@@ -420,11 +420,11 @@ export const modelInvokerLayer = (): Layer.Layer<
           positionRow(runId, state, 'response.ready'),
         ]);
         const contextSize = contextTokens(next);
-        if (contextSize > 0 && bound.contextWindow > 0) {
+        if (contextSize > 0 && bound.config.contextWindow > 0) {
           logger.emit({
             type: 'context.state',
             inputTokens: contextSize,
-            contextWindow: bound.contextWindow,
+            contextWindow: bound.config.contextWindow,
           });
         }
         yield* reportUsage(usageLog, bound, usage, attribution, session.roots);
@@ -460,7 +460,7 @@ export const modelInvokerLayer = (): Layer.Layer<
           state,
           request,
           bound,
-          yield* access.delivery(bound),
+          yield* bound.delivery,
         );
         let resolved = yield* prepareAttempt(bound, turnRequest);
         yield* saveDebug(
@@ -475,13 +475,13 @@ export const modelInvokerLayer = (): Layer.Layer<
         // An input that alone exceeds the window is refused before it is
         // billed; one leaving too little room for the requested output
         // shrinks that output rather than letting the provider reject it.
-        if (resolved.mode === 'foreground' && bound.contextWindow > 0) {
+        if (resolved.mode === 'foreground' && bound.config.contextWindow > 0) {
           const inputTokens = contextTokens(state);
-          if (inputTokens > bound.contextWindow) {
+          if (inputTokens > bound.config.contextWindow) {
             return yield* failAttempt(
               new ModelError({
                 kind: 'context-overflow',
-                message: `Input is ${inputTokens} tokens, which exceeds the model's context window of ${bound.contextWindow} tokens.`,
+                message: `Input is ${inputTokens} tokens, which exceeds the model's context window of ${bound.config.contextWindow} tokens.`,
               }),
             );
           }
@@ -490,22 +490,22 @@ export const modelInvokerLayer = (): Layer.Layer<
             'maxOutputTokens' in controls ? controls.maxOutputTokens : null;
           if (
             requested !== null &&
-            inputTokens + requested > bound.contextWindow
+            inputTokens + requested > bound.config.contextWindow
           ) {
             const reduced = reducedOutputBudget(
-              bound.contextWindow - inputTokens,
+              bound.config.contextWindow - inputTokens,
               bound.textOnly ? TOKEN_SAFETY_BUFFER : TOOL_USE_SAFETY_BUFFER,
             );
             logContextManagementEvent(
               logger,
-              `Token count (${inputTokens}) + max output tokens (${requested}) exceeds context window (${bound.contextWindow}). Reducing to ${reduced}.`,
+              `Token count (${inputTokens}) + max output tokens (${requested}) exceeds context window (${bound.config.contextWindow}). Reducing to ${reduced}.`,
               {
                 action: 'max_tokens_reduced',
                 tokensBefore: inputTokens,
-                contextWindow: bound.contextWindow,
+                contextWindow: bound.config.contextWindow,
                 utilizationBefore: roundedUtilizationPercent(
                   inputTokens,
-                  bound.contextWindow,
+                  bound.config.contextWindow,
                 ),
                 originalMaxTokens: requested,
                 reducedMaxTokens: reduced,

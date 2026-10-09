@@ -282,7 +282,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
                 run.config.mediaFiles.map((p) =>
                   run.fileService.createLocation(p),
                 ),
-                bound,
+                bound.config.capabilities,
                 logger,
                 run.session.roots.config,
               )
@@ -459,7 +459,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
         const toolChoice =
           state.forceFinalTool &&
           run.finalToolName !== null &&
-          bound.supportsForcedToolChoice
+          bound.forcedToolChoice
             ? { name: run.finalToolName }
             : undefined;
         const outcome = yield* invoker.invoke(cell, {

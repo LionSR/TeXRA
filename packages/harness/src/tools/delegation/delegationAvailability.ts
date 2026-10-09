@@ -21,20 +21,20 @@ import { modelRefOf } from '@texra-ai/llm';
 import { resolveDelegationScopeAgents } from '@agent/index/agentRegistry';
 import { withLogChannel } from '@logger/effectLog';
 import {
-  modelOptionsFrom,
+  modelVerdictsFrom,
   readModelAvailabilityInputs,
+  type ModelAvailabilityInputs,
   type ModelOptionStores,
 } from '@model/computeModelOptions';
 import { decideRunModel } from '@model/runModelDecision';
 import { Secrets } from '@platform/secrets';
 import type { SettingsStores } from '@shared/config/settingsAccess';
-import type {
-  AgentDelegationScope,
-  DelegationTargets,
-  ModelOptionData,
-  ToolDefinition,
+import {
+  MODEL_AVAILABILITY_STATUS,
+  type AgentDelegationScope,
+  type DelegationTargets,
+  type ToolDefinition,
 } from '@shared/schemas';
-import { isModelOptionAvailable } from '@shared/schemas';
 import {
   AGENT_TOOL_NAME,
   DOCUMENT_TASK_TOOL_NAME,
@@ -44,8 +44,11 @@ import { unique } from '@utils/core';
 import { readSettingFrom } from '@utils/config/platformSettings';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
-const availableModelNames = (models: readonly ModelOptionData[]): string[] =>
-  models.filter(isModelOptionAvailable).map((model) => model.value);
+/** The models that can run now, in picker order. */
+const availableModelNames = (inputs: ModelAvailabilityInputs): string[] =>
+  modelVerdictsFrom(inputs).flatMap(({ model, availability }) =>
+    MODEL_AVAILABILITY_STATUS[availability].available ? [model] : [],
+  );
 
 /* -------------------------------------------------------------------------
  * Reading
@@ -86,7 +89,7 @@ export const readDelegationTargets = Effect.fn('readDelegationTargets')(
           : [],
     );
     const models = yield* readModelAvailabilityInputs(stores).pipe(
-      Effect.map((inputs) => availableModelNames(modelOptionsFrom(inputs))),
+      Effect.map(availableModelNames),
       // A failed read (an unreadable store, a host call that rejected) tells
       // the model the list is unknown rather than failing the step, and is
       // logged. `Effect.catch` recovers typed failures only: the finisher's
@@ -225,9 +228,8 @@ export const selectAvailableDelegationModel = Effect.fn(
     ...input.settings,
     secrets: yield* Secrets,
   });
-  const models = modelOptionsFrom(inputs);
   const availableModels = unique(
-    availableModelNames(models)
+    availableModelNames(inputs)
       .map((model) => model.trim())
       .filter(Boolean),
   );

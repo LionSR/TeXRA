@@ -3,7 +3,6 @@ import { Effect, Result } from 'effect';
 
 // Local imports
 import {
-  modelOptionsFrom,
   readModelAvailabilityInputs,
   usageRouteFrom,
   type ModelAvailabilityInputs,
@@ -19,6 +18,7 @@ import {
   isModelOptionAvailable,
   MODEL_AVAILABILITY_STATUS,
 } from '@shared/schemas';
+import { modelOptionsFrom } from '@texra/model/modelOptions';
 import { assertNever, unique } from '@utils/core';
 
 // Local file imports

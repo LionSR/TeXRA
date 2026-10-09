@@ -4,15 +4,7 @@
  *
  * Per-run isolation (executions/{id}/...) provides uniqueness;
  * agent/model/round-in-basename tokens are no longer needed.
- *
- * The one exception is the extension's "Save as copy" action, which still
- * names its copy `<base>_<chunk>_r{round}_<model>` beside the base file.
- * Those copies are ordinary user files: no reader parses that name.
  */
-
-// Local imports
-import { modelConfig } from '@texra-ai/llm';
-import { agentFileName } from '@shared/schemas';
 
 /** The fixed basename of every workflow output file (no extension). */
 export const WORKFLOW_OUTPUT_BASENAME = 'output';
@@ -53,38 +45,4 @@ export function workflowOutputPath(params: {
   round: number;
 }): string {
   return `${workflowOutputRoundDir(params.round)}/${WORKFLOW_OUTPUT_BASENAME}.${params.ext}`;
-}
-
-/** First-name chunk used in the "Save as copy" stem. */
-function getAgentFirstNameChunk(agent: string): string {
-  const cleanAgent = agentFileName(agent);
-  // A `write-` tool takes the chunk after that prefix; every other agent takes
-  // its first word, delimited by `_` when the name uses that convention and by
-  // `-` otherwise.
-  if (cleanAgent.startsWith('write-')) {
-    return cleanAgent.split('-')[1];
-  }
-  return cleanAgent.split(cleanAgent.includes('_') ? '_' : '-')[0];
-}
-
-/**
- * The `<base>_<chunk>_r{round}_<model>` stem "Save as copy" writes beside a
- * base file.
- */
-export function workflowOutputCopyStem(params: {
-  base: string;
-  agent: string;
-  model: string;
-  round: number;
-}): string {
-  return `${params.base}_${getAgentFirstNameChunk(params.agent)}_r${params.round}_${modelFileName(params.model)}`;
-}
-
-/**
- * A model string as it may appear in a file or folder name: the model's API
- * id without its provider or selection suffix (`gpt-6.1-sol`), or the string
- * with path and shell-unsafe characters replaced when it names no model.
- */
-export function modelFileName(id: string): string {
-  return (modelConfig(id)?.id ?? id).replaceAll(/[\\/:*?"<>|@+\s]/g, '-');
 }

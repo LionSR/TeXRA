@@ -18,18 +18,18 @@ import {
   type Model,
   type ModelOrigin,
   type ModelRoute,
-  type ReasoningChoice,
   type TurnRequest,
 } from '@texra-ai/llm';
 
 import { getHelperModelName } from '@agent/runtime/helperModelName';
+import type { RoutePolicy } from '@agent/runtime/ModelRetryGate';
 import { RouteUnavailable } from '@common/errors/agentErrors';
 import {
   modelUnavailableReasonFrom,
   readModelAvailabilityInputs,
   type ModelOptionStores,
 } from '@model/computeModelOptions';
-import { readBackgroundToggles, readModelSettings } from '@model/modelSettings';
+import { readModelSettings } from '@model/modelSettings';
 import { ProjectEnvironment } from '@platform/defaults/nodeWorkspace';
 import type { StateReadFailed } from '@platform/interfaces';
 import { LanguageModel } from '@platform/languageModel';
@@ -38,10 +38,9 @@ import type {
   DeclinableUsageRoute,
   ModelBackend,
   RetryErrorInfo,
-  UsageRoute,
 } from '@shared/schemas';
 
-import { backgroundOn, bindRoute } from './binding';
+import { bindRoute } from './binding';
 import {
   admitSwitch,
   credentialSwitch,
@@ -51,40 +50,40 @@ import {
 import type { CallFailure } from './failureInfo';
 import type { ModelConfig } from 'llm-zoo';
 
-/** One bound model: the llm `Model` and the facts of its binding the run reads. */
+/**
+ * One bound model: the llm `Model` and the facts of its binding the run
+ * reads. Everything else a binding needs (its credential, its reasoning
+ * choice, the toggles it was bound under) stays inside model access.
+ */
 export interface BoundModel {
   /** The run's model string (`provider/id[@effort][+pro]`), as its rows name it. */
   readonly modelId: string;
-  readonly config: ModelConfig;
-  /** What this binding asks the model for: thinking, effort and mode. */
-  readonly reasoning: ReasoningChoice;
-  /** The service tier the requests are sent on, which pricing bills. */
-  readonly serviceTier?: 'fast';
+  /** The backend its `run.config` records. */
   readonly backend: ModelBackend;
+  /**
+   * The config the model runs and bills with on its route: its window, its
+   * prices, and the media its route carries (`capabilities`).
+   */
+  readonly config: ModelConfig;
   readonly model: Model;
   readonly origin: ModelOrigin;
   /** The route decision this binding carries out. */
   readonly route: ModelRoute;
-  readonly usageRoute: UsageRoute;
-  /** The route's subscription plan, when it names one; display-only. */
-  readonly usagePlan?: string;
-  readonly contextWindow: number;
-  readonly supportsVision: boolean;
-  readonly supportsNativePdf: boolean;
-  readonly supportsNativeAudio: boolean;
-  readonly supportsForcedToolChoice: boolean;
-  /** The retry gate's keys: one wire route (provider, credential route,
-   *  endpoint, key fingerprint), and that route narrowed to one model. */
-  readonly wireRouteKey: string;
-  readonly modelRetryRouteKey: string;
-  /** The binding can run a turn as background work (submit + observe). */
-  readonly backgroundCapable: boolean;
-  /** One connection a failed turn invalidates (the Responses WebSocket). */
-  readonly persistentConnection: boolean;
   /** Automatic retries after a failed attempt, read with the binding. */
   readonly automaticRetries: number;
-  /** Bound for a text-only persona; a rebinding keeps it. */
+  /** Bound for a text-only persona, with the model's whole output budget; a
+   *  rebinding keeps it. */
   readonly textOnly: boolean;
+  /** The route can be told to call one named tool. */
+  readonly forcedToolChoice: boolean;
+  /** One connection a failed turn invalidates (the Responses WebSocket). */
+  readonly persistentConnection: boolean;
+  /** The service tier and subscription plan pricing bills, where the route names them. */
+  readonly billing: { readonly serviceTier?: 'fast'; readonly plan?: string };
+  /** The retry gate's routes: the model on its wire route, then the wire route. */
+  readonly routes: readonly [RoutePolicy, RoutePolicy];
+  /** How the next turn is delivered, from the live toggles (#12710). */
+  readonly delivery: Effect.Effect<TurnRequest['mode'], StateReadFailed>;
 }
 
 /** What a run asks to bind. */
@@ -131,10 +130,6 @@ export class ModelAccess extends Context.Service<
       recorded: RetryErrorInfo,
       declinedRoutes: readonly DeclinableUsageRoute[],
     ) => Effect.Effect<CredentialSwitch | null>;
-    /** How the next turn on `bound` is delivered, from the live toggles. */
-    readonly delivery: (
-      bound: BoundModel,
-    ) => Effect.Effect<TurnRequest['mode'], StateReadFailed>;
   }
 >()('@texra/ModelAccess') {}
 
@@ -201,7 +196,7 @@ const bindOver = Effect.fn('ModelAccess.bind')(function* (
       decision,
       backend: request.backend ?? decision.backend,
     },
-    stores.secrets,
+    stores,
   );
 });
 
@@ -251,18 +246,6 @@ export const modelAccessLayer = (
         },
         credentialSwitch: (failed, recorded, declined) =>
           credentialSwitch(failed, recorded, declined, stores.secrets),
-        // Read live each turn, so a flip mid-run applies to the next turn.
-        delivery: (bound) =>
-          Effect.map(readBackgroundToggles(stores), (toggles) =>
-            backgroundOn(toggles, {
-              backgroundCapable: bound.backgroundCapable,
-              textOnly: bound.textOnly,
-              protocol: bound.origin.protocol,
-              modelName: bound.config.id,
-            })
-              ? 'background'
-              : 'foreground',
-          ),
       };
     }),
   );

@@ -1193,7 +1193,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
           ? ('success' as const)
           : ('error' as const),
       content: [
-        ...settlementContent(settlement, bound, logger),
+        ...settlementContent(settlement, bound.config.capabilities, logger),
         // What the call's hooks add, after its result.
         ...callHookText(settledState, responseId, fact.callId),
       ],
@@ -1219,7 +1219,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
           const part = inlineMediaPart(
             attachment.mimeType,
             attachment.content.data,
-            bound,
+            bound.config.capabilities,
           );
           return part?.kind === 'document'
             ? [{ path: attachment.path, part }]

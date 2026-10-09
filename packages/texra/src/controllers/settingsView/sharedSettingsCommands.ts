@@ -22,17 +22,14 @@ import {
 
 import type { SessionHandle } from '@agent/runtime';
 import { withLogChannel } from '@logger/effectLog';
-import {
-  modelOptionsFrom,
-  readModelAvailabilityInputs,
-} from '@model/computeModelOptions';
+import { readModelAvailabilityInputs } from '@model/computeModelOptions';
 import { discoverCopilotRoutes } from '@model/copilotRouting';
 import { type StorageFs, withSessionFs } from '@platform/rootedFs';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { TEXRA_APPROVAL_POLICY_CONFIG_KEY } from '@shared/approvalPolicy';
 import type { SubscriptionUsageProvider } from '@shared/schemas';
 import { SUBSCRIPTION_AUTH_PROVIDERS } from '@shared/model/subscriptionAuth';
-import { CODING_PLAN_BY_API_PROVIDER } from '@shared/schemas';
+import { modelOptionsFrom } from '@texra/model/modelOptions';
 import { codingPlanForUsageSetting } from '@texra/model/codingPlanSubscriptions';
 import { UnsupportedCommandError } from '@texra/shared/utils/dispatcher';
 import {
@@ -71,6 +68,7 @@ import {
 import { GITHUB_TOKEN_CREATE_URL } from '@texra/tools/github/githubAuth';
 import { allSettledVoid } from '@texra/utils/core/allSettledVoid';
 import { getProviderKeyUrl } from '@texra/model/providerPresentation';
+import { CODING_PLAN_BY_API_PROVIDER } from '@texra/shared/model/codingPlans';
 import type { ProcessServices } from '@texra-ai/harness';
 import type { PlatformSecrets } from '@texra-ai/harness';
 

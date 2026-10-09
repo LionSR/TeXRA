@@ -144,7 +144,7 @@ const overThreshold = Effect.fn('compaction.overThreshold')(function* (
     input.stores,
     MODEL_COMPACTION_THRESHOLD_SETTING.configKey,
   );
-  const contextWindow = input.bound.contextWindow;
+  const contextWindow = input.bound.config.contextWindow;
   return (
     percent > 0 &&
     contextWindow > 0 &&
@@ -170,7 +170,7 @@ const summarize = Effect.fn('compaction.summarize')(function* (
     }
     return null;
   }
-  const contextWindow = bound.contextWindow;
+  const contextWindow = bound.config.contextWindow;
   const tokensBefore = contextTokens(state);
   logger.debug(`Compacting conversation (${COMPACTION_REASON[reason]})`, {
     data: {
@@ -412,8 +412,8 @@ export const backgroundCompaction = Effect.fn('compaction.background')(
       }
       let state = yield* cell.current;
       // A history past the window cannot go out: it waits for the summary.
-      const full =
-        bound.contextWindow > 0 && contextTokens(state) >= bound.contextWindow;
+      const { contextWindow } = bound.config;
+      const full = contextWindow > 0 && contextTokens(state) >= contextWindow;
       if (pending !== null) {
         const running = pending.fiber;
         const finished = full

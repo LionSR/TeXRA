@@ -31,7 +31,6 @@ import { TestClock } from 'effect/testing';
 import { describe, expect } from 'vitest';
 import { z } from 'zod';
 import {
-  chooseReasoning,
   type Model,
   type ModelOrigin,
   type TurnResult,
@@ -55,6 +54,7 @@ import { dispatchFactsFor, localCallsOf } from '@agent/runtime/run/tools';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { AgentTrace } from '@agent/trace';
 import type { BoundModel } from '@agent/runtime/modelAccess/ModelAccess';
+import { routePolicies } from '@agent/runtime/modelAccess/failureInfo';
 import type { PluginContext } from '@platform/processRuntime';
 import { MODEL_RETRY_MAX_ATTEMPTS_SETTING } from '@shared/schemas';
 import { DatabaseWriteFailed } from '@shared/session/database';
@@ -171,26 +171,38 @@ function boundModel(): BoundModel {
   };
   return {
     modelId: GPT54,
-    config: MODEL_CONFIGS[GPT54],
-    reasoning: chooseReasoning(MODEL_CONFIGS[GPT54]),
+    config: {
+      ...MODEL_CONFIGS[GPT54],
+      capabilities: {
+        ...MODEL_CONFIGS[GPT54].capabilities,
+        supportsVision: false,
+        supportsNativePdf: false,
+        supportsNativeAudio: false,
+      },
+    },
     backend: 'openai',
     model,
     origin: ORIGIN,
     route: { kind: 'api-key', provider: 'openai', usageRoute: 'api-key' },
-    usageRoute: 'api-key',
-    contextWindow: MODEL_CONFIGS[GPT54].contextWindow,
-    supportsVision: false,
-    supportsNativePdf: false,
-    supportsNativeAudio: false,
-    supportsForcedToolChoice: true,
-    wireRouteKey: 'wire',
-    modelRetryRouteKey: `wire:${GPT54}`,
-    backgroundCapable: false,
+    forcedToolChoice: true,
     persistentConnection: false,
+    billing: {},
+    routes: routePolicies(['wire'], GPT54),
+    delivery: Effect.succeed('foreground'),
     automaticRetries: MODEL_RETRY_MAX_ATTEMPTS_SETTING.defaultValue,
     textOnly: false,
   };
 }
+
+/** `config` with a route that carries images and PDFs. */
+const withDocuments = (config: BoundModel['config']): BoundModel['config'] => ({
+  ...config,
+  capabilities: {
+    ...config.capabilities,
+    supportsVision: true,
+    supportsNativePdf: true,
+  },
+});
 
 let dispatchRunCounter = 0;
 const dispatchRunId = (): RunId =>
@@ -962,8 +974,7 @@ describe('tool-use dispatch', () => {
           bound: {
             ...boundModel(),
             model: uploading,
-            supportsVision: true,
-            supportsNativePdf: true,
+            config: withDocuments(boundModel().config),
           },
         });
         const delivering = yield* Effect.forkChild(dispatch(kit));
@@ -1026,8 +1037,7 @@ describe('tool-use dispatch', () => {
         bound: {
           ...boundModel(),
           model: uploading,
-          supportsVision: true,
-          supportsNativePdf: true,
+          config: withDocuments(boundModel().config),
         },
       });
       const delivering = yield* Effect.forkChild(dispatch(kit));
@@ -1073,8 +1083,7 @@ describe('tool-use dispatch', () => {
         bound: {
           ...boundModel(),
           model: uploading,
-          supportsVision: true,
-          supportsNativePdf: true,
+          config: withDocuments(boundModel().config),
         },
       });
       const { state } = yield* dispatch(kit);

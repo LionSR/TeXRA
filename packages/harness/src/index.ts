@@ -167,3 +167,5 @@ export type {
 // Model access a host request makes outside a run: the user's own key and
 // the endpoint they set (audio transcription).
 export { ownKeyCredential } from '@agent/runtime/modelAccess/credentials';
+// What a used-up plan falls back to, as the retry copy names it.
+export { quotaFallbackRouteFor } from '@shared/quotaFallbackRoutes';

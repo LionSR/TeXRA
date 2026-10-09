@@ -4,7 +4,7 @@ import { GlobalStateKey } from '@shared/state/stateKeys';
 import {
   CODING_PLAN_SUBSCRIPTIONS,
   type CodingPlanSubscription,
-} from '@shared/schemas';
+} from '@texra/shared/model/codingPlans';
 import {
   getGLMCodingPlan,
   getPreferKimiCode,

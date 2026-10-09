@@ -2,7 +2,7 @@
 import { describe, expect, it } from 'vitest';
 
 // Local imports
-import { workflowOutputCopyStem } from '@shared/constants/workflowOutput';
+import { workflowOutputCopyStem } from '@texra/utils/files/outputFileUtils';
 
 describe('Save-as-copy stem', () => {
   it.each([

@@ -29,7 +29,6 @@ import { MODEL_CONFIGS } from 'llm-zoo';
 import { APIError as OpenAIAPIError } from 'openai';
 import { afterEach, describe, expect, vi } from 'vitest';
 import {
-  chooseReasoning,
   type Model,
   ModelError,
   type ModelOrigin,
@@ -241,26 +240,15 @@ function boundModel(
   return {
     modelId: GPT54,
     config: MODEL_CONFIGS[GPT54],
-    reasoning: chooseReasoning(MODEL_CONFIGS[GPT54]),
     backend: 'openai',
     model,
     origin: ORIGIN,
     route: { kind: 'api-key', provider: 'openai', usageRoute: 'api-key' },
-    usageRoute: 'api-key',
-    contextWindow: MODEL_CONFIGS[GPT54].contextWindow,
-    supportsVision: false,
-    supportsNativePdf: false,
-    supportsNativeAudio: false,
-    supportsForcedToolChoice: true,
-    wireRouteKey: JSON.stringify(['openai', 'api-key', ORIGIN.requestedModel]),
-    modelRetryRouteKey: JSON.stringify([
-      'openai',
-      'api-key',
-      ORIGIN.requestedModel,
-      GPT54,
-    ]),
-    backgroundCapable: false,
+    forcedToolChoice: true,
     persistentConnection: false,
+    billing: {},
+    routes: routePolicies(['openai', 'api-key', ORIGIN.requestedModel], GPT54),
+    delivery: Effect.succeed('foreground'),
     automaticRetries: MODEL_RETRY_MAX_ATTEMPTS_SETTING.defaultValue,
     textOnly: false,
     ...overrides,
@@ -458,7 +446,7 @@ const BOUND = boundModel(stubModel([]).model);
  * route cools on shared-route evidence, the model route only on a limit the
  * provider scoped to one model.
  */
-const [modelRoute, wireRoute] = routePolicies(BOUND);
+const [modelRoute, wireRoute] = BOUND.routes;
 const wireRouteRecovery = (error: Error) => wireRoute.classifyFailure(error);
 const modelRouteRecovery = (error: Error) => modelRoute.classifyFailure(error);
 
@@ -782,7 +770,6 @@ describe('ModelInvoker retry', () => {
 
         const kit = yield* openRun(session, stub.model, {
           route: { kind: 'chatgpt-subscription' },
-          usageRoute: 'chatgpt-subscription',
         });
         yield* Effect.promise(() => seedActiveRun(session, kit.runId));
         const outcome = yield* invokeOn(kit);

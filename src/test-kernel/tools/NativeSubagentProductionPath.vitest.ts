@@ -18,7 +18,6 @@ import { it } from '@effect/vitest';
 import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 import {
   apiKeySecretName,
-  chooseReasoning,
   type Model,
   ModelError,
   type ModelOrigin,
@@ -48,7 +47,6 @@ vi.mock('@agent/runtime/modelAccess/ModelAccess', async (importActual) => {
         bind: (request) => bindingMocks.bindModel(request),
         admit: () => E.succeed(null),
         credentialSwitch: () => E.succeed(null),
-        delivery: () => E.succeed('foreground'),
       }),
   };
 });
@@ -72,6 +70,7 @@ import { type SessionHandle } from '@agent/runtime/SessionHandle';
 import { submitFollowUp } from '@agent/followUp/ToolUseFollowUp';
 import type { RunToolCall } from '@agent/runtime/RunCall';
 import type { BoundModel } from '@agent/runtime/modelAccess/ModelAccess';
+import { routePolicies } from '@agent/runtime/modelAccess/failureInfo';
 import { launchDesktopAgent } from '@desktop/main/desktopAgentLaunch';
 import { AgentDirectories, AppState } from '@platform/interfaces';
 import { withProcessServices } from '@platform/processRuntime';
@@ -316,26 +315,15 @@ function scriptedBoundModel(
   return {
     modelId: config.ref,
     config,
-    reasoning: chooseReasoning(config),
     backend: 'openai',
     model,
     origin,
     route: { kind: 'api-key', provider: 'openai', usageRoute: 'api-key' },
-    usageRoute: 'api-key',
-    contextWindow: config.contextWindow,
-    supportsVision: false,
-    supportsNativePdf: false,
-    supportsNativeAudio: false,
-    supportsForcedToolChoice: true,
-    wireRouteKey: JSON.stringify(['openai', 'api-key', config.id]),
-    modelRetryRouteKey: JSON.stringify([
-      'openai',
-      'api-key',
-      config.id,
-      config.ref,
-    ]),
-    backgroundCapable: false,
+    forcedToolChoice: true,
     persistentConnection: false,
+    billing: {},
+    routes: routePolicies(['openai', 'api-key', config.id], config.ref),
+    delivery: Effect.succeed('foreground'),
     automaticRetries: MODEL_RETRY_MAX_ATTEMPTS_SETTING.defaultValue,
     textOnly: false,
   };
