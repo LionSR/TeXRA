@@ -14,6 +14,7 @@ import {
   ToolContext,
   type CallRequests,
   type ToolContextShape,
+  type ToolRun,
 } from '@agent/core/tools/ToolTypes';
 import {
   ToolError,
@@ -111,27 +112,27 @@ export interface ScriptScope extends ScriptSource {
 }
 
 /**
- * What a tool reads of the run its call works for (its session, model,
- * policy, configuration and scope), read from the run rather than copied
- * onto the call. A tool that starts something the run should stop at its
- * end registers that stop on the run's scope.
+ * The rest of what a tool reads of its run (`ToolRun`, whose id the core
+ * declares): its session, model, policy, configuration and scope. A tool
+ * that starts something the run should stop at its end registers that stop
+ * on the run's scope. A plugin contract that narrows to what app tools read.
  */
-export type ToolRun = Pick<
-  AgentRunShape,
-  | 'session'
-  | 'runId'
-  | 'toolPolicy'
-  | 'config'
-  | 'model'
-  | 'delegationAgentScope'
-  | 'steps'
-  | 'scope'
-  | 'task'
-  | 'opening'
-  | 'logger'
-  | 'callbacks'
-  | 'fileService'
->;
+declare module '../core/tools/ToolTypes.js' {
+  interface ToolRun {
+    readonly session: AgentRunShape['session'];
+    readonly toolPolicy: AgentRunShape['toolPolicy'];
+    readonly config: AgentRunShape['config'];
+    readonly model: AgentRunShape['model'];
+    readonly delegationAgentScope?: AgentRunShape['delegationAgentScope'];
+    readonly steps: AgentRunShape['steps'];
+    readonly scope: AgentRunShape['scope'];
+    readonly task: AgentRunShape['task'];
+    readonly opening: AgentRunShape['opening'];
+    readonly logger: AgentRunShape['logger'];
+    readonly callbacks: AgentRunShape['callbacks'];
+    readonly fileService: AgentRunShape['fileService'];
+  }
+}
 
 /** A call made under a run, as its loop dispatched it (`RunCall`). */
 export interface RunCallShape {
@@ -174,7 +175,7 @@ export class ScriptCalls extends Context.Service<
 /** The run the current call works for; none for a standalone host call. */
 export const callerRun: Effect.Effect<ToolRun | undefined, never, ToolContext> =
   Effect.gen(function* () {
-    return (yield* ToolContext).run;
+    return (yield* ToolContext).env.run;
   });
 
 /**
@@ -187,7 +188,7 @@ export const requireRun = (
   toolName: string,
 ): Effect.Effect<
   ToolContextShape & {
-    readonly run: NonNullable<ToolContextShape['run']>;
+    readonly run: ToolRun;
     readonly requests: CallRequests;
   },
   ToolError,
@@ -195,19 +196,20 @@ export const requireRun = (
 > =>
   Effect.gen(function* () {
     const call = yield* ToolContext;
-    const { run } = call;
-    if (run === undefined)
+    const { run } = call.env;
+    const { requests } = call;
+    if (run === undefined || requests === undefined)
       return yield* Effect.fail(
         new ToolError(`${toolName} requires an active run context.`),
       );
-    return { ...call, run, requests: run.requests };
+    return { ...call, run, requests };
   });
 
 /** A built-in's call made under a run: the call, the run, where its
  *  requests open, and its place in the run. */
 export type RunToolCall = ToolContextShape &
   RunCallShape & {
-    readonly run: NonNullable<ToolContextShape['run']>;
+    readonly run: ToolRun;
     readonly requests: CallRequests;
   };
 

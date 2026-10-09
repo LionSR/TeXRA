@@ -6,5 +6,5 @@ Exports: 4
 
 - `callerRun` — `const callerRun: Effect<ToolRun | undefined, never, ToolContext>`
 - `harnessBuiltins` — `const harnessBuiltins: { readonly all: readonly Plugin[]; readonly minimal: readonly Plugin[]; }`
-- `requireRun` — `const requireRun: (toolName: string) => Effect<ToolContextShape & { readonly run: ToolRun & { readonly requests: CallRequests; }; readonly requests: CallRequests; }, ToolError, ToolContext>`
-- `ToolRun` — `type ToolRun = Pick<AgentRunShape, 'session' | 'runId' | 'toolPolicy' | 'config' | 'model' | 'delegationAgentScope' | 'steps' | 'scope' | 'task' | 'opening' | 'logger' | 'callbacks' | 'fileService'>; ≡ ToolRun`
+- `requireRun` — `const requireRun: (toolName: string) => Effect<ToolContextShape & { readonly run: ToolRun; readonly requests: CallRequests; }, ToolError, ToolContext>`
+- `ToolRun` — `interface ToolRun { readonly runId: RunId; }`

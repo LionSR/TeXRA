@@ -9,4 +9,5 @@
  * if any), typed `ToolRun`.
  */
 export { harnessBuiltins } from '@tools/builtinPlugins';
-export { callerRun, requireRun, type ToolRun } from '@agent/runtime/RunCall';
+export { callerRun, requireRun } from '@agent/runtime/RunCall';
+export type { ToolRun } from '@agent/core/tools/ToolTypes';

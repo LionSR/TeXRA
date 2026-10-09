@@ -7,13 +7,13 @@ import {
   ToolContext,
   type ToolContextShape,
   type ToolEnv,
+  type ToolRun,
 } from '@agent/core/tools/ToolTypes';
 import {
   IssuingScript,
   ScriptCalls,
   RunCall,
   type RunCallShape,
-  type ToolRun,
 } from '@agent/runtime/RunCall';
 import type { AgentRunShape } from '@agent/runtime/run/AgentRun';
 import type { OpenStep } from '@agent/runtime/loop/step';
@@ -65,7 +65,7 @@ export const testRunTools = (
  *  roots it answers for. The call's `Runs` are its run's session's; a call
  *  outside any run gets a registry over an empty fold, as it tracks no run. */
 export function nativeToolTestLayer(
-  options: Partial<ToolEnv> &
+  options: Partial<Omit<ToolEnv, 'run'>> &
     Partial<Pick<ToolContextShape, 'callId' | 'emit'>> & {
       run?: TestCallRun;
       readFiles?: Set<string>;
@@ -103,20 +103,18 @@ export function nativeToolTestLayer(
         roots,
         ...(workingDirectory !== undefined && { workingDirectory }),
         ...(stepRoots !== undefined && { stepRoots }),
+        ...(toolRun !== undefined && { run: toolRun }),
       },
       emit: options.emit ?? (() => undefined),
       ...(toolRun !== undefined && {
-        run: {
-          ...toolRun,
-          // A run's requests open unbound on its session: a test call has
-          // no loop to bind them to.
-          requests: {
-            nextId: (prefix: string) => `${prefix}-${generateShortId()}`,
-            open: (
-              payload: PermissionPayload,
-              opened?: { readonly onNeverCommitted?: Effect.Effect<void> },
-            ) => toolRun.session.requests.ask(toolRun.runId, payload, opened),
-          },
+        // A run's requests open unbound on its session: a test call has no
+        // loop to bind them to.
+        requests: {
+          nextId: (prefix: string) => `${prefix}-${generateShortId()}`,
+          open: (
+            payload: PermissionPayload,
+            opened?: { readonly onNeverCommitted?: Effect.Effect<void> },
+          ) => toolRun.session.requests.ask(toolRun.runId, payload, opened),
         },
       }),
     })),

@@ -454,8 +454,9 @@ function leanFilePath(file: string, call: ToolContextShape) {
   });
 }
 
-/** The runs whose end already stops the Lean servers they started. */
-const stopRegistered = new WeakSet<ToolRun>();
+/** The runs whose end already stops the Lean servers they started, by
+ *  their scope: one per run, whatever object a call sees the run through. */
+const stopRegistered = new WeakSet<ToolRun['scope']>();
 
 /**
  * The run a Lean request is attributed to. The first request of a run also
@@ -469,10 +470,10 @@ function leanRunId(
   return Effect.flatMap(callerRun, (run) => {
     if (!run) return Effect.succeed(undefined);
     const { runId } = run;
-    if (!services.stopSessionsForRun || stopRegistered.has(run)) {
+    if (!services.stopSessionsForRun || stopRegistered.has(run.scope)) {
       return Effect.succeed(runId);
     }
-    stopRegistered.add(run);
+    stopRegistered.add(run.scope);
     return Scope.addFinalizer(
       run.scope,
       // A finalizer on the run's scope: a failure here must not replace the

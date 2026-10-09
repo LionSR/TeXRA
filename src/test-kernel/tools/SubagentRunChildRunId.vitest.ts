@@ -80,7 +80,6 @@ describe('launchDetachedSubagent child run launch', () => {
     logId: 'parent-card',
     requests: fixtureRequests,
     run: {
-      requests: fixtureRequests,
       runId: 'parent-exec' as RunId,
       session: { tag: 'parent-session' } as never,
       task: null,

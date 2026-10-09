@@ -679,8 +679,9 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
                 roots: run.session.roots,
                 workingDirectory: run.workingDirectory,
                 stepRoots: step.stepRoots,
+                run,
               },
-              run: { ...run, requests },
+              requests,
               emit: onToolOutput,
             }),
             Effect.provideService(RunCall, {

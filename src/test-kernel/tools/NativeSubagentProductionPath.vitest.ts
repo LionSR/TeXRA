@@ -589,7 +589,6 @@ async function launchWaitingChild(options: {
     logId: 'parent-card',
     requests: fixtureRequests,
     run: {
-      requests: fixtureRequests,
       runId: PARENT_RUN_ID,
       session,
       task: null,
