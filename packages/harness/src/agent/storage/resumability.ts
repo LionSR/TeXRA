@@ -6,8 +6,8 @@ import {
   isDocumentTaskConfig,
   isLoopDriven,
   type RunId,
-  DatabaseRowEarlier,
 } from '@shared/schemas';
+import { DatabaseRowEarlier } from '@shared/session/database';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { runEndFromEvents } from './runRecords';
 
@@ -23,7 +23,13 @@ export type ResumabilityDecision =
   | { readonly kind: 'unopened' }
   | { readonly kind: 'none' }
   | { readonly kind: 'unreadable'; readonly cause: string }
-  | { readonly kind: 'earlierBuild' };
+  | { readonly kind: 'earlierBuild'; readonly refusal: DatabaseRowEarlier };
+
+/** The earlier-build refusal a failed read carries, if any. */
+const earlierRefusal = (error: unknown): DatabaseRowEarlier | undefined =>
+  [error, error instanceof Error ? error.cause : undefined].find(
+    (e): e is DatabaseRowEarlier => e instanceof DatabaseRowEarlier,
+  );
 
 /**
  * The one answer to "can this run resume?", before ownership (`runRefusal`
@@ -39,13 +45,9 @@ export const deriveResumability = Effect.fn('deriveResumability')(function* (
 ): Effect.fn.Return<ResumabilityDecision> {
   const read = yield* session.log.records(runId).pipe(Effect.result);
   // An earlier build's row: this build cannot open the run, and says so.
-  if (
-    read._tag === 'Failure' &&
-    [read.failure, read.failure.cause].some(
-      (error) => error instanceof DatabaseRowEarlier,
-    )
-  )
-    return { kind: 'earlierBuild' };
+  const refusal =
+    read._tag === 'Failure' ? earlierRefusal(read.failure) : undefined;
+  if (refusal !== undefined) return { kind: 'earlierBuild', refusal };
   if (read._tag === 'Failure') {
     const cause = `run state could not be read (${toErrorMessage(read.failure)})`;
     yield* Effect.logWarning(`Run ${runId}: ${cause}`).pipe(

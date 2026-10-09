@@ -53,23 +53,19 @@ export const AggregateStateSchema = z.object({
 export type AggregateState = z.infer<typeof AggregateStateSchema>;
 
 /**
- * C5's current claim on one aggregate, with the liveness of its owner proved
- * in the same call: `self` is this process, and a null owner (with a null
- * verdict) is an unclaimed or absent aggregate. The read a resume gate and
- * the run listing ask, never the fold, whose liveness comes from a prober
- * that only watches owners of runs already resident in the view.
- */
+ * C5's current claim on one aggregate, its owner's liveness proved in the same
+ * call (`self` is this process; a null owner is unclaimed or absent): what a
+ * resume gate and the run listing ask, never the fold, whose prober watches
+ * only owners of runs already resident in the view. */
 export interface AggregateClaim {
   readonly ownerId: OwnerId | null;
   readonly liveness: OwnerLiveness | 'self' | null;
 }
 
 /**
- * Who holds a claim relative to this process: this process itself, an owner
- * that is alive or cannot be proven dead, or nobody. The one derivation every
- * ladder that reads a claim shares — the run listing, the run
- * classification, and the resume gate all answer the same question of the
- * same two fields, and a run whose owner is provably dead is free.
+ * Who holds a claim relative to this process: itself, an owner alive or not
+ * proven dead, or nobody (a provably dead owner frees it). The one reading the
+ * run listing, the run classification and the resume gate all share.
  */
 type ClaimStanding =
   | { readonly kind: 'self' }
@@ -116,13 +112,11 @@ export class DatabaseWriteFailed extends Data.TaggedError(
 }
 
 /**
- * C5: a batch member targets an aggregate this process does not hold open,
- * because the claim moved, was never held, or the aggregate closed. Nothing
- * was written. The one write refusal that is a fact about ownership rather
- * than the disk, which is why `appendAll` fails with it typed instead of
- * wrapped in `DatabaseWriteFailed` (D6 b): a caller that lost its claim
- * stops, and never mistakes a disk error for a stolen claim or the reverse.
- */
+ * C5: a batch member targets an aggregate this process does not hold open (the
+ * claim moved, was never held, or the aggregate closed); nothing was written.
+ * A fact about ownership, not the disk, so `appendAll` fails with it typed,
+ * not wrapped in `DatabaseWriteFailed` (D6 b): a caller that lost its claim
+ * stops, never mistaking a disk error for a stolen claim or the reverse. */
 export class DatabaseNotOwner extends Data.TaggedError('DatabaseNotOwner')<{
   readonly aggregateId: AggregateId;
   /** The holder and closure at refusal time, read in the refusing transaction. */
@@ -139,13 +133,10 @@ export class DatabaseClaimRefused extends Data.TaggedError(
 }> {}
 
 /**
- * The owner the database names as holding an aggregate this caller was
- * refused (not proven alive: a claim verdict may be `unprovable`), or null
- * when the refusal names none: the claim verdict (carried as the write
- * failure's cause), or a `DatabaseNotOwner` naming an owner of an open
- * aggregate. A closed aggregate is finished and an ownerless one is free, so
- * neither is held elsewhere.
- */
+ * The owner a refusal names as holding an aggregate (not proven alive: a
+ * verdict may be `unprovable`), from a claim verdict (a write failure's cause)
+ * or a `DatabaseNotOwner` of an open aggregate; null otherwise, since a closed
+ * aggregate is finished and an ownerless one is free. */
 export const heldElsewhereBy = (error: unknown): OwnerId | null => {
   const refusal = error instanceof DatabaseWriteFailed ? error.cause : error;
   if (refusal instanceof DatabaseClaimRefused) return refusal.ownerId;
@@ -193,6 +184,14 @@ export class DatabaseRowCorrupt extends Data.TaggedError('DatabaseRowCorrupt')<{
   readonly detail: string;
 }> {
   override readonly message = `The session store's ${this.type} row at commit ${this.commit} does not decode (${this.detail}).`;
+}
+
+/** A row an earlier build wrote below the version this one reads: its run cannot open. */
+export class DatabaseRowEarlier extends Data.TaggedError('DatabaseRowEarlier')<{
+  readonly commit: number;
+  readonly type: string;
+}> {
+  override readonly message = `The session store's ${this.type} row at commit ${this.commit} was written by an earlier build of TeXRA; it can't be opened by this one.`;
 }
 
 /**

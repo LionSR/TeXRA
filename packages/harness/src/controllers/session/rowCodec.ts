@@ -39,10 +39,10 @@ import {
   type JsonValue,
   type SessionEvent,
   type SessionEventDraft,
-  DatabaseRowEarlier,
 } from '@shared/schemas';
 import {
   DatabaseRowCorrupt,
+  DatabaseRowEarlier,
   DatabaseStoreNewer,
 } from '@shared/session/database';
 import type { PluginArms } from '@tools/plugins';
@@ -137,6 +137,8 @@ const hasKind = (type: string): type is SessionEventDraft['type'] =>
 
 /** The lowest stored version of `type` this build reads: an older one has
  *  no upcaster here, so an earlier build wrote it. */
+// `decodeRow` refuses the same rows: with no upcasters, `upcast.slice` is
+// empty below `version`, exactly the versions under this floor.
 const readableFrom = (type: SessionEventDraft['type']): number =>
   ROW_KINDS[type].version - ROW_KINDS[type].upcast.length;
 
@@ -149,8 +151,10 @@ export const EARLIER_RUNS: readonly (readonly [string, readonly unknown[]])[] =
       readableFrom(type) > 1
         ? [
             [
-              `SELECT DISTINCT s.logical_id AS logicalId FROM ${EVENT_FROM}
-                WHERE s.kind = 'run' AND e.type = ? AND e.version < ?`,
+              `SELECT s.logical_id AS logicalId, min(e."commit") AS "commit",
+                e.type AS type FROM ${EVENT_FROM}
+                WHERE s.kind = 'run' AND e.type = ? AND e.version < ?
+                GROUP BY s.logical_id`,
               [type, readableFrom(type)],
             ] as const,
           ]

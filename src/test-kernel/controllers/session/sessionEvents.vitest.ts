@@ -1849,6 +1849,14 @@ describe('the C1 event table and the C6 publisher', () => {
           _tag: 'DatabaseRowEarlier',
           type: 'model.message',
         });
+        // A record read (history, resume, follow-up) refuses it the same way,
+        // though the records never select its `model.message` row.
+        const records = yield* Effect.flip(
+          Effect.flatMap(Database, (db) =>
+            db.readRunRecords(runStart.aggregateId),
+          ).pipe(Effect.provide(substrate(storage))),
+        );
+        expect(records.cause).toMatchObject({ _tag: 'DatabaseRowEarlier' });
         yield* Effect.gen(function* () {
           const view = yield* SessionViewService;
           yield* settle(view.ref, (v) => v.runs.get(RUN)?.readOnly === true);

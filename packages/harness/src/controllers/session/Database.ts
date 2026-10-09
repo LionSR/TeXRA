@@ -206,7 +206,7 @@ export const databaseLayer = (
       /** The store gate (`storeGate`), in the caller's transaction. */
       const arms = armsOf((yield* ToolRegistry).entries.values());
       const gate = storeGate(exec, arms);
-      const { read: decoded, damaged } = rowReader(path, arms);
+      const { read: decoded, damaged } = rowReader(path, arms, exec);
       const decodedRows = (
         statement: string,
         params: readonly unknown[],
@@ -990,7 +990,7 @@ export const databaseLayer = (
                 events,
                 checkedAggregateIds,
                 state: yield* readState(checkedAggregateIds),
-                damaged: yield* damaged(exec),
+                damaged: yield* damaged,
               };
             }),
           ),

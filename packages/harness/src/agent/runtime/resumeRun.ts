@@ -17,7 +17,7 @@ import {
 import { withLogChannel } from '@logger/effectLog';
 import type { ProcessServices } from '@platform/processRuntime';
 import { aggregateId, RUN_PHASE, type RunId } from '@shared/schemas';
-import { heldElsewhereBy } from '@shared/session/database';
+import { DatabaseRowEarlier, heldElsewhereBy } from '@shared/session/database';
 import { RunHistoryRefused } from '@shared/session/runHistory';
 import { FOLLOW_UP_TYPES, foldRunRows } from '@shared/session/runRows';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
@@ -249,6 +249,8 @@ function refusalFor(
   if (error instanceof ResumeSessionUnavailableError) {
     return Effect.succeed({ failed: 'finished' });
   }
+  if (error instanceof DatabaseRowEarlier)
+    return Effect.succeed({ failed: 'earlier_build' });
   if (namesUnusableCheckpoint(error)) {
     return Effect.logWarning(
       `Refusing to resume ${runId}: its saved state cannot be continued: ${toErrorMessage(error)}`,

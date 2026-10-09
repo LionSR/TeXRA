@@ -16,8 +16,6 @@
  * kind is unreleased: its shape may change with no upcaster and no bump, and
  * no upcaster exists yet.
  */
-import { Data } from 'effect';
-
 import type { JsonValue } from './jsonValue';
 import type { SessionEventDraft } from './sessionEvent';
 
@@ -105,12 +103,3 @@ export const ROW_KINDS: Readonly<Record<SessionEventDraft['type'], RowKind>> = {
   'hook.outcome': V1,
   'child.turn': V1,
 };
-
-/** A stored row an earlier build wrote, below the version this build reads
- *  (no upcaster): its run cannot be opened here, and says so. */
-export class DatabaseRowEarlier extends Data.TaggedError('DatabaseRowEarlier')<{
-  readonly commit: number;
-  readonly type: string;
-}> {
-  override readonly message = `The session store's ${this.type} row at commit ${this.commit} was written by an earlier build of TeXRA; it can't be opened by this one.`;
-}

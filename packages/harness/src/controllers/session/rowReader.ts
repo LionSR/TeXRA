@@ -7,6 +7,7 @@
  * never reads a run's history.
  */
 import { Effect, Result } from 'effect';
+import { z } from 'zod';
 
 import { withLogChannel } from '@logger/effectLog';
 import {
@@ -18,11 +19,11 @@ import {
   type LocalRuntimeState,
   type RunId,
   type SessionEvent,
-  type DatabaseRowEarlier,
 } from '@shared/schemas';
-import type {
-  DatabaseRowCorrupt,
-  DatabaseStoreNewer,
+import {
+  DatabaseRowEarlier,
+  type DatabaseRowCorrupt,
+  type DatabaseStoreNewer,
 } from '@shared/session/database';
 import type { PluginArms } from '@tools/plugins';
 
@@ -34,35 +35,54 @@ import {
   type SqlRow,
 } from './rowCodec';
 
+/** An earlier-build run row, as `EARLIER_RUNS` selects it. */
+const EarlierRowSchema = z.object({
+  logicalId: z.string(),
+  commit: z.int(),
+  type: z.string(),
+});
+
+/** A statement runner over the reader's connection. */
+type Exec<E> = (
+  statement: string,
+  params: readonly unknown[],
+) => Effect.Effect<readonly SqlRow[], E>;
+
 /** A selected row's reader, and the runs it found it cannot open. */
-export interface RowReader {
+export interface RowReader<E> {
   /** The events of `rows`. A newer row fails the read; one that does not
    *  decode fails a strict read (`whole`: a run's history and its records),
    *  so no decision is made from part of a run's rows, and is left out of a
    *  wide read (tail, listing, projections) with one warning, so one bad row
-   *  never costs the session. An absent plugin's kind is left out, warned. */
+   *  never costs the session. An absent plugin's kind is left out, warned.
+   *  A strict read of a run an earlier build wrote fails as that build's,
+   *  whichever of its rows it selected. */
   readonly read: (
     rows: readonly SqlRow[],
     whole: boolean,
   ) => Effect.Effect<
     readonly SessionEvent[],
-    DatabaseStoreNewer | DatabaseRowCorrupt | DatabaseRowEarlier
+    E | DatabaseStoreNewer | DatabaseRowCorrupt | DatabaseRowEarlier
   >;
-  /** Every run found unopenable so far, with why: shown read-only. The
-   *  first call also finds, through `exec`, every run holding an earlier
-   *  build's rows, which no wide read meets. */
-  readonly damaged: <E>(
-    exec: (
-      statement: string,
-      params: readonly unknown[],
-    ) => Effect.Effect<readonly SqlRow[], E>,
-  ) => Effect.Effect<LocalRuntimeState['unreadable'], E>;
+  /** Every run found unopenable so far, with why: shown read-only. */
+  readonly damaged: Effect.Effect<LocalRuntimeState['unreadable'], E>;
 }
 
-/** The reader of the store at `path`, over the process's plugin `arms`. */
-export function rowReader(path: string, arms: PluginArms): RowReader {
+/**
+ * The reader of the store at `path`, over the process's plugin `arms`. Its
+ * first strict read or `damaged` finds, through `exec`, every run holding an
+ * earlier build's row, which the listing (it never reads a run's history)
+ * would not meet: one finding, read by the listing, history and resume alike.
+ */
+export function rowReader<E>(
+  path: string,
+  arms: PluginArms,
+  exec: Exec<E>,
+): RowReader<E> {
   const warned = new Set<string>();
   const unopenable = new Map<RunId, string>();
+  // The runs an earlier build wrote, each with the first such row.
+  const earlier = new Map<RunId, DatabaseRowEarlier>();
   let scanned = false;
   const mark = (runId: RunId, earlier: boolean) => {
     if (!unopenable.has(runId))
@@ -78,8 +98,30 @@ export function rowReader(path: string, arms: PluginArms): RowReader {
           Effect.andThen(Effect.logWarning(message)),
           withLogChannel('sessionDatabase'),
         );
+  /** Find, once, every run holding an earlier build's row. */
+  const scan = Effect.gen(function* () {
+    for (const [statement, params] of scanned ? [] : EARLIER_RUNS)
+      for (const row of yield* exec(statement, params)) {
+        const { logicalId, commit, type } = EarlierRowSchema.parse(row);
+        const runId = RunIdSchema.parse(logicalId);
+        mark(runId, true);
+        if (!earlier.has(runId))
+          earlier.set(runId, new DatabaseRowEarlier({ commit, type }));
+      }
+    scanned = true;
+  });
   const read = (rows: readonly SqlRow[], whole: boolean) =>
     Effect.gen(function* () {
+      if (whole) {
+        yield* scan;
+        const [refusal] = rows.flatMap((row) => {
+          const { kind, logicalId } = RowSchema.parse(row);
+          return kind === 'run'
+            ? (earlier.get(RunIdSchema.parse(logicalId)) ?? [])
+            : [];
+        });
+        if (refusal !== undefined) return yield* Effect.fail(refusal);
+      }
       const events: SessionEvent[] = [];
       for (const row of rows) {
         const decoded = decodeRow(row, arms);
@@ -111,14 +153,9 @@ export function rowReader(path: string, arms: PluginArms): RowReader {
     });
   return {
     read,
-    damaged: (exec) =>
-      Effect.gen(function* () {
-        for (const [statement, params] of scanned ? [] : EARLIER_RUNS)
-          for (const { logicalId } of yield* exec(statement, params))
-            mark(RunIdSchema.parse(logicalId), true);
-        scanned = true;
-        return [...unopenable].map(([runId, detail]) => ({ runId, detail }));
-      }),
+    damaged: Effect.map(scan, () =>
+      [...unopenable].map(([runId, detail]) => ({ runId, detail })),
+    ),
   };
 }
 

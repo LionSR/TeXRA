@@ -232,10 +232,18 @@ describe('the golden 1.0 store', () => {
         .all(),
     );
     return Effect.gen(function* () {
-      const events = yield* rowReader(storage, armsOf(texraPlugins())).read(
-        rows,
-        true,
-      );
+      // The fixture's own connection runs the reader's earlier-build scan.
+      const exec = (statement: string, params: readonly unknown[]) =>
+        Effect.sync(() =>
+          raw(storage, (db) =>
+            db.prepare(statement).all(...(params as (string | number)[])),
+          ),
+        );
+      const events = yield* rowReader(
+        storage,
+        armsOf(texraPlugins()),
+        exec,
+      ).read(rows, true);
       expect(events).toHaveLength(rows.length);
       const types = new Set(events.map((event) => event.type));
       // Every row kind is in the fixture, the decode test of a released store,
