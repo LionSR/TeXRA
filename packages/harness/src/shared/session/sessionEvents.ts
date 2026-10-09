@@ -85,6 +85,24 @@ export interface JobOptions {
   readonly failed?: (error: unknown) => void;
 }
 
+/**
+ * Rows another owner decides inside a job, under holds the job's scope
+ * keeps: the job appends them with its own, so they commit together.
+ * `committed` is what changes in memory once they have: the job hands it to
+ * {@link afterCommit} or returns it for its caller to run after the
+ * transaction, never runs it on an attempt that may roll back.
+ */
+export interface CoWrite {
+  readonly rows: readonly SessionEventDraft[];
+  readonly committed: Effect.Effect<void>;
+}
+
+/** The co-write of a job with nothing to add. */
+export const noCoWrite: Effect.Effect<CoWrite> = Effect.sync(() => ({
+  rows: [],
+  committed: Effect.void,
+}));
+
 /** One ordered append to the log, as the publisher hands it to a job: a
  *  savepoint of the job's one transaction. */
 export type Append = (

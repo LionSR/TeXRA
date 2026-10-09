@@ -15,7 +15,7 @@ import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   finalizeRun: vi.fn(),
-  submitFollowUp: vi.fn(),
+  startFollowUpWake: vi.fn(),
 }));
 
 // Turn attribution is committed as `child.turn` rows on the run aggregate,
@@ -30,9 +30,11 @@ vi.mock('@agent/storage/runLifecycle', async (importOriginal) => ({
   finalizeRun: mocks.finalizeRun,
 }));
 
+// A delivery commits with its settlement; the parent's wake after it is
+// what a fixture holds open or observes.
 vi.mock('@agent/followUp/ToolUseFollowUp', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@agent/followUp/ToolUseFollowUp')>()),
-  submitFollowUp: mocks.submitFollowUp,
+  startFollowUpWake: mocks.startFollowUpWake,
 }));
 
 import { getRunRecords } from '@agent/storage';
@@ -41,9 +43,7 @@ import type { FinalizeRunInput } from '@agent/storage/runLifecycle';
 const { finalizeRun: realFinalizeRun } = await vi.importActual<
   typeof import('@agent/storage/runLifecycle')
 >('@agent/storage/runLifecycle');
-const { submitFollowUp: realSubmitFollowUp } = await vi.importActual<
-  typeof import('@agent/followUp/ToolUseFollowUp')
->('@agent/followUp/ToolUseFollowUp');
+import { submitFollowUp } from '@agent/followUp/ToolUseFollowUp';
 import {
   startChildRunLoop,
   type ChildRunLoopParams,
@@ -287,12 +287,21 @@ beforeEach(async () => {
   // turn's settlement.
   mocks.finalizeRun.mockImplementation(
     (target: SessionHandle, input: FinalizeRunInput) =>
-      (input.settlement?.length
-        ? target.log.transact(input.settlement)
-        : Effect.void
-      ).pipe(Effect.as({ ok: true })),
+      Effect.as(
+        target.log.transact((tx) =>
+          Effect.scoped(
+            Effect.gen(function* () {
+              if (input.settlement === undefined) return;
+              const co = yield* input.settlement;
+              yield* tx.append(co.rows);
+              yield* co.committed;
+            }),
+          ),
+        ),
+        { ok: true },
+      ),
   );
-  mocks.submitFollowUp.mockReturnValue(Effect.succeed({ status: 'sent' }));
+  mocks.startFollowUpWake.mockReturnValue(Effect.succeed(true));
   // Every run's end goes through the session's one terminal writer.
   vi.spyOn(session.runs, 'end').mockImplementation(
     (input) => mocks.finalizeRun(session, input) as never,
@@ -342,7 +351,7 @@ describe('childRunLoop E2E fixtures', () => {
 
         if (outcome === RUN_OUTCOME.CANCELLED) {
           expect(launch).not.toHaveBeenCalled();
-          expect(mocks.submitFollowUp).not.toHaveBeenCalled();
+          expect(mocks.startFollowUpWake).not.toHaveBeenCalled();
           expect(yield* readChildTurnState(session, runId)).toEqual({
             active: null,
             lastCompleted: null,
@@ -552,7 +561,7 @@ describe('childRunLoop E2E fixtures', () => {
         try {
           yield* foldParentPhase(true);
           expect(
-            yield* realSubmitFollowUp(
+            yield* submitFollowUp(
               PARENT_RUN_ID,
               { text: 'active parent', from: { kind: 'user' as const } },
               {
@@ -563,14 +572,14 @@ describe('childRunLoop E2E fixtures', () => {
 
           yield* foldParentPhase(false);
           expect(
-            yield* realSubmitFollowUp(
+            yield* submitFollowUp(
               PARENT_RUN_ID,
               { text: 'restore me', from: { kind: 'user' as const } },
               { session },
             ),
           ).toMatchObject({ status: 'failed' });
           expect(
-            yield* realSubmitFollowUp(
+            yield* submitFollowUp(
               PARENT_RUN_ID,
               {
                 text: 'late child result',
@@ -589,7 +598,7 @@ describe('childRunLoop E2E fixtures', () => {
           });
           try {
             expect(
-              yield* realSubmitFollowUp(
+              yield* submitFollowUp(
                 PARENT_RUN_ID,
                 {
                   text: 'native child result',
@@ -630,9 +639,9 @@ describe('childRunLoop E2E fixtures', () => {
           yield* Fiber.join(loop);
 
           expect(yield* queuedTexts(PARENT_RUN_ID)).toEqual(progressQueue);
-          expect(mocks.submitFollowUp).not.toHaveBeenCalled();
+          expect(mocks.startFollowUpWake).not.toHaveBeenCalled();
         } finally {
-          session.followUps.closeInput(PARENT_RUN_ID);
+          yield* session.followUps.closeInput(PARENT_RUN_ID);
           yield* session.runs['detachActiveChildren'](PARENT_RUN_ID);
           yield* Deferred.succeed<FakeTurn, Error>(turn, {
             kind: 'terminal',
@@ -660,7 +669,7 @@ describe('childRunLoop E2E fixtures', () => {
       expect(yield* getRunRecords(session, runId).readReport()).toBe(
         'delivered:saved',
       );
-      expect(mocks.submitFollowUp).not.toHaveBeenCalled();
+      expect(mocks.startFollowUpWake).not.toHaveBeenCalled();
     }),
   );
 
@@ -670,24 +679,6 @@ describe('childRunLoop E2E fixtures', () => {
       Effect.gen(function* () {
         const retryRunId = loopRunId();
         yield* session.followUps.open(PARENT_RUN_ID);
-        const admissions: string[] = [];
-        mocks.submitFollowUp.mockImplementation(
-          (targetRunId, followUp, options) =>
-            Effect.gen(function* () {
-              const admission = yield* options.session.followUps.send(
-                targetRunId,
-                followUp,
-              );
-              admissions.push(admission.kind);
-              return admission.kind === 'duplicate' ||
-                admission.kind === 'refused'
-                ? {
-                    status: 'failed' as const,
-                    reason: 'not_resumable' as const,
-                  }
-                : { status: 'sent' as const };
-            }),
-        );
 
         yield* Fiber.join(
           yield* startLoop(retryRunId, createTerminalStrategy('First attempt')),
@@ -702,7 +693,6 @@ describe('childRunLoop E2E fixtures', () => {
             ),
           ),
         ).toEqual({ kind: 'terminal', value: 'done' });
-        expect(admissions).toEqual(['duplicate', 'duplicate']);
         const delivered = yield* queuedFollowUps(session, PARENT_RUN_ID);
         expect(delivered.map((item) => item.text)).toEqual([
           'delivered:done',
@@ -720,10 +710,10 @@ describe('childRunLoop E2E fixtures', () => {
       const releaseSessionOwnership = vi.fn();
       // The in-mock assertion now fails the delivery as a defect rather than
       // being swallowed by a rejected promise the loop logs.
-      mocks.submitFollowUp.mockImplementation(() =>
+      mocks.startFollowUpWake.mockImplementation(() =>
         Effect.sync(() => {
           expect(releaseSessionOwnership).toHaveBeenCalledOnce();
-          return { status: 'sent' };
+          return true;
         }),
       );
 
@@ -758,7 +748,7 @@ describe('childRunLoop E2E fixtures', () => {
 
         const exit = yield* Fiber.await(loop);
         expect(Exit.isFailure(exit)).toBe(true);
-        expect(mocks.submitFollowUp).not.toHaveBeenCalled();
+        expect(mocks.startFollowUpWake).not.toHaveBeenCalled();
       }),
   );
 
@@ -773,12 +763,12 @@ describe('childRunLoop E2E fixtures', () => {
         const parentWake = vi.fn();
         const deliveryStarted = yield* Deferred.make<void>();
         const deliveryCompleted = yield* Deferred.make<void>();
-        mocks.submitFollowUp.mockImplementation(() =>
+        mocks.startFollowUpWake.mockImplementation(() =>
           Effect.gen(function* () {
             parentWake();
             yield* Deferred.succeed(deliveryStarted, undefined);
             yield* Deferred.await(deliveryCompleted);
-            return { status: 'sent' as const };
+            return true;
           }),
         );
 
@@ -790,11 +780,12 @@ describe('childRunLoop E2E fixtures', () => {
         yield* resolveTurn(1, { kind: 'interim', value: 'first' });
 
         yield* Deferred.await(deliveryStarted);
-        expect(mocks.submitFollowUp).toHaveBeenCalledWith(
+        // The result is queued by the time its parent is woken.
+        expect(mocks.startFollowUpWake).toHaveBeenCalledWith(
           PARENT_RUN_ID,
-          expect.objectContaining({ text: 'delivered:first' }),
-          expect.anything(),
+          session,
         );
+        expect(yield* queuedTexts(PARENT_RUN_ID)).toEqual(['delivered:first']);
         // The loop starts delivery for turn N before reading the queue for turn
         // N+1. Even input already queued during delivery must not begin another
         // model turn until the parent has received this result.
@@ -821,17 +812,16 @@ describe('childRunLoop E2E fixtures', () => {
         yield* resolveTurn(2, { kind: 'terminal', value: 'final' });
 
         yield* Fiber.join(loop);
-        expect(mocks.submitFollowUp).toHaveBeenCalledWith(
-          expect.anything(),
-          expect.objectContaining({ text: 'delivered:final' }),
-          expect.anything(),
-        );
+        expect(yield* queuedTexts(PARENT_RUN_ID)).toEqual([
+          'delivered:first',
+          'delivered:final',
+        ]);
         expect(session.runs.isLive(runId)).toBe(false);
       }),
   );
 
   // it.live: the WAITING status is the session fold projecting the park row
-  // that `commitPark` commits after delivery returns, and the loop offers
+  // the interim turn's settlement commits, and the loop offers
   // no in-fiber hook between the two, so the one surviving poll observes a
   // process-runtime fact under the live clock.
   it.live(
@@ -947,7 +937,7 @@ describe('childRunLoop E2E fixtures', () => {
           'delivered:late',
         );
         expect(releaseSessionOwnership).toHaveBeenCalledOnce();
-        expect(mocks.submitFollowUp).not.toHaveBeenCalled();
+        expect(mocks.startFollowUpWake).not.toHaveBeenCalled();
       }),
   );
 
@@ -959,8 +949,8 @@ describe('childRunLoop E2E fixtures', () => {
         const { strategy, resolveTurn } = createFakeStrategy();
         trackChildHandle(runId, PARENT_RUN_ID);
         const delivered = yield* Deferred.make<void>();
-        mocks.submitFollowUp.mockImplementation(() =>
-          Effect.as(Deferred.succeed(delivered, undefined), { status: 'sent' }),
+        mocks.startFollowUpWake.mockImplementation(() =>
+          Effect.as(Deferred.succeed(delivered, undefined), true),
         );
 
         const loop = yield* startLoop(runId, strategy);
@@ -979,7 +969,7 @@ describe('childRunLoop E2E fixtures', () => {
         expect(Exit.isFailure(exit)).toBe(true);
         expect(session.runs.isLive(runId)).toBe(false);
         // Only the one interim delivery — the kill did not spawn another turn.
-        expect(mocks.submitFollowUp).toHaveBeenCalledTimes(1);
+        expect(mocks.startFollowUpWake).toHaveBeenCalledTimes(1);
       }),
   );
 
@@ -994,8 +984,8 @@ describe('childRunLoop E2E fixtures', () => {
         }).pipe(Effect.provideService(Runs, session.runs));
         trackedRunIds.add(runId);
         const delivered = yield* Deferred.make<void>();
-        mocks.submitFollowUp.mockImplementation(() =>
-          Effect.as(Deferred.succeed(delivered, undefined), { status: 'sent' }),
+        mocks.startFollowUpWake.mockImplementation(() =>
+          Effect.as(Deferred.succeed(delivered, undefined), true),
         );
         mocks.finalizeRun.mockReturnValueOnce(
           Effect.succeed({
@@ -1008,7 +998,7 @@ describe('childRunLoop E2E fixtures', () => {
 
         yield* resolveTurn(1, { kind: 'interim', value: 'first' });
         yield* Deferred.await(delivered);
-        expect(mocks.submitFollowUp).toHaveBeenCalledTimes(1);
+        expect(mocks.startFollowUpWake).toHaveBeenCalledTimes(1);
         // One macrotask lets the loop reach its queue wait before the stop lands.
         yield* settle;
 
@@ -1047,11 +1037,11 @@ describe('childRunLoop E2E fixtures', () => {
         trackChildHandle(runId, PARENT_RUN_ID);
         const deliveryStarted = yield* Deferred.make<void>();
         const deliveryGate = yield* Deferred.make<void>();
-        mocks.submitFollowUp.mockImplementation(() =>
+        mocks.startFollowUpWake.mockImplementation(() =>
           Effect.gen(function* () {
             yield* Deferred.succeed(deliveryStarted, undefined);
             yield* Deferred.await(deliveryGate);
-            return { status: 'sent' as const };
+            return true;
           }),
         );
 
@@ -1072,7 +1062,7 @@ describe('childRunLoop E2E fixtures', () => {
         yield* Deferred.succeed(deliveryGate, undefined);
         const exit = yield* Fiber.await(loop);
         expect(Exit.isFailure(exit)).toBe(true);
-        expect(mocks.submitFollowUp).toHaveBeenCalledTimes(1);
+        expect(mocks.startFollowUpWake).toHaveBeenCalledTimes(1);
         expect(session.runs.isLive(runId)).toBe(false);
         yield* stop.settlement;
       }),
@@ -1102,14 +1092,14 @@ describe('childRunLoop E2E fixtures', () => {
         const wakeReached = yield* Deferred.make<void>();
         const releaseWake = yield* Deferred.make<void>();
         let handleAtWakeTime: unknown;
-        mocks.submitFollowUp.mockImplementation(() =>
+        mocks.startFollowUpWake.mockImplementation(() =>
           Effect.gen(function* () {
             // Snapshot registry state the instant the wake step is reached. The
             // same moment a resumed parent's own turn would begin running.
             handleAtWakeTime = session.runs.getHandle(runId);
             yield* Deferred.succeed(wakeReached, undefined);
             yield* Deferred.await(releaseWake);
-            return { status: 'sent' as const };
+            return true;
           }),
         );
 
@@ -1135,17 +1125,15 @@ describe('childRunLoop E2E fixtures', () => {
         const { strategy, resolveTurn, rejectTurn, errors } =
           createFakeStrategy();
         const firstDelivered = yield* Deferred.make<void>();
-        mocks.submitFollowUp.mockImplementation(() =>
-          Effect.as(Deferred.succeed(firstDelivered, undefined), {
-            status: 'sent',
-          }),
+        mocks.startFollowUpWake.mockImplementation(() =>
+          Effect.as(Deferred.succeed(firstDelivered, undefined), true),
         );
 
         const loop = yield* startLoop(runId, strategy);
 
         yield* resolveTurn(1, { kind: 'interim', value: 'first' });
         yield* Deferred.await(firstDelivered);
-        expect(mocks.submitFollowUp).toHaveBeenCalledTimes(1);
+        expect(mocks.startFollowUpWake).toHaveBeenCalledTimes(1);
 
         expect(
           yield* session.followUps.send(runId, {
@@ -1158,11 +1146,10 @@ describe('childRunLoop E2E fixtures', () => {
         yield* rejectTurn(2, resumeFailure);
 
         yield* Fiber.join(loop);
-        expect(mocks.submitFollowUp).toHaveBeenCalledWith(
-          expect.anything(),
-          expect.objectContaining({ text: 'error:thrown' }),
-          expect.anything(),
-        );
+        expect(yield* queuedTexts(PARENT_RUN_ID)).toEqual([
+          'delivered:first',
+          'error:thrown',
+        ]);
         expect(errors).toContain(resumeFailure);
         expect(session.runs.isLive(runId)).toBe(false);
       }),
@@ -1180,11 +1167,7 @@ describe('childRunLoop E2E fixtures', () => {
         yield* resolveTurn(1, { kind: 'error-turn', value: 'oops' });
 
         yield* Fiber.join(loop);
-        expect(mocks.submitFollowUp).toHaveBeenCalledWith(
-          expect.anything(),
-          expect.objectContaining({ text: 'error:oops' }),
-          expect.anything(),
-        );
+        expect(yield* queuedTexts(PARENT_RUN_ID)).toEqual(['error:oops']);
         expect(session.runs.isLive(runId)).toBe(false);
       }),
   );

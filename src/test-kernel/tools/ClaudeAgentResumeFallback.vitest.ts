@@ -311,8 +311,12 @@ describe('claude_agent tool launch and resume fallback', () => {
           {
             turnPermit: (turn) => turn,
             settleBoundary: () =>
-              Effect.succeed({ rows: [], settled: Effect.void }),
-            settleEnd: () => Effect.succeed([]),
+              Effect.succeed({
+                rows: [],
+                alongside: undefined,
+                settled: Effect.void,
+              }),
+            settleEnd: () => Effect.succeed(undefined),
           },
         );
 
@@ -362,8 +366,12 @@ describe('claude_agent tool launch and resume fallback', () => {
           {
             turnPermit: (turn) => turn,
             settleBoundary: () =>
-              Effect.succeed({ rows: [], settled: Effect.void }),
-            settleEnd: () => Effect.succeed([]),
+              Effect.succeed({
+                rows: [],
+                alongside: undefined,
+                settled: Effect.void,
+              }),
+            settleEnd: () => Effect.succeed(undefined),
           },
         );
         const [callArgs] = mocks.query.mock.calls[0] as [
@@ -435,8 +443,12 @@ describe('claude_agent tool launch and resume fallback', () => {
         {
           turnPermit: (turn) => turn,
           settleBoundary: () =>
-            Effect.succeed({ rows: [], settled: Effect.void }),
-          settleEnd: () => Effect.succeed([]),
+            Effect.succeed({
+              rows: [],
+              alongside: undefined,
+              settled: Effect.void,
+            }),
+          settleEnd: () => Effect.succeed(undefined),
         },
       );
       if (!turn) throw new Error('Expected a Claude turn result');
@@ -685,8 +697,12 @@ describe('claude_agent tool launch and resume fallback', () => {
           {
             turnPermit: (turn) => turn,
             settleBoundary: () =>
-              Effect.succeed({ rows: [], settled: Effect.void }),
-            settleEnd: () => Effect.succeed([]),
+              Effect.succeed({
+                rows: [],
+                alongside: undefined,
+                settled: Effect.void,
+              }),
+            settleEnd: () => Effect.succeed(undefined),
           },
         );
         if (!firstTurn) throw new Error('Expected a Claude fork turn');
@@ -775,8 +791,12 @@ describe('claude_agent tool launch and resume fallback', () => {
         {
           turnPermit: (turn) => turn,
           settleBoundary: () =>
-            Effect.succeed({ rows: [], settled: Effect.void }),
-          settleEnd: () => Effect.succeed([]),
+            Effect.succeed({
+              rows: [],
+              alongside: undefined,
+              settled: Effect.void,
+            }),
+          settleEnd: () => Effect.succeed(undefined),
         },
       );
       expect(firstTurn).toMatchObject({

@@ -66,7 +66,7 @@ describe('tool-use follow-up progress events', () => {
     const owner = session ?? testDefaultSession();
     handle.attachControls({
       oneShot: false,
-      requestImmediateCompaction: () => {},
+      requestImmediateCompaction: () => Effect.void,
       editView: () => Effect.void,
       modelSwitchDisabledReason: () => Effect.succeed(undefined),
       switchModel: () => Effect.void,
@@ -152,9 +152,7 @@ describe('tool-use follow-up progress events', () => {
           }),
         );
         yield* Effect.addFinalizer(() =>
-          Effect.sync(() =>
-            testDefaultSession().followUps.closeInput(resumingRunId),
-          ),
+          testDefaultSession().followUps.closeInput(resumingRunId),
         );
 
         const result = yield* submitFollowUp(

@@ -12,7 +12,11 @@ import { Deferred, Effect, Result, type Scope } from 'effect';
 import type { ResumeRunResult } from '@agent/runtime/resumeRun';
 import type { SessionLog } from '@agent/runtime/SessionHandle';
 import { withLogChannel } from '@logger/effectLog';
-import { aggregateId, type RunId } from '@shared/schemas';
+import {
+  aggregateId,
+  type RunId,
+  type SessionEventDraft,
+} from '@shared/schemas';
 import {
   heldElsewhereBy,
   type DatabaseReadFailed,
@@ -90,6 +94,9 @@ export interface SendOptions {
 /** A resume's result, and whether this caller joined one in flight. */
 type Resumed = { readonly result: ResumeRunResult; readonly joined: boolean };
 
+/** A send decided inside a job: its rows, and how it landed. */
+type Admission = { rows: readonly SessionEventDraft[]; sent: Sent };
+
 /** What observers hear: a run takes no more input, or the inbox closed. */
 export type InboxClosed =
   | { readonly kind: 'run'; readonly runId: RunId }
@@ -111,12 +118,9 @@ export class Inbox {
     this.port = port;
   }
 
-  /**
-   * Append one message to the run's input, in one publisher job under the
-   * run's claim: refused when the input is closed and no reader is open
-   * here, or when another live process holds the run (writing nothing); a
-   * replayed delivery id writes nothing. Any other write failure fails.
-   */
+  /** Append one message to the run's input in one job under its claim:
+   *  refused, writing nothing, when the input is closed with no reader here
+   *  or another live process holds the run; a replay writes nothing. */
   send(
     runId: RunId,
     item: InboxItem,
@@ -128,8 +132,9 @@ export class Inbox {
     );
   }
 
-  /** {@link send} for a producer with no fiber: enqueued on the publisher
-   *  now, so it commits in call order; a failure is logged. */
+  /** {@link send} for a producer with no fiber (a child's progress notice):
+   *  enqueued on the publisher now, so it commits in call order ahead of
+   *  the turn's result; a failure is logged. */
   sendDetached(runId: RunId, item: InboxItem): void {
     if (this.disposed) return;
     this.port.detach((append) =>
@@ -144,11 +149,8 @@ export class Inbox {
     );
   }
 
-  /**
-   * Open the run's reader for the caller's scope: the generation running
-   * the run. The run registry admits one generation at a time, so a second
-   * open is a defect.
-   */
+  /** Open the run's reader for the generation running it (the caller's
+   *  scope); the registry admits one at a time, so a second is a defect. */
   open(runId: RunId): Effect.Effect<RunInput, never, Scope.Scope> {
     return Effect.acquireRelease(
       Effect.suspend(() => {
@@ -188,29 +190,24 @@ export class Inbox {
     );
   }
 
-  /**
-   * Close the run's input with a `followup.closed` row, under its claim and
-   * only while nothing is queued: the publisher job reads the pending rows,
-   * so a message admitted before it keeps the run open, and its reader and
-   * observers hear nothing.
-   */
-  closeInput(runId: RunId): void {
-    if (this.disposed) return;
+  /** Close the run's input (`followup.closed`) under its claim, unless a
+   *  message is queued, read in the same transaction; a failure is logged. */
+  closeInput(runId: RunId): Effect.Effect<void> {
+    if (this.disposed) return Effect.void;
     const run = aggregateId('run', runId);
-    this.port.detach((append) =>
-      Effect.scoped(
+    return this.port.log
+      .transact((tx) =>
         Effect.gen({ self: this }, function* () {
           yield* this.port.log.hold(runId);
           const input = yield* this.read(runId);
           if (queued(input)) return;
           // A request the run never applied closes with its input.
-          const settled = input.followUps.map(({ followUpId }) => ({
-            type: 'followup.consumed' as const,
-            aggregateId: run,
-            followUpId,
-          }));
-          yield* append([
-            ...settled,
+          yield* tx.append([
+            ...input.followUps.map(({ followUpId }) => ({
+              type: 'followup.consumed' as const,
+              aggregateId: run,
+              followUpId,
+            })),
             { type: 'followup.closed', aggregateId: run },
           ]);
           // Only a closed input that committed ends the reader.
@@ -220,15 +217,15 @@ export class Inbox {
               this.notify({ kind: 'run', runId });
             }),
           );
-        }),
-      ).pipe(
+        }).pipe(Effect.scoped),
+      )
+      .pipe(
         Effect.catch((error) =>
           Effect.logWarning(
             `Run ${runId}: its closed input was not recorded`,
           ).pipe(Effect.annotateLogs({ data: error }), withLogChannel(CHANNEL)),
         ),
-      ),
-    );
+      );
   }
 
   /** A deleted run: its reader ends; its `run.removed` row closes its input. */
@@ -284,38 +281,70 @@ export class Inbox {
     this.observers.clear();
   }
 
-  /** One send, as a publisher job. */
   private admit(
     runId: RunId,
     item: InboxItem,
     options: SendOptions,
     append: Append,
   ): Effect.Effect<Sent, Error> {
-    // A run with no reader here answers "closed" from its rows, read again
-    // once the claim is held (a claim that moved here reads what its earlier
-    // owner wrote).
+    return Effect.gen({ self: this }, function* () {
+      const { rows, sent } = yield* this.admission(runId, item, options);
+      if (rows.length > 0) yield* append(rows);
+      return sent;
+    }).pipe(Effect.scoped);
+  }
+
+  /** One send decided in the caller's job under the run's claim: the row
+   *  the job appends with its own, and how it landed (see {@link send}). */
+  admission(
+    runId: RunId,
+    item: InboxItem,
+    options: SendOptions,
+  ): Effect.Effect<Admission, Error, Scope.Scope> {
+    // No reader here: "closed" is read from rows, again once claimed.
     const closed = (input: InputRows) =>
       this.disposed || (!this.readers.has(runId) && input.closed);
-    const refused = { kind: 'refused' } as const;
-    const landed = Effect.gen({ self: this }, function* () {
-      if (closed(yield* this.read(runId))) return refused;
+    const only = (sent: Sent): Admission => ({ rows: [], sent });
+    // The reader hears a committed row; a replay is news only as a wake.
+    const landed = (replay: boolean) =>
+      Effect.suspend(() => {
+        const reader = this.readers.get(runId);
+        const wake =
+          options.wake === true &&
+          options.hold !== 'instruction' &&
+          reader === undefined &&
+          !this.port.live(runId) &&
+          !this.resumes.has(runId);
+        const sent: Sent =
+          replay && !wake
+            ? { kind: 'duplicate' }
+            : { kind: 'queued', read: reader !== undefined, wake };
+        return Effect.as(
+          afterCommit(Effect.sync(() => reader?.notify())),
+          sent,
+        );
+      });
+    return Effect.gen({ self: this }, function* () {
+      if (closed(yield* this.read(runId))) return only({ kind: 'refused' });
       yield* this.port.log.hold(runId);
       const input = yield* this.read(runId);
-      if (closed(input)) return refused;
+      if (closed(input)) return only({ kind: 'refused' });
       // Stamped inside the job, from committed parentage.
       const row = queuedRow(item, options.hold, (sender) =>
         runRelation(sender, runId, this.port.parentOf),
       );
       if (!input.followUpIds.has(row.followUpId)) {
+        const aggregate = aggregateId('run', runId);
         const queued = { type: 'followup.queued', ...row } as const;
-        yield* append([{ ...queued, aggregateId: aggregateId('run', runId) }]);
-        return 'written' as const;
+        return {
+          rows: [{ ...queued, aggregateId: aggregate }],
+          sent: yield* landed(false),
+        };
       }
       return input.followUps.some((f) => f.followUpId === row.followUpId)
-        ? ('pending' as const)
-        : ({ kind: 'duplicate' } as const);
-    });
-    return Effect.scoped(landed).pipe(
+        ? { rows: [], sent: yield* landed(true) }
+        : only({ kind: 'duplicate' });
+    }).pipe(
       Effect.catchIf(
         (error) => heldElsewhereBy(error) !== null,
         (error) =>
@@ -324,29 +353,9 @@ export class Inbox {
           ).pipe(
             Effect.annotateLogs({ data: error }),
             withLogChannel(CHANNEL),
-            Effect.as<Sent>({ kind: 'refused', reason: 'owned_elsewhere' }),
+            Effect.as(only({ kind: 'refused', reason: 'owned_elsewhere' })),
           ),
       ),
-      Effect.flatMap((sent) => {
-        if (typeof sent !== 'string') return Effect.succeed(sent);
-        const reader = this.readers.get(runId);
-        const wake =
-          options.wake === true &&
-          options.hold !== 'instruction' &&
-          reader === undefined &&
-          !this.port.live(runId) &&
-          !this.resumes.has(runId);
-        // A replay still queued is news only when it owes the run a resume.
-        const landed: Sent =
-          sent === 'pending' && !wake
-            ? { kind: 'duplicate' }
-            : { kind: 'queued', read: reader !== undefined, wake };
-        // The reader reads the row once it has committed.
-        return Effect.as(
-          afterCommit(Effect.sync(() => reader?.notify())),
-          landed,
-        );
-      }),
     );
   }
 

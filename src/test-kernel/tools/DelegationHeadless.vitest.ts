@@ -8,6 +8,7 @@ import { humanGrant } from '@agent/runtime/runApprovalQueue';
 
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { AgentEngine } from '@agent/runtime/AgentEngine';
+import type { TransactionPart } from '@agent/runtime/childSettlement';
 import type { RunHandle } from '@agent/runtime/RunHandle';
 import { Runs } from '@agent/runtime/runRegistry';
 import { SessionHandle } from '@agent/runtime/SessionHandle';
@@ -113,7 +114,7 @@ vi.mock('@agent/storage/runLifecycle', async (importOriginal) => {
       input: Parameters<typeof actual.finalizeRun>[1],
     ) =>
       Effect.tryPromise({
-        try: () => persistSettlement(input.runId, input.settlement ?? []),
+        try: () => persistSettlement(input.runId, input.settlement),
         catch: ensureError,
       }).pipe(
         Effect.matchEffect({
@@ -128,11 +129,16 @@ vi.mock('@agent/storage/runLifecycle', async (importOriginal) => {
   };
 });
 
-/** Write a settlement's report and manifest to the suite's record store. */
+/** Write a settlement's report and manifest to the suite's record store:
+ *  the rows its transaction part decides, captured instead of committed. */
 async function persistSettlement(
   runId: RunId,
-  rows: readonly SessionEventDraft[],
+  settlement: TransactionPart | undefined,
 ): Promise<void> {
+  const rows: readonly SessionEventDraft[] =
+    settlement === undefined
+      ? []
+      : (await Effect.runPromise(Effect.scoped(settlement))).rows;
   for (const row of rows) {
     if (row.type === 'run.report' && row.report !== null)
       await mocks.childRecords(runId).writeReport(row.report);
@@ -603,8 +609,8 @@ describe('headless delegation', () => {
         session.runs.stop(runId, { reason: 'user' }).settlement,
       );
     }
-    session.followUps.closeInput(PARENT_RUN_ID);
-    session.followUps.closeInput(CHILD_RUN_ID);
+    await Effect.runPromise(session.followUps.closeInput(PARENT_RUN_ID));
+    await Effect.runPromise(session.followUps.closeInput(CHILD_RUN_ID));
     await Effect.runPromise(session.runs.awaitDrained());
     await Effect.runPromise(closeSessionOf(inBandSession));
   });

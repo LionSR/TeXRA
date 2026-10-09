@@ -44,7 +44,9 @@ import {
   MESSAGE_TYPES,
   RUN_PHASE,
   RUN_LIFECYCLE_READY,
+  RESTING_SUBSTATES,
   RUN_SUBSTATE,
+  parkSubstate,
   isDocumentTaskConfig,
   isPlainAgentIdentity,
   listingKeyOf,
@@ -526,9 +528,8 @@ function withAggregates(view: SessionView, run: RunView): RunView {
   const own = owner !== null && local.self.includes(owner);
   const heldBy =
     owner !== null && !own && !local.dead.includes(owner) ? owner : null;
-  const heldElsewhere = heldBy !== null;
-  const held = own || heldElsewhere;
-  const paused = run.substate === RUN_SUBSTATE.PAUSED;
+  const held = own || heldBy !== null;
+  const paused = RESTING_SUBSTATES.has(run.substate);
   // Only a request that parks its tool is a wait: a dispatched inquiry left
   // its run working, listed for the panel but still Running.
   const pendingOwn = view.requests.some(
@@ -562,7 +563,7 @@ function withAggregates(view: SessionView, run: RunView): RunView {
     interrupted,
     waiting,
   });
-  const readOnly = heldElsewhere || unreadable !== undefined;
+  const readOnly = heldBy !== null || unreadable !== undefined;
   const actions = runActions({ ...run, readOnly, group });
   const forceExpanded = waiting || interrupted || descendantNeedsUser;
   const blockedEntry = local.resumeBlocked.find((b) => b.runId === run.id);
@@ -871,10 +872,8 @@ function applyOwnArm(run: RunView, event: OwnEvent): RunView {
         facts: { ...run.facts, [`${event.plugin}/${event.kind}`]: event.value },
       };
     case 'child.park':
-      // A loop-driven child's park or pause; no run history, so `turn` stays null.
-      return event.phase === 'paused'
-        ? { ...parked(run, true, event.at), substate: RUN_SUBSTATE.PAUSED }
-        : parked(run, phaseMoveOf(event) === RUN_PHASE.WAITING, event.at);
+      run = parked(run, event.phase !== 'resumed', event.at);
+      return { ...run, substate: parkSubstate(event) };
     case 'run.detach':
       // The edge severed (one run model, 3.2); a run never gets a new parent.
       return run.parentId === null ? run : { ...run, parentId: null };

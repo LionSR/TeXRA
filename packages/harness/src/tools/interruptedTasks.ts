@@ -27,7 +27,7 @@ import { withLogChannel } from '@logger/effectLog';
 import type { AgentCatalogServices } from '@platform/processRuntime';
 import {
   RESUME_ON_OPEN_SETTING,
-  RUN_SUBSTATE,
+  RESTING_SUBSTATES,
   type ResumeOnOpen,
   type RunId,
 } from '@shared/schemas';
@@ -126,7 +126,7 @@ export const followInterruptedTasks = Effect.fn('followInterruptedTasks')(
         (run) =>
           run.parentId === null &&
           run.identity.kind === 'agent' &&
-          run.substate !== RUN_SUBSTATE.PAUSED &&
+          !RESTING_SUBSTATES.has(run.substate) &&
           !isTerminalOutcomePhase(run.status) &&
           !session.runs.isLive(run.id),
       );

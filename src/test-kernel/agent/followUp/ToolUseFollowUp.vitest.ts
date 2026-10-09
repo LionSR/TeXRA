@@ -773,7 +773,7 @@ describe('Inbox closed input', () => {
         const { followUps, queued } = recordedFollowUps();
         const closed = generateRunId();
         const open = generateRunId();
-        followUps.closeInput(closed);
+        yield* followUps.closeInput(closed);
         yield* settle;
 
         expect(
@@ -798,7 +798,7 @@ describe('Inbox closed input', () => {
       const { followUps, queued } = recordedFollowUps();
       const id = generateRunId();
       yield* followUps.send(id, user('raced'));
-      followUps.closeInput(id);
+      yield* followUps.closeInput(id);
       yield* settle;
 
       expect(yield* followUps.send(id, user('later'))).toMatchObject({

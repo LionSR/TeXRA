@@ -330,10 +330,14 @@ const DisplaySessionEventDraftSchema = z.discriminatedUnion('type', [
    * rests it with no `run.end`, keeping the `resumeId` a tool call continues
    * it by. A listing key of its own (`listingTypeOf`'s default): a cold
    * listing that dropped it would paint every parked child as busy.
+   * `heldFor`: the delivery id of a result its parent refused while another
+   * process held it, delivered when next admitted; `ends`: that turn's end.
    */
   durable('child.park', {
     phase: z.enum(['parked', 'resumed', 'paused']),
     resumeId: z.string().optional(),
+    heldFor: z.string().min(1).optional(),
+    ends: z.enum(['completed', 'failed']).optional(),
   }),
   RunRemovedDraftSchema,
   /** A run's title, and who gave it: the model's summary, or the user's
@@ -425,17 +429,13 @@ const RunHistoryEventDraftSchema = z.discriminatedUnion('type', [
    * The key is structural, (run, attempt, turn index), so an accepted turn
    * always folds to one identity and a later attempt reusing the run id
    * never collides with it. `accepted` without `settled` is the active
-   * turn; the latest `settled` is the last turn whose delivery ran. Its
-   * `delivery` names the parent and follow-up id of the `run.report` just
-   * before it in its batch: the parent's row is that report's relay.
+   * turn; the latest `settled` is the last turn whose delivery ran: its
+   * parent's `followup.queued` commits in the same transaction.
    */
   durable('child.turn', {
     attemptId: z.string().min(1),
     turnIndex: z.int().positive(),
     phase: z.enum(['accepted', 'settled']),
-    delivery: z
-      .object({ to: RunIdSchema, followUpId: z.string().min(1) })
-      .optional(),
   }),
 ]);
 export const SessionEventDraftSchema = z.discriminatedUnion('type', [

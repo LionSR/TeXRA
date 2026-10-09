@@ -925,6 +925,14 @@ show` print the same notice, and the new `texra agents customize`,
 
 ### Bug Fixes
 
+- **A subagent's result can no longer be lost to a crash.** A background
+  subagent, script or command used to record its result and then, as a
+  second step, queue it for the task that started it; a crash between the
+  two left the result only in the subagent's report until that task was
+  resumed a particular way. Both now commit together, so a task waiting on
+  its subagents always finds the result queued once the subagent reads as
+  done. `/compact` is now confirmed only after it is queued, and says so
+  when the conversation takes no more input.
 - **A crash no longer leaves half of one write on disk.** When TeXRA wrote
   several related records as one step (a goal and the approval it grants, a
   run's history with its registration, a request and its answer), each
