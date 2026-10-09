@@ -113,8 +113,10 @@ const refusingGlobalDatabase: Layer.Layer<GlobalDatabase> = Layer.succeed(
     list: () => refuseGlobalRecord('values.list'),
     changes: () => Stream.fromEffect(refuseGlobalRecord('values.changes')),
   },
-  readInputHistory: () => refuseGlobalRecord('readInputHistory'),
-  appendInputHistory: () => refuseGlobalRecord('appendInputHistory'),
+  inputHistory: {
+    read: refuseGlobalRecord('inputHistory.read'),
+    append: () => refuseGlobalRecord('inputHistory.append'),
+  },
 });
 
 /**

@@ -1915,6 +1915,10 @@ describe('the C1 event table and the C6 publisher', () => {
             (SELECT logical_id FROM event_sequence WHERE id = NEW.aggregate));
         END;
       `);
+      // The change poll hears this connection's schema change once; what
+      // follows is measured from there.
+      yield* TestClock.adjust('1 second');
+      const base = yield* SubscriptionRef.get(database.level);
 
       const failed = yield* Effect.exit(database.appendAll([runStart]));
       expect(Exit.isFailure(failed)).toBe(true);
@@ -1923,7 +1927,7 @@ describe('the C1 event table and the C6 publisher', () => {
           'FOREIGN KEY constraint failed',
         );
       }
-      expect(yield* SubscriptionRef.get(database.level)).toBe(0);
+      expect(yield* SubscriptionRef.get(database.level)).toBe(base);
       expect(yield* SubscriptionRef.get(database.observedCommit)).toBe(0);
 
       const committed = yield* database.appendAll([olderStart]);
@@ -1933,7 +1937,7 @@ describe('the C1 event table and the C6 publisher', () => {
       expect(connection.prepare('SELECT id FROM committed_run').all()).toEqual([
         { id: OLDER },
       ]);
-      expect(yield* SubscriptionRef.get(database.level)).toBe(1);
+      expect(yield* SubscriptionRef.get(database.level)).toBe(base + 1);
       expect(yield* SubscriptionRef.get(database.observedCommit)).toBe(1);
     }).pipe(Effect.provide(substrate(storage)), Effect.scoped);
   });

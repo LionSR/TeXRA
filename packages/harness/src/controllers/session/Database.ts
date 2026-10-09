@@ -17,9 +17,11 @@ import { join } from 'node:path';
 import * as SqliteClient from '@effect/sql-sqlite-node/SqliteClient';
 import * as SqlClient from 'effect/sql/SqlClient';
 import * as Reactivity from 'effect/reactivity/Reactivity';
+import { isSqlError } from 'effect/sql/SqlError';
 import { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 import {
   Clock,
+  Context,
   Duration,
   Scope,
   Effect,
@@ -48,7 +50,7 @@ import {
   type SessionEvent,
   type SessionEventDraft,
 } from '@shared/schemas';
-import { ProcessIdentity } from '@shared/session/sessionEvents';
+import { committing, ProcessIdentity } from '@shared/session/sessionEvents';
 import {
   AggregateStateSchema,
   DeletionModeSchema,
@@ -57,9 +59,9 @@ import {
   Database,
   GlobalDatabase,
   DatabaseOpenFailed,
-  DatabaseClaimRefused,
   DatabaseNotOwner,
   DatabaseReadFailed,
+  DatabaseStoreNewer,
   DatabaseWriteFailed,
 } from '@shared/session/database';
 import { armsOf } from '@tools/plugins';
@@ -104,13 +106,27 @@ import {
   type SqlRow,
 } from './rowCodec';
 import { rowReader } from './rowReader';
-import { isBusy, isDamaged, retryBusy } from './storeAside';
+import {
+  isBusy,
+  isDamaged,
+  OwnersUnproven,
+  ProvenOwners,
+  provingOwners,
+  reclaimable,
+  retryBusy,
+} from './storeAside';
 import { openStore, reclaimFreePages } from './storeSchema';
 /** The database file of a session root, beside the stores it replaces. */
 const SESSION_DATABASE_FILE = 'texra.db';
 const CHANNEL = 'sessionDatabase';
 /** A row or draft that contradicts the store's own protocol: a defect. */
 const invariant = (message: string) => Effect.die(new Error(message));
+/** The open transaction's mode, null outside one; `derive` (projection
+ *  catch-up) takes the write lock and wakes no reader. */
+const TxMode = Context.Reference<'read' | 'write' | 'derive' | null>(
+  '@texra/session/TxMode',
+  { defaultValue: () => null },
+);
 /** One aggregate's surrogate, from its two columns. */
 const AGGREGATE =
   '(SELECT id FROM event_sequence WHERE kind = ? AND logical_id = ?)';
@@ -329,84 +345,93 @@ export const databaseLayer = (
           ),
         ),
       );
-      // `derive` (projection catch-up) takes the write lock, wakes no reader.
-      const transactions = (mode: 'read' | 'write' | 'derive') =>
-        SqlClient.makeWithTransaction({
-          transactionService: sql.transactionService,
-          spanAttributes: [['db.system.name', 'sqlite']],
-          acquireConnection: Effect.gen(function* () {
-            const scope = yield* Scope.make();
-            const connection = yield* Scope.provide(sql.reserve, scope);
-            // Publish the committed write before the reserved connection is
-            // released, including when interruption is pending after COMMIT.
-            yield* Scope.addFinalizerExit(scope, (exit) =>
-              mode === 'write' && Exit.isSuccess(exit)
-                ? Effect.gen(function* () {
-                    yield* observe(
-                      commitFromRows(
-                        yield* connection.executeUnprepared(
-                          highWater,
-                          [],
-                          undefined,
-                        ),
+      // One transaction wrapper, so a nested call of any mode finds the
+      // savepoint semaphore its outermost opened; that one's mode is `TxMode`.
+      const withTransaction = SqlClient.makeWithTransaction({
+        transactionService: sql.transactionService,
+        spanAttributes: [['db.system.name', 'sqlite']],
+        acquireConnection: Effect.gen(function* () {
+          const mode = yield* TxMode;
+          const scope = yield* Scope.make();
+          const connection = yield* Scope.provide(sql.reserve, scope);
+          // Publish the committed write before the reserved connection is
+          // released, including when interruption is pending after COMMIT.
+          yield* Scope.addFinalizerExit(scope, (exit) =>
+            mode === 'write' && Exit.isSuccess(exit)
+              ? Effect.gen(function* () {
+                  yield* observe(
+                    commitFromRows(
+                      yield* connection.executeUnprepared(
+                        highWater,
+                        [],
+                        undefined,
                       ),
-                    );
-                    yield* SubscriptionRef.update(level, (wake) => wake + 1);
-                  }).pipe(Effect.orDie)
-                : Effect.void,
-            );
-            return [scope, connection] as const;
-          }),
-          begin: (connection) =>
+                    ),
+                  );
+                  yield* SubscriptionRef.update(level, (wake) => wake + 1);
+                }).pipe(Effect.orDie)
+              : Effect.void,
+          );
+          return [scope, connection] as const;
+        }),
+        begin: (connection) =>
+          Effect.flatMap(TxMode, (mode) =>
             connection.executeUnprepared(
               mode === 'read' ? 'BEGIN' : 'BEGIN IMMEDIATE',
               [],
               undefined,
             ),
-          commit: (connection) =>
-            connection.executeUnprepared('COMMIT', [], undefined).pipe(
-              Effect.orDie,
-              Effect.onError(() =>
-                connection
-                  .executeUnprepared('ROLLBACK', [], undefined)
-                  .pipe(Effect.orDie),
-              ),
+          ),
+        commit: (connection) =>
+          connection.executeUnprepared('COMMIT', [], undefined).pipe(
+            Effect.orDie,
+            Effect.onError(() =>
+              connection
+                .executeUnprepared('ROLLBACK', [], undefined)
+                .pipe(Effect.orDie),
             ),
-          rollback: (connection) =>
-            connection.executeUnprepared('ROLLBACK', [], undefined),
-          savepoint: (connection, id) =>
-            connection.executeUnprepared(
-              `SAVEPOINT effect_sql_${id}`,
-              [],
-              undefined,
-            ),
-          rollbackSavepoint: (connection, id) =>
-            connection.executeUnprepared(
-              `ROLLBACK TO SAVEPOINT effect_sql_${id}`,
-              [],
-              undefined,
-            ),
-        });
-      const run = {
-        read: transactions('read'),
-        write: transactions('write'),
-        derive: transactions('derive'),
-      };
+          ),
+        rollback: (connection) =>
+          connection.executeUnprepared('ROLLBACK', [], undefined),
+        savepoint: (connection, id) =>
+          connection.executeUnprepared(
+            `SAVEPOINT effect_sql_${id}`,
+            [],
+            undefined,
+          ),
+        rollbackSavepoint: (connection, id) =>
+          connection.executeUnprepared(
+            `ROLLBACK TO SAVEPOINT effect_sql_${id}`,
+            [],
+            undefined,
+          ),
+      });
       // Every body is database-only, so a busy one runs again whole. The
-      // store gate runs inside every write and derive: a store holding a kind
-      // this build does not read takes no write from it. The one exception
-      // (`gated` false) is `releaseClaims`, which gives back this process's
-      // own claims, writes no row, and lets the newer build take them.
+      // store gate runs inside every outermost write and derive: a store
+      // holding a kind this build does not read takes no write from it. The
+      // one exception (`gated` false) is `releaseClaims`, which gives back
+      // this process's own claims, writes no row, and lets the newer build
+      // take them. Inside a caller's transaction a body is its savepoint.
+      const own = <A, E>(
+        mode: 'read' | 'write' | 'derive',
+        body: Effect.Effect<A, E>,
+        gated = mode !== 'read',
+      ) =>
+        Effect.flatMap(TxMode, (outer) =>
+          outer !== null
+            ? withTransaction(body)
+            : provingOwners(liveness)(
+                retryBusy(
+                  withTransaction(gated ? Effect.andThen(gate, body) : body),
+                ).pipe(Effect.provideService(TxMode, mode)),
+              ),
+        );
       const transaction = <A, E, EBody>(
         mode: 'read' | 'write' | 'derive',
         body: Effect.Effect<A, EBody>,
         failed: (cause: unknown) => E,
-        gated = mode !== 'read',
-      ) =>
-        run[mode](gated ? Effect.andThen(gate, body) : body).pipe(
-          retryBusy,
-          mapDatabaseFailure(failed),
-        );
+        gated?: boolean,
+      ) => own(mode, body, gated).pipe(mapDatabaseFailure(failed));
       const transact = <A, E>(body: Effect.Effect<A, E>) =>
         transaction('write', body, writeFailed);
       const claim = `UPDATE event_sequence SET owner_id = ?
@@ -464,46 +489,29 @@ export const databaseLayer = (
       const typedRefusal = Effect.mapError((failure: DatabaseWriteFailed) =>
         failure.cause instanceof DatabaseNotOwner ? failure.cause : failure,
       );
-      /** Claim every observed row in the caller's transaction, refusing the
-       *  first whose claim moved since it was read. */
-      const claimObserved = (rows: readonly AggregateState[], moved: string) =>
-        Effect.gen(function* () {
-          for (const row of rows) {
-            const claimed = yield* exec(claim, [
-              identity.ownerId,
-              ...aggregateColumns(row.aggregateId),
-              row.ownerId,
-            ]);
-            if (claimed.length !== 1) {
-              return yield* refuseWriter(row.aggregateId, moved);
-            }
-          }
-        });
-      const proveReclaimable = (
+      const othersOf = (observed: readonly AggregateState[]) =>
+        new Set(
+          observed.flatMap((row) =>
+            row.ownerId === null || row.ownerId === identity.ownerId
+              ? []
+              : [row.ownerId],
+          ),
+        );
+      /** Claim `observed`, which MUST be read in this same transaction, once
+       *  its other owners are proven dead (deleting a single run: or unprovable). */
+      const claimAll = (
         observed: readonly AggregateState[],
         mode?: DeletionMode,
       ) =>
         Effect.gen(function* () {
-          const owners = new Set(
-            observed.flatMap((row) =>
-              row.ownerId === null || row.ownerId === identity.ownerId
-                ? []
-                : [row.ownerId],
-            ),
+          yield* reclaimable(othersOf(observed), mode === 'single');
+          yield* exec(
+            `UPDATE event_sequence SET owner_id = ? WHERE id IN (${AGGREGATE_LIST}) AND closed_by IS NULL`,
+            [
+              identity.ownerId,
+              ...aggregateLists(observed.map((row) => row.aggregateId)),
+            ],
           );
-          for (const owner of owners) {
-            const verdict = yield* liveness(owner);
-            if (
-              verdict !== 'dead' &&
-              !(mode === 'single' && verdict === 'unprovable')
-            ) {
-              return yield* Effect.fail(
-                writeFailed(
-                  new DatabaseClaimRefused({ ownerId: owner, verdict }),
-                ),
-              );
-            }
-          }
         });
       const projectionStates = exec(
         'SELECT name, version, through_commit AS through FROM projection_state',
@@ -995,97 +1003,58 @@ export const databaseLayer = (
             }),
           ),
         acquireClaims: (ids) =>
-          Effect.gen(function* () {
-            if (ids.length === 0) return [];
-            const observed = yield* query(readState(ids));
-            if (
-              observed.length !== new Set(ids).size ||
-              observed.some((row) => row.closed)
-            ) {
-              return yield* Effect.fail(
-                writeFailed(new Error('A claim target is missing or closed.')),
-              );
-            }
-            yield* proveReclaimable(observed);
-            return yield* transact(
-              Effect.gen(function* () {
-                yield* claimObserved(
-                  observed,
-                  'Claim changed before acquisition',
-                );
-                return observed
-                  .filter((row) => row.ownerId !== identity.ownerId)
-                  .map((row) => row.aggregateId);
-              }),
-            ).pipe(typedRefusal);
-          }),
+          ids.length === 0
+            ? Effect.succeed([])
+            : transact(
+                Effect.gen(function* () {
+                  const observed = yield* readState(ids);
+                  if (
+                    observed.length !== new Set(ids).size ||
+                    observed.some((row) => row.closed)
+                  )
+                    return yield* Effect.fail(
+                      new Error('A claim target is missing or closed.'),
+                    );
+                  yield* claimAll(observed);
+                  return observed
+                    .filter((row) => row.ownerId !== identity.ownerId)
+                    .map((row) => row.aggregateId);
+                }),
+              ),
         prepareRunRemoval: (id, mode, expectedStartCommit) =>
           Effect.gen(function* () {
-            const deletionMode = yield* Effect.try({
-              try: () => DeletionModeSchema.parse(mode),
-              catch: writeFailed,
-            });
-            const observed = yield* transaction(
-              'read',
-              readDependents(id),
-              readFailed,
+            const seen = yield* query(readDependents(id));
+            const verdicts = yield* Effect.forEach(othersOf(seen), (owner) =>
+              Effect.map(liveness(owner), (v) => [owner, v] as const),
             );
-            if (observed.length === 0 || observed.some((row) => row.closed)) {
-              return yield* Effect.fail(
-                writeFailed(
+            const removing = Effect.gen(function* () {
+              const observed = yield* readDependents(id);
+              const target = observed.find((row) => row.aggregateId === id);
+              if (target === undefined || observed.some((row) => row.closed))
+                return yield* Effect.fail(
                   new Error(`Deletion target is missing or closed: ${id}`),
-                ),
-              );
-            }
-            if (
-              observed.find((row) => row.aggregateId === id)?.startCommit !==
-              expectedStartCommit
-            ) {
-              return yield* Effect.fail(
-                writeFailed(
+                );
+              if (target.startCommit !== expectedStartCommit)
+                return yield* Effect.fail(
                   new Error(`Deletion target changed since admission: ${id}`),
-                ),
+                );
+              yield* claimAll(observed, DeletionModeSchema.parse(mode));
+              const removal = prepareEventDraft({
+                type: 'run.removed',
+                aggregateId: id,
+              });
+              return yield* appendRows(
+                [removal],
+                yield* Clock.currentTimeMillis,
               );
-            }
-            yield* proveReclaimable(observed, deletionMode);
-            const removal = yield* Effect.try({
-              try: () =>
-                prepareEventDraft({ type: 'run.removed', aggregateId: id }),
-              catch: writeFailed,
             });
-            // The proofs above run off the publisher's fiber; this
-            // transaction is the job it runs, and it rechecks what they read.
-            return transact(
-              Effect.gen(function* () {
-                const current = yield* readDependents(id);
-                const observedById = new Map(
-                  observed.map((row) => [row.aggregateId, row]),
-                );
-                if (
-                  current.length !== observed.length ||
-                  !current.every((row) => {
-                    const before = observedById.get(row.aggregateId);
-                    return (
-                      before !== undefined &&
-                      !row.closed &&
-                      before.startCommit === row.startCommit &&
-                      before.parentId === row.parentId
-                    );
-                  })
-                ) {
-                  return yield* invariant(
-                    `Deletion dependents changed before acquisition: ${id}`,
-                  );
-                }
-                yield* claimObserved(
-                  observed,
-                  'Deletion claim changed before acquisition',
-                );
-                return yield* appendRows(
-                  [removal],
-                  yield* Clock.currentTimeMillis,
-                );
-              }),
+            return Effect.flatMap(ProvenOwners, (proven) =>
+              transact(removing).pipe(
+                Effect.provideService(
+                  ProvenOwners,
+                  new Map([...verdicts, ...proven]),
+                ),
+              ),
             );
           }),
         collectDeletion: (tombstone, cleanup) =>
@@ -1124,6 +1093,21 @@ export const databaseLayer = (
                 writeFailed,
                 false,
               ),
+        job: (body) =>
+          committing(
+            (attempt) =>
+              own('write', attempt).pipe(
+                // The gate's, BEGIN's or COMMIT's failure; the body's leave typed.
+                Effect.catchIf(
+                  (e) => isSqlError(e) || e instanceof DatabaseStoreNewer,
+                  (e) => Effect.fail(writeFailed(e)),
+                ),
+                Effect.catchDefect((d) =>
+                  isSqlError(d) ? Effect.fail(writeFailed(d)) : Effect.die(d),
+                ),
+              ),
+            body,
+          ),
         appendAll: (input) =>
           Effect.gen(function* () {
             if (input.length === 0) return [];
@@ -1184,10 +1168,19 @@ export const globalDatabaseLayer = (
     ),
   );
 
-/** Interruption stays; a failure or a driver defect becomes `failed`'s. */
+/** Interruption stays; a failure or a driver defect becomes `failed`'s.
+ *  An attempt's unproven claim owners stay a defect, for the outermost
+ *  transaction to prove. */
 function mapDatabaseFailure<E>(failed: (cause: unknown) => E) {
   return <A, EOp, R>(
     operation: Effect.Effect<A, EOp, R>,
   ): Effect.Effect<A, E, R> =>
-    operation.pipe(Effect.catchDefect(Effect.fail), Effect.mapError(failed));
+    operation.pipe(
+      Effect.catchDefect((defect) =>
+        defect instanceof OwnersUnproven
+          ? Effect.die(defect)
+          : Effect.fail(defect),
+      ),
+      Effect.mapError(failed),
+    );
 }

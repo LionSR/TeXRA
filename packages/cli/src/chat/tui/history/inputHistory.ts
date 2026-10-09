@@ -30,9 +30,8 @@ export const loadInputHistory: Effect.Effect<
 > = Effect.gen(function* () {
   const database = yield* GlobalDatabase;
   // History failure must not prevent typing. A subsequent push may retry storage.
-  let records: readonly InputHistoryRecord[] = yield* database
-    .readInputHistory()
-    .pipe(
+  let records: readonly InputHistoryRecord[] =
+    yield* database.inputHistory.read.pipe(
       Effect.catch((error) =>
         Effect.logWarning('Input history could not be read.').pipe(
           Effect.annotateLogs({ data: error }),
@@ -53,7 +52,7 @@ export const loadInputHistory: Effect.Effect<
           if (records.at(-1)?.value !== value)
             records = [...records, record].slice(-INPUT_HISTORY_LIMIT);
           // Global adjacency belongs to SQLite, not this CLI's cached view.
-          yield* database.appendInputHistory(record);
+          yield* database.inputHistory.append(record);
         }),
       ),
     reverseFind(needle, from) {

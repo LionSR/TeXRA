@@ -32,7 +32,61 @@ export interface OpenWork {
   readonly id: string;
 }
 
-/** One ordered append to the log, as the publisher hands it to a job. */
+/** The publisher job this fiber runs, null outside one: inside one, the
+ *  store's write lock is held, so a claim is the job's own and a wait on
+ *  the publisher would never end. `committed` runs once the job has. */
+export const PublisherJob = Context.Reference<{
+  readonly committed: Effect.Effect<void>[];
+} | null>('@texra/session/PublisherJob', { defaultValue: () => null });
+
+/** Run `action` once the publisher job this fiber runs has committed, never
+ *  if it rolls back; outside a job, now. What a job changes in memory
+ *  (a reader ended, an observer told) waits for its rows. */
+export const afterCommit = (action: Effect.Effect<void>): Effect.Effect<void> =>
+  Effect.flatMap(PublisherJob, (job) =>
+    job === null
+      ? action
+      : Effect.sync(() => {
+          job.committed.push(action);
+        }),
+  );
+
+/**
+ * Run a job through `transaction` (which may run its attempt again whole),
+ * then what its last attempt left for after the commit ({@link afterCommit}),
+ * in order: a rolled-back attempt's actions never run.
+ */
+export const committing = <A, E, E2>(
+  transaction: <X, EX>(
+    attempt: Effect.Effect<X, EX>,
+  ) => Effect.Effect<X, EX | E2>,
+  job: Effect.Effect<A, E>,
+): Effect.Effect<A, E | E2> =>
+  transaction(
+    Effect.suspend(() => {
+      const committed: Effect.Effect<void>[] = [];
+      return Effect.map(
+        Effect.provideService(job, PublisherJob, { committed }),
+        (value) => ({ value, committed }),
+      );
+    }),
+  ).pipe(
+    Effect.flatMap(({ value, committed }) =>
+      Effect.as(Effect.all(committed, { discard: true }), value),
+    ),
+  );
+
+/** How a job runs. By default it is one SQLite transaction; `order` runs it
+ *  in its place in the inbox with none, for a barrier or transient state
+ *  that writes no row (its `append` is a defect). `failed` hears a detached
+ *  job's own failure, a failed commit's included. */
+export interface JobOptions {
+  readonly order?: boolean;
+  readonly failed?: (error: unknown) => void;
+}
+
+/** One ordered append to the log, as the publisher hands it to a job: a
+ *  savepoint of the job's one transaction. */
 export type Append = (
   events: readonly SessionEventDraft[],
 ) => Effect.Effect<
@@ -64,28 +118,34 @@ export class ProcessIdentity extends Context.Service<
  * the table is the order the jobs were enqueued: a trace row the tool
  * emitted, the loop's settlement batch that follows it, and a surface's
  * decision all land in program order, whichever fiber produced them. A job
- * receives the log's `Append` as its one argument and nothing else, so it
- * cannot wait on the publisher it runs on.
+ * receives the log's `Append` and writes through it; one that waits on the
+ * publisher it runs on is a defect.
  */
 export class SessionEvents extends Context.Service<
   SessionEvents,
   {
-    /** Run one job as the next transaction of the inbox and return its
-     *  value: a read of committed rows and the append that depends on it,
-     *  with no other write between them. An append refusal is one of two
-     *  typed failures, both meaning nothing was written (D6 b):
-     *  `DatabaseNotOwner`, a target the process does not hold open, and
-     *  `DatabaseWriteFailed`, the batch rolled back for any other reason.
-     *  Neither is retried or converted here (F3, R7). */
+    /** Run one job as the next transaction of the inbox, one SQLite
+     *  transaction, and return its value: reads of committed rows and the
+     *  appends that depend on them, committed together or not at all, with
+     *  no other write between them. An append refusal is one of two typed
+     *  failures (D6 b): `DatabaseNotOwner`, a target the process does not
+     *  hold open, and `DatabaseWriteFailed`, the batch rolled back for any
+     *  other reason; a job that lets one through writes nothing, and a
+     *  transaction that fails to commit is `DatabaseWriteFailed` too.
+     *  Neither is retried or converted here (F3, R7). A job may run again
+     *  whole (`Database.job`), so it is database-only. Called from inside
+     *  a job, it is a defect: the job would wait on itself. */
     readonly transact: <A, E>(
       job: (append: Append) => Effect.Effect<A, E>,
-    ) => Effect.Effect<A, E>;
+      options?: Pick<JobOptions, 'order'>,
+    ) => Effect.Effect<A, E | DatabaseWriteFailed>;
     /** Enqueue one job synchronously and return: the door for a producer
      *  with no fiber to wait on (a trace sink, a follow-up's admission).
      *  Its order is the moment of this call. A refused append is never
-     *  retried: the job hears it (a run's trace keeps it for the run's end,
-     *  `RunTrace.lost`), and the publisher logs it as itself. A
-     *  job enqueued after the plane closed goes nowhere, and says so. */
+     *  retried: the job hears it, `failed` hears the job's own failure (a
+     *  run's trace keeps either for the run's end, `RunTrace.lost`), and
+     *  the publisher logs it. A job enqueued after the plane closed goes
+     *  nowhere, and says so. */
     readonly detach: (
       job: (
         append: Append,
@@ -93,11 +153,12 @@ export class SessionEvents extends Context.Service<
         unknown,
         DatabaseNotOwner | DatabaseReadFailed | DatabaseWriteFailed
       >,
+      options?: JobOptions,
     ) => void;
     /** Remove a run and its dependents (C9): the liveness proofs run on the
      *  caller's fiber, then the tombstone's transaction runs as the next
      *  job, so it commits in enqueue order and what this publisher tracks
-     *  forgets every run the tombstone names. */
+     *  forgets every run it names. */
     readonly removeRun: (
       id: AggregateId,
       mode: DeletionMode,
@@ -108,8 +169,9 @@ export class SessionEvents extends Context.Service<
     >;
     /** Close the plane: end the inbox and run what it holds, inside the
      *  one close deadline (`SESSION_CLOSE_DEADLINE_MS`). At the deadline
-     *  the running job is cut outside its atomic write and every queued
-     *  one is refused, never joined without limit. Idempotent; the
+     *  the running job is cut (its transaction rolls back unless it had
+     *  committed) and every queued one is refused, never joined without
+     *  limit. Idempotent; the
      *  publisher's scope runs it too. */
     readonly drain: Effect.Effect<void>;
     /** What this publisher committed open on one aggregate and nothing has
@@ -117,7 +179,7 @@ export class SessionEvents extends Context.Service<
      *  `stream.end` or a phase move that rests or ends its run, a stage
      *  until its `stage.end`. What a park (streams) or a host exit (both)
      *  closes. Read on the publisher fiber (inside a job) or after a
-     *  settle, it counts every commit before. */
+     *  settle, it counts every job committed before. */
     readonly openWork: (aggregateId: AggregateId) => readonly OpenWork[];
     /** The cold listing hydrate (C8): the latest row per aggregate and type
      *  for the listing fact types plus the outstanding approvals, in commit
