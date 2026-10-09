@@ -8,7 +8,7 @@ import * as nodePath from 'node:path';
 import { Effect, FileSystem } from 'effect';
 
 import { ToolContext } from '@agent/core/tools/ToolTypes';
-import { recordToolFileRead } from '@agent/runtime/RunCall';
+import { recordToolFileRead, type RunCall } from '@agent/runtime/RunCall';
 import { WorkspaceFs } from '@platform/rootedFs';
 import { ToolError } from '@shared/schemas';
 import { type PerKeyLane, withPerKeyLane } from '@utils/core/perKeyQueue';
@@ -85,7 +85,7 @@ export const writeApprovedContent = Effect.fn('writeApprovedContent')(
   ): Effect.fn.Return<
     WriteApprovedContentResult,
     Error,
-    ToolContext | FileSystem.FileSystem | WorkspaceFs
+    ToolContext | RunCall | FileSystem.FileSystem | WorkspaceFs
   > {
     yield* ToolContext;
     const workspace = nodePath.isAbsolute(path)

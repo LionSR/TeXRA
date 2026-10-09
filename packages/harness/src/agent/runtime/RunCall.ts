@@ -7,7 +7,7 @@
  * included, is `ToolContext` (`@agent/core/tools/ToolTypes`); an app's
  * tool reads nothing here.
  */
-import { Context, Data, Effect, Option } from 'effect';
+import { Context, Data, Effect } from 'effect';
 
 import type { ScriptOp } from '@agent/codeSandbox/codeSandbox';
 import {
@@ -225,13 +225,11 @@ export const requireToolRun = (
     return { ...call, ...runCall };
   });
 
-/** Count `path` as read by the current call's run, if it has one: a later
- *  edit of it then needs no fresh read. Needs nothing of the caller, so a
- *  plugin's tool that writes through an approved write records it too. */
+/** Count `path` as read by the current call's run: a later edit of it then
+ *  needs no fresh read. */
 export const recordToolFileRead = Effect.fn('RunCall.recordFileRead')(
-  function* (path: string): Effect.fn.Return<void> {
-    const call = yield* Effect.serviceOption(RunCall);
-    if (path && Option.isSome(call)) call.value?.readFiles.add(path);
+  function* (path: string): Effect.fn.Return<void, never, RunCall> {
+    if (path) (yield* RunCall)?.readFiles.add(path);
   },
 );
 

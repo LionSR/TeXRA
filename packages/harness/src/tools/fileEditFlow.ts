@@ -4,11 +4,10 @@ import * as nodePath from 'node:path';
 import { Cause, Effect, FileSystem } from 'effect';
 
 // Local imports - common
-import { type RunCall } from '@agent/runtime/RunCall';
 import { ToolContext } from '@agent/core/tools/ToolTypes';
 
 // Local imports - shared schemas
-import { requireFileReadForEdit } from '@agent/runtime/RunCall';
+import { requireFileReadForEdit, type RunCall } from '@agent/runtime/RunCall';
 import type { AgentCatalogServices } from '@platform/processRuntime';
 import { WorkspaceFs } from '@platform/rootedFs';
 import { ToolError, type ToolResult } from '@shared/schemas';
@@ -229,7 +228,11 @@ export const applyApprovedFileEdit = Effect.fn('applyApprovedFileEdit')(
   }: ApprovedFileEditRequest): Effect.fn.Return<
     ToolResult,
     Error,
-    ToolContext | FileSystem.FileSystem | WorkspaceFs | AgentCatalogServices
+    | ToolContext
+    | RunCall
+    | FileSystem.FileSystem
+    | WorkspaceFs
+    | AgentCatalogServices
   > {
     const approval = yield* requestToolEditApproval({
       path,

@@ -211,11 +211,7 @@ function executeAcceptRunFilesTool(
 const acceptFiles = Effect.fn('AcceptRunFilesTool.acceptFiles')(function* (
   input: AcceptRunFilesInput,
   call: ToolContextShape,
-): Effect.fn.Return<
-  ToolResult,
-  Error,
-  ToolContext | FileSystem.FileSystem | WorkspaceFs
-> {
+): Effect.fn.Return<ToolResult, Error, ToolServices> {
   const { execution_id: runId, files, strip_criticize } = input;
 
   // Phase 1: Validate all source paths and read content before any approvals
