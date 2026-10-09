@@ -337,9 +337,12 @@ function executeAsk(
     // call: it commits with the call's `tool.result`, or not at all.
     const summary = yield* records.getThreadSummary(manifest.threadId);
 
+    // True whenever the user decides: the decision (even one landing before
+    // this result) queues the continuation.
     const message =
-      'Question dispatched to the user. The tool returned without waiting. ' +
-      'You will be woken with a continuation message when an answer arrives. ' +
+      'Question sent to the user. The answer, or the user dropping it, ' +
+      'arrives as an [inquiry] continuation message; `read` shows the ' +
+      "thread's current state. " +
       `Do NOT re-dispatch on thread_id=${manifest.threadId}. ` +
       'If your next step depends on this answer, end your turn now; ' +
       'otherwise proceed with independent work.';

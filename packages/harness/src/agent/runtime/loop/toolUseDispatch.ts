@@ -732,11 +732,10 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
     }
     // A result the schema refuses becomes an error result the model can read;
     // the projection of an error result cannot itself fail.
+    const plugin = entries.get(pluginOf.get(fact.toolName) ?? '');
     const extracted = yield* Effect.try({
       try: () =>
-        extractToolAttachments(result, (facts) =>
-          checkOwnFacts(entries.get(pluginOf.get(fact.toolName) ?? ''), facts),
-        ),
+        extractToolAttachments(result, (facts) => checkOwnFacts(plugin, facts)),
       catch: ensureError,
     }).pipe(
       Effect.catch((error) =>
@@ -777,7 +776,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
       extracted.sanitizedResult.status === 'executed'
         ? (extracted.sanitizedResult.consumedFollowUps ?? [])
         : [];
-    const facts = factRows(extracted.facts, runId);
+    const facts = factRows(extracted.facts, runId, plugin, run.session.log);
     yield* retireStanding;
     yield* settle(
       fact,

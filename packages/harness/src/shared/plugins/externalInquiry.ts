@@ -99,6 +99,20 @@ function admitsThreadRow(
   return null;
 }
 
+/** A thread's latest row supersedes a call's lagging `next` when the turn
+ *  `next` opens was already closed (answered or dropped) or passed. */
+function supersedesThreadRow(latest: ThreadRow, next: ThreadRow): boolean {
+  const was = InquiryThreadRowSchema.safeParse(latest.value);
+  const now = InquiryThreadRowSchema.safeParse(next.value);
+  if (!was.success || !now.success) return false;
+  return (
+    was.data.turnCount > now.data.turnCount ||
+    (was.data.turnCount === now.data.turnCount &&
+      was.data.status !== 'open' &&
+      now.data.status === 'open')
+  );
+}
+
 /** The external-inquiry plugin's one row kind. */
 export const EXTERNAL_INQUIRY_THREAD_ARM = {
   plugin: 'external-inquiry',
@@ -107,6 +121,7 @@ export const EXTERNAL_INQUIRY_THREAD_ARM = {
   schema: InquiryThreadRowSchema,
   upcasters: [],
   admits: admitsThreadRow,
+  supersedes: supersedesThreadRow,
 } as const;
 
 /** The fact that makes `summary` its thread's displayed state: an `ask`
