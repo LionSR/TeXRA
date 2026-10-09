@@ -22,7 +22,7 @@ import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import type { TeXRAIconName } from '@shared/iconNames';
 import { postMessage } from '@texra/shared/hostBridge';
 import { DetailsOpenController } from '@texra/shared/litControllers/DetailsOpenController';
-import { getLightweightMd } from '@texra/shared/highlighting/lightweightMd';
+import { getLightweightMd } from '@ui/markdown/lightweightMd';
 import { markdownStyles } from '@ui/styles/markdownStyles';
 import { designTokens, commonViewStyles } from '@ui/styles';
 import { renderIconActionButtonParts } from '@ui/wa/actionButtons';

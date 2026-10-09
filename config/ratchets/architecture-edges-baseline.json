@@ -50,7 +50,6 @@
     { "from": "shared", "to": "common", "kind": "value" },
     { "from": "shared", "to": "logger", "kind": "value" },
     { "from": "shared", "to": "platform", "kind": "type-only" },
-    { "from": "shared", "to": "ui", "kind": "value" },
     { "from": "shared", "to": "utils", "kind": "value" },
     { "from": "skills", "to": "common", "kind": "value" },
     { "from": "skills", "to": "shared", "kind": "value" },
