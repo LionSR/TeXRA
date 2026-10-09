@@ -7,7 +7,7 @@
  * .agents/docs/implemented/architecture/2026-09-21-effect-design-run-loop-programs.md).
  */
 
-import { Cause, Effect, Exit, SynchronizedRef } from 'effect';
+import { Cause, Effect, Exit, type Scope, SynchronizedRef } from 'effect';
 
 import type { AgentTrace, StageHandle } from '@agent/trace';
 import { RUN_OUTCOME, type RunId, type RunOutcome } from '@shared/schemas';
@@ -16,6 +16,7 @@ import type {
   DatabaseWriteFailed,
 } from '@shared/session/database';
 import { RunHistory, RunHistoryRefused } from '@shared/session/runHistory';
+import type { CoWrite } from '@shared/session/sessionEvents';
 import {
   freshRunState,
   type RunHistoryDraft,
@@ -58,12 +59,15 @@ export interface RunCell {
    * latest state. The wait for the lock is masked too, deliberately: a
    * settlement queued behind a sibling when the run stops belongs to a tool
    * that already ran, and committing it keeps a resume from running it again.
+   * `alongside` decides another aggregate's rows, appended with the batch
+   * (`RunHistory.appendBatch`): a child turn's delivery to its parent.
    */
-  readonly append: (
+  readonly append: <E = never>(
     rows:
       | readonly RunHistoryDraft[]
       | ((state: RunState) => readonly RunHistoryDraft[]),
-  ) => Effect.Effect<RunState, RunHistoryRefused | DatabaseWriteFailed>;
+    alongside?: Effect.Effect<CoWrite, E, Scope.Scope>,
+  ) => Effect.Effect<RunState, RunHistoryRefused | DatabaseWriteFailed | E>;
   /**
    * Re-read the run under the cell's lock: the state with every row another
    * writer committed (a `request.decided` the decide command landed), in
@@ -93,12 +97,14 @@ export const makeRunCell = (
       runId,
       current: SynchronizedRef.get(ref),
       opened,
-      append: (rows) =>
+      append: (rows, alongside) =>
         SynchronizedRef.updateAndGetEffect(ref, (state) =>
           runHistory.appendBatch(
             runId,
             state,
             typeof rows === 'function' ? rows(state) : rows,
+            [],
+            alongside,
           ),
         ).pipe(Effect.uninterruptible),
       refresh: SynchronizedRef.updateAndGetEffect(ref, () =>

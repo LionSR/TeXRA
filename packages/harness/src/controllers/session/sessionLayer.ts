@@ -41,23 +41,23 @@ import { HistoryQuery } from '@agent/runtime/historyQuery/HistoryQuery';
 import { ModelRetryGate } from '@agent/runtime/ModelRetryGate';
 import { RouteRetries } from '@agent/runtime/run/invocation';
 import { resumeRun } from '@agent/runtime/resumeRun';
+import { onHeldResult } from '@agent/runtime/runLaunchGuard';
 import { createSessionApprovals } from '@agent/runtime/runApprovalQueue';
 import { makeRunHistory } from '@agent/runtime/RunHistory';
 import { RunRegistry } from '@agent/runtime/runRegistry';
 import { sessionEventsLayer } from '@agent/runtime/SessionEvents';
-import type {
-  SessionHandle,
-  SessionHandleInit,
+import {
+  SESSION_CLOSE_DEADLINE_MS,
+  type SessionHandle,
+  type SessionHandleInit,
 } from '@agent/runtime/SessionHandle';
-import { SESSION_CLOSE_DEADLINE_MS } from '@agent/runtime/SessionHandle';
 import { presentTerminalResult } from '@agent/runtime/terminalResultToast';
 import { withLogChannel } from '@logger/effectLog';
 import {
   effectDiagnosticsLayer,
   type MinimumLogLevel,
 } from '@logger/effectDiagnostics';
-import { SessionOwner } from '@platform/processRuntime';
-import type { ProcessServices } from '@platform/processRuntime';
+import { SessionOwner, type ProcessServices } from '@platform/processRuntime';
 import {
   AgentDirectories,
   AppState,
@@ -245,9 +245,7 @@ const sessionHandleLayer = (key: SessionKey) =>
         Effect.sync(() => session.followUps.dispose()),
       );
       yield* Effect.addFinalizer(() => session.interactions.dispose());
-      yield* Effect.addFinalizer(() =>
-        Effect.sync(() => session.runs.dispose()),
-      );
+      yield* Effect.addFinalizer(() => Effect.sync(() => runs.dispose()));
       // An opener's presentation host attaches as its own step: `use`
       // replays its queue, a program a constructor cannot run.
       if (key.open.interactions)
@@ -265,6 +263,7 @@ const sessionHandleLayer = (key: SessionKey) =>
       yield* Stream.runForEach(store.folded, (event) =>
         Effect.gen(function* () {
           const target = aggregateTarget(event.aggregateId);
+          yield* onHeldResult(session, event, consumerScope);
           if (target.kind !== 'run' || event.type !== 'run.end') return;
           const { self } = yield* SubscriptionRef.get(local.ref);
           if (event.origin == null || !self.includes(event.origin)) return;

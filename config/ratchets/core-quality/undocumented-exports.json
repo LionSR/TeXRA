@@ -29,7 +29,6 @@
   "packages/harness/src/agent/runtime/run/modelCall.ts": 1,
   "packages/harness/src/agent/runtime/run/toolResultText.ts": 1,
   "packages/harness/src/agent/runtime/RunEndResult.ts": 1,
-  "packages/harness/src/agent/runtime/runRegistry.ts": 1,
   "packages/harness/src/agent/runtime/runtimePresentationEvents.ts": 2,
   "packages/harness/src/agent/runtime/scriptRun.ts": 1,
   "packages/harness/src/agent/runtime/subagentResults.ts": 1,

@@ -1,6 +1,6 @@
 {
   "packages/harness/src/agent/runtime/agentToolResolution.ts": 1,
-  "packages/harness/src/agent/runtime/childRunLoop.ts": 2,
+  "packages/harness/src/agent/runtime/childRunLoop.ts": 1,
   "packages/harness/src/agent/runtime/FollowUps.ts": 1,
   "packages/harness/src/agent/runtime/loop/step.ts": 2,
   "packages/harness/src/agent/runtime/loop/toolGuard.ts": 1,

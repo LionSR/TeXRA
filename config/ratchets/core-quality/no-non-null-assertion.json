@@ -1,5 +1,4 @@
 {
-  "packages/harness/src/agent/runtime/childRunLoop.ts": 1,
   "packages/harness/src/agent/runtime/ModelRetryGate.ts": 1,
   "packages/harness/src/shared/session/sessionFold.ts": 1,
   "packages/harness/src/shared/session/sessionView.ts": 1,

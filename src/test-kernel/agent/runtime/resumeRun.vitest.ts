@@ -312,7 +312,7 @@ describe('resumeRun tool-use queue ownership', () => {
 
       const resumed = yield* Effect.forkChild(resumeOne(RUN, { session }));
       yield* Deferred.await(configRead);
-      session.followUps.closeInput(RUN);
+      yield* session.followUps.closeInput(RUN);
       yield* session.log.settled;
       yield* Deferred.succeed(config, snapshot().agentConfig);
 

@@ -9,7 +9,7 @@
  * display tail: that filters to display rows and would silently drop every
  * run-history-private row.
  */
-import { type Context, Effect, Result } from 'effect';
+import { type Context, Effect, Result, type Scope } from 'effect';
 
 import { PreparedHistorySchema, type ModelOrigin } from '@texra-ai/llm';
 import {
@@ -21,7 +21,7 @@ import {
 import {
   type Database,
   DatabaseClaimRefused,
-  type DatabaseNotOwner,
+  DatabaseNotOwner,
   DatabaseWriteFailed,
 } from '@shared/session/database';
 import { type RunHistory, RunHistoryRefused } from '@shared/session/runHistory';
@@ -36,6 +36,11 @@ import type {
   HistoryMessage,
   RunHistoryRow,
 } from '@shared/session/historyTurns';
+import {
+  afterCommit,
+  noCoWrite,
+  type CoWrite,
+} from '@shared/session/sessionEvents';
 import { runHistoryRows, storedDraft } from './storedTurn';
 import type { SessionLog } from './SessionHandle';
 
@@ -241,12 +246,15 @@ const unprepared = (
   });
 };
 
-/** What a lost claim says, from the sequence row that refused the write. */
-function notOwnerDetail(failure: DatabaseNotOwner): string {
-  if (failure.closed) return 'the run aggregate is closed';
-  if (failure.ownerId === null) return 'the claim is unheld';
-  return `held by ${failure.ownerId}`;
-}
+/** A lost claim's refusal, worded from the row that refused the write. */
+const notOwner = (runId: RunId) => (failure: DatabaseNotOwner) => {
+  let detail = `held by ${failure.ownerId}`;
+  if (failure.ownerId === null) detail = 'the claim is unheld';
+  if (failure.closed) detail = 'the run aggregate is closed';
+  return Effect.fail(
+    new RunHistoryRefused({ reason: 'not-owner', runId, detail }),
+  );
+};
 
 /** The refusal of rows that do not fold. */
 const inconsistent = (runId: RunId, cause: RunHistoryInconsistent) =>
@@ -314,15 +322,7 @@ export function makeRunHistory(
   const acquire = Effect.fn('RunHistory.acquire')(function* (run: RunId) {
     const aggregate = qualifyAggregateId('run', run);
     yield* claims.acquireClaims([aggregate]).pipe(
-      Effect.catchTag('DatabaseNotOwner', (failure) =>
-        Effect.fail(
-          new RunHistoryRefused({
-            reason: 'not-owner',
-            runId: run,
-            detail: notOwnerDetail(failure),
-          }),
-        ),
-      ),
+      Effect.catchTag('DatabaseNotOwner', notOwner(run)),
       Effect.mapError((error) =>
         error instanceof DatabaseWriteFailed &&
         error.cause instanceof DatabaseClaimRefused
@@ -358,17 +358,7 @@ export function makeRunHistory(
           },
         })),
       )
-      .pipe(
-        Effect.catchTag('DatabaseNotOwner', (failure) =>
-          Effect.fail(
-            new RunHistoryRefused({
-              reason: 'not-owner',
-              runId: run,
-              detail: notOwnerDetail(failure),
-            }),
-          ),
-        ),
-      );
+      .pipe(Effect.catchTag('DatabaseNotOwner', notOwner(run)));
     // The cancellations fold onto the same read: the run is read once.
     return yield* loaded(run, foldStored(folded.success, cancelled));
   });
@@ -387,11 +377,12 @@ export function makeRunHistory(
     );
   });
 
-  const appendBatch = Effect.fn('RunHistory.appendBatch')(function* (
+  const appendBatch = Effect.fn('RunHistory.appendBatch')(function* <E>(
     run: RunId,
     state: RunState | null,
     rows: readonly RunHistoryDraft[],
     registration: readonly SessionEventDraft[] = [],
+    alongside: Effect.Effect<CoWrite, E, Scope.Scope> = noCoWrite,
   ) {
     const violation = contractViolation(run, state, rows, registration);
     if (violation !== null) {
@@ -449,16 +440,20 @@ export function makeRunHistory(
     // `not-owner`, nothing written (D6 b, R7); any other rollback stays the
     // write failure it is (F3).
     const committed = yield* sessionLog
-      .transact([...registration, ...rows.map(storedDraft)])
+      .transact((tx) =>
+        Effect.gen(function* () {
+          const co = yield* alongside;
+          const own = [...registration, ...rows.map(storedDraft)];
+          const written = yield* tx.append([...own, ...co.rows]);
+          yield* afterCommit(co.committed);
+          return written.slice(0, own.length);
+        }).pipe(Effect.scoped),
+      )
       .pipe(
-        Effect.catchTag('DatabaseNotOwner', (failure) =>
-          Effect.fail(
-            new RunHistoryRefused({
-              reason: 'not-owner',
-              runId: run,
-              detail: notOwnerDetail(failure),
-            }),
-          ),
+        Effect.catchIf(
+          (error): error is DatabaseNotOwner =>
+            error instanceof DatabaseNotOwner,
+          notOwner(run),
         ),
       );
     // A run registered with its history is its host's to resume, as any

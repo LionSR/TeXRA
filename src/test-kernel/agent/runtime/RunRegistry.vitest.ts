@@ -200,7 +200,7 @@ function trackInterruptibleHandle(
 function createRunControls(overrides: Partial<RunControls> = {}): RunControls {
   return {
     oneShot: false,
-    requestImmediateCompaction: vi.fn(),
+    requestImmediateCompaction: vi.fn(() => Effect.void),
     editView: vi.fn(() => Effect.void),
     modelSwitchDisabledReason: vi.fn(() => Effect.succeed(undefined)),
     switchModel: vi.fn(() => Effect.void),
@@ -928,37 +928,6 @@ describe('runRegistry', () => {
       // The parent edge is a `run.start` fact, so tracking publishes none.
       expect(recorded.events).toEqual([]);
       expect(registry.hasActiveChildren(parentRunId)).toBe(false);
-    } finally {
-      registry.dispose();
-    }
-  });
-
-  it('owns manual compaction admission for active tool-use flows', () => {
-    const { registry } = createRegistry();
-    const runId = generateRunId();
-    const requestImmediateCompaction = vi.fn();
-    const controls = createRunControls({ requestImmediateCompaction });
-
-    try {
-      expect(registry.requestManualCompaction(undefined)).toEqual({
-        kind: 'no_active_tool_use',
-      });
-      expect(registry.requestManualCompaction(runId)).toEqual({
-        kind: 'no_active_tool_use',
-        runId,
-      });
-
-      const handle = createHandle(runId, null, {
-        agentName: 'test-tool-use',
-      });
-      handle.attachControls(controls);
-      registry.track(handle);
-
-      expect(registry.requestManualCompaction(runId)).toEqual({
-        kind: 'requested',
-        runId,
-      });
-      expect(requestImmediateCompaction).toHaveBeenCalledOnce();
     } finally {
       registry.dispose();
     }

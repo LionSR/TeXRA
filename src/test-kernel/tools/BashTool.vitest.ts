@@ -5,7 +5,7 @@ import { strict as assert } from 'node:assert';
 import { it } from '@effect/vitest';
 
 // Third-party imports
-import { Deferred, Effect, Exit, Fiber, Schedule, Scope } from 'effect';
+import { Deferred, Effect, Exit, Fiber, Schedule } from 'effect';
 import { beforeEach, afterEach, describe, vi } from 'vitest';
 
 // Local imports
@@ -27,6 +27,7 @@ import {
   createProcessSession,
   publishTestRunStart,
   publishTestRows,
+  queuedFollowUps,
 } from '@test/support/sessionTestUtils';
 import { installPlatform, setupPlatform } from '@test/support/setupPlatform';
 import { BashTool } from '@tools/bash';
@@ -97,7 +98,8 @@ function detachBackgroundRun(
   recorded: ReturnType<typeof recordSessionEvents>,
   parentRunId: RunId,
 ): void {
-  testDefaultSession().followUps.closeInput(parentRunId);
+  // A teardown that runs in `finally`, so the close runs on its own.
+  Effect.runFork(testDefaultSession().followUps.closeInput(parentRunId));
 }
 
 /**
@@ -512,39 +514,30 @@ describe('BashTool', () => {
           { success: false, exitCode: 1 },
         );
 
+        // The result commits on the parent's input with the child's end; the
+        // parent's wake follows the commit.
         const followUpDelivered = Deferred.makeUnsafe<void>();
-        const submitFollowUpSpy = vi
-          .spyOn(toolUseFollowUp, 'submitFollowUp')
-          .mockImplementation(() => {
+        vi.spyOn(toolUseFollowUp, 'startFollowUpWake').mockImplementation(
+          () => {
             Deferred.doneUnsafe(followUpDelivered, Effect.void);
-            return Effect.succeed({ status: 'sent' });
-          });
+            return Effect.succeed(true);
+          },
+        );
 
         const parentRunId = startedParentRun();
-        // The parent's own loop reads its input.
-        const parentLoop = yield* Scope.make();
-        yield* testDefaultSession()
-          .followUps.open(parentRunId)
-          .pipe(Scope.provide(parentLoop));
+        const launchResult = yield* launchBackgroundBash(parentRunId);
+        assert.equal(launchResult.status, 'executed');
 
-        try {
-          const launchResult = yield* launchBackgroundBash(parentRunId);
-          assert.equal(launchResult.status, 'executed');
-
-          // The background run delivers its result asynchronously as a follow-up
-          // once the (mocked) process settles.
-          yield* Deferred.await(followUpDelivered);
-          assert.ok(
-            submitFollowUpSpy.mock.calls.length > 0,
-            'Background bash should deliver a follow-up once the run completes',
-          );
-        } finally {
-          yield* Scope.close(parentLoop, Exit.void);
-        }
-
-        const followUpArg = submitFollowUpSpy.mock.calls[0]?.[1];
-        const deliveredText =
-          typeof followUpArg === 'string' ? followUpArg : followUpArg?.text;
+        // The background run delivers its result asynchronously as a follow-up
+        // once the (mocked) process settles.
+        yield* Deferred.await(followUpDelivered);
+        const delivered = yield* queuedFollowUps(
+          testDefaultSession(),
+          parentRunId,
+        );
+        const deliveredText = delivered.find((followUp) =>
+          followUp.followUpId.endsWith(':delivery'),
+        )?.text;
         assert.ok(
           typeof deliveredText === 'string' &&
             deliveredText.includes(headMarker),

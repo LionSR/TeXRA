@@ -47,7 +47,7 @@ import { isTerminalOutcomePhase } from '@shared/runs/runStatus';
 import { subagentProgressRunId } from '@shared/subagentFollowup';
 import type { QueuedFollowUp } from '@shared/session/runRows';
 import type { RunHistoryDraft, RunState } from '@shared/session/runStateFold';
-
+import type { CoWrite } from '@shared/session/sessionEvents';
 import { activatedSkillNames } from '@skills/runtimeSkills';
 import { sha256 } from '@utils/core/idHash';
 import { ensureError } from '@utils/errors/errorMessage';
@@ -76,9 +76,10 @@ export interface JoinedFollowUps {
   readonly delivered: () => void;
 }
 
-/** A turn's end, committed in the batch that consumes the next input. */
+/** A turn's end and a child's delivery, committed with the next input. */
 export interface Boundary {
   readonly rows: readonly RunHistoryDraft[];
+  readonly alongside?: Effect.Effect<CoWrite, Error, Scope.Scope>;
 }
 
 export interface ConsumedFollowUps {
@@ -352,14 +353,13 @@ export const claimFollowUps = Effect.fn('FollowUps.claim')(function* (
       Error,
       FileSystem.FileSystem | ChildProcessSpawner
     > {
-      const state =
-        prepare === undefined ? yield* cell.current : yield* prepare(cell);
+      const state = yield* prepare?.(cell) ?? cell.current;
       const joined = yield* batchRows(state, batch);
-      const committed = yield* cell.append([
-        ...(boundary?.rows ?? []),
-        ...joined.rows,
-        ...(joined.turn ? [positionRow(runId, state, 'turn.ready')] : []),
-      ]);
+      const rows = [...(boundary?.rows ?? []), ...joined.rows];
+      const committed = yield* cell.append(
+        joined.turn ? [...rows, positionRow(runId, state, 'turn.ready')] : rows,
+        boundary?.alongside,
+      );
       joined.delivered();
       return { state: committed, turn: joined.turn };
     },

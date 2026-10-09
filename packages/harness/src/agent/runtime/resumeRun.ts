@@ -31,7 +31,7 @@ import {
   resumeToolUseFromResumeData,
   type ResumeToolUseFromResumeDataOptions,
 } from './executeAgent';
-import { relayChildDeliveries } from './childSettlement';
+import { deliverHeld } from './runLaunchGuard';
 import { startChildRunLoop } from './childRunLoop';
 import { Runs } from './runRegistry';
 import { RunLive } from './runRegistry';
@@ -176,7 +176,7 @@ const resumeHere = Effect.fn('resumeHere')(function* (
   ]);
   if (!config || !exists) {
     // A run whose records are gone: with nothing queued its input ends.
-    session.followUps.closeInput(runId);
+    yield* session.followUps.closeInput(runId);
     return REFUSED;
   }
   // Deleted, or its input closed, while those reads ran.
@@ -191,6 +191,8 @@ const resumeHere = Effect.fn('resumeHere')(function* (
   yield* Effect.addFinalizer(() => Scope.close(claim, Exit.void));
   const heldBy = yield* holdClaim(session, runId).pipe(Scope.provide(claim));
   if (heldBy !== null) return { failed: 'owned_elsewhere' };
+  // What its children hold for it, it reads once it runs here.
+  yield* deliverHeld(session, runId);
   const resume = yield* retrieveSessionResumeData(runId, config, session);
   if (cancelled()) return REFUSED;
   // Nothing to continue from.
@@ -283,9 +285,6 @@ const resumeQueuedToolUse = Effect.fn('resumeQueuedToolUse')(function* (
   const admitted = new Set<string>();
   const isAdmitted = (input: { readonly followUpId: string }): boolean =>
     admitted.has(input.followUpId);
-  // What its children settled and a crash kept from its inbox comes first:
-  // a relay that fails fails the resume, which a later one retries.
-  yield* relayChildDeliveries(session, runId);
   const queuedInput = queuedFollowUps(session, runId);
   const resumed = yield* Effect.result(
     Effect.gen(function* () {

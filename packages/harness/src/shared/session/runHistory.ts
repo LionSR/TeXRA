@@ -12,10 +12,11 @@
  * Deliberately absent: no `append` (a one-row case is a one-element batch),
  * no `messages()` (the folded state holds them), no subscribe surface.
  */
-import { Cause, Context, Data, type Effect } from 'effect';
+import { Cause, Context, Data, type Effect, type Scope } from 'effect';
 
 import type { RunId, SessionEventDraft } from '@shared/schemas';
 import { type DatabaseReadFailed, DatabaseWriteFailed } from './database';
+import type { CoWrite } from './sessionEvents';
 import type {
   RunHistoryDraft,
   RunHistoryInconsistent,
@@ -146,12 +147,17 @@ export class RunHistory extends Context.Service<
      *   registered without the history it was registered with. The claim
      *   the birth takes is released once the batch commits: such a run is
      *   its host's to resume.
+     *
+     * `alongside` decides what another aggregate commits with the batch,
+     * appended after its rows in its one append: a child's turn settles with
+     * its parent's `followup.queued`. Its failure commits none of the batch.
      */
-    readonly appendBatch: (
+    readonly appendBatch: <E = never>(
       run: RunId,
       state: RunState | null,
       rows: readonly RunHistoryDraft[],
       registration?: readonly SessionEventDraft[],
-    ) => Effect.Effect<RunState, RunHistoryRefused | DatabaseWriteFailed>;
+      alongside?: Effect.Effect<CoWrite, E, Scope.Scope>,
+    ) => Effect.Effect<RunState, RunHistoryRefused | DatabaseWriteFailed | E>;
   }
 >()('@texra/session/RunHistory') {}

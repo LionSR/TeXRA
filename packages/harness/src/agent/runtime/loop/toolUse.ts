@@ -197,15 +197,6 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
   let live = false;
   const controls: RunControls = {
     oneShot: run.toolPolicy.stopAfterCycle === true,
-    // Queued on the run's input, durable at once: the next model boundary
-    // compacts and consumes it, and a parked loop wakes for that turn.
-    requestImmediateCompaction(): void {
-      session.followUps.sendDetached(runId, {
-        text: '/compact',
-        from: { kind: 'user' },
-        control: { kind: 'compact' },
-      });
-    },
     // Applied at the loop's next park, before any input it takes there: a
     // park is a settled position, so the edit never cuts a turn.
     editView: (handoff) =>
@@ -590,9 +581,9 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
         // The turn's trace rows are queued ahead of the boundary: the
         // barrier lets the open streams `waiting` closes count every one.
         yield* session.log.settled;
-        // The turn boundary, in one batch: Stop hooks, the
-        // steps (`waiting` closes open streams), a child's settlement, and a
-        // Stop hook's block or input already queued, under a fresh step.
+        // The turn boundary, in one batch: Stop hooks, the steps (`waiting`
+        // closes open streams), a child's settlement with its parent's
+        // delivery, and a Stop hook's block or input already queued.
         const { rows: hooks, block } = yield* stopHooks(run, turn, response);
         const goesOn =
           script === null &&
@@ -613,9 +604,10 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
           next !== null && !isChild() ? yield* openStep(state, 'park') : null;
         state =
           next === null
-            ? yield* cell.append([...hooks, ...ending])
+            ? yield* cell.append([...hooks, ...ending], settlement?.alongside)
             : (yield* followUps.consume(cell, next, undefined, {
                 rows: [...hooks, ...ending, ...(pin?.rows ?? [])],
+                alongside: settlement?.alongside,
               })).state;
         // A turn's end is idle even when it took its next input with it.
         if (next !== null) run.callbacks.onIdle?.();

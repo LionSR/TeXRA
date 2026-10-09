@@ -97,13 +97,6 @@ export type ToolUseFollowUpTarget =
       readonly runStatus: RunPhase | undefined;
     };
 
-export type ManualCompactionRequestResult =
-  | { readonly kind: 'requested'; readonly runId: RunId }
-  | {
-      readonly kind: 'no_active_tool_use';
-      readonly runId?: RunId;
-    };
-
 /**
  * What the session hands its runs. They read a run's phase from the
  * session's fold (`RunView.status`) and keep no phase of their own; the
@@ -300,22 +293,6 @@ export class RunRegistry {
 
   hasActiveChildren(parentRunId: RunId): boolean {
     return this.childRunIds(parentRunId).length > 0;
-  }
-
-  /**
-   * Request manual compaction from the run's running loop, if one exists.
-   * Hosts own the user-facing message, but the registry owns the live-loop
-   * lookup so CLI and extension do not rederive the same runtime facts.
-   */
-  requestManualCompaction(
-    runId: RunId | undefined,
-  ): ManualCompactionRequestResult {
-    if (!runId) return { kind: 'no_active_tool_use' };
-    const controls = this.getHandle(runId)?.controls;
-    if (!controls) return { kind: 'no_active_tool_use', runId };
-
-    controls.requestImmediateCompaction();
-    return { kind: 'requested', runId };
   }
 
   /** Decide how a tool-use follow-up is admitted, from one registry-owned

@@ -16,7 +16,6 @@ import type {
   RunEndOutput,
   RunId,
   RunOutcome,
-  SessionEventDraft,
 } from '@shared/schemas';
 import {
   agentName as baseAgentName,
@@ -34,6 +33,7 @@ import { RunHandle } from './RunHandle';
 import { Runs, type AgentRunServices } from './runRegistry';
 import { receiveTerminalFailure } from './terminalResultToast';
 import { buildTerminalRunEndResult, type RunEndResult } from './RunEndResult';
+import type { TransactionPart } from './childSettlement';
 import type { SessionHandle } from './SessionHandle';
 import type { AgentLaunchContext } from './AgentLaunchContext';
 
@@ -46,7 +46,7 @@ const logLifecycleWarning = (message: string, data: unknown) =>
     withLogChannel(CHANNEL),
   );
 
-type Settlement = Effect.Effect<readonly SessionEventDraft[]>;
+type Settlement = Effect.Effect<TransactionPart | undefined>;
 
 export interface RunLifecycleOptions {
   /** The launching run: the parent edge on the live handle. */
@@ -152,13 +152,13 @@ export const finalizeRunTerminal = Effect.fn('finalizeRunTerminal')(
       ...(error ? { error } : {}),
       output,
     };
-    const settlement = params.settle ? yield* params.settle(outcome) : [];
+    const settlement = params.settle && (yield* params.settle(outcome));
     const finalization = yield* session.runs.end({
       runId: handle.runId,
       outcome,
       error,
       output,
-      ...(settlement.length > 0 ? { settlement } : {}),
+      settlement,
     });
     if (!finalization.ok)
       yield* logLifecycleWarning('Failed to finalize durable run state', {

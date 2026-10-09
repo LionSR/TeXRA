@@ -10,6 +10,7 @@ import { Cause, Effect, Exit } from 'effect';
 import stableStringify from 'safe-stable-stringify';
 
 import type { RunRecord } from '@agent/core/definition/RunRecord';
+import type { TransactionPart } from '@agent/runtime/childSettlement';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { consumedRows, haltedPositionRow } from '@agent/runtime/loop/rows';
 import {
@@ -241,15 +242,12 @@ export interface FinalizeRunInput {
   /**
    * What the run produced. Absent for a backstop that ends a run whose flow
    * produced nothing (host exit, a stop of a parked run, a failed launch):
-   * the row then carries an empty output. Also
-   * absent, by rule rather than omission, on the child-run path
-   * (`finalizeChildRun` in `packages/harness/src/tools/delegation/childRun.ts`): a child's
-   * product is its per-turn delivery to its parent, not a flow output.
+   * the row then carries an empty output. Absent by rule on the child-run
+   * path (`finalizeChildRun`): a child's product is its per-turn delivery.
    */
   readonly output?: RunEndOutput;
-  /** A child's last-turn settlement, committed with the run's end (alone
-   *  when that end was already written). */
-  readonly settlement?: readonly SessionEventDraft[];
+  /** A child's last-turn settlement, committed with the run's end. */
+  readonly settlement?: TransactionPart;
   /**
    * Where a persistence failure is reported, wrapped in one worded Error.
    * `finalizeRun` never throws; a caller with its own logging reads the
@@ -347,8 +345,9 @@ export const finalizeRun = Effect.fn('finalizeRun')(function* (
   const status = yield* Effect.exit(
     session.log.transact((tx) =>
       Effect.gen(function* () {
+        const co = yield* input.settlement ??
+          Effect.succeed({ rows: [], committed: Effect.void, held: false });
         const rows = yield* session.log.records(runId);
-        const target = aggregateId('run', runId);
         if (!rows.some((row) => row.type === 'run.start'))
           return yield* Effect.fail(
             new Error(`Run start not found for ${runId}`),
@@ -361,14 +360,15 @@ export const finalizeRun = Effect.fn('finalizeRun')(function* (
           keepExistingOutcome === true && ended !== undefined
             ? ended
             : requested;
-        const settlement = input.settlement ?? [];
         if (ended === persisted && lost !== undefined)
           yield* Effect.logWarning(`Run ${runId} had ended: ${lost.message}`);
-        if (ended === persisted)
-          return yield* Effect.as(tx.append(settlement), persisted);
+        const commit = (end: readonly SessionEventDraft[]) =>
+          tx
+            .append([...co.rows, ...end])
+            .pipe(Effect.as({ persisted, after: co.committed }));
+        if (ended === persisted || co.held) return yield* commit([]);
         const { followUps } = yield* session.followUps.read(runId);
-        const ending = tx.append([
-          ...settlement,
+        return yield* commit([
           ...consumedRows(runId, followUps), // a request it never applied
           // The loop's halt, never apart from its end.
           ...rows.flatMap((row) =>
@@ -380,14 +380,13 @@ export const finalizeRun = Effect.fn('finalizeRun')(function* (
           ...session.trace.closure(runId, persisted),
           {
             type: 'run.end' as const,
-            aggregateId: target,
+            aggregateId: aggregateId('run', runId),
             outcome: persisted,
             ...(error !== undefined ? { error } : {}),
             output: storedRunOutput(input.output ?? emptyRunEndOutput()),
           },
         ]);
-        return yield* Effect.as(ending, persisted);
-      }),
+      }).pipe(Effect.scoped),
     ),
   );
   if (Exit.isFailure(status)) {
@@ -400,5 +399,6 @@ export const finalizeRun = Effect.fn('finalizeRun')(function* (
     );
     return { ok: false, error };
   }
-  return { ok: true, outcome: status.value };
+  yield* status.value.after;
+  return { ok: true, outcome: status.value.persisted };
 });

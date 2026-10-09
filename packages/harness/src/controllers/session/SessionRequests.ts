@@ -15,8 +15,7 @@ import { detachSubagentsOnStop } from '@agent/runtime/detachSubagentsOnStop';
 import { requestAsks } from '@agent/runtime/requestPolicy';
 import { setPolicy } from '@agent/runtime/runApprovalQueue';
 import { forkRun, runNoun } from '@agent/runtime/forkRun';
-import { RunLive } from '@agent/runtime/runRegistry';
-import { Runs } from '@agent/runtime/runRegistry';
+import { RunLive, Runs } from '@agent/runtime/runRegistry';
 import type {
   SessionHandle,
   SessionRequests,
@@ -292,6 +291,31 @@ const decideRequest = (
   )(withRunClaim(deps, req.runId, heldHere, answer));
 };
 
+/** A request the run's live loop answers; refused when none runs here. A
+ *  `/compact` is answered once its row commits, never before. */
+const viaControls = (
+  deps: RequestDeps,
+  req: Extract<RuntimeRequest, { kind: 'run.compact' | 'run.reset' }>,
+): Effect.Effect<Outcome, RequestError> => {
+  const { runId } = req;
+  const noun = runNoun(deps.session(), runId);
+  const unavailable = (reason: string) => new Unavailable({ runId, reason });
+  const controls = deps.session().runs.getHandle(runId)?.controls;
+  const missing =
+    req.kind === 'run.reset'
+      ? `Resume the ${noun} to reset it.`
+      : `This ${noun} has no conversation to compact.`;
+  if (controls === undefined) return Effect.fail(unavailable(missing));
+  return (
+    req.kind === 'run.reset'
+      ? controls.editView(req.handoff ?? null)
+      : controls.requestImmediateCompaction()
+  ).pipe(
+    Effect.mapError((error) => unavailable(error.message)),
+    Effect.as(done),
+  );
+};
+
 /** Delete the admitted lifetime after acquiring its inactive run slot. */
 const deleteAdmittedRun = (
   deps: RequestDeps,
@@ -392,15 +416,8 @@ const handle = (
     case 'run.delete':
       return deleteAdmittedRun(deps, req.runId, admitted, 'single');
     case 'run.compact':
-      return deps.session().runs.requestManualCompaction(req.runId).kind ===
-        'requested'
-        ? Effect.succeed(done)
-        : Effect.fail(
-            new Unavailable({
-              runId: req.runId,
-              reason: `This ${runNoun(deps.session(), req.runId)} has no conversation to compact.`,
-            }),
-          );
+    case 'run.reset':
+      return viaControls(deps, req);
     case 'run.rename':
       return rename(deps, req, heldHere);
     case 'run.fork':
@@ -415,23 +432,6 @@ const handle = (
         ),
         Effect.map((runId): Outcome => ({ kind: 'forked', runId })),
       );
-    case 'run.reset': {
-      const controls = deps.session().runs.getHandle(req.runId)?.controls;
-      if (controls === undefined)
-        return Effect.fail(
-          new Unavailable({
-            runId: req.runId,
-            reason: `Resume the ${runNoun(deps.session(), req.runId)} to reset it.`,
-          }),
-        );
-      return controls.editView(req.handoff ?? null).pipe(
-        Effect.mapError(
-          (error): RequestError =>
-            new Unavailable({ runId: req.runId, reason: error.message }),
-        ),
-        Effect.as(done),
-      );
-    }
     case 'followUp.send':
       return submitFollowUp(
         req.runId,

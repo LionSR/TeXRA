@@ -39,7 +39,8 @@ export interface RunControls {
    *  may not be one-shot, which is why this is the live loop's, not the
    *  launch's `followUpSupport`. */
   readonly oneShot: boolean;
-  requestImmediateCompaction(): void;
+  /** Queue a `/compact` on the run's input; settles once its row commits. */
+  requestImmediateCompaction(): Effect.Effect<void, Error>;
   /**
    * Reset the run's view at its next park (`handoff` null), or hand off:
    * the reset with `handoff` as the message its next turn answers. Settles

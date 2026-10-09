@@ -75,10 +75,30 @@ export const RUN_SUBSTATE = {
   /** Rested by a stop (`child.park` `paused`): not ended, continued by
    *  calling the child again. */
   PAUSED: 'paused',
+  /** Parked holding a result its parent's input, open in another process,
+   *  refused (`child.park` `delivery`): delivered when next admitted. */
+  RESULT_WAITING: 'resultWaiting',
 } as const;
 
 export const RunSubstateSchema = z.enum(RUN_SUBSTATE);
 export type RunSubstate = z.infer<typeof RunSubstateSchema>;
+
+/** A child's park as its substate: a pause, a result held for its parent,
+ *  else none. */
+export function parkSubstate(park: {
+  readonly phase: string;
+  readonly heldFor?: string;
+}): RunSubstate | null {
+  if (park.phase === 'paused') return RUN_SUBSTATE.PAUSED;
+  return park.heldFor === undefined ? null : RUN_SUBSTATE.RESULT_WAITING;
+}
+
+/** Substates of a child at rest that is not a lost run: it is not ended
+ *  and nothing drives it, by design. */
+export const RESTING_SUBSTATES: ReadonlySet<RunSubstate | null> = new Set([
+  RUN_SUBSTATE.PAUSED,
+  RUN_SUBSTATE.RESULT_WAITING,
+]);
 
 /**
  * Wire-level lifecycle status of a run with no lifecycle recorded yet. `as const`
