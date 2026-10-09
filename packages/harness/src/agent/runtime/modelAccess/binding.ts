@@ -30,7 +30,7 @@ import { modelFetch } from '@platform/defaults/longRunningModelTransport';
 import { LanguageModel } from '@platform/languageModel';
 import type { ModelBackend } from '@shared/schemas';
 
-import { routeCredential } from './credentials';
+import { routeCredential, usageRouteOf } from './credentials';
 import { PROTOCOL_BY_BACKEND, type RouteDecision } from './routeDecision';
 import { routePolicies, type CallFailure } from './failureInfo';
 import type { BindRequest, BoundModel } from './ModelAccess';
@@ -223,7 +223,7 @@ export const bindRoute = Effect.fn('bindRoute')(function* (
           accountId: credential.accountId,
         }
       : { kind: 'api-key', apiKey: credential.bearer },
-    billing: credential.usageRoute,
+    billing: usageRouteOf(route),
     options: {
       maxOutputTokens: request.textOnly
         ? config.maxOutputTokens
