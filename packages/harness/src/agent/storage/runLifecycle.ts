@@ -264,8 +264,8 @@ export type FinalizeRunResult =
  * loop's halt, what it left open closed, and its `run.end`, with a child's
  * last-turn settlement and its parent's delivery in the same append. A run
  * whose current lifecycle already ended this way writes only the
- * settlement; a resumed run ends again. A run that never opened has no
- * rows: only what its settlement owes another run is written.
+ * settlement; a resumed run ends again. A run that never opened writes
+ * nothing.
  */
 export const endIn = Effect.fn('endIn')(function* (
   session: SessionHandle,
@@ -277,11 +277,9 @@ export const endIn = Effect.fn('endIn')(function* (
   const co = yield* input.settlement ??
     Effect.succeed({ rows: [], committed: Effect.void, held: false });
   const rows = yield* session.log.records(runId);
-  if (!rows.some((row) => row.type === 'run.start')) {
-    const owed = co.rows.filter((row) => row.aggregateId !== target);
-    if (owed.length > 0) yield* append(owed);
-    return { persisted: outcome, recorded: false, after: co.committed };
-  }
+  // A run never born has nothing to end: its launch reports the failure.
+  if (!rows.some((row) => row.type === 'run.start'))
+    return { persisted: outcome, recorded: false, after: Effect.void };
   // "Already ended" is about the run's current lifecycle (the rule of
   // `runEndFromEvents`): a resumed run ends again, even the same way, or
   // every `durableOutcome` reader keeps it RUNNING for want of the row.

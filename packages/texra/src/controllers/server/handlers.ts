@@ -26,6 +26,7 @@ import { Internal, type RequestError } from '@texra-ai/harness';
 import { describeFollowUpFailure } from '@agent/followUp/ToolUseFollowUp';
 import { resumeRun } from '@agent/runtime/resumeRun';
 import { runAgent } from '@agent/runtime/runAgent';
+import { terminalFailurePresented } from '@agent/runtime/terminalResultToast';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { getRunRecords } from '@agent/storage';
 import { isDocumentTaskConfig, RUN_PHASE, type RunId } from '@shared/schemas';
@@ -134,9 +135,10 @@ function liveRoot(
 const wireError = (error: RequestError): RequestErrorWire =>
   RequestErrorWireSchema.parse(error);
 
-const failed = (message: string): TaskFailed => ({
+const failed = (message: string, presented?: boolean): TaskFailed => ({
   _tag: 'TaskFailed',
   message,
+  ...(presented === true && { presented }),
 });
 
 /** A handler that died answers `Internal` under a reference the service
@@ -161,8 +163,8 @@ function admit<Admitted extends RunId | null>(
 ): Effect.Effect<Admitted, TaskFailed, ProcessServices> {
   return Effect.gen(function* () {
     const admitted = yield* Deferred.make<Admitted, TaskFailed>();
-    const ended = (message: string) =>
-      Deferred.fail(admitted, failed(message)).pipe(Effect.asVoid);
+    const ended = (message: string, presented?: boolean) =>
+      Deferred.fail(admitted, failed(message, presented)).pipe(Effect.asVoid);
     yield* FiberSet.run(
       runs,
       program(admitted).pipe(
@@ -174,7 +176,15 @@ function admit<Admitted extends RunId | null>(
                 'A service task ended with a failure',
                 cause,
               ).pipe(
-                Effect.andThen(ended(toErrorMessage(Cause.squash(cause)))),
+                Effect.andThen(
+                  Effect.suspend(() => {
+                    const error = Cause.squash(cause);
+                    return ended(
+                      toErrorMessage(error),
+                      terminalFailurePresented(error),
+                    );
+                  }),
+                ),
               ),
         ),
         Effect.ensuring(ended('The task ended before it started.')),

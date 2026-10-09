@@ -304,15 +304,14 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
     };
     // The opening (and a fresh run's registration, its cell's): the launch
     // enters its run once it commits.
-    yield* cell.append(
-      [
-        appendRow(runId, [{ role: 'user', content }], { input }),
-        ...offered,
-        configRow(runId, run.config, bound.modelId, binding),
-        positionRow(runId, opening, 'turn.ready'),
-      ],
-      Effect.succeed({ rows: [], committed: run.entry.entered }),
-    );
+    yield* cell.append([
+      appendRow(runId, [{ role: 'user', content }], { input }),
+      ...offered,
+      configRow(runId, run.config, bound.modelId, binding),
+      positionRow(runId, opening, 'turn.ready'),
+    ]);
+    // Once the view has folded the opening, off the publisher fiber.
+    yield* run.entry.entered;
     run.callbacks.onProgress?.({ kind: 'started' });
     return cell;
   });

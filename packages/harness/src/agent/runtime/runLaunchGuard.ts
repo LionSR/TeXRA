@@ -1,12 +1,8 @@
 /**
- * The ends a run's driver does not write, and the terminal a run's launch
- * owns: the host's final artifacts and the claim. A run its loop drives is
- * born with its opening and ended by its lifecycle, so a launch that fails
- * before either leaves nothing to end; a process child, registered before
- * its loop takes it, is ended here when that handoff fails. And a child
- * parked holding its result for a parent another process held: whoever
- * next admits the parent delivers it and ends the child (`deliverHeld`),
- * an ownerless end through the child's cell.
+ * The ends a run's driver does not write (a failed process-child handoff;
+ * a held child's end, delivered by whoever next admits its parent:
+ * `deliverHeld`), and the terminal a run's launch owns: the host's final
+ * artifacts and the claim.
  */
 import { Cause, Effect, Exit, Schedule, type Scope } from 'effect';
 
@@ -81,7 +77,11 @@ export const letGoOfClaim = (
   session: SessionHandle,
   runId: RunId,
 ): Effect.Effect<void> =>
-  Effect.scoped(session.log.hold(runId, { ends: true })).pipe(
+  Effect.gen(function* () {
+    // A run never born has no claim to let go.
+    if (!(yield* getRunRecords(session, runId).exists())) return;
+    yield* Effect.scoped(session.log.hold(runId, { ends: true }));
+  }).pipe(
     Effect.catch((error) =>
       warn(undefined, `The claim on ${runId} was not let go.`, error),
     ),
@@ -97,18 +97,19 @@ export const deliverLaunchFailure = (
   parent: RunParent,
   child: RunId,
   text: string,
-): Effect.Effect<void, Error> =>
+): Effect.Effect<void> =>
   Effect.gen(function* () {
     const to = parent.current;
     if (to === null || (yield* getRunRecords(session, child).exists())) return;
     const from = { kind: 'run', runId: child } as const;
-    const delivery = {
-      to,
-      item: { text, from, deliveryId: `${child}:launch` },
-    };
+    const item = { text, from, deliveryId: `${child}:launch` };
+    const delivery = { to, item };
     yield* session.followUps.send(to, delivery.item);
     yield* wakeParent(session, delivery, undefined);
-  });
+  }).pipe(
+    // The launch's own failure stands; this one is said beside it.
+    Effect.catch((e) => warn(undefined, `${child}: not delivered`, e)),
+  );
 
 /** A launch that owns its run for the run's whole life. */
 export interface RunTerminalOwner {

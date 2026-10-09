@@ -15,6 +15,7 @@ import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
 import { type RunId, USER_FOLLOW_UP_SUPPORT } from '@shared/schemas';
 import { generateRunId } from '@utils/core';
 import { humanGrant } from './runApprovalQueue';
+import { presentRunFailure } from './terminalResultToast';
 import { prepareAgentDefinition } from './AgentLaunchContext';
 import { runWithLaunchGuard, type RunTerminalOwner } from './runLaunchGuard';
 import { applyHelperModelPreference } from './helperModelPreference';
@@ -110,59 +111,69 @@ export const runAgent = Effect.fn('runAgent')(function* (
   } = options;
   const runSession = options.session;
   const runId = request.runId ?? generateRunId();
-  return yield* runSession.runs.launchRun(
-    runId,
-    Effect.gen(function* () {
-      // Resolve the selected model before registering the run. The helper
-      // model swap reads the enabled-model list, the routing switches and the
-      // provider keys, so it takes this session's setting slots and the
-      // process secret store.
-      const config = preferHelperModel
-        ? yield* applyHelperModelPreference(request.config, {
-            ...runSession.roots,
-            secrets: yield* Secrets,
-          })
-        : request.config;
-      const definition = yield* prepareAgentDefinition({
-        config,
-        session: runSession,
-        suppressErrorNotification,
-      });
-      const userFollowUpSupport =
-        definition.config.script == null &&
-        executeAgentOptions.stopAfterCycle !== true
-          ? USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE
-          : USER_FOLLOW_UP_SUPPORT.UNSUPPORTED;
-      const launchGrants = approveDelegatedWork
-        ? humanGrant(APPROVAL_BYPASS_KINDS, true)(NO_APPROVAL_GRANTS)
-        : NO_APPROVAL_GRANTS;
-      // A chat round takes the human grants of the round it continues,
-      // never its launch limit: the round asks with the chat's policy now.
-      const { limit: _previous, ...grants } =
-        continues !== undefined && continues !== runId
-          ? inheritedGrants(
-              SubscriptionRef.getUnsafe(runSession.view.ref),
-              continues,
-            )
-          : launchGrants;
-      // A policy the launch asked for, Auto-approve aside, is the run's
-      // limit whatever the project's is now, so widening the project's
-      // policy later never widens this run.
-      const limit: ApprovalPolicyLimit | undefined =
-        approvalPolicy === 'yolo' ? undefined : approvalPolicy;
-      return yield* runWithLaunchGuard(
-        runSession,
-        runId,
-        executeAgent(definition, runId, {
-          ...executeAgentOptions,
-          registration: {
-            identity: { kind: 'agent', agent: definition.config.agent },
-            userFollowUpSupport,
-            grants: limit === undefined ? grants : { ...grants, limit },
-          },
-        }),
-        { beforeRunEnd },
-      );
-    }),
-  );
+  return yield* runSession.runs
+    .launchRun(
+      runId,
+      Effect.gen(function* () {
+        // Resolve the selected model before registering the run. The helper
+        // model swap reads the enabled-model list, the routing switches and the
+        // provider keys, so it takes this session's setting slots and the
+        // process secret store.
+        const config = preferHelperModel
+          ? yield* applyHelperModelPreference(request.config, {
+              ...runSession.roots,
+              secrets: yield* Secrets,
+            })
+          : request.config;
+        const definition = yield* prepareAgentDefinition({
+          config,
+          session: runSession,
+          suppressErrorNotification,
+        });
+        const userFollowUpSupport =
+          definition.config.script == null &&
+          executeAgentOptions.stopAfterCycle !== true
+            ? USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE
+            : USER_FOLLOW_UP_SUPPORT.UNSUPPORTED;
+        const launchGrants = approveDelegatedWork
+          ? humanGrant(APPROVAL_BYPASS_KINDS, true)(NO_APPROVAL_GRANTS)
+          : NO_APPROVAL_GRANTS;
+        // A chat round takes the human grants of the round it continues,
+        // never its launch limit: the round asks with the chat's policy now.
+        const { limit: _previous, ...grants } =
+          continues !== undefined && continues !== runId
+            ? inheritedGrants(
+                SubscriptionRef.getUnsafe(runSession.view.ref),
+                continues,
+              )
+            : launchGrants;
+        // A policy the launch asked for, Auto-approve aside, is the run's
+        // limit whatever the project's is now, so widening the project's
+        // policy later never widens this run.
+        const limit: ApprovalPolicyLimit | undefined =
+          approvalPolicy === 'yolo' ? undefined : approvalPolicy;
+        return yield* runWithLaunchGuard(
+          runSession,
+          runId,
+          executeAgent(definition, runId, {
+            ...executeAgentOptions,
+            registration: {
+              identity: { kind: 'agent', agent: definition.config.agent },
+              userFollowUpSupport,
+              grants: limit === undefined ? grants : { ...grants, limit },
+            },
+          }),
+          { beforeRunEnd },
+        );
+      }),
+    )
+    .pipe(
+      // A run that fails before it opens has no row to present it: its launch
+      // does, once, unless the caller presents it.
+      Effect.tapError((error) =>
+        suppressErrorNotification === true
+          ? Effect.void
+          : presentRunFailure(runSession.interactions, error),
+      ),
+    );
 });

@@ -375,7 +375,7 @@ export const runWithLifecycle = Effect.fn('runWithLifecycle')(function* <R>(
     }
 
     const failure = new AgentError(errorMsg, { cause: err });
-    yield* receiveTerminalFailure(session.interactions, failure, finalized);
+    receiveTerminalFailure(failure, finalized);
     return yield* Effect.fail(failure);
   });
   // The flow is an Effect: a fiber interruption reaches its provider work

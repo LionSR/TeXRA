@@ -378,9 +378,13 @@ function memoryChildRecords() {
   // `executeAgent`, which this suite replaces with a mock, so the engine
   // wrapper records the turn's terminal fact here instead.
   let runEnd: unknown = null;
+  // The run's `run.start` is in the log once the engine's opening births it.
+  let born = false;
   return {
-    // Nothing registered: the run's `run.start` is not in the log.
-    exists: vi.fn(async () => false),
+    exists: vi.fn(async () => born),
+    bear: () => {
+      born = true;
+    },
     readResultMeta: vi.fn(async () => resultMeta),
     readRunEnd: vi.fn(async () => runEnd),
     recordRunEnd: (value: unknown) => {
@@ -463,6 +467,7 @@ describe('headless delegation', () => {
               parent: options.registration.parentRunId,
             });
             await Effect.runPromise(options.session.log.settled);
+            (mocks.childRecords(runId) as { bear?: () => void }).bear?.();
             const turn = await mocks.executeAgent(definition, runId, {
               ...options,
               turnSignal: signal,

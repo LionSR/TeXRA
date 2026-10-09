@@ -14,7 +14,7 @@
  * present.
  */
 
-import { Effect, Option, Stream } from 'effect';
+import { Cause, Effect, Option, Stream } from 'effect';
 
 import { withLogChannel } from '@logger/effectLog';
 import {
@@ -316,11 +316,12 @@ export function requestAsks({
               Effect.flatMap((cancelled) =>
                 cancelled ? Effect.void : releaseUncommitted,
               ),
-              Effect.catch((error) =>
+              // A session draining under it refuses even as a defect.
+              Effect.catchCause((cause) =>
                 Effect.logWarning(
                   `Request ${requestId} was not cancelled as its run stopped`,
                 ).pipe(
-                  Effect.annotateLogs({ data: error }),
+                  Effect.annotateLogs({ data: Cause.squash(cause) }),
                   withLogChannel(CHANNEL),
                 ),
               ),

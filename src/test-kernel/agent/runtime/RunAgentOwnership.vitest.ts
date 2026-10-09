@@ -8,17 +8,13 @@ const mocks = vi.hoisted(() => ({
   prepareAgentDefinition: vi.fn(),
   runActive: vi.fn(() => false),
   executeAgent: vi.fn(),
+  emit: vi.fn(),
   finalizeRun: vi.fn(),
   releaseClaims: vi.fn(),
 }));
 
 vi.mock('@agent/storage/runLifecycle', async (importActual) => ({
   ...(await importActual<typeof import('@agent/storage/runLifecycle')>()),
-  registerRun: (...args: unknown[]) =>
-    Effect.tryPromise({
-      try: () => mocks.registerRun(...args),
-      catch: ensureError,
-    }),
   finalizeRun: (...args: unknown[]) =>
     Effect.tryPromise({
       try: () => mocks.finalizeRun(...args),
@@ -63,6 +59,22 @@ const RUN_ID = 'a9e70a9e7001' as RunId;
 // The persisted lineage a resume reads after tracking its launch handle.
 // Empty unless a case seeds this run's `run.start` parent.
 const persistedRuns = new Map<RunId, { readonly parentId: RunId }>();
+// The runs whose opening committed: the mocked `executeAgent` opens its run
+// (a `run.start` row) unless a case fails it before birth.
+const bornRuns = new Set<RunId>();
+const birthRows = (runId: RunId) =>
+  Effect.succeed(
+    bornRuns.has(runId)
+      ? [{ type: 'run.start', aggregateId: qualifyAggregateId('run', runId) }]
+      : [],
+  );
+/** What the mocked `executeAgent` does past its opening. */
+const opened =
+  <A>(then: () => A) =>
+  async () => {
+    bornRuns.add(RUN_ID);
+    return then();
+  };
 const CONFIG = AgentConfigSchema.parse({
   agent: 'assistant',
   model: 'test-model',
@@ -99,11 +111,14 @@ const sessionRuns = {
 };
 const SESSION = {
   runs: sessionRuns,
+  // A failure the launch presents itself (one that never opened a run).
+  interactions: { emit: mocks.emit },
   view: { read: () => Effect.succeed({ runs: persistedRuns }) },
   log: {
-    // A runAgent launch is fresh: the log holds no row of its run yet.
-    rows: () => Effect.succeed([]),
-    records: () => Effect.succeed([]),
+    // A runAgent launch is fresh: the log holds no row of its run until
+    // its opening commits (this suite launches the one run).
+    rows: () => birthRows(RUN_ID),
+    records: birthRows,
     // The launch's hold on the run's claim: its release also reports to
     // `mocks.releaseClaims`, which the release-order cases observe.
     hold: (runId: RunId) => {
@@ -161,12 +176,14 @@ describe('runAgent run ownership', () => {
     vi.clearAllMocks();
     trackedHandle = undefined;
     persistedRuns.clear();
+    bornRuns.clear();
     mocks.acquireClaims.mockReturnValue(Effect.succeed(Effect.void));
     mocks.releaseClaims.mockReturnValue(Effect.void);
+    mocks.emit.mockReturnValue(Effect.void);
     mocks.prepareAgentDefinition.mockImplementation(({ config }) => ({
       config,
     }));
-    mocks.executeAgent.mockResolvedValue(EXECUTE_RESULT);
+    mocks.executeAgent.mockImplementation(opened(() => EXECUTE_RESULT));
   });
 
   it.effect('refuses a second launch while the first is still running', () =>
@@ -241,7 +258,7 @@ describe('runAgent run ownership', () => {
   );
 
   it.effect(
-    'fails an early launch as itself, writing no ending, and lets the claim go',
+    'fails an early launch as itself, writing no ending and holding no claim',
     () =>
       Effect.gen(function* () {
         const launchError = new Error('launch failed');
@@ -249,10 +266,15 @@ describe('runAgent run ownership', () => {
         expect(yield* Effect.flip(launch())).toBe(launchError);
 
         // A run is born with its opening, so a launch failing before it
-        // leaves no run to end.
+        // leaves no run to end and no claim to let go.
         expect(mocks.finalizeRun).not.toHaveBeenCalled();
-        expect(mocks.releaseClaims).toHaveBeenCalledWith(
-          qualifyAggregateId('run', RUN_ID),
+        expect(mocks.acquireClaims).not.toHaveBeenCalled();
+        expect(mocks.releaseClaims).not.toHaveBeenCalled();
+        // With no row to present it, the launch presents its own failure.
+        expect(mocks.emit).toHaveBeenCalledWith(
+          'requestShowError',
+          expect.objectContaining({ message: 'launch failed' }),
+          { replayWhenAttached: true },
         );
       }),
   );
@@ -260,10 +282,12 @@ describe('runAgent run ownership', () => {
   it.effect('persists final host artifacts before releasing ownership', () =>
     Effect.gen(function* () {
       const order: string[] = [];
-      mocks.executeAgent.mockImplementationOnce(async () => {
-        order.push('execute');
-        return EXECUTE_RESULT;
-      });
+      mocks.executeAgent.mockImplementationOnce(
+        opened(() => {
+          order.push('execute');
+          return EXECUTE_RESULT;
+        }),
+      );
       mocks.releaseClaims.mockImplementationOnce(() =>
         Effect.sync(() => {
           order.push('release');
@@ -323,7 +347,12 @@ describe('runAgent run ownership', () => {
             code: 'ENOSPC',
           },
         );
-        mocks.executeAgent.mockRejectedValueOnce(runError);
+        // The run opened, then failed: its claim is the launch's to let go.
+        mocks.executeAgent.mockImplementationOnce(
+          opened(() => {
+            throw runError;
+          }),
+        );
 
         const failure = yield* Effect.flip(
           launch({

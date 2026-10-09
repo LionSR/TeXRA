@@ -773,21 +773,6 @@ const driveTurns = <TTurn, R>(
       }
       const err = attempt.kind === 'failed' ? attempt.err : null;
       const turnIsError = attempt.kind === 'completed' && attempt.turnIsError;
-      // A launch can fail before its first cycle (and birth: see below).
-      if (
-        loop.turnIndex === 0 &&
-        err != null &&
-        !(yield* session.log.owns(runId))
-      ) {
-        if (strategy.deliveryMode !== 'persistOnly')
-          yield* deliverLaunchFailure(
-            session,
-            loop.parent,
-            runId,
-            strategy.formatError(null, err),
-          );
-        return yield* Effect.fail(ensureError(err));
-      }
       if (err != null || turnIsError) {
         loop.failed = true;
         loop.lastError =
@@ -795,6 +780,21 @@ const driveTurns = <TTurn, R>(
           new Error(
             `${strategy.stageLabel} reported a failed turn without throwing.`,
           );
+      }
+      // A launch can fail before its first cycle, and before its run's birth.
+      if (
+        loop.turnIndex === 0 &&
+        loop.failed &&
+        !(yield* session.log.owns(runId))
+      ) {
+        if (strategy.deliveryMode !== 'persistOnly')
+          yield* deliverLaunchFailure(
+            session,
+            loop.parent,
+            runId,
+            strategy.formatError(turn, err),
+          );
+        return yield* Effect.fail(ensureError(loop.lastError));
       }
       const nextRunTurn = strategy.runTurn;
       if (

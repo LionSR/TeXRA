@@ -295,6 +295,7 @@ export const prepareAgentDefinition = Effect.fn('prepareAgentDefinition')(
           ) {
             return Effect.void;
           }
+          attachErrorPresentationClaimed(error);
           return input.session.interactions.emit(
             'requestShowError',
             { message: toErrorMessage(error) },

@@ -172,6 +172,15 @@ const runEnds = (runId: RunId) =>
     ]),
   );
 
+/** Opens each run on the default session (its `run.start`, settled): a
+ *  detach writes its durable batch only for a child that was born. */
+const bear = (...runIds: readonly RunId[]) =>
+  Effect.suspend(() => {
+    for (const runId of runIds)
+      publishTestRunStart(testDefaultSession(), runId);
+    return testDefaultSession().log.settled;
+  });
+
 interface PublishedEvents {
   readonly published: SessionEventDraft[];
 }
@@ -227,12 +236,6 @@ function killRegistry(
   const stop = registry.stop(...args);
   Effect.runFork(stop.settlement);
   return stop.accepted();
-}
-function stopRegistry(
-  registry: RunRegistry,
-  ...args: Parameters<RunRegistry['stop']>
-): void {
-  Effect.runFork(registry.stop(...args).settlement);
 }
 
 describe('runRegistry', () => {
@@ -473,6 +476,7 @@ describe('runRegistry', () => {
           grandchildInterrupt,
           { agentName: 'test-grandchild' },
         );
+        yield* bear(childRunId, grandchildRunId);
 
         const stop = registry.stop(childRunId, {
           detachActiveChildren: true,
@@ -558,6 +562,7 @@ describe('runRegistry', () => {
             grandchildInterrupt,
             { agentName: 'test-grandchild' },
           );
+          yield* bear(childRunId, grandchildRunId);
 
           yield* registry.stop(rootRunId, {
             detachActiveChildren: true,
@@ -581,6 +586,49 @@ describe('runRegistry', () => {
       }),
   );
 
+  it.effect(
+    'stops a detaching parent whose tracked child is not born yet',
+    () =>
+      Effect.gen(function* () {
+        const { events, registry } = createRegistry();
+        yield* Effect.addFinalizer(() => Effect.sync(() => registry.dispose()));
+        const recorded = recordSessionEvents(events);
+        const rootRunId = generateRunId();
+        const childRunId = generateRunId();
+        const rootInterrupt = vi.fn();
+        const childInterrupt = vi.fn();
+
+        // The child is registered with its opening but has no `run.start`
+        // yet: there is no row to sever, so only its local edge goes.
+        trackInterruptibleHandle(
+          registry,
+          { runId: rootRunId },
+          rootInterrupt,
+          {
+            agentName: 'test-root',
+          },
+        );
+        trackInterruptibleHandle(
+          registry,
+          { runId: childRunId, parent: rootRunId },
+          childInterrupt,
+        );
+
+        const stop = registry.stop(rootRunId, {
+          detachActiveChildren: true,
+          reason: 'user',
+        });
+        yield* stop.settlement;
+
+        expect(stop.accepted()).toBe(true);
+        expect(rootInterrupt).toHaveBeenCalledOnce();
+        expect(childInterrupt).not.toHaveBeenCalled();
+        expect(registry.getHandle(childRunId)?.parent).toBeNull();
+        expect(registry.hasActiveChildren(rootRunId)).toBe(false);
+        expect(eventsOfType(recorded.events, 'run.detach')).toEqual([]);
+      }),
+  );
+
   it.effect('fails the stop when the detach batch is refused', () =>
     Effect.gen(function* () {
       const { registry } = createRegistry({
@@ -598,6 +646,7 @@ describe('runRegistry', () => {
           { runId: childRunId, parent: rootRunId },
           vi.fn(),
         );
+        yield* bear(childRunId);
 
         const error = yield* Effect.flip(
           registry.stop(rootRunId, {
@@ -641,6 +690,7 @@ describe('runRegistry', () => {
             { runId: childRunId, parent: rootRunId },
             vi.fn(),
           );
+          yield* bear(childRunId);
 
           const stopped = yield* Effect.forkChild(
             registry.stop(rootRunId, {
@@ -685,6 +735,7 @@ describe('runRegistry', () => {
           { runId: childRunId, parent: rootRunId },
           vi.fn(),
         );
+        yield* bear(childRunId);
 
         const stopped = yield* Effect.forkChild(
           registry.stop(rootRunId, {
@@ -888,25 +939,27 @@ describe('runRegistry', () => {
     }),
   );
 
-  it('detaches children of an ownerless run and cancels it', () => {
-    const { events, registry } = createRegistry();
-    const recorded = recordSessionEvents(events);
-    const parentRunId = generateRunId();
-    const childRunId = generateRunId();
-    const childInterrupt = vi.fn();
+  it.effect('detaches children of an ownerless run and cancels it', () =>
+    Effect.gen(function* () {
+      const { events, registry } = createRegistry();
+      yield* Effect.addFinalizer(() => Effect.sync(() => registry.dispose()));
+      const recorded = recordSessionEvents(events);
+      const parentRunId = generateRunId();
+      const childRunId = generateRunId();
+      const childInterrupt = vi.fn();
 
-    try {
       // No root handle owns `parentRunId` — only a tracked child does.
       trackInterruptibleHandle(
         registry,
         { runId: childRunId, parent: parentRunId },
         childInterrupt,
       );
+      yield* bear(parentRunId, childRunId);
 
-      stopRegistry(registry, parentRunId, {
+      yield* registry.stop(parentRunId, {
         detachActiveChildren: true,
         reason: 'user',
-      });
+      }).settlement;
 
       expect(childInterrupt).not.toHaveBeenCalled();
       expect(registry.getHandle(childRunId)?.parent).toBeNull();
@@ -914,10 +967,11 @@ describe('runRegistry', () => {
         type: 'run.detach',
         aggregateId: qualifyAggregateId('run', childRunId),
       });
-    } finally {
-      registry.dispose();
-    }
-  });
+      expect(yield* runEnds(parentRunId)).toMatchObject([
+        { outcome: RUN_OUTCOME.CANCELLED },
+      ]);
+    }),
+  );
 
   it('registers a child without publishing its parent edge', () => {
     const { events, registry } = createRegistry();
@@ -993,6 +1047,7 @@ describe('runRegistry', () => {
       const handle = createHandle(runId, parentRunId);
 
       registry.track(handle);
+      yield* bear(runId);
       expect(handle.parent).toBe(parentRunId);
       const sinceTrack = recordSessionEvents(events);
       yield* registry['detachActiveChildren'](parentRunId);
@@ -1045,6 +1100,7 @@ describe('runRegistry', () => {
       grants.policy.set(parentRunId, inherited);
       const handle = createHandle(childRunId, parentRunId);
       registry.track(handle);
+      yield* bear(childRunId);
 
       yield* registry['detachActiveChildren'](parentRunId);
 
