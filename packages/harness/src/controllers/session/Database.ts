@@ -497,8 +497,8 @@ export const databaseLayer = (
               : [row.ownerId],
           ),
         );
-      /** Claim `observed` (read in this transaction) once its other owners
-       *  are proven dead (or, deleting a single run, unprovable). */
+      /** Claim `observed`, which MUST be read in this same transaction, once
+       *  its other owners are proven dead (deleting a single run: or unprovable). */
       const claimAll = (
         observed: readonly AggregateState[],
         mode?: DeletionMode,
@@ -506,7 +506,7 @@ export const databaseLayer = (
         Effect.gen(function* () {
           yield* reclaimable(othersOf(observed), mode === 'single');
           yield* exec(
-            `UPDATE event_sequence SET owner_id = ? WHERE id IN (${AGGREGATE_LIST})`,
+            `UPDATE event_sequence SET owner_id = ? WHERE id IN (${AGGREGATE_LIST}) AND closed_by IS NULL`,
             [
               identity.ownerId,
               ...aggregateLists(observed.map((row) => row.aggregateId)),
