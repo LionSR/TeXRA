@@ -264,11 +264,10 @@ export class Database extends Context.Service<
       readonly SessionEvent[],
       DatabaseNotOwner | DatabaseWriteFailed
     >;
-    /** Run `body` as one write transaction behind the store gate: what it
-     *  writes commits together or not at all, readers wake after. It holds
-     *  the write lock, so `body` is database-only, forks nothing that
-     *  outlives it, and may run again whole (a busy lock; claim owners
-     *  proven off the lock). Its failures leave typed. */
+    /** Run `body` as one write transaction behind the store gate, whole or
+     *  not at all; readers wake after. It holds the write lock, so `body` is
+     *  database-only and may run again whole (a busy lock; claim owners
+     *  proven off the lock); `afterCommit` actions run after. */
     readonly job: <A, E>(
       body: Effect.Effect<A, E>,
     ) => Effect.Effect<A, E | DatabaseWriteFailed>;
@@ -343,15 +342,16 @@ export class Database extends Context.Service<
       readonly AggregateId[],
       DatabaseNotOwner | DatabaseReadFailed | DatabaseWriteFailed
     >;
-    /** C9, as one publisher job (`SessionEvents.removeRun`): claim the
-     *  owning tree once its owners are proven reclaimable, append the
-     *  tombstone, close every dependent; `expectedStartCommit` is the
-     *  lifetime the caller admitted. */
-    readonly appendRunRemoval: (
+    /** C9: prove the tree's owners off the publisher, then answer its job
+     *  (`SessionEvents.removeRun`): reread, claim, append the tombstone. */
+    readonly prepareRunRemoval: (
       id: AggregateId,
       mode: DeletionMode,
       expectedStartCommit: CommitOrdinal,
-    ) => Effect.Effect<readonly SessionEvent[], DatabaseWriteFailed>;
+    ) => Effect.Effect<
+      Effect.Effect<readonly SessionEvent[], DatabaseWriteFailed>,
+      DatabaseReadFailed | DatabaseWriteFailed
+    >;
     /** C9: the `run.removed` tombstones cleanup has not collected. */
     readonly readPendingDeletions: () => Effect.Effect<
       readonly SessionEvent[],

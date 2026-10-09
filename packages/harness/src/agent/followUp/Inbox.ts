@@ -27,7 +27,11 @@ import {
   type QueuedFollowUp,
   type RunRows,
 } from '@shared/session/runRows';
-import type { Append, SessionEventsShape } from '@shared/session/sessionEvents';
+import {
+  afterCommit,
+  type Append,
+  type SessionEventsShape,
+} from '@shared/session/sessionEvents';
 import { ensureError } from '@utils/errors/errorMessage';
 import { RunInput } from './RunInput';
 import { queuedRow } from './followUpMessages';
@@ -177,7 +181,9 @@ export class Inbox {
     this.port.detach(() =>
       Effect.gen({ self: this }, function* () {
         if (this.readers.has(runId) || queued(yield* this.read(runId))) return;
-        this.notify({ kind: 'run', runId });
+        yield* afterCommit(
+          Effect.sync(() => this.notify({ kind: 'run', runId })),
+        );
       }),
     );
   }
@@ -207,8 +213,13 @@ export class Inbox {
             ...settled,
             { type: 'followup.closed', aggregateId: run },
           ]);
-          this.endReader(runId);
-          this.notify({ kind: 'run', runId });
+          // Only a closed input that committed ends the reader.
+          yield* afterCommit(
+            Effect.sync(() => {
+              this.endReader(runId);
+              this.notify({ kind: 'run', runId });
+            }),
+          );
         }),
       ).pipe(
         Effect.catch((error) =>
@@ -316,10 +327,9 @@ export class Inbox {
             Effect.as<Sent>({ kind: 'refused', reason: 'owned_elsewhere' }),
           ),
       ),
-      Effect.map((sent): Sent => {
-        if (typeof sent !== 'string') return sent;
+      Effect.flatMap((sent) => {
+        if (typeof sent !== 'string') return Effect.succeed(sent);
         const reader = this.readers.get(runId);
-        reader?.notify();
         const wake =
           options.wake === true &&
           options.hold !== 'instruction' &&
@@ -327,8 +337,15 @@ export class Inbox {
           !this.port.live(runId) &&
           !this.resumes.has(runId);
         // A replay still queued is news only when it owes the run a resume.
-        if (sent === 'pending' && !wake) return { kind: 'duplicate' };
-        return { kind: 'queued', read: reader !== undefined, wake };
+        const landed: Sent =
+          sent === 'pending' && !wake
+            ? { kind: 'duplicate' }
+            : { kind: 'queued', read: reader !== undefined, wake };
+        // The reader reads the row once it has committed.
+        return Effect.as(
+          afterCommit(Effect.sync(() => reader?.notify())),
+          landed,
+        );
       }),
     );
   }

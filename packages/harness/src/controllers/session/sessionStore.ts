@@ -44,8 +44,8 @@ import {
   type DatabaseWriteFailed,
 } from '@shared/session/database';
 import {
-  InPublisherJob,
   ProcessIdentity,
+  PublisherJob,
   SessionEvents,
   type Append,
   type SessionEventsShape,
@@ -185,8 +185,8 @@ const claimHolds = (database: DatabaseShape) => {
         const held = (hold: { ended: boolean }) => {
           if (options.ends === true) hold.ended = true;
         };
-        return Effect.flatMap(InPublisherJob, (inJob) =>
-          inJob
+        return Effect.flatMap(PublisherJob, (job) =>
+          job !== null
             ? Effect.flatMap(take(id), (hold) => {
                 held(hold);
                 return Effect.flatMap(Effect.scope, (scope) =>
@@ -298,7 +298,7 @@ export const makeSessionStore = (
     const closed = () => doorsShut;
     /** Every job enqueued before it has run, and the view folded it. */
     const settled = events
-      .transact(() => database.currentCommit)
+      .transact(() => database.currentCommit, { order: true })
       .pipe(Effect.orDie, Effect.flatMap(settle.to));
     const trace = makeRunTrace({
       storage,
@@ -312,10 +312,13 @@ export const makeSessionStore = (
         work:
           | readonly SessionEventDraft[]
           | ((tx: SessionTransaction) => Effect.Effect<A, E>),
-      ) =>
-        typeof work === 'function'
-          ? transact(work)
-          : transact((tx) => tx.append(work)),
+      ) => {
+        if (typeof work === 'function') return transact(work);
+        // An empty batch is a barrier: every job before it has run.
+        return work.length === 0
+          ? events.transact(() => Effect.succeed([]), { order: true })
+          : transact((tx) => tx.append(work));
+      },
       publish: trace.publish,
       settled,
       now: () => SubscriptionRef.getUnsafe(database.observedCommit),

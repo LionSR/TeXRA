@@ -8,7 +8,6 @@
 // Third-party imports
 import {
   Cause,
-  type Context,
   Deferred,
   Effect,
   Exit,
@@ -42,9 +41,12 @@ import {
 } from '@shared/session/database';
 import { closesRunWindow } from '@shared/session/runRows';
 import {
-  InPublisherJob,
+  afterCommit,
+  committing,
+  PublisherJob,
   SessionEvents,
   type Append,
+  type JobOptions,
   type OpenWork,
   type SessionCursor,
   type SessionEventsShape,
@@ -193,46 +195,9 @@ export function tailFrom<A extends SessionEvent, E>(
   );
 }
 
-/** A job of the publisher: its `append`, and `wrote` for rows it commits
- *  some other way (a run's removal). */
-type Job<A, E> = (
-  append: Append,
-  wrote: (rows: readonly SessionEvent[]) => void,
-) => Effect.Effect<A, E>;
-
-/**
- * Run one job as one transaction (`Database.job`). Its appends commit with
- * it or not at all, so what they wrote is tracked only once it has: an
- * attempt that rolls back (and runs again) leaves nothing behind. Both of
- * `appendAll`'s refusals pass through typed (D6 b): a lost single-owner race
- * is the caller's fact to act on, not a defect.
- */
-const jobTransaction =
-  (
-    log: Context.Service.Shape<typeof Database>,
-    track: (rows: readonly SessionEvent[]) => void,
-  ) =>
-  <A, E>(job: Job<A, E>): Effect.Effect<A, E | DatabaseWriteFailed> =>
-    log
-      .job(
-        Effect.suspend(() => {
-          const rows: SessionEvent[] = [];
-          const wrote = (written: readonly SessionEvent[]) => {
-            rows.push(...written);
-          };
-          const append: Append = (events) =>
-            Effect.tap(log.appendAll(events), (written) =>
-              Effect.sync(() => wrote(written)),
-            );
-          return Effect.map(job(append, wrote), (value) => ({ value, rows }));
-        }).pipe(Effect.provideService(InPublisherJob, true)),
-      )
-      .pipe(
-        Effect.map(({ value, rows }) => {
-          track(rows);
-          return value;
-        }),
-      );
+/** An ordering job's `append`: it writes no row. */
+const ordering: Append = () =>
+  Effect.die(new Error('An ordering job appends nothing'));
 
 /** A job that waits on its own publisher would wait forever. */
 const reentered = Effect.die(
@@ -261,7 +226,22 @@ export const sessionEventsLayer = Layer.effect(
   Effect.gen(function* () {
     const log = yield* Database;
     const { track, openWork } = openWorkTracker();
-    const inTransaction = jobTransaction(log, track);
+    /** What a job's rows leave open is tracked once they commit, so an
+     *  attempt that rolls back (and runs again) leaves nothing behind. */
+    const tracked = (rows: readonly SessionEvent[]) =>
+      afterCommit(Effect.sync(() => track(rows)));
+    // Both of `appendAll`'s refusals pass through typed (D6 b).
+    const append: Append = (events) =>
+      Effect.tap(log.appendAll(events), tracked);
+    /** One job: one transaction (`Database.job`), or in its place with
+     *  none (`order`). */
+    const inTransaction = <A, E>(
+      job: (append: Append) => Effect.Effect<A, E>,
+      order = false,
+    ): Effect.Effect<A, E | DatabaseWriteFailed> =>
+      order
+        ? committing((attempt) => attempt, job(ordering))
+        : log.job(Effect.suspend(() => job(append)));
     const inbox = yield* Queue.unbounded<PublicationJob, Cause.Done>();
     // One job per take, never a batch: a job the close refuses is one the
     // consumer never took. It ends when the ended inbox runs dry.
@@ -316,12 +296,15 @@ export const sessionEventsLayer = Layer.effect(
     const enqueue = (job: PublicationJob): boolean =>
       Queue.offerUnsafe(inbox, job);
     const transact = <A, E>(
-      job: Job<A, E>,
+      job: (append: Append) => Effect.Effect<A, E>,
+      options: JobOptions = {},
     ): Effect.Effect<A, E | DatabaseWriteFailed> =>
       Effect.gen(function* () {
-        if (yield* InPublisherJob) return yield* reentered;
+        if ((yield* PublisherJob) !== null) return yield* reentered;
         const done = yield* Deferred.make<A, E | DatabaseWriteFailed>();
-        const admitted = enqueue(settling(inTransaction(job), done));
+        const admitted = enqueue(
+          settling(inTransaction(job, options.order), done),
+        );
         if (!admitted) {
           return yield* Effect.die(
             new Error('Session publication after the plane closed'),
@@ -334,19 +317,20 @@ export const sessionEventsLayer = Layer.effect(
       mode,
       expectedStartCommit,
     ) =>
-      transact((_, wrote) =>
-        Effect.tap(
-          log.appendRunRemoval(id, mode, expectedStartCommit),
-          (rows) => Effect.sync(() => wrote(rows)),
-        ),
+      Effect.flatMap(
+        log.prepareRunRemoval(id, mode, expectedStartCommit),
+        (removal) => transact(() => Effect.tap(removal, tracked)),
       );
-    const detach: SessionEventsShape['detach'] = (job) => {
+    const detach: SessionEventsShape['detach'] = (job, options = {}) => {
       const admitted = enqueue({
-        run: inTransaction(job).pipe(
+        run: inTransaction(job, options.order).pipe(
           Effect.catchCause((cause) =>
             Effect.logError('Session publication failed').pipe(
               Effect.annotateLogs({ data: Cause.squash(cause) }),
               withLogChannel(CHANNEL),
+              Effect.andThen(
+                Effect.sync(() => options.failed?.(Cause.squash(cause))),
+              ),
             ),
           ),
         ),

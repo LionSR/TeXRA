@@ -18,6 +18,7 @@ import {
 } from 'effect';
 import { isSqlError } from 'effect/sql/SqlError';
 import type { OwnerId, OwnerLiveness } from '@shared/schemas';
+import { DatabaseClaimRefused } from '@shared/session/database';
 import type * as SqlClient from 'effect/sql/SqlClient';
 
 export type Sql = SqlClient.SqlClient;
@@ -60,6 +61,26 @@ export class OwnersUnproven {
     this.owners = owners;
   }
 }
+
+/** Every one of `owners` proven dead by this attempt (`unprovable` will do
+ *  when `single`), or the refusal naming the first that is not. An owner it
+ *  has no verdict for restarts the outermost transaction ({@link
+ *  provingOwners}). */
+export const reclaimable = (
+  owners: ReadonlySet<OwnerId>,
+  single: boolean,
+): Effect.Effect<void, DatabaseClaimRefused> =>
+  Effect.gen(function* () {
+    const proven = yield* ProvenOwners;
+    const unproven = [...owners].filter((owner) => !proven.has(owner));
+    if (unproven.length > 0)
+      return yield* Effect.die(new OwnersUnproven(unproven));
+    for (const ownerId of owners) {
+      const verdict = proven.get(ownerId);
+      if (verdict === 'alive' || (verdict === 'unprovable' && !single))
+        return yield* new DatabaseClaimRefused({ ownerId, verdict });
+    }
+  });
 
 /** Run the outermost transaction's `attempt`; one that met claim owners it
  *  has no verdict for rolled back whole, so they are proven here, off the

@@ -50,7 +50,7 @@ import {
   type SessionEvent,
   type SessionEventDraft,
 } from '@shared/schemas';
-import { ProcessIdentity } from '@shared/session/sessionEvents';
+import { committing, ProcessIdentity } from '@shared/session/sessionEvents';
 import {
   AggregateStateSchema,
   DeletionModeSchema,
@@ -59,7 +59,6 @@ import {
   Database,
   GlobalDatabase,
   DatabaseOpenFailed,
-  DatabaseClaimRefused,
   DatabaseNotOwner,
   DatabaseReadFailed,
   DatabaseStoreNewer,
@@ -113,6 +112,7 @@ import {
   OwnersUnproven,
   ProvenOwners,
   provingOwners,
+  reclaimable,
   retryBusy,
 } from './storeAside';
 import { openStore, reclaimFreePages } from './storeSchema';
@@ -437,8 +437,6 @@ export const databaseLayer = (
       const claim = `UPDATE event_sequence SET owner_id = ?
         WHERE kind = ? AND logical_id = ? AND owner_id IS ?
           AND closed_by IS NULL RETURNING id`;
-      const claimEvery = `UPDATE event_sequence SET owner_id = ?
-        WHERE id IN (${AGGREGATE_LIST})`;
       const release = `UPDATE event_sequence SET owner_id = NULL
         WHERE id IN (${AGGREGATE_LIST}) AND owner_id = ?`;
       const reparent = `UPDATE event_sequence SET parent_id = ${AGGREGATE}
@@ -491,38 +489,29 @@ export const databaseLayer = (
       const typedRefusal = Effect.mapError((failure: DatabaseWriteFailed) =>
         failure.cause instanceof DatabaseNotOwner ? failure.cause : failure,
       );
-      /** Claim every row of `observed`, read in the caller's transaction,
-       *  once each other owner is proven dead (for a single run's deletion,
-       *  unprovable will do). An owner this attempt has no verdict for
-       *  restarts the outermost transaction, which proves it off the lock. */
+      const othersOf = (observed: readonly AggregateState[]) =>
+        new Set(
+          observed.flatMap((row) =>
+            row.ownerId === null || row.ownerId === identity.ownerId
+              ? []
+              : [row.ownerId],
+          ),
+        );
+      /** Claim `observed` (read in this transaction) once its other owners
+       *  are proven dead (or, deleting a single run, unprovable). */
       const claimAll = (
         observed: readonly AggregateState[],
         mode?: DeletionMode,
       ) =>
         Effect.gen(function* () {
-          const proven = yield* ProvenOwners;
-          const owners = new Set(
-            observed.flatMap((row) =>
-              row.ownerId === null || row.ownerId === identity.ownerId
-                ? []
-                : [row.ownerId],
-            ),
+          yield* reclaimable(othersOf(observed), mode === 'single');
+          yield* exec(
+            `UPDATE event_sequence SET owner_id = ? WHERE id IN (${AGGREGATE_LIST})`,
+            [
+              identity.ownerId,
+              ...aggregateLists(observed.map((row) => row.aggregateId)),
+            ],
           );
-          const unproven = [...owners].filter((owner) => !proven.has(owner));
-          if (unproven.length > 0)
-            return yield* Effect.die(new OwnersUnproven(unproven));
-          for (const ownerId of owners) {
-            const verdict = proven.get(ownerId);
-            if (
-              verdict === 'alive' ||
-              (verdict === 'unprovable' && mode !== 'single')
-            )
-              return yield* new DatabaseClaimRefused({ ownerId, verdict });
-          }
-          yield* exec(claimEvery, [
-            identity.ownerId,
-            ...aggregateLists(observed.map((row) => row.aggregateId)),
-          ]);
         });
       const projectionStates = exec(
         'SELECT name, version, through_commit AS through FROM projection_state',
@@ -1032,16 +1021,13 @@ export const databaseLayer = (
                     .map((row) => row.aggregateId);
                 }),
               ),
-        appendRunRemoval: (id, mode, expectedStartCommit) =>
-          // The tree is read, its owners checked and claimed, and the
-          // tombstone appended in one transaction: nothing moves between.
-          transact(
-            Effect.gen(function* () {
-              const deletionMode = DeletionModeSchema.parse(mode);
-              const removal = prepareEventDraft({
-                type: 'run.removed',
-                aggregateId: id,
-              });
+        prepareRunRemoval: (id, mode, expectedStartCommit) =>
+          Effect.gen(function* () {
+            const seen = yield* query(readDependents(id));
+            const verdicts = yield* Effect.forEach(othersOf(seen), (owner) =>
+              Effect.map(liveness(owner), (v) => [owner, v] as const),
+            );
+            const removing = Effect.gen(function* () {
               const observed = yield* readDependents(id);
               const target = observed.find((row) => row.aggregateId === id);
               if (target === undefined || observed.some((row) => row.closed))
@@ -1052,13 +1038,25 @@ export const databaseLayer = (
                 return yield* Effect.fail(
                   new Error(`Deletion target changed since admission: ${id}`),
                 );
-              yield* claimAll(observed, deletionMode);
+              yield* claimAll(observed, DeletionModeSchema.parse(mode));
+              const removal = prepareEventDraft({
+                type: 'run.removed',
+                aggregateId: id,
+              });
               return yield* appendRows(
                 [removal],
                 yield* Clock.currentTimeMillis,
               );
-            }),
-          ),
+            });
+            return Effect.flatMap(ProvenOwners, (proven) =>
+              transact(removing).pipe(
+                Effect.provideService(
+                  ProvenOwners,
+                  new Map([...verdicts, ...proven]),
+                ),
+              ),
+            );
+          }),
         collectDeletion: (tombstone, cleanup) =>
           Effect.gen(function* () {
             const columns = aggregateColumns(tombstone.aggregateId);
@@ -1096,17 +1094,19 @@ export const databaseLayer = (
                 false,
               ),
         job: (body) =>
-          own('write', body).pipe(
-            // The gate's, BEGIN's or COMMIT's failure; the body's leave typed.
-            Effect.catchIf(
-              (e) => isSqlError(e) || e instanceof DatabaseStoreNewer,
-              (e) => Effect.fail(writeFailed(e)),
-            ),
-            Effect.catchDefect((defect) =>
-              isSqlError(defect)
-                ? Effect.fail(writeFailed(defect))
-                : Effect.die(defect),
-            ),
+          committing(
+            (attempt) =>
+              own('write', attempt).pipe(
+                // The gate's, BEGIN's or COMMIT's failure; the body's leave typed.
+                Effect.catchIf(
+                  (e) => isSqlError(e) || e instanceof DatabaseStoreNewer,
+                  (e) => Effect.fail(writeFailed(e)),
+                ),
+                Effect.catchDefect((d) =>
+                  isSqlError(d) ? Effect.fail(writeFailed(d)) : Effect.die(d),
+                ),
+              ),
+            body,
           ),
         appendAll: (input) =>
           Effect.gen(function* () {

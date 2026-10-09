@@ -2694,7 +2694,9 @@ describe('the C1 event table and the C6 publisher', () => {
           yield* refusesDeletion;
           expect(
             yield* Effect.flip(
-              first.appendRunRemoval(root, 'bulk', initial[0]!.commit),
+              Effect.flatten(
+                first.prepareRunRemoval(root, 'bulk', initial[0]!.commit),
+              ),
             ),
           ).toMatchObject({
             _tag: 'DatabaseWriteFailed',
@@ -2704,7 +2706,9 @@ describe('the C1 event table and the C6 publisher', () => {
         }).pipe(Effect.provide(substrate(storage, OTHER)));
         const committed = [
           ...(yield* first.appendAll([waiting])),
-          ...(yield* first.appendRunRemoval(root, 'bulk', initial[0]!.commit)),
+          ...(yield* Effect.flatten(
+            first.prepareRunRemoval(root, 'bulk', initial[0]!.commit),
+          )),
         ];
         expect(committed.at(-1)).toMatchObject({
           type: 'run.removed',
@@ -2769,7 +2773,9 @@ describe('the C1 event table and the C6 publisher', () => {
         const replacement = yield* first.appendAll([runStart]);
         expect(
           (yield* Effect.flip(
-            first.appendRunRemoval(root, 'single', initial[0]!.commit),
+            Effect.flatten(
+              first.prepareRunRemoval(root, 'single', initial[0]!.commit),
+            ),
           ))._tag,
         ).toBe('DatabaseWriteFailed');
         expect(yield* first.readAggregate(root, 0)).toEqual(replacement);
@@ -3024,7 +3030,9 @@ describe('the C1 event table and the C6 publisher', () => {
           for (const mode of ['bulk', 'automatic'] as const) {
             expect(
               yield* Effect.flip(
-                first.appendRunRemoval(otherRoot, mode, otherStart),
+                Effect.flatten(
+                  first.prepareRunRemoval(otherRoot, mode, otherStart),
+                ),
               ),
             ).toMatchObject({
               _tag: 'DatabaseWriteFailed',
@@ -3034,7 +3042,9 @@ describe('the C1 event table and the C6 publisher', () => {
           expect((yield* first.aggregateState([otherRoot]))[0]?.closed).toBe(
             false,
           );
-          yield* first.appendRunRemoval(otherRoot, 'single', otherStart);
+          yield* Effect.flatten(
+            first.prepareRunRemoval(otherRoot, 'single', otherStart),
+          );
           expect((yield* first.aggregateState([otherRoot]))[0]?.closed).toBe(
             true,
           );
