@@ -26,7 +26,6 @@ import { constants, zstdCompressSync, zstdDecompressSync } from 'node:zlib';
 import stableStringify from 'safe-stable-stringify';
 import { Effect, Predicate, Result } from 'effect';
 import { z } from 'zod';
-import { withLogChannel } from '@logger/effectLog';
 import {
   AggregateIdSchema,
   aggregateTarget,
@@ -43,9 +42,10 @@ import {
 } from '@shared/schemas';
 import {
   DatabaseRowCorrupt,
+  DatabaseRowEarlier,
   DatabaseStoreNewer,
 } from '@shared/session/database';
-import { PLUGIN_ARMS } from '@tools/pluginArms';
+import type { PluginArms } from '@tools/plugins';
 
 /** One selected store row, its columns by name, decoded where it is read. */
 export type SqlRow = Readonly<Record<string, unknown>>;
@@ -135,6 +135,32 @@ export function aggregateOf(kind: unknown, logicalId: unknown): AggregateId {
 const hasKind = (type: string): type is SessionEventDraft['type'] =>
   Object.hasOwn(ROW_KINDS, type);
 
+/** The lowest stored version of `type` this build reads: an older one has
+ *  no upcaster here, so an earlier build wrote it. */
+// `decodeRow` refuses the same rows: with no upcasters, `upcast.slice` is
+// empty below `version`, exactly the versions under this floor.
+const readableFrom = (type: SessionEventDraft['type']): number =>
+  ROW_KINDS[type].version - ROW_KINDS[type].upcast.length;
+
+/** The queries, with their parameters, for the runs holding a row an
+ *  earlier build wrote below the version this build reads. */
+export const EARLIER_RUNS: readonly (readonly [string, readonly unknown[]])[] =
+  Object.keys(ROW_KINDS)
+    .filter(hasKind)
+    .flatMap((type) =>
+      readableFrom(type) > 1
+        ? [
+            [
+              `SELECT s.logical_id AS logicalId, min(e."commit") AS "commit",
+                e.type AS type FROM ${EVENT_FROM}
+                WHERE s.kind = 'run' AND e.type = ? AND e.version < ?
+                GROUP BY s.logical_id`,
+              [type, readableFrom(type)],
+            ] as const,
+          ]
+        : [],
+    );
+
 /** Validate a draft and encode it at its kind's current version. Throws on
  *  a draft that does not parse, is not JSON, or whose blob does not hash to
  *  its digest. */
@@ -187,7 +213,8 @@ function causeOf(error: unknown): string {
   return issue ? `${issue.code} at "${issue.path.join('.')}"` : String(error);
 }
 
-const RowSchema = z.object({
+/** A selected row's columns, as `EVENT_COLUMNS` names them. */
+export const RowSchema = z.object({
   commit: z.int(),
   kind: z.string(),
   logicalId: z.string(),
@@ -230,16 +257,15 @@ interface LeftOut {
 }
 
 /**
- * A selected row as its event, or {@link LeftOut}. A row of a kind or
- * newer version fails `DatabaseStoreNewer` (another build wrote it after
- * this one passed the store gate); one that does not decode, or of a kind
- * this build lacks, fails `DatabaseRowCorrupt` naming it.
- */
-function decodeRow(
+ * A selected row as its event, or {@link LeftOut}: a newer kind or version
+ * fails `DatabaseStoreNewer` (written after this build's store gate), and an
+ * undecodable row or unknown kind `DatabaseRowCorrupt`, naming it. */
+export function decodeRow(
   input: SqlRow,
+  arms: PluginArms,
 ): Result.Result<
   SessionEvent | LeftOut,
-  DatabaseStoreNewer | DatabaseRowCorrupt
+  DatabaseStoreNewer | DatabaseRowCorrupt | DatabaseRowEarlier
 > {
   const row = RowSchema.parse(input);
   const corrupt = (error: unknown, type = row.type) =>
@@ -257,6 +283,10 @@ function decodeRow(
   const version = row.version ?? ROW_KINDS[row.type].version;
   if (version > ROW_KINDS[row.type].version)
     return Result.fail(new DatabaseStoreNewer({ type: row.type, version }));
+  if (version < readableFrom(row.type))
+    return Result.fail(
+      new DatabaseRowEarlier({ commit: row.commit, type: row.type }),
+    );
   let data: Record<string, JsonValue>;
   try {
     data = JsonObjectSchema.parse(parseData(row));
@@ -285,7 +315,7 @@ function decodeRow(
   const event = parsed.data;
   if (event.type !== 'plugin.fact') return Result.succeed(event);
   const name = `${event.plugin}/${event.kind}`;
-  const arm = PLUGIN_ARMS.get(name);
+  const arm = arms[name];
   if (arm === undefined) return Result.succeed({ _tag: 'leftOut', kind: name });
   if (event.version > arm.version)
     return Result.fail(
@@ -302,82 +332,6 @@ function decodeRow(
   return Result.succeed({ ...event, version: arm.version, value });
 }
 
-/**
- * One connection's reader of selected rows (`read`), answering their
- * events. A newer row fails the read. A row that does not decode fails a
- * strict read (`whole`: a run's history and its records), so no decision is
- * made from part of a run's rows; a wide read (tail, listing, projections)
- * leaves it out with one warning, so one damaged row never costs the
- * session. Any undecodable row of a run marks that run in `damaged`, shown
- * read-only and never opened. An absent plugin's kind is left out, warned.
- */
-export function rowReader(path: string): {
-  readonly read: (
-    rows: readonly SqlRow[],
-    whole: boolean,
-  ) => Effect.Effect<
-    readonly SessionEvent[],
-    DatabaseStoreNewer | DatabaseRowCorrupt
-  >;
-  readonly damaged: () => readonly AggregateId[];
-} {
-  const warned = new Set<string>();
-  const damaged = new Set<AggregateId>();
-  const warnOnce = (key: string, message: string) =>
-    warned.has(key)
-      ? Effect.void
-      : Effect.sync(() => warned.add(key)).pipe(
-          Effect.andThen(Effect.logWarning(message)),
-          withLogChannel('sessionDatabase'),
-        );
-  const read = (rows: readonly SqlRow[], whole: boolean) =>
-    Effect.gen(function* () {
-      const events: SessionEvent[] = [];
-      for (const row of rows) {
-        const decoded = decodeRow(row);
-        if (Result.isSuccess(decoded)) {
-          if (!('_tag' in decoded.success)) events.push(decoded.success);
-          else
-            yield* warnOnce(
-              decoded.success.kind,
-              `${path} holds rows of the plugin kind ${decoded.success.kind}, whose plugin this build lacks; they stay in the store and are left out of every read.`,
-            );
-          continue;
-        }
-        if (whole || decoded.failure._tag === 'DatabaseStoreNewer')
-          return yield* Effect.fail(decoded.failure);
-        yield* warnOnce(
-          `${decoded.failure.commit}`,
-          `${path}: ${decoded.failure.message} It is left out of the listing and the tail, and its run is shown as damaged and cannot be opened.`,
-        );
-        const { kind, logicalId } = RowSchema.parse(row);
-        if (kind === 'run') damaged.add(aggregateOf(kind, logicalId));
-        const start = bareStart(row);
-        if (start !== null) events.push(start);
-      }
-      return events;
-    });
-  return { read, damaged: () => [...damaged] };
-}
-
-/** A damaged `run.start` as a bare one, so its run still lists. */
-function bareStart(input: SqlRow): SessionEvent | null {
-  const row = RowSchema.parse(input);
-  if (row.type !== 'run.start' || row.kind !== 'run') return null;
-  return {
-    type: 'run.start',
-    aggregateId: aggregateOf(row.kind, row.logicalId),
-    seq: row.seq,
-    commit: row.commit,
-    origin: row.origin,
-    at: row.at,
-    identity: { kind: 'agent', agent: 'unknown' },
-    userFollowUpSupport: 'unsupported',
-    parent: null,
-    provenance: null,
-  };
-}
-
 /** The `stored_kind` entry a plugin value is recorded under: each arm
  *  versions its kind on its own. */
 export const pluginKind = (plugin: string, kind: string): string =>
@@ -386,34 +340,31 @@ export const pluginKind = (plugin: string, kind: string): string =>
 /** The `stored_kind` entry every current value is recorded under. */
 export const CURRENT_VALUE_KIND = 'current_value';
 
-/** The highest version of a `stored_kind` entry this build reads, or
- *  `Infinity` for a plugin's kind whose plugin it lacks (left out of every
- *  read), or 0 for a core kind it lacks. */
-function readableVersion(type: string): number {
+/** The highest version of a `stored_kind` entry this build reads: `Infinity`
+ *  for a plugin kind it lacks (left out), 0 for a core kind it lacks. */
+function readableVersion(type: string, arms: PluginArms): number {
   if (type === CURRENT_VALUE_KIND) return CURRENT_VALUE_VERSION;
   if (type.startsWith('plugin.fact/'))
-    return (
-      PLUGIN_ARMS.get(type.slice('plugin.fact/'.length))?.version ?? Infinity
-    );
+    return arms[type.slice('plugin.fact/'.length)]?.version ?? Infinity;
   if (RETIRED_ROW_KINDS.has(type)) return Infinity;
   return hasKind(type) ? ROW_KINDS[type].version : 0;
 }
 
 /**
  * The store gate: fails on the first kind `stored_kind` names at a version
- * this build does not read. Run at open and inside every write
- * transaction, so no build reads part of a store or writes beside rows it
- * cannot read.
+ * this build does not read. Run at open and inside every write transaction,
+ * so no build reads part of a store or writes beside rows it cannot read.
  */
 export const storeGate = <E>(
   exec: (statement: string) => Effect.Effect<readonly SqlRow[], E>,
+  arms: PluginArms,
 ): Effect.Effect<void, E | DatabaseStoreNewer> =>
   Effect.gen(function* () {
     for (const input of yield* exec('SELECT type, version FROM stored_kind')) {
       const { type, version } = z
         .object({ type: z.string(), version: z.int() })
         .parse(input);
-      if (version > readableVersion(type))
+      if (version > readableVersion(type, arms))
         return yield* Effect.fail(new DatabaseStoreNewer({ type, version }));
     }
   });

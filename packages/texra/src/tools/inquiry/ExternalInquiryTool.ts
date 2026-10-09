@@ -17,6 +17,7 @@
 
 import { Cause, Effect } from 'effect';
 import { z } from 'zod';
+import { defineTool } from '@texra-ai/harness';
 import { type SessionHandle } from '@agent/runtime/SessionHandle';
 import { callerRun } from '@agent/runtime/RunCall';
 import { withLogChannel } from '@logger/effectLog';
@@ -35,7 +36,6 @@ import {
   type ToolResult,
 } from '@shared/schemas';
 import { inquiryRecordsLayer } from '@texra/tools/inquiry/inquiryRecords';
-import { defineTool } from '@tools/core/define';
 import { nullishWithDefault } from '@tools/core/inputSchema';
 import { executed } from '@tools/core/result';
 import { formatResultCount } from '@utils/text/stringUtils';

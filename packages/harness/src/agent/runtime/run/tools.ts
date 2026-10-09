@@ -2,7 +2,7 @@
  * The run's tools, as the package sees them and as the run history records them:
  * the uniform tool definitions of a `TurnRequest`, and the per-call dispatch
  * facts stamped on a `response` row so the fold and the resume rule need no
- * tool registry. Contiguous parallel-safe calls run together; every barrier
+ * tool registry. Contiguous parallel calls run together; every barrier
  * runs alone; a call whose name and arguments repeat an earlier one in the same
  * window is a duplicate that never executes.
  */
@@ -73,10 +73,12 @@ export function dispatchFactsFor(
     name: call.name,
     input: parseCallArguments(call, logger),
   }));
-  const isParallelSafe = (call: { readonly name: string }) =>
-    registry?.get(call.name)?.parallelSafe === true;
+  const laneOf = (call: { readonly name: string }) =>
+    registry?.get(call.name)?.lane ?? 'barrier';
+  const isParallel = (call: { readonly name: string }) =>
+    laneOf(call) === 'parallel';
   const duplicates =
-    parsed.length > 1 ? partitionDuplicateCalls(parsed, isParallelSafe) : null;
+    parsed.length > 1 ? partitionDuplicateCalls(parsed, isParallel) : null;
   if (duplicates !== null && duplicates.size > 0) {
     logger.debug(
       `Deduplicated ${duplicates.size} parallel tool call(s) with identical name and arguments`,
@@ -88,7 +90,7 @@ export function dispatchFactsFor(
       callId: call.callId,
       toolName: call.name,
       ordinal: index,
-      parallelSafe: isParallelSafe(call),
+      lane: laneOf(call),
       replay: registry?.get(call.name)?.replay ?? 'unsafe',
       duplicateOf:
         primaryIndex === undefined ? null : parsed[primaryIndex].callId,

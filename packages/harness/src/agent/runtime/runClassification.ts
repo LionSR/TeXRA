@@ -23,7 +23,8 @@ import { claimStanding } from '@shared/session/database';
 /** Why this process cannot resume a run (see the module note). */
 export type RunRefusal =
   | { readonly kind: 'held_elsewhere'; readonly owner: OwnerId }
-  | { readonly kind: 'finished' };
+  | { readonly kind: 'finished' }
+  | { readonly kind: 'earlier_build' };
 
 /** The refusal a resume of `runId` here meets, or null when none. */
 export const runRefusal = Effect.fn('runRefusal')(function* (
@@ -38,5 +39,6 @@ export const runRefusal = Effect.fn('runRefusal')(function* (
     return yield* Effect.fail(
       new Error(`Could not read the state of run ${runId}: ${facts.cause}`),
     );
+  if (facts.kind === 'earlierBuild') return { kind: 'earlier_build' };
   return facts.kind === 'none' ? { kind: 'finished' } : null;
 });

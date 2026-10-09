@@ -1,7 +1,7 @@
 import '@test/support/sessionGraphTestSetup';
 
 import * as path from 'node:path';
-import { Deferred, Effect, FileSystem } from 'effect';
+import { Effect, FileSystem } from 'effect';
 import { it } from '@effect/vitest';
 // Test composition imports
 
@@ -14,9 +14,9 @@ import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 
 // Local imports
 import { type SessionHandle } from '@agent/runtime/SessionHandle';
-import { onAppSignal } from '@eventBus/AppSignals';
 import { WorkspaceFs } from '@platform/rootedFs';
-import type { RequestDecision, RunId } from '@shared/schemas';
+import { DOCUMENTS_ACCEPTED_ARM } from '@shared/plugins/documents';
+import type { RequestDecision, RunId, ToolResult } from '@shared/schemas';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { installPlatform } from '@test/support/setupPlatform';
@@ -219,29 +219,14 @@ function runAccept(
   );
 }
 
-/**
- * Collect workspaceFilesWritten payloads on a fiber of the running test,
- * which its completion interrupts. The yield lets that fiber register before
- * the tool publishes: a subscription only receives what is published after
- * it exists.
- */
-function recordWrittenFiles(): Effect.Effect<{
-  written: string[][];
-  /** Completes when the next `workspaceFilesWritten` payload is delivered. */
-  delivered: Effect.Effect<void>;
-}> {
-  return Effect.gen(function* () {
-    const written: string[][] = [];
-    const delivered = yield* Deferred.make<void>();
-    yield* Effect.forkChild(
-      onAppSignal('workspaceFilesWritten', ({ absolutePaths }) => {
-        written.push(absolutePaths);
-        Deferred.doneUnsafe(delivered, Effect.void);
-      }),
-    );
-    yield* Effect.yieldNow;
-    return { written, delivered: Deferred.await(delivered) };
-  });
+/** The workspace files an accept result's facts say the run wrote: what
+ *  every process folding the run announces once the call settles. */
+function writtenFiles(result: ToolResult): readonly (readonly string[])[] {
+  return result.status === 'executed'
+    ? (result.facts ?? []).map(({ value }) =>
+        DOCUMENTS_ACCEPTED_ARM.writes(value),
+      )
+    : [];
 }
 
 describe('accept_run_files progress events', () => {
@@ -270,7 +255,6 @@ describe('accept_run_files progress events', () => {
       const explicit = createRecordingHost();
       const tool = AcceptRunFilesTool;
       const readFiles = new Set<string>();
-      const { written, delivered } = yield* recordWrittenFiles();
 
       setRunStorageEntries({
         [`executions/${runId}/output.tex`]: 'File',
@@ -287,9 +271,9 @@ describe('accept_run_files progress events', () => {
 
       expect(result.status).toBe('executed');
       expect(explicit.events).toEqual([]);
-      // Delivery runs on the recorder's own fiber, a turn after the publish.
-      yield* delivered;
-      expect(written).toEqual([[path.join(workspacePath, 'paper.tex')]]);
+      expect(writtenFiles(result)).toEqual([
+        [path.join(workspacePath, 'paper.tex')],
+      ]);
       expect(readFiles.has('paper.tex')).toBe(true);
     }).pipe(Effect.provide(nativeToolTestLayer())),
   );
@@ -442,7 +426,6 @@ describe('accept_run_files progress events', () => {
         const snapshot = `original project\n${body}tail\n`;
         let approvalOriginal = '';
         let approvalProposed = '';
-        const { written, delivered } = yield* recordWrittenFiles();
 
         setRunStorageEntries({}, projectRoots.storage);
         workspaceReads.set('draft.tex', {
@@ -482,9 +465,11 @@ describe('accept_run_files progress events', () => {
         );
 
         expect(result.status).toBe('executed');
-        // Delivery runs on the recorder's own fiber, a turn after the publish.
-        yield* delivered;
-        expect({ approvalOriginal, approvalProposed, written }).toEqual({
+        expect({
+          approvalOriginal,
+          approvalProposed,
+          written: writtenFiles(result),
+        }).toEqual({
           approvalOriginal: snapshot,
           approvalProposed: `proposed project\n${body}tail\n`,
           written: [[path.join(projectRoots.workspace, 'paper.tex')]],

@@ -7,7 +7,7 @@ import { z } from 'zod';
 
 // Local imports
 import { API_KEY_PROVIDER_IDS, lookupApiKeyOrigin } from '@texra-ai/llm';
-import { ToolContext, Secrets } from '@texra-ai/harness';
+import { defineTool, Secrets, ToolContext } from '@texra-ai/harness';
 import { withLogChannel } from '@logger/effectLog';
 import { nodeHostEnvironment } from '@texra/platform/defaults/nodeHostEnvironment';
 import { hasUsableSetupCredential } from '@texra/model/setupCredentialAccess';
@@ -18,7 +18,6 @@ import {
 import { resolveGitHubTokenSource } from '@texra/tools/github/githubAuth';
 import { detectPackageManager } from '@texra/utils/system/toolChecks';
 import { executed } from '@tools/core/result';
-import { defineTool } from '@tools/core/define';
 import { extendEnvPath, safeHomedir } from '@utils/system/platformPaths';
 
 // Local file imports

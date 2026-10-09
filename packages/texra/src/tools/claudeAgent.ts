@@ -24,7 +24,12 @@
 // Third-party imports
 import { Effect, Stream, type FileSystem } from 'effect';
 import { z } from 'zod';
-import { ToolContext, type ToolContextShape, Secrets } from '@texra-ai/harness';
+import {
+  defineTool,
+  Secrets,
+  ToolContext,
+  type ToolContextShape,
+} from '@texra-ai/harness';
 import type { RunCall } from '@agent/runtime/RunCall';
 
 // Local imports
@@ -55,7 +60,6 @@ import type {
 import { DELIVERY_TAG } from '@shared/deliveryTags';
 import { buildSyntheticToolUseConfig } from '@texra/tools/core/syntheticAgentConfig';
 import { buildAgentWorkspaceOptions } from '@texra/tools/agentWorkspaceOptions';
-import { defineTool } from '@tools/core/define';
 import type { DetachedChildRunLaunch } from '@tools/delegation/detachedChildRun';
 import { linkAbortSignals } from '@utils/core';
 import {

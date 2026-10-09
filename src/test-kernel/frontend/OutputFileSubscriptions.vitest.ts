@@ -6,8 +6,8 @@ import { Effect, Exit, Scope } from 'effect';
 import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import type { RunId } from '@shared/schemas';
-import { documentsOutputRow } from '@shared/plugins/documents';
+import { aggregateId, type RunId } from '@shared/schemas';
+import { documentsOutputFact } from '@shared/plugins/documents';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { waitForCondition } from '@test/support/asyncTestUtils';
 import { makeFakeSettingsStores } from '@test/support/settingsStoresFake';
@@ -133,26 +133,31 @@ async function emitOutputFiles(
 ): Promise<void> {
   emissions += 1;
   publishTestRows(session, [
-    documentsOutputRow(runId, [
-      {
-        round: emissions,
-        compileFailures: [],
-        missingOutputs: [],
-        outputs: [
-          {
-            source: absolutePath,
-            location: {
-              kind: 'workspace',
-              absolutePath,
-              relativePath: absolutePath.split('/').at(-1) ?? absolutePath,
+    {
+      type: 'plugin.fact',
+      aggregateId: aggregateId('run', runId),
+      parent: null,
+      ...documentsOutputFact([
+        {
+          round: emissions,
+          compileFailures: [],
+          missingOutputs: [],
+          outputs: [
+            {
+              source: absolutePath,
+              location: {
+                kind: 'workspace',
+                absolutePath,
+                relativePath: absolutePath.split('/').at(-1) ?? absolutePath,
+              },
+              lineage: null,
+              diff: null,
+              round: emissions,
             },
-            lineage: null,
-            diff: null,
-            round: emissions,
-          },
-        ],
-      },
-    ]),
+          ],
+        },
+      ]),
+    },
   ]);
   await Effect.runPromise(session.log.settled);
 }

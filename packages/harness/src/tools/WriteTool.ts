@@ -16,7 +16,7 @@ import {
 import { countLines } from '@utils/text/stringUtils';
 
 // Local file imports
-import { defineTool } from './core/define';
+import { defineTool } from './core/definition';
 
 const WriteInputSchema = z.strictObject({
   path: z

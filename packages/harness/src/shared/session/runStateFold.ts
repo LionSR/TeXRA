@@ -54,11 +54,10 @@ import type { HistoryMessage, Live, RunHistoryRow } from './historyTurns';
 
 /**
  * The rows `RunHistory.appendBatch` commits: the run history arms plus the
- * display arms a batch commits atomically with them (a card with its
- * `tool.result`, an open stream with the `waiting` step, a binding as its
- * `run.config`, a child's settlement with its boundary, a final answer).
- * Published apart, each is a crash window. Narrowed from the drafts.
- */
+ * display arms a batch commits atomically with them (a card or a fact with
+ * its `tool.result`, an open stream with the `waiting` step, a binding as its
+ * `run.config`, a child's settlement with its boundary, a final answer):
+ * published apart, each is a crash window. Narrowed from the drafts. */
 export type RunHistoryDraft = Live<
   Extract<SessionEventDraft, { type: RunHistoryDraftType }>
 >;
@@ -78,6 +77,7 @@ type RunHistoryDraftType =
   | 'stream.end'
   | 'request.opened'
   | 'request.decided'
+  | 'plugin.fact'
   | 'followup.consumed'
   | 'response.finalized'
   | SettlementType;
@@ -168,7 +168,7 @@ export type RunState = RunPosition &
   };
 
 /** Companions committed beside a history fact, which the loop ignores. */
-type CardRowType = CardType | SettlementType;
+type CardRowType = CardType | SettlementType | 'plugin.fact';
 type CardType = 'tool.start' | 'tool.end' | 'stream.end' | 'response.finalized';
 type SettlementType = 'run.report' | 'run.result' | 'child.turn';
 

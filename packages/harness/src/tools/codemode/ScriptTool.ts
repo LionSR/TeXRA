@@ -31,7 +31,7 @@ import {
 } from '@shared/schemas';
 import { executed } from '@tools/core/result';
 
-import { defineTool } from '../core/define';
+import { defineTool } from '../core/definition';
 import { launchBackgroundScript } from './backgroundScript';
 import { declarationOf, globalDeclarationOf } from './declarations';
 import { describeTool, searchTools } from './discovery';

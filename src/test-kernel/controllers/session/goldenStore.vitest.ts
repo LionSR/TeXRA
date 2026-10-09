@@ -47,11 +47,8 @@ import { resumeRun } from '@agent/runtime/resumeRun';
 import { makeRunHistory } from '@agent/runtime/RunHistory';
 import { sessionEventsLayer } from '@agent/runtime/SessionEvents';
 import { databaseLayer } from '@controllers/session/Database';
-import {
-  EVENT_COLUMNS,
-  EVENT_FROM,
-  rowReader,
-} from '@controllers/session/rowCodec';
+import { EVENT_COLUMNS, EVENT_FROM } from '@controllers/session/rowCodec';
+import { rowReader } from '@controllers/session/rowReader';
 import {
   LocalRuntimeSource,
   TextChunkSource,
@@ -92,6 +89,7 @@ import {
 import {
   fakeHostAgentDirectories,
   setupPlatform,
+  storePluginsLayer,
 } from '@test/support/setupPlatform';
 import {
   createTempDirPlatform,
@@ -99,6 +97,8 @@ import {
 } from '@test/support/tempDirPlatform';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
+import { texraPlugins } from '@texra/tools/registry';
+import { armsOf } from '@tools/plugins';
 
 const GOLDEN = readFileSync(
   resolve(REPO_ROOT, 'src/test-kernel/fixtures/storage/golden-1.0.sql'),
@@ -165,6 +165,7 @@ const raw = <T>(storage: string, read: (db: DatabaseSync) => T): T => {
 const substrate = (storage: string) =>
   databaseLayer('persistent').pipe(
     Layer.provide(Layer.succeed(WorkspaceRoots)({ storage })),
+    Layer.provide(storePluginsLayer),
     Layer.provide(ProcessIdentity.layer(SELF)),
     Layer.provide(nodeSpawnerLayer),
     Layer.provide(nodePlatformLayer),
@@ -231,7 +232,18 @@ describe('the golden 1.0 store', () => {
         .all(),
     );
     return Effect.gen(function* () {
-      const events = yield* rowReader(storage).read(rows, true);
+      // The fixture's own connection runs the reader's earlier-build scan.
+      const exec = (statement: string, params: readonly unknown[]) =>
+        Effect.sync(() =>
+          raw(storage, (db) =>
+            db.prepare(statement).all(...(params as (string | number)[])),
+          ),
+        );
+      const events = yield* rowReader(
+        storage,
+        armsOf(texraPlugins()),
+        exec,
+      ).read(rows, true);
       expect(events).toHaveLength(rows.length);
       const types = new Set(events.map((event) => event.type));
       // Every row kind is in the fixture, the decode test of a released store,

@@ -7,10 +7,10 @@
 import { Cause, Effect } from 'effect';
 import { z } from 'zod';
 
+import { defineTool } from '@texra-ai/harness';
 import { withLogChannel } from '@logger/effectLog';
 import { ToolResult } from '@shared/schemas';
 import { retryTransientFetch, scopedOkClient } from '@tools/timeouts';
-import { defineTool } from '@tools/core/define';
 import { errorResult, executed } from '@tools/core/result';
 import { nullishWithDefault } from '@tools/core/inputSchema';
 import { ensureArray } from '@utils/core';
@@ -262,7 +262,7 @@ const searchLoogle = Effect.fn('LoogleTool.execute')(function* ({
 export const LeanLoogleTool = defineTool({
   name: 'lean_loogle',
   replay: 'safe',
-  parallelSafe: true,
+  lane: 'parallel',
   description: `Search for Lean 4 / Mathlib theorems and definitions by type signature or name.
 
 Example queries:

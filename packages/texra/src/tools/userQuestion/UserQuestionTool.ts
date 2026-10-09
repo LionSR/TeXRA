@@ -1,6 +1,7 @@
 import { Effect } from 'effect';
 import { z } from 'zod';
 
+import { defineTool } from '@texra-ai/harness';
 import { requireToolRun } from '@agent/runtime/RunCall';
 import { withLogChannel } from '@logger/effectLog';
 import {
@@ -9,7 +10,6 @@ import {
 } from '@shared/schemas';
 import type { UserQuestionPermission } from '@shared/schemas';
 import { refusalOf } from '@shared/session/approvalDecision';
-import { defineTool } from '@tools/core/define';
 import { executed } from '@tools/core/result';
 
 const CHANNEL = 'UserQuestionTool';

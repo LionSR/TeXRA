@@ -20,7 +20,7 @@
 import { Effect } from 'effect';
 import { z } from 'zod';
 
-import { ToolContext, Secrets } from '@texra-ai/harness';
+import { defineTool, Secrets, ToolContext } from '@texra-ai/harness';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { requireToolRun } from '@agent/runtime/RunCall';
 import type { SettingsStores } from '@shared/config/settingsAccess';
@@ -28,7 +28,6 @@ import { ToolError, type RunId, type ToolResult } from '@shared/schemas';
 import { parseWorkingDirectory } from '@tools/pathResolution';
 import { nullishWithDefault } from '@tools/core/inputSchema';
 import { executed } from '@tools/core/result';
-import { defineTool } from '@tools/core/define';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { executeCommand } from '@utils/system/execUtils';
 

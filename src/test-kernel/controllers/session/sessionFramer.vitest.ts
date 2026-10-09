@@ -58,7 +58,10 @@ import {
   createFakeWorkspaceRoots,
   FakeConfigProvider,
 } from '@test/support/FakePlatform';
-import { fakeProcessServices } from '@test/support/setupPlatform';
+import {
+  fakeProcessServices,
+  storePluginsLayer,
+} from '@test/support/setupPlatform';
 import { createTestSession } from '@test/support/sessionTestUtils';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import {
@@ -140,7 +143,12 @@ const runtimeGraph = (
       sessionEventsLayer.pipe(
         Layer.provideMerge(
           seeded.pipe(
-            Layer.provideMerge(databaseLayer('ephemeral').pipe(Layer.orDie)),
+            Layer.provideMerge(
+              databaseLayer('ephemeral').pipe(
+                Layer.orDie,
+                Layer.provide(storePluginsLayer),
+              ),
+            ),
           ),
         ),
       ),

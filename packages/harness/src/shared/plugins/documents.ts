@@ -1,5 +1,5 @@
 /**
- * The documents plugin's rows (`PLUGIN_EVENT_ARMS` in `@tools/pluginArms`): a
+ * The documents plugin's rows (its `arms`, `@tools/plugins`): a
  * document task's documents are its latest `plugin.fact` of kind
  * `documents/output`, which carries every revision's outputs, and the files
  * a run last accepted into the workspace are its `documents/accepted`. Core
@@ -10,7 +10,6 @@
 import { z } from 'zod';
 
 import {
-  aggregateId,
   roundOutputsToCompileFailureSummaries,
   roundOutputsToOutputSummaries,
   RunDocumentsSchema,
@@ -20,8 +19,7 @@ import {
   RoundKeyedOutputSidecarValueSchemas,
   RoundOutputSchema,
   type RoundOutput,
-  type RunId,
-  type SessionEventDraft,
+  type ToolFact,
 } from '@shared/schemas';
 import type { RunView } from '@shared/session/sessionView';
 
@@ -42,19 +40,14 @@ export const DOCUMENTS_OUTPUT_ARM = {
 /** The key a run's documents fold under in `RunView.facts`. */
 export const DOCUMENTS_OUTPUT_KEY = `${DOCUMENTS_OUTPUT_ARM.plugin}/${DOCUMENTS_OUTPUT_ARM.kind}`;
 
-/** The row that makes `rounds` the run's documents, for the one publisher. */
-export function documentsOutputRow(
-  runId: RunId,
-  rounds: readonly RoundOutput[],
-): SessionEventDraft {
+/** The fact that makes `rounds` the calling run's documents, for its
+ *  call's result (`ToolResult.facts`). */
+export function documentsOutputFact(rounds: readonly RoundOutput[]): ToolFact {
   return {
-    type: 'plugin.fact',
-    aggregateId: aggregateId('run', runId),
     plugin: DOCUMENTS_OUTPUT_ARM.plugin,
     kind: DOCUMENTS_OUTPUT_ARM.kind,
     version: DOCUMENTS_OUTPUT_ARM.version,
     value: DocumentsOutputSchema.parse({ rounds }),
-    parent: null,
   };
 }
 
@@ -74,20 +67,17 @@ export const DOCUMENTS_ACCEPTED_ARM = {
   version: 1,
   schema: DocumentsAcceptedSchema,
   upcasters: [],
+  writes: (value: unknown): readonly string[] =>
+    DocumentsAcceptedSchema.parse(value).absolutePaths,
 } as const;
 
-/** The key a run's accepted files fold under in `RunView.facts`. */
-export const DOCUMENTS_ACCEPTED_KEY = `${DOCUMENTS_ACCEPTED_ARM.plugin}/${DOCUMENTS_ACCEPTED_ARM.kind}`;
-
-/** The row recording that `runId` accepted `absolutePaths` at `acceptedAt`. */
-export function documentsAcceptedRow(
-  runId: RunId,
+/** The fact that the calling run accepted `absolutePaths` at
+ *  `acceptedAt`, for its call's result (`ToolResult.facts`). */
+export function documentsAcceptedFact(
   absolutePaths: readonly string[],
   acceptedAt: number,
-): SessionEventDraft {
+): ToolFact {
   return {
-    type: 'plugin.fact',
-    aggregateId: aggregateId('run', runId),
     plugin: DOCUMENTS_ACCEPTED_ARM.plugin,
     kind: DOCUMENTS_ACCEPTED_ARM.kind,
     version: DOCUMENTS_ACCEPTED_ARM.version,
@@ -95,13 +85,7 @@ export function documentsAcceptedRow(
       absolutePaths: [...absolutePaths],
       acceptedAt,
     }),
-    parent: null,
   };
-}
-
-/** The workspace files a stored accepted row names. */
-export function acceptedPathsOf(value: unknown): string[] {
-  return DocumentsAcceptedSchema.parse(value).absolutePaths;
 }
 
 /** A stored documents row's rounds; none for a value that is not one. */

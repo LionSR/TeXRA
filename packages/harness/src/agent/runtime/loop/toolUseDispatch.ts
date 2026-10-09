@@ -1,7 +1,7 @@
 /**
  * Dispatch of one committed response's tool calls, from the folded state and
  * back into it. The guaranteed behaviours the node enforced, kept by
- * construction: contiguous parallel-safe calls run concurrently under a
+ * construction: contiguous parallel calls run concurrently under a
  * small window while every other call is a barrier that runs alone and in
  * order; a call repeating an earlier call's name and arguments never executes
  * and derives its primary's result with no edits, attachments or mutation;
@@ -81,6 +81,8 @@ import {
   type CallStatus,
   type PendingCall,
 } from '@shared/session/inFlight';
+import { checkOwnFacts } from '@tools/plugins';
+import { ToolRegistry } from '@tools/toolTable';
 import { generateShortId, getBasename } from '@utils/core';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { pathToLocationIn } from '@utils/files/fileLocation';
@@ -114,7 +116,7 @@ import type { InvokeError } from '../ModelInvoker';
 import type { Runs } from '../runRegistry';
 import type { RunCell } from './runProgram';
 
-/** Max concurrently executing parallel-safe tool calls. */
+/** Max concurrently executing parallel tool calls. */
 const MAX_PARALLEL_TOOL_CALLS = 4;
 
 /** How much of a running tool's output streams to its card as transient
@@ -281,15 +283,11 @@ function settlementContent(
   return [{ kind: 'text', text }, ...media];
 }
 
-/** Where a call runs against the calls issued before it: `parallel` after
- *  the barrier before it, inside the window; `barrier` after every call
- *  before it; `beside` like a parallel call, outside the window (a tool that
- *  bounds its own calls, or a duplicate that only waits for its primary). */
-type Lane = 'parallel' | 'barrier' | 'beside';
-
-const laneOf = (parallel: boolean, beside: boolean): Lane => {
-  if (parallel) return 'parallel';
-  return beside ? 'beside' : 'barrier';
+/** A response call's lane: its tool's (`ITool.lane`) when parallel, else a
+ *  barrier; a duplicate's `'own'` (it only waits for its primary). */
+const responseLane = (fact: DispatchFacts): DispatchFacts['lane'] => {
+  if (fact.duplicateOf !== null) return 'own';
+  return fact.lane === 'parallel' ? 'parallel' : 'barrier';
 };
 
 /**
@@ -333,7 +331,7 @@ const makeScheduler = Effect.gen(function* () {
      *  follows are done; `body` answers whether this call ended the turn. */
     run: <E, R>(
       seq: number,
-      lane: Lane,
+      lane: DispatchFacts['lane'],
       body: (endedBefore: boolean) => Effect.Effect<boolean, E, R>,
     ): Effect.Effect<void, E, R> =>
       Effect.gen(function* () {
@@ -392,6 +390,8 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
     cell.opened.pendingResponse?.responseId === responseId &&
     !run.config.script;
   const calls = localCallsOf(pending.assistant.content);
+  const { entries } = yield* ToolRegistry;
+  const pluginOf = new Map(step.offered.map((t) => [t.name, t.plugin]));
   // The calls answer the instruction the committed state records.
   const at = initial.input.instruction;
   const userInstruction =
@@ -727,7 +727,10 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
     // A result the schema refuses becomes an error result the model can read;
     // the projection of an error result cannot itself fail.
     const extracted = yield* Effect.try({
-      try: () => extractToolAttachments(result),
+      try: () =>
+        extractToolAttachments(result, (facts) =>
+          checkOwnFacts(entries.get(pluginOf.get(fact.toolName) ?? ''), facts),
+        ),
       catch: ensureError,
     }).pipe(
       Effect.catch((error) =>
@@ -764,12 +767,19 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
     // completed while recovery still sees an unsettled call.
     const cards = settledCards(fact, parsedInput, status, attempt, editedFiles);
     // An executed call's PostToolUse rows commit with its settlement, as do
-    // the queued follow-ups its result answers.
+    // the queued follow-ups its result answers and the facts it states about
+    // its run.
     const post = pre ? yield* pre.after(extracted.sanitizedResult) : [];
     const answered =
       extracted.sanitizedResult.status === 'executed'
         ? (extracted.sanitizedResult.consumedFollowUps ?? [])
         : [];
+    const facts = extracted.facts.map((fact): RunHistoryDraft => ({
+      type: 'plugin.fact',
+      aggregateId,
+      ...fact,
+      parent: null,
+    }));
     yield* retireStanding;
     yield* settle(
       fact,
@@ -791,6 +801,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
           aggregateId,
           followUpId,
         })),
+        ...facts,
       ],
     );
   });
@@ -858,7 +869,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
    * is handed back what its rows settled, in the order those settlements
    * committed, before any call runs again; an unsettled call continues as
    * its rows say; and a call at a recorded `seq` that is not the recorded
-   * one is a divergence. A parallel-safe call takes the window, a tool that
+   * one is a divergence. A parallel call takes the window, a tool that
    * bounds its own calls runs beside the others, any other is a barrier.
    */
   const scriptCallsOf = Effect.fn('toolUse.scriptCalls')(function* (
@@ -1020,11 +1031,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
             });
             return { result, attachments: [] };
           }
-          const lane = laneOf(
-            tool?.parallelSafe === true,
-            tool?.ownsConcurrency === true,
-          );
-          yield* lanes.run(op.seq, lane, () =>
+          yield* lanes.run(op.seq, tool?.lane ?? 'barrier', () =>
             Effect.gen(function* () {
               // Nothing runs again until the guest holds everything that
               // settled.
@@ -1052,16 +1059,12 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
             attachments: settledNow.attachments,
           };
         });
-
-        const plugins = new Map(
-          step.offered.map(({ name, plugin }) => [name, plugin]),
-        );
         return {
           catalog: step.definitions
             .filter(({ name }) => name !== script.toolName)
             .map((definition) => ({
               definition,
-              plugin: plugins.get(definition.name) ?? 'run',
+              plugin: pluginOf.get(definition.name) ?? 'run',
             })),
           globals: step.definitions.flatMap(({ name }) => {
             const global =
@@ -1155,13 +1158,8 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
   yield* Effect.forEach(
     pending.calls,
     (fact) =>
-      lanes.run(
-        fact.ordinal,
-        laneOf(
-          fact.duplicateOf === null && fact.parallelSafe,
-          fact.duplicateOf !== null,
-        ),
-        (endedBefore) => responseCall(fact, endedBefore),
+      lanes.run(fact.ordinal, responseLane(fact), (endedBefore) =>
+        responseCall(fact, endedBefore),
       ),
     { concurrency: 'unbounded', discard: true },
   );

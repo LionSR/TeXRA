@@ -53,7 +53,7 @@ import {
 import { attemptRequests, callRequestId } from '@shared/session/inFlight';
 import { deriveToolInputPreview } from '@shared/tools/toolInputPreview';
 import { delegatedChildGrants } from '@tools/approval';
-import { defineTool } from '@tools/core/define';
+import { defineTool } from '@tools/core/definition';
 import { nullishWithDefault } from '@tools/core/inputSchema';
 import { errorResult, executed } from '@tools/core/result';
 import { normalizeStructuredOutputSchema } from '@tools/structuredOutput';
@@ -697,7 +697,7 @@ export const agentTool = () =>
     // from it, or resumes it under its own id: it never launches a second one.
     replay: 'safe',
     // A script's calls run beside each other, held to the child-run budget.
-    ownsConcurrency: true,
+    lane: 'own',
     scriptGlobal: { positional: 'prompt' },
     // A script awaits the child's envelope, or `{ runId }` in the background.
     scriptReturns:

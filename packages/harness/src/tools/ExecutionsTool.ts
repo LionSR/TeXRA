@@ -55,7 +55,7 @@ import {
   formatRunStatus,
   runDisplayCategory,
 } from './executionFormatters';
-import { defineTool } from './core/define';
+import { defineTool } from './core/definition';
 import { formatFileView } from './formatting';
 import { serializeFilteredConfig } from './executions/configView';
 import { formatConversation } from './executions/conversationFormat';

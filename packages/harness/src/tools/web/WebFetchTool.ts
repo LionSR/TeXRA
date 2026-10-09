@@ -19,7 +19,7 @@ import {
   scopedClient,
   toFetchToolError,
 } from '@tools/timeouts';
-import { defineTool } from '@tools/core/define';
+import { defineTool } from '@tools/core/definition';
 import { executed } from '@tools/core/result';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { createHtmlToMarkdown } from '@utils/text/htmlToMarkdown';
@@ -322,7 +322,7 @@ export const WebFetchTool = defineTool({
   name: 'web_fetch',
   replay: 'safe',
   slow: true,
-  parallelSafe: true,
+  lane: 'parallel',
   description:
     'Fetch content from a URL and return it as clean text. Fetches the HTML and converts it to Markdown locally. Include an optional prompt to explain what context you need so the fetched content can be interpreted correctly.',
   schema: WebFetchInputSchema,

@@ -8,6 +8,7 @@
 import { Effect } from 'effect';
 import { z } from 'zod';
 
+import { defineTool } from '@texra-ai/harness';
 import {
   findAgentByIdentifier,
   getCatalogAgent,
@@ -16,7 +17,6 @@ import {
 import { requireToolRun } from '@agent/runtime/RunCall';
 import { agentKey, DEFAULT_TOOL_CONFIG } from '@shared/schemas';
 import { documentTaskConfig } from '@texra/agent/output/documentRecipe';
-import { defineTool } from '@tools/core/define';
 import { errorResult } from '@tools/core/result';
 import {
   CALL_FIELDS,
@@ -127,7 +127,7 @@ export const DocumentTaskTool = defineTool({
   name: 'document_task',
   requiresApproval: 'inBody',
   replay: 'safe',
-  ownsConcurrency: true,
+  lane: 'own',
   scriptGlobal: { positional: 'prompt' },
   scriptReturns:
     "{ response: string; documents: { outputs: { relativePath: string; absolutePath: string; added: number | null; removed: number | null }[] }; runId: string; outcome: 'completed'; cost: number } | { runId: string }",

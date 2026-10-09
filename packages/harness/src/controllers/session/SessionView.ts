@@ -38,7 +38,8 @@ import {
   emptySessionView,
   type SessionView,
 } from '@shared/session/sessionView';
-import { announceRunFacts } from '@tools/pluginArms';
+import { announceRunFacts, armsOf } from '@tools/plugins';
+import { ToolRegistry } from '@tools/toolTable';
 import { LocalRuntimeSource, TranscriptSubscriptions } from './sessionSources';
 import { WorkspaceRoots } from './WorkspaceRoots';
 
@@ -138,6 +139,7 @@ export const makeSessionViewAccess = (
   | SessionInputs
   | TranscriptSubscriptions
   | LocalRuntimeSource
+  | ToolRegistry
 > =>
   Effect.gen(function* () {
     const { ref, changes } = yield* SessionViewService;
@@ -153,6 +155,7 @@ export const makeSessionViewAccess = (
       (runId) =>
         database.readAggregate(aggregateId('run', runId), 1, ['plugin.fact']),
       yield* database.currentCommit,
+      armsOf((yield* ToolRegistry).entries.values()),
     ).pipe(
       Effect.catchCause((cause) =>
         Effect.logWarning(

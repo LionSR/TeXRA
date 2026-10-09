@@ -18,7 +18,7 @@
 // (`nodeSpawnerLayer`).
 import * as NodeFileSystem from '@effect/platform-node/NodeFileSystem';
 import * as NodePath from '@effect/platform-node/NodePath';
-import { ConfigProvider, Effect, RcMap } from 'effect';
+import { ConfigProvider, Effect, Layer, RcMap } from 'effect';
 import { afterEach, beforeEach } from 'vitest';
 
 import { AgentEngine } from '@agent/runtime/AgentEngine';
@@ -45,13 +45,20 @@ import {
 } from '@shared/session/database';
 import { UsageLog } from '@shared/usageLog';
 import {
+  DOCUMENTS_ACCEPTED_ARM,
+  DOCUMENTS_OUTPUT_ARM,
+} from '@shared/plugins/documents';
+import { EXTERNAL_INQUIRY_THREAD_ARM } from '@shared/plugins/externalInquiry';
+import { GOAL_STATE_ARM } from '@shared/plugins/goal';
+import type { SetupPlatformShape } from '@texra/tools/setup/platform';
+import {
   LeanLanguageServices,
   type LeanLanguageServicesShape,
 } from '@texra/tools/lean/leanLanguageServices';
-import type { SetupPlatformShape } from '@texra/tools/setup/platform';
 import { goalContinuation } from '@tools/goal/goalContinuation';
 import { toolCatalogLayer } from '@tools/liveTools';
-import { toolTable } from '@tools/toolTable';
+import type { Plugin } from '@tools/plugins';
+import { ToolRegistry, toolTable } from '@tools/toolTable';
 import { nodeSpawnerLayer } from './childProcessTestLayer';
 import {
   createFakePlatform,
@@ -61,7 +68,19 @@ import {
   type FakeProcessPorts,
   type FakePlatformOptions,
 } from './FakePlatform';
-import type { Layer } from 'effect';
+
+/** TeXRA's plugins that own row kinds, as their arms only: what a store
+ *  under test reads their rows with. */
+const ARMED_PLUGINS: readonly Plugin[] = [
+  { id: 'documents', arms: [DOCUMENTS_OUTPUT_ARM, DOCUMENTS_ACCEPTED_ARM] },
+  { id: 'external-inquiry', arms: [EXTERNAL_INQUIRY_THREAD_ARM] },
+];
+
+/** The plugin table a store suite opens its database over: every row kind
+ *  TeXRA's plugins own, and no tool. */
+export const storePluginsLayer = Layer.succeed(ToolRegistry)(
+  toolTable([{ id: 'goal', arms: [GOAL_STATE_ARM] }, ...ARMED_PLUGINS]),
+);
 
 /**
  * A host's process ports and the workspace roots installed beside them, plus the
@@ -328,8 +347,9 @@ export async function installFakeHost(host: FakeHost): Promise<void> {
         ),
     }),
     // An empty tool table (the real one loads every tool), with goal mode's
-    // continuation (and its switch): a suite that resolves a run's tools runs
-    // on the session graph's runtime or provides `pluginCatalogLayer`.
+    // continuation (and its switch) and the row kinds TeXRA's plugins own: a
+    // suite that resolves a run's tools runs on the session graph's runtime
+    // or provides `pluginCatalogLayer`.
     toolCatalogLayer(
       toolTable([
         {
@@ -337,7 +357,9 @@ export async function installFakeHost(host: FakeHost): Promise<void> {
           toggle: 'off',
           availability: { check: () => Effect.succeed(true) },
           continuation: goalContinuation,
+          arms: [GOAL_STATE_ARM],
         },
+        ...ARMED_PLUGINS,
       ]),
     ).pipe(
       // What a plugin's process layer is built over.
