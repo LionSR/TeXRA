@@ -13,7 +13,7 @@ All notable changes to this project will be documented in this file.
   run by returning it in its result's `facts`: the fact is committed with
   the call's result, never apart from it. A task an earlier build saved
   after it reached the model cannot be opened: the task list, `texra
-  history`, a resume and a follow-up say it was "written by an earlier
+history`, a resume and a follow-up say it was "written by an earlier
   build of TeXRA; it can't be opened by this one" instead of calling it
   damaged or offering to resume it.
 - **Some tasks saved by an earlier build can no longer be opened.** Fields
