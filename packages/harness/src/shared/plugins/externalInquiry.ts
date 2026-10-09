@@ -23,6 +23,7 @@ import {
   type JsonValue,
   type RunId,
   type SessionEventDraft,
+  type ToolFact,
 } from '@shared/schemas';
 import type { SessionView } from '@shared/session/sessionView';
 import type { ValueFamily } from '@shared/session/valueFamily';
@@ -98,6 +99,20 @@ function admitsThreadRow(
   return null;
 }
 
+/** A thread's latest row supersedes a call's lagging `next` when the turn
+ *  `next` opens was already closed (answered or dropped) or passed. */
+function supersedesThreadRow(latest: ThreadRow, next: ThreadRow): boolean {
+  const was = InquiryThreadRowSchema.safeParse(latest.value);
+  const now = InquiryThreadRowSchema.safeParse(next.value);
+  if (!was.success || !now.success) return false;
+  return (
+    was.data.turnCount > now.data.turnCount ||
+    (was.data.turnCount === now.data.turnCount &&
+      was.data.status !== 'open' &&
+      now.data.status === 'open')
+  );
+}
+
 /** The external-inquiry plugin's one row kind. */
 export const EXTERNAL_INQUIRY_THREAD_ARM = {
   plugin: 'external-inquiry',
@@ -106,26 +121,37 @@ export const EXTERNAL_INQUIRY_THREAD_ARM = {
   schema: InquiryThreadRowSchema,
   upcasters: [],
   admits: admitsThreadRow,
+  supersedes: supersedesThreadRow,
 } as const;
 
-/** The row that makes `summary` its thread's displayed state, for the one
- *  publisher. The aggregate key carries the plugin's id, so no other
- *  plugin's key can collide with a thread's. */
-export function inquiryThreadRow(
+/** The fact that makes `summary` its thread's displayed state: an `ask`
+ *  states it in its call's result, so it commits with the `tool.result`.
+ *  The aggregate key carries the plugin's id, so no other plugin's key can
+ *  collide with a thread's. */
+export function inquiryThreadFact(
   summary: InquiryThreadSummary,
-): SessionEventDraft {
-  const { parentRunId, ...value } = summary;
+): ToolFact & { readonly aggregate: string } {
+  const { parentRunId: _, ...value } = summary;
   return {
-    type: 'plugin.fact',
-    aggregateId: aggregateId(
-      'plugin',
-      `${EXTERNAL_INQUIRY_THREAD_ARM.plugin}:${summary.threadId}`,
-    ),
     plugin: EXTERNAL_INQUIRY_THREAD_ARM.plugin,
     kind: EXTERNAL_INQUIRY_THREAD_ARM.kind,
     version: EXTERNAL_INQUIRY_THREAD_ARM.version,
-    parent: parentRunId,
     value: InquiryThreadRowSchema.parse(value),
+    aggregate: `${EXTERNAL_INQUIRY_THREAD_ARM.plugin}:${summary.threadId}`,
+  };
+}
+
+/** {@link inquiryThreadFact} as its row, for a writer outside a call (a
+ *  decision), under the run that asked. */
+export function inquiryThreadRow(
+  summary: InquiryThreadSummary,
+): SessionEventDraft {
+  const { aggregate, ...fact } = inquiryThreadFact(summary);
+  return {
+    type: 'plugin.fact',
+    aggregateId: aggregateId('plugin', aggregate),
+    ...fact,
+    parent: summary.parentRunId,
   };
 }
 

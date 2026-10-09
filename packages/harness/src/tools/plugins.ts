@@ -24,16 +24,22 @@ import { z } from 'zod';
 
 // Local imports
 import type { Runs } from '@agent/runtime/runRegistry';
+import type { SessionLog } from '@agent/runtime/SessionHandle';
 import type { RuntimeTool, ToolServices } from '@agent/runtime/ToolServices';
 import { emitAppSignal } from '@eventBus/AppSignals';
 import { StateReadFailed, type StateStore } from '@platform/interfaces';
-import type {
-  CommitOrdinal,
-  JsonValue,
-  RunId,
-  SessionEvent,
-  ToolFact,
+import {
+  aggregateId,
+  type CommitOrdinal,
+  type JsonValue,
+  type RunId,
+  type SessionEvent,
+  type SessionEventDraft,
+  type ToolFact,
 } from '@shared/schemas';
+import { DatabaseWriteFailed } from '@shared/session/database';
+import type { RunHistoryDraft } from '@shared/session/runStateFold';
+import type { CoWrite } from '@shared/session/sessionEvents';
 import type { SessionView } from '@shared/session/sessionView';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import type { ToolAvailabilityChecks } from '@tools/toolProbes';
@@ -76,6 +82,10 @@ interface PluginArm {
     previous: PluginRow | undefined,
     next: PluginRow,
   ) => string | null;
+  /** Whether the aggregate's `latest` row already says more than `next`
+   *  (a call's fact that lagged behind a later writer): the call's batch
+   *  then leaves `next` out instead of failing on `admits`. */
+  readonly supersedes?: (latest: PluginRow, next: PluginRow) => boolean;
   /** The workspace files a row of the kind says its run wrote past the
    *  editor's own write path: every process that folds the run announces
    *  them (`workspaceFilesWritten`), a window hearing a service task's
@@ -294,12 +304,79 @@ export function checkOwnFacts(
   plugin: Plugin | undefined,
   facts: readonly ToolFact[],
 ): void {
-  for (const { kind, version, value, ...fact } of facts) {
+  for (const { kind, version, value, aggregate, ...fact } of facts) {
     const arm = plugin?.arms?.find((own) => own.kind === kind);
     if (arm === undefined || fact.plugin !== plugin?.id)
       throw new Error(`the fact ${fact.plugin}/${kind} is not its plugin's`);
+    if (aggregate !== undefined && !aggregate.startsWith(`${arm.plugin}:`))
+      throw new Error(`${arm.plugin}/${kind} names another plugin's aggregate`);
     if (version !== arm.version)
       throw new Error(`${arm.plugin}/${kind} is at version ${arm.version}`);
     arm.schema.parse(value);
   }
+}
+
+/**
+ * The rows the facts of a call of `runId` commit in its `tool.result`
+ * batch: a fact about the run on the run's history, and one about its
+ * plugin's own aggregate (`aggregate`), hung under the run, as the batch's
+ * co-write, so each commits with the result or not at all. The co-write
+ * reads the aggregate in the job's transaction: a row its latest one
+ * already supersedes (the arm's `supersedes`) is left out, since the call
+ * only lagged behind it; any other refusal stays the store's.
+ */
+export function factRows(
+  facts: readonly ToolFact[],
+  runId: RunId,
+  plugin: Plugin | undefined,
+  log: Pick<SessionLog, 'rows'>,
+): {
+  readonly run: readonly RunHistoryDraft[];
+  readonly alongside: Effect.Effect<CoWrite, DatabaseWriteFailed>;
+} {
+  const run: RunHistoryDraft[] = [];
+  const own: (SessionEventDraft & { type: 'plugin.fact' })[] = [];
+  for (const { aggregate, ...fact } of facts) {
+    const row = { type: 'plugin.fact', ...fact } as const;
+    if (aggregate === undefined)
+      run.push({
+        ...row,
+        aggregateId: aggregateId('run', runId),
+        parent: null,
+      });
+    else
+      own.push({
+        ...row,
+        aggregateId: aggregateId('plugin', aggregate),
+        parent: runId,
+      });
+  }
+  const current = (draft: (typeof own)[number]) =>
+    Effect.gen(function* () {
+      const arm = plugin?.arms?.find((one) => one.kind === draft.kind);
+      if (arm?.supersedes === undefined) return true;
+      const latest = (yield* log.rows(draft.aggregateId, [
+        'plugin.fact',
+      ])).findLast(
+        (row) => row.type === 'plugin.fact' && row.kind === draft.kind,
+      );
+      if (latest?.type !== 'plugin.fact' || !arm.supersedes(latest, draft))
+        return true;
+      yield* Effect.logDebug(
+        `${arm.plugin}/${arm.kind}: a later row of ${draft.aggregateId} supersedes the call's`,
+      );
+      return false;
+    });
+  return {
+    run,
+    alongside: Effect.map(Effect.filter(own, current), (rows) => ({
+      rows,
+      committed: Effect.void,
+    })).pipe(
+      // A read in the writing transaction that fails fails the write.
+      Effect.mapError(
+        (error) => new DatabaseWriteFailed({ path: error.path, cause: error }),
+      ),
+    ),
+  };
 }

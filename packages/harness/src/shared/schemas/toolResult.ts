@@ -127,6 +127,9 @@ const ToolFactSchema = z.strictObject({
   /** The arm's version `value` is written at. */
   version: z.int().positive(),
   value: JsonValueSchema,
+  /** The plugin's own aggregate the fact is about (`<plugin>:<key>`), hung
+   *  under the calling run; absent, the fact is about the run itself. */
+  aggregate: z.string().min(1).optional(),
 });
 /** A fact a tool's call states about its run (`ToolFactSchema`). */
 export type ToolFact = z.infer<typeof ToolFactSchema>;
