@@ -15,7 +15,6 @@ import { dirname } from 'node:path';
 
 import { Cause, Effect, Exit, FileSystem, SynchronizedRef } from 'effect';
 
-import type { AgentRunShape } from '@agent/runtime/run/AgentRun';
 import { LatexMediaManager } from '@latex/LatexMediaManager';
 import { getTeXCountStats } from '@latex/texcount';
 import {
@@ -52,11 +51,12 @@ import { readSettingFrom } from '@utils/config/platformSettings';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { pathToLocationIn } from '@utils/files/fileLocation';
 import { renderPrompt } from '@utils/prompt';
+import type { ToolRun } from '@texra-ai/harness/plugins';
 import type { DocumentTask, AgentConfig } from '@texra-ai/harness/schemas';
 
 /** What the documents read of the run their tool call serves. */
 type DocumentRun = Pick<
-  AgentRunShape,
+  ToolRun,
   | 'task'
   | 'config'
   | 'logger'

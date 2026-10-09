@@ -10,7 +10,8 @@ const mocks = vi.hoisted(() => ({
   runWithLifecycle: vi.fn(),
 }));
 
-vi.mock('@agent/index', () => ({
+vi.mock('@agent/index/agentRegistry', async (importActual) => ({
+  ...(await importActual<typeof import('@agent/index/agentRegistry')>()),
   resolveAgentForLaunch: mocks.resolve,
   settledCatalog: Effect.void,
 }));

@@ -2,7 +2,7 @@
  * The `document_task` tool: run a named agent's document task as a child of
  * the calling run. The child is a run of the agent opened on the document
  * recipe (`@agent/output/documentRecipe`), launched through the same core as
- * `agent` (`launchChildAgent`): one proposal, one reuse key, one in-band or
+ * `agent` (the `ChildRuns` launch): one proposal, one reuse key, one in-band or
  * detached child. A model that wants a conversation calls `agent` instead.
  */
 import { Effect } from 'effect';
@@ -10,6 +10,7 @@ import { z } from 'zod';
 
 import { defineTool } from '@texra-ai/harness';
 import { requireRun } from '@texra-ai/harness/plugins';
+import { ChildRuns } from '@texra-ai/harness/plugins';
 import {
   findAgentByIdentifier,
   getCatalogAgent,
@@ -18,11 +19,7 @@ import {
 import { agentKey, DEFAULT_TOOL_CONFIG } from '@shared/schemas';
 import { documentTaskConfig } from '@texra/agent/output/documentRecipe';
 import { errorResult } from '@tools/core/result';
-import {
-  CALL_FIELDS,
-  fileList,
-  launchChildAgent,
-} from '@tools/delegation/AgentTool';
+import { CALL_FIELDS, fileList } from '@tools/delegation/AgentTool';
 
 const DocumentTaskInputSchema = z.strictObject({
   prompt: z
@@ -83,7 +80,7 @@ const runDocumentTask = Effect.fn('DocumentTaskTool.call')(function* (
     return errorResult(
       `'${input.agentName}' revises files: pass the files it revises as \`inputFiles\`.`,
     );
-  return yield* launchChildAgent({
+  return yield* (yield* ChildRuns).launch({
     tool: 'document_task',
     agentName: input.agentName,
     prompt: input.prompt,

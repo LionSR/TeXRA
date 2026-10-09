@@ -25,7 +25,10 @@ import { z } from 'zod';
 // Local imports
 import type { Runs } from '@agent/runtime/runRegistry';
 import type { SessionLog } from '@agent/runtime/SessionHandle';
-import type { RuntimeTool, ToolServices } from '@agent/runtime/ToolServices';
+import type {
+  PluginToolServices,
+  RuntimeTool,
+} from '@agent/runtime/ToolServices';
 import { emitAppSignal } from '@eventBus/AppSignals';
 import { StateReadFailed, type StateStore } from '@platform/interfaces';
 import {
@@ -105,7 +108,9 @@ export interface Plugin {
    *  letter or digit. A list with any other id is refused. */
   readonly id: string;
   /** Its tools, by registered name. */
-  readonly tools?: Readonly<Record<string, RuntimeTool>>;
+  readonly tools?: Readonly<
+    Record<string, RuntimeTool<Error, PluginToolServices>>
+  >;
   /**
    * Present when the plugin has an external dependency: it is probed, and
    * its tools are withheld while the dependency is missing. Without it the
@@ -157,7 +162,7 @@ export interface PluginDefinition<ROut> extends Omit<
   'tools' | 'continuation' | 'processLayer' | 'sessionLayer' | 'availability'
 > {
   readonly tools?: Readonly<
-    Record<string, RuntimeTool<Error, ToolServices | ROut>>
+    Record<string, RuntimeTool<Error, PluginToolServices | ROut>>
   >;
   readonly continuation?: Continuation<ROut>;
   readonly processLayer?: ProcessPluginLayer<ROut>;

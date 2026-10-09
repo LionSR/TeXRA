@@ -11,7 +11,7 @@ import {
   refresh,
   resolveAgentForLaunch,
   settledCatalog,
-} from '@agent/index';
+} from '@agent/index/agentRegistry';
 import { agentEntryOf } from '@agent/index/agentYamlScanner';
 import { requirePluginAgentLoads } from '@agent/index/pluginAgents';
 import {

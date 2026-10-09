@@ -14,7 +14,10 @@ import {
 } from 'effect';
 import { afterEach, describe, expect, vi } from 'vitest';
 
-import type { RuntimeTool as ITool } from '@agent/runtime/ToolServices';
+import type {
+  PluginToolServices,
+  RuntimeTool,
+} from '@agent/runtime/ToolServices';
 import type { ConfigProvider } from '@platform/interfaces';
 import { Secrets, type PlatformSecrets } from '@platform/secrets';
 import { testHttpClientLayer } from '@test/support/fetchTestUtils';
@@ -66,7 +69,9 @@ const probeServices = Layer.mergeAll(
 );
 
 /** Tools under `names`, which the availability service only lists. */
-const named = (...names: string[]): Record<string, ITool> =>
+const named = (
+  ...names: string[]
+): Record<string, RuntimeTool<Error, PluginToolServices>> =>
   Object.fromEntries(
     names.map((name) => [
       name,

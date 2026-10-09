@@ -22,6 +22,7 @@ import * as vscode from 'vscode';
 import { Context, Effect, Fiber, Layer, Option, Stream } from 'effect';
 
 import {
+  childRunsLayer,
   IssuingScript,
   RunCall,
   Runs,
@@ -146,6 +147,7 @@ const copilotTools = Effect.fnUntraced(function* (
                   emit: () => undefined,
                 }),
                 // A host invocation is made under no run and by no script.
+                Effect.provide(childRunsLayer),
                 Effect.provideService(RunCall, null),
                 Effect.provideService(ScriptCalls, null),
                 Effect.provideService(IssuingScript, null),

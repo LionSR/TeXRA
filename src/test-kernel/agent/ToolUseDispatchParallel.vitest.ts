@@ -249,7 +249,6 @@ interface DispatchKit {
   /** The cell a live dispatch runs on: opened before the response, which
    *  it then committed, as the invoker's does. */
   readonly cell: RunCell;
-  readonly readFiles: Set<string>;
   /** The tools the dispatch's step offers. */
   readonly tools: RuntimeToolRegistry;
   readonly layer: Layer.Layer<
@@ -343,7 +342,6 @@ const openDispatch = Effect.fn('openDispatch')(function* (
     session,
     state,
     cell,
-    readFiles: new Set<string>(),
     tools,
     layer,
   } satisfies DispatchKit;
@@ -351,7 +349,7 @@ const openDispatch = Effect.fn('openDispatch')(function* (
 
 /** Dispatch the pending response of an opened run. */
 const dispatch = (kit: DispatchKit) =>
-  dispatchPendingResponse(kit.cell, kit.readFiles, {
+  dispatchPendingResponse(kit.cell, {
     definitions: [],
     registry: kit.tools,
     offered: [],

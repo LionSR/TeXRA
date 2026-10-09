@@ -17,7 +17,7 @@ import {
 } from '@agent/runtime/RunCall';
 import type { AgentRunShape } from '@agent/runtime/run/AgentRun';
 import type { OpenStep } from '@agent/runtime/loop/step';
-import type { RuntimeTool } from '@agent/runtime/ToolServices';
+import { childRunsLayer, type RuntimeTool } from '@agent/runtime/ToolServices';
 import type { BoundModel } from '@agent/runtime/modelAccess/ModelAccess';
 import type { ModelOptionStores } from '@model/computeModelOptions';
 import { sessionFsLayer } from '@platform/rootedFs';
@@ -33,7 +33,7 @@ import { RunFileService } from '@utils/files/runStorage';
 /** The run a test call is made under: what every fixture names, plus whatever
  *  else of the run the case under test actually reads. */
 type TestCallRun = Pick<ToolRun, 'session' | 'runId' | 'toolPolicy'> &
-  Partial<ToolRun>;
+  Partial<RunCallShape['run']>;
 
 /** A run's live model cell holding only the id a tool reads off it. */
 export const testModelCell = (modelId: string) =>
@@ -79,7 +79,7 @@ export function nativeToolTestLayer(
   const callId = options.callId ?? `call-${generateShortId()}`;
   // A fixture is the slice of the run its case reads; the run answers for
   // its own config and trace with the inert pair.
-  const toolRun: ToolRun | undefined = run && {
+  const toolRun: RunCallShape['run'] | undefined = run && {
     config: AgentConfigSchema.parse({ agent: 'test', model: 'test-model' }),
     model: testModelCell('test-model'),
     logger: noopTrace,
@@ -87,7 +87,12 @@ export function nativeToolTestLayer(
     scope: Scope.makeUnsafe(),
     task: null,
     opening: null,
-    fileService: new RunFileService(run.runId, roots),
+    // The run's files hold what it read: a case that seeds or checks that
+    // set shares its own with the run.
+    fileService: Object.assign(
+      new RunFileService(run.runId, roots),
+      readFiles && { readFiles },
+    ),
     callbacks: {},
     ...run,
   };
@@ -118,19 +123,25 @@ export function nativeToolTestLayer(
         },
       }),
     })),
-    // A test call is no script's and issues none.
+    // A test call is no script's and issues none; it launches children
+    // through the harness's capability over its own place in the run.
     Layer.succeed(ScriptCalls)(null),
-    Layer.succeed(IssuingScript)(null),
-    run === undefined
-      ? Layer.succeed(RunCall)(null)
-      : Layer.succeed(RunCall)({
-          readFiles: readFiles ?? new Set<string>(),
-          responseId: 'test-response',
-          instruction: undefined,
-          attempt: 1,
-          logId: `log-${callId}`,
-          ...origin,
-        }),
+    Layer.provideMerge(
+      childRunsLayer,
+      Layer.merge(
+        Layer.succeed(IssuingScript)(null),
+        toolRun === undefined
+          ? Layer.succeed(RunCall)(null)
+          : Layer.succeed(RunCall)({
+              run: toolRun,
+              responseId: 'test-response',
+              instruction: undefined,
+              attempt: 1,
+              logId: `log-${callId}`,
+              ...origin,
+            }),
+      ),
+    ),
     // The session's plugin services, over the same `Runs`, as a step pins
     // them for the call.
     testCallPluginServices.pipe(

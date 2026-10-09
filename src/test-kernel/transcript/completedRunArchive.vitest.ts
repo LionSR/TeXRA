@@ -7,8 +7,8 @@ const launchMocks = vi.hoisted(() => ({
   resolveAgent: vi.fn(),
 }));
 
-vi.mock('@agent/index', async (importActual) => ({
-  ...(await importActual<typeof import('@agent/index')>()),
+vi.mock('@agent/index/agentRegistry', async (importActual) => ({
+  ...(await importActual<typeof import('@agent/index/agentRegistry')>()),
   resolveAgentForLaunch: launchMocks.resolveAgent,
 }));
 

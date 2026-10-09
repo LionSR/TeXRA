@@ -73,7 +73,6 @@ describe('launchDetachedSubagent child run launch', () => {
     callId: 'parent-call',
     env: { roots },
     emit: () => undefined,
-    readFiles: new Set<string>(),
     responseId: 'parent-response',
     instruction: undefined,
     attempt: 1,

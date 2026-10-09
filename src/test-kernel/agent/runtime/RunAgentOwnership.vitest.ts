@@ -38,6 +38,11 @@ vi.mock('@agent/storage', () => ({
 
 vi.mock('@agent/storage/runLifecycle', async (importActual) => ({
   ...(await importActual<typeof import('@agent/storage/runLifecycle')>()),
+  registerRun: (...args: unknown[]) =>
+    Effect.tryPromise({
+      try: () => mocks.registerRun(...args),
+      catch: ensureError,
+    }),
   finalizeRun: (...args: unknown[]) =>
     Effect.tryPromise({
       try: () => mocks.finalizeRun(...args),

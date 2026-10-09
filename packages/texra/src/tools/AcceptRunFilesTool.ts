@@ -21,7 +21,6 @@ import {
 } from '@texra-ai/harness';
 import { requireRun } from '@texra-ai/harness/plugins';
 import { getRunRecords } from '@agent/storage';
-import type { ToolServices } from '@agent/runtime/ToolServices';
 import { cleanupAcceptedWorkspaceDiffFiles } from '@latex/acceptedFileTarget';
 import { WorkspaceFs } from '@platform/rootedFs';
 import { stripCriticizeAnnotations } from '@replacement/advanced';
@@ -52,6 +51,7 @@ import {
   inspectRunStorageEntryUnder,
 } from '@utils/files/runStorageFs';
 import { ensureError } from '@utils/errors/errorMessage';
+import type { PluginToolServices } from '@texra-ai/harness/plugins';
 
 /**
  * Whether `target` is a file, following links: a symlink to a file is a
@@ -184,7 +184,7 @@ type AcceptRunFilesInput = z.infer<typeof AcceptRunFilesInputSchema>;
 
 function executeAcceptRunFilesTool(
   input: AcceptRunFilesInput,
-): Effect.Effect<ToolResult, Error, ToolServices> {
+): Effect.Effect<ToolResult, Error, PluginToolServices> {
   return Effect.gen(function* () {
     const call = yield* ToolContext;
     const {
@@ -211,7 +211,7 @@ function executeAcceptRunFilesTool(
 const acceptFiles = Effect.fn('AcceptRunFilesTool.acceptFiles')(function* (
   input: AcceptRunFilesInput,
   call: ToolContextShape,
-): Effect.fn.Return<ToolResult, Error, ToolServices> {
+): Effect.fn.Return<ToolResult, Error, PluginToolServices> {
   const { execution_id: runId, files, strip_criticize } = input;
 
   // Phase 1: Validate all source paths and read content before any approvals

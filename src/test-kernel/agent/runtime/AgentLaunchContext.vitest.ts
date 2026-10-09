@@ -8,7 +8,8 @@ const mocks = vi.hoisted(() => ({
   buildVars: vi.fn(),
 }));
 
-vi.mock('@agent/index', () => ({
+vi.mock('@agent/index/agentRegistry', async (importActual) => ({
+  ...(await importActual<typeof import('@agent/index/agentRegistry')>()),
   getCatalogLoadFailure: () => undefined,
   getCustomAgentScanIssues: () => [],
   refresh: () => Effect.void,

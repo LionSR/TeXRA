@@ -1,6 +1,6 @@
 import { Effect, SubscriptionRef } from 'effect';
 
-import { registerRun } from '@agent/storage';
+import { registerRun } from '@agent/storage/runLifecycle';
 
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { ProcessServices } from '@platform/processRuntime';

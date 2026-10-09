@@ -16,7 +16,7 @@
 import { Cause, Data, Effect, Exit, Fiber } from 'effect';
 
 // Local imports
-import { getRunRecords } from '@agent/storage';
+import { getRunRecords } from '@agent/storage/runRecords';
 import { registerRun } from '@agent/storage/runLifecycle';
 import {
   prepareAgentDefinition,

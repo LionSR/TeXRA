@@ -28,7 +28,7 @@ import {
 
 // Each runtime value comes from the module that defines it: the
 // `@agent/runtime` barrel would evaluate runtime files no session here runs.
-import { getAgent } from '@agent/index';
+import { getAgent } from '@agent/index/agentRegistry';
 import { describeFollowUpFailure } from '@agent/followUp/ToolUseFollowUp';
 import { resumeRun } from '@agent/runtime/resumeRun';
 import { owningCall } from '@agent/storage/runRecords';

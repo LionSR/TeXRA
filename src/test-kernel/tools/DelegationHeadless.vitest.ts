@@ -79,7 +79,8 @@ vi.mock('@agent/index/agentRegistry', () => ({
   ) => entries.find((entry) => agentMatchesIdentifier(entry, identifier)),
 }));
 
-vi.mock('@agent/storage', () => ({
+vi.mock('@agent/storage/runRecords', async (importActual) => ({
+  ...(await importActual<typeof import('@agent/storage/runRecords')>()),
   getRunRecords: (_session: unknown, runId: RunId) => ({
     exists: () =>
       Effect.tryPromise({

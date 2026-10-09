@@ -6,13 +6,16 @@ All notable changes to this project will be documented in this file.
 
 ### Breaking Changes
 
-- **Plugin tools read their run through `ToolContext`.** A plugin's tool
-  gets the run its call works for from `ToolContext` (`env.run`), with
-  `requireRun` and `callerRun` and the `ToolRun` type from
-  `@texra-ai/harness/plugins`; the harness's internal `RunCall` is no
-  longer for plugins. `ToolRun` is a step: it still carries thirteen of the
-  run's fields, and will narrow to the ones plugin tools read, the rest
-  moving behind plugin services.
+- **Plugin tools: a narrower run, and their own services.** A plugin's
+  tool reads the run its call works for from `ToolContext`, with
+  `requireRun`, `callerRun` and the `ToolRun` type from
+  `@texra-ai/harness/plugins`; `ToolRun` carries only what plugin tools
+  use, and the files a run read are read-only there. A plugin's tools are
+  typed by `PluginToolServices`: a tool that requires the harness's own
+  call services no longer compiles. To launch a child agent from a tool,
+  use the `ChildRuns` service (`launch`) from the same entry; a script's
+  children stay within its concurrency budget. Plugin authors who imported
+  `RunCall` or typed tools by `ToolServices` move to these.
 - **SDK tool and plugin contract: `lane`, `arms` and `facts`.** A tool
   declares where its calls run with `lane: 'parallel' | 'barrier' | 'own'`,
   replacing `parallelSafe` and `ownsConcurrency`. A plugin lists its own row

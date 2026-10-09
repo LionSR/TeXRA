@@ -5,7 +5,8 @@ import { it } from '@effect/vitest';
 import { Effect } from 'effect';
 import { beforeEach, describe, expect } from 'vitest';
 
-import { getRunRecords, resolveChildRunOutput } from '@agent/storage';
+import { getRunRecords } from '@agent/storage';
+import { resolveChildRunOutput } from '@agent/storage/childRunOutput';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import {
   aggregateId,

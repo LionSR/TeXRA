@@ -43,7 +43,10 @@ import { z } from 'zod';
 import { normalizeToolCallError } from '@agent/core/tools/toolCallParsing';
 import { extractToolAttachments } from '@agent/core/tools/toolAttachmentExtraction';
 import type { ScriptOp } from '@agent/codeSandbox/codeSandbox';
-import type { RuntimeTool as ITool } from '@agent/runtime/ToolServices';
+import {
+  childRunsLayer,
+  type RuntimeTool as ITool,
+} from '@agent/runtime/ToolServices';
 import { ToolContext, type CallRequests } from '@agent/core/tools/ToolTypes';
 import {
   IssuingScript,
@@ -368,8 +371,6 @@ const makeScheduler = Effect.gen(function* () {
  *  then deliver, with the `joined` rows and what they record. */
 export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
   cell: RunCell,
-  /** The files the run read since its loop started (`RunCall.readFiles`). */
-  readFiles: Set<string>,
   step: StepTools,
   joined?: Pick<JoinedFollowUps, 'rows'> | null,
 ): Effect.fn.Return<
@@ -667,9 +668,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
         if (!startedAt(yield* cell.current, fact.callId, attempt))
           yield* commit(fact, [
             intentRow(fact, attempt),
-            ...(tool.slow === true
-              ? [cardStart(fact, parsedInput, attempt)]
-              : []),
+            ...(tool.slow ? [cardStart(fact, parsedInput, attempt)] : []),
           ]);
         accepting = tool.slow === true;
         yield* pre.bodyStarts;
@@ -690,8 +689,9 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
               requests,
               emit: onToolOutput,
             }),
+            Effect.provide(childRunsLayer),
             Effect.provideService(RunCall, {
-              readFiles,
+              run,
               responseId,
               instruction: userInstruction,
               attempt,

@@ -1,7 +1,6 @@
 // Third-party imports
 import { Effect, FileSystem } from 'effect';
 import { z } from 'zod';
-import { type RunCall } from '@agent/runtime/RunCall';
 import { ToolContext } from '@agent/core/tools/ToolTypes';
 
 // Local imports - tools
@@ -44,11 +43,7 @@ const write = Effect.fn('WriteFileTool.execute')(function* (
 ): Effect.fn.Return<
   ToolResult,
   Error,
-  | ToolContext
-  | RunCall
-  | FileSystem.FileSystem
-  | WorkspaceFs
-  | AgentCatalogServices
+  ToolContext | FileSystem.FileSystem | WorkspaceFs | AgentCatalogServices
 > {
   const call = yield* ToolContext;
   const prepared = yield* resolveWritableTarget(input.path, {

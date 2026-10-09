@@ -10,7 +10,7 @@
  */
 
 export { getRunRecords } from './runRecords';
-export { deliveredOutput, type RunResult } from './resultMeta';
+export type { RunResult } from './resultMeta';
 export {
   listRunWorkspaceFiles,
   resolveRunWorkspaceFilePath,
@@ -27,4 +27,3 @@ export {
 } from './runListing';
 export { deriveResumability, type ResumabilityDecision } from './resumability';
 export { formatConversationMessage } from './conversationFormat';
-export { resolveChildRunOutput } from './childRunOutput';

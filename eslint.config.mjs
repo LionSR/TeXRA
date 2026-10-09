@@ -871,38 +871,6 @@ export default tseslint.config(
     },
   },
 
-  // An app's tool reads its call and run through `ToolContext`
-  // (`requireRun`, `callerRun`); the call's place in its run (`RunCall`) and
-  // the script plumbing are the harness's built-ins' alone.
-  {
-    files: ['packages/texra/src/**/*.{ts,tsx,mts}'],
-    ignores: ['src/test-kernel/**'],
-    rules: {
-      'no-restricted-imports': [
-        'error',
-        {
-          paths: [
-            ...HOST_LAYER_RESTRICTED_IMPORT_PATHS,
-            {
-              name: '@agent/runtime',
-              importNames: ['RunCall', 'IssuingScript', 'ScriptCalls'],
-              message:
-                "An app's tool reads its run through ToolContext (requireRun, callerRun from @texra-ai/harness); RunCall is the built-ins' own.",
-            },
-          ],
-          patterns: [
-            ...HOST_LAYER_RESTRICTED_IMPORT_PATTERNS,
-            {
-              group: ['@agent/runtime/RunCall'],
-              message:
-                "An app's tool reads its run through ToolContext (requireRun, callerRun from @texra-ai/harness); RunCall is the built-ins' own.",
-            },
-          ],
-        },
-      ],
-    },
-  },
-
   // Agent core is the neutral execution layer. It may depend on shared agent
   // contracts, but not on concrete provider-handler implementations.
   {
