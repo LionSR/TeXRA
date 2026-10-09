@@ -27,8 +27,14 @@ function usageRouteOf(route: ModelRoute): UsageRoute {
     case 'chatgpt-subscription':
     case 'xai-subscription':
       return route.kind;
-    default:
+    case 'openrouter':
+    case 'copilot':
+    case 'validation':
+    case 'no-api-key':
+    case 'openrouter-unsupported':
       return 'api-key';
+    default:
+      return route satisfies never;
   }
 }
 
