@@ -32,7 +32,16 @@ export interface OpenWork {
   readonly id: string;
 }
 
-/** One ordered append to the log, as the publisher hands it to a job. */
+/** Whether this fiber runs a publisher job: inside one, the store's write
+ *  lock is held, so a claim is the job's own and a wait on the publisher
+ *  would never end. */
+export const InPublisherJob = Context.Reference<boolean>(
+  '@texra/session/InPublisherJob',
+  { defaultValue: () => false },
+);
+
+/** One ordered append to the log, as the publisher hands it to a job: a
+ *  savepoint of the job's one transaction. */
 export type Append = (
   events: readonly SessionEventDraft[],
 ) => Effect.Effect<
@@ -70,16 +79,20 @@ export class ProcessIdentity extends Context.Service<
 export class SessionEvents extends Context.Service<
   SessionEvents,
   {
-    /** Run one job as the next transaction of the inbox and return its
-     *  value: a read of committed rows and the append that depends on it,
-     *  with no other write between them. An append refusal is one of two
-     *  typed failures, both meaning nothing was written (D6 b):
-     *  `DatabaseNotOwner`, a target the process does not hold open, and
-     *  `DatabaseWriteFailed`, the batch rolled back for any other reason.
-     *  Neither is retried or converted here (F3, R7). */
+    /** Run one job as the next transaction of the inbox, one SQLite
+     *  transaction, and return its value: reads of committed rows and the
+     *  appends that depend on them, committed together or not at all, with
+     *  no other write between them. An append refusal is one of two typed
+     *  failures (D6 b): `DatabaseNotOwner`, a target the process does not
+     *  hold open, and `DatabaseWriteFailed`, the batch rolled back for any
+     *  other reason; a job that lets one through writes nothing, and a
+     *  transaction that fails to commit is `DatabaseWriteFailed` too.
+     *  Neither is retried or converted here (F3, R7). A job may run again
+     *  whole (`Database.job`), so it is database-only. Called from inside
+     *  a job, it is a defect: the job would wait on itself. */
     readonly transact: <A, E>(
       job: (append: Append) => Effect.Effect<A, E>,
-    ) => Effect.Effect<A, E>;
+    ) => Effect.Effect<A, E | DatabaseWriteFailed>;
     /** Enqueue one job synchronously and return: the door for a producer
      *  with no fiber to wait on (a trace sink, a follow-up's admission).
      *  Its order is the moment of this call. A refused append is never
@@ -94,18 +107,14 @@ export class SessionEvents extends Context.Service<
         DatabaseNotOwner | DatabaseReadFailed | DatabaseWriteFailed
       >,
     ) => void;
-    /** Remove a run and its dependents (C9): the liveness proofs run on the
-     *  caller's fiber, then the tombstone's transaction runs as the next
-     *  job, so it commits in enqueue order and what this publisher tracks
-     *  forgets every run the tombstone names. */
+    /** Remove a run and its dependents (C9) as the next job, so the
+     *  tombstone commits in enqueue order and what this publisher tracks
+     *  forgets every run it names. */
     readonly removeRun: (
       id: AggregateId,
       mode: DeletionMode,
       expectedStartCommit: CommitOrdinal,
-    ) => Effect.Effect<
-      readonly SessionEvent[],
-      DatabaseReadFailed | DatabaseWriteFailed
-    >;
+    ) => Effect.Effect<readonly SessionEvent[], DatabaseWriteFailed>;
     /** Close the plane: end the inbox and run what it holds, inside the
      *  one close deadline (`SESSION_CLOSE_DEADLINE_MS`). At the deadline
      *  the running job is cut outside its atomic write and every queued
@@ -117,7 +126,7 @@ export class SessionEvents extends Context.Service<
      *  `stream.end` or a phase move that rests or ends its run, a stage
      *  until its `stage.end`. What a park (streams) or a host exit (both)
      *  closes. Read on the publisher fiber (inside a job) or after a
-     *  settle, it counts every commit before. */
+     *  settle, it counts every job committed before. */
     readonly openWork: (aggregateId: AggregateId) => readonly OpenWork[];
     /** The cold listing hydrate (C8): the latest row per aggregate and type
      *  for the listing fact types plus the outstanding approvals, in commit

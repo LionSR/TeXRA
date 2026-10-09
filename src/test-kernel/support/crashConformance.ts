@@ -51,7 +51,9 @@
  *   between the answer and the body it admits honours that answer. Either
  *   way the attempt never asks again;
  * - invariant I9: a bypass turned off is acknowledged before its row is durable (a
- *   resume would restore it on).
+ *   resume would restore it on);
+ * - a crash inside one publisher job, between two of its appends, leaves
+ *   either half on disk (a job is one SQLite transaction).
  */
 import {
   cpSync,
@@ -86,6 +88,7 @@ import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { AgentDirectories, AppState } from '@platform/interfaces';
 import { withProcessServices } from '@platform/processRuntime';
 import {
+  aggregateId,
   aggregateTarget,
   type RunEndOutput,
   type RunId,
@@ -1141,6 +1144,59 @@ export function crashConformanceSuite(plugins: string): void {
         }),
       600_000,
     );
+    /**
+     * A job's appends commit together: a process killed between two of them
+     * leaves neither on disk. The cut is the store's files copied while the
+     * job holds its transaction open, which is what a kill there leaves.
+     */
+    if (plugins === 'harness built-ins')
+      it.live('a crash between two appends of one job leaves neither', () =>
+        Effect.scoped(
+          Effect.gen(function* () {
+            const roots = testWorkspaceRoots();
+            const session = yield* openTestDefaultSession({ roots });
+            const run = aggregateId('run', generateRunId());
+            const titled = (description: string) => [
+              {
+                type: 'run.description' as const,
+                aggregateId: run,
+                description,
+                by: 'user' as const,
+              },
+            ];
+            yield* session.log.transact([
+              {
+                type: 'run.start',
+                aggregateId: run,
+                identity: { kind: 'agent', agent: 'chat' },
+                userFollowUpSupport: 'unsupported',
+                parent: null,
+                provenance: null,
+              },
+            ]);
+            const cut = join(roots.storage, 'cut');
+            yield* session.log.transact((tx) =>
+              Effect.gen(function* () {
+                yield* tx.append(titled('first half'));
+                yield* Effect.sync(() => {
+                  mkdirSync(cut);
+                  for (const file of ['texra.db', 'texra.db-wal'])
+                    cpSync(join(roots.storage, file), join(cut, file));
+                });
+                yield* tx.append(titled('second half'));
+              }),
+            );
+            const types = (storage: string) =>
+              rowsOf(storage).map((row) => row.type);
+            expect(types(cut)).toEqual(['run.start']);
+            expect(types(roots.storage)).toEqual([
+              'run.start',
+              'run.description',
+              'run.description',
+            ]);
+          }).pipe(Effect.ensuring(closeTestDefaultSession)),
+        ),
+      );
     /**
      * A document task's documents are its recipe script's settled value: a
      * resume from any commit point ends `completed` with the clean run's

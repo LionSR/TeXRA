@@ -16,7 +16,7 @@ import {
   Effect,
   Option,
   RcMap,
-  type Scope,
+  Scope,
   Stream,
   SubscriptionRef,
 } from 'effect';
@@ -44,6 +44,7 @@ import {
   type DatabaseWriteFailed,
 } from '@shared/session/database';
 import {
+  InPublisherJob,
   ProcessIdentity,
   SessionEvents,
   type Append,
@@ -148,40 +149,58 @@ function settlement(
  * decided when the last holder's scope closes: given back to how the first
  * found it, or released when a hold `ends` it. The map closes with the
  * session, deciding whatever is still held.
+ *
+ * A hold inside a publisher job is the job's own, never the map's: the map's
+ * lookup could wait on the connection the job holds, and its release would
+ * run in the job's transaction after it ended. It is taken in the job's
+ * transaction and decided by the scope that closes it, in that closer's
+ * transaction (`Scope.addFinalizer` keeps no context).
  */
-const claimHolds = (database: DatabaseShape) =>
-  Effect.map(
+const claimHolds = (database: DatabaseShape) => {
+  const take = (id: AggregateId) =>
+    Effect.map(database.acquireClaims([id]), (ids) => ({
+      taken: ids.length > 0,
+      ended: false,
+    }));
+  const decide = (id: AggregateId, hold: { taken: boolean; ended: boolean }) =>
+    hold.taken || hold.ended
+      ? database
+          .releaseClaims([id])
+          .pipe(
+            Effect.catch(
+              logFailure(
+                `The claim on ${id} was not released; the next process proves this one dead before it takes the claim.`,
+              ),
+            ),
+          )
+      : Effect.void;
+  return Effect.map(
     RcMap.make({
       lookup: (id: AggregateId) =>
-        Effect.acquireRelease(
-          database
-            .acquireClaims([id])
-            .pipe(
-              Effect.map((ids) => ({ taken: ids.length > 0, ended: false })),
-            ),
-          (hold) =>
-            hold.taken || hold.ended
-              ? database
-                  .releaseClaims([id])
-                  .pipe(
-                    Effect.catch(
-                      logFailure(
-                        `The claim on ${id} was not released; the next process proves this one dead before it takes the claim.`,
-                      ),
-                    ),
-                  )
-              : Effect.void,
-        ),
+        Effect.acquireRelease(take(id), (hold) => decide(id, hold)),
     }),
     (claims): SessionLog['hold'] =>
-      (runId, options = {}) =>
-        Effect.map(
-          RcMap.get(claims, qualifyAggregateId('run', runId)),
-          (hold) => {
-            if (options.ends === true) hold.ended = true;
-          },
-        ),
+      (runId, options = {}) => {
+        const id = qualifyAggregateId('run', runId);
+        const held = (hold: { ended: boolean }) => {
+          if (options.ends === true) hold.ended = true;
+        };
+        return Effect.flatMap(InPublisherJob, (inJob) =>
+          inJob
+            ? Effect.flatMap(take(id), (hold) => {
+                held(hold);
+                return Effect.flatMap(Effect.scope, (scope) =>
+                  Scope.addFinalizer(
+                    scope,
+                    Effect.suspend(() => decide(id, hold)),
+                  ),
+                );
+              })
+            : Effect.map(RcMap.get(claims, id), held),
+        );
+      },
   );
+};
 
 /**
  * One transaction on the publisher, settled against its own last commit,
@@ -234,7 +253,12 @@ const transaction =
         },
       });
       const value = yield* events
-        .transact((append) => job(tx(append)))
+        .transact((append) => {
+          // An attempt that rolled back committed nothing and took nothing.
+          committed = null;
+          owned.length = 0;
+          return job(tx(append));
+        })
         .pipe(Effect.onError(() => release));
       if (committed !== null)
         yield* settleTo(committed).pipe(Effect.onError(() => release));

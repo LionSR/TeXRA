@@ -918,6 +918,11 @@ show` print the same notice, and the new `texra agents customize`,
 
 ### Bug Fixes
 
+- **A crash no longer leaves half of one write on disk.** When TeXRA wrote
+  several related records as one step (a goal and the approval it grants, a
+  run's history with its registration, a request and its answer), each
+  record was saved on its own, so a crash between them could keep one
+  without the other. Each step is now saved whole or not at all.
 - **A model failure that a retry cannot fix no longer offers Retry.** When
   a provider refused a request as invalid or unsupported, or rejected its
   credentials, without an HTTP status, the retry prompt still offered a

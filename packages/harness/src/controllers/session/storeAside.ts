@@ -2,13 +2,22 @@
  * The session store's aside copies: the files a store open moved beside it
  * (a pre-1.0 store to `.pre1`, a damaged file to `.corrupt-<stamp>`), each
  * at a name no earlier copy holds and kept until
- * `texra doctor --prune-storage` deletes them; the busy retry; and the test
+ * `texra doctor --prune-storage` deletes them; the outermost transaction's
+ * two retries (a busy lock, claim owners proven off the lock); and the test
  * of whether a failed open is SQLite reporting the file damaged.
  */
 import { randomUUID } from 'node:crypto';
 import { basename, dirname, join } from 'node:path';
-import { type Cause, Duration, Effect, FileSystem, Schedule } from 'effect';
+import {
+  type Cause,
+  Context,
+  Duration,
+  Effect,
+  FileSystem,
+  Schedule,
+} from 'effect';
 import { isSqlError } from 'effect/sql/SqlError';
+import type { OwnerId, OwnerLiveness } from '@shared/schemas';
 import type * as SqlClient from 'effect/sql/SqlClient';
 
 export type Sql = SqlClient.SqlClient;
@@ -35,6 +44,50 @@ export const isBusy = (error: unknown): boolean =>
   isSqlError(error) && error.reason._tag === 'LockTimeoutError';
 export const retryBusy = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
   effect.pipe(Effect.retry({ schedule: BUSY_RETRY, while: isBusy }));
+
+/** The claim owners' liveness verdicts an attempt of the outermost
+ *  transaction runs with, each proven off the write lock before it. */
+export const ProvenOwners = Context.Reference<
+  ReadonlyMap<OwnerId, OwnerLiveness>
+>('@texra/session/ProvenOwners', { defaultValue: () => new Map() });
+
+/** A claim met owners its attempt has no verdict for. Raised as a defect,
+ *  so no body's error handling swallows it: the outermost transaction rolls
+ *  back whole, proves them ({@link provingOwners}), and runs again. */
+export class OwnersUnproven {
+  readonly owners: readonly OwnerId[];
+  constructor(owners: readonly OwnerId[]) {
+    this.owners = owners;
+  }
+}
+
+/** Run the outermost transaction's `attempt`; one that met claim owners it
+ *  has no verdict for rolled back whole, so they are proven here, off the
+ *  write lock, and it runs again with every verdict so far. Each round
+ *  proves an owner the last did not, so the rounds end. */
+export const provingOwners =
+  <R>(prove: (owner: OwnerId) => Effect.Effect<OwnerLiveness, never, R>) =>
+  <A, E, R2>(
+    attempt: Effect.Effect<A, E, R2>,
+    proven: ReadonlyMap<OwnerId, OwnerLiveness> = new Map(),
+  ): Effect.Effect<A, E, R | R2> =>
+    attempt.pipe(
+      Effect.provideService(ProvenOwners, proven),
+      Effect.catchDefect((defect) =>
+        defect instanceof OwnersUnproven
+          ? Effect.flatMap(
+              Effect.forEach(defect.owners, (owner) =>
+                Effect.map(prove(owner), (v) => [owner, v] as const),
+              ),
+              (verdicts) =>
+                provingOwners(prove)(
+                  attempt,
+                  new Map([...proven, ...verdicts]),
+                ),
+            )
+          : Effect.die(defect),
+      ),
+    );
 
 /**
  * The first of `base`, `base.2`, `base.3`, … that names no file (with its

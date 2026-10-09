@@ -251,15 +251,12 @@ export class Database extends Context.Service<
     /** Set when this open moved a pre-1.0 or damaged store aside. */
     readonly movedAside: SessionStoreMovedAside | null;
     /**
-     * C6: append an ordered batch, possibly across several aggregates, in one
-     * `BEGIN IMMEDIATE` under the process's single permit. Each target's
-     * `seq` and the database-wide `commit` are assigned in batch order, the
-     * writer is this process (C5, derived here, never supplied by a caller),
-     * and a failure of any member rolls back every member and every sequence
-     * change. Returns the complete committed batch, which is what the fold
-     * reads before exposing the state it produced. A target this process
-     * does not hold open refuses the batch as `DatabaseNotOwner`; every
-     * other rollback is `DatabaseWriteFailed`.
+     * C6: append an ordered batch, possibly across several aggregates, whole
+     * or not at all, in the caller's {@link job} or a transaction of its
+     * own. `seq` and `commit` are assigned in batch order and the writer is
+     * this process (C5, never a caller's). A target this process does not
+     * hold open refuses the batch as `DatabaseNotOwner`; every other
+     * rollback is `DatabaseWriteFailed`.
      */
     readonly appendAll: (
       drafts: readonly SessionEventDraft[],
@@ -267,6 +264,14 @@ export class Database extends Context.Service<
       readonly SessionEvent[],
       DatabaseNotOwner | DatabaseWriteFailed
     >;
+    /** Run `body` as one write transaction behind the store gate: what it
+     *  writes commits together or not at all, readers wake after. It holds
+     *  the write lock, so `body` is database-only, forks nothing that
+     *  outlives it, and may run again whole (a busy lock; claim owners
+     *  proven off the lock). Its failures leave typed. */
+    readonly job: <A, E>(
+      body: Effect.Effect<A, E>,
+    ) => Effect.Effect<A, E | DatabaseWriteFailed>;
     /** Replaying wake counter. Local commits and foreign data-version changes
      *  advance it; it is never interpreted as an event ordinal. */
     readonly level: SubscriptionRef.SubscriptionRef<number>;
@@ -296,14 +301,16 @@ export class Database extends Context.Service<
     readonly readRunRecords: (
       id: AggregateId,
     ) => Effect.Effect<readonly SessionEvent[], DatabaseReadFailed>;
-    /** Bounded current CLI input rows, ordered oldest first. */
-    readonly readInputHistory: () => Effect.Effect<
-      readonly InputHistoryRecord[],
-      DatabaseReadFailed
-    >;
-    readonly appendInputHistory: (
-      record: InputHistoryRecord,
-    ) => Effect.Effect<void, DatabaseWriteFailed>;
+    /** The bounded CLI input rows, oldest first, and a new last one. */
+    readonly inputHistory: {
+      readonly read: Effect.Effect<
+        readonly InputHistoryRecord[],
+        DatabaseReadFailed
+      >;
+      readonly append: (
+        record: InputHistoryRecord,
+      ) => Effect.Effect<void, DatabaseWriteFailed>;
+    };
     /** The root's current values: application state, not history. */
     readonly values: CurrentValues;
     /** One aggregate's rows from `fromSeq`, or only those of `types`
@@ -327,29 +334,24 @@ export class Database extends Context.Service<
     readonly claimOwner: (
       id: AggregateId,
     ) => Effect.Effect<AggregateClaim, DatabaseReadFailed>;
-    /** Atomically acquire existing, open aggregates after proving prior
-     *  owners dead. A claim another process takes between that proof and
-     *  the acquiring transaction refuses as `DatabaseNotOwner`. */
+    /** Atomically acquire existing, open aggregates whose prior owners are
+     *  proven dead (off the lock, {@link job}), in the caller's transaction
+     *  when it has one. */
     readonly acquireClaims: (
       ids: readonly AggregateId[],
     ) => Effect.Effect<
       readonly AggregateId[],
       DatabaseNotOwner | DatabaseReadFailed | DatabaseWriteFailed
     >;
-    /** C9: read the owning tree and prove its owners reclaimable, then
-     *  answer the one transaction that rechecks that tree, acquires its
-     *  claims, appends the tombstone and closes all dependents. The
-     *  transaction is a publisher job (`SessionEvents.removeRun`), never
-     *  run on its own. The recorded start identifies the lifetime admitted
-     *  by the caller. */
-    readonly prepareRunRemoval: (
+    /** C9, as one publisher job (`SessionEvents.removeRun`): claim the
+     *  owning tree once its owners are proven reclaimable, append the
+     *  tombstone, close every dependent; `expectedStartCommit` is the
+     *  lifetime the caller admitted. */
+    readonly appendRunRemoval: (
       id: AggregateId,
       mode: DeletionMode,
       expectedStartCommit: CommitOrdinal,
-    ) => Effect.Effect<
-      Effect.Effect<readonly SessionEvent[], DatabaseWriteFailed>,
-      DatabaseReadFailed | DatabaseWriteFailed
-    >;
+    ) => Effect.Effect<readonly SessionEvent[], DatabaseWriteFailed>;
     /** C9: the `run.removed` tombstones cleanup has not collected. */
     readonly readPendingDeletions: () => Effect.Effect<
       readonly SessionEvent[],
@@ -406,10 +408,7 @@ export class Database extends Context.Service<
  */
 export class GlobalDatabase extends Context.Service<
   GlobalDatabase,
-  Pick<
-    Context.Service.Shape<typeof Database>,
-    'values' | 'readInputHistory' | 'appendInputHistory'
-  >
+  Pick<Context.Service.Shape<typeof Database>, 'values' | 'inputHistory'>
 >()('@texra/session/GlobalDatabase') {}
 
 /** Persistent project connections, retained by project and session scopes.

@@ -1915,6 +1915,10 @@ describe('the C1 event table and the C6 publisher', () => {
             (SELECT logical_id FROM event_sequence WHERE id = NEW.aggregate));
         END;
       `);
+      // The change poll hears this connection's schema change once; what
+      // follows is measured from there.
+      yield* TestClock.adjust('1 second');
+      const base = yield* SubscriptionRef.get(database.level);
 
       const failed = yield* Effect.exit(database.appendAll([runStart]));
       expect(Exit.isFailure(failed)).toBe(true);
@@ -1923,7 +1927,7 @@ describe('the C1 event table and the C6 publisher', () => {
           'FOREIGN KEY constraint failed',
         );
       }
-      expect(yield* SubscriptionRef.get(database.level)).toBe(0);
+      expect(yield* SubscriptionRef.get(database.level)).toBe(base);
       expect(yield* SubscriptionRef.get(database.observedCommit)).toBe(0);
 
       const committed = yield* database.appendAll([olderStart]);
@@ -1933,7 +1937,7 @@ describe('the C1 event table and the C6 publisher', () => {
       expect(connection.prepare('SELECT id FROM committed_run').all()).toEqual([
         { id: OLDER },
       ]);
-      expect(yield* SubscriptionRef.get(database.level)).toBe(1);
+      expect(yield* SubscriptionRef.get(database.level)).toBe(base + 1);
       expect(yield* SubscriptionRef.get(database.observedCommit)).toBe(1);
     }).pipe(Effect.provide(substrate(storage)), Effect.scoped);
   });
@@ -2690,9 +2694,7 @@ describe('the C1 event table and the C6 publisher', () => {
           yield* refusesDeletion;
           expect(
             yield* Effect.flip(
-              Effect.flatten(
-                first.prepareRunRemoval(root, 'bulk', initial[0]!.commit),
-              ),
+              first.appendRunRemoval(root, 'bulk', initial[0]!.commit),
             ),
           ).toMatchObject({
             _tag: 'DatabaseWriteFailed',
@@ -2702,9 +2704,7 @@ describe('the C1 event table and the C6 publisher', () => {
         }).pipe(Effect.provide(substrate(storage, OTHER)));
         const committed = [
           ...(yield* first.appendAll([waiting])),
-          ...(yield* Effect.flatten(
-            first.prepareRunRemoval(root, 'bulk', initial[0]!.commit),
-          )),
+          ...(yield* first.appendRunRemoval(root, 'bulk', initial[0]!.commit)),
         ];
         expect(committed.at(-1)).toMatchObject({
           type: 'run.removed',
@@ -2769,9 +2769,7 @@ describe('the C1 event table and the C6 publisher', () => {
         const replacement = yield* first.appendAll([runStart]);
         expect(
           (yield* Effect.flip(
-            Effect.flatten(
-              first.prepareRunRemoval(root, 'single', initial[0]!.commit),
-            ),
+            first.appendRunRemoval(root, 'single', initial[0]!.commit),
           ))._tag,
         ).toBe('DatabaseWriteFailed');
         expect(yield* first.readAggregate(root, 0)).toEqual(replacement);
@@ -3026,9 +3024,7 @@ describe('the C1 event table and the C6 publisher', () => {
           for (const mode of ['bulk', 'automatic'] as const) {
             expect(
               yield* Effect.flip(
-                Effect.flatten(
-                  first.prepareRunRemoval(otherRoot, mode, otherStart),
-                ),
+                first.appendRunRemoval(otherRoot, mode, otherStart),
               ),
             ).toMatchObject({
               _tag: 'DatabaseWriteFailed',
@@ -3038,9 +3034,7 @@ describe('the C1 event table and the C6 publisher', () => {
           expect((yield* first.aggregateState([otherRoot]))[0]?.closed).toBe(
             false,
           );
-          yield* Effect.flatten(
-            first.prepareRunRemoval(otherRoot, 'single', otherStart),
-          );
+          yield* first.appendRunRemoval(otherRoot, 'single', otherStart);
           expect((yield* first.aggregateState([otherRoot]))[0]?.closed).toBe(
             true,
           );

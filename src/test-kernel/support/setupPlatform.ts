@@ -375,6 +375,7 @@ export async function installFakeHost(host: FakeHost): Promise<void> {
     // is too: a suite that reads it provides its own innermost.
     Layer.mock(GlobalDatabase, {
       values: {} as CurrentValues,
+      inputHistory: {} as GlobalDatabase['Service']['inputHistory'],
     }),
     Layer.effect(
       ProjectDatabases,
