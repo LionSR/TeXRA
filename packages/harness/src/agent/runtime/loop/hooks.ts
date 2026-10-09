@@ -32,10 +32,10 @@ import {
 } from '@shared/schemas';
 import type { RunHistoryDraft, RunState } from '@shared/session/runStateFold';
 
+import type { RunCell } from '@shared/session/runHistory';
 import { rowAggregate } from './rows';
 import type { AgentRunShape } from '../run/AgentRun';
 import type { InputPart } from '../run/mediaInput';
-import type { RunCell } from './runProgram';
 import type { StepTools } from './step';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 

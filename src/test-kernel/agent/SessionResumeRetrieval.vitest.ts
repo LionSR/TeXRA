@@ -44,10 +44,10 @@ describe('retrieveSessionResumeData', () => {
   const openRun = Effect.fn('openRun')(function* (runId: RunId) {
     publishTestRunStart(session, runId);
     yield* session.log.settled;
-    yield* session.runHistory.acquire(runId);
-    yield* session.runHistory.appendBatch(runId, null, [
-      positionRow(runId, { turn: 0 }, 'turn.ready'),
-    ]);
+    const cell = yield* session.runHistory.open(runId, {
+      activation: () => Effect.succeed([]),
+    });
+    yield* cell.append([positionRow(runId, { turn: 0 }, 'turn.ready')]);
   });
 
   it.effect('resumes an opened run on its configuration, under its id', () =>

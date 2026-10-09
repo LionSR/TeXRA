@@ -1,176 +1,65 @@
 /**
- * The run program's scaffolding: the one state cell every run writes
- * through, the run's entry, and the exit protocol every run settles. What
- * the loop does between them stays in `toolUse.ts`. There is no hook
- * record: the surface is values and total functions, and the loop writes its
- * own three-argument `Effect.acquireUseRelease` (the run-loop design,
+ * The run program's scaffolding: the run's entry, which opens its one cell,
+ * and the exit protocol every run settles. What the loop does between them
+ * stays in `toolUse.ts`. There is no hook record: the surface is values and
+ * total functions, and the loop writes its own three-argument
+ * `Effect.acquireUseRelease` (the run-loop design,
  * .agents/docs/implemented/architecture/2026-09-21-effect-design-run-loop-programs.md).
  */
 
-import { Cause, Effect, Exit, type Scope, SynchronizedRef } from 'effect';
+import { Cause, Effect, Exit } from 'effect';
 
+import { activationRows } from '@agent/storage/runLifecycle';
 import type { AgentTrace, StageHandle } from '@agent/trace';
 import { RUN_OUTCOME, type RunId, type RunOutcome } from '@shared/schemas';
-import type {
-  DatabaseReadFailed,
-  DatabaseWriteFailed,
-} from '@shared/session/database';
-import { RunHistory, RunHistoryRefused } from '@shared/session/runHistory';
-import type { CoWrite } from '@shared/session/sessionEvents';
-import {
-  freshRunState,
-  type RunHistoryDraft,
-  type RunState,
-} from '@shared/session/runStateFold';
+import { RunHistory, type RunCell } from '@shared/session/runHistory';
+import type { RunState } from '@shared/session/runStateFold';
 import { ensureError } from '@utils/errors/errorMessage';
 
 import { AgentRun } from '../run/AgentRun';
 import { Runs } from '../runRegistry';
 import type { FollowUps } from '../FollowUps';
 
-/** What a run cell's commits and re-reads fail with. */
-export type CellError =
-  RunHistoryRefused | DatabaseWriteFailed | DatabaseReadFailed;
-
-/**
- * The run's one state holder and its only run history writer: the opening,
- * every step, settlement and delivery, the input it consumes, a compaction's
- * edit and a model switch all commit through {@link RunCell.append}, and
- * nothing sets the state it holds but what that folds back. Seeded inside
- * the acquire, so no reader branches on null: a resumed run's stored state,
- * or a fresh run's state before its opening batch. The loop hands the same
- * cell to the invoker and the dispatch unit, so no run service keeps a copy
- * of the state it commits against.
- */
-export interface RunCell {
-  readonly runId: RunId;
-  /** The state the loop continues from. Nothing mirrors it. */
-  readonly current: Effect.Effect<RunState>;
-  /** The state the cell opened on: what a resume folded from stored rows,
-   *  or a fresh run's before its opening batch. */
-  readonly opened: RunState;
-  /**
-   * Commit one batch against the current state and hold what the run history
-   * folds back. Rows that read the state (a step, a settlement, a delivery)
-   * are built from the state the batch commits
-   * against. Read-append-write is one uninterruptible region under the
-   * cell's lock, so a stop can never leave the cell behind the rows, and
-   * concurrent settlements of one parallel partition each fold onto the
-   * latest state. The wait for the lock is masked too, deliberately: a
-   * settlement queued behind a sibling when the run stops belongs to a tool
-   * that already ran, and committing it keeps a resume from running it again.
-   * `alongside` decides another aggregate's rows, appended with the batch
-   * (`RunHistory.appendBatch`): a child turn's delivery to its parent.
-   */
-  readonly append: <E = never>(
-    rows:
-      | readonly RunHistoryDraft[]
-      | ((state: RunState) => readonly RunHistoryDraft[]),
-    alongside?: Effect.Effect<CoWrite, E, Scope.Scope>,
-  ) => Effect.Effect<RunState, RunHistoryRefused | DatabaseWriteFailed | E>;
-  /**
-   * Re-read the run under the cell's lock: the state with every row another
-   * writer committed (a `request.decided` the decide command landed), in
-   * commit order, whatever this cell appended since. Folding one such row
-   * onto the cell instead cannot work once a sibling call's settlement has
-   * committed after it.
-   */
-  readonly refresh: Effect.Effect<
-    RunState,
-    RunHistoryRefused | DatabaseReadFailed
-  >;
-}
-
-/**
- * A `SynchronizedRef`: the loop, the invoker and a barrier call run on one
- * fiber, but a parallel partition settles its calls on sibling fibers, and
- * each settlement must fold onto the one before it.
- */
-export const makeRunCell = (
-  runId: RunId,
-  opened: RunState,
-): Effect.Effect<RunCell, never, RunHistory> =>
-  Effect.gen(function* () {
-    const runHistory = yield* RunHistory;
-    const ref = yield* SynchronizedRef.make(opened);
-    return {
-      runId,
-      current: SynchronizedRef.get(ref),
-      opened,
-      append: (rows, alongside) =>
-        SynchronizedRef.updateAndGetEffect(ref, (state) =>
-          runHistory.appendBatch(
-            runId,
-            state,
-            typeof rows === 'function' ? rows(state) : rows,
-            [],
-            alongside,
-          ),
-        ).pipe(Effect.uninterruptible),
-      refresh: SynchronizedRef.updateAndGetEffect(ref, () =>
-        Effect.flatMap(runHistory.load(runId), (state) =>
-          // The cell opened on rows, so the run has some.
-          state === null
-            ? Effect.die(new Error(`Run ${runId} lost its rows.`))
-            : Effect.succeed(state),
-        ),
-      ).pipe(Effect.uninterruptible),
-    } satisfies RunCell;
-  });
-
-/** Why a run the run history holds no rows for cannot be continued. */
+/** Why a run its rows never opened cannot be continued. */
 const NOT_RESUMABLE_MESSAGE =
   'This run stopped before it recorded any state to resume from. Start a new run instead.';
 
-export type RunEntry =
-  /** No opening row yet: the aggregate holds at most queued follow-ups. */
-  | { readonly _tag: 'fresh'; readonly opening: RunState }
-  | { readonly _tag: 'restored'; readonly loaded: RunState };
-
 /**
- * The run's entry, as data. Takes the claim when resuming, loads the
- * aggregate, and raises both refusals once — a resume with nothing to resume,
- * and a fresh launch onto an aggregate that already holds run history state
- * (#11313). The caller branches on the tag.
+ * The run's entry: its cell. A fresh run's registration rides the cell's
+ * first append, its opening, so the run exists with its opening or not at
+ * all. A resume takes the claim and commits its activation, in one batch,
+ * and is refused when the rows hold nothing to continue from. A fresh
+ * launch onto a run that already holds history state is refused (#11313).
+ * The caller opens a cell whose state has no phase.
  */
-export const loadRun = (
+export const openRun = (
   runId: RunId,
   resume: boolean,
-): Effect.Effect<RunEntry, Error, RunHistory | AgentRun> =>
+): Effect.Effect<RunCell, Error, RunHistory | AgentRun> =>
   Effect.gen(function* () {
     const runHistory = yield* RunHistory;
-    const loaded = resume
-      ? yield* runHistory.acquire(runId)
-      : yield* runHistory.load(runId);
-    if (loaded !== null && loaded.phase !== null) {
-      if (!resume) {
-        return yield* Effect.fail(
-          new Error(
-            `Run ${runId} already has run history state; resume it instead.`,
-          ),
-        );
-      }
-      return { _tag: 'restored', loaded } satisfies RunEntry;
-    }
-    // A resume of a run never opened (its launch stopped between its
-    // registration and its opening batch) opens it, as the launch would
-    // have; its launch context rendered the opening from its configuration.
     const run = yield* AgentRun;
-    if (resume && run.opening === null) {
-      return yield* Effect.fail(new Error(NOT_RESUMABLE_MESSAGE));
-    }
-    const bound = yield* SynchronizedRef.get(run.model);
-    return {
-      _tag: 'fresh',
-      // What the opening batch records (`run.config` with its binding): the
-      // state its first step is opened on.
-      opening: {
-        ...freshRunState(0),
-        modelId: bound.modelId,
-        backend: bound.backend,
-        declinedRoutes: run.declinedRoutes,
-      },
-    } satisfies RunEntry;
+    const cell = yield* runHistory.open(
+      runId,
+      resume
+        ? {
+            activation: (state: RunState | null) =>
+              state?.phase == null
+                ? Effect.fail(new Error(NOT_RESUMABLE_MESSAGE))
+                : activationRows(run.session, runId, run.config),
+          }
+        : { registration: run.entry.registration ?? [] },
+    );
+    // A resume has entered its run once its activation committed; a fresh
+    // run enters with its opening batch.
+    if (resume) yield* run.entry.entered;
+    if (!resume && (yield* cell.current).phase !== null)
+      return yield* Effect.fail(
+        new Error(
+          `Run ${runId} already has run history state; resume it instead.`,
+        ),
+      );
+    return cell;
   });
 
 /** What a run program, and each of its turns, returns. */

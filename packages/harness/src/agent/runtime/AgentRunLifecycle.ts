@@ -1,7 +1,7 @@
 import { Cause, Effect, Exit } from 'effect';
 
 import { logSdkError, type ResultEvent, type StageHandle } from '@agent/trace';
-import { configChange } from '@agent/storage/runLifecycle';
+import { finalizeRun } from '@agent/storage/runLifecycle';
 import {
   AGENT_ERROR_OUTCOME,
   AgentError,
@@ -95,6 +95,9 @@ interface FinalizeRunTerminalResult {
   /** The `run.end` row write's failure: the terminal still settled and
    *  untracked, and the event reports FAILED with its reason. */
   readonly persistFailure?: unknown;
+  /** False for a run that never opened: no row was written, so its
+   *  failure is its launch's to present. */
+  readonly recorded: boolean;
 }
 
 /**
@@ -153,7 +156,7 @@ export const finalizeRunTerminal = Effect.fn('finalizeRunTerminal')(
       output,
     };
     const settlement = params.settle && (yield* params.settle(outcome));
-    const finalization = yield* session.runs.end({
+    const finalization = yield* finalizeRun(session, {
       runId: handle.runId,
       outcome,
       error,
@@ -180,7 +183,7 @@ export const finalizeRunTerminal = Effect.fn('finalizeRunTerminal')(
         }),
       ),
     );
-    if (finalization.ok) return { event };
+    if (finalization.ok) return { event, recorded: finalization.recorded };
     // A run whose `run.end` did not commit failed, whatever it reported.
     const unsaved = ensureError(finalization.error);
     const message = `The run's end could not be saved: ${unsaved.message}`;
@@ -188,6 +191,7 @@ export const finalizeRunTerminal = Effect.fn('finalizeRunTerminal')(
     return {
       event: { ...event, outcome: RUN_OUTCOME.FAILED, error: failed },
       persistFailure: finalization.error,
+      recorded: false,
     };
   },
   // The run's terminal is atomic: the run's stop is its fiber's interruption,
@@ -371,22 +375,14 @@ export const runWithLifecycle = Effect.fn('runWithLifecycle')(function* <R>(
     }
 
     const failure = new AgentError(errorMsg, { cause: err });
-    receiveTerminalFailure(failure, finalized);
+    yield* receiveTerminalFailure(session.interactions, failure, finalized);
     return yield* Effect.fail(failure);
   });
-  const run = Effect.gen(function* () {
-    // `run.start` is already out: the launch context published it at its
-    // reservation commit point, with the run's configuration. An
-    // activation writes it again only when it changed (a resume on
-    // another model), before the RUNNING transition so the fold already
-    // carries it when the transition-owned run-start side effects fire.
-    const config = yield* configChange(ctx.session, runId, ctx.config);
-    if (config !== null) yield* ctx.session.log.transact([config]);
-    // The flow is an Effect: a fiber interruption reaches its provider work
-    // directly, and its finalizers settle before the resources below are
-    // disposed.
-    return yield* Effect.suspend(() => runner(handle));
-  });
+  // The flow is an Effect: a fiber interruption reaches its provider work
+  // directly, and its finalizers settle before the resources below are
+  // disposed. A fresh run is born with its opening, a resume activates
+  // with its cell: both inside the flow, so this terminal ends either.
+  const run = Effect.suspend(() => runner(handle));
   /**
    * The run's one terminal writer: every way the flow exits — a result, a
    * reported failure, an escaped exception, a stop — reaches this verdict

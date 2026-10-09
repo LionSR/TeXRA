@@ -332,12 +332,14 @@ export const serviceHandlers = TexraRpcs.toLayer(
                   session,
                   preferHelperModel,
                   ownApiKeyFallback,
-                  // Admitted once the run is registered, so a `task.ended`
-                  // that follows the answer finds it.
                   approveDelegatedWork,
                   ...(approvalPolicy !== null && { approvalPolicy }),
-                  onRun: (registered) =>
-                    Deferred.succeed(admitted, registered).pipe(Effect.asVoid),
+                  // Admitted once the run exists (born with its opening), so
+                  // a `task.ended` that follows the answer finds it, and a
+                  // launch that fails before then fails `task.start` itself.
+                  onRunResolved: (resolved) => {
+                    Deferred.doneUnsafe(admitted, Exit.succeed(resolved));
+                  },
                   ...(continues !== null && { continues }),
                 },
               ),

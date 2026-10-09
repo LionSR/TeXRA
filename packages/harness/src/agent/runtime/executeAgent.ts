@@ -1,6 +1,6 @@
 import * as path from 'node:path';
 
-import { Data, Effect, Fiber, Layer } from 'effect';
+import { Data, Deferred, Effect, Fiber, Layer } from 'effect';
 
 import type { AgentEvent } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
@@ -39,6 +39,7 @@ import { agentRunLayer } from './run/AgentRun';
 import { runToolUse } from './loop/toolUse';
 import { runWithLaunchGuard, type RunTerminalOwner } from './runLaunchGuard';
 import { Runs } from './runRegistry';
+import type { RegisterRunOptions } from '../storage/runLifecycle';
 import type { ChildRunTurns } from './childRunLoop';
 import type { RunEndResult } from './RunEndResult';
 import type { AgentRunServices } from './runRegistry';
@@ -251,6 +252,9 @@ interface SubagentRunOptions {
 
 /** Options for executeAgent. */
 export interface ExecuteAgentOptions extends SubagentRunOptions {
+  /** The run's registration, which its opening batch commits: the run is
+   *  born with its opening or not at all. */
+  readonly registration: RegisterRunOptions;
   /**
    * Publish a workflow's host-owned output (copies to user-requested
    * destinations, the result record) while its run handle and durable
@@ -273,9 +277,8 @@ export interface ExecuteAgentOptions extends SubagentRunOptions {
     agentDefaultOutputFiles: readonly string[],
   ) => Effect.Effect<'published' | 'failed', Error>;
   /**
-   * Fires with the run id once its `run.start` is published, before the run
-   * begins: the run exists for every fold, so a host may select it as its
-   * own surface state.
+   * Fires with the run id once the run exists for every fold (its opening
+   * committed), so a host may select it as its own surface state.
    */
   onRunResolved?: (runId: RunId) => void;
   /** A sink of every event the run's trace emits, beside the session's. */
@@ -288,11 +291,10 @@ export interface ExecuteAgentOptions extends SubagentRunOptions {
 }
 
 /**
- * Low-level runner for a freshly registered run. Launches should use
- * `runAgent()` or call `registerRun()` first so the canonical configuration
- * is committed with the run's creation. Its prepared definition must be the
- * one registration used; a resume goes through `resumeToolUseFromResumeData`.
- * The run is on `options.session`, and so are its `Runs`, provided here.
+ * Low-level runner for a fresh run: it registers the run with its opening
+ * (`options.registration`). Launches should use `runAgent()`; a resume
+ * goes through `resumeToolUseFromResumeData`. The run is on
+ * `options.session`, and so are its `Runs`, provided here.
  */
 export function executeAgent(
   definition: PreparedAgentDefinition,
@@ -300,10 +302,16 @@ export function executeAgent(
   options: ExecuteAgentOptions,
 ): Effect.Effect<RunEndResult, Error, ProcessServices> {
   return Effect.gen(function* () {
+    // Done once the run exists: its description is a row of it.
+    const opened = yield* Deferred.make<void>();
     const ctx = yield* buildAgentLaunchContext({
       definition,
       runId,
-      onRunResolved: options.onRunResolved,
+      registration: options.registration,
+      onRunResolved: (resolved) => {
+        Deferred.doneUnsafe(opened, Effect.void);
+        options.onRunResolved?.(resolved);
+      },
       onTraceEvent: options.onTraceEvent,
       session: options.session,
       ownApiKeyFallback: options.ownApiKeyFallback,
@@ -323,12 +331,16 @@ export function executeAgent(
     // A child of the run's fiber, so the run's stop interrupts it, as it
     // interrupts the run.
     const sessionDescription = yield* Effect.forkChild(
-      generateSessionDescription(
-        runId,
-        config,
-        ctx.resolvedAgentDescription,
-        runSession,
-        ctx.stores,
+      Deferred.await(opened).pipe(
+        Effect.andThen(
+          generateSessionDescription(
+            runId,
+            config,
+            ctx.resolvedAgentDescription,
+            runSession,
+            ctx.stores,
+          ),
+        ),
       ),
     );
     // The backstop wait is `ensuring`, not a generator `finally`: the driver
@@ -342,24 +354,16 @@ export function executeAgent(
           const parentRunId = handle.parent ?? undefined;
           // The run directory is created by the first write into it.
           yield* Effect.logInfo(`Starting run (runId: ${runId})`).pipe(
-            withLogChannel(CHANNEL),
-          );
-          yield* Effect.logInfo(
-            `Input file: ${config.inputFiles[0] ?? '(none)'}`,
-          ).pipe(withLogChannel(CHANNEL));
-          yield* Effect.logDebug('Run details').pipe(
             Effect.annotateLogs({
               data: {
-                runId,
                 agent: config.agent,
                 model: config.model,
+                input: config.inputFiles[0] ?? '(none)',
+                outputs: config.outputFiles?.length ?? 0,
               },
             }),
             withLogChannel(CHANNEL),
           );
-          yield* Effect.logDebug(
-            `Output files: ${config.outputFiles?.length ?? 0}`,
-          ).pipe(withLogChannel(CHANNEL));
           // Subagents don't need to force-open the progress board or show notifications;
           // the orchestrator's run is already visible.
           if (parentRunId === undefined) {
@@ -371,15 +375,8 @@ export function executeAgent(
               { replayWhenAttached: true },
             );
           }
-          yield* Effect.logInfo('Executing agent').pipe(
-            Effect.annotateLogs({
-              data: { agent: config.agent, model: config.model },
-            }),
-            withLogChannel(CHANNEL),
-          );
-
           return yield* launchRun(ctx, handle, options, { kind: 'fresh' });
-        }).pipe(settleDescriptionOnExit(sessionDescription)),
+        }).pipe(settleDescriptionOnExit(sessionDescription, opened)),
       // The edge the lifecycle's handle is born with: the caller's own
       // parent for a fresh child.
       {
@@ -405,9 +402,11 @@ export function executeAgent(
  */
 export type ResumeTurnIdentity = Pick<ResumeData, 'runId' | 'agentConfig'>;
 
-/** What a fresh launch takes, but its own-key fallback. */
+/** What a fresh launch takes, but its registration and own-key fallback. */
 export interface ResumeToolUseFromResumeDataOptions
-  extends Omit<ExecuteAgentOptions, 'ownApiKeyFallback'>, RunTerminalOwner {
+  extends
+    Omit<ExecuteAgentOptions, 'ownApiKeyFallback' | 'registration'>,
+    RunTerminalOwner {
   /** A resumed cycle is idle after its child delivery, while its run stays live. */
   readonly onIdle?: () => void;
   /** Caller-owned cancellation, read on the run's fiber before its loop. */
@@ -454,7 +453,6 @@ export function resumeToolUseFromResumeData(
     const ctx = yield* buildAgentLaunchContext({
       definition,
       runId: resume.runId,
-      resumed: true,
       onRunResolved: options.onRunResolved,
       onTraceEvent: options.onTraceEvent,
       session: runSession,

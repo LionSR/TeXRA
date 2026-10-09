@@ -27,6 +27,7 @@ import type { DatabaseWriteFailed } from '@shared/session/database';
 import type { RunHistoryRefused } from '@shared/session/runHistory';
 import type { RunHistoryDraft, RunState } from '@shared/session/runStateFold';
 import type { SettingsStores } from '@shared/config/settingsAccess';
+import type { RunCell } from '@shared/session/runHistory';
 import { readSettingFrom } from '@utils/config/platformSettings';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -35,7 +36,6 @@ import { contextTokens, estimateMessageTokens } from './contextTokens';
 import { turnText } from './turnText';
 import type { ModelInvoker } from '../ModelInvoker';
 import type { CallResult } from './modelCall';
-import type { RunCell } from '../loop/runProgram';
 
 /**
  * Prefix prepended to a compaction summary when it is folded back into the

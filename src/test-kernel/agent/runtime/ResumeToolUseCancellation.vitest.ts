@@ -128,8 +128,9 @@ const LANE_SESSION = {
           ),
         ),
       ),
-    // The resumed run reads its parent edge off the run's records, so the
-    // lineage fixture is that read.
+    rows: () => Effect.succeed([]),
+    // The launch guard reads whether the run exists, and the resumed run
+    // its parent edge, off the run's records, so the fixture is that read.
     records: (...args: unknown[]) =>
       Effect.tryPromise({
         try: () => mocks.readRunRecords(...args),
@@ -197,7 +198,12 @@ describe('resumeToolUseFromResumeData cancellation handoff', () => {
         createToolUseResumeData({ runId, agentConfig }),
     );
     mocks.releaseClaims.mockReturnValue(Effect.void);
-    mocks.readRunRecords.mockReset().mockResolvedValue([]);
+    // A resume's run exists: its stored `run.start`, a root's.
+    mocks.readRunRecords
+      .mockReset()
+      .mockImplementation(async (runId: RunId) => [
+        { type: 'run.start', aggregateId: qualifyAggregateId('run', runId) },
+      ]);
     // Default: the lifecycle wrapper just runs the flow against a no-op
     // handle. Tests that need a real handle override with
     // mockImplementationOnce, which takes precedence for their single call.
@@ -213,7 +219,15 @@ describe('resumeToolUseFromResumeData cancellation handoff', () => {
     Effect.gen(function* () {
       const storageError = new Error('run lineage unavailable');
       const snapshot = createToolUseResumeData({ runId: 'e80481' as RunId });
-      mocks.readRunRecords.mockRejectedValueOnce(storageError);
+      // The guard's existence read passes; the lineage read fails.
+      mocks.readRunRecords
+        .mockResolvedValueOnce([
+          {
+            type: 'run.start',
+            aggregateId: qualifyAggregateId('run', snapshot.runId),
+          },
+        ])
+        .mockRejectedValueOnce(storageError);
 
       expect(yield* Effect.flip(resumeToolUseFromResumeData(snapshot))).toBe(
         storageError,

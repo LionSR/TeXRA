@@ -73,7 +73,7 @@ import {
   type ExecutionsToolInput,
 } from './executions/toolInput';
 import { listRuns } from './executions/runListing';
-import { sendToRun } from './executions/send';
+import { missingRun, sendToRun } from './executions/send';
 import { turnAttributionNote } from './executions/turnAttribution';
 import { shouldSkipWait } from './executions/waitCoordination';
 import { scriptCallsView } from './executions/scriptCallsView';
@@ -358,12 +358,11 @@ const showSummary = Effect.fn('ExecutionsTool.showSummary')(function* (
   const view = yield* session.view.read([runId]);
   const run = view.runs.get(runId);
 
-  // Every open run is in the view: its `run.start` is seq 1 of its aggregate
-  // (the database refuses anything else there), so no checkpoint exists
-  // without the row that lists the run, and a closed run reads no snapshot.
-  if (!run) {
-    return yield* Effect.fail(new ToolError(`Run not found: ${runId}`));
-  }
+  // An open run is in the view; one launched here may not have opened yet.
+  if (!run)
+    return yield* Effect.fail(
+      missingRun(session, runId, `Run not found: ${runId}`),
+    );
 
   // The report is a private record row, never part of the display fold.
   const report = yield* getRunRecords(session, runId).readReport();

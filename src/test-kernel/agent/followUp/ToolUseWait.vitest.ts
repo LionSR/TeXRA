@@ -187,7 +187,7 @@ const quietSession = (overrides: Record<string, unknown> = {}) =>
  */
 const seedCommittedResponse = Effect.fn('test.seedCommittedResponse')(
   function* (session: SessionHandle, runId: RunId, text: string) {
-    const runHistory = session.runHistory;
+    const cell = yield* session.runHistory.open(runId);
     const aggregate = rowAggregate(runId);
     const fresh: RunState = {
       ...freshRunState(0),
@@ -195,14 +195,14 @@ const seedCommittedResponse = Effect.fn('test.seedCommittedResponse')(
       modelId: 'test-model',
       backend: 'deepseek',
     };
-    const opened = yield* runHistory.appendBatch(runId, null, [
+    const opened = yield* cell.append([
       appendRow(runId, [
         { role: 'user', content: [{ kind: 'text', text: 'Do the thing.' }] },
       ]),
       positionRow(runId, { ...fresh, turn: 1 }, 'turn.begin'),
     ]);
     const invocation = { invocationId: randomUUID(), attempt: 1 };
-    return yield* runHistory.appendBatch(runId, opened, [
+    return yield* cell.append([
       {
         type: 'model.message',
         aggregateId: aggregate,
@@ -549,7 +549,8 @@ describe('a parked root run', () => {
       // ended before the turn that answers them began.
       const parked = yield* session.runHistory.load(runId).pipe(Effect.orDie);
       if (parked === null) throw new Error('The run has no run history.');
-      yield* session.runHistory.appendBatch(runId, parked, [
+      const cell = yield* session.runHistory.open(runId);
+      yield* cell.append([
         appendRow(runId, [
           { role: 'user', content: [{ kind: 'text', text: 'answer me' }] },
         ]),

@@ -1,44 +1,51 @@
 /**
- * The ends a run's lifecycle does not write. The terminal a run's launch
- * owns: the backstop `run.end`, the host's final artifacts and the claim. A
- * fresh root (`runAgent`), a standalone resume and a detached child's handoff
- * end through {@link runWithLaunchGuard}; a child loop's own tail writes the
- * same backstop row. And a child parked holding its result for a parent
- * another process held: whoever next admits the parent delivers it and
- * ends the child (`deliverHeld`), the "ownerless stop" end site.
+ * The ends a run's driver does not write, and the terminal a run's launch
+ * owns: the host's final artifacts and the claim. A run its loop drives is
+ * born with its opening and ended by its lifecycle, so a launch that fails
+ * before either leaves nothing to end; a process child, registered before
+ * its loop takes it, is ended here when that handoff fails. And a child
+ * parked holding its result for a parent another process held: whoever
+ * next admits the parent delivers it and ends the child (`deliverHeld`),
+ * an ownerless end through the child's cell.
  */
 import { Cause, Effect, Exit, Schedule, type Scope } from 'effect';
 
+import { endIn, finalizeRun } from '@agent/storage/runLifecycle';
+import { getRunRecords } from '@agent/storage/runRecords';
 import { classifyAgentError } from '@common/errors';
 import { getSdkErrorMessage } from '@common/errors/sdkError/providerErrorFormat';
 import {
   aggregateId,
   aggregateTarget,
-  emptyRunEndOutput,
   RUN_OUTCOME,
   RUN_SUBSTATE,
-  storedRunOutput,
   type RunId,
   type RunOutcome,
   type SessionEvent,
-  type SessionEventDraft,
 } from '@shared/schemas';
 import { isTerminalOutcomePhase } from '@shared/runs/runStatus';
 import type { Append } from '@shared/session/sessionEvents';
 import { aggregateError } from '@utils/core';
 import { ensureError } from '@utils/errors/errorMessage';
 
-import { parentAdmission, warn, type TransactionPart } from './childSettlement';
-import { consumedRows, haltedPositionRow } from './loop/rows';
+import {
+  parentAdmission,
+  wakeParent,
+  warn,
+  type TransactionPart,
+} from './childSettlement';
 import { presentRunFailure } from './terminalResultToast';
+import type { RunParent } from './RunHandle';
 import type { SessionHandle } from './SessionHandle';
 
 /**
- * End a run its lifecycle did not end: the one backstop writer of `run.end`
- * beside the lifecycle's own terminal. An outcome the lifecycle already wrote
- * stands (`keepExistingOutcome`), so a row lands only for a run that failed
- * or stopped before its lifecycle, or outside it; a failure carries its
- * classified error, and a child's last-turn `settlement` rides the row.
+ * End a run no driver ends: the one writer of an ownerless `run.end` (a
+ * stop that reached no live target, a process child whose handoff failed,
+ * a native child's loop that outlived its lifecycle, a session close). An
+ * outcome the run already wrote stands (`keepExistingOutcome`), so a row
+ * lands only for a run that failed or stopped outside its driver; a failure
+ * carries its classified error, and a child's last-turn `settlement` rides
+ * the row.
  */
 export const endRunOutsideLifecycle = (
   session: SessionHandle,
@@ -47,31 +54,64 @@ export const endRunOutsideLifecycle = (
   error: unknown,
   settlement?: TransactionPart,
 ): Effect.Effect<void, Error> =>
-  session.runs
-    .end({
-      runId,
-      outcome,
-      keepExistingOutcome: true,
-      ...(settlement !== undefined && { settlement }),
-      ...(outcome === RUN_OUTCOME.FAILED && error != null
-        ? {
-            error: {
-              kind: classifyAgentError(error),
-              message: getSdkErrorMessage(error),
-            },
-          }
-        : {}),
-    })
-    .pipe(
-      Effect.flatMap((finalized) =>
-        finalized.ok ? Effect.void : Effect.fail(ensureError(finalized.error)),
-      ),
-    );
+  finalizeRun(session, {
+    runId,
+    outcome,
+    keepExistingOutcome: true,
+    ...(settlement !== undefined && { settlement }),
+    ...(outcome === RUN_OUTCOME.FAILED && error != null
+      ? {
+          error: {
+            kind: classifyAgentError(error),
+            message: getSdkErrorMessage(error),
+          },
+        }
+      : {}),
+  }).pipe(
+    Effect.flatMap((finalized) =>
+      finalized.ok ? Effect.void : Effect.fail(ensureError(finalized.error)),
+    ),
+  );
+
+/**
+ * Let go of `runId`'s claim where no hold of this process keeps it (a
+ * birth's): a hold taken and let go at once. A run never born has none.
+ */
+export const letGoOfClaim = (
+  session: SessionHandle,
+  runId: RunId,
+): Effect.Effect<void> =>
+  Effect.scoped(session.log.hold(runId, { ends: true })).pipe(
+    Effect.catch((error) =>
+      warn(undefined, `The claim on ${runId} was not let go.`, error),
+    ),
+  );
+
+/**
+ * A child launch that failed before its run was born: no row of the child
+ * exists to settle on, so its parent hears the failure as input alone, and
+ * is woken for it.
+ */
+export const deliverLaunchFailure = (
+  session: SessionHandle,
+  parent: RunParent,
+  child: RunId,
+  text: string,
+): Effect.Effect<void, Error> =>
+  Effect.gen(function* () {
+    const to = parent.current;
+    if (to === null || (yield* getRunRecords(session, child).exists())) return;
+    const from = { kind: 'run', runId: child } as const;
+    const delivery = {
+      to,
+      item: { text, from, deliveryId: `${child}:launch` },
+    };
+    yield* session.followUps.send(to, delivery.item);
+    yield* wakeParent(session, delivery, undefined);
+  });
 
 /** A launch that owns its run for the run's whole life. */
 export interface RunTerminalOwner {
-  /** Fires once the launch holds the run's claim. */
-  readonly onRunClaimed?: (runId: RunId) => void;
   /**
    * Host-owned final state, persisted before the run's claim goes. Its
    * failure is one more failure reported.
@@ -83,16 +123,18 @@ export interface RunTerminalOwner {
 
 /**
  * The one terminal of a run's launch, in the exit-protocol pattern: a stop
- * lands before it or after it, never inside. It ends what the lifecycle did
- * not ({@link endRunOutsideLifecycle}: FAILED, or CANCELLED for a stop),
- * persists the host's final artifacts, then lets the claim go.
+ * lands before it or after it, never inside. It persists the host's final
+ * artifacts, then lets the claim go.
  *
  * With an `owner`, the launch owns the run for its whole life (a fresh root,
- * a standalone resume): the guard holds the run's claim around `operation`
- * and ends the run on every exit once that hold is taken; a refused hold
- * fails as itself. Without one, `operation` only hands an admitted child to
- * its loop, which owns the ending from there: the guard ends the run when the
- * handoff fails and releases the birth claim no driver took.
+ * a standalone resume): a run that already exists (a resume) has its claim
+ * held around `operation`, so no other owner moves it between the resume's
+ * read and its launch; a fresh run is born with its claim at its opening.
+ * Without an owner, `operation` only hands a registered child to its loop,
+ * which owns the ending from there: the guard ends the run when the
+ * handoff fails ({@link endRunOutsideLifecycle}). Either way a claim no hold
+ * here took (a birth's) is let go once the operation is done; a loop still
+ * holding its own keeps it.
  *
  * The terminal's failures replace the operation's own as one aggregate; an
  * interruption unwinds as itself.
@@ -108,49 +150,46 @@ export function runWithLaunchGuard<A, E, R>(
     const collect = <X, Y>(exit: Exit.Exit<X, Y>): void => {
       if (Exit.isFailure(exit)) failures.push(Cause.squash(exit.cause));
     };
-    const terminal = (exit: Exit.Exit<A, E>) =>
+    const terminal = (held: boolean) => (exit: Exit.Exit<A, E>) =>
       Effect.gen(function* () {
-        if (Exit.isFailure(exit)) {
-          const stopped = Cause.hasInterrupts(exit.cause);
+        if (owner === undefined && Exit.isFailure(exit))
           collect(
             yield* Effect.exit(
               endRunOutsideLifecycle(
                 session,
                 runId,
-                stopped ? RUN_OUTCOME.CANCELLED : RUN_OUTCOME.FAILED,
+                Cause.hasInterrupts(exit.cause)
+                  ? RUN_OUTCOME.CANCELLED
+                  : RUN_OUTCOME.FAILED,
                 Cause.squash(exit.cause),
               ),
             ),
           );
-        }
         collect(
           yield* Effect.exit(
             Effect.suspend(() => owner?.beforeRunEnd?.(session) ?? Effect.void),
           ),
         );
-        // A hold taken and let go at once releases the birth claim no driver
-        // took; an owner's own hold is released by its scope.
-        if (owner === undefined)
-          yield* Effect.scoped(
-            Effect.ignore(session.log.hold(runId, { ends: true })),
-          );
+        if (!held) yield* letGoOfClaim(session, runId);
       }).pipe(Effect.uninterruptible);
     const guarded: Effect.Effect<A, E | Error, R> =
       owner === undefined
         ? operation.pipe(
             Effect.onExit((exit) =>
-              Exit.isSuccess(exit) ? Effect.void : terminal(exit),
+              Exit.isSuccess(exit) ? Effect.void : terminal(false)(exit),
             ),
           )
         : // No interrupt lands between taking the hold and attaching the
-          // terminal, so a claimed run always gets its ending; a refused hold
-          // still fails as itself.
+          // terminal, so a held run always gets its terminal; a refused
+          // hold still fails as itself.
           Effect.scoped(
             Effect.uninterruptibleMask((restore) =>
               Effect.gen(function* () {
-                yield* session.log.hold(runId, { ends: true });
-                owner.onRunClaimed?.(runId);
-                return yield* restore(operation).pipe(Effect.onExit(terminal));
+                const held = yield* getRunRecords(session, runId).exists();
+                if (held) yield* session.log.hold(runId, { ends: true });
+                return yield* restore(operation).pipe(
+                  Effect.onExit(terminal(held)),
+                );
               }),
             ),
           );
@@ -257,38 +296,23 @@ const deliverOne = (
         return Effect.void;
       admitted.push(one);
     }
-    const end =
-      ends === undefined ? [] : yield* endRows(session, child, ends, rows);
-    yield* append([...admitted.flatMap((one) => one.rows), ...end]);
-    return Effect.all(
+    const delivered = admitted.flatMap((one) => one.rows);
+    const said = Effect.all(
       admitted.map((one) => one.committed),
       { discard: true },
     );
-  });
-
-/** A held child's end, as the normal end writes it: its unread input
- *  consumed, its halt, what it left open, and its `run.end`. */
-const endRows = (
-  session: SessionHandle,
-  child: RunId,
-  end: 'completed' | 'failed',
-  rows: readonly SessionEvent[],
-): Effect.Effect<readonly SessionEventDraft[], Error> =>
-  Effect.map(session.followUps.read(child), ({ followUps }) => {
-    const position = rows.findLast((row) => row.type === 'run.position');
-    return [
-      ...consumedRows(child, followUps),
-      ...(position?.type === 'run.position'
-        ? [haltedPositionRow(position, end)]
-        : []),
-      ...session.trace.closure(child, end),
-      {
-        type: 'run.end',
-        aggregateId: aggregateId('run', child),
-        outcome: end,
-        output: storedRunOutput(emptyRunEndOutput()),
-      },
-    ];
+    if (ends === undefined) {
+      yield* append(delivered);
+      return said;
+    }
+    // The held last turn ends the child, through its cell, in this append:
+    // its unread input consumed, its halt, what it left open, its `run.end`.
+    yield* endIn(session, append, {
+      runId: child,
+      outcome: ends,
+      settlement: Effect.succeed({ rows: delivered, committed: Effect.void }),
+    });
+    return said;
   });
 
 /**

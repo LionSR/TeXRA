@@ -109,7 +109,11 @@ import {
 import { Database, GlobalDatabase } from '@shared/session/database';
 import { runActions } from '@shared/session/runActions';
 import { GlobalStateKey } from '@shared/state/stateKeys';
-import { RunHistory, RunHistoryRefused } from '@shared/session/runHistory';
+import {
+  RunHistory,
+  RunHistoryRefused,
+  type RunCell,
+} from '@shared/session/runHistory';
 import type { RunHistoryDraft } from '@shared/session/runStateFold';
 import { ProcessIdentity, SessionEvents } from '@shared/session/sessionEvents';
 import { DownMessageSchema } from '@shared/session/sessionFrames';
@@ -343,7 +347,7 @@ const runHistoryOverStore = Layer.effect(
   Effect.gen(function* () {
     const store = yield* makeSessionStore('/workspace/framing');
     yield* store.deliver(() => {});
-    return makeRunHistory(store.log, yield* Database);
+    return makeRunHistory(store.log);
   }),
 ).pipe(Layer.provide(ProcessIdentity.layer(SELF)));
 
@@ -2952,7 +2956,9 @@ describe('the C1 event table and the C6 publisher', () => {
         expect((yield* Effect.flip(restarted.appendAll([waiting])))._tag).toBe(
           'DatabaseNotOwner',
         );
-        yield* (yield* RunHistory).acquire(RUN);
+        yield* (yield* RunHistory).open(RUN, {
+          activation: () => Effect.succeed([]),
+        });
         expect((yield* restarted.aggregateState([target]))[0]?.ownerId).toBe(
           SELF,
         );
@@ -3203,9 +3209,9 @@ describe('RunHistory', () => {
     },
   };
   /** The batches of one turn, in order, up to and excluding the delivery. */
-  const openTurn = (run: typeof RunHistory.Service) =>
+  const openTurn = (cell: RunCell) =>
     Effect.gen(function* () {
-      let state = yield* run.appendBatch(RUN, null, [
+      yield* cell.append([
         {
           type: 'model.message',
           aggregateId: AGGREGATE,
@@ -3219,7 +3225,7 @@ describe('RunHistory', () => {
         },
         snapshot(),
       ]);
-      state = yield* run.appendBatch(RUN, state, [
+      yield* cell.append([
         {
           type: 'model.message',
           aggregateId: AGGREGATE,
@@ -3232,7 +3238,7 @@ describe('RunHistory', () => {
           },
         },
       ]);
-      state = yield* run.appendBatch(RUN, state, [
+      yield* cell.append([
         {
           type: 'model.message',
           aggregateId: AGGREGATE,
@@ -3243,7 +3249,7 @@ describe('RunHistory', () => {
           },
         },
       ]);
-      state = yield* run.appendBatch(RUN, state, [
+      return yield* cell.append([
         {
           type: 'model.message',
           aggregateId: AGGREGATE,
@@ -3266,7 +3272,6 @@ describe('RunHistory', () => {
           },
         },
       ]);
-      return state;
     });
 
   it.effect('live state equals reloaded state', () =>
@@ -3274,17 +3279,16 @@ describe('RunHistory', () => {
       const events = yield* SessionEvents;
       const run = yield* RunHistory;
       yield* events.transact((append) => append([runStart]));
-      yield* run.acquire(RUN);
-      let state = yield* openTurn(run);
-      state = yield* run.appendBatch(RUN, state, [
-        settled('call-a'),
-        toolEnd('call-a'),
-      ]);
-      state = yield* run.appendBatch(RUN, state, [
+      const cell = yield* run.open(RUN, {
+        activation: () => Effect.succeed([]),
+      });
+      yield* openTurn(cell);
+      yield* cell.append([settled('call-a'), toolEnd('call-a')]);
+      yield* cell.append([
         settled('call-b', { disposition: 'duplicate', duplicateOf: 'call-a' }),
         toolEnd('call-b'),
       ]);
-      state = yield* run.appendBatch(RUN, state, [
+      const state = yield* cell.append([
         group,
         snapshot(),
         {
@@ -3310,17 +3314,16 @@ describe('RunHistory', () => {
         const run = yield* RunHistory;
         const log = yield* Database;
         yield* events.transact((append) => append([runStart]));
-        let state = yield* openTurn(run);
+        const cell = yield* run.open(RUN);
+        let state = yield* openTurn(cell);
         // Delivering before the settlements committed is a caller defect.
-        const early = yield* run
-          .appendBatch(RUN, state, [group])
-          .pipe(Effect.exit);
+        const early = yield* cell.append([group]).pipe(Effect.exit);
         expect(Exit.isFailure(early) && Cause.hasDies(early.cause)).toBe(true);
         // A batch the fold rejects commits nothing: the refusal has to mean
         // "not written", or every later `load` meets the orphan row.
         const written = (yield* log.readAggregate(AGGREGATE, 1)).length;
-        const orphan = yield* run
-          .appendBatch(RUN, state, [settled('call-z'), toolEnd('call-z')])
+        const orphan = yield* cell
+          .append([settled('call-z'), toolEnd('call-z')])
           .pipe(Effect.flip);
         expect(refusalOf(orphan)?.reason).toBe('inconsistent');
         expect((yield* log.readAggregate(AGGREGATE, 1)).length).toBe(written);
@@ -3328,8 +3331,8 @@ describe('RunHistory', () => {
         // Same rule for the history the batch assembles: an append that leaves
         // a tool group with no calling assistant is refused before publishing,
         // not discovered on the next cold load.
-        const orphanGroup = yield* run
-          .appendBatch(RUN, state, [
+        const orphanGroup = yield* cell
+          .append([
             {
               type: 'model.message',
               aggregateId: AGGREGATE,
@@ -3354,7 +3357,7 @@ describe('RunHistory', () => {
           .pipe(Effect.flip);
         expect(refusalOf(orphanGroup)?.reason).toBe('unprepared-history');
         expect((yield* log.readAggregate(AGGREGATE, 1)).length).toBe(written);
-        state = yield* run.appendBatch(RUN, state, [approvalRequested]);
+        state = yield* cell.append([approvalRequested]);
         expect(state.requests['req-1']?.resolved).toBe(false);
         expect(state.pendingResponse?.records['call-a']?.status).toEqual({
           kind: 'started',
@@ -3362,7 +3365,7 @@ describe('RunHistory', () => {
         });
         // A real attachment carries loose keys and binary fields: accepted, and
         // the binary fields never reach the row.
-        state = yield* run.appendBatch(RUN, state, [
+        state = yield* cell.append([
           settled('call-a', {
             result: {
               status: 'executed',
@@ -3391,8 +3394,8 @@ describe('RunHistory', () => {
         // A credential-bearing endpoint is refused before anything is written,
         // and the refusal carries the permitted components only: the rejected
         // query string is the credential this check exists to keep out.
-        const unsafe = yield* run
-          .appendBatch(RUN, state, [
+        const unsafe = yield* cell
+          .append([
             {
               type: 'model.message',
               aggregateId: AGGREGATE,

@@ -46,7 +46,6 @@ import type {
   RuntimeToolRegistry,
   ToolServices,
 } from '@agent/runtime/ToolServices';
-import { makeRunCell, type RunCell } from '@agent/runtime/loop/runProgram';
 import { dispatchPendingResponse } from '@agent/runtime/loop/toolUseDispatch';
 import { appendRow, positionRow, rowAggregate } from '@agent/runtime/loop/rows';
 import { AgentRun, type AgentRunShape } from '@agent/runtime/run/AgentRun';
@@ -64,7 +63,7 @@ import {
   type RunId,
   type ToolResult,
 } from '@shared/schemas';
-import { RunHistory } from '@shared/session/runHistory';
+import { RunHistory, type RunCell } from '@shared/session/runHistory';
 import { freshRunState, type RunState } from '@shared/session/runStateFold';
 import { testAgentRun } from '@test/support/scriptedRunLayers';
 import { closeSessionOf } from '@test/support/sessionEnd';
@@ -280,17 +279,16 @@ const openDispatch = Effect.fn('openDispatch')(function* (
   const tools = new MapToolRegistry(options.tools);
   publishTestRunStart(session, runId);
   yield* session.log.settled;
-  yield* session.runHistory.acquire(runId);
-  const opened = yield* session.runHistory.appendBatch(runId, null, [
+  const cell = yield* session.runHistory.open(runId, {
+    activation: () => Effect.succeed([]),
+  });
+  yield* cell.append([
     appendRow(runId, [
       { role: 'user', content: [{ kind: 'text', text: 'go' }] },
     ]),
     positionRow(runId, freshState(), 'turn.ready'),
   ]);
   const turn = turnWithCalls(options.calls);
-  const cell = yield* makeRunCell(runId, opened).pipe(
-    Effect.provideService(RunHistory, session.runHistory),
-  );
   const state = yield* cell.append([
     {
       type: 'model.message',
@@ -799,9 +797,7 @@ describe('tool-use dispatch', () => {
         ],
       });
       const aggregateId = rowAggregate(kit.runId);
-      const cell = yield* makeRunCell(kit.runId, kit.state).pipe(
-        Effect.provide(kit.layer),
-      );
+      const cell = kit.cell;
       yield* cell.append(
         ['c1', 'c2'].map((callId) => ({
           type: 'tool.intent' as const,

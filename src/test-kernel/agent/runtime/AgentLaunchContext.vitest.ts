@@ -1,5 +1,5 @@
 import { it } from '@effect/vitest';
-import { Cause, Effect, Exit, Layer } from 'effect';
+import { Effect, Layer } from 'effect';
 import { assert, beforeEach, describe, expect, vi } from 'vitest';
 import { goalGrant, humanGrant } from '@agent/runtime/runApprovalQueue';
 
@@ -20,7 +20,7 @@ vi.mock('@agent/prompt/templateInputs', () => ({
   buildTemplateInputs: mocks.buildVars,
 }));
 
-import { registerRun } from '@agent/storage/runLifecycle';
+import { activationRows, registerRun } from '@agent/storage/runLifecycle';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { SessionHandle } from '@agent/runtime/SessionHandle';
 import {
@@ -35,13 +35,10 @@ import {
   UNAVAILABLE_LANGUAGE_MODEL_PORT,
 } from '@platform/languageModel';
 import { runBypasses } from '@shared/approvalBypassKind';
-import { RUN_OUTCOME, RUN_PHASE, type RunId } from '@shared/schemas';
+import { RUN_OUTCOME, type RunId } from '@shared/schemas';
 import { closeSessionOf } from '@test/support/sessionEnd';
 import { noopTrace } from '@test/support/noopTrace';
-import {
-  createTestSession,
-  publishTestRunStart,
-} from '@test/support/sessionTestUtils';
+import { createTestSession } from '@test/support/sessionTestUtils';
 import { fakeProcessServices } from '@test/support/setupPlatform';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 
@@ -274,58 +271,7 @@ describe('AgentLaunchContext', () => {
   );
 
   it.effect(
-    'presents an assembly failure once, through its terminal result',
-    () =>
-      Effect.gen(function* () {
-        // Regression: the launch catch used to toast an assembly failure beside
-        // the `result` event's own toast, so the user saw the error twice.
-        const recording = createRecordingHost();
-        const session = yield* createTestSession();
-        yield* session.interactions.use(recording.interactions);
-        yield* Effect.addFinalizer(() => closeSessionOf(session));
-        publishTestRunStart(session, EXECUTION_ID);
-        yield* session.log.settled;
-        mocks.resolve.mockReturnValueOnce(
-          Effect.succeed({
-            path: '/agents/chat.yaml',
-            persona: { prompt: '', tools: [], temperature: 1 },
-            task: null,
-          }),
-        );
-        mocks.buildVars.mockReturnValueOnce(
-          Effect.fail(new Error('user vars unavailable')),
-        );
-
-        const exit = yield* Effect.exit(
-          runWithLaunchGuard(
-            session,
-            EXECUTION_ID,
-            buildAgentLaunchContext({
-              config: AgentConfigSchema.parse({
-                agent: 'chat',
-                model: 'openai/gpt-5.5-2026-04-23',
-              }),
-              runId: EXECUTION_ID,
-              session,
-              resumed: true,
-            }),
-            {},
-          ),
-        );
-        assert(Exit.isFailure(exit));
-        expect(String(Cause.squash(exit.cause))).toContain(
-          'user vars unavailable',
-        );
-        expect(
-          recording.events.filter(
-            (event) => event.event === 'requestShowError',
-          ),
-        ).toHaveLength(1);
-      }),
-  );
-
-  it.effect(
-    'commits the activation with creation instead of publishing a reservation',
+    'registers a fresh run with its birth: creation, configuration and activation in one batch',
     () =>
       Effect.gen(function* () {
         const session = yield* createTestSession();
@@ -350,14 +296,20 @@ describe('AgentLaunchContext', () => {
           agent: 'chat',
           model: 'openai/gpt-5.5-2026-04-23',
         });
-        yield* registerRun(session, EXECUTION_ID, config, {
-          identity: { kind: 'agent', agent: 'chat' },
-        });
-        yield* buildAgentLaunchContext({
+        const ctx = yield* buildAgentLaunchContext({
           config,
           runId: EXECUTION_ID,
           session,
+          registration: { identity: { kind: 'agent', agent: 'chat' } },
         });
+        // Nothing is written until the opening; its batch carries the birth.
+        expect(yield* Effect.promise(() => recording.read())).toEqual([]);
+        const { registration } = ctx.entry;
+        assert(registration !== null);
+        const cell = yield* session.runHistory.open(EXECUTION_ID, {
+          registration,
+        });
+        yield* cell.append([]);
         const created = (yield* Effect.promise(() => recording.read())).slice(
           0,
           3,
@@ -389,22 +341,6 @@ describe('AgentLaunchContext', () => {
           agent: 'chat',
           model: 'openai/gpt-5.5-2026-04-23',
         });
-        const definitionMocks = () => {
-          mocks.resolve.mockReturnValueOnce(
-            Effect.succeed({
-              path: '/agents/chat.yaml',
-              persona: { prompt: '', tools: [], temperature: 1 },
-              task: null,
-            }),
-          );
-          mocks.buildVars.mockReturnValueOnce(
-            Effect.succeed({
-              inputs: {},
-              catalog: [],
-              attachedMemoryMisses: [],
-            }),
-          );
-        };
         yield* registerRun(session, EXECUTION_ID, config, {
           identity: { kind: 'agent', agent: 'chat' },
         });
@@ -417,12 +353,9 @@ describe('AgentLaunchContext', () => {
         yield* session.approvals.change(EXECUTION_ID, goalGrant(['bash']));
         yield* session.log.settled;
 
-        definitionMocks();
-        yield* buildAgentLaunchContext({
-          config,
-          runId: EXECUTION_ID,
-          session,
-          resumed: true,
+        // A resume's activation, as its run's cell commits it.
+        yield* session.runHistory.open(EXECUTION_ID, {
+          activation: () => activationRows(session, EXECUTION_ID, config),
         });
 
         // The human's grant stands; the goal's ends with the activation.
@@ -439,14 +372,12 @@ describe('AgentLaunchContext', () => {
       }),
   );
 
-  it.effect('ends a late launch-assembly failure on the launch terminal', () =>
+  it.effect('a late launch-assembly failure leaves no run behind', () =>
     Effect.gen(function* () {
       const order: string[] = [];
       const failure = new Error('user vars unavailable');
       const session = yield* createTestSession();
       yield* Effect.addFinalizer(() => closeSessionOf(session));
-      publishTestRunStart(session, EXECUTION_ID);
-      yield* session.log.settled;
       const terminalEvents = recordSessionEvents(session);
       const stage = noopTrace.openStage('Run');
       const endStage = vi.spyOn(stage, 'end').mockImplementation(() => {
@@ -488,7 +419,7 @@ describe('AgentLaunchContext', () => {
             }),
             runId: EXECUTION_ID,
             session,
-            resumed: true,
+            registration: { identity: { kind: 'agent', agent: 'chat' } },
             suppressErrorNotification: true,
           }),
           {},
@@ -502,16 +433,12 @@ describe('AgentLaunchContext', () => {
         stageId: undefined,
       });
       expect(endStage).toHaveBeenCalledExactlyOnceWith(RUN_OUTCOME.FAILED);
-      expect(session.view.run(EXECUTION_ID)?.status).toBe(RUN_PHASE.FAILED);
       expect(close).toHaveBeenCalledOnce();
-      // The launch's scope unwinds first (its stage, then its trace); the
-      // launch terminal then ends the run it left open.
-      expect(yield* Effect.promise(() => terminalEvents.read())).toContainEqual(
-        expect.objectContaining({
-          type: 'run.end',
-          outcome: RUN_OUTCOME.FAILED,
-        }),
-      );
+      // The launch's scope unwinds (its stage, then its trace), and the run
+      // was never born: its held trace is dropped, nothing is written.
+      yield* session.log.settled;
+      expect(session.view.run(EXECUTION_ID)).toBeUndefined();
+      expect(yield* Effect.promise(() => terminalEvents.read())).toEqual([]);
       expect(order).toEqual(['stage', 'close']);
     }),
   );

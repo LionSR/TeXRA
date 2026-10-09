@@ -1,7 +1,5 @@
 import { Effect, SubscriptionRef } from 'effect';
 
-import { registerRun } from '@agent/storage/runLifecycle';
-
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { ProcessServices } from '@platform/processRuntime';
 import { Secrets } from '@platform/secrets';
@@ -86,16 +84,16 @@ export interface RunAgentRequest {
  * Assigns a runId when the request omits one, then launches the run through
  * the session's one door (`Runs.launch`), awaited: a stop by run id
  * (`RunRegistry.interrupt`) or the caller's interruption reaches the run
- * wherever it has got to. On the launched fiber it resolves the model,
- * registers the run and runs it under the launch terminal
- * ({@link runWithLaunchGuard}), which holds the run's claim for the run's
- * whole life and, on every exit, ends what the lifecycle did not, awaits the
- * host's `beforeRunEnd` and commits the run's ending before the claim goes.
- * Presenting the result is the caller's, once this returns.
+ * wherever it has got to. On the launched fiber it resolves the model and
+ * runs the run under the launch terminal ({@link runWithLaunchGuard}),
+ * which awaits the host's `beforeRunEnd` before the run's claim goes. The
+ * run is born with its opening, so a launch that fails before it leaves no
+ * run: its failure is this call's. Presenting the result is the caller's,
+ * once this returns.
  *
  * Use this unless you need per-chunk streaming/lifecycle callbacks or subagent
  * lineage; for those, drop to the lower-level engine `executeAgent`, where the
- * caller owns runId generation and `registerRun`.
+ * caller owns runId generation and the registration.
  */
 export const runAgent = Effect.fn('runAgent')(function* (
   request: RunAgentRequest,
@@ -103,7 +101,6 @@ export const runAgent = Effect.fn('runAgent')(function* (
 ): Effect.fn.Return<RunEndResult, Error, ProcessServices> {
   const {
     beforeRunEnd,
-    onRunClaimed,
     preferHelperModel,
     suppressErrorNotification,
     continues,
@@ -153,16 +150,18 @@ export const runAgent = Effect.fn('runAgent')(function* (
       // policy later never widens this run.
       const limit: ApprovalPolicyLimit | undefined =
         approvalPolicy === 'yolo' ? undefined : approvalPolicy;
-      yield* registerRun(runSession, runId, definition.config, {
-        identity: { kind: 'agent', agent: definition.config.agent },
-        userFollowUpSupport,
-        grants: limit === undefined ? grants : { ...grants, limit },
-      });
       return yield* runWithLaunchGuard(
         runSession,
         runId,
-        executeAgent(definition, runId, executeAgentOptions),
-        { beforeRunEnd, onRunClaimed },
+        executeAgent(definition, runId, {
+          ...executeAgentOptions,
+          registration: {
+            identity: { kind: 'agent', agent: definition.config.agent },
+            userFollowUpSupport,
+            grants: limit === undefined ? grants : { ...grants, limit },
+          },
+        }),
+        { beforeRunEnd },
       );
     }),
   );

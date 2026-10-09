@@ -45,7 +45,6 @@ const mocks = vi.hoisted(() => ({
   resumeToolUseFromResumeData: vi.fn(),
   childRecords: vi.fn(),
   getVisibleAgents: vi.fn(),
-  registerRun: vi.fn(),
   writeReport: vi.fn(),
   writeResultMeta: vi.fn(),
   readModelAvailabilityInputs: vi.fn(),
@@ -98,10 +97,8 @@ vi.mock('@agent/storage/runRecords', async (importActual) => ({
         catch: ensureError,
       }),
   }),
-  registerRun: mocks.registerRun,
 }));
 
-// The launch sites register through `registerRun`; route the spy through it.
 // A child's last-turn settlement rides the row that ends it: the suite's
 // record store takes its report and manifest, as the run's own rows would.
 vi.mock('@agent/storage/runLifecycle', async (importOriginal) => {
@@ -109,7 +106,6 @@ vi.mock('@agent/storage/runLifecycle', async (importOriginal) => {
     await importOriginal<typeof import('@agent/storage/runLifecycle')>();
   return {
     ...actual,
-    registerRun: mocks.registerRun,
     finalizeRun: (
       session: SessionHandle,
       input: Parameters<typeof actual.finalizeRun>[1],
@@ -456,20 +452,17 @@ describe('headless delegation', () => {
       ({ config }: { config: unknown }) =>
         Effect.succeed({ config, persona: { tools: [] }, task: null }),
     );
-    // Production's `registerRun` commits the run's existence fact before it
-    // returns, and a child's own rows (`child.turn`, its terminal fact) are
-    // refused without it, so the spy publishes it and awaits durability too.
-    mocks.registerRun.mockImplementation(
-      (session: SessionHandle, runId: RunId) =>
-        Effect.promise(async () => {
-          publishTestRunStart(session, runId);
-          await Effect.runPromise(session.log.settled);
-        }),
-    );
     testEngine = {
       executeAgent: (definition, runId, options) =>
         Effect.tryPromise({
           try: async (signal) => {
+            // Production's opening births the run with its registration, and
+            // a child's own rows (its terminal fact) are refused without it,
+            // so the engine publishes its `run.start` and awaits durability.
+            publishTestRunStart(options.session, runId, {
+              parent: options.registration.parentRunId,
+            });
+            await Effect.runPromise(options.session.log.settled);
             const turn = await mocks.executeAgent(definition, runId, {
               ...options,
               turnSignal: signal,
@@ -580,7 +573,7 @@ describe('headless delegation', () => {
         expect(yield* Effect.flip(run([]))).toMatchObject({
           message: expect.stringContaining('pass inputFiles'),
         });
-        expect(mocks.registerRun).not.toHaveBeenCalled();
+        expect(mocks.executeAgent).not.toHaveBeenCalled();
         mocks.prepareAgentDefinition.mockClear();
         mocks.executeAgent.mockResolvedValue({
           outcome: 'completed',
@@ -655,7 +648,13 @@ describe('headless delegation', () => {
             config: expect.objectContaining({ agent: 'review' }),
           }),
           result.runId,
-          expect.objectContaining({ stopAfterCycle: true }),
+          expect.objectContaining({
+            stopAfterCycle: true,
+            registration: expect.objectContaining({
+              identity: { kind: 'agent', agent: 'review' },
+              parentRunId: IN_BAND_PARENT_RUN_ID,
+            }),
+          }),
         );
         expect(result.result).toEqual({
           outcome: 'completed',
@@ -665,12 +664,6 @@ describe('headless delegation', () => {
           },
         });
         expect(mocks.writeReport).toHaveBeenCalled();
-        expect(mocks.registerRun).toHaveBeenCalledWith(
-          inBandSession,
-          result.runId,
-          expect.objectContaining({ agent: 'review' }),
-          expect.objectContaining({ parentRunId: IN_BAND_PARENT_RUN_ID }),
-        );
         expect(mocks.writeResultMeta).toHaveBeenCalledWith(
           expect.objectContaining({
             producer: 'subagent',
@@ -817,7 +810,6 @@ describe('headless delegation', () => {
         const exit = yield* Fiber.await(running);
 
         expect(Exit.hasInterrupts(exit)).toBe(true);
-        expect(mocks.registerRun).not.toHaveBeenCalled();
         expect(mocks.executeAgent).not.toHaveBeenCalled();
       }),
   );

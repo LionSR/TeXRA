@@ -440,10 +440,7 @@ describe('the golden 1.0 store', () => {
       expect(
         [...folded.queuedFollowUps].map(([id, queued]) => [id, queued.length]),
       ).toEqual([[CHAT, 2]]);
-      const runHistory = makeRunHistory(
-        (yield* makeSessionStore(storage)).log,
-        yield* Database,
-      );
+      const runHistory = makeRunHistory((yield* makeSessionStore(storage)).log);
       const stateOf = (id: RunId) =>
         Effect.map(runHistory.load(id), (state) => ({
           at: state?.at,

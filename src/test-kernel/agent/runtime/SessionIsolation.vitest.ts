@@ -12,6 +12,7 @@ import {
   RUN_OUTCOME,
   aggregateId,
   emptyRunEndOutput,
+  RunIdSchema,
   type RunId,
 } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
@@ -34,9 +35,6 @@ import {
 } from '@test/support/sessionTestUtils';
 import { generateRunId } from '@utils/core';
 import { createTestLaunchContext } from './launchContextTestUtils';
-
-/** Storage root each host-exit terminal write resolved, by run id. */
-const settledUnder = new Map<string, string>();
 
 describe('session isolation', () => {
   it.effect('two sessions in one process write under their own roots', () =>
@@ -82,18 +80,25 @@ describe('session isolation', () => {
     'the host-exit drain settles each session under its own root, outside any scope',
     () =>
       Effect.gen(function* () {
+        // Persistent stores, so each root's rows outlive its session's close
+        // and are read back from the root they landed in.
+        const persistent = { kind: 'persistent' } as const;
+        const rootsA = createFakeWorkspaceRoots({
+          workspacePath: fakePath('papers/a'),
+          storagePath: fakePath('storage/a'),
+        });
+        const rootsB = createFakeWorkspaceRoots({
+          workspacePath: fakePath('papers/b'),
+          storagePath: fakePath('storage/b'),
+        });
         const sessionA = yield* createTestSession({
-          roots: createFakeWorkspaceRoots({
-            workspacePath: fakePath('papers/a'),
-            storagePath: fakePath('storage/a'),
-          }),
+          roots: rootsA,
+          transcriptMode: persistent,
         });
         yield* Effect.addFinalizer(() => closeSessionOf(sessionA));
         const sessionB = yield* createTestSession({
-          roots: createFakeWorkspaceRoots({
-            workspacePath: fakePath('papers/b'),
-            storagePath: fakePath('storage/b'),
-          }),
+          roots: rootsB,
+          transcriptMode: persistent,
         });
         yield* Effect.addFinalizer(() => closeSessionOf(sessionB));
         const live = [
@@ -101,12 +106,6 @@ describe('session isolation', () => {
           [sessionB, 'b0db01' as RunId],
         ] as const;
         for (const [session, runId] of live) {
-          vi.spyOn(session.runs, 'end').mockImplementation((input) =>
-            Effect.sync(() => {
-              settledUnder.set(input.runId, session.roots.storage);
-              return { ok: true, outcome: 'cancelled' } as const;
-            }),
-          );
           publishTestRunStart(session, runId);
           publishTestRows(session, [
             {
@@ -135,8 +134,25 @@ describe('session isolation', () => {
             concurrency: 'unbounded',
           },
         );
-        expect(settledUnder.get('a0da01')).toBe(fakePath('storage/a'));
-        expect(settledUnder.get('b0db01')).toBe(fakePath('storage/b'));
+        // Each run's end landed in its own root's store, and only there.
+        for (const [roots, own, other] of [
+          [rootsA, 'a0da01', 'b0db01'],
+          [rootsB, 'b0db01', 'a0da01'],
+        ] as const) {
+          const reopened = yield* createTestSession({
+            roots,
+            transcriptMode: persistent,
+          });
+          const ends = (runId: string) =>
+            reopened.log.rows(aggregateId('run', RunIdSchema.parse(runId)), [
+              'run.end',
+            ]);
+          expect(yield* ends(own)).toMatchObject([
+            { outcome: RUN_OUTCOME.CANCELLED },
+          ]);
+          expect(yield* ends(other)).toEqual([]);
+          yield* closeSessionOf(reopened);
+        }
       }),
   );
 

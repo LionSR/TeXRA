@@ -62,7 +62,6 @@ export interface ResumeRunOptions extends Pick<
   ResumeToolUseFromResumeDataOptions,
   | 'publishWorkflowOutput'
   | 'beforeRunEnd'
-  | 'onRunClaimed'
   | 'onRun'
   | 'onRunResolved'
   | 'onTraceEvent'
@@ -220,7 +219,6 @@ const runLaunchOptions = (options: ResumeRunOptions) => ({
   isCancellationRequested: options.isCancellationRequested,
   publishWorkflowOutput: options.publishWorkflowOutput,
   beforeRunEnd: options.beforeRunEnd,
-  onRunClaimed: options.onRunClaimed,
   onRun: options.onRun,
   onRunResolved: options.onRunResolved,
   onTraceEvent: options.onTraceEvent,

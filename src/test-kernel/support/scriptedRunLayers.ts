@@ -16,7 +16,6 @@ import {
   positionRow,
   type Message,
 } from '@agent/runtime/loop/rows';
-import type { RunCell } from '@agent/runtime/loop/runProgram';
 import { AgentRun, type AgentRunShape } from '@agent/runtime/run/AgentRun';
 import { dispatchFactsFor, localCallsOf } from '@agent/runtime/run/tools';
 import { turnText } from '@agent/runtime/run/turnText';
@@ -27,6 +26,7 @@ import {
   type BoundModel,
 } from '@agent/runtime/modelAccess/ModelAccess';
 import { routePolicies } from '@agent/runtime/modelAccess/failureInfo';
+import type { RunCell } from '@shared/session/runHistory';
 import { PersonaSchema } from '@shared/schemas';
 import {
   MODEL_RETRY_MAX_ATTEMPTS_SETTING,
@@ -294,7 +294,11 @@ export function testAgentRun(
     stores: hostStores(),
     toolPolicy: {},
     opening: { inputs: {}, activated: [], attachedMemoryMisses: [] },
-    initialUserMessageForTranscript: 'Do the thing.',
+    entry: {
+      registration: null,
+      entered: Effect.void,
+      initialUserMessage: 'Do the thing.',
+    },
     fileService: new RunFileService(runId, session.roots),
     ...testRunTools(hostStores()),
     finalToolName: null,
@@ -324,7 +328,7 @@ export interface ScriptedRunInit {
   readonly finalToolName?: string | null;
   readonly mediaFiles?: readonly string[];
   /** Absent means the launch had no transcript row to write. */
-  readonly initialUserMessageForTranscript?: string | undefined;
+  readonly initialUserMessage?: string | undefined;
   readonly onIdle?: () => void;
 }
 
@@ -361,10 +365,13 @@ export function agentRunTestLayer(init: ScriptedRunInit) {
           ...testRunTools(hostStores(), tools),
           finalToolName: init.finalToolName ?? null,
           callbacks: init.onIdle ? { onIdle: init.onIdle } : {},
-          ...('initialUserMessageForTranscript' in init
+          ...('initialUserMessage' in init
             ? {
-                initialUserMessageForTranscript:
-                  init.initialUserMessageForTranscript,
+                entry: {
+                  registration: null,
+                  entered: Effect.void,
+                  initialUserMessage: init.initialUserMessage,
+                },
               }
             : {}),
         },

@@ -1,13 +1,8 @@
 import { it } from '@effect/vitest';
 import { Cause, Deferred, Effect, Exit, Fiber } from 'effect';
 
-import { afterEach, beforeEach, describe, expect, vi, type Mock } from 'vitest';
+import { afterEach, describe, expect, vi } from 'vitest';
 
-import type {
-  FinalizeRunInput,
-  FinalizeRunResult,
-} from '@agent/storage/runLifecycle';
-import { RunHandle } from '@agent/runtime/RunHandle';
 import { Runs } from '@agent/runtime/runRegistry';
 import { SessionHandle } from '@agent/runtime/SessionHandle';
 import {
@@ -42,31 +37,13 @@ import {
 import { eventsOfType, recordSessionEvents } from '../progressTestUtils';
 import { createTestLaunchContext } from './launchContextTestUtils';
 
-const storageMocks = vi.hoisted(() => ({
-  // Echoes the requested outcome, as the real finalizer does whenever there
-  // is no existing outcome to retain.
-  finalizeRun: vi.fn(
-    (
-      _session: unknown,
-      input: {
-        outcome: RunOutcome;
-      },
-    ): Effect.Effect<FinalizeRunResult> =>
-      Effect.succeed({
-        ok: true,
-        outcome: input.outcome,
-      }),
-  ),
-}));
-
-// The lifecycle ends a run through its session's one terminal writer
-// (`Runs.end`); the suite observes that call.
-beforeEach(() => {
-  storageMocks.finalizeRun.mockClear();
-  vi.spyOn(testDefaultSession().runs, 'end').mockImplementation((input) =>
-    storageMocks.finalizeRun(testDefaultSession(), input),
+/** The run's committed `run.end` rows, once the session's writes settled:
+ *  what the lifecycle's one terminal writer (`finalizeRun`) said. */
+const runEnds = (session: SessionHandle, runId: RunId) =>
+  Effect.andThen(
+    session.log.settled,
+    session.log.rows(qualifyAggregateId('run', runId), ['run.end']),
   );
-});
 
 afterEach(() => {
   setLogSink(null);
@@ -110,18 +87,29 @@ function toolUseResult(runId: RunId, outcome: RunOutcome): RunEndResult {
   return { outcome, runId, output: { ...EMPTY_TOOL_USE_OUTPUT, files: [] } };
 }
 
-/** Gate the next finalizeRun call on an explicit release. */
-const parkNextFinalize = Effect.gen(function* () {
-  const started = yield* Deferred.make<void>();
-  const release = yield* Deferred.make<void>();
-  storageMocks.finalizeRun.mockImplementationOnce((_session, input) =>
-    Deferred.succeed(started, undefined).pipe(
-      Effect.andThen(Deferred.await(release)),
-      Effect.as<FinalizeRunResult>({ ok: true, outcome: input.outcome }),
-    ),
-  );
-  return { started, release };
-});
+/**
+ * Park the run's terminal before its `run.end` write: its stage end, the
+ * terminal's first step, enqueues a job that holds the session's publisher
+ * until `release`, so the end's transaction queues behind it. `started`
+ * resolves once that job holds the publisher.
+ */
+const parkTerminal = (ctx: AgentLaunchContext) =>
+  Effect.gen(function* () {
+    const started = yield* Deferred.make<void>();
+    const release = yield* Deferred.make<void>();
+    const endStage = ctx.parentStage.end.bind(ctx.parentStage);
+    vi.spyOn(ctx.parentStage, 'end').mockImplementationOnce((outcome) => {
+      Effect.runFork(
+        ctx.session.log.transact(() =>
+          Deferred.succeed(started, undefined).pipe(
+            Effect.andThen(Deferred.await(release)),
+          ),
+        ),
+      );
+      endStage(outcome);
+    });
+    return { started, release };
+  });
 
 /**
  * The lifecycle program over the fake host's process services. The suite runs
@@ -203,7 +191,7 @@ describe('runWithLifecycle', () => {
         // parks a handle, so there is no suspension for the stop to find and
         // nothing the exit has to remember to clear.
         const { runId, ctx } = lifecycleFixture();
-        const parked = yield* parkNextFinalize;
+        const parked = yield* parkTerminal(ctx);
 
         try {
           const running = yield* Effect.forkChild(
@@ -213,10 +201,9 @@ describe('runWithLifecycle', () => {
               { parentRunId: PARENT_RUN_ID },
             ),
           );
-          // The run reached its own persist and parked there, which is the
-          // window the stop below has to land in.
+          // The run reached its own terminal and parked before its persist,
+          // which is the window the stop below has to land in.
           yield* Deferred.await(parked.started);
-          expect(storageMocks.finalizeRun).toHaveBeenCalledOnce();
 
           const stop = testDefaultSession().runs.stop(runId, {
             reason: 'user',
@@ -229,6 +216,9 @@ describe('runWithLifecycle', () => {
           yield* Deferred.succeed(parked.release, undefined);
           const result = yield* Fiber.join(running);
           expect(result.outcome).toBe(RUN_OUTCOME.COMPLETED);
+          expect(yield* runEnds(ctx.session, runId)).toMatchObject([
+            { outcome: RUN_OUTCOME.COMPLETED },
+          ]);
           expect(testDefaultSession().runs.getHandle(runId)).toBeUndefined();
         } finally {
           untrackRun(testDefaultSession().runs, runId);
@@ -262,10 +252,9 @@ describe('runWithLifecycle', () => {
       expect(Exit.isFailure(exit) && Cause.hasInterrupts(exit.cause)).toBe(
         true,
       );
-      expect(storageMocks.finalizeRun).toHaveBeenCalledWith(
-        testDefaultSession(),
-        expect.objectContaining({ outcome: RUN_OUTCOME.CANCELLED }),
-      );
+      expect(yield* runEnds(ctx.session, runId)).toMatchObject([
+        { outcome: RUN_OUTCOME.CANCELLED },
+      ]);
     }),
   );
 
@@ -295,10 +284,8 @@ describe('runWithLifecycle', () => {
             'run.position',
           ),
         ).toEqual([]);
-        expect(storageMocks.finalizeRun).toHaveBeenCalledWith(
-          testDefaultSession(),
+        expect(yield* runEnds(ctx.session, runId)).toMatchObject([
           {
-            runId,
             outcome: RUN_OUTCOME.CANCELLED,
             error: {
               kind: 'abort',
@@ -307,7 +294,7 @@ describe('runWithLifecycle', () => {
             },
             output: EMPTY_TOOL_USE_OUTPUT,
           },
-        );
+        ]);
       }),
   );
 
@@ -336,14 +323,10 @@ describe('runWithLifecycle', () => {
           );
 
           expect(result.outcome).toBe(outcome);
-          expect(storageMocks.finalizeRun).toHaveBeenCalledWith(
-            testDefaultSession(),
-            {
-              runId,
-              outcome,
-              output: EMPTY_TOOL_USE_OUTPUT,
-            },
-          );
+          const [end, ...more] = yield* runEnds(ctx.session, runId);
+          expect(more).toEqual([]);
+          expect(end).toMatchObject({ outcome, output: EMPTY_TOOL_USE_OUTPUT });
+          expect(end).not.toHaveProperty('error');
           expect(stageEnd).toHaveBeenCalledWith(outcome);
         }
       }),
@@ -369,15 +352,13 @@ describe('runWithLifecycle', () => {
         expect(result).toEqual(carriedResult);
         // `run.end` is not a trace arm: the storage finalizer is its one
         // writer, so the absent error facts are read off that input.
-        expect(storageMocks.finalizeRun).toHaveBeenCalledWith(
-          testDefaultSession(),
-          {
-            runId,
-            outcome: RUN_OUTCOME.FAILED,
-            error: undefined,
-            output: carriedResult.output,
-          },
-        );
+        const [end, ...more] = yield* runEnds(ctx.session, runId);
+        expect(more).toEqual([]);
+        expect(end).toMatchObject({
+          outcome: RUN_OUTCOME.FAILED,
+          output: carriedResult.output,
+        });
+        expect(end).not.toHaveProperty('error');
         expect(stageEnd).toHaveBeenCalledWith(RUN_OUTCOME.FAILED);
       }),
   );
@@ -394,10 +375,8 @@ describe('runWithLifecycle', () => {
         );
 
         expect(result.outcome).toBe(RUN_OUTCOME.CANCELLED);
-        expect(storageMocks.finalizeRun).toHaveBeenCalledWith(
-          testDefaultSession(),
+        expect(yield* runEnds(ctx.session, runId)).toMatchObject([
           {
-            runId,
             outcome: RUN_OUTCOME.CANCELLED,
             error: {
               kind: 'abort',
@@ -406,7 +385,7 @@ describe('runWithLifecycle', () => {
             },
             output: EMPTY_TOOL_USE_OUTPUT,
           },
-        );
+        ]);
         expect(stageEnd).toHaveBeenCalledWith(RUN_OUTCOME.CANCELLED);
       }),
   );
@@ -421,10 +400,8 @@ describe('runWithLifecycle', () => {
       );
       expect(error.message).toContain('model exploded');
 
-      expect(storageMocks.finalizeRun).toHaveBeenCalledWith(
-        testDefaultSession(),
+      expect(yield* runEnds(ctx.session, runId)).toMatchObject([
         {
-          runId,
           outcome: RUN_OUTCOME.FAILED,
           error: {
             kind: 'unexpected',
@@ -433,7 +410,7 @@ describe('runWithLifecycle', () => {
           },
           output: EMPTY_TOOL_USE_OUTPUT,
         },
-      );
+      ]);
       expect(stageEnd).toHaveBeenCalledWith(RUN_OUTCOME.FAILED);
     }),
   );
@@ -454,17 +431,15 @@ describe('runWithLifecycle', () => {
         runLifecycle(ctx, () => Effect.fail(frozen)),
       );
       expect(error.message).toContain('flow failed');
-      expect(storageMocks.finalizeRun).toHaveBeenCalledWith(
-        testDefaultSession(),
-        expect.objectContaining({
-          runId,
+      expect(yield* runEnds(ctx.session, runId)).toMatchObject([
+        {
           outcome: RUN_OUTCOME.FAILED,
           error: {
             kind: 'unexpected',
             message: 'Error executing agent test-agent: flow failed',
           },
-        }),
-      );
+        },
+      ]);
     }),
   );
 
@@ -482,10 +457,9 @@ describe('runWithLifecycle', () => {
       expect(Exit.isFailure(exit) && Cause.hasInterruptsOnly(exit.cause)).toBe(
         true,
       );
-      expect(storageMocks.finalizeRun).toHaveBeenCalledWith(
-        testDefaultSession(),
-        expect.objectContaining({ runId, outcome: RUN_OUTCOME.CANCELLED }),
-      );
+      expect(yield* runEnds(ctx.session, runId)).toMatchObject([
+        { outcome: RUN_OUTCOME.CANCELLED },
+      ]);
     }),
   );
 
@@ -503,16 +477,12 @@ describe('runWithLifecycle', () => {
 
       yield* Effect.exit(runLifecycle(ctx, runner));
 
-      expect(storageMocks.finalizeRun).toHaveBeenCalledWith(
-        testDefaultSession(),
-        expect.objectContaining({
-          runId,
+      expect(yield* runEnds(ctx.session, runId)).toMatchObject([
+        {
           outcome: RUN_OUTCOME.CANCELLED,
-          error: expect.objectContaining({
-            message: expect.stringContaining('finalizer died'),
-          }),
-        }),
-      );
+          error: { message: expect.stringContaining('finalizer died') },
+        },
+      ]);
     }),
   );
 
@@ -571,18 +541,16 @@ describe('runWithLifecycle', () => {
           // A carried failure is exactly as loud as a thrown one: same terminal
           // status, same stage outcome, same classified error on the `run.end`
           // row the storage finalizer writes.
-          expect(storageMocks.finalizeRun).toHaveBeenCalledWith(
-            testDefaultSession(),
-            expect.objectContaining({
-              runId,
+          expect(yield* runEnds(ctx.session, runId)).toMatchObject([
+            {
               outcome: RUN_OUTCOME.FAILED,
-              error: expect.objectContaining({
+              error: {
                 kind: 'unexpected',
                 statusCode: 503,
                 userRetryable: true,
-              }),
-            }),
-          );
+              },
+            },
+          ]);
           expect(stageEnd).toHaveBeenCalledWith(RUN_OUTCOME.FAILED);
         } finally {
           untrackRun(testDefaultSession().runs, runId);
@@ -618,13 +586,12 @@ describe('runWithLifecycle', () => {
           );
           expect(error.message).toContain('Missing OpenRouter API key.');
 
-          expect(storageMocks.finalizeRun).toHaveBeenCalledWith(
-            testDefaultSession(),
-            expect.objectContaining({
+          expect(yield* runEnds(ctx.session, runId)).toMatchObject([
+            {
               outcome: RUN_OUTCOME.FAILED,
-              error: expect.objectContaining({ kind: 'missing-api-key' }),
-            }),
-          );
+              error: { kind: 'missing-api-key' },
+            },
+          ]);
         } finally {
           untrackRun(testDefaultSession().runs, runId);
         }
@@ -632,28 +599,19 @@ describe('runWithLifecycle', () => {
   );
 });
 
-/** The session fake, handle, and spies every finalize test drives. */
+/** A registered run on the default session and its handle. */
 function finalizeFixture(): {
   runId: RunId;
   session: SessionHandle;
   handle: ReturnType<typeof testRunHandle>;
-  untrackIfCurrent: Mock<(handle: RunHandle) => boolean>;
 } {
   const runId =
     `f${(finalizeFixtureCounter++).toString(16).padStart(5, '0')}` as RunId;
-  const untrackIfCurrent = vi.fn<(handle: RunHandle) => boolean>(() => true);
-  const session = {
-    runs: {
-      untrackIfCurrent,
-      end: (input: FinalizeRunInput) =>
-        storageMocks.finalizeRun(session, input),
-    },
-    trace: { lost: () => Effect.succeed(undefined) },
-  } as unknown as SessionHandle;
+  const session = testDefaultSession();
+  publishTestRunStart(session, runId);
   return {
     runId,
     session,
-    untrackIfCurrent,
     handle: testRunHandle({
       runId,
       parent: PARENT_RUN_ID,
@@ -673,50 +631,6 @@ function finalize(params: Parameters<typeof finalizeRunTerminal>[0]) {
 }
 
 describe('finalizeRunTerminal', () => {
-  it.effect(
-    'settles and untracks once, and fails a run whose terminal row was not saved',
-    () =>
-      Effect.gen(function* () {
-        const logs = captureLogEntries();
-        const { runId, session, handle, untrackIfCurrent } = finalizeFixture();
-        const durabilityError = new Error('metadata disk write failed');
-        storageMocks.finalizeRun.mockReturnValueOnce(
-          Effect.succeed({
-            ok: false,
-            error: durabilityError,
-          }),
-        );
-
-        // A run that reported success but whose `run.end` did not commit
-        // failed: its caller hears FAILED, never the unsaved report.
-        const event = yield* finalize({
-          session,
-          handle,
-          outcome: RUN_OUTCOME.COMPLETED,
-        });
-
-        expect(event).toMatchObject({
-          event: {
-            type: 'run.end',
-            outcome: RUN_OUTCOME.FAILED,
-            runId,
-            error: {
-              message: expect.stringContaining('metadata disk write failed'),
-            },
-          },
-          persistFailure: durabilityError,
-        });
-        expect(untrackIfCurrent).toHaveBeenCalledExactlyOnceWith(handle);
-        const [warning, ...rest] = logs.at('WARN', 'agentRunLifecycle');
-        expect(rest).toEqual([]);
-        expect(warning?.message).toBe('Failed to finalize durable run state');
-        // The sink renders the raw payload once; the durability facts ride it.
-        const data = String(warning?.annotations.data);
-        expect(data).toContain(`"runId": "${runId}"`);
-        expect(data).toContain('metadata disk write failed');
-      }).pipe(Effect.provide(effectDiagnosticsLayer('Trace'))),
-  );
-
   // The stop's verdict is the single owner of a run's terminal outcome: the
   // finalizer's `stopped` arm, set by the fiber interruption's exit protocol
   // or the child loop's own stop, outranks the run's report — the run it
@@ -750,12 +664,10 @@ describe('finalizeRunTerminal', () => {
         expect(stage.end).toHaveBeenCalledExactlyOnceWith(
           RUN_OUTCOME.CANCELLED,
         );
-        expect(storageMocks.finalizeRun).toHaveBeenCalledWith(
-          session,
-          expect.objectContaining({
-            outcome: RUN_OUTCOME.CANCELLED,
-          }),
-        );
+        const [end, ...more] = yield* runEnds(session, runId);
+        expect(more).toEqual([]);
+        expect(end).toMatchObject({ outcome: RUN_OUTCOME.CANCELLED });
+        expect(end).not.toHaveProperty('error');
         expect(logs.at('WARN')).toEqual([]);
       }).pipe(Effect.provide(effectDiagnosticsLayer('Trace'))),
   );

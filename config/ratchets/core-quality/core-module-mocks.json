@@ -7,7 +7,7 @@
   "src/test-kernel/agent/runtime/helperModelPreference.vitest.ts": 1,
   "src/test-kernel/agent/runtime/resumeRun.vitest.ts": 4,
   "src/test-kernel/agent/runtime/ResumeToolUseCancellation.vitest.ts": 7,
-  "src/test-kernel/agent/runtime/RunAgentOwnership.vitest.ts": 4,
+  "src/test-kernel/agent/runtime/RunAgentOwnership.vitest.ts": 3,
   "src/test-kernel/cli/ApiStatusLoad.vitest.ts": 1,
   "src/test-kernel/cli/ChatgptLoginBrowser.vitest.ts": 1,
   "src/test-kernel/cli/CliContext.vitest.ts": 1,

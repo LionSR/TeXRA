@@ -135,8 +135,7 @@ export const listRuns = Effect.fn('listRuns')(function* (
           ...(run.substate === RUN_SUBSTATE.PAUSED && { paused: true }),
           ...(run.description === null ? {} : { description: run.description }),
           ...(run.model === null ? {} : { model: run.model }),
-          resumable:
-            resumeFrom.kind === 'checkpoint' || resumeFrom.kind === 'unopened',
+          resumable: resumeFrom.kind === 'checkpoint',
         };
         const identity = run.identity;
         // Registration commits `run.config` in the `run.start` batch, so a

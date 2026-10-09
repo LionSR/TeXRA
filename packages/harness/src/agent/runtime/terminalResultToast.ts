@@ -54,18 +54,28 @@ function presentAgentFailure(
 const presentedFailures = new WeakSet<object>();
 
 /**
- * Receipt for a root run's failure once its `run.end` row committed: the
- * session's presenter shows that row's guidance, or queues it for the next
- * surface, whenever it has any. `failure` is what the run throws past the
- * row, so no caller presents it a second time.
+ * Receipt for a root run's failure: the session's presenter shows the
+ * guidance of its committed `run.end` row; a run that never opened has no
+ * row, so its failure is presented here, as a launch error. Either way
+ * `failure`, what the run throws past it, is marked presented, so no caller
+ * presents it a second time.
  */
 export function receiveTerminalFailure(
+  interactions: SessionHostInteractions,
   failure: Error,
-  terminal: { readonly event: ResultEvent; readonly persistFailure?: unknown },
-): void {
+  terminal: {
+    readonly event: ResultEvent;
+    readonly persistFailure?: unknown;
+    readonly recorded: boolean;
+  },
+): Effect.Effect<void> {
   const { error } = terminal.event;
-  if (terminal.persistFailure !== undefined || !error) return;
-  if (agentErrorPresentation(error) !== null) presentedFailures.add(failure);
+  if (terminal.persistFailure !== undefined || !error) return Effect.void;
+  if (agentErrorPresentation(error) === null) return Effect.void;
+  presentedFailures.add(failure);
+  return terminal.recorded
+    ? Effect.void
+    : presentAgentFailure(interactions, error);
 }
 
 /**

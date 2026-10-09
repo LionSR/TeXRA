@@ -6,6 +6,17 @@ All notable changes to this project will be documented in this file.
 
 ### Breaking Changes
 
+- **A run that fails before it starts is reported as a launch error, not
+  listed as a failed task.** A task, subagent or background script is
+  recorded together with its first batch of history, so one that fails
+  before it gets there (an agent file that does not render, an attachment
+  that cannot be read, a model that cannot be bound) leaves no entry in the
+  task list: the CLI exits non-zero with the cause, the desktop app and the
+  extension show the error where the task was started, `task.start` on the
+  service returns it, and the SDK's `start` fails with a `RunFailure` that
+  carries it. A parent whose subagent failed that way still receives the
+  failure as a follow-up. A resume that fails before it reopens the task
+  leaves the task as it was, instead of marking it failed.
 - **Plugin tools: a narrower run, and their own services.** A plugin's
   tool reads the run its call works for from `ToolContext`, with
   `requireRun`, `callerRun` and the `ToolRun` type from

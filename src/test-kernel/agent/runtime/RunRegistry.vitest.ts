@@ -162,6 +162,16 @@ function createRegistry(
   return { events, phases, registry, grants };
 }
 
+/** The run's committed `run.end` rows on the default session, once its
+ *  writes settled. */
+const runEnds = (runId: RunId) =>
+  Effect.andThen(
+    testDefaultSession().log.settled,
+    testDefaultSession().log.rows(qualifyAggregateId('run', runId), [
+      'run.end',
+    ]),
+  );
+
 interface PublishedEvents {
   readonly published: SessionEventDraft[];
 }
@@ -834,10 +844,11 @@ describe('runRegistry', () => {
     () =>
       Effect.gen(function* () {
         const { registry } = createRegistry();
-        const end = vi.spyOn(registry, 'end');
         yield* Effect.addFinalizer(() => Effect.sync(() => registry.dispose()));
         const interrupt = vi.fn();
         const runId = generateRunId();
+        // A started run, so an end the stop wrote would show as its row.
+        publishTestRunStart(testDefaultSession(), runId);
         registry.reserveChildActivation({
           retainsTerminalParent: true,
           runId,
@@ -848,7 +859,7 @@ describe('runRegistry', () => {
         yield* registry.stop(runId, { reason: 'user' }).settlement;
 
         expect(interrupt).toHaveBeenCalledOnce();
-        expect(end).not.toHaveBeenCalled();
+        expect(yield* runEnds(runId)).toEqual([]);
         expect(registry.activeIds()).toContain(runId);
       }),
   );
@@ -856,7 +867,6 @@ describe('runRegistry', () => {
   it.effect('cancels an ownerless run', () =>
     Effect.gen(function* () {
       const { registry } = createRegistry();
-      const end = vi.spyOn(registry, 'end');
       const runId = generateRunId();
 
       try {
@@ -869,12 +879,9 @@ describe('runRegistry', () => {
 
         // `run.end` is the run's whole terminal fact (one run model, 3.3), so
         // a stop that reached no live handle still writes it.
-        expect(end).toHaveBeenCalledWith(
-          expect.objectContaining({
-            runId,
-            outcome: RUN_OUTCOME.CANCELLED,
-          }),
-        );
+        expect(yield* runEnds(runId)).toMatchObject([
+          { outcome: RUN_OUTCOME.CANCELLED },
+        ]);
       } finally {
         registry.dispose();
       }

@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, vi } from 'vitest';
 
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { deriveResumability } from '@agent/storage';
+import { finalizeRun } from '@agent/storage/runLifecycle';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { positionRow } from '@agent/runtime/loop/rows';
 import {
@@ -33,11 +34,11 @@ describe('deriveResumability', () => {
   /** Open the run aggregate the way the loop does: claim, then the
    *  position that opens it. */
   async function writeOpening(runId: RunId): Promise<void> {
-    await Effect.runPromise(session.runHistory.acquire(runId));
+    const cell = await Effect.runPromise(
+      session.runHistory.open(runId, { activation: () => Effect.succeed([]) }),
+    );
     await Effect.runPromise(
-      session.runHistory.appendBatch(runId, null, [
-        positionRow(runId, { turn: 0 }, 'turn.ready'),
-      ]),
+      cell.append([positionRow(runId, { turn: 0 }, 'turn.ready')]),
     );
   }
 
@@ -116,7 +117,7 @@ describe('deriveResumability', () => {
         );
 
         expect(
-          yield* session.runs.end({ runId, outcome: RUN_OUTCOME.FAILED }),
+          yield* finalizeRun(session, { runId, outcome: RUN_OUTCOME.FAILED }),
         ).toMatchObject({ ok: false });
 
         expect(yield* deriveResumability(runId, session)).toMatchObject({
