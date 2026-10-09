@@ -43,6 +43,8 @@ export class RunFileService {
   /** The base files' pre-run locations, decided by `prepareRunWorkspace`. */
   private preparedBaseFiles: FileLocation[] | undefined;
   private readonly mirroredDependencies = new Set<string>();
+  /** The files the run read, which an edit of one needs; read-only here. */
+  public readonly readFiles: ReadonlySet<string> = new Set<string>();
 
   constructor(
     public readonly runId: RunId,

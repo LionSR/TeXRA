@@ -14,7 +14,11 @@
  */
 import { Effect, type FileSystem } from 'effect';
 
-import { refresh, resolveAgentForLaunch, settledCatalog } from '@agent/index';
+import {
+  refresh,
+  resolveAgentForLaunch,
+  settledCatalog,
+} from '@agent/index/agentRegistry';
 import type { AgentCatalogLoadError } from '@agent/index/agentRegistry';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { readInstalledPluginLoad } from '@common/plugins/pluginTrust';

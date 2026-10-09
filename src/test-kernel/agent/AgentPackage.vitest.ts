@@ -77,7 +77,8 @@ vi.mock('@utils/core', async (importActual) => ({
   generateRunId: () => mocks.runId,
 }));
 
-vi.mock('@agent/index', () => ({
+vi.mock('@agent/index/agentRegistry', async (importActual) => ({
+  ...(await importActual<typeof import('@agent/index/agentRegistry')>()),
   getAgent: () => ({
     source: 'custom',
     name: 'assistant',

@@ -8,6 +8,7 @@
 
 // Local imports
 import type { CodeSandbox } from '@agent/codeSandbox/codeSandbox';
+import type { RuntimeTool } from '@agent/runtime/ToolServices';
 import { AGENT_TOOL_NAME } from '@shared/constants/delegationTools';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import type { CanonicalToolDisplayName } from '@shared/tools/toolKind';
@@ -23,7 +24,7 @@ import { GrepTool } from '@tools/grep';
 import { MemoryTool } from '@tools/memory/MemoryTool';
 import { memoryPromptSection } from '@tools/memory/memoryPromptSection';
 import { PlanTool } from '@tools/plan/PlanTool';
-import { definePlugin, type Plugin } from '@tools/plugins';
+import type { PluginDefinition, Plugin } from '@tools/plugins';
 import { ReadFileTool } from '@tools/ReadTool';
 import { ALWAYS_AVAILABLE } from '@tools/toolProbes';
 import { WebFetchTool } from '@tools/web/WebFetchTool';
@@ -42,6 +43,18 @@ const fileTools = (writeFilter?: WriteFilter) => ({
 const SCRIPT_TOOLS = { script: ScriptTool };
 
 /**
+ * A built-in plugin: as a plugin's definition, but its tools may read the
+ * call's place in its run (`RunCall`) and its script, which the run loop
+ * provides to every call and no app's tool may require.
+ */
+const builtin = <ROut = never>(
+  plugin: Omit<PluginDefinition<ROut>, 'tools'> & {
+    readonly tools?: Readonly<Record<string, RuntimeTool<Error, unknown>>>;
+  },
+  // cast: erased; the run loop serves every built-in its call services.
+): Plugin => plugin as unknown as Plugin;
+
+/**
  * Compile-time guard: every canonical tool with specialized display
  * treatment is a built-in, so every list that includes the built-ins
  * registers it.
@@ -58,17 +71,18 @@ type _CanonicalDisplayNamesAreBuiltIns = AssertNever<
  *  `write_file` applies to what it writes (TeXRA's `.tex` replacements). */
 export const fileOps = (
   options: { readonly writeFilter?: WriteFilter } = {},
-): Plugin => ({
-  id: 'file-ops',
-  tools: fileTools(options.writeFilter),
-});
+): Plugin =>
+  builtin({
+    id: 'file-ops',
+    tools: fileTools(options.writeFilter),
+  });
 
-export const web: Plugin = {
+export const web: Plugin = builtin({
   id: 'web',
   tools: { web_search: WebSearchTool, web_fetch: WebFetchTool },
-};
+});
 
-export const memoryWorkflow: Plugin = {
+export const memoryWorkflow: Plugin = builtin({
   id: 'memory-workflow',
   tools: {
     memory: MemoryTool,
@@ -76,7 +90,7 @@ export const memoryWorkflow: Plugin = {
   },
   injectedWhen: { memory: GlobalStateKey.MEMORY_ENABLED },
   prompt: memoryPromptSection,
-};
+});
 
 /**
  * The `plan` tool owns planning and the goal lifecycle (update, pause,
@@ -84,7 +98,7 @@ export const memoryWorkflow: Plugin = {
  * is on; the synthetic turns are its continuation
  * (`@tools/goal/goalContinuation`). Its rows are the `goal/state` arm.
  */
-export const goal: Plugin = {
+export const goal: Plugin = builtin({
   id: 'goal',
   tools: { plan: PlanTool },
   injectedWhen: { plan: true },
@@ -92,23 +106,23 @@ export const goal: Plugin = {
   availability: ALWAYS_AVAILABLE,
   continuation: goalContinuation,
   arms: [GOAL_STATE_ARM],
-};
+});
 
 /** Child agents: the `agent` tool. */
-export const multiAgent: Plugin = {
+export const multiAgent: Plugin = builtin({
   id: 'multi-agent',
   tools: { [AGENT_TOOL_NAME]: agentTool() },
   // The one delegation tool: the built-in orchestrators need it.
   toggle: 'on',
   availability: ALWAYS_AVAILABLE,
-};
+});
 
 /**
  * The `script` tool: a program that calls the run's other tools. An agent
  * gets it only if its configuration names it; its session layer is the code
  * sandbox the scripts run in.
  */
-export const codemode = definePlugin<CodeSandbox>({
+export const codemode = builtin<CodeSandbox>({
   id: 'codemode',
   tools: SCRIPT_TOOLS,
   sessionLayer: codeSandboxLayer,

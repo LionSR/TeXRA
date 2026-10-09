@@ -1,11 +1,13 @@
 /**
  * A tool call made under a run, as only the harness's built-in tools read
- * it: its place in the run (`RunCall`: the files the run read, the
+ * it: its place in the run (`RunCall`: the run's step and callbacks, the
  * response and attempt it belongs to), the script that issued it
  * (`IssuingScript`), and a `script` call's door to the run's tools
  * (`ScriptCalls`). The public contract every tool reads, the run
  * included, is `ToolContext` (`@agent/core/tools/ToolTypes`); an app's
- * tool reads nothing here.
+ * tool reads none of those. The read-before-edit helpers here
+ * (`recordToolFileRead`, `requireFileReadForEdit`) read the run's
+ * `fileService.readFiles` through `ToolContext`, so any tool may use them.
  */
 import { Context, Data, Effect } from 'effect';
 
@@ -112,10 +114,13 @@ export interface ScriptScope extends ScriptSource {
 }
 
 /**
- * The rest of what a tool reads of its run (`ToolRun`, whose id the core
- * declares): its session, model, policy, configuration and scope. A tool
- * that starts something the run should stop at its end registers that stop
- * on the run's scope. A plugin contract that narrows to what app tools read.
+ * The rest of what a plugin's tool reads of its run (`ToolRun`, whose id
+ * the core declares): exactly the fields the app's tools read. Its session,
+ * policy, configuration, model, delegation scope, scope (a tool that starts
+ * something the run should stop registers that stop there) and opening;
+ * and, for the documents plugin, its document task and trace; and its run
+ * files, which hold what the run read (`fileService.readFiles`).
+ * What only the built-ins read is `BuiltinRun`.
  */
 declare module '../core/tools/ToolTypes.js' {
   interface ToolRun {
@@ -124,21 +129,22 @@ declare module '../core/tools/ToolTypes.js' {
     readonly config: AgentRunShape['config'];
     readonly model: AgentRunShape['model'];
     readonly delegationAgentScope?: AgentRunShape['delegationAgentScope'];
-    readonly steps: AgentRunShape['steps'];
     readonly scope: AgentRunShape['scope'];
-    readonly task: AgentRunShape['task'];
     readonly opening: AgentRunShape['opening'];
+    readonly task: AgentRunShape['task'];
     readonly logger: AgentRunShape['logger'];
-    readonly callbacks: AgentRunShape['callbacks'];
     readonly fileService: AgentRunShape['fileService'];
   }
 }
 
+/** The run as the harness's built-in tools read it: what a plugin's tool
+ *  sees (`ToolRun`), with the run's open step and its host callbacks. */
+type BuiltinRun = ToolRun & Pick<AgentRunShape, 'steps' | 'callbacks'>;
+
 /** A call made under a run, as its loop dispatched it (`RunCall`). */
 export interface RunCallShape {
-  /** The files the run read since its loop started, which an edit of an
-   *  existing file requires. Memory only: a resumed run reads again. */
-  readonly readFiles: Set<string>;
+  /** The run the call works for, as the built-ins read it. */
+  readonly run: BuiltinRun;
   /** The response whose call this is; a script's calls are its script's.
    *  A provider's call ids are unique within one response only. */
   readonly responseId: string;
@@ -208,10 +214,7 @@ export const requireRun = (
 /** A built-in's call made under a run: the call, the run, where its
  *  requests open, and its place in the run. */
 export type RunToolCall = ToolContextShape &
-  RunCallShape & {
-    readonly run: ToolRun;
-    readonly requests: CallRequests;
-  };
+  RunCallShape & { readonly requests: CallRequests };
 
 /** {@link requireRun}, with the call's place in its run, for built-ins. */
 export const requireToolRun = (
@@ -230,13 +233,16 @@ export const requireToolRun = (
 /** Count `path` as read by the current call's run: a later edit of it then
  *  needs no fresh read. */
 export const recordToolFileRead = Effect.fn('RunCall.recordFileRead')(
-  function* (path: string): Effect.fn.Return<void, never, RunCall> {
-    if (path) (yield* RunCall)?.readFiles.add(path);
+  function* (path: string): Effect.fn.Return<void, never, ToolContext> {
+    const files = (yield* ToolContext).env.run?.fileService;
+    // Recording a read is this helper's job alone: plugins see it read-only.
+    // cast: what the run read is a Set; the contract shows it read-only.
+    if (path) (files?.readFiles as Set<string> | undefined)?.add(path);
   },
 );
 
 /** The refusal an edit of an existing file gets when the run never read it,
- *  or null: an edit needs a read first, which the run's `readFiles` holds. */
+ *  or null: an edit needs a read first, which the run's files record. */
 export const requireFileReadForEdit = Effect.fn('RunCall.requireReadForEdit')(
   function* (
     path: string,
@@ -244,9 +250,9 @@ export const requireFileReadForEdit = Effect.fn('RunCall.requireReadForEdit')(
     errorMessage?: string,
     /** How the card names the file; the tracker keys on `path`. */
     displayPath: string = path,
-  ): Effect.fn.Return<ToolResult | null, never, RunCall> {
-    const call = yield* RunCall;
-    if (!exists || call?.readFiles.has(path) === true) {
+  ): Effect.fn.Return<ToolResult | null, never, ToolContext> {
+    const { run } = (yield* ToolContext).env;
+    if (!exists || run?.fileService.readFiles.has(path) === true) {
       return null;
     }
     return errorResult(

@@ -160,9 +160,6 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
   });
 
   // ---------------------------------------------------------------- state
-  // What the run read since this loop started: an edit of an existing file
-  // requires one. Memory only: a resumed run reads again.
-  const readFiles = new Set<string>();
   // The system text a fresh run renders, until its opening batch records it.
   let openingSystem: string | undefined;
   // The text the turn answers with, reported with its end.
@@ -393,7 +390,6 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
           const joined = yield* followUps.joinStopped(state);
           const dispatched = yield* dispatchPendingResponse(
             cell,
-            readFiles,
             (yield* openStep(state, 'dispatch')).tools,
             joined,
           );

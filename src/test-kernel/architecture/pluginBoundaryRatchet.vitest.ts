@@ -3,7 +3,15 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 // Third-party imports
+import { Effect } from 'effect';
 import { describe, expect, it } from 'vitest';
+
+import type {
+  IssuingScript,
+  RunCall,
+  ScriptCalls,
+} from '@agent/runtime/RunCall';
+import type { ChildRuns, RuntimeTool } from '@agent/runtime/ToolServices';
 
 import { TEXRA_PLUGIN_CARDS } from '@texra/tools/pluginCards';
 import { texraPlugins } from '@texra/tools/registry';
@@ -249,5 +257,26 @@ describe('plugin rosters', () => {
         ],
       ],
     });
+  });
+
+  // Failure mode: a plugin's tool requires the built-ins' call services, so
+  // a host serving exactly a plugin tool's services cannot run it. The
+  // compiler refuses it; this probe fails the typecheck if it ever accepts.
+  it("refuses a plugin tool that requires a built-in's call services", () => {
+    type PluginTool = NonNullable<Plugin['tools']>[string];
+    const requiring = <R>(service: R): RuntimeTool<Error, R> => ({
+      definition: { name: 'probe' },
+      call: () => Effect.die(service),
+    });
+    const probes: PluginTool[] = [
+      // @ts-expect-error a plugin's tool never requires RunCall
+      requiring<RunCall>(null as never),
+      // @ts-expect-error nor the issuing script
+      requiring<IssuingScript>(null as never),
+      // @ts-expect-error nor a script's door
+      requiring<ScriptCalls>(null as never),
+      requiring<ChildRuns>(null as never),
+    ];
+    expect(probes).toHaveLength(4);
   });
 });

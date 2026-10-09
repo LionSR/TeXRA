@@ -19,7 +19,7 @@ import { z } from 'zod';
 
 // Local imports
 import { ToolContext } from '@texra-ai/harness';
-import type { ToolServices } from '@agent/runtime/ToolServices';
+import type { PluginToolServices } from '@agent/runtime/ToolServices';
 import { ToolError, type ToolResult } from '@shared/schemas';
 import {
   isTransportReason,
@@ -51,9 +51,9 @@ export const withZoteroPort =
     run: (
       input: I,
       port: number,
-    ) => Effect.Effect<ToolResult, Error, ToolServices>,
+    ) => Effect.Effect<ToolResult, Error, PluginToolServices>,
   ) =>
-  (input: I): Effect.Effect<ToolResult, Error, ToolServices> =>
+  (input: I): Effect.Effect<ToolResult, Error, PluginToolServices> =>
     Effect.gen(function* () {
       const call = yield* ToolContext;
       return yield* run(
