@@ -5,7 +5,7 @@ import { lookup, ReasoningEffort as E, type ModelConfig } from 'llm-zoo';
 import { chooseReasoning, type ReasoningRequest } from '@texra-ai/llm';
 import { decideReasoning, type ReasoningRoute } from '@model/reasoningLevel';
 
-import { modelFileName } from '@shared/constants/workflowOutput';
+import { modelFileName } from '@texra/utils/files/outputFileUtils';
 
 const model = (ref: string): ModelConfig => {
   const config = lookup(ref);

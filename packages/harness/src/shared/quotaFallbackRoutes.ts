@@ -1,8 +1,5 @@
 import { CHATGPT_AUTH, GROK_AUTH } from '@shared/model/accountAuth';
-import {
-  CODING_PLAN_SUBSCRIPTIONS,
-  type DeclinableUsageRoute,
-} from './schemas/usage';
+import type { DeclinableUsageRoute } from './schemas/usage';
 import type { ExhaustionReason } from './schemas/errors';
 
 /**
@@ -44,14 +41,18 @@ const QUOTA_FALLBACK_ROUTES: readonly QuotaFallbackRoute[] = Object.freeze([
     retryFallbackName: 'your own xAI API key',
     retrySourceName: GROK_AUTH.subscriptionLabel,
   }),
-  ...CODING_PLAN_SUBSCRIPTIONS.map((plan) =>
-    Object.freeze({
-      usageRoute: plan.usageRoute,
-      exhaustionReason: plan.exhaustionReason,
-      retryFallbackName: plan.retryFallbackName,
-      retrySourceName: plan.retrySourceName,
-    }),
-  ),
+  Object.freeze({
+    usageRoute: 'kimi-code-subscription',
+    exhaustionReason: 'kimi-code-subscription',
+    retryFallbackName: 'your own Moonshot API keys',
+    retrySourceName: 'Kimi Code subscription',
+  }),
+  Object.freeze({
+    usageRoute: 'glm-coding-plan-subscription',
+    exhaustionReason: 'glm-coding-plan',
+    retryFallbackName: 'the regular GLM endpoint',
+    retrySourceName: 'GLM Coding Plan',
+  }),
 ]);
 
 const ROUTE_BY_USAGE = new Map<DeclinableUsageRoute, QuotaFallbackRoute>(

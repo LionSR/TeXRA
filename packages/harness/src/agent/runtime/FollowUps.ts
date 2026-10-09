@@ -164,7 +164,7 @@ export const claimFollowUps = Effect.fn('FollowUps.claim')(function* (
       const files = content.mediaFiles ?? [];
       const media = yield* mediaInputParts(
         files.map((path) => run.fileService.createLocation(path)),
-        bound,
+        bound.config.capabilities,
         logger,
         run.session.roots.config,
       );

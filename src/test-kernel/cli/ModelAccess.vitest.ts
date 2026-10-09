@@ -22,8 +22,11 @@ vi.mock('@model/computeModelOptions', () => ({
   readModelAvailabilityInputs: readModelAvailabilityInputsMock,
   // Availability is read once and finished purely, so a case seeds the option
   // rows on the read and the pure finisher hands them straight back.
-  modelOptionsFrom: (rows: readonly ModelOptionData[]) => rows,
   usageRouteFrom: () => undefined,
+}));
+// The availability read is stubbed to rows already.
+vi.mock('@texra/model/modelOptions', () => ({
+  modelOptionsFrom: (rows: readonly ModelOptionData[]) => rows,
 }));
 
 /** A registry model outside the visible list, typed in another case. */

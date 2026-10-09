@@ -73,6 +73,9 @@ vi.mock('@model/computeModelOptions', async (importOriginal) => ({
   readModelAvailabilityInputs,
   // The mocked read resolves the rows this fixture wants; the pure finisher
   // hands them back.
+}));
+// The availability read is stubbed to rows already.
+vi.mock('@texra/model/modelOptions', () => ({
   modelOptionsFrom: (rows: readonly ModelOptionData[]) => rows,
 }));
 

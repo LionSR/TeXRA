@@ -6,15 +6,31 @@
  * to the process usage log, which bills per call.
  */
 import { Effect } from 'effect';
-import { turnCost, type TurnResult } from '@texra-ai/llm';
+import { turnCost, type ModelRoute, type TurnResult } from '@texra-ai/llm';
 
 import type { BoundModel } from '@agent/runtime/modelAccess/ModelAccess';
 import { environment } from '@platform/defaults/nodeWorkspace';
 import type { SettingsStores } from '@shared/config/settingsAccess';
-import type { NormalizedUsage, RunId } from '@shared/schemas';
+import type { NormalizedUsage, RunId, UsageRoute } from '@shared/schemas';
 import type { UsageLog } from '@shared/usageLog';
 import { roundTo } from '@utils/core';
 import { ensureError } from '@utils/errors/errorMessage';
+
+/**
+ * What a route bills: the plan a direct key pays through, a subscription, or
+ * the user's own key (OpenRouter, the editor, the validation model).
+ */
+function usageRouteOf(route: ModelRoute): UsageRoute {
+  switch (route.kind) {
+    case 'api-key':
+      return route.usageRoute;
+    case 'chatgpt-subscription':
+    case 'xai-subscription':
+      return route.kind;
+    default:
+      return 'api-key';
+  }
+}
 
 /**
  * The priced usage of one turn, or `null` when the provider reported none.
@@ -26,6 +42,7 @@ export function priceTurnUsage(
   responseTimeMs: number,
 ): NormalizedUsage | null {
   if (usage === null) return null;
+  const usageRoute = usageRouteOf(bound.route);
   const provider = usage.providerUsage;
   const inputTokens = usage.inputTokens ?? 0;
   const cached = usage.cachedInputTokens ?? undefined;
@@ -51,13 +68,15 @@ export function priceTurnUsage(
     inputTokens,
     outputTokens: usage.outputTokens ?? 0,
     cost: turnCost(bound.config, usage, {
-      plan: bound.usageRoute !== 'api-key',
-      tier: bound.serviceTier,
+      plan: usageRoute !== 'api-key',
+      tier: bound.billing.serviceTier,
     }),
     responseTimeMs,
     provider: bound.origin.protocol,
-    usageRoute: bound.usageRoute,
-    ...(bound.usagePlan !== undefined ? { usagePlan: bound.usagePlan } : {}),
+    usageRoute,
+    ...(bound.billing.plan !== undefined
+      ? { usagePlan: bound.billing.plan }
+      : {}),
     ...(cached !== undefined ? { cachedInputTokens: cached } : {}),
     ...(cached !== undefined && inputTokens >= cached
       ? { cacheMissInputTokens: inputTokens - cached }

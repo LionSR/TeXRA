@@ -4,10 +4,7 @@ import { MODEL_CONFIGS } from 'llm-zoo';
 import { describe, expect, vi } from 'vitest';
 
 import { apiKeySecretName } from '@texra-ai/llm';
-import {
-  modelOptionsFrom,
-  readModelAvailabilityInputs,
-} from '@model/computeModelOptions';
+import { readModelAvailabilityInputs } from '@model/computeModelOptions';
 import {
   copilotRouteUnavailableReason,
   discoverCopilotRoutes,
@@ -28,6 +25,7 @@ import {
   hostStores,
   installPlatform,
 } from '@test/support/setupPlatform';
+import { modelOptionsFrom } from '@texra/model/modelOptions';
 
 /**
  * The availability read over the installed fake host's language-model port,

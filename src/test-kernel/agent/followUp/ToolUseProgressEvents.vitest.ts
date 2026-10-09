@@ -148,13 +148,13 @@ describe('the tool-use turn', () => {
 
   it.effect.each([true, false])(
     'forces one terminal-tool turn only where the provider can force it (%s)',
-    (supportsForcedToolChoice) =>
+    (forcedToolChoice) =>
       Effect.gen(function* () {
         const session = yield* quietSession();
         const { requests, state } = yield* runScript({
           runId: startedRun(session),
           session,
-          bound: { supportsForcedToolChoice },
+          bound: { forcedToolChoice },
           finalToolName: 'submit_output',
           tools: { submit_output: echoTool('submit_output') },
           script: [textTurn('Draft answer'), textTurn('Still drafting')],
@@ -164,7 +164,7 @@ describe('the tool-use turn', () => {
         // turn where the route supports it.
         expect(requests.map((request) => request.toolChoice)).toEqual([
           undefined,
-          supportsForcedToolChoice ? { name: 'submit_output' } : undefined,
+          forcedToolChoice ? { name: 'submit_output' } : undefined,
         ]);
         // The instruction is written once, forced or not.
         expect(

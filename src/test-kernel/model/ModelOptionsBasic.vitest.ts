@@ -7,7 +7,7 @@ import {
   DEFAULT_HELPER_MODEL,
   DEFAULT_MODELS,
 } from '@shared/constants/defaultModels';
-import { isExpensiveModel } from '@shared/schemas';
+import { isExpensiveModel } from '@texra/shared/model/modelPicker';
 
 // Local imports - model
 

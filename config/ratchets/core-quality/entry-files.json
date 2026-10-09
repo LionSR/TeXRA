@@ -1,7 +1,7 @@
 {
-  "@texra-ai/harness": 365,
+  "@texra-ai/harness": 364,
   "@texra-ai/harness/node": 132,
-  "@texra-ai/harness/plugins": 356,
+  "@texra-ai/harness/plugins": 355,
   "@texra-ai/harness/schemas": 71,
   "@texra-ai/llm": 17,
   "@texra-ai/llm/node": 30

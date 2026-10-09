@@ -267,7 +267,7 @@ const revisionMedia = Effect.fn('documents.revisionMedia')(function* (
   const configured = run.config.mediaFiles.map(
     (file) => deps.fileService.createLocation(file).absolutePath,
   );
-  if (!bound.supportsVision) return configured;
+  if (!bound.config.capabilities.supportsVision) return configured;
   const media = new LatexMediaManager(
     deps.logger,
     deps.roots,

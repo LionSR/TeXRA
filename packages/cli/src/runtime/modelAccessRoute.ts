@@ -12,7 +12,7 @@ import {
   CODING_PLAN_SUBSCRIPTIONS,
   type CodingPlanSubscription,
   type CodingPlanSubscriptionId,
-} from '@shared/schemas';
+} from '@texra/shared/model/codingPlans';
 import { OWN_API_KEYS } from '@ui/copy/modelAccess';
 
 // Kept to one rendered row: the /login form and the account panel both

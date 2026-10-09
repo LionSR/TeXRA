@@ -42,9 +42,9 @@ import {
 } from '@model/subscriptionAccess';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import {
-  codexAccountLabel,
   type SUBSCRIPTION_AUTH_PROVIDERS,
   type SubscriptionAuthStatus,
+  codexAccountLabel,
   xaiAccountLabel,
 } from '@shared/model/subscriptionAuth';
 import { toErrorMessage } from '@utils/errors/errorMessage';

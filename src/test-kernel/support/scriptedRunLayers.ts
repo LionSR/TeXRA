@@ -26,6 +26,7 @@ import {
   ModelAccess,
   type BoundModel,
 } from '@agent/runtime/modelAccess/ModelAccess';
+import { routePolicies } from '@agent/runtime/modelAccess/failureInfo';
 import { PersonaSchema } from '@shared/schemas';
 import {
   MODEL_RETRY_MAX_ATTEMPTS_SETTING,
@@ -60,26 +61,28 @@ const unusedModel = new Proxy({} as Model, {
   },
 });
 
-function testBoundModel(overrides: Partial<BoundModel> = {}): BoundModel {
-  const supportsVision = overrides.supportsVision ?? false;
+/** A scenario's binding: any field of it, and whether its model reads images. */
+type TestBinding = Partial<BoundModel> & { readonly supportsVision?: boolean };
+
+function testBoundModel({
+  supportsVision = false,
+  ...overrides
+}: TestBinding = {}): BoundModel {
   return {
     modelId: 'test-model',
-    config: buildTestModelConfig({ capabilities: { supportsVision } }),
-    reasoning: { thinking: false, effort: null, mode: null },
+    config: buildTestModelConfig({
+      contextWindow: 200_000,
+      capabilities: { supportsVision },
+    }),
     backend: 'deepseek',
     model: unusedModel,
     origin: TEST_ORIGIN,
     route: { kind: 'api-key', provider: 'deepseek', usageRoute: 'api-key' },
-    usageRoute: 'api-key',
-    contextWindow: 200_000,
-    supportsVision,
-    supportsNativePdf: false,
-    supportsNativeAudio: false,
-    supportsForcedToolChoice: true,
-    wireRouteKey: 'test-route',
-    modelRetryRouteKey: 'test-route/test-model',
-    backgroundCapable: false,
+    forcedToolChoice: true,
     persistentConnection: false,
+    billing: {},
+    routes: routePolicies(['test-route'], 'test-model'),
+    delivery: Effect.succeed('foreground'),
     automaticRetries: MODEL_RETRY_MAX_ATTEMPTS_SETTING.defaultValue,
     textOnly: false,
     ...overrides,
@@ -157,7 +160,6 @@ const unreachedModelAccess = Layer.succeed(ModelAccess, {
   bind: () => Effect.die(new Error('A scripted run binds no model.')),
   admit: () => Effect.die(new Error('A scripted run switches no model.')),
   credentialSwitch: () => Effect.succeed(null),
-  delivery: () => Effect.succeed('foreground'),
 });
 
 function scriptedInvoker(
@@ -313,7 +315,7 @@ export interface ScriptedRunInit {
   readonly session: SessionHandle;
   readonly tools?: Record<string, ITool>;
   readonly logger?: TraceEmitter;
-  readonly bound?: Partial<BoundModel>;
+  readonly bound?: TestBinding;
   /** A child run: its parent owns continuation across its turns. */
   readonly parentRunId?: RunId | null;
   /** Headless: the run stops after one turn instead of parking for input. */

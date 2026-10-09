@@ -145,7 +145,12 @@ vi.mock('@model/computeModelOptions', () => ({
   readModelAvailabilityInputs: mocks.readModelAvailabilityInputs,
   // Availability is read once and finished purely, so a case seeds the option
   // rows on the read and the pure finisher hands them straight back.
-  modelOptionsFrom: (rows: readonly ModelOptionData[]) => rows,
+  // The availability read is stubbed to rows; their verdicts are the rows'.
+  modelVerdictsFrom: (rows: readonly ModelOptionData[]) =>
+    rows.map(({ value, availability }) => ({
+      model: value,
+      availability: availability ?? 'provider-key',
+    })),
 }));
 
 const PARENT_RUN_ID = 'aaaaaa222222' as RunId;

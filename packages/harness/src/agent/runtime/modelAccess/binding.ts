@@ -2,9 +2,9 @@
  * A decided route made into a `BoundModel`: the editor's model for a Copilot
  * route, the canned validation model, or a wire model `@texra-ai/llm` binds
  * with the route's one credential and the vendor knobs the settings hold.
- * Also the facts the run reads beside the `Model`: its window, its media
- * support, the retry gate's route keys, whether a turn may run as
- * background work.
+ * Also the facts the run reads beside the `Model`: the config it runs and
+ * bills with (the media its route carries included), the retry gate's
+ * routes, and how each turn is delivered.
  */
 import { hash } from 'node:crypto';
 
@@ -19,16 +19,20 @@ import { bindModel as bindWireModel } from '@texra-ai/llm/node';
 import { validationModel } from '@agent/runtime/run/validationModel';
 import { RouteUnavailable } from '@common/errors/agentErrors';
 import { decideReasoning } from '@model/reasoningLevel';
-import type { BackgroundToggles, ModelSettings } from '@model/modelSettings';
+import type { ModelOptionStores } from '@model/computeModelOptions';
+import {
+  readBackgroundToggles,
+  type BackgroundToggles,
+  type ModelSettings,
+} from '@model/modelSettings';
 import type { CopilotModelRoute } from '@model/copilotRouting';
-import type { PlatformSecrets } from '@platform/secrets';
 import { modelFetch } from '@platform/defaults/longRunningModelTransport';
 import { LanguageModel } from '@platform/languageModel';
 import type { ModelBackend } from '@shared/schemas';
 
 import { routeCredential } from './credentials';
 import { PROTOCOL_BY_BACKEND, type RouteDecision } from './routeDecision';
-import type { CallFailure } from './failureInfo';
+import { routePolicies, type CallFailure } from './failureInfo';
 import type { BindRequest, BoundModel } from './ModelAccess';
 import type { ModelConfig } from 'llm-zoo';
 import type { HttpClient } from 'effect/http';
@@ -49,31 +53,27 @@ export interface BindPlan {
   readonly backend: ModelBackend;
 }
 
-/** A binding's retry-gate keys: one wire route, and it narrowed to one model. */
-function routeKeys(wire: readonly string[], model: string) {
-  const wireRouteKey = JSON.stringify(wire);
-  return {
-    wireRouteKey,
-    modelRetryRouteKey: JSON.stringify([wireRouteKey, model]),
-  };
-}
-
 /**
- * Whether a turn runs as background work: a text-only turn on a binding that
- * can, with its provider's toggle on.
+ * How a turn on a binding is delivered: as background work when the binding
+ * can, the turn is text-only and its provider's toggle is on. The toggles are
+ * read live each turn, so a flip mid-run applies to the next one (#12710).
  */
-export function backgroundOn(
+function backgroundOn(
   toggles: BackgroundToggles,
-  bound: Pick<BoundModel, 'backgroundCapable' | 'textOnly'> & {
+  turn: {
     readonly protocol: ModelOrigin['protocol'];
     readonly modelName: string;
+    readonly textOnly: boolean;
   },
 ): boolean {
-  if (!bound.backgroundCapable || !bound.textOnly) return false;
-  if (bound.protocol === 'google-interactions')
+  if (!turn.textOnly) return false;
+  if (turn.protocol === 'google-interactions')
     return toggles.googleInteractions;
-  return bound.modelName.toLowerCase().startsWith('gpt') && toggles.responses;
+  return turn.modelName.toLowerCase().startsWith('gpt') && toggles.responses;
 }
+
+/** A binding that never runs background work. */
+const FOREGROUND = Effect.succeed('foreground' as const);
 
 /** The reasoning `config` asks for on `plan`'s route, its substitution logged. */
 const reasoningOf = Effect.fn('binding.reasoning')(function* (
@@ -111,10 +111,19 @@ const bindEditor = Effect.fn('binding.editor')(function* (
   const routed = route.effectiveConfig;
   const requestedModel = route.reference.id;
   const deployment = { vendor: route.reference.vendor, version: route.version };
+  // A choice the route cannot carry still fails the bind.
+  yield* reasoningOf(plan, plan.requested, false);
   return {
     ...commonOf(plan),
-    config: routed,
-    reasoning: yield* reasoningOf(plan, plan.requested, false),
+    // The editor takes images only: no native PDF or audio input.
+    config: {
+      ...routed,
+      capabilities: {
+        ...routed.capabilities,
+        supportsNativePdf: false,
+        supportsNativeAudio: false,
+      },
+    },
     model: yield* (yield* LanguageModel).acquire({
       protocol: 'vscode-lm',
       requestedModel,
@@ -130,25 +139,21 @@ const bindEditor = Effect.fn('binding.editor')(function* (
       deployment,
     },
     route: { kind: 'copilot', route },
-    usageRoute: 'api-key',
-    contextWindow: routed.contextWindow,
-    supportsVision: routed.capabilities.supportsVision,
-    supportsNativePdf: false,
-    supportsNativeAudio: false,
-    supportsForcedToolChoice: false,
-    ...routeKeys(
+    forcedToolChoice: false,
+    persistentConnection: false,
+    billing: {},
+    routes: routePolicies(
       ['vscode-lm', deployment.vendor, deployment.version],
       requestedModel,
     ),
-    backgroundCapable: false,
-    persistentConnection: false,
+    delivery: FOREGROUND,
   };
 });
 
 /** Bind `plan`'s decided route into the caller's scope. */
 export const bindRoute = Effect.fn('bindRoute')(function* (
   plan: BindPlan,
-  secrets: PlatformSecrets,
+  stores: ModelOptionStores,
 ): Effect.fn.Return<
   BoundModel,
   CallFailure,
@@ -161,22 +166,27 @@ export const bindRoute = Effect.fn('bindRoute')(function* (
     return yield* bindEditor(plan, route.route);
   if (protocol === 'validation') {
     const bound = validationModel(requested);
+    yield* reasoningOf(plan, requested, false);
     return {
       ...commonOf(plan),
-      config: requested,
-      reasoning: yield* reasoningOf(plan, requested, false),
+      // The canned model reads text only.
+      config: {
+        ...requested,
+        capabilities: {
+          ...requested.capabilities,
+          supportsVision: false,
+          supportsNativePdf: false,
+          supportsNativeAudio: false,
+        },
+      },
       model: bound.model,
       origin: bound.origin,
       route: { kind: 'validation' },
-      usageRoute: 'api-key',
-      contextWindow: requested.contextWindow,
-      supportsVision: false,
-      supportsNativePdf: false,
-      supportsNativeAudio: false,
-      supportsForcedToolChoice: true,
-      ...routeKeys([requested.provider, 'validation'], requested.id),
-      backgroundCapable: false,
+      forcedToolChoice: true,
       persistentConnection: false,
+      billing: {},
+      routes: routePolicies([requested.provider, 'validation'], requested.id),
+      delivery: FOREGROUND,
     };
   }
   if (
@@ -194,7 +204,7 @@ export const bindRoute = Effect.fn('bindRoute')(function* (
     route,
     config,
     facts,
-    secrets,
+    stores.secrets,
     request.renew === true,
   );
   const codex = credential.route === 'chatgpt-subscription';
@@ -227,7 +237,6 @@ export const bindRoute = Effect.fn('bindRoute')(function* (
       // Background delivery, where the binding can carry it, wins over the
       // persistent WebSocket.
       background: backgroundOn(settings.background, {
-        backgroundCapable: true,
         protocol,
         modelName: config.id,
         textOnly: request.textOnly,
@@ -235,22 +244,20 @@ export const bindRoute = Effect.fn('bindRoute')(function* (
       fetch: yield* modelFetch,
     },
   });
+  const turn = { protocol, modelName: config.id, textOnly: request.textOnly };
   return {
     ...commonOf(plan),
     config,
-    reasoning,
-    ...(bound.serviceTier === 'fast' && { serviceTier: 'fast' as const }),
     model: bound.model,
     origin: bound.origin,
     route,
-    usageRoute: credential.usageRoute,
-    ...(codex && credential.plan ? { usagePlan: credential.plan } : {}),
-    contextWindow: config.contextWindow,
-    supportsVision: config.capabilities.supportsVision,
-    supportsNativePdf: config.capabilities.supportsNativePdf,
-    supportsNativeAudio: config.capabilities.supportsNativeAudio,
-    supportsForcedToolChoice: bound.forcedToolChoice,
-    ...routeKeys(
+    forcedToolChoice: bound.forcedToolChoice,
+    persistentConnection: bound.persistentConnection,
+    billing: {
+      ...(bound.serviceTier === 'fast' && { serviceTier: 'fast' as const }),
+      ...(codex && credential.plan ? { plan: credential.plan } : {}),
+    },
+    routes: routePolicies(
       [
         config.provider,
         credential.route,
@@ -263,7 +270,10 @@ export const bindRoute = Effect.fn('bindRoute')(function* (
       ],
       config.id,
     ),
-    backgroundCapable: bound.background,
-    persistentConnection: bound.persistentConnection,
+    delivery: bound.background
+      ? Effect.map(readBackgroundToggles(stores), (toggles) =>
+          backgroundOn(toggles, turn) ? 'background' : 'foreground',
+        )
+      : FOREGROUND,
   };
 });

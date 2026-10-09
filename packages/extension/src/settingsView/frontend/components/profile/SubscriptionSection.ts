@@ -19,8 +19,8 @@ import {
   type SubscriptionUsageSnapshot,
 } from '@shared/schemas';
 import {
-  codexAccountLabel,
   type SubscriptionAuthStatus,
+  codexAccountLabel,
   xaiAccountLabel,
 } from '@shared/model/subscriptionAuth';
 import { CHATGPT_AUTH, GROK_AUTH } from '@shared/model/accountAuth';
