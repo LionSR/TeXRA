@@ -70,18 +70,18 @@ export type LogWriteError = DatabaseNotOwner | DatabaseWriteFailed;
 /** A claim the store would not give this process. */
 type ClaimError = DatabaseNotOwner | DatabaseReadFailed | DatabaseWriteFailed;
 
-/** What one transaction's job holds: the ordered append, and the claim
- *  take-over a registration makes before it appends. */
+/** What one transaction's job holds: the ordered append (each in this
+ *  transaction's order), a registration's claim take-over, and what runs
+ *  once it commits. */
 export interface SessionTransaction {
-  /** Append one batch; every row commits in this transaction's order. */
   readonly append: Append;
-  /**
-   * Take `runId`'s claim for this process (a dead owner's, proved dead
-   * first, or this process's own) and leave it standing for the run's
-   * driver. A claim the job took is given back if the job fails, or if what
-   * it committed never reaches the view.
-   */
+  /** Take `runId`'s claim for this process (a dead owner's, proved dead,
+   *  or its own) and leave it for the run's driver; given back if the job
+   *  fails, or if what it committed never reaches the view. */
   readonly claim: (runId: RunId) => Effect.Effect<void, ClaimError>;
+  /** Run `action` once this transaction committed, before the publisher's
+   *  next job; never if it rolls back. */
+  readonly afterCommit: (action: Effect.Effect<void>) => Effect.Effect<void>;
 }
 
 /**

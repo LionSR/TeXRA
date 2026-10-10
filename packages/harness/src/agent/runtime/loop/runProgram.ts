@@ -7,18 +7,64 @@
  * .agents/docs/implemented/architecture/2026-09-21-effect-design-run-loop-programs.md).
  */
 
-import { Cause, Effect, Exit } from 'effect';
+import { Cause, Effect, Exit, SubscriptionRef } from 'effect';
 
 import { activationRows } from '@agent/storage/runLifecycle';
 import type { AgentTrace, StageHandle } from '@agent/trace';
-import { RUN_OUTCOME, type RunId, type RunOutcome } from '@shared/schemas';
+import {
+  inheritedGrants,
+  NO_APPROVAL_GRANTS,
+  type ApprovalGrantSource,
+} from '@shared/approvalBypassKind';
+import {
+  RUN_OUTCOME,
+  type RunId,
+  type RunOutcome,
+  type SessionEventDraft,
+} from '@shared/schemas';
 import { RunHistory, type RunCell } from '@shared/session/runHistory';
 import type { RunState } from '@shared/session/runStateFold';
 import { ensureError } from '@utils/errors/errorMessage';
 
-import { AgentRun } from '../run/AgentRun';
+import { AgentRun, type AgentRunShape } from '../run/AgentRun';
 import { Runs } from '../runRegistry';
 import type { FollowUps } from '../FollowUps';
+
+/**
+ * A fresh run's registration as its birth job decides it. A child whose
+ * parent edge a detaching stop cut before it was born (the local edge goes
+ * once that detach commits, before this job runs) is born detached: no
+ * parent, and the grants a detach keeps, inherited from that parent. The
+ * edge read is the one `detachChildren` cuts: the registry shares one
+ * `RunParent` between the handle (tracked before this job) and activation.
+ */
+const birthRows = (
+  run: Pick<AgentRunShape, 'runId' | 'session' | 'entry'>,
+): readonly SessionEventDraft[] => {
+  const rows = run.entry.registration ?? [];
+  const start = rows[0];
+  if (
+    start?.type !== 'run.start' ||
+    start.parent === null ||
+    run.session.runs.getHandle(run.runId)?.parent !== null
+  )
+    return rows;
+  const view = SubscriptionRef.getUnsafe(run.session.view.ref);
+  const own = start.approvalPolicy ?? NO_APPROVAL_GRANTS;
+  const source: ApprovalGrantSource<RunId> = {
+    runs: new Map<RunId, { readonly parentId: RunId | null }>(view.runs).set(
+      run.runId,
+      { parentId: start.parent.id },
+    ),
+    policy: new Map(view.policy).set(run.runId, own),
+  };
+  const snapshot = { ...inheritedGrants(source, run.runId), goal: own.goal };
+  return [
+    { ...start, parent: null },
+    ...rows.slice(1),
+    { type: 'approval.policy', aggregateId: start.aggregateId, snapshot },
+  ];
+};
 
 /** Why a run its rows never opened cannot be continued. */
 const NOT_RESUMABLE_MESSAGE =
@@ -39,20 +85,24 @@ export const openRun = (
   Effect.gen(function* () {
     const runHistory = yield* RunHistory;
     const run = yield* AgentRun;
-    const cell = yield* runHistory.open(
-      runId,
-      resume
-        ? {
-            activation: (state: RunState | null) =>
-              state?.phase == null
-                ? Effect.fail(new Error(NOT_RESUMABLE_MESSAGE))
-                : activationRows(run.session, runId, run.config),
-          }
-        : { registration: run.entry.registration ?? [] },
-    );
-    // A resume has entered its run once its activation committed; a fresh
-    // run enters with its opening batch.
-    if (resume) yield* run.entry.entered;
+    const cell = yield* runHistory
+      .open(
+        runId,
+        resume
+          ? {
+              activation: (state: RunState | null) =>
+                state?.phase == null
+                  ? Effect.fail(new Error(NOT_RESUMABLE_MESSAGE))
+                  : activationRows(run.session, runId, run.config),
+            }
+          : { registration: Effect.sync(() => birthRows(run)) },
+      )
+      .pipe(
+        // A resume enters once its activation settled (a fresh run, with its
+        // opening batch); a stop lands before both or after both.
+        Effect.tap(() => (resume ? run.entry.entered : Effect.void)),
+        Effect.uninterruptible,
+      );
     if (!resume && (yield* cell.current).phase !== null)
       return yield* Effect.fail(
         new Error(

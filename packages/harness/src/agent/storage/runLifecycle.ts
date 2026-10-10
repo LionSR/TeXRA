@@ -130,7 +130,7 @@ export const registerRun = Effect.fn('registerRun')(function* (
     const cell = yield* session.runHistory.open(
       runId,
       born
-        ? { registration: rows }
+        ? { registration: Effect.succeed(rows) }
         : { activation: () => Effect.succeed(rows) },
     );
     if (born) yield* cell.append([]);

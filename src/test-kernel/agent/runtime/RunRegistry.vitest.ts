@@ -9,7 +9,11 @@ import type { RunHandle, RunControls } from '@agent/runtime/RunHandle';
 import { RunRegistry } from '@agent/runtime/runRegistry';
 import { RunLive } from '@agent/runtime/runRegistry';
 import { humanGrant } from '@agent/runtime/runApprovalQueue';
-import type { SessionHandle, SessionLog } from '@agent/runtime/SessionHandle';
+import type {
+  SessionHandle,
+  SessionLog,
+  SessionTransaction,
+} from '@agent/runtime/SessionHandle';
 import {
   NO_APPROVAL_GRANTS,
   type ApprovalGrants,
@@ -142,9 +146,20 @@ function createRegistry(
     },
     log: {
       ...real.log,
+      // A detach job's batch lands in `events`; every other write (a run's
+      // end) is the default session's.
       transact: ((work: unknown) =>
         typeof work === 'function'
-          ? real.log.transact(work as never)
+          ? real.log.transact((tx) =>
+              (work as (tx: SessionTransaction) => Effect.Effect<unknown>)({
+                ...tx,
+                // cast: a refused detach fails as the test's own error.
+                append: ((drafts: readonly SessionEventDraft[]) =>
+                  drafts.some((draft) => draft.type === 'run.detach')
+                    ? Effect.as(commit(drafts), [])
+                    : tx.append(drafts)) as SessionTransaction['append'],
+              }),
+            )
           : Effect.as(
               commit(work as readonly SessionEventDraft[]),
               [],

@@ -64,20 +64,10 @@ function contractViolation(
   run: RunId,
   state: RunState,
   rows: readonly RunHistoryDraft[],
-  registration: readonly SessionEventDraft[],
 ): string | null {
   const aggregate = qualifyAggregateId('run', run);
   const settledInBatch = new Map<string, 'success' | 'error'>();
   const hasResponse = rows.some(isResponse);
-  if (registration.length > 0) {
-    if (state.phase !== null || state.runHistoryRows > 0)
-      return 'a registration comes with a run state';
-    if (registration[0]?.type !== 'run.start')
-      return 'a registration does not start with its run.start';
-    const stray = registration.find((row) => row.aggregateId !== aggregate);
-    if (stray !== undefined)
-      return `a registration's ${stray.type} targets ${stray.aggregateId}, not ${aggregate}`;
-  }
   // A row naming another aggregate would fold into the live state and be
   // invisible to a reload, which reads the run's aggregate.
   const foreign = rows.find((row) => row.aggregateId !== aggregate);
@@ -253,6 +243,15 @@ const notOwner =
     effect: Effect.Effect<A, E, R>,
   ): Effect.Effect<A, Exclude<E, DatabaseNotOwner> | RunHistoryRefused, R> =>
     Effect.mapError(effect, (failure) => {
+      // A live foreign owner refusing a claim is the same refusal.
+      if (
+        failure instanceof DatabaseWriteFailed &&
+        failure.cause instanceof DatabaseClaimRefused
+      ) {
+        const { ownerId, verdict } = failure.cause;
+        const detail = `held by ${ownerId} (${verdict})`;
+        return new RunHistoryRefused({ reason: 'not-owner', runId, detail });
+      }
       if (!(failure instanceof DatabaseNotOwner))
         // cast: the instanceof test above ruled DatabaseNotOwner out.
         return failure as Exclude<E, DatabaseNotOwner>;
@@ -305,18 +304,8 @@ const loaded = (
     return state;
   });
 
-/** A claim the store would not move here: the run history's `not-owner`. */
-const claimRefusal =
-  (run: RunId) =>
-  <E>(error: E): RunHistoryRefused | E =>
-    error instanceof DatabaseWriteFailed &&
-    error.cause instanceof DatabaseClaimRefused
-      ? new RunHistoryRefused({
-          reason: 'not-owner',
-          runId: run,
-          detail: `held by ${error.cause.ownerId} (${error.cause.verdict})`,
-        })
-      : error;
+/** No registration. */
+const none: Effect.Effect<readonly SessionEventDraft[]> = Effect.succeed([]);
 
 /**
  * One session's run history over its log (`SessionLog`): every row it
@@ -356,7 +345,7 @@ export function makeRunHistory(
     sessionLog
       .transact((tx) =>
         Effect.gen(function* () {
-          yield* tx.claim(run).pipe(Effect.mapError(claimRefusal(run)));
+          yield* tx.claim(run);
           const before = yield* loaded(
             run,
             foldStored(null, yield* stored(run)),
@@ -385,11 +374,11 @@ export function makeRunHistory(
     run: RunId,
     state: RunState,
     rows: readonly RunHistoryDraft[],
-    registration: readonly SessionEventDraft[],
+    registration: Effect.Effect<readonly SessionEventDraft[]>,
     alongside: Effect.Effect<CoWrite, E, Scope.Scope>,
     within: Append | undefined,
   ) {
-    const violation = contractViolation(run, state, rows, registration);
+    const violation = contractViolation(run, state, rows);
     if (violation !== null)
       return yield* Effect.die(
         new Error(`RunCell.append contract: ${violation}`),
@@ -421,10 +410,21 @@ export function makeRunHistory(
       const refusal = unprepared(run, assembled, kept);
       if (refusal !== null) return yield* refusal;
     }
+    const target = qualifyAggregateId('run', run);
     const job = (append: Append) =>
       Effect.gen(function* () {
+        // Decided in the job, so it reads what the jobs before it left.
+        // The store refuses a `run.start` anywhere but a run's first row.
+        const born = yield* registration;
+        const stray = born.find((row) => row.aggregateId !== target);
+        if (stray !== undefined)
+          return yield* Effect.die(
+            new Error(
+              `RunCell.append contract: a registration's ${stray.type} targets ${stray.aggregateId}`,
+            ),
+          );
         const co = yield* alongside;
-        const own = [...registration, ...rows.map(storedDraft)];
+        const own = [...born, ...rows.map(storedDraft)];
         const written = yield* append([...own, ...co.rows]);
         yield* afterCommit(co.committed);
         return written.slice(0, own.length);
@@ -461,7 +461,7 @@ export function makeRunHistory(
         ? yield* load(run)
         : yield* activate(run, activation)) ?? freshRunState(0);
     const ref = yield* SynchronizedRef.make(seeded);
-    let registration = opening.registration ?? []; // the first append's
+    let registration = opening.registration ?? none; // the first append's
     const cell: RunCell = {
       runId: run,
       current: SynchronizedRef.get(ref),
@@ -478,7 +478,7 @@ export function makeRunHistory(
             registration,
             alongside,
             within,
-          ).pipe(Effect.tap(() => Effect.sync(() => (registration = [])))),
+          ).pipe(Effect.tap(() => Effect.sync(() => (registration = none)))),
         ).pipe(Effect.uninterruptible),
       refresh: SynchronizedRef.updateAndGetEffect(ref, () =>
         Effect.flatMap(load(run), (state) =>

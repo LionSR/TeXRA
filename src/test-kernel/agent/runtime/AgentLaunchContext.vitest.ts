@@ -307,7 +307,7 @@ describe('AgentLaunchContext', () => {
         const { registration } = ctx.entry;
         assert(registration !== null);
         const cell = yield* session.runHistory.open(EXECUTION_ID, {
-          registration,
+          registration: Effect.succeed(registration),
         });
         yield* cell.append([]);
         const created = (yield* Effect.promise(() => recording.read())).slice(

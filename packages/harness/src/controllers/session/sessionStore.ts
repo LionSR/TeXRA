@@ -46,6 +46,7 @@ import {
 import {
   ProcessIdentity,
   PublisherJob,
+  afterCommit,
   SessionEvents,
   type Append,
   type SessionEventsShape,
@@ -251,6 +252,7 @@ const transaction =
             Effect.sync(() => owned.push(...taken)),
           );
         },
+        afterCommit,
       });
       const value = yield* events
         .transact((append) => {
