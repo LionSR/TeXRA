@@ -13,7 +13,6 @@ import { Predicate, Result } from 'effect';
 import {
   MessageSchema,
   ModelOriginSchema,
-  type ModelOrigin,
   RemoteOperationSchema,
   TurnResultSchema,
   type RemoteOperation,
@@ -169,65 +168,4 @@ export function runHistoryRows(
         commit: at?.commit ?? null,
       }),
   });
-}
-
-/**
- * Every place a `ModelOrigin` binding reaches a durable run history row. The
- * assertion reads these typed positions, never a recursive shape sniff, so an
- * `endpoint` key in tool output or a message body stays data, not a refusal.
- */
-function rowOrigins(row: RunHistoryDraft): readonly ModelOrigin[] {
-  if (row.type !== 'model.message') return [];
-  const p = row.payload;
-  switch (p.kind) {
-    case 'attempt':
-      return [p.origin];
-    case 'accepted':
-      return [p.operation.origin];
-    case 'response': {
-      const continuation =
-        p.turn.kind === 'http' ? (p.turn.continuation ?? null) : null;
-      return continuation === null
-        ? [p.turn.requestedOrigin]
-        : [p.turn.requestedOrigin, continuation.origin];
-    }
-    default:
-      return [];
-  }
-}
-
-/**
- * Every `deployment.endpoint` reaching a run history row carries no userinfo,
- * query string or fragment. The package's `EndpointSchema` already refuses
- * these at parse time; this is the loud restatement at the one boundary
- * where a row becomes permanent, never a `?? null`. A value that is not a URL
- * at all is refused the same way rather than thrown out of the generator.
- *
- * Returns what the refusal may say, never the rejected endpoint: the part
- * this check exists to keep out of durable state is exactly the part a
- * refusal would otherwise carry into logs and error reports. Scheme, host and
- * path — the components the constraint permits — plus the names of the
- * components that violated it.
- */
-function unsafeEndpoint(origin: ModelOrigin): string | null {
-  if (origin.protocol === 'vscode-lm') return null;
-  const { endpoint } = origin.deployment;
-  if (!URL.canParse(endpoint)) return 'the endpoint is not a URL';
-  const url = new URL(endpoint);
-  const violations = [
-    url.username !== '' || url.password !== '' ? 'userinfo' : null,
-    endpoint.includes('?') ? 'a query string' : null,
-    endpoint.includes('#') ? 'a fragment' : null,
-  ].filter((part): part is string => part !== null);
-  return violations.length === 0
-    ? null
-    : `${url.protocol}//${url.host}${url.pathname} carries ${violations.join(' and ')}`;
-}
-
-/** The first origin of `row` whose endpoint must not be stored, as what a
- *  refusal may say of it ({@link unsafeEndpoint}), or null. */
-export function unsafeOrigin(row: RunHistoryDraft): string | null {
-  for (const unsafe of rowOrigins(row).map(unsafeEndpoint))
-    if (unsafe !== null) return unsafe;
-  return null;
 }

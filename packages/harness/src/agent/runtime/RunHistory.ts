@@ -7,7 +7,7 @@
  */
 import { Effect, Result, type Scope, SynchronizedRef } from 'effect';
 
-import { PreparedHistorySchema } from '@texra-ai/llm';
+import { PreparedHistorySchema, type ModelOrigin } from '@texra-ai/llm';
 import {
   aggregateId as qualifyAggregateId,
   type RunId,
@@ -43,7 +43,7 @@ import {
   type Append,
   type CoWrite,
 } from '@shared/session/sessionEvents';
-import { runHistoryRows, storedDraft, unsafeOrigin } from './storedTurn';
+import { runHistoryRows, storedDraft } from './storedTurn';
 import type { SessionLog } from './SessionHandle';
 
 const isResponse = (row: RunHistoryDraft): boolean =>
@@ -58,24 +58,6 @@ const isMessageBearing = (row: RunHistoryDraft): boolean =>
 /** The provider-side status a settled call reports in its tool group. */
 const settlementStatus = (status: 'executed' | 'error'): 'success' | 'error' =>
   status === 'executed' ? 'success' : 'error';
-
-/** The first violated precondition of a registration, or null. */
-function registrationViolation(
-  run: RunId,
-  state: RunState,
-  registration: readonly SessionEventDraft[],
-): string | null {
-  const aggregate = qualifyAggregateId('run', run);
-  if (registration.length === 0) return null;
-  if (state.phase !== null || state.runHistoryRows > 0)
-    return 'a registration comes with a run state';
-  if (registration[0]?.type !== 'run.start')
-    return 'a registration does not start with its run.start';
-  const stray = registration.find((row) => row.aggregateId !== aggregate);
-  return stray === undefined
-    ? null
-    : `a registration's ${stray.type} targets ${stray.aggregateId}, not ${aggregate}`;
-}
 
 /** The first violated precondition of `RunCell.append`, or null. */
 function contractViolation(
@@ -160,6 +142,59 @@ function contractViolation(
 }
 
 /**
+ * Every place a `ModelOrigin` binding reaches a durable run history row. The
+ * assertion reads these typed positions, never a recursive shape sniff, so an
+ * `endpoint` key in tool output or a message body stays data, not a refusal.
+ */
+function rowOrigins(row: RunHistoryDraft): readonly ModelOrigin[] {
+  if (row.type !== 'model.message') return [];
+  const p = row.payload;
+  switch (p.kind) {
+    case 'attempt':
+      return [p.origin];
+    case 'accepted':
+      return [p.operation.origin];
+    case 'response': {
+      const continuation =
+        p.turn.kind === 'http' ? (p.turn.continuation ?? null) : null;
+      return continuation === null
+        ? [p.turn.requestedOrigin]
+        : [p.turn.requestedOrigin, continuation.origin];
+    }
+    default:
+      return [];
+  }
+}
+
+/**
+ * Every `deployment.endpoint` reaching a run history row carries no userinfo,
+ * query string or fragment. The package's `EndpointSchema` already refuses
+ * these at parse time; this is the loud restatement at the one boundary
+ * where a row becomes permanent, never a `?? null`. A value that is not a URL
+ * at all is refused the same way rather than thrown out of the generator.
+ *
+ * Returns what the refusal may say, never the rejected endpoint: the part
+ * this check exists to keep out of durable state is exactly the part a
+ * refusal would otherwise carry into logs and error reports. Scheme, host and
+ * path — the components the constraint permits — plus the names of the
+ * components that violated it.
+ */
+function unsafeEndpoint(origin: ModelOrigin): string | null {
+  if (origin.protocol === 'vscode-lm') return null;
+  const { endpoint } = origin.deployment;
+  if (!URL.canParse(endpoint)) return 'the endpoint is not a URL';
+  const url = new URL(endpoint);
+  const violations = [
+    url.username !== '' || url.password !== '' ? 'userinfo' : null,
+    endpoint.includes('?') ? 'a query string' : null,
+    endpoint.includes('#') ? 'a fragment' : null,
+  ].filter((part): part is string => part !== null);
+  return violations.length === 0
+    ? null
+    : `${url.protocol}//${url.host}${url.pathname} carries ${violations.join(' and ')}`;
+}
+
+/**
  * The batch as it would be committed, at provisional commits above the
  * state's. The fold reads a `commit` only to require strict increase and to
  * carry it into the state it returns, so folding these answers "does this
@@ -208,6 +243,15 @@ const notOwner =
     effect: Effect.Effect<A, E, R>,
   ): Effect.Effect<A, Exclude<E, DatabaseNotOwner> | RunHistoryRefused, R> =>
     Effect.mapError(effect, (failure) => {
+      // A live foreign owner refusing a claim is the same refusal.
+      if (
+        failure instanceof DatabaseWriteFailed &&
+        failure.cause instanceof DatabaseClaimRefused
+      ) {
+        const { ownerId, verdict } = failure.cause;
+        const detail = `held by ${ownerId} (${verdict})`;
+        return new RunHistoryRefused({ reason: 'not-owner', runId, detail });
+      }
       if (!(failure instanceof DatabaseNotOwner))
         // cast: the instanceof test above ruled DatabaseNotOwner out.
         return failure as Exclude<E, DatabaseNotOwner>;
@@ -263,19 +307,6 @@ const loaded = (
 /** No registration. */
 const none: Effect.Effect<readonly SessionEventDraft[]> = Effect.succeed([]);
 
-/** A claim the store would not move here: the run history's `not-owner`. */
-const claimRefusal =
-  (run: RunId) =>
-  <E>(error: E): RunHistoryRefused | E =>
-    error instanceof DatabaseWriteFailed &&
-    error.cause instanceof DatabaseClaimRefused
-      ? new RunHistoryRefused({
-          reason: 'not-owner',
-          runId: run,
-          detail: `held by ${error.cause.ownerId} (${error.cause.verdict})`,
-        })
-      : error;
-
 /**
  * One session's run history over its log (`SessionLog`): every row it
  * commits goes through the session's one door, a resume's claim inside the
@@ -314,7 +345,7 @@ export function makeRunHistory(
     sessionLog
       .transact((tx) =>
         Effect.gen(function* () {
-          yield* tx.claim(run).pipe(Effect.mapError(claimRefusal(run)));
+          yield* tx.claim(run);
           const before = yield* loaded(
             run,
             foldStored(null, yield* stored(run)),
@@ -352,15 +383,14 @@ export function makeRunHistory(
       return yield* Effect.die(
         new Error(`RunCell.append contract: ${violation}`),
       );
-    for (const row of rows) {
-      const unsafe = unsafeOrigin(row);
-      if (unsafe !== null)
-        return yield* new RunHistoryRefused({
-          reason: 'unsafe-endpoint',
-          runId: run,
-          detail: `a ${row.type} origin is not a scheme, host and path alone: ${unsafe}`,
-        });
-    }
+    for (const row of rows)
+      for (const unsafe of rowOrigins(row).map(unsafeEndpoint))
+        if (unsafe !== null)
+          return yield* new RunHistoryRefused({
+            reason: 'unsafe-endpoint',
+            runId: run,
+            detail: `a ${row.type} origin is not a scheme, host and path alone: ${unsafe}`,
+          });
     // Fold the batch before publishing it: a committed batch `load` cannot
     // fold is a run nothing can read again.
     const candidate = foldRunState(state, candidates(state, rows));
@@ -380,14 +410,18 @@ export function makeRunHistory(
       const refusal = unprepared(run, assembled, kept);
       if (refusal !== null) return yield* refusal;
     }
+    const target = qualifyAggregateId('run', run);
     const job = (append: Append) =>
       Effect.gen(function* () {
         // Decided in the job, so it reads what the jobs before it left.
+        // The store refuses a `run.start` anywhere but a run's first row.
         const born = yield* registration;
-        const refused = registrationViolation(run, state, born);
-        if (refused !== null)
+        const stray = born.find((row) => row.aggregateId !== target);
+        if (stray !== undefined)
           return yield* Effect.die(
-            new Error(`RunCell.append contract: ${refused}`),
+            new Error(
+              `RunCell.append contract: a registration's ${stray.type} targets ${stray.aggregateId}`,
+            ),
           );
         const co = yield* alongside;
         const own = [...born, ...rows.map(storedDraft)];

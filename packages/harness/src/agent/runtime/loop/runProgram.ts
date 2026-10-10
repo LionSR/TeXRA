@@ -7,10 +7,15 @@
  * .agents/docs/implemented/architecture/2026-09-21-effect-design-run-loop-programs.md).
  */
 
-import { Cause, Effect, Exit } from 'effect';
+import { Cause, Effect, Exit, SubscriptionRef } from 'effect';
 
 import { activationRows } from '@agent/storage/runLifecycle';
 import type { AgentTrace, StageHandle } from '@agent/trace';
+import {
+  inheritedGrants,
+  NO_APPROVAL_GRANTS,
+  type ApprovalGrantSource,
+} from '@shared/approvalBypassKind';
 import {
   RUN_OUTCOME,
   type RunId,
@@ -26,20 +31,39 @@ import { Runs } from '../runRegistry';
 import type { FollowUps } from '../FollowUps';
 
 /**
- * A fresh run's registration as its birth job decides it: a child whose
- * parent edge a detaching stop severed before it was born (its local edge,
- * cleared once the detach committed) is born with no parent.
+ * A fresh run's registration as its birth job decides it. A child whose
+ * parent edge a detaching stop cut before it was born (the local edge goes
+ * once that detach commits, before this job runs) is born detached: no
+ * parent, and the grants a detach keeps, inherited from that parent. The
+ * edge read is the one `detachChildren` cuts: the registry shares one
+ * `RunParent` between the handle (tracked before this job) and activation.
  */
 const birthRows = (
   run: Pick<AgentRunShape, 'runId' | 'session' | 'entry'>,
 ): readonly SessionEventDraft[] => {
   const rows = run.entry.registration ?? [];
-  const severed = run.session.runs.getHandle(run.runId)?.parent === null;
-  return rows.map((row) =>
-    row.type === 'run.start' && row.parent !== null && severed
-      ? { ...row, parent: null }
-      : row,
-  );
+  const start = rows[0];
+  if (
+    start?.type !== 'run.start' ||
+    start.parent === null ||
+    run.session.runs.getHandle(run.runId)?.parent !== null
+  )
+    return rows;
+  const view = SubscriptionRef.getUnsafe(run.session.view.ref);
+  const own = start.approvalPolicy ?? NO_APPROVAL_GRANTS;
+  const source: ApprovalGrantSource<RunId> = {
+    runs: new Map<RunId, { readonly parentId: RunId | null }>(view.runs).set(
+      run.runId,
+      { parentId: start.parent.id },
+    ),
+    policy: new Map(view.policy).set(run.runId, own),
+  };
+  const snapshot = { ...inheritedGrants(source, run.runId), goal: own.goal };
+  return [
+    { ...start, parent: null },
+    ...rows.slice(1),
+    { type: 'approval.policy', aggregateId: start.aggregateId, snapshot },
+  ];
 };
 
 /** Why a run its rows never opened cannot be continued. */
