@@ -25,7 +25,7 @@ import { foldRunState, type RunState } from '@shared/session/runStateFold';
 import {
   ResultMetaSchema,
   storedResultMeta,
-  aggregateId,
+  qualifyAggregateId,
   emptyRunEndOutput,
   isDocumentTaskConfig,
   sumRunUsageTotals,
@@ -66,21 +66,23 @@ export function readChildTurnState(
   session: SessionHandle,
   runId: RunId,
 ): Effect.Effect<ChildTurnState, DatabaseReadFailed> {
-  return session.log.rows(aggregateId('run', runId), ['child.turn']).pipe(
-    Effect.map((rows) => {
-      let active: AttemptKey | null = null;
-      let lastCompleted: AttemptKey | null = null;
-      for (const row of rows) {
-        if (row.type !== 'child.turn') continue;
-        const turn = { key: row.attemptId, index: row.turnIndex };
-        if (row.phase !== 'settled') active = turn;
-        else if (active?.key === turn.key && active.index === turn.index)
-          active = null;
-        if (row.phase === 'settled') lastCompleted = turn;
-      }
-      return { active, lastCompleted };
-    }),
-  );
+  return session.log
+    .rows(qualifyAggregateId('run', runId), ['child.turn'])
+    .pipe(
+      Effect.map((rows) => {
+        let active: AttemptKey | null = null;
+        let lastCompleted: AttemptKey | null = null;
+        for (const row of rows) {
+          if (row.type !== 'child.turn') continue;
+          const turn = { key: row.attemptId, index: row.turnIndex };
+          if (row.phase !== 'settled') active = turn;
+          else if (active?.key === turn.key && active.index === turn.index)
+            active = null;
+          if (row.phase === 'settled') lastCompleted = turn;
+        }
+        return { active, lastCompleted };
+      }),
+    );
 }
 
 /**
@@ -94,7 +96,7 @@ export function runEndFromEvents(
   rows: readonly SessionEvent[],
   runId: RunId,
 ): Extract<SessionEvent, { type: 'run.end' }> | null {
-  const id = aggregateId('run', runId);
+  const id = qualifyAggregateId('run', runId);
   const lifecycle = rows.findLast(
     (row): row is Extract<SessionEvent, { type: 'run.end' | 'run.activate' }> =>
       row.aggregateId === id &&
@@ -275,7 +277,7 @@ export const withChildSpend = <
 
 /** Native access to named run metadata, with no file-backed read arm. */
 export function getRunRecords(session: SessionHandle, runId: RunId) {
-  const id = aggregateId('run', runId);
+  const id = qualifyAggregateId('run', runId);
   /**
    * The run's terminal result: the `run.end` row's outcome, error and
    * output, and the usage its run history folds from its priced response

@@ -27,7 +27,7 @@ import {
   type InquiryThreadRecord,
 } from '@shared/plugins/externalInquiry';
 import {
-  aggregateId as qualifyAggregateId,
+  qualifyAggregateId,
   InquiryThreadIdSchema,
   ToolError,
   type RunId,

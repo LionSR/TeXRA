@@ -23,7 +23,7 @@ import stripAnsi from 'strip-ansi';
 
 import { fullTranscriptEntryLayout } from '@cli/chat/tui/panes/transcriptEntryLayout';
 import { isTerminalOutcomePhase } from '@shared/runs/runStatus';
-import { aggregateId, type RunOutcome } from '@shared/schemas';
+import { qualifyAggregateId, type RunOutcome } from '@shared/schemas';
 import type {
   EventsFrame,
   RequestErrorWire,
@@ -111,7 +111,9 @@ export function watchTask(
   return Stream.unwrap(
     Effect.gen(function* () {
       const graph = yield* WebviewSessions.open(task.workspace);
-      const aggregates = [{ id: aggregateId('run', task.runId), fromSeq: 0 }];
+      const aggregates = [
+        { id: qualifyAggregateId('run', task.runId), fromSeq: 0 },
+      ];
       const generation = 1;
       // Begin the generation and name the transcript before the first
       // frame, as a webview shell does before it posts its `Subscribe`.
@@ -168,7 +170,7 @@ export const attachTask = Effect.fn('attachTask')(function* (
   output: TaskAttachOutput,
 ): Effect.fn.Return<RunOutcome | null, TaskWatchEnded> {
   const includeDebugLogs = yield* LogLevel.isEnabled('Debug');
-  const aggregate = aggregateId('run', task.runId);
+  const aggregate = qualifyAggregateId('run', task.runId);
   let printed = 0;
   const printSettled = (run: RunView, ended: boolean): void => {
     if (output.format !== 'text') return;

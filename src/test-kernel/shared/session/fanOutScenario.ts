@@ -7,7 +7,7 @@
 
 import type { ApprovalGrants } from '@shared/approvalBypassKind';
 import {
-  aggregateId as qualifyAggregateId,
+  qualifyAggregateId,
   AgentConfigFieldsSchema,
   emptyRunEndOutput,
   MESSAGE_TYPES,

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
-  aggregateId,
+  qualifyAggregateId,
   DisplaySessionEventSchema,
   LOG_LEVELS,
   MESSAGE_TYPES,
@@ -16,7 +16,7 @@ function trace(message = 'hello'): TraceDocument {
     runId: RUN_ID,
     events: [
       DisplaySessionEventSchema.parse({
-        aggregateId: aggregateId('run', RUN_ID),
+        aggregateId: qualifyAggregateId('run', RUN_ID),
         seq: 1,
         commit: 1,
         origin: null,

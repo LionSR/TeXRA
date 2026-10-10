@@ -14,7 +14,7 @@ import { positionRow } from '@agent/runtime/loop/rows';
 import { retrieveSessionResumeData } from '@agent/runtime/SessionResumeRetrieval';
 import { SessionHandle } from '@agent/runtime/SessionHandle';
 import {
-  aggregateId,
+  qualifyAggregateId,
   emptyRunEndOutput,
   storedRunOutput,
   type RunId,
@@ -70,7 +70,7 @@ describe('retrieveSessionResumeData', () => {
       yield* session.log.transact([
         {
           type: 'run.end',
-          aggregateId: aggregateId('run', runId),
+          aggregateId: qualifyAggregateId('run', runId),
           outcome: 'failed',
           output: storedRunOutput(emptyRunEndOutput()),
         },

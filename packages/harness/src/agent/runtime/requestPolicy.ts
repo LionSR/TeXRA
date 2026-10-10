@@ -28,7 +28,7 @@ import {
   type ApprovalPolicyDenial,
 } from '@shared/approvalPolicy';
 import {
-  aggregateId as qualifyAggregateId,
+  qualifyAggregateId,
   isCredentialRetryFailure,
   type CommitOrdinal,
   type PermissionPayload,

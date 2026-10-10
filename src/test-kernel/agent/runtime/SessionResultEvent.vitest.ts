@@ -9,7 +9,7 @@ import { runWithLifecycle } from '@agent/runtime/AgentRunLifecycle';
 import { Runs } from '@agent/runtime/runRegistry';
 import type { AgentLaunchContext } from '@agent/runtime/AgentLaunchContext';
 import type { RunEndResult } from '@agent/runtime/RunEndResult';
-import { aggregateId, RUN_OUTCOME, type RunId } from '@shared/schemas';
+import { qualifyAggregateId, RUN_OUTCOME, type RunId } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import {
   fakeProcessServices,
@@ -67,9 +67,10 @@ function explodedRun(): Effect.Effect<never, Error> {
 const resultsOf = (ctx: AgentLaunchContext) =>
   Effect.gen(function* () {
     yield* ctx.session.log.settled;
-    const rows = yield* ctx.session.log.rows(aggregateId('run', ctx.runId), [
-      'run.end',
-    ]);
+    const rows = yield* ctx.session.log.rows(
+      qualifyAggregateId('run', ctx.runId),
+      ['run.end'],
+    );
     return rows.flatMap((row): ResultEvent[] =>
       row.type === 'run.end' ? [{ ...row, runId: ctx.runId }] : [],
     );

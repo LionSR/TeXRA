@@ -14,7 +14,7 @@ import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { CliUsageError, type CliContext } from '@cli/runtime/cliContext';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import {
-  aggregateId,
+  qualifyAggregateId,
   emptyRunEndOutput,
   storedRunOutput,
 } from '@shared/schemas';
@@ -100,7 +100,7 @@ async function seedRunRecord(seed: {
     session.log.transact([
       {
         type: 'run.start',
-        aggregateId: aggregateId('run', RUN_ID),
+        aggregateId: qualifyAggregateId('run', RUN_ID),
         identity: { kind: 'agent', agent: seed.config?.agent ?? 'planner' },
         userFollowUpSupport: 'unsupported',
         parent: null,
@@ -117,7 +117,7 @@ async function seedRunRecord(seed: {
       session.runHistory.appendBatch(RUN_ID, null, [
         {
           type: 'run.position',
-          aggregateId: aggregateId('run', RUN_ID),
+          aggregateId: qualifyAggregateId('run', RUN_ID),
           payload: { family: 'toolUse', at: 'turn.ready', turn: 0 },
         },
       ]),
@@ -303,7 +303,7 @@ describe('runResumeCommand', () => {
             seededSession.log.transact([
               {
                 type: 'run.end',
-                aggregateId: aggregateId('run', RUN_ID),
+                aggregateId: qualifyAggregateId('run', RUN_ID),
                 outcome: 'failed',
                 output: storedRunOutput(emptyRunEndOutput()),
               },

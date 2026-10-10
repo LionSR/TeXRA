@@ -8,7 +8,7 @@
  * is answered from these rows in full.
  */
 import {
-  aggregateId as qualifyAggregateId,
+  qualifyAggregateId,
   listingTypeOf,
   referencedAggregates,
   runIdentityDisplayName,

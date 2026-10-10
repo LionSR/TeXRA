@@ -25,7 +25,7 @@ import { SESSION_CLOSE_DEADLINE_MS } from '@agent/runtime/SessionHandle';
 import { withLogChannel } from '@logger/effectLog';
 import { writeLogLine } from '@logger/logSink';
 import {
-  aggregateId as qualifyAggregateId,
+  qualifyAggregateId,
   isDisplaySessionEvent,
   type AggregateId,
   type CommitOrdinal,

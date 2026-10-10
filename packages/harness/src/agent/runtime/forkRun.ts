@@ -17,7 +17,7 @@ import { Effect } from 'effect';
 import { getRunRecords } from '@agent/storage/runRecords';
 import { registrationRows } from '@agent/storage/runLifecycle';
 import {
-  aggregateId,
+  qualifyAggregateId,
   USER_FOLLOW_UP_SUPPORT,
   type RunId,
 } from '@shared/schemas';
@@ -66,7 +66,7 @@ export const forkRun = Effect.fn('forkRun')(function* (
   if (config === null || config.script != null) {
     return yield* refused('Only a conversation can be forked.');
   }
-  const aggregate = aggregateId('run', from.id);
+  const aggregate = qualifyAggregateId('run', from.id);
   const start = (yield* session.log.records(from.id)).find(
     (row) => row.type === 'run.start',
   );

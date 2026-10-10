@@ -13,7 +13,7 @@ import {
   resolveWorkspaceStoragePath,
 } from '@platform/defaults/workspaceStorage';
 import {
-  aggregateId,
+  qualifyAggregateId,
   LOG_LEVELS,
   MESSAGE_TYPES,
   DEFAULT_TOOL_CONFIG,
@@ -84,7 +84,7 @@ const persistTranscriptEntry = (runId: RunId) =>
   session.log.transact([
     {
       type: 'log',
-      aggregateId: aggregateId('run', runId),
+      aggregateId: qualifyAggregateId('run', runId),
       level: LOG_LEVELS.INFO,
       messageType: MESSAGE_TYPES.USER_MESSAGE,
       message: 'hello',

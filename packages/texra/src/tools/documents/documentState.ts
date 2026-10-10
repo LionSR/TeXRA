@@ -26,7 +26,7 @@ import {
   workflowOutputPath,
 } from '@shared/constants/workflowOutput';
 import {
-  aggregateId,
+  qualifyAggregateId,
   fileLocationDisplayPath,
   ToolError,
   type FileLocation,
@@ -124,7 +124,7 @@ export const openDocuments = Effect.fn('documents.open')(function* (
       ),
     );
   const { roots } = session;
-  const aggregate = aggregateId('run', runId);
+  const aggregate = qualifyAggregateId('run', runId);
   const rows = yield* session.log.rows(aggregate, ['plugin.fact']);
   const state = createOutputState(
     roundsFromPersisted(latestDocumentRounds(rows, aggregate) ?? []),

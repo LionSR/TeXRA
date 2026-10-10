@@ -16,7 +16,7 @@ import {
 } from '@agent/storage/runRecords';
 import { withLogChannel } from '@logger/effectLog';
 import type { ProcessServices } from '@platform/processRuntime';
-import { aggregateId, RUN_PHASE, type RunId } from '@shared/schemas';
+import { qualifyAggregateId, RUN_PHASE, type RunId } from '@shared/schemas';
 import { DatabaseRowEarlier, heldElsewhereBy } from '@shared/session/database';
 import { RunHistoryRefused } from '@shared/session/runHistory';
 import { FOLLOW_UP_TYPES, foldRunRows } from '@shared/session/runRows';
@@ -231,7 +231,7 @@ const runLaunchOptions = (options: ResumeRunOptions) => ({
 /** The follow-ups still queued on the run, folded from its durable rows. */
 const queuedFollowUps = (session: SessionHandle, runId: RunId) =>
   Effect.flatMap(
-    session.log.rows(aggregateId('run', runId), FOLLOW_UP_TYPES),
+    session.log.rows(qualifyAggregateId('run', runId), FOLLOW_UP_TYPES),
     (rows) =>
       Effect.try({
         try: () => foldRunRows(rows).followUps,

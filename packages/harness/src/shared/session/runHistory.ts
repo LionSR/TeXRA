@@ -2,7 +2,7 @@
  * The run history: the only reader of run-history-private payloads and the only
  * writer of the run rows. Three operations, each a boundary the row design
  * names, each taking the run id and qualifying its own aggregate access with
- * `aggregateId('run', run)`.
+ * `qualifyAggregateId('run', run)`.
  *
  * Stateless by construction. The loop holds the `RunState`; the run history folds
  * the batch it just committed onto the state it was handed. That is what

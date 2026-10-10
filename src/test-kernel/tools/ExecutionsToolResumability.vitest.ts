@@ -4,7 +4,7 @@ import { it } from '@effect/vitest';
 import { Effect } from 'effect';
 import { beforeEach, describe, expect } from 'vitest';
 
-import { aggregateId, type RunId } from '@shared/schemas';
+import { qualifyAggregateId, type RunId } from '@shared/schemas';
 import type { RunHistoryDraft } from '@shared/session/runStateFold';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
@@ -16,7 +16,7 @@ import { ExecutionsTool } from '@tools/ExecutionsTool';
 function openedParked(runId: RunId): RunHistoryDraft {
   return {
     type: 'run.position',
-    aggregateId: aggregateId('run', runId),
+    aggregateId: qualifyAggregateId('run', runId),
     payload: { family: 'toolUse', at: 'waiting', turn: 0 },
   };
 }

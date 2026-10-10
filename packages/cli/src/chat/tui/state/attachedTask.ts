@@ -6,7 +6,7 @@
 import { Effect, type Scope, Stream } from 'effect';
 
 import {
-  aggregateId,
+  qualifyAggregateId,
   type Outcome,
   type RuntimeRequest,
 } from '@texra-ai/harness';
@@ -83,7 +83,7 @@ export function followAttachedTask(
           ),
         ),
     });
-    const aggregate = aggregateId('run', task.runId);
+    const aggregate = qualifyAggregateId('run', task.runId);
     let seen = false;
     yield* Stream.runForEach(watchTask(client, task), (view) =>
       Effect.suspend(() => {

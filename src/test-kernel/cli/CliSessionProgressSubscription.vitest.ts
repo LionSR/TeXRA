@@ -11,7 +11,7 @@ import {
 import type { CliNdjsonRecord } from '@cli/schemas/cliOutput';
 import { inquiryThreadRow } from '@shared/plugins/externalInquiry';
 import {
-  aggregateId as qualifyAggregateId,
+  qualifyAggregateId,
   type SessionEventDraft,
   USER_FOLLOW_UP_SUPPORT,
 } from '@shared/schemas';

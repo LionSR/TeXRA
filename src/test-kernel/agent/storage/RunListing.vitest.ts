@@ -10,7 +10,7 @@ import {
 } from '@agent/core/definition/AgentConfig';
 import { DatabaseReadFailed } from '@shared/session/database';
 import {
-  aggregateId,
+  qualifyAggregateId,
   emptyRunEndOutput,
   type RunId,
   type RunIdentity,
@@ -53,7 +53,7 @@ async function writeMetadata(id: RunId, meta: SeededRunFacts): Promise<void> {
         session.log.transact([
           {
             type: 'run.start',
-            aggregateId: aggregateId('run', id),
+            aggregateId: qualifyAggregateId('run', id),
             identity: meta.identity,
             userFollowUpSupport: 'unsupported',
             parent:
@@ -74,7 +74,7 @@ async function writeMetadata(id: RunId, meta: SeededRunFacts): Promise<void> {
         {
           type: 'run.description',
           by: 'model',
-          aggregateId: aggregateId('run', id),
+          aggregateId: qualifyAggregateId('run', id),
           description: meta.description,
         },
       ]),
@@ -84,7 +84,7 @@ async function writeMetadata(id: RunId, meta: SeededRunFacts): Promise<void> {
       session.log.transact([
         {
           type: 'run.end',
-          aggregateId: aggregateId('run', id),
+          aggregateId: qualifyAggregateId('run', id),
           outcome: meta.outcome,
           output: emptyRunEndOutput(),
         },

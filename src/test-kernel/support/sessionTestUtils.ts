@@ -7,7 +7,7 @@ import type {
   SessionHandleInit,
 } from '@agent/runtime/SessionHandle';
 import {
-  aggregateId,
+  qualifyAggregateId,
   isTranscriptEvent,
   type AggregateId,
   RUN_PHASE,
@@ -123,7 +123,7 @@ export function publishTestRunStart(
   publishTestRows(session, [
     {
       type: 'run.start',
-      aggregateId: aggregateId('run', runId),
+      aggregateId: qualifyAggregateId('run', runId),
       identity: { kind: 'agent', agent: 'chat' },
       userFollowUpSupport: 'unsupported',
       parent:

@@ -74,7 +74,7 @@ async function writeCanonicalRunFixtures(
         },
       ];
       for (const runFixture of fixtures) {
-        const id = fixture.aggregateId('run', runFixture.runId);
+        const id = fixture.qualifyAggregateId('run', runFixture.runId);
         yield* database.appendAll([
           {
             type: 'run.start',
@@ -109,7 +109,7 @@ async function writeCanonicalRunFixtures(
       // rewriting a single row.
       yield* database.releaseClaims(
         fixtures.map((runFixture) =>
-          fixture.aggregateId('run', runFixture.runId),
+          fixture.qualifyAggregateId('run', runFixture.runId),
         ),
       );
       return yield* database.readAll(0);

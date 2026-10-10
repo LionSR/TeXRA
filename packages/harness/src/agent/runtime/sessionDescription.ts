@@ -16,7 +16,7 @@ import { withLogChannel } from '@logger/effectLog';
 import type { ModelOptionStores } from '@model/computeModelOptions';
 import type { LanguageModel } from '@platform/languageModel';
 import {
-  aggregateId as qualifyAggregateId,
+  qualifyAggregateId,
   RUN_OUTCOME,
   type RunId,
   type RunOutcome,

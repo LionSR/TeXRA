@@ -40,7 +40,7 @@ import { IssuingScript, requireToolRun } from '@agent/runtime/RunCall';
 import type { RunToolCall, ScriptScope } from '@agent/runtime/RunCall';
 import {
   isDocumentTaskConfig,
-  aggregateId,
+  qualifyAggregateId,
   AgentProposalSchema,
   type AgentProposal,
   toJsonValue,
@@ -306,7 +306,9 @@ const reusable = Effect.fn('agent.reusable')(function* (
     );
   siblings.set(key, callId);
   const rows = (yield* Effect.forEach(yield* reuseScope(call), (runId) =>
-    call.run.session.log.rows(aggregateId('run', runId), ['tool.result']),
+    call.run.session.log.rows(qualifyAggregateId('run', runId), [
+      'tool.result',
+    ]),
   )).flat();
   const found = rows.flatMap((row) =>
     row.type === 'tool.result' &&

@@ -9,7 +9,7 @@ import { getRunRecords } from '@agent/storage';
 import { resolveChildRunOutput } from '@agent/storage/childRunOutput';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import {
-  aggregateId,
+  qualifyAggregateId,
   RoundOutputSchema,
   type DeliveredResult,
   type RoundOutput,
@@ -82,7 +82,7 @@ const persistCompletedChild = (parentId: RunId = parentRunId) =>
     yield* session.log.transact([
       {
         type: 'run.start',
-        aggregateId: aggregateId('run', childRunId),
+        aggregateId: qualifyAggregateId('run', childRunId),
         identity: { kind: 'agent', agent: 'draft' },
         userFollowUpSupport: 'unsupported',
         parent: { id: parentId, callId: null },
@@ -96,7 +96,7 @@ const persistCompletedChild = (parentId: RunId = parentRunId) =>
     yield* session.log.transact([
       {
         type: 'run.end',
-        aggregateId: aggregateId('run', childRunId),
+        aggregateId: qualifyAggregateId('run', childRunId),
         outcome: 'completed',
         output: {
           response: '',

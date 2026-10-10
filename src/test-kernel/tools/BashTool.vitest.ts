@@ -15,7 +15,7 @@ import * as toolUseFollowUp from '@agent/followUp/ToolUseFollowUp';
 import { formatToolResultAsText } from '@agent/runtime/run/toolResultText';
 import {
   RUN_OUTCOME,
-  aggregateId,
+  qualifyAggregateId,
   RUN_PHASE,
   type ExecResult,
   type RunId,
@@ -122,7 +122,7 @@ async function parkRunWaiting(runId: RunId): Promise<void> {
   publishTestRows(session, [
     {
       type: 'run.position',
-      aggregateId: aggregateId('run', runId),
+      aggregateId: qualifyAggregateId('run', runId),
       payload: { family: 'toolUse', at: 'waiting' },
     },
   ]);
@@ -785,7 +785,7 @@ describe('BashTool', () => {
               (await recorded.read()).some(
                 (event) =>
                   event.type === 'run.end' &&
-                  event.aggregateId === aggregateId('run', runId) &&
+                  event.aggregateId === qualifyAggregateId('run', runId) &&
                   event.outcome === RUN_OUTCOME.FAILED,
               ),
               true,

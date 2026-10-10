@@ -11,7 +11,7 @@ import { Result } from 'effect';
 import { ModelOriginSchema } from '@texra-ai/llm';
 import { runHistoryRows, storedDraft } from '@agent/runtime/storedTurn';
 import {
-  aggregateId as qualifyAggregateId,
+  qualifyAggregateId,
   emptyRunEndOutput,
   DISPLAY_EVENT_TYPES,
   listingTypeOf,

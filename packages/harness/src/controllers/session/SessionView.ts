@@ -30,7 +30,7 @@ import {
 } from 'effect';
 
 import type { SessionViewAccess } from '@agent/runtime/SessionHandle';
-import { aggregateId, type LocalRuntimeState } from '@shared/schemas';
+import { qualifyAggregateId, type LocalRuntimeState } from '@shared/schemas';
 import { Database, type DatabaseReadFailed } from '@shared/session/database';
 import { SessionInputs } from '@shared/session/sessionInputs';
 import { fold } from '@shared/session/sessionFold';
@@ -153,7 +153,9 @@ export const makeSessionViewAccess = (
     yield* announceRunFacts(
       changes,
       (runId) =>
-        database.readAggregate(aggregateId('run', runId), 1, ['plugin.fact']),
+        database.readAggregate(qualifyAggregateId('run', runId), 1, [
+          'plugin.fact',
+        ]),
       yield* database.currentCommit,
       armsOf((yield* ToolRegistry).entries.values()),
     ).pipe(
@@ -179,7 +181,7 @@ export const makeSessionViewAccess = (
         inputs
           .read(
             runIds.map((id) => ({
-              id: aggregateId('run', id),
+              id: qualifyAggregateId('run', id),
               fromSeq: 0,
             })),
             0,

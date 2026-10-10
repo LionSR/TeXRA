@@ -29,7 +29,7 @@ import type {
 import { tailFrom } from '@agent/runtime/SessionEvents';
 import { withLogChannel } from '@logger/effectLog';
 import {
-  aggregateId as qualifyAggregateId,
+  qualifyAggregateId,
   aggregateTarget,
   type AggregateId,
   type CommitOrdinal,

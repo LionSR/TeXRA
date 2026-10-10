@@ -9,7 +9,7 @@ import {
   rowAggregate,
 } from '@agent/runtime/loop/rows';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import { aggregateId, type RunId } from '@shared/schemas';
+import { qualifyAggregateId, type RunId } from '@shared/schemas';
 import { freshRunState } from '@shared/session/runStateFold';
 import {
   createTestSession,
@@ -37,7 +37,7 @@ describe('run metadata updates', () => {
               {
                 type: 'run.description',
                 by: 'model',
-                aggregateId: aggregateId('run', id),
+                aggregateId: qualifyAggregateId('run', id),
                 description: 'A described session',
               },
             ]),

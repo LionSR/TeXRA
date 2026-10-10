@@ -2,10 +2,7 @@ import { it } from '@effect/vitest';
 import { Effect } from 'effect';
 import { describe, expect } from 'vitest';
 
-import {
-  aggregateId as qualifyAggregateId,
-  RunIdSchema,
-} from '@shared/schemas';
+import { qualifyAggregateId, RunIdSchema } from '@shared/schemas';
 import { closeSessionOf } from '@test/support/sessionEnd';
 import { createFakeWorkspaceRoots } from '@test/support/FakePlatform';
 import {

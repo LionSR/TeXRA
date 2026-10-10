@@ -7,7 +7,7 @@ import { deriveResumability } from '@agent/storage';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { positionRow } from '@agent/runtime/loop/rows';
 import {
-  aggregateId,
+  qualifyAggregateId,
   emptyRunEndOutput,
   RUN_OUTCOME,
   type RunId,
@@ -52,7 +52,7 @@ describe('deriveResumability', () => {
         session.log.transact([
           {
             type: 'run.end',
-            aggregateId: aggregateId('run', runId),
+            aggregateId: qualifyAggregateId('run', runId),
             outcome,
             output: emptyRunEndOutput(),
           },
@@ -82,7 +82,7 @@ describe('deriveResumability', () => {
       yield* session.log.transact([
         {
           type: 'run.config',
-          aggregateId: aggregateId('run', runId),
+          aggregateId: qualifyAggregateId('run', runId),
           config: AgentConfigSchema.parse(
             documentTaskConfig({ agent: 'polish', model: 'test-model' }),
           ),
@@ -92,7 +92,7 @@ describe('deriveResumability', () => {
       yield* session.log.transact([
         {
           type: 'run.end',
-          aggregateId: aggregateId('run', runId),
+          aggregateId: qualifyAggregateId('run', runId),
           outcome: RUN_OUTCOME.FAILED,
           output: emptyRunEndOutput(),
         },

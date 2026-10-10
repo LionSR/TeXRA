@@ -19,7 +19,7 @@ import {
 import { type SessionHandle } from '@agent/runtime/SessionHandle';
 import { resumeRun } from '@agent/runtime/resumeRun';
 import { withProcessServices } from '@platform/processRuntime';
-import { LOG_LEVELS, MESSAGE_TYPES, aggregateId } from '@shared/schemas';
+import { LOG_LEVELS, MESSAGE_TYPES, qualifyAggregateId } from '@shared/schemas';
 import type { JsonValue, LogLevel, MessageType, RunId } from '@shared/schemas';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { testRuntime } from '@test/support/testProcessRuntime';
@@ -111,7 +111,7 @@ async function appendRows(
     taskSession,
     rows.map((row) => ({
       type: 'log' as const,
-      aggregateId: aggregateId('run', runId),
+      aggregateId: qualifyAggregateId('run', runId),
       level: row.level,
       message: row.text ?? '',
       messageType: row.messageType,
@@ -208,14 +208,14 @@ describe('completedRunArchive facade', () => {
                 {
                   type: 'run.description',
                   by: 'model',
-                  aggregateId: aggregateId('run', runId),
+                  aggregateId: qualifyAggregateId('run', runId),
                   description: label,
                 },
               ]);
               publishTestRows(session, [
                 {
                   type: 'response.finalized',
-                  aggregateId: aggregateId('run', runId),
+                  aggregateId: qualifyAggregateId('run', runId),
                   text: `Proof for ${label}.`,
                 },
               ]);
@@ -310,14 +310,14 @@ describe('completedRunArchive facade', () => {
         publishTestRows(session, [
           {
             type: 'log',
-            aggregateId: aggregateId('run', runId),
+            aggregateId: qualifyAggregateId('run', runId),
             level: 'info',
             messageType: MESSAGE_TYPES.USER_MESSAGE,
             message: 'Prove the first lemma.',
           },
           {
             type: 'response.finalized',
-            aggregateId: aggregateId('run', runId),
+            aggregateId: qualifyAggregateId('run', runId),
             text: 'First proof.',
           },
         ]);
@@ -335,7 +335,7 @@ describe('completedRunArchive facade', () => {
         yield* session.log.transact([
           {
             type: 'run.position',
-            aggregateId: aggregateId('run', runId),
+            aggregateId: qualifyAggregateId('run', runId),
             payload: { family: 'toolUse', at: 'turn.ready', turn: 0 },
           },
         ]);
@@ -350,14 +350,14 @@ describe('completedRunArchive facade', () => {
             publishTestRows(session, [
               {
                 type: 'log',
-                aggregateId: aggregateId('run', runId),
+                aggregateId: qualifyAggregateId('run', runId),
                 level: 'info',
                 messageType: MESSAGE_TYPES.USER_MESSAGE,
                 message: 'Now prove the second lemma.',
               },
               {
                 type: 'response.finalized',
-                aggregateId: aggregateId('run', runId),
+                aggregateId: qualifyAggregateId('run', runId),
                 text: 'Second proof.',
               },
             ]);
@@ -379,7 +379,7 @@ describe('completedRunArchive facade', () => {
             session.log.transact([
               {
                 type: 'log',
-                aggregateId: aggregateId('run', runId),
+                aggregateId: qualifyAggregateId('run', runId),
                 level: 'info',
                 message: 'late stream write',
               },

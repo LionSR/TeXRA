@@ -37,7 +37,7 @@ import { isUserAbort } from '@common/errors/sdkError/errorPatterns';
 import { withLogChannel } from '@logger/effectLog';
 import {
   RUN_OUTCOME,
-  aggregateId,
+  qualifyAggregateId,
   type FollowUpContent,
   type DeliveredResult,
   type RunId,
@@ -463,7 +463,7 @@ function attemptTurn<TTurn, R, RTurn>(
 const parkRow = (runId: RunId, phase: 'parked' | 'resumed') =>
   ({
     type: 'child.park',
-    aggregateId: aggregateId('run', runId),
+    aggregateId: qualifyAggregateId('run', runId),
     phase,
   }) as const;
 
@@ -530,7 +530,7 @@ const beginTurn = <TTurn, R>(
       ...(resumed ? [parkRow(runId, 'resumed')] : []),
       {
         type: 'child.turn',
-        aggregateId: aggregateId('run', runId),
+        aggregateId: qualifyAggregateId('run', runId),
         attemptId: loop.attemptId,
         turnIndex: loop.turnIndex,
         phase: 'accepted',

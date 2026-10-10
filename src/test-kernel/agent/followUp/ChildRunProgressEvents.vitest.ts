@@ -15,7 +15,7 @@ import type {
 import { Runs } from '@agent/runtime/runRegistry';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import {
-  aggregateId as qualifyAggregateId,
+  qualifyAggregateId,
   aggregateTarget,
   RUN_OUTCOME,
   RUN_PHASE,

@@ -16,7 +16,7 @@ import { afterEach, describe, expect, vi } from 'vitest';
 // Local imports
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { sweepLeftoverRuns } from '@controllers/session/sweepLeftoverRuns';
-import { aggregateId, type RunId } from '@shared/schemas';
+import { qualifyAggregateId, type RunId } from '@shared/schemas';
 import { closeSessionOf } from '@test/support/sessionEnd';
 import {
   createTestSession,
@@ -68,7 +68,7 @@ describe('committed run removal', () => {
           publishTestRows(session, [
             {
               type: 'request.opened',
-              aggregateId: aggregateId('run', parent),
+              aggregateId: qualifyAggregateId('run', parent),
               requestId: 'question:removed-parent',
               payload: {
                 kind: 'userQuestion',
@@ -99,7 +99,7 @@ describe('committed run removal', () => {
           publishTestRows(session, [
             {
               type: 'run.removed',
-              aggregateId: aggregateId('run', parent),
+              aggregateId: qualifyAggregateId('run', parent),
             },
           ]);
           yield* session.log.settled;
@@ -183,7 +183,7 @@ describe('indexed background-shell cleanup', () => {
           publishTestRows(session, [
             {
               type: 'run.start',
-              aggregateId: aggregateId('run', shell),
+              aggregateId: qualifyAggregateId('run', shell),
               identity: { kind: 'process', tool: 'bash' },
               userFollowUpSupport: 'unsupported',
               parent: null,
@@ -191,7 +191,7 @@ describe('indexed background-shell cleanup', () => {
             },
             {
               type: 'run.start',
-              aggregateId: aggregateId('run', active),
+              aggregateId: qualifyAggregateId('run', active),
               identity: { kind: 'process', tool: 'bash' },
               userFollowUpSupport: 'unsupported',
               parent: null,
@@ -199,7 +199,7 @@ describe('indexed background-shell cleanup', () => {
             },
             {
               type: 'run.start',
-              aggregateId: aggregateId('run', notAShell),
+              aggregateId: qualifyAggregateId('run', notAShell),
               identity: { kind: 'agent', agent: 'assistant' },
               userFollowUpSupport: 'unsupported',
               parent: null,

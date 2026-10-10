@@ -88,7 +88,7 @@ import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { AgentDirectories, AppState } from '@platform/interfaces';
 import { withProcessServices } from '@platform/processRuntime';
 import {
-  aggregateId,
+  qualifyAggregateId,
   aggregateTarget,
   type RunEndOutput,
   type RunId,
@@ -1271,7 +1271,7 @@ export function crashConformanceSuite(plugins: string): void {
           Effect.gen(function* () {
             const roots = testWorkspaceRoots();
             const session = yield* openTestDefaultSession({ roots });
-            const run = aggregateId('run', generateRunId());
+            const run = qualifyAggregateId('run', generateRunId());
             const titled = (description: string) => [
               {
                 type: 'run.description' as const,

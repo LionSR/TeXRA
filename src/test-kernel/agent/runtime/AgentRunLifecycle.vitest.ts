@@ -19,11 +19,7 @@ import type { AgentLaunchContext } from '@agent/runtime/AgentLaunchContext';
 import { attachProviderError } from '@common/errors/sdkError/errorMetadata';
 import { effectDiagnosticsLayer } from '@logger/effectDiagnostics';
 import { setLogSink } from '@logger/logSink';
-import {
-  aggregateId as qualifyAggregateId,
-  RUN_OUTCOME,
-  agentKey,
-} from '@shared/schemas';
+import { qualifyAggregateId, RUN_OUTCOME, agentKey } from '@shared/schemas';
 import type { RunId, RunOutcome } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { SETUP_AGENT_NAME } from '@shared/constants/agents';

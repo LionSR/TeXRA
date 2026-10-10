@@ -7,7 +7,7 @@ import type { ResumeToolUseFromResumeDataOptions } from '@agent/runtime/executeA
 import { resumeRun } from '@agent/runtime/resumeRun';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { RunId } from '@shared/schemas';
-import { aggregateId, RUN_OUTCOME } from '@shared/schemas';
+import { qualifyAggregateId, RUN_OUTCOME } from '@shared/schemas';
 import {
   DatabaseClaimRefused,
   DatabaseReadFailed,
@@ -104,7 +104,7 @@ const resumedFlowTakes = (session: SessionHandle) =>
       yield* session.log.transact(
         batch.followUps.map((followUp) => ({
           type: 'followup.consumed' as const,
-          aggregateId: aggregateId('run', RUN),
+          aggregateId: qualifyAggregateId('run', RUN),
           followUpId: followUp.followUpId,
         })),
       );

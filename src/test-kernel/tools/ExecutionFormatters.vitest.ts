@@ -6,7 +6,7 @@ import { Effect } from 'effect';
 import { Runs } from '@agent/runtime/runRegistry';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import {
-  aggregateId,
+  qualifyAggregateId,
   emptyRunEndOutput,
   RunIdSchema,
   type RunOutcome,
@@ -51,7 +51,7 @@ async function endRun(outcome: RunOutcome): Promise<void> {
   publishTestRows(session, [
     {
       type: 'run.end',
-      aggregateId: aggregateId('run', RUN_ID),
+      aggregateId: qualifyAggregateId('run', RUN_ID),
       outcome,
       output: emptyRunEndOutput(),
     },
@@ -82,7 +82,7 @@ describe('turnAttributionNote', () => {
           phase: 'accepted' | 'settled',
         ): SessionEventDraft => ({
           type: 'child.turn',
-          aggregateId: aggregateId('run', RUN_ID),
+          aggregateId: qualifyAggregateId('run', RUN_ID),
           attemptId: 'attempt-1',
           turnIndex,
           phase,

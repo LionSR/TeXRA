@@ -40,7 +40,7 @@
 
 import {
   aggregateTarget,
-  aggregateId as qualifyAggregateId,
+  qualifyAggregateId,
   MESSAGE_TYPES,
   RUN_PHASE,
   RUN_LIFECYCLE_READY,

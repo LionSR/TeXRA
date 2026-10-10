@@ -19,7 +19,7 @@ import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { DELIVERY_TAG } from '@shared/deliveryTags';
 import { stripWorkflowRoundDir } from '@shared/constants/workflowOutput';
 import {
-  aggregateId,
+  qualifyAggregateId,
   OutputFileSummarySchema,
   type RunId,
   type ToolResultPayload,
@@ -72,7 +72,7 @@ export const scriptRunCalls = Effect.fn('scriptRun.calls')(function* (
   session: SessionHandle,
   runId: RunId,
 ) {
-  const rows = yield* session.log.rows(aggregateId('run', runId), [
+  const rows = yield* session.log.rows(qualifyAggregateId('run', runId), [
     'script.call',
     'tool.result',
   ]);

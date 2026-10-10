@@ -8,7 +8,7 @@ import { Effect } from 'effect';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { RunRecord } from '@agent/core/definition/RunRecord';
 import {
-  aggregateId,
+  qualifyAggregateId,
   RunRecordFieldsSchema,
   type RunId,
 } from '@shared/schemas';
@@ -22,7 +22,7 @@ export const seedRunRecord = (
     session.log.transact([
       {
         type: 'run.config',
-        aggregateId: aggregateId('run', runId),
+        aggregateId: qualifyAggregateId('run', runId),
         config: RunRecordFieldsSchema.parse(record),
       },
     ]),
@@ -35,6 +35,10 @@ export const seedReport = (
 ) =>
   session.log
     .transact([
-      { type: 'run.report', aggregateId: aggregateId('run', runId), report },
+      {
+        type: 'run.report',
+        aggregateId: qualifyAggregateId('run', runId),
+        report,
+      },
     ])
     .pipe(Effect.asVoid);

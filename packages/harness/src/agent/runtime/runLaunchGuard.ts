@@ -12,7 +12,7 @@ import { Cause, Effect, Exit, Schedule, type Scope } from 'effect';
 import { classifyAgentError } from '@common/errors';
 import { getSdkErrorMessage } from '@common/errors/sdkError/providerErrorFormat';
 import {
-  aggregateId,
+  qualifyAggregateId,
   aggregateTarget,
   emptyRunEndOutput,
   RUN_OUTCOME,
@@ -230,7 +230,7 @@ const deliverOne = (
   parent: RunId,
 ): Effect.Effect<Effect.Effect<void>, Error, Scope.Scope> =>
   Effect.gen(function* () {
-    const rows = yield* session.log.rows(aggregateId('run', child), [
+    const rows = yield* session.log.rows(qualifyAggregateId('run', child), [
       'child.park',
       'run.end',
       'run.activate',
@@ -284,7 +284,7 @@ const endRows = (
       ...session.trace.closure(child, end),
       {
         type: 'run.end',
-        aggregateId: aggregateId('run', child),
+        aggregateId: qualifyAggregateId('run', child),
         outcome: end,
         output: storedRunOutput(emptyRunEndOutput()),
       },
@@ -349,7 +349,7 @@ const clearHeld = (
     .transact((tx) =>
       Effect.gen(function* () {
         if (!(yield* session.log.owns(child))) return;
-        const rows = yield* session.log.rows(aggregateId('run', child), [
+        const rows = yield* session.log.rows(qualifyAggregateId('run', child), [
           'child.park',
         ]);
         const park = rows.at(-1);

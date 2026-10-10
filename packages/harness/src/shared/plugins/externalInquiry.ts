@@ -12,7 +12,7 @@ import { Context, type Effect } from 'effect';
 import { z } from 'zod';
 
 import {
-  aggregateId,
+  qualifyAggregateId,
   ExternalInquiryTurnRecordSchema,
   InquiryThreadIdSchema,
   InquiryThreadSummarySchema,
@@ -149,7 +149,7 @@ export function inquiryThreadRow(
   const { aggregate, ...fact } = inquiryThreadFact(summary);
   return {
     type: 'plugin.fact',
-    aggregateId: aggregateId('plugin', aggregate),
+    aggregateId: qualifyAggregateId('plugin', aggregate),
     ...fact,
     parent: summary.parentRunId,
   };

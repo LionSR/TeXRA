@@ -17,7 +17,7 @@ import {
 } from 'effect';
 import { render, type Instance as InkInstance } from 'ink';
 
-import { aggregateId } from '@texra-ai/harness';
+import { qualifyAggregateId } from '@texra-ai/harness';
 import type { AgentConfig } from '@agent/runtime';
 import { getVisibleAgents } from '@agent/index';
 import { CliUsageError, type CliContext } from '@cli/runtime/cliContext';
@@ -477,7 +477,7 @@ export async function runChat(
     runtime.runFork(
       backend.transcripts(
         'tui',
-        ids.map((id) => ({ id: aggregateId('run', id), fromSeq: 0 })),
+        ids.map((id) => ({ id: qualifyAggregateId('run', id), fromSeq: 0 })),
       ),
     );
   };

@@ -8,7 +8,7 @@ import {
 } from '@agent/core/definition/AgentConfig';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import {
-  aggregateId,
+  qualifyAggregateId,
   emptyRunEndOutput,
   LOG_LEVELS,
   MESSAGE_TYPES,
@@ -40,7 +40,7 @@ async function appendLogEntry(runId: RunId, text: string): Promise<void> {
     session.log.transact([
       {
         type: 'log',
-        aggregateId: aggregateId('run', runId),
+        aggregateId: qualifyAggregateId('run', runId),
         level: LOG_LEVELS.INFO,
         messageType: MESSAGE_TYPES.DEFAULT,
         message: text,
@@ -74,7 +74,7 @@ async function writeRun(
       session.log.transact([
         {
           type: 'run.end',
-          aggregateId: aggregateId('run', runId),
+          aggregateId: qualifyAggregateId('run', runId),
           outcome: meta.outcome,
           output: emptyRunEndOutput(),
         },
@@ -122,7 +122,7 @@ describe('assembleTrace', () => {
       publishTestRows(session, [
         {
           type: 'run.fact',
-          aggregateId: aggregateId('run', runId),
+          aggregateId: qualifyAggregateId('run', runId),
           fact: { key: 'plan', plan },
         },
       ]);

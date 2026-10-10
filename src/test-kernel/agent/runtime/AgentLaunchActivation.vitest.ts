@@ -49,7 +49,7 @@ import {
   RUN_OUTCOME,
   RUN_PHASE,
   type RunId,
-  aggregateId as qualifyAggregateId,
+  qualifyAggregateId,
   aggregateTarget,
   type AggregateId,
   type SessionEvent,

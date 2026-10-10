@@ -102,7 +102,7 @@ import {
   type RootRunSettled,
 } from '@cli/chat/tui/state/sessionRunState';
 import {
-  aggregateId,
+  qualifyAggregateId,
   emptyRunEndOutput,
   RUN_OUTCOME,
   RUN_PHASE,
@@ -448,7 +448,7 @@ describe('CLI terminal outcome resolution', () => {
       publishTestRows(session, [
         {
           type: 'run.end',
-          aggregateId: aggregateId('run', runId),
+          aggregateId: qualifyAggregateId('run', runId),
           outcome: RUN_OUTCOME.CANCELLED,
           output: emptyRunEndOutput(),
         },
@@ -710,7 +710,7 @@ describe('createChatSessionController', () => {
         publishTestRows(runtimeSession, [
           {
             type: 'request.decided',
-            aggregateId: aggregateId('run', childRun),
+            aggregateId: qualifyAggregateId('run', childRun),
             requestId,
             decision: { action: 'approve' },
           },

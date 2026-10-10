@@ -83,11 +83,7 @@ import {
   ResumeSessionUnavailableError,
   type ResumeToolUseFromResumeDataOptions,
 } from '@agent/runtime/executeAgent';
-import {
-  aggregateId as qualifyAggregateId,
-  RUN_OUTCOME,
-  type RunId,
-} from '@shared/schemas';
+import { qualifyAggregateId, RUN_OUTCOME, type RunId } from '@shared/schemas';
 import { createFakeWorkspaceRoots } from '@test/support/FakePlatform';
 import { fakeProcessServices } from '@test/support/setupPlatform';
 import { createToolUseResumeData } from '@test/support/toolUseResumeTestUtils';

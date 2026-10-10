@@ -76,7 +76,7 @@ import { AgentDirectories, AppState } from '@platform/interfaces';
 import { withProcessServices } from '@platform/processRuntime';
 import { MODEL_RETRY_MAX_ATTEMPTS_SETTING } from '@shared/schemas';
 import {
-  aggregateId,
+  qualifyAggregateId,
   RUN_OUTCOME,
   RUN_PHASE,
   type RunId,
@@ -1012,7 +1012,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
         // Admission order is the rows' commit order, and the child reads the
         // sends in exactly that order, each once.
         const admitted = followUpTexts(
-          yield* session.log.rows(aggregateId('run', runId)),
+          yield* session.log.rows(qualifyAggregateId('run', runId)),
         )
           .map((text) => text.match(/(second|third) assertion/)?.[1])
           .filter((word) => word !== undefined);

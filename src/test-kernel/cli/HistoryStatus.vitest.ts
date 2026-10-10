@@ -17,7 +17,7 @@ import {
 } from '@cli/runtime/history';
 import { withProcessServices } from '@platform/processRuntime';
 import {
-  aggregateId,
+  qualifyAggregateId,
   CLI_RUN_STATUS,
   HISTORY_RUN_STATUS,
 } from '@shared/schemas';
@@ -75,7 +75,7 @@ async function seedSnapshot(
     testDefaultSession().log.transact([
       {
         type: 'run.position',
-        aggregateId: aggregateId('run', id),
+        aggregateId: qualifyAggregateId('run', id),
         payload: { family: 'toolUse', at: 'turn.ready', turn: 0 },
       },
     ]),
@@ -174,7 +174,7 @@ describe('CLI history status formatting', () => {
       yield* testDefaultSession().log.transact([
         {
           type: 'run.start',
-          aggregateId: aggregateId('run', id),
+          aggregateId: qualifyAggregateId('run', id),
           identity: { kind: 'agent', agent: 'orchestrator' },
           userFollowUpSupport: 'unsupported',
           parent: null,
@@ -184,7 +184,7 @@ describe('CLI history status formatting', () => {
       yield* testDefaultSession().log.transact([
         {
           type: 'run.position',
-          aggregateId: aggregateId('run', id),
+          aggregateId: qualifyAggregateId('run', id),
           payload: { family: 'toolUse', at: 'turn.ready', turn: 0 },
         },
       ]);

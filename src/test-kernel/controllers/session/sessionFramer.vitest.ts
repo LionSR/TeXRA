@@ -32,7 +32,7 @@ import { SessionViewService } from '@controllers/session/SessionView';
 import { sessionInputsLayer } from '@controllers/session/sessionInputs';
 import { WorkspaceRoots } from '@controllers/session/WorkspaceRoots';
 import {
-  aggregateId as qualifyAggregateId,
+  qualifyAggregateId,
   DEBUG_MODE_KEY,
   FoldEventSchema,
   MESSAGE_TYPES,

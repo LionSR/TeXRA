@@ -20,7 +20,7 @@ import {
   SubscriptionRef,
 } from 'effect';
 
-import { aggregateId as qualifyAggregateId, type RunId } from '@shared/schemas';
+import { qualifyAggregateId, type RunId } from '@shared/schemas';
 import type { HostSnapshot } from '@shared/session/hostSnapshot';
 import {
   DownMessageSchema,

@@ -14,7 +14,11 @@ import type { ToolServices } from '@agent/runtime/ToolServices';
 
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { type SessionHandle } from '@agent/runtime/SessionHandle';
-import { RUN_PHASE, DEFAULT_TOOL_CONFIG, aggregateId } from '@shared/schemas';
+import {
+  RUN_PHASE,
+  DEFAULT_TOOL_CONFIG,
+  qualifyAggregateId,
+} from '@shared/schemas';
 import { RunIdSchema, type RunId, type RunPhase } from '@shared/schemas';
 import { closeSessionOf } from '@test/support/sessionEnd';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
@@ -54,7 +58,7 @@ function foldRunPhase(
     publishTestRows(session, [
       {
         type: 'run.position',
-        aggregateId: aggregateId('run', runId),
+        aggregateId: qualifyAggregateId('run', runId),
         payload: { family: 'toolUse', at: step },
       },
     ]);
@@ -418,7 +422,7 @@ describe('ExecutionsTool', () => {
           publishTestRows(session, [
             {
               type: 'followup.queued',
-              aggregateId: aggregateId('run', parentRunId),
+              aggregateId: qualifyAggregateId('run', parentRunId),
               followUpId: 'child-report',
               content: {
                 text: '<subagent-progress id="c41d0000000d" agent="review" type="started" />',

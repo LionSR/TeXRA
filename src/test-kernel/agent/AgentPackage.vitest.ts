@@ -204,7 +204,7 @@ import type { RunId } from '@shared/schemas';
 import type { SessionView as RuntimeSessionView } from '@shared/session/sessionView';
 import type { Plugin } from '@tools/plugins';
 import {
-  aggregateId,
+  qualifyAggregateId,
   type AgentPlatform,
   Sessions,
 } from '../../../packages/harness/src/index';
@@ -420,7 +420,7 @@ describe('agent package sessions', () => {
     () =>
       Effect.gen(function* () {
         const interest = [
-          { id: aggregateId('run', 'ae0001' as RunId), fromSeq: 0 },
+          { id: qualifyAggregateId('run', 'ae0001' as RunId), fromSeq: 0 },
         ];
 
         const program = Effect.gen(function* () {

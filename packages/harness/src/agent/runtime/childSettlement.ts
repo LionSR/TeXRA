@@ -21,7 +21,7 @@ import type { AgentTrace } from '@agent/trace';
 import type { AttemptKey } from '@agent/storage/runRecords';
 import { withLogChannel } from '@logger/effectLog';
 import {
-  aggregateId,
+  qualifyAggregateId,
   storedResultMeta,
   type DeliveredResult,
   type RunId,
@@ -104,7 +104,7 @@ export function settlementOf(params: {
   readonly end?: ChildDelivery['end'];
 }): ChildSettlement {
   const { runId, turn, to } = params;
-  const target = aggregateId('run', runId);
+  const target = qualifyAggregateId('run', runId);
   const prompt = params.consumed[0]?.followUpId;
   const deliveryId =
     params.deliveryId ??
@@ -208,7 +208,7 @@ export const deliverIn = (
           rows: [
             {
               type: 'child.park' as const,
-              aggregateId: aggregateId('run', item.from.runId),
+              aggregateId: qualifyAggregateId('run', item.from.runId),
               phase: 'parked' as const,
               heldFor: item.deliveryId,
               ...(end !== undefined && { ends: end }),

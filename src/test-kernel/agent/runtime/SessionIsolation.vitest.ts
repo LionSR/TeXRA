@@ -10,7 +10,7 @@ import { runWithLifecycle } from '@agent/runtime/AgentRunLifecycle';
 import { Runs } from '@agent/runtime/runRegistry';
 import {
   RUN_OUTCOME,
-  aggregateId,
+  qualifyAggregateId,
   emptyRunEndOutput,
   type RunId,
 } from '@shared/schemas';
@@ -111,7 +111,7 @@ describe('session isolation', () => {
           publishTestRows(session, [
             {
               type: 'stage.start',
-              aggregateId: aggregateId('run', runId),
+              aggregateId: qualifyAggregateId('run', runId),
               id: `stage:${runId}`,
               label: 'Running stage',
             },
@@ -168,7 +168,7 @@ describe('session isolation', () => {
           yield* session.log.transact([
             {
               type: 'run.start',
-              aggregateId: aggregateId('run', 'c0c002' as RunId),
+              aggregateId: qualifyAggregateId('run', 'c0c002' as RunId),
               identity: { kind: 'agent', agent: 'chat' },
               userFollowUpSupport: 'unsupported',
               parent: null,

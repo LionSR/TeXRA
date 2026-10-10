@@ -32,7 +32,7 @@ import type {
 import { emitAppSignal } from '@eventBus/AppSignals';
 import { StateReadFailed, type StateStore } from '@platform/interfaces';
 import {
-  aggregateId,
+  qualifyAggregateId,
   type CommitOrdinal,
   type JsonValue,
   type RunId,
@@ -346,13 +346,13 @@ export function factRows(
     if (aggregate === undefined)
       run.push({
         ...row,
-        aggregateId: aggregateId('run', runId),
+        aggregateId: qualifyAggregateId('run', runId),
         parent: null,
       });
     else
       own.push({
         ...row,
-        aggregateId: aggregateId('plugin', aggregate),
+        aggregateId: qualifyAggregateId('plugin', aggregate),
         parent: runId,
       });
   }

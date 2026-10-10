@@ -13,7 +13,7 @@ import type { ResumeRunResult } from '@agent/runtime/resumeRun';
 import type { SessionLog } from '@agent/runtime/SessionHandle';
 import { withLogChannel } from '@logger/effectLog';
 import {
-  aggregateId,
+  qualifyAggregateId,
   type RunId,
   type SessionEventDraft,
 } from '@shared/schemas';
@@ -194,7 +194,7 @@ export class Inbox {
    *  message is queued, read in the same transaction; a failure is logged. */
   closeInput(runId: RunId): Effect.Effect<void> {
     if (this.disposed) return Effect.void;
-    const run = aggregateId('run', runId);
+    const run = qualifyAggregateId('run', runId);
     return this.port.log
       .transact((tx) =>
         Effect.gen({ self: this }, function* () {
@@ -334,7 +334,7 @@ export class Inbox {
         runRelation(sender, runId, this.port.parentOf),
       );
       if (!input.followUpIds.has(row.followUpId)) {
-        const aggregate = aggregateId('run', runId);
+        const aggregate = qualifyAggregateId('run', runId);
         const queued = { type: 'followup.queued', ...row } as const;
         return {
           rows: [{ ...queued, aggregateId: aggregate }],
@@ -362,7 +362,7 @@ export class Inbox {
   /** The run's input as its committed rows say it (`InputRows`). */
   read(runId: RunId): Effect.Effect<InputRows, DatabaseReadFailed> {
     return Effect.suspend(() =>
-      this.port.log.rows(aggregateId('run', runId), INPUT_TYPES),
+      this.port.log.rows(qualifyAggregateId('run', runId), INPUT_TYPES),
     ).pipe(
       Effect.map((rows) => ({
         ...foldRunRows(rows.filter(isFollowUpRow)),

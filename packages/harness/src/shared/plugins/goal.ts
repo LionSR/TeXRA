@@ -9,7 +9,7 @@
 import { z } from 'zod';
 
 import {
-  aggregateId,
+  qualifyAggregateId,
   RunIdSchema,
   type RunId,
   type SessionEventDraft,
@@ -58,7 +58,7 @@ export function goalStateRow(
 ): SessionEventDraft {
   return {
     type: 'plugin.fact',
-    aggregateId: aggregateId('run', runId),
+    aggregateId: qualifyAggregateId('run', runId),
     plugin: GOAL_STATE_ARM.plugin,
     kind: GOAL_STATE_ARM.kind,
     version: GOAL_STATE_ARM.version,

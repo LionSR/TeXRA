@@ -6,7 +6,7 @@ import { Effect, Exit, Scope } from 'effect';
 import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import { aggregateId, type RunId } from '@shared/schemas';
+import { qualifyAggregateId, type RunId } from '@shared/schemas';
 import { documentsOutputFact } from '@shared/plugins/documents';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { waitForCondition } from '@test/support/asyncTestUtils';
@@ -135,7 +135,7 @@ async function emitOutputFiles(
   publishTestRows(session, [
     {
       type: 'plugin.fact',
-      aggregateId: aggregateId('run', runId),
+      aggregateId: qualifyAggregateId('run', runId),
       parent: null,
       ...documentsOutputFact([
         {

@@ -35,7 +35,7 @@ import {
   type TexraApprovalPolicy,
 } from '@shared/approvalPolicy';
 import {
-  aggregateId as qualifyAggregateId,
+  qualifyAggregateId,
   AgentProposalPermissionSchema,
   AgentConfigFieldsSchema,
   LOG_LEVELS,

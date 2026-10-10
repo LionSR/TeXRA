@@ -5,7 +5,11 @@ import { Effect } from 'effect';
 import { describe, expect } from 'vitest';
 
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import { aggregateId, emptyRunEndOutput, type RunId } from '@shared/schemas';
+import {
+  qualifyAggregateId,
+  emptyRunEndOutput,
+  type RunId,
+} from '@shared/schemas';
 import { closeSessionOf } from '@test/support/sessionEnd';
 import {
   createTestSession,
@@ -31,7 +35,7 @@ const withSession = <A, E>(
   body: (session: SessionHandle) => Effect.Effect<A, E>,
 ) => Effect.acquireUseRelease(createTestSession(), body, closeSessionOf);
 
-const run = (runId: RunId) => aggregateId('run', runId);
+const run = (runId: RunId) => qualifyAggregateId('run', runId);
 
 const query = (session: SessionHandle, sql: string, params: string[] = []) =>
   Effect.gen(function* () {

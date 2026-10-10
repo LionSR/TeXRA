@@ -21,7 +21,7 @@ import {
 import {
   RUN_OUTCOME,
   RunRecordFieldsSchema,
-  aggregateId,
+  qualifyAggregateId,
   storedRunOutput,
   type SessionEventDraft,
   USER_FOLLOW_UP_SUPPORT,
@@ -79,7 +79,7 @@ export const configChange = Effect.fn('configChange')(function* (
     return null;
   return {
     type: 'run.config',
-    aggregateId: aggregateId('run', runId),
+    aggregateId: qualifyAggregateId('run', runId),
     config: next,
   } satisfies SessionEventDraft;
 });
@@ -87,16 +87,17 @@ export const configChange = Effect.fn('configChange')(function* (
 /** A resume's activation: its `run.activate` and the grants it ends, as one
  *  batch. */
 export const commitResumedActivation = (session: SessionHandle, runId: RunId) =>
-  session.approvals
-    .activationRows(runId)
-    .pipe(
-      Effect.flatMap((grants) =>
-        session.log.transact([
-          { type: 'run.activate', aggregateId: aggregateId('run', runId) },
-          ...grants,
-        ]),
-      ),
-    );
+  session.approvals.activationRows(runId).pipe(
+    Effect.flatMap((grants) =>
+      session.log.transact([
+        {
+          type: 'run.activate',
+          aggregateId: qualifyAggregateId('run', runId),
+        },
+        ...grants,
+      ]),
+    ),
+  );
 
 interface RegisterRunOptions {
   /** The launching run: the whole parent edge, stamped on `run.start`. */
@@ -182,7 +183,7 @@ export const registrationRows = Effect.fn('registrationRows')(function* (
         );
     }
     const pinned = pinRunWorkingDirectory(record, session.roots.workspace);
-    const target = aggregateId('run', runId);
+    const target = qualifyAggregateId('run', runId);
     // A registration, first or again, opens the run with its configuration
     // in the batch that takes the claim: nothing is compared before the
     // claim is held, so a takeover never skips the row on a stale read.
@@ -380,7 +381,7 @@ export const finalizeRun = Effect.fn('finalizeRun')(function* (
           ...session.trace.closure(runId, persisted),
           {
             type: 'run.end' as const,
-            aggregateId: aggregateId('run', runId),
+            aggregateId: qualifyAggregateId('run', runId),
             outcome: persisted,
             ...(error !== undefined ? { error } : {}),
             output: storedRunOutput(input.output ?? emptyRunEndOutput()),
