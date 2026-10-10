@@ -219,7 +219,7 @@ describe('native agent launch activation', () => {
               if (registration === null)
                 return yield* Effect.die('a fresh run');
               const cell = yield* ctx.session.runHistory.open(ctx.runId, {
-                registration,
+                registration: Effect.succeed(registration),
               });
               yield* cell.append(
                 [],

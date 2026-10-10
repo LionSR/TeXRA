@@ -7,7 +7,7 @@
  */
 import { Effect, Result, type Scope, SynchronizedRef } from 'effect';
 
-import { PreparedHistorySchema, type ModelOrigin } from '@texra-ai/llm';
+import { PreparedHistorySchema } from '@texra-ai/llm';
 import {
   aggregateId as qualifyAggregateId,
   type RunId,
@@ -43,7 +43,7 @@ import {
   type Append,
   type CoWrite,
 } from '@shared/session/sessionEvents';
-import { runHistoryRows, storedDraft } from './storedTurn';
+import { runHistoryRows, storedDraft, unsafeOrigin } from './storedTurn';
 import type { SessionLog } from './SessionHandle';
 
 const isResponse = (row: RunHistoryDraft): boolean =>
@@ -59,25 +59,33 @@ const isMessageBearing = (row: RunHistoryDraft): boolean =>
 const settlementStatus = (status: 'executed' | 'error'): 'success' | 'error' =>
   status === 'executed' ? 'success' : 'error';
 
+/** The first violated precondition of a registration, or null. */
+function registrationViolation(
+  run: RunId,
+  state: RunState,
+  registration: readonly SessionEventDraft[],
+): string | null {
+  const aggregate = qualifyAggregateId('run', run);
+  if (registration.length === 0) return null;
+  if (state.phase !== null || state.runHistoryRows > 0)
+    return 'a registration comes with a run state';
+  if (registration[0]?.type !== 'run.start')
+    return 'a registration does not start with its run.start';
+  const stray = registration.find((row) => row.aggregateId !== aggregate);
+  return stray === undefined
+    ? null
+    : `a registration's ${stray.type} targets ${stray.aggregateId}, not ${aggregate}`;
+}
+
 /** The first violated precondition of `RunCell.append`, or null. */
 function contractViolation(
   run: RunId,
   state: RunState,
   rows: readonly RunHistoryDraft[],
-  registration: readonly SessionEventDraft[],
 ): string | null {
   const aggregate = qualifyAggregateId('run', run);
   const settledInBatch = new Map<string, 'success' | 'error'>();
   const hasResponse = rows.some(isResponse);
-  if (registration.length > 0) {
-    if (state.phase !== null || state.runHistoryRows > 0)
-      return 'a registration comes with a run state';
-    if (registration[0]?.type !== 'run.start')
-      return 'a registration does not start with its run.start';
-    const stray = registration.find((row) => row.aggregateId !== aggregate);
-    if (stray !== undefined)
-      return `a registration's ${stray.type} targets ${stray.aggregateId}, not ${aggregate}`;
-  }
   // A row naming another aggregate would fold into the live state and be
   // invisible to a reload, which reads the run's aggregate.
   const foreign = rows.find((row) => row.aggregateId !== aggregate);
@@ -149,59 +157,6 @@ function contractViolation(
     }
   }
   return null;
-}
-
-/**
- * Every place a `ModelOrigin` binding reaches a durable run history row. The
- * assertion reads these typed positions, never a recursive shape sniff, so an
- * `endpoint` key in tool output or a message body stays data, not a refusal.
- */
-function rowOrigins(row: RunHistoryDraft): readonly ModelOrigin[] {
-  if (row.type !== 'model.message') return [];
-  const p = row.payload;
-  switch (p.kind) {
-    case 'attempt':
-      return [p.origin];
-    case 'accepted':
-      return [p.operation.origin];
-    case 'response': {
-      const continuation =
-        p.turn.kind === 'http' ? (p.turn.continuation ?? null) : null;
-      return continuation === null
-        ? [p.turn.requestedOrigin]
-        : [p.turn.requestedOrigin, continuation.origin];
-    }
-    default:
-      return [];
-  }
-}
-
-/**
- * Every `deployment.endpoint` reaching a run history row carries no userinfo,
- * query string or fragment. The package's `EndpointSchema` already refuses
- * these at parse time; this is the loud restatement at the one boundary
- * where a row becomes permanent, never a `?? null`. A value that is not a URL
- * at all is refused the same way rather than thrown out of the generator.
- *
- * Returns what the refusal may say, never the rejected endpoint: the part
- * this check exists to keep out of durable state is exactly the part a
- * refusal would otherwise carry into logs and error reports. Scheme, host and
- * path — the components the constraint permits — plus the names of the
- * components that violated it.
- */
-function unsafeEndpoint(origin: ModelOrigin): string | null {
-  if (origin.protocol === 'vscode-lm') return null;
-  const { endpoint } = origin.deployment;
-  if (!URL.canParse(endpoint)) return 'the endpoint is not a URL';
-  const url = new URL(endpoint);
-  const violations = [
-    url.username !== '' || url.password !== '' ? 'userinfo' : null,
-    endpoint.includes('?') ? 'a query string' : null,
-    endpoint.includes('#') ? 'a fragment' : null,
-  ].filter((part): part is string => part !== null);
-  return violations.length === 0
-    ? null
-    : `${url.protocol}//${url.host}${url.pathname} carries ${violations.join(' and ')}`;
 }
 
 /**
@@ -305,6 +260,9 @@ const loaded = (
     return state;
   });
 
+/** No registration. */
+const none: Effect.Effect<readonly SessionEventDraft[]> = Effect.succeed([]);
+
 /** A claim the store would not move here: the run history's `not-owner`. */
 const claimRefusal =
   (run: RunId) =>
@@ -385,23 +343,24 @@ export function makeRunHistory(
     run: RunId,
     state: RunState,
     rows: readonly RunHistoryDraft[],
-    registration: readonly SessionEventDraft[],
+    registration: Effect.Effect<readonly SessionEventDraft[]>,
     alongside: Effect.Effect<CoWrite, E, Scope.Scope>,
     within: Append | undefined,
   ) {
-    const violation = contractViolation(run, state, rows, registration);
+    const violation = contractViolation(run, state, rows);
     if (violation !== null)
       return yield* Effect.die(
         new Error(`RunCell.append contract: ${violation}`),
       );
-    for (const row of rows)
-      for (const unsafe of rowOrigins(row).map(unsafeEndpoint))
-        if (unsafe !== null)
-          return yield* new RunHistoryRefused({
-            reason: 'unsafe-endpoint',
-            runId: run,
-            detail: `a ${row.type} origin is not a scheme, host and path alone: ${unsafe}`,
-          });
+    for (const row of rows) {
+      const unsafe = unsafeOrigin(row);
+      if (unsafe !== null)
+        return yield* new RunHistoryRefused({
+          reason: 'unsafe-endpoint',
+          runId: run,
+          detail: `a ${row.type} origin is not a scheme, host and path alone: ${unsafe}`,
+        });
+    }
     // Fold the batch before publishing it: a committed batch `load` cannot
     // fold is a run nothing can read again.
     const candidate = foldRunState(state, candidates(state, rows));
@@ -423,8 +382,15 @@ export function makeRunHistory(
     }
     const job = (append: Append) =>
       Effect.gen(function* () {
+        // Decided in the job, so it reads what the jobs before it left.
+        const born = yield* registration;
+        const refused = registrationViolation(run, state, born);
+        if (refused !== null)
+          return yield* Effect.die(
+            new Error(`RunCell.append contract: ${refused}`),
+          );
         const co = yield* alongside;
-        const own = [...registration, ...rows.map(storedDraft)];
+        const own = [...born, ...rows.map(storedDraft)];
         const written = yield* append([...own, ...co.rows]);
         yield* afterCommit(co.committed);
         return written.slice(0, own.length);
@@ -461,7 +427,7 @@ export function makeRunHistory(
         ? yield* load(run)
         : yield* activate(run, activation)) ?? freshRunState(0);
     const ref = yield* SynchronizedRef.make(seeded);
-    let registration = opening.registration ?? []; // the first append's
+    let registration = opening.registration ?? none; // the first append's
     const cell: RunCell = {
       runId: run,
       current: SynchronizedRef.get(ref),
@@ -478,7 +444,7 @@ export function makeRunHistory(
             registration,
             alongside,
             within,
-          ).pipe(Effect.tap(() => Effect.sync(() => (registration = [])))),
+          ).pipe(Effect.tap(() => Effect.sync(() => (registration = none)))),
         ).pipe(Effect.uninterruptible),
       refresh: SynchronizedRef.updateAndGetEffect(ref, () =>
         Effect.flatMap(load(run), (state) =>

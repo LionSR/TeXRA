@@ -843,47 +843,45 @@ export class RunRegistry {
 
   /**
    * Detach all active subagents from a parent, promoting them to top-level:
-   * they keep running and deliver through the follow-up queue. One durable
-   * batch severs every child's edge and keeps the grants it inherited, then
-   * the local sever follows on the children it committed, so a refused
-   * commit leaves both standing for a retry. The stop marked the parent
-   * before reading its children, so none is admitted in between. Each row
-   * lands on its child's aggregate, so every child's claim is held (holds
-   * nest) until the commit and the sever are done.
+   * they keep running and deliver through the follow-up queue. One job
+   * decides which children are born and severs those durably (their claims
+   * held), keeping the grants each inherited; their local edges follow the
+   * commit, so a refused one leaves both standing. An unborn child's local
+   * edge goes in the job: its birth job (`openRun`) reads it, so a child is
+   * born detached or detached with rows. The stop marked the parent before
+   * reading its children, so none is admitted in between.
    */
   private detachActiveChildren(parentRunId: RunId): Effect.Effect<void, Error> {
     const session = this.init.session();
-    // A child not born yet (registered with its opening) has no row to
-    // sever: only its local edge goes, and it never blocks the stop.
-    const sever = (born: readonly RunId[]) =>
-      Effect.forEach(born, (childRunId) => session.log.hold(childRunId), {
-        discard: true,
-      }).pipe(
-        Effect.andThen(
-          session.log.transact(
-            born.flatMap((childRunId) => {
-              const aggregateId = qualifyAggregateId('run', childRunId);
-              const snapshot = this.grantsOnDetach(childRunId);
-              return [
-                { type: 'run.detach', aggregateId },
-                { type: 'approval.policy', aggregateId, snapshot },
-              ] as const;
-            }),
-          ),
-        ),
-      );
-    return Effect.suspend(() =>
-      Effect.filter(this.childRunIds(parentRunId), (childRunId) =>
-        getRunRecords(session, childRunId).exists(),
-      ),
-    ).pipe(
-      Effect.flatMap((born) => {
-        const local = Effect.sync(() => this.detachChildren(parentRunId));
-        return born.length === 0
-          ? local
-          : Effect.scoped(Effect.andThen(sever(born), local));
-      }),
-    );
+    return session.log
+      .transact((tx) =>
+        Effect.gen({ self: this }, function* () {
+          const children = this.childRunIds(parentRunId);
+          const born = yield* Effect.filter(children, (childRunId) =>
+            getRunRecords(session, childRunId).exists(),
+          );
+          this.detachChildren(
+            parentRunId,
+            children.filter((childRunId) => !born.includes(childRunId)),
+          );
+          yield* Effect.forEach(born, (id) => session.log.hold(id), {
+            discard: true,
+          });
+          if (born.length > 0)
+            yield* tx.append(
+              born.flatMap((childRunId) => {
+                const aggregateId = qualifyAggregateId('run', childRunId);
+                const snapshot = this.grantsOnDetach(childRunId);
+                return [
+                  { type: 'run.detach', aggregateId },
+                  { type: 'approval.policy', aggregateId, snapshot },
+                ] as const;
+              }),
+            );
+          return born;
+        }).pipe(Effect.scoped),
+      )
+      .pipe(Effect.map((born) => this.detachChildren(parentRunId, born)));
   }
 
   /** Apply parent removal to local handles and approval ancestry without

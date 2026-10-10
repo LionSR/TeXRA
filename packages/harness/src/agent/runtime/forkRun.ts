@@ -169,7 +169,9 @@ export const forkRun = Effect.fn('forkRun')(function* (
   });
   // Registration and history are one commit, through the fork's cell: a
   // fork exists with its history or not at all.
-  const cell = yield* session.runHistory.open(runId, { registration });
+  const cell = yield* session.runHistory.open(runId, {
+    registration: Effect.succeed(registration),
+  });
   yield* cell.append(rows);
   // And unclaimed: the host's to resume, as any waiting conversation is.
   // The rows are durable whatever happens to the claim, so a release that

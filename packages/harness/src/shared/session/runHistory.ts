@@ -147,11 +147,11 @@ export interface RunCell {
 /** How {@link RunHistory} opens a cell. */
 export interface RunOpening<E = never> {
   /**
-   * A new run's registration (`run.start` first): it rides the cell's
-   * first append, so the run exists with what that append writes or not at
-   * all. The birth takes the run's claim for this process.
+   * A new run's registration (`run.start` first), decided inside the job
+   * of the cell's first append, which it rides: the run exists with what
+   * that append writes or not at all. The birth takes the run's claim.
    */
-  readonly registration?: readonly SessionEventDraft[];
+  readonly registration?: Effect.Effect<readonly SessionEventDraft[]>;
   /**
    * A resume: take the run's claim (proving a prior owner dead) and commit,
    * in one batch, the cancellation of every request the previous owner left
