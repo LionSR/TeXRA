@@ -17,8 +17,8 @@ import {
 import type { BoundModel } from '@agent/runtime/modelAccess/ModelAccess';
 import type { InvocationRef } from '@shared/schemas';
 
+import type { RunCell } from '@shared/session/runHistory';
 import { rowAggregate } from '../loop/rows';
-import type { RunCell } from '../loop/runProgram';
 import type { InvokeError } from '../ModelInvoker';
 import type { AgentRunShape } from './AgentRun';
 

@@ -24,11 +24,8 @@ import {
   type Scope,
 } from 'effect';
 
-import {
-  finalizeRun,
-  type FinalizeRunInput,
-  type FinalizeRunResult,
-} from '@agent/storage/runLifecycle';
+import { finalizeRun } from '@agent/storage/runLifecycle';
+import { getRunRecords } from '@agent/storage/runRecords';
 import type { ProcessServices } from '@platform/processRuntime';
 import {
   inheritedGrants,
@@ -45,6 +42,7 @@ import {
 import { isInFlightPhase } from '@shared/runs/runStatus';
 import type { RunStopReason } from '@shared/session/runtimeRequest';
 import { type PerKeyLane, withPerKeyLane } from '@utils/core/perKeyQueue';
+import { ensureError } from '@utils/errors/errorMessage';
 import type { RunHandle, RunParent } from './RunHandle';
 import type { SessionHandle } from './SessionHandle';
 import type { RunStop, RunStopOptions } from './runStop';
@@ -811,13 +809,6 @@ export class RunRegistry {
     return true;
   }
 
-  /** End a run (`finalizeRun`): the one terminal writer, whoever ends it
-   *  (its driver, a refused launch, an ownerless stop, a session close).
-   *  Never fails: a persistence failure comes back as `ok: false`. */
-  end(input: FinalizeRunInput): Effect.Effect<FinalizeRunResult> {
-    return Effect.suspend(() => finalizeRun(this.init.session(), input));
-  }
-
   /** The grants a child keeps once its parent edge goes (its detach row):
    *  what it inherits now, its own goal grant kept. */
   private grantsOnDetach(runId: RunId): ApprovalGrants {
@@ -829,26 +820,21 @@ export class RunRegistry {
   }
 
   /**
-   * Write the terminal fact for a stop that reached no live target, through
-   * the run's one writer. `keepExistingOutcome` leaves a run that already
-   * ended with its own verdict; the checkpoint is preserved, since a cancelled
-   * run is exactly the one a user resumes.
+   * Write the terminal fact for a stop that reached no live target: an
+   * ownerless end. A run that already ended keeps its own verdict; the
+   * checkpoint is preserved, since a cancelled run is exactly the one a
+   * user resumes.
    */
   private finalizeOwnerlessStop(runId: RunId): Effect.Effect<void, Error> {
-    return this.end({
-      runId,
-      outcome: RUN_OUTCOME.CANCELLED,
-      keepExistingOutcome: true,
-    }).pipe(
-      Effect.flatMap((finalization) =>
-        finalization.ok
-          ? Effect.void
-          : Effect.fail(
-              new Error(
-                `Failed to finalize a stop with no live run handle for run ${runId}`,
-                { cause: finalization.error },
-              ),
-            ),
+    return Effect.suspend(() =>
+      finalizeRun(this.init.session(), {
+        runId,
+        outcome: RUN_OUTCOME.CANCELLED,
+        keepExistingOutcome: true,
+      }),
+    ).pipe(
+      Effect.flatMap((ended) =>
+        ended.ok ? Effect.void : Effect.fail(ensureError(ended.error)),
       ),
     );
   }
@@ -866,35 +852,38 @@ export class RunRegistry {
    * nest) until the commit and the sever are done.
    */
   private detachActiveChildren(parentRunId: RunId): Effect.Effect<void, Error> {
-    return Effect.suspend(() => {
-      const detachedChildRunIds = this.childRunIds(parentRunId);
-      if (detachedChildRunIds.length === 0) return Effect.void;
-      return Effect.scoped(
-        Effect.forEach(
-          detachedChildRunIds,
-          (childRunId) => this.init.session().log.hold(childRunId),
-          { discard: true },
-        ).pipe(
-          Effect.andThen(
-            this.init.session().log.transact(
-              detachedChildRunIds.flatMap((childRunId) => {
-                const aggregateId = qualifyAggregateId('run', childRunId);
-                const snapshot = this.grantsOnDetach(childRunId);
-                return [
-                  { type: 'run.detach', aggregateId },
-                  { type: 'approval.policy', aggregateId, snapshot },
-                ] as const;
-              }),
-            ),
-          ),
-          Effect.andThen(
-            Effect.sync(() => {
-              this.detachChildren(parentRunId, detachedChildRunIds);
+    const session = this.init.session();
+    // A child not born yet (registered with its opening) has no row to
+    // sever: only its local edge goes, and it never blocks the stop.
+    const sever = (born: readonly RunId[]) =>
+      Effect.forEach(born, (childRunId) => session.log.hold(childRunId), {
+        discard: true,
+      }).pipe(
+        Effect.andThen(
+          session.log.transact(
+            born.flatMap((childRunId) => {
+              const aggregateId = qualifyAggregateId('run', childRunId);
+              const snapshot = this.grantsOnDetach(childRunId);
+              return [
+                { type: 'run.detach', aggregateId },
+                { type: 'approval.policy', aggregateId, snapshot },
+              ] as const;
             }),
           ),
         ),
       );
-    });
+    return Effect.suspend(() =>
+      Effect.filter(this.childRunIds(parentRunId), (childRunId) =>
+        getRunRecords(session, childRunId).exists(),
+      ),
+    ).pipe(
+      Effect.flatMap((born) => {
+        const local = Effect.sync(() => this.detachChildren(parentRunId));
+        return born.length === 0
+          ? local
+          : Effect.scoped(Effect.andThen(sever(born), local));
+      }),
+    );
   }
 
   /** Apply parent removal to local handles and approval ancestry without

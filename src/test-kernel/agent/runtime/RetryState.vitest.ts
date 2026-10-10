@@ -49,7 +49,6 @@ import {
 } from '@agent/runtime/ModelInvoker';
 import { ModelRetryGate } from '@agent/runtime/ModelRetryGate';
 import { RouteRetries } from '@agent/runtime/run/invocation';
-import { makeRunCell } from '@agent/runtime/loop/runProgram';
 import { AgentRun, type AgentRunShape } from '@agent/runtime/run/AgentRun';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { TraceEmitter, type AgentTrace } from '@agent/trace';
@@ -72,7 +71,11 @@ import {
   DatabaseReadFailed,
   DatabaseWriteFailed,
 } from '@shared/session/database';
-import { RunHistory, RunHistoryRefused } from '@shared/session/runHistory';
+import {
+  RunHistory,
+  RunHistoryRefused,
+  type RunCell,
+} from '@shared/session/runHistory';
 import { UsageLog } from '@shared/usageLog';
 import { freshRunState, type RunState } from '@shared/session/runStateFold';
 import { testAgentRun } from '@test/support/scriptedRunLayers';
@@ -313,8 +316,8 @@ const freshState = (): RunState => ({
 
 interface InvokerKit {
   readonly runId: RunId;
-  /** The folded state of the freshly opened run. */
-  readonly state: RunState;
+  /** The run's cell, holding the folded state of the freshly opened run. */
+  readonly cell: RunCell;
   /** `ModelInvoker` and this run's history, with nothing left to provide. */
   readonly layer: Layer.Layer<ModelInvoker | RunHistory | RouteRetries>;
 }
@@ -336,8 +339,10 @@ const openRun = Effect.fn('openRun')(function* (
   const runId = retryRunId();
   publishTestRunStart(session, runId);
   yield* session.log.settled.pipe(Effect.orDie);
-  yield* session.runHistory.acquire(runId);
-  const state = yield* session.runHistory.appendBatch(runId, null, [
+  const cell = yield* session.runHistory.open(runId, {
+    activation: () => Effect.succeed([]),
+  });
+  yield* cell.append([
     appendRow(runId, [
       { role: 'user', content: [{ kind: 'text', text: 'go' }] },
     ]),
@@ -371,14 +376,14 @@ const openRun = Effect.fn('openRun')(function* (
     // The process's route gate, as `processLayer` serves it.
     Layer.provideMerge(Layer.effect(RouteRetries, ModelRetryGate.make)),
   );
-  return { runId, state, layer };
+  return { runId, cell, layer };
 });
 
 /** One invocation on an opened run. */
-const invokeOn = ({ layer, runId, state }: InvokerKit) =>
+const invokeOn = ({ layer, cell }: InvokerKit) =>
   Effect.gen(function* () {
     const invoker = yield* ModelInvoker;
-    return yield* invoker.invoke(yield* makeRunCell(runId, state), REQUEST);
+    return yield* invoker.invoke(cell, REQUEST);
   }).pipe(
     // `invoke`'s debug-object sink writes through the process `FileSystem`;
     // this suite runs on `it.effect`'s own runtime, so the service comes from
@@ -882,9 +887,9 @@ describe('ModelInvoker retry', () => {
         while (stub.attempts() < 2) yield* settle;
         yield* Fiber.interrupt(fiber);
 
-        const state = yield* session.runHistory.load(kit.runId);
-        if (state === null) throw new Error('The run has no run history.');
-        const resumed = yield* invokeOn({ ...kit, state });
+        // The resume opens the run again from its stored rows.
+        const cell = yield* session.runHistory.open(kit.runId);
+        const resumed = yield* invokeOn({ ...kit, cell });
 
         expect(resumed.kind).toBe('response');
         // The interrupted attempt was asked about again, then sent once.
@@ -1059,16 +1064,12 @@ describe('ModelInvoker retry', () => {
         expect(first.state.continuation).not.toBeNull();
 
         // The next turn's message, sent on top of the stored response.
-        const next = yield* session.runHistory.appendBatch(
-          kit.runId,
-          first.state,
-          [
-            appendRow(kit.runId, [
-              { role: 'user', content: [{ kind: 'text', text: 'again' }] },
-            ]),
-          ],
-        );
-        const outcome = yield* invokeOn({ ...kit, state: next });
+        yield* kit.cell.append([
+          appendRow(kit.runId, [
+            { role: 'user', content: [{ kind: 'text', text: 'again' }] },
+          ]),
+        ]);
+        const outcome = yield* invokeOn(kit);
 
         expect(outcome.kind).toBe('response');
         expect(chained).toEqual([false, true, false]);
@@ -1140,7 +1141,10 @@ describe('ModelInvoker retry', () => {
           const state = yield* session.runHistory.load(kit.runId);
           if (state === null)
             throw new Error('The run has no run history state.');
-          const resumed = yield* invokeOn({ ...kit, state });
+          const resumed = yield* invokeOn({
+            ...kit,
+            cell: yield* session.runHistory.open(kit.runId),
+          });
           return {
             calls,
             accepted: state.invocation?.current.accepted,

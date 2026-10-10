@@ -41,7 +41,10 @@ import { HistoryQuery } from '@agent/runtime/historyQuery/HistoryQuery';
 import { ModelRetryGate } from '@agent/runtime/ModelRetryGate';
 import { RouteRetries } from '@agent/runtime/run/invocation';
 import { resumeRun } from '@agent/runtime/resumeRun';
-import { onHeldResult } from '@agent/runtime/runLaunchGuard';
+import {
+  endRunOutsideLifecycle,
+  onHeldResult,
+} from '@agent/runtime/runLaunchGuard';
 import { createSessionApprovals } from '@agent/runtime/runApprovalQueue';
 import { makeRunHistory } from '@agent/runtime/RunHistory';
 import { RunRegistry } from '@agent/runtime/runRegistry';
@@ -233,7 +236,7 @@ const sessionHandleLayer = (key: SessionKey) =>
           live: (runId) => runs.isLive(runId),
         }),
         trace: store.trace,
-        runHistory: makeRunHistory(store.log, database),
+        runHistory: makeRunHistory(store.log),
         history: yield* HistoryQuery.make(() => session),
       };
       // The session's teardown is this scope's finalizers, run in the reverse
@@ -452,23 +455,20 @@ const heldSession = (root: string) =>
 
 /**
  * Settle one run from outside its driver: what a close does for a run still
- * live when its budget ran out. Its outcome is recorded — CANCELLED unless
- * its driver already wrote one — in the one batch that also closes the
- * transcript groups it left open, with its checkpoint kept, since a
- * cancelled run is exactly the one a user resumes. A driver that writes a
- * different outcome after this is a separate lifecycle race:
- * `keepExistingOutcome` only protects earlier writes. A failure is logged,
- * never raised: a later launch classifies the run from its checkpoint.
+ * live when its budget ran out. Its end is ownerless (CANCELLED unless its
+ * driver already wrote one), with its checkpoint kept, since a cancelled
+ * run is exactly the one a user resumes. A failure is logged, never
+ * raised: a later launch classifies the run from its checkpoint.
  */
 const settleRun = (session: SessionHandle, runId: RunId): Effect.Effect<void> =>
   Effect.gen(function* () {
     if (!(yield* session.log.owns(runId))) return;
-    const finalization = yield* session.runs.end({
+    yield* endRunOutsideLifecycle(
+      session,
       runId,
-      outcome: RUN_OUTCOME.CANCELLED,
-      keepExistingOutcome: true,
-    });
-    if (!finalization.ok) return yield* Effect.die(finalization.error);
+      RUN_OUTCOME.CANCELLED,
+      undefined,
+    );
   }).pipe(
     Effect.catchCause((cause) =>
       Effect.logWarning(

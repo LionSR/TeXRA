@@ -25,7 +25,7 @@ import {
 } from '@agent/runtime/modelAccess/ModelAccess';
 import type { ModelOptionStores } from '@model/computeModelOptions';
 import type { LanguageModel } from '@platform/languageModel';
-import type { DocumentTask, Persona } from '@shared/schemas';
+import type { DocumentTask, Persona, SessionEventDraft } from '@shared/schemas';
 import { RunHistory } from '@shared/session/runHistory';
 import {
   AGENT_SOURCE,
@@ -43,6 +43,18 @@ import type { HttpClient } from 'effect/http';
 import type { OpenStep } from '../loop/step';
 import type { AgentLaunchContext } from '../AgentLaunchContext';
 import type { SessionHandle } from '../SessionHandle';
+
+/**
+ * How a launch enters its run's cell: a fresh run's `registration` rides
+ * its opening batch (null: a resume, whose cell activates the run), and
+ * `entered` runs once that batch commits. `initialUserMessage`: a fresh
+ * run's instruction, logged once its opening inserted the launch's media.
+ */
+interface LaunchEntry {
+  readonly registration: readonly SessionEventDraft[] | null;
+  readonly entered: Effect.Effect<void>;
+  readonly initialUserMessage: string | undefined;
+}
 
 /**
  * Immutable per-run tool policy, resolved by the launch and read from the
@@ -92,8 +104,8 @@ export interface AgentRunShape {
   /** What the run opens from; null for a tool-use run whose rows hold its
    *  opening, which a resume never renders again. */
   readonly opening: TemplateOpening | null;
-  /** Initial user row to log after the loop has inserted launch media. */
-  readonly initialUserMessageForTranscript: string | undefined;
+  /** How the launch enters the run's cell. */
+  readonly entry: LaunchEntry;
   readonly fileService: RunFileService;
   /** What each step resolves its tools from (`loop/step.ts`). */
   readonly toolInputs: Omit<
@@ -314,7 +326,7 @@ export const agentRunLayer = (
         delegationAgentScope: ctx.delegationAgentScope,
         stores: ctx.stores,
         opening: ctx.opening,
-        initialUserMessageForTranscript: ctx.initialUserMessageForTranscript,
+        entry: ctx.entry,
         fileService: new RunFileService(runId, session.roots),
         toolInputs,
         steps: yield* SynchronizedRef.make<OpenStep | null>(null),

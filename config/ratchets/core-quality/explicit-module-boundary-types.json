@@ -11,7 +11,6 @@
   "packages/harness/src/agent/runtime/runRegistry.ts": 1,
   "packages/harness/src/agent/runtime/selectAutoOpenFinalOutput.ts": 1,
   "packages/harness/src/agent/runtime/sessionDescription.ts": 1,
-  "packages/harness/src/agent/storage/runLifecycle.ts": 1,
   "packages/harness/src/agent/storage/runRecords.ts": 1,
   "packages/harness/src/agent/workspaceAgents/WorkspaceAgentsController.ts": 9,
   "packages/harness/src/agent/workspaceAgents/workspaceAgentsState.ts": 1,

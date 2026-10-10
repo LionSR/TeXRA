@@ -14,7 +14,7 @@
  * present.
  */
 
-import { Effect, Option, Stream } from 'effect';
+import { Cause, Effect, Option, Stream } from 'effect';
 
 import { withLogChannel } from '@logger/effectLog';
 import {
@@ -37,7 +37,7 @@ import {
   type SessionEvent,
 } from '@shared/schemas';
 import type { RunHistoryDraft } from '@shared/session/runStateFold';
-import type { Append, SessionEventsShape } from '@shared/session/sessionEvents';
+import type { Append } from '@shared/session/sessionEvents';
 
 import type { StepToolInputs } from './agentToolResolution';
 import type {
@@ -184,8 +184,6 @@ const REQUEST_TYPES: readonly SessionEvent['type'][] = [
 export interface RequestAsksInit {
   /** The session the requests are asked on, resolved when first used. */
   readonly session: () => SessionHandle;
-  /** The publisher's detached door: an interrupted ask's cancellation. */
-  readonly detach: SessionEventsShape['detach'];
   /** Whether the session's doors are shut: a cancellation then writes
    *  nothing. */
   readonly closed: () => boolean;
@@ -195,12 +193,16 @@ export interface RequestAsksInit {
  *  `decision`. */
 export function requestAsks({
   session,
-  detach,
   closed,
 }: RequestAsksInit): Pick<SessionRequests, 'ask' | 'decide' | 'decision'> {
+  const decide: SessionRequests['decide'] = (runId, requestId, answer) =>
+    session().log.transact((tx) =>
+      decisionRow(runId, requestId, answer, tx.append),
+    );
+
   /** The `request.decided` row for `requestId`, if the request is still
-   *  open: the body of one publisher transaction, whether a surface awaits
-   *  it or an interrupted {@link ask} detaches it. It reads the run's
+   *  open: the body of one publisher transaction, whether a surface or an
+   *  interrupted {@link ask} decides it. It reads the run's
    *  request rows alone, through the type index, so a decision costs the
    *  same however long the run's history grows. */
   const decisionRow = (
@@ -299,33 +301,34 @@ export function requestAsks({
         ),
       );
     }).pipe(
+      // The interruption decides the request through the one door a
+      // decision takes, awaited: the stop settles with the cancel written.
       Effect.onInterrupt(() =>
-        Effect.sync(() => {
-          if (closed()) return;
-          detach((append) =>
-            decisionRow(
-              runId,
-              requestId,
-              { action: 'cancel', cause: 'Run interrupted.' },
-              append,
-            ).pipe(
+        closed()
+          ? Effect.void
+          : decide(runId, requestId, {
+              action: 'cancel',
+              cause: 'Run interrupted.',
+            }).pipe(
               // `false` is the interruption that landed before the open
               // committed: no row exists, so this cancellation writes none
               // either and the caller's staging has no decision coming.
-              Effect.tap((cancelled) =>
+              Effect.flatMap((cancelled) =>
                 cancelled ? Effect.void : releaseUncommitted,
               ),
+              // A session draining under it refuses even as a defect.
+              Effect.catchCause((cause) =>
+                Effect.logWarning(
+                  `Request ${requestId} was not cancelled as its run stopped`,
+                ).pipe(
+                  Effect.annotateLogs({ data: Cause.squash(cause) }),
+                  withLogChannel(CHANNEL),
+                ),
+              ),
             ),
-          );
-        }),
       ),
     );
   };
-
-  const decide: SessionRequests['decide'] = (runId, requestId, answer) =>
-    session().log.transact((tx) =>
-      decisionRow(runId, requestId, answer, tx.append),
-    );
 
   return { ask, decide, decision };
 }

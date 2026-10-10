@@ -112,9 +112,11 @@ async function seedRunRecord(seed: {
     await Effect.runPromise(commitRunRecord(session, RUN_ID, seed.config));
   if (seed.checkpoint !== false) {
     // The position that opens the run: its rows hold a checkpoint.
-    await Effect.runPromise(session.runHistory.acquire(RUN_ID));
+    const cell = await Effect.runPromise(
+      session.runHistory.open(RUN_ID, { activation: () => Effect.succeed([]) }),
+    );
     await Effect.runPromise(
-      session.runHistory.appendBatch(RUN_ID, null, [
+      cell.append([
         {
           type: 'run.position',
           aggregateId: aggregateId('run', RUN_ID),

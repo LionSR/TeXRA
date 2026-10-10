@@ -355,8 +355,10 @@ const seedStartedRun = (session: SessionHandle, runId: string) =>
 const seedResumableCheckpoint = (session: SessionHandle, runId: string) =>
   Effect.gen(function* () {
     yield* seedStartedRun(session, runId);
-    yield* session.runHistory.acquire(runId as RunId);
-    yield* session.runHistory.appendBatch(runId as RunId, null, [
+    const cell = yield* session.runHistory.open(runId as RunId, {
+      activation: () => Effect.succeed([]),
+    });
+    yield* cell.append([
       {
         type: 'run.position',
         aggregateId: aggregateId('run', runId as RunId),

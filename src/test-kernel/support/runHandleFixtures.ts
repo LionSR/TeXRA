@@ -48,14 +48,10 @@ export function testRunRegistry(): RunRegistry {
       hold: () => Effect.void,
     },
   } as unknown as SessionHandle;
-  const registry: RunRegistry = new RunRegistry({
+  return new RunRegistry({
     session: () => session,
     fork: testRunFork,
   });
-  // No run is ever persisted here: a run's end is accepted as asked.
-  registry.end = (input) =>
-    Effect.succeed({ ok: true, outcome: input.outcome });
-  return registry;
 }
 
 /** The empty fold a {@link testRunRegistry} reads its grants from. */

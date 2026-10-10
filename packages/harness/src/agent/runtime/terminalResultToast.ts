@@ -12,6 +12,7 @@ import {
   primaryAgentError,
 } from '@common/errors/agentErrorClassification';
 import { causeChain } from '@common/errors/errorPredicates';
+import { hasErrorPresentationClaimed } from '@common/errors/sdkError/errorMetadata';
 import { Rejected } from '@shared/session/requestErrors';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -55,16 +56,21 @@ const presentedFailures = new WeakSet<object>();
 
 /**
  * Receipt for a root run's failure once its `run.end` row committed: the
- * session's presenter shows that row's guidance, or queues it for the next
- * surface, whenever it has any. `failure` is what the run throws past the
- * row, so no caller presents it a second time.
+ * session's presenter shows that row's guidance, so `failure`, what the run
+ * throws past it, is marked presented. A run that never opened has no row:
+ * its launch presents it (`runAgent`).
  */
 export function receiveTerminalFailure(
   failure: Error,
-  terminal: { readonly event: ResultEvent; readonly persistFailure?: unknown },
+  terminal: {
+    readonly event: ResultEvent;
+    readonly persistFailure?: unknown;
+    readonly recorded: boolean;
+  },
 ): void {
   const { error } = terminal.event;
-  if (terminal.persistFailure !== undefined || !error) return;
+  if (terminal.persistFailure !== undefined || !terminal.recorded || !error)
+    return;
   if (agentErrorPresentation(error) !== null) presentedFailures.add(failure);
 }
 
@@ -90,11 +96,18 @@ export function terminalFailurePresented(error: unknown): boolean {
   );
 }
 
+/** Record that `error` was presented (by another process too: a service
+ *  that showed it to this window), so no presenter here shows it again. */
+export function markFailurePresented(error: unknown): void {
+  if (typeof error === 'object' && error !== null) presentedFailures.add(error);
+}
+
 /**
  * Present a failed run from its raw error: the primary failure, classified,
  * worded as `prefix` plus its text (a `Rejected` request's reason), and
- * replayed to a surface that attaches later. A failure the terminal-result
- * presenter took presents nothing here.
+ * replayed to a surface that attaches later, then marked presented. A
+ * failure already presented (here, by the terminal-result presenter, or
+ * through a targeted notice) presents nothing.
  */
 export function presentRunFailure(
   interactions: SessionHostInteractions,
@@ -102,6 +115,9 @@ export function presentRunFailure(
   prefix = '',
 ): Effect.Effect<void> {
   if (terminalFailurePresented(error)) return Effect.void;
+  const claimed = hasErrorPresentationClaimed(error);
+  markFailurePresented(error);
+  if (claimed) return Effect.void;
   const primary = primaryAgentError(error);
   const text =
     primary instanceof Rejected ? primary.reason : toErrorMessage(primary);

@@ -484,7 +484,6 @@ export function sessionRequests(init: SessionRequestsInit): SessionRequests {
     decisionLanes: new Map(),
     asks: requestAsks({
       session: init.session,
-      detach: init.log.detach,
       closed: init.closed,
     }),
   };

@@ -12,11 +12,7 @@ import {
   type RunAgentOptions,
   type RunAgentRequest,
 } from '@agent/runtime';
-import {
-  deriveResumability,
-  type FinalizeRunInput,
-  type FinalizeRunResult,
-} from '@agent/storage';
+import { deriveResumability } from '@agent/storage';
 import { AgentError } from '@common/errors';
 import { isUserAbort } from '@common/errors/sdkError/errorPatterns';
 import { hasErrorPresentationClaimed } from '@common/errors/sdkError/errorMetadata';
@@ -91,10 +87,6 @@ interface CliExecuteOptions {
    *  predicate; a test harness injects stand-ins rather than mocking. */
   readonly agentRuns?: Partial<{
     readonly launch: (shutdown: () => boolean) => typeof runAgent;
-    readonly finalize: (
-      session: SessionHandle,
-      input: FinalizeRunInput,
-    ) => Effect.Effect<FinalizeRunResult>;
     readonly resumability: typeof deriveResumability;
   }>;
 }
@@ -239,8 +231,6 @@ export function executeCliRequest(
   return Effect.gen(function* () {
     const agentRuns = {
       launch: () => runAgent,
-      finalize: (session: SessionHandle, input: FinalizeRunInput) =>
-        session.runs.end(input),
       resumability: deriveResumability,
       ...options.agentRuns,
     };
@@ -289,7 +279,6 @@ export function executeCliRequest(
       }).pipe(Scope.provide(presentationScope));
     }
     const launchRunId = request.runId;
-    let ownedRunId: RunId | undefined;
     let shutdownRequested = false;
     // Workflow-output publication and shutdown-driven interruption race on the
     // same synchronous tick (see tryCommitWorkflowOutputPublication and the
@@ -300,11 +289,7 @@ export function executeCliRequest(
     type LaunchVerdict =
       | { readonly kind: 'undecided' }
       | { readonly kind: 'published' }
-      | {
-          readonly kind: 'interrupted';
-          artifactFailure: unknown;
-          finalizationFailureReported: boolean;
-        };
+      | { readonly kind: 'interrupted'; artifactFailure: unknown };
     let launchVerdict: LaunchVerdict = { kind: 'undecided' };
     // The lifecycle's `report` port is a plain callback the run loop calls as
     // it settles, routed straight to this host rather than through the session
@@ -314,16 +299,6 @@ export function executeCliRequest(
       presentationHost.emit('requestShowError', {
         message: toErrorMessage(error),
       });
-    };
-    const reportShutdownFinalizationFailure = (error: Error): void => {
-      if (
-        launchVerdict.kind !== 'interrupted' ||
-        launchVerdict.finalizationFailureReported
-      ) {
-        return;
-      }
-      launchVerdict.finalizationFailureReported = true;
-      reportFinalizationFailure(error);
     };
     const shutdownFinalizationDone = Deferred.makeUnsafe<void>();
     const recoveryNoticeStarted = Deferred.makeUnsafe<void>();
@@ -336,21 +311,13 @@ export function executeCliRequest(
     };
     const shutdownStatusFinalized = yield* Effect.cached(
       Effect.gen(function* () {
-        // Both call sites run after runAgent has taken (or failed to take)
-        // the run's claim, so the plain variable is the settled answer.
-        const runId = ownedRunId;
-        if (!runId) return false;
+        // Only an interrupted launch reaches here, after the run's own
+        // terminal wrote its CANCELLED end: the checkpoint alone decides
+        // the notice.
+        const runId = launchRunId;
         const onFinalized = options.onInterruptedRunFinalized;
         const drain = Effect.gen(function* () {
-          const terminalStatusPersisted = (yield* agentRuns.finalize(session, {
-            runId,
-            outcome: RUN_OUTCOME.CANCELLED,
-            report: reportShutdownFinalizationFailure,
-          })).ok;
-          const resumability = terminalStatusPersisted
-            ? yield* agentRuns.resumability(runId, session)
-            : undefined;
-          // The run's end committed above: the checkpoint alone decides the notice.
+          const resumability = yield* agentRuns.resumability(runId, session);
           if (onFinalized !== undefined) {
             const advertise = yield* advertisesInterruptedRun(
               runId,
@@ -411,11 +378,10 @@ export function executeCliRequest(
           launchVerdict = {
             kind: 'interrupted',
             artifactFailure: undefined,
-            finalizationFailureReported: false,
           };
         }
         const interruptedRunId =
-          launchVerdict.kind === 'interrupted' ? ownedRunId : undefined;
+          launchVerdict.kind === 'interrupted' ? launchRunId : undefined;
         // Everything the handler still has to wait for is one program over
         // the process services; only the verdict turn above is synchronous.
         yield* withProcessServices(
@@ -520,9 +486,6 @@ export function executeCliRequest(
               return yield* Effect.fail(ensureError(error));
             }
           }),
-        onRunClaimed: (runId) => {
-          ownedRunId = runId;
-        },
         stopAfterCycle: options.stopAfterCycle,
       });
 

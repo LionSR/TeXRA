@@ -72,15 +72,10 @@ type RunHistoryDraftType =
   | 'tools.offered'
   | 'context.blob'
   | 'hook.outcome'
-  | 'tool.start'
-  | 'tool.end'
-  | 'stream.end'
   | 'request.opened'
   | 'request.decided'
-  | 'plugin.fact'
   | 'followup.consumed'
-  | 'response.finalized'
-  | SettlementType;
+  | CardRowType;
 
 export class RunHistoryInconsistent extends Data.TaggedError(
   'RunHistoryInconsistent',
@@ -168,9 +163,10 @@ export type RunState = RunPosition &
   };
 
 /** Companions committed beside a history fact, which the loop ignores. */
-type CardRowType = CardType | SettlementType | 'plugin.fact';
+type CardRowType = CardType | SettlementType | EndType | 'plugin.fact';
 type CardType = 'tool.start' | 'tool.end' | 'stream.end' | 'response.finalized';
 type SettlementType = 'run.report' | 'run.result' | 'child.turn';
+type EndType = 'run.end' | 'stage.end'; // a run's end and what it closes
 
 /** The rows `foldRow` applies: the shared rows and the run history's own arms. */
 type FoldedRowType =

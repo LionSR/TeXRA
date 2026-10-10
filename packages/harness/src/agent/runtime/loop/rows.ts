@@ -72,7 +72,7 @@ export function positionRow(
 export function haltedPositionRow(
   position: Extract<SessionEvent, { type: 'run.position' }>,
   outcome: RunOutcome,
-): SessionEventDraft {
+): Extract<RunHistoryDraft, { type: 'run.position' }> {
   const { family, turn } = position.payload;
   return {
     type: 'run.position',

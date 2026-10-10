@@ -51,7 +51,6 @@ const mocks = vi.hoisted(() => ({
   runAgent: vi.fn(),
   writeTextStderr: vi.fn(),
   writeTextStderrAndWait: vi.fn<() => Effect.Effect<void>>(() => Effect.void),
-  finalizeRun: vi.fn(),
 }));
 
 /** Lets the forked run fiber and the process-runtime shutdown handler cross a macrotask. */
@@ -78,16 +77,14 @@ async function installStoragePlatform(): Promise<void> {
 
 /**
  * The agent boundary `executeCliRequest` runs through, injected through its
- * own options seam: the launch, the terminal-status drain, and the
- * resumability read all land in the suite's mock bag.
+ * own options seam: the launch and the resumability read land in the
+ * suite's mock bag.
  */
 const agentRunsFake = {
   launch:
     () =>
     (...args: unknown[]) =>
       Effect.promise(() => mocks.runAgent(...args)),
-  finalize: (_session: unknown, input: unknown) =>
-    Effect.promise(() => mocks.finalizeRun(input)),
   resumability: (...args: unknown[]) =>
     Effect.promise(() => mocks.deriveResumability(...args)),
 } as NonNullable<Parameters<typeof executeCliRequest>[2]['agentRuns']>;
@@ -228,7 +225,6 @@ type LeaseOptions = {
   beforeRunEnd?: () => Effect.Effect<boolean | void, Error>;
   publishWorkflowOutput?: RunAgentOptions['publishWorkflowOutput'];
   session?: SessionHandle;
-  onRunClaimed?: (runId: RunId) => void;
 };
 
 /**
@@ -322,11 +318,7 @@ async function stubExecuteCliDeps(): Promise<void> {
     outcomePersisted: true,
   });
   mocks.deriveResumability.mockResolvedValue({ kind: 'checkpoint' });
-  mocks.finalizeRun.mockResolvedValue({ ok: true });
-  mocks.runAgent.mockImplementation(async (_request, options) => {
-    options.onRunClaimed?.('exec-1' as RunId);
-    return COMPLETED_RUN;
-  });
+  mocks.runAgent.mockResolvedValue(COMPLETED_RUN);
 }
 
 /** Queues one cancelled, persisted outcome read for the next resolution. */
@@ -603,18 +595,14 @@ describe('executeCliRequest', () => {
           onInterruptedRunFinalized,
         }),
       );
-      const leaseOptions = yield* Deferred.await(published);
+      yield* Deferred.await(published);
       // The stub resumes this fiber synchronously, so one macrotask lets the
       // rest of the stub (the tracked launch handle) run first.
       yield* settle;
-      expect(leaseOptions.onRunClaimed).toBeDefined();
       const shutdown = yield* Effect.forkChild(
         Scope.close(platform.shutdownScope, Exit.void),
         { startImmediately: true },
       );
-      yield* settle;
-      expect(mocks.finalizeRun).not.toHaveBeenCalled();
-      leaseOptions.onRunClaimed?.('exec-1' as RunId);
       yield* settle;
       expect(killSpy).toHaveBeenCalledExactlyOnceWith('exec-1', {
         detachActiveChildren: false,
@@ -635,12 +623,6 @@ describe('executeCliRequest', () => {
       settleRecoveryWrite();
       yield* Fiber.join(shutdown);
       expect(flushSpy).toHaveBeenCalled();
-      expect(mocks.finalizeRun).toHaveBeenCalledWith(
-        expect.objectContaining({
-          runId: 'exec-1',
-          outcome: RUN_OUTCOME.CANCELLED,
-        }),
-      );
       expect(onInterruptedRunFinalized).toHaveBeenCalledExactlyOnceWith(
         'exec-1',
       );
@@ -653,7 +635,6 @@ describe('executeCliRequest', () => {
           runId: 'exec-1',
         },
       });
-      expect(mocks.finalizeRun).toHaveBeenCalledOnce();
     }),
   );
 
@@ -664,7 +645,8 @@ describe('executeCliRequest', () => {
         const { platform, executeCliRequest } = yield* Effect.promise(
           loadExecuteCliOnInstalledHost,
         );
-        mocks.deriveResumability.mockResolvedValueOnce({
+        // Both reads (the shutdown's inspection, the drain's) find none.
+        mocks.deriveResumability.mockResolvedValue({
           kind: 'none',
           outcome: RUN_OUTCOME.CANCELLED,
         });
@@ -677,21 +659,19 @@ describe('executeCliRequest', () => {
             onInterruptedRunFinalized,
           }),
         );
-        const leaseOptions = yield* Deferred.await(published);
+        yield* Deferred.await(published);
         yield* settle;
-        expect(leaseOptions.onRunClaimed).toBeDefined();
         const shutdown = yield* Effect.forkChild(
           Scope.close(platform.shutdownScope, Exit.void),
           { startImmediately: true },
         );
-        leaseOptions.onRunClaimed?.('exec-1' as RunId);
         mockCancelledOutcome();
         hangingRun.resolve(COMPLETED_RUN);
 
         yield* Fiber.join(shutdown);
         yield* Fiber.join(run);
 
-        expect(mocks.deriveResumability).toHaveBeenCalledExactlyOnceWith(
+        expect(mocks.deriveResumability).toHaveBeenCalledWith(
           'exec-1',
           expect.anything(),
         );
@@ -743,7 +723,6 @@ describe('executeCliRequest', () => {
           ok: false,
           exitCode: CliExitCode.Interrupted,
         });
-        expect(mocks.finalizeRun).not.toHaveBeenCalled();
       }),
   );
 
@@ -766,7 +745,6 @@ describe('executeCliRequest', () => {
         const leaseOptions = yield* Deferred.await(published);
         yield* settle;
         expect(leaseOptions).toBeDefined();
-        leaseOptions.onRunClaimed?.('exec-1' as RunId);
 
         const shutdown = yield* Effect.forkChild(
           Scope.close(platform.shutdownScope, Exit.void),
@@ -776,7 +754,9 @@ describe('executeCliRequest', () => {
         yield* Fiber.join(shutdown);
         yield* Fiber.join(run);
 
-        expect(mocks.finalizeRun).not.toHaveBeenCalled();
+        // A stop that reached no live run never reads the launch as
+        // interrupted, so nothing inspects it for recovery.
+        expect(mocks.deriveResumability).not.toHaveBeenCalled();
       }),
   );
 
@@ -811,7 +791,6 @@ describe('executeCliRequest', () => {
           Scope.close(platform.shutdownScope, Exit.void),
           { startImmediately: true },
         );
-        leaseOptions.onRunClaimed?.('exec-1' as RunId);
         yield* settle;
         yield* leaseOptions.publishWorkflowOutput?.(
           COMPLETED_WORKFLOW_RUN,
@@ -826,12 +805,6 @@ describe('executeCliRequest', () => {
           result: { outcome: RUN_OUTCOME.CANCELLED },
         });
         expect(publicationCommitted).toBe(false);
-        expect(mocks.finalizeRun).toHaveBeenCalledWith(
-          expect.objectContaining({
-            runId: 'exec-1',
-            outcome: RUN_OUTCOME.CANCELLED,
-          }),
-        );
       }),
   );
 
@@ -862,7 +835,6 @@ describe('executeCliRequest', () => {
         const leaseOptions = yield* Deferred.await(published);
         yield* settle;
         expect(leaseOptions).toBeDefined();
-        leaseOptions.onRunClaimed?.('exec-1' as RunId);
         yield* settle;
         yield* leaseOptions.publishWorkflowOutput?.(
           COMPLETED_WORKFLOW_RUN,
@@ -882,7 +854,6 @@ describe('executeCliRequest', () => {
         });
         expect(publicationCommitted).toBe(true);
         expect(killSpy).not.toHaveBeenCalled();
-        expect(mocks.finalizeRun).not.toHaveBeenCalled();
       }),
   );
 
@@ -912,7 +883,6 @@ describe('executeCliRequest', () => {
         });
         mocks.runAgent.mockImplementationOnce(
           async (_request: unknown, options: LeaseOptions) => {
-            options.onRunClaimed?.('exec-1' as RunId);
             try {
               await testRuntime().runPromise(
                 options.publishWorkflowOutput?.(COMPLETED_WORKFLOW_RUN, []) ??
@@ -963,132 +933,8 @@ describe('executeCliRequest', () => {
           exitCode: CliExitCode.AgentError,
         });
         expect(publicationCommitted).toBe(true);
-        expect(mocks.finalizeRun).not.toHaveBeenCalled();
         expect(mocks.emit).toHaveBeenCalledExactlyOnceWith('requestShowError', {
           message: `Error executing agent polish: ${outputFailure.message}`,
-        });
-      }),
-  );
-
-  it.live('closes the runtime host when shutdown finalization fails', () =>
-    Effect.gen(function* () {
-      const { platform, executeCliRequest } = yield* Effect.promise(
-        loadExecuteCliOnInstalledHost,
-      );
-      const persistenceError = new Error('terminal metadata disk full');
-      mocks.finalizeRun.mockImplementation(async (input) => {
-        input.report?.(
-          new Error(
-            `Failed to persist ${input.outcome} terminal state for run ${input.runId}: terminal metadata disk full`,
-            { cause: persistenceError },
-          ),
-        );
-        return { ok: false, error: persistenceError };
-      });
-      const published = yield* Deferred.make<LeaseOptions>();
-      const hangingRun = stubHangingRun(published);
-
-      const onInterruptedRunFinalized = vi.fn();
-      const run = yield* Effect.forkChild(
-        executeCliRequest(baseRequest(), cliContext(), {
-          onInterruptedRunFinalized,
-        }),
-      );
-      const leaseOptions = yield* Deferred.await(published);
-      yield* settle;
-      expect(mocks.runAgent).toHaveBeenCalledOnce();
-      leaseOptions.onRunClaimed?.('exec-1' as RunId);
-      const shutdown = yield* Effect.forkChild(
-        Scope.close(platform.shutdownScope, Exit.void),
-        {
-          startImmediately: true,
-        },
-      );
-      yield* settle;
-      expect(mocks.emit).not.toHaveBeenCalled();
-      mockCancelledOutcome();
-      hangingRun.resolve(COMPLETED_RUN);
-      yield* Fiber.join(shutdown);
-      expect(mocks.emit).toHaveBeenCalledExactlyOnceWith('requestShowError', {
-        message:
-          'Failed to persist cancelled terminal state for run exec-1: terminal metadata disk full',
-      });
-
-      expect(yield* Fiber.join(run)).toEqual({
-        ok: true,
-        outcomePersisted: true,
-        result: {
-          outcome: 'cancelled',
-          output: { response: '', files: [] },
-          runId: 'exec-1',
-        },
-      });
-      expect(mocks.finalizeRun).toHaveBeenCalledOnce();
-      expect(mocks.emit).toHaveBeenCalledTimes(1);
-      expect(mocks.close).toHaveBeenCalledTimes(1);
-      expect(onInterruptedRunFinalized).not.toHaveBeenCalled();
-    }),
-  );
-
-  it.live(
-    'still presents a classified run failure when shutdown finalization also failed',
-    () =>
-      Effect.gen(function* () {
-        const { platform, executeCliRequest } = yield* Effect.promise(
-          loadExecuteCliOnInstalledHost,
-        );
-        // Imported dynamically (like the tests above) so the `instanceof`
-        // check in executeCli.ts sees the same module instance.
-        const { AgentError: RuntimeAgentError } = yield* Effect.promise(
-          () => import('@common/errors'),
-        );
-        // The production `emit` wrapper, which the default stub replaces: it
-        // is the thing that sets `failurePresented`, so only with it installed
-        // can this suite see whether a finalization notice claims the run's
-        // own failure presentation.
-        mocks.createHeadlessCliHostInteractions.mockImplementationOnce(
-          (_session, _runtime, _context, hooks) => ({
-            emit: hooks.emit,
-            dispose: mocks.disposeHostInteractions,
-          }),
-        );
-        mocks.finalizeRun.mockImplementation(async (input) => {
-          input.report?.(new Error('terminal metadata disk full'));
-          return { ok: false };
-        });
-        const published = yield* Deferred.make<LeaseOptions>();
-        const hangingRun = stubHangingRun(published);
-
-        const run = yield* Effect.forkChild(
-          executeCliRequest(baseRequest(), cliContext(), {}),
-        );
-        const leaseOptions = yield* Deferred.await(published);
-        yield* settle;
-        leaseOptions.onRunClaimed?.('exec-1' as RunId);
-        const shutdown = yield* Effect.forkChild(
-          Scope.close(platform.shutdownScope, Exit.void),
-          { startImmediately: true },
-        );
-        yield* settle;
-        // The drain runs under the lease, before the launch settles: this is
-        // the instant at which its failure notice used to claim the run's own
-        // presentation and suppress the message below.
-        yield* leaseOptions.beforeRunEnd?.() ?? Effect.void;
-        hangingRun.reject(
-          new RuntimeAgentError('Error executing agent chat: boom'),
-        );
-        yield* Fiber.join(shutdown);
-
-        expect(yield* Fiber.join(run)).toEqual({
-          ok: false,
-          exitCode: CliExitCode.AgentError,
-        });
-        expect(mocks.emit).toHaveBeenCalledTimes(2);
-        expect(mocks.emit).toHaveBeenCalledWith('requestShowError', {
-          message: 'terminal metadata disk full',
-        });
-        expect(mocks.emit).toHaveBeenCalledWith('requestShowError', {
-          message: 'Error executing agent chat: boom',
         });
       }),
   );
@@ -1101,10 +947,9 @@ describe('executeCliRequest', () => {
       const request = baseRequest();
 
       yield* executeCliRequest(request, cliContext(), {});
-      mocks.finalizeRun.mockClear();
       yield* Scope.close(platform.shutdownScope, Exit.void);
 
-      expect(mocks.finalizeRun).not.toHaveBeenCalled();
+      expect(mocks.deriveResumability).not.toHaveBeenCalled();
     }),
   );
 });
@@ -1148,14 +993,12 @@ describe('executeCliConfig', () => {
             stopAfterCycle: true,
           }),
         );
-        const leaseOptions = yield* Deferred.await(published);
+        yield* Deferred.await(published);
         yield* settle;
-        expect(leaseOptions.onRunClaimed).toBeDefined();
         const shutdown = yield* Effect.forkChild(
           Scope.close(platform.shutdownScope, Exit.void),
           { startImmediately: true },
         );
-        leaseOptions.onRunClaimed?.('exec-1' as RunId);
         mockCancelledOutcome();
         hangingRun.resolve(COMPLETED_RUN);
 
@@ -1174,8 +1017,10 @@ describe('executeCliConfig', () => {
           ok: true,
           exitCode: CliExitCode.Interrupted,
         });
+        // The launch's own run id, minted for the tool-use request.
+        const launched: { runId: RunId } = mocks.runAgent.mock.calls[0]?.[0];
         expect(mocks.writeTextStderrAndWait).toHaveBeenCalledExactlyOnceWith(
-          "Resume this task with: texra resume exec-1 --cwd /tmp/project --approval-policy yolo --include-interop --source '/tmp/skill path'",
+          `Resume this task with: texra resume ${launched.runId} --cwd /tmp/project --approval-policy yolo --include-interop --source '/tmp/skill path'`,
         );
       }),
   );
@@ -1197,14 +1042,12 @@ describe('executeCliConfig', () => {
             recoveryInputIsDurable: false,
           }),
         );
-        const leaseOptions = yield* Deferred.await(published);
+        yield* Deferred.await(published);
         yield* settle;
-        expect(leaseOptions.onRunClaimed).toBeDefined();
         const shutdown = yield* Effect.forkChild(
           Scope.close(platform.shutdownScope, Exit.void),
           { startImmediately: true },
         );
-        leaseOptions.onRunClaimed?.('exec-1' as RunId);
         mockCancelledOutcome();
         hangingRun.resolve(COMPLETED_RUN);
 

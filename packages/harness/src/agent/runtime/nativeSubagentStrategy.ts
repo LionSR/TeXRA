@@ -10,6 +10,7 @@ import { type RunEndResult } from '@agent/runtime/RunEndResult';
 import { AgentEngine } from '@agent/runtime/AgentEngine';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { ExecuteAgentOptions } from '@agent/runtime/executeAgent';
+import type { RegisterRunOptions } from '@agent/storage/runLifecycle';
 import type { AgentRunServices } from '@agent/runtime/runRegistry';
 import type { ChildRunStrategy } from '@agent/runtime/childRunLoop';
 import type { PreparedAgentDefinition } from '@agent/runtime/AgentLaunchContext';
@@ -62,6 +63,8 @@ type NativeSubagentStrategyParams = NativeSubagentStrategyBase &
   (
     | {
         readonly definition: PreparedAgentDefinition;
+        /** The child's registration, which its opening commits. */
+        readonly registration: RegisterRunOptions;
         readonly resume?: never;
         readonly parentOffered: readonly OfferedTool[];
       }
@@ -140,7 +143,7 @@ export function createNativeSubagentStrategy(
       runNative(
         Effect.gen(function* () {
           const engine = yield* AgentEngine;
-          const executeOptions: ExecuteAgentOptions = {
+          const executeOptions: Omit<ExecuteAgentOptions, 'registration'> = {
             ...params.resume?.options,
             session: params.session,
             parentOffered: params.parentOffered,
@@ -174,6 +177,7 @@ export function createNativeSubagentStrategy(
             params.runId,
             {
               ...executeOptions,
+              registration: params.registration,
               // The live handle owns this edge, including a later detach.
               parentRunId: params.parentRunId,
               ...(params.inBand === true ? { stopAfterCycle: true } : {}),

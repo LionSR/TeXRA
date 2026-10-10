@@ -1,22 +1,19 @@
 /**
- * The run history: the only reader of run-history-private payloads and the only
- * writer of the run rows. Three operations, each a boundary the row design
- * names, each taking the run id and qualifying its own aggregate access with
- * `aggregateId('run', run)`.
+ * The run history: the only reader of run-history-private payloads and the
+ * only writer of the rows a run's state is folded from, each through one
+ * run's {@link RunCell}. Two operations: `load` reads, `open` hands out the
+ * cell every write of the run goes through.
  *
- * Stateless by construction. The loop holds the `RunState`; the run history folds
- * the batch it just committed onto the state it was handed. That is what
- * makes `foldRunState` provably the same function on the live path and on
- * resume, and it keeps a session-root service free of per-run mutable cache.
- *
- * Deliberately absent: no `append` (a one-row case is a one-element batch),
- * no `messages()` (the folded state holds them), no subscribe surface.
+ * Stateless by construction. A cell holds its run's `RunState`, folded from
+ * the batches it commits; that is what makes `foldRunState` provably the
+ * same function on the live path and on resume, and it keeps a session-root
+ * service free of per-run mutable cache.
  */
 import { Cause, Context, Data, type Effect, type Scope } from 'effect';
 
 import type { RunId, SessionEventDraft } from '@shared/schemas';
 import { type DatabaseReadFailed, DatabaseWriteFailed } from './database';
-import type { CoWrite } from './sessionEvents';
+import type { Append, CoWrite } from './sessionEvents';
 import type {
   RunHistoryDraft,
   RunHistoryInconsistent,
@@ -26,15 +23,15 @@ import type {
 /**
  * A refusal the run history itself decided. Database failures are NOT folded into
  * this type: reporting a disk error as a stolen claim is the silent-
- * degradation defect in a different costume, so `acquire` and `load` keep
+ * degradation defect in a different costume, so `open` and `load` keep
  * them in their error channel beside it.
  *
  * Which arms are reachable, and from where (D6 b):
- * - `not-owner`: from `acquire`, where `Database.acquireClaims` proves prior
- *   owners dead before moving the claim and a live foreign owner is the
+ * - `not-owner`: from a resume's `open`, where the claim proves prior owners
+ *   dead before moving and a live foreign owner is the
  *   `DatabaseClaimRefused` verdict it fails with (a claim taken after that
- *   proof is `DatabaseNotOwner`); and from `appendBatch`,
- *   where the session's log (`SessionLog.transact`) refuses a target this process no longer
+ *   proof is `DatabaseNotOwner`); and from `RunCell.append`,
+ *   where the session's log refuses a target this process no longer
  *   holds open as `DatabaseNotOwner`, nothing written. It is never
  *   synthesised from any other write failure: a disk error stays a
  *   `DatabaseWriteFailed` (F3). A loop that meets it mid-turn stops with it,
@@ -45,11 +42,11 @@ import type {
  *   assembles, at the write boundary of every batch that appends to or
  *   rewrites it, and on cold load (D11).
  * - `inconsistent`: the rows do not fold; `cause` says why. From `load`, and
- *   from `appendBatch` before it publishes: a batch is folded first and
+ *   from `RunCell.append` before it publishes: a batch is folded first and
  *   refused with nothing committed, because a published row the fold rejects
  *   is a run no later `load` can read.
- * A violated `appendBatch` precondition is a caller defect (`Effect.die`),
- * not an arm: the loop must not handle it.
+ * A violated `RunCell.append` precondition is a caller defect
+ * (`Effect.die`), not an arm: the loop must not handle it.
  */
 export class RunHistoryRefused extends Data.TaggedError('RunHistoryRefused')<{
   readonly reason:
@@ -83,34 +80,108 @@ export function findStorageRefusal(
   return undefined;
 }
 
+/** What a run cell's commits and re-reads fail with. */
+export type CellError =
+  RunHistoryRefused | DatabaseWriteFailed | DatabaseReadFailed;
+
+/**
+ * One run's state holder and the only writer of the rows its state is
+ * folded from: the opening, every step, settlement and delivery, the input
+ * it consumes, a compaction's edit, a model switch and its end all commit
+ * through {@link RunCell.append}, and nothing sets the state it holds but
+ * what that folds back. The loop hands the same cell to the invoker and the
+ * dispatch unit, so no run service keeps a copy of the state it commits
+ * against.
+ */
+export interface RunCell {
+  readonly runId: RunId;
+  /** The state the run continues from. Nothing mirrors it. */
+  readonly current: Effect.Effect<RunState>;
+  /** The state the cell opened on: what a resume folded from stored rows,
+   *  or a fresh run's before its opening batch. */
+  readonly opened: RunState;
+  /**
+   * Commit one batch against the current state and hold what the fold gives
+   * back. Rows that read the state (a step, a settlement, a delivery) are
+   * built from the state the batch commits against. Read-append-write is
+   * one uninterruptible region under the cell's lock, the wait for the lock
+   * included: a settlement queued behind a sibling when the run stops
+   * belongs to a tool that already ran, and committing it keeps a resume
+   * from running it again. `alongside` decides another aggregate's rows,
+   * appended after the batch's in its one append: a child turn's delivery
+   * to its parent. Failure of any member commits none.
+   *
+   * Preconditions, checked before anything is written; a violation is a
+   * defect:
+   * - a batch on an unopened run carries the `run.position` that opens it,
+   *   unless it is empty (a registration alone) or carries the run's end;
+   * - a `request.opened` precedes the `failed` attempt that asks it;
+   * - a `context.edit` immediately precedes the `model.message` `response`
+   *   row that used it, when both are present;
+   * - a `model.message` `append` naming `sourceResponse` requires that
+   *   response to be the pending one, and its first message to be a tool
+   *   group carrying, at each call's ordinal, that call's committed
+   *   settlement (committed before, or earlier in this batch): the canonical
+   *   tool message binds results to calls positionally, the run history
+   *   keys them by `callId`.
+   */
+  readonly append: <E = never>(
+    rows:
+      | readonly RunHistoryDraft[]
+      | ((state: RunState) => readonly RunHistoryDraft[]),
+    alongside?: Effect.Effect<CoWrite, E, Scope.Scope>,
+  ) => Effect.Effect<RunState, RunHistoryRefused | DatabaseWriteFailed | E>;
+  /**
+   * Re-read the run under the cell's lock: the state with every row another
+   * writer committed (a `request.decided` a surface landed), in commit
+   * order, whatever this cell appended since. Folding one such row onto the
+   * cell instead cannot work once a sibling call's settlement has committed
+   * after it.
+   */
+  readonly refresh: Effect.Effect<
+    RunState,
+    RunHistoryRefused | DatabaseReadFailed
+  >;
+}
+
+/** How {@link RunHistory} opens a cell. */
+export interface RunOpening<E = never> {
+  /**
+   * A new run's registration (`run.start` first): it rides the cell's
+   * first append, so the run exists with what that append writes or not at
+   * all. The birth takes the run's claim for this process.
+   */
+  readonly registration?: readonly SessionEventDraft[];
+  /**
+   * A resume: take the run's claim (proving a prior owner dead) and commit,
+   * in one batch, the cancellation of every request the previous owner left
+   * unbound and the rows this decides from the stored state (its
+   * `run.activate`, the grants it ends, a changed configuration).
+   */
+  readonly activation?: (
+    state: RunState | null,
+  ) => Effect.Effect<readonly SessionEventDraft[], E>;
+  /**
+   * The publisher job the caller is inside: the cell folds the run's rows
+   * in that job and appends through its transaction, never a nested one,
+   * and takes no claim, so the job's other rows and the cell's commit
+   * together.
+   */
+  readonly within?: Append;
+}
+
+/** The run history over one session's log. */
 export class RunHistory extends Context.Service<
   RunHistory,
   {
     /**
-     * The claim gate, called before any resume side effect: resume acquires
-     * the run aggregate's current claim first, and continues from the state
-     * it answers, `load`'s answer from the same read. Without it a second
-     * process can fold a run's state, re-dispatch a barrier tool, and learn
-     * only at its first append that the claim never moved, after the side
-     * effect.
-     */
-    readonly acquire: (
-      run: RunId,
-    ) => Effect.Effect<
-      RunState | null,
-      RunHistoryRefused | DatabaseReadFailed | DatabaseWriteFailed
-    >;
-    /**
-     * Fold a run's rows into its state. `null` only when no run history row has
-     * folded: the loop's fresh-run branch and, for a run recorded before the
-     * run history, the honest answer, distinct from "checkpoint corrupt".
-     * Queued follow-ups alone still return that unopened state (`phase` is
-     * null) so the caller can deliver them; they do not open the run. Run history
-     * rows without an opening `run.position` are not that case: they are a
-     * malformed aggregate and fail `inconsistent`, because folding an
-     * `attempt` or a `response` into a fresh run is how a paid invocation
-     * gets issued twice. Reads the run aggregate in full: the state is the
-     * fold of every row, nothing restates it.
+     * Fold a run's rows into its state. `null` only when no run history row
+     * has folded. Queued follow-ups alone still return that unopened state
+     * (`phase` is null); they do not open the run. Run history rows without
+     * an opening `run.position` are a malformed aggregate and fail
+     * `inconsistent`, because folding an `attempt` or a `response` into a
+     * fresh run is how a paid invocation gets issued twice. Reads the run
+     * aggregate in full: the state is the fold of every row.
      */
     readonly load: (
       run: RunId,
@@ -118,46 +189,17 @@ export class RunHistory extends Context.Service<
       through?: number,
     ) => Effect.Effect<RunState | null, RunHistoryRefused | DatabaseReadFailed>;
     /**
-     * Commit one ordered batch in one transaction, and return the state the
-     * loop continues from: `state` folded with the rows the publisher
-     * actually committed. Failure of any member commits none.
-     *
-     * Preconditions, checked before publish; a violation is a defect:
-     * - a batch on an unopened run carries the `run.position` that opens
-     *   it. A `request.opened` PRECEDES the `failed`
-     *   attempt that asks it, so the fold resolves the ask against a request
-     *   it already holds;
-     * - a `context.edit` immediately precedes the `model.message`
-     *   `response` row that used it, when both are present;
-     * - a `model.message` `response` row carries the dispatch facts and the
-     *   priced `usage` of its turn, both stamped here: the package produces
-     *   neither dispatch facts nor a price, and `RunState.usage` is
-     *   derived from the rows alone (D12), so a row appended without its
-     *   `NormalizedUsage` silently loses that turn's cost on resume;
-     * - a `model.message` `append` naming `sourceResponse` requires that
-     *   response to be the current pending response, and its first message
-     *   to be a tool group carrying, at the `callOrdinal` of each of that
-     *   response's dispatch facts, the committed settlement for that
-     *   `callId` (committed before, or earlier in this batch). This is the
-     *   settlement-to-provider join: the canonical tool message binds
-     *   results to calls positionally, the run history keys them by `callId`.
-     * - `registration`, the rows that register the run this batch opens
-     *   (`run.start` first), comes only with a null `state`: they commit
-     *   ahead of `rows` in the same transaction, so no crash leaves the run
-     *   registered without the history it was registered with. The claim
-     *   the birth takes is released once the batch commits: such a run is
-     *   its host's to resume.
-     *
-     * `alongside` decides what another aggregate commits with the batch,
-     * appended after its rows in its one append: a child's turn settles with
-     * its parent's `followup.queued`. Its failure commits none of the batch.
+     * The run's cell, seeded with its stored state (a fresh state when it
+     * has none). A resume (`activation`) is the claim gate, taken before any
+     * resume side effect: a second process learns it never had the run
+     * before it re-dispatches anything.
      */
-    readonly appendBatch: <E = never>(
+    readonly open: <E = never>(
       run: RunId,
-      state: RunState | null,
-      rows: readonly RunHistoryDraft[],
-      registration?: readonly SessionEventDraft[],
-      alongside?: Effect.Effect<CoWrite, E, Scope.Scope>,
-    ) => Effect.Effect<RunState, RunHistoryRefused | DatabaseWriteFailed | E>;
+      opening?: RunOpening<E>,
+    ) => Effect.Effect<
+      RunCell,
+      RunHistoryRefused | DatabaseReadFailed | DatabaseWriteFailed | E
+    >;
   }
 >()('@texra/session/RunHistory') {}

@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, vi } from 'vitest';
 
 import { getRunRecords } from '@agent/storage';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
-import { registerRun } from '@agent/storage/runLifecycle';
+import { finalizeRun, registerRun } from '@agent/storage/runLifecycle';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { RunId } from '@shared/schemas';
 import { DatabaseReadFailed } from '@shared/session/database';
@@ -164,7 +164,7 @@ describe('run registration and finalization', () => {
         // The run's rows live until explicit deletion (C9): finalization writes
         // the terminal row and removes nothing beside it, so a failed write is
         // the whole failure and comes back unwrapped.
-        const result = yield* session.runs.end({
+        const result = yield* finalizeRun(session, {
           runId,
           outcome: 'failed',
         });

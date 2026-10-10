@@ -1,9 +1,8 @@
 /**
- * Run lifecycle operations.
- *
- * Business logic that orchestrates the run's records across its aggregate:
- * registration, activation and finalization, separate from the record
- * accessors in `runRecords.ts`.
+ * Run lifecycle operations: a run's registration, a resume's activation and
+ * a run's end, each the rows one of the run's cells commits
+ * (`RunHistory.open`), separate from the record accessors in
+ * `runRecords.ts`.
  */
 
 import { Cause, Effect, Exit } from 'effect';
@@ -34,7 +33,8 @@ import {
   type RunProvenance,
   type UserFollowUpSupport,
 } from '@shared/schemas';
-import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
+import type { Append } from '@shared/session/sessionEvents';
+import { ensureError } from '@utils/errors/errorMessage';
 import {
   getRunRecords,
   openOwnedChildren,
@@ -54,20 +54,17 @@ function pinRunWorkingDirectory(
 }
 
 /**
- * The `run.config` row an activation owes, or null when the run's newest
- * row already says it. A run's configuration is written with its
- * registration and afterwards only when it changes, so the newest row is the
- * configuration and no activation restates it. Its model stays the stored
- * row's: the model the run is on is the newest config's, which only a
- * switch moves, and its binding is the fold's, which a config without one
- * leaves as it was. Its caller holds the run's claim, so no other writer
- * can move the row between the read and the write.
+ * A resume's activation: its `run.activate`, the grants it ends, and the
+ * `run.config` it owes when its configuration changed (the newest row is
+ * the configuration; its model stays the stored one, which only a switch
+ * moves). Read inside the activation's transaction, under its claim.
  */
-export const configChange = Effect.fn('configChange')(function* (
+export const activationRows = Effect.fn('activationRows')(function* (
   session: SessionHandle,
   runId: RunId,
   config: RunRecord,
-) {
+): Effect.fn.Return<readonly SessionEventDraft[], Error> {
+  const target = aggregateId('run', runId);
   const stored = yield* getRunRecords(session, runId).readRunRecord();
   const next = RunRecordFieldsSchema.parse(
     pinRunWorkingDirectory(
@@ -75,30 +72,19 @@ export const configChange = Effect.fn('configChange')(function* (
       session.roots.workspace,
     ),
   );
-  if (stored !== null && stableStringify(stored) === stableStringify(next))
-    return null;
-  return {
-    type: 'run.config',
-    aggregateId: aggregateId('run', runId),
-    config: next,
-  } satisfies SessionEventDraft;
+  const changed =
+    stored === null || stableStringify(stored) !== stableStringify(next);
+  return [
+    { type: 'run.activate', aggregateId: target },
+    ...(yield* session.approvals.activationRows(runId)),
+    ...(changed
+      ? [{ type: 'run.config' as const, aggregateId: target, config: next }]
+      : []),
+  ];
 });
 
-/** A resume's activation: its `run.activate` and the grants it ends, as one
- *  batch. */
-export const commitResumedActivation = (session: SessionHandle, runId: RunId) =>
-  session.approvals
-    .activationRows(runId)
-    .pipe(
-      Effect.flatMap((grants) =>
-        session.log.transact([
-          { type: 'run.activate', aggregateId: aggregateId('run', runId) },
-          ...grants,
-        ]),
-      ),
-    );
-
-interface RegisterRunOptions {
+/** What a run is registered with: the facts its `run.start` carries. */
+export interface RegisterRunOptions {
   /** The launching run: the whole parent edge, stamped on `run.start`. */
   readonly parentRunId?: RunId;
   /** The parent's tool card whose call launches this run. */
@@ -126,8 +112,11 @@ interface RegisterRunOptions {
 }
 
 /**
- * Register a new run: persist config, metadata, and parent linkage.
- * Awaits all writes before returning.
+ * Register a run whose loop is not this process's (a process child: an
+ * agent CLI, background bash): its registration alone, through its cell. A
+ * birth takes the claim with its `run.start`; a re-registration takes it
+ * over first, as a resume does. A run this process's loop drives registers
+ * with its opening instead (`LaunchEntry`).
  */
 export const registerRun = Effect.fn('registerRun')(function* (
   session: SessionHandle,
@@ -135,18 +124,17 @@ export const registerRun = Effect.fn('registerRun')(function* (
   record: RunRecord,
   options: RegisterRunOptions,
 ): Effect.fn.Return<void, Error> {
-  return yield* registrationRows(session, runId, record, options).pipe(
-    // A registration owns its run's claim: a birth takes it with its
-    // `run.start`, a re-registration takes it over first; its driver keeps it.
-    Effect.flatMap((events) =>
-      session.log.transact((tx) =>
-        (events.some((event) => event.type === 'run.start')
-          ? Effect.void
-          : tx.claim(runId)
-        ).pipe(Effect.andThen(tx.append(events))),
-      ),
-    ),
-    Effect.asVoid,
+  return yield* Effect.gen(function* () {
+    const rows = yield* registrationRows(session, runId, record, options);
+    const born = rows[0]?.type === 'run.start';
+    const cell = yield* session.runHistory.open(
+      runId,
+      born
+        ? { registration: rows }
+        : { activation: () => Effect.succeed(rows) },
+    );
+    if (born) yield* cell.append([]);
+  }).pipe(
     // A registration that died wrote nothing, and the caller refuses the
     // launch on it like any other refused registration.
     Effect.catchDefect((defect) => Effect.fail(ensureError(defect))),
@@ -154,9 +142,10 @@ export const registerRun = Effect.fn('registerRun')(function* (
 });
 
 /**
- * The rows that register a run, uncommitted: for a caller that commits them
- * with the run's first history in one batch, as a fork does, so no crash
- * leaves the run registered without the history it was registered with.
+ * The rows that register a run, uncommitted: its `run.start` first for a
+ * birth, which a caller commits with the run's first history in one batch
+ * (a fork, a fresh run's opening), so no crash leaves the run registered
+ * without the history it was registered with.
  */
 export const registrationRows = Effect.fn('registrationRows')(function* (
   session: SessionHandle,
@@ -235,7 +224,7 @@ export interface FinalizeRunInput {
   readonly runId: RunId;
   readonly outcome: RunOutcome;
   /** Keep the outcome already written: a backstop (the host-exit drain)
-   *  does not own the run's result. Read and write share one locked cycle. */
+   *  does not own the run's result. Read and write share one transaction. */
   readonly keepExistingOutcome?: boolean;
   /** The classified error behind a FAILED outcome, when the run has one. */
   readonly error?: RunEnd['error'];
@@ -248,12 +237,6 @@ export interface FinalizeRunInput {
   readonly output?: RunEndOutput;
   /** A child's last-turn settlement, committed with the run's end. */
   readonly settlement?: TransactionPart;
-  /**
-   * Where a persistence failure is reported, wrapped in one worded Error.
-   * `finalizeRun` never throws; a caller with its own logging reads the
-   * result instead.
-   */
-  readonly report?: (error: Error) => void;
 }
 
 export type FinalizeRunResult =
@@ -266,11 +249,73 @@ export type FinalizeRunResult =
        * value rather than to the one it asked for.
        */
       readonly outcome: RunOutcome;
+      /** False for a run that never opened: it has no rows, so nothing of
+       *  it was written, and its failure is its launch's to report. */
+      readonly recorded: boolean;
     }
   | {
       readonly ok: false;
       readonly error: unknown;
     };
+
+/**
+ * A run's end, inside the publisher job `append` belongs to, through the
+ * run's cell opened within it: what the run never applied consumed, the
+ * loop's halt, what it left open closed, and its `run.end`, with a child's
+ * last-turn settlement and its parent's delivery in the same append. A run
+ * whose current lifecycle already ended this way writes only the
+ * settlement; a resumed run ends again. A run that never opened writes
+ * nothing.
+ */
+export const endIn = Effect.fn('endIn')(function* (
+  session: SessionHandle,
+  append: Append,
+  input: FinalizeRunInput,
+) {
+  const { runId, outcome, keepExistingOutcome, error } = input;
+  const target = aggregateId('run', runId);
+  const co = yield* input.settlement ??
+    Effect.succeed({ rows: [], committed: Effect.void, held: false });
+  const rows = yield* session.log.records(runId);
+  // A run never born has nothing to end: its launch reports the failure.
+  if (!rows.some((row) => row.type === 'run.start'))
+    return { persisted: outcome, recorded: false, after: Effect.void };
+  // "Already ended" is about the run's current lifecycle (the rule of
+  // `runEndFromEvents`): a resumed run ends again, even the same way, or
+  // every `durableOutcome` reader keeps it RUNNING for want of the row.
+  const ended = runEndFromEvents(rows, runId)?.outcome;
+  const persisted =
+    keepExistingOutcome === true && ended !== undefined ? ended : outcome;
+  const cell = yield* session.runHistory.open(runId, { within: append });
+  const alongside = Effect.succeed({ rows: co.rows, committed: Effect.void });
+  if (ended === persisted || co.held === true) {
+    if (ended === persisted && error !== undefined)
+      yield* Effect.logWarning(`Run ${runId} had ended: ${error.message}`);
+    yield* cell.append([], alongside);
+    return { persisted, recorded: true, after: co.committed };
+  }
+  const { followUps } = yield* session.followUps.read(runId);
+  yield* cell.append(
+    [
+      ...consumedRows(runId, followUps), // a request it never applied
+      // The loop's halt, never apart from its end.
+      ...rows.flatMap((row) =>
+        row.type === 'run.position' ? [haltedPositionRow(row, persisted)] : [],
+      ),
+      // What the run left open closes with its end.
+      ...session.trace.closure(runId, persisted),
+      {
+        type: 'run.end' as const,
+        aggregateId: target,
+        outcome: persisted,
+        ...(error !== undefined ? { error } : {}),
+        output: storedRunOutput(input.output ?? emptyRunEndOutput()),
+      },
+    ],
+    alongside,
+  );
+  return { persisted, recorded: true, after: co.committed };
+});
 
 /**
  * End a run nothing drives any more, CANCELLED (an outcome it already wrote
@@ -283,7 +328,7 @@ const retireRun = Effect.fn('retireRun')(function* (
   const ended = yield* Effect.scoped(
     session.log.hold(runId, { ends: true }).pipe(
       Effect.andThen(
-        session.runs.end({
+        finalizeRun(session, {
           runId,
           outcome: RUN_OUTCOME.CANCELLED,
           keepExistingOutcome: true,
@@ -317,10 +362,9 @@ const endOwnedChildren = Effect.fn('endOwnedChildren')(function* (
 });
 
 /**
- * The one writer of the `run.end` row (one run model, 3.3), reached through
- * `Runs.end`. Read and write are one transaction, so a run whose current
- * lifecycle already ended this way writes nothing; a resumed run ends again.
- * Never fails: a persistence failure is `ok: false` (and `report`ed).
+ * The one writer of a run's end ({@link endIn}, in one transaction of its
+ * own), for its driver's terminal and for an end no driver writes. Never
+ * fails: a persistence failure is `ok: false`.
  */
 export const finalizeRun = Effect.fn('finalizeRun')(function* (
   session: SessionHandle,
@@ -330,75 +374,25 @@ export const finalizeRun = Effect.fn('finalizeRun')(function* (
   const owned = yield* Effect.exit(
     endOwnedChildren(session, runId, keepExistingOutcome === true),
   );
-  if (Exit.isFailure(owned)) {
-    const error = ensureError(Cause.squash(owned.cause));
-    input.report?.(error);
-    return { ok: false, error };
-  }
+  if (Exit.isFailure(owned))
+    return { ok: false, error: ensureError(Cause.squash(owned.cause)) };
   // Rows the run published and the store refused fail it, whoever ends it.
   const lost = yield* session.trace.lost(runId);
-  const requested =
-    lost !== undefined && outcome !== RUN_OUTCOME.CANCELLED
-      ? RUN_OUTCOME.FAILED
-      : outcome;
-  const error = input.error ?? lost;
   const status = yield* Effect.exit(
     session.log.transact((tx) =>
-      Effect.gen(function* () {
-        const co = yield* input.settlement ??
-          Effect.succeed({ rows: [], committed: Effect.void, held: false });
-        const rows = yield* session.log.records(runId);
-        if (!rows.some((row) => row.type === 'run.start'))
-          return yield* Effect.fail(
-            new Error(`Run start not found for ${runId}`),
-          );
-        // "Already ended" is about the run's current lifecycle (the rule of
-        // `runEndFromEvents`): a resumed run ends again, even the same way, or
-        // every `durableOutcome` reader keeps it RUNNING for want of the row.
-        const ended = runEndFromEvents(rows, runId)?.outcome;
-        const persisted =
-          keepExistingOutcome === true && ended !== undefined
-            ? ended
-            : requested;
-        if (ended === persisted && lost !== undefined)
-          yield* Effect.logWarning(`Run ${runId} had ended: ${lost.message}`);
-        const commit = (end: readonly SessionEventDraft[]) =>
-          tx
-            .append([...co.rows, ...end])
-            .pipe(Effect.as({ persisted, after: co.committed }));
-        if (ended === persisted || co.held) return yield* commit([]);
-        const { followUps } = yield* session.followUps.read(runId);
-        return yield* commit([
-          ...consumedRows(runId, followUps), // a request it never applied
-          // The loop's halt, never apart from its end.
-          ...rows.flatMap((row) =>
-            row.type === 'run.position'
-              ? [haltedPositionRow(row, persisted)]
-              : [],
-          ),
-          // What the run left open closes with its end.
-          ...session.trace.closure(runId, persisted),
-          {
-            type: 'run.end' as const,
-            aggregateId: aggregateId('run', runId),
-            outcome: persisted,
-            ...(error !== undefined ? { error } : {}),
-            output: storedRunOutput(input.output ?? emptyRunEndOutput()),
-          },
-        ]);
+      endIn(session, tx.append, {
+        ...input,
+        outcome:
+          lost !== undefined && outcome !== RUN_OUTCOME.CANCELLED
+            ? RUN_OUTCOME.FAILED
+            : outcome,
+        error: input.error ?? lost,
       }).pipe(Effect.scoped),
     ),
   );
-  if (Exit.isFailure(status)) {
-    const error = Cause.squash(status.cause);
-    input.report?.(
-      new Error(
-        `Failed to persist ${outcome} terminal state for run ${runId}: ${toErrorMessage(error)}`,
-        { cause: error },
-      ),
-    );
-    return { ok: false, error };
-  }
-  yield* status.value.after;
-  return { ok: true, outcome: status.value.persisted };
+  if (Exit.isFailure(status))
+    return { ok: false, error: Cause.squash(status.cause) };
+  const { persisted, recorded, after } = status.value;
+  yield* after;
+  return { ok: true, outcome: persisted, recorded };
 });

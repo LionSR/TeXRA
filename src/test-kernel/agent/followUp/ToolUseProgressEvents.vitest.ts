@@ -332,7 +332,7 @@ describe('the transcript row of the opening message (regression #7508)', () => {
           logger,
           bound: { supportsVision: true },
           mediaFiles: ['/tmp/texra-missing-figure.png'],
-          initialUserMessageForTranscript: undefined,
+          initialUserMessage: undefined,
           script: [textTurn('unreachable')],
         }),
       );

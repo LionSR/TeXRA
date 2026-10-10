@@ -84,6 +84,7 @@ import {
   type CallStatus,
   type PendingCall,
 } from '@shared/session/inFlight';
+import type { RunCell } from '@shared/session/runHistory';
 import { checkOwnFacts, factRows } from '@tools/plugins';
 import { ToolRegistry } from '@tools/toolTable';
 import { generateShortId, getBasename } from '@utils/core';
@@ -117,7 +118,6 @@ import type { StepTools } from './step';
 import type { JoinedFollowUps } from '../FollowUps';
 import type { InvokeError } from '../ModelInvoker';
 import type { Runs } from '../runRegistry';
-import type { RunCell } from './runProgram';
 
 /** Max concurrently executing parallel tool calls. */
 const MAX_PARALLEL_TOOL_CALLS = 4;

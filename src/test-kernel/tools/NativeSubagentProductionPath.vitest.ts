@@ -53,7 +53,7 @@ vi.mock('@agent/runtime/modelAccess/ModelAccess', async (importActual) => {
 
 // Local imports - agent runtime
 import { refresh } from '@agent/index';
-import { getRunRecords, registerRun } from '@agent/storage';
+import { getRunRecords } from '@agent/storage';
 import { readChildTurnState } from '@agent/storage/runRecords';
 import { prepareAgentDefinition } from '@agent/runtime/AgentLaunchContext';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
@@ -546,12 +546,6 @@ async function launchWaitingChild(options: {
     instruction: 'Coordinate the child proof review.',
     workingDirectory: process.cwd(),
   });
-  await Effect.runPromise(
-    registerRun(session, PARENT_RUN_ID, parentConfig, {
-      identity: { kind: 'agent', agent: PARENT_AGENT },
-      parentRunId: OUTER_RUN_ID,
-    }),
-  );
   // Admitted on the run's lane like every production launch, so the run's
   // fiber is its stop target by run id.
   parentFiber = testRuntime().runFork(
@@ -562,6 +556,10 @@ async function launchWaitingChild(options: {
           executeAgent(definition, PARENT_RUN_ID, {
             session,
             parentRunId: OUTER_RUN_ID,
+            registration: {
+              identity: { kind: 'agent', agent: PARENT_AGENT },
+              parentRunId: OUTER_RUN_ID,
+            },
           }),
         ),
       ),
@@ -1308,10 +1306,6 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
           instruction: 'Polish the notes through the workflow child.',
           workingDirectory: workspace,
         });
-        yield* registerRun(session, PARENT_RUN_ID, parentConfig, {
-          identity: { kind: 'agent', agent: PARENT_AGENT },
-          parentRunId: OUTER_RUN_ID,
-        });
         parentFiber = yield* Effect.forkChild(
           withProcessServices(
             testRuntime(),
@@ -1323,6 +1317,10 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
                     session,
                     parentRunId: OUTER_RUN_ID,
                     tools: [launchWorkflowChild],
+                    registration: {
+                      identity: { kind: 'agent', agent: PARENT_AGENT },
+                      parentRunId: OUTER_RUN_ID,
+                    },
                   }),
                 ),
               ),

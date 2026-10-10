@@ -31,6 +31,7 @@ import {
   buildTerminalRunEndResult,
   type RunEndResult,
 } from '@agent/runtime/RunEndResult';
+import { markFailurePresented } from '@agent/runtime/terminalResultToast';
 import {
   RUN_OUTCOME,
   type RunId,
@@ -291,12 +292,15 @@ export const serviceSessionBackend = Effect.fn('serviceSessionBackend')(
               approveDelegatedWork: options.approveDelegatedWork ?? false,
               approvalPolicy: options.approvalPolicy ?? null,
             }).pipe(
-              Effect.mapError(
-                (error) =>
-                  new Error(
-                    `The TeXRA service could not start the task: ${error.message}`,
-                  ),
-              ),
+              Effect.mapError((error) => {
+                const failure = new Error(
+                  `The TeXRA service could not start the task: ${error.message}`,
+                );
+                // The service presented it to this window already.
+                if ('presented' in error && error.presented === true)
+                  markFailurePresented(failure);
+                return failure;
+              }),
             ),
         ).pipe(
           Effect.tap((runId) => options.onRun?.(runId) ?? Effect.void),

@@ -167,9 +167,19 @@ export const forkRun = Effect.fn('forkRun')(function* (
       descriptionBy: title.by,
     }),
   });
-  // Registration and history are one commit: a fork exists with its history
-  // or not at all, and unclaimed: the host's to resume, as any waiting
-  // conversation is.
-  yield* session.runHistory.appendBatch(runId, null, rows, registration);
+  // Registration and history are one commit, through the fork's cell: a
+  // fork exists with its history or not at all.
+  const cell = yield* session.runHistory.open(runId, { registration });
+  yield* cell.append(rows);
+  // And unclaimed: the host's to resume, as any waiting conversation is.
+  // The rows are durable whatever happens to the claim, so a release that
+  // fails only says so; the next process proves this one dead first.
+  yield* Effect.scoped(session.log.hold(runId, { ends: true })).pipe(
+    Effect.catch((error) =>
+      Effect.logWarning(
+        `Run ${runId} was forked, but its claim was not released: this process cannot resume it`,
+      ).pipe(Effect.annotateLogs({ data: error })),
+    ),
+  );
   return runId;
 });

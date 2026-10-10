@@ -64,7 +64,7 @@ export const BUILD_VERSION: string =
 
 /** Bumped whenever a procedure or a payload changes shape. A client newer
  *  than the running service retires it; an older one stays in process. */
-export const PROTOCOL_VERSION = 15;
+export const PROTOCOL_VERSION = 16;
 
 /** `value` as JSON carries it: an absent field (`undefined`) is left out,
  *  which the wire's JSON check otherwise refuses. */
@@ -144,6 +144,9 @@ export type TaskSummary = z.infer<typeof TaskSummarySchema>;
 const TaskFailedSchema = z.object({
   _tag: z.literal('TaskFailed'),
   message: z.string(),
+  /** The service already presented it, through the window attached to the
+   *  project: the caller does not present it again. */
+  presented: z.boolean().optional(),
 });
 export type TaskFailed = z.infer<typeof TaskFailedSchema>;
 

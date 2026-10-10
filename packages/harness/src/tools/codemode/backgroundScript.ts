@@ -12,7 +12,6 @@ import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { prepareAgentDefinition } from '@agent/runtime/AgentLaunchContext';
 import { offeredBy } from '@agent/runtime/loop/step';
 import { createScriptRunStrategy } from '@agent/runtime/scriptRun';
-import { registerRun } from '@agent/storage/runLifecycle';
 import { type RunToolCall } from '@agent/runtime/RunCall';
 import { withLogChannel } from '@logger/effectLog';
 import { USER_FOLLOW_UP_SUPPORT, type RunId } from '@shared/schemas';
@@ -89,14 +88,6 @@ export const launchBackgroundScript = Effect.fn('script.background')(function* (
   });
   yield* Effect.uninterruptibleMask((restore) =>
     Effect.gen(function* () {
-      yield* registerRun(session, runId, definition.config, {
-        identity: { kind: 'script', title },
-        userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
-        parentRunId,
-        parentCard: call.logId,
-        parentCallId: call.callId,
-        description: childRunDescription(title),
-      });
       yield* startDetachedChildRunLoop({
         session,
         runId,
@@ -110,6 +101,15 @@ export const launchBackgroundScript = Effect.fn('script.background')(function* (
             Effect.as({
               strategy: createScriptRunStrategy({
                 definition,
+                // Registered with its opening, which its run commits.
+                registration: {
+                  identity: { kind: 'script', title },
+                  userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
+                  parentRunId,
+                  parentCard: call.logId,
+                  parentCallId: call.callId,
+                  description: childRunDescription(title),
+                },
                 runId,
                 parentRunId,
                 session,

@@ -298,14 +298,10 @@ beforeEach(async () => {
             }),
           ),
         ),
-        { ok: true },
+        { ok: true, outcome: input.outcome, recorded: true },
       ),
   );
   mocks.startFollowUpWake.mockReturnValue(Effect.succeed(true));
-  // Every run's end goes through the session's one terminal writer.
-  vi.spyOn(session.runs, 'end').mockImplementation(
-    (input) => mocks.finalizeRun(session, input) as never,
-  );
 });
 
 afterEach(() => {

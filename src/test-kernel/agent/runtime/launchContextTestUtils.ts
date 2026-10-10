@@ -1,5 +1,7 @@
 // Third-party imports
 
+import { Effect } from 'effect';
+
 // Local imports
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import type { AgentLaunchContext } from '@agent/runtime/AgentLaunchContext';
@@ -51,7 +53,11 @@ export function createTestLaunchContext({
       activated: [],
       attachedMemoryMisses: [],
     },
-    initialUserMessageForTranscript: undefined,
+    entry: {
+      registration: null,
+      entered: Effect.void,
+      initialUserMessage: undefined,
+    },
     toolPolicy: {},
     attachedMemoryMisses: [],
     modelConfig: buildTestModelConfig(),

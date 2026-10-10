@@ -48,6 +48,7 @@ import { subagentProgressRunId } from '@shared/subagentFollowup';
 import type { QueuedFollowUp } from '@shared/session/runRows';
 import type { RunHistoryDraft, RunState } from '@shared/session/runStateFold';
 import type { CoWrite } from '@shared/session/sessionEvents';
+import type { RunCell } from '@shared/session/runHistory';
 import { activatedSkillNames } from '@skills/runtimeSkills';
 import { sha256 } from '@utils/core/idHash';
 import { ensureError } from '@utils/errors/errorMessage';
@@ -62,7 +63,6 @@ import {
 import { promptHooks } from './loop/hooks';
 import { resolveActivations } from './loop/step';
 import type { AgentRunShape } from './run/AgentRun';
-import type { RunCell } from './loop/runProgram';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 /** A batch as the rows that consume it, for a caller that commits them in

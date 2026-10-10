@@ -31,7 +31,8 @@ describe('ExecutionsTool metadata-free run summary', () => {
       const runId = 'abc123abc123' as RunId;
       const session = testDefaultSession();
       publishTestRunStart(session, runId);
-      yield* session.runHistory.appendBatch(runId, null, [openedParked(runId)]);
+      const cell = yield* session.runHistory.open(runId);
+      yield* cell.append([openedParked(runId)]);
 
       const result = yield* ExecutionsTool.call({
         path: `/executions/${runId}`,

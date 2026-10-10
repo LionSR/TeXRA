@@ -35,8 +35,10 @@ vi.mock('@agent/runtime/AgentRunLifecycle', async (importActual) => {
   return { ...actual, runWithLifecycle: mocks.runWithLifecycle };
 });
 
-import { prepareAgentDefinition } from '@agent/runtime/AgentLaunchContext';
-import { registerRun } from '@agent/storage/runLifecycle';
+import {
+  prepareAgentDefinition,
+  type AgentLaunchContext,
+} from '@agent/runtime/AgentLaunchContext';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import {
   executeAgent,
@@ -44,16 +46,7 @@ import {
 } from '@agent/runtime/executeAgent';
 import { runWithLaunchGuard } from '@agent/runtime/runLaunchGuard';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import { NO_APPROVAL_GRANTS } from '@shared/approvalBypassKind';
-import {
-  RUN_OUTCOME,
-  RUN_PHASE,
-  type RunId,
-  aggregateId as qualifyAggregateId,
-  aggregateTarget,
-  type AggregateId,
-  type SessionEvent,
-} from '@shared/schemas';
+import type { RunId } from '@shared/schemas';
 import { closeSessionOf } from '@test/support/sessionEnd';
 import {
   createTestSession,
@@ -64,18 +57,11 @@ import {
   type FakeProcessServices,
 } from '@test/support/setupPlatform';
 import { createToolUseResumeData } from '@test/support/toolUseResumeTestUtils';
-import { eventsOfType, recordSessionEvents } from '../progressTestUtils';
+import { recordSessionEvents } from '../progressTestUtils';
 
-const LAUNCH_FAILURE = new Error('stop after run activation');
+const LAUNCH_FAILURE = new Error('stop before the run opens');
 const RUN_FAILURE = new Error('run flow failure');
 const DESCRIPTION_RUN_ID = 'de5c21' as RunId;
-
-/** The run an aggregate key names: every fact here lives on a run. */
-function runOf(key: AggregateId): RunId {
-  const target = aggregateTarget(key);
-  if (target.kind !== 'run') throw new Error('expected a run aggregate');
-  return target.id;
-}
 
 const FRESH_RUN_ID = 'f1e501' as RunId;
 
@@ -84,28 +70,20 @@ const config = AgentConfigSchema.parse({
   model: 'openai/gpt-5.5-2026-04-23',
 });
 
-interface StartedLaunch {
-  readonly session: SessionHandle;
-  /** The creation fact; absent on a resume, which activates an existing
-   *  run and mints no `run.start` (decision 9). */
-  readonly start: Extract<SessionEvent, { type: 'run.start' }> | undefined;
-  readonly activate: Extract<SessionEvent, { type: 'run.activate' }>;
-  readonly end: Extract<SessionEvent, { type: 'run.end' }>;
-}
-
 /**
- * Drive a launch that fails after its `run.start` (the reservation commit
- * point): the durable boundary the fold reads. The real trace is attached to
- * the session so the launch's facts reach the hub the way a run's do.
+ * Drive a launch that fails before its run opens (its template inputs
+ * fail to render) and answer the rows it left: a run is born with its
+ * opening, and a resume activates with it, so a launch that never opened
+ * writes nothing, and its failure is the launch's own.
  */
-const captureStartedLaunch = Effect.fn(function* (
+const rowsOfFailedLaunch = Effect.fn(function* (
   run: (
     session: SessionHandle,
   ) => Effect.Effect<unknown, Error, FakeProcessServices>,
   options: {
     /** The launching run, when this launch is a child. */
     readonly parentRunId?: RunId;
-    /** A resume activates this already-created run instead of minting one. */
+    /** A resume of this already-created run. */
     readonly resumedRunId?: RunId;
   } = {},
 ) {
@@ -125,89 +103,35 @@ const captureStartedLaunch = Effect.fn(function* (
         }
         const recordedSession = recordSessionEvents(session);
 
-        mocks.resolve.mockReturnValueOnce(
-          Effect.succeed({
-            path: '/agents/chat.yaml',
-            persona: { prompt: '', tools: [], temperature: 1 },
-            task: null,
-          }),
-        );
-        mocks.buildVars.mockReturnValueOnce(Effect.fail(LAUNCH_FAILURE));
-
-        if (!options.resumedRunId) {
-          yield* registerRun(session, FRESH_RUN_ID, config, {
-            identity: { kind: 'agent', agent: 'chat' },
-            parentRunId: options.parentRunId,
-          });
+        // A fresh launch fails rendering its opening; a resume, which renders
+        // none, resolving its agent.
+        if (options.resumedRunId)
+          mocks.resolve.mockReturnValueOnce(Effect.fail(LAUNCH_FAILURE));
+        else {
+          mocks.resolve.mockReturnValueOnce(
+            Effect.succeed({
+              path: '/agents/chat.yaml',
+              persona: { prompt: '', tools: [], temperature: 1 },
+              task: null,
+            }),
+          );
+          mocks.buildVars.mockReturnValueOnce(Effect.fail(LAUNCH_FAILURE));
         }
         const error = yield* Effect.flip(
           Effect.provide(run(session), fakeProcessServices()),
         );
         expect(error).toBe(LAUNCH_FAILURE);
-        const starts = eventsOfType(
-          yield* Effect.promise(() => recordedSession.read()),
-          'run.start',
+        yield* session.log.settled;
+        return (yield* Effect.promise(() => recordedSession.read())).filter(
+          (event) =>
+            event.type === 'run.start' ||
+            event.type === 'run.activate' ||
+            event.type === 'run.end',
         );
-        expect(starts).toHaveLength(options.resumedRunId ? 0 : 1);
-        const activations = eventsOfType(
-          yield* Effect.promise(() => recordedSession.read()),
-          'run.activate',
-        );
-        expect(activations).toHaveLength(1);
-        const ends = eventsOfType(
-          yield* Effect.promise(() => recordedSession.read()),
-          'run.end',
-        );
-        expect(ends).toHaveLength(1);
-        return {
-          session,
-          start: starts[0],
-          activate: activations[0],
-          end: ends[0],
-        } satisfies StartedLaunch;
       }),
     (session) => closeSessionOf(session),
   );
 });
-
-/**
- * A launch that fails after `run.start` folds to failed, never to a ghost:
- * the existence fact carries the launch facts and the session's owner
- * token, and the same failure path ends the run with its terminal
- * `run.end` row and the FAILED phase.
- */
-function expectStartedThenFailed(
-  launch: StartedLaunch,
-  parentRunId: RunId | undefined,
-): void {
-  const { start } = launch;
-  if (!start) throw new Error('a fresh launch emits run.start');
-  expect(start).toMatchObject({
-    identity: { kind: 'agent', agent: 'chat' },
-    // The parent edge is the whole of "is a child": the birth fact carries
-    // it, and nothing else spells it.
-    parent:
-      parentRunId === undefined
-        ? null
-        : expect.objectContaining({ id: parentRunId }),
-    approvalPolicy: NO_APPROVAL_GRANTS,
-  });
-  expectActivatedThenFailed(launch);
-  expect(launch.end.aggregateId).toBe(start.aggregateId);
-}
-
-/** Every activation, fresh or resumed, carries the activation metadata the
- *  frozen wire projects and ends on the same failure path. */
-function expectActivatedThenFailed(launch: StartedLaunch): void {
-  expect(launch.activate).toMatchObject({});
-  expect(launch.end).toMatchObject({
-    outcome: RUN_OUTCOME.FAILED,
-    aggregateId: launch.activate.aggregateId,
-  });
-  expect(
-    launch.session.view.run(runOf(launch.activate.aggregateId))?.status,
-  ).toBe(RUN_PHASE.FAILED);
-}
 
 describe('native agent launch activation', () => {
   beforeEach(() => {
@@ -218,12 +142,10 @@ describe('native agent launch activation', () => {
     { label: 'child', parentRunId: 'e11000' as RunId },
     { label: 'root', parentRunId: undefined },
   ])(
-    'starts a fresh $label launch at the commit point and fails it on the same path',
+    'a fresh $label launch that fails before its opening leaves no run',
     ({ parentRunId }) =>
       Effect.gen(function* () {
-        // The parent edge picks an `executeAgent` overload, so the call site
-        // has to name it rather than let `it.each` widen it.
-        const launch = yield* captureStartedLaunch(
+        const rows = yield* rowsOfFailedLaunch(
           (session) =>
             prepareAgentDefinition({ config, session }).pipe(
               Effect.flatMap((definition) =>
@@ -231,21 +153,21 @@ describe('native agent launch activation', () => {
                 runWithLaunchGuard(
                   session,
                   FRESH_RUN_ID,
-                  parentRunId
-                    ? executeAgent(definition, FRESH_RUN_ID, {
-                        session,
-                        parentRunId,
-                      })
-                    : executeAgent(definition, FRESH_RUN_ID, { session }),
+                  executeAgent(definition, FRESH_RUN_ID, {
+                    session,
+                    ...(parentRunId !== undefined && { parentRunId }),
+                    registration: {
+                      identity: { kind: 'agent', agent: 'chat' },
+                      ...(parentRunId !== undefined && { parentRunId }),
+                    },
+                  }),
                   {},
                 ),
               ),
             ),
           { parentRunId },
         );
-
-        expectStartedThenFailed(launch, parentRunId);
-        expect(launch.activate.aggregateId).toBe(launch.start?.aggregateId);
+        expect(rows).toEqual([]);
       }),
   );
 
@@ -253,7 +175,7 @@ describe('native agent launch activation', () => {
     { label: 'child', parentRunId: 'e11001' as RunId },
     { label: 'root', parentRunId: undefined },
   ])(
-    'starts a resumed $label launch at the commit point and fails it on the same path',
+    'a resumed $label launch that fails before its activation leaves the run as it was',
     ({ parentRunId }) =>
       Effect.gen(function* () {
         const runId = 'ae5010' as RunId;
@@ -264,19 +186,11 @@ describe('native agent launch activation', () => {
         mocks.retrieveSessionResumeData.mockReturnValueOnce(
           Effect.succeed(resume),
         );
-
-        const launch = yield* captureStartedLaunch(
+        const rows = yield* rowsOfFailedLaunch(
           (session) => resumeToolUseFromResumeData(resume, { session }),
           { parentRunId, resumedRunId: runId },
         );
-
-        // A resume activates the run it already has: no second creation
-        // fact, one activation on the same failure path.
-        expectActivatedThenFailed(launch);
-        expect(launch.start).toBeUndefined();
-        expect(launch.activate.aggregateId).toBe(
-          qualifyAggregateId('run', runId),
-        );
+        expect(rows).toEqual([]);
       }),
   );
 
@@ -295,12 +209,25 @@ describe('native agent launch activation', () => {
             Effect.andThen(Deferred.await(gate)),
           ),
         );
-        // Fail the run only once the description fiber is parked on its gate,
-        // so both sides settle deterministically.
-        mocks.runWithLifecycle.mockImplementationOnce(() =>
-          Deferred.await(descriptionStarted).pipe(
-            Effect.andThen(Effect.fail(RUN_FAILURE)),
-          ),
+        // The run is born (its registration alone stands in for the
+        // opening), then fails once the description fiber is parked on its
+        // gate, so both sides settle deterministically.
+        mocks.runWithLifecycle.mockImplementationOnce(
+          (ctx: AgentLaunchContext) =>
+            Effect.gen(function* () {
+              const { registration, entered } = ctx.entry;
+              if (registration === null)
+                return yield* Effect.die('a fresh run');
+              const cell = yield* ctx.session.runHistory.open(ctx.runId, {
+                registration,
+              });
+              yield* cell.append(
+                [],
+                Effect.succeed({ rows: [], committed: entered }),
+              );
+              yield* Deferred.await(descriptionStarted);
+              return yield* Effect.fail(RUN_FAILURE);
+            }),
         );
         mocks.resolve.mockReturnValueOnce(
           Effect.succeed({
@@ -325,14 +252,14 @@ describe('native agent launch activation', () => {
           model: 'openai/gpt-5.5-2026-04-23',
           instruction: 'Fix grammar.',
         });
-        yield* registerRun(session, DESCRIPTION_RUN_ID, described, {
-          identity: { kind: 'agent', agent: 'chat' },
-        });
         const failure = yield* Effect.forkChild(
           Effect.flip(
             prepareAgentDefinition({ config: described, session }).pipe(
               Effect.flatMap((definition) =>
-                executeAgent(definition, DESCRIPTION_RUN_ID, { session }),
+                executeAgent(definition, DESCRIPTION_RUN_ID, {
+                  session,
+                  registration: { identity: { kind: 'agent', agent: 'chat' } },
+                }),
               ),
               Effect.provide(fakeProcessServices()),
             ),

@@ -24,6 +24,22 @@ import { executed } from '@tools/core/result';
 import { previewLabel } from '@utils/text/stringUtils';
 
 /**
+ * The refusal for a run the view does not hold: `notFound`, unless it was
+ * launched here and has not opened yet (it is born with its opening, so it
+ * has no rows, but it is no unknown run).
+ */
+export const missingRun = (
+  session: SessionHandle,
+  runId: RunId,
+  notFound: string,
+): ToolError =>
+  new ToolError(
+    session.runs.heldIds().includes(runId)
+      ? `Run '${runId}' has not started yet; retry in a moment.`
+      : notFound,
+  );
+
+/**
  * Send `message` from the calling run to `target` (from the user when no
  * run calls). Any run may message any run in the project, whatever their
  * places in the supervision tree, and a message to a parked or waiting run
@@ -43,13 +59,14 @@ export const sendToRun = Effect.fn('ExecutionsTool.send')(function* (
   }
   const view = yield* session.view.read([]);
   const recipient = view.runs.get(target);
-  if (!recipient) {
+  if (!recipient)
     return yield* Effect.fail(
-      new ToolError(
+      missingRun(
+        session,
+        target,
         `Run '${target}' not found. Use the executions tool to list runs.`,
       ),
     );
-  }
   if (recipient.followUpSupport === USER_FOLLOW_UP_SUPPORT.UNSUPPORTED) {
     return yield* Effect.fail(
       new ToolError(
