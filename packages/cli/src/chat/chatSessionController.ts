@@ -255,10 +255,10 @@ export interface ChatSessionControllerInit {
   readonly agentRuns?: Partial<ChatAgentRuns> & {
     readonly records?: typeof getRunRecords;
   };
-  /** Where run requests land, edit previews come from and run state is
+  /** Where run requests land (edit previews included) and run state is
    *  read, when the chat is a client of the background service; its own
    *  session otherwise. */
-  readonly backend?: Pick<SessionBackend, 'request' | 'preview' | 'view'>;
+  readonly backend?: Pick<SessionBackend, 'request' | 'view'>;
   /** Offer the service what this chat shows for its project's tasks. */
   readonly attachWindow?: (host: WindowHost) => void;
 }
@@ -462,7 +462,16 @@ export function createChatSessionController(
     {
       session: runtimeSession,
       requests,
-      preview: init.backend?.preview,
+      preview:
+        init.backend &&
+        ((runId, requestId) =>
+          requests
+            .request({ kind: 'request.preview', runId, requestId })
+            .pipe(
+              Effect.map((outcome) =>
+                outcome.kind === 'preview' ? outcome.preview : null,
+              ),
+            )),
       secrets,
       settings: stores,
       runtime,

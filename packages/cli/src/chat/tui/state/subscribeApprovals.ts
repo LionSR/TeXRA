@@ -26,14 +26,13 @@ import { promptForCliProviderApiKey } from '@cli/chat/tui/hosts/cliProviderKeys'
 import type { CliContext } from '@cli/runtime/cliContext';
 import type { CliRuntimeHost } from '@cli/runtime/cliPresentationHost';
 import { withLogChannel } from '@logger/effectLog';
-import type { RetryPermission } from '@shared/schemas';
+import type { RetryPermission, RunId } from '@shared/schemas';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import type { HostRequest } from '@texra/shared/session/hostRequest';
 import {
   ApiKeyPromptFailed,
   ProgressApiKeyRetryController,
 } from '@texra/controllers/progressView/ProgressApiKeyRetryController';
-import type { ToolEditPreview } from '@texra/controllers/server/protocol';
 import { subscribeToSignalChanges } from '@texra/shared/signals';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -51,7 +50,7 @@ import {
   useHostCapability,
 } from './approvalQueue';
 import { appendLocalNotice } from './transcript';
-import type { ProcessRuntime } from '@texra-ai/harness';
+import type { ProcessRuntime, ToolEditPreview } from '@texra-ai/harness';
 import type { PlatformSecrets } from '@texra-ai/harness';
 
 /**
@@ -72,6 +71,7 @@ interface TuiApprovalStores {
   /** A tool edit's preview, when another process (the background service)
    *  runs the tool and so stages it there; absent when this one does. */
   readonly preview?: (
+    runId: RunId,
     requestId: string,
   ) => Effect.Effect<ToolEditPreview | null, Error>;
   readonly secrets: PlatformSecrets;
@@ -258,7 +258,7 @@ export function createTuiHostInteractions(
         // service no longer holds shows as an empty diff.
         acted.add(request.requestId);
         stores.runtime.runFork(
-          stores.preview(request.requestId).pipe(
+          stores.preview(request.runId, request.requestId).pipe(
             Effect.catch((error) =>
               Effect.logWarning(
                 `The preview of edit ${request.requestId} was not fetched`,

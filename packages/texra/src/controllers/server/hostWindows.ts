@@ -32,6 +32,7 @@ import { z } from 'zod';
 
 import type { HostInteractions } from '@agent/runtime/HostInteractions';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
+import type { ToolEditPreview } from '@shared/session/runtimeRequest';
 import {
   DiagnosticsReadFailed,
   PdfOpenFailed,
@@ -48,7 +49,6 @@ import {
   type HostFrame,
   type Notice,
 } from './hostCalls';
-import type { ToolEditPreview } from './protocol';
 
 /** Why a call a run waited on got no answer from a window. */
 export class WindowCallFailed extends Data.TaggedError('WindowCallFailed')<{
@@ -155,11 +155,6 @@ export interface HostWindows {
     session: SessionHandle,
     editors: EditorHostShape,
   ) => Effect.Effect<void, never, Scope.Scope>;
-  /** The staged preview of one of `session`'s pending requests. */
-  readonly preview: (
-    session: SessionHandle,
-    requestId: string,
-  ) => Effect.Effect<ToolEditPreview | null>;
 }
 
 export const makeHostWindows = Effect.sync((): HostWindows => {
@@ -404,6 +399,13 @@ export const makeHostWindows = Effect.sync((): HostWindows => {
             }),
         };
       },
+      // The staged preview of a request the session still lists.
+      preview: (requestId) =>
+        Effect.map(SubscriptionRef.get(session.view.ref), (view) =>
+          view.requests.some((request) => request.requestId === requestId)
+            ? previewOf(stagedIn(key).get(requestId))
+            : null,
+        ),
       // The service keeps every preview for `request.preview`; the window
       // that stages it as well is the one asked to release or approve it.
       presentToolEdit: (request) => {
@@ -584,11 +586,5 @@ export const makeHostWindows = Effect.sync((): HostWindows => {
         );
         yield* editors.attach(key, editorOf(key));
       }),
-    preview: (session, requestId) =>
-      Effect.map(SubscriptionRef.get(session.view.ref), (view) =>
-        view.requests.some((request) => request.requestId === requestId)
-          ? previewOf(stagedIn(session.roots.storage).get(requestId))
-          : null,
-      ),
   };
 });

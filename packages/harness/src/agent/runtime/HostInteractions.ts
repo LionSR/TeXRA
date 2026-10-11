@@ -3,6 +3,7 @@ import { withLogChannel } from '@logger/effectLog';
 import type { LanguageModelPort } from '@platform/languageModel';
 import type { ApprovalPolicyDenial } from '@shared/approvalPolicy';
 import type { RunId } from '@shared/schemas';
+import type { ToolEditPreview } from '@shared/session/runtimeRequest';
 import type { ToolEditApprovalRequest } from '@tools/approval/toolEditApproval';
 import { HostPresentationFailed } from './runtimePresentationEvents';
 import type {
@@ -15,11 +16,9 @@ import type {
 const CHANNEL = 'SessionHostInteractions';
 
 /**
- * Ceiling on presentation notices queued while no host is attached. A session
- * that never gets one (headless embedders, a window that never opens) would
- * otherwise accumulate every replayable notice for its whole lifetime. The
- * newest notices are the ones worth showing, so the oldest is dropped, and the
- * drop is logged, because a silently discarded notice is a defect.
+ * Ceiling on presentation notices queued while no host is attached (a
+ * headless embedder, a window that never opens): the oldest is dropped, and
+ * logged, since the newest are worth showing and a silent drop is a defect.
  */
 const MAX_PENDING_PRESENTATION_REPLAYS = 256;
 
@@ -74,10 +73,8 @@ export interface HostInteractions {
    * Drop what {@link presentToolEdit} staged for one request, for the single
    * case no `request.decided` ever reaches: a request whose `request.opened`
    * never committed. Every host that stages implements both. An `Effect`:
-   * the cleanup (a diff view to close, temp files to
-   * delete) is a program the session composes into its own, so it waits for
-   * it without a fiber of its own. Built when the preview is staged, run
-   * only if that one case arrives.
+   * the cleanup (a diff view to close, temp files to delete) is a program the
+   * session composes into its own. Built when staged, run only then.
    */
   releaseToolEdit?(requestId: string): Effect.Effect<void>;
   /**
@@ -87,6 +84,9 @@ export interface HostInteractions {
    * the decision (a failed read of the edit included, left pending).
    */
   approveToolEdit?(requestId: string): Effect.Effect<boolean>;
+  /** What {@link presentToolEdit} staged for a pending request, or null:
+   *  the answer to a `request.preview`. */
+  preview?(requestId: string): Effect.Effect<ToolEditPreview | null>;
   dispose?(): void;
 }
 
@@ -101,13 +101,10 @@ type PresentationProgram = (
 ) => Effect.Effect<void, HostPresentationFailed>;
 
 /**
- * Ask a host to present one notice. Presentation is fire-and-forget, so this
- * never waits on the program the host answers with (a desktop dialog settles
- * when the person dismisses it, and the run, the fold-gated result listeners
- * and the replay loop all raise notices from fibers that must not block on
- * that). It runs on a detached fiber instead, so its failure is reported
- * rather than dropped, while a host that throws synchronously reaches the
- * caller as {@link HostPresentationFailed} rather than as a defect.
+ * Ask a host to present one notice, fire-and-forget: the program the host
+ * answers with (a dialog settles on dismissal) runs on a detached fiber, so
+ * no caller blocks on it and its failure is reported, while a host that
+ * throws synchronously reaches the caller as {@link HostPresentationFailed}.
  */
 function presentOn<K extends RuntimePresentationEvent>(
   interactions: HostInteractions,
@@ -236,15 +233,11 @@ export class SessionHostInteractions implements HostInteractions {
   }
 
   /**
-   * Stage a preview on the attached host and hand back the release for it,
-   * bound to the attachment that staged: the stack may have changed by the
-   * time the release runs, and a release sent to whichever host is newest
-   * then would be a no-op on a host that staged nothing while the one that
-   * did kept its diff and temp files. `undefined` is "nothing is staged":
-   * either no attached host stages previews, or the one that did releases
-   * nothing. The release itself is the host's own program, run by the caller
-   * that holds it — a cleanup failure is that caller's to report, so it
-   * never masks the outcome of the call that staged.
+   * Stage a preview on the attached host and hand back the release bound
+   * to the attachment that staged (a release sent to whichever host is
+   * newest by then could miss the one holding the diff and temp files).
+   * `undefined`: nothing is staged. The caller runs the release and reports
+   * its failure, which never masks the outcome of the call that staged.
    */
   presentToolEdit(
     request: ToolEditApprovalRequest,
@@ -267,6 +260,14 @@ export class SessionHostInteractions implements HostInteractions {
     return (
       this.activeAttachment?.interactions.approveToolEdit?.(requestId) ??
       Effect.succeed(false)
+    );
+  }
+
+  /** The preview the attached host staged for `requestId`, else null. */
+  preview(requestId: string): Effect.Effect<ToolEditPreview | null> {
+    return (
+      this.activeAttachment?.interactions.preview?.(requestId) ??
+      Effect.succeed(null)
     );
   }
 

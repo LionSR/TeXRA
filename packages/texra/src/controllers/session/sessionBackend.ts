@@ -43,7 +43,6 @@ import type {
   Subscribe,
 } from '@texra/shared/session/sessionFrames';
 import { frameSubscription } from '@texra/controllers/session/SessionFramer';
-import type { ToolEditPreview } from '@texra/controllers/server/protocol';
 import type { ProcessServices } from '@texra-ai/harness';
 
 /** What a window asks of a live run's loop: its model switch. */
@@ -92,11 +91,6 @@ export interface SessionBackend {
     { readonly runId: RunId; readonly result: RunEndResult | null } | null,
     RequestRefusal
   >;
-  /** A pending tool edit's original and proposed content, when another
-   *  process runs the tool; null when this process staged it itself. */
-  readonly preview: (
-    requestId: string,
-  ) => Effect.Effect<ToolEditPreview | null, Error>;
   /** What `runId`'s current activation ends with, once it has ended: what
    *  a resume waits on. */
   readonly ended: (runId: RunId) => Effect.Effect<RunEndResult>;
@@ -210,7 +204,5 @@ export function localSessionBackend(session: SessionHandle): SessionBackend {
           );
         return Effect.succeed({ runId, result: resumed.result ?? null });
       }),
-    // A tool this process runs stages its own preview (`presentToolEdit`).
-    preview: () => Effect.succeed(null),
   };
 }

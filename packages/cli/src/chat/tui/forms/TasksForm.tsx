@@ -22,10 +22,7 @@ import {
   type SurfaceDecision,
 } from '@texra/shared/session/surfaceDecision';
 import type { ServiceConnection } from '@texra/controllers/server/client';
-import type {
-  TaskSummary,
-  ToolEditPreview,
-} from '@texra/controllers/server/protocol';
+import type { TaskSummary } from '@texra/controllers/server/protocol';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { BaseTextInput } from '../input/BaseTextInput';
@@ -38,7 +35,7 @@ import {
 } from '../state/attachedTask';
 import { transcriptToLines } from '../state/transcriptLines';
 import { AsyncListForm } from './_shared/ListForm';
-import type { ProcessRuntime } from '@texra-ai/harness';
+import type { ProcessRuntime, ToolEditPreview } from '@texra-ai/harness';
 import type { ApprovalPayload } from '../state/approvalQueue';
 
 /** Opens (and, when none runs, starts) the service connection. */
@@ -210,8 +207,11 @@ function AttachedTask(props: AttachedTaskProps): React.JSX.Element {
     act(
       (ready) =>
         ready
-          .preview(requestId)
+          .request({ kind: 'request.preview', runId: pending.runId, requestId })
           .pipe(
+            Effect.map((outcome) =>
+              outcome.kind === 'preview' ? outcome.preview : null,
+            ),
             Effect.map((preview) =>
               setPreviews((held) => new Map(held).set(requestId, preview)),
             ),

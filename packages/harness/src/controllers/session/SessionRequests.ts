@@ -1,12 +1,9 @@
 /**
  * `SessionRequests`: one handler for every request a surface issues to its
- * session's runtime (PRD one-fold-three-renderers, 7.6 and 8.2), answered
- * once with an `Outcome` or a request error. Existence is read from the
- * sequence table first (C2), so a stop issued as a launch exposes its run is
- * admitted, and a run with no row is `Unavailable`, never a defect. A foreign claim without a death
- * proof is `NotOwner`. A collaborator that rejects is a handler defect
- * (`Effect.orDie`): `SessionBridge` logs it and answers `Internal`. In
- * process the Effect's result is the response; a bridge posts it (8.4).
+ * session's runtime (PRD one-fold-three-renderers, 7.6, 8.2), answered once
+ * with an `Outcome` or a request error. Existence is read from the sequence
+ * table first (C2): a run with no row is `Unavailable`, a foreign claim
+ * without a death proof `NotOwner`, a rejecting collaborator a defect.
  */
 import { Effect, SubscriptionRef, type Context } from 'effect';
 
@@ -231,11 +228,9 @@ const rename = (
  * the authority, so two surfaces deciding at once record one decision and
  * the loser hears that the request was settled.
  *
- * The plugin that owns the request's kind records its side first (an
- * inquiry's answer, on its cross-project thread): that record cannot share
- * the run's transaction, and a process that exits in the gap then leaves
- * the request pending and answerable. So the whole decision takes the
- * request's lane.
+ * The plugin owning the request's kind records its side first (an
+ * inquiry's answer, on its cross-project thread), outside the run's
+ * transaction, so the whole decision takes the request's lane.
  */
 const decideRequest = (
   deps: RequestDeps,
@@ -463,6 +458,11 @@ const handle = (
       );
     case 'request.decide':
       return decideRequest(deps, req, heldHere);
+    case 'request.preview':
+      return Effect.map(
+        deps.session().interactions.preview(req.requestId),
+        (preview): Outcome => ({ kind: 'preview', preview }),
+      );
     case 'policy.set':
       return withRunClaim(
         deps,

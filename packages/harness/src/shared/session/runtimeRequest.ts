@@ -86,6 +86,13 @@ export const RuntimeRequestSchema = z.discriminatedUnion('kind', [
     requestId: z.string().min(1),
     decision: RequestDecisionSchema,
   }),
+  /** A pending tool edit's preview, as the session's host staged it beside
+   *  the request: answered `preview`, null when none is staged. */
+  z.object({
+    kind: z.literal('request.preview'),
+    ...runScoped,
+    requestId: z.string().min(1),
+  }),
   /** The field-level mutation, not a snapshot: the authority applies it and
    *  publishes the resulting `approval.policy` (PRD 6, item 2). */
   z.object({
@@ -105,6 +112,15 @@ export const RuntimeRequestSchema = z.discriminatedUnion('kind', [
 ]);
 export type RuntimeRequest = z.infer<typeof RuntimeRequestSchema>;
 
+/** What a pending tool edit would change: the original and proposed
+ *  content a host shows beside the request's path and line counts. */
+const ToolEditPreviewSchema = z.object({
+  originalContent: z.string(),
+  proposedContent: z.string(),
+});
+/** A pending tool edit's staged content (`request.preview`). */
+export type ToolEditPreview = z.infer<typeof ToolEditPreviewSchema>;
+
 /** What the runtime answers with: a typed value the host renders. */
 export const OutcomeSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('done') }),
@@ -115,5 +131,9 @@ export const OutcomeSchema = z.discriminatedUnion('kind', [
     wake: z.literal('failed').nullish(),
   }),
   z.object({ kind: z.literal('forked'), runId: RunIdSchema }),
+  z.object({
+    kind: z.literal('preview'),
+    preview: ToolEditPreviewSchema.nullable(),
+  }),
 ]);
 export type Outcome = z.infer<typeof OutcomeSchema>;

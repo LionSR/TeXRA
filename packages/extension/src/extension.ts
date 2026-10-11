@@ -81,7 +81,9 @@ import { StorageFs, withSessionFs } from '@platform/rootedFs';
 import { GlobalDatabase } from '@shared/session/database';
 import {
   formatTexraApprovalPolicy,
+  TEXRA_APPROVAL_POLICY_CONFIG_KEY,
   texraApprovalPolicyLabel,
+  type TexraApprovalPolicy,
 } from '@shared/approvalPolicy';
 import { readState, StateFlagSchema } from '@shared/config/settingsAccess';
 import { telemetryNoticeIfDue } from '@telemetry/telemetryNotice';
@@ -100,6 +102,7 @@ import { USER_MCP_CONFIG_PATH } from '@tools/mcp/mcpConfig';
 import { ToolAvailability } from '@tools/toolAvailabilityService';
 import { usageCostLabel } from '@ui/copy/modelAccess';
 import { sessionStoreMovedAsideMessage } from '@ui/copy/sessionStore';
+import { readConfigSettingFrom } from '@utils/config/platformSettings';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { reachExtensionService } from './common/extensionService';
 
@@ -632,7 +635,12 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
 
   const statusBarUsageTracker = new StatusBarUsageTracker(backend);
   const updateStatusBarTooltip = () => {
-    const policy = runtimeSession.approvals.policy();
+    // The project's persisted policy: what a run here, or the service's
+    // for this project, decides under.
+    const policy = readConfigSettingFrom<TexraApprovalPolicy>(
+      runtimeSession.roots.config,
+      TEXRA_APPROVAL_POLICY_CONFIG_KEY,
+    );
     const policyLine = `Approval policy: ${texraApprovalPolicyLabel(policy)} — ${formatTexraApprovalPolicy(policy)}`;
     const usage = statusBarUsageTracker.totalUsage;
     const { cost, inputTokens, outputTokens } = usage;

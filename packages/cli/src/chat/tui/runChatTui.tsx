@@ -64,7 +64,10 @@ import { subscribeToSignalChanges } from '@texra/shared/signals';
 import { attachWindowHost } from '@texra/controllers/server/windowHost';
 import { serviceSessionBackend } from '@texra/controllers/server/serviceBackend';
 import { localSessionBackend } from '@texra/controllers/session/sessionBackend';
-import { writeSettingTo } from '@utils/config/platformSettings';
+import {
+  readConfigSettingFrom,
+  writeSettingTo,
+} from '@utils/config/platformSettings';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { serviceAgentRuns } from '../serviceAgentRuns';
 
@@ -212,7 +215,10 @@ export async function runChat(
         // launch and narrows its tasks; a more permissive one is said and
         // ignored, since no client widens the project's policy.
         const requested = context.requestedApprovalPolicy;
-        const configured = runtimeSession.approvals.policy();
+        const configured = readConfigSettingFrom<TexraApprovalPolicy>(
+          runtimeSession.roots.config,
+          TEXRA_APPROVAL_POLICY_CONFIG_KEY,
+        );
         if (
           requested !== undefined &&
           stricterPolicy(requested, configured) !== requested
