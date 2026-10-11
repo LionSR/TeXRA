@@ -10,8 +10,10 @@
  * the guard releases the claim; a late loop failure is surfaced) lives in one
  * place.
  */
+// Third-party imports
 import { Cause, Effect, Exit, Fiber } from 'effect';
 
+// Local imports
 import type { AgentRunServices, Runs } from '@agent/runtime/runRegistry';
 import { runWithLaunchGuard } from '@agent/runtime/runLaunchGuard';
 import {
