@@ -120,6 +120,11 @@ function recordedFollowUps(
             (types === undefined || types.includes(row.type)),
         ),
       ),
+    // A run's record rows: what a parent-only send reads its edge from.
+    records: (runId: RunId) =>
+      Effect.sync(() =>
+        rows.filter((row) => row.aggregateId === aggregateId('run', runId)),
+      ),
     hold: (runId) =>
       Effect.suspend(() => {
         claims.push(runId);

@@ -138,7 +138,8 @@ function launchOn(runs: RunRegistry, options: RootLaunchOptions = {}) {
     .launch({ request: { config: CONFIG, runId: RUN_ID }, options })
     .pipe(
       Effect.provideService(SessionOwner, {
-        list: Effect.sync(() => [runs['init'].session()]),
+        holds: (session: SessionHandle) =>
+          Effect.sync(() => session === runs['init'].session()),
       } as never),
       Effect.provide(fakeProcessServices()),
     );

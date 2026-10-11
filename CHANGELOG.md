@@ -32,7 +32,8 @@ All notable changes to this project will be documented in this file.
   drives an external agent process as the calling run's child registers it
   with `ChildRuns.launchProcess`, and a plugin's session layer no longer
   reaches the session's runs. A host launches a root run with
-  `session.runs.launch({ request, options })` under its `SessionOwner`;
+  `session.runs.launch({ request, options })` under its `SessionOwner`,
+  which answers whether it still holds that session with `holds`;
   `runAgent` is gone.
 - **SDK tool and plugin contract: `lane`, `arms` and `facts`.** A tool
   declares where its calls run with `lane: 'parallel' | 'barrier' | 'own'`,

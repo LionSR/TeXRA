@@ -6,11 +6,10 @@ import type { ResumeRunResult } from '@agent/runtime/resumeRun';
 import { registryOf } from '@agent/runtime/runRegistry';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { presentRunFailure } from '@agent/runtime/terminalResultToast';
-import { parentEdgeOf } from '@agent/storage/runRecords';
 import { withLogChannel } from '@logger/effectLog';
 import { RUN_EARLIER_BUILD_MESSAGE } from '@shared/runs/runStatusDisplay';
 import type { RunId } from '@shared/schemas';
-import type { InboxItem, Sent, SendOptions } from './Inbox';
+import type { InboxItem, SendOptions } from './Inbox';
 
 /**
  * Why a submission could not be admitted, worded for the user by
@@ -250,17 +249,16 @@ function admitQueued(
   const options: SendOptions = {
     // A user's message whose loop ended while it was admitted still wakes.
     wake: mode === 'wake' || (mode === 'live' && item.from.kind === 'user'),
+    fromParent,
   };
   return Effect.map(
-    fromParent === true
-      ? sendFromParent(ownerSession, runId, item, options)
-      : ownerSession.followUps.send(runId, item, options),
+    ownerSession.followUps.send(runId, item, options),
     (sent) => {
-      if (sent === 'not_parent') return { status: 'failed', reason: sent };
       if (sent.kind === 'duplicate') return { status: 'sent' };
       if (sent.kind === 'refused') {
-        // Another process holds the run, or its input is closed (deleted,
-        // or torn down with nothing queued), or the session is disposed.
+        // Another process holds the run, the sender is not its parent, its
+        // input is closed (deleted, or torn down with nothing queued), or
+        // the session is disposed.
         return { status: 'failed', reason: sent.reason ?? 'not_resumable' };
       }
       if (sent.wake) return { resume: startFollowUpWake(runId, ownerSession) };
@@ -268,30 +266,6 @@ function admitQueued(
     },
   );
 }
-
-/** {@link Inbox.send}, only from the run's parent: the sender must be the
- *  run its rows name as parent, read in the job that admits the item, so a
- *  detach that committed first refuses it. */
-const sendFromParent = (
-  session: SessionHandle,
-  runId: RunId,
-  item: InboxItem,
-  options: SendOptions,
-): Effect.Effect<Sent | 'not_parent', Error> =>
-  session.log.transact((tx) =>
-    Effect.gen(function* () {
-      const edge = parentEdgeOf(yield* session.log.records(runId));
-      const sender = item.from.kind === 'run' ? item.from.runId : null;
-      if (edge?.id !== sender) return 'not_parent' as const;
-      const { rows, sent } = yield* session.followUps.admission(
-        runId,
-        item,
-        options,
-      );
-      if (rows.length > 0) yield* tx.append(rows);
-      return sent;
-    }).pipe(Effect.scoped),
-  );
 
 /** How a run's refusal reads to whoever sent the input. */
 const REFUSAL_REASON = {

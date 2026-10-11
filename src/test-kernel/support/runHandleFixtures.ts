@@ -105,14 +105,13 @@ export function admitInterruptibleRun(
   onInterrupt: () => void,
 ): Fiber.Fiber<void> {
   const interruptEffect = Effect.sync(onInterrupt);
+  // Awaited as a root launch awaits: interrupting this fiber stops the run.
   return Effect.runFork(
-    registryOf(runs)
-      .start(
-        runId,
-        Effect.never.pipe(Effect.onInterrupt(() => interruptEffect)),
-        (run) => run,
-      )
-      .pipe(Effect.flatMap(Fiber.join), Effect.ignore),
+    startAwaited(
+      runs,
+      runId,
+      Effect.never.pipe(Effect.onInterrupt(() => interruptEffect)),
+    ).pipe(Effect.ignore),
   );
 }
 

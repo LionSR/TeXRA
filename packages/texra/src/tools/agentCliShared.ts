@@ -6,8 +6,7 @@ import { Effect, type Context } from 'effect';
 
 // Local imports
 import { ToolContext, type ToolContextShape } from '@texra-ai/harness';
-import { requireRun, type ToolRun } from '@texra-ai/harness/plugins';
-import { ChildRuns } from '@texra-ai/harness/plugins';
+import { ChildRuns, requireRun, type ToolRun } from '@texra-ai/harness/plugins';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type {
   ChildRunPort,

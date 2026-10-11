@@ -19,6 +19,7 @@ import {
 import { attemptOf } from '@shared/session/inFlight';
 import { unloadable } from '@shared/session/runHistory';
 import { foldRunState, type RunState } from '@shared/session/runStateFold';
+import { parentEdgeOf } from '@shared/session/runRelation';
 import {
   ResultMetaSchema,
   storedResultMeta,
@@ -111,17 +112,6 @@ export const persistedParentRunId = Effect.fn('persistedParentRunId')(
       : undefined;
   },
 );
-
-/** The run's parent edge as its rows leave it: null for a root, and for a
- *  child a `run.detach` severed. */
-export const parentEdgeOf = (
-  rows: readonly SessionEvent[],
-): Extract<SessionEvent, { type: 'run.start' }>['parent'] => {
-  const edge = rows.findLast(
-    (row) => row.type === 'run.start' || row.type === 'run.detach',
-  );
-  return edge?.type === 'run.start' ? edge.parent : null;
-};
 
 const parentEdge = Effect.fn('parentEdge')(function* (
   session: SessionHandle,

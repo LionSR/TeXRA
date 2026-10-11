@@ -98,7 +98,7 @@ export const rootRun = Effect.fn('rootRun')(
     options: RootLaunchOptions & { readonly session: SessionHandle },
   ): Effect.fn.Return<RunEndResult, Error, SessionOwner> {
     const { session } = options;
-    if (!(yield* (yield* SessionOwner).list).includes(session))
+    if (!(yield* (yield* SessionOwner).holds(session)))
       return yield* Effect.fail(
         new Error('This session is closed; open it again to launch a run.'),
       );

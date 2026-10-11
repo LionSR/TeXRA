@@ -1,5 +1,5 @@
 import { Cause, Effect, Exit, Fiber } from 'effect';
-import type { Runs, AgentRunServices } from '@agent/runtime/runRegistry';
+import type { AgentRunServices, Runs } from '@agent/runtime/runRegistry';
 /**
  * Shared detached-child launch choreography for delegation launch sites.
  *

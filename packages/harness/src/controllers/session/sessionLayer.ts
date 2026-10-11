@@ -604,24 +604,20 @@ export interface ProcessLayerOptions {
   /** The dependency probes every tool gate and Tools dashboard read: absent,
    *  every host's; a test harness passes one that starts no probe. */
   readonly toolAvailability?: typeof toolAvailabilityLayer;
-  /**
-   * The host's usage layer owns its version-stamped sender and final drain.
-   * Absent, `UsageLog.disabled`: no usage is reported, as for an embedder,
-   * which has no version or editor of its own to stamp entries with. The
-   * host supplies the layer so this composition does not reach into
-   * telemetry.
-   */
+  /** The host's usage layer owns its version-stamped sender and final drain.
+   *  Absent, `UsageLog.disabled`: no usage is reported, as for an embedder,
+   *  which has no version or editor of its own to stamp entries with. The
+   *  host supplies the layer so this composition does not reach into
+   *  telemetry. */
   readonly usageLog?: Layer.Layer<
     UsageLog,
     never,
     HttpClient.HttpClient | AppState
   >;
-  /**
-   * The process's handle on the global storage root, built and closed with
-   * this runtime. Absent, the root's own database; opening it creates the
-   * root's SQLite file and forks a change poll, so the CLI entry that runs
-   * before any platform, on a possibly read-only root, passes a refusal.
-   */
+  /** The process's handle on the global storage root, built and closed with
+   *  this runtime. Absent, the root's own database; opening it creates the
+   *  root's SQLite file and forks a change poll, so the CLI entry that runs
+   *  before any platform, on a possibly read-only root, passes a refusal. */
   readonly globalDatabase?: Layer.Layer<
     GlobalDatabase,
     DatabaseOpenFailed,
@@ -749,6 +745,10 @@ const sessionOwnerLayer = Layer.effect(
     return {
       open: (init) => withMap(openSession(init)),
       list: withMap(listSessions),
+      holds: (session) =>
+        withMap(heldSession(session.roots.storage)).pipe(
+          Effect.map((held) => held?.session === session),
+        ),
       close: (root) => withMap(closeSession(root)),
       closeAll,
     };

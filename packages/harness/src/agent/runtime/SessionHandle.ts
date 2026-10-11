@@ -378,10 +378,9 @@ export interface SessionHandle {
  * from context: the hosts' default sessions, the desktop's projects, the
  * service's tasks and the SDK's `Sessions`.
  *
- * A handle `open` returns is borrowed access (PR #11893, agent SDK
- * architecture proposal, section 3): holding it carries no disposal
- * obligation; `close` is how a session ends, and the process layer's own
- * release closes whatever is still open.
+ * A handle `open` returns is borrowed access: holding it carries no
+ * disposal obligation; `close` is how a session ends, and the process
+ * layer's own release closes whatever is still open.
  */
 export interface SessionOwnerShape {
   /** The session of `init.roots`' storage root: the one already open there,
@@ -393,6 +392,8 @@ export interface SessionOwnerShape {
   ) => Effect.Effect<SessionHandle, SessionOpenError>;
   /** Every session the owner holds, waiting within the close budget. */
   readonly list: Effect.Effect<readonly SessionHandle[]>;
+  /** Whether it still holds `session`: its own root's entry, never another's. */
+  readonly holds: (session: SessionHandle) => Effect.Effect<boolean>;
   /** Close the session of a storage root: refuse new runs, interrupt the
    *  ones it owns and wait for them inside {@link SESSION_CLOSE_DEADLINE_MS},
    *  settle the ones still live, flush, release. A root with no open

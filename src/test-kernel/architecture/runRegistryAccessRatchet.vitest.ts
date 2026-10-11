@@ -52,8 +52,9 @@ const REGISTRY_IMPORTERS: Readonly<Record<string, string>> = {
     'delegation helper',
 };
 
+// A named import of either, or the whole module under a namespace.
 const REGISTRY_IMPORT =
-  /import\s*(?:type\s*)?\{[^}]*\b(?:registryOf|RunRegistry)\b[^}]*\}\s*from\s*'[^']*runRegistry'/;
+  /import\s*(?:type\s*)?(?:\{[^}]*\b(?:registryOf|RunRegistry)\b[^}]*\}|\*\s*as\s+\w+)\s*from\s*'[^']*runRegistry'/;
 
 describe('run registry access', () => {
   it('reaches the registry from the named harness internals alone', () => {
