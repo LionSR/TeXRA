@@ -31,6 +31,7 @@ import {
 } from 'effect';
 import { RpcSerialization, RpcServer } from 'effect/rpc';
 
+import type { EditorHost } from '@texra/tools/editorHost';
 import {
   probeRecordedService,
   WINDOWS_UNSUPPORTED,
@@ -106,7 +107,7 @@ export const serve = Effect.fn('server.serve')(function* (
 ): Effect.fn.Return<
   ServeExit,
   ServiceAlreadyRunning | ServiceListenFailed | ServiceUnavailable,
-  ProcessServices | ServiceProjects | Scope.Scope
+  ProcessServices | ServiceProjects | EditorHost | Scope.Scope
 > {
   if (process.platform === 'win32')
     return yield* Effect.fail(

@@ -38,6 +38,7 @@ import {
 } from '@texra/shared/session/sessionFrames';
 import { frameSubscription } from '@texra/controllers/session/SessionFramer';
 import { runEnded } from '@texra/controllers/session/sessionBackend';
+import { EditorHost } from '@texra/tools/editorHost';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 import {
@@ -46,6 +47,7 @@ import {
   type ServiceInfo,
   type TaskFailed,
 } from './protocol';
+
 import { makeHostWindows } from './hostWindows';
 import { listTasks } from './taskList';
 import type { ProcessServices } from '@texra-ai/harness';
@@ -209,6 +211,7 @@ export const serviceHandlers = TexraRpcs.toLayer(
         );
     });
     const hosts = yield* makeHostWindows;
+    const editors = yield* EditorHost;
     /** Each session's presentation surface, given once (claimed in one
      *  step) and closed with the session: what its runs ask of a host goes
      *  to the project's windows. */
@@ -218,7 +221,7 @@ export const serviceHandlers = TexraRpcs.toLayer(
         if (presented.has(session)) return Effect.void;
         const surface = Scope.forkUnsafe(scope);
         presented.set(session, surface);
-        return hosts.adopt(session).pipe(Scope.provide(surface));
+        return hosts.adopt(session, editors).pipe(Scope.provide(surface));
       });
     // A session no client leases and no run holds closes once idle long
     // enough, with its surface: a service that lives for weeks keeps only

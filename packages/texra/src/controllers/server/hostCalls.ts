@@ -18,7 +18,6 @@ import {
   VscodeLanguageModelConfigurationSchema,
 } from '@texra-ai/llm';
 
-import type { ManualCriticismEntry } from '@agent/runtime/HostInteractions';
 import type { ApprovalPolicyDenial } from '@shared/approvalPolicy';
 import {
   FileLocationSchema,
@@ -31,6 +30,7 @@ import {
   type RequestShowInstructionPayload,
   type ShowAgentConfigBannerPayload,
 } from '@shared/schemas';
+import type { ManualCriticismEntry } from '@texra/tools/editorHost';
 import type { GenericDiagnostic } from '@utils/diagnostics/diagnosticFormatting';
 import type { LanguageModelInfo } from '@texra-ai/harness';
 

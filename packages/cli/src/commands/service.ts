@@ -9,6 +9,7 @@ import { servicePaths } from '@texra/controllers/server/discovery';
 import { ServiceProjects } from '@texra/controllers/server/handlers';
 import { serve } from '@texra/controllers/server/serve';
 import type { ServiceInfo } from '@texra/controllers/server/protocol';
+import { EditorHost } from '@texra/tools/editorHost';
 
 import { CliUsageError, type CliContext } from '../runtime/cliContext';
 import {
@@ -16,6 +17,7 @@ import {
   connectCliService,
   probeCliService,
 } from '../runtime/cliService';
+import { cliEditors } from '../runtime/cliProcessRuntime';
 import { CliExitCode } from '../runtime/exitCodes';
 import { writeTextStderr } from '../runtime/logSinks';
 
@@ -92,7 +94,11 @@ function runServe(context: CliContext, idleSeconds: number) {
         idleAfter: `${idleSeconds} seconds`,
         shutdown,
         settle: Effect.asVoid(owner.closeAll),
-      }).pipe(Effect.provideService(ServiceProjects, projects));
+      }).pipe(
+        Effect.provideService(ServiceProjects, projects),
+        // The registry the CLI's plugins read: windows attach to it.
+        Effect.provideService(EditorHost, cliEditors),
+      );
     }).pipe(
       // The sessions close first, their runs stopped and settled; then the
       // stores their roots opened.

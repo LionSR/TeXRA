@@ -21,6 +21,7 @@ import { ModelError, ModelErrorFieldsSchema, type Model } from '@texra-ai/llm';
 
 import type { HostInteractions } from '@agent/runtime/HostInteractions';
 import { withLogChannel } from '@logger/effectLog';
+import type { EditorCapabilities } from '@texra/tools/editorHost';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import type { RpcClientError } from 'effect/rpc';
 import type { LanguageModelPort } from '@texra-ai/harness';
@@ -37,10 +38,9 @@ const CHANNEL = 'WindowHost';
 
 /** What a window does for its project's tasks; a capability it leaves out
  *  is one it does not offer. */
-export interface WindowHost extends Pick<
-  HostInteractions,
-  'readDiagnostics' | 'addCriticism' | 'openPdf' | 'emit' | 'approvalDenied'
-> {
+export interface WindowHost
+  extends Pick<HostInteractions, 'emit' | 'approvalDenied'>,
+    EditorCapabilities {
   /** The editor's language models, which the service's runs of this
    *  project bind through this window. */
   readonly languageModel?: LanguageModelPort;

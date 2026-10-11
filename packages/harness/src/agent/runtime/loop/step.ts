@@ -65,7 +65,7 @@ import { sha256 } from '@utils/core/idHash';
 import type { StepRoot } from '@utils/files/externalRoots';
 
 import { declaredToolNames, resolveStepTools } from '../agentToolResolution';
-import { liveToolGates } from '../requestPolicy';
+import { hostCapabilitiesOf, liveToolGates } from '../requestPolicy';
 import { goalGrant } from '../runApprovalQueue';
 import { blobRows, contextAt, stored } from '../run/requestContext';
 import { appendRow, rowAggregate } from './rows';
@@ -265,6 +265,7 @@ const openStep = Effect.fn('Step.open')(function* (
     const resolved = yield* resolveStepTools(pinned.entries, {
       ...run.toolInputs,
       ...liveToolGates(run.session, run.runId),
+      hostCapabilities: yield* hostCapabilitiesOf(run.session, pinned, scope),
       ...(recipe && { approvalPromptsUnavailable: false }),
     });
     const held = recorded === null ? null : heldToRecord(resolved, recorded);
@@ -273,8 +274,7 @@ const openStep = Effect.fn('Step.open')(function* (
       state,
       run.toolInputs.tools,
     );
-    // The plugin on that continues a parked run, if any (the table rules
-    // out two), and those that add a section to its text.
+    // The plugin continuing a parked run (one at most), and the sections.
     const continuing =
       pinned.plugins.find(({ continuation }) => continuation !== undefined) ??
       null;

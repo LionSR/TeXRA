@@ -14,7 +14,7 @@
  * present.
  */
 
-import { Cause, Effect, Option, Stream } from 'effect';
+import { Cause, Context, Effect, Option, Scope, Stream } from 'effect';
 import { withLogChannel } from '@logger/effectLog';
 import { runStateAppend } from '@shared/session/runHistory';
 
@@ -39,8 +39,9 @@ import {
 } from '@shared/schemas';
 import type { RunHistoryDraft } from '@shared/session/runStateFold';
 import type { Append } from '@shared/session/sessionEvents';
+import type { ToolStep } from '@tools/sessionTools';
 
-import type { StepToolInputs } from './agentToolResolution';
+import { HostCapabilities, type StepToolInputs } from './agentToolResolution';
 import type {
   AskOptions,
   LogWriteError,
@@ -157,21 +158,39 @@ export function policyDecidedRows(
   ];
 }
 
-/** The step's inputs read live from its session: whether approvals can be
- *  asked, and what its host serves now. */
+/** Whether a step's approval-gated tools are withheld: read live from its
+ *  session's policy and host. */
 export function liveToolGates(
   session: SessionHandle,
   runId: RunId,
-): Pick<StepToolInputs, 'approvalPromptsUnavailable' | 'hostCapabilities'> {
+): Pick<StepToolInputs, 'approvalPromptsUnavailable'> {
   return {
     approvalPromptsUnavailable: isTexraApprovalDenied(
       executableDecision(session, runId),
     ),
-    hostCapabilities: new Set(
-      session.interactions.readDiagnostics ? ['diagnostics'] : [],
-    ),
   };
 }
+
+/** What the session's host serves now, as the plugins of the step's
+ *  capability-gated tools say (`HostCapabilities`): none without one. */
+export const hostCapabilitiesOf = (
+  session: SessionHandle,
+  step: ToolStep,
+  scope: Scope.Scope,
+): Effect.Effect<ReadonlySet<string>> => {
+  const serving = new Set(
+    [...step.entries.values()].flatMap(({ tool, plugin }) =>
+      tool.hostCapability === undefined ? [] : [plugin],
+    ),
+  );
+  if (serving.size === 0) return Effect.succeed(new Set());
+  return Effect.map(Scope.provide(step.services(serving), scope), (services) =>
+    Option.match(Context.getOption(services, HostCapabilities), {
+      onNone: () => new Set<string>(),
+      onSome: ({ of }) => of(session.roots.storage),
+    }),
+  );
+};
 
 const CHANNEL = 'requestPolicy';
 

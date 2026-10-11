@@ -1,7 +1,7 @@
 /**
  * How a run reads a person's answer to a request it asked: a decision it
  * does not accept is the refusal it is, and a refusal has one wording. The
- * request tools (bash, tool edit, plan, proposal, web fetch, user question)
+ * request tools (bash, tool edit, plan, proposal, user question)
  * read their answers through here.
  *
  * Pure and host-neutral: it reaches `@shared/schemas` and nothing else.

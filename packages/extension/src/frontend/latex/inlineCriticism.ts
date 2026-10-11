@@ -22,13 +22,13 @@ import { Cause, Effect, Fiber, FileSystem, Stream } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports
-import type { ManualCriticismEntry } from '@agent/runtime';
 import { outputFilesProduced } from '@frontend/events/runFactSubscriptions';
 import { lineToRange } from '@frontend/vscode/vscodeEditor';
 import { parseCriticismAnnotations } from '@latex/criticismParser';
 import { withLogChannel } from '@logger/effectLog';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import type { AddOutputFilesPayload, OutputFileInfo } from '@shared/schemas';
+import type { ManualCriticismEntry } from '@texra/tools/editorHost';
 import type { SessionBackend } from '@texra/controllers/session/sessionBackend';
 import { TexraStateKey } from '@texra/shared/settingsView/texraSettings';
 import { readSettingFrom } from '@utils/config/platformSettings';

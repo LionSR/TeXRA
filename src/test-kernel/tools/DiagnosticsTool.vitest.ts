@@ -11,6 +11,7 @@ import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { createTestSession } from '@test/support/sessionTestUtils';
 import { createFakeHost } from '@test/support/setupPlatform';
 import { DiagnosticsTool } from '@texra/tools/DiagnosticsTool';
+import { EditorHost, makeEditorHost } from '@texra/tools/editorHost';
 
 /** The test scope owns its session and exposes its tool capabilities directly. */
 function withSession<A, E, R>(
@@ -43,9 +44,11 @@ describe('DiagnosticsTool', () => {
       yield* withSession((session) =>
         Effect.gen(function* () {
           const addCriticism = vi.fn(() => Effect.succeed(true));
-          yield* session.interactions.use({ addCriticism });
+          const editors = makeEditorHost();
+          yield* editors.attach(project.roots.storage, { addCriticism });
 
           const result = yield* DiagnosticsTool.call(addCriticismCall()).pipe(
+            Effect.provideService(EditorHost, editors),
             Effect.provide(
               nativeToolTestLayer({
                 run: {

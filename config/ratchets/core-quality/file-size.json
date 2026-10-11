@@ -7,7 +7,6 @@
   "packages/harness/src/agent/runtime/childRunLoop.ts": 1103,
   "packages/harness/src/agent/runtime/executeAgent.ts": 486,
   "packages/harness/src/agent/runtime/FollowUps.ts": 431,
-  "packages/harness/src/agent/runtime/HostInteractions.ts": 412,
   "packages/harness/src/agent/runtime/loop/hooks.ts": 471,
   "packages/harness/src/agent/runtime/loop/step.ts": 541,
   "packages/harness/src/agent/runtime/loop/toolUse.ts": 677,

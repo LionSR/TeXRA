@@ -12,8 +12,9 @@
  */
 export { harnessBuiltins } from '@tools/builtinPlugins';
 export { callerRun, requireRun } from '@agent/runtime/RunCall';
-export type { ToolRun } from '@agent/core/tools/ToolTypes';
 export {
   ChildRuns,
   type PluginToolServices,
 } from '@agent/runtime/ToolServices';
+export type { ToolRun } from '@agent/core/tools/ToolTypes';
+export { HostCapabilities } from '@agent/runtime/agentToolResolution';

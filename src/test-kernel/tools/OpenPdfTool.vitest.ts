@@ -1,7 +1,7 @@
 import '@test/support/sessionGraphTestSetup';
 
 import { it } from '@effect/vitest';
-import { Effect } from 'effect';
+import { Effect, Exit, Scope } from 'effect';
 
 // Test composition imports
 
@@ -9,7 +9,6 @@ import { Effect } from 'effect';
 import { afterEach, beforeEach, describe, expect, vi, type Mock } from 'vitest';
 
 // Local imports
-import type { HostInteractions } from '@agent/runtime/HostInteractions';
 import type { RunId } from '@shared/schemas';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
@@ -20,10 +19,18 @@ import {
   closeTestSession,
   openTestDefaultSession,
 } from '@test/support/sessionEnd';
+import {
+  EditorHost,
+  makeEditorHost,
+  type EditorCapabilities,
+} from '@texra/tools/editorHost';
 import { OpenPdfTool } from '@texra/tools/OpenPdfTool';
 
 /** The request shape the host's PDF opener receives, derived from the port. */
-type OpenPdfRequest = Parameters<NonNullable<HostInteractions['openPdf']>>[0];
+type OpenPdfRequest = Parameters<NonNullable<EditorCapabilities['openPdf']>>[0];
+
+/** The registry the tool reads; each test attaches its viewer to it. */
+const editors = makeEditorHost();
 
 describe('OpenPdfTool', () => {
   setupPlatform({
@@ -65,18 +72,21 @@ describe('OpenPdfTool', () => {
     }
   });
 
-  /** Attach a PDF viewer the way a host does: as a session capability. */
+  /** Attach a PDF viewer the way a host does: to the editor registry. */
   function installOpener(): Mock<
     (request: OpenPdfRequest) => Effect.Effect<void>
   > {
     const openPdf = vi.fn<(request: OpenPdfRequest) => Effect.Effect<void>>();
     openPdf.mockReturnValue(Effect.void);
     detachHostInteractions();
-    detachHostInteractions = Effect.runSync(
-      testDefaultSession().interactions.use({
-        openPdf,
-      }),
+    const scope = Effect.runSync(Scope.make());
+    Effect.runSync(
+      editors
+        .attach(testDefaultSession().roots.storage, { openPdf })
+        .pipe(Scope.provide(scope)),
     );
+    detachHostInteractions = () =>
+      Effect.runSync(Scope.close(scope, Exit.void));
     return openPdf;
   }
 
@@ -114,6 +124,7 @@ describe('OpenPdfTool', () => {
         preserveFocus: true,
       });
     }).pipe(
+      Effect.provideService(EditorHost, editors),
       Effect.provide(
         nativeToolTestLayer({
           run: {
@@ -137,6 +148,7 @@ describe('OpenPdfTool', () => {
           preserve_focus: true,
         })
         .pipe(
+          Effect.provideService(EditorHost, editors),
           Effect.provide(
             nativeToolTestLayer({
               run: {
@@ -159,6 +171,7 @@ describe('OpenPdfTool', () => {
         preserveFocus: true,
       });
     }).pipe(
+      Effect.provideService(EditorHost, editors),
       Effect.provide(
         nativeToolTestLayer({
           run: {
@@ -181,6 +194,7 @@ describe('OpenPdfTool', () => {
         const result = yield* tool
           .call({ path: fakePath('storage/executions/run-1/output.pdf') })
           .pipe(
+            Effect.provideService(EditorHost, editors),
             Effect.provide(
               nativeToolTestLayer({
                 workingDirectory: 'relative-path',
@@ -196,6 +210,7 @@ describe('OpenPdfTool', () => {
         expectOpened(result, 'output.pdf');
         expect(openPdf).toHaveBeenCalledOnce();
       }).pipe(
+        Effect.provideService(EditorHost, editors),
         Effect.provide(
           nativeToolTestLayer({
             run: {
@@ -214,6 +229,7 @@ describe('OpenPdfTool', () => {
       const tool = OpenPdfTool;
 
       const result = yield* tool.call({ path: fakePath('run/paper.pdf') }).pipe(
+        Effect.provideService(EditorHost, editors),
         Effect.provide(
           nativeToolTestLayer({
             workingDirectory: fakePath('workspace'),
@@ -229,6 +245,7 @@ describe('OpenPdfTool', () => {
       expectOpenError(result, 'Path must stay within the working directory');
       expect(openPdf).not.toHaveBeenCalled();
     }).pipe(
+      Effect.provideService(EditorHost, editors),
       Effect.provide(
         nativeToolTestLayer({
           run: {

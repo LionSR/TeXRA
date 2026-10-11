@@ -4,10 +4,8 @@
 import { Effect } from 'effect';
 import { z } from 'zod';
 import { defineTool, ToolContext } from '@texra-ai/harness';
-import { callerRun } from '@texra-ai/harness/plugins';
 
 // Local imports
-import type { HostInteractions } from '@agent/runtime/HostInteractions';
 import { withLogChannel } from '@logger/effectLog';
 import { type ToolResult, ToolError } from '@shared/schemas';
 import { resolveToolPath, type ToolPathCall } from '@tools/pathResolution';
@@ -20,6 +18,7 @@ import {
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local file imports
+import { EditorHost, type EditorCapabilities } from './editorHost';
 
 const CHANNEL = 'DiagnosticsTool';
 
@@ -29,8 +28,8 @@ const CHANNEL = 'DiagnosticsTool';
  */
 interface DiagnosticsPorts {
   readonly call: ToolPathCall;
-  readonly readDiagnostics: HostInteractions['readDiagnostics'];
-  readonly addCriticism: HostInteractions['addCriticism'];
+  readonly readDiagnostics: EditorCapabilities['readDiagnostics'];
+  readonly addCriticism: EditorCapabilities['addCriticism'];
 }
 
 const DiagnosticsPathSchema = z
@@ -194,15 +193,11 @@ const diagnose = Effect.fn('DiagnosticsTool.call')(function* (
   input: DiagnosticsInput,
 ) {
   const { env } = yield* ToolContext;
-  const interactions = (yield* callerRun)?.session.interactions;
-  if (!interactions)
-    return yield* Effect.fail(
-      new ToolError('Diagnostics requires an active session.'),
-    );
+  const editor = (yield* EditorHost).at(env.roots.storage);
   const ports: DiagnosticsPorts = {
     call: env,
-    readDiagnostics: interactions.readDiagnostics,
-    addCriticism: interactions.addCriticism,
+    readDiagnostics: editor.readDiagnostics,
+    addCriticism: editor.addCriticism,
   };
   return yield* input.command === 'add'
     ? addCriticism(ports, input)
@@ -211,8 +206,9 @@ const diagnose = Effect.fn('DiagnosticsTool.call')(function* (
 
 export const DiagnosticsTool = defineTool({
   name: 'diagnostics',
-  // Offered while the session's host reads an editor's diagnostics: the
-  // extension's own session, or a service task with one of its windows.
+  // Offered while an editor attached for the session reads diagnostics
+  // (`EditorHost`): the extension's own session, or a service task with
+  // one of its windows.
   hostCapability: 'diagnostics',
   unavailableHosts: ['desktop', 'sdk'],
   description:
