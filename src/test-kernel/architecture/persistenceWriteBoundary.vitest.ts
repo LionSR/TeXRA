@@ -240,7 +240,7 @@ describe('persistence write boundary', () => {
       found,
       found.length === 0
         ? undefined
-        : "Commit a run's rows through its cell (`RunCell.append`, `RunHistory.appendIn`) or the session's requests; `runStateAppend` is theirs.",
+        : "Commit a run's rows through its cell (`RunCell.append`) or the session's requests; `runStateAppend` is theirs.",
     ).toEqual([]);
     // Not vacuous: each writer holds it.
     expect(

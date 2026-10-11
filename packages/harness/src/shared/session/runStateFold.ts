@@ -32,6 +32,7 @@ import {
   copyById,
   freshRunPosition,
   isFollowUpRow,
+  type FOLLOW_UP_TYPES,
   isSharedRunRow,
   phaseAfter,
   type RunLoopPhase,
@@ -102,7 +103,7 @@ export type RunState = RunPosition &
     readonly round: number;
     /** The last folded row. */
     readonly commit: CommitOrdinal;
-    /** Run history rows folded: zero is only queued input (unopened). */
+    /** Run history rows folded: zero is an unopened run. */
     readonly runHistoryRows: number;
     /** `null` until the opening `run.position` (then moved by
      *  {@link phaseAfter}): no row that presupposes an opened run precedes it. */
@@ -161,20 +162,19 @@ type CardRowType = CardType | SettlementType | EndType | 'plugin.fact';
 type CardType = 'tool.start' | 'tool.end' | 'stream.end' | 'response.finalized';
 type SettlementType = 'run.report' | 'run.result' | 'child.turn' | 'child.park';
 type EndType = 'run.end' | 'stage.end' | 'followup.closed'; // and what it closes
+/** A run's input: the inbox folds it (`RunInput`), never the loop. */
+type InputType = (typeof FOLLOW_UP_TYPES)[number];
 /** The rows `foldRow` applies: the shared rows and the run history's own arms. */
-type FoldedRowType =
-  | SharedRunRow['type']
-  | Exclude<RunHistoryDraft['type'], CardRowType>
-  | 'run.activate';
+type FoldedRowType = Exclude<
+  SharedRunRow['type'] | RunHistoryDraft['type'] | 'run.activate',
+  CardRowType | InputType
+>;
 /** Every row kind the run's state (its facts too) is read from: only the
  *  run's cell and the session's requests write them. */
 export type RunStateRowType = FoldedRowType | 'response.finalized';
-/** A run's input and its turns' companions: no fold reads state for them,
- *  so they commit without folding the run (`RunHistory.appendIn`). */
-export type RunInputDraft = Exclude<
-  RunHistoryDraft,
-  { type: Exclude<RunStateRowType, 'followup.queued' | 'followup.consumed'> }
->;
+/** A run's input and its turns' companions: no fold reads them, so they
+ *  commit in any job, outside the run's cell. */
+export type RunInputDraft = Exclude<RunHistoryDraft, { type: RunStateRowType }>;
 
 /**
  * Display rows ignored by name: any other unfolded row on the run aggregate
@@ -208,6 +208,8 @@ const IGNORED_ROW_TYPES: Readonly<
   'run.report': true,
   'run.result': true,
   'followup.closed': true,
+  'followup.queued': true,
+  'followup.consumed': true,
   // The child loop's own bookkeeping: folded by its readers, not the loop.
   'child.turn': true,
 };
@@ -372,11 +374,8 @@ function foldRow(
     records[callId] = call;
     return { ...advance(state), pendingResponse: { ...pending, records } };
   };
-  // Pending input is the publisher's: a queued row only opens an empty run.
-  if (isFollowUpRow(row))
-    return current === null && row.type === 'followup.queued'
-      ? Result.succeed(freshRunState(commit))
-      : null;
+  // A run's input is the inbox's (`RunInput` folds it), never the loop's.
+  if (isFollowUpRow(row)) return null;
   if (isSharedRunRow(row)) {
     // The rows `sessionFold` reads too: applied once, in `runRows.ts`.
     // `unresolved` is a malformed aggregate here: this fold reads a run's

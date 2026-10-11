@@ -35,6 +35,7 @@ import { ensureError } from '@utils/errors/errorMessage';
 import {
   getRunRecords,
   openOwnedChildren,
+  persistedParentRunId,
   runEndFromEvents,
 } from './runRecords';
 
@@ -50,12 +51,9 @@ function pinRunWorkingDirectory(
   return workingDirectory ? { ...record, workingDirectory } : record;
 }
 
-/**
- * A resume's activation: its `run.activate`, the grants it ends, and the
- * `run.config` it owes when its configuration changed (the newest row is
- * the configuration; its model stays the stored one, which only a switch
- * moves). Read inside the activation's transaction, under its claim.
- */
+/** A resume's activation: its `run.activate`, the grants it ends, and a
+ *  `run.config` if its configuration changed (its model kept: only a
+ *  switch moves it). Read in the activation's transaction, under its claim. */
 export const activationRows = Effect.fn('activationRows')(function* (
   session: SessionHandle,
   runId: RunId,
@@ -103,13 +101,10 @@ export interface RegisterRunOptions {
   readonly grants?: ApprovalGrants;
 }
 
-/**
- * Register a run whose loop is not this process's (a process child: an
- * agent CLI, background bash): its registration alone, through its cell. A
- * birth takes the claim with its `run.start`; a re-registration takes it
- * over first, as a resume does. A run this process's loop drives registers
- * with its opening instead (`LaunchEntry`).
- */
+/** Register a run whose loop is not this process's (an agent CLI,
+ *  background bash) through its cell: a birth claims with its `run.start`,
+ *  a re-registration takes the claim over first. A run this process's loop
+ *  drives registers with its opening instead (`LaunchEntry`). */
 export const registerRun = Effect.fn('registerRun')(function* (
   session: SessionHandle,
   runId: RunId,
@@ -133,12 +128,8 @@ export const registerRun = Effect.fn('registerRun')(function* (
   );
 });
 
-/**
- * The rows that register a run, uncommitted: its `run.start` first for a
- * birth, which a caller commits with the run's first history in one batch
- * (a fork, a fresh run's opening), so no crash leaves the run registered
- * without the history it was registered with.
- */
+/** The rows that register a run, uncommitted (`run.start` first for a
+ *  birth), which a caller commits with the run's first history. */
 export const registrationRows = Effect.fn('registrationRows')(function* (
   session: SessionHandle,
   runId: RunId,
@@ -302,7 +293,7 @@ export const endIn = Effect.fn('endIn')(function* (
   yield* Effect.logWarning(
     `Run ${runId} ends unloaded: ${cell.failure.message}`,
   );
-  yield* session.runHistory.appendIn(append, beside);
+  yield* append(beside);
   return result;
 });
 
@@ -336,11 +327,8 @@ const endOwnedChildren = Effect.fn('endOwnedChildren')(function* (
   }
 });
 
-/**
- * The one writer of a run's end ({@link endIn}, in one transaction of its
- * own), for its driver's terminal and for an end no driver writes. Never
- * fails: a persistence failure is `ok: false`.
- */
+/** The one writer of a run's end ({@link endIn}, in its own transaction),
+ *  driver's or not. Never fails: a persistence failure is `ok: false`. */
 export const finalizeRun = Effect.fn('finalizeRun')(function* (
   session: SessionHandle,
   input: FinalizeRunInput,
@@ -366,12 +354,26 @@ export const finalizeRun = Effect.fn('finalizeRun')(function* (
     error: input.error ?? lost,
   };
   let status = yield* end({ ...requested, settlement });
-  // A refused settlement: the end, its outcome kept, without it, loudly.
+  // A refused settlement: the end, its outcome kept, records the result it
+  // lost, and the parent hears of it where it takes input.
   if (Exit.isFailure(status) && settlement !== undefined) {
-    yield* Effect.logWarning(`Run ${runId}: its settlement was not saved`).pipe(
-      Effect.annotateLogs({ data: Cause.squash(status.cause) }),
-    );
-    status = yield* end(requested);
+    const cause = ensureError(Cause.squash(status.cause)).message;
+    const message = `Result lost: ${cause}`;
+    yield* Effect.logWarning(`Run ${runId}: ${message}`);
+    status = yield* end({
+      ...requested,
+      error: { kind: 'unexpected', message },
+    });
+    const text = `The result of run ${runId} was lost: ${cause}`;
+    yield* Effect.flatMap(persistedParentRunId(session, runId), (to) =>
+      to === undefined
+        ? Effect.void
+        : session.followUps.send(to, {
+            text,
+            from: { kind: 'run', runId },
+            deliveryId: `${runId}:result-lost`,
+          }),
+    ).pipe(Effect.catch((e) => Effect.logWarning(`Run ${runId}: ${e}`)));
   }
   if (Exit.isSuccess(status)) {
     const { persisted, recorded, after } = status.value;

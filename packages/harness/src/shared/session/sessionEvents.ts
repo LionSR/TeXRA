@@ -94,7 +94,7 @@ export interface JobOptions {
  * transaction, never runs it on an attempt that may roll back.
  */
 export interface CoWrite {
-  /** Runs' input, committed through `RunHistory.appendIn`. */
+  /** Rows no run's state folds: a run's input and its turns' companions. */
   readonly rows: readonly RunInputDraft[];
   readonly committed: Effect.Effect<void>;
 }

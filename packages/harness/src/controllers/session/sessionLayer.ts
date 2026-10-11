@@ -205,7 +205,6 @@ const sessionHandleLayer = (key: SessionKey) =>
         session: () => session,
         fork: (run) => fork(Effect.provide(run, env)),
       });
-      const runHistory = makeRunHistory(store.log);
       const session: SessionHandle = {
         roots: key.open.roots,
         log: store.log,
@@ -232,18 +231,19 @@ const sessionHandleLayer = (key: SessionKey) =>
         interactions,
         followUps: new Inbox({
           log: store.log,
-          runHistory,
           detach: store.detach,
           parentOf: (runId) => view.run(runId)?.parentId,
           live: (runId) => runs.isLive(runId),
         }),
         trace: store.trace,
-        runHistory,
+        runHistory: makeRunHistory(store.log),
         history: yield* HistoryQuery.make(() => session),
       };
-      // Teardown, in reverse registration: the runs (none admitted over an
-      // unwinding session), the presentation hosts, the follow-up queue, the
-      // runs' fibers, and last the doors once the publisher drained.
+      // The session's teardown is this scope's finalizers, run in the reverse
+      // of their registration: first the runs, so no run is admitted over a
+      // session that is unwinding; then the presentation hosts, the follow-up
+      // queue, the runs' fibers; and last the doors, after the publisher
+      // drained (registered above the fork).
       yield* Effect.addFinalizer(() =>
         Effect.sync(() => session.followUps.dispose()),
       );

@@ -261,14 +261,14 @@ export const settleChildTurn = (
 
 /** Commit a part in one transaction, then run what it left for after. */
 export const commitPart = (
-  { log, runHistory }: Pick<SessionHandle, 'log' | 'runHistory'>,
+  { log }: Pick<SessionHandle, 'log'>,
   part: TransactionPart,
 ): Effect.Effect<void, Error> =>
   Effect.flatten(
     log.transact((tx) =>
       Effect.gen(function* () {
         const co = yield* part;
-        yield* runHistory.appendIn(tx.append, co.rows);
+        yield* tx.append(co.rows);
         return co.committed;
       }).pipe(Effect.scoped),
     ),

@@ -32,7 +32,6 @@ import {
   RunHistoryInconsistent,
   unboundRequests,
   type RunHistoryDraft,
-  type RunInputDraft,
   type RunState,
 } from '@shared/session/runStateFold';
 import type {
@@ -266,8 +265,8 @@ const loaded = (
     if (Result.isFailure(folded))
       return yield* inconsistent(run, folded.failure);
     const state = folded.success;
-    // Queued follow-ups alone do not open a run: that unopened state
-    // (`phase` null) is returned so its pending input is read.
+    // A run's input folds nothing; a request before its opening folds an
+    // unopened state (`phase` null).
     if (state === null) return null;
     if (state.phase === null && state.runHistoryRows === 0) return state;
     if (state.phase === null) {
@@ -414,7 +413,7 @@ export function makeRunHistory(
           ...born,
           ...rows.map(storedDraft),
         ]);
-        yield* appendIn(append, co.rows);
+        yield* append(co.rows);
         yield* afterCommit(co.committed);
         return written;
       }).pipe(Effect.scoped);
@@ -473,12 +472,5 @@ export function makeRunHistory(
     return cell;
   });
 
-  /** Runs' input and turn companions in `append`'s job: none folds the
-   *  run's state, so none reads its history (`RunInputDraft`). */
-  const appendIn = (append: Append, rows: readonly RunInputDraft[]) =>
-    rows.length === 0
-      ? Effect.void
-      : Effect.asVoid(runStateAppend(append)(rows));
-
-  return { load, open, appendIn };
+  return { load, open };
 }

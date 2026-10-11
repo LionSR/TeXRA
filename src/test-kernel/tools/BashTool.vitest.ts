@@ -725,22 +725,30 @@ describe('BashTool', () => {
       resolveCommand(DONE_EXEC_RESULT);
 
       // The manifest is what `/result` reads, and it rides the run's end:
-      // with that batch refused, the run still ends as it did, loudly,
-      // without the result its settlement carried.
+      // with that batch refused, the run still ends as it did, its own end
+      // recording the result it lost, which its card shows.
       yield* Effect.promise(() =>
         vi.waitFor(() =>
           assert.equal(session.runs.getHandle(runId), undefined),
         ),
       );
-      assert.equal((yield* records.readRunEnd())?.outcome, 'completed');
+      const end = yield* records.readRunEnd();
+      assert.equal(end?.outcome, 'completed');
+      assert.match(end?.error?.message ?? '', /^Result lost: /);
       assert.equal(yield* records.readResultMeta(), null);
-      // Nor does the parent read the result the settlement carried.
+      const card = (yield* session.view.read([runId])).runs.get(runId);
+      assert.match(card?.statusDetail ?? '', /^Result lost: /);
+      // The parent hears it lost, never the result the settlement carried.
       assert.deepEqual(
-        (yield* session.followUps.read(parentRunId)).followUps.filter(
-          ({ content: { from } }) =>
-            from.kind === 'run' && from.runId === runId,
-        ),
-        [],
+        (yield* session.followUps.read(parentRunId)).followUps
+          .filter(
+            ({ content: { from } }) =>
+              from.kind === 'run' && from.runId === runId,
+          )
+          .map(({ content }) =>
+            /^The result of run .* was lost: /.test(content.text),
+          ),
+        [true],
       );
       detachBackgroundRun(recorded, parentRunId);
     }).pipe(
