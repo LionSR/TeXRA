@@ -62,7 +62,7 @@ import type {
 } from './HostInteractions';
 import type { HistoryQuery } from './historyQuery/HistoryQuery';
 import type { SessionApprovals } from './runApprovalQueue';
-import type { RunRegistry } from './runRegistry';
+import type { RunsShape } from './runs';
 
 /** A write the store refused: nothing was written (D6 b). */
 export type LogWriteError = DatabaseNotOwner | DatabaseWriteFailed;
@@ -348,9 +348,8 @@ export interface SessionHandle {
   readonly log: SessionLog;
   /** The fold every renderer reads, and the local truth beside it. */
   readonly view: SessionViewAccess;
-  /** Registration, lookup, stop, lineage, and the run's one terminal
-   *  writer (`end`). */
-  readonly runs: RunRegistry;
+  /** Its runs: launch, resume, stop, and what this process holds. */
+  readonly runs: RunsShape;
   /** The project's tools: its plugin layers and MCP servers, closed with it. */
   readonly tools: SessionTools;
   /** The one handler of every request a surface issues, and the run's

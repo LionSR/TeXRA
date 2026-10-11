@@ -108,7 +108,7 @@ export interface HostRunActionPorts {
   readonly backend: SessionBackend;
   /**
    * Launch a validated fresh run; the host's own launcher reaches
-   * `runAgent`. The Effect settles with the launched run itself — a caller
+   * the session's root launch (`Runs.launch`). The Effect settles with the launched run itself — a caller
    * that wants only the launch acknowledged races it against the `onRun`
    * gate instead of awaiting it. It fails with the launcher's own error; the
    * actions below name that channel once.

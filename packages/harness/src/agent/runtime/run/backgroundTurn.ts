@@ -83,7 +83,9 @@ export const observeBackground = <E>(
     onEvent,
   ).pipe(
     Effect.onInterrupt(() =>
-      run.session.runs.stopReason(run.runId) === 'user' ? cancel : Effect.void,
+      run.session.runs.get(run.runId)?.stopReason === 'user'
+        ? cancel
+        : Effect.void,
     ),
   );
 };

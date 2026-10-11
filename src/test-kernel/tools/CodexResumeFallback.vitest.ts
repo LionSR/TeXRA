@@ -34,16 +34,10 @@ vi.mock('@agent/followUp/ToolUseFollowUp', () => ({
 // registry that dispatch resolves for it through the same accessor.
 const testSession = {
   followUps: { acquire: () => ({ enqueue: vi.fn() }) },
-  // The session-keyed registry resolves live handles through its session's
-  // RunRegistry; this suite never tracks real handles, so lookups miss.
-  runs: {
-    getHandle: () => undefined,
-  },
+  // This suite never tracks real handles, so lookups miss.
+  runs: { get: () => undefined },
 } as unknown as SessionHandle;
-const CodexThreads = new AgentCliSessionRegistry(
-  testSession.runs,
-  noPluginHold,
-);
+const CodexThreads = new AgentCliSessionRegistry(noPluginHold);
 /** The tool's call layer, serving the suite's one registry as the step would. */
 const toolLayer = (...options: Parameters<typeof nativeToolTestLayer>) =>
   Layer.merge(
@@ -51,7 +45,8 @@ const toolLayer = (...options: Parameters<typeof nativeToolTestLayer>) =>
     Layer.succeed(CodexThreadsService)(CodexThreads),
   );
 
-vi.mock('@agent/storage', () => ({
+vi.mock('@agent/storage/runLifecycle', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@agent/storage/runLifecycle')>()),
   registerRun: mocks.registerRun,
 }));
 
@@ -62,7 +57,7 @@ vi.mock('@tools/delegation/childRun', async () => {
     createChildRun: mocks.createChildRun,
     childRunDescription: (raw: string) => raw,
     // No paused child to reactivate here: every launch takes a fresh id.
-    agentCliChildRunId: () => Effect.sync(generateRunId),
+    resumedChildRunId: () => Effect.sync(generateRunId),
   };
 });
 

@@ -36,13 +36,14 @@ import { HistoryQuery } from '@agent/runtime/historyQuery/HistoryQuery';
 import { ModelRetryGate } from '@agent/runtime/ModelRetryGate';
 import { RouteRetries } from '@agent/runtime/run/invocation';
 import { resumeRun } from '@agent/runtime/resumeRun';
+import { rootRun } from '@agent/runtime/rootLaunch';
 import {
   endRunOutsideLifecycle,
   onHeldResult,
 } from '@agent/runtime/runLaunchGuard';
 import { createSessionApprovals } from '@agent/runtime/runApprovalQueue';
 import { makeRunHistory } from '@agent/runtime/RunHistory';
-import { RunRegistry } from '@agent/runtime/runRegistry';
+import { registryOf, RunRegistry } from '@agent/runtime/runRegistry';
 import { sessionEventsLayer } from '@agent/runtime/SessionEvents';
 import {
   SESSION_CLOSE_DEADLINE_MS,
@@ -188,7 +189,7 @@ const sessionHandleLayer = (key: SessionKey) =>
       yield* Effect.addFinalizer(() => store.close);
       // The runs' fork and the project's tools end with this scope.
       const fork = yield* FiberSet.makeRuntime<ProcessServices>();
-      const tools = yield* (yield* ToolCatalog).session(() => session.runs);
+      const tools = yield* (yield* ToolCatalog).session;
       const interactions = new SessionHostInteractions();
       // Each run's `.env`, read as it launches, and its window's models.
       const env = Layer.merge(
@@ -202,6 +203,7 @@ const sessionHandleLayer = (key: SessionKey) =>
         session: () => session,
         fork: (run) => fork(Effect.provide(run, env)),
         programs: {
+          root: rootRun,
           executeAgent,
           resumeTurn: resumeToolUseFromResumeData,
           resume: resumeRun,
@@ -235,7 +237,7 @@ const sessionHandleLayer = (key: SessionKey) =>
           log: store.log,
           detach: store.detach,
           parentOf: (runId) => view.run(runId)?.parentId,
-          live: (runId) => runs.isLive(runId),
+          live: (runId) => runs.get(runId)?.live === true,
         }),
         trace: store.trace,
         runHistory: makeRunHistory(store.log),
@@ -280,7 +282,7 @@ const sessionHandleLayer = (key: SessionKey) =>
                 ),
               ),
             );
-          session.runs.sweepChildrenOfFoldedStop(target.id);
+          runs.sweepChildrenOfFoldedStop(target.id);
         }),
       ).pipe(
         Effect.catch(
@@ -455,7 +457,7 @@ const heldSession = (root: string) =>
       .pipe(Effect.scoped, Effect.catch(unopenedEntry(key)));
     if (Option.isNone(held)) return undefined;
     const session = Context.get(held.value, Session);
-    return { key, session, runs: session.runs };
+    return { key, session, runs: registryOf(session.runs) };
   });
 
 /**
@@ -490,9 +492,8 @@ const settleRun = (session: SessionHandle, runId: RunId): Effect.Effect<void> =>
  * In order, on the caller's fiber:
  *
  * 1. refuse new runs;
- * 2. stop every run (it cascades into children; a process child's OS
- *    process ends with its loop), settle those no driver answered for, and
- *    wait for the rest, inside one budget ({@link SESSION_CLOSE_DEADLINE_MS});
+ * 2. stop every run, cascading (a process child ends with its loop), settle
+ *    the undriven and wait for the rest ({@link SESSION_CLOSE_DEADLINE_MS});
  * 3. settle from here, inside a second budget, each run still held when the
  *    first runs out ({@link settleRun}), reporting it as abandoned;
  * 4. release the entry, whose finalizers flush the session's publications
@@ -509,14 +510,13 @@ const closeSession = (root: string) =>
     if (held === undefined)
       return { settled: true, abandoned: [] } satisfies SessionCloseReport;
     const { key, session, runs } = held;
-    // A run the stop reached no driver for, or whose stop failed, has nothing
-    // to settle it: the close settles it now instead of waiting out the
-    // budget for it.
+    // A run the stop reached no driver for, or whose stop failed, is settled
+    // now rather than waited out; the rest drain, none admitted meanwhile.
     const drained = yield* Effect.gen(function* () {
       const undriven = yield* runs.stopAll();
       for (const runId of undriven) {
         yield* settleRun(session, runId);
-        const handle = runs.getHandle(runId);
+        const handle = runs.get(runId)?.handle;
         if (handle) runs.untrackIfCurrent(handle);
       }
       yield* runs.awaitDrained();
@@ -525,7 +525,7 @@ const closeSession = (root: string) =>
       Effect.timeoutOption(SESSION_CLOSE_DEADLINE_MS),
     );
     const settled = Option.isSome(drained);
-    const abandoned = settled ? [] : runs.heldIds();
+    const abandoned = settled ? [] : runs.get().map((run) => run.runId);
     if (abandoned.length > 0) {
       yield* Effect.logWarning(
         `Session ${root} closed with runs still live past its budget; settling them from the close: ${abandoned.join(', ')}`,

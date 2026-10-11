@@ -28,7 +28,12 @@ All notable changes to this project will be documented in this file.
   call services no longer compiles. To launch a child agent from a tool,
   use the `ChildRuns` service (`launch`) from the same entry; a script's
   children stay within its concurrency budget. Plugin authors who imported
-  `RunCall` or typed tools by `ToolServices` move to these.
+  `RunCall` or typed tools by `ToolServices` move to these. A tool that
+  drives an external agent process as the calling run's child registers it
+  with `ChildRuns.launchProcess`, and a plugin's session layer no longer
+  reaches the session's runs. A host launches a root run with
+  `session.runs.launch({ request, options })` under its `SessionOwner`;
+  `runAgent` is gone.
 - **SDK tool and plugin contract: `lane`, `arms` and `facts`.** A tool
   declares where its calls run with `lane: 'parallel' | 'barrier' | 'own'`,
   replacing `parallelSafe` and `ownsConcurrency`. A plugin lists its own row

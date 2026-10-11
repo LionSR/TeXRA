@@ -38,11 +38,10 @@ import { modelInvokerLayer } from './ModelInvoker';
 import { agentRunLayer } from './run/AgentRun';
 import { runToolUse } from './loop/toolUse';
 import { runWithLaunchGuard, type RunTerminalOwner } from './runLaunchGuard';
-import { Runs } from './runRegistry';
+import { Runs, type AgentRunServices } from './runRegistry';
 import type { RegisterRunOptions } from '../storage/runLifecycle';
 import type { ChildRunTurns } from './childRunLoop';
 import type { RunEndResult } from './RunEndResult';
-import type { AgentRunServices } from './runRegistry';
 import type { SessionHandle } from './SessionHandle';
 import type { RunHandle } from './RunHandle';
 
@@ -292,7 +291,7 @@ export interface ExecuteAgentOptions extends SubagentRunOptions {
 
 /**
  * Low-level runner for a fresh run: it registers the run with its opening
- * (`options.registration`). Launches should use `runAgent()`; a resume
+ * (`options.registration`). Launches should use `Runs.launch({ request, options })`; a resume
  * goes through `resumeToolUseFromResumeData`. The run is on
  * `options.session`, and so are its `Runs`, provided here.
  */
@@ -351,7 +350,7 @@ export function executeAgent(
         Effect.gen(function* () {
           // This run's parent edge now: a detach during preparation
           // promoted it to a top-level run.
-          const parentRunId = runSession.runs.parentOf(runId) ?? undefined;
+          const parentRunId = runSession.runs.get(runId)?.parent ?? undefined;
           // The run directory is created by the first write into it.
           yield* Effect.logInfo(`Starting run (runId: ${runId})`).pipe(
             Effect.annotateLogs({

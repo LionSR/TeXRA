@@ -135,9 +135,6 @@ export function runBypasses<Id>(
   };
 }
 
-/** The human values a run's ancestry gives it, as grants of its own: what a
- *  run keeps when its edge goes, or a conversation's next round starts
- *  with. A goal's grant is not carried: it ends with its goal. */
 /** The grants a child keeps once its parent edge goes (its detach, or a
  *  birth a detach cut): what it inherits through `parentId` with `own` as
  *  its rows name them, which a view that has not folded the child lacks,
@@ -176,6 +173,9 @@ export function grantsKeptFromRows(
   );
 }
 
+/** The human values a run's ancestry gives it, as grants of its own: what a
+ *  run keeps when its edge goes, or a conversation's next round starts
+ *  with. A goal's grant is not carried: it ends with its goal. */
 export function inheritedGrants<Id>(
   source: ApprovalGrantSource<Id>,
   runId: Id,

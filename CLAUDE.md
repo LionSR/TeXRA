@@ -247,10 +247,12 @@ template". Agents are flat persona YAML (`name`, `description`, `prompt`,
 `tools`, `temperature`) in `packages/extension/resources/`; a `task:` block
 makes one also launchable as a document task.
 
-**Launch executions via `runAgent`** (`packages/harness/src/agent/runtime/runAgent.ts`) — it
-assigns a `runId`, registers the run, and opens workflow output. Use the
+**Launch executions via `session.runs.launch({ request, options })`** (the
+session's `Runs`, `packages/harness/src/agent/runtime/runRegistry.ts`) — it
+assigns a `runId`, registers the run, and opens workflow output; it requires
+the composition root's `SessionOwner`, so no tool reaches it. Use the
 lower-level `executeAgent` only when you already own the `runId` (subagent
-dispatch). `runAgent` launches fresh runs only: a persisted run resumes
+dispatch). A launch starts fresh runs only: a persisted run resumes
 through `resumeRun`, which continues it with
 `resumeToolUseFromResumeData`. Loop conventions and the
 write points: `packages/harness/AGENTS.md` "Run loop architecture".

@@ -16,7 +16,7 @@ import {
 } from 'effect';
 import { beforeEach, describe, expect, onTestFinished, vi } from 'vitest';
 
-interface RunAgentOptions {
+interface RootLaunchOptions {
   readonly onRun?: (handle: unknown) => Effect.Effect<void>;
   readonly onRunResolved?: (runId: string, trace: unknown) => void;
 }
@@ -85,19 +85,6 @@ vi.mock('@agent/index/agentRegistry', async (importActual) => ({
   }),
 }));
 
-// The package launches through the curated `@agent/runtime` barrel.
-vi.mock('@agent/runtime/runAgent', async () => {
-  const { Effect } = await import('effect');
-  return {
-    runAgent: (input: unknown, options: RunAgentOptions) =>
-      Effect.tryPromise({
-        try: () => mocks.runValidatedAgent(input, options),
-        catch: (cause) =>
-          cause instanceof Error ? cause : new Error(String(cause)),
-      }).pipe(Effect.uninterruptible),
-  };
-});
-
 // The package composes its process with `processLayer`. The owner it serves
 // is stood in for by a map keyed by storage root, as the runtime's session
 // map keys its entries: the package must resolve every run through it and
@@ -110,8 +97,22 @@ vi.mock('@controllers/session/sessionLayer', async () => {
   const { testRuntime } = await import('@test/support/testProcessRuntime');
   const { emptySessionView } = await import('@shared/session/sessionView');
   class FakeSession {
+    // The package launches through its session's runs: a root launch.
     readonly runs = {
       interrupt: mocks.interruptRun,
+      launch: ({
+        request,
+        options,
+      }: {
+        readonly request: unknown;
+        readonly options: RootLaunchOptions;
+      }) =>
+        Effect.tryPromise({
+          try: () =>
+            mocks.runValidatedAgent(request, { ...options, session: this }),
+          catch: (cause) =>
+            cause instanceof Error ? cause : new Error(String(cause)),
+        }).pipe(Effect.uninterruptible),
     };
     readonly interactions: { readonly approvalPromptsUnavailable?: boolean };
     readonly requests = { request: mocks.decide };
@@ -271,7 +272,7 @@ function completeRunView(): Promise<void> {
 }
 
 /** The run entering the session, then its final view folding. */
-async function driveRun(options: RunAgentOptions): Promise<typeof RESULT> {
+async function driveRun(options: RootLaunchOptions): Promise<typeof RESULT> {
   options.onRunResolved?.('ae0001', TRACE);
   await enterRun('ae0001');
   await Effect.runPromise(options.onRun?.(HANDLE) ?? Effect.void);
@@ -280,7 +281,7 @@ async function driveRun(options: RunAgentOptions): Promise<typeof RESULT> {
 }
 
 /** Runs the run's own lifecycle hook, as the host invokes it. */
-async function runOnRun(options: RunAgentOptions): Promise<void> {
+async function runOnRun(options: RootLaunchOptions): Promise<void> {
   await Effect.runPromise(options.onRun?.(HANDLE) ?? Effect.void);
 }
 
@@ -292,7 +293,7 @@ describe('agent package sessions', () => {
     mocks.foldDeath = Effect.runSync(Deferred.make<never, Error>());
     mocks.interruptRun.mockReturnValue(false);
     mocks.runValidatedAgent.mockImplementation(
-      (_input: unknown, options: RunAgentOptions) => driveRun(options),
+      (_input: unknown, options: RootLaunchOptions) => driveRun(options),
     );
   });
 
@@ -465,7 +466,7 @@ describe('agent package sessions', () => {
         // first, and both the run's view and its result fail with that death
         // rather than wait on a level that never comes.
         mocks.runValidatedAgent.mockImplementationOnce(
-          async (_input: unknown, options: RunAgentOptions) => {
+          async (_input: unknown, options: RootLaunchOptions) => {
             options.onRunResolved?.('ae0001', TRACE);
             await enterRun('ae0001');
             await runOnRun(options);

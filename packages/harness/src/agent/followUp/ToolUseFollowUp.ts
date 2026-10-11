@@ -3,12 +3,14 @@ import { Cause, Effect, Fiber } from 'effect';
 
 import { runRefusal } from '@agent/runtime/runClassification';
 import type { ResumeRunResult } from '@agent/runtime/resumeRun';
+import { registryOf } from '@agent/runtime/runRegistry';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { presentRunFailure } from '@agent/runtime/terminalResultToast';
+import { parentEdgeOf } from '@agent/storage/runRecords';
 import { withLogChannel } from '@logger/effectLog';
 import { RUN_EARLIER_BUILD_MESSAGE } from '@shared/runs/runStatusDisplay';
 import type { RunId } from '@shared/schemas';
-import type { InboxItem } from './Inbox';
+import type { InboxItem, Sent, SendOptions } from './Inbox';
 
 /**
  * Why a submission could not be admitted, worded for the user by
@@ -36,6 +38,7 @@ export type FollowUpFailureReason =
   | 'read_failed'
   | 'owned_elsewhere'
   | 'not_resumable'
+  | 'not_parent'
   | 'blocked';
 
 /**
@@ -62,6 +65,8 @@ interface SubmitFollowUpOptions {
    * delivery has landed, so it always finds a live or recoverable queue.
    */
   readonly mode?: 'live_notification';
+  /** Only from the run's parent, by its rows (`SendOptions.fromParent`). */
+  readonly fromParent?: boolean;
 }
 
 const FAILURE_MESSAGES: Record<FollowUpFailureReason, string> = {
@@ -75,6 +80,8 @@ const FAILURE_MESSAGES: Record<FollowUpFailureReason, string> = {
     'This run is live in another TeXRA window. Send the message there.',
   not_resumable:
     'This run cannot accept messages right now. Resume it, or start a new agent task.',
+  not_parent:
+    'This run is not a child of the sender: it was detached or launched by another run.',
   blocked:
     "This task's agent, or the plugin it comes from, is missing, off or not trusted. It continues once that is fixed.",
 };
@@ -132,7 +139,7 @@ export function resumeOnSession(
       runMissing ||= session.view.run(runId) === undefined;
       return runMissing;
     };
-    return session.runs.programs
+    return session.runs
       .resume(runId, { session, isCancellationRequested })
       .pipe(
         Effect.tap((result) =>
@@ -163,7 +170,7 @@ export function resumeOnSession(
         }),
       );
   });
-  return Effect.flatMap(session.runs.fork(attempt), Fiber.join);
+  return Effect.flatMap(registryOf(session.runs).fork(attempt), Fiber.join);
 }
 
 /**
@@ -177,7 +184,7 @@ export function startFollowUpWake(
   session: SessionHandle,
 ): Effect.Effect<boolean> {
   return Effect.suspend(() =>
-    session.runs.isLive(runId)
+    session.runs.get(runId)?.live === true
       ? Effect.succeed(true)
       : Effect.map(
           resumeOnSession(runId, session),
@@ -204,7 +211,9 @@ function admitFollowUp(
   ownerSession: SessionHandle,
 ): Effect.Effect<Admission, Error> {
   return Effect.suspend(() => {
-    const target = ownerSession.runs.getToolUseFollowUpTarget(runId);
+    const target = registryOf(ownerSession.runs).getToolUseFollowUpTarget(
+      runId,
+    );
 
     if (target.kind === 'no_session') {
       return Effect.logWarning(
@@ -217,12 +226,12 @@ function admitFollowUp(
     // A running loop reads it at its next park; a notification never
     // revives a persisted run.
     if (options.mode === 'live_notification')
-      return admitQueued(runId, item, 'quiet', ownerSession);
+      return admitQueued(runId, item, 'quiet', options);
     return admitQueued(
       runId,
       item,
       target.kind === 'active' ? 'live' : 'wake',
-      ownerSession,
+      options,
     );
   });
 }
@@ -236,14 +245,18 @@ function admitQueued(
   runId: RunId,
   item: InboxItem,
   mode: 'live' | 'wake' | 'quiet',
-  ownerSession: SessionHandle,
+  { session: ownerSession, fromParent }: SubmitFollowUpOptions,
 ): Effect.Effect<Exclude<Admission, { status: 'no_session' }>, Error> {
+  const options: SendOptions = {
+    // A user's message whose loop ended while it was admitted still wakes.
+    wake: mode === 'wake' || (mode === 'live' && item.from.kind === 'user'),
+  };
   return Effect.map(
-    ownerSession.followUps.send(runId, item, {
-      // A user's message whose loop ended while it was admitted still wakes.
-      wake: mode === 'wake' || (mode === 'live' && item.from.kind === 'user'),
-    }),
+    fromParent === true
+      ? sendFromParent(ownerSession, runId, item, options)
+      : ownerSession.followUps.send(runId, item, options),
     (sent) => {
+      if (sent === 'not_parent') return { status: 'failed', reason: sent };
       if (sent.kind === 'duplicate') return { status: 'sent' };
       if (sent.kind === 'refused') {
         // Another process holds the run, or its input is closed (deleted,
@@ -255,6 +268,30 @@ function admitQueued(
     },
   );
 }
+
+/** {@link Inbox.send}, only from the run's parent: the sender must be the
+ *  run its rows name as parent, read in the job that admits the item, so a
+ *  detach that committed first refuses it. */
+const sendFromParent = (
+  session: SessionHandle,
+  runId: RunId,
+  item: InboxItem,
+  options: SendOptions,
+): Effect.Effect<Sent | 'not_parent', Error> =>
+  session.log.transact((tx) =>
+    Effect.gen(function* () {
+      const edge = parentEdgeOf(yield* session.log.records(runId));
+      const sender = item.from.kind === 'run' ? item.from.runId : null;
+      if (edge?.id !== sender) return 'not_parent' as const;
+      const { rows, sent } = yield* session.followUps.admission(
+        runId,
+        item,
+        options,
+      );
+      if (rows.length > 0) yield* tx.append(rows);
+      return sent;
+    }).pipe(Effect.scoped),
+  );
 
 /** How a run's refusal reads to whoever sent the input. */
 const REFUSAL_REASON = {
@@ -292,7 +329,7 @@ export const submitFollowUp = Effect.fn('submitFollowUp')(function* (
       return { status: 'failed', reason: REFUSAL_REASON[refusal.kind] };
     if (options.mode !== undefined || item.from.kind !== 'user')
       return { status: 'failed', reason: 'not_resumable' };
-    dispatch = yield* admitQueued(runId, item, 'wake', ownerSession);
+    dispatch = yield* admitQueued(runId, item, 'wake', options);
   } else {
     dispatch = routed;
   }

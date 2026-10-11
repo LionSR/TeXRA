@@ -12,7 +12,7 @@ import { detachSubagentsOnStop } from '@agent/runtime/detachSubagentsOnStop';
 import { requestAsks } from '@agent/runtime/requestPolicy';
 import { setPolicy } from '@agent/runtime/runApprovalQueue';
 import { forkRun, runNoun } from '@agent/runtime/forkRun';
-import { RunLive, Runs } from '@agent/runtime/runRegistry';
+import { registryOf, RunLive, Runs } from '@agent/runtime/runRegistry';
 import type {
   SessionHandle,
   SessionRequests,
@@ -290,7 +290,7 @@ const viaControls = (
   const { runId } = req;
   const noun = runNoun(deps.session(), runId);
   const unavailable = (reason: string) => new Unavailable({ runId, reason });
-  const controls = deps.session().runs.getHandle(runId)?.controls;
+  const controls = deps.session().runs.get(runId)?.controls;
   const missing =
     req.kind === 'run.reset'
       ? `Resume the ${noun} to reset it.`
@@ -334,9 +334,8 @@ const deleteAdmittedRun = (
         }),
       );
     }
-    yield* deps
-      .session()
-      .runs.withInactiveRunStep(
+    yield* registryOf(deps.session().runs)
+      .withInactiveRunStep(
         runId,
         deps.log.removeRun(aggregateId, mode, start.commit),
       )

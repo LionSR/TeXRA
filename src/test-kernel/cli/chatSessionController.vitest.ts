@@ -27,7 +27,7 @@ import {
 
 const mocks = vi.hoisted(() => ({
   executeAgent: vi.fn(),
-  runAgent: vi.fn(),
+  rootLaunch: vi.fn(),
   request: vi.fn(),
   workspaceGet: vi.fn(),
   globalGet: vi.fn(),
@@ -73,6 +73,8 @@ vi.mock('@cli/chat/tui/state/transcript', () => ({
 }));
 
 import { describeFollowUpFailure } from '@agent/followUp';
+import { registryOf } from '@agent/runtime/runRegistry';
+import type { RootLaunch } from '@agent/runtime/runs';
 import type {
   AgentConfig,
   AgentConfigPayload,
@@ -286,7 +288,8 @@ function makeInit(
     // the suite's own, so assertions read the same `mocks` entries the old
     // module mocks fed.
     agentRuns: {
-      launch: (...args: unknown[]) => mocks.runAgent(...args),
+      launch: ({ request, options }: RootLaunch) =>
+        mocks.rootLaunch(request, options),
       resume: (...args: unknown[]) => mocks.resumeRun(...args),
       records: (...args: unknown[]) => {
         const records = mocks.getRunRecords(...args);
@@ -344,12 +347,16 @@ const installableViewRef = () =>
   Effect.runSync(SubscriptionRef.make(currentView()));
 
 function installSession(overrides: Record<string, unknown> = {}): void {
+  // No run of these fixtures is live here: the chat adopts none.
   const runs = {
-    getActiveIds: mocks.getActiveRunIds,
-    getHandle: mocks.getRunHandle,
-    // No run of these fixtures is live here: the chat adopts none.
-    isLive: () => false,
-    awaitDrained: () => Effect.void,
+    get: (runId: RunId) => ({
+      runId,
+      handle: mocks.getRunHandle(runId),
+      live: false,
+      parent: null,
+      stopReason: undefined,
+      drained: Effect.void,
+    }),
   };
   const { view: installed, ...rest } = overrides;
   const ref =
@@ -412,7 +419,7 @@ const installOwnerSession = Effect.fn('installOwnerSession')(function* () {
   mocks.sessionStub.mockReturnValue(owner);
   return {
     session,
-    runs: session.runs,
+    runs: registryOf(session.runs),
     interactions: session.interactions,
   };
 });
@@ -530,7 +537,7 @@ describe('createChatSessionController', () => {
       runId: 'e50001',
       outcome: RUN_OUTCOME.COMPLETED,
     });
-    mocks.runAgent.mockImplementation(
+    mocks.rootLaunch.mockImplementation(
       (request: { config: unknown; runId: RunId }, options: object) =>
         Effect.tryPromise({
           try: () => mocks.executeAgent(request.config, request.runId, options),
@@ -658,7 +665,7 @@ describe('createChatSessionController', () => {
         const rootRun = session.runId;
         if (!rootRun) throw new Error('startRootRun did not claim a run id');
         yield* Effect.promise(() =>
-          vi.waitFor(() => expect(runs.getHandle(childRun)).toBeDefined()),
+          vi.waitFor(() => expect(runs.get(childRun)?.handle).toBeDefined()),
         );
 
         // The launch's `run.start` rows are detached publishes: the stop
@@ -730,7 +737,9 @@ describe('createChatSessionController', () => {
   );
 
   it('reports a fresh-run defect and settles its claimed run slot', async () => {
-    mocks.runAgent.mockReturnValueOnce(Effect.die(new Error('launch defect')));
+    mocks.rootLaunch.mockReturnValueOnce(
+      Effect.die(new Error('launch defect')),
+    );
     const session = makeSession();
     const ctrl = createChatSessionController(makeInit({ session }));
 
@@ -746,7 +755,7 @@ describe('createChatSessionController', () => {
   it('reports a run failure whose cause also carries an interrupt', async () => {
     // Fail-fast concurrency and interrupted teardown both fold an Interrupt
     // into a genuine failure's Cause; recovery must still see the failure.
-    mocks.runAgent.mockReturnValueOnce(
+    mocks.rootLaunch.mockReturnValueOnce(
       Effect.failCause(
         Cause.fromReasons([
           Cause.makeFailReason(new Error('run failed mid-teardown')),
@@ -1135,17 +1144,22 @@ describe('createChatSessionController', () => {
     // admission resumed it, so the second goes to the resumed run directly,
     // never waiting on its drain. The chat keeps no copy of either.
     holdRun('a11111' as RunId);
+    const drains = vi
+      .fn<() => Effect.Effect<void>>()
+      .mockReturnValueOnce(Effect.void)
+      .mockReturnValue(Effect.never);
     installSession({
       view: installableViewRef(),
       runs: {
-        getActiveIds: mocks.getActiveRunIds,
-        getHandle: mocks.getRunHandle,
-        isLive: () => false,
-        // The resumed run never drains while the test runs.
-        awaitDrained: vi
-          .fn()
-          .mockReturnValueOnce(Effect.void)
-          .mockReturnValue(Effect.never),
+        get: (runId: RunId) => ({
+          runId,
+          handle: mocks.getRunHandle(runId),
+          live: false,
+          parent: null,
+          stopReason: undefined,
+          // The resumed run never drains while the test runs.
+          drained: Effect.suspend(() => drains()),
+        }),
       },
     });
     const teardown = pendingRunClaim();

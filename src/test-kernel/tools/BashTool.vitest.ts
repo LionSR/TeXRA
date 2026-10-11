@@ -653,7 +653,7 @@ describe('BashTool', () => {
           .spyOn(followUps, 'resumeOnce')
           .mockImplementation((resumed, resume) => {
             Deferred.doneUnsafe(wakeReached, Effect.void);
-            handleAtResumeTime ??= testDefaultSession().runs.getHandle(runId);
+            handleAtResumeTime ??= testDefaultSession().runs.get(runId)?.handle;
             return resumeOnce(resumed, resume);
           });
         yield* Effect.promise(() => parkRunWaiting(parentRunId));
@@ -676,7 +676,7 @@ describe('BashTool', () => {
           // (finalized), never still RUNNING, so a resumed parent that waits on
           // it right now resolves immediately instead of racing its own wake.
           assert.equal(handleAtResumeTime, undefined);
-          assert.equal(testDefaultSession().runs.getHandle(runId), undefined);
+          assert.equal(testDefaultSession().runs.get(runId)?.handle, undefined);
         } finally {
           detachBackgroundRun(recorded, parentRunId);
         }
@@ -729,7 +729,7 @@ describe('BashTool', () => {
       // recording the result it lost, which its card shows.
       yield* Effect.promise(() =>
         vi.waitFor(() =>
-          assert.equal(session.runs.getHandle(runId), undefined),
+          assert.equal(session.runs.get(runId)?.handle, undefined),
         ),
       );
       const end = yield* records.readRunEnd();
@@ -798,7 +798,7 @@ describe('BashTool', () => {
             );
           }),
         );
-        assert.equal(testDefaultSession().runs.getHandle(runId), undefined);
+        assert.equal(testDefaultSession().runs.get(runId)?.handle, undefined);
 
         detachBackgroundRun(recorded, parentRunId);
       }).pipe(

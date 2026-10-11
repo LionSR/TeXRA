@@ -335,7 +335,7 @@ describe('resumeRun tool-use queue ownership', () => {
       ).toContain('failed');
       expect(yield* queuedTexts(session)).toEqual(['keep me']);
       // Nothing here holds the run: the next resume may take it.
-      expect(session.runs.isLive(RUN)).toBe(false);
+      expect(session.runs.get(RUN)?.live === true).toBe(false);
     }),
   );
 

@@ -10,6 +10,7 @@ import { it } from '@effect/vitest';
 import { Effect, Fiber } from 'effect';
 
 import { beforeEach, describe, expect, vi } from 'vitest';
+import { registryOf } from '@agent/runtime/runRegistry';
 import type { ToolServices } from '@agent/runtime/ToolServices';
 
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
@@ -202,7 +203,7 @@ describe('ExecutionsTool', () => {
 
           publishTestRunStart(session, parentRunId);
           publishTestRunStart(session, childRunId, { parent: parentRunId });
-          session.runs.track(handle);
+          registryOf(session.runs).track(handle);
           yield* foldRunPhase(
             session,
             childRunId,
@@ -275,7 +276,7 @@ describe('ExecutionsTool', () => {
           const childRunId = RunIdSchema.parse('c41d0000000d');
           publishTestRunStart(session, parentRunId);
           publishTestRunStart(session, childRunId, { parent: parentRunId });
-          session.runs.track(
+          registryOf(session.runs).track(
             testRunHandle({
               runId: childRunId,
               parent: parentRunId,
@@ -338,7 +339,7 @@ describe('ExecutionsTool', () => {
           const childRunId = RunIdSchema.parse('c41d0000000c');
           publishTestRunStart(session, parentRunId);
           publishTestRunStart(session, childRunId, { parent: parentRunId });
-          session.runs.track(
+          registryOf(session.runs).track(
             testRunHandle({
               runId: childRunId,
               parent: parentRunId,
@@ -387,7 +388,7 @@ describe('ExecutionsTool', () => {
           const childRunId = RunIdSchema.parse('c41d0000000d');
           publishTestRunStart(session, parentRunId);
           publishTestRunStart(session, childRunId, { parent: parentRunId });
-          session.runs.track(
+          registryOf(session.runs).track(
             testRunHandle({
               runId: childRunId,
               parent: parentRunId,

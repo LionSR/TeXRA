@@ -6,7 +6,6 @@ import { beforeEach, describe, expect, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({
   acquireClaims: vi.fn(),
   prepareAgentDefinition: vi.fn(),
-  runActive: vi.fn(() => false),
   executeAgent: vi.fn(),
   emit: vi.fn(),
   finalizeRun: vi.fn(),
@@ -41,18 +40,19 @@ vi.mock('@agent/runtime/executeAgent', async () => {
 
 import { ModelError } from '@texra-ai/llm';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
-import { RunHandle } from '@agent/runtime/RunHandle';
-import type { RunRegistry } from '@agent/runtime/runRegistry';
-import { runAgent } from '@agent/runtime/runAgent';
+import { RunRegistry } from '@agent/runtime/runRegistry';
+import type { RootLaunchOptions } from '@agent/runtime/rootLaunch';
+import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import {
   agentErrorPresentation,
   classifyAgentError,
   primaryAgentError,
 } from '@common/errors/agentErrorClassification';
 import { AgentError, RouteUnavailable } from '@common/errors/agentErrors';
+import { SessionOwner } from '@platform/processRuntime';
 import { aggregateId as qualifyAggregateId, type RunId } from '@shared/schemas';
 import { fakeProcessServices } from '@test/support/setupPlatform';
-import { testRunRegistry } from '@test/support/runHandleFixtures';
+import { testRunFork, testRunPrograms } from '@test/support/runHandleFixtures';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 const RUN_ID = 'a9e70a9e7001' as RunId;
@@ -79,37 +79,12 @@ const CONFIG = AgentConfigSchema.parse({
   agent: 'assistant',
   model: 'test-model',
 });
-let trackedHandle: RunHandle | undefined;
-const trackRun = vi.fn((handle: RunHandle) => {
-  trackedHandle = handle;
-});
-const untrackRun = vi.fn((runId: RunId) => {
-  if (trackedHandle?.runId === runId) trackedHandle = undefined;
-});
-// The real exit choreography over the mocked claim verbs, so the existing flush/release assertions keep
-// observing the same tree through its one owner.
-const sessionRuns = {
-  track: trackRun,
-  getHandle: vi.fn((runId) =>
-    trackedHandle?.runId === runId ? trackedHandle : undefined,
-  ),
-  untrack: untrackRun,
-  // No generation is live unless a case says so.
-  isLive: () => mocks.runActive(),
-  // This fixture never parks a run at WAITING; the cases that do build a
-  // real registry of their own.
-  // No competing generation exists in this fixture; the lane is a passthrough.
-  launchRun: vi.fn(
-    (_runId: RunId, operation: Effect.Effect<unknown, unknown>) => operation,
-  ),
-};
 const SESSION = {
-  runs: sessionRuns,
   // A failure the launch presents itself (one that never opened a run).
   interactions: { emit: mocks.emit },
   view: { read: () => Effect.succeed({ runs: persistedRuns }) },
   log: {
-    // A runAgent launch is fresh: the log holds no row of its run until
+    // A root launch is fresh: the log holds no row of its run until
     // its opening commits (this suite launches the one run).
     rows: () => birthRows(RUN_ID),
     records: birthRows,
@@ -139,36 +114,43 @@ const EXECUTE_RESULT = {
   outcome: 'COMPLETED',
 };
 
-type RunOptions = Omit<Parameters<typeof runAgent>[1], 'session'>;
+/** The suite's fake session with a real registry as its runs. */
+function sessionWithRuns(): RunRegistry {
+  const held: { session?: SessionHandle } = {};
+  const runs = new RunRegistry({
+    session: () => held.session as SessionHandle,
+    fork: testRunFork,
+    programs: testRunPrograms,
+  });
+  // cast: the slice of a session this suite's launch reads.
+  held.session = { ...(SESSION as object), runs } as unknown as SessionHandle;
+  return runs;
+}
 
 /**
- * `runAgent` over the fake host's process services: the suite runs it on the
- * default runtime rather than a process runtime, so the services it requires
- * are provided here.
+ * A root launch on `runs` over the fake host's process services, under an
+ * owner that holds the session: the suite runs it on the default runtime
+ * rather than a process runtime, so the services it requires are provided
+ * here.
  */
-function launchRun(...args: Parameters<typeof runAgent>) {
-  return Effect.provide(runAgent(...args), fakeProcessServices());
+function launchOn(runs: RunRegistry, options: RootLaunchOptions = {}) {
+  return runs
+    .launch({ request: { config: CONFIG, runId: RUN_ID }, options })
+    .pipe(
+      Effect.provideService(SessionOwner, {
+        list: Effect.sync(() => [runs['init'].session()]),
+      } as never),
+      Effect.provide(fakeProcessServices()),
+    );
 }
 
-function launch(options: RunOptions = {}) {
-  return launchRun(
-    { config: CONFIG, runId: RUN_ID },
-    { session: SESSION, ...options },
-  );
+function launch(options: RootLaunchOptions = {}) {
+  return launchOn(sessionWithRuns(), options);
 }
 
-/** Launches on a real registry, the session's own runs replaced by it. */
-function launchOn(runs: RunRegistry) {
-  return launchRun(
-    { config: CONFIG, runId: RUN_ID },
-    { session: { ...(SESSION as object), runs } as never },
-  );
-}
-
-describe('runAgent run ownership', () => {
+describe('root launch run ownership', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    trackedHandle = undefined;
     persistedRuns.clear();
     bornRuns.clear();
     mocks.acquireClaims.mockReturnValue(Effect.succeed(Effect.void));
@@ -185,13 +167,17 @@ describe('runAgent run ownership', () => {
       // A real registry: the first launch's admission is its fiber on the
       // run registry, so the duplicate is refused against it wherever the
       // first launch has got to — here, mid-run.
-      const runs = testRunRegistry();
+      const runs = sessionWithRuns();
       mocks.executeAgent.mockImplementationOnce(
         () => new Promise<never>(() => {}),
       );
       const first = yield* Effect.forkChild(launchOn(runs), {
         startImmediately: true,
       });
+      // Mid-run: the first launch reached its run.
+      yield* Effect.promise(() =>
+        vi.waitFor(() => expect(mocks.executeAgent).toHaveBeenCalledOnce()),
+      );
       expect(yield* Effect.flip(launchOn(runs))).toMatchObject({
         message: `Run is already running: ${RUN_ID}`,
       });
@@ -234,10 +220,7 @@ describe('runAgent run ownership', () => {
         const definition = { config: { ...CONFIG, agent: 'resolved' } };
         mocks.prepareAgentDefinition.mockReturnValueOnce(definition);
 
-        yield* launchRun(
-          { config: CONFIG, runId: RUN_ID },
-          { session: SESSION },
-        );
+        yield* launch();
 
         expect(mocks.executeAgent).toHaveBeenCalledWith(
           definition,

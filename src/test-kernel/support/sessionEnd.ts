@@ -8,7 +8,8 @@
 
 import { Effect } from 'effect';
 
-import type { RunRegistry } from '@agent/runtime/runRegistry';
+import { registryOf } from '@agent/runtime/runRegistry';
+import type { RunsShape } from '@agent/runtime/runs';
 import type {
   SessionHandle,
   SessionHandleInit,
@@ -24,9 +25,9 @@ let defaultSession: SessionHandle | undefined;
 
 /** End a tracked run's handle registration the way its lifecycle does at
  *  its terminal, for a test that stands in for that lifecycle. */
-export function untrackRun(runs: RunRegistry, runId: RunId): void {
-  const handle = runs.getHandle(runId);
-  if (handle) runs.untrackIfCurrent(handle);
+export function untrackRun(runs: RunsShape, runId: RunId): void {
+  const handle = runs.get(runId)?.handle;
+  if (handle) registryOf(runs).untrackIfCurrent(handle);
 }
 
 /** Open the session of `init`'s root through the installed owner. */

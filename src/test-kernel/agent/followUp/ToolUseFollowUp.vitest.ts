@@ -189,9 +189,10 @@ function fakeSession(target: ToolUseFollowUpTarget): SessionHandle {
       .pipe(Effect.map(({ result }) => result));
   return {
     runs: {
-      programs: { resume },
+      resume,
       getToolUseFollowUpTarget: () => target,
-      isLive: (runId: RunId) => live.has(runId),
+      get: (runId: RunId) =>
+        live.has(runId) ? { runId, live: true } : undefined,
       // The session's fork: the attempt outlives the fiber that asked.
       fork: (program: Effect.Effect<unknown, unknown>) =>
         Effect.forkDetach(program, { startImmediately: true }),

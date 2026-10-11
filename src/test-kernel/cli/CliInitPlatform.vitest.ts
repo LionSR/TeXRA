@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, vi } from 'vitest';
 
 // Local imports
 import { SessionOwner, withProcessServices } from '@texra-ai/harness';
+import { registryOf } from '@agent/runtime/runRegistry';
 import {
   cliPlatformShutdown,
   initCliPlatform,
@@ -245,7 +246,7 @@ describe('CLI platform init', () => {
         ),
       );
       const drain = vi
-        .spyOn(session.runs, 'stopAll')
+        .spyOn(registryOf(session.runs), 'stopAll')
         .mockImplementation(() => Effect.succeed([]));
       yield* Effect.addFinalizer(() => Effect.sync(() => drain.mockRestore()));
 

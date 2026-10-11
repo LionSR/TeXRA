@@ -36,7 +36,6 @@ import {
   type OpenToolUseCard,
   type ToolUseCardRef,
 } from '@agent/trace';
-import type { Runs } from '@agent/runtime/runRegistry';
 import type { ChildRunPort } from '@agent/runtime/childRunLoop';
 import { formatDelivery } from '@agent/runtime/deliveryEnvelope';
 import { withLogChannel } from '@logger/effectLog';
@@ -84,6 +83,7 @@ import {
   buildCodexThreadToolLog,
   buildCodexTurnToolLog,
 } from './codexShared';
+import type { ChildRuns } from '@texra-ai/harness/plugins';
 import type { AgentCliSessionRegistry } from './agentCliSessionRegistry';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
@@ -351,7 +351,7 @@ function buildCodexLaunch(params: {
   /** Release the fallback claim if the loop exits before promoting it. */
   releaseFallbackClaim: (() => void) | undefined;
   registry: AgentCliSessionRegistry;
-}): Effect.Effect<DetachedChildRunLaunch<RunResult>, never, Runs> {
+}): Effect.Effect<DetachedChildRunLaunch<RunResult>> {
   const {
     thread,
     childRun,
@@ -447,7 +447,7 @@ const runCodex = Effect.fn('CodexTool.run')(function* (
   ToolResult,
   ToolError,
   | ToolContext
-  | Runs
+  | ChildRuns
   | CodexThreads
   | ChildProcessSpawner
   | FileSystem.FileSystem
@@ -503,7 +503,7 @@ const launchCodexSession = Effect.fn('codex.launchCodexSession')(function* (
 ): Effect.fn.Return<
   ToolResult,
   ToolError,
-  ToolContext | Runs | ChildProcessSpawner | FileSystem.FileSystem
+  ToolContext | ChildRuns | ChildProcessSpawner | FileSystem.FileSystem
 > {
   const { roots } = (yield* ToolContext).env;
   const { thread, run } = yield* createCodexThread(
@@ -527,8 +527,6 @@ const launchCodexSession = Effect.fn('codex.launchCodexSession')(function* (
   const preview = previewLabel(input.prompt);
 
   return yield* launchAgentCliSession({
-    session: context.session,
-    parentRunId: context.parentRunId,
     resumeId: input.thread_id ?? undefined,
     agentName: 'codex',
     description: input.prompt,

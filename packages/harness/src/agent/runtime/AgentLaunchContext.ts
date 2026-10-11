@@ -335,7 +335,6 @@ const enterRun = Effect.fn('enterRun')(function* (
     return { rows, committed: Effect.void };
   });
   const entered = Effect.sync(() => {
-    session.runs.settleBirth(runId);
     for (const e of (held ?? []).slice(carried)) session.log.publish(runId, e);
     held = null;
     input.onRunResolved?.(runId);

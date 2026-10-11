@@ -7,14 +7,13 @@ import { Effect, type Context } from 'effect';
 // Local imports
 import { ToolContext, type ToolContextShape } from '@texra-ai/harness';
 import { requireRun, type ToolRun } from '@texra-ai/harness/plugins';
+import { ChildRuns } from '@texra-ai/harness/plugins';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import type { Runs } from '@agent/runtime/runRegistry';
 import type {
   ChildRunPort,
   ChildRunPorts,
   ChildRunStrategy,
 } from '@agent/runtime/childRunLoop';
-import { registerRun } from '@agent/storage';
 import {
   describeFollowUpFailure,
   FOLLOW_UP_WAKE_FAILED_MESSAGE,
@@ -28,18 +27,9 @@ import {
   type RunId,
   type TokenUsageStats,
   type ToolResult,
-  USER_FOLLOW_UP_SUPPORT,
 } from '@shared/schemas';
 import { executed } from '@tools/core/result';
-import {
-  agentCliChildRunId,
-  childRunDescription,
-  createChildRun,
-} from '@tools/delegation/childRun';
-import {
-  startDetachedChildRunLoop,
-  type DetachedChildRunLaunch,
-} from '@tools/delegation/detachedChildRun';
+import type { DetachedChildRunLaunch } from '@tools/delegation/detachedChildRun';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { previewLabel } from '@utils/text/stringUtils';
 import type { AgentConfig } from '@texra-ai/harness/schemas';
@@ -56,21 +46,15 @@ interface AgentCliResumeLabels {
   queuedLabel: string;
 }
 
-function requireCallerOwnership(
+const notOwned = (
   id: string,
-  callerRunId: RunId | undefined,
-  parent: RunId | null | undefined,
   labels: AgentCliResumeLabels,
-): Effect.Effect<void, ToolError> {
-  if (!callerRunId || parent === undefined || parent === callerRunId) {
-    return Effect.void;
-  }
-  return Effect.fail(
+): Effect.Effect<never, ToolError> =>
+  Effect.fail(
     new ToolError(
       `${labels.notActiveLabel} '${id}' is owned by a different session; start a new session without ${labels.idParamName} to run in this context.`,
     ),
   );
-}
 
 const queueAgentCliFollowUp = Effect.fn('agentCliShared.queueAgentCliFollowUp')(
   function* (
@@ -85,18 +69,15 @@ const queueAgentCliFollowUp = Effect.fn('agentCliShared.queueAgentCliFollowUp')(
     },
   ): Effect.fn.Return<ToolResult, ToolError> {
     const { id, prompt, callerRunId, labels, session } = params;
-    // Ownership is a live-handle fact: a detached or re-parented child must not
-    // accept follow-ups from its former orchestrator. A missing handle falls
-    // through to submitFollowUp's no-session outcome below.
-    yield* requireCallerOwnership(
-      id,
-      callerRunId,
-      registry.liveParent(stored),
-      labels,
-    );
-
+    // A detached or re-parented child must not accept follow-ups from its
+    // former orchestrator: the child's rows decide, in the job queuing it.
     const followUp = { text: prompt, from: senderOf(callerRunId) };
-    const result = yield* submitFollowUp(stored.runId, followUp, { session });
+    const result = yield* submitFollowUp(stored.runId, followUp, {
+      session,
+      fromParent: callerRunId !== undefined,
+    });
+    if (result.status === 'failed' && result.reason === 'not_parent')
+      return yield* notOwned(id, labels);
     if (result.status === 'failed') {
       return yield* Effect.fail(
         new ToolError(
@@ -169,9 +150,6 @@ const resumeOrLaunchAgentCliSession = Effect.fn(
 });
 
 interface AgentCliLaunchParams<TTurn> {
-  session: SessionHandle;
-  /** The launching run: the child's parent edge. */
-  parentRunId: RunId;
   /** The thread or session id this launch continues, if any. */
   resumeId?: string;
   agentName: string;
@@ -185,91 +163,55 @@ interface AgentCliLaunchParams<TTurn> {
   buildLaunch: (ctx: {
     childRun: ChildRunPort;
     runId: RunId;
-  }) => Effect.Effect<DetachedChildRunLaunch<TTurn>, Error, Runs>;
+  }) => Effect.Effect<DetachedChildRunLaunch<TTurn>, Error>;
   summary: string;
   launchedLine: string;
   followUpLine: string;
 }
 
 /**
- * Register an agent-CLI run (fresh, or the paused one `resumeId` continues),
- * then run the shared detached-child launch choreography over it and return
- * the "launched" ToolResult.
- *
- * Failure channel: a setup failure dies with the choreography's error
- * (`Effect.orDie`); an interrupt re-raises as an interrupt into the calling
- * tool fiber. The only reachable one is the `restore` checkpoint below, before
- * the child stream exists.
+ * Launch an agent-CLI child of the calling run (fresh, or the paused one
+ * `resumeId` continues) through the plugin's run door
+ * (`ChildRuns.launchProcess`) and return the "launched" ToolResult. A
+ * refused registration is the tool's error, worded by the provider.
  */
 export const launchAgentCliSession = Effect.fn(
   'agentCliShared.launchAgentCliSession',
 )(function* <TTurn>(
   params: AgentCliLaunchParams<TTurn>,
-): Effect.fn.Return<ToolResult, ToolError, Runs> {
-  return yield* Effect.uninterruptibleMask((restore) =>
-    Effect.gen(function* () {
-      const runId = yield* agentCliChildRunId(params);
-      // An external CLI drives this agent: the CLI is both the agent name and the
-      // driving tool, and `identity.tool` is what gates native-only affordances
-      // (resume/rerun) off for this cohort.
-      const identity = {
+): Effect.fn.Return<ToolResult, ToolError, ChildRuns> {
+  // An external CLI drives this agent: the CLI is both the agent name and the
+  // driving tool, and `identity.tool` is what gates native-only affordances
+  // (resume/rerun) off for this cohort.
+  const runId = yield* (yield* ChildRuns)
+    .launchProcess({
+      identity: {
         kind: 'agent',
         agent: params.agentName,
         tool: params.agentName,
-      } as const;
-
-      yield* registerRun(params.session, runId, params.config, {
-        identity,
-        userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.TERMINAL_BACKED,
-        parentRunId: params.parentRunId,
-        description: childRunDescription(params.description),
-      }).pipe(
-        Effect.mapError(
-          (error) =>
-            new ToolError(
-              `${params.registerFailedMessage} ${toErrorMessage(error)}`,
-              { cause: error },
-            ),
-        ),
-      );
-
-      yield* startDetachedChildRunLoop({
-        session: params.session,
-        runId,
-        parentRunId: params.parentRunId,
-        agentName: params.agentName,
-        // An agent-CLI child is an external process on the user's own
-        // subscription, outside both the cost contract and the child-run
-        // concurrency budget, exactly as a background shell is
-        // (`.agents/docs/implemented/architecture/2026-08-15-child-run-concurrency-budget.md`).
-        budgeted: false,
-        createChildRun: () =>
-          // Deliberate interruption checkpoint, not dead code: everything from
-          // here to the started loop is uninterruptible, so without this the
-          // pending interrupt would only be observed after the loop has been
-          // launched. `ChildRunProgressEvents.vitest.ts` pins the behavior — a
-          // cancel arriving while the record is committed but the detached work
-          // has not started must leave the run CANCELLED with no loop behind it.
-          restore(Effect.void).pipe(
-            Effect.andThen(
-              createChildRun(params.session, runId, params.parentRunId, {
-                run: identity,
-              }),
-            ),
+      },
+      config: params.config,
+      description: params.description,
+      resumeId: params.resumeId,
+      buildLaunch: params.buildLaunch,
+    })
+    .pipe(
+      Effect.mapError(
+        (error) =>
+          new ToolError(
+            `${params.registerFailedMessage} ${toErrorMessage(error)}`,
+            { cause: error },
           ),
-        buildLaunch: (childRun) => params.buildLaunch({ childRun, runId }),
-      }).pipe(Effect.orDie);
-
-      return executed(
-        [
-          params.launchedLine,
-          `Run ID: ${runId}`,
-          `Run: ${runId}`,
-          params.followUpLine,
-        ].join('\n'),
-        params.summary,
-      );
-    }),
+      ),
+    );
+  return executed(
+    [
+      params.launchedLine,
+      `Run ID: ${runId}`,
+      `Run: ${runId}`,
+      params.followUpLine,
+    ].join('\n'),
+    params.summary,
   );
 });
 
@@ -328,9 +270,6 @@ export const agentCliApprovalCommand = (
 /** Run context resolved for an agent-CLI launch, handed to the provider's
  * `launch` callback by {@link dispatchAgentCliTool}. */
 export interface AgentCliLaunchContext {
-  /** The launching run's session: the child's registration and delivery target. */
-  session: SessionHandle;
-  parentRunId: RunId;
   parentWorkingDirectory: string | undefined;
   /** Release the disk-based fallback claim if the launch fails before promoting
    * it. Undefined for a fresh (non-resumed) launch. */
@@ -373,14 +312,12 @@ export function dispatchAgentCliTool<R = never, S = never>(params: {
     Effect.gen(function* () {
       const registry = yield* store;
       const callerRunId = run.runId;
-      if (sourceId) {
-        yield* requireCallerOwnership(
-          sourceId,
-          callerRunId,
-          registry.liveParent(registry.lookup(sourceId)),
-          labels,
-        );
-      }
+      // A fork only reads its source session: a live source another run
+      // owns is refused by its current edge, nothing written.
+      const source = sourceId ? registry.lookup(sourceId) : undefined;
+      const sourceParent = source && run.session.runs.get(source.runId)?.parent;
+      if (sourceId && sourceParent != null && sourceParent !== callerRunId)
+        return yield* notOwned(sourceId, labels);
       return yield* resumeOrLaunchAgentCliSession(registry, {
         session: run.session,
         id: resumeId,
@@ -389,8 +326,6 @@ export function dispatchAgentCliTool<R = never, S = never>(params: {
         labels,
         launch: (releaseFallbackClaim) =>
           launch({
-            session: run.session,
-            parentRunId: run.runId,
             parentWorkingDirectory: params.toolCall.env.workingDirectory,
             releaseFallbackClaim,
             registry,
@@ -465,7 +400,7 @@ interface AgentCliLoopParams<TTurn> {
  */
 export function buildAgentCliLaunch<TTurn>(
   params: AgentCliLoopParams<TTurn>,
-): Effect.Effect<DetachedChildRunLaunch<TTurn>, never, Runs> {
+): Effect.Effect<DetachedChildRunLaunch<TTurn>> {
   return Effect.gen(function* () {
     const {
       childRun,

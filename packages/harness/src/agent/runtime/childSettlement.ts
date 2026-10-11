@@ -285,14 +285,15 @@ export const settleChildTurn = (
 };
 
 /** A child's parent edge as a job reads it: a born child's from its rows,
- *  an unborn one's from `parentOf` (its launch's, less a detach). */
+ *  an unborn one's from what this process holds of it (its launch's, less
+ *  a detach): an unborn child is held here, its launch's reservation. */
 export const parentEdgeIn = (
   session: SessionHandle,
   child: RunId,
 ): Effect.Effect<RunId | null, Error> =>
   Effect.gen(function* () {
     if (!(yield* getRunRecords(session, child).exists()))
-      return session.runs.parentOf(child);
+      return session.runs.get(child)?.parent ?? null;
     return (yield* persistedParentRunId(session, child)) ?? null;
   });
 

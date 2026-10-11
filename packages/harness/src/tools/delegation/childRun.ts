@@ -8,7 +8,7 @@ import type { ChildRunPause, ChildRunPort } from '@agent/runtime/childRunLoop';
 
 import { parentAdmission } from '@agent/runtime/childSettlement';
 import { RunHandle } from '@agent/runtime/RunHandle';
-import { Runs } from '@agent/runtime/runRegistry';
+import { registryOf, Runs } from '@agent/runtime/runRegistry';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { formatDelivery } from '@agent/runtime/deliveryEnvelope';
 import { persistedParentRunId } from '@agent/storage/runRecords';
@@ -56,7 +56,7 @@ export const createChildRun = Effect.fn('createChildRun')(function* (
   // run's own queued fact, which its own drain answers for. A session-wide
   // settle would instead report whatever session-scoped publication anyone
   // else queued and fail an otherwise sound launch over it.
-  const runs = yield* Runs;
+  const runs = registryOf(yield* Runs);
   // The run's canonical event publication, from its first event: the trace
   // is built with the session as its sink, and closed with the run.
   const trace = new TraceEmitter((event) => session.log.publish(runId, event));
@@ -256,7 +256,7 @@ const pauseChildRun = (
     Effect.ensuring(
       Effect.gen(function* () {
         if (!paused) return;
-        (yield* Runs).untrackIfCurrent(handle);
+        registryOf(yield* Runs).untrackIfCurrent(handle);
         closeTrace();
       }),
     ),
@@ -265,13 +265,13 @@ const pauseChildRun = (
 };
 
 /**
- * The run an agent-CLI launch registers: the paused child of `parentRunId`
+ * The run a process child's launch registers: the paused child of `parentRunId`
  * whose pause kept `resumeId`, reactivated rather than left paused beside a
  * new run, else a fresh id. Read from the rows (each run's latest
  * `child.park`, and the fold's paused reading), not from a live registry, so
  * it holds across a restart.
  */
-export const agentCliChildRunId = Effect.fn('agentCliChildRunId')(function* ({
+export const resumedChildRunId = Effect.fn('resumedChildRunId')(function* ({
   session,
   parentRunId,
   resumeId,

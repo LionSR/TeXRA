@@ -41,10 +41,6 @@ vi.mock('@agent/runtime/childRunLoop', () => ({
   startChildRunLoop: mocks.startChildRunLoop,
 }));
 
-vi.mock('@agent/storage', () => ({
-  registerRun: mocks.registerRun,
-}));
-
 // `launchDetachedSubagent` registers through `registerRun`; route the spy through it.
 vi.mock('@agent/storage/runLifecycle', async (importOriginal) => {
   const actual =

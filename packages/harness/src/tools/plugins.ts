@@ -23,7 +23,6 @@ import { Effect, type Layer, Result, Stream } from 'effect';
 import { z } from 'zod';
 
 // Local imports
-import type { Runs } from '@agent/runtime/runRegistry';
 import type { SessionLog } from '@agent/runtime/SessionHandle';
 import type {
   PluginToolServices,
@@ -166,7 +165,7 @@ export interface PluginDefinition<ROut> extends Omit<
   >;
   readonly continuation?: Continuation<ROut>;
   readonly processLayer?: ProcessPluginLayer<ROut>;
-  readonly sessionLayer?: Layer.Layer<ROut, never, Runs | PluginHold>;
+  readonly sessionLayer?: Layer.Layer<ROut, never, PluginHold>;
   /** Probed outside any step, whether or not the plugin is on: it may
    *  require only the process's probe services. Its own process services
    *  are offered while its layer is up, read with `Effect.serviceOption`. */

@@ -37,24 +37,21 @@ vi.mock('@agent/followUp/ToolUseFollowUp', () => ({
   submitFollowUp: mocks.submitFollowUp,
 }));
 
-// Session-keyed registries: the suite pins one fake session and reads the
-// registry that dispatch resolves for it through the same accessor.
-// The session-keyed registry resolves live handles through its session's
-// RunRegistry. Tests stage a handle here for the lookups they exercise;
-// unset slots miss, like an untracked run.
+// The suite pins one fake session; a call reads a run's live state through
+// its runs. Tests stage a handle here for the lookups they exercise; unset
+// slots miss, like an untracked run.
 const sessionHandles: { byRunId?: RunHandle } = {};
 const testSession = {
   followUps: { acquire: () => ({ enqueue: vi.fn() }) },
   runs: {
-    getHandle: () => sessionHandles.byRunId,
     // A staged handle's edge is the one its launch named.
-    parentOf: () => sessionHandles.byRunId?.launchParent ?? null,
+    get: () => {
+      const handle = sessionHandles.byRunId;
+      return handle && { handle, live: true, parent: handle.launchParent };
+    },
   },
 } as unknown as SessionHandle;
-const ClaudeAgentSessions = new AgentCliSessionRegistry(
-  testSession.runs,
-  noPluginHold,
-);
+const ClaudeAgentSessions = new AgentCliSessionRegistry(noPluginHold);
 /** The tool's call layer, serving the suite's one registry as the step would. */
 const toolLayer = (...options: Parameters<typeof nativeToolTestLayer>) =>
   Layer.merge(
@@ -62,7 +59,8 @@ const toolLayer = (...options: Parameters<typeof nativeToolTestLayer>) =>
     Layer.succeed(ClaudeAgentSessionsService)(ClaudeAgentSessions),
   );
 
-vi.mock('@agent/storage', () => ({
+vi.mock('@agent/storage/runLifecycle', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@agent/storage/runLifecycle')>()),
   registerRun: mocks.registerRun,
 }));
 
@@ -73,7 +71,7 @@ vi.mock('@tools/delegation/childRun', async () => {
     createChildRun: mocks.createChildRun,
     childRunDescription: (raw: string) => raw,
     // No paused child to reactivate here: every launch takes a fresh id.
-    agentCliChildRunId: () => Effect.sync(generateRunId),
+    resumedChildRunId: () => Effect.sync(generateRunId),
   };
 });
 
@@ -111,7 +109,7 @@ function completedChildRunLoop() {
 
 function stubRuns(): any {
   return {
-    getHandle: () => undefined,
+    get: () => undefined,
   };
 }
 

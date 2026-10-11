@@ -188,7 +188,7 @@ export const cliServiceProjects = Effect.fn('cliServiceProjects')(function* (
       const project = projects.get(root);
       if (project === undefined || project.leases > 0) return undefined;
       const now = Date.now();
-      if (project.session.runs.heldIds().length > 0) {
+      if (project.session.runs.get().length > 0) {
         project.idleSince = now;
         return undefined;
       }

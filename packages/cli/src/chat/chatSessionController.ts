@@ -18,9 +18,9 @@ import { getRunRecords } from '@agent/storage';
 import {
   AgentConfigSchema,
   resumeRun,
-  runAgent,
   type AgentConfig,
   type AgentConfigPayload,
+  type RootLaunch,
   type SessionHandle,
 } from '@agent/runtime';
 import {
@@ -326,7 +326,7 @@ export function createChatSessionController(
     runtime,
   } = init;
   const agentRuns = {
-    launch: runAgent,
+    launch: (launch: RootLaunch) => runtimeSession.runs.launch(launch),
     resume: resumeRun,
     resumeBeside: (id: RunId) =>
       Effect.asVoid(resumeOnSession(id, runtimeSession)),
@@ -520,10 +520,9 @@ export function createChatSessionController(
           // resolution falls through to whatever the prior round had, unless
           // this round sets its own explicit value.
           const previousRootRunId = rootRunId.get();
-          const result = yield* agentRuns.launch(
-            { config: registeredConfig, runId },
-            {
-              session: runtimeSession,
+          const result = yield* agentRuns.launch({
+            request: { config: registeredConfig, runId },
+            options: {
               ...(previousRootRunId !== undefined && {
                 continues: previousRootRunId,
               }),
@@ -534,7 +533,7 @@ export function createChatSessionController(
                 if (session.stopRequested) interruptActiveRun();
               },
             },
-          );
+          });
           session.settleExitCode(claim, runOutcomeExitCode(result.outcome));
         }),
         (error) => reportRunFailure(error, claim),
@@ -793,7 +792,7 @@ export function createChatSessionController(
     runtime.runFork(
       Effect.gen(function* () {
         yield* adoptRunRecord(run.id);
-        yield* runtimeSession.runs.awaitDrained(run.id);
+        yield* runtimeSession.runs.get(run.id)?.drained ?? Effect.void;
         const status = runtimeSession.view.run(run.id)?.status;
         session.settleExitCode(
           claim,
@@ -813,7 +812,10 @@ export function createChatSessionController(
       const previous = liveHere;
       liveHere = new Set(
         [...view.runs.values()]
-          .filter((run) => isLiveRun(run) && runtimeSession.runs.isLive(run.id))
+          .filter(
+            (run) =>
+              isLiveRun(run) && runtimeSession.runs.get(run.id)?.live === true,
+          )
           .map((run) => run.id),
       );
       for (const id of liveHere) {
@@ -992,7 +994,7 @@ export function createChatSessionController(
         // The stopped generation leaves the session before the message
         // continues the run, and the chat holds the slot while it resumes.
         yield* Effect.ignoreCause(session.runSettled ?? Effect.void);
-        yield* runtimeSession.runs.awaitDrained(interrupted);
+        yield* runtimeSession.runs.get(interrupted)?.drained ?? Effect.void;
         if (session.interruptedRunId === interrupted)
           preparing = claimPreparingRoot(interrupted);
       }

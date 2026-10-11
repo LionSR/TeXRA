@@ -33,14 +33,17 @@ import {
 } from './executeAgent';
 import { deliverHeld } from './runLaunchGuard';
 import { startChildRunLoop } from './childRunLoop';
-import { Runs } from './runRegistry';
-import { RunLive } from './runRegistry';
+import {
+  registryOf,
+  type AgentRunServices,
+  Runs,
+  RunLive,
+} from './runRegistry';
 import {
   retrieveSessionResumeData,
   type ResumeData,
 } from './SessionResumeRetrieval';
 import type { SessionHandle } from './SessionHandle';
-import type { AgentRunServices } from './runRegistry';
 
 type ResumeRunCompletion = Effect.Effect<RunEndResult, Error>;
 /** A resume settles at the run's idle turn or at run termination, after admitted input is consumed. */
@@ -56,7 +59,12 @@ export type ResumeRunResult =
       readonly result?: RunEndResult;
     }
   /** `read_failed` is a follow-up's alone: a resume reads under its claim. */
-  | { readonly failed: Exclude<FollowUpFailureReason, 'read_failed'> };
+  | {
+      readonly failed: Exclude<
+        FollowUpFailureReason,
+        'read_failed' | 'not_parent'
+      >;
+    };
 
 export interface ResumeRunOptions extends Pick<
   ResumeToolUseFromResumeDataOptions,
@@ -167,7 +175,7 @@ const resumeHere = Effect.fn('resumeHere')(function* (
 ): Effect.fn.Return<ResumeRunResult, Error, AgentRunServices | Scope.Scope> {
   const session = options.session;
   const cancelled = () => options.isCancellationRequested?.() === true;
-  if (session.runs.isLive(runId)) return REFUSED;
+  if (session.runs.get(runId)?.live === true) return REFUSED;
   const store = getRunRecords(session, runId);
   const [config, exists] = yield* Effect.all([
     store.readConfig(),
@@ -277,7 +285,7 @@ const resumeQueuedToolUse = Effect.fn('resumeQueuedToolUse')(function* (
 
   // Do not revive a generation while its stop is settling: a live run registry
   // entry is a run whose fiber has not settled yet.
-  if ((yield* Runs).isLive(resume.runId)) return REFUSED;
+  if ((yield* Runs).get(resume.runId)?.live === true) return REFUSED;
 
   let rootCompletion: ResumeRunCompletion | undefined;
   const admitted = new Set<string>();
@@ -306,7 +314,7 @@ const resumeQueuedToolUse = Effect.fn('resumeQueuedToolUse')(function* (
       const parentRunId = yield* persistedParentRunId(session, runId);
       let completion: Fiber.Fiber<RunEndResult | undefined, Error>;
       if (parentRunId === undefined) {
-        const root = yield* session.runs.launch(
+        const root = yield* registryOf(session.runs).start(
           runId,
           resumeToolUseFromResumeData(resume, { ...launchOptions, onIdle }),
           (admitted) => admitted,
