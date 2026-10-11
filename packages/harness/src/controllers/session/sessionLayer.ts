@@ -57,7 +57,7 @@ import {
   type MinimumLogLevel,
 } from '@logger/effectDiagnostics';
 import {
-  processRoots,
+  holdProcessRoot,
   SessionOwner,
   type ProcessServices,
 } from '@platform/processRuntime';
@@ -354,13 +354,22 @@ class SessionMap extends Context.Service<
 >()('@texra/session/SessionMap') {
   static readonly layer = Layer.effect(
     SessionMap,
-    LayerMap.make(
-      (key: SessionKey) =>
-        Layer.fresh(
-          sessionHandleLayer(key).pipe(Layer.provide(sessionGraphLayer(key))),
-        ),
-      { idleTimeToLive: Duration.infinity },
-    ),
+    Effect.suspend(() => {
+      // This composition: each entry holds its root under it while it lives.
+      const holder = {};
+      return LayerMap.make(
+        (key: SessionKey) =>
+          Layer.fresh(
+            sessionHandleLayer(key).pipe(
+              Layer.provide(sessionGraphLayer(key)),
+              Layer.provide(
+                Layer.effectDiscard(holdProcessRoot(key.storage, holder)),
+              ),
+            ),
+          ),
+        { idleTimeToLive: Duration.infinity },
+      );
+    }),
   );
 }
 
@@ -370,8 +379,6 @@ class SessionMap extends Context.Service<
 const openSession = (open: SessionHandleInit) =>
   Effect.gen(function* () {
     const sessions = yield* SessionMap;
-    const { storage } = open.roots;
-    yield* processRoots.claim(storage, sessions);
     // The map keys and releases a session by this root, so a caller's
     // mutable or inherited root record may not change it later. Read the
     // structural fields so inherited or non-enumerable getters work too.
@@ -389,10 +396,9 @@ const openSession = (open: SessionHandleInit) =>
         globalState: roots.globalState,
       },
     });
-    const context = yield* sessions.contextEffect(key).pipe(
-      Effect.onError(() => sessions.invalidate(key)),
-      Effect.onError(() => processRoots.release(sessions, storage)),
-    );
+    const context = yield* sessions
+      .contextEffect(key)
+      .pipe(Effect.onError(() => sessions.invalidate(key)));
     return Context.get(context, Session);
   }).pipe(Effect.scoped);
 
@@ -541,7 +547,6 @@ const closeSession = (root: string) =>
         ).pipe(withLogChannel(CHANNEL));
     }
     yield* sessions.invalidate(key);
-    yield* processRoots.release(sessions, root);
     return { settled, abandoned } satisfies SessionCloseReport;
   }).pipe(Effect.uninterruptible);
 
@@ -745,9 +750,7 @@ const sessionOwnerLayer = Layer.effect(
         { concurrency: 'unbounded' },
       );
     }).pipe(withMap);
-    yield* Effect.addFinalizer(() =>
-      Effect.andThen(closeAll, processRoots.release(map)),
-    );
+    yield* Effect.addFinalizer(() => Effect.asVoid(closeAll));
     return {
       open: (init) => withMap(openSession(init)),
       list: withMap(listSessions),

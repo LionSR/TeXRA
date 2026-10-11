@@ -26,7 +26,7 @@ import {
 } from 'node:fs';
 import * as os from 'node:os';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { basename, join } from 'node:path';
 import { monitorEventLoopDelay } from 'node:perf_hooks';
 import { DatabaseSync } from 'node:sqlite';
 
@@ -131,10 +131,12 @@ import { testRuntime } from '@test/support/testProcessRuntime';
 import { testRunHandle } from '@test/support/runHandleFixtures';
 import { createFakeWorkspaceRoots } from '@test/support/FakePlatform';
 import '@test/support/sessionGraphTestSetup';
-import { identityReads } from '@test/support/sessionGraphInstall';
+import {
+  identityReads,
+  testProcessLayer,
+} from '@test/support/sessionGraphInstall';
 import { REPO_ROOT } from '@test/support/repoScan';
 import { storePluginsLayer } from '@test/support/setupPlatform';
-import { testProcessLayer } from '@test/support/sessionGraphInstall';
 import { TEXRA_SETTING_ROWS } from '@texra/shared/settingsView/texraSettings';
 import {
   DOCUMENTS_ACCEPTED_ARM,
@@ -1309,8 +1311,9 @@ describe('Sessions owner', () => {
   );
   // Two compositions in one process (two `Sessions.layer` builds) share one
   // process identity, so only one may own a root. Failure modes: the second
-  // opens a root the first holds (two owners of its runs); a root the first
-  // never opened is refused; a root stays refused after the first closes it.
+  // opens a root the first holds (two owners of its runs), also through a
+  // second copy of the module or an alias of the root; a root the first does
+  // not hold is refused; a root stays refused after the first closes it.
   // Known gap until G11: both compositions still share the module-global
   // settings catalog (`installSettingsCatalog`), which this does not test.
   it.live(
@@ -1320,17 +1323,24 @@ describe('Sessions owner', () => {
         testRuntime(),
         Effect.gen(function* () {
           const temp = (prefix: string) =>
-            mkdtempSync(join(tmpdir(), `texra-${prefix}-`));
-          const [held, other, globalStorage] = [
-            temp('held'),
-            temp('other'),
-            temp('global'),
-          ];
+            Effect.acquireRelease(
+              Effect.sync(() =>
+                mkdtempSync(join(tmpdir(), `texra-${prefix}-`)),
+              ),
+              (dir) =>
+                Effect.sync(() =>
+                  rmSync(dir, { recursive: true, force: true }),
+                ),
+            );
+          const held = yield* temp('held');
+          const other = yield* temp('other');
+          const globalStorage = yield* temp('global');
           const roots = (storage: string) =>
             createFakeWorkspaceRoots({ storagePath: storage });
+          // Its own memo map, as a second ManagedRuntime has: built in this
+          // fiber's, the layers the kernel's runtime built would be shared.
+          // Its scope closes it, and its sessions, whatever fails.
           const second = Context.get(
-            // Its own memo map, as a second ManagedRuntime has: built in this
-            // fiber's, the layers the kernel's runtime built would be shared.
             yield* Layer.buildWithMemoMap(
               testProcessLayer([], TEXRA_SETTING_ROWS, globalStorage),
               Layer.makeMemoMapUnsafe(),
@@ -1338,21 +1348,24 @@ describe('Sessions owner', () => {
             ),
             SessionOwner,
           );
-          const first = yield* openTestSession({ roots: roots(held) });
+          const first = yield* Effect.acquireRelease(
+            openTestSession({ roots: roots(held) }),
+            (session) => Effect.asVoid(closeSessionOf(session)),
+          );
           const refused = yield* Effect.flip(
             second.open({ roots: roots(held) }),
           );
           expect(refused.message).toContain('already open in this process');
           // A second copy of the harness module (an app bundle beside an SDK
-          // consumer) refuses it too: the registry is per process.
+          // consumer) refuses it too, by an alias: the registry is per process.
           vi.resetModules();
           const copy = yield* Effect.promise(
             () => import('@platform/processRuntime'),
           );
           expect(copy.SessionOwner).not.toBe(SessionOwner);
           const refusedByCopy = yield* Effect.flip(
-            copy.processRoots.claim(held, {}),
-          );
+            copy.holdProcessRoot(`${held}/../${basename(held)}/`, {}),
+          ).pipe(Effect.scoped);
           expect(refusedByCopy.message).toContain(
             'already open in this process',
           );
@@ -1360,9 +1373,6 @@ describe('Sessions owner', () => {
           yield* closeSessionOf(first);
           const taken = yield* second.open({ roots: roots(held) });
           expect(taken.roots.storage).toBe(held);
-          yield* second.closeAll;
-          for (const dir of [held, other, globalStorage])
-            rmSync(dir, { recursive: true, force: true });
         }).pipe(Effect.scoped),
       ),
   );
