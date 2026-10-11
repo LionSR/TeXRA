@@ -12,12 +12,12 @@ import type { TransactionPart } from '@agent/runtime/childSettlement';
 import type { RunHandle } from '@agent/runtime/RunHandle';
 import { Runs } from '@agent/runtime/runRegistry';
 import { SessionHandle } from '@agent/runtime/SessionHandle';
+import type { RunHistoryDraft } from '@shared/session/runStateFold';
 import { RUN_OUTCOME, agentMatchesIdentifier } from '@shared/schemas';
 import type {
   ModelOptionData,
   RequestDecision,
   RunId,
-  SessionEventDraft,
 } from '@shared/schemas';
 import { untrackRun, closeSessionOf } from '@test/support/sessionEnd';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
@@ -132,7 +132,7 @@ async function persistSettlement(
   runId: RunId,
   settlement: TransactionPart | undefined,
 ): Promise<void> {
-  const rows: readonly SessionEventDraft[] =
+  const rows: readonly RunHistoryDraft[] =
     settlement === undefined
       ? []
       : (await Effect.runPromise(Effect.scoped(settlement))).rows;

@@ -145,7 +145,7 @@ export function inquiryThreadFact(
  *  decision), under the run that asked. */
 export function inquiryThreadRow(
   summary: InquiryThreadSummary,
-): SessionEventDraft {
+): Extract<SessionEventDraft, { type: 'plugin.fact' }> {
   const { aggregate, ...fact } = inquiryThreadFact(summary);
   return {
     type: 'plugin.fact',

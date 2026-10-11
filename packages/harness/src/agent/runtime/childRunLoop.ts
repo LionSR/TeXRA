@@ -732,7 +732,7 @@ const settleInterim = <TTurn, R>(
     const { settlement } = settled;
     const park = loop.isInterrupted() ? undefined : parkRow(runId, 'parked');
     yield* commitPart(
-      session.log,
+      session,
       settleChildTurn(session.followUps, settlement, loop.trace, park),
     );
     yield* settled.report;
@@ -859,7 +859,7 @@ const endNative = <TTurn, R>(
         settlement,
       );
     else if (!abnormal && settlement !== undefined)
-      yield* commitPart(session.log, settlement);
+      yield* commitPart(session, settlement);
     const target = loop.parent.current;
     if (
       strategy.stopNotice === undefined ||

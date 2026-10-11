@@ -31,7 +31,6 @@ import {
   type CommitOrdinal,
   type SessionEvent,
   type DisplaySessionEvent,
-  type SessionEventDraft,
   type RunId,
 } from '@shared/schemas';
 import {
@@ -50,6 +49,7 @@ import {
   type OpenWork,
   type SessionCursor,
   type SessionEventsShape,
+  type UnfoldedDraft,
 } from '@shared/session/sessionEvents';
 
 const CHANNEL = 'sessionEvents';
@@ -378,7 +378,7 @@ export const sessionEventsLayer = Layer.effect(
 export function runEventDraft(
   runId: RunId,
   event: AgentEvent,
-): SessionEventDraft | null {
+): UnfoldedDraft | null {
   if (event.type === 'stream.chunk') return null;
   return { ...event, aggregateId: qualifyAggregateId('run', runId) };
 }

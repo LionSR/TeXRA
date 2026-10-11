@@ -15,8 +15,9 @@
  */
 
 import { Cause, Effect, Option, Stream } from 'effect';
-
 import { withLogChannel } from '@logger/effectLog';
+import { runStateAppend } from '@shared/session/runHistory';
+
 import {
   decideHumanInputRequest,
   decideRetryApproval,
@@ -219,7 +220,7 @@ export function requestAsks({
       );
       if (!mine.some((row) => row.type === 'request.opened')) return false;
       if (mine.some((row) => row.type === 'request.decided')) return false;
-      yield* append([
+      yield* runStateAppend(append)([
         { type: 'request.decided', aggregateId, requestId, decision },
       ]);
       return true;
@@ -270,7 +271,9 @@ export function requestAsks({
       ((opened) =>
         Effect.suspend(() => {
           const from = session().log.now();
-          return session().log.transact(opened).pipe(Effect.as(from));
+          return session()
+            .log.transact((tx) => runStateAppend(tx.append)(opened))
+            .pipe(Effect.as(from));
         }));
     return Effect.gen(function* () {
       const rows: RequestRow[] = [

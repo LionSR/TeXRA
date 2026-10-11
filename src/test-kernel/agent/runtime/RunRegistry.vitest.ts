@@ -14,6 +14,7 @@ import type {
   SessionLog,
   SessionTransaction,
 } from '@agent/runtime/SessionHandle';
+import { runStateAppend } from '@shared/session/runHistory';
 import {
   NO_APPROVAL_GRANTS,
   type ApprovalGrants,
@@ -157,7 +158,9 @@ function createRegistry(
                 append: ((drafts: readonly SessionEventDraft[]) =>
                   drafts.some((draft) => draft.type === 'run.detach')
                     ? Effect.as(commit(drafts), [])
-                    : tx.append(drafts)) as SessionTransaction['append'],
+                    : runStateAppend(tx.append)(
+                        drafts,
+                      )) as SessionTransaction['append'],
               }),
             )
           : Effect.as(

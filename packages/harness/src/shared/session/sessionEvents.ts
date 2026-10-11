@@ -25,6 +25,7 @@ import type {
   DatabaseWriteFailed,
   DeletionMode,
 } from './database';
+import type { FoldReadType, RunHistoryDraft } from './runStateFold';
 
 /** One piece of work a run's rows left open (`SessionEvents.openWork`). */
 export interface OpenWork {
@@ -93,7 +94,8 @@ export interface JobOptions {
  * transaction, never runs it on an attempt that may roll back.
  */
 export interface CoWrite {
-  readonly rows: readonly SessionEventDraft[];
+  /** Committed through each run's cell (`RunHistory.appendIn`). */
+  readonly rows: readonly RunHistoryDraft[];
   readonly committed: Effect.Effect<void>;
 }
 
@@ -103,10 +105,14 @@ export const noCoWrite: Effect.Effect<CoWrite> = Effect.sync(() => ({
   committed: Effect.void,
 }));
 
+/** A row no run's state folds: what any job may append as is. */
+export type UnfoldedDraft = Exclude<SessionEventDraft, { type: FoldReadType }>;
+
 /** One ordered append to the log, as the publisher hands it to a job: a
- *  savepoint of the job's one transaction. */
+ *  savepoint of the job's one transaction. A row a run's state folds goes
+ *  through the run's cell (`RunHistory.appendIn`) instead. */
 export type Append = (
-  events: readonly SessionEventDraft[],
+  events: readonly UnfoldedDraft[],
 ) => Effect.Effect<
   readonly SessionEvent[],
   DatabaseNotOwner | DatabaseWriteFailed

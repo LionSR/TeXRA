@@ -10,11 +10,13 @@ import {
   rowAggregate,
 } from '@agent/runtime/loop/rows';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
+import { storedDraft } from '@agent/runtime/storedTurn';
 import { aggregateId, type RunId } from '@shared/schemas';
 import { freshRunState } from '@shared/session/runStateFold';
 import {
   createTestSession,
   publishTestRunStart,
+  seedRows,
 } from '@test/support/sessionTestUtils';
 import { setupPlatform } from '@test/support/setupPlatform';
 
@@ -67,6 +69,29 @@ describe('run metadata updates', () => {
       expect((yield* session.followUps.read(id)).followUps).toHaveLength(1);
       yield* finalizeRun(session, { runId: id, outcome: 'failed' });
       expect((yield* session.followUps.read(id)).followUps).toEqual([]);
+    }),
+  );
+  // A history that does not fold (here, input with no opening position)
+  // must not keep the run listed as running: its end still lands.
+  it.effect('ends a run whose history does not load', () =>
+    Effect.gen(function* () {
+      yield* seedRows(session.log)([
+        storedDraft(
+          appendRow(id, [
+            { role: 'user', content: [{ kind: 'text', text: 'go' }] },
+          ]),
+        ),
+      ]);
+      expect(yield* Effect.flip(session.runHistory.load(id))).toMatchObject({
+        reason: 'inconsistent',
+      });
+      const ended = yield* finalizeRun(session, {
+        runId: id,
+        outcome: 'failed',
+      });
+      expect(ended).toMatchObject({ ok: true, outcome: 'failed' });
+      const ends = yield* session.log.rows(aggregateId('run', id), ['run.end']);
+      expect(ends).toHaveLength(1);
     }),
   );
   it.effect('keeps a driver outcome when host-exit finalization follows', () =>

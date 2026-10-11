@@ -279,59 +279,61 @@ function executeAsk(
       sessionLinks: collectKnownSessionLinks(manifest),
       transcript: manifest.turns,
     };
-    yield* session.log
-      .transact([
-        {
-          type: 'request.opened',
-          aggregateId: qualifyAggregateId('run', runId),
-          requestId,
-          payload: { kind: 'externalInquiry', data: permission },
-        },
-      ])
-      .pipe(
-        Effect.mapError(
-          (error) =>
-            new Error(`The inquiry request could not be opened: ${error}`),
-        ),
-        // The turn is committed in the global inquiry database before the
-        // request that renders it, and the two stores cannot share a
-        // transaction. A publication that never landed takes the turn back
-        // down with it: left open, no surface would list it and no later
-        // `ask` could re-dispatch on the thread. `commit` appends before it
-        // waits for the fold to settle, so failing is not proof of a
-        // rolled-back append: the committed rows decide, and a turn whose
-        // request is durably open stays open with it.
-        Effect.onError(() =>
-          session.log.rows(qualifyAggregateId('run', runId)).pipe(
-            Effect.flatMap((rows) =>
-              rows.some(
-                (row) =>
-                  row.type === 'request.opened' && row.requestId === requestId,
-              )
-                ? Effect.void
-                : Effect.asVoid(
-                    records.markDropped({
-                      threadId: manifest.threadId,
-                      turnIndex,
-                    }),
-                  ),
-            ),
-            // `catchCause`, not `catch`: neither the aggregate read's
-            // `DatabaseReadFailed` nor a defect from the drop may replace
-            // the commit failure this compensation runs under. Either way
-            // the thread stays open, which the warning says, and the
-            // original failure is what the tool reports.
-            Effect.catchCause((cause) =>
-              Effect.logWarning(
-                `Inquiry thread ${manifest.threadId} stays open after its request failed to open`,
-              ).pipe(
-                Effect.annotateLogs({ data: Cause.squash(cause) }),
-                withLogChannel(CHANNEL),
-              ),
+    // The run's own row: through its cell, as every row its state folds.
+    yield* session.runHistory.open(runId).pipe(
+      Effect.flatMap((cell) =>
+        cell.append([
+          {
+            type: 'request.opened',
+            aggregateId: qualifyAggregateId('run', runId),
+            requestId,
+            payload: { kind: 'externalInquiry', data: permission },
+          },
+        ]),
+      ),
+      Effect.mapError(
+        (error) =>
+          new Error(`The inquiry request could not be opened: ${error}`),
+      ),
+      // The turn is committed in the global inquiry database before the
+      // request that renders it, and the two stores cannot share a
+      // transaction. A publication that never landed takes the turn back
+      // down with it: left open, no surface would list it and no later
+      // `ask` could re-dispatch on the thread. `commit` appends before it
+      // waits for the fold to settle, so failing is not proof of a
+      // rolled-back append: the committed rows decide, and a turn whose
+      // request is durably open stays open with it.
+      Effect.onError(() =>
+        session.log.rows(qualifyAggregateId('run', runId)).pipe(
+          Effect.flatMap((rows) =>
+            rows.some(
+              (row) =>
+                row.type === 'request.opened' && row.requestId === requestId,
+            )
+              ? Effect.void
+              : Effect.asVoid(
+                  records.markDropped({
+                    threadId: manifest.threadId,
+                    turnIndex,
+                  }),
+                ),
+          ),
+          // `catchCause`, not `catch`: neither the aggregate read's
+          // `DatabaseReadFailed` nor a defect from the drop may replace
+          // the commit failure this compensation runs under. Either way
+          // the thread stays open, which the warning says, and the
+          // original failure is what the tool reports.
+          Effect.catchCause((cause) =>
+            Effect.logWarning(
+              `Inquiry thread ${manifest.threadId} stays open after its request failed to open`,
+            ).pipe(
+              Effect.annotateLogs({ data: Cause.squash(cause) }),
+              withLogChannel(CHANNEL),
             ),
           ),
         ),
-      );
+      ),
+    );
 
     // The Background Tasks panel's row for the open thread, a fact of the
     // call: it commits with the call's `tool.result`, or not at all.

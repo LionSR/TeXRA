@@ -693,69 +693,67 @@ describe('BashTool', () => {
       ),
   );
 
-  it.live(
-    'never ends a background run completed without its result manifest',
-    () =>
-      Effect.gen(function* () {
-        const resolveCommand = holdCommand();
-        yield* Effect.promise(() => installPlatform(BASH_PLATFORM_OPTIONS));
-        const parentRunId = startedParentRun();
-        const recorded = recordSessionEvents(testDefaultSession());
+  it.live('fails a background run whose result manifest is refused', () =>
+    Effect.gen(function* () {
+      const resolveCommand = holdCommand();
+      yield* Effect.promise(() => installPlatform(BASH_PLATFORM_OPTIONS));
+      const parentRunId = startedParentRun();
+      const recorded = recordSessionEvents(testDefaultSession());
 
-        const launchResult = yield* launchBackgroundBash(parentRunId);
-        const { runId } = launchedIds(launchResult);
-        assert.ok(runId, JSON.stringify(launchResult));
-        const session = testDefaultSession();
-        // The manifest rides the batch that ends the run: refuse that batch.
-        const transact = session.log.transact.bind(session.log);
-        vi.spyOn(session.log, 'transact').mockImplementation(((
-          work: Parameters<typeof transact>[0],
-        ) =>
-          typeof work === 'function'
-            ? transact((tx) =>
-                work({
-                  ...tx,
-                  append: (rows) =>
-                    rows.some((row) => row.type === 'run.result')
-                      ? Effect.die(new Error('result metadata disk full'))
-                      : tx.append(rows),
-                }),
-              )
-            : transact(work)) as typeof transact);
-        const records = getRunRecords(session, runId);
+      const launchResult = yield* launchBackgroundBash(parentRunId);
+      const { runId } = launchedIds(launchResult);
+      assert.ok(runId, JSON.stringify(launchResult));
+      const session = testDefaultSession();
+      // The manifest rides the batch that ends the run: refuse that batch.
+      const transact = session.log.transact.bind(session.log);
+      vi.spyOn(session.log, 'transact').mockImplementation(((
+        work: Parameters<typeof transact>[0],
+      ) =>
+        typeof work === 'function'
+          ? transact((tx) =>
+              work({
+                ...tx,
+                append: (rows) =>
+                  rows.some((row) => row.type === 'run.result')
+                    ? Effect.die(new Error('result metadata disk full'))
+                    : tx.append(rows),
+              }),
+            )
+          : transact(work)) as typeof transact);
+      const records = getRunRecords(session, runId);
 
-        resolveCommand(DONE_EXEC_RESULT);
+      resolveCommand(DONE_EXEC_RESULT);
 
-        // The manifest is what `/result` reads, and it rides the run's end:
-        // with that batch refused, the run has neither, never an end
-        // without its result.
-        yield* Effect.promise(() =>
-          vi.waitFor(() =>
-            assert.equal(session.runs.getHandle(runId), undefined),
-          ),
-        );
-        assert.equal(yield* records.readRunEnd(), null);
-        assert.equal(yield* records.readResultMeta(), null);
-        // Nor does the parent read a result the child never ended with.
-        assert.deepEqual(
-          (yield* session.followUps.read(parentRunId)).followUps.filter(
-            ({ content: { from } }) =>
-              from.kind === 'run' && from.runId === runId,
-          ),
-          [],
-        );
-        detachBackgroundRun(recorded, parentRunId);
-      }).pipe(
-        Effect.provide(
-          nativeToolTestLayer({
-            run: {
-              session: testDefaultSession(),
-              runId: 'bash-tool' as RunId,
-              toolPolicy: {},
-            },
-          }),
+      // The manifest is what `/result` reads, and it rides the run's end:
+      // with that batch refused, the backstop ends the run FAILED alone,
+      // never completed without its result.
+      yield* Effect.promise(() =>
+        vi.waitFor(() =>
+          assert.equal(session.runs.getHandle(runId), undefined),
         ),
+      );
+      assert.equal((yield* records.readRunEnd())?.outcome, 'failed');
+      assert.equal(yield* records.readResultMeta(), null);
+      // Nor does the parent read a result the child never ended with.
+      assert.deepEqual(
+        (yield* session.followUps.read(parentRunId)).followUps.filter(
+          ({ content: { from } }) =>
+            from.kind === 'run' && from.runId === runId,
+        ),
+        [],
+      );
+      detachBackgroundRun(recorded, parentRunId);
+    }).pipe(
+      Effect.provide(
+        nativeToolTestLayer({
+          run: {
+            session: testDefaultSession(),
+            runId: 'bash-tool' as RunId,
+            toolPolicy: {},
+          },
+        }),
       ),
+    ),
   );
 
   it.live(

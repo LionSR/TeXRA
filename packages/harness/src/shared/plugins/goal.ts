@@ -55,7 +55,7 @@ export const GOAL_STATE_ARM = {
 export function goalStateRow(
   runId: RunId,
   state: GoalState,
-): SessionEventDraft {
+): Extract<SessionEventDraft, { type: 'plugin.fact' }> {
   return {
     type: 'plugin.fact',
     aggregateId: aggregateId('run', runId),

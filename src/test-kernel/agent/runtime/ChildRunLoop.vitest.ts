@@ -12,6 +12,7 @@ import '@test/support/defaultSessionTestSetup';
 import { it } from '@effect/vitest';
 import { Deferred, Effect, Exit, Fiber } from 'effect';
 import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
+import { storedDraft } from '@agent/runtime/storedTurn';
 
 const mocks = vi.hoisted(() => ({
   finalizeRun: vi.fn(),
@@ -62,6 +63,7 @@ import {
   CHILD_RUN_CONCURRENCY_BUDGET_CONFIG_KEY,
   CHILD_RUN_CONCURRENCY_BUDGET_SETTING,
 } from '@shared/schemas';
+import { runStateAppend } from '@shared/session/runHistory';
 import { DatabaseNotOwner } from '@shared/session/database';
 import { untrackRun } from '@test/support/sessionEnd';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
@@ -293,7 +295,7 @@ beforeEach(async () => {
             Effect.gen(function* () {
               if (input.settlement === undefined) return;
               const co = yield* input.settlement;
-              yield* tx.append(co.rows);
+              yield* runStateAppend(tx.append)(co.rows.map(storedDraft));
               yield* co.committed;
             }),
           ),

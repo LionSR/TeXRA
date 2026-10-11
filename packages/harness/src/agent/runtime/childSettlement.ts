@@ -25,7 +25,6 @@ import {
   storedResultMeta,
   type DeliveredResult,
   type RunId,
-  type SessionEventDraft,
 } from '@shared/schemas';
 import {
   DatabaseNotOwner,
@@ -35,7 +34,7 @@ import {
 import type { QueuedFollowUp } from '@shared/session/runRows';
 import type { RunHistoryDraft } from '@shared/session/runStateFold';
 import type { CoWrite } from '@shared/session/sessionEvents';
-import type { SessionHandle, SessionLog } from './SessionHandle';
+import type { SessionHandle } from './SessionHandle';
 
 const CHANNEL = 'childSettlement';
 const REFUSED: Sent = { kind: 'refused' };
@@ -245,7 +244,7 @@ export const settleChildTurn = (
   followUps: Inbox,
   { rows, delivery }: ChildSettlement,
   trace: AgentTrace | undefined,
-  park?: SessionEventDraft,
+  park?: RunHistoryDraft,
 ): TransactionPart => {
   const own = park === undefined ? [] : [park];
   return delivery === undefined
@@ -262,14 +261,14 @@ export const settleChildTurn = (
 
 /** Commit a part in one transaction, then run what it left for after. */
 export const commitPart = (
-  log: Pick<SessionLog, 'transact'>,
+  { log, runHistory }: Pick<SessionHandle, 'log' | 'runHistory'>,
   part: TransactionPart,
 ): Effect.Effect<void, Error> =>
   Effect.flatten(
     log.transact((tx) =>
       Effect.gen(function* () {
         const co = yield* part;
-        yield* tx.append(co.rows);
+        yield* runHistory.appendIn(tx.append, co.rows);
         return co.committed;
       }).pipe(Effect.scoped),
     ),

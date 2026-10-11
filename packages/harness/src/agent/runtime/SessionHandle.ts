@@ -50,7 +50,7 @@ import type { RequestError } from '@shared/session/requestErrors';
 import type { RunHistory } from '@shared/session/runHistory';
 import type { Outcome, RuntimeRequest } from '@shared/session/runtimeRequest';
 import type { RunHistoryDraft } from '@shared/session/runStateFold';
-import type { Append } from '@shared/session/sessionEvents';
+import type { Append, UnfoldedDraft } from '@shared/session/sessionEvents';
 import type { SessionInputs } from '@shared/session/sessionInputs';
 import type { RunView, SessionView } from '@shared/session/sessionView';
 import type { SessionTools } from '@tools/sessionTools';
@@ -99,7 +99,7 @@ export interface SessionLog {
    * typed; it is never retried here.
    */
   transact(
-    events: readonly SessionEventDraft[],
+    events: readonly UnfoldedDraft[],
   ): Effect.Effect<readonly SessionEvent[], LogWriteError>;
   transact<A, E>(
     job: (tx: SessionTransaction) => Effect.Effect<A, E>,
