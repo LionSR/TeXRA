@@ -1,5 +1,5 @@
 /** Formatting of canonical inquiry records for tools and the inquiry panel. */
-import type { InquiryThreadRecord } from '@shared/plugins/externalInquiry';
+import type { InquiryThreadRecord } from '@texra/shared/plugins/externalInquiry';
 import { unique } from '@utils/core';
 
 /**

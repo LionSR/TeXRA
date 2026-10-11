@@ -21,7 +21,7 @@ import type {
 } from '@shared/schemas';
 import { getProposalFileGroups } from '@shared/schemas';
 import { getModelLabel } from '@shared/model/modelLabel';
-import { APPROVE_ALL_DELEGATED_WORK_ACTION } from '@shared/session/approvalDecision';
+import { APPROVE_ALL_DELEGATED_WORK_ACTION } from '@texra/shared/session/surfaceDecision';
 import { SessionUiEvents } from '@texra/shared/session/uiEvents';
 import { selectStyles } from '@ui/styles';
 import {

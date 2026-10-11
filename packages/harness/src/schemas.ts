@@ -5,17 +5,12 @@ export type {
 } from '@agent/core/definition/AgentConfig';
 export {
   AgentDefinitionSchema,
-  DocumentTaskSchema,
   InlinePersonaSchema,
   PersonaSchema,
 } from '@shared/schemas';
-export type {
-  AgentDefinition,
-  DocumentTask,
-  InlinePersona,
-  Persona,
-} from '@shared/schemas';
+export type { AgentDefinition, InlinePersona, Persona } from '@shared/schemas';
 export type { RunEndResult } from '@agent/runtime/RunEndResult';
+export { DEFAULT_AGENT_MODEL } from '@shared/constants/defaultModels';
 export {
   AgentNameSchema,
   AgentSourceSchema,

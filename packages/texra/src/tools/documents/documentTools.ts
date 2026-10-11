@@ -14,7 +14,6 @@ import { defineTool } from '@texra-ai/harness';
 import { requireRun } from '@texra-ai/harness/plugins';
 import { getRunRecords } from '@agent/storage';
 import { postProcessResponse } from '@latex/texraResponseTextProcessing';
-import { documentsSummary } from '@shared/plugins/documents';
 import {
   fileLocationDisplayPath,
   OUTPUT_END_TAG,
@@ -22,6 +21,7 @@ import {
   ToolError,
   type FileLocation,
 } from '@shared/schemas';
+import { documentsSummary } from '@texra/shared/plugins/documents';
 import {
   compileFailuresOf,
   runCompileCheck,

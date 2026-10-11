@@ -43,7 +43,7 @@ import {
   EventsFrameSchema,
   RequestErrorWireSchema,
   SubscribeSchema,
-} from '@shared/session/sessionFrames';
+} from '@texra/shared/session/sessionFrames';
 import {
   HostAnswerSchema,
   HostCapabilitySchema,

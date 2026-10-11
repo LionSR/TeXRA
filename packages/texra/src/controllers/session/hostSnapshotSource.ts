@@ -23,14 +23,14 @@ import {
 } from '@model/computeModelOptions';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import { type FileOptions } from '@shared/schemas';
-import type {
-  HostSnapshot,
-  ProjectDisplay,
-} from '@shared/session/hostSnapshot';
 import {
   TEXRA_APPROVAL_POLICY_CONFIG_KEY,
   type TexraApprovalPolicy,
 } from '@shared/approvalPolicy';
+import type {
+  HostSnapshot,
+  ProjectDisplay,
+} from '@texra/shared/session/hostSnapshot';
 import { modelOptionsFrom } from '@texra/model/modelOptions';
 import { createTeamCatalogPorts } from '@texra/controllers/mainView/teamCatalogPorts';
 import { readRecentCommits } from '@texra/utils/git/repositoryOverview';

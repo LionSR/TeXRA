@@ -9,7 +9,6 @@ import {
   type CliNdjsonProgressRecordWriter,
 } from '@cli/runtime/sessionProgressSubscription';
 import type { CliNdjsonRecord } from '@cli/schemas/cliOutput';
-import { inquiryThreadRow } from '@shared/plugins/externalInquiry';
 import {
   aggregateId as qualifyAggregateId,
   type SessionEventDraft,
@@ -21,6 +20,7 @@ import {
   publishTestRunStart,
   publishTestRows,
 } from '@test/support/sessionTestUtils';
+import { inquiryThreadRow } from '@texra/shared/plugins/externalInquiry';
 
 const runId = 'c11a01' as RunId;
 const childRunId = 'c11c01' as RunId;

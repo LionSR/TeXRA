@@ -46,8 +46,10 @@ import {
  *   plugin with its services erased (`PluginContext` in `processRuntime.ts`),
  *   so no `ProcessServices` arm names one.
  */
-const PLUGIN_ARM_MODULES = /^packages\/harness\/src\/shared\/plugins\//;
-const PLUGIN_ARM_IMPORT = /^@shared\/plugins\//;
+/** The harness's own plugin arms (`goal`) and the app's. */
+const PLUGIN_ARM_MODULES =
+  /^packages\/(?:harness|texra)\/src\/shared\/plugins\//;
+const PLUGIN_ARM_IMPORT = /^@(?:texra\/)?shared\/plugins\//;
 const CORE = /^packages\/harness\/src\/(?:shared|agent)\//;
 const APPEND_PORTS =
   /^@(?:controllers\/session\/Database|shared\/session\/database|agent\/runtime\/SessionEvents)$/;

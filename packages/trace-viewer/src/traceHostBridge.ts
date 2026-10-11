@@ -22,7 +22,7 @@
 import {
   UpMessageSchema,
   type DownMessage,
-} from '@shared/session/sessionFrames';
+} from '@texra/shared/session/sessionFrames';
 import {
   HOST_BRIDGE_API_KEY,
   type HostBridgeApi,

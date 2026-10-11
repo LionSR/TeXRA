@@ -7,7 +7,7 @@ import { app, dialog, shell, type BrowserWindow } from 'electron';
 import { Cause, Effect } from 'effect';
 
 import { INSTRUCTION_ACTION, type InstructionAction } from '@shared/schemas';
-import type { DownMessage } from '@shared/session/sessionFrames';
+import type { DownMessage } from '@texra/shared/session/sessionFrames';
 import {
   ExternalOpenFailed,
   type NotificationFailed,

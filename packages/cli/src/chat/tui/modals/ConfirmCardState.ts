@@ -12,7 +12,7 @@ import {
 import {
   APPROVE_SESSION_ACTION,
   type SurfaceDecision,
-} from '@shared/session/approvalDecision';
+} from '@texra/shared/session/surfaceDecision';
 import { DELEGATION_APPROVAL_COPY } from '@ui/copy/delegationApproval';
 
 const APPROVAL_PULSE_FRAMES = ['●', '○'] as const;

@@ -16,10 +16,10 @@ import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { RouteRetries } from '@agent/runtime';
 import { withLogChannel } from '@logger/effectLog';
 import type { StorageFs } from '@platform/rootedFs';
-import type { HostSnapshot } from '@shared/session/hostSnapshot';
-import type { HostRequest } from '@shared/session/hostRequest';
-import type { HostOutcome } from '@shared/session/sessionFrames';
 import type { UsageLog } from '@shared/usageLog';
+import type { HostSnapshot } from '@texra/shared/session/hostSnapshot';
+import type { HostRequest } from '@texra/shared/session/hostRequest';
+import type { HostOutcome } from '@texra/shared/session/sessionFrames';
 import { polishTextWithAI } from '@texra/agent/runtime/textEnhancement';
 import {
   recordingsDir,

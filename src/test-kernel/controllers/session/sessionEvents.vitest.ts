@@ -85,11 +85,6 @@ import { withProcessServices } from '@platform/processRuntime';
 import { AppState, type StateStore } from '@platform/interfaces';
 import type { ProcessProbe } from '@platform/defaults/nodeProcesses';
 import {
-  DOCUMENTS_ACCEPTED_ARM,
-  documentsAcceptedFact,
-} from '@shared/plugins/documents';
-import { inquiryThreadRow } from '@shared/plugins/externalInquiry';
-import {
   aggregateId as qualifyAggregateId,
   AgentConfigFieldsSchema,
   emptyRunEndOutput,
@@ -117,7 +112,6 @@ import {
 } from '@shared/session/runHistory';
 import type { RunHistoryDraft } from '@shared/session/runStateFold';
 import { ProcessIdentity, SessionEvents } from '@shared/session/sessionEvents';
-import { DownMessageSchema } from '@shared/session/sessionFrames';
 import type { SessionView } from '@shared/session/sessionView';
 import {
   closeSessionOf,
@@ -139,6 +133,12 @@ import '@test/support/sessionGraphTestSetup';
 import { identityReads } from '@test/support/sessionGraphInstall';
 import { REPO_ROOT } from '@test/support/repoScan';
 import { storePluginsLayer } from '@test/support/setupPlatform';
+import {
+  DOCUMENTS_ACCEPTED_ARM,
+  documentsAcceptedFact,
+} from '@texra/shared/plugins/documents';
+import { inquiryThreadRow } from '@texra/shared/plugins/externalInquiry';
+import { DownMessageSchema } from '@texra/shared/session/sessionFrames';
 import { runActionGuard } from '@texra/controllers/session/runActionGuard';
 import type { LeanLanguageServices } from '@texra/tools/lean/leanLanguageServices';
 import { armsOf, announceRunFacts } from '@tools/plugins';

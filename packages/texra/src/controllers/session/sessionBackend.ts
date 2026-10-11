@@ -35,10 +35,13 @@ import {
   type RunId,
   type TranscriptSubscription,
 } from '@shared/schemas';
-import type { HostSnapshot } from '@shared/session/hostSnapshot';
-import type { EventsFrame, Subscribe } from '@shared/session/sessionFrames';
 import { isLiveRun } from '@shared/session/sessionView';
 import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
+import type { HostSnapshot } from '@texra/shared/session/hostSnapshot';
+import type {
+  EventsFrame,
+  Subscribe,
+} from '@texra/shared/session/sessionFrames';
 import { frameSubscription } from '@texra/controllers/session/SessionFramer';
 import type { ToolEditPreview } from '@texra/controllers/server/protocol';
 import type { ProcessServices } from '@texra-ai/harness';

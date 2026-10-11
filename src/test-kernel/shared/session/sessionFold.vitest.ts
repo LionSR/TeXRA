@@ -47,9 +47,12 @@ import {
   loadSurface,
   persistSurface,
   PersistedSurfaceSchema,
-} from '@shared/session/surface';
-import { markShownRunSeen, unseenRuns } from '@shared/session/unseenRuns';
-import { DOCUMENTS_OUTPUT_ARM, documentsOf } from '@shared/plugins/documents';
+} from '@texra/shared/session/surface';
+import { markShownRunSeen, unseenRuns } from '@texra/shared/session/unseenRuns';
+import {
+  DOCUMENTS_OUTPUT_ARM,
+  documentsOf,
+} from '@texra/shared/plugins/documents';
 
 import { createExternalLocation } from '@utils/files/fileLocation';
 

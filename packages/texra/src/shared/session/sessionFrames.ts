@@ -37,9 +37,12 @@ import {
   type FoldInput,
   type TranscriptSubscription,
 } from '@shared/schemas';
+import {
+  OutcomeSchema,
+  RuntimeRequestSchema,
+} from '@shared/session/runtimeRequest';
 import { HostRequestSchema } from './hostRequest';
 import { HostSnapshotSchema, type HostSnapshot } from './hostSnapshot';
-import { OutcomeSchema, RuntimeRequestSchema } from './runtimeRequest';
 import { LaunchPatchSchema } from './surface';
 
 /** The workspace root that keys the layer maps, on every message. */

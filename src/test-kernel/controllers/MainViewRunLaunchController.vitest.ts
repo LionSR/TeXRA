@@ -6,8 +6,6 @@ import { beforeEach, describe, expect, vi } from 'vitest';
 // Local imports
 import { AgentDirectories, AppState } from '@platform/interfaces';
 import type { AgentCatalogServices } from '@platform/processRuntime';
-import type { HostRequest } from '@shared/session/hostRequest';
-import { LaunchSurfaceSchema } from '@shared/session/surface';
 import {
   nodePlatformLayer,
   unusedGlobalStorageFs,
@@ -15,6 +13,8 @@ import {
 import { testHttpClientLayer } from '@test/support/fetchTestUtils';
 import { FakeStateStore } from '@test/support/FakePlatform';
 import { fakeHostAgentDirectories } from '@test/support/setupPlatform';
+import { LaunchSurfaceSchema } from '@texra/shared/session/surface';
+import type { HostRequest } from '@texra/shared/session/hostRequest';
 
 /**
  * A program over the process's global storage view. Nothing under test here

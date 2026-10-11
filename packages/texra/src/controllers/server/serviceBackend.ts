@@ -41,7 +41,7 @@ import { isLiveRun } from '@shared/session/sessionView';
 import type {
   EventsFrame,
   RequestErrorWire,
-} from '@shared/session/sessionFrames';
+} from '@texra/shared/session/sessionFrames';
 import type { SessionBackend } from '@texra/controllers/session/sessionBackend';
 import { WebviewSessions } from '@texra/controllers/session/webviewSessionLayer';
 import { generateRunId } from '@utils/core';

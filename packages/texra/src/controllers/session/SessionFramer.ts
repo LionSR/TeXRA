@@ -35,13 +35,13 @@ import {
   type TranscriptSubscription,
 } from '@shared/schemas';
 import type { SessionInputs } from '@shared/session/sessionInputs';
-import type { HostSnapshot } from '@shared/session/hostSnapshot';
+import type { SessionView } from '@shared/session/sessionView';
+import type { HostSnapshot } from '@texra/shared/session/hostSnapshot';
 import type {
   EventsFrame,
   FoldEvent,
   Subscribe,
-} from '@shared/session/sessionFrames';
-import type { SessionView } from '@shared/session/sessionView';
+} from '@texra/shared/session/sessionFrames';
 
 /** Rows per frame before the window cuts it. */
 const FRAME_ROWS = 256;

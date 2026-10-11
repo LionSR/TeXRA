@@ -60,20 +60,20 @@ import { parseVersionControlDiffFilename } from '@latex/latexdiff/diffFileNameMa
 import { withLogChannel } from '@logger/effectLog';
 import { withSessionFs, WorkspaceFs, type StorageFs } from '@platform/rootedFs';
 import latexPreamble from '@resources/templates/chatExport.tex';
-import type { HostRequest } from '@shared/session/hostRequest';
 import {
   GETTING_STARTED_COMMANDS,
   isMultipleDocumentFileType,
   type RunId,
 } from '@shared/schemas';
-import type {
-  HostOutcome,
-  SurfaceActionMessage,
-} from '@shared/session/sessionFrames';
 import {
   setFirstRunDone,
   setOnboardingDeclined,
 } from '@shared/state/onboardingState';
+import type { HostRequest } from '@texra/shared/session/hostRequest';
+import type {
+  HostOutcome,
+  SurfaceActionMessage,
+} from '@texra/shared/session/sessionFrames';
 import { ExternalOpenFailed } from '@texra/hosts/uiHosts';
 
 import type { ToolEditApprovalController } from '@texra/controllers/approval/ToolEditApprovalController';

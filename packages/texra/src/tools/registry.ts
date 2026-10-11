@@ -16,7 +16,7 @@ import replacementEngine, {
 import {
   DOCUMENTS_ACCEPTED_ARM,
   DOCUMENTS_OUTPUT_ARM,
-} from '@shared/plugins/documents';
+} from '@texra/shared/plugins/documents';
 import {
   claudeAgent,
   codex,

@@ -30,12 +30,12 @@ import { terminalFailurePresented } from '@agent/runtime/terminalResultToast';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { getRunRecords } from '@agent/storage';
 import { isDocumentTaskConfig, RUN_PHASE, type RunId } from '@shared/schemas';
-import type { HostSnapshot } from '@shared/session/hostSnapshot';
+import { isLiveRun, type SessionView } from '@shared/session/sessionView';
+import type { HostSnapshot } from '@texra/shared/session/hostSnapshot';
 import {
   RequestErrorWireSchema,
   type RequestErrorWire,
-} from '@shared/session/sessionFrames';
-import { isLiveRun, type SessionView } from '@shared/session/sessionView';
+} from '@texra/shared/session/sessionFrames';
 import { frameSubscription } from '@texra/controllers/session/SessionFramer';
 import { runEnded } from '@texra/controllers/session/sessionBackend';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';

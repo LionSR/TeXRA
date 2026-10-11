@@ -9,7 +9,7 @@
 import { Effect } from 'effect';
 
 // Local imports
-import { EXTERNAL_INQUIRY_THREAD_ARM } from '@shared/plugins/externalInquiry';
+import { EXTERNAL_INQUIRY_THREAD_ARM } from '@texra/shared/plugins/externalInquiry';
 import {
   ClaudeAgentSessions,
   claudeAgentSessionsLayer,

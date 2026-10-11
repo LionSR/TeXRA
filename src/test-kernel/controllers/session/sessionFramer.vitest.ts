@@ -44,15 +44,6 @@ import {
 import { Database } from '@shared/session/database';
 import { SessionInputs } from '@shared/session/sessionInputs';
 import { ProcessIdentity, SessionEvents } from '@shared/session/sessionEvents';
-import {
-  emptyHostSnapshot,
-  type HostSnapshot,
-} from '@shared/session/hostSnapshot';
-import type {
-  DownMessage,
-  EventsFrame,
-  Subscribe,
-} from '@shared/session/sessionFrames';
 import type { SessionView } from '@shared/session/sessionView';
 import { closeSessionOf } from '@test/support/sessionEnd';
 import {
@@ -65,6 +56,15 @@ import {
 } from '@test/support/setupPlatform';
 import { createTestSession } from '@test/support/sessionTestUtils';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
+import type {
+  DownMessage,
+  EventsFrame,
+  Subscribe,
+} from '@texra/shared/session/sessionFrames';
+import {
+  emptyHostSnapshot,
+  type HostSnapshot,
+} from '@texra/shared/session/hostSnapshot';
 import {
   frameSubscription,
   type FramerSource,

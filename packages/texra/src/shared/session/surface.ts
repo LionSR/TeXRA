@@ -13,7 +13,7 @@
  */
 import { z } from 'zod';
 
-import { DEFAULT_AGENT_MODEL } from '@shared/constants/defaultModels';
+import { DEFAULT_AGENT_MODEL } from '@texra-ai/harness/schemas';
 import {
   InquiryDraftSchema,
   LaunchTargetSchema,
@@ -30,7 +30,7 @@ import {
   type FollowUpHost,
   type SessionView,
   type RunView,
-} from './sessionView';
+} from '@shared/session/sessionView';
 import { markShownRunSeen } from './unseenRuns';
 import type { HostSnapshot } from './hostSnapshot';
 import type { RequestErrorWire } from './sessionFrames';

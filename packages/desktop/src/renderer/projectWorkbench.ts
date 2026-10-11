@@ -4,8 +4,8 @@
 import type { SessionSurfaces } from '@progressView/frontend/sessionSurfaces';
 import type { ProgressApp } from '@progressView/frontend/ProgressApp';
 import { isPackagedAgentSource, type Theme } from '@shared/schemas';
-import type { HostRequest } from '@shared/session/hostRequest';
-import type { HostOutcome } from '@shared/session/sessionFrames';
+import type { HostRequest } from '@texra/shared/session/hostRequest';
+import type { HostOutcome } from '@texra/shared/session/sessionFrames';
 import { postMessage } from '@texra/shared/hostBridge';
 
 import {
