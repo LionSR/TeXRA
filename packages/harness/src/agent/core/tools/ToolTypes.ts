@@ -58,10 +58,6 @@ export interface ToolGuard<T, R = never> {
   readonly cwd?: 'unknown';
 }
 
-/** A host capability a tool needs, named by the plugin that serves it
- *  (`HostCapabilities`). */
-export type HostToolCapability = string;
-
 /**
  * Contract for tool implementations.
  * `defineTool` provides the canonical implementation with Zod validation. Expected
@@ -73,9 +69,12 @@ export interface ITool<E = Error, R = never> {
   readonly definition: ToolDefinition;
   /** Hosts this tool is statically excluded from; an omitted host supports it. */
   readonly unavailableHosts?: readonly SettingHost[];
-  /** What the session's host must serve for this tool to be offered, read
-   *  live each step: a window that attaches mid-run brings it. */
-  readonly hostCapability?: HostToolCapability;
+  /** The host capability (named by the plugin that serves it,
+   *  `HostCapabilities`) the session's host must serve for this tool to be
+   *  offered, read live each step: a window that attaches mid-run brings it. */
+  readonly hostCapability?: string;
+  /** Launches agents' document tasks: its step lists the agents with one. */
+  readonly launchesTasks?: true;
   /**
    * Where its calls run beside their siblings (omitted: `'barrier'`).
    * Declared on the tool, not the YAML-overridable definition, so an agent

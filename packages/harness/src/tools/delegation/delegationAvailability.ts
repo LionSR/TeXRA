@@ -19,6 +19,7 @@ import { Effect } from 'effect';
 // Local imports
 import { modelRefOf } from '@texra-ai/llm';
 import { resolveDelegationScopeAgents } from '@agent/index/agentRegistry';
+import type { StepTools } from '@agent/runtime/loop/step';
 import { withLogChannel } from '@logger/effectLog';
 import {
   modelVerdictsFrom,
@@ -33,12 +34,8 @@ import {
   MODEL_AVAILABILITY_STATUS,
   type AgentDelegationScope,
   type DelegationTargets,
-  type ToolDefinition,
 } from '@shared/schemas';
-import {
-  AGENT_TOOL_NAME,
-  DOCUMENT_TASK_TOOL_NAME,
-} from '@shared/constants/delegationTools';
+import { AGENT_TOOL_NAME } from '@shared/constants/delegationTools';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { unique } from '@utils/core';
 import { readSettingFrom } from '@utils/config/platformSettings';
@@ -58,17 +55,19 @@ const availableModelNames = (inputs: ModelAvailabilityInputs): string[] =>
  * The targets the offered `definitions` can launch, or `undefined` when they
  * hold no delegation tool: the run's pinned delegation scope's agents, or
  * the workspace's visible ones, each marked when it is a document task;
- * only those when `document_task` is offered without `agent`.
+ * only those when a tool that launches tasks is offered without `agent`.
  */
 export const readDelegationTargets = Effect.fn('readDelegationTargets')(
   function* (
-    definitions: readonly ToolDefinition[],
+    { definitions, registry }: Pick<StepTools, 'definitions' | 'registry'>,
     stores: ModelOptionStores,
     scope: AgentDelegationScope | undefined,
   ) {
-    const names = new Set(definitions.map(({ name }) => name));
-    const chats = names.has(AGENT_TOOL_NAME);
-    if (!chats && !names.has(DOCUMENT_TASK_TOOL_NAME)) return undefined;
+    const chats = registry.get(AGENT_TOOL_NAME) !== undefined;
+    const tasks = definitions.some(
+      ({ name }) => registry.get(name)?.launchesTasks,
+    );
+    if (!chats && !tasks) return undefined;
     const entries = yield* resolveDelegationScopeAgents(stores, scope);
     const agents = entries.flatMap(
       ({ name, description, tools: agentTools, task }) =>

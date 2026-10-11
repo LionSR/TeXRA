@@ -383,7 +383,7 @@ const openStep = Effect.fn('Step.open')(function* (
   // The model-dependent text follows the step's model and settings.
   const model = yield* SynchronizedRef.get(run.model);
   const delegation = yield* readDelegationTargets(
-    step.tools.definitions,
+    step.tools,
     run.toolInputs.stores,
     run.delegationAgentScope ?? undefined,
   );
