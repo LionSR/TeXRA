@@ -22,7 +22,6 @@ import {
   Runs,
 } from '@agent/runtime/runRegistry';
 import {
-  deliverLaunchFailure,
   endRunOutsideLifecycle,
   letGoOfClaim,
 } from '@agent/runtime/runLaunchGuard';
@@ -31,6 +30,7 @@ import { getRunRecords } from '@agent/storage/runRecords';
 import {
   commitPart,
   deliverIn,
+  deliverLaunchFailure,
   parentEdgeIn,
   sendToParent,
   settleChildTurn,

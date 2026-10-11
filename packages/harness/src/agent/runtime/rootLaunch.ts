@@ -5,10 +5,8 @@ import { SessionOwner } from '@platform/processRuntime';
 import { Secrets } from '@platform/secrets';
 import {
   APPROVAL_BYPASS_KINDS,
-  NO_APPROVAL_GRANTS,
-} from '@shared/approvalBypassKind';
-import {
   inheritedGrants,
+  NO_APPROVAL_GRANTS,
   type ApprovalPolicyLimit,
 } from '@shared/approvalBypassKind';
 import type { TexraApprovalPolicy } from '@shared/approvalPolicy';

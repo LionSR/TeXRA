@@ -958,7 +958,7 @@ describe('runRegistry', () => {
 
       try {
         // The start row is what lets the stop's typed failure be yielded here:
-        // `finalizeOwnerlessStop` fails for a run that has none, and today the
+        // the ownerless stop's end fails for a run that has none, and today the
         // registry's own runFork drops that failure.
         publishTestRunStart(testDefaultSession(), runId);
         yield* testDefaultSession().log.settled;

@@ -299,8 +299,8 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
       ...(activated.length > 0 && { activated: [...activated] }),
       ...(misses.length > 0 && { memoryMisses: misses }),
     };
-    // The opening (registration, held trace), then the entry once it settled,
-    // its unborn mark gone: a stop lands before the opening or after both.
+    // The opening (registration, held trace), then the entry once it
+    // settled: a stop lands before the opening or after both.
     const rows = [
       appendRow(runId, [{ role: 'user', content }], { input }),
       ...offered,
@@ -310,7 +310,6 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
     yield* cell
       .append(rows, run.entry.opening)
       .pipe(Effect.andThen(run.entry.entered), Effect.uninterruptible);
-    runs.settleBirth(runId);
     run.callbacks.onProgress?.({ kind: 'started' });
     return cell;
   });

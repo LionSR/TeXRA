@@ -165,8 +165,8 @@ export class RunRegistry implements RunsShape {
   private readonly stopping = new Map<RunId, Set<symbol>>();
   /** Children a detach cut before their birth, which has no row to carry
    *  it: added in that detach's afterCommit, read through {@link parentOf}
-   *  (the birth job's, and the unborn edge's), removed once the birth
-   *  settled ({@link settleBirth}) or with the entry. */
+   *  (the birth job's, and the unborn edge's), removed with the entry. A
+   *  marked child is born detached, so once born its rows agree. */
   private readonly unbornDetached = new Set<RunId>();
   /** Steps admitted but not yet started; disposal fails them all at once. */
   private readonly waiting = new Set<Deferred.Deferred<never, Error>>();
@@ -315,12 +315,6 @@ export class RunRegistry implements RunsShape {
       entry?.activation?.launchParent ?? entry?.handle?.launchParent ?? null
     );
   };
-
-  /** The run's entering batch settled into the view, which holds its edge
-   *  from then on (`entered`): the birth job never ends the mark. */
-  settleBirth(runId: RunId): void {
-    this.unbornDetached.delete(runId);
-  }
 
   hasActiveChildren = (parentRunId: RunId): boolean =>
     this.childRunIds(parentRunId).length > 0;
@@ -696,8 +690,21 @@ export class RunRegistry implements RunsShape {
         Effect.andThen(
           Effect.suspend(() =>
             // A reached handle or child driver owns terminal finalization;
-            // only an ownerless stop writes the terminal fact here.
-            stopHere() ? Effect.void : this.finalizeOwnerlessStop(runId),
+            // only an ownerless stop writes the terminal fact here. A run
+            // that already ended keeps its own verdict.
+            stopHere()
+              ? Effect.void
+              : finalizeRun(this.init.session(), {
+                  runId,
+                  outcome: RUN_OUTCOME.CANCELLED,
+                  keepExistingOutcome: true,
+                }).pipe(
+                  Effect.flatMap((ended) =>
+                    ended.ok
+                      ? Effect.void
+                      : Effect.fail(ensureError(ended.error)),
+                  ),
+                ),
           ),
         ),
       );
@@ -822,26 +829,6 @@ export class RunRegistry implements RunsShape {
     visited.add(key);
     activation.interrupt();
     return true;
-  }
-
-  /**
-   * Write the terminal fact for a stop that reached no live target: an
-   * ownerless end. A run that already ended keeps its own verdict; the
-   * checkpoint is preserved, since a cancelled run is exactly the one a
-   * user resumes.
-   */
-  private finalizeOwnerlessStop(runId: RunId): Effect.Effect<void, Error> {
-    return Effect.suspend(() =>
-      finalizeRun(this.init.session(), {
-        runId,
-        outcome: RUN_OUTCOME.CANCELLED,
-        keepExistingOutcome: true,
-      }),
-    ).pipe(
-      Effect.flatMap((ended) =>
-        ended.ok ? Effect.void : Effect.fail(ensureError(ended.error)),
-      ),
-    );
   }
 
   // ---------------------------------------------------------------- detach

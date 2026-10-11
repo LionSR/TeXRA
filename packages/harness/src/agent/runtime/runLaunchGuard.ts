@@ -24,13 +24,7 @@ import type { Append } from '@shared/session/sessionEvents';
 import { aggregateError } from '@utils/core';
 import { ensureError } from '@utils/errors/errorMessage';
 
-import {
-  parentAdmission,
-  sendToParent,
-  wakeParent,
-  warn,
-  type TransactionPart,
-} from './childSettlement';
+import { parentAdmission, warn, type TransactionPart } from './childSettlement';
 import { presentRunFailure } from './terminalResultToast';
 import type { SessionHandle } from './SessionHandle';
 
@@ -85,27 +79,6 @@ export const letGoOfClaim = (
     Effect.catch((error) =>
       warn(undefined, `The claim on ${runId} was not let go.`, error),
     ),
-  );
-
-/**
- * A child launch that failed before its run was born: no row of the child
- * exists to settle on, so its parent hears the failure as input alone, and
- * is woken for it.
- */
-export const deliverLaunchFailure = (
-  session: SessionHandle,
-  child: RunId,
-  text: string,
-): Effect.Effect<void> =>
-  Effect.gen(function* () {
-    if (yield* getRunRecords(session, child).exists()) return;
-    const from = { kind: 'run', runId: child } as const;
-    const item = { text, from, deliveryId: `${child}:launch` };
-    const to = yield* sendToParent(session, item, {}, undefined);
-    if (to !== null) yield* wakeParent(session, { to, item }, undefined);
-  }).pipe(
-    // The launch's own failure stands; this one is said beside it.
-    Effect.catch((e) => warn(undefined, `${child}: not delivered`, e)),
   );
 
 /** A launch that owns its run for the run's whole life. */
@@ -279,9 +252,9 @@ const deliverOne = (
     if (held.length === 0) return Effect.void;
     const ends = parks.at(-1)?.park.ends;
     if (ends !== undefined) yield* session.log.hold(child);
+    const from = { kind: 'run', runId: child } as const;
     const admitted = [];
     for (const { park, text } of held) {
-      const from = { kind: 'run', runId: child } as const;
       const one = yield* parentAdmission(
         session.followUps,
         parent,
@@ -289,8 +262,7 @@ const deliverOne = (
         {},
         undefined,
       );
-      const { sent } = one;
-      if (sent.kind === 'refused' && sent.reason === 'owned_elsewhere')
+      if (one.sent.kind === 'refused' && one.sent.reason === 'owned_elsewhere')
         return Effect.void;
       admitted.push(one);
     }

@@ -31,7 +31,7 @@ import type { FollowUps } from '../FollowUps';
  * detaching stop cut before it was born (marked once that detach commits,
  * before this job runs, and read here through `RunRegistry.parentOf`) is
  * born detached: no parent, and the grants a detach keeps, inherited from
- * that parent. The mark stays until the birth settles (`entered`).
+ * that parent.
  */
 const birthRows = (
   run: Pick<AgentRunShape, 'runId' | 'session' | 'entry'>,
