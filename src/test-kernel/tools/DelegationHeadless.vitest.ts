@@ -14,11 +14,7 @@ import { Runs } from '@agent/runtime/runRegistry';
 import { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { RunHistoryDraft } from '@shared/session/runStateFold';
 import { RUN_OUTCOME, agentMatchesIdentifier } from '@shared/schemas';
-import type {
-  ModelOptionData,
-  RequestDecision,
-  RunId,
-} from '@shared/schemas';
+import type { ModelOptionData, RequestDecision, RunId } from '@shared/schemas';
 import { untrackRun, closeSessionOf } from '@test/support/sessionEnd';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { testRunHandle } from '@test/support/runHandleFixtures';
