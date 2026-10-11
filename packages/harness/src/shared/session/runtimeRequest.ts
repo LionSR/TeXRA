@@ -65,6 +65,12 @@ export const RuntimeRequestSchema = z.discriminatedUnion('kind', [
     ...runScoped,
     handoff: z.string().min(1).nullish(),
   }),
+  /** Switch a live run to `model` from its next model boundary. */
+  z.object({
+    kind: z.literal('run.model'),
+    ...runScoped,
+    model: z.string().min(1),
+  }),
   z.object({
     kind: z.literal('followUp.send'),
     ...runScoped,

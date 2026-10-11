@@ -1,11 +1,11 @@
 /**
- * The embedder's approval handler at work on one session of
- * `@texra-ai/harness`: which requests it is asked, once each, and what is
- * recorded when it does not answer. A request is never left parked on a
- * handler that failed, threw, or went quiet: that is a denial, with the
- * cause logged.
+ * A host attached to one session of `@texra-ai/harness`: its presentation
+ * surface, and its approval handler at work, which requests it is asked
+ * (once each) and what is recorded when it does not answer. A request is
+ * never left parked on a handler that failed, threw, or went quiet: that is
+ * a denial, with the cause logged.
  */
-import { Cause, Deferred, Duration, Effect, Stream } from 'effect';
+import { Cause, Duration, Effect, type Scope, Stream } from 'effect';
 
 import type { SessionHandle as RuntimeSessionHandle } from '@agent/runtime/SessionHandle';
 import { withLogChannel } from '@logger/effectLog';
@@ -13,7 +13,11 @@ import { requestParksItsCaller, type RequestDecision } from '@shared/schemas';
 import { attentionOf } from '@shared/session/sessionView';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
-import type { ApprovalHandler, PendingRequest } from './sessions.js';
+import type {
+  ApprovalHandler,
+  PendingRequest,
+  SessionHost,
+} from './sessions.js';
 
 const CHANNEL = 'agentPackage';
 
@@ -43,16 +47,15 @@ const decisionOf = (
   );
 
 /**
- * Answer the runs' requests of `session` with `approve` until `ended`:
+ * Answer the runs' requests of `session` with `approve` until interrupted:
  * every request a parked run waits on here (the attention rule every host
  * reads), once, through the session's one `request.decide`. A decision the
  * session refuses to record is logged and its request offered again on the
  * next view.
  */
-export function answerRequests(
+function answerRequests(
   session: RuntimeSessionHandle,
   approve: ApprovalHandler,
-  ended: Deferred.Deferred<void>,
 ): Effect.Effect<void> {
   // Keyed by run and request, as the fold keys a pending request.
   const acted = new Set<string>();
@@ -80,7 +83,6 @@ export function answerRequests(
       ),
     );
   return session.view.changes.pipe(
-    Stream.interruptWhen(Deferred.await(ended)),
     Stream.runForEach((view) =>
       Effect.forEach(
         attentionOf(view).requests.filter(
@@ -105,4 +107,25 @@ export function answerRequests(
       ),
     ),
   );
+}
+
+/**
+ * Attach `host` to `session` for the caller's scope: the newest host
+ * presents, and one with `approve` answers the runs' requests until the
+ * scope closes. A host with a handler can answer whatever its surface says.
+ */
+export function attachHost(
+  session: RuntimeSessionHandle,
+  { approve, ...interactions }: SessionHost,
+): Effect.Effect<void, never, Scope.Scope> {
+  return Effect.gen(function* () {
+    yield* Effect.acquireRelease(
+      session.interactions.use({
+        ...interactions,
+        ...(approve && { approvalPromptsUnavailable: false }),
+      }),
+      (detach) => Effect.sync(detach),
+    );
+    if (approve) yield* Effect.forkScoped(answerRequests(session, approve));
+  });
 }

@@ -34,6 +34,7 @@ import type { ToolCatalog } from '@tools/liveTools';
 import type { ToolAvailability } from '@tools/toolAvailabilityService';
 import type { ToolRegistry } from '@tools/toolTable';
 import type { HttpClient } from 'effect/http';
+import type { Sessions } from '../effect/processLayer.js';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 import type { AgentDirectories, AppState } from './interfaces';
@@ -162,7 +163,7 @@ export const holdProcessRoot = (
 /** The runtime a composition root makes over `processLayer`: the process
  *  services, and the `SessionOwner` that opens and closes its sessions. */
 export type ProcessRuntime = ManagedRuntime.ManagedRuntime<
-  ProcessServices | SessionOwner,
+  ProcessServices | SessionOwner | Sessions,
   never
 >;
 

@@ -241,9 +241,19 @@ export interface CurrentValues {
   ) => Stream.Stream<void>;
 }
 
-/** Why a session's root could not be opened: its database would not open,
- *  or the reads the session is built from failed. */
-export type SessionOpenError = DatabaseOpenFailed | DatabaseReadFailed;
+/** A root's session is already open over the other store (persistent or
+ *  in memory), which it keeps: an open asking for the other is refused. */
+export class SessionOptionsConflict extends Data.TaggedError(
+  'SessionOptionsConflict',
+)<{
+  readonly storage: string;
+  readonly message: string;
+}> {}
+
+/** Why a session's root could not be opened: its database or its reads
+ *  failed, or it is open over the other store. */
+export type SessionOpenError =
+  DatabaseOpenFailed | DatabaseReadFailed | SessionOptionsConflict;
 
 export class Database extends Context.Service<
   Database,
@@ -390,30 +400,20 @@ export class Database extends Context.Service<
 >()('@texra/session/Database') {}
 
 /**
- * The process's one handle on the global storage root, built beside
- * `GlobalStorageFs` by the entry that installs the process runtime and held
- * for that runtime's life. Every application record of that root — the
- * settings, the repository settings, the inquiry threads, the update check,
- * the CLI's input history, the desktop's remembered projects — reads and
- * writes through it, so the root's `data_version` poll is forked once per
- * process instead of once per operation, and the connection is neither
- * opened nor torn down on a single-row read. The per-workspace
- * {@link Database} of a session's root is unchanged and unrelated.
- *
- * The shape is that handle's current values and input history, and nothing
- * else: the global root holds no session and no event rows, so its event
- * reads, claims and moved-aside report have no reader here. What does follow this root is a
- * reader of named settings (the tool switches, the plugin install record),
- * which `values.changes` serves already narrowed to them.
+ * The process's one handle on the global storage root, held for the process
+ * runtime's life: every application record of that root (settings, inquiry
+ * threads, the update check, input history, remembered projects) goes
+ * through it, so its `data_version` poll is forked once per process and no
+ * single-row read opens a connection. Its current values and input history
+ * only: the global root holds no session and no event rows.
  */
 export class GlobalDatabase extends Context.Service<
   GlobalDatabase,
   Pick<Context.Service.Shape<typeof Database>, 'values' | 'inputHistory'>
 >()('@texra/session/GlobalDatabase') {}
 
-/** Persistent project connections, retained by project and session scopes.
- *  The last borrower releases the connection; an ephemeral transcript never
- *  substitutes its in-memory database for this persistent application state. */
+/** Persistent project connections, retained by project and session scopes
+ *  until the last borrower releases one (never an ephemeral in-memory one). */
 export class ProjectDatabases extends Context.Service<
   ProjectDatabases,
   RcMap.RcMap<string, Database['Service'], DatabaseOpenFailed>

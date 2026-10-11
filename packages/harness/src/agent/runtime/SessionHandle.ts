@@ -249,11 +249,11 @@ export interface SessionHandleInit {
    * SDK leave it unset: their policy is off (ruling Q2).
    */
   readonly interruptedTasks?: 'offer' | 'retry';
-  /** An ephemeral session opens a throwaway database instead of the
-   *  project's. */
-  readonly transcriptMode?:
-    | { readonly kind: 'persistent' }
-    | { readonly kind: 'ephemeral'; readonly reason: string };
+  /** Absent, the project's database; ephemeral, a throwaway one. */
+  readonly transcriptMode?: {
+    readonly kind: 'ephemeral';
+    readonly reason: string;
+  };
 }
 
 /** The rows that open a request: its `request.opened`, and the

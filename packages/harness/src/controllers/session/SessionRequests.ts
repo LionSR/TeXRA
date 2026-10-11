@@ -68,8 +68,7 @@ export interface SessionRequestsInit {
   readonly local: SubscriptionRef.SubscriptionRef<LocalRuntimeState>;
   readonly plugins: ToolTable;
   readonly globalDatabase: Context.Service.Shape<typeof GlobalDatabase>;
-  /** Whether the session's doors are shut: a cancellation then writes
-   *  nothing. */
+  /** Whether the session's doors are shut (a cancellation writes nothing). */
   readonly closed: () => boolean;
 }
 
@@ -83,24 +82,15 @@ const GATED_ACTIONS: Partial<Record<RuntimeRequest['kind'], RunAction>> = {
 
 /** One session's requests, as every handler below reads them. */
 interface RequestDeps extends SessionRequestsInit {
-  /**
-   * One in-process serial lane per request id. `decide`'s checked append
-   * fences the row across processes, but the row alone: two surfaces of
-   * this process deciding one inquiry would both pass the pending check and
-   * both reach the thread record before either appended, so the loser's
-   * verdict could stand over an answer already recorded and delivered. The
-   * lane makes the pending check, the inquiry record and the append one
-   * operation per request.
-   */
+  /** One in-process lane per request id, making the pending check, the
+   *  inquiry record and the append one operation: `decide`'s checked append
+   *  fences only the row, so two surfaces here could both record a verdict. */
   readonly decisionLanes: Map<string, PerKeyLane>;
   readonly asks: Pick<SessionRequests, 'ask' | 'decide' | 'decision'>;
 }
 
-/**
- * `write` under the run's claim: as is when this process holds the run,
- * else taken and given back around it, so a later resume can still take
- * the run.
- */
+/** `write` under the run's claim: as is when this process holds the run,
+ *  else taken and given back around it (a later resume can still take it). */
 const withRunClaim = <A, R>(
   deps: RequestDeps,
   runId: RunId,
@@ -285,22 +275,27 @@ const decideRequest = (
  *  `/compact` is answered once its row commits, never before. */
 const viaControls = (
   deps: RequestDeps,
-  req: Extract<RuntimeRequest, { kind: 'run.compact' | 'run.reset' }>,
+  req: Extract<
+    RuntimeRequest,
+    { kind: `run.${'compact' | 'reset' | 'model'}` }
+  >,
 ): Effect.Effect<Outcome, RequestError> => {
   const { runId } = req;
   const noun = runNoun(deps.session(), runId);
   const unavailable = (reason: string) => new Unavailable({ runId, reason });
   const controls = deps.session().runs.get(runId)?.controls;
-  const missing =
-    req.kind === 'run.reset'
-      ? `Resume the ${noun} to reset it.`
-      : `This ${noun} has no conversation to compact.`;
-  if (controls === undefined) return Effect.fail(unavailable(missing));
-  return (
-    req.kind === 'run.reset'
-      ? controls.editView(req.handoff ?? null)
-      : controls.requestImmediateCompaction()
-  ).pipe(
+  if (controls === undefined)
+    return Effect.fail(
+      unavailable(
+        req.kind === 'run.compact'
+          ? `This ${noun} has no conversation to compact.`
+          : `Resume the ${noun} to ${req.kind === 'run.reset' ? 'reset it' : 'switch its model'}.`,
+      ),
+    );
+  let action = controls.requestImmediateCompaction();
+  if (req.kind === 'run.reset') action = controls.editView(req.handoff ?? null);
+  if (req.kind === 'run.model') action = controls.switchModel(req.model);
+  return action.pipe(
     Effect.mapError((error) => unavailable(error.message)),
     Effect.as(done),
   );
@@ -406,6 +401,7 @@ const handle = (
       return deleteAdmittedRun(deps, req.runId, admitted, 'single');
     case 'run.compact':
     case 'run.reset':
+    case 'run.model':
       return viaControls(deps, req);
     case 'run.rename':
       return rename(deps, req, heldHere);

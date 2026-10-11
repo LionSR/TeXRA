@@ -85,7 +85,7 @@ vi.mock('@agent/index/agentRegistry', async (importActual) => ({
   }),
 }));
 
-// The package composes its process with `processLayer`. The owner it serves
+// The package composes its process over `ownerProcessLayer`. The owner it serves
 // is stood in for by a map keyed by storage root, as the runtime's session
 // map keys its entries: the package must resolve every run through it and
 // never build a session of its own. The other process services are the
@@ -114,7 +114,21 @@ vi.mock('@controllers/session/sessionLayer', async () => {
             cause instanceof Error ? cause : new Error(String(cause)),
         }).pipe(Effect.uninterruptible),
     };
-    readonly interactions: { readonly approvalPromptsUnavailable?: boolean };
+    /** The hosts attached, newest last: the newest says whether a run
+     *  here can ask. */
+    readonly hosts: { readonly approvalPromptsUnavailable?: boolean }[];
+    readonly interactions = {
+      get approvalPromptsUnavailable(): boolean {
+        return false;
+      },
+      use: (host: { readonly approvalPromptsUnavailable?: boolean }) =>
+        Effect.sync(() => {
+          this.hosts.push(host);
+          return () => {
+            this.hosts.splice(this.hosts.indexOf(host), 1);
+          };
+        }),
+    };
     readonly requests = { request: mocks.decide };
     /** The session's view level: the pre-launch session, no run yet. */
     readonly viewRef = Effect.runSync(
@@ -145,6 +159,8 @@ vi.mock('@controllers/session/sessionLayer', async () => {
         Effect.sync(() => {
           mocks.setTranscriptSubscriptions(port, set);
         }),
+      /** A reader's fold inputs: none here. */
+      inputs: () => Stream.empty,
     };
 
     readonly roots: { readonly storage: string };
@@ -153,7 +169,11 @@ vi.mock('@controllers/session/sessionLayer', async () => {
       mocks.sessionInits.push(init);
       mocks.sessionView = this.viewRef;
       this.roots = init.roots;
-      this.interactions = init.interactions ?? {};
+      this.hosts = [init.interactions ?? {}];
+      const hosts = this.hosts;
+      Object.defineProperty(this.interactions, 'approvalPromptsUnavailable', {
+        get: () => hosts.at(-1)?.approvalPromptsUnavailable === true,
+      });
     }
   }
   const sessions = new Map<string, FakeSession>();
@@ -180,7 +200,7 @@ vi.mock('@controllers/session/sessionLayer', async () => {
     ),
   };
   return {
-    processLayer: (options: unknown) => {
+    ownerProcessLayer: (options: unknown) => {
       mocks.processLayer(options);
       return Layer.effectContext(
         Effect.map(testRuntime().contextEffect, (context) =>
@@ -327,7 +347,7 @@ describe('agent package sessions', () => {
         });
         yield* Effect.gen(function* () {
           const sessions = yield* Sessions;
-          const session = yield* sessions.open();
+          const session = yield* sessions.open(PLATFORM.roots);
           const admission = yield* Effect.forkChild(
             session.start({
               agent: 'assistant',
@@ -365,7 +385,8 @@ describe('agent package sessions', () => {
         Deferred.succeed(decided, request).pipe(Effect.as({ kind: 'done' })),
       );
       const sessions = yield* Sessions;
-      yield* sessions.open(undefined, {
+      const session = yield* sessions.open(PLATFORM.roots);
+      yield* session.attach({
         approve: () => {
           throw new Error('handler down');
         },
@@ -402,7 +423,9 @@ describe('agent package sessions', () => {
   it.live("serves the embedder's tool-missing handler", () =>
     Effect.gen(function* () {
       const openOnce = (platform: AgentPlatform) =>
-        Effect.flatMap(Sessions, (sessions) => sessions.open()).pipe(
+        Effect.flatMap(Sessions, (sessions) =>
+          sessions.open(PLATFORM.roots),
+        ).pipe(
           Effect.scoped,
           Effect.provide(Sessions.layer({ platform, plugins: PLUGINS })),
         );
@@ -426,12 +449,14 @@ describe('agent package sessions', () => {
 
         const program = Effect.gen(function* () {
           const sessions = yield* Sessions;
-          const session = yield* sessions.open();
+          const session = yield* sessions.open(PLATFORM.roots);
           yield* session.start({
             agent: 'assistant',
             instruction: 'Test instruction',
           });
-          yield* Effect.scoped(session.subscribe(interest));
+          yield* Stream.runDrain(
+            session.view.watch(interest, { cursor: 0 as never, debug: false }),
+          );
         }).pipe(
           Effect.scoped,
           Effect.provide(
@@ -476,7 +501,7 @@ describe('agent package sessions', () => {
 
         yield* Effect.gen(function* () {
           const sessions = yield* Sessions;
-          const session = yield* sessions.open();
+          const session = yield* sessions.open(PLATFORM.roots);
           const run = yield* session.start({
             agent: 'assistant',
             instruction: 'Test instruction',

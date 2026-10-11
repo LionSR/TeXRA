@@ -27,7 +27,7 @@ import type { ProcessServices } from '@platform/processRuntime';
 import { aggregateId as qualifyAggregateId, type RunId } from '@shared/schemas';
 import { descendantRuns } from '@shared/session/sessionView';
 
-import { RunFailure } from './errors.js';
+import { RunFailure, TraceUnavailable } from './errors.js';
 import type { Run } from './sessions.js';
 
 /** A run that returned without ever publishing its stream: the launcher's
@@ -57,7 +57,7 @@ interface TraceHandover {
   ) => Effect.Effect<void>;
   /** The reader's stream: running it once is the contract, and ending it
    *  detaches the trace while the run continues. */
-  readonly events: Stream.Stream<AgentEvent, RunFailure>;
+  readonly events: Stream.Stream<AgentEvent, RunFailure | TraceUnavailable>;
 }
 
 /**
@@ -71,6 +71,7 @@ const traceHandover = (runId: RunId): Effect.Effect<TraceHandover> =>
     const trace = yield* Queue.unbounded<AgentEvent, RunFailure | Cause.Done>();
     let tapping = true;
     let reading = false;
+    let settledUnread = false;
     let buffered = 0;
     /** Stop taking the run's trace events: the reader's close does it while
      *  the run continues, and the run's settlement does it for a reader that
@@ -90,6 +91,7 @@ const traceHandover = (runId: RunId): Effect.Effect<TraceHandover> =>
       settle: (exit) =>
         Effect.gen(function* () {
           release();
+          settledUnread = !reading;
           if (buffered > TRACE_HANDOVER_EVENTS) {
             yield* Effect.logWarning(
               `Run ${runId} buffered ${TRACE_HANDOVER_EVENTS} trace events with no reader attached; its trace was detached. Iterate the run's events in the turn that starts it, or await only its result.`,
@@ -101,9 +103,23 @@ const traceHandover = (runId: RunId): Effect.Effect<TraceHandover> =>
           else yield* Queue.end(trace);
         }),
       events: Stream.unwrap(
-        Effect.sync(() => {
+        Effect.suspend(() => {
+          // A reader past the buffer, or after an unread settlement, has no
+          // trace left to read: it hears why rather than an empty stream.
+          let lost: TraceUnavailable['reason'] | null = null;
+          if (settledUnread) lost = 'ended';
+          if (buffered > TRACE_HANDOVER_EVENTS) lost = 'truncated';
           reading = true;
-          return Stream.fromQueue(trace);
+          if (lost === null) return Effect.succeed(Stream.fromQueue(trace));
+          const message = `Run ${runId}'s trace is ${lost === 'ended' ? 'gone: the run settled with no reader attached' : 'detached: it passed the handover buffer before a reader attached'}.`;
+          return Effect.logWarning(message).pipe(
+            withLogChannel(CHANNEL),
+            Effect.andThen(
+              Effect.fail(
+                new TraceUnavailable({ runId, reason: lost, message }),
+              ),
+            ),
+          );
         }),
       ).pipe(Stream.ensuring(Effect.sync(release))),
     };
@@ -210,9 +226,8 @@ export function handOver(
         );
         // The transcript tier folds only for subscribed aggregates, on a
         // port of this run's own: its stream now, its descendants as the
-        // view gains them. The port is never cleared, by choice: the run's
-        // rows stay resident for the life of the package session, as a
-        // TUI's do.
+        // view gains them, cleared when the drain ends so a long-lived
+        // session does not keep every run's rows resident.
         const port = `sdk/${runId}`;
         let subscribed = '';
         const interest = (ids: readonly RunId[]): Effect.Effect<void> =>
@@ -240,7 +255,7 @@ export function handOver(
                 interest(descendantRuns(level, runId, { includeRoot: true })),
               ),
             ),
-          ),
+          ).pipe(Effect.ensuring(session.view.subscribe(port, []))),
           { startImmediately: true },
         );
         spawned.push(drain);
