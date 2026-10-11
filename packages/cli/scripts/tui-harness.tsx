@@ -404,28 +404,27 @@ function session() {
 }
 
 /**
- * Write fixture rows the way the session does: a row no run's state folds
- * as one transaction, a `run.activate` as its run's opening, and a row a
- * run's state folds through that run's cell (`RunHistory.appendIn`).
+ * Write fixture rows the way the session does, one at a time in call order:
+ * a row no run's state folds as a transaction, a `run.activate` as its run's
+ * opening, a fold-read row the fixtures seed through its run's cell
+ * (`RunHistory.appendIn`). Any other row has no seeding path and fails loudly.
  */
 function publish(...drafts: SessionEventDraft[]): void {
   const { log, runHistory } = session();
-  const unfolded = drafts.filter(isUnfolded);
-  const folded = drafts.filter(isCellRow);
-  harnessRuntime.runFork(
-    Effect.gen(function* () {
-      if (unfolded.length > 0) yield* log.transact(unfolded);
-      for (const draft of drafts) {
-        const target = aggregateTarget(draft.aggregateId);
-        if (draft.type === 'run.activate' && target.kind === 'run')
-          yield* runHistory.open(target.id, {
-            activation: () => Effect.succeed([draft]),
-          });
-      }
-      if (folded.length > 0)
-        yield* log.transact((tx) => runHistory.appendIn(tx.append, folded));
-    }),
-  );
+  const seed = (draft: SessionEventDraft): Effect.Effect<unknown, unknown> => {
+    if (isUnfolded(draft)) return log.transact([draft]);
+    if (isCellRow(draft))
+      return log.transact((tx) => runHistory.appendIn(tx.append, [draft]));
+    const target = aggregateTarget(draft.aggregateId);
+    if (draft.type === 'run.activate' && target.kind === 'run')
+      return runHistory.open(target.id, {
+        activation: () => Effect.succeed([draft]),
+      });
+    return Effect.die(
+      new Error(`tui-harness: no seeding path for a ${draft.type} row`),
+    );
+  };
+  harnessRuntime.runFork(Effect.forEach(drafts, seed, { discard: true }));
 }
 
 /** The run rows the fixtures seed that a run's state folds. */
