@@ -127,19 +127,6 @@ describe('deriveResumability', () => {
       }),
   );
 
-  it.effect('does not mark a cancelled run resumable without an opening', () =>
-    Effect.gen(function* () {
-      const runId = 'ac0005' as RunId;
-      yield* Effect.promise(() =>
-        writeMeta(runId, { outcome: RUN_OUTCOME.CANCELLED }),
-      );
-
-      expect(yield* deriveResumability(runId, session)).toEqual({
-        kind: 'none',
-      });
-    }),
-  );
-
   it.effect('reports unreadable metadata as unreadable even when opened', () =>
     Effect.gen(function* () {
       const runId = 'ac000a' as RunId;

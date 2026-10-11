@@ -21,7 +21,6 @@ import * as NodePath from '@effect/platform-node/NodePath';
 import { ConfigProvider, Effect, Layer, RcMap } from 'effect';
 import { afterEach, beforeEach } from 'vitest';
 
-import { AgentEngine } from '@agent/runtime/AgentEngine';
 import { ModelRetryGate } from '@agent/runtime/ModelRetryGate';
 import { RouteRetries } from '@agent/runtime/run/invocation';
 import type { ModelOptionStores } from '@model/computeModelOptions';
@@ -337,15 +336,6 @@ export async function installFakeHost(host: FakeHost): Promise<void> {
     ConfigProvider.layer(ConfigProvider.fromEnvRecord(harnessEnv)),
     // The process's one route retry gate, as `processLayer` serves it.
     Layer.effect(RouteRetries, ModelRetryGate.make),
-    // A wake resumes as in production. The module is read per call, so a
-    // suite's own mock or spy of it is the resume the wake reaches.
-    Layer.mock(AgentEngine, {
-      resumeRun: (runId, options) =>
-        Effect.flatMap(
-          Effect.promise(() => import('@agent/runtime/resumeRun')),
-          (resume) => resume.resumeRun(runId, options),
-        ),
-    }),
     // An empty tool table (the real one loads every tool), with goal mode's
     // continuation (and its switch) and the row kinds TeXRA's plugins own: a
     // suite that resolves a run's tools runs on the session graph's runtime

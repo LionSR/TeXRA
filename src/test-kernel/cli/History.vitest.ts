@@ -367,14 +367,14 @@ describe('CLI history runtime', () => {
 
   it('projects the history-detail NDJSON status onto the frozen vocabulary', async () => {
     await publishRunFacts('c1c1c1' as RunId, {
-      outcome: RUN_OUTCOME.CANCELLED,
+      outcome: RUN_OUTCOME.FAILED,
     });
 
     const details = await historyDetails('c1c1c1' as RunId);
-    expect(details?.status).toBe('cancelled');
+    expect(details?.status).toBe('failed');
     expect(cliHistoryDetailNdjsonRecord(details!)).toMatchObject({
       kind: 'history-detail',
-      detail: { id: 'c1c1c1', status: 'interrupted' },
+      detail: { id: 'c1c1c1', status: 'error' },
     });
   });
 

@@ -26,12 +26,12 @@ import { ensureError } from '@utils/errors/errorMessage';
 
 import {
   parentAdmission,
+  sendToParent,
   wakeParent,
   warn,
   type TransactionPart,
 } from './childSettlement';
 import { presentRunFailure } from './terminalResultToast';
-import type { RunParent } from './RunHandle';
 import type { SessionHandle } from './SessionHandle';
 
 /**
@@ -94,18 +94,15 @@ export const letGoOfClaim = (
  */
 export const deliverLaunchFailure = (
   session: SessionHandle,
-  parent: RunParent,
   child: RunId,
   text: string,
 ): Effect.Effect<void> =>
   Effect.gen(function* () {
-    const to = parent.current;
-    if (to === null || (yield* getRunRecords(session, child).exists())) return;
+    if (yield* getRunRecords(session, child).exists()) return;
     const from = { kind: 'run', runId: child } as const;
     const item = { text, from, deliveryId: `${child}:launch` };
-    const delivery = { to, item };
-    yield* session.followUps.send(to, delivery.item);
-    yield* wakeParent(session, delivery, undefined);
+    const to = yield* sendToParent(session, item, {}, undefined);
+    if (to !== null) yield* wakeParent(session, { to, item }, undefined);
   }).pipe(
     // The launch's own failure stands; this one is said beside it.
     Effect.catch((e) => warn(undefined, `${child}: not delivered`, e)),

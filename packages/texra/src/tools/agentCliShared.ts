@@ -8,7 +8,6 @@ import { Effect, type Context } from 'effect';
 import { ToolContext, type ToolContextShape } from '@texra-ai/harness';
 import { requireRun, type ToolRun } from '@texra-ai/harness/plugins';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import type { RunHandle } from '@agent/runtime/RunHandle';
 import type { Runs } from '@agent/runtime/runRegistry';
 import type {
   ChildRunPort,
@@ -60,10 +59,10 @@ interface AgentCliResumeLabels {
 function requireCallerOwnership(
   id: string,
   callerRunId: RunId | undefined,
-  handle: RunHandle | undefined,
+  parent: RunId | null | undefined,
   labels: AgentCliResumeLabels,
 ): Effect.Effect<void, ToolError> {
-  if (!callerRunId || !handle || handle.isOwnedBy(callerRunId)) {
+  if (!callerRunId || parent === undefined || parent === callerRunId) {
     return Effect.void;
   }
   return Effect.fail(
@@ -92,7 +91,7 @@ const queueAgentCliFollowUp = Effect.fn('agentCliShared.queueAgentCliFollowUp')(
     yield* requireCallerOwnership(
       id,
       callerRunId,
-      registry.getHandle(stored),
+      registry.liveParent(stored),
       labels,
     );
 
@@ -378,7 +377,7 @@ export function dispatchAgentCliTool<R = never, S = never>(params: {
         yield* requireCallerOwnership(
           sourceId,
           callerRunId,
-          registry.getHandle(registry.lookup(sourceId)),
+          registry.liveParent(registry.lookup(sourceId)),
           labels,
         );
       }

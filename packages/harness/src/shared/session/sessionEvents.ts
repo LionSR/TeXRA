@@ -25,7 +25,7 @@ import type {
   DatabaseWriteFailed,
   DeletionMode,
 } from './database';
-import type { RunInputDraft, RunStateRowType } from './runStateFold';
+import type { RunStateRowType } from './runStateFold';
 
 /** One piece of work a run's rows left open (`SessionEvents.openWork`). */
 export interface OpenWork {
@@ -94,8 +94,9 @@ export interface JobOptions {
  * transaction, never runs it on an attempt that may roll back.
  */
 export interface CoWrite {
-  /** Rows no run's state folds: a run's input and its turns' companions. */
-  readonly rows: readonly RunInputDraft[];
+  /** Rows no run's state folds: a run's input, its turns' companions, and
+   *  the trace an opening carries. */
+  readonly rows: readonly UnfoldedDraft[];
   readonly committed: Effect.Effect<void>;
 }
 

@@ -17,6 +17,8 @@ All notable changes to this project will be documented in this file.
   carries it. A parent whose subagent failed that way still receives the
   failure as a follow-up. A resume that fails before it reopens the task
   leaves the task as it was, instead of marking it failed.
+- **`ProcessServices` no longer includes `AgentEngine`.** An SDK host that
+  builds its own layer over `ProcessServices` no longer provides it.
 - **Plugin tools: a narrower run, and their own services.** A plugin's
   tool reads the run its call works for from `ToolContext`, with
   `requireRun`, `callerRun` and the `ToolRun` type from

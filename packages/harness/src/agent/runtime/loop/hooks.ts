@@ -249,9 +249,9 @@ const hooksAt = Effect.fn('Hooks.at')(function* (
 /** The root of `run`'s parent chain: the session its hooks see. */
 const rootOf = (run: AgentRunShape) => {
   let root = run.runId;
-  for (let up = run.session.runs.getHandle(root)?.parent; up != null;) {
+  for (let up = run.session.runs.parentOf(root); up !== null;) {
     root = up;
-    up = run.session.runs.getHandle(root)?.parent;
+    up = run.session.runs.parentOf(root);
   }
   return root;
 };

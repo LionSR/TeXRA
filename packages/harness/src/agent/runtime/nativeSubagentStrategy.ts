@@ -7,11 +7,10 @@
 import { Effect } from 'effect';
 
 import { type RunEndResult } from '@agent/runtime/RunEndResult';
-import { AgentEngine } from '@agent/runtime/AgentEngine';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { ExecuteAgentOptions } from '@agent/runtime/executeAgent';
 import type { RegisterRunOptions } from '@agent/storage/runLifecycle';
-import type { AgentRunServices } from '@agent/runtime/runRegistry';
+import { Runs, type AgentRunServices } from '@agent/runtime/runRegistry';
 import type { ChildRunStrategy } from '@agent/runtime/childRunLoop';
 import type { PreparedAgentDefinition } from '@agent/runtime/AgentLaunchContext';
 import { normalizeProviderError } from '@common/errors/sdkError/providerErrorFormat';
@@ -142,7 +141,7 @@ export function createNativeSubagentStrategy(
     launch: (ports, _signal, turns) =>
       runNative(
         Effect.gen(function* () {
-          const engine = yield* AgentEngine;
+          const { programs } = yield* Runs;
           const executeOptions: Omit<ExecuteAgentOptions, 'registration'> = {
             ...params.resume?.options,
             session: params.session,
@@ -168,11 +167,11 @@ export function createNativeSubagentStrategy(
             },
           };
           if (params.resume)
-            return yield* engine.resumeToolUseFromResumeData(
+            return yield* programs.resumeTurn(
               params.resume.identity,
               executeOptions,
             );
-          const turn = yield* engine.executeAgent(
+          const turn = yield* programs.executeAgent(
             params.definition,
             params.runId,
             {

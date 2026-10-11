@@ -131,13 +131,16 @@ export class Inbox {
 
   /** {@link send} for a producer with no fiber (a child's progress notice):
    *  enqueued on the publisher now, so it commits in call order ahead of
-   *  the turn's result; a failure is logged. */
-  sendDetached(runId: RunId, item: InboxItem): void {
+   *  the turn's result; `to` is read in that job (none: nothing queued). A
+   *  failure is logged. */
+  sendDetached(to: Effect.Effect<RunId | null, Error>, item: InboxItem): void {
     if (this.disposed) return;
     this.port.detach((append) =>
-      this.admit(runId, item, {}, append).pipe(
+      Effect.flatMap(to, (runId) =>
+        runId === null ? Effect.void : this.admit(runId, item, {}, append),
+      ).pipe(
         Effect.catch((error) =>
-          Effect.logWarning(`Follow-up for run ${runId} was not queued`).pipe(
+          Effect.logWarning(`A follow-up was not queued`).pipe(
             Effect.annotateLogs({ data: error }),
             withLogChannel(CHANNEL),
           ),

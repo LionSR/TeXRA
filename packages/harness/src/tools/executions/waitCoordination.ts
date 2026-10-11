@@ -34,6 +34,6 @@ export function shouldSkipWait(session: SessionHandle, runId: RunId): boolean {
   return (
     status === RUN_PHASE.WAITING &&
     handle.identity.kind === 'agent' &&
-    handle.parent !== null
+    session.runs.parentOf(runId) !== null
   );
 }

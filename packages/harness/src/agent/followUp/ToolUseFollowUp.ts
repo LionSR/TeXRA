@@ -2,7 +2,6 @@ import { Cause, Effect, Fiber } from 'effect';
 /** Tool-use follow-up routing and continuation ownership. */
 
 import { runRefusal } from '@agent/runtime/runClassification';
-import { AgentEngine } from '@agent/runtime/AgentEngine';
 import type { ResumeRunResult } from '@agent/runtime/resumeRun';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { presentRunFailure } from '@agent/runtime/terminalResultToast';
@@ -111,9 +110,9 @@ const RESUME_REFUSED: ResumeRunResult = { failed: 'not_resumable' };
  * The resume every automatic wake and every host's Resume takes: the one
  * resume (`resumeRun`) on the session that holds the run, started on the fork
  * the session's launches run on, so the attempt belongs to the session and
- * outlives a caller that stops waiting. It reaches that resume through
- * {@link AgentEngine}, because a resumed run's child loop wakes its parent
- * through here in turn.
+ * outlives a caller that stops waiting. It reaches that resume through the
+ * session's run programs (`RunRegistryInit.programs`), because a resumed
+ * run's child loop wakes its parent through here in turn.
  *
  * What the run did not take is told to the user here, once: a refusal by its
  * reason, a fault as a failure unless the session's terminal-result presenter
@@ -133,36 +132,36 @@ export function resumeOnSession(
       runMissing ||= session.view.run(runId) === undefined;
       return runMissing;
     };
-    return Effect.flatMap(AgentEngine, (engine) =>
-      engine.resumeRun(runId, { session, isCancellationRequested }),
-    ).pipe(
-      Effect.tap((result) =>
-        'failed' in result && !isCancellationRequested()
-          ? session.interactions.emit(
-              'requestShowInstruction',
-              {
-                key: 'resumeRefused',
-                message: describeFollowUpFailure(result.failed),
-                showSuppress: false,
-              },
-              { replayWhenAttached: true },
-            )
-          : Effect.void,
-      ),
-      Effect.catchCause((cause) => {
-        if (Cause.hasInterruptsOnly(cause) || isCancellationRequested())
-          return Effect.succeed(RESUME_REFUSED);
-        const error = Cause.squash(cause);
-        return Effect.logError(`Failed to resume run ${runId}`).pipe(
-          Effect.annotateLogs({ data: error }),
-          withLogChannel(CHANNEL),
-          Effect.andThen(
-            presentRunFailure(session.interactions, error, 'Resume failed: '),
-          ),
-          Effect.as(RESUME_REFUSED),
-        );
-      }),
-    );
+    return session.runs.programs
+      .resume(runId, { session, isCancellationRequested })
+      .pipe(
+        Effect.tap((result) =>
+          'failed' in result && !isCancellationRequested()
+            ? session.interactions.emit(
+                'requestShowInstruction',
+                {
+                  key: 'resumeRefused',
+                  message: describeFollowUpFailure(result.failed),
+                  showSuppress: false,
+                },
+                { replayWhenAttached: true },
+              )
+            : Effect.void,
+        ),
+        Effect.catchCause((cause) => {
+          if (Cause.hasInterruptsOnly(cause) || isCancellationRequested())
+            return Effect.succeed(RESUME_REFUSED);
+          const error = Cause.squash(cause);
+          return Effect.logError(`Failed to resume run ${runId}`).pipe(
+            Effect.annotateLogs({ data: error }),
+            withLogChannel(CHANNEL),
+            Effect.andThen(
+              presentRunFailure(session.interactions, error, 'Resume failed: '),
+            ),
+            Effect.as(RESUME_REFUSED),
+          );
+        }),
+      );
   });
   return Effect.flatMap(session.runs.fork(attempt), Fiber.join);
 }

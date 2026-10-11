@@ -14,6 +14,7 @@ import type {
   ChildRunPorts,
   ChildRunStrategy,
 } from '@agent/runtime/childRunLoop';
+import type { RunHandle } from '@agent/runtime/RunHandle';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { RunId } from '@shared/schemas';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
@@ -41,11 +42,13 @@ vi.mock('@agent/followUp/ToolUseFollowUp', () => ({
 // The session-keyed registry resolves live handles through its session's
 // RunRegistry. Tests stage a handle here for the lookups they exercise;
 // unset slots miss, like an untracked run.
-const sessionHandles: { byRunId?: unknown } = {};
+const sessionHandles: { byRunId?: RunHandle } = {};
 const testSession = {
   followUps: { acquire: () => ({ enqueue: vi.fn() }) },
   runs: {
     getHandle: () => sessionHandles.byRunId,
+    // A staged handle's edge is the one its launch named.
+    parentOf: () => sessionHandles.byRunId?.launchParent ?? null,
   },
 } as unknown as SessionHandle;
 const ClaudeAgentSessions = new AgentCliSessionRegistry(

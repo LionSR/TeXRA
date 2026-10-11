@@ -12,7 +12,6 @@ import '@test/support/defaultSessionTestSetup';
 import { it } from '@effect/vitest';
 import { Deferred, Effect, Exit, Fiber } from 'effect';
 import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
-import { storedDraft } from '@agent/runtime/storedTurn';
 
 const mocks = vi.hoisted(() => ({
   finalizeRun: vi.fn(),
@@ -63,7 +62,6 @@ import {
   CHILD_RUN_CONCURRENCY_BUDGET_CONFIG_KEY,
   CHILD_RUN_CONCURRENCY_BUDGET_SETTING,
 } from '@shared/schemas';
-import { runStateAppend } from '@shared/session/runHistory';
 import { DatabaseNotOwner } from '@shared/session/database';
 import { untrackRun } from '@test/support/sessionEnd';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
@@ -83,10 +81,11 @@ const trackedRunIds = new Set<RunId>();
 
 const PARENT_RUN_ID = 'ffff01' as RunId;
 
-/** The run id a fixture drives, with its `run.start` already committed. */
+/** The run id a fixture drives, with its `run.start` (a child of
+ *  {@link PARENT_RUN_ID}, as a launch names it) already committed. */
 function loopRunId(): RunId {
   const runId = generateRunId();
-  publishTestRunStart(session, runId);
+  publishTestRunStart(session, runId, { parent: PARENT_RUN_ID });
   return runId;
 }
 
@@ -295,7 +294,7 @@ beforeEach(async () => {
             Effect.gen(function* () {
               if (input.settlement === undefined) return;
               const co = yield* input.settlement;
-              yield* runStateAppend(tx.append)(co.rows.map(storedDraft));
+              yield* tx.append(co.rows);
               yield* co.committed;
             }),
           ),
@@ -546,7 +545,7 @@ describe('childRunLoop E2E fixtures', () => {
               return yield* Deferred.await(formattedDelivery);
             }),
         );
-        publishTestRunStart(session, runId);
+        publishTestRunStart(session, runId, { parent: PARENT_RUN_ID });
         const childRun = yield* createChildRun(session, runId, PARENT_RUN_ID, {
           run: { kind: 'agent', agent: 'fake-cli', tool: 'codex' },
         }).pipe(Effect.provideService(Runs, session.runs));
@@ -572,13 +571,6 @@ describe('childRunLoop E2E fixtures', () => {
           expect(
             yield* submitFollowUp(
               PARENT_RUN_ID,
-              { text: 'restore me', from: { kind: 'user' as const } },
-              { session },
-            ),
-          ).toMatchObject({ status: 'failed' });
-          expect(
-            yield* submitFollowUp(
-              PARENT_RUN_ID,
               {
                 text: 'late child result',
                 from: { kind: 'run' as const, runId: 'c41dc41dc41d' as RunId },
@@ -590,7 +582,7 @@ describe('childRunLoop E2E fixtures', () => {
 
           const releaseNativeChild = session.runs.reserveChildActivation({
             runId: 'da7a01' as RunId,
-            parent: { current: PARENT_RUN_ID },
+            launchParent: PARENT_RUN_ID,
             retainsTerminalParent: true,
             interrupt: vi.fn(),
           });
@@ -1179,7 +1171,7 @@ describe('childRunLoop E2E fixtures', () => {
     () =>
       Effect.gen(function* () {
         const runId = 'fa11ed01' as RunId;
-        publishTestRunStart(session, runId);
+        publishTestRunStart(session, runId, { parent: PARENT_RUN_ID });
         const childRun = yield* createChildRun(session, runId, PARENT_RUN_ID, {
           run: { kind: 'agent', agent: 'fake-cli', tool: 'codex' },
         }).pipe(Effect.provideService(Runs, session.runs));

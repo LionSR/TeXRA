@@ -27,7 +27,6 @@ import {
 import { FetchHttpClient, HttpClient } from 'effect/http';
 
 import { Inbox } from '@agent/followUp/Inbox';
-import { AgentEngine } from '@agent/runtime/AgentEngine';
 import {
   executeAgent,
   resumeToolUseFromResumeData,
@@ -202,6 +201,11 @@ const sessionHandleLayer = (key: SessionKey) =>
       const runs = new RunRegistry({
         session: () => session,
         fork: (run) => fork(Effect.provide(run, env)),
+        programs: {
+          executeAgent,
+          resumeTurn: resumeToolUseFromResumeData,
+          resume: resumeRun,
+        },
       });
       const session: SessionHandle = {
         roots: key.open.roots,
@@ -253,10 +257,7 @@ const sessionHandleLayer = (key: SessionKey) =>
         yield* session.interactions.use(key.open.interactions);
       // The local half of a committed removal; its plugin rows go with it.
       yield* store
-        .deliver((runId) => {
-          session.runs.detachChildren(runId);
-          releaseRunResources(runId, session);
-        })
+        .deliver((runId) => releaseRunResources(runId, session))
         .pipe(Scope.provide(consumerScope));
       // The registry's phase notification rides the fold-gated tail: its
       // waiters read `RunView.status` synchronously, so a row reaches them
@@ -508,7 +509,6 @@ const closeSession = (root: string) =>
     if (held === undefined)
       return { settled: true, abandoned: [] } satisfies SessionCloseReport;
     const { key, session, runs } = held;
-    runs.close();
     // A run the stop reached no driver for, or whose stop failed, has nothing
     // to settle it: the close settles it now instead of waiting out the
     // budget for it.
@@ -687,11 +687,6 @@ export function processLayer({
       ? Layer.empty
       : ToolMissingReporter.layer(toolMissingReporter),
     catalog,
-    Layer.succeed(AgentEngine)({
-      executeAgent,
-      resumeToolUseFromResumeData,
-      resumeRun,
-    }),
     // One retry gate for the process: a 429 cools a credential for every
     // project's runs.
     Layer.effect(RouteRetries, ModelRetryGate.make),

@@ -245,8 +245,8 @@ describe('CLI platform init', () => {
         ),
       );
       const drain = vi
-        .spyOn(session.runs, 'close')
-        .mockImplementation(() => {});
+        .spyOn(session.runs, 'stopAll')
+        .mockImplementation(() => Effect.succeed([]));
       yield* Effect.addFinalizer(() => Effect.sync(() => drain.mockRestore()));
 
       // Registration alone must not kill anything; the drain belongs to the

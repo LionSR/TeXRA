@@ -26,8 +26,8 @@ import type { SessionHandle } from './SessionHandle';
  * handle existed.
  */
 function isChildResult(session: SessionHandle, event: ResultEvent): boolean {
-  const handle = session.runs.getHandle(event.runId);
-  if (handle) return handle.parent !== null;
+  if (session.runs.getHandle(event.runId))
+    return session.runs.parentOf(event.runId) !== null;
   const run = SubscriptionRef.getUnsafe(session.view.ref).runs.get(event.runId);
   return run !== undefined && run.parentId !== null;
 }

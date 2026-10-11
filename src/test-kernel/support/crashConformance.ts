@@ -970,6 +970,15 @@ export function crashConformanceSuite(plugins: string): void {
               },
             ],
           });
+          // The root's prompt line and its stage commit with its opening, so
+          // no crash point sits between them (the resume never logs it).
+          const first = (type: string) =>
+            cleanRows.find((row) => row.run === root && row.type === type)
+              ?.commit ?? 0;
+          const traced = Math.max(first('log'), first('stage.start'));
+          expect(
+            points.filter((p) => p >= first('run.position') && p < traced),
+          ).toEqual([]);
           // The two calls, the script and its three calls, each settled.
           expect(expected.settled).toHaveLength(6);
           expect(

@@ -13,7 +13,7 @@ import type {
   SessionLog,
   StreamClosure,
 } from '@agent/runtime/SessionHandle';
-import { runEventDraft } from '@agent/runtime/SessionEvents';
+import { runEventDraft } from '@agent/trace/TraceEmitter';
 import { classifyAgentError } from '@common/errors';
 import { writeLogLine } from '@logger/logSink';
 import {

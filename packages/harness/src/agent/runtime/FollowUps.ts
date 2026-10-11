@@ -423,8 +423,7 @@ export const claimFollowUps = Effect.fn('FollowUps.claim')(function* (
       session.followUps.release(
         runId,
         input,
-        next === 'terminal' ||
-          (session.runs.getHandle(runId)?.parent ?? null) !== null,
+        next === 'terminal' || session.runs.parentOf(runId) !== null,
       ),
     consume,
   };

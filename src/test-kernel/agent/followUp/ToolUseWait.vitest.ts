@@ -260,7 +260,8 @@ describe('a parked child run', () => {
     (queued) =>
       Effect.gen(function* () {
         const session = yield* quietSession();
-        const runId = startedRun(session);
+        const parentRunId = generateRunId();
+        const runId = startedRun(session, parentRunId);
         if (queued) {
           yield* enqueue(session, runId, [
             { text: 'later', from: { kind: 'user' as const } },
@@ -270,7 +271,7 @@ describe('a parked child run', () => {
         const { fiber, park, requests } = yield* forkLoop({
           runId,
           session,
-          parentRunId: generateRunId(),
+          parentRunId,
           script: [textTurn('first cycle'), textTurn('second cycle')],
         });
         yield* park(queued ? 1 : 0);
@@ -285,8 +286,8 @@ describe('a parked child run', () => {
     () =>
       Effect.gen(function* () {
         const session = yield* quietSession();
-        const runId = startedRun(session);
         const parentRunId = generateRunId();
+        const runId = startedRun(session, parentRunId);
         const asked = 'state where finiteness is used';
 
         const first = yield* forkLoop({
@@ -348,10 +349,11 @@ describe('a parked child run', () => {
       // A subagent that waited here would wait for a follow-up its
       // orchestrator was never told to send.
       const session = yield* quietSession();
+      const parentRunId = generateRunId();
       const { result } = yield* runLoop({
-        runId: startedRun(session),
+        runId: startedRun(session, parentRunId),
         session,
-        parentRunId: generateRunId(),
+        parentRunId,
         script: [{ failWith: { message: 'boom', userRetryable: false } }],
       });
 
@@ -407,10 +409,11 @@ describe('a parked root run', () => {
   it.effect('stops a one-cycle child instead of parking it as waiting', () =>
     Effect.gen(function* () {
       const session = yield* quietSession();
+      const parentRunId = generateRunId();
       const { result, requests } = yield* runLoop({
-        runId: startedRun(session),
+        runId: startedRun(session, parentRunId),
         session,
-        parentRunId: generateRunId(),
+        parentRunId,
         stopAfterCycle: true,
         script: [textTurn('done')],
       });
@@ -972,8 +975,8 @@ describe('an active goal at the wait', () => {
         // the model, so the error clears without pausing the goal or dropping
         // its unattended approvals first.
         const session = yield* goalSession();
-        const runId = startedRun(session);
         const parentRunId = generateRunId();
+        const runId = startedRun(session, parentRunId);
         yield* startGoal(session, runId, 'finish the autonomous proof');
 
         try {

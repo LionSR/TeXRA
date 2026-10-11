@@ -4,6 +4,7 @@ import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { withLogChannel } from '@logger/effectLog';
 import { isDocumentTaskConfig, type RunId } from '@shared/schemas';
 import { DatabaseRowEarlier } from '@shared/session/database';
+import { continuesFromRows } from '@shared/session/runActions';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { runEndFromEvents } from './runRecords';
 
@@ -51,15 +52,15 @@ export const deriveResumability = Effect.fn('deriveResumability')(function* (
     return { kind: 'unreadable', cause };
   }
   const records = read.success;
-  const ended = runEndFromEvents(records, runId) !== null;
+  const start = records.findLast((row) => row.type === 'run.start');
   const config = records.findLast((row) => row.type === 'run.config');
-  if (
-    ended &&
-    config?.type === 'run.config' &&
-    isDocumentTaskConfig(config.config)
-  )
-    return { kind: 'none' };
-  return records.some((row) => row.type === 'run.position')
+  const standing = {
+    ended: runEndFromEvents(records, runId) !== null,
+    documentTask:
+      config?.type === 'run.config' && isDocumentTaskConfig(config.config),
+  };
+  return start?.type === 'run.start' &&
+    continuesFromRows({ ...standing, identity: start.identity })
     ? { kind: 'checkpoint' }
     : { kind: 'none' };
 });
