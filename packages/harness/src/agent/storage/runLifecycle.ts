@@ -240,10 +240,10 @@ export type FinalizeRunResult =
 
 /**
  * A run's end in `append`'s job, through its cell: its unapplied input
- * consumed, the loop's halt, what it left open closed, its `run.end`, and a
- * child's last-turn settlement with its parent's delivery. A lifecycle that
- * ended this way writes only the settlement; an unborn run, nothing. A run
- * whose history does not load ends loudly with the rows no fold reads.
+ * consumed, its halt, what it left open, its `run.end`, a child's last
+ * settlement and delivery. An ended lifecycle writes only the settlement; an
+ * unborn run, nothing; rows that do not fold, loudly, only rows no fold
+ * reads. A store failure fails the end.
  */
 export const endIn = Effect.fn('endIn')(function* (
   session: SessionHandle,
@@ -297,7 +297,7 @@ export const endIn = Effect.fn('endIn')(function* (
   const alongside = Effect.succeed({ rows: co.rows, committed: Effect.void });
   if (Result.isSuccess(cell))
     return yield* Effect.as(cell.success.append(end, alongside), result);
-  if (cell.failure._tag === 'DatabaseWriteFailed') return yield* cell.failure;
+  if (cell.failure._tag !== 'RunHistoryRefused') return yield* cell.failure;
   yield* Effect.logWarning(
     `Run ${runId} ends unloaded: ${cell.failure.message}`,
   );
