@@ -123,6 +123,7 @@ export type {
   Outcome,
   RunStopReason,
   RuntimeRequest,
+  ToolEditContent,
 } from '@shared/session/runtimeRequest';
 
 // The platform's ports: what an `AgentPlatform` implements, the failures its

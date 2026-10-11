@@ -18,7 +18,11 @@ import {
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local file imports
-import { EditorHost, type EditorCapabilities } from './editorHost';
+import {
+  EditorHost,
+  type EditorCapabilities,
+  type EditorCapability,
+} from './editorHost';
 
 const CHANNEL = 'DiagnosticsTool';
 
@@ -209,7 +213,7 @@ export const DiagnosticsTool = defineTool({
   // Offered while an editor attached for the session reads diagnostics
   // (`EditorHost`): the extension's own session, or a service task with
   // one of its windows.
-  hostCapability: 'diagnostics',
+  hostCapability: 'diagnostics' satisfies EditorCapability,
   unavailableHosts: ['desktop', 'sdk'],
   description:
     'Inspect or annotate diagnostics for a file. Use "list"/"count" to retrieve linter diagnostics; use "add" to push a critique annotation as a VS Code diagnostic (squiggle + Problems panel entry) instead of inserting a literal \\criticize{...}{...}{...} macro. The "add" command requires the experimental "texra.inlineCriticism.enabled" setting and reports "not accepted" if disabled; criticisms pushed this way are read back by "list".',

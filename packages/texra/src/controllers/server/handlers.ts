@@ -305,12 +305,6 @@ export const serviceHandlers = TexraRpcs.toLayer(
             })),
           ),
         ),
-      'request.preview': ({ workspace, requestId }) =>
-        Effect.scoped(
-          open(workspace).pipe(
-            Effect.flatMap((session) => hosts.preview(session, requestId)),
-          ),
-        ),
       'task.request': ({ workspace, request }) =>
         Effect.scoped(
           openSession(workspace).pipe(

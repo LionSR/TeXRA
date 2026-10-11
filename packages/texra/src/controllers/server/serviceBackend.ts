@@ -352,14 +352,6 @@ export const serviceSessionBackend = Effect.fn('serviceSessionBackend')(
         };
       },
       ended,
-      preview: (requestId) =>
-        call(
-          () => new Error(OFFLINE),
-          (client) =>
-            client['request.preview']({ workspace, requestId }).pipe(
-              Effect.mapError((error) => new Error(error.message)),
-            ),
-        ),
     };
   },
 );

@@ -12,7 +12,6 @@ import { Context, Data, Effect, type Scope } from 'effect';
 
 import type { FileLocation } from '@shared/schemas';
 import type { GenericDiagnostic } from '@utils/diagnostics/diagnosticFormatting';
-import type { HostCapabilities } from '@texra-ai/harness/plugins';
 
 /**
  * Why the host could not read a file's diagnostics: the LaTeX build the read
@@ -66,6 +65,10 @@ export interface EditorCapabilities {
   }) => Effect.Effect<void, PdfOpenFailed>;
 }
 
+/** The host capabilities an editor serves (`HostCapabilities`), named
+ *  here so a tool's `hostCapability` that names none fails to compile. */
+export type EditorCapability = 'diagnostics';
+
 /** The registry's interface: attach for a scope, read by storage root. */
 export interface EditorHostShape {
   readonly attach: (
@@ -88,8 +91,9 @@ export type EditorRegistry = ReturnType<typeof makeEditorHost>;
 /** A registry with nothing attached: what a composition passes its plugins
  *  and attaches its hosts to. Also the harness's `HostCapabilities` over the
  *  same attachments. */
-export function makeEditorHost(): EditorHostShape &
-  Context.Service.Shape<typeof HostCapabilities> {
+export function makeEditorHost(): EditorHostShape & {
+  readonly of: (storage: string) => ReadonlySet<EditorCapability>;
+} {
   const attached = new Map<string, EditorCapabilities[]>();
   const at = (storage: string): EditorCapabilities =>
     attached.get(storage)?.at(-1) ?? {};
@@ -113,6 +117,8 @@ export function makeEditorHost(): EditorHostShape &
       ).pipe(Effect.asVoid),
     at,
     of: (storage) =>
-      new Set(at(storage).readDiagnostics ? ['diagnostics'] : []),
+      new Set<EditorCapability>(
+        at(storage).readDiagnostics ? ['diagnostics'] : [],
+      ),
   };
 }

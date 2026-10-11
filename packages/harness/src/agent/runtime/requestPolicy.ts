@@ -171,8 +171,9 @@ export function liveToolGates(
   };
 }
 
-/** What the session's host serves now, as the plugins of the step's
- *  capability-gated tools say (`HostCapabilities`): none without one. */
+/** What the session's host serves now: the union of what each plugin of
+ *  the step's capability-gated tools says (`HostCapabilities`), each read
+ *  from its own services; none without one. */
 export const hostCapabilitiesOf = (
   session: SessionHandle,
   step: ToolStep,
@@ -183,12 +184,18 @@ export const hostCapabilitiesOf = (
       tool.hostCapability === undefined ? [] : [plugin],
     ),
   );
-  if (serving.size === 0) return Effect.succeed(new Set());
-  return Effect.map(Scope.provide(step.services(serving), scope), (services) =>
-    Option.match(Context.getOption(services, HostCapabilities), {
-      onNone: () => new Set<string>(),
-      onSome: ({ of }) => of(session.roots.storage),
-    }),
+  return Effect.map(
+    Effect.forEach(serving, (plugin) =>
+      Scope.provide(step.services(new Set([plugin])), scope).pipe(
+        Effect.map((services) =>
+          Option.match(Context.getOption(services, HostCapabilities), {
+            onNone: () => [],
+            onSome: ({ of }) => [...of(session.roots.storage)],
+          }),
+        ),
+      ),
+    ),
+    (served) => new Set(served.flat()),
   );
 };
 
