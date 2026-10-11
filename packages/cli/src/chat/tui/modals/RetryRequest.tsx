@@ -3,7 +3,7 @@ import { Text, useWindowSize } from 'ink';
 import { wrappedRowCount } from '@cli/tui/ansiWrap';
 import { COLOR_HINT, COLOR_WARNING } from '@cli/tui/ui/colors';
 import { confirmCardContentWidth } from '@cli/tui/ui/theme';
-import type { SurfaceDecision } from '@shared/session/approvalDecision';
+import type { SurfaceDecision } from '@texra/shared/session/surfaceDecision';
 import { ConfirmCard } from './ConfirmCard';
 import {
   ScrollableModalText,

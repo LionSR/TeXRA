@@ -36,9 +36,9 @@ import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 // Local imports - shared webview
 import '@ui/wa/spinner';
 import { agentName } from '@shared/schemas';
-import type { HostSnapshot } from '@shared/session/hostSnapshot';
 import type { SessionView, RunView } from '@shared/session/sessionView';
-import type { Surface } from '@shared/session/surface';
+import type { HostSnapshot } from '@texra/shared/session/hostSnapshot';
+import type { Surface } from '@texra/shared/session/surface';
 import { SessionUiEvents } from '@texra/shared/session/uiEvents';
 import {
   FILE_SELECT_CONFIGS,

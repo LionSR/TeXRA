@@ -10,7 +10,7 @@ import {
   type AgentProposalPermission,
 } from '@shared/schemas';
 import { getModelLabel } from '@shared/model/modelLabel';
-import type { SurfaceDecision } from '@shared/session/approvalDecision';
+import type { SurfaceDecision } from '@texra/shared/session/surfaceDecision';
 import { DELEGATION_APPROVAL_COPY } from '@ui/copy/delegationApproval';
 import {
   SCRIPT_REQUEST_COPY,

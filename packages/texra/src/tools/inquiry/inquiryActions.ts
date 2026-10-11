@@ -17,17 +17,17 @@ import { withLogChannel } from '@logger/effectLog';
 
 // Local imports - shared
 import {
-  InquiryRecords,
-  inquiryThreadRow,
-  type InquiryThreadRecord,
-} from '@shared/plugins/externalInquiry';
-import {
   type ExternalInquiryPermission,
   type InquiryThreadId,
   type InquiryThreadSummary,
   type RequestDecision,
   type RunId,
 } from '@shared/schemas';
+import {
+  InquiryRecords,
+  inquiryThreadRow,
+  type InquiryThreadRecord,
+} from '@texra/shared/plugins/externalInquiry';
 import {
   formatRelativeTime,
   previewLabel,

@@ -12,7 +12,7 @@
 import { css, html, LitElement, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 
-import type { HostSnapshot } from '@shared/session/hostSnapshot';
+import type { HostSnapshot } from '@texra/shared/session/hostSnapshot';
 import { bannerStyles, designTokens } from '@ui/styles';
 import { renderWarningBanner } from '@ui/wa/bannerFrame';
 import './AgentConfigBanner';

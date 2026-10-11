@@ -28,7 +28,7 @@ import type { CliRuntimeHost } from '@cli/runtime/cliPresentationHost';
 import { withLogChannel } from '@logger/effectLog';
 import type { RetryPermission } from '@shared/schemas';
 import type { SettingsStores } from '@shared/config/settingsAccess';
-import type { HostRequest } from '@shared/session/hostRequest';
+import type { HostRequest } from '@texra/shared/session/hostRequest';
 import {
   ApiKeyPromptFailed,
   ProgressApiKeyRetryController,

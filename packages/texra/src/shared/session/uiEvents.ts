@@ -9,8 +9,8 @@
  * event; nothing translates in between (PRD 8, identity translation), and
  * a harness that assigns fixtures simply ignores them.
  */
-import type { HostRequest } from '@shared/session/hostRequest';
-import type { SurfaceAction } from '@shared/session/surface';
+import type { HostRequest } from '@texra/shared/session/hostRequest';
+import type { SurfaceAction } from '@texra/shared/session/surface';
 import type { RuntimeRequest } from '@texra-ai/harness';
 
 const SESSION_UI_EVENT = {

@@ -24,7 +24,6 @@ import { getRunRecords } from '@agent/storage';
 import { cleanupAcceptedWorkspaceDiffFiles } from '@latex/acceptedFileTarget';
 import { WorkspaceFs } from '@platform/rootedFs';
 import { stripCriticizeAnnotations } from '@replacement/advanced';
-import { documentsAcceptedFact } from '@shared/plugins/documents';
 import {
   RunIdSchema,
   ToolError,
@@ -34,6 +33,7 @@ import {
   RunId,
   FileLocation,
 } from '@shared/schemas';
+import { documentsAcceptedFact } from '@texra/shared/plugins/documents';
 import { assertNoParentTraversal } from '@tools/pathResolution';
 import {
   buildApprovalRejectedResult,

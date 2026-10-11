@@ -78,11 +78,6 @@ import {
   type RetryPermission,
   type RunId,
 } from '@shared/schemas';
-import {
-  APPROVE_ALL_DELEGATED_WORK_ACTION,
-  APPROVE_SESSION_ACTION,
-  type SurfaceDecision,
-} from '@shared/session/approvalDecision';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { createTuiCliContext } from '@test/cli/fixtures/cliContext';
@@ -90,6 +85,11 @@ import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { installedHost } from '@test/support/setupPlatform';
 import { makeFakeSettingsStores } from '@test/support/settingsStoresFake';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
+import {
+  APPROVE_ALL_DELEGATED_WORK_ACTION,
+  APPROVE_SESSION_ACTION,
+  type SurfaceDecision,
+} from '@texra/shared/session/surfaceDecision';
 import { requestToolEditApproval } from '@tools/approval/toolEditApproval';
 import { bashApprovalRequest } from '../agent/progressTestUtils';
 

@@ -7,11 +7,11 @@ import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { aggregateId, type RunId } from '@shared/schemas';
-import { documentsOutputFact } from '@shared/plugins/documents';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { waitForCondition } from '@test/support/asyncTestUtils';
 import { makeFakeSettingsStores } from '@test/support/settingsStoresFake';
 import { publishTestRows } from '@test/support/sessionTestUtils';
+import { documentsOutputFact } from '@texra/shared/plugins/documents';
 import { TexraStateKey } from '@texra/shared/settingsView/texraSettings';
 import type * as VSCode from 'vscode';
 

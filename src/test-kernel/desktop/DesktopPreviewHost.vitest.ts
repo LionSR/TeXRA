@@ -10,7 +10,6 @@ import { createDesktopHostRequests } from '@desktop/main/desktopHostRequests';
 import { createDesktopFileSelection } from '@desktop/main/desktopFileSelection';
 import { withProcessServices } from '@platform/processRuntime';
 import type { RunId } from '@shared/schemas';
-import type { HostRequest } from '@shared/session/hostRequest';
 import { Rejected } from '@shared/session/requestErrors';
 import { closeSessionOf } from '@test/support/sessionEnd';
 import { testRuntime } from '@test/support/testProcessRuntime';
@@ -22,6 +21,7 @@ import {
 } from '@test/support/tempDirPlatform';
 import { createFakeHost, installFakeHost } from '@test/support/setupPlatform';
 import { createTestSession } from '@test/support/sessionTestUtils';
+import type { HostRequest } from '@texra/shared/session/hostRequest';
 import { HostDraftRequests } from '@texra/controllers/session/hostDraftRequests';
 import { createHostSnapshotSource } from '@texra/controllers/session/hostSnapshotSource';
 import { localSessionBackend } from '@texra/controllers/session/sessionBackend';

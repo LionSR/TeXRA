@@ -32,18 +32,18 @@ import { createAgentPresentationHost } from '@frontend/events/agentEventListener
 import { pushManualCriticism } from '@frontend/latex/inlineCriticism';
 import { getLinterMessages } from '@frontend/latex/linter';
 import { withLogChannel } from '@logger/effectLog';
-import { DOCUMENTS_OUTPUT_KEY } from '@shared/plugins/documents';
 import { agentKeyOf, type FileLocation, type RunId } from '@shared/schemas';
 import { isLiveRun } from '@shared/session/sessionView';
-import { projectDisplayOf } from '@shared/session/hostSnapshot';
 import {
   getFirstRunDone,
   setOnboardingDeclined,
 } from '@shared/state/onboardingState';
+import { projectDisplayOf } from '@texra/shared/session/hostSnapshot';
+import { DOCUMENTS_OUTPUT_KEY } from '@texra/shared/plugins/documents';
 import type {
   DownMessage,
   SurfaceActionMessage,
-} from '@shared/session/sessionFrames';
+} from '@texra/shared/session/sessionFrames';
 import { ToolEditApprovalController } from '@texra/controllers/approval/ToolEditApprovalController';
 import { OnboardingFunnelRefresher } from '@texra/controllers/onboarding/onboardingFunnel';
 import type { ServiceLink } from '@texra/controllers/server/client';

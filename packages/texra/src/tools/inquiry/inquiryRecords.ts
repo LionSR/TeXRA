@@ -14,7 +14,7 @@ import {
   INQUIRY_THREADS,
   InquiryRecords,
   type InquiryThreadRecord,
-} from '@shared/plugins/externalInquiry';
+} from '@texra/shared/plugins/externalInquiry';
 import { toNewestFirstByTimestamp, unique, hexId12 } from '@utils/core';
 import { ensureError } from '@utils/errors/errorMessage';
 

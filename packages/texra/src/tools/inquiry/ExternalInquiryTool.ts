@@ -22,11 +22,6 @@ import { callerRun } from '@texra-ai/harness/plugins';
 import { type SessionHandle } from '@agent/runtime/SessionHandle';
 import { withLogChannel } from '@logger/effectLog';
 import {
-  InquiryRecords,
-  inquiryThreadFact,
-  type InquiryThreadRecord,
-} from '@shared/plugins/externalInquiry';
-import {
   aggregateId as qualifyAggregateId,
   InquiryThreadIdSchema,
   ToolError,
@@ -35,6 +30,11 @@ import {
   type InquiryThreadSummary,
   type ToolResult,
 } from '@shared/schemas';
+import {
+  InquiryRecords,
+  inquiryThreadFact,
+  type InquiryThreadRecord,
+} from '@texra/shared/plugins/externalInquiry';
 import { inquiryRecordsLayer } from '@texra/tools/inquiry/inquiryRecords';
 import { nullishWithDefault } from '@tools/core/inputSchema';
 import { executed } from '@tools/core/result';

@@ -16,7 +16,7 @@ import './TaskGroupList';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@ui/wa/spinner';
 import type { RunView, SessionView } from '@shared/session/sessionView';
-import type { Surface } from '@shared/session/surface';
+import type { Surface } from '@texra/shared/session/surface';
 import { SessionUiEvents } from '@texra/shared/session/uiEvents';
 import { designTokens } from '@ui/styles';
 import { getComposedPathElement } from '../utils';

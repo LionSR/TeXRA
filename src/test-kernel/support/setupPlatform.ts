@@ -44,12 +44,12 @@ import {
   type DatabaseOpenFailed,
 } from '@shared/session/database';
 import { UsageLog } from '@shared/usageLog';
+import { GOAL_STATE_ARM } from '@shared/plugins/goal';
 import {
   DOCUMENTS_ACCEPTED_ARM,
   DOCUMENTS_OUTPUT_ARM,
-} from '@shared/plugins/documents';
-import { EXTERNAL_INQUIRY_THREAD_ARM } from '@shared/plugins/externalInquiry';
-import { GOAL_STATE_ARM } from '@shared/plugins/goal';
+} from '@texra/shared/plugins/documents';
+import { EXTERNAL_INQUIRY_THREAD_ARM } from '@texra/shared/plugins/externalInquiry';
 import type { SetupPlatformShape } from '@texra/tools/setup/platform';
 import {
   LeanLanguageServices,

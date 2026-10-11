@@ -18,10 +18,6 @@ import { Cause, Effect, Exit, FileSystem, SynchronizedRef } from 'effect';
 import { LatexMediaManager } from '@latex/LatexMediaManager';
 import { getTeXCountStats } from '@latex/texcount';
 import {
-  documentsOutputFact,
-  latestDocumentRounds,
-} from '@shared/plugins/documents';
-import {
   WORKFLOW_RAW_OUTPUT_EXT,
   workflowOutputPath,
 } from '@shared/constants/workflowOutput';
@@ -32,6 +28,10 @@ import {
   type FileLocation,
   type ToolFact,
 } from '@shared/schemas';
+import {
+  documentsOutputFact,
+  latestDocumentRounds,
+} from '@texra/shared/plugins/documents';
 import { XmlOutputManager } from '@texra/agent/output/XmlOutputManager';
 import {
   createOutputState,
@@ -52,7 +52,7 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 import { pathToLocationIn } from '@utils/files/fileLocation';
 import { renderPrompt } from '@utils/prompt';
 import type { ToolRun } from '@texra-ai/harness/plugins';
-import type { DocumentTask, AgentConfig } from '@texra-ai/harness/schemas';
+import type { AgentConfig } from '@texra-ai/harness/schemas';
 
 /** What the documents read of the run their tool call serves. */
 type DocumentRun = Pick<
@@ -70,7 +70,7 @@ type DocumentRun = Pick<
 /** One document task run's documents, opened for one tool call. */
 export interface Documents {
   readonly run: DocumentRun;
-  readonly task: DocumentTask;
+  readonly task: NonNullable<DocumentRun['task']>;
   readonly deps: OutputDependencies;
   readonly state: OutputState;
   readonly xml: XmlOutputManager;
