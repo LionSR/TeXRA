@@ -39,7 +39,8 @@ const CHANNEL = 'WindowHost';
 /** What a window does for its project's tasks; a capability it leaves out
  *  is one it does not offer. */
 export interface WindowHost
-  extends Pick<HostInteractions, 'emit' | 'approvalDenied'>,
+  extends
+    Pick<HostInteractions, 'emit' | 'approvalDenied'>,
     EditorCapabilities {
   /** The editor's language models, which the service's runs of this
    *  project bind through this window. */

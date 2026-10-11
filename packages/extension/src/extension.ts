@@ -92,10 +92,7 @@ import { TEXRA_SETTING_ROWS } from '@texra/shared/settingsView/texraSettings';
 import type { CommandId } from '@texra/shared/commands/catalog';
 import { fromHost } from '@texra/controllers/session/hostCallFailure';
 import { bootstrapHost } from '@texra/controllers/hostBootstrap';
-import {
-  makeEditorHost,
-  type EditorRegistry,
-} from '@texra/tools/editorHost';
+import { makeEditorHost, type EditorRegistry } from '@texra/tools/editorHost';
 import { texraPlugins } from '@texra/tools/registry';
 import { gitHubTokenRejectedMessage } from '@texra/tools/github/githubAuth';
 import { LeanLanguageServices } from '@texra/tools/lean/leanLanguageServices';
