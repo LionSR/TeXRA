@@ -77,10 +77,11 @@ export interface ChildSettlement {
 /**
  * Rows decided inside a job, under holds its scope keeps until the job's one
  * append writes them with its own (`CoWrite`). `held`: the child parked
- * holding its last result, so its end is not written now.
+ * holding its last result, so its end is not written now. `note`: what the
+ * end's error adds from the part (a loss notice its parent refused).
  */
 export type TransactionPart = Effect.Effect<
-  CoWrite & { readonly held?: boolean },
+  CoWrite & { readonly held?: boolean; readonly note?: string },
   Error,
   Scope.Scope
 >;

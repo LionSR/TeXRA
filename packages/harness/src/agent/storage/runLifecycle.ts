@@ -83,8 +83,7 @@ export const activationRows = Effect.fn('activationRows')(function* (
 export interface RegisterRunOptions {
   /** The launching run: the whole parent edge, stamped on `run.start`. */
   readonly parentRunId?: RunId;
-  /** The parent's tool card whose call launches this run. */
-  readonly parentCard?: string;
+  readonly parentCard?: string; // the parent's tool card launching it
   /** That call's id: the call that owns this run until it detaches. */
   readonly parentCallId?: string;
   /** The run's identity, declared by the launch site — the durable authority. */
@@ -96,10 +95,8 @@ export interface RegisterRunOptions {
   readonly description?: string;
   /** Who wrote it: the model, unless a fork copies its user's title. */
   readonly descriptionBy?: 'model' | 'user';
-  /** Where the run's history came from: a fork's source and cut. */
-  readonly provenance?: RunProvenance;
-  /** The approval grants the run starts with, on its `run.start`. */
-  readonly grants?: ApprovalGrants;
+  readonly provenance?: RunProvenance; // a fork's source and cut
+  readonly grants?: ApprovalGrants; // the grants it starts with
 }
 
 /** Register a run whose loop is not this process's (an agent CLI, bash)
@@ -232,8 +229,8 @@ export const endIn = Effect.fn('endIn')(function* (
 ) {
   const { runId, outcome, keepExistingOutcome, error } = input;
   const target = aggregateId('run', runId);
-  const co = yield* input.settlement ??
-    Effect.succeed({ rows: [], committed: Effect.void, held: false });
+  const co: Effect.Success<TransactionPart> = yield* input.settlement ??
+    Effect.succeed({ rows: [], committed: Effect.void });
   const rows = yield* session.log.records(runId);
   // A run never born has nothing to end: its launch reports the failure.
   if (!rows.some((row) => row.type === 'run.start'))
@@ -264,7 +261,12 @@ export const endIn = Effect.fn('endIn')(function* (
           type: 'run.end' as const,
           aggregateId: target,
           outcome: persisted,
-          ...(error !== undefined ? { error } : {}),
+          ...(error && {
+            error: {
+              ...error,
+              message: [error.message, co.note].filter(Boolean).join('; '),
+            },
+          }),
           output: storedRunOutput(input.output ?? emptyRunEndOutput()),
         },
       ];
@@ -341,41 +343,41 @@ export const finalizeRun = Effect.fn('finalizeRun')(function* (
     error: input.error ?? lost,
   };
   let status = yield* end({ ...requested, settlement });
-  // A refused settlement: the end keeps its outcome and records the loss.
-  // An end that committed with it (its publication failed after) lost none.
-  if (Exit.isFailure(status) && settlement !== undefined) {
+  // A refused settlement: the end keeps its outcome and records the loss,
+  // once a read shows no end committed with it (its publication may have
+  // failed after); a failed read leaves the end to the backstop, loudly.
+  const read =
+    Exit.isFailure(status) && settlement !== undefined
+      ? yield* Effect.result(session.log.records(runId))
+      : undefined;
+  if (read?._tag === 'Success' && Exit.isFailure(status)) {
     const cause = ensureError(Cause.squash(status.cause)).message;
     yield* Effect.logWarning(`Run ${runId}: its settled end: ${cause}`);
-    const rows = yield* session.log
-      .records(runId)
-      .pipe(Effect.catch((e) => Effect.as(Effect.logWarning(`${e}`), [])));
-    const landed = runEndFromEvents(rows, runId);
+    const landed = runEndFromEvents(read.success, runId);
     if (landed !== null)
       return { ok: true, outcome: landed.outcome, recorded: true };
-    // The parent is told first, so its end says whether it was: one notice
-    // per lifecycle (its `run.activate`), so a later loss is not a replay.
-    const since = rows.findLast((row) => row.type === 'run.activate')?.commit;
-    const told = yield* Effect.gen(function* () {
+    // The parent's notice rides this end's append (both commit or neither),
+    // one per lifecycle (its `run.activate`) so a later loss is no replay;
+    // a parent that refuses it is the end's note, on the card.
+    const since = read.success.findLast((r) => r.type === 'run.activate');
+    const deliveryId = lostResultId(runId, since?.commit);
+    const text = `The result of run ${runId} was lost: ${cause}`;
+    const notice = Effect.gen(function* () {
       const to = yield* persistedParentRunId(session, runId);
-      if (to === undefined) return null;
-      const sent = yield* session.followUps.send(to, {
-        text: `The result of run ${runId} was lost: ${cause}`,
-        from: { kind: 'run', runId },
-        deliveryId: lostResultId(runId, since),
-      });
-      return sent.kind === 'refused'
-        ? `not told (${sent.reason ?? 'closed'})`
-        : null;
-    }).pipe(Effect.catch((e) => Effect.succeed(`not told: ${e}`)));
-    if (told !== null)
-      yield* Effect.logWarning(`Run ${runId}'s parent: ${told}`);
-    const had = requested.error?.message;
-    const parts = [cause, had && `it ended: ${had}`, told && `parent ${told}`];
-    const message = `Result lost: ${parts.filter(Boolean).join('; ')}`;
-    status = yield* end({
-      ...requested,
-      error: { kind: 'result-lost', message },
+      if (to === undefined) return { rows: [], committed: Effect.void };
+      const from = { kind: 'run', runId } as const;
+      const { rows, sent } = yield* session.followUps
+        .admission(to, { text, from, deliveryId }, {})
+        .pipe(Effect.catch((e) => Effect.succeed({ rows: [], sent: e })));
+      if ('kind' in sent && sent.kind !== 'refused')
+        return { rows, committed: Effect.void };
+      const note = `parent not told (${'kind' in sent ? (sent.reason ?? 'closed') : sent.message})`;
+      return { rows, committed: Effect.logWarning(`${runId}: ${note}`), note };
     });
+    const had = [cause, requested.error?.message].filter(Boolean);
+    const message = `Result lost: ${had.join('; it ended: ')}`;
+    const error = { kind: 'result-lost', message } as const;
+    status = yield* end({ ...requested, error, settlement: notice });
   }
   if (Exit.isSuccess(status)) {
     const { persisted, recorded, after } = status.value;
