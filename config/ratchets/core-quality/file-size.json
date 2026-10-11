@@ -29,7 +29,7 @@
   "packages/harness/src/shared/schemas/sessionEvent.ts": 642,
   "packages/harness/src/shared/session/database.ts": 420,
   "packages/harness/src/shared/session/runRows.ts": 418,
-  "packages/harness/src/shared/session/runStateFold.ts": 771,
+  "packages/harness/src/shared/session/runStateFold.ts": 765,
   "packages/harness/src/shared/session/sessionFold.ts": 1302,
   "packages/harness/src/shared/session/sessionView.ts": 468,
   "packages/harness/src/shared/session/transcriptState.ts": 412,

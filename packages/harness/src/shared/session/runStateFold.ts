@@ -162,18 +162,14 @@ type CardRowType = CardType | SettlementType | EndType | 'plugin.fact';
 type CardType = 'tool.start' | 'tool.end' | 'stream.end' | 'response.finalized';
 type SettlementType = 'run.report' | 'run.result' | 'child.turn' | 'child.park';
 type EndType = 'run.end' | 'stage.end' | 'followup.closed'; // and what it closes
-/** A run's input: the inbox folds it (`RunInput`), never the loop. */
-type InputType = (typeof FOLLOW_UP_TYPES)[number];
-/** The rows `foldRow` applies: the shared rows and the run history's own arms. */
+/** The rows `foldRow` applies (never a run's input, the inbox's). */
 type FoldedRowType = Exclude<
   SharedRunRow['type'] | RunHistoryDraft['type'] | 'run.activate',
-  CardRowType | InputType
+  CardRowType | (typeof FOLLOW_UP_TYPES)[number]
 >;
-/** Every row kind the run's state (its facts too) is read from: only the
- *  run's cell and the session's requests write them. */
+/** Every kind the run's state reads: its cell and the requests write them. */
 export type RunStateRowType = FoldedRowType | 'response.finalized';
-/** A run's input and its turns' companions: no fold reads them, so they
- *  commit in any job, outside the run's cell. */
+/** A run's input and turn companions: any job commits them, no cell. */
 export type RunInputDraft = Exclude<RunHistoryDraft, { type: RunStateRowType }>;
 
 /**
@@ -214,7 +210,6 @@ const IGNORED_ROW_TYPES: Readonly<
   'child.turn': true,
 };
 const IGNORED = new Set<string>(Object.keys(IGNORED_ROW_TYPES));
-
 /** The state a run starts from: every field at its zero, no family bound
  *  yet. The run program opens from this and stamps its family. */
 export const freshRunState = (commit: CommitOrdinal): RunState => ({
@@ -374,8 +369,7 @@ function foldRow(
     records[callId] = call;
     return { ...advance(state), pendingResponse: { ...pending, records } };
   };
-  // A run's input is the inbox's (`RunInput` folds it), never the loop's.
-  if (isFollowUpRow(row)) return null;
+  if (isFollowUpRow(row)) return null; // the inbox's input (`RunInput`)
   if (isSharedRunRow(row)) {
     // The rows `sessionFold` reads too: applied once, in `runRows.ts`.
     // `unresolved` is a malformed aggregate here: this fold reads a run's
