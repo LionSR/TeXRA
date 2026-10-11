@@ -86,7 +86,10 @@ import {
 import { readState, StateFlagSchema } from '@shared/config/settingsAccess';
 import { telemetryNoticeIfDue } from '@telemetry/telemetryNotice';
 import { usageLogLayer } from '@telemetry/UsageLogService';
-import { localSessionBackend } from '@texra/controllers/session/sessionBackend';
+import {
+  localSessionBackend,
+  presentMovedAside,
+} from '@texra/controllers/session/sessionBackend';
 import { serviceSessionBackend } from '@texra/controllers/server/serviceBackend';
 import { TEXRA_SETTING_ROWS } from '@texra/shared/settingsView/texraSettings';
 import type { CommandId } from '@texra/shared/commands/catalog';
@@ -97,8 +100,8 @@ import { gitHubTokenRejectedMessage } from '@texra/tools/github/githubAuth';
 import { LeanLanguageServices } from '@texra/tools/lean/leanLanguageServices';
 import { USER_MCP_CONFIG_PATH } from '@tools/mcp/mcpConfig';
 import { ToolAvailability } from '@tools/toolAvailabilityService';
-import { usageCostLabel } from '@ui/copy/modelAccess';
 import { sessionStoreMovedAsideMessage } from '@ui/copy/sessionStore';
+import { usageCostLabel } from '@ui/copy/modelAccess';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { reachExtensionService } from './common/extensionService';
 
@@ -498,17 +501,20 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
       ),
     );
   }
-  if (runtimeSession.log.movedAside) {
-    yield* Effect.forkDetach(
-      announce(
-        EXTENSION_CHANNEL,
-        vscodeUi.showWarningMessage(
-          sessionStoreMovedAsideMessage(runtimeSession.log.movedAside),
+  // The stores this window's open moved aside, here or in the service.
+  yield* Effect.forkDetach(
+    presentMovedAside([runtimeSession.view, backend.view], (moved) =>
+      Effect.asVoid(
+        Effect.forkDetach(
+          announce(
+            EXTENSION_CHANNEL,
+            vscodeUi.showWarningMessage(sessionStoreMovedAsideMessage(moved)),
+            undefined,
+          ),
         ),
-        undefined,
       ),
-    );
-  }
+    ),
+  );
   // The run-storage directory of the session just initialized, through that
   // session's own storage view rather than a static that re-reads the root.
   yield* withSessionFs(

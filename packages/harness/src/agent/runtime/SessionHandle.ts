@@ -44,7 +44,6 @@ import type {
   DatabaseWriteFailed,
   DeletionMode,
   SessionOpenError,
-  SessionStoreMovedAside,
 } from '@shared/session/database';
 import type { RequestError } from '@shared/session/requestErrors';
 import type { RunHistory } from '@shared/session/runHistory';
@@ -156,9 +155,6 @@ export interface SessionLog {
   /** Who holds `runId` now, with the owner's liveness proved in the call:
    *  what a resume gate and the run listing word a refusal from. */
   owner(runId: RunId): Effect.Effect<AggregateClaim, DatabaseReadFailed>;
-  /** Set when opening the store moved an older build's rows aside; the
-   *  host that opened the session presents it once. */
-  readonly movedAside: SessionStoreMovedAside | null;
 }
 
 /** What a resume of a run waits for, and whether one was asked for. */

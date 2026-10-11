@@ -1,11 +1,8 @@
 /**
  * The one session state every renderer reads (PRD one-fold-three-renderers,
- * section 5.1). Fold output, never persisted, never parsed: the schema is the
- * type's single source of truth, so a field lands here first and every host
- * reads the same name.
- *
- * `SessionView` holds `Map`s because it never crosses a bridge; only events,
- * chunks, and `local` do (8.1), and those are arrays and records.
+ * 5.1): fold output, never persisted or parsed; the schema is the type's one
+ * source, so every host reads the same name. It holds `Map`s because only
+ * its inputs (events, chunks, `local`) cross a bridge (8.1).
  *
  * Interaction state (selection, drafts, recording, expansion, focus, scroll)
  * is never here (G3); `sessionPresentationBoundary.vitest.ts` pins the names.
@@ -23,6 +20,7 @@ import {
   ConversationProgressSchema,
   JsonValueSchema,
   OwnerIdSchema,
+  SessionStoreMovedAsideSchema,
   PermissionPayloadSchema,
   PlanSchema,
   PluginFactDraftSchema,
@@ -51,13 +49,11 @@ import type { TranscriptRow } from '@shared/transcript';
 const SessionKeySchema = z.string().min(1);
 
 /**
- * A run's transcript slice: what hosts paint, and nothing else. The fold
- * keeps its incremental indexes (row and group positions, the compaction
- * projection's working state, the live text per streaming row) in a
- * module-private map beside it, so a host can neither depend on nor mutate
- * them. The slice is replaced on every change and never written after the
- * fold that produced it returns (D5). Row and block elements are the shared
- * renderers' own TypeScript shapes, stated here rather than re-declared.
+ * A run's transcript slice: what hosts paint, and nothing else. The fold's
+ * incremental indexes (row and group positions, compaction state, live text)
+ * live in a module-private map, out of a host's reach. Replaced on change,
+ * never written after its fold returns (D5); rows and blocks are the shared
+ * renderers' own shapes.
  */
 const TranscriptViewSchema = z.object({
   /** The transcript fold's rows (`transcriptFold.ts`) plus the compaction
@@ -346,6 +342,8 @@ const SessionViewSchema = z.object({
   policy: z.map(RunIdSchema, ApprovalPolicySnapshotSchema),
   pluginFacts: z.array(PluginFactDraftSchema),
   queuedFollowUps: z.map(RunIdSchema, z.array(QueuedFollowUpViewSchema)),
+  /** The stores this session's open moved aside (local truth). */
+  movedAside: z.array(SessionStoreMovedAsideSchema),
 });
 export type SessionView = z.infer<typeof SessionViewSchema>;
 
@@ -432,6 +430,7 @@ export function emptySessionView(
     policy: new Map(),
     pluginFacts: [],
     queuedFollowUps: new Map(),
+    movedAside: [],
   };
 }
 

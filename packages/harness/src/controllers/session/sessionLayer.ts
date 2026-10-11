@@ -1,16 +1,12 @@
 /**
  * The process layer ({@link processLayer}): every process service a
- * composition root runs on, and the `SessionOwner` over the keyed family of
- * sessions, a `LayerMap` keyed by workspace storage root (one session per
- * root and one only). A root's entry is the complete session: the
- * root-scoped services (the database event log, the session event reads and
- * publications, the fold, the session inputs, the three local sources, and
- * the owner-liveness prober) and the `SessionHandle` built over them, whose
- * request handler admits on that graph. Every opener (the hosts' default
- * sessions, the desktop's projects, the service's tasks, the SDK) resolves
- * its root here, so opening a root twice returns one handle, and the map is
- * the one owner of its lifetime: an open borrows, `close` settles and
- * releases, and the layer's release closes whatever is still open.
+ * composition root runs on, and the `SessionOwner` over a `LayerMap` of
+ * sessions, one per workspace storage root. An entry is the whole session:
+ * the root-scoped services (event log, publications, fold, inputs, local
+ * sources, owner-liveness prober) and the `SessionHandle` over them. Every
+ * opener resolves its root here, so two opens return one handle, and the
+ * map owns its lifetime: an open borrows, `close` settles and releases, and
+ * the layer's release closes whatever is still open.
  */
 import {
   Cause,
@@ -25,6 +21,7 @@ import {
   Option,
   RcMap,
   Stream,
+  SubscriptionRef,
   Scope,
 } from 'effect';
 import { FetchHttpClient, HttpClient } from 'effect/http';
@@ -132,10 +129,9 @@ const logFailure =
     log(message).pipe(Effect.annotateLogs({ data }), withLogChannel(CHANNEL));
 
 /**
- * Which session an entry is: its storage root (`SessionView.key`), with what
- * the opener supplied for building it. Equal and hashed by the root alone:
- * two opens of one root resolve one session, over what the first supplied,
- * and nothing store-bound is injected past that (PR #11893, section 3).
+ * Which session an entry is: its storage root (`SessionView.key`) and what
+ * the opener supplied. Equal and hashed by the root alone: two opens of one
+ * root resolve one session over what the first supplied (PR #11893, §3).
  */
 class SessionKey implements Equal.Equal {
   constructor(readonly open: SessionHandleInit) {}
@@ -159,12 +155,10 @@ class Session extends Context.Service<Session, SessionHandle>()(
 ) {}
 
 /**
- * The handle of one root, over the root's graph: the session is the entry's
- * one service. The last layer of the entry, so it is the first thing unwound
- * when the entry closes and the graph outlives every publisher above it. The
- * entry's scope is the session's one lifetime: {@link closeSession} and the
- * runtime's disposal both end it by closing that scope, and every owner the
- * handle holds is torn down by a finalizer registered here.
+ * The handle of one root over its graph: the entry's one service and last
+ * layer, so it unwinds first and the graph outlives every publisher above
+ * it. The entry's scope is the session's one lifetime ({@link closeSession}
+ * and disposal close it); every owner it holds has a finalizer here.
  */
 const sessionHandleLayer = (key: SessionKey) =>
   Layer.effectContext(
@@ -173,8 +167,13 @@ const sessionHandleLayer = (key: SessionKey) =>
       const plugins = yield* ToolRegistry;
       const globalDatabase = yield* GlobalDatabase;
       const local = yield* LocalRuntimeSource;
-      // Register the consumers' scope first so the handle's teardown can
-      // publish and settle while the tails and the view are still alive.
+      const { origin } = yield* ProcessIdentity;
+      const moved = [database.movedAside, globalDatabase.movedAside];
+      yield* SubscriptionRef.update(local.ref, (state) => ({
+        ...state,
+        movedAside: moved.filter((store) => store !== null),
+      }));
+      // First, so teardown publishes and settles while tails and view live.
       const consumerScope = yield* Effect.acquireRelease(
         Scope.make(),
         (scope, exit) => Scope.close(scope, exit),
@@ -185,8 +184,7 @@ const sessionHandleLayer = (key: SessionKey) =>
       const view = yield* makeSessionViewAccess(key.storage, store.closed);
       // Capture the startup cohort before callers can publish new launches.
       const initialListing = yield* database.readListing();
-      // The publisher drains inside the one close deadline, after the runs'
-      // fibers (registered before their fork) published their last rows.
+      // Drains in the close deadline, after the runs' fibers' last rows.
       yield* Effect.addFinalizer(() => store.close);
       // The runs' fork and the project's tools end with this scope.
       const fork = yield* FiberSet.makeRuntime<ProcessServices>();
@@ -259,18 +257,20 @@ const sessionHandleLayer = (key: SessionKey) =>
           releaseRunResources(runId, session);
         })
         .pipe(Scope.provide(consumerScope));
-      // The registry's phase notification rides the fold-gated tail: its
-      // waiters read `RunView.status` synchronously, so a row reaches them
-      // once the view holds its state. Host notices go to the author.
+      // Phase notifications ride the fold-gated tail: waiters read
+      // `RunView.status` synchronously. Host notices go to the author.
       yield* Stream.runForEach(store.folded, (event) =>
         Effect.gen(function* () {
           const target = aggregateTarget(event.aggregateId);
           yield* onHeldResult(session, event, consumerScope);
           if (target.kind !== 'run' || event.type !== 'run.end') return;
-          if (event.origin !== (yield* ProcessIdentity).origin) return;
           if (!store.closed())
             yield* Effect.suspend(() =>
-              presentTerminalResult(session, { ...event, runId: target.id }),
+              presentTerminalResult(
+                session,
+                { ...event, runId: target.id },
+                origin,
+              ),
             ).pipe(
               Effect.catchCause((cause) =>
                 Effect.logWarning('Terminal result presentation threw').pipe(
@@ -491,9 +491,8 @@ const settleRun = (session: SessionHandle, runId: RunId): Effect.Effect<void> =>
  * 4. release the entry, whose finalizers flush the session's publications
  *    and unwind its owners.
  *
- * The whole close is uninterruptible, so the budget is its one cancellation
- * channel: the stop and its wait run interruptible inside it, so the deadline
- * cuts them, and every step after the deadline still runs.
+ * The close is uninterruptible, so the budget is its one cancellation: the
+ * stop and its wait run interruptible inside it, and every later step runs.
  */
 const closeSession = (root: string) =>
   Effect.gen(function* () {
@@ -635,14 +634,11 @@ export interface ProcessLayerOptions {
 }
 
 /**
- * The process: every process service a composition root runs on, and the
- * {@link SessionOwner} that opens, lists and closes its sessions (one per
- * workspace storage root, held by a `LayerMap`). A host builds it once with
- * `ManagedRuntime.make` and disposes that runtime on its shutdown path; the
- * SDK's `Sessions.layer` provides it to its projection. Disposal closes every
- * session still open (plugins drained first), so a host that needs its
- * sessions closed before its own resources tear down runs
- * `SessionOwner.closeAll` first.
+ * The process services a composition root runs on, and the {@link
+ * SessionOwner} opening, listing and closing its sessions (one per storage
+ * root, in a `LayerMap`), for a `ManagedRuntime` the host disposes on
+ * shutdown. Disposal closes every open session, plugins drained first; a
+ * host whose resources must outlive them runs `SessionOwner.closeAll` first.
  */
 export function processLayer({
   processStart = nodeProcesses.selfIdentity(),

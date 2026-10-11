@@ -193,6 +193,7 @@ export const databaseLayer = (
         mode,
         path,
         filename,
+        Effect.suspend(() => storeOpenElsewhere(filename)),
       ).pipe(mapDatabaseFailure(openFailed));
       const level = yield* SubscriptionRef.make(0);
       const observedCommit = yield* SubscriptionRef.make(0);
@@ -441,8 +442,7 @@ export const databaseLayer = (
         WHERE id IN (${AGGREGATE_LIST}) AND owner_id = ?`;
       const reparent = `UPDATE event_sequence SET parent_id = ${AGGREGATE}
         WHERE id = ? AND owner_id = ? AND closed_by IS NULL`;
-      // A closed aggregate's sequence row, collected with its dependents
-      // and rows by the foreign keys' cascade.
+      // A closed aggregate's sequence row; the cascade collects the rest.
       const closedBy = `SELECT id FROM event_sequence
         WHERE kind = ? AND logical_id = ? AND closed_by = ?`;
       const collectClosed = `DELETE FROM event_sequence

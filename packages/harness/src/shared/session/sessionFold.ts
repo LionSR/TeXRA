@@ -3,15 +3,13 @@
  * input)` turns the durable session events, live text chunks, the local
  * runtime snapshot, and the transcript subscription set into `SessionView`.
  * Every process that shows a session runs it; the transport carries its
- * input, never its output.
- *
- * Pure in the sense that matters: no IO, no clock, no platform, no store reads,
- * and the same input sequence yields the same view. Incremental in the sense
+ * input, never its output. Pure: no IO, clock, platform or store reads, and
+ * the same input sequence yields the same view. Incremental in the sense
  * the PRD requires: an event recomputes the arm for its run, walks `parentId`
  * to the root refreshing each ancestor's `childIds`, `rollup`, `treeUsage`,
  * `approval`, `group`, and `forceExpanded`, then touches `order` only when a
- * top-level run appeared, moved, or left. O(depth) per event, never a whole-view pass. A text
- * chunk costs the chunk, never the row's text.
+ * top-level run appeared, moved, or left: O(depth) per event; a chunk costs
+ * the chunk.
  *
  * Three rules govern the event arm before any fact applies (5.2). A listing
  * fact is ordered by commit within its `(aggregate, listing type)` entry in
@@ -60,6 +58,7 @@ import {
   type AggregateId,
   type FoldInput,
   type ExistenceReconciliation,
+  emptyLocalRuntimeState,
   type LocalRuntimeState,
   type DisplaySessionEvent,
   type RunId,
@@ -261,7 +260,7 @@ function sessionIndexesOf(view: SessionView): SessionIndexes {
       claims: new Map(),
       rows: new Map(),
       latest: new Map(),
-      local: { self: [], dead: [], unreadable: [], resumeBlocked: [] },
+      local: emptyLocalRuntimeState(),
       head: null,
     };
     SESSION_INDEXES.set(view.runs, indexes);
@@ -1242,6 +1241,7 @@ function foldLocal(view: SessionView, local: LocalRuntimeState): void {
   const indexes = sessionIndexesOf(view);
   const previous = indexes.local;
   indexes.local = local;
+  view.movedAside = local.movedAside;
   // An owner entering or leaving the held set, or moving between self and a
   // proved-dead verdict, changes the answer for every run it holds.
   const standing = (state: LocalRuntimeState, owner: string) =>

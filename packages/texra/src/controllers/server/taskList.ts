@@ -93,6 +93,7 @@ const coldView = Effect.fn('taskList.coldView')(function* (
   storage: string,
 ) {
   const local = yield* SubscriptionRef.make<LocalRuntimeState>({
+    movedAside: [],
     self: [],
     dead: [],
     unreadable: [],
@@ -124,7 +125,13 @@ const coldView = Effect.fn('taskList.coldView')(function* (
   }
   return fold(view, {
     _tag: 'local',
-    local: { self: [], dead, unreadable: [], resumeBlocked: [] },
+    local: {
+      movedAside: [],
+      self: [],
+      dead,
+      unreadable: [],
+      resumeBlocked: [],
+    },
   });
 });
 

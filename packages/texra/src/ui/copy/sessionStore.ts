@@ -1,10 +1,10 @@
-import type { SessionStoreMovedAside } from '@shared/session/database';
+import type { SessionStoreMovedAside } from '@shared/schemas';
 
 /**
- * What a host tells the user when opening a session store moved it aside
- * whole (`SessionHandle.log.movedAside`). The CLI prints it once (the chat
- * TUI in its transcript) and the extension shows it as a warning; both say
- * the same thing.
+ * What a host tells the user when a session's open moved a store aside
+ * whole (`SessionView.movedAside`). The CLI prints it once (the chat TUI in
+ * its transcript), the extension shows it as a warning and the desktop app
+ * as a dialog; all say the same thing.
  */
 export function sessionStoreMovedAsideMessage(
   moved: SessionStoreMovedAside,

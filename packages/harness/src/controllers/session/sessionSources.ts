@@ -38,6 +38,7 @@ export class LocalRuntimeSource extends Context.Service<
     Effect.gen(function* () {
       const identity = yield* ProcessIdentity;
       const ref = yield* SubscriptionRef.make<LocalRuntimeState>({
+        movedAside: [],
         self: [identity.ownerId],
         dead: [],
         unreadable: [],

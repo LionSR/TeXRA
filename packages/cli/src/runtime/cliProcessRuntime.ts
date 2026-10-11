@@ -107,6 +107,7 @@ const refuseGlobalRecord = (operation: string) =>
 const refusingGlobalDatabase: Layer.Layer<GlobalDatabase> = Layer.succeed(
   GlobalDatabase,
 )({
+  movedAside: null,
   values: {
     get: () => refuseGlobalRecord('values.get'),
     modify: () => refuseGlobalRecord('values.modify'),

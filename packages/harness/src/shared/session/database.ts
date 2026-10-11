@@ -21,6 +21,7 @@ import type {
   SessionEvent,
   SessionEventDraft,
   LocalRuntimeState,
+  SessionStoreMovedAside,
 } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import type { ValueFamily } from './valueFamily';
@@ -151,16 +152,6 @@ export class DatabaseReadFailed extends Data.TaggedError('DatabaseReadFailed')<{
   readonly cause: unknown;
 }> {
   override readonly message = storeFailureMessage(this.cause);
-}
-
-/**
- * What opening a store moved aside, whole (never read again): a store written
- * before 1.0, or a file SQLite reports damaged or not a database. Null when
- * nothing was moved. The one fact a host presents about it. */
-export interface SessionStoreMovedAside {
-  readonly path: string;
-  readonly aside: string;
-  readonly reason: 'pre-1.0' | 'corrupt';
 }
 
 /**
@@ -408,7 +399,10 @@ export class Database extends Context.Service<
  */
 export class GlobalDatabase extends Context.Service<
   GlobalDatabase,
-  Pick<Context.Service.Shape<typeof Database>, 'values' | 'inputHistory'>
+  Pick<
+    Context.Service.Shape<typeof Database>,
+    'values' | 'inputHistory' | 'movedAside'
+  >
 >()('@texra/session/GlobalDatabase') {}
 
 /** Persistent project connections, retained by project and session scopes.

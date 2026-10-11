@@ -374,6 +374,7 @@ export async function installFakeHost(host: FakeHost): Promise<void> {
     // The records above are mocked, so the bare runtime's global-root handle
     // is too: a suite that reads it provides its own innermost.
     Layer.mock(GlobalDatabase, {
+      movedAside: null,
       values: {} as CurrentValues,
       inputHistory: {} as GlobalDatabase['Service']['inputHistory'],
     }),

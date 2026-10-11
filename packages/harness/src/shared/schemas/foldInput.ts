@@ -56,13 +56,30 @@ export const ResumeBlockerSchema = z.object({
 export type ResumeBlocker = z.infer<typeof ResumeBlockerSchema>;
 
 /**
+ * A store an open moved aside, whole (never read again): one written before
+ * 1.0, or a file SQLite reports damaged or not a database. The one fact a
+ * host presents about it.
+ */
+export const SessionStoreMovedAsideSchema = z.object({
+  path: z.string(),
+  aside: z.string(),
+  reason: z.enum(['pre-1.0', 'corrupt']),
+});
+/** A store moved aside at open (`SessionStoreMovedAsideSchema`). */
+export type SessionStoreMovedAside = z.infer<
+  typeof SessionStoreMovedAsideSchema
+>;
+
+/**
  * Process-local liveness evidence: self, explicitly proved-dead owners, and
  * unreadable runs. A current claimant absent from these verdicts is
  * unprovable and remains held until a probe establishes otherwise. Beside
  * it, the runs a resume found blocked: `retry` when one was asked for, so
- * the run continues once what it needs is back.
+ * the run continues once what it needs is back; and the stores this
+ * session's open moved aside (its own, the process's global one).
  */
 export const LocalRuntimeStateSchema = z.object({
+  movedAside: z.array(SessionStoreMovedAsideSchema),
   self: z.array(OwnerIdSchema),
   dead: z.array(OwnerIdSchema),
   unreadable: z.array(z.object({ runId: RunIdSchema, detail: z.string() })),
@@ -75,6 +92,15 @@ export const LocalRuntimeStateSchema = z.object({
   ),
 });
 export type LocalRuntimeState = z.infer<typeof LocalRuntimeStateSchema>;
+
+/** Local truth before anything is known: no owner, verdict or move. */
+export const emptyLocalRuntimeState = (): LocalRuntimeState => ({
+  movedAside: [],
+  self: [],
+  dead: [],
+  unreadable: [],
+  resumeBlocked: [],
+});
 
 /**
  * The aggregates whose transcript tier the view holds, each with the seq

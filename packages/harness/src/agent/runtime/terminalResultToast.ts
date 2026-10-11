@@ -75,15 +75,23 @@ export function receiveTerminalFailure(
 }
 
 /**
- * The session's one terminal-result presenter, run for each `run.end` row the
- * session authored once its view has folded: a root run's failure goes to the
- * attached host or is replayed to the next one.
+ * The session's one terminal-result presenter, run for each `run.end` row
+ * once its view has folded: a root run's failure goes to the attached host
+ * or is replayed to the next one. Only the end's author presents it: the
+ * composition holding the run's claim, or, for an end no claim covered, the
+ * process that wrote it (two compositions in one process share an origin).
  */
 export function presentTerminalResult(
   session: SessionHandle,
-  event: ResultEvent,
+  event: ResultEvent & { readonly origin: string | null },
+  /** The writing process this session stamps (`ProcessIdentity.origin`). */
+  origin: string,
 ): Effect.Effect<void> {
-  return !event.error || isChildResult(session, event)
+  const run = session.view.run(event.runId);
+  const authored =
+    run?.ownedHere === true ||
+    (run?.ownerId == null && event.origin === origin);
+  return !authored || !event.error || isChildResult(session, event)
     ? Effect.void
     : presentAgentFailure(session.interactions, event.error);
 }

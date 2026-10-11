@@ -715,6 +715,7 @@ describe('session events and view', () => {
         expect(own.rollup).toMatchObject({ waiting: 1, interrupted: 0 });
         // The owner is another process that is gone: nothing can answer.
         yield* SubscriptionRef.set(local.ref, {
+          movedAside: [],
           self: [OTHER],
           dead: [SELF],
           unreadable: [],
@@ -729,6 +730,7 @@ describe('session events and view', () => {
         expect(orphaned.runs.get(RUN)?.readOnly).toBe(false);
         // The owner is another process that is alive: held, waiting on it.
         yield* SubscriptionRef.set(local.ref, {
+          movedAside: [],
           self: [OTHER],
           dead: [],
           unreadable: [],
@@ -836,6 +838,7 @@ describe('Sessions owner', () => {
         const view = yield* SessionViewService;
         const local = yield* SubscriptionRef.make(
           LocalRuntimeStateSchema.parse({
+            movedAside: [],
             self: [OTHER],
             dead: [],
             unreadable: [],
@@ -920,6 +923,7 @@ describe('Sessions owner', () => {
           log: { ...db, removeRun, detach: events.detach },
           local: yield* SubscriptionRef.make(
             LocalRuntimeStateSchema.parse({
+              movedAside: [],
               self: [SELF],
               dead: [],
               unreadable: [],
@@ -1793,6 +1797,7 @@ describe('the C1 event table and the C6 publisher', () => {
           'persistent',
           filename,
           filename,
+          storeOpenElsewhere(filename),
         );
         expect(opened.movedAside).toBeNull();
         expect(

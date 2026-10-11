@@ -178,7 +178,14 @@ export const subscribe = (...ids: RunId[]): FoldInput => ({
 export function local(state: Partial<LocalRuntimeState>): FoldInput {
   return {
     _tag: 'local',
-    local: { self: [], dead: [], unreadable: [], resumeBlocked: [], ...state },
+    local: {
+      movedAside: [],
+      self: [],
+      dead: [],
+      unreadable: [],
+      resumeBlocked: [],
+      ...state,
+    },
   };
 }
 

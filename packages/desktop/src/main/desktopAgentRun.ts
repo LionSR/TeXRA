@@ -25,7 +25,11 @@ import { ToolEditApprovalController } from '@texra/controllers/approval/ToolEdit
 import { attachSessionHost } from '@texra/controllers/session/attachSessionHost';
 import type { ServiceLink } from '@texra/controllers/server/client';
 import { attachWindowHost } from '@texra/controllers/server/windowHost';
-import type { SessionBackend } from '@texra/controllers/session/sessionBackend';
+import {
+  presentMovedAside,
+  type SessionBackend,
+} from '@texra/controllers/session/sessionBackend';
+import { sessionStoreMovedAsideMessage } from '@ui/copy/sessionStore';
 
 import {
   DesktopToolEditApprovalHost,
@@ -171,6 +175,19 @@ export const createDesktopAgentRun = Effect.fn('desktop.createAgentRun')(
       attachSessionHost(session, toolEditApprovals, {
         emit: handlePresentationEvent,
       }).pipe(Scope.provide(scope)),
+    );
+    // The stores this project's open moved aside, here or in the service.
+    yield* Effect.forkScoped(
+      presentMovedAside([session.view, backend.view], (moved) =>
+        Effect.asVoid(
+          Effect.forkDetach(
+            host.showInstructionDialog(
+              sessionStoreMovedAsideMessage(moved),
+              undefined,
+            ),
+          ),
+        ),
+      ),
     );
     // A project of the service: the window serves its runs there with the
     // same notices and tool-edit previews.

@@ -79,7 +79,7 @@ type CliPlatformInitOptions = Pick<
   | 'version'
 > & {
   readonly installSignalHandlers?: boolean;
-  /** The caller shows `SessionHandle.log.movedAside` itself: the chat TUI,
+  /** The caller shows `SessionView.movedAside` itself: the chat TUI,
    *  in its transcript (`createChatSessionController`), since stderr written before Ink mounts is left
    *  above its header. Otherwise this init prints it to stderr: the
    *  platform's log sink is always silent. */
@@ -370,12 +370,12 @@ export function initCliPlatform(
             ).pipe(
               Scope.provide(projectScope),
               Effect.tap((session) =>
-                Effect.sync(() => {
-                  const moved = session.log.movedAside;
-                  if (moved && context.presentsStoreMovedAside !== true) {
-                    writeTextStderr(sessionStoreMovedAsideMessage(moved));
-                  }
-                }),
+                context.presentsStoreMovedAside === true
+                  ? Effect.void
+                  : Effect.map(session.view.read([]), ({ movedAside }) => {
+                      for (const moved of movedAside)
+                        writeTextStderr(sessionStoreMovedAsideMessage(moved));
+                    }),
               ),
             ),
           );

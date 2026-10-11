@@ -347,7 +347,6 @@ export const makeSessionStore = (
             ),
         ),
       owner: (runId) => database.claimOwner(qualifyAggregateId('run', runId)),
-      movedAside: database.movedAside,
     };
     return {
       log,

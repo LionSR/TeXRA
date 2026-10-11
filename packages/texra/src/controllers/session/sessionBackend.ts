@@ -33,6 +33,7 @@ import type {
 import {
   RUN_OUTCOME,
   type RunId,
+  type SessionStoreMovedAside,
   type TranscriptSubscription,
 } from '@shared/schemas';
 import { isLiveRun } from '@shared/session/sessionView';
@@ -214,3 +215,34 @@ export function localSessionBackend(session: SessionHandle): SessionBackend {
     preview: () => Effect.succeed(null),
   };
 }
+
+/** The moved-aside stores this process has presented, by their copy's path:
+ *  the global store is in every session's view. */
+const presentedStores = new Set<string>();
+
+/**
+ * Present each store a session's open moved aside, once per process, as the
+ * views list it: the window's own session and, for a project the service
+ * runs, the service's (whose open may be the one that moved it). Runs
+ * until the views end.
+ */
+export const presentMovedAside = (
+  views: readonly Pick<SessionViewAccess, 'changes'>[],
+  present: (moved: SessionStoreMovedAside) => Effect.Effect<void>,
+): Effect.Effect<void> =>
+  Stream.runForEach(
+    Stream.mergeAll(
+      views.map((view) => view.changes),
+      { concurrency: 'unbounded' },
+    ),
+    ({ movedAside }) =>
+      Effect.forEach(
+        movedAside,
+        (moved) => {
+          if (presentedStores.has(moved.aside)) return Effect.void;
+          presentedStores.add(moved.aside);
+          return present(moved);
+        },
+        { discard: true },
+      ),
+  );

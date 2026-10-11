@@ -4,18 +4,14 @@
  * §3): its tables, columns, indexes and PRAGMAs, the open sequence that
  * brings a file to them, and `SCHEMA_VERSION` in SQLite's `user_version`.
  *
- * `SCHEMA_VERSION` names the DDL, never the row vocabulary: rows carry
- * their own versions (`rowVersions.ts`), and the kinds a store holds are
- * gated by `rowCodec.ts`, so it moves only for a change an older build
- * cannot write around. The 1.0 baseline is 102. A file below it holding
- * tables was written before 1.0 (100, 101: unshipped; 101's claims lacked
- * a build nonce); this build reads none and moves it aside whole.
- *
- * This module knows no row kind and no payload field.
+ * It moves only for a change an older build cannot write around: rows carry
+ * their own versions (`rowVersions.ts`, gated by `rowCodec.ts`). The 1.0
+ * baseline is 102; a store below it (100, 101: unshipped; 101's claims lack
+ * a build nonce) is moved aside whole. No row kind or payload field here.
  */
 import { Clock, Effect, Exit, FileSystem, Scope } from 'effect';
 import { withLogChannel } from '@logger/effectLog';
-import type { SessionStoreMovedAside } from '@shared/session/database';
+import type { SessionStoreMovedAside } from '@shared/schemas';
 import {
   cannotOpen,
   freeName,
@@ -222,13 +218,11 @@ const checkStamps = Effect.fnUntraced(function* (sql: Sql, path: string) {
  * Bring an open connection to the store this build writes (§3's open
  * sequence, steps 2 to 6), answering what it moved aside.
  *
- * The driver sets `busy_timeout` before enabling WAL, and that order is
- * load-bearing: `journal_mode = WAL` takes an exclusive lock, and at zero a
- * second process opening the same file lost appends to `SQLITE_BUSY`. Once the
- * store is ready the timeout drops to a 25 ms slice, and `Database` retries a
- * busy transaction on its own fiber schedule instead of freezing the host
- * thread in SQLite. `synchronous = NORMAL` is the WAL-safe setting: `FULL` cost
- * 1.4x to 1.8x, and `kill -9` mid-transaction lost nothing at `NORMAL`.
+ * `busy_timeout` is set before WAL (`journal_mode = WAL` locks exclusively;
+ * at zero a second opener lost appends to `SQLITE_BUSY`), then drops to a
+ * 25 ms slice once ready: `Database` retries busy work on its own schedule.
+ * `synchronous = NORMAL` is WAL-safe (`FULL` cost 1.4-1.8x; `kill -9` lost
+ * nothing).
  *
  * A store written before 1.0 is copied whole to the first free `.pre1`
  * name and every table dropped (`underCopy`); an empty file gets the schema
@@ -301,14 +295,10 @@ const prepareStore = Effect.fnUntraced(function* (
 const RECLAIM_PAGES = 256;
 
 /**
- * Give the pages a collection freed back to the filesystem (the design's
- * §7), once it commits, in autocommit steps of `incremental_vacuum(N)`, so
- * another writer waits on one step, never the whole reclaim. A driver that
- * steps a statement to its end frees N pages a step, one that steps it once
- * frees one; either way the steps run until the freelist is empty or stops
- * shrinking. It is not interrupted, as the collection is not: a session that
- * closes first would leave the pages. A step that fails ends it, and the
- * next collection reclaims the rest.
+ * Give a collection's freed pages back to the filesystem (the design's §7)
+ * in autocommit `incremental_vacuum(N)` steps, so another writer waits on
+ * one step, until the freelist is empty or stops shrinking. Uninterrupted,
+ * as the collection is; a failed step ends it for the next one to resume.
  */
 export const reclaimFreePages = (sql: Sql, path: string) =>
   Effect.gen(function* () {
@@ -344,19 +334,28 @@ export const openStore = Effect.fnUntraced(function* <E, R>(
   mode: 'persistent' | 'ephemeral',
   path: string,
   filename: string,
+  /** Whether another process has the file open (`storeOpenElsewhere`). */
+  openElsewhere: Effect.Effect<'free' | 'open' | 'unreadable', E, R>,
 ) {
   const fs = yield* FileSystem.FileSystem;
   // A file the probe cannot open (none yet) is the open's to create; one
   // SQLite reads as damaged (cut short in its first page) is moved below.
-  if (mode === 'persistent')
-    yield* Effect.scoped(
+  const retiring =
+    mode === 'persistent' &&
+    (yield* Effect.scoped(
       Effect.flatMap(probe, (sql) => checkStamps(sql, path)),
     ).pipe(
       Effect.catchCause((cause) =>
         cannotOpen(cause) || isDamaged(cause)
-          ? Effect.void
+          ? Effect.succeed(false)
           : Effect.failCause(cause),
       ),
+    ));
+  // Never retire a store an earlier build still has open (its live claims).
+  if (retiring && (yield* openElsewhere) === 'open')
+    return yield* refused(
+      path,
+      'was written by an earlier build of TeXRA that still has it open; quit that build (and its background service), then open again',
     );
   const outer = yield* Effect.scope;
   const first = yield* Scope.fork(outer, 'sequential');

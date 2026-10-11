@@ -56,9 +56,12 @@ import { heldElsewhereBy } from '@shared/session/database';
 import { escapeText } from '@shared/utils/xmlEscape';
 import type { DisposableStore } from '@texra/platform/disposable';
 import type { WindowHost } from '@texra/controllers/server/windowHost';
-import type { SessionBackend } from '@texra/controllers/session/sessionBackend';
-import { FOCUSED_AGENT } from '@ui/copy/nestedRuns';
+import {
+  presentMovedAside,
+  type SessionBackend,
+} from '@texra/controllers/session/sessionBackend';
 import { sessionStoreMovedAsideMessage } from '@ui/copy/sessionStore';
+import { FOCUSED_AGENT } from '@ui/copy/nestedRuns';
 import { generateRunId } from '@utils/core';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { handleTuiSlashCommand } from './tui/commands/handleSlashCommand';
@@ -338,11 +341,17 @@ export function createChatSessionController(
   const viewChanges = (init.backend ?? runtimeSession).view.changes;
   // Said in the transcript the controller writes to, not on stderr before
   // Ink mounts, where it would be left above the header.
-  if (runtimeSession.log.movedAside) {
-    appendLocalNotice(
-      sessionStoreMovedAsideMessage(runtimeSession.log.movedAside),
-    );
-  }
+  runtime.runFork(
+    presentMovedAside(
+      init.backend === undefined
+        ? [runtimeSession.view]
+        : [runtimeSession.view, init.backend.view],
+      (moved) =>
+        Effect.sync(() =>
+          appendLocalNotice(sessionStoreMovedAsideMessage(moved)),
+        ),
+    ),
+  );
   let preparingRoot: PreparingRoot | undefined;
   const pendingSkillActivations = new Map<string, string>();
   let pendingSkillActivationClearEpoch = 0;
