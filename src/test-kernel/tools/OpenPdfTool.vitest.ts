@@ -1,12 +1,12 @@
 import '@test/support/sessionGraphTestSetup';
 
 import { it } from '@effect/vitest';
-import { Effect, Exit, Scope } from 'effect';
+import { Effect } from 'effect';
 
 // Test composition imports
 
 // Third-party imports
-import { afterEach, beforeEach, describe, expect, vi, type Mock } from 'vitest';
+import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 
 // Local imports
 import type { RunId } from '@shared/schemas';
@@ -45,7 +45,6 @@ describe('OpenPdfTool', () => {
     },
   });
 
-  let detachHostInteractions = (): void => {};
   let sessionRoot: string | undefined;
 
   beforeEach(async () => {
@@ -59,8 +58,6 @@ describe('OpenPdfTool', () => {
   });
 
   afterEach(async () => {
-    detachHostInteractions();
-    detachHostInteractions = () => undefined;
     const root = sessionRoot;
     sessionRoot = undefined;
     if (root === undefined) return;
@@ -72,23 +69,14 @@ describe('OpenPdfTool', () => {
     }
   });
 
-  /** Attach a PDF viewer the way a host does: to the editor registry. */
-  function installOpener(): Mock<
-    (request: OpenPdfRequest) => Effect.Effect<void>
-  > {
+  /** Attach a PDF viewer the way a host does: to the editor registry, for
+   *  the calling test's scope. */
+  const installOpener = Effect.gen(function* () {
     const openPdf = vi.fn<(request: OpenPdfRequest) => Effect.Effect<void>>();
     openPdf.mockReturnValue(Effect.void);
-    detachHostInteractions();
-    const scope = Effect.runSync(Scope.make());
-    Effect.runSync(
-      editors
-        .attach(testDefaultSession().roots.storage, { openPdf })
-        .pipe(Scope.provide(scope)),
-    );
-    detachHostInteractions = () =>
-      Effect.runSync(Scope.close(scope, Exit.void));
+    yield* editors.attach(testDefaultSession().roots.storage, { openPdf });
     return openPdf;
-  }
+  });
 
   function expectOpenError(result: unknown, fragment: string): void {
     expect(result).toMatchObject({
@@ -106,7 +94,7 @@ describe('OpenPdfTool', () => {
 
   it.effect('opens an existing PDF through the registered host callback', () =>
     Effect.gen(function* () {
-      const openPdf = installOpener();
+      const openPdf = yield* installOpener;
       const tool = OpenPdfTool;
 
       const result = yield* tool.call({
@@ -139,7 +127,7 @@ describe('OpenPdfTool', () => {
 
   it.effect('allows absolute paths inside active run storage', () =>
     Effect.gen(function* () {
-      const openPdf = installOpener();
+      const openPdf = yield* installOpener;
       const tool = OpenPdfTool;
 
       const result = yield* tool
@@ -188,7 +176,7 @@ describe('OpenPdfTool', () => {
     'does not parse working_directory before checking absolute run-storage paths',
     () =>
       Effect.gen(function* () {
-        const openPdf = installOpener();
+        const openPdf = yield* installOpener;
         const tool = OpenPdfTool;
 
         const result = yield* tool
@@ -225,7 +213,7 @@ describe('OpenPdfTool', () => {
 
   it.effect('rejects arbitrary absolute paths outside the allowed roots', () =>
     Effect.gen(function* () {
-      const openPdf = installOpener();
+      const openPdf = yield* installOpener;
       const tool = OpenPdfTool;
 
       const result = yield* tool.call({ path: fakePath('run/paper.pdf') }).pipe(

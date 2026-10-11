@@ -16,7 +16,6 @@ import {
   Effect,
   Exit,
   FiberSet,
-  Option,
   Schedule,
   Scope,
   Stream,
@@ -39,8 +38,7 @@ import {
 } from '@texra/shared/session/sessionFrames';
 import { frameSubscription } from '@texra/controllers/session/SessionFramer';
 import { runEnded } from '@texra/controllers/session/sessionBackend';
-import { EditorHost } from '@texra/tools/editorHost';
-import { ToolCatalog } from '@tools/liveTools';
+import type { EditorHostShape } from '@texra/tools/editorHost';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 import {
@@ -62,6 +60,9 @@ export class ServiceProjects extends Context.Service<
   {
     /** The storage root every project's store sits under. */
     readonly storageRoot: string;
+    /** The editor registry the service's plugins read (`texraPlugins`):
+     *  each presented project's windows attach their editors to it. */
+    readonly editors: EditorHostShape;
     /** The session of `workspace`, opened on first use and leased for the
      *  caller's scope: a leased session is never closed for idleness. */
     readonly open: (
@@ -213,7 +214,6 @@ export const serviceHandlers = TexraRpcs.toLayer(
         );
     });
     const hosts = yield* makeHostWindows;
-    const catalog = yield* ToolCatalog;
     /** Each session's presentation surface, given once (claimed in one
      *  step) and closed with the session: what its runs ask of a host goes
      *  to the project's windows. */
@@ -223,22 +223,9 @@ export const serviceHandlers = TexraRpcs.toLayer(
         if (presented.has(session)) return Effect.void;
         const surface = Scope.forkUnsafe(scope);
         presented.set(session, surface);
-        return Effect.gen(function* () {
-          // The registry the `core` plugin serves its editor tools from, in
-          // this process's runtime: the windows' editors attach to it.
-          const editors = yield* catalog
-            .processServices('core')
-            .pipe(
-              Effect.map(
-                Option.flatMap((core) => Context.getOption(core, EditorHost)),
-              ),
-            );
-          if (Option.isNone(editors))
-            yield* Effect.logWarning(
-              `The core plugin's services are down: tasks of ${session.roots.workspace ?? session.roots.storage} get no diagnostics, inline criticism or PDF viewer from its windows.`,
-            );
-          yield* hosts.adopt(session, Option.getOrUndefined(editors));
-        }).pipe(Scope.provide(surface));
+        return hosts
+          .adopt(session, projects.editors)
+          .pipe(Scope.provide(surface));
       });
     // A session no client leases and no run holds closes once idle long
     // enough, with its surface: a service that lives for weeks keeps only
