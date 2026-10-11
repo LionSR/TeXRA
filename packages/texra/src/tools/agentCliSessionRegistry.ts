@@ -1,6 +1,5 @@
 import { Deferred, Effect } from 'effect';
 
-import type { RunHandle } from '@agent/runtime/RunHandle';
 import type { RunRegistry } from '@agent/runtime/runRegistry';
 import type { RunId } from '@texra-ai/harness/schemas';
 
@@ -94,13 +93,17 @@ export class AgentCliSessionRegistry {
   }
 
   /**
-   * Live handle for an entry, resolved through the one run registry
-   * this session's agent-CLI children run under. Ownership and follow-up
-   * checks read the live handle rather than a stored pointer, so a detached
-   * or re-parented child answers with its current state.
+   * The parent edge of an entry's live run, resolved through the one run
+   * registry this session's agent-CLI children run under: `undefined` when
+   * no run of it is live here. Ownership checks read it rather than a
+   * stored pointer, so a detached child answers with its current edge.
    */
-  getHandle(entry: AgentCliSessionEntry | undefined): RunHandle | undefined {
-    return entry && this.runs.getHandle(entry.runId);
+  liveParent(
+    entry: AgentCliSessionEntry | undefined,
+  ): RunId | null | undefined {
+    if (entry === undefined || this.runs.getHandle(entry.runId) === undefined)
+      return undefined;
+    return this.runs.parentOf(entry.runId);
   }
 
   /** Wait for a reserved id to become active, or for its owner to release it. */

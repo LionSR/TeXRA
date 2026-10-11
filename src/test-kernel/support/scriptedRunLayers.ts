@@ -380,9 +380,11 @@ export function agentRunTestLayer(init: ScriptedRunInit) {
   );
 }
 
-/** A run id whose start is already on the session's log. */
-export function startedRun(session: SessionHandle): RunId {
+/** A run id whose start is already on the session's log; with
+ *  `parentRunId`, a child of that run, whose start goes first. */
+export function startedRun(session: SessionHandle, parentRunId?: RunId): RunId {
   const runId = generateRunId();
-  publishTestRunStart(session, runId);
+  if (parentRunId !== undefined) publishTestRunStart(session, parentRunId);
+  publishTestRunStart(session, runId, { parent: parentRunId ?? null });
   return runId;
 }

@@ -323,7 +323,7 @@ const waitForRuns = Effect.fn('ExecutionsTool.waitForRuns')(function* (
   ids?: readonly RunId[] | null,
 ) {
   const runs = yield* Runs;
-  const candidateIds = ids?.length ? unique(ids) : runs.activeIds();
+  const candidateIds = ids?.length ? unique(ids) : runs.heldIds();
   // Exclude runs that are already effectively done
   // (completed, inactive, or tool-use subagent WAITING with result delivered).
   const pendingIds = candidateIds.filter(
@@ -425,7 +425,7 @@ const handleKill = Effect.fn('ExecutionsTool.handleKill')(function* (
   }
 
   // Scope: can only kill your own children.
-  if (!target.isOwnedBy(context.runId)) {
+  if (runs.parentOf(runId) !== context.runId) {
     return yield* Effect.fail(
       new ToolError(`Cannot kill run ${runId}: not a child of this session.`),
     );

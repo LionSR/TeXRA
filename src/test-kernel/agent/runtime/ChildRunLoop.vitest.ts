@@ -83,10 +83,11 @@ const trackedRunIds = new Set<RunId>();
 
 const PARENT_RUN_ID = 'ffff01' as RunId;
 
-/** The run id a fixture drives, with its `run.start` already committed. */
+/** The run id a fixture drives, with its `run.start` (a child of
+ *  {@link PARENT_RUN_ID}, as a launch names it) already committed. */
 function loopRunId(): RunId {
   const runId = generateRunId();
-  publishTestRunStart(session, runId);
+  publishTestRunStart(session, runId, { parent: PARENT_RUN_ID });
   return runId;
 }
 
@@ -546,7 +547,7 @@ describe('childRunLoop E2E fixtures', () => {
               return yield* Deferred.await(formattedDelivery);
             }),
         );
-        publishTestRunStart(session, runId);
+        publishTestRunStart(session, runId, { parent: PARENT_RUN_ID });
         const childRun = yield* createChildRun(session, runId, PARENT_RUN_ID, {
           run: { kind: 'agent', agent: 'fake-cli', tool: 'codex' },
         }).pipe(Effect.provideService(Runs, session.runs));
@@ -572,13 +573,6 @@ describe('childRunLoop E2E fixtures', () => {
           expect(
             yield* submitFollowUp(
               PARENT_RUN_ID,
-              { text: 'restore me', from: { kind: 'user' as const } },
-              { session },
-            ),
-          ).toMatchObject({ status: 'failed' });
-          expect(
-            yield* submitFollowUp(
-              PARENT_RUN_ID,
               {
                 text: 'late child result',
                 from: { kind: 'run' as const, runId: 'c41dc41dc41d' as RunId },
@@ -590,7 +584,7 @@ describe('childRunLoop E2E fixtures', () => {
 
           const releaseNativeChild = session.runs.reserveChildActivation({
             runId: 'da7a01' as RunId,
-            parent: { current: PARENT_RUN_ID },
+            launchParent: PARENT_RUN_ID,
             retainsTerminalParent: true,
             interrupt: vi.fn(),
           });
@@ -1179,7 +1173,7 @@ describe('childRunLoop E2E fixtures', () => {
     () =>
       Effect.gen(function* () {
         const runId = 'fa11ed01' as RunId;
-        publishTestRunStart(session, runId);
+        publishTestRunStart(session, runId, { parent: PARENT_RUN_ID });
         const childRun = yield* createChildRun(session, runId, PARENT_RUN_ID, {
           run: { kind: 'agent', agent: 'fake-cli', tool: 'codex' },
         }).pipe(Effect.provideService(Runs, session.runs));

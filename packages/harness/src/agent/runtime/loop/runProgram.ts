@@ -31,12 +31,11 @@ import { Runs } from '../runRegistry';
 import type { FollowUps } from '../FollowUps';
 
 /**
- * A fresh run's registration as its birth job decides it. A child whose
- * parent edge a detaching stop cut before it was born (the local edge goes
- * once that detach commits, before this job runs) is born detached: no
- * parent, and the grants a detach keeps, inherited from that parent. The
- * edge read is the one `detachChildren` cuts: the registry shares one
- * `RunParent` between the handle (tracked before this job) and activation.
+ * A fresh run's registration as its birth job decides it. A child a
+ * detaching stop cut before it was born (marked once that detach commits,
+ * before this job runs, and read here through `RunRegistry.parentOf`) is
+ * born detached: no parent, and the grants a detach keeps, inherited from
+ * that parent. The mark stays until the birth settles (`entered`).
  */
 const birthRows = (
   run: Pick<AgentRunShape, 'runId' | 'session' | 'entry'>,
@@ -46,7 +45,7 @@ const birthRows = (
   if (
     start?.type !== 'run.start' ||
     start.parent === null ||
-    run.session.runs.getHandle(run.runId)?.parent !== null
+    run.session.runs.parentOf(run.runId) !== null
   )
     return rows;
   const view = SubscriptionRef.getUnsafe(run.session.view.ref);

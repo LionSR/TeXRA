@@ -106,7 +106,7 @@ describe('committed run removal', () => {
           expect(SubscriptionRef.getUnsafe(session.view.ref).requests).toEqual(
             [],
           );
-          expect(handle.isOwnedBy(parent)).toBe(false);
+          expect(session.runs.parentOf(handle.runId)).not.toBe(parent);
           expect(session.log.now()).toBe(before + 1);
           expect(goalOf(session, parent)).toBeNull();
         }),

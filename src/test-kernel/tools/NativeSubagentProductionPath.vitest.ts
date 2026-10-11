@@ -406,7 +406,7 @@ function childRunId(resultOutput: string | undefined): RunId {
 }
 
 function interruptActiveRuns(session: SessionHandle): void {
-  for (const runId of session.runs.activeIds()) {
+  for (const runId of session.runs.heldIds()) {
     session.runs.interrupt(runId);
   }
 }

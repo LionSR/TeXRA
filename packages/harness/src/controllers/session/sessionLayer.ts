@@ -257,10 +257,7 @@ const sessionHandleLayer = (key: SessionKey) =>
         yield* session.interactions.use(key.open.interactions);
       // The local half of a committed removal; its plugin rows go with it.
       yield* store
-        .deliver((runId) => {
-          session.runs.detachChildren(runId);
-          releaseRunResources(runId, session);
-        })
+        .deliver((runId) => releaseRunResources(runId, session))
         .pipe(Scope.provide(consumerScope));
       // The registry's phase notification rides the fold-gated tail: its
       // waiters read `RunView.status` synchronously, so a row reaches them
@@ -512,7 +509,6 @@ const closeSession = (root: string) =>
     if (held === undefined)
       return { settled: true, abandoned: [] } satisfies SessionCloseReport;
     const { key, session, runs } = held;
-    runs.close();
     // A run the stop reached no driver for, or whose stop failed, has nothing
     // to settle it: the close settles it now instead of waiting out the
     // budget for it.

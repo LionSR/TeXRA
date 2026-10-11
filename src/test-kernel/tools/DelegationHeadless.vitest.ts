@@ -590,7 +590,7 @@ describe('headless delegation', () => {
 
   afterEach(async () => {
     const session = testDefaultSession();
-    for (const runId of session.runs.activeIds()) {
+    for (const runId of session.runs.heldIds()) {
       // Test handles have no provider interrupt handler. Remove the fake
       // handle, then stop the real child activation that owns the loop.
       untrackRun(session.runs, runId);
@@ -1030,7 +1030,10 @@ describe('headless delegation', () => {
         expect(mocks.writeReport).toHaveBeenCalledWith(
           expect.stringContaining('The proof is correct.'),
         );
-        expect(capturedHandle?.parent).toBeNull();
+        const childRunId = capturedHandle?.runId;
+        expect(
+          childRunId && testDefaultSession().runs.parentOf(childRunId),
+        ).toBeNull();
         expect(
           yield* queuedFollowUps(testDefaultSession(), PARENT_RUN_ID),
         ).toEqual([]);

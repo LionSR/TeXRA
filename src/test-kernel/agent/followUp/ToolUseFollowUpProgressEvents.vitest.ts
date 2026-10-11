@@ -127,14 +127,18 @@ describe('tool-use follow-up progress events', () => {
 
         const result = yield* submitFollowUp(
           runId,
-          { text: 'late follow-up', from: { kind: 'user' as const } },
+          {
+            text: 'late follow-up',
+            from: { kind: 'run' as const, runId: 'fa0002' as RunId },
+          },
           {
             session: testDefaultSession(),
           },
         );
 
-        // The run's own terminal row is the refusal: it finished.
-        expect(result).toEqual({ status: 'failed', reason: 'finished' });
+        // The run's terminal row stands: another run's message never
+        // revives it, whatever controls a stale handle still holds.
+        expect(result).toEqual({ status: 'failed', reason: 'not_resumable' });
         expect(yield* queuedFollowUps(testDefaultSession(), runId)).toEqual([]);
       }),
   );

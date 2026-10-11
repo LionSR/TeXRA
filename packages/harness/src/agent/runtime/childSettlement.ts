@@ -18,7 +18,11 @@ import type {
 } from '@agent/followUp/Inbox';
 import { startFollowUpWake } from '@agent/followUp/ToolUseFollowUp';
 import type { AgentTrace } from '@agent/trace';
-import { lostResultId, type AttemptKey } from '@agent/storage/runRecords';
+import {
+  lostResultId,
+  persistedParentRunId,
+  type AttemptKey,
+} from '@agent/storage/runRecords';
 import { withLogChannel } from '@logger/effectLog';
 import {
   aggregateId,
@@ -186,55 +190,74 @@ export const parentAdmission = (
 
 /**
  * The parent's half of a settlement, appended with the child's rows; a
- * replay writes nothing. A parent another process holds leaves the result
- * parked on the child (`heldFor`, its end unwritten) for `deliverHeld`;
- * any other refusal is said once the rows commit.
+ * replay writes nothing. The child's edge is read from its records in this
+ * job: a detach that committed first leaves the result in its report. A
+ * parent another process holds leaves the result parked on the child
+ * (`heldFor`, its end unwritten) for `deliverHeld`; any other refusal is
+ * said once the rows commit.
  */
 export const deliverIn = (
-  followUps: Inbox,
+  session: SessionHandle,
   { to, item, end }: ChildDelivery,
   trace: AgentTrace | undefined,
 ): TransactionPart =>
-  Effect.map(
-    parentAdmission(followUps, to, item, {}, trace),
-    ({ rows, sent, committed }) => {
-      if (
-        sent.kind === 'refused' &&
-        sent.reason === 'owned_elsewhere' &&
-        item.from.kind === 'run' &&
-        item.deliveryId !== undefined
-      )
-        return {
-          rows: [
-            {
-              type: 'child.park' as const,
-              aggregateId: aggregateId('run', item.from.runId),
-              phase: 'parked' as const,
-              heldFor: item.deliveryId,
-              ...(end !== undefined && { ends: end }),
-            },
-          ],
-          held: end !== undefined,
-          committed: warn(trace, 'Result waiting: parent is open elsewhere.', {
-            parentRunId: to,
-          }),
-        };
+  Effect.gen(function* () {
+    const child = item.from.kind === 'run' ? item.from.runId : undefined;
+    if (
+      child !== undefined &&
+      (yield* persistedParentRunId(session, child)) !== to
+    )
       return {
-        rows,
-        committed:
-          sent.kind === 'refused'
-            ? Effect.andThen(
-                committed,
-                warn(
-                  trace,
-                  `Turn result not delivered: parent run is unavailable (${sent.reason ?? 'not_resumable'}). The result remains in the run report.`,
-                  { parentRunId: to, reason: sent.reason },
-                ),
-              )
-            : committed,
+        rows: [],
+        committed: warn(
+          trace,
+          'Turn result not delivered: child was detached from its orchestrator. The result remains in the run report.',
+          { runId: child },
+        ),
       };
-    },
-  );
+    const { rows, sent, committed } = yield* parentAdmission(
+      session.followUps,
+      to,
+      item,
+      {},
+      trace,
+    );
+    if (
+      sent.kind === 'refused' &&
+      sent.reason === 'owned_elsewhere' &&
+      item.from.kind === 'run' &&
+      item.deliveryId !== undefined
+    )
+      return {
+        rows: [
+          {
+            type: 'child.park' as const,
+            aggregateId: aggregateId('run', item.from.runId),
+            phase: 'parked' as const,
+            heldFor: item.deliveryId,
+            ...(end !== undefined && { ends: end }),
+          },
+        ],
+        held: end !== undefined,
+        committed: warn(trace, 'Result waiting: parent is open elsewhere.', {
+          parentRunId: to,
+        }),
+      };
+    return {
+      rows,
+      committed:
+        sent.kind === 'refused'
+          ? Effect.andThen(
+              committed,
+              warn(
+                trace,
+                `Turn result not delivered: parent run is unavailable (${sent.reason ?? 'not_resumable'}). The result remains in the run report.`,
+                { parentRunId: to, reason: sent.reason },
+              ),
+            )
+          : committed,
+    };
+  });
 
 /**
  * One settlement, whole, as the rows of the append that ends its turn: the
@@ -242,7 +265,7 @@ export const deliverIn = (
  * park, unless a held result's park took its place.
  */
 export const settleChildTurn = (
-  followUps: Inbox,
+  session: SessionHandle,
   { rows, delivery }: ChildSettlement,
   trace: AgentTrace | undefined,
   park?: RunInputDraft,
@@ -250,7 +273,7 @@ export const settleChildTurn = (
   const own = park === undefined ? [] : [park];
   return delivery === undefined
     ? Effect.succeed({ rows: [...rows, ...own], committed: Effect.void })
-    : Effect.map(deliverIn(followUps, delivery, trace), (parent) => ({
+    : Effect.map(deliverIn(session, delivery, trace), (parent) => ({
         ...parent,
         rows: [
           ...rows,

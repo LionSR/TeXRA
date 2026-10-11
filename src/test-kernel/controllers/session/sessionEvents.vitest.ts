@@ -1242,7 +1242,7 @@ describe('Sessions owner', () => {
         const interrupt = vi.fn(() => releaseChild());
         releaseChild = session.runs.reserveChildActivation({
           runId: RunIdSchema.parse('aa0002'),
-          parent: { current: null },
+          launchParent: null,
           retainsTerminalParent: true,
           interrupt,
         });
@@ -1289,7 +1289,7 @@ describe('Sessions owner', () => {
         const slow = RunIdSchema.parse('aa0003');
         session.runs.reserveChildActivation({
           runId: slow,
-          parent: { current: null },
+          launchParent: null,
           retainsTerminalParent: false,
           interrupt: () => {},
         });

@@ -110,9 +110,9 @@ const RESUME_REFUSED: ResumeRunResult = { failed: 'not_resumable' };
  * The resume every automatic wake and every host's Resume takes: the one
  * resume (`resumeRun`) on the session that holds the run, started on the fork
  * the session's launches run on, so the attempt belongs to the session and
- * outlives a caller that stops waiting. It reaches that resume through
- * {@link AgentEngine}, because a resumed run's child loop wakes its parent
- * through here in turn.
+ * outlives a caller that stops waiting. It reaches that resume through the
+ * session's run programs (`RunRegistryInit.programs`), because a resumed
+ * run's child loop wakes its parent through here in turn.
  *
  * What the run did not take is told to the user here, once: a refusal by its
  * reason, a fault as a failure unless the session's terminal-result presenter
@@ -132,7 +132,7 @@ export function resumeOnSession(
       runMissing ||= session.view.run(runId) === undefined;
       return runMissing;
     };
-    return session.runs
+    return session.runs.programs
       .resume(runId, { session, isCancellationRequested })
       .pipe(
         Effect.tap((result) =>

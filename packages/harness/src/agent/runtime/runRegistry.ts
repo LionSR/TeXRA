@@ -43,7 +43,7 @@ import { isInFlightPhase } from '@shared/runs/runStatus';
 import type { RunStopReason } from '@shared/session/runtimeRequest';
 import { type PerKeyLane, withPerKeyLane } from '@utils/core/perKeyQueue';
 import { ensureError } from '@utils/errors/errorMessage';
-import type { RunHandle, RunParent } from './RunHandle';
+import type { RunHandle } from './RunHandle';
 import type { SessionHandle } from './SessionHandle';
 import type { RunStop, RunStopOptions } from './runStop';
 import type { executeAgent, resumeToolUseFromResumeData } from './executeAgent';
@@ -73,7 +73,8 @@ class RunAdmissionClosed extends Data.TaggedError('RunAdmissionClosed')<{
  */
 export interface ChildRunActivation {
   readonly runId: RunId;
-  parent: RunParent;
+  /** The run that launched this child; its edge is {@link RunRegistry.parentOf}. */
+  readonly launchParent: RunId | null;
   readonly interrupt: () => void;
   /**
    * A native child (true) counts as its parent's active child until the last
@@ -154,12 +155,17 @@ export class RunRegistry {
    *  stops the first to settle cannot admit a child the second's snapshot
    *  already left behind. */
   private readonly stopping = new Map<RunId, Set<symbol>>();
+  /** Children a detach cut before their birth, which has no row to carry
+   *  it: added in that detach's afterCommit, read through {@link parentOf}
+   *  (the birth job's, and the unborn edge's), removed once the birth
+   *  settled ({@link settleBirth}) or with the entry. */
+  private readonly unbornDetached = new Set<RunId>();
   /** Steps admitted but not yet started; disposal fails them all at once. */
   private readonly waiting = new Set<Deferred.Deferred<never, Error>>();
   /** The session's child-run concurrency budget, made on first use. */
   private budget: Semaphore.Semaphore | undefined;
   private disposed = false;
-  /** Set by {@link close}: the session is closing. */
+  /** Set by {@link stopAll}: the session is closing. */
   private closing = false;
   /** The lane slots `withPerKeyLane` reads and writes: this registry's
    *  entries, so a lane never records a run the entry map lacks. */
@@ -178,12 +184,9 @@ export class RunRegistry {
 
   /** The run programs (`RunRegistryInit.programs`). */
   readonly programs: RunPrograms;
-  /** Resume one persisted run on this session (`resumeRun`). */
-  readonly resume: RunPrograms['resume'];
 
   constructor(private readonly init: RunRegistryInit) {
     this.programs = init.programs;
-    this.resume = init.programs.resume;
   }
 
   // ---------------------------------------------------------------- entries
@@ -202,6 +205,7 @@ export class RunRegistry {
     if (entry.hold !== undefined || entry.launches > 0) return;
     if (this.entries.get(runId) === entry) {
       this.entries.delete(runId);
+      this.unbornDetached.delete(runId);
       this.completeDrain(runId);
       if (this.entries.size === 0) this.completeDrain('');
     }
@@ -236,20 +240,6 @@ export class RunRegistry {
     for (const entry of this.entries.values())
       if (entry.handle) handles.push(entry.handle);
     return handles;
-  }
-
-  /**
-   * Every run with an interrupt target: the tracked handles and native child
-   * activations still preparing or delivering outside their engine handle.
-   * This is what a close stops; {@link awaitDrained} also waits for ownership
-   * retained beyond it, through the run's final resource release.
-   */
-  activeIds(): RunId[] {
-    const ids: RunId[] = [];
-    for (const [runId, entry] of this.entries)
-      if (entry.handle !== undefined || entry.activation !== undefined)
-        ids.push(runId);
-    return ids;
   }
 
   /** Every run this session still keeps a record of: what `awaitDrained`
@@ -291,23 +281,38 @@ export class RunRegistry {
       const activation = entry.activation;
       if (
         activation !== undefined &&
-        activation.parent.current === parentRunId
+        this.parentOf(activation.runId) === parentRunId
       ) {
         yield activation;
       }
     }
   }
 
-  /** The children one parent's detach covers. A Set, not an array: a child
-   *  detached mid-turn has both a live handle and a ChildRunActivation
-   *  under one runId, so both loops reach it and it is severed once. */
+  /** The children one parent's detach covers: each retained run (handle
+   *  or activation) whose edge names it, once. */
   private childRunIds(parentRunId: RunId): readonly RunId[] {
-    const childRunIds = new Set<RunId>();
-    for (const activation of this.activeChildActivations(parentRunId))
-      childRunIds.add(activation.runId);
-    for (const handle of this.handles())
-      if (handle.isOwnedBy(parentRunId)) childRunIds.add(handle.runId);
-    return [...childRunIds];
+    return [...this.entries.keys()].filter(
+      (id) => this.isRetained(id) && this.parentOf(id) === parentRunId,
+    );
+  }
+
+  /** The run's parent edge here, from its rows: the settled view's for a
+   *  run it holds; an unborn one's launch's, unless a detach cut it. A
+   *  decision that writes reads the run's records in its job instead. */
+  parentOf(runId: RunId): RunId | null {
+    const run = this.init.session().view.run(runId);
+    if (run !== undefined) return run.parentId;
+    if (this.unbornDetached.has(runId)) return null;
+    const entry = this.entries.get(runId);
+    return (
+      entry?.activation?.launchParent ?? entry?.handle?.launchParent ?? null
+    );
+  }
+
+  /** The run's entering batch settled into the view, which holds its edge
+   *  from then on (`entered`): the birth job never ends the mark. */
+  settleBirth(runId: RunId): void {
+    this.unbornDetached.delete(runId);
   }
 
   hasActiveChildren(parentRunId: RunId): boolean {
@@ -575,14 +580,9 @@ export class RunRegistry {
   /** Register a run handle. */
   track(handle: RunHandle): void {
     this.assertActive();
-    if (handle.parent !== null)
-      this.assertAdmitsChild(handle.parent, handle.runId);
-    const entry = this.entryFor(handle.runId);
-    handle.parentState =
-      entry.activation?.parent ??
-      entry.handle?.parentState ??
-      handle.parentState;
-    entry.handle = handle;
+    if (handle.launchParent !== null)
+      this.assertAdmitsChild(handle.launchParent, handle.runId);
+    this.entryFor(handle.runId).handle = handle;
   }
 
   /** Remove `handle` only if it is still the current registration. */
@@ -601,11 +601,9 @@ export class RunRegistry {
     if (this.entries.get(activation.runId)?.activation) {
       return () => {};
     }
-    if (activation.parent.current !== null)
-      this.assertAdmitsChild(activation.parent.current, activation.runId);
-    const entry = this.entryFor(activation.runId);
-    activation.parent = entry.handle?.parentState ?? activation.parent;
-    entry.activation = activation;
+    if (activation.launchParent !== null)
+      this.assertAdmitsChild(activation.launchParent, activation.runId);
+    this.entryFor(activation.runId).activation = activation;
     return () => {
       const current = this.entries.get(activation.runId);
       if (current?.activation !== activation) return;
@@ -719,21 +717,24 @@ export class RunRegistry {
     };
   }
 
-  /** Stop every run no other run here stops, cascading into its children:
-   *  the sweep a session close runs. A child whose parent this registry holds
-   *  is stopped by that parent's cascade; every other run — a root, or a
-   *  child whose parent is not here — is stopped itself. Answers the runs
-   *  left for the caller to settle: those no live target took the stop for,
-   *  since nothing here drives them, and those whose stop failed to record
-   *  what it owed storage (logged here). */
+  /** The session is closing: refuse every run registered from here on,
+   *  and stop every run no other run here stops, cascading into its
+   *  children. A child whose parent this registry holds is stopped by that
+   *  parent's cascade; every other run — a root, or a child whose parent is
+   *  not here — is stopped itself. Answers the runs left for the caller to
+   *  settle: those no live target took the stop for, since nothing here
+   *  drives them, and those whose stop failed to record what it owed storage
+   *  (logged here). Stopped runs keep their records until they settle
+   *  ({@link awaitDrained}). */
   stopAll(): Effect.Effect<readonly RunId[]> {
+    this.closing = true;
     const shutdown = {
       detachActiveChildren: false,
       reason: 'shutdown',
     } as const;
     const active = new Set(this.heldIds());
     const stops = [...active].flatMap((runId) => {
-      const parent = this.getHandle(runId)?.parent ?? null;
+      const parent = this.parentOf(runId);
       return parent !== null && active.has(parent)
         ? []
         : [{ runId, stop: this.stop(runId, shutdown) }];
@@ -799,7 +800,7 @@ export class RunRegistry {
       activation.interrupt();
     }
     for (const handle of this.handles()) {
-      if (handle.isOwnedBy(parentRunId))
+      if (this.parentOf(handle.runId) === parentRunId)
         this.terminate(handle, visited, true, reason);
     }
   }
@@ -866,11 +867,12 @@ export class RunRegistry {
    * Detach all active subagents from a parent, promoting them to top-level:
    * they keep running and deliver through the follow-up queue. One job
    * decides which children are born and severs those durably (their claims
-   * held), keeping the grants each inherited; every local edge goes once
-   * that commits (a refused one leaves all standing), before the publisher
-   * runs any birth job, which reads the edge (`openRun`): a child is born
-   * detached, or detached by rows. The stop marked the parent before
-   * reading its children, so none is admitted in between.
+   * held), keeping the grants each inherited. The unborn ones have no row to
+   * carry it: once the batch commits (a refused one cuts none), before the
+   * publisher runs any birth job, they are marked {@link unbornDetached},
+   * which their birth job reads (`openRun`): a child is born detached, or
+   * detached by rows. The stop marked the parent before reading its
+   * children, so none is admitted in between.
    */
   private detachActiveChildren(parentRunId: RunId): Effect.Effect<void, Error> {
     const session = this.init.session();
@@ -894,40 +896,17 @@ export class RunRegistry {
               ] as const;
             }),
           );
-        // Every local edge goes once the rows commit, before the publisher
-        // runs a birth job; a rolled-back detach cuts none.
+        const unborn = children.filter((id) => !born.includes(id));
         yield* tx.afterCommit(
-          Effect.sync(() => this.detachChildren(parentRunId, children)),
+          Effect.sync(() => {
+            for (const id of unborn) this.unbornDetached.add(id);
+          }),
         );
       }).pipe(Effect.scoped),
     );
   }
 
-  /** Apply parent removal to local handles and approval ancestry without
-   *  publishing, over children a durable detach already covers: the batch
-   *  a detaching stop committed, or a committed `run.removed`. */
-  detachChildren(
-    parentRunId: RunId,
-    childRunIds: readonly RunId[] = this.childRunIds(parentRunId),
-  ): void {
-    for (const childRunId of childRunIds) {
-      const entry = this.entries.get(childRunId);
-      const parent = entry?.activation?.parent ?? entry?.handle?.parentState;
-      if (parent?.current === parentRunId) parent.current = null;
-    }
-  }
-
   // ----------------------------------------------------------------- close
-
-  /**
-   * The session is closing: refuse every run registered from here on. The
-   * runs already tracked keep their handles until they settle
-   * ({@link awaitDrained}); the close's `stopAll` interrupts each, and a
-   * process child's OS process ends with its loop's scope.
-   */
-  close(): void {
-    this.closing = true;
-  }
 
   /** Resolve once every owner of `runId` (or of every run) has left. */
   awaitDrained(runId?: RunId): Effect.Effect<void> {

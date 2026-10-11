@@ -144,7 +144,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
   const invoker = yield* ModelInvoker;
   const access = yield* ModelAccess;
   const { runId, session, logger } = run;
-  const isChild = () => (runs.getHandle(runId)?.parent ?? null) !== null;
+  const isChild = () => runs.parentOf(runId) !== null;
   // A script's run: it opens on the call it was handed and ends when that
   // call settles.
   const script = run.config.script ?? null;

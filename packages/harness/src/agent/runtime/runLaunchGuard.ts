@@ -31,7 +31,6 @@ import {
   type TransactionPart,
 } from './childSettlement';
 import { presentRunFailure } from './terminalResultToast';
-import type { RunParent } from './RunHandle';
 import type { SessionHandle } from './SessionHandle';
 
 /**
@@ -94,12 +93,11 @@ export const letGoOfClaim = (
  */
 export const deliverLaunchFailure = (
   session: SessionHandle,
-  parent: RunParent,
+  to: RunId | null,
   child: RunId,
   text: string,
 ): Effect.Effect<void> =>
   Effect.gen(function* () {
-    const to = parent.current;
     if (to === null || (yield* getRunRecords(session, child).exists())) return;
     const from = { kind: 'run', runId: child } as const;
     const item = { text, from, deliveryId: `${child}:launch` };

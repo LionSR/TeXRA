@@ -310,10 +310,9 @@ export type PreparedAgentDefinition = Effect.Success<
 >;
 
 /**
- * How a launch enters its run (`LaunchEntry`), and the run's trace, held
- * until then and published in order once the entering batch commits (a
- * launch that never enters drops it: its failure is the launch's). A fresh
- * launch onto a run that exists is refused.
+ * How a launch enters its run (`LaunchEntry`), and its trace, held until the
+ * entering batch settles and then published in order (one that never enters
+ * drops it: its failure is the launch's). A run that exists is refused.
  */
 const enterRun = Effect.fn('enterRun')(function* (
   input: AgentLaunchInput,
@@ -336,6 +335,7 @@ const enterRun = Effect.fn('enterRun')(function* (
   );
   yield* Effect.addFinalizer(() => Effect.sync(() => logger.close()));
   const entered = Effect.sync(() => {
+    session.runs.settleBirth(runId);
     for (const event of held ?? []) session.log.publish(runId, event);
     held = null;
     input.onRunResolved?.(runId);

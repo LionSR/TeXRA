@@ -351,7 +351,7 @@ export function executeAgent(
         Effect.gen(function* () {
           // This run's lineage, derived once, from the live handle the
           // registry admitted: the caller's own parent.
-          const parentRunId = handle.parent ?? undefined;
+          const parentRunId = handle.launchParent ?? undefined;
           // The run directory is created by the first write into it.
           yield* Effect.logInfo(`Starting run (runId: ${runId})`).pipe(
             Effect.annotateLogs({

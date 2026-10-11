@@ -98,12 +98,6 @@ const sessionRuns = {
   isLive: () => mocks.runActive(),
   // This fixture never parks a run at WAITING; the cases that do build a
   // real registry of their own.
-  // The registry's local application of a durable detach, over the one
-  // handle this fixture tracks.
-  detachChildren: vi.fn((_parent: RunId, children: readonly RunId[]) => {
-    if (trackedHandle && children.includes(trackedHandle.runId))
-      trackedHandle.parentState.current = null;
-  }),
   // No competing generation exists in this fixture; the lane is a passthrough.
   launchRun: vi.fn(
     (_runId: RunId, operation: Effect.Effect<unknown, unknown>) => operation,

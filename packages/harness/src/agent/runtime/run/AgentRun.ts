@@ -231,7 +231,7 @@ export const agentRunLayer = (
       // the project's catalog for the run's life and started with its
       // variables; the read's problems reach its transcript.
       const declared = declaredToolNames(tools);
-      const root = session.runs.getHandle(runId)?.parent == null;
+      const root = session.runs.parentOf(runId) === null;
       const held = yield* session.tools
         .hold(declared, root)
         .pipe(Scope.provide(scope));

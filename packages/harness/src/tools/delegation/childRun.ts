@@ -11,6 +11,7 @@ import { RunHandle } from '@agent/runtime/RunHandle';
 import { Runs } from '@agent/runtime/runRegistry';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { formatDelivery } from '@agent/runtime/deliveryEnvelope';
+import { persistedParentRunId } from '@agent/storage/runRecords';
 import { classifyAgentError } from '@common/errors';
 import {
   aggregateId,
@@ -110,7 +111,8 @@ const finalizeChildRun = Effect.fn('finalizeChildRun')(function* (
   const { handle, session, logger, closeTrace, options } = args;
   // Only a child a parent can continue pauses: a detached one (no parent)
   // has nobody to call it again, so its stop cancels it.
-  const parentRunId = handle.parentState.current;
+  const parentRunId =
+    (yield* persistedParentRunId(session, handle.runId)) ?? null;
   const pause =
     options.outcome === RUN_OUTCOME.CANCELLED && parentRunId !== null
       ? options.pauseNotice?.()
