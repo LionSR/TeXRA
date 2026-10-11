@@ -1,0 +1,150 @@
+# TeXRA refactoring-debt audit
+
+_Generated 2026-10-11 by a scheduled codebase scan. Three subagents scanned the
+harness, the app (`texra`/`llm`), and the three hosts (`extension`/`cli`/`desktop`)
+in parallel; findings were cross-checked against the repo's own
+`config/ratchets/core-quality/` baselines and spot-verified with grep._
+
+## Headline
+
+The codebase is **well-disciplined, not messy in the usual sense**. Debt is not
+comment-marked (only 4 files carry any TODO/FIXME/HACK; zero `FIXME`/`HACK`/`XXX`),
+and the cross-cutting concerns you'd expect to be copy-pasted are already
+centralized:
+
+- error formatting → `@utils/errors/errorMessage` (279 uses)
+- JSON parsing → `@common/parsing/safeParseJson`
+- file-tool boilerplate → `@tools/pathResolution` + `fileEditFlow` + `formatting`
+- model/provider config → `llm-zoo` / `computeModelOptions` (data-driven)
+- cross-host rendering → `sharedHostRequests`, `@shared/transcript`, `@ui/markdown`
+- LLM wire transport → `packages/llm/src/api/transport.ts` + `assembleTurn` + `parts`
+
+So the remaining debt is **structural concentration** — a few god-files/factories
+and one genuine large-scale parallel-implementation pair — rather than scattered
+duplication. Net LOC savings are therefore moderate; the real payoff is
+maintainability, testability, and clearing the project's own grandfathered
+ratchet baselines (42 harness files are frozen over the 400-line bar).
+
+---
+
+## Prioritized list
+
+### 1. `codex*` vs `claudeAgent*` — two ~1,200-LOC parallel CLI-agent families ⭐ top pick
+**Impact: highest. Savings: ~200–350 LOC. Effort: L. Confidence: verified.**
+
+- **Where:** `packages/texra/src/tools/codex*.ts` (~1,193 LOC) and
+  `claudeAgent*.ts` (~1,368 LOC), over an existing shared layer `agentCliShared.ts`
+  (~835 LOC incl. model/session helpers).
+- **What's messy:** Both families drive an external CLI coding agent (stream a turn
+  into the transcript, loop follow-ups) and a large parallel skeleton was never
+  hoisted into the shared layer:
+  - Both export their own `runStreamedTurn` (`codex.ts:229`, `claudeAgent.ts:177`) —
+    same shape: drain the SDK async-iterator as an Effect `Stream`, collect
+    `responseParts`/`usage`, emit/end live tool cards, `Effect.ensuring` finalizer
+    calling `endOpenToolUseCards`. Only the per-SDK event switch differs.
+  - Tool-card builders (`buildCodex*ToolLog` vs `buildClaudeToolUseLog` +
+    `handleAssistantBlocks`/`handleToolResults`) both map "SDK event → `ToolUseLog`
+    → `emitToolUseCard`/`endToolUseCard`". Verified: this idiom lives in **only
+    these 5 files**, so it's a self-contained parallel pair, not a shared primitive.
+  - `codexImport.ts` vs `claudeAgentImport.ts` both hand-roll `PLATFORM` package
+    maps, a `*_BINARY_NAME = IS_WINDOWS ? …`, a dynamic SDK `import()`, and a
+    near-identical `createCachedBinaryResolver(...)` call.
+- **Approach:** Add a generic `drainAgentStream({ onEvent, finalize })` + a
+  `ToolCardTracker` to `agentCliShared`; each provider supplies only its
+  event→`ToolUseLog` mapping. Unify the two `*Import` resolvers behind one
+  config-driven resolver.
+- **Why #1:** Largest body of genuine duplication in the repo (~2,500 LOC affected),
+  a concrete and low-risk seam, and every new external-agent integration pays the
+  tax again until it's fixed.
+
+### 2. `sessionFold.ts` (1,302) + `runStateFold.ts` (772) — parallel folds over one event vocabulary
+**Impact: high. Savings: ~150–250 LOC. Effort: L. Confidence: ratchet-corroborated.**
+
+- **Where:** `packages/harness/src/shared/session/{sessionFold,runStateFold}.ts`.
+  `sessionFold` is the single largest file in the package (3.25× the 400-line bar).
+- **What's messy:** Two large `switch` dispatchers over the *same* ~18-arm
+  discriminated event vocabulary (`run.activate`, `model.message`, `tool.intent`,
+  `tool.result`, …; 32 case arms in one, 17 in the other). Not copy-paste — they
+  project different things (`SessionView` vs `RunState`) — but **shotgun surgery**:
+  every vocabulary change must be edited in lockstep in both, with per-arm payload
+  destructuring repeated across both.
+- **Approach:** Extract a shared per-event dispatch skeleton/table so each fold
+  supplies only its arm bodies; lift sessionFold's two over-complex arm handlers
+  (flagged in `complexity.json`) into named functions. Keep the two projections
+  separate — unify only the skeleton.
+
+### 3. `controllers/session/Database.ts` (1,186) — one `databaseLayer` closure with ~61 inline sub-closures
+**Impact: high. Savings: ~150–250 LOC. Effort: M–L. Confidence: verified (61 closures).**
+
+- **Where:** `packages/harness/src/controllers/session/Database.ts`
+  (`max-lines-per-function` flags 4 functions >150 lines).
+- **What's messy:** Classic god-layer: connection management, SQL exec/decode,
+  aggregate-claim concurrency, and projection catch-up are all private closures in
+  one lexical scope. The three `writeFailed`/`readFailed`/`openFailed`
+  error-wrapping closures are near-duplicates.
+- **Approach:** Carve out a "projection runner" (`applyOp`/`project`/
+  `catchUpProjections`/`setProjectionState`) and a "row codec/exec" module, each
+  taking the connection/services as params; the layer wires them. Collapse the
+  three error-wrappers into one tagged-error helper.
+
+### 4. CLI `createChatSessionController` — an 844-line factory function
+**Impact: high maintenance burden. Savings: ~50–100 net LOC. Effort: L. Confidence: verified.**
+
+- **Where:** `packages/cli/src/chat/chatSessionController.ts` (lines 309–1153) —
+  one function holding ~25 nested closures (`startRootRun`, `resume`,
+  `startSession`, `activateSkill`, …) over shared mutable state
+  (`preparingRoot`, `pendingSkillActivations`, …). Siblings in the same shape:
+  `runChatTui.tsx` `runChat` (~568 lines) and `App.tsx` (~549 lines, 17 hooks).
+- **What's messy:** The entire chat-session lifecycle lives in one closure sharing
+  mutable vars — hard to test in isolation, high change-risk. This is the host-side
+  twin of the harness god-files.
+- **Approach:** Extract cohesive collaborators (resume controller, skill-activation
+  store, root-run launcher) each owning their slice of state; split `runChat`
+  startup into named phase helpers; lift `App.tsx` sub-state into hooks/children.
+
+### 5. Cheap wins bundle — best savings-per-effort (do these first as warm-ups)
+**Impact: moderate. Savings: ~270–420 LOC combined. Effort: S–M each. Confidence: evidence-backed.**
+
+- **GitHub per-scope event formatters** (`tools/github/format{PR,Repo,Issue}Event.ts`):
+  the same comment/close/subscription-error messages are formatted 3× across PR/Repo/Issue
+  scopes while real primitives already sit in `formatUtils.ts`. Collapse into
+  scope-parameterized functions. **~80–120 LOC, M.**
+- **`LatexMediaManager.ts`** (715): four+ private methods repeat the same
+  "filter to `.tex` → resolve latex dir → walk deps → mirror into workspace"
+  skeleton. Extract one `mirrorDependencies({ files, collect, resolveDest })`.
+  **~100–150 LOC, M.**
+- **Per-host subscription sign-in presenters** (`extension` 201 / `cli` 152 /
+  `desktop` 73): all re-derive the same device-code → copy-code → open-URL flow and
+  wording. Lift into one `buildSubscriptionSignInPresenter(primitives)` in `texra`.
+  **~60–100 LOC, M.**
+- **Per-provider token-usage mapping** (`llm/api/{anthropicMessages,googleInteractions,
+  openaiResponsesUsage,openrouterChat}`): identical `uncached+cached`/total arithmetic
+  with per-provider field names. One `buildUsage({...})` normalizer.
+  **~30–50 LOC, S.**
+
+---
+
+## Ranking summary
+
+| # | Area | LOC saved | Effort | Savings/effort | Note |
+|---|------|-----------|--------|----------------|------|
+| 1 | `codex*`/`claudeAgent*` CLI-agent families | 200–350 | L | ★★★ | genuine large-scale dup; top priority |
+| 2 | `sessionFold` + `runStateFold` folds | 150–250 | L | ★★ | biggest file; shotgun-surgery risk |
+| 3 | `Database.ts` god-layer (61 closures) | 150–250 | M–L | ★★ | clean projection/codec seam |
+| 4 | CLI `createChatSessionController` factory | 50–100 | L | ★ | maintainability, not deletion |
+| 5 | Cheap-wins bundle (4 items) | 270–420 | S–M | ★★★ | start here; lowest risk |
+
+**Suggested sequencing:** #5 (cheap wins, build momentum) → #1 (highest payoff) →
+#2/#3 (harness god-files) → #4 (CLI factory). Each is behavior-preserving, so per
+repo rules they carry zero new tests (a regression test only if one earns its place).
+
+## Not worth refactoring (checked, came back clean)
+- LLM provider `streamTurn`/wire codecs — genuinely provider-specific, already on
+  shared transport. Not dup.
+- `replacement/rules.ts` vs `maxRules.ts` — different rule sets sharing `helpers.ts`.
+- LaTeX figure parsing — centralized in `extractFigure.ts`, reused. Well-factored.
+- The extension's two webview-messaging architectures (settingsView vs progressView)
+  are a **documented intentional** split (`extension/src/AGENTS.md`); converging them
+  is a deliberate migration, not a quick win — confirm before touching.
+- Error formatting, JSON parsing, file I/O tooling, output-truncation constants —
+  all already centralized. Don't spend budget hunting dedup there.
