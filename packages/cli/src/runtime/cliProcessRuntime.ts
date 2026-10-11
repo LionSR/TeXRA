@@ -50,7 +50,6 @@ import { appStateStoreFromDatabase } from '@controllers/session/appStateStore';
 import type { MinimumLogLevel } from '@logger/effectDiagnostics';
 import { GlobalDatabase } from '@shared/session/database';
 import { usageLogLayer } from '@telemetry/UsageLogService';
-import { makeEditorHost } from '@texra/tools/editorHost';
 import { TEXRA_SETTING_ROWS } from '@texra/shared/settingsView/texraSettings';
 import { texraPlugins } from '@texra/tools/registry';
 import { USER_MCP_CONFIG_PATH } from '@tools/mcp/mcpConfig';
@@ -58,10 +57,6 @@ import { USER_MCP_CONFIG_PATH } from '@tools/mcp/mcpConfig';
 import { readCliVersion } from './cliContext';
 import { cliSecrets } from './cliSecrets';
 import { setCliLogRuntime } from './logSinks';
-
-/** The CLI process's editor registry: its plugins read it and `texra serve`
- *  attaches its windows' editors to it. */
-export const cliEditors = makeEditorHost();
 
 const NO_PLATFORM_APP_STATE =
   'A platform-less TeXRA CLI entry serves no application state: it runs without a platform and its storage root may be read-only.';
@@ -223,7 +218,7 @@ export function installCliProcessRuntime(
     ManagedRuntime.make(
       processLayer({
         globalStorage: globalStoragePath,
-        plugins: texraPlugins({ editors: cliEditors }),
+        plugins: texraPlugins(),
         settings: TEXRA_SETTING_ROWS,
         mcpConfigPath: USER_MCP_CONFIG_PATH,
         secrets,

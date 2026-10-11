@@ -80,11 +80,12 @@ const PLUGIN_SERVICES: readonly {
   // The `core` plugin's Comments UI port: its tool.
   { tag: 'InlineComments', users: /^packages\/texra\/src\/tools\/comment\// },
   // The editor registry of `latex-diagnostics` and `core`: their tools, and
-  // the service, which attaches its windows' editors to it.
+  // the service, which reads it through `ToolCatalog` and attaches its
+  // windows' editors to it.
   {
     tag: 'EditorHost',
     users:
-      /^packages\/texra\/src\/(?:tools\/(?:DiagnosticsTool|OpenPdfTool|editorHost)\.ts$|controllers\/server\/(?:handlers|serve)\.ts$)|^packages\/cli\/src\/commands\/service\.ts$/,
+      /^packages\/texra\/src\/(?:tools\/(?:DiagnosticsTool|OpenPdfTool|editorHost)\.ts$|controllers\/server\/handlers\.ts$)/,
   },
 ];
 /** Where the services are declared, typed and built. */

@@ -153,7 +153,7 @@ export interface HostWindows {
    *  windows' editors to `editors`, for the scope's life. */
   readonly adopt: (
     session: SessionHandle,
-    editors: EditorHostShape,
+    editors: EditorHostShape | undefined,
   ) => Effect.Effect<void, never, Scope.Scope>;
   /** The staged preview of one of `session`'s pending requests. */
   readonly preview: (
@@ -582,7 +582,7 @@ export const makeHostWindows = Effect.sync((): HostWindows => {
           session.interactions.use(interactionsOf(session)),
           (release) => Effect.sync(release),
         );
-        yield* editors.attach(key, editorOf(key));
+        if (editors !== undefined) yield* editors.attach(key, editorOf(key));
       }),
     preview: (session, requestId) =>
       Effect.map(SubscriptionRef.get(session.view.ref), (view) =>
