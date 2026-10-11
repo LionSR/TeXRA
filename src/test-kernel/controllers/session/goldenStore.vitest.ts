@@ -620,11 +620,13 @@ describe('the golden run killed after its effect', () => {
     mkdirSync(workspace, { recursive: true });
     cpSync(EFFECT, join(workspace, 'approved.txt'));
     raw(storage, (db) => {
+      // The path lands inside a JSON string, so it goes in escaped as one:
+      // a Windows path's backslashes would otherwise corrupt the row.
       db.prepare(
         `UPDATE event SET data = replace(data, '/golden/project', ?)
          WHERE type IN ('run.start', 'run.config') AND aggregate =
            (SELECT id FROM event_sequence WHERE logical_id = ?)`,
-      ).run(workspace, KILLED);
+      ).run(JSON.stringify(workspace).slice(1, -1), KILLED);
       // The kill, on this host: an owner whose process is gone.
       db.prepare(
         'UPDATE event_sequence SET owner_id = ? WHERE logical_id = ?',
@@ -683,7 +685,7 @@ describe('the golden run killed after its effect', () => {
       // The effect the killed process left, and nothing more.
       expect(
         readFileSync(join(workspace!, 'approved.txt'), 'utf8')
-          .split('\n')
+          .split(/\r?\n/)
           .filter(Boolean),
       ).toEqual(['approved']);
     }),

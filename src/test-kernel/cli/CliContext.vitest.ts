@@ -314,7 +314,7 @@ describe('CLI context config defaults', () => {
         // is one `contextFromArgs` prints even under `--quiet`.
         expect(context.approvalPolicy).toBe('ask');
         expect(context.configDegradations).toEqual([
-          expect.stringContaining('.texra/config.json'),
+          expect.stringContaining(join('.texra', 'config.json')),
         ]);
         expect(context.configWarnings).toEqual([]);
       } finally {

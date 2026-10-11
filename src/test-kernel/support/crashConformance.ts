@@ -166,7 +166,11 @@ const rowsOf = (storage: string): Row[] => {
 /** A file's lines, none when it is absent. */
 const linesOf = (file: string): string[] =>
   existsSync(file)
-    ? readFileSync(file, 'utf8').split('\n').filter(Boolean)
+    ? readFileSync(file, 'utf8')
+        .split('\n')
+        // Windows' `echo x >> file` writes `x \r\n`.
+        .map((line) => line.trimEnd())
+        .filter(Boolean)
     : [];
 const json = (row: Row) => JSON.parse(row.data) as Record<string, unknown>;
 const payload = (row: Row) => json(row).payload as Record<string, unknown>;
