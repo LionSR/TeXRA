@@ -165,6 +165,8 @@ export type {
   ToolProbeServices,
 } from '@tools/toolProbes';
 
+// The budget a session close waits for its runs: a plugin's drain fits it.
+export { SESSION_CLOSE_DEADLINE_MS } from '@agent/runtime/SessionHandle';
 // Model access a host request makes outside a run: the user's own key and
 // the endpoint they set (audio transcription).
 export { ownKeyCredential } from '@agent/runtime/modelAccess/credentials';

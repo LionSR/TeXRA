@@ -577,6 +577,8 @@ async function launchWaitingChild(options: {
   const fixtureRequests = {
     nextId: (prefix: string) => prefix,
     open: () => Effect.die(new Error('This fixture opens no request.')),
+    post: () => Effect.die(new Error('This fixture posts no request.')),
+    present: () => Effect.void,
   };
   const parentCall = {
     callId: 'parent-call',

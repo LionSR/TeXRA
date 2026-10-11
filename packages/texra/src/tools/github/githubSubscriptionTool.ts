@@ -21,8 +21,11 @@ import { Effect } from 'effect';
 import { z } from 'zod';
 
 import { defineTool, Secrets, ToolContext } from '@texra-ai/harness';
-import { requireRun } from '@texra-ai/harness/plugins';
-import type { SessionHandle } from '@agent/runtime/SessionHandle';
+import {
+  ChildRuns,
+  requireRun,
+  type RunInbox,
+} from '@texra-ai/harness/plugins';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import { ToolError, type RunId, type ToolResult } from '@shared/schemas';
 import { parseWorkingDirectory } from '@tools/pathResolution';
@@ -213,7 +216,7 @@ function prSubscriptionActivitySentence(
 const execSubscribe = Effect.fn('GitHubSubscriptionTool.subscribe')(function* (
   input: SubscribeInput,
   runId: RunId,
-  session: SessionHandle,
+  inbox: RunInbox,
 ) {
   yield* requireToken();
   const subscriptions = yield* GitHubSubscriptions;
@@ -222,7 +225,7 @@ const execSubscribe = Effect.fn('GitHubSubscriptionTool.subscribe')(function* (
   const annotationLevelDescription =
     ANNOTATION_LEVEL_DESCRIPTIONS[minAnnotationLevel];
   if (target.kind === 'repo') {
-    const created = yield* subscriptions.repo.bind(runId, target, session);
+    const created = yield* subscriptions.repo.bind(runId, target, inbox);
     const slug = slugOf(target);
     return executed(
       created
@@ -240,7 +243,7 @@ const execSubscribe = Effect.fn('GitHubSubscriptionTool.subscribe')(function* (
         ...target,
         minAnnotationLevel,
       },
-      session,
+      inbox,
     );
     const slug = prRef(slugOf(target), target.pullNumber);
     return executed(
@@ -278,7 +281,7 @@ const execSubscribe = Effect.fn('GitHubSubscriptionTool.subscribe')(function* (
         pullNumber: target.issueNumber,
         minAnnotationLevel,
       },
-      session,
+      inbox,
     );
     let summary: string;
     if (!created) {
@@ -295,7 +298,7 @@ const execSubscribe = Effect.fn('GitHubSubscriptionTool.subscribe')(function* (
       summary,
     );
   }
-  const created = yield* subscriptions.issue.bind(runId, target, session);
+  const created = yield* subscriptions.issue.bind(runId, target, inbox);
   return executed(
     created
       ? `Subscribed to ${issueSlug}. New comments and state transitions (closed / reopened) arrive as <github-webhook-activity> follow-ups. The subscription stays active across close so reopens are caught: call command="unsubscribe" to release the slot.`
@@ -601,7 +604,11 @@ export const GitHubSubscriptionTool = defineTool({
       const { run } = yield* requireRun('github_subscription');
       switch (input.command) {
         case 'subscribe':
-          return yield* execSubscribe(input, run.runId, run.session);
+          return yield* execSubscribe(
+            input,
+            run.runId,
+            yield* (yield* ChildRuns).inbox(run.runId),
+          );
         case 'unsubscribe':
           return yield* execUnsubscribe(input, run.runId);
         case 'list':

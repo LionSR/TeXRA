@@ -26,8 +26,14 @@ const mocks = vi.hoisted(() => ({
   submitFollowUp: vi.fn(),
 }));
 
+// A run's input sends through the suite's `submitFollowUp`.
 vi.mock('@agent/followUp/ToolUseFollowUp', () => ({
   submitFollowUp: mocks.submitFollowUp,
+  runInbox: (session: unknown, runId: RunId) => ({
+    send: (item: unknown, options: object = {}) =>
+      mocks.submitFollowUp(runId, item, { ...options, session }),
+    onClosed: () => () => {},
+  }),
 }));
 
 // Session-keyed registries: the suite pins one fake session and reads the

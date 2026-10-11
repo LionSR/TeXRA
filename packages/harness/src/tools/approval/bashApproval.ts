@@ -1,7 +1,7 @@
 import { Effect } from 'effect';
 
 import { type SessionHandle } from '@agent/runtime/SessionHandle';
-import { requireRun } from '@agent/runtime/RunCall';
+import { requireRun, sessionOf } from '@agent/runtime/RunCall';
 import { ToolContext } from '@agent/core/tools/ToolTypes';
 import {
   BASH_APPROVAL_CONFIG_KEY,
@@ -84,7 +84,8 @@ export const requestBashApproval = Effect.fn('requestBashApproval')(function* (
     env.roots,
     BASH_APPROVAL_CONFIG_KEY,
   );
-  const { session, runId } = run;
+  const { runId } = run;
+  const session = sessionOf(run);
   const granted = () =>
     session.approvals.bypass(
       runId,

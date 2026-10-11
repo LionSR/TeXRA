@@ -7,7 +7,7 @@
  */
 import { Effect, SubscriptionRef, type Context } from 'effect';
 
-import { submitFollowUp } from '@agent/followUp/ToolUseFollowUp';
+import { runInbox, submitFollowUp } from '@agent/followUp/ToolUseFollowUp';
 import { detachSubagentsOnStop } from '@agent/runtime/detachSubagentsOnStop';
 import { requestAsks } from '@agent/runtime/requestPolicy';
 import { setPolicy } from '@agent/runtime/runApprovalQueue';
@@ -43,6 +43,7 @@ import {
 import type { Outcome, RuntimeRequest } from '@shared/session/runtimeRequest';
 import type { SessionEventsShape } from '@shared/session/sessionEvents';
 import { runActionRefusal } from '@shared/session/runActions';
+import { ownFactRow } from '@tools/plugins';
 import type { ToolTable } from '@tools/toolTable';
 import { withPerKeyLane, type PerKeyLane } from '@utils/core/perKeyQueue';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -253,15 +254,14 @@ const decideRequest = (
         }),
       );
     }
-    const hook = deps.plugins.decisions.get(pending.payload.kind);
-    if (hook !== undefined)
-      yield* hook
-        .record({
-          payload: pending.payload,
-          decision: req.decision,
-          session: deps.session(),
-        })
-        .pipe(Effect.orDie);
+    const { log } = deps.session();
+    const side = deps.plugins.decisions.get(pending.payload.kind)?.record({
+      payload: pending.payload,
+      decision: req.decision,
+      inbox: (runId) => runInbox(deps.session(), runId),
+      commit: (own) => log.transact(own.map((f) => ownFactRow(f, req.runId))),
+    });
+    if (side) yield* Effect.orDie(side);
     const recorded = yield* deps.asks
       .decide(req.runId, req.requestId, req.decision)
       .pipe(
