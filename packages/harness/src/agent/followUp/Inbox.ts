@@ -19,7 +19,7 @@ import {
 } from '@shared/session/database';
 import type { RunHistory } from '@shared/session/runHistory';
 import { runRelation } from '@shared/session/runRelation';
-import type { RunHistoryDraft } from '@shared/session/runStateFold';
+import type { RunInputDraft } from '@shared/session/runStateFold';
 import {
   FOLLOW_UP_TYPES,
   foldRunRows,
@@ -95,7 +95,7 @@ export interface SendOptions {
 type Resumed = { readonly result: ResumeRunResult; readonly joined: boolean };
 
 /** A send decided inside a job: its rows, and how it landed. */
-type Admission = { rows: readonly RunHistoryDraft[]; sent: Sent };
+type Admission = { rows: readonly RunInputDraft[]; sent: Sent };
 
 /** What observers hear: a run takes no more input, or the inbox closed. */
 export type InboxClosed =

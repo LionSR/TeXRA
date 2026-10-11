@@ -940,8 +940,10 @@ show` print the same notice, and the new `texra agents customize`,
 ### Bug Fixes
 
 - **A task whose end could not be saved no longer stays listed as
-  running.** It is recorded as failed, and the cause is logged. A task
-  whose saved history is damaged can still be stopped and ends the same way.
+  running.** When only its result could not be handed on, it ends as it
+  did; otherwise it is recorded as failed. The cause is logged either way.
+  A task whose saved history is damaged can still be stopped, and so can
+  the subagents under it.
 - **A subagent's result can no longer be lost to a crash.** A background
   subagent, script or command used to record its result and then, as a
   second step, queue it for the task that started it; a crash between the

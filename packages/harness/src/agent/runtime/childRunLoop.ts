@@ -54,6 +54,7 @@ import {
   DatabaseNotOwner,
   type DatabaseWriteFailed,
 } from '@shared/session/database';
+import { RunHistoryRefused } from '@shared/session/runHistory';
 import type { QueuedFollowUp } from '@shared/session/runRows';
 import { formatSubagentProgress } from '@shared/subagentFollowup';
 import { deriveRunOutcome } from '@shared/runs/runStatus';
@@ -868,8 +869,7 @@ const endNative = <TTurn, R>(
       target === null
     )
       return;
-    // A notice that cannot be read still says the child stopped: the stop
-    // stands, and the failure is loud.
+    // An unreadable notice still says the child stopped, loudly.
     const text = yield* strategy.stopNotice().pipe(
       Effect.catch((error) =>
         loop
@@ -902,8 +902,7 @@ const writeEnd = <TTurn, R>(
   stopped: boolean,
 ): Effect.Effect<void, Error, R | Runs> => {
   const { strategy, childRun, session } = loop.params;
-  // Re-read: a stop landing after the body's exit is still the run's
-  // terminal verdict.
+  // Re-read: a stop after the body's exit is still the run's verdict.
   const stoppedAtExit = stopped || loop.isInterrupted();
   const outcome = deriveRunOutcome({
     failed: loop.failed,
@@ -947,9 +946,12 @@ const endChildLoop = <TTurn, R>(
         const error = Cause.squash(body.cause);
         loop.failed = true;
         loop.lastError ??= error;
-        // A lost aggregate claim: this process no longer owns the run, so
-        // the loop stops rather than continue under it.
-        if (error instanceof DatabaseNotOwner) loop.interrupt();
+        // A lost claim: the loop and its process stop, unowned.
+        if (
+          error instanceof DatabaseNotOwner ||
+          (error instanceof RunHistoryRefused && error.reason === 'not-owner')
+        )
+          loop.interrupt();
       }
       // Debug-only driver diagnostic (#9531): how the loop ended.
       yield* loop.log('debug', 'childRunLoop loop.terminated', {
@@ -957,12 +959,10 @@ const endChildLoop = <TTurn, R>(
         stopped,
         failed: loop.failed,
       });
-      // The last turn's facts reach an awaiting caller before the child
-      // ends, as every earlier turn's did.
+      // The last turn's facts reach an awaiting caller before the end.
       yield* loop.endReport;
       const terminal = yield* Effect.exit(writeEnd(loop, stopped));
-      // Provider ids stay reserved until the terminal (or pause) row is
-      // written, so a call naming one finds this run, not a gap.
+      // Provider ids stay reserved until the terminal (or pause) row.
       const owned = yield* Effect.exit(
         Effect.sync(() => loop.releaseOwnership()),
       );

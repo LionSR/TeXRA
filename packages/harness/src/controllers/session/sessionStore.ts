@@ -3,12 +3,10 @@
  * transaction door with its reads and claims) and the trace sink
  * (`RunTrace`), over the root's publisher and database.
  *
- * "Published" means folded: a transaction returns once the session's tail
- * has delivered, and its view has folded, every commit it made, so a caller
- * that reads the view next sees what it wrote. The raw tail is delivered
- * here too ({@link SessionStore.deliver}): it drops the transient text a
- * committed row closes and hands a run's removal to the session, and its
- * position is half of what "settled" waits for.
+ * "Published" means folded: a transaction returns once the tail delivered,
+ * and the view folded, every commit it made. The raw tail is delivered here
+ * too ({@link SessionStore.deliver}): it drops the transient text a commit
+ * closes and hands a run's removal to the session.
  */
 import {
   type Context,
@@ -204,10 +202,9 @@ const claimHolds = (database: DatabaseShape) => {
 };
 
 /**
- * One transaction on the publisher, settled against its own last commit,
- * never another job's: one that appended nothing returns at once. A run the
- * job claimed or gave birth to is given back if the job fails, or if what it
- * committed never reaches the view.
+ * One transaction on the publisher, settled against its own last commit
+ * (none: at once). A run the job claimed or bore is given back if the job
+ * fails, or if what it committed never reaches the view.
  */
 const transaction =
   (
@@ -246,8 +243,7 @@ const transaction =
           ),
         claim: (runId) => {
           const id = qualifyAggregateId('run', runId);
-          // Only what this call took: a claim the process already held is
-          // not this transaction's to give back.
+          // Only what this call took, never a claim the process held.
           return Effect.tap(database.acquireClaims([id]), (taken) =>
             Effect.sync(() => owned.push(...taken)),
           );
@@ -289,8 +285,7 @@ export const makeSessionStore = (
     const { ownerId } = yield* ProcessIdentity;
     const view = yield* SessionViewService;
     const chunks = yield* TextChunkSource;
-    // Captured before anything can publish: the tails' first reads cover
-    // every commit after it.
+    // Captured before anything publishes: the tails cover every commit after.
     const anchor = yield* database.currentCommit;
     const delivered = yield* SubscriptionRef.make(anchor);
     const tailEnded = yield* Deferred.make<void, DatabaseReadFailed>();
@@ -327,6 +322,19 @@ export const makeSessionStore = (
       rows: (id, types) => database.readAggregate(id, 1, types),
       records: (runId) =>
         database.readRunRecords(qualifyAggregateId('run', runId)),
+      children: (runId) => {
+        const parent = qualifyAggregateId('run', runId);
+        return Effect.map(database.aggregateState({ under: parent }), (all) =>
+          all.flatMap((state) => {
+            const child = aggregateTarget(state.aggregateId);
+            return state.parentId === parent &&
+              !state.closed &&
+              child.kind === 'run'
+              ? [child.id]
+              : [];
+          }),
+        );
+      },
       display: (runId) =>
         Effect.map(
           database.readDisplayAggregate(qualifyAggregateId('run', runId), 1),

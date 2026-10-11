@@ -2,8 +2,8 @@
  * The run history: the only reader of run-history-private payloads and the
  * only writer of the rows a run's state is folded from, each through one
  * run's {@link RunCell}. `load` reads, `open` hands out the cell every write
- * of the run goes through, and `appendIn` routes another job's run rows
- * through their cells.
+ * of the run goes through, and `appendIn` commits runs' input in another
+ * job.
  *
  * Stateless by construction. A cell holds its run's `RunState`, folded from
  * the batches it commits; that is what makes `foldRunState` provably the
@@ -22,6 +22,7 @@ import type { Append, CoWrite } from './sessionEvents';
 import type {
   RunHistoryDraft,
   RunHistoryInconsistent,
+  RunInputDraft,
   RunState,
 } from './runStateFold';
 
@@ -215,13 +216,14 @@ export class RunHistory extends Context.Service<
       RunHistoryRefused | DatabaseReadFailed | DatabaseWriteFailed | E
     >;
     /**
-     * Rows of one or more runs, each through its own cell opened `within`
-     * the caller's job: how a write that touches another run's history
-     * (a delivery, an admitted input, a child's park) reaches it.
+     * Runs' input and turn companions in the caller's job (a delivery, an
+     * admitted input, a child's park or settlement): rows no fold reads state
+     * for, committed without reading the run's history, O(1) whatever its
+     * length.
      */
     readonly appendIn: (
       append: Append,
-      rows: readonly RunHistoryDraft[],
-    ) => Effect.Effect<void, CellError | DatabaseNotOwner>;
+      rows: readonly RunInputDraft[],
+    ) => Effect.Effect<void, DatabaseNotOwner | DatabaseWriteFailed>;
   }
 >()('@texra/session/RunHistory') {}

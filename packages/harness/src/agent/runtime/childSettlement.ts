@@ -32,7 +32,7 @@ import {
   DatabaseRowCorrupt,
 } from '@shared/session/database';
 import type { QueuedFollowUp } from '@shared/session/runRows';
-import type { RunHistoryDraft } from '@shared/session/runStateFold';
+import type { RunInputDraft } from '@shared/session/runStateFold';
 import type { CoWrite } from '@shared/session/sessionEvents';
 import type { SessionHandle } from './SessionHandle';
 
@@ -54,7 +54,7 @@ export const warn = (
 
 /** The rows a settlement commits, all on the child's aggregate. */
 export type SettlementRow = Extract<
-  RunHistoryDraft,
+  RunInputDraft,
   { type: 'run.report' | 'run.result' | 'child.turn' | 'followup.consumed' }
 >;
 
@@ -244,7 +244,7 @@ export const settleChildTurn = (
   followUps: Inbox,
   { rows, delivery }: ChildSettlement,
   trace: AgentTrace | undefined,
-  park?: RunHistoryDraft,
+  park?: RunInputDraft,
 ): TransactionPart => {
   const own = park === undefined ? [] : [park];
   return delivery === undefined

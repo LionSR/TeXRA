@@ -161,15 +161,20 @@ type CardRowType = CardType | SettlementType | EndType | 'plugin.fact';
 type CardType = 'tool.start' | 'tool.end' | 'stream.end' | 'response.finalized';
 type SettlementType = 'run.report' | 'run.result' | 'child.turn' | 'child.park';
 type EndType = 'run.end' | 'stage.end' | 'followup.closed'; // and what it closes
-
-/** The rows `foldRow` applies (the shared rows and the run history's own
- *  arms): only the run's cell and the session's requests write them. */
-export type FoldReadType =
+/** The rows `foldRow` applies: the shared rows and the run history's own arms. */
+type FoldedRowType =
   | SharedRunRow['type']
   | Exclude<RunHistoryDraft['type'], CardRowType>
   | 'run.activate';
-/** Every row kind the run's state (its facts too) is read from. */
-export type RunStateRowType = FoldReadType | 'response.finalized';
+/** Every row kind the run's state (its facts too) is read from: only the
+ *  run's cell and the session's requests write them. */
+export type RunStateRowType = FoldedRowType | 'response.finalized';
+/** A run's input and its turns' companions: no fold reads state for them,
+ *  so they commit without folding the run (`RunHistory.appendIn`). */
+export type RunInputDraft = Exclude<
+  RunHistoryDraft,
+  { type: Exclude<RunStateRowType, 'followup.queued' | 'followup.consumed'> }
+>;
 
 /**
  * Display rows ignored by name: any other unfolded row on the run aggregate
@@ -177,7 +182,7 @@ export type RunStateRowType = FoldReadType | 'response.finalized';
  * vocabulary, so a new display arm is a compile error here until classified.
  */
 const IGNORED_ROW_TYPES: Readonly<
-  Record<Exclude<SessionEvent['type'], FoldReadType>, true>
+  Record<Exclude<SessionEvent['type'], FoldedRowType>, true>
 > = {
   'tool.start': true,
   'tool.end': true,
@@ -207,11 +212,6 @@ const IGNORED_ROW_TYPES: Readonly<
   'child.turn': true,
 };
 const IGNORED = new Set<string>(Object.keys(IGNORED_ROW_TYPES));
-
-/** Whether no run's state folds `row` (it may commit outside its cell). */
-export const isUnfolded = <R extends { readonly type: string }>(
-  row: R,
-): row is Exclude<R, { type: FoldReadType }> => IGNORED.has(row.type);
 
 /** The state a run starts from: every field at its zero, no family bound
  *  yet. The run program opens from this and stamps its family. */

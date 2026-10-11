@@ -10,7 +10,6 @@ import { Effect, Result, type Scope, SynchronizedRef } from 'effect';
 import { PreparedHistorySchema, type ModelOrigin } from '@texra-ai/llm';
 import {
   aggregateId as qualifyAggregateId,
-  aggregateTarget,
   type RunId,
   type SessionEvent,
   type SessionEventDraft,
@@ -21,7 +20,6 @@ import {
   DatabaseWriteFailed,
 } from '@shared/session/database';
 import {
-  type CellError,
   type RunCell,
   type RunHistory,
   RunHistoryRefused,
@@ -34,6 +32,7 @@ import {
   RunHistoryInconsistent,
   unboundRequests,
   type RunHistoryDraft,
+  type RunInputDraft,
   type RunState,
 } from '@shared/session/runStateFold';
 import type {
@@ -474,22 +473,12 @@ export function makeRunHistory(
     return cell;
   });
 
-  /** Each run's rows through its cell in `append`'s job; a plugin's own
-   *  aggregate is no run's, and its facts append as they are. */
-  type Appended = Effect.Effect<unknown, CellError | DatabaseNotOwner>;
-  const appendIn = (append: Append, rows: readonly RunHistoryDraft[]) =>
-    Effect.forEach(
-      Map.groupBy(rows, (row) => row.aggregateId),
-      ([key, own]): Appended => {
-        const target = aggregateTarget(key);
-        return target.kind === 'run'
-          ? Effect.flatMap(open(target.id, { within: append }), (cell) =>
-              cell.append(own),
-            )
-          : runStateAppend(append)(own.map(storedDraft));
-      },
-      { discard: true },
-    );
+  /** Runs' input and turn companions in `append`'s job: none folds the
+   *  run's state, so none reads its history (`RunInputDraft`). */
+  const appendIn = (append: Append, rows: readonly RunInputDraft[]) =>
+    rows.length === 0
+      ? Effect.void
+      : Effect.asVoid(runStateAppend(append)(rows));
 
   return { load, open, appendIn };
 }

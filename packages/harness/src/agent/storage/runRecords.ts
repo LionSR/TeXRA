@@ -104,18 +104,10 @@ export function runEndFromEvents(
 }
 
 /**
- * A run's persisted parent edge: the fold's (`run.start.parent`, severed by
- * a later `run.detach`, and dropped once the parent is no longer listed),
- * read cold from the two runs' records so a read racing the live fold's
- * first replay still sees it.
- *
- * The one rule every resume family shares, and the one site that derives it:
- * a resumed run takes its lineage from the log, never from its caller, who
- * has no parent to name for a run that already started once. `runAgent`
- * tracks a launch handle before this read (so a stop during it has a
- * target) and then installs the edge on that handle, so a stop of the
- * parent sees the child from that moment on; the tool-use resume arm reads
- * it for the handle its own lifecycle registers.
+ * A run's persisted parent edge (`run.start.parent`, severed by a later
+ * `run.detach`, dropped once the parent is no longer listed), read cold from
+ * the two runs' records: the one rule every resume takes its lineage from,
+ * never from its caller.
  */
 export const persistedParentRunId = Effect.fn('persistedParentRunId')(
   function* (session: SessionHandle, runId: RunId) {
@@ -205,32 +197,45 @@ export const owningCall = Effect.fn('owningCall')(function* (
 
 /**
  * The children `runId`'s open calls own that have not ended, read from its
- * run history and the children's own rows, never from a view that may lag them.
+ * run history and the children's own rows, never from a view that may lag
+ * them. A history that does not load names no calls: every child its own
+ * edge (an indexed read) puts under one of the run's calls is owned, loudly.
  */
 export const openOwnedChildren = Effect.fn('openOwnedChildren')(function* (
   session: SessionHandle,
   runId: RunId,
 ) {
-  const calls = openCallChildren(runId, yield* session.runHistory.load(runId));
+  const history = yield* session.runHistory
+    .load(runId)
+    .pipe(
+      Effect.catchTag('RunHistoryRefused', (refused) =>
+        Effect.as(Effect.logWarning(`Run ${runId}: ${refused.message}`), null),
+      ),
+    );
+  const named =
+    history === null
+      ? (yield* session.log.children(runId)).map(
+          (child) => [null, child] as const,
+        )
+      : [...openCallChildren(runId, history)].flatMap(([callId, children]) =>
+          children.map((child) => [callId, child] as const),
+        );
   const open: { readonly runId: RunId; readonly callId: string }[] = [];
-  for (const [callId, children] of calls)
-    for (const child of children) {
-      // One read of the child's records (its edge and its end). A damaged
-      // child fails alone: its parent warns and does not wait on it.
-      const read = yield* Effect.result(session.log.records(child));
-      if (read._tag === 'Failure') {
-        yield* Effect.logWarning(
-          `Child run ${child} cannot be read; its parent ${runId} treats it as failed.`,
-        ).pipe(Effect.annotateLogs({ data: read.failure }));
-        continue;
-      }
-      const rows = read.success;
-      if (
-        edgeOf(rows)?.callId === callId &&
-        runEndFromEvents(rows, child) === null
-      )
-        open.push({ runId: child, callId });
+  for (const [callId, child] of named) {
+    // One read of the child's records (its edge and its end). A damaged
+    // child fails alone: its parent warns and does not wait on it.
+    const read = yield* Effect.result(session.log.records(child));
+    if (read._tag === 'Failure') {
+      yield* Effect.logWarning(
+        `Child run ${child} cannot be read; its parent ${runId} treats it as failed.`,
+      ).pipe(Effect.annotateLogs({ data: read.failure }));
+      continue;
     }
+    const edge = edgeOf(read.success)?.callId ?? null;
+    if (edge !== null && (callId ?? edge) === edge)
+      if (runEndFromEvents(read.success, child) === null)
+        open.push({ runId: child, callId: edge });
+  }
   return open;
 });
 
@@ -279,18 +284,14 @@ export function getRunRecords(session: SessionHandle, runId: RunId) {
   /**
    * The run's terminal result: the `run.end` row's outcome, error and
    * output, and the usage its run history folds from its priced response
-   * rows (a document task's: its revisions', {@link withChildSpend}). Absent
-   * usage is a run with no run history (an agent-CLI child, a launch that
-   * failed before its first batch); an unreadable run history is logged and
-   * reads the same, so it never also costs the run its terminal fact.
+   * rows (a document task's: its revisions', {@link withChildSpend}); none
+   * for a run without one, and an unreadable one is logged and reads so.
    */
   const runEndOf = (rows: readonly SessionEvent[]) =>
     Effect.gen(function* () {
       const end = runEndFromEvents(rows, runId);
       if (!end) return null;
-      // The usage is folded from these same rows, so the terminal fact and
-      // the totals come from one read and a resume can never pair them
-      // across two.
+      // The usage is folded from these same rows: one read, never two.
       const folded = Result.flatMap(runHistoryRows(rows), (live) =>
         foldRunState(null, live),
       );

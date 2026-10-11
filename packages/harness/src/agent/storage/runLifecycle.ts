@@ -30,7 +30,7 @@ import {
   type UserFollowUpSupport,
 } from '@shared/schemas';
 import type { Append } from '@shared/session/sessionEvents';
-import { isUnfolded, type RunHistoryDraft } from '@shared/session/runStateFold';
+import type { RunInputDraft } from '@shared/session/runStateFold';
 import { ensureError } from '@utils/errors/errorMessage';
 import {
   getRunRecords,
@@ -267,20 +267,20 @@ export const endIn = Effect.fn('endIn')(function* (
   const settled = ended === persisted || co.held === true;
   if (ended === persisted && error !== undefined)
     yield* Effect.logWarning(`Run ${runId} had ended: ${error.message}`);
-  const end: readonly RunHistoryDraft[] = settled
+  // The loop's halt, never apart from its end, through the run's cell; the
+  // input it never applied, what it left open and its `run.end` beside it.
+  const halt = settled
+    ? []
+    : rows.flatMap((row) =>
+        row.type === 'run.position' ? [haltedPositionRow(row, persisted)] : [],
+      );
+  const closing: readonly RunInputDraft[] = settled
     ? []
     : [
-        // Requests it never applied, and the loop's halt, never apart from it.
         ...consumedRows(
           runId,
           (yield* session.followUps.read(runId)).followUps,
         ),
-        ...rows.flatMap((row) =>
-          row.type === 'run.position'
-            ? [haltedPositionRow(row, persisted)]
-            : [],
-        ),
-        // What the run left open closes with its end.
         ...session.trace.closure(runId, persisted),
         {
           type: 'run.end' as const,
@@ -291,22 +291,18 @@ export const endIn = Effect.fn('endIn')(function* (
         },
       ];
   const result = { persisted, recorded: true, after: co.committed };
+  const beside = [...closing, ...co.rows];
   const cell = yield* Effect.result(
     session.runHistory.open(runId, { within: append }),
   );
-  const alongside = Effect.succeed({ rows: co.rows, committed: Effect.void });
+  const alongside = Effect.succeed({ rows: beside, committed: Effect.void });
   if (Result.isSuccess(cell))
-    return yield* Effect.as(cell.success.append(end, alongside), result);
+    return yield* Effect.as(cell.success.append(halt, alongside), result);
   if (cell.failure._tag !== 'RunHistoryRefused') return yield* cell.failure;
   yield* Effect.logWarning(
     `Run ${runId} ends unloaded: ${cell.failure.message}`,
   );
-  const mine = (row: RunHistoryDraft) => row.aggregateId === target;
-  yield* append([...end, ...co.rows].filter(mine).filter(isUnfolded));
-  yield* session.runHistory.appendIn(
-    append,
-    co.rows.filter((r) => !mine(r)),
-  );
+  yield* session.runHistory.appendIn(append, beside);
   return result;
 });
 
@@ -318,13 +314,7 @@ const endOwnedChildren = Effect.fn('endOwnedChildren')(function* (
   runId: RunId,
   cascade: boolean,
 ) {
-  // A history that does not load names no calls: the end goes on, loudly.
-  const owned = yield* openOwnedChildren(session, runId).pipe(
-    Effect.catchTag('RunHistoryRefused', (refused) =>
-      Effect.as(Effect.logWarning(`Run ${runId}: ${refused.message}`), []),
-    ),
-  );
-  for (const child of owned) {
+  for (const child of yield* openOwnedChildren(session, runId)) {
     if (!cascade || session.runs.isLive(child.runId))
       return yield* Effect.fail(
         new Error(
@@ -369,20 +359,26 @@ export const finalizeRun = Effect.fn('finalizeRun')(function* (
     );
   // Rows the run published and the store refused fail it, whoever ends it.
   const lost = yield* session.trace.lost(runId);
-  const status = yield* end({
+  const failed = lost !== undefined && outcome !== RUN_OUTCOME.CANCELLED;
+  const { settlement, ...requested } = {
     ...input,
-    outcome:
-      lost !== undefined && outcome !== RUN_OUTCOME.CANCELLED
-        ? RUN_OUTCOME.FAILED
-        : outcome,
+    outcome: failed ? RUN_OUTCOME.FAILED : outcome,
     error: input.error ?? lost,
-  });
+  };
+  let status = yield* end({ ...requested, settlement });
+  // A refused settlement: the end, its outcome kept, without it, loudly.
+  if (Exit.isFailure(status) && settlement !== undefined) {
+    yield* Effect.logWarning(`Run ${runId}: its settlement was not saved`).pipe(
+      Effect.annotateLogs({ data: Cause.squash(status.cause) }),
+    );
+    status = yield* end(requested);
+  }
   if (Exit.isSuccess(status)) {
     const { persisted, recorded, after } = status.value;
     yield* after;
     return { ok: true, outcome: persisted, recorded };
   }
-  // The backstop, loud: the end alone, FAILED, without what it carried.
+  // The last backstop, loud: the end alone, FAILED.
   const error = Cause.squash(status.cause);
   const message = `The run's end was not saved: ${ensureError(error).message}`;
   yield* Effect.logWarning(`Run ${runId}: ${message}`);
@@ -393,8 +389,6 @@ export const finalizeRun = Effect.fn('finalizeRun')(function* (
     error: { kind: 'unexpected', message },
   });
   if (Exit.isFailure(backstop))
-    yield* Effect.logError(
-      `Run ${runId} reads as running: no end of it commits`,
-    );
+    yield* Effect.logError(`Run ${runId} reads as running: no end commits`);
   return { ok: false, error };
 });
