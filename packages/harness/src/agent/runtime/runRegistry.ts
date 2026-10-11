@@ -369,14 +369,16 @@ export class RunRegistry {
   }
 
   /**
-   * Refuse a child admitted under a parent whose stop has begun, or whose
-   * stop has already folded (the fold's own `cancelled`, read from the
-   * session's view rather than remembered here). A child this registry
-   * already holds is not an admission — a native child's activation and every
-   * live handle it tracks re-enter here while the detach runs, and those are
-   * the children the stop is severing, not new ones.
+   * Refuse a child admitted under a parent whose stop has begun or folded
+   * (the view's `cancelled`). A child held here already answers by its
+   * edge now ({@link parentOf}), so one a detach cut is admitted as a root,
+   * and is not refused while the stop runs: it is one being severed.
    */
-  private assertAdmitsChild(parentRunId: RunId, childRunId: RunId): void {
+  private assertAdmitsChild(launchParent: RunId, childRunId: RunId): void {
+    const parentRunId = this.isRetained(childRunId)
+      ? this.parentOf(childRunId)
+      : launchParent;
+    if (parentRunId === null) return;
     if (this.stopping.has(parentRunId)) {
       if (this.isRetained(childRunId)) return;
       throw new Error(
