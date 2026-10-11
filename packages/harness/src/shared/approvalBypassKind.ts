@@ -9,6 +9,7 @@
 import { z } from 'zod';
 
 import type { TexraApprovalPolicy } from './approvalPolicy';
+import type { RunId, SessionEvent } from './schemas';
 
 export const APPROVAL_BYPASS_KINDS = ['bash', 'toolEdit', 'superYolo'] as const;
 
@@ -137,6 +138,44 @@ export function runBypasses<Id>(
 /** The human values a run's ancestry gives it, as grants of its own: what a
  *  run keeps when its edge goes, or a conversation's next round starts
  *  with. A goal's grant is not carried: it ends with its goal. */
+/** The grants a child keeps once its parent edge goes (its detach, or a
+ *  birth a detach cut): what it inherits through `parentId` with `own` as
+ *  its rows name them, which a view that has not folded the child lacks,
+ *  its own goal grant kept. */
+export function grantsKept<Id>(
+  source: ApprovalGrantSource<Id>,
+  runId: Id,
+  parentId: Id,
+  own: ApprovalGrants,
+): ApprovalGrants {
+  const seeded: ApprovalGrantSource<Id> = {
+    runs: new Map(source.runs).set(runId, { parentId }),
+    policy: new Map(source.policy).set(runId, own),
+  };
+  return { ...inheritedGrants(seeded, runId), goal: own.goal };
+}
+
+/** {@link grantsKept} from a child's own rows, its `run.start` and newest
+ *  `approval.policy`; `undefined` for a child with no start (unborn). */
+export function grantsKeptFromRows(
+  source: ApprovalGrantSource<RunId>,
+  runId: RunId,
+  parentId: RunId,
+  rows: readonly SessionEvent[],
+): ApprovalGrants | undefined {
+  const start = rows.find((row) => row.type === 'run.start');
+  if (start?.type !== 'run.start') return undefined;
+  const own = rows.findLast((row) => row.type === 'approval.policy');
+  return grantsKept(
+    source,
+    runId,
+    start.parent?.id ?? parentId,
+    own?.type === 'approval.policy'
+      ? own.snapshot
+      : (start.approvalPolicy ?? NO_APPROVAL_GRANTS),
+  );
+}
+
 export function inheritedGrants<Id>(
   source: ApprovalGrantSource<Id>,
   runId: Id,

@@ -25,10 +25,9 @@ import {
 } from 'effect';
 
 import { finalizeRun } from '@agent/storage/runLifecycle';
-import { getRunRecords } from '@agent/storage/runRecords';
 import type { ProcessServices } from '@platform/processRuntime';
 import {
-  inheritedGrants,
+  grantsKeptFromRows,
   type ApprovalGrants,
 } from '@shared/approvalBypassKind';
 import {
@@ -831,16 +830,6 @@ export class RunRegistry {
     return true;
   }
 
-  /** The grants a child keeps once its parent edge goes (its detach row):
-   *  what it inherits now, its own goal grant kept. */
-  private grantsOnDetach(runId: RunId): ApprovalGrants {
-    const current = SubscriptionRef.getUnsafe(this.init.session().view.ref);
-    return {
-      ...inheritedGrants(current, runId),
-      goal: current.policy.get(runId)?.goal ?? [],
-    };
-  }
-
   /**
    * Write the terminal fact for a stop that reached no live target: an
    * ownerless end. A run that already ended keeps its own verdict; the
@@ -879,27 +868,36 @@ export class RunRegistry {
     return session.log.transact((tx) =>
       Effect.gen({ self: this }, function* () {
         const children = this.childRunIds(parentRunId);
-        const born = yield* Effect.filter(children, (childRunId) =>
-          getRunRecords(session, childRunId).exists(),
-        );
-        yield* Effect.forEach(born, (id) => session.log.hold(id), {
-          discard: true,
-        });
-        if (born.length > 0)
+        const view = SubscriptionRef.getUnsafe(session.view.ref);
+        // Each born child's kept grants, from its rows: the view may not
+        // hold a child born a moment ago.
+        const kept = new Map<RunId, ApprovalGrants>();
+        for (const id of children) {
+          const rows = yield* session.log.rows(qualifyAggregateId('run', id), [
+            'run.start',
+            'approval.policy',
+          ]);
+          const grants = grantsKeptFromRows(view, id, parentRunId, rows);
+          if (grants === undefined) continue;
+          kept.set(id, grants);
+          yield* session.log.hold(id);
+        }
+        if (kept.size > 0)
           yield* tx.append(
-            born.flatMap((childRunId) => {
-              const aggregateId = qualifyAggregateId('run', childRunId);
-              const snapshot = this.grantsOnDetach(childRunId);
+            [...kept].flatMap(([id, snapshot]) => {
+              const aggregateId = qualifyAggregateId('run', id);
               return [
                 { type: 'run.detach', aggregateId },
                 { type: 'approval.policy', aggregateId, snapshot },
               ] as const;
             }),
           );
-        const unborn = children.filter((id) => !born.includes(id));
+        // Only a child still here: one gone since has no birth left to cut.
         yield* tx.afterCommit(
           Effect.sync(() => {
-            for (const id of unborn) this.unbornDetached.add(id);
+            for (const id of children)
+              if (!kept.has(id) && this.entries.has(id))
+                this.unbornDetached.add(id);
           }),
         );
       }).pipe(Effect.scoped),

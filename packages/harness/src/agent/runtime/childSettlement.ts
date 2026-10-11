@@ -19,6 +19,7 @@ import type {
 import { startFollowUpWake } from '@agent/followUp/ToolUseFollowUp';
 import type { AgentTrace } from '@agent/trace';
 import {
+  getRunRecords,
   lostResultId,
   persistedParentRunId,
   type AttemptKey,
@@ -282,6 +283,54 @@ export const settleChildTurn = (
         ],
       }));
 };
+
+/** A child's parent edge as a job reads it: a born child's from its rows,
+ *  an unborn one's from `parentOf` (its launch's, less a detach). */
+export const parentEdgeIn = (
+  session: SessionHandle,
+  child: RunId,
+): Effect.Effect<RunId | null, Error> =>
+  Effect.gen(function* () {
+    if (!(yield* getRunRecords(session, child).exists()))
+      return session.runs.parentOf(child);
+    return (yield* persistedParentRunId(session, child)) ?? null;
+  });
+
+/**
+ * A child's message (`item.from`) to its parent, the edge read in the job
+ * that queues it: a born child's from its rows, an unborn one's from
+ * `parentOf` (its launch's, less a detach). A detach that committed first
+ * sends it nowhere. The parent it reached, or null when there is none or it
+ * refused.
+ */
+export const sendToParent = (
+  session: SessionHandle,
+  item: InboxItem & { readonly from: { readonly kind: 'run' } },
+  options: SendOptions,
+  trace: AgentTrace | undefined,
+): Effect.Effect<RunId | null, Error> =>
+  Effect.gen(function* () {
+    const sent = yield* session.log.transact((tx) =>
+      Effect.gen(function* () {
+        const to = yield* parentEdgeIn(session, item.from.runId);
+        if (to === null) return { to, committed: Effect.void };
+        const co = yield* parentAdmission(
+          session.followUps,
+          to,
+          item,
+          options,
+          trace,
+        );
+        yield* tx.append(co.rows);
+        return {
+          to: co.sent.kind === 'refused' ? null : to,
+          committed: co.committed,
+        };
+      }).pipe(Effect.scoped),
+    );
+    yield* sent.committed;
+    return sent.to;
+  });
 
 /** Commit a part in one transaction, then run what it left for after. */
 export const commitPart = (

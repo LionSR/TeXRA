@@ -11,11 +11,7 @@ import { Cause, Effect, Exit, SubscriptionRef } from 'effect';
 
 import { activationRows } from '@agent/storage/runLifecycle';
 import type { AgentTrace, StageHandle } from '@agent/trace';
-import {
-  inheritedGrants,
-  NO_APPROVAL_GRANTS,
-  type ApprovalGrantSource,
-} from '@shared/approvalBypassKind';
+import { grantsKept, NO_APPROVAL_GRANTS } from '@shared/approvalBypassKind';
 import {
   RUN_OUTCOME,
   type RunId,
@@ -48,16 +44,12 @@ const birthRows = (
     run.session.runs.parentOf(run.runId) !== null
   )
     return rows;
-  const view = SubscriptionRef.getUnsafe(run.session.view.ref);
-  const own = start.approvalPolicy ?? NO_APPROVAL_GRANTS;
-  const source: ApprovalGrantSource<RunId> = {
-    runs: new Map<RunId, { readonly parentId: RunId | null }>(view.runs).set(
-      run.runId,
-      { parentId: start.parent.id },
-    ),
-    policy: new Map(view.policy).set(run.runId, own),
-  };
-  const snapshot = { ...inheritedGrants(source, run.runId), goal: own.goal };
+  const snapshot = grantsKept(
+    SubscriptionRef.getUnsafe(run.session.view.ref),
+    run.runId,
+    start.parent.id,
+    start.approvalPolicy ?? NO_APPROVAL_GRANTS,
+  );
   return [
     { ...start, parent: null },
     ...rows.slice(1),

@@ -109,16 +109,11 @@ const finalizeChildRun = Effect.fn('finalizeChildRun')(function* (
   args: FinalizeChildRunArgs,
 ) {
   const { handle, session, logger, closeTrace, options } = args;
-  // Only a child a parent can continue pauses: a detached one (no parent)
-  // has nobody to call it again, so its stop cancels it.
-  const parentRunId =
-    (yield* persistedParentRunId(session, handle.runId)) ?? null;
   const pause =
-    options.outcome === RUN_OUTCOME.CANCELLED && parentRunId !== null
+    options.outcome === RUN_OUTCOME.CANCELLED
       ? options.pauseNotice?.()
       : undefined;
-  if (pause !== undefined && parentRunId !== null)
-    return yield* pauseChildRun(args, pause, parentRunId);
+  if (pause !== undefined && (yield* pauseChildRun(args, pause))) return;
 
   // Describing the failure is fallible: `error` is `unknown`, and formatting
   // a foreign value can throw (a throwing `message` getter or `toString`).
@@ -182,16 +177,18 @@ const finalizeChildRun = Effect.fn('finalizeChildRun')(function* (
  * ending it: one transaction commits the notice as its report with the
  * `child.park` `paused` row carrying the resume id (not `run.end`), and
  * queues the notice for the parent's next input, waking nobody. Calling the
- * child again activates it once more. The handle is untracked and the trace
- * closed whatever the writes did, so the registry never keeps a finished
- * generation live.
+ * child again activates it once more. Only a child a parent can continue
+ * pauses: one its rows show detached, read in the pause's job, has nobody
+ * to call it again, so it ends cancelled instead (false). A paused child's
+ * handle is untracked and its trace closed whatever the writes did, so the
+ * registry never keeps a finished generation live.
  */
 const pauseChildRun = (
   { handle, session, logger, closeTrace, options }: FinalizeChildRunArgs,
   { text: notice, resumeId }: ChildRunPause,
-  parentRunId: RunId,
-) =>
-  Effect.gen(function* () {
+) => {
+  let paused = true;
+  return Effect.gen(function* () {
     const runId = handle.runId;
     const text = formatDelivery({
       tag: DELIVERY_TAG.childPaused,
@@ -206,13 +203,19 @@ const pauseChildRun = (
     // parent.
     const submitted = yield* session.log.transact((tx) =>
       Effect.gen(function* () {
+        const parentRunId = yield* persistedParentRunId(session, runId);
+        if (parentRunId === undefined) return undefined;
         const settlement = yield* options.settlement ??
           Effect.succeed({ rows: [], committed: Effect.void });
         // A last turn held for a parent open elsewhere is the park: no
         // pause after it (its notice would be refused the same way).
         if (settlement.rows.some((row) => row.type === 'child.park')) {
           yield* tx.append(settlement.rows);
-          return { sent: { kind: 'duplicate' }, after: settlement.committed };
+          return {
+            parentRunId,
+            sent: { kind: 'duplicate' },
+            after: settlement.committed,
+          };
         }
         // A parent that cannot take the notice refuses it: the pause stands.
         const notice = yield* parentAdmission(
@@ -235,25 +238,31 @@ const pauseChildRun = (
           ...notice.rows,
         ]);
         return {
+          parentRunId,
           sent: notice.sent,
           after: Effect.andThen(settlement.committed, notice.committed),
         };
       }).pipe(Effect.scoped),
     );
+    paused = submitted !== undefined;
+    if (submitted === undefined) return false;
     yield* submitted.after;
     if (submitted.sent.kind === 'refused')
       logger.warn(
-        `The pause notice was not queued for parent run ${parentRunId}; it remains in this run's report.`,
+        `The pause notice was not queued for parent run ${submitted.parentRunId}; it remains in this run's report.`,
       );
+    return true;
   }).pipe(
     Effect.ensuring(
       Effect.gen(function* () {
+        if (!paused) return;
         (yield* Runs).untrackIfCurrent(handle);
         closeTrace();
       }),
     ),
     Effect.withSpan('pauseChildRun'),
   );
+};
 
 /**
  * The run an agent-CLI launch registers: the paused child of `parentRunId`

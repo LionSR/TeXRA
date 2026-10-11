@@ -1131,7 +1131,7 @@ describe('runRegistry', () => {
       yield* Effect.addFinalizer(() => Effect.sync(() => registry.dispose()));
       const parentRunId = generateRunId();
       const childRunId = generateRunId();
-      grants.runs.set(childRunId, { parentId: parentRunId });
+      // Born, but not in the view yet: its grants come from its rows.
       grants.policy.set(parentRunId, inherited);
       const handle = createHandle(childRunId, parentRunId);
       registry.track(handle);

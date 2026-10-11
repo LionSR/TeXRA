@@ -26,10 +26,12 @@ import {
   letGoOfClaim,
 } from '@agent/runtime/runLaunchGuard';
 import type { RunInput } from '@agent/followUp/RunInput';
-import { getRunRecords, persistedParentRunId } from '@agent/storage/runRecords';
+import { getRunRecords } from '@agent/storage/runRecords';
 import {
   commitPart,
   deliverIn,
+  parentEdgeIn,
+  sendToParent,
   settleChildTurn,
   settlementOf,
   type ChildSettlement,
@@ -465,7 +467,7 @@ const progressPorts = <TTurn, R>(loop: ChildLoop<TTurn, R>): ChildRunPorts => ({
     // Nothing is queued when no session holds the run.
     if (session.runs.getToolUseFollowUpTarget(target).kind === 'no_session')
       return;
-    session.followUps.sendDetached(target, {
+    session.followUps.sendDetached(parentEdgeIn(session, runId), {
       text: formatSubagentProgress(runId, agentName, update),
       from: { kind: 'run', runId },
     });
@@ -771,7 +773,6 @@ const driveTurns = <TTurn, R>(
         if (strategy.deliveryMode !== 'persistOnly')
           yield* deliverLaunchFailure(
             session,
-            loop.runs.parentOf(runId),
             runId,
             strategy.formatError(turn, err),
           );
@@ -841,12 +842,10 @@ const endNative = <TTurn, R>(
       );
     else if (!abnormal && settlement !== undefined)
       yield* commitPart(session, settlement);
-    const target = yield* persistedParentRunId(session, runId);
     if (
       strategy.stopNotice === undefined ||
       strategy.deliveryMode === 'persistOnly' ||
-      !loop.userStopped ||
-      target === undefined
+      !loop.userStopped
     )
       return;
     // A notice that cannot be read still says the child stopped: the stop
@@ -863,7 +862,7 @@ const endNative = <TTurn, R>(
       );
     const deliveryId = `${runId}:${loop.attemptId}:stopped`;
     const item = { text, from: { kind: 'run', runId } as const, deliveryId };
-    yield* session.followUps.send(target, item, { hold: 'instruction' });
+    yield* sendToParent(session, item, { hold: 'instruction' }, loop.trace);
   });
 
 /** The child's terminal row, its process port's finalize or a native run's
