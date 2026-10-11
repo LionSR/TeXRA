@@ -1474,7 +1474,10 @@ describe('the C1 event table and the C6 publisher', () => {
         const [ownerA, ownerB] = [processOwnerId(start), processOwnerId(start)];
         const id = runStart.aggregateId;
         // A holds the run until its scope closes, as its session would.
-        const scopeA = yield* Scope.make();
+        // Closed below mid-test; the release also closes it on a failure.
+        const scopeA = yield* Effect.acquireRelease(Scope.make(), (scope) =>
+          Scope.close(scope, Exit.void),
+        );
         yield* Layer.buildWithScope(
           Layer.effectDiscard(
             Database.pipe(
