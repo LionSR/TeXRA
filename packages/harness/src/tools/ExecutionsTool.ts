@@ -20,6 +20,7 @@ import {
   listRunWorkspaceFiles,
   resolveRunWorkspaceFilePath,
 } from '@agent/storage';
+import { persistedParentRunId } from '@agent/storage/runRecords';
 import { type SessionHandle } from '@agent/runtime/SessionHandle';
 import { requireToolRun } from '@agent/runtime/RunCall';
 import { Runs } from '@agent/runtime/runRegistry';
@@ -417,23 +418,23 @@ const handleKill = Effect.fn('ExecutionsTool.handleKill')(function* (
   }
 
   const runs = yield* Runs;
-  const target = runs.getHandle(runId);
-  if (!target) {
+  if (!runs.getHandle(runId)) {
     return yield* Effect.fail(
       new ToolError(`Run ${runId} not found or already completed.`),
     );
   }
 
-  // Scope: can only kill your own children.
-  if (runs.parentOf(runId) !== context.runId) {
+  // Only your own children, by the edge the rows leave (a detach may be in).
+  const owner = (yield* getRunRecords(context.session, runId).exists())
+    ? yield* persistedParentRunId(context.session, runId)
+    : runs.parentOf(runId);
+  if (owner !== context.runId) {
     return yield* Effect.fail(
       new ToolError(`Cannot kill run ${runId}: not a child of this session.`),
     );
   }
 
-  // The permission gate: off, or a stored value that fails its schema,
-  // denies (the guard above has already narrowed `target` to an owned
-  // RunHandle).
+  // The permission gate: off, or a stored value that fails its schema, denies.
   const killDenial = yield* orchestratorKillDenial(context.session.roots);
   if (killDenial !== undefined) {
     return yield* Effect.fail(new ToolError(killDenial));
@@ -451,9 +452,7 @@ const handleKill = Effect.fn('ExecutionsTool.handleKill')(function* (
       Effect.andThen(Effect.sync(() => stop.accepted())),
     );
   }).pipe(Effect.uninterruptible);
-  if (success) {
-    return executed(`Run ${runId} terminated.`);
-  }
+  if (success) return executed(`Run ${runId} terminated.`);
   return yield* Effect.fail(
     new ToolError(`Run ${runId} could not be terminated.`),
   );
