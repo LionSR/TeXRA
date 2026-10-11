@@ -31,6 +31,7 @@ import { databaseLayer } from '@controllers/session/Database';
 import { SessionViewService } from '@controllers/session/SessionView';
 import { sessionInputsLayer } from '@controllers/session/sessionInputs';
 import { WorkspaceRoots } from '@controllers/session/WorkspaceRoots';
+import { runStateAppend } from '@shared/session/runHistory';
 import {
   aggregateId as qualifyAggregateId,
   DEBUG_MODE_KEY,
@@ -116,7 +117,10 @@ const running: SessionEventDraft = {
 
 /** A running model reply with no text of its own: the row the live text for
  *  `rowId` paints into once its entry folds. */
-function streamingRow(runId: RunId, rowId: string): SessionEventDraft {
+function streamingRow(
+  runId: RunId,
+  rowId: string,
+): Extract<SessionEventDraft, { type: 'stream.start' }> {
   return {
     type: 'stream.start',
     aggregateId: qualifyAggregateId('run', runId),
@@ -439,7 +443,7 @@ describe('session framer', () => {
         // the frame's cursor is the commit the framer drained; two appends
         // to one row in one window merge into one chunk, never two; a chunk
         // of an aggregate the Subscribe did not name is left out.
-        yield* events.transact((append) => append([running]));
+        yield* events.transact((append) => runStateAppend(append)([running]));
         const first = textTail('Hel');
         yield* SubscriptionRef.set(
           chunks.ref,
@@ -545,7 +549,7 @@ describe('session framer', () => {
           drawn(yield* SubscriptionRef.get(runtimeView.ref)),
         );
         // A tail commit reaches both folds.
-        yield* events.transact((append) => append([running]));
+        yield* events.transact((append) => runStateAppend(append)([running]));
         yield* SubscriptionRef.set(
           chunks.ref,
           new Map([[`${RUN}/row-1`, textTail('Hello again')]]),

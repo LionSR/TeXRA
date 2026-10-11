@@ -18,6 +18,7 @@ import { DatabaseReadFailed } from '@shared/session/database';
 import {
   createProcessSession,
   publishTestRunStart,
+  seedRows,
 } from '@test/support/sessionTestUtils';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { documentTaskConfig } from '@texra/agent/output/documentRecipe';
@@ -80,7 +81,7 @@ describe('deriveResumability', () => {
     Effect.gen(function* () {
       const runId = 'ac0001' as RunId;
       yield* Effect.promise(() => writeMeta(runId, {}));
-      yield* session.log.transact([
+      yield* seedRows(session.log)([
         {
           type: 'run.config',
           aggregateId: aggregateId('run', runId),

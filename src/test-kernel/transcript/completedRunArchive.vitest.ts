@@ -33,6 +33,7 @@ import {
   createTestSession,
   publishTestRunStart,
   publishTestRows,
+  seedRows,
 } from '@test/support/sessionTestUtils';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { settleSessionEvents } from '@test/agent/progressTestUtils';
@@ -332,7 +333,7 @@ describe('completedRunArchive facade', () => {
         );
 
         // The one fact a resume reads: the run's opening `run.position`.
-        yield* session.log.transact([
+        yield* seedRows(session.log)([
           {
             type: 'run.position',
             aggregateId: aggregateId('run', runId),

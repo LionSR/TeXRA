@@ -20,11 +20,8 @@ import type {
   ToolDefinition,
   ToolResult,
 } from '@shared/schemas';
-import type {
-  DatabaseNotOwner,
-  DatabaseWriteFailed,
-} from '@shared/session/database';
-import type { RunHistoryRefused } from '@shared/session/runHistory';
+import type { DatabaseNotOwner } from '@shared/session/database';
+import type { CellError } from '@shared/session/runHistory';
 import type { SettingHost } from '@shared/state/stateSettings';
 import type { StepRoot } from '@utils/files/externalRoots';
 
@@ -181,10 +178,7 @@ export interface CallRequests {
   readonly open: (
     payload: PermissionPayload,
     options?: { readonly onNeverCommitted?: Effect.Effect<void> },
-  ) => Effect.Effect<
-    RequestDecision,
-    DatabaseNotOwner | DatabaseWriteFailed | RunHistoryRefused
-  >;
+  ) => Effect.Effect<RequestDecision, DatabaseNotOwner | CellError>;
 }
 
 /**

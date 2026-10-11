@@ -15,6 +15,7 @@ import type {
   SessionHandle,
   SessionTransaction,
 } from '@agent/runtime/SessionHandle';
+import { makeRunHistory } from '@agent/runtime/RunHistory';
 import {
   aggregateId,
   type RunId,
@@ -30,6 +31,7 @@ import {
 import { runRelation } from '@shared/session/runRelation';
 import type { QueuedFollowUp } from '@shared/session/runRows';
 import type { Append } from '@shared/session/sessionEvents';
+import { runStateAppend } from '@shared/session/runHistory';
 import { createDeferred } from '@test/support/asyncTestUtils';
 import { generateRunId } from '@utils/core';
 
@@ -101,42 +103,44 @@ function recordedFollowUps(
       rows.push(...committed);
       return Effect.succeed(committed);
     });
-  const followUps = new Inbox({
-    log: {
-      transact: <A, E>(
-        work:
-          | readonly SessionEventDraft[]
-          | ((tx: SessionTransaction) => Effect.Effect<A, E>),
-      ) =>
-        typeof work === 'function'
-          ? publisher.withPermits(1)(
-              work({ append, claim: () => Effect.void, afterCommit: (a) => a }),
-            )
-          : publisher.withPermits(1)(append(work)),
-      rows: (id, types) =>
-        Effect.sync(() =>
-          rows.filter(
-            (row) =>
-              row.aggregateId === id &&
-              (types === undefined || types.includes(row.type)),
-          ),
+  const log = {
+    transact: <A, E>(
+      work:
+        | readonly SessionEventDraft[]
+        | ((tx: SessionTransaction) => Effect.Effect<A, E>),
+    ) =>
+      typeof work === 'function'
+        ? publisher.withPermits(1)(
+            work({ append, claim: () => Effect.void, afterCommit: (a) => a }),
+          )
+        : publisher.withPermits(1)(runStateAppend(append)(work)),
+    rows: (id, types) =>
+      Effect.sync(() =>
+        rows.filter(
+          (row) =>
+            row.aggregateId === id &&
+            (types === undefined || types.includes(row.type)),
         ),
-      hold: (runId) =>
-        Effect.suspend(() => {
-          claims.push(runId);
-          return options.claimRefused
-            ? Effect.fail(
-                new DatabaseWriteFailed({
-                  path: ':memory:',
-                  cause: new DatabaseClaimRefused({
-                    ownerId: JSON.stringify(['other-host', 4321, null]),
-                    verdict: 'alive',
-                  }),
+      ),
+    hold: (runId) =>
+      Effect.suspend(() => {
+        claims.push(runId);
+        return options.claimRefused
+          ? Effect.fail(
+              new DatabaseWriteFailed({
+                path: ':memory:',
+                cause: new DatabaseClaimRefused({
+                  ownerId: JSON.stringify(['other-host', 4321, null]),
+                  verdict: 'alive',
                 }),
-              )
-            : Effect.void;
-        }),
-    } as InboxPort['log'],
+              }),
+            )
+          : Effect.void;
+      }),
+  } as InboxPort['log'];
+  const followUps = new Inbox({
+    log,
+    runHistory: makeRunHistory(log),
     detach: (job) => {
       Effect.runFork(publisher.withPermits(1)(job(append)));
     },

@@ -23,8 +23,7 @@ import {
   MODEL_COMPACTION_THRESHOLD_SETTING,
   type RunId,
 } from '@shared/schemas';
-import type { DatabaseWriteFailed } from '@shared/session/database';
-import type { RunHistoryRefused } from '@shared/session/runHistory';
+import type { CellError } from '@shared/session/runHistory';
 import type { RunHistoryDraft, RunState } from '@shared/session/runStateFold';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import type { RunCell } from '@shared/session/runHistory';
@@ -296,10 +295,7 @@ const land = Effect.fn('compaction.land')(function* (
 const compactIfNeeded = Effect.fn('compaction.check')(function* (
   state: RunState,
   input: CompactionInput,
-): Effect.fn.Return<
-  RunState,
-  RunHistoryRefused | DatabaseWriteFailed | StateReadFailed
-> {
+): Effect.fn.Return<RunState, CellError | StateReadFailed> {
   const reason = input.force ?? 'threshold';
   if (input.force === null && !(yield* overThreshold(state, input)))
     return state;
@@ -326,25 +322,20 @@ export interface BackgroundCompaction {
     cell: RunCell,
     bound: BoundModel,
     requests: readonly RunHistoryDraft[],
-  ) => Effect.Effect<
-    RunState,
-    RunHistoryRefused | DatabaseWriteFailed | StateReadFailed
-  >;
+  ) => Effect.Effect<RunState, CellError | StateReadFailed>;
   /**
    * At the end of a turn: wait for the summary being made, and land it. A
    * summary does not outlive the turn that started it, so a process that
    * exits while the run is idle loses none, and its activity closes before
    * the turn's `waiting`.
    */
-  readonly finish: (
-    cell: RunCell,
-  ) => Effect.Effect<RunState, RunHistoryRefused | DatabaseWriteFailed>;
+  readonly finish: (cell: RunCell) => Effect.Effect<RunState, CellError>;
   /** Before another edit of the view: land a finished summary, cut short
    *  one still running (`why` says what edit is coming). */
   readonly settle: (
     cell: RunCell,
     why: string,
-  ) => Effect.Effect<RunState, RunHistoryRefused | DatabaseWriteFailed>;
+  ) => Effect.Effect<RunState, CellError>;
 }
 
 export const backgroundCompaction = Effect.fn('compaction.background')(

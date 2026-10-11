@@ -303,7 +303,7 @@ const deliverOne = (
       { discard: true },
     );
     if (ends === undefined) {
-      yield* append(delivered);
+      yield* session.runHistory.appendIn(append, delivered);
       return said;
     }
     // The held last turn ends the child, through its cell, in this append:
@@ -379,7 +379,7 @@ const clearHeld = (
         ]);
         const park = rows.at(-1);
         if (park?.type !== 'child.park' || park.heldFor !== followUpId) return;
-        yield* tx.append([
+        yield* session.runHistory.appendIn(tx.append, [
           {
             type: 'child.park',
             aggregateId: park.aggregateId,

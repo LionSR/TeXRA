@@ -1,8 +1,9 @@
 /**
  * The run history: the only reader of run-history-private payloads and the
  * only writer of the rows a run's state is folded from, each through one
- * run's {@link RunCell}. Two operations: `load` reads, `open` hands out the
- * cell every write of the run goes through.
+ * run's {@link RunCell}. `load` reads, `open` hands out the cell every write
+ * of the run goes through, and `appendIn` routes another job's run rows
+ * through their cells.
  *
  * Stateless by construction. A cell holds its run's `RunState`, folded from
  * the batches it commits; that is what makes `foldRunState` provably the
@@ -12,7 +13,11 @@
 import { Cause, Context, Data, type Effect, type Scope } from 'effect';
 
 import type { RunId, SessionEventDraft } from '@shared/schemas';
-import { type DatabaseReadFailed, DatabaseWriteFailed } from './database';
+import {
+  type DatabaseNotOwner,
+  type DatabaseReadFailed,
+  DatabaseWriteFailed,
+} from './database';
 import type { Append, CoWrite } from './sessionEvents';
 import type {
   RunHistoryDraft,
@@ -80,6 +85,14 @@ export function findStorageRefusal(
   return undefined;
 }
 
+/** The same append, every row admitted: held by the run's cell and the
+ *  session's requests (`request.opened`/`decided`) alone. */
+export const runStateAppend = (
+  append: Append,
+): ((events: readonly SessionEventDraft[]) => ReturnType<Append>) =>
+  // cast: one function; the narrowing is the type fence, not a runtime one.
+  append as never;
+
 /** What a run cell's commits and re-reads fail with. */
 export type CellError =
   RunHistoryRefused | DatabaseWriteFailed | DatabaseReadFailed;
@@ -130,7 +143,7 @@ export interface RunCell {
       | readonly RunHistoryDraft[]
       | ((state: RunState) => readonly RunHistoryDraft[]),
     alongside?: Effect.Effect<CoWrite, E, Scope.Scope>,
-  ) => Effect.Effect<RunState, RunHistoryRefused | DatabaseWriteFailed | E>;
+  ) => Effect.Effect<RunState, CellError | E>;
   /**
    * Re-read the run under the cell's lock: the state with every row another
    * writer committed (a `request.decided` a surface landed), in commit
@@ -201,5 +214,14 @@ export class RunHistory extends Context.Service<
       RunCell,
       RunHistoryRefused | DatabaseReadFailed | DatabaseWriteFailed | E
     >;
+    /**
+     * Rows of one or more runs, each through its own cell opened `within`
+     * the caller's job: how a write that touches another run's history
+     * (a delivery, an admitted input, a child's park) reaches it.
+     */
+    readonly appendIn: (
+      append: Append,
+      rows: readonly RunHistoryDraft[],
+    ) => Effect.Effect<void, CellError | DatabaseNotOwner>;
   }
 >()('@texra/session/RunHistory') {}

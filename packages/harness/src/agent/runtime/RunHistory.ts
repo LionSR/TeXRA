@@ -10,6 +10,7 @@ import { Effect, Result, type Scope, SynchronizedRef } from 'effect';
 import { PreparedHistorySchema, type ModelOrigin } from '@texra-ai/llm';
 import {
   aggregateId as qualifyAggregateId,
+  aggregateTarget,
   type RunId,
   type SessionEvent,
   type SessionEventDraft,
@@ -20,10 +21,12 @@ import {
   DatabaseWriteFailed,
 } from '@shared/session/database';
 import {
+  type CellError,
   type RunCell,
   type RunHistory,
   RunHistoryRefused,
   type RunOpening,
+  runStateAppend,
 } from '@shared/session/runHistory';
 import {
   foldRunState,
@@ -73,16 +76,6 @@ function contractViolation(
   const foreign = rows.find((row) => row.aggregateId !== aggregate);
   if (foreign !== undefined) {
     return `a ${foreign.type} targets ${foreign.aggregateId}, not ${aggregate}`;
-  }
-  // The batch that opens a run carries its first `run.position` (`load`
-  // refuses history rows with none); a registration alone opens nothing,
-  // and a run that never opened (a process child) still ends.
-  if (
-    state.phase === null &&
-    rows.length > 0 &&
-    !rows.some((row) => row.type === 'run.position' || row.type === 'run.end')
-  ) {
-    return 'a batch on an unopened run carries no opening run.position';
   }
   for (const [index, row] of rows.entries()) {
     if (row.type === 'context.edit') {
@@ -168,16 +161,10 @@ function rowOrigins(row: RunHistoryDraft): readonly ModelOrigin[] {
 
 /**
  * Every `deployment.endpoint` reaching a run history row carries no userinfo,
- * query string or fragment. The package's `EndpointSchema` already refuses
- * these at parse time; this is the loud restatement at the one boundary
- * where a row becomes permanent, never a `?? null`. A value that is not a URL
- * at all is refused the same way rather than thrown out of the generator.
- *
- * Returns what the refusal may say, never the rejected endpoint: the part
- * this check exists to keep out of durable state is exactly the part a
- * refusal would otherwise carry into logs and error reports. Scheme, host and
- * path — the components the constraint permits — plus the names of the
- * components that violated it.
+ * query string or fragment (`EndpointSchema`'s rule, restated loudly where
+ * a row becomes permanent); a non-URL is refused the same way. Returns what
+ * the refusal may say: scheme, host and path, and the names of the parts
+ * that violated it, never the endpoint the check keeps out of durable state.
  */
 function unsafeEndpoint(origin: ModelOrigin): string | null {
   if (origin.protocol === 'vscode-lm') return null;
@@ -195,11 +182,9 @@ function unsafeEndpoint(origin: ModelOrigin): string | null {
 }
 
 /**
- * The batch as it would be committed, at provisional commits above the
- * state's. The fold reads a `commit` only to require strict increase and to
- * carry it into the state it returns, so folding these answers "does this
- * batch fold?" exactly as the published rows will, before anything is
- * written.
+ * The batch at provisional commits above the state's: the fold reads a
+ * `commit` only to require strict increase, so folding these answers "does
+ * this batch fold?" exactly as the published rows will.
  */
 const candidates = (
   state: RunState,
@@ -211,11 +196,9 @@ const candidates = (
   }));
 
 /**
- * `PreparedHistorySchema` over `history` from message `from` on. Its rules
- * are between neighbours (a calling assistant and its tool group), so a
- * suffix that starts on a message already checked, and never on a tool
- * group, re-checks every pair past it; a refusal's detail is still the
- * whole parse's, whose indices name the whole history.
+ * `PreparedHistorySchema` over `history` from message `from` on: its rules
+ * are between neighbours, so a suffix starting on a checked message, never
+ * on a tool group, re-checks every pair past it.
  */
 const unprepared = (
   runId: RunId,
@@ -278,6 +261,7 @@ const foldStored = (state: RunState | null, rows: readonly SessionEvent[]) =>
 const loaded = (
   run: RunId,
   folded: ReturnType<typeof foldRunState>,
+  prepared = true,
 ): Effect.Effect<RunState | null, RunHistoryRefused> =>
   Effect.gen(function* () {
     if (Result.isFailure(folded))
@@ -297,12 +281,16 @@ const loaded = (
         }),
       );
     }
-    if (state.messages.length > 0) {
+    if (prepared && state.messages.length > 0) {
       const refusal = unprepared(run, state.messages);
       if (refusal !== null) return yield* refusal;
     }
     return state;
   });
+
+/** A batch this module refuses to commit: its caller's defect. */
+const broken = (detail: string) =>
+  Effect.die(new Error(`RunCell.append contract: ${detail}`));
 
 /** No registration. */
 const none: Effect.Effect<readonly SessionEventDraft[]> = Effect.succeed([]);
@@ -318,19 +306,22 @@ export function makeRunHistory(
   const stored = (run: RunId) =>
     sessionLog.rows(qualifyAggregateId('run', run));
 
-  const load = Effect.fn('RunHistory.load')(function* (
-    run: RunId,
-    through?: number,
-  ) {
-    const rows = yield* stored(run);
-    return yield* loaded(
-      run,
-      foldStored(
-        null,
-        through === undefined ? rows : rows.filter((r) => r.seq <= through),
+  /** `load`, and a read inside a job (`prepared` false: a batch that
+   *  changes the history is checked from where it changes). */
+  const read = (run: RunId, through = Infinity, prepared = true) =>
+    Effect.flatMap(stored(run), (rows) =>
+      loaded(
+        run,
+        foldStored(
+          null,
+          rows.filter((r) => r.seq <= through),
+        ),
+        prepared,
       ),
     );
-  });
+  const load = Effect.fn('RunHistory.load')((run: RunId, through?: number) =>
+    read(run, through),
+  );
 
   /**
    * A resume's one transaction, over one read: the claim (a dead owner's,
@@ -363,7 +354,8 @@ export function makeRunHistory(
             }),
           );
           const rows = [...(yield* activation(before)), ...cancels];
-          const written = rows.length === 0 ? [] : yield* tx.append(rows);
+          const written =
+            rows.length === 0 ? [] : yield* runStateAppend(tx.append)(rows);
           return yield* loaded(run, foldStored(before, written));
         }),
       )
@@ -379,10 +371,7 @@ export function makeRunHistory(
     within: Append | undefined,
   ) {
     const violation = contractViolation(run, state, rows);
-    if (violation !== null)
-      return yield* Effect.die(
-        new Error(`RunCell.append contract: ${violation}`),
-      );
+    if (violation !== null) return yield* broken(violation);
     for (const row of rows)
       for (const unsafe of rowOrigins(row).map(unsafeEndpoint))
         if (unsafe !== null)
@@ -391,15 +380,17 @@ export function makeRunHistory(
             runId: run,
             detail: `a ${row.type} origin is not a scheme, host and path alone: ${unsafe}`,
           });
-    // Fold the batch before publishing it: a committed batch `load` cannot
-    // fold is a run nothing can read again.
-    const candidate = foldRunState(state, candidates(state, rows));
-    if (Result.isFailure(candidate))
-      return yield* inconsistent(run, candidate.failure);
+    // `load`'s answer with the batch in, before publishing it: a committed
+    // batch `load` cannot fold is a run nothing can read again.
+    const after = yield* loaded(
+      run,
+      foldRunState(state, candidates(state, rows)),
+      false,
+    );
     // D11: the history `load` checks with `PreparedHistorySchema`, checked
     // here from what the batch changes on (an edit's range start, else the
     // already-checked history's end); re-checking all is quadratic.
-    const assembled = candidate.success?.messages ?? [];
+    const assembled = after?.messages ?? [];
     if (rows.some(isMessageBearing) && assembled.length > 0) {
       const edit = rows.find((row) => row.type === 'context.edit');
       const held = state.messages.length;
@@ -418,16 +409,15 @@ export function makeRunHistory(
         const born = yield* registration;
         const stray = born.find((row) => row.aggregateId !== target);
         if (stray !== undefined)
-          return yield* Effect.die(
-            new Error(
-              `RunCell.append contract: a registration's ${stray.type} targets ${stray.aggregateId}`,
-            ),
-          );
+          return yield* broken(`a registration targets ${stray.aggregateId}`);
         const co = yield* alongside;
-        const own = [...born, ...rows.map(storedDraft)];
-        const written = yield* append([...own, ...co.rows]);
+        const written = yield* runStateAppend(append)([
+          ...born,
+          ...rows.map(storedDraft),
+        ]);
+        yield* appendIn(append, co.rows);
         yield* afterCommit(co.committed);
-        return written.slice(0, own.length);
+        return written;
       }).pipe(Effect.scoped);
     // A target no longer held open is `not-owner`, nothing written (R7).
     const committed = yield* (
@@ -438,17 +428,10 @@ export function makeRunHistory(
     // The same fold at the commits the publisher assigned: the state the run
     // continues from. A failure here is this module's defect.
     const folded = foldStored(state, committed);
-    if (Result.isFailure(folded) || folded.success === null)
-      return yield* Effect.die(
-        new Error(
-          `RunCell.append published a batch its own fold rejects: ${
-            Result.isFailure(folded)
-              ? folded.failure.detail
-              : 'no run history row folded'
-          }`,
-        ),
-      );
-    return folded.success;
+    if (Result.isSuccess(folded) && folded.success !== null)
+      return folded.success;
+    const why = Result.isFailure(folded) ? folded.failure.detail : 'nothing';
+    return yield* broken(`its own fold rejects the published batch: ${why}`);
   });
 
   const open = Effect.fn('RunHistory.open')(function* <E>(
@@ -458,7 +441,7 @@ export function makeRunHistory(
     const { within, activation } = opening;
     const seeded =
       (activation === undefined
-        ? yield* load(run)
+        ? yield* read(run, Infinity, within === undefined)
         : yield* activate(run, activation)) ?? freshRunState(0);
     const ref = yield* SynchronizedRef.make(seeded);
     let registration = opening.registration ?? none; // the first append's
@@ -491,5 +474,22 @@ export function makeRunHistory(
     return cell;
   });
 
-  return { load, open };
+  /** Each run's rows through its cell in `append`'s job; a plugin's own
+   *  aggregate is no run's, and its facts append as they are. */
+  type Appended = Effect.Effect<unknown, CellError | DatabaseNotOwner>;
+  const appendIn = (append: Append, rows: readonly RunHistoryDraft[]) =>
+    Effect.forEach(
+      Map.groupBy(rows, (row) => row.aggregateId),
+      ([key, own]): Appended => {
+        const target = aggregateTarget(key);
+        return target.kind === 'run'
+          ? Effect.flatMap(open(target.id, { within: append }), (cell) =>
+              cell.append(own),
+            )
+          : runStateAppend(append)(own.map(storedDraft));
+      },
+      { discard: true },
+    );
+
+  return { load, open, appendIn };
 }

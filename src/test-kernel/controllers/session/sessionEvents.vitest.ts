@@ -106,6 +106,7 @@ import {
   RUN_DAMAGED_MESSAGE,
   RUN_EARLIER_BUILD_MESSAGE,
 } from '@shared/runs/runStatusDisplay';
+import { runStateAppend } from '@shared/session/runHistory';
 import { Database, GlobalDatabase } from '@shared/session/database';
 import { runActions } from '@shared/session/runActions';
 import { GlobalStateKey } from '@shared/state/stateKeys';
@@ -130,7 +131,7 @@ import {
   nodeSpawnerLayer,
   scriptedSpawnerLayer,
 } from '@test/support/childProcessTestLayer';
-import { publishTestRunStart } from '@test/support/sessionTestUtils';
+import { publishTestRunStart, seedRows } from '@test/support/sessionTestUtils';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { testRunHandle } from '@test/support/runHandleFixtures';
 import { createFakeWorkspaceRoots } from '@test/support/FakePlatform';
@@ -395,7 +396,7 @@ const publishTestRows = (
   session: SessionHandle,
   rows: readonly SessionEventDraft[],
 ): void => {
-  Effect.runFork(session.log.transact(rows));
+  Effect.runFork(seedRows(session.log)(rows));
 };
 
 /** The view access a request handler reads: the fold's level and one run
@@ -489,7 +490,7 @@ describe('session events and view', () => {
         yield* TestClock.adjust('1 second');
         expect(yield* SubscriptionRef.get(view.ref)).toBe(initial);
         expect(observed).toHaveLength(0);
-        yield* events.transact((append) => append([waiting]));
+        yield* events.transact((append) => runStateAppend(append)([waiting]));
         yield* Deferred.await(finished);
         expect(observed.length).toBeGreaterThan(0);
         expect(observed.every((state) => state.cursor > initial.cursor)).toBe(
@@ -628,7 +629,7 @@ describe('session events and view', () => {
       const events = yield* SessionEvents;
       const run = qualifyAggregateId('run', RUN);
       const [start] = yield* events.transact((append) =>
-        append([
+        runStateAppend(append)([
           runStart,
           {
             type: 'followup.queued',
@@ -665,7 +666,7 @@ describe('session events and view', () => {
       // they reach the fold as the tail and not as part of its cold read.
       yield* settle(view.ref, (v) => v.runs.has(RUN));
       yield* events.transact((append) =>
-        append([
+        runStateAppend(append)([
           {
             type: 'request.decided',
             aggregateId: qualifyAggregateId('run', RUN),
@@ -675,7 +676,7 @@ describe('session events and view', () => {
         ]),
       );
       yield* events.transact((append) =>
-        append([
+        runStateAppend(append)([
           {
             type: 'run.position',
             aggregateId: qualifyAggregateId('run', RUN),
@@ -1330,8 +1331,8 @@ describe('Sessions owner', () => {
           // Two acceptances committed close together fold to one view level.
           yield* Effect.all(
             [
-              first.log.transact([acceptedRow(runId, ['/w/a.tex'], 1)]),
-              first.log.transact([acceptedRow(runId, ['/w/b.tex'], 2)]),
+              seedRows(first.log)([acceptedRow(runId, ['/w/a.tex'], 1)]),
+              seedRows(first.log)([acceptedRow(runId, ['/w/b.tex'], 2)]),
             ],
             { concurrency: 'unbounded' },
           );

@@ -45,6 +45,7 @@ import type {
 } from '@shared/session/database';
 import { writeRefused, type RequestError } from '@shared/session/requestErrors';
 import type { Outcome, RuntimeRequest } from '@shared/session/runtimeRequest';
+import type { UnfoldedDraft } from '@shared/session/sessionEvents';
 import { readConfigSettingFrom } from '@utils/config/platformSettings';
 import { type PerKeyLane, withPerKeyLane } from '@utils/core/perKeyQueue';
 
@@ -139,7 +140,7 @@ export interface SessionApprovals {
   change(
     runId: RunId,
     edit: (grants: ApprovalGrants) => ApprovalGrants,
-    rows?: readonly SessionEventDraft[],
+    rows?: readonly UnfoldedDraft[],
   ): Effect.Effect<void, GrantWriteError>;
   /**
    * The grants row a run's activation commits beside its `run.activate`, if
@@ -255,10 +256,7 @@ export function createSessionApprovals(
         Effect.gen(function* () {
           const recorded = recordedGrants(yield* session().log.records(runId));
           const next = edit(recorded);
-          const policy: readonly SessionEventDraft[] = sameGrants(
-            recorded,
-            next,
-          )
+          const policy: readonly UnfoldedDraft[] = sameGrants(recorded, next)
             ? []
             : [
                 {

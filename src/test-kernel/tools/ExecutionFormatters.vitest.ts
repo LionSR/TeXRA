@@ -17,6 +17,7 @@ import {
   createTestSession,
   publishTestRunStart,
   publishTestRows,
+  seedRows,
 } from '@test/support/sessionTestUtils';
 import { testRunHandle } from '@test/support/runHandleFixtures';
 
@@ -87,7 +88,7 @@ describe('turnAttributionNote', () => {
           turnIndex,
           phase,
         });
-        yield* session.log.transact([
+        yield* seedRows(session.log)([
           turnRow(1, 'accepted'),
           turnRow(1, 'settled'),
           turnRow(2, 'accepted'),
