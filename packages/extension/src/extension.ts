@@ -74,7 +74,7 @@ import { withLogChannel } from '@logger/effectLog';
 import { setLogSink } from '@logger/logSink';
 import { nodeFileServices } from '@platform/defaults/jsonStore';
 import { FileSecrets, secretsDirectory } from '@platform/defaults/fileSecrets';
-import { DEFAULT_NODE_STORAGE_ROOT } from '@platform/defaults/nodeStorage';
+import { defaultNodeStorageRoot } from '@platform/defaults/nodeStorage';
 import { openTexraConfigStores } from '@platform/defaults/nodeStores';
 import { JsonConfigProvider } from '@platform/defaults/jsonConfigProvider';
 import { StorageFs, withSessionFs } from '@platform/rootedFs';
@@ -139,14 +139,14 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
   // `~/.texra` is one history across CLI/desktop/extension (#8622). The
   // process runtime precedes the config stores below, which open on it.
   const storage = resolveWorkspaceStoragePath(
-    DEFAULT_NODE_STORAGE_ROOT,
+    defaultNodeStorageRoot(),
     workspaceRoot,
   );
-  const globalStorage = resolveGlobalStoragePath(DEFAULT_NODE_STORAGE_ROOT);
+  const globalStorage = resolveGlobalStoragePath(defaultNodeStorageRoot());
   // The one credential store every host shares (`~/.texra/secrets/`):
   // the background service reads the keys this window saves.
   const secrets = new FileSecrets(
-    secretsDirectory(DEFAULT_NODE_STORAGE_ROOT),
+    secretsDirectory(defaultNodeStorageRoot()),
     (key) => emitAppSignal('credentialChanged', { key }),
   );
   // Usage logging is anonymous: a runtime service with no account behind it.
@@ -245,7 +245,7 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
       // changes, so the configuration stores stay pinned for this process.
       const config = new JsonConfigProvider(
         yield* openTexraConfigStores(
-          DEFAULT_NODE_STORAGE_ROOT,
+          defaultNodeStorageRoot(),
           workspaceRoot,
           (message) => {
             runtime.runFork(

@@ -104,7 +104,11 @@ try {
       repoRoot,
       'scripts/vscode-host-e2e-suite.cjs',
     ),
-    extensionTestsEnv: { HOME: home, TEXRA_NO_TELEMETRY: '1' },
+    extensionTestsEnv: {
+      HOME: home,
+      USERPROFILE: home,
+      TEXRA_NO_TELEMETRY: '1',
+    },
     launchArgs: [
       workspace,
       '--user-data-dir',

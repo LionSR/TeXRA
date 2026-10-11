@@ -148,7 +148,11 @@ export default defineConfig({
           isolate: true,
           include: ['src/test-kernel/**/*.vitest.ts'],
           exclude: pureSuites,
-          setupFiles: ['src/test-kernel/support/setupFakePlatform.ts'],
+          // The temp home first: no module loads before the real one is gone.
+          setupFiles: [
+            'src/test-kernel/support/isolateHome.ts',
+            'src/test-kernel/support/setupFakePlatform.ts',
+          ],
         },
       },
     ],
