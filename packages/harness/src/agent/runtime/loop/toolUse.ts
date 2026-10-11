@@ -228,10 +228,8 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
   ): Effect.fn.Return<RunCell, Error, ProcessServices> {
     const bound = yield* SynchronizedRef.get(run.model);
     // The state its first step opens on: what the opening batch records.
-    const binding = {
-      backend: bound.backend,
-      declinedRoutes: run.declinedRoutes,
-    };
+    const { backend } = bound;
+    const binding = { backend, declinedRoutes: run.declinedRoutes };
     const opening: RunState = {
       ...(yield* cell.current),
       ...{ modelId: bound.modelId, ...binding },
@@ -302,15 +300,16 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
       ...(activated.length > 0 && { activated: [...activated] }),
       ...(misses.length > 0 && { memoryMisses: misses }),
     };
-    // The opening (with a fresh run's registration), and the launch's entry
-    // once it settled: a stop lands before the opening or after the entry.
+    // The opening, with a fresh run's registration and held trace, then the
+    // entry once it settled: a stop lands before the opening or after both.
+    const rows = [
+      appendRow(runId, [{ role: 'user', content }], { input }),
+      ...offered,
+      configRow(runId, run.config, bound.modelId, binding),
+      positionRow(runId, opening, 'turn.ready'),
+    ];
     yield* cell
-      .append([
-        appendRow(runId, [{ role: 'user', content }], { input }),
-        ...offered,
-        configRow(runId, run.config, bound.modelId, binding),
-        positionRow(runId, opening, 'turn.ready'),
-      ])
+      .append(rows, run.entry.opening)
       .pipe(Effect.andThen(run.entry.entered), Effect.uninterruptible);
     run.callbacks.onProgress?.({ kind: 'started' });
     return cell;

@@ -20,18 +20,15 @@ import {
   SubscriptionRef,
 } from 'effect';
 
-import type { AgentEvent } from '@agent/trace';
 import { SESSION_CLOSE_DEADLINE_MS } from '@agent/runtime/SessionHandle';
 import { withLogChannel } from '@logger/effectLog';
 import { writeLogLine } from '@logger/logSink';
 import {
-  aggregateId as qualifyAggregateId,
   isDisplaySessionEvent,
   type AggregateId,
   type CommitOrdinal,
   type SessionEvent,
   type DisplaySessionEvent,
-  type RunId,
 } from '@shared/schemas';
 import {
   Database,
@@ -49,7 +46,6 @@ import {
   type OpenWork,
   type SessionCursor,
   type SessionEventsShape,
-  type UnfoldedDraft,
 } from '@shared/session/sessionEvents';
 
 const CHANNEL = 'sessionEvents';
@@ -373,12 +369,3 @@ export const sessionEventsLayer = Layer.effect(
     };
   }),
 );
-
-/** A source trace fact on its run aggregate. Streaming chunks remain transient. */
-export function runEventDraft(
-  runId: RunId,
-  event: AgentEvent,
-): UnfoldedDraft | null {
-  if (event.type === 'stream.chunk') return null;
-  return { ...event, aggregateId: qualifyAggregateId('run', runId) };
-}

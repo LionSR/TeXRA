@@ -27,6 +27,7 @@ import type { ModelOptionStores } from '@model/computeModelOptions';
 import type { LanguageModel } from '@platform/languageModel';
 import type { DocumentTask, Persona, SessionEventDraft } from '@shared/schemas';
 import { RunHistory } from '@shared/session/runHistory';
+import type { CoWrite } from '@shared/session/sessionEvents';
 import {
   AGENT_SOURCE,
   DeclinableUsageRouteSchema,
@@ -46,12 +47,14 @@ import type { SessionHandle } from '../SessionHandle';
 
 /**
  * How a launch enters its run's cell: a fresh run's `registration` rides
- * its opening batch (null: a resume, whose cell activates the run), and
- * `entered` runs once that batch commits. `initialUserMessage`: a fresh
+ * its opening batch (null: a resume, whose cell activates the run) with
+ * the trace held until then (`opening`), and `entered` runs once that
+ * batch commits. `initialUserMessage`: a fresh
  * run's instruction, logged once its opening inserted the launch's media.
  */
 interface LaunchEntry {
   readonly registration: readonly SessionEventDraft[] | null;
+  readonly opening: Effect.Effect<CoWrite>;
   readonly entered: Effect.Effect<void>;
   readonly initialUserMessage: string | undefined;
 }

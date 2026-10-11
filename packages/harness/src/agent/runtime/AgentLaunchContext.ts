@@ -21,6 +21,7 @@ import {
   type AgentTrace,
   type StageHandle,
 } from '@agent/trace';
+import { runEventDraft } from '@agent/trace/TraceEmitter';
 import {
   registrationRows,
   type RegisterRunOptions,
@@ -44,6 +45,7 @@ import {
   type AttachedMemoryMiss,
   type RunId,
 } from '@shared/schemas';
+import type { CoWrite } from '@shared/session/sessionEvents';
 import { parseWorkingDirectory } from '@tools/pathResolution';
 import { mcpServerOfToolName } from '@tools/mcp/mcpServer';
 import { ToolRegistry } from '@tools/toolTable';
@@ -80,18 +82,11 @@ type LaunchResolvedRunFacts = Pick<
 >;
 
 export interface AgentLaunchContext extends LaunchResolvedRunFacts {
-  /**
-   * The registry config of the launch model. The run's `AgentRun` service
-   * binds it (or the model and route a resumed run's snapshot names); a
-   * mid-run switch rebinds there.
-   */
+  /** The launch model's registry config, which `AgentRun` binds (or a
+   *  resumed run's snapshot's); a mid-run switch rebinds there. */
   readonly modelConfig: ModelConfig;
-  /**
-   * This launch is the user's own-API-key fallback: the retry they answered
-   * that way relaunched the run here, so it declines the editor's Copilot
-   * route and every subscription route the run's bindings could take. The
-   * user's stored preferences are not touched; the choice is the run's.
-   */
+  /** The user's own-API-key fallback ({@link AgentLaunchInput}): the run,
+   *  not the stored preferences, declines Copilot and subscription routes. */
   readonly ownApiKeyFallback: boolean;
   /** Description from the exact registry entry selected for this launch. */
   readonly resolvedAgentDescription?: string;
@@ -107,18 +102,11 @@ interface AgentLaunchInput {
    * activates it, and the initial instruction is not logged again.
    */
   registration?: RegisterRunOptions;
-  /**
-   * Fires once the run exists for every fold (a fresh run's opening has
-   * committed), so a host may select it (its own surface state, never a
-   * fact) and approval ancestry may be registered against it.
-   */
+  /** Fires once the run exists for every fold (a fresh run's opening
+   *  committed), so a host may select it (its own surface state). */
   onRunResolved?: (runId: RunId) => void;
-  /**
-   * A second sink of the run's trace, beside the session's: it hears every
-   * event the run emits, from the first (the instruction log, the root
-   * stage, the launch warnings) until the run ends — the agent package's
-   * live event stream, `stream.chunk` text included, which no row carries.
-   */
+  /** A second sink of the run's trace: every event from the first until
+   *  the run ends, `stream.chunk` text included, which no row carries. */
   onTraceEvent?: (event: AgentEvent) => void;
   /** Session owning this run's coordination state. */
   session: SessionHandle;
@@ -310,9 +298,10 @@ export type PreparedAgentDefinition = Effect.Success<
 >;
 
 /**
- * How a launch enters its run (`LaunchEntry`), and its trace, held until the
- * entering batch settles and then published in order (one that never enters
- * drops it: its failure is the launch's). A run that exists is refused.
+ * How a launch enters its run (`LaunchEntry`), its trace held until then:
+ * the opening's batch carries it up to its first stream (the prompt line and
+ * the run's stage commit with the opening), the rest is published once that
+ * settled. One that never enters drops it. A run that exists is refused.
  */
 const enterRun = Effect.fn('enterRun')(function* (
   input: AgentLaunchInput,
@@ -334,13 +323,24 @@ const enterRun = Effect.fn('enterRun')(function* (
     ...(input.onTraceEvent ? [input.onTraceEvent] : []),
   );
   yield* Effect.addFinalizer(() => Effect.sync(() => logger.close()));
+  let carried = 0;
+  const opening = Effect.sync((): CoWrite => {
+    const events = held ?? [];
+    carried = events.findIndex((e) => e.type.startsWith('stream.'));
+    if (carried < 0) carried = events.length;
+    const rows = events.slice(0, carried).flatMap((e) => {
+      const row = runEventDraft(runId, e);
+      return row === null ? [] : [row];
+    });
+    return { rows, committed: Effect.void };
+  });
   const entered = Effect.sync(() => {
     session.runs.settleBirth(runId);
-    for (const event of held ?? []) session.log.publish(runId, event);
+    for (const e of (held ?? []).slice(carried)) session.log.publish(runId, e);
     held = null;
     input.onRunResolved?.(runId);
   });
-  return { logger, entry: { registration, entered } };
+  return { logger, entry: { registration, opening, entered } };
 });
 
 /**

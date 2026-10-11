@@ -26,6 +26,7 @@ import {
   type BoundModel,
 } from '@agent/runtime/modelAccess/ModelAccess';
 import { routePolicies } from '@agent/runtime/modelAccess/failureInfo';
+import { noCoWrite } from '@shared/session/sessionEvents';
 import type { RunCell } from '@shared/session/runHistory';
 import { PersonaSchema } from '@shared/schemas';
 import {
@@ -296,6 +297,7 @@ export function testAgentRun(
     opening: { inputs: {}, activated: [], attachedMemoryMisses: [] },
     entry: {
       registration: null,
+      opening: noCoWrite,
       entered: Effect.void,
       initialUserMessage: 'Do the thing.',
     },
@@ -369,6 +371,7 @@ export function agentRunTestLayer(init: ScriptedRunInit) {
             ? {
                 entry: {
                   registration: null,
+                  opening: noCoWrite,
                   entered: Effect.void,
                   initialUserMessage: init.initialUserMessage,
                 },
