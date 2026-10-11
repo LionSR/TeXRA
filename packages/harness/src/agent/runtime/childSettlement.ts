@@ -287,12 +287,11 @@ export const wakeParent = (
     const id = delivery?.item.deliveryId;
     if (delivery === undefined || id === undefined) return;
     const from = delivery.item.from;
-    const ids = [
-      id,
-      ...(from.kind === 'run' ? [lostResultId(from.runId)] : []),
-    ];
+    const lost = from.kind === 'run' ? lostResultId(from.runId) : null;
     const { followUps } = yield* session.followUps.read(delivery.to);
-    if (!followUps.some((f) => ids.includes(f.followUpId))) return;
+    const waits = ({ followUpId }: { readonly followUpId: string }) =>
+      followUpId === id || (lost !== null && followUpId.startsWith(lost));
+    if (!followUps.some(waits)) return;
     if (!(yield* startFollowUpWake(delivery.to, session)))
       yield* warn(
         trace,

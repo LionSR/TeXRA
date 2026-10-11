@@ -196,7 +196,8 @@ const candidates = (
 /**
  * `PreparedHistorySchema` over `history` from message `from` on: its rules
  * are between neighbours, so a suffix starting on a checked message, never
- * on a tool group, re-checks every pair past it.
+ * on a tool group, re-checks every pair past it; a refusal's detail is still
+ * the whole parse's, whose indices name the whole history.
  */
 const unprepared = (
   runId: RunId,

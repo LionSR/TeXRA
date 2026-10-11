@@ -12,7 +12,12 @@
 import { Cause, Context, Data, type Effect, type Scope } from 'effect';
 
 import type { RunId, SessionEventDraft } from '@shared/schemas';
-import { type DatabaseReadFailed, DatabaseWriteFailed } from './database';
+import {
+  DatabaseReadFailed,
+  DatabaseRowCorrupt,
+  DatabaseRowEarlier,
+  DatabaseWriteFailed,
+} from './database';
 import type { Append, CoWrite } from './sessionEvents';
 import type {
   RunHistoryDraft,
@@ -87,6 +92,16 @@ export const runStateAppend = (
 ): ((events: readonly SessionEventDraft[]) => ReturnType<Append>) =>
   // cast: one function; the narrowing is the type fence, not a runtime one.
   append as never;
+
+/** A run whose rows do not load: they do not fold, or one does not decode
+ *  (corrupt, or an earlier build's); never a store that cannot be read. */
+export const unloadable = (
+  error: unknown,
+): error is RunHistoryRefused | DatabaseReadFailed =>
+  error instanceof RunHistoryRefused ||
+  (error instanceof DatabaseReadFailed &&
+    (error.cause instanceof DatabaseRowCorrupt ||
+      error.cause instanceof DatabaseRowEarlier));
 
 /** What a run cell's commits and re-reads fail with. */
 export type CellError =

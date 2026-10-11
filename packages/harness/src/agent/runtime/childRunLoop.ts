@@ -869,30 +869,21 @@ const endNative = <TTurn, R>(
       target === null
     )
       return;
-    // An unreadable notice still says the child stopped, loudly.
-    const text = yield* strategy.stopNotice().pipe(
-      Effect.catch((error) =>
-        loop
-          .log('warn', 'Child-run stop notice failed', {
-            runId,
-            error,
-          })
-          .pipe(
-            Effect.as(
-              `Run ${runId} was stopped. What it had done could not be read: ${toErrorMessage(error)}`,
-            ),
+    // A notice that cannot be read still says the child stopped: the stop
+    // stands, and the failure is loud.
+    const text = yield* strategy
+      .stopNotice()
+      .pipe(
+        Effect.catch((error) =>
+          Effect.as(
+            loop.log('warn', 'Child-run stop notice failed', { runId, error }),
+            `Run ${runId} was stopped. What it had done could not be read: ${toErrorMessage(error)}`,
           ),
-      ),
-    );
-    yield* session.followUps.send(
-      target,
-      {
-        text,
-        from: { kind: 'run', runId },
-        deliveryId: `${runId}:${loop.attemptId}:stopped`,
-      },
-      { hold: 'instruction' },
-    );
+        ),
+      );
+    const deliveryId = `${runId}:${loop.attemptId}:stopped`;
+    const item = { text, from: { kind: 'run', runId } as const, deliveryId };
+    yield* session.followUps.send(target, item, { hold: 'instruction' });
   });
 
 /** The child's terminal row, its process port's finalize or a native run's
@@ -902,7 +893,8 @@ const writeEnd = <TTurn, R>(
   stopped: boolean,
 ): Effect.Effect<void, Error, R | Runs> => {
   const { strategy, childRun, session } = loop.params;
-  // Re-read: a stop after the body's exit is still the run's verdict.
+  // Re-read: a stop landing after the body's exit is still the run's
+  // terminal verdict.
   const stoppedAtExit = stopped || loop.isInterrupted();
   const outcome = deriveRunOutcome({
     failed: loop.failed,
@@ -946,7 +938,8 @@ const endChildLoop = <TTurn, R>(
         const error = Cause.squash(body.cause);
         loop.failed = true;
         loop.lastError ??= error;
-        // A lost claim: the loop and its process stop, unowned.
+        // A lost aggregate claim: this process no longer owns the run, so
+        // the loop (and its process) stops rather than continue under it.
         if (
           error instanceof DatabaseNotOwner ||
           (error instanceof RunHistoryRefused && error.reason === 'not-owner')
@@ -959,10 +952,12 @@ const endChildLoop = <TTurn, R>(
         stopped,
         failed: loop.failed,
       });
-      // The last turn's facts reach an awaiting caller before the end.
+      // The last turn's facts reach an awaiting caller before the child
+      // ends, as every earlier turn's did.
       yield* loop.endReport;
       const terminal = yield* Effect.exit(writeEnd(loop, stopped));
-      // Provider ids stay reserved until the terminal (or pause) row.
+      // Provider ids stay reserved until the terminal (or pause) row is
+      // written, so a call naming one finds this run, not a gap.
       const owned = yield* Effect.exit(
         Effect.sync(() => loop.releaseOwnership()),
       );

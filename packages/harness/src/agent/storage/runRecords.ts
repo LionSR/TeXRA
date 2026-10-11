@@ -13,13 +13,11 @@ import {
 } from '@agent/core/definition/RunRecord';
 import {
   DatabaseReadFailed,
-  DatabaseRowCorrupt,
-  DatabaseRowEarlier,
   type DatabaseNotOwner,
   type DatabaseWriteFailed,
 } from '@shared/session/database';
 import { attemptOf } from '@shared/session/inFlight';
-import { RunHistoryRefused } from '@shared/session/runHistory';
+import { unloadable } from '@shared/session/runHistory';
 import { foldRunState, type RunState } from '@shared/session/runStateFold';
 import {
   ResultMetaSchema,
@@ -81,8 +79,9 @@ export function readChildTurnState(
 }
 
 /** The run's terminal fact for its current lifecycle (a `run.activate`
- *  after the last `run.end` starts one), or null: the scope `finalizeRun`,
- *  the row's one writer, and every reader share. */
+ *  after the last `run.end` starts one, so a resumed run never carries the
+ *  outcome of one it left), or null: the scope `finalizeRun`, the row's
+ *  one writer, and every reader share. */
 export function runEndFromEvents(
   rows: readonly SessionEvent[],
   runId: RunId,
@@ -96,8 +95,13 @@ export function runEndFromEvents(
   return lifecycle?.type === 'run.end' ? lifecycle : null;
 }
 
-/** A run's persisted parent (`run.start.parent`, less a `run.detach` or an
- *  unlisted parent), from the runs' records: every resume's lineage. */
+/**
+ * A run's persisted parent (`run.start.parent`, less a `run.detach` or an
+ * unlisted parent), read cold from the runs' records so a read racing the
+ * live fold's first replay still sees it. Every resume takes its lineage
+ * from here, never from its caller, who has no parent to name for a run that
+ * already started once.
+ */
 export const persistedParentRunId = Effect.fn('persistedParentRunId')(
   function* (session: SessionHandle, runId: RunId) {
     const parent = (yield* parentEdge(session, runId))?.id;
@@ -177,18 +181,11 @@ export const owningCall = Effect.fn('owningCall')(function* (
     : null;
 });
 
-/** The parent notice a run's end queues when its result was lost. */
-export const lostResultId = (runId: RunId): string => `${runId}:result-lost`;
-
-/** A run whose rows do not load: they do not fold, or one does not decode
- *  (corrupt, or an earlier build's); never a store that cannot be read. */
-export const unloadable = (
-  error: unknown,
-): error is RunHistoryRefused | DatabaseReadFailed =>
-  error instanceof RunHistoryRefused ||
-  (error instanceof DatabaseReadFailed &&
-    (error.cause instanceof DatabaseRowCorrupt ||
-      error.cause instanceof DatabaseRowEarlier));
+/** The parent notice a run's end queues when its result was lost, one per
+ *  lifecycle (`since`: its `run.activate`'s commit); without `since`, the
+ *  prefix every lifecycle's notice shares. */
+export const lostResultId = (runId: RunId, since?: number): string =>
+  `${runId}:result-lost:${since ?? ''}`;
 
 /** The unended children `runId`'s open calls own, from its history and
  *  their own rows. Unloadable, it names no calls: every child whose own
@@ -281,13 +278,15 @@ export function getRunRecords(session: SessionHandle, runId: RunId) {
    * The run's terminal result: the `run.end` row's outcome, error and
    * output, and the usage its run history folds from its priced response
    * rows (a document task's: its revisions', {@link withChildSpend}); none
-   * for a run without one, and an unreadable one is logged and reads so.
+   * for a run without one; an unreadable one is logged and reads the same,
+   * so it never also costs the run its terminal fact.
    */
   const runEndOf = (rows: readonly SessionEvent[]) =>
     Effect.gen(function* () {
       const end = runEndFromEvents(rows, runId);
       if (!end) return null;
-      // The usage is folded from these same rows: one read, never two.
+      // The usage is folded from these same rows: one read, so a resume
+      // can never pair the end and the totals across two.
       const folded = Result.flatMap(runHistoryRows(rows), (live) =>
         foldRunState(null, live),
       );

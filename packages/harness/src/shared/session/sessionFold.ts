@@ -25,10 +25,11 @@
  * named is removed the way a tombstone removes it.
  *
  * Publication (D5): returned views are immutable and untouched branches keep
- * identity; each changed container is copied at most once per fold, no-op
- * writes keep the previous branch, and every write reports changed so
- * foldWith publishes its copy. The module-private indexes advance only with
- * the latest level, so `fold` refuses any view but the one it last returned.
+ * identity, preserving older views and identity-based host comparisons; each
+ * changed container is copied at most once per fold, no-op writes keep the
+ * previous branch, and every write reports changed so foldWith publishes its
+ * copy. The module-private indexes advance only with the latest level, so
+ * `fold` refuses any view but the one it last returned.
  */
 
 import {
@@ -512,7 +513,8 @@ function refreshAncestors(view: SessionView, runId: RunId): void {
  * A run's aggregates and status copy, from its facts, the local snapshot and
  * its children (5.2). Interrupted is owner loss: a non-terminal run nobody
  * holds, pending approval or not. Waiting needs a held owner and a request
- * that parks its tool; unheld, it reads as interrupted, listed to re-ask.
+ * that parks its tool; unheld, it reads as interrupted, since nothing
+ * listens for the answer, and stays listed so a resume can re-ask.
  */
 function withAggregates(view: SessionView, run: RunView): RunView {
   const { local } = sessionIndexesOf(view);
@@ -636,15 +638,11 @@ function walkUp(view: SessionView, startId: RunId | null): void {
 }
 
 /** Finalize unmatched compaction starts when the turn settles. */
-function withSettledTranscript(
-  run: RunView,
-  finishedAt: number,
-  error?: RunEnd['error'],
-): RunView {
-  if (error?.kind === 'result-lost')
-    run = { ...run, lost: error.message ?? 'Result lost' };
+function withSettledTranscript(run: RunView, at: number, e?: RunEnd['error']) {
+  if (e?.kind === 'result-lost')
+    run = { ...run, lost: e.message ?? 'Result lost' };
   if (!isTranscriptSettlementPhase(run.status)) return run;
-  const transcript = settleTranscript(run.transcript, finishedAt);
+  const transcript = settleTranscript(run.transcript, at);
   return transcript === run.transcript ? run : { ...run, transcript };
 }
 

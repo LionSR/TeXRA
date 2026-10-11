@@ -133,7 +133,9 @@ export type RunState = RunPosition &
     readonly countStale: boolean;
     readonly pendingResponse: PendingResponse | null;
     /** The requests decided since the run's latest `run.activate`: answers
-     *  no waiter has read (an earlier one was read by the process that asked). */
+     *  this owner landed before its loop reached the call waiting on them, so
+     *  no waiter has read them. A decision from before the activation was
+     *  read by the process that asked, whose body went on with it. */
     readonly decidedSinceActivation: ReadonlySet<string>;
     /** Derived (D12): the priced usage on its `response`/`context.edit` rows. */
     readonly usage: RunUsageTotals;
