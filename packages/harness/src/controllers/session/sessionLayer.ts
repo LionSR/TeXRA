@@ -1,16 +1,12 @@
 /**
  * The process layer ({@link processLayer}): every process service a
- * composition root runs on, and the `SessionOwner` over the keyed family of
- * sessions, a `LayerMap` keyed by workspace storage root (one session per
- * root and one only). A root's entry is the complete session: the
- * root-scoped services (the database event log, the session event reads and
- * publications, the fold, the session inputs, the three local sources, and
- * the owner-liveness prober) and the `SessionHandle` built over them, whose
- * request handler admits on that graph. Every opener (the hosts' default
- * sessions, the desktop's projects, the service's tasks, the SDK) resolves
- * its root here, so opening a root twice returns one handle, and the map is
- * the one owner of its lifetime: an open borrows, `close` settles and
- * releases, and the layer's release closes whatever is still open.
+ * composition root runs on, and the `SessionOwner` over a `LayerMap` of
+ * sessions, one per workspace storage root. An entry is the whole session:
+ * the root-scoped services (event log, publications, fold, inputs, local
+ * sources, owner-liveness prober) and the `SessionHandle` over them. Every
+ * opener resolves its root here, so two opens return one handle, and the
+ * map owns its lifetime: an open borrows, `close` settles and releases, and
+ * the layer's release closes whatever is still open.
  */
 import {
   Cause,
@@ -60,7 +56,11 @@ import {
   effectDiagnosticsLayer,
   type MinimumLogLevel,
 } from '@logger/effectDiagnostics';
-import { SessionOwner, type ProcessServices } from '@platform/processRuntime';
+import {
+  processRoots,
+  SessionOwner,
+  type ProcessServices,
+} from '@platform/processRuntime';
 import {
   AgentDirectories,
   AppState,
@@ -160,12 +160,10 @@ class Session extends Context.Service<Session, SessionHandle>()(
 ) {}
 
 /**
- * The handle of one root, over the root's graph: the session is the entry's
- * one service. The last layer of the entry, so it is the first thing unwound
- * when the entry closes and the graph outlives every publisher above it. The
- * entry's scope is the session's one lifetime: {@link closeSession} and the
- * runtime's disposal both end it by closing that scope, and every owner the
- * handle holds is torn down by a finalizer registered here.
+ * The handle of one root over its graph: the entry's one service and last
+ * layer, so it unwinds first and the graph outlives every publisher above
+ * it. The entry's scope is the session's one lifetime ({@link closeSession}
+ * and disposal close it); every owner it holds has a finalizer here.
  */
 const sessionHandleLayer = (key: SessionKey) =>
   Layer.effectContext(
@@ -345,13 +343,10 @@ const sessionGraphLayer = (key: SessionKey) => {
 };
 
 /**
- * The keyed resource family the desktop's N papers and the SDK's N roots need:
- * one session per root, held by the map until `close` releases it or the
- * runtime goes. Opens borrow (the reference an open takes is released at once)
- * and the idle lifetime is infinite, so no reader's detachment and no
- * reference count decides a session's end: the application does, explicitly
- * (PR #11893, agent SDK architecture proposal, section 3). Entries are
- * `Layer.fresh`: layers memoize by reference, else roots share one fold.
+ * One session per root, held by the map until `close` releases it or the
+ * runtime goes. Opens borrow (released at once) and the idle lifetime is
+ * infinite, so the application, never a reader's detachment, ends a session
+ * (PR #11893, §3). Entries are `Layer.fresh`, else roots share one fold.
  */
 class SessionMap extends Context.Service<
   SessionMap,
@@ -375,6 +370,8 @@ class SessionMap extends Context.Service<
 const openSession = (open: SessionHandleInit) =>
   Effect.gen(function* () {
     const sessions = yield* SessionMap;
+    const { storage } = open.roots;
+    yield* processRoots.claim(storage, sessions);
     // The map keys and releases a session by this root, so a caller's
     // mutable or inherited root record may not change it later. Read the
     // structural fields so inherited or non-enumerable getters work too.
@@ -392,9 +389,10 @@ const openSession = (open: SessionHandleInit) =>
         globalState: roots.globalState,
       },
     });
-    const context = yield* sessions
-      .contextEffect(key)
-      .pipe(Effect.onError(() => sessions.invalidate(key)));
+    const context = yield* sessions.contextEffect(key).pipe(
+      Effect.onError(() => sessions.invalidate(key)),
+      Effect.onError(() => processRoots.release(sessions, storage)),
+    );
     return Context.get(context, Session);
   }).pipe(Effect.scoped);
 
@@ -493,9 +491,8 @@ const settleRun = (session: SessionHandle, runId: RunId): Effect.Effect<void> =>
  * 4. release the entry, whose finalizers flush the session's publications
  *    and unwind its owners.
  *
- * The whole close is uninterruptible, so the budget is its one cancellation
- * channel: the stop and its wait run interruptible inside it, so the deadline
- * cuts them, and every step after the deadline still runs.
+ * The close is uninterruptible, so the budget is its one cancellation: the
+ * stop and its wait run interruptible inside it, and every later step runs.
  */
 const closeSession = (root: string) =>
   Effect.gen(function* () {
@@ -544,6 +541,7 @@ const closeSession = (root: string) =>
         ).pipe(withLogChannel(CHANNEL));
     }
     yield* sessions.invalidate(key);
+    yield* processRoots.release(sessions, root);
     return { settled, abandoned } satisfies SessionCloseReport;
   }).pipe(Effect.uninterruptible);
 
@@ -637,14 +635,11 @@ export interface ProcessLayerOptions {
 }
 
 /**
- * The process: every process service a composition root runs on, and the
- * {@link SessionOwner} that opens, lists and closes its sessions (one per
- * workspace storage root, held by a `LayerMap`). A host builds it once with
- * `ManagedRuntime.make` and disposes that runtime on its shutdown path; the
- * SDK's `Sessions.layer` provides it to its projection. Disposal closes every
- * session still open (plugins drained first), so a host that needs its
- * sessions closed before its own resources tear down runs
- * `SessionOwner.closeAll` first.
+ * The process services a composition root runs on, and the {@link
+ * SessionOwner} opening, listing and closing its sessions (one per storage
+ * root, in a `LayerMap`), for a `ManagedRuntime` the host disposes on
+ * shutdown. Disposal closes every open session, plugins drained first; a
+ * host whose resources must outlive them runs `SessionOwner.closeAll` first.
  */
 export function processLayer({
   processStart = nodeProcesses.selfIdentity(),
@@ -750,7 +745,9 @@ const sessionOwnerLayer = Layer.effect(
         { concurrency: 'unbounded' },
       );
     }).pipe(withMap);
-    yield* Effect.addFinalizer(() => Effect.asVoid(closeAll));
+    yield* Effect.addFinalizer(() =>
+      Effect.andThen(closeAll, processRoots.release(map)),
+    );
     return {
       open: (init) => withMap(openSession(init)),
       list: withMap(listSessions),

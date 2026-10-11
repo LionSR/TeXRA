@@ -24,9 +24,10 @@ import type { AgentEngine } from '@agent/runtime/AgentEngine';
 import type { RouteRetries } from '@agent/runtime/run/invocation';
 import type { SessionOwnerShape } from '@agent/runtime/SessionHandle';
 import type { ProcessIdentity } from '@shared/session/sessionEvents';
-import type {
-  GlobalDatabase,
-  ProjectDatabases,
+import {
+  DatabaseOpenFailed,
+  type GlobalDatabase,
+  type ProjectDatabases,
 } from '@shared/session/database';
 import type { UsageLog } from '@shared/usageLog';
 import type { ToolCatalog } from '@tools/liveTools';
@@ -107,6 +108,49 @@ export class SessionOwner extends Context.Service<
   SessionOwner,
   SessionOwnerShape
 >()('@texra-ai/harness/SessionOwner') {}
+
+/** The roots open in this process, by the composition holding each. */
+const PROCESS_ROOTS = Symbol.for('@texra-ai/harness/processRoots');
+const openRoots = (): Map<string, object> => {
+  // cast: globalThis carries this one well-known symbol key, set only here.
+  const process = globalThis as { [PROCESS_ROOTS]?: Map<string, object> };
+  // On globalThis: one per PROCESS, not per copy of this module (an app
+  // bundle beside an SDK consumer or a jiti-loaded plugin each load one).
+  return (process[PROCESS_ROOTS] ??= new Map());
+};
+
+/**
+ * The process's one guard on a root's owner: a composition (one
+ * `processLayer` build, so one `Sessions.layer` build) opens a root only if
+ * no other composition in this process holds it, since both would own its
+ * runs under one process identity. `claim` takes `root` for `holder`, or
+ * refuses it, presented as the open's failure; `release` gives back one
+ * root, or every root `holder` holds.
+ */
+export const processRoots = {
+  claim(root: string, holder: object): Effect.Effect<void, DatabaseOpenFailed> {
+    const held = openRoots().get(root);
+    if (held !== undefined && held !== holder)
+      return Effect.fail(
+        new DatabaseOpenFailed({
+          path: root,
+          cause: new Error(
+            `The session at ${root} is already open in this process; share that session instead of opening it from a second composition (Sessions.layer build).`,
+          ),
+        }),
+      );
+    openRoots().set(root, holder);
+    return Effect.void;
+  },
+  release(holder: object, root?: string): Effect.Effect<void> {
+    return Effect.sync(() => {
+      const roots = openRoots();
+      for (const [open, held] of roots)
+        if (held === holder && (root === undefined || open === root))
+          roots.delete(open);
+    });
+  },
+};
 
 /** The runtime a composition root makes over `processLayer`: the process
  *  services, and the `SessionOwner` that opens and closes its sessions. */

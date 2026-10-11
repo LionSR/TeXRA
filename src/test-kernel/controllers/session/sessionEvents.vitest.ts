@@ -37,6 +37,7 @@ import * as SqlDriver from '@effect/sql-sqlite-node/SqliteClient';
 import {
   Cause,
   Clock,
+  Context,
   Deferred,
   Effect,
   Exit,
@@ -81,7 +82,7 @@ import { SessionViewService } from '@controllers/session/SessionView';
 import { sessionInputsLayer } from '@controllers/session/sessionInputs';
 import { WorkspaceRoots } from '@controllers/session/WorkspaceRoots';
 import { onAppSignal } from '@eventBus/AppSignals';
-import { withProcessServices } from '@platform/processRuntime';
+import { SessionOwner, withProcessServices } from '@platform/processRuntime';
 import { AppState, type StateStore } from '@platform/interfaces';
 import type { ProcessProbe } from '@platform/defaults/nodeProcesses';
 import {
@@ -133,6 +134,8 @@ import '@test/support/sessionGraphTestSetup';
 import { identityReads } from '@test/support/sessionGraphInstall';
 import { REPO_ROOT } from '@test/support/repoScan';
 import { storePluginsLayer } from '@test/support/setupPlatform';
+import { testProcessLayer } from '@test/support/sessionGraphInstall';
+import { TEXRA_SETTING_ROWS } from '@texra/shared/settingsView/texraSettings';
 import {
   DOCUMENTS_ACCEPTED_ARM,
   documentsAcceptedFact,
@@ -1303,6 +1306,65 @@ describe('Sessions owner', () => {
         });
         expect(yield* isLive(session)).toBe(false);
       }),
+  );
+  // Two compositions in one process (two `Sessions.layer` builds) share one
+  // process identity, so only one may own a root. Failure modes: the second
+  // opens a root the first holds (two owners of its runs); a root the first
+  // never opened is refused; a root stays refused after the first closes it.
+  // Known gap until G11: both compositions still share the module-global
+  // settings catalog (`installSettingsCatalog`), which this does not test.
+  it.live(
+    'refuses a second composition a root the first holds, until it closes',
+    () =>
+      withProcessServices(
+        testRuntime(),
+        Effect.gen(function* () {
+          const temp = (prefix: string) =>
+            mkdtempSync(join(tmpdir(), `texra-${prefix}-`));
+          const [held, other, globalStorage] = [
+            temp('held'),
+            temp('other'),
+            temp('global'),
+          ];
+          const roots = (storage: string) =>
+            createFakeWorkspaceRoots({ storagePath: storage });
+          const second = Context.get(
+            // Its own memo map, as a second ManagedRuntime has: built in this
+            // fiber's, the layers the kernel's runtime built would be shared.
+            yield* Layer.buildWithMemoMap(
+              testProcessLayer([], TEXRA_SETTING_ROWS, globalStorage),
+              Layer.makeMemoMapUnsafe(),
+              yield* Effect.scope,
+            ),
+            SessionOwner,
+          );
+          const first = yield* openTestSession({ roots: roots(held) });
+          const refused = yield* Effect.flip(
+            second.open({ roots: roots(held) }),
+          );
+          expect(refused.message).toContain('already open in this process');
+          // A second copy of the harness module (an app bundle beside an SDK
+          // consumer) refuses it too: the registry is per process.
+          vi.resetModules();
+          const copy = yield* Effect.promise(
+            () => import('@platform/processRuntime'),
+          );
+          expect(copy.SessionOwner).not.toBe(SessionOwner);
+          const refusedByCopy = yield* Effect.flip(
+            copy.processRoots.claim(held, {}),
+          );
+          expect(refusedByCopy.message).toContain(
+            'already open in this process',
+          );
+          yield* second.open({ roots: roots(other) });
+          yield* closeSessionOf(first);
+          const taken = yield* second.open({ roots: roots(held) });
+          expect(taken.roots.storage).toBe(held);
+          yield* second.closeAll;
+          for (const dir of [held, other, globalStorage])
+            rmSync(dir, { recursive: true, force: true });
+        }).pipe(Effect.scoped),
+      ),
   );
   it.live(
     'announces each accepted-files row once, never the history a reopen replays',
