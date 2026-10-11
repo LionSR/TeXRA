@@ -26,6 +26,7 @@ import {
   type BoundModel,
 } from '@agent/runtime/modelAccess/ModelAccess';
 import { routePolicies } from '@agent/runtime/modelAccess/failureInfo';
+import { registryOf } from '@agent/runtime/runRegistry';
 import { noCoWrite } from '@shared/session/sessionEvents';
 import type { RunCell } from '@shared/session/runHistory';
 import { PersonaSchema } from '@shared/schemas';
@@ -347,7 +348,7 @@ export function agentRunTestLayer(init: ScriptedRunInit) {
         agent: 'chat',
         parent: init.parentRunId ?? null,
       });
-      init.session.runs.track(handle);
+      registryOf(init.session.runs).track(handle);
       yield* Effect.addFinalizer(() =>
         Effect.sync(() => untrackRun(init.session.runs, handle.runId)),
       );

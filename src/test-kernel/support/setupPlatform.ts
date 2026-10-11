@@ -24,7 +24,7 @@ import { afterEach, beforeEach } from 'vitest';
 import { ModelRetryGate } from '@agent/runtime/ModelRetryGate';
 import { RouteRetries } from '@agent/runtime/run/invocation';
 import type { ModelOptionStores } from '@model/computeModelOptions';
-import type { ProcessServices } from '@platform/processRuntime';
+import type { ProcessServices, SessionOwner } from '@platform/processRuntime';
 import type { AgentDirectoriesPort, StateStore } from '@platform/interfaces';
 import {
   UNAVAILABLE_LANGUAGE_MODEL_PORT,
@@ -254,8 +254,9 @@ export const fakeHostAgentDirectories: AgentDirectoriesPort = {
   builtIn: () => installedHost().platform.agentDirectories.builtIn(),
 };
 
-/** The process services a fake host provides to a program. */
-export type FakeProcessServices = ProcessServices;
+/** The process services a fake host provides to a program, and the
+ *  installed runtime's session owner, which a root launch asks. */
+export type FakeProcessServices = ProcessServices | SessionOwner;
 
 type FakeProcessServicesLayer = Layer.Layer<FakeProcessServices>;
 
@@ -295,14 +296,14 @@ export function fakeProcessServices(): FakeProcessServicesLayer {
 export async function installFakeHost(host: FakeHost): Promise<void> {
   const [
     { initTestWorkspaceRoots },
-    { initTestProcessRuntime, tryTestProcessRuntime },
+    { initTestProcessRuntime, testSessionOwner, tryTestProcessRuntime },
     { Layer, ManagedRuntime },
     { testHttpClientLayer },
     { Secrets },
     { AgentDirectories, AppState },
     { LanguageModel },
     { unprobedToolAvailability },
-    { SessionOwner },
+    { SessionOwner: SessionOwnerTag },
   ] = await Promise.all([
     import('@test/support/testWorkspaceRoots'),
     import('./testProcessRuntime'),
@@ -323,6 +324,18 @@ export async function installFakeHost(host: FakeHost): Promise<void> {
   // `testRuntime().runSync` callers, so a lazily imported (asynchronous)
   // layer here fails every one of them.
   processServices ??= Layer.mergeAll(
+    // The installed runtime's session owner, read per call: a root launch
+    // asks it whether its session is still open.
+    Layer.succeed(SessionOwnerTag)({
+      open: (init) =>
+        Effect.flatMap(testSessionOwner, (owner) => owner.open(init)),
+      list: Effect.flatMap(testSessionOwner, (owner) => owner.list),
+      holds: (session) =>
+        Effect.flatMap(testSessionOwner, (owner) => owner.holds(session)),
+      close: (root) =>
+        Effect.flatMap(testSessionOwner, (owner) => owner.close(root)),
+      closeAll: Effect.flatMap(testSessionOwner, (owner) => owner.closeAll),
+    }),
     UsageLog.disabled,
     ProcessIdentity.layer(processOwnerId('test')),
     testHttpClientLayer,
@@ -412,7 +425,7 @@ export async function installFakeHost(host: FakeHost): Promise<void> {
         // naming the missing member.
         Layer.merge(
           processServices,
-          Layer.mock(SessionOwner, { list: Effect.succeed([]) }),
+          Layer.mock(SessionOwnerTag, { list: Effect.succeed([]) }),
         ),
       ),
     );

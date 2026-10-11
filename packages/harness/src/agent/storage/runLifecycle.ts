@@ -295,7 +295,7 @@ const endOwnedChildren = Effect.fn('endOwnedChildren')(function* (
   cascade: boolean,
 ) {
   for (const child of yield* openOwnedChildren(session, runId)) {
-    if (!cascade || session.runs.isLive(child.runId))
+    if (!cascade || session.runs.get(child.runId)?.live === true)
       return yield* Effect.fail(
         new Error(
           `Run ${runId} cannot end while its open call ${child.callId} owns run ${child.runId}, which has not ended`,

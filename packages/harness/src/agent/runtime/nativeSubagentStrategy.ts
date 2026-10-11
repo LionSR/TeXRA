@@ -10,7 +10,11 @@ import { type RunEndResult } from '@agent/runtime/RunEndResult';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { ExecuteAgentOptions } from '@agent/runtime/executeAgent';
 import type { RegisterRunOptions } from '@agent/storage/runLifecycle';
-import { Runs, type AgentRunServices } from '@agent/runtime/runRegistry';
+import {
+  registryOf,
+  type AgentRunServices,
+  Runs,
+} from '@agent/runtime/runRegistry';
 import type { ChildRunStrategy } from '@agent/runtime/childRunLoop';
 import type { PreparedAgentDefinition } from '@agent/runtime/AgentLaunchContext';
 import { normalizeProviderError } from '@common/errors/sdkError/providerErrorFormat';
@@ -141,7 +145,7 @@ export function createNativeSubagentStrategy(
     launch: (ports, _signal, turns) =>
       runNative(
         Effect.gen(function* () {
-          const { programs } = yield* Runs;
+          const { programs } = registryOf(yield* Runs);
           const executeOptions: Omit<ExecuteAgentOptions, 'registration'> = {
             ...params.resume?.options,
             session: params.session,

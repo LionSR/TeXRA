@@ -259,26 +259,31 @@ export function runResumeCommand(
               // the one core resume path, settling with its whole run.
               // A shutdown before the run's lane exists stops the resume through
               // its predicate; the refusal it causes reads as that abort.
-              launch: (shutdown) => (_request, options) =>
-                resumeRun(id, {
-                  ...options,
-                  isCancellationRequested: shutdown,
-                }).pipe(
-                  Effect.flatMap((resumed) => {
-                    if ('failed' in resumed)
+              launch:
+                (shutdown) =>
+                (session, { options }) =>
+                  resumeRun(id, {
+                    ...options,
+                    session,
+                    isCancellationRequested: shutdown,
+                  }).pipe(
+                    Effect.flatMap((resumed) => {
+                      if ('failed' in resumed)
+                        return Effect.fail(
+                          shutdown()
+                            ? new DOMException('Resume stopped', 'AbortError')
+                            : new CliUsageError(
+                                describeFollowUpFailure(resumed.failed),
+                              ),
+                        );
+                      if (resumed.result) return Effect.succeed(resumed.result);
                       return Effect.fail(
-                        shutdown()
-                          ? new DOMException('Resume stopped', 'AbortError')
-                          : new CliUsageError(
-                              describeFollowUpFailure(resumed.failed),
-                            ),
+                        new Error(
+                          `Run ${id} did not resume as a document task.`,
+                        ),
                       );
-                    if (resumed.result) return Effect.succeed(resumed.result);
-                    return Effect.fail(
-                      new Error(`Run ${id} did not resume as a document task.`),
-                    );
-                  }),
-                ),
+                    }),
+                  ),
             },
           },
         );

@@ -63,7 +63,7 @@ import { offeredBy } from '@agent/runtime/loop/step';
 import type { Message } from '@agent/runtime/loop/rows';
 import { executeAgent } from '@agent/runtime/executeAgent';
 import { resumeRun } from '@agent/runtime/resumeRun';
-import { Runs } from '@agent/runtime/runRegistry';
+import { registryOf, Runs } from '@agent/runtime/runRegistry';
 import { type SessionHandle } from '@agent/runtime/SessionHandle';
 
 // Local imports - shared/runtime boundaries
@@ -84,6 +84,7 @@ import {
 } from '@shared/schemas';
 import { NO_APPROVAL_GRANTS } from '@shared/approvalBypassKind';
 import { FakeStateStore } from '@test/support/FakePlatform';
+import { startAwaited } from '@test/support/runHandleFixtures';
 import { noopTrace } from '@test/support/noopTrace';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { testRuntime } from '@test/support/testProcessRuntime';
@@ -406,8 +407,8 @@ function childRunId(resultOutput: string | undefined): RunId {
 }
 
 function interruptActiveRuns(session: SessionHandle): void {
-  for (const runId of session.runs.heldIds()) {
-    session.runs.interrupt(runId);
+  for (const runId of session.runs.get().map((run) => run.runId)) {
+    registryOf(session.runs).interrupt(runId);
   }
 }
 
@@ -549,7 +550,8 @@ async function launchWaitingChild(options: {
   // Admitted on the run's lane like every production launch, so the run's
   // fiber is its stop target by run id.
   parentFiber = testRuntime().runFork(
-    session.runs.launchRun(
+    startAwaited(
+      session.runs,
       PARENT_RUN_ID,
       prepareAgentDefinition({ config: parentConfig, session }).pipe(
         Effect.flatMap((definition) =>
@@ -691,10 +693,10 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
           );
 
         yield* Effect.promise(() => waitForPersistedResult(runId, 'Result A.'));
-        const firstHandle = session.runs.getHandle(runId);
+        const firstHandle = session.runs.get(runId)?.handle;
         const initialBindings = bindingMocks.bindModel.mock.calls.length;
         yield* waitForParentTurns(1);
-        const budget = yield* session.runs.childRunBudget(1);
+        const budget = yield* registryOf(session.runs).childRunBudget(1);
         expect(yield* budget.takeIfAvailable(1)).toBe(true);
         yield* budget.release(1);
 
@@ -705,7 +707,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
 
         yield* Effect.promise(() => waitForPersistedResult(runId, 'Result B.'));
         yield* waitForParentTurns(2);
-        expect(session.runs.getHandle(runId)).toBe(firstHandle);
+        expect(session.runs.get(runId)?.handle).toBe(firstHandle);
         expect(bindingMocks.bindModel).toHaveBeenCalledTimes(initialBindings);
 
         // The next turn asks the model with the follow-up as its last message
@@ -784,9 +786,9 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
           delivered: true,
           outcome: RUN_PHASE.WAITING,
         });
-        const recoveredHandle = session.runs.getHandle(runId);
+        const recoveredHandle = session.runs.get(runId)?.handle;
         expect(recoveredHandle).toBeDefined();
-        expect(session.runs.isLive(runId)).toBe(true);
+        expect(session.runs.get(runId)?.live === true).toBe(true);
         childTurns.push({ text: 'Recovered result D.' });
         parentTurns.push({ text: 'Parent received recovered result D.' });
         yield* submitFollowUp(
@@ -803,7 +805,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
           waitForPersistedResult(runId, 'Recovered result D.'),
         );
         yield* waitForParentTurns(4);
-        expect(session.runs.getHandle(runId)).toBe(recoveredHandle);
+        expect(session.runs.get(runId)?.handle).toBe(recoveredHandle);
         yield* session.runs.stop(runId, { reason: 'user' }).settlement;
         yield* Effect.promise(() => waitForClaimRelease(runId));
 
@@ -821,7 +823,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
           delivered: true,
           outcome: RUN_PHASE.WAITING,
         });
-        expect(session.runs.getHandle(runId)).toBeDefined();
+        expect(session.runs.get(runId)?.handle).toBeDefined();
         yield* session.view.changes.pipe(
           Stream.filter(
             (view) => view.runs.get(runId)?.status === RUN_PHASE.WAITING,
@@ -1309,7 +1311,8 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
         parentFiber = yield* Effect.forkChild(
           withProcessServices(
             testRuntime(),
-            session.runs.launchRun(
+            startAwaited(
+              session.runs,
               PARENT_RUN_ID,
               prepareAgentDefinition({ config: parentConfig, session }).pipe(
                 Effect.flatMap((definition) =>
@@ -1352,7 +1355,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
         expect(
           delivery?.messages.at(-1) && messageText(delivery.messages.at(-1)!),
         ).toContain('<subagent-result');
-        expect(session.runs.isLive(PARENT_RUN_ID)).toBe(true);
+        expect(session.runs.get(PARENT_RUN_ID)?.live === true).toBe(true);
         expect(parentTurns).toHaveLength(0);
       }),
     30_000,

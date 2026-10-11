@@ -4,22 +4,28 @@ import { beforeEach, describe, expect, vi } from 'vitest';
 import { Effect } from 'effect';
 
 // Local imports
+import { modelRefOf } from '@texra-ai/llm';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import {
   LanguageModel,
   UNAVAILABLE_LANGUAGE_MODEL_PORT,
 } from '@platform/languageModel';
+import { GlobalStateKey } from '@shared/state/stateKeys';
 import { fakeStores } from '@test/support/FakePlatform';
 
-const getHelperModelName = vi.hoisted(() => vi.fn());
 const readModelAvailabilityInputs = vi.hoisted(() =>
   vi.fn(() => Effect.succeed({})),
 );
 const modelUnavailableReasonFrom = vi.hoisted(() => vi.fn());
 
-vi.mock('@agent/runtime/helperModelName', () => ({ getHelperModelName }));
 vi.mock('@model/computeModelOptions', () => ({
   CALLING_SCOPE: <A>(read: () => A): A => read(),
+  // Every helper a case names counts as enabled, so the configured choice
+  // stands and the preference alone decides.
+  getEnabledModels: (state: { get: (key: string) => Effect.Effect<unknown> }) =>
+    Effect.map(state.get(HELPER_KEY), (model) => [
+      modelRefOf(String(model)) ?? String(model),
+    ]),
   readModelAvailabilityInputs,
   modelUnavailableReasonFrom,
 }));
@@ -28,12 +34,14 @@ vi.mock('llm-zoo', async (importOriginal) => ({
   MODEL_CONFIGS,
 }));
 
-/**
- * The launching run's stores. Both readers that would touch them
- * (`getHelperModelName`, the availability read) are mocked here, so the
- * bag only has to be the one the preference forwards.
- */
+const HELPER_KEY = vi.hoisted(() => 'polishModel');
+
+/** The launching run's stores; each case writes its helper model there. */
 const STORES = fakeStores();
+
+function withHelper(helper: string) {
+  return STORES.globalState.update(GlobalStateKey.HELPER_MODEL, helper);
+}
 
 const MODEL_CONFIGS = vi.hoisted(() => ({
   deepseek: { capabilities: { supportsFunctionCalling: true } },
@@ -50,7 +58,6 @@ function configFor(model: string): AgentConfig {
 describe('applyHelperModelPreference', () => {
   beforeEach(() => {
     vi.resetModules();
-    getHelperModelName.mockReset();
     readModelAvailabilityInputs.mockClear();
     modelUnavailableReasonFrom.mockReset();
   });
@@ -58,9 +65,7 @@ describe('applyHelperModelPreference', () => {
   function resolve(config: AgentConfig) {
     // `vi.resetModules()` runs per case, so the module under test is imported
     // inside the program the case runs.
-    return Effect.promise(
-      () => import('@agent/runtime/helperModelPreference'),
-    ).pipe(
+    return Effect.promise(() => import('@agent/runtime/helperModelName')).pipe(
       Effect.flatMap(({ applyHelperModelPreference }) =>
         applyHelperModelPreference(config, STORES),
       ),
@@ -88,7 +93,7 @@ describe('applyHelperModelPreference', () => {
     },
   ])('keeps the selected model when $scenario', ({ helper }) =>
     Effect.gen(function* () {
-      getHelperModelName.mockReturnValue(Effect.succeed(helper));
+      yield* withHelper(helper);
 
       const result = yield* resolve(configFor('opus'));
 
@@ -101,9 +106,7 @@ describe('applyHelperModelPreference', () => {
     'falls back to the selected model when the helper model is unavailable',
     () =>
       Effect.gen(function* () {
-        getHelperModelName.mockReturnValue(
-          Effect.succeed('deepseek/deepseek-flash@none'),
-        );
+        yield* withHelper('deepseek/deepseek-flash@none');
         modelUnavailableReasonFrom.mockReturnValue('No API key configured.');
 
         const result = yield* resolve(configFor('opus'));

@@ -2,6 +2,7 @@ import { it } from '@effect/vitest';
 import { Effect } from 'effect';
 
 import { afterEach, describe, expect } from 'vitest';
+import { registryOf } from '@agent/runtime/runRegistry';
 
 import { SessionHandle } from '@agent/runtime/SessionHandle';
 import { submitFollowUp } from '@agent/followUp/ToolUseFollowUp';
@@ -71,7 +72,7 @@ describe('tool-use follow-up progress events', () => {
       modelSwitchDisabledReason: () => Effect.succeed(undefined),
       switchModel: () => Effect.void,
     });
-    owner.runs.track(handle);
+    registryOf(owner.runs).track(handle);
     trackedRuns.push({ session: owner, runId });
   }
 

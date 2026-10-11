@@ -4,7 +4,7 @@ import { beforeEach, describe, expect } from 'vitest';
 
 import { Effect } from 'effect';
 
-import { registerRun } from '@agent/storage';
+import { registerRun } from '@agent/storage/runLifecycle';
 import {
   AgentConfigSchema,
   type AgentConfig,

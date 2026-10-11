@@ -83,7 +83,6 @@ import { apiKeySecretName } from '@texra-ai/llm';
 import { refresh } from '@agent/index';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { resumeRun } from '@agent/runtime/resumeRun';
-import { runAgent } from '@agent/runtime/runAgent';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { AgentDirectories, AppState } from '@platform/interfaces';
 import { withProcessServices } from '@platform/processRuntime';
@@ -452,7 +451,7 @@ const userSteps = (session: SessionHandle, storage: string, root: RunId) =>
     // row is committed is the resumed run's to apply.
     if (!requested(rowsOf(storage), root, 'model')) {
       yield* until(storage, (rows) => parkedAfter(rows, root, 2));
-      const controls = session.runs.getHandle(root)?.controls;
+      const controls = session.runs.get(root)?.controls;
       if (controls === undefined)
         return yield* Effect.die('the parked run has no live controls');
       yield* controls.switchModel(SWITCH_TO);
@@ -931,8 +930,8 @@ export function crashConformanceSuite(plugins: string): void {
             (session) =>
               withProcessServices(
                 testRuntime(),
-                runAgent(
-                  {
+                session.runs.launch({
+                  request: {
                     config: AgentConfigSchema.parse({
                       agent: 'golden_crash',
                       model: 'gpt56',
@@ -940,8 +939,8 @@ export function crashConformanceSuite(plugins: string): void {
                     }),
                     runId: root,
                   },
-                  { session },
-                ),
+                  options: {},
+                }),
               ),
             (session) => userSteps(session, roots.storage, root),
           );
@@ -1137,8 +1136,8 @@ export function crashConformanceSuite(plugins: string): void {
               (session) =>
                 withProcessServices(
                   testRuntime(),
-                  runAgent(
-                    {
+                  session.runs.launch({
+                    request: {
                       config: AgentConfigSchema.parse({
                         agent: 'golden_delivery',
                         model: 'gpt56',
@@ -1146,8 +1145,8 @@ export function crashConformanceSuite(plugins: string): void {
                       }),
                       runId: root,
                     },
-                    { session },
-                  ),
+                    options: {},
+                  }),
                 ),
               (session) =>
                 Effect.gen(function* () {
@@ -1355,8 +1354,8 @@ export function crashConformanceSuite(plugins: string): void {
               (session) =>
                 withProcessServices(
                   testRuntime(),
-                  runAgent(
-                    {
+                  session.runs.launch({
+                    request: {
                       config: AgentConfigSchema.parse(
                         documentTaskConfig({
                           agent: 'polish',
@@ -1369,8 +1368,8 @@ export function crashConformanceSuite(plugins: string): void {
                       ),
                       runId: root,
                     },
-                    { session },
-                  ),
+                    options: {},
+                  }),
                 ),
               () => ended(roots.storage),
             );

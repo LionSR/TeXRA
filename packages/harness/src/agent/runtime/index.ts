@@ -33,9 +33,9 @@ export type { HostInteractions } from './HostInteractions';
 // is on; a host invoking a tool outside any run provides `session.runs`.
 export { Runs } from './runRegistry';
 
-// runAgent
-export { runAgent } from './runAgent';
-export type { RunAgentOptions, RunAgentRequest } from './runAgent';
+// rootLaunch: what `Runs.launch({ request, options })` takes.
+export type { RootLaunchOptions, RootLaunchRequest } from './rootLaunch';
+export type { RootLaunch } from './runs';
 
 // SessionResumeRetrieval
 

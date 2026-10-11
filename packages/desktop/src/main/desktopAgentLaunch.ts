@@ -6,8 +6,8 @@ import {
   presentRunFailure,
   selectAutoOpenFinalOutput,
   type RunEndResult,
-  type RunAgentOptions,
-  type RunAgentRequest,
+  type RootLaunchOptions,
+  type RootLaunchRequest,
   type SessionHandle,
 } from '@agent/runtime';
 import type { RequestOpenFilePayload } from '@shared/schemas';
@@ -30,7 +30,7 @@ interface DesktopAgentLaunchContext {
 }
 
 export type DesktopAgentLaunchOptions = Pick<
-  RunAgentOptions,
+  RootLaunchOptions,
   'ownApiKeyFallback' | 'preferHelperModel' | 'onRun' | 'onRunResolved'
 > & {
   /** An Auto-approve launch: the run starts with delegated work approved. */
@@ -44,7 +44,7 @@ export type DesktopAgentLaunchOptions = Pick<
  * resume port's program does, so the effect itself requires nothing.
  */
 export function launchDesktopAgent(
-  request: RunAgentRequest,
+  request: RootLaunchRequest,
   context: DesktopAgentLaunchContext,
   options: DesktopAgentLaunchOptions = {},
 ): Effect.Effect<void, Error> {

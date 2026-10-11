@@ -149,7 +149,7 @@ describe('native agent launch activation', () => {
           (session) =>
             prepareAgentDefinition({ config, session }).pipe(
               Effect.flatMap((definition) =>
-                // The launch terminal `runAgent` runs a fresh run under.
+                // The launch terminal a root launch runs a fresh run under.
                 runWithLaunchGuard(
                   session,
                   FRESH_RUN_ID,

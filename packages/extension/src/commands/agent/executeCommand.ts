@@ -8,7 +8,7 @@ import { openFinalOutputIfAvailable } from '@frontend/agents/finalOutputOpener';
 import { withLogChannel } from '@logger/effectLog';
 import type { SessionBackend } from '@texra/controllers/session/sessionBackend';
 import { ensureError } from '@utils/errors/errorMessage';
-import type { ProcessServices } from '@texra-ai/harness';
+import type { ProcessServices, SessionOwner } from '@texra-ai/harness';
 import type { RunId } from '@texra-ai/harness/schemas';
 
 const CHANNEL = 'ExecuteCommand';
@@ -40,7 +40,7 @@ export const runExecuteCommand = Effect.fn('runExecuteCommand')(function* (
   backend: SessionBackend,
   /** Select the run this launch resolved: the launching surface's own. */
   onRunResolved: (runId: RunId) => void,
-): Effect.fn.Return<void, Error, ProcessServices> {
+): Effect.fn.Return<void, Error, ProcessServices | SessionOwner> {
   // A configuration that does not parse fails the command, so its caller
   // hears the refusal instead of a settled launch that never started.
   const { wrapped, config } = yield* Effect.try({

@@ -15,7 +15,6 @@ import {
   type Scope,
 } from 'effect';
 import type { RuntimeTool as ITool } from '@agent/runtime/ToolServices';
-import type { Runs } from '@agent/runtime/runRegistry';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { LoadablePlugin } from '@common/plugins/pluginTrust';
 import type { AppState, ConfigProvider } from '@platform/interfaces';
@@ -59,9 +58,10 @@ export interface ProcessPluginLayer<ROut = never> {
  * A plugin's session-lifetime services (its `sessionLayer`): one build
  * per open session, up while the plugin is switched on, a step of that
  * session pins it, or work it started holds it (`PluginHold`), and closed
- * with the session. It may read the session's `Runs`.
+ * with the session. It reads no run: a plugin reaches runs through its
+ * tools' `ChildRuns`.
  */
-export type SessionPluginLayer = Layer.Layer<never, never, Runs | PluginHold>;
+export type SessionPluginLayer = Layer.Layer<never, never, PluginHold>;
 
 /**
  * Keep the session layer that provides this service up until `until` ends:

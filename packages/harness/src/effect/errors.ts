@@ -70,7 +70,7 @@ export class RunFailure extends Data.TaggedError('RunFailure')<{
  */
 export class ResumeRefused extends Data.TaggedError('ResumeRefused')<{
   readonly runId: string;
-  readonly reason: Exclude<FollowUpFailureReason, 'read_failed'>;
+  readonly reason: Exclude<FollowUpFailureReason, 'read_failed' | 'not_parent'>;
   readonly message: string;
 }> {}
 

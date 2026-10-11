@@ -2,7 +2,7 @@
  * The chat's run boundary when its runs run in the TeXRA service: the same
  * launch and resume the controller drives in-process, answered by the
  * service. A launch or resume is admitted there, and the service says when
- * the run ends: the chat holds its turn until then, as `runAgent` and a
+ * the run ends: the chat holds its turn until then, as a root launch and a
  * resume's `completion` do. The view folded here could still show the
  * run's previous end right after a resume.
  */
@@ -11,21 +11,20 @@ import { Effect } from 'effect';
 import type {
   ResumeRunOptions,
   ResumeRunResult,
-  RunAgentOptions,
-  RunAgentRequest,
+  RootLaunch,
   RunEndResult,
 } from '@agent/runtime';
 import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
 import type { SessionBackend } from '@texra/controllers/session/sessionBackend';
-import type { ProcessServices } from '@texra-ai/harness';
+import type { ProcessServices, SessionOwner } from '@texra-ai/harness';
 import type { RunId } from '@texra-ai/harness/schemas';
 
 /** The run boundary `ChatSessionController` takes. */
 export interface ChatAgentRuns {
+  /** A root launch on the chat's session. */
   readonly launch: (
-    request: RunAgentRequest,
-    options: RunAgentOptions,
-  ) => Effect.Effect<Pick<RunEndResult, 'outcome'>, Error, ProcessServices>;
+    launch: RootLaunch,
+  ) => Effect.Effect<Pick<RunEndResult, 'outcome'>, Error, SessionOwner>;
   readonly resume: (
     runId: RunId,
     options: ResumeRunOptions,
@@ -43,7 +42,7 @@ export function serviceAgentRuns(
   approvalPolicy: () => TexraApprovalPolicy | undefined,
 ): ChatAgentRuns {
   return {
-    launch: (request, options) =>
+    launch: ({ request, options }) =>
       backend.launch(request, {
         continues: options.continues,
         onRunResolved: options.onRunResolved,

@@ -54,7 +54,7 @@ import { mediaInputParts, type InputPart } from '../run/mediaInput';
 import { stored } from '../run/requestContext';
 import { claimFollowUps, type ConsumedFollowUps } from '../FollowUps';
 import { ModelInvoker } from '../ModelInvoker';
-import { Runs } from '../runRegistry';
+import { registryOf, Runs } from '../runRegistry';
 import {
   appendRow,
   configRow,
@@ -140,7 +140,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
   TurnServices | ModelInvoker | Scope.Scope
 > {
   const run = yield* AgentRun;
-  const runs = yield* Runs;
+  const runs = registryOf(yield* Runs);
   const invoker = yield* ModelInvoker;
   const access = yield* ModelAccess;
   const { runId, session, logger } = run;
@@ -286,8 +286,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
           });
         }
         if (Exit.isFailure(media)) return yield* Effect.failCause(media.cause);
-        content.push(...media.value.parts);
-        content.push({ kind: 'text', text: userRequest });
+        content.push(...media.value.parts, { kind: 'text', text: userRequest });
         const hooked = yield* openingHooks(run, opening, userRequest);
         content.push(...hooked.parts);
         return { content, offered: [...step.rows, ...hooked.rows] };
@@ -300,8 +299,8 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
       ...(activated.length > 0 && { activated: [...activated] }),
       ...(misses.length > 0 && { memoryMisses: misses }),
     };
-    // The opening, with a fresh run's registration and held trace, then the
-    // entry once it settled: a stop lands before the opening or after both.
+    // The opening (registration, held trace), then the entry once it settled,
+    // its unborn mark gone: a stop lands before the opening or after both.
     const rows = [
       appendRow(runId, [{ role: 'user', content }], { input }),
       ...offered,
@@ -311,6 +310,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
     yield* cell
       .append(rows, run.entry.opening)
       .pipe(Effect.andThen(run.entry.entered), Effect.uninterruptible);
+    runs.settleBirth(runId);
     run.callbacks.onProgress?.({ kind: 'started' });
     return cell;
   });

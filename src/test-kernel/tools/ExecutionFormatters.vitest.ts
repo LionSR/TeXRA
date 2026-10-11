@@ -3,7 +3,7 @@ import * as assert from 'node:assert';
 import { afterEach, beforeEach, describe, vi } from 'vitest';
 import { it } from '@effect/vitest';
 import { Effect } from 'effect';
-import { Runs } from '@agent/runtime/runRegistry';
+import { registryOf, Runs } from '@agent/runtime/runRegistry';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import {
   aggregateId,
@@ -74,7 +74,7 @@ describe('turnAttributionNote', () => {
         // The handle outlives the run's terminal phase, so handle presence
         // alone must not word the note as "still running".
         const handle = testRunHandle({ runId: RUN_ID, agent: 'test' });
-        session.runs.track(handle);
+        registryOf(session.runs).track(handle);
         yield* Effect.promise(() => endRun('completed'));
         // The turn identity is structural now: one settled turn behind the
         // accepted one the note has to word.

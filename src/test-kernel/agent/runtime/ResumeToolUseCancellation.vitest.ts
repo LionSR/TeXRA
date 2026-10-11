@@ -106,17 +106,10 @@ const NO_USAGE = {
   totalToolUsePromptTokens: 0,
 };
 
-/**
- * The session whose run lane admits the resume. No competing generation
- * exists in this fixture, so the lane is a passthrough.
- */
+/** The session the resume runs on. */
 const LANE_SESSION = {
   // The run layer builds the session's rooted filesystems from these.
   roots: createFakeWorkspaceRoots(),
-  runs: {
-    launchRun: (_runId: RunId, operation: Effect.Effect<unknown, unknown>) =>
-      operation,
-  },
   log: {
     // The resume's hold on the run's claim: its release is what the suite
     // observes, when the resume's scope closes.

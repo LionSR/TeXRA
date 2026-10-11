@@ -1,13 +1,16 @@
-import { Effect, type Fiber, SubscriptionRef } from 'effect';
+import { Effect, Fiber, SubscriptionRef } from 'effect';
 
 // Local imports
 import type { AgentTrace } from '@agent/trace';
 import { RunHandle, type RunFacts } from '@agent/runtime/RunHandle';
 import {
+  registryOf,
   RunRegistry,
   type RunPrograms,
   type RunRegistryInit,
+  type AgentRunServices,
 } from '@agent/runtime/runRegistry';
+import type { RunsShape } from '@agent/runtime/runs';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { emptySessionView } from '@shared/session/sessionView';
 import type { RunId, RunIdentity } from '@shared/schemas';
@@ -62,6 +65,11 @@ export function testRunRegistry(): RunRegistry {
 /** The run programs a test registry runs: the production ones, each read
  *  per call so a suite's own mock of its module is the program it reaches. */
 export const testRunPrograms: RunPrograms = {
+  root: (...args) =>
+    Effect.flatMap(
+      Effect.promise(() => import('@agent/runtime/rootLaunch')),
+      (module) => module.rootRun(...args),
+    ),
   executeAgent: (...args) =>
     Effect.flatMap(
       Effect.promise(() => import('@agent/runtime/executeAgent')),
@@ -92,17 +100,31 @@ const emptyView = Effect.runSync(
  * await of the returned fiber) resolves.
  */
 export function admitInterruptibleRun(
-  registry: RunRegistry,
+  runs: RunsShape,
   runId: RunId,
   onInterrupt: () => void,
 ): Fiber.Fiber<void> {
   const interruptEffect = Effect.sync(onInterrupt);
+  // Awaited as a root launch awaits: interrupting this fiber stops the run.
   return Effect.runFork(
-    registry
-      .launchRun(
-        runId,
-        Effect.never.pipe(Effect.onInterrupt(() => interruptEffect)),
-      )
-      .pipe(Effect.ignore),
+    startAwaited(
+      runs,
+      runId,
+      Effect.never.pipe(Effect.onInterrupt(() => interruptEffect)),
+    ).pipe(Effect.ignore),
+  );
+}
+
+/** A run admitted at `runs`' door and awaited, as a root launch awaits its
+ *  program: the caller's interruption stops it. */
+export function startAwaited<A, E, R extends AgentRunServices>(
+  runs: RunsShape,
+  runId: RunId,
+  program: Effect.Effect<A, E, R>,
+): Effect.Effect<A, E | Error> {
+  return Effect.flatMap(
+    registryOf(runs).start(runId, program, (run) => run),
+    (fiber) =>
+      Fiber.join(fiber).pipe(Effect.onInterrupt(() => Fiber.interrupt(fiber))),
   );
 }

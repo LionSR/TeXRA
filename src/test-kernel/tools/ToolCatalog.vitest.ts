@@ -6,7 +6,6 @@ import { expect } from 'vitest';
 // Local imports - real catalog and shared host edges
 import { AppState } from '@platform/interfaces';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
-import { testRunRegistry } from '@test/support/runHandleFixtures';
 import { fakeHostAppState } from '@test/support/setupPlatform';
 import { ToolCatalog, toolCatalogLayer } from '@tools/liveTools';
 import { ALWAYS_AVAILABLE } from '@tools/toolProbes';
@@ -42,7 +41,7 @@ it.effect(
     ]);
     return Effect.gen(function* () {
       const catalog = yield* ToolCatalog;
-      const tools = yield* catalog.session(testRunRegistry);
+      const tools = yield* catalog.session;
       const services = Effect.scoped(
         Effect.flatMap(tools.pin(Effect.succeed(new Set())), (step) =>
           step.services(new Set(['failed-plugin'])),

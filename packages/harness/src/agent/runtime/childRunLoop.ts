@@ -16,9 +16,10 @@ import type { AgentTrace, StageHandle } from '@agent/trace';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { resolveChildRunConcurrencyBudget } from '@agent/runtime/childRunBudget';
 import {
-  Runs,
-  type AgentRunServices,
+  registryOf,
   type RunRegistry,
+  type AgentRunServices,
+  Runs,
 } from '@agent/runtime/runRegistry';
 import {
   deliverLaunchFailure,
@@ -305,8 +306,7 @@ export interface ChildRunLoopParams<TTurn, R = never> {
  */
 class ChildLoop<TTurn, R> {
   private readonly controller = new AbortController();
-  /** The stop was a user's, read when it lands: the registry forgets the
-   *  reason once the run has unwound. */
+  /** The stop was a user's, read as it lands: its reason goes with the run. */
   userStopped = false;
   readonly trace: AgentTrace | undefined;
   readonly attemptId = randomUUID();
@@ -341,7 +341,7 @@ class ChildLoop<TTurn, R> {
 
   interrupt(): void {
     const { runId, childRun } = this.params;
-    this.userStopped ||= this.runs.stopReason(runId) === 'user';
+    this.userStopped ||= this.runs.get(runId)?.stopReason === 'user';
     this.controller.abort();
     if (childRun === undefined) this.runs.interrupt(runId);
   }
@@ -465,7 +465,7 @@ const progressPorts = <TTurn, R>(loop: ChildLoop<TTurn, R>): ChildRunPorts => ({
     const target = loop.runs.parentOf(runId);
     if (strategy.deliveryMode === 'persistOnly' || target === null) return;
     // Nothing is queued when no session holds the run.
-    if (session.runs.getToolUseFollowUpTarget(target).kind === 'no_session')
+    if (loop.runs.getToolUseFollowUpTarget(target).kind === 'no_session')
       return;
     session.followUps.sendDetached(parentEdgeIn(session, runId), {
       text: formatSubagentProgress(runId, agentName, update),
@@ -1028,7 +1028,7 @@ const launchChildLoop = <TTurn, R extends AgentRunServices>(
       return yield* Effect.fail(
         yield* unwindSetup(loop, Cause.squash(setup.cause)),
       );
-    return yield* loop.runs.launch(runId, runChildLoop(loop), (admitted) =>
+    return yield* loop.runs.start(runId, runChildLoop(loop), (admitted) =>
       Effect.suspend(() => {
         loop.forked = true;
         return Effect.andThen(Effect.yieldNow, admitted).pipe(
@@ -1057,7 +1057,7 @@ export function startChildRunLoop<TTurn, R extends AgentRunServices = never>(
   params: ChildRunLoopParams<TTurn, R>,
 ): Effect.Effect<Fiber.Fiber<TTurn | undefined, Error>, Error, R | Runs> {
   return Effect.flatMap(Runs, (runs) => {
-    const loop = new ChildLoop(params, runs);
+    const loop = new ChildLoop(params, registryOf(runs));
     // The handoff never happened: the setup this launch acquired unwinds
     // here, atomically, rather than leaking the activation and the stage.
     return launchChildLoop(loop).pipe(

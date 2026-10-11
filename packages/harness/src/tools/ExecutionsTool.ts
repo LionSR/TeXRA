@@ -324,10 +324,10 @@ const waitForRuns = Effect.fn('ExecutionsTool.waitForRuns')(function* (
   ids?: readonly RunId[] | null,
 ) {
   const runs = yield* Runs;
-  const candidateIds = ids?.length ? unique(ids) : runs.heldIds();
+  const candidates = ids?.length ? unique(ids) : runs.get().map((r) => r.runId);
   // Exclude runs that are already effectively done
   // (completed, inactive, or tool-use subagent WAITING with result delivered).
-  const pendingIds = candidateIds.filter(
+  const pendingIds = candidates.filter(
     (id) => !shouldSkipWait(context.session, id),
   );
   if (pendingIds.length === 0) return;
@@ -392,7 +392,7 @@ const showSummary = Effect.fn('ExecutionsTool.showSummary')(function* (
     options.suppressAutoDeliveredSubagentReport === true &&
     run.identity.kind === 'agent' &&
     run.parentId === context.runId &&
-    (yield* Runs).getHandle(runId) !== undefined;
+    (yield* Runs).get(runId)?.handle !== undefined;
 
   lines.push(
     ...buildSummaryTailLines(
@@ -418,7 +418,7 @@ const handleKill = Effect.fn('ExecutionsTool.handleKill')(function* (
   }
 
   const runs = yield* Runs;
-  if (!runs.getHandle(runId)) {
+  if (!runs.get(runId)?.handle) {
     return yield* Effect.fail(
       new ToolError(`Run ${runId} not found or already completed.`),
     );
@@ -427,7 +427,7 @@ const handleKill = Effect.fn('ExecutionsTool.handleKill')(function* (
   // Only your own children, by the edge the rows leave (a detach may be in).
   const owner = (yield* getRunRecords(context.session, runId).exists())
     ? yield* persistedParentRunId(context.session, runId)
-    : runs.parentOf(runId);
+    : (runs.get(runId)?.parent ?? null);
   if (owner !== context.runId) {
     return yield* Effect.fail(
       new ToolError(`Cannot kill run ${runId}: not a child of this session.`),

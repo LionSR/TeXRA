@@ -4,12 +4,12 @@
 import { it } from '@effect/vitest';
 import { Deferred, Effect, Exit, Fiber, Stream, SubscriptionRef } from 'effect';
 import { afterEach, beforeEach, describe, expect, vi, type Mock } from 'vitest';
+import { registryOf, type RunPrograms, Runs } from '@agent/runtime/runRegistry';
 import { humanGrant } from '@agent/runtime/runApprovalQueue';
 
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import type { TransactionPart } from '@agent/runtime/childSettlement';
 import type { RunHandle } from '@agent/runtime/RunHandle';
-import { Runs, type RunPrograms } from '@agent/runtime/runRegistry';
 import { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { UnfoldedDraft } from '@shared/session/sessionEvents';
 import { RUN_OUTCOME, agentMatchesIdentifier } from '@shared/schemas';
@@ -263,7 +263,7 @@ function delegateWithProposalDecision(
       if (options.launchSignal) {
         yield* Deferred.await(options.launchSignal);
       }
-      yield* session.runs.awaitDrained();
+      yield* registryOf(session.runs).awaitDrained();
       return result;
     }),
   );
@@ -345,7 +345,7 @@ function mockTrackedChildOnce(
         parent: PARENT_RUN_ID,
         agent: 'review',
       });
-      testDefaultSession().runs.track(handle);
+      registryOf(testDefaultSession().runs).track(handle);
       runOptions.onRunResolved?.(runId);
       Effect.runSync(runOptions.onRun?.(runId) ?? Effect.void);
       await options.afterRun?.(handle);
@@ -450,6 +450,8 @@ describe('headless delegation', () => {
         Effect.succeed({ config, persona: { tools: [] }, task: null }),
     );
     testEngine = {
+      // No root launch runs in this suite.
+      root: () => Effect.die(new Error('no root launch here')),
       executeAgent: (definition, runId, options) =>
         Effect.tryPromise({
           try: async (signal) => {
@@ -590,7 +592,7 @@ describe('headless delegation', () => {
 
   afterEach(async () => {
     const session = testDefaultSession();
-    for (const runId of session.runs.heldIds()) {
+    for (const runId of session.runs.get().map((run) => run.runId)) {
       // Test handles have no provider interrupt handler. Remove the fake
       // handle, then stop the real child activation that owns the loop.
       untrackRun(session.runs, runId);
@@ -600,7 +602,7 @@ describe('headless delegation', () => {
     }
     await Effect.runPromise(session.followUps.closeInput(PARENT_RUN_ID));
     await Effect.runPromise(session.followUps.closeInput(CHILD_RUN_ID));
-    await Effect.runPromise(session.runs.awaitDrained());
+    await Effect.runPromise(registryOf(session.runs).awaitDrained());
     await Effect.runPromise(closeSessionOf(inBandSession));
   });
 
@@ -755,7 +757,9 @@ describe('headless delegation', () => {
         yield* Fiber.interrupt(running);
         const exit = yield* Fiber.await(running);
         expect(Exit.hasInterrupts(exit)).toBe(true);
-        expect(inBandSession.runs.isLive(IN_BAND_RUN_ID)).toBe(false);
+        expect(inBandSession.runs.get(IN_BAND_RUN_ID)?.live === true).toBe(
+          false,
+        );
       }),
   );
 
@@ -837,7 +841,7 @@ describe('headless delegation', () => {
       // than hand the caller's instruction through verbatim. Deliberately
       // wording-free — the injected copy churns (#9568) without behavior changing.
       yield* callDelegateReview();
-      yield* testDefaultSession().runs.awaitDrained();
+      yield* registryOf(testDefaultSession().runs).awaitDrained();
 
       const instruction =
         mocks.executeAgent.mock.calls.at(-1)?.[0].config.instruction;
@@ -855,7 +859,7 @@ describe('headless delegation', () => {
         yield* callDelegateReview(
           parentRunContext({ userInstruction: parentInstruction }),
         );
-        yield* testDefaultSession().runs.awaitDrained();
+        yield* registryOf(testDefaultSession().runs).awaitDrained();
 
         expect(mocks.executeAgent).toHaveBeenCalledWith(
           expect.objectContaining({
@@ -923,7 +927,7 @@ describe('headless delegation', () => {
             parentRunContext({ session, approvalPromptsUnavailable: true }),
           );
 
-          yield* session.runs.awaitDrained();
+          yield* registryOf(session.runs).awaitDrained();
           expect(decider.openedKinds).toEqual([]);
           expect(result.status).toBe('executed');
           expect(result.summary).toBe("Launched 'review' (async)");
@@ -974,7 +978,7 @@ describe('headless delegation', () => {
         );
         const result = yield* callDelegateReview(parentRunContext({ session }));
 
-        yield* session.runs.awaitDrained();
+        yield* registryOf(session.runs).awaitDrained();
         expect(decider.openedKinds).toEqual([]);
         expect(result.status).toBe('executed');
       }),
@@ -1014,7 +1018,9 @@ describe('headless delegation', () => {
           afterRun: (handle) => {
             capturedHandle = handle;
             return Effect.runPromise(
-              testDefaultSession().runs['detachActiveChildren'](PARENT_RUN_ID),
+              registryOf(testDefaultSession().runs)['detachActiveChildren'](
+                PARENT_RUN_ID,
+              ),
             );
           },
         });
@@ -1032,7 +1038,8 @@ describe('headless delegation', () => {
         );
         const childRunId = capturedHandle?.runId;
         expect(
-          childRunId && testDefaultSession().runs.parentOf(childRunId),
+          childRunId &&
+            registryOf(testDefaultSession().runs).parentOf(childRunId),
         ).toBeNull();
         expect(
           yield* queuedFollowUps(testDefaultSession(), PARENT_RUN_ID),

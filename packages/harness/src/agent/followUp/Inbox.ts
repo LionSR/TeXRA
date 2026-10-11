@@ -17,7 +17,7 @@ import {
   heldElsewhereBy,
   type DatabaseReadFailed,
 } from '@shared/session/database';
-import { runRelation } from '@shared/session/runRelation';
+import { parentEdgeOf, runRelation } from '@shared/session/runRelation';
 import type { RunInputDraft } from '@shared/session/runStateFold';
 import {
   FOLLOW_UP_TYPES,
@@ -48,7 +48,7 @@ type InputRows = RunRows & { readonly closed: boolean };
 /** The session doors the inbox works through (the session layer wires them). */
 export interface InboxPort {
   /** The session's log: a send is one transaction under the run's claim. */
-  readonly log: Pick<SessionLog, 'transact' | 'rows' | 'hold'>;
+  readonly log: Pick<SessionLog, 'transact' | 'rows' | 'records' | 'hold'>;
   /** Enqueue a job on the session's publisher and return. */
   readonly detach: SessionEventsShape['detach'];
   /** The run's parent as the session view folds it; `null` at top level. */
@@ -77,7 +77,9 @@ export interface InboxItem {
 export type Sent =
   | { readonly kind: 'duplicate' }
   | { readonly kind: 'queued'; readonly read: boolean; readonly wake: boolean }
-  | { readonly kind: 'refused'; readonly reason?: 'owned_elsewhere' };
+  | { readonly kind: 'refused'; readonly reason?: Refusal };
+/** Why a send wrote nothing beyond a closed input. */
+type Refusal = 'owned_elsewhere' | 'not_parent';
 
 /** What a send asks of the row and of the run. */
 export interface SendOptions {
@@ -86,6 +88,8 @@ export interface SendOptions {
   readonly hold?: QueuedFollowUp['holdUntil'];
   /** Owe the run a resume when no generation here will read the row. */
   readonly wake?: boolean;
+  /** Only from the run's parent: its rows' edge, read in this job. */
+  readonly fromParent?: boolean;
 }
 
 /** A resume's result, and whether this caller joined one in flight. */
@@ -138,14 +142,7 @@ export class Inbox {
     this.port.detach((append) =>
       Effect.flatMap(to, (runId) =>
         runId === null ? Effect.void : this.admit(runId, item, {}, append),
-      ).pipe(
-        Effect.catch((error) =>
-          Effect.logWarning(`A follow-up was not queued`).pipe(
-            Effect.annotateLogs({ data: error }),
-            withLogChannel(CHANNEL),
-          ),
-        ),
-      ),
+      ).pipe(Effect.catch(warnWith('A follow-up was not queued'))),
     );
   }
 
@@ -219,13 +216,7 @@ export class Inbox {
           );
         }).pipe(Effect.scoped),
       )
-      .pipe(
-        Effect.catch((error) =>
-          Effect.logWarning(
-            `Run ${runId}: its closed input was not recorded`,
-          ).pipe(Effect.annotateLogs({ data: error }), withLogChannel(CHANNEL)),
-        ),
-      );
+      .pipe(Effect.catch(warnWith(`Run ${runId}: closing its input failed`)));
   }
 
   /** A deleted run: its reader ends; its `run.removed` row closes its input. */
@@ -329,6 +320,11 @@ export class Inbox {
       yield* this.port.log.hold(runId);
       const input = yield* this.read(runId);
       if (closed(input)) return only({ kind: 'refused' });
+      if (options.fromParent === true) {
+        const edge = parentEdgeOf(yield* this.port.log.records(runId));
+        if (edge?.id !== (item.from.kind === 'run' ? item.from.runId : null))
+          return only({ kind: 'refused', reason: 'not_parent' });
+      }
       // Stamped inside the job, from committed parentage.
       const row = queuedRow(item, options.hold, (sender) =>
         runRelation(sender, runId, this.port.parentOf),
@@ -348,11 +344,9 @@ export class Inbox {
       Effect.catchIf(
         (error) => heldElsewhereBy(error) !== null,
         (error) =>
-          Effect.logWarning(
+          warnWith(
             `Follow-up for run ${runId} was not queued: another process holds the run.`,
-          ).pipe(
-            Effect.annotateLogs({ data: error }),
-            withLogChannel(CHANNEL),
+          )(error).pipe(
             Effect.as(only({ kind: 'refused', reason: 'owned_elsewhere' })),
           ),
       ),
@@ -382,17 +376,22 @@ export class Inbox {
         try: () => observer(closed),
         catch: ensureError,
       });
-      if (Result.isFailure(ran)) {
+      if (Result.isFailure(ran))
         this.port.detach(() =>
-          Effect.logWarning('An inbox observer threw').pipe(
-            Effect.annotateLogs({ data: ran.failure }),
-            withLogChannel(CHANNEL),
-          ),
+          warnWith('An inbox observer threw')(ran.failure),
         );
-      }
     }
   }
 }
+
+/** Log `message` at warn with the failure behind it. */
+const warnWith =
+  (message: string) =>
+  (cause: unknown): Effect.Effect<void> =>
+    Effect.logWarning(message).pipe(
+      Effect.annotateLogs({ data: cause }),
+      withLogChannel(CHANNEL),
+    );
 
 /** Whether a message is queued: a request (`control`) resumes no run. */
 const queued = (input: InputRows): boolean =>

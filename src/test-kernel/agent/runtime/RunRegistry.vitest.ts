@@ -6,8 +6,7 @@ import { describe, expect, vi } from 'vitest';
 // Local imports
 import type { AgentTrace } from '@agent/trace';
 import type { RunHandle, RunControls } from '@agent/runtime/RunHandle';
-import { RunRegistry } from '@agent/runtime/runRegistry';
-import { RunLive } from '@agent/runtime/runRegistry';
+import { RunRegistry, RunLive } from '@agent/runtime/runRegistry';
 import { humanGrant } from '@agent/runtime/runApprovalQueue';
 import type {
   SessionHandle,
@@ -31,6 +30,7 @@ import {
   type SessionEventDraft,
 } from '@shared/schemas';
 import type { RunView, SessionView } from '@shared/session/sessionView';
+import { startAwaited } from '@test/support/runHandleFixtures';
 import { untrackRun } from '@test/support/sessionEnd';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
@@ -310,7 +310,8 @@ describe('runRegistry', () => {
         const release = yield* Deferred.make<void>();
         const drained = yield* Deferred.make<void>();
         const generation = yield* Effect.forkChild(
-          registry.launchRun(
+          startAwaited(
+            registry,
             runId,
             Effect.sync(() => registry.track(createHandle(runId))).pipe(
               Effect.ensuring(
@@ -325,8 +326,8 @@ describe('runRegistry', () => {
         );
         yield* Deferred.await(untracked);
         yield* registry.stopAll();
-        expect(registry.getHandle(runId)).toBeUndefined();
-        expect(registry.isLive(runId)).toBe(true);
+        expect(registry.get(runId)?.handle).toBeUndefined();
+        expect(registry.get(runId)?.live === true).toBe(true);
         const drain = yield* Effect.forkChild(
           registry
             .awaitDrained()
@@ -342,7 +343,7 @@ describe('runRegistry', () => {
         // The close stopped the generation: it ends interrupted.
         yield* Fiber.await(generation);
         yield* Fiber.join(drain);
-        expect(registry.isLive(runId)).toBe(false);
+        expect(registry.get(runId)?.live === true).toBe(false);
       }),
   );
 
@@ -386,7 +387,7 @@ describe('runRegistry', () => {
 
       expect(killRegistry(registry, runId, { reason: 'user' })).toBe(false);
 
-      expect(registry.getHandle(runId)).toBe(handle);
+      expect(registry.get(runId)?.handle).toBe(handle);
     } finally {
       registry.dispose();
     }
@@ -408,7 +409,7 @@ describe('runRegistry', () => {
 
       expect(killRegistry(registry, runId, { reason: 'user' })).toBe(false);
 
-      expect(registry.getHandle(runId)).toBe(handle);
+      expect(registry.get(runId)?.handle).toBe(handle);
     } finally {
       registry.dispose();
     }
@@ -795,7 +796,7 @@ describe('runRegistry', () => {
         yield* Deferred.succeed(allowCommit, undefined);
         yield* Fiber.join(stopped);
 
-        expect(registry.getHandle(lateChildRunId)).toBeUndefined();
+        expect(registry.get(lateChildRunId)?.handle).toBeUndefined();
         expect(registry.hasActiveChildren(rootRunId)).toBe(false);
       } finally {
         registry.dispose();
@@ -863,7 +864,7 @@ describe('runRegistry', () => {
               interrupt: vi.fn(),
             }),
           ).toThrow(/stop has already folded/);
-          expect(registry.getHandle(postFoldChildRunId)).toBeUndefined();
+          expect(registry.get(postFoldChildRunId)?.handle).toBeUndefined();
         } finally {
           registry.dispose();
         }
@@ -916,8 +917,8 @@ describe('runRegistry', () => {
           expect(rootInterrupt).not.toHaveBeenCalled();
           expect(siblingInterrupt).not.toHaveBeenCalled();
           expect(descendantInterrupt).not.toHaveBeenCalled();
-          expect(registry.getHandle(rootRunId)).toBe(rootHandle);
-          expect(registry.getHandle(siblingRunId)).toBe(siblingHandle);
+          expect(registry.get(rootRunId)?.handle).toBe(rootHandle);
+          expect(registry.get(siblingRunId)?.handle).toBe(siblingHandle);
           expect(registry.parentOf(descendantRunId)).toBeNull();
         } finally {
           registry.dispose();
@@ -946,7 +947,7 @@ describe('runRegistry', () => {
 
         expect(interrupt).toHaveBeenCalledOnce();
         expect(yield* runEnds(runId)).toEqual([]);
-        expect(registry.heldIds()).toContain(runId);
+        expect(registry.get().map((run) => run.runId)).toContain(runId);
       }),
   );
 
@@ -1160,7 +1161,8 @@ it.effect(
       const started = yield* Deferred.make<void>();
       const finish = yield* Deferred.make<void>();
       const generation = yield* Effect.forkChild(
-        registry.launchRun(
+        startAwaited(
+          registry,
           runId,
           Deferred.succeed(started, undefined).pipe(
             Effect.andThen(Deferred.await(finish)),
@@ -1203,7 +1205,7 @@ it.effect(
       yield* Deferred.await(admitted);
       const launch = vi.fn(async () => {});
       const next = yield* Effect.forkChild(
-        registry.launchRun(runId, Effect.promise(launch)),
+        startAwaited(registry, runId, Effect.promise(launch)),
         { startImmediately: true },
       );
       expect(launch).not.toHaveBeenCalled();
@@ -1230,7 +1232,7 @@ it.effect('holds a run against launches without making it a stop target', () =>
     const hold = yield* Effect.forkChild(
       Effect.scoped(
         Effect.gen(function* () {
-          yield* registry.holdInactiveRun(runId);
+          yield* registry.launch({ hold: runId });
           yield* Effect.never;
         }),
       ),
@@ -1238,15 +1240,15 @@ it.effect('holds a run against launches without making it a stop target', () =>
     );
     // The hold is registered before its claim lands: a launch while the
     // claim is still in flight is refused, not started beside it.
-    expect(registry.isLive(runId)).toBe(true);
+    expect(registry.get(runId)?.live === true).toBe(true);
     expect(
-      yield* Effect.flip(registry.launchRun(runId, Effect.void)),
+      yield* Effect.flip(startAwaited(registry, runId, Effect.void)),
     ).toBeInstanceOf(RunLive);
     // A run only held is not running: a stop by run id reaches nothing.
     expect(registry.interrupt(runId)).toBe(false);
     yield* Deferred.succeed(claimed, undefined);
     yield* Fiber.interrupt(hold);
     expect(released).toHaveBeenCalledOnce();
-    expect(registry.isLive(runId)).toBe(false);
+    expect(registry.get(runId)?.live === true).toBe(false);
   }),
 );

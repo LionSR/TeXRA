@@ -25,7 +25,7 @@ import {
 } from '@agent/runtime/RunEndResult';
 import { getRunRecords } from '@agent/storage/runRecords';
 import type { RunControls } from '@agent/runtime/RunHandle';
-import { runAgent, type RunAgentRequest } from '@agent/runtime/runAgent';
+import type { RootLaunchRequest } from '@agent/runtime';
 import type {
   SessionHandle,
   SessionViewAccess,
@@ -43,7 +43,7 @@ import type {
   Subscribe,
 } from '@texra/shared/session/sessionFrames';
 import { frameSubscription } from '@texra/controllers/session/SessionFramer';
-import type { ProcessServices } from '@texra-ai/harness';
+import type { SessionOwner } from '@texra-ai/harness';
 
 /** What a window asks of a live run's loop: its model switch. */
 type RunModelControls = Pick<
@@ -77,9 +77,9 @@ export interface SessionBackend {
   ) => Effect.Effect<Outcome, RequestError>;
   /** Start a fresh run, and settle with its result once it ends. */
   readonly launch: (
-    request: RunAgentRequest,
+    request: RootLaunchRequest,
     options: SessionLaunchOptions,
-  ) => Effect.Effect<RunEndResult, Error, ProcessServices>;
+  ) => Effect.Effect<RunEndResult, Error, SessionOwner>;
   /**
    * Continue a settled run. Answers the run that resumed (the one asked
    * for, or the parent that owns it) and its result when it ended where the
@@ -115,7 +115,7 @@ interface SessionLaunchOptions {
   /** The chat's previous root: its approval bypasses carry over. */
   readonly continues?: RunId;
   /** The policy the launch asked for: a stricter one than the project's
-   *  narrows this run only (`RunAgentOptions.approvalPolicy`). */
+   *  narrows this run only (`RootLaunchOptions.approvalPolicy`). */
   readonly approvalPolicy?: TexraApprovalPolicy;
 }
 
@@ -130,7 +130,7 @@ export function runEnded(
   runId: RunId,
 ): Effect.Effect<RunEndResult> {
   return Effect.gen(function* () {
-    yield* session.runs.awaitDrained(runId);
+    yield* session.runs.get(runId)?.drained ?? Effect.void;
     const head = yield* SubscriptionRef.changes(session.view.ref).pipe(
       Stream.map((view) => view.runs.get(runId)),
       Stream.filter((run) => run === undefined || !isLiveRun(run)),
@@ -175,19 +175,21 @@ export function localSessionBackend(session: SessionHandle): SessionBackend {
       ),
     transcripts: (port, set) => session.view.subscribe(port, set),
     launch: (request, options) =>
-      runAgent(request, {
-        session,
-        preferHelperModel: options.preferHelperModel ?? false,
-        ownApiKeyFallback: options.ownApiKeyFallback,
-        approveDelegatedWork: options.approveDelegatedWork,
-        onRun: options.onRun,
-        continues: options.continues,
-        onRunResolved: options.onRunResolved,
-        suppressErrorNotification: options.suppressErrorNotification,
-        approvalPolicy: options.approvalPolicy,
+      session.runs.launch({
+        request,
+        options: {
+          preferHelperModel: options.preferHelperModel ?? false,
+          ownApiKeyFallback: options.ownApiKeyFallback,
+          approveDelegatedWork: options.approveDelegatedWork,
+          onRun: options.onRun,
+          continues: options.continues,
+          onRunResolved: options.onRunResolved,
+          suppressErrorNotification: options.suppressErrorNotification,
+          approvalPolicy: options.approvalPolicy,
+        },
       }),
     request: (request) => session.requests.request(request),
-    controls: (runId) => session.runs.getHandle(runId)?.controls,
+    controls: (runId) => session.runs.get(runId)?.controls,
     ended: (runId) => runEnded(session, runId),
     resume: (runId) =>
       Effect.flatMap(resumeOnSession(runId, session), (resumed) => {

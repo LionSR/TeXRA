@@ -23,9 +23,9 @@ import {
 } from 'effect';
 
 import { Internal, type RequestError } from '@texra-ai/harness';
+import { SessionOwner, type ProcessServices } from '@texra-ai/harness';
 import { describeFollowUpFailure } from '@agent/followUp/ToolUseFollowUp';
 import { resumeRun } from '@agent/runtime/resumeRun';
-import { runAgent } from '@agent/runtime/runAgent';
 import { terminalFailurePresented } from '@agent/runtime/terminalResultToast';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { getRunRecords } from '@agent/storage';
@@ -50,7 +50,6 @@ import {
 
 import { makeHostWindows } from './hostWindows';
 import { listTasks } from './taskList';
-import type { ProcessServices } from '@texra-ai/harness';
 
 /** The projects the service serves: one session per folder, opened on
  *  demand and closed once idle. The host that composes the service builds
@@ -125,11 +124,12 @@ function liveRoot(
   session: SessionHandle,
   runId: RunId,
 ): RunId | null {
-  if (!session.runs.isLive(runId)) return null;
+  const live = (id: RunId) => session.runs.get(id)?.live === true;
+  if (!live(runId)) return null;
   let root = runId;
   for (
     let parent = view.runs.get(root)?.parentId;
-    parent != null && session.runs.isLive(parent);
+    parent != null && live(parent);
     parent = view.runs.get(root)?.parentId
   )
     root = parent;
@@ -204,6 +204,8 @@ export const serviceHandlers = TexraRpcs.toLayer(
   Effect.gen(function* () {
     const projects = yield* ServiceProjects;
     const control = yield* ServiceControl;
+    // A task's launch is a root launch: the process's session owner's.
+    const owner = yield* SessionOwner;
     const runs = yield* FiberSet.make();
     const scope = yield* Effect.scope;
     let ports = 0;
@@ -337,30 +339,31 @@ export const serviceHandlers = TexraRpcs.toLayer(
             yield* refuseWhileDraining;
             const session = yield* open(workspace);
             return yield* admit<RunId>(runs, (admitted) =>
-              runAgent(
-                { config, runId },
-                {
-                  session,
-                  preferHelperModel,
-                  ownApiKeyFallback,
-                  approveDelegatedWork,
-                  ...(approvalPolicy !== null && { approvalPolicy }),
-                  // Admitted once the run exists (born with its opening), so
-                  // a `task.ended` that follows the answer finds it, and a
-                  // launch that fails before then fails `task.start` itself.
-                  onRunResolved: (resolved) => {
-                    Deferred.doneUnsafe(admitted, Exit.succeed(resolved));
+              session.runs
+                .launch({
+                  request: { config, runId },
+                  options: {
+                    preferHelperModel,
+                    ownApiKeyFallback,
+                    approveDelegatedWork,
+                    ...(approvalPolicy !== null && { approvalPolicy }),
+                    // Admitted once the run exists (born with its opening), so
+                    // a `task.ended` that follows the answer finds it, and a
+                    // launch that fails before then fails `task.start` itself.
+                    onRunResolved: (resolved) => {
+                      Deferred.doneUnsafe(admitted, Exit.succeed(resolved));
+                    },
+                    ...(continues !== null && { continues }),
                   },
-                  ...(continues !== null && { continues }),
-                },
-              ),
+                })
+                .pipe(Effect.provideService(SessionOwner, owner)),
             );
           }),
         ),
       'task.model': ({ workspace, runId, model }) =>
         Effect.scoped(
           Effect.flatMap(open(workspace), (session) => {
-            const controls = session.runs.getHandle(runId)?.controls;
+            const controls = session.runs.get(runId)?.controls;
             if (controls === undefined)
               return Effect.fail(
                 failed(

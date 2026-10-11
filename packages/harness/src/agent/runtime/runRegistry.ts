@@ -5,7 +5,7 @@
  * One entry per run records the fiber running it, the tracked handle, the
  * native child loop's activation and the run's serial lane; the entry exists
  * exactly while one of those does, which makes it the single in-process
- * answer to "is a generation of this run live here" ({@link RunRegistry.isLive}).
+ * answer to "is a generation of this run live here" (`LiveRun.live`).
  * Admission, stop, deletion and follow-up routing all read that one record.
  * Serialization is `withPerKeyLane`: FIFO admission with an interruptible wait,
  * its lane kept on the entry.
@@ -43,8 +43,15 @@ import type { RunStopReason } from '@shared/session/runtimeRequest';
 import { type PerKeyLane, withPerKeyLane } from '@utils/core/perKeyQueue';
 import { ensureError } from '@utils/errors/errorMessage';
 import type { RunHandle } from './RunHandle';
+import type { rootRun } from './rootLaunch';
 import type { SessionHandle } from './SessionHandle';
-import type { RunStop, RunStopOptions } from './runStop';
+import type {
+  LiveRun,
+  RootLaunch,
+  RunsShape,
+  RunStop,
+  RunStopOptions,
+} from './runs';
 import type { executeAgent, resumeToolUseFromResumeData } from './executeAgent';
 import type { resumeRun } from './resumeRun';
 
@@ -115,9 +122,10 @@ export interface RunRegistryInit {
   readonly programs: RunPrograms;
 }
 
-/** The run programs, each named: a fresh run's turn (`executeAgent`), a
- *  resumed run's turn (`resumeTurn`), and a whole resume (`resume`). */
+/** The run programs: a root launch, a fresh run's turn, a resumed run's
+ *  turn (`resumeTurn`), and a whole resume. */
 export interface RunPrograms {
+  readonly root: typeof rootRun;
   readonly executeAgent: typeof executeAgent;
   readonly resumeTurn: typeof resumeToolUseFromResumeData;
   readonly resume: typeof resumeRun;
@@ -145,8 +153,9 @@ interface RunEntry {
 }
 
 /** Session-owned registry of runs: one per session, built by the session
- *  layer in that session's scope and provided as {@link Runs}. */
-export class RunRegistry {
+ *  layer in that session's scope and provided as {@link Runs}. Its members
+ *  past {@link RunsShape} are the harness internals' (`registryOf`). */
+export class RunRegistry implements RunsShape {
   private readonly entries = new Map<RunId, RunEntry>();
   /** {@link awaitDrained}'s waiters: by run, and `''` for the last entry. */
   private readonly drains = new Map<string, Deferred.Deferred<void>>();
@@ -183,9 +192,12 @@ export class RunRegistry {
 
   /** The run programs (`RunRegistryInit.programs`). */
   readonly programs: RunPrograms;
+  /** Resume one persisted run on this session (`resumeRun`). */
+  readonly resume: RunPrograms['resume'];
 
   constructor(private readonly init: RunRegistryInit) {
     this.programs = init.programs;
+    this.resume = init.programs.resume;
   }
 
   // ---------------------------------------------------------------- entries
@@ -230,29 +242,30 @@ export class RunRegistry {
 
   // --------------------------------------------------------------- queries
 
-  getHandle(runId: RunId): RunHandle | undefined {
-    return this.entries.get(runId)?.handle;
-  }
+  /** One run this process holds, or every one: a launch still resolving
+   *  (a fiber, no handle yet) included, which is what `awaitDrained`
+   *  waits on and a close stops and, past its budget, settles. */
+  // cast: the overloads RunsShape names, answered by one body.
+  readonly get = ((runId?: RunId) =>
+    runId === undefined
+      ? [...this.entries.keys()].flatMap((id) => this.liveRun(id) ?? [])
+      : this.liveRun(runId)) as RunsShape['get'];
 
-  private handles(): RunHandle[] {
-    const handles: RunHandle[] = [];
-    for (const entry of this.entries.values())
-      if (entry.handle) handles.push(entry.handle);
-    return handles;
-  }
-
-  /** Every run this session still keeps a record of: what `awaitDrained`
-   *  waits on, so what a close stops and, past its budget, settles — a
-   *  launch still resolving (a fiber, no handle yet) included. */
-  heldIds(): RunId[] {
-    return [...this.entries.keys()];
+  private liveRun(runId: RunId): LiveRun | undefined {
+    const entry = this.entries.get(runId);
+    if (entry === undefined) return undefined;
+    const { handle, stopReason } = entry;
+    const [live, parent] = [this.isLive(runId), this.parentOf(runId)];
+    const drained = this.awaitDrained(runId);
+    const controls = handle?.controls;
+    return { runId, handle, controls, live, parent, stopReason, drained };
   }
 
   /** Whether this process holds a live generation of the run: its fiber, a
    *  hold, or an admitted launch. A live tool-use loop is not a fourth arm:
    *  the loop attaches and detaches inside the run program, which runs on
    *  the generation's fiber. */
-  isLive(runId: RunId): boolean {
+  private isLive(runId: RunId): boolean {
     const entry = this.entries.get(runId);
     if (entry === undefined) return false;
     return (
@@ -273,18 +286,13 @@ export class RunRegistry {
     return (this.entries.get(runId)?.lane?.fibers ?? 0) > 0;
   }
 
-  private *activeChildActivations(
-    parentRunId: RunId,
-  ): Generator<ChildRunActivation> {
-    for (const entry of this.entries.values()) {
-      const activation = entry.activation;
-      if (
-        activation !== undefined &&
-        this.parentOf(activation.runId) === parentRunId
-      ) {
-        yield activation;
-      }
-    }
+  /** The child activations whose edge names `parentRunId`. */
+  private activations(parentRunId: RunId): ChildRunActivation[] {
+    return [...this.entries.values()].flatMap(({ activation }) =>
+      activation && this.parentOf(activation.runId) === parentRunId
+        ? [activation]
+        : [],
+    );
   }
 
   /** The children one parent's detach covers: each retained run (handle
@@ -298,7 +306,7 @@ export class RunRegistry {
   /** The run's parent edge here, from its rows: the settled view's for a
    *  run it holds; an unborn one's launch's, unless a detach cut it. A
    *  decision that writes reads the run's records in its job instead. */
-  parentOf(runId: RunId): RunId | null {
+  readonly parentOf = (runId: RunId): RunId | null => {
     const run = this.init.session().view.run(runId);
     if (run !== undefined) return run.parentId;
     if (this.unbornDetached.has(runId)) return null;
@@ -306,7 +314,7 @@ export class RunRegistry {
     return (
       entry?.activation?.launchParent ?? entry?.handle?.launchParent ?? null
     );
-  }
+  };
 
   /** The run's entering batch settled into the view, which holds its edge
    *  from then on (`entered`): the birth job never ends the mark. */
@@ -314,9 +322,8 @@ export class RunRegistry {
     this.unbornDetached.delete(runId);
   }
 
-  hasActiveChildren(parentRunId: RunId): boolean {
-    return this.childRunIds(parentRunId).length > 0;
-  }
+  hasActiveChildren = (parentRunId: RunId): boolean =>
+    this.childRunIds(parentRunId).length > 0;
 
   /** Decide how a tool-use follow-up is admitted, from one registry-owned
    *  snapshot of run status, running loop, and child runs. */
@@ -329,13 +336,12 @@ export class RunRegistry {
       // Only a native child's explicit delivery reservation can retain a
       // terminal parent's continuation. A child-run handle is lifecycle
       // ownership, not authority to revive a parent that already finished.
-      for (const activation of this.activeChildActivations(runId)) {
-        if (activation.retainsTerminalParent) return { kind: 'queue' };
-      }
-      return { kind: 'no_session', runStatus: status };
+      return this.activations(runId).some((a) => a.retainsTerminalParent)
+        ? { kind: 'queue' }
+        : { kind: 'no_session', runStatus: status };
     }
 
-    if (this.getHandle(runId)?.controls) return { kind: 'active' };
+    if (this.entries.get(runId)?.handle?.controls) return { kind: 'active' };
 
     if (
       run?.substate === RUN_SUBSTATE.RESUMING ||
@@ -351,15 +357,10 @@ export class RunRegistry {
 
   /** Why this registry admits no run work, or `undefined` while it does. */
   private closedRefusal(): RunAdmissionClosed | undefined {
-    if (this.disposed)
-      return new RunAdmissionClosed({
-        message: 'Cannot register run work after session disposal.',
-      });
-    if (this.closing)
-      return new RunAdmissionClosed({
-        message: 'Cannot register run work while the session is closing.',
-      });
-    return undefined;
+    if (!this.disposed && !this.closing) return undefined;
+    const when = this.disposed ? 'after session disposal' : 'while closing';
+    const message = `Cannot register run work ${when}.`;
+    return new RunAdmissionClosed({ message });
   }
 
   /** {@link closedRefusal} for the synchronous admissions, which throw it. */
@@ -396,12 +397,23 @@ export class RunRegistry {
     return this.init.session().view.run(runId)?.status === RUN_PHASE.CANCELLED;
   }
 
+  /** A root launch (`programs.root`, awaited), or a hold on a stopped
+   *  run ({@link hold}). */
+  // cast: the overloads RunsShape names, answered by one body.
+  readonly launch = ((spec: RootLaunch | { readonly hold: RunId }) =>
+    'hold' in spec
+      ? this.hold(spec.hold)
+      : this.programs.root(spec.request, {
+          ...spec.options,
+          session: this.init.session(),
+        })) as RunsShape['launch'];
+
   /**
    * The one launch door (R2): every run starts here, on the session's context
    * ({@link fork}), after earlier work on its lane. It refuses with `RunLive`
    * as it claims; a surviving claim lifts the stop marks. `settle` wraps it.
    */
-  launch<A, E, R extends AgentRunServices, B, E2>(
+  start<A, E, R extends AgentRunServices, B, E2>(
     runId: RunId,
     program: Effect.Effect<A, E, R>,
     settle: (
@@ -411,25 +423,11 @@ export class RunRegistry {
     return this.fork(settle(this.admit(runId, program, false)));
   }
 
-  /** {@link launch}'s fork, admitting no run: a resume attempt admits its own. */
+  /** {@link start}'s fork, admitting no run: a resume attempt admits its own. */
   readonly fork = <A, E>(program: Effect.Effect<A, E, AgentRunServices>) =>
     Effect.sync(() =>
       this.init.fork(program.pipe(Effect.provideService(Runs, this))),
     );
-
-  /** {@link launch}, awaited: the caller's interruption stops the run. */
-  launchRun<A, E, R extends AgentRunServices>(
-    runId: RunId,
-    program: Effect.Effect<A, E, R>,
-  ): Effect.Effect<A, E | Error> {
-    return Effect.flatMap(
-      this.launch(runId, program, (run) => run),
-      (fiber) =>
-        Fiber.join(fiber).pipe(
-          Effect.onInterrupt(() => Fiber.interrupt(fiber)),
-        ),
-    );
-  }
 
   /** Reserve an inactive run for deletion; never wait for a live owner. */
   withInactiveRunStep<A, E, R>(
@@ -518,7 +516,7 @@ export class RunRegistry {
    * fiber on the entry, which {@link isLive} reports and no stop reaches,
    * carrying the run's DB claim in its own scope: one construct fences both.
    */
-  holdInactiveRun(runId: RunId): Effect.Effect<void, Error, Scope.Scope> {
+  private hold(runId: RunId): Effect.Effect<void, Error, Scope.Scope> {
     return Effect.suspend(() => {
       const refused = this.closedRefusal();
       if (refused) return Effect.fail(refused);
@@ -680,7 +678,7 @@ export class RunRegistry {
       const { reason } = options;
       if (!detach) this.interruptActiveChildren(runId, visited, reason);
       this.markStopped(runId, reason);
-      const root = this.getHandle(runId);
+      const root = this.entries.get(runId)?.handle;
       reached = root
         ? this.terminate(root, visited, !detach, reason)
         : this.interruptActive(runId);
@@ -733,7 +731,7 @@ export class RunRegistry {
       detachActiveChildren: false,
       reason: 'shutdown',
     } as const;
-    const active = new Set(this.heldIds());
+    const active = new Set(this.entries.keys());
     const stops = [...active].flatMap((runId) => {
       const parent = this.parentOf(runId);
       return parent !== null && active.has(parent)
@@ -779,11 +777,6 @@ export class RunRegistry {
     if (entry.stopReason !== 'user') entry.stopReason = reason;
   }
 
-  /** Why the run was stopped here, while it unwinds from that stop. */
-  stopReason(runId: RunId): RunStopReason | undefined {
-    return this.entries.get(runId)?.stopReason;
-  }
-
   /** Interrupt all active subagents of a parent run, including descendants. */
   private interruptActiveChildren(
     parentRunId: RunId,
@@ -793,17 +786,16 @@ export class RunRegistry {
     // Preparation and final delivery outlive the engine handle; stop their
     // activation as well as the live run below. The activation is keyed
     // apart from the handle so each is interrupted once per stop.
-    for (const activation of this.activeChildActivations(parentRunId)) {
+    for (const activation of this.activations(parentRunId)) {
       const key = `activation:${activation.runId}`;
       if (visited.has(key)) continue;
       visited.add(key);
       this.markStopped(activation.runId, reason);
       activation.interrupt();
     }
-    for (const handle of this.handles()) {
-      if (this.parentOf(handle.runId) === parentRunId)
+    for (const { handle } of this.entries.values())
+      if (handle && this.parentOf(handle.runId) === parentRunId)
         this.terminate(handle, visited, true, reason);
-    }
   }
 
   private terminate(
@@ -939,15 +931,21 @@ export class RunRegistry {
 }
 
 /**
- * The session's runs: run admission and lanes, the live handles, the child
- * run registry of one session. Built by the session layer in the session's scope
- * and disposed when that scope closes (`sessionLayer.ts`); the session record
- * carries the same value (`SessionHandle.runs`) for a host that holds the
- * session. Effect code below a launch takes it from context.
+ * The session's runs ({@link RunsShape}). Built by the session layer in the
+ * session's scope and disposed when that scope closes (`sessionLayer.ts`);
+ * the session record carries the same value (`SessionHandle.runs`) for a
+ * host that holds the session. Effect code below a launch takes it from
+ * context.
  */
-export class Runs extends Context.Service<Runs, RunRegistry>()(
+export class Runs extends Context.Service<Runs, RunsShape>()(
   '@texra/session/Runs',
 ) {}
+
+/** The registry behind a session's runs: harness internals only, the files
+ *  `runRegistryAccessRatchet` names. */
+export const registryOf = (runs: RunsShape): RunRegistry =>
+  // cast: the session layer builds every session's runs as a RunRegistry.
+  runs as RunRegistry;
 
 /**
  * The services every step of an agent run reads on the way down: the process

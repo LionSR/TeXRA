@@ -1,6 +1,7 @@
 import { it } from '@effect/vitest';
 import { Effect } from 'effect';
 import { describe, expect } from 'vitest';
+import { registryOf } from '@agent/runtime/runRegistry';
 
 import { submitFollowUp } from '@agent/followUp/ToolUseFollowUp';
 import { TraceEmitter } from '@agent/trace';
@@ -128,7 +129,7 @@ describe('sendFollowUp host-path session routing', () => {
 
         // A child run is tracked in the explicit process session, as desktop
         // composition does instead of using the module default.
-        processSession.runs.track(
+        registryOf(processSession.runs).track(
           testRunHandle({
             runId: generateRunId(),
             parent: parentRun,

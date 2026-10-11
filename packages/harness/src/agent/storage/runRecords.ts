@@ -19,6 +19,7 @@ import {
 import { attemptOf } from '@shared/session/inFlight';
 import { unloadable } from '@shared/session/runHistory';
 import { foldRunState, type RunState } from '@shared/session/runStateFold';
+import { parentEdgeOf } from '@shared/session/runRelation';
 import {
   ResultMetaSchema,
   storedResultMeta,
@@ -112,20 +113,11 @@ export const persistedParentRunId = Effect.fn('persistedParentRunId')(
   },
 );
 
-/** The run's parent edge as its rows leave it: null for a root, and for a
- *  child a `run.detach` severed. */
-const edgeOf = (rows: readonly SessionEvent[]) => {
-  const edge = rows.findLast(
-    (row) => row.type === 'run.start' || row.type === 'run.detach',
-  );
-  return edge?.type === 'run.start' ? edge.parent : null;
-};
-
 const parentEdge = Effect.fn('parentEdge')(function* (
   session: SessionHandle,
   runId: RunId,
 ) {
-  return edgeOf(yield* session.log.records(runId));
+  return parentEdgeOf(yield* session.log.records(runId));
 });
 
 /** The run one attempt of a parent's call launches (an `agent` child, a
@@ -227,7 +219,7 @@ export const openOwnedChildren = Effect.fn('openOwnedChildren')(function* (
       ).pipe(Effect.annotateLogs({ data: read.failure }));
       continue;
     }
-    const edge = edgeOf(read.success)?.callId ?? null;
+    const edge = parentEdgeOf(read.success)?.callId ?? null;
     if (edge !== null && (callId ?? edge) === edge)
       if (runEndFromEvents(read.success, child) === null)
         open.push({ runId: child, callId: edge });

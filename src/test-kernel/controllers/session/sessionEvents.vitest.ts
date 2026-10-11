@@ -51,6 +51,7 @@ import { TestClock } from 'effect/testing';
 import * as Reactivity from 'effect/reactivity/Reactivity';
 
 import { afterAll, beforeAll, describe, expect, vi } from 'vitest';
+import { registryOf } from '@agent/runtime/runRegistry';
 
 vi.mock('@effect/sql-sqlite-node/SqliteClient', async (importOriginal) => ({
   ...(await importOriginal<
@@ -991,7 +992,7 @@ describe('Sessions owner', () => {
   const isLive = (session: SessionHandle) =>
     Effect.map(listTestSessions, (live) => live.includes(session));
   const track = (session: SessionHandle, runId: RunId) =>
-    session.runs.track(testRunHandle({ runId, agent: 'chat' }));
+    registryOf(session.runs).track(testRunHandle({ runId, agent: 'chat' }));
 
   it.live(
     'shares the project database with its session until the project closes',
@@ -1088,7 +1089,10 @@ describe('Sessions owner', () => {
     () =>
       Effect.gen(function* () {
         const session = yield* open('/workspace/owner/committed-status');
-        const sweep = vi.spyOn(session.runs, 'sweepChildrenOfFoldedStop');
+        const sweep = vi.spyOn(
+          registryOf(session.runs),
+          'sweepChildrenOfFoldedStop',
+        );
 
         try {
           publishTestRows(session, [
@@ -1240,7 +1244,7 @@ describe('Sessions owner', () => {
         // wait for the loop to release the activation after its last delivery.
         let releaseChild = (): void => {};
         const interrupt = vi.fn(() => releaseChild());
-        releaseChild = session.runs.reserveChildActivation({
+        releaseChild = registryOf(session.runs).reserveChildActivation({
           runId: RunIdSchema.parse('aa0002'),
           launchParent: null,
           retainsTerminalParent: true,
@@ -1287,7 +1291,7 @@ describe('Sessions owner', () => {
         const session = yield* open('/workspace/owner/abandoned');
         // A run whose driver takes the stop and never unwinds.
         const slow = RunIdSchema.parse('aa0003');
-        session.runs.reserveChildActivation({
+        registryOf(session.runs).reserveChildActivation({
           runId: slow,
           launchParent: null,
           retainsTerminalParent: false,

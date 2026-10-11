@@ -96,6 +96,8 @@ export function nativeToolTestLayer(
     callbacks: {},
     ...run,
   };
+  // One layer value, so the child door and the plugin services share it.
+  const runs = Layer.sync(Runs, () => run?.session.runs ?? testRunRegistry());
   return Layer.mergeAll(
     Layer.effectContext(testRuntime().contextEffect),
     // The call's rooted filesystems, from the same roots it is given.
@@ -128,7 +130,8 @@ export function nativeToolTestLayer(
     Layer.succeed(ScriptCalls)(null),
     Layer.provideMerge(
       childRunsLayer,
-      Layer.merge(
+      Layer.mergeAll(
+        runs,
         Layer.succeed(IssuingScript)(null),
         toolRun === undefined
           ? Layer.succeed(RunCall)(null)
@@ -144,10 +147,6 @@ export function nativeToolTestLayer(
     ),
     // The session's plugin services, over the same `Runs`, as a step pins
     // them for the call.
-    testCallPluginServices.pipe(
-      Layer.provideMerge(
-        Layer.sync(Runs, () => run?.session.runs ?? testRunRegistry()),
-      ),
-    ),
+    testCallPluginServices.pipe(Layer.provideMerge(runs)),
   );
 }

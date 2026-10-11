@@ -23,7 +23,7 @@ import type { RunState } from '@shared/session/runStateFold';
 import { ensureError } from '@utils/errors/errorMessage';
 
 import { AgentRun, type AgentRunShape } from '../run/AgentRun';
-import { Runs } from '../runRegistry';
+import { registryOf, Runs } from '../runRegistry';
 import type { FollowUps } from '../FollowUps';
 
 /**
@@ -41,7 +41,7 @@ const birthRows = (
   if (
     start?.type !== 'run.start' ||
     start.parent === null ||
-    run.session.runs.parentOf(run.runId) !== null
+    registryOf(run.session.runs).parentOf(run.runId) !== null
   )
     return rows;
   const snapshot = grantsKept(
@@ -137,7 +137,7 @@ export const settleRun =
       onFailure: failureOutcome,
     });
     return Effect.gen(function* () {
-      const runs = yield* Runs;
+      const runs = registryOf(yield* Runs);
       lease.release(
         outcome === RUN_OUTCOME.COMPLETED && !runs.hasActiveChildren(cell.runId)
           ? 'terminal'

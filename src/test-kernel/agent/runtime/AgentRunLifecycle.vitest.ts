@@ -2,8 +2,8 @@ import { it } from '@effect/vitest';
 import { Cause, Deferred, Effect, Exit, Fiber } from 'effect';
 
 import { afterEach, describe, expect, vi } from 'vitest';
+import { registryOf, Runs } from '@agent/runtime/runRegistry';
 
-import { Runs } from '@agent/runtime/runRegistry';
 import { SessionHandle } from '@agent/runtime/SessionHandle';
 import {
   finalizeRunTerminal,
@@ -22,6 +22,7 @@ import {
 import type { RunId, RunOutcome } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { SETUP_AGENT_NAME } from '@shared/constants/agents';
+import { startAwaited } from '@test/support/runHandleFixtures';
 import { untrackRun } from '@test/support/sessionEnd';
 import { noopTrace } from '@test/support/noopTrace';
 import { captureLogEntries } from '@test/support/logSinkCapture';
@@ -219,7 +220,7 @@ describe('runWithLifecycle', () => {
           expect(yield* runEnds(ctx.session, runId)).toMatchObject([
             { outcome: RUN_OUTCOME.COMPLETED },
           ]);
-          expect(testDefaultSession().runs.getHandle(runId)).toBeUndefined();
+          expect(testDefaultSession().runs.get(runId)?.handle).toBeUndefined();
         } finally {
           untrackRun(testDefaultSession().runs, runId);
         }
@@ -241,12 +242,12 @@ describe('runWithLifecycle', () => {
         ),
       );
       const run = yield* Effect.forkChild(
-        ctx.session.runs.launchRun(runId, flow),
+        startAwaited(ctx.session.runs, runId, flow),
         { startImmediately: true },
       );
       yield* Deferred.await(runnerParked);
 
-      expect(testDefaultSession().runs.interrupt(runId)).toBe(true);
+      expect(registryOf(testDefaultSession().runs).interrupt(runId)).toBe(true);
       const exit = yield* Fiber.await(run);
 
       expect(Exit.isFailure(exit) && Cause.hasInterrupts(exit.cause)).toBe(

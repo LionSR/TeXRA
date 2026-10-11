@@ -1086,9 +1086,23 @@ describe('ModelInvoker retry', () => {
       Effect.gen(function* () {
         const session = yield* sessionWithInteractions(undefined);
         const stopped = new Map<RunId, 'user' | 'shutdown'>();
-        vi.spyOn(session.runs, 'stopReason').mockImplementation((runId) =>
-          stopped.get(runId),
-        );
+        const get = session.runs.get.bind(session.runs);
+        vi.spyOn(session.runs, 'get').mockImplementation(((runId?: RunId) => {
+          if (runId === undefined) return get();
+          const live = get(runId);
+          const stopReason = stopped.get(runId);
+          if (stopReason === undefined) return live;
+          // The run's stop, whether or not this registry holds it.
+          return {
+            runId,
+            handle: undefined,
+            live: false,
+            parent: null,
+            drained: Effect.void,
+            ...live,
+            stopReason,
+          };
+        }) as typeof session.runs.get);
         const background = BACKGROUND_PREPARED;
         const operation = RemoteOperationSchema.parse({
           origin: ORIGIN,
