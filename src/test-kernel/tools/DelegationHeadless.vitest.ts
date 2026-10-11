@@ -7,10 +7,9 @@ import { afterEach, beforeEach, describe, expect, vi, type Mock } from 'vitest';
 import { humanGrant } from '@agent/runtime/runApprovalQueue';
 
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
-import { AgentEngine } from '@agent/runtime/AgentEngine';
 import type { TransactionPart } from '@agent/runtime/childSettlement';
 import type { RunHandle } from '@agent/runtime/RunHandle';
-import { Runs } from '@agent/runtime/runRegistry';
+import { Runs, type RunPrograms } from '@agent/runtime/runRegistry';
 import { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { RunHistoryDraft } from '@shared/session/runStateFold';
 import { RUN_OUTCOME, agentMatchesIdentifier } from '@shared/schemas';
@@ -54,11 +53,11 @@ vi.mock('@agent/runtime/AgentLaunchContext', () => ({
 // the process engine it reads there is this suite's engine.
 vi.mock('@agent/runtime/executeAgent', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@agent/runtime/executeAgent')>()),
-  executeAgent: (...args: Parameters<AgentEngine['Service']['executeAgent']>) =>
+  executeAgent: (...args: Parameters<RunPrograms['executeAgent']>) =>
     testEngine.executeAgent(...args),
   resumeToolUseFromResumeData: (
-    ...args: Parameters<AgentEngine['Service']['resumeToolUseFromResumeData']>
-  ) => testEngine.resumeToolUseFromResumeData(...args),
+    ...args: Parameters<RunPrograms['resumeTurn']>
+  ) => testEngine.resumeTurn(...args),
 }));
 
 // Delegation resolves targets through the scope resolver; with no active run
@@ -188,7 +187,7 @@ function parentRunContext(
 }
 
 /** The shared delegation call used by nearly every case. */
-let testEngine: AgentEngine['Service'];
+let testEngine: RunPrograms;
 
 function callDelegateReview(call = parentRunContext()) {
   return agentTool()
@@ -197,7 +196,6 @@ function callDelegateReview(call = parentRunContext()) {
       prompt: 'Check the proof.',
     })
     .pipe(
-      Effect.provideService(AgentEngine, testEngine),
       // The child's run id derives from the call's id: each case is its own
       // call, so it launches its own child on the shared session.
       Effect.provide(
@@ -308,7 +306,6 @@ function runInBand(
   runId: RunId = IN_BAND_RUN_ID,
 ) {
   return executeSubagentInBandEffect({ ...options, runId }).pipe(
-    Effect.provideService(AgentEngine, testEngine),
     Effect.provide(fakeProcessServices()),
     Effect.provideService(Runs, options.session.runs),
   );
@@ -480,13 +477,13 @@ describe('headless delegation', () => {
           },
           catch: ensureError,
         }),
-      resumeToolUseFromResumeData: (...args) =>
+      resumeTurn: (...args) =>
         Effect.tryPromise({
           try: () => mocks.resumeToolUseFromResumeData(...args),
           catch: ensureError,
         }),
       // No wake in these cases resumes a run.
-      resumeRun: () => Effect.succeed({ failed: 'not_resumable' }),
+      resume: () => Effect.succeed({ failed: 'not_resumable' }),
     };
     mocks.getVisibleAgents.mockReturnValue(
       Effect.succeed([
@@ -563,10 +560,7 @@ describe('headless delegation', () => {
             executeSubagentInBandEffect({
               ...options,
               runId: IN_BAND_RUN_ID,
-            }).pipe(
-              Effect.provideService(Runs, options.session.runs),
-              Effect.provideService(AgentEngine, testEngine),
-            ),
+            }).pipe(Effect.provideService(Runs, options.session.runs)),
             fakeProcessServices(),
           );
         };

@@ -3,7 +3,11 @@ import { Effect, type Fiber, SubscriptionRef } from 'effect';
 // Local imports
 import type { AgentTrace } from '@agent/trace';
 import { RunHandle, type RunFacts } from '@agent/runtime/RunHandle';
-import { RunRegistry, type RunRegistryInit } from '@agent/runtime/runRegistry';
+import {
+  RunRegistry,
+  type RunPrograms,
+  type RunRegistryInit,
+} from '@agent/runtime/runRegistry';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { emptySessionView } from '@shared/session/sessionView';
 import type { RunId, RunIdentity } from '@shared/schemas';
@@ -51,8 +55,29 @@ export function testRunRegistry(): RunRegistry {
   return new RunRegistry({
     session: () => session,
     fork: testRunFork,
+    programs: testRunPrograms,
   });
 }
+
+/** The run programs a test registry runs: the production ones, each read
+ *  per call so a suite's own mock of its module is the program it reaches. */
+export const testRunPrograms: RunPrograms = {
+  executeAgent: (...args) =>
+    Effect.flatMap(
+      Effect.promise(() => import('@agent/runtime/executeAgent')),
+      (module) => module.executeAgent(...args),
+    ),
+  resumeTurn: (...args) =>
+    Effect.flatMap(
+      Effect.promise(() => import('@agent/runtime/executeAgent')),
+      (module) => module.resumeToolUseFromResumeData(...args),
+    ),
+  resume: (...args) =>
+    Effect.flatMap(
+      Effect.promise(() => import('@agent/runtime/resumeRun')),
+      (module) => module.resumeRun(...args),
+    ),
+};
 
 /** The empty fold a {@link testRunRegistry} reads its grants from. */
 const emptyView = Effect.runSync(

@@ -2,7 +2,6 @@ import { Cause, Effect, Fiber } from 'effect';
 /** Tool-use follow-up routing and continuation ownership. */
 
 import { runRefusal } from '@agent/runtime/runClassification';
-import { AgentEngine } from '@agent/runtime/AgentEngine';
 import type { ResumeRunResult } from '@agent/runtime/resumeRun';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { presentRunFailure } from '@agent/runtime/terminalResultToast';
@@ -133,36 +132,36 @@ export function resumeOnSession(
       runMissing ||= session.view.run(runId) === undefined;
       return runMissing;
     };
-    return Effect.flatMap(AgentEngine, (engine) =>
-      engine.resumeRun(runId, { session, isCancellationRequested }),
-    ).pipe(
-      Effect.tap((result) =>
-        'failed' in result && !isCancellationRequested()
-          ? session.interactions.emit(
-              'requestShowInstruction',
-              {
-                key: 'resumeRefused',
-                message: describeFollowUpFailure(result.failed),
-                showSuppress: false,
-              },
-              { replayWhenAttached: true },
-            )
-          : Effect.void,
-      ),
-      Effect.catchCause((cause) => {
-        if (Cause.hasInterruptsOnly(cause) || isCancellationRequested())
-          return Effect.succeed(RESUME_REFUSED);
-        const error = Cause.squash(cause);
-        return Effect.logError(`Failed to resume run ${runId}`).pipe(
-          Effect.annotateLogs({ data: error }),
-          withLogChannel(CHANNEL),
-          Effect.andThen(
-            presentRunFailure(session.interactions, error, 'Resume failed: '),
-          ),
-          Effect.as(RESUME_REFUSED),
-        );
-      }),
-    );
+    return session.runs
+      .resume(runId, { session, isCancellationRequested })
+      .pipe(
+        Effect.tap((result) =>
+          'failed' in result && !isCancellationRequested()
+            ? session.interactions.emit(
+                'requestShowInstruction',
+                {
+                  key: 'resumeRefused',
+                  message: describeFollowUpFailure(result.failed),
+                  showSuppress: false,
+                },
+                { replayWhenAttached: true },
+              )
+            : Effect.void,
+        ),
+        Effect.catchCause((cause) => {
+          if (Cause.hasInterruptsOnly(cause) || isCancellationRequested())
+            return Effect.succeed(RESUME_REFUSED);
+          const error = Cause.squash(cause);
+          return Effect.logError(`Failed to resume run ${runId}`).pipe(
+            Effect.annotateLogs({ data: error }),
+            withLogChannel(CHANNEL),
+            Effect.andThen(
+              presentRunFailure(session.interactions, error, 'Resume failed: '),
+            ),
+            Effect.as(RESUME_REFUSED),
+          );
+        }),
+      );
   });
   return Effect.flatMap(session.runs.fork(attempt), Fiber.join);
 }

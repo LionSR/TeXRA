@@ -46,6 +46,8 @@ import { ensureError } from '@utils/errors/errorMessage';
 import type { RunHandle, RunParent } from './RunHandle';
 import type { SessionHandle } from './SessionHandle';
 import type { RunStop, RunStopOptions } from './runStop';
+import type { executeAgent, resumeToolUseFromResumeData } from './executeAgent';
+import type { resumeRun } from './resumeRun';
 
 /** A generation, a hold or a retained owner already has the run here: the one
  *  refusal for that fact. Hosts word it from `message`; a resume reads the tag
@@ -108,6 +110,17 @@ export interface RunRegistryInit {
   readonly fork: <A, E>(
     effect: Effect.Effect<A, E, ProcessServices>,
   ) => Fiber.Fiber<A, E>;
+  /** The run programs these runs run, given by the session layer: an import
+   *  of them here would close a cycle (their tools reach `Runs`). */
+  readonly programs: RunPrograms;
+}
+
+/** The run programs, each named: a fresh run's turn (`executeAgent`), a
+ *  resumed run's turn (`resumeTurn`), and a whole resume (`resume`). */
+export interface RunPrograms {
+  readonly executeAgent: typeof executeAgent;
+  readonly resumeTurn: typeof resumeToolUseFromResumeData;
+  readonly resume: typeof resumeRun;
 }
 
 type AnyFiber = Fiber.Fiber<unknown, unknown>;
@@ -163,7 +176,15 @@ export class RunRegistry {
     },
   };
 
-  constructor(private readonly init: RunRegistryInit) {}
+  /** The run programs (`RunRegistryInit.programs`). */
+  readonly programs: RunPrograms;
+  /** Resume one persisted run on this session (`resumeRun`). */
+  readonly resume: RunPrograms['resume'];
+
+  constructor(private readonly init: RunRegistryInit) {
+    this.programs = init.programs;
+    this.resume = init.programs.resume;
+  }
 
   // ---------------------------------------------------------------- entries
 

@@ -36,6 +36,7 @@ import { publishTestRunStart } from '@test/support/sessionTestUtils';
 import {
   admitInterruptibleRun,
   testRunFork,
+  testRunPrograms,
   testRunHandle,
 } from '@test/support/runHandleFixtures';
 import { setupPlatform } from '@test/support/setupPlatform';
@@ -176,6 +177,7 @@ function createRegistry(
   const registry = new RunRegistry({
     session: () => session,
     fork: testRunFork,
+    programs: testRunPrograms,
   });
   return { events, phases, registry, grants };
 }

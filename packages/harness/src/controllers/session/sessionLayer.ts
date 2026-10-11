@@ -27,7 +27,6 @@ import {
 import { FetchHttpClient, HttpClient } from 'effect/http';
 
 import { Inbox } from '@agent/followUp/Inbox';
-import { AgentEngine } from '@agent/runtime/AgentEngine';
 import {
   executeAgent,
   resumeToolUseFromResumeData,
@@ -202,6 +201,11 @@ const sessionHandleLayer = (key: SessionKey) =>
       const runs = new RunRegistry({
         session: () => session,
         fork: (run) => fork(Effect.provide(run, env)),
+        programs: {
+          executeAgent,
+          resumeTurn: resumeToolUseFromResumeData,
+          resume: resumeRun,
+        },
       });
       const session: SessionHandle = {
         roots: key.open.roots,
@@ -687,11 +691,6 @@ export function processLayer({
       ? Layer.empty
       : ToolMissingReporter.layer(toolMissingReporter),
     catalog,
-    Layer.succeed(AgentEngine)({
-      executeAgent,
-      resumeToolUseFromResumeData,
-      resumeRun,
-    }),
     // One retry gate for the process: a 429 cools a credential for every
     // project's runs.
     Layer.effect(RouteRetries, ModelRetryGate.make),

@@ -21,7 +21,6 @@ import {
   Path,
   type Scope,
 } from 'effect';
-import type { AgentEngine } from '@agent/runtime/AgentEngine';
 import type { RouteRetries } from '@agent/runtime/run/invocation';
 import type { SessionOwnerShape } from '@agent/runtime/SessionHandle';
 import type { ProcessIdentity } from '@shared/session/sessionEvents';
@@ -74,7 +73,6 @@ export type ProcessServices =
   | AppState
   | LanguageModel
   | AgentDirectories
-  | AgentEngine
   | UsageLog
   | ToolRegistry
   | ToolCatalog
