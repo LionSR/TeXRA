@@ -7,7 +7,7 @@ import { DatabaseOpenFailed, type ConfigProvider } from '@texra-ai/harness';
 import { canonicalizeWorkspacePath } from '@texra-ai/harness/node';
 import { safeParseJson } from '@common/parsing/safeParseJson';
 import type { MinimumLogLevel } from '@logger/effectDiagnostics';
-import { DEFAULT_NODE_STORAGE_ROOT } from '@platform/defaults/nodeStorage';
+import { defaultNodeStorageRoot } from '@platform/defaults/nodeStorage';
 import {
   CLI_OUTPUT_FORMATS,
   CLI_OUTPUT_FORMAT_CONFIG_KEY,
@@ -399,7 +399,7 @@ export const buildCliContext = Effect.fn('cliContext.buildCliContext')(
   > {
     const ambient = init.ambient ?? readCliAmbientState();
     const cwd = yield* resolveCliCwd(init.globalArgs.cwd);
-    const storageRoot = init.storageRoot ?? DEFAULT_NODE_STORAGE_ROOT;
+    const storageRoot = init.storageRoot ?? defaultNodeStorageRoot();
     // The project file over the user file, resolved by the same
     // `JsonConfigProvider` that `roots.config` gives the extension and desktop
     // hosts — and, from `initCliPlatform` on, this host too. This is the
