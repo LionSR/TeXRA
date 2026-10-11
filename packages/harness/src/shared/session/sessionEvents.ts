@@ -25,7 +25,7 @@ import type {
   DatabaseWriteFailed,
   DeletionMode,
 } from './database';
-import type { FoldReadType, RunHistoryDraft } from './runStateFold';
+import type { RunInputDraft, RunStateRowType } from './runStateFold';
 
 /** One piece of work a run's rows left open (`SessionEvents.openWork`). */
 export interface OpenWork {
@@ -94,8 +94,8 @@ export interface JobOptions {
  * transaction, never runs it on an attempt that may roll back.
  */
 export interface CoWrite {
-  /** Committed through each run's cell (`RunHistory.appendIn`). */
-  readonly rows: readonly RunHistoryDraft[];
+  /** Rows no run's state folds: a run's input and its turns' companions. */
+  readonly rows: readonly RunInputDraft[];
   readonly committed: Effect.Effect<void>;
 }
 
@@ -106,7 +106,10 @@ export const noCoWrite: Effect.Effect<CoWrite> = Effect.sync(() => ({
 }));
 
 /** A row no run's state folds: what any job may append as is. */
-export type UnfoldedDraft = Exclude<SessionEventDraft, { type: FoldReadType }>;
+export type UnfoldedDraft = Exclude<
+  SessionEventDraft,
+  { type: RunStateRowType }
+>;
 
 /** One ordered append to the log, as the publisher hands it to a job: a
  *  savepoint of the job's one transaction. A row a run's state folds goes

@@ -2870,14 +2870,6 @@ async function validateServiceEditorModels() {
       await new Promise((resolve) => setTimeout(resolve, 250));
     }
   };
-  /** The run's end, once it ended: its outcome and error message. */
-  const ended = (runId) => {
-    const rows = project.readStore(
-      `SELECT e.data FROM event e JOIN event_sequence s ON s.id = e.aggregate
-       WHERE s.logical_id = '${runId}' AND e.type = 'run.end'`,
-    );
-    return rows.length === 0 ? null : String(rows[0].data);
-  };
   /** The run's rows that carry `needle`, by type. */
   const saying = (runId, needle) =>
     project
@@ -2940,13 +2932,14 @@ async function validateServiceEditorModels() {
       child.stdout.on('data', (chunk) => (state.stdout += chunk));
       child.stderr.on('data', (chunk) => (state.stderr += chunk));
       await waitFor(`the ${mode} window to start its task`, () =>
-        /STARTED [0-9a-f]{12}/.test(state.stdout),
+        /(STARTED [0-9a-f]{12}|REFUSED .)/.test(state.stdout),
       );
       return state;
     };
+    // With no editor models the task cannot bind its model, so it fails
+    // before it starts: its launch's error, and no run (`task.start`).
     window = await startWindow('start');
-    const alone = /STARTED ([0-9a-f]{12})/.exec(window.stdout)[1];
-    await waitFor('the windowless task to end', () => ended(alone) !== null);
+    const alone = /REFUSED (.*)/.exec(window.stdout)?.[1] ?? null;
     window.child.kill('SIGKILL');
     window = await startWindow('lm');
     const served = /STARTED ([0-9a-f]{12})/.exec(window.stdout)[1];
@@ -2958,7 +2951,7 @@ async function validateServiceEditorModels() {
     );
     const artifactPath = writeArtifact('service-editor-models.json', {
       terminal: refused.stderr.trim().split('\n').at(-1),
-      alone: ended(alone),
+      alone,
       streamed: saying(served, reply),
       window: window.stdout.trim().split('\n'),
     });
@@ -2967,10 +2960,10 @@ async function validateServiceEditorModels() {
       `the CLI should refuse a Copilot model it cannot run (artifact: ${artifactPath})`,
     );
     assert(
-      ended(alone).includes(
+      alone?.includes(
         'Copilot models run through a VS Code window of this project',
-      ),
-      `a Copilot task with no window should say a VS Code window serves Copilot (artifact: ${artifactPath})`,
+      ) === true,
+      `a Copilot task with no window should be refused, saying a VS Code window serves Copilot (artifact: ${artifactPath})`,
     );
     assert(
       window.stdout.includes('CALLED lmModels') &&

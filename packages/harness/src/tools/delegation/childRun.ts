@@ -209,7 +209,7 @@ const pauseChildRun = (
         // A last turn held for a parent open elsewhere is the park: no
         // pause after it (its notice would be refused the same way).
         if (settlement.rows.some((row) => row.type === 'child.park')) {
-          yield* session.runHistory.appendIn(tx.append, settlement.rows);
+          yield* tx.append(settlement.rows);
           return { sent: { kind: 'duplicate' }, after: settlement.committed };
         }
         // A parent that cannot take the notice refuses it: the pause stands.
@@ -221,7 +221,7 @@ const pauseChildRun = (
           logger,
         );
         // One append: the pause and its notice commit together.
-        yield* session.runHistory.appendIn(tx.append, [
+        yield* tx.append([
           ...settlement.rows,
           { type: 'run.report', aggregateId: target, report: text },
           {

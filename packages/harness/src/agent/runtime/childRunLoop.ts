@@ -54,6 +54,7 @@ import {
   DatabaseNotOwner,
   type DatabaseWriteFailed,
 } from '@shared/session/database';
+import { RunHistoryRefused } from '@shared/session/runHistory';
 import type { QueuedFollowUp } from '@shared/session/runRows';
 import { formatSubagentProgress } from '@shared/subagentFollowup';
 import { deriveRunOutcome } from '@shared/runs/runStatus';
@@ -870,29 +871,19 @@ const endNative = <TTurn, R>(
       return;
     // A notice that cannot be read still says the child stopped: the stop
     // stands, and the failure is loud.
-    const text = yield* strategy.stopNotice().pipe(
-      Effect.catch((error) =>
-        loop
-          .log('warn', 'Child-run stop notice failed', {
-            runId,
-            error,
-          })
-          .pipe(
-            Effect.as(
-              `Run ${runId} was stopped. What it had done could not be read: ${toErrorMessage(error)}`,
-            ),
+    const text = yield* strategy
+      .stopNotice()
+      .pipe(
+        Effect.catch((error) =>
+          Effect.as(
+            loop.log('warn', 'Child-run stop notice failed', { runId, error }),
+            `Run ${runId} was stopped. What it had done could not be read: ${toErrorMessage(error)}`,
           ),
-      ),
-    );
-    yield* session.followUps.send(
-      target,
-      {
-        text,
-        from: { kind: 'run', runId },
-        deliveryId: `${runId}:${loop.attemptId}:stopped`,
-      },
-      { hold: 'instruction' },
-    );
+        ),
+      );
+    const deliveryId = `${runId}:${loop.attemptId}:stopped`;
+    const item = { text, from: { kind: 'run', runId } as const, deliveryId };
+    yield* session.followUps.send(target, item, { hold: 'instruction' });
   });
 
 /** The child's terminal row, its process port's finalize or a native run's
@@ -948,8 +939,12 @@ const endChildLoop = <TTurn, R>(
         loop.failed = true;
         loop.lastError ??= error;
         // A lost aggregate claim: this process no longer owns the run, so
-        // the loop stops rather than continue under it.
-        if (error instanceof DatabaseNotOwner) loop.interrupt();
+        // the loop (and its process) stops rather than continue under it.
+        if (
+          error instanceof DatabaseNotOwner ||
+          (error instanceof RunHistoryRefused && error.reason === 'not-owner')
+        )
+          loop.interrupt();
       }
       // Debug-only driver diagnostic (#9531): how the loop ended.
       yield* loop.log('debug', 'childRunLoop loop.terminated', {

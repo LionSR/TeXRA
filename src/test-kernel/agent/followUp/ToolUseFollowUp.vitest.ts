@@ -15,7 +15,6 @@ import type {
   SessionHandle,
   SessionTransaction,
 } from '@agent/runtime/SessionHandle';
-import { makeRunHistory } from '@agent/runtime/RunHistory';
 import {
   aggregateId,
   type RunId,
@@ -140,7 +139,6 @@ function recordedFollowUps(
   } as InboxPort['log'];
   const followUps = new Inbox({
     log,
-    runHistory: makeRunHistory(log),
     detach: (job) => {
       Effect.runFork(publisher.withPermits(1)(job(append)));
     },

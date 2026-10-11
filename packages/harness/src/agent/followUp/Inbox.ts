@@ -17,9 +17,8 @@ import {
   heldElsewhereBy,
   type DatabaseReadFailed,
 } from '@shared/session/database';
-import type { RunHistory } from '@shared/session/runHistory';
 import { runRelation } from '@shared/session/runRelation';
-import type { RunHistoryDraft } from '@shared/session/runStateFold';
+import type { RunInputDraft } from '@shared/session/runStateFold';
 import {
   FOLLOW_UP_TYPES,
   foldRunRows,
@@ -50,8 +49,6 @@ type InputRows = RunRows & { readonly closed: boolean };
 export interface InboxPort {
   /** The session's log: a send is one transaction under the run's claim. */
   readonly log: Pick<SessionLog, 'transact' | 'rows' | 'hold'>;
-  /** Every input row commits through the run's cell. */
-  readonly runHistory: Pick<RunHistory['Service'], 'appendIn'>;
   /** Enqueue a job on the session's publisher and return. */
   readonly detach: SessionEventsShape['detach'];
   /** The run's parent as the session view folds it; `null` at top level. */
@@ -95,7 +92,7 @@ export interface SendOptions {
 type Resumed = { readonly result: ResumeRunResult; readonly joined: boolean };
 
 /** A send decided inside a job: its rows, and how it landed. */
-type Admission = { rows: readonly RunHistoryDraft[]; sent: Sent };
+type Admission = { rows: readonly RunInputDraft[]; sent: Sent };
 
 /** What observers hear: a run takes no more input, or the inbox closed. */
 export type InboxClosed =
@@ -202,7 +199,7 @@ export class Inbox {
           const input = yield* this.read(runId);
           if (queued(input)) return;
           // A request the run never applied closes with its input.
-          yield* this.port.runHistory.appendIn(tx.append, [
+          yield* tx.append([
             ...input.followUps.map(({ followUpId }) => ({
               type: 'followup.consumed' as const,
               aggregateId: run,
@@ -289,7 +286,7 @@ export class Inbox {
   ): Effect.Effect<Sent, Error> {
     return Effect.gen({ self: this }, function* () {
       const { rows, sent } = yield* this.admission(runId, item, options);
-      if (rows.length > 0) yield* this.port.runHistory.appendIn(append, rows);
+      if (rows.length > 0) yield* append(rows);
       return sent;
     }).pipe(Effect.scoped);
   }

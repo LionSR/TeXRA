@@ -46,7 +46,9 @@ const RunEndErrorSchema = z
       partialText: true,
     })
       .partial()
-      .extend({ kind: z.enum(['abort', 'disk-full']) }),
+      // `result-lost`: an end that kept its outcome when its settlement
+      // (the result it delivers) was refused.
+      .extend({ kind: z.enum(['abort', 'disk-full', 'result-lost']) }),
     RetryErrorInfoSchema.partial().extend({
       kind: z.enum(['context-window', 'missing-api-key', 'unexpected']),
     }),

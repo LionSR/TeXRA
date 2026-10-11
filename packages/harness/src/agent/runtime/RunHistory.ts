@@ -10,7 +10,6 @@ import { Effect, Result, type Scope, SynchronizedRef } from 'effect';
 import { PreparedHistorySchema, type ModelOrigin } from '@texra-ai/llm';
 import {
   aggregateId as qualifyAggregateId,
-  aggregateTarget,
   type RunId,
   type SessionEvent,
   type SessionEventDraft,
@@ -21,7 +20,6 @@ import {
   DatabaseWriteFailed,
 } from '@shared/session/database';
 import {
-  type CellError,
   type RunCell,
   type RunHistory,
   RunHistoryRefused,
@@ -198,7 +196,8 @@ const candidates = (
 /**
  * `PreparedHistorySchema` over `history` from message `from` on: its rules
  * are between neighbours, so a suffix starting on a checked message, never
- * on a tool group, re-checks every pair past it.
+ * on a tool group, re-checks every pair past it; a refusal's detail is still
+ * the whole parse's, whose indices name the whole history.
  */
 const unprepared = (
   runId: RunId,
@@ -267,8 +266,8 @@ const loaded = (
     if (Result.isFailure(folded))
       return yield* inconsistent(run, folded.failure);
     const state = folded.success;
-    // Queued follow-ups alone do not open a run: that unopened state
-    // (`phase` null) is returned so its pending input is read.
+    // A run's input folds nothing; a request before its opening folds an
+    // unopened state (`phase` null).
     if (state === null) return null;
     if (state.phase === null && state.runHistoryRows === 0) return state;
     if (state.phase === null) {
@@ -415,7 +414,7 @@ export function makeRunHistory(
           ...born,
           ...rows.map(storedDraft),
         ]);
-        yield* appendIn(append, co.rows);
+        yield* append(co.rows);
         yield* afterCommit(co.committed);
         return written;
       }).pipe(Effect.scoped);
@@ -474,22 +473,5 @@ export function makeRunHistory(
     return cell;
   });
 
-  /** Each run's rows through its cell in `append`'s job; a plugin's own
-   *  aggregate is no run's, and its facts append as they are. */
-  type Appended = Effect.Effect<unknown, CellError | DatabaseNotOwner>;
-  const appendIn = (append: Append, rows: readonly RunHistoryDraft[]) =>
-    Effect.forEach(
-      Map.groupBy(rows, (row) => row.aggregateId),
-      ([key, own]): Appended => {
-        const target = aggregateTarget(key);
-        return target.kind === 'run'
-          ? Effect.flatMap(open(target.id, { within: append }), (cell) =>
-              cell.append(own),
-            )
-          : runStateAppend(append)(own.map(storedDraft));
-      },
-      { discard: true },
-    );
-
-  return { load, open, appendIn };
+  return { load, open };
 }

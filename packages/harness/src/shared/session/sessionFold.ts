@@ -5,13 +5,11 @@
  * Every process that shows a session runs it; the transport carries its
  * input, never its output.
  *
- * Pure in the sense that matters: no IO, no clock, no platform, no store reads,
- * and the same input sequence yields the same view. Incremental in the sense
- * the PRD requires: an event recomputes the arm for its run, walks `parentId`
- * to the root refreshing each ancestor's `childIds`, `rollup`, `treeUsage`,
- * `approval`, `group`, and `forceExpanded`, then touches `order` only when a
- * top-level run appeared, moved, or left. O(depth) per event, never a whole-view pass. A text
- * chunk costs the chunk, never the row's text.
+ * Pure: no IO, clock, platform or store reads; the same input yields the
+ * same view. Incremental: an event recomputes its run's arm and walks
+ * `parentId` to the root refreshing each ancestor's aggregates, touching
+ * `order` only when a top-level run moved. O(depth) per event; a text chunk
+ * costs the chunk, never the row's text.
  *
  * Three rules govern the event arm before any fact applies (5.2). A listing
  * fact is ordered by commit within its `(aggregate, listing type)` entry in
@@ -26,16 +24,12 @@
  * (7.2): at the replay marker every run no listing row of that sequence
  * named is removed the way a tombstone removes it.
  *
- * Publication (D5): returned views are immutable; untouched branches retain
- * identity. `writable` and the transcript fold copy each changed container
- * at most once per fold, and writes stop when fold returns. No-op writes keep
- * the previous branch. RunView, TranscriptView, and SessionView are replaced
- * on change, preserving older views and identity-based host comparisons.
- * Indexes are module-private, keyed by their transcript/view, and advance only
- * with the latest level: row/group positions, text and thinking state, claims,
- * listing commits, owners, ended/listed runs, snapshots, and shared-row slices.
- * So `fold` refuses any view but the level it last returned.
- * Every container write must report changed so foldWith publishes its copy.
+ * Publication (D5): returned views are immutable and untouched branches keep
+ * identity, preserving older views and identity-based host comparisons; each
+ * changed container is copied at most once per fold, no-op writes keep the
+ * previous branch, and every write reports changed so foldWith publishes its
+ * copy. The module-private indexes advance only with the latest level, so
+ * `fold` refuses any view but the one it last returned.
  */
 
 import {
@@ -62,6 +56,7 @@ import {
   type ExistenceReconciliation,
   type LocalRuntimeState,
   type DisplaySessionEvent,
+  type RunEnd,
   type RunId,
   type TextChunk,
   type TranscriptSubscription,
@@ -332,6 +327,7 @@ function createRun(
     substate: null,
     durableOutcome: null,
     statusDetail: null,
+    lost: null,
     ...runStatusCopy(status),
     createdAt: event.commit,
     launchedAt: event.at,
@@ -514,13 +510,11 @@ function refreshAncestors(view: SessionView, runId: RunId): void {
 // ---------------------------------------------------------------------------
 
 /**
- * `group`, `approval`, `readOnly`, `actions`, `forceExpanded`, `rollup`,
- * `treeUsage`, `durableOutcome` and the status copy, from the run's facts, the local
- * snapshot and its children (5.2). Interrupted is owner loss: a non-terminal
- * run nobody holds (this process, or one whose lease this one may not
- * touch), pending approval or not. Waiting needs a held owner and a request
- * that parks its tool; unheld, that request reads as interrupted, since
- * nothing listens for the answer, and stays listed so a resume can re-ask.
+ * A run's aggregates and status copy, from its facts, the local snapshot and
+ * its children (5.2). Interrupted is owner loss: a non-terminal run nobody
+ * holds, pending approval or not. Waiting needs a held owner and a request
+ * that parks its tool; unheld, it reads as interrupted, since nothing
+ * listens for the answer, and stays listed so a resume can re-ask.
  */
 function withAggregates(view: SessionView, run: RunView): RunView {
   const { local } = sessionIndexesOf(view);
@@ -578,6 +572,7 @@ function withAggregates(view: SessionView, run: RunView): RunView {
     statusDetail = runInterruptedMessage();
   else if (statusDetail === null && heldBy !== null)
     statusDetail = runHeldMessage(ownerPid(heldBy));
+  else if (statusDetail === null) statusDetail = run.lost;
   if (
     run.group === group &&
     run.approval === approval &&
@@ -643,9 +638,11 @@ function walkUp(view: SessionView, startId: RunId | null): void {
 }
 
 /** Finalize unmatched compaction starts when the turn settles. */
-function withSettledTranscript(run: RunView, finishedAt: number): RunView {
+function withSettledTranscript(run: RunView, at: number, e?: RunEnd['error']) {
+  if (e?.kind === 'result-lost')
+    run = { ...run, lost: e.message ?? 'Result lost' };
   if (!isTranscriptSettlementPhase(run.status)) return run;
-  const transcript = settleTranscript(run.transcript, finishedAt);
+  const transcript = settleTranscript(run.transcript, at);
   return transcript === run.transcript ? run : { ...run, transcript };
 }
 
@@ -827,6 +824,7 @@ function applyOwnArm(run: RunView, event: OwnEvent): RunView {
         substate,
         runStartedAt: event.at,
         turn: null,
+        lost: null,
       };
     }
     case 'run.config': {
@@ -889,11 +887,11 @@ function applyOwnArm(run: RunView, event: OwnEvent): RunView {
             title: event.description || run.label,
           };
     case 'run.end':
-      // The terminal fact: the phase is its outcome (one run model, section
-      // 3.3). The caller records that the run ended.
+      // The terminal fact: its outcome (3.3), and any result it lost.
       return withSettledTranscript(
         { ...run, status: event.outcome, substate: null, runStartedAt: null },
         event.at,
+        event.error,
       );
   }
 }

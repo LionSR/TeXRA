@@ -18,7 +18,7 @@ import type {
 } from '@agent/followUp/Inbox';
 import { startFollowUpWake } from '@agent/followUp/ToolUseFollowUp';
 import type { AgentTrace } from '@agent/trace';
-import type { AttemptKey } from '@agent/storage/runRecords';
+import { lostResultId, type AttemptKey } from '@agent/storage/runRecords';
 import { withLogChannel } from '@logger/effectLog';
 import {
   aggregateId,
@@ -32,7 +32,7 @@ import {
   DatabaseRowCorrupt,
 } from '@shared/session/database';
 import type { QueuedFollowUp } from '@shared/session/runRows';
-import type { RunHistoryDraft } from '@shared/session/runStateFold';
+import type { RunInputDraft } from '@shared/session/runStateFold';
 import type { CoWrite } from '@shared/session/sessionEvents';
 import type { SessionHandle } from './SessionHandle';
 
@@ -54,7 +54,7 @@ export const warn = (
 
 /** The rows a settlement commits, all on the child's aggregate. */
 export type SettlementRow = Extract<
-  RunHistoryDraft,
+  RunInputDraft,
   { type: 'run.report' | 'run.result' | 'child.turn' | 'followup.consumed' }
 >;
 
@@ -77,10 +77,11 @@ export interface ChildSettlement {
 /**
  * Rows decided inside a job, under holds its scope keeps until the job's one
  * append writes them with its own (`CoWrite`). `held`: the child parked
- * holding its last result, so its end is not written now.
+ * holding its last result, so its end is not written now. `note`: what the
+ * end's error adds from the part (a loss notice its parent refused).
  */
 export type TransactionPart = Effect.Effect<
-  CoWrite & { readonly held?: boolean },
+  CoWrite & { readonly held?: boolean; readonly note?: string },
   Error,
   Scope.Scope
 >;
@@ -244,7 +245,7 @@ export const settleChildTurn = (
   followUps: Inbox,
   { rows, delivery }: ChildSettlement,
   trace: AgentTrace | undefined,
-  park?: RunHistoryDraft,
+  park?: RunInputDraft,
 ): TransactionPart => {
   const own = park === undefined ? [] : [park];
   return delivery === undefined
@@ -261,21 +262,22 @@ export const settleChildTurn = (
 
 /** Commit a part in one transaction, then run what it left for after. */
 export const commitPart = (
-  { log, runHistory }: Pick<SessionHandle, 'log' | 'runHistory'>,
+  { log }: Pick<SessionHandle, 'log'>,
   part: TransactionPart,
 ): Effect.Effect<void, Error> =>
   Effect.flatten(
     log.transact((tx) =>
       Effect.gen(function* () {
         const co = yield* part;
-        yield* runHistory.appendIn(tx.append, co.rows);
+        yield* tx.append(co.rows);
         return co.committed;
       }).pipe(Effect.scoped),
     ),
   );
 
 /** After the transaction that queued `delivery` committed: wake the parent
- *  when no generation of it here reads it. A refused or already-read
+ *  when no generation of it here reads it, for the delivery or the notice
+ *  its end queued in its place (`lostResultId`). A refused or already-read
  *  delivery owes no wake. */
 export const wakeParent = (
   session: SessionHandle,
@@ -285,8 +287,12 @@ export const wakeParent = (
   Effect.gen(function* () {
     const id = delivery?.item.deliveryId;
     if (delivery === undefined || id === undefined) return;
+    const from = delivery.item.from;
+    const lost = from.kind === 'run' ? lostResultId(from.runId) : null;
     const { followUps } = yield* session.followUps.read(delivery.to);
-    if (!followUps.some((f) => f.followUpId === id)) return;
+    const waits = ({ followUpId }: { readonly followUpId: string }) =>
+      followUpId === id || (lost !== null && followUpId.startsWith(lost));
+    if (!followUps.some(waits)) return;
     if (!(yield* startFollowUpWake(delivery.to, session)))
       yield* warn(
         trace,
