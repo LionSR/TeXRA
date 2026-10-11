@@ -21,9 +21,12 @@ const inspectActions = (): RunAction[] => ['openRunStorage', 'export', 'copy'];
 
 /**
  * The one rule for which actions a run's state licenses, applied by the fold
- * into `RunView.actions`. A run another process holds (or one this process
- * cannot read) is inspect-only. A live run (`isLiveRun`: working, waiting,
- * or spawned and not started yet) can be stopped; while it works, an
+ * into `RunView.actions`. A run another process holds is inspect-only. One
+ * no live process holds whose rows this build cannot read (`stranded`:
+ * damaged, or an earlier build's with no upcaster) never becomes readable,
+ * so it offers delete beside inspection, the one way to clear it. A live
+ * run (`isLiveRun`: working, waiting, or spawned and not started yet) can
+ * be stopped; while it works, an
  * agent's run takes approval grants, and a conversation (not a document
  * task) its compaction and a reset or handoff. Nothing that rewrites or
  * removes a run's files or history is offered while it is live. Any run this
@@ -48,7 +51,9 @@ export function runActions(
     | 'parentId'
     | 'forkPoint'
   >,
+  stranded: boolean,
 ): RunAction[] {
+  if (stranded) return ['delete', ...inspectActions()];
   if (run.readOnly) return inspectActions();
   if (isLiveRun(run)) {
     const working = run.group === 'running' || run.group === 'waiting';

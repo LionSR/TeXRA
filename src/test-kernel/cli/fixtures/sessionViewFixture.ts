@@ -54,7 +54,7 @@ export function makeRunView(over: RunViewOverrides): RunView {
   // A case may blank the identity to stand for metadata not yet folded; the
   // fold never states such a run, so it offers nothing.
   const identity = run.identity as RunView['identity'] | undefined;
-  return { ...run, actions: identity ? runActions(run) : [] };
+  return { ...run, actions: identity ? runActions(run, false) : [] };
 }
 
 function runViewFields(over: RunViewOverrides): RunView {

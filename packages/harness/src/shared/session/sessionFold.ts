@@ -557,17 +557,15 @@ function withAggregates(view: SessionView, run: RunView): RunView {
     interrupted,
     waiting,
   });
-  const readOnly = heldBy !== null || unreadable !== undefined;
-  const actions = runActions({ ...run, readOnly, group });
+  const stranded = heldBy === null && unreadable !== undefined;
+  const readOnly = heldBy !== null || stranded;
+  const actions = runActions({ ...run, readOnly, group }, stranded);
   const forceExpanded = waiting || interrupted || descendantNeedsUser;
   const blockedEntry = local.resumeBlocked.find((b) => b.runId === run.id);
   const resumeBlocked = blockedEntry?.reason ?? null;
   let statusDetail: string | null = unreadable ?? null;
   if (statusDetail === null && blockedEntry !== undefined)
-    statusDetail = runResumeBlockedMessage(
-      blockedEntry.reason,
-      blockedEntry.retry,
-    );
+    statusDetail = runResumeBlockedMessage(blockedEntry);
   else if (statusDetail === null && interrupted)
     statusDetail = runInterruptedMessage();
   else if (statusDetail === null && heldBy !== null)
