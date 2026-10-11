@@ -51,7 +51,7 @@ import {
   isPlainAgentIdentity,
   listingKeyOf,
   isTranscriptEvent,
-  ownerPid,
+  ownerIdentity,
   requestParksItsCaller,
   runIdentityDisplayName,
   emptyUsageStats,
@@ -577,7 +577,7 @@ function withAggregates(view: SessionView, run: RunView): RunView {
   else if (statusDetail === null && interrupted)
     statusDetail = runInterruptedMessage();
   else if (statusDetail === null && heldBy !== null)
-    statusDetail = runHeldMessage(ownerPid(heldBy));
+    statusDetail = runHeldMessage(ownerIdentity(heldBy).pid);
   if (
     run.group === group &&
     run.approval === approval &&

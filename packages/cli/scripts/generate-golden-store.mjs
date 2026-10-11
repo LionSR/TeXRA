@@ -1029,6 +1029,16 @@ function normalize(file, root) {
   const origins = tokens((n) =>
     JSON.stringify(['golden-host', n, `process-${n}`]),
   );
+  const nonces = tokens((n) => `build-${n}`);
+  // A claim's owner is its process (named as that process's rows' origin)
+  // and the build nonce of the composition holding it.
+  const ownerOf = (owner) => {
+    const [hostname, pid, start, nonce] = JSON.parse(owner);
+    const process = JSON.parse(
+      origins.get(JSON.stringify([hostname, pid, start])),
+    );
+    return JSON.stringify([...process, nonces.get(nonce)]);
+  };
   const uuids = tokens(
     (n) => `00000000-0000-4000-8000-${n.toString(16).padStart(12, '0')}`,
   );
@@ -1232,7 +1242,7 @@ function normalize(file, root) {
     updateSequence.run(
       ids.get(row.logical_id),
       uuids.get(row.uid),
-      row.owner_id === null ? null : origins.get(row.owner_id),
+      row.owner_id === null ? null : ownerOf(row.owner_id),
       row.id,
     );
   for (const [table, column, keys] of [

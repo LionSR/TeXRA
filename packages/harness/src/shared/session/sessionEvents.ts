@@ -11,13 +11,14 @@ import {
   type SubscriptionRef,
 } from 'effect';
 
-import type {
-  AggregateId,
-  CommitOrdinal,
-  OwnerId,
-  SessionEvent,
-  DisplaySessionEvent,
-  SessionEventDraft,
+import {
+  ownerProcess,
+  type AggregateId,
+  type CommitOrdinal,
+  type OwnerId,
+  type SessionEvent,
+  type DisplaySessionEvent,
+  type SessionEventDraft,
 } from '@shared/schemas';
 import type {
   DatabaseNotOwner,
@@ -122,17 +123,21 @@ export type Append = (
 export type SessionCursor = CommitOrdinal;
 
 /**
- * The canonical hostname, pid, and nullable process-start tuple (C5): the
- * `ownerId` stamped on every event the process appends and the `self` entry
- * of its local runtime snapshot. Resolved once at each process entry, where
- * the start identity can be awaited, and provided to the process layer.
+ * This composition's owner (C5): the process's canonical hostname, pid and
+ * nullable start, plus the build nonce of the `processLayer` build that
+ * minted it. It names the claims the composition holds and is the `self`
+ * entry of its local runtime snapshot; the rows it appends carry `origin`,
+ * the process part alone.
  */
 export class ProcessIdentity extends Context.Service<
   ProcessIdentity,
-  { readonly ownerId: OwnerId }
+  { readonly ownerId: OwnerId; readonly origin: string }
 >()('@texra/session/ProcessIdentity') {
   static layer(ownerId: OwnerId): Layer.Layer<ProcessIdentity> {
-    return Layer.succeed(ProcessIdentity)({ ownerId });
+    return Layer.succeed(ProcessIdentity)({
+      ownerId,
+      origin: ownerProcess(ownerId),
+    });
   }
 }
 

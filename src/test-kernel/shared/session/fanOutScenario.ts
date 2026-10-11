@@ -27,9 +27,12 @@ import {
 } from '@shared/session/sessionView';
 import { DOCUMENTS_OUTPUT_ARM } from '@texra/shared/plugins/documents';
 
-/** A process identity, never a lease token (contract C5). */
-export const OWNER = '["test-host",4242,"2026-09-04T00:00:00.000Z"]';
-export const OTHER_OWNER = '["test-host",4343,"2026-09-04T00:00:00.000Z"]';
+/** The process that writes the scenario's rows (contract C5). */
+export const ORIGIN = '["test-host",4242,"2026-09-04T00:00:00.000Z"]';
+/** Owner identities: a process and its composition's build nonce. */
+export const OWNER = '["test-host",4242,"2026-09-04T00:00:00.000Z","build-a"]';
+export const OTHER_OWNER =
+  '["test-host",4343,"2026-09-04T00:00:00.000Z","build-b"]';
 export const ROOT = RunIdSchema.parse('aaaaaaaaaaaa');
 export const CHILD = RunIdSchema.parse('bbbbbbbbbbbb');
 export const GRANDCHILD = RunIdSchema.parse('dddddddddddd');
@@ -96,7 +99,7 @@ export class Log {
     runId: RunId,
     at: number,
     body: DisplaySessionEventBody,
-    origin: string | null = OWNER,
+    origin: string | null = ORIGIN,
   ): DisplaySessionEvent {
     const key = qualifyAggregateId('run', runId);
     const seq = (this.seq.get(key) ?? 0) + 1;
@@ -136,7 +139,12 @@ export class Log {
     const claims = new Map<DisplaySessionEvent['aggregateId'], string | null>();
     const removed = new Set<DisplaySessionEvent['aggregateId']>();
     for (const event of this.events.slice(0, through)) {
-      if (event.seq === 1) claims.set(event.aggregateId, event.origin);
+      // The writer's composition holds what its first fact created.
+      if (event.seq === 1)
+        claims.set(
+          event.aggregateId,
+          event.origin === ORIGIN ? OWNER : event.origin,
+        );
       if (event.type === 'run.removed') {
         claims.delete(event.aggregateId);
         removed.add(event.aggregateId);

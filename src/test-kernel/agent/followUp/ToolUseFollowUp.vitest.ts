@@ -130,7 +130,12 @@ function recordedFollowUps(
               new DatabaseWriteFailed({
                 path: ':memory:',
                 cause: new DatabaseClaimRefused({
-                  ownerId: JSON.stringify(['other-host', 4321, null]),
+                  ownerId: JSON.stringify([
+                    'other-host',
+                    4321,
+                    null,
+                    'other-build',
+                  ]),
                   verdict: 'alive',
                 }),
               }),
@@ -547,7 +552,7 @@ describe('Inbox readers', () => {
   );
 
   it('counts only a live holder as held elsewhere', () => {
-    const owner = JSON.stringify(['other-host', 4321, null]);
+    const owner = JSON.stringify(['other-host', 4321, null, 'other-build']);
     const notOwner = (ownerId: string | null, closed: boolean) =>
       new DatabaseNotOwner({
         aggregateId: aggregateId('run', generateRunId()),

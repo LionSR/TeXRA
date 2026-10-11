@@ -187,11 +187,11 @@ the same handler (compared by identity). An open that asks for something
 else fails with `SessionOptionsConflict`; close the session first to open
 it differently.
 
-| Service    | What it is                                                                                                                                                                                                                                                                                                                                                                                      |
-| ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `Sessions` | The process's one session owner: `open(roots?, options?)`, `close(roots?)`, `list`. One session per workspace storage root, the same owner every TeXRA host opens through. `Sessions.layer({ platform, plugins })` composes the process (`processLayer`, the one every TeXRA host builds) and provides a projection of its `SessionOwner`, for the layer's lifetime. Build it once per process. |
-| `Session`  | `start`, `resume`, `request`, `view.changes`, and `subscribe`, whose transcript interest is held for a `Scope` and cleared when it closes. A value, one per root, not a tag.                                                                                                                                                                                                                    |
-| `Run`      | `runId`, `result`, `view`, `events`, `interrupt`. `start` succeeds at admission: the run exists in the session, its row published and its trace live.                                                                                                                                                                                                                                           |
+| Service    | What it is                                                                                                                                                                                                                                                                                                                                                                                                            |
+| ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Sessions` | A composition's session owner: `open(roots?, options?)`, `close(roots?)`, `list`. One session per workspace storage root, the same owner every TeXRA host opens through. `Sessions.layer({ platform, plugins })` composes the process (`processLayer`, the one every TeXRA host builds) and provides a projection of its `SessionOwner`, for the layer's lifetime. Each build is its own owner of the runs it claims. |
+| `Session`  | `start`, `resume`, `request`, `view.changes`, and `subscribe`, whose transcript interest is held for a `Scope` and cleared when it closes. A value, one per root, not a tag.                                                                                                                                                                                                                                          |
+| `Run`      | `runId`, `result`, `view`, `events`, `interrupt`. `start` succeeds at admission: the run exists in the session, its row published and its trace live.                                                                                                                                                                                                                                                                 |
 
 `run.events` is the run's trace as a `Stream`. Trace events are buffered from
 the moment the run enters its session, so a reader begun right after `start`
@@ -252,13 +252,13 @@ closes every session the owner holds this way and then releases the process
 under them, so an embedder that drains its scope on shutdown needs no
 separate close call.
 
-**Build the layer once per process.** It is an ordinary Effect layer: provide
-it once at the application's edge (`ManagedRuntime.make(Sessions.layer(...))`,
+**Each build is its own composition.** It is an ordinary Effect layer:
+provide it at the application's edge (`ManagedRuntime.make(Sessions.layer(...))`,
 or one `Effect.provide` around the whole program) and run every program on
-it. Two live builds compose two processes in one: two session owners over
-the same storage root, both stamped with this process's owner id, which the
-one-writer claim fence cannot tell apart. A later build after the first one
-is released is fine.
+it. Every build mints its own owner id (this process's identity plus a build
+nonce), so a second live build over the same storage root is another owner:
+it reads the first one's runs as held elsewhere and claims them only once
+the first build's scope has closed and released them.
 
 ## Durable invariants
 

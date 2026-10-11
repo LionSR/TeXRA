@@ -25,7 +25,6 @@ import {
   Option,
   RcMap,
   Stream,
-  SubscriptionRef,
   Scope,
 } from 'effect';
 import { FetchHttpClient, HttpClient } from 'effect/http';
@@ -268,8 +267,7 @@ const sessionHandleLayer = (key: SessionKey) =>
           const target = aggregateTarget(event.aggregateId);
           yield* onHeldResult(session, event, consumerScope);
           if (target.kind !== 'run' || event.type !== 'run.end') return;
-          const { self } = yield* SubscriptionRef.get(local.ref);
-          if (event.origin == null || !self.includes(event.origin)) return;
+          if (event.origin !== (yield* ProcessIdentity).origin) return;
           if (!store.closed())
             yield* Effect.suspend(() =>
               presentTerminalResult(session, { ...event, runId: target.id }),
@@ -665,10 +663,11 @@ export function processLayer({
 }: ProcessLayerOptions): Layer.Layer<ProcessServices | SessionOwner> {
   installSettingsCatalog(settingsCatalog(settings));
   const catalog = pluginCatalogLayer(plugins, mcpConfigPath);
-  // Non-failing: `selfIdentity()` reads an unreadable identity as undefined.
-  const identity = Layer.effect(
-    ProcessIdentity,
-    Effect.map(processStart, (start) => ({ ownerId: processOwnerId(start) })),
+  // One owner id, nonce minted, per build; an unreadable start is undefined.
+  const identity = Layer.unwrap(
+    Effect.map(processStart, (start) =>
+      ProcessIdentity.layer(processOwnerId(start)),
+    ),
   );
   // Keep the global handle outside session `Layer.fresh`; open failure is fatal.
   const globalDatabase = globalDatabaseOption.pipe(

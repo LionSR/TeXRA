@@ -7,9 +7,9 @@
  * `SCHEMA_VERSION` names the DDL, never the row vocabulary: rows carry
  * their own versions (`rowVersions.ts`), and the kinds a store holds are
  * gated by `rowCodec.ts`, so it moves only for a change an older build
- * cannot write around. The 1.0 baseline is 101. A file below it holding
- * tables was written before 1.0 (100 a pre-release that never shipped);
- * this build reads none and moves it aside whole.
+ * cannot write around. The 1.0 baseline is 102. A file below it holding
+ * tables was written before 1.0 (100, 101: unshipped; 101's claims lacked
+ * a build nonce); this build reads none and moves it aside whole.
  *
  * This module knows no row kind and no payload field.
  */
@@ -30,10 +30,10 @@ import {
 const CHANNEL = 'sessionDatabase';
 
 /** The DDL this build creates and writes. */
-const SCHEMA_VERSION = 101;
+const SCHEMA_VERSION = 102;
 /** The first stamp a released build wrote. Fixed for good: a store stamped
  *  below it is pre-1.0 and moved aside; one at or above it is kept. */
-const BASELINE_1_0 = 101;
+const BASELINE_1_0 = 102;
 /** `TeXR`: a TeXRA store, told apart from a foreign SQLite file before
  *  anything in it is touched. */
 const APPLICATION_ID = 0x54655852;

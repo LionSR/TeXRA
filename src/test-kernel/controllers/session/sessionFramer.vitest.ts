@@ -80,7 +80,9 @@ function textTail(
   return { previous, text, length: (previous?.length ?? 0) + text.length };
 }
 
-const SELF = '["test-host",4242,"self-start"]';
+const SELF = '["test-host",4242,"self-start","self-build"]';
+/** The process part of {@link SELF}: what its rows carry as `origin`. */
+const SELF_ORIGIN = '["test-host",4242,"self-start"]';
 const KEY = '/workspace/framing';
 const RUN = 'ab12cd' as RunId;
 const SECOND = 'dec0de' as RunId;
@@ -244,7 +246,7 @@ describe('session framer', () => {
         ),
         seq: 1,
         commit: 1,
-        origin: SELF,
+        origin: SELF_ORIGIN,
         at: 0,
       },
     };
@@ -527,7 +529,7 @@ describe('session framer', () => {
                 aggregateId: qualifyAggregateId('run', RUN),
                 seq: 9,
                 commit: 99,
-                origin: SELF,
+                origin: SELF_ORIGIN,
                 at: 0,
               },
             },
@@ -694,7 +696,7 @@ describe('session framer', () => {
                 ...waiting,
                 seq: 10,
                 commit: 10,
-                origin: SELF,
+                origin: SELF_ORIGIN,
                 at: 0,
               },
             },

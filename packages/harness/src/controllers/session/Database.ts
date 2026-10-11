@@ -823,7 +823,7 @@ export const databaseLayer = (
             seq,
             encoded.type,
             encoded.version,
-            identity.ownerId,
+            identity.origin,
             at,
             encoded.data,
           ]))?.commit;
@@ -877,7 +877,7 @@ export const databaseLayer = (
             ...committedDraft,
             seq,
             commit,
-            origin: identity.ownerId,
+            origin: identity.origin,
             at,
           };
         });

@@ -61,6 +61,7 @@ import {
   CHILD_IDENTITY,
   GRANDCHILD,
   Log,
+  ORIGIN as WRITER,
   OTHER_OWNER,
   OWNER,
   PROCESS,
@@ -1102,7 +1103,7 @@ describe('sessionFold', () => {
         aggregateId,
         seq: ++seq,
         commit,
-        origin: OWNER,
+        origin: WRITER,
         at: 5000,
       } as DisplaySessionEvent);
     const queued = (commit: number, followUpId: string, text: string) =>
@@ -1142,7 +1143,7 @@ describe('sessionFold', () => {
       tail({
         seq,
         commit: 300 + seq,
-        origin: OWNER,
+        origin: WRITER,
         at: 5000 + seq,
         aggregateId: child,
         type: 'run.description',
@@ -1163,7 +1164,7 @@ describe('sessionFold', () => {
   it('mints a run from run.start alone', () => {
     const ghost = 'eeeeeeeeeeee' as RunId;
     const settled = foldAll(scenario.events);
-    const stamp = { seq: 1, commit: 99, origin: OWNER, at: 4000 };
+    const stamp = { seq: 1, commit: 99, origin: WRITER, at: 4000 };
     const facts: FoldInput[] = [
       tail({
         ...stamp,
@@ -1228,7 +1229,7 @@ describe('sessionFold', () => {
         aggregateId: qualifyAggregateId('run', CHILD),
         seq: childSeq + 1,
         commit: 199,
-        origin: OWNER,
+        origin: WRITER,
         at: 3900,
         type: 'run.activate',
       }),
@@ -1236,7 +1237,7 @@ describe('sessionFold', () => {
         aggregateId: qualifyAggregateId('run', CHILD),
         seq: childSeq + 2,
         commit: 200,
-        origin: OWNER,
+        origin: WRITER,
         at: 4000,
         type: 'stream.start',
         id: 'late',
@@ -1285,7 +1286,7 @@ describe('sessionFold', () => {
         aggregateId: qualifyAggregateId('run', CHILD),
         seq: childSeq + 3,
         commit: 201,
-        origin: OWNER,
+        origin: WRITER,
         at: 4100,
         type: 'log',
         level: 'info',

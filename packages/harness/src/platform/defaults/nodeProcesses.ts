@@ -6,6 +6,7 @@
  * process; none of them is converted to a clock value, so a wall-clock step
  * cannot make a live owner look dead.
  */
+import { randomUUID } from 'node:crypto';
 import { hostname } from 'node:os';
 
 import { Data, Effect, FileSystem } from 'effect';
@@ -16,12 +17,18 @@ import { withLogChannel } from '@logger/effectLog';
 import type { OwnerId } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
-/** This process's complete owner identity (contract C5). */
+/**
+ * A new composition's owner identity (contract C5): this process's
+ * hostname, pid and start identity, and a build nonce this call mints, so
+ * two compositions in one process never hold each other's claims. Call it
+ * once per composition (`processLayer` does, per layer build).
+ */
 export function processOwnerId(processStart: string | undefined): OwnerId {
   return JSON.stringify([
     hostname().toLowerCase(),
     process.pid,
     processStart ?? null,
+    randomUUID(),
   ]);
 }
 

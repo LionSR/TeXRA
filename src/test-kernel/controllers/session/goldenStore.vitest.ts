@@ -631,7 +631,12 @@ describe('the golden run killed after its effect', () => {
       db.prepare(
         'UPDATE event_sequence SET owner_id = ? WHERE logical_id = ?',
       ).run(
-        JSON.stringify([os.hostname().toLowerCase(), process.pid, 'killed']),
+        JSON.stringify([
+          os.hostname().toLowerCase(),
+          process.pid,
+          'killed',
+          'its-build',
+        ]),
         KILLED,
       );
     });

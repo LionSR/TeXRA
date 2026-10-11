@@ -489,7 +489,12 @@ describe('resumeRun tool-use queue ownership', () => {
     () =>
       Effect.gen(function* () {
         const session = yield* createSession();
-        const ownerId = JSON.stringify(['other-host', 4321, 'start-1']);
+        const ownerId = JSON.stringify([
+          'other-host',
+          4321,
+          'start-1',
+          'other-build',
+        ]);
         // The claim the host's resume takes is refused by its live owner.
         vi.spyOn(session.log, 'hold').mockReturnValue(
           Effect.fail(

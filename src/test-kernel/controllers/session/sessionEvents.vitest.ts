@@ -83,7 +83,11 @@ import { WorkspaceRoots } from '@controllers/session/WorkspaceRoots';
 import { onAppSignal } from '@eventBus/AppSignals';
 import { withProcessServices } from '@platform/processRuntime';
 import { AppState, type StateStore } from '@platform/interfaces';
-import type { ProcessProbe } from '@platform/defaults/nodeProcesses';
+import {
+  nodeProcesses,
+  processOwnerId,
+  type ProcessProbe,
+} from '@platform/defaults/nodeProcesses';
 import {
   aggregateId as qualifyAggregateId,
   AgentConfigFieldsSchema,
@@ -252,8 +256,11 @@ vi.mock('@texra/tools/lean/direct/directLspAdapter', async () => {
   };
 });
 
-const SELF = '["test-host",4242,"self-start"]';
-const OTHER = '["test-host",4343,"other-start"]';
+const SELF = '["test-host",4242,"self-start","self-build"]';
+/** The process part of {@link SELF}: what its rows carry as `origin`. */
+const SELF_ORIGIN = '["test-host",4242,"self-start"]';
+const OTHER = '["test-host",4343,"other-start","other-build"]';
+const OTHER_ORIGIN = '["test-host",4343,"other-start"]';
 /** The run every case here is about; one id, the key of its one aggregate. */
 const RUN = RunIdSchema.parse('ab12cd');
 const OLDER = RunIdSchema.parse('ab12ce');
@@ -740,7 +747,7 @@ describe('session events and view', () => {
         expect(released.cursor).toBe(held.cursor);
         expect(released.runs.get(RUN)?.group).toBe('interrupted');
         expect(released.runs.get(RUN)?.readOnly).toBe(false);
-        expect((yield* db.readAggregate(id, 1))[0]?.origin).toBe(SELF);
+        expect((yield* db.readAggregate(id, 1))[0]?.origin).toBe(SELF_ORIGIN);
       }).pipe(Effect.provide(graph([runStart, waiting, requested]))),
   );
   it.effect('lists stored run facts in commit order and on the wire', () =>
@@ -777,9 +784,9 @@ describe('session events and view', () => {
         replayComplete: true,
         existence: {
           checkedAggregateIds: rows.map(({ aggregateId }) => aggregateId),
-          claims: rows.map(({ aggregateId, origin }) => ({
+          claims: rows.map(({ aggregateId }) => ({
             aggregateId,
-            ownerId: origin,
+            ownerId: SELF,
           })),
         },
       });
@@ -1447,6 +1454,59 @@ describe('the C1 event table and the C6 publisher', () => {
     return db;
   };
 
+  // Two compositions in one process (two `Sessions.layer` builds) share
+  // the pid and start identity: only the build nonce tells their claims
+  // apart. Failure modes: the second reads the first's live run as its own
+  // and writes it; or it treats it as a dead owner's and reaps it; or it
+  // never takes the run once the first has released it.
+  it.live(
+    "keeps a second composition in this process off the first's live run",
+    () =>
+      Effect.gen(function* () {
+        const storage = workspace();
+        const start = yield* nodeProcesses
+          .selfIdentity()
+          .pipe(Effect.provide(nodePlatformLayer));
+        const [ownerA, ownerB] = [processOwnerId(start), processOwnerId(start)];
+        const id = runStart.aggregateId;
+        // A holds the run until its scope closes, as its session would.
+        const scopeA = yield* Scope.make();
+        yield* Layer.buildWithScope(
+          Layer.effectDiscard(
+            Database.pipe(
+              Effect.flatMap((database) =>
+                Effect.acquireRelease(database.appendAll([runStart]), () =>
+                  database.releaseClaims([id]).pipe(Effect.orDie),
+                ),
+              ),
+            ),
+          ).pipe(Layer.provideMerge(substrate(storage, ownerA))),
+          scopeA,
+        );
+        const b = yield* Layer.build(substrate(storage, ownerB));
+        const onB = <A, E>(
+          use: (database: Database['Service']) => Effect.Effect<A, E>,
+        ) => Database.pipe(Effect.flatMap(use), Effect.provide(b));
+        expect(ownerA).not.toBe(ownerB);
+        expect(yield* onB((database) => database.claimOwner(id))).toEqual({
+          ownerId: ownerA,
+          liveness: 'alive',
+        });
+        const refused = yield* onB((database) =>
+          Effect.flip(database.acquireClaims([id])),
+        );
+        expect(refused.cause).toMatchObject({
+          _tag: 'DatabaseClaimRefused',
+          ownerId: ownerA,
+          verdict: 'alive',
+        });
+        yield* Scope.close(scopeA, Exit.void);
+        expect(yield* onB((database) => database.acquireClaims([id]))).toEqual([
+          id,
+        ]);
+      }).pipe(Effect.scoped),
+  );
+
   it.effect('rejects a remote mount before creating the database', () => {
     const storage = workspace();
     const resolved = realpathSync.native(storage);
@@ -1546,7 +1606,7 @@ describe('the C1 event table and the C6 publisher', () => {
       const reopened = reader(storage);
       try {
         expect(reopened.prepare('PRAGMA user_version').get()).toEqual({
-          user_version: 101,
+          user_version: 102,
         });
         expect(reopened.prepare('PRAGMA auto_vacuum').get()).toEqual({
           auto_vacuum: 2,
@@ -1605,7 +1665,7 @@ describe('the C1 event table and the C6 publisher', () => {
   // its own id even at the 1.0 schema's number.
   for (const stamp of [
     '',
-    'PRAGMA application_id = 1234; PRAGMA user_version = 101;',
+    'PRAGMA application_id = 1234; PRAGMA user_version = 102;',
   ])
     it.effect(
       `refuses another application's SQLite file untouched (${stamp || 'unstamped'})`,
@@ -1648,7 +1708,7 @@ describe('the C1 event table and the C6 publisher', () => {
     Effect.forEach([20, 100], (length) => {
       const storage = workspace();
       return Effect.gen(function* () {
-        yield* storeOfFormat(storage, 101);
+        yield* storeOfFormat(storage, 102);
         const file = join(storage, 'texra.db');
         const truncated = readFileSync(file).subarray(0, length);
         rmSync(`${file}-wal`, { force: true });
@@ -1878,7 +1938,7 @@ describe('the C1 event table and the C6 publisher', () => {
 
   it.effect('refuses a store of a newer schema and changes nothing', () => {
     const storage = workspace();
-    const format = 102;
+    const format = 103;
     return Effect.gen(function* () {
       yield* storeOfFormat(storage, format);
       const failure = yield* Effect.flip(
@@ -2101,9 +2161,9 @@ describe('the C1 event table and the C6 publisher', () => {
         ]);
         // The writer is the process, stamped by the layer (C5), and `at` is
         // the layer's own clock: no caller passes either.
-        expect(first.every((e) => e.origin === SELF && e.at === now)).toBe(
-          true,
-        );
+        expect(
+          first.every((e) => e.origin === SELF_ORIGIN && e.at === now),
+        ).toBe(true);
         // One wake per committed batch, independent of its event ordinal.
         expect(yield* SubscriptionRef.get(db.level)).toBe(2);
         expect(yield* db.currentCommit).toBe(4);
@@ -2199,7 +2259,7 @@ describe('the C1 event table and the C6 publisher', () => {
           ...runStart,
           seq: 700,
           commit: 800,
-          origin: OTHER,
+          origin: OTHER_ORIGIN,
           at: 1,
         };
         yield* db.appendAll([suppliedEnvelope, olderStart]);
@@ -2246,7 +2306,7 @@ describe('the C1 event table and the C6 publisher', () => {
             seq: 1,
             type: 'run.start',
             version: 1,
-            origin: SELF,
+            origin: SELF_ORIGIN,
             at: now,
             data: JSON.stringify({
               identity: runStart.identity,
@@ -2261,7 +2321,7 @@ describe('the C1 event table and the C6 publisher', () => {
             seq: 1,
             type: 'run.start',
             version: 1,
-            origin: SELF,
+            origin: SELF_ORIGIN,
             at: now,
             data: JSON.stringify({
               identity: runStart.identity,
@@ -2931,6 +2991,7 @@ describe('the C1 event table and the C6 publisher', () => {
       os.hostname().toLowerCase(),
       process.pid,
       'an-earlier-process',
+      'its-build',
     ]);
     const target = qualifyAggregateId('run', RUN);
     const followUp = {

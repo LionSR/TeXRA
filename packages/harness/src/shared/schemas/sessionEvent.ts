@@ -20,7 +20,7 @@
  * shared-to-agent allowlist empty).
  */
 import { Result } from 'effect';
-import { z } from 'zod';
+import { z, type ZodType } from 'zod';
 
 import { parseJsonWith } from '@common/parsing/safeParseJson';
 
@@ -52,46 +52,45 @@ import { UserFollowUpSupportSchema, WorktreeInfoSchema } from './run';
 import { ConversationProgressSchema } from './runState';
 import { TranscriptEventSchemas } from './traceEvent';
 
-/** C5's complete process identity, encoded canonically without losing null. */
-const OwnerIdentitySchema = z.tuple([
+/** C5 identities as canonical JSON (hostname lowercase): a row's `origin` is
+ *  its writing process `[hostname, pid, processStart]`; a claim's owner adds
+ *  its composition's build nonce, so compositions in one process differ. */
+const PROCESS = [
   z.string().min(1),
   z.int().positive(),
   z.string().min(1).nullable(),
-]);
-
-/**
- * JSON.stringify([hostname.toLowerCase(), pid, processStart]). Host identity
- * is necessary: a missing local pid cannot prove a foreign process dead.
- */
-export const OwnerIdSchema = z.string().refine(
-  (value) =>
-    Result.match(parseJsonWith(value, OwnerIdentitySchema), {
-      onSuccess: (identity) =>
-        identity[0] === identity[0].toLowerCase() &&
-        JSON.stringify(identity) === value,
-      onFailure: () => false,
-    }),
-  'Expected a canonical [hostname, pid, processStart] process identity',
-);
+] as const;
+const OwnerTupleSchema = z.tuple([...PROCESS, z.string().min(1)]);
+const canonical = (tuple: ZodType<readonly [string, ...unknown[]]>) =>
+  z.string().refine(
+    (value) =>
+      Result.match(parseJsonWith(value, tuple), {
+        onSuccess: (identity) =>
+          identity[0] === identity[0].toLowerCase() &&
+          JSON.stringify(identity) === value,
+        onFailure: () => false,
+      }),
+    'Expected a canonical C5 identity',
+  );
+/** A claim's owner; its liveness is its process's (`ownerIdentity`). */
+export const OwnerIdSchema = canonical(OwnerTupleSchema);
 export type OwnerId = z.infer<typeof OwnerIdSchema>;
 
-/** Decode an owner already validated at the event or transport boundary. */
+/** Decode an owner validated at its boundary: the process it names. */
 export function ownerIdentity(ownerId: OwnerId): {
   hostname: string;
   pid: number;
   processStart: string | null;
 } {
   const [hostname, pid, processStart] = JSON.parse(ownerId) as z.infer<
-    typeof OwnerIdentitySchema
+    typeof OwnerTupleSchema
   >;
   return { hostname, pid, processStart };
 }
 
-/** The recorded pid shown when another process holds a run. */
-export function ownerPid(ownerId: OwnerId): number {
-  return ownerIdentity(ownerId).pid;
-}
-
+/** The process an owner runs in: the `origin` its rows carry. */
+export const ownerProcess = (ownerId: OwnerId): string =>
+  JSON.stringify(Object.values(ownerIdentity(ownerId)));
 /**
  * A verdict about an owner is a proof or an admission that no proof exists.
  * `unprovable` means "do not touch automatically": every acquire path treats
@@ -179,7 +178,7 @@ const envelope = {
   commit: CommitOrdinalSchema,
   /** The process that appended the row (not the aggregate's claim holder);
    *  null for the trace viewer's reconstruction, which has no writer. */
-  origin: OwnerIdSchema.nullable(),
+  origin: canonical(z.tuple([...PROCESS])).nullable(),
   /** The publish clock in whole milliseconds: C1 stores it in an `INTEGER`
    *  column of a `STRICT` table, so the vocabulary states that rule here and
    *  the substrate restates it nowhere. */

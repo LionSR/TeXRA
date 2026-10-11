@@ -325,7 +325,7 @@ describe('runResumeCommand', () => {
   it('refuses a run another live TeXRA process holds, naming its pid', async () => {
     vi.spyOn(seededSession.log, 'owner').mockReturnValue(
       Effect.succeed({
-        ownerId: JSON.stringify(['other-host', 4321, 'start-1']),
+        ownerId: JSON.stringify(['other-host', 4321, 'start-1', 'other-build']),
         liveness: 'alive',
       }),
     );
