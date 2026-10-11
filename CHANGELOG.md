@@ -6,6 +6,12 @@ All notable changes to this project will be documented in this file.
 
 ### Breaking Changes
 
+- **Session stores written by earlier development builds are moved aside
+  once.** A claim on a task now names the TeXRA composition holding it, not
+  only the process, so two embedders in one process (two
+  `Sessions.layer` builds) never take each other's running tasks. The
+  store format moves to 102: a store of an earlier pre-release format is
+  moved to `texra.db.pre1` on first open and TeXRA starts with a fresh one.
 - **A run that fails before it starts is reported as a launch error, not
   listed as a failed task.** A task, subagent or background script is
   recorded together with its first batch of history, so one that fails
