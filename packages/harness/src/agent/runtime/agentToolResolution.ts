@@ -37,10 +37,7 @@
 import { Context, Effect, SubscriptionRef } from 'effect';
 
 import type { RuntimeTool as ITool } from '@agent/runtime/ToolServices';
-import {
-  MapToolRegistry,
-  type HostToolCapability,
-} from '@agent/core/tools/ToolTypes';
+import { MapToolRegistry } from '@agent/core/tools/ToolTypes';
 import { isInstalledPluginId } from '@common/plugins/pluginTrust';
 import type { ModelOptionStores } from '@model/computeModelOptions';
 import type { Persona } from '@shared/schemas';
@@ -80,7 +77,7 @@ export interface StepToolInputs {
   readonly approvalPromptsUnavailable: boolean;
   /** What the session's host serves now, read live each step: a tool that
    *  needs a capability missing here is withheld. */
-  readonly hostCapabilities: ReadonlySet<HostToolCapability>;
+  readonly hostCapabilities: ReadonlySet<string>;
   /** The product host the run's roots name; tools excluded from it are dropped. */
   readonly host: SettingHost;
   /** Tools only this run holds, laid over the resolved list (step 4). */

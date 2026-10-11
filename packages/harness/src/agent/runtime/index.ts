@@ -62,9 +62,6 @@ export type {
   RuntimePresentationEventPayloads,
 } from './runtimePresentationEvents';
 
-// selectAutoOpenFinalOutput
-export { selectAutoOpenFinalOutput } from './selectAutoOpenFinalOutput';
-
 // helperModelName
 export { getHelperModelName } from './helperModelName';
 

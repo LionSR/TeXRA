@@ -9,7 +9,6 @@
   "packages/harness/src/agent/runtime/run/backgroundTurn.ts": 1,
   "packages/harness/src/agent/runtime/run/requestContext.ts": 1,
   "packages/harness/src/agent/runtime/runRegistry.ts": 1,
-  "packages/harness/src/agent/runtime/selectAutoOpenFinalOutput.ts": 1,
   "packages/harness/src/agent/runtime/sessionDescription.ts": 1,
   "packages/harness/src/agent/storage/runRecords.ts": 1,
   "packages/harness/src/agent/workspaceAgents/WorkspaceAgentsController.ts": 9,

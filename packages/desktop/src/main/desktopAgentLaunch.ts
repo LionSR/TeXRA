@@ -4,13 +4,13 @@ import { Cancelled, type PlatformSecrets } from '@texra-ai/harness';
 import { type ProcessRuntime, withProcessServices } from '@texra-ai/harness';
 import {
   presentRunFailure,
-  selectAutoOpenFinalOutput,
   type RunEndResult,
   type RootLaunchOptions,
   type RootLaunchRequest,
   type SessionHandle,
 } from '@agent/runtime';
 import type { RequestOpenFilePayload } from '@shared/schemas';
+import { selectAutoOpenFinalOutput } from '@texra/agent/output/selectAutoOpenFinalOutput';
 import type { SessionBackend } from '@texra/controllers/session/sessionBackend';
 import { ensureError } from '@utils/errors/errorMessage';
 import {
