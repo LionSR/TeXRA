@@ -152,12 +152,13 @@ function withFreshSignalCapture<E>(
     vi.resetModules();
     const { registered, restore } = spyOnSignalRegistration();
     yield* Effect.addFinalizer(() => Effect.sync(restore));
-    yield* run({
-      registered,
-      initPlatform: yield* Effect.promise(
-        () => import('@cli/runtime/initPlatform'),
-      ),
-    });
+    const initPlatform = yield* Effect.promise(
+      () => import('@cli/runtime/initPlatform'),
+    );
+    // The fresh module's platform holds the global store open; Windows
+    // cannot remove the storage root under an open `texra.db`.
+    yield* Effect.addFinalizer(() => initPlatform.cliPlatformShutdown);
+    yield* run({ registered, initPlatform });
   });
 }
 

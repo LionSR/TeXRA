@@ -214,10 +214,12 @@ describe('desktop workspace IPC', () => {
         const builtIn = join(fixtureRoot, 'built-in');
         mkdirSync(custom);
         mkdirSync(builtIn);
+        // LF, as the editor's reads hand it back: a Windows checkout may
+        // carry the fixture with CRLF.
         const original = readFileSync(
           join(REPO_ROOT, 'packages/extension/resources/agents/assistant.yaml'),
           'utf8',
-        );
+        ).replaceAll('\r\n', '\n');
         const packagedPath = join(builtIn, 'assistant.yaml');
         const customPath = join(custom, 'assistant.yaml');
         writeFileSync(packagedPath, original);
