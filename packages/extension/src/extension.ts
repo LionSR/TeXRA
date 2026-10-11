@@ -92,6 +92,7 @@ import { TEXRA_SETTING_ROWS } from '@texra/shared/settingsView/texraSettings';
 import type { CommandId } from '@texra/shared/commands/catalog';
 import { fromHost } from '@texra/controllers/session/hostCallFailure';
 import { bootstrapHost } from '@texra/controllers/hostBootstrap';
+import { makeEditorHost, type EditorRegistry } from '@texra/tools/editorHost';
 import { texraPlugins } from '@texra/tools/registry';
 import { gitHubTokenRejectedMessage } from '@texra/tools/github/githubAuth';
 import { LeanLanguageServices } from '@texra/tools/lean/leanLanguageServices';
@@ -149,6 +150,9 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
     secretsDirectory(defaultNodeStorageRoot()),
     (key) => emitAppSignal('credentialChanged', { key }),
   );
+  // The editor registry the plugins' editor tools read; the progress view
+  // attaches this window's editor to it.
+  const editors = makeEditorHost();
   // Usage logging is anonymous: a runtime service with no account behind it.
   const extensionVersion =
     typeof context.extension.packageJSON?.version === 'string'
@@ -161,6 +165,7 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
         // TeXRA's plugins, with Copilot's TeXRA tools where a default session
         // runs their calls.
         plugins: texraPlugins({
+          editors,
           ...(workspaceRoot && {
             copilot: copilotToolsLayer(
               () => runtime,
@@ -286,7 +291,7 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
         ? yield* telemetryNoticeIfDue(roots.config)
         : null;
       if (notice) void vscode.window.showInformationMessage(notice);
-      return { secrets, runtime, roots };
+      return { secrets, runtime, roots, editors };
     }),
   );
 });
@@ -424,7 +429,7 @@ const activateExtension = Effect.fn('activateExtension')(function* (
   // not leave a disposed host surface installed.
   context.subscriptions.push({ dispose: () => setLogSink(null) });
   const languageModel = createLanguageModelPort(context);
-  const { secrets, runtime, roots } = yield* initVscodePlatform(
+  const { secrets, runtime, roots, editors } = yield* initVscodePlatform(
     context,
     workspaceRoot,
     { languageModel, toolMissingHandler: vscodeToolMissingReporter },
@@ -437,7 +442,7 @@ const activateExtension = Effect.fn('activateExtension')(function* (
   const activationScope = yield* Scope.Scope;
   yield* withProcessServices(
     runtime,
-    activateWorkspace(context, secrets, runtime, roots).pipe(
+    activateWorkspace(context, secrets, runtime, roots, editors).pipe(
       Effect.provideService(Scope.Scope, activationScope),
     ),
   );
@@ -454,6 +459,7 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
   secrets: FileSecrets,
   runtime: ProcessRuntime,
   roots: WorkspaceRoots,
+  editors: EditorRegistry,
 ) {
   const { globalState } = roots;
   // Compatible editors may omit the language-model API. Its events belong
@@ -543,6 +549,7 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
     runtimeSession,
     backend,
     Result.isSuccess(service) ? service.success : undefined,
+    editors,
     (usable) => (usable ? setupPill.hide() : setupPill.show()),
   );
   yield* Effect.andThen(

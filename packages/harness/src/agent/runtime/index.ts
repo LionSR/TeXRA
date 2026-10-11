@@ -27,10 +27,7 @@ export { SESSION_CLOSE_DEADLINE_MS } from './SessionHandle';
 export type { RouteRetries } from './run/invocation';
 
 // HostInteractions
-export type {
-  HostInteractions,
-  ManualCriticismEntry,
-} from './HostInteractions';
+export type { HostInteractions } from './HostInteractions';
 
 // runRegistry: the session's `Runs`. A launch provides it from the session it
 // is on; a host invoking a tool outside any run provides `session.runs`.
@@ -58,10 +55,6 @@ export type { ResumeRunOptions, ResumeRunResult } from './resumeRun';
 export { describeFollowUpFailure } from '@agent/followUp/ToolUseFollowUp';
 
 // runtimePresentationEvents
-export {
-  DiagnosticsReadFailed,
-  PdfOpenFailed,
-} from './runtimePresentationEvents';
 export type {
   HostPresentation,
   PresentationEventHandlers,

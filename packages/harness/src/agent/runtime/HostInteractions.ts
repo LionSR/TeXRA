@@ -2,15 +2,12 @@ import { Cause, Effect } from 'effect';
 import { withLogChannel } from '@logger/effectLog';
 import type { LanguageModelPort } from '@platform/languageModel';
 import type { ApprovalPolicyDenial } from '@shared/approvalPolicy';
-import type { FileLocation, RunId } from '@shared/schemas';
+import type { RunId } from '@shared/schemas';
 import type { ToolEditApprovalRequest } from '@tools/approval/toolEditApproval';
-import type { GenericDiagnostic } from '@utils/diagnostics/diagnosticFormatting';
 import { HostPresentationFailed } from './runtimePresentationEvents';
 import type {
   AgentRuntimeEmitOptions,
-  DiagnosticsReadFailed,
   HostPresentation,
-  PdfOpenFailed,
   RuntimePresentationEvent,
   RuntimePresentationEventPayloads,
 } from './runtimePresentationEvents';
@@ -25,50 +22,6 @@ const CHANNEL = 'SessionHostInteractions';
  * drop is logged, because a silently discarded notice is a defect.
  */
 const MAX_PENDING_PRESENTATION_REPLAYS = 256;
-
-/**
- * Read a file's diagnostics from the host's own language tooling. `path` is
- * absolute — the diagnostics tool resolves the model's input against its tool
- * root before calling. An `Effect`:
- * a host that could not produce them reaches the diagnostics tool as
- * {@link DiagnosticsReadFailed} instead of as `unknown`, and a tool call that
- * is interrupted while the host rebuilds stops waiting on it.
- */
-type DiagnosticsReader = (
-  path: string,
-) => Effect.Effect<GenericDiagnostic[], DiagnosticsReadFailed>;
-
-export interface ManualCriticismEntry {
-  /** Absolute path resolved by the diagnostics tool. */
-  readonly absolutePath: string;
-  /** 1-based line number. */
-  readonly line: number;
-  readonly message: string;
-  /** 0-5; mapped to DiagnosticSeverity by the host. */
-  readonly severity: number;
-  /** 1-5; appended to the message as `(S/C)`. */
-  readonly confidence: number;
-}
-
-/** Whether the criticism was added: not where inline criticism is off. */
-type AddCriticismSink = (
-  input: ManualCriticismEntry,
-) => Effect.Effect<boolean, Error>;
-
-interface OpenPdfRequest {
-  readonly location: FileLocation;
-  readonly preserveFocus: boolean;
-}
-
-/**
- * Show a PDF in the host's viewer. An `Effect`, so a viewer that refused
- * reaches the tool as {@link PdfOpenFailed} rather than as an `unknown`
- * rejection — and the `Promise<void> | void` union the port carried while it
- * was Promise-shaped is gone with it.
- */
-type OpenPdfOpener = (
-  request: OpenPdfRequest,
-) => Effect.Effect<void, PdfOpenFailed>;
 
 /**
  * The host's presentation surface for a session (ruling A9-3): what a host
@@ -103,12 +56,6 @@ export interface HostInteractions {
    * nothing.
    */
   approvalDenied?(denial: ApprovalPolicyDenial, runId: RunId): void;
-  /** Read diagnostics from the active host integration. */
-  readonly readDiagnostics?: DiagnosticsReader;
-  /** Add one manual criticism to the active host diagnostics surface. */
-  readonly addCriticism?: AddCriticismSink;
-  /** Open a PDF in the active host's viewer. */
-  readonly openPdf?: OpenPdfOpener;
   /** The host editor's language models, served to the session's runs. */
   readonly languageModel?: LanguageModelPort;
   /**
@@ -126,8 +73,8 @@ export interface HostInteractions {
   /**
    * Drop what {@link presentToolEdit} staged for one request, for the single
    * case no `request.decided` ever reaches: a request whose `request.opened`
-   * never committed. Every host that stages implements both. An `Effect`,
-   * as `openPdf` is: the cleanup (a diff view to close, temp files to
+   * never committed. Every host that stages implements both. An `Effect`:
+   * the cleanup (a diff view to close, temp files to
    * delete) is a program the session composes into its own, so it waits for
    * it without a fiber of its own. Built when the preview is staged, run
    * only if that one case arrives.
@@ -282,18 +229,6 @@ export class SessionHostInteractions implements HostInteractions {
 
   approvalDenied(denial: ApprovalPolicyDenial, runId: RunId): void {
     this.activeAttachment?.interactions.approvalDenied?.(denial, runId);
-  }
-
-  get readDiagnostics(): DiagnosticsReader | undefined {
-    return this.activeAttachment?.interactions.readDiagnostics;
-  }
-
-  get addCriticism(): AddCriticismSink | undefined {
-    return this.activeAttachment?.interactions.addCriticism;
-  }
-
-  get openPdf(): OpenPdfOpener | undefined {
-    return this.activeAttachment?.interactions.openPdf;
   }
 
   get languageModel(): LanguageModelPort | undefined {

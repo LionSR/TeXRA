@@ -58,9 +58,9 @@ export interface ToolGuard<T, R = never> {
   readonly cwd?: 'unknown';
 }
 
-/** A host capability a tool needs: `diagnostics` is a file's diagnostics
- *  from the host's editor. */
-export type HostToolCapability = 'diagnostics';
+/** A host capability a tool needs, named by the plugin that serves it
+ *  (`HostCapabilities`). */
+export type HostToolCapability = string;
 
 /**
  * Contract for tool implementations.

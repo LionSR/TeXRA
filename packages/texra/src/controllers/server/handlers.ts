@@ -38,6 +38,7 @@ import {
 } from '@texra/shared/session/sessionFrames';
 import { frameSubscription } from '@texra/controllers/session/SessionFramer';
 import { runEnded } from '@texra/controllers/session/sessionBackend';
+import type { EditorHostShape } from '@texra/tools/editorHost';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 import {
@@ -46,6 +47,7 @@ import {
   type ServiceInfo,
   type TaskFailed,
 } from './protocol';
+
 import { makeHostWindows } from './hostWindows';
 import { listTasks } from './taskList';
 import type { ProcessServices } from '@texra-ai/harness';
@@ -58,6 +60,9 @@ export class ServiceProjects extends Context.Service<
   {
     /** The storage root every project's store sits under. */
     readonly storageRoot: string;
+    /** The editor registry the service's plugins read (`texraPlugins`):
+     *  each presented project's windows attach their editors to it. */
+    readonly editors: EditorHostShape;
     /** The session of `workspace`, opened on first use and leased for the
      *  caller's scope: a leased session is never closed for idleness. */
     readonly open: (
@@ -218,7 +223,9 @@ export const serviceHandlers = TexraRpcs.toLayer(
         if (presented.has(session)) return Effect.void;
         const surface = Scope.forkUnsafe(scope);
         presented.set(session, surface);
-        return hosts.adopt(session).pipe(Scope.provide(surface));
+        return hosts
+          .adopt(session, projects.editors)
+          .pipe(Scope.provide(surface));
       });
     // A session no client leases and no run holds closes once idle long
     // enough, with its surface: a service that lives for weeks keeps only

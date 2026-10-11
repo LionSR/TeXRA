@@ -31,11 +31,13 @@ import {
 import { z } from 'zod';
 
 import type { HostInteractions } from '@agent/runtime/HostInteractions';
+import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import {
   DiagnosticsReadFailed,
   PdfOpenFailed,
-} from '@agent/runtime/runtimePresentationEvents';
-import type { SessionHandle } from '@agent/runtime/SessionHandle';
+  type EditorCapabilities,
+  type EditorHostShape,
+} from '@texra/tools/editorHost';
 
 import {
   CALL_CAPABILITY,
@@ -147,9 +149,11 @@ export interface HostWindows {
   readonly focus: (attachment: string) => Effect.Effect<void>;
   /** A window's answer to one call. */
   readonly answer: (id: string, answer: HostAnswer) => Effect.Effect<void>;
-  /** Give `session` the forwarding surface, for the scope's life. */
+  /** Give `session` the forwarding surface, and attach its project's
+   *  windows' editors to `editors`, for the scope's life. */
   readonly adopt: (
     session: SessionHandle,
+    editors: EditorHostShape,
   ) => Effect.Effect<void, never, Scope.Scope>;
   /** The staged preview of one of `session`'s pending requests. */
   readonly preview: (
@@ -364,36 +368,6 @@ export const makeHostWindows = Effect.sync((): HostWindows => {
             call: { kind: 'approvalDenied', denial, runId },
           });
       },
-      get readDiagnostics(): HostInteractions['readDiagnostics'] {
-        if (!offers(key, 'readDiagnostics')) return undefined;
-        return (path: string) =>
-          ask(
-            key,
-            { kind: 'readDiagnostics', path },
-            CallResultSchemas.readDiagnostics,
-          ).pipe(
-            Effect.mapError(
-              (failure) =>
-                new DiagnosticsReadFailed({
-                  reason:
-                    failure.reason === 'failed'
-                      ? 'read-failed'
-                      : failure.reason,
-                  path,
-                  message: failure.message,
-                }),
-            ),
-          );
-      },
-      get addCriticism(): HostInteractions['addCriticism'] {
-        if (!offers(key, 'addCriticism')) return undefined;
-        return (entry) =>
-          ask(
-            key,
-            { kind: 'addCriticism', entry },
-            CallResultSchemas.addCriticism,
-          );
-      },
       get languageModel(): HostInteractions['languageModel'] {
         if (!offers(key, 'languageModel')) return undefined;
         return {
@@ -429,20 +403,6 @@ export const makeHostWindows = Effect.sync((): HostWindows => {
               };
             }),
         };
-      },
-      get openPdf(): HostInteractions['openPdf'] {
-        if (!offers(key, 'openPdf')) return undefined;
-        return ({ location, preserveFocus }) =>
-          ask(key, { kind: 'openPdf', location, preserveFocus }, z.null()).pipe(
-            Effect.asVoid,
-            Effect.mapError(
-              (failure) =>
-                new PdfOpenFailed({
-                  path: location.absolutePath,
-                  message: failure.message,
-                }),
-            ),
-          );
       },
       // The service keeps every preview for `request.preview`; the window
       // that stages it as well is the one asked to release or approve it.
@@ -493,6 +453,52 @@ export const makeHostWindows = Effect.sync((): HostWindows => {
         }),
     };
   };
+  /** What `session`'s project's windows offer its runs' editor tools,
+   *  routed to the window focused last that offers each. */
+  const editorOf = (key: string): EditorCapabilities => ({
+    get readDiagnostics(): EditorCapabilities['readDiagnostics'] {
+      if (!offers(key, 'readDiagnostics')) return undefined;
+      return (path: string) =>
+        ask(
+          key,
+          { kind: 'readDiagnostics', path },
+          CallResultSchemas.readDiagnostics,
+        ).pipe(
+          Effect.mapError(
+            (failure) =>
+              new DiagnosticsReadFailed({
+                reason:
+                  failure.reason === 'failed' ? 'read-failed' : failure.reason,
+                path,
+                message: failure.message,
+              }),
+          ),
+        );
+    },
+    get addCriticism(): EditorCapabilities['addCriticism'] {
+      if (!offers(key, 'addCriticism')) return undefined;
+      return (entry) =>
+        ask(
+          key,
+          { kind: 'addCriticism', entry },
+          CallResultSchemas.addCriticism,
+        );
+    },
+    get openPdf(): EditorCapabilities['openPdf'] {
+      if (!offers(key, 'openPdf')) return undefined;
+      return ({ location, preserveFocus }) =>
+        ask(key, { kind: 'openPdf', location, preserveFocus }, z.null()).pipe(
+          Effect.asVoid,
+          Effect.mapError(
+            (failure) =>
+              new PdfOpenFailed({
+                path: location.absolutePath,
+                message: failure.message,
+              }),
+          ),
+        );
+    },
+  });
   /** Stage `entry` in `window`, which then holds it. */
   const stage = (entry: Staged, window: Window | undefined) => {
     entry.window = window;
@@ -547,7 +553,7 @@ export const makeHostWindows = Effect.sync((): HostWindows => {
       Effect.suspend(
         () => calls.get(id)?.pending.get(id)?.answer(answer) ?? Effect.void,
       ),
-    adopt: (session) =>
+    adopt: (session, editors) =>
       Effect.gen(function* () {
         const key = session.roots.storage;
         // A staged preview whose request the session listed and no longer
@@ -576,6 +582,7 @@ export const makeHostWindows = Effect.sync((): HostWindows => {
           session.interactions.use(interactionsOf(session)),
           (release) => Effect.sync(release),
         );
+        yield* editors.attach(key, editorOf(key));
       }),
     preview: (session, requestId) =>
       Effect.map(SubscriptionRef.get(session.view.ref), (view) =>
