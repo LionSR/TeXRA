@@ -60,6 +60,7 @@ import {
   type RunId,
   type SessionEventDraft,
   type UserQuestionPermission,
+  aggregateTarget,
 } from '@shared/schemas';
 import { goalStateOf } from '@shared/plugins/goal';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
@@ -68,6 +69,7 @@ import {
   isTerminalOutcomePhase,
 } from '@shared/runs/runStatus';
 import { acceptsFollowUp, descendantRuns } from '@shared/session/sessionView';
+import { isUnfolded } from '@shared/session/runStateFold';
 import {
   buildScenario,
   foldAll,
@@ -401,9 +403,44 @@ function session() {
   return harnessRuntimeSession;
 }
 
+/**
+ * Write fixture rows the way the session does: a row no run's state folds
+ * as one transaction, a `run.activate` as its run's opening, and a row a
+ * run's state folds through that run's cell (`RunHistory.appendIn`).
+ */
 function publish(...drafts: SessionEventDraft[]): void {
-  harnessRuntime.runFork(session().log.transact(drafts));
+  const { log, runHistory } = session();
+  const unfolded = drafts.filter(isUnfolded);
+  const folded = drafts.filter(isCellRow);
+  harnessRuntime.runFork(
+    Effect.gen(function* () {
+      if (unfolded.length > 0) yield* log.transact(unfolded);
+      for (const draft of drafts) {
+        const target = aggregateTarget(draft.aggregateId);
+        if (draft.type === 'run.activate' && target.kind === 'run')
+          yield* runHistory.open(target.id, {
+            activation: () => Effect.succeed([draft]),
+          });
+      }
+      if (folded.length > 0)
+        yield* log.transact((tx) => runHistory.appendIn(tx.append, folded));
+    }),
+  );
 }
+
+/** The run rows the fixtures seed that a run's state folds. */
+const isCellRow = (
+  draft: SessionEventDraft,
+): draft is Extract<
+  SessionEventDraft,
+  {
+    type: 'run.config' | 'run.position' | 'request.decided' | 'followup.queued';
+  }
+> =>
+  draft.type === 'run.config' ||
+  draft.type === 'run.position' ||
+  draft.type === 'request.decided' ||
+  draft.type === 'followup.queued';
 
 // The TUI reads the session fold (PRD 10.1): bind it and subscribe every
 // run's transcript tier the way `runChat` does.
