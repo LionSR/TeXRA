@@ -1504,7 +1504,9 @@ const nonce = 'texra-webview-smoke';
 // transcript tier for the aggregates the subscribe named), the way
 // `SessionFramer` cuts a frame.
 const SESSION_KEY = '/tmp/texra-smoke/project';
-const OWNER = '["test-host",4242,"2026-09-04T00:00:00.000Z"]';
+/** The writing process the fixture rows name, and its composition's owner. */
+const ORIGIN = '["test-host",4242,"2026-09-04T00:00:00.000Z"]';
+const OWNER = '["test-host",4242,"2026-09-04T00:00:00.000Z","build-a"]';
 const NOW = 1_783_353_600_000;
 const RUN = 'a1b2c3d4e5f6';
 const CHILD_RUN = 'b1b2c3d4e5f6';
@@ -1552,7 +1554,7 @@ function sessionLog() {
     const seq = (seqs.get(aggregateId) ?? 0) + 1;
     seqs.set(aggregateId, seq);
     commit += 1;
-    events.push({ aggregateId, seq, commit, origin: OWNER, at, ...body });
+    events.push({ aggregateId, seq, commit, origin: ORIGIN, at, ...body });
   };
   const entry = (runId, at, fields) => {
     emit(runId, at, { type: 'log', level: 'info', ...fields });
