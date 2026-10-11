@@ -32,7 +32,7 @@ import { z } from 'zod';
 
 import type { HostInteractions } from '@agent/runtime/HostInteractions';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import type { ToolEditPreview } from '@shared/session/runtimeRequest';
+import type { ToolEditContent } from '@shared/session/runtimeRequest';
 import {
   DiagnosticsReadFailed,
   PdfOpenFailed,
@@ -124,7 +124,7 @@ interface Staged {
   seen: boolean;
 }
 
-const previewOf = (entry: Staged | undefined): ToolEditPreview | null =>
+const previewOf = (entry: Staged | undefined): ToolEditContent | null =>
   entry === undefined
     ? null
     : {

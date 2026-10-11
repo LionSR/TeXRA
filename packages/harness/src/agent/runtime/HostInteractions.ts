@@ -3,7 +3,7 @@ import { withLogChannel } from '@logger/effectLog';
 import type { LanguageModelPort } from '@platform/languageModel';
 import type { ApprovalPolicyDenial } from '@shared/approvalPolicy';
 import type { RunId } from '@shared/schemas';
-import type { ToolEditPreview } from '@shared/session/runtimeRequest';
+import type { ToolEditContent } from '@shared/session/runtimeRequest';
 import type { ToolEditApprovalRequest } from '@tools/approval/toolEditApproval';
 import { HostPresentationFailed } from './runtimePresentationEvents';
 import type {
@@ -86,7 +86,7 @@ export interface HostInteractions {
   approveToolEdit?(requestId: string): Effect.Effect<boolean>;
   /** What {@link presentToolEdit} staged for a pending request, or null:
    *  the answer to a `request.preview`. */
-  preview?(requestId: string): Effect.Effect<ToolEditPreview | null>;
+  preview?(requestId: string): Effect.Effect<ToolEditContent | null>;
   dispose?(): void;
 }
 
@@ -264,7 +264,7 @@ export class SessionHostInteractions implements HostInteractions {
   }
 
   /** The preview the attached host staged for `requestId`, else null. */
-  preview(requestId: string): Effect.Effect<ToolEditPreview | null> {
+  preview(requestId: string): Effect.Effect<ToolEditContent | null> {
     return (
       this.activeAttachment?.interactions.preview?.(requestId) ??
       Effect.succeed(null)

@@ -35,7 +35,7 @@ import {
 } from '../state/attachedTask';
 import { transcriptToLines } from '../state/transcriptLines';
 import { AsyncListForm } from './_shared/ListForm';
-import type { ProcessRuntime, ToolEditPreview } from '@texra-ai/harness';
+import type { ProcessRuntime, ToolEditContent } from '@texra-ai/harness';
 import type { ApprovalPayload } from '../state/approvalQueue';
 
 /** Opens (and, when none runs, starts) the service connection. */
@@ -130,7 +130,7 @@ function AttachedTask(props: AttachedTaskProps): React.JSX.Element {
   const [notice, setNotice] = useState<string>();
   const [decided, setDecided] = useState<ReadonlySet<string>>(new Set());
   const [previews, setPreviews] = useState<
-    ReadonlyMap<string, ToolEditPreview | null>
+    ReadonlyMap<string, ToolEditContent | null>
   >(new Map());
   const actions = useRef<AttachedTaskActions>(undefined);
 

@@ -114,12 +114,12 @@ export type RuntimeRequest = z.infer<typeof RuntimeRequestSchema>;
 
 /** What a pending tool edit would change: the original and proposed
  *  content a host shows beside the request's path and line counts. */
-const ToolEditPreviewSchema = z.object({
+const ToolEditContentSchema = z.object({
   originalContent: z.string(),
   proposedContent: z.string(),
 });
 /** A pending tool edit's staged content (`request.preview`). */
-export type ToolEditPreview = z.infer<typeof ToolEditPreviewSchema>;
+export type ToolEditContent = z.infer<typeof ToolEditContentSchema>;
 
 /** What the runtime answers with: a typed value the host renders. */
 export const OutcomeSchema = z.discriminatedUnion('kind', [
@@ -133,7 +133,7 @@ export const OutcomeSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('forked'), runId: RunIdSchema }),
   z.object({
     kind: z.literal('preview'),
-    preview: ToolEditPreviewSchema.nullable(),
+    preview: ToolEditContentSchema.nullable(),
   }),
 ]);
 export type Outcome = z.infer<typeof OutcomeSchema>;

@@ -50,7 +50,7 @@ import {
   useHostCapability,
 } from './approvalQueue';
 import { appendLocalNotice } from './transcript';
-import type { ProcessRuntime, ToolEditPreview } from '@texra-ai/harness';
+import type { ProcessRuntime, ToolEditContent } from '@texra-ai/harness';
 import type { PlatformSecrets } from '@texra-ai/harness';
 
 /**
@@ -73,7 +73,7 @@ interface TuiApprovalStores {
   readonly preview?: (
     runId: RunId,
     requestId: string,
-  ) => Effect.Effect<ToolEditPreview | null, Error>;
+  ) => Effect.Effect<ToolEditContent | null, Error>;
   readonly secrets: PlatformSecrets;
   /** The settings slots a key prompt reads a provider's display name and key
    *  URL from, so a retry that has to ask for a credential words the ask the

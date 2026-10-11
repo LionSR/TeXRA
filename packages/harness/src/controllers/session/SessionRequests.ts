@@ -119,12 +119,9 @@ const withRunClaim = <A, R>(
       );
 
 /**
- * Refuse a delete, compaction, rename or approval grant the run's current
- * `actions` no longer holds, with its reason: the host rendered it from an
- * earlier view, and the run may have started or ended since. A run the
- * view has not folded yet, and one another process holds, are left to
- * `admit` and the claim (the latter answers `NotOwner`). A stop is not
- * gated: it is always safe to ask.
+ * Refuse a delete, compaction, rename or grant the run's `actions` no longer
+ * hold (the host rendered an earlier view). A run not folded yet, or held
+ * by another process, is left to `admit` and the claim; a stop is ungated.
  */
 const requireRunAction = (
   deps: RequestDeps,
@@ -186,10 +183,7 @@ const admit = (
   );
 };
 
-/**
- * The user's title, as the run's `run.description` row by the user, under
- * the run's claim.
- */
+/** The user's title: the run's `run.description` row, under its claim. */
 const rename = (
   deps: RequestDeps,
   req: Extract<RuntimeRequest, { kind: 'run.rename' }>,
@@ -220,6 +214,12 @@ const rename = (
       ),
   );
 
+/** The pending request `requestId` of run `runId`, if the view lists it. */
+const pendingOf = (deps: RequestDeps, runId: RunId, requestId: string) =>
+  SubscriptionRef.getUnsafe(deps.session().view.ref).requests.find(
+    (row) => row.runId === runId && row.requestId === requestId,
+  );
+
 /**
  * The one way in for a surface's decision (one run model, 3.7): the
  * request must be pending, the decision lands as the run's
@@ -238,12 +238,7 @@ const decideRequest = (
   heldHere: boolean,
 ): Effect.Effect<Outcome, RequestError, GlobalDatabase> => {
   const answer = Effect.gen(function* () {
-    const pending = SubscriptionRef.getUnsafe(
-      deps.session().view.ref,
-    ).requests.find(
-      (request) =>
-        request.runId === req.runId && request.requestId === req.requestId,
-    );
+    const pending = pendingOf(deps, req.runId, req.requestId);
     if (pending === undefined) return yield* Effect.fail(settled(req.runId));
     // A request that parks its caller is answered by the fiber waiting on
     // it, and that fiber died with the owner this decision is taking over
@@ -459,10 +454,13 @@ const handle = (
     case 'request.decide':
       return decideRequest(deps, req, heldHere);
     case 'request.preview':
-      return Effect.map(
-        deps.session().interactions.preview(req.requestId),
-        (preview): Outcome => ({ kind: 'preview', preview }),
-      );
+      // A request of another run: its staged content is not this caller's.
+      return pendingOf(deps, req.runId, req.requestId) === undefined
+        ? Effect.succeed({ kind: 'preview', preview: null })
+        : Effect.map(
+            deps.session().interactions.preview(req.requestId),
+            (preview): Outcome => ({ kind: 'preview', preview }),
+          );
     case 'policy.set':
       return withRunClaim(
         deps,
