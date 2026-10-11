@@ -124,7 +124,7 @@ const RunViewSchema = z.object({
   /** Banner copy: the unreadable detail, else the interrupted or held
    *  notice, else `lost`; null otherwise. */
   statusDetail: z.string().nullable(),
-  /** What an end that did not fail lost (its error: a refused result). */
+  /** The result its end lost (a `result-lost` error), whatever its outcome. */
   lost: z.string().nullable(),
   // G4: one table (`runStatusDisplay`) spells both, through the status
   // and substate or the interrupted reading.

@@ -1,12 +1,16 @@
 /**
  * The persistence substrate (`2026-09-03-persistence-substrate-decision.md`,
- * `2026-09-28-storage-v1-design.md`): the connection, transactions and busy
- * retry, the one write path, claims, the aggregate lifecycle, deletion,
- * collection and the reads. One database per session root, never a process
- * singleton (an ephemeral session runs it in memory; a failed file open is
- * an error). `storeSchema.ts` owns the DDL, `rowCodec.ts` every stored shape,
- * `projections` the projectors; this module the envelope: the writer (C5),
- * the publish clock, and the `seq` and `commit` ordinals.
+ * reshaped by `2026-09-28-storage-v1-design.md`): the connection, its
+ * transactions and busy retry, the run history's one write path, claims, the
+ * aggregate lifecycle, deletion and collection, and the reads. One database
+ * per session root (`WorkspaceRoots`), never a process singleton; an
+ * ephemeral session runs the same schema in SQLite memory, and a failed file
+ * open is an error, never the ephemeral mode. `storeSchema.ts` owns the DDL
+ * and the open sequence; `rowCodec.ts` every stored shape, by the arms the
+ * process's plugins contribute (this module reads no payload); `projections`
+ * the projectors whose operations run in the append transaction. This module
+ * owns the envelope: the writer (C5, `ProcessIdentity`), the publish clock,
+ * and the `seq` and `commit` ordinals, none of which a caller supplies.
  */
 import { randomUUID } from 'node:crypto';
 import { join } from 'node:path';
@@ -437,7 +441,8 @@ export const databaseLayer = (
         WHERE id IN (${AGGREGATE_LIST}) AND owner_id = ?`;
       const reparent = `UPDATE event_sequence SET parent_id = ${AGGREGATE}
         WHERE id = ? AND owner_id = ? AND closed_by IS NULL`;
-      // A closed aggregate's row; the foreign keys' cascade collects the rest.
+      // A closed aggregate's sequence row, collected with its dependents
+      // and rows by the foreign keys' cascade.
       const closedBy = `SELECT id FROM event_sequence
         WHERE kind = ? AND logical_id = ? AND closed_by = ?`;
       const collectClosed = `DELETE FROM event_sequence
@@ -704,7 +709,8 @@ export const databaseLayer = (
           const target = aggregateTarget(draft.aggregateId);
           const columns = aggregateColumns(draft.aggregateId);
           if (edges.borrowsClaim) {
-            // A plugin's aggregate borrows its claim for this transaction.
+            // A plugin's own aggregate borrows its claim for this
+            // transaction only.
             yield* exec(claim, [identity.ownerId, ...columns, null]);
           }
           if (edges.reparent != null) {
@@ -836,7 +842,8 @@ export const databaseLayer = (
             );
           }
           if (edges.reparent !== undefined) {
-            // A plugin's aggregate hangs under its `parent` run, or none.
+            // A plugin's aggregate hangs under its `parent` run, so that
+            // run's deletion collects it, or under none.
             const parentColumns =
               edges.reparent === null
                 ? [null, null]
@@ -954,12 +961,12 @@ export const databaseLayer = (
               fromSeq,
             ]).pipe(Effect.map((rows) => rows.filter(isDisplaySessionEvent))),
           ),
-        aggregateState: (of) =>
-          query('under' in of ? readDependents(of.under) : readState(of)),
+        aggregateState: (ids) => query(readState(ids)),
         claimOwner: (id) =>
           Effect.gen(function* () {
             const state = (yield* query(readState([id])))[0];
-            // A tombstoned row's owner holds nothing: it reads unclaimed.
+            // A tombstoned row keeps the owner that closed it, but what it
+            // named is gone: nothing holds it, so it reads unclaimed.
             const owner =
               state?.closed === true ? null : (state?.ownerId ?? null);
             if (owner === null) return { ownerId: null, liveness: null };

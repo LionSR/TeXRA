@@ -10,8 +10,8 @@
 // another acquisition as the editor does, and prints `ACQUIRED` and
 // `CALLED lmModels` / `lmPrepare` / `lmStream`. With
 // `lm` or `start` it then starts a task on `<model>` itself, as a VS Code
-// window launches one, and prints `STARTED <runId>` (`start` offers no
-// models).
+// window launches one, and prints `STARTED <runId>`, or `REFUSED <error>`
+// for a task that fails before it starts (`start` offers no models).
 //
 //   node service-host-harness.js <storageRoot> <workspace> <answer|hang|lm|start> [model]
 
@@ -182,7 +182,9 @@ await Effect.runPromise(
       yield* say('ATTACHED');
       const client = yield* SubscriptionRef.get(link.client);
       if ((mode === 'lm' || mode === 'start') && client !== null) {
-        const runId = yield* client['task.start']({
+        // A task that fails before it starts is the launch's error, and no
+        // run (`REFUSED <message>`); one that starts is `STARTED <runId>`.
+        const started = yield* client['task.start']({
           workspace,
           runId: generateRunId(),
           config: AgentConfigSchema.parse({
@@ -199,8 +201,10 @@ await Effect.runPromise(
           ownApiKeyFallback: false,
           approvalPolicy: null,
           approveDelegatedWork: false,
-        });
-        yield* say(`STARTED ${runId}`);
+        }).pipe(Effect.result);
+        yield* started._tag === 'Success'
+          ? say(`STARTED ${started.success}`)
+          : say(`REFUSED ${JSON.stringify(started.failure)}`);
       }
       return yield* Effect.never;
     }),

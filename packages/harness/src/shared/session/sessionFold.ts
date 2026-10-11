@@ -55,6 +55,7 @@ import {
   type ExistenceReconciliation,
   type LocalRuntimeState,
   type DisplaySessionEvent,
+  type RunEnd,
   type RunId,
   type TextChunk,
   type TranscriptSubscription,
@@ -638,10 +639,10 @@ function walkUp(view: SessionView, startId: RunId | null): void {
 function withSettledTranscript(
   run: RunView,
   finishedAt: number,
-  error?: { readonly message?: string },
+  error?: RunEnd['error'],
 ): RunView {
-  if (error?.message !== undefined && run.status !== RUN_PHASE.FAILED)
-    run = { ...run, lost: error.message };
+  if (error?.kind === 'result-lost')
+    run = { ...run, lost: error.message ?? 'Result lost' };
   if (!isTranscriptSettlementPhase(run.status)) return run;
   const transcript = settleTranscript(run.transcript, finishedAt);
   return transcript === run.transcript ? run : { ...run, transcript };
@@ -888,8 +889,7 @@ function applyOwnArm(run: RunView, event: OwnEvent): RunView {
             title: event.description || run.label,
           };
     case 'run.end':
-      // The terminal fact: the phase is its outcome (one run model, 3.3),
-      // and what an end that did not fail lost. The caller records the end.
+      // The terminal fact: its outcome (3.3), and any result it lost.
       return withSettledTranscript(
         { ...run, status: event.outcome, substate: null, runStartedAt: null },
         event.at,

@@ -34,17 +34,18 @@ import type { RunInputDraft } from '@shared/session/runStateFold';
 import { ensureError } from '@utils/errors/errorMessage';
 import {
   getRunRecords,
+  lostResultId,
   openOwnedChildren,
   persistedParentRunId,
   runEndFromEvents,
+  unloadable,
 } from './runRecords';
 
 function pinRunWorkingDirectory(
   record: RunRecord,
   workspaceRoot: string | undefined,
 ): RunRecord {
-  // First non-blank candidate wins, stored verbatim (untrimmed) — trimming
-  // here previously mangled resumed workflow paths (2e3197f92f).
+  // First non-blank wins, untrimmed: trimming mangled paths (2e3197f92f).
   const workingDirectory = [record.workingDirectory, workspaceRoot].find(
     (dir) => dir?.trim(),
   );
@@ -122,8 +123,7 @@ export const registerRun = Effect.fn('registerRun')(function* (
     );
     if (born) yield* cell.append([]);
   }).pipe(
-    // A registration that died wrote nothing, and the caller refuses the
-    // launch on it like any other refused registration.
+    // A registration that died wrote nothing: the caller refuses the launch.
     Effect.catchDefect((defect) => Effect.fail(ensureError(defect))),
   );
 });
@@ -137,13 +137,11 @@ export const registrationRows = Effect.fn('registrationRows')(function* (
   options: RegisterRunOptions,
 ): Effect.fn.Return<readonly SessionEventDraft[], Error> {
   return yield* Effect.gen(function* () {
-    // A re-registration writes into a run that already has rows; the
-    // registration takes the run's claim over as it commits.
+    // A re-registration takes the existing run's claim over as it commits.
     const prior = yield* getRunRecords(session, runId).exists();
     if (options.parentRunId !== undefined) {
-      // A barrier first: a parent whose `run.start` is still queued reads
-      // as absent. The database refuses a closed or unborn parent; this
-      // read only words the refusal before the transaction opens.
+      // A barrier first (a queued `run.start` reads absent); the database
+      // refuses a closed or unborn parent, this only words the refusal.
       yield* session.log.transact([]);
       if (!(yield* getRunRecords(session, options.parentRunId).exists()))
         return yield* Effect.fail(
@@ -152,9 +150,8 @@ export const registrationRows = Effect.fn('registrationRows')(function* (
     }
     const pinned = pinRunWorkingDirectory(record, session.roots.workspace);
     const target = aggregateId('run', runId);
-    // A registration, first or again, opens the run with its configuration
-    // in the batch that takes the claim: nothing is compared before the
-    // claim is held, so a takeover never skips the row on a stale read.
+    // Its configuration rides the batch that takes the claim, never
+    // compared before it is held (a takeover skips nothing on a stale read).
     const config = {
       type: 'run.config',
       aggregateId: target,
@@ -202,8 +199,7 @@ export const registrationRows = Effect.fn('registrationRows')(function* (
 export interface FinalizeRunInput {
   readonly runId: RunId;
   readonly outcome: RunOutcome;
-  /** Keep the outcome already written: a backstop (the host-exit drain)
-   *  does not own the run's result. Read and write share one transaction. */
+  /** Keep an outcome already written (a backstop owns no result). */
   readonly keepExistingOutcome?: boolean;
   /** The classified error behind a FAILED outcome, when the run has one. */
   readonly error?: RunEnd['error'];
@@ -220,8 +216,7 @@ export type FinalizeRunResult =
       /** The outcome that stands on disk: the requested one, or the one
        *  `keepExistingOutcome` retained, which a backstop settles to. */
       readonly outcome: RunOutcome;
-      /** False for a run that never opened: it has no rows, so nothing of
-       *  it was written, and its failure is its launch's to report. */
+      /** False for a run never born: its launch reports its failure. */
       readonly recorded: boolean;
     }
   | {
@@ -229,13 +224,10 @@ export type FinalizeRunResult =
       readonly error: unknown;
     };
 
-/**
- * A run's end in `append`'s job, through its cell: its unapplied input
- * consumed, its halt, what it left open, its `run.end`, a child's last
- * settlement and delivery. An ended lifecycle writes only the settlement; an
- * unborn run, nothing; rows that do not fold, loudly, only rows no fold
- * reads. A store failure fails the end.
- */
+/** A run's end in `append`'s job: its halt through its cell, beside it the
+ *  input it never applied, what it left open, its `run.end` and a child's
+ *  last settlement. An ended lifecycle writes only the settlement, an unborn
+ *  run nothing, an unloadable one all but the halt, loudly. */
 export const endIn = Effect.fn('endIn')(function* (
   session: SessionHandle,
   append: Append,
@@ -249,9 +241,7 @@ export const endIn = Effect.fn('endIn')(function* (
   // A run never born has nothing to end: its launch reports the failure.
   if (!rows.some((row) => row.type === 'run.start'))
     return { persisted: outcome, recorded: false, after: Effect.void };
-  // "Already ended" is about the run's current lifecycle (the rule of
-  // `runEndFromEvents`): a resumed run ends again, even the same way, or
-  // every `durableOutcome` reader keeps it RUNNING for want of the row.
+  // Ended in its current lifecycle: a resumed run ends again, even the same way.
   const ended = runEndFromEvents(rows, runId)?.outcome;
   const persisted =
     keepExistingOutcome === true && ended !== undefined ? ended : outcome;
@@ -289,7 +279,7 @@ export const endIn = Effect.fn('endIn')(function* (
   const alongside = Effect.succeed({ rows: beside, committed: Effect.void });
   if (Result.isSuccess(cell))
     return yield* Effect.as(cell.success.append(halt, alongside), result);
-  if (cell.failure._tag !== 'RunHistoryRefused') return yield* cell.failure;
+  if (!unloadable(cell.failure)) return yield* cell.failure;
   yield* Effect.logWarning(
     `Run ${runId} ends unloaded: ${cell.failure.message}`,
   );
@@ -355,24 +345,30 @@ export const finalizeRun = Effect.fn('finalizeRun')(function* (
   };
   let status = yield* end({ ...requested, settlement });
   // A refused settlement: the end, its outcome kept, records the result it
-  // lost, and the parent hears of it where it takes input.
+  // lost, and the parent is told, and woken, where it takes input. An end
+  // that committed with it (its publication failed after) lost nothing.
   if (Exit.isFailure(status) && settlement !== undefined) {
     const cause = ensureError(Cause.squash(status.cause)).message;
-    const message = `Result lost: ${cause}`;
-    yield* Effect.logWarning(`Run ${runId}: ${message}`);
+    yield* Effect.logWarning(`Run ${runId}: its settled end: ${cause}`);
+    const landed = yield* getRunRecords(session, runId)
+      .readRunEnd()
+      .pipe(Effect.catch((e) => Effect.as(Effect.logWarning(`${e}`), null)));
+    if (landed !== null)
+      return { ok: true, outcome: landed.outcome, recorded: true };
+    const had = requested.error?.message;
+    const message = `Result lost: ${cause}${had ? ` (it ended: ${had})` : ''}`;
     status = yield* end({
       ...requested,
-      error: { kind: 'unexpected', message },
+      error: { kind: 'result-lost', message },
     });
     const text = `The result of run ${runId} was lost: ${cause}`;
+    const item = {
+      text,
+      from: { kind: 'run', runId } as const,
+      deliveryId: lostResultId(runId),
+    };
     yield* Effect.flatMap(persistedParentRunId(session, runId), (to) =>
-      to === undefined
-        ? Effect.void
-        : session.followUps.send(to, {
-            text,
-            from: { kind: 'run', runId },
-            deliveryId: `${runId}:result-lost`,
-          }),
+      to === undefined ? Effect.void : session.followUps.send(to, item),
     ).pipe(Effect.catch((e) => Effect.logWarning(`Run ${runId}: ${e}`)));
   }
   if (Exit.isSuccess(status)) {

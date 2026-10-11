@@ -1,12 +1,8 @@
-/**
- * Native access to a run's named records: the run-record tier of its
- * aggregate (`run.config`, `run.report`, `run.result`, ...), the terminal
- * fact, and the child loop's turn bookkeeping. Every read is a database read
- * of committed rows; nothing here reads a file, and the run loop itself
- * writes the run history.
- */
+/** A run's named records (`run.config`, `run.report`, `run.result`, ...),
+ *  its terminal fact, its parent edge and the children its calls own, and
+ *  the child loop's turn bookkeeping: database reads of committed rows. */
 
-import { Effect, Result } from 'effect';
+import { Effect, Result, Stream } from 'effect';
 
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { runHistoryRows } from '@agent/runtime/storedTurn';
@@ -17,15 +13,19 @@ import {
 } from '@agent/core/definition/RunRecord';
 import {
   DatabaseReadFailed,
+  DatabaseRowCorrupt,
+  DatabaseRowEarlier,
   type DatabaseNotOwner,
   type DatabaseWriteFailed,
 } from '@shared/session/database';
 import { attemptOf } from '@shared/session/inFlight';
+import { RunHistoryRefused } from '@shared/session/runHistory';
 import { foldRunState, type RunState } from '@shared/session/runStateFold';
 import {
   ResultMetaSchema,
   storedResultMeta,
   aggregateId,
+  aggregateTarget,
   emptyRunEndOutput,
   isDocumentTaskConfig,
   sumRunUsageTotals,
@@ -57,11 +57,8 @@ interface ChildTurnState {
   readonly lastCompleted: AttemptKey | null;
 }
 
-/**
- * Fold the run's `child.turn` rows, in commit order: `accepted` opens the
- * turn, `settled` closes it and becomes the last completed one, which can
- * belong to an earlier attempt than the active one.
- */
+/** Fold the run's `child.turn` rows: `accepted` opens a turn, `settled`
+ *  closes it as the last completed (maybe an earlier attempt's). */
 export function readChildTurnState(
   session: SessionHandle,
   runId: RunId,
@@ -83,13 +80,9 @@ export function readChildTurnState(
   );
 }
 
-/**
- * The run's terminal fact for the lifecycle it is in now, or null while this
- * lifecycle has not ended: a `run.activate` (the launch, each resume) after
- * the last `run.end` starts a new lifecycle, so a resumed run never carries
- * the outcome of one it left. Shared with `finalizeRun`, the row's one
- * writer, so writer and readers scope it identically.
- */
+/** The run's terminal fact for its current lifecycle (a `run.activate`
+ *  after the last `run.end` starts one), or null: the scope `finalizeRun`,
+ *  the row's one writer, and every reader share. */
 export function runEndFromEvents(
   rows: readonly SessionEvent[],
   runId: RunId,
@@ -103,12 +96,8 @@ export function runEndFromEvents(
   return lifecycle?.type === 'run.end' ? lifecycle : null;
 }
 
-/**
- * A run's persisted parent edge (`run.start.parent`, severed by a later
- * `run.detach`, dropped once the parent is no longer listed), read cold from
- * the two runs' records: the one rule every resume takes its lineage from,
- * never from its caller.
- */
+/** A run's persisted parent (`run.start.parent`, less a `run.detach` or an
+ *  unlisted parent), from the runs' records: every resume's lineage. */
 export const persistedParentRunId = Effect.fn('persistedParentRunId')(
   function* (session: SessionHandle, runId: RunId) {
     const parent = (yield* parentEdge(session, runId))?.id;
@@ -135,11 +124,8 @@ const parentEdge = Effect.fn('parentEdge')(function* (
   return edgeOf(yield* session.log.records(runId));
 });
 
-/**
- * The run one attempt of a parent's call launches: an `agent` call's child,
- * a background `script` run. A provider's call ids are unique within one
- * response only, so the call is named by its response too.
- */
+/** The run one attempt of a parent's call launches (an `agent` child, a
+ *  background script), named by its response too: call ids repeat. */
 export const callChildRunId = (call: {
   readonly parentRunId: RunId;
   readonly responseId: string;
@@ -172,12 +158,8 @@ const openCallChildren = (
   return open;
 };
 
-/**
- * The open call that owns `runId` (HQ6): the parent call that launched it,
- * while the run is not detached and the call is still unsettled in the
- * parent's run history. Null for a root, a detached child, a child no call
- * launched, or one whose call has settled.
- */
+/** The open call that owns `runId` (HQ6): the undetached parent call that
+ *  launched it, unsettled in the parent's history; else null. */
 export const owningCall = Effect.fn('owningCall')(function* (
   session: SessionHandle,
   runId: RunId,
@@ -195,12 +177,22 @@ export const owningCall = Effect.fn('owningCall')(function* (
     : null;
 });
 
-/**
- * The children `runId`'s open calls own that have not ended, read from its
- * run history and the children's own rows, never from a view that may lag
- * them. A history that does not load names no calls: every child its own
- * edge (an indexed read) puts under one of the run's calls is owned, loudly.
- */
+/** The parent notice a run's end queues when its result was lost. */
+export const lostResultId = (runId: RunId): string => `${runId}:result-lost`;
+
+/** A run whose rows do not load: they do not fold, or one does not decode
+ *  (corrupt, or an earlier build's); never a store that cannot be read. */
+export const unloadable = (
+  error: unknown,
+): error is RunHistoryRefused | DatabaseReadFailed =>
+  error instanceof RunHistoryRefused ||
+  (error instanceof DatabaseReadFailed &&
+    (error.cause instanceof DatabaseRowCorrupt ||
+      error.cause instanceof DatabaseRowEarlier));
+
+/** The unended children `runId`'s open calls own, from its history and
+ *  their own rows. Unloadable, it names no calls: every child whose own
+ *  `run.start` (the listing's row) puts it under a call is owned, loudly. */
 export const openOwnedChildren = Effect.fn('openOwnedChildren')(function* (
   session: SessionHandle,
   runId: RunId,
@@ -208,22 +200,29 @@ export const openOwnedChildren = Effect.fn('openOwnedChildren')(function* (
   const history = yield* session.runHistory
     .load(runId)
     .pipe(
-      Effect.catchTag('RunHistoryRefused', (refused) =>
-        Effect.as(Effect.logWarning(`Run ${runId}: ${refused.message}`), null),
+      Effect.catchIf(unloadable, (refused) =>
+        Effect.as(
+          Effect.logWarning(`Run ${runId}: ${refused.message}`),
+          false as const,
+        ),
       ),
     );
   const named =
-    history === null
-      ? (yield* session.log.children(runId)).map(
-          (child) => [null, child] as const,
-        )
+    history === false
+      ? (yield* Stream.runCollect(session.log.listing())).flatMap((row) => {
+          const child = aggregateTarget(row.aggregateId);
+          return row.type === 'run.start' &&
+            row.parent?.id === runId &&
+            child.kind === 'run'
+            ? [[null, child.id] as const]
+            : [];
+        })
       : [...openCallChildren(runId, history)].flatMap(([callId, children]) =>
           children.map((child) => [callId, child] as const),
         );
   const open: { readonly runId: RunId; readonly callId: string }[] = [];
   for (const [callId, child] of named) {
-    // One read of the child's records (its edge and its end). A damaged
-    // child fails alone: its parent warns and does not wait on it.
+    // Its edge and its end; a damaged child fails alone, loudly.
     const read = yield* Effect.result(session.log.records(child));
     if (read._tag === 'Failure') {
       yield* Effect.logWarning(
@@ -239,11 +238,8 @@ export const openOwnedChildren = Effect.fn('openOwnedChildren')(function* (
   return open;
 });
 
-/**
- * The run's latest row of one type, or null: the one latest-row reader every
- * named record goes through. The read keeps only the newest row of each type,
- * and its strict decode already refused a row that does not match.
- */
+/** The run's latest row of one type, or null: the one latest-row reader
+ *  (the read keeps the newest of each type, strictly decoded). */
 function latestOfType<T extends SessionEvent['type']>(
   rows: readonly SessionEvent[],
   id: AggregateId,

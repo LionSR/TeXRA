@@ -196,8 +196,10 @@ export class DatabaseRowEarlier extends Data.TaggedError('DatabaseRowEarlier')<{
 
 /**
  * A root's current values (`current_value`): one row per family and key,
- * replaced in place outside the event history, written in one `BEGIN
- * IMMEDIATE` with no claim, decoded (or refused) where read.
+ * replaced in place, outside the event history, so an event-format bump
+ * leaves them. Every write is one `BEGIN IMMEDIATE` with no aggregate claim;
+ * a value decodes with its family's schema where it is read, and a row that
+ * no longer decodes fails that read.
  */
 export interface CurrentValues {
   readonly get: <T, D extends boolean>(
@@ -227,8 +229,12 @@ export interface CurrentValues {
     readonly { readonly key: string; readonly value: T }[],
     DatabaseReadFailed
   >;
-  /** Emits as subscribed, then after each commit (any process's) that
-   *  changed one of `keys`' values; a failed read is logged and retried. */
+  /**
+   * Emits as subscribed, then after each commit, by this process or
+   * another, that changed one of `keys`' values: the root's wake level
+   * narrowed inside the store to those rows. A read that fails is logged and
+   * retried, so no change is missed.
+   */
   readonly changes: (
     family: Pick<ValueFamily<unknown, boolean>, 'name'>,
     keys: readonly string[],
@@ -377,10 +383,8 @@ export class Database extends Context.Service<
       },
       DatabaseReadFailed
     >;
-    /** Aggregates' claims and edges: of `ids`, or of one aggregate and
-     *  everything under it by their own parent edges (`under`, indexed). */
     readonly aggregateState: (
-      of: readonly AggregateId[] | { readonly under: AggregateId },
+      ids: readonly AggregateId[],
     ) => Effect.Effect<readonly AggregateState[], DatabaseReadFailed>;
   }
 >()('@texra/session/Database') {}

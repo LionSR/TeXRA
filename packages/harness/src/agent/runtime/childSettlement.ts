@@ -18,7 +18,7 @@ import type {
 } from '@agent/followUp/Inbox';
 import { startFollowUpWake } from '@agent/followUp/ToolUseFollowUp';
 import type { AgentTrace } from '@agent/trace';
-import type { AttemptKey } from '@agent/storage/runRecords';
+import { lostResultId, type AttemptKey } from '@agent/storage/runRecords';
 import { withLogChannel } from '@logger/effectLog';
 import {
   aggregateId,
@@ -275,7 +275,8 @@ export const commitPart = (
   );
 
 /** After the transaction that queued `delivery` committed: wake the parent
- *  when no generation of it here reads it. A refused or already-read
+ *  when no generation of it here reads it, for the delivery or the notice
+ *  its end queued in its place (`lostResultId`). A refused or already-read
  *  delivery owes no wake. */
 export const wakeParent = (
   session: SessionHandle,
@@ -285,8 +286,13 @@ export const wakeParent = (
   Effect.gen(function* () {
     const id = delivery?.item.deliveryId;
     if (delivery === undefined || id === undefined) return;
+    const from = delivery.item.from;
+    const ids = [
+      id,
+      ...(from.kind === 'run' ? [lostResultId(from.runId)] : []),
+    ];
     const { followUps } = yield* session.followUps.read(delivery.to);
-    if (!followUps.some((f) => f.followUpId === id)) return;
+    if (!followUps.some((f) => ids.includes(f.followUpId))) return;
     if (!(yield* startFollowUpWake(delivery.to, session)))
       yield* warn(
         trace,

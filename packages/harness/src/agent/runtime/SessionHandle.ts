@@ -126,8 +126,6 @@ export interface SessionLog {
   records(
     runId: RunId,
   ): Effect.Effect<readonly SessionEvent[], DatabaseReadFailed>;
-  /** The open runs whose own `run.start` names `runId` their parent. */
-  children(runId: RunId): Effect.Effect<readonly RunId[], DatabaseReadFailed>;
   /** A run's display rows, its priced `usage` rows among them; empty when
    *  the run never existed or was removed. */
   display(
@@ -142,9 +140,12 @@ export interface SessionLog {
   /** The cold listing: the latest row per aggregate and listing type, plus
    *  the outstanding approvals; completes. */
   listing(): Stream.Stream<DisplaySessionEvent, DatabaseReadFailed>;
-  /** Hold `runId`'s claim for the caller's scope. Holds are counted: the
-   *  first takes it (proving a prior owner dead), the last returns it as
-   *  the first found it, unless a hold `ends` it (the run's driver). */
+  /**
+   * Hold `runId`'s claim for the caller's scope. Holds are counted: the
+   * first takes the claim (proving a prior owner dead), later ones share
+   * it, and the last to go returns it to how the first found it, unless a
+   * hold `ends` it (the run's driver), when it is released.
+   */
   hold(
     runId: RunId,
     options?: { readonly ends?: boolean },
