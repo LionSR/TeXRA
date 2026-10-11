@@ -42,7 +42,6 @@ import type { CoWrite } from '@shared/session/sessionEvents';
 import type { SessionHandle } from './SessionHandle';
 
 const CHANNEL = 'childSettlement';
-const REFUSED: Sent = { kind: 'refused' };
 
 /** A delivery's warning: on an agent-CLI child's trace, else the log. */
 export const warn = (
@@ -176,14 +175,11 @@ export const parentAdmission = (
       (error) =>
         Effect.succeed({
           rows: [],
-          sent: REFUSED,
+          sent: { kind: 'refused' } satisfies Sent,
           committed: warn(
             trace,
             `Parent run ${to} is closed or cannot be read.`,
-            {
-              parentRunId: to,
-              error,
-            },
+            { parentRunId: to, error },
           ),
         }),
     ),
@@ -226,14 +222,14 @@ export const deliverIn = (
     if (
       sent.kind === 'refused' &&
       sent.reason === 'owned_elsewhere' &&
-      item.from.kind === 'run' &&
+      child !== undefined &&
       item.deliveryId !== undefined
     )
       return {
         rows: [
           {
             type: 'child.park' as const,
-            aggregateId: aggregateId('run', item.from.runId),
+            aggregateId: aggregateId('run', child),
             phase: 'parked' as const,
             heldFor: item.deliveryId,
             ...(end !== undefined && { ends: end }),
@@ -332,6 +328,27 @@ export const sendToParent = (
     yield* sent.committed;
     return sent.to;
   });
+
+/**
+ * A child launch that failed before its run was born: no row of the child
+ * exists to settle on, so its parent hears the failure as input alone, and
+ * is woken for it.
+ */
+export const deliverLaunchFailure = (
+  session: SessionHandle,
+  child: RunId,
+  text: string,
+): Effect.Effect<void> =>
+  Effect.gen(function* () {
+    if (yield* getRunRecords(session, child).exists()) return;
+    const from = { kind: 'run', runId: child } as const;
+    const item = { text, from, deliveryId: `${child}:launch` };
+    const to = yield* sendToParent(session, item, {}, undefined);
+    if (to !== null) yield* wakeParent(session, { to, item }, undefined);
+  }).pipe(
+    // The launch's own failure stands; this one is said beside it.
+    Effect.catch((e) => warn(undefined, `${child}: not delivered`, e)),
+  );
 
 /** Commit a part in one transaction, then run what it left for after. */
 export const commitPart = (

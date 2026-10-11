@@ -1,5 +1,3 @@
-import { Cause, Effect, Exit, Fiber } from 'effect';
-import type { AgentRunServices, Runs } from '@agent/runtime/runRegistry';
 /**
  * Shared detached-child launch choreography for delegation launch sites.
  *
@@ -12,10 +10,11 @@ import type { AgentRunServices, Runs } from '@agent/runtime/runRegistry';
  * the guard releases the claim; a late loop failure is surfaced) lives in one
  * place.
  */
-
 // Third-party imports
+import { Cause, Effect, Exit, Fiber } from 'effect';
 
 // Local imports
+import type { AgentRunServices, Runs } from '@agent/runtime/runRegistry';
 import { runWithLaunchGuard } from '@agent/runtime/runLaunchGuard';
 import {
   startChildRunLoop,
@@ -92,7 +91,7 @@ export type DetachedChildRunInput<
 
 /**
  * Run the shared detached-child launch choreography: hold the owned-run
- * owned-run launch guard while creating any child stream and handing it to the run
+ * launch guard while creating any child stream and handing it to the run
  * loop, then attach the completion error trace. Returns the launched loop's
  * completion so in-band callers can await it.
  */
@@ -154,8 +153,8 @@ export function startDetachedChildRunLoop<
         return yield* Effect.failCause(setup.cause);
       }
       const { launch, completion } = setup.value;
-      if (launch.onLoopFailed) {
-        const onLoopFailed = launch.onLoopFailed;
+      const { onLoopFailed } = launch;
+      if (onLoopFailed) {
         yield* Effect.forkDetach(
           Fiber.join(completion).pipe(
             Effect.catchCause((cause) => onLoopFailed(Cause.squash(cause))),

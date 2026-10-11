@@ -294,6 +294,81 @@ const broken = (detail: string) =>
 /** No registration. */
 const none: Effect.Effect<readonly SessionEventDraft[]> = Effect.succeed([]);
 
+/** One checked batch, committed in the job `within` names or in the
+ *  session's own (`sessionLog`). */
+const commit = Effect.fn('RunCell.commit')(function* <E>(
+  sessionLog: Pick<SessionLog, 'transact'>,
+  run: RunId,
+  state: RunState,
+  rows: readonly RunHistoryDraft[],
+  registration: Effect.Effect<readonly SessionEventDraft[]>,
+  alongside: Effect.Effect<CoWrite, E, Scope.Scope>,
+  within: Append | undefined,
+) {
+  const violation = contractViolation(run, state, rows);
+  if (violation !== null) return yield* broken(violation);
+  for (const row of rows)
+    for (const unsafe of rowOrigins(row).map(unsafeEndpoint))
+      if (unsafe !== null)
+        return yield* new RunHistoryRefused({
+          reason: 'unsafe-endpoint',
+          runId: run,
+          detail: `a ${row.type} origin is not a scheme, host and path alone: ${unsafe}`,
+        });
+  // `load`'s answer with the batch in, before publishing it: a committed
+  // batch `load` cannot fold is a run nothing can read again.
+  const after = yield* loaded(
+    run,
+    foldRunState(state, candidates(state, rows)),
+    false,
+  );
+  // D11: the history `load` checks with `PreparedHistorySchema`, checked
+  // here from what the batch changes on (an edit's range start, else the
+  // already-checked history's end); re-checking all is quadratic.
+  const assembled = after?.messages ?? [];
+  if (rows.some(isMessageBearing) && assembled.length > 0) {
+    const edit = rows.find((row) => row.type === 'context.edit');
+    const held = state.messages.length;
+    const kept =
+      edit?.type === 'context.edit'
+        ? Math.min(edit.payload.range.from, held)
+        : held;
+    const refusal = unprepared(run, assembled, kept);
+    if (refusal !== null) return yield* refusal;
+  }
+  const target = qualifyAggregateId('run', run);
+  const job = (append: Append) =>
+    Effect.gen(function* () {
+      // Decided in the job, so it reads what the jobs before it left.
+      // The store refuses a `run.start` anywhere but a run's first row.
+      const born = yield* registration;
+      const stray = born.find((row) => row.aggregateId !== target);
+      if (stray !== undefined)
+        return yield* broken(`a registration targets ${stray.aggregateId}`);
+      const co = yield* alongside;
+      const written = yield* runStateAppend(append)([
+        ...born,
+        ...rows.map(storedDraft),
+      ]);
+      yield* append(co.rows);
+      yield* afterCommit(co.committed);
+      return written;
+    }).pipe(Effect.scoped);
+  // A target no longer held open is `not-owner`, nothing written (R7).
+  const committed = yield* (
+    within === undefined
+      ? sessionLog.transact((tx) => job(tx.append))
+      : job(within)
+  ).pipe(notOwner(run));
+  // The same fold at the commits the publisher assigned: the state the run
+  // continues from. A failure here is this module's defect.
+  const folded = foldStored(state, committed);
+  if (Result.isSuccess(folded) && folded.success !== null)
+    return folded.success;
+  const why = Result.isFailure(folded) ? folded.failure.detail : 'nothing';
+  return yield* broken(`its own fold rejects the published batch: ${why}`);
+});
+
 /**
  * One session's run history over its log (`SessionLog`): every row it
  * commits goes through the session's one door, a resume's claim inside the
@@ -308,16 +383,10 @@ export function makeRunHistory(
   /** `load`, and a read inside a job (`prepared` false: a batch that
    *  changes the history is checked from where it changes). */
   const read = (run: RunId, through = Infinity, prepared = true) =>
-    Effect.flatMap(stored(run), (rows) =>
-      loaded(
-        run,
-        foldStored(
-          null,
-          rows.filter((r) => r.seq <= through),
-        ),
-        prepared,
-      ),
-    );
+    Effect.flatMap(stored(run), (rows) => {
+      const kept = rows.filter((r) => r.seq <= through);
+      return loaded(run, foldStored(null, kept), prepared);
+    });
   const load = Effect.fn('RunHistory.load')((run: RunId, through?: number) =>
     read(run, through),
   );
@@ -360,79 +429,6 @@ export function makeRunHistory(
       )
       .pipe(notOwner(run));
 
-  /** One checked batch, committed in the job `within` names or in its own. */
-  const commit = Effect.fn('RunCell.commit')(function* <E>(
-    run: RunId,
-    state: RunState,
-    rows: readonly RunHistoryDraft[],
-    registration: Effect.Effect<readonly SessionEventDraft[]>,
-    alongside: Effect.Effect<CoWrite, E, Scope.Scope>,
-    within: Append | undefined,
-  ) {
-    const violation = contractViolation(run, state, rows);
-    if (violation !== null) return yield* broken(violation);
-    for (const row of rows)
-      for (const unsafe of rowOrigins(row).map(unsafeEndpoint))
-        if (unsafe !== null)
-          return yield* new RunHistoryRefused({
-            reason: 'unsafe-endpoint',
-            runId: run,
-            detail: `a ${row.type} origin is not a scheme, host and path alone: ${unsafe}`,
-          });
-    // `load`'s answer with the batch in, before publishing it: a committed
-    // batch `load` cannot fold is a run nothing can read again.
-    const after = yield* loaded(
-      run,
-      foldRunState(state, candidates(state, rows)),
-      false,
-    );
-    // D11: the history `load` checks with `PreparedHistorySchema`, checked
-    // here from what the batch changes on (an edit's range start, else the
-    // already-checked history's end); re-checking all is quadratic.
-    const assembled = after?.messages ?? [];
-    if (rows.some(isMessageBearing) && assembled.length > 0) {
-      const edit = rows.find((row) => row.type === 'context.edit');
-      const held = state.messages.length;
-      const kept =
-        edit?.type === 'context.edit'
-          ? Math.min(edit.payload.range.from, held)
-          : held;
-      const refusal = unprepared(run, assembled, kept);
-      if (refusal !== null) return yield* refusal;
-    }
-    const target = qualifyAggregateId('run', run);
-    const job = (append: Append) =>
-      Effect.gen(function* () {
-        // Decided in the job, so it reads what the jobs before it left.
-        // The store refuses a `run.start` anywhere but a run's first row.
-        const born = yield* registration;
-        const stray = born.find((row) => row.aggregateId !== target);
-        if (stray !== undefined)
-          return yield* broken(`a registration targets ${stray.aggregateId}`);
-        const co = yield* alongside;
-        const written = yield* runStateAppend(append)([
-          ...born,
-          ...rows.map(storedDraft),
-        ]);
-        yield* append(co.rows);
-        yield* afterCommit(co.committed);
-        return written;
-      }).pipe(Effect.scoped);
-    // A target no longer held open is `not-owner`, nothing written (R7).
-    const committed = yield* (
-      within === undefined
-        ? sessionLog.transact((tx) => job(tx.append))
-        : job(within)
-    ).pipe(notOwner(run));
-    // The same fold at the commits the publisher assigned: the state the run
-    // continues from. A failure here is this module's defect.
-    const folded = foldStored(state, committed);
-    if (Result.isSuccess(folded) && folded.success !== null)
-      return folded.success;
-    const why = Result.isFailure(folded) ? folded.failure.detail : 'nothing';
-    return yield* broken(`its own fold rejects the published batch: ${why}`);
-  });
-
   const open = Effect.fn('RunHistory.open')(function* <E>(
     run: RunId,
     opening: RunOpening<E> = {},
@@ -454,6 +450,7 @@ export function makeRunHistory(
       append: (rows, alongside = noCoWrite) =>
         SynchronizedRef.updateAndGetEffect(ref, (state) =>
           commit(
+            sessionLog,
             run,
             state,
             typeof rows === 'function' ? rows(state) : rows,

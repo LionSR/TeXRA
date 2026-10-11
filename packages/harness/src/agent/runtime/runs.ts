@@ -1,8 +1,7 @@
 /**
- * A session's runs, as hosts and tools reach them (`Runs`): launch one (a
- * root, or a hold on a stopped one), resume one, stop one, and read what this
- * process holds of them. The registry behind them (`runRegistry.ts`) is the
- * harness internals'; the `Runs` tag that serves these is its module's.
+ * A session's runs as hosts and tools reach them ({@link RunsShape}). The
+ * registry behind them (`runRegistry.ts`) is the harness internals'; the
+ * `Runs` tag that serves these is its module's.
  */
 
 import type { SessionOwner } from '@platform/processRuntime';
