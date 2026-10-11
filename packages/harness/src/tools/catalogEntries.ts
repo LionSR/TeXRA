@@ -11,7 +11,7 @@ import type { RuntimeTool as ITool } from '@agent/runtime/ToolServices';
 import { convertToolSchema } from '@agent/core/tools/toolSchema';
 import type { ToolDefinition } from '@shared/schemas';
 import { withoutSchemaDescriptions } from '@tools/schemaIdentity';
-import { sha256 } from '@utils/core/idHash';
+import { jsonSha } from '@utils/core/idHash';
 
 type ToolDefinitions = NonNullable<TurnRequest['tools']>;
 
@@ -62,11 +62,11 @@ export const toolDigests = (
 ): { readonly digest: string; readonly shown: string } => {
   const [definition] = toolDefinitionsFor([tool.definition]);
   return {
-    digest: sha256({
+    digest: jsonSha({
       name: definition.name,
       parameters: withoutSchemaDescriptions(definition.parameters),
     }),
-    shown: sha256(definition),
+    shown: jsonSha(definition),
   };
 };
 

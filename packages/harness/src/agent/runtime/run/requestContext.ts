@@ -39,7 +39,7 @@ import {
 } from '@shared/schemas';
 import type { RunHistoryDraft, RunState } from '@shared/session/runStateFold';
 import { delegationSection } from '@tools/delegation/delegationAvailability';
-import { sha256 } from '@utils/core/idHash';
+import { jsonSha } from '@utils/core/idHash';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { envFlag } from '@utils/system/envFlags';
 
@@ -88,7 +88,7 @@ export function blobRows(
 ): RunHistoryDraft[] {
   const stored = new Set(Object.keys(state.contents));
   return values.flatMap((value) => {
-    const digest = sha256(value);
+    const digest = jsonSha(value);
     if (stored.has(digest)) return [];
     stored.add(digest);
     return [
@@ -114,10 +114,10 @@ function recorded(
   };
   const request = {
     mode: resolved.mode,
-    system: resolved.system === undefined ? null : sha256(resolved.system),
-    tools: resolved.tools.map((tool) => sha256(tool)),
+    system: resolved.system === undefined ? null : jsonSha(resolved.system),
+    tools: resolved.tools.map((tool) => jsonSha(tool)),
     controls: resolved.controls,
-    agent: sha256(agent),
+    agent: jsonSha(agent),
   };
   return { agent, request };
 }
@@ -127,7 +127,7 @@ function recorded(
 export const attemptRequest = (
   run: Pick<AgentRunShape, 'config' | 'persona' | 'task'>,
   resolved: ResolvedTurn,
-): string => sha256(recorded(run, resolved).request);
+): string => jsonSha(recorded(run, resolved).request);
 
 /**
  * The rows of an attempt that sends `resolved`, the turn the bound model
@@ -157,7 +157,7 @@ export function attemptRows(
         kind: 'attempt',
         invocation,
         purpose,
-        request: sha256(request),
+        request: jsonSha(request),
         origin,
       },
     },
@@ -215,7 +215,7 @@ function blob(state: RunState, digest: string): unknown {
   const value = state.contents[digest];
   if (value === undefined)
     throw new Error(`The run's rows hold no context blob ${digest}`);
-  if (sha256(value) !== digest)
+  if (jsonSha(value) !== digest)
     throw new Error(`The context blob ${digest} does not hash to its address`);
   return value;
 }

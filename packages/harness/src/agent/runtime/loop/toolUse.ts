@@ -46,7 +46,7 @@ import {
 import { RunHistory, type RunCell } from '@shared/session/runHistory';
 import type { RunState } from '@shared/session/runStateFold';
 import { toolDefinitionsFor } from '@tools/catalogEntries';
-import { sha256 } from '@utils/core/idHash';
+import { jsonSha } from '@utils/core/idHash';
 
 import { AgentRun } from '../run/AgentRun';
 import { backgroundCompaction } from '../run/compaction';
@@ -298,7 +298,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
     const { activated = [], attachedMemoryMisses: misses = [] } =
       run.opening ?? {};
     const input = {
-      ...(openingSystem !== undefined && { system: sha256(openingSystem) }),
+      ...(openingSystem !== undefined && { system: jsonSha(openingSystem) }),
       ...(activated.length > 0 && { activated: [...activated] }),
       ...(misses.length > 0 && { memoryMisses: misses }),
     };

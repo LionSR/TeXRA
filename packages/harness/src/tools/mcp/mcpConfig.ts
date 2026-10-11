@@ -52,7 +52,7 @@ import type {
   LoadedPluginTools,
   PluginLoader,
 } from '@tools/toolTable';
-import { sha256 } from '@utils/core/idHash';
+import { jsonSha } from '@utils/core/idHash';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { safeHomedir } from '@utils/system/platformPaths';
 
@@ -271,7 +271,7 @@ class ServerKey implements Equal.Equal {
   ) {
     this.plugin = plugin;
     this.env = env;
-    this.id = sha256([plugin.id, plugin.spec, plugin.revision, load, env]);
+    this.id = jsonSha([plugin.id, plugin.spec, plugin.revision, load, env]);
   }
 
   [Equal.symbol](that: Equal.Equal): boolean {
@@ -315,7 +315,7 @@ export const projectServers = Effect.fnUntraced(function* (
       const key = new ServerKey(plugin, yield* ProjectEnvironment, load);
       const { tools, failure } = yield* RcMap.get(servers, key);
       if (failure !== undefined) failed.add(key);
-      const revision = sha256({ spec: plugin.spec, env: plugin.revision });
+      const revision = jsonSha({ spec: plugin.spec, env: plugin.revision });
       return { failure, tools, revision };
     });
   const hold: ProjectServers['hold'] = Effect.fn('ToolCatalog.hold')(

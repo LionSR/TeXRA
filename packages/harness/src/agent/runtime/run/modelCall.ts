@@ -30,7 +30,7 @@ import type {
 } from '@shared/schemas';
 import { invocationAfter, type Invocation } from '@shared/session/inFlight';
 import { UsageLog } from '@shared/usageLog';
-import { sha256 } from '@utils/core/idHash';
+import { jsonSha } from '@utils/core/idHash';
 
 import { runInvocation, type RouteRetries } from './invocation';
 import { priceTurnUsage, reportUsage, type UsageAttribution } from './pricing';
@@ -140,7 +140,7 @@ export const callModel = Effect.fn('ModelInvoker.call')(function* <R>(
           // prepared turn's own.
           request:
             call.record === null
-              ? sha256(prepared)
+              ? jsonSha(prepared)
               : yield* call.record.attempt(ref, bound, prepared),
           origin: bound.origin,
         });

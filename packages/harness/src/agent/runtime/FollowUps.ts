@@ -50,7 +50,7 @@ import type { RunHistoryDraft, RunState } from '@shared/session/runStateFold';
 import type { CoWrite } from '@shared/session/sessionEvents';
 import type { RunCell } from '@shared/session/runHistory';
 import { activatedSkillNames } from '@skills/runtimeSkills';
-import { sha256 } from '@utils/core/idHash';
+import { jsonSha } from '@utils/core/idHash';
 import { ensureError } from '@utils/errors/errorMessage';
 import { type InputPart, mediaInputParts } from './run/mediaInput';
 import { blobRows } from './run/requestContext';
@@ -296,7 +296,7 @@ export const claimFollowUps = Effect.fn('FollowUps.claim')(function* (
     const input = {
       ...(instruction !== undefined && {
         instruction:
-          instruction === run.config.instruction ? null : sha256(instruction),
+          instruction === run.config.instruction ? null : jsonSha(instruction),
       }),
       ...(activated !== undefined && { activated }),
     };

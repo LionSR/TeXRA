@@ -61,7 +61,7 @@ import { mcpServerOfToolName } from '@tools/mcp/mcpServer';
 import { readDisabledTools } from '@tools/plugins';
 import { readDelegationTargets } from '@tools/delegation/delegationAvailability';
 import type { Continuation } from '@tools/toolTable';
-import { sha256 } from '@utils/core/idHash';
+import { jsonSha } from '@utils/core/idHash';
 import type { StepRoot } from '@utils/files/externalRoots';
 
 import { declaredToolNames, resolveStepTools } from '../agentToolResolution';
@@ -405,7 +405,7 @@ const openStep = Effect.fn('Step.open')(function* (
     toolsChanged ||
     skillsChanged ||
     state.offeredContinuation !== continuation ||
-    state.offeredContext !== sha256(context) ||
+    state.offeredContext !== jsonSha(context) ||
     step.hooks.join('\0') !== state.offeredHooks.join('\0');
   // What is withheld can change while the offered set does not (a plugin
   // switched on whose tools all need approval): reported on its own.
@@ -451,8 +451,8 @@ const openStep = Effect.fn('Step.open')(function* (
               tools: step.tools.offered,
               continuation,
               skills,
-              system: system === undefined ? null : sha256(system),
-              context: sha256(context),
+              system: system === undefined ? null : jsonSha(system),
+              context: jsonSha(context),
               hooks: step.hooks,
             },
           } satisfies RunHistoryDraft,

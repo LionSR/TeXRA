@@ -57,7 +57,7 @@ import { defineTool } from '@tools/core/definition';
 import { nullishWithDefault } from '@tools/core/inputSchema';
 import { errorResult, executed } from '@tools/core/result';
 import { normalizeStructuredOutputSchema } from '@tools/structuredOutput';
-import { sha256 } from '@utils/core/idHash';
+import { jsonSha } from '@utils/core/idHash';
 import { truncateWithEllipsis } from '@utils/text/stringUtils';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -497,7 +497,7 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
       : null;
   const key =
     awaited && script !== undefined
-      ? sha256({
+      ? jsonSha({
           tool: launch.tool,
           prompt: launch.prompt,
           agent: agent.name,
