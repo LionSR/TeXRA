@@ -164,15 +164,16 @@ in Verification results — a single-consumer justified factory, not a split tar
 
 ---
 
-## Ranking summary
+## Ranking summary (superseded)
 
-| #   | Area                                       | LOC saved | Effort | Savings/effort | Note                                  |
-| --- | ------------------------------------------ | --------- | ------ | -------------- | ------------------------------------- |
-| 1   | `codex*`/`claudeAgent*` CLI-agent families | 200–350   | L      | ★★★            | genuine large-scale dup; top priority |
-| 2   | `sessionFold` + `runStateFold` folds       | 150–250   | L      | ★★             | biggest file; shotgun-surgery risk    |
-| 3   | `Database.ts` god-layer (61 closures)      | 150–250   | M–L    | ★★             | clean projection/codec seam           |
-| 4   | CLI `createChatSessionController` factory  | 50–100    | L      | ★              | maintainability, not deletion         |
-| 5   | Cheap-wins bundle (4 items)                | 270–420   | S–M    | ★★★            | start here; lowest risk               |
+The original scan ranked the five candidates below; **all were refuted** (see
+Verification results), so these estimates and priorities do not stand:
+
+- #1 `codex*`/`claudeAgent*` CLI-agent families — est. 200–350 LOC, L — refuted
+- #2 `sessionFold` + `runStateFold` folds — est. 150–250 LOC, L — refuted
+- #3 `Database.ts` god-layer — est. 150–250 LOC, M–L — refuted
+- #4 CLI `createChatSessionController` — est. 50–100 LOC, L — refuted
+- #5 cheap-wins bundle (4 items) — est. 270–420 LOC, S–M — refuted
 
 **Suggested sequencing:** ~~#5 → #1 → #2/#3 → #4~~ — **superseded. Do not follow
 this sequence.** Verification refuted every item; implementing any of them would be
@@ -263,13 +264,12 @@ Each finding was opened and read against its actual source before any edit.
 size-concentration items (#3, #4) resist the obvious fix too, because splitting them
 into helper modules would be single-caller extractions the repo deliberately bans. A
 second automated reviewer (Codex) independently reached the same verdict on every
-item, citing the same AGENTS.md rules, and further showed that even the one in-place
-cleanup the draft kept (merging the three `Database.ts` error-wrappers) would add
-indirection rather than remove it — they are three distinct typed error channels. So
-the only thing left standing is the optional `texFilesOf()` micro-nit (~8 LOC),
-itself borderline against the one-expression-helper bar. **The actionable conclusion
-is that this codebase does not currently warrant a structural refactor — nor any
-in-place cleanup worth a PR.** If a future change adds a _second_ consumer to the
+item, citing the same AGENTS.md rules, and further showed that even the two in-place
+nits the draft kept do not survive: merging the three `Database.ts` error-wrappers
+would add indirection (they are three distinct typed error channels), and the
+`texFilesOf()` helper covers only three `.tex`-filter sites, so it nets ~zero. **The
+actionable conclusion is that this codebase does not currently warrant a structural
+refactor — nor any in-place cleanup worth a PR.** If a future change adds a _second_ consumer to the
 `Database` projection logic or the chat controller, that is the moment an extraction
 would pay for itself; until then, leave them.
 
