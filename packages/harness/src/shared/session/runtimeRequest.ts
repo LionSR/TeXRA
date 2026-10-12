@@ -14,7 +14,10 @@
  */
 import { z } from 'zod';
 
-import { APPROVAL_BYPASS_KINDS } from '@shared/approvalBypassKind';
+import {
+  APPROVAL_BYPASS_KINDS,
+  APPROVAL_POLICY_LIMITS,
+} from '@shared/approvalBypassKind';
 import { RequestDecisionSchema, RunIdSchema } from '@shared/schemas';
 
 const runScoped = { runId: RunIdSchema };
@@ -115,17 +118,26 @@ export const RuntimeRequestSchema = z.discriminatedUnion('kind', [
    *  publishes the resulting `approval.policy` (PRD 6, item 2). */
   z.object({
     kind: z.literal('policy.set'),
-    change: z.object({
-      field: z.literal('bypass'),
-      ...runScoped,
-      bypass: z.enum(APPROVAL_BYPASS_KINDS),
-      enabled: z.boolean(),
-      /** Turning a bypass on also approves the run's requests already
-       *  pending under it. This one is the surface's own, decided by the
-       *  `request.decide` that follows, which may carry more than a plain
-       *  approval. */
-      exceptRequestId: z.string().optional(),
-    }),
+    change: z.discriminatedUnion('field', [
+      z.object({
+        field: z.literal('bypass'),
+        ...runScoped,
+        bypass: z.enum(APPROVAL_BYPASS_KINDS),
+        enabled: z.boolean(),
+        /** Turning a bypass on also approves the run's requests already
+         *  pending under it. This one is the surface's own, decided by the
+         *  `request.decide` that follows, which may carry more than a plain
+         *  approval. */
+        exceptRequestId: z.string().optional(),
+      }),
+      /** Narrow the run's limit at once (a chat's `/approval`): it only
+       *  ever lowers, never raises, the run's own limit. */
+      z.object({
+        field: z.literal('limit'),
+        ...runScoped,
+        limit: z.enum(APPROVAL_POLICY_LIMITS),
+      }),
+    ]),
   }),
 ]);
 export type RuntimeRequest = z.infer<typeof RuntimeRequestSchema>;

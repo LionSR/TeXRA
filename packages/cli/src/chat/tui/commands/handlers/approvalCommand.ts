@@ -19,24 +19,20 @@ import { type SlashCommandContext } from './slashContext';
 const APPROVAL_USAGE = 'Usage: /approval [ask | never | yolo]';
 
 /**
- * `/approval` sets the chat's policy. A chat running in this process takes
- * it as a session override, like `--approval-policy`. A chat whose tasks run
- * in the service writes the project's persisted policy instead: the service
- * follows only that setting, for every window and terminal of the project.
+ * `/approval` sets this chat's launch policy, like `--approval-policy`, here
+ * or in the service; it never writes the project's policy, which `/config`
+ * and the settings view change.
  */
 export function applyCliApprovalPolicySelection(
   input: string,
   context: SlashCommandContext,
-): void {
-  const normalized = input.trim().toLowerCase();
-  const policy = parseTexraApprovalPolicy(normalized);
-  if (!policy) {
-    setTransientNotice(APPROVAL_USAGE);
-    return;
-  }
-
-  context.setApprovalPolicy(policy);
-  appendLocalNotice(`Approval mode: ${formatTexraApprovalPolicy(policy)}`);
+): Effect.Effect<void> {
+  const policy = parseTexraApprovalPolicy(input.trim().toLowerCase());
+  if (!policy) return Effect.sync(() => setTransientNotice(APPROVAL_USAGE));
+  const confirm = `Approval mode: ${formatTexraApprovalPolicy(policy)}`;
+  return context
+    .setApprovalPolicy(policy)
+    .pipe(Effect.andThen(Effect.sync(() => appendLocalNotice(confirm))));
 }
 
 /**

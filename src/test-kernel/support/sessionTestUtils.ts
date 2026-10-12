@@ -7,6 +7,7 @@ import type {
   SessionHandleInit,
   SessionLog,
 } from '@agent/runtime/SessionHandle';
+import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import { runStateAppend } from '@shared/session/runHistory';
 import {
   aggregateId,
@@ -26,11 +27,16 @@ import {
   resetTranscriptOwnership,
 } from '@shared/session/transcriptState';
 import {
+  TEXRA_APPROVAL_POLICY_CONFIG_KEY,
+  type TexraApprovalPolicy,
+} from '@shared/approvalPolicy';
+import {
   closeSessionOf,
   openTestDefaultSession,
 } from '@test/support/sessionEnd';
 import { testSessionOwner } from '@test/support/testProcessRuntime';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
+import { FakeConfigProvider } from '@test/support/FakePlatform';
 import { generateRunId } from '@utils/core';
 
 /** What a test supplies: the isolated roots are this helper's job. */
@@ -199,4 +205,15 @@ export function createTestRunTrace(runId: RunId) {
     rows: () => transcript.rows,
     dispose: () => trace.close(),
   };
+}
+
+/** Set the project's approval policy: the setting every session over
+ *  `roots` (by default the installed fake host's) decides by. */
+export function setTestApprovalPolicy(
+  policy: TexraApprovalPolicy,
+  { config }: Pick<WorkspaceRoots, 'config'> = testWorkspaceRoots(),
+): void {
+  if (!(config instanceof FakeConfigProvider))
+    throw new Error('The installed fake host has no fake config to set.');
+  config.set(TEXRA_APPROVAL_POLICY_CONFIG_KEY, policy);
 }

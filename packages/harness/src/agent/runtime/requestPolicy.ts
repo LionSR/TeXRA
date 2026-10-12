@@ -27,6 +27,7 @@ import {
   texraHumanInputDenialMessage,
   texraRetryDenialMessage,
   type ApprovalPolicyDenial,
+  type TexraApprovalPolicy,
 } from '@shared/approvalPolicy';
 import {
   aggregateId as qualifyAggregateId,
@@ -60,11 +61,17 @@ const canPresent = (session: SessionHandle): boolean =>
  * approval-gated tool) under what the host can answer. One reading for
  * every run of the session, whoever triggers it.
  */
-const executableDecision = (session: SessionHandle, runId: RunId) =>
+const executableDecision = (
+  session: SessionHandle,
+  runId: RunId,
+  policy = session.approvals.policy(runId),
+) =>
   decideTexraApproval({
-    policy: session.approvals.policy(runId),
+    policy,
     promptRequired: true,
-    scopedBypass: false,
+    // A run whose delegated work is bypassed (an Auto-approve launch) is
+    // asked nothing: every approval it would open is granted.
+    scopedBypass: session.approvals.bypass(runId, 'superYolo') !== null,
     canPresent: canPresent(session),
   });
 
@@ -93,7 +100,7 @@ function answerFor(
           action: 'deny',
           reason: texraApprovalDenialMessage(decision),
         },
-        denial: { kind: 'plan' },
+        denial: { kind: 'plan', policy },
       };
     }
     case 'userQuestion': {
@@ -107,7 +114,7 @@ function answerFor(
           action: 'deny',
           reason: texraHumanInputDenialMessage(decision.deny),
         },
-        denial: { kind: 'humanInput', deny: decision.deny },
+        denial: { kind: 'humanInput', deny: decision.deny, policy },
       };
     }
     case 'retry': {
@@ -124,7 +131,7 @@ function answerFor(
           action: 'deny',
           reason: texraRetryDenialMessage(decision.deny),
         },
-        denial: { kind: 'retry', deny: decision.deny },
+        denial: { kind: 'retry', deny: decision.deny, policy },
       };
     }
     case 'proposal':
@@ -159,15 +166,20 @@ export function policyDecidedRows(
 }
 
 /** Whether a step's approval-gated tools are withheld: read live from its
- *  session's policy and host. */
+ *  session's policy, its grants and its host; and the policy read, which a
+ *  denial of the withheld tools names. */
 export function liveToolGates(
   session: SessionHandle,
   runId: RunId,
-): Pick<StepToolInputs, 'approvalPromptsUnavailable'> {
+): Pick<StepToolInputs, 'approvalPromptsUnavailable'> & {
+  readonly policy: TexraApprovalPolicy;
+} {
+  const policy = session.approvals.policy(runId);
   return {
     approvalPromptsUnavailable: isTexraApprovalDenied(
-      executableDecision(session, runId),
+      executableDecision(session, runId, policy),
     ),
+    policy,
   };
 }
 

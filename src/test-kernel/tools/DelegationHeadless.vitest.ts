@@ -14,6 +14,7 @@ import { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { UnfoldedDraft } from '@shared/session/sessionEvents';
 import { RUN_OUTCOME, agentMatchesIdentifier } from '@shared/schemas';
 import type { ModelOptionData, RequestDecision, RunId } from '@shared/schemas';
+import { setTestApprovalPolicy } from '@test/support/sessionTestUtils';
 import { untrackRun, closeSessionOf } from '@test/support/sessionEnd';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { testRunHandle } from '@test/support/runHandleFixtures';
@@ -429,6 +430,7 @@ describe('headless delegation', () => {
   let releaseClaim: Mock<() => void>;
 
   beforeEach(async () => {
+    setTestApprovalPolicy('ask');
     vi.clearAllMocks();
     // A child registers under its parent, and a run's aggregate must begin
     // with its own `run.start`.
@@ -950,7 +952,7 @@ describe('headless delegation', () => {
           // Failure modes: `never` approves the proposal because the run
           // cannot present prompts, or opens a prompt nobody may answer.
           const session = yield* createTestSession();
-          session.approvals.override('never');
+          setTestApprovalPolicy('never');
           const decider = answerOpenedRequests(session, { action: 'approve' });
           yield* Effect.addFinalizer(() =>
             decider.stop().pipe(Effect.ensuring(closeSessionOf(session))),
@@ -971,7 +973,7 @@ describe('headless delegation', () => {
     Effect.scoped(
       Effect.gen(function* () {
         const session = yield* createTestSession();
-        session.approvals.override('yolo');
+        setTestApprovalPolicy('yolo');
         const decider = answerOpenedRequests(session, { action: 'approve' });
         yield* Effect.addFinalizer(() =>
           decider.stop().pipe(Effect.ensuring(closeSessionOf(session))),

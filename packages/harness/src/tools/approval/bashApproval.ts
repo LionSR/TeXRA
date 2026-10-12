@@ -91,8 +91,9 @@ export const requestBashApproval = Effect.fn('requestBashApproval')(function* (
       runId,
       request.grant === 'shell' ? 'bash' : 'superYolo',
     ) !== null;
+  const policy = session.approvals.policy(runId);
   const decision = decideTexraApproval({
-    policy: session.approvals.policy(runId),
+    policy,
     promptRequired: approvalsEnabled,
     scopedBypass: granted(),
     canPresent: run.toolPolicy.approvalPromptsUnavailable !== true,
@@ -100,7 +101,7 @@ export const requestBashApproval = Effect.fn('requestBashApproval')(function* (
 
   if (decision === 'allow') return { action: 'approve' };
   if (isTexraApprovalDenied(decision)) {
-    session.interactions.approvalDenied({ kind: 'executable' }, runId);
+    session.interactions.approvalDenied({ kind: 'executable', policy }, runId);
     return { action: 'deny', reason: texraApprovalDenialMessage(decision) };
   }
 

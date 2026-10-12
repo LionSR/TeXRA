@@ -286,7 +286,7 @@ export function createTuiHostInteractions(
 
   return {
     approvalDenied: (denial, runId) =>
-      warnApprovalDenied(stores.session, context, denial, runId),
+      warnApprovalDenied(context, denial, runId),
     // The CLI host renders the notice itself and says whether it rendered a
     // user-visible record; there is no program for the session to fork.
     emit: (event, payload) => {

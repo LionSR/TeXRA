@@ -374,7 +374,6 @@ const harnessRuntimeSession = await harnessRuntime.runPromise(
 const harnessRunSession = await harnessRuntime.runPromise(
   HARNESS_PLATFORM_SERVICES.runSession,
 );
-harnessRuntimeSession.approvals.override(TEXRA_APPROVAL_POLICY_DEFAULT);
 if (process.env.HARNESS_VISIBLE_AGENTS !== undefined) {
   await harnessRuntime.runPromise(
     harnessRoots.repoState.update(WorkspaceStateKey.WORKSPACE_AGENTS, {
@@ -1514,8 +1513,13 @@ function appendHarnessTranscript(
   }
 }
 
+/** The harness chat's launch policy, which `/approval` sets, as the chat's
+ *  does; it never writes the project's. */
+let harnessPolicy: TexraApprovalPolicy = TEXRA_APPROVAL_POLICY_DEFAULT;
+const harnessApprovalPolicy = (): TexraApprovalPolicy => harnessPolicy;
+
 function setHarnessApprovalPolicy(policy: TexraApprovalPolicy): void {
-  harnessRuntimeSession.approvals.override(policy);
+  harnessPolicy = policy;
   sessionMeta.set({
     ...sessionMeta.get(),
     approvalPolicy: policy,
@@ -1572,7 +1576,7 @@ function appendHarnessStatus(): void {
       model: meta.model,
       teamName: meta.teamName,
       modelAccess: run?.usage.usageRoute,
-      approvalPolicy: harnessRuntimeSession.approvals.policy(),
+      approvalPolicy: harnessApprovalPolicy(),
       approvalBypasses: runBypasses(view, runId),
       statusLabel: run?.statusLabel,
       activeChildSessions: runningChildCount(view, run),
@@ -1677,8 +1681,13 @@ registerBuiltinSlashCommands({
         ? DISABLED_MODEL_SWITCH_REASON
         : undefined,
     ),
-  getApprovalPolicy: () => harnessRuntimeSession.approvals.policy(),
-  onApprovalPolicySelect: setHarnessApprovalPolicy,
+  getApprovalPolicy: harnessApprovalPolicy,
+  onApprovalPolicySelect: (policy) =>
+    Effect.sync(() => setHarnessApprovalPolicy(policy)),
+  onProjectApprovalPolicyChanged: (policy) =>
+    appendHarnessAssistantTranscript(
+      `Project approval policy: ${formatTexraApprovalPolicy(policy)}`,
+    ),
   onModelSelect: (model) =>
     Effect.sync(() => {
       setCliSessionModelOverride(model);

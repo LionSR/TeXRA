@@ -10,7 +10,7 @@ import { Effect, SubscriptionRef, type Context } from 'effect';
 import { runInbox, submitFollowUp } from '@agent/followUp/ToolUseFollowUp';
 import { detachSubagentsOnStop } from '@agent/runtime/detachSubagentsOnStop';
 import { requestAsks } from '@agent/runtime/requestPolicy';
-import { setPolicy } from '@agent/runtime/runApprovalQueue';
+import { narrows, setPolicy } from '@agent/runtime/runApprovalQueue';
 import { forkRun, runNoun } from '@agent/runtime/forkRun';
 import { registryOf, RunLive, Runs } from '@agent/runtime/runRegistry';
 import type {
@@ -111,10 +111,9 @@ const withRunClaim = <A, R>(
           ),
       );
 
-/** Refuse a gated request the run's `actions` no longer hold (the host
- *  rendered an earlier view; a files copy is gated as `pack`, a removal as
- *  `clean`); a run not folded yet, or held elsewhere, is left to `admit`
- *  and the claim; a stop is ungated. */
+/** Refuse a gated request the run's `actions` no longer hold (a files copy
+ *  is gated as `pack`, a removal as `clean`); a run not folded yet, or held
+ *  elsewhere, is left to `admit` and the claim; a stop is ungated. */
 const requireRunAction = (
   deps: RequestDeps,
   req: RuntimeRequest,
@@ -122,6 +121,7 @@ const requireRunAction = (
   let action = GATED_ACTIONS[req.kind];
   if (req.kind === 'run.files')
     action = req.files.op === 'copy' ? 'pack' : 'clean';
+  if (req.kind === 'policy.set' && narrows(req.change)) action = undefined;
   if (action === undefined) return Effect.void;
   const runId = req.kind === 'policy.set' ? req.change.runId : req.runId;
   const run = deps.session().view.run(runId);

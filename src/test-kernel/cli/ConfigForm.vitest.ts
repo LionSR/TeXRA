@@ -424,7 +424,7 @@ describe('/config slash command wiring', () => {
           runtimeSession: testDefaultSession(),
           runSession: testSessionOf(testDefaultSession()),
           configStores: stores,
-          onApprovalPolicySelect: (policy) => {
+          onProjectApprovalPolicyChanged: (policy) => {
             applied.push(policy);
           },
         });

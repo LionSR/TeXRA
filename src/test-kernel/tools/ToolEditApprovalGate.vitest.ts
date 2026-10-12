@@ -23,6 +23,7 @@ import type {
   SessionEventDraft,
 } from '@shared/schemas';
 import { DatabaseWriteFailed } from '@shared/session/database';
+import { setTestApprovalPolicy } from '@test/support/sessionTestUtils';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { waitForCondition } from '@test/support/asyncTestUtils';
@@ -195,7 +196,7 @@ const opensRequest = (
 describe('Tool edit approval gating', () => {
   beforeEach(async () => {
     await installPlatform();
-    testDefaultSession().approvals.override('ask');
+    setTestApprovalPolicy('ask', testDefaultSession().roots);
     policyDenials = 0;
     workspaceWrites.mockReset();
     relativeFiles.clear();
@@ -385,7 +386,7 @@ describe('Tool edit approval gating', () => {
       yield* Effect.tryPromise(() =>
         installPlatform({ 'texra.toolUse.requireEditApproval': false }),
       );
-      testDefaultSession().approvals.override('never');
+      setTestApprovalPolicy('never', testDefaultSession().roots);
 
       const tool = writeFileTool();
       const write = stubWorkspaceFile('denied.txt', {
