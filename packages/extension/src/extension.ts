@@ -34,7 +34,6 @@ import {
   resolveWorkspaceStoragePath,
   canonicalizeWorkspacePath,
 } from '@texra-ai/harness/node';
-import type { SessionHandle } from '@agent/runtime';
 import { EXTENSION_COMMANDS } from '@commands/extensionCommandIds';
 import { setApiKey as apiSetApiKey } from '@commands/api/apiKeyCommands';
 import { openGettingStarted } from '@commands/system/walkthroughCommands';
@@ -117,10 +116,6 @@ const EXTENSION_CHANNEL = 'extension';
 // reads back the scope the activation program ran in: its finalizer is the
 // process's shutdown drain, so closing it is deactivation.
 let activationScope: Scope.Closeable | undefined;
-// The workspace window's session, while one is open: what Copilot's TeXRA
-// tools run their calls on. Set by the workspace activation, cleared when
-// the activation scope closes it.
-let workspaceSession: SessionHandle | undefined;
 
 /**
  * The process runtime and the process roots, wired once for
@@ -162,18 +157,20 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
     typeof context.extension.packageJSON?.version === 'string'
       ? context.extension.packageJSON.version
       : undefined;
+  // The window's roots while its workspace is open: what Copilot's TeXRA
+  // tools run their calls over. Cleared when the activation scope closes.
+  let windowRoots: WorkspaceRoots | undefined;
   const managed = withForkFailureReporting(
     ManagedRuntime.make(
       processLayer({
         globalStorage,
-        // TeXRA's plugins, with Copilot's TeXRA tools where a default session
-        // runs their calls.
+        // TeXRA's plugins, with Copilot's TeXRA tools over the window's roots.
         plugins: texraPlugins({
           editors,
           ...(workspaceRoot && {
             copilot: copilotToolsLayer(
               () => runtime,
-              () => workspaceSession,
+              () => windowRoots,
             ),
           }),
           // The Comments UI behind the `inline_comment` tool. The provider reads
@@ -236,7 +233,7 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
     ).pipe(
       Effect.ensuring(
         Effect.sync(() => {
-          workspaceSession = undefined;
+          windowRoots = undefined;
         }),
       ),
       Effect.ensuring(Scope.close(projectScope, Exit.void)),
@@ -283,6 +280,7 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
         repoState: yield* openRepoStateStore(workspaceRoot, storage),
         globalState,
       });
+      windowRoots = roots;
       // The once-per-process installs, in the order the shared bootstrap owns.
       yield* bootstrapHost({
         roots,
@@ -497,14 +495,9 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
     // client.
     ...(Result.isFailure(service) && { interruptedTasks: 'offer' }),
   });
-  workspaceSession = runtimeSession;
   // Where this window's runs run: the service's session, or this one.
   const session = Result.isSuccess(service)
-    ? yield* serviceSession(
-        service.success,
-        roots.workspace ?? '',
-        runtimeSession.roots,
-      )
+    ? yield* serviceSession(service.success, roots.workspace ?? '', roots)
     : yield* sessions.open(roots, { persistent: true });
   if (Result.isFailure(service)) {
     const reason = `TeXRA runs this window's tasks here only, so other windows and terminals will not see them: ${service.failure.message}`;
@@ -531,7 +524,7 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
   // The run-storage directory of the session just initialized, through that
   // session's own storage view rather than a static that re-reads the root.
   yield* withSessionFs(
-    runtimeSession.roots,
+    roots,
     Effect.flatMap(Effect.service(StorageFs), (storageFs) =>
       storageFs.makeDirectory(WORKSPACE_STORAGE_LAYOUT.runs, {
         recursive: true,
@@ -580,7 +573,8 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
     progressViewProvider,
     secrets,
     runtime,
-    runtimeSession,
+    roots,
+    runtimeSession.interactions,
     session,
   );
   registerWalkthroughWorkspaceAction(context, true, runtime);
@@ -595,7 +589,7 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
   // refresh instead of letting it become an unhandled rejection.
   const refreshToolAvailabilityLogged = (trigger: string) =>
     Effect.flatMap(ToolAvailability, (availability) =>
-      availability.refresh(runtimeSession.roots),
+      availability.refresh(roots),
     ).pipe(
       Effect.catchCause((cause) =>
         Effect.logError(
@@ -648,7 +642,7 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
     // The project's persisted policy: what a run here, or the service's
     // for this project, decides under.
     const policy = readConfigSettingFrom<TexraApprovalPolicy>(
-      runtimeSession.roots.config,
+      roots.config,
       TEXRA_APPROVAL_POLICY_CONFIG_KEY,
     );
     const policyLine = `Approval policy: ${texraApprovalPolicyLabel(policy)} — ${formatTexraApprovalPolicy(policy)}`;

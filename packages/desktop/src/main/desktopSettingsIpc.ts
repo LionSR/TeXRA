@@ -173,7 +173,7 @@ export function createDesktopSettingsIpc(
     host: 'desktop',
     // The approval policy is the project's persisted setting: the write
     // is the change, which this session and the service both read.
-    session: { roots: options.session.roots },
+    roots: options.session.roots,
     secrets: options.secrets,
     resourcesPath: options.resourcesPath,
     skillDisplay: loadRuntimeSkillDisplay(

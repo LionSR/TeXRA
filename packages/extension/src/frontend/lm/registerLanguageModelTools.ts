@@ -19,17 +19,15 @@
  */
 
 import * as vscode from 'vscode';
-import { Context, Effect, Fiber, Layer, Option, Stream } from 'effect';
+import { Context, Data, Effect, Fiber, Layer, Option, Stream } from 'effect';
 
 import {
-  childRunsLayer,
-  IssuingScript,
-  RunCall,
-  Runs,
-  ScriptCalls,
   ToolContext,
-  type SessionHandle,
-} from '@agent/runtime';
+  type PluginContext,
+  type ProcessRuntime,
+  type WorkspaceRoots,
+} from '@texra-ai/harness';
+import { ChildRuns, type PluginToolServices } from '@texra-ai/harness/plugins';
 import { sessionFsLayer } from '@platform/rootedFs';
 
 import type { ToolResult } from '@shared/schemas';
@@ -43,7 +41,6 @@ import {
   buildLanguageModelToolInvocationMessage,
   type LanguageModelResearchToolName,
 } from './languageModelToolInvocationMessage';
-import type { PluginContext, ProcessRuntime } from '@texra-ai/harness';
 
 /** VS Code tool name (manifest) → canonical TeXRA registry tool name. */
 const LM_TOOL_NAMES = {
@@ -59,22 +56,40 @@ function toResultText(result: ToolResult): string {
   return result.output ?? result.summary ?? '(no output)';
 }
 
+// A Copilot call is under no run, so it launches and reads none.
+class CopilotToolRunRefused extends Data.TaggedError('CopilotToolRunRefused')<{
+  readonly message: string;
+}> {}
+const noRun = Effect.fail(
+  new CopilotToolRunRefused({
+    message: 'no run to launch from a Copilot tool call',
+  }),
+);
+const refusingChildRuns = Layer.succeed(ChildRuns)({
+  launch: () => noRun,
+  launchProcess: () => noRun,
+  inbox: () => noRun,
+  parent: () => noRun,
+  records: () => ({ exists: noRun, end: noRun }),
+  rows: () => noRun,
+});
+
 /**
  * The `copilot` plugin's process layer: the curated TeXRA tools registered
  * with the VS Code Language Model Tool API while the tool catalog offers
  * them, for as long as the layer is up. A call runs on the process runtime
- * and the workspace's default session, read when the call arrives.
+ * over the window's roots, read when the call arrives.
  */
 export const copilotToolsLayer = (
   runtime: () => ProcessRuntime,
-  session: () => SessionHandle | undefined,
+  roots: () => WorkspaceRoots | undefined,
 ): ProcessPluginLayer => ({
-  layer: Layer.effectDiscard(copilotTools(runtime, session)),
+  layer: Layer.effectDiscard(copilotTools(runtime, roots)),
 });
 
 const copilotTools = Effect.fnUntraced(function* (
   processRuntime: () => ProcessRuntime,
-  defaultSession: () => SessionHandle | undefined,
+  windowRoots: () => WorkspaceRoots | undefined,
 ) {
   const lm = (vscode as { lm?: Partial<typeof vscode.lm> }).lm;
   if (typeof lm?.registerTool !== 'function') return;
@@ -105,8 +120,8 @@ const copilotTools = Effect.fnUntraced(function* (
         token: vscode.CancellationToken,
       ) {
         const runtime = processRuntime();
-        const session = defaultSession();
-        if (session === undefined)
+        const roots = windowRoots();
+        if (roots === undefined)
           return new vscode.LanguageModelToolResult([
             new vscode.LanguageModelTextPart(
               'TeXRA has no workspace session to run this tool in.',
@@ -133,7 +148,14 @@ const copilotTools = Effect.fnUntraced(function* (
               // Its plugin's process services, as a step would serve them
               // (the research tools' plugins own none).
               const services = yield* catalog.processServices(plugin);
-              return yield* tool.call(options.input).pipe(
+              // cast: the curated tools are plugin tools (web_fetch,
+              // arxiv_search), which read no built-in's run services.
+              const call = tool.call(options.input) as Effect.Effect<
+                ToolResult,
+                Error,
+                PluginToolServices
+              >;
+              return yield* call.pipe(
                 Effect.provide(
                   Option.getOrElse(
                     services,
@@ -143,19 +165,14 @@ const copilotTools = Effect.fnUntraced(function* (
                 Effect.provideService(ToolContext, {
                   // Copilot's invocation names no call id of its own.
                   callId: `${lmName}-${generateShortId()}`,
-                  env: { roots: session.roots },
+                  env: { roots },
                   emit: () => undefined,
                 }),
-                // A host invocation is made under no run and by no script.
-                Effect.provide(childRunsLayer),
-                Effect.provideService(RunCall, null),
-                Effect.provideService(ScriptCalls, null),
-                Effect.provideService(IssuingScript, null),
-                Effect.provideService(Runs, session.runs),
+                Effect.provide(refusingChildRuns),
                 // Every `WorkspaceFs`/`StorageFs` service read in this call
-                // resolves against this session's folders, and path resolution
+                // resolves against the window's folders, and path resolution
                 // takes `ToolContext.env` as data.
-                Effect.provide(sessionFsLayer(session.roots)),
+                Effect.provide(sessionFsLayer(roots)),
               );
             }),
           ),

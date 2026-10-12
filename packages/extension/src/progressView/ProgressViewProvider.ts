@@ -302,7 +302,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       host: new VscodeToolEditApprovalHost(
         path.join(storageRoot.fsPath, 'tool-edit-previews'),
         this.runtime,
-        session,
+        session.roots,
       ),
       // A decision goes where the run runs.
       session: { requests: runSession },
@@ -373,7 +373,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       this,
       globalState,
       this.runtime,
-      session,
+      session.roots,
     );
     this.runtime.runSync(
       this.editors

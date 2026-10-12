@@ -6,12 +6,13 @@ import { z, ZodError } from 'zod';
 import {
   AgentConfigSchema,
   presentRunFailure,
-  type SessionHandle,
+  type SessionHostInteractions,
 } from '@agent/runtime';
 import { openFinalOutputIfAvailable } from '@frontend/agents/finalOutputOpener';
 import { withLogChannel } from '@logger/effectLog';
 import { ensureError } from '@utils/errors/errorMessage';
 import type { ProcessServices, Session } from '@texra-ai/harness';
+import type { WorkspaceRoots } from '@texra-ai/harness';
 import type { RunId } from '@texra-ai/harness/schemas';
 
 const CHANNEL = 'ExecuteCommand';
@@ -38,7 +39,8 @@ const WrappedExecuteInputSchema = z.object({
  */
 export const runExecuteCommand = Effect.fn('runExecuteCommand')(function* (
   input: unknown,
-  session: SessionHandle,
+  roots: WorkspaceRoots,
+  present: Pick<SessionHostInteractions, 'emit'>,
   /** Where the run runs: this window's session, or the service's. */
   runSession: Session,
   /** Select the run this launch resolved: the launching surface's own. */
@@ -81,16 +83,12 @@ export const runExecuteCommand = Effect.fn('runExecuteCommand')(function* (
       ownKeyFallback: wrapped?.ownApiKeyFallback,
       interactive: true,
     })
-    .pipe(
-      Effect.tapError((error) =>
-        presentRunFailure(session.interactions, error),
-      ),
-    );
+    .pipe(Effect.tapError((error) => presentRunFailure(present, error)));
   yield* onAdmitted(run.runId);
   const result = yield* run.result;
   // Presentation reacts to the committed outcome; it never runs inside the run,
   // and its failure never fails the launch that produced the run.
-  yield* openFinalOutputIfAvailable(session.roots)(result).pipe(
+  yield* openFinalOutputIfAvailable(roots)(result).pipe(
     Effect.catchCause((cause) =>
       Effect.logWarning('Opening the final output failed', cause).pipe(
         withLogChannel(CHANNEL),

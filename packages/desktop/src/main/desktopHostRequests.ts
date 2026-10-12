@@ -146,9 +146,10 @@ export function createDesktopHostRequests(
   options: DesktopHostRequestsOptions,
 ): DesktopHostRequests {
   const { session, host, run, runtime } = options;
+  const { roots } = session;
   /** The rooted filesystems of this window's paper, built once from the
    *  roots its session holds for its lifetime, never from an ambient store. */
-  const sessionFiles = sessionFsLayer(session.roots);
+  const sessionFiles = sessionFsLayer(roots);
   /** The project's `.env` over the process's: what this window asks about
    *  its project (model options, a polish's helper model) answers from it,
    *  as the project's runs do. */
@@ -156,7 +157,7 @@ export function createDesktopHostRequests(
   // A shared controller's notice IS the refusal the request answers with.
   const rejectRequestEffect = (reason: string): Effect.Effect<void, Rejected> =>
     Effect.fail(new Rejected({ reason }));
-  const draftRequests = options.draftRequests.attach(session, (recording) => {
+  const draftRequests = options.draftRequests.attach(roots, (recording) => {
     // Recorder notifications can arrive outside a request fiber.
     runtime.runFork(options.snapshot.setRecording(recording));
   });
@@ -168,7 +169,7 @@ export function createDesktopHostRequests(
       loadModelOptions: () =>
         withProcessServices(
           runtime,
-          loadModelOptions({ ...session.roots, secrets: options.secrets }).pipe(
+          loadModelOptions({ ...roots, secrets: options.secrets }).pipe(
             Effect.provide(projectEnv),
           ),
         ),
@@ -262,7 +263,7 @@ export function createDesktopHostRequests(
 
   const workflowFileActions = new ProgressWorkflowFileActionsController({
     state: runOutputs,
-    storageRoot: session.roots.storage,
+    storageRoot: roots.storage,
     host: {
       compareFiles: (baseFile, editedFile) =>
         fileActions.compareFiles(baseFile, editedFile),
@@ -432,12 +433,12 @@ export function createDesktopHostRequests(
           new Rejected({ reason: 'Choose a base file first.' }),
         );
       }
-      const base = pathToLocationIn(session.roots.workspace, baseFile);
+      const base = pathToLocationIn(roots.workspace, baseFile);
       if (action === 'latexdiffvc') {
-        const result = yield* new LaTeXdiffService(
-          CHANNEL,
-          session.roots,
-        ).runDiffVc(base, commit);
+        const result = yield* new LaTeXdiffService(CHANNEL, roots).runDiffVc(
+          base,
+          commit,
+        );
         if (!result.success) {
           return yield* Effect.fail(new Rejected({ reason: result.message }));
         }
@@ -550,7 +551,7 @@ export function createDesktopHostRequests(
     snapshot: options.snapshot,
     draftRequests,
     toolEditApprovals: run.toolEditApprovals,
-    session,
+    roots,
     host: hostBindings,
   };
 

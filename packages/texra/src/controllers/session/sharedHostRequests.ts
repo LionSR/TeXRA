@@ -18,7 +18,6 @@ import * as path from 'node:path';
 import { Effect } from 'effect';
 
 import { Rejected, type HostRequestFailure } from '@texra-ai/harness';
-import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { getIncludedExtensions } from '@common/files/fileTypeUtils';
 import type { StorageFs, WorkspaceFs } from '@platform/rootedFs';
 import type { HostRequest } from '@texra/shared/session/hostRequest';
@@ -42,7 +41,7 @@ import {
 } from '@texra/controllers/session/hostRunActions';
 import type { HostSnapshotSource } from '@texra/controllers/session/hostSnapshotSource';
 import { formatResultCount } from '@utils/text/stringUtils';
-import type { ProcessServices } from '@texra-ai/harness';
+import type { ProcessServices, WorkspaceRoots } from '@texra-ai/harness';
 import type { RunId } from '@texra-ai/harness/schemas';
 
 /** The kinds {@link handleSharedHostRequest} answers. */
@@ -182,7 +181,7 @@ export interface SharedHostRequestPorts {
    *  {@link HostDraftRequests.attach} bound it. */
   readonly draftRequests: ReturnType<HostDraftRequests['attach']>;
   readonly toolEditApprovals: ToolEditApprovalController;
-  readonly session: Pick<SessionHandle, 'roots' | 'approvals'>;
+  readonly roots: WorkspaceRoots;
   readonly host: SharedHostRequestBindings;
 }
 
@@ -271,7 +270,7 @@ export function handleSharedHostRequest(
         return done;
       case 'attachDroppedFiles': {
         const attached = yield* attachDroppedFiles(
-          ports.session.roots.workspace,
+          ports.roots.workspace,
           request.paths,
           getIncludedExtensions(request.category),
         );
@@ -294,8 +293,8 @@ export function handleSharedHostRequest(
         yield* host.admitLaunch(request.launch);
         yield* prepareSurfaceLaunch(
           request,
-          ports.session.roots.repoState,
-          ports.session.roots.storage,
+          ports.roots.repoState,
+          ports.roots.storage,
         ).pipe(
           Effect.flatMap((prepared) =>
             ports.runActions

@@ -2,7 +2,7 @@
 import { Cause, Effect } from 'effect';
 
 // Local imports
-import { AgentConfigSchema, type SessionHandle } from '@agent/runtime';
+import { AgentConfigSchema } from '@agent/runtime';
 import { EXTENSION_COMMANDS } from '@commands/extensionCommandIds';
 import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
 import { safeExecuteCommand } from '@frontend/system/commandUtils';
@@ -29,6 +29,7 @@ import type {
   StateReadFailed,
   StateWriteFailed,
 } from '@texra-ai/harness';
+import type { WorkspaceRoots } from '@texra-ai/harness';
 
 const CHANNEL = 'SetupAssistant';
 /**
@@ -124,7 +125,7 @@ const ensureRoutingConfigured = Effect.fn('ensureRoutingConfigured')(function* (
  */
 export function launchSetupAssistant(
   secrets: PlatformSecrets,
-  session: SessionHandle,
+  roots: WorkspaceRoots,
   /** Where the setup conversation runs: here, or in the service. */
   runSession: Session,
   onAdmitted: (runId: RunId) => Effect.Effect<void, Error>,
@@ -161,7 +162,7 @@ export function launchSetupAssistant(
     // subscription user whose "Use OpenRouter" flag is on without an OR
     // key would otherwise fall into the credential prompt first, because the
     // picker never routes through the subscription while OpenRouter is on.
-    if (!(yield* ensureRoutingConfigured(session.roots, secrets))) {
+    if (!(yield* ensureRoutingConfigured(roots, secrets))) {
       yield* Effect.forkDetach(
         showLoggedInfoMessage(
           CHANNEL,
@@ -173,20 +174,15 @@ export function launchSetupAssistant(
 
     // The credential predicate every host shares: adapter-level checks, so a
     // blank env key does not count and fail later as "No model is available".
-    const hasCredential = yield* hasUsableSetupCredential(
-      session.roots,
-      secrets,
-    ).pipe(withLogChannel('Setup Credentials'));
+    const hasCredential = yield* hasUsableSetupCredential(roots, secrets).pipe(
+      withLogChannel('Setup Credentials'),
+    );
     if (!hasCredential) {
       yield* connectModel;
       return 'not-started' as const;
     }
 
-    const resolution = yield* resolveSetupLaunchModel(
-      session.roots,
-      secrets,
-      true,
-    );
+    const resolution = yield* resolveSetupLaunchModel(roots, secrets, true);
     if (!resolution) {
       // Edge case: no setup-model candidate is usable with the current
       // credentials. Refuse launch rather than pick a model that crashes at
@@ -229,7 +225,7 @@ export function launchSetupAssistant(
     );
 
     yield* resolution.requiresOpenRouter
-      ? withOpenRouterFlagOn(session.roots, launch)
+      ? withOpenRouterFlagOn(roots, launch)
       : launch;
     return 'launched' as const;
   }).pipe(
