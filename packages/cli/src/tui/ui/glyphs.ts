@@ -17,6 +17,9 @@ export const TICK = '✓';
 /** Steady status dot for tool rows and subagent rows (never animated). */
 export const STATUS_DOT = '●';
 
+/** Hollow counterpart to STATUS_DOT: a queued step, or the off beat of a pulse. */
+export const HOLLOW_DOT = '○';
+
 /** Decorative brand marker at the head of the status bar (aria-hidden). */
 export const STATUS_DIAMOND = '◆';
 

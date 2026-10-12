@@ -13,6 +13,7 @@ import { Box, Text, useInput, useWindowSize } from 'ink';
 import { isCtrlInput, isEscapeInput } from '@cli/tui/inputKeys';
 import { ReaderPanel, readerLayout } from '@cli/tui/ui/BorderedPanel';
 import { KeyHints, type KeyHint } from '@cli/tui/ui/KeyHints';
+import { CROSS, HOLLOW_DOT, SKIP_CIRCLE, TICK } from '@cli/tui/ui/glyphs';
 import { Select, type SelectItem } from '@cli/tui/ui/Select';
 import {
   COLOR_BORDER,
@@ -48,14 +49,14 @@ import type { RunId } from '@texra-ai/harness/schemas';
 const POPUP_EXTRA_ROWS = 1;
 
 const STATUS_GLYPH = {
-  queued: '○',
+  queued: HOLLOW_DOT,
   running: '◐',
   interrupted: '◌',
-  finished: '✓',
+  finished: TICK,
   reused: '↺',
-  skipped: '⊘',
-  cancelled: '⊘',
-  failed: '✗',
+  skipped: SKIP_CIRCLE,
+  cancelled: SKIP_CIRCLE,
+  failed: CROSS,
   'not run': '·',
 } as const satisfies Record<ScriptCallView['status'], string>;
 
