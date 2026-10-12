@@ -630,8 +630,7 @@ export async function runChat(
           recovery: CHAT_STARTUP_MODEL_RECOVERY,
           firstRunSetupAgent: startup.firstRunSetupAgent,
         },
-        (held) =>
-          chatController.submit(held.line, held),
+        (held) => chatController.submit(held.line, held),
       ),
     secrets: services.secrets,
     stores: services,
