@@ -3,11 +3,11 @@ import { Effect, Fiber } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports - common
-import { DiagnosticsReadFailed } from '@agent/runtime';
 import { isTexFile } from '@common/files/fileTypeUtils';
 import { invokeLatexWorkshopBuild } from '@frontend/latex/openBuild';
 import { openFileInEditor } from '@frontend/vscode/vscodeEditor';
 import { waitForDiagnosticsChange } from '@frontend/vscode/vscodeDiagnostics';
+import { DiagnosticsReadFailed } from '@texra/tools/editorHost';
 
 const CHANNEL = 'LinterUtils';
 const DIAGNOSTIC_UPDATE_TIMEOUT_MS = 7500;

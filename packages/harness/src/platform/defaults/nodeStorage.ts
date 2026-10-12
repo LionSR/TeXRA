@@ -8,10 +8,12 @@ export const TEXRA_STORAGE_DIR_NAME = '.texra';
 /** File name of the JSON config file inside a `.texra` directory. */
 export const TEXRA_CONFIG_FILE_NAME = 'config.json';
 
-export const DEFAULT_NODE_STORAGE_ROOT = path.join(
-  os.homedir(),
-  TEXRA_STORAGE_DIR_NAME,
-);
+/** The global TeXRA data root, `~/.texra`, read from the home directory at
+ *  each call so nothing caches a home resolved before the environment set. */
+export function defaultNodeStorageRoot(): string {
+  const home = os.homedir();
+  return path.join(home, TEXRA_STORAGE_DIR_NAME);
+}
 
 /**
  * Project-local config file shared by the CLI, extension, and desktop app:

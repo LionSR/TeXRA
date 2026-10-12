@@ -28,7 +28,6 @@ import {
 } from 'effect';
 import { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
-import type { RunRegistry } from '@agent/runtime/runRegistry';
 import { AppState } from '@platform/interfaces';
 import type { PluginContext } from '@platform/processRuntime';
 import { entriesOf, type ToolEntry } from '@tools/catalogEntries';
@@ -65,9 +64,7 @@ export class ToolCatalog extends Context.Service<
      *  `drain`, while its services are still up. */
     readonly drain: Effect.Effect<void>;
     /** A session's catalog, in the caller's scope (the session's). */
-    readonly session: (
-      runs: () => RunRegistry,
-    ) => Effect.Effect<SessionTools, never, Scope.Scope>;
+    readonly session: Effect.Effect<SessionTools, never, Scope.Scope>;
   }
 >()('@texra/tools/ToolCatalog') {}
 
@@ -182,7 +179,7 @@ export const toolCatalogLayer = (
             ),
           { concurrency: 'unbounded', discard: true },
         ),
-        session: (runs) => sessionTools(shared, runs),
+        session: sessionTools(shared),
       };
       return service;
     }),

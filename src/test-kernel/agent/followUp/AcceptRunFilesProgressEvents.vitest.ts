@@ -15,7 +15,6 @@ import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 // Local imports
 import { type SessionHandle } from '@agent/runtime/SessionHandle';
 import { WorkspaceFs } from '@platform/rootedFs';
-import { DOCUMENTS_ACCEPTED_ARM } from '@shared/plugins/documents';
 import type { RequestDecision, RunId, ToolResult } from '@shared/schemas';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
@@ -25,6 +24,7 @@ import {
   closeTestSession,
   openTestDefaultSession,
 } from '@test/support/sessionEnd';
+import { DOCUMENTS_ACCEPTED_ARM } from '@texra/shared/plugins/documents';
 import { AcceptRunFilesTool } from '@texra/tools/AcceptRunFilesTool';
 import { type ToolEditApprovalRequest } from '@tools/approval/toolEditApproval';
 

@@ -60,6 +60,7 @@ import {
   type RunId,
   type SessionEventDraft,
   type UserQuestionPermission,
+  aggregateTarget,
 } from '@shared/schemas';
 import { goalStateOf } from '@shared/plugins/goal';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
@@ -68,6 +69,7 @@ import {
   isTerminalOutcomePhase,
 } from '@shared/runs/runStatus';
 import { acceptsFollowUp, descendantRuns } from '@shared/session/sessionView';
+import type { UnfoldedDraft } from '@shared/session/sessionEvents';
 import {
   buildScenario,
   foldAll,
@@ -401,9 +403,54 @@ function session() {
   return harnessRuntimeSession;
 }
 
-function publish(...drafts: SessionEventDraft[]): void {
-  harnessRuntime.runFork(session().log.transact(drafts));
+/**
+ * Write fixture rows the way the session does: a row no run's state folds
+ * as one transaction, a `run.activate` as its run's opening, and the rows a
+ * run's state folds that the fixtures seed through that run's cell. Any
+ * other folded kind has no seeding path here: it does not type-check.
+ */
+function publish(...drafts: SeedRow[]): void {
+  const { log, runHistory } = session();
+  const folded = drafts.filter(isCellRow);
+  const unfolded = drafts.filter(
+    (draft): draft is UnfoldedDraft =>
+      !isCellRow(draft) && draft.type !== 'run.activate',
+  );
+  harnessRuntime.runFork(
+    Effect.gen(function* () {
+      if (unfolded.length > 0) yield* log.transact(unfolded);
+      for (const draft of drafts) {
+        const target = aggregateTarget(draft.aggregateId);
+        if (draft.type === 'run.activate' && target.kind === 'run')
+          yield* runHistory.open(target.id, {
+            activation: () => Effect.succeed([draft]),
+          });
+      }
+      for (const [key, rows] of Map.groupBy(folded, (row) => row.aggregateId)) {
+        const target = aggregateTarget(key);
+        if (target.kind !== 'run')
+          return yield* Effect.die(new Error(`${key} is not a run`));
+        const cell = yield* runHistory.open(target.id);
+        yield* cell.append(rows);
+      }
+    }),
+  );
 }
+
+/** The run rows the fixtures seed that a run's state folds. */
+type CellRow = Extract<
+  SessionEventDraft,
+  { type: 'run.config' | 'run.position' | 'request.decided' }
+>;
+/** What a fixture seeds: a row no run folds, its cell's rows, its opening. */
+type SeedRow =
+  | UnfoldedDraft
+  | CellRow
+  | Extract<SessionEventDraft, { type: 'run.activate' }>;
+const isCellRow = (draft: SeedRow): draft is CellRow =>
+  draft.type === 'run.config' ||
+  draft.type === 'run.position' ||
+  draft.type === 'request.decided';
 
 // The TUI reads the session fold (PRD 10.1): bind it and subscribe every
 // run's transcript tier the way `runChat` does.

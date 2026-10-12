@@ -65,6 +65,7 @@ import type { Attempt, RetryCredentials } from '@shared/session/inFlight';
 import { findStorageRefusal } from '@shared/session/runHistory';
 import type { RunHistoryDraft, RunState } from '@shared/session/runStateFold';
 import { UsageLog, usageAgentName } from '@shared/usageLog';
+import type { CellError, RunCell } from '@shared/session/runHistory';
 import { generateShortId } from '@utils/core';
 
 import { policyDecidedRows } from './requestPolicy';
@@ -84,7 +85,6 @@ import {
 } from './run/requestContext';
 import { dispatchFactsFor, localCallsOf } from './run/tools';
 import { rowAggregate, positionRow } from './loop/rows';
-import type { CellError, RunCell } from './loop/runProgram';
 
 /** The answer the invoker gives itself for an automatic quota fallback. */
 const PERSONAL_RETRY = {

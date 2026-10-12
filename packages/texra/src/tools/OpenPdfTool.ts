@@ -7,7 +7,6 @@ import { defineTool, ToolContext } from '@texra-ai/harness';
 import { callerRun } from '@texra-ai/harness/plugins';
 
 // Local imports
-import type { HostInteractions } from '@agent/runtime/HostInteractions';
 import {
   fileLocationDisplayPath,
   ToolError,
@@ -22,6 +21,7 @@ import { runStorageLocationInRunUnder } from '@utils/files/runStorageFs';
 import { hasExtension } from '@utils/core/pathCore';
 
 // Local file imports
+import { EditorHost, type EditorCapabilities } from './editorHost';
 
 const OpenPdfInputSchema = z.strictObject({
   path: z.string().describe('Path to the PDF file to open.'),
@@ -38,7 +38,7 @@ export type OpenPdfInput = z.infer<typeof OpenPdfInputSchema>;
  */
 interface OpenPdfPorts {
   readonly call: ToolPathCall;
-  readonly openPdf: HostInteractions['openPdf'];
+  readonly openPdf: EditorCapabilities['openPdf'];
   /**
    * The requested path's run-storage identity, resolved in the caller's turn
    * against the run's own storage root (`session.roots.storage`), which the
@@ -116,7 +116,7 @@ export const OpenPdfTool = defineTool({
     const trimmedPath = input.path.trim();
     const ports: OpenPdfPorts = {
       call: env,
-      openPdf: run?.session.interactions.openPdf,
+      openPdf: (yield* EditorHost).at(env.roots.storage).openPdf,
       runStorageLocation:
         runId && trimmedPath
           ? runStorageLocationInRunUnder(env.roots.storage, trimmedPath, runId)

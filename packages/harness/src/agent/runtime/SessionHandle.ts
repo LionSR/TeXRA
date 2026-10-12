@@ -50,7 +50,7 @@ import type { RequestError } from '@shared/session/requestErrors';
 import type { RunHistory } from '@shared/session/runHistory';
 import type { Outcome, RuntimeRequest } from '@shared/session/runtimeRequest';
 import type { RunHistoryDraft } from '@shared/session/runStateFold';
-import type { Append } from '@shared/session/sessionEvents';
+import type { Append, UnfoldedDraft } from '@shared/session/sessionEvents';
 import type { SessionInputs } from '@shared/session/sessionInputs';
 import type { RunView, SessionView } from '@shared/session/sessionView';
 import type { SessionTools } from '@tools/sessionTools';
@@ -62,7 +62,7 @@ import type {
 } from './HostInteractions';
 import type { HistoryQuery } from './historyQuery/HistoryQuery';
 import type { SessionApprovals } from './runApprovalQueue';
-import type { RunRegistry } from './runRegistry';
+import type { RunsShape } from './runs';
 
 /** A write the store refused: nothing was written (D6 b). */
 export type LogWriteError = DatabaseNotOwner | DatabaseWriteFailed;
@@ -70,18 +70,18 @@ export type LogWriteError = DatabaseNotOwner | DatabaseWriteFailed;
 /** A claim the store would not give this process. */
 type ClaimError = DatabaseNotOwner | DatabaseReadFailed | DatabaseWriteFailed;
 
-/** What one transaction's job holds: the ordered append, and the claim
- *  take-over a registration makes before it appends. */
+/** What one transaction's job holds: the ordered append (each in this
+ *  transaction's order), a registration's claim take-over, and what runs
+ *  once it commits. */
 export interface SessionTransaction {
-  /** Append one batch; every row commits in this transaction's order. */
   readonly append: Append;
-  /**
-   * Take `runId`'s claim for this process (a dead owner's, proved dead
-   * first, or this process's own) and leave it standing for the run's
-   * driver. A claim the job took is given back if the job fails, or if what
-   * it committed never reaches the view.
-   */
+  /** Take `runId`'s claim for this process (a dead owner's, proved dead,
+   *  or its own) and leave it for the run's driver; given back if the job
+   *  fails, or if what it committed never reaches the view. */
   readonly claim: (runId: RunId) => Effect.Effect<void, ClaimError>;
+  /** Run `action` once this transaction committed, before the publisher's
+   *  next job; never if it rolls back. */
+  readonly afterCommit: (action: Effect.Effect<void>) => Effect.Effect<void>;
 }
 
 /**
@@ -99,7 +99,7 @@ export interface SessionLog {
    * typed; it is never retried here.
    */
   transact(
-    events: readonly SessionEventDraft[],
+    events: readonly UnfoldedDraft[],
   ): Effect.Effect<readonly SessionEvent[], LogWriteError>;
   transact<A, E>(
     job: (tx: SessionTransaction) => Effect.Effect<A, E>,
@@ -348,9 +348,8 @@ export interface SessionHandle {
   readonly log: SessionLog;
   /** The fold every renderer reads, and the local truth beside it. */
   readonly view: SessionViewAccess;
-  /** Registration, lookup, stop, lineage, and the run's one terminal
-   *  writer (`end`). */
-  readonly runs: RunRegistry;
+  /** Its runs: launch, resume, stop, and what this process holds. */
+  readonly runs: RunsShape;
   /** The project's tools: its plugin layers and MCP servers, closed with it. */
   readonly tools: SessionTools;
   /** The one handler of every request a surface issues, and the run's
@@ -379,10 +378,9 @@ export interface SessionHandle {
  * from context: the hosts' default sessions, the desktop's projects, the
  * service's tasks and the SDK's `Sessions`.
  *
- * A handle `open` returns is borrowed access (PR #11893, agent SDK
- * architecture proposal, section 3): holding it carries no disposal
- * obligation; `close` is how a session ends, and the process layer's own
- * release closes whatever is still open.
+ * A handle `open` returns is borrowed access: holding it carries no
+ * disposal obligation; `close` is how a session ends, and the process
+ * layer's own release closes whatever is still open.
  */
 export interface SessionOwnerShape {
   /** The session of `init.roots`' storage root: the one already open there,
@@ -394,6 +392,8 @@ export interface SessionOwnerShape {
   ) => Effect.Effect<SessionHandle, SessionOpenError>;
   /** Every session the owner holds, waiting within the close budget. */
   readonly list: Effect.Effect<readonly SessionHandle[]>;
+  /** Whether it still holds `session`: its own root's entry, never another's. */
+  readonly holds: (session: SessionHandle) => Effect.Effect<boolean>;
   /** Close the session of a storage root: refuse new runs, interrupt the
    *  ones it owns and wait for them inside {@link SESSION_CLOSE_DEADLINE_MS},
    *  settle the ones still live, flush, release. A root with no open

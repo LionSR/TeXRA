@@ -2,14 +2,14 @@ import { Cause, Effect, Fiber } from 'effect';
 /** Tool-use follow-up routing and continuation ownership. */
 
 import { runRefusal } from '@agent/runtime/runClassification';
-import { AgentEngine } from '@agent/runtime/AgentEngine';
 import type { ResumeRunResult } from '@agent/runtime/resumeRun';
+import { registryOf } from '@agent/runtime/runRegistry';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { presentRunFailure } from '@agent/runtime/terminalResultToast';
 import { withLogChannel } from '@logger/effectLog';
 import { RUN_EARLIER_BUILD_MESSAGE } from '@shared/runs/runStatusDisplay';
 import type { RunId } from '@shared/schemas';
-import type { InboxItem } from './Inbox';
+import type { InboxItem, SendOptions } from './Inbox';
 
 /**
  * Why a submission could not be admitted, worded for the user by
@@ -37,6 +37,7 @@ export type FollowUpFailureReason =
   | 'read_failed'
   | 'owned_elsewhere'
   | 'not_resumable'
+  | 'not_parent'
   | 'blocked';
 
 /**
@@ -47,7 +48,7 @@ export type FollowUpFailureReason =
  * queued (`wake: 'failed'`): the input belongs to the run, and an
  * explicit Resume delivers it.
  */
-type SubmitFollowUpResult =
+export type SubmitFollowUpResult =
   | { status: 'sent' }
   | { status: 'queued'; wake?: 'failed' }
   | { status: 'failed'; reason: FollowUpFailureReason };
@@ -63,6 +64,8 @@ interface SubmitFollowUpOptions {
    * delivery has landed, so it always finds a live or recoverable queue.
    */
   readonly mode?: 'live_notification';
+  /** Only from the run's parent, by its rows (`SendOptions.fromParent`). */
+  readonly fromParent?: boolean;
 }
 
 const FAILURE_MESSAGES: Record<FollowUpFailureReason, string> = {
@@ -76,6 +79,8 @@ const FAILURE_MESSAGES: Record<FollowUpFailureReason, string> = {
     'This run is live in another TeXRA window. Send the message there.',
   not_resumable:
     'This run cannot accept messages right now. Resume it, or start a new agent task.',
+  not_parent:
+    'This run is not a child of the sender: it was detached or launched by another run.',
   blocked:
     "This task's agent, or the plugin it comes from, is missing, off or not trusted. It continues once that is fixed.",
 };
@@ -111,9 +116,9 @@ const RESUME_REFUSED: ResumeRunResult = { failed: 'not_resumable' };
  * The resume every automatic wake and every host's Resume takes: the one
  * resume (`resumeRun`) on the session that holds the run, started on the fork
  * the session's launches run on, so the attempt belongs to the session and
- * outlives a caller that stops waiting. It reaches that resume through
- * {@link AgentEngine}, because a resumed run's child loop wakes its parent
- * through here in turn.
+ * outlives a caller that stops waiting. It reaches that resume through the
+ * session's run programs (`RunRegistryInit.programs`), because a resumed
+ * run's child loop wakes its parent through here in turn.
  *
  * What the run did not take is told to the user here, once: a refusal by its
  * reason, a fault as a failure unless the session's terminal-result presenter
@@ -133,38 +138,38 @@ export function resumeOnSession(
       runMissing ||= session.view.run(runId) === undefined;
       return runMissing;
     };
-    return Effect.flatMap(AgentEngine, (engine) =>
-      engine.resumeRun(runId, { session, isCancellationRequested }),
-    ).pipe(
-      Effect.tap((result) =>
-        'failed' in result && !isCancellationRequested()
-          ? session.interactions.emit(
-              'requestShowInstruction',
-              {
-                key: 'resumeRefused',
-                message: describeFollowUpFailure(result.failed),
-                showSuppress: false,
-              },
-              { replayWhenAttached: true },
-            )
-          : Effect.void,
-      ),
-      Effect.catchCause((cause) => {
-        if (Cause.hasInterruptsOnly(cause) || isCancellationRequested())
-          return Effect.succeed(RESUME_REFUSED);
-        const error = Cause.squash(cause);
-        return Effect.logError(`Failed to resume run ${runId}`).pipe(
-          Effect.annotateLogs({ data: error }),
-          withLogChannel(CHANNEL),
-          Effect.andThen(
-            presentRunFailure(session.interactions, error, 'Resume failed: '),
-          ),
-          Effect.as(RESUME_REFUSED),
-        );
-      }),
-    );
+    return session.runs
+      .resume(runId, { session, isCancellationRequested })
+      .pipe(
+        Effect.tap((result) =>
+          'failed' in result && !isCancellationRequested()
+            ? session.interactions.emit(
+                'requestShowInstruction',
+                {
+                  key: 'resumeRefused',
+                  message: describeFollowUpFailure(result.failed),
+                  showSuppress: false,
+                },
+                { replayWhenAttached: true },
+              )
+            : Effect.void,
+        ),
+        Effect.catchCause((cause) => {
+          if (Cause.hasInterruptsOnly(cause) || isCancellationRequested())
+            return Effect.succeed(RESUME_REFUSED);
+          const error = Cause.squash(cause);
+          return Effect.logError(`Failed to resume run ${runId}`).pipe(
+            Effect.annotateLogs({ data: error }),
+            withLogChannel(CHANNEL),
+            Effect.andThen(
+              presentRunFailure(session.interactions, error, 'Resume failed: '),
+            ),
+            Effect.as(RESUME_REFUSED),
+          );
+        }),
+      );
   });
-  return Effect.flatMap(session.runs.fork(attempt), Fiber.join);
+  return Effect.flatMap(registryOf(session.runs).fork(attempt), Fiber.join);
 }
 
 /**
@@ -178,7 +183,7 @@ export function startFollowUpWake(
   session: SessionHandle,
 ): Effect.Effect<boolean> {
   return Effect.suspend(() =>
-    session.runs.isLive(runId)
+    session.runs.get(runId)?.live === true
       ? Effect.succeed(true)
       : Effect.map(
           resumeOnSession(runId, session),
@@ -205,7 +210,9 @@ function admitFollowUp(
   ownerSession: SessionHandle,
 ): Effect.Effect<Admission, Error> {
   return Effect.suspend(() => {
-    const target = ownerSession.runs.getToolUseFollowUpTarget(runId);
+    const target = registryOf(ownerSession.runs).getToolUseFollowUpTarget(
+      runId,
+    );
 
     if (target.kind === 'no_session') {
       return Effect.logWarning(
@@ -218,12 +225,12 @@ function admitFollowUp(
     // A running loop reads it at its next park; a notification never
     // revives a persisted run.
     if (options.mode === 'live_notification')
-      return admitQueued(runId, item, 'quiet', ownerSession);
+      return admitQueued(runId, item, 'quiet', options);
     return admitQueued(
       runId,
       item,
       target.kind === 'active' ? 'live' : 'wake',
-      ownerSession,
+      options,
     );
   });
 }
@@ -237,18 +244,21 @@ function admitQueued(
   runId: RunId,
   item: InboxItem,
   mode: 'live' | 'wake' | 'quiet',
-  ownerSession: SessionHandle,
+  { session: ownerSession, fromParent }: SubmitFollowUpOptions,
 ): Effect.Effect<Exclude<Admission, { status: 'no_session' }>, Error> {
+  const options: SendOptions = {
+    // A user's message whose loop ended while it was admitted still wakes.
+    wake: mode === 'wake' || (mode === 'live' && item.from.kind === 'user'),
+    fromParent,
+  };
   return Effect.map(
-    ownerSession.followUps.send(runId, item, {
-      // A user's message whose loop ended while it was admitted still wakes.
-      wake: mode === 'wake' || (mode === 'live' && item.from.kind === 'user'),
-    }),
+    ownerSession.followUps.send(runId, item, options),
     (sent) => {
       if (sent.kind === 'duplicate') return { status: 'sent' };
       if (sent.kind === 'refused') {
-        // Another process holds the run, or its input is closed (deleted,
-        // or torn down with nothing queued), or the session is disposed.
+        // Another process holds the run, the sender is not its parent, its
+        // input is closed (deleted, or torn down with nothing queued), or
+        // the session is disposed.
         return { status: 'failed', reason: sent.reason ?? 'not_resumable' };
       }
       if (sent.wake) return { resume: startFollowUpWake(runId, ownerSession) };
@@ -293,7 +303,7 @@ export const submitFollowUp = Effect.fn('submitFollowUp')(function* (
       return { status: 'failed', reason: REFUSAL_REASON[refusal.kind] };
     if (options.mode !== undefined || item.from.kind !== 'user')
       return { status: 'failed', reason: 'not_resumable' };
-    dispatch = yield* admitQueued(runId, item, 'wake', ownerSession);
+    dispatch = yield* admitQueued(runId, item, 'wake', options);
   } else {
     dispatch = routed;
   }
@@ -303,4 +313,29 @@ export const submitFollowUp = Effect.fn('submitFollowUp')(function* (
       : { status: 'queued', wake: 'failed' };
   }
   return dispatch;
+});
+
+/**
+ * One run's input, as a plugin reaches it: what it sends the run (routed,
+ * admitted and woken as {@link submitFollowUp} does), and when the run
+ * takes no more.
+ */
+export interface RunInbox {
+  /** Deliver `item` to the run. */
+  readonly send: (
+    item: InboxItem,
+    options?: Pick<SubmitFollowUpOptions, 'mode' | 'fromParent'>,
+  ) => Effect.Effect<SubmitFollowUpResult, Error>;
+  /** Hear the run take no more input, or its session's inbox close;
+   *  returns the detach. */
+  readonly onClosed: (listener: () => void) => () => void;
+}
+
+/** `runId`'s input on `session`. */
+export const runInbox = (session: SessionHandle, runId: RunId): RunInbox => ({
+  send: (item, options) => submitFollowUp(runId, item, { ...options, session }),
+  onClosed: (listener) =>
+    session.followUps.onClosed((closed) => {
+      if (closed.kind === 'session' || closed.runId === runId) listener();
+    }),
 });

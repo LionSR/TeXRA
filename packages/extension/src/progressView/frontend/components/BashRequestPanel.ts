@@ -5,7 +5,7 @@ import { html, type TemplateResult } from 'lit';
 import { customElement } from 'lit/decorators.js';
 
 // Local imports - shared vocabulary
-import { APPROVE_SESSION_ACTION } from '@shared/session/approvalDecision';
+import { APPROVE_SESSION_ACTION } from '@texra/shared/session/surfaceDecision';
 import { RUN_GRANT_LABEL } from '@ui/copy/delegationApproval';
 
 // Local imports - progress view styles

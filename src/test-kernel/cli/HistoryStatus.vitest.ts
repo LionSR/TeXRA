@@ -4,7 +4,7 @@ import { beforeEach, describe, expect } from 'vitest';
 
 import { Effect } from 'effect';
 
-import { registerRun } from '@agent/storage';
+import { registerRun } from '@agent/storage/runLifecycle';
 import {
   AgentConfigSchema,
   type AgentConfig,
@@ -22,6 +22,7 @@ import {
   HISTORY_RUN_STATUS,
 } from '@shared/schemas';
 import type { RunId, RunOutcome } from '@shared/schemas';
+import { seedRows } from '@test/support/sessionTestUtils';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { setupPlatform } from '@test/support/setupPlatform';
@@ -72,7 +73,7 @@ async function seedSnapshot(
     }),
   );
   await Effect.runPromise(
-    testDefaultSession().log.transact([
+    seedRows(testDefaultSession().log)([
       {
         type: 'run.position',
         aggregateId: aggregateId('run', id),
@@ -181,7 +182,7 @@ describe('CLI history status formatting', () => {
           provenance: null,
         },
       ]);
-      yield* testDefaultSession().log.transact([
+      yield* seedRows(testDefaultSession().log)([
         {
           type: 'run.position',
           aggregateId: aggregateId('run', id),

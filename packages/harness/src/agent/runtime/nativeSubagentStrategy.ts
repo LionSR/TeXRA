@@ -7,10 +7,14 @@
 import { Effect } from 'effect';
 
 import { type RunEndResult } from '@agent/runtime/RunEndResult';
-import { AgentEngine } from '@agent/runtime/AgentEngine';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { ExecuteAgentOptions } from '@agent/runtime/executeAgent';
-import type { AgentRunServices } from '@agent/runtime/runRegistry';
+import type { RegisterRunOptions } from '@agent/storage/runLifecycle';
+import {
+  registryOf,
+  type AgentRunServices,
+  Runs,
+} from '@agent/runtime/runRegistry';
 import type { ChildRunStrategy } from '@agent/runtime/childRunLoop';
 import type { PreparedAgentDefinition } from '@agent/runtime/AgentLaunchContext';
 import { normalizeProviderError } from '@common/errors/sdkError/providerErrorFormat';
@@ -62,6 +66,8 @@ type NativeSubagentStrategyParams = NativeSubagentStrategyBase &
   (
     | {
         readonly definition: PreparedAgentDefinition;
+        /** The child's registration, which its opening commits. */
+        readonly registration: RegisterRunOptions;
         readonly resume?: never;
         readonly parentOffered: readonly OfferedTool[];
       }
@@ -139,8 +145,8 @@ export function createNativeSubagentStrategy(
     launch: (ports, _signal, turns) =>
       runNative(
         Effect.gen(function* () {
-          const engine = yield* AgentEngine;
-          const executeOptions: ExecuteAgentOptions = {
+          const { programs } = registryOf(yield* Runs);
+          const executeOptions: Omit<ExecuteAgentOptions, 'registration'> = {
             ...params.resume?.options,
             session: params.session,
             parentOffered: params.parentOffered,
@@ -165,15 +171,16 @@ export function createNativeSubagentStrategy(
             },
           };
           if (params.resume)
-            return yield* engine.resumeToolUseFromResumeData(
+            return yield* programs.resumeTurn(
               params.resume.identity,
               executeOptions,
             );
-          const turn = yield* engine.executeAgent(
+          const turn = yield* programs.executeAgent(
             params.definition,
             params.runId,
             {
               ...executeOptions,
+              registration: params.registration,
               // The live handle owns this edge, including a later detach.
               parentRunId: params.parentRunId,
               ...(params.inBand === true ? { stopAfterCycle: true } : {}),

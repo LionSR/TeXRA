@@ -23,6 +23,8 @@ export const AGENT_ERROR_OUTCOME: Readonly<Record<AgentErrorKind, RunOutcome>> =
     abort: RUN_OUTCOME.CANCELLED,
     'context-window': RUN_OUTCOME.FAILED,
     'disk-full': RUN_OUTCOME.FAILED,
+    // Never thrown: an end records it, keeping its own outcome.
+    'result-lost': RUN_OUTCOME.FAILED,
     'missing-api-key': RUN_OUTCOME.FAILED,
     unexpected: RUN_OUTCOME.FAILED,
   };
@@ -105,6 +107,11 @@ export function agentErrorPresentation(error: {
       return {
         type: 'error',
         payload: { message: error.message ?? 'Disk full.', ...docs },
+      };
+    case 'result-lost':
+      return {
+        type: 'error',
+        payload: { message: error.message ?? 'The result was lost.', ...docs },
       };
     case 'unexpected':
       return {

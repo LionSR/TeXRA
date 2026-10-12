@@ -40,6 +40,7 @@ import type {
   ProjectDatabases,
 } from '@shared/session/database';
 import { ownerIdentity, type OwnerId } from '@shared/schemas';
+import type { EditorHostShape } from '@texra/tools/editorHost';
 import type { ServiceInfo } from '@texra/controllers/server/protocol';
 import type { ServiceProjects } from '@texra/controllers/server/handlers';
 import {
@@ -72,6 +73,8 @@ export const cliServiceProjects = Effect.fn('cliServiceProjects')(function* (
     'storageRoot' | 'resourcesPath' | 'skillSourceOptions'
   >,
   scope: Scope.Scope,
+  /** The editor registry this process's plugins read. */
+  editors: EditorHostShape,
 ) {
   const { storageRoot } = context;
   const globalStorage = resolveGlobalStoragePath(storageRoot);
@@ -185,7 +188,7 @@ export const cliServiceProjects = Effect.fn('cliServiceProjects')(function* (
       const project = projects.get(root);
       if (project === undefined || project.leases > 0) return undefined;
       const now = Date.now();
-      if (project.session.runs.heldIds().length > 0) {
+      if (project.session.runs.get().length > 0) {
         project.idleSince = now;
         return undefined;
       }
@@ -199,6 +202,7 @@ export const cliServiceProjects = Effect.fn('cliServiceProjects')(function* (
     }).pipe(withPerKeyLane(lanes, root), Effect.provideContext(services));
   return {
     storageRoot,
+    editors,
     open,
     opened: Effect.sync(
       () =>

@@ -15,9 +15,9 @@ import { customElement, property } from 'lit/decorators.js';
 import { repeat } from 'lit/directives/repeat.js';
 
 // Local imports - main view
-import type { HostRequest } from '@shared/session/hostRequest';
-import type { SurfaceAction } from '@shared/session/surface';
 import type { TeXRAIconName } from '@shared/iconNames';
+import type { HostRequest } from '@texra/shared/session/hostRequest';
+import type { SurfaceAction } from '@texra/shared/session/surface';
 import { SessionUiEvents } from '@texra/shared/session/uiEvents';
 import { buttonStyles } from '@ui/styles/controlStyles';
 import { compactFormControlStyles, designTokens } from '@ui/styles';

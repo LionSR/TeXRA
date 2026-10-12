@@ -20,11 +20,8 @@ import type {
   ToolDefinition,
   ToolResult,
 } from '@shared/schemas';
-import type {
-  DatabaseNotOwner,
-  DatabaseWriteFailed,
-} from '@shared/session/database';
-import type { RunHistoryRefused } from '@shared/session/runHistory';
+import type { DatabaseNotOwner } from '@shared/session/database';
+import type { CellError } from '@shared/session/runHistory';
 import type { SettingHost } from '@shared/state/stateSettings';
 import type { StepRoot } from '@utils/files/externalRoots';
 
@@ -61,10 +58,6 @@ export interface ToolGuard<T, R = never> {
   readonly cwd?: 'unknown';
 }
 
-/** A host capability a tool needs: `diagnostics` is a file's diagnostics
- *  from the host's editor. */
-export type HostToolCapability = 'diagnostics';
-
 /**
  * Contract for tool implementations.
  * `defineTool` provides the canonical implementation with Zod validation. Expected
@@ -76,9 +69,12 @@ export interface ITool<E = Error, R = never> {
   readonly definition: ToolDefinition;
   /** Hosts this tool is statically excluded from; an omitted host supports it. */
   readonly unavailableHosts?: readonly SettingHost[];
-  /** What the session's host must serve for this tool to be offered, read
-   *  live each step: a window that attaches mid-run brings it. */
-  readonly hostCapability?: HostToolCapability;
+  /** The host capability (named by the plugin that serves it,
+   *  `HostCapabilities`) the session's host must serve for this tool to be
+   *  offered, read live each step: a window that attaches mid-run brings it. */
+  readonly hostCapability?: string;
+  /** Launches agents' document tasks: its step lists the agents with one. */
+  readonly launchesTasks?: true;
   /**
    * Where its calls run beside their siblings (omitted: `'barrier'`).
    * Declared on the tool, not the YAML-overridable definition, so an agent
@@ -181,10 +177,7 @@ export interface CallRequests {
   readonly open: (
     payload: PermissionPayload,
     options?: { readonly onNeverCommitted?: Effect.Effect<void> },
-  ) => Effect.Effect<
-    RequestDecision,
-    DatabaseNotOwner | DatabaseWriteFailed | RunHistoryRefused
-  >;
+  ) => Effect.Effect<RequestDecision, DatabaseNotOwner | CellError>;
 }
 
 /**

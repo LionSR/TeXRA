@@ -17,7 +17,6 @@ import { Cause, Data, Effect, Exit, Fiber } from 'effect';
 
 // Local imports
 import { getRunRecords } from '@agent/storage/runRecords';
-import { registerRun } from '@agent/storage/runLifecycle';
 import {
   prepareAgentDefinition,
   type PreparedAgentDefinition,
@@ -28,7 +27,8 @@ import {
   AgentConfigSchema,
   type AgentConfigPayload,
 } from '@agent/core/definition/AgentConfig';
-import { Runs, type AgentRunServices } from '@agent/runtime/runRegistry';
+import { registryOf, Runs } from '@agent/runtime/runRegistry';
+import type { AgentRunServices } from '@agent/runtime/runRegistry';
 import {
   createNativeSubagentStrategy,
   type ChildRunLaunchOptions,
@@ -158,27 +158,6 @@ const executeInBand = Effect.fn('executeInBand')(
         config.agent,
       );
       if (refusal !== undefined) return yield* Effect.fail(new Error(refusal));
-
-      yield* registerRun(options.session, runId, config, {
-        identity: { kind: 'agent', agent: config.agent },
-        userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
-        parentRunId: options.parentRunId,
-        ...(options.parentCard !== undefined && {
-          parentCard: options.parentCard,
-        }),
-        ...(options.parentCallId !== undefined && {
-          parentCallId: options.parentCallId,
-        }),
-        ...(options.grants !== undefined && { grants: options.grants }),
-      }).pipe(
-        Effect.mapError(
-          (cause) =>
-            new SubagentDurabilityError({
-              message: `Failed to register subagent ${runId}.`,
-              cause,
-            }),
-        ),
-      );
     }
     let settledTurn: SettledInBandTurn | undefined;
     const { completion } = yield* startDetachedChildRunLoop({
@@ -200,7 +179,25 @@ const executeInBand = Effect.fn('executeInBand')(
           strategy: createNativeSubagentStrategy({
             ...options,
             ...(launch.kind === 'fresh'
-              ? { definition: launch.definition }
+              ? {
+                  definition: launch.definition,
+                  // Registered with its opening, which the child's run
+                  // commits as it starts.
+                  registration: {
+                    identity: { kind: 'agent', agent: config.agent },
+                    userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
+                    parentRunId: options.parentRunId,
+                    ...(options.parentCard !== undefined && {
+                      parentCard: options.parentCard,
+                    }),
+                    ...(options.parentCallId !== undefined && {
+                      parentCallId: options.parentCallId,
+                    }),
+                    ...(options.grants !== undefined && {
+                      grants: options.grants,
+                    }),
+                  },
+                }
               : {
                   resume: {
                     identity: launch.identity,
@@ -403,10 +400,8 @@ const awaitInBand = (
   program: Effect.Effect<InBandSubagentRunResult, Error, AgentRunServices>,
 ): Effect.Effect<InBandSubagentRunResult, Error, AgentRunServices> =>
   Effect.gen(function* () {
-    const runs = yield* Runs;
-    const child = yield* Effect.forkChild(program, {
-      startImmediately: true,
-    });
+    const runs = registryOf(yield* Runs);
+    const child = yield* Effect.forkChild(program, { startImmediately: true });
     return yield* Fiber.join(child).pipe(
       Effect.onInterrupt(() =>
         Effect.suspend(() =>

@@ -16,6 +16,7 @@ import type { ToolServices } from '@agent/runtime/ToolServices';
 
 import type { SessionTransaction } from '@agent/runtime/SessionHandle';
 import { WorkspaceFs } from '@platform/rootedFs';
+import type { Append, UnfoldedDraft } from '@shared/session/sessionEvents';
 import type {
   RequestDecision,
   RunId,
@@ -169,6 +170,27 @@ function inRun<A, E>(effect: Effect.Effect<A, E, ToolServices>) {
     ),
   );
 }
+
+/** Whether a transaction's job opens a request: its first append, read
+ *  against a transaction that commits nothing and stops there. */
+const opensRequest = (
+  work: (tx: SessionTransaction) => Effect.Effect<unknown, unknown>,
+): Effect.Effect<boolean> =>
+  Effect.suspend(() => {
+    let opens = false;
+    const append = ((drafts: readonly SessionEventDraft[]) => {
+      opens = drafts.some((event) => event.type === 'request.opened');
+      return Effect.fail(
+        new DatabaseWriteFailed({ path: 'probe', cause: null }),
+      );
+    }) as Append;
+    const tx = {
+      append,
+      claim: () => Effect.void,
+      afterCommit: () => Effect.void,
+    };
+    return Effect.map(Effect.exit(work(tx)), () => opens);
+  });
 
 describe('Tool edit approval gating', () => {
   beforeEach(async () => {
@@ -419,18 +441,20 @@ describe('Tool edit approval gating', () => {
       const transact = session.log.transact.bind(session.log);
       vi.spyOn(session.log, 'transact').mockImplementation(((
         work:
-          | readonly SessionEventDraft[]
+          | readonly UnfoldedDraft[]
           | ((tx: SessionTransaction) => Effect.Effect<unknown, unknown>),
       ) => {
-        if (typeof work === 'function') return transact(work);
-        return work.some((event) => event.type === 'request.opened')
-          ? Effect.fail(
-              new DatabaseWriteFailed({
-                path: 'session.db',
-                cause: 'the disk is full',
-              }),
-            )
-          : transact(work);
+        if (typeof work !== 'function') return transact(work);
+        return Effect.flatMap(opensRequest(work), (opens) =>
+          opens
+            ? Effect.fail(
+                new DatabaseWriteFailed({
+                  path: 'session.db',
+                  cause: 'the disk is full',
+                }),
+              )
+            : transact(work),
+        );
       }) as typeof transact);
 
       const failure = yield* inRun(
@@ -460,13 +484,13 @@ describe('Tool edit approval gating', () => {
         const transact = session.log.transact.bind(session.log);
         vi.spyOn(session.log, 'transact').mockImplementation(((
           work:
-            | readonly SessionEventDraft[]
+            | readonly UnfoldedDraft[]
             | ((tx: SessionTransaction) => Effect.Effect<unknown, unknown>),
         ) => {
-          if (typeof work === 'function') return transact(work);
-          return work.some((event) => event.type === 'request.opened')
-            ? Effect.never
-            : transact(work);
+          if (typeof work !== 'function') return transact(work);
+          return Effect.flatMap(opensRequest(work), (opens) =>
+            opens ? Effect.never : transact(work),
+          );
         }) as typeof transact);
 
         const request = yield* Effect.forkChild(

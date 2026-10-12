@@ -11,6 +11,7 @@
  */
 import { Effect, type Scope } from 'effect';
 import { ModelError } from './errors.js';
+import { toErrorMessage } from './oauth/support.js';
 import { originOf, type ModelOrigin } from './protocol.js';
 import type { ModelConfig } from 'llm-zoo';
 
@@ -87,7 +88,7 @@ const constructed = (make: () => Model) =>
         ? cause
         : new ModelError({
             kind: 'invalid-request',
-            message: cause instanceof Error ? cause.message : String(cause),
+            message: toErrorMessage(cause),
             cause,
           }),
   });

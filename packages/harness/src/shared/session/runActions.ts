@@ -10,6 +10,8 @@ import {
   type RunAction,
 } from '@shared/schemas';
 
+import { isTerminalOutcomePhase } from '@shared/runs/runStatus';
+
 import { isLiveRun, type RunView } from './sessionView';
 
 /** Opening the run's folder, exporting its conversation, copying its
@@ -65,8 +67,9 @@ export function runActions(
     ];
   }
   const actions: RunAction[] = ['delete', 'rename'];
+  const ended = isTerminalOutcomePhase(run.status);
   if (
-    isLoopDriven(run.identity) &&
+    continuesFromRows({ ...run, ended }) &&
     (run.group === 'interrupted' ||
       (run.identity.kind === 'script' && run.status !== RUN_PHASE.COMPLETED))
   )
@@ -79,6 +82,17 @@ export function runActions(
     actions.push('diff', 'pack', 'clean');
   return [...actions, ...inspectActions()];
 }
+
+/**
+ * Whether a run continues from its own rows: a loop-driven run (born with
+ * its opening) does, whatever its outcome, unless it is a document task that
+ * ended (its recipe's result is settled, so it runs again). The one standing
+ * `deriveResumability` reads from a run's records and `runActions` from its
+ * view, so the two never decide apart.
+ */
+export const continuesFromRows = (
+  run: Pick<RunView, 'identity' | 'documentTask'> & { readonly ended: boolean },
+): boolean => isLoopDriven(run.identity) && !(run.ended && run.documentTask);
 
 /** A conversation with a settled point to cut at: a plain agent's run, not
  *  a document task, whose first turn has ended. */

@@ -13,12 +13,12 @@ import { when } from 'lit/directives/when.js';
 
 // Local imports
 import type { SessionView, RunView } from '@shared/session/sessionView';
-import type { Surface } from '@shared/session/surface';
-import { unseenRuns } from '@shared/session/unseenRuns';
 import {
   RUN_GROUP_LABELS,
   RUN_GROUP_ORDER,
 } from '@shared/runs/runStatusDisplay';
+import type { Surface } from '@texra/shared/session/surface';
+import { unseenRuns } from '@texra/shared/session/unseenRuns';
 import { SessionUiEvents } from '@texra/shared/session/uiEvents';
 import { designTokens, commonViewStyles } from '@ui/styles';
 

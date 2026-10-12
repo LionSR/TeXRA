@@ -15,11 +15,7 @@ import {
 } from 'effect';
 
 import { LanguageModel, withProcessServices } from '@texra-ai/harness';
-import {
-  PdfOpenFailed,
-  type ManualCriticismEntry,
-  type SessionHandle,
-} from '@agent/runtime';
+import type { SessionHandle } from '@agent/runtime';
 import { getCatalogAgent, refresh } from '@agent/index';
 import { BundledViewContentProvider } from '@common/webview';
 import {
@@ -32,18 +28,23 @@ import { createAgentPresentationHost } from '@frontend/events/agentEventListener
 import { pushManualCriticism } from '@frontend/latex/inlineCriticism';
 import { getLinterMessages } from '@frontend/latex/linter';
 import { withLogChannel } from '@logger/effectLog';
-import { DOCUMENTS_OUTPUT_KEY } from '@shared/plugins/documents';
 import { agentKeyOf, type FileLocation, type RunId } from '@shared/schemas';
 import { isLiveRun } from '@shared/session/sessionView';
-import { projectDisplayOf } from '@shared/session/hostSnapshot';
 import {
   getFirstRunDone,
   setOnboardingDeclined,
 } from '@shared/state/onboardingState';
+import {
+  PdfOpenFailed,
+  type EditorCapabilities,
+  type EditorRegistry,
+} from '@texra/tools/editorHost';
+import { projectDisplayOf } from '@texra/shared/session/hostSnapshot';
+import { DOCUMENTS_OUTPUT_KEY } from '@texra/shared/plugins/documents';
 import type {
   DownMessage,
   SurfaceActionMessage,
-} from '@shared/session/sessionFrames';
+} from '@texra/shared/session/sessionFrames';
 import { ToolEditApprovalController } from '@texra/controllers/approval/ToolEditApprovalController';
 import { OnboardingFunnelRefresher } from '@texra/controllers/onboarding/onboardingFunnel';
 import type { ServiceLink } from '@texra/controllers/server/client';
@@ -177,6 +178,8 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     private readonly backend: SessionBackend,
     /** The background service, when this window is its client. */
     private readonly service: ServiceLink | undefined,
+    /** The editor registry the extension's plugins read (`texraPlugins`). */
+    private readonly editors: EditorRegistry,
     /** The setup pill: painted from the same credential answer the funnel
      *  reads, so the pill and the "Connect a model" card agree. */
     private readonly paintSetupPill: (credentialUsable: boolean) => void,
@@ -331,12 +334,11 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     // chime, one per process (PRD 12.4), never a renderer transition hook
     // that every subscriber would replay. A failed run does not chime.
     // What this window does for a run, whether it runs here or in the
-    // service: notices, the editor's diagnostics and inline criticism, and
-    // opening a PDF.
-    const capabilities = {
-      ...createAgentPresentationHost(this, globalState, this.runtime, session),
+    // service: notices, and the editor's diagnostics, inline criticism and
+    // PDF viewer, which the editor tools read through the registry.
+    const editor: EditorCapabilities = {
       readDiagnostics: getLinterMessages,
-      addCriticism: (payload: ManualCriticismEntry) =>
+      addCriticism: (payload) =>
         Effect.sync(() => pushManualCriticism(payload)),
       openPdf: ({
         location,
@@ -363,9 +365,20 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
             }),
         }),
     };
+    const presentation = createAgentPresentationHost(
+      this,
+      globalState,
+      this.runtime,
+      session,
+    );
+    this.runtime.runSync(
+      this.editors
+        .attach(session.roots.storage, editor)
+        .pipe(Scope.provide(this.scope)),
+    );
     this.runtime.runSync(
       attachSessionHost(session, this.toolEditApprovals, {
-        ...capabilities,
+        ...presentation,
         onEvent: (event) =>
           Effect.sync(() => {
             // A document task's end carries its documents.
@@ -384,7 +397,11 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     if (service !== undefined)
       this.runtime.runFork(
         Effect.flatMap(Effect.service(LanguageModel), (languageModel) =>
-          this.attachToService(service, { ...capabilities, languageModel }),
+          this.attachToService(service, {
+            ...presentation,
+            ...editor,
+            languageModel,
+          }),
         ).pipe(Scope.provide(this.scope)),
       );
 

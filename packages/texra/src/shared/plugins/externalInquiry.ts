@@ -12,7 +12,6 @@ import { Context, type Effect } from 'effect';
 import { z } from 'zod';
 
 import {
-  aggregateId,
   ExternalInquiryTurnRecordSchema,
   InquiryThreadIdSchema,
   InquiryThreadSummarySchema,
@@ -22,7 +21,6 @@ import {
   type InquiryThreadSummary,
   type JsonValue,
   type RunId,
-  type SessionEventDraft,
   type ToolFact,
 } from '@shared/schemas';
 import type { SessionView } from '@shared/session/sessionView';
@@ -138,20 +136,6 @@ export function inquiryThreadFact(
     version: EXTERNAL_INQUIRY_THREAD_ARM.version,
     value: InquiryThreadRowSchema.parse(value),
     aggregate: `${EXTERNAL_INQUIRY_THREAD_ARM.plugin}:${summary.threadId}`,
-  };
-}
-
-/** {@link inquiryThreadFact} as its row, for a writer outside a call (a
- *  decision), under the run that asked. */
-export function inquiryThreadRow(
-  summary: InquiryThreadSummary,
-): SessionEventDraft {
-  const { aggregate, ...fact } = inquiryThreadFact(summary);
-  return {
-    type: 'plugin.fact',
-    aggregateId: aggregateId('plugin', aggregate),
-    ...fact,
-    parent: summary.parentRunId,
   };
 }
 

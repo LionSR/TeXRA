@@ -261,8 +261,9 @@ export class Sessions extends Context.Service<
    * lowercase letters, digits and dashes, an id or tool name listed twice)
    * fails with {@link PluginsRefused}, before anything is built.
    *
-   * Build it once per process, as any Effect layer is memoized: two live
-   * builds over one storage root are two writers of that root's sessions.
+   * Build it once per process, as any Effect layer is memoized: a second
+   * live build that opens a root the first holds is refused at open
+   * (`processRoots`), since both would own its runs.
    */
   static layer({
     platform,

@@ -6,6 +6,19 @@ All notable changes to this project will be documented in this file.
 
 ### Breaking Changes
 
+- **A run that fails before it starts is reported as a launch error, not
+  listed as a failed task.** A task, subagent or background script is
+  recorded together with its first batch of history, so one that fails
+  before it gets there (an agent file that does not render, an attachment
+  that cannot be read, a model that cannot be bound) leaves no entry in the
+  task list: the CLI exits non-zero with the cause, the desktop app and the
+  extension show the error where the task was started, `task.start` on the
+  service returns it, and the SDK's `start` fails with a `RunFailure` that
+  carries it. A parent whose subagent failed that way still receives the
+  failure as a follow-up. A resume that fails before it reopens the task
+  leaves the task as it was, instead of marking it failed.
+- **`ProcessServices` no longer includes `AgentEngine`.** An SDK host that
+  builds its own layer over `ProcessServices` no longer provides it.
 - **Plugin tools: a narrower run, and their own services.** A plugin's
   tool reads the run its call works for from `ToolContext`, with
   `requireRun`, `callerRun` and the `ToolRun` type from
@@ -15,7 +28,13 @@ All notable changes to this project will be documented in this file.
   call services no longer compiles. To launch a child agent from a tool,
   use the `ChildRuns` service (`launch`) from the same entry; a script's
   children stay within its concurrency budget. Plugin authors who imported
-  `RunCall` or typed tools by `ToolServices` move to these.
+  `RunCall` or typed tools by `ToolServices` move to these. A tool that
+  drives an external agent process as the calling run's child registers it
+  with `ChildRuns.launchProcess`, and a plugin's session layer no longer
+  reaches the session's runs. A host launches a root run with
+  `session.runs.launch({ request, options })` under its `SessionOwner`,
+  which answers whether it still holds that session with `holds`;
+  `runAgent` is gone.
 - **SDK tool and plugin contract: `lane`, `arms` and `facts`.** A tool
   declares where its calls run with `lane: 'parallel' | 'barrier' | 'own'`,
   replacing `parallelSafe` and `ownsConcurrency`. A plugin lists its own row
@@ -928,6 +947,11 @@ show` print the same notice, and the new `texra agents customize`,
 
 ### Bug Fixes
 
+- **A task whose end could not be saved no longer stays listed as
+  running.** When only its result could not be saved, it ends as it did,
+  its card says "Result lost" with the cause, and the task that started it
+  is told; otherwise it is recorded as failed. A task whose saved history
+  is damaged can still be stopped, and so can the subagents under it.
 - **A subagent's result can no longer be lost to a crash.** A background
   subagent, script or command used to record its result and then, as a
   second step, queue it for the task that started it; a crash between the

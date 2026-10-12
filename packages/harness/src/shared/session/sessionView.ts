@@ -115,17 +115,17 @@ const RunViewSchema = z.object({
    *  step. Only a run whose loop steps carries one. */
   substate: RunSubstateSchema.nullable(),
   /**
-   * The terminal status once nothing can move it: for a run this process
-   * owns, after its `run.end` has folded (a user stop publishes CANCELLED
-   * while the loop still writes its closing rows); for any other run, the
-   * terminal status itself. Null while anything can still move.
-   * What licenses a host to paint an open group as interrupted and the
-   * session to release the run's sidecar record.
+   * The terminal status once nothing can move it (for an owned run, once
+   * its `run.end` folded, since a user stop publishes CANCELLED while the
+   * loop still writes its closing rows; else the terminal status itself),
+   * null before: what lets a host paint an open group as interrupted and
+   * the session release the run's sidecar record.
    */
   durableOutcome: RunOutcomeSchema.nullable(),
-  /** Banner copy beside the label: the local unreadable detail, else the
-   *  interrupted or held notice; null otherwise. */
+  /** Banner copy: unreadable, else interrupted or held, else `lost`. */
   statusDetail: z.string().nullable(),
+  /** The result its end lost (a `result-lost` error), whatever its outcome. */
+  lost: z.string().nullable(),
   // G4: one table (`runStatusDisplay`) spells both, through the status
   // and substate or the interrupted reading.
   statusLabel: z.string(),

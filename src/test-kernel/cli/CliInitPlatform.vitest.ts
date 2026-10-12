@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, vi } from 'vitest';
 
 // Local imports
 import { SessionOwner, withProcessServices } from '@texra-ai/harness';
+import { registryOf } from '@agent/runtime/runRegistry';
 import {
   cliPlatformShutdown,
   initCliPlatform,
@@ -152,12 +153,13 @@ function withFreshSignalCapture<E>(
     vi.resetModules();
     const { registered, restore } = spyOnSignalRegistration();
     yield* Effect.addFinalizer(() => Effect.sync(restore));
-    yield* run({
-      registered,
-      initPlatform: yield* Effect.promise(
-        () => import('@cli/runtime/initPlatform'),
-      ),
-    });
+    const initPlatform = yield* Effect.promise(
+      () => import('@cli/runtime/initPlatform'),
+    );
+    // The fresh module's platform holds the global store open; Windows
+    // cannot remove the storage root under an open `texra.db`.
+    yield* Effect.addFinalizer(() => initPlatform.cliPlatformShutdown);
+    yield* run({ registered, initPlatform });
   });
 }
 
@@ -244,8 +246,8 @@ describe('CLI platform init', () => {
         ),
       );
       const drain = vi
-        .spyOn(session.runs, 'close')
-        .mockImplementation(() => {});
+        .spyOn(registryOf(session.runs), 'stopAll')
+        .mockImplementation(() => Effect.succeed([]));
       yield* Effect.addFinalizer(() => Effect.sync(() => drain.mockRestore()));
 
       // Registration alone must not kill anything; the drain belongs to the

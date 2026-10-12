@@ -12,11 +12,11 @@ import '@awesome.me/webawesome/dist/components/dropdown/dropdown.js';
 import '@awesome.me/webawesome/dist/components/dropdown-item/dropdown-item.js';
 import { html, nothing, type TemplateResult } from 'lit';
 
-import type { ProjectDisplay } from '@shared/session/hostSnapshot';
 import type { SessionView } from '@shared/session/sessionView';
-import type { Surface } from '@shared/session/surface';
-import { unseenRuns } from '@shared/session/unseenRuns';
 import type { TeXRAIconName } from '@shared/iconNames';
+import type { ProjectDisplay } from '@texra/shared/session/hostSnapshot';
+import type { Surface } from '@texra/shared/session/surface';
+import { unseenRuns } from '@texra/shared/session/unseenRuns';
 import type { Shell } from '@texra/shared/session/shell';
 import {
   renderIconActionButton,

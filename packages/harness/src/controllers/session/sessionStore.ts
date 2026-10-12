@@ -35,7 +35,6 @@ import {
   type CommitOrdinal,
   type RunId,
   type SessionEvent,
-  type SessionEventDraft,
 } from '@shared/schemas';
 import {
   Database,
@@ -46,9 +45,11 @@ import {
 import {
   ProcessIdentity,
   PublisherJob,
+  afterCommit,
   SessionEvents,
   type Append,
   type SessionEventsShape,
+  type UnfoldedDraft,
 } from '@shared/session/sessionEvents';
 
 import { makeRunTrace } from './runTrace';
@@ -251,6 +252,7 @@ const transaction =
             Effect.sync(() => owned.push(...taken)),
           );
         },
+        afterCommit,
       });
       const value = yield* events
         .transact((append) => {
@@ -310,7 +312,7 @@ export const makeSessionStore = (
     const log: SessionLog = {
       transact: <A, E>(
         work:
-          | readonly SessionEventDraft[]
+          | readonly UnfoldedDraft[]
           | ((tx: SessionTransaction) => Effect.Effect<A, E>),
       ) => {
         if (typeof work === 'function') return transact(work);

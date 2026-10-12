@@ -20,6 +20,7 @@ import {
   createTestSession,
   publishTestRunStart,
   queuedFollowUps,
+  seedRows,
 } from '@test/support/sessionTestUtils';
 import { fakeProcessServices } from '@test/support/setupPlatform';
 import { createToolUseResumeData } from '@test/support/toolUseResumeTestUtils';
@@ -101,7 +102,7 @@ const resumedFlowTakes = (session: SessionHandle) =>
     if (batch?.kind === 'followUps') {
       taken.push(...batch.followUps.map((followUp) => followUp.content.text));
       // What the loop's consume commits: the rows stop queueing the batch.
-      yield* session.log.transact(
+      yield* seedRows(session.log)(
         batch.followUps.map((followUp) => ({
           type: 'followup.consumed' as const,
           aggregateId: aggregateId('run', RUN),
@@ -334,7 +335,7 @@ describe('resumeRun tool-use queue ownership', () => {
       ).toContain('failed');
       expect(yield* queuedTexts(session)).toEqual(['keep me']);
       // Nothing here holds the run: the next resume may take it.
-      expect(session.runs.isLive(RUN)).toBe(false);
+      expect(session.runs.get(RUN)?.live === true).toBe(false);
     }),
   );
 

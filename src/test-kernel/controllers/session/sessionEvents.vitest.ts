@@ -26,7 +26,7 @@ import {
 } from 'node:fs';
 import * as os from 'node:os';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { basename, join } from 'node:path';
 import { monitorEventLoopDelay } from 'node:perf_hooks';
 import { DatabaseSync } from 'node:sqlite';
 
@@ -37,6 +37,7 @@ import * as SqlDriver from '@effect/sql-sqlite-node/SqliteClient';
 import {
   Cause,
   Clock,
+  Context,
   Deferred,
   Effect,
   Exit,
@@ -50,6 +51,7 @@ import { TestClock } from 'effect/testing';
 import * as Reactivity from 'effect/reactivity/Reactivity';
 
 import { afterAll, beforeAll, describe, expect, vi } from 'vitest';
+import { registryOf } from '@agent/runtime/runRegistry';
 
 vi.mock('@effect/sql-sqlite-node/SqliteClient', async (importOriginal) => ({
   ...(await importOriginal<
@@ -81,14 +83,9 @@ import { SessionViewService } from '@controllers/session/SessionView';
 import { sessionInputsLayer } from '@controllers/session/sessionInputs';
 import { WorkspaceRoots } from '@controllers/session/WorkspaceRoots';
 import { onAppSignal } from '@eventBus/AppSignals';
-import { withProcessServices } from '@platform/processRuntime';
+import { SessionOwner, withProcessServices } from '@platform/processRuntime';
 import { AppState, type StateStore } from '@platform/interfaces';
 import type { ProcessProbe } from '@platform/defaults/nodeProcesses';
-import {
-  DOCUMENTS_ACCEPTED_ARM,
-  documentsAcceptedFact,
-} from '@shared/plugins/documents';
-import { inquiryThreadRow } from '@shared/plugins/externalInquiry';
 import {
   aggregateId as qualifyAggregateId,
   AgentConfigFieldsSchema,
@@ -106,13 +103,17 @@ import {
   RUN_DAMAGED_MESSAGE,
   RUN_EARLIER_BUILD_MESSAGE,
 } from '@shared/runs/runStatusDisplay';
+import { runStateAppend } from '@shared/session/runHistory';
 import { Database, GlobalDatabase } from '@shared/session/database';
 import { runActions } from '@shared/session/runActions';
 import { GlobalStateKey } from '@shared/state/stateKeys';
-import { RunHistory, RunHistoryRefused } from '@shared/session/runHistory';
+import {
+  RunHistory,
+  RunHistoryRefused,
+  type RunCell,
+} from '@shared/session/runHistory';
 import type { RunHistoryDraft } from '@shared/session/runStateFold';
 import { ProcessIdentity, SessionEvents } from '@shared/session/sessionEvents';
-import { DownMessageSchema } from '@shared/session/sessionFrames';
 import type { SessionView } from '@shared/session/sessionView';
 import {
   closeSessionOf,
@@ -126,14 +127,24 @@ import {
   nodeSpawnerLayer,
   scriptedSpawnerLayer,
 } from '@test/support/childProcessTestLayer';
-import { publishTestRunStart } from '@test/support/sessionTestUtils';
+import { publishTestRunStart, seedRows } from '@test/support/sessionTestUtils';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { testRunHandle } from '@test/support/runHandleFixtures';
 import { createFakeWorkspaceRoots } from '@test/support/FakePlatform';
 import '@test/support/sessionGraphTestSetup';
-import { identityReads } from '@test/support/sessionGraphInstall';
+import {
+  identityReads,
+  testProcessLayer,
+} from '@test/support/sessionGraphInstall';
 import { REPO_ROOT } from '@test/support/repoScan';
 import { storePluginsLayer } from '@test/support/setupPlatform';
+import { inquiryThreadRow } from '@test/support/inquiryThreadRow';
+import { TEXRA_SETTING_ROWS } from '@texra/shared/settingsView/texraSettings';
+import {
+  DOCUMENTS_ACCEPTED_ARM,
+  documentsAcceptedFact,
+} from '@texra/shared/plugins/documents';
+import { DownMessageSchema } from '@texra/shared/session/sessionFrames';
 import { runActionGuard } from '@texra/controllers/session/runActionGuard';
 import type { LeanLanguageServices } from '@texra/tools/lean/leanLanguageServices';
 import { armsOf, announceRunFacts } from '@tools/plugins';
@@ -343,7 +354,7 @@ const runHistoryOverStore = Layer.effect(
   Effect.gen(function* () {
     const store = yield* makeSessionStore('/workspace/framing');
     yield* store.deliver(() => {});
-    return makeRunHistory(store.log, yield* Database);
+    return makeRunHistory(store.log);
   }),
 ).pipe(Layer.provide(ProcessIdentity.layer(SELF)));
 
@@ -391,7 +402,7 @@ const publishTestRows = (
   session: SessionHandle,
   rows: readonly SessionEventDraft[],
 ): void => {
-  Effect.runFork(session.log.transact(rows));
+  Effect.runFork(seedRows(session.log)(rows));
 };
 
 /** The view access a request handler reads: the fold's level and one run
@@ -485,7 +496,7 @@ describe('session events and view', () => {
         yield* TestClock.adjust('1 second');
         expect(yield* SubscriptionRef.get(view.ref)).toBe(initial);
         expect(observed).toHaveLength(0);
-        yield* events.transact((append) => append([waiting]));
+        yield* events.transact((append) => runStateAppend(append)([waiting]));
         yield* Deferred.await(finished);
         expect(observed.length).toBeGreaterThan(0);
         expect(observed.every((state) => state.cursor > initial.cursor)).toBe(
@@ -624,7 +635,7 @@ describe('session events and view', () => {
       const events = yield* SessionEvents;
       const run = qualifyAggregateId('run', RUN);
       const [start] = yield* events.transact((append) =>
-        append([
+        runStateAppend(append)([
           runStart,
           {
             type: 'followup.queued',
@@ -661,7 +672,7 @@ describe('session events and view', () => {
       // they reach the fold as the tail and not as part of its cold read.
       yield* settle(view.ref, (v) => v.runs.has(RUN));
       yield* events.transact((append) =>
-        append([
+        runStateAppend(append)([
           {
             type: 'request.decided',
             aggregateId: qualifyAggregateId('run', RUN),
@@ -671,7 +682,7 @@ describe('session events and view', () => {
         ]),
       );
       yield* events.transact((append) =>
-        append([
+        runStateAppend(append)([
           {
             type: 'run.position',
             aggregateId: qualifyAggregateId('run', RUN),
@@ -981,7 +992,7 @@ describe('Sessions owner', () => {
   const isLive = (session: SessionHandle) =>
     Effect.map(listTestSessions, (live) => live.includes(session));
   const track = (session: SessionHandle, runId: RunId) =>
-    session.runs.track(testRunHandle({ runId, agent: 'chat' }));
+    registryOf(session.runs).track(testRunHandle({ runId, agent: 'chat' }));
 
   it.live(
     'shares the project database with its session until the project closes',
@@ -1078,7 +1089,10 @@ describe('Sessions owner', () => {
     () =>
       Effect.gen(function* () {
         const session = yield* open('/workspace/owner/committed-status');
-        const sweep = vi.spyOn(session.runs, 'sweepChildrenOfFoldedStop');
+        const sweep = vi.spyOn(
+          registryOf(session.runs),
+          'sweepChildrenOfFoldedStop',
+        );
 
         try {
           publishTestRows(session, [
@@ -1230,9 +1244,9 @@ describe('Sessions owner', () => {
         // wait for the loop to release the activation after its last delivery.
         let releaseChild = (): void => {};
         const interrupt = vi.fn(() => releaseChild());
-        releaseChild = session.runs.reserveChildActivation({
+        releaseChild = registryOf(session.runs).reserveChildActivation({
           runId: RunIdSchema.parse('aa0002'),
-          parent: { current: null },
+          launchParent: null,
           retainsTerminalParent: true,
           interrupt,
         });
@@ -1277,9 +1291,9 @@ describe('Sessions owner', () => {
         const session = yield* open('/workspace/owner/abandoned');
         // A run whose driver takes the stop and never unwinds.
         const slow = RunIdSchema.parse('aa0003');
-        session.runs.reserveChildActivation({
+        registryOf(session.runs).reserveChildActivation({
           runId: slow,
-          parent: { current: null },
+          launchParent: null,
           retainsTerminalParent: false,
           interrupt: () => {},
         });
@@ -1298,6 +1312,73 @@ describe('Sessions owner', () => {
         });
         expect(yield* isLive(session)).toBe(false);
       }),
+  );
+  // Two compositions in one process (two `Sessions.layer` builds) share one
+  // process identity, so only one may own a root. Failure modes: the second
+  // opens a root the first holds (two owners of its runs), also through a
+  // second copy of the module or an alias of the root; a root the first does
+  // not hold is refused; a root stays refused after the first closes it.
+  // Known gap until G11: both compositions still share the module-global
+  // settings catalog (`installSettingsCatalog`), which this does not test.
+  it.live(
+    'refuses a second composition a root the first holds, until it closes',
+    () =>
+      withProcessServices(
+        testRuntime(),
+        Effect.gen(function* () {
+          const temp = (prefix: string) =>
+            Effect.acquireRelease(
+              Effect.sync(() =>
+                mkdtempSync(join(tmpdir(), `texra-${prefix}-`)),
+              ),
+              (dir) =>
+                Effect.sync(() =>
+                  rmSync(dir, { recursive: true, force: true }),
+                ),
+            );
+          const held = yield* temp('held');
+          const other = yield* temp('other');
+          const globalStorage = yield* temp('global');
+          const roots = (storage: string) =>
+            createFakeWorkspaceRoots({ storagePath: storage });
+          // Its own memo map, as a second ManagedRuntime has: built in this
+          // fiber's, the layers the kernel's runtime built would be shared.
+          // Its scope closes it, and its sessions, whatever fails.
+          const second = Context.get(
+            yield* Layer.buildWithMemoMap(
+              testProcessLayer([], TEXRA_SETTING_ROWS, globalStorage),
+              Layer.makeMemoMapUnsafe(),
+              yield* Effect.scope,
+            ),
+            SessionOwner,
+          );
+          const first = yield* Effect.acquireRelease(
+            openTestSession({ roots: roots(held) }),
+            (session) => Effect.asVoid(closeSessionOf(session)),
+          );
+          const refused = yield* Effect.flip(
+            second.open({ roots: roots(held) }),
+          );
+          expect(refused.message).toContain('already open in this process');
+          // A second copy of the harness module (an app bundle beside an SDK
+          // consumer) refuses it too, by an alias: the registry is per process.
+          vi.resetModules();
+          const copy = yield* Effect.promise(
+            () => import('@platform/processRuntime'),
+          );
+          expect(copy.SessionOwner).not.toBe(SessionOwner);
+          const refusedByCopy = yield* Effect.flip(
+            copy.holdProcessRoot(`${held}/../${basename(held)}/`, {}),
+          ).pipe(Effect.scoped);
+          expect(refusedByCopy.message).toContain(
+            'already open in this process',
+          );
+          yield* second.open({ roots: roots(other) });
+          yield* closeSessionOf(first);
+          const taken = yield* second.open({ roots: roots(held) });
+          expect(taken.roots.storage).toBe(held);
+        }).pipe(Effect.scoped),
+      ),
   );
   it.live(
     'announces each accepted-files row once, never the history a reopen replays',
@@ -1326,8 +1407,8 @@ describe('Sessions owner', () => {
           // Two acceptances committed close together fold to one view level.
           yield* Effect.all(
             [
-              first.log.transact([acceptedRow(runId, ['/w/a.tex'], 1)]),
-              first.log.transact([acceptedRow(runId, ['/w/b.tex'], 2)]),
+              seedRows(first.log)([acceptedRow(runId, ['/w/a.tex'], 1)]),
+              seedRows(first.log)([acceptedRow(runId, ['/w/b.tex'], 2)]),
             ],
             { concurrency: 'unbounded' },
           );
@@ -2952,7 +3033,9 @@ describe('the C1 event table and the C6 publisher', () => {
         expect((yield* Effect.flip(restarted.appendAll([waiting])))._tag).toBe(
           'DatabaseNotOwner',
         );
-        yield* (yield* RunHistory).acquire(RUN);
+        yield* (yield* RunHistory).open(RUN, {
+          activation: () => Effect.succeed([]),
+        });
         expect((yield* restarted.aggregateState([target]))[0]?.ownerId).toBe(
           SELF,
         );
@@ -3203,9 +3286,9 @@ describe('RunHistory', () => {
     },
   };
   /** The batches of one turn, in order, up to and excluding the delivery. */
-  const openTurn = (run: typeof RunHistory.Service) =>
+  const openTurn = (cell: RunCell) =>
     Effect.gen(function* () {
-      let state = yield* run.appendBatch(RUN, null, [
+      yield* cell.append([
         {
           type: 'model.message',
           aggregateId: AGGREGATE,
@@ -3219,7 +3302,7 @@ describe('RunHistory', () => {
         },
         snapshot(),
       ]);
-      state = yield* run.appendBatch(RUN, state, [
+      yield* cell.append([
         {
           type: 'model.message',
           aggregateId: AGGREGATE,
@@ -3232,7 +3315,7 @@ describe('RunHistory', () => {
           },
         },
       ]);
-      state = yield* run.appendBatch(RUN, state, [
+      yield* cell.append([
         {
           type: 'model.message',
           aggregateId: AGGREGATE,
@@ -3243,7 +3326,7 @@ describe('RunHistory', () => {
           },
         },
       ]);
-      state = yield* run.appendBatch(RUN, state, [
+      return yield* cell.append([
         {
           type: 'model.message',
           aggregateId: AGGREGATE,
@@ -3266,7 +3349,6 @@ describe('RunHistory', () => {
           },
         },
       ]);
-      return state;
     });
 
   it.effect('live state equals reloaded state', () =>
@@ -3274,17 +3356,16 @@ describe('RunHistory', () => {
       const events = yield* SessionEvents;
       const run = yield* RunHistory;
       yield* events.transact((append) => append([runStart]));
-      yield* run.acquire(RUN);
-      let state = yield* openTurn(run);
-      state = yield* run.appendBatch(RUN, state, [
-        settled('call-a'),
-        toolEnd('call-a'),
-      ]);
-      state = yield* run.appendBatch(RUN, state, [
+      const cell = yield* run.open(RUN, {
+        activation: () => Effect.succeed([]),
+      });
+      yield* openTurn(cell);
+      yield* cell.append([settled('call-a'), toolEnd('call-a')]);
+      yield* cell.append([
         settled('call-b', { disposition: 'duplicate', duplicateOf: 'call-a' }),
         toolEnd('call-b'),
       ]);
-      state = yield* run.appendBatch(RUN, state, [
+      const state = yield* cell.append([
         group,
         snapshot(),
         {
@@ -3310,17 +3391,16 @@ describe('RunHistory', () => {
         const run = yield* RunHistory;
         const log = yield* Database;
         yield* events.transact((append) => append([runStart]));
-        let state = yield* openTurn(run);
+        const cell = yield* run.open(RUN);
+        let state = yield* openTurn(cell);
         // Delivering before the settlements committed is a caller defect.
-        const early = yield* run
-          .appendBatch(RUN, state, [group])
-          .pipe(Effect.exit);
+        const early = yield* cell.append([group]).pipe(Effect.exit);
         expect(Exit.isFailure(early) && Cause.hasDies(early.cause)).toBe(true);
         // A batch the fold rejects commits nothing: the refusal has to mean
         // "not written", or every later `load` meets the orphan row.
         const written = (yield* log.readAggregate(AGGREGATE, 1)).length;
-        const orphan = yield* run
-          .appendBatch(RUN, state, [settled('call-z'), toolEnd('call-z')])
+        const orphan = yield* cell
+          .append([settled('call-z'), toolEnd('call-z')])
           .pipe(Effect.flip);
         expect(refusalOf(orphan)?.reason).toBe('inconsistent');
         expect((yield* log.readAggregate(AGGREGATE, 1)).length).toBe(written);
@@ -3328,8 +3408,8 @@ describe('RunHistory', () => {
         // Same rule for the history the batch assembles: an append that leaves
         // a tool group with no calling assistant is refused before publishing,
         // not discovered on the next cold load.
-        const orphanGroup = yield* run
-          .appendBatch(RUN, state, [
+        const orphanGroup = yield* cell
+          .append([
             {
               type: 'model.message',
               aggregateId: AGGREGATE,
@@ -3354,7 +3434,7 @@ describe('RunHistory', () => {
           .pipe(Effect.flip);
         expect(refusalOf(orphanGroup)?.reason).toBe('unprepared-history');
         expect((yield* log.readAggregate(AGGREGATE, 1)).length).toBe(written);
-        state = yield* run.appendBatch(RUN, state, [approvalRequested]);
+        state = yield* cell.append([approvalRequested]);
         expect(state.requests['req-1']?.resolved).toBe(false);
         expect(state.pendingResponse?.records['call-a']?.status).toEqual({
           kind: 'started',
@@ -3362,7 +3442,7 @@ describe('RunHistory', () => {
         });
         // A real attachment carries loose keys and binary fields: accepted, and
         // the binary fields never reach the row.
-        state = yield* run.appendBatch(RUN, state, [
+        state = yield* cell.append([
           settled('call-a', {
             result: {
               status: 'executed',
@@ -3391,8 +3471,8 @@ describe('RunHistory', () => {
         // A credential-bearing endpoint is refused before anything is written,
         // and the refusal carries the permitted components only: the rejected
         // query string is the credential this check exists to keep out.
-        const unsafe = yield* run
-          .appendBatch(RUN, state, [
+        const unsafe = yield* cell
+          .append([
             {
               type: 'model.message',
               aggregateId: AGGREGATE,

@@ -21,13 +21,13 @@ import {
   resolveTeamLaunch,
   TEAM_SELECTION_REQUIRED_MESSAGE,
 } from '@common/teams/TeamPlan';
-import type { HostRequest } from '@shared/session/hostRequest';
 import {
   DEFAULT_TOOL_CONFIG,
   ToolConfigSchema,
   type AgentDelegationScope,
   type SessionType,
 } from '@shared/schemas';
+import type { HostRequest } from '@texra/shared/session/hostRequest';
 import { createTeamCatalogPorts } from '@texra/controllers/mainView/teamCatalogPorts';
 import { documentTaskConfig } from '@texra/agent/output/documentRecipe';
 import { pastedImageFullPath } from '@texra/utils/files/pastedImageUtils';

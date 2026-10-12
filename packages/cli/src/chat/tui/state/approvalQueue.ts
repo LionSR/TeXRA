@@ -19,12 +19,12 @@ import type {
   RequestDecision,
   RunId,
 } from '@shared/schemas';
+import { attentionOf, type SessionView } from '@shared/session/sessionView';
 import {
   approvalDecisionArms,
   type SurfaceDecision,
-} from '@shared/session/approvalDecision';
-import type { HostRequest } from '@shared/session/hostRequest';
-import { attentionOf, type SessionView } from '@shared/session/sessionView';
+} from '@texra/shared/session/surfaceDecision';
+import type { HostRequest } from '@texra/shared/session/hostRequest';
 import type { SessionBackend } from '@texra/controllers/session/sessionBackend';
 import { assertNever } from '@utils/core';
 

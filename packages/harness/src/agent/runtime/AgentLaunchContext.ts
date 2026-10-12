@@ -21,8 +21,11 @@ import {
   type AgentTrace,
   type StageHandle,
 } from '@agent/trace';
-import { commitResumedActivation } from '@agent/storage/runLifecycle';
-import { deriveResumability } from '@agent/storage/resumability';
+import { runEventDraft } from '@agent/trace/TraceEmitter';
+import {
+  registrationRows,
+  type RegisterRunOptions,
+} from '@agent/storage/runLifecycle';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { getDisplayedInstruction } from '@agent/runtime/sessionDescription';
 import { buildTemplateInputs } from '@agent/prompt/templateInputs';
@@ -42,6 +45,7 @@ import {
   type AttachedMemoryMiss,
   type RunId,
 } from '@shared/schemas';
+import type { CoWrite } from '@shared/session/sessionEvents';
 import { parseWorkingDirectory } from '@tools/pathResolution';
 import { mcpServerOfToolName } from '@tools/mcp/mcpServer';
 import { ToolRegistry } from '@tools/toolTable';
@@ -74,22 +78,15 @@ type LaunchResolvedRunFacts = Pick<
   | 'toolPolicy'
   | 'stores'
   | 'opening'
-  | 'initialUserMessageForTranscript'
+  | 'entry'
 >;
 
 export interface AgentLaunchContext extends LaunchResolvedRunFacts {
-  /**
-   * The registry config of the launch model. The run's `AgentRun` service
-   * binds it (or the model and route a resumed run's snapshot names); a
-   * mid-run switch rebinds there.
-   */
+  /** The launch model's registry config, which `AgentRun` binds (or a
+   *  resumed run's snapshot's); a mid-run switch rebinds there. */
   readonly modelConfig: ModelConfig;
-  /**
-   * This launch is the user's own-API-key fallback: the retry they answered
-   * that way relaunched the run here, so it declines the editor's Copilot
-   * route and every subscription route the run's bindings could take. The
-   * user's stored preferences are not touched; the choice is the run's.
-   */
+  /** The user's own-API-key fallback ({@link AgentLaunchInput}): the run,
+   *  not the stored preferences, declines Copilot and subscription routes. */
   readonly ownApiKeyFallback: boolean;
   /** Description from the exact registry entry selected for this launch. */
   readonly resolvedAgentDescription?: string;
@@ -100,24 +97,16 @@ interface AgentLaunchInput {
   definition: PreparedAgentDefinition;
   runId: RunId;
   /**
-   * The run's `run.start` was committed by an earlier activation: this
-   * launch resumes it, so it appends its own `run.activate` and does not
-   * log the initial instruction again.
+   * A fresh run's registration, which its opening batch commits; absent,
+   * the launch resumes a run an earlier activation started: its cell
+   * activates it, and the initial instruction is not logged again.
    */
-  resumed?: boolean;
-  /**
-   * Fires once the run's `run.start` is published, before the run itself
-   * begins: the run exists for every fold by then, so a host may select
-   * it (its own surface state, never a fact) and approval ancestry may be
-   * registered against it.
-   */
+  registration?: RegisterRunOptions;
+  /** Fires once the run exists for every fold (a fresh run's opening
+   *  committed), so a host may select it (its own surface state). */
   onRunResolved?: (runId: RunId) => void;
-  /**
-   * A second sink of the run's trace, beside the session's: it hears every
-   * event the run emits, from the first (the instruction log, the root
-   * stage, the launch warnings) until the run ends — the agent package's
-   * live event stream, `stream.chunk` text included, which no row carries.
-   */
+  /** A second sink of the run's trace: every event from the first until
+   *  the run ends, `stream.chunk` text included, which no row carries. */
   onTraceEvent?: (event: AgentEvent) => void;
   /** Session owning this run's coordination state. */
   session: SessionHandle;
@@ -130,10 +119,8 @@ interface AgentLaunchInput {
 
 /**
  * Present a launch error through its targeted host notice (replayed if no
- * host is attached yet) and fail with it claimed: the notice is its one
- * surface, so the launch catch adds no generic toast. No run exists yet, so a
- * host that throws on the notice, live or on replay (a renderer torn down
- * mid-post, #10398/#10466), shows the generic toast in its place.
+ * host is attached) and fail with it claimed, so no generic toast repeats
+ * it; a host that throws on the notice shows that toast instead (#10398).
  */
 function presentLaunchError<K extends RuntimePresentationEvent>(
   interactions: Pick<SessionHostInteractions, 'emit'>,
@@ -179,18 +166,9 @@ const validateModelExists = Effect.fn('AgentLaunchContext.validateModelExists')(
 );
 
 /**
- * Create a "Run:" stage, optionally logging a user instruction first.
- *
- * ORDERING INVARIANT: The instruction is emitted BEFORE the stage is created.
- * At this point no group context exists, so the message gets no groupId and
- * its timestamp precedes the stage's startTime. The chronological timeline
- * therefore renders the instruction before the run group.
- *
- * ROOT INVARIANT: a stage parents only to the handle or id its opener names,
- * so this opens as a root — it cannot inherit a stage from a parent run (e.g.
- * an orchestrator's tool-use stage when this is a subagent). That isolation is
- * what keeps a subagent's "Run:"/Init/r0/r1 subtree from orphaning in its own
- * transcript. See 2026-05-30-progress-grouping-refactor.md (R1).
+ * Create a root "Run:" stage, logging a user instruction first so it has no
+ * group and renders before the run group; a root never inherits a parent
+ * run's stage (2026-05-30-progress-grouping-refactor.md, R1).
  */
 function beginRunStage(
   agentLogger: AgentTrace,
@@ -228,10 +206,8 @@ export const prepareAgentDefinition = Effect.fn('prepareAgentDefinition')(
   }) {
     const fullConfig = input.config;
     const interactions = input.session.interactions;
-    // Single launch resolution rule (see resolveAgentForLaunch): pinned
-    // (source, name), else the visible set, else the catalog; never blind
-    // source-priority on a bare name. The catalog is settled first (a saved
-    // edit inside the watcher's debounce is loaded now), and a miss rescans.
+    // One resolution rule (resolveAgentForLaunch), over a settled catalog;
+    // a miss rescans.
     const resolve = resolveAgentForLaunch(
       input.session.roots,
       fullConfig.agent,
@@ -258,11 +234,8 @@ export const prepareAgentDefinition = Effect.fn('prepareAgentDefinition')(
       );
     const { persona, task } = agentEntry;
 
-    // A declared tool no plugin registers, and no MCP server could, is a
-    // configuration error (a typo, or a tool retired from the table): the
-    // run is refused rather than started without it. A plugin switched off
-    // still withholds its tools quietly at the step: that is the user's
-    // switch, not the file's.
+    // A declared tool nothing could serve is a configuration error: the run
+    // is refused (a plugin switched off withholds its tools at the step).
     const table = yield* ToolRegistry;
     const unknown = declaredToolNames(persona.tools).filter(
       (name) => !table.get(name) && mcpServerOfToolName(name) === undefined,
@@ -281,11 +254,8 @@ export const prepareAgentDefinition = Effect.fn('prepareAgentDefinition')(
       interactions,
     );
 
-    // Stamp the resolved source so the run record carries the decided identity;
-    // `agent` stays as the caller spelled it (the resume-id contract). The
-    // output list is normalized once, for the record and every reader: the
-    // explicit list unless it names only inputs (an editing agent writes its
-    // inputs back), else the agent's defaults.
+    // The resolved source is stamped (`agent` stays as spelled); the outputs
+    // are the explicit list unless it names only inputs, else the defaults.
     const explicit = fullConfig.outputFiles.filter(Boolean);
     const config: AgentConfig = {
       ...fullConfig,
@@ -313,6 +283,7 @@ export const prepareAgentDefinition = Effect.fn('prepareAgentDefinition')(
           ) {
             return Effect.void;
           }
+          attachErrorPresentationClaimed(error);
           return input.session.interactions.emit(
             'requestShowError',
             { message: toErrorMessage(error) },
@@ -327,9 +298,53 @@ export type PreparedAgentDefinition = Effect.Success<
 >;
 
 /**
- * Resolve the context of a run already admitted and created by registration.
- * A failure here is the launch's to end (`runWithLaunchGuard`, or a child
- * loop's tail). Interruptible: every acquisition settles atomically inside
+ * How a launch enters its run (`LaunchEntry`), its trace held until then:
+ * the opening's batch carries it up to its first stream (the prompt line and
+ * the run's stage commit with the opening), the rest is published once that
+ * settled. One that never enters drops it. A run that exists is refused.
+ */
+const enterRun = Effect.fn('enterRun')(function* (
+  input: AgentLaunchInput,
+  config: AgentConfig,
+) {
+  const { session, runId } = input;
+  const registration =
+    input.registration === undefined
+      ? null
+      : yield* registrationRows(session, runId, config, input.registration);
+  if (registration !== null && registration[0]?.type !== 'run.start')
+    return yield* Effect.fail(
+      new AgentError(`Run ${runId} already exists; resume it.`),
+    );
+  let held: AgentEvent[] | null = [];
+  const logger = new TraceEmitter(
+    (event) =>
+      held === null ? session.log.publish(runId, event) : held.push(event),
+    ...(input.onTraceEvent ? [input.onTraceEvent] : []),
+  );
+  yield* Effect.addFinalizer(() => Effect.sync(() => logger.close()));
+  let carried = 0;
+  const opening = Effect.sync((): CoWrite => {
+    const events = held ?? [];
+    carried = events.findIndex((e) => e.type.startsWith('stream.'));
+    if (carried < 0) carried = events.length;
+    const rows = events.slice(0, carried).flatMap((e) => {
+      const row = runEventDraft(runId, e);
+      return row === null ? [] : [row];
+    });
+    return { rows, committed: Effect.void };
+  });
+  const entered = Effect.sync(() => {
+    for (const e of (held ?? []).slice(carried)) session.log.publish(runId, e);
+    held = null;
+    input.onRunResolved?.(runId);
+  });
+  return { logger, entry: { registration, opening, entered } };
+});
+
+/**
+ * Resolve the context of a run admitted for launch: a fresh one, which its
+ * opening registers, or a resume. Interruptible: every acquisition settles atomically inside
  * its own `acquireRelease`, so an interruption lands between steps and the
  * scope's finalizers release whatever was acquired.
  */
@@ -354,10 +369,8 @@ export const buildAgentLaunchContext = Effect.fn('buildAgentLaunchContext')(
     // and carried in, so a delegated launch inherits the parent run's session
     // policy and a root launch gets the process default exactly once.
     const { session, runId } = input;
-    // Whether a resumed run's rows hold its opening.
-    const opened =
-      input.resumed &&
-      (yield* deriveResumability(runId, session)).kind === 'checkpoint';
+    const resumed = input.registration === undefined;
+    const { logger: agentLogger, entry } = yield* enterRun(input, config);
     // The run's model is bound from the stores the launch already has: the
     // session's own setting slots, so routing and the provider switches
     // answer for this run's workspace, and the process secret store.
@@ -366,30 +379,11 @@ export const buildAgentLaunchContext = Effect.fn('buildAgentLaunchContext')(
       secrets: yield* Secrets,
     };
 
-    // The run's trace publishes into the session (and to the caller's tap);
-    // the run's scope closes it when the run ends, and when a launch that
-    // never became a run unwinds.
-    const agentLogger = new TraceEmitter(
-      (event) => session.log.publish(runId, event),
-      ...(input.onTraceEvent ? [input.onTraceEvent] : []),
-    );
-    yield* Effect.addFinalizer(() => Effect.sync(() => agentLogger.close()));
-
-    // Registration committed creation, configuration and first activation; a
-    // resume appends its activation here. It is durable before the run
-    // resolves, so nothing drains here (lost facts are the terminal drain's),
-    // and the append is uninterruptible: a stop lands before or after.
-    if (input.resumed) {
-      yield* Effect.uninterruptible(commitResumedActivation(session, runId));
-    }
-
-    input.onRunResolved?.(runId);
-
     // Log the initial instruction as a user message so the run's tab
     // displays it inline with the stream log (no separate panel).
     const displayInstruction = getDisplayedInstruction(config);
     const initialInstruction =
-      displayInstruction && !input.resumed ? displayInstruction : undefined;
+      displayInstruction && !resumed ? displayInstruction : undefined;
     const supportsMediaInMessage =
       modelConfig.capabilities.supportsVision ||
       modelConfig.capabilities.supportsNativeAudio;
@@ -431,12 +425,12 @@ export const buildAgentLaunchContext = Effect.fn('buildAgentLaunchContext')(
         },
       );
 
-    // A conversation whose rows hold its opening renders nothing again; a
-    // document task's tools render its templates from it at every call, a
-    // resumed run's included.
+    // A resumed conversation's rows hold its opening, which renders nothing
+    // again; a document task's tools render its templates from it at every
+    // call, a resumed run's included.
     const opening = yield* Effect.suspend(() => {
       if (documentTask === null)
-        return opened ? Effect.succeed(null) : buildVars();
+        return resumed ? Effect.succeed(null) : buildVars();
 
       const initStage = parentStage.child('Init');
       return buildVars(initStage.id).pipe(
@@ -471,12 +465,15 @@ export const buildAgentLaunchContext = Effect.fn('buildAgentLaunchContext')(
       logger: agentLogger,
       parentStage,
       opening,
+      entry: {
+        ...entry,
+        initialUserMessage: initialMediaMayBeInserted
+          ? initialInstruction
+          : undefined,
+      },
       // A resumed run's are on its opening's `append`, which its loop
       // reports with its result.
       attachedMemoryMisses: opening?.attachedMemoryMisses ?? [],
-      initialUserMessageForTranscript: initialMediaMayBeInserted
-        ? initialInstruction
-        : undefined,
     };
     // Frozen at the run's one real construction site: a run's identity, its
     // owning session, and the rest of what the launch resolved must not change

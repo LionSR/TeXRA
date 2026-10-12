@@ -10,7 +10,7 @@ import * as path from 'node:path';
 
 import { Effect, type Scope } from 'effect';
 
-import { DEFAULT_NODE_STORAGE_ROOT } from '@platform/defaults/nodeStorage';
+import { defaultNodeStorageRoot } from '@platform/defaults/nodeStorage';
 import {
   linkService,
   spawnService,
@@ -36,10 +36,10 @@ export function reachDesktopService(
   mainDir: string,
 ): Effect.Effect<ServiceLink, Error, Scope.Scope> {
   return Effect.suspend(() => {
-    if (dataRoot !== DEFAULT_NODE_STORAGE_ROOT)
+    if (dataRoot !== defaultNodeStorageRoot())
       return Effect.fail(
         new Error(
-          `the app keeps its data in ${dataRoot}, outside ${DEFAULT_NODE_STORAGE_ROOT}`,
+          `the app keeps its data in ${dataRoot}, outside ${defaultNodeStorageRoot()}`,
         ),
       );
     const bundle = serviceBundle(mainDir);

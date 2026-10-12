@@ -9,13 +9,13 @@ import type {
   RetryApprovalPayload,
 } from '@cli/chat/tui/state/approvalQueue';
 import type { RunId } from '@shared/schemas';
-import type { SurfaceDecision } from '@shared/session/approvalDecision';
 import { waitForCondition as waitFor } from '@test/support/asyncTestUtils';
 import {
   loadInk,
   renderInteractive,
   renderOutputAtTerminalSize,
 } from '@test/support/inkTestHarness.ts';
+import type { SurfaceDecision } from '@texra/shared/session/surfaceDecision';
 
 /** A foreground modal entry whose decision the test awaits. */
 function pendingFor(payload: ApprovalPayload): {

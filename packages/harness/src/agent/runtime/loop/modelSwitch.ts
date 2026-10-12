@@ -10,9 +10,9 @@ import { ModelAccess } from '@agent/runtime/modelAccess/ModelAccess';
 import type { QueuedFollowUp } from '@shared/session/runRows';
 import type { RunState } from '@shared/session/runStateFold';
 
+import type { RunCell } from '@shared/session/runHistory';
 import { AgentRun, type AgentRunShape } from '../run/AgentRun';
 import { configRow, consumedRows } from './rows';
-import type { RunCell } from './runProgram';
 
 /** Apply the model switches the run's input queues (the latest wins): the
  *  `run.config` naming the new model and the requests' `followup.consumed`,

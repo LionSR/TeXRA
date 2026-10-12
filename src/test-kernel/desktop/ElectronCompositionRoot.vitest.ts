@@ -67,6 +67,8 @@ const ephemeralOwner = (reason: string): SessionOwner['Service'] => ({
     }),
   close: closeTestSession,
   list: listTestSessions,
+  holds: (session) =>
+    Effect.map(listTestSessions, (held) => held.includes(session)),
   closeAll: closeAllTestSessions,
 });
 

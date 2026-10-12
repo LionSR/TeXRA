@@ -178,7 +178,7 @@ function executeMemoryTool(
     const invocation = {
       runId,
       agentName:
-        runId === undefined ? undefined : runs.getHandle(runId)?.agentName,
+        runId === undefined ? undefined : runs.get(runId)?.handle?.agentName,
     } satisfies MemoryInvocation;
     return yield* run(input, invocation).pipe(onMemoryTreeLane);
   }).pipe(Effect.catchTag('PlatformError', (error) => Effect.die(error)));

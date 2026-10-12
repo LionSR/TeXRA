@@ -25,9 +25,9 @@ import type {
   ExternalInquiryPermission,
   InquiryDraft,
 } from '@shared/schemas';
-import type { InquiryThreadRecord } from '@shared/plugins/externalInquiry';
-import type { SurfaceDecision } from '@shared/session/approvalDecision';
-import type { Surface } from '@shared/session/surface';
+import type { InquiryThreadRecord } from '@texra/shared/plugins/externalInquiry';
+import type { SurfaceDecision } from '@texra/shared/session/surfaceDecision';
+import type { Surface } from '@texra/shared/session/surface';
 import { SessionUiEvents } from '@texra/shared/session/uiEvents';
 import { CopyButtonController } from '@texra/shared/litControllers/CopyButtonController';
 import { renderLabeledActionButton } from '@ui/wa/actionButtons';

@@ -16,11 +16,6 @@ export {
   resolveRunWorkspaceFilePath,
 } from './runWorkspaceFiles';
 export {
-  registerRun,
-  type FinalizeRunInput,
-  type FinalizeRunResult,
-} from './runLifecycle';
-export {
   type AgentRunListingEntry,
   listRuns,
   isUserVisibleRun,

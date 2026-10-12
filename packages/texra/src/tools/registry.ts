@@ -7,6 +7,7 @@
 
 // Third-party imports
 import { Effect, Layer } from 'effect';
+import { HostCapabilities } from '@texra-ai/harness/plugins';
 
 // Local imports
 import { isTexFile } from '@common/files/fileTypeUtils';
@@ -16,7 +17,7 @@ import replacementEngine, {
 import {
   DOCUMENTS_ACCEPTED_ARM,
   DOCUMENTS_OUTPUT_ARM,
-} from '@shared/plugins/documents';
+} from '@texra/shared/plugins/documents';
 import {
   claudeAgent,
   codex,
@@ -51,6 +52,7 @@ import {
   type InlineCommentProvider,
 } from './comment/InlineCommentTool';
 import { DiagnosticsTool } from './DiagnosticsTool';
+import { EditorHost, makeEditorHost, type EditorRegistry } from './editorHost';
 import {
   DocumentCompileTool,
   DocumentContextTool,
@@ -123,10 +125,20 @@ const latexExtract: Plugin = {
   },
 };
 
-const latexDiagnostics: Plugin = {
-  id: 'latex-diagnostics',
-  tools: { diagnostics: DiagnosticsTool },
-};
+/** The editor's diagnostics, offered while an editor attached for the
+ *  session reads them: the plugin serves `HostCapabilities` from the same
+ *  registry its tool reads. */
+const latexDiagnostics = (editors: EditorRegistry) =>
+  definePlugin<EditorHost>({
+    id: 'latex-diagnostics',
+    tools: { diagnostics: DiagnosticsTool },
+    processLayer: {
+      layer: Layer.mergeAll(
+        Layer.succeed(EditorHost)(editors),
+        Layer.succeed(HostCapabilities)(editors),
+      ),
+    },
+  });
 
 const arxiv: Plugin = {
   id: 'arxiv',
@@ -143,8 +155,8 @@ const arxiv: Plugin = {
  * prompt section is the configured default bibliography, at every step of
  * every run.
  */
-const core = (provider?: InlineCommentProvider) =>
-  definePlugin<InlineComments>({
+const core = (editors: EditorRegistry, provider?: InlineCommentProvider) =>
+  definePlugin<EditorHost>({
     id: 'core',
     tools: {
       inline_comment: InlineCommentTool,
@@ -158,11 +170,17 @@ const core = (provider?: InlineCommentProvider) =>
         ? `The default bibliography file is ${bibPath}. You can grep or read this file to search for citations and references.`
         : '';
     },
-    // The host's Comments UI, for the one host that has one; elsewhere the
-    // tool fails naming the missing host wiring.
-    ...(provider !== undefined && {
-      processLayer: { layer: Layer.succeed(InlineComments)(provider) },
-    }),
+    // The editor's PDF viewer; the host's Comments UI, for the one host
+    // that has one (elsewhere the tool fails naming the missing wiring).
+    processLayer: {
+      layer:
+        provider === undefined
+          ? Layer.succeed(EditorHost)(editors)
+          : Layer.mergeAll(
+              Layer.succeed(EditorHost)(editors),
+              Layer.succeed(InlineComments)(provider),
+            ),
+    },
   });
 
 /** The onboarding agent's narrow set, one responsibility per tool, over the
@@ -220,31 +238,37 @@ export const texraPlugins = (
     /** The host's setup capabilities (VS Code's commands, extensions and
      *  terminal); none elsewhere. */
     readonly setup?: SetupPlatformShape;
+    /** The composition's editor registry its hosts attach to
+     *  (`makeEditorHost`); none attached when absent. */
+    readonly editors?: EditorRegistry;
   } = {},
-): readonly Plugin[] => [
-  fileOps({ writeFilter: texWriteFilter }),
-  latexExtract,
-  latexDiagnostics,
-  arxiv,
-  web,
-  memoryWorkflow,
-  goal,
-  wolfram,
-  zotero,
-  lean4({ setup: host.setup ?? {}, services: host.lean }),
-  multiAgent,
-  githubActivity,
-  externalInquiry,
-  codex,
-  claudeAgent,
-  core(host.inlineComments),
-  codemode,
-  setup(host.setup ?? {}),
-  {
-    id: 'copilot',
-    toggle: 'on',
-    availability: ALWAYS_AVAILABLE,
-    ...(host.copilot !== undefined && { processLayer: host.copilot }),
-  },
-  documents,
-];
+): readonly Plugin[] => {
+  const editors = host.editors ?? makeEditorHost();
+  return [
+    fileOps({ writeFilter: texWriteFilter }),
+    latexExtract,
+    latexDiagnostics(editors),
+    arxiv,
+    web,
+    memoryWorkflow,
+    goal,
+    wolfram,
+    zotero,
+    lean4({ setup: host.setup ?? {}, services: host.lean }),
+    multiAgent,
+    githubActivity,
+    externalInquiry,
+    codex,
+    claudeAgent,
+    core(editors, host.inlineComments),
+    codemode,
+    setup(host.setup ?? {}),
+    {
+      id: 'copilot',
+      toggle: 'on',
+      availability: ALWAYS_AVAILABLE,
+      ...(host.copilot !== undefined && { processLayer: host.copilot }),
+    },
+    documents,
+  ];
+};

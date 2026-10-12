@@ -255,10 +255,11 @@ separate close call.
 **Build the layer once per process.** It is an ordinary Effect layer: provide
 it once at the application's edge (`ManagedRuntime.make(Sessions.layer(...))`,
 or one `Effect.provide` around the whole program) and run every program on
-it. Two live builds compose two processes in one: two session owners over
-the same storage root, both stamped with this process's owner id, which the
-one-writer claim fence cannot tell apart. A later build after the first one
-is released is fine.
+it. Two live builds share one process identity, so a second build that opens
+a root the first holds is refused at open ("already open in this process";
+the guard is `processRoots` beside `SessionOwner`): share that session
+instead. Builds over different roots each work, and a later build after the
+first one is released is fine.
 
 ## Durable invariants
 

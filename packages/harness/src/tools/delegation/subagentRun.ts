@@ -9,7 +9,6 @@
 import { Effect } from 'effect';
 import { prepareAgentDefinition } from '@agent/runtime/AgentLaunchContext';
 import { childToolRefusal } from '@agent/runtime/agentToolResolution';
-import { registerRun } from '@agent/storage/runLifecycle';
 
 // Local imports
 import {
@@ -116,17 +115,17 @@ export const launchDetachedSubagent = Effect.fn('launchDetachedSubagent')(
       : USER_FOLLOW_UP_SUPPORT.UNSUPPORTED;
     yield* Effect.uninterruptibleMask((restore) =>
       Effect.gen(function* () {
-        yield* registerRun(parentSession, runId, config, {
-          identity: { kind: 'agent', agent: config.agent },
-          userFollowUpSupport,
-          parentRunId,
-          parentCard: parent.logId,
-          parentCallId: parent.callId,
-          grants,
-        });
-
+        // The child registers with its opening, which its run commits.
         const strategyParams = {
           definition,
+          registration: {
+            identity: { kind: 'agent' as const, agent: config.agent },
+            userFollowUpSupport,
+            parentRunId,
+            parentCard: parent.logId,
+            parentCallId: parent.callId,
+            grants,
+          },
           runId,
           parentRunId,
           session: parentSession,

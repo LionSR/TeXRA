@@ -46,8 +46,8 @@ import {
   type RequestError,
 } from '@texra-ai/harness';
 import { withLogChannel } from '@logger/effectLog';
-import type { HostRequest } from '@shared/session/hostRequest';
-import type { HostSnapshot } from '@shared/session/hostSnapshot';
+import type { HostRequest } from '@texra/shared/session/hostRequest';
+import type { HostSnapshot } from '@texra/shared/session/hostSnapshot';
 import {
   UpMessageSchema,
   type DownMessage,
@@ -56,7 +56,7 @@ import {
   type Response,
   type Subscribe,
   type SurfaceActionMessage,
-} from '@shared/session/sessionFrames';
+} from '@texra/shared/session/sessionFrames';
 import type { SessionBackend } from '@texra/controllers/session/sessionBackend';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import type { ProcessServices } from '@texra-ai/harness';
