@@ -41,7 +41,11 @@ composes the process and provides the session owner for one `Scope`, and the
 embedder runs the program at its own entry point. `plugins` is the list of
 what the runs can use: the harness's built-ins (`harnessBuiltins.all`, or
 `harnessBuiltins.minimal` for files and the shell alone), and any plugin of
-the embedder's own beside them. `session.start` runs an agent as a
+the embedder's own beside them. Pass an optional `logSink` to route the
+process's diagnostics to your own surface for the layer's lifetime (a
+`LogSink`: one redacted `LogEntry` in, one write out, rendered with
+`entryMessage` / `entryChannel`); omit it and entries fall back to the
+console. `session.start` runs an agent as a
 conversation. A document task (an agent's `task:` block, run as revisions
 that rewrite documents) is a recipe script over the tools of TeXRA's
 `documents` plugin, which is the app's and which the package does not ship.

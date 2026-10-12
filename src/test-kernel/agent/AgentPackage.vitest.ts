@@ -198,6 +198,7 @@ vi.mock('@controllers/session/sessionLayer', async () => {
 });
 
 // Local imports - package API under test
+import { writeLogLine } from '@logger/logSink';
 import { MemoryStateStore } from '@platform/defaults/memoryState';
 import type { RunId } from '@shared/schemas';
 import type { SessionView as RuntimeSessionView } from '@shared/session/sessionView';
@@ -205,6 +206,8 @@ import type { Plugin } from '@tools/plugins';
 import {
   aggregateId,
   type AgentPlatform,
+  entryMessage,
+  type LogSink,
   Sessions,
 } from '../../../packages/harness/src/index';
 import { nodePlatform } from '../../../packages/harness/src/node';
@@ -412,6 +415,38 @@ describe('agent package sessions', () => {
       // The process lives for the layer's scope.
       expect(mocks.releaseProcess).toHaveBeenCalledOnce();
     }),
+  );
+
+  it.live(
+    "installs the embedder's log sink for the layer's scope and restores it on release",
+    () =>
+      Effect.gen(function* () {
+        const lines: string[] = [];
+        const sink: LogSink = {
+          write: (entry) => {
+            lines.push(entryMessage(entry));
+          },
+        };
+        yield* Effect.gen(function* () {
+          // Forcing the service built means the layer's acquire ran: the
+          // embedder's sink is installed before anything the process logs.
+          yield* Sessions;
+          writeLogLine('INFO', 'embedder', 'during');
+        }).pipe(
+          Effect.scoped,
+          Effect.provide(
+            Sessions.layer({
+              platform: PLATFORM,
+              plugins: PLUGINS,
+              logSink: sink,
+            }),
+          ),
+        );
+        // The layer released: the console fallback is back, so a later write
+        // never reaches the embedder's sink.
+        writeLogLine('INFO', 'embedder', 'after');
+        expect(lines).toEqual(['during']);
+      }),
   );
 
   it.live(

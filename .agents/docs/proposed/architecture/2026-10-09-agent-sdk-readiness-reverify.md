@@ -136,16 +136,22 @@ irreducible durability/resume/stop invariants, enforced by `check:core-quality`.
    carry stale `packages/agent` paths; refresh them to `packages/harness` when next
    touched.
 
-2. **The logger sink→Layer step is still unlanded.** `logSink.ts` still holds the
-   mutable module global (`let sink = consoleLogSink`, `setLogSink`,
-   `writeLogEntry`, ~165–199), set by host callers. It is the one real
-   SDK-relevant host leak: `effect/runtime.ts` composes the process runtime but
-   installs no sink, so an embedder of `@texra-ai/harness` gets whatever
-   process-global sink is set and cannot inject its own through
-   `Sessions.layer`/`AgentPlatform`, and two embedders in one process share one
-   global. This rides `2026-09-21-effect-design-synchronous-facades.md` §5 step 6
-   (the expensive step; it rewrites the kernel log-capture seam) and does not by
-   itself deliver embedder injection through the public boundary.
+2. **The logger embedder-injection half landed; the kernel-seam rewrite stays
+   deferred.** `Sessions.layer` now takes an optional `logSink` (`Composition.logSink`)
+   that it installs for the layer's scope and restores on release, and the root
+   entry exports the `LogSink`/`LogEntry` contract with `entryChannel` /
+   `entryMessage` — so an embedder of `@texra-ai/harness` can route the process's
+   diagnostics to its own surface through the public boundary, which it could not
+   before. `logSink.ts` still holds the mutable module global (`let sink =
+   consoleLogSink`, `setLogSink`, `writeLogEntry`, ~165–205): it is load-bearing
+   for the synchronous, no-fiber publication points (the trace emitter, the
+   pre-runtime and shutdown paths) that have no Effect context to read a sink
+   service from, so removing it is still the expensive
+   `2026-09-21-effect-design-synchronous-facades.md` §5 step 6 (it rewrites the
+   kernel log-capture seam). That step is now lower value, since the public
+   embedder-injection benefit it was the prerequisite for is delivered by the
+   scoped `logSink` above; two embedders in one process still share the one
+   global, which the rewrite would finally separate.
 
 3. **`packages/llm` ambient `*_CUSTOM_HEADERS` reads, still two.**
    `openaiResponsesRequest.ts:254` and `anthropicMessages.ts:715` (the latter now a
@@ -173,8 +179,17 @@ load-bearing for finalizer-before-release ordering.
 No refactor to land autonomously from this charter. The one owner-level action the
 surface audit asks for is to **re-scope the Tier-1 manifest around the harness SDK**
 (§Open.1) — now more clearly warranted, since the package the old manifest named
-(`@texra-ai/agent`) no longer exists. The logger sink→Layer step (§Open.2) and the
-two `packages/llm` ambient reads (§Open.3) are carried unchanged. Re-running this
-audit as a routine will again add no signal until the durable-harness program
-moves further (next: `Session.resume` after reopen, the public sink-injection
-step, and the manifest re-scope).
+(`@texra-ai/agent`) no longer exists. The two `packages/llm` ambient reads
+(§Open.3) are carried unchanged.
+
+**Update (2026-10-12, owner-directed).** On an explicit owner instruction to land
+a refactor, the logger embedder-injection half of §Open.2 was implemented:
+`Sessions.layer`'s optional `logSink` plus the exported `LogSink`/`LogEntry`
+contract, closing the one real SDK-relevant host leak at the public boundary
+(the kernel-seam rewrite stays deferred and is now lower value). This was the
+single bounded, behavior-preserving code change the three audited areas offered;
+the agent core, model handler, and remaining llm reads stayed clean on
+inspection, so nothing else was touched. Re-running this audit as a routine will
+again add no signal until the durable-harness program moves further (next:
+`Session.resume` after reopen, the sink global→service rewrite, and the manifest
+re-scope).

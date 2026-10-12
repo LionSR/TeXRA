@@ -45,6 +45,12 @@ const LOG_DATA = 'data';
  * an always-attached payload cannot flood a host surface. */
 const MAX_LOG_DATA_LENGTH = 2_000;
 
+/**
+ * A host (or an embedder, through `Sessions.layer`'s `logSink`) renders
+ * diagnostics by implementing this: one redacted {@link LogEntry} in, one
+ * surface write out. `dispose` releases whatever the sink holds when it is
+ * replaced.
+ */
 export interface LogSink {
   write(entry: LogEntry): void;
   dispose?(): void;

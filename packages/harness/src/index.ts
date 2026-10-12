@@ -167,3 +167,9 @@ export type {
 // Model access a host request makes outside a run: the user's own key and
 // the endpoint they set (audio transcription).
 export { ownKeyCredential } from '@agent/runtime/modelAccess/credentials';
+
+// The diagnostic sink an embedder installs through `Sessions.layer`'s
+// `logSink`, and the helpers that render one entry it receives for a
+// surface that wants a single line of text.
+export type { LogEntry, LogSink } from '@logger/logSink';
+export { entryChannel, entryMessage } from '@logger/logSink';

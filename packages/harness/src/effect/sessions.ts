@@ -9,6 +9,7 @@ import type { AgentEvent } from '@agent/trace';
 import type { ITool } from '@agent/core/tools/ToolTypes';
 import type { RunEndResult } from '@agent/runtime/RunEndResult';
 import { processLayer } from '@controllers/session/sessionLayer';
+import { setLogSink, type LogSink } from '@logger/logSink';
 import { SessionOwner } from '@platform/processRuntime';
 import {
   AppState,
@@ -81,6 +82,16 @@ export interface Composition {
   readonly platform: AgentPlatform;
   readonly plugins: readonly Plugin[];
   readonly settings?: readonly StateSettingEntry[];
+  /**
+   * The diagnostic sink this composition's process writes to, installed for
+   * the layer's scope and restored when the layer releases. Absent, entries
+   * go to whatever sink the process already holds — the console fallback for
+   * a standalone embedder, since no TeXRA host is there to have installed
+   * one. Entries reach the sink secret-redacted, exactly as every host
+   * surface sees them; render one with {@link LogSink}'s `entryMessage` /
+   * `entryChannel`.
+   */
+  readonly logSink?: LogSink;
 }
 
 /**
@@ -268,6 +279,7 @@ export class Sessions extends Context.Service<
     platform,
     plugins,
     settings = [],
+    logSink,
   }: Composition): Layer.Layer<Sessions, PluginsRefused> {
     // A thunk: constructing the process layer installs the settings
     // catalog, which only a composition that passed the check may do.
@@ -306,7 +318,7 @@ export class Sessions extends Context.Service<
     // every host's bootstrap seeds them, before the process's catalog first
     // reads them: the opt-in plugins stay off until the embedder switches
     // them on. A store that cannot be read or written is a platform defect.
-    return Layer.unwrap(
+    const built = Layer.unwrap(
       Effect.try({
         try: () => toolTable(plugins),
         catch: (thrown) =>
@@ -320,5 +332,21 @@ export class Sessions extends Context.Service<
         Effect.map(sessions),
       ),
     );
+    // An embedder's sink is installed before the process it will carry builds
+    // and restored after it releases, so the whole composition — session
+    // opens, run loops, shutdown — speaks through the embedder's sink and no
+    // entry lands on the console fallback once the layer is up.
+    return logSink === undefined
+      ? built
+      : built.pipe(
+          Layer.provide(
+            Layer.effectDiscard(
+              Effect.acquireRelease(
+                Effect.sync(() => setLogSink(logSink)),
+                () => Effect.sync(() => setLogSink(null)),
+              ),
+            ),
+          ),
+        );
   }
 }
