@@ -16,6 +16,20 @@ import {
 } from 'effect';
 
 import {
+  describeFollowUpFailure,
+  escapeText,
+  hasErrorPresentationClaimed,
+  presentFollowUpResult,
+  type PlatformSecrets,
+  type ProcessRuntime,
+  type ProcessServices,
+  type RunStopReason,
+  type RuntimeRequest,
+  type RunView,
+  type Session,
+  type SessionView,
+} from '@texra-ai/harness';
+import {
   AgentConfigSchema,
   terminalFailurePresented,
   type AgentConfig,
@@ -80,20 +94,6 @@ import {
   reportRequestDefect,
 } from './tui/state/transcript';
 import { sessionAgentRuns, type ChatAgentRuns } from './sessionAgentRuns';
-import {
-  describeFollowUpFailure,
-  escapeText,
-  hasErrorPresentationClaimed,
-  presentFollowUpResult,
-  type PlatformSecrets,
-  type ProcessRuntime,
-  type ProcessServices,
-  type RunStopReason,
-  type RuntimeRequest,
-  type RunView,
-  type Session,
-  type SessionView,
-} from '@texra-ai/harness';
 import type { FollowUpDeliveryQueue } from './followUpDeliveryQueue';
 import type { SessionRequests } from './tui/state/approvalQueue';
 import type { SkillActivation } from './tui/forms/SkillsListForm';
