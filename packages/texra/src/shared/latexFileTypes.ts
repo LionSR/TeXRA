@@ -6,8 +6,11 @@
  */
 const LATEX_EXTENSIONS = ['.tex', '.ltx', '.latex'] as const;
 
+// Like `path.extname`: a basename that is only the extension (`.tex`) is a
+// dotfile with no extension.
 function hasExtension(filePath: string, extension: string): boolean {
-  return filePath.toLowerCase().endsWith(extension);
+  const name = filePath.slice(filePath.search(/[^/\\]*$/)).toLowerCase();
+  return name.length > extension.length && name.endsWith(extension);
 }
 
 /**
