@@ -2,12 +2,16 @@
  * `SessionRequests`: one handler for every request a surface issues to its
  * session's runtime (PRD one-fold-three-renderers, 7.6, 8.2), answered once
  * with an `Outcome` or a request error. Existence is read from the sequence
- * table first (C2): a run with no row is `Unavailable`, a foreign claim
- * without a death proof `NotOwner`, a rejecting collaborator a defect.
+ * table first (C2): no row is `Unavailable`, a foreign claim without a death
+ * proof `NotOwner`, a rejecting collaborator a defect.
  */
 import { Effect, SubscriptionRef, type Context } from 'effect';
 
-import { runInbox, submitFollowUp } from '@agent/followUp/ToolUseFollowUp';
+import {
+  describeFollowUpFailure,
+  runInbox,
+  submitFollowUp,
+} from '@agent/followUp/ToolUseFollowUp';
 import { detachSubagentsOnStop } from '@agent/runtime/detachSubagentsOnStop';
 import { requestAsks } from '@agent/runtime/requestPolicy';
 import { narrows, setPolicy } from '@agent/runtime/runApprovalQueue';
@@ -232,11 +236,10 @@ const decideRequest = (
   const answer = Effect.gen(function* () {
     const pending = pendingOf(deps, req.runId, req.requestId);
     if (pending === undefined) return yield* Effect.fail(settled(req.runId));
-    // A request that parks its caller is answered by the fiber waiting on
-    // it, and that fiber died with the owner this decision is taking over
-    // from: recording a decision would clear the panel without doing what
-    // it says. Resuming the run re-enters the call, which waits on the
-    // same request again, and the answer is taken then.
+    // A request that parks its caller is answered by the fiber waiting on it,
+    // and that fiber died with the owner this decision takes over from:
+    // recording a decision would clear the panel without doing what it says.
+    // Resuming the run re-enters the call, which asks again and is answered then.
     if (!heldHere && requestParksItsCaller(pending.payload)) {
       return yield* Effect.fail(
         new Unavailable({
@@ -435,7 +438,7 @@ const handle = (
             ? Effect.fail(
                 new Unavailable({
                   runId: req.runId,
-                  reason: result.reason,
+                  reason: describeFollowUpFailure(result.reason),
                 }),
               )
             : Effect.succeed<Outcome>({
@@ -467,11 +470,9 @@ const handle = (
   }
 };
 
-/**
- * The session's requests: the handler that admits on the log's sequence
- * table, and a run's questions to a person. One value per session, so the
- * decision lanes serialize within a session and never across two.
- */
+/** The session's requests: the handler that admits on the log's sequence
+ *  table, and a run's questions to a person. One value per session, so the
+ *  decision lanes serialize within a session and never across two. */
 export function sessionRequests(init: SessionRequestsInit): SessionRequests {
   const deps: RequestDeps = {
     ...init,
@@ -498,10 +499,9 @@ export function sessionRequests(init: SessionRequestsInit): SessionRequests {
     mode: DeletionMode,
     expectedStartCommit: CommitOrdinal,
   ) {
-    // Listing-driven removal (`texra history delete`, the leftover-shell
-    // sweep) acts through the registry's inactive-run step and the claim,
-    // which refuse a run anything still holds. Deliberately not gated on
-    // `actions` either: the claim protects a run a live process holds.
+    // Listing-driven removal (`texra history delete`, the leftover-shell sweep)
+    // acts through the registry's inactive-run step and the claim, which refuse
+    // a run anything still holds; `actions` is not consulted, the claim suffices.
     const admitted = yield* admit(deps, { kind: 'run.delete', runId });
     if (admitted.startCommit !== expectedStartCommit) {
       return yield* Effect.fail(
