@@ -10,7 +10,7 @@ import { Effect, Layer } from 'effect';
 import { HostCapabilities } from '@texra-ai/harness/plugins';
 
 // Local imports
-import { isTexFile } from '@common/files/fileTypeUtils';
+import { isTexFile } from '@texra/shared/latexFileTypes';
 import replacementEngine, {
   logReplacementDiagnostics,
 } from '@replacement/engine';

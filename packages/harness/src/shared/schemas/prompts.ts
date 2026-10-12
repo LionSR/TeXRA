@@ -28,7 +28,6 @@ export const ToolEditPermissionSchema = PermissionBaseSchema.extend({
   sourceTool: z.string(),
   addedLines: LineCountSchema,
   removedLines: LineCountSchema,
-  isLatex: z.boolean(),
 });
 export type ToolEditPermission = z.infer<typeof ToolEditPermissionSchema>;
 

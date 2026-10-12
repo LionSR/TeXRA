@@ -5,7 +5,7 @@ import * as vscode from 'vscode';
 import { Effect, FileSystem, type Path, type PlatformError } from 'effect';
 
 import type { SessionHandle } from '@agent/runtime';
-import { isLatexFile } from '@common/files/fileTypeUtils';
+import { isLatexFile } from '@texra/shared/latexFileTypes';
 import { showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
 import { openFileInEditor } from '@frontend/vscode/vscodeEditor';
 import { compileLatex2Pdf } from '@latex/texTools';

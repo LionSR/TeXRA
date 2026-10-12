@@ -29,7 +29,6 @@ function createPermission(
       sourceTool: 'edit',
       addedLines: 1,
       removedLines: 0,
-      isLatex: false,
       ...data,
     },
   };
@@ -75,7 +74,9 @@ describe('tool-edit-request-panel', () => {
   );
 
   it('dispatches the primary and menu diff actions', async () => {
-    const element = await mountPanel(createPermission({ isLatex: true }));
+    const element = await mountPanel(
+      createPermission({ path: '/workspace/main.tex' }),
+    );
     const actions = recordPermissionActions(element);
 
     element.shadowRoot
