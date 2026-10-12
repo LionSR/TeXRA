@@ -33,14 +33,18 @@ improved**, entirely through the human-owned program, not this routine.
   `packages/harness/README.md` and the path aliases are all consistent with the
   new name. There is no `@texra/core` (deleted by #7099); the SDK surface is
   `@texra-ai/harness`, built and fenced, not published.
-- **Model handler decomposed into a subsystem.** The old single
-  `runtime/run/modelBinding.ts` (966 lines at the 2026-10-04 pin, 1037 before
-  that) is **gone**: #13919/#13920 split binding, route decision, credentials
-  and failure reading into the `runtime/modelAccess/` subsystem — five files,
-  `ModelAccess.ts` (251), `binding.ts` (279), `routeDecision.ts` (311),
-  `credentials.ts` (251), `failureInfo.ts` (159), **~1,251 lines total**. This
-  is a decomposition by concern, not a net line shrink; the bound-`Model` route
-  and its deliberate exceptions are unchanged.
+- **Model handler consolidated into one subsystem.** #13919 replaced **four**
+  previously-separate modules — `run/modelBinding.ts` (423 lines just before
+  deletion), `modelRoutes.ts` (447), `model/modelRoute.ts` (257) and
+  `run/modelFailure.ts` (304), **~1,431 lines in all** — with the
+  `runtime/modelAccess/` subsystem: five files, `ModelAccess.ts` (251),
+  `binding.ts` (279), `routeDecision.ts` (311), `credentials.ts` (251),
+  `failureInfo.ts` (159), **~1,251 lines total**. So it is a consolidation by
+  concern (binding, route decision, credentials, failure reading) that modestly
+  *reduced* net lines while fusing four top-level modules into one, not an added
+  tier. The bound-`Model` route is unchanged. (The 966-line `modelBinding.ts`
+  the 2026-10-04 pass cited had itself already shrunk to 423 before #13919
+  deleted it.)
 - **SDK center `effect/` decomposed.** The single `effect/runtime.ts` the prior
   pass named is gone; the directory is now
   `effect/{sessions,sessionPrograms,runHandle,requestAnswerer,errors}.ts`. This
@@ -81,9 +85,11 @@ set; nothing in these areas reopened a retained refusal.
    - Agent core: `packages/harness/src/agent/core/` (`definition/`, `state/`,
      `tools/`) — three modules (see `agent/core/README.md`). Run program
      `@agent/runtime/loop/toolUse.ts` over the run history; the run loop's model
-     call is `@agent/runtime/ModelInvoker.ts` (with `helperModel.ts` and
-     `run/compaction.ts` invoking the bound `Model` directly — deliberate
-     exceptions, not a second handler).
+     call is `@agent/runtime/ModelInvoker.ts`, the one handler. `run/compaction.ts`
+     is **not** a second path — it takes a `ModelInvoker['Service']` and calls
+     `input.invoker.call(...)` (`run/compaction.ts:100,192`); the `helperModel`
+     path binds its own `Model` through the same `modelAccess/ModelAccess.ts`
+     route rather than bypassing it.
    - Model handler: provider calls are reached only through the `packages/llm`
      (`@texra-ai/llm`) `Model` bound by `runtime/modelAccess/binding.ts` (279
      lines) — one of the five files of the `runtime/modelAccess/` subsystem
@@ -108,12 +114,13 @@ set; nothing in these areas reopened a retained refusal.
      terminal-finalization boundary (`AgentRunLifecycle.ts:276` and
      `tools/delegation/childRun.ts:144`), not a cosmetic wrapper — do not inline
      it.
-   - **Model handler** was reorganized, not inflated: the old 966-line
-     `modelBinding.ts` became the five-file `runtime/modelAccess/` subsystem
-     (~1,251 lines total, split by concern — binding, route decision,
-     credentials, failure reading). The `Model` interface still takes only a
-     Zod-guarded materialized `TurnRequest` and keeps host concerns in
-     `BoundModel`.
+   - **Model handler** was consolidated, not inflated: #13919 fused four
+     predecessor modules (`run/modelBinding.ts`, `modelRoutes.ts`,
+     `model/modelRoute.ts`, `run/modelFailure.ts`, ~1,431 lines) into the
+     five-file `runtime/modelAccess/` subsystem (~1,251 lines, by concern —
+     binding, route decision, credentials, failure reading), a net reduction.
+     The `Model` interface still takes only a Zod-guarded materialized
+     `TurnRequest` and keeps host concerns in `BoundModel`.
    - **Logger** is a clean host-agnostic producer port (`Effect.log*` +
      `withLogChannel`) with a single render→redact→truncate owner
      (`logSink.ts`). One structural item is still open — the sink→Layer
