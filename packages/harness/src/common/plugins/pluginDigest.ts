@@ -5,7 +5,6 @@
 // for trust again.
 
 // Node imports
-import { hash } from 'node:crypto';
 import * as path from 'node:path';
 
 // Third-party imports
@@ -21,6 +20,7 @@ import { LRUCache } from 'lru-cache';
 import stableStringify from 'safe-stable-stringify';
 
 // Local imports - utilities
+import { hexDigest } from '@utils/core/idHash';
 import { isPathWithin } from '@utils/core/pathCore';
 import { absentReason } from '@utils/files/fsEntryExists';
 import { whichOnExtendedPath } from '@utils/system/platformPaths';
@@ -29,8 +29,6 @@ import { whichOnExtendedPath } from '@utils/system/platformPaths';
 import { envDigest, type McpServerConfig } from './mcpServers';
 import { pinHook } from './pluginHooks';
 import { PluginError, type ResolvedPlugin } from './pluginManifest';
-
-const sha256 = (value: string | Uint8Array) => hash('sha256', value, 'hex');
 
 /** How recent a modification keeps a file out of the hash cache. */
 const RACY_MS = 2_000;
@@ -89,7 +87,7 @@ const pluginFiles = Effect.fn('pluginDigest.pluginFiles')(function* (
             : undefined;
           let hash = key === undefined ? undefined : hashes.get(key);
           if (hash === undefined) {
-            hash = sha256(yield* fs.readFile(full));
+            hash = hexDigest(yield* fs.readFile(full));
             if (key !== undefined) hashes.set(key, hash);
           }
           files.push([relative, hash]);
@@ -195,5 +193,5 @@ export const pluginDigest = (
         pin,
       })),
     );
-    return sha256(stableStringify({ files, servers, hooks }) ?? '');
+    return hexDigest(stableStringify({ files, servers, hooks }) ?? '');
   });

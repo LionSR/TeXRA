@@ -21,7 +21,6 @@
  * - **Aggregates.** An `AggregateId` is stored as two columns, `kind` and
  *   `logical_id`, and composed back from them here.
  */
-import { hash } from 'node:crypto';
 import { constants, zstdCompressSync, zstdDecompressSync } from 'node:zlib';
 import stableStringify from 'safe-stable-stringify';
 import { Effect, Predicate, Result } from 'effect';
@@ -46,6 +45,7 @@ import {
   DatabaseStoreNewer,
 } from '@shared/session/database';
 import type { PluginArms } from '@tools/plugins';
+import { hexDigest } from '@utils/core/idHash';
 
 /** One selected store row, its columns by name, decoded where it is read. */
 export type SqlRow = Readonly<Record<string, unknown>>;
@@ -57,7 +57,6 @@ if (typeof zstdCompressSync !== 'function')
 /** A payload key shaped `$b`, `$$b`, …: stored with one more `$`. */
 const REF_SHAPED = /^\$+b$/;
 const ZSTD_LEVEL_3 = { params: { [constants.ZSTD_c_compressionLevel]: 3 } };
-const sha256 = (text: string) => hash('sha256', text, 'hex');
 /** An object with its keys of the reference's shape renamed, or itself. */
 const renameRefShaped = (value: object, rename: (key: string) => string) =>
   Object.keys(value).some((key) => REF_SHAPED.test(key))
@@ -179,7 +178,7 @@ export function encodeDraft(draft: SessionEventDraft): EncodedRow {
   if (draft.type === 'context.blob') {
     const { digest, value } = draft.payload;
     const canonical = stableStringify(value);
-    if (canonical === undefined || sha256(canonical) !== digest)
+    if (canonical === undefined || hexDigest(canonical) !== digest)
       throw new Error(`The context blob ${digest} does not hash to its digest`);
     stored = { ...payload, payload: { digest, value: canonical } };
   }
@@ -188,7 +187,7 @@ export function encodeDraft(draft: SessionEventDraft): EncodedRow {
   const data = JSON.stringify(stored, (_key, value: unknown) => {
     if (typeof value === 'string' && value.length >= 4096) {
       const json = JSON.stringify(value);
-      const digest = sha256(json);
+      const digest = hexDigest(json);
       blobs.set(digest, json);
       return { $b: digest };
     }
@@ -244,7 +243,8 @@ function parseData({ data, blobs }: z.infer<typeof RowSchema>): unknown {
     const digest = String(value.$b);
     const zst = Buffer.from(hex.get(digest) ?? '', 'hex');
     const text = zstdDecompressSync(zst).toString('utf8');
-    if (sha256(text) !== digest) throw new Error(`Blob ${digest} is corrupt`);
+    if (hexDigest(text) !== digest)
+      throw new Error(`Blob ${digest} is corrupt`);
     return z.string().parse(JSON.parse(text));
   });
 }
@@ -296,7 +296,7 @@ export function decodeRow(
       const field = JsonObjectSchema.parse(data.payload);
       // The value is stored canonical, so its text hashes to its address.
       const text = z.string().parse(field.value);
-      if (sha256(text) !== field.digest) throw new Error('digest mismatch');
+      if (hexDigest(text) !== field.digest) throw new Error('digest mismatch');
       data = { ...data, payload: { ...field, value: JSON.parse(text) } };
     }
   } catch (error) {
