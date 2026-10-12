@@ -213,8 +213,11 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
       ? quotaRead.value
       : undefined;
 
+  // A run parked on the user's answer is not working: no clock, no spinner.
   const runStartedAt =
-    isActivePhase(displayStatus) && displayRun?.runStartedAt !== null
+    isActivePhase(displayStatus) &&
+    displayRun?.group !== 'waiting' &&
+    displayRun?.runStartedAt !== null
       ? displayRun?.runStartedAt
       : undefined;
   const now = useLiveNowMsSince([runStartedAt]);

@@ -183,8 +183,10 @@ export function viewWith(
     return rollup;
   };
   // A held run with a request that parks its caller is waiting on it, as the
-  // fold's aggregates derive it. Fixture runs model runs this process holds;
-  // one built interrupted (unheld) or with its own approval keeps it.
+  // fold's aggregates derive it, label and tone included (the same
+  // `runStatusCopy` reading `withAggregates` makes). Fixture runs model runs
+  // this process holds; one built interrupted (unheld) or with its own
+  // approval keeps it.
   for (const request of over.requests ?? []) {
     const run = byId.get(request.runId);
     if (
@@ -194,7 +196,15 @@ export function viewWith(
       !requestParksItsCaller(request.payload)
     )
       continue;
-    byId.set(run.id, { ...run, approval: 'own', group: 'waiting' });
+    byId.set(run.id, {
+      ...run,
+      ...runStatusCopy(run.status, {
+        substate: run.substate ?? undefined,
+        waiting: true,
+      }),
+      approval: 'own',
+      group: 'waiting',
+    });
   }
   for (const stream of [...byId.values()]) {
     if (stream.childIds.length === 0) continue;
