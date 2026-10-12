@@ -2,7 +2,7 @@
 import * as vscode from 'vscode';
 
 // Local imports - commands
-import type { SessionHandle } from '@agent/runtime';
+import type { SessionHostInteractions } from '@agent/runtime';
 import {
   createExtensionCommandActions,
   registerExtensionCommandRegistry,
@@ -13,6 +13,7 @@ import { SettingsViewProvider } from '@settingsView/SettingsViewProvider';
 import { ProgressViewProvider } from './progressView/ProgressViewProvider';
 import type { ProcessRuntime, Session } from '@texra-ai/harness';
 import type { PlatformSecrets, StateStore } from '@texra-ai/harness';
+import type { WorkspaceRoots } from '@texra-ai/harness';
 
 export function registerCommands(
   context: vscode.ExtensionContext,
@@ -20,7 +21,8 @@ export function registerCommands(
   progressViewProvider: ProgressViewProvider,
   secrets: PlatformSecrets,
   runtime: ProcessRuntime,
-  session: SessionHandle,
+  roots: WorkspaceRoots,
+  present: Pick<SessionHostInteractions, 'emit'>,
   /** Where this window's runs run. */
   runSession: Session,
 ): void {
@@ -29,7 +31,7 @@ export function registerCommands(
     globalState,
     secrets,
     runtime,
-    session,
+    roots,
     progressViewProvider,
   );
 
@@ -41,11 +43,12 @@ export function registerCommands(
       settingsViewProvider,
       progressViewProvider,
       secrets,
-      session,
+      roots,
+      present,
       runSession,
     ),
     runtime,
-    session,
+    roots,
   );
 
   context.subscriptions.push(

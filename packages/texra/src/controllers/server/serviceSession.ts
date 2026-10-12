@@ -202,8 +202,9 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
   /** What a task the service runs ends with: asked of the service the
    *  link holds, again of the next one if the link is lost meanwhile (a
    *  retired service finishes its tasks first). A run that failed fails
-   *  this with its error, as a run here does; the service's terminal
-   *  presenter showed the error this window, so it is marked presented. A
+   *  this, as a run here does: with its error, which the service's
+   *  terminal presenter showed this window, so it is marked presented, or
+   *  without one (an end with no error recorded) as a plain failure. A
    *  service that cannot answer fails it offline. */
   const ended = (runId: RunId): Effect.Effect<RunEndResult, RunFailure> =>
     Effect.flatMap(connected, (client) =>
@@ -219,10 +220,13 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
         ),
       ),
       Effect.flatMap(({ error, ...end }) => {
-        if (end.outcome !== RUN_OUTCOME.FAILED || error === undefined)
+        if (end.outcome !== RUN_OUTCOME.FAILED)
           return Effect.succeed({ ...end, runId });
-        const cause = new Error(error.message ?? `Task ${runId} failed.`);
-        if (agentErrorPresentation(error) !== null) markFailurePresented(cause);
+        const cause = new Error(
+          error?.message ?? `The task failed (run ${runId}).`,
+        );
+        if (error !== undefined && agentErrorPresentation(error) !== null)
+          markFailurePresented(cause);
         return Effect.fail(runFailure(cause.message, cause));
       }),
     );

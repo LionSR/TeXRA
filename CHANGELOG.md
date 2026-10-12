@@ -6,6 +6,14 @@ All notable changes to this project will be documented in this file.
 
 ### Breaking Changes
 
+- **SDK: a run whose trace cannot be read says why.** A run's `events`
+  stream fails with `TraceUnavailable` instead of ending with no events.
+  Its reason is `ended` (the run finished before anyone read its trace),
+  `truncated` (the trace outgrew what is kept for a reader that had not
+  attached yet) or `remote` (the run runs in the TeXRA service, which keeps
+  its trace). The run's result is unaffected.
+- **A failed task in the TeXRA service always reports failure**, even
+  when the service recorded no error for it.
 - **A run that fails before it starts is reported as a launch error, not
   listed as a failed task.** A task, subagent or background script is
   recorded together with its first batch of history, so one that fails

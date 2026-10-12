@@ -216,13 +216,14 @@ export function createExtensionHostRequests(
     globalState,
     runtime,
   } = options;
-  const draftRequests = options.draftRequests.attach(session, (recording) => {
+  const { roots } = session;
+  const draftRequests = options.draftRequests.attach(roots, (recording) => {
     // Recorder notifications can arrive outside a request fiber.
     runtime.runFork(options.snapshot.setRecording(recording));
   });
 
   /** The native picker of each multi-file launcher list. */
-  const multipleFilePickers = createFileSelectionPickers(session);
+  const multipleFilePickers = createFileSelectionPickers(roots);
 
   /**
    * Start a validated fresh request on the window's session, here or in the
@@ -249,7 +250,7 @@ export function createExtensionHostRequests(
           Effect.tap((run) =>
             Effect.forkIn(
               run.result.pipe(
-                Effect.flatMap(openFinalOutputIfAvailable(session.roots)),
+                Effect.flatMap(openFinalOutputIfAvailable(roots)),
                 Effect.ignore({ log: 'Warn', message: 'Opening the output' }),
               ),
               options.scope,
@@ -265,15 +266,9 @@ export function createExtensionHostRequests(
       scope: options.scope,
       runValidated,
       openWorkflowOutput: (result) =>
-        withProcessServices(
-          runtime,
-          openFinalOutputIfAvailable(session.roots)(result),
-        ),
+        withProcessServices(runtime, openFinalOutputIfAvailable(roots)(result)),
       loadModelOptions: () =>
-        withProcessServices(
-          runtime,
-          loadModelOptions({ ...session.roots, secrets }),
-        ),
+        withProcessServices(runtime, loadModelOptions({ ...roots, secrets })),
       // The set-key quick pick is a VS Code command: it either runs or
       // faults, so its rejection is the one failure, as `ApiKeyPromptFailed`.
       promptForApiKey: (provider) =>
@@ -293,7 +288,7 @@ export function createExtensionHostRequests(
   );
 
   const { runOutputs } = runActions;
-  const at = (file: string) => pathToLocationIn(session.roots.workspace, file);
+  const at = (file: string) => pathToLocationIn(roots.workspace, file);
   // A file-action port's handler; the process services come from the runtime.
   const runFileAction = <A, E>(
     command: string,
@@ -302,7 +297,7 @@ export function createExtensionHostRequests(
 
   const workflowFileActions = new ProgressWorkflowFileActionsController({
     state: runOutputs,
-    storageRoot: session.roots.storage,
+    storageRoot: roots.storage,
     host: {
       // Each command is named, so a failure carries a tag, never a rejection.
       compareFiles: (base, edited) =>
@@ -313,9 +308,9 @@ export function createExtensionHostRequests(
           handleAcceptEdited(at(base), at(edited), copyMeta),
         ),
       mergeFile: (base, edited) =>
-        runFileAction('merge', handleMerge(session, base, edited)),
+        runFileAction('merge', handleMerge(roots, base, edited)),
       latexdiffFile: (base, edited) =>
-        runFileAction('latexdiff', handleLatexdiff(session, base, edited)),
+        runFileAction('latexdiff', handleLatexdiff(roots, base, edited)),
       openDirectory: (directory) =>
         runCommand('revealFileInOS', vscode.Uri.file(directory)),
       // An accepted-edit backup names an absolute workspace path the
@@ -431,7 +426,7 @@ export function createExtensionHostRequests(
   };
 
   function getOpenedFiles(): Effect.Effect<string[]> {
-    const workspaceRoot = session.roots.workspace;
+    const workspaceRoot = roots.workspace;
     if (!workspaceRoot) {
       return Effect.logWarning('No workspace path found for opened files').pipe(
         withLogChannel(CHANNEL),
@@ -460,7 +455,7 @@ export function createExtensionHostRequests(
     request: Extract<HostRequest, { kind: 'useCurrentFile' }>,
   ) {
     return Effect.gen(function* () {
-      const currentOpenFile = yield* getCurrentFile(session);
+      const currentOpenFile = yield* getCurrentFile(roots);
       if (!currentOpenFile) {
         return yield* Effect.fail(
           new Rejected({
@@ -477,7 +472,7 @@ export function createExtensionHostRequests(
         if (parsed) {
           const commitLabel = yield* runHandler(
             'findCommitInHistory',
-            findCommitInHistory(session, parsed.commitHash),
+            findCommitInHistory(roots, parsed.commitHash),
           );
           if (commitLabel) {
             options.surfaceAction({
@@ -492,7 +487,7 @@ export function createExtensionHostRequests(
             );
           }
           const sourceLocation = locateInWorkspace(
-            session.roots.workspace,
+            roots.workspace,
             parsed.sourcePath,
           );
           const sourceExists =
@@ -562,8 +557,8 @@ export function createExtensionHostRequests(
    *  onto a VS Code command, an editor API, or the sidebar. */
   const hostBindings: SharedHostRequestBindings = {
     openPath: (file, line) =>
-      runHandler('openFile', openFile(session, file, line)),
-    openLabel: (label) => runHandler('openLabel', openLabel(session, label)),
+      runHandler('openFile', openFile(roots, file, line)),
+    openLabel: (label) => runHandler('openLabel', openLabel(roots, label)),
     exportTranscript: (runId) => Effect.asVoid(exportTranscript(runId)),
     surfaceAction: (action) => options.surfaceAction(action),
     showInfo: (message) => vscodeUi.showInfoMessage(message),
@@ -578,7 +573,7 @@ export function createExtensionHostRequests(
     latexdiffAgainstCommit: (action, baseFile, commit) =>
       runHandler(
         action,
-        handleLatexdiffCommitAction(session, action, baseFile, commit),
+        handleLatexdiffCommitAction(roots, action, baseFile, commit),
       ),
     openSettings: (section) => {
       if (section === 'teams') return commandVerb('texra.showTeamSettings');
@@ -634,7 +629,7 @@ export function createExtensionHostRequests(
       }),
     onboarding: {
       signInChatGpt: Effect.gen(function* () {
-        yield* signInWithSubscription(session.roots, CHANNEL, 'chatgpt');
+        yield* signInWithSubscription(roots, CHANNEL, 'chatgpt');
         yield* refreshAfterCredentialChange;
       }),
       skip: Effect.gen(function* () {
@@ -661,7 +656,7 @@ export function createExtensionHostRequests(
     snapshot,
     draftRequests,
     toolEditApprovals,
-    session,
+    roots,
     host: hostBindings,
   };
 
@@ -733,7 +728,7 @@ export function createExtensionHostRequests(
     // chosen here, at the host edge, not read at the depth that writes --
     // once, for the whole dispatch.
     handleHostRequest: (request, port) =>
-      withSessionFs(session.roots, dispatch(request, port)),
+      withSessionFs(roots, dispatch(request, port)),
     closePort: draftRequests.closePort,
     dispose: draftRequests.dispose,
   };

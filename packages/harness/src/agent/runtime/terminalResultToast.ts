@@ -38,7 +38,7 @@ function isChildResult(session: SessionHandle, event: ResultEvent): boolean {
  * attaches later, so no guidance is lost for want of an attached host.
  */
 function presentAgentFailure(
-  interactions: SessionHostInteractions,
+  interactions: Pick<SessionHostInteractions, 'emit'>,
   error: Parameters<typeof agentErrorPresentation>[0],
 ): Effect.Effect<void> {
   const toast = agentErrorPresentation(error);
@@ -111,7 +111,7 @@ export function markFailurePresented(error: unknown): void {
  * `RunFailure` is presented as the failure it carries.
  */
 export function presentRunFailure(
-  interactions: SessionHostInteractions,
+  interactions: Pick<SessionHostInteractions, 'emit'>,
   error: unknown,
   prefix = '',
 ): Effect.Effect<void> {
