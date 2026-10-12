@@ -62,13 +62,16 @@ const projectDispatchers = new Map<string, EnvHttpProxyAgent>();
  */
 export const undiciFetchThrough = (
   dispatcher: Dispatcher,
-  input: string | URL,
+  input: Parameters<typeof fetch>[0],
   init?: RequestInit,
 ): Promise<Response> =>
-  undiciFetch(input, {
-    ...init,
-    dispatcher,
-  } as Parameters<typeof undiciFetch>[1]) as unknown as Promise<Response>;
+  undiciFetch(
+    input as Parameters<typeof undiciFetch>[0],
+    {
+      ...init,
+      dispatcher,
+    } as Parameters<typeof undiciFetch>[1],
+  ) as unknown as Promise<Response>;
 
 /**
  * The fetch every model factory is constructed with. It is undici's own

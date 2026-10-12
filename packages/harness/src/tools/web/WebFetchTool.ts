@@ -124,7 +124,7 @@ function webFetchDispatcher(): Dispatcher {
  * (see `longRunningModelFetch`).
  */
 const publicFetch: typeof fetch = (input, init) =>
-  undiciFetchThrough(webFetchDispatcher(), input as string | URL, init);
+  undiciFetchThrough(webFetchDispatcher(), input, init);
 
 /** Refuse an IP-literal host, the one form {@link publicOnlyLookup} never sees. */
 function assertPublicLiteral(url: URL) {
