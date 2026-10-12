@@ -7,7 +7,6 @@ import { Effect, type Context } from 'effect';
 // Local imports
 import { ToolContext, type ToolContextShape } from '@texra-ai/harness';
 import { ChildRuns, requireRun, type ToolRun } from '@texra-ai/harness/plugins';
-import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type {
   ChildRunPort,
   ChildRunPorts,
@@ -16,7 +15,6 @@ import type {
 import {
   describeFollowUpFailure,
   FOLLOW_UP_WAKE_FAILED_MESSAGE,
-  submitFollowUp,
 } from '@agent/followUp/ToolUseFollowUp';
 import { senderOf } from '@agent/followUp/followUpSender';
 import type { SettingsStores } from '@shared/config/settingsAccess';
@@ -60,19 +58,18 @@ const queueAgentCliFollowUp = Effect.fn('agentCliShared.queueAgentCliFollowUp')(
     registry: AgentCliSessionRegistry,
     stored: AgentCliSessionEntry,
     params: {
-      session: SessionHandle;
       id: string;
       prompt: string;
       callerRunId: RunId | undefined;
       labels: AgentCliResumeLabels;
     },
-  ): Effect.fn.Return<ToolResult, ToolError> {
-    const { id, prompt, callerRunId, labels, session } = params;
+  ): Effect.fn.Return<ToolResult, ToolError, ChildRuns> {
+    const { id, prompt, callerRunId, labels } = params;
     // A detached or re-parented child must not accept follow-ups from its
     // former orchestrator: the child's rows decide, in the job queuing it.
     const followUp = { text: prompt, from: senderOf(callerRunId) };
-    const result = yield* submitFollowUp(stored.runId, followUp, {
-      session,
+    const inbox = yield* (yield* ChildRuns).inbox(stored.runId);
+    const result = yield* inbox.send(followUp, {
       fromParent: callerRunId !== undefined,
     });
     if (result.status === 'failed' && result.reason === 'not_parent')
@@ -113,7 +110,6 @@ const resumeOrLaunchAgentCliSession = Effect.fn(
 )(function* <R>(
   store: AgentCliSessionRegistry,
   params: {
-    session: SessionHandle;
     id: string | undefined;
     prompt: string;
     callerRunId: RunId | undefined;
@@ -122,7 +118,7 @@ const resumeOrLaunchAgentCliSession = Effect.fn(
       releaseClaim?: () => void,
     ) => Effect.Effect<ToolResult, ToolError, R>;
   },
-): Effect.fn.Return<ToolResult, ToolError, R | ToolContext> {
+): Effect.fn.Return<ToolResult, ToolError, R | ToolContext | ChildRuns> {
   const { id } = params;
   if (!id) return yield* params.launch();
 
@@ -139,7 +135,6 @@ const resumeOrLaunchAgentCliSession = Effect.fn(
     const stored = yield* store.waitForActive(id);
     if (!stored) continue;
     return yield* queueAgentCliFollowUp(store, stored, {
-      session: params.session,
       id,
       prompt: params.prompt,
       callerRunId: params.callerRunId,
@@ -304,7 +299,7 @@ export function dispatchAgentCliTool<R = never, S = never>(params: {
   launch: (
     context: AgentCliLaunchContext,
   ) => Effect.Effect<ToolResult, ToolError, R>;
-}): Effect.Effect<ToolResult, ToolError, R | S | ToolContext> {
+}): Effect.Effect<ToolResult, ToolError, R | S | ToolContext | ChildRuns> {
   const { agentName, store, resumeId, sourceId, prompt, labels, launch } =
     params;
   return withAgentCliRun(agentName, (run) =>
@@ -314,11 +309,11 @@ export function dispatchAgentCliTool<R = never, S = never>(params: {
       // A fork only reads its source session: a live source another run
       // owns is refused by its current edge, nothing written.
       const source = sourceId ? registry.lookup(sourceId) : undefined;
-      const sourceParent = source && run.session.runs.get(source.runId)?.parent;
+      const sourceParent =
+        source && (yield* (yield* ChildRuns).parent(source.runId));
       if (sourceId && sourceParent != null && sourceParent !== callerRunId)
         return yield* notOwned(sourceId, labels);
       return yield* resumeOrLaunchAgentCliSession(registry, {
-        session: run.session,
         id: resumeId,
         prompt,
         callerRunId,

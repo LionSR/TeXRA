@@ -48,7 +48,7 @@ export type FollowUpFailureReason =
  * queued (`wake: 'failed'`): the input belongs to the run, and an
  * explicit Resume delivers it.
  */
-type SubmitFollowUpResult =
+export type SubmitFollowUpResult =
   | { status: 'sent' }
   | { status: 'queued'; wake?: 'failed' }
   | { status: 'failed'; reason: FollowUpFailureReason };
@@ -313,4 +313,29 @@ export const submitFollowUp = Effect.fn('submitFollowUp')(function* (
       : { status: 'queued', wake: 'failed' };
   }
   return dispatch;
+});
+
+/**
+ * One run's input, as a plugin reaches it: what it sends the run (routed,
+ * admitted and woken as {@link submitFollowUp} does), and when the run
+ * takes no more.
+ */
+export interface RunInbox {
+  /** Deliver `item` to the run. */
+  readonly send: (
+    item: InboxItem,
+    options?: Pick<SubmitFollowUpOptions, 'mode' | 'fromParent'>,
+  ) => Effect.Effect<SubmitFollowUpResult, Error>;
+  /** Hear the run take no more input, or its session's inbox close;
+   *  returns the detach. */
+  readonly onClosed: (listener: () => void) => () => void;
+}
+
+/** `runId`'s input on `session`. */
+export const runInbox = (session: SessionHandle, runId: RunId): RunInbox => ({
+  send: (item, options) => submitFollowUp(runId, item, { ...options, session }),
+  onClosed: (listener) =>
+    session.followUps.onClosed((closed) => {
+      if (closed.kind === 'session' || closed.runId === runId) listener();
+    }),
 });

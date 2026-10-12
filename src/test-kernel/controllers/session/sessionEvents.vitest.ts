@@ -138,12 +138,12 @@ import {
 } from '@test/support/sessionGraphInstall';
 import { REPO_ROOT } from '@test/support/repoScan';
 import { storePluginsLayer } from '@test/support/setupPlatform';
+import { inquiryThreadRow } from '@test/support/inquiryThreadRow';
 import { TEXRA_SETTING_ROWS } from '@texra/shared/settingsView/texraSettings';
 import {
   DOCUMENTS_ACCEPTED_ARM,
   documentsAcceptedFact,
 } from '@texra/shared/plugins/documents';
-import { inquiryThreadRow } from '@texra/shared/plugins/externalInquiry';
 import { DownMessageSchema } from '@texra/shared/session/sessionFrames';
 import { runActionGuard } from '@texra/controllers/session/runActionGuard';
 import type { LeanLanguageServices } from '@texra/tools/lean/leanLanguageServices';

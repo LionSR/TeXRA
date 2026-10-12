@@ -64,6 +64,8 @@ describe('launchDetachedSubagent child run launch', () => {
   const fixtureRequests = {
     nextId: (prefix: string) => prefix,
     open: () => Effect.die(new Error('This fixture opens no request.')),
+    post: () => Effect.die(new Error('This fixture posts no request.')),
+    present: () => Effect.void,
   };
   const parent: RunToolCall = {
     callId: 'parent-call',

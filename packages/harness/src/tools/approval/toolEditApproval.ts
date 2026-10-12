@@ -1,7 +1,7 @@
 import { Cause, Effect } from 'effect';
 
 import { type SessionHandle } from '@agent/runtime/SessionHandle';
-import { requireRun } from '@agent/runtime/RunCall';
+import { requireRun, sessionOf } from '@agent/runtime/RunCall';
 import { ToolContext } from '@agent/core/tools/ToolTypes';
 import { isLatexFile } from '@common/files/fileTypeUtils';
 import { withLogChannel } from '@logger/effectLog';
@@ -211,7 +211,7 @@ export const requestToolEditApproval = Effect.fn('requestToolEditApproval')(
       TOOL_EDIT_APPROVAL_CONFIG_KEY,
     );
     const { run, requests } = call;
-    const { session } = run;
+    const session = sessionOf(run);
     const contextRunId = run.runId;
     const withRunId =
       request.runId || !contextRunId

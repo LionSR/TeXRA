@@ -11,6 +11,7 @@ import type {
   RunCall,
   ScriptCalls,
 } from '@agent/runtime/RunCall';
+import type { ToolRun } from '@agent/core/tools/ToolTypes';
 import type { ChildRuns, RuntimeTool } from '@agent/runtime/ToolServices';
 import { Runs } from '@agent/runtime/runRegistry';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
@@ -313,6 +314,19 @@ describe('plugin rosters', () => {
       ),
     ];
     expect(probes).toHaveLength(1);
+  });
+
+  // Failure mode: an app plugin's tool holds the session again (its log,
+  // its run history, its inbox), past `ChildRuns` and its call's requests.
+  // The run a plugin's tool reads names no session, and no file of the
+  // app's tools names the handle.
+  it("keeps the session out of the app's plugin tools", () => {
+    // @ts-expect-error a plugin's tool reads no session off its run
+    const probe: ToolRun['session'] = null;
+    const holders = files()
+      .filter((file) => file.startsWith('packages/texra/src/tools/'))
+      .filter((file) => /\bSessionHandle\b/.test(source(file)));
+    expect({ probe, holders }).toEqual({ probe: null, holders: [] });
   });
 
   // Failure mode: a plugin's session layer reads the session's runs, so a

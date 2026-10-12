@@ -1,6 +1,5 @@
 {
   "src/test-kernel/agent/AgentPackage.vitest.ts": 3,
-  "src/test-kernel/agent/followUp/GitHubSubscriptionProgressEvents.vitest.ts": 1,
   "src/test-kernel/agent/runtime/AgentLaunchActivation.vitest.ts": 5,
   "src/test-kernel/agent/runtime/AgentLaunchContext.vitest.ts": 2,
   "src/test-kernel/agent/runtime/ChildRunLoop.vitest.ts": 3,
