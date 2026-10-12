@@ -94,8 +94,12 @@ manifest's ratification, "not another lint rule":
 - **No source or declaration maps** emitted; NodeNext relative specifiers must
   carry `.js`; ESM only; no undeclared bare-package imports.
 
-The dead-export ratchet (`npm run check:dead-code-ratchet`, green) additionally
-guarantees no entry names a binding nothing consumes.
+The dead-export ratchet (`npm run check:dead-code-ratchet`, green) guarantees no
+*internal* dead export. It does not prove every public binding has a consumer:
+the four entries are knip entry points (`knip.json`), so a public re-export with
+no package-name importer still passes — `MapToolRegistry`, for instance, has no
+`@texra-ai/harness` consumer yet satisfies the ratchet through its internal use.
+Closing that gap is exactly what the shed audit in §5.2 is for.
 
 The frozen deep-import list (`config/ratchets/harness-deep-import-baseline.json`,
 renamed from `host-agent-import-baseline.json`) is the complementary artifact:
@@ -160,9 +164,11 @@ Re-scoped around the harness SDK per the pivot:
 6. **The result-shape contract** as `packages/harness/README.md` writes it —
    `RunEndResult` with `usage` and one `output` shape
    `{ response, files, structured?, documents? }` (no `category` to switch on;
-   `documents` only on a document task's run), plus the failed-run `error`. The
-   declared shape moved since the 2026-09-04 closure without this manifest's
-   intent being re-stated; ratification should confirm or trim it.
+   `documents` only on a document task's run), plus an optional `error?` (a
+   provider/runtime failure — a domain-`FAILED` outcome such as rejected
+   document output can carry none). The declared shape moved since the
+   2026-09-04 closure without this manifest's intent being re-stated;
+   ratification should confirm or trim it.
 
 Resolved by deletion, recorded for the audit trail only: `IModelHandler` /
 `ModelHandler` (the god-base and port, deleted in #12320, no re-export shim) and

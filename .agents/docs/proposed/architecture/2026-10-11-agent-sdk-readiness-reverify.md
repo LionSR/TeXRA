@@ -45,13 +45,16 @@ the accepted durable-harness program (`2026-10-02-durable-harness.md`, status:
   254 distinct at the SQ2 ruling and 256/501 at M8's end — so it has continued
   to narrow, never widen). Enforced by
   `src/test-kernel/architecture/harnessDeepImportRatchet.vitest.ts`.
-- **Durable-harness run-history lanes landed** (all on the harness package):
-  D1 "every run write through its cell; runs born with their opening" (#13932),
-  D2a "every row a run's state folds commits through its cell" (#13938), and
-  G2 "app-owned session and plugin modules move to the app" (#13940), plus the
-  settlement/delivery single-append and plugin-aggregate-in-tool.result-batch
-  consolidations (#13921, #13928). These sharpen the "one publisher, loop-owned
-  cards, one history writer" contract — they add no indirection tier.
+- **Durable-harness lanes landed.** The run-history lanes on the harness
+  package — D1 "every run write through its cell; runs born with their opening"
+  (#13932) and D2a "every row a run's state folds commits through its cell"
+  (#13938), plus the settlement/delivery single-append and
+  plugin-aggregate-in-tool.result-batch consolidations (#13921, #13928) —
+  sharpen the "one publisher, loop-owned cards, one history writer" contract
+  without adding an indirection tier. G2 (#13940) is a **cross-package
+  ownership move**, not harness-only: it relocates app-owned session and plugin
+  modules into `packages/texra` with consumer updates across the CLI, desktop,
+  extension, and trace-viewer.
 
 So this pass records real movement, all of it through the human-owned
 durable-harness program and ordinary review, none through this routine.
@@ -98,8 +101,11 @@ guardrail, which is why it stays:
   class"` across `packages/llm/src` returns only error types
   (`Data.TaggedError`) plus generic OAuth/concurrency machinery
   (`SubscriptionOAuthCoordinator`, `SharedAttempt`, `SerializedWrites`) —
-  **zero per-provider handler classes**. The codex/xai OAuth dirs are
-  ~50-line policy-data modules over one generic `SubscriptionOAuthCoordinator`.
+  **zero per-provider handler classes**. The codex/xai OAuth arms carry real
+  provider-specific code (~500 lines each — device-login flow, JWT, client,
+  constants) but share the one generic `SubscriptionOAuthCoordinator` through a
+  small per-provider policy/session module, rather than a per-provider handler
+  base.
   The few single-caller helpers (`helperRequest`, `subscriptionCredential`)
   carry real branching logic and keep the `bind` closure under the
   core-quality line ceiling.
@@ -125,7 +131,8 @@ guardrail, which is why it stays:
 1. **Identify the areas** — re-confirmed at the new paths:
    - Agent core: `packages/harness/src/agent/core/` (`definition/`, `state/`,
      `tools/`); the one run program `@agent/runtime/loop/toolUse.ts` over the
-     run history, round mode via `loop/rounds.ts`; the model call at
+     run history (a document task runs that one program over the documents
+     plugin's recipe in `packages/texra`, not a harness round file); the model call at
      `@agent/runtime/ModelInvoker.ts` (with `run/compaction.ts` and the helper
      path invoking the bound `Model` directly — deliberate exceptions, not a
      second handler).
