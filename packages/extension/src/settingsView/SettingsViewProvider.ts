@@ -3,7 +3,6 @@ import { Effect } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports
-import type { SessionHandle } from '@agent/runtime';
 import { BundledViewContentProvider } from '@common/webview';
 import type { ProgressViewProvider } from '@progressView/ProgressViewProvider';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
@@ -18,6 +17,7 @@ import {
 } from './SettingsViewMessageHandler';
 import type { ProcessRuntime, ProcessServices } from '@texra-ai/harness';
 import type { PlatformSecrets, StateStore } from '@texra-ai/harness';
+import type { WorkspaceRoots } from '@texra-ai/harness';
 
 function isReadyMessage(message: unknown): boolean {
   return (
@@ -46,7 +46,7 @@ export class SettingsViewProvider {
     globalState: StateStore,
     secrets: PlatformSecrets,
     private readonly runtime: ProcessRuntime,
-    session: SessionHandle,
+    roots: WorkspaceRoots,
     progressView: ProgressViewProvider,
   ) {
     this.contentProvider = new BundledViewContentProvider(
@@ -59,7 +59,7 @@ export class SettingsViewProvider {
       globalState,
       secrets,
       runtime,
-      session,
+      roots,
       progressView,
     );
   }

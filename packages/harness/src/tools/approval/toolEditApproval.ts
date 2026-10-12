@@ -231,15 +231,19 @@ export const requestToolEditApproval = Effect.fn('requestToolEditApproval')(
         { action: 'apply', appliedContent: preparedRequest.proposedContent },
         preparedRequest,
       );
+    const policy = session.approvals.policy(runId ?? undefined);
     const decision = decideTexraApproval({
-      policy: session.approvals.policy(runId ?? undefined),
+      policy,
       promptRequired: approvalsEnabled,
       scopedBypass: isRunBypassed,
       canPresent: run.toolPolicy.approvalPromptsUnavailable !== true,
     });
     if (decision === 'allow') return yield* acceptProposedAsIs();
     if (isTexraApprovalDenied(decision)) {
-      session.interactions.approvalDenied({ kind: 'executable' }, run.runId);
+      session.interactions.approvalDenied(
+        { kind: 'executable', policy },
+        run.runId,
+      );
       return { action: 'deny', reason: texraApprovalDenialMessage(decision) };
     }
     if (!runId) {

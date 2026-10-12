@@ -1,6 +1,5 @@
 import { Effect } from 'effect';
 
-import { type SessionHandle } from '@agent/runtime';
 import { withLogChannel } from '@logger/effectLog';
 import type {
   ApprovalPolicyDenial,
@@ -68,14 +67,17 @@ function retryDenialReason(
 
 function approvalDenialMessage(
   denial: ApprovalPolicyDenial,
-  policy: TexraApprovalPolicy,
   context: CliContext,
 ): string {
-  const reason = promptUnavailableReason(policy, context);
-  const allow =
+  const reason = promptUnavailableReason(denial.policy, context);
+  // Under Block no request widens: only the project's policy can change.
+  let allow =
     context.mode === 'headless'
       ? 'Use --approval-policy yolo to allow'
       : 'Change the policy with /approval to allow';
+  if (denial.policy === 'never')
+    allow =
+      "Change the project's approval policy (/config or the settings view) to allow";
   switch (denial.kind) {
     case 'executable':
       return `Command or edit denied: ${reason}. ${allow} it.`;
@@ -101,13 +103,12 @@ function approvalDenialMessage(
  * denial as tool feedback and routes around it, so this is diagnostics only —
  * a denied gate never changes the process exit code.
  *
- * TUI `/approval` updates SessionHandle only, so the frozen
- * CliContext.approvalPolicy can be stale — the warning names the live policy
- * read off the threaded `session`. Operator-facing warnings go
- * to stderr (not the diagnostic log).
+ * The warning names the policy that closed the gate, which the denial
+ * carries (the frozen `CliContext.approvalPolicy` can be stale after a
+ * `/approval`). Operator-facing warnings go to stderr (not the diagnostic
+ * log).
  */
 export function warnApprovalDenied(
-  session: SessionHandle,
   context: CliContext,
   denial: ApprovalPolicyDenial,
   runId?: RunId | '',
@@ -131,7 +132,7 @@ export function warnApprovalDenied(
   if (warned.has(key)) return;
   warned.add(key);
   writeTextStderr(
-    `[warn] [cli-approval] ${approvalDenialMessage(denial, session.approvals.policy(), context)}`,
+    `[warn] [cli-approval] ${approvalDenialMessage(denial, context)}`,
   );
 }
 

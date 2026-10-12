@@ -4,7 +4,6 @@ import path from 'node:path';
 import { Effect, type FileSystem, type Path } from 'effect';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { SessionHandle } from '@agent/runtime';
 import { VscodeToolEditApprovalHost } from '@frontend/approval/VscodeToolEditApprovalHost';
 import type { RunId } from '@shared/schemas';
 import type { Outcome, RuntimeRequest } from '@shared/session/runtimeRequest';
@@ -12,6 +11,7 @@ import { testRuntime } from '@test/support/testProcessRuntime';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 import { ToolEditApprovalController } from '@texra/controllers/approval/ToolEditApprovalController';
 import { toolEditApprovalRequest } from '../agent/progressTestUtils';
+import type { WorkspaceRoots } from '@texra-ai/harness';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 interface TestUri {
@@ -143,9 +143,9 @@ function createApprovalHarness(): ApprovalHarness {
     host: new VscodeToolEditApprovalHost(
       storageRoot,
       testRuntime(),
-      // The session only backs `openBuildDisplay`, which this suite never
+      // The roots only back `openBuildDisplay`, which this suite never
       // invokes; no shared fake exists that builds without a platform host.
-      { roots: {} } as unknown as SessionHandle,
+      {} as WorkspaceRoots,
     ),
     session: { requests: { request: decide } },
   });

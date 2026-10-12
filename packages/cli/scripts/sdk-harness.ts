@@ -81,11 +81,17 @@ const approveAll: ApprovalHandler = (request) =>
     return { action: 'approve' } as const;
   });
 
+const platform = nodePlatform({
+  agentsDir: `${storageDir}/no-agents`,
+  storageDir,
+  workspaceDir: workspace,
+});
+
 const program = Effect.gen(function* () {
   const sessions = yield* Sessions;
   switch (mode) {
     case 'inline': {
-      const session = yield* sessions.open();
+      const session = yield* sessions.open(platform.roots);
       const run = yield* session.start({
         agent: {
           name: 'inline_echo',
@@ -103,10 +109,10 @@ const program = Effect.gen(function* () {
       return yield* print({ runId: run.runId, result, identity });
     }
     case 'ask': {
-      const session = yield* sessions.open(undefined, {
+      const session = yield* sessions.open(platform.roots, {
         persistent: true,
-        approve: reportOnly,
       });
+      yield* session.attach({ approve: reportOnly });
       const run = yield* session.start({
         agent: {
           name: 'approval_validation',
@@ -122,10 +128,10 @@ const program = Effect.gen(function* () {
       return yield* run.result;
     }
     case 'resume': {
-      const session = yield* sessions.open(undefined, {
+      const session = yield* sessions.open(platform.roots, {
         persistent: true,
-        approve: approveAll,
       });
+      yield* session.attach({ approve: approveAll });
       // `argument` is the id the `ask` phase printed.
       const run = yield* session.resume(argument as RunId, { tools });
       const result = yield* run.result;
@@ -136,16 +142,7 @@ const program = Effect.gen(function* () {
   }
 }).pipe(
   Effect.scoped,
-  Effect.provide(
-    Sessions.layer({
-      platform: nodePlatform({
-        agentsDir: `${storageDir}/no-agents`,
-        storageDir,
-        workspaceDir: workspace,
-      }),
-      plugins: harnessBuiltins.all,
-    }),
-  ),
+  Effect.provide(Sessions.layer({ platform, plugins: harnessBuiltins.all })),
 );
 
 await Effect.runPromise(program);

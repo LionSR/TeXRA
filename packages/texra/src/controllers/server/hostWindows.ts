@@ -39,6 +39,7 @@ import {
   type EditorCapabilities,
   type EditorHostShape,
 } from '@texra/tools/editorHost';
+import { isPathWithin } from '@utils/core/pathCore';
 
 import {
   CALL_CAPABILITY,
@@ -145,6 +146,13 @@ export interface HostWindows {
     session: SessionHandle,
     capabilities: readonly HostCapability[],
   ) => Stream.Stream<HostFrame>;
+  /** Files a task wrote past the editor's own write path, as this
+   *  process's announcer heard them from the task's rows: every window
+   *  whose project holds one hears it, so its file tree and decorations
+   *  follow the service's tasks. */
+  readonly filesWritten: (
+    absolutePaths: readonly string[],
+  ) => Effect.Effect<void>;
   /** The window was focused: its project's calls go to it first. */
   readonly focus: (attachment: string) => Effect.Effect<void>;
   /** A window's answer to one call. */
@@ -545,6 +553,16 @@ export const makeHostWindows = Effect.sync((): HostWindows => {
             Stream.fromQueue(window.frames),
           ).pipe(Stream.ensuring(detach(window)));
         }),
+      ),
+    filesWritten: (absolutePaths) =>
+      Effect.forEach(
+        [...windows].filter(
+          (window) =>
+            window.capabilities.has('notices') &&
+            absolutePaths.some((path) => isPathWithin(window.project, path)),
+        ),
+        (window) => tell(window, { kind: 'filesWritten', absolutePaths }),
+        { discard: true },
       ),
     focus: (attachment) =>
       Effect.sync(() => {

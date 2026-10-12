@@ -18,7 +18,10 @@ import {
   VscodeLanguageModelConfigurationSchema,
 } from '@texra-ai/llm';
 
-import type { ApprovalPolicyDenial } from '@shared/approvalPolicy';
+import {
+  TexraApprovalPolicySchema,
+  type ApprovalPolicyDenial,
+} from '@shared/approvalPolicy';
 import {
   FileLocationSchema,
   INSTRUCTION_ACTION,
@@ -62,21 +65,26 @@ const ManualCriticismEntrySchema = z.object({
   confidence: z.int(),
 }) satisfies z.ZodType<ManualCriticismEntry>;
 
+/** The policy that closed a gate, as the window names it. */
+const policy = TexraApprovalPolicySchema;
 const ApprovalPolicyDenialSchema = z.discriminatedUnion('kind', [
-  z.object({ kind: z.literal('executable') }),
-  z.object({ kind: z.literal('plan') }),
-  z.object({ kind: z.literal('proposal') }),
+  z.object({ kind: z.literal('executable'), policy }),
+  z.object({ kind: z.literal('plan'), policy }),
+  z.object({ kind: z.literal('proposal'), policy }),
   z.object({
     kind: z.literal('withheldTools'),
     tools: z.array(z.string()).readonly(),
+    policy,
   }),
   z.object({
     kind: z.literal('retry'),
     deny: z.enum(['yolo-retry', 'credential', 'policy', 'unpresentable']),
+    policy,
   }),
   z.object({
     kind: z.literal('humanInput'),
     deny: z.enum(['yolo-no-human', 'policy', 'unpresentable']),
+    policy,
   }),
 ]) satisfies z.ZodType<ApprovalPolicyDenial>;
 
@@ -168,6 +176,12 @@ const HostCallSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('releaseToolEdit'), requestId: z.string() }),
   z.object({ kind: z.literal('approveToolEdit'), requestId: z.string() }),
   z.object({ kind: z.literal('notice'), notice: NoticeSchema }),
+  // Files a task of the project wrote past the editor's own write path, as
+  // the service's announcer heard them from the task's rows.
+  z.object({
+    kind: z.literal('filesWritten'),
+    absolutePaths: z.array(z.string()).readonly(),
+  }),
   z.object({
     kind: z.literal('approvalDenied'),
     denial: ApprovalPolicyDenialSchema,
@@ -201,6 +215,7 @@ export const CALL_CAPABILITY: Readonly<
   releaseToolEdit: 'toolEdits',
   approveToolEdit: 'toolEdits',
   notice: 'notices',
+  filesWritten: 'notices',
   approvalDenied: 'notices',
   lmModels: 'languageModel',
   lmPrepare: 'languageModel',

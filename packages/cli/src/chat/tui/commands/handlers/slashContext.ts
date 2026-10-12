@@ -8,8 +8,11 @@ import { type TuiSession } from '@cli/chat/tui/state/sessionRunState';
 import { appendLocalNotice } from '@cli/chat/tui/state/transcript';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
-import type { SessionBackend } from '@texra/controllers/session/sessionBackend';
-import type { ProcessRuntime, ProcessServices } from '@texra-ai/harness';
+import type {
+  ProcessRuntime,
+  ProcessServices,
+  Session,
+} from '@texra-ai/harness';
 import type { PlatformSecrets } from '@texra-ai/harness';
 import type { Effect } from 'effect';
 
@@ -25,12 +28,12 @@ export type SlashCommandEffect = Effect.Effect<void, Error, ProcessServices>;
 export interface SlashCommandContext {
   readonly cliContext: CliContext;
   readonly session: TuiSession;
-  /** The chat's runtime session: the session commands read run state and land
-   *  requests on it, threaded from the chat entry point that opened it. */
+  /** The process session whose records `/status` reads (a run's offered
+   *  skills); records stay read here. */
   readonly runtimeSession: SessionHandle;
   /** Where run requests and resumes land: the chat's session, here or in
    *  the background service. */
-  readonly backend: SessionBackend;
+  readonly runSession: Session;
   /**
    * The process secret store and the three setting slots the account,
    * model-access and model-selection commands read, filled from the
@@ -49,7 +52,9 @@ export interface SlashCommandContext {
   readonly initialModel: string;
   readonly requestInputExit: () => void;
   readonly getApprovalPolicy: () => TexraApprovalPolicy;
-  readonly setApprovalPolicy: (policy: TexraApprovalPolicy) => void;
+  readonly setApprovalPolicy: (
+    policy: TexraApprovalPolicy,
+  ) => Effect.Effect<void>;
   /** Start a new task (`/clear`): false, with a notice, while a response
    *  is running. */
   readonly resetSession: () => boolean;

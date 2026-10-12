@@ -5,7 +5,6 @@ import { Cause, Effect, Option } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports
-import type { SessionHandle } from '@agent/runtime';
 import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
 import { safeExecuteCommand } from '@frontend/system/commandUtils';
 import { inputBox, quickPick } from '@frontend/ui/dialogs';
@@ -17,7 +16,7 @@ import {
 } from '@latex/arxivProcessor';
 import { resolveLatexFormatter } from '@latex/formatter/texFormatter';
 import { withLogChannel } from '@logger/effectLog';
-import type { ProcessServices } from '@texra-ai/harness';
+import type { ProcessServices, WorkspaceRoots } from '@texra-ai/harness';
 
 const CHANNEL = 'arXivCommands';
 
@@ -31,7 +30,7 @@ const CHANNEL = 'arXivCommands';
  * the value that `catch` clause bound, so the message is unchanged.
  */
 export function downloadArXivSource(
-  session: SessionHandle,
+  roots: WorkspaceRoots,
 ): Effect.Effect<void, never, ProcessServices> {
   return Effect.gen(function* () {
     const arxivId = yield* inputBox({
@@ -93,9 +92,9 @@ export function downloadArXivSource(
               {
                 progressCallback: (message, increment) =>
                   progress.report({ message, increment }),
-                workspaceRoot: session.roots.workspace ?? '',
+                workspaceRoot: roots.workspace ?? '',
                 formatter: autoIndent
-                  ? yield* resolveLatexFormatter(session.roots)
+                  ? yield* resolveLatexFormatter(roots)
                   : null,
                 autoIndent,
                 destination,

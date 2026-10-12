@@ -23,9 +23,10 @@ import {
   acceptsFollowUp,
   requestAnswerability,
   type FollowUpHost,
-  type RunView,
+  type RunView as FoldedRunView,
   type SessionView,
 } from '@shared/session/sessionView';
+import type { ReadonlyDeep } from '@shared/session/readonlyDeep';
 import { deliveredResponse } from '@shared/subagentFollowup';
 import { formatWorkflowCallFiles } from '@shared/transcript/workflowCall';
 import { assertNever, getBasename } from '@utils/core';
@@ -35,7 +36,7 @@ import {
   formatResultCount,
 } from '@utils/text/stringUtils';
 
-import type { ToolRow, TranscriptRow } from './transcriptRow';
+import type { ToolRow as FoldedToolRow, TranscriptRow } from './transcriptRow';
 
 /** What a card the run's end failed while it was open says: the call never
  *  settled, so nothing records how it ended. */
@@ -131,7 +132,7 @@ export interface ScriptStageView {
 }
 
 /** What a waiting run asks for, in one line. */
-function pendingRequestLine(payload: PermissionPayload): string {
+function pendingRequestLine(payload: ReadonlyDeep<PermissionPayload>): string {
   switch (payload.kind) {
     case 'bash':
       return `Wants bash: ${payload.data.command}`;
@@ -152,7 +153,10 @@ function pendingRequestLine(payload: PermissionPayload): string {
   }
 }
 
-type StageSession = Pick<SessionView, 'runs' | 'requests'>;
+/** The fold's values as a reader holds them (`Session.view`). */
+type RunView = ReadonlyDeep<FoldedRunView>;
+type ToolRow = ReadonlyDeep<FoldedToolRow>;
+type StageSession = Pick<ReadonlyDeep<SessionView>, 'runs' | 'requests'>;
 
 /** The run under `run` that is asking: itself, else the first descendant
  *  the fold marked, following `descendant` down. */
@@ -328,10 +332,10 @@ function stageSummary(
  * run). A child whose card (`parentCard`) sits under a script stage, awaited
  * or sent to the background, has its one home in that stage's rows.
  */
-export function dispatchedChildren(
-  run: RunView,
-  view: Pick<SessionView, 'runs'>,
-): RunView[] {
+export function dispatchedChildren<Run extends RunView>(
+  run: Run,
+  view: { readonly runs: ReadonlyMap<RunId, Run> },
+): Run[] {
   const { taskGroups, rows } = run.transcript;
   const stageIds = new Set(
     taskGroups
@@ -371,7 +375,7 @@ export function scriptStages(
   if (stages.length === 0) return [];
   const byStage = Map.groupBy(
     rows.filter(
-      (row: TranscriptRow): row is ToolRow =>
+      (row: ReadonlyDeep<TranscriptRow>): row is ToolRow =>
         row.kind === 'tool' && row.groupId !== undefined,
     ),
     (row) => row.groupId!,

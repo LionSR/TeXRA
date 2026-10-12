@@ -10,7 +10,6 @@ import * as vscode from 'vscode';
 import { Cause, Effect, Exit, Fiber } from 'effect';
 import { ModelError, completedTurn } from '@texra-ai/llm';
 
-import type { SessionHandle } from '@agent/runtime';
 import { emitAppSignal } from '@eventBus/AppSignals';
 import { signInWithSubscription } from '@frontend/auth/subscriptionSignIn';
 import { subscribeAppSignal } from '@frontend/events/appSignalSubscriptions';
@@ -52,6 +51,7 @@ import {
 } from './handlers/latexSettingsHandlers';
 import type { ProcessRuntime, ProcessServices } from '@texra-ai/harness';
 import type { PlatformSecrets, StateStore } from '@texra-ai/harness';
+import type { WorkspaceRoots } from '@texra-ai/harness';
 
 /** The webview shapes SettingsView dispatches for. */
 type SettingsWebview = vscode.WebviewView | vscode.WebviewPanel;
@@ -106,7 +106,7 @@ export class SettingsViewMessageHandler {
     private readonly globalState: StateStore,
     secrets: PlatformSecrets,
     private readonly runtime: ProcessRuntime,
-    private readonly session: SessionHandle,
+    roots: WorkspaceRoots,
     private readonly progressView: Pick<
       ProgressViewProvider,
       'refreshCatalogs' | 'refreshApiKeyStatus' | 'revealRun' | 'runLabel'
@@ -114,13 +114,10 @@ export class SettingsViewMessageHandler {
   ) {
     this.body = createSettingsViewBody({
       host: 'vscode',
-      session,
+      roots,
       secrets,
       resourcesPath: path.join(context.extensionPath, 'resources'),
-      skillDisplay: loadRuntimeSkillDisplay(
-        session.roots.workspace,
-        session.roots,
-      ),
+      skillDisplay: loadRuntimeSkillDisplay(roots.workspace, roots),
       accountCopy: ACCOUNT_OUTCOME,
       bindings: {
         post: (message) =>
@@ -172,7 +169,7 @@ export class SettingsViewMessageHandler {
         refreshCredentialStatus: progressView.refreshApiKeyStatus,
         signInSubscription: (providerId) =>
           Effect.asVoid(
-            signInWithSubscription(session.roots, this.channel, providerId),
+            signInWithSubscription(roots, this.channel, providerId),
           ),
         revealRun: (runId) => progressView.revealRun(runId),
         runLabel: (runId) => progressView.runLabel(runId),
@@ -194,7 +191,7 @@ export class SettingsViewMessageHandler {
             terminal.sendText(command);
           }),
         latexEditorStatus,
-        requiresOpenWorkspace: () => !session.roots.workspace,
+        requiresOpenWorkspace: () => !roots.workspace,
       },
     });
     this.handlerRegistry = this.createHandlerRegistry(context);

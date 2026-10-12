@@ -4,7 +4,6 @@ import {
   LoopbackTransportUnavailableError,
   type SubscriptionDeviceCodePrompt,
 } from '@texra-ai/llm/node';
-import type { SessionHandle } from '@agent/runtime';
 import { onAppSignal } from '@eventBus/AppSignals';
 import { withLogChannel } from '@logger/effectLog';
 import type { StorageFs } from '@platform/rootedFs';
@@ -27,7 +26,7 @@ import { gitHubTokenRejectedMessage } from '@texra/tools/github/githubAuth';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { parsedRoute, type DesktopCommandRoute } from './desktopIpcTypes.js';
 import type { ProcessServices } from '@texra-ai/harness';
-import type { PlatformSecrets } from '@texra-ai/harness';
+import type { PlatformSecrets, WorkspaceRoots } from '@texra-ai/harness';
 import type { DesktopSpawn } from './desktopWindows.js';
 
 const NO_EXTENSION_HOSTING =
@@ -55,9 +54,9 @@ export interface DesktopSettingsIpcOptions {
       productName: string,
     ): Effect.Effect<void, Error>;
   };
-  /** The session of the project this settings surface serves. The desktop has
-   *  no process-default session, so it must be passed. */
-  readonly session: SessionHandle;
+  /** The roots of the project this settings surface serves. The desktop has
+   *  no process-default roots, so they must be passed. */
+  readonly roots: WorkspaceRoots;
   readonly secrets: PlatformSecrets;
   /** Root of the packaged resources tree, which holds the agent templates. */
   readonly resourcesPath: string;
@@ -162,7 +161,7 @@ export function createDesktopSettingsIpc(
             ),
         },
       });
-      yield* provider.setPreferSubscription(options.session.roots, true);
+      yield* provider.setPreferSubscription(options.roots, true);
       yield* bindings.notify.showInfoMessage(
         ACCOUNT_OUTCOME.signedInAs(displayName, account.label),
       );
@@ -173,12 +172,12 @@ export function createDesktopSettingsIpc(
     host: 'desktop',
     // The approval policy is the project's persisted setting: the write
     // is the change, which this session and the service both read.
-    session: { roots: options.session.roots },
+    roots: options.roots,
     secrets: options.secrets,
     resourcesPath: options.resourcesPath,
     skillDisplay: loadRuntimeSkillDisplay(
-      options.session.roots.workspace,
-      options.session.roots,
+      options.roots.workspace,
+      options.roots,
     ),
     accountCopy: ACCOUNT_OUTCOME,
     bindings: {

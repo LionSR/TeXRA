@@ -7,7 +7,6 @@
 // `./hookProtocol`.
 
 // Node imports
-import { hash } from 'node:crypto';
 import * as os from 'node:os';
 import * as path from 'node:path';
 
@@ -18,6 +17,7 @@ import which from 'which';
 
 // Local imports - utilities
 import { toErrorMessage } from '@utils/errors/errorMessage';
+import { sha256Hex } from '@utils/core/idHash';
 import { isPathWithin } from '@utils/core/pathCore';
 import { absentReason } from '@utils/files/fsEntryExists';
 
@@ -216,7 +216,7 @@ export const pinHook = Effect.fn('pluginHooks.pin')(
         path: real ?? word,
         sha256:
           info?.type === 'File' && real !== undefined
-            ? hash('sha256', yield* fs.readFile(real), 'hex')
+            ? sha256Hex(yield* fs.readFile(real))
             : null,
       });
     }

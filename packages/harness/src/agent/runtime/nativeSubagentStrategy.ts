@@ -49,8 +49,8 @@ export interface ChildRunLaunchOptions {
    * resumed child is held to its own record.
    */
   readonly parentOffered?: readonly OfferedTool[];
-  /** Fires with the resolved child run id — the caller inherits approvals onto it. */
-  readonly onRunResolved?: (runId: RunId) => void;
+  /** The child's admission (`ExecuteAgentOptions.onAdmitted`). */
+  readonly onAdmitted?: ExecuteAgentOptions['onAdmitted'];
 }
 
 interface NativeSubagentStrategyBase extends ChildRunLaunchOptions {
@@ -96,20 +96,22 @@ export function createNativeSubagentStrategy(
   let cachedBuilt: SubagentResultMeta | undefined;
   let cachedDelivery: string | undefined;
 
+  // Adopt `turn` as the latest result and drop the caches derived from the
+  // prior one: the next build/delivery recomputes from this turn. Every point
+  // that advances the turn must clear both caches together, so they live here
+  // once rather than at each site.
+  const recordTurn = (turn: RunEndResult | undefined): void => {
+    lastResult = turn;
+    cachedBuilt = undefined;
+    cachedDelivery = undefined;
+  };
+
   const runNative = Effect.fn('nativeSubagent.runTurn')(function* (
     call: Effect.Effect<RunEndResult, Error, AgentRunServices>,
   ) {
-    lastResult = undefined;
-    cachedBuilt = undefined;
-    cachedDelivery = undefined;
+    recordTurn(undefined);
     return yield* call.pipe(
-      Effect.tap((result) =>
-        Effect.sync(() => {
-          lastResult = result;
-          cachedBuilt = undefined;
-          cachedDelivery = undefined;
-        }),
-      ),
+      Effect.tap((result) => Effect.sync(() => recordTurn(result))),
     );
   });
 
@@ -150,22 +152,18 @@ export function createNativeSubagentStrategy(
             ...params.resume?.options,
             session: params.session,
             parentOffered: params.parentOffered,
-            onRunResolved: params.onRunResolved,
+            onAdmitted: params.onAdmitted,
             onProgress: (update) => ports.notify(update),
             turns: {
               turnPermit: turns.turnPermit,
               settleBoundary: (turn: RunEndResult) =>
                 Effect.suspend(() => {
-                  lastResult = turn;
-                  cachedBuilt = undefined;
-                  cachedDelivery = undefined;
+                  recordTurn(turn);
                   return turns.settleBoundary(turn);
                 }),
               settleEnd: (turn: RunEndResult) =>
                 Effect.suspend(() => {
-                  lastResult = turn;
-                  cachedBuilt = undefined;
-                  cachedDelivery = undefined;
+                  recordTurn(turn);
                   return turns.settleEnd(turn);
                 }),
             },

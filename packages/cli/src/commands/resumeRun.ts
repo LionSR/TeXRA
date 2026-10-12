@@ -10,6 +10,7 @@ import {
   isDocumentTaskConfig,
   type RunId,
 } from '@shared/schemas';
+import { texraApprovalPolicyLabel } from '@shared/approvalPolicy';
 import { runHeldByProcessMessage } from '@shared/runs/runStatusDisplay';
 import { ensureError } from '@utils/errors/errorMessage';
 import { pathExists } from '@utils/files/fsDurability';
@@ -171,6 +172,14 @@ export function runResumeCommand(
       writeTextStderr(runHeldByProcessMessage(id, refusal.owner));
       return CliExitCode.Usage;
     }
+
+    // A resumed task continues under the approval it was launched with: a
+    // requested policy is said not to apply, never dropped silently. A
+    // chat's new rounds take it.
+    if (context.requestedApprovalPolicy !== undefined)
+      writeTextStderr(
+        `The requested approval policy (${texraApprovalPolicyLabel(context.requestedApprovalPolicy)}) does not change task ${id}: it resumes under the approval it was launched with${documentTask ? '' : "; the chat's new messages take it"}.`,
+      );
 
     // A chat resume reopens the interactive TUI, so headless callers are
     // rejected before resume-state loading. A document task resumes headless

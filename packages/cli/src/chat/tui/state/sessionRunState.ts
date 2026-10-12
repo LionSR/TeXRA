@@ -3,13 +3,11 @@ import { computed, signal } from '@lit-labs/signals';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import { RUN_PHASE, type RunPhase, type RunId } from '@shared/schemas';
 import { isActivePhase } from '@shared/runs/runStatus';
-import type { SessionBackend } from '@texra/controllers/session/sessionBackend';
+import { isLiveRun } from '@shared/session/sessionView';
 
 import { registerCliStateResetHook } from './cliState';
 import { runPhaseOf, runViewOf, sessionView } from './sessionView';
 import type { Effect } from 'effect';
-
-type RunControlsOf = SessionBackend['controls'];
 
 /**
  * The claimed root run's settlement, as the slot holds it: the program that
@@ -64,10 +62,7 @@ export const runStopFacts = computed((): ChatTuiRunStopFacts => {
 export class TuiSession {
   /** A new session starts with no claim. `runsElsewhere`: its runs run in
    *  the background service, so leaving the chat never ends one. */
-  constructor(
-    private readonly runControlsOf: RunControlsOf,
-    private readonly runsElsewhere = false,
-  ) {
+  constructor(private readonly runsElsewhere = false) {
     rootRunClaim.set(NO_CLAIM);
   }
 
@@ -148,18 +143,18 @@ export class TuiSession {
     return runStopFacts.get().status;
   }
 
-  /** The claimed run's live controls, while its loop runs. */
-  activeRunControls(): ReturnType<RunControlsOf> {
-    const { runId } = this;
-    return runId ? this.runControlsOf(runId) : undefined;
+  /** Whether the claimed run is live, as the session view folds it: what
+   *  a model switch reaches. */
+  runLive(): boolean {
+    const run = runViewOf(sessionView().get(), this.runId);
+    return run !== undefined && isLiveRun(run);
   }
 
   /** Model selection is open with no pending run, or at a tool-use wait. */
   canSelectModel(): boolean {
     return (
       chatTuiCanStartRootRun(this) ||
-      (this.status() === RUN_PHASE.WAITING &&
-        this.activeRunControls() !== undefined)
+      (this.status() === RUN_PHASE.WAITING && this.runLive())
     );
   }
 
@@ -185,7 +180,7 @@ export class TuiSession {
       this.runId !== undefined &&
       chatTuiRunPending(this) &&
       !this.canStopVisibleRun() &&
-      this.activeRunControls() !== undefined
+      this.runLive()
     );
   }
 }

@@ -5,9 +5,9 @@
  * here derives topology.
  */
 import { RUN_PHASE, type RunPhase, type RunId } from '@shared/schemas';
-import type { SessionView } from '@shared/session/sessionView';
 import { formatCompactDuration } from '@utils/text/stringUtils';
 import { runViewOf } from './sessionView';
+import type { SessionView } from '@texra-ai/harness';
 
 /**
  * How long a running child has been at it, formatted: the caller selects the
