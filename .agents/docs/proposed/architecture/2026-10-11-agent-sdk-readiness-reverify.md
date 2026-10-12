@@ -74,7 +74,7 @@ services-bag, no re-export shim, no per-provider handler class.**
 Concretely, each apparent "collapsible" abstraction is protected by a named
 guardrail, which is why it stays:
 
-- **Agent core** (`packages/harness/src/agent/`, ~31k LOC, bulk in `runtime/`).
+- **Agent core** (`packages/harness/src/agent/`, ~29k LOC, bulk in `runtime/`).
   The barrels (`runtime/index.ts`, `followUp/`, `trace/`, `storage/`,
   `index/`) are the documented host-boundary doors recorded in
   `harness-deep-import-baseline.json`; deleting one would *widen* that baseline.
@@ -95,8 +95,10 @@ guardrail, which is why it stays:
   `switch (protocol)` over dynamic imports of
   data-only protocol arms + a compiler-exhaustive `CONFIGURE` table;
   providers are the `MODEL_PROVIDER_PLUGINS` data manifest. `grep "export
-  class"` across `packages/llm/src` returns only error and generic-OAuth
-  types — **zero per-provider handler classes**. The codex/xai OAuth dirs are
+  class"` across `packages/llm/src` returns only error types
+  (`Data.TaggedError`) plus generic OAuth/concurrency machinery
+  (`SubscriptionOAuthCoordinator`, `SharedAttempt`, `SerializedWrites`) —
+  **zero per-provider handler classes**. The codex/xai OAuth dirs are
   ~50-line policy-data modules over one generic `SubscriptionOAuthCoordinator`.
   The few single-caller helpers (`helperRequest`, `subscriptionCredential`)
   carry real branching logic and keep the `bind` closure under the
