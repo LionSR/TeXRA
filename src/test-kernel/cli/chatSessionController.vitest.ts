@@ -72,7 +72,7 @@ vi.mock('@cli/chat/tui/state/transcript', () => ({
   reportRequestDefect: mocks.reportRequestDefect,
 }));
 
-import { describeFollowUpFailure } from '@agent/followUp';
+import { describeFollowUpFailure } from '@agent/followUp/ToolUseFollowUp';
 import { registryOf } from '@agent/runtime/runRegistry';
 import type { RootLaunch } from '@agent/runtime/runs';
 import type {

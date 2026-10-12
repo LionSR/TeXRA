@@ -92,7 +92,7 @@ export type TransactionPart = Effect.Effect<
  * prompt's, so a re-execution after a crash is judged a replay, else the
  * `child.turn` key (run, attempt, turn index), distinct across attempts.
  */
-export function settlementOf(params: {
+export function childSettlementOf(params: {
   readonly runId: RunId;
   readonly turn: AttemptKey;
   readonly message: string;
