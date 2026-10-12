@@ -41,6 +41,7 @@ import {
 } from '@texra/shared/session/hostSnapshot';
 import { serviceSession } from '@texra/controllers/server/serviceSession';
 import type { ServiceLink } from '@texra/controllers/server/client';
+import { sessionStoreMovedAsideMessage } from '@ui/copy/sessionStore';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { withPerKeyLane, type PerKeyLane } from '@utils/core/perKeyQueue';
 import { absentReason } from '@utils/files/fsEntryExists';
@@ -248,7 +249,11 @@ function openProjectSession(
         root,
         service,
         session: yield* serviceSession(service, root, roots),
-        present: new SessionHostInteractions(),
+        // Disposed with the project, its window's attachment with it.
+        present: yield* Effect.acquireRelease(
+          Effect.sync(() => new SessionHostInteractions()),
+          (present) => present.dispose(),
+        ),
       };
     // The no-workspace session's runs, and every run without a service, run
     // here.
@@ -259,6 +264,12 @@ function openProjectSession(
       // artifacts flushed, its entry released.
       (opened) => Effect.asVoid(owner.close(opened.roots.storage)),
     );
+    // A store moved aside at open (pre-1.0 or corrupt) is said once, as the
+    // extension and the CLI say it.
+    if (handle.log.movedAside)
+      void showDesktopWarningDialog(
+        sessionStoreMovedAsideMessage(handle.log.movedAside),
+      );
     return {
       ...facts,
       root,

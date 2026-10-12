@@ -141,6 +141,12 @@ export function createDesktopHostRequests(
 ): DesktopHostRequests {
   const { project, host, run, runtime } = options;
   const { roots } = project;
+  /** Where the window reads its runs' records: its own session, or the
+   *  service's, bound once. */
+  const records =
+    project.handle !== undefined
+      ? { handle: project.handle, remote: undefined }
+      : { remote: serviceRecords(project.service, project.root) };
   /** The rooted filesystems of this window's paper, built once from the
    *  roots its session holds for its lifetime, never from an ambient store. */
   const sessionFiles = sessionFsLayer(roots);
@@ -158,12 +164,11 @@ export function createDesktopHostRequests(
   const runActions = runtime.runSync(
     createHostRunActions({
       ...run, // this window's launcher and output opener
-      ...(project.handle !== undefined
-        ? localRunActionPorts(project.handle)
+      ...(records.remote === undefined
+        ? localRunActionPorts(records.handle)
         : {
             roots,
-            readConfig: serviceRecords(project.service, project.root)
-              .readConfig,
+            readConfig: records.remote.readConfig,
             present: project.present,
           }),
       session: project.session,
@@ -323,13 +328,11 @@ export function createDesktopHostRequests(
           return new Controller({
             roots,
             records:
-              project.handle !== undefined
-                ? localExportRecords(project.handle)
+              records.remote === undefined
+                ? localExportRecords(records.handle)
                 : {
-                    input: serviceRecords(project.service, project.root)
-                      .exportInput,
-                    trace: serviceRecords(project.service, project.root)
-                      .exportTrace,
+                    input: records.remote.exportInput,
+                    trace: records.remote.exportTrace,
                   },
             latexPreamble,
           });
