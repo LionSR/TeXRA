@@ -326,8 +326,8 @@ happens without reading the code. The table is in the header of
 - **S4** A write fails (`DatabaseWriteFailed`): the batch rolled back and
   the call fails. Inside a run, the run ends, whatever the tool or model
   call that met it did with it.
-- **S5** The claim is not this process's (`DatabaseNotOwner`, or a
-  `DatabaseClaimRefused` cause): nothing was written. A run that loses its own
+- **S5** The claim is not this process's (`DatabaseNotOwner` or
+  `DatabaseClaimRefused`, both typed): nothing was written. A run that loses its own
   claim stops, with no retry. When another process holds the run, every
   caller refuses the same way (`heldElsewhereBy`): a resume or follow-up
   answers `owned_elsewhere`, a request `NotOwner`.

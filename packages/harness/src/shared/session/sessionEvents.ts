@@ -20,6 +20,7 @@ import type {
   SessionEventDraft,
 } from '@shared/schemas';
 import type {
+  DatabaseClaimError,
   DatabaseNotOwner,
   DatabaseReadFailed,
   DatabaseWriteFailed,
@@ -193,7 +194,7 @@ export class SessionEvents extends Context.Service<
       expectedStartCommit: CommitOrdinal,
     ) => Effect.Effect<
       readonly SessionEvent[],
-      DatabaseReadFailed | DatabaseWriteFailed
+      DatabaseReadFailed | DatabaseClaimError
     >;
     /** Close the plane: end the inbox and run what it holds, inside the
      *  one close deadline (`SESSION_CLOSE_DEADLINE_MS`). At the deadline

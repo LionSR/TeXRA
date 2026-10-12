@@ -39,6 +39,7 @@ import type {
 } from '@shared/schemas';
 import type {
   AggregateClaim,
+  DatabaseClaimError,
   DatabaseNotOwner,
   DatabaseReadFailed,
   DatabaseWriteFailed,
@@ -68,7 +69,7 @@ import type { RunsShape } from './runs';
 export type LogWriteError = DatabaseNotOwner | DatabaseWriteFailed;
 
 /** A claim the store would not give this process. */
-type ClaimError = DatabaseNotOwner | DatabaseReadFailed | DatabaseWriteFailed;
+type ClaimError = DatabaseReadFailed | DatabaseClaimError;
 
 /** What one transaction's job holds: the ordered append (each in this
  *  transaction's order), a registration's claim take-over, and what runs
@@ -93,10 +94,9 @@ export interface SessionTransaction {
 export interface SessionLog {
   /**
    * One transaction, run as the next job of the session's publisher and
-   * returned once the view has folded what it committed: a batch of rows,
-   * or a job that reads committed rows and appends what depends on them
-   * with no other write between. A refusal wrote nothing and comes back
-   * typed; it is never retried here.
+   * returned once the view has folded what it committed: a batch of rows, or
+   * a job that reads committed rows and appends what depends on them with no
+   * other write between. A refusal wrote nothing, comes back typed, never retried.
    */
   transact(
     events: readonly UnfoldedDraft[],

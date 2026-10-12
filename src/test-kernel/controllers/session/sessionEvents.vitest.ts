@@ -2787,9 +2787,7 @@ describe('the C1 event table and the C6 publisher', () => {
                 first.prepareRunRemoval(root, 'bulk', initial[0]!.commit),
               ),
             ),
-          ).toMatchObject({
-            _tag: 'DatabaseWriteFailed',
-          });
+          ).toMatchObject({ _tag: 'DatabaseClaimRefused' });
           expect(yield* first.readAll(0)).toEqual(initial);
           yield* second.releaseClaims([inquiry]);
         }).pipe(Effect.provide(substrate(storage, OTHER)));
@@ -3081,7 +3079,7 @@ describe('the C1 event table and the C6 publisher', () => {
             closed: false,
           });
           expect((yield* Effect.flip(second.acquireClaims(targets)))._tag).toBe(
-            'DatabaseWriteFailed',
+            'DatabaseClaimRefused',
           );
           yield* second.releaseClaims(targets);
           expect(
@@ -3126,8 +3124,8 @@ describe('the C1 event table and the C6 publisher', () => {
                 ),
               ),
             ).toMatchObject({
-              _tag: 'DatabaseWriteFailed',
-              cause: { _tag: 'DatabaseClaimRefused', verdict: 'unprovable' },
+              _tag: 'DatabaseClaimRefused',
+              verdict: 'unprovable',
             });
           }
           expect((yield* first.aggregateState([otherRoot]))[0]?.closed).toBe(
