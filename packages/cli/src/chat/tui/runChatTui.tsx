@@ -378,7 +378,9 @@ export async function runChat(
   const setApprovalPolicy = (
     policy: TexraApprovalPolicy,
   ): Effect.Effect<void> => {
-    const leaving = getApprovalPolicy() === 'yolo' && policy !== 'yolo';
+    // What the chat asked for, not the effective policy: a yolo under a
+    // Block project left a grant that a later Ask project would honour.
+    const leaving = chatPolicy === 'yolo' && policy !== 'yolo';
     chatPolicy = policy;
     patchSessionMeta({ approvalPolicy: getApprovalPolicy() });
     const run = runViewOf(currentView(), session.runId ?? rootRunId.get());
