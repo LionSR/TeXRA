@@ -11,7 +11,7 @@ which is now deleted; version control keeps it, per `.agents/docs/README.md`.
 
 Pin: verified against branch `claude/eager-noether-5nwuta` at `8a58597`
 (#13922). The 2026-10-04 pass's pin, `ae953c3`, is an ancestor — 192 commits
-back (`git rev-list --count ae953c3..HEAD`); it only looks unreachable from a
+back (`git rev-list --count ae953c3..8a58597`); it only looks unreachable from a
 shallow clone, which needs deepening first (`git fetch --deepen`). This pass
 re-verifies the current tree and reads that range for the delta.
 
@@ -19,7 +19,7 @@ re-verifies the current tree and reads that range for the delta.
 
 The 2026-10-04 pass closed with "re-running this audit as a routine will again
 add no signal until the harness program moves." It has moved. The whole
-precondition that pass named is now met, and the delta over `ae953c3..HEAD` is
+precondition that pass named is now met, and the delta over `ae953c3..8a58597` is
 the harness-package-split and durable-harness program landing in the tree:
 
 - **The package split landed.** `packages/agent` / `@texra-ai/agent` is gone;
@@ -202,16 +202,27 @@ added indirection tiers.
    Low priority; file into `2026-09-20-llm-package-hardening.md` only if the
    relocation is ever wanted.
 
-4. **The surface error vocabulary grew from six to eight and stayed
-   consistent — no reconcile needed.** The 2026-10-04 pass applied a six-error
-   reconcile across `errors.ts` and the README. At this pin the package defines
-   **six** tagged errors (`PluginsRefused`, `SessionOptionsConflict`,
-   `AgentNotFound`, `ToolsRefused`, `ResumeRefused`, `RunFailure`) plus **two**
-   re-exported store errors (`DatabaseOpenFailed`, `DatabaseReadFailed`, the
-   `SessionOpenError` union) — **eight** on the surface. Both the `errors.ts`
-   header comment and the README §Effect state eight, with the same six-from-the-
-   package breakdown. The reconcile held through the growth; nothing to fix this
-   pass.
+4. **The lifecycle+store error vocabulary grew from six to eight and stayed
+   consistent; it is not the whole tagged-error surface.** The 2026-10-04 pass
+   applied a six-error reconcile across `errors.ts` and the README. At this pin
+   the package defines **six** lifecycle tagged errors (`PluginsRefused`,
+   `SessionOptionsConflict`, `AgentNotFound`, `ToolsRefused`, `ResumeRefused`,
+   `RunFailure`) plus **two** re-exported store errors (`DatabaseOpenFailed`,
+   `DatabaseReadFailed`, the `SessionOpenError` union) — **eight**, which both the
+   `errors.ts` header comment and the README §Effect state with the same
+   breakdown. That reconcile held through the growth. The eight is **not** the
+   total count of `Data.TaggedError` classes the root entry exports, though: the
+   root also re-exports the `RequestError` union as values (`NotOwner`,
+   `Unavailable`, `Cancelled`, `Rejected`, `Internal`) and the platform error
+   classes (`ConfigWriteFailed`, `StateReadFailed`, `StateWriteFailed`,
+   `AgentDirectoriesFailed`), for seventeen tagged-error classes in all. These
+   are separately documented categories (the request vocabulary every TeXRA host
+   reads; the platform-port write failures), not a second launch-error
+   vocabulary — so the eight is the lifecycle+store count, correctly, but the
+   "eight … in all" phrasing in `errors.ts`/README is scoped to those two
+   families and reads as a total it is not. Pre-existing wording this PR did not
+   introduce; a one-line clarification there is a cheap owner-level follow-up,
+   not a reconcile this pass owns.
 
 ## Marginal cleanups (tech-debt-tier)
 
@@ -244,14 +255,23 @@ added indirection tiers.
 level is a distinct `Effect.scoped`/`acquireRelease` region whose nesting order
 is load-bearing for finalizer-before-release ordering.
 
-## Refuted set unchanged except mechanical re-pins
+## Refuted set: one refusal landed on new evidence, the rest re-pinned
 
 `config/ratchets/refuted-candidates.json` is still the authoritative refused
-set. Over this range it changed only mechanically: the split moved the files, so
-the symbol paths were re-pinned from `packages/agent/src/...` to
-`packages/harness/src/...` (e.g. `ModelRetryGate.ts`, `perKeyQueue.ts`,
-`interfaces.ts`, `jsonConfigProvider.ts`). No retained refusal was reversed, so
-none bears on this verdict.
+set. Over this range it changed two ways. Most entries changed only
+mechanically: the split moved the files, so the symbol paths were re-pinned from
+`packages/agent/src/...` to `packages/harness/src/...` (e.g. `ModelRetryGate.ts`,
+`perKeyQueue.ts`, `interfaces.ts`, `jsonConfigProvider.ts`). But **one refusal
+was reversed on new evidence, the legal retirement path** (the file's own
+semantics): `SCOPE-held-sessions-as-effects` (candidate: "current/held as
+Effects, deleting `HeldSessions`") is gone, retired in #13825 — the commit that
+deleted `HeldSessions` and moved session ownership onto `SessionMap` with
+effectful owner methods (`controllers/session/sessionLayer.ts`), the exact
+refactor that entry had refused. So the earlier "stay ruled 2026-09-20" ruling
+was superseded by the composition-root rework, not left standing. This does not
+bear on the audit *verdict* — the landed change is a consolidation consistent
+with alignment improving — but the delta is a reversal, not only re-pins. No
+*other* retained refusal was reversed.
 
 ## Genuinely open (carried, still human-owned)
 
