@@ -66,6 +66,7 @@ export const undiciFetchThrough = (
   init?: RequestInit,
 ): Promise<Response> =>
   undiciFetch(
+    // cast: undici's input type is the DOM's `Request` by another name.
     input as Parameters<typeof undiciFetch>[0],
     {
       ...init,
