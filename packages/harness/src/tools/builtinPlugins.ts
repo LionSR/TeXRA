@@ -8,7 +8,6 @@
 
 // Local imports
 import type { CodeSandbox } from '@agent/codeSandbox/codeSandbox';
-import type { ToolServices } from '@agent/runtime/ToolServices';
 import { AGENT_TOOL_NAME } from '@shared/constants/delegationTools';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import type { CanonicalToolDisplayName } from '@shared/tools/toolKind';
@@ -24,11 +23,7 @@ import { GrepTool } from '@tools/grep';
 import { MemoryTool } from '@tools/memory/MemoryTool';
 import { memoryPromptSection } from '@tools/memory/memoryPromptSection';
 import { PlanTool } from '@tools/plan/PlanTool';
-import {
-  definePlugin,
-  type PluginDefinition,
-  type Plugin,
-} from '@tools/plugins';
+import { defineBuiltinPlugin, type Plugin } from '@tools/plugins';
 import { ReadFileTool } from '@tools/ReadTool';
 import { ALWAYS_AVAILABLE } from '@tools/toolProbes';
 import { WebFetchTool } from '@tools/web/WebFetchTool';
@@ -51,9 +46,7 @@ const SCRIPT_TOOLS = { script: ScriptTool };
  * call's place in its run (`RunCall`) and its script, which the run loop
  * provides to every call and no app's tool may require.
  */
-const builtin: <ROut = never>(
-  plugin: PluginDefinition<ROut, ToolServices>,
-) => Plugin = definePlugin;
+const builtin = defineBuiltinPlugin;
 
 /**
  * Compile-time guard: every canonical tool with specialized display
