@@ -22,10 +22,6 @@ import {
 } from '@agent/runtime';
 import { getCatalogAgent, refresh } from '@agent/index';
 import { BundledViewContentProvider } from '@common/webview';
-import {
-  EXTENSION_CATEGORIES,
-  getFilterExtensions,
-} from '@texra/common/files/fileTypeUtils';
 import { emitAppSignal } from '@eventBus/AppSignals';
 import { subscribeAppSignal } from '@frontend/events/appSignalSubscriptions';
 import { VscodeToolEditApprovalHost } from '@frontend/approval/VscodeToolEditApprovalHost';
@@ -39,6 +35,10 @@ import {
   getFirstRunDone,
   setOnboardingDeclined,
 } from '@shared/state/onboardingState';
+import {
+  EXTENSION_CATEGORIES,
+  getFilterExtensions,
+} from '@texra/common/files/fileTypeUtils';
 import {
   PdfOpenFailed,
   type EditorCapabilities,
