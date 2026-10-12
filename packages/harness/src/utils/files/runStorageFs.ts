@@ -1,26 +1,23 @@
+// Node imports
 import * as path from 'node:path';
 
-import { Effect, FileSystem, Path, PlatformError, type Scope } from 'effect';
+// Third-party imports
+import { Effect, FileSystem, Path, PlatformError } from 'effect';
 
+// Local imports
 import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
 import { withLogChannel } from '@logger/effectLog';
-import { StorageFs, WorkspaceFs, withSessionFs } from '@platform/rootedFs';
-import type { WorkspaceRoots } from '@platform/workspaceRoots';
+import { StorageFs, WorkspaceFs } from '@platform/rootedFs';
 import {
   RunIdSchema,
   type RunId,
   type RunStorageFileLocation,
 } from '@shared/schemas';
-import { Rejected, type RequestError } from '@shared/session/requestErrors';
-import type {
-  Outcome,
-  RunFilesResult,
-  RuntimeRequest,
-} from '@shared/session/runtimeRequest';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { normalizeFilePath } from '@utils/core';
 import { getPathSegments, isPathWithin } from '@utils/core/pathCore';
 
+// Local file imports
 import { createRunStorageLocation } from './fileLocation';
 import { copyDereferenced } from './fsDurability';
 import { entryExists, entryTypeIn } from './fsEntryExists';
@@ -314,86 +311,37 @@ export function shouldSkipRelocation(relativePath: string): boolean {
   return segments.length > 0 && IGNORED_WORKSPACE_ROOTS.has(segments[0]);
 }
 
-/*
- * The `run.files` request: a stopped run's directory copied into the
- * workspace or removed, by the process whose session holds the run. The run
- * is held for the operation (`runs.launch({ hold })`), which takes its claim
- * and refuses a run live here, so a resume never starts under it; the claim
- * is never taken on another process's behalf. What the copy is for, and
- * where it goes, is the requesting app's.
+/**
+ * Copy a stopped run's directory to the workspace path `to`, or remove it;
+ * `false` when the run has no directory. Symlinks are dereferenced so a copy
+ * stands alone, and a copy onto an existing folder fails rather than merging
+ * into it.
  */
-
-/** What a `run.files` request reads from the process: its files. */
-export type RunFilesServices = FileSystem.FileSystem | Path.Path;
-
-type RunFilesRequest = Extract<RuntimeRequest, { kind: 'run.files' }>;
-
-/** Copy the run's directory to `to`, or remove it, as its result. */
-const copyOrRemove = Effect.fn('runFiles.copyOrRemove')(function* (
-  req: RunFilesRequest,
-) {
-  const storageFs = yield* StorageFs;
-  const runDir = resolveRunStoragePath(req.runId);
-  if (!(yield* storageFs.exists(runDir))) {
-    yield* Effect.logWarning(`Run directory not found for run ${req.runId}`);
-    return { status: 'noFiles' } satisfies RunFilesResult;
-  }
-  if (req.files.op === 'remove') {
-    yield* Effect.logInfo(`Removing the run directory ${runDir}`);
-    yield* storageFs.remove(runDir, { recursive: true, force: true });
-    return { status: 'done' } satisfies RunFilesResult;
-  }
-  const { to } = req.files;
-  const workspaceFs = yield* WorkspaceFs;
-  const source = yield* storageFs.resolve(runDir);
-  const destination = yield* workspaceFs.resolve(to);
-  yield* workspaceFs.makeDirectory((yield* Path.Path).dirname(to), {
-    recursive: true,
-  });
-  // Symlinks are dereferenced so the copy stands alone; it fails on an
-  // existing folder rather than merging into an earlier copy.
-  yield* copyDereferenced(source, destination);
-  yield* Effect.logInfo(`Copied ${source} -> ${destination}`);
-  return { status: 'done', to } satisfies RunFilesResult;
-});
-
-/** Answer `req` on `session`, with the run held for the operation. */
-export const runFiles = (
-  session: {
-    readonly roots: WorkspaceRoots;
-    readonly runs: {
-      readonly launch: (spec: {
-        readonly hold: RunId;
-      }) => Effect.Effect<void, Error, Scope.Scope>;
-    };
+export const copyOrRemoveRunDir = Effect.fn('runStorage.copyOrRemoveRunDir')(
+  function* (
+    runId: RunId,
+    files:
+      { readonly op: 'copy'; readonly to: string } | { readonly op: 'remove' },
+  ) {
+    const storageFs = yield* StorageFs;
+    const runDir = resolveRunStoragePath(runId);
+    if (!(yield* storageFs.exists(runDir))) {
+      yield* Effect.logWarning(`Run directory not found for run ${runId}`);
+      return false;
+    }
+    if (files.op === 'remove') {
+      yield* Effect.logInfo(`Removing the run directory ${runDir}`);
+      yield* storageFs.remove(runDir, { recursive: true, force: true });
+      return true;
+    }
+    const workspaceFs = yield* WorkspaceFs;
+    const source = yield* storageFs.resolve(runDir);
+    const destination = yield* workspaceFs.resolve(files.to);
+    yield* workspaceFs.makeDirectory((yield* Path.Path).dirname(files.to), {
+      recursive: true,
+    });
+    yield* copyDereferenced(source, destination);
+    yield* Effect.logInfo(`Copied ${source} -> ${destination}`);
+    return true;
   },
-  req: RunFilesRequest,
-): Effect.Effect<Outcome, RequestError, RunFilesServices> =>
-  session.runs.launch({ hold: req.runId }).pipe(
-    Effect.mapError((cause) =>
-      cause instanceof Rejected
-        ? cause
-        : new Rejected({
-            reason: `This run is running or held elsewhere: ${toErrorMessage(cause)}`,
-          }),
-    ),
-    Effect.andThen(
-      copyOrRemove(req).pipe(
-        Effect.catch((error) =>
-          Effect.logError(
-            `The ${req.files.op} of run ${req.runId} failed`,
-          ).pipe(
-            Effect.annotateLogs({ data: error }),
-            Effect.as<RunFilesResult>({
-              status: 'error',
-              error: toErrorMessage(error),
-            }),
-          ),
-        ),
-      ),
-    ),
-    Effect.map((result): Outcome => ({ kind: 'runFiles', result })),
-    Effect.scoped,
-    (program) => withSessionFs(session.roots, program),
-    withLogChannel(CHANNEL),
-  );
+);
