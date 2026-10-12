@@ -23,6 +23,7 @@ import {
   type RuntimePresentationEventPayloads,
   type ValidatedRunRequest,
 } from '@agent/runtime';
+import { emitAppSignal } from '@eventBus/AppSignals';
 import type { RequestOpenFilePayload, RunId } from '@shared/schemas';
 import { ToolEditApprovalController } from '@texra/controllers/approval/ToolEditApprovalController';
 import { attachSessionHost } from '@texra/controllers/session/attachSessionHost';
@@ -189,6 +190,12 @@ export const createDesktopAgentRun = Effect.fn('desktop.createAgentRun')(
         project.root,
         {
           emit: handlePresentationEvent,
+          // What a service task wrote, told here as a task here tells it:
+          // the file tree follows it.
+          filesWritten: (absolutePaths) =>
+            emitAppSignal('workspaceFilesWritten', {
+              absolutePaths: [...absolutePaths],
+            }),
           toolEdits: {
             stage: (staging) =>
               withProcessServices(
