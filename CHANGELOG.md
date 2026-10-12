@@ -34,9 +34,11 @@ All notable changes to this project will be documented in this file.
   names the policy that decided it (service protocol bump).
 - **`/approval` in `texra chat` sets only that chat's policy.** It no longer
   writes the project's policy in service mode; change that with `/config`
-  or the settings view. A run of the chat that is live takes the change on
-  its own approval record (Auto-approve on or off), and a later message
-  that leaves Auto-approve is asked again.
+  or the settings view. The chat's latest run takes the change on its own
+  approval record: Auto-approve turns its grants on, leaving Auto-approve
+  turns them off (so the next message is asked again), and a stricter
+  policy applies to a live run at once, even below the project's policy.
+  Grants given from an approval card still carry across messages.
 - **An Auto-approve run asks its questions.** A run started with
   `--approval-policy yolo` in a project set to Ask presents a question for
   you and a model retry past its automatic attempts interactively, where it

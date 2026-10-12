@@ -162,22 +162,18 @@ const admittedRun = Effect.fn('admittedRun')(function* (
       ? USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE
       : USER_FOLLOW_UP_SUPPORT.UNSUPPORTED;
   // A chat round takes the human grants of the round it continues, never
-  // its launch limit: the round asks with the chat's policy now, which also
-  // bounds what it inherits. An Auto-approve launch grants every bypass;
-  // any other explicit policy drops the bypasses a round inherits, so a
-  // chat that left Auto-approve is asked again.
-  const continuing = continues !== undefined && continues !== runId;
-  const inherited = continuing
-    ? inheritedGrants(SubscriptionRef.getUnsafe(runSession.view.ref), continues)
-    : NO_APPROVAL_GRANTS;
-  const capped = continuing && approvalPolicy !== undefined;
-  const { limit: _previous, ...grants } =
-    approveDelegatedWork || capped
-      ? humanGrant(
-          APPROVAL_BYPASS_KINDS,
-          approveDelegatedWork === true,
-        )(inherited)
-      : inherited;
+  // its launch limit: the round asks with the chat's policy now. An
+  // Auto-approve launch grants every bypass over them.
+  const inherited =
+    continues !== undefined && continues !== runId
+      ? inheritedGrants(
+          SubscriptionRef.getUnsafe(runSession.view.ref),
+          continues,
+        )
+      : NO_APPROVAL_GRANTS;
+  const { limit: _previous, ...grants } = approveDelegatedWork
+    ? humanGrant(APPROVAL_BYPASS_KINDS, true)(inherited)
+    : inherited;
   // A policy the launch asked for, Auto-approve aside, is the run's
   // limit whatever the project's is now, so widening the project's
   // policy later never widens this run.

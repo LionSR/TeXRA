@@ -18,7 +18,11 @@ import {
 } from 'effect';
 import { render, type Instance as InkInstance } from 'ink';
 
-import { aggregateId, type ConfigProvider } from '@texra-ai/harness';
+import {
+  aggregateId,
+  type ConfigProvider,
+  type RuntimeRequest,
+} from '@texra-ai/harness';
 import type { AgentConfig } from '@agent/runtime';
 import { getVisibleAgents } from '@agent/index';
 import {
@@ -51,6 +55,7 @@ import {
 } from '@cli/tui/terminalCleanup';
 import { cliSecrets } from '@cli/runtime/cliSecrets';
 import { nodeFileServices } from '@platform/defaults/jsonStore';
+import { isLiveRun } from '@shared/session/sessionView';
 import {
   formatTexraApprovalPolicy,
   TEXRA_APPROVAL_POLICY_CONFIG_KEY,
@@ -95,6 +100,7 @@ import { announceForegroundApprovals } from './state/subscribeApprovals';
 import { subscribeCliCredentialChanges } from './hosts/cliProviderKeys';
 import { createTuiViewportController } from './render/tuiViewportController';
 import {
+  rootRunId,
   selectedRunId as selectedRunIdSignal,
   resetCliState,
   patchSessionMeta,
@@ -136,6 +142,9 @@ import type { RunId } from '@texra-ai/harness/schemas';
 interface ChatResult {
   exitCode: number;
 }
+
+/** A change of a run's approval grants (`policy.set`). */
+type PolicyChange = Extract<RuntimeRequest, { kind: 'policy.set' }>['change'];
 
 /** The project's persisted approval policy, as the session reads it. */
 const projectApprovalPolicy = (roots: {
@@ -370,33 +379,46 @@ export async function runChat(
   });
   // `/approval` sets this chat's launch policy only, here or in the
   // service; the project's policy changes through `/config` or the settings
-  // view. A run of the chat that takes a grant now records the change on
-  // its own `approval.policy` row: Auto-approve turns its delegated-work
-  // bypass on, any other policy turns it off (the card's `a` key's request).
+  // view. The chat's latest run takes the change on its own `approval.policy`
+  // row (the card's request): Auto-approve turns its bypasses on; leaving
+  // Auto-approve turns them off, so the next round inherits them cleared;
+  // a stricter policy lowers a live run's limit at once, even below the
+  // project's.
   const setApprovalPolicy = (policy: TexraApprovalPolicy): void => {
+    const leaving = getApprovalPolicy() === 'yolo' && policy !== 'yolo';
     chatPolicy = policy;
     patchSessionMeta({ approvalPolicy: getApprovalPolicy() });
-    const run = runViewOf(
-      currentView(),
-      session.runId ?? selectedRunIdSignal.get(),
-    );
-    if (run === undefined || !run.actions.includes('grant')) return;
+    const run = runViewOf(currentView(), session.runId ?? rootRunId.get());
+    if (run === undefined) return;
+    const bypass = (enabled: boolean): PolicyChange => ({
+      field: 'bypass',
+      runId: run.id,
+      bypass: 'superYolo',
+      enabled,
+    });
+    const live = isLiveRun(run);
+    const changes: PolicyChange[] = [
+      ...(policy === 'yolo' && run.actions.includes('grant')
+        ? [bypass(true)]
+        : []),
+      ...(leaving ? [bypass(false)] : []),
+      ...(policy !== 'yolo' && live
+        ? [{ field: 'limit' as const, runId: run.id, limit: policy }]
+        : []),
+    ];
     runtime.runFork(
-      runSession
-        .request({
-          kind: 'policy.set',
-          change: {
-            field: 'bypass',
-            runId: run.id,
-            bypass: 'superYolo',
-            enabled: policy === 'yolo',
-          },
-        })
-        .pipe(
-          Effect.catch((error) =>
-            Effect.sync(() => appendLocalRequestRefusal(error, run.id)),
-          ),
-        ),
+      Effect.forEach(
+        changes,
+        (change) =>
+          runSession
+            .request({ kind: 'policy.set', change })
+            .pipe(
+              Effect.catch((error) =>
+                Effect.sync(() => appendLocalRequestRefusal(error, run.id)),
+              ),
+            ),
+        { discard: true },
+      ),
     );
   };
   // The slash-command context is identical at every call site; build it once

@@ -281,7 +281,8 @@ export const goalGrant =
   (kinds: readonly ApprovalBypassKind[]) =>
   (grants: ApprovalGrants): ApprovalGrants => ({ ...grants, goal: kinds });
 
-type BypassChange = Extract<RuntimeRequest, { kind: 'policy.set' }>['change'];
+type PolicyChange = Extract<RuntimeRequest, { kind: 'policy.set' }>['change'];
+type BypassChange = Extract<PolicyChange, { field: 'bypass' }>;
 
 /** The request kinds each bypass covers. The delegated-work grant covers all
  *  three. A question, an inquiry, a retry and a plan approval never appear
@@ -344,36 +345,53 @@ function approvePendingUnderBypass(
   );
 }
 
+/** Whether `change` only narrows a run (a bypass off, a lower limit): open
+ *  on any run, live or not, where a widening needs a working run's `grant`. */
+export const narrows = (change: PolicyChange): boolean =>
+  change.field === 'limit' || !change.enabled;
+
 /**
- * Apply a bypass change, acknowledged once its `approval.policy` row is
+ * Apply a grant change (a bypass, or a lower limit), acknowledged once its `approval.policy` row is
  * durable: the row is the grant, so nothing is held to undo when it does
  * not land. The caller holds the run's claim. Turning a bypass on then
  * approves what already waits behind it, on a run this process drives.
  */
 export function setPolicy(
   session: SessionHandle,
-  change: BypassChange,
+  change: PolicyChange,
   heldHere: boolean,
 ): Effect.Effect<Outcome, RequestError> {
   const { runId } = change;
-  // The delegated-work grant covers the command and edit grants too.
-  const kinds =
-    change.bypass === 'superYolo' ? APPROVAL_BYPASS_KINDS : [change.bypass];
-  return session.approvals
-    .change(runId, humanGrant(kinds, change.enabled))
-    .pipe(
-      Effect.mapError(
-        writeRefused({
-          runId,
-          reason: 'The approval change could not be saved.',
-        }),
-      ),
-      // A run held elsewhere has no fiber here to act on a decision.
-      Effect.andThen(
-        change.enabled && heldHere
-          ? approvePendingUnderBypass(session, change)
-          : Effect.void,
-      ),
-      Effect.as({ kind: 'done' } as const),
-    );
+  // A limit only lowers; the delegated-work grant covers the command and
+  // edit grants too.
+  const edit =
+    change.field === 'limit'
+      ? (grants: ApprovalGrants): ApprovalGrants => ({
+          ...grants,
+          limit:
+            grants.limit === 'never' || change.limit === 'never'
+              ? 'never'
+              : 'ask',
+        })
+      : humanGrant(
+          change.bypass === 'superYolo'
+            ? APPROVAL_BYPASS_KINDS
+            : [change.bypass],
+          change.enabled,
+        );
+  return session.approvals.change(runId, edit).pipe(
+    Effect.mapError(
+      writeRefused({
+        runId,
+        reason: 'The approval change could not be saved.',
+      }),
+    ),
+    // A run held elsewhere has no fiber here to act on a decision.
+    Effect.andThen(
+      change.field === 'bypass' && change.enabled && heldHere
+        ? approvePendingUnderBypass(session, change)
+        : Effect.void,
+    ),
+    Effect.as({ kind: 'done' } as const),
+  );
 }
