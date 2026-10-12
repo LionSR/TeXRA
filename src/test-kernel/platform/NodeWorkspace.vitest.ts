@@ -7,11 +7,11 @@ import { basename, join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 // Local imports - platform
+import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 import {
   canonicalizeWorkspacePath,
   relativeToRoot,
-} from '@platform/defaults/nodeWorkspace';
-import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
+} from '@utils/files/externalRoots';
 
 describe('Node workspace identity', () => {
   const tempDirs = useTempDirs();

@@ -4,13 +4,13 @@ import * as vscode from 'vscode';
 
 // Local imports
 import type { SessionHandle } from '@agent/runtime';
-import { getFilterExtensions } from '@common/files/fileTypeUtils';
 import {
   showLoggedErrorMessage,
   showLoggedInfoMessage,
 } from '@frontend/ui/errorHandlingUtils';
 import { selectFiles } from '@frontend/ui/dialogs';
 import type { MultipleDocumentFileType } from '@shared/schemas';
+import { getFilterExtensions } from '@texra/common/files/fileTypeUtils';
 import { workspaceRelativePath } from '@utils/files/workspaceFS';
 
 const CHANNEL = 'fileSelectionCommands';

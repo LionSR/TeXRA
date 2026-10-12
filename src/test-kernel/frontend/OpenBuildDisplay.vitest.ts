@@ -43,7 +43,7 @@ const mocks = vi.hoisted(() => ({
   ),
 }));
 
-vi.mock('@common/files/fileTypeUtils', () => ({
+vi.mock('@texra/common/files/fileTypeUtils', () => ({
   isLatexFile: mocks.isLatexFile,
 }));
 

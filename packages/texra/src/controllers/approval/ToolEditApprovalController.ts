@@ -41,9 +41,9 @@ import {
 // Local imports
 import { Rejected, type HostRequestFailure } from '@texra-ai/harness';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import { isLatexFile } from '@common/files/fileTypeUtils';
 import { withLogChannel } from '@logger/effectLog';
 import type { RequestDecision, SessionEvent } from '@shared/schemas';
+import { isLatexFile } from '@texra/common/files/fileTypeUtils';
 import type { HostRequest } from '@texra/shared/session/hostRequest';
 import {
   previewProposedLatex,

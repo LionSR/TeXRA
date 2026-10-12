@@ -12,6 +12,7 @@ import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 
 // Local imports - shared styles
 import { APPROVE_SESSION_ACTION } from '@texra/shared/session/surfaceDecision';
+import { isLatexFile } from '@texra/common/files/fileTypeUtils';
 import { SessionUiEvents } from '@texra/shared/session/uiEvents';
 import { RUN_GRANT_LABEL } from '@ui/copy/delegationApproval';
 
@@ -110,7 +111,8 @@ export class ToolEditRequestPanel extends BaseRequestPanel<'toolEdit'> {
       disabled: this.readOnly,
       onClick: this.handleDiffAction,
     });
-    if (!this.permission.data.isLatex || this.readOnly) return openDiff;
+    if (!isLatexFile(this.permission.data.path) || this.readOnly)
+      return openDiff;
 
     return html`
       ${openDiff}

@@ -18,10 +18,6 @@ import { LanguageModel, withProcessServices } from '@texra-ai/harness';
 import type { SessionHandle } from '@agent/runtime';
 import { getCatalogAgent, refresh } from '@agent/index';
 import { BundledViewContentProvider } from '@common/webview';
-import {
-  EXTENSION_CATEGORIES,
-  getFilterExtensions,
-} from '@common/files/fileTypeUtils';
 import { subscribeAppSignal } from '@frontend/events/appSignalSubscriptions';
 import { VscodeToolEditApprovalHost } from '@frontend/approval/VscodeToolEditApprovalHost';
 import { createAgentPresentationHost } from '@frontend/events/agentEventListeners';
@@ -34,6 +30,10 @@ import {
   getFirstRunDone,
   setOnboardingDeclined,
 } from '@shared/state/onboardingState';
+import {
+  EXTENSION_CATEGORIES,
+  getFilterExtensions,
+} from '@texra/common/files/fileTypeUtils';
 import {
   PdfOpenFailed,
   type EditorCapabilities,

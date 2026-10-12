@@ -51,7 +51,6 @@ import {
 } from '@commands/files/fileSelectionCommands';
 import { EXTENSION_COMMANDS } from '@commands/extensionCommandIds';
 import { handleMerge } from '@commands/agent/mergeCommands';
-import { getIncludedExtensions } from '@common/files/fileTypeUtils';
 import { openFileInEditor } from '@frontend/vscode/vscodeEditor';
 import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
 import { signInWithSubscription } from '@frontend/auth/subscriptionSignIn';
@@ -69,6 +68,7 @@ import {
   setFirstRunDone,
   setOnboardingDeclined,
 } from '@shared/state/onboardingState';
+import { getIncludedExtensions } from '@texra/common/files/fileTypeUtils';
 import type { HostRequest } from '@texra/shared/session/hostRequest';
 import type {
   HostOutcome,

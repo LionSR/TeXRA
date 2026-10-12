@@ -47,7 +47,7 @@ export interface RootLaunchOptions
    */
   suppressErrorNotification?: boolean;
   /**
-   * Opt-in set by the "fix LaTeX" VS Code actions (Fix-Compilation command, the
+   * Opt-in set by the host's quick-fix actions (the compile-fix command, the
    * progress-view compile fixer): run the launched agent on the configured
    * helper model instead of the selected one. Off for a direct main-view launch,
    * the CLI, and orchestrator delegations, which all keep the chosen model.
