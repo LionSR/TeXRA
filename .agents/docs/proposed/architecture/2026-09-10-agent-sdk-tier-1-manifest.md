@@ -50,12 +50,12 @@ outside the carved runtime entries (the one internal `runFork` is
 `processRuntime`'s fork-failure reporter, re-exported as
 `withForkFailureReporting`):
 
-| Entry                        | Subpath      | Shape                                                                                      |
-| ---------------------------- | ------------ | ------------------------------------------------------------------------------------------ |
-| `@texra-ai/harness`          | `.`          | The Effect services where the decisions are stated (`Sessions`/`Session`/`Run`), the tagged failures, the payloads, the platform ports, and the tool-definition helpers |
-| `@texra-ai/harness/schemas`  | `./schemas`  | Zod schemas and their inferred types                                                       |
-| `@texra-ai/harness/plugins`  | `./plugins`  | The built-in plugins (`harnessBuiltins`) and the plugin-tool run services                  |
-| `@texra-ai/harness/node`     | `./node`     | The ready-made Node platform (`nodePlatform`)                                              |
+| Entry                       | Subpath     | Shape                                                                                                                                                                   |
+| --------------------------- | ----------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@texra-ai/harness`         | `.`         | The Effect services where the decisions are stated (`Sessions`/`Session`/`Run`), the tagged failures, the payloads, the platform ports, and the tool-definition helpers |
+| `@texra-ai/harness/schemas` | `./schemas` | Zod schemas and their inferred types                                                                                                                                    |
+| `@texra-ai/harness/plugins` | `./plugins` | The built-in plugins (`harnessBuiltins`) and the plugin-tool run services                                                                                               |
+| `@texra-ai/harness/node`    | `./node`    | The ready-made Node platform (`nodePlatform`)                                                                                                                           |
 
 The root entry **is** the Effect surface: the Promise/AsyncIterable rendering
 and the `/effect` subpath were deleted in the 2026-09-21 flip (rulings ledger's
@@ -97,7 +97,7 @@ manifest's ratification, "not another lint rule":
   carry `.js`; ESM only; no undeclared bare-package imports.
 
 The dead-export ratchet (`npm run check:dead-code-ratchet`, green) guarantees no
-*internal* dead export. It does not prove every public binding has a consumer:
+_internal_ dead export. It does not prove every public binding has a consumer:
 the four entries are knip entry points (`knip.json`), so a public re-export with
 no package-name importer still passes — `MapToolRegistry`, for instance, has no
 `@texra-ai/harness` consumer yet satisfies the ratchet through its internal use.
@@ -121,7 +121,7 @@ each ratification decision below. It only ever shrinks; never widen it.
   `texra` import `@texra-ai/harness` (and `/schemas`, `/node`) directly by
   package name across dozens of files each at this pin — not only through the
   repo-root path aliases. They are the real dependency set a keep/shed decision
-  must weigh. What they still reach *around* the public surface by deep import
+  must weigh. What they still reach _around_ the public surface by deep import
   (`@agent/*`, `@shared/*`, …) is the separate, frozen coupling in
   `harness-deep-import-baseline.json` (§3).
 - **Consumer-shaped example: one.** `packages/harness/example/effectSession.mjs`,

@@ -80,7 +80,7 @@ guardrail, which is why it stays:
 - **Agent core** (`packages/harness/src/agent/`, ~29k LOC, bulk in `runtime/`).
   The barrels (`runtime/index.ts`, `followUp/`, `trace/`, `storage/`,
   `index/`) are the documented host-boundary doors recorded in
-  `harness-deep-import-baseline.json`; deleting one would *widen* that baseline.
+  `harness-deep-import-baseline.json`; deleting one would _widen_ that baseline.
   The run-loop `Context.Service` classes (`Runs`, `ModelInvoker`, `ModelAccess`,
   `AgentRun`, `ChildRuns`, `RunCall`, …) are the "services from context, no
   services bag" contract. `AgentEngine.ts` (23 LOC, one implementer) is a
@@ -98,7 +98,7 @@ guardrail, which is why it stays:
   `switch (protocol)` over dynamic imports of
   data-only protocol arms + a compiler-exhaustive `CONFIGURE` table;
   providers are the `MODEL_PROVIDER_PLUGINS` data manifest. `grep "export
-  class"` across `packages/llm/src` returns only error types
+class"` across `packages/llm/src` returns only error types
   (`Data.TaggedError`) plus generic OAuth/concurrency machinery
   (`SubscriptionOAuthCoordinator`, `SharedAttempt`, `SerializedWrites`) —
   **zero per-provider handler classes**. The codex/xai OAuth arms carry real
@@ -112,7 +112,7 @@ guardrail, which is why it stays:
 - **Logger** (`packages/harness/src/logger/`, 5 files, 551 LOC). A clean
   single-owner producer→sink pipeline: `Effect.log*` + `withLogChannel`
   (386 `withLogChannel(` call sites) on the producer side; render→redact→truncate at one sink;
-  `LogEntry` *is* Effect's structured record type, not a parallel type. The
+  `LogEntry` _is_ Effect's structured record type, not a parallel type. The
   obvious wrapper candidates (`createLog`, `logUtils`, the CLI's former
   parallel `createCliLogger`/`LogRecord`) were already deleted (0 hits).
 - **SDK surface** (`@texra-ai/harness`: `index.ts`, `node.ts`, `plugins.ts`,
@@ -151,7 +151,7 @@ guardrail, which is why it stays:
    net-negative candidate beyond the one cosmetic single-caller split carried
    below.
 3. **Plan API-surface simplification** — the plan is the durable-harness
-   program's *extend* half (`2026-10-02-durable-harness.md` H4: `Plugin`,
+   program's _extend_ half (`2026-10-02-durable-harness.md` H4: `Plugin`,
    `Sessions.layer({ plugins })`, `Plugins.contribute` in a `Scope`,
    `Session.resume`) plus the frozen-list shrink AGENTS.md names — **not**
    ratification of the 2026-09-10 static-export manifest (see New.1). The SDK
@@ -208,7 +208,7 @@ guardrail, which is why it stays:
 
 ## Shrinking the deep-import baseline (the non-widening narrowing path)
 
-Consistent with "never widen a baseline," the way to *shrink*
+Consistent with "never widen a baseline," the way to _shrink_
 `harness-deep-import-baseline.json` is to promote the heaviest, most-shared
 deep imports into a documented public re-export on `@texra-ai/harness` (with
 the existing consumer), then delete the now-stale rows. The natural Tier-1
