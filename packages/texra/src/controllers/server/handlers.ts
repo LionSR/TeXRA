@@ -87,6 +87,10 @@ export class ServiceProjects extends Context.Service<
     ) => Effect.Effect<ServiceProject, Error, Scope.Scope>;
     /** The sessions open now, by storage root. */
     readonly opened: Effect.Effect<ReadonlyMap<string, SessionHandle>>;
+    /** The files this process's sessions announce their tasks wrote
+     *  (`workspaceFilesWritten`), as the host hears them on its signal bus
+     *  (controllers do not import it). */
+    readonly filesWritten: Stream.Stream<readonly string[]>;
     /** Close, with their stores, the sessions no lease and no run has held
      *  for `idleFor`; answers the sessions closed. */
     readonly closeIdle: (
@@ -269,6 +273,9 @@ export const serviceHandlers = TexraRpcs.toLayer(
         );
     });
     const hosts = yield* makeHostWindows;
+    yield* Effect.forkScoped(
+      Stream.runForEach(projects.filesWritten, hosts.filesWritten),
+    );
     /** Each session's presentation surface, given once (claimed in one
      *  step) and closed with the session: what its runs ask of a host goes
      *  to the project's windows. */

@@ -11,7 +11,9 @@ import {
   Duration,
   Effect,
   Exit,
+  Queue,
   Scope,
+  Stream,
   type Context,
   type FileSystem,
   type Path,
@@ -29,6 +31,7 @@ import {
   openProjectStateStore,
   openRepoStateStore,
 } from '@controllers/session/appStateStore';
+import { onAppSignal } from '@eventBus/AppSignals';
 import { setLogSink, silentLogSink, writeLogLine } from '@logger/logSink';
 import { JsonStore } from '@platform/defaults/jsonStore';
 import { loginShellEnvironment } from '@platform/defaults/loginShellEnv';
@@ -214,6 +217,13 @@ export const cliServiceProjects = Effect.fn('cliServiceProjects')(function* (
     storageRoot,
     editors,
     open,
+    filesWritten: Stream.callback<readonly string[]>((queue) =>
+      Effect.forkScoped(
+        onAppSignal('workspaceFilesWritten', ({ absolutePaths }) =>
+          Queue.offerUnsafe(queue, absolutePaths),
+        ),
+      ),
+    ),
     opened: Effect.sync(
       () =>
         new Map(

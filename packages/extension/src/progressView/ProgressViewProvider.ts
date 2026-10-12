@@ -26,6 +26,7 @@ import {
   EXTENSION_CATEGORIES,
   getFilterExtensions,
 } from '@common/files/fileTypeUtils';
+import { emitAppSignal } from '@eventBus/AppSignals';
 import { subscribeAppSignal } from '@frontend/events/appSignalSubscriptions';
 import { VscodeToolEditApprovalHost } from '@frontend/approval/VscodeToolEditApprovalHost';
 import { createAgentPresentationHost } from '@frontend/events/agentEventListeners';
@@ -449,6 +450,12 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
             ...presentation,
             ...editor,
             languageModel,
+            // What a service task wrote, told here as a task here tells
+            // it: the file decorations follow it.
+            filesWritten: (absolutePaths) =>
+              emitAppSignal('workspaceFilesWritten', {
+                absolutePaths: [...absolutePaths],
+              }),
           }),
         ).pipe(Scope.provide(this.scope)),
       );

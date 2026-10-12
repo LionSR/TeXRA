@@ -168,6 +168,12 @@ const HostCallSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('releaseToolEdit'), requestId: z.string() }),
   z.object({ kind: z.literal('approveToolEdit'), requestId: z.string() }),
   z.object({ kind: z.literal('notice'), notice: NoticeSchema }),
+  // Files a task of the project wrote past the editor's own write path, as
+  // the service's announcer heard them from the task's rows.
+  z.object({
+    kind: z.literal('filesWritten'),
+    absolutePaths: z.array(z.string()).readonly(),
+  }),
   z.object({
     kind: z.literal('approvalDenied'),
     denial: ApprovalPolicyDenialSchema,
@@ -201,6 +207,7 @@ export const CALL_CAPABILITY: Readonly<
   releaseToolEdit: 'toolEdits',
   approveToolEdit: 'toolEdits',
   notice: 'notices',
+  filesWritten: 'notices',
   approvalDenied: 'notices',
   lmModels: 'languageModel',
   lmPrepare: 'languageModel',
