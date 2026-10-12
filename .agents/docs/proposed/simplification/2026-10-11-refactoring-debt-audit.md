@@ -61,6 +61,7 @@ harness files are frozen over the 400-line bar in `file-size.json`).
 > wrong or overstated; the verified conclusion is that no refactor is warranted.
 
 ### 1. `codex*` vs `claudeAgent*` — two ~1,200-LOC parallel CLI-agent families ⭐ top pick
+
 **Impact: highest. Savings: ~200–350 LOC. Effort: L. Confidence: verified.**
 
 - **Where:** `packages/texra/src/tools/codex*.ts` (~1,193 LOC) and
@@ -89,11 +90,12 @@ harness files are frozen over the 400-line bar in `file-size.json`).
   tax again until it's fixed.
 
 ### 2. `sessionFold.ts` (1,302) + `runStateFold.ts` (772) — parallel folds over one event vocabulary
+
 **Impact: high. Savings: ~150–250 LOC. Effort: L. Confidence: ratchet-corroborated.**
 
 - **Where:** `packages/harness/src/shared/session/{sessionFold,runStateFold}.ts`.
   `sessionFold` is the single largest file in the package (3.25× the 400-line bar).
-- **What's messy:** Two large `switch` dispatchers over the *same* ~18-arm
+- **What's messy:** Two large `switch` dispatchers over the _same_ ~18-arm
   discriminated event vocabulary (`run.activate`, `model.message`, `tool.intent`,
   `tool.result`, …; 32 case arms in one, 17 in the other). Not copy-paste — they
   project different things (`SessionView` vs `RunState`) — but **shotgun surgery**:
@@ -105,6 +107,7 @@ harness files are frozen over the 400-line bar in `file-size.json`).
   separate — unify only the skeleton.
 
 ### 3. `controllers/session/Database.ts` (1,186) — one `databaseLayer` closure with ~61 inline sub-closures
+
 **Impact: high. Savings: ~150–250 LOC. Effort: M–L. Confidence: verified (61 closures).**
 
 - **Where:** `packages/harness/src/controllers/session/Database.ts`
@@ -119,6 +122,7 @@ harness files are frozen over the 400-line bar in `file-size.json`).
   three error-wrappers into one tagged-error helper.
 
 ### 4. CLI `createChatSessionController` — an 844-line factory function
+
 **Impact: high maintenance burden. Savings: ~50–100 net LOC. Effort: L.**
 **Confidence:** the 844-line function length is `wc -l`-verified (not ratchet-sourced);
 the sibling counts below were hand-counted and corrected 2026-10-12. Finding refuted
@@ -139,6 +143,7 @@ in Verification results — a single-consumer justified factory, not a split tar
   startup into named phase helpers; lift `App.tsx` sub-state into hooks/children.
 
 ### 5. Cheap wins bundle — best savings-per-effort (do these first as warm-ups)
+
 **Impact: moderate. Savings: ~270–420 LOC combined. Effort: S–M each. Confidence: evidence-backed.**
 
 - **GitHub per-scope event formatters** (`tools/github/format{PR,Repo,Issue}Event.ts`):
@@ -154,7 +159,7 @@ in Verification results — a single-consumer justified factory, not a split tar
   wording. Lift into one `buildSubscriptionSignInPresenter(primitives)` in `texra`.
   **~60–100 LOC, M.**
 - **Per-provider token-usage mapping** (`llm/api/{anthropicMessages,googleInteractions,
-  openaiResponsesUsage,openrouterChat}`): identical `uncached+cached`/total arithmetic
+openaiResponsesUsage,openrouterChat}`): identical `uncached+cached`/total arithmetic
   with per-provider field names. One `buildUsage({...})` normalizer.
   **~30–50 LOC, S.**
 
@@ -162,13 +167,13 @@ in Verification results — a single-consumer justified factory, not a split tar
 
 ## Ranking summary
 
-| # | Area | LOC saved | Effort | Savings/effort | Note |
-|---|------|-----------|--------|----------------|------|
-| 1 | `codex*`/`claudeAgent*` CLI-agent families | 200–350 | L | ★★★ | genuine large-scale dup; top priority |
-| 2 | `sessionFold` + `runStateFold` folds | 150–250 | L | ★★ | biggest file; shotgun-surgery risk |
-| 3 | `Database.ts` god-layer (61 closures) | 150–250 | M–L | ★★ | clean projection/codec seam |
-| 4 | CLI `createChatSessionController` factory | 50–100 | L | ★ | maintainability, not deletion |
-| 5 | Cheap-wins bundle (4 items) | 270–420 | S–M | ★★★ | start here; lowest risk |
+| #   | Area                                       | LOC saved | Effort | Savings/effort | Note                                  |
+| --- | ------------------------------------------ | --------- | ------ | -------------- | ------------------------------------- |
+| 1   | `codex*`/`claudeAgent*` CLI-agent families | 200–350   | L      | ★★★            | genuine large-scale dup; top priority |
+| 2   | `sessionFold` + `runStateFold` folds       | 150–250   | L      | ★★             | biggest file; shotgun-surgery risk    |
+| 3   | `Database.ts` god-layer (61 closures)      | 150–250   | M–L    | ★★             | clean projection/codec seam           |
+| 4   | CLI `createChatSessionController` factory  | 50–100    | L      | ★              | maintainability, not deletion         |
+| 5   | Cheap-wins bundle (4 items)                | 270–420   | S–M    | ★★★            | start here; lowest risk               |
 
 **Suggested sequencing:** ~~#5 → #1 → #2/#3 → #4~~ — **superseded. Do not follow
 this sequence.** Verification refuted every item; implementing any of them would be
@@ -186,11 +191,11 @@ Each finding was opened and read against its actual source before any edit.
   builders. The two `runStreamedTurn` bodies share only a ~5–10-line stream-drain
   skeleton; the bulk is irreducibly provider-specific (different SDK event
   vocabularies, promise-returning `runStreamed` vs synchronous `query()`, abort-link
-  + background-task finalizer vs turn-card finalizer, different return types,
-  throw-vs-flag error models). A `drainAgentStream` wrapper would be a leaky
-  abstraction saving almost nothing. The only literal twins are the two-line
-  `IS_WINDOWS ? 'x.exe' : 'x'` and the per-provider platform-package maps, which are
-  data, not logic. **No clean refactor.**
+  - background-task finalizer vs turn-card finalizer, different return types,
+    throw-vs-flag error models). A `drainAgentStream` wrapper would be a leaky
+    abstraction saving almost nothing. The only literal twins are the two-line
+    `IS_WINDOWS ? 'x.exe' : 'x'` and the per-provider platform-package maps, which are
+    data, not logic. **No clean refactor.**
 - **#2 `sessionFold`/`runStateFold` — not god-functions.** `sessionFold.ts` is ~40
   small, well-named functions (`applyOwnArm`, `withAggregates`, `foldDurable`,
   `reconcileExistence`, …); it is large by line count because an event fold
@@ -209,14 +214,14 @@ Each finding was opened and read against its actual source before any edit.
   interfaces delete more structure than they add. The one in-place idea the earlier
   draft floated — collapsing the three `openFailed`/`writeFailed`/`readFailed`
   wrappers — does **not** hold either: each is a minimal two-line builder for a
-  *distinct* tagged-error channel (`DatabaseOpenFailed`/`WriteFailed`/`ReadFailed`),
+  _distinct_ tagged-error channel (`DatabaseOpenFailed`/`WriteFailed`/`ReadFailed`),
   used at different sites; merging them needs a generic constructor plus three
   bindings, which adds indirection and blurs three typed channels, so it cannot net
   negative. Net result: **nothing here is worth doing** — not a module split, not the
   error-wrapper merge. Downgraded from "strongest candidate" to "no action."
 - **#4 CLI `createChatSessionController` — a justified factory, not a split target.**
   It has one production consumer (`runChatTui.tsx`), and it captures initialization
-  context in its closures — precisely the repo's documented *justified* factory case.
+  context in its closures — precisely the repo's documented _justified_ factory case.
   The proposed resume-controller / skill-activation-store / root-run-launcher
   collaborators would each be single-consumer abstractions around state that is
   coordinated in one init closure by design. Without additional consumers or
@@ -245,15 +250,14 @@ Each finding was opened and read against its actual source before any edit.
   mirror methods. What remains per method is real orchestration difference (BFS
   recursion with a worklist, `.tex` snapshotting, stat-gating, vision-context vs
   mirror-only). Only micro-win: a `texFilesOf()` helper for the 5 `files.filter(f =>
-  hasExtension(f.absolutePath, '.tex'))` sites (~8 LOC), borderline against the
+hasExtension(f.absolutePath, '.tex'))` sites (~8 LOC), borderline against the
   one-expression-helper bar. **Optional micro-nit, not a refactor.**
 - **#5d llm per-provider token-usage mapping — divergent semantics.** OpenAI's
   `input_tokens` is already the combined input (and `total_tokens` comes from the
   provider); Anthropic's `input_tokens` excludes cache, so it sums `uncached + cached
-  + creation` and computes the total itself; the `providerUsage` shapes
-  (`xai`-conditional vs always-`anthropic` with cache breakdown) differ entirely. A
-  `buildUsage` normalizer would have to be parameterized enough to obscure the real
-  per-provider arithmetic. **No clean refactor.**
+  - creation`and computes the total itself; the`providerUsage` shapes
+(`xai`-conditional vs always-`anthropic`with cache breakdown) differ entirely. A`buildUsage` normalizer would have to be parameterized enough to obscure the real
+    per-provider arithmetic. **No clean refactor.**
 
 **Net:** the dedup space is exhausted — the maintainers got there first — and the
 size-concentration items (#3, #4) resist the obvious fix too, because splitting them
@@ -265,11 +269,12 @@ indirection rather than remove it — they are three distinct typed error channe
 the only thing left standing is the optional `texFilesOf()` micro-nit (~8 LOC),
 itself borderline against the one-expression-helper bar. **The actionable conclusion
 is that this codebase does not currently warrant a structural refactor — nor any
-in-place cleanup worth a PR.** If a future change adds a *second* consumer to the
+in-place cleanup worth a PR.** If a future change adds a _second_ consumer to the
 `Database` projection logic or the chat controller, that is the moment an extraction
 would pay for itself; until then, leave them.
 
 ## Not worth refactoring (checked, came back clean)
+
 - LLM provider `streamTurn`/wire codecs — genuinely provider-specific, already on
   shared transport. Not dup.
 - `replacement/rules.ts` vs `maxRules.ts` — different rule sets sharing `helpers.ts`.
