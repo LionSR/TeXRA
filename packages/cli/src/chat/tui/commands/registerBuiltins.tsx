@@ -19,10 +19,6 @@ import {
 import { runBypasses } from '@shared/approvalBypassKind';
 import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
 import type { SettingsStores } from '@shared/config/settingsAccess';
-import {
-  localSessionBackend,
-  type SessionBackend,
-} from '@texra/controllers/session/sessionBackend';
 import type { ServiceConnection } from '@texra/controllers/server/client';
 import { RUN_GRANT_ORDER } from '@ui/copy/delegationApproval';
 import { PLUGINS_TUI } from '@ui/copy/plugins';
@@ -85,7 +81,11 @@ import {
   type FormActionHandler,
   modelAccessContribution,
 } from './modelAccessContribution';
-import type { ProcessRuntime, ProcessServices } from '@texra-ai/harness';
+import type {
+  ProcessRuntime,
+  ProcessServices,
+  Session,
+} from '@texra-ai/harness';
 import type { PlatformSecrets } from '@texra-ai/harness';
 
 type SelectHandler<T> = (value: T) => SlashCommandEffect;
@@ -105,12 +105,12 @@ export function registerBuiltinSlashCommands(options: {
   /** The process runtime the account commands and the `/resume` listing run
    *  their programs on, from the same surface. */
   runtime: ProcessRuntime;
-  /** The session `/resume` lists history from and `/plan` and `/compact` act
-   *  on, threaded from the surface that registers the commands. */
+  /** The process session `/resume` lists history from: its records, which
+   *  stay read here. */
   runtimeSession: SessionHandle;
-  /** Where the commands' run requests and resumes land: the chat's session
-   *  in the service; its own session when unset. */
-  backend?: SessionBackend;
+  /** Where the commands' run requests and resumes land: the chat's session,
+   *  here or in the service. */
+  runSession: Session;
   onAgentSelect?: SelectHandler<string>;
   /** `/agent` → a team preset, by id. */
   onTeamSelect?: SelectHandler<string>;
@@ -119,9 +119,12 @@ export function registerBuiltinSlashCommands(options: {
   onAccountChanged?: () => Effect.Effect<void, never, ProcessServices>;
   canSelectAgent?: () => boolean;
   getApprovalPolicy?: () => TexraApprovalPolicy;
-  /** Stays a plain callback: `/config`'s shared write path takes the same
-   *  hook as a void-returning port, so an Effect here would never run. */
-  onApprovalPolicySelect?: (policy: TexraApprovalPolicy) => void;
+  /** `/approval`'s choice: the chat's own launch policy, settled once the
+   *  chat's run has recorded it. */
+  onApprovalPolicySelect?: (policy: TexraApprovalPolicy) => Effect.Effect<void>;
+  /** The project's policy `/config` wrote. Stays a plain callback: the
+   *  shared write path takes it as a void-returning port. */
+  onProjectApprovalPolicyChanged?: (policy: TexraApprovalPolicy) => void;
   onModelSelect?: SelectHandler<string>;
   canSelectModel?: () => boolean;
   getModelSwitchDisabledReason?: GetModelSwitchDisabledReason;
@@ -138,8 +141,7 @@ export function registerBuiltinSlashCommands(options: {
   onError?: ErrorHandler;
 }): void {
   const { secrets, stores, runtime } = options;
-  const backend =
-    options.backend ?? localSessionBackend(options.runtimeSession);
+  const { runSession } = options;
   const modelStores = { ...stores, secrets, runtime };
   const onAgentSelect: SelectHandler<string> =
     options.onAgentSelect ??
@@ -241,13 +243,11 @@ export function registerBuiltinSlashCommands(options: {
               case 'superYolo':
                 return runId === undefined
                   ? Effect.void
-                  : revokeCliRunGrant(backend, runId, value);
+                  : revokeCliRunGrant(runSession, runId, value);
               case 'ask':
               case 'never':
               case 'yolo':
-                return Effect.sync(() =>
-                  options.onApprovalPolicySelect?.(value),
-                );
+                return options.onApprovalPolicySelect?.(value) ?? Effect.void;
               default:
                 return value satisfies never;
             }
@@ -300,7 +300,7 @@ export function registerBuiltinSlashCommands(options: {
     (formProps) => (
       <MemoryListForm
         runtime={runtime}
-        roots={options.runtimeSession.roots}
+        roots={options.runSession.roots}
         {...formProps}
       />
     ),
@@ -333,8 +333,8 @@ export function registerBuiltinSlashCommands(options: {
     (formProps) => (
       <SkillsListForm
         runtime={runtime}
-        workspaceRoot={options.runtimeSession.roots.workspace}
-        stores={options.runtimeSession.roots}
+        workspaceRoot={options.runSession.roots.workspace}
+        stores={options.runSession.roots}
         {...formProps}
       />
     ),
@@ -354,7 +354,7 @@ export function registerBuiltinSlashCommands(options: {
 
   const PluginsListFormAdapter = (props: SlashFormProps): React.JSX.Element => (
     <PluginsListForm
-      roots={options.runtimeSession.roots}
+      roots={options.runSession.roots}
       runtime={runtime}
       availableRows={props.availableRows}
       onClose={() => props.onDone(undefined)}
@@ -375,7 +375,7 @@ export function registerBuiltinSlashCommands(options: {
         /^(.+?)(?:\s+--plugin\s+(\S+))?$/.exec(rest ?? '') ?? [];
       if (verb?.toLowerCase() !== 'add' || !source)
         return yield* Effect.fail(new Error(PLUGINS_TUI.addUsage));
-      const { roots } = options.runtimeSession;
+      const { roots } = options.runSession;
       const origin = parsePluginOrigin(
         source,
         roots.workspace ?? context.cliContext.cwd,
@@ -399,14 +399,11 @@ export function registerBuiltinSlashCommands(options: {
           stores={configStores}
           secrets={secrets}
           runtime={runtime}
-          workspaceRoot={options.runtimeSession.roots.workspace}
+          workspaceRoot={options.runSession.roots.workspace}
           availableRows={props.availableRows}
-          // Same hook `/approval` drives, so the approval-policy row updates
-          // the live session and the status bar from whichever surface set
-          // it — including its "Approval mode: …" transcript line, which is
-          // the confirmation that the change reached the running session and
-          // not just the config file.
-          onApprovalPolicyChanged={options.onApprovalPolicySelect}
+          // The project's policy, written: the status bar follows it, and
+          // the chat's own `/approval` choice stays as it was.
+          onApprovalPolicyChanged={options.onProjectApprovalPolicyChanged}
           onClose={() => props.onDone(undefined)}
           onError={async (error) => {
             props.onPersist?.();
@@ -504,9 +501,7 @@ export function registerBuiltinSlashCommands(options: {
           category: 'configuration',
           echo: 'ifPersists',
           handler: (remainder, context) =>
-            Effect.sync(() =>
-              applyCliApprovalPolicySelection(remainder, context),
-            ),
+            applyCliApprovalPolicySelection(remainder, context),
           formRemainders: ['status'],
           formComponent: ApprovalPolicyFormAdapter,
         },
@@ -527,8 +522,7 @@ export function registerBuiltinSlashCommands(options: {
           description: "Read the focused agent's work plan",
           category: 'session',
           echo: 'never',
-          handler: () =>
-            Effect.sync(() => showCliWorkPlan(options.runtimeSession)),
+          handler: () => Effect.sync(() => showCliWorkPlan()),
         },
         {
           name: 'resume',
@@ -539,7 +533,7 @@ export function registerBuiltinSlashCommands(options: {
           handler: (remainder, context) =>
             Effect.gen(function* () {
               if (remainder.trim() === 'all')
-                return yield* resumeInterruptedTasks(context.backend);
+                return yield* resumeInterruptedTasks(context.runSession);
               const id = parseCliHistoryId(remainder);
               if (!id)
                 return yield* Effect.fail(
@@ -573,7 +567,7 @@ export function registerBuiltinSlashCommands(options: {
           echo: 'ifPersists',
           handler: (remainder) =>
             Effect.suspend(() => {
-              const roots = options.runtimeSession.roots;
+              const roots = options.runSession.roots;
               return remainder.toLowerCase() === 'list'
                 ? showCliMemoryList(roots)
                 : showCliMemoryPreview(roots, remainder);
@@ -602,6 +596,6 @@ export function registerBuiltinSlashCommands(options: {
     // Only offer /config when the host wired the stores it reads/writes — a
     // command that can't reach a store would render an inert panel.
     ...(options.configStores ? [configContribution(options.configStores)] : []),
-    ...sessionContributions(backend),
+    ...sessionContributions(runSession),
   ]);
 }

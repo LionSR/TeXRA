@@ -9,7 +9,7 @@ import { EnvHttpProxyAgent, type Dispatcher } from 'undici';
 import { z } from 'zod';
 
 // Local imports - core
-import { fetchThrough } from '@platform/defaults/longRunningModelTransport';
+import { undiciFetchThrough } from '@platform/defaults/longRunningModelTransport';
 import { ToolError } from '@shared/schemas';
 import {
   retryTransientFetch,
@@ -121,9 +121,10 @@ function webFetchDispatcher(): Dispatcher {
 /**
  * undici's own `fetch`, not the global one: the global is the runtime's
  * bundled undici, which rejects a dispatcher built by this package's undici
- * (see `fetchThrough`).
+ * (see `longRunningModelFetch`).
  */
-const publicFetch = fetchThrough(webFetchDispatcher);
+const publicFetch: typeof fetch = (input, init) =>
+  undiciFetchThrough(webFetchDispatcher(), input, init);
 
 /** Refuse an IP-literal host, the one form {@link publicOnlyLookup} never sees. */
 function assertPublicLiteral(url: URL) {

@@ -24,10 +24,12 @@ import { createTestSession } from '@test/support/sessionTestUtils';
 import type { HostRequest } from '@texra/shared/session/hostRequest';
 import { HostDraftRequests } from '@texra/controllers/session/hostDraftRequests';
 import { createHostSnapshotSource } from '@texra/controllers/session/hostSnapshotSource';
-import { localSessionBackend } from '@texra/controllers/session/sessionBackend';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { createExternalLocation } from '@utils/files/fileLocation';
-import { createStubDesktopAgentRunHost } from './desktopAgentRunTestHarness.ts';
+import {
+  createStubDesktopAgentRunHost,
+  localTestProject,
+} from './desktopAgentRunTestHarness.ts';
 
 // The LaTeX engine and toolchain probe, mocked once for the file. Each test
 // sets their behaviour through `loadDesktopPreviewHost`; the module graph is
@@ -151,8 +153,7 @@ describe('desktop preview host', () => {
         });
         const handler = createDesktopHostRequests({
           runtime: testRuntime(),
-          session,
-          backend: localSessionBackend(session),
+          project: localTestProject(session),
           host: createStubDesktopAgentRunHost({
             ...preview,
             showErrorMessage,
@@ -176,7 +177,6 @@ describe('desktop preview host', () => {
           }),
           draftRequests,
           workspaceFile: () => Effect.succeed({ kind: 'done' }),
-          workspacePath: undefined,
           resourcesPath: '/resources',
           postToRenderer: () => {},
           postSurfaceAction: () => {},

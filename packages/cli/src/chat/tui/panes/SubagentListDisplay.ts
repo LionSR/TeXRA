@@ -7,12 +7,12 @@ import {
   COLOR_WARNING,
 } from '@cli/tui/ui/colors';
 import { STATUS_DOT } from '@cli/tui/ui/glyphs';
-import type { RunView } from '@shared/session/sessionView';
 import { TOKENS_GENERATED } from '@shared/transcript/workflowCall';
 import {
   formatCompactTokenCount,
   formatResultCount,
 } from '@utils/text/stringUtils';
+import type { RunView } from '@texra-ai/harness';
 
 // Local imports - TUI state
 import type { PendingApprovalKind } from '../state/approvalQueue';

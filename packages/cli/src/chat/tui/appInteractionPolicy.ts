@@ -3,7 +3,7 @@
 import { type RunId } from '@texra-ai/harness/schemas';
 import { isUnhandledControlInput, metaChordInput } from '@cli/tui/inputKeys';
 // Local imports - shared schemas and utilities
-import type { SessionView } from '@shared/session/sessionView';
+import type { SessionView } from '@texra-ai/harness';
 import type { Key } from 'ink';
 
 // Local imports - TUI state

@@ -12,6 +12,9 @@
  * (`RunInbox`).
  */
 export { harnessBuiltins } from '@tools/builtinPlugins';
+/** The `web` plugin's fetch tool, typed with what its call requires, for a
+ *  host that calls it outside a run (the editor's Copilot tools). */
+export { WebFetchTool } from '@tools/web/WebFetchTool';
 export { callerRun, requireRun } from '@agent/runtime/RunCall';
 export {
   ChildRuns,

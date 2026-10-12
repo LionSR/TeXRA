@@ -14,13 +14,13 @@
  */
 import { Effect } from 'effect';
 import {
+  type Dispatcher,
   EnvHttpProxyAgent,
   fetch as undiciFetch,
   setGlobalDispatcher,
-  type Dispatcher,
 } from 'undici';
 
-import { ProjectEnvironment } from '@platform/defaults/nodeWorkspace';
+import { ProjectEnvironment } from '@utils/system/nodeWorkspace';
 
 /** A streamed reasoning turn may sit silent this long between chunks. */
 const MODEL_STREAM_INACTIVITY_TIMEOUT_MS = 30 * 60 * 1000;
@@ -56,9 +56,26 @@ interface ProxyPolicy {
 const projectDispatchers = new Map<string, EnvHttpProxyAgent>();
 
 /**
- * A fetch over `dispatch`'s agent: the one every model factory is
- * constructed with, and `web_fetch`'s over its public-only resolver. It is
- * undici's own
+ * undici's `fetch` under the `Fetch` signature the rest of the codebase
+ * speaks: undici's `RequestInit`/`Response` are structurally close to the
+ * DOM's but not assignable, so the cast lives here once, for every caller.
+ */
+export const undiciFetchThrough = (
+  dispatcher: Dispatcher,
+  input: Parameters<typeof fetch>[0],
+  init?: RequestInit,
+): Promise<Response> =>
+  undiciFetch(
+    // cast: undici's input type is the DOM's `Request` by another name.
+    input as Parameters<typeof undiciFetch>[0],
+    {
+      ...init,
+      dispatcher,
+    } as Parameters<typeof undiciFetch>[1],
+  ) as unknown as Promise<Response>;
+
+/**
+ * The fetch every model factory is constructed with. It is undici's own
  * `fetch`, not the global one: the global is the runtime's bundled undici
  * (Electron 44 ships 7.x), which rejects a dispatcher built by this
  * package's undici ("invalid onRequestStart method").
@@ -72,23 +89,26 @@ const projectDispatchers = new Map<string, EnvHttpProxyAgent>();
  * The request is held until the fetch settles: a cloned `Request`'s signal
  * follows its parent only while the clone is alive.
  */
-export const fetchThrough =
-  (dispatch: () => Dispatcher): typeof fetch =>
+const fetchThrough =
+  (dispatch: () => EnvHttpProxyAgent): typeof fetch =>
   (input, init) => {
     const request =
       typeof input === 'string' || input instanceof URL ? undefined : input;
-    const response = undiciFetch(request?.url ?? (input as string | URL), {
-      ...(request && {
-        method: request.method,
-        headers: request.headers,
-        body: request.body,
-        signal: request.signal,
-        redirect: request.redirect,
-        ...(request.body !== null && { duplex: 'half' }),
-      }),
-      ...init,
-      dispatcher: dispatch(),
-    } as Parameters<typeof undiciFetch>[1]) as unknown as Promise<Response>;
+    const response = undiciFetchThrough(
+      dispatch(),
+      request?.url ?? (input as string | URL),
+      {
+        ...(request && {
+          method: request.method,
+          headers: request.headers,
+          body: request.body,
+          signal: request.signal,
+          redirect: request.redirect,
+          ...(request.body !== null && { duplex: 'half' }),
+        }),
+        ...init,
+      },
+    );
     return request === undefined ? response : response.finally(() => request);
   };
 

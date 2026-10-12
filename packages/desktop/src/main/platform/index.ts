@@ -1,5 +1,5 @@
 import { app } from 'electron';
-import { Effect, Layer, ManagedRuntime, Scope } from 'effect';
+import { Context, Effect, Layer, ManagedRuntime, Scope } from 'effect';
 
 import {
   AgentDirectories,
@@ -12,6 +12,7 @@ import {
   type AgentDirectoriesPort,
   type StateStore,
   type WorkspaceRoots,
+  Sessions,
 } from '@texra-ai/harness';
 import {
   createNodeWorkspaceRoots,
@@ -211,5 +212,8 @@ export const initializeElectronPlatform = Effect.fn(
       mainDir,
     };
   });
-  return { runtime, processScope, initialize };
+  // The process's sessions, read from the runtime that serves them, for the
+  // project registry to open each project's session through.
+  const sessions = Effect.map(runtime.contextEffect, Context.get(Sessions));
+  return { runtime, processScope, initialize, sessions };
 });

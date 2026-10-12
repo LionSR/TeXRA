@@ -11,6 +11,7 @@ import {
   Effect,
   Exit,
   Fiber,
+  Scope,
   Stream,
   SubscriptionRef,
 } from 'effect';
@@ -18,7 +19,7 @@ import { beforeEach, describe, expect, onTestFinished, vi } from 'vitest';
 
 interface RootLaunchOptions {
   readonly onRun?: (handle: unknown) => Effect.Effect<void>;
-  readonly onRunResolved?: (runId: string, trace: unknown) => void;
+  readonly onAdmitted?: (runId: string) => Effect.Effect<void, Error>;
 }
 
 /** A session view run entry as the package's fold keys it. */
@@ -39,13 +40,13 @@ const mocks = vi.hoisted(() => ({
   closeSession: vi.fn((_root: string) =>
     Effect.succeed({ settled: true, abandoned: [] as string[] }),
   ),
-  detachEvents: vi.fn(),
   /** The process layer's release, as the package's scope ends it. */
   releaseProcess: vi.fn(),
   runId: 'ae0001',
   /** Fails the package session's fold, as a fold defect ends its view. */
   foldDeath: undefined as Deferred.Deferred<never, Error> | undefined,
-  eventListener: undefined as ((event: unknown) => void) | undefined,
+  /** The run's trace-port listeners a handoff installed. */
+  traceListeners: new Set<(event: unknown) => void>(),
   /** What the package composes its process from (`processLayer`). */
   processLayer: vi.fn(),
   runValidatedAgent: vi.fn(),
@@ -59,10 +60,6 @@ const mocks = vi.hoisted(() => ({
   /** The current package session's view, advanced independently of run. */
   sessionView: undefined as unknown,
   setTranscriptSubscriptions: vi.fn(),
-  subscribe: vi.fn((listener: (event: unknown) => void) => {
-    mocks.eventListener = listener;
-    return mocks.detachEvents;
-  }),
 }));
 
 vi.mock('@agent/core/definition/AgentConfig', () => ({
@@ -85,7 +82,7 @@ vi.mock('@agent/index/agentRegistry', async (importActual) => ({
   }),
 }));
 
-// The package composes its process with `processLayer`. The owner it serves
+// The package composes its process over `ownerProcessLayer`. The owner it serves
 // is stood in for by a map keyed by storage root, as the runtime's session
 // map keys its entries: the package must resolve every run through it and
 // never build a session of its own. The other process services are the
@@ -114,8 +111,31 @@ vi.mock('@controllers/session/sessionLayer', async () => {
             cause instanceof Error ? cause : new Error(String(cause)),
         }).pipe(Effect.uninterruptible),
     };
-    readonly interactions: { readonly approvalPromptsUnavailable?: boolean };
+    /** The hosts attached, newest last: the newest says whether a run
+     *  here can ask. */
+    readonly hosts: { readonly approvalPromptsUnavailable?: boolean }[];
+    readonly interactions = {
+      get approvalPromptsUnavailable(): boolean {
+        return false;
+      },
+      use: (host: { readonly approvalPromptsUnavailable?: boolean }) =>
+        Effect.sync(() => {
+          this.hosts.push(host);
+          return () => {
+            this.hosts.splice(this.hosts.indexOf(host), 1);
+          };
+        }),
+    };
     readonly requests = { request: mocks.decide };
+    /** The run's trace port: the listeners a handoff installs. */
+    readonly trace = {
+      listen: (_runId: string, listener: (event: unknown) => void) => {
+        mocks.traceListeners.add(listener);
+        return () => mocks.traceListeners.delete(listener);
+      },
+    };
+    /** No resume here is ever joined by another caller. */
+    readonly followUps = { joined: () => false };
     /** The session's view level: the pre-launch session, no run yet. */
     readonly viewRef = Effect.runSync(
       SubscriptionRef.make<FakeSessionView>({
@@ -145,6 +165,8 @@ vi.mock('@controllers/session/sessionLayer', async () => {
         Effect.sync(() => {
           mocks.setTranscriptSubscriptions(port, set);
         }),
+      /** A reader's fold inputs: none here. */
+      inputs: () => Stream.empty,
     };
 
     readonly roots: { readonly storage: string };
@@ -153,7 +175,11 @@ vi.mock('@controllers/session/sessionLayer', async () => {
       mocks.sessionInits.push(init);
       mocks.sessionView = this.viewRef;
       this.roots = init.roots;
-      this.interactions = init.interactions ?? {};
+      this.hosts = [init.interactions ?? {}];
+      const hosts = this.hosts;
+      Object.defineProperty(this.interactions, 'approvalPromptsUnavailable', {
+        get: () => hosts.at(-1)?.approvalPromptsUnavailable === true,
+      });
     }
   }
   const sessions = new Map<string, FakeSession>();
@@ -180,7 +206,7 @@ vi.mock('@controllers/session/sessionLayer', async () => {
     ),
   };
   return {
-    processLayer: (options: unknown) => {
+    ownerProcessLayer: (options: unknown) => {
       mocks.processLayer(options);
       return Layer.effectContext(
         Effect.map(testRuntime().contextEffect, (context) =>
@@ -219,8 +245,6 @@ const PLATFORM = {
   roots: { storage: '/storage', globalState: new MemoryStateStore() },
   storage: { getGlobalStoragePath: () => '/global-storage' },
 } as unknown as AgentPlatform;
-/** The run's trace as `onRunResolved` hands it over: the event source. */
-const TRACE = { subscribe: mocks.subscribe };
 /** The run's handle as `onRun` hands it over: the interrupt target. */
 const HANDLE = { runId: mocks.runId, interrupt: vi.fn() };
 const RESULT = { outcome: 'COMPLETED' } as never;
@@ -273,7 +297,7 @@ function completeRunView(): Promise<void> {
 
 /** The run entering the session, then its final view folding. */
 async function driveRun(options: RootLaunchOptions): Promise<typeof RESULT> {
-  options.onRunResolved?.('ae0001', TRACE);
+  await Effect.runPromise(options.onAdmitted?.('ae0001') ?? Effect.void);
   await enterRun('ae0001');
   await Effect.runPromise(options.onRun?.(HANDLE) ?? Effect.void);
   await completeRunView();
@@ -289,7 +313,7 @@ describe('agent package sessions', () => {
   beforeEach(() => {
     mocks.sessionInits.splice(0);
     vi.clearAllMocks();
-    mocks.eventListener = undefined;
+    mocks.traceListeners.clear();
     mocks.foldDeath = Effect.runSync(Deferred.make<never, Error>());
     mocks.interruptRun.mockReturnValue(false);
     mocks.runValidatedAgent.mockImplementation(
@@ -327,7 +351,7 @@ describe('agent package sessions', () => {
         });
         yield* Effect.gen(function* () {
           const sessions = yield* Sessions;
-          const session = yield* sessions.open();
+          const session = yield* sessions.open(PLATFORM.roots);
           const admission = yield* Effect.forkChild(
             session.start({
               agent: 'assistant',
@@ -365,7 +389,8 @@ describe('agent package sessions', () => {
         Deferred.succeed(decided, request).pipe(Effect.as({ kind: 'done' })),
       );
       const sessions = yield* Sessions;
-      yield* sessions.open(undefined, {
+      const session = yield* sessions.open(PLATFORM.roots);
+      yield* session.attach({
         approve: () => {
           throw new Error('handler down');
         },
@@ -399,10 +424,85 @@ describe('agent package sessions', () => {
     ),
   );
 
+  // Failure mode: the newest handler leaves mid-prompt on a parked run,
+  // which publishes no view, so the handler left behind never answers.
+  it.effect(
+    'withdraws a prompt when a newer handler attaches (never a watcher), and hands it back when that one leaves',
+    () =>
+      Effect.gen(function* () {
+        const decided = yield* Deferred.make<unknown>();
+        mocks.decide.mockImplementationOnce((request: unknown) =>
+          Deferred.succeed(decided, request).pipe(Effect.as({ kind: 'done' })),
+        );
+        const session = yield* (yield* Sessions).open(PLATFORM.roots);
+        // The older handler's first prompt is withdrawn; asked again once
+        // the newer one leaves, it approves.
+        const olderAsked = yield* Deferred.make<void>();
+        const withdrawn = yield* Deferred.make<void>();
+        let asks = 0;
+        yield* session.attach({
+          approve: () =>
+            (asks += 1) === 1
+              ? Deferred.succeed(olderAsked, undefined).pipe(
+                  Effect.andThen(Effect.never),
+                  Effect.onInterrupt(() =>
+                    Deferred.succeed(withdrawn, undefined),
+                  ),
+                )
+              : Effect.succeed({ action: 'approve' as const }),
+        });
+        yield* Effect.promise(() =>
+          enterRun('ae0001', { approval: 'own' } as Partial<FakeRunView>),
+        );
+        yield* SubscriptionRef.update(sessionView(), (current) => ({
+          ...current,
+          requests: [
+            {
+              runId: 'ae0001' as RunId,
+              requestId: 'r1',
+              payload: { kind: 'bash', data: {} } as never,
+              thread: null,
+            },
+          ],
+        }));
+        yield* Deferred.await(olderAsked);
+        // A watcher with no handler never takes the prompt over.
+        yield* session.attach({});
+        yield* Effect.yieldNow;
+        expect(yield* Deferred.isDone(withdrawn)).toBe(false);
+        const prompting = yield* Deferred.make<void>();
+        const newest = yield* Scope.make();
+        yield* session
+          .attach({
+            approve: () =>
+              Deferred.succeed(prompting, undefined).pipe(
+                Effect.andThen(Effect.never),
+              ),
+          })
+          .pipe(Scope.provide(newest));
+        yield* Deferred.await(withdrawn);
+        yield* Deferred.await(prompting);
+        yield* Scope.close(newest, Exit.void);
+        expect(yield* Deferred.await(decided)).toEqual({
+          kind: 'request.decide',
+          runId: 'ae0001',
+          requestId: 'r1',
+          decision: { action: 'approve' },
+        });
+      }).pipe(
+        Effect.scoped,
+        Effect.provide(
+          Sessions.layer({ platform: PLATFORM, plugins: PLUGINS }),
+        ),
+      ),
+  );
+
   it.live("serves the embedder's tool-missing handler", () =>
     Effect.gen(function* () {
       const openOnce = (platform: AgentPlatform) =>
-        Effect.flatMap(Sessions, (sessions) => sessions.open()).pipe(
+        Effect.flatMap(Sessions, (sessions) =>
+          sessions.open(PLATFORM.roots),
+        ).pipe(
           Effect.scoped,
           Effect.provide(Sessions.layer({ platform, plugins: PLUGINS })),
         );
@@ -426,12 +526,14 @@ describe('agent package sessions', () => {
 
         const program = Effect.gen(function* () {
           const sessions = yield* Sessions;
-          const session = yield* sessions.open();
+          const session = yield* sessions.open(PLATFORM.roots);
           yield* session.start({
             agent: 'assistant',
             instruction: 'Test instruction',
           });
-          yield* Effect.scoped(session.subscribe(interest));
+          yield* Stream.runDrain(
+            session.view.watch(interest, { cursor: 0 as never, debug: false }),
+          );
         }).pipe(
           Effect.scoped,
           Effect.provide(
@@ -467,7 +569,9 @@ describe('agent package sessions', () => {
         // rather than wait on a level that never comes.
         mocks.runValidatedAgent.mockImplementationOnce(
           async (_input: unknown, options: RootLaunchOptions) => {
-            options.onRunResolved?.('ae0001', TRACE);
+            await Effect.runPromise(
+              options.onAdmitted?.('ae0001') ?? Effect.void,
+            );
             await enterRun('ae0001');
             await runOnRun(options);
             return RESULT;
@@ -476,7 +580,7 @@ describe('agent package sessions', () => {
 
         yield* Effect.gen(function* () {
           const sessions = yield* Sessions;
-          const session = yield* sessions.open();
+          const session = yield* sessions.open(PLATFORM.roots);
           const run = yield* session.start({
             agent: 'assistant',
             instruction: 'Test instruction',

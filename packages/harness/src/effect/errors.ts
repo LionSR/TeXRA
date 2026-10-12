@@ -1,11 +1,11 @@
 /**
  * The failures the Effect surface names (`@texra-ai/harness`). Six are defined
- * here — the plugin list the package refuses, a reopen whose options differ,
- * the two launch refusals an embedder branches on, the resume refusal, and
- * the run's own failure — and two more reach the surface re-exported from
- * the session store (`DatabaseOpenFailed`, `DatabaseReadFailed`, the
- * `SessionOpenError` union in `@shared/session/database`), for eight tagged
- * errors on the surface in all.
+ * here — the plugin list the package refuses, the two launch refusals an
+ * embedder branches on, the resume refusal, a trace no reader can take, and
+ * the run's own failure — and three more reach the surface from the session
+ * store (`DatabaseOpenFailed`, `DatabaseReadFailed`, `SessionOptionsConflict`:
+ * the `SessionOpenError` union in `@shared/session/database`), for nine
+ * tagged errors on the surface in all.
  *
  * Request failures are not here. A `session.request` answers with the
  * runtime's own `RequestError` union (`@shared/session/requestErrors`), the
@@ -22,19 +22,6 @@ import type { FollowUpFailureReason } from '@agent/followUp/ToolUseFollowUp';
  * continue parked runs, or a switch on a plugin with no availability probe.
  */
 export class PluginsRefused extends Data.TaggedError('PluginsRefused')<{
-  readonly message: string;
-}> {}
-
-/**
- * A root's session is already open with other options: another store, or
- * another approval handler (compared by identity). The session keeps what
- * it was built with, so a reopen that asks for something else is refused
- * rather than handed a session that ignores it.
- */
-export class SessionOptionsConflict extends Data.TaggedError(
-  'SessionOptionsConflict',
-)<{
-  readonly storage: string;
   readonly message: string;
 }> {}
 
@@ -71,6 +58,19 @@ export class RunFailure extends Data.TaggedError('RunFailure')<{
 export class ResumeRefused extends Data.TaggedError('ResumeRefused')<{
   readonly runId: string;
   readonly reason: Exclude<FollowUpFailureReason, 'read_failed' | 'not_parent'>;
+  readonly message: string;
+}> {}
+
+/**
+ * A run's trace that no reader can take any more: `ended` (the run settled
+ * with nobody reading, so its buffered trace went with it), `truncated`
+ * (it passed the handover buffer before a reader attached, so the trace
+ * was detached) or `remote` (the run runs in another process, which keeps
+ * its trace). The run itself is unaffected: its `result` still answers.
+ */
+export class TraceUnavailable extends Data.TaggedError('TraceUnavailable')<{
+  readonly runId: string;
+  readonly reason: 'ended' | 'truncated' | 'remote';
   readonly message: string;
 }> {}
 

@@ -20,7 +20,7 @@ import {
   lookupApiKey,
   providerDisplayName,
 } from '@texra-ai/llm';
-import type { HostInteractions, SessionHandle } from '@agent/runtime';
+import type { HostInteractions } from '@agent/runtime';
 import { warnApprovalDenied } from '@cli/runtime/approval/approvalPrompts';
 import { promptForCliProviderApiKey } from '@cli/chat/tui/hosts/cliProviderKeys';
 import type { CliContext } from '@cli/runtime/cliContext';
@@ -61,13 +61,9 @@ import type { PlatformSecrets } from '@texra-ai/harness';
  * which holds them already.
  */
 interface TuiApprovalStores {
-  /** The chat's session: `/approval` writes land here between turns, so a
-   *  denial notice names the live policy read from it rather than the
-   *  launch-time CliContext value. */
-  readonly session: SessionHandle;
-  /** Where its decisions land: the chat's session in the service;
-   *  `session`'s own when unset. */
-  readonly requests?: SessionRequests;
+  /** Where its decisions land: the chat's session, here or in the
+   *  service. */
+  readonly requests: SessionRequests;
   /** A tool edit's preview, when another process (the background service)
    *  runs the tool and so stages it there; absent when this one does. */
   readonly preview?: (
@@ -147,7 +143,7 @@ export function createTuiHostInteractions(
         // This capability already selected the credential route; decomposing
         // the decision again would call the capability recursively.
         landRequestDecision(
-          stores.requests ?? stores.session.requests,
+          stores.requests,
           stores.runtime,
           runId,
           requestId,
@@ -286,7 +282,7 @@ export function createTuiHostInteractions(
 
   return {
     approvalDenied: (denial, runId) =>
-      warnApprovalDenied(stores.session, context, denial, runId),
+      warnApprovalDenied(context, denial, runId),
     // The CLI host renders the notice itself and says whether it rendered a
     // user-visible record; there is no program for the session to fork.
     emit: (event, payload) => {

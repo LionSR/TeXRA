@@ -1,4 +1,8 @@
-/** C9 generated-file cleanup, driven only by committed deletion records. */
+/**
+ * A run's directory on disk: C9 generated-file cleanup, driven only by
+ * committed deletion records, and the `run.files` request that copies a
+ * stopped run's directory into the workspace or removes it.
+ */
 import * as path from 'node:path';
 
 import {
@@ -7,14 +11,25 @@ import {
   FileSystem,
   type Context,
   type Fiber,
+  type Path,
   type PlatformError,
   type Scope,
 } from 'effect';
 
 import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
 import { withLogChannel } from '@logger/effectLog';
+import { withSessionFs } from '@platform/rootedFs';
+import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import type { RunId } from '@shared/schemas';
 import type { Database } from '@shared/session/database';
+import { Rejected, type RequestError } from '@shared/session/requestErrors';
+import type {
+  Outcome,
+  RunFilesResult,
+  RuntimeRequest,
+} from '@shared/session/runtimeRequest';
+import { toErrorMessage } from '@utils/errors/errorMessage';
+import { copyOrRemoveRunDir } from '@utils/files/runStorageFs';
 import { isPathWithin } from '@utils/core/pathCore';
 
 const CHANNEL = 'DeletionCleanup';
@@ -132,3 +147,59 @@ export const deletionCollector = (
     );
     return Effect.forkIn(pass, scope);
   });
+
+/** What a `run.files` request reads from the process: its files. */
+export type RunFilesServices = FileSystem.FileSystem | Path.Path;
+
+/**
+ * Answer a `run.files` request on `session` with the run held for the
+ * operation (`runs.launch({ hold })`): that takes its claim and refuses a run
+ * live here, so a resume never starts under it, and the claim is never taken
+ * on another process's behalf. What a copy is for, and where it goes, is the
+ * requesting app's.
+ */
+export const runFiles = (
+  session: {
+    readonly roots: WorkspaceRoots;
+    readonly runs: {
+      readonly launch: (spec: {
+        readonly hold: RunId;
+      }) => Effect.Effect<void, Error, Scope.Scope>;
+    };
+  },
+  req: Extract<RuntimeRequest, { kind: 'run.files' }>,
+): Effect.Effect<Outcome, RequestError, RunFilesServices> =>
+  session.runs.launch({ hold: req.runId }).pipe(
+    Effect.mapError((cause) =>
+      cause instanceof Rejected
+        ? cause
+        : new Rejected({
+            reason: `This run is running or held elsewhere: ${toErrorMessage(cause)}`,
+          }),
+    ),
+    Effect.andThen(
+      copyOrRemoveRunDir(req.runId, req.files).pipe(
+        Effect.map((found): RunFilesResult => {
+          if (!found) return { status: 'noFiles' };
+          return req.files.op === 'copy'
+            ? { status: 'done', to: req.files.to }
+            : { status: 'done' };
+        }),
+        Effect.catch((error) =>
+          Effect.logError(
+            `The ${req.files.op} of run ${req.runId} failed`,
+          ).pipe(
+            Effect.annotateLogs({ data: error }),
+            Effect.as<RunFilesResult>({
+              status: 'error',
+              error: toErrorMessage(error),
+            }),
+          ),
+        ),
+      ),
+    ),
+    Effect.map((result): Outcome => ({ kind: 'runFiles', result })),
+    Effect.scoped,
+    (program) => withSessionFs(session.roots, program),
+    withLogChannel('runFiles'),
+  );
