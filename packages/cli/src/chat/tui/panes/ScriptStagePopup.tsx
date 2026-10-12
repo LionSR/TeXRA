@@ -15,6 +15,16 @@ import { ReaderPanel, readerLayout } from '@cli/tui/ui/BorderedPanel';
 import { KeyHints, type KeyHint } from '@cli/tui/ui/KeyHints';
 import { Select, type SelectItem } from '@cli/tui/ui/Select';
 import {
+  CROSS,
+  DASHED_CIRCLE,
+  HALF_CIRCLE,
+  HOLLOW_DOT,
+  NOT_RUN,
+  REUSED,
+  SKIP_CIRCLE,
+  TICK,
+} from '@cli/tui/ui/glyphs';
+import {
   COLOR_BORDER,
   COLOR_ERROR,
   COLOR_HINT,
@@ -48,15 +58,15 @@ import type { RunId } from '@texra-ai/harness/schemas';
 const POPUP_EXTRA_ROWS = 1;
 
 const STATUS_GLYPH = {
-  queued: '○',
-  running: '◐',
-  interrupted: '◌',
-  finished: '✓',
-  reused: '↺',
-  skipped: '⊘',
-  cancelled: '⊘',
-  failed: '✗',
-  'not run': '·',
+  queued: HOLLOW_DOT,
+  running: HALF_CIRCLE,
+  interrupted: DASHED_CIRCLE,
+  finished: TICK,
+  reused: REUSED,
+  skipped: SKIP_CIRCLE,
+  cancelled: SKIP_CIRCLE,
+  failed: CROSS,
+  'not run': NOT_RUN,
 } as const satisfies Record<ScriptCallView['status'], string>;
 
 const STATUS_COLOR = {

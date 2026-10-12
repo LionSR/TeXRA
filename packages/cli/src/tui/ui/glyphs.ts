@@ -32,6 +32,16 @@ export const CROSS = '✗';
 /** Work deliberately not done: a user skip or a task the run never reached. */
 export const SKIP_CIRCLE = '⊘';
 
+/** Hollow dot: the off beat of a pulse, and a step queued but not started. */
+export const HOLLOW_DOT = '○';
+
+/** Script-call states with no other home in the TUI: running, interrupted,
+ *  reused from an earlier run, and not run. */
+export const HALF_CIRCLE = '◐';
+export const DASHED_CIRCLE = '◌';
+export const REUSED = '↺';
+export const NOT_RUN = '·';
+
 /** Transcript row prefixes (trailing space included for the gutter). User rows
  *  (and the default fallback) reuse the same chevron as selects (POINTER) so the
  *  look stays consistent; error rows use a bang. Assistant rows carry no prefix
