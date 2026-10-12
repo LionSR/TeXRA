@@ -103,10 +103,10 @@ set; nothing in these areas reopened a retained refusal.
      the charter names, and no net-negative collapse candidate remains. The
      prior pass's one carried marginal item — a single-caller
      `finalizeRunTerminalBody` split — no longer applies: that symbol is gone,
-     and `finalizeRunTerminal` (`AgentRunLifecycle.ts:114`, an `Effect.fn`
+     and `finalizeRunTerminal` (`AgentRunLifecycle.ts:113`, an `Effect.fn`
      applying `Effect.uninterruptible` directly) is now a **two-caller** shared
-     terminal-finalization boundary (`AgentRunLifecycle.ts:297` and
-     `tools/delegation/childRun.ts:147`), not a cosmetic wrapper — do not inline
+     terminal-finalization boundary (`AgentRunLifecycle.ts:276` and
+     `tools/delegation/childRun.ts:144`), not a cosmetic wrapper — do not inline
      it.
    - **Model handler** was reorganized, not inflated: the old 966-line
      `modelBinding.ts` became the five-file `runtime/modelAccess/` subsystem
