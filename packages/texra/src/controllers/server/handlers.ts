@@ -48,6 +48,7 @@ import {
 } from '@texra/shared/session/sessionFrames';
 import { frameSubscription } from '@texra/controllers/session/SessionFramer';
 import type { EditorHostShape } from '@texra/tools/editorHost';
+import { assembleTrace } from '@transcript';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import {
@@ -322,19 +323,23 @@ export const serviceHandlers = TexraRpcs.toLayer(
           Effect.mapError((error) =>
             recordsFailed('unreadable', error.message),
           ),
+          // Whether the run exists, from the log rather than the live
+          // fold: a session the open just (re)built has folded nothing yet.
           Effect.flatMap(({ handle }) =>
-            handle.view.run(runId) === undefined
-              ? Effect.fail(
-                  recordsFailed(
-                    'unknownRun',
-                    `The TeXRA service holds no task ${runId} in ${workspace}.`,
+            Effect.flatMap(handle.view.read([runId]), (level) =>
+              level.runs.has(runId)
+                ? read(handle).pipe(
+                    Effect.mapError((error) =>
+                      recordsFailed('unreadable', error.message),
+                    ),
+                  )
+                : Effect.fail(
+                    recordsFailed(
+                      'unknownRun',
+                      `The TeXRA service holds no task ${runId} in ${workspace}.`,
+                    ),
                   ),
-                )
-              : read(handle).pipe(
-                  Effect.mapError((error) =>
-                    recordsFailed('unreadable', error.message),
-                  ),
-                ),
+            ),
           ),
         ),
       );
@@ -391,6 +396,8 @@ export const serviceHandlers = TexraRpcs.toLayer(
             ({ config, exportInput }) => ({ config, exportInput }),
           ),
         ),
+      'task.exportTrace': ({ workspace, runId }) =>
+        records(workspace, runId, (handle) => assembleTrace(runId, handle)),
       'task.request': ({ workspace, request }) =>
         Effect.scoped(
           openSession(workspace).pipe(

@@ -49,8 +49,7 @@ const SessionCloseReportSchema = z.strictObject({
 
 export type SessionCloseReport = z.infer<typeof SessionCloseReportSchema>;
 
-/** What a pack or clean of a run's files did (`run.files`). */
-export const FileOpResultSchema = z.discriminatedUnion('status', [
+const FileOpResultSchema = z.discriminatedUnion('status', [
   z.strictObject({
     status: z.literal('success'),
     /** Output directory if files were packed */

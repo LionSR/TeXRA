@@ -618,7 +618,8 @@ export const createHostRunActions = (
           const config = yield* workflowConfig(runId);
           if (!config) return undefined;
           const inputFile = config.inputFiles[0] ?? '';
-          if (!inputFile)
+          // A pack names its folder for the input; a clean needs none.
+          if (operation === 'pack' && !inputFile)
             return { inputFile, result: { status: 'missingParams' } as const };
           const outcome = yield* session
             .request({
@@ -627,7 +628,7 @@ export const createHostRunActions = (
               files:
                 operation === 'pack'
                   ? {
-                      action: 'pack',
+                      op: 'copy',
                       to: packDestination({
                         runId,
                         inputFile,
@@ -635,7 +636,7 @@ export const createHostRunActions = (
                         model: config.model,
                       }),
                     }
-                  : { action: 'clean' },
+                  : { op: 'remove' },
             })
             .pipe(
               Effect.catchTag('NotOwner', () =>
@@ -650,7 +651,14 @@ export const createHostRunActions = (
             return yield* Effect.die(
               new Error(`run.files answered ${outcome.kind}`),
             );
-          return { inputFile, result: outcome.result };
+          const { result } = outcome;
+          return {
+            inputFile,
+            result:
+              result.status === 'done'
+                ? { status: 'success', outputFolder: result.to }
+                : result,
+          };
         },
       ),
       runCompileFixer: Effect.fn(function* (runId) {

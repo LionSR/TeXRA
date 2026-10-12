@@ -21,8 +21,9 @@
  *   model switch, a pending tool edit's preview, …).
  * - `task.start` / `task.resume`: launch or continue a task in the service;
  *   `task.ended`: the outcome it ends with.
- * - `task.config` / `task.exportInput`: a task's saved setup, and what its
- *   transcript export reads, from the service's own records.
+ * - `task.config` / `task.exportInput` / `task.exportTrace`: a task's saved
+ *   setup, and what its transcript exports read, from the service's own
+ *   records.
  * - `host.attach` / `host.focus` / `host.answer`: a window offering its host
  *   capabilities to its project's tasks (see `hostCalls.ts`).
  */
@@ -34,7 +35,12 @@ import { z } from 'zod';
 import { AgentConfigSchema } from '@texra-ai/harness/schemas';
 import { ChatExportInputSchema } from '@agent/export/schemas';
 import { TexraApprovalPolicySchema } from '@shared/approvalPolicy';
-import { RunEndSchema, RunIdSchema } from '@shared/schemas';
+import {
+  DisplaySessionEventSchema,
+  RunEndSchema,
+  RunIdSchema,
+  RunRecordFieldsSchema,
+} from '@shared/schemas';
 
 import {
   OutcomeSchema,
@@ -151,8 +157,8 @@ const TaskFailedSchema = z.object({
 });
 export type TaskFailed = z.infer<typeof TaskFailedSchema>;
 
-/** Why `task.config` or `task.exportInput` has no answer: the service holds
- *  no such run in the project, or its records would not read. */
+/** Why a task's records have no answer: the service holds no such run in
+ *  the project, or its records would not read. */
 const TaskRecordsFailedSchema = z.object({
   _tag: z.literal('TaskRecordsFailed'),
   reason: z.enum(['unknownRun', 'unreadable']),
@@ -229,6 +235,26 @@ export const TexraRpcs = RpcGroup.make(
   Rpc.make('task.config', {
     payload: { workspace, runId: zodWire(RunIdSchema) },
     success: zodWire(AgentConfigSchema.nullable()),
+    error: zodWire(TaskRecordsFailedSchema),
+  }),
+  /** What the HTML transcript export reads: the run's display rows and its
+   *  record (`assembleTrace`), or why it has none. */
+  Rpc.make('task.exportTrace', {
+    payload: { workspace, runId: zodWire(RunIdSchema) },
+    success: zodWire(
+      z.discriminatedUnion('status', [
+        z.object({
+          status: z.literal('ok'),
+          // A `TraceDocument`: the run's display rows, in commit order.
+          trace: z.object({
+            runId: RunIdSchema,
+            events: z.array(DisplaySessionEventSchema),
+          }),
+          record: RunRecordFieldsSchema,
+        }),
+        z.object({ status: z.enum(['config_missing', 'streamLogs_missing']) }),
+      ]),
+    ),
     error: zodWire(TaskRecordsFailedSchema),
   }),
   /** What the transcript export reads: the run's setup and the assembled

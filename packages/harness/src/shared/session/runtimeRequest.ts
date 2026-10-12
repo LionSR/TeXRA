@@ -15,11 +15,7 @@
 import { z } from 'zod';
 
 import { APPROVAL_BYPASS_KINDS } from '@shared/approvalBypassKind';
-import {
-  FileOpResultSchema,
-  RequestDecisionSchema,
-  RunIdSchema,
-} from '@shared/schemas';
+import { RequestDecisionSchema, RunIdSchema } from '@shared/schemas';
 
 const runScoped = { runId: RunIdSchema };
 
@@ -76,16 +72,15 @@ export const RuntimeRequestSchema = z.discriminatedUnion('kind', [
     model: z.string().min(1),
   }),
   /**
-   * The toolbar's pack and clean of a stopped run's files, done under its
-   * claim by the process that holds the run's session: `pack` copies the
-   * run's directory to `to` (workspace-relative), `clean` removes it.
+   * A stopped run's directory, copied to `to` (workspace-relative) or
+   * removed, under its claim by the process that holds the run's session.
    */
   z.object({
     kind: z.literal('run.files'),
     ...runScoped,
-    files: z.discriminatedUnion('action', [
-      z.object({ action: z.literal('pack'), to: z.string().min(1) }),
-      z.object({ action: z.literal('clean') }),
+    files: z.discriminatedUnion('op', [
+      z.object({ op: z.literal('copy'), to: z.string().min(1) }),
+      z.object({ op: z.literal('remove') }),
     ]),
   }),
   z.object({
@@ -144,6 +139,16 @@ const ToolEditContentSchema = z.object({
 /** A pending tool edit's staged content (`request.preview`). */
 export type ToolEditContent = z.infer<typeof ToolEditContentSchema>;
 
+/** What a `run.files` did: `done` (with the copy's folder), no directory
+ *  to act on, or the failure that stopped it. */
+const RunFilesResultSchema = z.discriminatedUnion('status', [
+  z.object({ status: z.literal('done'), to: z.string().optional() }),
+  z.object({ status: z.literal('noFiles') }),
+  z.object({ status: z.literal('error'), error: z.string() }),
+]);
+/** What a `run.files` request did. */
+export type RunFilesResult = z.infer<typeof RunFilesResultSchema>;
+
 /** What the runtime answers with: a typed value the host renders. */
 export const OutcomeSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('done') }),
@@ -158,6 +163,6 @@ export const OutcomeSchema = z.discriminatedUnion('kind', [
     kind: z.literal('preview'),
     preview: ToolEditContentSchema.nullable(),
   }),
-  z.object({ kind: z.literal('runFiles'), result: FileOpResultSchema }),
+  z.object({ kind: z.literal('runFiles'), result: RunFilesResultSchema }),
 ]);
 export type Outcome = z.infer<typeof OutcomeSchema>;

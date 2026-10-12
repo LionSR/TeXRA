@@ -22,7 +22,7 @@
   "packages/harness/src/agent/workspaceAgents/WorkspaceAgentsController.ts": 436,
   "packages/harness/src/controllers/session/Database.ts": 1186,
   "packages/harness/src/controllers/session/sessionLayer.ts": 756,
-  "packages/harness/src/controllers/session/SessionRequests.ts": 525,
+  "packages/harness/src/controllers/session/SessionRequests.ts": 524,
   "packages/harness/src/controllers/session/storeSchema.ts": 412,
   "packages/harness/src/shared/schemas/runHistoryEvent.ts": 454,
   "packages/harness/src/shared/schemas/sessionEvent.ts": 642,

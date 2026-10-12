@@ -132,7 +132,7 @@ export class TaskRecordsUnavailable extends Data.TaggedError(
 /**
  * A window's reads of its project's task records, answered by the service
  * from its own session: the run's saved setup, and what its transcript
- * export reads. The window opens no records of its own in service mode.
+ * exports read. The window opens no records of its own in service mode.
  */
 export const serviceRecords = (link: ServiceLink, workspace: string) => {
   const ask = <A>(
@@ -173,6 +173,8 @@ export const serviceRecords = (link: ServiceLink, workspace: string) => {
       ask(runId, (client) => client['task.config']({ workspace, runId })),
     exportInput: (runId: RunId) =>
       ask(runId, (client) => client['task.exportInput']({ workspace, runId })),
+    exportTrace: (runId: RunId) =>
+      ask(runId, (client) => client['task.exportTrace']({ workspace, runId })),
   };
 };
 

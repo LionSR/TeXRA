@@ -15,7 +15,11 @@ import {
 } from 'effect';
 
 import { LanguageModel, withProcessServices } from '@texra-ai/harness';
-import { SessionHostInteractions, type HostInteractions } from '@agent/runtime';
+import {
+  SessionHostInteractions,
+  type HostInteractions,
+  type SessionHandle,
+} from '@agent/runtime';
 import { getCatalogAgent, refresh } from '@agent/index';
 import { BundledViewContentProvider } from '@common/webview';
 import {
@@ -80,7 +84,6 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { createExtensionHostRequests } from './extensionHostRequests';
 import { RequestAttention } from './requestAttention';
-import type { WindowSession } from '../windowSession';
 import type {
   ProcessRuntime,
   ProcessServices,
@@ -118,6 +121,20 @@ interface Port {
   readonly attached: AttachedPort;
   readonly disposables: vscode.Disposable[];
 }
+
+/** The window's session: the service's, or, when the service could not be
+ *  reached, this process's own with the handle that owns it. */
+export type WindowSession =
+  | {
+      readonly session: Session;
+      readonly service: ServiceLink;
+      readonly handle?: undefined;
+    }
+  | {
+      readonly session: Session;
+      readonly handle: SessionHandle;
+      readonly service?: undefined;
+    };
 
 export class ProgressViewProvider implements vscode.WebviewViewProvider {
   public static readonly viewType = 'texra.mainView';
@@ -469,16 +486,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     );
     return {
       records: { roots: this.roots, readConfig: remote.readConfig, present },
-      exportRecords: {
-        input: remote.exportInput,
-        // The trace stays with the service that runs the task.
-        trace: (runId) =>
-          Effect.fail(
-            new Error(
-              `The HTML export reads task ${runId}'s trace, which the TeXRA service keeps; export it as Markdown or LaTeX instead.`,
-            ),
-          ),
-      },
+      exportRecords: { input: remote.exportInput, trace: remote.exportTrace },
     };
   }
 

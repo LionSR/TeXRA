@@ -111,16 +111,17 @@ const withRunClaim = <A, R>(
           ),
       );
 
-/**
- * Refuse a delete, compaction, rename or grant the run's `actions` no longer
- * hold (the host rendered an earlier view). A run not folded yet, or held
- * by another process, is left to `admit` and the claim; a stop is ungated.
- */
+/** Refuse a gated request the run's `actions` no longer hold (the host
+ *  rendered an earlier view; a files copy is gated as `pack`, a removal as
+ *  `clean`); a run not folded yet, or held elsewhere, is left to `admit`
+ *  and the claim; a stop is ungated. */
 const requireRunAction = (
   deps: RequestDeps,
   req: RuntimeRequest,
 ): Effect.Effect<void, RequestError> => {
-  const action = GATED_ACTIONS[req.kind];
+  let action = GATED_ACTIONS[req.kind];
+  if (req.kind === 'run.files')
+    action = req.files.op === 'copy' ? 'pack' : 'clean';
   if (action === undefined) return Effect.void;
   const runId = req.kind === 'policy.set' ? req.change.runId : req.runId;
   const run = deps.session().view.run(runId);
@@ -214,12 +215,10 @@ const pendingOf = (deps: RequestDeps, runId: RunId, requestId: string) =>
   );
 
 /**
- * The one way in for a surface's decision (one run model, 3.7): the
- * request must be pending, the decision lands as the run's
- * `request.decided` row, and the waiting run reads it from the tail.
- * {@link decide} re-reads the committed rows inside its transaction and is
- * the authority, so two surfaces deciding at once record one decision and
- * the loser hears that the request was settled.
+ * The one way in for a surface's decision (one run model, 3.7): a pending
+ * request's `request.decided` row, which the waiting run reads from the
+ * tail. {@link decide} re-reads the committed rows in its transaction, so of
+ * two surfaces deciding at once one records and the other hears `settled`.
  *
  * The plugin owning the request's kind records its side first (an
  * inquiry's answer, on its cross-project thread), outside the run's

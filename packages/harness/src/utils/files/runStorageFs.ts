@@ -1,30 +1,29 @@
-// Node imports
 import * as path from 'node:path';
 
-// Third-party imports
 import { Effect, FileSystem, Path, PlatformError, type Scope } from 'effect';
 
-// Local imports
 import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
 import { withLogChannel } from '@logger/effectLog';
 import { StorageFs, WorkspaceFs, withSessionFs } from '@platform/rootedFs';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import {
   RunIdSchema,
-  type FileOpResult,
   type RunId,
   type RunStorageFileLocation,
 } from '@shared/schemas';
 import { Rejected, type RequestError } from '@shared/session/requestErrors';
-import type { Outcome, RuntimeRequest } from '@shared/session/runtimeRequest';
+import type {
+  Outcome,
+  RunFilesResult,
+  RuntimeRequest,
+} from '@shared/session/runtimeRequest';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { normalizeFilePath } from '@utils/core';
 import { getPathSegments, isPathWithin } from '@utils/core/pathCore';
 
-// Local file imports
 import { createRunStorageLocation } from './fileLocation';
-import { entryExists, entryTypeIn } from './fsEntryExists';
 import { copyDereferenced } from './fsDurability';
+import { entryExists, entryTypeIn } from './fsEntryExists';
 
 export const CHANNEL = 'runStorage';
 
@@ -315,24 +314,34 @@ export function shouldSkipRelocation(relativePath: string): boolean {
   return segments.length > 0 && IGNORED_WORKSPACE_ROOTS.has(segments[0]);
 }
 
+/*
+ * The `run.files` request: a stopped run's directory copied into the
+ * workspace or removed, by the process whose session holds the run. The run
+ * is held for the operation (`runs.launch({ hold })`), which takes its claim
+ * and refuses a run live here, so a resume never starts under it; the claim
+ * is never taken on another process's behalf. What the copy is for, and
+ * where it goes, is the requesting app's.
+ */
+
 /** What a `run.files` request reads from the process: its files. */
 export type RunFilesServices = FileSystem.FileSystem | Path.Path;
 
+type RunFilesRequest = Extract<RuntimeRequest, { kind: 'run.files' }>;
+
 /** Copy the run's directory to `to`, or remove it, as its result. */
-const packOrClean = Effect.fn('runStorage.packOrClean')(function* (
-  req: Extract<RuntimeRequest, { kind: 'run.files' }>,
+const copyOrRemove = Effect.fn('runFiles.copyOrRemove')(function* (
+  req: RunFilesRequest,
 ) {
   const storageFs = yield* StorageFs;
   const runDir = resolveRunStoragePath(req.runId);
-  // Only `NotFound` is absent: a directory that cannot be inspected fails.
   if (!(yield* storageFs.exists(runDir))) {
     yield* Effect.logWarning(`Run directory not found for run ${req.runId}`);
-    return { status: 'noFiles' } satisfies FileOpResult;
+    return { status: 'noFiles' } satisfies RunFilesResult;
   }
-  if (req.files.action === 'clean') {
+  if (req.files.op === 'remove') {
     yield* Effect.logInfo(`Removing the run directory ${runDir}`);
     yield* storageFs.remove(runDir, { recursive: true, force: true });
-    return { status: 'success' } satisfies FileOpResult;
+    return { status: 'done' } satisfies RunFilesResult;
   }
   const { to } = req.files;
   const workspaceFs = yield* WorkspaceFs;
@@ -342,19 +351,13 @@ const packOrClean = Effect.fn('runStorage.packOrClean')(function* (
     recursive: true,
   });
   // Symlinks are dereferenced so the copy stands alone; it fails on an
-  // existing folder rather than merging into an earlier pack.
+  // existing folder rather than merging into an earlier copy.
   yield* copyDereferenced(source, destination);
-  yield* Effect.logInfo(`Packed ${source} -> ${destination}`);
-  return { status: 'success', outputFolder: to } satisfies FileOpResult;
+  yield* Effect.logInfo(`Copied ${source} -> ${destination}`);
+  return { status: 'done', to } satisfies RunFilesResult;
 });
 
-/**
- * The `run.files` request: a stopped run's directory packed into the
- * workspace or removed, by the process whose session holds the run. The run
- * is held for the operation (`runs.launch({ hold })`), which takes its claim
- * and refuses a run live here, so a resume never starts under a pack or a
- * clean; the claim is never taken on another process's behalf.
- */
+/** Answer `req` on `session`, with the run held for the operation. */
 export const runFiles = (
   session: {
     readonly roots: WorkspaceRoots;
@@ -364,23 +367,24 @@ export const runFiles = (
       }) => Effect.Effect<void, Error, Scope.Scope>;
     };
   },
-  req: Extract<RuntimeRequest, { kind: 'run.files' }>,
+  req: RunFilesRequest,
 ): Effect.Effect<Outcome, RequestError, RunFilesServices> =>
   session.runs.launch({ hold: req.runId }).pipe(
-    Effect.mapError(
-      (cause) =>
-        new Rejected({
-          reason: `This run is running or held elsewhere: ${toErrorMessage(cause)}`,
-        }),
+    Effect.mapError((cause) =>
+      cause instanceof Rejected
+        ? cause
+        : new Rejected({
+            reason: `This run is running or held elsewhere: ${toErrorMessage(cause)}`,
+          }),
     ),
     Effect.andThen(
-      packOrClean(req).pipe(
+      copyOrRemove(req).pipe(
         Effect.catch((error) =>
           Effect.logError(
-            `The ${req.files.action} of run ${req.runId} failed`,
+            `The ${req.files.op} of run ${req.runId} failed`,
           ).pipe(
             Effect.annotateLogs({ data: error }),
-            Effect.as<FileOpResult>({
+            Effect.as<RunFilesResult>({
               status: 'error',
               error: toErrorMessage(error),
             }),
