@@ -12,7 +12,6 @@ import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 
 // Local imports - shared styles
 import { APPROVE_SESSION_ACTION } from '@texra/shared/session/surfaceDecision';
-import { isLatexFile } from '@texra/common/files/fileTypeUtils';
 import { SessionUiEvents } from '@texra/shared/session/uiEvents';
 import { RUN_GRANT_LABEL } from '@ui/copy/delegationApproval';
 
@@ -29,6 +28,9 @@ import { BaseRequestPanel, type RunGrant } from './BaseRequestPanel';
 import { toolEditRequestPanelStyles } from './ToolEditRequestPanel.styles';
 import type { RuntimeRequest } from '@texra-ai/harness';
 import type { WaSelectEvent } from '@awesome.me/webawesome/dist/events/events.js';
+
+/** Browser-safe LaTeX check: the webview cannot load `node:path`-backed path helpers. */
+const LATEX_PATH = /\.(?:tex|ltx|latex)$/i;
 
 @customElement('tool-edit-request-panel')
 export class ToolEditRequestPanel extends BaseRequestPanel<'toolEdit'> {
@@ -111,7 +113,7 @@ export class ToolEditRequestPanel extends BaseRequestPanel<'toolEdit'> {
       disabled: this.readOnly,
       onClick: this.handleDiffAction,
     });
-    if (!isLatexFile(this.permission.data.path) || this.readOnly)
+    if (!LATEX_PATH.test(this.permission.data.path) || this.readOnly)
       return openDiff;
 
     return html`
