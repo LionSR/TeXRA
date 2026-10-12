@@ -3,7 +3,6 @@ import { Cause, Effect } from 'effect';
 import { type SessionHandle } from '@agent/runtime/SessionHandle';
 import { requireRun, sessionOf } from '@agent/runtime/RunCall';
 import { ToolContext } from '@agent/core/tools/ToolTypes';
-import { isLatexFile } from '@common/files/fileTypeUtils';
 import { withLogChannel } from '@logger/effectLog';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import {
@@ -126,7 +125,6 @@ export function prepareToolEditApprovalPrompt(
       runId: runId ?? '',
       addedLines: lineChanges.added,
       removedLines: lineChanges.removed,
-      isLatex: isLatexFile(request.path),
     },
     diffTimeout: timeout,
   };

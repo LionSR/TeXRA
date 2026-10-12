@@ -16,10 +16,12 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { spawnSync } from 'node:child_process';
-import { tmpdir } from 'node:os';
+import { homedir, tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { runTests } from '@vscode/test-electron';
+
+import { isolatedHomeEnv } from './isolated-home.mjs';
 
 const repoRoot = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -44,8 +46,10 @@ const root = mkdtempSync(
 );
 const workspace = path.join(root, 'w');
 mkdirSync(workspace);
-// The extension host's home: the TeXRA store and the background service the
-// window starts live here, never in the developer's ~/.texra.
+// The window's home: the TeXRA store and the background service the window
+// starts live here, never in the developer's ~/.texra. Every directory the
+// kernel suite swaps is swapped here too, and the suite checks nothing of
+// the real home reaches the extension host.
 const home = path.join(root, 'h');
 mkdirSync(home);
 writeFileSync(
@@ -105,8 +109,8 @@ try {
       'scripts/vscode-host-e2e-suite.cjs',
     ),
     extensionTestsEnv: {
-      HOME: home,
-      USERPROFILE: home,
+      ...isolatedHomeEnv(home),
+      TEXRA_E2E_REAL_HOME: homedir(),
       TEXRA_NO_TELEMETRY: '1',
     },
     launchArgs: [
