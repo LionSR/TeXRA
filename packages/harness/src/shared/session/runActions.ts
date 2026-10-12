@@ -10,7 +10,10 @@ import {
   type RunAction,
 } from '@shared/schemas';
 
+import { isTerminalOutcomePhase } from '@shared/runs/runStatus';
+
 import { isLiveRun, type RunView } from './sessionView';
+import type { ReadonlyDeep } from './readonlyDeep';
 
 /** Opening the run's folder, exporting its conversation, copying its
  *  diagnostics: what any run offers, a fresh list per run so no two views
@@ -19,9 +22,12 @@ const inspectActions = (): RunAction[] => ['openRunStorage', 'export', 'copy'];
 
 /**
  * The one rule for which actions a run's state licenses, applied by the fold
- * into `RunView.actions`. A run another process holds (or one this process
- * cannot read) is inspect-only. A live run (`isLiveRun`: working, waiting,
- * or spawned and not started yet) can be stopped; while it works, an
+ * into `RunView.actions`. A run another process holds is inspect-only. One
+ * no live process holds whose rows this build cannot read (`stranded`:
+ * damaged, or an earlier build's with no upcaster) never becomes readable,
+ * so it offers delete beside inspection, the one way to clear it. A live
+ * run (`isLiveRun`: working, waiting, or spawned and not started yet) can
+ * be stopped; while it works, an
  * agent's run takes approval grants, and a conversation (not a document
  * task) its compaction and a reset or handoff. Nothing that rewrites or
  * removes a run's files or history is offered while it is live. Any run this
@@ -46,7 +52,9 @@ export function runActions(
     | 'parentId'
     | 'forkPoint'
   >,
+  stranded: boolean,
 ): RunAction[] {
+  if (stranded) return ['delete', ...inspectActions()];
   if (run.readOnly) return inspectActions();
   if (isLiveRun(run)) {
     const working = run.group === 'running' || run.group === 'waiting';
@@ -65,8 +73,9 @@ export function runActions(
     ];
   }
   const actions: RunAction[] = ['delete', 'rename'];
+  const ended = isTerminalOutcomePhase(run.status);
   if (
-    isLoopDriven(run.identity) &&
+    continuesFromRows({ ...run, ended }) &&
     (run.group === 'interrupted' ||
       (run.identity.kind === 'script' && run.status !== RUN_PHASE.COMPLETED))
   )
@@ -80,6 +89,17 @@ export function runActions(
   return [...actions, ...inspectActions()];
 }
 
+/**
+ * Whether a run continues from its own rows: a loop-driven run (born with
+ * its opening) does, whatever its outcome, unless it is a document task that
+ * ended (its recipe's result is settled, so it runs again). The one standing
+ * `deriveResumability` reads from a run's records and `runActions` from its
+ * view, so the two never decide apart.
+ */
+export const continuesFromRows = (
+  run: Pick<RunView, 'identity' | 'documentTask'> & { readonly ended: boolean },
+): boolean => isLoopDriven(run.identity) && !(run.ended && run.documentTask);
+
 /** A conversation with a settled point to cut at: a plain agent's run, not
  *  a document task, whose first turn has ended. */
 const forkable = (
@@ -91,7 +111,10 @@ const forkable = (
 
 /** Why a run no longer takes `action`: the refusal every handler words. */
 export function runActionRefusal(
-  run: Pick<RunView, 'readOnly' | 'group' | 'status' | 'substate' | 'label'>,
+  run: Pick<
+    ReadonlyDeep<RunView>,
+    'readOnly' | 'group' | 'status' | 'substate' | 'label'
+  >,
   action: RunAction,
 ): string {
   const what = ACTION_LABEL[action];

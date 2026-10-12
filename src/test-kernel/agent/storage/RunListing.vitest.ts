@@ -214,7 +214,8 @@ describe('run listing normalization', () => {
             // The model the run is on is the view's (its newest config's),
             // not a second copy of the record's.
             model: agentConfig.model,
-            // Registered and never opened: it reopens from its config.
+            // A loop-driven run continues from its rows: it is born with its
+            // opening, so the standing never asks for one.
             resumable: true,
           },
         ]);

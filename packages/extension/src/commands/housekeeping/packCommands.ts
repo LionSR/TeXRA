@@ -10,11 +10,11 @@ import {
   showLoggedInfoMessage,
   showLoggedMessage,
 } from '@frontend/ui/errorHandlingUtils';
-import { fileOpResultMessage, packRunOutputs } from '@housekeeping/runDirOps';
+import { fileOpResultMessage } from '@housekeeping/runDirOps';
 import { filesystemFor } from '@housekeeping/utils';
 import { WorkspaceFs } from '@platform/rootedFs';
 import { type FileOpResult } from '@shared/schemas';
-import type { WorkflowFileOperationRequest } from '@texra/controllers/session/hostRunActions';
+import type { WorkflowFileOperationResult } from '@texra/controllers/session/hostRunActions';
 
 const CHANNEL = 'packCommands';
 
@@ -50,15 +50,15 @@ const showPackResult = (
     }
   });
 
-export const handlePack = Effect.fn('packCommands.handlePack')(function* (
-  config: WorkflowFileOperationRequest,
-) {
+/** Tell the user what the toolbar's Pack did, offering its folder. */
+export const presentPack = Effect.fn('packCommands.presentPack')(function* ({
+  result,
+  inputFile,
+}: WorkflowFileOperationResult) {
   const workspaceFs = yield* WorkspaceFs;
-  const result = yield* packRunOutputs(config);
-
   const folder = result.status === 'success' ? result.outputFolder : undefined;
   const folderPath = folder
     ? (yield* filesystemFor(workspaceFs, folder)).absolutePath
     : undefined;
-  yield* showPackResult(result, config.inputFile, folderPath);
+  yield* showPackResult(result, inputFile, folderPath);
 });

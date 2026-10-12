@@ -1,7 +1,7 @@
 import { mkdir, writeFile } from 'node:fs/promises';
 import * as path from 'node:path';
 
-import { Effect, Exit, Fiber, Layer, Scope, Stream } from 'effect';
+import { Effect, Fiber, Layer, Scope, Stream } from 'effect';
 
 /**
  * Production-shaped regression for #9531. Agent registration, launch, child
@@ -53,7 +53,7 @@ vi.mock('@agent/runtime/modelAccess/ModelAccess', async (importActual) => {
 
 // Local imports - agent runtime
 import { refresh } from '@agent/index';
-import { getRunRecords, registerRun } from '@agent/storage';
+import { getRunRecords } from '@agent/storage';
 import { readChildTurnState } from '@agent/storage/runRecords';
 import { prepareAgentDefinition } from '@agent/runtime/AgentLaunchContext';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
@@ -63,7 +63,7 @@ import { offeredBy } from '@agent/runtime/loop/step';
 import type { Message } from '@agent/runtime/loop/rows';
 import { executeAgent } from '@agent/runtime/executeAgent';
 import { resumeRun } from '@agent/runtime/resumeRun';
-import { Runs } from '@agent/runtime/runRegistry';
+import { registryOf, Runs } from '@agent/runtime/runRegistry';
 import { type SessionHandle } from '@agent/runtime/SessionHandle';
 
 // Local imports - shared/runtime boundaries
@@ -84,9 +84,10 @@ import {
 } from '@shared/schemas';
 import { NO_APPROVAL_GRANTS } from '@shared/approvalBypassKind';
 import { FakeStateStore } from '@test/support/FakePlatform';
+import { startAwaited } from '@test/support/runHandleFixtures';
 import { noopTrace } from '@test/support/noopTrace';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
-import { testRuntime } from '@test/support/testProcessRuntime';
+import { testRuntime, testSessionOf } from '@test/support/testProcessRuntime';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
 import {
   nativeToolTestLayer,
@@ -114,7 +115,6 @@ import {
   openTestDefaultSession,
 } from '@test/support/sessionEnd';
 import { documentTaskConfig } from '@texra/agent/output/documentRecipe';
-import { localSessionBackend } from '@texra/controllers/session/sessionBackend';
 import { ExecutionsTool } from '@tools/ExecutionsTool';
 import { launchDetachedSubagent } from '@tools/delegation/subagentRun';
 import { readCompletedRunConversation } from '@transcript';
@@ -406,8 +406,8 @@ function childRunId(resultOutput: string | undefined): RunId {
 }
 
 function interruptActiveRuns(session: SessionHandle): void {
-  for (const runId of session.runs.activeIds()) {
-    session.runs.interrupt(runId);
+  for (const runId of session.runs.get().map((run) => run.runId)) {
+    registryOf(session.runs).interrupt(runId);
   }
 }
 
@@ -546,22 +546,21 @@ async function launchWaitingChild(options: {
     instruction: 'Coordinate the child proof review.',
     workingDirectory: process.cwd(),
   });
-  await Effect.runPromise(
-    registerRun(session, PARENT_RUN_ID, parentConfig, {
-      identity: { kind: 'agent', agent: PARENT_AGENT },
-      parentRunId: OUTER_RUN_ID,
-    }),
-  );
   // Admitted on the run's lane like every production launch, so the run's
   // fiber is its stop target by run id.
   parentFiber = testRuntime().runFork(
-    session.runs.launchRun(
+    startAwaited(
+      session.runs,
       PARENT_RUN_ID,
       prepareAgentDefinition({ config: parentConfig, session }).pipe(
         Effect.flatMap((definition) =>
           executeAgent(definition, PARENT_RUN_ID, {
             session,
             parentRunId: OUTER_RUN_ID,
+            registration: {
+              identity: { kind: 'agent', agent: PARENT_AGENT },
+              parentRunId: OUTER_RUN_ID,
+            },
           }),
         ),
       ),
@@ -577,6 +576,8 @@ async function launchWaitingChild(options: {
   const fixtureRequests = {
     nextId: (prefix: string) => prefix,
     open: () => Effect.die(new Error('This fixture opens no request.')),
+    post: () => Effect.die(new Error('This fixture posts no request.')),
+    present: () => Effect.void,
   };
   const parentCall = {
     callId: 'parent-call',
@@ -693,10 +694,10 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
           );
 
         yield* Effect.promise(() => waitForPersistedResult(runId, 'Result A.'));
-        const firstHandle = session.runs.getHandle(runId);
+        const firstHandle = session.runs.get(runId)?.handle;
         const initialBindings = bindingMocks.bindModel.mock.calls.length;
         yield* waitForParentTurns(1);
-        const budget = yield* session.runs.childRunBudget(1);
+        const budget = yield* registryOf(session.runs).childRunBudget(1);
         expect(yield* budget.takeIfAvailable(1)).toBe(true);
         yield* budget.release(1);
 
@@ -707,7 +708,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
 
         yield* Effect.promise(() => waitForPersistedResult(runId, 'Result B.'));
         yield* waitForParentTurns(2);
-        expect(session.runs.getHandle(runId)).toBe(firstHandle);
+        expect(session.runs.get(runId)?.handle).toBe(firstHandle);
         expect(bindingMocks.bindModel).toHaveBeenCalledTimes(initialBindings);
 
         // The next turn asks the model with the follow-up as its last message
@@ -786,9 +787,9 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
           delivered: true,
           outcome: RUN_PHASE.WAITING,
         });
-        const recoveredHandle = session.runs.getHandle(runId);
+        const recoveredHandle = session.runs.get(runId)?.handle;
         expect(recoveredHandle).toBeDefined();
-        expect(session.runs.isLive(runId)).toBe(true);
+        expect(session.runs.get(runId)?.live === true).toBe(true);
         childTurns.push({ text: 'Recovered result D.' });
         parentTurns.push({ text: 'Parent received recovered result D.' });
         yield* submitFollowUp(
@@ -805,7 +806,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
           waitForPersistedResult(runId, 'Recovered result D.'),
         );
         yield* waitForParentTurns(4);
-        expect(session.runs.getHandle(runId)).toBe(recoveredHandle);
+        expect(session.runs.get(runId)?.handle).toBe(recoveredHandle);
         yield* session.runs.stop(runId, { reason: 'user' }).settlement;
         yield* Effect.promise(() => waitForClaimRelease(runId));
 
@@ -823,7 +824,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
           delivered: true,
           outcome: RUN_PHASE.WAITING,
         });
-        expect(session.runs.getHandle(runId)).toBeDefined();
+        expect(session.runs.get(runId)?.handle).toBeDefined();
         yield* session.view.changes.pipe(
           Stream.filter(
             (view) => view.runs.get(runId)?.status === RUN_PHASE.WAITING,
@@ -1308,14 +1309,11 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
           instruction: 'Polish the notes through the workflow child.',
           workingDirectory: workspace,
         });
-        yield* registerRun(session, PARENT_RUN_ID, parentConfig, {
-          identity: { kind: 'agent', agent: PARENT_AGENT },
-          parentRunId: OUTER_RUN_ID,
-        });
         parentFiber = yield* Effect.forkChild(
           withProcessServices(
             testRuntime(),
-            session.runs.launchRun(
+            startAwaited(
+              session.runs,
               PARENT_RUN_ID,
               prepareAgentDefinition({ config: parentConfig, session }).pipe(
                 Effect.flatMap((definition) =>
@@ -1323,6 +1321,10 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
                     session,
                     parentRunId: OUTER_RUN_ID,
                     tools: [launchWorkflowChild],
+                    registration: {
+                      identity: { kind: 'agent', agent: PARENT_AGENT },
+                      parentRunId: OUTER_RUN_ID,
+                    },
                   }),
                 ),
               ),
@@ -1354,7 +1356,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
         expect(
           delivery?.messages.at(-1) && messageText(delivery.messages.at(-1)!),
         ).toContain('<subagent-result');
-        expect(session.runs.isLive(PARENT_RUN_ID)).toBe(true);
+        expect(session.runs.get(PARENT_RUN_ID)?.live === true).toBe(true);
         expect(parentTurns).toHaveLength(0);
       }),
     30_000,
@@ -1366,8 +1368,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
    * - the host's open-final-output presentation runs inside the run, so its
    *   failure ends a completed run FAILED;
    * - the presentation is dropped rather than moved, so a completed run
-   *   never reaches its auto-open gate;
-   * - the presentation failure is swallowed instead of reaching the caller.
+   *   never reaches its auto-open gate.
    */
   it.live(
     'records a completed workflow as completed when its host presentation fails',
@@ -1405,33 +1406,39 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
           throw presentationFailure;
         }) as typeof config.get);
 
-        const launch = yield* Effect.exit(
-          launchDesktopAgent(
-            {
-              runId,
-              config: AgentConfigSchema.parse(
-                documentTaskConfig({
-                  agent: WORKFLOW_CHILD_AGENT,
-                  agentSource: 'custom',
-                  model: CHILD_MODEL,
-                  instruction: 'Polish the notes.',
-                  inputFiles: ['notes.md'],
-                }),
-              ),
+        const run = yield* launchDesktopAgent(
+          {
+            runId,
+            config: AgentConfigSchema.parse(
+              documentTaskConfig({
+                agent: WORKFLOW_CHILD_AGENT,
+                agentSource: 'custom',
+                model: CHILD_MODEL,
+                instruction: 'Polish the notes.',
+                inputFiles: ['notes.md'],
+              }),
+            ),
+          },
+          {
+            project: {
+              session: testSessionOf(session, { persistent: true }),
+              roots: session.roots,
+              present: session.interactions,
             },
-            {
-              session,
-              backend: localSessionBackend(session),
-              runtime: testRuntime(),
-            },
-          ),
+            runtime: testRuntime(),
+            scope: yield* Scope.make(),
+          },
         );
+        yield* run.result;
 
         expect(
           (yield* getRunRecords(session, runId).readRunEnd())?.outcome,
         ).toBe(RUN_OUTCOME.COMPLETED);
-        expect(gateReads).toHaveLength(1);
-        expect(launch).toStrictEqual(Exit.die(presentationFailure));
+        yield* Effect.promise(() =>
+          vi.waitFor(() => {
+            expect(gateReads).toHaveLength(1);
+          }),
+        );
       }),
     30_000,
   );

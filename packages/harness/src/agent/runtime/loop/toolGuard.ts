@@ -7,13 +7,17 @@
  * as there were shell-shaped tools and made a tool's roots its own business.
  * Here the run loop asks once, through the same `requestBashApproval` the
  * session's approval queue and its `request.opened` rows already serve, so no
- * tool opens a prompt and no tool writes a card.
+ * tool opens a prompt and no tool writes a card. What a body itself asks a
+ * person goes through its call's requests (`callRequests`), on the same run.
  */
 import { Effect } from 'effect';
 import { z } from 'zod';
 
-import { ToolContext } from '@agent/core/tools/ToolTypes';
-import type { ToolResult } from '@shared/schemas';
+import { ToolContext, type CallRequests } from '@agent/core/tools/ToolTypes';
+import { qualifyAggregateId, type ToolResult } from '@shared/schemas';
+import { callRequestId, type AttemptRequests } from '@shared/session/inFlight';
+import type { CellError, RunCell } from '@shared/session/runHistory';
+import type { RunHistoryDraft } from '@shared/session/runStateFold';
 import { assertWritable, resolveToolPath } from '@tools/pathResolution';
 import {
   buildBashApprovalRejectedResult,
@@ -21,6 +25,7 @@ import {
 } from '@tools/approval/bashApproval';
 import { ensureError } from '@utils/errors/errorMessage';
 
+import type { AgentRunShape } from '../run/AgentRun';
 import type { RuntimeTool, ToolServices } from '../ToolServices';
 
 const JSON_OBJECT_ARGUMENTS = z.record(z.string(), z.unknown());
@@ -123,3 +128,107 @@ export const guardedToolCall = (
         : Effect.andThen(bodyStarts, tool.call(rawInput)),
     ),
   );
+
+/**
+ * One tool call's requests (`CallRequests`), opened through its run's loop
+ * under ids its attempt (`at`) derives: a fresh one past every ordinal it
+ * `raised`. A resumed attempt joins the request it left `standing` when it
+ * asks that kind again; one it no longer asks is retired as cancelled
+ * (`retireStanding`, which the call's settlement runs too), so no surface
+ * keeps offering it. `commit` commits rows of the call.
+ */
+export const callRequests = (
+  run: Pick<AgentRunShape, 'session' | 'runId' | 'logger'>,
+  cell: Pick<RunCell, 'opened'>,
+  commit: (
+    rows: readonly RunHistoryDraft[],
+  ) => Effect.Effect<unknown, CellError>,
+  at: Parameters<typeof callRequestId>[0],
+  raised: number,
+  standing: AttemptRequests['own'],
+): {
+  readonly requests: CallRequests;
+  readonly retireStanding: Effect.Effect<void>;
+} => {
+  const { session, runId, logger } = run;
+  let reentering = standing;
+  let opened = raised;
+  // Through the decision authority's own check, so an answer a surface
+  // landed meanwhile stands and the retirement writes nothing.
+  const retireStanding = Effect.suspend(() => {
+    const open = reentering?.request.decision === null ? reentering : null;
+    reentering = null;
+    if (open === null) return Effect.void;
+    return session.requests
+      .decide(runId, open.requestId, {
+        action: 'cancel',
+        cause: 'The resumed call no longer asks it.',
+      })
+      .pipe(
+        Effect.catch((error) =>
+          Effect.sync(() =>
+            logger.warn(
+              `Request ${open.requestId} the resumed call no longer asks stays open: its retirement failed.`,
+              { data: error },
+            ),
+          ),
+        ),
+        Effect.asVoid,
+      );
+  });
+  const requests: CallRequests = {
+    nextId: (kind) =>
+      reentering?.request.payload.kind === kind
+        ? reentering.requestId
+        : callRequestId(at, opened + 1),
+    open: (payload, options) =>
+      Effect.suspend(() => {
+        const reentered =
+          payload.data.requestId === reentering?.requestId ? reentering : null;
+        if (reentered !== null) reentering = null;
+        else if (payload.data.requestId === callRequestId(at, opened + 1))
+          opened += 1;
+        // Answered before this owner's loop reached the call: the answer
+        // is the row's, and what the host staged for it is released here,
+        // as no later decision will release it.
+        if (reentered?.request.decision != null)
+          return Effect.as(
+            Effect.uninterruptible(options?.onNeverCommitted ?? Effect.void),
+            reentered.request.decision,
+          );
+        return session.requests.ask(runId, payload, {
+          ...options,
+          open: (rows) => {
+            if (reentered !== null) {
+              // Open already: only what the policy decides commits, and
+              // the decision is read from where the resume read the run.
+              const decided = rows.filter(
+                (row) => row.type !== 'request.opened',
+              );
+              const from = cell.opened.commit;
+              return decided.length === 0
+                ? Effect.succeed(from)
+                : commit(decided).pipe(Effect.as(from));
+            }
+            return retireStanding.pipe(
+              Effect.andThen(Effect.sync(() => session.log.now())),
+              Effect.flatMap((from) => commit(rows).pipe(Effect.as(from))),
+            );
+          },
+        });
+      }),
+    post: (requestId, payload) =>
+      Effect.asVoid(
+        commit([
+          {
+            type: 'request.opened',
+            aggregateId: qualifyAggregateId('run', runId),
+            requestId,
+            payload,
+          },
+        ]),
+      ),
+    present: session.interactions.emit.bind(session.interactions),
+  };
+  return { requests, retireStanding };
+};

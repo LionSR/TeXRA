@@ -8,13 +8,13 @@ import { html, LitElement, nothing, type TemplateResult } from 'lit';
 import { property } from 'lit/decorators.js';
 
 import type { PermissionPayload } from '@shared/schemas';
-import type { HostSnapshot } from '@shared/session/hostSnapshot';
 import {
   isLiveRun,
   type SessionView,
   type RunView,
 } from '@shared/session/sessionView';
-import type { Surface } from '@shared/session/surface';
+import type { HostSnapshot } from '@texra/shared/session/hostSnapshot';
+import type { Surface } from '@texra/shared/session/surface';
 import { SessionUiEvents } from '@texra/shared/session/uiEvents';
 import { interruptedTasks, resumeBlockerFix } from '@ui/copy/interruptedTasks';
 import { TASK_ACTIONS } from '@ui/copy/nestedRuns';

@@ -6,10 +6,9 @@ import { Effect } from 'effect';
 // Test composition imports
 
 // Third-party imports
-import { afterEach, beforeEach, describe, expect, vi, type Mock } from 'vitest';
+import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 
 // Local imports
-import type { HostInteractions } from '@agent/runtime/HostInteractions';
 import type { RunId } from '@shared/schemas';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
@@ -20,10 +19,18 @@ import {
   closeTestSession,
   openTestDefaultSession,
 } from '@test/support/sessionEnd';
+import {
+  EditorHost,
+  makeEditorHost,
+  type EditorCapabilities,
+} from '@texra/tools/editorHost';
 import { OpenPdfTool } from '@texra/tools/OpenPdfTool';
 
 /** The request shape the host's PDF opener receives, derived from the port. */
-type OpenPdfRequest = Parameters<NonNullable<HostInteractions['openPdf']>>[0];
+type OpenPdfRequest = Parameters<NonNullable<EditorCapabilities['openPdf']>>[0];
+
+/** The registry the tool reads; each test attaches its viewer to it. */
+const editors = makeEditorHost();
 
 describe('OpenPdfTool', () => {
   setupPlatform({
@@ -38,7 +45,6 @@ describe('OpenPdfTool', () => {
     },
   });
 
-  let detachHostInteractions = (): void => {};
   let sessionRoot: string | undefined;
 
   beforeEach(async () => {
@@ -52,8 +58,6 @@ describe('OpenPdfTool', () => {
   });
 
   afterEach(async () => {
-    detachHostInteractions();
-    detachHostInteractions = () => undefined;
     const root = sessionRoot;
     sessionRoot = undefined;
     if (root === undefined) return;
@@ -65,20 +69,14 @@ describe('OpenPdfTool', () => {
     }
   });
 
-  /** Attach a PDF viewer the way a host does: as a session capability. */
-  function installOpener(): Mock<
-    (request: OpenPdfRequest) => Effect.Effect<void>
-  > {
+  /** Attach a PDF viewer the way a host does: to the editor registry, for
+   *  the calling test's scope. */
+  const installOpener = Effect.gen(function* () {
     const openPdf = vi.fn<(request: OpenPdfRequest) => Effect.Effect<void>>();
     openPdf.mockReturnValue(Effect.void);
-    detachHostInteractions();
-    detachHostInteractions = Effect.runSync(
-      testDefaultSession().interactions.use({
-        openPdf,
-      }),
-    );
+    yield* editors.attach(testDefaultSession().roots.storage, { openPdf });
     return openPdf;
-  }
+  });
 
   function expectOpenError(result: unknown, fragment: string): void {
     expect(result).toMatchObject({
@@ -96,7 +94,7 @@ describe('OpenPdfTool', () => {
 
   it.effect('opens an existing PDF through the registered host callback', () =>
     Effect.gen(function* () {
-      const openPdf = installOpener();
+      const openPdf = yield* installOpener;
       const tool = OpenPdfTool;
 
       const result = yield* tool.call({
@@ -114,6 +112,7 @@ describe('OpenPdfTool', () => {
         preserveFocus: true,
       });
     }).pipe(
+      Effect.provideService(EditorHost, editors),
       Effect.provide(
         nativeToolTestLayer({
           run: {
@@ -128,7 +127,7 @@ describe('OpenPdfTool', () => {
 
   it.effect('allows absolute paths inside active run storage', () =>
     Effect.gen(function* () {
-      const openPdf = installOpener();
+      const openPdf = yield* installOpener;
       const tool = OpenPdfTool;
 
       const result = yield* tool
@@ -137,6 +136,7 @@ describe('OpenPdfTool', () => {
           preserve_focus: true,
         })
         .pipe(
+          Effect.provideService(EditorHost, editors),
           Effect.provide(
             nativeToolTestLayer({
               run: {
@@ -159,6 +159,7 @@ describe('OpenPdfTool', () => {
         preserveFocus: true,
       });
     }).pipe(
+      Effect.provideService(EditorHost, editors),
       Effect.provide(
         nativeToolTestLayer({
           run: {
@@ -175,12 +176,13 @@ describe('OpenPdfTool', () => {
     'does not parse working_directory before checking absolute run-storage paths',
     () =>
       Effect.gen(function* () {
-        const openPdf = installOpener();
+        const openPdf = yield* installOpener;
         const tool = OpenPdfTool;
 
         const result = yield* tool
           .call({ path: fakePath('storage/executions/run-1/output.pdf') })
           .pipe(
+            Effect.provideService(EditorHost, editors),
             Effect.provide(
               nativeToolTestLayer({
                 workingDirectory: 'relative-path',
@@ -196,6 +198,7 @@ describe('OpenPdfTool', () => {
         expectOpened(result, 'output.pdf');
         expect(openPdf).toHaveBeenCalledOnce();
       }).pipe(
+        Effect.provideService(EditorHost, editors),
         Effect.provide(
           nativeToolTestLayer({
             run: {
@@ -210,10 +213,11 @@ describe('OpenPdfTool', () => {
 
   it.effect('rejects arbitrary absolute paths outside the allowed roots', () =>
     Effect.gen(function* () {
-      const openPdf = installOpener();
+      const openPdf = yield* installOpener;
       const tool = OpenPdfTool;
 
       const result = yield* tool.call({ path: fakePath('run/paper.pdf') }).pipe(
+        Effect.provideService(EditorHost, editors),
         Effect.provide(
           nativeToolTestLayer({
             workingDirectory: fakePath('workspace'),
@@ -229,6 +233,7 @@ describe('OpenPdfTool', () => {
       expectOpenError(result, 'Path must stay within the working directory');
       expect(openPdf).not.toHaveBeenCalled();
     }).pipe(
+      Effect.provideService(EditorHost, editors),
       Effect.provide(
         nativeToolTestLayer({
           run: {

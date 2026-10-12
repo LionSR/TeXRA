@@ -4,7 +4,6 @@ import {
   type TokenUsageStats,
   type UsageRoute,
 } from '@shared/schemas';
-import type { RunView, SessionView } from '@shared/session/sessionView';
 import {
   formatTexraApprovalPolicy,
   type TexraApprovalPolicy,
@@ -16,6 +15,7 @@ import { usageCostLabel } from '@ui/copy/modelAccess';
 import { truncateSummary } from '@utils/text/stringUtils';
 
 import { formatResumeCommand } from './state/resumeHint';
+import type { RunView, SessionView } from '@texra-ai/harness';
 import type { BypassState } from './panes/statusBarDisplay';
 
 const QUEUED_FOLLOW_UP_STATUS_LENGTH = 160;

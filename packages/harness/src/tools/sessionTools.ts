@@ -23,7 +23,6 @@ import {
 } from 'effect';
 import { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
-import { Runs, type RunRegistry } from '@agent/runtime/runRegistry';
 import type { LoadablePlugin } from '@common/plugins/pluginTrust';
 import { withLogChannel } from '@logger/effectLog';
 import type { PluginContext } from '@platform/processRuntime';
@@ -273,7 +272,6 @@ const pinStep = <E>(
 /** One session's catalog over `shared`, in the caller's scope. */
 export const sessionTools = Effect.fnUntraced(function* (
   shared: ProcessCatalog,
-  runs: () => RunRegistry,
 ) {
   const scope = yield* Effect.scope;
   // A hold on one plugin's build, taken now, released when `until` ends
@@ -292,7 +290,6 @@ export const sessionTools = Effect.fnUntraced(function* (
   const layers: RcMap.RcMap<string, PluginContext> = yield* RcMap.make({
     lookup: (id: string) =>
       buildPluginLayer(id, shared.sessionLayerOf).pipe(
-        Effect.provideService(Runs, runs()),
         Effect.provideService(PluginHold, holdFor(id)),
       ),
   });

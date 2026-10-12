@@ -2,15 +2,13 @@ import { Cause, Effect } from 'effect';
 import { withLogChannel } from '@logger/effectLog';
 import type { LanguageModelPort } from '@platform/languageModel';
 import type { ApprovalPolicyDenial } from '@shared/approvalPolicy';
-import type { FileLocation, RunId } from '@shared/schemas';
+import type { RunId } from '@shared/schemas';
+import type { ToolEditContent } from '@shared/session/runtimeRequest';
 import type { ToolEditApprovalRequest } from '@tools/approval/toolEditApproval';
-import type { GenericDiagnostic } from '@utils/diagnostics/diagnosticFormatting';
 import { HostPresentationFailed } from './runtimePresentationEvents';
 import type {
   AgentRuntimeEmitOptions,
-  DiagnosticsReadFailed,
   HostPresentation,
-  PdfOpenFailed,
   RuntimePresentationEvent,
   RuntimePresentationEventPayloads,
 } from './runtimePresentationEvents';
@@ -18,57 +16,11 @@ import type {
 const CHANNEL = 'SessionHostInteractions';
 
 /**
- * Ceiling on presentation notices queued while no host is attached. A session
- * that never gets one (headless embedders, a window that never opens) would
- * otherwise accumulate every replayable notice for its whole lifetime. The
- * newest notices are the ones worth showing, so the oldest is dropped, and the
- * drop is logged, because a silently discarded notice is a defect.
+ * Ceiling on presentation notices queued while no host is attached (a
+ * headless embedder, a window that never opens): the oldest is dropped, and
+ * logged, since the newest are worth showing and a silent drop is a defect.
  */
 const MAX_PENDING_PRESENTATION_REPLAYS = 256;
-
-/**
- * Read a file's diagnostics from the host's own language tooling. `path` is
- * absolute — the diagnostics tool resolves the model's input against its tool
- * root before calling. An `Effect`:
- * a host that could not produce them reaches the diagnostics tool as
- * {@link DiagnosticsReadFailed} instead of as `unknown`, and a tool call that
- * is interrupted while the host rebuilds stops waiting on it.
- */
-type DiagnosticsReader = (
-  path: string,
-) => Effect.Effect<GenericDiagnostic[], DiagnosticsReadFailed>;
-
-export interface ManualCriticismEntry {
-  /** Absolute path resolved by the diagnostics tool. */
-  readonly absolutePath: string;
-  /** 1-based line number. */
-  readonly line: number;
-  readonly message: string;
-  /** 0-5; mapped to DiagnosticSeverity by the host. */
-  readonly severity: number;
-  /** 1-5; appended to the message as `(S/C)`. */
-  readonly confidence: number;
-}
-
-/** Whether the criticism was added: not where inline criticism is off. */
-type AddCriticismSink = (
-  input: ManualCriticismEntry,
-) => Effect.Effect<boolean, Error>;
-
-interface OpenPdfRequest {
-  readonly location: FileLocation;
-  readonly preserveFocus: boolean;
-}
-
-/**
- * Show a PDF in the host's viewer. An `Effect`, so a viewer that refused
- * reaches the tool as {@link PdfOpenFailed} rather than as an `unknown`
- * rejection — and the `Promise<void> | void` union the port carried while it
- * was Promise-shaped is gone with it.
- */
-type OpenPdfOpener = (
-  request: OpenPdfRequest,
-) => Effect.Effect<void, PdfOpenFailed>;
 
 /**
  * The host's presentation surface for a session (ruling A9-3): what a host
@@ -103,12 +55,6 @@ export interface HostInteractions {
    * nothing.
    */
   approvalDenied?(denial: ApprovalPolicyDenial, runId: RunId): void;
-  /** Read diagnostics from the active host integration. */
-  readonly readDiagnostics?: DiagnosticsReader;
-  /** Add one manual criticism to the active host diagnostics surface. */
-  readonly addCriticism?: AddCriticismSink;
-  /** Open a PDF in the active host's viewer. */
-  readonly openPdf?: OpenPdfOpener;
   /** The host editor's language models, served to the session's runs. */
   readonly languageModel?: LanguageModelPort;
   /**
@@ -126,11 +72,9 @@ export interface HostInteractions {
   /**
    * Drop what {@link presentToolEdit} staged for one request, for the single
    * case no `request.decided` ever reaches: a request whose `request.opened`
-   * never committed. Every host that stages implements both. An `Effect`,
-   * as `openPdf` is: the cleanup (a diff view to close, temp files to
-   * delete) is a program the session composes into its own, so it waits for
-   * it without a fiber of its own. Built when the preview is staged, run
-   * only if that one case arrives.
+   * never committed. Every host that stages implements both. An `Effect`:
+   * the cleanup (a diff view to close, temp files to delete) is a program the
+   * session composes into its own. Built when staged, run only then.
    */
   releaseToolEdit?(requestId: string): Effect.Effect<void>;
   /**
@@ -140,6 +84,9 @@ export interface HostInteractions {
    * the decision (a failed read of the edit included, left pending).
    */
   approveToolEdit?(requestId: string): Effect.Effect<boolean>;
+  /** What {@link presentToolEdit} staged for a pending request, or null:
+   *  the answer to a `request.preview`. */
+  preview?(requestId: string): Effect.Effect<ToolEditContent | null>;
   dispose?(): void;
 }
 
@@ -154,13 +101,10 @@ type PresentationProgram = (
 ) => Effect.Effect<void, HostPresentationFailed>;
 
 /**
- * Ask a host to present one notice. Presentation is fire-and-forget, so this
- * never waits on the program the host answers with (a desktop dialog settles
- * when the person dismisses it, and the run, the fold-gated result listeners
- * and the replay loop all raise notices from fibers that must not block on
- * that). It runs on a detached fiber instead, so its failure is reported
- * rather than dropped, while a host that throws synchronously reaches the
- * caller as {@link HostPresentationFailed} rather than as a defect.
+ * Ask a host to present one notice, fire-and-forget: the program the host
+ * answers with (a dialog settles on dismissal) runs on a detached fiber, so
+ * no caller blocks on it and its failure is reported, while a host that
+ * throws synchronously reaches the caller as {@link HostPresentationFailed}.
  */
 function presentOn<K extends RuntimePresentationEvent>(
   interactions: HostInteractions,
@@ -284,32 +228,16 @@ export class SessionHostInteractions implements HostInteractions {
     this.activeAttachment?.interactions.approvalDenied?.(denial, runId);
   }
 
-  get readDiagnostics(): DiagnosticsReader | undefined {
-    return this.activeAttachment?.interactions.readDiagnostics;
-  }
-
-  get addCriticism(): AddCriticismSink | undefined {
-    return this.activeAttachment?.interactions.addCriticism;
-  }
-
-  get openPdf(): OpenPdfOpener | undefined {
-    return this.activeAttachment?.interactions.openPdf;
-  }
-
   get languageModel(): LanguageModelPort | undefined {
     return this.activeAttachment?.interactions.languageModel;
   }
 
   /**
-   * Stage a preview on the attached host and hand back the release for it,
-   * bound to the attachment that staged: the stack may have changed by the
-   * time the release runs, and a release sent to whichever host is newest
-   * then would be a no-op on a host that staged nothing while the one that
-   * did kept its diff and temp files. `undefined` is "nothing is staged":
-   * either no attached host stages previews, or the one that did releases
-   * nothing. The release itself is the host's own program, run by the caller
-   * that holds it — a cleanup failure is that caller's to report, so it
-   * never masks the outcome of the call that staged.
+   * Stage a preview on the attached host and hand back the release bound
+   * to the attachment that staged (a release sent to whichever host is
+   * newest by then could miss the one holding the diff and temp files).
+   * `undefined`: nothing is staged. The caller runs the release and reports
+   * its failure, which never masks the outcome of the call that staged.
    */
   presentToolEdit(
     request: ToolEditApprovalRequest,
@@ -332,6 +260,14 @@ export class SessionHostInteractions implements HostInteractions {
     return (
       this.activeAttachment?.interactions.approveToolEdit?.(requestId) ??
       Effect.succeed(false)
+    );
+  }
+
+  /** The preview the attached host staged for `requestId`, else null. */
+  preview(requestId: string): Effect.Effect<ToolEditContent | null> {
+    return (
+      this.activeAttachment?.interactions.preview?.(requestId) ??
+      Effect.succeed(null)
     );
   }
 

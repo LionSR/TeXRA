@@ -13,12 +13,7 @@ import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { positionRow } from '@agent/runtime/loop/rows';
 import { retrieveSessionResumeData } from '@agent/runtime/SessionResumeRetrieval';
 import { SessionHandle } from '@agent/runtime/SessionHandle';
-import {
-  qualifyAggregateId,
-  emptyRunEndOutput,
-  storedRunOutput,
-  type RunId,
-} from '@shared/schemas';
+import type { RunId } from '@shared/schemas';
 import { DatabaseReadFailed } from '@shared/session/database';
 import {
   createProcessSession,
@@ -44,10 +39,10 @@ describe('retrieveSessionResumeData', () => {
   const openRun = Effect.fn('openRun')(function* (runId: RunId) {
     publishTestRunStart(session, runId);
     yield* session.log.settled;
-    yield* session.runHistory.acquire(runId);
-    yield* session.runHistory.appendBatch(runId, null, [
-      positionRow(runId, { turn: 0 }, 'turn.ready'),
-    ]);
+    const cell = yield* session.runHistory.open(runId, {
+      activation: () => Effect.succeed([]),
+    });
+    yield* cell.append([positionRow(runId, { turn: 0 }, 'turn.ready')]);
   });
 
   it.effect('resumes an opened run on its configuration, under its id', () =>
@@ -59,26 +54,6 @@ describe('retrieveSessionResumeData', () => {
         runId,
         agentConfig: CONFIG,
       });
-    }),
-  );
-
-  it.effect('reports an ended run never opened as nothing to resume', () =>
-    Effect.gen(function* () {
-      const runId = 'ab0002' as RunId;
-      publishTestRunStart(session, runId);
-      // Registered and never opened, it would resume by opening: it ended.
-      yield* session.log.transact([
-        {
-          type: 'run.end',
-          aggregateId: qualifyAggregateId('run', runId),
-          outcome: 'failed',
-          output: storedRunOutput(emptyRunEndOutput()),
-        },
-      ]);
-
-      expect(
-        yield* retrieveSessionResumeData(runId, CONFIG, session),
-      ).toBeNull();
     }),
   );
 

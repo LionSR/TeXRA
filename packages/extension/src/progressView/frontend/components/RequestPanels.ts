@@ -21,7 +21,7 @@ import {
   requestAnswerability,
   type RunView,
 } from '@shared/session/sessionView';
-import type { Surface } from '@shared/session/surface';
+import type { Surface } from '@texra/shared/session/surface';
 
 // Local imports - progress view component types
 import type { BaseRequestPanel } from './BaseRequestPanel';

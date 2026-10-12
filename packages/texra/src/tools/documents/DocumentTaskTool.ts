@@ -122,6 +122,7 @@ const runDocumentTask = Effect.fn('DocumentTaskTool.call')(function* (
 /** The `document_task` tool. */
 export const DocumentTaskTool = defineTool({
   name: 'document_task',
+  launchesTasks: true,
   requiresApproval: 'inBody',
   replay: 'safe',
   lane: 'own',

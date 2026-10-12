@@ -33,6 +33,7 @@ import {
   createTestSession,
   publishTestRunStart,
   publishTestRows,
+  seedRows,
 } from '@test/support/sessionTestUtils';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { settleSessionEvents } from '@test/agent/progressTestUtils';
@@ -292,7 +293,7 @@ describe('completedRunArchive facade', () => {
   );
 
   it.live(
-    'reconstructs both turns when the production resume launch reopens the canonical writer',
+    'reconstructs both turns after a production resume that failed before it entered the run',
     () =>
       Effect.gen(function* () {
         const runId = '0aa1110aa111' as RunId;
@@ -332,7 +333,7 @@ describe('completedRunArchive facade', () => {
         );
 
         // The one fact a resume reads: the run's opening `run.position`.
-        yield* session.log.transact([
+        yield* seedRows(session.log)([
           {
             type: 'run.position',
             aggregateId: qualifyAggregateId('run', runId),
@@ -340,36 +341,29 @@ describe('completedRunArchive facade', () => {
           },
         ]);
 
-        // The resumed run's trace writes its first event through the reopened
-        // writer; the second turn lands beside it.
-        const publishRunEvent = session.log.publish.bind(session.log);
-        const resumedWriter = vi
-          .spyOn(session.log, 'publish')
-          .mockImplementationOnce((requestedRunId, event) => {
-            publishRunEvent(requestedRunId, event);
-            publishTestRows(session, [
-              {
-                type: 'log',
-                aggregateId: qualifyAggregateId('run', runId),
-                level: 'info',
-                messageType: MESSAGE_TYPES.USER_MESSAGE,
-                message: 'Now prove the second lemma.',
-              },
-              {
-                type: 'response.finalized',
-                aggregateId: qualifyAggregateId('run', runId),
-                text: 'Second proof.',
-              },
-            ]);
-          });
+        // The second turn, as a run that continued would have left it.
+        publishTestRows(session, [
+          {
+            type: 'log',
+            aggregateId: qualifyAggregateId('run', runId),
+            level: 'info',
+            messageType: MESSAGE_TYPES.USER_MESSAGE,
+            message: 'Now prove the second lemma.',
+          },
+          {
+            type: 'response.finalized',
+            aggregateId: qualifyAggregateId('run', runId),
+            text: 'Second proof.',
+          },
+        ]);
+        yield* session.log.settled;
 
-        // The resumed launch stops once its writer is open: the run's rows
-        // hold its opening, and no provider key binds its model.
+        // The resumed launch stops before it enters the run (no provider key
+        // binds its model): it writes nothing and lets the claim go.
         expect(
           (yield* Effect.flip(resumeRun(runId, { session }))).message,
         ).toContain('Missing API key');
 
-        expect(resumedWriter).toHaveBeenCalledWith(runId, expect.anything());
         const released = yield* Effect.result(
           seedReport(session, runId, 'late write'),
         );
@@ -387,7 +381,6 @@ describe('completedRunArchive facade', () => {
           ))._tag,
         ).toBe('Failure');
         expect(yield* session.log.owns(runId)).toBe(false);
-        resumedWriter.mockRestore();
 
         const archived = yield* readCompletedRunConversationEffect(
           runId,

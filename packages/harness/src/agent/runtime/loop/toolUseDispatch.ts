@@ -47,7 +47,7 @@ import {
   childRunsLayer,
   type RuntimeTool as ITool,
 } from '@agent/runtime/ToolServices';
-import { ToolContext, type CallRequests } from '@agent/core/tools/ToolTypes';
+import { ToolContext } from '@agent/core/tools/ToolTypes';
 import {
   IssuingScript,
   RunCall,
@@ -78,12 +78,12 @@ import {
 import {
   attemptOf,
   attemptRequests,
-  callRequestId,
-  settlementOf,
+  callSettlementOf,
   type AttemptRequests,
   type CallStatus,
   type PendingCall,
 } from '@shared/session/inFlight';
+import type { RunCell } from '@shared/session/runHistory';
 import { checkOwnFacts, factRows } from '@tools/plugins';
 import { ToolRegistry } from '@tools/toolTable';
 import { generateShortId, getBasename } from '@utils/core';
@@ -104,7 +104,7 @@ import {
   formatAttachmentSummary,
   formatToolResultAsText,
 } from '../run/toolResultText';
-import { guardedToolCall } from './toolGuard';
+import { callRequests, guardedToolCall } from './toolGuard';
 import { callHookText, preToolUse } from './hooks';
 import {
   appendRow,
@@ -117,7 +117,6 @@ import type { StepTools } from './step';
 import type { JoinedFollowUps } from '../FollowUps';
 import type { InvokeError } from '../ModelInvoker';
 import type { Runs } from '../runRegistry';
-import type { RunCell } from './runProgram';
 
 /** Max concurrently executing parallel tool calls. */
 const MAX_PARALLEL_TOOL_CALLS = 4;
@@ -569,82 +568,14 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
         ...(stageId !== undefined ? { stageId } : {}),
       });
     };
-    // The call's requests, under ids the attempt derives: a fresh one past
-    // every ordinal it raised. A resumed attempt joins the request it left
-    // standing when it asks that kind again; one it no longer asks is
-    // retired as cancelled, so no surface keeps offering it.
-    const at = { responseId, callId: fact.callId, attempt };
-    let reentering = standing;
-    let opened = raised;
-    // Through the decision authority's own check, so an answer a surface
-    // landed meanwhile stands and the retirement writes nothing.
-    const retireStanding = Effect.suspend(() => {
-      const open = reentering?.request.decision === null ? reentering : null;
-      reentering = null;
-      if (open === null) return Effect.void;
-      return run.session.requests
-        .decide(runId, open.requestId, {
-          action: 'cancel',
-          cause: 'The resumed call no longer asks it.',
-        })
-        .pipe(
-          Effect.catch((error) =>
-            Effect.sync(() =>
-              logger.warn(
-                `Request ${open.requestId} the resumed call no longer asks stays open: its retirement failed.`,
-                { data: error },
-              ),
-            ),
-          ),
-          Effect.asVoid,
-        );
-    });
-    const requests: CallRequests = {
-      nextId: (kind) =>
-        reentering?.request.payload.kind === kind
-          ? reentering.requestId
-          : callRequestId(at, opened + 1),
-      open: (payload, options) =>
-        Effect.suspend(() => {
-          const reentered =
-            payload.data.requestId === reentering?.requestId
-              ? reentering
-              : null;
-          if (reentered !== null) reentering = null;
-          else if (payload.data.requestId === callRequestId(at, opened + 1))
-            opened += 1;
-          // Answered before this owner's loop reached the call: the answer
-          // is the row's, and what the host staged for it is released here,
-          // as no later decision will release it.
-          if (reentered?.request.decision != null)
-            return Effect.as(
-              Effect.uninterruptible(options?.onNeverCommitted ?? Effect.void),
-              reentered.request.decision,
-            );
-          return run.session.requests.ask(runId, payload, {
-            ...options,
-            open: (rows) => {
-              if (reentered !== null) {
-                // Open already: only what the policy decides commits, and
-                // the decision is read from where the resume read the run.
-                const decided = rows.filter(
-                  (row) => row.type !== 'request.opened',
-                );
-                const from = cell.opened.commit;
-                return decided.length === 0
-                  ? Effect.succeed(from)
-                  : commit(fact, decided).pipe(Effect.as(from));
-              }
-              return retireStanding.pipe(
-                Effect.andThen(Effect.sync(() => run.session.log.now())),
-                Effect.flatMap((from) =>
-                  commit(fact, rows).pipe(Effect.as(from)),
-                ),
-              );
-            },
-          });
-        }),
-    };
+    const { requests, retireStanding } = callRequests(
+      run,
+      cell,
+      (rows) => commit(fact, rows),
+      { responseId, callId: fact.callId, attempt },
+      raised,
+      standing,
+    );
     // Its step's PreToolUse hooks, recorded before the approval and the body.
     const pre =
       tool &&
@@ -1173,12 +1104,12 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
   // A script's calls are not the response's: its own result says whether
   // one of them ended the turn.
   const endTurn = settledPending.calls.some((fact) => {
-    const settled = settlementOf(settledPending, fact.callId);
+    const settled = callSettlementOf(settledPending, fact.callId);
     return settled !== null && endsTurn(settled);
   });
   const bound = yield* SynchronizedRef.get(run.model);
   const results = settledPending.calls.map((fact, ordinal) => {
-    const settlement = settlementOf(settledPending, fact.callId);
+    const settlement = callSettlementOf(settledPending, fact.callId);
     if (settlement === null) {
       throw new Error(`Call ${fact.callId} is unsettled at delivery.`);
     }
@@ -1209,19 +1140,19 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
     );
   const documents = (endTurn || switching ? [] : settledPending.calls).flatMap(
     (fact) =>
-      (settlementOf(settledPending, fact.callId)?.attachments ?? []).flatMap(
-        (attachment) => {
-          if (attachment.content.kind !== 'base64') return [];
-          const part = inlineMediaPart(
-            attachment.mimeType,
-            attachment.content.data,
-            bound.config.capabilities,
-          );
-          return part?.kind === 'document'
-            ? [{ path: attachment.path, part }]
-            : [];
-        },
-      ),
+      (
+        callSettlementOf(settledPending, fact.callId)?.attachments ?? []
+      ).flatMap((attachment) => {
+        if (attachment.content.kind !== 'base64') return [];
+        const part = inlineMediaPart(
+          attachment.mimeType,
+          attachment.content.data,
+          bound.config.capabilities,
+        );
+        return part?.kind === 'document'
+          ? [{ path: attachment.path, part }]
+          : [];
+      }),
   );
   const uploadFile =
     documents.length === 0 ? undefined : bound.model.uploadFile;

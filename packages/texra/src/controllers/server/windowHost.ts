@@ -21,6 +21,7 @@ import { ModelError, ModelErrorFieldsSchema, type Model } from '@texra-ai/llm';
 
 import type { HostInteractions } from '@agent/runtime/HostInteractions';
 import { withLogChannel } from '@logger/effectLog';
+import type { EditorCapabilities } from '@texra/tools/editorHost';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import type { RpcClientError } from 'effect/rpc';
 import type { LanguageModelPort } from '@texra-ai/harness';
@@ -37,13 +38,17 @@ const CHANNEL = 'WindowHost';
 
 /** What a window does for its project's tasks; a capability it leaves out
  *  is one it does not offer. */
-export interface WindowHost extends Pick<
-  HostInteractions,
-  'readDiagnostics' | 'addCriticism' | 'openPdf' | 'emit' | 'approvalDenied'
-> {
+export interface WindowHost
+  extends
+    Pick<HostInteractions, 'emit' | 'approvalDenied'>,
+    EditorCapabilities {
   /** The editor's language models, which the service's runs of this
    *  project bind through this window. */
   readonly languageModel?: LanguageModelPort;
+  /** Files a task of the project wrote past the editor's own write path,
+   *  as the service's announcer heard them: the host tells its own
+   *  listeners (a file tree, decorations), as a task here would. */
+  readonly filesWritten?: (absolutePaths: readonly string[]) => void;
   /** The tool-edit preview a window stages beside the request, which the
    *  window releases when the request settles, and whose edited content an
    *  approve-all reads. */
@@ -60,7 +65,9 @@ function capabilitiesOf(host: WindowHost): HostCapability[] {
     ...(host.addCriticism ? (['addCriticism'] as const) : []),
     ...(host.openPdf ? (['openPdf'] as const) : []),
     ...(host.toolEdits ? (['toolEdits'] as const) : []),
-    ...(host.emit || host.approvalDenied ? (['notices'] as const) : []),
+    ...(host.emit || host.approvalDenied || host.filesWritten
+      ? (['notices'] as const)
+      : []),
     ...(host.languageModel ? (['languageModel'] as const) : []),
   ];
 }
@@ -154,6 +161,11 @@ function perform(
         );
         return presented ?? Effect.void;
       }).pipe(Effect.as(null));
+    case 'filesWritten':
+      return Effect.sync(() => {
+        host.filesWritten?.(call.absolutePaths);
+        return null;
+      });
     case 'approvalDenied':
       return Effect.sync(() => {
         host.approvalDenied?.(call.denial, call.runId);

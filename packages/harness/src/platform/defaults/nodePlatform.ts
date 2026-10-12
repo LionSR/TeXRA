@@ -92,7 +92,7 @@ import {
   makeHandle,
 } from 'effect/process/ChildProcessSpawner';
 import { withLogChannel } from '@logger/effectLog';
-import { ProjectEnvironment } from '@platform/defaults/nodeWorkspace';
+import { ProjectEnvironment } from '@utils/system/nodeWorkspace';
 import { ensureError } from '@utils/errors/errorMessage';
 import type * as ChildProcess from 'effect/process/ChildProcess';
 import type { PlatformError } from 'effect/PlatformError';

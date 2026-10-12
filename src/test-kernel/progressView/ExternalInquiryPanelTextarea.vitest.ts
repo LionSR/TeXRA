@@ -4,8 +4,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 // Local imports
 import type { ExternalInquiryPanel } from '@progressView/frontend/components/ExternalInquiryPanel';
 import type { ExternalInquiryPermission, RunId } from '@shared/schemas';
-import type { SurfaceAction } from '@shared/session/surface';
 import { recordPermissionActions } from '@test/support/permissionPanelEvents';
+import type { SurfaceAction } from '@texra/shared/session/surface';
 
 // Local file imports
 import {

@@ -15,7 +15,6 @@ import {
   type RoundOutput,
   type RunId,
 } from '@shared/schemas';
-import { documentsSummary } from '@shared/plugins/documents';
 import {
   createProcessSession,
   publishTestRunStart,
@@ -23,6 +22,7 @@ import {
 import { setupPlatform } from '@test/support/setupPlatform';
 import { fakePath } from '@test/support/FakePlatform';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
+import { documentsSummary } from '@texra/shared/plugins/documents';
 
 const parentRunId = 'aaaaaa111111' as RunId;
 const childRunId = 'bbbbbb222222' as RunId;

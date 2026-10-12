@@ -10,7 +10,6 @@ import {
 import { ToolCatalog } from '@tools/liveTools';
 import { readDisabledTools } from '@tools/plugins';
 
-import { testRunRegistry } from './runHandleFixtures';
 import { unprobedToolAvailability } from './toolAvailabilityTestLayer';
 
 /**
@@ -38,7 +37,7 @@ export const resolveTestStep = Effect.fn('resolveTestStep')(function* (
       >
     >,
 ) {
-  const tools = yield* (yield* ToolCatalog).session(testRunRegistry);
+  const tools = yield* (yield* ToolCatalog).session;
   const held = yield* tools.hold(declaredToolNames(input.tools), true);
   const pinned = yield* tools.pin(readDisabledTools(input.stores.globalState), {
     held,

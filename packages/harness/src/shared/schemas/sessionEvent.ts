@@ -511,15 +511,13 @@ export function edgesOf(draft: SessionEventDraft): AggregateEdges {
         borrowsClaim: false,
         closes: false,
       };
-    case 'plugin.fact':
-      return aggregateTarget(draft.aggregateId).kind === 'run'
-        ? { parent: null, borrowsClaim: false, closes: false }
-        : {
-            parent: null,
-            reparent: draft.parent && qualifyAggregateId('run', draft.parent),
-            borrowsClaim: true,
-            closes: false,
-          };
+    case 'plugin.fact': {
+      if (aggregateTarget(draft.aggregateId).kind === 'run')
+        return { parent: null, borrowsClaim: false, closes: false };
+      const reparent =
+        draft.parent === null ? null : qualifyAggregateId('run', draft.parent);
+      return { parent: null, reparent, borrowsClaim: true, closes: false };
+    }
     case 'run.removed':
       return { parent: null, borrowsClaim: false, closes: true };
     default:

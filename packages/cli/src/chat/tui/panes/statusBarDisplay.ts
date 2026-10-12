@@ -21,7 +21,6 @@ import {
   type UsageRoute,
 } from '@shared/schemas';
 import { isActivePhase } from '@shared/runs/runStatus';
-import type { RunView, SessionView } from '@shared/session/sessionView';
 import {
   contextGaugeBand,
   roundedContextPercent,
@@ -40,6 +39,7 @@ import {
 import { formatResumeCommand } from '../state/resumeHint';
 import { type TransientNotice } from '../state/cliState';
 import { runPhaseOf, runViewOf } from '../state/sessionView';
+import type { RunView, SessionView } from '@texra-ai/harness';
 import type { PendingApprovalKind } from '../state/approvalQueue';
 
 /** Which approval bypasses are on for a run, its own or inherited. */

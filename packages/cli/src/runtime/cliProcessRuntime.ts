@@ -32,14 +32,17 @@
  * scoped connection. Platform-less entries provide refusing services instead.
  * initCliPlatform reads that AppState and opens only the workspace scope.
  */
-import { Effect, Layer, ManagedRuntime, Stream } from 'effect';
+import { Context, Effect, Layer, ManagedRuntime, Stream } from 'effect';
 
 import {
   AgentDirectories,
   AppState,
   processLayer,
+  Sessions,
   StateWriteFailed,
   type ProcessRuntime,
+  type ProcessServices,
+  type SessionOwner,
   type StateStore,
   UNAVAILABLE_LANGUAGE_MODEL_PORT,
   withForkFailureReporting,
@@ -51,6 +54,7 @@ import type { MinimumLogLevel } from '@logger/effectDiagnostics';
 import { GlobalDatabase } from '@shared/session/database';
 import { usageLogLayer } from '@telemetry/UsageLogService';
 import { TEXRA_SETTING_ROWS } from '@texra/shared/settingsView/texraSettings';
+import { makeEditorHost, type EditorRegistry } from '@texra/tools/editorHost';
 import { texraPlugins } from '@texra/tools/registry';
 import { USER_MCP_CONFIG_PATH } from '@tools/mcp/mcpConfig';
 
@@ -159,8 +163,17 @@ export const NO_PLATFORM_INSTALL: CliProcessRuntimeInstall = Object.freeze({
   globalDatabase: refusingGlobalDatabase,
 });
 
-/** The runtime this module built, until its disposal starts. */
-let installed: ProcessRuntime | undefined;
+/** The runtime this module built, with the editor registry its plugins
+ *  read, until its disposal starts. */
+let installed:
+  | {
+      readonly runtime: ManagedRuntime.ManagedRuntime<
+        ProcessServices | SessionOwner | Sessions,
+        never
+      >;
+      readonly editors: EditorRegistry;
+    }
+  | undefined;
 
 /**
  * Install the process runtime, or join the one already installed: every entry
@@ -187,11 +200,14 @@ export function installCliProcessRuntime(
   storageRoot: string,
   options?: CliProcessRuntimeInstall,
 ): ProcessRuntime {
-  if (installed) return installed;
+  if (installed) return installed.runtime;
   // The global root resolves here, at install, with the pure calculator:
   // the directory is the state store's and the global database's to create
   // when they open below, and clone — whose storage root may be read-only,
   // and which runs no records operation — must not create it at all.
+  // The editor registry this install's plugins read; `texra serve`
+  // attaches its windows' editors to it (`installedEditorHost`).
+  const editors = makeEditorHost();
   const globalStoragePath = resolveGlobalStoragePath(storageRoot);
   const version = readCliVersion();
   const secrets = cliSecrets(storageRoot);
@@ -214,11 +230,11 @@ export function installCliProcessRuntime(
         }),
     ),
   );
-  const runtime: ProcessRuntime = withForkFailureReporting(
+  const runtime = withForkFailureReporting(
     ManagedRuntime.make(
       processLayer({
         globalStorage: globalStoragePath,
-        plugins: texraPlugins(),
+        plugins: texraPlugins({ editors }),
         settings: TEXRA_SETTING_ROWS,
         mcpConfigPath: USER_MCP_CONFIG_PATH,
         secrets,
@@ -249,12 +265,28 @@ export function installCliProcessRuntime(
       }),
     ),
   );
-  installed = runtime;
+  installed = { runtime, editors };
   // The output plane runs its Effects on this runtime from here on; the
   // disposal below hands it back the no-runtime state.
   setCliLogRuntime(runtime);
   return runtime;
 }
+
+/** The editor registry of the runtime installed now, for the one entry
+ *  that serves windows (`texra serve`); none before an install or after
+ *  its disposal starts. */
+export const installedEditorHost = (): EditorRegistry | undefined =>
+  installed?.editors;
+
+/** The sessions of the runtime installed now: the `Session` every entry
+ *  that drives a project's runs takes (`initCliPlatform`'s, `texra
+ *  serve`'s); a defect before an install or after its disposal starts. */
+export const installedSessions: Effect.Effect<Sessions['Service']> =
+  Effect.suspend(() =>
+    installed === undefined
+      ? Effect.die(new Error('No TeXRA process runtime is installed.'))
+      : Effect.map(installed.runtime.contextEffect, Context.get(Sessions)),
+  );
 
 /**
  * Dispose this process's runtime, if one is installed: the CLI's own end of
@@ -271,7 +303,7 @@ export function installCliProcessRuntime(
  */
 export const disposeCliProcessRuntime: Effect.Effect<void> = Effect.suspend(
   () => {
-    const runtime = installed;
+    const runtime = installed?.runtime;
     if (!runtime) return Effect.void;
     installed = undefined;
     return runtime.disposeEffect.pipe(

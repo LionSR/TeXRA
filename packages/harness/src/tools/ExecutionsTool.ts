@@ -20,6 +20,7 @@ import {
   listRunWorkspaceFiles,
   resolveRunWorkspaceFilePath,
 } from '@agent/storage';
+import { persistedParentRunId } from '@agent/storage/runRecords';
 import { type SessionHandle } from '@agent/runtime/SessionHandle';
 import { requireToolRun } from '@agent/runtime/RunCall';
 import { Runs } from '@agent/runtime/runRegistry';
@@ -73,7 +74,7 @@ import {
   type ExecutionsToolInput,
 } from './executions/toolInput';
 import { listRuns } from './executions/runListing';
-import { sendToRun } from './executions/send';
+import { missingRun, sendToRun } from './executions/send';
 import { turnAttributionNote } from './executions/turnAttribution';
 import { shouldSkipWait } from './executions/waitCoordination';
 import { scriptCallsView } from './executions/scriptCallsView';
@@ -323,10 +324,10 @@ const waitForRuns = Effect.fn('ExecutionsTool.waitForRuns')(function* (
   ids?: readonly RunId[] | null,
 ) {
   const runs = yield* Runs;
-  const candidateIds = ids?.length ? unique(ids) : runs.activeIds();
+  const candidates = ids?.length ? unique(ids) : runs.get().map((r) => r.runId);
   // Exclude runs that are already effectively done
   // (completed, inactive, or tool-use subagent WAITING with result delivered).
-  const pendingIds = candidateIds.filter(
+  const pendingIds = candidates.filter(
     (id) => !shouldSkipWait(context.session, id),
   );
   if (pendingIds.length === 0) return;
@@ -358,12 +359,11 @@ const showSummary = Effect.fn('ExecutionsTool.showSummary')(function* (
   const view = yield* session.view.read([runId]);
   const run = view.runs.get(runId);
 
-  // Every open run is in the view: its `run.start` is seq 1 of its aggregate
-  // (the database refuses anything else there), so no checkpoint exists
-  // without the row that lists the run, and a closed run reads no snapshot.
-  if (!run) {
-    return yield* Effect.fail(new ToolError(`Run not found: ${runId}`));
-  }
+  // An open run is in the view; one launched here may not have opened yet.
+  if (!run)
+    return yield* Effect.fail(
+      missingRun(session, runId, `Run not found: ${runId}`),
+    );
 
   // The report is a private record row, never part of the display fold.
   const report = yield* getRunRecords(session, runId).readReport();
@@ -392,7 +392,7 @@ const showSummary = Effect.fn('ExecutionsTool.showSummary')(function* (
     options.suppressAutoDeliveredSubagentReport === true &&
     run.identity.kind === 'agent' &&
     run.parentId === context.runId &&
-    (yield* Runs).getHandle(runId) !== undefined;
+    (yield* Runs).get(runId)?.handle !== undefined;
 
   lines.push(
     ...buildSummaryTailLines(
@@ -418,23 +418,23 @@ const handleKill = Effect.fn('ExecutionsTool.handleKill')(function* (
   }
 
   const runs = yield* Runs;
-  const target = runs.getHandle(runId);
-  if (!target) {
+  if (!runs.get(runId)?.handle) {
     return yield* Effect.fail(
       new ToolError(`Run ${runId} not found or already completed.`),
     );
   }
 
-  // Scope: can only kill your own children.
-  if (!target.isOwnedBy(context.runId)) {
+  // Only your own children, by the edge the rows leave (a detach may be in).
+  const owner = (yield* getRunRecords(context.session, runId).exists())
+    ? yield* persistedParentRunId(context.session, runId)
+    : (runs.get(runId)?.parent ?? null);
+  if (owner !== context.runId) {
     return yield* Effect.fail(
       new ToolError(`Cannot kill run ${runId}: not a child of this session.`),
     );
   }
 
-  // The permission gate: off, or a stored value that fails its schema,
-  // denies (the guard above has already narrowed `target` to an owned
-  // RunHandle).
+  // The permission gate: off, or a stored value that fails its schema, denies.
   const killDenial = yield* orchestratorKillDenial(context.session.roots);
   if (killDenial !== undefined) {
     return yield* Effect.fail(new ToolError(killDenial));
@@ -452,9 +452,7 @@ const handleKill = Effect.fn('ExecutionsTool.handleKill')(function* (
       Effect.andThen(Effect.sync(() => stop.accepted())),
     );
   }).pipe(Effect.uninterruptible);
-  if (success) {
-    return executed(`Run ${runId} terminated.`);
-  }
+  if (success) return executed(`Run ${runId} terminated.`);
   return yield* Effect.fail(
     new ToolError(`Run ${runId} could not be terminated.`),
   );

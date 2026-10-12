@@ -10,7 +10,8 @@ map from `tsconfig.json` (`scripts/aliases.mjs:14-20`,
 `packages/extension/vite.config.mts:5`), while the extension's esbuild bundle
 reads its package tsconfig, which extends the root one (`packages/extension/esbuild.config.mjs:34-48`).
 Nothing here is a stable contract — this note documents what an external
-program has to do _today_ to get a `runAgent` call to complete, so that SDK work
+program has to do _today_ to get a root launch (`session.runs.launch`) to
+complete, so that SDK work
 has a measurable baseline.
 
 Every claim below is cited to `file:line`. The original baseline was verified
@@ -22,7 +23,7 @@ awkward, this note says so rather than describing an intended future shape.
 
 ---
 
-## 1. The minimum sequence to a working `runAgent`
+## 1. The minimum sequence to a working root launch
 
 The sections below separate minimum launch requirements from shipped-feature
 parity. A raw agent loop needs an installed process runtime, usable credentials,
@@ -130,7 +131,7 @@ is the part the plan of record describes incorrectly.
 
 ### Prerequisite A — a default or explicit session
 
-A session is required by `RunAgentOptions.session`. The CLI bootstrap in
+A root launch runs on a session (`session.runs.launch`). The CLI bootstrap in
 `packages/cli/src/runtime/initPlatform.ts` prepares one memoized session-opening
 Effect; commands run `services.session` when they need a session. Utility commands
 that need no session leave the store unopened.
@@ -141,7 +142,7 @@ that need no session leave the store unopened.
   The CLI and extension supply their `responseTextProcessing` policy here.
 - `openSessionEffect({ roots, ... })` opens an owner-held session for explicit
   roots, returning the existing handle when that storage root is already open.
-  Pass the handle to `runAgent`; close it through the session owner when its
+  Launch on the handle (`session.runs.launch`); close it through the session owner when its
   lifetime ends.
 
 ### Prerequisite B — `yield* loadAgents(...)`
@@ -153,12 +154,12 @@ state (`packages/harness/src/agent/index/agentRegistry.ts`); when it misses,
 `Could not find agent: <name>` (`packages/harness/src/agent/runtime/AgentLaunchContext.ts:158-159`).
 
 `loadAgents` (`packages/harness/src/agent/index/agentRegistry.ts:113-128`) is what fills it.
-Neither `runAgent`, `executeAgent`, nor `AgentLaunchContext` populates the
+Neither the root launch, `executeAgent`, nor `AgentLaunchContext` populates the
 registry, so the caller must ensure that loading has happened before launch.
 
 ### Per-session — attach host interactions when presentation is required
 
-`runAgent` and `executeAgent` obtain presentation and approval behavior from
+A root launch and `executeAgent` obtain presentation and approval behavior from
 the selected session's stable `SessionHostInteractions` object. A host attaches
 its adapter with `session.interactions.use(...)` and detaches that adapter
 when the host presentation lifetime ends. `use` returns an `Effect` that
@@ -177,7 +178,7 @@ This example assumes an alias-aware build from a TeXRA checkout, as described
 at the start of this document. Copying these imports into an ordinary external
 TypeScript project and running plain `tsc` is insufficient: there are no
 runtime packages named `@controllers/session/sessionLayer`,
-`@agent/runtime/runAgent`, and so on.
+`@agent/runtime/sessionGraph`, and so on.
 
 ```ts
 import { Effect } from 'effect';
@@ -190,7 +191,6 @@ import { nodeProcesses } from '@platform/defaults/nodeProcesses';
 import { bootstrapHost } from '@controllers/hostBootstrap';
 import { loadAgents } from '@agent/index/agentRegistry';
 import { initializeDefaultSession } from '@agent/runtime/sessionGraph';
-import { runAgent } from '@agent/runtime/runAgent';
 import { validateRunRequest } from '@agent/core/state/runRequests';
 
 // Step 1 — the process services: agent directories, filesystem, secrets,
@@ -251,7 +251,8 @@ await runtime.runPromise(
     if (!validated.valid) throw new Error(validated.message);
 
     yield* Effect.ensuring(
-      runAgent(validated.request, { session }),
+      // The process runtime serves the `SessionOwner` a root launch requires.
+      session.runs.launch({ request: validated.request, options: {} }),
       Effect.sync(detachHostInteractions),
     );
   }),
@@ -437,7 +438,7 @@ and parks nothing.
 The host says it by supplying `approvalPromptsUnavailable` on the object it
 passes to `session.interactions.use({...})`, as in the §1 example; it is a
 field of `HostInteractions` (`packages/harness/src/agent/runtime/HostInteractions.ts:97`), not
-an option of `runAgent`, and `RunAgentOptions` has no such property. The
+an option of the root launch, and `RootLaunchOptions` has no such property. The
 session's `interactions.approvalPromptsUnavailable` getter reads the attached
 host's answer (`HostInteractions.ts:272-276`), and it is `false` while no host
 is attached. It is a fact of the session, not a launch option: each step
@@ -450,7 +451,7 @@ same answer. When the answer is to withhold, `resolveAgentTools` drops every
 catalog `requiresApproval` tool before the model sees it
 (`packages/harness/src/agent/runtime/agentToolResolution.ts:245-249`), so a run cannot open the
 requests those tools would raise. Tools an embedder supplies in
-`RunAgentOptions.tools` are not withheld: they are overlaid after the gates
+`RootLaunchOptions.tools` are not withheld: they are overlaid after the gates
 (`resolveStepTools`, `agentToolResolution.ts:356-365`) and the model is
 offered them, so a run-scoped tool that needs approval is left to the
 approval guard, which may deny the call, rather than removed. The tools that open
@@ -482,7 +483,7 @@ The same holds for a plan, a delegation proposal and a question
 ### What ends a wait without a decision
 
 Stopping the run (`session.runs.stop(runId)`, with the id
-`RunAgentOptions.onRun` hands over; `packages/harness/src/agent/runtime/runRegistry.ts`) ends
+`RootLaunchOptions.onRun` hands over; `packages/harness/src/agent/runtime/runs.ts`) ends
 the run. A request opened through `SessionHandle.openRequest` (a command, an
 edit, a plan, a delegation, a question) is closed by the interruption: it
 commits `request.decided` with `{ action: 'cancel', cause: 'Run interrupted.' }`

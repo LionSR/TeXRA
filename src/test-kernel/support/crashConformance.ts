@@ -83,7 +83,6 @@ import { apiKeySecretName } from '@texra-ai/llm';
 import { refresh } from '@agent/index';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { resumeRun } from '@agent/runtime/resumeRun';
-import { runAgent } from '@agent/runtime/runAgent';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { AgentDirectories, AppState } from '@platform/interfaces';
 import { withProcessServices } from '@platform/processRuntime';
@@ -166,7 +165,11 @@ const rowsOf = (storage: string): Row[] => {
 /** A file's lines, none when it is absent. */
 const linesOf = (file: string): string[] =>
   existsSync(file)
-    ? readFileSync(file, 'utf8').split('\n').filter(Boolean)
+    ? readFileSync(file, 'utf8')
+        .split('\n')
+        // Windows' `echo x >> file` writes `x \r\n`.
+        .map((line) => line.trimEnd())
+        .filter(Boolean)
     : [];
 const json = (row: Row) => JSON.parse(row.data) as Record<string, unknown>;
 const payload = (row: Row) => json(row).payload as Record<string, unknown>;
@@ -448,7 +451,7 @@ const userSteps = (session: SessionHandle, storage: string, root: RunId) =>
     // row is committed is the resumed run's to apply.
     if (!requested(rowsOf(storage), root, 'model')) {
       yield* until(storage, (rows) => parkedAfter(rows, root, 2));
-      const controls = session.runs.getHandle(root)?.controls;
+      const controls = session.runs.get(root)?.controls;
       if (controls === undefined)
         return yield* Effect.die('the parked run has no live controls');
       yield* controls.switchModel(SWITCH_TO);
@@ -927,8 +930,8 @@ export function crashConformanceSuite(plugins: string): void {
             (session) =>
               withProcessServices(
                 testRuntime(),
-                runAgent(
-                  {
+                session.runs.launch({
+                  request: {
                     config: AgentConfigSchema.parse({
                       agent: 'golden_crash',
                       model: 'gpt56',
@@ -936,8 +939,8 @@ export function crashConformanceSuite(plugins: string): void {
                     }),
                     runId: root,
                   },
-                  { session },
-                ),
+                  options: {},
+                }),
               ),
             (session) => userSteps(session, roots.storage, root),
           );
@@ -966,6 +969,15 @@ export function crashConformanceSuite(plugins: string): void {
               },
             ],
           });
+          // The root's prompt line and its stage commit with its opening, so
+          // no crash point sits between them (the resume never logs it).
+          const first = (type: string) =>
+            cleanRows.find((row) => row.run === root && row.type === type)
+              ?.commit ?? 0;
+          const traced = Math.max(first('log'), first('stage.start'));
+          expect(
+            points.filter((p) => p >= first('run.position') && p < traced),
+          ).toEqual([]);
           // The two calls, the script and its three calls, each settled.
           expect(expected.settled).toHaveLength(6);
           expect(
@@ -1124,8 +1136,8 @@ export function crashConformanceSuite(plugins: string): void {
               (session) =>
                 withProcessServices(
                   testRuntime(),
-                  runAgent(
-                    {
+                  session.runs.launch({
+                    request: {
                       config: AgentConfigSchema.parse({
                         agent: 'golden_delivery',
                         model: 'gpt56',
@@ -1133,8 +1145,8 @@ export function crashConformanceSuite(plugins: string): void {
                       }),
                       runId: root,
                     },
-                    { session },
-                  ),
+                    options: {},
+                  }),
                 ),
               (session) =>
                 Effect.gen(function* () {
@@ -1342,8 +1354,8 @@ export function crashConformanceSuite(plugins: string): void {
               (session) =>
                 withProcessServices(
                   testRuntime(),
-                  runAgent(
-                    {
+                  session.runs.launch({
+                    request: {
                       config: AgentConfigSchema.parse(
                         documentTaskConfig({
                           agent: 'polish',
@@ -1356,8 +1368,8 @@ export function crashConformanceSuite(plugins: string): void {
                       ),
                       runId: root,
                     },
-                    { session },
-                  ),
+                    options: {},
+                  }),
                 ),
               () => ended(roots.storage),
             );

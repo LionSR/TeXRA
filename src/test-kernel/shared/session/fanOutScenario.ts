@@ -20,12 +20,12 @@ import {
   type RunId,
   type RunParent,
 } from '@shared/schemas';
-import { DOCUMENTS_OUTPUT_ARM } from '@shared/plugins/documents';
 import { fold } from '@shared/session/sessionFold';
 import {
   emptySessionView,
   type SessionView,
 } from '@shared/session/sessionView';
+import { DOCUMENTS_OUTPUT_ARM } from '@texra/shared/plugins/documents';
 
 /** A process identity, never a lease token (contract C5). */
 export const OWNER = '["test-host",4242,"2026-09-04T00:00:00.000Z"]';
@@ -133,7 +133,10 @@ export class Log {
 
   /** Finite-read marker for this fixture log, whose first facts acquire its claims. */
   drained(through = this.events.length): FoldInput {
-    const claims = new Map<DisplaySessionEvent['aggregateId'], string | null>();
+    const claims = new Map<
+      DisplaySessionEvent['aggregateId'],
+      string | null
+    >();
     const removed = new Set<DisplaySessionEvent['aggregateId']>();
     for (const event of this.events.slice(0, through)) {
       if (event.seq === 1) claims.set(event.aggregateId, event.origin);

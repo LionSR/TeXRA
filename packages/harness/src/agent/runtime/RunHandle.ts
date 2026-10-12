@@ -1,7 +1,7 @@
 /**
  * Live run handle and terminal settlement.
  *
- * A handle owns one run's identity, its parent edge, its live controls
+ * A handle owns one run's identity, its launch's parent, its live controls
  * (while a tool-use loop runs), and its exactly-once
  * terminal settlement. A run's stop is its fiber's interruption
  * (`RunRegistry.interrupt`), never a call on this handle. Termination
@@ -20,11 +20,6 @@ import type { Effect } from 'effect';
 export interface RunFacts {
   readonly runId: RunId;
   readonly identity: RunIdentity;
-}
-
-/** One live parent edge, retained by a native activation and its handles. */
-export interface RunParent {
-  current: RunId | null;
 }
 
 /**
@@ -54,15 +49,16 @@ export interface RunControls {
 }
 
 /**
- * Handle for agent-based runs (workflow or toolUse subagents). A handle
- * with a parent represents a child whose results route to that parent.
+ * Handle for agent-based runs (workflow or toolUse subagents). The parent
+ * edge is not the handle's: it is the run's rows (`RunRegistry.parentOf`).
  */
 export class RunHandle<
   Trace extends AgentTrace | undefined = AgentTrace | undefined,
 > {
-  /** @internal The registry shares this cell across one activation's handles. */
-  parentState: RunParent;
   private liveControls?: RunControls;
+  /** The run that launched this one, as its launch named it: the parent its
+   *  birth writes, never cut. A detach is the rows' (`parentOf`). */
+  readonly launchParent: RunId | null;
 
   constructor(
     /**
@@ -71,13 +67,13 @@ export class RunHandle<
      * so the handle and the event plane cannot describe the run differently.
      */
     readonly run: RunFacts,
-    parent: RunId | null,
+    launchParent: RunId | null,
     /** The run's discriminated-event channel, for run-scoped subscribers:
      *  present on every launched run, absent on a process or external-CLI
      *  run's handle, which the type parameter records. */
     readonly trace: Trace = undefined as Trace,
   ) {
-    this.parentState = { current: parent };
+    this.launchParent = launchParent;
   }
 
   get runId(): RunId {
@@ -90,22 +86,6 @@ export class RunHandle<
 
   get agentName(): string {
     return runIdentityName(this.run.identity);
-  }
-
-  /** The launching run this run's results route to, or null for a root and
-   *  for a child the registry has detached. */
-  get parent(): RunId | null {
-    return this.parentState.current;
-  }
-
-  /**
-   * True when this run is a live child whose results deliver to
-   * `callerRunId` — the one caller-ownership authorization check. Reads the
-   * live parent edge, so a detached child answers false to its former
-   * orchestrator.
-   */
-  isOwnedBy(callerRunId: RunId | null | undefined): boolean {
-    return callerRunId != null && this.parentState.current === callerRunId;
   }
 
   attachControls(controls: RunControls): void {

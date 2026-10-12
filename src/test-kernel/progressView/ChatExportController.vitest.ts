@@ -28,7 +28,10 @@ import { installPlatform } from '@test/support/setupPlatform';
 import { rootedFsLayer } from '@test/support/fsTestUtils';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 import { seedRunRecord } from '@test/support/runRecordSeeds';
-import { ChatExportController } from '@texra/controllers/progressView/ChatExportController';
+import {
+  ChatExportController,
+  localExportRecords,
+} from '@texra/controllers/progressView/ChatExportController';
 
 const TEMPLATE =
   '<!doctype html><html><head><title>t</title>' +
@@ -103,7 +106,8 @@ describe('ChatExportController.exportAsHtml', () => {
     );
     controller = new ChatExportController({
       latexPreamble: '',
-      session,
+      roots: session.roots,
+      records: localExportRecords(session),
     });
   });
 
@@ -165,7 +169,8 @@ describe('ChatExportController.buildExportInput', () => {
     );
     controller = new ChatExportController({
       latexPreamble: '',
-      session,
+      roots: session.roots,
+      records: localExportRecords(session),
     });
   });
 

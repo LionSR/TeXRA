@@ -14,9 +14,10 @@
  * present.
  */
 
-import { Effect, Option, Stream } from 'effect';
-
+import { Cause, Context, Effect, Option, Scope, Stream } from 'effect';
 import { withLogChannel } from '@logger/effectLog';
+import { runStateAppend } from '@shared/session/runHistory';
+
 import {
   decideHumanInputRequest,
   decideRetryApproval,
@@ -26,6 +27,7 @@ import {
   texraHumanInputDenialMessage,
   texraRetryDenialMessage,
   type ApprovalPolicyDenial,
+  type TexraApprovalPolicy,
 } from '@shared/approvalPolicy';
 import {
   qualifyAggregateId,
@@ -37,9 +39,10 @@ import {
   type SessionEvent,
 } from '@shared/schemas';
 import type { RunHistoryDraft } from '@shared/session/runStateFold';
-import type { Append, SessionEventsShape } from '@shared/session/sessionEvents';
+import type { Append } from '@shared/session/sessionEvents';
+import type { ToolStep } from '@tools/sessionTools';
 
-import type { StepToolInputs } from './agentToolResolution';
+import { HostCapabilities, type StepToolInputs } from './agentToolResolution';
 import type {
   AskOptions,
   LogWriteError,
@@ -58,11 +61,17 @@ const canPresent = (session: SessionHandle): boolean =>
  * approval-gated tool) under what the host can answer. One reading for
  * every run of the session, whoever triggers it.
  */
-const executableDecision = (session: SessionHandle, runId: RunId) =>
+const executableDecision = (
+  session: SessionHandle,
+  runId: RunId,
+  policy = session.approvals.policy(runId),
+) =>
   decideTexraApproval({
-    policy: session.approvals.policy(runId),
+    policy,
     promptRequired: true,
-    scopedBypass: false,
+    // A run whose delegated work is bypassed (an Auto-approve launch) is
+    // asked nothing: every approval it would open is granted.
+    scopedBypass: session.approvals.bypass(runId, 'superYolo') !== null,
     canPresent: canPresent(session),
   });
 
@@ -91,7 +100,7 @@ function answerFor(
           action: 'deny',
           reason: texraApprovalDenialMessage(decision),
         },
-        denial: { kind: 'plan' },
+        denial: { kind: 'plan', policy },
       };
     }
     case 'userQuestion': {
@@ -105,7 +114,7 @@ function answerFor(
           action: 'deny',
           reason: texraHumanInputDenialMessage(decision.deny),
         },
-        denial: { kind: 'humanInput', deny: decision.deny },
+        denial: { kind: 'humanInput', deny: decision.deny, policy },
       };
     }
     case 'retry': {
@@ -122,7 +131,7 @@ function answerFor(
           action: 'deny',
           reason: texraRetryDenialMessage(decision.deny),
         },
-        denial: { kind: 'retry', deny: decision.deny },
+        denial: { kind: 'retry', deny: decision.deny, policy },
       };
     }
     case 'proposal':
@@ -156,21 +165,51 @@ export function policyDecidedRows(
   ];
 }
 
-/** The step's inputs read live from its session: whether approvals can be
- *  asked, and what its host serves now. */
+/** Whether a step's approval-gated tools are withheld: read live from its
+ *  session's policy, its grants and its host; and the policy read, which a
+ *  denial of the withheld tools names. */
 export function liveToolGates(
   session: SessionHandle,
   runId: RunId,
-): Pick<StepToolInputs, 'approvalPromptsUnavailable' | 'hostCapabilities'> {
+): Pick<StepToolInputs, 'approvalPromptsUnavailable'> & {
+  readonly policy: TexraApprovalPolicy;
+} {
+  const policy = session.approvals.policy(runId);
   return {
     approvalPromptsUnavailable: isTexraApprovalDenied(
-      executableDecision(session, runId),
+      executableDecision(session, runId, policy),
     ),
-    hostCapabilities: new Set(
-      session.interactions.readDiagnostics ? ['diagnostics'] : [],
-    ),
+    policy,
   };
 }
+
+/** What the session's host serves now: the union of what each plugin of
+ *  the step's capability-gated tools says (`HostCapabilities`), each read
+ *  from its own services; none without one. */
+export const hostCapabilitiesOf = (
+  session: SessionHandle,
+  step: ToolStep,
+  scope: Scope.Scope,
+): Effect.Effect<ReadonlySet<string>> => {
+  const serving = new Set(
+    [...step.entries.values()].flatMap(({ tool, plugin }) =>
+      tool.hostCapability === undefined ? [] : [plugin],
+    ),
+  );
+  return Effect.map(
+    Effect.forEach(serving, (plugin) =>
+      Scope.provide(step.services(new Set([plugin])), scope).pipe(
+        Effect.map((services) =>
+          Option.match(Context.getOption(services, HostCapabilities), {
+            onNone: () => [],
+            onSome: ({ of }) => [...of(session.roots.storage)],
+          }),
+        ),
+      ),
+    ),
+    (served) => new Set(served.flat()),
+  );
+};
 
 const CHANNEL = 'requestPolicy';
 
@@ -184,8 +223,6 @@ const REQUEST_TYPES: readonly SessionEvent['type'][] = [
 export interface RequestAsksInit {
   /** The session the requests are asked on, resolved when first used. */
   readonly session: () => SessionHandle;
-  /** The publisher's detached door: an interrupted ask's cancellation. */
-  readonly detach: SessionEventsShape['detach'];
   /** Whether the session's doors are shut: a cancellation then writes
    *  nothing. */
   readonly closed: () => boolean;
@@ -195,12 +232,16 @@ export interface RequestAsksInit {
  *  `decision`. */
 export function requestAsks({
   session,
-  detach,
   closed,
 }: RequestAsksInit): Pick<SessionRequests, 'ask' | 'decide' | 'decision'> {
+  const decide: SessionRequests['decide'] = (runId, requestId, answer) =>
+    session().log.transact((tx) =>
+      decisionRow(runId, requestId, answer, tx.append),
+    );
+
   /** The `request.decided` row for `requestId`, if the request is still
-   *  open: the body of one publisher transaction, whether a surface awaits
-   *  it or an interrupted {@link ask} detaches it. It reads the run's
+   *  open: the body of one publisher transaction, whether a surface or an
+   *  interrupted {@link ask} decides it. It reads the run's
    *  request rows alone, through the type index, so a decision costs the
    *  same however long the run's history grows. */
   const decisionRow = (
@@ -217,7 +258,7 @@ export function requestAsks({
       );
       if (!mine.some((row) => row.type === 'request.opened')) return false;
       if (mine.some((row) => row.type === 'request.decided')) return false;
-      yield* append([
+      yield* runStateAppend(append)([
         { type: 'request.decided', aggregateId, requestId, decision },
       ]);
       return true;
@@ -268,7 +309,9 @@ export function requestAsks({
       ((opened) =>
         Effect.suspend(() => {
           const from = session().log.now();
-          return session().log.transact(opened).pipe(Effect.as(from));
+          return session()
+            .log.transact((tx) => runStateAppend(tx.append)(opened))
+            .pipe(Effect.as(from));
         }));
     return Effect.gen(function* () {
       const rows: RequestRow[] = [
@@ -299,33 +342,34 @@ export function requestAsks({
         ),
       );
     }).pipe(
+      // The interruption decides the request through the one door a
+      // decision takes, awaited: the stop settles with the cancel written.
       Effect.onInterrupt(() =>
-        Effect.sync(() => {
-          if (closed()) return;
-          detach((append) =>
-            decisionRow(
-              runId,
-              requestId,
-              { action: 'cancel', cause: 'Run interrupted.' },
-              append,
-            ).pipe(
+        closed()
+          ? Effect.void
+          : decide(runId, requestId, {
+              action: 'cancel',
+              cause: 'Run interrupted.',
+            }).pipe(
               // `false` is the interruption that landed before the open
               // committed: no row exists, so this cancellation writes none
               // either and the caller's staging has no decision coming.
-              Effect.tap((cancelled) =>
+              Effect.flatMap((cancelled) =>
                 cancelled ? Effect.void : releaseUncommitted,
               ),
+              // A session draining under it refuses even as a defect.
+              Effect.catchCause((cause) =>
+                Effect.logWarning(
+                  `Request ${requestId} was not cancelled as its run stopped`,
+                ).pipe(
+                  Effect.annotateLogs({ data: Cause.squash(cause) }),
+                  withLogChannel(CHANNEL),
+                ),
+              ),
             ),
-          );
-        }),
       ),
     );
   };
-
-  const decide: SessionRequests['decide'] = (runId, requestId, answer) =>
-    session().log.transact((tx) =>
-      decisionRow(runId, requestId, answer, tx.append),
-    );
 
   return { ask, decide, decision };
 }

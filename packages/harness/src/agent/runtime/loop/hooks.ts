@@ -32,10 +32,11 @@ import {
 } from '@shared/schemas';
 import type { RunHistoryDraft, RunState } from '@shared/session/runStateFold';
 
+import type { RunCell } from '@shared/session/runHistory';
 import { rowAggregate } from './rows';
+import { registryOf } from '../runRegistry';
 import type { AgentRunShape } from '../run/AgentRun';
 import type { InputPart } from '../run/mediaInput';
-import type { RunCell } from './runProgram';
 import type { StepTools } from './step';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
@@ -248,11 +249,9 @@ const hooksAt = Effect.fn('Hooks.at')(function* (
 
 /** The root of `run`'s parent chain: the session its hooks see. */
 const rootOf = (run: AgentRunShape) => {
+  const { parentOf } = registryOf(run.session.runs);
   let root = run.runId;
-  for (let up = run.session.runs.getHandle(root)?.parent; up != null;) {
-    root = up;
-    up = run.session.runs.getHandle(root)?.parent;
-  }
+  for (let up = parentOf(root); up !== null; up = parentOf(root)) root = up;
   return root;
 };
 

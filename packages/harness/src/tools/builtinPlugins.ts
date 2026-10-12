@@ -8,7 +8,7 @@
 
 // Local imports
 import type { CodeSandbox } from '@agent/codeSandbox/codeSandbox';
-import type { RuntimeTool } from '@agent/runtime/ToolServices';
+import type { RuntimeTool, ToolServices } from '@agent/runtime/ToolServices';
 import { AGENT_TOOL_NAME } from '@shared/constants/delegationTools';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import type { CanonicalToolDisplayName } from '@shared/tools/toolKind';
@@ -49,7 +49,9 @@ const SCRIPT_TOOLS = { script: ScriptTool };
  */
 const builtin = <ROut = never>(
   plugin: Omit<PluginDefinition<ROut>, 'tools'> & {
-    readonly tools?: Readonly<Record<string, RuntimeTool<Error, unknown>>>;
+    readonly tools?: Readonly<
+      Record<string, RuntimeTool<Error, ToolServices | ROut>>
+    >;
   },
   // cast: erased; the run loop serves every built-in its call services.
 ): Plugin => plugin as unknown as Plugin;

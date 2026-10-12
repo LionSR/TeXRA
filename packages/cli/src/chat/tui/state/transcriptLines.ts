@@ -2,8 +2,7 @@
 // display lines. Unlike the finalized scrollback and the live region, this
 // renders every tool-output line.
 
-import type { TranscriptRow } from '@shared/transcript';
-
+import type { TranscriptRow } from '@cli/chat/tui/state/sessionView';
 import { isRenderableTranscriptEntry } from '../panes/transcriptEntries';
 import { fullTranscriptEntryLayout } from '../panes/transcriptEntryLayout';
 

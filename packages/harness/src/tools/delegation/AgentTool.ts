@@ -296,8 +296,7 @@ const reusable = Effect.fn('agent.reusable')(function* (
     Effect.sync(() => new Map<string, string>()),
   );
   const callId = call.callId ?? '';
-  // Claimed before the read below yields, so two calls of the script
-  // issued together cannot both pass.
+  // Claimed before the read yields, so two calls at once cannot both pass.
   const claimed = siblings.get(key);
   if (claimed !== undefined && claimed !== callId)
     return errorResult(
@@ -305,8 +304,9 @@ const reusable = Effect.fn('agent.reusable')(function* (
       { name: 'DuplicateCall' },
     );
   siblings.set(key, callId);
-  const rows = (yield* Effect.forEach(yield* reuseScope(call), (id) =>
-    call.run.session.log.rows(qualifyAggregateId('run', id), ['tool.result']),
+  const { log } = call.run.session;
+  const rows = (yield* Effect.forEach(yield* reuseScope(call), (runId) =>
+    log.rows(qualifyAggregateId('run', runId), ['tool.result']),
   )).flat();
   const found = rows.flatMap((row) =>
     row.type === 'tool.result' &&

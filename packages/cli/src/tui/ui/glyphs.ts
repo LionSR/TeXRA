@@ -14,7 +14,7 @@ export const POINTER = '›';
 /** Active/checked marker for selectable values. */
 export const TICK = '✓';
 
-/** Steady status dot for tool rows and subagent rows (never animated). */
+/** Status dot for tool rows and subagent rows; the on-beat of the approval pulse. */
 export const STATUS_DOT = '●';
 
 /** Decorative brand marker at the head of the status bar (aria-hidden). */
@@ -31,6 +31,9 @@ export const CROSS = '✗';
 
 /** Work deliberately not done: a user skip or a task the run never reached. */
 export const SKIP_CIRCLE = '⊘';
+
+/** Hollow dot: the off beat of a pulse, and a step queued but not started. */
+export const HOLLOW_DOT = '○';
 
 /** Transcript row prefixes (trailing space included for the gutter). User rows
  *  (and the default fallback) reuse the same chevron as selects (POINTER) so the

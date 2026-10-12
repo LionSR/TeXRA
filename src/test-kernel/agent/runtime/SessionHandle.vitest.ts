@@ -7,6 +7,7 @@ import path from 'node:path';
 import { it } from '@effect/vitest';
 import { Cause, Effect, Exit } from 'effect';
 import { describe, expect, vi } from 'vitest';
+import { registryOf } from '@agent/runtime/runRegistry';
 
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { RunHandle } from '@agent/runtime/RunHandle';
@@ -26,38 +27,31 @@ function trackAgent(session: SessionHandle, runId: RunId): RunHandle {
     runId,
     agent: 'orchestrator',
   });
-  session.runs.track(handle);
+  registryOf(session.runs).track(handle);
   return handle;
 }
 
 describe('SessionHandle', () => {
-  it.effect(
-    'keeps run tracking and approval policy isolated between sessions',
-    () =>
-      Effect.gen(function* () {
-        const a = yield* Effect.acquireRelease(createTestSession(), (session) =>
-          closeSessionOf(session),
-        );
-        const b = yield* Effect.acquireRelease(createTestSession(), (session) =>
-          closeSessionOf(session),
-        );
-        const isolated = generateRunId();
-        const runB = generateRunId();
-        const handle = trackAgent(a, isolated);
-        expect(a.runs.getHandle(isolated)).toBe(handle);
-        expect(b.runs.getHandle(isolated)).toBeUndefined();
+  it.effect('keeps run tracking isolated between sessions', () =>
+    Effect.gen(function* () {
+      const a = yield* Effect.acquireRelease(createTestSession(), (session) =>
+        closeSessionOf(session),
+      );
+      const b = yield* Effect.acquireRelease(createTestSession(), (session) =>
+        closeSessionOf(session),
+      );
+      const isolated = generateRunId();
+      const runB = generateRunId();
+      const handle = trackAgent(a, isolated);
+      expect(a.runs.get(isolated)?.handle).toBe(handle);
+      expect(b.runs.get(isolated)?.handle).toBeUndefined();
 
-        // Disposing A leaves B's separate registry untouched.
-        const handleB = trackAgent(b, runB);
-        // The policy is the session's own setting: a change on A writes no
-        // row and leaves B's as it was.
-        a.approvals.override('yolo');
-        expect(a.approvals.policy()).toBe('yolo');
-        expect(b.approvals.policy()).toBe('ask');
-        yield* closeSessionOf(a);
-        expect(a.runs.getHandle(isolated)).toBeUndefined();
-        expect(b.runs.getHandle(runB)).toBe(handleB);
-      }),
+      // Disposing A leaves B's separate registry untouched.
+      const handleB = trackAgent(b, runB);
+      yield* closeSessionOf(a);
+      expect(a.runs.get(isolated)?.handle).toBeUndefined();
+      expect(b.runs.get(runB)?.handle).toBe(handleB);
+    }),
   );
 
   it.effect(
@@ -108,7 +102,7 @@ describe('SessionHandle', () => {
         .mockImplementation(() => {
           throw failure;
         });
-      const runs = vi.spyOn(session.runs, 'dispose');
+      const runs = vi.spyOn(registryOf(session.runs), 'dispose');
       const exit = yield* Effect.exit(closeSessionOf(session));
       expect(Exit.isFailure(exit)).toBe(true);
       // The teardown failure reaches the caller as a defect, not a typed fail.

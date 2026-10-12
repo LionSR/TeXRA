@@ -11,12 +11,15 @@
  */
 import { writeLogLine } from '@logger/logSink';
 import {
+  qualifyAggregateId,
   RUN_OUTCOME,
   toJsonValue,
+  type RunId,
   type LogLevel,
   type MessageType,
   type RunOutcome,
 } from '@shared/schemas';
+import type { UnfoldedDraft } from '@shared/session/sessionEvents';
 import { generateShortId } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -204,4 +207,13 @@ class StreamHandleImpl implements StreamHandle {
     });
     return this.finalText;
   }
+}
+
+/** A source trace fact on its run aggregate. Streaming chunks remain transient. */
+export function runEventDraft(
+  runId: RunId,
+  event: AgentEvent,
+): UnfoldedDraft | null {
+  if (event.type === 'stream.chunk') return null;
+  return { ...event, aggregateId: qualifyAggregateId('run', runId) };
 }

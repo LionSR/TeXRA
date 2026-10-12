@@ -60,6 +60,7 @@ import {
   type RunId,
   type SessionEventDraft,
   type UserQuestionPermission,
+  aggregateTarget,
 } from '@shared/schemas';
 import { goalStateOf } from '@shared/plugins/goal';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
@@ -68,6 +69,7 @@ import {
   isTerminalOutcomePhase,
 } from '@shared/runs/runStatus';
 import { acceptsFollowUp, descendantRuns } from '@shared/session/sessionView';
+import type { UnfoldedDraft } from '@shared/session/sessionEvents';
 import {
   buildScenario,
   foldAll,
@@ -369,7 +371,9 @@ if (HARNESS_MEMORY_FILES.length > 0) {
 const harnessRuntimeSession = await harnessRuntime.runPromise(
   HARNESS_PLATFORM_SERVICES.session,
 );
-harnessRuntimeSession.approvals.override(TEXRA_APPROVAL_POLICY_DEFAULT);
+const harnessRunSession = await harnessRuntime.runPromise(
+  HARNESS_PLATFORM_SERVICES.runSession,
+);
 if (process.env.HARNESS_VISIBLE_AGENTS !== undefined) {
   await harnessRuntime.runPromise(
     harnessRoots.repoState.update(WorkspaceStateKey.WORKSPACE_AGENTS, {
@@ -401,13 +405,58 @@ function session() {
   return harnessRuntimeSession;
 }
 
-function publish(...drafts: SessionEventDraft[]): void {
-  harnessRuntime.runFork(session().log.transact(drafts));
+/**
+ * Write fixture rows the way the session does: a row no run's state folds
+ * as one transaction, a `run.activate` as its run's opening, and the rows a
+ * run's state folds that the fixtures seed through that run's cell. Any
+ * other folded kind has no seeding path here: it does not type-check.
+ */
+function publish(...drafts: SeedRow[]): void {
+  const { log, runHistory } = session();
+  const folded = drafts.filter(isCellRow);
+  const unfolded = drafts.filter(
+    (draft): draft is UnfoldedDraft =>
+      !isCellRow(draft) && draft.type !== 'run.activate',
+  );
+  harnessRuntime.runFork(
+    Effect.gen(function* () {
+      if (unfolded.length > 0) yield* log.transact(unfolded);
+      for (const draft of drafts) {
+        const target = aggregateTarget(draft.aggregateId);
+        if (draft.type === 'run.activate' && target.kind === 'run')
+          yield* runHistory.open(target.id, {
+            activation: () => Effect.succeed([draft]),
+          });
+      }
+      for (const [key, rows] of Map.groupBy(folded, (row) => row.aggregateId)) {
+        const target = aggregateTarget(key);
+        if (target.kind !== 'run')
+          return yield* Effect.die(new Error(`${key} is not a run`));
+        const cell = yield* runHistory.open(target.id);
+        yield* cell.append(rows);
+      }
+    }),
+  );
 }
+
+/** The run rows the fixtures seed that a run's state folds. */
+type CellRow = Extract<
+  SessionEventDraft,
+  { type: 'run.config' | 'run.position' | 'request.decided' }
+>;
+/** What a fixture seeds: a row no run folds, its cell's rows, its opening. */
+type SeedRow =
+  | UnfoldedDraft
+  | CellRow
+  | Extract<SessionEventDraft, { type: 'run.activate' }>;
+const isCellRow = (draft: SeedRow): draft is CellRow =>
+  draft.type === 'run.config' ||
+  draft.type === 'run.position' ||
+  draft.type === 'request.decided';
 
 // The TUI reads the session fold (PRD 10.1): bind it and subscribe every
 // run's transcript tier the way `runChat` does.
-HARNESS_DISPOSERS.push(bindSessionView(harnessRuntime, session().view.ref));
+HARNESS_DISPOSERS.push(bindSessionView(harnessRuntime, harnessRunSession.view));
 {
   let subscribed = '';
   const syncTranscriptSubscriptions = (): void => {
@@ -435,7 +484,7 @@ HARNESS_DISPOSERS.push(
   Effect.runSync(
     session().interactions.use(
       createTuiHostInteractions(harnessRuntimeHost, HARNESS_CLI_CONTEXT, {
-        session: session(),
+        requests: session().requests,
         secrets: HARNESS_PLATFORM_SERVICES.secrets,
         settings: HARNESS_PLATFORM_SERVICES,
         runtime: harnessRuntime,
@@ -1464,8 +1513,13 @@ function appendHarnessTranscript(
   }
 }
 
+/** The harness chat's launch policy, which `/approval` sets, as the chat's
+ *  does; it never writes the project's. */
+let harnessPolicy: TexraApprovalPolicy = TEXRA_APPROVAL_POLICY_DEFAULT;
+const harnessApprovalPolicy = (): TexraApprovalPolicy => harnessPolicy;
+
 function setHarnessApprovalPolicy(policy: TexraApprovalPolicy): void {
-  harnessRuntimeSession.approvals.override(policy);
+  harnessPolicy = policy;
   sessionMeta.set({
     ...sessionMeta.get(),
     approvalPolicy: policy,
@@ -1522,7 +1576,7 @@ function appendHarnessStatus(): void {
       model: meta.model,
       teamName: meta.teamName,
       modelAccess: run?.usage.usageRoute,
-      approvalPolicy: harnessRuntimeSession.approvals.policy(),
+      approvalPolicy: harnessApprovalPolicy(),
       approvalBypasses: runBypasses(view, runId),
       statusLabel: run?.statusLabel,
       activeChildSessions: runningChildCount(view, run),
@@ -1579,7 +1633,7 @@ function handleHarnessSlashCommand(line: string): boolean {
       appendHarnessStatus();
       return true;
     case 'plan':
-      void showCliWorkPlan(session());
+      showCliWorkPlan();
       return true;
     case 'clear':
       resetHarnessForClear();
@@ -1609,13 +1663,14 @@ function handleHarnessSlashCommand(line: string): boolean {
 }
 
 /** The harness's root-run claim, held the way `texra chat` holds its own. */
-const harnessSession = new TuiSession(() => undefined);
+const harnessSession = new TuiSession();
 
 registerBuiltinSlashCommands({
   secrets: HARNESS_PLATFORM_SERVICES.secrets,
   stores: HARNESS_PLATFORM_SERVICES,
   runtime: HARNESS_PLATFORM_SERVICES.runtime,
   runtimeSession: harnessRuntimeSession,
+  runSession: harnessRunSession,
   // Mirror `texra chat`: agent selection is open exactly while no root run
   // is pending.
   canSelectAgent: () => chatTuiCanStartRootRun(harnessSession),
@@ -1626,8 +1681,13 @@ registerBuiltinSlashCommands({
         ? DISABLED_MODEL_SWITCH_REASON
         : undefined,
     ),
-  getApprovalPolicy: () => harnessRuntimeSession.approvals.policy(),
-  onApprovalPolicySelect: setHarnessApprovalPolicy,
+  getApprovalPolicy: harnessApprovalPolicy,
+  onApprovalPolicySelect: (policy) =>
+    Effect.sync(() => setHarnessApprovalPolicy(policy)),
+  onProjectApprovalPolicyChanged: (policy) =>
+    appendHarnessAssistantTranscript(
+      `Project approval policy: ${formatTexraApprovalPolicy(policy)}`,
+    ),
   onModelSelect: (model) =>
     Effect.sync(() => {
       setCliSessionModelOverride(model);
@@ -1703,7 +1763,7 @@ function renderHarnessApp(): React.JSX.Element {
       secrets={HARNESS_PLATFORM_SERVICES.secrets}
       stores={HARNESS_PLATFORM_SERVICES}
       runtime={harnessRuntime}
-      session={session()}
+      session={harnessRunSession}
       onSubmit={handleHarnessSubmit}
       onStaticTranscriptChange={viewportController.repaintTranscript}
       onCtrlC={handleHarnessCtrlC}
@@ -1783,7 +1843,12 @@ if (process.env.HARNESS_SESSION_TREE === '1') {
     }),
   ]);
   const ref = await harnessRuntime.runPromise(SubscriptionRef.make(view));
-  HARNESS_DISPOSERS.push(bindSessionView(harnessRuntime, ref));
+  HARNESS_DISPOSERS.push(
+    bindSessionView(harnessRuntime, {
+      current: () => SubscriptionRef.getUnsafe(ref),
+      changes: SubscriptionRef.changes(ref),
+    }),
+  );
   rootRunId.set(interrupted);
   focusRun(PROCESS);
 }

@@ -128,7 +128,7 @@ export const followInterruptedTasks = Effect.fn('followInterruptedTasks')(
           run.identity.kind === 'agent' &&
           !RESTING_SUBSTATES.has(run.substate) &&
           !isTerminalOutcomePhase(run.status) &&
-          !session.runs.isLive(run.id),
+          session.runs.get(run.id)?.live !== true,
       );
       // Interrupted: no live process holds it (the claim's owner is proved
       // dead, or there is none).

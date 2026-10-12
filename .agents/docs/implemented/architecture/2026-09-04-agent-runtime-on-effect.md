@@ -227,7 +227,7 @@ aggregate wording below is likewise the one run model's single `run` aggregate
 
 One `run` aggregate per run in the substrate's `event` table, keyed
 `(aggregate_id, seq)` (contract C1). Its storage key is
-`aggregateId('run', runId)` under C2 (one run model §3.1, decision D0); a
+`qualifyAggregateId('run', runId)` under C2 (one run model §3.1, decision D0); a
 logical id alone is never an aggregate key. `RunHistory.load` accepts the run
 id and qualifies its database reads internally. The `commit` column (`INTEGER
 PRIMARY KEY AUTOINCREMENT`) is the database-wide total order; nothing
@@ -660,7 +660,7 @@ row also carries the database-wide `commit` value, exported under the same
 name, and the scrubber keys on that. `StreamLogEntry.seqNo` is
 renumbered on merge and is explicitly not foldable, so it is not the key.
 `RunHistory.load` uses C7's indexed
-`aggregatesAfterCommit([aggregateId('run', runId)], snapshot.commit)` for the
+`aggregatesAfterCommit([qualifyAggregateId('run', runId)], snapshot.commit)` for the
 tail, so it does not scan unrelated
 runs. A snapshot includes the preceding rows and its
 explicit non-message state; `appendBatch` resolves any reference to an
@@ -807,7 +807,7 @@ state, not just the live registry. `run.start.parent` is the whole edge
 `run.start` commit, stamped by the database inside the child's creation
 transaction. Before admission, resume, a new child turn after
 WAITING, or parent-directed delivery/approval routing, the runtime resolves
-`aggregateId('run', parent.id)` through C7 `aggregateState` and the
+`qualifyAggregateId('run', parent.id)` through C7 `aggregateState` and the
 indexed current `run.start` lookup. A missing or closed parent, or a current
 start commit unequal to `parent.startCommit`, gives **no effective parent**;
 the matching open parent remains the parent even when it has no live owner.

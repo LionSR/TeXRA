@@ -9,10 +9,10 @@ import path from 'node:path';
 
 import { useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Box, Static, Text } from 'ink';
+import type { TranscriptRow } from '@cli/chat/tui/state/sessionView';
 
 import { COLOR_HINT } from '@cli/tui/ui/colors';
-import type { SessionView } from '@shared/session/sessionView';
-import type { TranscriptRow } from '@shared/transcript';
+
 import { safeHomedir } from '@utils/system/platformPaths';
 
 import {
@@ -44,6 +44,7 @@ import {
 } from './staticTranscriptRing';
 import { TranscriptEntry } from './TranscriptEntry';
 import { transcriptColumns } from './transcriptEntryLayout';
+import type { SessionView } from '@texra-ai/harness';
 import type { RunId } from '@texra-ai/harness/schemas';
 
 function shortenCwd(cwd: string): string {
