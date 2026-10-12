@@ -2,8 +2,8 @@
  * `SessionRequests`: one handler for every request a surface issues to its
  * session's runtime (PRD one-fold-three-renderers, 7.6, 8.2), answered once
  * with an `Outcome` or a request error. Existence is read from the sequence
- * table first (C2): a run with no row is `Unavailable`, a foreign claim
- * without a death proof `NotOwner`, a rejecting collaborator a defect.
+ * table first (C2): no row is `Unavailable`, a foreign claim without a death
+ * proof `NotOwner`, a rejecting collaborator a defect.
  */
 import { Effect, SubscriptionRef, type Context } from 'effect';
 
@@ -470,11 +470,9 @@ const handle = (
   }
 };
 
-/**
- * The session's requests: the handler that admits on the log's sequence
- * table, and a run's questions to a person. One value per session, so the
- * decision lanes serialize within a session and never across two.
- */
+/** The session's requests: the handler that admits on the log's sequence
+ *  table, and a run's questions to a person. One value per session, so the
+ *  decision lanes serialize within a session and never across two. */
 export function sessionRequests(init: SessionRequestsInit): SessionRequests {
   const deps: RequestDeps = {
     ...init,
