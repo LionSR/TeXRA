@@ -40,13 +40,13 @@ const mocks = vi.hoisted(() => ({
   closeSession: vi.fn((_root: string) =>
     Effect.succeed({ settled: true, abandoned: [] as string[] }),
   ),
-  detachEvents: vi.fn(),
   /** The process layer's release, as the package's scope ends it. */
   releaseProcess: vi.fn(),
   runId: 'ae0001',
   /** Fails the package session's fold, as a fold defect ends its view. */
   foldDeath: undefined as Deferred.Deferred<never, Error> | undefined,
-  eventListener: undefined as ((event: unknown) => void) | undefined,
+  /** The run's trace-port listeners a handoff installed. */
+  traceListeners: new Set<(event: unknown) => void>(),
   /** What the package composes its process from (`processLayer`). */
   processLayer: vi.fn(),
   runValidatedAgent: vi.fn(),
@@ -60,10 +60,6 @@ const mocks = vi.hoisted(() => ({
   /** The current package session's view, advanced independently of run. */
   sessionView: undefined as unknown,
   setTranscriptSubscriptions: vi.fn(),
-  subscribe: vi.fn((listener: (event: unknown) => void) => {
-    mocks.eventListener = listener;
-    return mocks.detachEvents;
-  }),
 }));
 
 vi.mock('@agent/core/definition/AgentConfig', () => ({
@@ -131,6 +127,15 @@ vi.mock('@controllers/session/sessionLayer', async () => {
         }),
     };
     readonly requests = { request: mocks.decide };
+    /** The run's trace port: the listeners a handoff installs. */
+    readonly trace = {
+      listen: (_runId: string, listener: (event: unknown) => void) => {
+        mocks.traceListeners.add(listener);
+        return () => mocks.traceListeners.delete(listener);
+      },
+    };
+    /** No resume here is ever joined by another caller. */
+    readonly followUps = { joined: () => false };
     /** The session's view level: the pre-launch session, no run yet. */
     readonly viewRef = Effect.runSync(
       SubscriptionRef.make<FakeSessionView>({
@@ -308,7 +313,7 @@ describe('agent package sessions', () => {
   beforeEach(() => {
     mocks.sessionInits.splice(0);
     vi.clearAllMocks();
-    mocks.eventListener = undefined;
+    mocks.traceListeners.clear();
     mocks.foldDeath = Effect.runSync(Deferred.make<never, Error>());
     mocks.interruptRun.mockReturnValue(false);
     mocks.runValidatedAgent.mockImplementation(

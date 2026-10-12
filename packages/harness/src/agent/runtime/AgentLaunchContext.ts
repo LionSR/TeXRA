@@ -104,9 +104,6 @@ interface AgentLaunchInput {
   registration?: RegisterRunOptions;
   /** A fresh run's admission, once its opening committed: it never waits. */
   onAdmitted?: (runId: RunId) => Effect.Effect<void>;
-  /** A second sink of the run's trace: every event from the first until
-   *  the run ends, `stream.chunk` text included, which no row carries. */
-  onTraceEvent?: (event: AgentEvent) => void;
   /** Session owning this run's coordination state. */
   session: SessionHandle;
   /** This launch is the user's own-API-key fallback for a quota-exhausted
@@ -319,7 +316,8 @@ const enterRun = Effect.fn('enterRun')(function* (
   const logger = new TraceEmitter(
     (event) =>
       held === null ? session.log.publish(runId, event) : held.push(event),
-    ...(input.onTraceEvent ? [input.onTraceEvent] : []),
+    // The run's trace port: every caller reading its events, joiners too.
+    (event) => session.trace.tap(runId, event),
   );
   yield* Effect.addFinalizer(() => Effect.sync(() => logger.close()));
   let carried = 0;

@@ -2,7 +2,6 @@ import * as path from 'node:path';
 
 import { Data, Deferred, Effect, Fiber, Layer } from 'effect';
 
-import type { AgentEvent } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { RuntimeTool as ITool } from '@agent/runtime/ToolServices';
 import { withLogChannel } from '@logger/effectLog';
@@ -277,8 +276,6 @@ export interface ExecuteAgentOptions extends SubagentRunOptions {
    * has the run, runs it under the claim; a failure aborts that one.
    */
   onAdmitted?: (runId: RunId) => Effect.Effect<void, Error>;
-  /** A sink of every event the run's trace emits, beside the session's. */
-  onTraceEvent?: (event: AgentEvent) => void;
   /** Stop a tool-use run after one model/tool cycle instead of waiting for follow-up input. */
   stopAfterCycle?: boolean;
   /** This launch is the user's own-API-key fallback for a quota-exhausted
@@ -313,7 +310,6 @@ export function executeAgent(
             ),
           ),
         ),
-      onTraceEvent: options.onTraceEvent,
       session: options.session,
       ownApiKeyFallback: options.ownApiKeyFallback,
       toolPolicy: {
@@ -450,7 +446,6 @@ export function resumeToolUseFromResumeData(
     const ctx = yield* buildAgentLaunchContext({
       definition,
       runId: resume.runId,
-      onTraceEvent: options.onTraceEvent,
       session: runSession,
       toolPolicy: {
         approvalPromptsUnavailable:

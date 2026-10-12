@@ -77,12 +77,13 @@ export interface ResumeRunOptions extends Pick<
   | 'beforeRunEnd'
   | 'onRun'
   | 'onAdmitted'
-  | 'onTraceEvent'
   | 'stopAfterCycle'
   | 'tools'
 > {
   /** Session owning the resumed run's coordination state. */
   readonly session: SessionHandle;
+  /** This caller joined a resume already in flight: an observer. */
+  readonly onJoined?: () => void;
   /** Monotone per-attempt cancellation signal: once true it stays true. */
   readonly isCancellationRequested?: () => boolean;
 }
@@ -140,9 +141,15 @@ export const resumeOwnRun = Effect.fn('resumeOwnRun')(function* (
   const session = options.session;
   const cancelled = () => options.isCancellationRequested?.() === true;
   if (cancelled()) return REFUSED;
+  // The owner's resume is uninterruptible; a joiner is an observer whose
+  // wait its own interruption ends, never the resume it joined.
   const { result, joined } = yield* session.followUps.resumeOnce(
     runId,
-    resumeHere(runId, options).pipe(Effect.provideService(Runs, session.runs)),
+    resumeHere(runId, options).pipe(
+      Effect.provideService(Runs, session.runs),
+      Effect.uninterruptible,
+    ),
+    options.onJoined,
   );
   if (!joined || 'ownedBy' in result) return result;
   // A joiner of a resume already in flight hears that resume's refusal or
@@ -160,7 +167,7 @@ export const resumeOwnRun = Effect.fn('resumeOwnRun')(function* (
       return result;
     }),
   );
-}, Effect.uninterruptible);
+});
 
 /** Hold the run's claim for the enclosing scope: null, or the live process
  *  that refused it. */
@@ -238,7 +245,6 @@ const runLaunchOptions = (options: ResumeRunOptions) => ({
   beforeRunEnd: options.beforeRunEnd,
   onRun: options.onRun,
   // Admitted under the claim already (`resumeHere`): not again at entry.
-  onTraceEvent: options.onTraceEvent,
   stopAfterCycle: options.stopAfterCycle,
   tools: options.tools,
 });

@@ -213,19 +213,19 @@ export type StreamClosure = Extract<RunHistoryDraft, { type: 'stream.end' }>;
 export type ClosureFact =
   StreamClosure | Extract<SessionEventDraft, { type: 'stage.end' }>;
 
-/**
- * What each run's trace ({@link SessionLog.publish}) left: the first row the
- * store refused, the run's own to hear at its end, and its open work.
- */
+/** Each run's trace ({@link SessionLog.publish}): the first row the store
+ *  refused, its open work, and its port every reader of its events hears. */
 export interface RunTrace {
-  /** The first of `runId`'s rows the store refused, taken, as the error
-   *  its `run.end` carries; read after every row before it was tried. */
+  /** The first refused row of `runId`, taken, as its `run.end` error. */
   lost(runId: RunId): Effect.Effect<RunEnd['error'] | undefined>;
-  /** What closes what is still open on `runId`: every stream, with its
-   *  text, and with an `outcome` every stage. Read inside a job of the
-   *  session's publisher, or once the log has settled. */
+  /** What closes `runId`'s open streams (and stages, with an `outcome`);
+   *  read in a publisher job or once the log settled. */
   closure(runId: RunId): StreamClosure[];
   closure(runId: RunId, outcome: RunOutcome): ClosureFact[];
+  /** The run's trace port: hand `event` to every listener of `runId`. */
+  tap(runId: RunId, event: AgentEvent): void;
+  /** Listen on `runId`'s port, from now until the returned release. */
+  listen(runId: RunId, listener: (event: AgentEvent) => void): () => void;
 }
 
 /**

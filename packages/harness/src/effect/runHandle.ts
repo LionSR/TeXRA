@@ -132,14 +132,14 @@ const traceHandover = (runId: RunId): Effect.Effect<TraceHandover> =>
     };
   });
 
-/** What a launch reports to its handle: every trace event, from the run's
- *  first, and the moment the run exists in its session. */
+/** What a launch reports to its handle: the moment the run exists in its
+ *  session, and that it joined a resume already in flight. */
 interface LaunchHooks {
   /** Whether the handoff was abandoned before the run could be stopped by
    *  id: a launch that reads it starts no run once it is true. */
   readonly isCancellationRequested: () => boolean;
-  readonly onTraceEvent: (event: AgentEvent) => void;
   readonly onAdmitted: () => Effect.Effect<void>;
+  readonly onJoined: () => void;
 }
 
 /** One launch of `runId`, fresh or resumed, wired to the hooks its handle
@@ -152,10 +152,13 @@ type Launch = (
  * Launch `runId` on `session` and hand back its {@link Run} once it exists
  * there; a launch that fails first fails this with its own error.
  *
- * The handoff is all-or-nothing, which is what lets a caller treat the
- * `Run` as the only handle on the run: this either returns one, or it ends
- * every fiber it started. There is no exit in which a run keeps working
- * with nobody holding it.
+ * The handoff is all-or-nothing for the caller that launched: this either
+ * returns a `Run`, or it ends every fiber it started, and abandoned before
+ * admission it stops the launch, unless another caller joined it, when it
+ * leaves and the run goes on for them. A caller that joined a resume already
+ * in flight is an observer: its interruption ends only its own wait and its
+ * events, never the run. Every caller reads the run's events from the run's
+ * one trace port (`session.trace.listen`), from its own handoff on.
  */
 export function handOver(
   session: RuntimeSessionHandle,
@@ -165,6 +168,7 @@ export function handOver(
 ): Effect.Effect<Run, RunFailure> {
   return Effect.gen(function* () {
     const trace = yield* traceHandover(runId);
+    const unlisten = session.trace.listen(runId, trace.offer);
     const admitted = yield* Deferred.make<void, RunFailure>();
     // Settling a run that was admitted changes nothing here; one that never
     // was fails its admission with its own failure, or with the launcher's
@@ -172,7 +176,8 @@ export function handOver(
     const settle = (
       exit: Exit.Exit<RunEndResult, RunFailure>,
     ): Effect.Effect<void> =>
-      trace.settle(exit).pipe(
+      Effect.sync(unlisten).pipe(
+        Effect.andThen(trace.settle(exit)),
         Effect.andThen(
           Exit.isFailure(exit)
             ? Deferred.failCause(admitted, exit.cause)
@@ -185,6 +190,7 @@ export function handOver(
               ),
         ),
       );
+    let joined = false;
     // The launch and the drain are the run's, and until the caller holds
     // the `Run` that names them they are nobody's: whatever ends this
     // handoff short of that ends them too. So the handoff is
@@ -203,11 +209,11 @@ export function handOver(
       Effect.gen(function* () {
         const runFiber = yield* Effect.forkDetach(
           launch({
-            // The run's trace is built with this tap, so it hears the run
-            // from its first event.
-            onTraceEvent: trace.offer,
             isCancellationRequested: () => cancelled,
             onAdmitted: () => Deferred.done(admitted, Exit.void),
+            onJoined: () => {
+              joined = true;
+            },
           }).pipe(
             Effect.onExit(settle),
             // The embedder owns this runtime. Provide the process's existing
@@ -272,7 +278,9 @@ export function handOver(
           view,
           events: trace.events,
           interrupt: Effect.suspend(() =>
-            interruptLaunch() ? Effect.void : Fiber.interrupt(runFiber),
+            !joined && interruptLaunch()
+              ? Effect.void
+              : Fiber.interrupt(runFiber),
           ),
         };
       }),
@@ -281,10 +289,13 @@ export function handOver(
         Exit.isSuccess(exit)
           ? Effect.void
           : Effect.suspend(() => {
-              // Only a handoff the caller abandoned has a launch to stop by
-              // id: one the launch failed has settled it, and the id may
-              // name another run (a supplied id already live).
-              if (Cause.hasInterrupts(exit.cause)) interruptLaunch();
+              // Only a launcher's abandoned handoff stops the launch by id
+              // (one the launch failed has settled it), and only while no
+              // other caller joined it; a joiner ends only its own wait.
+              if (!Cause.hasInterrupts(exit.cause) || joined)
+                return Fiber.interruptAll(spawned);
+              if (session.followUps.joined(runId)) return Effect.void;
+              interruptLaunch();
               return Fiber.interruptAll(spawned);
             }),
       ),

@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 
 import type { RunEndResult } from '@agent/runtime/RunEndResult';
 import type { ResumeToolUseFromResumeDataOptions } from '@agent/runtime/executeAgent';
-import { resumeRun } from '@agent/runtime/resumeRun';
+import { resumeOwnRun, resumeRun } from '@agent/runtime/resumeRun';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { RunId } from '@shared/schemas';
 import { aggregateId, RUN_OUTCOME } from '@shared/schemas';
@@ -308,6 +308,60 @@ describe('resumeRun tool-use queue ownership', () => {
         expect(resumeToolUseFromResumeDataMock).toHaveBeenCalledOnce();
         expect(admittedFirst.mock.calls).toEqual([[RUN]]);
         expect(admittedSecond.mock.calls).toEqual([[RUN]]);
+      }),
+  );
+
+  // Failure modes: interrupting a joiner stops the resume it joined (the
+  // run), or blocks on it; a joiner hears none of the run's events.
+  it.live(
+    'a joiner is an observer: its interruption leaves the resume running, and it hears the run on its trace port',
+    () =>
+      Effect.gen(function* () {
+        const session = yield* createSession();
+        yield* seedRecoverable(session, 'once');
+        const entered = yield* Deferred.make<void>();
+        const barrier = yield* Deferred.make<void>();
+        resumeToolUseFromResumeDataMock.mockReturnValueOnce(
+          Deferred.succeed(entered, undefined).pipe(
+            Effect.andThen(Deferred.await(barrier)),
+            Effect.andThen(
+              Effect.sync(() =>
+                session.trace.tap(RUN, {
+                  type: 'stream.chunk',
+                  id: 's1',
+                  text: 'hello',
+                } as never),
+              ),
+            ),
+            Effect.as(completed),
+          ),
+        );
+        const owner = yield* Effect.forkChild(resumeOne(RUN, { session }));
+        yield* Deferred.await(entered);
+        const heard: unknown[] = [];
+        const unlisten = session.trace.listen(RUN, (event) =>
+          heard.push(event),
+        );
+        const joining = yield* Deferred.make<void>();
+        const joiner = yield* Effect.forkChild(
+          Effect.provide(
+            resumeOwnRun(RUN, {
+              session,
+              onJoined: () => Deferred.doneUnsafe(joining, Effect.void),
+            }),
+            fakeProcessServices(),
+          ),
+        );
+        yield* Deferred.await(joining);
+        // Its own wait ends at once; the resume it joined does not.
+        yield* Fiber.interrupt(joiner);
+        expect(owner.pollUnsafe()).toBeUndefined();
+        yield* Deferred.succeed(barrier, undefined);
+        expect(yield* Fiber.join(owner)).toMatchObject({ started: true });
+        unlisten();
+        expect(heard).toEqual([
+          { type: 'stream.chunk', id: 's1', text: 'hello' },
+        ]);
       }),
   );
 
