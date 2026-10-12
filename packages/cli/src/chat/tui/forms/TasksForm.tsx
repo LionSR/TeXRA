@@ -155,11 +155,13 @@ function AttachedTask(props: AttachedTaskProps): React.JSX.Element {
     };
   }, [runtime, props.connect, task]);
 
-  /** Run one action on the service, saying so when it fails. */
+  /** Run one action on the service, saying so when it fails. A notice is
+   *  about the latest attempt: each new one clears the last. */
   const act = (
     program: (a: AttachedTaskActions) => Effect.Effect<void, Error>,
     onFailed?: () => void,
   ) => {
+    setNotice(undefined);
     const ready = actions.current;
     if (!ready) {
       setNotice('Still connecting to the TeXRA service.');
