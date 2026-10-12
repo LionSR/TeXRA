@@ -10,6 +10,7 @@ import {
   Deferred,
   Duration,
   Effect,
+  FiberSet,
   Queue,
   type Scope,
   Stream,
@@ -55,11 +56,16 @@ const decisionOf = (
     ),
   );
 
-/** One attached handler on a session's list (newest last), and the wake
- *  that tells it it became the newest. */
+/** One attached host with an approval handler, on its session's list
+ *  (newest last): the wake that tells it it became the newest, its prompts
+ *  in flight (withdrawn when a newer handler attaches), and how its surface
+ *  hears that a decision it made went to a newer one. A host without a
+ *  handler (a viewer) is not on the list: it never takes prompts over. */
 export interface Approver {
   readonly approve: ApprovalHandler;
   readonly wake: Queue.Queue<void>;
+  readonly prompts: FiberSet.FiberSet<void>;
+  readonly superseded: (pending: PendingRequest) => Effect.Effect<void>;
 }
 
 /**
@@ -73,7 +79,7 @@ export interface Approver {
  */
 function answerRequests(
   session: RuntimeSessionHandle,
-  { approve, wake }: Approver,
+  { approve, wake, prompts, superseded }: Approver,
   active: () => boolean,
 ): Effect.Effect<void> {
   // Keyed by run and request, as the fold keys a pending request.
@@ -83,13 +89,24 @@ function answerRequests(
   const answer = (pending: PendingRequest): Effect.Effect<void> =>
     decisionOf(approve, pending).pipe(
       Effect.flatMap((decision) =>
-        session.requests.request({
-          kind: 'request.decide',
-          runId: pending.runId,
-          requestId: pending.requestId,
-          decision,
-        }),
+        // A newer handler attached as this one decided (its prompt is
+        // withdrawn on attach; this is the backstop): the newer one answers.
+        active()
+          ? session.requests.request({
+              kind: 'request.decide',
+              runId: pending.runId,
+              requestId: pending.requestId,
+              decision,
+            })
+          : Effect.logWarning(
+              `A decision on request ${pending.requestId} came from a handler no longer the newest; the newer one answers it`,
+            ).pipe(
+              withLogChannel(CHANNEL),
+              Effect.andThen(superseded(pending)),
+            ),
       ),
+      // Withdrawn: asked again should this handler become the newest.
+      Effect.onInterrupt(() => Effect.sync(() => acted.delete(keyOf(pending)))),
       Effect.asVoid,
       Effect.catchCause((cause) =>
         Effect.logWarning(
@@ -115,8 +132,11 @@ function answerRequests(
         ),
         (pending) => {
           acted.add(keyOf(pending));
-          // One handler awaiting its embedder never holds the next.
-          return Effect.forkChild(answer(pending));
+          // One handler awaiting its embedder never holds the next. Held
+          // in the set before it starts, so an attach can withdraw it.
+          return FiberSet.run(prompts, answer(pending), {
+            startImmediately: false,
+          });
         },
         { discard: true },
       ).pipe(
@@ -155,11 +175,37 @@ export function attachHost(
       (detach) => Effect.sync(detach),
     );
     if (approve === undefined) return;
-    const self: Approver = { approve, wake: yield* Queue.unbounded<void>() };
-    // Leaving wakes the handler that becomes the newest: it re-reads the
-    // current view, where a request this one was asking still waits.
+    const self: Approver = {
+      approve,
+      wake: yield* Queue.unbounded<void>(),
+      prompts: yield* FiberSet.make<void>(),
+      superseded: (pending) =>
+        Effect.suspend(
+          () =>
+            interactions.emit?.('requestShowInstruction', {
+              key: `superseded-${pending.requestId}`,
+              message: 'This request was answered in a newer window.',
+            }) ?? Effect.void,
+        ).pipe(
+          Effect.catchCause((cause) =>
+            Effect.logWarning(
+              `The older window was not told request ${pending.requestId} went to a newer one`,
+            ).pipe(
+              Effect.annotateLogs({ data: cause }),
+              withLogChannel(CHANNEL),
+            ),
+          ),
+        ),
+    };
+    // Attaching withdraws the older handler's prompts in flight: the newest
+    // asks them again. Leaving wakes the handler that becomes the newest: it
+    // re-reads the current view, where a request this one asked still waits.
     yield* Effect.acquireRelease(
-      Effect.sync(() => approvers.push(self)),
+      Effect.gen(function* () {
+        const older = approvers.at(-1);
+        approvers.push(self);
+        if (older !== undefined) yield* FiberSet.clear(older.prompts);
+      }),
       () =>
         Effect.suspend(() => {
           approvers.splice(approvers.indexOf(self), 1);

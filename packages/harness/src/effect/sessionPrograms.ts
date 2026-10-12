@@ -148,6 +148,16 @@ function start(
     const canAsk = !session.interactions.approvalPromptsUnavailable;
     const config = yield* admitInput(input, canAsk);
     const runId = input.runId ?? generateRunId();
+    // A supplied id already a run's: refused before any handoff, which
+    // would stop the run by that id were its caller to abandon it.
+    if (
+      input.runId !== undefined &&
+      (SubscriptionRef.getUnsafe(session.view.ref).runs.has(runId) ||
+        session.runs.get(runId) !== undefined)
+    )
+      return yield* runFailure(
+        new Error(`Run ${runId} already exists in this session.`),
+      );
     return yield* handOver(session, services, runId, (hooks) =>
       session.runs
         .launch({

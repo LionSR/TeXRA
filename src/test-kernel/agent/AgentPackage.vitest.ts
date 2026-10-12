@@ -424,7 +424,7 @@ describe('agent package sessions', () => {
   // Failure mode: the newest handler leaves mid-prompt on a parked run,
   // which publishes no view, so the handler left behind never answers.
   it.effect(
-    'hands a request to the older handler when the newest leaves mid-prompt',
+    'withdraws a prompt when a newer handler attaches (never a watcher), and hands it back when that one leaves',
     () =>
       Effect.gen(function* () {
         const decided = yield* Deferred.make<unknown>();
@@ -432,19 +432,22 @@ describe('agent package sessions', () => {
           Deferred.succeed(decided, request).pipe(Effect.as({ kind: 'done' })),
         );
         const session = yield* (yield* Sessions).open(PLATFORM.roots);
+        // The older handler's first prompt is withdrawn; asked again once
+        // the newer one leaves, it approves.
+        const olderAsked = yield* Deferred.make<void>();
+        const withdrawn = yield* Deferred.make<void>();
+        let asks = 0;
         yield* session.attach({
-          approve: () => Effect.succeed({ action: 'approve' as const }),
+          approve: () =>
+            (asks += 1) === 1
+              ? Deferred.succeed(olderAsked, undefined).pipe(
+                  Effect.andThen(Effect.never),
+                  Effect.onInterrupt(() =>
+                    Deferred.succeed(withdrawn, undefined),
+                  ),
+                )
+              : Effect.succeed({ action: 'approve' as const }),
         });
-        const prompting = yield* Deferred.make<void>();
-        const newest = yield* Scope.make();
-        yield* session
-          .attach({
-            approve: () =>
-              Deferred.succeed(prompting, undefined).pipe(
-                Effect.andThen(Effect.never),
-              ),
-          })
-          .pipe(Scope.provide(newest));
         yield* Effect.promise(() =>
           enterRun('ae0001', { approval: 'own' } as Partial<FakeRunView>),
         );
@@ -459,6 +462,22 @@ describe('agent package sessions', () => {
             },
           ],
         }));
+        yield* Deferred.await(olderAsked);
+        // A watcher with no handler never takes the prompt over.
+        yield* session.attach({});
+        yield* Effect.yieldNow;
+        expect(yield* Deferred.isDone(withdrawn)).toBe(false);
+        const prompting = yield* Deferred.make<void>();
+        const newest = yield* Scope.make();
+        yield* session
+          .attach({
+            approve: () =>
+              Deferred.succeed(prompting, undefined).pipe(
+                Effect.andThen(Effect.never),
+              ),
+          })
+          .pipe(Scope.provide(newest));
+        yield* Deferred.await(withdrawn);
         yield* Deferred.await(prompting);
         yield* Scope.close(newest, Exit.void);
         expect(yield* Deferred.await(decided)).toEqual({
