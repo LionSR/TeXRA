@@ -5,14 +5,11 @@ import { lookup } from 'node:dns';
 import { Effect, Stream } from 'effect';
 import { FetchHttpClient, HttpClient, type HttpClientError } from 'effect/http';
 import ipaddr from 'ipaddr.js';
-import {
-  EnvHttpProxyAgent,
-  fetch as undiciFetch,
-  type Dispatcher,
-} from 'undici';
+import { EnvHttpProxyAgent, type Dispatcher } from 'undici';
 import { z } from 'zod';
 
 // Local imports - core
+import { undiciFetchThrough } from '@platform/defaults/longRunningModelTransport';
 import { ToolError } from '@shared/schemas';
 import {
   retryTransientFetch,
@@ -127,12 +124,10 @@ function webFetchDispatcher(): Dispatcher {
  * (see `longRunningModelFetch`).
  */
 const publicFetch: typeof fetch = (input, init) =>
-  undiciFetch(
-    input as Parameters<typeof undiciFetch>[0],
-    { ...init, dispatcher: webFetchDispatcher() } as Parameters<
-      typeof undiciFetch
-    >[1],
-  ) as unknown as Promise<Response>;
+  undiciFetchThrough(input as string | URL, {
+    ...init,
+    dispatcher: webFetchDispatcher(),
+  });
 
 /** Refuse an IP-literal host, the one form {@link publicOnlyLookup} never sees. */
 function assertPublicLiteral(url: URL) {
