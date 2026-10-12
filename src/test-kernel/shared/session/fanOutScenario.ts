@@ -133,10 +133,7 @@ export class Log {
 
   /** Finite-read marker for this fixture log, whose first facts acquire its claims. */
   drained(through = this.events.length): FoldInput {
-    const claims = new Map<
-      DisplaySessionEvent['aggregateId'],
-      string | null
-    >();
+    const claims = new Map<DisplaySessionEvent['aggregateId'], string | null>();
     const removed = new Set<DisplaySessionEvent['aggregateId']>();
     for (const event of this.events.slice(0, through)) {
       if (event.seq === 1) claims.set(event.aggregateId, event.origin);
