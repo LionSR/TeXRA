@@ -134,7 +134,7 @@ interface ExtensionHostRequestsOptions {
   readonly runtime: ProcessRuntime;
   /** A host-initiated change to the surface (PRD 8.5). */
   surfaceAction(action: SurfaceActionMessage['action']): void;
-  /** Select a run this window just launched (the launch's `onRunResolved`). */
+  /** Select a run this window just launched (the launch's `onAdmitted`). */
   presentLaunchedRun(runId: RunId): void;
   /** The placement commands the sidebar and the editor tab share. */
   popOutToEditor(): Effect.Effect<void, HostRequestFailure, ProcessServices>;
@@ -239,7 +239,8 @@ export function createExtensionHostRequests(
         ownApiKeyFallback: runOptions.ownApiKeyFallback,
         approveDelegatedWork: runOptions.approveDelegatedWork,
         onRun: runOptions.onRun,
-        onRunResolved: options.presentLaunchedRun,
+        onAdmitted: (runId) =>
+          Effect.sync(() => options.presentLaunchedRun(runId)),
       })
       .pipe(Effect.flatMap(openFinalOutputIfAvailable(session.roots)));
     return withProcessServices(runtime, launch);

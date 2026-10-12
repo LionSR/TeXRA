@@ -410,7 +410,7 @@ export function createChatSessionController(
 
   const interruptActiveRun = (): void => {
     // The run id is known from the mint, but a stop can only land on a run
-    // the fold holds; `onRunResolved` re-reads `stopRequested` for a stop
+    // the fold holds; `onAdmitted` re-reads `stopRequested` for a stop
     // asked in the launch gap.
     const runId = session.runId;
     if (!runId || !runViewOf(currentView(), runId)) return;
@@ -526,12 +526,13 @@ export function createChatSessionController(
               ...(previousRootRunId !== undefined && {
                 continues: previousRootRunId,
               }),
-              onRunResolved: (resolvedRunId) => {
-                rootRunId.set(resolvedRunId);
-                moveLocalTranscriptToRun(resolvedRunId);
-                focusRun(resolvedRunId);
-                if (session.stopRequested) interruptActiveRun();
-              },
+              onAdmitted: (resolvedRunId) =>
+                Effect.sync(() => {
+                  rootRunId.set(resolvedRunId);
+                  moveLocalTranscriptToRun(resolvedRunId);
+                  focusRun(resolvedRunId);
+                  if (session.stopRequested) interruptActiveRun();
+                }),
             },
           });
           session.settleExitCode(claim, runOutcomeExitCode(result.outcome));
@@ -551,7 +552,7 @@ export function createChatSessionController(
   // -----------------------------------------------------------------------
 
   // The user's resume of a conversation they pick. Config is adopted inside
-  // `onResumeResolved`, which `resumeRun` calls only once the saved state
+  // `onAdmitted`, which `resumeRun` calls only once the saved state
   // loaded. The stopped conversation it supersedes stays the chat's target
   // again when the resume never reaches its run.
   const resume = (id: RunId, edit?: ResumeEdit): Effect.Effect<void, Error> =>
@@ -653,7 +654,7 @@ export function createChatSessionController(
           Effect.gen(function* () {
             const result = yield* agentRuns.resume(id, {
               session: runtimeSession,
-              onResumeResolved: adoptResumedRun,
+              onAdmitted: adoptResumedRun,
               isCancellationRequested: () => session.stopRequested,
             });
             if ('started' in result) {

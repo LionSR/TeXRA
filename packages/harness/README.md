@@ -59,7 +59,7 @@ const platform = nodePlatform({
 
 const program = Effect.gen(function* () {
   const sessions = yield* Sessions;
-  const session = yield* sessions.open();
+  const session = yield* sessions.open(platform.roots);
   const run = yield* session.start({
     agent: 'polish',
     instruction: 'Tighten the abstract in paper.tex.',
@@ -95,7 +95,7 @@ would in a file.
 
 ```ts
 const program = Effect.gen(function* () {
-  const session = yield* (yield* Sessions).open();
+  const session = yield* (yield* Sessions).open(platform.roots);
   const run = yield* session.start({
     agent: {
       name: 'abstract_editor',
@@ -125,15 +125,17 @@ host takes and hands back the same `Run` that `start` returns. A run that
 nothing can continue fails with `ResumeRefused`, whose `reason` says why:
 `finished`, `owned_elsewhere` (a live process holds it), `blocked` (an agent
 or plugin it needs is missing), `unusable_checkpoint`, or `not_resumable`
-(it is running here, it was deleted, or it is a child that an open call of
-its parent owns, which resumes with that parent). A run that called a
+(it is running here, or it was deleted). A child that an open call of its
+parent owns, as the child's records say, resumes with that parent: the
+`Run` is the parent's, and its `redirectedFrom` names the child asked for. A
+run that called a
 custom tool needs that tool again, so `resume` takes the same `tools` as
 `start`. A second `resume` of a run already resuming here joins the first
 and gets the same `Run`.
 
 ```ts
 const program = Effect.gen(function* () {
-  const session = yield* (yield* Sessions).open(undefined, {
+  const session = yield* (yield* Sessions).open(platform.roots, {
     persistent: true,
   });
   const run = yield* session.resume(runId, { tools });
@@ -143,9 +145,10 @@ const program = Effect.gen(function* () {
 
 ### Approvals
 
-A session opened without a handler answers no request: its policy denies
-every request a run raises, and a run is offered no tool that needs
-approval. `sessions.open(roots, { approve })` gives the session a handler,
+A session no host answers answers no request: its policy denies every
+request a run raises, and a run is offered no tool that needs approval.
+`session.attach({ approve })` attaches a host with a handler for the
+caller's scope (a host's presentation surface rides the same value),
 an Effect function from a `PendingRequest` (which run asks, the request's
 id, and its `payload`, whose `kind` is a command, an edit, a plan, a retry
 or a question) to the `RequestDecision` it records. The handler is called
@@ -159,13 +162,15 @@ logged at warn: no run stays parked on a handler that went quiet.
 
 A request is a row, so it survives the process. On a persistent session, a
 run killed while it waits for approval still waits after a restart: reopen
-the session with a handler, `resume` the run, and the handler is asked the
-same request, under the same id.
+the session, attach a handler, `resume` the run, and the handler is asked
+the same request, under the same id.
 
 ```ts
 const program = Effect.gen(function* () {
-  const session = yield* (yield* Sessions).open(undefined, {
+  const session = yield* (yield* Sessions).open(platform.roots, {
     persistent: true,
+  });
+  yield* session.attach({
     approve: (request) =>
       Effect.succeed(
         request.payload.kind === 'bash'
@@ -181,17 +186,16 @@ const program = Effect.gen(function* () {
 });
 ```
 
-The options belong to the open that builds the root's session. A later
-open of the same root gets that session, and must ask for the same store and
-the same handler (compared by identity). An open that asks for something
-else fails with `SessionOptionsConflict`; close the session first to open
-it differently.
+The store belongs to the open that builds the root's session. A later open
+of the same root gets that session, and must ask for the same store: one
+that asks for the other fails with `SessionOptionsConflict`; close the
+session first to open it differently.
 
-| Service    | What it is                                                                                                                                                                                                                                                                                                                                                                                      |
-| ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `Sessions` | The process's one session owner: `open(roots?, options?)`, `close(roots?)`, `list`. One session per workspace storage root, the same owner every TeXRA host opens through. `Sessions.layer({ platform, plugins })` composes the process (`processLayer`, the one every TeXRA host builds) and provides a projection of its `SessionOwner`, for the layer's lifetime. Build it once per process. |
-| `Session`  | `start`, `resume`, `request`, `view.changes`, and `subscribe`, whose transcript interest is held for a `Scope` and cleared when it closes. A value, one per root, not a tag.                                                                                                                                                                                                                    |
-| `Run`      | `runId`, `result`, `view`, `events`, `interrupt`. `start` succeeds at admission: the run exists in the session, its row published and its trace live.                                                                                                                                                                                                                                           |
+| Service    | What it is                                                                                                                                                                                                                                                                                                                                             |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `Sessions` | The process's sessions: `open(roots, options?)`, `close(roots)`, `list`. One session per workspace storage root, through the same owner every TeXRA host opens through. `processLayer`, the one every TeXRA host builds, serves it; `Sessions.layer({ platform, plugins })` composes that process for the layer's lifetime. Build it once per process. |
+| `Session`  | `roots`; `view.current()`, `view.changes`, and `view.watch(set, from)`, a reader's fold inputs whose transcript interest lives as long as the stream; `start`, `resume`, `request`; `attach(host)`, a host for the caller's scope. A value, one per root, not a tag.                                                                                   |
+| `Run`      | `runId`, `result`, `view`, `events`, `interrupt`, and `redirectedFrom` on a resume that continued a child's parent. `start` succeeds at admission: the run exists in the session, its row published and its trace live.                                                                                                                                |
 
 `run.events` is the run's trace as a `Stream`. Trace events are buffered from
 the moment the run enters its session, so a reader begun right after `start`
@@ -201,9 +205,11 @@ without ever being read discards what it buffered. That buffer is only the
 handover to the first reader, and it is bounded: a run whose events pass the
 handover window with nobody reading has no reader, so it logs a warning
 naming the run and detaches its trace. Taking only `result` therefore never
-retains a long run's whole trace. A reader that did attach is never dropped:
-past its first pull the buffer is that reader's, and nothing discards what it
-has yet to read.
+retains a long run's whole trace. A reader that attaches after that, or
+after the run settled unread, fails with `TraceUnavailable` (`truncated` or
+`ended`) rather than reading an empty trace. A reader that did attach in
+time is never dropped: past its first pull the buffer is that reader's, and
+nothing discards what it has yet to read.
 
 Every failure is a typed error on the effect that owns it. A refusal before
 any model work fails `session.start` with one of the tagged errors the
@@ -235,13 +241,14 @@ so nothing in the package folds onto anything but the latest level. The exported
 arrays); a write through a cast corrupts the session every later run in the
 process reads. A run is a row of `SessionView.runs`. The run's transcript rows
 (`RunView.transcript`) are subscribed on its behalf, the run itself and its
-descendants as they appear, and stay resident for the life of the process.
+descendants as they appear, until the run's final view: a reader that needs
+them later watches them (`view.watch`).
 
 Runs share one session per workspace storage root. The runtime's session
 owner holds it, the same owner every TeXRA host opens its sessions through, so
 opening a root twice resolves the one session already open there; a second
-root gets its own. A session's requests are answered by the handler it
-was opened with, or, without one, denied by its policy (see
+root gets its own. A session's requests are answered by the hosts attached
+to it, or, without one that answers, denied by its policy (see
 [Approvals](#approvals)). A session ends through `sessions.close(roots)`: it refuses new runs on the
 root, interrupts the runs it owns and waits for them to settle within the
 runtime's shutdown budget, flushes its artifacts, and releases the session,
@@ -354,11 +361,12 @@ parallel surfaces. The composition-once-per-process limit went with the
 Promise entry: each `Sessions.layer` scope owns the composition it made.
 
 Failures are `Data.TaggedError`s. Six come from the package itself —
-`PluginsRefused`, `SessionOptionsConflict`, `AgentNotFound`, `ToolsRefused`,
-`ResumeRefused`, and `RunFailure`, whose `cause` is exactly what the launch
-path threw — and two, `DatabaseOpenFailed` and `DatabaseReadFailed` (the
-`SessionOpenError` union), reach the surface from the session store when it
-cannot open or read, for eight in all. A
+`PluginsRefused`, `AgentNotFound`, `ToolsRefused`, `ResumeRefused`,
+`TraceUnavailable`, and `RunFailure`, whose `cause` is exactly what the
+launch path threw — and three, `DatabaseOpenFailed`, `DatabaseReadFailed` and
+`SessionOptionsConflict` (the `SessionOpenError` union), reach the surface
+from the session store when it cannot open or read, or is open over the
+other store, for nine in all. A
 `session.request` answers with the runtime's own `Outcome` or its
 `RequestError` union, the same values every TeXRA host reads. Beyond these,
 nothing else is exported: no fold internals, no host widgets.
@@ -429,11 +437,11 @@ only at the embedding application's host boundary.
 These are enforced, not undocumented — each fails or degrades loudly rather
 than failing quietly:
 
-- **Without a handler, requests are denied.** A session opened with no
-  `approve` handler denies every request its runs raise, retries included,
-  and fails a launch whose custom tools need approval with `ToolsRefused`.
-- **Runs are one cycle long.** `start` and `resume` both end the run after
-  its cycle rather than waiting for a follow-up message.
+- **Without a handler, requests are denied.** A session no attached host
+  answers denies every request its runs raise, retries included, and fails
+  a launch whose custom tools need approval with `ToolsRefused`.
+- **Runs are one cycle long** unless `interactive`: `start` and `resume`
+  end the run after its cycle rather than waiting for a follow-up message.
 - **No language-model port.** `nodePlatform` wires the unavailable port, so a
   host that needs host-provided models must supply its own.
 

@@ -216,7 +216,10 @@ export const createDesktopAgentRun = Effect.fn('desktop.createAgentRun')(
       return launchDesktopAgent(
         request,
         { session, backend, runtime },
-        { onRunResolved: options.onLaunched, ...runOptions },
+        {
+          onAdmitted: (runId) => Effect.sync(() => options.onLaunched?.(runId)),
+          ...runOptions,
+        },
       ).pipe(Effect.ensuring(options.onRunCompleted ?? Effect.void));
     }
 

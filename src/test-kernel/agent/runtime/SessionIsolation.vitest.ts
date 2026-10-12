@@ -82,7 +82,6 @@ describe('session isolation', () => {
       Effect.gen(function* () {
         // Persistent stores, so each root's rows outlive its session's close
         // and are read back from the root they landed in.
-        const persistent = { kind: 'persistent' } as const;
         const rootsA = createFakeWorkspaceRoots({
           workspacePath: fakePath('papers/a'),
           storagePath: fakePath('storage/a'),
@@ -93,12 +92,12 @@ describe('session isolation', () => {
         });
         const sessionA = yield* createTestSession({
           roots: rootsA,
-          transcriptMode: persistent,
+          persistent: true,
         });
         yield* Effect.addFinalizer(() => closeSessionOf(sessionA));
         const sessionB = yield* createTestSession({
           roots: rootsB,
-          transcriptMode: persistent,
+          persistent: true,
         });
         yield* Effect.addFinalizer(() => closeSessionOf(sessionB));
         const live = [
@@ -141,7 +140,7 @@ describe('session isolation', () => {
         ] as const) {
           const reopened = yield* createTestSession({
             roots,
-            transcriptMode: persistent,
+            persistent: true,
           });
           const ends = (runId: string) =>
             reopened.log.rows(aggregateId('run', RunIdSchema.parse(runId)), [

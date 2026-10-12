@@ -38,8 +38,8 @@ export const runExecuteCommand = Effect.fn('runExecuteCommand')(function* (
   session: SessionHandle,
   /** Where the run runs: this window's session, or the service's. */
   backend: SessionBackend,
-  /** Select the run this launch resolved: the launching surface's own. */
-  onRunResolved: (runId: RunId) => void,
+  /** Select the run this launch admitted: the launching surface's own. */
+  onAdmitted: (runId: RunId) => Effect.Effect<void, Error>,
 ): Effect.fn.Return<void, Error, ProcessServices | SessionOwner> {
   // A configuration that does not parse fails the command, so its caller
   // hears the refusal instead of a settled launch that never started.
@@ -74,7 +74,7 @@ export const runExecuteCommand = Effect.fn('runExecuteCommand')(function* (
       // keeps the user's selected model.
       preferHelperModel: wrapped?.preferHelperModel ?? false,
       ownApiKeyFallback: wrapped?.ownApiKeyFallback,
-      onRunResolved,
+      onAdmitted,
     },
   );
   // Presentation reacts to the committed outcome; it never runs inside the run,

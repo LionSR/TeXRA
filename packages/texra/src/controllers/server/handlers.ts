@@ -350,9 +350,8 @@ export const serviceHandlers = TexraRpcs.toLayer(
                     // Admitted once the run exists (born with its opening), so
                     // a `task.ended` that follows the answer finds it, and a
                     // launch that fails before then fails `task.start` itself.
-                    onRunResolved: (resolved) => {
-                      Deferred.doneUnsafe(admitted, Exit.succeed(resolved));
-                    },
+                    onAdmitted: (resolved) =>
+                      Deferred.done(admitted, Exit.succeed(resolved)),
                     ...(continues !== null && { continues }),
                   },
                 })
@@ -421,7 +420,7 @@ export const serviceHandlers = TexraRpcs.toLayer(
                       Deferred.succeed(admitted, registered).pipe(
                         Effect.asVoid,
                       ),
-                    onResumeResolved: (resumed) =>
+                    onAdmitted: (resumed) =>
                       Effect.sync(() => {
                         resolved = resumed;
                       }),

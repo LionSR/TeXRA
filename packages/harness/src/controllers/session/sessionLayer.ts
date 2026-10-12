@@ -1,12 +1,9 @@
 /**
- * The process layer ({@link processLayer}): every process service a
- * composition root runs on, and the `SessionOwner` over a `LayerMap` of
- * sessions, one per workspace storage root. An entry is the whole session:
- * the root-scoped services (event log, publications, fold, inputs, local
- * sources, owner-liveness prober) and the `SessionHandle` over them. Every
- * opener resolves its root here, so two opens return one handle, and the
- * map owns its lifetime: an open borrows, `close` settles and releases, and
- * the layer's release closes whatever is still open.
+ * {@link ownerProcessLayer}: the process services and the `SessionOwner` over
+ * a `LayerMap` of sessions, one per storage root, each entry the root-scoped
+ * services and the `SessionHandle` over them. Two opens of a root return one
+ * handle; an open borrows, `close` settles and releases, and the layer's
+ * release closes whatever is still open.
  */
 import {
   Cause,
@@ -90,7 +87,9 @@ import {
   Database,
   ProjectDatabases,
   type DatabaseOpenFailed,
+  type DatabaseReadFailed,
   GlobalDatabase,
+  SessionOptionsConflict,
   type SessionOpenError,
 } from '@shared/session/database';
 import { UsageLog } from '@shared/usageLog';
@@ -353,7 +352,11 @@ const sessionGraphLayer = (key: SessionKey) => {
  */
 class SessionMap extends Context.Service<
   SessionMap,
-  LayerMap.LayerMap<SessionKey, Session, SessionOpenError>
+  LayerMap.LayerMap<
+    SessionKey,
+    Session,
+    DatabaseOpenFailed | DatabaseReadFailed
+  >
 >()('@texra/session/SessionMap') {
   static readonly layer = Layer.effect(
     SessionMap,
@@ -402,6 +405,14 @@ const openSession = (open: SessionHandleInit) =>
     const context = yield* sessions
       .contextEffect(key)
       .pipe(Effect.onError(() => sessions.invalidate(key)));
+    // Read once held, so racing first opens agree: the other store refused.
+    const store = (init: SessionHandleInit) => init.transcriptMode?.kind;
+    for (const held of yield* RcMap.keys(sessions.rcMap))
+      if (held.storage === key.storage && store(held.open) !== store(open))
+        return yield* new SessionOptionsConflict({
+          storage: key.storage,
+          message: `The session of ${key.storage} is already open over the other store; close it before opening it differently.`,
+        });
     return Context.get(context, Session);
   }).pipe(Effect.scoped);
 
@@ -488,19 +499,12 @@ const settleRun = (session: SessionHandle, runId: RunId): Effect.Effect<void> =>
   );
 
 /**
- * Close the session of one root, the one way a session ends, whoever asks.
- * In order, on the caller's fiber:
- *
- * 1. refuse new runs;
- * 2. stop every run, cascading (a process child ends with its loop), settle
- *    the undriven and wait for the rest ({@link SESSION_CLOSE_DEADLINE_MS});
- * 3. settle from here, inside a second budget, each run still held when the
- *    first runs out ({@link settleRun}), reporting it as abandoned;
- * 4. release the entry, whose finalizers flush the session's publications
- *    and unwind its owners.
- *
- * The close is uninterruptible, so the budget is its one cancellation: the
- * stop and its wait run interruptible inside it, and every later step runs.
+ * Close the session of one root, the one way a session ends: refuse new
+ * runs; stop every run, cascading, settling the undriven and waiting for the
+ * rest ({@link SESSION_CLOSE_DEADLINE_MS}); settle in a second budget each
+ * run still held ({@link settleRun}), reported abandoned; release the entry,
+ * whose finalizers flush and unwind. Uninterruptible: the budget is its one
+ * cancellation, and every step after it still runs.
  */
 const closeSession = (root: string) =>
   Effect.gen(function* () {
@@ -635,14 +639,10 @@ export interface ProcessLayerOptions {
   readonly workspace?: string;
 }
 
-/**
- * The process services a composition root runs on, and the {@link
- * SessionOwner} opening, listing and closing its sessions (one per storage
- * root, in a `LayerMap`), for a `ManagedRuntime` the host disposes on
- * shutdown. Disposal closes every open session, plugins drained first; a
- * host whose resources must outlive them runs `SessionOwner.closeAll` first.
- */
-export function processLayer({
+/** The process services and the {@link SessionOwner} over the session map
+ *  (one session per storage root), which the public `processLayer` serves
+ *  its `Sessions` over. */
+export function ownerProcessLayer({
   processStart = nodeProcesses.selfIdentity(),
   globalStorage,
   plugins,

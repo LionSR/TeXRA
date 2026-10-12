@@ -31,7 +31,7 @@ interface DesktopAgentLaunchContext {
 
 export type DesktopAgentLaunchOptions = Pick<
   RootLaunchOptions,
-  'ownApiKeyFallback' | 'preferHelperModel' | 'onRun' | 'onRunResolved'
+  'ownApiKeyFallback' | 'preferHelperModel' | 'onRun' | 'onAdmitted'
 > & {
   /** An Auto-approve launch: the run starts with delegated work approved. */
   readonly approveDelegatedWork?: boolean;
@@ -56,7 +56,7 @@ export function launchDesktopAgent(
         ...(options.preferHelperModel && { preferHelperModel: true }),
         approveDelegatedWork: options.approveDelegatedWork,
         onRun: options.onRun,
-        onRunResolved: options.onRunResolved,
+        onAdmitted: options.onAdmitted,
         suppressErrorNotification: true,
       })
       .pipe(

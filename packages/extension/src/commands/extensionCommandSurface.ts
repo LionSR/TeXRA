@@ -64,7 +64,8 @@ export function createExtensionCommandActions(
           secrets,
           session,
           backend,
-          (runId) => progressViewProvider.presentLaunchedRun(runId),
+          (runId) =>
+            Effect.sync(() => progressViewProvider.presentLaunchedRun(runId)),
           progressViewProvider.showConnectModel(),
         ),
       ),
@@ -92,7 +93,7 @@ export function createExtensionCommandActions(
       input === undefined
         ? progressViewProvider.submit()
         : agentRunExecuteCommand(input, session, backend, (runId) =>
-            progressViewProvider.presentLaunchedRun(runId),
+            Effect.sync(() => progressViewProvider.presentLaunchedRun(runId)),
           ),
   };
 }

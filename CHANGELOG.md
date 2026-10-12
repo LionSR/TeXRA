@@ -508,13 +508,16 @@ history`, a resume and a follow-up say it was "written by an earlier
   the same on-disk store the TeXRA apps keep, and `session.resume(runId)`
   continues a run from it in a later process, handing back the same run
   handle `start` does (`ResumeRefused` says why a run cannot continue).
-  `sessions.open(roots, { approve })` answers the runs' approval requests
-  with the embedder's own Effect function; a handler that fails, throws or
-  does not answer within ten minutes denies the request. Without a handler,
-  every request is still denied. A run killed while it waits for approval is
-  asked the same request again after a restart and a resume, which takes the
-  run's custom tools again. Reopening a root with other options fails with
-  `SessionOptionsConflict`.
+  `session.attach({ approve })` attaches the embedder's own Effect function
+  for the caller's scope, and it answers the runs' approval requests; the
+  newest attached handler answers, and a handler that fails, throws or does
+  not answer within ten minutes denies the request. Without a handler, every
+  request is still denied. A run killed while it waits for approval is asked
+  the same request again after a restart and a resume, which takes the run's
+  custom tools again. Reopening a root over the other store (persistent or
+  in memory) fails with `SessionOptionsConflict`. A `Session.resume` that
+  meets a resume already under way (a window's) joins it: it sees the run's
+  events from then on, and stopping it leaves that resume running.
 - **Agent SDK: an agent can be written inline.** `session.start({ agent })`
   takes the persona itself (`name`, `description`, `prompt`, `tools`,
   `temperature`, as an agent file writes them) instead of the name of an

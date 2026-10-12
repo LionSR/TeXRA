@@ -304,9 +304,7 @@ export const serviceSessionBackend = Effect.fn('serviceSessionBackend')(
             ),
         ).pipe(
           Effect.tap((runId) => options.onRun?.(runId) ?? Effect.void),
-          Effect.tap((runId) =>
-            Effect.sync(() => options.onRunResolved?.(runId)),
-          ),
+          Effect.tap((runId) => options.onAdmitted?.(runId) ?? Effect.void),
           Effect.flatMap(ended),
         ),
       resume: (runId) =>

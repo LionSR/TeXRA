@@ -130,7 +130,7 @@ export function launchSetupAssistant(
   session: SessionHandle,
   /** Where the setup conversation runs: here, or in the service. */
   backend: SessionBackend,
-  onRunResolved: (runId: RunId) => void,
+  onAdmitted: (runId: RunId) => Effect.Effect<void, Error>,
   /** Bring the panel's "Connect a model" card into view: the one credential
    *  prompt, which the setup card follows once a credential lands. */
   connectModel: Effect.Effect<void, Error, ProcessServices>,
@@ -216,7 +216,7 @@ export function launchSetupAssistant(
       instruction: SETUP_INSTRUCTION,
     });
 
-    const launch = backend.launch({ config }, { onRunResolved });
+    const launch = backend.launch({ config }, { onAdmitted });
 
     yield* resolution.requiresOpenRouter
       ? withOpenRouterFlagOn(session.roots, launch)

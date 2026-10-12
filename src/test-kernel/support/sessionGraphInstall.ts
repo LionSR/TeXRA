@@ -1,9 +1,6 @@
 import { Effect, ManagedRuntime } from 'effect';
 
-import {
-  processLayer,
-  type ProcessLayerOptions,
-} from '@controllers/session/sessionLayer';
+import { processLayer, type ProcessLayerOptions } from '@texra-ai/harness';
 import { AppState, AgentDirectories } from '@platform/interfaces';
 import { withForkFailureReporting } from '@platform/processRuntime';
 import type { StateSettingEntry } from '@shared/state/stateSettings';
