@@ -443,11 +443,10 @@ describe('runChat signal ownership wiring', () => {
       });
       submit.current?.('check the ordinary case', []);
       await submitted.promise;
-      expect(mocks.submit).toHaveBeenCalledWith(
-        'check the ordinary case',
-        [],
-        undefined,
-      );
+      expect(mocks.submit).toHaveBeenCalledWith('check the ordinary case', {
+        mediaFiles: [],
+        images: undefined,
+      });
 
       mocks.callOrder.length = 0;
       mocks.unmount.mockImplementationOnce(() => {
