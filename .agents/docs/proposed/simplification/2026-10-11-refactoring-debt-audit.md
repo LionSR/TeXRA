@@ -32,11 +32,11 @@ in parallel; findings were cross-checked against the repo's own
 ## Headline
 
 The codebase is **well-disciplined, not messy in the usual sense**. Debt is not
-comment-marked (only 2 source files carry a `TODO`: `replacement/rulesRegex.ts`
-and `tools/claudeAgentConfig.ts`; zero carry `FIXME`/`HACK`/`XXX`), and the
-cross-cutting concerns you'd expect to be copy-pasted are already centralized:
+comment-marked (a word-boundary grep finds exactly one source file with a `TODO` —
+`replacement/rulesRegex.ts` — and zero `FIXME`/`HACK`/`XXX`), and the cross-cutting
+concerns you'd expect to be copy-pasted are already centralized:
 
-- error formatting → `@utils/errors/errorMessage` (279 uses)
+- error formatting → `@utils/errors/errorMessage` (`toErrorMessage`/`ensureError`, used throughout)
 - JSON parsing → `@common/parsing/safeParseJson`
 - file-tool boilerplate → `@tools/pathResolution` + `fileEditFlow` + `formatting`
 - model/provider config → `llm-zoo` / `computeModelOptions` (data-driven)
