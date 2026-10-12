@@ -45,7 +45,10 @@ Status: proposed
 ## 1. The entries
 
 `packages/harness/package.json` declares **four** subpath entries, all pure
-Effect, no in-package `Effect.runPromise`/`runSync`/`runFork`:
+Effect — no top-level Promise/AsyncIterable rendering and no `Effect.run*`
+outside the carved runtime entries (the one internal `runFork` is
+`processRuntime`'s fork-failure reporter, re-exported as
+`withForkFailureReporting`):
 
 | Entry                        | Subpath      | Shape                                                                                      |
 | ---------------------------- | ------------ | ------------------------------------------------------------------------------------------ |
@@ -104,18 +107,23 @@ each ratification decision below. It only ever shrinks; never widen it.
 
 ## 4. Actual consumers
 
-- **External consumers: none.** npm publication is deliberately held until a
-  named external consumer exists (CLAUDE.md "Layout"). The manifest describes a
-  surface with no installed base — exactly when it is cheapest to fix.
-- **In-repo consumer-shaped: one.** `packages/harness/example/effectSession.mjs`,
-  installed from a packed tarball, exercises the root entry (`Sessions`,
-  `session.start`, the tagged refusal) and `/node` (`nodePlatform`).
-- **The hosts consume none of it by package name.** `extension`, `desktop`,
-  `cli`, `texra`, `trace-viewer` reach shared code through the repo-root path
-  aliases (`@agent/*`, `@shared/*`, …), governed separately by
-  `harness-deep-import-baseline.json`.
-- **Coverage gap worth naming:** no artifact imports `/schemas` or `/plugins`
-  by package name; the example covers the root + `/node` only.
+- **External (npm) consumers: none.** Publication is deliberately held until a
+  named external consumer exists (CLAUDE.md "Layout"), so there is no installed
+  base — exactly when the surface is cheapest to change.
+- **In-repo consumers by package name: the hosts, extensively.** Since the
+  rename and the harness-package-split, `extension`, `desktop`, `cli`, and
+  `texra` import `@texra-ai/harness` (and `/schemas`, `/node`) directly by
+  package name across dozens of files each at this pin — not only through the
+  repo-root path aliases. They are the real dependency set a keep/shed decision
+  must weigh. What they still reach *around* the public surface by deep import
+  (`@agent/*`, `@shared/*`, …) is the separate, frozen coupling in
+  `harness-deep-import-baseline.json` (§3).
+- **Consumer-shaped example: one.** `packages/harness/example/effectSession.mjs`,
+  installed from a packed tarball (the only code that installs the package as an
+  external consumer would), exercises the root entry (`Sessions`,
+  `session.start`, the tagged refusal), `/node` (`nodePlatform`), and `/plugins`.
+- **Coverage note:** `/schemas` and `/plugins` are exercised — by the hosts and,
+  for `/plugins`, by the example — so no entry is wholly unexercised.
 
 ## 5. Open ratification questions (owner-gated)
 
@@ -136,18 +144,25 @@ Re-scoped around the harness SDK per the pivot:
    `DatabaseReadFailed`, and the `SessionOpenError` union (from
    `@shared/session/database`) reach embedders typed. Whether SQLite-store
    open/read failures belong on Tier-1 is a ratification question.
-4. **An interactive approval / host-interactions channel.** The Node platform
-   attaches a fixed headless host and refuses approval-requiring tools; a public
-   interaction channel is unbuilt and is what keeps the subagent boundary (the
-   `creator` tool-use agent) correctly open.
-5. **The `AgentPlatform` roots coupling** that `2026-09-05` §4 proposes removing
-   as consumers move to explicit sessions — carried, to re-verify at
-   ratification against the current `runtime.ts`.
-6. **The result-shape contract** as `packages/harness/README.md` writes it
-   (`RunEndResult`, its `usage.totalCost` and workflow per-file `diffs`,
-   discrimination on `output.category`). The declared shape moved since the
-   2026-09-04 closure without this manifest's intent being re-stated;
-   ratification should confirm or trim it.
+4. **The approval / interaction channel — built; ratify its defaults.** The
+   channel already exists: the root entry exports `ApprovalHandler`,
+   `OpenOptions`, `PendingRequest`, and `RequestDecision`, and
+   `Sessions.open(roots, { approve })` (`effect/sessions.ts`) installs the
+   embedder's Effect handler for approvals, retries, and questions. Approval-
+   gated tools are refused only when the caller omits that handler — which is
+   why the headless Node default keeps the subagent boundary open. What is open
+   is whether the headless default and that refusal behavior are the ratified
+   contract, not whether the channel exists.
+5. **The `AgentPlatform` roots coupling** (`effect/sessions.ts`; the interface
+   now directly carries `roots` rather than `extends Platform`) that
+   `2026-09-05` §4 proposes removing as consumers move to explicit sessions —
+   carried, to re-evaluate against that current shape at ratification.
+6. **The result-shape contract** as `packages/harness/README.md` writes it —
+   `RunEndResult` with `usage` and one `output` shape
+   `{ response, files, structured?, documents? }` (no `category` to switch on;
+   `documents` only on a document task's run), plus the failed-run `error`. The
+   declared shape moved since the 2026-09-04 closure without this manifest's
+   intent being re-stated; ratification should confirm or trim it.
 
 Resolved by deletion, recorded for the audit trail only: `IModelHandler` /
 `ModelHandler` (the god-base and port, deleted in #12320, no re-export shim) and
