@@ -6,9 +6,11 @@ status: proposed
 
 # TeXRA refactoring-debt audit
 
-> **Status:** proposed. A dated audit of candidate refactors; the verification
-> pass (2026-10-12) refuted the dedup findings, leaving the `Database.ts`
-> projection-runner extraction as the one live candidate. No code has landed.
+> **Status:** proposed. A dated audit of candidate refactors. The verification
+> pass (2026-10-12), independently corroborated by a second automated reviewer,
+> refuted every finding: the dedup opportunities are already realized, and the
+> size-concentration items would need single-caller extractions the repo bans.
+> Conclusion: no structural refactor is warranted now. No code has landed.
 
 _Generated 2026-10-11 by a scheduled codebase scan. Three subagents scanned the
 harness, the app (`texra`/`llm`), and the three hosts (`extension`/`cli`/`desktop`)
@@ -189,12 +191,34 @@ Each finding was opened and read against its actual source before any edit.
   skeleton saves little and couples two independently-evolving projections; splitting
   the file is the mechanical split the harness AGENTS.md explicitly forbids.
   **No clean refactor.**
-- **#3 `Database.ts` god-layer — real but risky, not cheap.** This one is genuine
-  structural concentration (the repo's own ratchet tracks it), but a sound
-  decomposition (extract a projection runner + row codec/exec) is behavior-preserving
-  surgery on the session DB layer, needs the full suite (minutes) to validate, and
-  should be a dedicated reviewed effort — not an autonomous drive-by. Deferred, not
-  dismissed.
+- **#3 `Database.ts` god-layer — genuine size concentration, but a module split
+  would be a single-caller extraction.** The 1186-line layer and its ~61 inline
+  closures are real (the repo's own ratchet tracks the file size). But the proposed
+  "projection runner" and "row codec/exec" modules would be wired only by
+  `databaseLayer` — a single consumer — which is exactly the single-caller extraction
+  AGENTS.md bans, and this audit supplies no net-LOC accounting showing the new module
+  interfaces delete more structure than they add. So the honest recommendation is
+  **in-place** simplification of the existing owner (collapse the three
+  `writeFailed`/`readFailed`/`openFailed` wrappers into one tagged-error helper; group
+  the closures without new cross-module boundaries), done only if it nets negative and
+  validated with the full suite — **not** a prioritized module split. Downgraded from
+  "strongest candidate" to "in-place only, pending LOC proof."
+- **#4 CLI `createChatSessionController` — a justified factory, not a split target.**
+  It has one production consumer (`runChatTui.tsx`), and it captures initialization
+  context in its closures — precisely the repo's documented *justified* factory case.
+  The proposed resume-controller / skill-activation-store / root-run-launcher
+  collaborators would each be single-consumer abstractions around state that is
+  coordinated in one init closure by design. Without additional consumers or
+  build-implies-delete accounting, splitting it for isolation is not warranted. The
+  844-line function is a readability cost, but the remedy (if any) is in-place, not
+  new single-use modules. **No clean refactor.**
+- **#5c per-host sign-in presenters — not one flow.** The three presenters implement
+  genuinely different host UX: the CLI (`subscriptionLogin.ts`) only prints copyable
+  instructions (no clipboard write, no page open), the extension attempts a clipboard
+  write and offers an async open action, and the desktop presenter requires the
+  clipboard write before showing a modal. Centralizing them would either change host
+  UX/error semantics or need a branch-heavy primitives interface — not the low-risk
+  consolidation claimed. **Not worth it.**
 - **#5a GitHub per-scope formatters — divergent by design.** The genuinely shared
   parts are already in `formatUtils.ts` (`formatCommentEvent`, `authorOf`, `sections`,
   `truncate`, `wrapWebhookEvent`, `formatPreviousStateHint`), used by all three
@@ -220,12 +244,17 @@ Each finding was opened and read against its actual source before any edit.
   `buildUsage` normalizer would have to be parameterized enough to obscure the real
   per-provider arithmetic. **No clean refactor.**
 
-**Net:** the dedup space is exhausted — the maintainers got there first. The only
-genuine remaining debt is size/complexity concentration in a few files (#3, #4),
-which the repo already tracks in its ratchets and deliberately has not prioritized.
-Those are worth doing as dedicated, reviewed, behavior-preserving efforts with the
-full suite green — not as an autonomous batch. Happy to take one on if you want it
-scoped (the `Database.ts` projection-runner extraction is the strongest candidate).
+**Net:** the dedup space is exhausted — the maintainers got there first — and the
+size-concentration items (#3, #4) resist the obvious fix too, because splitting them
+into helper modules would be single-caller extractions the repo deliberately bans. A
+second automated reviewer (Codex) independently reached the same verdict on every
+item, citing the same AGENTS.md rules. The remaining, defensible debt is narrow: the
+one in-place `Database.ts` cleanup (collapse the three error-wrappers into one
+tagged-error helper), and the optional `texFilesOf()` micro-nit — both small, both
+in-place, neither worth a dedicated campaign. **The actionable conclusion is that
+this codebase does not currently warrant a structural refactor.** If a future change
+adds a *second* consumer to the `Database` projection logic or the chat controller,
+that is the moment an extraction would pay for itself; until then, leave them.
 
 ## Not worth refactoring (checked, came back clean)
 - LLM provider `streamTurn`/wire codecs — genuinely provider-specific, already on
