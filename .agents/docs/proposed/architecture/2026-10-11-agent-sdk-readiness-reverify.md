@@ -28,9 +28,12 @@ the accepted durable-harness program (`2026-10-02-durable-harness.md`, status:
 - **The package rename landed.** `@texra-ai/agent` / `packages/agent` is gone;
   the SDK surface now lives in `@texra-ai/harness` / `packages/harness`
   (`packages/agent` no longer exists on disk; `packages/harness/package.json`
-  `name` is `@texra-ai/harness`). This resolves durable-harness **Q5** (the
-  package name was explicitly open at the 2026-10-04 pin, which is why that pass
-  still wrote `packages/agent`). The audited source dirs moved with it:
+  `name` is `@texra-ai/harness`). This resolves the **harness-name portion of
+  durable-harness Q5** (the package name was explicitly open at the 2026-10-04
+  pin, which is why that pass still wrote `packages/agent`); Q5 also covers
+  retaining `@texra-ai/llm`, moving the app plugins to `packages/theorist`, and
+  host locations, and `packages/theorist` does not exist at this pin, so the
+  rest of Q5 stays open. The audited source dirs moved with it:
   `packages/harness/src/{agent,logger,model}/`.
 - **The deep-import frozen list was renamed and shrank.**
   `config/ratchets/host-agent-import-baseline.json` →
@@ -57,8 +60,11 @@ not a gap. **No autonomous refactor is warranted from this charter.** Every safe
 candidate in these areas is already filed, already landed, or already recorded
 as refused with a ruling (`config/ratchets/refuted-candidates.json`, still the
 authoritative refused set — 9 candidates: 5 `EFF-ADOPT-*`, 3 `RT-*`, 1
-`SCOPE-*`; no retained refusal was reversed, and none touches a logger or
-surface symbol, so none bears on this verdict). The four fresh audits found
+`SCOPE-*`; no retained refusal was reversed. One, `EFF-ADOPT-config-provider`,
+does pin a public-surface symbol — the `ConfigProvider` interface exported from
+`index.ts` and recorded in `config/api-reports/harness.api.md` — so it must be
+weighed when that port is revised; but the refusal stands and does not change
+the no-abstraction verdict here). The four fresh audits found
 **no wrapper layer that only forwards, no second run-history writer, no
 services-bag, no re-export shim, no per-provider handler class.**
 
@@ -79,8 +85,11 @@ guardrail, which is why it stays:
   split (12 `executeAgent` sites). `ModelRetryGate` is on the refuted list
   (`EFF-ADOPT-retry-gate-schedule`).
 - **Model handler.** Provider calls flow only through the `@texra-ai/llm`
-  `Model` bound by `runtime/run/modelBinding.ts`; `ModelInvoker` is its sole
-  caller. Wire dispatch is one `switch (protocol)` over dynamic imports of
+  `Model` bound by `modelAccess/binding.ts`; `ModelInvoker` is the run loop's
+  caller of it, with the helper path (`helperModel.ts`, which builds its own
+  `ModelAccess` and calls `callModel` → `run/modelCall.ts`) and compaction as
+  deliberate direct exceptions, not a second handler. Wire dispatch is one
+  `switch (protocol)` over dynamic imports of
   data-only protocol arms + a compiler-exhaustive `CONFIGURE` table;
   providers are the `MODEL_PROVIDER_PLUGINS` data manifest. `grep "export
   class"` across `packages/llm/src` returns only error and generic-OAuth
@@ -97,8 +106,11 @@ guardrail, which is why it stays:
   parallel `createCliLogger`/`LogRecord`) were already deleted (0 hits).
 - **SDK surface** (`@texra-ai/harness`: `index.ts`, `node.ts`, `plugins.ts`,
   `schemas.ts`). The center — `Sessions`/`Session`/`Run` + tagged errors +
-  `defineTool`, pure Effect, no in-package `runPromise`/`runSync`/`runFork` —
-  is minimal. `index.ts:81-88` deliberately sources `RunEndResult` off its own
+  `defineTool`, pure Effect — is minimal: no top-level Promise/AsyncIterable
+  rendering and no `Effect.run*` outside the carved runtime entries (the one
+  internal `runFork` is `processRuntime`'s fork-failure reporter, re-exported as
+  `withForkFailureReporting`). `index.ts:81-88` deliberately sources
+  `RunEndResult` off its own
   module (not the `@agent/runtime` barrel) so the published `.d.ts` graph never
   reaches a provider SDK — the leak check in
   `packages/harness/scripts/validate-artifacts.mjs` enforces exactly that.
@@ -113,14 +125,16 @@ guardrail, which is why it stays:
      path invoking the bound `Model` directly — deliberate exceptions, not a
      second handler).
    - Model handler: `packages/llm` (`@texra-ai/llm`) reached only through the
-     `Model` bound by `runtime/run/modelBinding.ts` + `runtime/modelAccess/`.
+     `Model` bound by `runtime/modelAccess/` (`ModelAccess.ts`, `binding.ts`,
+     `routeDecision.ts`, `credentials.ts`).
      Deliberate exceptions outside the route are unchanged (audio transcription
      builds `OpenAI` directly; the `codex`/`claude_code` tools load their own
      provider SDKs; the settings-view consent probe acquires a VS Code `Model`).
    - Logger: `packages/harness/src/logger/` (`effectLog.ts`, `logSink.ts`,
      `effectDiagnostics.ts`, `formatLogData.ts`, `redaction.ts`).
-   - SDK surface: `packages/harness` (`@texra-ai/harness`) — four entries +
-     `effect/`.
+   - SDK surface: `packages/harness` (`@texra-ai/harness`) — four package
+     entries (`.`, `./schemas`, `./plugins`, `./node`); `effect/` is internal
+     implementation behind the root entry, not a published subpath.
 2. **Audit for unnecessary abstraction** — done, four ways (see Verdict). No
    net-negative candidate beyond the one cosmetic single-caller split carried
    below.
@@ -140,21 +154,19 @@ guardrail, which is why it stays:
 
 ## New since the 2026-10-04 pass (needs an owner, not a routine)
 
-1. **The 2026-09-10 Tier-1 manifest doc is now doubly stale — rewrite around
-   the harness SDK or retire it.** `2026-09-10-agent-sdk-tier-1-manifest.md`
-   still names `@texra-ai/agent` / `packages/agent` (both renamed), lists **3
-   entries** (misses `/plugins` entirely), **~67 bindings**, and includes
-   deleted/renamed names (`ToolHost`, `PlatformConflict`,
-   `ToolUseRunEndResult`/`WorkflowRunEndResult`, the workflow configs,
-   `AgentCategory`). The live root entry alone is now **35 `export` statements /
-   ~90 bindings** — the surface has roughly tripled since that inventory
-   (platform-ports block, request-refusal errors, tool-probe types,
-   `ownKeyCredential`, `quotaFallbackRouteFor` all added since), and the
-   `Plugin` / `Composition` exports the old draft predates are now the central
-   extend surface. Ratifying the static list as-is would pin a deleted name
-   (`ToolHost`) and omit `Plugin`. The move is to re-scope the manifest around
-   the durable-harness extend surface, or retire the draft; this is the single
-   most actionable surface gap and it is owner-level.
+1. **The 2026-09-10 Tier-1 manifest — rewritten in this PR; ratification stays
+   owner-level.** At commit `c139d88` it still named the deleted `@texra-ai/agent`
+   / `packages/agent`, listed **3 entries** (missing `/plugins`), ~67 bindings,
+   and included removed names (`ToolHost`, `PlatformConflict`, the workflow
+   configs, `AgentCategory`) against a live root entry of **35 `export`
+   statements / ~90 bindings**. This PR rewrites it: the rename and moved paths
+   are fixed, and the drift-prone hand-enumeration (four hand re-counts since
+   `cf88d2d`) is replaced by a pointer to the committed, auto-regenerated
+   `config/api-reports/harness*.api.md`. What stays owner-level is the
+   **ratification** — re-scope around the durable-harness extend surface
+   (`Plugin`, `Composition`, `Sessions.layer`, `Plugins.contribute`,
+   `Session.resume`) and decide keep/seal/shed for the surviving open questions;
+   it is not a routine edit.
 2. **The logger sink→Layer step is still unlanded.** `logSink.ts` (~165–186)
    still holds the mutable module global (`let sink = consoleLogSink`,
    `setLogSink`, `writeLogEntry`), set by host callers. This is the one real
@@ -175,10 +187,12 @@ guardrail, which is why it stays:
    callers construct the factories without `modelBinding`), not a lift. Low
    priority; file into `2026-09-20-llm-package-hardening.md` or a fresh
    tech-debt entry.
-4. **Doc/filename drift from the baseline rename.** Several proposal docs and
-   the ratchet's own prose still say `host-agent-import-baseline.json` /
-   `host-agent-import`; the live file is `harness-deep-import-baseline.json`.
-   Pure doc fixes; fold into whichever owner touches the manifest next.
+4. **Doc drift from the baseline rename.** Several historical proposal and
+   implemented notes still say `host-agent-import-baseline.json`; the live
+   ratchet file (`config/ratchets/harness-deep-import-baseline.json`) and its
+   kernel test (`harnessDeepImportRatchet.vitest.ts`) already use the new name,
+   so this is doc-only. Pure doc fixes; fold into whichever owner touches those
+   notes next.
 
 ## Shrinking the deep-import baseline (the non-widening narrowing path)
 
@@ -197,26 +211,31 @@ public); it is not a routine edit.
 
 ## Marginal cleanups (tech-debt-tier)
 
-- `AgentRunLifecycle.ts` `finalizeRunTerminalBody` — one caller; exists only to
-  be wrapped in `Effect.uninterruptible`. Cosmetic split, carried.
+- The prior pass's `finalizeRunTerminalBody` single-caller item is **resolved**:
+  no such symbol exists at this pin; `finalizeRunTerminal`
+  (`AgentRunLifecycle.ts:113`) is already `Effect.uninterruptible`-wrapped and
+  has multiple consumers (`AgentRunLifecycle.ts`, `tools/delegation/childRun.ts`,
+  `shared/runs/taskGroupProjection.ts`). Dropped.
 - `redaction.ts` `redactDisplayValue` docblock wording is slightly stale (claims
   "other callers hand it raw values"; its only production caller is
   `logSink.redactEntry`, though the raw-`Error` branch stays reachable). Not
   worth a change.
 
-**Do not collapse** (unchanged): `executeAgent.ts` `resumeToolUse*` three-level
-chain — each level is a distinct `Effect.scoped`/`acquireRelease` region whose
-nesting order is load-bearing for finalizer-before-release ordering. The
-`modelBinding.ts` re-guard disjuncts are reachable format/route-mismatch cases
-(trimming would be a silent-degradation regression; refuted in the prior pass).
+**Do not collapse**: the `Effect.scoped` / `acquireRelease` regions in
+`executeAgent.ts` (`executeAgent` and `resumeToolUseFromResumeData`) — their
+nesting order is load-bearing for finalizer-before-release ordering. (The prior
+pass's "three-level `resumeToolUse*` chain" phrasing is stale: there is one
+resume entry, `resumeToolUseFromResumeData`.) The `modelAccess/binding.ts`
+re-guard disjuncts are reachable format/route-mismatch cases (trimming would be
+a silent-degradation regression; refuted in the prior pass).
 
 ## Recommendation
 
 No refactor to land autonomously from this charter. The charter tracks the
-accepted durable-harness program (H1–H5); the one owner-level action the surface
-audit still asks for is to **re-scope the Tier-1 manifest around the harness SDK
-rather than ratify the 2026-09-10 static list** (New.1) — now additionally
-stale from the package rename this pass records. The logger sink→Layer step
+accepted durable-harness program (H1–H5). This PR rewrites the stale Tier-1
+manifest (New.1); the owner-level action that remains is to **ratify it** —
+re-scope around the harness extend surface and settle keep/seal/shed. The logger
+sink→Layer step
 (New.2) rides `2026-09-21-effect-design-synchronous-facades.md`; the two
 `packages/llm` ambient reads (New.3) and the filename drift (New.4) need filing.
 With the rename landed, the next signal this routine can add will come when the
