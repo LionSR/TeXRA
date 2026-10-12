@@ -5,7 +5,6 @@ import * as path from 'node:path';
 import { Effect, FileSystem, PlatformError } from 'effect';
 
 import { withLogChannel } from '@logger/effectLog';
-import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import { type RunId, type FileLocation } from '@shared/schemas';
 import {
   WORKFLOW_OUTPUT_BASENAME,
@@ -53,7 +52,10 @@ export class RunFileService {
      * resolves reads them here rather than from the calling context's roots
      * scope, which a run's Effect fiber is not guaranteed to sit inside.
      */
-    private readonly roots: WorkspaceRoots,
+    private readonly roots: {
+      readonly storage: string;
+      readonly workspace: string | undefined;
+    },
   ) {
     this.runDirectory = runDirUnder(roots.storage, runId);
   }

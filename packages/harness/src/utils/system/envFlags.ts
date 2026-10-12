@@ -28,7 +28,7 @@ import {
   type ApiKeyProviderId,
 } from '@texra-ai/llm';
 
-import { environment } from '@platform/defaults/nodeWorkspace';
+import { environment } from '@utils/system/nodeWorkspace';
 import { IS_WINDOWS } from '@utils/system/platformPaths';
 
 const ENV_FLAG_OFF_VALUES = new Set(['', '0', 'false', 'no', 'off']);
