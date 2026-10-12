@@ -6,9 +6,8 @@
  * session (`resumeOnSession`) and wording a refusal
  * (`describeFollowUpFailure`, `presentFollowUpResult`), decoupling host code
  * from the follow-up internals' file layout, per the module-level barrel
- * pattern set by `@agent/runtime` (#10011). The harness deep-import ratchet
- * (`config/ratchets/harness-deep-import-baseline.json`) records each host's
- * single `@agent/followUp` specifier.
+ * pattern set by `@agent/runtime` (#10011). Hosts reach it through the
+ * `@texra-ai/harness` root, which re-exports it.
  *
  * Internal follow-up modules keep importing each other by direct path;
  * nothing inside `src/agent` imports this barrel, so it introduces no import
