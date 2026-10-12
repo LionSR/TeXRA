@@ -54,7 +54,14 @@ const AgentConfigObjectSchema = NullableFileFieldsSchema.extend({
   rootUserInstruction: z.string().nullish(),
   /** Optional user-facing text for logs when instruction contains hidden context. */
   displayInstruction: z.string().nullish(),
-  editedFiles: z.array(z.string()).prefault([]),
+  /** Removed: a launch names its one edited file in `editedFile`. An empty
+   *  list (what every build wrote) still reads; any file in it is refused,
+   *  never silently dropped. */
+  editedFiles: z
+    .tuple([], {
+      error: '`editedFiles` was removed; name the edited file in `editedFile`',
+    })
+    .optional(),
   toolConfig: ToolConfigSchema,
   /** Memory display paths attached to this delegation (e.g. /memories/conventions.md). */
   memories: z.array(z.string()).prefault([]),

@@ -28,11 +28,11 @@ function getSelectedPanel(): SettingsTabPanelName {
 }
 
 async function mountSettingsApp(
-  initialTab: SettingsTabPanelName = 'models',
+  initialTab?: SettingsTabPanelName,
 ): Promise<LitElementLike> {
   const app = document.createElement('settings-app') as LitElementLike;
   app.setAttribute('data-desktop-view', 'settings');
-  setSelectedPanel(initialTab);
+  if (initialTab) setSelectedPanel(initialTab);
   document.body.append(app);
   await app.updateComplete;
   return app;
@@ -78,12 +78,13 @@ describe('settings navigation', () => {
     setSelectedPanel('models');
   });
 
-  it('shows every page in one strip and a sub-tab row only for multi-section pages', async () => {
+  it('shows every page and section navigation only for multi-section pages', async () => {
     const app = await mountSettingsApp();
 
+    expect(activePanelLabel(app)).toBe('General');
     expect(
       app.shadowRoot?.querySelectorAll('.settings-page-nav [role="tab"]'),
-    ).toHaveLength(navEntries.length + navEntries[0].sections.length);
+    ).toHaveLength(navEntries.length);
     for (const entry of navEntries) {
       pageButton(app, entry.panel).click();
       await app.updateComplete;
@@ -159,7 +160,7 @@ describe('settings navigation', () => {
         '.settings-page-button[data-panel="shortcuts"]',
       ),
     ).toBeNull();
-    expect(activePanelLabel(app)).toBe('Models');
+    expect(activePanelLabel(app)).toBe('General');
     expect(app.shadowRoot?.querySelector('shortcuts-tab')).toBeNull();
   });
 });

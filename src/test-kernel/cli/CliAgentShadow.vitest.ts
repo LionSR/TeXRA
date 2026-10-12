@@ -71,13 +71,6 @@ describe('CLI agent validation with a shadowed name', () => {
             Effect.sync(() =>
               resolve(REPO_ROOT, 'packages/extension/resources/agents'),
             ),
-          builtInToolUse: () =>
-            Effect.sync(() =>
-              resolve(
-                REPO_ROOT,
-                'packages/extension/resources/tool_use_agents',
-              ),
-            ),
         },
       },
     );
@@ -180,7 +173,7 @@ describe('CLI agent validation with a shadowed name', () => {
             }),
           update: stores.globalState.update.bind(stores.globalState),
         };
-        const session = new TuiSession(() => undefined);
+        const session = new TuiSession();
         patchSessionMeta({ agent: 'launched-agent', teamName: 'Physicist' });
         const context = {
           stores: { ...stores, globalState: delayedState },

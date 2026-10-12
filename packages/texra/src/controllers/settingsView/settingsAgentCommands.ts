@@ -4,8 +4,6 @@
  * team presets, with the refresh every mutation ends in. The host binds only
  * what it shows its own way (a document, a folder picker, the AI creator).
  */
-import * as path from 'node:path';
-
 import { Effect, FileSystem } from 'effect';
 
 import { AgentDirectories, type WorkspaceRoots } from '@texra-ai/harness';
@@ -127,7 +125,7 @@ export function settingsAgentCommands(ports: SettingsAgentCommandsPorts) {
     openReadOnlyDocument: (filePath) =>
       Effect.flatMap(
         FileSystem.FileSystem.use((fs) => fs.readFileString(filePath)),
-        (text) => bindings.showReadOnlyYaml(path.basename(filePath), text),
+        (text) => bindings.showReadOnlyYaml(filePath, text),
       ),
     revealFile: bindings.revealPath,
     confirmAction: (message, confirmLabel) =>
@@ -226,8 +224,8 @@ export function settingsAgentCommands(ports: SettingsAgentCommandsPorts) {
             ports.resourcesPath,
           );
           if (!written.ok) return yield* present.alert(written.message);
-          yield* bindings.openPath(written.filePath);
           yield* refreshAfterAgentMutation();
+          yield* bindings.openPath(written.filePath);
         }),
       ),
     setCustomAgentDir: () =>

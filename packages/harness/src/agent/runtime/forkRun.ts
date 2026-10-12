@@ -43,6 +43,13 @@ const isSettled = (state: RunState): boolean =>
 
 const refused = (reason: string) => new Rejected({ reason });
 
+/** A run's noun in a refusal (GQ4): an agent is a run another run started. */
+export const runNoun = (
+  session: SessionHandle,
+  runId: RunId,
+): 'task' | 'agent' =>
+  session.view.run(runId)?.parentId == null ? 'task' : 'agent';
+
 /**
  * Fork run `from` at `at`, the `seq` of a settled position in its run
  * history, or at the end of its last completed turn when `at` is null (a
@@ -64,7 +71,9 @@ export const forkRun = Effect.fn('forkRun')(function* (
     (row) => row.type === 'run.start',
   );
   if (start?.type !== 'run.start') {
-    return yield* refused(`Task ${from.id} has no recorded start.`);
+    return yield* refused(
+      `The ${runNoun(session, from.id)} ${from.id} has no recorded start.`,
+    );
   }
   // The title the source shows: its newest user title over any later model
   // title, as the fold reads it, with its authorship.
@@ -158,9 +167,21 @@ export const forkRun = Effect.fn('forkRun')(function* (
       descriptionBy: title.by,
     }),
   });
-  // Registration and history are one commit: a fork exists with its history
-  // or not at all, and unclaimed: the host's to resume, as any waiting
-  // conversation is.
-  yield* session.runHistory.appendBatch(runId, null, rows, registration);
+  // Registration and history are one commit, through the fork's cell: a
+  // fork exists with its history or not at all.
+  const cell = yield* session.runHistory.open(runId, {
+    registration: Effect.succeed(registration),
+  });
+  yield* cell.append(rows);
+  // And unclaimed: the host's to resume, as any waiting conversation is.
+  // The rows are durable whatever happens to the claim, so a release that
+  // fails only says so; the next process proves this one dead first.
+  yield* Effect.scoped(session.log.hold(runId, { ends: true })).pipe(
+    Effect.catch((error) =>
+      Effect.logWarning(
+        `Run ${runId} was forked, but its claim was not released: this process cannot resume it`,
+      ).pipe(Effect.annotateLogs({ data: error })),
+    ),
+  );
   return runId;
 });

@@ -1,30 +1,15 @@
-import { ModelProvider } from 'llm-zoo';
 // Third-party imports
 import {
-  APIUserAbortError as AnthropicAPIUserAbortError,
-  AuthenticationError as AnthropicAuthenticationError,
-} from '@anthropic-ai/sdk';
-import {
-  APIConnectionTimeoutError as OpenAIAPIConnectionTimeoutError,
-  APIError as OpenAIAPIError,
-  APIUserAbortError as OpenAIAPIUserAbortError,
   BadRequestError as OpenAIBadRequestError,
   RateLimitError as OpenAIRateLimitError,
 } from 'openai';
 import { describe, expect, it } from 'vitest';
 
 // Local imports
-import { classifyModelFailure } from '@agent/runtime/run/modelFailure';
-import {
-  attachContextWindowError,
-  attachMissingApiKeyError,
-  attachProviderError,
-  hasContextWindowErrorMarker,
-} from '@common/errors/sdkError/errorMetadata';
-import { isUserAbort } from '@common/errors/sdkError/errorPatterns';
+import { failureInfo } from '@agent/runtime/modelAccess/failureInfo';
+import { attachProviderError } from '@common/errors/sdkError/errorMetadata';
 import {
   buildErrorLogData,
-  formatProviderHttpError,
   getSdkErrorMessage,
   normalizeProviderError,
 } from '@common/errors/sdkError/providerErrorFormat';
@@ -33,399 +18,26 @@ import { openaiFailure } from '../../../packages/llm/src/api/openaiError.js';
 import { judgeFailure } from '../../../packages/llm/src/api/verdict.js';
 
 /**
- * An OpenAI SDK failure as the binding raises and judges it, read the way the
- * run reads it: the package owns every verdict on a provider's reply.
+ * An OpenAI SDK failure as the binding raises and judges it, recorded the way
+ * the run records it: the package owns every verdict on a provider's reply.
  */
 const judged = (cause: unknown) =>
-  classifyModelFailure(judgeFailure(openaiFailure(cause), 'api-key'), {
-    config: { provider: ModelProvider.OPENAI },
-  });
-
-class APIError extends Error {}
-
-class APIUserAbortError extends APIError {}
-
-/**
- * An OpenAI SDK 400 carrying `body` with an explicit wrapper message. The SDK
- * constructor derives `Error.message` from the body, so the cases that
- * exercise "is this message a serialization of the body?" overwrite it after
- * construction — the shape a provider produces when it stringifies the
- * response into the thrown error, or explains the failure in prose.
- */
-function badRequestWithBody(
-  body: string | Record<string, unknown>,
-  wrapperMessage: string,
-): Error {
-  const error = new OpenAIBadRequestError(400, body, undefined, new Headers());
-  error.message = wrapperMessage;
-  return error;
-}
-
-function providerAttributedError(body: unknown): Error {
-  const error = new Error('background response failed') as Error & {
-    error: unknown;
-    provider: string;
-  };
-  error.error = body;
-  error.provider = 'openai';
-  return error;
-}
-
-describe('formatProviderHttpError', () => {
-  it('preserves native SDK abort detection for packaged builds', () => {
-    expect(isUserAbort(new OpenAIAPIUserAbortError())).toBe(true);
-    expect(isUserAbort(new AnthropicAPIUserAbortError())).toBe(true);
-  });
-
-  it('detects AbortController DOMException aborts', () => {
-    expect(isUserAbort(new DOMException('aborted', 'AbortError'))).toBe(true);
-  });
-
-  it('keeps SDK user aborts non-retryable', () => {
-    const formatted = formatProviderHttpError(
-      new APIUserAbortError('aborted by user'),
-    );
-
-    expect(formatted.message).toBe('Request aborted');
-    expect(formatted.userRetryable).toBe(false);
-  });
-
-  it('formats OpenAI connection errors with existing retry behavior', () => {
-    const error = new OpenAIAPIConnectionTimeoutError();
-
-    const formatted = formatProviderHttpError(error);
-
-    expect(formatted.statusCode).toBeUndefined();
-    expect(formatted.message).toBe('Request timed out.');
-    expect(formatted.userRetryable).toBe(true);
-  });
-
-  it('infers a retryable 500 from a status-less OpenAI server_error body', () => {
-    const body = {
-      type: 'server_error',
-      code: 'server_error',
-      message:
-        'An error occurred while processing your request. You can retry your request, or contact us through our help center at help.openai.com if the error persists. Please include the request ID 988f71d8-3453-46f1-a466-529d2a967244 in your message.',
-      param: null,
-    };
-    const error = new OpenAIAPIError(undefined, body, body.message, undefined);
-
-    const { formatted } = judged(error);
-
-    expect(formatted.statusCode).toBe(500);
-    expect(formatted.userRetryable).toBe(true);
-    expect(formatted.rawErrorBody).toEqual(body);
-  });
-
-  it('infers a retryable 503 from a status-less OpenAI overload body', () => {
-    const body = {
-      type: 'service_unavailable_error',
-      code: 'server_is_overloaded',
-      message: 'Our servers are currently overloaded. Please try again later.',
-      param: null,
-    };
-    const error = new OpenAIAPIError(undefined, body, body.message, undefined);
-
-    const { formatted } = judged(error);
-
-    expect(formatted.statusCode).toBe(503);
-    expect(formatted.userRetryable).toBe(true);
-    expect(judged(error).autoRetryable).toBe(true);
-    expect(formatted.rawErrorBody).toEqual(body);
-
-    const codeOnlyBody = {
-      code: 'server_is_overloaded',
-      message: body.message,
-    };
-    const codeOnlyError = new OpenAIAPIError(
-      undefined,
-      codeOnlyBody,
-      codeOnlyBody.message,
-      undefined,
-    );
-
-    expect(judged(codeOnlyError).formatted.statusCode).toBe(503);
-  });
-
-  it('formats OpenAI HTTP errors with status metadata', () => {
-    const error = new OpenAIBadRequestError(
-      400,
-      { message: 'bad payload' },
-      'bad payload',
-      new Headers([['x-request-id', 'req_123']]),
-    );
-
-    const formatted = formatProviderHttpError(error);
-
-    expect(formatted.statusCode).toBe(400);
-    expect(formatted.statusText).toBe('Bad Request');
-    expect(formatted.message).toContain('HTTP 400 Bad Request');
-    expect(formatted.message).toContain('bad payload');
-    expect(formatted.userRetryable).toBe(false);
-  });
-
-  it('does not promote a serialized provider response body into the message', () => {
-    const privatePrompt = 'private request body content';
-    const body = {
-      request: { prompt: privatePrompt },
-      authorization: 'opaque credential',
-    };
-    const error = new OpenAIBadRequestError(
-      400,
-      body,
-      `400 ${JSON.stringify(body)}`,
-      new Headers(),
-    );
-
-    const { formatted } = judged(error);
-
-    expect(formatted.message).toBe('HTTP 400 Bad Request – Bad Request');
-    expect(formatted.message).not.toContain(privatePrompt);
-    expect(formatted.message).not.toContain('opaque credential');
-    expect(formatted.rawErrorBody).toEqual(body);
-  });
-
-  it('does not promote a pretty-printed provider response body into the message', () => {
-    const privatePrompt = 'private pretty-printed request content';
-    const body = {
-      request: { prompt: privatePrompt },
-      authorization: 'opaque pretty-printed credential',
-    };
-    // Key order differs from the body, so only a stable-stringify comparison
-    // recognizes this message as a serialization of it.
-    const reorderedBody = {
-      authorization: body.authorization,
-      request: body.request,
-    };
-    const error = badRequestWithBody(
-      body,
-      `400 ${JSON.stringify(reorderedBody, null, 2)}`,
-    );
-
-    const { formatted } = judged(error);
-
-    expect(formatted.message).toBe('HTTP 400 Bad Request – Bad Request');
-    expect(formatted.message).not.toContain(privatePrompt);
-    expect(formatted.message).not.toContain('opaque pretty-printed credential');
-    expect(formatted.rawErrorBody).toEqual(body);
-  });
-
-  it('retains a useful wrapper explanation when the raw body is plain text', () => {
-    const error = badRequestWithBody(
-      'upstream plain-text response',
-      'The provider rejected this request because the model is unavailable.',
-    );
-
-    const { formatted } = judged(error);
-
-    expect(formatted.message).toBe(
-      'HTTP 400 Bad Request – The provider rejected this request because the model is unavailable.',
-    );
-    expect(formatted.rawErrorBody).toBe('upstream plain-text response');
-  });
-
-  it('formats cyclic diagnostic bodies without throwing', () => {
-    const error = badRequestWithBody(
-      { kind: 'provider-error' },
-      'The provider failed while reporting {"kind":"provider-error"}.',
-    );
-    // Attached after construction: the SDK constructor would itself throw on a
-    // cyclic body while deriving its message.
-    const body: { kind: string; self?: unknown } = { kind: 'provider-error' };
-    body.self = body;
-    Object.assign(error, { error: body });
-
-    const { formatted } = judged(error);
-
-    expect(formatted.message).toBe(
-      'HTTP 400 Bad Request – The provider failed while reporting {"kind":"provider-error"}.',
-    );
-    expect(formatted.rawErrorBody).toBe(body);
-  });
-
-  it('retains a wrapper explanation that does not serialize its response body', () => {
-    const body = { code: 'unsupported_response_format' };
-    const error = badRequestWithBody(
-      body,
-      'The selected model does not support this response format.',
-    );
-
-    const { formatted } = judged(error);
-
-    expect(formatted.message).toBe(
-      'HTTP 400 Bad Request – The selected model does not support this response format.',
-    );
-    expect(formatted.rawErrorBody).toEqual(body);
-  });
-
-  it('does not promote a serialized plain-text response body into the message', () => {
-    const privateBody = 'private prompt and opaque authorization';
-    const error = new OpenAIBadRequestError(
-      400,
-      privateBody,
-      'ignored by the OpenAI error constructor',
-      new Headers(),
-    );
-
-    const { formatted } = judged(error);
-
-    expect(formatted.message).toBe('HTTP 400 Bad Request – Bad Request');
-    expect(formatted.message).not.toContain(privateBody);
-    expect(formatted.rawErrorBody).toBe(privateBody);
-  });
-
-  it('classifies OpenAI insufficient_quota bodies as credential exhaustion', () => {
-    const error = new OpenAIRateLimitError(
-      429,
-      {
-        message: 'You exceeded your current quota.',
-        type: 'insufficient_quota',
-        code: 'insufficient_quota',
-      },
-      'quota exhausted',
-      new Headers(),
-    );
-
-    const { formatted } = judged(error);
-
-    expect(formatted.statusCode).toBe(429);
-    expect(formatted.classification).toStrictEqual({ kind: 'upstream-credit' });
-    expect(formatted.userRetryable).toBe(true);
-  });
-
-  it('classifies OpenAI quota messages without code as credential exhaustion', () => {
-    const error = new OpenAIRateLimitError(
-      429,
-      {
-        message:
-          'You exceeded your current quota, please check your plan and billing details.',
-      },
-      'quota exhausted',
-      new Headers(),
-    );
-
-    const { formatted } = judged(error);
-
-    expect(formatted.statusCode).toBe(429);
-    expect(formatted.classification).toStrictEqual({ kind: 'upstream-credit' });
-    expect(formatted.userRetryable).toBe(true);
-  });
-
-  it('classifies provider-attributed OpenAI quota bodies without SDK metadata', () => {
-    const error = providerAttributedError({
-      message: 'You exceeded your current quota.',
-      type: 'insufficient_quota',
-      code: 'insufficient_quota',
-    });
-
-    const { formatted } = judged(error);
-
-    expect(formatted.statusCode).toBeUndefined();
-    expect(formatted.classification).toStrictEqual({ kind: 'upstream-credit' });
-    expect(formatted.userRetryable).toBe(true);
-  });
-
-  it('infers a retryable status for provider-attributed background server errors', () => {
-    const error = providerAttributedError({
-      message: 'The background response ended before completion.',
-      type: 'server_error',
-    });
-
-    const { formatted } = judged(error);
-
-    expect(formatted.statusCode).toBe(500);
-    expect(formatted.classification).toBeUndefined();
-    expect(formatted.userRetryable).toBe(true);
-  });
-
-  it('treats provider empty responses as retryable transient failures', () => {
-    const formatted = formatProviderHttpError(
-      new Error('No output generated - API returned empty response'),
-    );
-
-    expect(formatted.message).toBe(
-      'No output generated - API returned empty response',
-    );
-    expect(formatted.userRetryable).toBe(true);
-  });
-
-  it('formats Anthropic user abort errors', () => {
-    const error = new AnthropicAPIUserAbortError();
-
-    const formatted = formatProviderHttpError(error);
-
-    expect(formatted.message).toBe('Request aborted');
-    expect(formatted.userRetryable).toBe(false);
-  });
-
-  it('formats Anthropic HTTP errors with status-derived metadata', () => {
-    const error = new AnthropicAuthenticationError(
-      401,
-      {
-        type: 'error',
-        error: { type: 'authentication_error', message: 'invalid key' },
-      },
-      'invalid key',
-      new Headers([['request-id', 'req_anthropic']]),
-    );
-
-    const formatted = formatProviderHttpError(error);
-
-    expect(formatted.statusCode).toBe(401);
-    expect(formatted.statusText).toBe('Unauthorized');
-    expect(formatted.message).toContain('HTTP 401 Unauthorized');
-    expect(formatted.message).toContain('invalid key');
-    expect(formatted.userRetryable).toBe(false);
-  });
-});
-
-describe('provider marker classification', () => {
-  it('formats a missing API key marker as the aligned agent-error kind', () => {
-    const err = new Error('provider-specific credential wording');
-    attachMissingApiKeyError(err);
-
-    expect(formatProviderHttpError(err).classification).toStrictEqual({
-      kind: 'missing-api-key',
-    });
-  });
-});
+  failureInfo(judgeFailure(openaiFailure(cause), 'api-key'), 'openai');
 
 describe('context-window overflow', () => {
-  it('is recognized by its marker, independent of wording', () => {
-    const err = new Error(
-      'Token count of message exceeds context window: 5 > 3',
-    );
-    attachContextWindowError(err);
-
-    expect(hasContextWindowErrorMarker(err)).toBe(true);
-    expect(formatProviderHttpError(err).classification).toStrictEqual({
-      kind: 'context-window',
-    });
-  });
-
-  it('is recognized by its marker through a cause chain (rethrown/wrapped error)', () => {
-    const inner = new Error(
-      'Token count of message exceeds context window: 5 > 3',
-    );
-    attachContextWindowError(inner);
-    const outer = new Error('request failed', { cause: inner });
-
-    expect(hasContextWindowErrorMarker(outer)).toBe(true);
-  });
-
   it('is the package verdict on third-party provider wording', () => {
     for (const message of [
       'context length exceeded',
       'Maximum context length is 128000.',
     ])
-      expect(judged(new Error(message)).formatted.classification).toStrictEqual(
-        { kind: 'context-window' },
-      );
+      expect(judged(new Error(message)).classification).toStrictEqual({
+        kind: 'context-window',
+      });
   });
 
   it('is not read into an unrelated error', () => {
     expect(
-      judged(new Error('rate limit exceeded')).formatted.classification,
+      judged(new Error('rate limit exceeded')).classification,
     ).toBeUndefined();
   });
 
@@ -437,7 +49,7 @@ describe('context-window overflow', () => {
       new Headers(),
     );
 
-    expect(judged(err).formatted.classification).toStrictEqual({
+    expect(judged(err).classification).toStrictEqual({
       kind: 'context-window',
     });
   });
@@ -450,8 +62,8 @@ describe('context-window overflow', () => {
     };
     err.error = { code: 'context_length_exceeded', message: 'overflow' };
 
-    expect(judged(err).autoRetryable).toBe(false);
-    expect(judged(err).formatted.classification).toStrictEqual({
+    expect(judged(err).userRetryable).toBe(false);
+    expect(judged(err).classification).toStrictEqual({
       kind: 'context-window',
     });
   });
@@ -464,7 +76,7 @@ describe('context-window overflow', () => {
       new Headers(),
     );
 
-    expect(judged(err).formatted.classification).toBeUndefined();
+    expect(judged(err).classification).toBeUndefined();
   });
 });
 

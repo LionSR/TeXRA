@@ -4,7 +4,6 @@
 // -Drawer, -Wide, -Tools, -Proposal, -Inline).
 import { html, type TemplateResult } from 'lit';
 
-import { DOCUMENTS_OUTPUT_ARM } from '@shared/plugins/documents';
 import {
   AgentConfigFieldsSchema,
   emptyRunEndOutput,
@@ -13,19 +12,9 @@ import {
   type MissingTool,
 } from '@shared/schemas';
 import {
-  emptyHostSnapshot,
-  type HostSnapshot,
-} from '@shared/session/hostSnapshot';
-import {
   emptySessionView,
   type SessionView,
 } from '@shared/session/sessionView';
-import {
-  applySurfaceAction,
-  emptySurface,
-  type Surface,
-  type SurfaceAction,
-} from '@shared/session/surface';
 import {
   buildScenario,
   CHILD,
@@ -46,6 +35,17 @@ import {
   withProposal,
   withWaitingGrandchild,
 } from '@test/shared/session/fanOutScenario';
+import { DOCUMENTS_OUTPUT_ARM } from '@texra/shared/plugins/documents';
+import {
+  emptyHostSnapshot,
+  type HostSnapshot,
+} from '@texra/shared/session/hostSnapshot';
+import {
+  applySurfaceAction,
+  emptySurface,
+  type Surface,
+  type SurfaceAction,
+} from '@texra/shared/session/surface';
 
 // ── the host snapshot: one project, the catalogs the composer and sheet read ──
 
@@ -229,7 +229,7 @@ function interruptedTasksView(): SessionView {
       {
         type: 'run.start',
         identity: { kind: 'agent', agent: 'assistant' },
-        worktree: { workingDirectory: '/paper', branch: 'main' },
+        worktree: { workingDirectory: '/paper' },
         parent: null,
         provenance: null,
         userFollowUpSupport: 'nativeInteractive',
@@ -308,7 +308,7 @@ function forkView(): SessionView {
     log.emit(id, at, {
       type: 'run.start',
       identity: { kind: 'agent', agent: 'assistant' },
-      worktree: { workingDirectory: '/paper', branch: 'main' },
+      worktree: { workingDirectory: '/paper' },
       parent: null,
       provenance,
       userFollowUpSupport: 'nativeInteractive',
@@ -577,7 +577,7 @@ export const extensionScenes: Record<string, () => TemplateResult> = {
     log.emit(ROOT, T.root, {
       type: 'run.start',
       identity: { kind: 'agent', agent: 'review' },
-      worktree: { workingDirectory: '/paper', branch: 'main' },
+      worktree: { workingDirectory: '/paper' },
       parent: null,
       provenance: null,
       userFollowUpSupport: 'unsupported',
@@ -604,7 +604,6 @@ export const extensionScenes: Record<string, () => TemplateResult> = {
       value: {
         rounds: [0, 1].map((round) => ({
           round,
-          rawOutput: null,
           outputs: [],
           compileFailures: [],
           missingOutputs: [],

@@ -3,14 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 // Local imports
 import type { RunTabs } from '@progressView/frontend/components/RunTabs';
-import type { HostRequest } from '@shared/session/hostRequest';
 import type { SessionView } from '@shared/session/sessionView';
-import {
-  applySurfaceAction,
-  emptySurface,
-  type Surface,
-  type SurfaceAction,
-} from '@shared/session/surface';
 import type { RuntimeRequest } from '@shared/session/runtimeRequest';
 import {
   CHILD,
@@ -18,6 +11,13 @@ import {
   GRANDCHILD,
   ROOT,
 } from '@test/shared/session/fanOutScenario';
+import {
+  applySurfaceAction,
+  emptySurface,
+  type Surface,
+  type SurfaceAction,
+} from '@texra/shared/session/surface';
+import type { HostRequest } from '@texra/shared/session/hostRequest';
 
 // Local file imports
 import {
@@ -136,7 +136,7 @@ describe('run-tabs over the fold', () => {
     expect(rowOf(element, ROOT)).toBeTruthy();
   });
 
-  it('sends one run.delete for a double-clicked rail ×', async () => {
+  it('sends one run.delete for a repeated task-menu delete action', async () => {
     const base = fanOutView();
     const root = base.runs.get(ROOT);
     if (!root) throw new Error('no root run');
@@ -150,9 +150,16 @@ describe('run-tabs over the fold', () => {
       { topLevelOnly: true, removable: true },
     );
 
-    const remove = control(rowOf(element, ROOT), 'delete');
-    remove.click();
-    remove.click();
+    const menu = rowOf(element, ROOT).shadowRoot?.querySelector('.tab-actions');
+    if (!menu) throw new Error('no task actions menu');
+    const selectDelete = () =>
+      menu.dispatchEvent(
+        new CustomEvent('wa-select', {
+          detail: { item: { value: 'delete' } },
+        }),
+      );
+    selectDelete();
+    selectDelete();
     expect(requests).toEqual([{ kind: 'run.delete', runId: ROOT }]);
   });
 });

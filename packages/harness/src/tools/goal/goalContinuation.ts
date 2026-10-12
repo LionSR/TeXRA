@@ -17,7 +17,6 @@ import { readSettingFrom } from '@utils/config/platformSettings';
 import { renderPrompt } from '@utils/prompt';
 import { formatCompactDuration, formatCostUsd } from '@utils/text/stringUtils';
 
-import { setGoalSessionAutoApproval } from './goalAutoApproval';
 import { goalOf, pauseGoal } from './goalRows';
 
 const pauseActive = Effect.fn('goal.pause')(function* ({
@@ -29,7 +28,6 @@ const pauseActive = Effect.fn('goal.pause')(function* ({
 }) {
   if (goalOf(session, runId)?.status !== 'active') return;
   yield* pauseGoal(session, runId);
-  yield* setGoalSessionAutoApproval(session, runId, false);
 });
 
 export const goalContinuation: Continuation = {
@@ -55,7 +53,7 @@ export const goalContinuation: Continuation = {
         .cost ?? 0;
     if (cap > 0 && spent >= cap) {
       yield* pauseActive({ session, runId });
-      session.trace.publish(runId, {
+      session.log.publish(runId, {
         type: 'log',
         level: 'warn',
         message:

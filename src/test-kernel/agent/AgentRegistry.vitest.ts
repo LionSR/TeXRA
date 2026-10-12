@@ -59,10 +59,6 @@ const BUILTIN_AGENTS_DIR = resolve(
   REPO_ROOT,
   'packages/extension/resources/agents',
 );
-const BUILTIN_TOOL_USE_AGENTS_DIR = resolve(
-  REPO_ROOT,
-  'packages/extension/resources/tool_use_agents',
-);
 
 function testAgentDirectories(
   overrides: Partial<AgentDirectoriesPort> = {},
@@ -71,7 +67,6 @@ function testAgentDirectories(
     custom: () => Effect.sync(() => ''),
     customConfigured: () => Effect.succeed(false),
     builtIn: () => Effect.sync(() => BUILTIN_AGENTS_DIR),
-    builtInToolUse: () => Effect.sync(() => BUILTIN_TOOL_USE_AGENTS_DIR),
     ...overrides,
   };
 }
@@ -82,7 +77,6 @@ const mutableAgentDirectories: AgentDirectoriesPort = {
   custom: () => activeAgentDirectories.custom(),
   customConfigured: () => activeAgentDirectories.customConfigured(),
   builtIn: () => activeAgentDirectories.builtIn(),
-  builtInToolUse: () => activeAgentDirectories.builtInToolUse(),
 };
 
 /** Point the platform at the real bundled agent YAMLs, overriding any dir. */
@@ -140,11 +134,7 @@ describe('agent registry', () => {
 
         expect(registerExternalRoot).toHaveBeenCalledWith(
           resolve(resourcesPath, 'agents'),
-          expect.objectContaining({ kind: 'builtInWorkflow', writable: false }),
-        );
-        expect(registerExternalRoot).toHaveBeenCalledWith(
-          resolve(resourcesPath, 'tool_use_agents'),
-          expect.objectContaining({ kind: 'builtInToolUse', writable: false }),
+          expect.objectContaining({ kind: 'builtIn', writable: false }),
         );
         expect(registerExternalRoot).toHaveBeenCalledWith(
           resolve(resourcesPath, 'docs', 'agent-creation'),
@@ -186,14 +176,14 @@ describe('agent registry', () => {
   it.effect(
     'keeps the current cache visible while a refresh is pending',
     () => {
-      const builtInToolUseDir = createDeferred<void>();
+      const builtInDir = createDeferred<void>();
       return Effect.gen(function* () {
         expect(getAgent('assistant')?.name).toBe('assistant');
 
         useAgentDirectories({
-          builtInToolUse: () =>
-            Effect.promise(() => builtInToolUseDir.promise).pipe(
-              Effect.as(BUILTIN_TOOL_USE_AGENTS_DIR),
+          builtIn: () =>
+            Effect.promise(() => builtInDir.promise).pipe(
+              Effect.as(BUILTIN_AGENTS_DIR),
             ),
         });
 
@@ -206,12 +196,12 @@ describe('agent registry', () => {
 
         expect(getAgent('assistant')?.name).toBe('assistant');
 
-        builtInToolUseDir.resolve();
+        builtInDir.resolve();
         yield* Fiber.join(pendingRefresh);
       }).pipe(
         Effect.ensuring(
           Effect.sync(() => {
-            builtInToolUseDir.resolve();
+            builtInDir.resolve();
             useAgentDirectories();
           }),
         ),
@@ -224,7 +214,7 @@ describe('agent registry', () => {
       expect(getAgent('assistant')?.name).toBe('assistant');
 
       useAgentDirectories({
-        builtInToolUse: () =>
+        builtIn: () =>
           Effect.fail(
             new AgentDirectoriesFailed({
               source: 'builtIn',

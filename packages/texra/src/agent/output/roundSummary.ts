@@ -24,7 +24,6 @@ interface RoundSummary {
 export const summarizeRound = Effect.fn('documents.summarizeRound')(function* (
   state: OutputState,
   deps: OutputDependencies,
-  outputFile: FileLocation,
   currRound: number,
   options: {
     mapping?: RoundFileMapping;
@@ -37,7 +36,6 @@ export const summarizeRound = Effect.fn('documents.summarizeRound')(function* (
   },
 ) {
   const data = ensureRoundData(state, currRound);
-  data.rawOutput ??= outputFile;
 
   const fileInfos = yield* computeOutputDiffStats(
     state,

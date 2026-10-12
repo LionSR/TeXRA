@@ -55,18 +55,18 @@ export class SubscriptionUsageRow extends LitElement {
 
       .usage-card {
         display: grid;
-        gap: 0.4rem;
-        padding: var(--wa-space-2xs) var(--wa-space-xs);
-        background-color: var(--wa-color-surface-lowered, transparent);
-        border-radius: var(--wa-border-radius-m, 0.5rem);
+        gap: var(--wa-space-xs);
+        padding: var(--wa-space-xs);
+        background-color: var(--wa-color-surface-lowered);
+        border-radius: var(--border-radius);
       }
 
       .usage-window {
         display: grid;
-        grid-template-columns: minmax(5rem, auto) minmax(5rem, 1fr) auto;
+        grid-template-columns: 6rem minmax(0, 1fr) 8rem;
         align-items: center;
-        gap: 0.55rem;
-        font-size: var(--wa-font-size-s, 0.8125rem);
+        gap: var(--wa-space-xs);
+        font-size: var(--font-size-sm);
       }
 
       wa-progress-bar {
@@ -81,13 +81,17 @@ export class SubscriptionUsageRow extends LitElement {
       }
 
       .usage-plan {
-        font-weight: 600;
+        font-weight: var(--font-weight-medium);
+      }
+
+      .usage-reset {
+        text-align: end;
       }
 
       .usage-updated,
       .usage-unavailable-detail {
         color: var(--color-text-secondary);
-        font-size: var(--wa-font-size-xs, 0.75rem);
+        font-size: var(--font-size-xs);
       }
 
       @container settings (max-width: 520px) {

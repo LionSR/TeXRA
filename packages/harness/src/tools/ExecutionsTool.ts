@@ -20,6 +20,7 @@ import {
   listRunWorkspaceFiles,
   resolveRunWorkspaceFilePath,
 } from '@agent/storage';
+import { persistedParentRunId } from '@agent/storage/runRecords';
 import { type SessionHandle } from '@agent/runtime/SessionHandle';
 import { requireToolRun } from '@agent/runtime/RunCall';
 import { Runs } from '@agent/runtime/runRegistry';
@@ -55,7 +56,7 @@ import {
   formatRunStatus,
   runDisplayCategory,
 } from './executionFormatters';
-import { defineTool } from './core/define';
+import { defineTool } from './core/definition';
 import { formatFileView } from './formatting';
 import { serializeFilteredConfig } from './executions/configView';
 import { formatConversation } from './executions/conversationFormat';
@@ -73,14 +74,14 @@ import {
   type ExecutionsToolInput,
 } from './executions/toolInput';
 import { listRuns } from './executions/runListing';
-import { sendToRun } from './executions/send';
+import { missingRun, sendToRun } from './executions/send';
 import { turnAttributionNote } from './executions/turnAttribution';
 import { shouldSkipWait } from './executions/waitCoordination';
 import { scriptCallsView } from './executions/scriptCallsView';
 
 interface RunToolContext {
   readonly session: SessionHandle;
-  readonly runId: RunId | undefined;
+  readonly runId: RunId;
 }
 
 /**
@@ -107,11 +108,7 @@ const awaitStatusChange = Effect.fn('ExecutionsTool.awaitStatusChange')(
     const phases = (view: SessionView): string =>
       runIds.map((id) => view.runs.get(id)?.status ?? '').join(',');
     const sent = (view: SessionView): readonly string[] =>
-      context.runId === undefined
-        ? []
-        : (view.queuedFollowUps.get(context.runId) ?? []).map(
-            (f) => f.followUpId,
-          );
+      (view.queuedFollowUps.get(context.runId) ?? []).map((f) => f.followUpId);
     const initial = SubscriptionRef.getUnsafe(context.session.view.ref);
     const started = phases(initial);
     const held = new Set(sent(initial));
@@ -226,12 +223,21 @@ const runExecutions = Effect.fn('ExecutionsTool.run')(function* (
           runId,
           input.message,
         );
-      case 'wait':
+      case 'wait': {
         yield* waitForRuns(context, input.timeout, [runId]);
-        return yield* showSummary(context, runId, {
-          suppressAutoDeliveredSubagentReport:
-            !(yield* context.session.followUps.withdraw(context.runId, runId)),
+        // The child's deliveries still queued on the caller: this result
+        // answers them, and its settlement consumes them with it.
+        const queued = yield* context.session.followUps
+          .read(context.runId)
+          .pipe(Effect.orDie);
+        const answered = queued.followUps
+          .map(({ followUpId }) => followUpId)
+          .filter((followUpId) => followUpId.startsWith(`${runId}:`));
+        const summary = yield* showSummary(context, runId, {
+          suppressAutoDeliveredSubagentReport: answered.length === 0,
         });
+        return { ...summary, consumedFollowUps: answered };
+      }
       case 'view':
         return yield* showSummary(context, runId, {
           suppressAutoDeliveredSubagentReport: false,
@@ -301,17 +307,7 @@ function resolveRunId(
   context: RunToolContext,
   id: string,
 ): Effect.Effect<RunId, ToolError> {
-  if (id === 'current') {
-    const runId = context.runId;
-    if (!runId) {
-      return Effect.fail(
-        new ToolError(
-          'No active run. Use a specific run ID instead of "current".',
-        ),
-      );
-    }
-    return Effect.succeed(runId);
-  }
+  if (id === 'current') return Effect.succeed(context.runId);
   const result = RunIdSchema.safeParse(id);
   if (!result.success) {
     return Effect.fail(
@@ -328,10 +324,10 @@ const waitForRuns = Effect.fn('ExecutionsTool.waitForRuns')(function* (
   ids?: readonly RunId[] | null,
 ) {
   const runs = yield* Runs;
-  const candidateIds = ids?.length ? unique(ids) : runs.activeIds();
+  const candidates = ids?.length ? unique(ids) : runs.get().map((r) => r.runId);
   // Exclude runs that are already effectively done
   // (completed, inactive, or tool-use subagent WAITING with result delivered).
-  const pendingIds = candidateIds.filter(
+  const pendingIds = candidates.filter(
     (id) => !shouldSkipWait(context.session, id),
   );
   if (pendingIds.length === 0) return;
@@ -363,12 +359,11 @@ const showSummary = Effect.fn('ExecutionsTool.showSummary')(function* (
   const view = yield* session.view.read([runId]);
   const run = view.runs.get(runId);
 
-  // Every open run is in the view: its `run.start` is seq 1 of its aggregate
-  // (the database refuses anything else there), so no checkpoint exists
-  // without the row that lists the run, and a closed run reads no snapshot.
-  if (!run) {
-    return yield* Effect.fail(new ToolError(`Run not found: ${runId}`));
-  }
+  // An open run is in the view; one launched here may not have opened yet.
+  if (!run)
+    return yield* Effect.fail(
+      missingRun(session, runId, `Run not found: ${runId}`),
+    );
 
   // The report is a private record row, never part of the display fold.
   const report = yield* getRunRecords(session, runId).readReport();
@@ -391,14 +386,13 @@ const showSummary = Effect.fn('ExecutionsTool.showSummary')(function* (
   }
 
   // A report the caller already received as a follow-up is elided; a wait
-  // withdraws one still queued and shows it here. Only a live handle proves
+  // answers one still queued and shows it here. Only a live handle proves
   // the child-run loop delivered it (a background bash run included).
   const suppressReport =
     options.suppressAutoDeliveredSubagentReport === true &&
     run.identity.kind === 'agent' &&
-    context.runId !== undefined &&
     run.parentId === context.runId &&
-    (yield* Runs).getHandle(runId) !== undefined;
+    (yield* Runs).get(runId)?.handle !== undefined;
 
   lines.push(
     ...buildSummaryTailLines(
@@ -417,8 +411,6 @@ const handleKill = Effect.fn('ExecutionsTool.handleKill')(function* (
   context: RunToolContext,
   runId: RunId,
 ) {
-  const callerRunId = context.runId;
-
   if (context.runId === runId) {
     return yield* Effect.fail(
       new ToolError(`Cannot kill your own run (${runId}).`),
@@ -426,23 +418,23 @@ const handleKill = Effect.fn('ExecutionsTool.handleKill')(function* (
   }
 
   const runs = yield* Runs;
-  const target = runs.getHandle(runId);
-  if (!target) {
+  if (!runs.get(runId)?.handle) {
     return yield* Effect.fail(
       new ToolError(`Run ${runId} not found or already completed.`),
     );
   }
 
-  // Scope: can only kill your own children. Deny if no context.
-  if (!target.isOwnedBy(callerRunId)) {
+  // Only your own children, by the edge the rows leave (a detach may be in).
+  const owner = (yield* getRunRecords(context.session, runId).exists())
+    ? yield* persistedParentRunId(context.session, runId)
+    : (runs.get(runId)?.parent ?? null);
+  if (owner !== context.runId) {
     return yield* Effect.fail(
       new ToolError(`Cannot kill run ${runId}: not a child of this session.`),
     );
   }
 
-  // The permission gate: off, or a stored value that fails its schema,
-  // denies (the guard above has already narrowed `target` to an owned
-  // RunHandle).
+  // The permission gate: off, or a stored value that fails its schema, denies.
   const killDenial = yield* orchestratorKillDenial(context.session.roots);
   if (killDenial !== undefined) {
     return yield* Effect.fail(new ToolError(killDenial));
@@ -460,9 +452,7 @@ const handleKill = Effect.fn('ExecutionsTool.handleKill')(function* (
       Effect.andThen(Effect.sync(() => stop.accepted())),
     );
   }).pipe(Effect.uninterruptible);
-  if (success) {
-    return executed(`Run ${runId} terminated.`);
-  }
+  if (success) return executed(`Run ${runId} terminated.`);
   return yield* Effect.fail(
     new ToolError(`Run ${runId} could not be terminated.`),
   );

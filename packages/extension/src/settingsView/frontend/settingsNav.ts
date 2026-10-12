@@ -1,8 +1,7 @@
 /**
- * Settings navigation presentation layer: one strip of pages and, for a page
- * with two or more sections, a second strip of section sub-tabs. Pages and
- * sections are addressed by name — the names that travel over IPC as
- * `SET_TAB.tab` (`page` or `page/section`).
+ * Settings navigation: grouped pages in the desktop sidebar, a page strip
+ * in the extension, and section tabs beside the current page's content.
+ * Pages and sections retain their IPC addresses (`page` or `page/section`).
  */
 
 import type { TeXRAIconName } from '@shared/iconNames';
@@ -24,6 +23,7 @@ export interface SettingsNavEntry {
   readonly panel: SettingsTabPanelName;
   readonly icon: TeXRAIconName;
   readonly label: string;
+  readonly group: 'Preferences' | 'AI' | 'Tools';
   readonly description: string;
   /** Sub-tabs in display order; empty for a single-section page. */
   readonly sections: readonly SettingsSectionEntry[];
@@ -39,6 +39,7 @@ const SETTINGS_TAB_METADATA: {
   };
 } = {
   models: {
+    group: 'AI',
     icon: 'server',
     label: 'Models',
     description:
@@ -50,6 +51,7 @@ const SETTINGS_TAB_METADATA: {
     },
   },
   agents: {
+    group: 'AI',
     icon: 'robot',
     label: 'Agents',
     description: 'Choose the agents, teams, and skills your tasks can use.',
@@ -61,12 +63,14 @@ const SETTINGS_TAB_METADATA: {
     },
   },
   plugins: {
+    group: 'Tools',
     icon: 'cube',
     label: 'Plugins',
     description: PLUGINS_PAGE.description,
     sections: {},
   },
   latex: {
+    group: 'Tools',
     icon: 'file-code',
     label: 'LaTeX',
     description:
@@ -79,18 +83,26 @@ const SETTINGS_TAB_METADATA: {
     },
   },
   memory: {
+    group: 'AI',
     icon: 'database',
     label: 'Memory',
     description: 'Control and inspect the notes TeXRA keeps across tasks.',
     sections: {},
   },
   general: {
+    group: 'Preferences',
     icon: 'gear',
     label: 'General',
-    description: 'When agents ask first, privacy, and Git commit attribution.',
-    sections: { approval: 'Approval', privacy: 'Privacy', git: 'Git' },
+    description: 'Application behavior, privacy, and Git preferences.',
+    sections: {
+      appearance: 'Appearance',
+      approval: 'Approval',
+      privacy: 'Privacy',
+      git: 'Git',
+    },
   },
   shortcuts: {
+    group: 'Preferences',
     icon: 'code',
     label: 'Shortcuts',
     description: 'Customize desktop commands and resolve key conflicts.',

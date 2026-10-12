@@ -6,20 +6,82 @@
  * `superYolo` here is the delegated-work scoped bypass, not a TeXRA policy
  * value.
  */
+import { z } from 'zod';
+
+import type { TexraApprovalPolicy } from './approvalPolicy';
+import type { RunId, SessionEvent } from './schemas';
+
 export const APPROVAL_BYPASS_KINDS = ['bash', 'toolEdit', 'superYolo'] as const;
 
 export type ApprovalBypassKind = (typeof APPROVAL_BYPASS_KINDS)[number];
 
 /** A run's own value for one kind: a human's `on` or `off`, or `parent`,
  *  derived at an activation: follow the ancestry's human values, not its
- *  goals (`ApprovalPolicySnapshotSchema`). */
+ *  goals. */
 type OwnGrant = 'on' | 'off' | 'parent';
 
-/** A run's own approval grants, as its latest `approval.policy` row (or its
- *  `run.start`) records them. */
-export interface ApprovalGrants {
-  readonly own: Partial<Record<ApprovalBypassKind, OwnGrant>>;
-  readonly goal: readonly ApprovalBypassKind[];
+/** The policies a launch can narrow a run to: anything below Auto-approve,
+ *  which is never stricter than a project's policy. */
+export const APPROVAL_POLICY_LIMITS = ['never', 'ask'] as const;
+export type ApprovalPolicyLimit = (typeof APPROVAL_POLICY_LIMITS)[number];
+
+/**
+ * A run's own approval grants, the one record of them (its latest
+ * `approval.policy` row, else its `run.start`): what the run itself
+ * decided, never what it inherits. A kind the run decides nothing about
+ * defers to its parent's grants while the edge stands, which is read off
+ * the rows (`resolveBypass`), never stored here.
+ */
+export const ApprovalPolicySnapshotSchema = z.object({
+  /** A human's `on` or `off` per kind, or `parent`: derived when a resume
+   *  ended an ancestor's goal grant, following the ancestry's human values. */
+  own: z.partialRecord(
+    z.enum(APPROVAL_BYPASS_KINDS),
+    z.enum(['on', 'off', 'parent']),
+  ),
+  /** The kinds the run's own goal grants it, over its own values, until the
+   *  goal ends, a human decides the kind, or a resume ends the goal. */
+  goal: z.array(z.enum(APPROVAL_BYPASS_KINDS)).readonly(),
+  /** The most permissive policy the run and its descendants run under: a
+   *  launch that asked for a stricter policy than the project's narrows it
+   *  for this run only, never widened (`policyLimit`). */
+  limit: z.enum(APPROVAL_POLICY_LIMITS).optional(),
+});
+export type ApprovalGrants = z.infer<typeof ApprovalPolicySnapshotSchema>;
+
+const STRICTNESS: Readonly<Record<TexraApprovalPolicy, number>> = {
+  never: 0,
+  ask: 1,
+  yolo: 2,
+};
+
+/** The stricter of two policies (`never` < `ask` < `yolo`). */
+export function stricterPolicy(
+  a: TexraApprovalPolicy,
+  b: TexraApprovalPolicy,
+): TexraApprovalPolicy {
+  return STRICTNESS[a] <= STRICTNESS[b] ? a : b;
+}
+
+/** The strictest launch limit on a run's ancestry while its edges stand,
+ *  or undefined when no launch narrowed it. */
+export function policyLimit<Id>(
+  source: ApprovalGrantSource<Id>,
+  runId: Id,
+): ApprovalPolicyLimit | undefined {
+  const seen = new Set<Id>();
+  let limit: ApprovalPolicyLimit | undefined;
+  for (
+    let current: Id | null | undefined = runId;
+    current !== null && current !== undefined && !seen.has(current);
+    current = source.runs.get(current)?.parentId
+  ) {
+    seen.add(current);
+    const own = source.policy.get(current)?.limit;
+    // Block is the strictest limit; any other is Ask.
+    if (own !== undefined && limit !== 'never') limit = own;
+  }
+  return limit;
 }
 
 /** No grants of its own: every kind defers to the run's ancestry. */
@@ -73,6 +135,44 @@ export function runBypasses<Id>(
   };
 }
 
+/** The grants a child keeps once its parent edge goes (its detach, or a
+ *  birth a detach cut): what it inherits through `parentId` with `own` as
+ *  its rows name them, which a view that has not folded the child lacks,
+ *  its own goal grant kept. */
+export function grantsKept<Id>(
+  source: ApprovalGrantSource<Id>,
+  runId: Id,
+  parentId: Id,
+  own: ApprovalGrants,
+): ApprovalGrants {
+  const seeded: ApprovalGrantSource<Id> = {
+    runs: new Map(source.runs).set(runId, { parentId }),
+    policy: new Map(source.policy).set(runId, own),
+  };
+  return { ...inheritedGrants(seeded, runId), goal: own.goal };
+}
+
+/** {@link grantsKept} from a child's own rows, its `run.start` and newest
+ *  `approval.policy`; `undefined` for a child with no start (unborn). */
+export function grantsKeptFromRows(
+  source: ApprovalGrantSource<RunId>,
+  runId: RunId,
+  parentId: RunId,
+  rows: readonly SessionEvent[],
+): ApprovalGrants | undefined {
+  const start = rows.find((row) => row.type === 'run.start');
+  if (start?.type !== 'run.start') return undefined;
+  const own = rows.findLast((row) => row.type === 'approval.policy');
+  return grantsKept(
+    source,
+    runId,
+    start.parent?.id ?? parentId,
+    own?.type === 'approval.policy'
+      ? own.snapshot
+      : (start.approvalPolicy ?? NO_APPROVAL_GRANTS),
+  );
+}
+
 /** The human values a run's ancestry gives it, as grants of its own: what a
  *  run keeps when its edge goes, or a conversation's next round starts
  *  with. A goal's grant is not carried: it ends with its goal. */
@@ -95,5 +195,6 @@ export function inheritedGrants<Id>(
       break;
     }
   }
-  return { own, goal: [] };
+  const limit = policyLimit(source, runId);
+  return { own, goal: [], ...(limit !== undefined && { limit }) };
 }

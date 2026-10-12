@@ -29,18 +29,33 @@ const taskAgent: AgentSelectionItem = {
   enabled: true,
 };
 
-function renderAgentSelectionPanel(
+async function renderAgentSelectionPanel(
   agents: AgentSelectionItem[] = [taskAgent],
 ): Promise<AgentSelectionPanelElement> {
-  return mountComponent<AgentSelectionPanelElement>('agent-selection-panel', {
-    agents,
-  });
+  const panel = await mountComponent<AgentSelectionPanelElement>(
+    'agent-selection-panel',
+    { agents },
+  );
+  await settle(panel);
+  return panel;
+}
+
+function catalogOf(panel: AgentSelectionPanelElement) {
+  return panel.shadowRoot!.querySelector('settings-catalog')!;
+}
+
+async function settle(panel: AgentSelectionPanelElement): Promise<void> {
+  await catalogOf(panel).updateComplete;
+  await panel.updateComplete;
+  await catalogOf(panel).updateComplete;
 }
 
 function queryToggle(
   panel: AgentSelectionPanelElement,
 ): HTMLElement & { checked?: boolean } {
-  const toggle = panel.shadowRoot!.querySelector('.agent-list-item-toggle');
+  const toggle = catalogOf(panel).shadowRoot!.querySelector(
+    '.catalog-row-toggle',
+  );
   expect(toggle).not.toBeNull();
   return toggle as HTMLElement & { checked?: boolean };
 }
@@ -59,8 +74,8 @@ describe('AgentSelectionPanel', () => {
     const panel = await renderAgentSelectionPanel();
 
     let rowClicked = false;
-    panel
-      .shadowRoot!.querySelector('.agent-list-item')
+    catalogOf(panel)
+      .shadowRoot!.querySelector('.catalog-row')
       ?.addEventListener('click', () => {
         rowClicked = true;
       });
@@ -113,5 +128,42 @@ describe('AgentSelectionPanel', () => {
       [SETTINGS_VIEW_COMMANDS.DELETE_CUSTOM_AGENT, { agentName: 'summarize' }],
       [SETTINGS_VIEW_COMMANDS.KEEP_CUSTOM_AGENT, { agentName: 'summarize' }],
     ]);
+  });
+
+  it('filters by purpose and keeps details and keyboard selection within the results', async () => {
+    const panel = await renderAgentSelectionPanel([
+      { ...taskAgent, name: 'writer', description: 'Draft a manuscript' },
+      { ...taskAgent, name: 'reviewer', description: 'Review a manuscript' },
+      { ...taskAgent, name: 'coder', description: 'Implement code' },
+    ]);
+    const root = panel.shadowRoot!;
+    const catalogRoot = catalogOf(panel).shadowRoot!;
+    const search = catalogRoot.querySelector('wa-input') as HTMLElement & {
+      value: string;
+    };
+    search.value = 'manuscript';
+    search.dispatchEvent(new Event('input', { bubbles: true }));
+    await settle(panel);
+    expect(
+      [...catalogRoot.querySelectorAll('.catalog-row-name')].map(
+        (node) => node.textContent,
+      ),
+    ).toEqual(['writer', 'reviewer']);
+    catalogRoot
+      .querySelector('.catalog-row-select')
+      ?.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }),
+      );
+    await settle(panel);
+    expect(root.querySelector('#catalog-detail-name')?.textContent).toContain(
+      'reviewer',
+    );
+    search.value = 'no matching agent';
+    search.dispatchEvent(new Event('input', { bubbles: true }));
+    await settle(panel);
+    expect(catalogRoot.querySelectorAll('.catalog-row')).toHaveLength(0);
+    expect(catalogRoot.textContent).toContain('No matching agents');
+    expect(catalogRoot.querySelector('slot[name=detail]')).toBeNull();
+    expect(mocks.postMessage).not.toHaveBeenCalled();
   });
 });

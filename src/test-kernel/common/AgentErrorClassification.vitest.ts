@@ -5,15 +5,16 @@
  * an error that merely *says* "Missing API key" no longer classifies as one.
  */
 import { describe, expect, it } from 'vitest';
+import { ModelError } from '@texra-ai/llm';
 
 import {
   agentErrorPresentation,
   classifyAgentError,
 } from '@common/errors/agentErrorClassification';
-import {
-  attachContextWindowError,
-  attachMissingApiKeyError,
-} from '@common/errors/sdkError/errorMetadata';
+import { RouteUnavailable } from '@common/errors/agentErrors';
+
+const missingKey = (message: string) =>
+  new RouteUnavailable({ reason: 'missing-api-key', message });
 
 describe('classifyAgentError', () => {
   it('classifies a user abort ahead of every other kind', () => {
@@ -29,11 +30,10 @@ describe('classifyAgentError', () => {
     expect(classifyAgentError(err)).toBe('disk-full');
   });
 
-  it('finds the missing-api-key marker through a rewrapping cause chain', () => {
-    // The marker is attached at resolveRouteCredential; anything that
+  it('finds a missing key through a rewrapping cause chain', () => {
+    // Model access fails with it where the credential is read; anything that
     // rethrows on top of it must stay classifiable.
-    const inner = new Error('Missing API key for openai.');
-    attachMissingApiKeyError(inner);
+    const inner = missingKey('Missing API key for openai.');
     const outer = new Error('Failed to build the model client', {
       cause: inner,
     });
@@ -43,7 +43,7 @@ describe('classifyAgentError', () => {
 
   it('does not classify a message that merely mentions a missing API key', () => {
     // The deleted predicates matched these two strings anywhere in a message.
-    // Only the throw-site marker classifies now, so a model's prose, a tool
+    // Only the typed failure classifies now, so a model's prose, a tool
     // result, or a log line quoting the phrase cannot hijack the taxonomy.
     expect(
       classifyAgentError(
@@ -55,29 +55,28 @@ describe('classifyAgentError', () => {
     ).toBe('unexpected');
   });
 
-  it('classifies a TeXRA-internal context-window throw via its marker', () => {
-    const err = new Error(
-      'Token count of message exceeds context window: 5 > 3',
-    );
-    attachContextWindowError(err);
+  it('classifies an overflowed window by llm verdict', () => {
+    const err = new ModelError({
+      kind: 'context-overflow',
+      message: 'Token count of message exceeds context window: 5 > 3',
+    });
 
     expect(classifyAgentError(err)).toBe('context-window');
   });
 
   it('does not classify a message that merely mentions the context window', () => {
-    // A provider's overflow is the llm package's verdict, marked where the
-    // run reads it; prose quoting the phrase cannot hijack the taxonomy.
+    // A provider's overflow is the llm package's verdict; prose quoting the
+    // phrase cannot hijack the taxonomy.
     expect(
       classifyAgentError(new Error('maximum context length is 128000')),
     ).toBe('unexpected');
   });
 
-  it('prefers the credential marker over a context-window message', () => {
-    // A credential failure rewrapped by a caller whose wording happens to
-    // mention the context window must still route to the actionable
-    // set-your-key toast, not the "start a new session" one.
-    const err = new Error('maximum context length is 128000');
-    attachMissingApiKeyError(err);
+  it('prefers a missing key over a context-window message', () => {
+    // A credential failure whose wording happens to mention the context
+    // window must still route to the actionable set-your-key toast, not the
+    // "start a new session" one.
+    const err = missingKey('maximum context length is 128000');
 
     expect(classifyAgentError(err)).toBe('missing-api-key');
   });

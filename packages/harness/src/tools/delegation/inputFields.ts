@@ -10,7 +10,7 @@ import { Effect, FileSystem, Result } from 'effect';
 import { z } from 'zod';
 
 // Local imports
-import { resolveChildRunOutput } from '@agent/storage';
+import { resolveChildRunOutput } from '@agent/storage/childRunOutput';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { formatError } from '@common/errors';
 import type { RunId } from '@shared/schemas';

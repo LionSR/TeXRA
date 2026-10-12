@@ -12,11 +12,11 @@
  */
 import { z } from 'zod';
 
+import { ApprovalPolicySnapshotSchema } from '@shared/approvalBypassKind';
 import type { SessionTitleState } from '@shared/sessionTitle';
 
 import {
   AggregateIdSchema,
-  ApprovalPolicySnapshotSchema,
   ResumeBlockerSchema,
   CommitOrdinalSchema,
   ContextStateDataSchema,
@@ -46,6 +46,7 @@ import {
 import { isActivePhase, isTerminalOutcomePhase } from '@shared/runs/runStatus';
 import { RUN_STATUS_TONE } from '@shared/runs/runStatusDisplay';
 import type { TranscriptRow } from '@shared/transcript';
+import type { ReadonlyDeep } from './readonlyDeep';
 
 /** Which session (paper) a view is of: the session's storage root. */
 const SessionKeySchema = z.string().min(1);
@@ -53,15 +54,11 @@ const SessionKeySchema = z.string().min(1);
 /**
  * A run's transcript slice: what hosts paint, and nothing else. The fold
  * keeps its incremental indexes (row and group positions, the compaction
- * projection's working state, the measured live text per streaming row)
- * beside the value in a module-private map, so a host
- * can neither depend on nor mutate them. The slice value is replaced on every
- * change and `rows` and `taskGroups` are never written after the fold that
- * produced them returns (D5); hosts read, never write.
- *
- * The row and block elements are the shared renderers' own TypeScript
- * shapes (`transcriptRow.ts`, `compactionActivityProjection.ts`); they have no schema of their own yet, so the
- * element types are stated rather than re-declared here.
+ * projection's working state, the live text per streaming row) in a
+ * module-private map beside it, so a host can neither depend on nor mutate
+ * them. The slice is replaced on every change and never written after the
+ * fold that produced it returns (D5). Row and block elements are the shared
+ * renderers' own TypeScript shapes, stated here rather than re-declared.
  */
 const TranscriptViewSchema = z.object({
   /** The transcript fold's rows (`transcriptFold.ts`) plus the compaction
@@ -119,17 +116,17 @@ const RunViewSchema = z.object({
    *  step. Only a run whose loop steps carries one. */
   substate: RunSubstateSchema.nullable(),
   /**
-   * The terminal status once nothing can move it: for a run this process
-   * owns, after its `run.end` has folded (a user stop publishes CANCELLED
-   * while the loop still writes its closing rows); for any other run, the
-   * terminal status itself. Null while anything can still move.
-   * What licenses a host to paint an open group as interrupted and the
-   * session to release the run's sidecar record.
+   * The terminal status once nothing can move it (for an owned run, once
+   * its `run.end` folded, since a user stop publishes CANCELLED while the
+   * loop still writes its closing rows; else the terminal status itself),
+   * null before: what lets a host paint an open group as interrupted and
+   * the session release the run's sidecar record.
    */
   durableOutcome: RunOutcomeSchema.nullable(),
-  /** Banner copy beside the label: the local unreadable detail, else the
-   *  interrupted or held notice; null otherwise. */
+  /** Banner copy: unreadable, else interrupted or held, else `lost`. */
   statusDetail: z.string().nullable(),
+  /** The result its end lost (a `result-lost` error), whatever its outcome. */
+  lost: z.string().nullable(),
   // G4: one table (`runStatusDisplay`) spells both, through the status
   // and substate or the interrupted reading.
   statusLabel: z.string(),
@@ -264,14 +261,24 @@ export interface FollowUpHost {
  * Whether a run takes a follow-up at all, the one rule every host reads (it
  * decides whether the composer shows). A run with no follow-up support, a
  * terminal-backed run on a host that cannot drive one, and a run this process
- * may not act on take none; a run still going or waiting takes one, as does a
- * conversation not yet started (`ready`, nothing written).
+ * may not act on take none; a run still going or waiting takes one, as do a
+ * conversation not yet started (`ready`, nothing written) and a stopped native
+ * one with saved steps, which admission resumes from its history.
  */
-export function acceptsFollowUp(run: RunView, host: FollowUpHost): boolean {
+export function acceptsFollowUp(run: ReadRunView, host: FollowUpHost): boolean {
   if (run.followUpSupport === 'unsupported' || run.readOnly) return false;
   if (run.followUpSupport === 'terminalBacked' && !host.terminalBacked)
     return false;
   if (run.group === 'running' || run.group === 'waiting') return true;
+  if (
+    run.followUpSupport === 'nativeInteractive' &&
+    run.identity.kind === 'agent' &&
+    run.parentId === null &&
+    !run.documentTask &&
+    run.resumeBlocked === null &&
+    (run.turn !== null || run.forkPoint !== null)
+  )
+    return true;
   return run.status === 'ready' && run.lastTimestamp === null;
 }
 
@@ -285,7 +292,7 @@ export function acceptsFollowUp(run: RunView, host: FollowUpHost): boolean {
  */
 export type RequestAnswerability = 'answerable' | 'readOnly' | 'resume';
 export function requestAnswerability(
-  run: RunView,
+  run: ReadRunView,
   payload: Pick<PermissionPayload, 'kind'>,
 ): RequestAnswerability {
   if (run.readOnly) return 'readOnly';
@@ -294,20 +301,16 @@ export function requestAnswerability(
   return 'resume';
 }
 
-/** A pending request: which run is asking, the payload the UI shows (its
- *  `kind` is the request's kind), and the earlier request it continues (an
- *  inquiry's thread). The list is a set keyed by `requestId` (5.2): opened
- *  without decided. */
+/** A pending request: which run asks and the payload the UI shows. The list
+ *  is a set keyed by `requestId` (5.2): opened without decided. */
 const PendingRequestSchema = z.object({
   runId: RunIdSchema,
   requestId: z.string(),
   payload: PermissionPayloadSchema,
-  thread: z.string().nullable(),
 });
 
-/** A queued follow-up as a composer lists it: the row's key and the text it
- *  shows (`displayText`, else `text`). Per run a set keyed by `followUpId`
- *  (5.2): queued without consumed, in queue order. */
+/** A queued follow-up as a composer lists it (`displayText`, else `text`).
+ *  Per run a set keyed by `followUpId` (5.2): queued, unconsumed, in order. */
 const QueuedFollowUpViewSchema = z.object({
   followUpId: z.string(),
   text: z.string(),
@@ -347,20 +350,19 @@ const SessionViewSchema = z.object({
 });
 export type SessionView = z.infer<typeof SessionViewSchema>;
 
-type PendingRequest = SessionView['requests'][number];
+type ReadSessionView = ReadonlyDeep<SessionView>;
+type ReadRunView = ReadonlyDeep<RunView>;
 
-/** What in one session wants the user of this window. */
-export interface Attention {
-  /** The requests this window can answer (`requestAnswerability`), in fold
-   *  order: what every badge counts. */
-  readonly requests: readonly PendingRequest[];
-  /** Those `previous` could not answer: what brings a run forward or raises
-   *  a notification. Empty without a `previous`, since the first view a
-   *  host reads is history, not news. */
-  readonly arrived: readonly PendingRequest[];
+/** What wants this window: the requests it can answer, in fold order (the
+ *  badge), and those `previous` could not (none without it: history). */
+export interface Attention<Request> {
+  readonly requests: readonly Request[];
+  readonly arrived: readonly Request[];
 }
 
-function answerableRequests(view: SessionView): PendingRequest[] {
+function answerableRequests<View extends ReadSessionView>(
+  view: View,
+): View['requests'][number][] {
   return view.requests.filter((request) => {
     const run = view.runs.get(request.runId);
     return (
@@ -377,10 +379,10 @@ function answerableRequests(view: SessionView): PendingRequest[] {
  * A request on a run another process holds, or one waiting for its run's
  * resume, is shown on its card but asks nothing of this window.
  */
-export function attentionOf(
-  view: SessionView,
-  previous?: SessionView,
-): Attention {
+export function attentionOf<View extends ReadSessionView>(
+  view: View,
+  previous?: ReadSessionView,
+): Attention<View['requests'][number]> {
   const requests = answerableRequests(view);
   if (previous === undefined) return { requests, arrived: [] };
   const known = new Set(
@@ -393,7 +395,7 @@ export function attentionOf(
 }
 
 /** A live run working right now: not a conversation parked on its user. */
-export function isWorkingRun(run: RunView): boolean {
+export function isWorkingRun(run: ReadRunView): boolean {
   return isLiveRun(run) && isActivePhase(run.status);
 }
 
@@ -402,7 +404,7 @@ export function isWorkingRun(run: RunView): boolean {
  * fold and nothing else: a request this window can answer outranks a run
  * working right now; a conversation parked on its user is idle.
  */
-export function sessionActivity(view: SessionView): SessionTitleState {
+export function sessionActivity(view: ReadSessionView): SessionTitleState {
   if (answerableRequests(view).length > 0) return 'approval';
   for (const run of view.runs.values()) if (isWorkingRun(run)) return 'running';
   return 'idle';
@@ -433,10 +435,8 @@ export function emptySessionView(
   };
 }
 
-/** The read shape `descendantRuns` needs: satisfied by `SessionView`
- *  itself and by any deep-readonly projection of it (a `Map` structurally
- *  satisfies `ReadonlyMap`), so a consumer holding a readonly view never
- *  needs to re-derive the walk to keep its own copy. */
+/** The read shape `descendantRuns` needs: `SessionView` itself or any
+ *  deep-readonly projection of it (a `Map` satisfies `ReadonlyMap`). */
 type RunTopology = {
   readonly runs: ReadonlyMap<RunId, { readonly childIds: readonly RunId[] }>;
 };
@@ -453,9 +453,7 @@ export function descendantRuns(
 ): readonly RunId[] {
   if (rootRunId === undefined) return [];
   const out: RunId[] = [];
-  // An index cursor over an append-only queue keeps this linear in the
-  // topology's size; `Array.shift()` would re-index the remainder on every
-  // pop and make a large fan-out's walk quadratic.
+  // An index cursor, not `Array.shift()`, keeps a large fan-out's walk linear.
   const pending = [rootRunId];
   const seen = new Set<RunId>();
   for (let cursor = 0; cursor < pending.length; cursor++) {

@@ -16,7 +16,6 @@ import {
 } from 'effect';
 import * as ChildProcess from 'effect/process/ChildProcess';
 
-import type { ApiKeyRouteCredential } from '@agent/runtime/modelRoutes';
 import { getSdkErrorMessage } from '@common/errors/sdkError/providerErrorFormat';
 import { withLogChannel } from '@logger/effectLog';
 import {
@@ -242,7 +241,7 @@ export function validateRecordingFile(
  */
 export function transcribeRecording(
   recordingPath: string,
-  credential: ApiKeyRouteCredential,
+  credential: { readonly bearer: string; readonly endpoint: string },
 ): Effect.Effect<string, AudioRecorderError> {
   return Effect.tryPromise({
     // The transcription endpoint is an OpenAI SDK operation the llm package
@@ -252,7 +251,7 @@ export function transcribeRecording(
     try: async (signal) => {
       const { default: OpenAI } = await import('openai');
       const client = new OpenAI({
-        apiKey: credential.apiKey,
+        apiKey: credential.bearer,
         baseURL: credential.endpoint,
       });
       const result = await client.audio.transcriptions.create(

@@ -13,8 +13,5 @@ export {
   pauseGoal,
   retargetGoal,
   startGoal,
-} from './goalRows';
-export {
-  setGoalSessionAutoApproval,
   type GoalAutoApprovalScope,
-} from './goalAutoApproval';
+} from './goalRows';

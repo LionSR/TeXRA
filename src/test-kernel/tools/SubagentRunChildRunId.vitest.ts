@@ -41,10 +41,6 @@ vi.mock('@agent/runtime/childRunLoop', () => ({
   startChildRunLoop: mocks.startChildRunLoop,
 }));
 
-vi.mock('@agent/storage', () => ({
-  registerRun: mocks.registerRun,
-}));
-
 // `launchDetachedSubagent` registers through `registerRun`; route the spy through it.
 vi.mock('@agent/storage/runLifecycle', async (importOriginal) => {
   const actual =
@@ -65,19 +61,21 @@ describe('launchDetachedSubagent child run launch', () => {
   } as never;
 
   const roots = createFakeWorkspaceRoots();
+  const fixtureRequests = {
+    nextId: (prefix: string) => prefix,
+    open: () => Effect.die(new Error('This fixture opens no request.')),
+    post: () => Effect.die(new Error('This fixture posts no request.')),
+    present: () => Effect.void,
+  };
   const parent: RunToolCall = {
     callId: 'parent-call',
     env: { roots },
     emit: () => undefined,
-    readFiles: new Set<string>(),
     responseId: 'parent-response',
     instruction: undefined,
     attempt: 1,
     logId: 'parent-card',
-    requests: {
-      nextId: (prefix: string) => prefix,
-      open: () => Effect.die(new Error('This fixture opens no request.')),
-    },
+    requests: fixtureRequests,
     run: {
       runId: 'parent-exec' as RunId,
       session: { tag: 'parent-session' } as never,

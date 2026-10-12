@@ -244,11 +244,9 @@ export function formatSubagentError(
  * prose; how the run ended is the terminal fact's to say, not this record's.
  */
 export function buildSubagentResultMeta(
-  agentName: string,
   output: RunEndOutput,
-  wallTimeMs: number,
 ): SubagentResultMeta {
-  return { producer: 'subagent', agentName, wallTimeMs, output };
+  return { producer: 'subagent', output };
 }
 
 // ============================================================================
@@ -439,16 +437,10 @@ export const buildSubagentResult = Effect.fn(
   'subagentResults.buildSubagentResult',
 )(function* (
   runId: RunId,
-  agentName: string,
   output: RunEndOutput,
-  options: {
-    readonly startedAt: number;
-    /** Storage root of the launching session: where this run's diffs land. */
-    readonly storageRoot: string;
-  },
+  /** Storage root of the launching session: where this run's diffs land. */
+  storageRoot: string,
 ): Effect.fn.Return<SubagentResultMeta, never, FileSystem.FileSystem> {
-  // The run's wall time, not the diff computation that follows it.
-  const wallTimeMs = Date.now() - options.startedAt;
-  const enriched = yield* withWorkflowDiffs(options.storageRoot, runId, output);
-  return buildSubagentResultMeta(agentName, enriched, wallTimeMs);
+  const enriched = yield* withWorkflowDiffs(storageRoot, runId, output);
+  return buildSubagentResultMeta(enriched);
 });

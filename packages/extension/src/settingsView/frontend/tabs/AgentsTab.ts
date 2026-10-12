@@ -5,6 +5,9 @@
  */
 
 import '@awesome.me/webawesome/dist/components/tag/tag.js';
+import '@awesome.me/webawesome/dist/components/details/details.js';
+import '@awesome.me/webawesome/dist/components/dropdown/dropdown.js';
+import '@awesome.me/webawesome/dist/components/dropdown-item/dropdown-item.js';
 import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 
@@ -35,10 +38,7 @@ import {
   renderLabeledActionButton,
 } from '@ui/wa/actionButtons';
 import { renderSettingsBanner } from '@ui/wa/settingsBanner';
-import {
-  renderSettingsNumberRow,
-  renderSettingsSectionHeading,
-} from '@ui/wa/settingsSection';
+import { renderSettingsNumberRow } from '@ui/wa/settingsSection';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import { pluralize } from '@utils/text/stringUtils';
 import {
@@ -85,13 +85,9 @@ export class AgentsTab extends LitElement {
         margin-top: var(--wa-space-2xs);
       }
 
-      .agent-list {
-        margin-top: var(--wa-space-l);
-      }
-
-      .agent-list agent-selection-panel {
+      .agent-folder {
         display: block;
-        min-height: 22rem;
+        margin-block-start: var(--wa-space-s);
       }
 
       ::slotted([slot='teams']),
@@ -147,7 +143,7 @@ export class AgentsTab extends LitElement {
       icon: 'triangle-exclamation',
       title: `${issues.length} custom ${pluralize(issues.length, 'agent')} could not be loaded`,
       description:
-        'These files are in the folder above. TeXRA skipped them; each entry below gives the reason.',
+        'TeXRA skipped these files in your custom agents folder. Each entry gives the reason.',
       detail: html`
         <ul class="custom-agent-issues">
           ${issues.map(
@@ -163,32 +159,20 @@ export class AgentsTab extends LitElement {
   }
 
   private renderAgentList(): TemplateResult {
-    const actions = html`${renderLabeledActionButton({
-      icon: 'file-circle-plus',
-      text: 'New chat agent',
-      kind: 'primary',
-      appearance: 'filled',
-      onClick: () => this.handleCreateAgent(false),
-    })}
-    ${renderLabeledActionButton({
-      icon: 'file-circle-plus',
-      text: 'New document task',
-      kind: 'secondary',
-      appearance: 'outlined',
-      onClick: () => this.handleCreateAgent(true),
-    })}`;
     return html`
-      <section class="agent-list" aria-labelledby="agents-heading">
-        ${renderSettingsSectionHeading({
-          title: `Agents (${this.agents.length})`,
-          description:
-            'Every agent can chat. An agent marked "document task" can also revise the files you select, in passes.',
-          icon: 'wand-magic-sparkles',
-          actions,
-          id: 'agents-heading',
-        })}
-        <agent-selection-panel .agents=${this.agents}></agent-selection-panel>
-      </section>
+      <agent-selection-panel .agents=${this.agents}>
+        <wa-dropdown slot="actions">
+          <wa-button slot="trigger" variant="brand" size="s">
+            ${waIcon('plus', { slot: 'start' })}New agent
+          </wa-button>
+          <wa-dropdown-item @click=${() => this.handleCreateAgent(false)}>
+            ${waIcon('comment', { slot: 'icon' })}Chat agent
+          </wa-dropdown-item>
+          <wa-dropdown-item @click=${() => this.handleCreateAgent(true)}>
+            ${waIcon('file-lines', { slot: 'icon' })}Document task agent
+          </wa-dropdown-item>
+        </wa-dropdown>
+      </agent-selection-panel>
     `;
   }
 
@@ -217,68 +201,59 @@ export class AgentsTab extends LitElement {
   }
 
   private renderLibrary(): TemplateResult {
-    // Point to the creator agent only where the selector offers it.
-    const creatorShown = this.agents.some(
-      (agent) => agent.name === 'creator' && agent.enabled,
-    );
     return html`
-      ${renderSettingsSectionHeading({
-        title: 'Agent library',
-        description: `Choose which agents appear in the agent selector, or create your own from a template.${
-          creatorShown
-            ? ' To have one drafted for you, run the creator agent.'
-            : ''
-        }`,
-        icon: 'robot',
-      })}
-      <div class="settings-section">
-        <div class="settings-row">
-          <div class="settings-row-text">
-            <span class="settings-row-label">
-              ${waIcon('folder')} Custom agents
+      ${this.renderAgentList()} ${this.renderCustomAgentIssues()}
+      <wa-details
+        class="collapsible-quiet agent-folder"
+        summary="Custom agent folder"
+      >
+        <div class="settings-section">
+          <div class="settings-row">
+            <div class="settings-row-text">
+              <span class="settings-row-label">
+                ${waIcon('folder')} Custom agents
+                ${
+                  this.customAgentDirIsDefault
+                    ? html`<wa-tag variant="neutral" size="s">Default</wa-tag>`
+                    : nothing
+                }
+              </span>
+              <span
+                class="settings-row-help agents-dir-path"
+                title=${this.customAgentDir}
+              >
+                <bdi dir="auto">${this.customAgentDir}</bdi>
+              </span>
+            </div>
+            <div class="settings-row-control action-button-group">
+              ${renderIconActionButton({
+                icon: 'folder-open',
+                label: 'Open custom agents folder',
+                onClick: () => this.handleOpenFolder(),
+              })}
+              ${renderLabeledActionButton({
+                text: 'Change folder',
+                label: 'Change custom agents folder',
+                kind: 'secondary',
+                appearance: 'outlined',
+                onClick: () => this.handleChangeCustomDir(),
+              })}
               ${
                 this.customAgentDirIsDefault
-                  ? html`<wa-tag variant="neutral" size="s">Default</wa-tag>`
-                  : nothing
+                  ? nothing
+                  : renderLabeledActionButton({
+                      icon: 'arrow-rotate-left',
+                      text: 'Use default folder',
+                      label: 'Reset custom agents folder',
+                      kind: 'secondary',
+                      appearance: 'outlined',
+                      onClick: () => this.handleResetCustomDir(),
+                    })
               }
-            </span>
-            <span
-              class="settings-row-help agents-dir-path"
-              title=${this.customAgentDir}
-            >
-              <bdi dir="auto">${this.customAgentDir}</bdi>
-            </span>
-          </div>
-          <div class="settings-row-control action-button-group">
-            ${renderIconActionButton({
-              icon: 'folder-open',
-              label: 'Open custom agents folder',
-              onClick: () => this.handleOpenFolder(),
-            })}
-            ${renderLabeledActionButton({
-              text: 'Change folder',
-              label: 'Change custom agents folder',
-              kind: 'secondary',
-              appearance: 'outlined',
-              onClick: () => this.handleChangeCustomDir(),
-            })}
-            ${
-              this.customAgentDirIsDefault
-                ? nothing
-                : renderLabeledActionButton({
-                    icon: 'arrow-rotate-left',
-                    text: 'Use default folder',
-                    label: 'Reset custom agents folder',
-                    kind: 'secondary',
-                    appearance: 'outlined',
-                    onClick: () => this.handleResetCustomDir(),
-                  })
-            }
+            </div>
           </div>
         </div>
-        ${this.renderCustomAgentIssues()}
-      </div>
-      ${this.renderAgentList()}
+      </wa-details>
     `;
   }
 

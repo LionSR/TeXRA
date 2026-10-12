@@ -22,8 +22,8 @@ import {
 } from '@latex/acceptedFileTarget';
 import { withLogChannel } from '@logger/effectLog';
 import type { AcceptCopyMeta, FileLocation } from '@shared/schemas';
-import { workflowOutputCopyStem } from '@shared/constants/workflowOutput';
 import { DIFF_REGISTRATION_DELAY_MS } from '@texra/shared/constants/latexTiming';
+import { workflowOutputCopyStem } from '@texra/utils/files/outputFileUtils';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 const CHANNEL = 'CompareCommands';

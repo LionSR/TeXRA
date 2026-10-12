@@ -78,10 +78,77 @@ test('first launch shows a usable launcher chrome', async () => {
   // The conversation view renders the launcher or the no-workspace empty
   // state — both are valid first-launch outcomes. The audit doc tracks which
   // one each user actually hits.
-  const mainSection = launched.page.locator(
-    '.shell-conversation-pane[data-pane="conversation"]',
-  );
+  const mainSection = launched.page.locator('.shell-dock-agent');
   await expect(mainSection).toBeVisible();
+});
+
+test('approval menu shows the current policy and keeps selection marks inside its rows', async () => {
+  const { page, app } = launched;
+  for (const [value, label] of [
+    ['never', 'Block'],
+    ['ask', 'Ask'],
+    ['yolo', 'Auto-approve'],
+  ] as const) {
+    await setSettingsTab(launched, 'general');
+    await page.locator('[data-section="approval"]').click();
+    const policy = page.locator('#texra-approval-policy');
+    await policy.locator(`wa-radio[value="${value}"]`).click();
+    await expect(policy).toHaveJSProperty('value', value);
+    await page.locator('.desktop-settings-close').click();
+    await showLauncher(launched);
+    const trigger = page.locator('#composer-approval');
+    await expect(trigger).toContainText(label);
+    await trigger.click();
+    const selected = page.locator(
+      'session-composer wa-dropdown-item[value="approval:policy"]',
+    );
+    await expect(selected).toBeVisible();
+    await expect(selected).toHaveJSProperty('checked', true);
+    await expect(selected).toContainText(`Use settings · ${label}`);
+    const contained = await selected.evaluate((item) => {
+      const check = item.shadowRoot!.querySelector('#check')!;
+      const row = item.getBoundingClientRect();
+      const mark = check.getBoundingClientRect();
+      return mark.left >= row.left && mark.right <= row.right;
+    });
+    expect(contained).toBe(true);
+    await expect(
+      page.locator('wa-dropdown-item[value="approval:autoApprove"]'),
+    ).toHaveJSProperty('disabled', value === 'never');
+    await page.screenshot({
+      path: test.info().outputPath(`approval-${value}.png`),
+    });
+    await page.keyboard.press('Escape');
+  }
+  // The same shared gutter applies to other checkbox menus at narrow widths.
+  await app.evaluate(({ BrowserWindow }) => {
+    BrowserWindow.getAllWindows()[0]!.setContentSize(760, 700);
+  });
+  await page.locator('#composer-agent').click();
+  const selectedAgent = page
+    .locator('session-composer')
+    .getByRole('menuitemcheckbox', { name: 'orchestrator', exact: true });
+  await expect(selectedAgent).toBeVisible();
+  await expect(selectedAgent).toHaveJSProperty('checked', true);
+  expect(
+    await selectedAgent.evaluate((item) => {
+      const row = item.getBoundingClientRect();
+      const mark = item
+        .shadowRoot!.querySelector('#check')!
+        .getBoundingClientRect();
+      return mark.left >= row.left && mark.right <= row.right;
+    }),
+  ).toBe(true);
+  await selectedAgent.click();
+  await page.locator('#composer-agent').click();
+  await expect(selectedAgent).toHaveJSProperty('checked', true);
+  await page.screenshot({
+    path: test.info().outputPath('agent-menu-narrow.png'),
+  });
+  await page.keyboard.press('Escape');
+  await app.evaluate(({ BrowserWindow }) => {
+    BrowserWindow.getAllWindows()[0]!.setContentSize(1280, 800);
+  });
 });
 
 /**
@@ -215,13 +282,13 @@ test('desktop:showDiff opens the in-app Review workbench', async () => {
 
   await launched.page.evaluate((message) => {
     const session = document.querySelector<HTMLElement>(
-      '.shell-launcher-surface',
+      '.shell-project-workbench:not([hidden])',
     )?.dataset.session;
     window.postMessage({ ...message, session }, '*');
   }, payload);
 
   const reviewTab = launched.page.locator(
-    '.shell-workbench-tab[data-kind="review"][data-active="true"]',
+    '.shell-dock-tab[data-kind="review"]',
   );
   await expect(reviewTab).toBeVisible();
   const review = launched.page.locator('.desktop-review-pane');
@@ -264,14 +331,15 @@ test('desktop:showDiff opens the in-app Review workbench', async () => {
       {
         command: 'desktop:closeDiff',
         previewId: 'a-superseded-preview',
-        session: document.querySelector<HTMLElement>('.shell-launcher-surface')
-          ?.dataset.session,
+        session: document.querySelector<HTMLElement>(
+          '.shell-project-workbench:not([hidden])',
+        )?.dataset.session,
       },
       '*',
     );
   });
   await expect(
-    launched.page.locator('.shell-workbench-tab[data-kind="review"]'),
+    launched.page.locator('.shell-dock-tab[data-kind="review"]'),
   ).toHaveCount(1);
 
   // Close via desktop:closeDiff naming the diff it opened — the Review tab
@@ -281,14 +349,15 @@ test('desktop:showDiff opens the in-app Review workbench', async () => {
       {
         command: 'desktop:closeDiff',
         previewId: 'trajectory-review',
-        session: document.querySelector<HTMLElement>('.shell-launcher-surface')
-          ?.dataset.session,
+        session: document.querySelector<HTMLElement>(
+          '.shell-project-workbench:not([hidden])',
+        )?.dataset.session,
       },
       '*',
     );
   });
   await expect(
-    launched.page.locator('.shell-workbench-tab[data-kind="review"]'),
+    launched.page.locator('.shell-dock-tab[data-kind="review"]'),
   ).toHaveCount(0);
 });
 
@@ -297,9 +366,9 @@ test('desktop:showPdf opens and closes an in-app PDF workbench', async () => {
   const { page } = launched;
   const pdfUrl = 'file:///tmp/texra-trajectory/output.pdf';
   const session = await page
-    .locator('.shell-launcher-surface')
+    .locator('.shell-project-workbench:not([hidden])')
     .getAttribute('data-session');
-  const pdfTab = page.locator('.shell-workbench-tab[data-kind="pdf"]');
+  const pdfTab = page.locator('.shell-dock-tab[data-kind="pdf"]');
   const frame = page.locator('iframe.shell-workbench-pdf-frame');
 
   await page.evaluate(
@@ -317,7 +386,10 @@ test('desktop:showPdf opens and closes an in-app PDF workbench', async () => {
     { session, pdfUrl },
   );
   await expect(pdfTab).toBeVisible();
-  await expect(pdfTab).toHaveAttribute('data-active', 'true');
+  await expect(pdfTab.locator('xpath=..')).toHaveAttribute(
+    'aria-selected',
+    'true',
+  );
   await expect(pdfTab).toContainText('output.pdf');
   await expect(frame).toBeVisible();
   await expect(frame).toHaveAttribute('src', pdfUrl);
@@ -343,7 +415,7 @@ test('desktop:showPdf opens and closes an in-app PDF workbench', async () => {
   await expect(frame).toHaveAttribute('src', pdfUrl);
 
   // A PDF is a workbench tab, closed from its own tab like any other.
-  await pdfTab.locator('.shell-workbench-tab-close').click();
+  await pdfTab.locator('.shell-dock-tab-close wa-button').click();
   await expect(pdfTab).toHaveCount(0);
   await expect(frame).toHaveCount(0);
 });

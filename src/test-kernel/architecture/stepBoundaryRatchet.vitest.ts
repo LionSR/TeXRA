@@ -17,15 +17,14 @@ import {
  * Invariant 7 of the core concepts: a run's tools, continuation and prompt
  * contributions change only at a step boundary, and the change is recorded
  * there. The step (`packages/harness/src/agent/runtime/loop/step.ts`) is the one module that
- * applies the plugin switches to the live catalog, pins its tool generation
- * and the plugins on (whose continuations and prompt sections it reads),
- * installs the run's current step, and authors the
+ * reads the plugin switches and pins the tools they give in its session's
+ * catalog, with the plugins on (whose continuations and prompt sections it
+ * reads), installs the run's current step, and authors the
  * `tools.offered` row. Anything else doing one of these would change a
  * run's tools or continuation between steps, or change them unrecorded.
  * Failure modes guarded:
  *
- * - a host or tool pins the catalog, or applies the switches to it, and
- *   hands a run tools no step offered;
+ * - a host or tool pins the catalog and hands a run tools no step offered;
  * - a loop reads a continuation no step pinned, so goal mode switched off
  *   still opens turns, or switched on opens them unrecorded;
  * - a prompt builder reads the pinned sections itself, so a plugin switched
@@ -42,17 +41,13 @@ const RULES: readonly {
   readonly pattern: RegExp;
   /** Files allowed to match, besides the step. */
   readonly also: readonly string[];
+  /** The step itself does not match (a door only others may not use). */
+  readonly notInStep?: true;
 }[] = [
   {
-    what: 'applies the plugin switches and pins a tool generation and the plugins on',
-    pattern: /\bregistry\.pin\b|\bpinSwitched\(/,
-    // The catalog itself, which serializes the switch read with the pin, and
-    // the process's plugin catalog layer, which applies a switch flipped in this
-    // process to the catalog at once (it pins nothing past the call).
-    also: [
-      'packages/harness/src/tools/liveTools.ts',
-      'packages/harness/src/tools/pluginCatalog.ts',
-    ],
+    what: 'reads the plugin switches and pins the tools they give and the plugins on',
+    pattern: /\.tools\s*\.pin\(/,
+    also: [],
   },
   {
     what: "writes a run's current step",
@@ -66,16 +61,15 @@ const RULES: readonly {
     also: [],
   },
   {
-    what: 'reads the live catalog service',
-    pattern: /yield\*\s*\(?\s*(?:yield\*\s*)?LiveTools\b/,
-    // The run's loaded-plugin hold (MCP servers for its life); the VS Code
-    // Copilot tools, which follow the current generation; the plugin
-    // catalog's switch follower (above); the shutdown protocol's plugin
-    // drain; the settings Git tab's read of the GitHub plugin's process
-    // services. None offers a run anything or pins a generation.
+    what: 'reads the tool catalog service',
+    pattern: /yield\*\s*\(?\s*(?:yield\*\s*)?ToolCatalog\b/,
+    notInStep: true,
+    // The session layer, which builds each session's catalog and runs the
+    // shutdown protocol's plugin drain; the VS Code Copilot tools, which
+    // follow the built-in tools as the switches stand; the settings Git
+    // tab's read of the GitHub plugin's process services. None offers a run
+    // anything or pins a step's tools.
     also: [
-      'packages/harness/src/agent/runtime/run/AgentRun.ts',
-      'packages/harness/src/tools/pluginCatalog.ts',
       'packages/harness/src/controllers/session/sessionLayer.ts',
       'packages/texra/src/controllers/settingsView/githubSubscriptions.ts',
       // The availability probes, which run each plugin's probe with its
@@ -107,9 +101,9 @@ describe('step boundary (invariant 7)', () => {
 
   it('finds each rule in the step itself', () => {
     const step = source(STEP);
-    const missing = RULES.filter(({ pattern }) => !pattern.test(step)).map(
-      ({ what }) => what,
-    );
+    const missing = RULES.filter(
+      ({ pattern, notInStep }) => !notInStep && !pattern.test(step),
+    ).map(({ what }) => what);
     expect(missing).toEqual([]);
   });
 

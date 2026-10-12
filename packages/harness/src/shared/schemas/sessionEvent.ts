@@ -24,7 +24,7 @@ import { z } from 'zod';
 
 import { parseJsonWith } from '@common/parsing/safeParseJson';
 
-import { APPROVAL_BYPASS_KINDS } from '@shared/approvalBypassKind';
+import { ApprovalPolicySnapshotSchema } from '@shared/approvalBypassKind';
 import { JsonValueSchema } from './jsonValue';
 import {
   RunEndRowSchema,
@@ -167,22 +167,6 @@ const SeqSchema = z.int().positive();
 export const CommitOrdinalSchema = z.int().nonnegative();
 export type CommitOrdinal = z.infer<typeof CommitOrdinalSchema>;
 
-const OWN_GRANT = z.enum(['on', 'off', 'parent']);
-/**
- * A run's approval grants after a change, the one record of them: what the
- * run itself decided, never what it inherits. A kind the run decides
- * nothing about defers to its parent's grants while the edge stands, which
- * is read off the rows (`resolveBypass`), never stored here.
- */
-export const ApprovalPolicySnapshotSchema = z.object({
-  /** A human's `on` or `off` per kind, or `parent`: derived when a resume
-   *  ended an ancestor's goal grant, following the ancestry's human values. */
-  own: z.partialRecord(z.enum(APPROVAL_BYPASS_KINDS), OWN_GRANT),
-  /** The kinds the run's own goal grants it, over its own values, until the
-   *  goal ends, a human decides the kind, or a resume ends the goal. */
-  goal: z.array(z.enum(APPROVAL_BYPASS_KINDS)).readonly(),
-});
-
 /**
  * The envelope every durable arm rides (contract C1). A run-scoped fact's
  * aggregate is its run; a plugin's own aggregate is the plugin's key
@@ -293,7 +277,7 @@ const RunRemovedDraftSchema = RunRemovedEventSchema.omit({
   runIds: true,
 });
 
-/** A row of a plugin's own kind (`@tools/pluginArms`): core folds `value`
+/** A row of a plugin's own kind (`Plugin.arms`): core folds `value`
  *  latest per (plugin, kind) and never reads it; the plugin decodes it. A
  *  run's is `RunView.facts`; a plugin aggregate's is `SessionView.pluginFacts`,
  *  under its `parent` run (whose deletion collects it) or none. */
@@ -346,10 +330,14 @@ const DisplaySessionEventDraftSchema = z.discriminatedUnion('type', [
    * rests it with no `run.end`, keeping the `resumeId` a tool call continues
    * it by. A listing key of its own (`listingTypeOf`'s default): a cold
    * listing that dropped it would paint every parked child as busy.
+   * `heldFor`: the delivery id of a result its parent refused while another
+   * process held it, delivered when next admitted; `ends`: that turn's end.
    */
   durable('child.park', {
     phase: z.enum(['parked', 'resumed', 'paused']),
     resumeId: z.string().optional(),
+    heldFor: z.string().min(1).optional(),
+    ends: z.enum(['completed', 'failed']).optional(),
   }),
   RunRemovedDraftSchema,
   /** A run's title, and who gave it: the model's summary, or the user's
@@ -380,13 +368,11 @@ const DisplaySessionEventDraftSchema = z.discriminatedUnion('type', [
   durable('followup.consumed', { followUpId: z.string().min(1) }),
   /**
    * A run asking a person (one run model, section 3.7): what the UI shows,
-   * never host handles. `thread` names an earlier request this one
-   * continues (an inquiry's multi-turn). Pending is opened without decided.
+   * never host handles. Pending is opened without decided.
    */
   durable('request.opened', {
     requestId: z.string().min(1),
     payload: PermissionPayloadSchema,
-    thread: z.string().min(1).nullish(),
   }),
   /**
    * The answer, whatever surface gave it and whatever its provenance. The
@@ -443,17 +429,13 @@ const RunHistoryEventDraftSchema = z.discriminatedUnion('type', [
    * The key is structural, (run, attempt, turn index), so an accepted turn
    * always folds to one identity and a later attempt reusing the run id
    * never collides with it. `accepted` without `settled` is the active
-   * turn; the latest `settled` is the last turn whose delivery ran. Its
-   * `delivery` names the parent and follow-up id of the `run.report` just
-   * before it in its batch: the parent's row is that report's relay.
+   * turn; the latest `settled` is the last turn whose delivery ran: its
+   * parent's `followup.queued` commits in the same transaction.
    */
   durable('child.turn', {
     attemptId: z.string().min(1),
     turnIndex: z.int().positive(),
     phase: z.enum(['accepted', 'settled']),
-    delivery: z
-      .object({ to: RunIdSchema, followUpId: z.string().min(1) })
-      .optional(),
   }),
 ]);
 export const SessionEventDraftSchema = z.discriminatedUnion('type', [

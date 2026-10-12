@@ -1,432 +1,269 @@
-/*
- * Conversation-first desktop shell.
- *
- * The stable hierarchy is sidebar → task → optional workbench. The task never
- * becomes a tab and never disappears behind an editor: artifacts open beside
- * it, matching the reference's chat + code layout.
- */
-
+/* Desktop composition: a title bar, project/history rail, agent and workspace.
+   Controls and typography use the shared skins; this sheet only owns layout. */
 :root {
-  --shell-frame-header-height: 48px;
-  --shell-frame-icon-box: var(--control-size-s);
-  --shell-frame-icon-size: var(--font-size-icon-sm);
-  --shell-workbench-tab-height: var(--shell-frame-header-height);
-  --shell-sidebar-default-width: 288px;
-  /* Traffic lights end near 70px with the custom hidden-inset position. Keep
-     native controls plus a full compact-control gap clear of app content. */
-  --macos-titlebar-safe-inset: 92px;
+  --shell-frame-header-height: 44px;
+  --shell-frame-icon-size: 14px;
+  --shell-frame-icon-box: 24px;
+  --shell-workbench-tab-height: 38px;
+  --macos-titlebar-safe-inset: 96px;
 }
-
-:is(.shell-frame, .shell-main-split, .shell-bottom-split) {
-  --divider-width: 1px;
-  --divider-hit-area: 12px;
-}
-
-.shell-frame {
-  --min: 220px;
-  --max: min(480px, 42vw);
-  position: relative;
+.desktop-app {
   display: grid;
-  width: 100vw;
+  grid-template-rows: 44px minmax(0, 1fr);
   height: 100vh;
   overflow: hidden;
-  background: var(--wa-color-surface-default);
-  color: var(--wa-color-text-normal);
 }
-
-.shell-frame-collapsed {
-  display: block;
-}
-
-.shell-frame::part(panel),
-.shell-main-split::part(panel),
-.shell-bottom-split::part(panel) {
-  min-width: 0;
-  min-height: 0;
-  overflow: hidden;
-}
-
-.shell-frame::part(divider),
-.shell-main-split::part(divider),
-.shell-bottom-split::part(divider) {
-  background: var(--wa-color-surface-border);
-  transition: background-color var(--transition-fast);
-}
-
-.shell-frame::part(divider):hover,
-.shell-frame::part(divider):focus-visible,
-.shell-main-split::part(divider):hover,
-.shell-main-split::part(divider):focus-visible,
-.shell-bottom-split::part(divider):hover,
-.shell-bottom-split::part(divider):focus-visible {
-  background: var(--wa-color-focus);
-}
-
-.shell-frame-main-panel,
-.shell-main-panel,
-.shell-workbench-panel,
-.shell-bottom-workbench-panel {
-  width: 100%;
-  height: 100%;
-  min-width: 0;
-  min-height: 0;
-  overflow: hidden;
-}
-
-.shell-main-split {
-  --min: 380px;
-  --max: min(960px, calc(100% - 380px));
-  display: grid;
-  width: 100%;
-  height: 100%;
-}
-
-.shell-bottom-split {
-  --min: 180px;
-  --max: min(560px, 62%);
-  display: grid;
-  width: 100%;
-  height: 100%;
-  min-width: 0;
-  min-height: 0;
-}
-
-:is(.shell-split-handle, .shell-bottom-split-handle) {
-  width: 18px;
-  height: 18px;
-  color: var(--wa-color-text-quiet);
-  font-size: var(--font-size-xs);
-  line-height: 1;
-  pointer-events: none;
-}
-
-.shell-split-handle {
-  display: block;
-  transform: rotate(90deg);
-}
-
-.shell-bottom-split-handle {
-  display: grid;
-  place-items: center;
-}
-
-/* A closed pane's split panel is disabled with a zero-width divider; its
-   grip would otherwise float free in the canvas. */
-wa-split-panel[disabled] > .shell-split-handle,
-wa-split-panel[disabled] > .shell-bottom-split-handle {
-  display: none;
-}
-
-/* ── Project/task sidebar ─────────────────────────────────────────────── */
-
-.shell-sidebar-slot {
-  position: relative;
-  min-width: 0;
-  min-height: 0;
-}
-
-.shell-sidebar {
-  position: relative;
-  z-index: 4;
-  display: grid;
-  grid-template-rows: auto auto minmax(0, 1fr) auto;
-  width: 100%;
-  height: 100%;
-  min-width: 0;
-  min-height: 0;
-  border-right: 1px solid var(--wa-color-surface-border);
-  background: var(--wa-color-surface-lowered);
-  overflow: hidden;
-}
-
-.shell-sidebar-brand {
+.shell-workspace-toolbar {
   display: flex;
   align-items: center;
-  gap: 9px;
-  height: var(--shell-frame-header-height);
+  gap: 12px;
+  min-width: 0;
   padding: 0 12px;
-  box-sizing: border-box;
+  background: var(--wa-color-surface-lowered);
+  border-bottom: 1px solid var(--wa-color-surface-border);
   -webkit-app-region: drag;
 }
-
-body[data-desktop-platform='darwin'] .shell-sidebar-brand {
-  padding-left: var(--macos-titlebar-safe-inset);
+body[data-desktop-platform='darwin'] .shell-workspace-toolbar {
+  padding-inline-start: var(--macos-titlebar-safe-inset);
 }
-
-/* The TeXRA {T} mark (extension/resources/logo-128x128.svg) as a mask, so
-   it takes the brand accent in either theme. */
-.shell-sidebar-logo {
-  width: 26px;
-  height: 26px;
-  background: var(--wa-color-brand-fill-loud);
-  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cg fill='none' stroke='%23000' stroke-width='4.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M22 10c-5.2 0-8 3.4-8 8.5v5.3c0 3-1.5 4.8-4.7 5.7 3.2.9 4.7 2.7 4.7 5.7v5.3c0 5.1 2.8 8.5 8 8.5'/%3E%3Cpath d='M42 10c5.2 0 8 3.4 8 8.5v5.3c0 3 1.5 4.8 4.7 5.7-3.2.9-4.7 2.7-4.7 5.7v5.3c0 5.1-2.8 8.5-8 8.5'/%3E%3C/g%3E%3Cpath d='M25 17.5h14v5.6h-4.1V47h-5.8V23.1H25z'/%3E%3C/svg%3E")
-    center / contain no-repeat;
-  -webkit-app-region: no-drag;
-}
-
-.shell-sidebar-product {
-  min-width: 0;
-  color: var(--wa-color-text-normal);
-  font-size: var(--font-size-lg);
-  font-weight: var(--font-weight-semibold);
-  letter-spacing: -0.015em;
-}
-.shell-split-handle wa-icon,
-.shell-bottom-split-handle wa-icon,
-.shell-header-button wa-icon,
-.shell-layout-toggle wa-icon,
-.shell-workbench-tab-close wa-icon,
-.shell-workbench-close wa-icon {
-  display: grid;
-  place-items: center;
-  width: 1em;
-  height: 1em;
-  font-size: var(--shell-frame-icon-size);
-  line-height: 1;
-}
-
-.shell-sidebar-primary {
-  display: grid;
-  gap: 2px;
-  padding: 8px 10px 10px;
-}
-
-.shell-sidebar-action {
+.shell-header-button-slot {
+  display: inline-flex;
+  align-items: center;
   position: relative;
-  display: block;
-  width: 100%;
+}
+.shell-header-pending-approval-badge {
+  position: absolute;
+  right: 0;
+  top: 0;
+  --dot-size: 6px;
+  --dot-color: var(--color-warning);
+  pointer-events: none;
+}
+.shell-workspace-project {
+  flex: 1;
+  min-width: 48px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   color: var(--wa-color-text-normal);
-  font-size: var(--font-size);
-}
-
-.shell-sidebar-action::part(base) {
-  justify-content: flex-start;
-  width: 100%;
-  /* A nav row, not a call to action: the button default is semibold, which
-     made every sidebar row shout at the same volume. */
-  font-weight: var(--font-weight-normal);
-  min-height: var(--row-height);
-  padding: 0 10px;
-}
-
-.shell-sidebar-action::part(label) {
-  min-width: 0;
-  text-align: left;
-}
-
-.shell-sidebar-action-icon {
-  display: grid;
-  place-items: center;
-  width: var(--shell-frame-icon-box);
-  height: var(--shell-frame-icon-box);
-  flex: 0 0 var(--shell-frame-icon-box);
-  color: var(--wa-color-text-quiet);
-  font-size: var(--shell-frame-icon-size);
-  line-height: 1;
-}
-
-.shell-sidebar-scroll {
-  display: grid;
-  width: 100%;
-  height: 100%;
-  min-width: 0;
-  min-height: 0;
-  overflow: auto;
-  scrollbar-width: thin;
-}
-
-.shell-sidebar-section {
-  width: 100%;
-  min-width: 0;
-  min-height: 0;
-  padding: 10px;
-  box-sizing: border-box;
-  overflow: auto;
-  scrollbar-width: thin;
-}
-
-.shell-sidebar-section-label {
-  color: var(--wa-color-text-quiet);
   font-size: var(--font-size-sm);
   font-weight: var(--font-weight-medium);
 }
+.shell-view-switch {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  -webkit-app-region: no-drag;
+}
+.shell-view-switch .action-button[aria-pressed='true']::part(base) {
+  background: var(--wa-color-surface-raised);
+  color: var(--wa-color-text-normal);
+}
+.shell-workspace-tools {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  -webkit-app-region: no-drag;
+}
+.shell-frame {
+  --divider-width: 1px;
+  --divider-hit-area: 10px;
+  --min: 208px;
+  --max: min(340px, 36vw);
+  display: grid;
+  min-height: 0;
+  width: 100%;
+  height: 100%;
+  color: var(--wa-color-text-normal);
+  background: var(--wa-color-surface-default);
+}
+.shell-frame-collapsed {
+  display: block;
+}
+.shell-frame::part(panel) {
+  min-width: 0;
+  min-height: 0;
+  overflow: clip;
+}
+.shell-frame::part(divider) {
+  background: var(--wa-color-surface-border);
+}
+.shell-frame::part(divider):is(:hover, :focus-visible) {
+  background: var(--wa-color-focus);
+}
+.shell-frame-main-panel,
+.shell-workspace-layout,
+.shell-sidebar-slot,
+.shell-project-workbench {
+  min-width: 0;
+  min-height: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+.shell-project-workbench[hidden] {
+  display: none;
+}
 
+/* Two lists with the same row grid. History belongs to the selected project. */
+.shell-sidebar {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  height: 100%;
+  min-width: 0;
+  background: var(--wa-color-surface-lowered);
+}
+.shell-sidebar-primary {
+  padding: 12px 12px 4px;
+}
+.shell-sidebar-action {
+  display: block;
+  width: 100%;
+  color: var(--wa-color-text-quiet);
+}
+.shell-sidebar-action::part(base) {
+  width: 100%;
+  justify-content: flex-start;
+  height: var(--row-height);
+  min-height: var(--row-height);
+  padding-inline: 8px;
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-normal);
+}
+.shell-sidebar-action::part(label) {
+  min-width: 0;
+  text-align: start;
+}
+.shell-sidebar-action-icon {
+  width: 14px;
+  height: 14px;
+  font-size: var(--font-size-icon-sm);
+}
+.shell-sidebar-scroll {
+  min-height: 0;
+  overflow: auto;
+  scrollbar-width: thin;
+}
+.shell-sidebar-section {
+  padding: 0 12px;
+  min-width: 0;
+}
 .shell-sidebar-section-heading {
   display: flex;
   align-items: center;
-  min-height: 30px;
-  padding: 0 8px;
+  justify-content: space-between;
+  min-height: 36px;
+  gap: 8px;
+  padding-inline: 8px 4px;
 }
-
+.shell-sidebar-section-label {
+  color: var(--wa-color-text-quiet);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-medium);
+  letter-spacing: 0.02em;
+}
+.shell-history-section {
+  margin-top: 18px;
+}
 .shell-project-item {
-  position: relative;
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 24px 24px;
+  gap: 4px;
   align-items: center;
-  gap: 2px;
-  margin-top: 4px;
+  min-height: 34px;
+  padding-inline-end: 4px;
+  margin-block: 2px;
+  border-radius: var(--row-radius);
 }
-
-/* The shown project reads as selected by weight alone: the selected task
-   under it carries the fill, and two stacked fills read as one heavy block.
-   Every other row keeps the same shape, so nothing moves when the selection
-   does. */
-.shell-project-item.is-active .shell-project-name {
-  font-weight: var(--font-weight-semibold);
+.shell-project-item.is-active {
+  background: var(--wa-color-surface-raised);
 }
-
-/* One dot per project, always present when the project has news: what
-   needs the user, what is running, what finished while they were away. */
+.shell-project-item:hover {
+  background: var(--surface-hover);
+}
+.shell-project-row {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  color: var(--wa-color-text-normal);
+}
+.shell-project-row::part(base) {
+  width: 100%;
+  justify-content: start;
+  padding-inline: 8px 0;
+  min-height: var(--row-height);
+  background: transparent;
+}
+.shell-project-row::part(label) {
+  min-width: 0;
+  text-align: start;
+}
+.shell-project-row wa-icon {
+  color: var(--wa-color-text-quiet);
+}
+.shell-project-name {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+}
 .shell-project-status {
-  flex: 0 0 auto;
-  width: 8px;
-  height: 8px;
-  margin: 0 4px;
+  grid-column: 2;
+  width: 6px;
+  height: 6px;
   border-radius: 50%;
+  justify-self: center;
 }
-
+.shell-project-status[data-tone='running'] {
+  background: var(--wa-color-success-fill-loud);
+}
 .shell-project-status[data-tone='waiting'],
 .shell-project-status[data-tone='interrupted'] {
   background: var(--wa-color-warning-fill-loud);
 }
-
-.shell-project-status[data-tone='running'] {
-  background: var(--wa-color-success-fill-loud);
-}
-
 .shell-project-status[data-tone='unseen'] {
   background: var(--wa-color-brand-fill-loud);
 }
-
-/* The row's own actions take room only while the row is hovered or
-   focused, so at rest the project name has the sidebar's whole width. At
-   rest they are visually hidden, not removed: a screen reader's browse
-   cursor still reaches them without moving focus. */
-.shell-project-new,
-.shell-project-close {
-  flex: 0 0 auto;
-  color: var(--wa-color-text-quiet);
-}
-
-.shell-project-item:not(:hover, :focus-within)
-  :is(.shell-project-new, .shell-project-close) {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  margin: -1px;
-  overflow: hidden;
-  clip-path: inset(50%);
-  white-space: nowrap;
-  border: 0;
-}
-
-.shell-project-add {
-  margin-left: auto;
-  color: var(--wa-color-text-quiet);
-}
-
-.shell-project-empty {
+.shell-project-menu {
   display: block;
-  width: 100%;
+  grid-column: 3;
+  width: 24px;
+  height: 24px;
   color: var(--wa-color-text-quiet);
 }
-
-.shell-project-empty::part(base) {
-  justify-content: flex-start;
-  width: 100%;
-  padding: 4px 8px;
+.shell-project-rename {
+  margin-inline-start: 4px;
+  width: calc(100% - 4px);
 }
-
-.shell-project-row {
-  display: block;
-  width: 100%;
-  margin-top: 4px;
-  color: var(--wa-color-text-normal);
-}
-
-.shell-project-item .shell-project-row {
-  flex: 1 1 auto;
-  min-width: 0;
-  margin-top: 0;
-}
-
-.shell-project-fold {
-  flex: 0 0 auto;
-  color: var(--wa-color-text-quiet);
-}
-
-.shell-project-row::part(base) {
-  width: 100%;
-  min-height: 28px;
-  padding: 2px 6px;
-}
-
-.shell-project-row::part(label) {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-  min-width: 0;
-  text-align: left;
-}
-
-.shell-project-mark {
-  color: var(--wa-color-text-normal);
+.shell-history-empty {
+  margin: 4px 8px;
   font-size: var(--font-size-xs);
-  font-weight: var(--font-weight-semibold);
-  box-shadow: var(--desktop-shadow-sm);
+  color: var(--wa-color-text-quiet);
+  line-height: 1.5;
 }
-
-.shell-project-name {
-  flex: 1 1 auto;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: var(--font-size);
-  font-weight: var(--font-weight-medium);
+.shell-project-runs {
+  --run-tab-padding-inline-start: 8px;
+  --run-tab-row-gap: 2px;
+  --run-tab-radius: 6px;
+  --run-tab-meta-display: none;
+  --run-tab-detail-display: none;
+  --run-tab-status-width: 24px;
+  --run-tab-status-label-display: none;
 }
-
-.shell-sidebar-sessions {
-  min-height: 0;
-}
-
 .shell-sidebar-sessions > run-tabs {
   display: flex;
   min-width: 0;
-  min-height: 0;
   --background-color: transparent;
   --color-border: transparent;
 }
-
 .shell-sidebar-footer {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 2px;
-  padding: 8px 10px 10px;
-  border-top: 1px solid var(--wa-color-surface-border);
+  padding: 8px 12px;
 }
 
-.shell-sidebar-footer .shell-sidebar-action {
-  font-size: var(--font-size-sm);
-}
-
-.shell-sidebar-footer .shell-sidebar-action::part(base) {
-  min-height: 34px;
-  padding: 0 8px;
-}
-
-.shell-sidebar-footer .shell-sidebar-action-icon {
-  font-size: var(--font-size-icon-sm);
-}
-
-/* ── Task conversation ────────────────────────────────────────────────── */
-
+/* Task reading surface. The transcript owns its one bounded content column. */
 .shell-conversation {
-  position: relative;
-  /* A column whose body takes what is left: with a folder open the
-     conversation's own header is the one row, and only the no-folder screen
-     puts a header row here. */
   display: flex;
   flex-direction: column;
   width: 100%;
@@ -434,356 +271,58 @@ body[data-desktop-platform='darwin'] .shell-sidebar-brand {
   min-width: 0;
   min-height: 0;
   background: var(--wa-color-surface-default);
-  overflow: hidden;
-  container-name: shell-conversation;
-  container-type: inline-size;
+  container: shell-conversation / inline-size;
 }
-
-/* The body takes the rest of the column; the conversation surface fills
-   it, so the transcript scrolls inside the window and the composer sits at
-   its foot rather than under however much content there happens to be. */
-.shell-conversation-body {
-  position: relative;
-  display: grid;
-  flex: 1 1 auto;
-  grid-template-columns: minmax(0, 1fr);
-  grid-template-rows: minmax(0, 1fr);
-  min-width: 0;
-  min-height: 0;
-  overflow: hidden;
+.shell-files {
+  align-content: start;
+  padding: 8px;
 }
-
-.shell-conversation-pane {
-  display: grid;
-  grid-area: 1 / 1;
-  grid-template-rows: minmax(0, 1fr);
-  min-width: 0;
-  min-height: 0;
+.shell-files .desktop-editor-tree-header > span {
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-medium);
+  color: var(--wa-color-text-quiet);
 }
-
-.shell-conversation-pane[hidden] {
-  display: none;
+.shell-files .desktop-editor-tree-list {
+  display: block;
+  max-height: none;
+  padding: 0;
+  overflow: visible;
 }
-
-.shell-conversation-pane > *,
-.shell-launcher-surface {
-  min-width: 0;
-  min-height: 0;
-  width: 100%;
-  height: 100%;
+.shell-files .desktop-editor-tree-row {
+  --indent-size: 14px;
 }
-
-/* A flex column: <progress-app> sizes itself as a flex item (flex: 1), so
-   its parent must be a flex container for it to take the height. */
-.shell-launcher-surface {
-  display: flex;
-  flex-direction: column;
+.shell-files .desktop-editor-tree-row::part(item) {
+  min-height: 28px;
+  padding: 0 4px;
 }
-
-.shell-header {
-  flex: 0 0 var(--shell-frame-header-height);
-  position: relative;
-  z-index: 5;
+.desktop-editor-tree-empty {
+  padding: 8px;
+  color: var(--wa-color-text-quiet);
+  font-size: var(--font-size-xs);
+}
+.shell-editor-toolbar {
   display: flex;
   align-items: center;
   gap: 8px;
-  min-width: 0;
-  padding: 0 12px;
-  box-sizing: border-box;
-  border-bottom: 1px solid var(--wa-color-surface-border);
-  background: color-mix(
-    in srgb,
-    var(--wa-color-surface-default) 94%,
-    transparent
-  );
-  -webkit-app-region: drag;
-}
-
-.shell-header-button-slot {
-  position: relative;
-  display: inline-flex;
-  flex: 0 0 auto;
-}
-
-/* Same warning hue the rail's per-run pending-approval indicator uses
-   (RunTab.styles.ts `.has-pending-approval`) — the only cue left when a
-   call held at the approval gate is on a run the collapsed sidebar
-   currently hides. */
-.shell-header-pending-approval-badge {
-  position: absolute;
-  top: 2px;
-  right: 2px;
-  --dot-size: 8px;
-  --dot-color: var(--color-warning);
-  border: 1.5px solid var(--wa-color-surface-default);
-  pointer-events: none;
-}
-
-.shell-layout-toggle {
-  display: block;
-}
-
-/* ── Optional workbench ───────────────────────────────────────────────── */
-
-.shell-workbench {
-  --workbench-tabs-height: var(--shell-frame-header-height);
-  position: relative;
-  z-index: 3;
-  display: grid;
-  grid-template-rows: var(--workbench-tabs-height) minmax(0, 1fr);
-  width: 100%;
-  height: 100%;
-  min-width: 0;
-  min-height: 0;
-  background: var(--wa-color-surface-default);
-  overflow: hidden;
-}
-
-.shell-workbench[data-placement='bottom'] {
-  --workbench-tabs-height: var(--shell-workbench-tab-height);
-}
-
-.shell-workbench-tabs {
-  display: flex;
-  align-items: stretch;
-  min-width: 0;
-  border-bottom: 1px solid var(--wa-color-surface-border);
+  padding: 0 10px;
+  border-top: 1px solid var(--wa-color-surface-border);
   background: var(--wa-color-surface-lowered);
-  -webkit-app-region: drag;
-}
-
-.shell-workbench-tabs-scroll {
-  display: flex;
-  align-items: stretch;
-  flex: 1 1 auto;
-  min-width: 0;
-  overflow-x: auto;
-  scrollbar-width: none;
-  -webkit-app-region: no-drag;
-}
-
-.shell-workbench-tabs-scroll::-webkit-scrollbar {
-  display: none;
-}
-
-.shell-workbench-tab {
-  position: relative;
-  display: flex;
-  align-items: center;
-  flex: 0 0 auto;
-  min-width: 90px;
-  max-width: 210px;
-  border-right: 1px solid var(--wa-color-surface-border);
-  color: var(--wa-color-text-quiet);
-  font-size: var(--font-size-sm);
-  user-select: none;
-}
-
-.shell-workbench-tab:hover {
-  background: var(--wa-color-toolbar-hover);
-  color: var(--wa-color-text-normal);
-}
-
-.shell-workbench-tab[data-active='true'] {
-  background: var(--wa-color-surface-default);
-  color: var(--wa-color-text-normal);
-}
-
-.shell-workbench-tab[data-active='true']::after {
-  content: '';
-  position: absolute;
-  inset: auto 10px 0;
-  height: 2px;
-  border-radius: 999px;
-  background: var(--wa-color-text-normal);
-}
-
-.shell-workbench-tab-icon {
-  display: grid;
-  place-items: center;
-  width: var(--shell-frame-icon-box);
-  height: var(--shell-frame-icon-box);
-  flex: 0 0 var(--shell-frame-icon-box);
-  font-size: var(--shell-frame-icon-size);
-  line-height: 1;
-}
-
-.shell-workbench-tab-activate {
-  display: block;
-  min-width: 0;
-  height: 100%;
-  flex: 1 1 auto;
-  color: inherit;
-}
-
-.shell-workbench-tab-activate::part(base) {
-  justify-content: flex-start;
-  width: 100%;
-  min-height: var(--workbench-tabs-height);
-  padding: 0 4px 0 8px;
-  border-radius: 0;
-  background: transparent;
-}
-
-.shell-workbench-tab-activate::part(label) {
   min-width: 0;
 }
-
-.shell-workbench-tab-label {
-  display: block;
+.shell-editor-path {
+  flex: 1;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.shell-workbench-tab-dirty {
-  flex: 0 0 auto;
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--wa-color-text-normal);
-}
-
-.shell-workbench-tab-close,
-.shell-workbench-close {
-  display: block;
-  flex: 0 0 auto;
-  color: inherit;
-}
-
-.shell-workbench-tab-close {
-  opacity: 0;
-}
-
-.shell-workbench-tab-menu {
-  position: absolute;
-  width: 0;
-  height: 0;
-}
-
-.shell-workbench-tab-menu-anchor {
-  position: fixed;
-  z-index: -1;
-  top: var(--context-menu-y, 0);
-  left: var(--context-menu-x, 0);
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  border: 0;
-  opacity: 0;
-  pointer-events: none;
-}
-
-.shell-workbench-tab-menu wa-dropdown-item wa-icon {
-  display: grid;
-  place-items: center;
-  width: var(--shell-frame-icon-box);
-  height: var(--shell-frame-icon-box);
-  font-size: var(--shell-frame-icon-size);
-  line-height: 1;
-}
-
-.shell-workbench-tab:hover .shell-workbench-tab-close,
-.shell-workbench-tab[data-active='true'] .shell-workbench-tab-close,
-.shell-workbench-tab-close:focus-visible {
-  opacity: 0.65;
-}
-
-.shell-workbench-tab-close:hover {
-  opacity: 1;
-}
-
-.shell-workbench-close {
-  align-self: center;
-  margin: 0 8px;
-}
-
-body[data-desktop-platform='darwin'] .shell-frame-collapsed .shell-header,
-body[data-desktop-platform='darwin']
-  .shell-frame-collapsed
-  .shell-header-start {
-  padding-left: var(--macos-titlebar-safe-inset);
-}
-
-/* The desktop's controls slotted into the conversation's header row. */
-.shell-header-start,
-.shell-header-end {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-}
-
-.shell-workbench-body,
-.shell-workbench-pane,
-.shell-workbench-surface {
-  display: grid;
-  grid-template-rows: minmax(0, 1fr);
-  min-width: 0;
-  min-height: 0;
-  height: 100%;
-  overflow: hidden;
-}
-
-.shell-workbench-pane[hidden] {
-  display: none;
-}
-
-.shell-workbench-surface[data-scroll='true'] {
-  overflow: auto;
-}
-
-.shell-workbench-placeholder {
-  display: grid;
-  align-content: center;
-  place-items: center;
-  padding: 32px;
   color: var(--wa-color-text-quiet);
-  text-align: center;
+  font-size: var(--font-size-xs);
 }
-
-.shell-workbench-placeholder .empty-state-icon-surface {
-  margin: 0 auto 12px;
+.shell-editor-toolbar .action-button::part(base) {
+  min-height: 24px;
+  height: 24px;
+  font-size: var(--font-size-xs);
 }
-
-.shell-workbench-placeholder .empty-state-title {
-  max-width: 300px;
-  margin: 0 0 5px;
-  color: var(--wa-color-text-normal);
-  font-size: var(--font-size-lg);
-}
-
-.shell-workbench-placeholder .empty-state-body {
-  max-width: 300px;
-  margin: 0;
-  font-size: var(--font-size-sm);
-  line-height: var(--line-height-relaxed);
-}
-
-@media (max-width: 1120px) {
-  .shell-main-split {
-    --min: 320px;
-    --max: min(720px, calc(100% - 320px));
-  }
-}
-
-@container shell-conversation (max-width: 420px) {
-  .shell-header {
-    gap: 4px;
-    padding-inline: 8px;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .shell-frame *,
-  .shell-frame *::before,
-  .shell-frame *::after {
-    scroll-behavior: auto !important;
-    transition-duration: 0.01ms !important;
-  }
-}
-
-/* A compiled PDF fills its workbench pane; Chromium's viewer draws the chrome. */
 .shell-workbench-pdf-frame {
   display: block;
   width: 100%;
@@ -791,75 +330,20 @@ body[data-desktop-platform='darwin']
   border: 0;
   background: var(--wa-color-surface-default);
 }
-
-/* ---------------------------------------------------------------------------
- * Projects as rail sections
- * ------------------------------------------------------------------------- */
-
-/* The rail is one line per task, the way a page tree is: agent, branch,
-   time and model live in the row's tooltip, not a second line that appears
-   under the selected row. */
-.shell-project-runs {
-  margin: 2px 0 4px 10px;
-  --run-tab-meta-display: none;
+@media (max-width: 900px) {
+  .shell-workspace-project {
+    display: none;
+  }
+  .shell-view-switch {
+    margin-inline-start: auto;
+  }
+  .shell-workspace-toolbar {
+    gap: 8px;
+  }
 }
-
-/* Project and tab contents retain their DOM nodes while another owner is visible. */
-.shell-project-workbench,
-.shell-workbench-retained-surface {
-  height: 100%;
-  min-height: 0;
-}
-
-.shell-project-workbench[hidden],
-.shell-workbench-retained-surface[hidden] {
-  display: none;
-}
-
-/* The Files tab: the tree alone; the tab names it, so its own heading
-   keeps only the refresh control. */
-.shell-files,
-.shell-editor-tree {
-  align-content: start;
-  padding: 6px 4px;
-}
-
-:is(.shell-files, .shell-editor-tree) .desktop-editor-tree-header > span {
-  visibility: hidden;
-}
-
-:is(.shell-files, .shell-editor-tree) .desktop-editor-tree-list {
-  display: block;
-  max-height: none;
-  padding: 0;
-  overflow: visible;
-}
-
-:is(.shell-files, .shell-editor-tree) .desktop-editor-tree-row {
-  --indent-size: 1.15em;
-}
-
-/* An open file keeps the tree it came from beside it, so the next file is
-   one click away rather than a tab switch back to Files. */
-.shell-editor-with-tree {
-  grid-template-columns: minmax(150px, 28%) minmax(0, 1fr);
-}
-
-.shell-editor-tree {
-  display: grid;
-  min-height: 0;
-  overflow: auto;
-  border-right: 1px solid var(--wa-color-surface-border);
-}
-
-:is(.shell-files, .shell-editor-tree) .desktop-editor-tree-row::part(item) {
-  min-height: 26px;
-  padding: 0 4px;
-  border-radius: 6px;
-}
-
-:is(.shell-files, .shell-editor-tree) .desktop-editor-tree-empty {
-  padding: 8px;
-  color: var(--wa-color-text-quiet);
-  font-size: var(--font-size-sm);
+@media (prefers-reduced-motion: reduce) {
+  .desktop-app * {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
 }

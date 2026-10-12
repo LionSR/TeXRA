@@ -31,6 +31,7 @@ import { databaseLayer } from '@controllers/session/Database';
 import { SessionViewService } from '@controllers/session/SessionView';
 import { sessionInputsLayer } from '@controllers/session/sessionInputs';
 import { WorkspaceRoots } from '@controllers/session/WorkspaceRoots';
+import { runStateAppend } from '@shared/session/runHistory';
 import {
   aggregateId as qualifyAggregateId,
   DEBUG_MODE_KEY,
@@ -43,29 +44,32 @@ import {
 import { Database } from '@shared/session/database';
 import { SessionInputs } from '@shared/session/sessionInputs';
 import { ProcessIdentity, SessionEvents } from '@shared/session/sessionEvents';
-import {
-  emptyHostSnapshot,
-  type HostSnapshot,
-} from '@shared/session/hostSnapshot';
-import type {
-  DownMessage,
-  EventsFrame,
-  Subscribe,
-} from '@shared/session/sessionFrames';
 import type { SessionView } from '@shared/session/sessionView';
 import { closeSessionOf } from '@test/support/sessionEnd';
 import {
   createFakeWorkspaceRoots,
   FakeConfigProvider,
 } from '@test/support/FakePlatform';
-import { fakeProcessServices } from '@test/support/setupPlatform';
+import {
+  fakeProcessServices,
+  storePluginsLayer,
+} from '@test/support/setupPlatform';
 import { createTestSession } from '@test/support/sessionTestUtils';
+import { testSessionOf } from '@test/support/testProcessRuntime';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
+import type {
+  DownMessage,
+  EventsFrame,
+  Subscribe,
+} from '@texra/shared/session/sessionFrames';
+import {
+  emptyHostSnapshot,
+  type HostSnapshot,
+} from '@texra/shared/session/hostSnapshot';
 import {
   frameSubscription,
   type FramerSource,
 } from '@texra/controllers/session/SessionFramer';
-import { localSessionBackend } from '@texra/controllers/session/sessionBackend';
 import { SessionBridge } from '@texra/controllers/session/SessionBridge';
 import { WebviewSessions } from '@texra/controllers/session/webviewSessionLayer';
 
@@ -113,7 +117,10 @@ const running: SessionEventDraft = {
 
 /** A running model reply with no text of its own: the row the live text for
  *  `rowId` paints into once its entry folds. */
-function streamingRow(runId: RunId, rowId: string): SessionEventDraft {
+function streamingRow(
+  runId: RunId,
+  rowId: string,
+): Extract<SessionEventDraft, { type: 'stream.start' }> {
   return {
     type: 'stream.start',
     aggregateId: qualifyAggregateId('run', runId),
@@ -140,7 +147,12 @@ const runtimeGraph = (
       sessionEventsLayer.pipe(
         Layer.provideMerge(
           seeded.pipe(
-            Layer.provideMerge(databaseLayer('ephemeral').pipe(Layer.orDie)),
+            Layer.provideMerge(
+              databaseLayer('ephemeral').pipe(
+                Layer.orDie,
+                Layer.provide(storePluginsLayer),
+              ),
+            ),
           ),
         ),
       ),
@@ -212,9 +224,15 @@ const framerSource = Effect.gen(function* () {
   const subscriptions = yield* TranscriptSubscriptions;
   const source: FramerSource = {
     key: KEY,
-    view: view.ref,
-    inputs: inputs.read,
-    setTranscriptSubscriptions: (port, set) => subscriptions.set(port, set),
+    view: {
+      current: () => SubscriptionRef.getUnsafe(view.ref),
+      watch: (set, from) =>
+        Stream.unwrap(
+          Effect.acquireRelease(subscriptions.set(PORT, set), () =>
+            subscriptions.set(PORT, []),
+          ).pipe(Effect.as(inputs.read(set, from.cursor, from.debug))),
+        ),
+    },
   };
   return source;
 });
@@ -253,7 +271,7 @@ describe('session framer', () => {
       yield* Effect.addFinalizer(() => closeSessionOf(session));
       const setSubscriptions = vi.spyOn(session.view, 'subscribe');
       const bridge = yield* SessionBridge.make({
-        backend: localSessionBackend(session),
+        session: testSessionOf(session),
         onPortClosed: () => {},
         handleHostRequest: () =>
           Effect.die(new Error('No host request is expected.')),
@@ -271,7 +289,7 @@ describe('session framer', () => {
       yield* Effect.promise(() =>
         vi.waitFor(() => {
           expect(setSubscriptions).toHaveBeenCalledWith(
-            PORT,
+            expect.any(String),
             keys.map((id) => ({ id, fromSeq: 0 })),
           );
         }),
@@ -283,7 +301,7 @@ describe('session framer', () => {
       const session = yield* createTestSession();
       yield* Effect.addFinalizer(() => closeSessionOf(session));
       const bridge = yield* SessionBridge.make({
-        backend: localSessionBackend(session),
+        session: testSessionOf(session),
         onPortClosed: () => {},
         handleHostRequest: () =>
           Effect.die(new Error('No host request is expected.')),
@@ -325,7 +343,7 @@ describe('session framer', () => {
         Stream.die(new Error('replay read failed')),
       );
       const bridge = yield* SessionBridge.make({
-        backend: localSessionBackend(session),
+        session: testSessionOf(session),
         onPortClosed: () => {},
         handleHostRequest: () =>
           Effect.die(new Error('No host request is expected.')),
@@ -348,7 +366,7 @@ describe('session framer', () => {
       const setSubscriptions = vi.spyOn(session.view, 'subscribe');
       const onPortClosed = vi.fn();
       const bridge = yield* SessionBridge.make({
-        backend: localSessionBackend(session),
+        session: testSessionOf(session),
         onPortClosed,
         handleHostRequest: () =>
           Effect.die(new Error('No host request is expected.')),
@@ -362,7 +380,10 @@ describe('session framer', () => {
       });
       yield* Effect.promise(() =>
         vi.waitFor(() => {
-          expect(setSubscriptions).toHaveBeenCalledWith(PORT, aggregates);
+          expect(setSubscriptions).toHaveBeenCalledWith(
+            expect.any(String),
+            aggregates,
+          );
         }),
       );
 
@@ -375,11 +396,13 @@ describe('session framer', () => {
 
       yield* Effect.promise(() =>
         vi.waitFor(() => {
-          expect(setSubscriptions.mock.calls).toEqual([
-            [PORT, aggregates],
-            [PORT, []],
-            [PORT, aggregates],
-          ]);
+          // The first port's watch lets go of its set before the
+          // replacement's watch names it again.
+          const [first, released, second] = setSubscriptions.mock.calls;
+          expect(setSubscriptions.mock.calls).toHaveLength(3);
+          expect(first).toEqual([first?.[0], aggregates]);
+          expect(released).toEqual([first?.[0], []]);
+          expect(second).toEqual([second?.[0], aggregates]);
           expect(onPortClosed).toHaveBeenCalledTimes(1);
           expect(onPortClosed).toHaveBeenCalledWith(PORT);
           expect(setSubscriptions.mock.invocationCallOrder[1]).toBeLessThan(
@@ -403,7 +426,7 @@ describe('session framer', () => {
         const frames = yield* Queue.unbounded<EventsFrame>();
         const framer = yield* Effect.forkScoped(
           Stream.runForEach(
-            frameSubscription(source, PORT, host, subscribe),
+            frameSubscription(source, host, subscribe),
             (frame) => Queue.offer(frames, frame),
           ),
         );
@@ -431,7 +454,7 @@ describe('session framer', () => {
         // the frame's cursor is the commit the framer drained; two appends
         // to one row in one window merge into one chunk, never two; a chunk
         // of an aggregate the Subscribe did not name is left out.
-        yield* events.transact((append) => append([running]));
+        yield* events.transact((append) => runStateAppend(append)([running]));
         const first = textTail('Hel');
         yield* SubscriptionRef.set(
           chunks.ref,
@@ -494,7 +517,7 @@ describe('session framer', () => {
         yield* shell.set('shell', subscribe.aggregates);
         const parentDecoder = yield* Effect.forkScoped(
           Stream.runForEach(
-            frameSubscription(source, PORT, host, subscribe),
+            frameSubscription(source, host, subscribe),
             (frame) => frames.feed(frame),
           ),
         );
@@ -537,7 +560,7 @@ describe('session framer', () => {
           drawn(yield* SubscriptionRef.get(runtimeView.ref)),
         );
         // A tail commit reaches both folds.
-        yield* events.transact((append) => append([running]));
+        yield* events.transact((append) => runStateAppend(append)([running]));
         yield* SubscriptionRef.set(
           chunks.ref,
           new Map([[`${RUN}/row-1`, textTail('Hello again')]]),
@@ -583,9 +606,8 @@ describe('session framer', () => {
         yield* frames.begin(named.generation);
         yield* shell.set('shell', named.aggregates);
         const decoder = yield* Effect.forkScoped(
-          Stream.runForEach(
-            frameSubscription(source, PORT, host, named),
-            (frame) => frames.feed(frame),
+          Stream.runForEach(frameSubscription(source, host, named), (frame) =>
+            frames.feed(frame),
           ),
         );
         // The named run's streaming row and the row's first prefix can
@@ -701,7 +723,7 @@ describe('session framer', () => {
         yield* shell.set('shell', named.aggregates);
         const resumed = yield* Effect.forkScoped(
           Stream.runForEach(
-            frameSubscription(source, PORT, host, {
+            frameSubscription(source, host, {
               ...named,
               generation: 4,
               cursor: beforeReplay.cursor,
@@ -762,7 +784,7 @@ describe('session framer', () => {
           yield* webview.subscriptions.set('shell', request.aggregates);
           return yield* Effect.forkScoped(
             Stream.runForEach(
-              frameSubscription(source, PORT, host, request),
+              frameSubscription(source, host, request),
               webview.frames.feed,
             ),
           );

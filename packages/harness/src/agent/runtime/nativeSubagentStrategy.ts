@@ -7,10 +7,14 @@
 import { Effect } from 'effect';
 
 import { type RunEndResult } from '@agent/runtime/RunEndResult';
-import { AgentEngine } from '@agent/runtime/AgentEngine';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { ExecuteAgentOptions } from '@agent/runtime/executeAgent';
-import type { AgentRunServices } from '@agent/runtime/runRegistry';
+import type { RegisterRunOptions } from '@agent/storage/runLifecycle';
+import {
+  registryOf,
+  type AgentRunServices,
+  Runs,
+} from '@agent/runtime/runRegistry';
 import type { ChildRunStrategy } from '@agent/runtime/childRunLoop';
 import type { PreparedAgentDefinition } from '@agent/runtime/AgentLaunchContext';
 import { normalizeProviderError } from '@common/errors/sdkError/providerErrorFormat';
@@ -45,8 +49,8 @@ export interface ChildRunLaunchOptions {
    * resumed child is held to its own record.
    */
   readonly parentOffered?: readonly OfferedTool[];
-  /** Fires with the resolved child run id — the caller inherits approvals onto it. */
-  readonly onRunResolved?: (runId: RunId) => void;
+  /** The child's admission (`ExecuteAgentOptions.onAdmitted`). */
+  readonly onAdmitted?: ExecuteAgentOptions['onAdmitted'];
 }
 
 interface NativeSubagentStrategyBase extends ChildRunLaunchOptions {
@@ -62,6 +66,8 @@ type NativeSubagentStrategyParams = NativeSubagentStrategyBase &
   (
     | {
         readonly definition: PreparedAgentDefinition;
+        /** The child's registration, which its opening commits. */
+        readonly registration: RegisterRunOptions;
         readonly resume?: never;
         readonly parentOffered: readonly OfferedTool[];
       }
@@ -90,20 +96,22 @@ export function createNativeSubagentStrategy(
   let cachedBuilt: SubagentResultMeta | undefined;
   let cachedDelivery: string | undefined;
 
+  // Adopt `turn` as the latest result and drop the caches derived from the
+  // prior one: the next build/delivery recomputes from this turn. Every point
+  // that advances the turn must clear both caches together, so they live here
+  // once rather than at each site.
+  const recordTurn = (turn: RunEndResult | undefined): void => {
+    lastResult = turn;
+    cachedBuilt = undefined;
+    cachedDelivery = undefined;
+  };
+
   const runNative = Effect.fn('nativeSubagent.runTurn')(function* (
     call: Effect.Effect<RunEndResult, Error, AgentRunServices>,
   ) {
-    lastResult = undefined;
-    cachedBuilt = undefined;
-    cachedDelivery = undefined;
+    recordTurn(undefined);
     return yield* call.pipe(
-      Effect.tap((result) =>
-        Effect.sync(() => {
-          lastResult = result;
-          cachedBuilt = undefined;
-          cachedDelivery = undefined;
-        }),
-      ),
+      Effect.tap((result) => Effect.sync(() => recordTurn(result))),
     );
   });
 
@@ -113,12 +121,8 @@ export function createNativeSubagentStrategy(
     if (!cachedBuilt) {
       cachedBuilt = yield* buildSubagentResult(
         params.runId,
-        config.agent,
         turn.output,
-        {
-          startedAt: params.startedAt,
-          storageRoot: params.session.roots.storage,
-        },
+        params.session.roots.storage,
       );
     }
     return cachedBuilt;
@@ -143,41 +147,38 @@ export function createNativeSubagentStrategy(
     launch: (ports, _signal, turns) =>
       runNative(
         Effect.gen(function* () {
-          const engine = yield* AgentEngine;
-          const executeOptions: ExecuteAgentOptions = {
+          const { programs } = registryOf(yield* Runs);
+          const executeOptions: Omit<ExecuteAgentOptions, 'registration'> = {
             ...params.resume?.options,
             session: params.session,
             parentOffered: params.parentOffered,
-            onRunResolved: params.onRunResolved,
+            onAdmitted: params.onAdmitted,
             onProgress: (update) => ports.notify(update),
             turns: {
               turnPermit: turns.turnPermit,
               settleBoundary: (turn: RunEndResult) =>
                 Effect.suspend(() => {
-                  lastResult = turn;
-                  cachedBuilt = undefined;
-                  cachedDelivery = undefined;
+                  recordTurn(turn);
                   return turns.settleBoundary(turn);
                 }),
               settleEnd: (turn: RunEndResult) =>
                 Effect.suspend(() => {
-                  lastResult = turn;
-                  cachedBuilt = undefined;
-                  cachedDelivery = undefined;
+                  recordTurn(turn);
                   return turns.settleEnd(turn);
                 }),
             },
           };
           if (params.resume)
-            return yield* engine.resumeToolUseFromResumeData(
+            return yield* programs.resumeTurn(
               params.resume.identity,
               executeOptions,
             );
-          const turn = yield* engine.executeAgent(
+          const turn = yield* programs.executeAgent(
             params.definition,
             params.runId,
             {
               ...executeOptions,
+              registration: params.registration,
               // The live handle owns this edge, including a later detach.
               parentRunId: params.parentRunId,
               ...(params.inBand === true ? { stopAfterCycle: true } : {}),
@@ -194,6 +195,9 @@ export function createNativeSubagentStrategy(
 
     formatDelivery: Effect.fn('nativeSubagent.formatDelivery')(function* (
       turn: RunEndResult,
+      /** The turn's wall time, measured by the loop before this result
+       *  computes its diffs. */
+      wallTimeMs: number,
     ) {
       if (cachedDelivery === undefined) {
         const built = yield* buildResult(turn);
@@ -209,7 +213,7 @@ export function createNativeSubagentStrategy(
               {
                 runId: params.runId,
                 memoryMisses: turn.memoryMisses,
-                wallTimeMs: built.wallTimeMs,
+                wallTimeMs,
                 workingDirectory: params.workingDirectory,
               },
             ),
@@ -242,11 +246,7 @@ export function createNativeSubagentStrategy(
           // failed run's own output, or an empty one when the turn produced
           // none.
           const result = turn ?? lastResult;
-          return buildSubagentResultMeta(
-            config.agent,
-            result?.output ?? emptyRunEndOutput(),
-            Date.now() - params.startedAt,
-          );
+          return buildSubagentResultMeta(result?.output ?? emptyRunEndOutput());
         }
         return yield* buildResult(turn);
       }),

@@ -243,8 +243,6 @@ export function nextAttempt(
 
 /** What one failure says about the move after it. */
 export interface FailureFacts {
-  /** The user aborted the request. */
-  readonly abort: boolean;
   /** The vendor no longer holds the response this attempt chained on;
    *  true only for an attempt that sent a continuation. */
   readonly unchain: boolean;
@@ -268,7 +266,6 @@ export function failedNext(
   retries: number,
   requestId: string | null,
 ): FailedNext {
-  if (facts.abort) return { kind: 'cancel' };
   // Once per invocation: the resend after it carries no continuation.
   if (
     facts.unchain &&

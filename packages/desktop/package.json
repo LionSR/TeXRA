@@ -22,7 +22,9 @@
     "build": "corepack pnpm run typecheck && corepack pnpm run build:main && corepack pnpm run build:preload && corepack pnpm run build:renderer",
     "package:dir": "corepack pnpm exec electron-builder --dir --config electron-builder.yml",
     "package:dist": "corepack pnpm exec electron-builder --config electron-builder.yml --publish never",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test --project=desktop",
+    "test:dev": "playwright test --project=development",
+    "test:appearance": "playwright test --project=appearance"
   },
   "devDependencies": {
     "@awesome.me/webawesome": "^3.14.0",
@@ -45,11 +47,12 @@
     "nanoid": "catalog:",
     "signal-polyfill": "^0.2.2",
     "typescript": "npm:@typescript/typescript6@^6.0.2",
-    "vite": "^8.3.2",
+    "vite": "^8.3.3",
     "yaml": "catalog:",
     "zod": "catalog:"
   },
   "dependencies": {
+    "dockview": "8.4.1",
     "node-pty": "^1.1.0"
   }
 }

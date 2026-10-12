@@ -5,20 +5,14 @@ import { Effect } from 'effect';
 import { AppState } from '@platform/interfaces';
 import { readDisabledTools } from '@tools/plugins';
 
-export const BUILTIN_WORKFLOW_AGENTS_DIR = 'agents' as const;
-export const BUILTIN_TOOL_USE_AGENTS_DIR = 'tool_use_agents' as const;
-
-export const BUNDLED_AGENT_DIRECTORY_NAMES = [
-  BUILTIN_WORKFLOW_AGENTS_DIR,
-  BUILTIN_TOOL_USE_AGENTS_DIR,
-] as const;
+/** The one bundled agent directory under a host's packaged resources. */
+export const BUNDLED_AGENTS_DIRECTORY = 'agents' as const;
 
 /**
  * The agent directories of the tool plugins, at
  * `<resources>/plugins/<id>/agents`, by plugin id (a plugin that ships no
  * agents has no such directory, which scans as none). Their agents are bundled
- * agents like the core ones and keep the `builtInToolUse` source, so
- * their keys do not change. The process's agent-catalog follower
+ * agents like the core ones: the `builtIn` source. The process's agent-catalog follower
  * (`@tools/agentCatalogFollower`) installs them under the host's packaged
  * resources root as it is built, before any reload; the plugin ids cross as strings, so `@agent/index` takes no edge
  * to `@tools`. The default installs none.
@@ -38,7 +32,7 @@ export function installPluginAgentDirectories(
 }
 
 /**
- * The roots of the `builtInToolUse` source: the core bundled directory the
+ * The roots of the `builtIn` source: the core bundled directory the
  * host's agent directories name, then each installed plugin's that is on. A
  * plugin is one on/off unit, so the user's switch (`texra.tools.disabled`)
  * that withholds its tools drops its agents too, wherever agents are found:
@@ -48,7 +42,7 @@ export function installPluginAgentDirectories(
  * process's, and a plugin's agents may be what helps the user set the
  * dependency up.
  */
-export const enabledToolUseRoots = (coreDirectory: string) =>
+export const enabledBuiltInRoots = (coreDirectory: string) =>
   AppState.pipe(
     Effect.flatMap(readDisabledTools),
     Effect.map((disabled): readonly string[] => [

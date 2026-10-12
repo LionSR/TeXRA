@@ -10,7 +10,6 @@
 import { Effect, FileSystem } from 'effect';
 import * as vscode from 'vscode';
 
-import type { SessionHandle } from '@agent/runtime';
 import {
   VscodeDiffViewHost,
   type DiffSession,
@@ -34,7 +33,7 @@ import {
   type ToolEditApprovalRequest,
 } from '@tools/approval/toolEditApproval';
 import { pluralize } from '@utils/text/stringUtils';
-import type { ProcessRuntime } from '@texra-ai/harness';
+import type { ProcessRuntime, WorkspaceRoots } from '@texra-ai/harness';
 import type { HostRequestFailure } from '@texra-ai/harness';
 
 const CHANNEL = 'ToolEditApproval';
@@ -42,12 +41,12 @@ const CHANNEL = 'ToolEditApproval';
 export class VscodeToolEditApprovalHost implements ToolEditApprovalHost {
   private readonly diffViewHost = new VscodeDiffViewHost();
   readonly openBuildDisplay: BuildDisplayFn = (location, options) =>
-    Effect.asVoid(openBuildDisplayIfTex(this.session, location, options));
+    Effect.asVoid(openBuildDisplayIfTex(this.roots, location, options));
 
   constructor(
     private readonly storageDirectory: string,
     private readonly runtime: ProcessRuntime,
-    private readonly session: SessionHandle,
+    private readonly roots: WorkspaceRoots,
   ) {}
 
   stagePreview(

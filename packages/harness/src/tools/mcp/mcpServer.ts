@@ -1,9 +1,10 @@
 /**
  * One stdio MCP server, brought up in a scope: spawned with a scrubbed
  * environment, initialized, its tools listed, and stopped (SIGTERM, then
- * SIGKILL) when the scope closes. The scope is the hold the live catalog
- * counts for its spec and revision (`@tools/liveTools`), so the process
- * lives exactly as long as some open run names it.
+ * SIGKILL) when the scope closes. The scope is its project's catalog entry
+ * for its spec, revision and project variables (`@tools/liveTools`), so the
+ * process lives exactly as long as some open run or step of that project
+ * holds it.
  *
  * JSON-RPC runs over the same Effect connection the Lean language server
  * uses (`@tools/jsonRpc`), in newline framing. Each listed tool becomes a
@@ -33,6 +34,7 @@ import type { ToolResult } from '@shared/schemas';
 import { makeJsonRpcConnection, type JsonRpcConnection } from '@tools/jsonRpc';
 import { errorResult, executed } from '@tools/core/result';
 import type { LoadedPluginTools } from '@tools/toolTable';
+import { environment } from '@utils/system/nodeWorkspace';
 import { truncatedHexId } from '@utils/core/idHash';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { appendHead, appendTail } from '@utils/text/appendTail';
@@ -128,10 +130,15 @@ function mcpToolName(server: string, tool: string): string {
   return `${normalized.slice(0, MAX_TOOL_NAME_LENGTH - NAME_HASH_LENGTH - 1)}_${suffix}`;
 }
 
-/** The parent environment minus credential-shaped names, plus the entry's. */
-function serverEnv(config: McpServerConfig): Record<string, string> {
+/** The environment the server starts from (the process's, with the
+ *  project's `.env` over it) minus credential-shaped names, plus the
+ *  entry's. */
+function serverEnv(
+  config: McpServerConfig,
+  inherited: Readonly<Record<string, string | undefined>>,
+): Record<string, string> {
   const env: Record<string, string> = {};
-  for (const [name, value] of Object.entries(process.env)) {
+  for (const [name, value] of Object.entries(inherited)) {
     if (value !== undefined && !SENSITIVE_ENV_NAME.test(name))
       env[name] = value;
   }
@@ -269,7 +276,7 @@ const stopProcess = (handle: ChildProcessSpawner.ChildProcessHandle) =>
 const connect = (config: McpServerConfig) =>
   Effect.gen(function* () {
     const handle = yield* ChildProcess.make(config.command, [...config.args], {
-      env: serverEnv(config),
+      env: serverEnv(config, yield* environment),
       extendEnv: false,
       ...(config.cwd === undefined ? {} : { cwd: config.cwd }),
     }).pipe(

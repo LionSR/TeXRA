@@ -3,12 +3,12 @@ import { Effect } from 'effect';
 import { hasUsableApiKey } from '@texra-ai/llm';
 import {
   type ModelOptionStores,
-  modelOptionsFrom,
   readModelAvailabilityInputs,
   usageRouteFrom,
 } from '@model/computeModelOptions';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import { isModelOptionAvailable } from '@shared/schemas';
+import { modelOptionsFrom } from '@texra/model/modelOptions';
 import { SETUP_MODEL_BY_PROVIDER } from '@texra/model/setupModelDefaults';
 import { getUseOpenRouter } from '@utils/config/providerConfig';
 import type { PlatformSecrets, LanguageModel } from '@texra-ai/harness';

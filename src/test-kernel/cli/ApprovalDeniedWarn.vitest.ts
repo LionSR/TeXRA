@@ -12,37 +12,34 @@ vi.mock('@cli/runtime/logSinks', async (importOriginal) => {
 
 import { warnApprovalDenied } from '@cli/runtime/approval/approvalPrompts';
 import type { RunId } from '@shared/schemas';
-import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
 
-const EXECUTABLE = { kind: 'executable' } as const;
+const EXECUTABLE = { kind: 'executable', policy: 'never' } as const;
 
 describe('warnApprovalDenied', () => {
   beforeEach(() => {
     writeTextStderrMock.mockClear();
-    testDefaultSession().approvals.setPolicy('ask');
   });
 
-  it('warns once per run and denial kind with the live policy', () => {
-    testDefaultSession().approvals.setPolicy('never');
+  it('warns once per run and denial kind with the deciding policy', () => {
     const context = createTestCliContext({ approvalPolicy: 'never' });
 
-    warnApprovalDenied(testDefaultSession(), context, EXECUTABLE);
-    warnApprovalDenied(testDefaultSession(), context, EXECUTABLE);
+    warnApprovalDenied(context, EXECUTABLE);
+    warnApprovalDenied(context, EXECUTABLE);
 
     expect(writeTextStderrMock).toHaveBeenCalledTimes(1);
     expect(writeTextStderrMock).toHaveBeenCalledWith(
-      '[warn] [cli-approval] Command or edit denied: the approval policy is "never". Use --approval-policy yolo to allow it.',
+      '[warn] [cli-approval] Command or edit denied: the approval policy is "never". Change the project\'s approval policy (/config or the settings view) to allow it.',
     );
 
     // The chat TUI shares one context across overlapping runs (a detached
     // child outliving its root beside a new root): each run warns once, and
     // neither run's warning suppresses the other's.
     const [first, second] = ['a0000a', 'b0000b'] as RunId[];
-    warnApprovalDenied(testDefaultSession(), context, EXECUTABLE, first);
-    warnApprovalDenied(testDefaultSession(), context, EXECUTABLE, second);
-    warnApprovalDenied(testDefaultSession(), context, EXECUTABLE, first);
-    warnApprovalDenied(testDefaultSession(), context, EXECUTABLE, second);
+    warnApprovalDenied(context, EXECUTABLE, first);
+    warnApprovalDenied(context, EXECUTABLE, second);
+    warnApprovalDenied(context, EXECUTABLE, first);
+    warnApprovalDenied(context, EXECUTABLE, second);
 
     expect(writeTextStderrMock).toHaveBeenCalledTimes(3);
   });
@@ -50,9 +47,10 @@ describe('warnApprovalDenied', () => {
   it('says what was closed and why a headless ask run could not prompt', () => {
     const context = createTestCliContext({ approvalPolicy: 'ask' });
 
-    warnApprovalDenied(testDefaultSession(), context, {
+    warnApprovalDenied(context, {
       kind: 'retry',
       deny: 'unpresentable',
+      policy: 'ask',
     });
 
     expect(writeTextStderrMock).toHaveBeenCalledWith(
@@ -60,16 +58,15 @@ describe('warnApprovalDenied', () => {
     );
   });
 
-  it('names the live session policy, not the launch-time CLI context', () => {
-    // `/approval` in the TUI updates the session only; the frozen CliContext
-    // keeps its launch-time value.
-    testDefaultSession().approvals.setPolicy('never');
+  it('names the policy that decided, not the launch-time CLI context', () => {
+    // The frozen CliContext keeps its launch-time value after a `/approval`;
+    // the denial carries the policy the session decided by.
     const context = createTestCliContext({ approvalPolicy: 'ask' });
 
-    warnApprovalDenied(testDefaultSession(), context, EXECUTABLE);
+    warnApprovalDenied(context, EXECUTABLE);
 
     expect(writeTextStderrMock).toHaveBeenCalledWith(
-      '[warn] [cli-approval] Command or edit denied: the approval policy is "never". Use --approval-policy yolo to allow it.',
+      '[warn] [cli-approval] Command or edit denied: the approval policy is "never". Change the project\'s approval policy (/config or the settings view) to allow it.',
     );
   });
 });

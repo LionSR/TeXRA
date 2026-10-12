@@ -1,24 +1,27 @@
 /**
  * The tool contract: a tool (`ITool`), its registry, its guard, and what
  * its body reads of its own call (`ToolContext`: its id, where it works, how
- * it asks a person, where its transient output goes). What the harness's
- * built-in tools read of a call made under a run is `@agent/runtime/RunCall`.
+ * it asks a person, the run it works for, where its transient output goes).
+ * The run's window (`ToolRun`) is declared here with its id; the runtime
+ * adds the rest of it, and the helpers over it (`requireRun`, `callerRun`),
+ * in `@agent/runtime/RunCall`, published to plugin authors on
+ * `@texra-ai/harness/plugins`. The rest of that module (the call's place in
+ * its run, the script plumbing) is the harness's built-ins' alone.
  */
 
 import { Context, type Effect } from 'effect';
 
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import type {
+  DispatchFacts,
   PermissionPayload,
   RequestDecision,
+  RunId,
   ToolDefinition,
   ToolResult,
 } from '@shared/schemas';
-import type {
-  DatabaseNotOwner,
-  DatabaseWriteFailed,
-} from '@shared/session/database';
-import type { RunHistoryRefused } from '@shared/session/runHistory';
+import type { DatabaseNotOwner } from '@shared/session/database';
+import type { CellError } from '@shared/session/runHistory';
 import type { SettingHost } from '@shared/state/stateSettings';
 import type { StepRoot } from '@utils/files/externalRoots';
 
@@ -55,10 +58,6 @@ export interface ToolGuard<T, R = never> {
   readonly cwd?: 'unknown';
 }
 
-/** A host capability a tool needs: `diagnostics` is a file's diagnostics
- *  from the host's editor. */
-export type HostToolCapability = 'diagnostics';
-
 /**
  * Contract for tool implementations.
  * `defineTool` provides the canonical implementation with Zod validation. Expected
@@ -70,32 +69,31 @@ export interface ITool<E = Error, R = never> {
   readonly definition: ToolDefinition;
   /** Hosts this tool is statically excluded from; an omitted host supports it. */
   readonly unavailableHosts?: readonly SettingHost[];
-  /** What the session's host must serve for this tool to be offered, read
-   *  live each step: a window that attaches mid-run brings it. */
-  readonly hostCapability?: HostToolCapability;
+  /** The host capability (named by the plugin that serves it,
+   *  `HostCapabilities`) the session's host must serve for this tool to be
+   *  offered, read live each step: a window that attaches mid-run brings it. */
+  readonly hostCapability?: string;
+  /** Launches agents' document tasks: its step lists the agents with one. */
+  readonly launchesTasks?: true;
   /**
-   * True only for tools that are side-effect-free AND approval-free, so
-   * parallel calls in one model response may execute concurrently.
-   * Declared on the tool (not the YAML-overridable definition) so agent
-   * configs cannot mark arbitrary tools parallel-safe.
+   * Where its calls run beside their siblings (omitted: `'barrier'`).
+   * Declared on the tool, not the YAML-overridable definition, so an agent
+   * config cannot move an arbitrary tool out of order.
    *
-   * The two properties are coupled on purpose and both are load-bearing in
-   * `partitionDuplicateCalls`: every non-parallel-safe call acts as an
-   * ordering barrier that clears the read-dedup segment. A read-only tool
-   * that requires user approval is therefore NOT parallel-safe — it cannot
-   * run concurrently with siblings in the same batch (it needs an approval
-   * round-trip first), so it must stay a barrier. Only set this when a call
-   * both mutates nothing and never prompts for approval.
+   * - `'parallel'`: side-effect-free AND approval-free, so calls of one
+   *   response (or one script) run concurrently within the parallel window,
+   *   and identical ones collapse onto one (`partitionDuplicateCalls`). A
+   *   read-only tool that prompts for approval is not parallel: it needs an
+   *   approval round-trip first, so it stays a barrier.
+   * - `'barrier'`: waits for every call issued before it and holds back
+   *   every call after it until it settles.
+   * - `'own'`: in a script, its calls neither wait for the calls issued
+   *   before them nor block the ones after, and take no place in the
+   *   parallel window: the tool bounds how many of its own calls run at
+   *   once (a call that waits on a child run). A later barrier still waits
+   *   for it; a response's call of it is a barrier.
    */
-  readonly parallelSafe?: boolean;
-  /**
-   * In a script, its calls neither wait for the calls issued before them
-   * nor block the ones after, and take no place in the parallel window: the
-   * tool bounds how many of its own calls run at once. For a call that
-   * waits on long-running work it does not perform itself (a child run). A
-   * later barrier still waits for it.
-   */
-  readonly ownsConcurrency?: boolean;
+  readonly lane?: DispatchFacts['lane'];
   /**
    * The tool is also a global function of a script, taking its `positional`
    * field as the first argument and the rest as the second:
@@ -106,7 +104,7 @@ export interface ITool<E = Error, R = never> {
    * Whether a call recorded as started, with no result, may run again on
    * resume without asking: `'safe'` only for a read-only or idempotent tool,
    * whose second run changes nothing the first did not. Omitted is
-   * `'unsafe'`. Independent of `parallelSafe`, which is about concurrency.
+   * `'unsafe'`. Independent of `lane`, which is about concurrency.
    * The response row saves the declaration with each call, and a resume
    * re-runs a call only when that saved word and the current one both say
    * `'safe'` (`toolUseDispatch.ts`).
@@ -144,7 +142,6 @@ export interface ITool<E = Error, R = never> {
 /** Tool lookup abstraction — supports dependency injection and mock tools. */
 export interface IToolRegistry<E = Error, R = never> {
   get(name: string): ITool<E, R> | undefined;
-  has(name: string): boolean;
 }
 
 /** Map- or Record-backed IToolRegistry. */
@@ -160,10 +157,6 @@ export class MapToolRegistry<E = Error, R = never> implements IToolRegistry<
 
   get(name: string): ITool<E, R> | undefined {
     return this.tools.get(name);
-  }
-
-  has(name: string): boolean {
-    return this.tools.has(name);
   }
 }
 
@@ -184,10 +177,7 @@ export interface CallRequests {
   readonly open: (
     payload: PermissionPayload,
     options?: { readonly onNeverCommitted?: Effect.Effect<void> },
-  ) => Effect.Effect<
-    RequestDecision,
-    DatabaseNotOwner | DatabaseWriteFailed | RunHistoryRefused
-  >;
+  ) => Effect.Effect<RequestDecision, DatabaseNotOwner | CellError>;
 }
 
 /**
@@ -202,6 +192,17 @@ export interface ToolEnv {
   readonly roots: WorkspaceRoots;
   readonly workingDirectory?: string;
   readonly stepRoots?: readonly StepRoot[];
+  /** The run the call works for; absent for a standalone host invocation. */
+  readonly run?: ToolRun;
+}
+
+/**
+ * What a tool reads of the run its call works for, read from the run rather
+ * than copied onto the call. The core names its id; the runtime declares the
+ * rest (`@agent/runtime/RunCall`), so the core imports nothing of it.
+ */
+export interface ToolRun {
+  readonly runId: RunId;
 }
 
 /** What every tool call knows of itself. */

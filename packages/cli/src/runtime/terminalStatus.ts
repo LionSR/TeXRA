@@ -1,7 +1,7 @@
 import { Effect } from 'effect';
 
 import { getRunRecords } from '@agent/storage';
-import type { SessionHandle, runAgent } from '@agent/runtime';
+import type { RunEndResult, SessionHandle } from '@agent/runtime';
 import { readInstalledPluginLoad } from '@common/plugins/pluginTrust';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import { RUN_OUTCOME, type RunOutcome, RUN_PHASE } from '@shared/schemas';
@@ -12,7 +12,7 @@ import { CliExitCode } from './exitCodes';
 import type { DatabaseReadFailed } from '@texra-ai/harness';
 import type { CliPluginPin } from '../schemas/cliOutput';
 
-export type ExecuteAgentResult = Effect.Success<ReturnType<typeof runAgent>>;
+export type ExecuteAgentResult = RunEndResult;
 
 // A type alias, not an interface: the result line types its payload as a
 // loose object, which an interface (no implicit index signature) cannot meet.
@@ -25,7 +25,7 @@ type CliRunResultMetadata = {
   readonly copiedOutputs?: string[];
 };
 
-// Intersecting distributes over the runAgent result union, attaching the
+// Intersecting distributes over the run result union, attaching the
 // CLI-only metadata fields to every member.
 export type CliRunResult = ExecuteAgentResult & CliRunResultMetadata;
 
@@ -87,7 +87,7 @@ export const readCliRunOutcomeState = Effect.fn('readCliRunOutcomeState')(
   function* (
     session: SessionHandle,
     result: ExecuteAgentResult,
-    reportReadFailure?: (error: Error) => void,
+    reportReadFailure: (error: Error) => void,
   ): Effect.fn.Return<{ outcome: RunOutcome; outcomePersisted: boolean }> {
     return yield* getRunRecords(session, result.runId)
       .readRunEnd()
@@ -101,7 +101,7 @@ export const readCliRunOutcomeState = Effect.fn('readCliRunOutcomeState')(
         // being reported as a failed outcome read.
         Effect.catch((error: DatabaseReadFailed) =>
           Effect.sync(() => {
-            reportReadFailure?.(
+            reportReadFailure(
               new Error(
                 `Could not verify the persisted outcome for run ${result.runId}; using the current run outcome: ${toErrorMessage(error)}`,
                 { cause: error },

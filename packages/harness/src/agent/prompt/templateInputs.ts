@@ -46,8 +46,7 @@ const TemplateInputsSchema = z.object({
   /** Workspace root the run operates in. */
   CWD: z.string(),
   /** Absolute agent-directory paths from the external-roots registry, '' when unregistered. */
-  BUILTIN_WORKFLOW_DIR: z.string(),
-  BUILTIN_TOOLUSE_DIR: z.string(),
+  BUILTIN_AGENTS_DIR: z.string(),
   CUSTOM_AGENTS_DIR: z.string(),
   AGENT_DOCS_DIR: z.string(),
   /** Per-category primary file and its content, null when none is readable. */
@@ -233,8 +232,7 @@ type BasicVars = Pick<
   | 'INSTRUCTION'
   | 'IS_ANTHROPIC_MODEL'
   | 'CWD'
-  | 'BUILTIN_WORKFLOW_DIR'
-  | 'BUILTIN_TOOLUSE_DIR'
+  | 'BUILTIN_AGENTS_DIR'
   | 'CUSTOM_AGENTS_DIR'
   | 'AGENT_DOCS_DIR'
 >;
@@ -262,22 +260,17 @@ function getBasicVars(
  */
 type AgentDirectoryVars = Pick<
   TemplateInputs,
-  | 'BUILTIN_WORKFLOW_DIR'
-  | 'BUILTIN_TOOLUSE_DIR'
-  | 'CUSTOM_AGENTS_DIR'
-  | 'AGENT_DOCS_DIR'
+  'BUILTIN_AGENTS_DIR' | 'CUSTOM_AGENTS_DIR' | 'AGENT_DOCS_DIR'
 >;
 
 function getAgentDirectoryVars(): AgentDirectoryVars {
   const KIND_TO_VAR: Record<ExternalRootKind, keyof AgentDirectoryVars> = {
-    builtInWorkflow: 'BUILTIN_WORKFLOW_DIR',
-    builtInToolUse: 'BUILTIN_TOOLUSE_DIR',
+    builtIn: 'BUILTIN_AGENTS_DIR',
     custom: 'CUSTOM_AGENTS_DIR',
     agentDocs: 'AGENT_DOCS_DIR',
   };
   const vars: AgentDirectoryVars = {
-    BUILTIN_WORKFLOW_DIR: '',
-    BUILTIN_TOOLUSE_DIR: '',
+    BUILTIN_AGENTS_DIR: '',
     CUSTOM_AGENTS_DIR: '',
     AGENT_DOCS_DIR: '',
   };
@@ -286,31 +279,24 @@ function getAgentDirectoryVars(): AgentDirectoryVars {
   return vars;
 }
 
-// Maps a template prefix to its canonical file-list field.
-type FileCategoryConfig = {
-  multiple: keyof AgentConfig;
-  single?: keyof AgentConfig;
-};
-
+/** A template prefix's files, as the run's config names them: the one
+ *  edited file a merge launch sets, or the list a category's field holds. */
 const FILE_CATEGORIES: Record<
   FileCategoryPrefix | 'MEDIA',
-  FileCategoryConfig
+  (config: AgentConfig) => readonly (string | null)[]
 > = {
-  INPUT: { multiple: 'inputFiles' },
-  CONTEXT: { multiple: 'contextFiles' },
-  MEDIA: { multiple: 'mediaFiles' },
-  EDITED: { multiple: 'editedFiles', single: 'editedFile' },
+  INPUT: (config) => config.inputFiles,
+  CONTEXT: (config) => config.contextFiles,
+  MEDIA: (config) => config.mediaFiles,
+  EDITED: (config) => [config.editedFile],
 };
 
-/** Get the multi-list for a category (filtering empties) */
+/** A category's files, empties dropped and each named once. */
 function getCategoryFiles(
   config: AgentConfig,
   category: FileCategoryPrefix | 'MEDIA',
 ): string[] {
-  const cat = FILE_CATEGORIES[category];
-  const list = (config[cat.multiple] as string[] | undefined) ?? [];
-  const single = cat.single ? (config[cat.single] as string | null) : null;
-  return unique([single, ...list].filter(isNonEmptyString));
+  return unique(FILE_CATEGORIES[category](config).filter(isNonEmptyString));
 }
 
 /** Categories used for building file vars (excludes MEDIA which is display-only) */

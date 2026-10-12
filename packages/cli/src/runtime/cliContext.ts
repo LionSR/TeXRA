@@ -7,7 +7,7 @@ import { DatabaseOpenFailed, type ConfigProvider } from '@texra-ai/harness';
 import { canonicalizeWorkspacePath } from '@texra-ai/harness/node';
 import { safeParseJson } from '@common/parsing/safeParseJson';
 import type { MinimumLogLevel } from '@logger/effectDiagnostics';
-import { DEFAULT_NODE_STORAGE_ROOT } from '@platform/defaults/nodeStorage';
+import { defaultNodeStorageRoot } from '@platform/defaults/nodeStorage';
 import {
   CLI_OUTPUT_FORMATS,
   CLI_OUTPUT_FORMAT_CONFIG_KEY,
@@ -17,8 +17,10 @@ import {
   TEXRA_APPROVAL_POLICY_CONFIG_KEY,
   TEXRA_APPROVAL_POLICY_NO_INPUT_DEFAULT,
   parseTexraApprovalPolicy,
+  texraApprovalPolicyLabel,
   type TexraApprovalPolicy,
 } from '@shared/approvalPolicy';
+import { stricterPolicy } from '@shared/approvalBypassKind';
 import type { SkillSourceOptions } from '@skills/skillSources';
 import { readConfigSettingFrom } from '@utils/config/platformSettings';
 import { absentReason } from '@utils/files/fsEntryExists';
@@ -45,6 +47,10 @@ export interface CliContext {
   readonly mode: CliMode;
   readonly outputFormat: CliOutputFormat;
   readonly approvalPolicy: TexraApprovalPolicy;
+  /** The policy this invocation asked for itself (`--approval-policy`,
+   *  `TEXRA_APPROVAL_POLICY`, `--no-input`), absent when it follows the
+   *  config: what a service launch sends to narrow its own task. */
+  readonly requestedApprovalPolicy?: TexraApprovalPolicy;
   readonly quietLogs: boolean;
   /**
    * The diagnostics emission threshold this process's runtime builds with,
@@ -395,7 +401,7 @@ export const buildCliContext = Effect.fn('cliContext.buildCliContext')(
   > {
     const ambient = init.ambient ?? readCliAmbientState();
     const cwd = yield* resolveCliCwd(init.globalArgs.cwd);
-    const storageRoot = init.storageRoot ?? DEFAULT_NODE_STORAGE_ROOT;
+    const storageRoot = init.storageRoot ?? defaultNodeStorageRoot();
     // The project file over the user file, resolved by the same
     // `JsonConfigProvider` that `roots.config` gives the extension and desktop
     // hosts — and, from `initCliPlatform` on, this host too. This is the
@@ -423,19 +429,21 @@ export const buildCliContext = Effect.fn('cliContext.buildCliContext')(
     // set one — the environment is the only tier that can still carry an
     // unvalidated string. `--no-input` skips the env and config tiers
     // entirely, so it also skips their warnings.
-    const approvalPolicy: TexraApprovalPolicy =
+    const requestedApprovalPolicy: TexraApprovalPolicy | undefined =
       init.globalArgs.approvalPolicy ??
       (noInput
         ? TEXRA_APPROVAL_POLICY_NO_INPUT_DEFAULT
-        : ((yield* pickEnv(
+        : yield* pickEnv(
             'TEXRA_APPROVAL_POLICY',
             parseTexraApprovalPolicy,
             configWarnings,
-          )) ??
-          readConfigSettingFrom<TexraApprovalPolicy>(
-            config,
-            TEXRA_APPROVAL_POLICY_CONFIG_KEY,
-          )));
+          ));
+    const approvalPolicy: TexraApprovalPolicy =
+      requestedApprovalPolicy ??
+      readConfigSettingFrom<TexraApprovalPolicy>(
+        config,
+        TEXRA_APPROVAL_POLICY_CONFIG_KEY,
+      );
     const outputFormat: CliOutputFormat =
       init.globalArgs.outputFormat ??
       (yield* pickEnv(
@@ -459,6 +467,7 @@ export const buildCliContext = Effect.fn('cliContext.buildCliContext')(
       mode: cliMode(init.globalArgs, ambient),
       outputFormat,
       approvalPolicy,
+      ...(requestedApprovalPolicy !== undefined && { requestedApprovalPolicy }),
       quietLogs: init.globalArgs.quiet === true,
       minimumLogLevel,
       stdoutIsTty: ambient.stdoutIsTty,
@@ -481,3 +490,53 @@ export const buildCliContext = Effect.fn('cliContext.buildCliContext')(
     };
   },
 );
+
+/**
+ * What a launch asks for with the policy this invocation requested
+ * explicitly (its flag, `TEXRA_APPROVAL_POLICY`, `--no-input`, a chat's
+ * `/approval`); none follows the project's. The request is the run's launch
+ * limit, which only narrows the project's policy. An explicit Auto-approve
+ * also grants the run every bypass (an Auto-approve launch), recorded on
+ * the run, never on the project. Local and service launches alike.
+ */
+export function launchApproval(requested: TexraApprovalPolicy | undefined): {
+  readonly approvalPolicy?: TexraApprovalPolicy;
+  readonly approveDelegatedWork: boolean;
+} {
+  return {
+    ...(requested !== undefined && { approvalPolicy: requested }),
+    approveDelegatedWork: requested === 'yolo',
+  };
+}
+
+/** The policy a launch runs under: the project's, narrowed by what the
+ *  invocation asked for, or Auto-approve when it asked for that, which a
+ *  Block project still denies first. */
+export function effectiveApprovalPolicy(
+  requested: TexraApprovalPolicy | undefined,
+  configured: TexraApprovalPolicy,
+): TexraApprovalPolicy {
+  if (requested === undefined) return configured;
+  return requested === 'yolo' && configured !== 'never'
+    ? 'yolo'
+    : stricterPolicy(requested, configured);
+}
+
+/** Why a request is not what a launch runs under: one more permissive than
+ *  the project's policy cannot widen it, and Auto-approve, which widens its
+ *  own task, cannot override Block. */
+export function launchApprovalNotice(
+  requested: TexraApprovalPolicy | undefined,
+  configured: TexraApprovalPolicy,
+): string | undefined {
+  if (
+    requested === undefined ||
+    (requested === 'yolo' && configured !== 'never') ||
+    stricterPolicy(requested, configured) === requested
+  )
+    return undefined;
+  const change = `Change the project's policy with /config in \`texra chat\` or in the settings view.`;
+  return requested === 'yolo'
+    ? `Auto-approve can't override Block: tasks run under the project's Block policy. ${change}`
+    : `Tasks run under the project's approval policy, ${texraApprovalPolicyLabel(configured)}, not ${texraApprovalPolicyLabel(requested)}: a launch can only narrow it, or auto-approve its own task. ${change}`;
+}

@@ -1,5 +1,5 @@
-import type { HostRequest } from '@shared/session/hostRequest';
 import type { RuntimeRequest } from '@shared/session/runtimeRequest';
+import type { HostRequest } from '@texra/shared/session/hostRequest';
 
 export type PanelRequest = RuntimeRequest | HostRequest;
 

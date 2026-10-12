@@ -18,10 +18,16 @@ import {
   type StepToolInputs,
 } from '@agent/runtime/agentToolResolution';
 import type { TemplateOpening } from '@agent/prompt/templateInputs';
+import {
+  ModelAccess,
+  modelAccessLayer,
+  type BoundModel,
+} from '@agent/runtime/modelAccess/ModelAccess';
 import type { ModelOptionStores } from '@model/computeModelOptions';
 import type { LanguageModel } from '@platform/languageModel';
-import type { DocumentTask, Persona } from '@shared/schemas';
+import type { DocumentTask, Persona, SessionEventDraft } from '@shared/schemas';
 import { RunHistory } from '@shared/session/runHistory';
+import type { CoWrite } from '@shared/session/sessionEvents';
 import {
   AGENT_SOURCE,
   DeclinableUsageRouteSchema,
@@ -31,15 +37,27 @@ import {
   type RunId,
   type SubagentProgressUpdate,
 } from '@shared/schemas';
-import { LiveTools } from '@tools/liveTools';
 import { buildTerminalTool } from '@tools/structuredOutput';
 import { RunFileService } from '@utils/files/runStorage';
-
-import { bindModel, type BoundModel } from './modelBinding';
-import type { OpenStep } from '../loop/step';
 import type { HttpClient } from 'effect/http';
+
+import type { OpenStep } from '../loop/step';
 import type { AgentLaunchContext } from '../AgentLaunchContext';
 import type { SessionHandle } from '../SessionHandle';
+
+/**
+ * How a launch enters its run's cell: a fresh run's `registration` rides
+ * its opening batch (null: a resume, whose cell activates the run) with
+ * the trace held until then (`opening`), and `entered` runs once that
+ * batch commits. `initialUserMessage`: a fresh
+ * run's instruction, logged once its opening inserted the launch's media.
+ */
+interface LaunchEntry {
+  readonly registration: readonly SessionEventDraft[] | null;
+  readonly opening: Effect.Effect<CoWrite>;
+  readonly entered: Effect.Effect<void>;
+  readonly initialUserMessage: string | undefined;
+}
 
 /**
  * Immutable per-run tool policy, resolved by the launch and read from the
@@ -83,14 +101,14 @@ export interface AgentRunShape {
   readonly toolPolicy: ToolPolicy;
   readonly workingDirectory?: string;
   readonly delegationAgentScope?: AgentDelegationScope | null;
-  /** The process stores the launch read; every route and credential read
-   *  below the loop takes them from here. */
+  /** The session's setting slots and the process secret store the launch
+   *  read, for what the run reads besides its model (`ModelAccess` owns that). */
   readonly stores: ModelOptionStores;
   /** What the run opens from; null for a tool-use run whose rows hold its
    *  opening, which a resume never renders again. */
   readonly opening: TemplateOpening | null;
-  /** Initial user row to log after the loop has inserted launch media. */
-  readonly initialUserMessageForTranscript: string | undefined;
+  /** How the launch enters the run's cell. */
+  readonly entry: LaunchEntry;
   readonly fileService: RunFileService;
   /** What each step resolves its tools from (`loop/step.ts`). */
   readonly toolInputs: Omit<
@@ -148,17 +166,19 @@ interface AgentRunLayerInput {
 }
 
 /**
- * Build the run's service from its launch context. A resumed run is on its
- * newest `run.config`'s model and backend, never a file's; a fresh run binds
- * the launch's model under the route the launch context already resolved.
+ * Build the run's service, and the model access its bindings go through,
+ * from its launch context. A resumed run is on its newest `run.config`'s
+ * model and backend, never a file's; a fresh run binds the launch's model
+ * under the route the launch context already resolved. Model access is
+ * built here, in the run's fiber, under its project's environment.
  */
 export const agentRunLayer = (
   ctx: AgentLaunchContext,
   input: AgentRunLayerInput,
 ): Layer.Layer<
-  AgentRun,
+  AgentRun | ModelAccess,
   Error,
-  RunHistory | LanguageModel | HttpClient.HttpClient | LiveTools
+  RunHistory | LanguageModel | HttpClient.HttpClient
 > =>
   Layer.effect(
     AgentRun,
@@ -210,11 +230,13 @@ export const agentRunLayer = (
             ?.filter(({ plugin }) => plugin !== 'run')
             .map(({ name }) => name) ?? PLUGIN_AGENT_DEFAULT_TOOLS
         ).map((name) => ({ name }));
-      // The loaded plugins (MCP servers) the declared tools name, held for
-      // the run's life; the read's problems reach its transcript.
+      // The loaded plugins (MCP servers) the declared tools name, held in
+      // the project's catalog for the run's life and started with its
+      // variables; the read's problems reach its transcript.
       const declared = declaredToolNames(tools);
-      const held = yield* (yield* LiveTools)
-        .hold(declared)
+      const root = (session.runs.get(runId)?.parent ?? null) === null;
+      const held = yield* session.tools
+        .hold(declared, root)
         .pipe(Scope.provide(scope));
       for (const warning of held.warnings) logger.warn(warning);
       const toolInputs: AgentRunShape['toolInputs'] = {
@@ -262,16 +284,17 @@ export const agentRunLayer = (
       // force is open. `bindingScope` is written only inside the ref's
       // update, which serializes every swap.
       let bindingScope = yield* Scope.fork(scope);
-      const bound = yield* bindModel({
-        modelId,
-        config: modelConfig,
-        stores: ctx.stores,
-        backend,
-        ownApiKeyFallback: ctx.ownApiKeyFallback,
-        declinedRoutes,
-        textOnly,
-        temperature: persona.temperature,
-      }).pipe(Scope.provide(bindingScope));
+      const bound = yield* (yield* ModelAccess)
+        .bind({
+          modelId,
+          config: modelConfig,
+          backend,
+          ownApiKeyFallback: ctx.ownApiKeyFallback,
+          declinedRoutes,
+          textOnly,
+          temperature: persona.temperature,
+        })
+        .pipe(Scope.provide(bindingScope));
       const model = yield* SynchronizedRef.make(bound);
       const swapModel: AgentRunShape['swapModel'] = (next) =>
         SynchronizedRef.updateAndGetEffect(model, (current) =>
@@ -306,7 +329,7 @@ export const agentRunLayer = (
         delegationAgentScope: ctx.delegationAgentScope,
         stores: ctx.stores,
         opening: ctx.opening,
-        initialUserMessageForTranscript: ctx.initialUserMessageForTranscript,
+        entry: ctx.entry,
         fileService: new RunFileService(runId, session.roots),
         toolInputs,
         steps: yield* SynchronizedRef.make<OpenStep | null>(null),
@@ -318,4 +341,4 @@ export const agentRunLayer = (
         callbacks: input.callbacks,
       };
     }),
-  );
+  ).pipe(Layer.provideMerge(modelAccessLayer(ctx.stores)));

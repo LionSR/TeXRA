@@ -5,7 +5,8 @@ import { it } from '@effect/vitest';
 import { Effect } from 'effect';
 import { beforeEach, describe, expect } from 'vitest';
 
-import { getRunRecords, resolveChildRunOutput } from '@agent/storage';
+import { getRunRecords } from '@agent/storage';
+import { resolveChildRunOutput } from '@agent/storage/childRunOutput';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import {
   aggregateId,
@@ -14,7 +15,6 @@ import {
   type RoundOutput,
   type RunId,
 } from '@shared/schemas';
-import { documentsSummary } from '@shared/plugins/documents';
 import {
   createProcessSession,
   publishTestRunStart,
@@ -22,6 +22,7 @@ import {
 import { setupPlatform } from '@test/support/setupPlatform';
 import { fakePath } from '@test/support/FakePlatform';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
+import { documentsSummary } from '@texra/shared/plugins/documents';
 
 const parentRunId = 'aaaaaa111111' as RunId;
 const childRunId = 'bbbbbb222222' as RunId;
@@ -42,7 +43,6 @@ function workflowRounds(absolutePath: string): RoundOutput[] {
   return [
     RoundOutputSchema.parse({
       round: 1,
-      rawOutput: null,
       outputs: [
         {
           source: 'draft',
@@ -63,8 +63,6 @@ function workflowRounds(absolutePath: string): RoundOutput[] {
 
 const completedWorkflowResult: DeliveredResult = {
   producer: 'subagent',
-  agentName: 'draft',
-  wallTimeMs: 10,
   output: {
     response: '',
     files: [],

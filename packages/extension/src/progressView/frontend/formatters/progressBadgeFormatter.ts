@@ -1,8 +1,8 @@
+import type { RunView } from '@shared/session/sessionView';
 import {
   DOCUMENTS_OUTPUT_KEY,
   documentRoundsOf,
-} from '@shared/plugins/documents';
-import type { RunView } from '@shared/session/sessionView';
+} from '@texra/shared/plugins/documents';
 import { passLabel } from '@ui/copy/taskDiagnostics';
 
 /**

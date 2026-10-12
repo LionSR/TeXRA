@@ -17,7 +17,7 @@ import {
 
 import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 
-import { testRuntime } from '@test/support/testProcessRuntime';
+import { testRuntime, testSessionOf } from '@test/support/testProcessRuntime';
 
 import {
   createFakeHost,
@@ -296,6 +296,9 @@ describe('CLI history runtime', () => {
         globalState: host.roots.globalState,
         secrets: host.secrets,
         session: Effect.succeed(testDefaultSession()),
+        runSession: Effect.sync(() =>
+          testSessionOf(testDefaultSession(), { persistent: true }),
+        ),
         roots: host.roots,
         runtime: testRuntime(),
       }),
@@ -367,14 +370,14 @@ describe('CLI history runtime', () => {
 
   it('projects the history-detail NDJSON status onto the frozen vocabulary', async () => {
     await publishRunFacts('c1c1c1' as RunId, {
-      outcome: RUN_OUTCOME.CANCELLED,
+      outcome: RUN_OUTCOME.FAILED,
     });
 
     const details = await historyDetails('c1c1c1' as RunId);
-    expect(details?.status).toBe('cancelled');
+    expect(details?.status).toBe('failed');
     expect(cliHistoryDetailNdjsonRecord(details!)).toMatchObject({
       kind: 'history-detail',
-      detail: { id: 'c1c1c1', status: 'interrupted' },
+      detail: { id: 'c1c1c1', status: 'error' },
     });
   });
 
@@ -452,7 +455,7 @@ describe('CLI history runtime', () => {
       const runId = 'a11ce7a11ce7' as RunId;
       const session = testDefaultSession();
       publishTestRunStart(session, runId);
-      session.trace.publish(runId, {
+      session.log.publish(runId, {
         type: 'log',
         level: 'info',
         message: 'Root status only',

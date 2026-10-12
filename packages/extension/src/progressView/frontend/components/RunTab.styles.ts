@@ -1,12 +1,11 @@
 // Third-party imports
 import { css } from 'lit';
 
-import { visuallyHiddenDeclarations } from '@ui/styles';
-
 /** Styles for the individual <run-tab> row. */
 export const runTabStyles = css`
   :host {
     display: block;
+    padding-block: var(--run-tab-row-gap, var(--wa-space-3xs));
     container-type: inline-size;
     box-sizing: border-box;
     min-width: 0;
@@ -21,9 +20,10 @@ export const runTabStyles = css`
     width: 100%;
     min-width: 0;
     max-width: 100%;
-    gap: var(--wa-space-3xs);
-    border-inline-start: var(--border-medium) solid
-      var(--run-status-rail-color, var(--run-status-color, transparent));
+    gap: var(--wa-space-2xs);
+    min-height: var(--row-height);
+    border-radius: var(--run-tab-radius, var(--wa-border-radius-s));
+    padding-inline-end: var(--wa-space-2xs);
     box-sizing: border-box;
     overflow: hidden;
   }
@@ -39,21 +39,17 @@ export const runTabStyles = css`
 
   .tab-container.tone-warning {
     --run-status-color: var(--color-warning);
-    --run-status-rail-color: var(--color-warning);
   }
 
   .tab-container.tone-success .tab-status-icon {
     color: var(--color-success);
   }
 
-  /* Finished states (completed/cancelled/ready) and unavailable keep the
-     transparent default: the rail only lights up while something is
-     happening or needs attention. */
+  /* Finished neutral states need no extra status decoration. */
 
-  /* Pending approval — solid orange start rail. */
+  /* Pending approval uses the warning glyph. */
   .tab-container.has-pending-approval {
     --run-status-color: var(--color-warning);
-    --run-status-rail-color: var(--color-chart-orange);
   }
 
   .tab-select-tooltip-anchor {
@@ -67,13 +63,22 @@ export const runTabStyles = css`
     display: flex;
     flex-direction: column;
     align-items: flex-start;
-    padding: var(--wa-space-3xs) var(--wa-space-2xs);
+    min-height: var(--row-height);
+    justify-content: center;
+    padding: var(--wa-space-2xs) var(--wa-space-xs);
+    padding-inline-start: var(
+      --run-tab-padding-inline-start,
+      var(--wa-space-xs)
+    );
     cursor: pointer;
     border: none;
     background: none;
     color: var(--wa-color-text-normal);
     text-align: start;
     font-family: var(--font-family);
+    box-sizing: border-box;
+    font-size: var(--font-size-sm);
+    line-height: var(--line-height-normal);
     min-width: 0;
     overflow-x: hidden;
   }
@@ -123,6 +128,8 @@ export const runTabStyles = css`
     font-size: var(--font-size-xs);
     line-height: var(--line-height-tight);
     white-space: nowrap;
+    justify-content: center;
+    width: var(--run-tab-status-width, auto);
   }
 
   .tab-status-icon {
@@ -135,8 +142,13 @@ export const runTabStyles = css`
   }
 
   .tab-status-label {
+    display: var(--run-tab-status-label-display, inline);
     overflow: hidden;
     text-overflow: ellipsis;
+  }
+
+  .tone-running:not(.has-pending-approval) .tab-status-icon {
+    font-size: 8px;
   }
 
   .tab-meta {
@@ -193,19 +205,8 @@ export const runTabStyles = css`
    * .tab-expand, and any nested spans
    * (.last-active, .model) and codicon glyphs.
    */
-  .tab-container.is-active * {
+  .tab-container.is-active :is(.tab, .tab-title, .tab-expand) {
     color: inherit;
-  }
-
-  /* Selection is the primary row state. Keep the lifecycle rail present, but
-     neutralize its hue against the selected surface. */
-  .tab-container.is-active:is(
-      .tone-running,
-      .tone-danger,
-      .tone-warning,
-      .has-pending-approval
-    ) {
-    --run-status-rail-color: currentColor;
   }
 
   /* A collapsed parent's descendants, in words: how many it hides and how
@@ -220,6 +221,7 @@ export const runTabStyles = css`
 
   /* The fold's banner copy: the unreadable detail or the interrupted notice. */
   .tab-detail {
+    display: var(--run-tab-detail-display, block);
     width: 100%;
     min-width: 0;
     overflow: hidden;
@@ -236,21 +238,24 @@ export const runTabStyles = css`
     display: none;
   }
 
-  /* The row's Delete: shown on hover or focus, and at rest kept for a
-     screen reader's browse cursor, which reaches it without moving focus. */
-  .tab-remove {
+  /* Always-present actions keep renaming/deletion reachable by keyboard and screen reader. */
+  .tab-actions {
+    display: block;
+    width: var(--control-size-s);
+    height: var(--control-size-s);
     flex-shrink: 0;
     color: var(--color-text-muted);
   }
 
-  .tab-remove::part(base) {
-    padding: 0 var(--wa-space-3xs);
-    border: none;
-    background: none;
+  .tab[hidden] {
+    display: none;
   }
 
-  .tab-container:not(:hover, :focus-within) .tab-remove {
-    ${visuallyHiddenDeclarations}
+  .tab-rename {
+    width: 100%;
+    min-width: 0;
+    margin-inline: var(--wa-space-2xs);
+    align-self: center;
   }
 
   .tab-container.is-read-only .tab-title {
@@ -326,17 +331,14 @@ export const runTabStyles = css`
   @media (forced-colors: active) {
     .tab-container:is(.tone-running, .tone-warning, .has-pending-approval) {
       --run-status-color: Highlight;
-      --run-status-rail-color: Highlight;
     }
 
     .tab-container.tone-danger {
       --run-status-color: CanvasText;
-      --run-status-rail-color: CanvasText;
     }
 
     .tab-container:is(.tone-success, .tone-neutral) {
       --run-status-color: GrayText;
-      --run-status-rail-color: transparent;
     }
 
     /* System selection colors override authored status hues. The focused
@@ -344,15 +346,6 @@ export const runTabStyles = css`
     .tab-container.is-active {
       background-color: Highlight;
       color: HighlightText;
-    }
-
-    .tab-container.is-active:is(
-        .tone-running,
-        .tone-danger,
-        .tone-warning,
-        .has-pending-approval
-      ) {
-      --run-status-rail-color: HighlightText;
     }
 
     .tab-container.is-active * {

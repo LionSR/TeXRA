@@ -197,9 +197,7 @@ export const readCliHistoryDetails = Effect.fn('cli.readCliHistoryDetails')(
     const checkpointPresent = resumeFrom.kind === 'checkpoint';
     // A run with no config is corrupt: there is nothing to resume it under.
     const standing = cliRunStanding({
-      resumable:
-        config !== null &&
-        (checkpointPresent || resumeFrom.kind === 'unopened'),
+      resumable: config !== null && checkpointPresent,
       phase: run?.status,
       paused: run?.substate === RUN_SUBSTATE.PAUSED,
     });

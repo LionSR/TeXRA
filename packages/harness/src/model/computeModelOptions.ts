@@ -1,10 +1,5 @@
 import { Data, Effect, Result } from 'effect';
-import {
-  hint,
-  MODEL_CONFIGS,
-  type ModelConfig,
-  type ReasoningEffort,
-} from 'llm-zoo';
+import { MODEL_CONFIGS, type ModelConfig, type ReasoningEffort } from 'llm-zoo';
 import { z } from 'zod';
 
 import {
@@ -12,8 +7,6 @@ import {
   decideModelRoute,
   hasUsableApiKey,
   type HostRouteFacts,
-  isKimiCodeExclusiveModel,
-  isKimiSubscriptionEligible,
   modelConfig,
   type ModelRoute,
   providerDisplayName,
@@ -27,26 +20,16 @@ import type { PlatformSecrets } from '@platform/secrets';
 import { DEFAULT_MODELS } from '@shared/constants/defaultModels';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import {
-  EXPENSIVE_MODEL_HINT,
-  FAST_FIRST_RESPONSE_HINT,
-  isExpensiveModel,
-  isFastFirstResponseModel,
   MODEL_AVAILABILITY_STATUS,
   type ModelAvailabilityKind,
-  type ModelOptionData,
   type UsageRoute,
 } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 
-import {
-  reasoningEffortOverrides,
-  reasoningLevelLabel,
-} from './reasoningLevel';
-import { readRouteFacts } from './modelRoute';
+import { readModelSettings, routeFactsFor } from './modelSettings';
 import {
   copilotRouteUnavailableReason,
   discoverCopilotRoutes,
-  prefersCopilotRoute,
   type CopilotModelRoute,
 } from './copilotRouting';
 
@@ -159,6 +142,8 @@ type ProviderKeyStatuses = Partial<Record<ApiKeyProviderId, boolean>>;
  */
 interface ModelRouteContext {
   reasoningLevels: Readonly<Record<string, ReasoningEffort>>;
+  /** Models whose Copilot route the user prefers. */
+  copilotModels: readonly string[];
   hasOpenRouter: boolean;
   facts: HostRouteFacts;
 }
@@ -314,7 +299,7 @@ function readProviderKeyStatuses(
 
 /**
  * Stage 0: every host fact the routes are decided over, resolved once per
- * call. The Kimi Code key status is a route fact (`readRouteFacts` reads it),
+ * call. The Kimi Code key status is a route fact (`readModelSettings` reads it),
  * so it seeds the key statuses, and the OpenRouter branch is decided by the
  * OpenRouter key alone.
  */
@@ -322,19 +307,17 @@ function buildAvailabilityContext(
   stores: ModelOptionStores,
 ): Effect.Effect<ModelAvailabilityContext, ModelHostFactUnreadable> {
   return Effect.gen(function* () {
-    const [facts, reasoningLevels, openRouterKey] = yield* Effect.all(
+    const [settings, openRouterKey] = yield* Effect.all(
       [
-        hostFact('the routing preferences', readRouteFacts(stores)),
-        hostFact(
-          'the stored reasoning levels',
-          reasoningEffortOverrides(stores.globalState),
-        ),
+        hostFact('the model settings', readModelSettings(stores)),
         readProviderKeyStatuses(stores.secrets, ['openRouter']),
       ] as const,
       { concurrency: 'unbounded' },
     );
+    const facts = routeFactsFor(settings, []);
     return {
-      reasoningLevels,
+      reasoningLevels: settings.reasoningLevels,
+      copilotModels: settings.copilotModels,
       facts,
       hasOpenRouter: openRouterKey.openRouter === true,
       keyStatuses: { ...openRouterKey, kimiCode: facts.kimiCodeKey },
@@ -354,11 +337,7 @@ const presentedCopilotRoutes = discoverCopilotRoutes().pipe(
  * rather than re-deciding over inputs that may have moved while the key read
  * was in flight.
  */
-function routeModels(
-  stores: ModelOptionStores,
-  models: readonly string[],
-  ctx: ModelRouteContext,
-) {
+function routeModels(models: readonly string[], ctx: ModelRouteContext) {
   return Effect.gen(function* () {
     const routed = new Map<string, RoutedModel>();
     let copilotRoutes: ReadonlyMap<string, CopilotModelRoute> | undefined;
@@ -369,8 +348,7 @@ function routeModels(
       const rawConfig = selected.config;
       // A retired row settles without its Copilot preference.
       const prefersCopilot =
-        !rawConfig.retired &&
-        (yield* prefersCopilotRoute(rawConfig.ref, stores.globalState));
+        !rawConfig.retired && ctx.copilotModels.includes(rawConfig.ref);
       const copilotRoute = prefersCopilot
         ? (copilotRoutes ??= yield* presentedCopilotRoutes).get(rawConfig.ref)
         : undefined;
@@ -559,131 +537,13 @@ export function setModelEnabled(input: {
     );
 }
 
-/** The fields of a model's picker row the registry alone decides. */
-interface BaseModelOption {
-  readonly value: string;
-  readonly label: string;
-  readonly provider: string;
-  readonly context: string | undefined;
-  readonly cost: string | undefined;
-  readonly hint: string;
-}
-
-const MILLION = 1_000_000;
-const THOUSAND = 1_000;
-
-/** Format a context window for display. */
-function formatContext(context: number | undefined): string | undefined {
-  if (context === undefined) return undefined;
-  if (context >= MILLION) return `${(context / MILLION).toFixed(1)}M`;
-  if (context >= THOUSAND) return `${Math.round(context / THOUSAND)}K`;
-  return context.toString();
-}
-
-/** Format per-million input and output prices for display. */
-function formatCost(
-  inputPrice: number | undefined,
-  outputPrice: number | undefined,
-): string | undefined {
-  if (inputPrice === undefined || outputPrice === undefined) return undefined;
-  return `$${inputPrice.toFixed(3)}/$${outputPrice.toFixed(3)}`;
-}
-
-function prefixHint(prefix: string, base: string): string {
-  return base ? `${prefix} | ${base}` : prefix;
-}
-
-/** The model tooltip: the registry's hint behind a pricing hint, if any. */
-function buildModelHint(config: ModelConfig): string {
-  const base = hint(config);
-  if (isExpensiveModel(config.outputPrice)) {
-    return prefixHint(EXPENSIVE_MODEL_HINT, base);
-  }
-  if (isFastFirstResponseModel(config.inputPrice)) {
-    return prefixHint(FAST_FIRST_RESPONSE_HINT, base);
-  }
-  return base;
-}
-
-/**
- * Project a model's registry config to the picker-row fields every view
- * shares: label, source, context window, prices and tooltip. The tooltip
- * reads `hintConfig`, the config as published, while the window and prices
- * read the config the model runs with on its route.
- */
-function buildBaseModelOption(
-  model: string,
-  config: ModelConfig,
-  hintConfig: ModelConfig = config,
-  source: string = resolveModelSource(config),
-): BaseModelOption {
-  return {
-    value: model,
-    label: config.label,
-    provider: source,
-    context: formatContext(config.contextWindow),
-    cost: formatCost(config.inputPrice, config.outputPrice),
-    hint: buildModelHint(hintConfig),
-  };
-}
-
-/**
- * Build typed model option data for a single model from stage 1's decision for
- * it. No decision means the registry does not describe the model.
- */
-function buildModelOptionData(
-  model: string,
-  decision: RoutedModel | undefined,
-  ctx: ModelAvailabilityContext,
-): ModelOptionData {
-  if (!decision) {
-    return { value: model, label: model, availability: 'unknown-model' };
-  }
-  const { rawConfig, config, route } = decision;
-  const availability = resolveModelAvailability(
-    model,
-    decision.gate,
-    ctx.keyStatuses,
-  );
-  const optionConfig =
-    route.kind === 'copilot' && route.route?.access === 'allowed'
-      ? route.route.effectiveConfig
-      : config;
-  const source = modelSource(route, optionConfig);
-  const reasoning =
-    availability.kind === 'copilot-allowed'
-      ? optionConfig.reasoning && 'Default (provider managed)'
-      : reasoningLevelLabel(
-          optionConfig,
-          ctx.reasoningLevels[optionConfig.ref],
-        );
-  let routeLabel: string | undefined;
-  if (availability.kind === 'copilot-allowed') {
-    // The row's identity stays the base model; the badge names the route.
-    routeLabel = 'Via Copilot';
-  } else if (
-    isKimiSubscriptionEligible(config) &&
-    !isKimiCodeExclusiveModel(config)
-  ) {
-    routeLabel = `Via ${route.kind === 'openrouter' ? 'OpenRouter' : providerDisplayName(source)}`;
-  }
-  // The row ships the verdict's kind alone; `MODEL_AVAILABILITY_STATUS`
-  // words it for whichever surface renders it.
-  return {
-    ...buildBaseModelOption(model, optionConfig, rawConfig, source),
-    ...(reasoning ? { reasoning } : {}),
-    ...(routeLabel ? { routeLabel } : {}),
-    availability: availability.kind,
-  };
-}
-
 /**
  * One computation's resolved inputs: the host facts and key statuses, read
  * once, and the route each visible model was decided to take over them.
  *
  * This is the whole of the boundary between reading a host and computing
  * availability. {@link readModelAvailabilityInputs} is the only thing in this
- * module that touches a host; {@link modelOptionsFrom} and
+ * module that touches a host; {@link modelVerdictsFrom} and
  * {@link modelUnavailableReasonFrom} are pure functions of this value, so a
  * caller awaits once and then finishes synchronously. It carries no store
  * reference, which is what makes that structural rather than a promise: the
@@ -719,12 +579,7 @@ export const readModelAvailabilityInputs = Effect.fn(
       ),
       routeCtx,
     );
-  // Stage 1's live state reads (the Copilot route preference, the GLM endpoint
-  // settings) fail like the reads above.
-  const routed = yield* hostFact(
-    'the route preferences',
-    routeModels(stores, visible, routeCtx),
-  );
+  const routed = yield* routeModels(visible, routeCtx);
   const context = yield* withConsultedKeyStatuses(
     stores.secrets,
     routed,
@@ -734,15 +589,56 @@ export const readModelAvailabilityInputs = Effect.fn(
 });
 
 /**
- * Typed model option data for Lit-native rendering — pure, and the whole of
- * the per-model work, so the ~157-model settings pass costs no awaits.
+ * One visible model's verdict: whether it can run now, and the route that
+ * decided it. The registry does not describe an `unknown-model`. Each host
+ * words a row from it (the app's `modelOptionsFrom`).
  */
-export function modelOptionsFrom(
+export type ModelVerdict =
+  | { readonly model: string; readonly availability: 'unknown-model' }
+  | {
+      readonly model: string;
+      readonly availability: ModelAvailabilityKind;
+      /** The registry config as published: what the model is. */
+      readonly published: ModelConfig;
+      /** The config it runs with on its route: the editor's when Copilot serves it. */
+      readonly config: ModelConfig;
+      readonly route: ModelRoute<CopilotModelRoute>;
+      /** The key its route bills, or the model's own source. */
+      readonly source: string;
+      /** The user's saved reasoning effort for it. */
+      readonly savedEffort: ReasoningEffort | undefined;
+    };
+
+/**
+ * Every visible model's verdict, in the order they are shown: pure, and the
+ * whole of the per-model work, so the ~157-model settings pass costs no
+ * awaits.
+ */
+export function modelVerdictsFrom(
   inputs: ModelAvailabilityInputs,
-): ModelOptionData[] {
-  return inputs.visible.map((model) =>
-    buildModelOptionData(model, inputs.routed.get(model), inputs.context),
-  );
+): ModelVerdict[] {
+  return inputs.visible.map((model) => {
+    const decision = inputs.routed.get(model);
+    if (!decision) return { model, availability: 'unknown-model' };
+    const { route } = decision;
+    const config =
+      route.kind === 'copilot' && route.route?.access === 'allowed'
+        ? route.route.effectiveConfig
+        : decision.config;
+    return {
+      model,
+      availability: resolveModelAvailability(
+        model,
+        decision.gate,
+        inputs.context.keyStatuses,
+      ).kind,
+      published: decision.rawConfig,
+      config,
+      route,
+      source: modelSource(route, config),
+      savedEffort: inputs.context.reasoningLevels[config.ref],
+    };
+  });
 }
 
 /**

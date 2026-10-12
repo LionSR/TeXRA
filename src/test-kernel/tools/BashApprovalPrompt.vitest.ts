@@ -4,7 +4,7 @@ import '@test/support/defaultSessionTestSetup';
 // Third-party imports
 import { it } from '@effect/vitest';
 import { Deferred, Effect, Fiber, Stream } from 'effect';
-import { describe, expect } from 'vitest';
+import { beforeEach, describe, expect } from 'vitest';
 import { humanGrant } from '@agent/runtime/runApprovalQueue';
 
 // Local imports
@@ -14,6 +14,7 @@ import {
   TOOL_EDIT_APPROVAL_CONFIG_KEY,
   type BashPermission,
 } from '@shared/schemas';
+import { setTestApprovalPolicy } from '@test/support/sessionTestUtils';
 import { closeSessionOf } from '@test/support/sessionEnd';
 import { createFakeHost, installedHost } from '@test/support/setupPlatform';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
@@ -63,6 +64,8 @@ function watchBashRequests(session: SessionHandle) {
 }
 
 describe('requestBashApproval queueing', () => {
+  // The project's policy is the fake host's setting, shared by the file.
+  beforeEach(() => setTestApprovalPolicy('ask'));
   it.effect(
     'uses the invoking project approval settings outside its ambient scope',
     () =>
@@ -70,7 +73,7 @@ describe('requestBashApproval queueing', () => {
         Effect.gen(function* () {
           const session = yield* createTestSession();
           yield* Effect.addFinalizer(() => closeSessionOf(session));
-          session.approvals.setPolicy('ask');
+          setTestApprovalPolicy('ask');
           const keys = [
             BASH_APPROVAL_CONFIG_KEY,
             TOOL_EDIT_APPROVAL_CONFIG_KEY,
@@ -128,7 +131,7 @@ describe('requestBashApproval queueing', () => {
             policyDenials += 1;
           },
         });
-        session.approvals.setPolicy('never');
+        setTestApprovalPolicy('never');
         publishTestRunStart(session, runId);
         yield* session.approvals.change(runId, humanGrant(['bash'], true));
         const requests = yield* watchBashRequests(session);

@@ -5,7 +5,6 @@ import { Cause, Context, Effect, Exit, FileSystem, Layer, Scope } from 'effect';
 import { it as effectIt } from '@effect/vitest';
 
 import { describe, expect, it, vi } from 'vitest';
-import { SessionOwner } from '@agent/runtime/SessionOwner';
 import { globalDatabaseLayer } from '@controllers/session/Database';
 import { projectDatabaseLayer } from '@controllers/session/projectDatabase';
 import { openDesktopProjectRegistry } from '@desktop/main/desktopProjects.js';
@@ -13,6 +12,7 @@ import {
   DesktopProjectRecords,
   openDesktopProjectRecords,
 } from '@desktop/main/desktopProjectRecords.js';
+import { SessionOwner } from '@platform/processRuntime';
 import { JsonStore } from '@platform/defaults/jsonStore';
 import {
   nodeProcesses,
@@ -22,19 +22,21 @@ import { resolveGlobalStoragePath } from '@platform/defaults/workspaceStorage';
 import { DatabaseWriteFailed, GlobalDatabase } from '@shared/session/database';
 import { ProcessIdentity } from '@shared/session/sessionEvents';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
-import { createFakeHost } from '@test/support/setupPlatform';
+import { createFakeHost, storePluginsLayer } from '@test/support/setupPlatform';
 import {
   closeAllTestSessions,
   closeTestSession,
   listTestSessions,
 } from '@test/support/sessionEnd';
 import { createTestSession } from '@test/support/sessionTestUtils';
+import { testSessions } from '@test/support/testProcessRuntime';
 
 import { sourceFilesUnder } from '@test/support/repoScan';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 import { withEnv } from '@test/support/testEnv';
 import { normalizeFilePath } from '@utils/core';
 import { DESKTOP_SRC_DIR, REPO_ROOT } from './desktopTestPaths.ts';
+import type { Sessions } from '@texra-ai/harness';
 
 /**
  * The records over a temp profile's global root, on a handle the caller's
@@ -67,17 +69,25 @@ const ephemeralOwner = (reason: string): SessionOwner['Service'] => ({
     }),
   close: closeTestSession,
   list: listTestSessions,
+  holds: (session) =>
+    Effect.map(listTestSessions, (held) => held.includes(session)),
   closeAll: closeAllTestSessions,
 });
+
+/** The kernel's sessions, over the ephemeral store the owner above opens. */
+const ephemeralSessions = Effect.map(
+  testSessions,
+  (sessions): Sessions['Service'] => ({
+    ...sessions,
+    open: (roots) => sessions.open(roots),
+  }),
+);
 
 describe('desktop composition root and launch environment', () => {
   const tempDirs = useTempDirs();
 
   async function createResourceTree(resourcesPath: string): Promise<void> {
-    await Promise.all([
-      mkdir(join(resourcesPath, 'agents'), { recursive: true }),
-      mkdir(join(resourcesPath, 'tool_use_agents'), { recursive: true }),
-    ]);
+    await mkdir(join(resourcesPath, 'agents'), { recursive: true });
   }
 
   effectIt.live(
@@ -117,6 +127,7 @@ describe('desktop composition root and launch environment', () => {
       ).pipe(
         Effect.provide(nodePlatformLayer),
         Effect.provide(projectDatabaseLayer),
+        Effect.provide(storePluginsLayer),
         Effect.provide(ProcessIdentity.layer(processOwnerId(undefined))),
         Effect.provide(nodePlatformLayer),
       ),
@@ -145,6 +156,7 @@ describe('desktop composition root and launch environment', () => {
             globalConfigStore: config,
             stores: { ...host.roots, secrets: host.secrets },
             service: undefined,
+            sessions: yield* ephemeralSessions,
           }).pipe(
             Effect.provideService(DesktopProjectRecords, records),
             Effect.provideService(
@@ -200,6 +212,7 @@ describe('desktop composition root and launch environment', () => {
       ).pipe(
         Effect.provide(nodePlatformLayer),
         Effect.provide(projectDatabaseLayer),
+        Effect.provide(storePluginsLayer),
         Effect.provide(ProcessIdentity.layer(processOwnerId(undefined))),
         Effect.provide(nodePlatformLayer),
       ),
@@ -230,6 +243,7 @@ describe('desktop composition root and launch environment', () => {
           globalConfigStore: config,
           stores: { ...host.roots, secrets: host.secrets },
           service: undefined,
+          sessions: yield* ephemeralSessions,
         }).pipe(
           Effect.provideService(DesktopProjectRecords, records),
           Effect.provideService(
@@ -279,6 +293,7 @@ describe('desktop composition root and launch environment', () => {
     ).pipe(
       Effect.provide(nodePlatformLayer),
       Effect.provide(projectDatabaseLayer),
+      Effect.provide(storePluginsLayer),
       Effect.provide(ProcessIdentity.layer(processOwnerId(undefined))),
       Effect.provide(nodePlatformLayer),
     ),

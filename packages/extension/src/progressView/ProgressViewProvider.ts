@@ -14,10 +14,10 @@ import {
   SubscriptionRef,
 } from 'effect';
 
-import { withProcessServices } from '@texra-ai/harness';
+import { LanguageModel, withProcessServices } from '@texra-ai/harness';
 import {
-  PdfOpenFailed,
-  type ManualCriticismEntry,
+  SessionHostInteractions,
+  type HostInteractions,
   type SessionHandle,
 } from '@agent/runtime';
 import { getCatalogAgent, refresh } from '@agent/index';
@@ -26,31 +26,46 @@ import {
   EXTENSION_CATEGORIES,
   getFilterExtensions,
 } from '@common/files/fileTypeUtils';
+import { emitAppSignal } from '@eventBus/AppSignals';
 import { subscribeAppSignal } from '@frontend/events/appSignalSubscriptions';
 import { VscodeToolEditApprovalHost } from '@frontend/approval/VscodeToolEditApprovalHost';
 import { createAgentPresentationHost } from '@frontend/events/agentEventListeners';
 import { pushManualCriticism } from '@frontend/latex/inlineCriticism';
 import { getLinterMessages } from '@frontend/latex/linter';
 import { withLogChannel } from '@logger/effectLog';
-import { DOCUMENTS_OUTPUT_KEY } from '@shared/plugins/documents';
 import { agentKeyOf, type FileLocation, type RunId } from '@shared/schemas';
 import { isLiveRun } from '@shared/session/sessionView';
-import { projectDisplayOf } from '@shared/session/hostSnapshot';
 import {
   getFirstRunDone,
   setOnboardingDeclined,
 } from '@shared/state/onboardingState';
+import {
+  PdfOpenFailed,
+  type EditorCapabilities,
+  type EditorRegistry,
+} from '@texra/tools/editorHost';
+import { projectDisplayOf } from '@texra/shared/session/hostSnapshot';
+import { DOCUMENTS_OUTPUT_KEY } from '@texra/shared/plugins/documents';
 import type {
   DownMessage,
   SurfaceActionMessage,
-} from '@shared/session/sessionFrames';
+} from '@texra/shared/session/sessionFrames';
 import { ToolEditApprovalController } from '@texra/controllers/approval/ToolEditApprovalController';
 import { OnboardingFunnelRefresher } from '@texra/controllers/onboarding/onboardingFunnel';
 import type { ServiceLink } from '@texra/controllers/server/client';
+import { serviceRecords } from '@texra/controllers/server/serviceSession';
 import {
   attachWindowHost,
   type WindowHost,
 } from '@texra/controllers/server/windowHost';
+import {
+  localExportRecords,
+  type ChatExportRecords,
+} from '@texra/controllers/progressView/ChatExportController';
+import {
+  localRunActionPorts,
+  type RunActionRecordPorts,
+} from '@texra/controllers/session/hostRunActions';
 import { attachSessionHost } from '@texra/controllers/session/attachSessionHost';
 import { HostDraftRequests } from '@texra/controllers/session/hostDraftRequests';
 import {
@@ -58,7 +73,6 @@ import {
   HostSnapshotReadFailed,
   type HostSnapshotSource,
 } from '@texra/controllers/session/hostSnapshotSource';
-import type { SessionBackend } from '@texra/controllers/session/sessionBackend';
 import {
   SessionBridge,
   type AttachedPort,
@@ -71,10 +85,14 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { createExtensionHostRequests } from './extensionHostRequests';
 import { RequestAttention } from './requestAttention';
-import type { ProcessRuntime, ProcessServices } from '@texra-ai/harness';
+import type {
+  ProcessRuntime,
+  ProcessServices,
+  Session,
+  WorkspaceRoots,
+} from '@texra-ai/harness';
 import type {
   PlatformSecrets,
-  LanguageModel,
   StateStore,
   StateReadFailed,
   StateWriteFailed,
@@ -105,6 +123,20 @@ interface Port {
   readonly disposables: vscode.Disposable[];
 }
 
+/** The window's session: the service's, or, when the service could not be
+ *  reached, this process's own with the handle that owns it. */
+export type WindowSession =
+  | {
+      readonly session: Session;
+      readonly service: ServiceLink;
+      readonly handle?: undefined;
+    }
+  | {
+      readonly session: Session;
+      readonly handle: SessionHandle;
+      readonly service?: undefined;
+    };
+
 export class ProgressViewProvider implements vscode.WebviewViewProvider {
   public static readonly viewType = 'texra.mainView';
 
@@ -122,6 +154,12 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
   private sidebarPort: Port | undefined;
   /** The popped-out tab and its port, attached and released together. */
   private editor: { panel: vscode.WebviewPanel; port: Port } | undefined;
+  /** Where a failure before a run opens is presented: the window's own
+   *  session's surface, or, in service mode, this window's presentation
+   *  host directly. */
+  public readonly present: Pick<SessionHostInteractions, 'emit'>;
+  /** Where this window's runs run: the service's session, or this one. */
+  private readonly runSession: Session;
   /** The last credential answer the API-key banner's producer read. */
   private credentialUsable = true;
 
@@ -172,12 +210,13 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     private readonly secrets: PlatformSecrets,
     /** Process runtime shared with every extension surface. */
     private readonly runtime: ProcessRuntime,
-    /** Session created by the extension entry. */
-    public readonly session: SessionHandle,
-    /** Where this window's runs run: the session here, or the service's. */
-    private readonly backend: SessionBackend,
-    /** The background service, when this window is its client. */
-    private readonly service: ServiceLink | undefined,
+    /** The window's roots: its workspace, storage and settings stores. */
+    private readonly roots: WorkspaceRoots,
+    /** Where this window's runs run: the service's session, or this
+     *  process's own with the handle that owns it. */
+    windowSession: WindowSession,
+    /** The editor registry the extension's plugins read (`texraPlugins`). */
+    private readonly editors: EditorRegistry,
     /** The setup pill: painted from the same credential answer the funnel
      *  reads, so the pill and the "Connect a model" card agree. */
     private readonly paintSetupPill: (credentialUsable: boolean) => void,
@@ -209,18 +248,19 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
         }),
     });
 
+    const runSession = windowSession.session;
+    this.runSession = runSession;
     // Install the recipient before host requests publish the recorder's state.
     this.bridge = this.runtime.runSync(
       SessionBridge.make({
-        backend,
+        session: runSession,
         handleHostRequest: (request, port) =>
           hostRequests.handleHostRequest(request, port),
         onPortClosed: (port) => hostRequests.closePort(port),
       }).pipe(Scope.provide(this.scope)),
     );
-    const roots = session.roots;
     this.snapshot = createHostSnapshotSource({
-      project: projectDisplayOf(session.roots.storage, roots.workspace),
+      project: projectDisplayOf(roots.storage, roots.workspace),
       root: roots.workspace,
       stores: roots,
       secrets,
@@ -246,7 +286,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       // once a task has finished; before that the card is the one prompt.
       apiKeyBanner: () =>
         Effect.all([
-          hasUsableSetupCredential(this.session.roots, this.secrets).pipe(
+          hasUsableSetupCredential(this.roots, this.secrets).pipe(
             withLogChannel('Setup Credentials'),
           ),
           getFirstRunDone(globalState),
@@ -297,19 +337,32 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       host: new VscodeToolEditApprovalHost(
         path.join(storageRoot.fsPath, 'tool-edit-previews'),
         this.runtime,
-        session,
+        roots,
       ),
       // A decision goes where the run runs.
-      session: { requests: backend },
+      session: { requests: runSession },
     });
     this.runtime.runSync(
-      Effect.forkIn(this.attention.follow(backend), this.scope),
+      Effect.forkIn(this.attention.follow(runSession), this.scope),
     );
 
+    const presentation = createAgentPresentationHost(
+      this,
+      globalState,
+      this.runtime,
+      roots,
+    );
+    const { records, exportRecords } = this.windowRecords(
+      windowSession,
+      presentation,
+    );
+    this.present = records.present;
     const hostRequests = createExtensionHostRequests({
-      session,
-      backend,
+      records,
+      exportRecords,
+      runSession,
       runtime: this.runtime,
+      scope: this.scope,
       extensionPath: context.extensionPath,
       globalState,
       secrets,
@@ -332,12 +385,11 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     // chime, one per process (PRD 12.4), never a renderer transition hook
     // that every subscriber would replay. A failed run does not chime.
     // What this window does for a run, whether it runs here or in the
-    // service: notices, the editor's diagnostics and inline criticism, and
-    // opening a PDF.
-    const capabilities = {
-      ...createAgentPresentationHost(this, globalState, this.runtime, session),
+    // service: notices, and the editor's diagnostics, inline criticism and
+    // PDF viewer, which the editor tools read through the registry.
+    const editor: EditorCapabilities = {
       readDiagnostics: getLinterMessages,
-      addCriticism: (payload: ManualCriticismEntry) =>
+      addCriticism: (payload) =>
         Effect.sync(() => pushManualCriticism(payload)),
       openPdf: ({
         location,
@@ -364,31 +416,85 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
             }),
         }),
     };
-    this.runtime.runSync(
-      attachSessionHost(session, this.toolEditApprovals, {
-        ...capabilities,
-        onEvent: (event) =>
-          Effect.sync(() => {
-            // A document task's end carries its documents.
-            if (
-              event.type === 'run.end' &&
-              event.output.documents !== undefined &&
-              event.outcome !== 'failed'
-            )
-              this.chime();
-          }),
-      }).pipe(Scope.provide(this.scope)),
-    );
-    // A window of the service is its project's window too: the service's
-    // runs ask it for the same, and it stages their tool edits.
+    // A window that runs its tasks here attaches to its own session; a
+    // window of the service is its project's window there: the service's
+    // runs ask it for the same, stage their tool edits here, and bind the
+    // editor's language models (Copilot) through it.
+    const { handle, service } = windowSession;
+    if (handle !== undefined) {
+      this.runtime.runSync(
+        this.editors
+          .attach(roots.storage, editor)
+          .pipe(Scope.provide(this.scope)),
+      );
+      this.runtime.runSync(
+        attachSessionHost(handle, this.toolEditApprovals, {
+          ...presentation,
+          onEvent: (event) =>
+            Effect.sync(() => {
+              // A document task's end carries its documents.
+              if (
+                event.type === 'run.end' &&
+                event.output.documents !== undefined &&
+                event.outcome !== 'failed'
+              )
+                this.chime();
+            }),
+        }).pipe(Scope.provide(this.scope)),
+      );
+    }
     if (service !== undefined)
       this.runtime.runFork(
-        this.attachToService(service, capabilities).pipe(
-          Scope.provide(this.scope),
-        ),
+        Effect.flatMap(Effect.service(LanguageModel), (languageModel) =>
+          this.attachToService(service, {
+            ...presentation,
+            ...editor,
+            languageModel,
+            // What a service task wrote, told here as a task here tells
+            // it: the file decorations follow it.
+            filesWritten: (absolutePaths) =>
+              emitAppSignal('workspaceFilesWritten', {
+                absolutePaths: [...absolutePaths],
+              }),
+          }),
+        ).pipe(Scope.provide(this.scope)),
       );
 
     this.watchWorkspace();
+  }
+
+  /**
+   * What the run actions and the transcript export read, from the one
+   * place the window's runs are held: its own session handle, or the
+   * service. In service mode a failure before a run opens is presented on
+   * this window's presentation host, held for the provider's life.
+   */
+  private windowRecords(
+    windowSession: WindowSession,
+    presentation: Pick<HostInteractions, 'emit'>,
+  ): {
+    readonly records: RunActionRecordPorts;
+    readonly exportRecords: ChatExportRecords;
+  } {
+    if (windowSession.handle !== undefined)
+      return {
+        records: localRunActionPorts(windowSession.handle),
+        exportRecords: localExportRecords(windowSession.handle),
+      };
+    const present = new SessionHostInteractions();
+    this.runtime.runSync(
+      Effect.acquireRelease(present.use(presentation), (detach) =>
+        Effect.sync(detach),
+      ).pipe(Scope.provide(this.scope)),
+    );
+    const remote = serviceRecords(
+      windowSession.service,
+      this.roots.workspace ?? '',
+    );
+    return {
+      records: { roots: this.roots, readConfig: remote.readConfig, present },
+      exportRecords: { input: remote.exportInput, trace: remote.exportTrace },
+    };
   }
 
   /**
@@ -399,7 +505,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     service: ServiceLink,
     capabilities: Omit<WindowHost, 'toolEdits'>,
   ): Effect.Effect<void, never, Scope.Scope> {
-    const workspace = this.session.roots.workspace;
+    const workspace = this.roots.workspace;
     if (workspace === undefined) return Effect.void;
     const previews = <A, E>(
       program: Effect.Effect<
@@ -429,7 +535,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
               previews(
                 this.toolEditApprovals.present({
                   ...staging,
-                  roots: this.session.roots,
+                  roots: this.roots,
                 }),
               ).pipe(Effect.mapError((failure) => new Error(failure.message))),
             release: (requestId) =>
@@ -458,7 +564,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
   private chimeOnServiceDocuments(): Effect.Effect<void> {
     return Effect.suspend(() => {
       let live = new Set<RunId>();
-      return Stream.runForEach(this.backend.view.changes, (view) =>
+      return Stream.runForEach(this.runSession.view.changes, (view) =>
         Effect.sync(() => {
           const now = new Set<RunId>();
           for (const run of view.runs.values()) {
@@ -778,16 +884,14 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       if (!options?.inPlace) yield* this.showInSidebar();
       // Each surface decides from its own selection: one on the New-task
       // state opens the newest session, one showing a session keeps it.
-      const newest = SubscriptionRef.getUnsafe(this.backend.view.ref).order.at(
-        0,
-      );
+      const newest = this.runSession.view.current().order.at(0);
       if (newest !== undefined)
         this.surfaceAction({ kind: 'showSessions', runId: newest });
     });
   }
 
   /** Select a stream this window just launched (the launch's
-   *  `onRunResolved` callback): the launching surface selects it, and a
+   *  `onAdmitted` hook): the launching surface selects it, and a
    *  resolved agent retires the missing-agent warning. */
   public presentLaunchedRun(runId: RunId): void {
     this.surfaceAction({ kind: 'select', runId });
@@ -798,7 +902,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     runId: RunId,
   ): Effect.Effect<ProgressRunRevealResult, SurfacePlacementFailed> {
     return Effect.gen({ self: this }, function* () {
-      const view = SubscriptionRef.getUnsafe(this.backend.view.ref);
+      const view = this.runSession.view.current();
       if (!view.runs.has(runId)) return 'missing' as const;
       yield* this.showProgressView();
       this.surfaceAction({ kind: 'select', runId });
@@ -807,8 +911,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
   }
 
   public runLabel(runId: RunId): string | undefined {
-    return SubscriptionRef.getUnsafe(this.backend.view.ref).runs.get(runId)
-      ?.label;
+    return this.runSession.view.current().runs.get(runId)?.label;
   }
 
   public popOutToEditor() {

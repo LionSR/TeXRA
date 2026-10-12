@@ -23,6 +23,8 @@
  *   is refused: a one-shot parent never reads a message. Headless
  *   delegation runs in band, so every row commits in one order.
  * - two `review` runs over the same notes: the context blobs they share.
+ * - a `polish` document task with `--output`: the documents plugin's output
+ *   fact and the CLI's `run.result` (producer `cliWorkflow`).
  * - `golden_chat`, the interactive `texra chat` driven under a PTY, with
  *   "Keep agents running" turned on in `/config` and a plugin's
  *   `PostToolUse` hook on `codex` enabled: a plan the user runs as a goal
@@ -47,6 +49,14 @@
  *   fork, whose `run.start.provenance` names its source and whose first
  *   history row is a `context.edit` (cause `fork`); then `texra resume
  *   --handoff` on the fork: a `context.edit` (cause `handoff`).
+ * - `golden_effect` (headless, `yolo`): its command
+ *   appends to `approved.txt`, then a plugin's `PostToolUse` hook on `bash`
+ *   holds the call, and the process is killed (`SIGKILL`) there. A call's
+ *   PostToolUse rows commit with its settlement, so the store holds the
+ *   command's intent and no result: the consequential crash, after an
+ *   external effect and before its result commits. The file it left is the
+ *   fixture's artifact (`golden-effect/approved.txt`), which the golden
+ *   suite puts back before it resumes the run.
  * - one `golden_child` run, deleted with `texra history delete` once
  *   `texra serve` holds the project open: the tombstoned run, which no
  *   later open is left to collect.
@@ -93,6 +103,12 @@ const binaryPath = path.join(validationRoot, 'bin', 'texra.js');
 const fixturePath = path.join(
   repoRoot,
   'src/test-kernel/fixtures/storage/golden-1.0.sql',
+);
+/** The killed command's effect, kept beside the store it was killed in. */
+const effectPath = path.join(
+  path.dirname(fixturePath),
+  'golden-effect',
+  'approved.txt',
 );
 const FLAG_CONTENT = 'texra-cli-run-validation\n';
 const FAKE_KEY = 'texra-validation-fake-key';
@@ -168,6 +184,10 @@ function scenario(root) {
   writeFileSync(
     path.join(project, 'notes.tex'),
     '\\section{Notes}\nThe golden store reads this file.\n',
+  );
+  writeFileSync(
+    path.join(project, 'paper.tex'),
+    '\\section{Input}\nThe golden document task polishes this file.\n',
   );
   // The Codex CLI the Codex child runs: first on PATH, with an empty global
   // npm prefix so no installed Codex is found first. Its one turn answers
@@ -380,7 +400,31 @@ process.stdin.on('end', function answer() {
     const code = await exited;
     if (code !== 0) fail(`texra serve exited ${code}\n${log}`);
   };
-  return { run, chat, serve, store, project, hooks };
+  // A headless run in the background, for the generator to kill.
+  const start = (command) => {
+    const child = spawn(process.execPath, argv(command), {
+      cwd: project,
+      env,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    spawned.add(child);
+    let output = '';
+    child.stdout.on('data', (chunk) => (output += chunk));
+    child.stderr.on('data', (chunk) => (output += chunk));
+    const exited = new Promise((resolve) =>
+      child.on('exit', (code, signal) => {
+        spawned.delete(child);
+        resolve({ code, signal });
+      }),
+    );
+    return {
+      exited,
+      kill: () => child.kill('SIGKILL'),
+      done: () => child.exitCode !== null || child.signalCode !== null,
+      output: () => output,
+    };
+  };
+  return { run, start, chat, serve, store, project, hooks };
 }
 
 /** Rows of the workspace store, read from outside the CLI. */
@@ -456,6 +500,24 @@ async function generate(root) {
       'json',
       '--print',
     ]);
+
+  // A document task through `texra run --output`: the documents plugin's
+  // output fact and the CLI's `run.result` (producer `cliWorkflow`).
+  cli.run([
+    'run',
+    'polish',
+    '--model',
+    'gpt56',
+    '--input',
+    'paper.tex',
+    '--output',
+    'paper.polished.tex',
+    '--approval-policy',
+    'never',
+    '--output-format',
+    'json',
+    '--print',
+  ]);
 
   // The chat's Codex call runs the hook plugin's `PostToolUse` hook.
   cli.run(['tools', 'enable', 'codex', '--print']);
@@ -693,6 +755,61 @@ async function generate(root) {
     'Saw: The handoff note.',
   );
 
+  // The consequential crash: the command's effect lands, then its
+  // PostToolUse hook holds the call until the process is killed, before
+  // the command's result commits.
+  const held = path.join(root, 'golden-effect-hooks');
+  mkdirSync(path.join(held, '.claude-plugin'), { recursive: true });
+  mkdirSync(path.join(held, 'hooks'));
+  writeFileSync(
+    path.join(held, '.claude-plugin', 'plugin.json'),
+    `${JSON.stringify({ name: 'golden-effect-hooks', version: '1.0.0' })}\n`,
+  );
+  const started = path.join(root, 'golden-effect.started');
+  writeFileSync(
+    path.join(held, 'hooks', 'hooks.json'),
+    `${JSON.stringify({
+      hooks: {
+        PostToolUse: [
+          {
+            matcher: 'bash',
+            hooks: [
+              {
+                type: 'command',
+                command: 'node',
+                args: [
+                  '-e',
+                  `require('node:fs').writeFileSync(${JSON.stringify(started)}, ''); setTimeout(() => {}, 60_000)`,
+                ],
+              },
+            ],
+          },
+        ],
+      },
+    })}\n`,
+  );
+  cli.run(['plugin', 'install', held, '--print']);
+  cli.run(['plugin', 'enable', 'golden-effect-hooks', '--print'], 'y\n');
+  const effect = cli.start([
+    'run',
+    'golden_effect',
+    '--model',
+    'gpt56',
+    '--instruction',
+    'Run the command.',
+    '--approval-policy',
+    'yolo',
+    '--output-format',
+    'json',
+    '--print',
+  ]);
+  await until('the held command', () => existsSync(started), effect);
+  effect.kill();
+  await effect.exited;
+  cli.run(['plugin', 'disable', 'golden-effect-hooks', '--print']);
+  mkdirSync(path.dirname(effectPath), { recursive: true });
+  cpSync(path.join(cli.project, 'approved.txt'), effectPath);
+
   // The tombstone's run: a finished run, deleted in the service step below
   // with no later open left to collect it.
   const before = new Set(
@@ -721,10 +838,26 @@ async function generate(root) {
   // reports back. The service's `task.resume` of that finished command, a
   // run with no agent record, closes its input (`followup.closed`) and
   // refuses it. No open follows, which would remove the finished command.
+  // The service follows the project's persisted policy (the user's local
+  // config beside its store), never a client's: Auto-approve, so the
+  // background command runs unasked.
+  const localConfig = path.join(path.dirname(cli.store()), 'config.json');
+  writeFileSync(
+    localConfig,
+    `${JSON.stringify({
+      ...(existsSync(localConfig)
+        ? JSON.parse(readFileSync(localConfig, 'utf8'))
+        : {}),
+      'texra.approvalPolicy': 'yolo',
+    })}\n`,
+  );
   await cli.serve(async ({ client, call, handle: service }) => {
-    // The tombstone, made once the service holds the project open: a later
-    // open would collect it.
-    await call('project.policy', { workspace: cli.project, policy: 'yolo' });
+    // The tombstone, made once the service holds the project open (any
+    // project call opens it): a later open would collect it.
+    await call('task.request', {
+      workspace: cli.project,
+      request: { kind: 'request.preview', runId: doomed, requestId: '-' },
+    });
     cli.run(['history', 'delete', doomed, '--yes', '--print']);
     const { runId: task } = JSON.parse(
       client([
@@ -789,6 +922,7 @@ async function generate(root) {
       service,
     );
   });
+
   return cli.store();
 }
 
@@ -1014,6 +1148,11 @@ function normalize(file, root) {
     ...uuids.seen,
     ...nanos.seen,
     ...times.seen,
+    // The project's storage folder, named by a hash of its temporary path.
+    [
+      /workspace-storage\/project-[0-9a-f]+/g,
+      'workspace-storage/project-golden',
+    ],
     [/Date: \d{4}-\d{2}-\d{2}/g, 'Date: 2026-01-01'],
     [/Platform: [^\n]*/g, 'Platform: golden'],
     [/Shell: [^\n]*/g, 'Shell: golden'],

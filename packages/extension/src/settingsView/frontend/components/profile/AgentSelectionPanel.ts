@@ -1,17 +1,11 @@
 /** Master-detail panel of the agent library, grouped by source. */
 
 import '@awesome.me/webawesome/dist/components/tag/tag.js';
-import '@awesome.me/webawesome/dist/components/switch/switch.js';
+import '@awesome.me/webawesome/dist/components/dropdown/dropdown.js';
+import '@awesome.me/webawesome/dist/components/dropdown-item/dropdown-item.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
-import {
-  LitElement,
-  html,
-  nothing,
-  type PropertyValues,
-  type TemplateResult,
-} from 'lit';
+import { LitElement, html, nothing, type TemplateResult } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
-import { classMap } from 'lit/directives/class-map.js';
 
 // Local imports - shared styles
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
@@ -29,6 +23,7 @@ import {
   settingsBannerStyles,
 } from '@ui/styles';
 import {
+  renderIconActionButton,
   renderLabeledActionButton,
   type LabeledActionButtonOptions,
 } from '@ui/wa/actionButtons';
@@ -37,9 +32,10 @@ import { AGENT_DECORATORS } from '@ui/wa/icons';
 import { getBasename } from '@utils/core';
 
 // Local imports - shared schemas and events
-import { pluralize } from '@utils/text/stringUtils';
-import { agentSelectionPanelStyles } from './AgentSelectionPanel.styles';
+import { catalogDetailStyles } from '../shared/catalogDetailStyles';
+import '../shared/SettingsCatalog';
 import { renderNewerBuiltInNotice } from './newerBuiltInNotice';
+import type { SettingsCatalogItem } from '../shared/SettingsCatalog';
 import type { AgentSource } from '@texra-ai/harness/schemas';
 
 /** Shorthand: derive the canonical key from an AgentSelectionItem. */
@@ -72,236 +68,51 @@ export class AgentSelectionPanel extends LitElement {
     designTokens,
     commonViewStyles,
     settingsBannerStyles,
-    agentSelectionPanelStyles,
+    catalogDetailStyles,
   ];
 
   @property({ attribute: false }) agents: AgentSelectionItem[] = [];
 
   @state() private selectedKey: string | null = null;
 
-  @state() private groupedSources: Map<AgentSource, AgentSelectionItem[]> =
-    new Map();
-
-  /** Flat list in visual display order, for keyboard navigation. */
-  private get displayOrder(): AgentSelectionItem[] {
-    return AgentSelectionPanel.SOURCE_ORDER.flatMap(
-      (source) => this.groupedSources.get(source) ?? [],
-    );
-  }
-
-  private static readonly SOURCE_ORDER = [
-    AGENT_SOURCE.CUSTOM,
-    AGENT_SOURCE.BUILT_IN,
-    AGENT_SOURCE.PLUGIN,
-  ];
-
-  protected override willUpdate(changed: PropertyValues): void {
-    if (changed.has('agents')) {
-      this.groupedSources = Map.groupBy(this.agents, (agent) => agent.source);
-
-      const order = this.displayOrder;
-      const stillValid = order.some((a) => agentKey(a) === this.selectedKey);
-      if (!stillValid) {
-        const first = order[0];
-        this.selectedKey = first ? agentKey(first) : null;
-      }
-    }
-  }
-
   private get selectedAgent(): AgentSelectionItem | undefined {
-    return this.agents.find((a) => agentKey(a) === this.selectedKey);
-  }
-
-  private selectAgent(agent: AgentSelectionItem): void {
-    this.selectedKey = agentKey(agent);
-  }
-
-  private handleListKeydown(event: KeyboardEvent): void {
-    if (
-      !(event.target as HTMLElement | null)?.closest('.agent-list-item-select')
-    ) {
-      return;
-    }
-
-    const items = this.displayOrder;
-    if (items.length === 0) return;
-
-    const currentIndex = items.findIndex(
-      (a) => agentKey(a) === this.selectedKey,
+    return (
+      this.agents.find((agent) => agentKey(agent) === this.selectedKey) ??
+      this.agents[0]
     );
-
-    let nextIndex: number;
-    switch (event.key) {
-      case 'ArrowDown':
-        nextIndex = Math.min(currentIndex + 1, items.length - 1);
-        break;
-      case 'ArrowUp':
-        nextIndex = Math.max(currentIndex - 1, 0);
-        break;
-      case 'Home':
-        nextIndex = 0;
-        break;
-      case 'End':
-        nextIndex = items.length - 1;
-        break;
-      default:
-        return;
-    }
-
-    event.preventDefault();
-    if (nextIndex !== currentIndex) {
-      this.selectAgent(items[nextIndex]);
-      requestAnimationFrame(() => {
-        const el = this.shadowRoot?.querySelector(
-          '.agent-list-item-select[aria-current="true"]',
-        ) as HTMLElement | null;
-        el?.focus();
-      });
-    }
   }
 
-  private handleSetAllEnabled(source: AgentSource, enabled: boolean): void {
-    postMessage(SETTINGS_VIEW_COMMANDS.SET_ALL_AGENTS_ENABLED, {
-      source,
-      enabled,
-    });
-  }
-
-  private renderListItem(agent: AgentSelectionItem): TemplateResult {
+  private catalogItem(agent: AgentSelectionItem): SettingsCatalogItem {
     const key = agentKey(agent);
-    const isSelected = this.selectedKey === key;
-    const { badge } = sourceMeta(agent.source);
-
-    return html`
-      <div
-        class=${classMap({
-          'agent-list-item': true,
-          selected: isSelected,
-        })}
-        role="listitem"
-      >
-        <wa-switch
-          class="agent-list-item-toggle"
-          ?checked=${agent.enabled}
-          @click=${(e: Event) => {
-            e.stopPropagation();
-            postMessage(SETTINGS_VIEW_COMMANDS.SET_AGENT_ENABLED, {
-              agentName: agent.name,
-              agentSource: agent.source,
-              enabled: !agent.enabled,
-            });
-          }}
-          title="Show in agent selector"
-        >
-          <!-- Slotted (not a host aria-label, which names the custom element
-               rather than the inner switch — see settingsSection.ts). The
-               constant wording keeps the name stable across state; checked
-               carries the state. -->
-          <span class="visually-hidden"
-            >Show ${agent.name} in agent selector</span
-          >
-        </wa-switch>
-        <button
-          class="agent-list-item-select focus-ring-inset"
-          type="button"
-          aria-current=${isSelected ? 'true' : nothing}
-          aria-controls="agent-detail"
-          tabindex=${isSelected ? '0' : '-1'}
-          @click=${() => this.selectAgent(agent)}
-          title=${agent.description ?? agent.name}
-        >
-          <bdi class="agent-list-item-name" dir="auto">${agent.name}</bdi>
-          <span class="agent-list-item-badges">
-            ${
-              agent.hasTask
-                ? html`<span title="Document task"
-                    >${waIcon('file-lines', { label: 'Document task' })}</span
-                  >`
-                : nothing
-            }
-            ${
-              agent.newerBuiltIn
-                ? html`<span title="Newer built-in version available"
-                    >${waIcon('arrow-up', {
-                      label: 'Newer built-in version available',
-                    })}</span
-                  >`
-                : nothing
-            }
-            ${
-              badge
-                ? html`<span title="${badge.label} agent"
-                    >${waIcon(badge.icon, {
-                      label: `${badge.label} agent`,
-                    })}</span
-                  >`
-                : nothing
-            }
-          </span>
-        </button>
-      </div>
-    `;
-  }
-
-  private renderSetAllButton(
-    source: AgentSource,
-    sourceName: string,
-    enable: boolean,
-  ): TemplateResult {
-    const verb = enable ? 'Show' : 'Hide';
-    return html`<wa-button
-      class="agent-count-link btn-ghost is-link"
-      appearance="plain"
-      size="s"
-      @click=${() => this.handleSetAllEnabled(source, enable)}
-      title="${verb} all ${sourceName} agents"
-    >
-      ${verb} all
-      <span class="visually-hidden">${sourceName} agents</span>
-    </wa-button>`;
-  }
-
-  private renderList(): TemplateResult {
-    const groups = this.groupedSources;
-    const orderedSources = AgentSelectionPanel.SOURCE_ORDER.filter((s) =>
-      groups.has(s),
-    );
-
-    return html`
-      <div
-        class="agent-list-pane"
-        role="region"
-        aria-label="Agents"
-        @keydown=${this.handleListKeydown}
-      >
-        ${orderedSources.map((source) => {
-          const agents = groups.get(source)!;
-          const enabledInGroup = agents.filter((a) => a.enabled).length;
-          const sourceName = sourceMeta(source).displayName;
-          const headingId = `${source}-agents-heading`;
-          return html`
-            <div class="agent-list-section-header" id=${headingId}>
-              <span>${sourceName}</span>
-              <span class="agent-list-section-actions">
-                ${
-                  enabledInGroup < agents.length
-                    ? this.renderSetAllButton(source, sourceName, true)
-                    : nothing
-                }
-                ${
-                  enabledInGroup > 0
-                    ? this.renderSetAllButton(source, sourceName, false)
-                    : nothing
-                }
-              </span>
-            </div>
-            <div role="list" aria-labelledby=${headingId}>
-              ${agents.map((a) => this.renderListItem(a))}
-            </div>
-          `;
-        })}
-      </div>
-    `;
+    return {
+      key,
+      name: agent.name,
+      group: sourceMeta(agent.source).displayName,
+      description:
+        agent.description ||
+        (agent.hasTask ? 'Chat and document tasks' : 'Chat agent'),
+      searchText: agent.tools?.join(' '),
+      badges: html`${agent.hasTask ? waIcon('file-lines', { label: 'Document task' }) : nothing}
+      ${agent.newerBuiltIn ? waIcon('arrow-up', { label: 'Newer built-in version available' }) : nothing}`,
+      control: renderIconActionButton({
+        id: `agent-visible-${encodeURIComponent(key)}`,
+        className: 'catalog-row-toggle',
+        icon: agent.enabled ? 'eye' : 'eye-slash',
+        label: `Show ${agent.name} in agent selector`,
+        tooltip: agent.enabled
+          ? 'Shown in agent selector'
+          : 'Hidden from agent selector',
+        pressed: agent.enabled,
+        onClick: (event) => {
+          event.stopPropagation();
+          postMessage(SETTINGS_VIEW_COMMANDS.SET_AGENT_ENABLED, {
+            agentName: agent.name,
+            agentSource: agent.source,
+            enabled: !agent.enabled,
+          });
+        },
+      }),
+    };
   }
 
   /** Detail-pane actions in render order, each with the condition that shows it. */
@@ -325,7 +136,7 @@ export class AgentSelectionPanel extends LitElement {
           title: builtIn
             ? 'View the built-in definition (read-only). Use Customize to edit it.'
             : 'Open this agent YAML definition for editing',
-          className: 'agent-action-btn',
+          className: 'catalog-action-btn',
           kind: 'ghost',
           onClick: () =>
             postMessage(SETTINGS_VIEW_COMMANDS.OPEN_AGENT_YAML, {
@@ -340,7 +151,7 @@ export class AgentSelectionPanel extends LitElement {
           icon: 'folder-open',
           text: 'Reveal in file explorer',
           title: 'Show this file in your system file explorer',
-          className: 'agent-action-btn',
+          className: 'catalog-action-btn',
           kind: 'ghost',
           onClick: () =>
             postMessage(SETTINGS_VIEW_COMMANDS.REVEAL_AGENT_FILE, {
@@ -358,7 +169,7 @@ export class AgentSelectionPanel extends LitElement {
           text: 'Customize',
           label: 'Customize agent',
           title: 'Create an editable copy in your custom agents folder',
-          className: 'agent-action-btn',
+          className: 'catalog-action-btn',
           appearance: 'filled',
           variant: 'brand',
           kind: 'primary',
@@ -376,7 +187,7 @@ export class AgentSelectionPanel extends LitElement {
           text: 'Delete',
           label: 'Delete custom agent',
           title: 'Delete this custom agent',
-          className: 'agent-action-btn',
+          className: 'catalog-action-btn',
           kind: 'danger',
           onClick: () =>
             postMessage(SETTINGS_VIEW_COMMANDS.DELETE_CUSTOM_AGENT, {
@@ -396,12 +207,12 @@ export class AgentSelectionPanel extends LitElement {
 
     return html`
       <section
-        class="agent-detail-pane"
-        id="agent-detail"
-        aria-labelledby="agent-detail-name"
+        class="catalog-detail-pane"
+        id="catalog-detail"
+        aria-labelledby="catalog-detail-name"
       >
-        <div class="agent-detail-header">
-          <h3 class="agent-detail-name" id="agent-detail-name">
+        <div class="catalog-detail-header">
+          <h3 class="catalog-detail-name" id="catalog-detail-name">
             <bdi dir="auto">${agent.name}</bdi>
           </h3>
           <wa-tag variant="neutral" size="s" title="${displayName} agent"
@@ -419,38 +230,36 @@ export class AgentSelectionPanel extends LitElement {
           }
         </div>
 
+        <div class="catalog-detail-actions">
+          ${this.renderDetailActions(agent)}
+        </div>
         ${renderNewerBuiltInNotice(agent)}
         ${
           agent.description
-            ? html`<div class="agent-detail-description" dir="auto">
+            ? html`<div class="catalog-detail-description" dir="auto">
                 ${agent.description}
               </div>`
             : nothing
         }
         ${
           agent.filePath
-            ? html`<div class="agent-detail-path" title=${agent.filePath}>
+            ? html`<div class="catalog-detail-path" title=${agent.filePath}>
                 <bdi dir="auto">${getBasename(agent.filePath)}</bdi>
               </div>`
             : nothing
         }
 
-        <dl class="agent-detail-meta">
-          <dt class="agent-detail-meta-label">Shown in agent selector</dt>
-          <dd class="agent-detail-meta-value">
-            ${agent.enabled ? 'Yes' : 'No'}
-          </dd>
-
+        <dl class="catalog-detail-meta">
           ${
             agent.tools?.length
               ? html`
-                  <dt class="agent-detail-meta-label">Tools</dt>
-                  <dd class="agent-detail-meta-value">
-                    <div class="agent-detail-tools">
+                  <dt class="catalog-detail-meta-label">Tools</dt>
+                  <dd class="catalog-detail-meta-value">
+                    <div class="catalog-detail-tools">
                       ${agent.tools.map(
                         (t) =>
                           html`<wa-tag
-                            class="agent-tool-badge"
+                            class="catalog-tool-badge"
                             variant="neutral"
                             size="s"
                             ><bdi dir="auto">${t}</bdi></wa-tag
@@ -462,32 +271,61 @@ export class AgentSelectionPanel extends LitElement {
               : nothing
           }
         </dl>
-
-        <div class="agent-detail-actions">
-          ${this.renderDetailActions(agent)}
-        </div>
       </section>
     `;
   }
 
   override render(): TemplateResult {
-    // `willUpdate` keeps `selectedKey` pointing at a live row whenever the
-    // agent list is non-empty, so a missing agent means an empty agent list.
     const agent = this.selectedAgent;
-    if (!agent) {
-      return html` <em class="text-secondary">No agents available.</em> `;
-    }
-
-    const enabledCount = this.agents.filter((a) => a.enabled).length;
-
+    const sources = [
+      AGENT_SOURCE.CUSTOM,
+      AGENT_SOURCE.BUILT_IN,
+      AGENT_SOURCE.PLUGIN,
+    ];
+    const items = sources.flatMap((source) =>
+      this.agents
+        .filter((item) => item.source === source)
+        .map((item) => this.catalogItem(item)),
+    );
     return html`
-      <div class="agent-split-panel">
-        ${this.renderList()} ${this.renderDetail(agent)}
-      </div>
-      <div class="agent-count" aria-live="polite" aria-atomic="true">
-        ${enabledCount} of ${this.agents.length}
-        ${pluralize(this.agents.length, 'agent')} shown in selector
-      </div>
+      <settings-catalog
+        label="Agents"
+        actionLabel="Visible"
+        placeholder="Search name, purpose, or tool"
+        .items=${items}
+        .selectedKey=${this.selectedKey}
+        @catalog-select=${(event: CustomEvent<string | null>) => {
+          this.selectedKey = event.detail;
+        }}
+      >
+        <div slot="actions" class="catalog-toolbar-actions">
+          <wa-dropdown>
+            <wa-button slot="trigger" appearance="plain" size="s"
+              >Visibility</wa-button
+            >
+            ${sources
+              .filter((source) =>
+                this.agents.some((entry) => entry.source === source),
+              )
+              .map((source) =>
+                [true, false].map(
+                  (enabled) => html`
+                    <wa-dropdown-item
+                      @click=${() => postMessage(SETTINGS_VIEW_COMMANDS.SET_ALL_AGENTS_ENABLED, { source, enabled })}
+                    >
+                      ${waIcon(enabled ? 'eye' : 'eye-slash', { slot: 'icon' })}
+                      ${enabled ? 'Show' : 'Hide'} all
+                      ${sourceMeta(source).displayName.toLocaleLowerCase()}
+                      agents
+                    </wa-dropdown-item>
+                  `,
+                ),
+              )}
+          </wa-dropdown>
+          <slot name="actions"></slot>
+        </div>
+        <div slot="detail">${agent ? this.renderDetail(agent) : nothing}</div>
+      </settings-catalog>
     `;
   }
 }

@@ -3,7 +3,7 @@
  *
  * The switches are off by default (experimental, opt-in). When one is on AND
  * the user is signed in, the provider's eligible models route through the
- * subscription instead of the user's API key; `readRouteFacts` reads the
+ * subscription instead of the user's API key; `readModelSettings` reads the
  * sign-in from the session store (`@texra-ai/llm/node`).
  */
 import type { ConfigTarget, ConfigWriteFailed } from '@platform/interfaces';

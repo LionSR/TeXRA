@@ -1,11 +1,11 @@
 import { Effect, Stream } from 'effect';
 
 // Local imports - runtime events
-import type { SessionBackend } from '@texra/controllers/session/sessionBackend';
+import type { Session } from '@texra-ai/harness';
 import type { StatusBarUsageTracker } from './StatusBarUsageTracker';
 
 interface StatusBarSessionEventOptions {
-  session: Pick<SessionBackend, 'view'>;
+  session: Pick<Session, 'view'>;
   /** What the two callbacks paint: the subscription refreshes the bar when
    *  one of these projections moves, and nothing else. */
   tracker: Pick<

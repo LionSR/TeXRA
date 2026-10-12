@@ -1,6 +1,6 @@
 {
   "packages/harness/src/agent/index/AgentDirectoryService.ts": 1,
-  "packages/harness/src/agent/runtime/childRunLoop.ts": 3,
+  "packages/harness/src/agent/runtime/childRunLoop.ts": 2,
   "packages/harness/src/agent/runtime/historyQuery/HistoryQuery.ts": 3,
   "packages/harness/src/agent/runtime/ModelRetryGate.ts": 1,
   "packages/harness/src/agent/runtime/RunHandle.ts": 2,

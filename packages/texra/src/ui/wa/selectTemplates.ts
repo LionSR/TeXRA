@@ -38,6 +38,25 @@ export function selectedItemValue(event: WaSelectEvent): string {
     : '';
 }
 
+/**
+ * Runs `then` once the dropdown that fired `event` has finished hiding.
+ * Until then the dropdown still moves focus: to its trigger on select, and
+ * to its first item when the pick cut its opening animation short. An action
+ * that focuses something of its own (an inline rename input that commits on
+ * blur) starts here, or those moves blur it shut.
+ */
+export function afterDropdownHides(event: Event, then: () => void): void {
+  const dropdown = event.currentTarget;
+  if (!(dropdown instanceof HTMLElement)) return then();
+  const onHidden = (hidden: Event): void => {
+    // A tooltip inside the dropdown bubbles its own `wa-after-hide`.
+    if (hidden.target !== dropdown) return;
+    dropdown.removeEventListener('wa-after-hide', onHidden);
+    then();
+  };
+  dropdown.addEventListener('wa-after-hide', onHidden);
+}
+
 function buildAgentTooltip(opt: AgentOptionData): string {
   const { properties } = AGENT_DECORATORS;
   const hints: string[] = [];

@@ -8,6 +8,8 @@
 // in a layer: any unlayered renderer rule then refines it, whatever order
 // the sheets load in.
 import { designTokens } from '@ui/styles';
+import { noticeStyles } from '@ui/styles/surfaceStyles';
+import { monacoStyles } from '@ui/styles/monacoStyles';
 import {
   buttonStyles,
   focusRingStyles,
@@ -25,8 +27,14 @@ shared.replaceSync(
     iconSurfaceStyles,
     formControlStyles,
     settingsRowStyles,
+    noticeStyles,
   ]
     .map((sheet) => sheet.cssText)
     .join('\n')}\n}`,
 );
 document.adoptedStyleSheets = [...document.adoptedStyleSheets, shared];
+// Monaco injects unlayered styles after loading. The shared adapter stays in
+// the final adopted-sheet cascade so its geometry cannot depend on load order.
+const editorStyles = new CSSStyleSheet();
+editorStyles.replaceSync(monacoStyles.cssText);
+document.adoptedStyleSheets = [...document.adoptedStyleSheets, editorStyles];

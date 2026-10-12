@@ -5,10 +5,6 @@ import { css, type CSSResult } from 'lit';
 import { sp } from '@ui/styles';
 
 export const toolEditRequestPanelStyles: CSSResult = css`
-  :host {
-    --request-accent: var(--wa-color-text-normal);
-  }
-
   .tool-edit__diff {
     display: inline-flex;
     align-items: baseline;

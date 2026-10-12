@@ -1,5 +1,4 @@
 import '@awesome.me/webawesome/dist/components/button/button.js';
-import '@awesome.me/webawesome/dist/components/callout/callout.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import { LitElement, html, css, type TemplateResult } from 'lit';
 import { customElement } from 'lit/decorators.js';
@@ -44,28 +43,28 @@ export class OnboardingWelcomeCard extends LitElement {
       .welcome-card-container {
         min-width: 0;
         container: onboarding-card / inline-size;
+        max-width: 640px;
+        margin-inline: auto;
+        padding: var(--wa-space-l);
       }
 
-      wa-callout {
+      .welcome-card {
         box-sizing: border-box;
-        display: block;
-        width: 100%;
-        max-width: 100%;
-        margin-bottom: var(--wa-space-s);
-        padding: var(--wa-space-m);
-      }
-
-      wa-callout::part(icon) {
-        display: none;
+        min-width: 0;
       }
 
       .welcome-header {
         display: grid;
-        grid-template-columns: auto minmax(0, 1fr);
-        align-items: start;
+        justify-items: start;
         gap: var(--wa-space-s);
         min-width: 0;
-        margin-bottom: var(--wa-space-s);
+        margin-bottom: var(--wa-space-l);
+      }
+
+      .welcome-icon {
+        color: var(--wa-color-brand-on-quiet);
+        background: var(--wa-color-brand-fill-quiet);
+        border-color: transparent;
       }
 
       .welcome-heading {
@@ -75,10 +74,17 @@ export class OnboardingWelcomeCard extends LitElement {
       .card-title {
         display: block;
         font-weight: var(--font-weight-semibold, 600);
+        font-size: var(--font-size-h1);
+        letter-spacing: -0.025em;
+        line-height: var(--line-height-heading);
+        margin: 0 0 var(--wa-space-xs);
+        text-wrap: balance;
+      }
+
+      .card-tagline {
+        margin: 0 0 var(--wa-space-xs);
         font-size: var(--font-size-lg);
-        letter-spacing: -0.005em;
-        line-height: var(--line-height-tight);
-        margin: var(--wa-space-3xs) 0 var(--wa-space-2xs);
+        color: var(--wa-color-text-normal);
       }
 
       .card-copy {
@@ -86,12 +92,24 @@ export class OnboardingWelcomeCard extends LitElement {
         color: var(--wa-color-text-quiet);
         line-height: var(--line-height-normal, 1.4);
         overflow-wrap: anywhere;
+        text-wrap: pretty;
       }
 
       .choices {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: var(--wa-space-s);
+      }
+
+      .choice {
         display: flex;
         flex-direction: column;
         gap: var(--wa-space-s);
+        min-width: 0;
+        padding: var(--wa-space-m);
+        border: var(--border-thin) solid var(--wa-color-surface-border);
+        border-radius: var(--wa-border-radius-l);
+        background: var(--wa-form-control-background-color);
       }
 
       .choice wa-button {
@@ -117,8 +135,8 @@ export class OnboardingWelcomeCard extends LitElement {
 
       .choice-description {
         display: block;
-        margin-top: var(--wa-space-3xs);
-        text-align: center;
+        margin: 0;
+        text-align: start;
         font-size: var(--font-size-sm);
         line-height: var(--line-height-normal, 1.4);
         color: var(--wa-color-text-quiet);
@@ -128,40 +146,19 @@ export class OnboardingWelcomeCard extends LitElement {
       .skip-row {
         display: flex;
         align-items: center;
-        justify-content: center;
+        justify-content: space-between;
         flex-wrap: wrap;
         gap: var(--wa-space-2xs);
-        margin-top: var(--wa-space-s);
+        margin-top: var(--wa-space-l);
       }
 
       .skip-row wa-button::part(base) {
         font-size: var(--font-size-sm);
       }
 
-      @container onboarding-card (max-width: 420px) {
-        wa-callout {
-          padding: var(--wa-space-xs);
-        }
-
-        .welcome-header {
-          grid-template-columns: 1fr;
-          gap: var(--wa-space-xs);
-        }
-
-        .welcome-icon {
-          display: none;
-        }
-
+      @container onboarding-card (max-width: 540px) {
         .choices {
-          gap: var(--wa-space-xs);
-        }
-
-        .choice wa-button {
-          font-size: var(--font-size-sm);
-        }
-
-        .choice-description {
-          text-align: start;
+          grid-template-columns: 1fr;
         }
       }
     `,
@@ -197,7 +194,11 @@ export class OnboardingWelcomeCard extends LitElement {
   override render(): TemplateResult {
     return html`
       <div class="welcome-card-container">
-        <wa-callout id="onboardingWelcomeCard" variant="brand">
+        <section
+          id="onboardingWelcomeCard"
+          class="welcome-card"
+          aria-labelledby="welcome-title"
+        >
           <div class="welcome-header">
             <span
               class="welcome-icon icon-surface is-size-l"
@@ -206,8 +207,11 @@ export class OnboardingWelcomeCard extends LitElement {
               ${waIcon('wand-magic-sparkles')}
             </span>
             <div class="welcome-heading">
-              <h1 class="card-title">${ONBOARDING_CARD_TITLE}</h1>
-              <p class="card-copy">${TEXRA_TAGLINE} ${ONBOARDING_CARD_LEDE}</p>
+              <h1 id="welcome-title" class="card-title">
+                ${ONBOARDING_CARD_TITLE}
+              </h1>
+              <p class="card-tagline">${TEXRA_TAGLINE}</p>
+              <p class="card-copy">${ONBOARDING_CARD_LEDE}</p>
             </div>
           </div>
           <div class="choices">
@@ -270,7 +274,7 @@ export class OnboardingWelcomeCard extends LitElement {
               ${ONBOARDING_CHOICE_SKIP_LABEL}
             </wa-button>
           </div>
-        </wa-callout>
+        </section>
       </div>
     `;
   }

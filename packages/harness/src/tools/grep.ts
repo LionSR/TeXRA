@@ -15,7 +15,7 @@ import { executeCommand } from '@utils/system/execUtils';
 import { splitOutputLines } from '@utils/text/stringUtils';
 
 // Local file imports
-import { defineTool } from './core/define';
+import { defineTool } from './core/definition';
 import { nullishWithDefault } from './core/inputSchema';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
@@ -223,7 +223,7 @@ const runGrep = Effect.fn('GrepTool.execute')(function* (
 export const GrepTool = defineTool({
   name: 'grep',
   replay: 'safe',
-  parallelSafe: true,
+  lane: 'parallel',
   description:
     'Search file contents using regex patterns. For surrounding lines use -C with output_mode "content".',
   schema: GrepInputSchema,

@@ -6,6 +6,104 @@ All notable changes to this project will be documented in this file.
 
 ### Breaking Changes
 
+- **SDK: a run whose trace cannot be read says why.** A run's `events`
+  stream fails with `TraceUnavailable` instead of ending with no events.
+  Its reason is `ended` (the run finished before anyone read its trace),
+  `truncated` (the trace outgrew what is kept for a reader that had not
+  attached yet) or `remote` (the run runs in the TeXRA service, which keeps
+  its trace). The run's result is unaffected.
+- **A failed task in the TeXRA service always reports failure**, even
+  when the service recorded no error for it.
+- **A VS Code window of the TeXRA service opens no session of its own.**
+  Its run actions, the toolbar's pack and clean, and every transcript
+  export (HTML, Markdown, LaTeX) are done by the service, which holds the
+  task while it packs or cleans. An older window is refused by a newer
+  service and asked to update.
+- **The desktop app opens no session of its own for a folder the TeXRA
+  service serves.** Its run actions, pack and clean, and transcript exports
+  for that folder are done by the service, as a VS Code window's are. Only
+  the no-folder session, and every folder when the service cannot be
+  reached, run in the app itself.
+- **An explicit `--approval-policy yolo` is an Auto-approve launch, in the
+  TeXRA service too.** The flag (or `TEXRA_APPROVAL_POLICY=yolo`) grants
+  that run, and only that run, every approval it would open, recorded on
+  the run; the project's policy is never changed, and the service no longer
+  ignores it. Any other requested policy only narrows the project's: one
+  more permissive than it (Ask over Block) is refused with a notice where
+  it used to apply in a terminal without the service. A denial's warning
+  names the policy that decided it.
+- **`/approval` in `texra chat` sets only that chat's policy.** It no longer
+  writes the project's policy in service mode; change that with `/config`
+  or the settings view. The chat's latest run takes the change on its own
+  approval record: Auto-approve turns its grants on, leaving Auto-approve
+  turns them off (so the next message is asked again), and a stricter
+  policy applies to a live run at once, even below the project's policy.
+  Grants given from an approval card still carry across messages.
+- **An Auto-approve run asks its questions.** A run started with
+  `--approval-policy yolo` in a project set to Ask presents a question for
+  you and a model retry past its automatic attempts interactively, where it
+  used to deny them, and denies them in a headless run. `texra resume` says
+  that a requested policy does not change the resumed task, and a project's
+  `.env` no longer passes `TEXRA_APPROVAL_POLICY` to a nested TeXRA.
+- **A goal that grants all agent work also approves its run's plan.** A
+  run whose delegated work is granted (a goal's all-agent-work grant, or an
+  Auto-approve launch) is asked nothing, a plan included; a Block policy
+  still denies first.
+- **A run that fails before it starts is reported as a launch error, not
+  listed as a failed task.** A task, subagent or background script is
+  recorded together with its first batch of history, so one that fails
+  before it gets there (an agent file that does not render, an attachment
+  that cannot be read, a model that cannot be bound) leaves no entry in the
+  task list: the CLI exits non-zero with the cause, the desktop app and the
+  extension show the error where the task was started, `task.start` on the
+  service returns it, and the SDK's `start` fails with a `RunFailure` that
+  carries it. A parent whose subagent failed that way still receives the
+  failure as a follow-up. A resume that fails before it reopens the task
+  leaves the task as it was, instead of marking it failed.
+- **`ProcessServices` no longer includes `AgentEngine`.** An SDK host that
+  builds its own layer over `ProcessServices` no longer provides it.
+- **Plugin tools: a narrower run, and their own services.** A plugin's
+  tool reads the run its call works for from `ToolContext`, with
+  `requireRun`, `callerRun` and the `ToolRun` type from
+  `@texra-ai/harness/plugins`; `ToolRun` carries only what plugin tools
+  use, and the files a run read are read-only there. A plugin's tools are
+  typed by `PluginToolServices`: a tool that requires the harness's own
+  call services no longer compiles. To launch a child agent from a tool,
+  use the `ChildRuns` service (`launch`) from the same entry; a script's
+  children stay within its concurrency budget. Plugin authors who imported
+  `RunCall` or typed tools by `ToolServices` move to these. A tool that
+  drives an external agent process as the calling run's child registers it
+  with `ChildRuns.launchProcess`, and a plugin's session layer no longer
+  reaches the session's runs. A host launches a root run with
+  `session.runs.launch({ request, options })` under its `SessionOwner`,
+  which answers whether it still holds that session with `holds`;
+  `runAgent` is gone.
+- **SDK tool and plugin contract: `lane`, `arms` and `facts`.** A tool
+  declares where its calls run with `lane: 'parallel' | 'barrier' | 'own'`,
+  replacing `parallelSafe` and `ownsConcurrency`. A plugin lists its own row
+  kinds as `arms` on its `Plugin` value, and a tool states a fact about its
+  run by returning it in its result's `facts`: the fact is committed with
+  the call's result, never apart from it. A task an earlier build saved
+  after it reached the model cannot be opened: the task list, `texra
+history`, a resume and a follow-up say it was "written by an earlier
+  build of TeXRA; it can't be opened by this one" instead of calling it
+  damaged or offering to resume it.
+- **Some tasks saved by an earlier build can no longer be opened.** Fields
+  nothing read were removed from the stored records, and these records are
+  checked strictly: a document task (any run that produced revisions), a
+  `texra run --output` / `--output-dir` run, and a finished subagent run
+  (the child's own record) now read as damaged: they
+  cannot be opened, resumed or shown in history. Other tasks are unaffected. A launch configuration that still
+  lists files in `editedFiles` is refused with a message naming
+  `editedFile`.
+- **The built-in agents ship in one directory.** The split between
+  `agents/` (agents with a document task) and `tool_use_agents/` came from
+  the old agent categories, and nothing reads that distinction any more:
+  every bundled agent now lives in `resources/agents/`. The prompt variables
+  `BUILTIN_WORKFLOW_DIR` and `BUILTIN_TOOLUSE_DIR` become one,
+  `BUILTIN_AGENTS_DIR`. A custom agent (for example a customized copy of
+  `creator`) that still names one of the old two is listed as an issue
+  saying so, instead of rendering it empty.
 - **Agent files no longer inherit from each other.** The `inherits:` field
   is gone: an agent file is complete on its own, and customizing a
   built-in agent already gives you a full copy. A custom agent file that
@@ -18,8 +116,11 @@ All notable changes to this project will be documented in this file.
 - **Task history is stored without per-turn snapshots.** A task now resumes
   from the rows that record each fact (its configuration, its messages, its
   tool results), so a resumed task picks up exactly where its rows left it.
-  Tasks saved by an earlier build open as made by an older TeXRA and cannot
-  be resumed.
+  **Essentially every task saved by an earlier build that called a tool can
+  no longer be resumed or opened.** Its saved tool calls, retries and
+  snapshots are in shapes this release no longer reads. Such a task stays in
+  the task list marked as damaged, read-only; start it again to continue the
+  work.
 - **No more "Did it finish before TeXRA stopped?" question after a crash.**
   When TeXRA stops while a command, an edit or another call that is not
   safe to repeat is running, the resumed task no longer asks you whether to
@@ -29,19 +130,24 @@ All notable changes to this project will be documented in this file.
   subagent left in an inconsistent state after a crash is resumed under its
   own id, or comes back as an ordinary failed call. An approval this build
   asked for is still waiting after a restart. A task saved by an earlier
-  build that ever showed the old "Run again / Skip it" question opens as
-  made by an older TeXRA and cannot be resumed.
+  build that ever showed the old "Run again / Skip it" question is marked
+  as damaged and cannot be resumed.
 - **A project a newer TeXRA has saved into opens only in that version.**
   When a newer TeXRA version has saved tasks into a project, an older one
   now refuses to open the project's history ("update TeXRA, or move the
   store aside") instead of showing those tasks as blocked, and an older
-  window that is already open stops saving into it. A single damaged task
-  is left out of the task list with a note in the log, and it cannot be
-  opened, while every other task still works. History from before 1.0 is
+  window that is already open stops saving into it. A task with any
+  damaged saved step stays in the task list marked as damaged, with a note
+  in the log, and it cannot be opened or resumed, while every other task
+  still works. History from before 1.0 is
   still set aside on first launch; the copies set aside are now kept until
   you remove them with `texra doctor --prune-storage`, which lists every
   copy and every project folder that no longer exists before deleting
   anything.
+- **`@texra-ai/harness`: a run's final answer is no longer a trace event.**
+  `response.finalized` left the exported `AgentEvent` union, so `run.events`
+  no longer carries it. It is a row of the run's own history, committed with
+  the turn; read the answer from the run's result or its history.
 - **`@texra-ai/harness`: one process layer for hosts and embedders.**
   `Sessions.layer` now composes the same `processLayer` every TeXRA host
   builds its runtime from, and the root entry exports it with the
@@ -57,7 +163,7 @@ All notable changes to this project will be documented in this file.
   that holds it is resumed, for its subagents too. When a display row a
   task published cannot be saved, the task ends as failed with the real
   error instead of an "artifact drain" mark; a task an earlier build ended
-  with that mark is left out of the task list as unreadable. Grants a task
+  with that mark is shown as damaged and cannot be resumed. Grants a task
   only inherited under an earlier build are not carried over.
 - **One credential store for every TeXRA app; enter your keys once more.**
   The VS Code extension and the desktop app no longer keep API keys and
@@ -428,18 +534,33 @@ All notable changes to this project will be documented in this file.
 
 ### Features
 
+- **A dockable desktop workspace.** Arrange Agent, Files, editors, terminals,
+  and Browser in movable tab groups. Drag previews show the destination,
+  including columns beside the whole workspace, and layouts survive restarts
+  and project switches. Project and task actions support renaming; shared
+  controls, message headers, settings catalogs, and editor menus use consistent
+  spacing and themes. New task opens a fresh draft; chats with saved history
+  remain open for follow-ups after stopping, failing, or completing. Messages
+  group the author and time, with Copy and collapse controls at the edge.
+  Agent YAML opens in the app's editor, and clean editor tabs refresh when
+  reopened after an external change. Empty groups offer a close action and
+  buttons to open a view. Approval menus explain the active policy, keep
+  selection marks inside the menu, and respect settings that block actions.
 - **Agent SDK: persistent sessions, resume, and approvals.**
   `sessions.open(roots, { persistent: true })` keeps a session's history in
   the same on-disk store the TeXRA apps keep, and `session.resume(runId)`
   continues a run from it in a later process, handing back the same run
   handle `start` does (`ResumeRefused` says why a run cannot continue).
-  `sessions.open(roots, { approve })` answers the runs' approval requests
-  with the embedder's own Effect function; a handler that fails, throws or
-  does not answer within ten minutes denies the request. Without a handler,
-  every request is still denied. A run killed while it waits for approval is
-  asked the same request again after a restart and a resume, which takes the
-  run's custom tools again. Reopening a root with other options fails with
-  `SessionOptionsConflict`.
+  `session.attach({ approve })` attaches the embedder's own Effect function
+  for the caller's scope, and it answers the runs' approval requests; the
+  newest attached handler answers, and a handler that fails, throws or does
+  not answer within ten minutes denies the request. Without a handler, every
+  request is still denied. A run killed while it waits for approval is asked
+  the same request again after a restart and a resume, which takes the run's
+  custom tools again. Reopening a root over the other store (persistent or
+  in memory) fails with `SessionOptionsConflict`. A `Session.resume` that
+  meets a resume already under way (a window's) joins it: it sees the run's
+  events from then on, and stopping it leaves that resume running.
 - **Agent SDK: an agent can be written inline.** `session.start({ agent })`
   takes the persona itself (`name`, `description`, `prompt`, `tools`,
   `temperature`, as an agent file writes them) instead of the name of an
@@ -872,6 +993,151 @@ show` print the same notice, and the new `texra agents customize`,
 
 ### Bug Fixes
 
+- **A task that can no longer be read can be deleted from the task list.**
+  A task whose saved history is damaged, or was written by an earlier
+  build in a format this one does not read, is listed as unreadable. It
+  used to offer only Open folder, Export and Copy, so it stayed in the
+  desktop and extension task lists for good. It now offers Delete as well,
+  unless another running TeXRA window holds it.
+- **`texra chat` as a client of the TeXRA service shows the service's
+  tasks in its work-plan reader**, as it does in its transcript; it read
+  the terminal's own session before. A chat with or without the service
+  now starts, resumes and stops its tasks the same way, and a Ctrl-C while
+  a resume is still settling stops the resumed task.
+- **A task whose end could not be saved no longer stays listed as
+  running.** When only its result could not be saved, it ends as it did,
+  its card says "Result lost" with the cause, and the task that started it
+  is told; otherwise it is recorded as failed. A task whose saved history
+  is damaged can still be stopped, and so can the subagents under it.
+- **A subagent's result can no longer be lost to a crash.** A background
+  subagent, script or command used to record its result and then, as a
+  second step, queue it for the task that started it; a crash between the
+  two left the result only in the subagent's report until that task was
+  resumed a particular way. Both now commit together, so a task waiting on
+  its subagents always finds the result queued once the subagent reads as
+  done. `/compact` is now confirmed only after it is queued, and says so
+  when the conversation takes no more input.
+- **A crash no longer leaves half of one write on disk.** When TeXRA wrote
+  several related records as one step (a goal and the approval it grants, a
+  run's history with its registration, a request and its answer), each
+  record was saved on its own, so a crash between them could keep one
+  without the other. Each step is now saved whole or not at all.
+- **A model failure that a retry cannot fix no longer offers Retry.** When
+  a provider refused a request as invalid or unsupported, or rejected its
+  credentials, without an HTTP status, the retry prompt still offered a
+  Retry that sent the same request and failed again. It now offers one only
+  when the provider's reply says the same request can succeed, or after a
+  used-up plan (where the retry switches to your own key). The offer follows
+  the model's retryable and quota classification rather than the HTTP
+  status, so a 429 or 5xx whose reply says the context overflowed is not
+  offered Retry either.
+- **Reopening the desktop window works with the TeXRA service.** When the
+  app used the background service (the macOS default), clicking the Dock icon
+  after closing the window logged "could not be reopened", clicking a
+  notification did not show its task, and a second click could open a second
+  window. The window now reopens once, and a notification shows its task
+  after the window is back.
+- **Read conversations stay read after restarting.** Loading older chat history
+  no longer resets the sidebar's read marker. Later activity still makes the
+  conversation unread until it is viewed.
+- **A window shows the files a background task accepts.** When a task in the
+  TeXRA service (`texra serve`) accepted files into the project, or the setup
+  agent applied an agent team there, the desktop file tree and the editor's
+  file badges and agent lists did not update until you refreshed them. The
+  change is now recorded on the task, and every window that shows the
+  project picks it up.
+- **Copilot models work in service tasks again.** Since tasks moved into
+  the TeXRA service, a model routed through GitHub Copilot failed there:
+  the service has no editor. A task now runs its Copilot turns through a
+  VS Code window of its project, streaming the reply back and stopping the
+  turn when the task stops; the window's own model error is shown as it
+  is. With no such window open, the task says so: open the project in VS
+  Code with GitHub Copilot, or stop using Copilot for that model.
+- **A project's `.env` reaches its tasks again, in every TeXRA app.**
+  Since tasks moved into the TeXRA service, a key kept only in the
+  project's `.env` was missing there, and a different key from your login
+  shell could be used instead. Each task now reads its project's `.env`
+  as it starts, over the environment, so an edited or rotated key applies
+  to the next task; its commands see the variables (never
+  a provider key), a `DO_NOT_TRACK` or `TEXRA_NO_TELEMETRY` there turns
+  usage logging off for its tasks, and one project's `.env` never reaches
+  another's. The CLI and the desktop app read it too, for their model
+  lists and key checks. A key you set only in the terminal that
+  starts a chat or `texra tasks start` does not reach a task in the
+  service, and the CLI now says so.
+- **MCP servers start with their project's `.env`.** Each project now runs
+  its own MCP servers, from `~/.texra/mcp.json` and from installed
+  plugins: a server starts with that project's `.env` variables over the
+  environment (never a provider key), stays up for the project's next task
+  (30 minutes after the last one used it), and stops when the project
+  closes. In the TeXRA service,
+  one project's server is never shared with another's, and a server no
+  longer starts without its project's variables. An edited `.env` starts a
+  fresh server for the next task.
+
+- **The TeXRA service no longer grows with every project it ever
+  opened.** A project's session in the service now closes once no window
+  or terminal is attached to it and none of its tasks is running or
+  waiting, for as long as the service's own idle time (10 minutes by
+  default, `texra serve --idle-timeout`); the next use reopens it. Streaming
+  text no longer makes the service re-read the task store on every burst:
+  it reads only when something was committed.
+
+- **A task with a damaged saved step is shown as damaged, not as
+  resumable.** If any saved step of a task can't be read, not only its
+  start, the task is marked damaged and can't be opened. A task whose start
+  was damaged no longer offers to resume as if it had never begun.
+
+- **A task whose end could not be saved now reports a failure.** Before,
+  it reported the result it had in memory, even though its history did not
+  record that it had ended.
+
+- **Pausing or finishing a goal ends its auto-approval in the same save.**
+  A paused goal can no longer keep approving commands because only half
+  of the change was saved.
+
+- **A window reconnecting to the TeXRA service no longer restores an old
+  approval policy.** The project's saved approval policy is now the only
+  one the service follows: it reads the setting for every request, and a
+  window or terminal changes it only by saving the setting (the settings
+  view, `/config`, or `/approval` in a chat whose tasks run in the
+  service). Before, each window re-sent the policy it last held whenever it
+  reconnected, so a window left open on Auto-approve could silently undo
+  another window's change to Ask. A launch can still narrow its own task:
+  `texra tasks start --approval-policy ask`, `--no-input`, or a chat's
+  stricter `--approval-policy` or `/approval` makes that task ask (or
+  block) even in an Auto-approve project. A more permissive request is said
+  and ignored; to widen the project's policy, change the setting. A chat
+  run with `TEXRA_NO_SERVICE=1` still uses its own policy as before.
+
+- **OpenAI models can use tools.** A task on an OpenAI model, directly
+  or through OpenRouter, failed on its first request with an "Invalid schema
+  for function 'memory'" (or 'executions') error, because the line-range
+  option of those two tools was described in a form OpenAI does not accept.
+  Every bundled agent offers one of them, so every OpenAI task with tools
+  was affected.
+
+- **Each of several messages sent together shows only its own attachments.**
+  When a text-only message and a message with an image reached a task in the
+  same turn, both rows showed the image badge. Now each row shows the
+  attachments its own message carried. Forking an agent that has no recorded
+  start now says "The agent ... has no recorded start" instead of calling it
+  a task.
+
+- **Closing a project or quitting no longer hangs when the task history is
+  busy.** If another TeXRA process keeps the history locked while a project
+  closes, TeXRA waits a few seconds and then closes anyway, logging the
+  updates it could not save. Before, closing could wait for minutes.
+
+- **An older TeXRA no longer changes a project that a newer TeXRA has
+  saved into.** Before, it still saved typed-message history and removed
+  deleted tasks' files there.
+
+- **Summaries and helper requests that cannot switch to new credentials
+  now fail, as a task's own model request already does.** Before, they
+  were sent again on the old sign-in. A connection that a renewed sign-in
+  has already replaced is no longer replaced a second time.
+
 - **A model retry that cannot switch credentials now fails instead of
   resending on the old ones.** When you answer a failed request with "retry
   with my own key" and that key is gone, or a dropped Responses WebSocket
@@ -948,9 +1214,10 @@ show` print the same notice, and the new `texra agents customize`,
 - **One warning per media file a model can't read.** Attaching an image
   or PDF to a model without vision used to log two warnings: a
   launch-time "Model has no vision support" summary, repeated on every
-  resume, and then "Skipping <file>" for each dropped file. Only the
-  per-file "Skipping <file>: the model does not accept
-  images/documents/audio" warning remains, written where the file is
+  resume, and then `Skipping <file>` for each dropped file. Only the
+  per-file
+  `Skipping <file>: the model does not accept images/documents/audio`
+  warning remains, written where the file is
   dropped: on a chat's first message, a follow-up, a subagent's opening,
   and each revision of a document task.
 - **A resumed task no longer asks whether a command ran that never

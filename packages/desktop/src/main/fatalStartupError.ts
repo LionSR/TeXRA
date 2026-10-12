@@ -1,6 +1,7 @@
 import { app, dialog } from 'electron';
 
 import { formatFatalErrorDetail } from '@logger/redaction';
+import { DESKTOP_HEADLESS } from './desktopPresentation.js';
 
 let fatalStartupErrorReported = false;
 let fatalDesktopShutdownRequested = false;
@@ -46,6 +47,11 @@ function reportFatalDesktopError(
   fatalStartupErrorReported = true;
 
   const showFailureDialog = (): void => {
+    if (DESKTOP_HEADLESS) {
+      fatalDesktopShutdownRequested = true;
+      app.exit(1);
+      return;
+    }
     if (options.forceQuit) {
       fatalDesktopShutdownRequested = true;
       void dialog

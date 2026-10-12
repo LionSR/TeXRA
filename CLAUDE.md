@@ -5,8 +5,10 @@ document processing using LLMs. It ships as a VS Code extension, an Electron
 desktop app, and a terminal CLI (`texra`) — three hosts over one host-agnostic
 core.
 
-Coding conventions and full patterns live in [AGENTS.md](./AGENTS.md). This file
-covers what you can't learn by reading the tree.
+Coding conventions and full patterns live in [AGENTS.md](./AGENTS.md), with
+folder-scoped additions in the nested `AGENTS.md` files it lists (each nested
+`CLAUDE.md` imports its sibling). This file covers what you can't learn by
+reading the tree.
 
 ## Commands
 
@@ -29,7 +31,7 @@ in front of every local commit it gets skipped. The loop is stock Vitest:
 `test:watch` while editing, `test:changed` before a commit, `test:pure` before
 a push — 30s, and it covers the architecture ratchets, which no module graph
 ties to the code they scan. `npm test` before opening a PR. Tiers and why a
-suite lands in one: AGENTS.md "Test tiers".
+suite lands in one: `src/test-kernel/AGENTS.md` "Test tiers".
 
 **Builds don't type check.** esbuild and Vite only strip TypeScript types; they
 treat it as "JavaScript with annotations to remove." Run `npm run typecheck`, or
@@ -238,21 +240,22 @@ takes from context (`AgentRun`, model binding, pricing, media, tools) and
 tool calls. `output/` holds the document recipe (`documentRecipe.ts`), the
 script a document task's run executes over the documents plugin's tools
 (`packages/texra/src/tools/documents/`), and its output pipeline. Provider APIs are reached
-only through the `packages/llm` `Model` that `runtime/run/modelBinding.ts`
+only through the `packages/llm` `Model` that `runtime/modelAccess/ModelAccess.ts`
 binds; the `helperModel` path binds through that same route. New agents come
 from the built-in `creator` agent or the settings view's "Create from
 template". Agents are flat persona YAML (`name`, `description`, `prompt`,
 `tools`, `temperature`) in `packages/extension/resources/`; a `task:` block
 makes one also launchable as a document task.
 
-**Launch executions via `runAgent`** (`packages/harness/src/agent/runtime/runAgent.ts`) — it
-assigns a `runId`, registers the run, and opens workflow output. Use the
+**Launch executions via `session.runs.launch({ request, options })`** (the
+session's `Runs`, `packages/harness/src/agent/runtime/runRegistry.ts`) — it
+assigns a `runId`, registers the run, and opens workflow output; it requires
+the composition root's `SessionOwner`, so no tool reaches it. Use the
 lower-level `executeAgent` only when you already own the `runId` (subagent
-dispatch). `runAgent` launches fresh runs only: a persisted run resumes
+dispatch). A launch starts fresh runs only: a persisted run resumes
 through `resumeRun`, which continues it with
 `resumeToolUseFromResumeData`. Loop conventions and the
-write points: AGENTS.md "Patterns across the codebase" (Run loop
-architecture).
+write points: `packages/harness/AGENTS.md` "Run loop architecture".
 
 **There is no flow engine.** A run is one Effect program that appends rows to
 the run history (`packages/harness/src/shared/session/runHistory.ts`) and continues from the

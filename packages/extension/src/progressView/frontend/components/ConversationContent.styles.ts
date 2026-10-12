@@ -2,6 +2,7 @@
 
 // Third-party imports
 import { css, type CSSResult } from 'lit';
+import { readingColumnStyles } from '@ui/styles/surfaceStyles';
 
 /**
  * Keeps the transcript as the primary reading surface while preserving the
@@ -29,9 +30,7 @@ export const conversationContentStyles: CSSResult = css`
   }
 
   .conversation-column {
-    width: calc(100% - 2 * var(--wa-space-m));
-    min-width: 0;
-    box-sizing: border-box;
+    ${readingColumnStyles}
   }
 
   /* Pending approvals sit above the transcript and are not height-capped
@@ -42,7 +41,7 @@ export const conversationContentStyles: CSSResult = css`
     flex: 0 1 auto;
     min-height: 0;
     max-height: min(52%, 30rem);
-    padding-top: var(--wa-space-xs);
+    padding-block: var(--message-gap) 0;
     overflow-x: hidden;
     overflow-y: auto;
     overscroll-behavior-block: contain;
@@ -56,7 +55,9 @@ export const conversationContentStyles: CSSResult = css`
   .conversation-epilogue {
     flex: 0 1 auto;
     min-height: 0;
-    padding-top: var(--wa-space-xs);
+    /* The children own their spacing. Empty custom elements still count as
+       children, so :empty cannot remove padding from an unused prelude. */
+    padding-top: 0;
     overflow-x: hidden;
     overflow-y: auto;
     overscroll-behavior-block: contain;
@@ -95,12 +96,8 @@ export const conversationContentStyles: CSSResult = css`
     position: relative;
     z-index: 3;
     flex: 0 0 auto;
-    padding: var(--wa-space-xs) 0 var(--wa-space-s);
-    background: linear-gradient(
-      to bottom,
-      transparent,
-      var(--wa-color-surface-default) var(--wa-space-m)
-    );
+    padding: var(--wa-space-xs) 0 var(--wa-space-m);
+    background: var(--wa-color-surface-default);
   }
 
   .conversation-composer-dock session-banners {
@@ -112,8 +109,10 @@ export const conversationContentStyles: CSSResult = css`
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: var(--wa-space-xs) var(--wa-space-s);
-    padding: var(--wa-space-xs) var(--wa-space-s);
+    gap: var(--wa-space-s);
+    min-height: var(--height-button, 36px);
+    padding: var(--wa-space-s) 0 0;
+    border-top: 1px solid var(--wa-color-surface-border);
     color: var(--color-text-muted);
     font-size: var(--wa-font-size-s);
   }
@@ -129,14 +128,10 @@ export const conversationContentStyles: CSSResult = css`
   }
 
   .conversation-ended > span {
-    flex: 1 1 100%;
+    flex: 1 1 auto;
   }
 
   @container (max-width: 640px) {
-    .conversation-column {
-      width: calc(100% - 2 * var(--wa-space-xs));
-    }
-
     .conversation-approval-dock {
       max-height: min(48%, 24rem);
     }

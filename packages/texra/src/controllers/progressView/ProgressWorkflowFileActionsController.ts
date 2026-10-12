@@ -7,8 +7,7 @@ import { Effect, FileSystem } from 'effect';
 // Local imports
 import { withLogChannel } from '@logger/effectLog';
 import type { AcceptCopyMeta, RunId } from '@shared/schemas';
-import type { HostRequest } from '@shared/session/hostRequest';
-import { PrunedNestedMap } from '@texra/utils/core/prunedNestedMap';
+import type { HostRequest } from '@texra/shared/session/hostRequest';
 import {
   ensureRunDirUnder,
   findRunDirUnder,
@@ -67,11 +66,7 @@ export class ProgressWorkflowFileActionsController {
    * digest, not the content: Accept only asks whether the file changed
    * since. Kept while the file is still an output of its run.
    */
-  private readonly modelOutputBackups = new PrunedNestedMap<
-    RunId,
-    string,
-    string
-  >();
+  private readonly modelOutputBackups = new Map<RunId, Map<string, string>>();
 
   constructor(
     private readonly deps: ProgressWorkflowFileActionsControllerDeps,
@@ -156,7 +151,7 @@ export class ProgressWorkflowFileActionsController {
     return Effect.gen({ self: this }, function* () {
       const backup =
         file && activeRun
-          ? this.modelOutputBackups.get(activeRun, file)
+          ? this.modelOutputBackups.get(activeRun)?.get(file)
           : undefined;
       let currentContent: string | undefined;
 
@@ -204,7 +199,11 @@ export class ProgressWorkflowFileActionsController {
       }
 
       if (backup !== undefined && activeRun) {
-        this.modelOutputBackups.delete(activeRun, file);
+        const runBackups = this.modelOutputBackups.get(activeRun);
+        runBackups?.delete(file);
+        if (runBackups?.size === 0) {
+          this.modelOutputBackups.delete(activeRun);
+        }
       }
     });
   }
@@ -250,18 +249,21 @@ export class ProgressWorkflowFileActionsController {
       // A digest lives while its file is still an output of its run: a
       // removed run, or a round that no longer lists the file, takes its
       // digests with it, so the map is bounded by outputs that exist.
-      for (const [stream, digests] of [...this.modelOutputBackups.groups()]) {
+      for (const [stream, digests] of this.modelOutputBackups) {
         const outputs = new Set(
           Object.values(this.deps.state.getOutputFiles(stream))
             .flat()
             .map((info) => info.location.absolutePath),
         );
-        for (const tracked of [...digests.keys()]) {
-          if (!outputs.has(tracked))
-            this.modelOutputBackups.delete(stream, tracked);
+        for (const tracked of digests.keys()) {
+          if (!outputs.has(tracked)) digests.delete(tracked);
         }
+        if (digests.size === 0) this.modelOutputBackups.delete(stream);
       }
-      this.modelOutputBackups.set(runId, file, contentDigest(content));
+      const runBackups =
+        this.modelOutputBackups.get(runId) ?? new Map<string, string>();
+      runBackups.set(file, contentDigest(content));
+      this.modelOutputBackups.set(runId, runBackups);
     }).pipe(
       // Best-effort: backup only informs the accepted-edit follow-up, but a
       // later Accept then has no compare-time content to offer.

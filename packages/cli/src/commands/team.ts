@@ -9,10 +9,16 @@ import {
   planTeamRuns,
 } from '@common/teams/TeamPlan';
 import { findTeamPreset } from '@common/teams/TeamPresets';
+import {
+  TEXRA_APPROVAL_POLICY_CONFIG_KEY,
+  type TexraApprovalPolicy,
+} from '@shared/approvalPolicy';
+import { readConfigSettingFrom } from '@utils/config/platformSettings';
 import { filterNotNullish } from '@utils/core';
 
 import { missingAgentMessage, missingTeamMessage } from '../runtime/agents';
 import {
+  effectiveApprovalPolicy,
   failUsage,
   readCliStdinText,
   type CliContext,
@@ -140,8 +146,17 @@ export const runTeam = Effect.fn('runTeam')(function* (
   }
   const services = yield* initCliPlatform(context);
 
+  // The policy the team's launch runs under: an Ask request under a Block
+  // project runs under Block, which needs no prompt.
   const rejectsHeadlessAsk =
-    context.mode === 'headless' && context.approvalPolicy === 'ask';
+    context.mode === 'headless' &&
+    effectiveApprovalPolicy(
+      context.requestedApprovalPolicy ?? context.approvalPolicy,
+      readConfigSettingFrom<TexraApprovalPolicy>(
+        services.config,
+        TEXRA_APPROVAL_POLICY_CONFIG_KEY,
+      ),
+    ) === 'ask';
   const plan = yield* loadTeamRunPlan(init, services);
   if (rejectsHeadlessAsk) {
     writeTextStderr(

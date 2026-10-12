@@ -7,7 +7,7 @@ import { app, dialog, shell, type BrowserWindow } from 'electron';
 import { Cause, Effect } from 'effect';
 
 import { INSTRUCTION_ACTION, type InstructionAction } from '@shared/schemas';
-import type { DownMessage } from '@shared/session/sessionFrames';
+import type { DownMessage } from '@texra/shared/session/sessionFrames';
 import {
   ExternalOpenFailed,
   type NotificationFailed,
@@ -278,7 +278,7 @@ export function createDesktopWindowHost(options: {
      * are the ones that do not.
      */
     forProject(project: DesktopProject) {
-      const { roots } = project.session;
+      const { roots } = project;
       const name = project.display.name;
       const diff = diffHost.inProject(roots);
       const requestDiff = requestDiffHost.inProject(roots);

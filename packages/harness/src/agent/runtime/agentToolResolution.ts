@@ -2,10 +2,10 @@
  * Agent tool resolution — single source of truth for the tools one step
  * offers.
  *
- * A step pins a generation of the process's live tool catalog
- * (`@tools/liveTools`): the tools of every plugin switched on, and of the
- * loaded plugins (MCP servers) some run holds. This module narrows that
- * generation to what the run may be offered, in this order:
+ * A step pins its tools in its session's catalog (`@tools/liveTools`):
+ * the tools of every plugin switched on, of the installed plugins, and of
+ * the loaded plugins (MCP servers) its run holds. This module narrows
+ * those to what the run may be offered, in this order:
  *   1. The declared tools, in declaration order, each with the catalog's own
  *      contract (description, parameter schema). An MCP server's tools
  *      (`mcp__<server>__<tool>`, or `mcp__<server>__*` for all it lists)
@@ -14,7 +14,7 @@
  *      dependency probe found missing, that the host cannot run (its
  *      `unavailableHosts`) or that
  *      is approval-gated while approval prompts are unavailable is withheld;
- *      so is one whose plugin is off (not in the generation).
+ *      so is one whose plugin is off (not pinned).
  *   2. The injected tools not already declared, under the same gates: the
  *      plugins' (`injectedWhen`), and every tool of an installed plugin (its
  *      MCP servers'), which the plugin's enablement offers every top-level
@@ -34,13 +34,10 @@
  * the offered set changes, not on every step.
  */
 
-import { Effect, SubscriptionRef } from 'effect';
+import { Context, Effect, SubscriptionRef } from 'effect';
 
 import type { RuntimeTool as ITool } from '@agent/runtime/ToolServices';
-import {
-  MapToolRegistry,
-  type HostToolCapability,
-} from '@agent/core/tools/ToolTypes';
+import { MapToolRegistry } from '@agent/core/tools/ToolTypes';
 import { isInstalledPluginId } from '@common/plugins/pluginTrust';
 import type { ModelOptionStores } from '@model/computeModelOptions';
 import type { Persona } from '@shared/schemas';
@@ -53,12 +50,24 @@ import {
 import {
   toolDigests,
   type HeldPlugins,
-  type ToolGeneration,
+  type ToolEntry,
 } from '@tools/catalogEntries';
 import { mcpPluginId, mcpServerOfToolName } from '@tools/mcp/mcpServer';
 import { ToolAvailability } from '@tools/toolAvailabilityService';
 import { ToolRegistry } from '@tools/toolTable';
 import { readSettingFrom } from '@utils/config/platformSettings';
+
+/**
+ * The host capabilities a session's host serves now (`ITool.hostCapability`
+ * names one), by the session's storage root: what a plugin whose tools need
+ * a host capability serves from its process layer, from the same place its
+ * tools reach that capability, so it is offered exactly while it works.
+ * A plugin that serves none offers its gated tools nowhere.
+ */
+export class HostCapabilities extends Context.Service<
+  HostCapabilities,
+  { readonly of: (storage: string) => ReadonlySet<string> }
+>()('@texra/agent/HostCapabilities') {}
 
 /** What a step resolves its tools from: fixed at the run's open, but the
  *  approval flag the step reads live. */
@@ -68,7 +77,7 @@ export interface StepToolInputs {
   readonly approvalPromptsUnavailable: boolean;
   /** What the session's host serves now, read live each step: a tool that
    *  needs a capability missing here is withheld. */
-  readonly hostCapabilities: ReadonlySet<HostToolCapability>;
+  readonly hostCapabilities: ReadonlySet<string>;
   /** The product host the run's roots name; tools excluded from it are dropped. */
   readonly host: SettingHost;
   /** Tools only this run holds, laid over the resolved list (step 4). */
@@ -124,9 +133,9 @@ export function childToolRefusal(
   ].join(' ');
 }
 
-/** Resolve the tools one step offers from the generation it pinned. */
+/** Resolve the tools one step offers from the catalog entries it pinned. */
 export const resolveStepTools = Effect.fn('resolveStepTools')(function* (
-  generation: ToolGeneration,
+  catalog: ReadonlyMap<string, ToolEntry>,
   input: StepToolInputs,
 ) {
   const table = yield* ToolRegistry;
@@ -145,7 +154,7 @@ export const resolveStepTools = Effect.fn('resolveStepTools')(function* (
     }
   }
   if (input.injectInstalled)
-    for (const [name, entry] of generation.entries)
+    for (const [name, entry] of catalog)
       if (isInstalledPluginId(entry.plugin)) injected.push(name);
   if (input.parentOffered) {
     const refusal = childToolRefusal(input.parentOffered, input.tools);
@@ -164,7 +173,7 @@ export const resolveStepTools = Effect.fn('resolveStepTools')(function* (
     ),
   );
   const enabled = new Map(
-    [...generation.entries].filter(([, e]) => !probedOff.has(e.plugin)),
+    [...catalog].filter(([, e]) => !probedOff.has(e.plugin)),
   );
   // A child keeps only what its parent's step offered, as the same tool.
   const parent = input.parentOffered
@@ -212,7 +221,7 @@ export const resolveStepTools = Effect.fn('resolveStepTools')(function* (
     const server = mcpServerOfToolName(name);
     if (server === undefined) return [name];
     const id = mcpPluginId(server);
-    // An installed plugin's server: its tools are in the generation while
+    // An installed plugin's server: its tools are pinned while
     // the plugin loads, and why it does not is the step's to report.
     const installed = [...enabled].flatMap(([toolName, e]) =>
       isInstalledPluginId(e.plugin) && mcpServerOfToolName(toolName) === server
@@ -248,7 +257,7 @@ export const resolveStepTools = Effect.fn('resolveStepTools')(function* (
     // A missing dependency says so where the run declared the tool, before
     // any other gate, so an approval-gated tool's reason is not lost to the
     // approval notice.
-    const missing = probedOff.get(generation.entries.get(name)?.plugin ?? '');
+    const missing = probedOff.get(catalog.get(name)?.plugin ?? '');
     if (missing !== undefined) {
       if (source === 'declared')
         warnings.push(

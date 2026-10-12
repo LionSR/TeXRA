@@ -1,4 +1,5 @@
 import { css, type CSSResult } from 'lit';
+import { noticeStyles } from './surfaceStyles';
 
 import {
   buttonStyles,
@@ -97,6 +98,8 @@ export const dropCueStyles: CSSResult = css`
 `;
 
 export const commonViewStyles: CSSResult = css`
+  ${noticeStyles}
+
   .list-item {
     border: var(--border-thin) solid var(--wa-color-surface-border);
     border-radius: var(--border-radius-large);
@@ -114,7 +117,8 @@ export const commonViewStyles: CSSResult = css`
 
   .settings-disclosure-list {
     display: grid;
-    gap: var(--wa-space-2xs);
+    gap: 0;
+    border-block: var(--border-thin) solid var(--color-border);
   }
 
   /* Single-open disclosure pattern: consumers (ModelSelectionList,
@@ -125,9 +129,12 @@ export const commonViewStyles: CSSResult = css`
      independent <details>-style toggles. */
   .settings-disclosure {
     overflow: hidden;
-    border: var(--border-thin) solid var(--color-border);
-    border-radius: var(--border-radius);
+    border-block-end: var(--border-thin) solid var(--color-border);
     background: var(--wa-color-surface-default);
+  }
+
+  .settings-disclosure:last-child {
+    border-block-end: 0;
   }
 
   .settings-disclosure-summary {
@@ -152,7 +159,8 @@ export const commonViewStyles: CSSResult = css`
     justify-content: flex-start;
     width: 100%;
     min-height: var(--control-size-l);
-    padding: var(--wa-space-xs);
+    height: auto;
+    padding: var(--wa-space-2xs) var(--wa-space-xs);
     border: 0;
     border-radius: 0;
     background: transparent;
@@ -212,15 +220,12 @@ export const commonViewStyles: CSSResult = css`
     gap: var(--wa-space-2xs);
   }
 
-  /* Panel collapsible - consistent styling for collapsible panels */
-  .panel-collapsible {
-    border-top: var(--border-thin) solid var(--color-border);
-  }
-
-  /* Boxed variant: also rule off the bottom edge so the panel reads as a
-     standalone band (used by the Plan panel in the progress board). */
-  .panel-collapsible.is-boxed {
-    border-bottom: var(--border-thin) solid var(--color-border);
+  /* The primitive owns one frame. Host borders would sit outside WA's own
+     rounded base and create stray rules above and below the same panel. */
+  .panel-collapsible::part(base) {
+    border: var(--border-thin) solid var(--color-border);
+    border-radius: var(--border-radius);
+    background: var(--wa-color-surface-default);
   }
 
   .panel-collapsible::part(header) {
@@ -303,22 +308,25 @@ export const commonViewStyles: CSSResult = css`
   ${visuallyHiddenStyles}
   ${settingsRowStyles}
 
-  /* Stricter compactness for wa-checkbox / wa-radio — smaller label,
-   * tighter gap between control and label. */
   wa-checkbox,
-  wa-radio {
-    font-size: var(--font-size-sm);
+  wa-radio,
+  wa-switch {
+    font-size: var(--font-size);
   }
 
   wa-checkbox::part(label),
-  wa-radio::part(label) {
-    font-size: var(--font-size-sm);
-    padding-inline-start: var(--wa-space-2xs);
+  wa-radio::part(label),
+  wa-switch::part(label) {
+    font-size: var(--font-size);
+    padding-inline-start: 0;
+    line-height: var(--line-height-normal);
   }
 
   wa-checkbox::part(base),
-  wa-radio::part(base) {
-    gap: var(--wa-space-2xs);
+  wa-radio::part(base),
+  wa-switch::part(base) {
+    align-items: center;
+    gap: var(--wa-space-xs);
   }
 
   .clickable-link {
@@ -440,23 +448,26 @@ export const commonViewStyles: CSSResult = css`
     margin: 0 auto;
   }
 
+  .tab-content-container > section + section {
+    margin-block-start: var(--wa-space-l);
+  }
+
   .settings-section-heading {
     display: grid;
     gap: var(--wa-space-3xs);
-    margin: var(--wa-space-l) 0 var(--wa-space-xs);
-    padding-bottom: var(--wa-space-xs);
-    border-bottom: var(--border-thin) solid var(--color-border);
+    margin: 0 0 var(--wa-space-xs);
+    padding-bottom: var(--wa-space-2xs);
   }
 
   .settings-section-heading-row {
     display: flex;
     align-items: center;
-    gap: var(--wa-space-2xs);
+    gap: var(--wa-space-xs);
     min-width: 0;
   }
 
   .settings-section-heading-icon {
-    display: grid;
+    display: var(--settings-section-icon-display, grid);
     width: 1em;
     height: 1em;
     flex: 0 0 auto;
@@ -468,9 +479,9 @@ export const commonViewStyles: CSSResult = css`
   .settings-section-heading-title {
     margin: 0;
     color: var(--wa-color-text-normal);
-    font-size: var(--font-size-lg);
-    font-weight: var(--font-weight-semibold);
-    line-height: var(--line-height-tight);
+    font-size: var(--font-size);
+    font-weight: var(--font-weight-medium);
+    line-height: var(--line-height-heading);
   }
 
   .settings-section-heading-description {
@@ -485,7 +496,7 @@ export const commonViewStyles: CSSResult = css`
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: var(--wa-space-2xs);
+    gap: var(--wa-space-xs);
     margin-inline-start: auto;
   }
 
@@ -515,12 +526,6 @@ export const commonViewStyles: CSSResult = css`
     .settings-section-heading-actions {
       width: 100%;
       margin-inline-start: 0;
-    }
-
-    .settings-row {
-      align-items: stretch;
-      flex-direction: column;
-      gap: var(--wa-space-xs);
     }
 
     .settings-row-control {

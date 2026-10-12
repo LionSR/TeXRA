@@ -16,21 +16,3 @@ export interface Shell {
   /** Rail rows the user folded shut. */
   readonly collapsed: readonly string[];
 }
-
-type ShellAction = {
-  readonly kind: 'collapse';
-  readonly session: string;
-  readonly collapsed: boolean;
-};
-
-export function applyShellAction(shell: Shell, action: ShellAction): Shell {
-  switch (action.kind) {
-    case 'collapse': {
-      const without = shell.collapsed.filter((key) => key !== action.session);
-      return {
-        ...shell,
-        collapsed: action.collapsed ? [...without, action.session] : without,
-      };
-    }
-  }
-}

@@ -8,11 +8,8 @@ import {
 } from '@shared/schemas';
 
 import { isDiskFullError } from './errorPredicates';
-import {
-  hasContextWindowErrorMarker,
-  hasMissingApiKeyErrorMarker,
-} from './sdkError/errorMetadata';
 import { isUserAbort } from './sdkError/errorPatterns';
+import { normalizeProviderError } from './sdkError/providerErrorFormat';
 
 export type AgentErrorKind = NonNullable<RunEnd['error']>['kind'];
 
@@ -26,6 +23,8 @@ export const AGENT_ERROR_OUTCOME: Readonly<Record<AgentErrorKind, RunOutcome>> =
     abort: RUN_OUTCOME.CANCELLED,
     'context-window': RUN_OUTCOME.FAILED,
     'disk-full': RUN_OUTCOME.FAILED,
+    // Never thrown: an end records it, keeping its own outcome.
+    'result-lost': RUN_OUTCOME.FAILED,
     'missing-api-key': RUN_OUTCOME.FAILED,
     unexpected: RUN_OUTCOME.FAILED,
   };
@@ -42,18 +41,17 @@ export function primaryAgentError(err: unknown): unknown {
 /**
  * Classify agent execution errors for consistent runtime notification policy.
  *
- * Every kind is decided by a typed signal — an SDK/abort predicate, an errno,
- * or a `Symbol.for` marker attached where the failure was classified (a
- * window overflow is the llm package's verdict, marked by
- * `classifyModelFailure`).
+ * Every kind is decided by a typed signal: an abort predicate, an errno, or
+ * the failure's classification (a missing key is model access's
+ * `RouteUnavailable`, an overflowed window llm's verdict, either one as a
+ * run recorded it).
  */
 export function classifyAgentError(err: unknown): AgentErrorKind {
   const primary = primaryAgentError(err);
   if (isUserAbort(primary)) return 'abort';
   if (isDiskFullError(primary)) return 'disk-full';
-  if (hasMissingApiKeyErrorMarker(primary)) return 'missing-api-key';
-  if (hasContextWindowErrorMarker(primary)) return 'context-window';
-
+  const kind = normalizeProviderError(primary).classification?.kind;
+  if (kind === 'missing-api-key' || kind === 'context-window') return kind;
   return 'unexpected';
 }
 
@@ -109,6 +107,11 @@ export function agentErrorPresentation(error: {
       return {
         type: 'error',
         payload: { message: error.message ?? 'Disk full.', ...docs },
+      };
+    case 'result-lost':
+      return {
+        type: 'error',
+        payload: { message: error.message ?? 'The result was lost.', ...docs },
       };
     case 'unexpected':
       return {

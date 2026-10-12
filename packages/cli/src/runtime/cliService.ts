@@ -4,44 +4,50 @@
  * as the desktop opens its folders), the detached start a client asks for
  * when no service answers, and the connection the chat TUI holds.
  */
-import { hostname } from 'node:os';
+import { homedir, hostname } from 'node:os';
 import * as path from 'node:path';
 
 import {
+  Duration,
   Effect,
+  Exit,
+  Queue,
   Scope,
+  Stream,
   type Context,
   type FileSystem,
   type Path,
 } from 'effect';
 
-import { AppState, SessionOwner } from '@texra-ai/harness';
+import { API_KEY_ENV_NAMES } from '@texra-ai/llm';
+import { AppState, SessionOwner, type Sessions } from '@texra-ai/harness';
 import {
   createNodeWorkspaceRoots,
   canonicalizeWorkspacePath,
   resolveGlobalStoragePath,
   resolveWorkspaceStoragePath,
 } from '@texra-ai/harness/node';
-import type { SessionHandle } from '@agent/runtime';
 import {
   openProjectStateStore,
   openRepoStateStore,
 } from '@controllers/session/appStateStore';
+import { onAppSignal } from '@eventBus/AppSignals';
 import { setLogSink, silentLogSink, writeLogLine } from '@logger/logSink';
 import { JsonStore } from '@platform/defaults/jsonStore';
+import { loginShellEnvironment } from '@platform/defaults/loginShellEnv';
 import { TEXRA_CONFIG_FILE_NAME } from '@platform/defaults/nodeStorage';
 import { openTexraWorkspaceConfigStores } from '@platform/defaults/nodeStores';
-import {
-  TEXRA_APPROVAL_POLICY_CONFIG_KEY,
-  type TexraApprovalPolicy,
-} from '@shared/approvalPolicy';
 import type {
   GlobalDatabase,
   ProjectDatabases,
 } from '@shared/session/database';
 import { ownerIdentity, type OwnerId } from '@shared/schemas';
+import type { EditorHostShape } from '@texra/tools/editorHost';
 import type { ServiceInfo } from '@texra/controllers/server/protocol';
-import type { ServiceProjects } from '@texra/controllers/server/handlers';
+import type {
+  ServiceProject,
+  ServiceProjects,
+} from '@texra/controllers/server/handlers';
 import {
   ensureService,
   linkService,
@@ -52,12 +58,11 @@ import {
   type ServiceUnavailable,
 } from '@texra/controllers/server/client';
 import { bootstrapHost } from '@texra/controllers/hostBootstrap';
-import { readSettingFrom } from '@utils/config/platformSettings';
 import { envFlag } from '@utils/system/envFlags';
 import { withPerKeyLane, type PerKeyLane } from '@utils/core/perKeyQueue';
 import { ensureError } from '@utils/errors/errorMessage';
 
-import { readCliEntrypointPath } from './cliContext';
+import { cliEnvValue, readCliEntrypointPath } from './cliContext';
 import type { CliContext } from './cliContext';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
@@ -73,6 +78,11 @@ export const cliServiceProjects = Effect.fn('cliServiceProjects')(function* (
     'storageRoot' | 'resourcesPath' | 'skillSourceOptions'
   >,
   scope: Scope.Scope,
+  /** The editor registry this process's plugins read. */
+  editors: EditorHostShape,
+  /** The process's sessions, which each project's session is also opened
+   *  through. */
+  sessions: Context.Service.Shape<typeof Sessions>,
 ) {
   const { storageRoot } = context;
   const globalStorage = resolveGlobalStoragePath(storageRoot);
@@ -91,6 +101,7 @@ export const cliServiceProjects = Effect.fn('cliServiceProjects')(function* (
   );
   const openRoots = Effect.fn('cliServiceProjects.openRoots')(function* (
     workspace: string | undefined,
+    within: Scope.Scope,
   ) {
     const storage = resolveWorkspaceStoragePath(storageRoot, workspace);
     const [workspaceState, repoState, configs] = yield* Effect.all(
@@ -100,7 +111,7 @@ export const cliServiceProjects = Effect.fn('cliServiceProjects')(function* (
         openTexraWorkspaceConfigStores(storage, workspace, warn, follow),
       ],
       { concurrency: 'unbounded' },
-    ).pipe(Scope.provide(scope));
+    ).pipe(Scope.provide(within));
     return createNodeWorkspaceRoots({
       host: 'cli',
       workspacePath: workspace,
@@ -113,7 +124,7 @@ export const cliServiceProjects = Effect.fn('cliServiceProjects')(function* (
     });
   });
   yield* bootstrapHost({
-    roots: yield* openRoots(undefined),
+    roots: yield* openRoots(undefined, scope),
     skills: {
       resourcesPath: context.resourcesPath,
       skillSourceOptions: context.skillSourceOptions,
@@ -130,58 +141,105 @@ export const cliServiceProjects = Effect.fn('cliServiceProjects')(function* (
     | ProjectDatabases
     | SessionOwner
   >();
-  const sessions = new Map<string, SessionHandle>();
+  // Each project's approval policy is its persisted setting, which the
+  // session reads at every decision through these following config stores:
+  // a change any client writes applies to the next request, and nothing a
+  // window holds can replace it.
+  //
+  // A project is its session and the scope its stores live in, leased by
+  // the callers that use it. Opening, leasing and closing one run on the
+  // project's lane, so a close sees every lease taken before it and an open
+  // after it opens the project anew.
+  interface Project extends ServiceProject {
+    readonly scope: Scope.Closeable;
+    leases: number;
+    idleSince: number;
+  }
+  const projects = new Map<string, Project>();
   const lanes = new Map<string, PerKeyLane>();
-  // Each project's approval policy as its config last read: a change there
-  // (`texra config`, any window's settings) applies at the next call, and
-  // a policy a window told the service holds until the config changes.
-  const configuredPolicy = new Map<string, TexraApprovalPolicy>();
-  const followPolicy = (root: string, session: SessionHandle) =>
-    Effect.map(
-      readSettingFrom<TexraApprovalPolicy>(
-        session.roots,
-        TEXRA_APPROVAL_POLICY_CONFIG_KEY,
-      ),
-      (policy) => {
-        if (configuredPolicy.get(root) === policy) return;
-        configuredPolicy.set(root, policy);
-        session.approvals.setPolicy(policy);
-      },
-    );
+  const lease = (root: string) =>
+    Effect.gen(function* () {
+      let project = projects.get(root);
+      if (project === undefined) {
+        const projectScope = yield* Scope.fork(scope);
+        const opened = yield* Effect.gen(function* () {
+          const roots = yield* openRoots(root, projectScope);
+          const handle = yield* (yield* SessionOwner).open({
+            roots,
+            interruptedTasks: 'offer',
+          });
+          // The same session, as every host drives it.
+          const session = yield* sessions.open(roots, { persistent: true });
+          return { handle, session };
+        }).pipe(Effect.onError(() => Scope.close(projectScope, Exit.void)));
+        project = { ...opened, scope: projectScope, leases: 0, idleSince: 0 };
+        projects.set(root, project);
+      }
+      project.leases += 1;
+      return project;
+    }).pipe(withPerKeyLane(lanes, root));
   const open = (workspace: string) => {
     const root = canonicalizeWorkspacePath(workspace);
-    return Effect.gen(function* () {
-      const held = sessions.get(root);
-      if (held !== undefined) {
-        yield* followPolicy(root, held);
-        return held;
-      }
-      const roots = yield* openRoots(root);
-      const session = yield* (yield* SessionOwner).open({
-        roots,
-        interruptedTasks: 'offer',
-      });
-      yield* followPolicy(root, session);
-      sessions.set(root, session);
-      return session;
-    }).pipe(
-      withPerKeyLane(lanes, root),
+    return Effect.acquireRelease(lease(root), (project) =>
+      Effect.sync(() => {
+        project.leases -= 1;
+        if (project.leases === 0) project.idleSince = Date.now();
+      }),
+    ).pipe(
+      Effect.map(({ handle, session }): ServiceProject => ({
+        handle,
+        session,
+      })),
       Effect.mapError(ensureError),
       Effect.provideContext(services),
     );
   };
+  /** Close `root` if it is still unleased, holds no run and has been idle
+   *  for `idleMs`; a run held restarts its idle time. */
+  const closeIfIdle = (root: string, idleMs: number) =>
+    Effect.gen(function* () {
+      const project = projects.get(root);
+      if (project === undefined || project.leases > 0) return undefined;
+      const now = Date.now();
+      if (project.handle.runs.get().length > 0) {
+        project.idleSince = now;
+        return undefined;
+      }
+      if (now - project.idleSince < idleMs) return undefined;
+      projects.delete(root);
+      // The stores close even if the session's close fails.
+      yield* (yield* SessionOwner)
+        .close(project.handle.roots.storage)
+        .pipe(Effect.ensuring(Scope.close(project.scope, Exit.void)));
+      return project.handle;
+    }).pipe(withPerKeyLane(lanes, root), Effect.provideContext(services));
   return {
     storageRoot,
+    editors,
     open,
+    filesWritten: Stream.callback<readonly string[]>((queue) =>
+      Effect.forkScoped(
+        onAppSignal('workspaceFilesWritten', ({ absolutePaths }) =>
+          Queue.offerUnsafe(queue, absolutePaths),
+        ),
+      ),
+    ),
     opened: Effect.sync(
       () =>
         new Map(
-          [...sessions.values()].map((session) => [
-            session.roots.storage,
-            session,
+          [...projects.values()].map(({ handle }) => [
+            handle.roots.storage,
+            handle,
           ]),
         ),
     ),
+    closeIdle: (idleFor) =>
+      Effect.map(
+        Effect.forEach([...projects.keys()], (root) =>
+          closeIfIdle(root, Duration.toMillis(idleFor)),
+        ),
+        (closed) => closed.filter((session) => session !== undefined),
+      ),
   } satisfies Context.Service.Shape<typeof ServiceProjects>;
 });
 
@@ -274,3 +332,27 @@ export function connectCliService(
 ): Effect.Effect<ServiceConnection, Error, Scope.Scope> {
   return quietClient.pipe(Effect.andThen(reachCliService(storageRoot)));
 }
+
+/**
+ * What a client says when this terminal sets a provider key the service
+ * will not take from it. The service reads keys from the shared key store,
+ * the project's `.env` and its own login shell, never from a client, so a
+ * key this terminal set itself (`OPENAI_API_KEY=… texra chat`) does not
+ * reach the task. Null when every such key is the login shell's own.
+ */
+export const serviceKeysNotice = Effect.fn('serviceKeysNotice')(
+  function* (): Effect.fn.Return<string | null> {
+    const own = (name: string) => cliEnvValue(name)?.trim() || undefined;
+    const set = API_KEY_ENV_NAMES.filter((name) => own(name) !== undefined);
+    if (set.length === 0) return null;
+    // Best effort, for a notice only: a login shell that does not answer
+    // leaves the service without those keys too.
+    const login = yield* loginShellEnvironment(
+      cliEnvValue('HOME') ?? homedir(),
+    ).pipe(Effect.orElseSucceed((): Readonly<Record<string, string>> => ({})));
+    const unseen = set.filter((name) => login[name]?.trim() !== own(name));
+    if (unseen.length === 0) return null;
+    const one = unseen.length === 1;
+    return `${unseen.join(', ')} from this terminal ${one ? 'does' : 'do'} not reach tasks in the TeXRA service, which reads keys from \`texra setup\`, the project's .env and your login shell. Run with TEXRA_NO_SERVICE=1 to use this terminal's ${one ? 'key' : 'keys'}.`;
+  },
+);

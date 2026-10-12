@@ -16,10 +16,7 @@ import {
   type RunView,
   type SessionView,
 } from '@shared/session/sessionView';
-import type {
-  TaskSummary,
-  ToolEditPreview,
-} from '@texra/controllers/server/protocol';
+import type { TaskSummary } from '@texra/controllers/server/protocol';
 import type { ServiceConnection } from '@texra/controllers/server/client';
 
 /** One level of the attached task, as the view paints it. */
@@ -34,9 +31,6 @@ export interface AttachedTaskLevel {
 /** What the attached view does to the task, each a request to the service. */
 export interface AttachedTaskActions {
   readonly request: (request: RuntimeRequest) => Effect.Effect<Outcome, Error>;
-  readonly preview: (
-    requestId: string,
-  ) => Effect.Effect<ToolEditPreview | null, Error>;
 }
 
 /** The run ids of `root` and every run under it. */
@@ -71,15 +65,6 @@ export function followAttachedTask(
             error._tag === 'RpcClientError'
               ? error
               : new Error(describeWireRefusal(error)),
-          ),
-        ),
-      preview: (requestId) =>
-        client['request.preview']({
-          workspace: task.workspace,
-          requestId,
-        }).pipe(
-          Effect.mapError((error) =>
-            error._tag === 'RpcClientError' ? error : new Error(error.message),
           ),
         ),
     });

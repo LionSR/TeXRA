@@ -22,7 +22,11 @@ import { Effect, Stream, type FileSystem } from 'effect';
 import { z } from 'zod';
 
 // Local imports
-import { ToolContext, type WorkspaceRoots } from '@texra-ai/harness';
+import {
+  defineTool,
+  ToolContext,
+  type WorkspaceRoots,
+} from '@texra-ai/harness';
 import {
   emitToolUseCard,
   endOpenToolUseCards,
@@ -32,9 +36,7 @@ import {
   type OpenToolUseCard,
   type ToolUseCardRef,
 } from '@agent/trace';
-import type { Runs } from '@agent/runtime/runRegistry';
 import type { ChildRunPort } from '@agent/runtime/childRunLoop';
-import type { RunCall } from '@agent/runtime/RunCall';
 import { formatDelivery } from '@agent/runtime/deliveryEnvelope';
 import { withLogChannel } from '@logger/effectLog';
 import type {
@@ -54,7 +56,6 @@ import { DELIVERY_TAG } from '@shared/deliveryTags';
 import { CodexStateKey } from '@texra/shared/settingsView/integrationSettings';
 import { buildSyntheticToolUseConfig } from '@texra/tools/core/syntheticAgentConfig';
 import { buildAgentWorkspaceOptions } from '@texra/tools/agentWorkspaceOptions';
-import { defineTool } from '@tools/core/define';
 import type { DetachedChildRunLaunch } from '@tools/delegation/detachedChildRun';
 import { readSettingFrom } from '@utils/config/platformSettings';
 import { formatWallTimeSeconds, previewLabel } from '@utils/text/stringUtils';
@@ -82,6 +83,7 @@ import {
   buildCodexThreadToolLog,
   buildCodexTurnToolLog,
 } from './codexShared';
+import type { ChildRuns } from '@texra-ai/harness/plugins';
 import type { AgentCliSessionRegistry } from './agentCliSessionRegistry';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
@@ -349,7 +351,7 @@ function buildCodexLaunch(params: {
   /** Release the fallback claim if the loop exits before promoting it. */
   releaseFallbackClaim: (() => void) | undefined;
   registry: AgentCliSessionRegistry;
-}): Effect.Effect<DetachedChildRunLaunch<RunResult>, never, Runs> {
+}): Effect.Effect<DetachedChildRunLaunch<RunResult>> {
   const {
     thread,
     childRun,
@@ -445,8 +447,7 @@ const runCodex = Effect.fn('CodexTool.run')(function* (
   ToolResult,
   ToolError,
   | ToolContext
-  | RunCall
-  | Runs
+  | ChildRuns
   | CodexThreads
   | ChildProcessSpawner
   | FileSystem.FileSystem
@@ -492,7 +493,7 @@ export const CodexTool = defineTool({
     // A resumed thread keeps its stored workspace: name none, not the wrong one.
     cwd: 'unknown',
   },
-  execute: (input) => runCodex(input),
+  execute: runCodex,
 });
 
 const launchCodexSession = Effect.fn('codex.launchCodexSession')(function* (
@@ -502,7 +503,7 @@ const launchCodexSession = Effect.fn('codex.launchCodexSession')(function* (
 ): Effect.fn.Return<
   ToolResult,
   ToolError,
-  ToolContext | RunCall | Runs | ChildProcessSpawner | FileSystem.FileSystem
+  ToolContext | ChildRuns | ChildProcessSpawner | FileSystem.FileSystem
 > {
   const { roots } = (yield* ToolContext).env;
   const { thread, run } = yield* createCodexThread(
@@ -526,8 +527,6 @@ const launchCodexSession = Effect.fn('codex.launchCodexSession')(function* (
   const preview = previewLabel(input.prompt);
 
   return yield* launchAgentCliSession({
-    session: context.session,
-    parentRunId: context.parentRunId,
     resumeId: input.thread_id ?? undefined,
     agentName: 'codex',
     description: input.prompt,

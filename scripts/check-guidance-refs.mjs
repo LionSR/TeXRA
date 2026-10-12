@@ -41,6 +41,10 @@ const repoRoot = process.argv[2] ? resolve(process.argv[2]) : sourceRoot;
 const GUIDANCE_FILES = [
   'CLAUDE.md',
   'AGENTS.md',
+  'src/test-kernel/AGENTS.md',
+  'packages/harness/AGENTS.md',
+  'packages/texra/AGENTS.md',
+  'packages/extension/src/AGENTS.md',
   'src/README.md',
   'packages/harness/src/agent/core/README.md',
   'packages/harness/src/agent/runtime/README.md',
@@ -111,10 +115,6 @@ const PATH_PREFIXES = [
   // Hidden note tree. Do not add a bare `agents/` prefix: that matches
   // skill sidecars like `agents/openai.yaml`, which are not repo-root paths.
   '.agents/',
-  // Cited from CLAUDE.md/AGENTS.md: prompts/agents/remote/ is the declared
-  // public home for the hosted agent YAMLs. Without this prefix a stale
-  // citation to it rots silently.
-  'prompts/',
 ];
 
 // Generated or installed at build or test time, so absent in a clean checkout.

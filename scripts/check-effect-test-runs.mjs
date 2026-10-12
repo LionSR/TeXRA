@@ -145,9 +145,9 @@ function enclosingBoundary(node) {
 /**
  * The names the file's own declarations bind inside the run vocabulary. A bare
  * `runSync(...)` whose name the file declares itself is the file's helper --
- * `src/test-kernel/scripts/SyncRemoteAgents.vitest.ts` drives a build script
- * with a local `runSync(root, argv)` -- not a run of an Effect, and counting it
- * would demand a conversion the guidance does not ask for.
+ * a local `runSync(root, argv)` that drives a build script, say -- not a run
+ * of an Effect, and counting it would demand a conversion the guidance does
+ * not ask for.
  */
 function locallyDeclaredRunNames(sourceFile) {
   const declared = new Set();

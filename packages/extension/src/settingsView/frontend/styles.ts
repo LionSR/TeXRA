@@ -49,11 +49,30 @@ export const settingsViewStyles: CSSResult[] = [
       padding: 0 var(--wa-space-xs);
     }
 
-    /* The current page's sections: a second strip of text sub-tabs, on the
-       page's own surface so it reads as part of the page below it. */
+    /* Sections belong below the current page heading, beside their content. */
     .settings-section-nav {
-      border-top: var(--border-thin) solid var(--border-hairline);
-      background: var(--wa-color-surface-default);
+      display: flex;
+      flex-wrap: wrap;
+      gap: var(--wa-space-2xs);
+      margin-bottom: var(--wa-space-m);
+      padding-bottom: var(--wa-space-xs);
+      border-bottom: var(--border-thin) solid var(--border-hairline);
+    }
+
+    .settings-section-button::part(base) {
+      min-height: var(--height-control);
+      padding-inline: var(--wa-space-xs);
+      font-size: var(--font-size-sm);
+      border: 0;
+      border-radius: var(--row-radius);
+      background: transparent;
+      color: var(--wa-color-text-quiet);
+    }
+
+    .settings-section-button[data-active='true']::part(base) {
+      background: var(--surface-selected);
+      color: var(--wa-color-text-normal);
+      font-weight: var(--font-weight-medium);
     }
 
     .settings-page-button {
@@ -101,20 +120,19 @@ export const settingsViewStyles: CSSResult[] = [
     }
 
     .settings-panel {
+      container: settings / inline-size;
       flex: 1;
       box-sizing: border-box;
       min-width: 0;
       min-height: 0;
       max-width: 100%;
-      padding: var(--wa-space-s);
+      padding: var(--wa-space-m);
       overflow: auto;
       overscroll-behavior: contain;
     }
 
     .settings-page-header {
-      margin-bottom: var(--wa-space-s);
-      padding-bottom: var(--wa-space-s);
-      border-bottom: var(--border-thin) solid var(--border-hairline);
+      margin-bottom: var(--wa-space-m);
     }
 
     .settings-page-header-copy {
@@ -130,10 +148,82 @@ export const settingsViewStyles: CSSResult[] = [
     }
 
     .settings-page-header p {
-      margin: var(--wa-space-3xs) 0 0;
+      margin: var(--wa-space-2xs) 0 0;
       color: var(--wa-color-text-quiet);
       font-size: var(--font-size-sm);
       line-height: var(--line-height-normal);
+      max-width: 65ch;
+      text-wrap: pretty;
+    }
+
+    /* Desktop settings have enough room for a persistent section rail.
+       Keeping the categories in one column leaves a stable reading edge. */
+    :host([data-desktop-view]) .settings-container {
+      display: grid;
+      grid-template-columns: clamp(136px, 20%, 196px) minmax(0, 1fr);
+    }
+
+    :host([data-desktop-view]) {
+      --settings-section-icon-display: none;
+    }
+
+    :host([data-desktop-view]) .settings-navigation {
+      min-height: 0;
+      padding: var(--wa-space-xs);
+      overflow-y: auto;
+      overscroll-behavior: contain;
+      border-bottom: 0;
+      border-inline-end: var(--border-thin) solid var(--wa-color-surface-border);
+      background: var(--wa-color-surface-lowered);
+    }
+
+    :host([data-desktop-view]) .settings-page-nav {
+      flex-direction: column;
+      align-items: stretch;
+      gap: var(--wa-space-3xs);
+      padding: 0;
+      overflow: visible;
+    }
+
+    .settings-nav-group-label {
+      margin-block-start: var(--wa-space-s);
+      padding: var(--wa-space-2xs) var(--wa-space-xs);
+      color: var(--wa-color-text-quiet);
+      font-size: var(--font-size-xs);
+      font-weight: var(--font-weight-medium);
+      line-height: var(--line-height-normal);
+    }
+
+    .settings-nav-group-label:first-child {
+      margin-block-start: 0;
+    }
+
+    :host([data-desktop-view]) .settings-page-button::part(base) {
+      justify-content: flex-start;
+      gap: var(--wa-space-xs);
+      min-height: var(--height-button);
+      padding-inline: var(--wa-space-xs);
+      border-radius: var(--row-radius);
+      box-shadow: none;
+      white-space: normal;
+      text-align: start;
+    }
+
+    :host([data-desktop-view]) .settings-page-button::part(start) {
+      flex: none;
+      margin: 0;
+    }
+
+    :host([data-desktop-view]) .settings-tab-icon {
+      width: var(--font-size-icon-sm);
+      height: var(--font-size-icon-sm);
+    }
+
+    :host([data-desktop-view])
+      .settings-page-button[data-active='true']::part(base) {
+      background: var(--surface-selected);
+      color: var(--wa-color-brand-on-quiet);
+      font-weight: var(--font-weight-semibold);
     }
 
     @container settings (max-width: 520px) {

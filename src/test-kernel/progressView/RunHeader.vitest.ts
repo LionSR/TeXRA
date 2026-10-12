@@ -5,12 +5,12 @@ import { describe, expect, it } from 'vitest';
 import type { RunHeader } from '@progressView/frontend/components/RunHeader';
 import { ELEMENT_IDS } from '@progressView/frontend/constants';
 import { RUN_PHASE, RUN_SUBSTATE, type RunId } from '@shared/schemas';
-import type { HostRequest } from '@shared/session/hostRequest';
 import { runActions } from '@shared/session/runActions';
 import type { SessionView, RunView } from '@shared/session/sessionView';
-import type { SurfaceAction } from '@shared/session/surface';
 import type { RuntimeRequest } from '@shared/session/runtimeRequest';
 import { CHILD, fanOutView, ROOT } from '@test/shared/session/fanOutScenario';
+import type { SurfaceAction } from '@texra/shared/session/surface';
+import type { HostRequest } from '@texra/shared/session/hostRequest';
 
 // Local file imports
 import {
@@ -109,7 +109,7 @@ describe('run-header over the fold', () => {
       } as RunView;
       const { element } = await mountHeader(view, {
         ...fields,
-        actions: runActions(fields),
+        actions: runActions(fields, false),
       });
       return (
         element.shadowRoot?.querySelector(
@@ -124,5 +124,20 @@ describe('run-header over the fold', () => {
     expect(
       await cleanOffered({ status: RUN_PHASE.COMPLETED, group: 'recent' }),
     ).toBe(true);
+  });
+
+  it('keeps an idle chat free of stop or end actions', async () => {
+    const view = fanOutView();
+    const run = {
+      ...runOfEvent(view, ROOT),
+      status: RUN_PHASE.WAITING,
+      substate: null,
+      approval: 'none',
+    } as RunView;
+    const { element } = await mountHeader(view, run);
+    expect(
+      element.shadowRoot?.querySelector(`#${ELEMENT_IDS.STOP_STREAM_BTN}`),
+    ).toBeNull();
+    expect(element.shadowRoot?.textContent).not.toMatch(/End\s+task/);
   });
 });

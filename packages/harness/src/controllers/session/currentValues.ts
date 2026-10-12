@@ -84,15 +84,10 @@ export function currentValues(store: {
     read: Effect.Effect<A, E>,
   ) => Effect.Effect<A, DatabaseReadFailed>;
   readonly level: SubscriptionRef.SubscriptionRef<number>;
-  /** The store gate, run inside each change's transaction. */
-  readonly gate: Effect.Effect<void, SqlError | DatabaseStoreNewer>;
   /** Record for the gate that a value was written at this build's version. */
   readonly valueWritten: Effect.Effect<void, SqlError>;
-}): Pick<
-  Database['Service'],
-  'values' | 'readInputHistory' | 'appendInputHistory'
-> {
-  const { exec, execOne, transact, query, level, gate, valueWritten } = store;
+}): Pick<Database['Service'], 'values' | 'inputHistory'> {
+  const { exec, execOne, transact, query, level, valueWritten } = store;
   /** One value's row. */
   const valueRow = (family: string, key: string) =>
     execOne(
@@ -111,7 +106,6 @@ export function currentValues(store: {
     modify: (family, key, change) =>
       transact(
         Effect.gen(function* () {
-          yield* gate;
           const row = yield* valueRow(family.name, key);
           const result = change(
             row === undefined ? undefined : decodeValue(family, row),
@@ -189,31 +183,32 @@ export function currentValues(store: {
   };
   return {
     values,
-    readInputHistory: () =>
-      query(
+    inputHistory: {
+      read: query(
         exec('SELECT at, value FROM input_history ORDER BY id').pipe(
           Effect.map((rows) =>
             rows.map((row) => InputHistoryRecordSchema.parse(row)),
           ),
         ),
       ),
-    appendInputHistory: ({ at, value }) =>
-      transact(
-        Effect.gen(function* () {
-          const latest = yield* execOne(
-            'SELECT value FROM input_history ORDER BY id DESC LIMIT 1',
-          );
-          if (latest?.value !== value) {
-            yield* exec('INSERT INTO input_history (at, value) VALUES (?, ?)', [
-              at,
-              value,
-            ]);
-            yield* exec(
-              'DELETE FROM input_history WHERE id NOT IN (SELECT id FROM input_history ORDER BY id DESC LIMIT ?)',
-              [INPUT_HISTORY_LIMIT],
+      append: ({ at, value }) =>
+        transact(
+          Effect.gen(function* () {
+            const latest = yield* execOne(
+              'SELECT value FROM input_history ORDER BY id DESC LIMIT 1',
             );
-          }
-        }),
-      ),
+            if (latest?.value !== value) {
+              yield* exec(
+                'INSERT INTO input_history (at, value) VALUES (?, ?)',
+                [at, value],
+              );
+              yield* exec(
+                'DELETE FROM input_history WHERE id NOT IN (SELECT id FROM input_history ORDER BY id DESC LIMIT ?)',
+                [INPUT_HISTORY_LIMIT],
+              );
+            }
+          }),
+        ),
+    },
   };
 }

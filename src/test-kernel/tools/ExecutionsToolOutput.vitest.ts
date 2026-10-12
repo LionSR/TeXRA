@@ -9,7 +9,7 @@ import { Effect } from 'effect';
 import { beforeEach, afterEach, describe, vi } from 'vitest';
 
 // Local imports
-import { registerRun } from '@agent/storage';
+import { registerRun } from '@agent/storage/runLifecycle';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import * as toolUseFollowUp from '@agent/followUp/ToolUseFollowUp';
 
@@ -65,9 +65,10 @@ function launchBackgroundRun(emit: (sink: ExecChunkSink) => void) {
           return Effect.promise(() => processExit);
         }),
     );
+    // The completion commits on the parent's input; its wake follows.
     const followUp = vi
-      .spyOn(toolUseFollowUp, 'submitFollowUp')
-      .mockReturnValue(Effect.succeed({ status: 'sent' }));
+      .spyOn(toolUseFollowUp, 'startFollowUpWake')
+      .mockReturnValue(Effect.succeed(true));
 
     publishTestRunStart(testDefaultSession(), PARENT_RUN_ID);
     // No settle before the launch. `registerRun` opens the parent check with an
@@ -164,15 +165,17 @@ function registerScriptRun(name: string, model?: string) {
     );
     if (model !== undefined) {
       const session = testDefaultSession();
-      session.trace.publish(runId, {
-        type: 'run.config',
-        runId,
-        config: AgentConfigSchema.parse({
-          agent: name,
-          model,
-          instruction: `Script '${name}'`,
-        }),
-      });
+      publishTestRows(session, [
+        {
+          type: 'run.config',
+          aggregateId: aggregateId('run', runId),
+          config: AgentConfigSchema.parse({
+            agent: name,
+            model,
+            instruction: `Script '${name}'`,
+          }),
+        },
+      ]);
       yield* session.log.settled;
     }
     return runId;

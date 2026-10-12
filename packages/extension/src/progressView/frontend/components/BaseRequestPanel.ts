@@ -29,12 +29,12 @@ import '@awesome.me/webawesome/dist/components/textarea/textarea.js';
 
 // Local imports - shared schemas
 import type { PermissionPayload, RunId } from '@shared/schemas';
+import type { RequestAnswerability } from '@shared/session/sessionView';
+import type { TeXRAIconName } from '@shared/iconNames';
 import {
   approvalDecisionArms,
   type SurfaceDecision,
-} from '@shared/session/approvalDecision';
-import type { RequestAnswerability } from '@shared/session/sessionView';
-import type { TeXRAIconName } from '@shared/iconNames';
+} from '@texra/shared/session/surfaceDecision';
 import { SessionUiEvents } from '@texra/shared/session/uiEvents';
 import {
   commonViewStyles,

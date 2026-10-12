@@ -2,6 +2,7 @@ import { it } from '@effect/vitest';
 import { Effect } from 'effect';
 
 import { afterEach, describe, expect } from 'vitest';
+import { registryOf } from '@agent/runtime/runRegistry';
 
 import { SessionHandle } from '@agent/runtime/SessionHandle';
 import { submitFollowUp } from '@agent/followUp/ToolUseFollowUp';
@@ -66,12 +67,12 @@ describe('tool-use follow-up progress events', () => {
     const owner = session ?? testDefaultSession();
     handle.attachControls({
       oneShot: false,
-      requestImmediateCompaction: () => {},
+      requestImmediateCompaction: () => Effect.void,
       editView: () => Effect.void,
       modelSwitchDisabledReason: () => Effect.succeed(undefined),
       switchModel: () => Effect.void,
     });
-    owner.runs.track(handle);
+    registryOf(owner.runs).track(handle);
     trackedRuns.push({ session: owner, runId });
   }
 
@@ -127,14 +128,18 @@ describe('tool-use follow-up progress events', () => {
 
         const result = yield* submitFollowUp(
           runId,
-          { text: 'late follow-up', from: { kind: 'user' as const } },
+          {
+            text: 'late follow-up',
+            from: { kind: 'run' as const, runId: 'fa0002' as RunId },
+          },
           {
             session: testDefaultSession(),
           },
         );
 
-        // The run's own terminal row is the refusal: it finished.
-        expect(result).toEqual({ status: 'failed', reason: 'finished' });
+        // The run's terminal row stands: another run's message never
+        // revives it, whatever controls a stale handle still holds.
+        expect(result).toEqual({ status: 'failed', reason: 'not_resumable' });
         expect(yield* queuedFollowUps(testDefaultSession(), runId)).toEqual([]);
       }),
   );
@@ -152,9 +157,7 @@ describe('tool-use follow-up progress events', () => {
           }),
         );
         yield* Effect.addFinalizer(() =>
-          Effect.sync(() =>
-            testDefaultSession().followUps.closeInput(resumingRunId),
-          ),
+          testDefaultSession().followUps.closeInput(resumingRunId),
         );
 
         const result = yield* submitFollowUp(

@@ -1,11 +1,7 @@
 // Type imports
 import { Cause, Effect, type Scope } from 'effect';
 import { z, ZodError, type ZodType } from 'zod';
-import type {
-  HostToolCapability,
-  ITool,
-  ToolGuard,
-} from '@agent/core/tools/ToolTypes';
+import type { ITool, ToolGuard } from '@agent/core/tools/ToolTypes';
 import type { SettingHost } from '@shared/state/stateSettings';
 import {
   DIAGNOSTIC_TYPE_VALIDATION_ERROR,
@@ -30,12 +26,13 @@ export type DefinedTool<T, R = never> = Omit<ITool<Error, R>, 'call'> & {
   call(
     rawInput: unknown,
   ): Effect.Effect<ToolResult, Error, Exclude<R, Scope.Scope>>;
-  readonly parallelSafe: boolean | undefined;
+  readonly lane: ITool['lane'];
   readonly replay: ITool['replay'];
   readonly requiresApproval: ITool['requiresApproval'];
   readonly slow: boolean | undefined;
   readonly unavailableHosts: readonly SettingHost[] | undefined;
-  readonly hostCapability: HostToolCapability | undefined;
+  readonly hostCapability: string | undefined;
+  readonly launchesTasks: true | undefined;
   readonly guard: ToolGuard<T, R> | undefined;
   readonly describe: ITool['describe'];
 };
@@ -48,8 +45,8 @@ export type DefineToolOptions<T, R = never> = Required<
     ITool,
     | 'unavailableHosts'
     | 'hostCapability'
-    | 'parallelSafe'
-    | 'ownsConcurrency'
+    | 'launchesTasks'
+    | 'lane'
     | 'scriptGlobal'
     | 'replay'
     | 'requiresApproval'
@@ -102,16 +99,14 @@ export function defineTool<T, R = never>(
         scriptReturns: def.scriptReturns,
       }),
     },
-    parallelSafe: def.parallelSafe,
-    ...(def.ownsConcurrency !== undefined && {
-      ownsConcurrency: def.ownsConcurrency,
-    }),
+    lane: def.lane,
     ...(def.scriptGlobal !== undefined && { scriptGlobal: def.scriptGlobal }),
     replay: def.replay,
     requiresApproval: def.requiresApproval,
     slow: def.slow,
     unavailableHosts: def.unavailableHosts,
     hostCapability: def.hostCapability,
+    launchesTasks: def.launchesTasks,
     guard: def.guard,
     describe: def.describe,
     // Validate lazily in the caller's fiber; interruption never becomes a

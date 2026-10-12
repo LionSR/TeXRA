@@ -15,10 +15,6 @@ import { renderLabeledActionButton } from '@ui/wa/actionButtons';
 import { BaseRequestPanel } from './BaseRequestPanel';
 
 const planApprovalRequestPanelStyles: CSSResult = css`
-  :host {
-    --request-accent: var(--wa-color-text-link);
-  }
-
   .plan-request__objective {
     margin: ${sp.small} 0;
     color: var(--wa-color-text-normal);

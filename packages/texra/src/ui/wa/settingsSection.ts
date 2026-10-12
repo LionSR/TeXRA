@@ -62,7 +62,7 @@ export function renderSettingsSectionHeading(
 
 export interface SettingsToggleRowOptions {
   readonly label: string;
-  readonly description: string;
+  readonly description?: string;
   readonly checked: boolean;
   readonly disabled?: boolean;
   readonly onChange: (event: Event) => void;
@@ -83,35 +83,35 @@ function settingsRowId(kind: 'toggle' | 'number', label: string): string {
  * the switch in the control slot. A switch is its own state indicator — do
  * not add status icons beside it.
  *
- * The visible label is a real `<label for>`, not a `<span>` plus an
- * `aria-label` on the host. WebAwesome renders
- * `<label part="base"><input role="switch"> … </label>` inside its shadow root,
- * so a host `aria-label` names the custom element rather than the control that
- * carries the role — all 21 rows built by this helper were reaching the
- * accessibility tree unnamed. `wa-switch` is a form-associated custom element
- * (`WebAwesomeFormAssociatedElement.formAssociated = true`), which makes it
- * labelable, so a light-DOM `for` associates properly.
- *
- * It also means the label text is now part of the switch's hit target, which
- * is what removes the dead zone between a toggle and the words describing it.
+ * The external label activates the form-associated host. Its label does not
+ * name WebAwesome's role-bearing input inside the shadow root, so repeat the
+ * text in the switch's label slot, visually hidden. A host aria-label alone
+ * also leaves that internal input unnamed.
  */
 export function renderSettingsToggleRow(
   options: SettingsToggleRowOptions,
 ): TemplateResult {
   const id = settingsRowId('toggle', options.label);
   return html`
-    <div class="settings-row">
+    <div class="settings-row is-toggle">
       <div class="settings-row-text">
         <label class="settings-row-label" for=${id}>${options.label}</label>
-        <span class="settings-row-help">${options.description}</span>
+        ${
+          options.description
+            ? html`<span class="settings-row-help"
+                >${options.description}</span
+              >`
+            : nothing
+        }
       </div>
       <div class="settings-row-control">
         <wa-switch
           id=${id}
-          ?checked=${options.checked}
+          .checked=${live(options.checked)}
           ?disabled=${options.disabled}
           @change=${options.onChange}
-        ></wa-switch>
+          ><span class="visually-hidden">${options.label}</span></wa-switch
+        >
       </div>
     </div>
   `;

@@ -26,13 +26,16 @@ interface TerminalPaneCallbacks {
 }
 
 interface TerminalPane {
-  readonly element: HTMLElement;
+  elementFor(sessionId: string): HTMLElement;
   /**
    * Shows `sessionId`, creating its terminal and pty on first use. `focus`
    * (default `true`) moves keyboard focus into the terminal; pass `false`
    * from layout passes, which must re-fit without stealing focus.
    */
-  activate(sessionId: string, options?: { focus?: boolean }): void;
+  activate(
+    sessionId: string,
+    options?: { focus?: boolean; background?: boolean },
+  ): void;
   /** Feeds pty output into the matching terminal. */
   write(sessionId: string, data: string): void;
   /** Reports process exit in-band so the pane doesn't look merely idle. */
@@ -75,16 +78,11 @@ export function createTerminalPane(
 ): TerminalPane {
   injectXtermStyles();
 
-  const element = document.createElement('div');
-  element.className = 'desktop-terminal-pane';
-
   const sessions = new Map<string, TerminalSession>();
-  let activeSessionId: string | undefined;
 
   function createSession(sessionId: string): TerminalSession {
     const host = document.createElement('div');
-    host.className = 'desktop-terminal-surface';
-    element.append(host);
+    host.className = 'desktop-terminal-pane desktop-terminal-surface';
 
     const { theme, fontFamily } = resolveXtermTheme(document.body);
     const terminal = new Terminal({
@@ -137,11 +135,12 @@ export function createTerminalPane(
     session.terminal.dispose();
     session.host.remove();
     sessions.delete(sessionId);
-    if (activeSessionId === sessionId) activeSessionId = undefined;
   }
 
   return {
-    element,
+    elementFor(sessionId) {
+      return (sessions.get(sessionId) ?? createSession(sessionId)).host;
+    },
 
     refreshTheme() {
       const { theme } = resolveXtermTheme(document.body);
@@ -149,12 +148,13 @@ export function createTerminalPane(
         terminal.options.theme = theme;
     },
 
-    activate(sessionId, { focus = true }: { focus?: boolean } = {}) {
+    activate(sessionId, { focus = true, background = false } = {}) {
       const session = sessions.get(sessionId) ?? createSession(sessionId);
-      activeSessionId = sessionId;
-      for (const [id, entry] of sessions) {
-        entry.host.hidden = id !== sessionId;
-      }
+      if (
+        (!session.host.clientWidth || !session.host.clientHeight) &&
+        !background
+      )
+        return;
       fit(session);
       if (!session.started) {
         session.started = true;
@@ -187,10 +187,9 @@ export function createTerminalPane(
     },
 
     layout() {
-      const session = activeSessionId
-        ? sessions.get(activeSessionId)
-        : undefined;
-      if (session) fit(session);
+      for (const session of sessions.values()) {
+        if (session.host.clientWidth && session.host.clientHeight) fit(session);
+      }
     },
 
     dispose: disposeSession,

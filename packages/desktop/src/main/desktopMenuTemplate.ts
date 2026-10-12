@@ -11,9 +11,8 @@
 import type { DesktopPlatform } from '@texra/shared/commands/accelerators';
 
 import {
-  DESKTOP_FILE_COMMANDS,
   DESKTOP_HELP_COMMANDS,
-  DESKTOP_MENU_GROUPS,
+  DESKTOP_LOCAL_COMMANDS,
   dispatchDesktopCommand,
   getDesktopCommandMenuEntries,
   type DesktopCommandActions,
@@ -81,37 +80,74 @@ export function buildDesktopMenuTemplate(
       click: () => dispatchDesktopCommand(id, actions),
     };
   };
-  const customMenu: DesktopMenuTemplateItem = {
-    label: 'TeXRA',
-    submenu: [
-      ...DESKTOP_MENU_GROUPS[0].map(commandItem),
-      { type: 'separator' },
-      ...DESKTOP_MENU_GROUPS[1].map(commandItem),
-    ],
+  const settingsItem = {
+    ...commandItem('texra.showDashboard'),
+    label: 'Settings…',
   };
   const fileMenu: DesktopMenuTemplateItem = {
     label: 'File',
     submenu: [
-      ...DESKTOP_FILE_COMMANDS.map(commandItem),
+      commandItem('texra.showMainView'),
+      commandItem(DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_FOLDER),
       openRecentMenu(recent),
       { type: 'separator' },
+      commandItem(DESKTOP_LOCAL_COMMANDS.SAVE_FILE),
+      ...(platform === 'darwin'
+        ? []
+        : [settingsItem, { type: 'separator' as const }]),
       platform === 'darwin' ? { role: 'close' } : { role: 'quit' },
     ],
   };
 
   const leadingMenus: DesktopMenuTemplateItem[] =
-    platform === 'darwin' ? [{ role: 'appMenu' }, fileMenu] : [fileMenu];
+    platform === 'darwin'
+      ? [
+          {
+            role: 'appMenu',
+            submenu: [
+              { role: 'about' },
+              { type: 'separator' },
+              settingsItem,
+              { type: 'separator' },
+              { role: 'services' },
+              { type: 'separator' },
+              { role: 'hide' },
+              { role: 'hideOthers' },
+              { role: 'unhide' },
+              { type: 'separator' },
+              { role: 'quit' },
+            ],
+          },
+          fileMenu,
+        ]
+      : [fileMenu];
 
   return [
     ...leadingMenus,
-    customMenu,
     { role: 'editMenu' },
-    { role: 'viewMenu' },
+    {
+      label: 'View',
+      submenu: [
+        commandItem(DESKTOP_LOCAL_COMMANDS.TOGGLE_SIDE_PANEL),
+        commandItem(DESKTOP_LOCAL_COMMANDS.TOGGLE_BOTTOM_BAR),
+        commandItem(DESKTOP_LOCAL_COMMANDS.SHOW_LOGS),
+        { type: 'separator' },
+        { role: 'resetZoom' },
+        { role: 'zoomIn' },
+        { role: 'zoomOut' },
+        { type: 'separator' },
+        { role: 'togglefullscreen' },
+      ],
+    },
     { role: 'windowMenu' },
     {
       label: 'Help',
       role: 'help',
-      submenu: DESKTOP_HELP_COMMANDS.map(commandItem),
+      submenu: [
+        ...DESKTOP_HELP_COMMANDS.map(commandItem),
+        { type: 'separator' },
+        commandItem(DESKTOP_LOCAL_COMMANDS.OPEN_LOG_FOLDER),
+      ],
     },
   ];
 }

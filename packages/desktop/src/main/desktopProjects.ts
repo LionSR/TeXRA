@@ -1,6 +1,8 @@
-// The desktop's open projects: one `SessionHandle` per open folder, each rooted
-// in that folder's `WorkspaceRoots`, plus the no-workspace session the window
-// shows before any folder is open. Opening a second folder no longer relaunches
+// The desktop's open projects: one `Session` per open folder, each rooted in
+// that folder's `WorkspaceRoots`, plus the no-workspace session the window
+// shows before any folder is open. A folder's session is the background
+// service's while the app is its client; only the no-workspace session, and
+// every session when there is no service, is opened here. Opening a second folder no longer relaunches
 // the process; the window switches which project it shows.
 
 import {
@@ -14,14 +16,14 @@ import {
   type PlatformError,
 } from 'effect';
 
-import { SessionOwner } from '@texra-ai/harness';
+import { SessionOwner, type Session, type Sessions } from '@texra-ai/harness';
 import {
   createNodeWorkspaceRoots,
   canonicalizeWorkspacePath,
   resolveGlobalStoragePath,
   resolveWorkspaceStoragePath,
 } from '@texra-ai/harness/node';
-import type { SessionHandle } from '@agent/runtime';
+import { SessionHostInteractions, type SessionHandle } from '@agent/runtime';
 import {
   openProjectStateStore,
   openRepoStateStore,
@@ -30,33 +32,25 @@ import type { ModelOptionStores } from '@model/computeModelOptions';
 import type { ConfigStore } from '@platform/defaults/jsonConfigProvider';
 import { openTexraWorkspaceConfigStores } from '@platform/defaults/nodeStores';
 import {
-  TEXRA_APPROVAL_POLICY_CONFIG_KEY,
-  type TexraApprovalPolicy,
-} from '@shared/approvalPolicy';
-import {
   GlobalDatabase,
   type ProjectDatabases,
 } from '@shared/session/database';
 import {
   projectDisplayOf,
   type ProjectDisplay,
-} from '@shared/session/hostSnapshot';
-import {
-  localSessionBackend,
-  type SessionBackend,
-} from '@texra/controllers/session/sessionBackend';
-import { serviceSessionBackend } from '@texra/controllers/server/serviceBackend';
+} from '@texra/shared/session/hostSnapshot';
+import { serviceSession } from '@texra/controllers/server/serviceSession';
 import type { ServiceLink } from '@texra/controllers/server/client';
+import { sessionStoreMovedAsideMessage } from '@ui/copy/sessionStore';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { withPerKeyLane, type PerKeyLane } from '@utils/core/perKeyQueue';
-import { readSettingFrom } from '@utils/config/platformSettings';
 import { absentReason } from '@utils/files/fsEntryExists';
 import { DesktopProjectRecords } from './desktopProjectRecords.js';
 import { showDesktopWarningDialog } from './platform/warningDialog.js';
 import type { WorkspaceRoots } from '@texra-ai/harness';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
-export interface DesktopProject {
+interface DesktopProjectFacts {
   /** The session key: the storage root the fold's `SessionView.key`
    *  carries, and the project's name on every renderer message. */
   readonly key: string;
@@ -66,15 +60,28 @@ export interface DesktopProject {
    *  for it, derived once from `key` and `root`. */
   readonly display: ProjectDisplay;
   readonly roots: WorkspaceRoots;
-  readonly session: SessionHandle;
-  /** Where this project's runs run: the background service, for a folder
-   *  while the app is its client, or this session. */
-  readonly backend: SessionBackend;
-  /** The service the backend reaches, when it is the service's. */
-  readonly service: ServiceLink | undefined;
+  /** Where this project's runs run: the background service's session, for
+   *  a folder while the app is its client, or the one opened here. */
+  readonly session: Session;
+  /** Where a failure this window meets before a run opens is presented: the
+   *  local session's interactions, or the window's own, which its run wiring
+   *  attaches. */
+  readonly present: SessionHostInteractions;
   /** Release the session from its owner; settles once its entry has unwound. */
   dispose(): Effect.Effect<void>;
 }
+
+/** An open project: its session opened here (`handle`), or the service's,
+ *  which this process holds no handle, run log or claim of. */
+export type DesktopProject = DesktopProjectFacts &
+  (
+    | { readonly handle: SessionHandle; readonly service?: undefined }
+    | {
+        readonly handle?: undefined;
+        readonly service: ServiceLink;
+        readonly root: string;
+      }
+  );
 
 /** What the window shows and offers, as one value its surfaces follow. */
 export interface DesktopProjectsState {
@@ -108,6 +115,9 @@ interface DesktopProjectRegistryOptions {
   /** The background service, when the app is its client: a folder's
    *  runs run there. */
   readonly service: ServiceLink | undefined;
+  /** The process's sessions: each project's session, as every host drives
+   *  it, is opened through them beside the owner's handle. */
+  readonly sessions: Sessions['Service'];
 }
 
 export interface DesktopProjectRegistry {
@@ -222,43 +232,50 @@ function openProjectSession(
   scope: Scope.Closeable,
   service: ServiceLink | undefined,
   owner: SessionOwner['Service'],
+  sessions: Sessions['Service'],
 ): Effect.Effect<DesktopProject, Error, Scope.Scope> {
   return Effect.gen(function* () {
+    const facts = {
+      key: roots.storage,
+      display: projectDisplayOf(roots.storage, root),
+      roots,
+      dispose: () => Scope.close(scope, Exit.void),
+    };
     // A folder's runs run in the service, which follows its interrupted
-    // tasks; the no-workspace session's, and every run without a service,
-    // run here.
-    const served = root !== undefined ? service : undefined;
-    const session = yield* Effect.acquireRelease(
-      owner.open({
-        roots,
-        ...(served === undefined && { interruptedTasks: 'offer' }),
-      }),
+    // tasks; this process opens no session for it.
+    if (service !== undefined && root !== undefined)
+      return {
+        ...facts,
+        root,
+        service,
+        session: yield* serviceSession(service, root, roots),
+        // Disposed with the project, its window's attachment with it.
+        present: yield* Effect.acquireRelease(
+          Effect.sync(() => new SessionHostInteractions()),
+          (present) => present.dispose(),
+        ),
+      };
+    // The no-workspace session's runs, and every run without a service, run
+    // here.
+    const handle = yield* Effect.acquireRelease(
+      owner.open({ roots, interruptedTasks: 'offer' }),
       // The one close every session takes: its runs stopped under the
       // shutdown deadline, the ones still live past it settled, its
       // artifacts flushed, its entry released.
-      (session) => Effect.asVoid(owner.close(session.roots.storage)),
+      (opened) => Effect.asVoid(owner.close(opened.roots.storage)),
     );
-    session.approvals.setPolicy(
-      yield* readSettingFrom<TexraApprovalPolicy>(
-        roots,
-        TEXRA_APPROVAL_POLICY_CONFIG_KEY,
-      ),
-    );
-    const backend =
-      served === undefined || root === undefined
-        ? localSessionBackend(session)
-        : yield* serviceSessionBackend(served, root, roots.storage);
-    if (served !== undefined)
-      yield* backend.setApprovalPolicy(session.approvals.policy());
+    // A store moved aside at open (pre-1.0 or corrupt) is said once, as the
+    // extension and the CLI say it.
+    if (handle.log.movedAside)
+      void showDesktopWarningDialog(
+        sessionStoreMovedAsideMessage(handle.log.movedAside),
+      );
     return {
-      key: roots.storage,
+      ...facts,
       root,
-      display: projectDisplayOf(roots.storage, root),
-      roots,
-      session,
-      backend,
-      service: served,
-      dispose: () => Scope.close(scope, Exit.void),
+      handle,
+      session: yield* sessions.open(roots, { persistent: true }),
+      present: handle.interactions,
     };
   });
 }
@@ -276,6 +293,7 @@ export function openDesktopProjectRegistry(
 > {
   return Effect.gen(function* () {
     const owner = yield* SessionOwner;
+    const { sessions } = options;
     const records = yield* DesktopProjectRecords;
     const globalDatabase = yield* GlobalDatabase;
     const lanes = new Map<string | symbol, PerKeyLane>();
@@ -287,6 +305,7 @@ export function openDesktopProjectRegistry(
         options.processScope,
         undefined,
         owner,
+        sessions,
       ).pipe(
         Scope.provide(options.processScope),
         Effect.onError(() => Scope.close(options.processScope, Exit.void)),
@@ -365,6 +384,7 @@ export function openDesktopProjectRegistry(
                 projectScope,
                 options.service,
                 owner,
+                sessions,
               ).pipe(
                 Effect.tap((project) =>
                   Effect.gen(function* () {

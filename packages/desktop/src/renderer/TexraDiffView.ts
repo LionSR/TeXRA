@@ -5,13 +5,15 @@ import { customElement, property, state } from 'lit/decorators.js';
 import { DESKTOP_THEME_KIND, type Theme } from '@shared/schemas';
 import {
   loadMonaco,
-  monacoThemeForHostTheme,
   type MonacoModule,
 } from '@texra/shared/monaco/monacoLoader';
 import { commonViewStyles, designTokens } from '@ui/styles';
 
 // Local imports - shared Web Awesome helpers
 import { renderLoadingState } from '@ui/wa/loadingState';
+import { applyMonacoTheme } from '@ui/wa/monacoTheme';
+import { monacoPresentationOptions } from '@ui/wa/monacoOptions';
+import { installMonacoCommandDescriptions } from '@ui/wa/monacoCommandDescriptions';
 
 // Local imports - errors
 import { extractErrorMessage } from '@utils/errors/errorMessage';
@@ -51,8 +53,10 @@ export class TexraDiffView extends LitElement {
         border: 0;
       }
 
-      .editor {
+      ::slotted(.desktop-diff-editor) {
         flex: 1;
+        width: 100%;
+        height: 100%;
         min-width: 0;
         min-height: 0;
       }
@@ -92,6 +96,16 @@ export class TexraDiffView extends LitElement {
   private proposedModel?: TextModel;
   private resizeObserver?: ResizeObserver;
   private loadGeneration = 0;
+  private readonly editorContainer = document.createElement('div');
+  private disposeCommandTooltips: (() => void) | undefined;
+
+  override connectedCallback(): void {
+    super.connectedCallback();
+    // Monaco and its popups share the document stylesheet with the source
+    // editor. The component's slot retains the diff frame and sizing.
+    this.editorContainer.className = 'desktop-diff-editor';
+    this.append(this.editorContainer);
+  }
 
   override disconnectedCallback(): void {
     this.loadGeneration += 1;
@@ -133,7 +147,7 @@ export class TexraDiffView extends LitElement {
     return html`
       ${this.loading ? renderLoadingState('Loading diff...') : nothing}
       <div class="diff-view" ?hidden=${this.loading}>
-        <div class="editor"></div>
+        <slot></slot>
       </div>
     `;
   }
@@ -147,19 +161,19 @@ export class TexraDiffView extends LitElement {
     try {
       const monaco = await loadMonaco();
       if (!this.isConnected || generation !== this.loadGeneration) return;
-      const container = this.renderRoot.querySelector<HTMLElement>('.editor');
-      if (!container) return;
+      const container = this.editorContainer;
+      this.disposeCommandTooltips = installMonacoCommandDescriptions(container);
 
       this.monaco = monaco;
       this.applyTheme();
       this.editor = monaco.editor.createDiffEditor(container, {
+        ...monacoPresentationOptions(this),
         automaticLayout: false,
         enableSplitViewResizing: true,
         originalEditable: false,
         readOnly: true,
         renderOverviewRuler: true,
         renderSideBySide: true,
-        scrollBeyondLastLine: false,
       });
       this.syncModels();
       this.observeResize(container);
@@ -190,21 +204,27 @@ export class TexraDiffView extends LitElement {
   }
 
   private observeResize(container: HTMLElement): void {
+    const layout = () => {
+      const { clientWidth: width, clientHeight: height } = container;
+      if (width > 0 && height > 0) this.editor?.layout({ width, height });
+    };
     if (typeof ResizeObserver === 'undefined') {
-      this.editor?.layout();
+      layout();
       return;
     }
     this.resizeObserver?.disconnect();
-    this.resizeObserver = new ResizeObserver(() => this.editor?.layout());
+    this.resizeObserver = new ResizeObserver(layout);
     this.resizeObserver.observe(container);
-    this.editor?.layout();
+    layout();
   }
 
   private applyTheme(): void {
-    this.monaco?.editor.setTheme(monacoThemeForHostTheme(this.hostTheme));
+    if (this.monaco) applyMonacoTheme(this.monaco, this.hostTheme, this);
   }
 
   private disposeMonacoObjects(): void {
+    this.disposeCommandTooltips?.();
+    this.disposeCommandTooltips = undefined;
     this.editor?.dispose();
     this.editor = undefined;
     this.originalModel?.dispose();

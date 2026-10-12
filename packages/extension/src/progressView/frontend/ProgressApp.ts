@@ -36,9 +36,9 @@ import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 // Local imports - shared webview
 import '@ui/wa/spinner';
 import { agentName } from '@shared/schemas';
-import type { HostSnapshot } from '@shared/session/hostSnapshot';
 import type { SessionView, RunView } from '@shared/session/sessionView';
-import type { Surface } from '@shared/session/surface';
+import type { HostSnapshot } from '@texra/shared/session/hostSnapshot';
+import type { Surface } from '@texra/shared/session/surface';
 import { SessionUiEvents } from '@texra/shared/session/uiEvents';
 import {
   FILE_SELECT_CONFIGS,
@@ -324,8 +324,9 @@ export class ProgressApp extends LitElement {
   }
 
   /** The New-task state's menu: the window items alone. */
-  private renderOverflow(): TemplateResult {
+  private renderOverflow(): TemplateResult | typeof nothing {
     const items = this.windowItems();
+    if (items.length === 0) return nothing;
     return html`
       <wa-dropdown
         placement="bottom-end"
@@ -418,7 +419,10 @@ export class ProgressApp extends LitElement {
       </section>`;
     }
     if (host.banners.gettingStarted) {
-      return html`<getting-started-banner></getting-started-banner>`;
+      return html`<new-task-hero
+          .projectName=${host.project.name}
+        ></new-task-hero>
+        <getting-started-banner></getting-started-banner>`;
     }
     return html`<new-task-hero
       .projectName=${host.project.name}

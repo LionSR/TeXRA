@@ -20,7 +20,7 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 import { pluralize } from '@utils/text/stringUtils';
 
 // Local file imports
-import { defineTool } from './core/define';
+import { defineTool } from './core/definition';
 
 const GlobInputSchema = z.strictObject({
   pattern: z
@@ -176,7 +176,7 @@ const runGlob = Effect.fn('GlobTool.execute')(function* (
 export const GlobTool = defineTool({
   name: 'glob',
   replay: 'safe',
-  parallelSafe: true,
+  lane: 'parallel',
   description:
     'Find files matching glob patterns (e.g., "**/*.tex", "src/**/*.ts"). Returns paths sorted by modification time.',
   schema: GlobInputSchema,

@@ -101,7 +101,7 @@ function visibleTokenStats(usage: TokenUsageStats): TokenStat[] {
 function renderTokenStat(stat: TokenStat): TemplateResult {
   const tooltip = `${stat.tooltip}: ${stat.value.toLocaleString('en-US')}`;
   // prettier-ignore
-  return html`<span id=${stat.id} class="token-stat">${waIcon(stat.icon)}${formatCompactTokenCount(stat.value)}</span><wa-tooltip for=${stat.id}>${tooltip}</wa-tooltip>`;
+  return html`<span id=${stat.id} class="token-stat" tabindex="0">${waIcon(stat.icon)}<span class="token-value">${formatCompactTokenCount(stat.value)}</span></span><wa-tooltip for=${stat.id}>${tooltip}</wa-tooltip>`;
 }
 
 /** Solid fill color based on context utilization. */
@@ -123,9 +123,8 @@ export class UsagePanel extends LitElement {
       }
 
       .usage-summary-footer {
-        border-top: var(--border-thin) solid var(--color-border);
-        background-color: var(--wa-color-surface-lowered);
-        padding: var(--wa-space-2xs) var(--wa-space-xs);
+        padding: var(--wa-space-xs) 0;
+        column-gap: var(--wa-space-s);
         display: flex;
         flex-wrap: wrap;
         row-gap: var(--wa-space-3xs);
@@ -151,6 +150,10 @@ export class UsagePanel extends LitElement {
 
       :is(.run-summary, .context-state) wa-icon {
         font-size: var(--font-size-icon-sm);
+        display: block;
+        flex: 0 0 var(--font-size-icon-sm);
+        width: var(--font-size-icon-sm);
+        height: var(--font-size-icon-sm);
       }
 
       /* Each compact counter needs a keyboard-reachable explanation. Keeping
@@ -165,12 +168,12 @@ export class UsagePanel extends LitElement {
       }
 
       .run-summary__route {
-        font-weight: var(--wa-font-weight-semibold);
+        font-weight: var(--font-weight-normal);
         white-space: nowrap;
       }
 
       .run-summary__route--covered {
-        color: var(--color-success);
+        color: var(--color-text-secondary);
       }
 
       /* Context gauge bar */
@@ -207,7 +210,18 @@ export class UsagePanel extends LitElement {
       }
 
       .run-summary__value {
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+        gap: var(--wa-space-xs);
         min-width: 0;
+      }
+
+      .token-value,
+      .context-state__value {
+        display: block;
+        line-height: var(--line-height-normal);
       }
     `,
   ];
@@ -261,10 +275,9 @@ export class UsagePanel extends LitElement {
       ? this.renderCostRoute(cost)
       : html`<span id="usage-cost" class="token-stat">${this.renderCostRoute(cost)}</span><wa-tooltip for="usage-cost" placement="top-end">${ownShare}</wa-tooltip>`;
     return html`
-      ${waIcon('chart-pie')}
       <span class="run-summary__value">
-        ${join(visibleTokenStats(this.usage).map(renderTokenStat), ' · ')} ·
-        ${costRoute}
+        ${join(visibleTokenStats(this.usage).map(renderTokenStat), html`<span aria-hidden="true">·</span>`)}
+        <span aria-hidden="true">·</span>${costRoute}
       </span>
     `;
   }
@@ -330,7 +343,7 @@ export class UsagePanel extends LitElement {
 
     return html`
       <span id="usage-context-gauge" class="context-gauge" tabindex="0">
-        ${waIcon('window-maximize')}
+        <span class="context-label">Context</span>
         <span class="context-gauge__track">
           <wa-progress-bar
             class="context-gauge__bar"

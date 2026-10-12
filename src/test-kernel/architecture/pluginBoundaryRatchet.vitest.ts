@@ -3,13 +3,24 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 // Third-party imports
+import { Effect, Layer } from 'effect';
 import { describe, expect, it } from 'vitest';
+
+import type {
+  IssuingScript,
+  RunCall,
+  ScriptCalls,
+} from '@agent/runtime/RunCall';
+import type { ToolRun } from '@agent/core/tools/ToolTypes';
+import type { ChildRuns, RuntimeTool } from '@agent/runtime/ToolServices';
+import { Runs } from '@agent/runtime/runRegistry';
+import type { SessionHandle } from '@agent/runtime/SessionHandle';
+import type { ToolResult } from '@shared/schemas';
 
 import { TEXRA_PLUGIN_CARDS } from '@texra/tools/pluginCards';
 import { texraPlugins } from '@texra/tools/registry';
 import { harnessBuiltins } from '@tools/builtinPlugins';
-import { PLUGIN_ARMS } from '@tools/pluginArms';
-import type { Plugin } from '@tools/plugins';
+import { armsOf, type Plugin, type PluginDefinition } from '@tools/plugins';
 import {
   ALL_HOST_PRODUCTION_ROOTS,
   collectModuleSpecifiers,
@@ -22,24 +33,27 @@ import {
 
 /**
  * Invariants 1 and 6 of the core concepts, for what a plugin brings: its
- * own row kinds (`PLUGIN_EVENT_ARMS`) and its services (a `Plugin`'s
+ * own row kinds (`Plugin.arms`) and its services (a `Plugin`'s
  * `processLayer` and `sessionLayer`). Failure modes guarded:
  *
  * - core (the harness's `shared/`, `agent/`) imports a plugin's arm, so a plugin's
  *   row kind is hard-coded in core again and a new stateful plugin edits
  *   core;
- * - a plugin row is drafted anywhere but its plugin's arm module, or a
+ * - a plugin row is drafted anywhere but its plugin's arm module or the
+ *   dispatch that commits a call's facts with its result, or a
  *   plugin reaches the store's append port, so a second append path or a
  *   row no arm checks appears;
  * - a plugin's service is reached outside its own plugin's code, which the
  *   step serves it to, and the one host door (the settings Git tab reading
- *   the GitHub plugin's process services through `LiveTools`), so plugin
+ *   the GitHub plugin's process services through `ToolCatalog`), so plugin
  *   state is used past its switch and its pin. The table holds each
  *   plugin with its services erased (`PluginContext` in `processRuntime.ts`),
  *   so no `ProcessServices` arm names one.
  */
-const PLUGIN_ARM_MODULES = /^packages\/harness\/src\/shared\/plugins\//;
-const PLUGIN_ARM_IMPORT = /^@shared\/plugins\/|^@tools\/pluginArms$/;
+/** The harness's own plugin arms (`goal`) and the app's. */
+const PLUGIN_ARM_MODULES =
+  /^packages\/(?:harness|texra)\/src\/shared\/plugins\//;
+const PLUGIN_ARM_IMPORT = /^@(?:texra\/)?shared\/plugins\//;
 const CORE = /^packages\/harness\/src\/(?:shared|agent)\//;
 const APPEND_PORTS =
   /^@(?:controllers\/session\/Database|shared\/session\/database|agent\/runtime\/SessionEvents)$/;
@@ -69,6 +83,13 @@ const PLUGIN_SERVICES: readonly {
   },
   // The `core` plugin's Comments UI port: its tool.
   { tag: 'InlineComments', users: /^packages\/texra\/src\/tools\/comment\// },
+  // The editor registry of `latex-diagnostics` and `core`: their tools. The
+  // hosts that attach to it hold the registry value, never the tag.
+  {
+    tag: 'EditorHost',
+    users:
+      /^packages\/texra\/src\/tools\/(?:DiagnosticsTool|OpenPdfTool|editorHost)\.ts$/,
+  },
 ];
 /** Where the services are declared, typed and built. */
 const SERVICE_HOMES = new Set([
@@ -101,7 +122,12 @@ describe('plugin boundaries (invariants 1 and 6)', () => {
     const appends = files()
       .filter((file) => PLUGIN_ARM_MODULES.test(file))
       .filter((file) => specifiers(file).some((s) => APPEND_PORTS.test(s)));
-    expect({ drafts, appends }).toEqual({ drafts: [], appends: [] });
+    // The one generic writer: `factRows` drafts a call's facts
+    // (`ToolResult.facts`), which the dispatch commits with its `tool.result`.
+    expect({ drafts, appends }).toEqual({
+      drafts: ['packages/harness/src/tools/plugins.ts'],
+      appends: [],
+    });
   });
 
   it('reaches plugin services only from their plugin and the step', () => {
@@ -211,17 +237,13 @@ describe('plugin rosters', () => {
     }).toEqual({ switchedWithoutCard: [], cardWithoutPlugin: [] });
   });
 
-  it('pins the row kinds plugins write, each of a listed plugin', () => {
-    const ids = new Set(texraPlugins().map(({ id }) => id));
-    expect(
-      [...PLUGIN_ARMS.values()].map(({ plugin, kind }) => [
-        `${plugin}/${kind}`,
-        ids.has(plugin),
-      ]),
-    ).toEqual([
-      ['goal/state', true],
-      ['documents/output', true],
-      ['external-inquiry/thread', true],
+  it('pins the row kinds plugins write', () => {
+    // `armsOf` refuses an arm of another plugin's id, or a kind twice.
+    expect(Object.keys(armsOf(texraPlugins())).toSorted()).toEqual([
+      'documents/accepted',
+      'documents/output',
+      'external-inquiry/thread',
+      'goal/state',
     ]);
   });
 
@@ -248,5 +270,72 @@ describe('plugin rosters', () => {
         ],
       ],
     });
+  });
+
+  // Failure mode: a plugin's tool requires the built-ins' call services, so
+  // a host serving exactly a plugin tool's services cannot run it. The
+  // compiler refuses it; this probe fails the typecheck if it ever accepts.
+  it("refuses a plugin tool that requires a built-in's call services", () => {
+    type PluginTool = NonNullable<Plugin['tools']>[string];
+    const requiring = <R>(service: R): RuntimeTool<Error, R> => ({
+      definition: { name: 'probe' },
+      call: () => Effect.die(service),
+    });
+    const probes: PluginTool[] = [
+      // @ts-expect-error a plugin's tool never requires RunCall
+      requiring<RunCall>(null as never),
+      // @ts-expect-error nor the issuing script
+      requiring<IssuingScript>(null as never),
+      // @ts-expect-error nor a script's door
+      requiring<ScriptCalls>(null as never),
+      requiring<ChildRuns>(null as never),
+      // @ts-expect-error nor the session's runs: ChildRuns is its run door
+      requiring<Runs>(null as never),
+    ];
+    expect(probes).toHaveLength(5);
+  });
+
+  // Failure mode: a plugin's tool reaches a root launch (outside any
+  // script's budget, under no parent) through the session its run carries.
+  // A root launch requires the composition root's `SessionOwner`, which no
+  // tool is served: the compiler refuses it.
+  it('refuses a plugin tool that launches a root run', () => {
+    type PluginTool = NonNullable<Plugin['tools']>[string];
+    const calling = <R>(
+      call: () => Effect.Effect<ToolResult, Error, R>,
+    ): RuntimeTool<Error, R> => ({ definition: { name: 'probe' }, call });
+    const session = null as unknown as SessionHandle;
+    const probes: PluginTool[] = [
+      // @ts-expect-error a plugin's tool never reaches a root launch
+      calling(() =>
+        session.runs
+          .launch({ request: { config: null as never }, options: {} })
+          .pipe(Effect.as(null as unknown as ToolResult)),
+      ),
+    ];
+    expect(probes).toHaveLength(1);
+  });
+
+  // Failure mode: an app plugin's tool holds the session again (its log,
+  // its run history, its inbox), past `ChildRuns` and its call's requests.
+  // The run a plugin's tool reads names no session, and no file of the
+  // app's tools names the handle.
+  it("keeps the session out of the app's plugin tools", () => {
+    // @ts-expect-error a plugin's tool reads no session off its run
+    const probe: ToolRun['session'] = null;
+    const holders = files()
+      .filter((file) => file.startsWith('packages/texra/src/tools/'))
+      .filter((file) => /\bSessionHandle\b/.test(source(file)));
+    expect({ probe, holders }).toEqual({ probe: null, holders: [] });
+  });
+
+  // Failure mode: a plugin's session layer reads the session's runs, so a
+  // service it serves its tools hands them a launch.
+  it("refuses a plugin's session layer that reads the session's runs", () => {
+    const layers: NonNullable<PluginDefinition<never>['sessionLayer']>[] = [
+      // @ts-expect-error a plugin's session layer reads no Runs
+      Layer.effectDiscard(Effect.flatMap(Runs, () => Effect.void)),
+    ];
+    expect(layers).toHaveLength(1);
   });
 });

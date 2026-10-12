@@ -54,7 +54,6 @@ describe('shared text-diff caller fixtures', () => {
       const runId = 'abcdef' as RunId;
       const meta = yield* buildSubagentResult(
         runId,
-        'workflow-subagent',
         {
           response: '',
           files: [],
@@ -74,7 +73,7 @@ describe('shared text-diff caller fixtures', () => {
             diffs: [],
           },
         },
-        { startedAt: Date.now(), storageRoot },
+        storageRoot,
       );
 
       expect(meta.output.documents?.diffs).toEqual([

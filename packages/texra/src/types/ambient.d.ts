@@ -117,6 +117,16 @@ declare module 'monaco-editor/languages/register.all.js' {
   export default registered;
 }
 
+declare module 'monaco-editor/features/register.all.js' {
+  const registered: void;
+  export default registered;
+}
+
+declare module 'monaco-editor/languages/features/register.all.js' {
+  const registered: void;
+  export default registered;
+}
+
 declare module '*?worker' {
   const WorkerConstructor: new () => Worker;
   export default WorkerConstructor;

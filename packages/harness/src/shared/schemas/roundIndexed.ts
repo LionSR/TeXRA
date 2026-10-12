@@ -7,8 +7,8 @@
  * itself, so no encode step exists anywhere.
  *
  * Deliberately NOT unified into this shape (different requirements, not
- * history): `RoundOutput[]` (a per-round aggregate carrying `rawOutput`,
- * owned by the documents plugin) and `DiffResult.baseRound` /
+ * history): `RoundOutput[]` (a per-round aggregate owned by the
+ * documents plugin) and `DiffResult.baseRound` /
  * `revisedRound` (scalar round references, parsed at their own entry in
  * `diffResult.ts`).
  */

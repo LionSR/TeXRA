@@ -46,7 +46,10 @@ const PlanRouteSchema = z.enum([
 /** A subscription plan, named by the route that bills through it. */
 export type PlanRoute = z.infer<typeof PlanRouteSchema>;
 
-const ModelErrorFieldsSchema = z.strictObject({
+/** A model failure's fields as data: what crosses a process boundary (an
+ *  editor's model served to the service) and is rebuilt there as a
+ *  {@link ModelError}. */
+export const ModelErrorFieldsSchema = z.strictObject({
   kind: z.enum([
     'invalid-request',
     'unsupported',

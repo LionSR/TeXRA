@@ -37,12 +37,22 @@ import {
 } from '@shared/session/runStateFold';
 import { fold } from '@shared/session/sessionFold';
 import {
+  acceptsFollowUp,
   emptySessionView,
   type SessionView,
   type RunView,
 } from '@shared/session/sessionView';
 import { compareByNewestCreationTime } from '@shared/runs/runOrdering';
-import { DOCUMENTS_OUTPUT_ARM, documentsOf } from '@shared/plugins/documents';
+import {
+  loadSurface,
+  persistSurface,
+  PersistedSurfaceSchema,
+} from '@texra/shared/session/surface';
+import { markShownRunSeen, unseenRuns } from '@texra/shared/session/unseenRuns';
+import {
+  DOCUMENTS_OUTPUT_ARM,
+  documentsOf,
+} from '@texra/shared/plugins/documents';
 
 import { createExternalLocation } from '@utils/files/fileLocation';
 
@@ -81,6 +91,82 @@ const nobody = local({ dead: [OWNER] });
 
 describe('sessionFold', () => {
   const scenario = buildScenario();
+
+  it.each(['cancelled', 'failed', 'completed'] as const)(
+    'keeps the composer available for a %s conversation with saved history',
+    (status) => {
+      const run = {
+        ...runView(foldAll([...scenario.events, nobody]), CHILD),
+        parentId: null,
+        status,
+        durableOutcome: status,
+      };
+      const host = { terminalBacked: true };
+      expect(acceptsFollowUp(run, host)).toBe(true);
+      expect(acceptsFollowUp({ ...run, readOnly: true }, host)).toBe(false);
+      expect(acceptsFollowUp({ ...run, documentTask: true }, host)).toBe(false);
+      expect(
+        acceptsFollowUp({ ...run, turn: null, forkPoint: null }, host),
+      ).toBe(false);
+    },
+  );
+
+  it('keeps read conversations read across history replay and restart while detecting later activity', () => {
+    const log = new Log();
+    const start = log.emit(ROOT, 1000, {
+      type: 'run.start',
+      identity: ROOT_IDENTITY,
+      userFollowUpSupport: 'unsupported',
+      parent: null,
+      provenance: null,
+    });
+    const response = log.emit(ROOT, 2000, {
+      type: 'response.finalized',
+      text: 'Ready for review.',
+    });
+    const end = log.emit(ROOT, 3000, {
+      type: 'run.end',
+      outcome: 'completed',
+      output: emptyRunEndOutput(),
+    });
+    const listing = foldAll(
+      [start, end].map((event) => ({
+        _tag: 'event',
+        read: 'listing',
+        event,
+      })),
+    );
+    const history = foldAll(
+      [subscribe(ROOT), ...log.events.map(tail)],
+      listing,
+    );
+    const surface = loadSurface(
+      'paper',
+      PersistedSurfaceSchema.parse({ selected: ROOT }),
+    );
+    const read = markShownRunSeen(surface, history);
+    const restarted = loadSurface('paper', persistSurface(read));
+    expect(unseenRuns(restarted, listing)).toEqual(new Set());
+    expect(runView(history, ROOT).lastTimestamp).toBe(end.at);
+
+    // A partial replay must never move an existing read marker backwards.
+    const partial = foldAll([tail(start), subscribe(ROOT), tail(response)]);
+    expect(markShownRunSeen(restarted, partial)).toBe(restarted);
+    const later = fold(
+      history,
+      tail(
+        log.emit(ROOT, 4000, {
+          type: 'run.end',
+          outcome: 'completed',
+          output: emptyRunEndOutput(),
+        }),
+      ),
+    );
+    expect(unseenRuns(restarted, later)).toEqual(new Set([ROOT]));
+    expect(unseenRuns(markShownRunSeen(restarted, later), later)).toEqual(
+      new Set(),
+    );
+  });
 
   it('projects completed trace facts identically live and on replay without folding the listing as transcript', () => {
     const log = new Log();
@@ -212,10 +298,7 @@ describe('sessionFold', () => {
     expect(view.order).toStrictEqual([PROCESS, ROOT]);
 
     expect(root.label).toBe(runIdentityDisplayName(ROOT_IDENTITY));
-    expect(root.worktree).toStrictEqual({
-      workingDirectory: '/paper',
-      branch: 'main',
-    });
+    expect(root.worktree).toStrictEqual({ workingDirectory: '/paper' });
     expect(root.inputFiles).toStrictEqual([]);
     expect(root.childIds).toStrictEqual([CHILD]);
     // The commit ordinal of the run's run.start, never a clock.
@@ -822,7 +905,6 @@ describe('sessionFold', () => {
     });
     const roundOutput = (round: number) => ({
       round,
-      rawOutput: null,
       outputs: [outputOf(round)],
       compileFailures: round === 0 ? [failureOf(0)] : [],
       missingOutputs: round === 0 ? ['intro.tex'] : [],
@@ -1286,7 +1368,7 @@ const CALLS = [
     callId: 'call-a',
     toolName: 'bash',
     ordinal: 0,
-    parallelSafe: false,
+    lane: 'barrier',
     replay: 'unsafe',
     duplicateOf: null,
     logId: 'card-0',
@@ -1296,7 +1378,7 @@ const CALLS = [
     callId: 'call-b',
     toolName: 'bash',
     ordinal: 1,
-    parallelSafe: false,
+    lane: 'barrier',
     replay: 'unsafe',
     duplicateOf: 'call-a',
     logId: 'card-1',

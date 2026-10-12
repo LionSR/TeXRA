@@ -13,7 +13,6 @@ import {
   type TexraApprovalPolicy,
 } from '@shared/approvalPolicy';
 import {
-  codingPlanForUsageRoute,
   type ContextStateData,
   type RunId,
   type SubscriptionUsageProvider,
@@ -22,11 +21,11 @@ import {
   type UsageRoute,
 } from '@shared/schemas';
 import { isActivePhase } from '@shared/runs/runStatus';
-import type { RunView, SessionView } from '@shared/session/sessionView';
 import {
   contextGaugeBand,
   roundedContextPercent,
 } from '@texra/shared/contextGauge';
+import { codingPlanForUsageRoute } from '@texra/shared/model/codingPlans';
 import { AGENT_LIST, NESTED_AGENT, TASK_ACTIONS } from '@ui/copy/nestedRuns';
 import { APPROVAL_BYPASS_BADGE } from '@ui/copy/approvalBypass';
 import { assertNever, filterNotNullish, unique } from '@utils/core';
@@ -40,6 +39,7 @@ import {
 import { formatResumeCommand } from '../state/resumeHint';
 import { type TransientNotice } from '../state/cliState';
 import { runPhaseOf, runViewOf } from '../state/sessionView';
+import type { RunView, SessionView } from '@texra-ai/harness';
 import type { PendingApprovalKind } from '../state/approvalQueue';
 
 /** Which approval bypasses are on for a run, its own or inherited. */

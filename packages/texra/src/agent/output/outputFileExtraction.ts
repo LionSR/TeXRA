@@ -136,7 +136,6 @@ export const extractFilesFromXml = Effect.fn('documents.extractFilesFromXml')(
   ) {
     const { logger } = deps;
     const data = ensureRoundData(state, currRound);
-    data.rawOutput ??= outputLocation;
 
     logger.debug(
       `Processing multiple outputs for ${outputLocation.absolutePath}`,

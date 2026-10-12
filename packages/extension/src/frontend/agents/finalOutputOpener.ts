@@ -1,9 +1,10 @@
 import * as vscode from 'vscode';
 import { Effect, Result } from 'effect';
 
-import { selectAutoOpenFinalOutput, type RunEndResult } from '@agent/runtime';
+import type { RunEndResult } from '@agent/runtime';
 import { withLogChannel } from '@logger/effectLog';
 import type { SettingsStores } from '@shared/config/settingsAccess';
+import { selectAutoOpenFinalOutput } from '@texra/agent/output/selectAutoOpenFinalOutput';
 import { ensureError } from '@utils/errors/errorMessage';
 
 const CHANNEL = 'FinalOutputOpener';

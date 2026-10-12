@@ -10,7 +10,7 @@ import type { ITool } from '@agent/core/tools/ToolTypes';
 import type { InvokeRequest } from '@agent/runtime/ModelInvoker';
 import { runToolUse } from '@agent/runtime/loop/toolUse';
 import { TraceEmitter } from '@agent/trace';
-import { RUN_OUTCOME } from '@shared/schemas';
+import { aggregateId, RUN_OUTCOME } from '@shared/schemas';
 import { RunHistory } from '@shared/session/runHistory';
 import type { RunState } from '@shared/session/runStateFold';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
@@ -92,15 +92,11 @@ describe('the tool-use turn', () => {
     () =>
       Effect.gen(function* () {
         const session = yield* quietSession();
-        const finalized: string[] = [];
-        const logger = new TraceEmitter((event) => {
-          if (event.type === 'response.finalized') finalized.push(event.text);
-        });
+        const runId = startedRun(session);
 
         const { state } = yield* runScript({
-          runId: startedRun(session),
+          runId,
           session,
-          logger,
           tools: { echo: echoTool('echo') },
           script: [
             toolCallTurn([{ id: 'call-1', name: 'echo' }]),
@@ -109,8 +105,17 @@ describe('the tool-use turn', () => {
         });
 
         // The tool-calling round is not the end of the turn, so only the
-        // text round's response is finalized, once, with its text.
-        expect(finalized).toEqual(['Done \\checkmark']);
+        // text round's response is finalized, once, with its text, as a row
+        // of the run's history (never a detached trace row).
+        const finalized = yield* session.log.rows(aggregateId('run', runId), [
+          'response.finalized',
+        ]);
+        expect(
+          finalized.map((row) =>
+            row.type === 'response.finalized' ? row.text : null,
+          ),
+        ).toEqual(['Done \\checkmark']);
+        expect(state?.answerFinalized).toBe(true);
         expect(state?.messages.at(-1)?.role).toBe('assistant');
       }),
   );
@@ -143,13 +148,13 @@ describe('the tool-use turn', () => {
 
   it.effect.each([true, false])(
     'forces one terminal-tool turn only where the provider can force it (%s)',
-    (supportsForcedToolChoice) =>
+    (forcedToolChoice) =>
       Effect.gen(function* () {
         const session = yield* quietSession();
         const { requests, state } = yield* runScript({
           runId: startedRun(session),
           session,
-          bound: { supportsForcedToolChoice },
+          bound: { forcedToolChoice },
           finalToolName: 'submit_output',
           tools: { submit_output: echoTool('submit_output') },
           script: [textTurn('Draft answer'), textTurn('Still drafting')],
@@ -159,7 +164,7 @@ describe('the tool-use turn', () => {
         // turn where the route supports it.
         expect(requests.map((request) => request.toolChoice)).toEqual([
           undefined,
-          supportsForcedToolChoice ? { name: 'submit_output' } : undefined,
+          forcedToolChoice ? { name: 'submit_output' } : undefined,
         ]);
         // The instruction is written once, forced or not.
         expect(
@@ -327,7 +332,7 @@ describe('the transcript row of the opening message (regression #7508)', () => {
           logger,
           bound: { supportsVision: true },
           mediaFiles: ['/tmp/texra-missing-figure.png'],
-          initialUserMessageForTranscript: undefined,
+          initialUserMessage: undefined,
           script: [textTurn('unreachable')],
         }),
       );

@@ -1,6 +1,6 @@
 // Node imports
 import { readFileSync } from 'node:fs';
-import { relative, resolve } from 'node:path';
+import { resolve } from 'node:path';
 
 // Third-party imports
 import ts from 'typescript';
@@ -15,6 +15,7 @@ import {
   productionFilesUnder,
   REPO_ROOT,
   stripComments,
+  toRepoPath,
 } from '../support/repoScan';
 
 /**
@@ -78,7 +79,7 @@ function llmImportsOfStoredShapes(): {
   for (const file of reached) {
     for (const specifier of collectModuleSpecifiers(parseSourceFile(file))) {
       if (specifier.startsWith('@texra-ai/llm'))
-        llm.push(`${relative(REPO_ROOT, file)} -> ${specifier}`);
+        llm.push(`${toRepoPath(file)} -> ${specifier}`);
       const target = ts.resolveModuleName(specifier, file, options, ts.sys)
         .resolvedModule?.resolvedFileName;
       if (target !== undefined && !target.includes('node_modules'))
@@ -86,7 +87,7 @@ function llmImportsOfStoredShapes(): {
     }
   }
   return {
-    reached: [...reached].map((file) => relative(REPO_ROOT, file)),
+    reached: [...reached].map(toRepoPath),
     llm,
   };
 }

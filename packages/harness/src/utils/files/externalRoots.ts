@@ -50,8 +50,7 @@ import { isPathWithin } from '@utils/core/pathCore';
 
 /** Stable identifier for each registered root. Label strings are for display
  *  only and must not be used as keys. */
-export type ExternalRootKind =
-  'builtInWorkflow' | 'builtInToolUse' | 'custom' | 'agentDocs';
+export type ExternalRootKind = 'builtIn' | 'custom' | 'agentDocs';
 
 export interface ExternalRoot {
   /** Stable key, independent of UI text. */

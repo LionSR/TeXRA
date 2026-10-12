@@ -2,13 +2,7 @@
 
 import { css, type CSSResult } from 'lit';
 
-import { sp } from '@ui/styles';
-
 export const retryRequestPanelStyles: CSSResult = css`
-  :host {
-    --request-accent: var(--color-warning);
-  }
-
   /* No local clip. A max-height of 4em with overflow hidden cut the message
      with no way to read the rest: the adjacent "Error details" disclosure
      holds errorDetails, a different value, not the truncated remainder. The
@@ -21,25 +15,27 @@ export const retryRequestPanelStyles: CSSResult = css`
      the call failed. */
   .retry-request__error {
     font-size: var(--font-size-sm);
-    color: var(--color-error);
+    color: var(--wa-color-text-normal);
     line-height: var(--line-height-normal);
     overflow-wrap: anywhere;
     text-wrap: pretty;
   }
 
   .retry-request__error-details {
-    margin-top: ${sp.tiny};
+    --spacing: 0;
+    margin: 0;
     font-size: var(--font-size-xs);
   }
 
   .retry-request__error-details::part(header) {
-    min-height: 28px;
-    padding: ${sp.small} ${sp.large};
+    min-height: var(--height-control-compact);
+    padding: 0;
+    box-sizing: border-box;
     color: var(--wa-color-text-quiet);
   }
 
   .retry-request__error-details::part(content) {
-    padding: 0 ${sp.large} ${sp.large};
+    padding: 0;
   }
 
   .retry-request__error-summary {
@@ -47,7 +43,7 @@ export const retryRequestPanelStyles: CSSResult = css`
     color: var(--wa-color-text-quiet);
     display: flex;
     align-items: center;
-    gap: ${sp.tiny};
+    gap: var(--wa-space-3xs);
     user-select: none;
   }
 
@@ -56,10 +52,8 @@ export const retryRequestPanelStyles: CSSResult = css`
   }
 
   .retry-request__error-body {
-    margin-top: ${sp.tiny};
-    padding: ${sp.small};
-    background: var(--wa-color-surface-lowered);
-    border-radius: var(--border-radius-small);
+    margin: 0;
+    padding: var(--wa-space-2xs) 0;
     font-family: var(--wa-font-family-mono);
     font-size: var(--font-size-xs);
     white-space: pre-wrap;

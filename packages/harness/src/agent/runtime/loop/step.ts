@@ -34,7 +34,7 @@
  * section whose text an update changed: nothing a request sends differs
  * from the latest record unrecorded.
  */
-import { Context, Effect, Exit, Scope, SynchronizedRef } from 'effect';
+import { Effect, Exit, Scope, SynchronizedRef } from 'effect';
 import { ModelProvider } from 'llm-zoo';
 import { z } from 'zod';
 
@@ -57,7 +57,6 @@ import {
 import type { RunHistoryDraft, RunState } from '@shared/session/runStateFold';
 import { loadRuntimeSkillCatalog } from '@skills/runtimeSkills';
 import { toolDefinitionsFor, toolDigests } from '@tools/catalogEntries';
-import { LiveTools } from '@tools/liveTools';
 import { mcpServerOfToolName } from '@tools/mcp/mcpServer';
 import { readDisabledTools } from '@tools/plugins';
 import { readDelegationTargets } from '@tools/delegation/delegationAvailability';
@@ -66,7 +65,7 @@ import { sha256 } from '@utils/core/idHash';
 import type { StepRoot } from '@utils/files/externalRoots';
 
 import { declaredToolNames, resolveStepTools } from '../agentToolResolution';
-import { liveToolGates } from '../requestPolicy';
+import { hostCapabilitiesOf, liveToolGates } from '../requestPolicy';
 import { goalGrant } from '../runApprovalQueue';
 import { blobRows, contextAt, stored } from '../run/requestContext';
 import { appendRow, rowAggregate } from './rows';
@@ -236,8 +235,8 @@ function describedAtFreeze<
 }
 
 /**
- * Open the run's next step: apply the switches and pin the generation they
- * produce, as one step (`LiveTools.pinSwitched`), release the previous
+ * Open the run's next step: read the switches and pin the tools they give
+ * in the session's catalog (`SessionTools.pin`), release the previous
  * step's pin, and resolve what it offers.
  * `recorded` holds a resumed activation's first step to it, and
  * `recordedHooks` a resumed dispatch to the hooks its calls were offered
@@ -252,7 +251,6 @@ const openStep = Effect.fn('Step.open')(function* (
   runSystem: RunSystem,
   recordedHooks: readonly string[] | null = null,
 ) {
-  const live = yield* LiveTools;
   const { roots } = run.session;
   const scope = yield* Scope.fork(run.scope);
   const step = yield* Effect.gen(function* () {
@@ -261,12 +259,14 @@ const openStep = Effect.fn('Step.open')(function* (
     const off = recipe
       ? Effect.succeed(new Set<string>())
       : readDisabledTools(run.stores.globalState);
-    const pinned = yield* live
-      .pinSwitched(off, { installed: true })
+    const pinned = yield* run.session.tools
+      .pin(off, { installed: true, held: run.toolInputs.held })
       .pipe(Scope.provide(scope));
-    const resolved = yield* resolveStepTools(pinned.generation, {
+    const { policy, ...gates } = liveToolGates(run.session, run.runId);
+    const resolved = yield* resolveStepTools(pinned.entries, {
       ...run.toolInputs,
-      ...liveToolGates(run.session),
+      ...gates,
+      hostCapabilities: yield* hostCapabilitiesOf(run.session, pinned, scope),
       ...(recipe && { approvalPromptsUnavailable: false }),
     });
     const held = recorded === null ? null : heldToRecord(resolved, recorded);
@@ -275,8 +275,7 @@ const openStep = Effect.fn('Step.open')(function* (
       state,
       run.toolInputs.tools,
     );
-    // The plugin on that continues a parked run, if any (the table rules
-    // out two), and those that add a section to its text.
+    // The plugin continuing a parked run (one at most), and the sections.
     const continuing =
       pinned.plugins.find(({ continuation }) => continuation !== undefined) ??
       null;
@@ -290,16 +289,7 @@ const openStep = Effect.fn('Step.open')(function* (
       ...(continuing === null ? [] : [continuing.id]),
       ...contributing.map(({ id }) => id),
     ]);
-    const services = Context.merge(
-      yield* pinned.layersFor(used).pipe(Scope.provide(scope)),
-      yield* run.session.runs
-        .pinPlugins(
-          pinned.generation.id,
-          new Set(pinned.generation.owners.values()),
-          used,
-        )
-        .pipe(Scope.provide(scope)),
-    );
+    const services = yield* pinned.services(used).pipe(Scope.provide(scope));
     // The skills: the built-in plugins on and the installed ones the step
     // accepted contribute, as it accepted them, so a plugin enabled or
     // updated since reaches this step's text. A step held to the record
@@ -369,6 +359,11 @@ const openStep = Effect.fn('Step.open')(function* (
         ),
       ],
       withheld: resolved.withheldForApproval,
+      denied: {
+        kind: 'withheldTools',
+        tools: resolved.withheldForApproval,
+        policy,
+      } as const,
       continuing,
       skills,
       listed,
@@ -394,7 +389,7 @@ const openStep = Effect.fn('Step.open')(function* (
   // The model-dependent text follows the step's model and settings.
   const model = yield* SynchronizedRef.get(run.model);
   const delegation = yield* readDelegationTargets(
-    step.tools.definitions,
+    step.tools,
     run.toolInputs.stores,
     run.delegationAgentScope ?? undefined,
   );
@@ -423,24 +418,18 @@ const openStep = Effect.fn('Step.open')(function* (
   const withheldChanged =
     step.withheld.length > 0 &&
     step.withheld.join('\0') !== (previous?.withheld ?? []).join('\0');
-  const warnings = [
-    ...(toolsChanged || skillsChanged ? step.warnings : []),
-    ...(withheldChanged
-      ? [
-          `Not offering ${step.withheld.join(', ')}: these tools need approval, and this run can neither show an approval prompt nor auto-approve under its approval policy. Use the yolo approval policy to allow them.`,
-        ]
-      : []),
-  ];
+  const warnings = toolsChanged || skillsChanged ? [...step.warnings] : [];
+  if (withheldChanged) {
+    warnings.push(
+      `Not offering ${step.withheld.join(', ')}: these tools need approval, and this run can neither show an approval prompt nor auto-approve under its approval policy. Use the yolo approval policy to allow them.`,
+    );
+    run.session.interactions.approvalDenied(step.denied, run.runId);
+  }
   // Reported where the change is recorded, not at every step.
   for (const message of warnings) {
     yield* Effect.logWarning(message).pipe(withLogChannel('Step'));
     run.logger.warn(message);
   }
-  if (withheldChanged)
-    run.session.interactions.approvalDenied(
-      { kind: 'withheldTools', tools: step.withheld },
-      run.runId,
-    );
   return {
     tools,
     continuation: step.continuing?.continuation ?? null,

@@ -41,7 +41,7 @@ import { nodeSpawnerLayer } from '@test/support/childProcessTestLayer';
 import { texraPlugins } from '@texra/tools/registry';
 import { USER_MCP_CONFIG_PATH } from '@tools/mcp/mcpConfig';
 import { pluginCatalogLayer } from '@tools/pluginCatalog';
-import { toolTableLayer } from '@tools/liveTools';
+import { toolCatalogLayer } from '@tools/liveTools';
 import { toolTable } from '@tools/toolTable';
 import { generateRunId } from '@utils/core';
 
@@ -178,7 +178,7 @@ describe('run-scoped tool resolution', () => {
         // Dispatch answers the offered names only: a registered tool the run
         // did not offer is unknown, however the model came to name it.
         expect(dispatch.get('bash')).toBe(shadowing);
-        expect(dispatch.has('grep')).toBe(false);
+        expect(dispatch.get('grep')).toBeUndefined();
         yield* closeSessionOf(session);
       }),
   );
@@ -225,8 +225,12 @@ describe('run-scoped tool resolution', () => {
         ]);
         const offered = resumed.step.tools.definitions.map(({ name }) => name);
         expect(offered).toEqual(['kept']);
-        expect(resumed.step.tools.registry.has('gone')).toBe(false);
-        expect(resumed.step.tools.registry.has('added')).toBe(false);
+        expect(resumed.step.tools.registry.get('gone') !== undefined).toBe(
+          false,
+        );
+        expect(resumed.step.tools.registry.get('added') !== undefined).toBe(
+          false,
+        );
         // The narrower set is recorded before the resumed request, and the
         // model is told, after the history its cached prefix holds.
         expect(resumed.step.rows.map(({ type }) => type)).toEqual([
@@ -370,7 +374,9 @@ describe('run-scoped tool resolution', () => {
         expect(script(offered.payload.tools)).toBe(
           script(before.offeredTools ?? []),
         );
-        expect(step.tools.registry.has('zotero_search')).toBe(true);
+        expect(step.tools.registry.get('zotero_search') !== undefined).toBe(
+          true,
+        );
         const told = step.rows.filter((row) => row.type === 'model.message');
         expect(told).toHaveLength(1);
         assert(told[0]?.type === 'model.message');
@@ -411,7 +417,7 @@ describe('run-scoped tool resolution', () => {
         Effect.scoped,
         Effect.provide(LanguageModel.layer(UNAVAILABLE_LANGUAGE_MODEL_PORT)),
         Effect.provide(
-          toolTableLayer(
+          toolCatalogLayer(
             toolTable([
               {
                 id: 'test',

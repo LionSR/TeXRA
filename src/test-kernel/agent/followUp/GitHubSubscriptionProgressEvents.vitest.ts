@@ -6,13 +6,7 @@ import '@test/support/defaultSessionTestSetup';
 // Third-party imports
 import { it } from '@effect/vitest';
 import { Deferred, Effect, Fiber, Layer } from 'effect';
-import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
-
-const submitFollowUpMock = vi.hoisted(() => vi.fn());
-
-vi.mock('@agent/followUp/ToolUseFollowUp', () => ({
-  submitFollowUp: submitFollowUpMock,
-}));
+import { afterEach, describe, expect, vi } from 'vitest';
 
 // Local imports
 import {
@@ -24,14 +18,12 @@ import { effectDiagnosticsLayer } from '@logger/effectDiagnostics';
 import { setLogSink } from '@logger/logSink';
 import { Secrets } from '@platform/secrets';
 import type { RunId } from '@shared/schemas';
-import { closeSessionOf } from '@test/support/sessionEnd';
 import { testHttpClientLayer } from '@test/support/fetchTestUtils';
 import { fakeHostSecrets } from '@test/support/setupPlatform';
 import { testRuntime } from '@test/support/testProcessRuntime';
 
 // Test support imports
 import { captureLogEntries } from '@test/support/logSinkCapture';
-import { createTestSession } from '@test/support/sessionTestUtils';
 import { GitHubAuthError } from '@texra/tools/github/githubClient';
 import {
   PollingSourceBase,
@@ -46,12 +38,20 @@ import {
 
 // Local file imports
 import { createRecordingHost } from '../progressTestUtils';
+import type { RunInbox } from '@texra-ai/harness/plugins';
 
 /** What a source's `subscribe` reads: the token store and the HTTP client. */
 const githubServices = Layer.merge(
   Secrets.layer(fakeHostSecrets),
   testHttpClientLayer,
 );
+
+/** A run's input that records what the registry sends it. */
+function testInbox(
+  send: RunInbox['send'] = () => Effect.succeed({ status: 'sent' as const }),
+) {
+  return { send: vi.fn(send), onClosed: () => () => {} } satisfies RunInbox;
+}
 
 function createTestRegistry(
   source: RegistryTestSource,
@@ -219,13 +219,6 @@ class RegistryTestSource {
 }
 
 describe('GitHub subscription app signals and follow-ups', () => {
-  beforeEach(() => {
-    submitFollowUpMock.mockReset();
-    submitFollowUpMock.mockReturnValue(
-      Effect.succeed({ status: 'sent' as const }),
-    );
-  });
-
   afterEach(() => {
     setLogSink(null);
   });
@@ -259,12 +252,10 @@ describe('GitHub subscription app signals and follow-ups', () => {
   it.effect('dispose releases every binding and the source-key listener', () =>
     Effect.gen(function* () {
       const source = new RegistryTestSource();
-      const session = yield* createTestSession();
       const registry = createTestRegistry(source);
-      yield* Effect.addFinalizer(() => closeSessionOf(session));
 
       yield* registry
-        .bind('stream-a' as RunId, 'owner/repo', session)
+        .bind('stream-a' as RunId, 'owner/repo', testInbox())
         .pipe(Effect.provide(githubServices));
       expect(source.keyListenerCount()).toBe(1);
 
@@ -279,67 +270,60 @@ describe('GitHub subscription app signals and follow-ups', () => {
   );
 
   it.effect(
-    'passes the bind-time session to detached subscription follow-ups',
+    'passes the bind-time input to detached subscription follow-ups',
     () =>
       Effect.gen(function* () {
         const runId = 'stream-a' as RunId;
         const source = new RegistryTestSource();
-        const session = yield* createTestSession();
-        yield* session.followUps.open(runId);
+        const inbox = testInbox();
         const registry = createTestRegistry(source);
-        yield* Effect.addFinalizer(() => closeSessionOf(session));
 
         yield* registry
-          .bind(runId, 'owner/repo', session)
+          .bind(runId, 'owner/repo', inbox)
           .pipe(Effect.provide(githubServices));
 
         yield* Effect.promise(() =>
           source.emit('owner/repo', 'new github event'),
         );
 
-        expect(submitFollowUpMock).toHaveBeenCalledWith(
-          runId,
+        expect(inbox.send).toHaveBeenCalledWith(
           {
             text: 'new github event',
             from: { kind: 'notification', source: 'github' },
           },
-          { session, mode: 'live_notification' },
+          { mode: 'live_notification' },
         );
       }),
   );
 
   it.effect(
-    'rebinds an existing subscription to the session that rebound it',
+    'rebinds an existing subscription to the input that rebound it',
     () =>
       Effect.gen(function* () {
         const runId = 'stream-a' as RunId;
         const source = new RegistryTestSource();
-        const firstSession = yield* createTestSession();
-        yield* firstSession.followUps.open(runId);
-        const secondSession = yield* createTestSession();
-        yield* secondSession.followUps.open(runId);
+        const first = testInbox();
+        const second = testInbox();
         const registry = createTestRegistry(source);
-        yield* Effect.addFinalizer(() => closeSessionOf(secondSession));
-        yield* Effect.addFinalizer(() => closeSessionOf(firstSession));
 
         yield* registry
-          .bind(runId, 'owner/repo', firstSession)
+          .bind(runId, 'owner/repo', first)
           .pipe(Effect.provide(githubServices));
         yield* registry
-          .bind(runId, 'owner/repo', secondSession)
+          .bind(runId, 'owner/repo', second)
           .pipe(Effect.provide(githubServices));
 
         yield* Effect.promise(() =>
           source.emit('owner/repo', 'new github event'),
         );
 
-        expect(submitFollowUpMock).toHaveBeenCalledWith(
-          runId,
+        expect(first.send).not.toHaveBeenCalled();
+        expect(second.send).toHaveBeenCalledWith(
           {
             text: 'new github event',
             from: { kind: 'notification', source: 'github' },
           },
-          { session: secondSession, mode: 'live_notification' },
+          { mode: 'live_notification' },
         );
       }),
   );
@@ -350,14 +334,12 @@ describe('GitHub subscription app signals and follow-ups', () => {
       Effect.gen(function* () {
         const runId = 'stream-a' as RunId;
         const source = new RegistryTestSource();
-        const session = yield* createTestSession();
+        const inbox = testInbox(() =>
+          Effect.fail(new Error('delivery failed')),
+        );
         const logs = captureLogEntries();
         const registry = createTestRegistry(source);
         const unhandledRejection = vi.fn();
-        submitFollowUpMock.mockReturnValueOnce(
-          Effect.fail(new Error('delivery failed')),
-        );
-        yield* Effect.addFinalizer(() => closeSessionOf(session));
         yield* Effect.addFinalizer(() =>
           Effect.sync(() =>
             process.off('unhandledRejection', unhandledRejection),
@@ -366,7 +348,7 @@ describe('GitHub subscription app signals and follow-ups', () => {
 
         process.once('unhandledRejection', unhandledRejection);
         yield* registry
-          .bind(runId, 'owner/repo', session)
+          .bind(runId, 'owner/repo', inbox)
           .pipe(Effect.provide(githubServices));
 
         // emit() awaits the delivery program, so the recovery has run by the

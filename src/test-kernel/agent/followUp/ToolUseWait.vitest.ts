@@ -2,6 +2,8 @@ import '@test/support/defaultSessionTestSetup';
 
 // Third-party imports
 import { randomUUID } from 'node:crypto';
+import { rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import * as path from 'node:path';
 import { it } from '@effect/vitest';
 import * as NodeFileSystem from '@effect/platform-node/NodeFileSystem';
@@ -43,12 +45,7 @@ import {
   publishTestRows,
 } from '@test/support/sessionTestUtils';
 import { releaseRunResources } from '@tools/approval';
-import {
-  clearGoal,
-  goalOf,
-  setGoalSessionAutoApproval,
-  startGoal,
-} from '@tools/goal';
+import { clearGoal, goalOf, startGoal } from '@tools/goal';
 import { generateRunId } from '@utils/core';
 
 import {
@@ -190,7 +187,7 @@ const quietSession = (overrides: Record<string, unknown> = {}) =>
  */
 const seedCommittedResponse = Effect.fn('test.seedCommittedResponse')(
   function* (session: SessionHandle, runId: RunId, text: string) {
-    const runHistory = session.runHistory;
+    const cell = yield* session.runHistory.open(runId);
     const aggregate = rowAggregate(runId);
     const fresh: RunState = {
       ...freshRunState(0),
@@ -198,14 +195,14 @@ const seedCommittedResponse = Effect.fn('test.seedCommittedResponse')(
       modelId: 'test-model',
       backend: 'deepseek',
     };
-    const opened = yield* runHistory.appendBatch(runId, null, [
+    const opened = yield* cell.append([
       appendRow(runId, [
         { role: 'user', content: [{ kind: 'text', text: 'Do the thing.' }] },
       ]),
       positionRow(runId, { ...fresh, turn: 1 }, 'turn.begin'),
     ]);
     const invocation = { invocationId: randomUUID(), attempt: 1 };
-    return yield* runHistory.appendBatch(runId, opened, [
+    return yield* cell.append([
       {
         type: 'model.message',
         aggregateId: aggregate,
@@ -263,7 +260,8 @@ describe('a parked child run', () => {
     (queued) =>
       Effect.gen(function* () {
         const session = yield* quietSession();
-        const runId = startedRun(session);
+        const parentRunId = generateRunId();
+        const runId = startedRun(session, parentRunId);
         if (queued) {
           yield* enqueue(session, runId, [
             { text: 'later', from: { kind: 'user' as const } },
@@ -273,7 +271,7 @@ describe('a parked child run', () => {
         const { fiber, park, requests } = yield* forkLoop({
           runId,
           session,
-          parentRunId: generateRunId(),
+          parentRunId,
           script: [textTurn('first cycle'), textTurn('second cycle')],
         });
         yield* park(queued ? 1 : 0);
@@ -288,8 +286,8 @@ describe('a parked child run', () => {
     () =>
       Effect.gen(function* () {
         const session = yield* quietSession();
-        const runId = startedRun(session);
         const parentRunId = generateRunId();
+        const runId = startedRun(session, parentRunId);
         const asked = 'state where finiteness is used';
 
         const first = yield* forkLoop({
@@ -351,10 +349,11 @@ describe('a parked child run', () => {
       // A subagent that waited here would wait for a follow-up its
       // orchestrator was never told to send.
       const session = yield* quietSession();
+      const parentRunId = generateRunId();
       const { result } = yield* runLoop({
-        runId: startedRun(session),
+        runId: startedRun(session, parentRunId),
         session,
-        parentRunId: generateRunId(),
+        parentRunId,
         script: [{ failWith: { message: 'boom', userRetryable: false } }],
       });
 
@@ -410,10 +409,11 @@ describe('a parked root run', () => {
   it.effect('stops a one-cycle child instead of parking it as waiting', () =>
     Effect.gen(function* () {
       const session = yield* quietSession();
+      const parentRunId = generateRunId();
       const { result, requests } = yield* runLoop({
-        runId: startedRun(session),
+        runId: startedRun(session, parentRunId),
         session,
-        parentRunId: generateRunId(),
+        parentRunId,
         stopAfterCycle: true,
         script: [textTurn('done')],
       });
@@ -552,7 +552,8 @@ describe('a parked root run', () => {
       // ended before the turn that answers them began.
       const parked = yield* session.runHistory.load(runId).pipe(Effect.orDie);
       if (parked === null) throw new Error('The run has no run history.');
-      yield* session.runHistory.appendBatch(runId, parked, [
+      const cell = yield* session.runHistory.open(runId);
+      yield* cell.append([
         appendRow(runId, [
           { role: 'user', content: [{ kind: 'text', text: 'answer me' }] },
         ]),
@@ -779,6 +780,54 @@ describe('the batch a parked run consumes', () => {
       }),
   );
 
+  it.effect("gives each row of a batch only its own item's badges", () =>
+    Effect.gen(function* () {
+      const figure = path.join(tmpdir(), `texra-badge-${randomUUID()}.png`);
+      // A 1×1 PNG: within any size limit, so it attaches as it is.
+      writeFileSync(
+        figure,
+        Buffer.from(
+          'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==',
+          'base64',
+        ),
+      );
+      const session = yield* quietSession();
+      const runId = startedRun(session);
+      const logger = new TraceEmitter();
+      const info = vi.spyOn(logger, 'info');
+      yield* enqueue(session, runId, [
+        { text: 'just text', from: { kind: 'user' as const } },
+        {
+          text: 'with a figure',
+          mediaFiles: [figure],
+          from: { kind: 'user' as const },
+        },
+      ]);
+
+      const { fiber, park } = yield* forkLoop({
+        runId,
+        session,
+        logger,
+        bound: { supportsVision: true },
+        script: [textTurn('first'), textTurn('second')],
+      });
+      yield* park(1);
+      yield* Fiber.interrupt(fiber);
+      rmSync(figure, { force: true });
+
+      expect(info).toHaveBeenCalledWith(
+        'with a figure',
+        expect.objectContaining({
+          data: expect.objectContaining({ attachments: ['image'] }),
+        }),
+      );
+      expect(info).toHaveBeenCalledWith(
+        'just text',
+        expect.not.objectContaining({ data: expect.anything() }),
+      );
+    }),
+  );
+
   it.effect(
     'records what was asked and keeps the batch unconsumed when it cannot be applied',
     () =>
@@ -888,9 +937,8 @@ describe('an active goal at the wait', () => {
       Effect.gen(function* () {
         const session = yield* goalSession();
         const runId = startedRun(session);
-        yield* startGoal(session, runId, 'finish the refactor');
-        // The grant an approved plan makes; pausing ends it.
-        yield* setGoalSessionAutoApproval(session, runId, 'commands');
+        // Under the grant an approved plan makes; pausing ends it.
+        yield* startGoal(session, runId, 'finish the refactor', 'commands');
         const recorded = recordSessionEvents(session);
 
         try {
@@ -927,8 +975,8 @@ describe('an active goal at the wait', () => {
         // the model, so the error clears without pausing the goal or dropping
         // its unattended approvals first.
         const session = yield* goalSession();
-        const runId = startedRun(session);
         const parentRunId = generateRunId();
+        const runId = startedRun(session, parentRunId);
         yield* startGoal(session, runId, 'finish the autonomous proof');
 
         try {

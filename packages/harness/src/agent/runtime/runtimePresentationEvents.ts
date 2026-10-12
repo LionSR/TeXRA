@@ -65,25 +65,6 @@ export type PresentationEventHandlers<
 };
 
 /**
- * Why the host could not read a file's diagnostics for the diagnostics tool.
- *
- * Read off the one implementation
- * (`packages/extension/src/frontend/latex/linter.ts`): the LaTeX build the
- * read triggers to refresh them faults (`build-failed`), or the host's own
- * diagnostics collection throws (`read-failed`).
- */
-export class DiagnosticsReadFailed extends Data.TaggedError(
-  'DiagnosticsReadFailed',
-)<{
-  /** Also, when another process's window was asked: `detached` (it closed
-   *  before it answered) or `no-answer` (it did not answer in time). */
-  readonly reason: 'build-failed' | 'read-failed' | 'detached' | 'no-answer';
-  readonly path: string;
-  readonly message: string;
-  readonly cause?: unknown;
-}> {}
-
-/**
  * A host could not present one runtime notice: its `emit` threw. The
  * presentation plane's one failure, so the fallback notice and the warn logs
  * that consume it report the same cause the raw `catch` they replaced
@@ -96,15 +77,4 @@ export class HostPresentationFailed extends Data.TaggedError(
 )<{
   readonly event: RuntimePresentationEvent;
   readonly cause: unknown;
-}> {}
-
-/**
- * The host viewer refused to open a PDF the tool had already located on disk.
- * One reason only, by measurement: the implementation hands the file to the
- * host's own viewer, which either opens it or rejects.
- */
-export class PdfOpenFailed extends Data.TaggedError('PdfOpenFailed')<{
-  readonly path: string;
-  readonly message: string;
-  readonly cause?: unknown;
 }> {}

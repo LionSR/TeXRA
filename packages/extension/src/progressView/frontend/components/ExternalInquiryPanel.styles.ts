@@ -5,10 +5,6 @@ import { css, type CSSResult } from 'lit';
 import { sp } from '@ui/styles';
 
 export const externalInquiryPanelStyles: CSSResult = css`
-  :host {
-    --request-accent: var(--wa-color-focus);
-  }
-
   /* Question and answer are the card; the dock scrolls rather than this
      body, so the answer box is never scrolled out of its own card. */
   .request-card__details {

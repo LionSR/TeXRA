@@ -3,7 +3,7 @@ import { type Context, Effect, Option } from 'effect';
 
 // Local imports - GitHub subscriptions
 import { GitHubSubscriptions } from '@texra/tools/github/subscriptionBindings';
-import { LiveTools } from '@tools/liveTools';
+import { ToolCatalog } from '@tools/liveTools';
 import type { RunId } from '@texra-ai/harness/schemas';
 
 interface GitHubSubscriptionOwner {
@@ -23,10 +23,10 @@ interface GitHubSubscriptionEntry {
 const whileUp = <A>(
   none: A,
   read: Effect.Effect<A, never, GitHubSubscriptions>,
-): Effect.Effect<A, never, LiveTools> =>
+): Effect.Effect<A, never, ToolCatalog> =>
   Effect.scoped(
     Effect.gen(function* () {
-      const services = yield* (yield* LiveTools).processServices(
+      const services = yield* (yield* ToolCatalog).processServices(
         'github-pr-subscription',
       );
       return Option.isSome(services)

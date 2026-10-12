@@ -74,7 +74,6 @@ export function ensureRoundData(
   if (existing) return existing;
   const data: RoundOutput = {
     round,
-    rawOutput: null,
     outputs: [],
     compileFailures: [],
     missingOutputs: [],

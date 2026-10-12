@@ -13,7 +13,6 @@ import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 
 import { DESKTOP_PROJECTS } from '@desktop/main/desktopProjectRecords';
-import { INQUIRY_THREADS } from '@shared/plugins/externalInquiry';
 import {
   CURRENT_VALUE_VERSION,
   RETIRED_ROW_KINDS,
@@ -25,8 +24,10 @@ import {
   REPO_STATE,
   WORKSPACE_STORES,
 } from '@shared/session/valueFamily';
+import { INQUIRY_THREADS } from '@texra/shared/plugins/externalInquiry';
 import { UPDATE_CHECKS } from '@texra/utils/system/updateCheck';
-import { PLUGIN_ARMS } from '@tools/pluginArms';
+import { texraPlugins } from '@texra/tools/registry';
+import { armsOf } from '@tools/plugins';
 import {
   productionFilesUnder,
   productionRoots,
@@ -77,7 +78,7 @@ const VERSIONED: readonly Versioned[] = [
       schema: arm,
     };
   }),
-  ...[...PLUGIN_ARMS].map(([name, arm]) => ({
+  ...Object.entries(armsOf(texraPlugins())).map(([name, arm]) => ({
     name: `plugin.fact.${name.replace('/', '.')}`,
     version: arm.version,
     upcasts: arm.upcasters.length,

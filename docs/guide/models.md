@@ -192,7 +192,7 @@ The Status column shows `Set` once the key is stored. To replace a key, set it a
 Expand a provider's row (select the chevron) to point requests at a custom endpoint, for providers that support it.
 :::
 
-You can also place a `.env` file in your workspace with variables such as `OPENAI_API_KEY`. TeXRA loads it automatically, so you don't need to enter keys each time.
+You can also place a `.env` file in your workspace with variables such as `OPENAI_API_KEY`. Every task of the project reads it, in the extension, the desktop app and the CLI, so you don't need to enter keys each time.
 
 Already paying for a ChatGPT or Grok subscription? Sign in and skip the API key for those models.
 Kimi Code and the GLM Coding Plan also run on a subscription you already pay for, authenticated with a

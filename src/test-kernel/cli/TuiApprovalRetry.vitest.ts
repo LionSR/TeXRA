@@ -5,7 +5,7 @@
 import { it } from '@effect/vitest';
 import { Deferred, Effect, Fiber, SubscriptionRef } from 'effect';
 import { afterEach, beforeAll, beforeEach, describe, expect, vi } from 'vitest';
-import { humanGrant } from '@agent/runtime/runApprovalQueue';
+import { goalGrant, humanGrant } from '@agent/runtime/runApprovalQueue';
 
 const mocks = vi.hoisted(() => ({
   hasUsableApiKey: vi.fn(),
@@ -78,19 +78,21 @@ import {
   type RetryPermission,
   type RunId,
 } from '@shared/schemas';
-import {
-  APPROVE_ALL_DELEGATED_WORK_ACTION,
-  APPROVE_SESSION_ACTION,
-  type SurfaceDecision,
-} from '@shared/session/approvalDecision';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { createTuiCliContext } from '@test/cli/fixtures/cliContext';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { installedHost } from '@test/support/setupPlatform';
 import { makeFakeSettingsStores } from '@test/support/settingsStoresFake';
-import { publishTestRunStart } from '@test/support/sessionTestUtils';
-import { setGoalSessionAutoApproval } from '@tools/goal';
+import {
+  publishTestRunStart,
+  setTestApprovalPolicy,
+} from '@test/support/sessionTestUtils';
+import {
+  APPROVE_ALL_DELEGATED_WORK_ACTION,
+  APPROVE_SESSION_ACTION,
+  type SurfaceDecision,
+} from '@texra/shared/session/surfaceDecision';
 import { requestToolEditApproval } from '@tools/approval/toolEditApproval';
 import { bashApprovalRequest } from '../agent/progressTestUtils';
 
@@ -113,7 +115,7 @@ function tui(
   contextOverrides: Partial<CliContext> = {},
 ): { readonly presentationHost: CliRuntimeHost; readonly dispose: () => void } {
   const cliContext = createTuiCliContext(contextOverrides);
-  testDefaultSession().approvals.setPolicy(cliContext.approvalPolicy);
+  setTestApprovalPolicy(cliContext.approvalPolicy);
   // The installed fake host's secret store: the credential work takes it
   // directly, and the key-check expectations name exactly this object.
   const { secrets } = installedHost();
@@ -121,7 +123,7 @@ function tui(
   detachHost = Effect.runSync(
     testDefaultSession().interactions.use(
       createTuiHostInteractions(presentationHost, cliContext, {
-        session: testDefaultSession(),
+        requests: testDefaultSession().requests,
         secrets,
         settings: makeFakeSettingsStores('cli').stores,
         runtime: testRuntime(),
@@ -311,7 +313,11 @@ function waitForNoApproval(): Effect.Effect<void> {
 }
 
 beforeAll(() => {
-  bindSessionView(testRuntime(), testDefaultSession().view.ref);
+  const { view } = testDefaultSession();
+  bindSessionView(testRuntime(), {
+    current: () => SubscriptionRef.getUnsafe(view.ref),
+    changes: view.changes,
+  });
 });
 
 beforeEach(() => {
@@ -385,7 +391,7 @@ describe('TUI request decisions', () => {
         const session = testDefaultSession();
         const { approvals } = session;
         yield* approvals.change(runId, humanGrant(['bash'], false));
-        yield* setGoalSessionAutoApproval(session, runId, 'commands');
+        yield* approvals.change(runId, goalGrant(['bash']));
         expect(approvals.bypass(runId, 'bash') !== null).toBe(true);
         // The human turns commands off, then on again, while the goal runs,
         // and approves edits for the session; ending the goal must write
@@ -395,7 +401,7 @@ describe('TUI request decisions', () => {
         yield* approvals.change(runId, humanGrant(['bash'], true));
         yield* approvals.change(runId, humanGrant(['toolEdit'], true));
 
-        yield* setGoalSessionAutoApproval(session, runId, false);
+        yield* approvals.change(runId, goalGrant([]));
         expect(approvals.bypass(runId, 'bash') !== null).toBe(true);
         expect(approvals.bypass(runId, 'toolEdit') !== null).toBe(true);
       }),

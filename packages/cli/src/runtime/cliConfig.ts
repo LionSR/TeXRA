@@ -9,6 +9,7 @@ import {
 
 // Local imports - platform
 import { modelConfig } from '@texra-ai/llm';
+import { writeLogLine } from '@logger/logSink';
 import {
   JsonConfigProvider,
   type ConfigStore,
@@ -283,8 +284,19 @@ export function loadCliStartupConfig(
       // which holds the same rows.
       installSettingsCatalog(TEXRA_SETTINGS);
       const degradations: string[] = [];
-      const stores = yield* openTexraConfigStores(storageRoot, cwd, (message) =>
-        degradations.push(message),
+      // Following their files: a run that follows the project's settings
+      // (its approval policy, read at each decision) sees what another
+      // window or terminal saves while it runs.
+      const stores = yield* openTexraConfigStores(
+        storageRoot,
+        cwd,
+        (message) => degradations.push(message),
+        (error) =>
+          writeLogLine(
+            'WARN',
+            'cliConfig',
+            `A TeXRA config file changed but could not be read; this run keeps its previous settings until it is fixed: ${error.message}`,
+          ),
       );
       // The user's MCP server config, which only a run declaring MCP tools
       // otherwise reads: a broken file warns here, not first mid-run.

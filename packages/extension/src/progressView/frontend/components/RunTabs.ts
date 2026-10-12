@@ -13,12 +13,12 @@ import { when } from 'lit/directives/when.js';
 
 // Local imports
 import type { SessionView, RunView } from '@shared/session/sessionView';
-import type { Surface } from '@shared/session/surface';
-import { unseenRuns } from '@shared/session/unseenRuns';
 import {
   RUN_GROUP_LABELS,
   RUN_GROUP_ORDER,
 } from '@shared/runs/runStatusDisplay';
+import type { Surface } from '@texra/shared/session/surface';
+import { unseenRuns } from '@texra/shared/session/unseenRuns';
 import { SessionUiEvents } from '@texra/shared/session/uiEvents';
 import { designTokens, commonViewStyles } from '@ui/styles';
 
@@ -227,7 +227,16 @@ export class RunTabs extends LitElement {
     return html`
       <div class="tabs">
         <div class="tabs-content">
-          <div @click=${this.handleTabClick}>${body}</div>
+          <div
+            @click=${this.handleTabClick}
+            @run-row-delete=${(event: Event) => {
+              const tab = getComposedPathElement<RunTab>(event, 'run-tab');
+              if (tab && this.removable && tab.run.actions.includes('delete'))
+                this.deleteRun(tab, tab.run.id);
+            }}
+          >
+            ${body}
+          </div>
           ${when((view?.order.length ?? 0) === 0, () =>
             renderEmptyState({
               icon: 'list-ul',

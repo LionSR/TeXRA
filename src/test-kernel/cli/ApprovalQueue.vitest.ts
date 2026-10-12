@@ -60,7 +60,6 @@ function viewOfRequests(...payloads: readonly ApprovalPayload[]): SessionView {
       runId: payload.data.runId as RunId,
       requestId: payload.data.requestId,
       payload,
-      thread: null,
     })),
   });
 }
@@ -84,7 +83,6 @@ describe('CLI approval surface', () => {
           runId: payload.data.runId as RunId,
           requestId: payload.data.requestId,
           payload,
-          thread: null,
         })),
       },
     );

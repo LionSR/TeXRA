@@ -99,7 +99,6 @@ function queueTitleApproval(label: string): void {
           command: 'echo ok',
         },
       },
-      thread: null,
     },
   ];
   syncView();
@@ -134,7 +133,7 @@ describe('installTerminalTitleUpdates', () => {
     vi.setSystemTime(0);
     enableOscTitles();
     const updates = installTerminalTitleUpdates('/work/coauthor');
-    const session = new TuiSession(() => undefined);
+    const session = new TuiSession();
     session.markRunPending(Effect.never);
     session.runId = 'transition-root' as RunId;
     setPhase('transition-root', RUN_PHASE.WAITING);
@@ -179,7 +178,7 @@ describe('installTerminalTitleUpdates', () => {
     const updates = installTerminalTitleUpdates(
       '/tmp/evil\x07\x1b]0;pwned\x07',
     );
-    const session = new TuiSession(() => undefined);
+    const session = new TuiSession();
     session.markRunPending(Effect.never);
     await flushTitleUpdate();
     updates.dispose();

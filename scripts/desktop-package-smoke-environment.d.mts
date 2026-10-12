@@ -31,7 +31,8 @@ export type DatabaseFixture = Pick<
   Pick<
     typeof import('@platform/defaults/nodePlatform'),
     'nodePlatformServices'
-  >;
+  > &
+  Pick<typeof import('@tools/toolTable'), 'ToolRegistry' | 'toolTable'>;
 
 export function loadDatabaseFixture(
   userDataPath: string,

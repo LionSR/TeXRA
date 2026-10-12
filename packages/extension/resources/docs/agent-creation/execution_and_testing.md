@@ -6,7 +6,7 @@ This note explains how TeXRA runs agents, and — more importantly — how the
 ## How TeXRA runs agents
 
 Every agent run flows through one entry point: `texra.execute` command →
-`runAgent`, which assigns the run id and calls
+the session's root launch (`session.runs.launch`), which assigns the run id and calls
 `executeAgent(definition, runId, options)`. The runtime takes a
 `PreparedAgentDefinition` (agent name, model, instruction, and optional input
 / memory / working-directory fields), resolves the YAML, and runs it in one of

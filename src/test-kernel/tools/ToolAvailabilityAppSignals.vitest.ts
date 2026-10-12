@@ -14,7 +14,10 @@ import {
 } from 'effect';
 import { afterEach, describe, expect, vi } from 'vitest';
 
-import type { RuntimeTool as ITool } from '@agent/runtime/ToolServices';
+import type {
+  PluginToolServices,
+  RuntimeTool,
+} from '@agent/runtime/ToolServices';
 import type { ConfigProvider } from '@platform/interfaces';
 import { Secrets, type PlatformSecrets } from '@platform/secrets';
 import { testHttpClientLayer } from '@test/support/fetchTestUtils';
@@ -22,7 +25,7 @@ import { nodeSpawnerLayer } from '@test/support/childProcessTestLayer';
 import { LeanLanguageServices } from '@texra/tools/lean/leanLanguageServices';
 import type { Plugin } from '@tools/plugins';
 import type { ToolProbeInputs } from '@tools/toolProbes';
-import { LiveTools } from '@tools/liveTools';
+import { ToolCatalog } from '@tools/liveTools';
 import { ToolRegistry, toolTable } from '@tools/toolTable';
 import { ToolAvailability } from '@tools/toolAvailabilityService';
 
@@ -66,7 +69,9 @@ const probeServices = Layer.mergeAll(
 );
 
 /** Tools under `names`, which the availability service only lists. */
-const named = (...names: string[]): Record<string, ITool> =>
+const named = (
+  ...names: string[]
+): Record<string, RuntimeTool<Error, PluginToolServices>> =>
   Object.fromEntries(
     names.map((name) => [
       name,
@@ -90,9 +95,9 @@ const availabilityService = (plugins: readonly Plugin[]) =>
           Layer.merge(
             Layer.succeed(ToolRegistry)(toolTable(plugins)),
             // No plugin layer is up: each probe runs on the process services.
-            Layer.succeed(LiveTools)({
+            Layer.mock(ToolCatalog, {
               processServices: () => Effect.succeed(Option.none()),
-            } as unknown as LiveTools['Service']),
+            }),
           ),
         ),
       ),

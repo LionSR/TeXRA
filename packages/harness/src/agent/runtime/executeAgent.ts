@@ -1,8 +1,7 @@
 import * as path from 'node:path';
 
-import { Data, Effect, Fiber, Layer } from 'effect';
+import { Data, Deferred, Effect, Fiber, Layer } from 'effect';
 
-import type { AgentEvent } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { RuntimeTool as ITool } from '@agent/runtime/ToolServices';
 import { withLogChannel } from '@logger/effectLog';
@@ -38,10 +37,10 @@ import { modelInvokerLayer } from './ModelInvoker';
 import { agentRunLayer } from './run/AgentRun';
 import { runToolUse } from './loop/toolUse';
 import { runWithLaunchGuard, type RunTerminalOwner } from './runLaunchGuard';
-import { Runs } from './runRegistry';
+import { Runs, type AgentRunServices } from './runRegistry';
+import type { RegisterRunOptions } from '../storage/runLifecycle';
 import type { ChildRunTurns } from './childRunLoop';
 import type { RunEndResult } from './RunEndResult';
-import type { AgentRunServices } from './runRegistry';
 import type { SessionHandle } from './SessionHandle';
 import type { RunHandle } from './RunHandle';
 
@@ -251,17 +250,15 @@ interface SubagentRunOptions {
 
 /** Options for executeAgent. */
 export interface ExecuteAgentOptions extends SubagentRunOptions {
+  /** The run's registration, which its opening batch commits: the run is
+   *  born with its opening or not at all. */
+  readonly registration: RegisterRunOptions;
   /**
-   * Publish a workflow's host-owned output (copies to user-requested
-   * destinations, the result record) while its run handle and durable
-   * checkpoint are still live, before the run's terminal commit. A stop
-   * during this operation can therefore preserve the checkpoint instead of
-   * interrupting an already-terminal run.
-   *
-   * The host reports a fact, `failed` when requested output could not be
-   * delivered, and the run decides its verdict from it. It runs on the run's
-   * own fiber, so a stop reaches it, and reads session-rooted facts from the
-   * session it was given.
+   * Publish a workflow's host-owned output (copies, the result record)
+   * while its run and checkpoint are live, before its terminal commit, on
+   * the run's own fiber (a stop reaches it and keeps the checkpoint). The
+   * host reports `failed` when output could not be delivered; the run
+   * decides its verdict from it.
    */
   publishWorkflowOutput?: (
     result: RunEndResult,
@@ -273,13 +270,12 @@ export interface ExecuteAgentOptions extends SubagentRunOptions {
     agentDefaultOutputFiles: readonly string[],
   ) => Effect.Effect<'published' | 'failed', Error>;
   /**
-   * Fires with the run id once its `run.start` is published, before the run
-   * begins: the run exists for every fold, so a host may select it as its
-   * own surface state.
+   * The one admission hook, once per caller, with the run admitted. A fresh
+   * launch runs it as its opening commits, which it holds: keep it short (a
+   * failure warns; the run goes on). A resume, or a joiner once the resume
+   * has the run, runs it under the claim; a failure aborts that one.
    */
-  onRunResolved?: (runId: RunId) => void;
-  /** A sink of every event the run's trace emits, beside the session's. */
-  onTraceEvent?: (event: AgentEvent) => void;
+  onAdmitted?: (runId: RunId) => Effect.Effect<void, Error>;
   /** Stop a tool-use run after one model/tool cycle instead of waiting for follow-up input. */
   stopAfterCycle?: boolean;
   /** This launch is the user's own-API-key fallback for a quota-exhausted
@@ -288,11 +284,10 @@ export interface ExecuteAgentOptions extends SubagentRunOptions {
 }
 
 /**
- * Low-level runner for a freshly registered run. Launches should use
- * `runAgent()` or call `registerRun()` first so the canonical configuration
- * is committed with the run's creation. Its prepared definition must be the
- * one registration used; a resume goes through `resumeToolUseFromResumeData`.
- * The run is on `options.session`, and so are its `Runs`, provided here.
+ * Low-level runner for a fresh run: it registers the run with its opening
+ * (`options.registration`). Launches should use `Runs.launch({ request, options })`; a resume
+ * goes through `resumeToolUseFromResumeData`. The run is on
+ * `options.session`, and so are its `Runs`, provided here.
  */
 export function executeAgent(
   definition: PreparedAgentDefinition,
@@ -300,11 +295,21 @@ export function executeAgent(
   options: ExecuteAgentOptions,
 ): Effect.Effect<RunEndResult, Error, ProcessServices> {
   return Effect.gen(function* () {
+    // Done once the run exists: its description is a row of it.
+    const opened = yield* Deferred.make<void>();
     const ctx = yield* buildAgentLaunchContext({
       definition,
       runId,
-      onRunResolved: options.onRunResolved,
-      onTraceEvent: options.onTraceEvent,
+      registration: options.registration,
+      onAdmitted: (resolved) =>
+        Deferred.succeed(opened, undefined).pipe(
+          Effect.andThen(options.onAdmitted?.(resolved) ?? Effect.void),
+          Effect.catch((error) =>
+            Effect.logWarning(`Run ${resolved}'s admission failed`).pipe(
+              Effect.annotateLogs({ data: error }),
+            ),
+          ),
+        ),
       session: options.session,
       ownApiKeyFallback: options.ownApiKeyFallback,
       toolPolicy: {
@@ -323,12 +328,16 @@ export function executeAgent(
     // A child of the run's fiber, so the run's stop interrupts it, as it
     // interrupts the run.
     const sessionDescription = yield* Effect.forkChild(
-      generateSessionDescription(
-        runId,
-        config,
-        ctx.resolvedAgentDescription,
-        runSession,
-        ctx.stores,
+      Deferred.await(opened).pipe(
+        Effect.andThen(
+          generateSessionDescription(
+            runId,
+            config,
+            ctx.resolvedAgentDescription,
+            runSession,
+            ctx.stores,
+          ),
+        ),
       ),
     );
     // The backstop wait is `ensuring`, not a generator `finally`: the driver
@@ -337,29 +346,21 @@ export function executeAgent(
       ctx,
       (handle) =>
         Effect.gen(function* () {
-          // This run's lineage, derived once, from the live handle the
-          // registry admitted: the caller's own parent.
-          const parentRunId = handle.parent ?? undefined;
+          // This run's parent edge now: a detach during preparation
+          // promoted it to a top-level run.
+          const parentRunId = runSession.runs.get(runId)?.parent ?? undefined;
           // The run directory is created by the first write into it.
           yield* Effect.logInfo(`Starting run (runId: ${runId})`).pipe(
-            withLogChannel(CHANNEL),
-          );
-          yield* Effect.logInfo(
-            `Input file: ${config.inputFiles[0] ?? '(none)'}`,
-          ).pipe(withLogChannel(CHANNEL));
-          yield* Effect.logDebug('Run details').pipe(
             Effect.annotateLogs({
               data: {
-                runId,
                 agent: config.agent,
                 model: config.model,
+                input: config.inputFiles[0] ?? '(none)',
+                outputs: config.outputFiles?.length ?? 0,
               },
             }),
             withLogChannel(CHANNEL),
           );
-          yield* Effect.logDebug(
-            `Output files: ${config.outputFiles?.length ?? 0}`,
-          ).pipe(withLogChannel(CHANNEL));
           // Subagents don't need to force-open the progress board or show notifications;
           // the orchestrator's run is already visible.
           if (parentRunId === undefined) {
@@ -371,15 +372,8 @@ export function executeAgent(
               { replayWhenAttached: true },
             );
           }
-          yield* Effect.logInfo('Executing agent').pipe(
-            Effect.annotateLogs({
-              data: { agent: config.agent, model: config.model },
-            }),
-            withLogChannel(CHANNEL),
-          );
-
           return yield* launchRun(ctx, handle, options, { kind: 'fresh' });
-        }).pipe(settleDescriptionOnExit(sessionDescription)),
+        }).pipe(settleDescriptionOnExit(sessionDescription, opened)),
       // The edge the lifecycle's handle is born with: the caller's own
       // parent for a fresh child.
       {
@@ -405,9 +399,11 @@ export function executeAgent(
  */
 export type ResumeTurnIdentity = Pick<ResumeData, 'runId' | 'agentConfig'>;
 
-/** What a fresh launch takes, but its own-key fallback. */
+/** What a fresh launch takes, but its registration and own-key fallback. */
 export interface ResumeToolUseFromResumeDataOptions
-  extends Omit<ExecuteAgentOptions, 'ownApiKeyFallback'>, RunTerminalOwner {
+  extends
+    Omit<ExecuteAgentOptions, 'ownApiKeyFallback' | 'registration'>,
+    RunTerminalOwner {
   /** A resumed cycle is idle after its child delivery, while its run stays live. */
   readonly onIdle?: () => void;
   /** Caller-owned cancellation, read on the run's fiber before its loop. */
@@ -416,15 +412,11 @@ export interface ResumeToolUseFromResumeDataOptions
 
 /**
  * Resume one run (a conversation, or a document task's recipe) from its
- * durable cursor, in place: a standalone resume is launched through the
- * session's door (`Runs.launch`), and a recovered child's continuous driver
- * (`options.turns`) runs it inside its own launch. A standalone resume owns
- * the run for its whole life under the launch terminal
- * ({@link runWithLaunchGuard}), whose claim is held before the cursor read so
- * no concurrent owner mutates the run between the read and the launch; the
- * resume's own scope, and the compensating finalizers the launch registered
- * in it, close before that claim goes. Lineage is `run.start.parent`, minus a
- * committed detach.
+ * durable cursor, in place: standalone through the session's door
+ * (`Runs.launch`), owned for its life by the launch terminal
+ * ({@link runWithLaunchGuard}, its claim held before the cursor read), or
+ * inside a recovered child's continuous driver (`options.turns`). Lineage is
+ * `run.start.parent`, minus a committed detach.
  */
 export function resumeToolUseFromResumeData(
   identity: ResumeTurnIdentity,
@@ -454,9 +446,6 @@ export function resumeToolUseFromResumeData(
     const ctx = yield* buildAgentLaunchContext({
       definition,
       runId: resume.runId,
-      resumed: true,
-      onRunResolved: options.onRunResolved,
-      onTraceEvent: options.onTraceEvent,
       session: runSession,
       toolPolicy: {
         approvalPromptsUnavailable:

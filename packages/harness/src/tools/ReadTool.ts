@@ -3,8 +3,8 @@ import { Effect, FileSystem, Scope } from 'effect';
 import { z } from 'zod';
 
 // Local imports
-import type { RunCall } from '@agent/runtime/RunCall';
 import { ToolContext } from '@agent/core/tools/ToolTypes';
+import { recordToolFileRead } from '@agent/runtime/RunCall';
 import { ToolError, type ToolResult } from '@shared/schemas';
 import {
   resolveToolPath,
@@ -12,7 +12,6 @@ import {
 } from '@tools/pathResolution';
 import { buildBytesAttachment, buildFileAttachment } from '@tools/attachments';
 import { formatFileView } from '@tools/formatting';
-import { recordToolFileRead } from '@tools/fileInteractions';
 import { parseEml, type EmlImageAttachment } from '@tools/emlParser';
 import {
   formatBytes,
@@ -28,7 +27,7 @@ import {
 } from '@utils/files/mimeUtils';
 
 // Local file imports
-import { defineTool } from './core/define';
+import { defineTool } from './core/definition';
 
 /**
  * Schema for range parameter with preprocessing to handle array format.
@@ -116,7 +115,7 @@ const read = Effect.fn('ReadFileTool.execute')(function* (
 ): Effect.fn.Return<
   ToolResult,
   Error,
-  ToolContext | RunCall | Scope.Scope | FileSystem.FileSystem
+  ToolContext | Scope.Scope | FileSystem.FileSystem
 > {
   const call = yield* ToolContext;
   // Local reads finish in milliseconds, so no mid-read cancellation is
@@ -242,11 +241,7 @@ const returnBinaryAttachment = Effect.fn('ReadFileTool.returnBinaryAttachment')(
     input: ReadInput,
     kind: AttachmentKind,
     resolved: ToolPathResolution,
-  ): Effect.fn.Return<
-    ToolResult,
-    Error,
-    ToolContext | RunCall | FileSystem.FileSystem
-  > {
+  ): Effect.fn.Return<ToolResult, Error, ToolContext | FileSystem.FileSystem> {
     const copy = ATTACHMENT_COPY[kind];
     const attachment = yield* buildFileAttachment({
       filePath: resolved.fsPath,
@@ -269,7 +264,7 @@ const returnBinaryAttachment = Effect.fn('ReadFileTool.returnBinaryAttachment')(
 export const ReadFileTool = defineTool({
   name: 'read_file',
   replay: 'safe',
-  parallelSafe: true,
+  lane: 'parallel',
   description:
     'Read and return workspace files. For text files you can supply an optional line range. PDFs (.pdf) and common image formats are returned as attachments so vision-capable models can inspect their pages or visual content.',
   schema: ReadInputSchema,

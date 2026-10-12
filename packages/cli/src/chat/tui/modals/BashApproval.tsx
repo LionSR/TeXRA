@@ -5,7 +5,7 @@ import { confirmCardContentWidth } from '@cli/tui/ui/theme';
 import { truncateToWidth } from '@cli/runtime/terminalText';
 import type { BashPermission } from '@shared/schemas';
 
-import type { SurfaceDecision } from '@shared/session/approvalDecision';
+import type { SurfaceDecision } from '@texra/shared/session/surfaceDecision';
 import { ConfirmCard } from './ConfirmCard';
 import {
   ScrollableModalText,

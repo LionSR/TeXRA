@@ -28,7 +28,10 @@ import { installPlatform } from '@test/support/setupPlatform';
 import { rootedFsLayer } from '@test/support/fsTestUtils';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 import { seedRunRecord } from '@test/support/runRecordSeeds';
-import { ChatExportController } from '@texra/controllers/progressView/ChatExportController';
+import {
+  ChatExportController,
+  localExportRecords,
+} from '@texra/controllers/progressView/ChatExportController';
 
 const TEMPLATE =
   '<!doctype html><html><head><title>t</title>' +
@@ -72,7 +75,6 @@ function config(overrides: Partial<AgentConfig> = {}): AgentConfig {
     agent: 'orchestrator',
     model: 'deepseek/deepseek-v4-flash',
     instruction: 'Solve the problem.',
-    editedFiles: [],
     toolConfig: DEFAULT_TOOL_CONFIG,
     memories: [],
     workingDirectory: '/workspace',
@@ -104,7 +106,8 @@ describe('ChatExportController.exportAsHtml', () => {
     );
     controller = new ChatExportController({
       latexPreamble: '',
-      session,
+      roots: session.roots,
+      records: localExportRecords(session),
     });
   });
 
@@ -166,7 +169,8 @@ describe('ChatExportController.buildExportInput', () => {
     );
     controller = new ChatExportController({
       latexPreamble: '',
-      session,
+      roots: session.roots,
+      records: localExportRecords(session),
     });
   });
 

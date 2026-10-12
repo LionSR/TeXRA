@@ -5,7 +5,10 @@ import { TraceEmitter } from '@agent/trace';
 import type {
   SessionHandle,
   SessionHandleInit,
+  SessionLog,
 } from '@agent/runtime/SessionHandle';
+import type { WorkspaceRoots } from '@platform/workspaceRoots';
+import { runStateAppend } from '@shared/session/runHistory';
 import {
   aggregateId,
   isTranscriptEvent,
@@ -24,15 +27,23 @@ import {
   resetTranscriptOwnership,
 } from '@shared/session/transcriptState';
 import {
+  TEXRA_APPROVAL_POLICY_CONFIG_KEY,
+  type TexraApprovalPolicy,
+} from '@shared/approvalPolicy';
+import {
   closeSessionOf,
   openTestDefaultSession,
 } from '@test/support/sessionEnd';
 import { testSessionOwner } from '@test/support/testProcessRuntime';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
+import { FakeConfigProvider } from '@test/support/FakePlatform';
 import { generateRunId } from '@utils/core';
 
 /** What a test supplies: the isolated roots are this helper's job. */
-type TestSessionInit = Partial<SessionHandleInit>;
+/** An open's init; `persistent` keeps the root's own store. */
+type TestSessionInit = Partial<SessionHandleInit> & {
+  readonly persistent?: boolean;
+};
 
 let opened = 0;
 
@@ -48,8 +59,9 @@ export const createTestSession = (
   Effect.flatMap(testSessionOwner, (owner) => {
     const installed = testWorkspaceRoots();
     opened += 1;
+    const { persistent, ...open } = init;
     return owner.open({
-      ...init,
+      ...open,
       roots: init.roots ?? {
         host: installed.host,
         workspace: installed.workspace,
@@ -60,10 +72,12 @@ export const createTestSession = (
         repoState: installed.repoState,
         globalState: installed.globalState,
       },
-      transcriptMode: init.transcriptMode ?? {
-        kind: 'ephemeral',
-        reason: 'isolated test session',
-      },
+      ...(!persistent && {
+        transcriptMode: init.transcriptMode ?? {
+          kind: 'ephemeral',
+          reason: 'isolated test session',
+        },
+      }),
     });
   });
 
@@ -108,8 +122,14 @@ export function publishTestRows(
   session: SessionHandle,
   rows: readonly SessionEventDraft[],
 ): void {
-  Effect.runFork(session.log.transact(rows));
+  Effect.runFork(seedRows(session.log)(rows));
 }
+
+/** A fixture's rows committed as the store holds them, every kind
+ *  admitted: a seeded history stands in for what a run's cell wrote. */
+export const seedRows =
+  (log: Pick<SessionLog, 'transact'>) => (rows: readonly SessionEventDraft[]) =>
+    log.transact((tx) => runStateAppend(tx.append)(rows));
 
 /**
  * Publish the existence fact before a test exercises a run's later events.
@@ -178,8 +198,22 @@ export function createTestRunTrace(runId: RunId) {
         apply({ type: 'run.position', payload: { at: 'waiting' } });
       } else apply({ type: 'run.end', outcome: phase });
     },
+    /** The run history's final-answer row (`response.finalized`), folded
+     *  in its place beside the trace. */
+    finalize: (text: string) => apply({ type: 'response.finalized', text }),
     transcript: () => transcript,
     rows: () => transcript.rows,
     dispose: () => trace.close(),
   };
+}
+
+/** Set the project's approval policy: the setting every session over
+ *  `roots` (by default the installed fake host's) decides by. */
+export function setTestApprovalPolicy(
+  policy: TexraApprovalPolicy,
+  { config }: Pick<WorkspaceRoots, 'config'> = testWorkspaceRoots(),
+): void {
+  if (!(config instanceof FakeConfigProvider))
+    throw new Error('The installed fake host has no fake config to set.');
+  config.set(TEXRA_APPROVAL_POLICY_CONFIG_KEY, policy);
 }

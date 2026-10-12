@@ -10,7 +10,9 @@
  */
 import { DateTime, Effect } from 'effect';
 
+import { goalGrant } from '@agent/runtime/runApprovalQueue';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
+import type { ApprovalBypassKind } from '@shared/approvalBypassKind';
 import type { RunId } from '@shared/schemas';
 import {
   goalStateOf,
@@ -25,12 +27,25 @@ import { hexId12 } from '@utils/core';
 type GoalReader = Pick<SessionHandle, 'view'>;
 
 /**
- * What a goal mutation takes: the reader plus the awaited commit. A mutation
- * reports the goal it wrote only once that row is in the log, so a refused or
- * failed append reaches the caller as the mutation's error instead of a
- * success over a row that never landed.
+ * What a goal mutation takes: the reader plus the run's grants, the door the
+ * goal row commits through beside the grant it implies. A mutation reports
+ * the goal it wrote only once that row is in the log, so a refused or failed
+ * append reaches the caller as the mutation's error instead of a success
+ * over a row that never landed.
  */
-type GoalWriter = GoalReader & Pick<SessionHandle, 'log'>;
+type GoalWriter = GoalReader & Pick<SessionHandle, 'approvals'>;
+
+/** What an active goal auto-approves: commands alone unless the user
+ *  widened it; `false` grants nothing (a paused or ended goal). */
+export type GoalAutoApprovalScope = 'commands' | 'allAgentWork';
+
+const SCOPE_KINDS: Record<
+  GoalAutoApprovalScope,
+  readonly ApprovalBypassKind[]
+> = {
+  commands: ['bash'],
+  allAgentWork: ['superYolo', 'toolEdit', 'bash'],
+};
 
 function goalOfRunView(runId: RunId, run: RunView | undefined): Goal | null {
   if (run === undefined) return null;
@@ -40,23 +55,38 @@ function goalOfRunView(runId: RunId, run: RunView | undefined): Goal | null {
   return { runId, ...goal };
 }
 
+/**
+ * Commit the run's goal state and the goal grant it implies in one
+ * transaction, so no grant outlives the goal that armed it: an approved
+ * plan's goal grants `grant`; a paused or ended one grants nothing. The
+ * grant sits over the run's human values without replacing them.
+ */
 function commitGoalState(
   session: GoalWriter,
   runId: RunId,
   state: GoalState,
+  grant: GoalAutoApprovalScope | false,
 ): Effect.Effect<void, Error> {
-  return session.log.transact([goalStateRow(runId, state)]).pipe(Effect.asVoid);
+  return session.approvals.change(
+    runId,
+    goalGrant(grant === false ? [] : SCOPE_KINDS[grant]),
+    [goalStateRow(runId, state)],
+  );
 }
 
 /** Commit the run's goal as its next row and hand it back to the caller. */
 function commitGoal(
   session: GoalWriter,
   goal: Goal,
+  grant: GoalAutoApprovalScope | false,
 ): Effect.Effect<Goal, Error> {
   const { runId, ...state } = goal;
-  return commitGoalState(session, runId, { active: true, ...state }).pipe(
-    Effect.as(goal),
-  );
+  return commitGoalState(
+    session,
+    runId,
+    { active: true, ...state },
+    goal.status === 'active' ? grant : false,
+  ).pipe(Effect.as(goal));
 }
 
 function requireNonEmpty(
@@ -75,7 +105,8 @@ export function goalOf(session: GoalReader, runId: RunId): Goal | null {
 }
 
 /**
- * Start a pursuit on the run, and succeed once its row is committed. Fails
+ * Start a pursuit on the run under `grant`, and succeed once its row is
+ * committed. Fails
  * when one is already in flight (active or paused): completing one and
  * starting another is normal, replacing a live one is `retargetGoal`.
  */
@@ -83,6 +114,7 @@ export function startGoal(
   session: GoalWriter,
   runId: RunId,
   objective: string,
+  grant: GoalAutoApprovalScope | false = false,
 ): Effect.Effect<Goal, Error> {
   return Effect.gen(function* () {
     const trimmed = yield* requireNonEmpty(objective, 'objective');
@@ -95,13 +127,17 @@ export function startGoal(
         ),
       );
     }
-    return yield* commitGoal(session, {
-      goalId: `goal_${hexId12()}`,
-      runId,
-      objective: trimmed,
-      status: 'active',
-      startedAt: DateTime.formatIso(yield* DateTime.now),
-    });
+    return yield* commitGoal(
+      session,
+      {
+        goalId: `goal_${hexId12()}`,
+        runId,
+        objective: trimmed,
+        status: 'active',
+        startedAt: DateTime.formatIso(yield* DateTime.now),
+      },
+      grant,
+    );
   });
 }
 
@@ -115,6 +151,7 @@ export function retargetGoal(
   session: GoalWriter,
   runId: RunId,
   objective: string,
+  grant: GoalAutoApprovalScope | false = false,
 ): Effect.Effect<Goal, Error> {
   return Effect.gen(function* () {
     const trimmed = yield* requireNonEmpty(objective, 'objective');
@@ -122,11 +159,11 @@ export function retargetGoal(
     if (!existing) {
       return yield* Effect.fail(new Error('No goal found for this run.'));
     }
-    return yield* commitGoal(session, {
-      ...existing,
-      objective: trimmed,
-      status: 'active',
-    });
+    return yield* commitGoal(
+      session,
+      { ...existing, objective: trimmed, status: 'active' },
+      grant,
+    );
   });
 }
 
@@ -141,7 +178,7 @@ export function pauseGoal(
   const existing = goalOf(session, runId);
   if (!existing || existing.status === 'paused')
     return Effect.succeed(existing);
-  return commitGoal(session, { ...existing, status: 'paused' });
+  return commitGoal(session, { ...existing, status: 'paused' }, false);
 }
 
 /**
@@ -154,5 +191,5 @@ export function clearGoal(
   runId: RunId,
 ): Effect.Effect<void, Error> {
   if (!goalOf(session, runId)) return Effect.void;
-  return commitGoalState(session, runId, { active: false });
+  return commitGoalState(session, runId, { active: false }, false);
 }

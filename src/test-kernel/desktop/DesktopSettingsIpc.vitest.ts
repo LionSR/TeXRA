@@ -41,7 +41,6 @@ import {
   SettingsViewInboundMessageSchema,
   type DerivedSettingsSnapshot,
 } from '@texra/shared/settingsView/settingsViewMessages';
-import { localSessionBackend } from '@texra/controllers/session/sessionBackend';
 import { DocumentsStateKey } from '@texra/shared/settingsView/documentsSettings';
 
 import {
@@ -74,6 +73,9 @@ vi.mock('@model/computeModelOptions', async (importOriginal) => ({
   readModelAvailabilityInputs,
   // The mocked read resolves the rows this fixture wants; the pure finisher
   // hands them back.
+}));
+// The availability read is stubbed to rows already.
+vi.mock('@texra/model/modelOptions', () => ({
   modelOptionsFrom: (rows: readonly ModelOptionData[]) => rows,
 }));
 
@@ -147,8 +149,7 @@ async function createSettingsFixture(overrides: SettingsFixtureOverrides = {}) {
       },
       secrets: new FakeSecrets(),
       resourcesPath: '/resources',
-      session,
-      backend: localSessionBackend(session),
+      roots: session.roots,
     }).pipe(
       // Runs an owned command's program the way the window's router does.
       Effect.map((ipc) => ({

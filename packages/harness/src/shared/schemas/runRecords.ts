@@ -46,7 +46,9 @@ const RunEndErrorSchema = z
       partialText: true,
     })
       .partial()
-      .extend({ kind: z.enum(['abort', 'disk-full']) }),
+      // `result-lost`: an end that kept its outcome when its settlement
+      // (the result it delivers) was refused.
+      .extend({ kind: z.enum(['abort', 'disk-full', 'result-lost']) }),
     RetryErrorInfoSchema.partial().extend({
       kind: z.enum(['context-window', 'missing-api-key', 'unexpected']),
     }),
@@ -153,13 +155,9 @@ export const ResultMetaSchema = z.discriminatedUnion('producer', [
   }),
   DeliveredDiffsSchema.extend({
     producer: z.literal('cliWorkflow'),
-    copiedOutput: z.string().optional(),
-    copiedOutputs: z.array(z.string()).optional(),
   }),
   DeliveredDiffsSchema.extend({
     producer: z.literal('subagent'),
-    agentName: z.string(),
-    wallTimeMs: z.number().nonnegative(),
     output: StoredRunOutputSchema,
   }),
 ]);

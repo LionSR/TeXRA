@@ -4,6 +4,7 @@ import { css } from 'lit';
 // Shared styles
 import { visuallyHiddenStyles } from '@ui/styles';
 import { buttonStyles } from '@ui/styles/controlStyles';
+import { noticeStyles, readingColumnStyles } from '@ui/styles/surfaceStyles';
 
 import { heroStyles } from './components/NewTaskHero';
 
@@ -14,8 +15,11 @@ import { heroStyles } from './components/NewTaskHero';
  * placement; below it the tab behaves like the sidebar (the drawer).
  */
 export const progressAppStyles = css`
+  ${noticeStyles}
+
   .request-notice {
-    margin: var(--wa-space-s);
+    ${readingColumnStyles}
+    margin-block: var(--message-gap);
   }
 
   .request-notice-content {
@@ -57,12 +61,12 @@ export const progressAppStyles = css`
     border-bottom: var(--border-thin) solid var(--color-border);
   }
 
-  /* The desktop has no title bar: this row is the window's drag handle,
-     taller to sit level with the traffic lights. Its controls stay
-     clickable through the no-drag rule in the shared token sheet. */
+  /* Workspace controls live in the desktop's separate title bar. This
+     header belongs to the task and aligns with the file-tab strip. */
   :host([placement='desktop']) .shell-header {
-    min-height: 48px;
-    -webkit-app-region: drag;
+    --wa-height-header: 44px;
+    min-height: 44px;
+    border-bottom: 0;
   }
   /* The desktop rail lists each project's tasks, so the sessions button
      and drawer would be a second list there. */
@@ -72,8 +76,8 @@ export const progressAppStyles = css`
   }
   /* One readable column, as the wide editor tab has: the desktop window
      is wide and a launcher stretched edge to edge reads as packed. */
-  :host([placement='desktop']) .reading > * {
-    width: min(760px, 100%);
+  :host([placement='desktop']) .reading > .empty {
+    width: min(740px, 100%);
     margin: 0 auto;
   }
   /* The desktop's new task is one centred group: hero, attachments and
@@ -83,6 +87,18 @@ export const progressAppStyles = css`
   :host([placement='desktop']) .empty {
     /* \`safe\`: a group taller than the pane starts at the top, not clipped. */
     justify-content: safe center;
+    --hero-align: start;
+    --hero-text-align: start;
+    --hero-heading-size: 28px;
+    --hero-padding-inline: 0;
+    box-sizing: border-box;
+    padding: 32px 28px 80px;
+  }
+  :host([placement='desktop']) .hero-wrap {
+    padding-block: 0 24px;
+  }
+  :host([placement='desktop']) .header-main {
+    padding-inline: 24px;
   }
   :host([placement='desktop']) .launch-banners {
     margin-top: 0;
@@ -189,7 +205,7 @@ export const progressAppStyles = css`
     .shell.is-editor .reading {
       align-items: stretch;
     }
-    .shell.is-editor .reading > * {
+    .shell.is-editor .reading > .empty {
       width: min(760px, 100%);
       margin: 0 auto;
     }

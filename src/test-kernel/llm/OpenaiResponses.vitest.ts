@@ -8,6 +8,7 @@ import { Cause, Deferred, Effect, Fiber, Stream } from 'effect';
 import { TestClock } from 'effect/testing';
 import { afterEach, describe, expect, vi } from 'vitest';
 import { WebSocketServer, type WebSocket } from 'ws';
+import { z } from 'zod';
 import {
   type BackgroundEvent,
   completedTurn,
@@ -18,6 +19,8 @@ import {
   type TurnRequest,
 } from '@texra-ai/llm';
 import { createDeferred } from '@test/support/asyncTestUtils';
+import { toolDefinitionsFor } from '@tools/catalogEntries';
+import { ViewRangeSchema } from '@tools/formatting';
 import { ContinuationSchema } from '../../../packages/llm/src/message.js';
 import { openaiResponsesModel } from '../../../packages/llm/src/api/openaiResponses.js';
 import { openaiResponsesWebSocketModel } from '../../../packages/llm/src/api/openaiResponsesWebSocket.js';
@@ -892,6 +895,40 @@ describe('native OpenAI Responses protocol', () => {
         expect(yield* sent(false)).toEqual({
           role: 'user',
           content: '<system-update>\nSkills changed.\n</system-update>',
+        });
+      }),
+  );
+
+  it.effect(
+    'sends a tuple parameter as an array with an items schema, which OpenAI requires',
+    () =>
+      Effect.gen(function* () {
+        const fetch = vi
+          .fn<typeof globalThis.fetch>()
+          .mockImplementation(async () => response(events([MESSAGE])));
+        const model = modelWith(fetch);
+        const turn = yield* model.prepareTurn({
+          ...REQUEST,
+          tools: toolDefinitionsFor([
+            {
+              name: 'memory',
+              description: 'Read memory.',
+              zodSchema: z.object({ view_range: ViewRangeSchema.nullish() }),
+            },
+          ]),
+        });
+        assert(turn.mode === 'foreground');
+        yield* completedTurn(model.streamTurn(turn));
+        const [tool] = JSON.parse(String(fetch.mock.calls[0]?.[1]?.body)).tools;
+        expect(tool.parameters.properties.view_range.anyOf[0]).toStrictEqual({
+          type: 'array',
+          items: {
+            type: 'integer',
+            minimum: 1,
+            maximum: Number.MAX_SAFE_INTEGER,
+          },
+          minItems: 2,
+          maxItems: 2,
         });
       }),
   );

@@ -1,33 +1,22 @@
-import { StatusCodes } from 'http-status-codes';
+import { getReasonPhrase } from 'http-status-codes';
 import prettyMilliseconds from 'pretty-ms';
+import { Result } from 'effect';
+import { ModelError } from '@texra-ai/llm';
 
-import {
-  type ErrorContext,
-  type ErrorLogData,
-  type ProviderError,
-  type ProviderErrorClassification,
-  getExhaustionReason,
+import type {
+  ErrorContext,
+  ErrorLogData,
+  ProviderError,
 } from '@shared/schemas';
 import {
   extractErrorMessage,
   toErrorMessage,
 } from '@utils/errors/errorMessage';
 
+import { RouteUnavailable } from '../agentErrors';
 import { findInCauseChain, isDiskFullError } from '../errorPredicates';
 import { isUserAbort } from './errorPatterns';
-import {
-  hasContextWindowErrorMarker,
-  hasMissingApiKeyErrorMarker,
-  providerErrorMetadata,
-} from './errorMetadata';
-import {
-  detectRawErrorBody,
-  detectStatusCode,
-  detectStatusText,
-  firstBodyStringField,
-  safeGetReasonPhrase,
-} from './errorInspection';
-import { isRetryableStatusCode } from './sdkErrorKinds';
+import { providerErrorMetadata } from './errorMetadata';
 
 /**
  * Format a coarse "1d 20h" / "20h 22m" / "5m" duration from a second count.
@@ -47,6 +36,11 @@ export function formatResetDuration(totalSeconds: number): string {
   return prettyMilliseconds(flooredMinutes * 60_000, { unitCount: 2 });
 }
 
+/** An HTTP status's reason phrase; undefined for an unknown code (`getReasonPhrase` throws). */
+export function safeGetReasonPhrase(statusCode: number): string | undefined {
+  return Result.getOrUndefined(Result.try(() => getReasonPhrase(statusCode)));
+}
+
 /**
  * The user-facing text of a failure: `HTTP {code}[ {text}] – {message}`
  * under a status, the message alone without one. Pure display formatting.
@@ -63,131 +57,73 @@ export function httpErrorMessage(
     : message;
 }
 
-/**
- * Builds a fresh `ProviderError` without caching it on the thrown value.
- * The package judges its own failures (`classifyModelFailure` reads that
- * verdict); this formats any other error: its status, its message, and the
- * classification its markers carry.
- *
- * @internal Production code should call {@link normalizeProviderError}, the
- * single public entry that classifies once and caches the result on the
- * error. This stays module-exported for tests that assert raw formatting.
- */
-export function formatProviderHttpError(err: unknown): ProviderError {
-  const rawErrorBody = detectRawErrorBody(err);
-  const extractedMessage = extractErrorMessage(err);
-  const exceedsContextWindow = hasContextWindowErrorMarker(err);
-  let classification: ProviderErrorClassification | undefined;
-  if (hasMissingApiKeyErrorMarker(err)) {
-    classification = { kind: 'missing-api-key' };
-  } else if (exceedsContextWindow) {
-    classification = { kind: 'context-window' };
-  }
-
-  // Terminal failures (user abort, local disk-full): never retryable and never
-  // a credential affordance.
-  function terminalError(
-    message: string,
-    terminalClassification?: ProviderErrorClassification,
-  ): ProviderError {
+/** A failure formatted fresh: an abort, a full disk, a model failure, or any error's message. */
+function formatFailure(err: unknown): ProviderError {
+  if (isUserAbort(err))
+    return { message: 'Request aborted', userRetryable: false };
+  if (isDiskFullError(err)) {
     return {
-      message,
+      message: 'No space left on device. Free up disk space and try again.',
       userRetryable: false,
-      classification: terminalClassification,
-      rawErrorBody,
     };
   }
-
-  // An AbortController abort or an SDK user-abort error.
-  if (isUserAbort(err)) {
-    return terminalError('Request aborted');
-  }
-
-  // Disk full — local I/O error, no retry will help
-  if (isDiskFullError(err)) {
-    return terminalError(
-      'No space left on device. Free up disk space and try again.',
-    );
-  }
-
-  const statusCode = detectStatusCode(err);
-
-  // A context-window overflow marked at its throw site is deterministic: a
-  // retry resends the same oversized payload and fails again. Guarded on the
-  // status code so a retryable failure keeps its retry affordance.
-  if (
-    exceedsContextWindow &&
-    (statusCode === undefined || !isRetryableStatusCode(statusCode))
-  ) {
-    return terminalError(
-      `${extractedMessage ?? 'Conversation exceeds the model context window.'} ` +
-        'Retrying would resend the same oversized request. Start a new ' +
-        'session, or reduce attached files and tool output.',
-      classification,
-    );
-  }
-
-  const statusText = detectStatusText(err, statusCode);
-  const message = httpErrorMessage(
-    statusCode,
-    extractedMessage ??
-      firstBodyStringField(rawErrorBody, 'message') ??
-      (statusCode ? safeGetReasonPhrase(statusCode) : undefined) ??
-      'Provider request failed',
-    statusText,
+  const known = findInCauseChain(err, (cause) =>
+    cause instanceof ModelError || cause instanceof RouteUnavailable
+      ? cause
+      : undefined,
   );
+  if (known instanceof RouteUnavailable) {
+    return {
+      message: known.message,
+      userRetryable: false,
+      ...(known.reason === 'missing-api-key' && {
+        classification: { kind: 'missing-api-key' as const },
+      }),
+    };
+  }
+  if (known instanceof ModelError) {
+    const statusText =
+      known.status === undefined
+        ? undefined
+        : safeGetReasonPhrase(known.status);
+    return {
+      message: httpErrorMessage(
+        known.status,
+        known.message || statusText || 'Provider request failed',
+        statusText,
+      ),
+      userRetryable: known.retryable,
+      ...(known.status !== undefined && { statusCode: known.status }),
+      ...(statusText !== undefined && { statusText }),
+      ...(known.kind === 'context-overflow' && {
+        classification: { kind: 'context-window' as const },
+      }),
+      ...(known.requestId !== undefined && { requestId: known.requestId }),
+      ...(known.cause !== undefined && { rawErrorBody: known.cause }),
+    };
+  }
   return {
-    classification,
-    rawErrorBody,
-    message,
-    statusCode,
-    statusText,
-    // No status code likely means a network-level failure (DNS, proxy, TLS,
-    // etc.) — show the retry button for safety.
-    userRetryable: statusCode ? isRetryableStatusCode(statusCode) : true,
+    message: extractErrorMessage(err) ?? 'Provider request failed',
+    // No status: likely a network-level failure; offer the retry.
+    userRetryable: true,
   };
 }
 
 /**
- * Normalize an upstream or SDK error. If a structured `ProviderError` was
- * explicitly attached at a provider/flow boundary (possibly on a deeper
- * `cause`), recover it; otherwise format the error fresh. Retry code consumes
- * this helper so provider-boundary code owns classification while downstream
- * layers only read the shape.
+ * Normalize a failure for display and logs. A `ProviderError` a run recorded
+ * and carried back (attached on its error, possibly on a deeper `cause`) is
+ * recovered as recorded; anything else is formatted fresh, uncached.
  */
 export function normalizeProviderError(err: unknown): ProviderError {
   const cached = findInCauseChain(err, providerErrorMetadata.detect);
   if (cached) {
-    // Cache metadata is canonical and validated by providerErrorMetadata.
-    // Copy a value found on a deeper cause onto the wrapper so later reads can
-    // skip the cause-chain walk.
     providerErrorMetadata.attach(err, cached);
     return cached;
   }
-
-  // Compute fresh but DO NOT cache the result: a caller may format an error
-  // for logging before it is classified, and a deliberately status-stripped
-  // wrapper must not inherit a status cached by an incidental normalize on
-  // its cause. Only explicit `attachProviderError` at provider/flow
-  // boundaries seeds the cache the lookup above recovers.
-  return formatProviderHttpError(err);
+  return formatFailure(err);
 }
 
-/** Whether repeating the same provider request can recover without user action. */
-export function isProviderErrorAutoRetryable(err: unknown): boolean {
-  if (isUserAbort(err) || hasContextWindowErrorMarker(err)) {
-    return false;
-  }
-
-  const formatted = normalizeProviderError(err);
-  return (
-    formatted.userRetryable &&
-    getExhaustionReason(formatted) === undefined &&
-    formatted.statusCode !== StatusCodes.UNAUTHORIZED &&
-    formatted.statusCode !== StatusCodes.FORBIDDEN
-  );
-}
-
+/** The user-facing message of any failure. */
 export function getSdkErrorMessage(err: unknown): string {
   return normalizeProviderError(err).message;
 }

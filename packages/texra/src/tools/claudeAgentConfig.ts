@@ -1,5 +1,4 @@
 // Node imports
-import { hash } from 'node:crypto';
 import { access } from 'node:fs/promises';
 import * as path from 'node:path';
 
@@ -10,6 +9,7 @@ import { Effect } from 'effect';
 import { apiKeyEnvName, exposeApiKey, lookupApiKey } from '@texra-ai/llm';
 import { Secrets } from '@texra-ai/harness';
 import { withLogChannel } from '@logger/effectLog';
+import { sha256Hex } from '@utils/core/idHash';
 import { inheritedEnv } from '@utils/system/envFlags';
 import { executeCommand } from '@utils/system/execUtils';
 import { safeHomedir } from '@utils/system/platformPaths';
@@ -100,7 +100,7 @@ function claudeKeychainCredentialProbes(configDir: string): string[][] {
   const normalizedConfigDir = path.resolve(configDir);
   const usesDefaultConfigDir =
     normalizedConfigDir === path.resolve(resolveClaudeConfigDir(undefined));
-  const configDirHash = hash('sha256', normalizedConfigDir, 'hex');
+  const configDirHash = sha256Hex(normalizedConfigDir);
   const keychainProfiles = [normalizedConfigDir, configDirHash];
   const legacyProbes: string[][] = usesDefaultConfigDir
     ? [['find-generic-password', '-s', 'Claude Code-credentials']]
@@ -150,7 +150,7 @@ export const buildClaudeAgentEnv = Effect.fn('buildClaudeAgentEnv')(function* (
   const apiKeyVar = apiKeyEnvName('anthropic');
   // The other providers' keys stay out of the subprocess: what its tools
   // print comes back as a tool result. Its own Anthropic key is resolved below.
-  const env: NodeJS.ProcessEnv = inheritedEnv('anthropic');
+  const env: NodeJS.ProcessEnv = yield* inheritedEnv('anthropic');
   env.CLAUDE_AGENT_SDK_CLIENT_APP = 'texra';
   env.CLAUDE_CODE_ENABLE_TODO_TOOLS = '1';
   const oauthToken = env.CLAUDE_CODE_OAUTH_TOKEN?.trim();

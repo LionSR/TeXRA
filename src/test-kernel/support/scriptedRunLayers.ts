@@ -16,13 +16,19 @@ import {
   positionRow,
   type Message,
 } from '@agent/runtime/loop/rows';
-import type { RunCell } from '@agent/runtime/loop/runProgram';
 import { AgentRun, type AgentRunShape } from '@agent/runtime/run/AgentRun';
-import type { BoundModel } from '@agent/runtime/run/modelBinding';
 import { dispatchFactsFor, localCallsOf } from '@agent/runtime/run/tools';
 import { turnText } from '@agent/runtime/run/turnText';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { TraceEmitter } from '@agent/trace';
+import {
+  ModelAccess,
+  type BoundModel,
+} from '@agent/runtime/modelAccess/ModelAccess';
+import { routePolicies } from '@agent/runtime/modelAccess/failureInfo';
+import { registryOf } from '@agent/runtime/runRegistry';
+import { noCoWrite } from '@shared/session/sessionEvents';
+import type { RunCell } from '@shared/session/runHistory';
 import { PersonaSchema } from '@shared/schemas';
 import {
   MODEL_RETRY_MAX_ATTEMPTS_SETTING,
@@ -57,26 +63,28 @@ const unusedModel = new Proxy({} as Model, {
   },
 });
 
-function testBoundModel(overrides: Partial<BoundModel> = {}): BoundModel {
-  const supportsVision = overrides.supportsVision ?? false;
+/** A scenario's binding: any field of it, and whether its model reads images. */
+type TestBinding = Partial<BoundModel> & { readonly supportsVision?: boolean };
+
+function testBoundModel({
+  supportsVision = false,
+  ...overrides
+}: TestBinding = {}): BoundModel {
   return {
     modelId: 'test-model',
-    config: buildTestModelConfig({ capabilities: { supportsVision } }),
-    reasoning: { thinking: false, effort: null, mode: null },
+    config: buildTestModelConfig({
+      contextWindow: 200_000,
+      capabilities: { supportsVision },
+    }),
     backend: 'deepseek',
     model: unusedModel,
     origin: TEST_ORIGIN,
     route: { kind: 'api-key', provider: 'deepseek', usageRoute: 'api-key' },
-    usageRoute: 'api-key',
-    contextWindow: 200_000,
-    supportsVision,
-    supportsNativePdf: false,
-    supportsNativeAudio: false,
-    supportsForcedToolChoice: true,
-    wireRouteKey: 'test-route',
-    modelRetryRouteKey: 'test-route/test-model',
-    backgroundCapable: false,
+    forcedToolChoice: true,
     persistentConnection: false,
+    billing: {},
+    routes: routePolicies(['test-route'], 'test-model'),
+    delivery: Effect.succeed('foreground'),
     automaticRetries: MODEL_RETRY_MAX_ATTEMPTS_SETTING.defaultValue,
     textOnly: false,
     ...overrides,
@@ -145,6 +153,20 @@ export type ScriptedTurn =
 export function scriptedInvokerLayer(
   script: readonly ScriptedTurn[],
   seen: InvokeRequest[] = [],
+) {
+  return Layer.merge(unreachedModelAccess, scriptedInvoker(script, seen));
+}
+
+/** Model access a scripted run never reaches: its binding is the scenario's. */
+const unreachedModelAccess = Layer.succeed(ModelAccess, {
+  bind: () => Effect.die(new Error('A scripted run binds no model.')),
+  admit: () => Effect.die(new Error('A scripted run switches no model.')),
+  credentialSwitch: () => Effect.succeed(null),
+});
+
+function scriptedInvoker(
+  script: readonly ScriptedTurn[],
+  seen: InvokeRequest[],
 ) {
   return Layer.effect(
     ModelInvoker,
@@ -274,7 +296,12 @@ export function testAgentRun(
     stores: hostStores(),
     toolPolicy: {},
     opening: { inputs: {}, activated: [], attachedMemoryMisses: [] },
-    initialUserMessageForTranscript: 'Do the thing.',
+    entry: {
+      registration: null,
+      opening: noCoWrite,
+      entered: Effect.void,
+      initialUserMessage: 'Do the thing.',
+    },
     fileService: new RunFileService(runId, session.roots),
     ...testRunTools(hostStores()),
     finalToolName: null,
@@ -295,7 +322,7 @@ export interface ScriptedRunInit {
   readonly session: SessionHandle;
   readonly tools?: Record<string, ITool>;
   readonly logger?: TraceEmitter;
-  readonly bound?: Partial<BoundModel>;
+  readonly bound?: TestBinding;
   /** A child run: its parent owns continuation across its turns. */
   readonly parentRunId?: RunId | null;
   /** Headless: the run stops after one turn instead of parking for input. */
@@ -304,7 +331,7 @@ export interface ScriptedRunInit {
   readonly finalToolName?: string | null;
   readonly mediaFiles?: readonly string[];
   /** Absent means the launch had no transcript row to write. */
-  readonly initialUserMessageForTranscript?: string | undefined;
+  readonly initialUserMessage?: string | undefined;
   readonly onIdle?: () => void;
 }
 
@@ -321,7 +348,7 @@ export function agentRunTestLayer(init: ScriptedRunInit) {
         agent: 'chat',
         parent: init.parentRunId ?? null,
       });
-      init.session.runs.track(handle);
+      registryOf(init.session.runs).track(handle);
       yield* Effect.addFinalizer(() =>
         Effect.sync(() => untrackRun(init.session.runs, handle.runId)),
       );
@@ -341,10 +368,14 @@ export function agentRunTestLayer(init: ScriptedRunInit) {
           ...testRunTools(hostStores(), tools),
           finalToolName: init.finalToolName ?? null,
           callbacks: init.onIdle ? { onIdle: init.onIdle } : {},
-          ...('initialUserMessageForTranscript' in init
+          ...('initialUserMessage' in init
             ? {
-                initialUserMessageForTranscript:
-                  init.initialUserMessageForTranscript,
+                entry: {
+                  registration: null,
+                  opening: noCoWrite,
+                  entered: Effect.void,
+                  initialUserMessage: init.initialUserMessage,
+                },
               }
             : {}),
         },
@@ -353,9 +384,11 @@ export function agentRunTestLayer(init: ScriptedRunInit) {
   );
 }
 
-/** A run id whose start is already on the session's log. */
-export function startedRun(session: SessionHandle): RunId {
+/** A run id whose start is already on the session's log; with
+ *  `parentRunId`, a child of that run, whose start goes first. */
+export function startedRun(session: SessionHandle, parentRunId?: RunId): RunId {
   const runId = generateRunId();
-  publishTestRunStart(session, runId);
+  if (parentRunId !== undefined) publishTestRunStart(session, parentRunId);
+  publishTestRunStart(session, runId, { parent: parentRunId ?? null });
   return runId;
 }

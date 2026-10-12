@@ -15,13 +15,9 @@ import { dirname } from 'node:path';
 
 import { Cause, Effect, Exit, FileSystem, SynchronizedRef } from 'effect';
 
-import type { AgentRunShape } from '@agent/runtime/run/AgentRun';
+import { ChildRuns, type ToolRun } from '@texra-ai/harness/plugins';
 import { LatexMediaManager } from '@latex/LatexMediaManager';
 import { getTeXCountStats } from '@latex/texcount';
-import {
-  documentsOutputRow,
-  latestDocumentRounds,
-} from '@shared/plugins/documents';
 import {
   WORKFLOW_RAW_OUTPUT_EXT,
   workflowOutputPath,
@@ -31,7 +27,12 @@ import {
   fileLocationDisplayPath,
   ToolError,
   type FileLocation,
+  type ToolFact,
 } from '@shared/schemas';
+import {
+  documentsOutputFact,
+  latestDocumentRounds,
+} from '@texra/shared/plugins/documents';
 import { XmlOutputManager } from '@texra/agent/output/XmlOutputManager';
 import {
   createOutputState,
@@ -51,25 +52,29 @@ import { readSettingFrom } from '@utils/config/platformSettings';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { pathToLocationIn } from '@utils/files/fileLocation';
 import { renderPrompt } from '@utils/prompt';
-import type { DocumentTask, AgentConfig } from '@texra-ai/harness/schemas';
+import type { CallRequests, ToolEnv } from '@texra-ai/harness';
+import type { AgentConfig } from '@texra-ai/harness/schemas';
 
 /** What the documents read of the run their tool call serves. */
 type DocumentRun = Pick<
-  AgentRunShape,
-  | 'task'
-  | 'config'
-  | 'logger'
-  | 'fileService'
-  | 'session'
-  | 'runId'
-  | 'opening'
-  | 'model'
+  ToolRun,
+  'task' | 'config' | 'logger' | 'fileService' | 'runId' | 'opening' | 'model'
 >;
+
+/** The tool call the documents are opened for: its run, its roots, and
+ *  where it shows the person a file or notice. */
+interface DocumentCall {
+  readonly run: DocumentRun;
+  readonly env: Pick<ToolEnv, 'roots'>;
+  readonly requests: Pick<CallRequests, 'present'>;
+}
 
 /** One document task run's documents, opened for one tool call. */
 export interface Documents {
   readonly run: DocumentRun;
-  readonly task: DocumentTask;
+  /** Where the call shows the person what the step wrote. */
+  readonly requests: DocumentCall['requests'];
+  readonly task: NonNullable<DocumentRun['task']>;
   readonly deps: OutputDependencies;
   readonly state: OutputState;
   readonly xml: XmlOutputManager;
@@ -77,8 +82,9 @@ export interface Documents {
   /** Where each base file's pre-run content lives: every revision diffs
    *  against these, never the live file an in-place revision overwrote. */
   readonly baseFiles: FileLocation[];
-  /** Commit the revisions as the run's documents. */
-  readonly commit: Effect.Effect<void, Error>;
+  /** The revisions as the run's documents: the fact the call's result
+   *  states (`ToolResult.facts`), built from the state as the call left it. */
+  readonly fact: () => ToolFact;
 }
 
 /** The files a revision works on: the inputs, then the last outputs. */
@@ -111,21 +117,23 @@ export const rejectsOnCompileFailure = (
  * Open the documents of `run`, the document task the calling tool serves.
  * Fails for a run that is no document task's.
  */
-export const openDocuments = Effect.fn('documents.open')(function* (
-  run: DocumentRun,
-) {
-  const { task, config, logger, fileService, session, runId } = run;
+export const openDocuments = Effect.fn('documents.open')(function* ({
+  run,
+  env: { roots },
+  requests,
+}: DocumentCall) {
+  const { task, config, logger, fileService, runId } = run;
   if (task === null)
     return yield* Effect.fail(
       new ToolError(
         `Run ${runId} is not a document task: its agent '${config.agent}' has no task.`,
       ),
     );
-  const { roots } = session;
-  const aggregate = aggregateId('run', runId);
-  const rows = yield* session.log.rows(aggregate, ['plugin.fact']);
+  const rows = yield* (yield* ChildRuns).rows(runId, ['plugin.fact']);
   const state = createOutputState(
-    roundsFromPersisted(latestDocumentRounds(rows, aggregate) ?? []),
+    roundsFromPersisted(
+      latestDocumentRounds(rows, aggregateId('run', runId)) ?? [],
+    ),
   );
   const sources: FileLocation[] = (
     config.outputFiles.length > 0 ? config.outputFiles : config.inputFiles
@@ -156,6 +164,7 @@ export const openDocuments = Effect.fn('documents.open')(function* (
     );
   return {
     run,
+    requests,
     task,
     deps,
     state,
@@ -169,12 +178,7 @@ export const openDocuments = Effect.fn('documents.open')(function* (
       roots,
     ),
     baseFiles,
-    // Suspended: the row is built from the state as the call left it.
-    commit: Effect.suspend(() =>
-      session.log.transact([
-        documentsOutputRow(runId, roundsToPersisted(state)),
-      ]),
-    ).pipe(Effect.asVoid),
+    fact: () => documentsOutputFact(roundsToPersisted(state)),
   } satisfies Documents;
 });
 
@@ -267,7 +271,7 @@ const revisionMedia = Effect.fn('documents.revisionMedia')(function* (
   const configured = run.config.mediaFiles.map(
     (file) => deps.fileService.createLocation(file).absolutePath,
   );
-  if (!bound.supportsVision) return configured;
+  if (!bound.config.capabilities.supportsVision) return configured;
   const media = new LatexMediaManager(
     deps.logger,
     deps.roots,

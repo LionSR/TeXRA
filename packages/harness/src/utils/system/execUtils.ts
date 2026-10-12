@@ -40,6 +40,7 @@ function normalizeOutput(text: string | null | undefined): string {
  * project context an agent orients by.
  */
 function commandEnv(
+  inherited: Record<string, string>,
   workspacePath: string,
   authorEnv: Record<string, string | undefined> | undefined,
   envOverrides?: Record<string, string>,
@@ -49,7 +50,7 @@ function commandEnv(
   // leave both spellings on the environment handed to the shell, and the one
   // the shell resolves against is then undefined.
   const env = withExtendedPath({
-    ...inheritedEnv(),
+    ...inherited,
     ...authorEnv,
     ...envOverrides,
   });
@@ -434,7 +435,12 @@ export const executeCommand = Effect.fn('executeCommand')(function* (
     yield* logError(message);
     return resultFromProcessOutput('', message, 127);
   }
-  const env = commandEnv(cwd, authorEnv.success, options.env);
+  const env = commandEnv(
+    yield* inheritedEnv(),
+    cwd,
+    authorEnv.success,
+    options.env,
+  );
   if (!options.quiet) {
     yield* Effect.logDebug(`Running command: ${displayCommand(command)}`).pipe(
       withLogChannel(channel),

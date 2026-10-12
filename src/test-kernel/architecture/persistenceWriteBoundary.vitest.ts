@@ -78,9 +78,32 @@ const CURRENT_VALUES_MODULE =
  *  invariant 1). */
 const PUBLISHER_MODULE = 'packages/harness/src/agent/runtime/SessionEvents.ts';
 
+/** The session store owns the publisher: the one module that takes its tag,
+ *  so its transactions are reached through the session's log alone, never
+ *  around it (a run's rows included). The layer that builds it imports the
+ *  tag to provide it. */
+const PUBLISHER_OWNERS = [
+  'packages/harness/src/controllers/session/sessionStore.ts',
+  PUBLISHER_MODULE,
+];
+/** A value import of the publisher's tag; a type import or the shape is
+ *  not one. */
+const PUBLISHER_TAG_IMPORT =
+  /import\s*\{(?:[^}]*,)?\s*SessionEvents\s*[,}][^;]*from\s*['"]@shared\/session\/sessionEvents['"]/;
+
+/** The one widening of a job's append to the rows a run's state folds: held
+ *  by the run's cell and the session's requests, beside its definition. Test
+ *  fixtures that seed a history are outside the production scan. */
+const RUN_STATE_APPEND = /\brunStateAppend\b/;
+const RUN_STATE_WRITERS = [
+  'packages/harness/src/shared/session/runHistory.ts',
+  'packages/harness/src/agent/runtime/RunHistory.ts',
+  'packages/harness/src/agent/runtime/requestPolicy.ts',
+];
+
 /** A call of the database's append, or of the run removal whose transaction
  *  appends the tombstone; never a declaration or a `Pick` key. */
-const APPEND_CALL = /(?:\.appendAll|\.prepareRunRemoval|\bappendPrepared)\s*\(/;
+const APPEND_CALL = /(?:\.appendAll|\.prepareRunRemoval|\bappendRows)\s*\(/;
 
 /**
  * The files that still append without the publisher, each with the reason it
@@ -89,7 +112,7 @@ const APPEND_CALL = /(?:\.appendAll|\.prepareRunRemoval|\bappendPrepared)\s*\(/;
  */
 const APPENDS_OUTSIDE_PUBLISHER: Readonly<Record<string, string>> = {
   [DATABASE_MODULE]:
-    'defines appendAll and appendPrepared; the run-removal transaction it prepares runs as a publisher job',
+    'defines appendAll and appendRows; the run-removal transaction it prepares runs as a publisher job',
 };
 
 /** A numbered SQL parameter (`?1`, `?NNN`). A terminal private-mode escape
@@ -188,6 +211,46 @@ describe('persistence write boundary', () => {
         ),
     );
     expect(stale).toEqual([]);
+  });
+
+  it('takes the publisher in the session store and nowhere else', () => {
+    const found = offenders(PUBLISHER_TAG_IMPORT, PUBLISHER_OWNERS);
+
+    expect(
+      found,
+      found.length === 0
+        ? undefined
+        : "Write through the session log (`SessionLog.transact`, `SessionLog.publish`); the publisher is the session store's own.",
+    ).toEqual([]);
+    // Not vacuous: each owner takes the tag.
+    expect(
+      PUBLISHER_OWNERS.filter(
+        (file) =>
+          !PUBLISHER_TAG_IMPORT.test(
+            stripComments(readFileSync(resolve(REPO_ROOT, file), 'utf8')),
+          ),
+      ),
+    ).toEqual([]);
+  });
+
+  it('writes rows a run folds through its cell and the requests only', () => {
+    const found = offenders(RUN_STATE_APPEND, RUN_STATE_WRITERS);
+
+    expect(
+      found,
+      found.length === 0
+        ? undefined
+        : "Commit a run's rows through its cell (`RunCell.append`) or the session's requests; `runStateAppend` is theirs.",
+    ).toEqual([]);
+    // Not vacuous: each writer holds it.
+    expect(
+      RUN_STATE_WRITERS.filter(
+        (file) =>
+          !RUN_STATE_APPEND.test(
+            stripComments(readFileSync(resolve(REPO_ROOT, file), 'utf8')),
+          ),
+      ),
+    ).toEqual([]);
   });
 
   it('binds SQL with anonymous parameters only', () => {

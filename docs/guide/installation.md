@@ -297,7 +297,7 @@ TeXRA talks to model providers directly with an API key you supply. You need a k
 
 ### In the VS Code extension
 
-The shortest path: open the TeXRA Settings, go to the **Models** page, and select the provider you want. Paste the key and it is saved in `~/.texra/secrets/`, a folder only your user can read, shared by every TeXRA app. You can also run **TeXRA: Set API Key** from the Command Palette, or put the keys in a `.env` file in your project; the extension reads it on startup.
+The shortest path: open the TeXRA Settings, go to the **Models** page, and select the provider you want. Paste the key and it is saved in `~/.texra/secrets/`, a folder only your user can read, shared by every TeXRA app. You can also run **TeXRA: Set API Key** from the Command Palette, or put the keys in a `.env` file in your project: each task of that project reads it as it starts (so an edited key applies to the next task), and its keys win over the ones in your environment. A `DO_NOT_TRACK=1` or `TEXRA_NO_TELEMETRY=1` there turns usage logging off for that project's tasks.
 
 <ApiKeysHero />
 
@@ -312,12 +312,7 @@ export ANTHROPIC_API_KEY=sk-…
 texra doctor
 ```
 
-The CLI **doesn't read `.env` files automatically** (the extension does). If you already keep keys in a project `.env`, load them into the shell first, for example in bash or zsh:
-
-```bash
-set -a; . .env; set +a
-texra doctor
-```
+A project's `.env` file works here too: every task of the project reads it, in every TeXRA app. A key you set only in this terminal (`OPENAI_API_KEY=… texra chat`) does not reach a task that runs in the TeXRA service, which keeps running when the terminal closes; the CLI says so when that happens. Save the key with `texra setup`, put it in the project's `.env`, or run with `TEXRA_NO_SERVICE=1` to keep the task in this terminal.
 
 If you prefer not to manage keys, connect a provider subscription instead. A ChatGPT subscription unlocks the Codex models, and a Grok (xAI SuperGrok) subscription unlocks the xAI models:
 

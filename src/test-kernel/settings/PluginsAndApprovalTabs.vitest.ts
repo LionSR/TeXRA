@@ -45,8 +45,8 @@ describe('settings approval and plugins pages', () => {
     >(`wa-switch#${id}`);
 
     expect(toggle?.checked).toBe(false);
-    // The <label for> is what names the control; a host aria-label never
-    // reached the role-bearing input inside wa-switch's shadow root.
+    // The external label activates the host; the label slot also names the
+    // role-bearing input inside wa-switch's shadow root.
     expect(
       element.shadowRoot?.querySelector(`label[for="${id}"]`)?.textContent,
     ).toBe('Restrict tool paths to the working directory');
@@ -104,28 +104,36 @@ describe('settings approval and plugins pages', () => {
     const element = await mountComponent<PluginsTab>('plugins-tab', {
       page: { rows, mcpConfigPath: '/home/u/.texra/mcp.json', mcpWarnings: [] },
     });
-    const cards = [
-      ...(element.shadowRoot?.querySelectorAll('plugin-card') ?? []),
-    ];
-    await Promise.all(cards.map((card) => card.updateComplete));
-    const switchOf = (index: number) =>
-      cards[index].shadowRoot?.querySelector<
-        HTMLElement & { checked?: boolean }
-      >('wa-switch') ?? null;
-
-    expect(cards).toHaveLength(3);
-    expect(switchOf(2)).toBeNull();
-    expect(cards[2].shadowRoot?.textContent).toContain('Used by: assistant');
-
-    flip(switchOf(0)!);
+    const catalog = element.shadowRoot!.querySelector('settings-catalog')!;
+    await catalog.updateComplete;
+    const select = async (index: number) => {
+      const choices = catalog.shadowRoot!.querySelectorAll<HTMLElement>(
+        '.catalog-row-select',
+      );
+      choices[index].click();
+      await element.updateComplete;
+      const card = element.shadowRoot!.querySelector('plugin-card')!;
+      await card.updateComplete;
+      return card;
+    };
+    const switchOf = (card: Awaited<ReturnType<typeof select>>) =>
+      card.shadowRoot?.querySelector<HTMLElement & { checked?: boolean }>(
+        'wa-switch',
+      ) ?? null;
+    const first = await select(0);
+    flip(switchOf(first)!);
     expect(mocks.postMessage).toHaveBeenLastCalledWith(
       SETTINGS_VIEW_COMMANDS.TOGGLE_TOOL,
       { toolId: 'zotero', enabled: true },
     );
-    flip(switchOf(1)!);
+    flip(switchOf(await select(1))!);
     expect(mocks.postMessage).toHaveBeenLastCalledWith(
       SETTINGS_VIEW_COMMANDS.PLUGIN_ACTION,
       { action: 'enable', name: 'lean-mathlib' },
     );
+    const mcp = await select(2);
+    expect(switchOf(mcp)).toBeNull();
+    expect(mcp.shadowRoot?.textContent).toContain('Used by: assistant');
+    expect(element.shadowRoot?.querySelectorAll('plugin-card')).toHaveLength(1);
   });
 });

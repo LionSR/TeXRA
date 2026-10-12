@@ -20,9 +20,8 @@ import type { AgentSource } from '@shared/schemas';
 import { entryExists } from '@utils/files/fsEntryExists';
 
 import {
-  BUILTIN_WORKFLOW_AGENTS_DIR,
-  BUILTIN_TOOL_USE_AGENTS_DIR,
-  enabledToolUseRoots,
+  BUNDLED_AGENTS_DIRECTORY,
+  enabledBuiltInRoots,
 } from './BundledAgentDirectories';
 
 type AgentDirectoryDocsId = 'custom-agents';
@@ -55,11 +54,7 @@ export class AgentDirectoryService {
   }
 
   builtIn(): Effect.Effect<string, AgentDirectoriesFailed> {
-    return this.packagedDir(BUILTIN_WORKFLOW_AGENTS_DIR);
-  }
-
-  builtInToolUse(): Effect.Effect<string, AgentDirectoriesFailed> {
-    return this.packagedDir(BUILTIN_TOOL_USE_AGENTS_DIR);
+    return this.packagedDir(BUNDLED_AGENTS_DIRECTORY);
   }
 
   custom(): Effect.Effect<
@@ -249,8 +244,8 @@ export class AgentDirectoryService {
  * The one `AgentSource` to local-directories mapping, read off the port so
  * every holder of an `AgentDirectoriesPort` answers a source the same way,
  * the catalog's scan included: the custom directory, or the bundled
- * directories (the workflow and tool-use ones, then each tool plugin's that
- * is on; an off plugin contributes nothing). A plugin agent has none: it
+ * directory, then each tool plugin's that is on (an off plugin contributes
+ * nothing). A plugin agent has none: it
  * lives in its own plugin's.
  */
 export function agentSourceRoots(
@@ -265,16 +260,7 @@ export function agentSourceRoots(
     case 'custom':
       return Effect.map(directories.custom(), (dir) => [dir]);
     case 'builtIn':
-      return Effect.map(
-        Effect.all(
-          [
-            directories.builtIn(),
-            Effect.flatMap(directories.builtInToolUse(), enabledToolUseRoots),
-          ],
-          { concurrency: 'unbounded' },
-        ),
-        ([workflow, toolUse]) => [workflow, ...toolUse],
-      );
+      return Effect.flatMap(directories.builtIn(), enabledBuiltInRoots);
     case 'plugin':
     case 'inline':
       return Effect.succeed([]);

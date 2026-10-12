@@ -3,8 +3,8 @@ import { dirname, join } from 'node:path';
 import { app } from 'electron';
 import { Data, Effect, FileSystem } from 'effect';
 
-import { BUNDLED_AGENT_DIRECTORY_NAMES } from '@agent/index';
-import { DEFAULT_NODE_STORAGE_ROOT } from '@platform/defaults/nodeStorage';
+import { BUNDLED_AGENTS_DIRECTORY } from '@agent/index';
+import { defaultNodeStorageRoot } from '@platform/defaults/nodeStorage';
 import { absentReason } from '@utils/files/fsEntryExists';
 import { envVar } from '@utils/system/envFlags';
 
@@ -22,7 +22,7 @@ interface ResourcesPathOptions {
  * Root directory for desktop-persisted memory/history/executions data.
  *
  * Production desktop shares the CLI's `~/.texra` root ({@link
- * DEFAULT_NODE_STORAGE_ROOT}) so a workspace worked on from both hosts shows
+ * defaultNodeStorageRoot}) so a workspace worked on from both hosts shows
  * one memory/history view (#7987). The e2e/dev harness isolates Electron's
  * own `userData` profile via `TEXRA_DESKTOP_E2E_USER_DATA_PATH` (see
  * `packages/desktop/src/main/index.ts`) so relaunches share one throwaway
@@ -34,7 +34,7 @@ interface ResourcesPathOptions {
 export const resolveDesktopDataRoot = Effect.fn('resolveDesktopDataRoot')(
   function* (userDataPath: string) {
     const e2eUserDataPath = yield* envVar('TEXRA_DESKTOP_E2E_USER_DATA_PATH');
-    return e2eUserDataPath?.trim() ? userDataPath : DEFAULT_NODE_STORAGE_ROOT;
+    return e2eUserDataPath?.trim() ? userDataPath : defaultNodeStorageRoot();
   },
 );
 
@@ -88,10 +88,7 @@ export const resolveResourcesPath = Effect.fn('resolveResourcesPath')(
 const hasRequiredResourceDirectories = Effect.fn(
   'hasRequiredResourceDirectories',
 )(function* (fs: FileSystem.FileSystem, candidate: string) {
-  for (const path of [
-    candidate,
-    ...BUNDLED_AGENT_DIRECTORY_NAMES.map((name) => join(candidate, name)),
-  ]) {
+  for (const path of [candidate, join(candidate, BUNDLED_AGENTS_DIRECTORY)]) {
     if (!(yield* isExistingDirectory(fs, path))) return false;
   }
   return true;

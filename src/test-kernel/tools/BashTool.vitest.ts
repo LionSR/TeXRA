@@ -5,7 +5,7 @@ import { strict as assert } from 'node:assert';
 import { it } from '@effect/vitest';
 
 // Third-party imports
-import { Deferred, Effect, Exit, Fiber, Schedule, Scope } from 'effect';
+import { Deferred, Effect, Exit, Fiber, Schedule } from 'effect';
 import { beforeEach, afterEach, describe, vi } from 'vitest';
 
 // Local imports
@@ -27,6 +27,7 @@ import {
   createProcessSession,
   publishTestRunStart,
   publishTestRows,
+  queuedFollowUps,
 } from '@test/support/sessionTestUtils';
 import { installPlatform, setupPlatform } from '@test/support/setupPlatform';
 import { BashTool } from '@tools/bash';
@@ -97,7 +98,8 @@ function detachBackgroundRun(
   recorded: ReturnType<typeof recordSessionEvents>,
   parentRunId: RunId,
 ): void {
-  testDefaultSession().followUps.closeInput(parentRunId);
+  // A teardown that runs in `finally`, so the close runs on its own.
+  Effect.runFork(testDefaultSession().followUps.closeInput(parentRunId));
 }
 
 /**
@@ -512,39 +514,30 @@ describe('BashTool', () => {
           { success: false, exitCode: 1 },
         );
 
+        // The result commits on the parent's input with the child's end; the
+        // parent's wake follows the commit.
         const followUpDelivered = Deferred.makeUnsafe<void>();
-        const submitFollowUpSpy = vi
-          .spyOn(toolUseFollowUp, 'submitFollowUp')
-          .mockImplementation(() => {
+        vi.spyOn(toolUseFollowUp, 'startFollowUpWake').mockImplementation(
+          () => {
             Deferred.doneUnsafe(followUpDelivered, Effect.void);
-            return Effect.succeed({ status: 'sent' });
-          });
+            return Effect.succeed(true);
+          },
+        );
 
         const parentRunId = startedParentRun();
-        // The parent's own loop reads its input.
-        const parentLoop = yield* Scope.make();
-        yield* testDefaultSession()
-          .followUps.open(parentRunId)
-          .pipe(Scope.provide(parentLoop));
+        const launchResult = yield* launchBackgroundBash(parentRunId);
+        assert.equal(launchResult.status, 'executed');
 
-        try {
-          const launchResult = yield* launchBackgroundBash(parentRunId);
-          assert.equal(launchResult.status, 'executed');
-
-          // The background run delivers its result asynchronously as a follow-up
-          // once the (mocked) process settles.
-          yield* Deferred.await(followUpDelivered);
-          assert.ok(
-            submitFollowUpSpy.mock.calls.length > 0,
-            'Background bash should deliver a follow-up once the run completes',
-          );
-        } finally {
-          yield* Scope.close(parentLoop, Exit.void);
-        }
-
-        const followUpArg = submitFollowUpSpy.mock.calls[0]?.[1];
-        const deliveredText =
-          typeof followUpArg === 'string' ? followUpArg : followUpArg?.text;
+        // The background run delivers its result asynchronously as a follow-up
+        // once the (mocked) process settles.
+        yield* Deferred.await(followUpDelivered);
+        const delivered = yield* queuedFollowUps(
+          testDefaultSession(),
+          parentRunId,
+        );
+        const deliveredText = delivered.find((followUp) =>
+          followUp.followUpId.endsWith(':delivery'),
+        )?.text;
         assert.ok(
           typeof deliveredText === 'string' &&
             deliveredText.includes(headMarker),
@@ -660,7 +653,7 @@ describe('BashTool', () => {
           .spyOn(followUps, 'resumeOnce')
           .mockImplementation((resumed, resume) => {
             Deferred.doneUnsafe(wakeReached, Effect.void);
-            handleAtResumeTime ??= testDefaultSession().runs.getHandle(runId);
+            handleAtResumeTime ??= testDefaultSession().runs.get(runId)?.handle;
             return resumeOnce(resumed, resume);
           });
         yield* Effect.promise(() => parkRunWaiting(parentRunId));
@@ -683,7 +676,7 @@ describe('BashTool', () => {
           // (finalized), never still RUNNING, so a resumed parent that waits on
           // it right now resolves immediately instead of racing its own wake.
           assert.equal(handleAtResumeTime, undefined);
-          assert.equal(testDefaultSession().runs.getHandle(runId), undefined);
+          assert.equal(testDefaultSession().runs.get(runId)?.handle, undefined);
         } finally {
           detachBackgroundRun(recorded, parentRunId);
         }
@@ -700,69 +693,75 @@ describe('BashTool', () => {
       ),
   );
 
-  it.live(
-    'never ends a background run completed without its result manifest',
-    () =>
-      Effect.gen(function* () {
-        const resolveCommand = holdCommand();
-        yield* Effect.promise(() => installPlatform(BASH_PLATFORM_OPTIONS));
-        const parentRunId = startedParentRun();
-        const recorded = recordSessionEvents(testDefaultSession());
+  it.live('ends a background run whose result manifest is refused', () =>
+    Effect.gen(function* () {
+      const resolveCommand = holdCommand();
+      yield* Effect.promise(() => installPlatform(BASH_PLATFORM_OPTIONS));
+      const parentRunId = startedParentRun();
+      const recorded = recordSessionEvents(testDefaultSession());
 
-        const launchResult = yield* launchBackgroundBash(parentRunId);
-        const { runId } = launchedIds(launchResult);
-        assert.ok(runId, JSON.stringify(launchResult));
-        const session = testDefaultSession();
-        // The manifest rides the batch that ends the run: refuse that batch.
-        const transact = session.log.transact.bind(session.log);
-        vi.spyOn(session.log, 'transact').mockImplementation(((
-          work: Parameters<typeof transact>[0],
-        ) =>
-          typeof work === 'function'
-            ? transact((tx) =>
-                work({
-                  ...tx,
-                  append: (rows) =>
-                    rows.some((row) => row.type === 'run.result')
-                      ? Effect.die(new Error('result metadata disk full'))
-                      : tx.append(rows),
-                }),
-              )
-            : transact(work)) as typeof transact);
-        const records = getRunRecords(session, runId);
+      const launchResult = yield* launchBackgroundBash(parentRunId);
+      const { runId } = launchedIds(launchResult);
+      assert.ok(runId, JSON.stringify(launchResult));
+      const session = testDefaultSession();
+      // The manifest rides the batch that ends the run: refuse that batch.
+      const transact = session.log.transact.bind(session.log);
+      vi.spyOn(session.log, 'transact').mockImplementation(((
+        work: Parameters<typeof transact>[0],
+      ) =>
+        typeof work === 'function'
+          ? transact((tx) =>
+              work({
+                ...tx,
+                append: (rows) =>
+                  rows.some((row) => row.type === 'run.result')
+                    ? Effect.die(new Error('result metadata disk full'))
+                    : tx.append(rows),
+              }),
+            )
+          : transact(work)) as typeof transact);
+      const records = getRunRecords(session, runId);
 
-        resolveCommand(DONE_EXEC_RESULT);
+      resolveCommand(DONE_EXEC_RESULT);
 
-        // The manifest is what `/result` reads, and it rides the run's end:
-        // with that batch refused, the run has neither, never an end
-        // without its result.
-        yield* Effect.promise(() =>
-          vi.waitFor(() =>
-            assert.equal(session.runs.getHandle(runId), undefined),
-          ),
-        );
-        assert.equal(yield* records.readRunEnd(), null);
-        assert.equal(yield* records.readResultMeta(), null);
-        // Nor does the parent read a result the child never ended with.
-        assert.deepEqual(
-          (yield* session.followUps.read(parentRunId)).followUps.filter(
+      // The manifest is what `/result` reads, and it rides the run's end:
+      // with that batch refused, the run still ends as it did, its own end
+      // recording the result it lost, which its card shows.
+      yield* Effect.promise(() =>
+        vi.waitFor(() =>
+          assert.equal(session.runs.get(runId)?.handle, undefined),
+        ),
+      );
+      const end = yield* records.readRunEnd();
+      assert.equal(end?.outcome, 'completed');
+      assert.match(end?.error?.message ?? '', /^Result lost: /);
+      assert.equal(yield* records.readResultMeta(), null);
+      const card = (yield* session.view.read([runId])).runs.get(runId);
+      assert.match(card?.statusDetail ?? '', /^Result lost: /);
+      // The parent hears it lost, never the result the settlement carried.
+      assert.deepEqual(
+        (yield* session.followUps.read(parentRunId)).followUps
+          .filter(
             ({ content: { from } }) =>
               from.kind === 'run' && from.runId === runId,
+          )
+          .map(({ content }) =>
+            /^The result of run .* was lost: /.test(content.text),
           ),
-          [],
-        );
-        detachBackgroundRun(recorded, parentRunId);
-      }).pipe(
-        Effect.provide(
-          nativeToolTestLayer({
-            run: {
-              session: testDefaultSession(),
-              runId: 'bash-tool' as RunId,
-              toolPolicy: {},
-            },
-          }),
-        ),
+        [true],
+      );
+      detachBackgroundRun(recorded, parentRunId);
+    }).pipe(
+      Effect.provide(
+        nativeToolTestLayer({
+          run: {
+            session: testDefaultSession(),
+            runId: 'bash-tool' as RunId,
+            toolPolicy: {},
+          },
+        }),
       ),
+    ),
   );
 
   it.live(
@@ -799,7 +798,7 @@ describe('BashTool', () => {
             );
           }),
         );
-        assert.equal(testDefaultSession().runs.getHandle(runId), undefined);
+        assert.equal(testDefaultSession().runs.get(runId)?.handle, undefined);
 
         detachBackgroundRun(recorded, parentRunId);
       }).pipe(

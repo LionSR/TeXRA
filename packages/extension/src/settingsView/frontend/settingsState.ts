@@ -124,10 +124,11 @@ export function applySettingsSnapshot(
 // ---------------------------------------------------------------------------
 /**
  * Opening panel when the host asks for the settings view without naming a tab:
- * Models, the first page, because connecting a model is the first job.
+ * General, where application preferences live. Model setup links target
+ * Models explicitly.
  */
 export const selectedPanel = trackedSignal<SettingsTabPanelName>(
-  () => 'models',
+  () => 'general',
 );
 
 /**

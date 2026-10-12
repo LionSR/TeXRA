@@ -77,13 +77,13 @@ export {
  * command surfaces so no stale IPC target remains.
  */
 export const SETTINGS_TAB_ORDER = [
-  'models',
-  'agents',
-  'plugins',
-  'latex',
-  'memory',
   'general',
   'shortcuts',
+  'models',
+  'agents',
+  'memory',
+  'plugins',
+  'latex',
 ] as const;
 
 /**
@@ -105,7 +105,7 @@ export const SETTINGS_PAGE_SECTIONS = {
   plugins: [],
   latex: ['dependencies', 'compile', 'formatting', 'vscode'],
   memory: [],
-  general: ['approval', 'privacy', 'git'],
+  general: ['appearance', 'approval', 'privacy', 'git'],
   shortcuts: [],
 } as const satisfies Record<SettingsTabPanelName, readonly string[]>;
 

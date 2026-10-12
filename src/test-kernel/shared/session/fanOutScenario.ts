@@ -20,12 +20,12 @@ import {
   type RunId,
   type RunParent,
 } from '@shared/schemas';
-import { DOCUMENTS_OUTPUT_ARM } from '@shared/plugins/documents';
 import { fold } from '@shared/session/sessionFold';
 import {
   emptySessionView,
   type SessionView,
 } from '@shared/session/sessionView';
+import { DOCUMENTS_OUTPUT_ARM } from '@texra/shared/plugins/documents';
 
 /** A process identity, never a lease token (contract C5). */
 export const OWNER = '["test-host",4242,"2026-09-04T00:00:00.000Z"]';
@@ -191,7 +191,7 @@ export function buildScenario({ proposal = false } = {}) {
   log.emit(ROOT, T.root, {
     type: 'run.start',
     identity: ROOT_IDENTITY,
-    worktree: { workingDirectory: '/paper', branch: 'main' },
+    worktree: { workingDirectory: '/paper' },
     parent: null,
     provenance: null,
     userFollowUpSupport: 'unsupported',
@@ -305,7 +305,6 @@ export function buildScenario({ proposal = false } = {}) {
       rounds: [
         {
           round: 1,
-          rawOutput: null,
           outputs: [],
           compileFailures: [],
           missingOutputs: [],

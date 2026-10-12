@@ -11,7 +11,7 @@ import {
 import { Effect } from 'effect';
 import { codexBackendModelId, routeConfig } from '@texra-ai/llm';
 import { readProspectiveUsageRoute } from '@model/computeModelOptions';
-import { readRouteFacts } from '@model/modelRoute';
+import { readModelSettings, routeFactsFor } from '@model/modelSettings';
 import { withProcessServices } from '@platform/processRuntime';
 import { CHATGPT_CODEX_CONTEXT_WINDOW_SETTING } from '@shared/schemas';
 
@@ -26,7 +26,8 @@ import type { CodexSession } from '../../../packages/llm/src/oauth/codex/codexSe
 
 /** The config a model runs with on the ChatGPT subscription. */
 const chatgptConfig = (config: ModelConfig) =>
-  readRouteFacts(hostStores()).pipe(
+  readModelSettings(hostStores()).pipe(
+    Effect.map((settings) => routeFactsFor(settings, [])),
     Effect.map((facts) =>
       routeConfig(config, { kind: 'chatgpt-subscription' }, facts),
     ),

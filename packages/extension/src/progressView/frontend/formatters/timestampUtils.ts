@@ -25,12 +25,20 @@ export function getTimeFormatter(): Intl.DateTimeFormat {
 }
 
 /** Format a timestamp for display. */
-export function formatDisplayTimestamp(date: Date): {
+export function formatDisplayTimestamp(
+  date: Date,
+  precision: 'minute' | 'second' = 'second',
+): {
   timeDisplay: string;
   tooltipTimestamp: string;
 } {
   return {
-    timeDisplay: getTimeFormatter().format(date),
+    timeDisplay:
+      precision === 'minute'
+        ? cachedDateTimeFormat({ hour: 'numeric', minute: '2-digit' }).format(
+            date,
+          )
+        : getTimeFormatter().format(date),
     tooltipTimestamp: cachedDateTimeFormat(DATETIME_FORMAT_OPTIONS).format(
       date,
     ),

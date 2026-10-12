@@ -10,10 +10,9 @@
 import { Cause, Effect } from 'effect';
 import { z } from 'zod';
 
-import { getRunRecords } from '@agent/storage';
-import { requireToolRun } from '@agent/runtime/RunCall';
+import { defineTool } from '@texra-ai/harness';
+import { ChildRuns, requireRun } from '@texra-ai/harness/plugins';
 import { postProcessResponse } from '@latex/texraResponseTextProcessing';
-import { documentsSummary } from '@shared/plugins/documents';
 import {
   fileLocationDisplayPath,
   OUTPUT_END_TAG,
@@ -21,6 +20,7 @@ import {
   ToolError,
   type FileLocation,
 } from '@shared/schemas';
+import { documentsSummary } from '@texra/shared/plugins/documents';
 import {
   compileFailuresOf,
   runCompileCheck,
@@ -43,7 +43,6 @@ import {
   revisionPrompt,
   type Documents,
 } from '@texra/tools/documents/documentState';
-import { defineTool } from '@tools/core/define';
 import { executed } from '@tools/core/result';
 import { readSettingFrom } from '@utils/config/platformSettings';
 
@@ -57,8 +56,7 @@ export const RevisionSchema = z
 export const documentsOfCall = Effect.fn('documents.ofCall')(function* (
   tool: string,
 ) {
-  const { run } = yield* requireToolRun(tool);
-  return yield* openDocuments(run);
+  return yield* openDocuments(yield* requireRun(tool));
 });
 
 /** A step whose failure costs that step, not the revision: reported at
@@ -76,7 +74,7 @@ const present = (docs: Documents, locations: readonly FileLocation[]) =>
   Effect.forEach(
     locations,
     (location) =>
-      docs.run.session.interactions.emit('requestOpenFile', {
+      docs.requests.present('requestOpenFile', {
         location,
         preserveFocus: true,
       }),
@@ -144,12 +142,11 @@ export const DocumentExtractTool = defineTool({
   }),
   execute: Effect.fn('document_extract')(function* ({ revision, run }) {
     const docs = yield* documentsOfCall('document_extract');
-    const { session } = docs.run;
-    const end = yield* getRunRecords(session, run).readRunEnd();
+    const end = yield* (yield* ChildRuns).records(run).end;
     // The host's cleanup of provider text (TeXRA's LaTeX replacements).
     const reply = yield* postProcessResponse(
       end?.output.response ?? '',
-      session.roots.config,
+      docs.deps.roots.config,
     );
     if (end?.outcome !== 'completed' || !reply.trim())
       return yield* Effect.fail(
@@ -176,13 +173,11 @@ export const DocumentExtractTool = defineTool({
       round.outputs.length > 0
         ? traceFileLineage(docs.state, docs.baseFiles, revision)
         : undefined;
-    const summary = yield* summarizeRound(
-      docs.state,
-      docs.deps,
-      location,
-      revision,
-      { mapping, isRewrite: docs.task.rewrite, baseFiles: docs.baseFiles },
-    );
+    const summary = yield* summarizeRound(docs.state, docs.deps, revision, {
+      mapping,
+      isRewrite: docs.task.rewrite,
+      baseFiles: docs.baseFiles,
+    });
     const { missing } = yield* checkExpectedOutputs(
       docs.state,
       docs.deps,
@@ -190,7 +185,7 @@ export const DocumentExtractTool = defineTool({
       revision,
     );
     if (missing.length > 0)
-      yield* session.interactions.emit('requestShowInstruction', {
+      yield* docs.requests.present('requestShowInstruction', {
         key: 'missingOutputsInfo',
         message: 'Missing output files detected',
       });
@@ -198,12 +193,11 @@ export const DocumentExtractTool = defineTool({
     if (!reply.includes(OUTPUT_END_TAG)) {
       const message = `Revision ${revision + 1} did not close its documents, so its output may be incomplete. Raise the model's max output tokens to let it finish.`;
       logger.warn(message);
-      yield* session.interactions.emit('requestShowInstruction', {
+      yield* docs.requests.present('requestShowInstruction', {
         key: 'roundOutputLimit',
         message,
       });
     }
-    yield* docs.commit;
     yield* present(docs, summary.filesToOpen);
     const files = round.outputs.map((output) =>
       fileLocationDisplayPath(output.location),
@@ -216,6 +210,7 @@ export const DocumentExtractTool = defineTool({
         `Revision ${revision + 1}: ${files.length} files`,
       ),
       value: { files, missing },
+      facts: [docs.fact()],
     };
   }),
 });
@@ -253,7 +248,6 @@ export const DocumentCompileTool = defineTool({
     );
     const failures = compileFailuresOf(check.compileResult);
     setCompileFailures(docs.state, revision, failures);
-    yield* docs.commit;
     if (yield* autoOpensPdf(docs))
       yield* present(
         docs,
@@ -273,6 +267,7 @@ export const DocumentCompileTool = defineTool({
         failures.length === 0 ? 'Compiles' : `${failures.length} failed`,
       ),
       value: { failures: summary, checked: check.compileResult !== undefined },
+      facts: [docs.fact()],
     };
   }),
 });

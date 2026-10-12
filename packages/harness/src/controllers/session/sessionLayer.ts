@@ -1,16 +1,9 @@
 /**
- * The process layer ({@link processLayer}): every process service a
- * composition root runs on, and the `SessionOwner` over the keyed family of
- * sessions, a `LayerMap` keyed by workspace storage root (one session per
- * root and one only). A root's entry is the complete session: the
- * root-scoped services (the database event log, the session event reads and
- * publications, the fold, the session inputs, the three local sources, and
- * the owner-liveness prober) and the `SessionHandle` built over them, whose
- * request handler admits on that graph. Every opener (the hosts' default
- * sessions, the desktop's projects, the service's tasks, the SDK) resolves
- * its root here, so opening a root twice returns one handle, and the map is
- * the one owner of its lifetime: an open borrows, `close` settles and
- * releases, and the layer's release closes whatever is still open.
+ * {@link ownerProcessLayer}: the process services and the `SessionOwner` over
+ * a `LayerMap` of sessions, one per storage root, each entry the root-scoped
+ * services and the `SessionHandle` over them. Two opens of a root return one
+ * handle; an open borrows, `close` settles and releases, and the layer's
+ * release closes whatever is still open.
  */
 import {
   Cause,
@@ -31,7 +24,6 @@ import {
 import { FetchHttpClient, HttpClient } from 'effect/http';
 
 import { Inbox } from '@agent/followUp/Inbox';
-import { AgentEngine } from '@agent/runtime/AgentEngine';
 import {
   executeAgent,
   resumeToolUseFromResumeData,
@@ -41,23 +33,31 @@ import { HistoryQuery } from '@agent/runtime/historyQuery/HistoryQuery';
 import { ModelRetryGate } from '@agent/runtime/ModelRetryGate';
 import { RouteRetries } from '@agent/runtime/run/invocation';
 import { resumeRun } from '@agent/runtime/resumeRun';
+import { rootRun } from '@agent/runtime/rootLaunch';
+import {
+  endRunOutsideLifecycle,
+  onHeldResult,
+} from '@agent/runtime/runLaunchGuard';
 import { createSessionApprovals } from '@agent/runtime/runApprovalQueue';
-import { runHistoryLayer } from '@agent/runtime/RunHistory';
-import { RunRegistry } from '@agent/runtime/runRegistry';
+import { makeRunHistory } from '@agent/runtime/RunHistory';
+import { registryOf, RunRegistry } from '@agent/runtime/runRegistry';
 import { sessionEventsLayer } from '@agent/runtime/SessionEvents';
-import type {
-  SessionHandle,
-  SessionHandleInit,
+import {
+  SESSION_CLOSE_DEADLINE_MS,
+  type SessionHandle,
+  type SessionHandleInit,
 } from '@agent/runtime/SessionHandle';
-import { SESSION_CLOSE_DEADLINE_MS } from '@agent/runtime/SessionHandle';
-import { SessionOwner } from '@agent/runtime/SessionOwner';
 import { presentTerminalResult } from '@agent/runtime/terminalResultToast';
 import { withLogChannel } from '@logger/effectLog';
 import {
   effectDiagnosticsLayer,
   type MinimumLogLevel,
 } from '@logger/effectDiagnostics';
-import type { ProcessServices } from '@platform/processRuntime';
+import {
+  holdProcessRoot,
+  SessionOwner,
+  type ProcessServices,
+} from '@platform/processRuntime';
 import {
   AgentDirectories,
   AppState,
@@ -72,20 +72,24 @@ import {
   processOwnerId,
   type ProcessProbe,
 } from '@platform/defaults/nodeProcesses';
-import { nodePlatformServices } from '@platform/defaults/nodePlatform';
-import { RunHistory } from '@shared/session/runHistory';
+import {
+  nodePlatformServices,
+  workspaceEnvironmentLayer,
+} from '@platform/defaults/nodePlatform';
 import {
   aggregateTarget,
   RUN_OUTCOME,
   type RunId,
   type SessionCloseReport,
 } from '@shared/schemas';
-import { ProcessIdentity, SessionEvents } from '@shared/session/sessionEvents';
+import { ProcessIdentity } from '@shared/session/sessionEvents';
 import {
   Database,
   ProjectDatabases,
   type DatabaseOpenFailed,
+  type DatabaseReadFailed,
   GlobalDatabase,
+  SessionOptionsConflict,
   type SessionOpenError,
 } from '@shared/session/database';
 import { UsageLog } from '@shared/usageLog';
@@ -95,19 +99,17 @@ import {
   type StateSettingEntry,
 } from '@shared/state/stateSettings';
 import { releaseRunResources } from '@tools/approval';
-import { LiveTools } from '@tools/liveTools';
+import { ToolCatalog } from '@tools/liveTools';
 import { pluginCatalogLayer } from '@tools/pluginCatalog';
 import type { Plugin } from '@tools/plugins';
-import { drainPlugins, sessionPluginLayers } from '@tools/pluginLayers';
 import { toolAvailabilityLayer } from '@tools/toolAvailability';
 import { ToolAvailability } from '@tools/toolAvailabilityService';
 import { ToolRegistry } from '@tools/toolTable';
 import { agentCatalogFollower } from '@tools/agentCatalogFollower';
 import { followInterruptedTasks } from '@tools/interruptedTasks';
-import { processEnvConfigLayer } from '@utils/system/envFlags';
 import { databaseLayer, globalDatabaseLayer } from './Database';
 import { projectDatabaseLayer } from './projectDatabase';
-import { deletionCollector } from './deletionCleanup';
+import { deletionCollector, type RunFilesServices } from './deletionCleanup';
 import { ownerLiveness } from './ownerLiveness';
 import { sessionRequests } from './SessionRequests';
 import { makeSessionStore } from './sessionStore';
@@ -130,13 +132,10 @@ const logFailure =
     log(message).pipe(Effect.annotateLogs({ data }), withLogChannel(CHANNEL));
 
 /**
- * Which session an entry is: its storage root, the value `SessionView.key`
- * carries, together with what the opener supplied for building it (the roots,
- * the transcript store mode the graph opens its stores with, the response text
- * policy, the host interactions it is born with). Equal and hashed by the
- * storage root alone: two opens of one root resolve one session, over what the
- * first of them supplied. Nothing store-bound can be injected past that
- * boundary (PR #11893, agent SDK architecture proposal, section 3).
+ * Which session an entry is: its storage root (`SessionView.key`), with what
+ * the opener supplied for building it. Equal and hashed by the root alone:
+ * two opens of one root resolve one session, over what the first supplied,
+ * and nothing store-bound is injected past that (PR #11893, section 3).
  */
 class SessionKey implements Equal.Equal {
   constructor(readonly open: SessionHandleInit) {}
@@ -160,21 +159,16 @@ class Session extends Context.Service<Session, SessionHandle>()(
 ) {}
 
 /**
- * The handle of one root, over the root's graph: the session is the entry's
- * one service. The last layer of the entry, so it is the first thing unwound
- * when the entry closes and the graph outlives every publisher above it. The
- * entry's scope is the session's one lifetime: {@link closeSession} and the
- * runtime's disposal both end it by closing that scope, and every owner the
- * handle holds is torn down by a finalizer registered here.
+ * The handle of one root over its graph: the entry's one service and last
+ * layer, so it unwinds first and the graph outlives every publisher above
+ * it. The entry's scope is the session's one lifetime ({@link closeSession}
+ * and disposal close it); every owner it holds has a finalizer here.
  */
 const sessionHandleLayer = (key: SessionKey) =>
   Layer.effectContext(
     Effect.gen(function* () {
-      const events = yield* SessionEvents;
       const database = yield* Database;
-      const runHistory = yield* RunHistory;
       const plugins = yield* ToolRegistry;
-      const globalDatabase = yield* GlobalDatabase;
       const local = yield* LocalRuntimeSource;
       // Register the consumers' scope first so the handle's teardown can
       // publish and settle while the tails and the view are still alive.
@@ -188,94 +182,90 @@ const sessionHandleLayer = (key: SessionKey) =>
       const view = yield* makeSessionViewAccess(key.storage, store.closed);
       // Capture the startup cohort before callers can publish new launches.
       const initialListing = yield* database.readListing();
-      // The runs' fork and the history store end with this scope.
+      // The publisher drains inside the one close deadline, after the runs'
+      // fibers (registered before their fork) published their last rows.
+      yield* Effect.addFinalizer(() => store.close);
+      // The runs' fork and the project's tools end with this scope.
       const fork = yield* FiberSet.makeRuntime<ProcessServices>();
-      const pinPlugins = yield* sessionPluginLayers(() => session.runs);
+      const tools = yield* (yield* ToolCatalog).session;
       const interactions = new SessionHostInteractions();
+      // Each run's `.env`, read as it launches, and its window's models.
+      const env = Layer.merge(
+        workspaceEnvironmentLayer(key.open.roots.workspace),
+        LanguageModel.layer(
+          yield* LanguageModel,
+          () => interactions.languageModel,
+        ),
+      );
       const runs = new RunRegistry({
         session: () => session,
-        fork,
-        pinPlugins,
+        fork: (run) => fork(Effect.provide(run, env)),
+        programs: {
+          root: rootRun,
+          executeAgent,
+          resumeTurn: resumeToolUseFromResumeData,
+          resume: resumeRun,
+        },
       });
       const session: SessionHandle = {
         roots: key.open.roots,
         log: store.log,
         view,
         runs,
+        tools,
         requests: sessionRequests({
           session: () => session,
           log: {
             ...database,
             removeRun: (id, mode, start) =>
               Effect.tap(
-                events.removeRun(id, mode, start),
+                store.removeRun(id, mode, start),
                 () => collectDeletions,
               ),
             detach: store.detach,
           },
           local: local.ref,
           plugins,
-          globalDatabase,
+          services: yield* Effect.context<GlobalDatabase | RunFilesServices>(),
           closed: store.closed,
         }),
-        approvals: createSessionApprovals({ view: view.ref, log: store.log }),
+        approvals: createSessionApprovals(() => session),
         interactions,
         followUps: new Inbox({
           log: store.log,
           detach: store.detach,
           parentOf: (runId) => view.run(runId)?.parentId,
-          live: (runId) => runs.isLive(runId),
+          live: (runId) => runs.get(runId)?.live === true,
         }),
         trace: store.trace,
-        runHistory,
+        runHistory: makeRunHistory(store.log),
         history: yield* HistoryQuery.make(() => session),
       };
       // The session's teardown is this scope's finalizers, run in the reverse
-      // of their registration: the doors shut last, after every owner below
-      // has unwound, with what they left settled; then the follow-up queue,
-      // the presentation hosts; and first of all the runs, so no run is
-      // admitted over a session that is unwinding.
-      yield* Effect.addFinalizer(() =>
-        session.log.settled.pipe(
-          // Bounded like the close that invalidates this entry: a
-          // publisher too stuck to settle must not hold the release.
-          Effect.timeoutOption(SESSION_CLOSE_DEADLINE_MS),
-          Effect.flatMap((settled) =>
-            Option.isSome(settled)
-              ? Effect.void
-              : Effect.logWarning(
-                  `Session ${key.storage} closed with publications still unsettled past the close budget`,
-                ).pipe(withLogChannel(CHANNEL)),
-          ),
-          Effect.ensuring(Effect.sync(() => store.close())),
-        ),
-      );
+      // of their registration: first the runs, so no run is admitted over a
+      // session that is unwinding; then the presentation hosts, the follow-up
+      // queue, the runs' fibers; and last the doors, after the publisher
+      // drained (registered above the fork).
       yield* Effect.addFinalizer(() =>
         Effect.sync(() => session.followUps.dispose()),
       );
       yield* Effect.addFinalizer(() => session.interactions.dispose());
-      yield* Effect.addFinalizer(() =>
-        Effect.sync(() => session.runs.dispose()),
-      );
-      // The presentation host an opener hands over is attached here, as its
-      // own step: `use` replays what is queued for it, which is a program,
-      // and a constructor cannot run one.
+      yield* Effect.addFinalizer(() => Effect.sync(() => runs.dispose()));
+      // An opener's presentation host attaches as its own step: `use`
+      // replays its queue, a program a constructor cannot run.
       if (key.open.interactions)
         yield* session.interactions.use(key.open.interactions);
       // The local half of a committed removal; its plugin rows go with it.
       yield* store
-        .deliver((runId) => {
-          session.runs.detachChildren(runId);
-          releaseRunResources(runId, session);
-        })
+        .deliver((runId) => releaseRunResources(runId, session))
         .pipe(Scope.provide(consumerScope));
-      // The registry's phase notification rides the fold-gated tail, not the
-      // raw one: its waiters and child lists read `RunView.status`
-      // synchronously, so a row reaches them only once the view holds the
-      // state it produced. Host notifications belong to the authoring process.
+      // The registry's phase notification rides the fold-gated tail: its
+      // waiters read `RunView.status` synchronously, so a row reaches them
+      // once the view holds its state. Host notices go to the author.
       yield* Stream.runForEach(store.folded, (event) =>
         Effect.gen(function* () {
           const target = aggregateTarget(event.aggregateId);
+          yield* onHeldResult(session, event, consumerScope);
           if (target.kind !== 'run' || event.type !== 'run.end') return;
           const { self } = yield* SubscriptionRef.get(local.ref);
           if (event.origin == null || !self.includes(event.origin)) return;
@@ -290,7 +280,7 @@ const sessionHandleLayer = (key: SessionKey) =>
                 ),
               ),
             );
-          session.runs.sweepChildrenOfFoldedStop(target.id);
+          runs.sweepChildrenOfFoldedStop(target.id);
         }),
       ).pipe(
         Effect.catch(
@@ -328,7 +318,7 @@ const sessionGraphLayer = (key: SessionKey) => {
   const database: Layer.Layer<
     Database,
     DatabaseOpenFailed,
-    ProjectDatabases | ProcessIdentity | WorkspaceRoots | ProcessProbe
+    ProjectDatabases | Layer.Services<ReturnType<typeof databaseLayer>>
   > =
     key.open.transcriptMode?.kind === 'ephemeral'
       ? databaseLayer('ephemeral')
@@ -341,7 +331,6 @@ const sessionGraphLayer = (key: SessionKey) => {
   return ownerLiveness.pipe(
     Layer.provideMerge(SessionViewService.layer),
     Layer.provideMerge(sessionInputsLayer),
-    Layer.provideMerge(runHistoryLayer),
     Layer.provideMerge(sessionEventsLayer.pipe(Layer.provideMerge(database))),
     Layer.provideMerge(
       Layer.mergeAll(
@@ -355,27 +344,37 @@ const sessionGraphLayer = (key: SessionKey) => {
 };
 
 /**
- * The keyed resource family the desktop's N papers and the SDK's N roots need:
- * one session per root, held by the map until `close` releases it or the
- * runtime goes. Opens borrow (the reference an open takes is released at once)
- * and the idle lifetime is infinite, so no reader's detachment and no
- * reference count decides a session's end: the application does, explicitly
- * (PR #11893, agent SDK architecture proposal, section 3). Entries are
- * `Layer.fresh`: layers memoize by reference, else roots share one fold.
+ * One session per root, held by the map until `close` releases it or the
+ * runtime goes. Opens borrow (released at once) and the idle lifetime is
+ * infinite, so the application, never a reader's detachment, ends a session
+ * (PR #11893, §3). Entries are `Layer.fresh`, else roots share one fold.
  */
 class SessionMap extends Context.Service<
   SessionMap,
-  LayerMap.LayerMap<SessionKey, Session, SessionOpenError>
+  LayerMap.LayerMap<
+    SessionKey,
+    Session,
+    DatabaseOpenFailed | DatabaseReadFailed
+  >
 >()('@texra/session/SessionMap') {
   static readonly layer = Layer.effect(
     SessionMap,
-    LayerMap.make(
-      (key: SessionKey) =>
-        Layer.fresh(
-          sessionHandleLayer(key).pipe(Layer.provide(sessionGraphLayer(key))),
-        ),
-      { idleTimeToLive: Duration.infinity },
-    ),
+    Effect.suspend(() => {
+      // This composition: each entry holds its root under it while it lives.
+      const holder = {};
+      return LayerMap.make(
+        (key: SessionKey) =>
+          Layer.fresh(
+            sessionHandleLayer(key).pipe(
+              Layer.provide(sessionGraphLayer(key)),
+              Layer.provide(
+                Layer.effectDiscard(holdProcessRoot(key.storage, holder)),
+              ),
+            ),
+          ),
+        { idleTimeToLive: Duration.infinity },
+      );
+    }),
   );
 }
 
@@ -405,6 +404,14 @@ const openSession = (open: SessionHandleInit) =>
     const context = yield* sessions
       .contextEffect(key)
       .pipe(Effect.onError(() => sessions.invalidate(key)));
+    // Read once held, so racing first opens agree: the other store refused.
+    const store = (init: SessionHandleInit) => init.transcriptMode?.kind;
+    for (const held of yield* RcMap.keys(sessions.rcMap))
+      if (held.storage === key.storage && store(held.open) !== store(open))
+        return yield* new SessionOptionsConflict({
+          storage: key.storage,
+          message: `The session of ${key.storage} is already open over the other store; close it before opening it differently.`,
+        });
     return Context.get(context, Session);
   }).pipe(Effect.scoped);
 
@@ -460,28 +467,25 @@ const heldSession = (root: string) =>
       .pipe(Effect.scoped, Effect.catch(unopenedEntry(key)));
     if (Option.isNone(held)) return undefined;
     const session = Context.get(held.value, Session);
-    return { key, session, runs: session.runs };
+    return { key, session, runs: registryOf(session.runs) };
   });
 
 /**
  * Settle one run from outside its driver: what a close does for a run still
- * live when its budget ran out. Its outcome is recorded — CANCELLED unless
- * its driver already wrote one — in the one batch that also closes the
- * transcript groups it left open, with its checkpoint kept, since a
- * cancelled run is exactly the one a user resumes. A driver that writes a
- * different outcome after this is a separate lifecycle race:
- * `keepExistingOutcome` only protects earlier writes. A failure is logged,
- * never raised: a later launch classifies the run from its checkpoint.
+ * live when its budget ran out. Its end is ownerless (CANCELLED unless its
+ * driver already wrote one), with its checkpoint kept, since a cancelled
+ * run is exactly the one a user resumes. A failure is logged, never
+ * raised: a later launch classifies the run from its checkpoint.
  */
 const settleRun = (session: SessionHandle, runId: RunId): Effect.Effect<void> =>
   Effect.gen(function* () {
     if (!(yield* session.log.owns(runId))) return;
-    const finalization = yield* session.runs.end({
+    yield* endRunOutsideLifecycle(
+      session,
       runId,
-      outcome: RUN_OUTCOME.CANCELLED,
-      keepExistingOutcome: true,
-    });
-    if (!finalization.ok) return yield* Effect.die(finalization.error);
+      RUN_OUTCOME.CANCELLED,
+      undefined,
+    );
   }).pipe(
     Effect.catchCause((cause) =>
       Effect.logWarning(
@@ -494,22 +498,12 @@ const settleRun = (session: SessionHandle, runId: RunId): Effect.Effect<void> =>
   );
 
 /**
- * Close the session of one root: the one way a session ends, whoever asks —
- * an SDK close, a desktop project's close, a host's shutdown, a host
- * releasing its default session. In order, on the caller's fiber:
- *
- * 1. refuse new runs;
- * 2. stop every run (it cascades into children; a process child's OS
- *    process ends with its loop), settle those no driver answered for, and
- *    wait for the rest, inside one budget ({@link SESSION_CLOSE_DEADLINE_MS});
- * 3. settle from here, inside a second budget, each run still held when the
- *    first runs out ({@link settleRun}), reporting it as abandoned;
- * 4. release the entry, whose finalizers flush the session's publications
- *    and unwind its owners.
- *
- * The whole close is uninterruptible, so the budget is its one cancellation
- * channel: the stop and its wait run interruptible inside it, so the deadline
- * cuts them, and every step after the deadline still runs.
+ * Close the session of one root, the one way a session ends: refuse new
+ * runs; stop every run, cascading, settling the undriven and waiting for the
+ * rest ({@link SESSION_CLOSE_DEADLINE_MS}); settle in a second budget each
+ * run still held ({@link settleRun}), reported abandoned; release the entry,
+ * whose finalizers flush and unwind. Uninterruptible: the budget is its one
+ * cancellation, and every step after it still runs.
  */
 const closeSession = (root: string) =>
   Effect.gen(function* () {
@@ -519,15 +513,13 @@ const closeSession = (root: string) =>
     if (held === undefined)
       return { settled: true, abandoned: [] } satisfies SessionCloseReport;
     const { key, session, runs } = held;
-    runs.close();
-    // A run the stop reached no driver for, or whose stop failed, has nothing
-    // to settle it: the close settles it now instead of waiting out the
-    // budget for it.
+    // A run the stop reached no driver for, or whose stop failed, is settled
+    // now rather than waited out; the rest drain, none admitted meanwhile.
     const drained = yield* Effect.gen(function* () {
       const undriven = yield* runs.stopAll();
       for (const runId of undriven) {
         yield* settleRun(session, runId);
-        const handle = runs.getHandle(runId);
+        const handle = runs.get(runId)?.handle;
         if (handle) runs.untrackIfCurrent(handle);
       }
       yield* runs.awaitDrained();
@@ -536,7 +528,7 @@ const closeSession = (root: string) =>
       Effect.timeoutOption(SESSION_CLOSE_DEADLINE_MS),
     );
     const settled = Option.isSome(drained);
-    const abandoned = settled ? [] : runs.heldIds();
+    const abandoned = settled ? [] : runs.get().map((run) => run.runId);
     if (abandoned.length > 0) {
       yield* Effect.logWarning(
         `Session ${root} closed with runs still live past its budget; settling them from the close: ${abandoned.join(', ')}`,
@@ -578,8 +570,8 @@ export interface ProcessLayerOptions {
   readonly globalStorage: string;
   /**
    * The app's plugins, in order, the harness's built-ins among them: the
-   * process serves them as `ToolRegistry` and the live catalog over it
-   * (`LiveTools`). The harness names no plugin of its own; TeXRA's entries
+   * process serves them as `ToolRegistry` and the tool catalog over it
+   * (`ToolCatalog`). The harness names no plugin of its own; TeXRA's entries
    * pass `texraPlugins` (`@tools/registry`).
    */
   readonly plugins: readonly Plugin[];
@@ -588,16 +580,11 @@ export interface ProcessLayerOptions {
   /** The MCP config file (`.mcp.json` shape) the catalog reads. */
   readonly mcpConfigPath: string;
   readonly secrets: PlatformSecrets;
-  /**
-   * The host's agent-directory layer, which can capture AppState at construction
-   * without exposing that dependency in its readers.
-   */
+  /** The host's agent-directory layer: it may capture AppState as it is
+   *  built, which its readers never see. */
   readonly agentDirectories: Layer.Layer<AgentDirectories, never, AppState>;
-  /**
-   * The host's tool-missing reporter, served as `ToolMissingReporter`. Optional
-   * because only the VS Code host has a UI for it; an absent reporter serves
-   * the no-op, so a missing-tool probe still answers without surfacing.
-   */
+  /** The host's tool-missing reporter, served as `ToolMissingReporter`;
+   *  absent (no UI for it), a probe still answers, without surfacing. */
   readonly toolMissingReporter?: ToolMissingHandler;
   /**
    * The host's global application-state layer, acquired in this runtime's
@@ -620,54 +607,41 @@ export interface ProcessLayerOptions {
   /** The dependency probes every tool gate and Tools dashboard read: absent,
    *  every host's; a test harness passes one that starts no probe. */
   readonly toolAvailability?: typeof toolAvailabilityLayer;
-  /**
-   * The host's usage layer owns its version-stamped sender and final drain.
-   * Absent, `UsageLog.disabled`: no usage is reported, as for an embedder,
-   * which has no version or editor of its own to stamp entries with. The
-   * host supplies the layer so this composition does not reach into
-   * telemetry.
-   */
+  /** The host's usage layer owns its version-stamped sender and final drain.
+   *  Absent, `UsageLog.disabled`: no usage is reported, as for an embedder,
+   *  which has no version or editor of its own to stamp entries with. The
+   *  host supplies the layer so this composition does not reach into
+   *  telemetry. */
   readonly usageLog?: Layer.Layer<
     UsageLog,
     never,
     HttpClient.HttpClient | AppState
   >;
-  /**
-   * The process's handle on the global storage root, built and closed with
-   * this runtime. Absent, the root's own database; opening it creates the
-   * root's SQLite file and forks a change poll, so the CLI entry that runs
-   * before any platform, on a possibly read-only root, passes a refusing
-   * layer.
-   */
+  /** The process's handle on the global storage root, built and closed with
+   *  this runtime. Absent, the root's own database; opening it creates the
+   *  root's SQLite file and forks a change poll, so the CLI entry that runs
+   *  before any platform, on a possibly read-only root, passes a refusal. */
   readonly globalDatabase?: Layer.Layer<
     GlobalDatabase,
     DatabaseOpenFailed,
     ProcessIdentity | ProcessProbe
   >;
   /**
-   * The runtime's emission threshold for Effect diagnostics, from facts the
-   * composition root holds that cannot change mid-process: the surface kind
-   * (the extension's `LogOutputChannel` filters for itself, so it passes
-   * `'Trace'`; the desktop's rotated log file passes `'Debug'`) or the CLI's
-   * `--quiet` / `--verbose` argv. The reference it feeds is fiberCached and
-   * read before any logger runs, which is exactly why a live user setting
-   * must arrive by another road (the transcript fold's `debug` flag) and not
-   * here.
+   * The runtime's emission threshold for Effect diagnostics, from facts that
+   * cannot change mid-process: the surface (the extension's channel filters
+   * itself: `'Trace'`; the desktop's log file: `'Debug'`) or the CLI's
+   * `--quiet` / `--verbose`. It is read before any logger runs, so a live
+   * user setting arrives by another road (the fold's `debug` flag).
    */
   readonly minimumLogLevel: MinimumLogLevel;
+  /** A single-project host's folder, whose `.env` its own reads see. */
+  readonly workspace?: string;
 }
 
-/**
- * The process: every process service a composition root runs on, and the
- * {@link SessionOwner} that opens, lists and closes its sessions (one per
- * workspace storage root, held by a `LayerMap`). A host builds it once with
- * `ManagedRuntime.make` and disposes that runtime on its shutdown path; the
- * SDK's `Sessions.layer` provides it to its projection. Disposal closes every
- * session still open (plugins drained first), so a host that needs its
- * sessions closed before its own resources tear down runs
- * `SessionOwner.closeAll` first.
- */
-export function processLayer({
+/** The process services and the {@link SessionOwner} over the session map
+ *  (one session per storage root), which the public `processLayer` serves
+ *  its `Sessions` over. */
+export function ownerProcessLayer({
   processStart = nodeProcesses.selfIdentity(),
   globalStorage,
   plugins,
@@ -682,6 +656,7 @@ export function processLayer({
   usageLog = UsageLog.disabled,
   globalDatabase: globalDatabaseOption = globalDatabaseLayer(globalStorage),
   minimumLogLevel,
+  workspace,
 }: ProcessLayerOptions): Layer.Layer<ProcessServices | SessionOwner> {
   installSettingsCatalog(settingsCatalog(settings));
   const catalog = pluginCatalogLayer(plugins, mcpConfigPath);
@@ -707,11 +682,6 @@ export function processLayer({
       ? Layer.empty
       : ToolMissingReporter.layer(toolMissingReporter),
     catalog,
-    Layer.succeed(AgentEngine)({
-      executeAgent,
-      resumeToolUseFromResumeData,
-      resumeRun,
-    }),
     // One retry gate for the process: a 429 cools a credential for every
     // project's runs.
     Layer.effect(RouteRetries, ModelRetryGate.make),
@@ -741,7 +711,7 @@ export function processLayer({
         Layer.succeed(HttpClient.TracerPropagationEnabled)(false), // no run trace ids to third parties
         // Filesystem, path, spawner, env config: once per process.
         nodePlatformServices,
-        processEnvConfigLayer,
+        workspaceEnvironmentLayer(workspace),
       ),
     ),
   );
@@ -756,17 +726,14 @@ const sessionOwnerLayer = Layer.effect(
   SessionOwner,
   Effect.gen(function* () {
     const map = yield* SessionMap;
-    const live = yield* LiveTools;
-    const registry = yield* ToolRegistry;
+    const catalog = yield* ToolCatalog;
     const withMap = <A, E>(
       effect: Effect.Effect<A, E, SessionMap>,
     ): Effect.Effect<A, E> => Effect.provideService(effect, SessionMap, map);
     const closeAll = Effect.gen(function* () {
       // What a plugin admitted for a session (a GitHub poll round's
       // delivery) lands before that session closes, not after.
-      yield* drainPlugins(live).pipe(
-        Effect.provideService(ToolRegistry, registry),
-      );
+      yield* catalog.drain;
       return yield* Effect.forEach(
         yield* listSessions,
         (session) => closeSession(session.roots.storage),
@@ -777,6 +744,10 @@ const sessionOwnerLayer = Layer.effect(
     return {
       open: (init) => withMap(openSession(init)),
       list: withMap(listSessions),
+      holds: (session) =>
+        withMap(heldSession(session.roots.storage)).pipe(
+          Effect.map((held) => held?.session === session),
+        ),
       close: (root) => withMap(closeSession(root)),
       closeAll,
     };

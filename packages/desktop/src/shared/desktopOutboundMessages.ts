@@ -38,11 +38,13 @@ import {
   DesktopTerminalExitMessageSchema,
   DesktopTerminalOpenCommandMessageSchema,
   DesktopWorkspaceFilesChangedMessageSchema,
+  DesktopOpenDocumentMessageSchema,
 } from './desktopWorkspaceMessages.js';
 
 export const DesktopOutboundMessageSchema = z.discriminatedUnion('command', [
   // Editor tree
   DesktopWorkspaceFilesChangedMessageSchema,
+  DesktopOpenDocumentMessageSchema,
   // Terminal
   DesktopTerminalDataMessageSchema,
   DesktopTerminalExitMessageSchema,

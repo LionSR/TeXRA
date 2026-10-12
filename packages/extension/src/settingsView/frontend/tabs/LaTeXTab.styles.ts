@@ -114,7 +114,8 @@ export const latexTabStyles: CSSResult = css`
 
   /* Wide enough for the catalog's "value — description" option text. */
   .settings-row-control wa-select {
-    min-width: 17rem;
+    width: 17rem;
+    min-width: 0;
   }
 
   wa-tag.setting-badge {
