@@ -221,19 +221,24 @@ added indirection tiers.
   list. These single-caller cosmetics keep folding during restructuring without
   this routine.
 - `loop/runProgram.ts:239` `stagedBy` — a generic stage combinator with one caller
-  (`toolUse.ts:471`); its comment gestures at a second adopter
-  (`childRunLoop.ts`, which still uses a mutable `loop.stage` field and did not
-  adopt it). It encapsulates non-trivial logic (`acquireUseRelease` +
-  `Exit.match`/`failureOutcome` a Scope finalizer cannot express), so it is
-  defensible as-is; the only item in the audited area that approaches a
-  single-caller violation. Carried as an observation, not a fix: the implied
-  two-loop consolidation did not land.
-- `core/definition/AgentConfig.ts:5` — `AgentConfigSchema = AgentConfigFieldsSchema`
-  carries a comment claiming "output file count validation" it does not add. A
-  doc-comment inaccuracy, not indirection (the alias anchors the widely-used
-  `AgentConfig`/`AgentConfigPayload` types). First-pass observation; if a later
-  pass corroborates it, correct the comment. Not applied autonomously (the
-  two-consecutive-passes bar the prior pass used for doc fixes is not met).
+  (`toolUse.ts:471`); its comment gestured at a second adopter
+  (`childRunLoop.ts`, which still uses a mutable `stage` field). **Inspected and
+  closed as correct-as-is, not a single-caller violation.** The child loop
+  cannot adopt `stagedBy`: its stage is opened at reservation
+  (`childRunLoop.ts:1050`) and closes on a settlement a surviving fiber delivers
+  after detach or on a process child's stop (`:498`, `:928`), so it outlives the
+  body and cannot be expressed as `acquireUseRelease`. Adopting `stagedBy` there
+  would close the stage when the body exits — a durability regression. The only
+  action warranted was to **harden the `stagedBy` comment** to record this
+  invariant (applied this pass, line-neutral-ish, within the 400-line core
+  rule), so a future reader or audit is not lured into the consolidation.
+- `core/definition/AgentConfig.ts:4` — **inspected and closed; the comment is
+  accurate, no fix.** `AgentConfigSchema = AgentConfigFieldsSchema`, and
+  `AgentConfigFieldsSchema` (`@shared/schemas/agentConfig.ts:107`) carries the
+  output-file-count validation in its own `.superRefine` ("Number of output
+  files must not be greater than the number of input files.", `:125`). The alias
+  adds no logic, but the comment describes the schema it names, which does have
+  that validation. The prior-pass observation does not corroborate; dropped.
 
 **Do not collapse** (unchanged): `executeAgent.ts` `resumeToolUse*` chain — each
 level is a distinct `Effect.scoped`/`acquireRelease` region whose nesting order
@@ -262,11 +267,14 @@ none bears on this verdict.
 
 ## Recommendation
 
-No refactor to land autonomously from this charter: the one doc inconsistency the
-prior pass fixed (the six-error reconcile) is already consistent through growth,
-and the two marginal observations this pass surfaced are first-pass, below the
-bar for autonomous correction. The charter's deliverable this pass is this
-finding itself. The harness program has moved as predicted — the package split
+No code refactor of substance to land from this charter: the two marginal items
+this pass surfaced were both inspected in depth and closed as correct-as-is (the
+`AgentConfig` comment is accurate; the `childRunLoop` mutable stage is
+load-bearing), and the one doc inconsistency the prior pass fixed (the six-error
+reconcile) is already consistent through growth. The only change applied this
+pass is hardening the `stagedBy` comment to record why the two run-loop stages
+are not consolidated, so a future pass does not re-mine it as a regression. The
+charter's primary deliverable this pass is this finding itself. The harness program has moved as predicted — the package split
 and the `ModelAccess` consolidation landed — and the audited areas held or
 improved (the ambient-header reads became explicit refusals; the model binder
 collapsed to one service) entirely through review, not this routine. The one
