@@ -136,7 +136,7 @@ changed in every entry at once:
 | `ToolsRefused`           | value | `./effect/errors.js`                  |
 | `DatabaseOpenFailed`     | value | `@shared/session/database`            |
 | `DatabaseReadFailed`     | value | `@shared/session/database`            |
-| `aggregateId`            | value | `@shared/schemas` → `sessionEvent.ts` |
+| `qualifyAggregateId`     | value | `@shared/schemas` → `sessionEvent.ts` |
 | `MapToolRegistry`        | value | `@agent/core/tools/ToolTypes`         |
 | `defineTool`             | value | `@tools/core/definition`              |
 | `AgentPlatform`          | type  | `./effect/runtime.js`                 |
