@@ -142,22 +142,31 @@ function start(
   session: RuntimeSessionHandle,
   services: Context.Context<ProcessServices>,
   owner: Context.Service.Shape<typeof SessionOwner>,
+  starting: Set<RunId>,
   input: StartInput,
 ): Effect.Effect<Run, LaunchError | RunFailure> {
   return Effect.gen(function* () {
     const canAsk = !session.interactions.approvalPromptsUnavailable;
     const config = yield* admitInput(input, canAsk);
     const runId = input.runId ?? generateRunId();
-    // A supplied id already a run's: refused before any handoff, which
-    // would stop the run by that id were its caller to abandon it.
-    if (
-      input.runId !== undefined &&
-      (SubscriptionRef.getUnsafe(session.view.ref).runs.has(runId) ||
-        session.runs.get(runId) !== undefined)
-    )
-      return yield* runFailure(
-        new Error(`Run ${runId} already exists in this session.`),
+    // A supplied id is checked and reserved in one step (`starting`, held
+    // until the handoff ends, when the run is in the registry): a second
+    // start of it is refused, so the id a handoff stops on abandonment is
+    // only ever its own launch's.
+    if (input.runId !== undefined) {
+      const taken =
+        starting.has(runId) ||
+        SubscriptionRef.getUnsafe(session.view.ref).runs.has(runId) ||
+        session.runs.get(runId) !== undefined;
+      if (taken)
+        return yield* runFailure(
+          new Error(`Run ${runId} already exists in this session.`),
+        );
+      starting.add(runId);
+      yield* Effect.addFinalizer(() =>
+        Effect.sync(() => starting.delete(runId)),
       );
+    }
     return yield* handOver(session, services, runId, (hooks) =>
       session.runs
         .launch({
@@ -178,7 +187,7 @@ function start(
           Effect.mapError(runFailure),
         ),
     );
-  });
+  }).pipe(Effect.scoped);
 }
 
 /** What a resume fails with before its run is handed over. */
@@ -258,6 +267,13 @@ function resume(
   });
 }
 
+/** What the package keeps per session beside the owner's handle: its
+ *  attached handlers (newest last) and the supplied run ids starting now. */
+interface SessionState {
+  readonly approvers: Approver[];
+  readonly starting: Set<RunId>;
+}
+
 /** One reader port per `watch`, so no reader disturbs another's set. */
 let readerPorts = 0;
 
@@ -268,11 +284,11 @@ function sessionOf(
   services: Context.Context<ProcessServices>,
   owner: Context.Service.Shape<typeof SessionOwner>,
   resumeJoined: Session['resume'],
-  approvers: Approver[],
+  { approvers, starting }: SessionState,
 ): Session {
   return {
     roots: handle.roots,
-    start: (input) => start(handle, services, owner, input),
+    start: (input) => start(handle, services, owner, starting, input),
     resume: resumeJoined,
     request: (request) => handle.requests.request(request),
     view: {
@@ -346,12 +362,15 @@ export function makeSessions(
             ),
           );
         });
-    // Each session's attached handlers, newest last: only it answers.
-    const approvers = new WeakMap<RuntimeSessionHandle, Approver[]>();
+    // Each session's own state beside its handle (`SessionState`).
+    const states = new WeakMap<RuntimeSessionHandle, SessionState>();
     const sessionFor = (handle: RuntimeSessionHandle): Session => {
-      const handlers = approvers.get(handle) ?? [];
-      approvers.set(handle, handlers);
-      return sessionOf(handle, services, owner, resumeJoined(handle), handlers);
+      const state = states.get(handle) ?? {
+        approvers: [],
+        starting: new Set(),
+      };
+      states.set(handle, state);
+      return sessionOf(handle, services, owner, resumeJoined(handle), state);
     };
     return {
       // An open asking for the other store than the session's is the
