@@ -24,6 +24,15 @@ All notable changes to this project will be documented in this file.
   for that folder are done by the service, as a VS Code window's are. Only
   the no-folder session, and every folder when the service cannot be
   reached, run in the app itself.
+- **An explicit `--approval-policy yolo` is an Auto-approve launch, in the
+  TeXRA service too.** The flag (or `TEXRA_APPROVAL_POLICY=yolo`) grants
+  that run, and only that run, every approval it would open, recorded on
+  the run; the project's policy is never changed, and the service no longer
+  ignores it. Any other requested policy only narrows the project's: one
+  more permissive than it (Ask over Block) is refused with a notice where
+  it used to apply in a terminal without the service. `/approval` in a chat
+  writes the project's policy whether or not the service runs. A denial's
+  warning names the policy that decided it (service protocol bump).
 - **A run that fails before it starts is reported as a launch error, not
   listed as a failed task.** A task, subagent or background script is
   recorded together with its first batch of history, so one that fails

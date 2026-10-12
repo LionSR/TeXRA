@@ -425,11 +425,11 @@ const openStep = Effect.fn('Step.open')(function* (
     yield* Effect.logWarning(message).pipe(withLogChannel('Step'));
     run.logger.warn(message);
   }
-  if (withheldChanged)
-    run.session.interactions.approvalDenied(
-      { kind: 'withheldTools', tools: step.withheld },
-      run.runId,
-    );
+  if (withheldChanged) {
+    const policy = run.session.approvals.policy(run.runId);
+    const denial = { kind: 'withheldTools' as const, tools: step.withheld };
+    run.session.interactions.approvalDenied({ ...denial, policy }, run.runId);
+  }
   return {
     tools,
     continuation: step.continuing?.continuation ?? null,

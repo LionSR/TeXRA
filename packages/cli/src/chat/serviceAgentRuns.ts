@@ -14,7 +14,6 @@ import type {
   RootLaunch,
   RunEndResult,
 } from '@agent/runtime';
-import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
 import type { ProcessServices, Session, SessionOwner } from '@texra-ai/harness';
 import type { RunId } from '@texra-ai/harness/schemas';
 
@@ -34,12 +33,8 @@ export interface ChatAgentRuns {
 }
 
 /** The chat's run boundary over the service's `session`; each launch asks
- *  for `approvalPolicy()`, the policy the chat asked for itself (its flag,
- *  then `/approval`), which limits the task; none follows the project's. */
-export function serviceAgentRuns(
-  session: Session,
-  approvalPolicy: () => TexraApprovalPolicy | undefined,
-): ChatAgentRuns {
+ *  for the approval its options carry (`launchApproval`). */
+export function serviceAgentRuns(session: Session): ChatAgentRuns {
   const resume = (runId: RunId) => session.resume(runId, { interactive: true });
   return {
     launch: ({ request, options }) =>
@@ -48,7 +43,10 @@ export function serviceAgentRuns(
           config: request.config,
           runId: request.runId,
           continues: options.continues,
-          approval: { policy: approvalPolicy() },
+          approval: {
+            policy: options.approvalPolicy,
+            delegated: options.approveDelegatedWork,
+          },
           interactive: true,
         });
         yield* options.onAdmitted?.(run.runId) ?? Effect.void;

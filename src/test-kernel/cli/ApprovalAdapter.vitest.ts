@@ -42,7 +42,10 @@ import {
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
-import { publishTestRunStart } from '@test/support/sessionTestUtils';
+import {
+  publishTestRunStart,
+  setTestApprovalPolicy,
+} from '@test/support/sessionTestUtils';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { requestToolEditApproval } from '@tools/approval/toolEditApproval';
 
@@ -54,7 +57,7 @@ function context(overrides: Partial<CliContext> = {}): CliContext {
     version: 'test',
     ...overrides,
   });
-  testDefaultSession().approvals.override(ctx.approvalPolicy);
+  setTestApprovalPolicy(ctx.approvalPolicy);
   return ctx;
 }
 
@@ -67,7 +70,7 @@ function useCliHostInteractions(
   hooks: CliApprovalPromptHooks = {},
 ): void {
   detachHostInteractions();
-  testDefaultSession().approvals.override(cliContext.approvalPolicy);
+  setTestApprovalPolicy(cliContext.approvalPolicy);
   detachHostInteractions = Effect.runSync(
     testDefaultSession().interactions.use(
       createHeadlessCliHostInteractions(

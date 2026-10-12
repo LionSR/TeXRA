@@ -18,7 +18,10 @@ import {
   VscodeLanguageModelConfigurationSchema,
 } from '@texra-ai/llm';
 
-import type { ApprovalPolicyDenial } from '@shared/approvalPolicy';
+import {
+  TexraApprovalPolicySchema,
+  type ApprovalPolicyDenial,
+} from '@shared/approvalPolicy';
 import {
   FileLocationSchema,
   INSTRUCTION_ACTION,
@@ -62,21 +65,26 @@ const ManualCriticismEntrySchema = z.object({
   confidence: z.int(),
 }) satisfies z.ZodType<ManualCriticismEntry>;
 
+/** The policy that closed a gate, as the window names it. */
+const policy = TexraApprovalPolicySchema;
 const ApprovalPolicyDenialSchema = z.discriminatedUnion('kind', [
-  z.object({ kind: z.literal('executable') }),
-  z.object({ kind: z.literal('plan') }),
-  z.object({ kind: z.literal('proposal') }),
+  z.object({ kind: z.literal('executable'), policy }),
+  z.object({ kind: z.literal('plan'), policy }),
+  z.object({ kind: z.literal('proposal'), policy }),
   z.object({
     kind: z.literal('withheldTools'),
     tools: z.array(z.string()).readonly(),
+    policy,
   }),
   z.object({
     kind: z.literal('retry'),
     deny: z.enum(['yolo-retry', 'credential', 'policy', 'unpresentable']),
+    policy,
   }),
   z.object({
     kind: z.literal('humanInput'),
     deny: z.enum(['yolo-no-human', 'policy', 'unpresentable']),
+    policy,
   }),
 ]) satisfies z.ZodType<ApprovalPolicyDenial>;
 

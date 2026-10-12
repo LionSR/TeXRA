@@ -31,6 +31,7 @@ import { DEFAULT_MODELS } from '@shared/constants/defaultModels';
 import {
   formatTexraApprovalPolicy,
   parseTexraApprovalPolicy,
+  TEXRA_APPROVAL_POLICY_CONFIG_KEY,
   TEXRA_APPROVAL_POLICY_DEFAULT,
   type TexraApprovalPolicy,
 } from '@shared/approvalPolicy';
@@ -83,6 +84,10 @@ import { subscribeToSignalChanges } from '@texra/shared/signals';
 import { clearGoal, startGoal } from '@tools/goal';
 import { prepareToolEditApprovalPrompt } from '@tools/approval/toolEditApproval';
 import { FOCUSED_AGENT } from '@ui/copy/nestedRuns';
+import {
+  readConfigSettingFrom,
+  writeSettingTo,
+} from '@utils/config/platformSettings';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { App } from '../src/chat/tui/App';
@@ -374,7 +379,6 @@ const harnessRuntimeSession = await harnessRuntime.runPromise(
 const harnessRunSession = await harnessRuntime.runPromise(
   HARNESS_PLATFORM_SERVICES.runSession,
 );
-harnessRuntimeSession.approvals.override(TEXRA_APPROVAL_POLICY_DEFAULT);
 if (process.env.HARNESS_VISIBLE_AGENTS !== undefined) {
   await harnessRuntime.runPromise(
     harnessRoots.repoState.update(WorkspaceStateKey.WORKSPACE_AGENTS, {
@@ -1514,8 +1518,26 @@ function appendHarnessTranscript(
   }
 }
 
+/** The harness project's persisted policy, which its session decides by. */
+const harnessApprovalPolicy = (): TexraApprovalPolicy =>
+  readConfigSettingFrom<TexraApprovalPolicy>(
+    harnessRoots.config,
+    TEXRA_APPROVAL_POLICY_CONFIG_KEY,
+  );
+
+/** `/approval` writes the project's policy, as the chat's does. */
 function setHarnessApprovalPolicy(policy: TexraApprovalPolicy): void {
-  harnessRuntimeSession.approvals.override(policy);
+  harnessRuntime.runFork(
+    writeSettingTo(harnessRoots, TEXRA_APPROVAL_POLICY_CONFIG_KEY, policy).pipe(
+      Effect.catch((error) =>
+        Effect.sync(() =>
+          appendHarnessAssistantTranscript(
+            `The approval policy was not saved: ${error.message}`,
+          ),
+        ),
+      ),
+    ),
+  );
   sessionMeta.set({
     ...sessionMeta.get(),
     approvalPolicy: policy,
@@ -1572,7 +1594,7 @@ function appendHarnessStatus(): void {
       model: meta.model,
       teamName: meta.teamName,
       modelAccess: run?.usage.usageRoute,
-      approvalPolicy: harnessRuntimeSession.approvals.policy(),
+      approvalPolicy: harnessApprovalPolicy(),
       approvalBypasses: runBypasses(view, runId),
       statusLabel: run?.statusLabel,
       activeChildSessions: runningChildCount(view, run),
@@ -1677,7 +1699,7 @@ registerBuiltinSlashCommands({
         ? DISABLED_MODEL_SWITCH_REASON
         : undefined,
     ),
-  getApprovalPolicy: () => harnessRuntimeSession.approvals.policy(),
+  getApprovalPolicy: harnessApprovalPolicy,
   onApprovalPolicySelect: setHarnessApprovalPolicy,
   onModelSelect: (model) =>
     Effect.sync(() => {

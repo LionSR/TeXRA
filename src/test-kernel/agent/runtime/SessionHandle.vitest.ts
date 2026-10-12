@@ -32,33 +32,26 @@ function trackAgent(session: SessionHandle, runId: RunId): RunHandle {
 }
 
 describe('SessionHandle', () => {
-  it.effect(
-    'keeps run tracking and approval policy isolated between sessions',
-    () =>
-      Effect.gen(function* () {
-        const a = yield* Effect.acquireRelease(createTestSession(), (session) =>
-          closeSessionOf(session),
-        );
-        const b = yield* Effect.acquireRelease(createTestSession(), (session) =>
-          closeSessionOf(session),
-        );
-        const isolated = generateRunId();
-        const runB = generateRunId();
-        const handle = trackAgent(a, isolated);
-        expect(a.runs.get(isolated)?.handle).toBe(handle);
-        expect(b.runs.get(isolated)?.handle).toBeUndefined();
+  it.effect('keeps run tracking isolated between sessions', () =>
+    Effect.gen(function* () {
+      const a = yield* Effect.acquireRelease(createTestSession(), (session) =>
+        closeSessionOf(session),
+      );
+      const b = yield* Effect.acquireRelease(createTestSession(), (session) =>
+        closeSessionOf(session),
+      );
+      const isolated = generateRunId();
+      const runB = generateRunId();
+      const handle = trackAgent(a, isolated);
+      expect(a.runs.get(isolated)?.handle).toBe(handle);
+      expect(b.runs.get(isolated)?.handle).toBeUndefined();
 
-        // Disposing A leaves B's separate registry untouched.
-        const handleB = trackAgent(b, runB);
-        // The policy is the session's own setting: a change on A writes no
-        // row and leaves B's as it was.
-        a.approvals.override('yolo');
-        expect(a.approvals.policy()).toBe('yolo');
-        expect(b.approvals.policy()).toBe('ask');
-        yield* closeSessionOf(a);
-        expect(a.runs.get(isolated)?.handle).toBeUndefined();
-        expect(b.runs.get(runB)?.handle).toBe(handleB);
-      }),
+      // Disposing A leaves B's separate registry untouched.
+      const handleB = trackAgent(b, runB);
+      yield* closeSessionOf(a);
+      expect(a.runs.get(isolated)?.handle).toBeUndefined();
+      expect(b.runs.get(runB)?.handle).toBe(handleB);
+    }),
   );
 
   it.effect(

@@ -64,7 +64,9 @@ const executableDecision = (session: SessionHandle, runId: RunId) =>
   decideTexraApproval({
     policy: session.approvals.policy(runId),
     promptRequired: true,
-    scopedBypass: false,
+    // A run whose delegated work is bypassed (an Auto-approve launch) is
+    // asked nothing: every approval it would open is granted.
+    scopedBypass: session.approvals.bypass(runId, 'superYolo') !== null,
     canPresent: canPresent(session),
   });
 
@@ -93,7 +95,7 @@ function answerFor(
           action: 'deny',
           reason: texraApprovalDenialMessage(decision),
         },
-        denial: { kind: 'plan' },
+        denial: { kind: 'plan', policy },
       };
     }
     case 'userQuestion': {
@@ -107,7 +109,7 @@ function answerFor(
           action: 'deny',
           reason: texraHumanInputDenialMessage(decision.deny),
         },
-        denial: { kind: 'humanInput', deny: decision.deny },
+        denial: { kind: 'humanInput', deny: decision.deny, policy },
       };
     }
     case 'retry': {
@@ -124,7 +126,7 @@ function answerFor(
           action: 'deny',
           reason: texraRetryDenialMessage(decision.deny),
         },
-        denial: { kind: 'retry', deny: decision.deny },
+        denial: { kind: 'retry', deny: decision.deny, policy },
       };
     }
     case 'proposal':
@@ -159,7 +161,7 @@ export function policyDecidedRows(
 }
 
 /** Whether a step's approval-gated tools are withheld: read live from its
- *  session's policy and host. */
+ *  session's policy, its grants and its host. */
 export function liveToolGates(
   session: SessionHandle,
   runId: RunId,

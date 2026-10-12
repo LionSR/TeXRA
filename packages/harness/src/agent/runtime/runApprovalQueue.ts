@@ -151,22 +151,15 @@ export interface SessionApprovals {
     runId: RunId,
   ): Effect.Effect<readonly SessionEventDraft[], DatabaseReadFailed>;
   /**
-   * The approval policy `runId`'s requests are decided under: this
-   * process's override, else the project's persisted
-   * `texra.approvalPolicy`, read at each call, narrowed by the strictest
-   * launch limit on the run's ancestry (`policyLimit`). The persisted
-   * setting is the one owner of a project's policy; a client changes it by
-   * writing that setting, never by telling a session. Without a run, the
-   * session's own policy.
+   * The approval policy `runId`'s requests are decided under: the
+   * project's persisted `texra.approvalPolicy`, read at each call, narrowed
+   * by the strictest launch limit on the run's ancestry (`policyLimit`).
+   * The persisted setting is the one owner of a project's policy; a client
+   * changes it by writing that setting, never by telling a session, and a
+   * launch widens it only for its own run, by its grants (an Auto-approve
+   * launch). Without a run, the project's policy.
    */
   policy(runId?: RunId): TexraApprovalPolicy;
-  /**
-   * Override the persisted policy for this process's own session (a CLI
-   * invocation's `--approval-policy`, a chat's `/approval`); null follows
-   * the setting again. The service never takes one: its sessions serve
-   * every window of a project, so they follow the setting alone.
-   */
-  override(policy: TexraApprovalPolicy | null): void;
 }
 
 /** Build the session's approvals over its view, its record door and its
@@ -184,22 +177,16 @@ export function createSessionApprovals(
   };
   const bypass: SessionApprovals['bypass'] = (runId, kind) =>
     resolveBypass(view(), runId, kind);
-  let overridden: TexraApprovalPolicy | null = null;
   return {
     bypass,
     policy: (runId) => {
-      const policy =
-        overridden ??
-        readConfigSettingFrom<TexraApprovalPolicy>(
-          session().roots.config,
-          TEXRA_APPROVAL_POLICY_CONFIG_KEY,
-        );
+      const policy = readConfigSettingFrom<TexraApprovalPolicy>(
+        session().roots.config,
+        TEXRA_APPROVAL_POLICY_CONFIG_KEY,
+      );
       const limit =
         runId === undefined ? undefined : policyLimit(view(), runId);
       return limit === undefined ? policy : stricterPolicy(policy, limit);
-    },
-    override: (next) => {
-      overridden = next;
     },
     enqueue: (kind, runId, approval) =>
       Effect.suspend(() =>

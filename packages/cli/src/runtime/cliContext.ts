@@ -17,8 +17,10 @@ import {
   TEXRA_APPROVAL_POLICY_CONFIG_KEY,
   TEXRA_APPROVAL_POLICY_NO_INPUT_DEFAULT,
   parseTexraApprovalPolicy,
+  texraApprovalPolicyLabel,
   type TexraApprovalPolicy,
 } from '@shared/approvalPolicy';
+import { stricterPolicy } from '@shared/approvalBypassKind';
 import type { SkillSourceOptions } from '@skills/skillSources';
 import { readConfigSettingFrom } from '@utils/config/platformSettings';
 import { absentReason } from '@utils/files/fsEntryExists';
@@ -488,3 +490,36 @@ export const buildCliContext = Effect.fn('cliContext.buildCliContext')(
     };
   },
 );
+
+/**
+ * What a launch asks for with the policy this invocation requested
+ * explicitly (its flag, `TEXRA_APPROVAL_POLICY`, `--no-input`, a chat's
+ * `/approval`); none follows the project's. The request is the run's launch
+ * limit, which only narrows the project's policy. An explicit Auto-approve
+ * also grants the run every bypass (an Auto-approve launch), recorded on
+ * the run, never on the project. Local and service launches alike.
+ */
+export function launchApproval(requested: TexraApprovalPolicy | undefined): {
+  readonly approvalPolicy?: TexraApprovalPolicy;
+  readonly approveDelegatedWork: boolean;
+} {
+  return {
+    ...(requested !== undefined && { approvalPolicy: requested }),
+    approveDelegatedWork: requested === 'yolo',
+  };
+}
+
+/** Why a request is not what a launch runs under: one more permissive than
+ *  the project's policy, Auto-approve aside, cannot widen it. */
+export function launchApprovalNotice(
+  requested: TexraApprovalPolicy | undefined,
+  configured: TexraApprovalPolicy,
+): string | undefined {
+  if (
+    requested === undefined ||
+    requested === 'yolo' ||
+    stricterPolicy(requested, configured) === requested
+  )
+    return undefined;
+  return `Tasks run under the project's approval policy, ${texraApprovalPolicyLabel(configured)}, not ${texraApprovalPolicyLabel(requested)}: a launch can only narrow it, or auto-approve its own task. Change the project's policy with /approval in \`texra chat\` or in the settings view.`;
+}

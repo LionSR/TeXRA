@@ -30,7 +30,7 @@ import {
   resumeOnSession,
 } from '@agent/followUp';
 
-import { type CliContext } from '@cli/runtime/cliContext';
+import { launchApproval, type CliContext } from '@cli/runtime/cliContext';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import { readCliTeamName } from '@cli/runtime/cliTeams';
 import { setCliHelperModel } from '@cli/runtime/initPlatform';
@@ -45,6 +45,7 @@ import {
 } from '@cli/runtime/terminalStatus';
 import { hasErrorPresentationClaimed } from '@common/errors/sdkError/errorMetadata';
 import type { RunModelDecisionReason } from '@model/runModelDecision';
+import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import { acceptsFollowUp, isLiveRun } from '@shared/session/sessionView';
 import { isTerminalOutcomePhase } from '@shared/runs/runStatus';
@@ -250,6 +251,10 @@ export interface ChatSessionControllerInit {
    *  here: the controller lives for the length of the chat session, and its
    *  Promise-facing methods are that session's run edge. */
   readonly runtime: ProcessRuntime;
+  /** The policy the chat asked for itself (its flag, then `/approval`),
+   *  which each launch carries (`launchApproval`); none follows the
+   *  project's. */
+  readonly approvalPolicy: () => TexraApprovalPolicy | undefined;
   /** The agent run boundary the controller drives. Composition leaves it
    *  unset and gets the agent runtime's own; a test harness injects its
    *  stand-ins here rather than mocking agent modules. */
@@ -530,6 +535,7 @@ export function createChatSessionController(
           const result = yield* agentRuns.launch({
             request: { config: registeredConfig, runId },
             options: {
+              ...launchApproval(init.approvalPolicy()),
               ...(previousRootRunId !== undefined && {
                 continues: previousRootRunId,
               }),

@@ -433,18 +433,24 @@ describe('executeCliRequest', () => {
       }),
   );
 
-  it.effect('keeps yolo runs approval-available for agent run', () =>
+  it.effect('asks an Auto-approve launch for an explicit yolo', () =>
     Effect.gen(function* () {
       const { executeCliRequest } = yield* Effect.promise(loadExecuteCli);
-      const seen = promptsUnavailableAtLaunch();
 
       yield* executeCliRequest(
         baseRequest(),
         cliContext({ approvalPolicy: 'yolo', requestedApprovalPolicy: 'yolo' }),
       );
 
-      expect(testDefaultSession().approvals.policy()).toBe('yolo');
-      expect(seen()).toBe(false);
+      // An explicit yolo rides the launch as an Auto-approve launch; the
+      // project's policy is never touched.
+      expect(mocks.rootLaunch).toHaveBeenLastCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          approvalPolicy: 'yolo',
+          approveDelegatedWork: true,
+        }),
+      );
     }),
   );
 
