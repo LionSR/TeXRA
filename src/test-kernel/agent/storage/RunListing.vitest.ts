@@ -214,8 +214,9 @@ describe('run listing normalization', () => {
             // The model the run is on is the view's (its newest config's),
             // not a second copy of the record's.
             model: agentConfig.model,
-            // Registered and never opened: nothing to resume from.
-            resumable: false,
+            // A loop-driven run continues from its rows: it is born with its
+            // opening, so the standing never asks for one.
+            resumable: true,
           },
         ]);
         expect(entries.filter(isUserVisibleRun)).toHaveLength(1);

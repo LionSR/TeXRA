@@ -3,7 +3,7 @@
  * from `agentErrorPresentation`. Child results and outcomes without error
  * metadata do not produce a notification.
  */
-import { Effect, SubscriptionRef } from 'effect';
+import { Effect, Predicate, SubscriptionRef } from 'effect';
 
 import type { ResultEvent } from '@agent/trace';
 import {
@@ -26,8 +26,8 @@ import type { SessionHandle } from './SessionHandle';
  * handle existed.
  */
 function isChildResult(session: SessionHandle, event: ResultEvent): boolean {
-  const handle = session.runs.getHandle(event.runId);
-  if (handle) return handle.parent !== null;
+  const live = session.runs.get(event.runId);
+  if (live?.handle) return live.parent !== null;
   const run = SubscriptionRef.getUnsafe(session.view.ref).runs.get(event.runId);
   return run !== undefined && run.parentId !== null;
 }
@@ -38,7 +38,7 @@ function isChildResult(session: SessionHandle, event: ResultEvent): boolean {
  * attaches later, so no guidance is lost for want of an attached host.
  */
 function presentAgentFailure(
-  interactions: SessionHostInteractions,
+  interactions: Pick<SessionHostInteractions, 'emit'>,
   error: Parameters<typeof agentErrorPresentation>[0],
 ): Effect.Effect<void> {
   const toast = agentErrorPresentation(error);
@@ -58,7 +58,7 @@ const presentedFailures = new WeakSet<object>();
  * Receipt for a root run's failure once its `run.end` row committed: the
  * session's presenter shows that row's guidance, so `failure`, what the run
  * throws past it, is marked presented. A run that never opened has no row:
- * its launch presents it (`runAgent`).
+ * its launch presents it (`Runs.launch`).
  */
 export function receiveTerminalFailure(
   failure: Error,
@@ -107,10 +107,11 @@ export function markFailurePresented(error: unknown): void {
  * worded as `prefix` plus its text (a `Rejected` request's reason), and
  * replayed to a surface that attaches later, then marked presented. A
  * failure already presented (here, by the terminal-result presenter, or
- * through a targeted notice) presents nothing.
+ * through a targeted notice) presents nothing. A `Session` start's
+ * `RunFailure` is presented as the failure it carries.
  */
 export function presentRunFailure(
-  interactions: SessionHostInteractions,
+  interactions: Pick<SessionHostInteractions, 'emit'>,
   error: unknown,
   prefix = '',
 ): Effect.Effect<void> {
@@ -118,7 +119,11 @@ export function presentRunFailure(
   const claimed = hasErrorPresentationClaimed(error);
   markFailurePresented(error);
   if (claimed) return Effect.void;
-  const primary = primaryAgentError(error);
+  const primary = primaryAgentError(
+    Predicate.isTagged(error, 'RunFailure') && 'cause' in error
+      ? error.cause
+      : error,
+  );
   const text =
     primary instanceof Rejected ? primary.reason : toErrorMessage(primary);
   return presentAgentFailure(interactions, {

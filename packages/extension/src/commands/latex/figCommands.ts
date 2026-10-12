@@ -6,7 +6,6 @@ import { Effect } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports
-import type { SessionHandle } from '@agent/runtime';
 import { runGuardedLatexCommand } from '@frontend/editor/activeFileGuards';
 import { safeExecuteCommand } from '@frontend/system/commandUtils';
 import { quickPick } from '@frontend/ui/dialogs';
@@ -18,15 +17,15 @@ import type { StorageFs, WorkspaceFs } from '@platform/rootedFs';
 import { ensureError } from '@utils/errors/errorMessage';
 import { pathToLocationIn } from '@utils/files/fileLocation';
 import { pluralize, truncateWithEllipsis } from '@utils/text/stringUtils';
-import type { ProcessServices } from '@texra-ai/harness';
+import type { ProcessServices, WorkspaceRoots } from '@texra-ai/harness';
 
 const CHANNEL = 'FigCommands';
 
 export function handleExtractTikzFigures(
-  session: SessionHandle,
+  roots: WorkspaceRoots,
 ): Effect.Effect<void, never, ProcessServices> {
   return runGuardedLatexCommand(
-    session,
+    roots,
     {
       channel: CHANNEL,
       action: 'extract TikZ figures',
@@ -39,7 +38,7 @@ export function handleExtractTikzFigures(
         ).pipe(withLogChannel(CHANNEL));
 
         const labeledTikzPictures = yield* TikzPictureManager.extract(
-          pathToLocationIn(session.roots.workspace, filePath),
+          pathToLocationIn(roots.workspace, filePath),
         );
 
         if (labeledTikzPictures.length === 0) {
@@ -74,10 +73,10 @@ export function handleExtractTikzFigures(
 }
 
 export function handleCompileTikzFigures(
-  session: SessionHandle,
+  roots: WorkspaceRoots,
 ): Effect.Effect<void, never, ProcessServices | WorkspaceFs | StorageFs> {
   return runGuardedLatexCommand(
-    session,
+    roots,
     {
       channel: CHANNEL,
       action: 'compile TikZ figures',
@@ -105,7 +104,6 @@ export function handleCompileTikzFigures(
 
               // Over the session's rooted filesystems the command root
               // provided, not a view built at this depth.
-              const { roots } = session;
               const compiledFiles = yield* TikzPictureManager.compile(
                 pathToLocationIn(roots.workspace, filePath),
                 roots,

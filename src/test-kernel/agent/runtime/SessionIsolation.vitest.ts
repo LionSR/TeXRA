@@ -5,9 +5,9 @@ import { it } from '@effect/vitest';
 import { Effect } from 'effect';
 
 import { describe, expect, vi } from 'vitest';
+import { registryOf, Runs } from '@agent/runtime/runRegistry';
 
 import { runWithLifecycle } from '@agent/runtime/AgentRunLifecycle';
-import { Runs } from '@agent/runtime/runRegistry';
 import {
   RUN_OUTCOME,
   aggregateId,
@@ -82,7 +82,6 @@ describe('session isolation', () => {
       Effect.gen(function* () {
         // Persistent stores, so each root's rows outlive its session's close
         // and are read back from the root they landed in.
-        const persistent = { kind: 'persistent' } as const;
         const rootsA = createFakeWorkspaceRoots({
           workspacePath: fakePath('papers/a'),
           storagePath: fakePath('storage/a'),
@@ -93,12 +92,12 @@ describe('session isolation', () => {
         });
         const sessionA = yield* createTestSession({
           roots: rootsA,
-          transcriptMode: persistent,
+          persistent: true,
         });
         yield* Effect.addFinalizer(() => closeSessionOf(sessionA));
         const sessionB = yield* createTestSession({
           roots: rootsB,
-          transcriptMode: persistent,
+          persistent: true,
         });
         yield* Effect.addFinalizer(() => closeSessionOf(sessionB));
         const live = [
@@ -116,7 +115,7 @@ describe('session isolation', () => {
             },
           ]);
           yield* session.log.settled;
-          session.runs.track(
+          registryOf(session.runs).track(
             testRunHandle({
               runId,
               agent: 'assistant',
@@ -141,7 +140,7 @@ describe('session isolation', () => {
         ] as const) {
           const reopened = yield* createTestSession({
             roots,
-            transcriptMode: persistent,
+            persistent: true,
           });
           const ends = (runId: string) =>
             reopened.log.rows(aggregateId('run', RunIdSchema.parse(runId)), [
@@ -211,14 +210,14 @@ describe('session isolation', () => {
         runId,
         agent: 'assistant',
       });
-      sessionB.runs.track(handle);
+      registryOf(sessionB.runs).track(handle);
       admitInterruptibleRun(sessionB.runs, runId, interrupt);
 
       const stop = sessionB.runs.stop(runId, { reason: 'user' });
       expect(stop.accepted()).toBe(true);
       yield* stop.settlement;
       expect(interrupt).toHaveBeenCalledOnce();
-      expect(testDefaultSession().runs.getHandle(runId)).toBeUndefined();
+      expect(testDefaultSession().runs.get(runId)?.handle).toBeUndefined();
     }),
   );
 
@@ -244,9 +243,9 @@ describe('session isolation', () => {
           runWithLifecycle(ctx, () =>
             Effect.sync(() => {
               // Mid-run: the handle is registered in session B's registry only.
-              expect(sessionB.runs.getHandle(runId)).toBeDefined();
+              expect(sessionB.runs.get(runId)?.handle).toBeDefined();
               expect(
-                testDefaultSession().runs.getHandle(runId),
+                testDefaultSession().runs.get(runId)?.handle,
               ).toBeUndefined();
               return {
                 outcome: RUN_OUTCOME.COMPLETED,
@@ -259,8 +258,8 @@ describe('session isolation', () => {
         );
 
         // After completion the run session untracked it; default never saw it.
-        expect(sessionB.runs.getHandle(runId)).toBeUndefined();
-        expect(testDefaultSession().runs.getHandle(runId)).toBeUndefined();
+        expect(sessionB.runs.get(runId)?.handle).toBeUndefined();
+        expect(testDefaultSession().runs.get(runId)?.handle).toBeUndefined();
       }),
   );
 });

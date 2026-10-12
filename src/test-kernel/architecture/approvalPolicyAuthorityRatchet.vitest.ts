@@ -55,7 +55,7 @@ const BYPASS_WRITE_ALLOWLIST = new Set([
   'packages/harness/src/agent/runtime/runApprovalQueue.ts',
   'packages/harness/src/agent/runtime/loop/step.ts',
   // An Auto-approve launch's grants, on its `run.start`.
-  'packages/harness/src/agent/runtime/runAgent.ts',
+  'packages/harness/src/agent/runtime/rootLaunch.ts',
   // `policy.set`, the one host door, committed as its row.
   'packages/harness/src/controllers/session/pendingUnderBypass.ts',
   'packages/harness/src/tools/approval/index.ts',

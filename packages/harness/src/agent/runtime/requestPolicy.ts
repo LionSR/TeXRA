@@ -14,7 +14,7 @@
  * present.
  */
 
-import { Cause, Effect, Option, Stream } from 'effect';
+import { Cause, Context, Effect, Option, Scope, Stream } from 'effect';
 import { withLogChannel } from '@logger/effectLog';
 import { runStateAppend } from '@shared/session/runHistory';
 
@@ -27,6 +27,7 @@ import {
   texraHumanInputDenialMessage,
   texraRetryDenialMessage,
   type ApprovalPolicyDenial,
+  type TexraApprovalPolicy,
 } from '@shared/approvalPolicy';
 import {
   aggregateId as qualifyAggregateId,
@@ -39,8 +40,9 @@ import {
 } from '@shared/schemas';
 import type { RunHistoryDraft } from '@shared/session/runStateFold';
 import type { Append } from '@shared/session/sessionEvents';
+import type { ToolStep } from '@tools/sessionTools';
 
-import type { StepToolInputs } from './agentToolResolution';
+import { HostCapabilities, type StepToolInputs } from './agentToolResolution';
 import type {
   AskOptions,
   LogWriteError,
@@ -59,11 +61,17 @@ const canPresent = (session: SessionHandle): boolean =>
  * approval-gated tool) under what the host can answer. One reading for
  * every run of the session, whoever triggers it.
  */
-const executableDecision = (session: SessionHandle, runId: RunId) =>
+const executableDecision = (
+  session: SessionHandle,
+  runId: RunId,
+  policy = session.approvals.policy(runId),
+) =>
   decideTexraApproval({
-    policy: session.approvals.policy(runId),
+    policy,
     promptRequired: true,
-    scopedBypass: false,
+    // A run whose delegated work is bypassed (an Auto-approve launch) is
+    // asked nothing: every approval it would open is granted.
+    scopedBypass: session.approvals.bypass(runId, 'superYolo') !== null,
     canPresent: canPresent(session),
   });
 
@@ -92,7 +100,7 @@ function answerFor(
           action: 'deny',
           reason: texraApprovalDenialMessage(decision),
         },
-        denial: { kind: 'plan' },
+        denial: { kind: 'plan', policy },
       };
     }
     case 'userQuestion': {
@@ -106,7 +114,7 @@ function answerFor(
           action: 'deny',
           reason: texraHumanInputDenialMessage(decision.deny),
         },
-        denial: { kind: 'humanInput', deny: decision.deny },
+        denial: { kind: 'humanInput', deny: decision.deny, policy },
       };
     }
     case 'retry': {
@@ -123,7 +131,7 @@ function answerFor(
           action: 'deny',
           reason: texraRetryDenialMessage(decision.deny),
         },
-        denial: { kind: 'retry', deny: decision.deny },
+        denial: { kind: 'retry', deny: decision.deny, policy },
       };
     }
     case 'proposal':
@@ -157,21 +165,51 @@ export function policyDecidedRows(
   ];
 }
 
-/** The step's inputs read live from its session: whether approvals can be
- *  asked, and what its host serves now. */
+/** Whether a step's approval-gated tools are withheld: read live from its
+ *  session's policy, its grants and its host; and the policy read, which a
+ *  denial of the withheld tools names. */
 export function liveToolGates(
   session: SessionHandle,
   runId: RunId,
-): Pick<StepToolInputs, 'approvalPromptsUnavailable' | 'hostCapabilities'> {
+): Pick<StepToolInputs, 'approvalPromptsUnavailable'> & {
+  readonly policy: TexraApprovalPolicy;
+} {
+  const policy = session.approvals.policy(runId);
   return {
     approvalPromptsUnavailable: isTexraApprovalDenied(
-      executableDecision(session, runId),
+      executableDecision(session, runId, policy),
     ),
-    hostCapabilities: new Set(
-      session.interactions.readDiagnostics ? ['diagnostics'] : [],
-    ),
+    policy,
   };
 }
+
+/** What the session's host serves now: the union of what each plugin of
+ *  the step's capability-gated tools says (`HostCapabilities`), each read
+ *  from its own services; none without one. */
+export const hostCapabilitiesOf = (
+  session: SessionHandle,
+  step: ToolStep,
+  scope: Scope.Scope,
+): Effect.Effect<ReadonlySet<string>> => {
+  const serving = new Set(
+    [...step.entries.values()].flatMap(({ tool, plugin }) =>
+      tool.hostCapability === undefined ? [] : [plugin],
+    ),
+  );
+  return Effect.map(
+    Effect.forEach(serving, (plugin) =>
+      Scope.provide(step.services(new Set([plugin])), scope).pipe(
+        Effect.map((services) =>
+          Option.match(Context.getOption(services, HostCapabilities), {
+            onNone: () => [],
+            onSome: ({ of }) => [...of(session.roots.storage)],
+          }),
+        ),
+      ),
+    ),
+    (served) => new Set(served.flat()),
+  );
+};
 
 const CHANNEL = 'requestPolicy';
 

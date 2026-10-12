@@ -1,25 +1,36 @@
 import { Cause, Deferred, Effect, Exit, Result, Scope } from 'effect';
 
 import { RUN_OUTCOME, type RunId } from '@texra-ai/harness/schemas';
-import { withProcessServices, type ProcessRuntime } from '@texra-ai/harness';
 import {
-  runAgent,
+  hasErrorPresentationClaimed,
+  withProcessServices,
+  type ProcessRuntime,
+  type ProcessServices,
+  type SessionOwner,
+} from '@texra-ai/harness';
+import {
   SESSION_CLOSE_DEADLINE_MS,
   type SessionHandle,
   terminalFailurePresented,
   validateRunRequest,
   type AgentConfigPayload,
-  type RunAgentOptions,
-  type RunAgentRequest,
+  type RootLaunch,
+  type RootLaunchOptions,
+  type RootLaunchRequest,
+  type RunEndResult,
 } from '@agent/runtime';
 import { deriveResumability } from '@agent/storage';
 import { AgentError } from '@common/errors';
 import { isUserAbort } from '@common/errors/sdkError/errorPatterns';
-import { hasErrorPresentationClaimed } from '@common/errors/sdkError/errorMetadata';
 import {
   DatabaseNotOwner,
   type SessionOpenError,
 } from '@shared/session/database';
+import {
+  TEXRA_APPROVAL_POLICY_CONFIG_KEY,
+  type TexraApprovalPolicy,
+} from '@shared/approvalPolicy';
+import { readConfigSettingFrom } from '@utils/config/platformSettings';
 import { aggregateError, generateRunId } from '@utils/core';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -43,20 +54,30 @@ import {
   runOutcomeExitCode,
   type ExecuteAgentResult,
 } from './terminalStatus';
-import { CliUsageError, type CliContext } from './cliContext';
+import {
+  CliUsageError,
+  launchApproval,
+  launchApprovalNotice,
+  type CliContext,
+} from './cliContext';
 
 type RunAgentWorkflowOutput = NonNullable<
-  RunAgentOptions['publishWorkflowOutput']
+  RootLaunchOptions['publishWorkflowOutput']
 >;
 
-/**
- * The process services a headless run requires (the ones `runAgent` reads),
- * derived rather than named so the host imports no agent-internal module.
- */
-export type CliRunServices = Effect.Services<ReturnType<typeof runAgent>>;
+/** The process services a headless run requires: a root launch's, under
+ *  the process's session owner. */
+export type CliRunServices = ProcessServices | SessionOwner;
+
+/** How a headless run launches on its session: a root launch, or
+ *  `texra resume`'s resume of the persisted run. */
+type CliLaunch = (
+  session: SessionHandle,
+  launch: RootLaunch,
+) => Effect.Effect<RunEndResult, Error, CliRunServices>;
 type CliWorkflowOutputHandler = (
   result: Parameters<RunAgentWorkflowOutput>[0],
-  /** The declared defaults the run hands over; see `RunAgentOptions`. */
+  /** The declared defaults the run hands over; see `RootLaunchOptions`. */
   agentDefaultOutputFiles: Parameters<RunAgentWorkflowOutput>[1],
   tryCommitPublication: () => boolean,
 ) => Effect.Effect<Effect.Success<ReturnType<RunAgentWorkflowOutput>>, Error>;
@@ -86,7 +107,7 @@ interface CliExecuteOptions {
    *  `texra resume`'s is the core resume path, which reads the shutdown
    *  predicate; a test harness injects stand-ins rather than mocking. */
   readonly agentRuns?: Partial<{
-    readonly launch: (shutdown: () => boolean) => typeof runAgent;
+    readonly launch: (shutdown: () => boolean) => CliLaunch;
     readonly resumability: typeof deriveResumability;
   }>;
 }
@@ -212,10 +233,10 @@ export function executeCliToolUseConfig(
  */
 export function executeCliRequest(
   // The run id is decided before launch: a shutdown stops the launch through
-  // the session's registry under it (`runs.stop`), which `runAgent` tracks
+  // the session's registry under it (`runs.stop`), which the launch tracks
   // (or attaches to a parked predecessor) before the first resume lineage
   // read, so this kill has a target from that first await on.
-  request: RunAgentRequest & { readonly runId: RunId },
+  request: RootLaunchRequest & { readonly runId: RunId },
   runContext: CliContext,
   options: CliExecuteOptions,
 ): Effect.Effect<
@@ -230,15 +251,21 @@ export function executeCliRequest(
 > {
   return Effect.gen(function* () {
     const agentRuns = {
-      launch: () => runAgent,
+      launch: (): CliLaunch => (session, launch) => session.runs.launch(launch),
       resumability: deriveResumability,
       ...options.agentRuns,
     };
     const session = yield* options.session;
-    // Only a policy this invocation asked for overrides the session; with
-    // none, the run follows the project's setting, read at each decision.
-    if (runContext.requestedApprovalPolicy !== undefined)
-      session.approvals.override(runContext.requestedApprovalPolicy);
+    // The run follows the project's setting, read at each decision, with
+    // what this invocation asked for riding its launch (`launchApproval`).
+    const refused = launchApprovalNotice(
+      runContext.requestedApprovalPolicy,
+      readConfigSettingFrom<TexraApprovalPolicy>(
+        session.roots.config,
+        TEXRA_APPROVAL_POLICY_CONFIG_KEY,
+      ),
+    );
+    if (refused !== undefined) writeTextStderr(refused);
     const presentationHost = createCliRuntimeHost(runContext);
     // Everything the run attaches to the session for its output: closed once,
     // after the last result read, so the last line is on the wire before the
@@ -332,7 +359,7 @@ export function executeCliRequest(
           return true;
         });
         // Record the original drain failure for the one-shot runtime adapter
-        // below, which rethrows it into runAgent's artifact aggregate. This
+        // below, which rethrows it into the launch's artifact aggregate. This
         // memoized operation itself resolves false so the outer shutdown await
         // cannot rethrow the same error over the primary run failure.
         return yield* drain.pipe(
@@ -404,7 +431,7 @@ export function executeCliRequest(
                 ).pipe(Effect.orElseSucceed(() => false)));
             }
             // Earlier shutdown handlers interrupt the live agent sessions. Wait
-            // for runAgent to finish unwinding before the final drain commits
+            // for the launch to finish unwinding before the final drain commits
             // the run's ending, so no transcript or checkpoint writer can race
             // it. This step's deadline bounds this wait by interrupting it.
             // Once durable resumability has been established, however, keep
@@ -462,31 +489,34 @@ export function executeCliRequest(
       ),
     );
     const publishWorkflowOutput = options.publishWorkflowOutput;
-    const invoke = (): ReturnType<typeof runAgent> =>
-      agentRuns.launch(() => shutdownRequested)(request, {
-        session,
-        publishWorkflowOutput:
-          publishWorkflowOutput === undefined
-            ? undefined
-            : (result, agentDefaultOutputFiles) =>
-                publishWorkflowOutput(
-                  result,
-                  agentDefaultOutputFiles,
-                  tryCommitWorkflowOutputPublication,
-                ),
-        beforeRunEnd: () =>
-          Effect.gen(function* () {
-            yield* finalizeShutdownStatus;
-            if (
-              launchVerdict.kind === 'interrupted' &&
-              launchVerdict.artifactFailure !== undefined
-            ) {
-              const error = launchVerdict.artifactFailure;
-              launchVerdict.artifactFailure = undefined;
-              return yield* Effect.fail(ensureError(error));
-            }
-          }),
-        stopAfterCycle: options.stopAfterCycle,
+    const invoke = (): ReturnType<CliLaunch> =>
+      agentRuns.launch(() => shutdownRequested)(session, {
+        request,
+        options: {
+          ...launchApproval(runContext.requestedApprovalPolicy),
+          publishWorkflowOutput:
+            publishWorkflowOutput === undefined
+              ? undefined
+              : (result, agentDefaultOutputFiles) =>
+                  publishWorkflowOutput(
+                    result,
+                    agentDefaultOutputFiles,
+                    tryCommitWorkflowOutputPublication,
+                  ),
+          beforeRunEnd: () =>
+            Effect.gen(function* () {
+              yield* finalizeShutdownStatus;
+              if (
+                launchVerdict.kind === 'interrupted' &&
+                launchVerdict.artifactFailure !== undefined
+              ) {
+                const error = launchVerdict.artifactFailure;
+                launchVerdict.artifactFailure = undefined;
+                return yield* Effect.fail(ensureError(error));
+              }
+            }),
+          stopAfterCycle: options.stopAfterCycle,
+        },
       });
 
     let runResult:

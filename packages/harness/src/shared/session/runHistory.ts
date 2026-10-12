@@ -2,8 +2,7 @@
  * The run history: the only reader of run-history-private payloads and the
  * only writer of the rows a run's state is folded from, each through one
  * run's {@link RunCell}. `load` reads, `open` hands out the cell every write
- * of the run goes through, and `appendIn` routes another job's run rows
- * through their cells.
+ * of the run goes through.
  *
  * Stateless by construction. A cell holds its run's `RunState`, folded from
  * the batches it commits; that is what makes `foldRunState` provably the
@@ -14,8 +13,9 @@ import { Cause, Context, Data, type Effect, type Scope } from 'effect';
 
 import type { RunId, SessionEventDraft } from '@shared/schemas';
 import {
-  type DatabaseNotOwner,
-  type DatabaseReadFailed,
+  DatabaseReadFailed,
+  DatabaseRowCorrupt,
+  DatabaseRowEarlier,
   DatabaseWriteFailed,
 } from './database';
 import type { Append, CoWrite } from './sessionEvents';
@@ -92,6 +92,16 @@ export const runStateAppend = (
 ): ((events: readonly SessionEventDraft[]) => ReturnType<Append>) =>
   // cast: one function; the narrowing is the type fence, not a runtime one.
   append as never;
+
+/** A run whose rows do not load: they do not fold, or one does not decode
+ *  (corrupt, or an earlier build's); never a store that cannot be read. */
+export const unloadable = (
+  error: unknown,
+): error is RunHistoryRefused | DatabaseReadFailed =>
+  error instanceof RunHistoryRefused ||
+  (error instanceof DatabaseReadFailed &&
+    (error.cause instanceof DatabaseRowCorrupt ||
+      error.cause instanceof DatabaseRowEarlier));
 
 /** What a run cell's commits and re-reads fail with. */
 export type CellError =
@@ -189,8 +199,7 @@ export class RunHistory extends Context.Service<
   {
     /**
      * Fold a run's rows into its state. `null` only when no run history row
-     * has folded. Queued follow-ups alone still return that unopened state
-     * (`phase` is null); they do not open the run. Run history rows without
+     * has folded; a run's input folds nothing. Run history rows without
      * an opening `run.position` are a malformed aggregate and fail
      * `inconsistent`, because folding an `attempt` or a `response` into a
      * fresh run is how a paid invocation gets issued twice. Reads the run
@@ -214,14 +223,5 @@ export class RunHistory extends Context.Service<
       RunCell,
       RunHistoryRefused | DatabaseReadFailed | DatabaseWriteFailed | E
     >;
-    /**
-     * Rows of one or more runs, each through its own cell opened `within`
-     * the caller's job: how a write that touches another run's history
-     * (a delivery, an admitted input, a child's park) reaches it.
-     */
-    readonly appendIn: (
-      append: Append,
-      rows: readonly RunHistoryDraft[],
-    ) => Effect.Effect<void, CellError | DatabaseNotOwner>;
   }
 >()('@texra/session/RunHistory') {}

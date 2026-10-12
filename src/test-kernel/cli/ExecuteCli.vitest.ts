@@ -8,15 +8,22 @@ import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 import { Deferred, Effect, Exit, Fiber, Scope } from 'effect';
 
 import { liveToolGates } from '@agent/runtime/requestPolicy';
-import type { RunAgentOptions } from '@agent/runtime/runAgent';
+import { humanGrant } from '@agent/runtime/runApprovalQueue';
+import type { RootLaunchOptions } from '@agent/runtime/rootLaunch';
 import { RunHandle } from '@agent/runtime/RunHandle';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
+import { registryOf } from '@agent/runtime/runRegistry';
+import type { RootLaunch } from '@agent/runtime/runs';
 import type { CliContext } from '@cli/runtime/cliContext';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import type { executeCliRequest } from '@cli/runtime/executeCli';
 import { AgentError } from '@common/errors';
 import { enablePlugin } from '@common/plugins/pluginTrust';
-import { RUN_OUTCOME } from '@shared/schemas';
+import {
+  APPROVAL_BYPASS_KINDS,
+  NO_APPROVAL_GRANTS,
+} from '@shared/approvalBypassKind';
+import { aggregateId, RUN_OUTCOME } from '@shared/schemas';
 import type { RunId } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { untrackRun } from '@test/support/sessionEnd';
@@ -34,7 +41,9 @@ import {
   useTempDirs,
 } from '@test/support/tempDirPlatform';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
+import { publishTestRows } from '@test/support/sessionTestUtils';
 import { admitInterruptibleRun } from '@test/support/runHandleFixtures';
+import { generateRunId } from '@utils/core';
 
 const mocks = vi.hoisted(() => ({
   close: vi.fn(),
@@ -48,7 +57,7 @@ const mocks = vi.hoisted(() => ({
   prepareInteractivePrompt: vi.fn(),
   readCliRunOutcomeState: vi.fn(),
   deriveResumability: vi.fn(),
-  runAgent: vi.fn(),
+  rootLaunch: vi.fn(),
   writeTextStderr: vi.fn(),
   writeTextStderrAndWait: vi.fn<() => Effect.Effect<void>>(() => Effect.void),
 }));
@@ -81,10 +90,12 @@ async function installStoragePlatform(): Promise<void> {
  * suite's mock bag.
  */
 const agentRunsFake = {
+  // The mock bag takes a launch as `(request, options)`, the session among
+  // the options.
   launch:
     () =>
-    (...args: unknown[]) =>
-      Effect.promise(() => mocks.runAgent(...args)),
+    (session: SessionHandle, { request, options }: RootLaunch) =>
+      Effect.promise(() => mocks.rootLaunch(request, { ...options, session })),
   resumability: (...args: unknown[]) =>
     Effect.promise(() => mocks.deriveResumability(...args)),
 } as NonNullable<Parameters<typeof executeCliRequest>[2]['agentRuns']>;
@@ -122,7 +133,7 @@ vi.mock('@cli/runtime/logSinks', () => ({
 
 type CliRequest = Parameters<typeof executeCliRequest>[0];
 
-/** Result shape the default `runAgent` stub resolves with. */
+/** Result shape the default `rootLaunch` stub resolves with. */
 const COMPLETED_RUN = {
   outcome: 'completed',
   output: { response: '', files: [] },
@@ -130,7 +141,7 @@ const COMPLETED_RUN = {
 } as const;
 
 const COMPLETED_WORKFLOW_RUN: Parameters<
-  NonNullable<RunAgentOptions['publishWorkflowOutput']>
+  NonNullable<RootLaunchOptions['publishWorkflowOutput']>
 >[0] = {
   outcome: 'completed',
   output: {
@@ -223,12 +234,12 @@ async function loadExecuteCli() {
 
 type LeaseOptions = {
   beforeRunEnd?: () => Effect.Effect<boolean | void, Error>;
-  publishWorkflowOutput?: RunAgentOptions['publishWorkflowOutput'];
+  publishWorkflowOutput?: RootLaunchOptions['publishWorkflowOutput'];
   session?: SessionHandle;
 };
 
 /**
- * Stubs runAgent to publish its lease options through `published` and then
+ * Stubs the launch to publish its lease options through `published` and then
  * hang until the test resolves it — the shape the shutdown-interrupt tests
  * drive.
  */
@@ -238,37 +249,39 @@ function stubHangingRun(published: Deferred.Deferred<LeaseOptions>): {
 } {
   let resolveRun!: (result: unknown) => void;
   let rejectRun!: (error: unknown) => void;
-  mocks.runAgent.mockImplementation(async (request, options: LeaseOptions) => {
-    Deferred.doneUnsafe(published, Effect.succeed(options));
-    const runId = request.runId as RunId;
-    const launchHandle = new RunHandle(
-      {
-        runId,
-        identity: { kind: 'agent', agent: 'chat' },
-      },
-      null,
-    );
-    const runs = options.session?.runs;
-    // The launch's stop target is its run's run registry fiber; the hanging
-    // promise is the test's to resolve, as the run's own result is, and the
-    // generation ends with it.
-    let generation: { interruptUnsafe(): void } | undefined;
-    if (runs) {
-      runs.track(launchHandle);
-      generation = admitInterruptibleRun(runs, runId, () => undefined);
-    }
-    try {
-      return await new Promise((resolve, reject) => {
-        resolveRun = resolve;
-        rejectRun = reject;
-      });
-    } finally {
-      generation?.interruptUnsafe();
-      if (runs && runs.getHandle(runId) === launchHandle) {
-        if (runs) untrackRun(runs, runId);
+  mocks.rootLaunch.mockImplementation(
+    async (request, options: LeaseOptions) => {
+      Deferred.doneUnsafe(published, Effect.succeed(options));
+      const runId = request.runId as RunId;
+      const launchHandle = new RunHandle(
+        {
+          runId,
+          identity: { kind: 'agent', agent: 'chat' },
+        },
+        null,
+      );
+      const runs = options.session?.runs;
+      // The launch's stop target is its run's run registry fiber; the hanging
+      // promise is the test's to resolve, as the run's own result is, and the
+      // generation ends with it.
+      let generation: { interruptUnsafe(): void } | undefined;
+      if (runs) {
+        registryOf(runs).track(launchHandle);
+        generation = admitInterruptibleRun(runs, runId, () => undefined);
       }
-    }
-  });
+      try {
+        return await new Promise((resolve, reject) => {
+          resolveRun = resolve;
+          rejectRun = reject;
+        });
+      } finally {
+        generation?.interruptUnsafe();
+        if (runs && runs.get(runId)?.handle === launchHandle) {
+          if (runs) untrackRun(runs, runId);
+        }
+      }
+    },
+  );
   return {
     resolve: (result: unknown) => resolveRun(result),
     reject: (error: unknown) => rejectRun(error),
@@ -318,7 +331,7 @@ async function stubExecuteCliDeps(): Promise<void> {
     outcomePersisted: true,
   });
   mocks.deriveResumability.mockResolvedValue({ kind: 'checkpoint' });
-  mocks.runAgent.mockResolvedValue(COMPLETED_RUN);
+  mocks.rootLaunch.mockResolvedValue(COMPLETED_RUN);
 }
 
 /** Queues one cancelled, persisted outcome read for the next resolution. */
@@ -383,9 +396,9 @@ describe('executeCliRequest', () => {
         expect(attachProjection).toHaveBeenCalledTimes(1);
         // The writer slot: the projection defaults to the NDJSON stdout sink.
         expect(attachProjection.mock.calls[0]?.[1]).toBeUndefined();
-        expect(mocks.runAgent).toHaveBeenCalledTimes(1);
+        expect(mocks.rootLaunch).toHaveBeenCalledTimes(1);
         expect(attachProjection.mock.invocationCallOrder[0]).toBeLessThan(
-          mocks.runAgent.mock.invocationCallOrder[0] ??
+          mocks.rootLaunch.mock.invocationCallOrder[0] ??
             Number.POSITIVE_INFINITY,
         );
         expect(mocks.detachSessionProgressProjection).toHaveBeenCalledTimes(1);
@@ -393,14 +406,33 @@ describe('executeCliRequest', () => {
   );
 
   /** Whether the session withheld approval-gated tools while the run
-   *  launched: its policy applied to what the attached host can answer. */
+   *  launched: its policy and the grants its `run.start` records, as the
+   *  root launch records them, applied to what the attached host can
+   *  answer. */
   const promptsUnavailableAtLaunch = (): (() => boolean | undefined) => {
     let seen: boolean | undefined;
-    mocks.runAgent.mockImplementationOnce(
+    mocks.rootLaunch.mockImplementationOnce(
       async (
         request: { runId: RunId },
-        options: { session: SessionHandle },
+        options: { session: SessionHandle; approveDelegatedWork?: boolean },
       ) => {
+        if (options.approveDelegatedWork === true) {
+          publishTestRows(options.session, [
+            {
+              type: 'run.start',
+              aggregateId: aggregateId('run', request.runId),
+              identity: { kind: 'agent', agent: 'chat' },
+              userFollowUpSupport: 'unsupported',
+              parent: null,
+              provenance: null,
+              approvalPolicy: humanGrant(
+                APPROVAL_BYPASS_KINDS,
+                true,
+              )(NO_APPROVAL_GRANTS),
+            },
+          ]);
+          await testRuntime().runPromise(options.session.log.settled);
+        }
         seen = liveToolGates(
           options.session,
           request.runId,
@@ -433,11 +465,20 @@ describe('executeCliRequest', () => {
       const seen = promptsUnavailableAtLaunch();
 
       yield* executeCliRequest(
-        baseRequest(),
+        { ...baseRequest(), runId: generateRunId() },
         cliContext({ approvalPolicy: 'yolo', requestedApprovalPolicy: 'yolo' }),
       );
 
-      expect(testDefaultSession().approvals.policy()).toBe('yolo');
+      // An explicit yolo rides the launch as an Auto-approve launch; the
+      // project's policy is never touched.
+      expect(mocks.rootLaunch).toHaveBeenLastCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          approvalPolicy: 'yolo',
+          approveDelegatedWork: true,
+        }),
+      );
+      // The Auto-approve grant keeps its gated tools offered, headless.
       expect(seen()).toBe(false);
     }),
   );
@@ -482,8 +523,8 @@ describe('executeCliRequest', () => {
           callOrder.push('flush');
         }),
       );
-      mocks.runAgent.mockImplementationOnce(async () => {
-        callOrder.push('runAgent');
+      mocks.rootLaunch.mockImplementationOnce(async () => {
+        callOrder.push('rootLaunch');
         return {
           outcome: 'completed',
           output: { response: '', files: [] },
@@ -493,7 +534,7 @@ describe('executeCliRequest', () => {
 
       yield* executeCliRequest(request, cliContext());
 
-      expect(callOrder).toEqual(['runAgent', 'flush']);
+      expect(callOrder).toEqual(['rootLaunch', 'flush']);
     }),
   );
 
@@ -502,7 +543,7 @@ describe('executeCliRequest', () => {
       const { executeCliRequest } = yield* Effect.promise(loadExecuteCli);
       const request = baseRequest();
       const { flushSpy } = yield* Effect.promise(spyOnArtifactFlush);
-      mocks.runAgent.mockRejectedValueOnce(new AgentError('boom'));
+      mocks.rootLaunch.mockRejectedValueOnce(new AgentError('boom'));
 
       // #7645: a classified run failure resolves to a non-zero exit code
       // instead of rethrowing — otherwise it reaches bin/texra.ts's crash
@@ -551,7 +592,7 @@ describe('executeCliRequest', () => {
     () =>
       Effect.gen(function* () {
         const { executeCliRequest } = yield* Effect.promise(loadExecuteCli);
-        mocks.runAgent.mockImplementationOnce(async () => {
+        mocks.rootLaunch.mockImplementationOnce(async () => {
           const hooks =
             mocks.createHeadlessCliHostInteractions.mock.calls[0]?.[3];
           hooks.emit('requestShowError', { message: 'Agent not found.' });
@@ -687,7 +728,7 @@ describe('executeCliRequest', () => {
           loadExecuteCliOnInstalledHost,
         );
         const launch = yield* Deferred.make<void>();
-        mocks.runAgent.mockImplementationOnce(
+        mocks.rootLaunch.mockImplementationOnce(
           async (request: { runId: RunId }, options: LeaseOptions) => {
             const runId = request.runId;
             // The launch's fiber is its stop: shutdown interrupts the run by
@@ -881,7 +922,7 @@ describe('executeCliRequest', () => {
         const runGate = new Promise<void>((resolve) => {
           releaseRun = resolve;
         });
-        mocks.runAgent.mockImplementationOnce(
+        mocks.rootLaunch.mockImplementationOnce(
           async (_request: unknown, options: LeaseOptions) => {
             try {
               await testRuntime().runPromise(
@@ -893,7 +934,7 @@ describe('executeCliRequest', () => {
               Deferred.doneUnsafe(outputFailed, Effect.void);
             }
             await runGate;
-            // runAgent classifies the host output failure before it reaches the
+            // rootLaunch classifies the host output failure before it reaches the
             // CLI boundary. Emit the same prefixed AgentError finalizeFailedRun
             // throws so this test pins the production message, not the mock's raw
             // copy error.
@@ -1018,7 +1059,7 @@ describe('executeCliConfig', () => {
           exitCode: CliExitCode.Interrupted,
         });
         // The launch's own run id, minted for the tool-use request.
-        const launched: { runId: RunId } = mocks.runAgent.mock.calls[0]?.[0];
+        const launched: { runId: RunId } = mocks.rootLaunch.mock.calls[0]?.[0];
         expect(mocks.writeTextStderrAndWait).toHaveBeenCalledExactlyOnceWith(
           `Resume this task with: texra resume ${launched.runId} --cwd /tmp/project --approval-policy yolo --include-interop --source '/tmp/skill path'`,
         );
@@ -1091,7 +1132,7 @@ describe('executeCliConfig', () => {
         ).pipe(Effect.provide(NodeFileSystem.layer));
         const { executeCliToolUseConfig } =
           yield* Effect.promise(loadExecuteCli);
-        mocks.runAgent.mockResolvedValueOnce({
+        mocks.rootLaunch.mockResolvedValueOnce({
           outcome: 'completed',
           output: {
             response: 'Done.',

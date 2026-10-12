@@ -114,9 +114,9 @@ export const externalInquiry: Plugin = {
   // asked, before the decision commits.
   decision: {
     kind: 'externalInquiry',
-    record: ({ payload, decision, session }) =>
+    record: ({ payload, decision, inbox, commit }) =>
       payload.kind === 'externalInquiry'
-        ? recordInquiryDecision(payload.data, decision, session).pipe(
+        ? recordInquiryDecision(payload.data, decision, inbox, commit).pipe(
             Effect.provide(inquiryRecordsLayer),
           )
         : Effect.die(

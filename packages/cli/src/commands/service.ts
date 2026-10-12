@@ -16,6 +16,10 @@ import {
   connectCliService,
   probeCliService,
 } from '../runtime/cliService';
+import {
+  installedEditorHost,
+  installedSessions,
+} from '../runtime/cliProcessRuntime';
 import { CliExitCode } from '../runtime/exitCodes';
 import { writeTextStderr } from '../runtime/logSinks';
 
@@ -87,7 +91,19 @@ function runServe(context: CliContext, idleSeconds: number) {
     const scope = yield* Scope.make();
     const owner = yield* SessionOwner;
     const served = Effect.gen(function* () {
-      const projects = yield* cliServiceProjects(context, scope);
+      // The registry the installed runtime's plugins read: windows attach
+      // their editors to it.
+      const editors = installedEditorHost();
+      if (editors === undefined)
+        return yield* Effect.die(
+          new Error('texra serve runs on an installed runtime; none is.'),
+        );
+      const projects = yield* cliServiceProjects(
+        context,
+        scope,
+        editors,
+        yield* installedSessions,
+      );
       return yield* serve({
         idleAfter: `${idleSeconds} seconds`,
         shutdown,

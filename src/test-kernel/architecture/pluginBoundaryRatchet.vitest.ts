@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 // Third-party imports
-import { Effect } from 'effect';
+import { Effect, Layer } from 'effect';
 import { describe, expect, it } from 'vitest';
 
 import type {
@@ -11,12 +11,16 @@ import type {
   RunCall,
   ScriptCalls,
 } from '@agent/runtime/RunCall';
+import type { ToolRun } from '@agent/core/tools/ToolTypes';
 import type { ChildRuns, RuntimeTool } from '@agent/runtime/ToolServices';
+import { Runs } from '@agent/runtime/runRegistry';
+import type { SessionHandle } from '@agent/runtime/SessionHandle';
+import type { ToolResult } from '@shared/schemas';
 
 import { TEXRA_PLUGIN_CARDS } from '@texra/tools/pluginCards';
 import { texraPlugins } from '@texra/tools/registry';
 import { harnessBuiltins } from '@tools/builtinPlugins';
-import { armsOf, type Plugin } from '@tools/plugins';
+import { armsOf, type Plugin, type PluginDefinition } from '@tools/plugins';
 import {
   ALL_HOST_PRODUCTION_ROOTS,
   collectModuleSpecifiers,
@@ -79,6 +83,13 @@ const PLUGIN_SERVICES: readonly {
   },
   // The `core` plugin's Comments UI port: its tool.
   { tag: 'InlineComments', users: /^packages\/texra\/src\/tools\/comment\// },
+  // The editor registry of `latex-diagnostics` and `core`: their tools. The
+  // hosts that attach to it hold the registry value, never the tag.
+  {
+    tag: 'EditorHost',
+    users:
+      /^packages\/texra\/src\/tools\/(?:DiagnosticsTool|OpenPdfTool|editorHost)\.ts$/,
+  },
 ];
 /** Where the services are declared, typed and built. */
 const SERVICE_HOMES = new Set([
@@ -278,7 +289,53 @@ describe('plugin rosters', () => {
       // @ts-expect-error nor a script's door
       requiring<ScriptCalls>(null as never),
       requiring<ChildRuns>(null as never),
+      // @ts-expect-error nor the session's runs: ChildRuns is its run door
+      requiring<Runs>(null as never),
     ];
-    expect(probes).toHaveLength(4);
+    expect(probes).toHaveLength(5);
+  });
+
+  // Failure mode: a plugin's tool reaches a root launch (outside any
+  // script's budget, under no parent) through the session its run carries.
+  // A root launch requires the composition root's `SessionOwner`, which no
+  // tool is served: the compiler refuses it.
+  it('refuses a plugin tool that launches a root run', () => {
+    type PluginTool = NonNullable<Plugin['tools']>[string];
+    const calling = <R>(
+      call: () => Effect.Effect<ToolResult, Error, R>,
+    ): RuntimeTool<Error, R> => ({ definition: { name: 'probe' }, call });
+    const session = null as unknown as SessionHandle;
+    const probes: PluginTool[] = [
+      // @ts-expect-error a plugin's tool never reaches a root launch
+      calling(() =>
+        session.runs
+          .launch({ request: { config: null as never }, options: {} })
+          .pipe(Effect.as(null as unknown as ToolResult)),
+      ),
+    ];
+    expect(probes).toHaveLength(1);
+  });
+
+  // Failure mode: an app plugin's tool holds the session again (its log,
+  // its run history, its inbox), past `ChildRuns` and its call's requests.
+  // The run a plugin's tool reads names no session, and no file of the
+  // app's tools names the handle.
+  it("keeps the session out of the app's plugin tools", () => {
+    // @ts-expect-error a plugin's tool reads no session off its run
+    const probe: ToolRun['session'] = null;
+    const holders = files()
+      .filter((file) => file.startsWith('packages/texra/src/tools/'))
+      .filter((file) => /\bSessionHandle\b/.test(source(file)));
+    expect({ probe, holders }).toEqual({ probe: null, holders: [] });
+  });
+
+  // Failure mode: a plugin's session layer reads the session's runs, so a
+  // service it serves its tools hands them a launch.
+  it("refuses a plugin's session layer that reads the session's runs", () => {
+    const layers: NonNullable<PluginDefinition<never>['sessionLayer']>[] = [
+      // @ts-expect-error a plugin's session layer reads no Runs
+      Layer.effectDiscard(Effect.flatMap(Runs, () => Effect.void)),
+    ];
+    expect(layers).toHaveLength(1);
   });
 });

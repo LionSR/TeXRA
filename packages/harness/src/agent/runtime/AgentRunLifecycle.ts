@@ -30,7 +30,7 @@ import {
 import { SETUP_AGENT_NAME } from '@shared/constants/agents';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { RunHandle } from './RunHandle';
-import { Runs, type AgentRunServices } from './runRegistry';
+import { registryOf, type AgentRunServices, Runs } from './runRegistry';
 import { receiveTerminalFailure } from './terminalResultToast';
 import { buildTerminalRunEndResult, type RunEndResult } from './RunEndResult';
 import type { TransactionPart } from './childSettlement';
@@ -115,7 +115,7 @@ export const finalizeRunTerminal = Effect.fn('finalizeRunTerminal')(
     params: FinalizeRunTerminalParams,
   ): Effect.fn.Return<FinalizeRunTerminalResult, Error, Runs> {
     const { session, handle } = params;
-    const runs = yield* Runs;
+    const runs = registryOf(yield* Runs);
     // Stop precedence, read once: a stop that reached the run before its exit
     // outranks the flow's report, on the stage here as on the row below.
     const stopped = params.stopped === true;
@@ -244,7 +244,7 @@ export const runWithLifecycle = Effect.fn('runWithLifecycle')(function* <R>(
   options?: RunLifecycleOptions,
 ): Effect.fn.Return<RunEndResult, Error, R | AppState | AgentRunServices> {
   const { runId, session } = ctx;
-  const runs = yield* Runs;
+  const runs = registryOf(yield* Runs);
   const agentIdentifier = ctx.config.agent;
   const script = ctx.config.script ?? null;
   const handle = new RunHandle(
@@ -303,7 +303,7 @@ export const runWithLifecycle = Effect.fn('runWithLifecycle')(function* <R>(
         const errorMsg = `Error executing agent ${agentIdentifier}: ${sdkMsg}`;
         // Root failures are logged here; a subagent's is delivered to its
         // orchestrator, so a second wrapper error would blame the parent.
-        if (kind !== 'abort' && handle.parent === null) {
+        if (kind !== 'abort' && runs.parentOf(runId) === null) {
           yield* logSdkError(ctx.logger, errorMsg, err, {
             operation: `execute ${agentIdentifier}`,
           });
@@ -340,19 +340,19 @@ export const runWithLifecycle = Effect.fn('runWithLifecycle')(function* <R>(
     // A stop that reached the run outranks the failure beside it; the
     // failure still rides the cancelled row as its error detail.
     const outcome = stopped ? RUN_OUTCOME.CANCELLED : AGENT_ERROR_OUTCOME[kind];
-    // A child's failure rides its result: the normalized error its
-    // delivery to the parent reports.
-    const subagentResult: RunEndResult | undefined = handle.parent
-      ? {
-          ...(carried ??
-            buildTerminalRunEndResult(
-              outcome,
-              runId,
-              ctx.attachedMemoryMisses,
-            )),
-          error: info,
-        }
-      : undefined;
+    // A child's failure rides its result, the error its delivery reports.
+    const subagentResult: RunEndResult | undefined =
+      runs.parentOf(runId) !== null
+        ? {
+            ...(carried ??
+              buildTerminalRunEndResult(
+                outcome,
+                runId,
+                ctx.attachedMemoryMisses,
+              )),
+            error: info,
+          }
+        : undefined;
     // One finalize covers the three exits below; its row is the toast's.
     const finalized = yield* finalizeTerminal({
       outcome,

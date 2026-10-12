@@ -46,12 +46,12 @@ import {
   type McpServerConfig,
 } from '@common/plugins/mcpServers';
 import { TEXRA_STORAGE_DIR_NAME } from '@platform/defaults/nodeStorage';
-import { ProjectEnvironment } from '@platform/defaults/nodeWorkspace';
 import type {
   LoadedPlugin,
   LoadedPluginTools,
   PluginLoader,
 } from '@tools/toolTable';
+import { ProjectEnvironment } from '@utils/system/nodeWorkspace';
 import { sha256 } from '@utils/core/idHash';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { safeHomedir } from '@utils/system/platformPaths';

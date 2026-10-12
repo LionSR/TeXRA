@@ -26,6 +26,8 @@ import {
   type BoundModel,
 } from '@agent/runtime/modelAccess/ModelAccess';
 import { routePolicies } from '@agent/runtime/modelAccess/failureInfo';
+import { registryOf } from '@agent/runtime/runRegistry';
+import { noCoWrite } from '@shared/session/sessionEvents';
 import type { RunCell } from '@shared/session/runHistory';
 import { PersonaSchema } from '@shared/schemas';
 import {
@@ -296,6 +298,7 @@ export function testAgentRun(
     opening: { inputs: {}, activated: [], attachedMemoryMisses: [] },
     entry: {
       registration: null,
+      opening: noCoWrite,
       entered: Effect.void,
       initialUserMessage: 'Do the thing.',
     },
@@ -345,7 +348,7 @@ export function agentRunTestLayer(init: ScriptedRunInit) {
         agent: 'chat',
         parent: init.parentRunId ?? null,
       });
-      init.session.runs.track(handle);
+      registryOf(init.session.runs).track(handle);
       yield* Effect.addFinalizer(() =>
         Effect.sync(() => untrackRun(init.session.runs, handle.runId)),
       );
@@ -369,6 +372,7 @@ export function agentRunTestLayer(init: ScriptedRunInit) {
             ? {
                 entry: {
                   registration: null,
+                  opening: noCoWrite,
                   entered: Effect.void,
                   initialUserMessage: init.initialUserMessage,
                 },
@@ -380,9 +384,11 @@ export function agentRunTestLayer(init: ScriptedRunInit) {
   );
 }
 
-/** A run id whose start is already on the session's log. */
-export function startedRun(session: SessionHandle): RunId {
+/** A run id whose start is already on the session's log; with
+ *  `parentRunId`, a child of that run, whose start goes first. */
+export function startedRun(session: SessionHandle, parentRunId?: RunId): RunId {
   const runId = generateRunId();
-  publishTestRunStart(session, runId);
+  if (parentRunId !== undefined) publishTestRunStart(session, parentRunId);
+  publishTestRunStart(session, runId, { parent: parentRunId ?? null });
   return runId;
 }

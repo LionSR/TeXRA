@@ -20,14 +20,20 @@ import {
 } from '@agent/core/tools/ToolTypes';
 import {
   ToolError,
+  type PermissionPayload,
   type ToolResult,
   type ToolDefinition,
   type ToolResultPayload,
 } from '@shared/schemas';
+import type { CellError } from '@shared/session/runHistory';
 import { errorResult } from '@tools/core/result';
 
 import type { InvokeError } from './ModelInvoker';
 import type { AgentRunShape } from './run/AgentRun';
+import type {
+  RuntimePresentationEvent,
+  RuntimePresentationEventPayloads,
+} from './runtimePresentationEvents';
 
 /** A resumed script issued another call at `seq` than its rows recorded. */
 export class ScriptDiverged extends Data.TaggedError('ScriptDiverged')<{
@@ -115,16 +121,17 @@ export interface ScriptScope extends ScriptSource {
 
 /**
  * The rest of what a plugin's tool reads of its run (`ToolRun`, whose id
- * the core declares): exactly the fields the app's tools read. Its session,
- * policy, configuration, model, delegation scope, scope (a tool that starts
+ * the core declares): exactly the fields the app's tools read. Its policy,
+ * configuration, model, delegation scope, scope (a tool that starts
  * something the run should stop registers that stop there) and opening;
  * and, for the documents plugin, its document task and trace; and its run
- * files, which hold what the run read (`fileService.readFiles`).
+ * files, which hold what the run read (`fileService.readFiles`). Never its
+ * session: a plugin reaches the session's runs through `ChildRuns`, and
+ * shows the person something through its call's `requests.present`.
  * What only the built-ins read is `BuiltinRun`.
  */
 declare module '../core/tools/ToolTypes.js' {
   interface ToolRun {
-    readonly session: AgentRunShape['session'];
     readonly toolPolicy: AgentRunShape['toolPolicy'];
     readonly config: AgentRunShape['config'];
     readonly model: AgentRunShape['model'];
@@ -135,11 +142,31 @@ declare module '../core/tools/ToolTypes.js' {
     readonly logger: AgentRunShape['logger'];
     readonly fileService: AgentRunShape['fileService'];
   }
+  interface CallRequests {
+    /**
+     * Open a request the call does not wait on, under `requestId`: its
+     * `request.opened` commits on the run's history, and the plugin owning
+     * its kind takes the decision when it lands (`Plugin.decision`). A
+     * failed commit is not proof that nothing landed: the run's rows decide.
+     */
+    readonly post: (
+      requestId: string,
+      payload: PermissionPayload,
+    ) => Effect.Effect<void, CellError>;
+    /** Show the person something on the session's host (a file opened
+     *  beside what they are looking at, a notice), answered by nothing. */
+    readonly present: <K extends RuntimePresentationEvent>(
+      event: K,
+      payload: RuntimePresentationEventPayloads[K],
+    ) => Effect.Effect<void>;
+  }
 }
 
 /** The run as the harness's built-in tools read it: what a plugin's tool
- *  sees (`ToolRun`), with the run's open step and its host callbacks. */
-type BuiltinRun = ToolRun & Pick<AgentRunShape, 'steps' | 'callbacks'>;
+ *  sees (`ToolRun`), with its session, its open step and its host
+ *  callbacks. */
+type BuiltinRun = ToolRun &
+  Pick<AgentRunShape, 'session' | 'steps' | 'callbacks'>;
 
 /** A call made under a run, as its loop dispatched it (`RunCall`). */
 export interface RunCallShape {
@@ -177,6 +204,14 @@ export class ScriptCalls extends Context.Service<
   ScriptCalls,
   Effect.Effect<ScriptDoor> | null
 >()('@texra/agent/ScriptCalls') {}
+
+/** The session of a call's run, for the harness's own helpers a plugin's
+ *  tool may call (an edit's approval, which `accept_run_files` asks for);
+ *  a plugin's tool reads no session. */
+export const sessionOf = (run: ToolRun): AgentRunShape['session'] =>
+  // The run on every call the runtime makes is its `AgentRun`.
+  // cast: `toolUseDispatch` puts the `AgentRun`, which has its session.
+  (run as BuiltinRun).session;
 
 /** The run the current call works for; none for a standalone host call. */
 export const callerRun: Effect.Effect<ToolRun | undefined, never, ToolContext> =

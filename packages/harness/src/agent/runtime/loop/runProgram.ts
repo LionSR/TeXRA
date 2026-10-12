@@ -11,11 +11,7 @@ import { Cause, Effect, Exit, SubscriptionRef } from 'effect';
 
 import { activationRows } from '@agent/storage/runLifecycle';
 import type { AgentTrace, StageHandle } from '@agent/trace';
-import {
-  inheritedGrants,
-  NO_APPROVAL_GRANTS,
-  type ApprovalGrantSource,
-} from '@shared/approvalBypassKind';
+import { grantsKept, NO_APPROVAL_GRANTS } from '@shared/approvalBypassKind';
 import {
   RUN_OUTCOME,
   type RunId,
@@ -27,16 +23,15 @@ import type { RunState } from '@shared/session/runStateFold';
 import { ensureError } from '@utils/errors/errorMessage';
 
 import { AgentRun, type AgentRunShape } from '../run/AgentRun';
-import { Runs } from '../runRegistry';
+import { registryOf, Runs } from '../runRegistry';
 import type { FollowUps } from '../FollowUps';
 
 /**
- * A fresh run's registration as its birth job decides it. A child whose
- * parent edge a detaching stop cut before it was born (the local edge goes
- * once that detach commits, before this job runs) is born detached: no
- * parent, and the grants a detach keeps, inherited from that parent. The
- * edge read is the one `detachChildren` cuts: the registry shares one
- * `RunParent` between the handle (tracked before this job) and activation.
+ * A fresh run's registration as its birth job decides it. A child a
+ * detaching stop cut before it was born (marked once that detach commits,
+ * before this job runs, and read here through `RunRegistry.parentOf`) is
+ * born detached: no parent, and the grants a detach keeps, inherited from
+ * that parent.
  */
 const birthRows = (
   run: Pick<AgentRunShape, 'runId' | 'session' | 'entry'>,
@@ -46,19 +41,15 @@ const birthRows = (
   if (
     start?.type !== 'run.start' ||
     start.parent === null ||
-    run.session.runs.getHandle(run.runId)?.parent !== null
+    registryOf(run.session.runs).parentOf(run.runId) !== null
   )
     return rows;
-  const view = SubscriptionRef.getUnsafe(run.session.view.ref);
-  const own = start.approvalPolicy ?? NO_APPROVAL_GRANTS;
-  const source: ApprovalGrantSource<RunId> = {
-    runs: new Map<RunId, { readonly parentId: RunId | null }>(view.runs).set(
-      run.runId,
-      { parentId: start.parent.id },
-    ),
-    policy: new Map(view.policy).set(run.runId, own),
-  };
-  const snapshot = { ...inheritedGrants(source, run.runId), goal: own.goal };
+  const snapshot = grantsKept(
+    SubscriptionRef.getUnsafe(run.session.view.ref),
+    run.runId,
+    start.parent.id,
+    start.approvalPolicy ?? NO_APPROVAL_GRANTS,
+  );
   return [
     { ...start, parent: null },
     ...rows.slice(1),
@@ -146,7 +137,7 @@ export const settleRun =
       onFailure: failureOutcome,
     });
     return Effect.gen(function* () {
-      const runs = yield* Runs;
+      const runs = registryOf(yield* Runs);
       lease.release(
         outcome === RUN_OUTCOME.COMPLETED && !runs.hasActiveChildren(cell.runId)
           ? 'terminal'
@@ -172,8 +163,11 @@ export const stoppedBy =
 /**
  * A trace stage whose verdict is the body's own exit. acquireUseRelease, not
  * a Scope: a Scope's finalizer sees `Exit<unknown, unknown>` and cannot read
- * the body's value, which is why both loops used to close their stage from a
- * mutable verdict instead.
+ * the body's value, which is why a stage closed from a mutable verdict was the
+ * older shape. This serves the run loop, whose stage closes with its body;
+ * `childRunLoop` deliberately keeps a mutable `stage` field, because a detached
+ * or process child's stage outlives the body and closes on the settlement a
+ * surviving fiber delivers, so it cannot be expressed as acquireUseRelease.
  */
 export const stagedBy =
   <A>(open: () => StageHandle, outcomeOf: (value: A) => RunOutcome) =>

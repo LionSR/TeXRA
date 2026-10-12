@@ -23,7 +23,6 @@ import { Effect, type Layer, Result, Stream } from 'effect';
 import { z } from 'zod';
 
 // Local imports
-import type { Runs } from '@agent/runtime/runRegistry';
 import type { SessionLog } from '@agent/runtime/SessionHandle';
 import type {
   PluginToolServices,
@@ -166,7 +165,7 @@ export interface PluginDefinition<ROut> extends Omit<
   >;
   readonly continuation?: Continuation<ROut>;
   readonly processLayer?: ProcessPluginLayer<ROut>;
-  readonly sessionLayer?: Layer.Layer<ROut, never, Runs | PluginHold>;
+  readonly sessionLayer?: Layer.Layer<ROut, never, PluginHold>;
   /** Probed outside any step, whether or not the plugin is on: it may
    *  require only the process's probe services. Its own process services
    *  are offered while its layer is up, read with `Effect.serviceOption`. */
@@ -321,6 +320,20 @@ export function checkOwnFacts(
   }
 }
 
+type OwnFactRow = Extract<SessionEventDraft, { type: 'plugin.fact' }>;
+
+/** A fact about its plugin's own aggregate, as its row hung under
+ *  `runId`: a call's (`factRows`) or a decision's (`Plugin.decision`). */
+export const ownFactRow = (
+  { aggregate, ...fact }: ToolFact & { readonly aggregate: string },
+  runId: RunId,
+): OwnFactRow => ({
+  type: 'plugin.fact',
+  ...fact,
+  aggregateId: aggregateId('plugin', aggregate),
+  parent: runId,
+});
+
 /**
  * The rows the facts of a call of `runId` commit in its `tool.result`
  * batch: a fact about the run on the run's history, and one about its
@@ -340,22 +353,16 @@ export function factRows(
   readonly alongside: Effect.Effect<CoWrite, DatabaseWriteFailed>;
 } {
   const run: RunHistoryDraft[] = [];
-  const own: (SessionEventDraft & { type: 'plugin.fact' })[] = [];
-  for (const { aggregate, ...fact } of facts) {
-    const row = { type: 'plugin.fact', ...fact } as const;
+  const own: OwnFactRow[] = [];
+  for (const { aggregate, ...fact } of facts)
     if (aggregate === undefined)
       run.push({
-        ...row,
+        type: 'plugin.fact',
+        ...fact,
         aggregateId: aggregateId('run', runId),
         parent: null,
       });
-    else
-      own.push({
-        ...row,
-        aggregateId: aggregateId('plugin', aggregate),
-        parent: runId,
-      });
-  }
+    else own.push(ownFactRow({ ...fact, aggregate }, runId));
   const current = (draft: (typeof own)[number]) =>
     Effect.gen(function* () {
       const arm = plugin?.arms?.find((one) => one.kind === draft.kind);

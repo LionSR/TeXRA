@@ -1,5 +1,5 @@
 /** Explicit call capabilities over the test host's existing process services. */
-import { type Effect, Layer, Scope, SynchronizedRef } from 'effect';
+import { Effect, Layer, Scope, SynchronizedRef } from 'effect';
 
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { Runs } from '@agent/runtime/runRegistry';
@@ -7,7 +7,6 @@ import {
   ToolContext,
   type ToolContextShape,
   type ToolEnv,
-  type ToolRun,
 } from '@agent/core/tools/ToolTypes';
 import {
   IssuingScript,
@@ -21,7 +20,7 @@ import { childRunsLayer, type RuntimeTool } from '@agent/runtime/ToolServices';
 import type { BoundModel } from '@agent/runtime/modelAccess/ModelAccess';
 import type { ModelOptionStores } from '@model/computeModelOptions';
 import { sessionFsLayer } from '@platform/rootedFs';
-import type { PermissionPayload } from '@shared/schemas';
+import { aggregateId, type PermissionPayload } from '@shared/schemas';
 import { noopTrace } from '@test/support/noopTrace';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { testRuntime } from '@test/support/testProcessRuntime';
@@ -32,7 +31,10 @@ import { RunFileService } from '@utils/files/runStorage';
 
 /** The run a test call is made under: what every fixture names, plus whatever
  *  else of the run the case under test actually reads. */
-type TestCallRun = Pick<ToolRun, 'session' | 'runId' | 'toolPolicy'> &
+type TestCallRun = Pick<
+  RunCallShape['run'],
+  'session' | 'runId' | 'toolPolicy'
+> &
   Partial<RunCallShape['run']>;
 
 /** A run's live model cell holding only the id a tool reads off it. */
@@ -96,6 +98,8 @@ export function nativeToolTestLayer(
     callbacks: {},
     ...run,
   };
+  // One layer value, so the child door and the plugin services share it.
+  const runs = Layer.sync(Runs, () => run?.session.runs ?? testRunRegistry());
   return Layer.mergeAll(
     Layer.effectContext(testRuntime().contextEffect),
     // The call's rooted filesystems, from the same roots it is given.
@@ -120,6 +124,22 @@ export function nativeToolTestLayer(
             payload: PermissionPayload,
             opened?: { readonly onNeverCommitted?: Effect.Effect<void> },
           ) => toolRun.session.requests.ask(toolRun.runId, payload, opened),
+          post: (requestId: string, payload: PermissionPayload) =>
+            toolRun.session.runHistory.open(toolRun.runId).pipe(
+              Effect.flatMap((cell) =>
+                cell.append([
+                  {
+                    type: 'request.opened',
+                    aggregateId: aggregateId('run', toolRun.runId),
+                    requestId,
+                    payload,
+                  },
+                ]),
+              ),
+              Effect.asVoid,
+            ),
+          present: (event, payload) =>
+            toolRun.session.interactions.emit(event, payload),
         },
       }),
     })),
@@ -128,7 +148,8 @@ export function nativeToolTestLayer(
     Layer.succeed(ScriptCalls)(null),
     Layer.provideMerge(
       childRunsLayer,
-      Layer.merge(
+      Layer.mergeAll(
+        runs,
         Layer.succeed(IssuingScript)(null),
         toolRun === undefined
           ? Layer.succeed(RunCall)(null)
@@ -144,10 +165,6 @@ export function nativeToolTestLayer(
     ),
     // The session's plugin services, over the same `Runs`, as a step pins
     // them for the call.
-    testCallPluginServices.pipe(
-      Layer.provideMerge(
-        Layer.sync(Runs, () => run?.session.runs ?? testRunRegistry()),
-      ),
-    ),
+    testCallPluginServices.pipe(Layer.provideMerge(runs)),
   );
 }

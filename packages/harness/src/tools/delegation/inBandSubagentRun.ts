@@ -27,7 +27,8 @@ import {
   AgentConfigSchema,
   type AgentConfigPayload,
 } from '@agent/core/definition/AgentConfig';
-import { Runs, type AgentRunServices } from '@agent/runtime/runRegistry';
+import { registryOf, Runs } from '@agent/runtime/runRegistry';
+import type { AgentRunServices } from '@agent/runtime/runRegistry';
 import {
   createNativeSubagentStrategy,
   type ChildRunLaunchOptions,
@@ -399,10 +400,8 @@ const awaitInBand = (
   program: Effect.Effect<InBandSubagentRunResult, Error, AgentRunServices>,
 ): Effect.Effect<InBandSubagentRunResult, Error, AgentRunServices> =>
   Effect.gen(function* () {
-    const runs = yield* Runs;
-    const child = yield* Effect.forkChild(program, {
-      startImmediately: true,
-    });
+    const runs = registryOf(yield* Runs);
+    const child = yield* Effect.forkChild(program, { startImmediately: true });
     return yield* Fiber.join(child).pipe(
       Effect.onInterrupt(() =>
         Effect.suspend(() =>

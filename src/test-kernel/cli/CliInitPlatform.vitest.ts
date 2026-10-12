@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, vi } from 'vitest';
 
 // Local imports
 import { SessionOwner, withProcessServices } from '@texra-ai/harness';
+import { registryOf } from '@agent/runtime/runRegistry';
 import {
   cliPlatformShutdown,
   initCliPlatform,
@@ -92,10 +93,8 @@ vi.mock('@platform/defaults/nodeHost', () => ({
 // First-init dependencies: only exercised while no earlier init in the same
 // module instance installed its roots, so these stubs only drive the "first
 // init" tests below.
-vi.mock('@platform/defaults/nodeWorkspace', async (importOriginal) => ({
-  ...(await importOriginal<
-    typeof import('@platform/defaults/nodeWorkspace')
-  >()),
+vi.mock('@utils/system/nodeWorkspace', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@utils/system/nodeWorkspace')>()),
   canonicalizeWorkspacePath: vi.fn((workspacePath: string) => workspacePath),
 }));
 
@@ -245,8 +244,8 @@ describe('CLI platform init', () => {
         ),
       );
       const drain = vi
-        .spyOn(session.runs, 'close')
-        .mockImplementation(() => {});
+        .spyOn(registryOf(session.runs), 'stopAll')
+        .mockImplementation(() => Effect.succeed([]));
       yield* Effect.addFinalizer(() => Effect.sync(() => drain.mockRestore()));
 
       // Registration alone must not kill anything; the drain belongs to the

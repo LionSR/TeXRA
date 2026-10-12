@@ -20,7 +20,7 @@ import {
   publishTestRunStart,
   publishTestRows,
 } from '@test/support/sessionTestUtils';
-import { inquiryThreadRow } from '@texra/shared/plugins/externalInquiry';
+import { inquiryThreadRow } from '@test/support/inquiryThreadRow';
 
 const runId = 'c11a01' as RunId;
 const childRunId = 'c11c01' as RunId;

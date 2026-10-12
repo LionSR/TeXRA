@@ -18,15 +18,16 @@ import {
   Exit,
   type FileSystem,
   type ManagedRuntime,
-  type Path,
+  Path,
+  type Scope,
 } from 'effect';
-import type { AgentEngine } from '@agent/runtime/AgentEngine';
 import type { RouteRetries } from '@agent/runtime/run/invocation';
 import type { SessionOwnerShape } from '@agent/runtime/SessionHandle';
 import type { ProcessIdentity } from '@shared/session/sessionEvents';
-import type {
-  GlobalDatabase,
-  ProjectDatabases,
+import {
+  DatabaseOpenFailed,
+  type GlobalDatabase,
+  type ProjectDatabases,
 } from '@shared/session/database';
 import type { UsageLog } from '@shared/usageLog';
 import type { ToolCatalog } from '@tools/liveTools';
@@ -72,7 +73,6 @@ export type ProcessServices =
   | AppState
   | LanguageModel
   | AgentDirectories
-  | AgentEngine
   | UsageLog
   | ToolRegistry
   | ToolCatalog
@@ -107,6 +107,57 @@ export class SessionOwner extends Context.Service<
   SessionOwner,
   SessionOwnerShape
 >()('@texra-ai/harness/SessionOwner') {}
+
+/** A root's holder (one composition) and how many of its sessions hold it. */
+type RootHold = { readonly holder: object; count: number };
+const PROCESS_ROOTS = Symbol.for('@texra-ai/harness/processRoots');
+const openRoots = (): Map<string, RootHold> => {
+  // cast: globalThis carries this one well-known symbol key, set only here.
+  const process = globalThis as { [PROCESS_ROOTS]?: Map<string, RootHold> };
+  // On globalThis: one per PROCESS, not per copy of this module (an app
+  // bundle beside an SDK consumer or a jiti-loaded plugin each load one).
+  return (process[PROCESS_ROOTS] ??= new Map());
+};
+
+/**
+ * The process's one guard on a root's owner: a composition (one
+ * `processLayer` build, so one `Sessions.layer` build) holds a root, for the
+ * scope of one of its sessions, only if no other composition in this process
+ * holds it, since both would own its runs under one process identity. The
+ * root is keyed by its resolved path, so a trailing slash or a `..` names the
+ * same root. A refusal is the open's failure.
+ */
+export const holdProcessRoot = (
+  root: string,
+  holder: object,
+): Effect.Effect<void, DatabaseOpenFailed, Path.Path | Scope.Scope> =>
+  Effect.gen(function* () {
+    // Resolved without I/O: a session opens synchronously (`runSync`).
+    const canonical = (yield* Path.Path).resolve(root);
+    const take = Effect.suspend(() => {
+      const held = openRoots().get(canonical);
+      if (held === undefined) openRoots().set(canonical, { holder, count: 1 });
+      else if (held.holder === holder) held.count += 1;
+      else
+        return Effect.fail(
+          new DatabaseOpenFailed({
+            path: root,
+            cause: new Error(
+              `The session at ${root} is already open in this process; share that session instead of opening it from a second composition (Sessions.layer build).`,
+            ),
+          }),
+        );
+      return Effect.void;
+    });
+    // Counted, so a reopen racing a close of the same root keeps its hold.
+    yield* Effect.acquireRelease(take, () =>
+      Effect.sync(() => {
+        const held = openRoots().get(canonical);
+        if (held !== undefined && --held.count === 0)
+          openRoots().delete(canonical);
+      }),
+    );
+  });
 
 /** The runtime a composition root makes over `processLayer`: the process
  *  services, and the `SessionOwner` that opens and closes its sessions. */

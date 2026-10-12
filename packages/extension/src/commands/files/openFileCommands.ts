@@ -3,7 +3,6 @@ import { Effect } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports
-import type { SessionHandle } from '@agent/runtime';
 import { openFileInEditor } from '@frontend/vscode/vscodeEditor';
 import { openFirstLabelMatch } from '@latex/labelSearch';
 import { withLogChannel } from '@logger/effectLog';
@@ -12,6 +11,7 @@ import { listWorkspaceFilesOfType } from '@texra/controllers/session/workspaceFi
 import { workspaceAbsolutePath } from '@utils/files/workspaceFS';
 import { ensureError } from '@utils/errors/errorMessage';
 import { normalizeLineEndings } from '@utils/text/stringUtils';
+import type { WorkspaceRoots } from '@texra-ai/harness';
 
 const CHANNEL = 'openFileCommands';
 
@@ -35,8 +35,8 @@ function openInEditor(
   );
 }
 
-export function openFile(session: SessionHandle, file: string, line?: number) {
-  const absolutePath = workspaceAbsolutePath(session.roots.workspace, file);
+export function openFile(roots: WorkspaceRoots, file: string, line?: number) {
+  const absolutePath = workspaceAbsolutePath(roots.workspace, file);
   const opened =
     line !== undefined && line > 0
       ? openInEditor(absolutePath, () => new vscode.Position(line - 1, 0))
@@ -65,10 +65,9 @@ export function openFile(session: SessionHandle, file: string, line?: number) {
  * for every host.
  */
 export const openLabel = Effect.fn('openFileCommands.openLabel')(function* (
-  session: SessionHandle,
+  roots: WorkspaceRoots,
   label: string,
 ) {
-  const { roots } = session;
   const [inputs, contexts] = yield* Effect.all([
     listWorkspaceFilesOfType('input', roots.workspace),
     listWorkspaceFilesOfType('context', roots.workspace),

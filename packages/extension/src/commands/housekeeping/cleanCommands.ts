@@ -12,18 +12,17 @@ import {
   findBuildDirectories,
   removeBuildDirectories,
 } from '@housekeeping/clean';
-import { fileOpResultMessage, runCleanRunDir } from '@housekeeping/runDirOps';
-import { withLogChannel } from '@logger/effectLog';
+import { fileOpResultMessage } from '@housekeeping/runDirOps';
 
-import type { FileOpResult } from '@shared/schemas';
-import type { WorkflowFileOperationRequest } from '@texra/controllers/session/hostRunActions';
+import type { WorkflowFileOperationResult } from '@texra/controllers/session/hostRunActions';
 
 const CHANNEL = 'cleanCommands';
 
-const showCleanResult = (
-  result: FileOpResult,
-  inputFile: string,
-): Effect.Effect<void> =>
+/** Tell the user what the toolbar's Clean of a run's storage did. */
+export const presentClean = ({
+  result,
+  inputFile,
+}: WorkflowFileOperationResult): Effect.Effect<void> =>
   Effect.gen(function* () {
     const { level, text } = fileOpResultMessage('clean', result, inputFile);
     if (result.status === 'missingParams' || level === 'error') {
@@ -32,17 +31,6 @@ const showCleanResult = (
       yield* Effect.forkDetach(showLoggedInfoMessage(CHANNEL, text));
     }
   });
-
-/** Clean removes a run's own storage. */
-export const handleClean = Effect.fn('cleanCommands.handleClean')(function* (
-  config: WorkflowFileOperationRequest,
-) {
-  yield* Effect.logDebug(
-    `Clean command called with config: ${JSON.stringify(config)}`,
-  ).pipe(withLogChannel(CHANNEL));
-  const result = yield* runCleanRunDir(config.runId);
-  yield* showCleanResult(result, config.inputFile);
-});
 
 const LISTED_BUILD_DIRECTORIES = 10;
 

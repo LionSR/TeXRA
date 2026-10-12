@@ -653,7 +653,7 @@ describe('BashTool', () => {
           .spyOn(followUps, 'resumeOnce')
           .mockImplementation((resumed, resume) => {
             Deferred.doneUnsafe(wakeReached, Effect.void);
-            handleAtResumeTime ??= testDefaultSession().runs.getHandle(runId);
+            handleAtResumeTime ??= testDefaultSession().runs.get(runId)?.handle;
             return resumeOnce(resumed, resume);
           });
         yield* Effect.promise(() => parkRunWaiting(parentRunId));
@@ -676,7 +676,7 @@ describe('BashTool', () => {
           // (finalized), never still RUNNING, so a resumed parent that waits on
           // it right now resolves immediately instead of racing its own wake.
           assert.equal(handleAtResumeTime, undefined);
-          assert.equal(testDefaultSession().runs.getHandle(runId), undefined);
+          assert.equal(testDefaultSession().runs.get(runId)?.handle, undefined);
         } finally {
           detachBackgroundRun(recorded, parentRunId);
         }
@@ -693,7 +693,7 @@ describe('BashTool', () => {
       ),
   );
 
-  it.live('fails a background run whose result manifest is refused', () =>
+  it.live('ends a background run whose result manifest is refused', () =>
     Effect.gen(function* () {
       const resolveCommand = holdCommand();
       yield* Effect.promise(() => installPlatform(BASH_PLATFORM_OPTIONS));
@@ -725,22 +725,30 @@ describe('BashTool', () => {
       resolveCommand(DONE_EXEC_RESULT);
 
       // The manifest is what `/result` reads, and it rides the run's end:
-      // with that batch refused, the backstop ends the run FAILED alone,
-      // never completed without its result.
+      // with that batch refused, the run still ends as it did, its own end
+      // recording the result it lost, which its card shows.
       yield* Effect.promise(() =>
         vi.waitFor(() =>
-          assert.equal(session.runs.getHandle(runId), undefined),
+          assert.equal(session.runs.get(runId)?.handle, undefined),
         ),
       );
-      assert.equal((yield* records.readRunEnd())?.outcome, 'failed');
+      const end = yield* records.readRunEnd();
+      assert.equal(end?.outcome, 'completed');
+      assert.match(end?.error?.message ?? '', /^Result lost: /);
       assert.equal(yield* records.readResultMeta(), null);
-      // Nor does the parent read a result the child never ended with.
+      const card = (yield* session.view.read([runId])).runs.get(runId);
+      assert.match(card?.statusDetail ?? '', /^Result lost: /);
+      // The parent hears it lost, never the result the settlement carried.
       assert.deepEqual(
-        (yield* session.followUps.read(parentRunId)).followUps.filter(
-          ({ content: { from } }) =>
-            from.kind === 'run' && from.runId === runId,
-        ),
-        [],
+        (yield* session.followUps.read(parentRunId)).followUps
+          .filter(
+            ({ content: { from } }) =>
+              from.kind === 'run' && from.runId === runId,
+          )
+          .map(({ content }) =>
+            /^The result of run .* was lost: /.test(content.text),
+          ),
+        [true],
       );
       detachBackgroundRun(recorded, parentRunId);
     }).pipe(
@@ -790,7 +798,7 @@ describe('BashTool', () => {
             );
           }),
         );
-        assert.equal(testDefaultSession().runs.getHandle(runId), undefined);
+        assert.equal(testDefaultSession().runs.get(runId)?.handle, undefined);
 
         detachBackgroundRun(recorded, parentRunId);
       }).pipe(

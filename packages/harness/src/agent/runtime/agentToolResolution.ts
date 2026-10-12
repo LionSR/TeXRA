@@ -34,13 +34,10 @@
  * the offered set changes, not on every step.
  */
 
-import { Effect, SubscriptionRef } from 'effect';
+import { Context, Effect, SubscriptionRef } from 'effect';
 
 import type { RuntimeTool as ITool } from '@agent/runtime/ToolServices';
-import {
-  MapToolRegistry,
-  type HostToolCapability,
-} from '@agent/core/tools/ToolTypes';
+import { MapToolRegistry } from '@agent/core/tools/ToolTypes';
 import { isInstalledPluginId } from '@common/plugins/pluginTrust';
 import type { ModelOptionStores } from '@model/computeModelOptions';
 import type { Persona } from '@shared/schemas';
@@ -60,6 +57,18 @@ import { ToolAvailability } from '@tools/toolAvailabilityService';
 import { ToolRegistry } from '@tools/toolTable';
 import { readSettingFrom } from '@utils/config/platformSettings';
 
+/**
+ * The host capabilities a session's host serves now (`ITool.hostCapability`
+ * names one), by the session's storage root: what a plugin whose tools need
+ * a host capability serves from its process layer, from the same place its
+ * tools reach that capability, so it is offered exactly while it works.
+ * A plugin that serves none offers its gated tools nowhere.
+ */
+export class HostCapabilities extends Context.Service<
+  HostCapabilities,
+  { readonly of: (storage: string) => ReadonlySet<string> }
+>()('@texra/agent/HostCapabilities') {}
+
 /** What a step resolves its tools from: fixed at the run's open, but the
  *  approval flag the step reads live. */
 export interface StepToolInputs {
@@ -68,7 +77,7 @@ export interface StepToolInputs {
   readonly approvalPromptsUnavailable: boolean;
   /** What the session's host serves now, read live each step: a tool that
    *  needs a capability missing here is withheld. */
-  readonly hostCapabilities: ReadonlySet<HostToolCapability>;
+  readonly hostCapabilities: ReadonlySet<string>;
   /** The product host the run's roots name; tools excluded from it are dropped. */
   readonly host: SettingHost;
   /** Tools only this run holds, laid over the resolved list (step 4). */

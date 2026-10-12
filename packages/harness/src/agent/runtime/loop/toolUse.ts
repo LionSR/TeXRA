@@ -54,7 +54,7 @@ import { mediaInputParts, type InputPart } from '../run/mediaInput';
 import { stored } from '../run/requestContext';
 import { claimFollowUps, type ConsumedFollowUps } from '../FollowUps';
 import { ModelInvoker } from '../ModelInvoker';
-import { Runs } from '../runRegistry';
+import { registryOf, Runs } from '../runRegistry';
 import {
   appendRow,
   configRow,
@@ -140,11 +140,11 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
   TurnServices | ModelInvoker | Scope.Scope
 > {
   const run = yield* AgentRun;
-  const runs = yield* Runs;
+  const runs = registryOf(yield* Runs);
   const invoker = yield* ModelInvoker;
   const access = yield* ModelAccess;
   const { runId, session, logger } = run;
-  const isChild = () => (runs.getHandle(runId)?.parent ?? null) !== null;
+  const isChild = () => runs.parentOf(runId) !== null;
   // A script's run: it opens on the call it was handed and ends when that
   // call settles.
   const script = run.config.script ?? null;
@@ -228,10 +228,8 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
   ): Effect.fn.Return<RunCell, Error, ProcessServices> {
     const bound = yield* SynchronizedRef.get(run.model);
     // The state its first step opens on: what the opening batch records.
-    const binding = {
-      backend: bound.backend,
-      declinedRoutes: run.declinedRoutes,
-    };
+    const { backend } = bound;
+    const binding = { backend, declinedRoutes: run.declinedRoutes };
     const opening: RunState = {
       ...(yield* cell.current),
       ...{ modelId: bound.modelId, ...binding },
@@ -288,8 +286,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
           });
         }
         if (Exit.isFailure(media)) return yield* Effect.failCause(media.cause);
-        content.push(...media.value.parts);
-        content.push({ kind: 'text', text: userRequest });
+        content.push(...media.value.parts, { kind: 'text', text: userRequest });
         const hooked = yield* openingHooks(run, opening, userRequest);
         content.push(...hooked.parts);
         return { content, offered: [...step.rows, ...hooked.rows] };
@@ -302,15 +299,16 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
       ...(activated.length > 0 && { activated: [...activated] }),
       ...(misses.length > 0 && { memoryMisses: misses }),
     };
-    // The opening (with a fresh run's registration), and the launch's entry
-    // once it settled: a stop lands before the opening or after the entry.
+    // The opening (registration, held trace), then the entry once it
+    // settled: a stop lands before the opening or after both.
+    const rows = [
+      appendRow(runId, [{ role: 'user', content }], { input }),
+      ...offered,
+      configRow(runId, run.config, bound.modelId, binding),
+      positionRow(runId, opening, 'turn.ready'),
+    ];
     yield* cell
-      .append([
-        appendRow(runId, [{ role: 'user', content }], { input }),
-        ...offered,
-        configRow(runId, run.config, bound.modelId, binding),
-        positionRow(runId, opening, 'turn.ready'),
-      ])
+      .append(rows, run.entry.opening)
       .pipe(Effect.andThen(run.entry.entered), Effect.uninterruptible);
     run.callbacks.onProgress?.({ kind: 'started' });
     return cell;

@@ -27,7 +27,7 @@ import { it } from '@effect/vitest';
 import { MODEL_CONFIGS } from 'llm-zoo';
 
 import { APIError as OpenAIAPIError } from 'openai';
-import { afterEach, describe, expect, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 import {
   type Model,
   ModelError,
@@ -78,6 +78,7 @@ import {
 } from '@shared/session/runHistory';
 import { UsageLog } from '@shared/usageLog';
 import { freshRunState, type RunState } from '@shared/session/runStateFold';
+import { setTestApprovalPolicy } from '@test/support/sessionTestUtils';
 import { testAgentRun } from '@test/support/scriptedRunLayers';
 import { closeSessionOf } from '@test/support/sessionEnd';
 import { noopTrace } from '@test/support/noopTrace';
@@ -590,6 +591,8 @@ describe('recovery-route verdicts', () => {
 });
 
 describe('ModelInvoker retry', () => {
+  // The project's policy is the fake host's setting, shared by the file.
+  beforeEach(() => setTestApprovalPolicy('ask'));
   afterEach(async () => {
     await installPlatform();
   });
@@ -911,7 +914,7 @@ describe('ModelInvoker retry', () => {
         installPlatform({ config: { 'texra.model.retry.maxAttempts': 0 } }),
       );
       const session = yield* sessionWithInteractions(undefined);
-      session.approvals.override('yolo');
+      setTestApprovalPolicy('yolo');
       const stub = stubModel([
         { fail: new Error('stream dropped before first token') },
       ]);
@@ -1086,9 +1089,23 @@ describe('ModelInvoker retry', () => {
       Effect.gen(function* () {
         const session = yield* sessionWithInteractions(undefined);
         const stopped = new Map<RunId, 'user' | 'shutdown'>();
-        vi.spyOn(session.runs, 'stopReason').mockImplementation((runId) =>
-          stopped.get(runId),
-        );
+        const get = session.runs.get.bind(session.runs);
+        vi.spyOn(session.runs, 'get').mockImplementation(((runId?: RunId) => {
+          if (runId === undefined) return get();
+          const live = get(runId);
+          const stopReason = stopped.get(runId);
+          if (stopReason === undefined) return live;
+          // The run's stop, whether or not this registry holds it.
+          return {
+            runId,
+            handle: undefined,
+            live: false,
+            parent: null,
+            drained: Effect.void,
+            ...live,
+            stopReason,
+          };
+        }) as typeof session.runs.get);
         const background = BACKGROUND_PREPARED;
         const operation = RemoteOperationSchema.parse({
           origin: ORIGIN,

@@ -10,12 +10,10 @@ import {
   submitFollowUp,
 } from '@agent/followUp/ToolUseFollowUp';
 import type { ToolUseFollowUpTarget } from '@agent/runtime/runRegistry';
-import { AgentEngine } from '@agent/runtime/AgentEngine';
 import type {
   SessionHandle,
   SessionTransaction,
 } from '@agent/runtime/SessionHandle';
-import { makeRunHistory } from '@agent/runtime/RunHistory';
 import {
   aggregateId,
   type RunId,
@@ -47,7 +45,7 @@ function mockTryResume(): Mock<() => Effect.Effect<boolean, Error>> {
 type TryResume = (runId: RunId) => Effect.Effect<boolean, Error>;
 
 /** The case's answer to the one resume a wake reaches: whether the run took
- *  it. The fake session's fork serves it as the engine's resume. */
+ *  it. The fake session's runs serve it as their resume. */
 let tryResume: TryResume = () => Effect.succeed(false);
 
 const withResumePort =
@@ -122,6 +120,11 @@ function recordedFollowUps(
             (types === undefined || types.includes(row.type)),
         ),
       ),
+    // A run's record rows: what a parent-only send reads its edge from.
+    records: (runId: RunId) =>
+      Effect.sync(() =>
+        rows.filter((row) => row.aggregateId === aggregateId('run', runId)),
+      ),
     hold: (runId) =>
       Effect.suspend(() => {
         claims.push(runId);
@@ -140,7 +143,6 @@ function recordedFollowUps(
   } as InboxPort['log'];
   const followUps = new Inbox({
     log,
-    runHistory: makeRunHistory(log),
     detach: (job) => {
       Effect.runFork(publisher.withPermits(1)(job(append)));
     },
@@ -177,30 +179,28 @@ let recorded = recordedFollowUps();
 function fakeSession(target: ToolUseFollowUpTarget): SessionHandle {
   recorded = recordedFollowUps();
   const { followUps, live } = recorded;
-  /** The engine's resume, as `resumeRun` runs it: one in flight per run,
+  /** The session's resume, as `resumeRun` runs it: one in flight per run,
    *  and a run that took it is live here from then on. */
-  const engine = {
-    resumeRun: (runId: RunId) =>
-      followUps
-        .resumeOnce(
-          runId,
-          Effect.map(tryResume(runId), (resumed) => {
-            if (!resumed) return { failed: 'not_resumable' as const };
-            live.add(runId);
-            return { started: true as const, delivered: true };
-          }),
-        )
-        .pipe(Effect.map(({ result }) => result)),
-  } as unknown as AgentEngine['Service'];
+  const resume = (runId: RunId) =>
+    followUps
+      .resumeOnce(
+        runId,
+        Effect.map(tryResume(runId), (resumed) => {
+          if (!resumed) return { failed: 'not_resumable' as const };
+          live.add(runId);
+          return { started: true as const, delivered: true };
+        }),
+      )
+      .pipe(Effect.map(({ result }) => result));
   return {
     runs: {
+      resume,
       getToolUseFollowUpTarget: () => target,
-      isLive: (runId: RunId) => live.has(runId),
+      get: (runId: RunId) =>
+        live.has(runId) ? { runId, live: true } : undefined,
       // The session's fork: the attempt outlives the fiber that asked.
-      fork: (program: Effect.Effect<unknown, unknown, AgentEngine>) =>
-        Effect.forkDetach(Effect.provideService(program, AgentEngine, engine), {
-          startImmediately: true,
-        }),
+      fork: (program: Effect.Effect<unknown, unknown>) =>
+        Effect.forkDetach(program, { startImmediately: true }),
     },
     view: { run: () => ({}) },
     interactions: { emit: () => Effect.void },

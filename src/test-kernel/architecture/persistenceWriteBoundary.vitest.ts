@@ -91,6 +91,16 @@ const PUBLISHER_OWNERS = [
 const PUBLISHER_TAG_IMPORT =
   /import\s*\{(?:[^}]*,)?\s*SessionEvents\s*[,}][^;]*from\s*['"]@shared\/session\/sessionEvents['"]/;
 
+/** The one widening of a job's append to the rows a run's state folds: held
+ *  by the run's cell and the session's requests, beside its definition. Test
+ *  fixtures that seed a history are outside the production scan. */
+const RUN_STATE_APPEND = /\brunStateAppend\b/;
+const RUN_STATE_WRITERS = [
+  'packages/harness/src/shared/session/runHistory.ts',
+  'packages/harness/src/agent/runtime/RunHistory.ts',
+  'packages/harness/src/agent/runtime/requestPolicy.ts',
+];
+
 /** A call of the database's append, or of the run removal whose transaction
  *  appends the tombstone; never a declaration or a `Pick` key. */
 const APPEND_CALL = /(?:\.appendAll|\.prepareRunRemoval|\bappendRows)\s*\(/;
@@ -217,6 +227,26 @@ describe('persistence write boundary', () => {
       PUBLISHER_OWNERS.filter(
         (file) =>
           !PUBLISHER_TAG_IMPORT.test(
+            stripComments(readFileSync(resolve(REPO_ROOT, file), 'utf8')),
+          ),
+      ),
+    ).toEqual([]);
+  });
+
+  it('writes rows a run folds through its cell and the requests only', () => {
+    const found = offenders(RUN_STATE_APPEND, RUN_STATE_WRITERS);
+
+    expect(
+      found,
+      found.length === 0
+        ? undefined
+        : "Commit a run's rows through its cell (`RunCell.append`) or the session's requests; `runStateAppend` is theirs.",
+    ).toEqual([]);
+    // Not vacuous: each writer holds it.
+    expect(
+      RUN_STATE_WRITERS.filter(
+        (file) =>
+          !RUN_STATE_APPEND.test(
             stripComments(readFileSync(resolve(REPO_ROOT, file), 'utf8')),
           ),
       ),

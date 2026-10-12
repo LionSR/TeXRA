@@ -1,33 +1,33 @@
 /**
- * Public Effect session and run capabilities for embedders: `Sessions` is a
- * projection of the process's `SessionOwner`, and `Sessions.layer` composes
- * that process with the same `processLayer` every TeXRA host runs on.
+ * The public shapes of `@texra-ai/harness`'s sessions and runs: what an
+ * embedder or a host composes the process from, the {@link Session} it
+ * holds for one root, and the {@link Run} it holds for one run. The
+ * `Sessions` service that opens them is `processLayer.ts`'s; the programs
+ * behind them are `sessionPrograms.ts`'s.
  */
-import { Context, Effect, Layer, type Stream, type Scope } from 'effect';
 
 import type { AgentEvent } from '@agent/trace';
 import type { ITool } from '@agent/core/tools/ToolTypes';
+import type { AgentConfig } from '@agent/core/definition/AgentConfig';
+import type { HostInteractions } from '@agent/runtime/HostInteractions';
 import type { RunEndResult } from '@agent/runtime/RunEndResult';
-import { processLayer } from '@controllers/session/sessionLayer';
-import { SessionOwner } from '@platform/processRuntime';
-import {
-  AppState,
-  AgentDirectories,
-  type AgentDirectoriesPort,
-  type ToolMissingHandler,
+import type {
+  AgentDirectoriesPort,
+  ToolMissingHandler,
 } from '@platform/interfaces';
 import type { LanguageModelPort } from '@platform/languageModel';
-import type { ProcessServices } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
+import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
 import type {
+  CommitOrdinal,
+  FoldInput,
   InlinePersona,
   RequestDecision,
   RunId,
-  SessionCloseReport,
   TranscriptSubscription,
 } from '@shared/schemas';
-import type { SessionOpenError } from '@shared/session/database';
+import type { ReadonlyDeep } from '@shared/session/readonlyDeep';
 import type { StateSettingEntry } from '@shared/state/stateSettings';
 import type { RequestError } from '@shared/session/requestErrors';
 import type { Outcome, RuntimeRequest } from '@shared/session/runtimeRequest';
@@ -37,19 +37,15 @@ import type {
   TranscriptView as RuntimeTranscriptView,
 } from '@shared/session/sessionView';
 import type { Plugin } from '@tools/plugins';
-import { seedDisabledToolDefaults } from '@tools/toolAvailability';
-import { toolTable } from '@tools/toolTable';
-import { toErrorMessage } from '@utils/errors/errorMessage';
+import type { Effect, Stream, Scope } from 'effect';
 
-import {
-  PluginsRefused,
-  type LaunchError,
-  type ResumeRefused,
-  type SessionOptionsConflict,
-  type ToolsRefused,
-  type RunFailure,
+import type {
+  LaunchError,
+  ResumeRefused,
+  RunFailure,
+  ToolsRefused,
+  TraceUnavailable,
 } from './errors.js';
-import { makeSessions } from './sessionPrograms.js';
 
 /**
  * The process services the package composes, together with the workspace
@@ -83,33 +79,6 @@ export interface Composition {
   readonly settings?: readonly StateSettingEntry[];
 }
 
-/**
- * A runtime value as the embedder may hold it: read-only all the way down,
- * every map, array, and record included. The value itself is not copied
- * (the fold publishes immutable levels); the type is what keeps a write
- * from reaching it. A primitive stays itself, so a branded id (a `RunId`)
- * is still that id.
- */
-type ReadonlyDeep<T> = T extends
-  | string
-  | number
-  | boolean
-  | bigint
-  | symbol
-  | null
-  | undefined
-  | ((...args: never[]) => unknown)
-  ? T
-  : T extends ReadonlyMap<infer K, infer V>
-    ? ReadonlyMap<K, ReadonlyDeep<V>>
-    : T extends ReadonlySet<infer V>
-      ? ReadonlySet<ReadonlyDeep<V>>
-      : T extends readonly (infer E)[]
-        ? readonly ReadonlyDeep<E>[]
-        : T extends object
-          ? { readonly [P in keyof T]: ReadonlyDeep<T[P]> }
-          : T;
-
 /** One published level of the session's fold: an immutable value. */
 export type SessionView = ReadonlyDeep<RuntimeSessionView>;
 /** One stream of the {@link SessionView}. */
@@ -122,7 +91,7 @@ export type TranscriptView = ReadonlyDeep<RuntimeTranscriptView>;
 export type PendingRequest = SessionView['requests'][number];
 
 /**
- * The embedder's answer to each request a run of the session waits on: an
+ * A host's answer to each request a run of the session waits on: an
  * approval, a denial with its reason, or for a retry, `retry` or `cancel`.
  * The session records it as the request's `request.decided`, through the
  * same `request.decide` a {@link Session.request} sends. A handler that
@@ -133,36 +102,72 @@ export type ApprovalHandler = (
   request: PendingRequest,
 ) => Effect.Effect<RequestDecision, Error>;
 
-/** How {@link Sessions} opens a root's session. A later open of the same
- *  root gets the session already there, and must ask for the same options:
- *  one that differs fails with {@link SessionOptionsConflict}. */
+/** How a root's session is opened. A later open of the same root gets the
+ *  session already there, and must ask for the same store: one that
+ *  differs fails with `SessionOptionsConflict`. */
 export interface OpenOptions {
   /** Keep the session's history in the root's SQLite store (under
    *  `roots.storage`, the store every TeXRA host keeps), so a later process
    *  reopens it and resumes its runs. Absent, the store is in memory and
    *  ends with the session. */
   readonly persistent?: boolean;
-  /** Answer the runs' requests. Absent, nobody answers: the session's
-   *  policy denies every request and offers no approval-gated tool. */
+}
+
+/**
+ * A host attached to a session ({@link Session.attach}): the presentation
+ * surface it serves, and the answer it gives the runs' requests. With no
+ * host attached that answers (`approve`, or a surface that can prompt), the
+ * session cannot ask: its policy denies every request and offers no
+ * approval-gated tool.
+ */
+export interface SessionHost extends Omit<HostInteractions, 'dispose'> {
+  /** Answers each request a run of the session waits on. */
   readonly approve?: ApprovalHandler;
 }
 
-/** What starting a run on a session takes. */
-export interface StartInput {
-  /** The agent: a name the agent directories list, or a persona written
-   *  inline in the agent file format (`InlinePersonaSchema`), which the run
-   *  records so a resume needs no file. */
-  readonly agent: string | InlinePersona;
-  readonly instruction: string;
-  readonly model?: string;
+/** What starting a run on a session takes: the agent, by name or written
+ *  inline (`InlinePersonaSchema`, recorded so a resume needs no file), or
+ *  a host's whole configuration; then the launch's facts. */
+export type StartInput = (
+  | {
+      readonly agent: string | InlinePersona;
+      readonly instruction: string;
+      readonly model?: string;
+    }
+  | { readonly config: AgentConfig }
+) & {
+  /** The id to admit the run under; one is minted when absent. */
+  readonly runId?: RunId;
+  /** The chat's previous root: the run starts with the grants it held. */
+  readonly continues?: RunId;
+  /** Run on the configured helper model (the "fix LaTeX" actions). */
+  readonly helperModel?: boolean;
+  /** A quota-exhausted retry offers the user's own API key. */
+  readonly ownKeyFallback?: boolean;
+  /** The policy the launch asked for (it only ever narrows the project's),
+   *  and whether delegated work starts approved (Auto-approve). */
+  readonly approval?: {
+    readonly policy?: TexraApprovalPolicy;
+    readonly delegated?: boolean;
+  };
+  /** A window's run, which parks for input after each cycle; absent, the
+   *  run ends with its first cycle. */
+  readonly interactive?: boolean;
   readonly tools?: readonly ITool[];
-}
+};
+
+/** What a resume takes beside its run: the custom tools the run needs
+ *  again, and whether it is a window's. */
+export type ResumeInput = Pick<StartInput, 'tools' | 'interactive'>;
 
 /** One run of an agent, from the moment it exists in its session. */
 export interface Run {
   /** The run's id, minted here and handed to the launcher, so it
    *  identifies the run before its first model call. */
   readonly runId: RunId;
+  /** Set when a resume asked for a child an open call of this run owns:
+   *  the child resumes with this run, its parent, and this names it. */
+  readonly redirectedFrom?: RunId;
   /**
    * The run's own outcome first: on failure the fold's fate never replaces
    * it; on success this waits for the level holding the durable outcome.
@@ -178,28 +183,45 @@ export interface Run {
   /**
    * The run's trace, buffered from the moment the run enters the session so
    * that no launch event is lost to a reader that has yet to attach. Ends
-   * when the run settles, fails with {@link RunFailure} when the run failed,
-   * and drops what it holds when the run settles unread. Running it once is
-   * the contract: ending the iteration detaches the trace while the run
-   * continues. The pre-reader buffer is bounded: a run whose events pass
-   * the bounded handover queue with nobody reading has no reader, so it
-   * warns and detaches rather than retaining the whole trace.
+   * when the run settles and fails with {@link RunFailure} when the run
+   * failed. Running it once is the contract: ending the iteration detaches
+   * the trace while the run continues. The pre-reader buffer is bounded: a
+   * run that passes it with nobody reading detaches its trace, and a reader
+   * that attaches after that, or after the run settled unread, fails with
+   * {@link TraceUnavailable} rather than reading an empty trace.
    */
-  readonly events: Stream.Stream<AgentEvent, RunFailure>;
+  readonly events: Stream.Stream<AgentEvent, RunFailure | TraceUnavailable>;
   /** Before the runtime hands over the live handle this aborts the launch;
    *  after, it interrupts the run. */
   readonly interrupt: Effect.Effect<void>;
 }
 
-/** One session of the process's owner, as this package works on it. */
+/** One session of the process's owner: a root's runs, its view, and the
+ *  hosts attached to it. */
 export interface Session {
   readonly roots: WorkspaceRoots;
+  /** The fold's levels, each an immutable value. */
+  readonly view: {
+    /** The current level. */
+    readonly current: () => SessionView;
+    readonly changes: Stream.Stream<SessionView>;
+    /**
+     * The ordered fold inputs for one reader: a complete replay of the
+     * runs `set` names, then events from `from.cursor` before live text.
+     * The reader's transcript interest lives as long as the stream.
+     */
+    readonly watch: (
+      set: readonly TranscriptSubscription[],
+      from: { readonly cursor: CommitOrdinal; readonly debug: boolean },
+    ) => Stream.Stream<readonly FoldInput[]>;
+  };
   /**
    * Admission: succeeds when the run exists in the session, with its stream
    * published and its trace live. Interrupting the caller before admission
    * aborts the launch; interrupting it during the handoff that follows ends
    * the run too, so a caller that does not receive a {@link Run} has none
-   * running.
+   * running. A failure before admission is the caller's to present: `start`
+   * presents nothing.
    */
   readonly start: (
     input: StartInput,
@@ -208,117 +230,24 @@ export interface Session {
    * Continue a persisted run of this session through the one resume path
    * every host takes, from its committed history: the same handle and the
    * same admission as {@link start}, and the same custom `tools`, which a
-   * persisted run needs again to continue a call to one. A resume of a run
-   * already resuming here joins it, with the same handle. A run nothing can
-   * continue fails with {@link ResumeRefused}.
+   * persisted run needs again to continue a call to one. A child an open
+   * call of its parent owns resumes with that parent
+   * ({@link Run.redirectedFrom}). A resume of a run already resuming here
+   * joins it, with the same handle. A run nothing can continue fails with
+   * {@link ResumeRefused}.
    */
   readonly resume: (
     runId: RunId,
-    input?: Pick<StartInput, 'tools'>,
+    input?: ResumeInput,
   ) => Effect.Effect<Run, ResumeRefused | ToolsRefused | RunFailure>;
   /** The one handler of every request a surface issues to this session:
    *  answered exactly once, an outcome or a request error. */
   readonly request: (
     request: RuntimeRequest,
   ) => Effect.Effect<Outcome, RequestError>;
-  /** The fold's levels, each an immutable value. */
-  readonly view: { readonly changes: Stream.Stream<SessionView> };
-  /**
-   * This reader's transcript interest, held for the scope and cleared when
-   * it closes. Its port is the reader's own, so it never disturbs a run's.
-   */
-  readonly subscribe: (
-    interests: readonly TranscriptSubscription[],
+  /** Attach `host` for the caller's scope: the newest attached host
+   *  presents, and its `approve` answers the runs' requests. */
+  readonly attach: (
+    host: SessionHost,
   ) => Effect.Effect<void, never, Scope.Scope>;
-}
-
-/** The process's session owner: one session per workspace storage root. */
-export class Sessions extends Context.Service<
-  Sessions,
-  {
-    /** The session of these roots, or the runtime's, through the process's
-     *  one owner; `options` decide its store and who answers its runs. */
-    readonly open: (
-      roots?: WorkspaceRoots,
-      options?: OpenOptions,
-    ) => Effect.Effect<Session, SessionOpenError | SessionOptionsConflict>;
-    /**
-     * Refuse new runs, settle the ones it owns inside the runtime's
-     * shutdown-phase budget, flush, release.
-     */
-    readonly close: (
-      roots?: WorkspaceRoots,
-    ) => Effect.Effect<SessionCloseReport>;
-    readonly list: Effect.Effect<readonly Session[]>;
-  }
->()('@texra-ai/harness/Sessions') {
-  /**
-   * The Effect embedder's entry: compose the process from its platform and
-   * its plugins (`harnessBuiltins.all` from `@texra-ai/harness/plugins`, or a
-   * list of the embedder's own beside them), and serve its session owner for
-   * this layer's lifetime; the layer's release closes every session still
-   * open. A plugin list the harness cannot compose (an id that is not
-   * lowercase letters, digits and dashes, an id or tool name listed twice)
-   * fails with {@link PluginsRefused}, before anything is built.
-   *
-   * Build it once per process, as any Effect layer is memoized: two live
-   * builds over one storage root are two writers of that root's sessions.
-   */
-  static layer({
-    platform,
-    plugins,
-    settings = [],
-  }: Composition): Layer.Layer<Sessions, PluginsRefused> {
-    // A thunk: constructing the process layer installs the settings
-    // catalog, which only a composition that passed the check may do.
-    const sessions = (): Layer.Layer<Sessions> =>
-      Layer.effect(
-        Sessions,
-        Effect.gen(function* () {
-          return yield* makeSessions(
-            platform.roots,
-            yield* SessionOwner,
-            yield* Effect.context<ProcessServices>(),
-            yield* Effect.scope,
-          );
-        }),
-      ).pipe(
-        Layer.provide(
-          processLayer({
-            globalStorage: platform.roots.globalStorage,
-            plugins,
-            settings,
-            mcpConfigPath: platform.mcpConfigPath,
-            secrets: platform.secrets,
-            appState: AppState.layer(platform.roots.globalState),
-            languageModel: platform.languageModel,
-            agentDirectories: AgentDirectories.layer(platform.agentDirectories),
-            toolMissingReporter: platform.toolMissingHandler,
-            // An embedder's console has no live level filter of its own, so the
-            // package speaks at the informational level rather than flooding it.
-            minimumLogLevel: 'Info',
-          }),
-        ),
-      );
-    // The list is checked before anything is composed, so a refusal names
-    // the plugin rather than failing the first session open, and leaves the
-    // process untouched. Then the first-install tool switches are seeded, as
-    // every host's bootstrap seeds them, before the process's catalog first
-    // reads them: the opt-in plugins stay off until the embedder switches
-    // them on. A store that cannot be read or written is a platform defect.
-    return Layer.unwrap(
-      Effect.try({
-        try: () => toolTable(plugins),
-        catch: (thrown) =>
-          new PluginsRefused({ message: toErrorMessage(thrown) }),
-      }).pipe(
-        Effect.tap(() =>
-          seedDisabledToolDefaults(platform.roots.globalState, plugins).pipe(
-            Effect.orDie,
-          ),
-        ),
-        Effect.map(sessions),
-      ),
-    );
-  }
 }

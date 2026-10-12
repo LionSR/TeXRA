@@ -26,7 +26,7 @@ import {
 } from 'node:fs';
 import * as os from 'node:os';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { basename, join } from 'node:path';
 import { monitorEventLoopDelay } from 'node:perf_hooks';
 import { DatabaseSync } from 'node:sqlite';
 
@@ -37,12 +37,15 @@ import * as SqlDriver from '@effect/sql-sqlite-node/SqliteClient';
 import {
   Cause,
   Clock,
+  Context,
   Deferred,
   Effect,
   Exit,
   Scope,
   Fiber,
+  type FileSystem,
   Layer,
+  type Path,
   Stream,
   SubscriptionRef,
 } from 'effect';
@@ -50,6 +53,7 @@ import { TestClock } from 'effect/testing';
 import * as Reactivity from 'effect/reactivity/Reactivity';
 
 import { afterAll, beforeAll, describe, expect, vi } from 'vitest';
+import { registryOf } from '@agent/runtime/runRegistry';
 
 vi.mock('@effect/sql-sqlite-node/SqliteClient', async (importOriginal) => ({
   ...(await importOriginal<
@@ -81,7 +85,7 @@ import { SessionViewService } from '@controllers/session/SessionView';
 import { sessionInputsLayer } from '@controllers/session/sessionInputs';
 import { WorkspaceRoots } from '@controllers/session/WorkspaceRoots';
 import { onAppSignal } from '@eventBus/AppSignals';
-import { withProcessServices } from '@platform/processRuntime';
+import { SessionOwner, withProcessServices } from '@platform/processRuntime';
 import { AppState, type StateStore } from '@platform/interfaces';
 import type { ProcessProbe } from '@platform/defaults/nodeProcesses';
 import {
@@ -130,14 +134,18 @@ import { testRuntime } from '@test/support/testProcessRuntime';
 import { testRunHandle } from '@test/support/runHandleFixtures';
 import { createFakeWorkspaceRoots } from '@test/support/FakePlatform';
 import '@test/support/sessionGraphTestSetup';
-import { identityReads } from '@test/support/sessionGraphInstall';
+import {
+  identityReads,
+  testProcessLayer,
+} from '@test/support/sessionGraphInstall';
 import { REPO_ROOT } from '@test/support/repoScan';
 import { storePluginsLayer } from '@test/support/setupPlatform';
+import { inquiryThreadRow } from '@test/support/inquiryThreadRow';
+import { TEXRA_SETTING_ROWS } from '@texra/shared/settingsView/texraSettings';
 import {
   DOCUMENTS_ACCEPTED_ARM,
   documentsAcceptedFact,
 } from '@texra/shared/plugins/documents';
-import { inquiryThreadRow } from '@texra/shared/plugins/externalInquiry';
 import { DownMessageSchema } from '@texra/shared/session/sessionFrames';
 import { runActionGuard } from '@texra/controllers/session/runActionGuard';
 import type { LeanLanguageServices } from '@texra/tools/lean/leanLanguageServices';
@@ -852,7 +860,9 @@ describe('Sessions owner', () => {
           log: { ...db, removeRun: events.removeRun, detach: events.detach },
           local,
           plugins: toolTable([]),
-          globalDatabase: yield* GlobalDatabase,
+          services: yield* Effect.context<
+            GlobalDatabase | FileSystem.FileSystem | Path.Path
+          >(),
           closed: () => false,
         });
         // The displayed fold was built as SELF and considers this run writable.
@@ -894,6 +904,7 @@ describe('Sessions owner', () => {
             Layer.orDie,
           ),
         ),
+        Effect.provide(nodePlatformLayer),
       ),
   );
 
@@ -920,7 +931,9 @@ describe('Sessions owner', () => {
             }),
           ),
           plugins: toolTable([]),
-          globalDatabase: yield* GlobalDatabase,
+          services: yield* Effect.context<
+            GlobalDatabase | FileSystem.FileSystem | Path.Path
+          >(),
           closed: () => false,
         });
         yield* settle(view.ref, (v) => v.runs.has(RUN));
@@ -936,7 +949,7 @@ describe('Sessions owner', () => {
                 group: 'running' as const,
                 readOnly: false,
               };
-              return [id, { ...started, actions: runActions(started) }];
+              return [id, { ...started, actions: runActions(started, false) }];
             }),
           ),
         }));
@@ -951,9 +964,7 @@ describe('Sessions owner', () => {
 
         // A second Resume while the first is in flight is refused at once,
         // not queued behind the first's whole run.
-        const guard = runActionGuard(
-          {} as Pick<SessionHandle, 'view' | 'runs'>,
-        );
+        const guard = runActionGuard({ run: () => undefined });
         const finish = yield* Deferred.make<void>();
         const first = yield* Effect.forkChild(
           guard.resuming(Deferred.await(finish), RUN),
@@ -975,6 +986,7 @@ describe('Sessions owner', () => {
             Layer.orDie,
           ),
         ),
+        Effect.provide(nodePlatformLayer),
       ),
   );
 
@@ -986,7 +998,7 @@ describe('Sessions owner', () => {
   const isLive = (session: SessionHandle) =>
     Effect.map(listTestSessions, (live) => live.includes(session));
   const track = (session: SessionHandle, runId: RunId) =>
-    session.runs.track(testRunHandle({ runId, agent: 'chat' }));
+    registryOf(session.runs).track(testRunHandle({ runId, agent: 'chat' }));
 
   it.live(
     'shares the project database with its session until the project closes',
@@ -1083,7 +1095,10 @@ describe('Sessions owner', () => {
     () =>
       Effect.gen(function* () {
         const session = yield* open('/workspace/owner/committed-status');
-        const sweep = vi.spyOn(session.runs, 'sweepChildrenOfFoldedStop');
+        const sweep = vi.spyOn(
+          registryOf(session.runs),
+          'sweepChildrenOfFoldedStop',
+        );
 
         try {
           publishTestRows(session, [
@@ -1235,9 +1250,9 @@ describe('Sessions owner', () => {
         // wait for the loop to release the activation after its last delivery.
         let releaseChild = (): void => {};
         const interrupt = vi.fn(() => releaseChild());
-        releaseChild = session.runs.reserveChildActivation({
+        releaseChild = registryOf(session.runs).reserveChildActivation({
           runId: RunIdSchema.parse('aa0002'),
-          parent: { current: null },
+          launchParent: null,
           retainsTerminalParent: true,
           interrupt,
         });
@@ -1282,9 +1297,9 @@ describe('Sessions owner', () => {
         const session = yield* open('/workspace/owner/abandoned');
         // A run whose driver takes the stop and never unwinds.
         const slow = RunIdSchema.parse('aa0003');
-        session.runs.reserveChildActivation({
+        registryOf(session.runs).reserveChildActivation({
           runId: slow,
-          parent: { current: null },
+          launchParent: null,
           retainsTerminalParent: false,
           interrupt: () => {},
         });
@@ -1303,6 +1318,73 @@ describe('Sessions owner', () => {
         });
         expect(yield* isLive(session)).toBe(false);
       }),
+  );
+  // Two compositions in one process (two `Sessions.layer` builds) share one
+  // process identity, so only one may own a root. Failure modes: the second
+  // opens a root the first holds (two owners of its runs), also through a
+  // second copy of the module or an alias of the root; a root the first does
+  // not hold is refused; a root stays refused after the first closes it.
+  // Known gap until G11: both compositions still share the module-global
+  // settings catalog (`installSettingsCatalog`), which this does not test.
+  it.live(
+    'refuses a second composition a root the first holds, until it closes',
+    () =>
+      withProcessServices(
+        testRuntime(),
+        Effect.gen(function* () {
+          const temp = (prefix: string) =>
+            Effect.acquireRelease(
+              Effect.sync(() =>
+                mkdtempSync(join(tmpdir(), `texra-${prefix}-`)),
+              ),
+              (dir) =>
+                Effect.sync(() =>
+                  rmSync(dir, { recursive: true, force: true }),
+                ),
+            );
+          const held = yield* temp('held');
+          const other = yield* temp('other');
+          const globalStorage = yield* temp('global');
+          const roots = (storage: string) =>
+            createFakeWorkspaceRoots({ storagePath: storage });
+          // Its own memo map, as a second ManagedRuntime has: built in this
+          // fiber's, the layers the kernel's runtime built would be shared.
+          // Its scope closes it, and its sessions, whatever fails.
+          const second = Context.get(
+            yield* Layer.buildWithMemoMap(
+              testProcessLayer([], TEXRA_SETTING_ROWS, globalStorage),
+              Layer.makeMemoMapUnsafe(),
+              yield* Effect.scope,
+            ),
+            SessionOwner,
+          );
+          const first = yield* Effect.acquireRelease(
+            openTestSession({ roots: roots(held) }),
+            (session) => Effect.asVoid(closeSessionOf(session)),
+          );
+          const refused = yield* Effect.flip(
+            second.open({ roots: roots(held) }),
+          );
+          expect(refused.message).toContain('already open in this process');
+          // A second copy of the harness module (an app bundle beside an SDK
+          // consumer) refuses it too, by an alias: the registry is per process.
+          vi.resetModules();
+          const copy = yield* Effect.promise(
+            () => import('@platform/processRuntime'),
+          );
+          expect(copy.SessionOwner).not.toBe(SessionOwner);
+          const refusedByCopy = yield* Effect.flip(
+            copy.holdProcessRoot(`${held}/../${basename(held)}/`, {}),
+          ).pipe(Effect.scoped);
+          expect(refusedByCopy.message).toContain(
+            'already open in this process',
+          );
+          yield* second.open({ roots: roots(other) });
+          yield* closeSessionOf(first);
+          const taken = yield* second.open({ roots: roots(held) });
+          expect(taken.roots.storage).toBe(held);
+        }).pipe(Effect.scoped),
+      ),
   );
   it.live(
     'announces each accepted-files row once, never the history a reopen replays',
@@ -1783,7 +1865,8 @@ describe('the C1 event table and the C6 publisher', () => {
           });
         }).pipe(Effect.provide(substrate(storage)));
         // A fresh session over the store opens: the healthy run lists, and
-        // the damaged one lists too, shown damaged and read-only.
+        // the damaged one lists too, shown damaged and read-only, with
+        // delete its one way out of the list.
         yield* Effect.gen(function* () {
           const view = yield* SessionViewService;
           yield* settle(
@@ -1795,6 +1878,7 @@ describe('the C1 event table and the C6 publisher', () => {
           ).toMatchObject({
             readOnly: true,
             statusDetail: RUN_DAMAGED_MESSAGE,
+            actions: ['delete', 'openRunStorage', 'export', 'copy'],
           });
         }).pipe(
           Effect.provide(graph([], substrate(storage).pipe(Layer.orDie))),

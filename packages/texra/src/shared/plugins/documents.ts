@@ -21,7 +21,7 @@ import {
   type RoundOutput,
   type ToolFact,
 } from '@shared/schemas';
-import type { RunView } from '@shared/session/sessionView';
+import type { RunView } from '@texra-ai/harness';
 
 const DocumentsOutputSchema = z.strictObject({
   /** Every revision so far, by its zero-based `round`. */

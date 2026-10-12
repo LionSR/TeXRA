@@ -14,15 +14,19 @@ import {
   type Path,
   type Scope,
 } from 'effect';
+import type { RunInbox } from '@agent/followUp/ToolUseFollowUp';
 import type { RuntimeTool as ITool } from '@agent/runtime/ToolServices';
-import type { Runs } from '@agent/runtime/runRegistry';
-import type { SessionHandle } from '@agent/runtime/SessionHandle';
+import type {
+  LogWriteError,
+  SessionHandle,
+} from '@agent/runtime/SessionHandle';
 import type { LoadablePlugin } from '@common/plugins/pluginTrust';
 import type { AppState, ConfigProvider } from '@platform/interfaces';
 import type {
   PermissionPayload,
   RequestDecision,
   RunId,
+  ToolFact,
 } from '@shared/schemas';
 import type { GlobalDatabase } from '@shared/session/database';
 import type { RunState } from '@shared/session/runStateFold';
@@ -59,9 +63,10 @@ export interface ProcessPluginLayer<ROut = never> {
  * A plugin's session-lifetime services (its `sessionLayer`): one build
  * per open session, up while the plugin is switched on, a step of that
  * session pins it, or work it started holds it (`PluginHold`), and closed
- * with the session. It may read the session's `Runs`.
+ * with the session. It reads no run: a plugin reaches runs through its
+ * tools' `ChildRuns`.
  */
-export type SessionPluginLayer = Layer.Layer<never, never, Runs | PluginHold>;
+export type SessionPluginLayer = Layer.Layer<never, never, PluginHold>;
 
 /**
  * Keep the session layer that provides this service up until `until` ends:
@@ -183,7 +188,9 @@ export type PromptSection = (ctx: {
  * (the external inquiry's answer, recorded on its cross-project thread). The
  * session runs it before the decision's row commits, under the request's
  * decision lane, so a process that exits in between leaves the request
- * pending and answerable rather than settled with nothing recorded.
+ * pending and answerable rather than settled with nothing recorded. It may
+ * send a run of the session its input (`inbox`), and commit facts about its
+ * own aggregates, hung under the request's run (`commit`).
  */
 export interface RequestDecisionHook {
   /** The request kind whose decisions this plugin records. */
@@ -191,7 +198,10 @@ export interface RequestDecisionHook {
   readonly record: (request: {
     readonly payload: PermissionPayload;
     readonly decision: RequestDecision;
-    readonly session: SessionHandle;
+    readonly inbox: (runId: RunId) => RunInbox;
+    readonly commit: (
+      facts: readonly (ToolFact & { readonly aggregate: string })[],
+    ) => Effect.Effect<void, LogWriteError>;
   }) => Effect.Effect<void, Error, GlobalDatabase>;
 }
 

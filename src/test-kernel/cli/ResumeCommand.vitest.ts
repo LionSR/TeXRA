@@ -13,11 +13,7 @@ import {
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { CliUsageError, type CliContext } from '@cli/runtime/cliContext';
 import { CliExitCode } from '@cli/runtime/exitCodes';
-import {
-  aggregateId,
-  emptyRunEndOutput,
-  storedRunOutput,
-} from '@shared/schemas';
+import { aggregateId } from '@shared/schemas';
 import type { RunId } from '@shared/schemas';
 import { DatabaseReadFailed } from '@shared/session/database';
 import { testRuntime } from '@test/support/testProcessRuntime';
@@ -292,35 +288,6 @@ describe('runResumeCommand', () => {
       `Run not found: ${RUN_ID}`,
     );
   });
-
-  it.effect('reports an ended run with no checkpoint as finished', () =>
-    Effect.gen(function* () {
-      yield* Effect.promise(() =>
-        seedRunRecord({ config: TOOL_USE_CONFIG, checkpoint: false }),
-      );
-      // Registered and never opened, it would resume by opening: it ended.
-      yield* Effect.scoped(
-        seededSession.log.hold(RUN_ID).pipe(
-          Effect.andThen(
-            seededSession.log.transact([
-              {
-                type: 'run.end',
-                aggregateId: aggregateId('run', RUN_ID),
-                outcome: 'failed',
-                output: storedRunOutput(emptyRunEndOutput()),
-              },
-            ]),
-          ),
-        ),
-      );
-
-      expect(yield* Effect.promise(() => run(cliContext()))).toBe(2);
-
-      expect(mocks.writeTextStderr).toHaveBeenCalledWith(
-        'This run has finished. Start a new agent task to continue.',
-      );
-    }),
-  );
 
   it('refuses a run another live TeXRA process holds, naming its pid', async () => {
     vi.spyOn(seededSession.log, 'owner').mockReturnValue(

@@ -14,7 +14,10 @@
  */
 import { z } from 'zod';
 
-import { APPROVAL_BYPASS_KINDS } from '@shared/approvalBypassKind';
+import {
+  APPROVAL_BYPASS_KINDS,
+  APPROVAL_POLICY_LIMITS,
+} from '@shared/approvalBypassKind';
 import { RequestDecisionSchema, RunIdSchema } from '@shared/schemas';
 
 const runScoped = { runId: RunIdSchema };
@@ -65,6 +68,24 @@ export const RuntimeRequestSchema = z.discriminatedUnion('kind', [
     ...runScoped,
     handoff: z.string().min(1).nullish(),
   }),
+  /** Switch a live run to `model` from its next model boundary. */
+  z.object({
+    kind: z.literal('run.model'),
+    ...runScoped,
+    model: z.string().min(1),
+  }),
+  /**
+   * A stopped run's directory, copied to `to` (workspace-relative) or
+   * removed, under its claim by the process that holds the run's session.
+   */
+  z.object({
+    kind: z.literal('run.files'),
+    ...runScoped,
+    files: z.discriminatedUnion('op', [
+      z.object({ op: z.literal('copy'), to: z.string().min(1) }),
+      z.object({ op: z.literal('remove') }),
+    ]),
+  }),
   z.object({
     kind: z.literal('followUp.send'),
     ...runScoped,
@@ -86,24 +107,59 @@ export const RuntimeRequestSchema = z.discriminatedUnion('kind', [
     requestId: z.string().min(1),
     decision: RequestDecisionSchema,
   }),
+  /** A pending tool edit's preview, as the session's host staged it beside
+   *  the request: answered `preview`, null when none is staged. */
+  z.object({
+    kind: z.literal('request.preview'),
+    ...runScoped,
+    requestId: z.string().min(1),
+  }),
   /** The field-level mutation, not a snapshot: the authority applies it and
    *  publishes the resulting `approval.policy` (PRD 6, item 2). */
   z.object({
     kind: z.literal('policy.set'),
-    change: z.object({
-      field: z.literal('bypass'),
-      ...runScoped,
-      bypass: z.enum(APPROVAL_BYPASS_KINDS),
-      enabled: z.boolean(),
-      /** Turning a bypass on also approves the run's requests already
-       *  pending under it. This one is the surface's own, decided by the
-       *  `request.decide` that follows, which may carry more than a plain
-       *  approval. */
-      exceptRequestId: z.string().optional(),
-    }),
+    change: z.discriminatedUnion('field', [
+      z.object({
+        field: z.literal('bypass'),
+        ...runScoped,
+        bypass: z.enum(APPROVAL_BYPASS_KINDS),
+        enabled: z.boolean(),
+        /** Turning a bypass on also approves the run's requests already
+         *  pending under it. This one is the surface's own, decided by the
+         *  `request.decide` that follows, which may carry more than a plain
+         *  approval. */
+        exceptRequestId: z.string().optional(),
+      }),
+      /** Narrow the run's limit at once (a chat's `/approval`): it only
+       *  ever lowers, never raises, the run's own limit. */
+      z.object({
+        field: z.literal('limit'),
+        ...runScoped,
+        limit: z.enum(APPROVAL_POLICY_LIMITS),
+      }),
+    ]),
   }),
 ]);
 export type RuntimeRequest = z.infer<typeof RuntimeRequestSchema>;
+
+/** What a pending tool edit would change: the original and proposed
+ *  content a host shows beside the request's path and line counts. */
+const ToolEditContentSchema = z.object({
+  originalContent: z.string(),
+  proposedContent: z.string(),
+});
+/** A pending tool edit's staged content (`request.preview`). */
+export type ToolEditContent = z.infer<typeof ToolEditContentSchema>;
+
+/** What a `run.files` did: `done` (with the copy's folder), no directory
+ *  to act on, or the failure that stopped it. */
+const RunFilesResultSchema = z.discriminatedUnion('status', [
+  z.object({ status: z.literal('done'), to: z.string().optional() }),
+  z.object({ status: z.literal('noFiles') }),
+  z.object({ status: z.literal('error'), error: z.string() }),
+]);
+/** What a `run.files` request did. */
+export type RunFilesResult = z.infer<typeof RunFilesResultSchema>;
 
 /** What the runtime answers with: a typed value the host renders. */
 export const OutcomeSchema = z.discriminatedUnion('kind', [
@@ -115,5 +171,10 @@ export const OutcomeSchema = z.discriminatedUnion('kind', [
     wake: z.literal('failed').nullish(),
   }),
   z.object({ kind: z.literal('forked'), runId: RunIdSchema }),
+  z.object({
+    kind: z.literal('preview'),
+    preview: ToolEditContentSchema.nullable(),
+  }),
+  z.object({ kind: z.literal('runFiles'), result: RunFilesResultSchema }),
 ]);
 export type Outcome = z.infer<typeof OutcomeSchema>;

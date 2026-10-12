@@ -19,8 +19,7 @@ import {
   ToolContext,
   type ToolContextShape,
 } from '@texra-ai/harness';
-import { requireRun } from '@texra-ai/harness/plugins';
-import { getRunRecords } from '@agent/storage';
+import { ChildRuns, requireRun } from '@texra-ai/harness/plugins';
 import { cleanupAcceptedWorkspaceDiffFiles } from '@latex/acceptedFileTarget';
 import { WorkspaceFs } from '@platform/rootedFs';
 import { stripCriticizeAnnotations } from '@replacement/advanced';
@@ -187,16 +186,14 @@ function executeAcceptRunFilesTool(
 ): Effect.Effect<ToolResult, Error, PluginToolServices> {
   return Effect.gen(function* () {
     const call = yield* ToolContext;
-    const {
-      run: { session },
-    } = yield* requireRun('accept_run_files');
+    yield* requireRun('accept_run_files');
     const directory = yield* findExistingRunStoragePathUnder(
       call.env.roots.storage,
       input.execution_id,
     );
     if (
       directory === undefined &&
-      !(yield* getRunRecords(session, input.execution_id).exists())
+      !(yield* (yield* ChildRuns).records(input.execution_id).exists)
     ) {
       return yield* Effect.fail(
         new ToolError(

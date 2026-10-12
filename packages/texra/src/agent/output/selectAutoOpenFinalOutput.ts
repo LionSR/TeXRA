@@ -6,7 +6,7 @@ import { readSettingFrom } from '@utils/config/platformSettings';
 
 /**
  * Decide whether a finished run should auto-open a final output, and which
- * one. Shared policy across hosts (VS Code extension, desktop) so a multi-round
+ * one. The app's policy across hosts (VS Code extension, desktop) so a multi-round
  * run resolves the same file everywhere instead of each host picking its own.
  * Hosts ask once the launch has returned, so this presentation never runs
  * inside the run whose outcome it shows:

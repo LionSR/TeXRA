@@ -32,6 +32,7 @@ import {
   copyById,
   freshRunPosition,
   isFollowUpRow,
+  type FOLLOW_UP_TYPES,
   isSharedRunRow,
   phaseAfter,
   type RunLoopPhase,
@@ -45,7 +46,7 @@ import {
   attemptRequests,
   invocationAfter,
   pendingResponseOf,
-  settlementOf,
+  callSettlementOf,
   type Invocation,
   type PendingCall,
   type PendingResponse,
@@ -102,7 +103,7 @@ export type RunState = RunPosition &
     readonly round: number;
     /** The last folded row. */
     readonly commit: CommitOrdinal;
-    /** Run history rows folded: zero is only queued input (unopened). */
+    /** Run history rows folded: zero is an unopened run. */
     readonly runHistoryRows: number;
     /** `null` until the opening `run.position` (then moved by
      *  {@link phaseAfter}): no row that presupposes an opened run precedes it. */
@@ -132,7 +133,9 @@ export type RunState = RunPosition &
     readonly countStale: boolean;
     readonly pendingResponse: PendingResponse | null;
     /** The requests decided since the run's latest `run.activate`: answers
-     *  no waiter has read (an earlier one was read by the process that asked). */
+     *  this owner landed before its loop reached the call waiting on them, so
+     *  no waiter has read them. A decision from before the activation was
+     *  read by the process that asked, whose body went on with it. */
     readonly decidedSinceActivation: ReadonlySet<string>;
     /** Derived (D12): the priced usage on its `response`/`context.edit` rows. */
     readonly usage: RunUsageTotals;
@@ -161,15 +164,15 @@ type CardRowType = CardType | SettlementType | EndType | 'plugin.fact';
 type CardType = 'tool.start' | 'tool.end' | 'stream.end' | 'response.finalized';
 type SettlementType = 'run.report' | 'run.result' | 'child.turn' | 'child.park';
 type EndType = 'run.end' | 'stage.end' | 'followup.closed'; // and what it closes
-
-/** The rows `foldRow` applies (the shared rows and the run history's own
- *  arms): only the run's cell and the session's requests write them. */
-export type FoldReadType =
-  | SharedRunRow['type']
-  | Exclude<RunHistoryDraft['type'], CardRowType>
-  | 'run.activate';
-/** Every row kind the run's state (its facts too) is read from. */
-export type RunStateRowType = FoldReadType | 'response.finalized';
+/** The rows `foldRow` applies (never a run's input, the inbox's). */
+type FoldedRowType = Exclude<
+  SharedRunRow['type'] | RunHistoryDraft['type'] | 'run.activate',
+  CardRowType | (typeof FOLLOW_UP_TYPES)[number]
+>;
+/** Every kind the run's state reads: its cell and the requests write them. */
+export type RunStateRowType = FoldedRowType | 'response.finalized';
+/** A run's input and turn companions: any job commits them, no cell. */
+export type RunInputDraft = Exclude<RunHistoryDraft, { type: RunStateRowType }>;
 
 /**
  * Display rows ignored by name: any other unfolded row on the run aggregate
@@ -177,7 +180,7 @@ export type RunStateRowType = FoldReadType | 'response.finalized';
  * vocabulary, so a new display arm is a compile error here until classified.
  */
 const IGNORED_ROW_TYPES: Readonly<
-  Record<Exclude<SessionEvent['type'], FoldReadType>, true>
+  Record<Exclude<SessionEvent['type'], FoldedRowType>, true>
 > = {
   'tool.start': true,
   'tool.end': true,
@@ -203,16 +206,12 @@ const IGNORED_ROW_TYPES: Readonly<
   'run.report': true,
   'run.result': true,
   'followup.closed': true,
+  'followup.queued': true,
+  'followup.consumed': true,
   // The child loop's own bookkeeping: folded by its readers, not the loop.
   'child.turn': true,
 };
 const IGNORED = new Set<string>(Object.keys(IGNORED_ROW_TYPES));
-
-/** Whether no run's state folds `row` (it may commit outside its cell). */
-export const isUnfolded = <R extends { readonly type: string }>(
-  row: R,
-): row is Exclude<R, { type: FoldReadType }> => IGNORED.has(row.type);
-
 /** The state a run starts from: every field at its zero, no family bound
  *  yet. The run program opens from this and stamps its family. */
 export const freshRunState = (commit: CommitOrdinal): RunState => ({
@@ -372,11 +371,7 @@ function foldRow(
     records[callId] = call;
     return { ...advance(state), pendingResponse: { ...pending, records } };
   };
-  // Pending input is the publisher's: a queued row only opens an empty run.
-  if (isFollowUpRow(row))
-    return current === null && row.type === 'followup.queued'
-      ? Result.succeed(freshRunState(commit))
-      : null;
+  if (isFollowUpRow(row)) return null; // the inbox's input (`RunInput`)
   if (isSharedRunRow(row)) {
     // The rows `sessionFold` reads too: applied once, in `runRows.ts`.
     // `unresolved` is a malformed aggregate here: this fold reads a run's
@@ -548,7 +543,7 @@ function foldRow(
             );
           }
           const unsettled = pending.calls.filter(
-            (call) => settlementOf(pending, call.callId) === null,
+            (call) => callSettlementOf(pending, call.callId) === null,
           );
           if (unsettled.length > 0) {
             return refuse(

@@ -15,7 +15,6 @@ import {
   type CliContext,
 } from '@cli/runtime/cliContext';
 import * as logSinks from '@cli/runtime/logSinks';
-import { canonicalizeWorkspacePath } from '@platform/defaults/nodeWorkspace';
 import {
   resolveGlobalStoragePath,
   resolveWorkspaceStoragePath,
@@ -23,6 +22,7 @@ import {
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { withEnv } from '@test/support/testEnv';
+import { canonicalizeWorkspacePath } from '@utils/system/nodeWorkspace';
 
 // The user mcp.json the CLI validates at startup, moved out of the real home
 // so no case reads a developer's own file.

@@ -11,7 +11,7 @@ import '@test/support/sessionGraphTestSetup';
 import type { CliContext } from '@cli/runtime/cliContext';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
-import { testRuntime } from '@test/support/testProcessRuntime';
+import { testRuntime, testSessionOf } from '@test/support/testProcessRuntime';
 import { createDeferred } from '@test/support/asyncTestUtils';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
 import { installedHost, installFakeHost } from '@test/support/setupPlatform';
@@ -275,6 +275,9 @@ describe('runChat signal ownership wiring', () => {
       globalState: installedHost().roots.globalState,
       secrets: installedHost().secrets,
       session: Effect.succeed(session),
+      runSession: Effect.sync(() =>
+        testSessionOf(session, { persistent: true }),
+      ),
       runtime: testRuntime(),
     });
     mocks.initCliPlatform.mockImplementation(() =>

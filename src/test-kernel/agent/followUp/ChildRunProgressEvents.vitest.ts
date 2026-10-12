@@ -4,15 +4,16 @@
 import { it } from '@effect/vitest';
 import { Cause, Deferred, Effect, Exit, Fiber } from 'effect';
 import { beforeEach, describe, expect, vi } from 'vitest';
+import { registryOf, Runs } from '@agent/runtime/runRegistry';
 
 // Local imports
-import { getRunRecords, registerRun } from '@agent/storage';
+import { getRunRecords } from '@agent/storage';
+import { registerRun } from '@agent/storage/runLifecycle';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import type {
   ChildRunPort,
   ChildRunStrategy,
 } from '@agent/runtime/childRunLoop';
-import { Runs } from '@agent/runtime/runRegistry';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import {
   aggregateId as qualifyAggregateId,
@@ -29,7 +30,7 @@ import {
   publishTestRunStart,
 } from '@test/support/sessionTestUtils';
 import { seedReport } from '@test/support/runRecordSeeds';
-import { launchAgentCliSession } from '@texra/tools/agentCliShared';
+import { launchProcessChild } from '@tools/delegation/detachedChildRun';
 import { createChildRun } from '@tools/delegation/childRun';
 
 // Local file imports
@@ -236,9 +237,9 @@ describe('child run progress events', () => {
       expect(testDefaultSession().view.run(workflowRelaunchRunId)?.status).toBe(
         RUN_PHASE.RUNNING,
       );
-      expect(testDefaultSession().runs.hasActiveChildren(parentRunId)).toBe(
-        true,
-      );
+      expect(
+        registryOf(testDefaultSession().runs).hasActiveChildren(parentRunId),
+      ).toBe(true);
       // The relaunch is a second activation on the same run: that row is
       // what carries the run out of its terminal phase.
       expect(
@@ -288,7 +289,7 @@ describe('child run progress events', () => {
         }),
       );
       expect(
-        testDefaultSession().runs.getHandle(workflowRelaunchRunId),
+        testDefaultSession().runs.get(workflowRelaunchRunId)?.handle,
       ).toMatchObject({
         agentName: 'repo-cleanup-readonly-pilot-2026-07-24',
       });
@@ -366,17 +367,11 @@ describe('child run progress events', () => {
           Effect.succeed({ strategy: neverRunStrategy }),
         );
         const launching = yield* Effect.forkChild(
-          launchAgentCliSession({
-            session,
-            parentRunId,
-            agentName: 'codex',
+          launchProcessChild(session, parentRunId, {
+            identity: { kind: 'agent', agent: 'codex', tool: 'codex' },
             description: 'Cancelled admission',
             config,
-            registerFailedMessage: 'registration failed',
             buildLaunch,
-            summary: 'unreachable',
-            launchedLine: 'unreachable',
-            followUpLine: 'unreachable',
           }).pipe(Effect.provideService(Runs, session.runs)),
         );
         const id = yield* Deferred.await(committed);
@@ -418,25 +413,19 @@ describe('child run progress events', () => {
         // The launch dies with the loop's throw, so flip the defect back
         // into the error channel.
         const defect = yield* Effect.flip(
-          launchAgentCliSession({
-            session: testDefaultSession(),
-            parentRunId,
-            agentName: 'codex',
+          launchProcessChild(testDefaultSession(), parentRunId, {
+            identity: { kind: 'agent', agent: 'codex', tool: 'codex' },
             description: 'Fail during synchronous loop setup',
             config,
-            registerFailedMessage: 'registration failed',
             buildLaunch: (context) => {
               childRun = context.childRun;
               childRunId = context.runId;
               // Before the loop reserves its stop target, no stop can find
               // the handle: a stop never reaches a run it cannot interrupt.
               visibleBeforeLoop =
-                session.runs.getHandle(context.runId) !== undefined;
+                session.runs.get(context.runId)?.handle !== undefined;
               throw setupError;
             },
-            summary: 'unreachable',
-            launchedLine: 'unreachable',
-            followUpLine: 'unreachable',
           }).pipe(
             Effect.provideService(Runs, session.runs),
             Effect.catchDefect((cause) => Effect.fail(cause)),
@@ -450,7 +439,7 @@ describe('child run progress events', () => {
         if (!childRun || !childRunId) {
           throw new Error('expected the failed child launch to be captured');
         }
-        expect(session.runs.getHandle(childRunId)).toBeUndefined();
+        expect(session.runs.get(childRunId)?.handle).toBeUndefined();
         expect(session.view.run(childRunId)?.status).toBe(RUN_PHASE.FAILED);
         expect(
           yield* getRunRecords(session, childRunId).readRunEnd(),
@@ -472,7 +461,9 @@ describe('child run progress events', () => {
         const childRun = yield* Effect.promise(() =>
           startCodexChild(stoppedRunId, 'Run a stopped Codex child loop'),
         );
-        expect(testDefaultSession().runs.getHandle(stoppedRunId)).toBeDefined();
+        expect(
+          testDefaultSession().runs.get(stoppedRunId)?.handle,
+        ).toBeDefined();
 
         yield* childRun.finalize({ outcome: RUN_OUTCOME.CANCELLED });
 
@@ -490,7 +481,7 @@ describe('child run progress events', () => {
       const childRun = yield* Effect.promise(() =>
         startCodexChild(failedRunId, 'Run a failing Codex child loop'),
       );
-      expect(testDefaultSession().runs.getHandle(failedRunId)).toBeDefined();
+      expect(testDefaultSession().runs.get(failedRunId)?.handle).toBeDefined();
 
       yield* childRun.finalize({
         outcome: RUN_OUTCOME.FAILED,
@@ -526,7 +517,7 @@ describe('child run progress events', () => {
       });
 
       expect(
-        testDefaultSession().runs.getHandle(unformattableRunId),
+        testDefaultSession().runs.get(unformattableRunId)?.handle,
       ).toBeUndefined();
       expect(
         yield* getRunRecords(

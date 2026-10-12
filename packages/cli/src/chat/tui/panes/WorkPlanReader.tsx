@@ -2,29 +2,28 @@
 
 import { useInput, useWindowSize } from 'ink';
 
-import { type SessionHandle } from '@agent/runtime';
 import { isEscapeInput } from '@cli/tui/inputKeys';
 import { ReaderPanel, readerLayout } from '@cli/tui/ui/BorderedPanel';
 import { CLOSE_HINTS, READER_SCROLL_HINTS } from '@cli/tui/ui/KeyHints';
 import { ScrollableModalText } from '../modals/ScrollableModalText';
+import { sessionView } from '../state/sessionView';
+import { useSignal } from '../state/useSignal';
 import type { RunId } from '@texra-ai/harness/schemas';
 
 export function WorkPlanReader({
   availableRows,
   onClose,
   runId,
-  session,
   title,
 }: {
   readonly availableRows: number;
   readonly onClose: () => void;
   readonly runId: RunId;
-  /** The chat's session the plan is read from, threaded from the App. */
-  readonly session: SessionHandle;
   readonly title: string;
 }): React.JSX.Element {
   const { columns } = useWindowSize();
-  const run = session.view.run(runId);
+  // The plan as the view the chat renders states it, live.
+  const run = useSignal(sessionView()).runs.get(runId);
   const layout = readerLayout({
     availableRows,
     frameWidth: Math.max(1, columns),

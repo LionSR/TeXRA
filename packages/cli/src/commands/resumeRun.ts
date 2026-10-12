@@ -10,6 +10,7 @@ import {
   isDocumentTaskConfig,
   type RunId,
 } from '@shared/schemas';
+import { texraApprovalPolicyLabel } from '@shared/approvalPolicy';
 import { runHeldByProcessMessage } from '@shared/runs/runStatusDisplay';
 import { ensureError } from '@utils/errors/errorMessage';
 import { pathExists } from '@utils/files/fsDurability';
@@ -172,6 +173,14 @@ export function runResumeCommand(
       return CliExitCode.Usage;
     }
 
+    // A resumed task continues under the approval it was launched with: a
+    // requested policy is said not to apply, never dropped silently. A
+    // chat's new rounds take it.
+    if (context.requestedApprovalPolicy !== undefined)
+      writeTextStderr(
+        `The requested approval policy (${texraApprovalPolicyLabel(context.requestedApprovalPolicy)}) does not change task ${id}: it resumes under the approval it was launched with${documentTask ? '' : "; the chat's new messages take it"}.`,
+      );
+
     // A chat resume reopens the interactive TUI, so headless callers are
     // rejected before resume-state loading. A document task resumes headless
     // and skips this gate entirely.
@@ -259,26 +268,31 @@ export function runResumeCommand(
               // the one core resume path, settling with its whole run.
               // A shutdown before the run's lane exists stops the resume through
               // its predicate; the refusal it causes reads as that abort.
-              launch: (shutdown) => (_request, options) =>
-                resumeRun(id, {
-                  ...options,
-                  isCancellationRequested: shutdown,
-                }).pipe(
-                  Effect.flatMap((resumed) => {
-                    if ('failed' in resumed)
+              launch:
+                (shutdown) =>
+                (session, { options }) =>
+                  resumeRun(id, {
+                    ...options,
+                    session,
+                    isCancellationRequested: shutdown,
+                  }).pipe(
+                    Effect.flatMap((resumed) => {
+                      if ('failed' in resumed)
+                        return Effect.fail(
+                          shutdown()
+                            ? new DOMException('Resume stopped', 'AbortError')
+                            : new CliUsageError(
+                                describeFollowUpFailure(resumed.failed),
+                              ),
+                        );
+                      if (resumed.result) return Effect.succeed(resumed.result);
                       return Effect.fail(
-                        shutdown()
-                          ? new DOMException('Resume stopped', 'AbortError')
-                          : new CliUsageError(
-                              describeFollowUpFailure(resumed.failed),
-                            ),
+                        new Error(
+                          `Run ${id} did not resume as a document task.`,
+                        ),
                       );
-                    if (resumed.result) return Effect.succeed(resumed.result);
-                    return Effect.fail(
-                      new Error(`Run ${id} did not resume as a document task.`),
-                    );
-                  }),
-                ),
+                    }),
+                  ),
             },
           },
         );

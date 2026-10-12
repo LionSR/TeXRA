@@ -16,13 +16,12 @@ import type { AgentTrace, StageHandle } from '@agent/trace';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { resolveChildRunConcurrencyBudget } from '@agent/runtime/childRunBudget';
 import {
-  Runs,
-  type AgentRunServices,
+  registryOf,
   type RunRegistry,
+  type AgentRunServices,
+  Runs,
 } from '@agent/runtime/runRegistry';
-import type { RunParent } from '@agent/runtime/RunHandle';
 import {
-  deliverLaunchFailure,
   endRunOutsideLifecycle,
   letGoOfClaim,
 } from '@agent/runtime/runLaunchGuard';
@@ -31,8 +30,11 @@ import { getRunRecords } from '@agent/storage/runRecords';
 import {
   commitPart,
   deliverIn,
+  deliverLaunchFailure,
+  parentEdgeIn,
+  sendToParent,
   settleChildTurn,
-  settlementOf,
+  childSettlementOf,
   type ChildSettlement,
   type SettlementRow,
   type TransactionPart,
@@ -54,6 +56,7 @@ import {
   DatabaseNotOwner,
   type DatabaseWriteFailed,
 } from '@shared/session/database';
+import { RunHistoryRefused } from '@shared/session/runHistory';
 import type { QueuedFollowUp } from '@shared/session/runRows';
 import { formatSubagentProgress } from '@shared/subagentFollowup';
 import { deriveRunOutcome } from '@shared/runs/runStatus';
@@ -303,12 +306,9 @@ export interface ChildRunLoopParams<TTurn, R = never> {
  */
 class ChildLoop<TTurn, R> {
   private readonly controller = new AbortController();
-  /** The stop was a user's, read when it lands: the registry forgets the
-   *  reason once the run has unwound. */
+  /** The stop was a user's, read as it lands: its reason goes with the run. */
   userStopped = false;
   readonly trace: AgentTrace | undefined;
-  /** The parent edge, the run registry's shared cell: a detach severs it. */
-  readonly parent: RunParent;
   readonly attemptId = randomUUID();
   stage: StageHandle | undefined;
   budget: Semaphore.Semaphore | undefined;
@@ -337,14 +337,11 @@ class ChildLoop<TTurn, R> {
     readonly runs: RunRegistry,
   ) {
     this.trace = params.childRun?.logger;
-    this.parent = runs.getHandle(params.runId)?.parentState ?? {
-      current: params.parentRunId,
-    };
   }
 
   interrupt(): void {
     const { runId, childRun } = this.params;
-    this.userStopped ||= this.runs.stopReason(runId) === 'user';
+    this.userStopped ||= this.runs.get(runId)?.stopReason === 'user';
     this.controller.abort();
     if (childRun === undefined) this.runs.interrupt(runId);
   }
@@ -465,12 +462,12 @@ const progressPorts = <TTurn, R>(loop: ChildLoop<TTurn, R>): ChildRunPorts => ({
   notify: (update) => {
     const { notify, strategy, session, runId, agentName } = loop.params;
     if (notify) return notify(update);
-    const target = loop.parent.current;
+    const target = loop.runs.parentOf(runId);
     if (strategy.deliveryMode === 'persistOnly' || target === null) return;
     // Nothing is queued when no session holds the run.
-    if (session.runs.getToolUseFollowUpTarget(target).kind === 'no_session')
+    if (loop.runs.getToolUseFollowUpTarget(target).kind === 'no_session')
       return;
-    session.followUps.sendDetached(target, {
+    session.followUps.sendDetached(parentEdgeIn(session, runId), {
       text: formatSubagentProgress(runId, agentName, update),
       from: { kind: 'run', runId },
     });
@@ -530,32 +527,23 @@ const beginTurn = <TTurn, R>(
   });
 
 /** Who reads this turn's result: its parent, unless the child is
- *  persist-only, detached, or stopped with nothing to deliver. */
+ *  persist-only or stopped with nothing to deliver. A detach is read from
+ *  the child's rows in the job delivering it (`deliverIn`). */
 const deliveryTarget = <TTurn, R>(
   loop: ChildLoop<TTurn, R>,
   turn: TTurn | null,
   isError: boolean,
-): Effect.Effect<RunId | null> =>
-  Effect.gen(function* () {
-    const { strategy, session, runId } = loop.params;
-    if (strategy.deliveryMode === 'persistOnly') return null;
-    const target = loop.parent.current;
-    if (target === null) {
-      yield* loop.log(
-        'warn',
-        'Turn result not delivered: child was detached from its orchestrator. The result remains in the run report.',
-        { runId },
-      );
-      return null;
-    }
-    if (loop.isInterrupted()) {
-      loop.releaseOwnership();
-      return strategy.deliverAfterInterrupt === true ? target : null;
-    }
-    if (isError) loop.releaseOwnership();
-    else if (turn != null) strategy.onTurnSuccess?.(turn, session);
-    return target;
-  });
+): RunId | null => {
+  const { strategy, session, parentRunId: target } = loop.params;
+  if (strategy.deliveryMode === 'persistOnly') return null;
+  if (loop.isInterrupted()) {
+    loop.releaseOwnership();
+    return strategy.deliverAfterInterrupt === true ? target : null;
+  }
+  if (isError) loop.releaseOwnership();
+  else if (turn != null) strategy.onTurnSuccess?.(turn, session);
+  return target;
+};
 
 /** One turn's settlement, and the report an awaiting caller reads once it
  *  commits (or once its commit failed, then the turn's failure). */
@@ -589,14 +577,14 @@ const settleTurn = <TTurn, R>(
           err ?? undefined,
         )
       : undefined;
-    const settlement = settlementOf({
+    const settlement = childSettlementOf({
       runId,
       turn: { key: loop.attemptId, index: loop.turnIndex },
       message,
       resultMeta,
       consumed: loop.consumed,
       deliveryId: strategy.deliveryId,
-      to: yield* deliveryTarget(loop, turn, isError),
+      to: deliveryTarget(loop, turn, isError),
       ...(last && { end: isError ? 'failed' : 'completed' }),
     });
     const report = Effect.sync(() =>
@@ -622,11 +610,7 @@ const settleEnd = <TTurn, R>(
     Effect.map(({ settlement, report }) => {
       loop.ending = settlement;
       loop.endReport = report;
-      return settleChildTurn(
-        loop.params.session.followUps,
-        settlement,
-        loop.trace,
-      );
+      return settleChildTurn(loop.params.session, settlement, loop.trace);
     }),
     Effect.catch((error) =>
       Effect.sync(() => {
@@ -657,8 +641,7 @@ function nativeTurns<TTurn, R>(
           const { rows, delivery } = settlement;
           return {
             rows,
-            alongside:
-              delivery && deliverIn(session.followUps, delivery, loop.trace),
+            alongside: delivery && deliverIn(session, delivery, loop.trace),
             settled: Effect.andThen(
               report,
               wakeParent(session, delivery, loop.trace),
@@ -733,7 +716,7 @@ const settleInterim = <TTurn, R>(
     const park = loop.isInterrupted() ? undefined : parkRow(runId, 'parked');
     yield* commitPart(
       session,
-      settleChildTurn(session.followUps, settlement, loop.trace, park),
+      settleChildTurn(session, settlement, loop.trace, park),
     );
     yield* settled.report;
     yield* wakeParent(session, settlement.delivery, loop.trace);
@@ -790,7 +773,6 @@ const driveTurns = <TTurn, R>(
         if (strategy.deliveryMode !== 'persistOnly')
           yield* deliverLaunchFailure(
             session,
-            loop.parent,
             runId,
             strategy.formatError(turn, err),
           );
@@ -860,39 +842,27 @@ const endNative = <TTurn, R>(
       );
     else if (!abnormal && settlement !== undefined)
       yield* commitPart(session, settlement);
-    const target = loop.parent.current;
     if (
       strategy.stopNotice === undefined ||
       strategy.deliveryMode === 'persistOnly' ||
-      !loop.userStopped ||
-      target === null
+      !loop.userStopped
     )
       return;
     // A notice that cannot be read still says the child stopped: the stop
     // stands, and the failure is loud.
-    const text = yield* strategy.stopNotice().pipe(
-      Effect.catch((error) =>
-        loop
-          .log('warn', 'Child-run stop notice failed', {
-            runId,
-            error,
-          })
-          .pipe(
-            Effect.as(
-              `Run ${runId} was stopped. What it had done could not be read: ${toErrorMessage(error)}`,
-            ),
+    const text = yield* strategy
+      .stopNotice()
+      .pipe(
+        Effect.catch((error) =>
+          Effect.as(
+            loop.log('warn', 'Child-run stop notice failed', { runId, error }),
+            `Run ${runId} was stopped. What it had done could not be read: ${toErrorMessage(error)}`,
           ),
-      ),
-    );
-    yield* session.followUps.send(
-      target,
-      {
-        text,
-        from: { kind: 'run', runId },
-        deliveryId: `${runId}:${loop.attemptId}:stopped`,
-      },
-      { hold: 'instruction' },
-    );
+        ),
+      );
+    const deliveryId = `${runId}:${loop.attemptId}:stopped`;
+    const item = { text, from: { kind: 'run', runId } as const, deliveryId };
+    yield* sendToParent(session, item, { hold: 'instruction' }, loop.trace);
   });
 
 /** The child's terminal row, its process port's finalize or a native run's
@@ -912,7 +882,7 @@ const writeEnd = <TTurn, R>(
   const settlement =
     loop.ended || loop.ending === undefined
       ? undefined
-      : settleChildTurn(session.followUps, loop.ending, loop.trace);
+      : settleChildTurn(session, loop.ending, loop.trace);
   if (childRun === undefined)
     return endNative(loop, outcome, stoppedAtExit, settlement);
   return childRun.finalize({
@@ -948,8 +918,12 @@ const endChildLoop = <TTurn, R>(
         loop.failed = true;
         loop.lastError ??= error;
         // A lost aggregate claim: this process no longer owns the run, so
-        // the loop stops rather than continue under it.
-        if (error instanceof DatabaseNotOwner) loop.interrupt();
+        // the loop (and its process) stops rather than continue under it.
+        if (
+          error instanceof DatabaseNotOwner ||
+          (error instanceof RunHistoryRefused && error.reason === 'not-owner')
+        )
+          loop.interrupt();
       }
       // Debug-only driver diagnostic (#9531): how the loop ended.
       yield* loop.log('debug', 'childRunLoop loop.terminated', {
@@ -1034,7 +1008,7 @@ const launchChildLoop = <TTurn, R extends AgentRunServices>(
     // native one retains a terminal parent's continuation.
     loop.releaseActivation = loop.runs.reserveChildActivation({
       runId,
-      parent: loop.parent,
+      launchParent: loop.params.parentRunId,
       retainsTerminalParent: childRun === undefined,
       interrupt: () => loop.interrupt(),
     });
@@ -1054,7 +1028,7 @@ const launchChildLoop = <TTurn, R extends AgentRunServices>(
       return yield* Effect.fail(
         yield* unwindSetup(loop, Cause.squash(setup.cause)),
       );
-    return yield* loop.runs.launch(runId, runChildLoop(loop), (admitted) =>
+    return yield* loop.runs.start(runId, runChildLoop(loop), (admitted) =>
       Effect.suspend(() => {
         loop.forked = true;
         return Effect.andThen(Effect.yieldNow, admitted).pipe(
@@ -1083,7 +1057,7 @@ export function startChildRunLoop<TTurn, R extends AgentRunServices = never>(
   params: ChildRunLoopParams<TTurn, R>,
 ): Effect.Effect<Fiber.Fiber<TTurn | undefined, Error>, Error, R | Runs> {
   return Effect.flatMap(Runs, (runs) => {
-    const loop = new ChildLoop(params, runs);
+    const loop = new ChildLoop(params, registryOf(runs));
     // The handoff never happened: the setup this launch acquired unwinds
     // here, atomically, rather than leaking the activation and the stage.
     return launchChildLoop(loop).pipe(

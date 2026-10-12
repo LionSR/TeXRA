@@ -3,7 +3,6 @@ import type { RouteRetries } from '@agent/runtime';
 
 import { POLISH_PROMPT_PREFIX } from '@agent/runtime/bundledPrompts';
 import { helperCall } from '@agent/runtime/helperModel';
-import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { getSdkErrorMessage } from '@common/errors/sdkError/providerErrorFormat';
 import { withLogChannel } from '@logger/effectLog';
 import type { ModelOptionStores } from '@model/computeModelOptions';
@@ -11,7 +10,7 @@ import type { UsageLog } from '@shared/usageLog';
 import { extractTextFromTag } from '@texra/utils/text/xmlExtraction';
 import { isNonEmptyString } from '@utils/text/stringUtils';
 
-import type { LanguageModel } from '@texra-ai/harness';
+import type { LanguageModel, WorkspaceRoots } from '@texra-ai/harness';
 import type { HttpClient } from 'effect/http';
 
 const CHANNEL = 'TextEnhancement';
@@ -20,13 +19,13 @@ const CHANNEL = 'TextEnhancement';
  * Polish `text` with the configured helper model. Fails with the reason the
  * helper could not answer, formatted for the user.
  *
- * The helper model is resolved and bound against the requesting session's
+ * The helper model is resolved and bound against the requesting roots'
  * setting slots and the process secret store, and the call is gated on the
  * process's retry gate.
  */
 export const polishTextWithAI = Effect.fn('polishTextWithAI')(function* (
   text: string,
-  session: SessionHandle,
+  roots: WorkspaceRoots,
   secrets: ModelOptionStores['secrets'],
 ): Effect.fn.Return<
   string,
@@ -35,7 +34,7 @@ export const polishTextWithAI = Effect.fn('polishTextWithAI')(function* (
 > {
   return yield* Effect.gen(function* () {
     const responseText = yield* helperCall(
-      { ...session.roots, secrets },
+      { ...roots, secrets },
       { userPrompt: POLISH_PROMPT_PREFIX + text },
       // A draft polish serves no run and no agent category.
       { agentName: 'polish', runId: null },
