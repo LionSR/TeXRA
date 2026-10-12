@@ -53,12 +53,16 @@ not a gap. No autonomous refactor is warranted from this charter. Four
 read-only audits — one each over the agent core, the model handler, the logger,
 and the SDK public surface — again found **no wrapper layer that only forwards,
 no second run-history writer, no services-bag, no re-export shim**. The one
-consensus fix the prior pass applied (the six-error reconcile) survived the
+consensus fix the prior pass applied (the error-count reconcile) survived the
 rename intact: `packages/harness/README.md:355` and
-`packages/harness/src/effect/errors.ts:2` both state "Six" and name the two
-store errors, matching the six error values the root entry exports. The
-`refuted-candidates.json` ledger remains the authoritative refused set; nothing
-in these areas reopened a retained refusal.
+`packages/harness/src/effect/errors.ts:2` both state that **six** errors are
+defined in the package (`PluginsRefused`, `SessionOptionsConflict`,
+`AgentNotFound`, `ToolsRefused`, `ResumeRefused`, `RunFailure`) and that **two
+more** — `DatabaseOpenFailed` and `DatabaseReadFailed`, the `SessionOpenError`
+union — reach the surface from the session store, "for eight in all." The root
+entry (`index.ts:62-75`) exports all eight of those error values, matching that
+prose. The `refuted-candidates.json` ledger remains the authoritative refused
+set; nothing in these areas reopened a retained refusal.
 
 ## The four asks, re-mapped to the current pin
 
@@ -83,9 +87,14 @@ in these areas reopened a retained refusal.
 
 2. **Audit for unnecessary abstraction.** Done, four ways.
    - **Agent core** is still written defensively against the exact anti-patterns
-     the charter names. The only net-negative candidate carried is cosmetic
-     (`AgentRunLifecycle.ts` `finalizeRunTerminalBody`, one caller, exists only
-     to be wrapped in `Effect.uninterruptible`) — not worth a churn.
+     the charter names, and no net-negative collapse candidate remains. The
+     prior pass's one carried marginal item — a single-caller
+     `finalizeRunTerminalBody` split — no longer applies: that symbol is gone,
+     and `finalizeRunTerminal` (`AgentRunLifecycle.ts:114`, an `Effect.fn`
+     applying `Effect.uninterruptible` directly) is now a **two-caller** shared
+     terminal-finalization boundary (`AgentRunLifecycle.ts:297` and
+     `tools/delegation/childRun.ts:147`), not a cosmetic wrapper — do not inline
+     it.
    - **Model handler** continues to de-duplicate (the 966→423 shrink). The
      `Model` interface still takes only a Zod-guarded materialized `TurnRequest`
      and keeps host concerns in `BoundModel`.
@@ -157,7 +166,7 @@ in these areas reopened a retained refusal.
 ## Recommendation
 
 No refactor to land autonomously from this charter. The one consensus fix the
-prior pass carried (the six-error reconcile) is already in place and survived
+prior pass carried (the error-count reconcile) is already in place and survived
 the rename. "Agent SDK readiness" now tracks the durable-harness program
 (`2026-10-02-durable-harness.md` H1–H5); the one owner-level action the surface
 audit still asks for is to **re-scope (or retire) the 2026-09-10 Tier-1 manifest
