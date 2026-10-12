@@ -45,7 +45,7 @@ import {
   attemptRequests,
   invocationAfter,
   pendingResponseOf,
-  settlementOf,
+  callSettlementOf,
   type Invocation,
   type PendingCall,
   type PendingResponse,
@@ -552,7 +552,7 @@ function foldRow(
             );
           }
           const unsettled = pending.calls.filter(
-            (call) => settlementOf(pending, call.callId) === null,
+            (call) => callSettlementOf(pending, call.callId) === null,
           );
           if (unsettled.length > 0) {
             return refuse(

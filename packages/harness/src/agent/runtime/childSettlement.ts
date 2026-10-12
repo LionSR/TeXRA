@@ -61,7 +61,7 @@ export interface ChildSettlement {
  * manifest, the follow-ups its prompt consumed, and the `child.turn settled`
  * row naming the delivery to `to` under `deliveryId`.
  */
-export function settlementOf(params: {
+export function childSettlementOf(params: {
   readonly runId: RunId;
   readonly turn: AttemptKey;
   readonly message: string;

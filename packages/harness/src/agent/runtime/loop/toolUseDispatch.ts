@@ -76,7 +76,7 @@ import {
   attemptOf,
   attemptRequests,
   callRequestId,
-  settlementOf,
+  callSettlementOf,
   type AttemptRequests,
   type CallStatus,
   type PendingCall,
@@ -940,7 +940,8 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
         ): Effect.Effect<A, E, R> =>
           Effect.suspend(() => {
             const existing = sharedValues.get(key) as
-              Deferred.Deferred<A, E> | undefined;
+              | Deferred.Deferred<A, E>
+              | undefined;
             if (existing !== undefined) return Deferred.await(existing);
             const made = Deferred.makeUnsafe<A, E>();
             sharedValues.set(key, made as Deferred.Deferred<unknown, unknown>);
@@ -1177,12 +1178,12 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
   // A script's calls are not the response's: its own result says whether
   // one of them ended the turn.
   const endTurn = settledPending.calls.some((fact) => {
-    const settled = settlementOf(settledPending, fact.callId);
+    const settled = callSettlementOf(settledPending, fact.callId);
     return settled !== null && endsTurn(settled);
   });
   const bound = yield* SynchronizedRef.get(run.model);
   const results = settledPending.calls.map((fact, ordinal) => {
-    const settlement = settlementOf(settledPending, fact.callId);
+    const settlement = callSettlementOf(settledPending, fact.callId);
     if (settlement === null) {
       throw new Error(`Call ${fact.callId} is unsettled at delivery.`);
     }
@@ -1213,19 +1214,19 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
     );
   const documents = (endTurn || switching ? [] : settledPending.calls).flatMap(
     (fact) =>
-      (settlementOf(settledPending, fact.callId)?.attachments ?? []).flatMap(
-        (attachment) => {
-          if (attachment.content.kind !== 'base64') return [];
-          const part = inlineMediaPart(
-            attachment.mimeType,
-            attachment.content.data,
-            bound,
-          );
-          return part?.kind === 'document'
-            ? [{ path: attachment.path, part }]
-            : [];
-        },
-      ),
+      (
+        callSettlementOf(settledPending, fact.callId)?.attachments ?? []
+      ).flatMap((attachment) => {
+        if (attachment.content.kind !== 'base64') return [];
+        const part = inlineMediaPart(
+          attachment.mimeType,
+          attachment.content.data,
+          bound,
+        );
+        return part?.kind === 'document'
+          ? [{ path: attachment.path, part }]
+          : [];
+      }),
   );
   const uploadFile =
     documents.length === 0 ? undefined : bound.model.uploadFile;

@@ -16,7 +16,7 @@ import type { RunInput } from '@agent/followUp/RunInput';
 import {
   relayDelivery,
   settledRow,
-  settlementOf,
+  childSettlementOf,
   type ChildSettlement,
   type SettlementRow,
 } from '@agent/runtime/childSettlement';
@@ -729,7 +729,7 @@ export function startChildRunLoop<TTurn, R extends AgentRunServices = never>(
                     err ?? undefined,
                   )
                 : undefined;
-              const settlement = settlementOf({
+              const settlement = childSettlementOf({
                 runId,
                 turn: turnKey,
                 message,
