@@ -679,7 +679,9 @@ export function createChatSessionController(
               session.settleExitCode(claim, CliExitCode.Interrupted);
             } else {
               appendLocalErrorTranscript(
-                describeFollowUpFailure(result.failed),
+                'message' in result
+                  ? result.message
+                  : describeFollowUpFailure(result.failed),
               );
               session.settleExitCode(claim, CliExitCode.Usage);
             }
