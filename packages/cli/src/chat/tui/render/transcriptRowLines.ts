@@ -8,11 +8,11 @@
 import { safeTerminalText } from '@cli/runtime/terminalText';
 import { hiddenRowsText } from '@cli/tui/overflowText';
 import { CROSS, TICK, TOOL_OUTPUT_CORNER } from '@cli/tui/ui/glyphs';
+import type { TranscriptRow } from '@cli/chat/tui/state/sessionView';
 import {
   elideText,
   transcriptText,
   type StatItem,
-  type TranscriptRow,
   type TranscriptText,
 } from '@shared/transcript';
 import { formatBytes } from '@utils/text/stringUtils';

@@ -10,6 +10,7 @@ import {
   Effect,
   Exit,
   Fiber,
+  FiberHandle,
   Result,
   Scope,
   Stream,
@@ -62,8 +63,7 @@ import {
 import { DisposableStore } from '@texra/platform/disposable';
 import { subscribeToSignalChanges } from '@texra/shared/signals';
 import { attachWindowHost } from '@texra/controllers/server/windowHost';
-import { serviceSessionBackend } from '@texra/controllers/server/serviceBackend';
-import { localSessionBackend } from '@texra/controllers/session/sessionBackend';
+import { serviceSession } from '@texra/controllers/server/serviceSession';
 import {
   readConfigSettingFrom,
   writeSettingTo,
@@ -200,13 +200,14 @@ export async function runChat(
         }),
       });
       const runtimeSession = yield* services.session;
-      const backend = Result.isSuccess(service)
-        ? yield* serviceSessionBackend(
+      // Where this chat's runs run: the service's session, or this one.
+      const runSession = Result.isSuccess(service)
+        ? yield* serviceSession(
             service.success,
             context.cwd,
-            runtimeSession.roots.storage,
+            runtimeSession.roots,
           ).pipe(Scope.provide(chatScope))
-        : localSessionBackend(runtimeSession);
+        : yield* services.runSession;
       // Said once the view is bound, which the transcript rows need.
       const startupNotices: string[] = [];
       if (Result.isSuccess(service)) {
@@ -318,7 +319,7 @@ export async function runChat(
         startupNotices,
         services,
         runtimeSession,
-        backend,
+        runSession,
         link: Result.isSuccess(service) ? service.success : undefined,
         runsElsewhere: Result.isSuccess(service),
         defaults,
@@ -339,7 +340,7 @@ export async function runChat(
     ),
   );
   if (startup.exitCode !== undefined) return { exitCode: startup.exitCode };
-  const { services, runtimeSession, backend, runsElsewhere, link } = startup;
+  const { services, runtimeSession, runSession, runsElsewhere, link } = startup;
   const { defaults, model } = startup;
   const { inputHistory, followUpQueue, startupNotices } = startup;
   const { agent } = defaults;
@@ -388,7 +389,7 @@ export async function runChat(
     cliContext: context,
     session,
     runtimeSession,
-    backend,
+    runSession,
     secrets: services.secrets,
     stores: services,
     runtime: services.runtime,
@@ -417,13 +418,12 @@ export async function runChat(
   // bridged into a signal, its transcript tier subscribed for the runs this
   // terminal paints. Bound before anything reads the view: the terminal
   // title below derives its attention state from it on install.
-  const session = new TuiSession(backend.controls, runsElsewhere);
+  const session = new TuiSession(runsElsewhere);
   disposables.add(() => runtime.runFork(Scope.close(chatScope, Exit.void)));
   // A dead fold (`view.changes` failing) is the end of this session: the
   // composer closes on the reason, Ctrl-C still exits, and the exit is a
   // failure on every exit path, since they all read `session.runExitCode`.
-  const unbindSessionView = bindSessionView(runtime, backend.view.ref, {
-    changes: backend.view.changes,
+  const unbindSessionView = bindSessionView(runtime, runSession.view, {
     onFailure: (error) => {
       sessionViewFailureSignal.set(
         `The session view stopped updating: ${toErrorMessage(error)} Press Ctrl-C to exit and restart texra. If it repeats, run the same texra version that last opened this project; an older build cannot read a newer session store.`,
@@ -474,16 +474,28 @@ export async function runChat(
       .pipe(Effect.provide(nodeFileServices)),
   );
   disposables.add(() => runtime.runFork(Fiber.interrupt(watchingKeys)));
+  // The runs this terminal paints, watched on the session for as long as
+  // the set holds: the watch keeps their transcripts in the view, and a
+  // new set replaces the watch. The chat's scope ends it.
+  const transcriptWatch = runtime.runSync(
+    FiberHandle.make<void, never>().pipe(Scope.provide(chatScope)),
+  );
   let subscribedRuns = '';
   const syncTranscriptSubscriptions = (): void => {
     const ids = paintedRunIds.get();
     const key = ids.join('\0');
     if (key === subscribedRuns) return;
     subscribedRuns = key;
+    const view = runSession.view.current();
     runtime.runFork(
-      backend.transcripts(
-        'tui',
-        ids.map((id) => ({ id: aggregateId('run', id), fromSeq: 0 })),
+      FiberHandle.run(
+        transcriptWatch,
+        Stream.runDrain(
+          runSession.view.watch(
+            ids.map((id) => ({ id: aggregateId('run', id), fromSeq: 0 })),
+            { cursor: view.cursor, debug: view.debug },
+          ),
+        ),
       ),
     );
   };
@@ -498,8 +510,15 @@ export async function runChat(
     if (chatTuiCanStartRootRun(session) || !session.canSelectModel()) {
       return Effect.succeed(undefined);
     }
+    // The run's loop answers in this process; the service checks the
+    // switch against the run when it is asked.
+    const { runId } = session;
+    const controls =
+      runId === undefined || runsElsewhere
+        ? undefined
+        : runtimeSession.runs.get(runId)?.controls;
     return (
-      session.activeRunControls()?.modelSwitchDisabledReason(candidateModel) ??
+      controls?.modelSwitchDisabledReason(candidateModel) ??
       Effect.succeed(undefined)
     );
   };
@@ -522,8 +541,8 @@ export async function runChat(
     stores: services,
     runtime,
     ...(link !== undefined && {
-      backend,
-      agentRuns: serviceAgentRuns(backend, () => chatPolicy),
+      serviceSession: runSession,
+      agentRuns: serviceAgentRuns(runSession, () => chatPolicy),
       attachWindow: (host) => {
         runtime.runFork(
           attachWindowHost(link, context.cwd, host).pipe(
@@ -568,7 +587,7 @@ export async function runChat(
 
   // Pre-register the slash commands the input palette uses.
   registerBuiltinSlashCommands({
-    backend,
+    runSession,
     connectService: () => reachCliService(context.storageRoot),
     onAccountChanged: () =>
       connectChatModel(
@@ -632,7 +651,7 @@ export async function runChat(
       stores={services}
       runtime={runtime}
       session={runtimeSession}
-      requests={backend}
+      requests={runSession}
       onSubmit={(line, mediaFiles, images) => {
         if (holdUntilConnected({ line, mediaFiles, images })) return;
         runtime.runFork(chatController.submit(line, mediaFiles, images));

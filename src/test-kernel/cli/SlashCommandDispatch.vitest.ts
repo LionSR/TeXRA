@@ -51,6 +51,7 @@ import type { CliLogoutTarget } from '@cli/runtime/loginOptions';
 import * as modelAccessSelection from '@cli/runtime/modelAccessSelection';
 import * as cliProviderKeys from '@cli/chat/tui/hosts/cliProviderKeys';
 import { TuiSession } from '@cli/chat/tui/state/sessionRunState';
+import type { TranscriptRow } from '@cli/chat/tui/state/sessionView';
 import * as subscriptionAccess from '@model/subscriptionAccess';
 import { withProcessServices } from '@platform/processRuntime';
 import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
@@ -62,13 +63,11 @@ import {
   type RunPhase,
 } from '@shared/schemas';
 import type { RunView } from '@shared/session/sessionView';
-import type { TranscriptRow } from '@shared/transcript';
-import { testRuntime } from '@test/support/testProcessRuntime';
+import { testRuntime, testSessionOf } from '@test/support/testProcessRuntime';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
 import { FakeSecrets } from '@test/support/FakePlatform';
 import { makeFakeSettingsStores } from '@test/support/settingsStoresFake';
-import { localSessionBackend } from '@texra/controllers/session/sessionBackend';
 import {
   bindTestSessionView,
   makeRunView,
@@ -156,10 +155,11 @@ const services = {
   stores: makeFakeSettingsStores('cli').stores,
   runtime: testRuntime(),
   runtimeSession: testDefaultSession(),
+  runSession: testSessionOf(testDefaultSession()),
 };
 
 function createSession(): TuiSession {
-  return new TuiSession(() => undefined);
+  return new TuiSession();
 }
 
 function mockModelAccessOverview(): void {
@@ -209,7 +209,7 @@ function createContext(
     cliContext: createCliContext(),
     session,
     runtimeSession: services.runtimeSession,
-    backend: localSessionBackend(services.runtimeSession),
+    runSession: services.runSession,
     secrets: services.secrets,
     stores: services.stores,
     runtime: testRuntime(),

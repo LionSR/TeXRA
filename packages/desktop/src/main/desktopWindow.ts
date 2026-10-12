@@ -106,7 +106,7 @@ export const openDesktopWindow = Effect.fn('desktop.openWindow')(function* (
   const initialProject = projects.active();
   const window = yield* openDesktopBrowserWindow({
     title: getDesktopWindowTitle(
-      initialProject.backend,
+      initialProject.runSession,
       initialProject.root && initialProject.display.name,
     ),
     mainDir: options.mainDir,

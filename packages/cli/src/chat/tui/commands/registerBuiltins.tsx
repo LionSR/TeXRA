@@ -19,10 +19,6 @@ import {
 import { runBypasses } from '@shared/approvalBypassKind';
 import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
 import type { SettingsStores } from '@shared/config/settingsAccess';
-import {
-  localSessionBackend,
-  type SessionBackend,
-} from '@texra/controllers/session/sessionBackend';
 import type { ServiceConnection } from '@texra/controllers/server/client';
 import { RUN_GRANT_ORDER } from '@ui/copy/delegationApproval';
 import { PLUGINS_TUI } from '@ui/copy/plugins';
@@ -85,7 +81,11 @@ import {
   type FormActionHandler,
   modelAccessContribution,
 } from './modelAccessContribution';
-import type { ProcessRuntime, ProcessServices } from '@texra-ai/harness';
+import type {
+  ProcessRuntime,
+  ProcessServices,
+  Session,
+} from '@texra-ai/harness';
 import type { PlatformSecrets } from '@texra-ai/harness';
 
 type SelectHandler<T> = (value: T) => SlashCommandEffect;
@@ -108,9 +108,9 @@ export function registerBuiltinSlashCommands(options: {
   /** The session `/resume` lists history from and `/plan` and `/compact` act
    *  on, threaded from the surface that registers the commands. */
   runtimeSession: SessionHandle;
-  /** Where the commands' run requests and resumes land: the chat's session
-   *  in the service; its own session when unset. */
-  backend?: SessionBackend;
+  /** Where the commands' run requests and resumes land: the chat's session,
+   *  here or in the service. */
+  runSession: Session;
   onAgentSelect?: SelectHandler<string>;
   /** `/agent` → a team preset, by id. */
   onTeamSelect?: SelectHandler<string>;
@@ -138,8 +138,7 @@ export function registerBuiltinSlashCommands(options: {
   onError?: ErrorHandler;
 }): void {
   const { secrets, stores, runtime } = options;
-  const backend =
-    options.backend ?? localSessionBackend(options.runtimeSession);
+  const { runSession } = options;
   const modelStores = { ...stores, secrets, runtime };
   const onAgentSelect: SelectHandler<string> =
     options.onAgentSelect ??
@@ -241,7 +240,7 @@ export function registerBuiltinSlashCommands(options: {
               case 'superYolo':
                 return runId === undefined
                   ? Effect.void
-                  : revokeCliRunGrant(backend, runId, value);
+                  : revokeCliRunGrant(runSession, runId, value);
               case 'ask':
               case 'never':
               case 'yolo':
@@ -539,7 +538,7 @@ export function registerBuiltinSlashCommands(options: {
           handler: (remainder, context) =>
             Effect.gen(function* () {
               if (remainder.trim() === 'all')
-                return yield* resumeInterruptedTasks(context.backend);
+                return yield* resumeInterruptedTasks(context.runSession);
               const id = parseCliHistoryId(remainder);
               if (!id)
                 return yield* Effect.fail(
@@ -602,6 +601,6 @@ export function registerBuiltinSlashCommands(options: {
     // Only offer /config when the host wired the stores it reads/writes — a
     // command that can't reach a store would render an inert panel.
     ...(options.configStores ? [configContribution(options.configStores)] : []),
-    ...sessionContributions(backend),
+    ...sessionContributions(runSession),
   ]);
 }

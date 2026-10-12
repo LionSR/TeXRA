@@ -310,7 +310,11 @@ function waitForNoApproval(): Effect.Effect<void> {
 }
 
 beforeAll(() => {
-  bindSessionView(testRuntime(), testDefaultSession().view.ref);
+  const { view } = testDefaultSession();
+  bindSessionView(testRuntime(), {
+    current: () => SubscriptionRef.getUnsafe(view.ref),
+    changes: view.changes,
+  });
 });
 
 beforeEach(() => {

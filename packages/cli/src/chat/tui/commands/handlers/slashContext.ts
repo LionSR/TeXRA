@@ -8,8 +8,11 @@ import { type TuiSession } from '@cli/chat/tui/state/sessionRunState';
 import { appendLocalNotice } from '@cli/chat/tui/state/transcript';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
-import type { SessionBackend } from '@texra/controllers/session/sessionBackend';
-import type { ProcessRuntime, ProcessServices } from '@texra-ai/harness';
+import type {
+  ProcessRuntime,
+  ProcessServices,
+  Session,
+} from '@texra-ai/harness';
 import type { PlatformSecrets } from '@texra-ai/harness';
 import type { Effect } from 'effect';
 
@@ -30,7 +33,7 @@ export interface SlashCommandContext {
   readonly runtimeSession: SessionHandle;
   /** Where run requests and resumes land: the chat's session, here or in
    *  the background service. */
-  readonly backend: SessionBackend;
+  readonly runSession: Session;
   /**
    * The process secret store and the three setting slots the account,
    * model-access and model-selection commands read, filled from the

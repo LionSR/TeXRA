@@ -1,14 +1,5 @@
 /** Host-neutral relaunch and retry actions shared by extension and desktop. */
-import {
-  Cause,
-  Data,
-  Deferred,
-  Effect,
-  Exit,
-  Fiber,
-  FileSystem,
-  SubscriptionRef,
-} from 'effect';
+import { Cause, Data, Effect, FileSystem, type Scope } from 'effect';
 
 import {
   type ApiKeyProviderId,
@@ -25,6 +16,9 @@ import {
   DatabaseReadFailed,
   AppState,
   StateReadFailed,
+  type Run,
+  type Session,
+  type StartInput,
 } from '@texra-ai/harness';
 import { presentRunFailure } from '@agent/runtime/terminalResultToast';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
@@ -62,7 +56,6 @@ import {
   type ProgressFollowUpState,
 } from '../progressView/ProgressFollowUpController';
 import type { RunEndResult, AgentConfig } from '@texra-ai/harness/schemas';
-import type { SessionBackend } from './sessionBackend';
 
 const CHANNEL = 'HostRunActions';
 
@@ -82,11 +75,8 @@ export interface WorkflowFileOperationRequest {
 }
 
 /**
- * The host's launcher could not start the run: it fails with a bare `Error`,
- * lifted here with that error as `cause`. {@link HostRunActionPorts.runValidated}
- * settles only with the run itself, so the copilot fallback races it against
- * the launcher's start callback; a launch that faults first reaches the
- * waiter as this failure.
+ * The host's launcher could not start the run, or the run it started
+ * failed: a bare `Error`, lifted here with that error as `cause`.
  */
 class RunLaunchFailed extends Data.TaggedError('RunLaunchFailed')<{
   readonly message: string;
@@ -101,31 +91,35 @@ class RunConfigUnreadable extends Data.TaggedError('RunConfigUnreadable')<{
   readonly cause: DatabaseReadFailed;
 }> {}
 
+/** The launch facts an action adds to a validated request, as the
+ *  session's `start` takes them. */
+export type RunValidatedOptions = Pick<
+  StartInput,
+  'helperModel' | 'ownKeyFallback' | 'approval'
+>;
+
 export interface HostRunActionPorts {
-  readonly session: SessionHandle;
+  /** This process's handle on the window's session: its records, its run
+   *  guards, and the surface its failures are presented on. */
+  readonly handle: SessionHandle;
   /** Where this window's run actions land: its own session, or the
    *  background service's. Run state is read from its view. */
-  readonly backend: SessionBackend;
+  readonly session: Session;
+  /** The host's scope: what an action does when its run ends lives as long
+   *  as the host. */
+  readonly scope: Scope.Scope;
   /**
-   * Launch a validated fresh run; the host's own launcher reaches
-   * the session's root launch (`Runs.launch`). The Effect settles with the launched run itself — a caller
-   * that wants only the launch acknowledged races it against the `onRun`
-   * gate instead of awaiting it. It fails with the launcher's own error; the
-   * actions below name that channel once.
+   * Start a validated fresh run through the host's own launcher (the
+   * session's `start`), answering once it is admitted. What the host does
+   * when the run ends (open its output) follows the run's `result`, so a
+   * caller that waits for the run waits on that. It fails with the
+   * launcher's own error; the actions below present a failure before the
+   * run opens, once, unless the launcher already did.
    */
   runValidated(
     request: ValidatedRunRequest,
-    options?: {
-      preferHelperModel?: boolean;
-      /** This launch replaces a quota-exhausted retry the user answered
-       *  with their own API key. */
-      ownApiKeyFallback?: boolean;
-      /** An Auto-approve launch: the run starts with delegated work
-       *  approved. */
-      approveDelegatedWork?: boolean;
-      onRun?: (runId: RunId) => Effect.Effect<void>;
-    },
-  ): Effect.Effect<void, Error>;
+    options?: RunValidatedOptions,
+  ): Effect.Effect<Run, Error>;
   /** Open a resumed workflow's final output, as the launcher does a fresh one's. */
   openWorkflowOutput(result: RunEndResult): Effect.Effect<void, Error>;
   loadModelOptions(): Effect.Effect<
@@ -227,21 +221,27 @@ export const createHostRunActions = (
     // read through this filesystem rather than taking one from whatever
     // context each of its callers happens to run on.
     const fs = yield* FileSystem.FileSystem;
-    const { session, backend } = ports;
-    const view = () => SubscriptionRef.getUnsafe(backend.view.ref);
+    const { handle, session } = ports;
+    const view = () => session.view.current();
     const runView = (runId: RunId) => view().runs.get(runId);
     const guard = runActionGuard({
       view: { run: runView },
-      runs: session.runs,
+      runs: handle.runs,
     });
+    const launchFailed = (cause: Error): RequestRefusal | RunLaunchFailed =>
+      isRequestRefusal(cause)
+        ? cause
+        : new RunLaunchFailed({ message: toErrorMessage(cause), cause });
 
-    /** Validate a request an action built, then launch it: one that does
+    /** Validate a request an action built, then start it: one that does
      *  not validate is refused before anything starts, a refusal the
-     *  launcher worded travels as itself, anything else is RunLaunchFailed. */
-    const runAgentRequest = (
+     *  launcher worded travels as itself, anything else is RunLaunchFailed.
+     *  A failure before the run opens has no row to show it: it is
+     *  presented here, once. */
+    const startAgentRequest = (
       request: RunRequest,
       options?: Parameters<HostRunActionPorts['runValidated']>[1],
-    ): Effect.Effect<void, RequestRefusal | RunLaunchFailed> => {
+    ): Effect.Effect<Run, RequestRefusal | RunLaunchFailed> => {
       const validated = validateRunRequest(request);
       if (!validated.valid) {
         return Effect.logError(validated.message).pipe(
@@ -252,16 +252,23 @@ export const createHostRunActions = (
           ),
         );
       }
-      return ports
-        .runValidated(validated.request, options)
-        .pipe(
-          Effect.mapError((cause) =>
-            isRequestRefusal(cause)
-              ? cause
-              : new RunLaunchFailed({ message: toErrorMessage(cause), cause }),
-          ),
-        );
+      return ports.runValidated(validated.request, options).pipe(
+        Effect.tapError((cause) =>
+          presentRunFailure(handle.interactions, cause),
+        ),
+        Effect.mapError(launchFailed),
+      );
     };
+    /** Start a request an action built and wait for its run to end. */
+    const runAgentRequest = (
+      request: RunRequest,
+      options?: Parameters<HostRunActionPorts['runValidated']>[1],
+    ): Effect.Effect<void, RequestRefusal | RunLaunchFailed> =>
+      startAgentRequest(request, options).pipe(
+        Effect.flatMap((run) =>
+          run.result.pipe(Effect.asVoid, Effect.mapError(launchFailed)),
+        ),
+      );
 
     const documentsOfRun = (runId: RunId) => {
       const run = runView(runId);
@@ -276,7 +283,7 @@ export const createHostRunActions = (
     const readConfig = Effect.fn('HostRunActions.readConfig')(function* (
       runId: RunId,
     ) {
-      const config = yield* getRunRecords(session, runId)
+      const config = yield* getRunRecords(handle, runId)
         .readConfig()
         .pipe(
           Effect.mapError(
@@ -353,7 +360,7 @@ export const createHostRunActions = (
       // defect — is logged and reports false, as the Promise edge's rejection
       // handler did. Interruption is not caught: it belongs to the caller's
       // fiber.
-      backend
+      session
         .request({
           kind: 'request.decide',
           runId,
@@ -387,11 +394,11 @@ export const createHostRunActions = (
       // context's ambient roots.
       workspace: {
         locatePath: (target) =>
-          locateInWorkspace(session.roots.workspace, target),
+          locateInWorkspace(handle.roots.workspace, target),
         exists: (relativePath) =>
           entryExists(
             fs,
-            workspaceAbsolutePath(session.roots.workspace, relativePath),
+            workspaceAbsolutePath(handle.roots.workspace, relativePath),
           ),
       },
     });
@@ -415,7 +422,7 @@ export const createHostRunActions = (
         }
         let fallback = getRuntimeModelDirectFallback(
           request.model,
-          yield* getUseOpenRouter(session.roots),
+          yield* getUseOpenRouter(handle.roots),
         );
         if (!fallback) {
           yield* ports.showInfo(
@@ -434,7 +441,7 @@ export const createHostRunActions = (
         if (!prepared || !isRetryPending(runId, requestId)) return;
         const currentFallback = getRuntimeModelDirectFallback(
           request.model,
-          yield* getUseOpenRouter(session.roots),
+          yield* getUseOpenRouter(handle.roots),
         );
         if (!currentFallback) {
           yield* ports.showInfo(modelsChanged);
@@ -449,7 +456,7 @@ export const createHostRunActions = (
           if (!prepared || !isRetryPending(runId, requestId)) return;
           const finalFallback = getRuntimeModelDirectFallback(
             request.model,
-            yield* getUseOpenRouter(session.roots),
+            yield* getUseOpenRouter(handle.roots),
           );
           if (!finalFallback || finalFallback.provider !== fallback.provider) {
             yield* ports.showInfo(modelsChanged);
@@ -468,62 +475,38 @@ export const createHostRunActions = (
         // the Copilot route and every subscription route for its own
         // bindings. No standing preference is rewritten, so a concurrent run
         // keeps the routes its own user chose.
+        // The replacement is started, and the retry cancelled, once it is
+        // admitted; a failure after that is the run's own, presented by
+        // its result unless that already showed it.
         const started = yield* Effect.suspend(() => {
           if (!isRetryPending(runId, requestId)) return Effect.succeed(false);
-          // Start acknowledges ownership of the replacement run. Settlement
-          // without an onRun callback means no replacement was launched. The
-          // launch settles only with the run itself, so the answer is the
-          // first of the launcher's own start callback (the gate) and the
-          // detached launch fiber's settlement — a rejection reaches the
-          // waiter as the fiber's failure rather than a lost second resolver.
-          return Effect.gen(function* () {
-            const runStarted = yield* Deferred.make<void>();
-            // A failure after start has no waiter: warn, and present it
-            // through the session's presenter, which skips a failure its run's
-            // terminal result already showed.
-            let launched = false;
-            const requestFiber = yield* Effect.forkDetach(
-              runAgentRequest(
-                { config: { ...config, model } },
-                {
-                  ownApiKeyFallback: true,
-                  onRun: () =>
-                    Effect.sync(() => {
-                      launched = true;
-                      Deferred.doneUnsafe(runStarted, Effect.void);
-                    }),
-                },
-              ).pipe(
-                Effect.onExit((exit) => {
-                  if (!launched || Exit.isSuccess(exit)) return Effect.void;
-                  if (Cause.hasInterruptsOnly(exit.cause)) return Effect.void;
-                  const error = Cause.squash(exit.cause);
-                  return Effect.logWarning(
-                    `Own-key replacement of run ${runId} failed: ${toErrorMessage(error)}`,
-                  ).pipe(
-                    Effect.andThen(
-                      presentRunFailure(
-                        session.interactions,
-                        error,
-                        'Your own-key run failed: ',
+          return startAgentRequest(
+            { config: { ...config, model } },
+            { ownKeyFallback: true },
+          ).pipe(
+            Effect.tap((run) =>
+              Effect.forkIn(
+                run.result.pipe(
+                  Effect.catch((error) =>
+                    Effect.logWarning(
+                      `Own-key replacement of run ${runId} failed: ${error.message}`,
+                    ).pipe(
+                      Effect.andThen(
+                        presentRunFailure(
+                          handle.interactions,
+                          error,
+                          'Your own-key run failed: ',
+                        ),
                       ),
+                      withLogChannel(CHANNEL),
                     ),
-                    withLogChannel(CHANNEL),
-                  );
-                }),
-              ),
-            );
-            return yield* Effect.raceFirst(
-              Deferred.await(runStarted).pipe(Effect.as(true)),
-              Fiber.await(requestFiber).pipe(
-                Effect.flatMap((exit) =>
-                  Exit.isSuccess(exit)
-                    ? Effect.succeed(false)
-                    : Effect.failCause(exit.cause),
+                  ),
                 ),
+                ports.scope,
               ),
-            );
-          });
+            ),
+            Effect.as(true),
+          );
         });
         if (!started) return;
         yield* settleRetry(runId, requestId, { action: 'cancel' });
@@ -534,7 +517,7 @@ export const createHostRunActions = (
       runOutputs,
       sendFollowUp(runId, text) {
         const present = (message: string) => ports.showWarning(message);
-        const deliver = backend
+        const deliver = session
           .request({ kind: 'followUp.send', runId, text })
           .pipe(
             Effect.flatMap((outcome) =>
@@ -562,17 +545,36 @@ export const createHostRunActions = (
       },
       /**
        * Resume a settled run, of either category, on the session that holds
-       * it: it continues the run's own rows. A run that does not take it
-       * refuses the request (its reason already told); a workflow settles
+       * it: it continues the run's own rows (a child's, with the parent
+       * that owns it). A run that does not take it refuses the request (its
+       * reason already told); one that waits for what blocks it is asked
+       * for, and its own line says what it waits for. A workflow settles
        * with its whole run, whose output opens then.
        */
       resume: Effect.fn('HostRunActions.resume')(function* (runId) {
         yield* nativeAgentRun(runId, 'resume');
-        const result = (yield* backend.resume(runId))?.result;
-        if (result)
-          yield* ports
-            .openWorkflowOutput(result)
-            .pipe(Effect.ignore({ log: 'Warn' }), withLogChannel(CHANNEL));
+        const run = yield* session.resume(runId, { interactive: true }).pipe(
+          Effect.map((resumed): Run | null => resumed),
+          Effect.catch((refusal) =>
+            refusal._tag === 'ResumeRefused' && refusal.reason === 'blocked'
+              ? Effect.succeed(null)
+              : Effect.fail(
+                  new Unavailable({ runId, reason: refusal.message }),
+                ),
+          ),
+        );
+        if (run === null) return;
+        const config = yield* readConfig(run.runId);
+        if (config === undefined || !isDocumentTaskConfig(config)) return;
+        const result = yield* run.result.pipe(
+          Effect.mapError(
+            (failure) =>
+              new Unavailable({ runId: run.runId, reason: failure.message }),
+          ),
+        );
+        yield* ports
+          .openWorkflowOutput(result)
+          .pipe(Effect.ignore({ log: 'Warn' }), withLogChannel(CHANNEL));
       }, guard.resuming),
       runNew: Effect.fn('HostRunActions.runNew')(function* (runId) {
         const config = yield* nativeAgentRun(runId, 'runNew');
@@ -618,7 +620,7 @@ export const createHostRunActions = (
           yield* ports.showInfo(plan.message);
         } else {
           yield* runAgentRequest(plan.request, {
-            preferHelperModel: true,
+            helperModel: true,
           });
         }
       }),
@@ -633,7 +635,7 @@ export const createHostRunActions = (
         });
       },
       fork: Effect.fn('HostRunActions.fork')(function* (runId, at) {
-        const outcome = yield* backend
+        const outcome = yield* session
           .request({ kind: 'run.fork', runId, at })
           .pipe(
             Effect.mapError((error): RequestRefusal =>
@@ -652,8 +654,8 @@ export const createHostRunActions = (
         // The fork waits for its host: continuing it parks it on the
         // user's next message. A refusal is told by the resume itself, and
         // the fork keeps its Resume.
-        yield* backend
-          .resume(outcome.runId)
+        yield* session
+          .resume(outcome.runId, { interactive: true })
           .pipe(Effect.ignore({ log: 'Warn' }));
         return outcome.runId;
       }),

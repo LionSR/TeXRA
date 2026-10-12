@@ -3,12 +3,15 @@ import { Effect } from 'effect';
 import { z, ZodError } from 'zod';
 
 // Local imports
-import { AgentConfigSchema, type SessionHandle } from '@agent/runtime';
+import {
+  AgentConfigSchema,
+  presentRunFailure,
+  type SessionHandle,
+} from '@agent/runtime';
 import { openFinalOutputIfAvailable } from '@frontend/agents/finalOutputOpener';
 import { withLogChannel } from '@logger/effectLog';
-import type { SessionBackend } from '@texra/controllers/session/sessionBackend';
 import { ensureError } from '@utils/errors/errorMessage';
-import type { ProcessServices, SessionOwner } from '@texra-ai/harness';
+import type { ProcessServices, Session } from '@texra-ai/harness';
 import type { RunId } from '@texra-ai/harness/schemas';
 
 const CHANNEL = 'ExecuteCommand';
@@ -37,10 +40,10 @@ export const runExecuteCommand = Effect.fn('runExecuteCommand')(function* (
   input: unknown,
   session: SessionHandle,
   /** Where the run runs: this window's session, or the service's. */
-  backend: SessionBackend,
-  /** Select the run this launch admitted: the launching surface's own. */
+  runSession: Session,
+  /** Select the run this launch resolved: the launching surface's own. */
   onAdmitted: (runId: RunId) => Effect.Effect<void, Error>,
-): Effect.fn.Return<void, Error, ProcessServices | SessionOwner> {
+): Effect.fn.Return<void, Error, ProcessServices> {
   // A configuration that does not parse fails the command, so its caller
   // hears the refusal instead of a settled launch that never started.
   const { wrapped, config } = yield* Effect.try({
@@ -64,19 +67,27 @@ export const runExecuteCommand = Effect.fn('runExecuteCommand')(function* (
     ),
   );
 
-  // Post-start failures are already logged and surfaced by the run lifecycle,
-  // so they travel the failure channel without a second (mislabeled) log entry.
-  const result = yield* backend.launch(
-    { config },
-    {
+  // A failure before the run opens has no row to show it: it is presented
+  // here, once. Post-start failures are already logged and surfaced by the
+  // run lifecycle, so they travel the failure channel without a second
+  // (mislabeled) log entry.
+  const run = yield* runSession
+    .start({
+      config,
       // Set only by the "fix LaTeX" actions (see handleFixCompilation and the
       // progress-view compile fixer); a direct main-view launch omits it and
       // keeps the user's selected model.
-      preferHelperModel: wrapped?.preferHelperModel ?? false,
-      ownApiKeyFallback: wrapped?.ownApiKeyFallback,
-      onAdmitted,
-    },
-  );
+      helperModel: wrapped?.preferHelperModel ?? false,
+      ownKeyFallback: wrapped?.ownApiKeyFallback,
+      interactive: true,
+    })
+    .pipe(
+      Effect.tapError((error) =>
+        presentRunFailure(session.interactions, error),
+      ),
+    );
+  yield* onAdmitted(run.runId);
+  const result = yield* run.result;
   // Presentation reacts to the committed outcome; it never runs inside the run,
   // and its failure never fails the launch that produced the run.
   yield* openFinalOutputIfAvailable(session.roots)(result).pipe(

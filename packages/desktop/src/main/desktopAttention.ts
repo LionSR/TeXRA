@@ -7,14 +7,11 @@
 import { app, Notification, type BrowserWindow } from 'electron';
 import { Context, Effect, Queue, Stream, SubscriptionRef } from 'effect';
 
-import {
-  attentionOf,
-  type RunView,
-  type SessionView,
-} from '@shared/session/sessionView';
+import { attentionOf } from '@shared/session/sessionView';
 
 import { DesktopProjects, type DesktopProject } from './desktopProjects.js';
 import { DESKTOP_HEADLESS } from './desktopPresentation.js';
+import type { RunView, SessionView } from '@texra-ai/harness';
 import type { RunId } from '@texra-ai/harness/schemas';
 
 /** The host's attention surfaces, served by the Electron composition root. */
@@ -188,7 +185,7 @@ export const followDesktopAttention = Effect.gen(function* () {
     Stream.switchMap(({ projects: open }) =>
       Stream.mergeAll(
         [projects.fallback(), ...open].map((project) =>
-          project.backend.view.changes.pipe(
+          project.runSession.view.changes.pipe(
             Stream.map((view) => [project, view] as const),
           ),
         ),

@@ -63,13 +63,14 @@ export class ResumeRefused extends Data.TaggedError('ResumeRefused')<{
 
 /**
  * A run's trace that no reader can take any more: `ended` (the run settled
- * with nobody reading, so its buffered trace went with it) or `truncated`
+ * with nobody reading, so its buffered trace went with it), `truncated`
  * (it passed the handover buffer before a reader attached, so the trace
- * was detached). The run itself is unaffected: its `result` still answers.
+ * was detached) or `remote` (the run runs in another process, which keeps
+ * its trace). The run itself is unaffected: its `result` still answers.
  */
 export class TraceUnavailable extends Data.TaggedError('TraceUnavailable')<{
   readonly runId: string;
-  readonly reason: 'ended' | 'truncated';
+  readonly reason: 'ended' | 'truncated' | 'remote';
   readonly message: string;
 }> {}
 

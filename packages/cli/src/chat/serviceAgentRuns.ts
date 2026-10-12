@@ -1,10 +1,10 @@
 /**
  * The chat's run boundary when its runs run in the TeXRA service: the same
  * launch and resume the controller drives in-process, answered by the
- * service. A launch or resume is admitted there, and the service says when
- * the run ends: the chat holds its turn until then, as a root launch and a
- * resume's `completion` do. The view folded here could still show the
- * run's previous end right after a resume.
+ * service's session. A launch or resume is admitted there, and the service
+ * says when the run ends: the chat holds its turn until then, as a root
+ * launch and a resume's `completion` do. The view folded here could still
+ * show the run's previous end right after a resume.
  */
 import { Effect } from 'effect';
 
@@ -15,8 +15,7 @@ import type {
   RunEndResult,
 } from '@agent/runtime';
 import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
-import type { SessionBackend } from '@texra/controllers/session/sessionBackend';
-import type { ProcessServices, SessionOwner } from '@texra-ai/harness';
+import type { ProcessServices, Session, SessionOwner } from '@texra-ai/harness';
 import type { RunId } from '@texra-ai/harness/schemas';
 
 /** The run boundary `ChatSessionController` takes. */
@@ -34,48 +33,50 @@ export interface ChatAgentRuns {
   readonly resumeBeside: (runId: RunId) => Effect.Effect<void>;
 }
 
-/** The chat's run boundary over the service's `backend`; each launch asks
+/** The chat's run boundary over the service's `session`; each launch asks
  *  for `approvalPolicy()`, the policy the chat asked for itself (its flag,
  *  then `/approval`), which limits the task; none follows the project's. */
 export function serviceAgentRuns(
-  backend: SessionBackend,
+  session: Session,
   approvalPolicy: () => TexraApprovalPolicy | undefined,
 ): ChatAgentRuns {
+  const resume = (runId: RunId) => session.resume(runId, { interactive: true });
   return {
     launch: ({ request, options }) =>
-      backend.launch(request, {
-        continues: options.continues,
-        onAdmitted: options.onAdmitted,
-        approvalPolicy: approvalPolicy(),
+      Effect.gen(function* () {
+        const run = yield* session.start({
+          config: request.config,
+          runId: request.runId,
+          continues: options.continues,
+          approval: { policy: approvalPolicy() },
+          interactive: true,
+        });
+        yield* options.onAdmitted?.(run.runId) ?? Effect.void;
+        return yield* run.result;
       }),
     resumeBeside: (runId) =>
-      backend
-        .resume(runId)
-        .pipe(Effect.ignore({ log: 'Warn', message: `Resuming ${runId}` })),
+      resume(runId).pipe(
+        Effect.ignore({ log: 'Warn', message: `Resuming ${runId}` }),
+      ),
     resume: (runId, options) =>
-      backend.resume(runId).pipe(
-        // The service words its refusal; the chat shows it as it is.
-        Effect.mapError(
-          (refusal) =>
-            new Error(
-              refusal._tag === 'Cancelled'
-                ? 'The resume was cancelled.'
-                : refusal.reason,
-            ),
-        ),
-        Effect.flatMap((resumed) => {
-          // Waiting for what blocks it: the service resumes it once that is
-          // back, as a window's own session would.
-          if (resumed === null)
-            return Effect.succeed<ResumeRunResult>({ failed: 'blocked' });
-          return (options.onAdmitted?.(resumed.runId) ?? Effect.void).pipe(
+      resume(runId).pipe(
+        Effect.flatMap((run) =>
+          (options.onAdmitted?.(run.runId) ?? Effect.void).pipe(
             Effect.as<ResumeRunResult>({
               started: true,
               delivered: true,
-              completion: backend.ended(resumed.runId),
+              completion: run.result,
             }),
-          );
-        }),
+          ),
+        ),
+        // Waiting for what blocks it: the service resumes it once that is
+        // back, as a window's own session would. The service words any
+        // other refusal; the chat shows it as it is.
+        Effect.catchTag('ResumeRefused', (refusal) =>
+          refusal.reason === 'blocked'
+            ? Effect.succeed<ResumeRunResult>({ failed: 'blocked' })
+            : Effect.fail(new Error(refusal.message)),
+        ),
       ),
   };
 }

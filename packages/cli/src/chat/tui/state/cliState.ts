@@ -14,7 +14,7 @@ import {
   type AgentSource,
   type RunId,
 } from '@shared/schemas';
-import { descendantRuns, type RunView } from '@shared/session/sessionView';
+import { descendantRuns } from '@shared/session/sessionView';
 import { RUN_GROUP_LABELS } from '@shared/runs/runStatusDisplay';
 import { compareByNewestCreationTime } from '@shared/runs/runOrdering';
 import {
@@ -26,6 +26,7 @@ import {
   type SurfaceAction,
 } from '@texra/shared/session/surface';
 import { sessionView } from './sessionView';
+import type { RunView } from '@texra-ai/harness';
 import type { PastedImageEntry } from '../input/draftAttachments';
 
 // ---------------------------------------------------------------------------

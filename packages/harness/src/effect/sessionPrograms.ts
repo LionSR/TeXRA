@@ -174,6 +174,8 @@ function start(
           options: {
             ...hooks,
             stopAfterCycle: input.interactive !== true,
+            // A failure before the run opens is the caller's to present.
+            suppressErrorNotification: true,
             tools: input.tools,
             continues: input.continues,
             preferHelperModel: input.helperModel,

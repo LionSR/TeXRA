@@ -18,6 +18,7 @@ import { getRunRecords } from '@agent/storage';
 import {
   AgentConfigSchema,
   resumeRun,
+  terminalFailurePresented,
   type AgentConfig,
   type AgentConfigPayload,
   type RootLaunch,
@@ -28,6 +29,7 @@ import {
   presentFollowUpResult,
   resumeOnSession,
 } from '@agent/followUp';
+
 import { type CliContext } from '@cli/runtime/cliContext';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import { readCliTeamName } from '@cli/runtime/cliTeams';
@@ -44,19 +46,13 @@ import {
 import { hasErrorPresentationClaimed } from '@common/errors/sdkError/errorMetadata';
 import type { RunModelDecisionReason } from '@model/runModelDecision';
 import type { SettingsStores } from '@shared/config/settingsAccess';
-import {
-  acceptsFollowUp,
-  isLiveRun,
-  type RunView,
-  type SessionView,
-} from '@shared/session/sessionView';
+import { acceptsFollowUp, isLiveRun } from '@shared/session/sessionView';
 import { isTerminalOutcomePhase } from '@shared/runs/runStatus';
 import { isDocumentTaskConfig, RUN_OUTCOME, type RunId } from '@shared/schemas';
 import { heldElsewhereBy } from '@shared/session/database';
 import { escapeText } from '@shared/utils/xmlEscape';
 import type { DisposableStore } from '@texra/platform/disposable';
 import type { WindowHost } from '@texra/controllers/server/windowHost';
-import type { SessionBackend } from '@texra/controllers/session/sessionBackend';
 import { FOCUSED_AGENT } from '@ui/copy/nestedRuns';
 import { sessionStoreMovedAsideMessage } from '@ui/copy/sessionStore';
 import { generateRunId } from '@utils/core';
@@ -95,7 +91,12 @@ import {
   moveLocalTranscriptToRun,
   reportRequestDefect,
 } from './tui/state/transcript';
-import type { ProcessRuntime, ProcessServices } from '@texra-ai/harness';
+import type { RunView, SessionView } from '@texra-ai/harness';
+import type {
+  ProcessRuntime,
+  ProcessServices,
+  Session,
+} from '@texra-ai/harness';
 import type {
   RunStopReason,
   RuntimeRequest,
@@ -258,7 +259,7 @@ export interface ChatSessionControllerInit {
   /** Where run requests land (edit previews included) and run state is
    *  read, when the chat is a client of the background service; its own
    *  session otherwise. */
-  readonly backend?: Pick<SessionBackend, 'request' | 'view'>;
+  readonly serviceSession?: Pick<Session, 'request' | 'view'>;
   /** Offer the service what this chat shows for its project's tasks. */
   readonly attachWindow?: (host: WindowHost) => void;
 }
@@ -333,9 +334,11 @@ export function createChatSessionController(
     records: getRunRecords,
     ...init.agentRuns,
   };
-  const requests: SessionRequests = init.backend ?? runtimeSession.requests;
+  const requests: SessionRequests =
+    init.serviceSession ?? runtimeSession.requests;
   // The fold the chat's runs appear in: the service's, or this session's.
-  const viewChanges = (init.backend ?? runtimeSession).view.changes;
+  const viewChanges: Stream.Stream<SessionView> =
+    init.serviceSession?.view.changes ?? runtimeSession.view.changes;
   // Said in the transcript the controller writes to, not on stderr before
   // Ink mounts, where it would be left above the header.
   if (runtimeSession.log.movedAside) {
@@ -431,9 +434,13 @@ export function createChatSessionController(
       return;
     }
     // A launch failure already rendered through a targeted presentation
-    // (e.g. the model-not-recognized instruction) is marked -- skip the
-    // generic transcript line so the TUI doesn't show the same failure twice.
-    if (!hasErrorPresentationClaimed(error)) {
+    // (e.g. the model-not-recognized instruction), or presented already (by
+    // the service, to this chat) is marked -- skip the generic transcript
+    // line so the TUI doesn't show the same failure twice.
+    if (
+      !hasErrorPresentationClaimed(error) &&
+      !terminalFailurePresented(error)
+    ) {
       appendLocalErrorTranscript(toErrorMessage(error));
     }
     // Another live process holds the run: it refused the claim, or took it
@@ -463,7 +470,7 @@ export function createChatSessionController(
       session: runtimeSession,
       requests,
       preview:
-        init.backend &&
+        init.serviceSession &&
         ((runId, requestId) =>
           requests
             .request({ kind: 'request.preview', runId, requestId })
@@ -826,7 +833,7 @@ export function createChatSessionController(
     });
   // A chat of the service adopts only the runs it launches or resumes: the
   // service's view also holds other terminals' conversations.
-  if (init.backend === undefined) {
+  if (init.serviceSession === undefined) {
     const resumedRoots = runtime.runFork(
       Stream.runForEach(runtimeSession.view.changes, observeResumedRoots),
     );
@@ -842,7 +849,7 @@ export function createChatSessionController(
   const stop = (reason: RunStopReason): void => {
     // A chat of the background service leaves its task running when the
     // terminal goes: only the user's own stop reaches it.
-    if (reason === 'shutdown' && init.backend !== undefined) return;
+    if (reason === 'shutdown' && init.serviceSession !== undefined) return;
     requestStop(reason);
     interruptActiveRun();
   };

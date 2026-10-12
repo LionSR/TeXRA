@@ -103,7 +103,6 @@ export type InboxClosed =
 /** The session's follow-up inbox; see the module comment. */
 export class Inbox {
   private readonly readers = new Map<RunId, RunInput>();
-  /** Each resume in flight, and how many callers joined it. */
   private readonly resumes = new Map<
     RunId,
     { readonly done: Deferred.Deferred<ResumeAttempt, Error>; joiners: number }
@@ -194,6 +193,7 @@ export class Inbox {
           yield* this.port.log.hold(runId);
           const input = yield* this.read(runId);
           if (queued(input)) return;
+          // A request the run never applied closes with its input.
           yield* tx.append([
             ...input.followUps.map(({ followUpId }) => ({
               type: 'followup.consumed' as const,
@@ -202,6 +202,7 @@ export class Inbox {
             })),
             { type: 'followup.closed', aggregateId: run },
           ]);
+          // Only a closed input that committed ends the reader.
           yield* afterCommit(
             Effect.sync(() => {
               this.endReader(runId);
@@ -220,8 +221,7 @@ export class Inbox {
     this.notify({ kind: 'run', runId });
   }
 
-  /** One resume of `runId` at a time: a second caller joins the first (told
-   *  `onJoined` at once) and hears its result (`joined`). */
+  /** One resume of `runId` at a time; a joiner (`onJoined`) hears its result. */
   resumeOnce<R>(
     runId: RunId,
     resume: Effect.Effect<ResumeAttempt, Error, R>,
@@ -327,6 +327,7 @@ export class Inbox {
         if (edge?.id !== (item.from.kind === 'run' ? item.from.runId : null))
           return only({ kind: 'refused', reason: 'not_parent' });
       }
+      // Stamped inside the job, from committed parentage.
       const row = queuedRow(item, options.hold, (sender) =>
         runRelation(sender, runId, this.port.parentOf),
       );

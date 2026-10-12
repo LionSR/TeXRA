@@ -113,7 +113,6 @@ import {
 import { TEXRA_APPROVAL_POLICY_DEFAULT } from '@shared/approvalPolicy';
 import { DatabaseReadFailed } from '@shared/session/database';
 import type { Outcome, RuntimeRequest } from '@shared/session/runtimeRequest';
-import type { SessionView } from '@shared/session/sessionView';
 import { untrackRun } from '@test/support/sessionEnd';
 import { createDeferred } from '@test/support/asyncTestUtils';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
@@ -142,6 +141,7 @@ import {
   seedView,
   viewWith,
 } from './fixtures/sessionViewFixture';
+import type { SessionView } from '@texra-ai/harness';
 
 // The state stores the controller's setting reads land on, as ports of the
 // installed fake host rather than a module mock of `platform()`: the setting
@@ -178,7 +178,7 @@ interface SessionFixture {
 }
 
 function makeSession(overrides: SessionFixture = {}): TuiSession {
-  const session = new TuiSession(() => undefined);
+  const session = new TuiSession();
   if (overrides.runSettled) session.markRunPending(overrides.runSettled);
   if (overrides.runCompleted && overrides.runSettled)
     session.markRunCompleted(overrides.runSettled);

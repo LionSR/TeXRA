@@ -3,11 +3,12 @@ import '@test/support/sessionGraphTestSetup';
 
 // Third-party imports
 import { it } from '@effect/vitest';
-import { Deferred, Effect, Fiber, Stream } from 'effect';
+import { Deferred, Effect, Stream } from 'effect';
 import { describe, expect, onTestFinished, vi } from 'vitest';
 
 // Local imports
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
+import type { RunEndResult } from '@agent/runtime/RunEndResult';
 import * as DesktopAgentLaunch from '@desktop/main/desktopAgentLaunch';
 import { createDesktopAgentRun } from '@desktop/main/desktopAgentRun';
 import {
@@ -18,13 +19,12 @@ import {
   type SessionEventDraft,
 } from '@shared/schemas';
 import { closeSessionOf } from '@test/support/sessionEnd';
-import { testRuntime } from '@test/support/testProcessRuntime';
+import { testRuntime, testSessionOf } from '@test/support/testProcessRuntime';
 import {
   createTestSession,
   publishTestRunStart,
   publishTestRows,
 } from '@test/support/sessionTestUtils';
-import { localSessionBackend } from '@texra/controllers/session/sessionBackend';
 import { generateRunId } from '@utils/core';
 
 // Local file imports
@@ -44,16 +44,25 @@ describe('desktop agent run completion hook', () => {
   // successful run must clear the setup card without a restart (#11934).
   // The run.end row commits inside finalizeTerminal, before
   // AgentRunLifecycle writes firstRunDone; the hook must wait for the
-  // awaited launch to settle.
-  it.effect('fires after the awaited launch settles, not from run.end', () =>
+  // run's result to settle.
+  it.effect('fires after the run result settles, not from run.end', () =>
     Effect.gen(function* () {
       const session = yield* createTestSession();
       const onRunCompleted = vi.fn();
       const host = createStubDesktopAgentRunHost();
-      const launchSettled = yield* Deferred.make<void>();
+      const launched = generateRunId();
+      const result = yield* Deferred.make<RunEndResult>();
       const launch = vi
         .spyOn(DesktopAgentLaunch, 'launchDesktopAgent')
-        .mockReturnValue(Deferred.await(launchSettled));
+        .mockReturnValue(
+          Effect.succeed({
+            runId: launched,
+            result: Deferred.await(result),
+            view: Stream.empty,
+            events: Stream.empty,
+            interrupt: Effect.void,
+          }),
+        );
       onTestFinished(() => {
         launch.mockRestore();
       });
@@ -66,7 +75,7 @@ describe('desktop agent run completion hook', () => {
           closeDiff: () => Effect.void,
         },
         session,
-        backend: localSessionBackend(session),
+        runSession: testSessionOf(session),
         focused: Stream.empty,
         service: undefined,
         root: undefined,
@@ -78,23 +87,27 @@ describe('desktop agent run completion hook', () => {
         await testRuntime().runPromise(closeSessionOf(session));
       });
 
-      const fiber = yield* Effect.forkChild(
-        run.runValidated({
-          config: AgentConfigSchema.parse({
-            agent: 'proofreader',
-            model: 'deepseek/deepseek-v4-pro',
-          }),
+      yield* run.runValidated({
+        config: AgentConfigSchema.parse({
+          agent: 'proofreader',
+          model: 'deepseek/deepseek-v4-pro',
         }),
-        { startImmediately: true },
-      );
+      });
       const completedRun = publishTestRunStart(session, generateRunId());
       publishTestRows(session, [completedRunEnd(completedRun)]);
       yield* session.log.settled;
       expect(onRunCompleted).not.toHaveBeenCalled();
 
-      yield* Deferred.succeed(launchSettled, undefined);
-      yield* Fiber.join(fiber);
-      expect(onRunCompleted).toHaveBeenCalledOnce();
+      yield* Deferred.succeed(result, {
+        runId: launched,
+        outcome: RUN_OUTCOME.COMPLETED,
+        output: emptyRunEndOutput(),
+      });
+      yield* Effect.promise(() =>
+        vi.waitFor(() => {
+          expect(onRunCompleted).toHaveBeenCalledOnce();
+        }),
+      );
     }),
   );
 });

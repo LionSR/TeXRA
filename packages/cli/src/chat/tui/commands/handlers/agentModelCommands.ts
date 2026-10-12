@@ -16,7 +16,10 @@ import {
   setCliSessionModelOverride,
 } from '@cli/chat/tui/state/cliState';
 import { chatTuiCanStartRootRun } from '@cli/chat/tui/state/sessionRunState';
-import { appendLocalNotice } from '@cli/chat/tui/state/transcript';
+import {
+  appendLocalNotice,
+  appendLocalRequestRefusal,
+} from '@cli/chat/tui/state/transcript';
 import {
   formatTeamLaunchBlockedMessage,
   formatUnknownTeamMessage,
@@ -172,15 +175,26 @@ export const applyCliModelSelection = Effect.fn('applyCliModelSelection')(
       return;
     }
 
-    const controls = context.session.activeRunControls();
-    if (!controls) {
+    const { runId } = context.session;
+    if (runId === undefined || !context.session.runLive()) {
       setTransientNotice(
         'Model switching is only available for an active tool-use chat. Start a new chat with texra chat --model=<name> to choose a different root model.',
       );
       return;
     }
 
-    yield* controls.switchModel(nextModel);
+    const switched = yield* context.runSession
+      .request({ kind: 'run.model', runId, model: nextModel })
+      .pipe(
+        Effect.match({
+          onFailure: (error) => {
+            appendLocalRequestRefusal(error, runId);
+            return false;
+          },
+          onSuccess: () => true,
+        }),
+      );
+    if (!switched) return;
     setCliSessionModelOverride(nextModel);
     // The switch already reached the live run; only the persisted default is
     // at stake here, so a write failure is reported beside the switch rather

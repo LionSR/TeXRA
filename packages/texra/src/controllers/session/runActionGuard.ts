@@ -7,16 +7,14 @@
 import { Effect, type Scope } from 'effect';
 
 import { Rejected } from '@texra-ai/harness';
-import type {
-  SessionHandle,
-  SessionViewAccess,
-} from '@agent/runtime/SessionHandle';
+import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { RunAction, RunId } from '@shared/schemas';
 import { runActionRefusal } from '@shared/session/runActions';
 import { toErrorMessage } from '@utils/errors/errorMessage';
+import type { RunView } from '@texra-ai/harness';
 
 export function runActionGuard(session: {
-  readonly view: Pick<SessionViewAccess, 'run'>;
+  readonly view: { readonly run: (runId: RunId) => RunView | undefined };
   readonly runs: SessionHandle['runs'];
 }) {
   /** Runs this process is resuming: a second Resume, and a pack, clean,
