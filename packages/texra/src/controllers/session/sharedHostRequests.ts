@@ -37,7 +37,7 @@ import type { HostDraftRequests } from '@texra/controllers/session/hostDraftRequ
 import {
   type HostRunActions,
   type WorkflowDiffRequest,
-  type WorkflowFileOperationRequest,
+  type WorkflowFileOperationResult,
 } from '@texra/controllers/session/hostRunActions';
 import type { HostSnapshotSource } from '@texra/controllers/session/hostSnapshotSource';
 import { formatResultCount } from '@utils/text/stringUtils';
@@ -133,9 +133,10 @@ export interface SharedHostRequestBindings {
    *  directory. */
   admitLaunch(form: LaunchRequest['launch']): HostVerb<void>;
   runWorkflowDiff(request: WorkflowDiffRequest): HostVerb<void>;
-  runWorkflowFileOperation(
+  /** Tell the user what a pack or clean did. */
+  presentWorkflowFileOperation(
     operation: 'pack' | 'clean',
-    request: WorkflowFileOperationRequest,
+    done: WorkflowFileOperationResult,
   ): HostVerb<void>;
   /** latexdiff-vc over the base file against a commit, and the pack and
    *  clean housekeeping of what it produced. */
@@ -375,11 +376,12 @@ export function handleSharedHostRequest(
       }
       case 'pack':
       case 'clean': {
-        yield* ports.runActions.workflowFileOperation(
+        const files = yield* ports.runActions.workflowFileOperation(
           request.runId,
           request.kind,
-          (operation) => host.runWorkflowFileOperation(request.kind, operation),
         );
+        if (files)
+          yield* host.presentWorkflowFileOperation(request.kind, files);
         return done;
       }
       case 'latexdiffs':

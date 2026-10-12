@@ -12,6 +12,7 @@ import {
   isRequestRefusal,
   Rejected,
   Unavailable,
+  type RequestError,
   type RequestRefusal,
   DatabaseReadFailed,
   AppState,
@@ -19,8 +20,10 @@ import {
   type Run,
   type Session,
   type StartInput,
+  type WorkspaceRoots,
 } from '@texra-ai/harness';
 import { presentRunFailure } from '@agent/runtime/terminalResultToast';
+import type { SessionHostInteractions } from '@agent/runtime/HostInteractions';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import {
   validateRunRequest,
@@ -32,11 +35,17 @@ import { FOLLOW_UP_WAKE_FAILED_MESSAGE } from '@agent/followUp/ToolUseFollowUp';
 import { withLogChannel } from '@logger/effectLog';
 import { getRuntimeModelDirectFallback } from '@model/copilotRouting';
 import type { ModelHostFactUnreadable } from '@model/computeModelOptions';
-import { isDocumentTaskConfig, type RunId } from '@shared/schemas';
+import {
+  isDocumentTaskConfig,
+  type FileOpResult,
+  type RunId,
+} from '@shared/schemas';
+import { packDestination } from '@texra/tools/documents/runOutputs';
 import type { HostRequest } from '@texra/shared/session/hostRequest';
 import { documentsOf } from '@texra/shared/plugins/documents';
 import type { MessageHost, NotificationFailed } from '@texra/hosts/uiHosts';
 import { runActionGuard } from '@texra/controllers/session/runActionGuard';
+import type { TaskRecordsUnavailable } from '@texra/controllers/server/serviceSession';
 import { getUseOpenRouter } from '@utils/config/providerConfig';
 import { entryExists } from '@utils/files/fsEntryExists';
 import {
@@ -66,12 +75,11 @@ export interface WorkflowDiffRequest {
   runId: RunId;
 }
 
-/** The workflow toolbar's pack and clean over a run's output files. */
-export interface WorkflowFileOperationRequest {
-  agent: string;
-  model: string;
-  inputFile: string;
-  runId: RunId;
+/** What the workflow toolbar's pack or clean of a run's files did, and the
+ *  input file its message names. */
+export interface WorkflowFileOperationResult {
+  readonly result: FileOpResult;
+  readonly inputFile: string;
 }
 
 /**
@@ -83,12 +91,13 @@ class RunLaunchFailed extends Data.TaggedError('RunLaunchFailed')<{
   readonly cause: unknown;
 }> {}
 
-/** The run's saved setup could not be read: the database would not answer,
- *  or it refused the committed `run.config` row (`cause`). */
+/** The run's saved setup could not be read: the database would not answer
+ *  or refused the committed `run.config` row, or the service holding the
+ *  run could not answer for it (`cause`). */
 class RunConfigUnreadable extends Data.TaggedError('RunConfigUnreadable')<{
   readonly runId: RunId;
   readonly message: string;
-  readonly cause: DatabaseReadFailed;
+  readonly cause: DatabaseReadFailed | TaskRecordsUnavailable;
 }> {}
 
 /** The launch facts an action adds to a validated request, as the
@@ -98,10 +107,33 @@ export type RunValidatedOptions = Pick<
   'helperModel' | 'ownKeyFallback' | 'approval'
 >;
 
-export interface HostRunActionPorts {
-  /** This process's handle on the window's session: its records, its run
-   *  guards, and the surface its failures are presented on. */
-  readonly handle: SessionHandle;
+/** What the run actions read and present beside the window's `Session`:
+ *  filled from this process's session handle where the window holds one
+ *  ({@link localRunActionPorts}), from the service where it runs there. */
+export interface RunActionRecordPorts {
+  /** The window's roots: its workspace and its settings stores. */
+  readonly roots: WorkspaceRoots;
+  /** The run's saved setup; null when it saved none. */
+  readonly readConfig: (
+    runId: RunId,
+  ) => Effect.Effect<
+    AgentConfig | null,
+    DatabaseReadFailed | TaskRecordsUnavailable
+  >;
+  /** Where a failure before a run opens is presented. */
+  readonly present: Pick<SessionHostInteractions, 'emit'>;
+}
+
+/** The ports of a window whose process holds its session. */
+export const localRunActionPorts = (
+  handle: SessionHandle,
+): RunActionRecordPorts => ({
+  roots: handle.roots,
+  readConfig: (runId) => getRunRecords(handle, runId).readConfig(),
+  present: handle.interactions,
+});
+
+export interface HostRunActionPorts extends RunActionRecordPorts {
   /** Where this window's run actions land: its own session, or the
    *  background service's. Run state is read from its view. */
   readonly session: Session;
@@ -177,16 +209,16 @@ export interface HostRunActions {
     WorkflowDiffRequest | undefined,
     Rejected | RunConfigUnreadable
   >;
-  /** Pack or clean a workflow run's outputs, from its saved config and the
-   *  outputs the view holds: the action check, then `perform` with the run
-   *  held (claim included). No workflow config is a no-op. */
-  workflowFileOperation<E, R>(
+  /** Pack or clean a workflow run's files, from its saved config: the
+   *  action check, then the session's `run.files`, which the process that
+   *  holds the run does with it held. No workflow config is a no-op. */
+  workflowFileOperation(
     runId: RunId,
     operation: 'pack' | 'clean',
-    perform: (
-      request: WorkflowFileOperationRequest,
-    ) => Effect.Effect<void, E, R>,
-  ): Effect.Effect<void, E | Rejected | RunConfigUnreadable, R>;
+  ): Effect.Effect<
+    WorkflowFileOperationResult | undefined,
+    RequestError | RunConfigUnreadable
+  >;
   /** The retry's switch onto the user's own key. The host arm that took the
    *  request runs it where it stands. */
   useOwnApiKey(
@@ -221,13 +253,10 @@ export const createHostRunActions = (
     // read through this filesystem rather than taking one from whatever
     // context each of its callers happens to run on.
     const fs = yield* FileSystem.FileSystem;
-    const { handle, session } = ports;
+    const { roots, session } = ports;
     const view = () => session.view.current();
     const runView = (runId: RunId) => view().runs.get(runId);
-    const guard = runActionGuard({
-      view: { run: runView },
-      runs: handle.runs,
-    });
+    const guard = runActionGuard({ run: runView });
     const launchFailed = (cause: Error): RequestRefusal | RunLaunchFailed =>
       isRequestRefusal(cause)
         ? cause
@@ -253,9 +282,7 @@ export const createHostRunActions = (
         );
       }
       return ports.runValidated(validated.request, options).pipe(
-        Effect.tapError((cause) =>
-          presentRunFailure(handle.interactions, cause),
-        ),
+        Effect.tapError((cause) => presentRunFailure(ports.present, cause)),
         Effect.mapError(launchFailed),
       );
     };
@@ -283,18 +310,16 @@ export const createHostRunActions = (
     const readConfig = Effect.fn('HostRunActions.readConfig')(function* (
       runId: RunId,
     ) {
-      const config = yield* getRunRecords(handle, runId)
-        .readConfig()
-        .pipe(
-          Effect.mapError(
-            (cause) =>
-              new RunConfigUnreadable({
-                runId,
-                message: toErrorMessage(cause),
-                cause,
-              }),
-          ),
-        );
+      const config = yield* ports.readConfig(runId).pipe(
+        Effect.mapError(
+          (cause) =>
+            new RunConfigUnreadable({
+              runId,
+              message: toErrorMessage(cause),
+              cause,
+            }),
+        ),
+      );
       return config ?? undefined;
     });
 
@@ -393,13 +418,9 @@ export const createHostRunActions = (
       // probes its candidates there rather than through the calling
       // context's ambient roots.
       workspace: {
-        locatePath: (target) =>
-          locateInWorkspace(handle.roots.workspace, target),
+        locatePath: (target) => locateInWorkspace(roots.workspace, target),
         exists: (relativePath) =>
-          entryExists(
-            fs,
-            workspaceAbsolutePath(handle.roots.workspace, relativePath),
-          ),
+          entryExists(fs, workspaceAbsolutePath(roots.workspace, relativePath)),
       },
     });
 
@@ -422,7 +443,7 @@ export const createHostRunActions = (
         }
         let fallback = getRuntimeModelDirectFallback(
           request.model,
-          yield* getUseOpenRouter(handle.roots),
+          yield* getUseOpenRouter(roots),
         );
         if (!fallback) {
           yield* ports.showInfo(
@@ -441,7 +462,7 @@ export const createHostRunActions = (
         if (!prepared || !isRetryPending(runId, requestId)) return;
         const currentFallback = getRuntimeModelDirectFallback(
           request.model,
-          yield* getUseOpenRouter(handle.roots),
+          yield* getUseOpenRouter(roots),
         );
         if (!currentFallback) {
           yield* ports.showInfo(modelsChanged);
@@ -456,7 +477,7 @@ export const createHostRunActions = (
           if (!prepared || !isRetryPending(runId, requestId)) return;
           const finalFallback = getRuntimeModelDirectFallback(
             request.model,
-            yield* getUseOpenRouter(handle.roots),
+            yield* getUseOpenRouter(roots),
           );
           if (!finalFallback || finalFallback.provider !== fallback.provider) {
             yield* ports.showInfo(modelsChanged);
@@ -493,7 +514,7 @@ export const createHostRunActions = (
                     ).pipe(
                       Effect.andThen(
                         presentRunFailure(
-                          handle.interactions,
+                          ports.present,
                           error,
                           'Your own-key run failed: ',
                         ),
@@ -590,19 +611,56 @@ export const createHostRunActions = (
           return config ? { runId } : undefined;
         },
       ),
-      workflowFileOperation: (runId, operation, perform) =>
-        Effect.gen(function* () {
+      workflowFileOperation: Effect.fn('HostRunActions.workflowFileOperation')(
+        function* (runId, operation) {
           yield* guard.require(runId, operation);
-          yield* guard.hold(runId);
+          yield* guard.idle(runId);
           const config = yield* workflowConfig(runId);
-          if (!config) return;
-          yield* perform({
-            agent: config.agent,
-            model: config.model,
-            inputFile: config.inputFiles[0] ?? '',
-            runId,
-          });
-        }).pipe(Effect.scoped),
+          if (!config) return undefined;
+          const inputFile = config.inputFiles[0] ?? '';
+          // A pack names its folder for the input; a clean needs none.
+          if (operation === 'pack' && !inputFile)
+            return { inputFile, result: { status: 'missingParams' } as const };
+          const outcome = yield* session
+            .request({
+              kind: 'run.files',
+              runId,
+              files:
+                operation === 'pack'
+                  ? {
+                      op: 'copy',
+                      to: packDestination({
+                        runId,
+                        inputFile,
+                        agent: config.agent,
+                        model: config.model,
+                      }),
+                    }
+                  : { op: 'remove' },
+            })
+            .pipe(
+              Effect.catchTag('NotOwner', () =>
+                Effect.fail(
+                  new Rejected({
+                    reason: 'This run is running or held elsewhere.',
+                  }),
+                ),
+              ),
+            );
+          if (outcome.kind !== 'runFiles')
+            return yield* Effect.die(
+              new Error(`run.files answered ${outcome.kind}`),
+            );
+          const { result } = outcome;
+          return {
+            inputFile,
+            result:
+              result.status === 'done'
+                ? { status: 'success', outputFolder: result.to }
+                : result,
+          };
+        },
+      ),
       runCompileFixer: Effect.fn(function* (runId) {
         if (!view().runs.has(runId)) {
           return yield* Effect.fail(

@@ -195,7 +195,6 @@
       "@shared/utils/xmlEscape",
       "@skills/runtimeSkills",
       "@tools/approval/toolEditApproval",
-      "@tools/catalogEntries",
       "@tools/liveTools",
       "@tools/mcp/mcpConfig",
       "@tools/toolAvailabilityService",

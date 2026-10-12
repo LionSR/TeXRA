@@ -1,21 +1,18 @@
 /**
  * What a host's run actions check as each request is handled, not only as it
- * was rendered: the run's current `actions`, whether this process is already
- * resuming it, and, for an action that reads or changes its files, a hold on
- * the stopped run that takes its claim, so another process sees it held.
+ * was rendered: the run's current `actions`, and whether this window is
+ * already resuming it. A pack or clean is held by the process that holds the
+ * run (`run.files`), not here.
  */
-import { Effect, type Scope } from 'effect';
+import { Effect } from 'effect';
 
 import { Rejected } from '@texra-ai/harness';
-import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { RunAction, RunId } from '@shared/schemas';
 import { runActionRefusal } from '@shared/session/runActions';
-import { toErrorMessage } from '@utils/errors/errorMessage';
 import type { RunView } from '@texra-ai/harness';
 
-export function runActionGuard(session: {
-  readonly view: { readonly run: (runId: RunId) => RunView | undefined };
-  readonly runs: SessionHandle['runs'];
+export function runActionGuard(view: {
+  readonly run: (runId: RunId) => RunView | undefined;
 }) {
   /** Runs this process is resuming: a second Resume, and a pack, clean,
    *  diff or restore, is refused while one is in flight, never queued
@@ -30,28 +27,13 @@ export function runActionGuard(session: {
      *  longer holds is left to the action's own read. */
     require: (runId: RunId, action: RunAction): Effect.Effect<void, Rejected> =>
       Effect.suspend(() => {
-        const run = session.view.run(runId);
+        const run = view.run(runId);
         return run === undefined || run.actions.includes(action)
           ? Effect.void
           : Effect.fail(
               new Rejected({ reason: runActionRefusal(run, action) }),
             );
       }),
-    /** Hold a stopped run for the caller's scope (a pack or clean of its
-     *  files, the one host action that is no session request): the hold
-     *  takes the run's claim and refuses a run live in this process, and a
-     *  resume that starts meanwhile is refused by the hold. */
-    hold: (runId: RunId): Effect.Effect<void, Rejected, Scope.Scope> =>
-      idle(runId).pipe(
-        Effect.andThen(session.runs.launch({ hold: runId })),
-        Effect.mapError((cause) =>
-          cause instanceof Rejected
-            ? cause
-            : new Rejected({
-                reason: `This run is running or held elsewhere: ${toErrorMessage(cause)}`,
-              }),
-        ),
-      ),
     /** Run `resume` marked as resuming: checked and marked in one
      *  synchronous step, cleared however it ends. */
     resuming: <A, E, R>(

@@ -40,6 +40,7 @@ import {
   type RunId,
 } from '@shared/schemas';
 import { isLiveRun, type SessionView } from '@shared/session/sessionView';
+import { loadChatExportInput } from '@texra/agent/export/loadChatExportInput';
 import type { HostSnapshot } from '@texra/shared/session/hostSnapshot';
 import {
   RequestErrorWireSchema,
@@ -47,6 +48,7 @@ import {
 } from '@texra/shared/session/sessionFrames';
 import { frameSubscription } from '@texra/controllers/session/SessionFramer';
 import type { EditorHostShape } from '@texra/tools/editorHost';
+import { assembleTrace } from '@transcript';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import {
@@ -54,6 +56,7 @@ import {
   TexraRpcs,
   type ServiceInfo,
   type TaskFailed,
+  type TaskRecordsFailed,
 } from './protocol';
 
 import { makeHostWindows } from './hostWindows';
@@ -160,6 +163,11 @@ const failed = (message: string, presented?: boolean): TaskFailed => ({
   message,
   ...(presented === true && { presented }),
 });
+
+const recordsFailed = (
+  reason: TaskRecordsFailed['reason'],
+  message: string,
+): TaskRecordsFailed => ({ _tag: 'TaskRecordsFailed', reason, message });
 
 /** A handler that died answers `Internal` under a reference the service
  *  log carries the cause under, as the session bridge does. */
@@ -302,6 +310,39 @@ export const serviceHandlers = TexraRpcs.toLayer(
       openSession(workspace).pipe(
         Effect.mapError((error) => failed(error.message)),
       );
+    /** What `read` answers from `runId`'s records in the project's session,
+     *  read where the run is held; a run the session does not hold is
+     *  unknown, not a run without records. */
+    const records = <A>(
+      workspace: string,
+      runId: RunId,
+      read: (handle: SessionHandle) => Effect.Effect<A, Error>,
+    ): Effect.Effect<A, TaskRecordsFailed> =>
+      Effect.scoped(
+        openSession(workspace).pipe(
+          Effect.mapError((error) =>
+            recordsFailed('unreadable', error.message),
+          ),
+          // Whether the run exists, from the log rather than the live
+          // fold: a session the open just (re)built has folded nothing yet.
+          Effect.flatMap(({ handle }) =>
+            Effect.flatMap(handle.view.read([runId]), (level) =>
+              level.runs.has(runId)
+                ? read(handle).pipe(
+                    Effect.mapError((error) =>
+                      recordsFailed('unreadable', error.message),
+                    ),
+                  )
+                : Effect.fail(
+                    recordsFailed(
+                      'unknownRun',
+                      `The TeXRA service holds no task ${runId} in ${workspace}.`,
+                    ),
+                  ),
+            ),
+          ),
+        ),
+      );
     return {
       'service.hello': () =>
         Effect.gen(function* () {
@@ -344,6 +385,19 @@ export const serviceHandlers = TexraRpcs.toLayer(
             runEnded(handle, runId),
           ),
         ),
+      'task.config': ({ workspace, runId }) =>
+        records(workspace, runId, (handle) =>
+          getRunRecords(handle, runId).readConfig(),
+        ),
+      'task.exportInput': ({ workspace, runId }) =>
+        records(workspace, runId, (handle) =>
+          Effect.map(
+            loadChatExportInput(runId, handle),
+            ({ config, exportInput }) => ({ config, exportInput }),
+          ),
+        ),
+      'task.exportTrace': ({ workspace, runId }) =>
+        records(workspace, runId, (handle) => assembleTrace(runId, handle)),
       'task.request': ({ workspace, request }) =>
         Effect.scoped(
           openSession(workspace).pipe(

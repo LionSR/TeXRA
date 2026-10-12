@@ -3,7 +3,6 @@ import { Cause, Effect, FileSystem } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports
-import type { SessionHandle } from '@agent/runtime';
 import {
   prepareBuildDisplay,
   scheduleViewerDisplay,
@@ -42,7 +41,7 @@ import { readSettingFrom } from '@utils/config/platformSettings';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { pathToLocationIn } from '@utils/files/fileLocation';
 import { entryExists } from '@utils/files/fsEntryExists';
-import type { WorkspaceRoots } from '@texra-ai/harness';
+import type { Session, WorkspaceRoots } from '@texra-ai/harness';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 type LatexdiffTool = 'latexdiff' | 'latexdiff-vc';
@@ -393,14 +392,15 @@ export const handleLatexdiffCommitAction = (
       );
 
 export const handleRunLatexdiff = Effect.fnUntraced(function* (
-  session: SessionHandle,
+  roots: WorkspaceRoots,
+  session: Session,
   request: WorkflowDiffRequest,
 ) {
   yield* withLatexdiffTool(
     'latexdiff',
     'Error running LaTeX diffs',
     Effect.gen(function* () {
-      const mathMarkup = yield* promptForLatexdiffMathMarkup(session.roots);
+      const mathMarkup = yield* promptForLatexdiffMathMarkup(roots);
       if (!mathMarkup) return;
 
       yield* Effect.logInfo(`Running latexdiff, math markup: ${mathMarkup}`);
@@ -418,9 +418,13 @@ export const handleRunLatexdiff = Effect.fnUntraced(function* (
           });
           return runLatexdiffForRun({
             runId: request.runId,
-            roots: session.roots,
+            roots,
             mathMarkup,
-            runDiscovery: runOutputReader(session),
+            // The window's own view: where its runs run, here or in the
+            // service, it folds their documents.
+            runDiscovery: runOutputReader(() =>
+              Effect.sync(() => session.view.current()),
+            ),
             channel: CHANNEL,
             progress,
           });
@@ -449,7 +453,7 @@ export const handleRunLatexdiff = Effect.fnUntraced(function* (
         );
       }
 
-      yield* prepareLatexdiffResultsAndScheduleViewer(session.roots, results);
+      yield* prepareLatexdiffResultsAndScheduleViewer(roots, results);
     }),
   );
 });

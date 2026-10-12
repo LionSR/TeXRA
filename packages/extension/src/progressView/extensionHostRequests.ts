@@ -32,7 +32,7 @@ import {
   type ProcessServices,
   type Session,
 } from '@texra-ai/harness';
-import { presentRunFailure, type SessionHandle } from '@agent/runtime';
+import { presentRunFailure } from '@agent/runtime';
 import {
   handleLatexdiff,
   handleLatexdiffCommitAction,
@@ -42,8 +42,8 @@ import {
   handleAcceptEdited,
   handleCompare,
 } from '@commands/latex/compareCommands';
-import { handlePack } from '@commands/housekeeping/packCommands';
-import { handleClean } from '@commands/housekeeping/cleanCommands';
+import { presentPack } from '@commands/housekeeping/packCommands';
+import { presentClean } from '@commands/housekeeping/cleanCommands';
 import { findCommitInHistory } from '@commands/git/gitCommands';
 import { openFile, openLabel } from '@commands/files/openFileCommands';
 import {
@@ -79,7 +79,10 @@ import { ExternalOpenFailed } from '@texra/hosts/uiHosts';
 
 import type { ToolEditApprovalController } from '@texra/controllers/approval/ToolEditApprovalController';
 import { normalizeMainViewFileExtension } from '@texra/controllers/mainView/MainViewDroppedFilesController';
-import { ChatExportController } from '@texra/controllers/progressView/ChatExportController';
+import {
+  ChatExportController,
+  type ChatExportRecords,
+} from '@texra/controllers/progressView/ChatExportController';
 import {
   exportRunTranscript,
   TRANSCRIPT_EXPORT_FORMAT_CHOICES,
@@ -97,6 +100,7 @@ import type { HostDraftRequests } from '@texra/controllers/session/hostDraftRequ
 import {
   createHostRunActions,
   type HostRunActionPorts,
+  type RunActionRecordPorts,
 } from '@texra/controllers/session/hostRunActions';
 import type { HostSnapshotSource } from '@texra/controllers/session/hostSnapshotSource';
 import {
@@ -119,7 +123,11 @@ import { normalizeLineEndings } from '@utils/text/stringUtils';
 const CHANNEL = 'ExtensionHostRequests';
 
 interface ExtensionHostRequestsOptions {
-  readonly session: SessionHandle;
+  /** The run records and failure surface the run actions read, from the
+   *  window's own session handle or from the service. */
+  readonly records: RunActionRecordPorts;
+  /** What the transcript export reads, from the same place. */
+  readonly exportRecords: ChatExportRecords;
   /** Where this window's runs run: the session here, or the service's. */
   readonly runSession: Session;
   readonly extensionPath: string;
@@ -208,7 +216,7 @@ export function createExtensionHostRequests(
   options: ExtensionHostRequestsOptions,
 ): ExtensionHostRequests {
   const {
-    session,
+    records,
     runSession,
     snapshot,
     toolEditApprovals,
@@ -216,7 +224,7 @@ export function createExtensionHostRequests(
     globalState,
     runtime,
   } = options;
-  const { roots } = session;
+  const { roots } = records;
   const draftRequests = options.draftRequests.attach(roots, (recording) => {
     // Recorder notifications can arrive outside a request fiber.
     runtime.runFork(options.snapshot.setRecording(recording));
@@ -241,9 +249,7 @@ export function createExtensionHostRequests(
       runSession
         .start({ config: request.config, ...runOptions, interactive: true })
         .pipe(
-          Effect.tapError((error) =>
-            presentRunFailure(session.interactions, error),
-          ),
+          Effect.tapError((error) => presentRunFailure(records.present, error)),
           Effect.tap((run) =>
             Effect.sync(() => options.presentLaunchedRun(run.runId)),
           ),
@@ -261,7 +267,7 @@ export function createExtensionHostRequests(
 
   const runActions = runtime.runSync(
     createHostRunActions({
-      handle: session,
+      ...records,
       session: runSession,
       scope: options.scope,
       runValidated,
@@ -393,7 +399,8 @@ export function createExtensionHostRequests(
       getController: Effect.sync(
         () =>
           (chatExportController ??= new ChatExportController({
-            session,
+            roots,
+            records: options.exportRecords,
             latexPreamble,
           })),
       ),
@@ -564,11 +571,11 @@ export function createExtensionHostRequests(
     showInfo: (message) => vscodeUi.showInfoMessage(message),
     admitLaunch,
     runWorkflowDiff: (diff) =>
-      runHandler('runLatexdiff', handleRunLatexdiff(session, diff)),
-    runWorkflowFileOperation: (operation, request) =>
+      runHandler('runLatexdiff', handleRunLatexdiff(roots, runSession, diff)),
+    presentWorkflowFileOperation: (operation, files) =>
       runHandler(
         operation,
-        operation === 'pack' ? handlePack(request) : handleClean(request),
+        operation === 'pack' ? presentPack(files) : presentClean(files),
       ),
     latexdiffAgainstCommit: (action, baseFile, commit) =>
       runHandler(

@@ -109,7 +109,7 @@ import { agentCatalogFollower } from '@tools/agentCatalogFollower';
 import { followInterruptedTasks } from '@tools/interruptedTasks';
 import { databaseLayer, globalDatabaseLayer } from './Database';
 import { projectDatabaseLayer } from './projectDatabase';
-import { deletionCollector } from './deletionCleanup';
+import { deletionCollector, type RunFilesServices } from './deletionCleanup';
 import { ownerLiveness } from './ownerLiveness';
 import { sessionRequests } from './SessionRequests';
 import { makeSessionStore } from './sessionStore';
@@ -169,7 +169,6 @@ const sessionHandleLayer = (key: SessionKey) =>
     Effect.gen(function* () {
       const database = yield* Database;
       const plugins = yield* ToolRegistry;
-      const globalDatabase = yield* GlobalDatabase;
       const local = yield* LocalRuntimeSource;
       // Register the consumers' scope first so the handle's teardown can
       // publish and settle while the tails and the view are still alive.
@@ -227,7 +226,7 @@ const sessionHandleLayer = (key: SessionKey) =>
           },
           local: local.ref,
           plugins,
-          globalDatabase,
+          services: yield* Effect.context<GlobalDatabase | RunFilesServices>(),
           closed: store.closed,
         }),
         approvals: createSessionApprovals(() => session),

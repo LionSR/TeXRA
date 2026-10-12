@@ -15,7 +15,11 @@ import {
 } from 'effect';
 
 import { LanguageModel, withProcessServices } from '@texra-ai/harness';
-import type { SessionHandle } from '@agent/runtime';
+import {
+  SessionHostInteractions,
+  type HostInteractions,
+  type SessionHandle,
+} from '@agent/runtime';
 import { getCatalogAgent, refresh } from '@agent/index';
 import { BundledViewContentProvider } from '@common/webview';
 import {
@@ -48,10 +52,19 @@ import type {
 import { ToolEditApprovalController } from '@texra/controllers/approval/ToolEditApprovalController';
 import { OnboardingFunnelRefresher } from '@texra/controllers/onboarding/onboardingFunnel';
 import type { ServiceLink } from '@texra/controllers/server/client';
+import { serviceRecords } from '@texra/controllers/server/serviceSession';
 import {
   attachWindowHost,
   type WindowHost,
 } from '@texra/controllers/server/windowHost';
+import {
+  localExportRecords,
+  type ChatExportRecords,
+} from '@texra/controllers/progressView/ChatExportController';
+import {
+  localRunActionPorts,
+  type RunActionRecordPorts,
+} from '@texra/controllers/session/hostRunActions';
 import { attachSessionHost } from '@texra/controllers/session/attachSessionHost';
 import { HostDraftRequests } from '@texra/controllers/session/hostDraftRequests';
 import {
@@ -75,6 +88,7 @@ import type {
   ProcessRuntime,
   ProcessServices,
   Session,
+  WorkspaceRoots,
 } from '@texra-ai/harness';
 import type {
   PlatformSecrets,
@@ -108,6 +122,20 @@ interface Port {
   readonly disposables: vscode.Disposable[];
 }
 
+/** The window's session: the service's, or, when the service could not be
+ *  reached, this process's own with the handle that owns it. */
+export type WindowSession =
+  | {
+      readonly session: Session;
+      readonly service: ServiceLink;
+      readonly handle?: undefined;
+    }
+  | {
+      readonly session: Session;
+      readonly handle: SessionHandle;
+      readonly service?: undefined;
+    };
+
 export class ProgressViewProvider implements vscode.WebviewViewProvider {
   public static readonly viewType = 'texra.mainView';
 
@@ -125,6 +153,12 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
   private sidebarPort: Port | undefined;
   /** The popped-out tab and its port, attached and released together. */
   private editor: { panel: vscode.WebviewPanel; port: Port } | undefined;
+  /** Where a failure before a run opens is presented: the window's own
+   *  session's surface, or, in service mode, this window's presentation
+   *  host directly. */
+  public readonly present: Pick<SessionHostInteractions, 'emit'>;
+  /** Where this window's runs run: the service's session, or this one. */
+  private readonly runSession: Session;
   /** The last credential answer the API-key banner's producer read. */
   private credentialUsable = true;
 
@@ -175,12 +209,11 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     private readonly secrets: PlatformSecrets,
     /** Process runtime shared with every extension surface. */
     private readonly runtime: ProcessRuntime,
-    /** Session created by the extension entry. */
-    public readonly session: SessionHandle,
-    /** Where this window's runs run: the session here, or the service's. */
-    private readonly runSession: Session,
-    /** The background service, when this window is its client. */
-    private readonly service: ServiceLink | undefined,
+    /** The window's roots: its workspace, storage and settings stores. */
+    private readonly roots: WorkspaceRoots,
+    /** Where this window's runs run: the service's session, or this
+     *  process's own with the handle that owns it. */
+    windowSession: WindowSession,
     /** The editor registry the extension's plugins read (`texraPlugins`). */
     private readonly editors: EditorRegistry,
     /** The setup pill: painted from the same credential answer the funnel
@@ -214,6 +247,8 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
         }),
     });
 
+    const runSession = windowSession.session;
+    this.runSession = runSession;
     // Install the recipient before host requests publish the recorder's state.
     this.bridge = this.runtime.runSync(
       SessionBridge.make({
@@ -223,9 +258,8 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
         onPortClosed: (port) => hostRequests.closePort(port),
       }).pipe(Scope.provide(this.scope)),
     );
-    const roots = session.roots;
     this.snapshot = createHostSnapshotSource({
-      project: projectDisplayOf(session.roots.storage, roots.workspace),
+      project: projectDisplayOf(roots.storage, roots.workspace),
       root: roots.workspace,
       stores: roots,
       secrets,
@@ -251,7 +285,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       // once a task has finished; before that the card is the one prompt.
       apiKeyBanner: () =>
         Effect.all([
-          hasUsableSetupCredential(this.session.roots, this.secrets).pipe(
+          hasUsableSetupCredential(this.roots, this.secrets).pipe(
             withLogChannel('Setup Credentials'),
           ),
           getFirstRunDone(globalState),
@@ -302,7 +336,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       host: new VscodeToolEditApprovalHost(
         path.join(storageRoot.fsPath, 'tool-edit-previews'),
         this.runtime,
-        session.roots,
+        roots,
       ),
       // A decision goes where the run runs.
       session: { requests: runSession },
@@ -311,8 +345,20 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       Effect.forkIn(this.attention.follow(runSession), this.scope),
     );
 
+    const presentation = createAgentPresentationHost(
+      this,
+      globalState,
+      this.runtime,
+      roots,
+    );
+    const { records, exportRecords } = this.windowRecords(
+      windowSession,
+      presentation,
+    );
+    this.present = records.present;
     const hostRequests = createExtensionHostRequests({
-      session,
+      records,
+      exportRecords,
       runSession,
       runtime: this.runtime,
       scope: this.scope,
@@ -369,35 +415,33 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
             }),
         }),
     };
-    const presentation = createAgentPresentationHost(
-      this,
-      globalState,
-      this.runtime,
-      session.roots,
-    );
-    this.runtime.runSync(
-      this.editors
-        .attach(session.roots.storage, editor)
-        .pipe(Scope.provide(this.scope)),
-    );
-    this.runtime.runSync(
-      attachSessionHost(session, this.toolEditApprovals, {
-        ...presentation,
-        onEvent: (event) =>
-          Effect.sync(() => {
-            // A document task's end carries its documents.
-            if (
-              event.type === 'run.end' &&
-              event.output.documents !== undefined &&
-              event.outcome !== 'failed'
-            )
-              this.chime();
-          }),
-      }).pipe(Scope.provide(this.scope)),
-    );
-    // A window of the service is its project's window too: the service's
+    // A window that runs its tasks here attaches to its own session; a
+    // window of the service is its project's window there: the service's
     // runs ask it for the same, stage their tool edits here, and bind the
     // editor's language models (Copilot) through it.
+    const { handle, service } = windowSession;
+    if (handle !== undefined) {
+      this.runtime.runSync(
+        this.editors
+          .attach(roots.storage, editor)
+          .pipe(Scope.provide(this.scope)),
+      );
+      this.runtime.runSync(
+        attachSessionHost(handle, this.toolEditApprovals, {
+          ...presentation,
+          onEvent: (event) =>
+            Effect.sync(() => {
+              // A document task's end carries its documents.
+              if (
+                event.type === 'run.end' &&
+                event.output.documents !== undefined &&
+                event.outcome !== 'failed'
+              )
+                this.chime();
+            }),
+        }).pipe(Scope.provide(this.scope)),
+      );
+    }
     if (service !== undefined)
       this.runtime.runFork(
         Effect.flatMap(Effect.service(LanguageModel), (languageModel) =>
@@ -413,6 +457,40 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
   }
 
   /**
+   * What the run actions and the transcript export read, from the one
+   * place the window's runs are held: its own session handle, or the
+   * service. In service mode a failure before a run opens is presented on
+   * this window's presentation host, held for the provider's life.
+   */
+  private windowRecords(
+    windowSession: WindowSession,
+    presentation: Pick<HostInteractions, 'emit'>,
+  ): {
+    readonly records: RunActionRecordPorts;
+    readonly exportRecords: ChatExportRecords;
+  } {
+    if (windowSession.handle !== undefined)
+      return {
+        records: localRunActionPorts(windowSession.handle),
+        exportRecords: localExportRecords(windowSession.handle),
+      };
+    const present = new SessionHostInteractions();
+    this.runtime.runSync(
+      Effect.acquireRelease(present.use(presentation), (detach) =>
+        Effect.sync(detach),
+      ).pipe(Scope.provide(this.scope)),
+    );
+    const remote = serviceRecords(
+      windowSession.service,
+      this.roots.workspace ?? '',
+    );
+    return {
+      records: { roots: this.roots, readConfig: remote.readConfig, present },
+      exportRecords: { input: remote.exportInput, trace: remote.exportTrace },
+    };
+  }
+
+  /**
    * Offer the service this window's capabilities for its project's runs,
    * and chime when one of its document tasks ends, as a run here does.
    */
@@ -420,7 +498,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     service: ServiceLink,
     capabilities: Omit<WindowHost, 'toolEdits'>,
   ): Effect.Effect<void, never, Scope.Scope> {
-    const workspace = this.session.roots.workspace;
+    const workspace = this.roots.workspace;
     if (workspace === undefined) return Effect.void;
     const previews = <A, E>(
       program: Effect.Effect<
@@ -450,7 +528,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
               previews(
                 this.toolEditApprovals.present({
                   ...staging,
-                  roots: this.session.roots,
+                  roots: this.roots,
                 }),
               ).pipe(Effect.mapError((failure) => new Error(failure.message))),
             release: (requestId) =>

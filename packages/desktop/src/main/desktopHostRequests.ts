@@ -24,11 +24,7 @@ import {
   type Session,
 } from '@texra-ai/harness';
 import { presentRunFailure, type SessionHandle } from '@agent/runtime';
-import {
-  fileOpResultMessage,
-  packRunOutputs,
-  runCleanRunDir,
-} from '@housekeeping/runDirOps';
+import { fileOpResultMessage } from '@housekeeping/runDirOps';
 import {
   latexdiffPackMessage,
   runPackLatexdiffvc,
@@ -42,7 +38,7 @@ import {
   type WorkspaceFs,
 } from '@platform/rootedFs';
 import latexPreamble from '@resources/templates/chatExport.tex';
-import { type FileOpResult, type RunId } from '@shared/schemas';
+import { type RunId } from '@shared/schemas';
 import type { HostRequest } from '@texra/shared/session/hostRequest';
 import type {
   HostOutcome,
@@ -62,8 +58,8 @@ import {
 import type { HostDraftRequests } from '@texra/controllers/session/hostDraftRequests';
 import {
   createHostRunActions,
+  localRunActionPorts,
   type WorkflowDiffRequest,
-  type WorkflowFileOperationRequest,
 } from '@texra/controllers/session/hostRunActions';
 import type { HostSnapshotSource } from '@texra/controllers/session/hostSnapshotSource';
 import {
@@ -140,8 +136,6 @@ export interface DesktopHostRequests {
 
 const CHANNEL = 'DesktopHostRequests';
 
-type WorkflowFileOperation = 'pack' | 'clean';
-
 export function createDesktopHostRequests(
   options: DesktopHostRequestsOptions,
 ): DesktopHostRequests {
@@ -164,7 +158,7 @@ export function createDesktopHostRequests(
   const runActions = runtime.runSync(
     createHostRunActions({
       ...run, // this window's launcher and output opener
-      handle: session,
+      ...localRunActionPorts(session),
       session: options.runSession,
       loadModelOptions: () =>
         withProcessServices(
@@ -302,57 +296,6 @@ export function createDesktopHostRequests(
         ),
       );
 
-  /** Info results are shown; error results reject the request, which the
-   *  dispatcher surfaces. The wording is the shared `fileOpResultMessage`. */
-  const reportFileOperationResult = (
-    operation: WorkflowFileOperation,
-    result: FileOpResult,
-    inputFile: string,
-  ) => {
-    const message = fileOpResultMessage(operation, result, inputFile);
-    return message.level === 'info'
-      ? host.showInfoMessage(message.text)
-      : Effect.fail(new Rejected({ reason: message.text }));
-  };
-
-  const runWorkflowFileOperation = (
-    operation: WorkflowFileOperation,
-    request: WorkflowFileOperationRequest,
-  ) =>
-    Effect.gen(function* () {
-      const { agent, model, inputFile, runId } = request;
-      if (!agent || !model || !inputFile) {
-        return yield* reportFileOperationResult(
-          operation,
-          { status: 'missingParams' },
-          inputFile,
-        );
-      }
-      if (!runId) {
-        return yield* Effect.fail(
-          new Rejected({ reason: `Missing run identity for ${operation}.` }),
-        );
-      }
-      const ran = yield* Effect.exit(
-        operation === 'pack'
-          ? packRunOutputs(request)
-          : runCleanRunDir(runId as RunId),
-      );
-      if (Exit.isFailure(ran)) {
-        const error = Cause.squash(ran.cause);
-        yield* Effect.logError(`Desktop ${operation} operation failed`).pipe(
-          Effect.annotateLogs({ data: error }),
-          withLogChannel(CHANNEL),
-        );
-        return yield* reportFileOperationResult(
-          operation,
-          { status: 'error', error: toErrorMessage(error) },
-          inputFile,
-        );
-      }
-      yield* reportFileOperationResult(operation, ran.value, inputFile);
-    });
-
   /**
    * The chat export controller, loaded on the first export so its module
    * graph — the formatters, the trace assembler, the LaTeX compiler — stays
@@ -368,9 +311,13 @@ export function createDesktopHostRequests(
     Effect.cachedWithTTL(
       Effect.tryPromise({
         try: async () => {
-          const { ChatExportController: Controller } =
+          const { ChatExportController: Controller, localExportRecords } =
             await import('@texra/controllers/progressView/ChatExportController');
-          return new Controller({ session, latexPreamble });
+          return new Controller({
+            roots,
+            records: localExportRecords(session),
+            latexPreamble,
+          });
         },
         catch: (cause) =>
           new TranscriptExportFailed({
@@ -479,7 +426,14 @@ export function createDesktopHostRequests(
     // The window's paper is its one workspace: any launch runs as asked.
     admitLaunch: () => Effect.void,
     runWorkflowDiff,
-    runWorkflowFileOperation,
+    // Info results are shown; error results reject the request, which the
+    // dispatcher surfaces. The wording is the shared `fileOpResultMessage`.
+    presentWorkflowFileOperation: (operation, { result, inputFile }) => {
+      const message = fileOpResultMessage(operation, result, inputFile);
+      return message.level === 'info'
+        ? host.showInfoMessage(message.text)
+        : Effect.fail(new Rejected({ reason: message.text }));
+    },
     latexdiffAgainstCommit,
     openSettings: (section) =>
       Effect.sync(() =>

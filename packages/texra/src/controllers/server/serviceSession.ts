@@ -8,6 +8,7 @@
  */
 import {
   Cause,
+  Data,
   Effect,
   FiberHandle,
   Layer,
@@ -53,6 +54,7 @@ import { generateRunId } from '@utils/core';
 
 import { attachWindowHost } from './windowHost';
 import type { ServiceClient, ServiceLink } from './client';
+import type { TaskRecordsFailed } from './protocol';
 
 /** What a call made while the link reconnects is told. */
 const OFFLINE = 'The TeXRA service is offline; TeXRA is reconnecting to it.';
@@ -106,6 +108,76 @@ function frameInputs(frame: EventsFrame): FoldInput[] {
   return inputs;
 }
 
+/** The service's client now; `offline` answers a call made while the link
+ *  holds none. A reconnect needs nothing here: the next call takes it. */
+const callService = <A, E>(
+  link: ServiceLink,
+  offline: () => E,
+  use: (client: ServiceClient) => Effect.Effect<A, E>,
+): Effect.Effect<A, E> =>
+  Effect.flatMap(SubscriptionRef.get(link.client), (client) =>
+    client === null ? Effect.fail(offline()) : use(client),
+  );
+
+/** A task's records the service could not answer for: it is offline (or
+ *  did not answer), holds no such run, or its records would not read. */
+export class TaskRecordsUnavailable extends Data.TaggedError(
+  'TaskRecordsUnavailable',
+)<{
+  readonly runId: RunId;
+  readonly reason: 'offline' | 'unknownRun' | 'unreadable';
+  readonly message: string;
+}> {}
+
+/**
+ * A window's reads of its project's task records, answered by the service
+ * from its own session: the run's saved setup, and what its transcript
+ * exports read. The window opens no records of its own in service mode.
+ */
+export const serviceRecords = (link: ServiceLink, workspace: string) => {
+  const ask = <A>(
+    runId: RunId,
+    use: (
+      client: ServiceClient,
+    ) => Effect.Effect<
+      A,
+      TaskRecordsFailed | { readonly _tag: 'RpcClientError'; message: string }
+    >,
+  ): Effect.Effect<A, TaskRecordsUnavailable> =>
+    callService(
+      link,
+      () =>
+        new TaskRecordsUnavailable({
+          runId,
+          reason: 'offline',
+          message: OFFLINE,
+        }),
+      (client) =>
+        use(client).pipe(
+          Effect.mapError(
+            (error) =>
+              new TaskRecordsUnavailable({
+                runId,
+                ...(error._tag === 'TaskRecordsFailed'
+                  ? { reason: error.reason, message: error.message }
+                  : {
+                      reason: 'offline',
+                      message: `The TeXRA service did not answer: ${error.message}`,
+                    }),
+              }),
+          ),
+        ),
+    );
+  return {
+    readConfig: (runId: RunId) =>
+      ask(runId, (client) => client['task.config']({ workspace, runId })),
+    exportInput: (runId: RunId) =>
+      ask(runId, (client) => client['task.exportInput']({ workspace, runId })),
+    exportTrace: (runId: RunId) =>
+      ask(runId, (client) => client['task.exportTrace']({ workspace, runId })),
+  };
+};
+
 /** A failure of a call to the service, as a run's own. */
 const runFailure = (message: string, cause: Error = new Error(message)) =>
   new RunFailure({ cause, message });
@@ -121,14 +193,6 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
   roots: WorkspaceRoots,
 ): Effect.fn.Return<Session, never, Scope.Scope> {
   const key = roots.storage;
-  /** The client now; `offline` answers a call made while there is none. */
-  const call = <A, E>(
-    offline: () => E,
-    use: (client: ServiceClient) => Effect.Effect<A, E>,
-  ): Effect.Effect<A, E> =>
-    Effect.flatMap(SubscriptionRef.get(link.client), (client) =>
-      client === null ? Effect.fail(offline()) : use(client),
-    );
   /** The client, once the link has one. */
   const connected = SubscriptionRef.changes(link.client).pipe(
     Stream.filter((client) => client !== null),
@@ -231,7 +295,8 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
       }),
     );
   const request: Session['request'] = (runtimeRequest) =>
-    call(
+    callService(
+      link,
       () => new Rejected({ reason: OFFLINE }),
       (client) =>
         client['task.request']({ workspace, request: runtimeRequest }).pipe(
@@ -351,7 +416,7 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
             message: "The TeXRA service cannot run a window's own tools.",
           }),
         );
-      return call(offline, (client) =>
+      return callService(link, offline, (client) =>
         client['task.start']({
           workspace,
           runId: input.runId ?? generateRunId(),
@@ -375,7 +440,7 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
       ).pipe(Effect.flatMap((runId) => runOf(runId)));
     },
     resume: (runId) =>
-      call(offline, (client) =>
+      callService(link, offline, (client) =>
         client['task.resume']({ workspace, runId }).pipe(
           Effect.mapError((error) => runFailure(error.message)),
         ),
