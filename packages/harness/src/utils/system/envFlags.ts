@@ -74,7 +74,8 @@ export function isEnvFlagEnabled(
  * The environment a child process TeXRA spawns starts from: this process's
  * with its project's `.env` variables over it (`environment`),
  * minus every provider API-key variable TeXRA reads as its own credential
- * ({@link API_KEY_ENV_NAMES}). What a child prints lands in tool results and
+ * ({@link API_KEY_ENV_NAMES}) and the requested approval policy
+ * (`TEXRA_APPROVAL_POLICY`). What a child prints lands in tool results and
  * the transcript, so the key is never there to print. `keep` names the one
  * provider whose key a child agent CLI authenticates with itself. Windows
  * matches variable names case-insensitively, as its environment does.
@@ -86,8 +87,13 @@ export const inheritedEnv = (
     const env = yield* environment;
     const fold = (name: string) => (IS_WINDOWS ? name.toUpperCase() : name);
     const kept = keep === undefined ? undefined : apiKeyEnvName(keep);
+    // A project's `.env` never reaches a nested TeXRA as a requested
+    // approval policy: only the user's own invocation asks for one.
     const withheld = new Set(
-      API_KEY_ENV_NAMES.filter((name) => name !== kept).map(fold),
+      [
+        ...API_KEY_ENV_NAMES.filter((name) => name !== kept),
+        'TEXRA_APPROVAL_POLICY',
+      ].map(fold),
     );
     return Object.fromEntries(
       Object.entries(env).filter(

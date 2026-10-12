@@ -54,7 +54,6 @@ import { nodeFileServices } from '@platform/defaults/jsonStore';
 import {
   formatTexraApprovalPolicy,
   TEXRA_APPROVAL_POLICY_CONFIG_KEY,
-  texraApprovalPolicyLabel,
   type TexraApprovalPolicy,
 } from '@shared/approvalPolicy';
 import { stricterPolicy } from '@shared/approvalBypassKind';
@@ -68,10 +67,7 @@ import { DisposableStore } from '@texra/platform/disposable';
 import { subscribeToSignalChanges } from '@texra/shared/signals';
 import { attachWindowHost } from '@texra/controllers/server/windowHost';
 import { serviceSession } from '@texra/controllers/server/serviceSession';
-import {
-  readConfigSettingFrom,
-  writeSettingTo,
-} from '@utils/config/platformSettings';
+import { readConfigSettingFrom } from '@utils/config/platformSettings';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { serviceAgentRuns } from '../serviceAgentRuns';
 
@@ -118,6 +114,7 @@ import { discoverTerminalCapabilities } from './state/terminalCapabilities';
 import {
   appendLocalErrorTranscript,
   appendLocalNotice,
+  appendLocalRequestRefusal,
   paintedRunIds,
 } from './state/transcript';
 import { openCliSlashCommandForm } from './commands/slashForms';
@@ -371,26 +368,35 @@ export async function runChat(
     ...context,
     quietLogs: true,
   });
-  // `/approval` writes the project's persisted policy, the one every
-  // window and terminal of the project follows, here or in the service,
-  // and the status line moves once the write lands; meanwhile the chat's
-  // next launch already asks for it.
+  // `/approval` sets this chat's launch policy only, here or in the
+  // service; the project's policy changes through `/config` or the settings
+  // view. A run of the chat that takes a grant now records the change on
+  // its own `approval.policy` row: Auto-approve turns its delegated-work
+  // bypass on, any other policy turns it off (the card's `a` key's request).
   const setApprovalPolicy = (policy: TexraApprovalPolicy): void => {
     chatPolicy = policy;
+    patchSessionMeta({ approvalPolicy: getApprovalPolicy() });
+    const run = runViewOf(
+      currentView(),
+      session.runId ?? selectedRunIdSignal.get(),
+    );
+    if (run === undefined || !run.actions.includes('grant')) return;
     runtime.runFork(
-      writeSettingTo(
-        runtimeSession.roots,
-        TEXRA_APPROVAL_POLICY_CONFIG_KEY,
-        policy,
-      ).pipe(
-        Effect.match({
-          onSuccess: () => patchSessionMeta({ approvalPolicy: policy }),
-          onFailure: (error) =>
-            appendLocalNotice(
-              `The project's approval policy was not saved, so it stays ${texraApprovalPolicyLabel(projectApprovalPolicy(runtimeSession.roots))}: ${error.message}`,
-            ),
-        }),
-      ),
+      runSession
+        .request({
+          kind: 'policy.set',
+          change: {
+            field: 'bypass',
+            runId: run.id,
+            bypass: 'superYolo',
+            enabled: policy === 'yolo',
+          },
+        })
+        .pipe(
+          Effect.catch((error) =>
+            Effect.sync(() => appendLocalRequestRefusal(error, run.id)),
+          ),
+        ),
     );
   };
   // The slash-command context is identical at every call site; build it once

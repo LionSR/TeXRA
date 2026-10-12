@@ -31,7 +31,6 @@ import { DEFAULT_MODELS } from '@shared/constants/defaultModels';
 import {
   formatTexraApprovalPolicy,
   parseTexraApprovalPolicy,
-  TEXRA_APPROVAL_POLICY_CONFIG_KEY,
   TEXRA_APPROVAL_POLICY_DEFAULT,
   type TexraApprovalPolicy,
 } from '@shared/approvalPolicy';
@@ -84,10 +83,6 @@ import { subscribeToSignalChanges } from '@texra/shared/signals';
 import { clearGoal, startGoal } from '@tools/goal';
 import { prepareToolEditApprovalPrompt } from '@tools/approval/toolEditApproval';
 import { FOCUSED_AGENT } from '@ui/copy/nestedRuns';
-import {
-  readConfigSettingFrom,
-  writeSettingTo,
-} from '@utils/config/platformSettings';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { App } from '../src/chat/tui/App';
@@ -1518,26 +1513,13 @@ function appendHarnessTranscript(
   }
 }
 
-/** The harness project's persisted policy, which its session decides by. */
-const harnessApprovalPolicy = (): TexraApprovalPolicy =>
-  readConfigSettingFrom<TexraApprovalPolicy>(
-    harnessRoots.config,
-    TEXRA_APPROVAL_POLICY_CONFIG_KEY,
-  );
+/** The harness chat's launch policy, which `/approval` sets, as the chat's
+ *  does; it never writes the project's. */
+let harnessPolicy: TexraApprovalPolicy = TEXRA_APPROVAL_POLICY_DEFAULT;
+const harnessApprovalPolicy = (): TexraApprovalPolicy => harnessPolicy;
 
-/** `/approval` writes the project's policy, as the chat's does. */
 function setHarnessApprovalPolicy(policy: TexraApprovalPolicy): void {
-  harnessRuntime.runFork(
-    writeSettingTo(harnessRoots, TEXRA_APPROVAL_POLICY_CONFIG_KEY, policy).pipe(
-      Effect.catch((error) =>
-        Effect.sync(() =>
-          appendHarnessAssistantTranscript(
-            `The approval policy was not saved: ${error.message}`,
-          ),
-        ),
-      ),
-    ),
-  );
+  harnessPolicy = policy;
   sessionMeta.set({
     ...sessionMeta.get(),
     approvalPolicy: policy,

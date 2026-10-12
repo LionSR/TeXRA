@@ -30,9 +30,19 @@ All notable changes to this project will be documented in this file.
   the run; the project's policy is never changed, and the service no longer
   ignores it. Any other requested policy only narrows the project's: one
   more permissive than it (Ask over Block) is refused with a notice where
-  it used to apply in a terminal without the service. `/approval` in a chat
-  writes the project's policy whether or not the service runs. A denial's
-  warning names the policy that decided it (service protocol bump).
+  it used to apply in a terminal without the service. A denial's warning
+  names the policy that decided it (service protocol bump).
+- **`/approval` in `texra chat` sets only that chat's policy.** It no longer
+  writes the project's policy in service mode; change that with `/config`
+  or the settings view. A run of the chat that is live takes the change on
+  its own approval record (Auto-approve on or off), and a later message
+  that leaves Auto-approve is asked again.
+- **An Auto-approve run asks its questions.** A run started with
+  `--approval-policy yolo` in a project set to Ask presents a question for
+  you and a model retry past its automatic attempts interactively, where it
+  used to deny them, and denies them in a headless run. `texra resume` says
+  that a requested policy does not change the resumed task, and a project's
+  `.env` no longer passes `TEXRA_APPROVAL_POLICY` to a nested TeXRA.
 - **A goal that grants all agent work also approves its run's plan.** A
   run whose delegated work is granted (a goal's all-agent-work grant, or an
   Auto-approve launch) is asked nothing, a plan included; a Block policy
