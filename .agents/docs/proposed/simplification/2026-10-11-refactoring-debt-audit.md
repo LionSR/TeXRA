@@ -158,10 +158,9 @@ in Verification results — a single-consumer justified factory, not a split tar
   `desktop` 73): all re-derive the same device-code → copy-code → open-URL flow and
   wording. Lift into one `buildSubscriptionSignInPresenter(primitives)` in `texra`.
   **~60–100 LOC, M.**
-- **Per-provider token-usage mapping** (`llm/api/{anthropicMessages,googleInteractions,
-openaiResponsesUsage,openrouterChat}`): identical `uncached+cached`/total arithmetic
-  with per-provider field names. One `buildUsage({...})` normalizer.
-  **~30–50 LOC, S.**
+- **Per-provider token-usage mapping** (the four `llm/api` usage mappers): looks like
+  identical total arithmetic with per-provider field names. One `buildUsage({...})`
+  normalizer. **~30–50 LOC, S.**
 
 ---
 
@@ -249,15 +248,16 @@ Each finding was opened and read against its actual source before any edit.
   `pathToLocationIn`, and `extractFigurePathsFromLatex` are already shared across the
   mirror methods. What remains per method is real orchestration difference (BFS
   recursion with a worklist, `.tex` snapshotting, stat-gating, vision-context vs
-  mirror-only). Only micro-win: a `texFilesOf()` helper for the 5 `files.filter(f =>
-hasExtension(f.absolutePath, '.tex'))` sites (~8 LOC), borderline against the
-  one-expression-helper bar. **Optional micro-nit, not a refactor.**
+  mirror-only). The one micro-nit — a `texFilesOf()` helper — covers only 3 `.tex`
+  filter sites, so it nets ~zero (6 lines become a declaration plus 3 calls).
+  **Nothing worth doing here.**
 - **#5d llm per-provider token-usage mapping — divergent semantics.** OpenAI's
   `input_tokens` is already the combined input (and `total_tokens` comes from the
-  provider); Anthropic's `input_tokens` excludes cache, so it sums `uncached + cached
-  - creation`and computes the total itself; the`providerUsage` shapes
-(`xai`-conditional vs always-`anthropic`with cache breakdown) differ entirely. A`buildUsage` normalizer would have to be parameterized enough to obscure the real
-    per-provider arithmetic. **No clean refactor.**
+  provider); Anthropic's `input_tokens` excludes cache, so it adds the uncached,
+  cached, and cache-creation counters itself and then computes the total; the
+  `providerUsage` shapes (`xai`-conditional vs always-`anthropic` with a cache
+  breakdown) differ entirely. A `buildUsage` normalizer would need enough
+  per-provider policy to obscure that arithmetic. **No clean refactor.**
 
 **Net:** the dedup space is exhausted — the maintainers got there first — and the
 size-concentration items (#3, #4) resist the obvious fix too, because splitting them
