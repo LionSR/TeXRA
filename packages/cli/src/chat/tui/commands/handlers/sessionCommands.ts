@@ -56,14 +56,14 @@ export function showCliSlashCommandHelp(): void {
 }
 
 /** Open the focused run's work plan from the view it is rendered from. */
-export function showCliWorkPlan(session: SessionHandle): void {
+export function showCliWorkPlan(): void {
   const runId = selectedRunIdSignal.get();
   if (!runId) {
     setTransientNotice('No focused agent.');
     return;
   }
   clearTransientNotice();
-  const run = session.view.run(runId);
+  const run = runViewOf(currentView(), runId);
   if (run && run.plan !== null) {
     openWorkPlanReader(runId);
   } else {

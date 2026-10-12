@@ -484,7 +484,7 @@ HARNESS_DISPOSERS.push(
   Effect.runSync(
     session().interactions.use(
       createTuiHostInteractions(harnessRuntimeHost, HARNESS_CLI_CONTEXT, {
-        session: session(),
+        requests: session().requests,
         secrets: HARNESS_PLATFORM_SERVICES.secrets,
         settings: HARNESS_PLATFORM_SERVICES,
         runtime: harnessRuntime,
@@ -1633,7 +1633,7 @@ function handleHarnessSlashCommand(line: string): boolean {
       appendHarnessStatus();
       return true;
     case 'plan':
-      void showCliWorkPlan(session());
+      showCliWorkPlan();
       return true;
     case 'clear':
       resetHarnessForClear();
@@ -1763,7 +1763,7 @@ function renderHarnessApp(): React.JSX.Element {
       secrets={HARNESS_PLATFORM_SERVICES.secrets}
       stores={HARNESS_PLATFORM_SERVICES}
       runtime={harnessRuntime}
-      session={session()}
+      session={harnessRunSession}
       onSubmit={handleHarnessSubmit}
       onStaticTranscriptChange={viewportController.repaintTranscript}
       onCtrlC={handleHarnessCtrlC}

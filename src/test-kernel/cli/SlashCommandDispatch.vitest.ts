@@ -155,7 +155,10 @@ const services = {
   stores: makeFakeSettingsStores('cli').stores,
   runtime: testRuntime(),
   runtimeSession: testDefaultSession(),
-  runSession: testSessionOf(testDefaultSession()),
+  // Read when a case asks: each case's fake host opens its own session.
+  get runSession() {
+    return testSessionOf(testDefaultSession());
+  },
 };
 
 function createSession(): TuiSession {

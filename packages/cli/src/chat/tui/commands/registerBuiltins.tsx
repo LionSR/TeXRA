@@ -105,8 +105,8 @@ export function registerBuiltinSlashCommands(options: {
   /** The process runtime the account commands and the `/resume` listing run
    *  their programs on, from the same surface. */
   runtime: ProcessRuntime;
-  /** The session `/resume` lists history from and `/plan` and `/compact` act
-   *  on, threaded from the surface that registers the commands. */
+  /** The process session `/resume` lists history from: its records, which
+   *  stay read here. */
   runtimeSession: SessionHandle;
   /** Where the commands' run requests and resumes land: the chat's session,
    *  here or in the service. */
@@ -300,7 +300,7 @@ export function registerBuiltinSlashCommands(options: {
     (formProps) => (
       <MemoryListForm
         runtime={runtime}
-        roots={options.runtimeSession.roots}
+        roots={options.runSession.roots}
         {...formProps}
       />
     ),
@@ -333,8 +333,8 @@ export function registerBuiltinSlashCommands(options: {
     (formProps) => (
       <SkillsListForm
         runtime={runtime}
-        workspaceRoot={options.runtimeSession.roots.workspace}
-        stores={options.runtimeSession.roots}
+        workspaceRoot={options.runSession.roots.workspace}
+        stores={options.runSession.roots}
         {...formProps}
       />
     ),
@@ -354,7 +354,7 @@ export function registerBuiltinSlashCommands(options: {
 
   const PluginsListFormAdapter = (props: SlashFormProps): React.JSX.Element => (
     <PluginsListForm
-      roots={options.runtimeSession.roots}
+      roots={options.runSession.roots}
       runtime={runtime}
       availableRows={props.availableRows}
       onClose={() => props.onDone(undefined)}
@@ -375,7 +375,7 @@ export function registerBuiltinSlashCommands(options: {
         /^(.+?)(?:\s+--plugin\s+(\S+))?$/.exec(rest ?? '') ?? [];
       if (verb?.toLowerCase() !== 'add' || !source)
         return yield* Effect.fail(new Error(PLUGINS_TUI.addUsage));
-      const { roots } = options.runtimeSession;
+      const { roots } = options.runSession;
       const origin = parsePluginOrigin(
         source,
         roots.workspace ?? context.cliContext.cwd,
@@ -399,7 +399,7 @@ export function registerBuiltinSlashCommands(options: {
           stores={configStores}
           secrets={secrets}
           runtime={runtime}
-          workspaceRoot={options.runtimeSession.roots.workspace}
+          workspaceRoot={options.runSession.roots.workspace}
           availableRows={props.availableRows}
           // The project's policy, written: the status bar follows it, and
           // the chat's own `/approval` choice stays as it was.
@@ -522,8 +522,7 @@ export function registerBuiltinSlashCommands(options: {
           description: "Read the focused agent's work plan",
           category: 'session',
           echo: 'never',
-          handler: () =>
-            Effect.sync(() => showCliWorkPlan(options.runtimeSession)),
+          handler: () => Effect.sync(() => showCliWorkPlan()),
         },
         {
           name: 'resume',
@@ -568,7 +567,7 @@ export function registerBuiltinSlashCommands(options: {
           echo: 'ifPersists',
           handler: (remainder) =>
             Effect.suspend(() => {
-              const roots = options.runtimeSession.roots;
+              const roots = options.runSession.roots;
               return remainder.toLowerCase() === 'list'
                 ? showCliMemoryList(roots)
                 : showCliMemoryPreview(roots, remainder);

@@ -1,10 +1,8 @@
 /**
- * The chat's run boundary when its runs run in the TeXRA service: the same
- * launch and resume the controller drives in-process, answered by the
- * service's session. A launch or resume is admitted there, and the service
- * says when the run ends: the chat holds its turn until then, as a root
- * launch and a resume's `completion` do. The view folded here could still
- * show the run's previous end right after a resume.
+ * The chat's run boundary over its `Session`, here or in the TeXRA service:
+ * a launch or resume is admitted by the session, which says when the run
+ * ends; the chat holds its turn until then. The view folded here could
+ * still show the run's previous end right after a resume.
  */
 import { Effect } from 'effect';
 
@@ -25,16 +23,16 @@ export interface ChatAgentRuns {
   ) => Effect.Effect<Pick<RunEndResult, 'outcome'>, Error, SessionOwner>;
   readonly resume: (
     runId: RunId,
-    options: ResumeRunOptions,
+    options: Pick<ResumeRunOptions, 'onAdmitted'>,
   ) => Effect.Effect<ResumeRunResult, Error, ProcessServices>;
   /** Resume a run beside the chat (a workflow), which the chat does not
    *  adopt; its refusal is told where it runs. */
   readonly resumeBeside: (runId: RunId) => Effect.Effect<void>;
 }
 
-/** The chat's run boundary over the service's `session`; each launch asks
- *  for the approval its options carry (`launchApproval`). */
-export function serviceAgentRuns(session: Session): ChatAgentRuns {
+/** The chat's run boundary over `session`; each launch asks for the
+ *  approval its options carry (`launchApproval`). */
+export function sessionAgentRuns(session: Session): ChatAgentRuns {
   const resume = (runId: RunId) => session.resume(runId, { interactive: true });
   return {
     launch: ({ request, options }) =>

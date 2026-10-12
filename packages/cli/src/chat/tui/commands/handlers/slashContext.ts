@@ -28,8 +28,8 @@ export type SlashCommandEffect = Effect.Effect<void, Error, ProcessServices>;
 export interface SlashCommandContext {
   readonly cliContext: CliContext;
   readonly session: TuiSession;
-  /** The chat's runtime session: the session commands read run state and land
-   *  requests on it, threaded from the chat entry point that opened it. */
+  /** The process session whose records `/status` reads (a run's offered
+   *  skills); records stay read here. */
   readonly runtimeSession: SessionHandle;
   /** Where run requests and resumes land: the chat's session, here or in
    *  the background service. */

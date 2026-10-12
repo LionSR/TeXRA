@@ -36,7 +36,7 @@ import {
 } from '@shared/schemas';
 import { runHeldMessage } from '@shared/runs/runStatusDisplay';
 import type { SessionView, RunView } from '@shared/session/sessionView';
-import { testRuntime } from '@test/support/testProcessRuntime';
+import { testRuntime, testSessionOf } from '@test/support/testProcessRuntime';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { FakeSecrets } from '@test/support/FakePlatform';
 import { makeFakeSettingsStores } from '@test/support/settingsStoresFake';
@@ -212,7 +212,7 @@ function appProps(): AppProps {
     secrets: new FakeSecrets(),
     stores: makeFakeSettingsStores('cli').stores,
     runtime: testRuntime(),
-    session: testDefaultSession(),
+    session: testSessionOf(testDefaultSession()),
     onSubmit: vi.fn(),
     onCtrlC: vi.fn(),
   };
