@@ -56,6 +56,21 @@ interface ProxyPolicy {
 const projectDispatchers = new Map<string, EnvHttpProxyAgent>();
 
 /**
+ * undici's `fetch` under the `Fetch` signature the rest of the codebase
+ * speaks: undici's `RequestInit`/`Response` are structurally close to the
+ * DOM's but not assignable, so the cast lives here once, for every caller.
+ */
+export const undiciFetchThrough = (
+  dispatcher: Dispatcher,
+  input: string | URL,
+  init?: RequestInit,
+): Promise<Response> =>
+  undiciFetch(input, {
+    ...init,
+    dispatcher,
+  } as Parameters<typeof undiciFetch>[1]) as unknown as Promise<Response>;
+
+/**
  * The fetch every model factory is constructed with. It is undici's own
  * `fetch`, not the global one: the global is the runtime's bundled undici
  * (Electron 44 ships 7.x), which rejects a dispatcher built by this
@@ -70,26 +85,13 @@ const projectDispatchers = new Map<string, EnvHttpProxyAgent>();
  * The request is held until the fetch settles: a cloned `Request`'s signal
  * follows its parent only while the clone is alive.
  */
-/**
- * undici's `fetch` under the `Fetch` signature the rest of the codebase
- * speaks: undici's `RequestInit`/`Response` are structurally close to the
- * DOM's but not assignable, so the cast lives here once, for every caller.
- */
-export const undiciFetchThrough = (
-  input: string | URL,
-  init: RequestInit & { dispatcher: Dispatcher },
-): Promise<Response> =>
-  undiciFetch(
-    input,
-    init as Parameters<typeof undiciFetch>[1],
-  ) as unknown as Promise<Response>;
-
 const fetchThrough =
   (dispatch: () => EnvHttpProxyAgent): typeof fetch =>
   (input, init) => {
     const request =
       typeof input === 'string' || input instanceof URL ? undefined : input;
     const response = undiciFetchThrough(
+      dispatch(),
       request?.url ?? (input as string | URL),
       {
         ...(request && {
@@ -101,7 +103,6 @@ const fetchThrough =
           ...(request.body !== null && { duplex: 'half' }),
         }),
         ...init,
-        dispatcher: dispatch(),
       },
     );
     return request === undefined ? response : response.finally(() => request);
