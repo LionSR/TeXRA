@@ -33,6 +33,10 @@ All notable changes to this project will be documented in this file.
   it used to apply in a terminal without the service. `/approval` in a chat
   writes the project's policy whether or not the service runs. A denial's
   warning names the policy that decided it (service protocol bump).
+- **A goal that grants all agent work also approves its run's plan.** A
+  run whose delegated work is granted (a goal's all-agent-work grant, or an
+  Auto-approve launch) is asked nothing, a plan included; a Block policy
+  still denies first.
 - **A run that fails before it starts is reported as a launch error, not
   listed as a failed task.** A task, subagent or background script is
   recorded together with its first batch of history, so one that fails
