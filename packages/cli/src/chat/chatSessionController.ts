@@ -14,6 +14,15 @@ import {
   Stream,
 } from 'effect';
 
+import {
+  describeFollowUpFailure,
+  escapeText,
+  hasErrorPresentationClaimed,
+  presentFollowUpResult,
+  resumeOnSession,
+  type ProcessRuntime,
+  type ProcessServices,
+} from '@texra-ai/harness';
 import { getRunRecords } from '@agent/storage';
 import {
   AgentConfigSchema,
@@ -23,11 +32,6 @@ import {
   type RootLaunch,
   type SessionHandle,
 } from '@agent/runtime';
-import {
-  describeFollowUpFailure,
-  presentFollowUpResult,
-  resumeOnSession,
-} from '@agent/followUp';
 import { type CliContext } from '@cli/runtime/cliContext';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import { readCliTeamName } from '@cli/runtime/cliTeams';
@@ -41,7 +45,6 @@ import {
   runOutcomeExitCode,
   type TurnOutcome,
 } from '@cli/runtime/terminalStatus';
-import { hasErrorPresentationClaimed } from '@common/errors/sdkError/errorMetadata';
 import type { RunModelDecisionReason } from '@model/runModelDecision';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import {
@@ -53,7 +56,6 @@ import {
 import { isTerminalOutcomePhase } from '@shared/runs/runStatus';
 import { isDocumentTaskConfig, RUN_OUTCOME, type RunId } from '@shared/schemas';
 import { heldElsewhereBy } from '@shared/session/database';
-import { escapeText } from '@shared/utils/xmlEscape';
 import type { DisposableStore } from '@texra/platform/disposable';
 import type { WindowHost } from '@texra/controllers/server/windowHost';
 import type { SessionBackend } from '@texra/controllers/session/sessionBackend';
@@ -95,7 +97,6 @@ import {
   moveLocalTranscriptToRun,
   reportRequestDefect,
 } from './tui/state/transcript';
-import type { ProcessRuntime, ProcessServices } from '@texra-ai/harness';
 import type {
   RunStopReason,
   RuntimeRequest,
