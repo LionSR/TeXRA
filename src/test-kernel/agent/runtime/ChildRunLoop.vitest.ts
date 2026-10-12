@@ -46,7 +46,13 @@ import {
   CHILD_RUN_CONCURRENCY_BUDGET_SETTING,
 } from '@shared/schemas';
 import { DatabaseNotOwner } from '@shared/session/database';
-import { untrackRun } from '@test/support/sessionEnd';
+import { closeTestDefaultSession, untrackRun } from '@test/support/sessionEnd';
+import { setupPlatform } from '@test/support/setupPlatform';
+import { sessionStoreFaults } from '@test/support/storeFaults';
+import {
+  createTempDirPlatform,
+  useTempDirs,
+} from '@test/support/tempDirPlatform';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import {
   createProcessSession,
@@ -57,6 +63,11 @@ import {
 import { FakeConfigProvider } from '@test/support/FakePlatform';
 import { createChildRun } from '@tools/delegation/childRun';
 import { generateRunId } from '@utils/core';
+
+// A persistent store under a temp root, so a case can fail its writes
+// (`sessionStoreFaults`); its run ends are the real `finalizeRun`'s.
+const tempDirs = useTempDirs();
+setupPlatform(() => createTempDirPlatform('texra-child-loop-', tempDirs));
 
 let session: SessionHandle;
 const trackedRunIds = new Set<RunId>();
@@ -271,11 +282,18 @@ const startNativeLoop = (
     strategy,
   }).pipe(Effect.provideService(Runs, session.runs));
 
-/** The store refuses every write from here on, as a full disk does. */
-const refuseWrites = (message: string) =>
-  vi
-    .spyOn(session.log, 'transact')
-    .mockReturnValue(Effect.fail(new Error(message)) as never);
+/** The run's `run.end` rows, in order. */
+const runEnds = (runId: RunId) =>
+  Effect.map(session.log.rows(qualifyAggregateId('run', runId)), (rows) =>
+    rows.filter((row) => row.type === 'run.end'),
+  );
+
+/** The next `run.end` the store is asked to commit is refused, for the
+ *  rest of the test's scope. */
+const refuseNextRunEnd = Effect.gen(function* () {
+  const faults = yield* sessionStoreFaults(session.roots.storage);
+  yield* faults.failNext('appendAll', 'run.end');
+});
 
 /** The host's stop gesture on a child run: kill it, and settle the stop. */
 const stopChildRun = (runId: RunId): Effect.Effect<void, Error> =>
@@ -286,18 +304,19 @@ const stopChildRun = (runId: RunId): Effect.Effect<void, Error> =>
   });
 
 beforeEach(async () => {
-  session = await Effect.runPromise(createProcessSession());
+  session = await Effect.runPromise(createProcessSession({ persistent: true }));
   publishTestRunStart(session, PARENT_RUN_ID);
   await Effect.runPromise(session.log.settled);
   vi.clearAllMocks();
   mocks.startFollowUpWake.mockReturnValue(Effect.succeed(true));
 });
 
-afterEach(() => {
+afterEach(async () => {
   for (const runId of trackedRunIds) {
     untrackRun(session.runs, runId);
   }
   trackedRunIds.clear();
+  await Effect.runPromise(closeTestDefaultSession);
 });
 
 describe('childRunLoop E2E fixtures', () => {
@@ -847,12 +866,21 @@ describe('childRunLoop E2E fixtures', () => {
         yield* turnStarted(2);
 
         // The last turn's settlement rides the child's `run.end`, which
-        // the store refuses.
-        refuseWrites('disk full');
+        // the store refuses: the end that commits instead records the lost
+        // result, and the prompt it would have consumed stays queued.
+        yield* refuseNextRunEnd;
         yield* resolveTurn(2, { kind: 'terminal', value: 'final' });
 
-        expect(Exit.isFailure(yield* Fiber.await(loop))).toBe(true);
+        yield* Fiber.await(loop);
         expect(yield* queuedTexts(runId)).toEqual(['keep going']);
+        expect(yield* runEnds(runId)).toMatchObject([
+          {
+            error: {
+              kind: 'result-lost',
+              message: expect.stringContaining('injected appendAll fault'),
+            },
+          },
+        ]);
         expect(session.runs.get(runId)?.live === true).toBe(false);
       }),
   );
@@ -921,7 +949,7 @@ describe('childRunLoop E2E fixtures', () => {
   );
 
   it.effect(
-    'stops a waiting child and releases its handle when terminal metadata fails',
+    'a stopped child whose end the store refuses lets its handle go and ends failed by its backstop',
     () =>
       Effect.gen(function* () {
         const runId = loopRunId();
@@ -937,7 +965,7 @@ describe('childRunLoop E2E fixtures', () => {
         expect(mocks.startFollowUpWake).toHaveBeenCalledTimes(1);
         // One macrotask lets the loop reach its queue wait before the stop lands.
         yield* settle;
-        refuseWrites('metadata disk full');
+        yield* refuseNextRunEnd;
 
         // Loop is now between turns; the stop reaches it through its run registry
         // activation and the run's fiber.
@@ -949,7 +977,15 @@ describe('childRunLoop E2E fixtures', () => {
 
         // Metadata failure must not retain the child handle or queue ownership.
         expect(session.runs.get(runId)?.handle).toBeUndefined();
-        expect(yield* getRunRecords(session, runId).readRunEnd()).toBeNull();
+        // The cancellation's end was refused; the backstop's says so.
+        expect(yield* runEnds(runId)).toMatchObject([
+          {
+            outcome: RUN_OUTCOME.FAILED,
+            error: {
+              message: expect.stringContaining("The run's end was not saved"),
+            },
+          },
+        ]);
       }),
   );
 

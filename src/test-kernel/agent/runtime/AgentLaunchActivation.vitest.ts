@@ -1,283 +1,194 @@
+/**
+ * A launch's activation over a real store, on the validation model: a run
+ * is born with its opening batch or not at all, and a run that fails after
+ * it opened still records the description generated for it.
+ *
+ * Failure modes:
+ * - a launch whose opening is refused leaves a partial run (a `run.start`
+ *   with no activation) for the listing to show;
+ * - a run that fails while its description is still being generated ends
+ *   without it, or records it after its `run.end`.
+ */
 import { it } from '@effect/vitest';
 import { Deferred, Effect, Fiber } from 'effect';
-import { beforeEach, describe, expect, vi } from 'vitest';
+import { describe, expect, vi } from 'vitest';
 
-const mocks = vi.hoisted(() => ({
-  buildVars: vi.fn(),
-  helperCall: vi.fn(),
-  canResume: vi.fn(),
-  resolve: vi.fn(),
-  runWithLifecycle: vi.fn(),
+const helper = vi.hoisted(() => ({
+  started: undefined as (() => void) | undefined,
+  answer: undefined as Promise<string> | undefined,
 }));
 
-vi.mock('@agent/index/agentRegistry', async (importActual) => ({
-  ...(await importActual<typeof import('@agent/index/agentRegistry')>()),
-  resolveAgentForLaunch: mocks.resolve,
-  settledCatalog: Effect.void,
-}));
-vi.mock('@agent/prompt/templateInputs', () => ({
-  buildTemplateInputs: mocks.buildVars,
-}));
-vi.mock('@agent/storage/resumability', async (importActual) => ({
-  ...(await importActual<typeof import('@agent/storage/resumability')>()),
-  canResume: mocks.canResume,
-}));
-vi.mock('@agent/runtime/helperModel', async (importActual) => ({
-  ...(await importActual<typeof import('@agent/runtime/helperModel')>()),
-  helperCall: mocks.helperCall,
-}));
-// Only the regression test below replaces `runWithLifecycle`; every other
-// launch in this suite fails during launch-assembly, before the lifecycle, and
-// an unconsumed once-implementation falls back to the real one.
-vi.mock('@agent/runtime/AgentRunLifecycle', async (importActual) => {
+// The one seam left: the description's helper call is answered by the
+// validation model at once, so the race below needs it held; the session,
+// the store, the agent catalog and the lifecycle are real.
+vi.mock('@agent/runtime/helperModel', async (importActual) => {
+  const { Effect } = await import('effect');
   const actual =
-    await importActual<typeof import('@agent/runtime/AgentRunLifecycle')>();
-  mocks.runWithLifecycle.mockImplementation(actual.runWithLifecycle);
-  return { ...actual, runWithLifecycle: mocks.runWithLifecycle };
+    await importActual<typeof import('@agent/runtime/helperModel')>();
+  return {
+    ...actual,
+    helperCall: (...args: Parameters<typeof actual.helperCall>) =>
+      helper.answer === undefined
+        ? actual.helperCall(...args)
+        : Effect.promise(() => {
+            helper.started?.();
+            return helper.answer!;
+          }),
+  };
 });
 
-import {
-  prepareAgentDefinition,
-  type AgentLaunchContext,
-} from '@agent/runtime/AgentLaunchContext';
+import '@test/support/sessionGraphTestSetup';
+
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
+import { prepareAgentDefinition } from '@agent/runtime/AgentLaunchContext';
+import { executeAgent } from '@agent/runtime/executeAgent';
+import { withProcessServices } from '@platform/processRuntime';
+import { openTestDefaultSession } from '@test/support/sessionEnd';
 import {
-  executeAgent,
-  resumeToolUseFromResumeData,
-} from '@agent/runtime/executeAgent';
-import { runWithLaunchGuard } from '@agent/runtime/runLaunchGuard';
-import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import type { RunId } from '@shared/schemas';
-import { closeSessionOf } from '@test/support/sessionEnd';
-import {
-  createTestSession,
-  publishTestRunStart,
-} from '@test/support/sessionTestUtils';
-import {
-  fakeProcessServices,
-  type FakeProcessServices,
-} from '@test/support/setupPlatform';
-import { createToolUseResumeData } from '@test/support/toolUseResumeTestUtils';
-import { recordSessionEvents } from '../progressTestUtils';
+  parkedAfter,
+  sessionStoreFaults,
+  storedRows,
+  untilStored,
+  REAL_RUN_TIMEOUT,
+  validationHost,
+} from '@test/support/storeFaults';
+import { testRuntime } from '@test/support/testProcessRuntime';
+import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
+import { generateRunId } from '@utils/core';
 
-const LAUNCH_FAILURE = new Error('stop before the run opens');
-const RUN_FAILURE = new Error('run flow failure');
-const DESCRIPTION_RUN_ID = 'de5c21' as RunId;
+const config = (instruction: string) =>
+  AgentConfigSchema.parse({ agent: 'assistant', model: 'gpt56', instruction });
 
-const FRESH_RUN_ID = 'f1e501' as RunId;
+describe(
+  'native agent launch activation',
+  { timeout: REAL_RUN_TIMEOUT },
+  () => {
+    validationHost('texra-activation-');
 
-const config = AgentConfigSchema.parse({
-  agent: 'chat',
-  model: 'openai/gpt-5.5-2026-04-23',
-});
-
-/**
- * Drive a launch that fails before its run opens (its template inputs
- * fail to render) and answer the rows it left: a run is born with its
- * opening, and a resume activates with it, so a launch that never opened
- * writes nothing, and its failure is the launch's own.
- */
-const rowsOfFailedLaunch = Effect.fn(function* (
-  run: (
-    session: SessionHandle,
-  ) => Effect.Effect<unknown, Error, FakeProcessServices>,
-  options: {
-    /** The launching run, when this launch is a child. */
-    readonly parentRunId?: RunId;
-    /** A resume of this already-created run. */
-    readonly resumedRunId?: RunId;
-  } = {},
-) {
-  return yield* Effect.acquireUseRelease(
-    createTestSession(),
-    (session) =>
-      Effect.gen(function* () {
-        if (options.parentRunId) {
-          publishTestRunStart(session, options.parentRunId);
-          yield* session.log.settled;
-        }
-        if (options.resumedRunId) {
-          publishTestRunStart(session, options.resumedRunId, {
-            parent: options.parentRunId ?? null,
-          });
-          yield* session.log.settled;
-        }
-        const recordedSession = recordSessionEvents(session);
-
-        // A fresh launch fails rendering its opening; a resume, which renders
-        // none, resolving its agent.
-        if (options.resumedRunId)
-          mocks.resolve.mockReturnValueOnce(Effect.fail(LAUNCH_FAILURE));
-        else {
-          mocks.resolve.mockReturnValueOnce(
-            Effect.succeed({
-              path: '/agents/chat.yaml',
-              persona: { prompt: '', tools: [], temperature: 1 },
-              blocks: {},
+    // A root's refused opening is the ownership suite's
+    // (`RunAgentOwnership.vitest.ts`); a child's ends failed, for its parent.
+    it.live(
+      'a child launch whose opening is refused leaves no run and ends failed for its parent',
+      () =>
+        Effect.gen(function* () {
+          const roots = testWorkspaceRoots();
+          const session = yield* openTestDefaultSession({ roots });
+          const parentRunId = generateRunId();
+          yield* withProcessServices(
+            testRuntime(),
+            session.runs.launch({
+              request: { config: config('Parent.'), runId: parentRunId },
+              options: {},
             }),
+          ).pipe(Effect.forkChild);
+          yield* untilStored(
+            roots.storage,
+            parkedAfter(parentRunId, 1, roots.storage),
           );
-          mocks.buildVars.mockReturnValueOnce(Effect.fail(LAUNCH_FAILURE));
-        }
-        const error = yield* Effect.flip(
-          Effect.provide(run(session), fakeProcessServices()),
-        );
-        expect(error).toBe(LAUNCH_FAILURE);
-        yield* session.log.settled;
-        return (yield* Effect.promise(() => recordedSession.read())).filter(
-          (event) =>
-            event.type === 'run.start' ||
-            event.type === 'run.activate' ||
-            event.type === 'run.end',
-        );
-      }),
-    (session) => closeSessionOf(session),
-  );
-});
+          const faults = yield* sessionStoreFaults(roots.storage);
+          yield* faults.failNext('appendAll', 'run.start');
+          const runId = generateRunId();
 
-describe('native agent launch activation', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
-
-  it.effect.each([
-    { label: 'child', parentRunId: 'e11000' as RunId },
-    { label: 'root', parentRunId: undefined },
-  ])(
-    'a fresh $label launch that fails before its opening leaves no run',
-    ({ parentRunId }) =>
-      Effect.gen(function* () {
-        const rows = yield* rowsOfFailedLaunch(
-          (session) =>
-            prepareAgentDefinition({ config, session }).pipe(
+          const ended = yield* withProcessServices(
+            testRuntime(),
+            prepareAgentDefinition({
+              config: config('Refused.'),
+              session,
+            }).pipe(
               Effect.flatMap((definition) =>
-                // The launch terminal a root launch runs a fresh run under.
-                runWithLaunchGuard(
+                executeAgent(definition, runId, {
                   session,
-                  FRESH_RUN_ID,
-                  executeAgent(definition, FRESH_RUN_ID, {
-                    session,
-                    ...(parentRunId !== undefined && { parentRunId }),
-                    registration: {
-                      identity: { kind: 'agent', agent: 'chat' },
-                      ...(parentRunId !== undefined && { parentRunId }),
-                    },
-                  }),
-                  true,
-                ),
-              ),
-            ),
-          { parentRunId },
-        );
-        expect(rows).toEqual([]);
-      }),
-  );
-
-  it.effect.each([
-    { label: 'child', parentRunId: 'e11001' as RunId },
-    { label: 'root', parentRunId: undefined },
-  ])(
-    'a resumed $label launch that fails before its activation leaves the run as it was',
-    ({ parentRunId }) =>
-      Effect.gen(function* () {
-        const runId = 'ae5010' as RunId;
-        const resume = createToolUseResumeData({
-          runId,
-          agentConfig: config,
-        });
-        mocks.canResume.mockReturnValueOnce(Effect.succeed(true));
-        const rows = yield* rowsOfFailedLaunch(
-          (session) => resumeToolUseFromResumeData(resume, { session }),
-          { parentRunId, resumedRunId: runId },
-        );
-        expect(rows).toEqual([]);
-      }),
-  );
-
-  // Regression: the description join once lived in a generator `finally`,
-  // which the Effect driver never resumes after a failed `yield*` — the
-  // run-failure path left executeAgent with the write still in flight and
-  // auto-supervision interrupted the fiber before it could commit.
-  it.effect(
-    'joins the session description fiber on the run-failure path',
-    () =>
-      Effect.gen(function* () {
-        const gate = yield* Deferred.make<string>();
-        const descriptionStarted = yield* Deferred.make<void>();
-        mocks.helperCall.mockImplementationOnce(() =>
-          Deferred.succeed(descriptionStarted, undefined).pipe(
-            Effect.andThen(Deferred.await(gate)),
-          ),
-        );
-        // The run is born (its registration alone stands in for the
-        // opening), then fails once the description fiber is parked on its
-        // gate, so both sides settle deterministically.
-        mocks.runWithLifecycle.mockImplementationOnce(
-          (ctx: AgentLaunchContext) =>
-            Effect.gen(function* () {
-              const { registration, entered } = ctx.entry;
-              if (registration === null)
-                return yield* Effect.die('a fresh run');
-              const cell = yield* ctx.session.runHistory.open(ctx.runId, {
-                registration: Effect.succeed(registration),
-              });
-              yield* cell.append(
-                [],
-                Effect.succeed({ rows: [], committed: entered }),
-              );
-              yield* Deferred.await(descriptionStarted);
-              return yield* Effect.fail(RUN_FAILURE);
-            }),
-        );
-        mocks.resolve.mockReturnValueOnce(
-          Effect.succeed({
-            path: '/agents/chat.yaml',
-            persona: { prompt: '', tools: [], temperature: 1 },
-            blocks: {},
-          }),
-        );
-        mocks.buildVars.mockReturnValueOnce(
-          Effect.succeed({
-            inputs: {},
-            catalog: [],
-            activated: [],
-            attachedMemoryMisses: [],
-          }),
-        );
-
-        const session = yield* createTestSession();
-        yield* Effect.addFinalizer(() => closeSessionOf(session));
-        const described = AgentConfigSchema.parse({
-          agent: 'chat',
-          model: 'openai/gpt-5.5-2026-04-23',
-          instruction: 'Fix grammar.',
-        });
-        const failure = yield* Effect.forkChild(
-          Effect.flip(
-            prepareAgentDefinition({ config: described, session }).pipe(
-              Effect.flatMap((definition) =>
-                executeAgent(definition, DESCRIPTION_RUN_ID, {
-                  session,
-                  registration: { identity: { kind: 'agent', agent: 'chat' } },
+                  parentRunId,
+                  registration: {
+                    identity: { kind: 'agent', agent: 'assistant' },
+                    parentRunId,
+                  },
                 }),
               ),
-              Effect.provide(fakeProcessServices()),
             ),
-          ),
-        );
+          );
+          expect(ended).toMatchObject({
+            outcome: 'failed',
+            error: { message: expect.stringContaining('injected appendAll') },
+          });
+          expect(
+            storedRows(roots.storage).filter((row) => row.run === runId),
+          ).toEqual([]);
+        }),
+    );
 
-        yield* Deferred.await(descriptionStarted);
-        yield* Deferred.succeed(gate, 'Fixing grammar in the introduction');
-        expect(yield* Fiber.join(failure)).toBe(RUN_FAILURE);
-        const view = yield* session.view.read([DESCRIPTION_RUN_ID]);
-        expect(view.runs.get(DESCRIPTION_RUN_ID)?.description).toBe(
-          'Fixing grammar in the introduction',
-        );
-      }),
-    // This case parks on a Deferred that a *forked* fiber completes, so it is
-    // the first casualty of a contended machine: under heavy parallel load the
-    // fork's own scheduling has exceeded the suite's 10s kernel timeout while
-    // the assertions below were still sound. Give this one case room; the
-    // assertion is unchanged, so a genuinely broken join still fails here.
-    { timeout: 30_000 },
-  );
-});
+    // Regression: the description join once lived in a generator `finally`,
+    // which the Effect driver never resumes after a failed `yield*`, so a run
+    // that failed left with the description's write still in flight.
+    it.live(
+      'a run that fails while its description is generated records the description before its end',
+      () =>
+        Effect.gen(function* () {
+          const roots = testWorkspaceRoots();
+          const session = yield* openTestDefaultSession({ roots });
+          const runId = generateRunId();
+          const generating = yield* Deferred.make<void>();
+          let answer: (text: string) => void = () => undefined;
+          helper.answer = new Promise((resolve) => {
+            answer = resolve;
+          });
+          helper.started = () => Deferred.doneUnsafe(generating, Effect.void);
+          yield* Effect.addFinalizer(() =>
+            Effect.sync(() => {
+              helper.answer = undefined;
+              helper.started = undefined;
+            }),
+          );
+          const faults = yield* sessionStoreFaults(roots.storage);
+          // The run's first read after it opened fails it.
+          const failed = yield* Deferred.make<void>();
+          const launch = yield* withProcessServices(
+            testRuntime(),
+            session.runs.launch({
+              request: { config: config('Fix grammar.'), runId },
+              options: {
+                onAdmitted: () =>
+                  Effect.sync(() => {
+                    Effect.runFork(
+                      faults
+                        .holdNext('readAggregate')
+                        .pipe(
+                          Effect.flatMap((hold) =>
+                            hold.reached.pipe(
+                              Effect.andThen(hold.fail),
+                              Effect.andThen(
+                                Deferred.succeed(failed, undefined),
+                              ),
+                            ),
+                          ),
+                        ),
+                    );
+                  }),
+              },
+            }),
+          ).pipe(Effect.flip, Effect.forkChild);
+          yield* Deferred.await(generating);
+          yield* Deferred.await(failed);
+
+          // The run fails with its description still being generated.
+          yield* Effect.promise(
+            () => new Promise((done) => setImmediate(done)),
+          );
+          answer('Fixing grammar in the introduction');
+          expect((yield* Fiber.join(launch)).message).toContain(
+            'injected readAggregate fault',
+          );
+          const rows = storedRows(roots.storage).filter(
+            (row) =>
+              row.run === runId &&
+              (row.type === 'run.description' || row.type === 'run.end'),
+          );
+          expect(rows.map((row) => row.type)).toEqual([
+            'run.description',
+            'run.end',
+          ]);
+          expect(rows[0]!.data).toContain('Fixing grammar in the introduction');
+        }),
+    );
+  },
+);
