@@ -14,7 +14,7 @@ export const POINTER = '›';
 /** Active/checked marker for selectable values. */
 export const TICK = '✓';
 
-/** Steady status dot for tool rows and subagent rows (never animated). */
+/** Status dot for tool rows and subagent rows; the on-beat of the approval pulse. */
 export const STATUS_DOT = '●';
 
 /** Decorative brand marker at the head of the status bar (aria-hidden). */
