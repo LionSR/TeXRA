@@ -1,9 +1,14 @@
-import { hasExtension } from '@utils/core/pathCore';
+// Browser-reachable (the progress webview imports it): no Node built-ins and
+// no `@utils/core/pathCore`, which pulls in `node:path`.
 
 /**
  * LaTeX file extensions that can be compiled to PDF.
  */
 const LATEX_EXTENSIONS = ['.tex', '.ltx', '.latex'] as const;
+
+function hasExtension(filePath: string, extension: string): boolean {
+  return filePath.toLowerCase().endsWith(extension);
+}
 
 /**
  * Returns true if the file has a .tex extension.
