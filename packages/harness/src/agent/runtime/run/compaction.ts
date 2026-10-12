@@ -23,10 +23,10 @@ import {
   MODEL_COMPACTION_THRESHOLD_SETTING,
   type RunId,
 } from '@shared/schemas';
-import type { DatabaseWriteFailed } from '@shared/session/database';
-import type { RunHistoryRefused } from '@shared/session/runHistory';
+import type { CellError } from '@shared/session/runHistory';
 import type { RunHistoryDraft, RunState } from '@shared/session/runStateFold';
 import type { SettingsStores } from '@shared/config/settingsAccess';
+import type { RunCell } from '@shared/session/runHistory';
 import { readSettingFrom } from '@utils/config/platformSettings';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -35,7 +35,6 @@ import { contextTokens, estimateMessageTokens } from './contextTokens';
 import { turnText } from './turnText';
 import type { ModelInvoker } from '../ModelInvoker';
 import type { CallResult } from './modelCall';
-import type { RunCell } from '../loop/runProgram';
 
 /**
  * Prefix prepended to a compaction summary when it is folded back into the
@@ -144,7 +143,7 @@ const overThreshold = Effect.fn('compaction.overThreshold')(function* (
     input.stores,
     MODEL_COMPACTION_THRESHOLD_SETTING.configKey,
   );
-  const contextWindow = input.bound.contextWindow;
+  const contextWindow = input.bound.config.contextWindow;
   return (
     percent > 0 &&
     contextWindow > 0 &&
@@ -170,7 +169,7 @@ const summarize = Effect.fn('compaction.summarize')(function* (
     }
     return null;
   }
-  const contextWindow = bound.contextWindow;
+  const contextWindow = bound.config.contextWindow;
   const tokensBefore = contextTokens(state);
   logger.debug(`Compacting conversation (${COMPACTION_REASON[reason]})`, {
     data: {
@@ -296,10 +295,7 @@ const land = Effect.fn('compaction.land')(function* (
 const compactIfNeeded = Effect.fn('compaction.check')(function* (
   state: RunState,
   input: CompactionInput,
-): Effect.fn.Return<
-  RunState,
-  RunHistoryRefused | DatabaseWriteFailed | StateReadFailed
-> {
+): Effect.fn.Return<RunState, CellError | StateReadFailed> {
   const reason = input.force ?? 'threshold';
   if (input.force === null && !(yield* overThreshold(state, input)))
     return state;
@@ -326,25 +322,20 @@ export interface BackgroundCompaction {
     cell: RunCell,
     bound: BoundModel,
     requests: readonly RunHistoryDraft[],
-  ) => Effect.Effect<
-    RunState,
-    RunHistoryRefused | DatabaseWriteFailed | StateReadFailed
-  >;
+  ) => Effect.Effect<RunState, CellError | StateReadFailed>;
   /**
    * At the end of a turn: wait for the summary being made, and land it. A
    * summary does not outlive the turn that started it, so a process that
    * exits while the run is idle loses none, and its activity closes before
    * the turn's `waiting`.
    */
-  readonly finish: (
-    cell: RunCell,
-  ) => Effect.Effect<RunState, RunHistoryRefused | DatabaseWriteFailed>;
+  readonly finish: (cell: RunCell) => Effect.Effect<RunState, CellError>;
   /** Before another edit of the view: land a finished summary, cut short
    *  one still running (`why` says what edit is coming). */
   readonly settle: (
     cell: RunCell,
     why: string,
-  ) => Effect.Effect<RunState, RunHistoryRefused | DatabaseWriteFailed>;
+  ) => Effect.Effect<RunState, CellError>;
 }
 
 export const backgroundCompaction = Effect.fn('compaction.background')(
@@ -412,8 +403,8 @@ export const backgroundCompaction = Effect.fn('compaction.background')(
       }
       let state = yield* cell.current;
       // A history past the window cannot go out: it waits for the summary.
-      const full =
-        bound.contextWindow > 0 && contextTokens(state) >= bound.contextWindow;
+      const { contextWindow } = bound.config;
+      const full = contextWindow > 0 && contextTokens(state) >= contextWindow;
       if (pending !== null) {
         const running = pending.fiber;
         const finished = full

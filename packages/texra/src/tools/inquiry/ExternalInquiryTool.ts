@@ -17,16 +17,15 @@
 
 import { Cause, Effect } from 'effect';
 import { z } from 'zod';
-import { type SessionHandle } from '@agent/runtime/SessionHandle';
-import { callerRun } from '@agent/runtime/RunCall';
+import { defineTool } from '@texra-ai/harness';
+import {
+  callerRun,
+  ChildRuns,
+  requireRun,
+  type PluginToolServices,
+} from '@texra-ai/harness/plugins';
 import { withLogChannel } from '@logger/effectLog';
 import {
-  InquiryRecords,
-  inquiryThreadRow,
-  type InquiryThreadRecord,
-} from '@shared/plugins/externalInquiry';
-import {
-  aggregateId as qualifyAggregateId,
   InquiryThreadIdSchema,
   ToolError,
   type RunId,
@@ -34,8 +33,12 @@ import {
   type InquiryThreadSummary,
   type ToolResult,
 } from '@shared/schemas';
+import {
+  InquiryRecords,
+  inquiryThreadFact,
+  type InquiryThreadRecord,
+} from '@texra/shared/plugins/externalInquiry';
 import { inquiryRecordsLayer } from '@texra/tools/inquiry/inquiryRecords';
-import { defineTool } from '@tools/core/define';
 import { nullishWithDefault } from '@tools/core/inputSchema';
 import { executed } from '@tools/core/result';
 import { formatResultCount } from '@utils/text/stringUtils';
@@ -206,20 +209,13 @@ Do not treat paper-specific claims from the external model as automatically veri
 
 function executeExternalInquiryTool(input: InquiryInput) {
   return Effect.gen(function* () {
-    const run = yield* callerRun;
-    const runId = run?.runId;
     switch (input.command) {
       case 'ask':
-        if (!run?.session.interactions) {
-          return yield* Effect.fail(
-            new ToolError('inquiry requires a session with host interactions.'),
-          );
-        }
-        return yield* executeAsk(input, runId, run.session);
+        return yield* executeAsk(input);
       case 'read':
         return yield* executeRead(input);
       case 'list':
-        return yield* executeList(input, runId);
+        return yield* executeList(input, (yield* callerRun)?.runId);
     }
     // The threads live on the process's global root.
   }).pipe(Effect.provide(inquiryRecordsLayer));
@@ -227,18 +223,14 @@ function executeExternalInquiryTool(input: InquiryInput) {
 
 function executeAsk(
   input: Extract<InquiryInput, { command: 'ask' }>,
-  runId: RunId | undefined,
-  session: SessionHandle,
-): Effect.Effect<ToolResult, Error, InquiryRecords> {
+): Effect.Effect<ToolResult, Error, InquiryRecords | PluginToolServices> {
   return Effect.gen(function* () {
     const records = yield* InquiryRecords;
-    if (!runId) {
-      return yield* Effect.fail(
-        new ToolError(
-          'inquiry { command: "ask" } requires an active run context.',
-        ),
-      );
-    }
+    const {
+      run: { runId },
+      requests,
+    } = yield* requireRun('inquiry { command: "ask" }');
+    const runs = yield* ChildRuns;
     const questionContext = input.context ?? undefined;
     const suggestSearch = input.suggestSearch ?? undefined;
     const attachFiles = input.attachFiles ?? undefined;
@@ -279,15 +271,9 @@ function executeAsk(
       sessionLinks: collectKnownSessionLinks(manifest),
       transcript: manifest.turns,
     };
-    yield* session.log
-      .transact([
-        {
-          type: 'request.opened',
-          aggregateId: qualifyAggregateId('run', runId),
-          requestId,
-          payload: { kind: 'externalInquiry', data: permission },
-        },
-      ])
+    // A request the call does not wait on: the decision hook answers it.
+    yield* requests
+      .post(requestId, { kind: 'externalInquiry', data: permission })
       .pipe(
         Effect.mapError(
           (error) =>
@@ -302,7 +288,7 @@ function executeAsk(
         // rolled-back append: the committed rows decide, and a turn whose
         // request is durably open stays open with it.
         Effect.onError(() =>
-          session.log.rows(qualifyAggregateId('run', runId)).pipe(
+          runs.rows(runId, ['request.opened']).pipe(
             Effect.flatMap((rows) =>
               rows.some(
                 (row) =>
@@ -333,34 +319,27 @@ function executeAsk(
         ),
       );
 
-    // Background Tasks panel: announce the open thread.
+    // The Background Tasks panel's row for the open thread, a fact of the
+    // call: it commits with the call's `tool.result`, or not at all.
     const summary = yield* records.getThreadSummary(manifest.threadId);
-    // The panel's announcement, after the request is durable: a refused row
-    // is logged, never the tool's failure (the thread record is the authority).
-    if (summary) {
-      yield* session.log
-        .transact([inquiryThreadRow(summary)])
-        .pipe(
-          Effect.catch((error) =>
-            Effect.logWarning('The inquiry thread row was not written').pipe(
-              Effect.annotateLogs({ data: error }),
-              withLogChannel(CHANNEL),
-            ),
-          ),
-        );
-    }
 
+    // True whenever the user decides: the decision (even one landing before
+    // this result) queues the continuation.
     const message =
-      'Question dispatched to the user. The tool returned without waiting. ' +
-      'You will be woken with a continuation message when an answer arrives. ' +
+      'Question sent to the user. The answer, or the user dropping it, ' +
+      'arrives as an [inquiry] continuation message; `read` shows the ' +
+      "thread's current state. " +
       `Do NOT re-dispatch on thread_id=${manifest.threadId}. ` +
       'If your next step depends on this answer, end your turn now; ' +
       'otherwise proceed with independent work.';
 
-    return executed(
-      `status: dispatched\nthread_id: ${manifest.threadId}\n\n${message}`,
-      `Inquiry dispatched (${manifest.threadId})`,
-    );
+    return {
+      ...executed(
+        `status: dispatched\nthread_id: ${manifest.threadId}\n\n${message}`,
+        `Inquiry dispatched (${manifest.threadId})`,
+      ),
+      ...(summary && { facts: [inquiryThreadFact(summary)] }),
+    };
   });
 }
 

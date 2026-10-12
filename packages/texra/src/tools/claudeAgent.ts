@@ -24,8 +24,12 @@
 // Third-party imports
 import { Effect, Stream, type FileSystem } from 'effect';
 import { z } from 'zod';
-import { ToolContext, type ToolContextShape, Secrets } from '@texra-ai/harness';
-import type { RunCall } from '@agent/runtime/RunCall';
+import {
+  defineTool,
+  Secrets,
+  ToolContext,
+  type ToolContextShape,
+} from '@texra-ai/harness';
 
 // Local imports
 import {
@@ -35,7 +39,6 @@ import {
   type AgentTrace,
   type OpenToolUseCard,
 } from '@agent/trace';
-import type { Runs } from '@agent/runtime/runRegistry';
 import type { ChildRunPort } from '@agent/runtime/childRunLoop';
 import { formatDelivery } from '@agent/runtime/deliveryEnvelope';
 import {
@@ -55,7 +58,6 @@ import type {
 import { DELIVERY_TAG } from '@shared/deliveryTags';
 import { buildSyntheticToolUseConfig } from '@texra/tools/core/syntheticAgentConfig';
 import { buildAgentWorkspaceOptions } from '@texra/tools/agentWorkspaceOptions';
-import { defineTool } from '@tools/core/define';
 import type { DetachedChildRunLaunch } from '@tools/delegation/detachedChildRun';
 import { linkAbortSignals } from '@utils/core';
 import {
@@ -88,6 +90,7 @@ import {
   readClaudeCodeRun,
   type ClaudeCodeRun,
 } from './claudeAgentShared';
+import type { ChildRuns } from '@texra-ai/harness/plugins';
 import type { AgentCliSessionRegistry } from './agentCliSessionRegistry';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
@@ -422,7 +425,7 @@ function buildClaudeAgentLaunch(params: {
   /** Release the fallback claim if the loop exits before promoting it. */
   releaseFallbackClaim: (() => void) | undefined;
   registry: AgentCliSessionRegistry;
-}): Effect.Effect<DetachedChildRunLaunch<TurnResult>, never, Runs> {
+}): Effect.Effect<DetachedChildRunLaunch<TurnResult>> {
   const { childRun, runId, initialPrompt } = params;
   const { logger } = childRun;
 
@@ -520,8 +523,7 @@ const run = Effect.fn('ClaudeAgentTool.run')(function* (
   ToolError,
   | Secrets
   | ToolContext
-  | RunCall
-  | Runs
+  | ChildRuns
   | ClaudeAgentSessions
   | ChildProcessSpawner
   | FileSystem.FileSystem
@@ -585,8 +587,7 @@ const launchClaudeAgentSession = Effect.fn(
   ToolError,
   | Secrets
   | ToolContext
-  | RunCall
-  | Runs
+  | ChildRuns
   | ChildProcessSpawner
   | FileSystem.FileSystem
 > {
@@ -614,8 +615,6 @@ const launchClaudeAgentSession = Effect.fn(
   const preview = previewLabel(input.prompt);
 
   return yield* launchAgentCliSession({
-    session: context.session,
-    parentRunId: context.parentRunId,
     resumeId: input.fork_session ? undefined : (input.session_id ?? undefined),
     agentName: CLAUDE_AGENT_NAME,
     description: input.prompt,

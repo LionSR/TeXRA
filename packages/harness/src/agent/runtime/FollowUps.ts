@@ -47,7 +47,8 @@ import { isTerminalOutcomePhase } from '@shared/runs/runStatus';
 import { subagentProgressRunId } from '@shared/subagentFollowup';
 import type { QueuedFollowUp } from '@shared/session/runRows';
 import type { RunHistoryDraft, RunState } from '@shared/session/runStateFold';
-
+import type { CoWrite } from '@shared/session/sessionEvents';
+import type { RunCell } from '@shared/session/runHistory';
 import { activatedSkillNames } from '@skills/runtimeSkills';
 import { sha256 } from '@utils/core/idHash';
 import { ensureError } from '@utils/errors/errorMessage';
@@ -62,7 +63,6 @@ import {
 import { promptHooks } from './loop/hooks';
 import { resolveActivations } from './loop/step';
 import type { AgentRunShape } from './run/AgentRun';
-import type { RunCell } from './loop/runProgram';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 /** A batch as the rows that consume it, for a caller that commits them in
@@ -76,9 +76,10 @@ export interface JoinedFollowUps {
   readonly delivered: () => void;
 }
 
-/** A turn's end, committed in the batch that consumes the next input. */
+/** A turn's end and a child's delivery, committed with the next input. */
 export interface Boundary {
   readonly rows: readonly RunHistoryDraft[];
+  readonly alongside?: Effect.Effect<CoWrite, Error, Scope.Scope>;
 }
 
 export interface ConsumedFollowUps {
@@ -164,7 +165,7 @@ export const claimFollowUps = Effect.fn('FollowUps.claim')(function* (
       const files = content.mediaFiles ?? [];
       const media = yield* mediaInputParts(
         files.map((path) => run.fileService.createLocation(path)),
-        bound,
+        bound.config.capabilities,
         logger,
         run.session.roots.config,
       );
@@ -352,14 +353,13 @@ export const claimFollowUps = Effect.fn('FollowUps.claim')(function* (
       Error,
       FileSystem.FileSystem | ChildProcessSpawner
     > {
-      const state =
-        prepare === undefined ? yield* cell.current : yield* prepare(cell);
+      const state = yield* prepare?.(cell) ?? cell.current;
       const joined = yield* batchRows(state, batch);
-      const committed = yield* cell.append([
-        ...(boundary?.rows ?? []),
-        ...joined.rows,
-        ...(joined.turn ? [positionRow(runId, state, 'turn.ready')] : []),
-      ]);
+      const rows = [...(boundary?.rows ?? []), ...joined.rows];
+      const committed = yield* cell.append(
+        joined.turn ? [...rows, positionRow(runId, state, 'turn.ready')] : rows,
+        boundary?.alongside,
+      );
       joined.delivered();
       return { state: committed, turn: joined.turn };
     },
@@ -423,8 +423,7 @@ export const claimFollowUps = Effect.fn('FollowUps.claim')(function* (
       session.followUps.release(
         runId,
         input,
-        next === 'terminal' ||
-          (session.runs.getHandle(runId)?.parent ?? null) !== null,
+        next === 'terminal' || session.runs.get(runId)?.parent != null,
       ),
     consume,
   };

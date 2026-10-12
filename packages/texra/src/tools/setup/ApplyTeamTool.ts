@@ -13,15 +13,13 @@
 
 import { Effect } from 'effect';
 import { z } from 'zod';
-import { ToolContext } from '@texra-ai/harness';
+import { defineTool, ToolContext } from '@texra-ai/harness';
 
 import { createWorkspaceAgentsController } from '@agent/index/agentRegistry';
 import { teamPresets } from '@common/teams/TeamPresets';
 import { missingMemberNames } from '@common/teams/TeamPlan';
 import { agentName, ToolError } from '@shared/schemas';
 import { executed } from '@tools/core/result';
-
-import { defineTool } from '@tools/core/define';
 
 /**
  * The shared catalog's built-in teams (the setup starter included), so the

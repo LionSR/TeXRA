@@ -45,7 +45,7 @@ import { executeCommand } from '@utils/system/execUtils';
 import { appendHead, appendTail } from '@utils/text/appendTail';
 
 // Local file imports
-import { defineTool } from './core/define';
+import { defineTool } from './core/definition';
 import { nullishWithDefault } from './core/inputSchema';
 import { childRunDescription, createChildRun } from './delegation/childRun';
 import { startDetachedChildRunLoop } from './delegation/detachedChildRun';

@@ -1,5 +1,5 @@
 /**
- * The goal plugin's rows (`PLUGIN_EVENT_ARMS` in `@tools/pluginArms`): the
+ * The goal plugin's rows (its `arms`, `@tools/plugins`): the
  * goal of a run is its latest `plugin.fact` of kind `goal/state`, which
  * carries the whole pursuit. Core stores and folds the row without reading
  * it (`RunView.facts`); this module is its schema and its one reader, which
@@ -14,6 +14,7 @@ import {
   type RunId,
   type SessionEventDraft,
 } from '@shared/schemas';
+import type { ReadonlyDeep } from '@shared/session/readonlyDeep';
 import type { RunView } from '@shared/session/sessionView';
 
 /**
@@ -55,7 +56,7 @@ export const GOAL_STATE_ARM = {
 export function goalStateRow(
   runId: RunId,
   state: GoalState,
-): SessionEventDraft {
+): Extract<SessionEventDraft, { type: 'plugin.fact' }> {
   return {
     type: 'plugin.fact',
     aggregateId: aggregateId('run', runId),
@@ -68,7 +69,9 @@ export function goalStateRow(
 }
 
 /** The run's goal as its latest goal row states it; none before the first. */
-export function goalStateOf(run: Pick<RunView, 'facts'>): GoalState {
+export function goalStateOf(
+  run: Pick<ReadonlyDeep<RunView>, 'facts'>,
+): GoalState {
   const value = run.facts[`${GOAL_STATE_ARM.plugin}/${GOAL_STATE_ARM.kind}`];
   return value === undefined ? { active: false } : GoalStateSchema.parse(value);
 }

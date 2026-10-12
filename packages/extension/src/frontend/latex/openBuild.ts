@@ -4,7 +4,6 @@ import * as path from 'node:path';
 import * as vscode from 'vscode';
 import { Effect, FileSystem, type Path, type PlatformError } from 'effect';
 
-import type { SessionHandle } from '@agent/runtime';
 import { isLatexFile } from '@common/files/fileTypeUtils';
 import { showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
 import { openFileInEditor } from '@frontend/vscode/vscodeEditor';
@@ -21,6 +20,7 @@ import {
 import { getFileStem } from '@utils/core';
 import { pathToLocationIn } from '@utils/files/fileLocation';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
+import type { WorkspaceRoots } from '@texra-ai/harness';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 const CHANNEL = 'OpenBuildUtils';
@@ -119,13 +119,13 @@ export const invokeLatexWorkshopBuild = (
  * viewer-open outcome that follows the build attempt.
  */
 export const openBuildDisplayIfTex = (
-  session: SessionHandle,
+  roots: WorkspaceRoots,
   fileLocation: FileLocation,
   options: { preserveFocus?: boolean } = {},
 ): Effect.Effect<boolean, DisplayFailure, PreparedFileServices> =>
   Effect.gen(function* () {
     const prepared = yield* prepareFileForDisplay(
-      session,
+      roots,
       fileLocation,
       options.preserveFocus ?? false,
     );
@@ -145,13 +145,13 @@ export const openBuildDisplayIfTex = (
  * current document/root is the intended viewer target (#10553).
  */
 export const prepareBuildDisplay = (
-  session: SessionHandle,
+  roots: WorkspaceRoots,
   fileLocation: FileLocation,
   options: { preserveFocus?: boolean; scheduleViewer?: boolean } = {},
 ): Effect.Effect<boolean, DisplayFailure, PreparedFileServices> =>
   Effect.gen(function* () {
     const prepared = yield* prepareFileForDisplay(
-      session,
+      roots,
       fileLocation,
       options.preserveFocus ?? false,
     );
@@ -180,7 +180,7 @@ type PrepareFileForDisplayResult =
   { kind: 'done'; delivered: boolean } | { kind: 'latex-ready' };
 
 const prepareFileForDisplay = (
-  session: SessionHandle,
+  roots: WorkspaceRoots,
   fileLocation: FileLocation,
   preserveFocus: boolean,
 ): Effect.Effect<
@@ -211,7 +211,7 @@ const prepareFileForDisplay = (
     }
 
     const prepared = yield* prepareLatexBuild(
-      session,
+      roots,
       uri,
       fileLocation,
       preserveFocus,
@@ -233,7 +233,7 @@ const prepareFileForDisplay = (
  * workspace root, ensuring project-local .sty / .cls / .bib files are found.
  */
 const prepareLatexBuild = (
-  session: SessionHandle,
+  roots: WorkspaceRoots,
   uri: vscode.Uri,
   fileLocation: FileLocation,
   preserveFocus: boolean,
@@ -254,7 +254,6 @@ const prepareLatexBuild = (
     // packages, so compile internally with TEXINPUTS set.
     // Resolve the same outDir that LaTeX Workshop uses so the viewer finds the PDF.
     const outDir = resolveLatexWorkshopOutDir(uri.fsPath);
-    const { roots } = session;
     const compiled = yield* withSessionFs(
       roots,
       compileLatex2Pdf(pathToLocationIn(roots.workspace, uri.fsPath), roots, {

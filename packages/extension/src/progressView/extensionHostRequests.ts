@@ -12,7 +12,7 @@
 import * as path from 'node:path';
 
 import * as vscode from 'vscode';
-import { Effect, FileSystem } from 'effect';
+import { Effect, FileSystem, type Scope } from 'effect';
 
 import {
   AgentDirectories,
@@ -30,8 +30,9 @@ import {
   withProcessServices,
   type ProcessRuntime,
   type ProcessServices,
+  type Session,
 } from '@texra-ai/harness';
-import type { SessionHandle } from '@agent/runtime';
+import { presentRunFailure } from '@agent/runtime';
 import {
   handleLatexdiff,
   handleLatexdiffCommitAction,
@@ -41,8 +42,8 @@ import {
   handleAcceptEdited,
   handleCompare,
 } from '@commands/latex/compareCommands';
-import { handlePack } from '@commands/housekeeping/packCommands';
-import { handleClean } from '@commands/housekeeping/cleanCommands';
+import { presentPack } from '@commands/housekeeping/packCommands';
+import { presentClean } from '@commands/housekeeping/cleanCommands';
 import { findCommitInHistory } from '@commands/git/gitCommands';
 import { openFile, openLabel } from '@commands/files/openFileCommands';
 import {
@@ -60,25 +61,28 @@ import { parseVersionControlDiffFilename } from '@latex/latexdiff/diffFileNameMa
 import { withLogChannel } from '@logger/effectLog';
 import { withSessionFs, WorkspaceFs, type StorageFs } from '@platform/rootedFs';
 import latexPreamble from '@resources/templates/chatExport.tex';
-import type { HostRequest } from '@shared/session/hostRequest';
 import {
   GETTING_STARTED_COMMANDS,
   isMultipleDocumentFileType,
   type RunId,
 } from '@shared/schemas';
-import type {
-  HostOutcome,
-  SurfaceActionMessage,
-} from '@shared/session/sessionFrames';
 import {
   setFirstRunDone,
   setOnboardingDeclined,
 } from '@shared/state/onboardingState';
+import type { HostRequest } from '@texra/shared/session/hostRequest';
+import type {
+  HostOutcome,
+  SurfaceActionMessage,
+} from '@texra/shared/session/sessionFrames';
 import { ExternalOpenFailed } from '@texra/hosts/uiHosts';
 
 import type { ToolEditApprovalController } from '@texra/controllers/approval/ToolEditApprovalController';
 import { normalizeMainViewFileExtension } from '@texra/controllers/mainView/MainViewDroppedFilesController';
-import { ChatExportController } from '@texra/controllers/progressView/ChatExportController';
+import {
+  ChatExportController,
+  type ChatExportRecords,
+} from '@texra/controllers/progressView/ChatExportController';
 import {
   exportRunTranscript,
   TRANSCRIPT_EXPORT_FORMAT_CHOICES,
@@ -96,9 +100,9 @@ import type { HostDraftRequests } from '@texra/controllers/session/hostDraftRequ
 import {
   createHostRunActions,
   type HostRunActionPorts,
+  type RunActionRecordPorts,
 } from '@texra/controllers/session/hostRunActions';
 import type { HostSnapshotSource } from '@texra/controllers/session/hostSnapshotSource';
-import type { SessionBackend } from '@texra/controllers/session/sessionBackend';
 import {
   handleSharedHostRequest,
   isSharedHostRequest,
@@ -119,9 +123,13 @@ import { normalizeLineEndings } from '@utils/text/stringUtils';
 const CHANNEL = 'ExtensionHostRequests';
 
 interface ExtensionHostRequestsOptions {
-  readonly session: SessionHandle;
+  /** The run records and failure surface the run actions read, from the
+   *  window's own session handle or from the service. */
+  readonly records: RunActionRecordPorts;
+  /** What the transcript export reads, from the same place. */
+  readonly exportRecords: ChatExportRecords;
   /** Where this window's runs run: the session here, or the service's. */
-  readonly backend: SessionBackend;
+  readonly runSession: Session;
   readonly extensionPath: string;
   readonly globalState: StateStore;
   /** The process secret store the extension root holds (model availability). */
@@ -132,9 +140,11 @@ interface ExtensionHostRequestsOptions {
   /** The process runtime the extension root holds; every request arm that
    *  settles an Effect runs it here. */
   readonly runtime: ProcessRuntime;
+  /** The view's scope: what a run's end does lives as long as the view. */
+  readonly scope: Scope.Scope;
   /** A host-initiated change to the surface (PRD 8.5). */
   surfaceAction(action: SurfaceActionMessage['action']): void;
-  /** Select a run this window just launched (the launch's `onRunResolved`). */
+  /** Select a run this window just launched (the launch's `onAdmitted`). */
   presentLaunchedRun(runId: RunId): void;
   /** The placement commands the sidebar and the editor tab share. */
   popOutToEditor(): Effect.Effect<void, HostRequestFailure, ProcessServices>;
@@ -206,60 +216,65 @@ export function createExtensionHostRequests(
   options: ExtensionHostRequestsOptions,
 ): ExtensionHostRequests {
   const {
-    session,
-    backend,
+    records,
+    runSession,
     snapshot,
     toolEditApprovals,
     secrets,
     globalState,
     runtime,
   } = options;
-  const draftRequests = options.draftRequests.attach(session, (recording) => {
+  const { roots } = records;
+  const draftRequests = options.draftRequests.attach(roots, (recording) => {
     // Recorder notifications can arrive outside a request fiber.
     runtime.runFork(options.snapshot.setRecording(recording));
   });
 
   /** The native picker of each multi-file launcher list. */
-  const multipleFilePickers = createFileSelectionPickers(session);
+  const multipleFilePickers = createFileSelectionPickers(roots);
 
   /**
-   * Launch a validated fresh request through the window's backend, here or
-   * in the service, and open its final output once it ends: the surface's
-   * launch and the shared run actions both reach it. The launch program
-   * takes its process services from this runtime's context on the fiber
-   * that runs it.
+   * Start a validated fresh request on the window's session, here or in the
+   * service, and open its final output once it ends: the surface's launch
+   * and the shared run actions both reach it. A failure before the run
+   * opens is presented here, once. The launch program takes its process
+   * services from this runtime's context on the fiber that runs it.
    */
   const runValidated: HostRunActionPorts['runValidated'] = (
     request,
     runOptions = {},
-  ) => {
-    const launch = backend
-      .launch(request, {
-        preferHelperModel: runOptions.preferHelperModel ?? false,
-        ownApiKeyFallback: runOptions.ownApiKeyFallback,
-        approveDelegatedWork: runOptions.approveDelegatedWork,
-        onRun: runOptions.onRun,
-        onRunResolved: options.presentLaunchedRun,
-      })
-      .pipe(Effect.flatMap(openFinalOutputIfAvailable(session.roots)));
-    return withProcessServices(runtime, launch);
-  };
+  ) =>
+    withProcessServices(
+      runtime,
+      runSession
+        .start({ config: request.config, ...runOptions, interactive: true })
+        .pipe(
+          Effect.tapError((error) => presentRunFailure(records.present, error)),
+          Effect.tap((run) =>
+            Effect.sync(() => options.presentLaunchedRun(run.runId)),
+          ),
+          Effect.tap((run) =>
+            Effect.forkIn(
+              run.result.pipe(
+                Effect.flatMap(openFinalOutputIfAvailable(roots)),
+                Effect.ignore({ log: 'Warn', message: 'Opening the output' }),
+              ),
+              options.scope,
+            ),
+          ),
+        ),
+    );
 
   const runActions = runtime.runSync(
     createHostRunActions({
-      session,
-      backend,
+      ...records,
+      session: runSession,
+      scope: options.scope,
       runValidated,
       openWorkflowOutput: (result) =>
-        withProcessServices(
-          runtime,
-          openFinalOutputIfAvailable(session.roots)(result),
-        ),
+        withProcessServices(runtime, openFinalOutputIfAvailable(roots)(result)),
       loadModelOptions: () =>
-        withProcessServices(
-          runtime,
-          loadModelOptions({ ...session.roots, secrets }),
-        ),
+        withProcessServices(runtime, loadModelOptions({ ...roots, secrets })),
       // The set-key quick pick is a VS Code command: it either runs or
       // faults, so its rejection is the one failure, as `ApiKeyPromptFailed`.
       promptForApiKey: (provider) =>
@@ -279,7 +294,7 @@ export function createExtensionHostRequests(
   );
 
   const { runOutputs } = runActions;
-  const at = (file: string) => pathToLocationIn(session.roots.workspace, file);
+  const at = (file: string) => pathToLocationIn(roots.workspace, file);
   // A file-action port's handler; the process services come from the runtime.
   const runFileAction = <A, E>(
     command: string,
@@ -288,7 +303,7 @@ export function createExtensionHostRequests(
 
   const workflowFileActions = new ProgressWorkflowFileActionsController({
     state: runOutputs,
-    storageRoot: session.roots.storage,
+    storageRoot: roots.storage,
     host: {
       // Each command is named, so a failure carries a tag, never a rejection.
       compareFiles: (base, edited) =>
@@ -299,9 +314,9 @@ export function createExtensionHostRequests(
           handleAcceptEdited(at(base), at(edited), copyMeta),
         ),
       mergeFile: (base, edited) =>
-        runFileAction('merge', handleMerge(session, base, edited)),
+        runFileAction('merge', handleMerge(roots, base, edited)),
       latexdiffFile: (base, edited) =>
-        runFileAction('latexdiff', handleLatexdiff(session, base, edited)),
+        runFileAction('latexdiff', handleLatexdiff(roots, base, edited)),
       openDirectory: (directory) =>
         runCommand('revealFileInOS', vscode.Uri.file(directory)),
       // An accepted-edit backup names an absolute workspace path the
@@ -384,7 +399,8 @@ export function createExtensionHostRequests(
       getController: Effect.sync(
         () =>
           (chatExportController ??= new ChatExportController({
-            session,
+            roots,
+            records: options.exportRecords,
             latexPreamble,
           })),
       ),
@@ -417,7 +433,7 @@ export function createExtensionHostRequests(
   };
 
   function getOpenedFiles(): Effect.Effect<string[]> {
-    const workspaceRoot = session.roots.workspace;
+    const workspaceRoot = roots.workspace;
     if (!workspaceRoot) {
       return Effect.logWarning('No workspace path found for opened files').pipe(
         withLogChannel(CHANNEL),
@@ -446,7 +462,7 @@ export function createExtensionHostRequests(
     request: Extract<HostRequest, { kind: 'useCurrentFile' }>,
   ) {
     return Effect.gen(function* () {
-      const currentOpenFile = yield* getCurrentFile(session);
+      const currentOpenFile = yield* getCurrentFile(roots);
       if (!currentOpenFile) {
         return yield* Effect.fail(
           new Rejected({
@@ -463,7 +479,7 @@ export function createExtensionHostRequests(
         if (parsed) {
           const commitLabel = yield* runHandler(
             'findCommitInHistory',
-            findCommitInHistory(session, parsed.commitHash),
+            findCommitInHistory(roots, parsed.commitHash),
           );
           if (commitLabel) {
             options.surfaceAction({
@@ -478,7 +494,7 @@ export function createExtensionHostRequests(
             );
           }
           const sourceLocation = locateInWorkspace(
-            session.roots.workspace,
+            roots.workspace,
             parsed.sourcePath,
           );
           const sourceExists =
@@ -548,23 +564,23 @@ export function createExtensionHostRequests(
    *  onto a VS Code command, an editor API, or the sidebar. */
   const hostBindings: SharedHostRequestBindings = {
     openPath: (file, line) =>
-      runHandler('openFile', openFile(session, file, line)),
-    openLabel: (label) => runHandler('openLabel', openLabel(session, label)),
+      runHandler('openFile', openFile(roots, file, line)),
+    openLabel: (label) => runHandler('openLabel', openLabel(roots, label)),
     exportTranscript: (runId) => Effect.asVoid(exportTranscript(runId)),
     surfaceAction: (action) => options.surfaceAction(action),
     showInfo: (message) => vscodeUi.showInfoMessage(message),
     admitLaunch,
     runWorkflowDiff: (diff) =>
-      runHandler('runLatexdiff', handleRunLatexdiff(session, diff)),
-    runWorkflowFileOperation: (operation, request) =>
+      runHandler('runLatexdiff', handleRunLatexdiff(roots, runSession, diff)),
+    presentWorkflowFileOperation: (operation, files) =>
       runHandler(
         operation,
-        operation === 'pack' ? handlePack(request) : handleClean(request),
+        operation === 'pack' ? presentPack(files) : presentClean(files),
       ),
     latexdiffAgainstCommit: (action, baseFile, commit) =>
       runHandler(
         action,
-        handleLatexdiffCommitAction(session, action, baseFile, commit),
+        handleLatexdiffCommitAction(roots, action, baseFile, commit),
       ),
     openSettings: (section) => {
       if (section === 'teams') return commandVerb('texra.showTeamSettings');
@@ -620,7 +636,7 @@ export function createExtensionHostRequests(
       }),
     onboarding: {
       signInChatGpt: Effect.gen(function* () {
-        yield* signInWithSubscription(session.roots, CHANNEL, 'chatgpt');
+        yield* signInWithSubscription(roots, CHANNEL, 'chatgpt');
         yield* refreshAfterCredentialChange;
       }),
       skip: Effect.gen(function* () {
@@ -647,7 +663,7 @@ export function createExtensionHostRequests(
     snapshot,
     draftRequests,
     toolEditApprovals,
-    session,
+    roots,
     host: hostBindings,
   };
 
@@ -719,7 +735,7 @@ export function createExtensionHostRequests(
     // chosen here, at the host edge, not read at the depth that writes --
     // once, for the whole dispatch.
     handleHostRequest: (request, port) =>
-      withSessionFs(session.roots, dispatch(request, port)),
+      withSessionFs(roots, dispatch(request, port)),
     closePort: draftRequests.closePort,
     dispose: draftRequests.dispose,
   };

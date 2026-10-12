@@ -21,7 +21,8 @@ import {
 } from 'effect';
 
 import { aggregateId as qualifyAggregateId, type RunId } from '@shared/schemas';
-import type { HostSnapshot } from '@shared/session/hostSnapshot';
+import type { SessionView } from '@shared/session/sessionView';
+import type { HostSnapshot } from '@texra/shared/session/hostSnapshot';
 import {
   DownMessageSchema,
   type DownMessage,
@@ -30,8 +31,7 @@ import {
   type Response,
   type Subscribe,
   type UpMessage,
-} from '@shared/session/sessionFrames';
-import type { SessionView } from '@shared/session/sessionView';
+} from '@texra/shared/session/sessionFrames';
 import { toSignal, type StreamSignal } from '@texra/shared/signals';
 import {
   installWebviewRuntime,

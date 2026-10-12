@@ -9,8 +9,8 @@
 import { html, nothing, type TemplateResult } from 'lit';
 import { customElement } from 'lit/decorators.js';
 
-import { documentsOf } from '@shared/plugins/documents';
 import { isLiveRun } from '@shared/session/sessionView';
+import { documentsOf } from '@texra/shared/plugins/documents';
 
 // Local imports - progress view
 import { BaseRunContent } from './BaseRunContent';

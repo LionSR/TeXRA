@@ -7,14 +7,7 @@
 
 import path from 'node:path';
 
-import {
-  Cause,
-  Effect,
-  Exit,
-  FileSystem,
-  Layer,
-  SubscriptionRef,
-} from 'effect';
+import { Cause, Effect, Exit, FileSystem, Layer } from 'effect';
 import {
   Cancelled,
   Rejected,
@@ -29,12 +22,8 @@ import {
   type ProcessRuntime,
   type ProcessServices,
 } from '@texra-ai/harness';
-import { presentRunFailure, type SessionHandle } from '@agent/runtime';
-import {
-  fileOpResultMessage,
-  packRunOutputs,
-  runCleanRunDir,
-} from '@housekeeping/runDirOps';
+import { presentRunFailure } from '@agent/runtime';
+import { fileOpResultMessage } from '@housekeeping/runDirOps';
 import {
   latexdiffPackMessage,
   runPackLatexdiffvc,
@@ -48,16 +37,15 @@ import {
   type WorkspaceFs,
 } from '@platform/rootedFs';
 import latexPreamble from '@resources/templates/chatExport.tex';
-import type { HostRequest } from '@shared/session/hostRequest';
-import { type FileOpResult, type RunId } from '@shared/schemas';
+import { type RunId } from '@shared/schemas';
+import type { HostRequest } from '@texra/shared/session/hostRequest';
 import type {
   HostOutcome,
   SurfaceActionMessage,
-} from '@shared/session/sessionFrames';
+} from '@texra/shared/session/sessionFrames';
 import { ExternalOpenFailed } from '@texra/hosts/uiHosts';
 
 import type { ChatExportController } from '@texra/controllers/progressView/ChatExportController';
-import type { SessionBackend } from '@texra/controllers/session/sessionBackend';
 import { exportRunTranscript } from '@texra/controllers/progressView/exportTranscript';
 import { ApiKeyPromptFailed } from '@texra/controllers/progressView/ProgressApiKeyRetryController';
 import { ProgressWorkflowFileActionsController } from '@texra/controllers/progressView/ProgressWorkflowFileActionsController';
@@ -69,8 +57,8 @@ import {
 import type { HostDraftRequests } from '@texra/controllers/session/hostDraftRequests';
 import {
   createHostRunActions,
+  localRunActionPorts,
   type WorkflowDiffRequest,
-  type WorkflowFileOperationRequest,
 } from '@texra/controllers/session/hostRunActions';
 import type { HostSnapshotSource } from '@texra/controllers/session/hostSnapshotSource';
 import {
@@ -80,6 +68,7 @@ import {
   type SharedHostRequestPorts,
 } from '@texra/controllers/session/sharedHostRequests';
 import { listWorkspaceFilesOfType } from '@texra/controllers/session/workspaceFileOptions';
+import { serviceRecords } from '@texra/controllers/server/serviceSession';
 import { loadModelOptions } from '@texra/model/setupCredentialAccess';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import {
@@ -97,22 +86,22 @@ import type { DesktopOnboardingIpc } from './desktopOnboardingIpc.js';
 import type { PreviewUnavailable } from './desktopPreviewHost.js';
 import type { DesktopAgentRun } from './desktopAgentRun.js';
 import type { DesktopAgentRunHost } from './desktopAgentRunHost.js';
+import type { DesktopProject } from './desktopProjects.js';
 import type { DesktopFileSelection } from './desktopFileSelection.js';
 import type { createDesktopWorkspaceIpc } from './desktopWorkspaceIpc.js';
 
 interface DesktopHostRequestsOptions {
-  session: SessionHandle;
+  /** The project this window serves: its runs run in its session, here or
+   *  in the service, whose records answer what the window reads of them. */
+  project: DesktopProject;
   /** The process secret store the model catalog reads. */
   secrets: PlatformSecrets;
-  /** Where this project's runs run: the session here, or the service's. */
-  backend: SessionBackend;
   host: DesktopAgentRunHost;
   run: DesktopAgentRun;
   files: DesktopFileSelection;
   snapshot: HostSnapshotSource;
   draftRequests: HostDraftRequests;
   workspaceFile: ReturnType<typeof createDesktopWorkspaceIpc>['file'];
-  workspacePath: string | undefined;
   /** Packaged app resources root (`…/resources`), for export templates. */
   resourcesPath: string;
   postToRenderer(message: unknown): boolean | void;
@@ -147,35 +136,46 @@ export interface DesktopHostRequests {
 
 const CHANNEL = 'DesktopHostRequests';
 
-type WorkflowFileOperation = 'pack' | 'clean';
-
 export function createDesktopHostRequests(
   options: DesktopHostRequestsOptions,
 ): DesktopHostRequests {
-  const { session, host, run, runtime } = options;
+  const { project, host, run, runtime } = options;
+  const { roots } = project;
+  /** Where the window reads its runs' records: its own session, or the
+   *  service's, bound once. */
+  const records =
+    project.handle !== undefined
+      ? { handle: project.handle, remote: undefined }
+      : { remote: serviceRecords(project.service, project.root) };
   /** The rooted filesystems of this window's paper, built once from the
    *  roots its session holds for its lifetime, never from an ambient store. */
-  const sessionFiles = sessionFsLayer(session.roots);
+  const sessionFiles = sessionFsLayer(roots);
   /** The project's `.env` over the process's: what this window asks about
    *  its project (model options, a polish's helper model) answers from it,
    *  as the project's runs do. */
-  const projectEnv = workspaceEnvironmentLayer(options.workspacePath);
+  const projectEnv = workspaceEnvironmentLayer(project.root);
   // A shared controller's notice IS the refusal the request answers with.
   const rejectRequestEffect = (reason: string): Effect.Effect<void, Rejected> =>
     Effect.fail(new Rejected({ reason }));
-  const draftRequests = options.draftRequests.attach(session, (recording) => {
+  const draftRequests = options.draftRequests.attach(roots, (recording) => {
     // Recorder notifications can arrive outside a request fiber.
     runtime.runFork(options.snapshot.setRecording(recording));
   });
   const runActions = runtime.runSync(
     createHostRunActions({
       ...run, // this window's launcher and output opener
-      session,
-      backend: options.backend,
+      ...(records.remote === undefined
+        ? localRunActionPorts(records.handle)
+        : {
+            roots,
+            readConfig: records.remote.readConfig,
+            present: project.present,
+          }),
+      session: project.session,
       loadModelOptions: () =>
         withProcessServices(
           runtime,
-          loadModelOptions({ ...session.roots, secrets: options.secrets }).pipe(
+          loadModelOptions({ ...roots, secrets: options.secrets }).pipe(
             Effect.provide(projectEnv),
           ),
         ),
@@ -213,7 +213,7 @@ export function createDesktopHostRequests(
    *  so nothing settles here. */
   const listWorkspaceCandidateFiles = () =>
     Effect.suspend(() => {
-      const workspacePath = options.workspacePath;
+      const workspacePath = project.root;
       if (!workspacePath) return Effect.succeed([]);
       return Effect.all([
         listWorkspaceFilesOfType('input', workspacePath),
@@ -233,10 +233,11 @@ export function createDesktopHostRequests(
       showErrorMessage: rejectRequestEffect,
     },
     {
-      session,
+      session: project.session,
       runtime,
-      // The request schedules a merge; its later run failure belongs to this
-      // lifecycle callback, after the request has already completed.
+      // The request schedules a merge; a failure to start it belongs to
+      // this lifecycle callback, after the request has already completed,
+      // and one after that to the run's own result.
       startRun: (request) => {
         runtime.runFork(
           run.runValidated(request).pipe(
@@ -253,7 +254,7 @@ export function createDesktopHostRequests(
                       withLogChannel(CHANNEL),
                     );
                     return yield* presentRunFailure(
-                      session.interactions,
+                      project.present,
                       error,
                       'Merge failed: ',
                     );
@@ -268,7 +269,7 @@ export function createDesktopHostRequests(
 
   const workflowFileActions = new ProgressWorkflowFileActionsController({
     state: runOutputs,
-    storageRoot: session.roots.storage,
+    storageRoot: roots.storage,
     host: {
       compareFiles: (baseFile, editedFile) =>
         fileActions.compareFiles(baseFile, editedFile),
@@ -307,57 +308,6 @@ export function createDesktopHostRequests(
         ),
       );
 
-  /** Info results are shown; error results reject the request, which the
-   *  dispatcher surfaces. The wording is the shared `fileOpResultMessage`. */
-  const reportFileOperationResult = (
-    operation: WorkflowFileOperation,
-    result: FileOpResult,
-    inputFile: string,
-  ) => {
-    const message = fileOpResultMessage(operation, result, inputFile);
-    return message.level === 'info'
-      ? host.showInfoMessage(message.text)
-      : Effect.fail(new Rejected({ reason: message.text }));
-  };
-
-  const runWorkflowFileOperation = (
-    operation: WorkflowFileOperation,
-    request: WorkflowFileOperationRequest,
-  ) =>
-    Effect.gen(function* () {
-      const { agent, model, inputFile, runId } = request;
-      if (!agent || !model || !inputFile) {
-        return yield* reportFileOperationResult(
-          operation,
-          { status: 'missingParams' },
-          inputFile,
-        );
-      }
-      if (!runId) {
-        return yield* Effect.fail(
-          new Rejected({ reason: `Missing run identity for ${operation}.` }),
-        );
-      }
-      const ran = yield* Effect.exit(
-        operation === 'pack'
-          ? packRunOutputs(request)
-          : runCleanRunDir(runId as RunId),
-      );
-      if (Exit.isFailure(ran)) {
-        const error = Cause.squash(ran.cause);
-        yield* Effect.logError(`Desktop ${operation} operation failed`).pipe(
-          Effect.annotateLogs({ data: error }),
-          withLogChannel(CHANNEL),
-        );
-        return yield* reportFileOperationResult(
-          operation,
-          { status: 'error', error: toErrorMessage(error) },
-          inputFile,
-        );
-      }
-      yield* reportFileOperationResult(operation, ran.value, inputFile);
-    });
-
   /**
    * The chat export controller, loaded on the first export so its module
    * graph — the formatters, the trace assembler, the LaTeX compiler — stays
@@ -373,9 +323,19 @@ export function createDesktopHostRequests(
     Effect.cachedWithTTL(
       Effect.tryPromise({
         try: async () => {
-          const { ChatExportController: Controller } =
+          const { ChatExportController: Controller, localExportRecords } =
             await import('@texra/controllers/progressView/ChatExportController');
-          return new Controller({ session, latexPreamble });
+          return new Controller({
+            roots,
+            records:
+              records.remote === undefined
+                ? localExportRecords(records.handle)
+                : {
+                    input: records.remote.exportInput,
+                    trace: records.remote.exportTrace,
+                  },
+            latexPreamble,
+          });
         },
         catch: (cause) =>
           new TranscriptExportFailed({
@@ -390,9 +350,7 @@ export function createDesktopHostRequests(
 
   const exportTranscript = (runId: RunId) =>
     Effect.gen(function* () {
-      if (
-        !SubscriptionRef.getUnsafe(options.backend.view.ref).runs.has(runId)
-      ) {
+      if (!project.session.view.current().runs.has(runId)) {
         return yield* Effect.fail(
           new Unavailable({ runId, reason: 'The run is no longer open.' }),
         );
@@ -440,12 +398,12 @@ export function createDesktopHostRequests(
           new Rejected({ reason: 'Choose a base file first.' }),
         );
       }
-      const base = pathToLocationIn(session.roots.workspace, baseFile);
+      const base = pathToLocationIn(roots.workspace, baseFile);
       if (action === 'latexdiffvc') {
-        const result = yield* new LaTeXdiffService(
-          CHANNEL,
-          session.roots,
-        ).runDiffVc(base, commit);
+        const result = yield* new LaTeXdiffService(CHANNEL, roots).runDiffVc(
+          base,
+          commit,
+        );
         if (!result.success) {
           return yield* Effect.fail(new Rejected({ reason: result.message }));
         }
@@ -486,7 +444,14 @@ export function createDesktopHostRequests(
     // The window's paper is its one workspace: any launch runs as asked.
     admitLaunch: () => Effect.void,
     runWorkflowDiff,
-    runWorkflowFileOperation,
+    // Info results are shown; error results reject the request, which the
+    // dispatcher surfaces. The wording is the shared `fileOpResultMessage`.
+    presentWorkflowFileOperation: (operation, { result, inputFile }) => {
+      const message = fileOpResultMessage(operation, result, inputFile);
+      return message.level === 'info'
+        ? host.showInfoMessage(message.text)
+        : Effect.fail(new Rejected({ reason: message.text }));
+    },
     latexdiffAgainstCommit,
     openSettings: (section) =>
       Effect.sync(() =>
@@ -558,7 +523,7 @@ export function createDesktopHostRequests(
     snapshot: options.snapshot,
     draftRequests,
     toolEditApprovals: run.toolEditApprovals,
-    session,
+    roots,
     host: hostBindings,
   };
 

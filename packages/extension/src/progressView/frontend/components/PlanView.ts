@@ -9,7 +9,7 @@ import { customElement, property } from 'lit/decorators.js';
 
 // Local imports - shared styles
 import type { Plan } from '@shared/schemas';
-import type { Surface } from '@shared/session/surface';
+import type { Surface } from '@texra/shared/session/surface';
 import { designTokens, commonViewStyles } from '@ui/styles';
 import { dispatchGroupToggle } from '../utils';
 import type { RunId } from '@texra-ai/harness/schemas';

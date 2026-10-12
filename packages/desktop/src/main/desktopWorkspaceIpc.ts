@@ -19,8 +19,8 @@ import { Rejected } from '@texra-ai/harness';
 import { FILE_HANDLING_RULES } from '@common/files/fileHandlingRules';
 import { getIncludedExtensions } from '@common/files/fileTypeUtils';
 import { onAppSignal } from '@eventBus/AppSignals';
-import type { HostRequest } from '@shared/session/hostRequest';
-import type { HostOutcome } from '@shared/session/sessionFrames';
+import type { HostRequest } from '@texra/shared/session/hostRequest';
+import type { HostOutcome } from '@texra/shared/session/sessionFrames';
 import {
   passesFileFilters,
   prepareFileFilters,

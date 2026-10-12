@@ -1,6 +1,5 @@
 import { Context, Effect, Layer } from 'effect';
 
-import { Runs } from '@agent/runtime/runRegistry';
 import { PluginHold } from '@tools/toolTable';
 
 import { AgentCliSessionRegistry } from './agentCliSessionRegistry';
@@ -8,7 +7,7 @@ import { AgentCliSessionRegistry } from './agentCliSessionRegistry';
 /**
  * The codex and claude-agent plugins' session services
  * (their plugins' `sessionLayer`): each session's registry of that agent CLI's
- * live sessions, over the session's own `Runs`, so a registry dies with its
+ * live sessions, one per session, so a registry dies with its
  * session instead of living as a process singleton. Each live child holds
  * its registry (`AgentCliSessionRegistry.holdWhileLive`), so switching the
  * plugin off and on while one runs keeps the registry that routes its
@@ -25,7 +24,7 @@ export class ClaudeAgentSessions extends Context.Service<
 >()('@texra/tools/ClaudeAgentSessions') {}
 
 const registryOver = Effect.gen(function* () {
-  return new AgentCliSessionRegistry(yield* Runs, yield* PluginHold);
+  return new AgentCliSessionRegistry(yield* PluginHold);
 });
 
 export const codexThreadsLayer = Layer.effect(CodexThreads, registryOver);

@@ -12,6 +12,7 @@ import {
   RunRecordFieldsSchema,
   type RunId,
 } from '@shared/schemas';
+import { seedRows } from './sessionTestUtils';
 
 export const seedRunRecord = (
   session: SessionHandle,
@@ -19,7 +20,7 @@ export const seedRunRecord = (
   record: RunRecord,
 ) =>
   Effect.suspend(() =>
-    session.log.transact([
+    seedRows(session.log)([
       {
         type: 'run.config',
         aggregateId: aggregateId('run', runId),

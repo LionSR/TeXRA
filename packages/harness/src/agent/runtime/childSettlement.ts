@@ -1,28 +1,29 @@
 /**
- * A child turn's settlement: the rows on the child's own aggregate that the
- * batch ending the turn commits, and the relay that hands its result to the
- * parent's inbox once they are durable. The rows are the turn's report, its
- * result manifest, the prompt it consumed, and its `child.turn settled`,
- * which names the delivery (`delivery`: the parent and the follow-up id the
- * report is queued under).
- *
- * The child's rows are the one fact, and the parent's `followup.queued` row
- * is their relay: idempotent by its id, written just after the rows commit,
- * and written again by a resumed parent for every settled delivery it has
- * not read (`relayChildDeliveries`). A crash between the child's batch and
- * the parent's row therefore loses nothing. A final turn's rows commit with
- * the child's `run.end`, so the parent never reads a result from a child
- * that still reads as running (#8093), and needs no hold for it.
+ * A child turn's settlement: its rows (report, result manifest, the prompt it
+ * consumed, `child.turn settled`) and its delivery, the report queued on the
+ * parent's input. Both commit in one append, one SQLite transaction
+ * (`settleChildTurn`), so no crash leaves a settled turn its parent never
+ * reads; a last turn's commit with the child's `run.end` (#8093). A parent
+ * another process holds refuses: the child parks holding the result, and
+ * whoever next admits the parent delivers it with the child's end, read
+ * from rows: the owner's tail seeing the park, or the parent's resume.
  */
-import { Effect } from 'effect';
+import { Effect, type Scope } from 'effect';
 
-import type { InboxItem } from '@agent/followUp/Inbox';
-import {
-  startFollowUpWake,
-  submitFollowUp,
-} from '@agent/followUp/ToolUseFollowUp';
+import type {
+  Inbox,
+  InboxItem,
+  Sent,
+  SendOptions,
+} from '@agent/followUp/Inbox';
+import { startFollowUpWake } from '@agent/followUp/ToolUseFollowUp';
 import type { AgentTrace } from '@agent/trace';
-import type { AttemptKey } from '@agent/storage/runRecords';
+import {
+  getRunRecords,
+  lostResultId,
+  persistedParentRunId,
+  type AttemptKey,
+} from '@agent/storage/runRecords';
 import { withLogChannel } from '@logger/effectLog';
 import {
   aggregateId,
@@ -30,36 +31,66 @@ import {
   type DeliveredResult,
   type RunId,
 } from '@shared/schemas';
+import { DatabaseNotOwner, DatabaseReadFailed } from '@shared/session/database';
 import type { QueuedFollowUp } from '@shared/session/runRows';
-import type { RunHistoryDraft } from '@shared/session/runStateFold';
+import type { RunInputDraft } from '@shared/session/runStateFold';
+import type { CoWrite } from '@shared/session/sessionEvents';
 import type { SessionHandle } from './SessionHandle';
 
 const CHANNEL = 'childSettlement';
 
+/** A delivery's warning: on an agent-CLI child's trace, else the log. */
+export const warn = (
+  trace: AgentTrace | undefined,
+  message: string,
+  data: unknown,
+): Effect.Effect<void> =>
+  trace
+    ? Effect.sync(() => trace.warn(message, { data }))
+    : Effect.logWarning(message).pipe(
+        Effect.annotateLogs({ data }),
+        withLogChannel(CHANNEL),
+      );
+
 /** The rows a settlement commits, all on the child's aggregate. */
 export type SettlementRow = Extract<
-  RunHistoryDraft,
+  RunInputDraft,
   { type: 'run.report' | 'run.result' | 'child.turn' | 'followup.consumed' }
 >;
 
-/** A result on its way to the parent's inbox. */
+/** A result on its way to the parent's inbox; `end`: the turn was the
+ *  child's last, and ends it as this outcome. */
 export interface ChildDelivery {
   readonly to: RunId;
   readonly item: InboxItem;
+  readonly end?: 'completed' | 'failed';
 }
 
 /** One settled turn: what its ending batch commits and what it delivers. */
 export interface ChildSettlement {
   readonly rows: readonly SettlementRow[];
-  /** The parent delivery the rows name; none for a detached or
+  /** The parent delivery, committed with the rows; none for a detached or
    *  persist-only child, or a turn a stop ended. */
   readonly delivery: ChildDelivery | undefined;
 }
 
 /**
- * The settlement of one turn whose report is `message`: the report and
- * manifest, the follow-ups its prompt consumed, and the `child.turn settled`
- * row naming the delivery to `to` under `deliveryId`.
+ * Rows decided inside a job, under holds its scope keeps until the job's one
+ * append writes them with its own (`CoWrite`). `held`: the child parked
+ * holding its last result, so its end is not written now. `note`: what the
+ * end's error adds from the part (a loss notice its parent refused).
+ */
+export type TransactionPart = Effect.Effect<
+  CoWrite & { readonly held?: boolean; readonly note?: string },
+  Error,
+  Scope.Scope
+>;
+
+/**
+ * The settlement of one turn whose report is `message`, delivered to `to`
+ * under the strategy's one `deliveryId` or the turn's own (#9531): its
+ * prompt's, so a re-execution after a crash is judged a replay, else the
+ * `child.turn` key (run, attempt, turn index), distinct across attempts.
  */
 export function childSettlementOf(params: {
   readonly runId: RunId;
@@ -67,11 +98,19 @@ export function childSettlementOf(params: {
   readonly message: string;
   readonly resultMeta: DeliveredResult | undefined;
   readonly consumed: readonly QueuedFollowUp[];
-  readonly deliveryId: string;
+  readonly deliveryId: string | undefined;
   readonly to: RunId | null;
+  /** The turn is the child's last, ending it so. */
+  readonly end?: ChildDelivery['end'];
 }): ChildSettlement {
-  const target = aggregateId('run', params.runId);
-  const { to, deliveryId } = params;
+  const { runId, turn, to } = params;
+  const target = aggregateId('run', runId);
+  const prompt = params.consumed[0]?.followUpId;
+  const deliveryId =
+    params.deliveryId ??
+    (prompt === undefined
+      ? `${runId}:${turn.key}:${turn.index}:delivery`
+      : `${runId}:${prompt}:delivery`);
   return {
     rows: [
       { type: 'run.report', aggregateId: target, report: params.message },
@@ -89,7 +128,13 @@ export function childSettlementOf(params: {
         aggregateId: target,
         followUpId: followUp.followUpId,
       })),
-      settledRow(params.runId, params.turn, to, deliveryId),
+      {
+        type: 'child.turn',
+        aggregateId: target,
+        attemptId: params.turn.key,
+        turnIndex: params.turn.index,
+        phase: 'settled',
+      },
     ],
     delivery:
       to === null
@@ -101,123 +146,242 @@ export function childSettlementOf(params: {
               from: { kind: 'run', runId: params.runId },
               deliveryId,
             },
+            ...(params.end !== undefined && { end: params.end }),
           },
   };
 }
 
-/** A turn's `child.turn settled` row, naming its delivery when it has one. */
-export function settledRow(
-  runId: RunId,
-  turn: AttemptKey,
-  to: RunId | null = null,
-  followUpId?: string,
-): Extract<SettlementRow, { type: 'child.turn' }> {
-  return {
-    type: 'child.turn',
-    aggregateId: aggregateId('run', runId),
-    attemptId: turn.key,
-    turnIndex: turn.index,
-    phase: 'settled',
-    ...(to === null || followUpId === undefined
-      ? {}
-      : { delivery: { to, followUpId } }),
-  };
-}
-
-/**
- * Hand a durable delivery to the parent's inbox, and wake the parent when no
- * generation of it runs here. Its id makes it a replay when a resumed
- * parent already relayed it.
- */
-export const relayDelivery = Effect.fn('childSettlement.relay')(function* (
-  session: SessionHandle,
-  { to, item }: ChildDelivery,
+/** A child's message to its parent, decided in the job committing the
+ *  child's rows: a closed, tombstoned or unreadable parent refuses, loudly
+ *  once the rows commit, and the child's own rows still commit. */
+export const parentAdmission = (
+  followUps: Inbox,
+  to: RunId,
+  item: InboxItem,
+  options: SendOptions,
   trace: AgentTrace | undefined,
-): Effect.fn.Return<void, Error> {
-  const warn = (message: string, data: unknown) =>
-    trace
-      ? Effect.sync(() => trace.warn(message, { data }))
-      : Effect.logWarning(message).pipe(
-          Effect.annotateLogs({ data }),
-          withLogChannel(CHANNEL),
-        );
-  // Only a settlement that committed is relayed: a refused batch (its
-  // `run.end`, say) leaves the parent nothing to read.
-  if (item.from.kind !== 'run') return;
-  const sender = item.from.runId;
-  const settled = yield* session.log.rows(aggregateId('run', sender), [
-    'child.turn',
-  ]);
-  if (
-    !settled.some(
-      (row) =>
-        row.type === 'child.turn' &&
-        row.delivery?.followUpId === item.deliveryId,
-    )
-  )
-    return yield* warn(
-      'Turn result not delivered: its settlement did not commit. The result remains in the run report.',
-      { runId: sender, parentRunId: to },
-    );
-  const sent = yield* session.followUps.send(to, item, { wake: true });
-  if (sent.kind === 'refused')
-    return yield* warn(
-      `Turn result not delivered: parent run is unavailable (${sent.reason ?? 'not_resumable'}). The result remains in the run report.`,
-      { parentRunId: to, reason: sent.reason },
-    );
-  const unresumed =
-    'Turn result queued for the parent, but the parent could not be resumed; an explicit Resume delivers it.';
-  if (
-    sent.kind === 'queued' &&
-    sent.wake &&
-    !(yield* startFollowUpWake(to, session))
-  )
-    yield* warn(unresumed, { parentRunId: to });
-  // A replay of the row above: a parent live here reads it at its park.
-  const delivery = yield* submitFollowUp(to, item, { session });
-  if (delivery.status === 'failed')
-    yield* warn(
-      `Turn result not delivered: parent run is unavailable (${delivery.reason}). The result remains in the run report.`,
-      { parentRunId: to, reason: delivery.reason },
-    );
-  else if (delivery.status === 'queued' && delivery.wake === 'failed')
-    yield* warn(unresumed, { parentRunId: to });
-});
+): Effect.Effect<CoWrite & { readonly sent: Sent }, Error, Scope.Scope> =>
+  followUps.admission(to, item, options).pipe(
+    Effect.map((admitted) => ({ ...admitted, committed: Effect.void })),
+    Effect.catchIf(
+      (error) =>
+        (error instanceof DatabaseNotOwner && error.closed) ||
+        error instanceof DatabaseReadFailed,
+      (error) =>
+        Effect.succeed({
+          rows: [],
+          sent: { kind: 'refused' } satisfies Sent,
+          committed: warn(
+            trace,
+            `Parent run ${to} is closed or cannot be read.`,
+            { parentRunId: to, error },
+          ),
+        }),
+    ),
+  );
 
 /**
- * Relay every delivery the parent's children settled and the parent has
- * not read: the recovery of a crash between a child's settlement and its
- * relay. Each report is the `run.report` its settled row follows in their batch. Already-read
- * deliveries are replays and write nothing.
+ * The parent's half of a settlement, appended with the child's rows; a
+ * replay writes nothing. The child's edge is read from its records in this
+ * job: a detach that committed first leaves the result in its report. A
+ * parent another process holds leaves the result parked on the child
+ * (`heldFor`, its end unwritten) for `deliverHeld`; any other refusal is
+ * said once the rows commit.
  */
-export const relayChildDeliveries = Effect.fn(
-  'childSettlement.relayChildDeliveries',
-)(function* (
+export const deliverIn = (
   session: SessionHandle,
-  parentRunId: RunId,
-): Effect.fn.Return<void, Error> {
-  // The listing as the log holds it: a session just opened has not folded
-  // its runs yet.
-  const { runs } = yield* session.view.read([]);
-  for (const [childId, child] of runs) {
-    if (child.parentId !== parentRunId) continue;
-    const rows = yield* session.log.rows(aggregateId('run', childId), [
-      'child.turn',
-      'run.report',
-    ]);
-    for (const row of rows) {
-      if (row.type !== 'child.turn' || row.delivery?.to !== parentRunId)
-        continue;
-      // The settlement's report precedes its `child.turn` in their batch.
-      const report = rows.findLast(
-        (other) => other.type === 'run.report' && other.commit < row.commit,
+  { to, item, end }: ChildDelivery,
+  trace: AgentTrace | undefined,
+): TransactionPart =>
+  Effect.gen(function* () {
+    const child = item.from.kind === 'run' ? item.from.runId : undefined;
+    if (
+      child !== undefined &&
+      (yield* persistedParentRunId(session, child)) !== to
+    )
+      return {
+        rows: [],
+        committed: warn(
+          trace,
+          'Turn result not delivered: child was detached from its orchestrator. The result remains in the run report.',
+          { runId: child },
+        ),
+      };
+    const { rows, sent, committed } = yield* parentAdmission(
+      session.followUps,
+      to,
+      item,
+      {},
+      trace,
+    );
+    if (
+      sent.kind === 'refused' &&
+      sent.reason === 'owned_elsewhere' &&
+      child !== undefined &&
+      item.deliveryId !== undefined
+    )
+      return {
+        rows: [
+          {
+            type: 'child.park' as const,
+            aggregateId: aggregateId('run', child),
+            phase: 'parked' as const,
+            heldFor: item.deliveryId,
+            ...(end !== undefined && { ends: end }),
+          },
+        ],
+        held: end !== undefined,
+        committed: warn(trace, 'Result waiting: parent is open elsewhere.', {
+          parentRunId: to,
+        }),
+      };
+    return {
+      rows,
+      committed:
+        sent.kind === 'refused'
+          ? Effect.andThen(
+              committed,
+              warn(
+                trace,
+                `Turn result not delivered: parent run is unavailable (${sent.reason ?? 'not_resumable'}). The result remains in the run report.`,
+                { parentRunId: to, reason: sent.reason },
+              ),
+            )
+          : committed,
+    };
+  });
+
+/**
+ * One settlement, whole, as the rows of the append that ends its turn: the
+ * child's rows, its parent's `followup.queued`, and `park`, the turn's own
+ * park, unless a held result's park took its place.
+ */
+export const settleChildTurn = (
+  session: SessionHandle,
+  { rows, delivery }: ChildSettlement,
+  trace: AgentTrace | undefined,
+  park?: RunInputDraft,
+): TransactionPart => {
+  const own = park === undefined ? [] : [park];
+  return delivery === undefined
+    ? Effect.succeed({ rows: [...rows, ...own], committed: Effect.void })
+    : Effect.map(deliverIn(session, delivery, trace), (parent) => ({
+        ...parent,
+        rows: [
+          ...rows,
+          ...parent.rows,
+          ...(parent.rows.some((row) => row.type === 'child.park') ? [] : own),
+        ],
+      }));
+};
+
+/** A child's parent edge as a job reads it: a born child's from its rows,
+ *  an unborn one's from what this process holds of it (its launch's, less
+ *  a detach): an unborn child is held here, its launch's reservation. */
+export const parentEdgeIn = (
+  session: SessionHandle,
+  child: RunId,
+): Effect.Effect<RunId | null, Error> =>
+  Effect.gen(function* () {
+    if (!(yield* getRunRecords(session, child).exists()))
+      return session.runs.get(child)?.parent ?? null;
+    return (yield* persistedParentRunId(session, child)) ?? null;
+  });
+
+/**
+ * A child's message (`item.from`) to its parent, the edge read in the job
+ * that queues it: a born child's from its rows, an unborn one's from
+ * `parentOf` (its launch's, less a detach). A detach that committed first
+ * sends it nowhere. The parent it reached, or null when there is none or it
+ * refused.
+ */
+export const sendToParent = (
+  session: SessionHandle,
+  item: InboxItem & { readonly from: { readonly kind: 'run' } },
+  options: SendOptions,
+  trace: AgentTrace | undefined,
+): Effect.Effect<RunId | null, Error> =>
+  Effect.gen(function* () {
+    const sent = yield* session.log.transact((tx) =>
+      Effect.gen(function* () {
+        const to = yield* parentEdgeIn(session, item.from.runId);
+        if (to === null) return { to, committed: Effect.void };
+        const co = yield* parentAdmission(
+          session.followUps,
+          to,
+          item,
+          options,
+          trace,
+        );
+        yield* tx.append(co.rows);
+        return {
+          to: co.sent.kind === 'refused' ? null : to,
+          committed: co.committed,
+        };
+      }).pipe(Effect.scoped),
+    );
+    yield* sent.committed;
+    return sent.to;
+  });
+
+/**
+ * A child launch that failed before its run was born: no row of the child
+ * exists to settle on, so its parent hears the failure as input alone, and
+ * is woken for it.
+ */
+export const deliverLaunchFailure = (
+  session: SessionHandle,
+  child: RunId,
+  text: string,
+): Effect.Effect<void> =>
+  Effect.gen(function* () {
+    if (yield* getRunRecords(session, child).exists()) return;
+    const from = { kind: 'run', runId: child } as const;
+    const item = { text, from, deliveryId: `${child}:launch` };
+    const to = yield* sendToParent(session, item, {}, undefined);
+    if (to !== null) yield* wakeParent(session, { to, item }, undefined);
+  }).pipe(
+    // The launch's own failure stands; this one is said beside it.
+    Effect.catch((e) => warn(undefined, `${child}: not delivered`, e)),
+  );
+
+/** Commit a part in one transaction, then run what it left for after. */
+export const commitPart = (
+  { log }: Pick<SessionHandle, 'log'>,
+  part: TransactionPart,
+): Effect.Effect<void, Error> =>
+  Effect.flatten(
+    log.transact((tx) =>
+      Effect.gen(function* () {
+        const co = yield* part;
+        yield* tx.append(co.rows);
+        return co.committed;
+      }).pipe(Effect.scoped),
+    ),
+  );
+
+/** After the transaction that queued `delivery` committed: wake the parent
+ *  when no generation of it here reads it, for the delivery or the notice
+ *  its end queued in its place (`lostResultId`). A refused or already-read
+ *  delivery owes no wake. */
+export const wakeParent = (
+  session: SessionHandle,
+  delivery: ChildDelivery | undefined,
+  trace: AgentTrace | undefined,
+): Effect.Effect<void, Error> =>
+  Effect.gen(function* () {
+    const id = delivery?.item.deliveryId;
+    if (delivery === undefined || id === undefined) return;
+    const from = delivery.item.from;
+    const lost = from.kind === 'run' ? lostResultId(from.runId) : null;
+    const { followUps } = yield* session.followUps.read(delivery.to);
+    const waits = ({ followUpId }: { readonly followUpId: string }) =>
+      followUpId === id || (lost !== null && followUpId.startsWith(lost));
+    if (!followUps.some(waits)) return;
+    if (!(yield* startFollowUpWake(delivery.to, session)))
+      yield* warn(
+        trace,
+        'Turn result queued for the parent, but the parent could not be resumed; an explicit Resume delivers it.',
+        { parentRunId: delivery.to },
       );
-      if (report?.type !== 'run.report' || report.report === null) continue;
-      yield* session.followUps.send(parentRunId, {
-        text: report.report,
-        from: { kind: 'run', runId: childId },
-        deliveryId: row.delivery.followUpId,
-      });
-    }
-  }
-});
+  });

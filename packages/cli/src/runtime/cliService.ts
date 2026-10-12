@@ -11,25 +11,27 @@ import {
   Duration,
   Effect,
   Exit,
+  Queue,
   Scope,
+  Stream,
   type Context,
   type FileSystem,
   type Path,
 } from 'effect';
 
 import { API_KEY_ENV_NAMES } from '@texra-ai/llm';
-import { AppState, SessionOwner } from '@texra-ai/harness';
+import { AppState, SessionOwner, type Sessions } from '@texra-ai/harness';
 import {
   createNodeWorkspaceRoots,
   canonicalizeWorkspacePath,
   resolveGlobalStoragePath,
   resolveWorkspaceStoragePath,
 } from '@texra-ai/harness/node';
-import type { SessionHandle } from '@agent/runtime';
 import {
   openProjectStateStore,
   openRepoStateStore,
 } from '@controllers/session/appStateStore';
+import { onAppSignal } from '@eventBus/AppSignals';
 import { setLogSink, silentLogSink, writeLogLine } from '@logger/logSink';
 import { JsonStore } from '@platform/defaults/jsonStore';
 import { loginShellEnvironment } from '@platform/defaults/loginShellEnv';
@@ -40,8 +42,12 @@ import type {
   ProjectDatabases,
 } from '@shared/session/database';
 import { ownerIdentity, type OwnerId } from '@shared/schemas';
+import type { EditorHostShape } from '@texra/tools/editorHost';
 import type { ServiceInfo } from '@texra/controllers/server/protocol';
-import type { ServiceProjects } from '@texra/controllers/server/handlers';
+import type {
+  ServiceProject,
+  ServiceProjects,
+} from '@texra/controllers/server/handlers';
 import {
   ensureService,
   linkService,
@@ -72,6 +78,11 @@ export const cliServiceProjects = Effect.fn('cliServiceProjects')(function* (
     'storageRoot' | 'resourcesPath' | 'skillSourceOptions'
   >,
   scope: Scope.Scope,
+  /** The editor registry this process's plugins read. */
+  editors: EditorHostShape,
+  /** The process's sessions, which each project's session is also opened
+   *  through. */
+  sessions: Context.Service.Shape<typeof Sessions>,
 ) {
   const { storageRoot } = context;
   const globalStorage = resolveGlobalStoragePath(storageRoot);
@@ -139,8 +150,7 @@ export const cliServiceProjects = Effect.fn('cliServiceProjects')(function* (
   // the callers that use it. Opening, leasing and closing one run on the
   // project's lane, so a close sees every lease taken before it and an open
   // after it opens the project anew.
-  interface Project {
-    readonly session: SessionHandle;
+  interface Project extends ServiceProject {
     readonly scope: Scope.Closeable;
     leases: number;
     idleSince: number;
@@ -152,14 +162,17 @@ export const cliServiceProjects = Effect.fn('cliServiceProjects')(function* (
       let project = projects.get(root);
       if (project === undefined) {
         const projectScope = yield* Scope.fork(scope);
-        const session = yield* Effect.gen(function* () {
+        const opened = yield* Effect.gen(function* () {
           const roots = yield* openRoots(root, projectScope);
-          return yield* (yield* SessionOwner).open({
+          const handle = yield* (yield* SessionOwner).open({
             roots,
             interruptedTasks: 'offer',
           });
+          // The same session, as every host drives it.
+          const session = yield* sessions.open(roots, { persistent: true });
+          return { handle, session };
         }).pipe(Effect.onError(() => Scope.close(projectScope, Exit.void)));
-        project = { session, scope: projectScope, leases: 0, idleSince: 0 };
+        project = { ...opened, scope: projectScope, leases: 0, idleSince: 0 };
         projects.set(root, project);
       }
       project.leases += 1;
@@ -173,7 +186,10 @@ export const cliServiceProjects = Effect.fn('cliServiceProjects')(function* (
         if (project.leases === 0) project.idleSince = Date.now();
       }),
     ).pipe(
-      Effect.map((project) => project.session),
+      Effect.map(({ handle, session }): ServiceProject => ({
+        handle,
+        session,
+      })),
       Effect.mapError(ensureError),
       Effect.provideContext(services),
     );
@@ -185,7 +201,7 @@ export const cliServiceProjects = Effect.fn('cliServiceProjects')(function* (
       const project = projects.get(root);
       if (project === undefined || project.leases > 0) return undefined;
       const now = Date.now();
-      if (project.session.runs.heldIds().length > 0) {
+      if (project.handle.runs.get().length > 0) {
         project.idleSince = now;
         return undefined;
       }
@@ -193,19 +209,27 @@ export const cliServiceProjects = Effect.fn('cliServiceProjects')(function* (
       projects.delete(root);
       // The stores close even if the session's close fails.
       yield* (yield* SessionOwner)
-        .close(project.session.roots.storage)
+        .close(project.handle.roots.storage)
         .pipe(Effect.ensuring(Scope.close(project.scope, Exit.void)));
-      return project.session;
+      return project.handle;
     }).pipe(withPerKeyLane(lanes, root), Effect.provideContext(services));
   return {
     storageRoot,
+    editors,
     open,
+    filesWritten: Stream.callback<readonly string[]>((queue) =>
+      Effect.forkScoped(
+        onAppSignal('workspaceFilesWritten', ({ absolutePaths }) =>
+          Queue.offerUnsafe(queue, absolutePaths),
+        ),
+      ),
+    ),
     opened: Effect.sync(
       () =>
         new Map(
-          [...projects.values()].map(({ session }) => [
-            session.roots.storage,
-            session,
+          [...projects.values()].map(({ handle }) => [
+            handle.roots.storage,
+            handle,
           ]),
         ),
     ),

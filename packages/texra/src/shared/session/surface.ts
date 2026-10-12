@@ -13,7 +13,7 @@
  */
 import { z } from 'zod';
 
-import { DEFAULT_AGENT_MODEL } from '@shared/constants/defaultModels';
+import { DEFAULT_AGENT_MODEL } from '@texra-ai/harness/schemas';
 import {
   InquiryDraftSchema,
   LaunchTargetSchema,
@@ -30,8 +30,9 @@ import {
   type FollowUpHost,
   type SessionView,
   type RunView,
-} from './sessionView';
+} from '@shared/session/sessionView';
 import { markShownRunSeen } from './unseenRuns';
+import type { SessionView as ReadSessionView } from '@texra-ai/harness';
 import type { HostSnapshot } from './hostSnapshot';
 import type { RequestErrorWire } from './sessionFrames';
 
@@ -230,7 +231,7 @@ export function persistSurface(surface: Surface): PersistedSurface {
 
 function retain<V>(
   map: ReadonlyMap<RunId, V>,
-  view: SessionView,
+  view: Pick<ReadSessionView, 'runs'>,
 ): ReadonlyMap<RunId, V> {
   const retained = [...map].filter(([id]) => view.runs.has(id));
   return retained.length === map.size ? map : new Map(retained);
@@ -268,7 +269,9 @@ const PER_STREAM_MAPS = Object.keys(
  */
 export type SelectionRule = (selected: RunId | null) => RunId | null;
 
-function projectSelection(view: SessionView): SelectionRule {
+function projectSelection(
+  view: Pick<ReadSessionView, 'runs' | 'order'>,
+): SelectionRule {
   return (selected) =>
     selected === null || view.runs.has(selected)
       ? selected
@@ -284,7 +287,7 @@ function projectSelection(view: SessionView): SelectionRule {
  */
 export function pruneSurface(
   surface: Surface,
-  view: SessionView,
+  view: ReadSessionView,
   select: SelectionRule = projectSelection(view),
 ): Surface {
   // `retain` only ever drops entries, never changes a value, so each pruned

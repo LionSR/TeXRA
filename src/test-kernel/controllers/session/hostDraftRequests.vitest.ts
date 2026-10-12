@@ -7,7 +7,6 @@ import { expect, vi } from 'vitest';
 import { apiKeySecretName } from '@texra-ai/llm';
 import { RouteRetries } from '@agent/runtime/run/invocation';
 import { ModelRetryGate } from '@agent/runtime/ModelRetryGate';
-import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { AppState } from '@platform/interfaces';
 import {
   LanguageModel,
@@ -22,6 +21,7 @@ import { testHttpClientLayer } from '@test/support/fetchTestUtils';
 import { scriptedSpawnerLayer } from '@test/support/childProcessTestLayer';
 import { HostDraftRequests } from '@texra/controllers/session/hostDraftRequests';
 import type { RootedFileSystem } from '@utils/files/rootedFileSystem';
+import type { WorkspaceRoots } from '@texra-ai/harness';
 
 // The recorder module answers in Effects, so every double returns one: a
 // bare `vi.fn()` would hand the take fiber `undefined` to yield.
@@ -102,14 +102,13 @@ it.effect(
       );
       const requests = new HostDraftRequests();
       const first = {
-        roots: { storage: '/papers/first', ...makeFakeSettingsStores().stores },
-      } as SessionHandle;
+        storage: '/papers/first',
+        ...makeFakeSettingsStores().stores,
+      } as WorkspaceRoots;
       const second = {
-        roots: {
-          storage: '/papers/second',
-          ...makeFakeSettingsStores().stores,
-        },
-      } as SessionHandle;
+        storage: '/papers/second',
+        ...makeFakeSettingsStores().stores,
+      } as WorkspaceRoots;
       const snapshot = vi.fn();
       const unsubscribe = requests.subscribe(snapshot);
 
@@ -271,8 +270,9 @@ it.effect(
       );
       const requests = new HostDraftRequests();
       const session = {
-        roots: { storage: '/papers/first', ...makeFakeSettingsStores().stores },
-      } as SessionHandle;
+        storage: '/papers/first',
+        ...makeFakeSettingsStores().stores,
+      } as WorkspaceRoots;
 
       const take = yield* Effect.forkChild(
         requests.handle(
@@ -314,8 +314,9 @@ it.effect('rejects Start with the reason sox exited before Stop', () =>
     const snapshot = vi.fn();
     requests.subscribe(snapshot);
     const session = {
-      roots: { storage: '/papers/first', ...makeFakeSettingsStores().stores },
-    } as SessionHandle;
+      storage: '/papers/first',
+      ...makeFakeSettingsStores().stores,
+    } as WorkspaceRoots;
 
     expect(
       yield* Effect.flip(

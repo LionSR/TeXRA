@@ -1,15 +1,13 @@
 // Third-party imports
 import { Effect, type FileSystem } from 'effect';
 import { z } from 'zod';
-import { ToolContext } from '@texra-ai/harness';
-import type { RunCall } from '@agent/runtime/RunCall';
+import { defineTool, ToolContext } from '@texra-ai/harness';
 
 // Local imports - tools
 import { TikzPictureManager } from '@latex/TikzPictureManager';
 import type { WorkspaceFs } from '@platform/rootedFs';
 import { type ToolFileAttachment, type ToolResult } from '@shared/schemas';
 import { formatToolOutput } from '@tools/formatting';
-import { defineTool } from '@tools/core/define';
 import { pathToLocationIn } from '@utils/files/fileLocation';
 import { formatResultCount } from '@utils/text/stringUtils';
 import {
@@ -39,11 +37,7 @@ const extractTikzFigures = Effect.fn('ExtractTikzFiguresTool.execute')(
   }: ExtractTikzInput): Effect.fn.Return<
     ToolResult,
     Error,
-    | ToolContext
-    | RunCall
-    | FileSystem.FileSystem
-    | WorkspaceFs
-    | ChildProcessSpawner
+    ToolContext | FileSystem.FileSystem | WorkspaceFs | ChildProcessSpawner
   > {
     const call = yield* ToolContext;
     const { path, display } = yield* resolveLatexFile(texPath);

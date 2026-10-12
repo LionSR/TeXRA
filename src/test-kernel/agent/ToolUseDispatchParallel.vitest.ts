@@ -31,7 +31,6 @@ import { TestClock } from 'effect/testing';
 import { describe, expect } from 'vitest';
 import { z } from 'zod';
 import {
-  chooseReasoning,
   type Model,
   type ModelOrigin,
   type TurnResult,
@@ -47,7 +46,6 @@ import type {
   RuntimeToolRegistry,
   ToolServices,
 } from '@agent/runtime/ToolServices';
-import { makeRunCell, type RunCell } from '@agent/runtime/loop/runProgram';
 import { dispatchPendingResponse } from '@agent/runtime/loop/toolUseDispatch';
 import { appendRow, positionRow, rowAggregate } from '@agent/runtime/loop/rows';
 import { AgentRun, type AgentRunShape } from '@agent/runtime/run/AgentRun';
@@ -55,6 +53,7 @@ import { dispatchFactsFor, localCallsOf } from '@agent/runtime/run/tools';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { AgentTrace } from '@agent/trace';
 import type { BoundModel } from '@agent/runtime/modelAccess/ModelAccess';
+import { routePolicies } from '@agent/runtime/modelAccess/failureInfo';
 import type { PluginContext } from '@platform/processRuntime';
 import { MODEL_RETRY_MAX_ATTEMPTS_SETTING } from '@shared/schemas';
 import { DatabaseWriteFailed } from '@shared/session/database';
@@ -64,7 +63,7 @@ import {
   type RunId,
   type ToolResult,
 } from '@shared/schemas';
-import { RunHistory } from '@shared/session/runHistory';
+import { RunHistory, type RunCell } from '@shared/session/runHistory';
 import { freshRunState, type RunState } from '@shared/session/runStateFold';
 import { testAgentRun } from '@test/support/scriptedRunLayers';
 import { closeSessionOf } from '@test/support/sessionEnd';
@@ -110,11 +109,11 @@ function probeTool(
   probe: DispatchProbe,
   name: string,
   wait: number | Effect.Effect<void>,
-  options: { endTurn?: boolean; parallelSafe?: boolean } = {},
+  options: { endTurn?: boolean; lane?: ITool['lane'] } = {},
 ): ITool {
   return {
     definition: { name, description: name, parameters: {} },
-    parallelSafe: options.parallelSafe,
+    lane: options.lane,
     call: Effect.fn(function* (input: unknown): Effect.fn.Return<ToolResult> {
       const tag = `${name}:${JSON.stringify(input)}`;
       probe.events.push(`start ${tag}`);
@@ -171,26 +170,38 @@ function boundModel(): BoundModel {
   };
   return {
     modelId: GPT54,
-    config: MODEL_CONFIGS[GPT54],
-    reasoning: chooseReasoning(MODEL_CONFIGS[GPT54]),
+    config: {
+      ...MODEL_CONFIGS[GPT54],
+      capabilities: {
+        ...MODEL_CONFIGS[GPT54].capabilities,
+        supportsVision: false,
+        supportsNativePdf: false,
+        supportsNativeAudio: false,
+      },
+    },
     backend: 'openai',
     model,
     origin: ORIGIN,
     route: { kind: 'api-key', provider: 'openai', usageRoute: 'api-key' },
-    usageRoute: 'api-key',
-    contextWindow: MODEL_CONFIGS[GPT54].contextWindow,
-    supportsVision: false,
-    supportsNativePdf: false,
-    supportsNativeAudio: false,
-    supportsForcedToolChoice: true,
-    wireRouteKey: 'wire',
-    modelRetryRouteKey: `wire:${GPT54}`,
-    backgroundCapable: false,
+    forcedToolChoice: true,
     persistentConnection: false,
+    billing: {},
+    routes: routePolicies(['wire'], GPT54),
+    delivery: Effect.succeed('foreground'),
     automaticRetries: MODEL_RETRY_MAX_ATTEMPTS_SETTING.defaultValue,
     textOnly: false,
   };
 }
+
+/** `config` with a route that carries images and PDFs. */
+const withDocuments = (config: BoundModel['config']): BoundModel['config'] => ({
+  ...config,
+  capabilities: {
+    ...config.capabilities,
+    supportsVision: true,
+    supportsNativePdf: true,
+  },
+});
 
 let dispatchRunCounter = 0;
 const dispatchRunId = (): RunId =>
@@ -237,7 +248,6 @@ interface DispatchKit {
   /** The cell a live dispatch runs on: opened before the response, which
    *  it then committed, as the invoker's does. */
   readonly cell: RunCell;
-  readonly readFiles: Set<string>;
   /** The tools the dispatch's step offers. */
   readonly tools: RuntimeToolRegistry;
   readonly layer: Layer.Layer<
@@ -269,17 +279,16 @@ const openDispatch = Effect.fn('openDispatch')(function* (
   const tools = new MapToolRegistry(options.tools);
   publishTestRunStart(session, runId);
   yield* session.log.settled;
-  yield* session.runHistory.acquire(runId);
-  const opened = yield* session.runHistory.appendBatch(runId, null, [
+  const cell = yield* session.runHistory.open(runId, {
+    activation: () => Effect.succeed([]),
+  });
+  yield* cell.append([
     appendRow(runId, [
       { role: 'user', content: [{ kind: 'text', text: 'go' }] },
     ]),
     positionRow(runId, freshState(), 'turn.ready'),
   ]);
   const turn = turnWithCalls(options.calls);
-  const cell = yield* makeRunCell(runId, opened).pipe(
-    Effect.provideService(RunHistory, session.runHistory),
-  );
   const state = yield* cell.append([
     {
       type: 'model.message',
@@ -331,7 +340,6 @@ const openDispatch = Effect.fn('openDispatch')(function* (
     session,
     state,
     cell,
-    readFiles: new Set<string>(),
     tools,
     layer,
   } satisfies DispatchKit;
@@ -339,7 +347,7 @@ const openDispatch = Effect.fn('openDispatch')(function* (
 
 /** Dispatch the pending response of an opened run. */
 const dispatch = (kit: DispatchKit) =>
-  dispatchPendingResponse(kit.cell, kit.readFiles, {
+  dispatchPendingResponse(kit.cell, {
     definitions: [],
     registry: kit.tools,
     offered: [],
@@ -537,9 +545,9 @@ describe('tool-use dispatch', () => {
       });
       const kit = yield* openDispatch({
         tools: {
-          grep: probeTool(probe, 'grep', awaitSibling, { parallelSafe: true }),
+          grep: probeTool(probe, 'grep', awaitSibling, { lane: 'parallel' }),
           read_file: probeTool(probe, 'read_file', awaitSibling, {
-            parallelSafe: true,
+            lane: 'parallel',
           }),
         },
         calls: [
@@ -567,7 +575,7 @@ describe('tool-use dispatch', () => {
       const probe = newProbe();
       const kit = yield* openDispatch({
         tools: {
-          read_file: probeTool(probe, 'read_file', 20, { parallelSafe: true }),
+          read_file: probeTool(probe, 'read_file', 20, { lane: 'parallel' }),
           write_file: probeTool(probe, 'write_file', 10),
         },
         calls: [
@@ -631,7 +639,7 @@ describe('tool-use dispatch', () => {
       Effect.gen(function* () {
         const probe = newProbe();
         const kit = yield* openDispatch({
-          tools: { grep: probeTool(probe, 'grep', 5, { parallelSafe: true }) },
+          tools: { grep: probeTool(probe, 'grep', 5, { lane: 'parallel' }) },
           calls: [
             makeCall('c1', 'grep', { pattern: 'same' }),
             makeCall('c2', 'grep', { pattern: 'same' }),
@@ -731,10 +739,10 @@ describe('tool-use dispatch', () => {
       const kit = yield* openDispatch({
         tools: {
           grep: probeTool(probe, 'grep', awaitInterruption, {
-            parallelSafe: true,
+            lane: 'parallel',
           }),
           read_file: probeTool(probe, 'read_file', awaitInterruption, {
-            parallelSafe: true,
+            lane: 'parallel',
           }),
         },
         calls: [
@@ -780,8 +788,8 @@ describe('tool-use dispatch', () => {
       const probe = newProbe();
       const kit = yield* openDispatch({
         tools: {
-          grep: probeTool(probe, 'grep', 0, { parallelSafe: true }),
-          read_file: probeTool(probe, 'read_file', 0, { parallelSafe: true }),
+          grep: probeTool(probe, 'grep', 0, { lane: 'parallel' }),
+          read_file: probeTool(probe, 'read_file', 0, { lane: 'parallel' }),
         },
         calls: [
           makeCall('c1', 'grep', { pattern: 'a' }),
@@ -789,9 +797,7 @@ describe('tool-use dispatch', () => {
         ],
       });
       const aggregateId = rowAggregate(kit.runId);
-      const cell = yield* makeRunCell(kit.runId, kit.state).pipe(
-        Effect.provide(kit.layer),
-      );
+      const cell = kit.cell;
       yield* cell.append(
         ['c1', 'c2'].map((callId) => ({
           type: 'tool.intent' as const,
@@ -849,7 +855,7 @@ describe('tool-use dispatch', () => {
       const probe = newProbe();
       const kit = yield* openDispatch({
         tools: {
-          read_file: probeTool(probe, 'read_file', 5, { parallelSafe: true }),
+          read_file: probeTool(probe, 'read_file', 5, { lane: 'parallel' }),
           write_file: probeTool(probe, 'write_file', 5),
         },
         calls: [
@@ -962,8 +968,7 @@ describe('tool-use dispatch', () => {
           bound: {
             ...boundModel(),
             model: uploading,
-            supportsVision: true,
-            supportsNativePdf: true,
+            config: withDocuments(boundModel().config),
           },
         });
         const delivering = yield* Effect.forkChild(dispatch(kit));
@@ -1026,8 +1031,7 @@ describe('tool-use dispatch', () => {
         bound: {
           ...boundModel(),
           model: uploading,
-          supportsVision: true,
-          supportsNativePdf: true,
+          config: withDocuments(boundModel().config),
         },
       });
       const delivering = yield* Effect.forkChild(dispatch(kit));
@@ -1073,8 +1077,7 @@ describe('tool-use dispatch', () => {
         bound: {
           ...boundModel(),
           model: uploading,
-          supportsVision: true,
-          supportsNativePdf: true,
+          config: withDocuments(boundModel().config),
         },
       });
       const { state } = yield* dispatch(kit);

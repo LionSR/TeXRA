@@ -11,11 +11,11 @@ import { Clock, Duration, Effect, Semaphore } from 'effect';
 import { z } from 'zod';
 
 // Local imports
+import { defineTool } from '@texra-ai/harness';
 import { normaliseArxivIdentifier } from '@latex/arxivIdentifier';
 import { withLogChannel } from '@logger/effectLog';
 import { ToolError } from '@shared/schemas';
 import { requireNonEmptyString } from '@tools/utils';
-import { defineTool } from '@tools/core/define';
 import { nullishWithDefault } from '@tools/core/inputSchema';
 import { executed } from '@tools/core/result';
 import { pluralize } from '@utils/text/stringUtils';
@@ -224,7 +224,7 @@ const searchArxiv = Effect.fn('ArxivSearchTool.execute')(function* (
 export const ArxivSearchTool = defineTool({
   name: 'arxiv_search',
   replay: 'safe',
-  parallelSafe: true,
+  lane: 'parallel',
   description:
     'Search arXiv for papers and return basic metadata for each hit. Use field="author" for author name searches.',
   schema: ArxivSearchInputSchema,

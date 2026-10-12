@@ -1,6 +1,7 @@
 // Local imports - tool result schemas
 import {
   type FileReference,
+  type ToolFact,
   type ToolFileAttachment,
   type ToolResult,
   ToolResultSchema,
@@ -33,8 +34,11 @@ function sanitizeDiagnostics(
 interface ExtractedToolAttachments {
   /** Extracted file attachments with binary data. */
   attachments: ToolFileAttachment[];
-  /** Sanitized result payload without binary data. */
+  /** Sanitized result payload without binary data or facts. */
   sanitizedResult: ToolResult;
+  /** The facts an executed result states about its run, which commit as
+   *  rows beside its settlement, never on the stored result. */
+  facts: readonly ToolFact[];
 }
 
 /**
@@ -45,10 +49,12 @@ interface ExtractedToolAttachments {
  * success vs error before this projection sees the result.
  *
  * @param result - Raw tool result, possibly containing binary data.
+ * @param checkFacts - Throws on a fact the calling tool may not state.
  * @returns Extracted attachments and typed payload without binary data.
  */
 export function extractToolAttachments(
   result: ToolResult,
+  checkFacts: (facts: readonly ToolFact[]) => void = () => undefined,
 ): ExtractedToolAttachments {
   // The parse IS the field whitelist: `ToolResultSchema` has no catchall, so
   // every undeclared key is already stripped here. Re-listing the declared
@@ -64,6 +70,7 @@ export function extractToolAttachments(
     const diagnostics = sanitizeDiagnostics(rawDiagnostics);
     return {
       attachments: [],
+      facts: [],
       sanitizedResult: {
         ...rest,
         ...(diagnostics !== undefined ? { diagnostics } : {}),
@@ -71,12 +78,14 @@ export function extractToolAttachments(
     };
   }
 
-  const { files, diagnostics: rawDiagnostics, ...rest } = parsed;
+  const { files, facts = [], diagnostics: rawDiagnostics, ...rest } = parsed;
+  checkFacts(facts);
   const diagnostics = sanitizeDiagnostics(rawDiagnostics);
   const attachments: ToolFileAttachment[] = files ?? [];
 
   return {
     attachments,
+    facts,
     sanitizedResult: {
       ...rest,
       // Binary payloads (base64Data/bytes) are the one thing the schema keeps

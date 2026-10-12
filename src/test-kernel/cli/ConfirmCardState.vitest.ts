@@ -4,7 +4,7 @@ import {
   confirmCardKeyDecision,
   confirmCardKeyRows,
 } from '@cli/chat/tui/modals/ConfirmCardState';
-import { APPROVE_SESSION_ACTION } from '@shared/session/approvalDecision';
+import { APPROVE_SESSION_ACTION } from '@texra/shared/session/surfaceDecision';
 
 describe('CLI confirm-card key handling', () => {
   const feedbackRows = confirmCardKeyRows({ rejectionMode: 'feedback' });

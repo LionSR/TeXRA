@@ -91,7 +91,9 @@ export const ROW_KINDS: Readonly<Record<SessionEventDraft['type'], RowKind>> = {
   'run.report': V1,
   'run.result': V1,
   'followup.closed': V1,
-  'model.message': V1,
+  // v2: dispatch facts record `lane`, not `parallelSafe` (no upcaster: an
+  // earlier build's v1 row refuses its run as written by that build).
+  'model.message': { version: 2, upcast: [] },
   'context.edit': V1,
   'tool.intent': V1,
   'script.call': V1,

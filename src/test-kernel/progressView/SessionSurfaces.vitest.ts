@@ -5,24 +5,24 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 // Local imports
 import { createSessionSurfaces } from '@progressView/frontend/sessionSurfaces';
 import type { WebviewTransport } from '@progressView/frontend/sessionTransport';
-import {
-  emptyHostSnapshot,
-  type HostSnapshot,
-} from '@shared/session/hostSnapshot';
-import type { HostRequest } from '@shared/session/hostRequest';
-import type { Response } from '@shared/session/sessionFrames';
 import type { RuntimeRequest } from '@shared/session/runtimeRequest';
 import { emptySessionView } from '@shared/session/sessionView';
-import {
-  LaunchPatchSchema,
-  PersistedSurfaceSchema,
-} from '@shared/session/surface';
 import {
   buildScenario,
   CHILD,
   foldAll,
   ROOT,
 } from '@test/shared/session/fanOutScenario';
+import {
+  emptyHostSnapshot,
+  type HostSnapshot,
+} from '@texra/shared/session/hostSnapshot';
+import type { HostRequest } from '@texra/shared/session/hostRequest';
+import type { Response } from '@texra/shared/session/sessionFrames';
+import {
+  LaunchPatchSchema,
+  PersistedSurfaceSchema,
+} from '@texra/shared/session/surface';
 import {
   createWebviewStorage,
   type KeyValueStore,

@@ -1,7 +1,6 @@
 import { Effect, FileSystem } from 'effect';
 import { z } from 'zod';
 import { ToolContext } from '@texra-ai/harness';
-import type { RunCall } from '@agent/runtime/RunCall';
 import {
   ToolError,
   type ToolFileAttachment,
@@ -58,7 +57,7 @@ export const resolveLatexFile = Effect.fn('tools.resolveLatexFile')(function* (
 ): Effect.fn.Return<
   LatexFileResolution,
   ToolError | Error,
-  ToolContext | RunCall | FileSystem.FileSystem
+  ToolContext | FileSystem.FileSystem
 > {
   const call = yield* ToolContext;
   const fs = yield* FileSystem.FileSystem;
@@ -84,7 +83,7 @@ export const buildLimitedAttachments = Effect.fn(
 ): Effect.fn.Return<
   AttachmentLimitResult,
   ToolError,
-  ToolContext | RunCall | FileSystem.FileSystem
+  ToolContext | FileSystem.FileSystem
 > {
   if (paths.length === 0 || limit <= 0) {
     return { attachments: [], limitedPaths: [], limitReached: false };

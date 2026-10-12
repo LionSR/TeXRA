@@ -6,7 +6,7 @@
  */
 import type { RunId } from '@shared/schemas';
 
-import type { SessionView } from './sessionView';
+import type { SessionView } from '@shared/session/sessionView';
 import type { Surface } from './surface';
 
 /** The surface with its shown top-level run recorded as seen as `view`

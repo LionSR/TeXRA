@@ -29,13 +29,13 @@ import {
 } from './installRecord';
 import { readPluginCandidates, type PluginCandidate } from './marketplace';
 import { pluginDataDir } from './pluginHooks';
+import { rereadPlugin } from './pluginTrust';
 import { checkoutDetached, fetchPinned } from './pluginGit';
 import {
   ioError,
   PluginError,
   PluginRequestError,
   readPlugin,
-  type ResolvedPlugin,
 } from './pluginManifest';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
@@ -380,21 +380,6 @@ export function removePlugin(name: string, env: PluginEnv) {
     return plugin === undefined
       ? { name, path: dir, local, leftover: true }
       : { name, path: plugin.path, local, leftover: false };
-  });
-}
-
-/**
- * Reread a recorded plugin's manifest. Its record stands in for a manifest
- * it never had (a plugin a marketplace entry described).
- */
-export function rereadPlugin(
-  plugin: InstalledPlugin,
-): Effect.Effect<ResolvedPlugin, PluginError, FileSystem.FileSystem> {
-  return readPlugin(plugin.path, {
-    name: plugin.name,
-    version: plugin.version,
-    description: plugin.description,
-    skills: plugin.skills.map((skill) => path.relative(plugin.path, skill)),
   });
 }
 

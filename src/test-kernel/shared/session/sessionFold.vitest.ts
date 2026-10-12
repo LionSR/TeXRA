@@ -47,9 +47,12 @@ import {
   loadSurface,
   persistSurface,
   PersistedSurfaceSchema,
-} from '@shared/session/surface';
-import { markShownRunSeen, unseenRuns } from '@shared/session/unseenRuns';
-import { DOCUMENTS_OUTPUT_ARM, documentsOf } from '@shared/plugins/documents';
+} from '@texra/shared/session/surface';
+import { markShownRunSeen, unseenRuns } from '@texra/shared/session/unseenRuns';
+import {
+  DOCUMENTS_OUTPUT_ARM,
+  documentsOf,
+} from '@texra/shared/plugins/documents';
 
 import { createExternalLocation } from '@utils/files/fileLocation';
 
@@ -1365,7 +1368,7 @@ const CALLS = [
     callId: 'call-a',
     toolName: 'bash',
     ordinal: 0,
-    parallelSafe: false,
+    lane: 'barrier',
     replay: 'unsafe',
     duplicateOf: null,
     logId: 'card-0',
@@ -1375,7 +1378,7 @@ const CALLS = [
     callId: 'call-b',
     toolName: 'bash',
     ordinal: 1,
-    parallelSafe: false,
+    lane: 'barrier',
     replay: 'unsafe',
     duplicateOf: 'call-a',
     logId: 'card-1',

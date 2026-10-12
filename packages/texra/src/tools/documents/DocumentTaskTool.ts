@@ -2,27 +2,24 @@
  * The `document_task` tool: run a named agent's document task as a child of
  * the calling run. The child is a run of the agent opened on the document
  * recipe (`@agent/output/documentRecipe`), launched through the same core as
- * `agent` (`launchChildAgent`): one proposal, one reuse key, one in-band or
+ * `agent` (the `ChildRuns` launch): one proposal, one reuse key, one in-band or
  * detached child. A model that wants a conversation calls `agent` instead.
  */
 import { Effect } from 'effect';
 import { z } from 'zod';
 
+import { defineTool } from '@texra-ai/harness';
+import { requireRun } from '@texra-ai/harness/plugins';
+import { ChildRuns } from '@texra-ai/harness/plugins';
 import {
   findAgentByIdentifier,
   getCatalogAgent,
   resolveDelegationScopeAgents,
 } from '@agent/index/agentRegistry';
-import { requireToolRun } from '@agent/runtime/RunCall';
 import { agentKey, DEFAULT_TOOL_CONFIG } from '@shared/schemas';
 import { documentTaskConfig } from '@texra/agent/output/documentRecipe';
-import { defineTool } from '@tools/core/define';
 import { errorResult } from '@tools/core/result';
-import {
-  CALL_FIELDS,
-  fileList,
-  launchChildAgent,
-} from '@tools/delegation/AgentTool';
+import { CALL_FIELDS, fileList } from '@tools/delegation/AgentTool';
 
 const DocumentTaskInputSchema = z.strictObject({
   prompt: z
@@ -69,7 +66,7 @@ type DocumentTaskInput = z.infer<typeof DocumentTaskInputSchema>;
 const runDocumentTask = Effect.fn('DocumentTaskTool.call')(function* (
   input: DocumentTaskInput,
 ) {
-  const call = yield* requireToolRun('document_task');
+  const call = yield* requireRun('document_task');
   const agents = yield* resolveDelegationScopeAgents(
     call.env.roots,
     call.run.delegationAgentScope ?? undefined,
@@ -83,7 +80,7 @@ const runDocumentTask = Effect.fn('DocumentTaskTool.call')(function* (
     return errorResult(
       `'${input.agentName}' revises files: pass the files it revises as \`inputFiles\`.`,
     );
-  return yield* launchChildAgent({
+  return yield* (yield* ChildRuns).launch({
     tool: 'document_task',
     agentName: input.agentName,
     prompt: input.prompt,
@@ -125,9 +122,10 @@ const runDocumentTask = Effect.fn('DocumentTaskTool.call')(function* (
 /** The `document_task` tool. */
 export const DocumentTaskTool = defineTool({
   name: 'document_task',
+  launchesTasks: true,
   requiresApproval: 'inBody',
   replay: 'safe',
-  ownsConcurrency: true,
+  lane: 'own',
   scriptGlobal: { positional: 'prompt' },
   scriptReturns:
     "{ response: string; documents: { outputs: { relativePath: string; absolutePath: string; added: number | null; removed: number | null }[] }; runId: string; outcome: 'completed'; cost: number } | { runId: string }",

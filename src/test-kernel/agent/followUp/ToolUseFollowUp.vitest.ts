@@ -10,7 +10,6 @@ import {
   submitFollowUp,
 } from '@agent/followUp/ToolUseFollowUp';
 import type { ToolUseFollowUpTarget } from '@agent/runtime/runRegistry';
-import { AgentEngine } from '@agent/runtime/AgentEngine';
 import type {
   SessionHandle,
   SessionTransaction,
@@ -30,6 +29,7 @@ import {
 import { runRelation } from '@shared/session/runRelation';
 import type { QueuedFollowUp } from '@shared/session/runRows';
 import type { Append } from '@shared/session/sessionEvents';
+import { runStateAppend } from '@shared/session/runHistory';
 import { createDeferred } from '@test/support/asyncTestUtils';
 import { generateRunId } from '@utils/core';
 
@@ -45,7 +45,7 @@ function mockTryResume(): Mock<() => Effect.Effect<boolean, Error>> {
 type TryResume = (runId: RunId) => Effect.Effect<boolean, Error>;
 
 /** The case's answer to the one resume a wake reaches: whether the run took
- *  it. The fake session's fork serves it as the engine's resume. */
+ *  it. The fake session's runs serve it as their resume. */
 let tryResume: TryResume = () => Effect.succeed(false);
 
 const withResumePort =
@@ -101,40 +101,48 @@ function recordedFollowUps(
       rows.push(...committed);
       return Effect.succeed(committed);
     });
-  const followUps = new Inbox({
-    log: {
-      transact: <A, E>(
-        work:
-          | readonly SessionEventDraft[]
-          | ((tx: SessionTransaction) => Effect.Effect<A, E>),
-      ) =>
-        typeof work === 'function'
-          ? publisher.withPermits(1)(work({ append, claim: () => Effect.void }))
-          : publisher.withPermits(1)(append(work)),
-      rows: (id, types) =>
-        Effect.sync(() =>
-          rows.filter(
-            (row) =>
-              row.aggregateId === id &&
-              (types === undefined || types.includes(row.type)),
-          ),
+  const log = {
+    transact: <A, E>(
+      work:
+        | readonly SessionEventDraft[]
+        | ((tx: SessionTransaction) => Effect.Effect<A, E>),
+    ) =>
+      typeof work === 'function'
+        ? publisher.withPermits(1)(
+            work({ append, claim: () => Effect.void, afterCommit: (a) => a }),
+          )
+        : publisher.withPermits(1)(runStateAppend(append)(work)),
+    rows: (id, types) =>
+      Effect.sync(() =>
+        rows.filter(
+          (row) =>
+            row.aggregateId === id &&
+            (types === undefined || types.includes(row.type)),
         ),
-      hold: (runId) =>
-        Effect.suspend(() => {
-          claims.push(runId);
-          return options.claimRefused
-            ? Effect.fail(
-                new DatabaseWriteFailed({
-                  path: ':memory:',
-                  cause: new DatabaseClaimRefused({
-                    ownerId: JSON.stringify(['other-host', 4321, null]),
-                    verdict: 'alive',
-                  }),
+      ),
+    // A run's record rows: what a parent-only send reads its edge from.
+    records: (runId: RunId) =>
+      Effect.sync(() =>
+        rows.filter((row) => row.aggregateId === aggregateId('run', runId)),
+      ),
+    hold: (runId) =>
+      Effect.suspend(() => {
+        claims.push(runId);
+        return options.claimRefused
+          ? Effect.fail(
+              new DatabaseWriteFailed({
+                path: ':memory:',
+                cause: new DatabaseClaimRefused({
+                  ownerId: JSON.stringify(['other-host', 4321, null]),
+                  verdict: 'alive',
                 }),
-              )
-            : Effect.void;
-        }),
-    } as InboxPort['log'],
+              }),
+            )
+          : Effect.void;
+      }),
+  } as InboxPort['log'];
+  const followUps = new Inbox({
+    log,
     detach: (job) => {
       Effect.runFork(publisher.withPermits(1)(job(append)));
     },
@@ -171,30 +179,28 @@ let recorded = recordedFollowUps();
 function fakeSession(target: ToolUseFollowUpTarget): SessionHandle {
   recorded = recordedFollowUps();
   const { followUps, live } = recorded;
-  /** The engine's resume, as `resumeRun` runs it: one in flight per run,
+  /** The session's resume, as `resumeRun` runs it: one in flight per run,
    *  and a run that took it is live here from then on. */
-  const engine = {
-    resumeRun: (runId: RunId) =>
-      followUps
-        .resumeOnce(
-          runId,
-          Effect.map(tryResume(runId), (resumed) => {
-            if (!resumed) return { failed: 'not_resumable' as const };
-            live.add(runId);
-            return { started: true as const, delivered: true };
-          }),
-        )
-        .pipe(Effect.map(({ result }) => result)),
-  } as unknown as AgentEngine['Service'];
+  const resume = (runId: RunId) =>
+    followUps
+      .resumeOnce(
+        runId,
+        Effect.map(tryResume(runId), (resumed) => {
+          if (!resumed) return { failed: 'not_resumable' as const };
+          live.add(runId);
+          return { started: true as const, delivered: true };
+        }),
+      )
+      .pipe(Effect.map(({ result }) => result));
   return {
     runs: {
+      resume,
       getToolUseFollowUpTarget: () => target,
-      isLive: (runId: RunId) => live.has(runId),
+      get: (runId: RunId) =>
+        live.has(runId) ? { runId, live: true } : undefined,
       // The session's fork: the attempt outlives the fiber that asked.
-      fork: (program: Effect.Effect<unknown, unknown, AgentEngine>) =>
-        Effect.forkDetach(Effect.provideService(program, AgentEngine, engine), {
-          startImmediately: true,
-        }),
+      fork: (program: Effect.Effect<unknown, unknown>) =>
+        Effect.forkDetach(program, { startImmediately: true }),
     },
     view: { run: () => ({}) },
     interactions: { emit: () => Effect.void },
@@ -773,7 +779,7 @@ describe('Inbox closed input', () => {
         const { followUps, queued } = recordedFollowUps();
         const closed = generateRunId();
         const open = generateRunId();
-        followUps.closeInput(closed);
+        yield* followUps.closeInput(closed);
         yield* settle;
 
         expect(
@@ -798,7 +804,7 @@ describe('Inbox closed input', () => {
       const { followUps, queued } = recordedFollowUps();
       const id = generateRunId();
       yield* followUps.send(id, user('raced'));
-      followUps.closeInput(id);
+      yield* followUps.closeInput(id);
       yield* settle;
 
       expect(yield* followUps.send(id, user('later'))).toMatchObject({

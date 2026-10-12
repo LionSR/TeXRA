@@ -10,9 +10,9 @@ import { ModelAccess } from '@agent/runtime/modelAccess/ModelAccess';
 import type { QueuedFollowUp } from '@shared/session/runRows';
 import type { RunState } from '@shared/session/runStateFold';
 
+import type { RunCell } from '@shared/session/runHistory';
 import { AgentRun, type AgentRunShape } from '../run/AgentRun';
 import { configRow, consumedRows } from './rows';
-import type { RunCell } from './runProgram';
 
 /** Apply the model switches the run's input queues (the latest wins): the
  *  `run.config` naming the new model and the requests' `followup.consumed`,
@@ -70,8 +70,11 @@ export const applyPendingModelSwitch = Effect.fn('toolUse.applyModelSwitch')(
   },
 );
 
-/** The host port's switch methods: whether `model` can replace the run's,
- *  and the admission the loop applies at its next model boundary. */
+const control = { kind: 'compact' } as const;
+
+/** The host port's queued requests: a model switch (whether `model` can
+ *  replace the run's, and the admission the loop applies at its next model
+ *  boundary) and a `/compact`, each answered once its row commits. */
 export function modelSwitchPort(
   run: AgentRunShape,
   access: ModelAccess['Service'],
@@ -84,6 +87,16 @@ export function modelSwitchPort(
       run.declinedRoutes,
     );
   return {
+    requestImmediateCompaction: () =>
+      run.session.followUps
+        .send(run.runId, { text: '/compact', from: { kind: 'user' }, control })
+        .pipe(
+          Effect.filterOrFail(
+            (sent) => sent.kind !== 'refused',
+            () => new Error('This conversation takes no more input.'),
+          ),
+          Effect.asVoid,
+        ),
     modelSwitchDisabledReason: (model: string) =>
       Effect.map(admission(model), (refused) => refused?.reason),
     switchModel: Effect.fn('toolUse.switchModel')(function* (model: string) {
@@ -93,11 +106,16 @@ export function modelSwitchPort(
       // Queued on the run's input, durable at once; the loop binds and
       // records it at its next model boundary, which consumes it. A switch
       // back to the current model is queued too: the latest request wins.
-      yield* run.session.followUps.send(run.runId, {
+      const sent = yield* run.session.followUps.send(run.runId, {
         text: `/model ${model}`,
         from: { kind: 'user' },
         control: { kind: 'model', model },
       });
+      // Its input closed while the switch was admitted: nothing switches.
+      if (sent.kind === 'refused')
+        return yield* Effect.fail(
+          new Error('This conversation takes no more input.'),
+        );
     }),
   };
 }

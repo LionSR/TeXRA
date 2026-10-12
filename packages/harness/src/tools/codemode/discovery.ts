@@ -7,7 +7,7 @@
  * needs.
  */
 import { Predicate } from 'effect';
-import type { ScriptDoor } from '@agent/runtime/RunCall';
+import { type ScriptDoor } from '@agent/runtime/RunCall';
 
 import { declarationOf, firstSentence, inputSchema } from './declarations';
 

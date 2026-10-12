@@ -1,6 +1,7 @@
 import { it } from '@effect/vitest';
 import { Effect } from 'effect';
 import { describe, expect } from 'vitest';
+import { registryOf } from '@agent/runtime/runRegistry';
 
 import { submitFollowUp } from '@agent/followUp/ToolUseFollowUp';
 import { TraceEmitter } from '@agent/trace';
@@ -98,7 +99,7 @@ describe('session-owned transcripts and follow-up queues', () => {
       yield* a.followUps.open(runId);
       yield* b.followUps.open(runId);
 
-      a.followUps.closeInput(runId);
+      yield* a.followUps.closeInput(runId);
       yield* a.log.settled;
 
       const late = { from: { kind: 'user' as const }, text: 'late' };
@@ -121,14 +122,14 @@ describe('sendFollowUp host-path session routing', () => {
         const parentRun = publishTestRunStart(processSession);
         yield* processSession.log.settled;
         yield* Effect.addFinalizer(() =>
-          Effect.sync(() =>
-            processSession.followUps.closeInput(parentRun),
-          ).pipe(Effect.andThen(closeSessionOf(processSession))),
+          processSession.followUps
+            .closeInput(parentRun)
+            .pipe(Effect.andThen(closeSessionOf(processSession))),
         );
 
         // A child run is tracked in the explicit process session, as desktop
         // composition does instead of using the module default.
-        processSession.runs.track(
+        registryOf(processSession.runs).track(
           testRunHandle({
             runId: generateRunId(),
             parent: parentRun,

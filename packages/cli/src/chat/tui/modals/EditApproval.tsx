@@ -3,7 +3,7 @@ import { Box, Text, useWindowSize } from 'ink';
 
 import { COLOR_HINT } from '@cli/tui/ui/colors';
 import { clampModalWidth, isCompactRows } from '@cli/tui/ui/theme';
-import type { SurfaceDecision } from '@shared/session/approvalDecision';
+import type { SurfaceDecision } from '@texra/shared/session/surfaceDecision';
 import { buildDiffHunks } from '@utils/text/unifiedDiff';
 import { formatResultCount } from '@utils/text/stringUtils';
 

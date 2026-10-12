@@ -10,7 +10,7 @@ import { Effect } from 'effect';
 import { z } from 'zod';
 
 // Local imports - core
-import { defineTool } from '@tools/core/define';
+import { defineTool } from '@texra-ai/harness';
 import { executed } from '@tools/core/result';
 import { formatResultCount } from '@utils/text/stringUtils';
 
@@ -197,7 +197,7 @@ const searchZotero = Effect.fn('ZoteroSearchTool.execute')(function* (
 export const ZoteroSearchTool = defineTool({
   name: 'zotero_search',
   replay: 'safe',
-  parallelSafe: true,
+  lane: 'parallel',
   description:
     'Search Zotero library by citation key, title, author, or year. ' +
     'Prefer the structured title/author/year fields over a single query string. ' +

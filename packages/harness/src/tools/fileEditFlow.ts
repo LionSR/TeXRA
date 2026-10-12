@@ -4,10 +4,10 @@ import * as nodePath from 'node:path';
 import { Cause, Effect, FileSystem } from 'effect';
 
 // Local imports - common
-import type { RunCall } from '@agent/runtime/RunCall';
 import { ToolContext } from '@agent/core/tools/ToolTypes';
 
 // Local imports - shared schemas
+import { requireFileReadForEdit } from '@agent/runtime/RunCall';
 import type { AgentCatalogServices } from '@platform/processRuntime';
 import { WorkspaceFs } from '@platform/rootedFs';
 import { ToolError, type ToolResult } from '@shared/schemas';
@@ -15,7 +15,6 @@ import { resolveToolPath } from '@tools/pathResolution';
 
 // Local imports - tools
 import { reloadAgentCatalog } from '@tools/agentCatalogFollower';
-import { requireFileReadForEdit } from '@tools/fileInteractions';
 import {
   appendApprovalDiffNote,
   buildApprovalRejectedResult,
@@ -78,7 +77,7 @@ export const resolveWritableTarget = Effect.fn('resolveWritableTarget')(
   ): Effect.fn.Return<
     WritableTargetPreparation,
     Error,
-    ToolContext | RunCall | FileSystem.FileSystem
+    ToolContext | FileSystem.FileSystem
   > {
     // Resolution and the caller's own validation both reject with a ToolError
     // the tool runner reports to the model, so they stay a failure rather than
@@ -229,11 +228,7 @@ export const applyApprovedFileEdit = Effect.fn('applyApprovedFileEdit')(
   }: ApprovedFileEditRequest): Effect.fn.Return<
     ToolResult,
     Error,
-    | ToolContext
-    | RunCall
-    | FileSystem.FileSystem
-    | WorkspaceFs
-    | AgentCatalogServices
+    ToolContext | FileSystem.FileSystem | WorkspaceFs | AgentCatalogServices
   > {
     const approval = yield* requestToolEditApproval({
       path,

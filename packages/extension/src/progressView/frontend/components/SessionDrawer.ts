@@ -17,9 +17,9 @@ import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/input/input.js';
 import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 
-import type { HostSnapshot } from '@shared/session/hostSnapshot';
 import type { SessionView } from '@shared/session/sessionView';
-import type { Surface } from '@shared/session/surface';
+import type { HostSnapshot } from '@texra/shared/session/hostSnapshot';
+import type { Surface } from '@texra/shared/session/surface';
 import { SessionUiEvents } from '@texra/shared/session/uiEvents';
 import { overlaySurfaceStyles } from '@ui/styles/overlaySurfaceStyles';
 import { designTokens, commonViewStyles } from '@ui/styles';

@@ -5,7 +5,6 @@ import * as path from 'node:path';
 import { Effect, FileSystem, PlatformError } from 'effect';
 
 import { withLogChannel } from '@logger/effectLog';
-import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import { type RunId, type FileLocation } from '@shared/schemas';
 import {
   WORKFLOW_OUTPUT_BASENAME,
@@ -43,6 +42,8 @@ export class RunFileService {
   /** The base files' pre-run locations, decided by `prepareRunWorkspace`. */
   private preparedBaseFiles: FileLocation[] | undefined;
   private readonly mirroredDependencies = new Set<string>();
+  /** The files the run read, which an edit of one needs; read-only here. */
+  public readonly readFiles: ReadonlySet<string> = new Set<string>();
 
   constructor(
     public readonly runId: RunId,
@@ -51,7 +52,10 @@ export class RunFileService {
      * resolves reads them here rather than from the calling context's roots
      * scope, which a run's Effect fiber is not guaranteed to sit inside.
      */
-    private readonly roots: WorkspaceRoots,
+    private readonly roots: {
+      readonly storage: string;
+      readonly workspace: string | undefined;
+    },
   ) {
     this.runDirectory = runDirUnder(roots.storage, runId);
   }

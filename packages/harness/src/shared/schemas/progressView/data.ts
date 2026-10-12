@@ -34,7 +34,7 @@ export const MissingOutputsPayloadSchema = z.object({
  * the `image-attachment` / `document-attachment` split that
  * `normalizeConversationForExport` turns into export attachment parts.
  */
-const MediaAttachmentKindSchema = z.enum(['image', 'document']);
+export const MediaAttachmentKindSchema = z.enum(['image', 'document']);
 export type MediaAttachmentKind = z.infer<typeof MediaAttachmentKindSchema>;
 
 /**

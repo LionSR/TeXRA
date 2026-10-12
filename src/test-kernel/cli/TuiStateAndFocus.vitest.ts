@@ -209,7 +209,7 @@ describe('CLI TUI session run state', () => {
     'only reports a waiting tool-use run resumable-idle $name',
     ({ runCompleted, runSettled, runId, expected }) => {
       seedView(familyView({ [root]: { status: RUN_PHASE.WAITING } }));
-      const session = new TuiSession(() => ({}) as never);
+      const session = new TuiSession();
       if (runSettled) session.markRunPending(runSettled);
       if (runCompleted && runSettled) session.markRunCompleted(runSettled);
       session.runId = runId;
@@ -219,7 +219,7 @@ describe('CLI TUI session run state', () => {
 
   it('marks a chat root run pending before async startup work resolves', () => {
     const startupSettled = Effect.never;
-    const session = new TuiSession(() => undefined);
+    const session = new TuiSession();
     session.runId = root;
     session.runExitCode = CliExitCode.AgentError;
     const earlier = Effect.void;
@@ -241,7 +241,7 @@ describe('CLI TUI session run state', () => {
   });
 
   it('publishes the run-control run id from the session itself', () => {
-    const session = new TuiSession(() => undefined);
+    const session = new TuiSession();
     const claim = Effect.never;
     session.markRunPending(claim);
     expect(runStopFacts.get().runId).toBeUndefined();
@@ -260,7 +260,7 @@ describe('CLI TUI session run state', () => {
   });
 
   it('clears stale resume ids when clearing chat session run state', () => {
-    const session = new TuiSession(() => undefined);
+    const session = new TuiSession();
     const claim = Effect.void;
     session.markRunPending(claim);
     session.markRunCompleted(claim);

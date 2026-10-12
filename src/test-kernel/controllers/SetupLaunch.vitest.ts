@@ -30,6 +30,10 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@model/computeModelOptions', () => ({
   readModelAvailabilityInputs: (_stores: unknown, models: readonly string[]) =>
     Effect.succeed(models),
+  usageRouteFrom: (_inputs: unknown, model: string) =>
+    mocks.usageRoutes.get(model),
+}));
+vi.mock('@texra/model/modelOptions', () => ({
   modelOptionsFrom: (models: readonly string[]): ModelOptionData[] =>
     models.map((value) => ({
       value,
@@ -37,8 +41,6 @@ vi.mock('@model/computeModelOptions', () => ({
       availability: 'missing-key',
       ...mocks.rows.get(value),
     })),
-  usageRouteFrom: (_inputs: unknown, model: string) =>
-    mocks.usageRoutes.get(model),
 }));
 
 vi.mock('@texra-ai/llm', async (importOriginal) => {

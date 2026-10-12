@@ -19,7 +19,6 @@ import {
   type PresentationEventHandlers,
   type RuntimePresentationEvent,
   type RuntimePresentationEventPayloads,
-  type SessionHandle,
 } from '@agent/runtime';
 import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
 import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';
@@ -35,7 +34,7 @@ import {
   type RequestShowInstructionPayload,
 } from '@shared/schemas';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
-import type { StateStore } from '@texra-ai/harness';
+import type { StateStore, WorkspaceRoots } from '@texra-ai/harness';
 
 const CHANNEL = 'agentEventListeners';
 
@@ -199,7 +198,7 @@ export function createAgentPresentationHost(
   progressViewProvider: ProgressViewProvider,
   globalState: StateStore,
   runtime: ProcessRuntime,
-  session: SessionHandle,
+  roots: WorkspaceRoots,
 ): Pick<HostInteractions, 'emit'> {
   const handlers: PresentationEventHandlers<
     RuntimePresentationEventPayloads,
@@ -210,7 +209,7 @@ export function createAgentPresentationHost(
     requestOpenFile: (payload) =>
       withProcessServices(
         runtime,
-        openBuildDisplayIfTex(session, payload.location, {
+        openBuildDisplayIfTex(roots, payload.location, {
           preserveFocus: payload.preserveFocus,
         }),
       ).pipe(Effect.asVoid),

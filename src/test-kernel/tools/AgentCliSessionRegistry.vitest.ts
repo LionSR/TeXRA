@@ -5,7 +5,6 @@ import { describe, expect } from 'vitest';
 
 // Local imports
 import type { RunId } from '@shared/schemas';
-import { testRunRegistry } from '@test/support/runHandleFixtures';
 import { noPluginHold } from '@test/support/testPluginServices';
 import { AgentCliSessionRegistry } from '@texra/tools/agentCliSessionRegistry';
 
@@ -14,8 +13,7 @@ describe('AgentCliSessionRegistry', () => {
     'atomically claims a session id and wakes waiters when it becomes active',
     () =>
       Effect.gen(function* () {
-        const runs = testRunRegistry();
-        const registry = new AgentCliSessionRegistry(runs, noPluginHold);
+        const registry = new AgentCliSessionRegistry(noPluginHold);
         const entry = { runId: 'run-a' as RunId };
 
         try {
@@ -47,7 +45,6 @@ describe('AgentCliSessionRegistry', () => {
           releaseNextClaim?.();
         } finally {
           registry.release('session-a');
-          runs.dispose();
         }
       }),
   );
@@ -56,33 +53,27 @@ describe('AgentCliSessionRegistry', () => {
     'releases pending waiters and permits a new claim after cleanup',
     () =>
       Effect.gen(function* () {
-        const runs = testRunRegistry();
-        const registry = new AgentCliSessionRegistry(runs, noPluginHold);
+        const registry = new AgentCliSessionRegistry(noPluginHold);
 
-        try {
-          const releaseClaim = registry.claim('session-a');
-          expect(releaseClaim).toBeTypeOf('function');
-          const waiting = yield* Effect.forkChild(
-            registry.waitForActive('session-a'),
-          );
+        const releaseClaim = registry.claim('session-a');
+        expect(releaseClaim).toBeTypeOf('function');
+        const waiting = yield* Effect.forkChild(
+          registry.waitForActive('session-a'),
+        );
 
-          releaseClaim?.();
+        releaseClaim?.();
 
-          expect(yield* Fiber.join(waiting)).toBeUndefined();
-          const releaseNextClaim = registry.claim('session-a');
-          expect(releaseNextClaim).toBeTypeOf('function');
+        expect(yield* Fiber.join(waiting)).toBeUndefined();
+        const releaseNextClaim = registry.claim('session-a');
+        expect(releaseNextClaim).toBeTypeOf('function');
 
-          releaseNextClaim?.();
-          expect(yield* registry.waitForActive('session-a')).toBeUndefined();
-        } finally {
-          runs.dispose();
-        }
+        releaseNextClaim?.();
+        expect(yield* registry.waitForActive('session-a')).toBeUndefined();
       }),
   );
 
   it('releases every active alias owned by one run', () => {
-    const runs = testRunRegistry();
-    const registry = new AgentCliSessionRegistry(runs, noPluginHold);
+    const registry = new AgentCliSessionRegistry(noPluginHold);
     const runA = 'run-a' as RunId;
     const runB = 'run-b' as RunId;
     const entry = (runId: RunId) => ({ runId });
@@ -102,7 +93,6 @@ describe('AgentCliSessionRegistry', () => {
     } finally {
       releasePending?.();
       registry.releaseByRunId(runB);
-      runs.dispose();
     }
   });
 });

@@ -58,7 +58,6 @@ export const testCallPluginServices = Layer.merge(
         const built = builtFor.get(runs);
         if (built !== undefined) return Effect.succeed(built);
         return Layer.build(testPluginServicesLayer).pipe(
-          Effect.provideService(Runs, runs),
           Scope.provide(Scope.makeUnsafe()),
           Effect.map((services) => {
             const context = services as PluginContext;

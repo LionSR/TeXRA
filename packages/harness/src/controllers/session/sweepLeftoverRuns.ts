@@ -12,7 +12,7 @@ const CHANNEL = 'LeftoverRunSweep';
 
 /** Runs this process is running right now, by handle or by in-flight phase. */
 function runningRuns(session: SessionHandle): Set<RunId> {
-  const running = new Set(session.runs.activeIds());
+  const running = new Set(session.runs.get().map((run) => run.runId));
   for (const run of SubscriptionRef.getUnsafe(session.view.ref).runs.values()) {
     if (isInFlightPhase(run.status)) running.add(run.id);
   }
@@ -24,9 +24,22 @@ export const sweepLeftoverRuns = Effect.fn('sweepLeftoverRuns')(function* (
   session: SessionHandle,
   rows: readonly SessionEvent[],
 ) {
+  // A shell parked holding its result for its parent (no end after the
+  // park) stays until that result is delivered.
+  const ended = new Map(
+    rows.flatMap((row) =>
+      row.type === 'run.end' ? [[row.aggregateId, row.commit] as const] : [],
+    ),
+  );
   const removed = new Set(
     rows
-      .filter((row) => row.type === 'run.removed')
+      .filter(
+        (row) =>
+          row.type === 'run.removed' ||
+          (row.type === 'child.park' &&
+            row.heldFor !== undefined &&
+            (ended.get(row.aggregateId) ?? 0) < row.commit),
+      )
       .map((row) => row.aggregateId),
   );
   const running = runningRuns(session);

@@ -1,7 +1,7 @@
 /**
  * Dispatch of one committed response's tool calls, from the folded state and
  * back into it. The guaranteed behaviours the node enforced, kept by
- * construction: contiguous parallel-safe calls run concurrently under a
+ * construction: contiguous parallel calls run concurrently under a
  * small window while every other call is a barrier that runs alone and in
  * order; a call repeating an earlier call's name and arguments never executes
  * and derives its primary's result with no edits, attachments or mutation;
@@ -43,8 +43,11 @@ import { z } from 'zod';
 import { normalizeToolCallError } from '@agent/core/tools/toolCallParsing';
 import { extractToolAttachments } from '@agent/core/tools/toolAttachmentExtraction';
 import type { ScriptOp } from '@agent/codeSandbox/codeSandbox';
-import type { RuntimeTool as ITool } from '@agent/runtime/ToolServices';
-import { ToolContext, type CallRequests } from '@agent/core/tools/ToolTypes';
+import {
+  childRunsLayer,
+  type RuntimeTool as ITool,
+} from '@agent/runtime/ToolServices';
+import { ToolContext } from '@agent/core/tools/ToolTypes';
 import {
   IssuingScript,
   RunCall,
@@ -75,12 +78,14 @@ import {
 import {
   attemptOf,
   attemptRequests,
-  callRequestId,
   callSettlementOf,
   type AttemptRequests,
   type CallStatus,
   type PendingCall,
 } from '@shared/session/inFlight';
+import type { RunCell } from '@shared/session/runHistory';
+import { checkOwnFacts, factRows } from '@tools/plugins';
+import { ToolRegistry } from '@tools/toolTable';
 import { generateShortId, getBasename } from '@utils/core';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { pathToLocationIn } from '@utils/files/fileLocation';
@@ -99,7 +104,7 @@ import {
   formatAttachmentSummary,
   formatToolResultAsText,
 } from '../run/toolResultText';
-import { guardedToolCall } from './toolGuard';
+import { callRequests, guardedToolCall } from './toolGuard';
 import { callHookText, preToolUse } from './hooks';
 import {
   appendRow,
@@ -112,9 +117,8 @@ import type { StepTools } from './step';
 import type { JoinedFollowUps } from '../FollowUps';
 import type { InvokeError } from '../ModelInvoker';
 import type { Runs } from '../runRegistry';
-import type { RunCell } from './runProgram';
 
-/** Max concurrently executing parallel-safe tool calls. */
+/** Max concurrently executing parallel tool calls. */
 const MAX_PARALLEL_TOOL_CALLS = 4;
 
 /** How much of a running tool's output streams to its card as transient
@@ -281,15 +285,11 @@ function settlementContent(
   return [{ kind: 'text', text }, ...media];
 }
 
-/** Where a call runs against the calls issued before it: `parallel` after
- *  the barrier before it, inside the window; `barrier` after every call
- *  before it; `beside` like a parallel call, outside the window (a tool that
- *  bounds its own calls, or a duplicate that only waits for its primary). */
-type Lane = 'parallel' | 'barrier' | 'beside';
-
-const laneOf = (parallel: boolean, beside: boolean): Lane => {
-  if (parallel) return 'parallel';
-  return beside ? 'beside' : 'barrier';
+/** A response call's lane: its tool's (`ITool.lane`) when parallel, else a
+ *  barrier; a duplicate's `'own'` (it only waits for its primary). */
+const responseLane = (fact: DispatchFacts): DispatchFacts['lane'] => {
+  if (fact.duplicateOf !== null) return 'own';
+  return fact.lane === 'parallel' ? 'parallel' : 'barrier';
 };
 
 /**
@@ -333,7 +333,7 @@ const makeScheduler = Effect.gen(function* () {
      *  follows are done; `body` answers whether this call ended the turn. */
     run: <E, R>(
       seq: number,
-      lane: Lane,
+      lane: DispatchFacts['lane'],
       body: (endedBefore: boolean) => Effect.Effect<boolean, E, R>,
     ): Effect.Effect<void, E, R> =>
       Effect.gen(function* () {
@@ -370,8 +370,6 @@ const makeScheduler = Effect.gen(function* () {
  *  then deliver, with the `joined` rows and what they record. */
 export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
   cell: RunCell,
-  /** The files the run read since its loop started (`RunCall.readFiles`). */
-  readFiles: Set<string>,
   step: StepTools,
   joined?: Pick<JoinedFollowUps, 'rows'> | null,
 ): Effect.fn.Return<
@@ -392,6 +390,8 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
     cell.opened.pendingResponse?.responseId === responseId &&
     !run.config.script;
   const calls = localCallsOf(pending.assistant.content);
+  const { entries } = yield* ToolRegistry;
+  const pluginOf = new Map(step.offered.map((t) => [t.name, t.plugin]));
   // The calls answer the instruction the committed state records.
   const at = initial.input.instruction;
   const userInstruction =
@@ -421,6 +421,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
     rows:
       | readonly RunHistoryDraft[]
       | ((state: RunState) => readonly RunHistoryDraft[]),
+    alongside?: ReturnType<typeof factRows>['alongside'],
   ) =>
     append((state) => {
       const own = typeof rows === 'function' ? rows(state) : rows;
@@ -428,27 +429,32 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
       return script !== null && recordOf(state, fact.callId) === null
         ? [{ type: 'script.call', aggregateId, payload: script }, ...own]
         : own;
-    });
+    }, alongside);
 
   const settle = (
     fact: CallFacts,
     attempt: number,
     settlement: Settlement,
     cards: (state: RunState) => readonly RunHistoryDraft[] = () => [],
+    alongside?: ReturnType<typeof factRows>['alongside'],
   ) =>
-    commit(fact, (state) => [
-      {
-        type: 'tool.result',
-        aggregateId,
-        payload: {
-          responseId,
-          callId: fact.callId,
-          attempt,
-          ...settlement,
+    commit(
+      fact,
+      (state) => [
+        {
+          type: 'tool.result',
+          aggregateId,
+          payload: {
+            responseId,
+            callId: fact.callId,
+            attempt,
+            ...settlement,
+          },
         },
-      },
-      ...cards(state),
-    ]);
+        ...cards(state),
+      ],
+      alongside,
+    );
 
   const slow = (fact: CallFacts) =>
     step.registry.get(fact.toolName)?.slow === true;
@@ -562,82 +568,14 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
         ...(stageId !== undefined ? { stageId } : {}),
       });
     };
-    // The call's requests, under ids the attempt derives: a fresh one past
-    // every ordinal it raised. A resumed attempt joins the request it left
-    // standing when it asks that kind again; one it no longer asks is
-    // retired as cancelled, so no surface keeps offering it.
-    const at = { responseId, callId: fact.callId, attempt };
-    let reentering = standing;
-    let opened = raised;
-    // Through the decision authority's own check, so an answer a surface
-    // landed meanwhile stands and the retirement writes nothing.
-    const retireStanding = Effect.suspend(() => {
-      const open = reentering?.request.decision === null ? reentering : null;
-      reentering = null;
-      if (open === null) return Effect.void;
-      return run.session.requests
-        .decide(runId, open.requestId, {
-          action: 'cancel',
-          cause: 'The resumed call no longer asks it.',
-        })
-        .pipe(
-          Effect.catch((error) =>
-            Effect.sync(() =>
-              logger.warn(
-                `Request ${open.requestId} the resumed call no longer asks stays open: its retirement failed.`,
-                { data: error },
-              ),
-            ),
-          ),
-          Effect.asVoid,
-        );
-    });
-    const requests: CallRequests = {
-      nextId: (kind) =>
-        reentering?.request.payload.kind === kind
-          ? reentering.requestId
-          : callRequestId(at, opened + 1),
-      open: (payload, options) =>
-        Effect.suspend(() => {
-          const reentered =
-            payload.data.requestId === reentering?.requestId
-              ? reentering
-              : null;
-          if (reentered !== null) reentering = null;
-          else if (payload.data.requestId === callRequestId(at, opened + 1))
-            opened += 1;
-          // Answered before this owner's loop reached the call: the answer
-          // is the row's, and what the host staged for it is released here,
-          // as no later decision will release it.
-          if (reentered?.request.decision != null)
-            return Effect.as(
-              Effect.uninterruptible(options?.onNeverCommitted ?? Effect.void),
-              reentered.request.decision,
-            );
-          return run.session.requests.ask(runId, payload, {
-            ...options,
-            open: (rows) => {
-              if (reentered !== null) {
-                // Open already: only what the policy decides commits, and
-                // the decision is read from where the resume read the run.
-                const decided = rows.filter(
-                  (row) => row.type !== 'request.opened',
-                );
-                const from = cell.opened.commit;
-                return decided.length === 0
-                  ? Effect.succeed(from)
-                  : commit(fact, decided).pipe(Effect.as(from));
-              }
-              return retireStanding.pipe(
-                Effect.andThen(Effect.sync(() => run.session.log.now())),
-                Effect.flatMap((from) =>
-                  commit(fact, rows).pipe(Effect.as(from)),
-                ),
-              );
-            },
-          });
-        }),
-    };
+    const { requests, retireStanding } = callRequests(
+      run,
+      cell,
+      (rows) => commit(fact, rows),
+      { responseId, callId: fact.callId, attempt },
+      raised,
+      standing,
+    );
     // Its step's PreToolUse hooks, recorded before the approval and the body.
     const pre =
       tool &&
@@ -661,9 +599,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
         if (!startedAt(yield* cell.current, fact.callId, attempt))
           yield* commit(fact, [
             intentRow(fact, attempt),
-            ...(tool.slow === true
-              ? [cardStart(fact, parsedInput, attempt)]
-              : []),
+            ...(tool.slow ? [cardStart(fact, parsedInput, attempt)] : []),
           ]);
         accepting = tool.slow === true;
         yield* pre.bodyStarts;
@@ -679,13 +615,14 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
                 roots: run.session.roots,
                 workingDirectory: run.workingDirectory,
                 stepRoots: step.stepRoots,
+                run,
               },
               requests,
               emit: onToolOutput,
             }),
+            Effect.provide(childRunsLayer),
             Effect.provideService(RunCall, {
               run,
-              readFiles,
               responseId,
               instruction: userInstruction,
               attempt,
@@ -726,8 +663,10 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
     }
     // A result the schema refuses becomes an error result the model can read;
     // the projection of an error result cannot itself fail.
+    const plugin = entries.get(pluginOf.get(fact.toolName) ?? '');
     const extracted = yield* Effect.try({
-      try: () => extractToolAttachments(result),
+      try: () =>
+        extractToolAttachments(result, (facts) => checkOwnFacts(plugin, facts)),
       catch: ensureError,
     }).pipe(
       Effect.catch((error) =>
@@ -757,19 +696,18 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
     );
     const status: ToolCallStatus =
       extracted.sanitizedResult.status === 'error' ? 'failed' : 'completed';
-    // The whole card commits with the settlement: a slow tool's card is
-    // already open and only closes here, and a fast tool's opens and closes
-    // in this same batch under the id its dispatch facts carry. Publishing a
-    // terminal card outside the batch would tell the transcript the call
-    // completed while recovery still sees an unsettled call.
+    // The whole card commits with the settlement (a slow tool's closes here,
+    // a fast tool's opens and closes here): a terminal card outside the batch
+    // would show the call completed while recovery sees it unsettled.
     const cards = settledCards(fact, parsedInput, status, attempt, editedFiles);
-    // An executed call's PostToolUse rows commit with its settlement, as do
-    // the queued follow-ups its result answers.
+    // An executed call's PostToolUse rows, the follow-ups its result answers
+    // and its facts (the run's, and its plugin's own aggregates') commit too.
     const post = pre ? yield* pre.after(extracted.sanitizedResult) : [];
     const answered =
       extracted.sanitizedResult.status === 'executed'
         ? (extracted.sanitizedResult.consumedFollowUps ?? [])
         : [];
+    const facts = factRows(extracted.facts, runId, plugin, run.session.log);
     yield* retireStanding;
     yield* settle(
       fact,
@@ -791,7 +729,9 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
           aggregateId,
           followUpId,
         })),
+        ...facts.run,
       ],
+      facts.alongside,
     );
   });
 
@@ -858,7 +798,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
    * is handed back what its rows settled, in the order those settlements
    * committed, before any call runs again; an unsettled call continues as
    * its rows say; and a call at a recorded `seq` that is not the recorded
-   * one is a divergence. A parallel-safe call takes the window, a tool that
+   * one is a divergence. A parallel call takes the window, a tool that
    * bounds its own calls runs beside the others, any other is a barrier.
    */
   const scriptCallsOf = Effect.fn('toolUse.scriptCalls')(function* (
@@ -940,8 +880,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
         ): Effect.Effect<A, E, R> =>
           Effect.suspend(() => {
             const existing = sharedValues.get(key) as
-              | Deferred.Deferred<A, E>
-              | undefined;
+              Deferred.Deferred<A, E> | undefined;
             if (existing !== undefined) return Deferred.await(existing);
             const made = Deferred.makeUnsafe<A, E>();
             sharedValues.set(key, made as Deferred.Deferred<unknown, unknown>);
@@ -1021,11 +960,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
             });
             return { result, attachments: [] };
           }
-          const lane = laneOf(
-            tool?.parallelSafe === true,
-            tool?.ownsConcurrency === true,
-          );
-          yield* lanes.run(op.seq, lane, () =>
+          yield* lanes.run(op.seq, tool?.lane ?? 'barrier', () =>
             Effect.gen(function* () {
               // Nothing runs again until the guest holds everything that
               // settled.
@@ -1053,16 +988,12 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
             attachments: settledNow.attachments,
           };
         });
-
-        const plugins = new Map(
-          step.offered.map(({ name, plugin }) => [name, plugin]),
-        );
         return {
           catalog: step.definitions
             .filter(({ name }) => name !== script.toolName)
             .map((definition) => ({
               definition,
-              plugin: plugins.get(definition.name) ?? 'run',
+              plugin: pluginOf.get(definition.name) ?? 'run',
             })),
           globals: step.definitions.flatMap(({ name }) => {
             const global =
@@ -1156,13 +1087,8 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
   yield* Effect.forEach(
     pending.calls,
     (fact) =>
-      lanes.run(
-        fact.ordinal,
-        laneOf(
-          fact.duplicateOf === null && fact.parallelSafe,
-          fact.duplicateOf !== null,
-        ),
-        (endedBefore) => responseCall(fact, endedBefore),
+      lanes.run(fact.ordinal, responseLane(fact), (endedBefore) =>
+        responseCall(fact, endedBefore),
       ),
     { concurrency: 'unbounded', discard: true },
   );
@@ -1194,7 +1120,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
           ? ('success' as const)
           : ('error' as const),
       content: [
-        ...settlementContent(settlement, bound, logger),
+        ...settlementContent(settlement, bound.config.capabilities, logger),
         // What the call's hooks add, after its result.
         ...callHookText(settledState, responseId, fact.callId),
       ],
@@ -1221,7 +1147,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
         const part = inlineMediaPart(
           attachment.mimeType,
           attachment.content.data,
-          bound,
+          bound.config.capabilities,
         );
         return part?.kind === 'document'
           ? [{ path: attachment.path, part }]

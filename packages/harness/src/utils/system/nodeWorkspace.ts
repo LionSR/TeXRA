@@ -23,7 +23,8 @@ export function canonicalizeWorkspacePath(workspacePath: string): string {
   try {
     canonical = canonicalizePath(workspacePath);
   } catch (error) {
-    const code = (error as NodeJS.ErrnoException).code;
+    const code =
+      error instanceof Error && 'code' in error ? error.code : undefined;
     if (code !== 'EACCES' && code !== 'EPERM') throw error;
     canonical = path.resolve(workspacePath);
   }

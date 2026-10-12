@@ -1,9 +1,12 @@
 // Third-party imports
 
+import { Effect } from 'effect';
+
 // Local imports
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import type { AgentLaunchContext } from '@agent/runtime/AgentLaunchContext';
 import { type SessionHandle } from '@agent/runtime/SessionHandle';
+import { noCoWrite } from '@shared/session/sessionEvents';
 import { PersonaSchema } from '@shared/schemas';
 import type { RunId } from '@shared/schemas';
 import { noopTrace } from '@test/support/noopTrace';
@@ -51,7 +54,12 @@ export function createTestLaunchContext({
       activated: [],
       attachedMemoryMisses: [],
     },
-    initialUserMessageForTranscript: undefined,
+    entry: {
+      registration: null,
+      opening: noCoWrite,
+      entered: Effect.void,
+      initialUserMessage: undefined,
+    },
     toolPolicy: {},
     attachedMemoryMisses: [],
     modelConfig: buildTestModelConfig(),

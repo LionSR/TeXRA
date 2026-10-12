@@ -10,13 +10,13 @@ import type { PlatformSecrets } from '@platform/secrets';
 import { MemoryConfigProvider } from '@platform/defaults/memoryConfigProvider';
 import { MemoryStateStore } from '@platform/defaults/memoryState';
 import { createNodeWorkspaceRoots } from '@platform/defaults/nodeHost';
-import { canonicalizeWorkspacePath } from '@platform/defaults/nodeWorkspace';
 import {
   resolveGlobalStoragePath,
   resolveWorkspaceStoragePath,
 } from '@platform/defaults/workspaceStorage';
 import { UNAVAILABLE_LANGUAGE_MODEL_PORT } from '@platform/languageModel';
 import { mcpConfigPathOf } from '@tools/mcp/mcpConfig';
+import { canonicalizeWorkspacePath } from '@utils/system/nodeWorkspace';
 
 import type { AgentPlatform } from './index.js';
 
@@ -27,7 +27,7 @@ export { createNodeWorkspaceRoots } from '@platform/defaults/nodeHost';
 export {
   canonicalizeWorkspacePath,
   relativeToRoot,
-} from '@platform/defaults/nodeWorkspace';
+} from '@utils/system/nodeWorkspace';
 export {
   resolveGlobalStoragePath,
   resolveWorkspaceStoragePath,

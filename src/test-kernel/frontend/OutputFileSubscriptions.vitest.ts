@@ -6,12 +6,12 @@ import { Effect, Exit, Scope } from 'effect';
 import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import type { RunId } from '@shared/schemas';
-import { documentsOutputRow } from '@shared/plugins/documents';
-import { testRuntime } from '@test/support/testProcessRuntime';
+import { aggregateId, type RunId } from '@shared/schemas';
+import { testRuntime, testSessionOf } from '@test/support/testProcessRuntime';
 import { waitForCondition } from '@test/support/asyncTestUtils';
 import { makeFakeSettingsStores } from '@test/support/settingsStoresFake';
 import { publishTestRows } from '@test/support/sessionTestUtils';
+import { documentsOutputFact } from '@texra/shared/plugins/documents';
 import { TexraStateKey } from '@texra/shared/settingsView/texraSettings';
 import type * as VSCode from 'vscode';
 
@@ -133,26 +133,31 @@ async function emitOutputFiles(
 ): Promise<void> {
   emissions += 1;
   publishTestRows(session, [
-    documentsOutputRow(runId, [
-      {
-        round: emissions,
-        compileFailures: [],
-        missingOutputs: [],
-        outputs: [
-          {
-            source: absolutePath,
-            location: {
-              kind: 'workspace',
-              absolutePath,
-              relativePath: absolutePath.split('/').at(-1) ?? absolutePath,
+    {
+      type: 'plugin.fact',
+      aggregateId: aggregateId('run', runId),
+      parent: null,
+      ...documentsOutputFact([
+        {
+          round: emissions,
+          compileFailures: [],
+          missingOutputs: [],
+          outputs: [
+            {
+              source: absolutePath,
+              location: {
+                kind: 'workspace',
+                absolutePath,
+                relativePath: absolutePath.split('/').at(-1) ?? absolutePath,
+              },
+              lineage: null,
+              diff: null,
+              round: emissions,
             },
-            lineage: null,
-            diff: null,
-            round: emissions,
-          },
-        ],
-      },
-    ]),
+          ],
+        },
+      ]),
+    },
   ]);
   await Effect.runPromise(session.log.settled);
 }
@@ -200,7 +205,7 @@ describe('output-file run fact frontend subscriptions', () => {
       const scope = yield* Scope.make();
       yield* registerFileDecorations(
         context as unknown as VSCode.ExtensionContext,
-        session,
+        testSessionOf(session),
       ).pipe(Scope.provide(scope));
       const provider = mocks.registeredProviders.at(-1) as {
         provideFileDecoration(uri: { scheme: string; fsPath: string }): unknown;
@@ -262,7 +267,7 @@ describe('output-file run fact frontend subscriptions', () => {
         yield* registerInlineCriticism(
           context as unknown as VSCode.ExtensionContext,
           testRuntime(),
-          session,
+          testSessionOf(session),
           stores,
         );
 

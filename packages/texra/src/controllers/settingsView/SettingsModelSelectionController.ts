@@ -34,11 +34,7 @@ import {
 } from '@model/reasoningLevel';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
-import {
-  isExpensiveModel,
-  isFastFirstResponseModel,
-  type ModelOptionData,
-} from '@shared/schemas';
+import { type ModelOptionData } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import {
   type CopilotRouteInfo,
@@ -46,6 +42,10 @@ import {
   type ModelSelectionItem,
   type UpdateModelSelectionMessage,
 } from '@texra/shared/settingsView/settingsViewMessages';
+import {
+  isExpensiveModel,
+  isFastFirstResponseModel,
+} from '@texra/shared/model/modelPicker';
 import { byName } from '@utils/core';
 import { readSettingFrom } from '@utils/config/platformSettings';
 

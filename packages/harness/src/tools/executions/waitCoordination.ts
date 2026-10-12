@@ -19,7 +19,8 @@ import { isInFlightPhase } from '@shared/runs/runStatus';
  * One handle lookup and one view read per call — no redundant lookups.
  */
 export function shouldSkipWait(session: SessionHandle, runId: RunId): boolean {
-  const handle = session.runs.getHandle(runId);
+  const live = session.runs.get(runId);
+  const handle = live?.handle;
   if (!handle) return true;
 
   // A tracked run whose activation has not folded yet is running: the
@@ -34,6 +35,6 @@ export function shouldSkipWait(session: SessionHandle, runId: RunId): boolean {
   return (
     status === RUN_PHASE.WAITING &&
     handle.identity.kind === 'agent' &&
-    handle.parent !== null
+    live?.parent != null
   );
 }

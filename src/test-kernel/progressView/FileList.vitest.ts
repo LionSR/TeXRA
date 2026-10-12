@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 // Local imports
 import type { FileList } from '@progressView/frontend/components/FileList';
 import type { OutputFileInfo, RunId } from '@shared/schemas';
-import type { HostRequest } from '@shared/session/hostRequest';
+import type { HostRequest } from '@texra/shared/session/hostRequest';
 
 // Local file imports
 import {

@@ -4,9 +4,8 @@ import * as nodePath from 'node:path';
 // Third-party imports
 import { Effect, FileSystem } from 'effect';
 import { z } from 'zod';
-import { ToolContext } from '@texra-ai/harness';
+import { defineTool, ToolContext } from '@texra-ai/harness';
 import { relativeToRoot } from '@texra-ai/harness/node';
-import type { RunCall } from '@agent/runtime/RunCall';
 
 // Local imports - tools
 import {
@@ -18,7 +17,6 @@ import { WorkspaceFs } from '@platform/rootedFs';
 import type { ToolResult } from '@shared/schemas';
 import { resolveToolPath, type ToolPathCall } from '@tools/pathResolution';
 import { formatToolOutput } from '@tools/formatting';
-import { defineTool } from '@tools/core/define';
 import { executed } from '@tools/core/result';
 import { toPosixPath } from '@utils/core/pathCore';
 import { ensureError } from '@utils/errors/errorMessage';
@@ -74,7 +72,7 @@ const extractBibliography = Effect.fn('ExtractBibliographyTool.execute')(
   }: ExtractBibliographyInput): Effect.fn.Return<
     ToolResult,
     Error,
-    ToolContext | RunCall | WorkspaceFs | FileSystem.FileSystem
+    ToolContext | WorkspaceFs | FileSystem.FileSystem
   > {
     const call = yield* ToolContext;
     const { path, display } = yield* resolveLatexFile(texPath);
