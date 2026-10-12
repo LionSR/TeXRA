@@ -42,6 +42,22 @@ import {
 type CodeEditor = ReturnType<MonacoModule['editor']['create']>;
 type TextModel = ReturnType<MonacoModule['editor']['createModel']>;
 
+/** Everything the pane tracks for one workspace path. */
+interface FileState {
+  // One model per opened file so switching tabs preserves each file's undo
+  // history and cursor — recreating a model on every switch would lose both.
+  model?: TextModel;
+  viewState?: NonNullable<ReturnType<CodeEditor['saveViewState']>>;
+  pendingLoad?: Promise<TextModel | undefined>;
+  /** The tail of this path's model-sync lane; see `onModelSyncLane`. */
+  syncTail?: Promise<void>;
+  writeEpoch: number;
+  activeWrites: number;
+  dirty: boolean;
+  syncing: boolean;
+  closed: boolean;
+}
+
 interface EditorPaneCallbacks {
   /** Lists the direct children of one workspace directory for the tree. */
   listFiles(directory: string): Promise<readonly EditorFileEntry[]>;
@@ -101,7 +117,6 @@ export function createEditorPane(callbacks: EditorPaneCallbacks): EditorPane {
   element.append(notice.element, editorHost);
 
   let disposed = false;
-  const closedPaths = new Set<string>();
   let monaco: MonacoModule | undefined;
   let editor: CodeEditor | undefined;
   let editorLoad: Promise<CodeEditor | undefined> | undefined;
@@ -119,20 +134,25 @@ export function createEditorPane(callbacks: EditorPaneCallbacks): EditorPane {
   const directoryChildren = new Map<string, readonly EditorTreeNode[]>();
   const loadingDirectories = new Set<string>();
   const directoryErrors = new Set<string>();
-  // One model per opened file so switching tabs preserves each file's undo
-  // history and cursor — recreating a model on every switch would lose both.
-  const models = new Map<string, TextModel>();
-  const viewStates = new Map<
-    string,
-    NonNullable<ReturnType<CodeEditor['saveViewState']>>
-  >();
-  const pendingModelLoads = new Map<string, Promise<TextModel | undefined>>();
-  // The tail of each path's model-sync lane; see `onModelSyncLane`.
-  const modelSyncTails = new Map<string, Promise<void>>();
-  const writeEpochs = new Map<string, number>();
-  const activeWrites = new Map<string, number>();
-  const dirtyPaths = new Set<string>();
-  const syncingPaths = new Set<string>();
+  // `close` resets an entry rather than deleting it: a load, sync, or save
+  // still in flight keeps comparing against the same flags and counters, and
+  // the `closed` flag must outlive the model so a late load is discarded.
+  const files = new Map<string, FileState>();
+
+  function fileState(path: string): FileState {
+    let file = files.get(path);
+    if (!file) {
+      file = {
+        writeEpoch: 0,
+        activeWrites: 0,
+        dirty: false,
+        syncing: false,
+        closed: false,
+      };
+      files.set(path, file);
+    }
+    return file;
+  }
 
   function renderTree(): void {
     render(treeTemplate(), treeHost);
@@ -306,7 +326,7 @@ export function createEditorPane(callbacks: EditorPaneCallbacks): EditorPane {
     }
 
     const isOpen = node.path === openPath;
-    const isDirty = dirtyPaths.has(node.path);
+    const isDirty = files.get(node.path)?.dirty === true;
     return html`
       <wa-tree-item
         class="desktop-editor-tree-row"
@@ -369,15 +389,13 @@ export function createEditorPane(callbacks: EditorPaneCallbacks): EditorPane {
 
   function loadModel(
     path: string,
+    file: FileState,
     loadedMonaco: MonacoModule,
   ): Promise<TextModel | undefined> {
-    const loaded = models.get(path);
-    if (loaded) return Promise.resolve(loaded);
-    const pending = pendingModelLoads.get(path);
-    if (pending) return pending;
+    if (file.pendingLoad) return file.pendingLoad;
 
     const load = readCurrentContents(path).then((contents) => {
-      if (disposed || closedPaths.has(path)) return undefined;
+      if (disposed || file.closed) return undefined;
       const model = loadedMonaco.editor.createModel(
         contents,
         monacoLanguageForPath(path),
@@ -386,21 +404,18 @@ export function createEditorPane(callbacks: EditorPaneCallbacks): EditorPane {
       // edits too, which is correct here: only reads and saves are
       // programmatic, and both reset the flag explicitly.
       model.onDidChangeContent(() => {
-        if (syncingPaths.has(path)) return;
-        if (dirtyPaths.has(path)) return;
-        dirtyPaths.add(path);
+        if (file.syncing || file.dirty) return;
+        file.dirty = true;
         callbacks.onDirtyChange(path, true);
         renderTree();
       });
-      models.set(path, model);
+      file.model = model;
       return model;
     });
     const ownedLoad = load.finally(() => {
-      if (pendingModelLoads.get(path) === ownedLoad) {
-        pendingModelLoads.delete(path);
-      }
+      if (file.pendingLoad === ownedLoad) file.pendingLoad = undefined;
     });
-    pendingModelLoads.set(path, ownedLoad);
+    file.pendingLoad = ownedLoad;
     return ownedLoad;
   }
 
@@ -416,64 +431,68 @@ export function createEditorPane(callbacks: EditorPaneCallbacks): EditorPane {
    *
    * The tail waits for the settlement rather than the value, so a failed sync
    * neither poisons the path's lane nor is swallowed: the failure still
-   * reaches the caller through the returned promise. The path's entry leaves
-   * the map once its last entrant settles.
+   * reaches the caller through the returned promise. The lane's tail clears
+   * once its last entrant settles.
    */
   function onModelSyncLane(
-    path: string,
+    file: FileState,
     sync: () => Promise<void>,
   ): Promise<void> {
-    const result = (modelSyncTails.get(path) ?? Promise.resolve()).then(sync);
+    const result = (file.syncTail ?? Promise.resolve()).then(sync);
     const tail: Promise<void> = Promise.allSettled([result]).then(() => {
-      if (modelSyncTails.get(path) === tail) modelSyncTails.delete(path);
+      if (file.syncTail === tail) file.syncTail = undefined;
     });
-    modelSyncTails.set(path, tail);
+    file.syncTail = tail;
     return result;
   }
 
-  function syncCleanModel(path: string, model: TextModel): Promise<void> {
-    return onModelSyncLane(path, async () => {
-      if (disposed || models.get(path) !== model || dirtyPaths.has(path))
-        return;
+  function syncCleanModel(
+    path: string,
+    file: FileState,
+    model: TextModel,
+  ): Promise<void> {
+    return onModelSyncLane(file, async () => {
+      if (disposed || file.model !== model || file.dirty) return;
       const version = model.getVersionId();
       const generation = refreshGeneration;
-      const writeEpoch = writeEpochs.get(path) ?? 0;
+      const writeEpoch = file.writeEpoch;
       const contents = await callbacks.readFile(path);
       // The read crosses IPC. Recheck all local state so an edit, save, or
       // newer refresh can supersede this result while it is in flight.
       if (
         disposed ||
-        models.get(path) !== model ||
-        dirtyPaths.has(path) ||
-        (activeWrites.get(path) ?? 0) > 0 ||
+        file.model !== model ||
+        file.dirty ||
+        file.activeWrites > 0 ||
         model.getVersionId() !== version ||
         refreshGeneration !== generation ||
-        (writeEpochs.get(path) ?? 0) !== writeEpoch ||
+        file.writeEpoch !== writeEpoch ||
         model.getValue() === contents
       ) {
         return;
       }
-      syncingPaths.add(path);
+      file.syncing = true;
       try {
         model.setValue(contents);
       } finally {
-        syncingPaths.delete(path);
+        file.syncing = false;
       }
     });
   }
 
   async function open(path: string): Promise<void> {
     if (disposed) return;
-    closedPaths.delete(path);
+    fileState(path).closed = false;
     const request = ++latestOpenRequest;
     const target = await ensureEditor();
     if (!target || !monaco) return;
     try {
-      let model = models.get(path);
+      const file = fileState(path);
+      let model = file.model;
       if (!model) {
-        model = await loadModel(path, monaco);
+        model = await loadModel(path, file, monaco);
       } else {
-        await syncCleanModel(path, model);
+        await syncCleanModel(path, file, model);
       }
       // Several tree clicks can race the first Monaco load and IPC reads.
       // Populate every requested model, but only the newest request may choose
@@ -482,10 +501,10 @@ export function createEditorPane(callbacks: EditorPaneCallbacks): EditorPane {
       if (target.getModel() !== model) {
         if (openPath) {
           const state = target.saveViewState();
-          if (state) viewStates.set(openPath, state);
+          if (state) fileState(openPath).viewState = state;
         }
         target.setModel(model);
-        const state = viewStates.get(path);
+        const state = file.viewState;
         if (state) target.restoreViewState(state);
       }
       openPath = path;
@@ -529,10 +548,14 @@ export function createEditorPane(callbacks: EditorPaneCallbacks): EditorPane {
         }
       }
     })();
-    const modelRefreshes = [...models].map(([path, model]) =>
-      syncCleanModel(path, model).catch((error: unknown) =>
-        callbacks.onError(error),
-      ),
+    const modelRefreshes = [...files].flatMap(([path, file]) =>
+      file.model
+        ? [
+            syncCleanModel(path, file, file.model).catch((error: unknown) =>
+              callbacks.onError(error),
+            ),
+          ]
+        : [],
     );
     await Promise.all([treeRefresh, ...modelRefreshes]);
   }
@@ -559,30 +582,29 @@ export function createEditorPane(callbacks: EditorPaneCallbacks): EditorPane {
 
   async function save(): Promise<void> {
     const path = openPath;
-    const model = path ? models.get(path) : undefined;
-    if (!path || !model || callbacks.isReadOnly?.(path)) return;
+    const file = path ? files.get(path) : undefined;
+    const model = file?.model;
+    if (!path || !file || !model || callbacks.isReadOnly?.(path)) return;
     const savedVersion = model.getVersionId();
-    activeWrites.set(path, (activeWrites.get(path) ?? 0) + 1);
-    writeEpochs.set(path, (writeEpochs.get(path) ?? 0) + 1);
+    file.activeWrites += 1;
+    file.writeEpoch += 1;
     try {
       await callbacks.writeFile(path, model.getValue());
       if (
         disposed ||
-        models.get(path) !== model ||
+        file.model !== model ||
         model.getVersionId() !== savedVersion
       )
         return;
-      dirtyPaths.delete(path);
+      file.dirty = false;
       callbacks.onDirtyChange(path, false);
       notice.clear(path);
       renderTree();
     } catch (error) {
       if (!disposed) notice.report(path, 'save', error);
     } finally {
-      const remainingWrites = (activeWrites.get(path) ?? 1) - 1;
-      if (remainingWrites === 0) activeWrites.delete(path);
-      else activeWrites.set(path, remainingWrites);
-      writeEpochs.set(path, (writeEpochs.get(path) ?? 0) + 1);
+      file.activeWrites -= 1;
+      file.writeEpoch += 1;
     }
   }
 
@@ -608,20 +630,21 @@ export function createEditorPane(callbacks: EditorPaneCallbacks): EditorPane {
       editor?.layout();
     },
 
-    hasUnsavedChanges: () => dirtyPaths.size > 0,
+    hasUnsavedChanges: () => [...files.values()].some((file) => file.dirty),
     save,
 
     close(path) {
-      closedPaths.add(path);
+      const file = fileState(path);
+      file.closed = true;
       if (openPath === path) {
         latestOpenRequest += 1;
         editor?.setModel(null);
         openPath = undefined;
       }
-      models.get(path)?.dispose();
-      models.delete(path);
-      viewStates.delete(path);
-      dirtyPaths.delete(path);
+      file.model?.dispose();
+      file.model = undefined;
+      file.viewState = undefined;
+      file.dirty = false;
       renderTree();
     },
 
@@ -632,9 +655,11 @@ export function createEditorPane(callbacks: EditorPaneCallbacks): EditorPane {
       treeRevision += 1;
       editor?.dispose();
       editor = undefined;
-      for (const model of models.values()) model.dispose();
-      models.clear();
-      viewStates.clear();
+      for (const file of files.values()) {
+        file.model?.dispose();
+        file.model = undefined;
+        file.viewState = undefined;
+      }
     },
   };
 }

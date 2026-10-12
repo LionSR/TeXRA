@@ -147,7 +147,7 @@ export function normalizeStructuredOutputSchema(
 ): StructuredOutputSchema {
   const fromZod = input instanceof z.ZodType;
   if (!fromZod) assertSafeSandboxSchema(input);
-  const zodSchema = fromZod ? input : (z.fromJSONSchema(input) as z.ZodType);
+  const zodSchema = fromZod ? input : z.fromJSONSchema(input);
   const jsonSchema = convertToolSchema({
     name: STRUCTURED_OUTPUT_TOOL_NAME,
     zodSchema,

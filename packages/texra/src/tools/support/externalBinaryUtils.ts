@@ -5,9 +5,9 @@
  *
  * Both tools follow the same shapes and would otherwise drift:
  * - `importForeignSdk()` — wrap the one dynamic `import()` each tool makes:
- *   classify a missing package into install guidance, then resolve its export.
- * - `resolveSdkExport()` — resolve and validate the SDK's main export across
- *   the ESM/CJS interop shapes esbuild can produce.
+ *   classify a missing package into install guidance, then resolve and
+ *   validate its main export across the ESM/CJS interop shapes esbuild can
+ *   produce.
  * - `resolveBinary()` — the 4-strategy native-binary probe, plus the identical
  *   Electron-detection and path-existence helpers it needs.
  * - `createCachedBinaryResolver()` — the per-session cache wrapper around
@@ -49,16 +49,27 @@ const CHANNEL = 'ExternalBinaryUtils';
  * the import call itself cannot be hoisted here (see the file header). This
  * wraps everything downstream of that one foreign edge: a missing package is
  * re-stated as `notFoundMessage` with the original attached as `cause`, so
- * callers classify it off the cause chain rather than the message text; a
- * present package resolves its export via {@link resolveSdkExport}.
+ * callers classify it off the cause chain rather than the message text.
+ *
+ * esbuild's CJS output for an ESM-only package can surface the named export
+ * directly (`mod.exportName`), under `default` (`mod.default.exportName`), or
+ * as `mod.default` itself; all three are checked and the result must be
+ * callable. A missing or non-function export fails — a build-configuration
+ * error (the package landed in esbuild's `external` array).
  */
-export function importForeignSdk<T>(opts: {
-  readonly load: () => Promise<Record<string, unknown>>;
+export function importForeignSdk<
+  M extends object,
+  K extends keyof M & string,
+>(opts: {
+  readonly load: () => Promise<M>;
   readonly notFoundMessage: string;
-  readonly exportName: string;
+  /** Property name of the export inside the module (e.g. `query`, `Codex`). */
+  readonly exportName: K;
+  /** Package specifier, for the error message (e.g. `@openai/codex-sdk`). */
   readonly specifier: string;
+  /** Human label for the export in the error (e.g. `query()`, `Codex class`). */
   readonly errorLabel: string;
-}): Effect.Effect<T, Error> {
+}): Effect.Effect<M[K], Error> {
   return Effect.tryPromise({
     try: opts.load,
     catch: (err) =>
@@ -66,60 +77,24 @@ export function importForeignSdk<T>(opts: {
         ? new Error(opts.notFoundMessage, { cause: err })
         : ensureError(err),
   }).pipe(
-    Effect.flatMap((mod) =>
-      Effect.try({
-        try: () =>
-          resolveSdkExport<T>(mod, {
-            exportName: opts.exportName,
-            specifier: opts.specifier,
-            errorLabel: opts.errorLabel,
-          }),
-        catch: ensureError,
-      }),
-    ),
+    Effect.flatMap((loaded) => {
+      const mod = loaded as Record<string, unknown>;
+      const value =
+        mod[opts.exportName] ??
+        (mod.default as Record<string, unknown> | undefined)?.[
+          opts.exportName
+        ] ??
+        mod.default;
+      if (typeof value === 'function') return Effect.succeed(value as M[K]);
+      const keys = Object.keys(mod).join(', ');
+      return Effect.fail(
+        new Error(
+          `${opts.errorLabel} not found in ${opts.specifier}. Module keys: [${keys}]. ` +
+            `Ensure ${opts.specifier} is NOT in esbuild externals.`,
+        ),
+      );
+    }),
   );
-}
-
-// ---------------------------------------------------------------------------
-// SDK export resolution
-// ---------------------------------------------------------------------------
-
-/**
- * Resolve and validate the main export of a dynamically-imported SDK module.
- *
- * esbuild's CJS output for an ESM-only package can surface the named export
- * directly (`mod.exportName`), under `default` (`mod.default.exportName`), or
- * as `mod.default` itself; this checks all three and asserts the result is
- * callable. The caller keeps its own `await import('<literal>')` (see the file
- * header) and passes the resulting module here.
- *
- * @throws if the export is missing or not a function — a build-configuration
- * error (the package landed in esbuild's `external` array).
- */
-function resolveSdkExport<T>(
-  mod: Record<string, unknown>,
-  opts: {
-    /** Property name of the export inside the module (e.g. `query`, `Codex`). */
-    readonly exportName: string;
-    /** Package specifier, for the error message (e.g. `@openai/codex-sdk`). */
-    readonly specifier: string;
-    /** Human label for the export in the error (e.g. `query()`, `Codex class`). */
-    readonly errorLabel: string;
-  },
-): T {
-  const value =
-    mod[opts.exportName] ??
-    (mod.default as Record<string, unknown> | undefined)?.[opts.exportName] ??
-    mod.default;
-
-  if (typeof value !== 'function') {
-    const keys = Object.keys(mod).join(', ');
-    throw new Error(
-      `${opts.errorLabel} not found in ${opts.specifier}. Module keys: [${keys}]. ` +
-        `Ensure ${opts.specifier} is NOT in esbuild externals.`,
-    );
-  }
-  return value as T;
 }
 
 // ---------------------------------------------------------------------------

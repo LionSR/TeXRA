@@ -16,112 +16,80 @@ import { ensureError } from '@utils/errors/errorMessage';
 
 const CHANNEL = 'latexSettingsHandlers';
 
-type LatexRecommendedSettingField = 'outDir' | 'autoRevealExclude';
+const OUT_DIR = '%DIR%/build/';
+const AUTO_REVEAL_EXCLUDE = 'explorer.autoRevealExclude';
+const AUTO_REVEAL_EXCLUDE_ENTRIES: Record<string, unknown> = {
+  '**/build/': true,
+};
 
-/** A recommended setting whose target value is a single scalar. */
-interface LatexRecommendedScalarSetting {
-  kind: 'scalar';
+/** A recommended LaTeX-related VS Code setting. */
+interface LatexRecommendedSetting {
   key: string;
-  value: string;
-  field: LatexRecommendedSettingField;
+  /** Whether `current` already holds the recommended value. */
+  holds(current: unknown): boolean;
+  /** The global value to write; `undefined` removes the setting. */
+  update(reset: boolean): unknown;
 }
 
-/**
- * A recommended setting whose target value is an object merged key-by-key
- * into whatever the user already has set (rather than overwritten wholesale).
- */
-interface LatexRecommendedObjectSetting {
-  kind: 'object';
-  key: string;
-  value: Record<string, unknown>;
-  field: LatexRecommendedSettingField;
-}
-
-type LatexRecommendedSetting =
-  LatexRecommendedScalarSetting | LatexRecommendedObjectSetting;
-
-/** Recommended LaTeX-related VS Code settings and their target values. */
-const LATEX_RECOMMENDED_SETTINGS: LatexRecommendedSetting[] = [
-  {
-    kind: 'scalar',
+/** Recommended LaTeX-related VS Code settings, by status field. */
+const LATEX_RECOMMENDED_SETTINGS: Record<
+  'outDir' | 'autoRevealExclude',
+  LatexRecommendedSetting
+> = {
+  outDir: {
     key: 'latex-workshop.latex.outDir',
-    value: '%DIR%/build/',
-    field: 'outDir',
+    holds: (current) => current === OUT_DIR,
+    update: (reset) => (reset ? undefined : OUT_DIR),
   },
-  {
-    kind: 'object',
-    key: 'explorer.autoRevealExclude',
-    value: { '**/build/': true },
-    field: 'autoRevealExclude',
+  // An object merged key-by-key into (and, on reset, unmerged out of) the
+  // user's existing global value, so their unrelated keys survive both
+  // directions. It holds when it contains every recommended entry.
+  autoRevealExclude: {
+    key: AUTO_REVEAL_EXCLUDE,
+    holds: (current) =>
+      typeof current === 'object' &&
+      current !== null &&
+      Object.entries(AUTO_REVEAL_EXCLUDE_ENTRIES).every(
+        ([key, value]) => Reflect.get(current, key) === value,
+      ),
+    update(reset) {
+      const globalValue = vscode.workspace
+        .getConfiguration()
+        .inspect<Record<string, unknown>>(AUTO_REVEAL_EXCLUDE)?.globalValue;
+      const remaining =
+        typeof globalValue === 'object' && globalValue !== null
+          ? { ...globalValue }
+          : {};
+      if (!reset) return { ...remaining, ...AUTO_REVEAL_EXCLUDE_ENTRIES };
+      for (const key of Object.keys(AUTO_REVEAL_EXCLUDE_ENTRIES)) {
+        delete remaining[key];
+      }
+      return Object.keys(remaining).length > 0 ? remaining : undefined;
+    },
   },
-];
+};
 
-/**
- * Whether a recommended setting is explicitly set to its recommended value.
- * An object setting counts as set when it contains every recommended entry;
- * the user's other keys are irrelevant.
- */
-function isRecommendedValueSet(field: LatexRecommendedSettingField): boolean {
-  const setting = LATEX_RECOMMENDED_SETTINGS.find(
-    (candidate) => candidate.field === field,
-  );
-  if (!setting) return false;
-  const inspection = vscode.workspace.getConfiguration().inspect(setting.key);
+/** Whether a recommended setting is explicitly set to its recommended value. */
+function isRecommendedValueSet({
+  key,
+  holds,
+}: LatexRecommendedSetting): boolean {
+  const inspection = vscode.workspace.getConfiguration().inspect(key);
   const explicitlySet =
     inspection?.globalValue !== undefined ||
     inspection?.workspaceValue !== undefined ||
     inspection?.workspaceFolderValue !== undefined;
-  if (!explicitlySet) return false;
-
-  const current = vscode.workspace.getConfiguration().get(setting.key);
-  if (setting.kind === 'scalar') {
-    return current === setting.value;
-  }
-
-  if (typeof current !== 'object' || current === null) return false;
-  const currentObject = current as Record<string, unknown>;
-  return Object.entries(setting.value).every(
-    ([key, value]) => currentObject[key] === value,
-  );
-}
-
-/**
- * The value to write for one recommended setting. Object settings merge into
- * (and, on reset, unmerge out of) the user's existing global value so their
- * unrelated keys survive both directions.
- */
-function resolveUpdateValue(
-  setting: LatexRecommendedSetting,
-  reset: boolean,
-): unknown {
-  if (setting.kind === 'scalar') {
-    return reset ? undefined : setting.value;
-  }
-
-  const globalValue = vscode.workspace
-    .getConfiguration()
-    .inspect<Record<string, unknown>>(setting.key)?.globalValue;
-  const remaining =
-    typeof globalValue === 'object' && globalValue !== null
-      ? { ...globalValue }
-      : {};
-
-  if (reset) {
-    for (const recommendedKey of Object.keys(setting.value)) {
-      delete remaining[recommendedKey];
-    }
-    return Object.keys(remaining).length > 0 ? remaining : undefined;
-  }
-
-  return { ...remaining, ...setting.value };
+  return explicitlySet && holds(vscode.workspace.getConfiguration().get(key));
 }
 
 /** Which recommended settings are applied and whether LaTeX Workshop is
  *  installed, for the LaTeX page's status. */
 export function latexEditorStatus(): LatexEditorStatus {
   return {
-    outDir: isRecommendedValueSet('outDir'),
-    autoRevealExclude: isRecommendedValueSet('autoRevealExclude'),
+    outDir: isRecommendedValueSet(LATEX_RECOMMENDED_SETTINGS.outDir),
+    autoRevealExclude: isRecommendedValueSet(
+      LATEX_RECOMMENDED_SETTINGS.autoRevealExclude,
+    ),
     latexWorkshopInstalled:
       vscode.extensions.getExtension(LATEX_WORKSHOP_EXT_ID) !== undefined,
   };
@@ -172,10 +140,8 @@ export function vscodeLatexSettingsHandlers(
         Effect.gen(function* () {
           const reset = data.reset ?? false;
           const targets = data.field
-            ? LATEX_RECOMMENDED_SETTINGS.filter(
-                (setting) => setting.field === data.field,
-              )
-            : LATEX_RECOMMENDED_SETTINGS;
+            ? [LATEX_RECOMMENDED_SETTINGS[data.field]]
+            : Object.values(LATEX_RECOMMENDED_SETTINGS);
           for (const setting of targets) {
             yield* Effect.tryPromise({
               try: () =>
@@ -183,7 +149,7 @@ export function vscodeLatexSettingsHandlers(
                   .getConfiguration()
                   .update(
                     setting.key,
-                    resolveUpdateValue(setting, reset),
+                    setting.update(reset),
                     vscode.ConfigurationTarget.Global,
                   ),
               catch: ensureError,

@@ -55,9 +55,8 @@ type QueryFn = typeof import('@anthropic-ai/claude-agent-sdk').query;
  * `importCodexClass` has.
  */
 export function importClaudeAgentSdk(): Effect.Effect<QueryFn, Error> {
-  return importForeignSdk<QueryFn>({
-    load: (): Promise<Record<string, unknown>> =>
-      import('@anthropic-ai/claude-agent-sdk'),
+  return importForeignSdk({
+    load: () => import('@anthropic-ai/claude-agent-sdk'),
     notFoundMessage:
       '@anthropic-ai/claude-agent-sdk package not found. Reinstall TeXRA.',
     exportName: 'query',

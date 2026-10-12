@@ -74,8 +74,8 @@ type _CodexSandboxModeAligned = _AssertExtends<
  * it (the shape shared with `importClaudeAgentSdk`).
  */
 export function importCodexClass(): Effect.Effect<CodexConstructor, Error> {
-  return importForeignSdk<CodexConstructor>({
-    load: (): Promise<Record<string, unknown>> => import('@openai/codex-sdk'),
+  return importForeignSdk({
+    load: () => import('@openai/codex-sdk'),
     notFoundMessage:
       '@openai/codex-sdk package not found. Install with: npm install -g @openai/codex',
     exportName: 'Codex',

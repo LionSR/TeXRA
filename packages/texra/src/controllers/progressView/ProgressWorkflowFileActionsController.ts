@@ -62,11 +62,15 @@ interface ProgressWorkflowFileActionsControllerDeps {
 
 export class ProgressWorkflowFileActionsController {
   /**
-   * Per-stream digest of each output file's content at compare time. A
-   * digest, not the content: Accept only asks whether the file changed
-   * since. Kept while the file is still an output of its run.
+   * Digest of an output file's content at compare time, by
+   * {@link backupKey}. A digest, not the content: Accept only asks whether
+   * the file changed since. Kept while the file is still an output of its
+   * run.
    */
-  private readonly modelOutputBackups = new Map<RunId, Map<string, string>>();
+  private readonly modelOutputBackups = new Map<
+    string,
+    { readonly stream: RunId; readonly file: string; readonly digest: string }
+  >();
 
   constructor(
     private readonly deps: ProgressWorkflowFileActionsControllerDeps,
@@ -151,7 +155,7 @@ export class ProgressWorkflowFileActionsController {
     return Effect.gen({ self: this }, function* () {
       const backup =
         file && activeRun
-          ? this.modelOutputBackups.get(activeRun)?.get(file)
+          ? this.modelOutputBackups.get(backupKey(activeRun, file))?.digest
           : undefined;
       let currentContent: string | undefined;
 
@@ -199,11 +203,7 @@ export class ProgressWorkflowFileActionsController {
       }
 
       if (backup !== undefined && activeRun) {
-        const runBackups = this.modelOutputBackups.get(activeRun);
-        runBackups?.delete(file);
-        if (runBackups?.size === 0) {
-          this.modelOutputBackups.delete(activeRun);
-        }
+        this.modelOutputBackups.delete(backupKey(activeRun, file));
       }
     });
   }
@@ -249,21 +249,16 @@ export class ProgressWorkflowFileActionsController {
       // A digest lives while its file is still an output of its run: a
       // removed run, or a round that no longer lists the file, takes its
       // digests with it, so the map is bounded by outputs that exist.
-      for (const [stream, digests] of this.modelOutputBackups) {
-        const outputs = new Set(
-          Object.values(this.deps.state.getOutputFiles(stream))
-            .flat()
-            .map((info) => info.location.absolutePath),
-        );
-        for (const tracked of digests.keys()) {
-          if (!outputs.has(tracked)) digests.delete(tracked);
+      for (const [key, backup] of this.modelOutputBackups) {
+        if (this.outputRounds(backup.stream, backup.file).length === 0) {
+          this.modelOutputBackups.delete(key);
         }
-        if (digests.size === 0) this.modelOutputBackups.delete(stream);
       }
-      const runBackups =
-        this.modelOutputBackups.get(runId) ?? new Map<string, string>();
-      runBackups.set(file, contentDigest(content));
-      this.modelOutputBackups.set(runId, runBackups);
+      this.modelOutputBackups.set(backupKey(runId, file), {
+        stream: runId,
+        file,
+        digest: contentDigest(content),
+      });
     }).pipe(
       // Best-effort: backup only informs the accepted-edit follow-up, but a
       // later Accept then has no compare-time content to offer.
@@ -289,10 +284,7 @@ export class ProgressWorkflowFileActionsController {
     // Use the matched entry's own `round` and prefer the most recent match:
     // in-place workflows reuse the same workspace path across rounds, so the
     // Map key (and the first match) would mislabel the `r<round>` postfix.
-    const rounds = Object.values(this.deps.state.getOutputFiles(stream))
-      .flat()
-      .filter((info) => info.location.absolutePath === file)
-      .map((info) => info.round);
+    const rounds = this.outputRounds(stream, file);
     if (rounds.length === 0) return undefined;
 
     return {
@@ -301,6 +293,19 @@ export class ProgressWorkflowFileActionsController {
       round: Math.max(...rounds),
     };
   }
+
+  /** The rounds of `stream` that list `file` as an output. */
+  private outputRounds(stream: RunId, file: string): number[] {
+    return Object.values(this.deps.state.getOutputFiles(stream))
+      .flat()
+      .filter((info) => info.location.absolutePath === file)
+      .map((info) => info.round);
+  }
+}
+
+/** One compare-time backup per run and output file. */
+function backupKey(stream: RunId, file: string): string {
+  return `${stream}\n${file}`;
 }
 
 /** A full sha256 digest of a file's text: what a compare-time backup keeps. */

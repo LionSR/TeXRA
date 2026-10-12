@@ -1,6 +1,6 @@
 // Shared constants and helpers for the Claude Code CLI tool.
 
-import { Effect } from 'effect';
+import { Effect, Predicate } from 'effect';
 
 import { withLogChannel } from '@logger/effectLog';
 import { writeLogLine } from '@logger/logSink';
@@ -190,13 +190,6 @@ export function claudeResultUsage(
   );
 }
 
-/** Narrow an SDK-sourced value to a plain record, the way every built-in
- *  tool's `input` arrives per the tool-use protocol (a no-argument call still
- *  sends `{}`, never a bare primitive or `null`). */
-function isToolRecord(value: unknown): value is Record<string, unknown> {
-  return value !== null && typeof value === 'object';
-}
-
 /**
  * Narrow a `tool_use` block's `input` to a record for storage on
  * `ToolUseLog`. A non-object payload here means the SDK sent something
@@ -209,7 +202,7 @@ function toToolInputRecord(
   input: unknown,
 ): Record<string, unknown> | undefined {
   if (input === undefined) return undefined;
-  if (isToolRecord(input)) return input;
+  if (Predicate.isObject(input)) return input;
   // Direct sink write: this runs inside the SDK stream's `for await` drain
   // (one `Effect.tryPromise` in claudeAgent.ts), where no fiber is current.
   writeLogLine(
@@ -245,7 +238,7 @@ export function buildClaudeToolUseLog(params: {
  * to the tool name when the input shape isn't recognized.
  */
 function describeToolInput(toolName: string, input: unknown): string {
-  if (!isToolRecord(input)) return toolName;
+  if (!Predicate.isObject(input)) return toolName;
   const record = input;
 
   switch (toolName) {
