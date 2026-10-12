@@ -91,10 +91,12 @@ guardrail, which is why it stays:
   split (12 `executeAgent` sites). `ModelRetryGate` is on the refuted list
   (`EFF-ADOPT-retry-gate-schedule`).
 - **Model handler.** Provider calls flow only through the `@texra-ai/llm`
-  `Model` bound by `modelAccess/binding.ts`; `ModelInvoker` is the run loop's
-  caller of it, with the helper path (`helperModel.ts`, which builds its own
-  `ModelAccess` and calls `callModel` → `run/modelCall.ts`) and compaction as
-  deliberate direct exceptions, not a second handler. Wire dispatch is one
+  `Model` bound by `modelAccess/binding.ts`. `ModelInvoker` owns both the turn
+  call (`invoke`) and the compaction summary (`call`, which `run/compaction.ts`
+  reaches via `input.invoker.call`), so compaction is not a bypass. The one
+  caller that reaches the bound `Model` without `ModelInvoker` is `helperModel.ts`
+  (it builds its own `ModelAccess` and calls `callModel` → `run/modelCall.ts`) —
+  a deliberate exception, not a second handler. Wire dispatch is one
   `switch (protocol)` over dynamic imports of
   data-only protocol arms + a compiler-exhaustive `CONFIGURE` table;
   providers are the `MODEL_PROVIDER_PLUGINS` data manifest. `grep "export
@@ -133,9 +135,10 @@ class"` across `packages/llm/src` returns only error types
      `tools/`); the one run program `@agent/runtime/loop/toolUse.ts` over the
      run history (a document task runs that one program over the documents
      plugin's recipe in `packages/texra`, not a harness round file); the model call at
-     `@agent/runtime/ModelInvoker.ts` (with `run/compaction.ts` and the helper
-     path invoking the bound `Model` directly — deliberate exceptions, not a
-     second handler).
+     `@agent/runtime/ModelInvoker.ts` (which owns both the turn `invoke` and the
+     compaction `call` that `run/compaction.ts` reaches; only `helperModel.ts`
+     reaches the bound `Model` without it — a deliberate exception, not a second
+     handler).
    - Model handler: `packages/llm` (`@texra-ai/llm`) reached only through the
      `Model` bound by `runtime/modelAccess/` (`ModelAccess.ts`, `binding.ts`,
      `routeDecision.ts`, `credentials.ts`).
@@ -215,8 +218,12 @@ the existing consumer), then delete the now-stale rows. The natural Tier-1
 promotion set, by host-fan-out: `@shared/schemas` and
 `@utils/errors/errorMessage` (both imported by all 5 packages), then the
 4-package cluster (`@agent/index`, `@agent/runtime`, `@eventBus/AppSignals`,
-`@logger/effectLog`, `@logger/logSink`, `@platform/rootedFs`,
-`@shared/session/database`, `@shared/session/sessionView`, `@utils/core`, …).
+`@logger/effectLog`, `@platform/rootedFs`, `@shared/session/database`,
+`@shared/session/sessionView`, `@utils/core`, …). `@logger/logSink` is
+deliberately **excluded** from the promotion set: its `setLogSink`
+process-global is the host leak New.2 slates for replacement by a Layer, so
+promoting it would pin that API as a contract and turn the repair into a
+breaking change — defer it until the injectable logging surface is designed.
 Each promotion is strictly a narrowing under the ratchet's set semantics. This
 is owner work paired with New.1 (the manifest re-scope decides what becomes
 public); it is not a routine edit.
