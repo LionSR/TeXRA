@@ -151,8 +151,8 @@ class"` across `packages/llm/src` returns only error types
      entries (`.`, `./schemas`, `./plugins`, `./node`); `effect/` is internal
      implementation behind the root entry, not a published subpath.
 2. **Audit for unnecessary abstraction** — done, four ways (see Verdict). No
-   net-negative candidate beyond the one cosmetic single-caller split carried
-   below.
+   net-negative candidate survives; the prior pass's one cosmetic single-caller
+   item is now resolved (see Marginal cleanups).
 3. **Plan API-surface simplification** — the plan is the durable-harness
    program's _extend_ half (`2026-10-02-durable-harness.md` H4: `Plugin`,
    `Sessions.layer({ plugins })`, `Plugins.contribute` in a `Scope`,
