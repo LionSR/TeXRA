@@ -298,6 +298,32 @@ These are committed-state contracts. An external effect that finished before
 its result was committed can remain uncertain; **I4** governs that uncertainty,
 without promising exactly-once execution of arbitrary external effects.
 
+## Storage failures
+
+Every session-store error ends in one of a few outcomes, so a host knows what
+happens without reading the code. The table is in the header of
+`src/shared/session/database.ts`; in short:
+
+- **S1** The store does not open (`DatabaseOpenFailed`): the session does
+  not open, and the error says why. A store written before 1.0, or one SQLite
+  reports damaged, is moved aside instead (`movedAside`), never read again.
+- **S2** A store a newer build wrote (`DatabaseStoreNewer`, the cause of an
+  open, read or write failure) is refused whole: nothing is read in part or
+  written beside it.
+- **S3** A read fails (`DatabaseReadFailed`): the call that read fails. A
+  run whose own rows do not decode (`DatabaseRowCorrupt`, or
+  `DatabaseRowEarlier` from an earlier build) cannot open; it is listed as
+  unreadable and is never resumed. A listing or a tail leaves such a row out
+  with one warning instead.
+- **S4** A write fails (`DatabaseWriteFailed`): the batch rolled back and
+  the call fails. Inside a run, the run ends, whatever the tool or model
+  call that met it did with it.
+- **S5** The claim is not this process's (`DatabaseNotOwner`, or a
+  `DatabaseClaimRefused` cause): nothing was written. A run that loses its own
+  claim stops, with no retry. When another process holds the run, every
+  caller refuses the same way (`heldElsewhereBy`): a resume or follow-up
+  answers `owned_elsewhere`, a request `NotOwner`.
+
 ## Run results
 
 There is exactly one result shape: `RunEndResult`, the run's `run.end`

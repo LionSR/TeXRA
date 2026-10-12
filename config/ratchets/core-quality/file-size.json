@@ -26,7 +26,7 @@
   "packages/harness/src/controllers/session/storeSchema.ts": 412,
   "packages/harness/src/shared/schemas/runHistoryEvent.ts": 454,
   "packages/harness/src/shared/schemas/sessionEvent.ts": 642,
-  "packages/harness/src/shared/session/database.ts": 420,
+  "packages/harness/src/shared/session/database.ts": 419,
   "packages/harness/src/shared/session/runRows.ts": 418,
   "packages/harness/src/shared/session/runStateFold.ts": 767,
   "packages/harness/src/shared/session/sessionFold.ts": 1300,
