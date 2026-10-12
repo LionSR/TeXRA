@@ -52,7 +52,13 @@ harness files are frozen over the 400-line bar in `file-size.json`).
 
 ---
 
-## Prioritized list
+## Prioritized list — ⚠️ SUPERSEDED (raw scan output, do NOT implement)
+
+> This section and the **Ranking summary** below are the pre-verification scan
+> output, kept only for provenance. **Every item in it was refuted** by the
+> **Verification results** section further down — do not act on the priorities,
+> LOC estimates, "confidence: verified" labels, or sequencing here. They are
+> wrong or overstated; the verified conclusion is that no refactor is warranted.
 
 ### 1. `codex*` vs `claudeAgent*` — two ~1,200-LOC parallel CLI-agent families ⭐ top pick
 **Impact: highest. Savings: ~200–350 LOC. Effort: L. Confidence: verified.**
@@ -113,7 +119,10 @@ harness files are frozen over the 400-line bar in `file-size.json`).
   three error-wrappers into one tagged-error helper.
 
 ### 4. CLI `createChatSessionController` — an 844-line factory function
-**Impact: high maintenance burden. Savings: ~50–100 net LOC. Effort: L. Confidence: the function-length figure is ratchet-independent but `wc -l`-verified; the sibling counts below are hand-counted (corrected 2026-10-12).**
+**Impact: high maintenance burden. Savings: ~50–100 net LOC. Effort: L.**
+**Confidence:** the 844-line function length is `wc -l`-verified (not ratchet-sourced);
+the sibling counts below were hand-counted and corrected 2026-10-12. Finding refuted
+in Verification results — a single-consumer justified factory, not a split target.
 
 - **Where:** `packages/cli/src/chat/chatSessionController.ts` (lines 309–1153, an
   844-line function) — one function holding ~25 nested closures (`startRootRun`,
@@ -161,9 +170,9 @@ harness files are frozen over the 400-line bar in `file-size.json`).
 | 4 | CLI `createChatSessionController` factory | 50–100 | L | ★ | maintainability, not deletion |
 | 5 | Cheap-wins bundle (4 items) | 270–420 | S–M | ★★★ | start here; lowest risk |
 
-**Suggested sequencing:** #5 (cheap wins, build momentum) → #1 (highest payoff) →
-#2/#3 (harness god-files) → #4 (CLI factory). Each is behavior-preserving, so per
-repo rules they carry zero new tests (a regression test only if one earns its place).
+**Suggested sequencing:** ~~#5 → #1 → #2/#3 → #4~~ — **superseded. Do not follow
+this sequence.** Verification refuted every item; implementing any of them would be
+the net-negative churn the repo's rules reject. See **Verification results** below.
 
 ## Verification results (per finding)
 
@@ -197,12 +206,14 @@ Each finding was opened and read against its actual source before any edit.
   "projection runner" and "row codec/exec" modules would be wired only by
   `databaseLayer` — a single consumer — which is exactly the single-caller extraction
   AGENTS.md bans, and this audit supplies no net-LOC accounting showing the new module
-  interfaces delete more structure than they add. So the honest recommendation is
-  **in-place** simplification of the existing owner (collapse the three
-  `writeFailed`/`readFailed`/`openFailed` wrappers into one tagged-error helper; group
-  the closures without new cross-module boundaries), done only if it nets negative and
-  validated with the full suite — **not** a prioritized module split. Downgraded from
-  "strongest candidate" to "in-place only, pending LOC proof."
+  interfaces delete more structure than they add. The one in-place idea the earlier
+  draft floated — collapsing the three `openFailed`/`writeFailed`/`readFailed`
+  wrappers — does **not** hold either: each is a minimal two-line builder for a
+  *distinct* tagged-error channel (`DatabaseOpenFailed`/`WriteFailed`/`ReadFailed`),
+  used at different sites; merging them needs a generic constructor plus three
+  bindings, which adds indirection and blurs three typed channels, so it cannot net
+  negative. Net result: **nothing here is worth doing** — not a module split, not the
+  error-wrapper merge. Downgraded from "strongest candidate" to "no action."
 - **#4 CLI `createChatSessionController` — a justified factory, not a split target.**
   It has one production consumer (`runChatTui.tsx`), and it captures initialization
   context in its closures — precisely the repo's documented *justified* factory case.
@@ -248,13 +259,15 @@ Each finding was opened and read against its actual source before any edit.
 size-concentration items (#3, #4) resist the obvious fix too, because splitting them
 into helper modules would be single-caller extractions the repo deliberately bans. A
 second automated reviewer (Codex) independently reached the same verdict on every
-item, citing the same AGENTS.md rules. The remaining, defensible debt is narrow: the
-one in-place `Database.ts` cleanup (collapse the three error-wrappers into one
-tagged-error helper), and the optional `texFilesOf()` micro-nit — both small, both
-in-place, neither worth a dedicated campaign. **The actionable conclusion is that
-this codebase does not currently warrant a structural refactor.** If a future change
-adds a *second* consumer to the `Database` projection logic or the chat controller,
-that is the moment an extraction would pay for itself; until then, leave them.
+item, citing the same AGENTS.md rules, and further showed that even the one in-place
+cleanup the draft kept (merging the three `Database.ts` error-wrappers) would add
+indirection rather than remove it — they are three distinct typed error channels. So
+the only thing left standing is the optional `texFilesOf()` micro-nit (~8 LOC),
+itself borderline against the one-expression-helper bar. **The actionable conclusion
+is that this codebase does not currently warrant a structural refactor — nor any
+in-place cleanup worth a PR.** If a future change adds a *second* consumer to the
+`Database` projection logic or the chat controller, that is the moment an extraction
+would pay for itself; until then, leave them.
 
 ## Not worth refactoring (checked, came back clean)
 - LLM provider `streamTurn`/wire codecs — genuinely provider-specific, already on
