@@ -353,7 +353,7 @@ export type PendingResponse = {
 };
 
 /** The settlement of `callId` the rows committed, or null. */
-export const settlementOf = (
+export const callSettlementOf = (
   pending: PendingResponse,
   callId: string,
 ): Extract<CallStatus, { kind: 'settled' }> | null => {

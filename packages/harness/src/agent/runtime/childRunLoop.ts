@@ -34,7 +34,7 @@ import {
   parentEdgeIn,
   sendToParent,
   settleChildTurn,
-  settlementOf,
+  childSettlementOf,
   type ChildSettlement,
   type SettlementRow,
   type TransactionPart,
@@ -577,7 +577,7 @@ const settleTurn = <TTurn, R>(
           err ?? undefined,
         )
       : undefined;
-    const settlement = settlementOf({
+    const settlement = childSettlementOf({
       runId,
       turn: { key: loop.attemptId, index: loop.turnIndex },
       message,

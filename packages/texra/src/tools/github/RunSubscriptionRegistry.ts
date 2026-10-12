@@ -15,6 +15,7 @@ import { Effect } from 'effect';
 
 import { emitAppSignal } from '@eventBus/AppSignals';
 import { withLogChannel } from '@logger/effectLog';
+import { PrunedNestedMap } from '@texra/utils/core/prunedNestedMap';
 import type { Disposable } from '@texra-ai/harness';
 import type { RunInbox } from '@texra-ai/harness/plugins';
 import type { RunId } from '@texra-ai/harness/schemas';
@@ -61,7 +62,7 @@ interface BoundSubscription {
 }
 
 export class RunSubscriptionRegistry<K extends string, Input> {
-  private readonly perRun = new Map<RunId, Map<K, BoundSubscription>>();
+  private readonly perRun = new PrunedNestedMap<RunId, K, BoundSubscription>();
   private readonly keysListener: Disposable;
   /** The polling source this registry binds runs to. */
   readonly source: PollingSourceLike<K, Input>;
@@ -83,7 +84,7 @@ export class RunSubscriptionRegistry<K extends string, Input> {
    */
   dispose(): void {
     this.keysListener.dispose();
-    const bindings = [...this.perRun.values()].flatMap((bound) => [
+    const bindings = [...this.perRun.groups()].flatMap(([, bound]) => [
       ...bound.values(),
     ]);
     this.perRun.clear();
@@ -104,8 +105,7 @@ export class RunSubscriptionRegistry<K extends string, Input> {
   ): Effect.Effect<boolean, never, GitHubServices> {
     return Effect.suspend(() => {
       const key = this.opts.keyOf(input);
-      const bound = this.perRun.get(runId) ?? new Map<K, BoundSubscription>();
-      const existing = bound.get(key);
+      const existing = this.perRun.get(runId, key);
       if (existing) {
         existing.release();
         existing.inbox = inbox;
@@ -118,7 +118,7 @@ export class RunSubscriptionRegistry<K extends string, Input> {
         // capture the binding and its input now — bind() reassigns the input
         // on rebind, and the delivery belongs to the input the event came
         // through. Only the delivery itself runs in the source-owned FiberSet.
-        const subscription = bound.get(key);
+        const subscription = this.perRun.get(runId, key);
         if (!subscription) return Effect.void;
         const { inbox: owner } = subscription;
         // The identifiers ride in the message: the sink renders `data` with
@@ -149,8 +149,7 @@ export class RunSubscriptionRegistry<K extends string, Input> {
             release: () => {},
           };
           subscription.release = this.releaseOnClose(runId, key, subscription);
-          bound.set(key, subscription);
-          this.perRun.set(runId, bound);
+          this.perRun.set(runId, key, subscription);
           return Effect.logInfo(
             `Bound subscription ${key} → run ${runId}`,
           ).pipe(
@@ -170,9 +169,8 @@ export class RunSubscriptionRegistry<K extends string, Input> {
   /** Returns true if a subscription existed and was removed. */
   unbind(runId: RunId, input: Input): boolean {
     const key = this.opts.keyOf(input);
-    const bound = this.perRun.get(runId);
-    const binding = bound && this.deleteBoundKey(runId, bound, key);
-    if (!bound || !binding) return false;
+    const binding = this.perRun.delete(runId, key);
+    if (!binding) return false;
     release(binding);
     this.emitBindingsChanged();
     return true;
@@ -186,8 +184,8 @@ export class RunSubscriptionRegistry<K extends string, Input> {
   unbindAll(key: string): number {
     const canonicalKey = key as K;
     const removedBindings: BoundSubscription[] = [];
-    for (const [runId, bound] of [...this.perRun]) {
-      const binding = this.deleteBoundKey(runId, bound, canonicalKey);
+    for (const [runId] of [...this.perRun.groups()]) {
+      const binding = this.perRun.delete(runId, canonicalKey);
       if (binding) removedBindings.push(binding);
     }
     if (removedBindings.length > 0) {
@@ -201,7 +199,7 @@ export class RunSubscriptionRegistry<K extends string, Input> {
     keys: readonly K[] = this.opts.source.activeKeys(),
   ): SubscriptionBinding<K>[] {
     const runIdsByKey = new Map<K, RunId[]>();
-    for (const [runId, bound] of this.perRun) {
+    for (const [runId, bound] of this.perRun.groups()) {
       for (const key of bound.keys()) {
         const runIds = runIdsByKey.get(key);
         if (runIds) runIds.push(runId);
@@ -222,9 +220,8 @@ export class RunSubscriptionRegistry<K extends string, Input> {
     binding: BoundSubscription,
   ): () => void {
     return binding.inbox.onClosed(() => {
-      const bound = this.perRun.get(runId);
-      if (bound?.get(key) !== binding) return;
-      this.deleteBoundKey(runId, bound, key);
+      if (this.perRun.get(runId, key) !== binding) return;
+      this.perRun.delete(runId, key);
       release(binding);
       this.emitBindingsChanged();
     });
@@ -233,10 +230,10 @@ export class RunSubscriptionRegistry<K extends string, Input> {
   private pruneMissingSourceKeys(keys: readonly K[]): void {
     const active = new Set<string>(keys);
     let removed = false;
-    for (const [runId, bound] of [...this.perRun]) {
+    for (const [runId, bound] of [...this.perRun.groups()]) {
       for (const key of [...bound.keys()]) {
         if (active.has(key)) continue;
-        const binding = this.deleteBoundKey(runId, bound, key);
+        const binding = this.perRun.delete(runId, key);
         if (!binding) continue;
         // The source already dropped the key: only the close listener goes.
         binding.release();
@@ -244,24 +241,6 @@ export class RunSubscriptionRegistry<K extends string, Input> {
       }
     }
     if (removed) this.emitBindingsChanged();
-  }
-
-  /**
-   * Remove one binding, pruning the run's map (and, once empty, `perRun`
-   * itself) in the same step. The single place every unbind path shrinks the
-   * (runId, key) → binding maps — callers still own disposing the returned
-   * binding's `disposable`.
-   */
-  private deleteBoundKey(
-    runId: RunId,
-    bound: Map<K, BoundSubscription>,
-    key: K,
-  ): BoundSubscription | undefined {
-    const binding = bound.get(key);
-    if (!binding) return undefined;
-    bound.delete(key);
-    if (bound.size === 0) this.perRun.delete(runId);
-    return binding;
   }
 
   private emitBindingsChanged(): void {
