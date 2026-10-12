@@ -464,11 +464,15 @@ describe('CLI terminal outcome resolution', () => {
       yield* session.log.settled;
 
       expect(
-        yield* readCliRunOutcomeState(session, {
-          outcome: RUN_OUTCOME.COMPLETED,
-          output: { response: '', files: [] },
-          runId,
-        }),
+        yield* readCliRunOutcomeState(
+          session,
+          {
+            outcome: RUN_OUTCOME.COMPLETED,
+            output: { response: '', files: [] },
+            runId,
+          },
+          (error) => expect.unreachable(error.message),
+        ),
       ).toEqual({
         outcome: RUN_OUTCOME.CANCELLED,
         outcomePersisted: true,

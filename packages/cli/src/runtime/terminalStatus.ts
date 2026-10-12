@@ -87,7 +87,7 @@ export const readCliRunOutcomeState = Effect.fn('readCliRunOutcomeState')(
   function* (
     session: SessionHandle,
     result: ExecuteAgentResult,
-    reportReadFailure?: (error: Error) => void,
+    reportReadFailure: (error: Error) => void,
   ): Effect.fn.Return<{ outcome: RunOutcome; outcomePersisted: boolean }> {
     return yield* getRunRecords(session, result.runId)
       .readRunEnd()
@@ -101,7 +101,7 @@ export const readCliRunOutcomeState = Effect.fn('readCliRunOutcomeState')(
         // being reported as a failed outcome read.
         Effect.catch((error: DatabaseReadFailed) =>
           Effect.sync(() => {
-            reportReadFailure?.(
+            reportReadFailure(
               new Error(
                 `Could not verify the persisted outcome for run ${result.runId}; using the current run outcome: ${toErrorMessage(error)}`,
                 { cause: error },
