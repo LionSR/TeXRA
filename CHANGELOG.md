@@ -31,7 +31,7 @@ All notable changes to this project will be documented in this file.
   ignores it. Any other requested policy only narrows the project's: one
   more permissive than it (Ask over Block) is refused with a notice where
   it used to apply in a terminal without the service. A denial's warning
-  names the policy that decided it (service protocol bump).
+  names the policy that decided it.
 - **`/approval` in `texra chat` sets only that chat's policy.** It no longer
   writes the project's policy in service mode; change that with `/config`
   or the settings view. The chat's latest run takes the change on its own

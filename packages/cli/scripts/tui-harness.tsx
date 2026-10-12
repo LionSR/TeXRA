@@ -1683,6 +1683,10 @@ registerBuiltinSlashCommands({
     ),
   getApprovalPolicy: harnessApprovalPolicy,
   onApprovalPolicySelect: setHarnessApprovalPolicy,
+  onProjectApprovalPolicyChanged: (policy) =>
+    appendHarnessAssistantTranscript(
+      `Project approval policy: ${formatTexraApprovalPolicy(policy)}`,
+    ),
   onModelSelect: (model) =>
     Effect.sync(() => {
       setCliSessionModelOverride(model);

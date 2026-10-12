@@ -119,9 +119,11 @@ export function registerBuiltinSlashCommands(options: {
   onAccountChanged?: () => Effect.Effect<void, never, ProcessServices>;
   canSelectAgent?: () => boolean;
   getApprovalPolicy?: () => TexraApprovalPolicy;
-  /** Stays a plain callback: `/config`'s shared write path takes the same
-   *  hook as a void-returning port, so an Effect here would never run. */
+  /** `/approval`'s choice: the chat's own launch policy. */
   onApprovalPolicySelect?: (policy: TexraApprovalPolicy) => void;
+  /** The project's policy `/config` wrote. Stays a plain callback: the
+   *  shared write path takes it as a void-returning port. */
+  onProjectApprovalPolicyChanged?: (policy: TexraApprovalPolicy) => void;
   onModelSelect?: SelectHandler<string>;
   canSelectModel?: () => boolean;
   getModelSwitchDisabledReason?: GetModelSwitchDisabledReason;
@@ -400,12 +402,9 @@ export function registerBuiltinSlashCommands(options: {
           runtime={runtime}
           workspaceRoot={options.runtimeSession.roots.workspace}
           availableRows={props.availableRows}
-          // Same hook `/approval` drives, so the approval-policy row updates
-          // the live session and the status bar from whichever surface set
-          // it — including its "Approval mode: …" transcript line, which is
-          // the confirmation that the change reached the running session and
-          // not just the config file.
-          onApprovalPolicyChanged={options.onApprovalPolicySelect}
+          // The project's policy, written: the status bar follows it, and
+          // the chat's own `/approval` choice stays as it was.
+          onApprovalPolicyChanged={options.onProjectApprovalPolicyChanged}
           onClose={() => props.onDone(undefined)}
           onError={async (error) => {
             props.onPersist?.();

@@ -509,17 +509,34 @@ export function launchApproval(requested: TexraApprovalPolicy | undefined): {
   };
 }
 
+/** The policy a launch runs under: the project's, narrowed by what the
+ *  invocation asked for, or Auto-approve when it asked for that, which a
+ *  Block project still denies first. */
+export function effectiveApprovalPolicy(
+  requested: TexraApprovalPolicy | undefined,
+  configured: TexraApprovalPolicy,
+): TexraApprovalPolicy {
+  if (requested === undefined) return configured;
+  return requested === 'yolo' && configured !== 'never'
+    ? 'yolo'
+    : stricterPolicy(requested, configured);
+}
+
 /** Why a request is not what a launch runs under: one more permissive than
- *  the project's policy, Auto-approve aside, cannot widen it. */
+ *  the project's policy cannot widen it, and Auto-approve, which widens its
+ *  own task, cannot override Block. */
 export function launchApprovalNotice(
   requested: TexraApprovalPolicy | undefined,
   configured: TexraApprovalPolicy,
 ): string | undefined {
   if (
     requested === undefined ||
-    requested === 'yolo' ||
+    (requested === 'yolo' && configured !== 'never') ||
     stricterPolicy(requested, configured) === requested
   )
     return undefined;
-  return `Tasks run under the project's approval policy, ${texraApprovalPolicyLabel(configured)}, not ${texraApprovalPolicyLabel(requested)}: a launch can only narrow it, or auto-approve its own task. Change the project's policy with /approval in \`texra chat\` or in the settings view.`;
+  const change = `Change the project's policy with /config in \`texra chat\` or in the settings view.`;
+  return requested === 'yolo'
+    ? `Auto-approve can't override Block: tasks run under the project's Block policy. ${change}`
+    : `Tasks run under the project's approval policy, ${texraApprovalPolicyLabel(configured)}, not ${texraApprovalPolicyLabel(requested)}: a launch can only narrow it, or auto-approve its own task. ${change}`;
 }

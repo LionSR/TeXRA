@@ -262,9 +262,10 @@ const openStep = Effect.fn('Step.open')(function* (
     const pinned = yield* run.session.tools
       .pin(off, { installed: true, held: run.toolInputs.held })
       .pipe(Scope.provide(scope));
+    const { policy, ...gates } = liveToolGates(run.session, run.runId);
     const resolved = yield* resolveStepTools(pinned.entries, {
       ...run.toolInputs,
-      ...liveToolGates(run.session, run.runId),
+      ...gates,
       hostCapabilities: yield* hostCapabilitiesOf(run.session, pinned, scope),
       ...(recipe && { approvalPromptsUnavailable: false }),
     });
@@ -358,6 +359,11 @@ const openStep = Effect.fn('Step.open')(function* (
         ),
       ],
       withheld: resolved.withheldForApproval,
+      denied: {
+        kind: 'withheldTools',
+        tools: resolved.withheldForApproval,
+        policy,
+      } as const,
       continuing,
       skills,
       listed,
@@ -412,23 +418,17 @@ const openStep = Effect.fn('Step.open')(function* (
   const withheldChanged =
     step.withheld.length > 0 &&
     step.withheld.join('\0') !== (previous?.withheld ?? []).join('\0');
-  const warnings = [
-    ...(toolsChanged || skillsChanged ? step.warnings : []),
-    ...(withheldChanged
-      ? [
-          `Not offering ${step.withheld.join(', ')}: these tools need approval, and this run can neither show an approval prompt nor auto-approve under its approval policy. Use the yolo approval policy to allow them.`,
-        ]
-      : []),
-  ];
+  const warnings = toolsChanged || skillsChanged ? [...step.warnings] : [];
+  if (withheldChanged) {
+    warnings.push(
+      `Not offering ${step.withheld.join(', ')}: these tools need approval, and this run can neither show an approval prompt nor auto-approve under its approval policy. Use the yolo approval policy to allow them.`,
+    );
+    run.session.interactions.approvalDenied(step.denied, run.runId);
+  }
   // Reported where the change is recorded, not at every step.
   for (const message of warnings) {
     yield* Effect.logWarning(message).pipe(withLogChannel('Step'));
     run.logger.warn(message);
-  }
-  if (withheldChanged) {
-    const policy = run.session.approvals.policy(run.runId);
-    const denial = { kind: 'withheldTools' as const, tools: step.withheld };
-    run.session.interactions.approvalDenied({ ...denial, policy }, run.runId);
   }
   return {
     tools,

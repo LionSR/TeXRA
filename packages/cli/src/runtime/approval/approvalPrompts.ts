@@ -70,10 +70,14 @@ function approvalDenialMessage(
   context: CliContext,
 ): string {
   const reason = promptUnavailableReason(denial.policy, context);
-  const allow =
+  // Under Block no request widens: only the project's policy can change.
+  let allow =
     context.mode === 'headless'
       ? 'Use --approval-policy yolo to allow'
       : 'Change the policy with /approval to allow';
+  if (denial.policy === 'never')
+    allow =
+      "Change the project's approval policy (/config or the settings view) to allow";
   switch (denial.kind) {
     case 'executable':
       return `Command or edit denied: ${reason}. ${allow} it.`;

@@ -27,6 +27,7 @@ import type { AgentConfig } from '@agent/runtime';
 import { getVisibleAgents } from '@agent/index';
 import {
   CliUsageError,
+  effectiveApprovalPolicy,
   launchApprovalNotice,
   type CliContext,
 } from '@cli/runtime/cliContext';
@@ -61,7 +62,6 @@ import {
   TEXRA_APPROVAL_POLICY_CONFIG_KEY,
   type TexraApprovalPolicy,
 } from '@shared/approvalPolicy';
-import { stricterPolicy } from '@shared/approvalBypassKind';
 import { RUN_PHASE } from '@shared/schemas';
 import { getFirstRunDone } from '@shared/state/onboardingState';
 import {
@@ -154,18 +154,6 @@ const projectApprovalPolicy = (roots: {
     roots.config,
     TEXRA_APPROVAL_POLICY_CONFIG_KEY,
   );
-
-/** The policy this chat's launches run under: the project's, narrowed by
- *  what the chat asked for, or Auto-approve when it asked for that. */
-const chatApprovalPolicy = (
-  requested: TexraApprovalPolicy | undefined,
-  configured: TexraApprovalPolicy,
-): TexraApprovalPolicy => {
-  if (requested === 'yolo') return 'yolo';
-  return requested === undefined
-    ? configured
-    : stricterPolicy(requested, configured);
-};
 
 export interface RunChatInit {
   /** `--agent` override from the CLI; falls through `resolveChatDefaults`. */
@@ -319,7 +307,7 @@ export async function runChat(
         model: modelSelection.model,
         modelSource: defaults.modelSource,
         cwd: context.cwd,
-        approvalPolicy: chatApprovalPolicy(
+        approvalPolicy: effectiveApprovalPolicy(
           context.requestedApprovalPolicy,
           projectApprovalPolicy(runtimeSession.roots),
         ),
@@ -372,7 +360,10 @@ export async function runChat(
   // then each `/approval`.
   let chatPolicy = context.requestedApprovalPolicy;
   const getApprovalPolicy = (): TexraApprovalPolicy =>
-    chatApprovalPolicy(chatPolicy, projectApprovalPolicy(runtimeSession.roots));
+    effectiveApprovalPolicy(
+      chatPolicy,
+      projectApprovalPolicy(runtimeSession.roots),
+    );
   const currentSessionContext = (): CliContext => ({
     ...context,
     quietLogs: true,
@@ -654,6 +645,14 @@ export async function runChat(
     onApprovalPolicySelect: (policy) => {
       setApprovalPolicy(policy);
       appendLocalNotice(`Approval mode: ${formatTexraApprovalPolicy(policy)}`);
+    },
+    onProjectApprovalPolicyChanged: (policy) => {
+      patchSessionMeta({
+        approvalPolicy: effectiveApprovalPolicy(chatPolicy, policy),
+      });
+      appendLocalNotice(
+        `Project approval policy: ${formatTexraApprovalPolicy(policy)}`,
+      );
     },
     canSelectModel: () => session.canSelectModel(),
     getModelSwitchDisabledReason,

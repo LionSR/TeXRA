@@ -29,7 +29,7 @@ describe('warnApprovalDenied', () => {
 
     expect(writeTextStderrMock).toHaveBeenCalledTimes(1);
     expect(writeTextStderrMock).toHaveBeenCalledWith(
-      '[warn] [cli-approval] Command or edit denied: the approval policy is "never". Use --approval-policy yolo to allow it.',
+      '[warn] [cli-approval] Command or edit denied: the approval policy is "never". Change the project\'s approval policy (/config or the settings view) to allow it.',
     );
 
     // The chat TUI shares one context across overlapping runs (a detached
@@ -66,7 +66,7 @@ describe('warnApprovalDenied', () => {
     warnApprovalDenied(context, EXECUTABLE);
 
     expect(writeTextStderrMock).toHaveBeenCalledWith(
-      '[warn] [cli-approval] Command or edit denied: the approval policy is "never". Use --approval-policy yolo to allow it.',
+      '[warn] [cli-approval] Command or edit denied: the approval policy is "never". Change the project\'s approval policy (/config or the settings view) to allow it.',
     );
   });
 });
