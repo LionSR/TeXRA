@@ -12,7 +12,8 @@ which is now deleted; version control keeps it, per `.agents/docs/README.md`.
 Pin: verified against branch `claude/eager-noether-5nwuta` at `8a58597`
 (#13922). The 2026-10-04 pass's pin, `ae953c3`, is an ancestor — 192 commits
 back (`git rev-list --count ae953c3..8a58597`); it only looks unreachable from a
-shallow clone, which needs deepening first (`git fetch --deepen`). This pass
+shallow clone, which needs deepening first (`git fetch --deepen=400`, or
+`--unshallow`). This pass
 re-verifies the current tree and reads that range for the delta.
 
 ## Headline: the harness program moved, so this pass has signal
@@ -261,12 +262,16 @@ is load-bearing for finalizer-before-release ordering.
 ## Refuted set: one refusal landed on new evidence, the rest re-pinned
 
 `config/ratchets/refuted-candidates.json` is still the authoritative refused
-set. Over this range it changed two ways. Most entries changed only
+set. Over this range it changed three ways. Most entries changed only
 mechanically: the split moved the files, so the symbol paths were re-pinned from
 `packages/agent/src/...` to `packages/harness/src/...` (e.g. `ModelRetryGate.ts`,
-`perKeyQueue.ts`, `interfaces.ts`, `jsonConfigProvider.ts`). But **one refusal
-was reversed on new evidence, the legal retirement path** (the file's own
-semantics): `SCOPE-held-sessions-as-effects` (candidate: "current/held as
+`perKeyQueue.ts`, `interfaces.ts`, `jsonConfigProvider.ts`). One entry also had a
+**signature re-pin**, not just a path one: `EFF-ADOPT-config-provider`'s
+`ConfigProvider.inspect` tightened its return from `ConfigInspection<T> |
+undefined` to `ConfigInspection<T>` (the ratchet pins symbol shape, so this is a
+real API change to a still-refused symbol, independent of the refusal). And
+**one refusal was reversed on new evidence, the legal retirement path** (the
+file's own semantics): `SCOPE-held-sessions-as-effects` (candidate: "current/held as
 Effects, deleting `HeldSessions`") is gone, retired in #13825 — the commit that
 deleted `HeldSessions` and moved session ownership onto `SessionMap` with
 effectful owner methods (`controllers/session/sessionLayer.ts`), the exact
@@ -281,8 +286,11 @@ _other_ retained refusal was reversed.
 - **Re-scope the Tier-1 manifest around the harness SDK** — §New.2; belongs to
   the durable-harness program. More urgent than the prior pass noted: the draft
   now names a deleted package.
-- **Reconcile `2026-10-02-durable-harness.md` Q5** — the package name it lists as
-  open is `harness` in the tree. A doc catch-up, owner-level.
+- **Reconcile `2026-10-02-durable-harness.md` Q5** — it lists all three package
+  names as open; the tree has settled two of its three proposals and overridden
+  the third: `@texra-ai/harness` and `@texra-ai/llm` shipped as proposed, but the
+  app package shipped as `@texra-ai/texra` (`packages/texra`), not the proposed
+  `@texra-ai/theorist` (`packages/theorist`). A doc catch-up, owner-level.
 - **Shrink the `host-agent-import` frozen list** as the manifest ratifies each
   edge; never widen.
 - **Logger sink→Layer** (§New.1) — rides
