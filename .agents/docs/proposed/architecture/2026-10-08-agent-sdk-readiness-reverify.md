@@ -33,13 +33,14 @@ improved**, entirely through the human-owned program, not this routine.
   `packages/harness/README.md` and the path aliases are all consistent with the
   new name. There is no `@texra/core` (deleted by #7099); the SDK surface is
   `@texra-ai/harness`, built and fenced, not published.
-- **Model handler consolidated and kept shrinking.** The old
+- **Model handler decomposed into a subsystem.** The old single
   `runtime/run/modelBinding.ts` (966 lines at the 2026-10-04 pin, 1037 before
-  that) is **gone**: #13919/#13920 folded binding, route decision and failure
-  reading into one `runtime/modelAccess/` subsystem
-  (`ModelAccess.ts`, `binding.ts`, `routeDecision.ts`, `credentials.ts`,
-  `failureInfo.ts`), where `binding.ts` is now **279 lines**. The bound-`Model`
-  route and its deliberate exceptions are unchanged.
+  that) is **gone**: #13919/#13920 split binding, route decision, credentials
+  and failure reading into the `runtime/modelAccess/` subsystem — five files,
+  `ModelAccess.ts` (251), `binding.ts` (279), `routeDecision.ts` (311),
+  `credentials.ts` (251), `failureInfo.ts` (159), **~1,251 lines total**. This
+  is a decomposition by concern, not a net line shrink; the bound-`Model` route
+  and its deliberate exceptions are unchanged.
 - **SDK center `effect/` decomposed.** The single `effect/runtime.ts` the prior
   pass named is gone; the directory is now
   `effect/{sessions,sessionPrograms,runHandle,requestAnswerer,errors}.ts`. This
@@ -85,7 +86,8 @@ set; nothing in these areas reopened a retained refusal.
      exceptions, not a second handler).
    - Model handler: provider calls are reached only through the `packages/llm`
      (`@texra-ai/llm`) `Model` bound by `runtime/modelAccess/binding.ts` (279
-     lines, under the `runtime/modelAccess/` subsystem #13919/#13920 introduced).
+     lines) — one of the five files of the `runtime/modelAccess/` subsystem
+     (~1,251 lines total) #13919/#13920 introduced.
      Deliberate exceptions outside that route are unchanged (audio
      transcription builds `OpenAI` directly; the `codex`/`claude_code` tools
      load their own provider SDKs; the settings-view consent probe acquires a VS
@@ -106,9 +108,10 @@ set; nothing in these areas reopened a retained refusal.
      terminal-finalization boundary (`AgentRunLifecycle.ts:297` and
      `tools/delegation/childRun.ts:147`), not a cosmetic wrapper — do not inline
      it.
-   - **Model handler** continues to de-duplicate (the old 966-line
-     `modelBinding.ts` folded into the `runtime/modelAccess/` subsystem, with
-     `binding.ts` now 279 lines). The `Model` interface still takes only a
+   - **Model handler** was reorganized, not inflated: the old 966-line
+     `modelBinding.ts` became the five-file `runtime/modelAccess/` subsystem
+     (~1,251 lines total, split by concern — binding, route decision,
+     credentials, failure reading). The `Model` interface still takes only a
      Zod-guarded materialized `TurnRequest` and keeps host concerns in
      `BoundModel`.
    - **Logger** is a clean host-agnostic producer port (`Effect.log*` +
