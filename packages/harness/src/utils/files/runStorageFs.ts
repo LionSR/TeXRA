@@ -2,16 +2,21 @@
 import * as path from 'node:path';
 
 // Third-party imports
-import { Effect, FileSystem, PlatformError } from 'effect';
+import { Effect, FileSystem, Path, PlatformError, type Scope } from 'effect';
 
 // Local imports
 import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
 import { withLogChannel } from '@logger/effectLog';
+import { StorageFs, WorkspaceFs, withSessionFs } from '@platform/rootedFs';
+import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import {
   RunIdSchema,
+  type FileOpResult,
   type RunId,
   type RunStorageFileLocation,
 } from '@shared/schemas';
+import { Rejected, type RequestError } from '@shared/session/requestErrors';
+import type { Outcome, RuntimeRequest } from '@shared/session/runtimeRequest';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { normalizeFilePath } from '@utils/core';
 import { getPathSegments, isPathWithin } from '@utils/core/pathCore';
@@ -19,6 +24,7 @@ import { getPathSegments, isPathWithin } from '@utils/core/pathCore';
 // Local file imports
 import { createRunStorageLocation } from './fileLocation';
 import { entryExists, entryTypeIn } from './fsEntryExists';
+import { copyDereferenced } from './fsDurability';
 
 export const CHANNEL = 'runStorage';
 
@@ -29,7 +35,7 @@ export const CHANNEL = 'runStorage';
  */
 
 /** A storage-relative (POSIX) path under the runs directory. */
-export function resolveRunStoragePath(...segments: string[]): string {
+function resolveRunStoragePath(...segments: string[]): string {
   return path.posix.join(WORKSPACE_STORAGE_LAYOUT.runs, ...segments);
 }
 
@@ -308,3 +314,82 @@ export function shouldSkipRelocation(relativePath: string): boolean {
   const segments = getPathSegments(relativePath);
   return segments.length > 0 && IGNORED_WORKSPACE_ROOTS.has(segments[0]);
 }
+
+/** What a `run.files` request reads from the process: its files. */
+export type RunFilesServices = FileSystem.FileSystem | Path.Path;
+
+/** Copy the run's directory to `to`, or remove it, as its result. */
+const packOrClean = Effect.fn('runStorage.packOrClean')(function* (
+  req: Extract<RuntimeRequest, { kind: 'run.files' }>,
+) {
+  const storageFs = yield* StorageFs;
+  const runDir = resolveRunStoragePath(req.runId);
+  // Only `NotFound` is absent: a directory that cannot be inspected fails.
+  if (!(yield* storageFs.exists(runDir))) {
+    yield* Effect.logWarning(`Run directory not found for run ${req.runId}`);
+    return { status: 'noFiles' } satisfies FileOpResult;
+  }
+  if (req.files.action === 'clean') {
+    yield* Effect.logInfo(`Removing the run directory ${runDir}`);
+    yield* storageFs.remove(runDir, { recursive: true, force: true });
+    return { status: 'success' } satisfies FileOpResult;
+  }
+  const { to } = req.files;
+  const workspaceFs = yield* WorkspaceFs;
+  const source = yield* storageFs.resolve(runDir);
+  const destination = yield* workspaceFs.resolve(to);
+  yield* workspaceFs.makeDirectory((yield* Path.Path).dirname(to), {
+    recursive: true,
+  });
+  // Symlinks are dereferenced so the copy stands alone; it fails on an
+  // existing folder rather than merging into an earlier pack.
+  yield* copyDereferenced(source, destination);
+  yield* Effect.logInfo(`Packed ${source} -> ${destination}`);
+  return { status: 'success', outputFolder: to } satisfies FileOpResult;
+});
+
+/**
+ * The `run.files` request: a stopped run's directory packed into the
+ * workspace or removed, by the process whose session holds the run. The run
+ * is held for the operation (`runs.launch({ hold })`), which takes its claim
+ * and refuses a run live here, so a resume never starts under a pack or a
+ * clean; the claim is never taken on another process's behalf.
+ */
+export const runFiles = (
+  session: {
+    readonly roots: WorkspaceRoots;
+    readonly runs: {
+      readonly launch: (spec: {
+        readonly hold: RunId;
+      }) => Effect.Effect<void, Error, Scope.Scope>;
+    };
+  },
+  req: Extract<RuntimeRequest, { kind: 'run.files' }>,
+): Effect.Effect<Outcome, RequestError, RunFilesServices> =>
+  session.runs.launch({ hold: req.runId }).pipe(
+    Effect.mapError(
+      (cause) =>
+        new Rejected({
+          reason: `This run is running or held elsewhere: ${toErrorMessage(cause)}`,
+        }),
+    ),
+    Effect.andThen(
+      packOrClean(req).pipe(
+        Effect.catch((error) =>
+          Effect.logError(
+            `The ${req.files.action} of run ${req.runId} failed`,
+          ).pipe(
+            Effect.annotateLogs({ data: error }),
+            Effect.as<FileOpResult>({
+              status: 'error',
+              error: toErrorMessage(error),
+            }),
+          ),
+        ),
+      ),
+    ),
+    Effect.map((result): Outcome => ({ kind: 'runFiles', result })),
+    Effect.scoped,
+    (program) => withSessionFs(session.roots, program),
+    withLogChannel(CHANNEL),
+  );

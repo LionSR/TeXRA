@@ -26,11 +26,10 @@ export { SESSION_CLOSE_DEADLINE_MS } from './SessionHandle';
 // The process's one route retry gate, which a helper call reads from context.
 export type { RouteRetries } from './run/invocation';
 
-// HostInteractions
-export type {
-  HostInteractions,
-  SessionHostInteractions,
-} from './HostInteractions';
+// HostInteractions; a host with no session of its own presents through a
+// `SessionHostInteractions` it attaches its presentation host to.
+export type { HostInteractions } from './HostInteractions';
+export { SessionHostInteractions } from './HostInteractions';
 
 // rootLaunch: what `Runs.launch({ request, options })` takes.
 export type { RootLaunchOptions, RootLaunchRequest } from './rootLaunch';

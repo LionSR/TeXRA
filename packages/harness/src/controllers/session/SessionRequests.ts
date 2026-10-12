@@ -47,8 +47,10 @@ import { ownFactRow } from '@tools/plugins';
 import type { ToolTable } from '@tools/toolTable';
 import { withPerKeyLane, type PerKeyLane } from '@utils/core/perKeyQueue';
 import { toErrorMessage } from '@utils/errors/errorMessage';
+import { runFiles, type RunFilesServices } from '@utils/files/runStorageFs';
 
 const done: Outcome = Object.freeze({ kind: 'done' } as const);
+type RequestServices = GlobalDatabase | RunFilesServices | Runs;
 
 /** The log's reads, and removal through the session's publisher. */
 type SessionRequestLog = Pick<
@@ -67,7 +69,7 @@ export interface SessionRequestsInit {
   /** This process's liveness snapshot (`self`, `dead`). */
   readonly local: SubscriptionRef.SubscriptionRef<LocalRuntimeState>;
   readonly plugins: ToolTable;
-  readonly globalDatabase: Context.Service.Shape<typeof GlobalDatabase>;
+  readonly services: Context.Context<GlobalDatabase | RunFilesServices>;
   /** Whether the session's doors are shut (a cancellation writes nothing). */
   readonly closed: () => boolean;
 }
@@ -367,14 +369,13 @@ const handle = (
   req: RuntimeRequest,
   admitted: AggregateState,
   heldHere: boolean,
-): Effect.Effect<Outcome, RequestError, GlobalDatabase | Runs> => {
+): Effect.Effect<Outcome, RequestError, RequestServices> => {
   switch (req.kind) {
     case 'run.stop':
       return Effect.gen(function* () {
         const runs = yield* Runs;
-        // An explicit child policy wins; an unset one is this session's
-        // configured "Keep subagents running", resolved here once for every
-        // request-borne stop.
+        // An explicit child policy wins; an unset one is the session's
+        // "Keep subagents running", resolved once for every request's stop.
         const detachActiveChildren =
           req.detachActiveChildren ??
           (yield* detachSubagentsOnStop(deps.session().roots));
@@ -383,10 +384,9 @@ const handle = (
           reason: req.reason,
         }).settlement;
       }).pipe(
-        // The stop fails when the setting could not be read or the run's
-        // terminal row was refused (a live foreign owner, a rolled-back
-        // transaction): the run is still in flight, so the requester hears
-        // that rather than `done`.
+        // A setting that would not read, or a refused terminal row (a live
+        // foreign owner, a rolled-back transaction): the run is still in
+        // flight, so the requester hears that rather than `done`.
         Effect.mapError(
           (error): RequestError =>
             new Unavailable({
@@ -405,6 +405,8 @@ const handle = (
       return viaControls(deps, req);
     case 'run.rename':
       return rename(deps, req, heldHere);
+    case 'run.files':
+      return runFiles(deps.session(), req);
     case 'run.fork':
       return forkRun(
         deps.session(),
@@ -475,10 +477,7 @@ export function sessionRequests(init: SessionRequestsInit): SessionRequests {
   const deps: RequestDeps = {
     ...init,
     decisionLanes: new Map(),
-    asks: requestAsks({
-      session: init.session,
-      closed: init.closed,
-    }),
+    asks: requestAsks(init),
   };
   const request = Effect.fn('SessionRequests.request')(function* (
     req: RuntimeRequest,
@@ -490,7 +489,7 @@ export function sessionRequests(init: SessionRequestsInit): SessionRequests {
       admitted.ownerId !== null &&
       SubscriptionRef.getUnsafe(deps.local).self.includes(admitted.ownerId);
     return yield* handle(deps, req, admitted, heldHere).pipe(
-      Effect.provideService(GlobalDatabase, deps.globalDatabase),
+      Effect.provideContext(deps.services),
       Effect.provideService(Runs, deps.session().runs),
     );
   });

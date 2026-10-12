@@ -14,6 +14,12 @@ All notable changes to this project will be documented in this file.
   its trace). The run's result is unaffected.
 - **A failed task in the TeXRA service always reports failure**, even
   when the service recorded no error for it.
+- **A VS Code window of the TeXRA service opens no session of its own.**
+  Its run actions, pack and clean, and its transcript export are answered
+  by the service (service protocol 20; an older client is refused). Pack
+  and clean are a session request (`run.files`) the process holding the
+  run performs. In such a window the HTML transcript export says the trace
+  stays with the service; Markdown and LaTeX export as before.
 - **A run that fails before it starts is reported as a launch error, not
   listed as a failed task.** A task, subagent or background script is
   recorded together with its first batch of history, so one that fails

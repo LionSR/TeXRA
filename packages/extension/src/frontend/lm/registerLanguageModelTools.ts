@@ -27,11 +27,15 @@ import {
   type ProcessRuntime,
   type WorkspaceRoots,
 } from '@texra-ai/harness';
-import { ChildRuns, type PluginToolServices } from '@texra-ai/harness/plugins';
+import {
+  ChildRuns,
+  WebFetchTool,
+  type PluginToolServices,
+} from '@texra-ai/harness/plugins';
 import { sessionFsLayer } from '@platform/rootedFs';
 
 import type { ToolResult } from '@shared/schemas';
-import type { ToolEntry } from '@tools/catalogEntries';
+import { ArxivSearchTool } from '@texra/tools/arxiv/ArxivSearchTool';
 import { ToolCatalog } from '@tools/liveTools';
 import type { ProcessPluginLayer } from '@tools/toolTable';
 import { generateShortId } from '@utils/core';
@@ -42,11 +46,23 @@ import {
   type LanguageModelResearchToolName,
 } from './languageModelToolInvocationMessage';
 
-/** VS Code tool name (manifest) → canonical TeXRA registry tool name. */
-const LM_TOOL_NAMES = {
-  texra_arxiv_search: 'arxiv_search',
-  texra_web_fetch: 'web_fetch',
-} as const satisfies Record<string, LanguageModelResearchToolName>;
+/** A tool Copilot can call: one whose call requires only what a plugin's
+ *  tool is served outside a run (`PluginToolServices`: the call's context,
+ *  the window's rooted files, a refusing `ChildRuns`, process services). A
+ *  tool that reads a run's own services does not compile here. */
+interface CopilotTool {
+  call(input: unknown): Effect.Effect<ToolResult, Error, PluginToolServices>;
+}
+
+/** VS Code tool name (manifest) → the TeXRA tool it calls, typed from its
+ *  defining module; the catalog says only whether its plugin is on. */
+const LM_TOOLS = {
+  texra_arxiv_search: { name: 'arxiv_search', tool: ArxivSearchTool },
+  texra_web_fetch: { name: 'web_fetch', tool: WebFetchTool },
+} as const satisfies Record<
+  string,
+  { readonly name: LanguageModelResearchToolName; readonly tool: CopilotTool }
+>;
 
 /** Flatten a TeXRA ToolResult into the plain text VS Code chat expects. */
 function toResultText(result: ToolResult): string {
@@ -61,9 +77,7 @@ class CopilotToolRunRefused extends Data.TaggedError('CopilotToolRunRefused')<{
   readonly message: string;
 }> {}
 const noRun = Effect.fail(
-  new CopilotToolRunRefused({
-    message: 'no run to launch from a Copilot tool call',
-  }),
+  new CopilotToolRunRefused({ message: 'A Copilot tool call is under no run' }),
 );
 const refusingChildRuns = Layer.succeed(ChildRuns)({
   launch: () => noRun,
@@ -102,7 +116,8 @@ const copilotTools = Effect.fnUntraced(function* (
   const register = (
     lmName: string,
     toolName: LanguageModelResearchToolName,
-    { tool, plugin }: ToolEntry,
+    tool: CopilotTool,
+    plugin: string,
   ) =>
     registerTool(lmName, {
       prepareInvocation(
@@ -120,11 +135,12 @@ const copilotTools = Effect.fnUntraced(function* (
         token: vscode.CancellationToken,
       ) {
         const runtime = processRuntime();
+        // The window's roots, which are gone once its workspace has closed.
         const roots = windowRoots();
         if (roots === undefined)
           return new vscode.LanguageModelToolResult([
             new vscode.LanguageModelTextPart(
-              'TeXRA has no workspace session to run this tool in.',
+              'TeXRA has no open workspace to run this tool in.',
             ),
           ]);
         // Run the invocation directly on the process runtime rather than
@@ -148,14 +164,7 @@ const copilotTools = Effect.fnUntraced(function* (
               // Its plugin's process services, as a step would serve them
               // (the research tools' plugins own none).
               const services = yield* catalog.processServices(plugin);
-              // cast: the curated tools are plugin tools (web_fetch,
-              // arxiv_search), which read no built-in's run services.
-              const call = tool.call(options.input) as Effect.Effect<
-                ToolResult,
-                Error,
-                PluginToolServices
-              >;
-              return yield* call.pipe(
+              return yield* tool.call(options.input).pipe(
                 Effect.provide(
                   Option.getOrElse(
                     services,
@@ -186,11 +195,11 @@ const copilotTools = Effect.fnUntraced(function* (
   yield* catalog.current.pipe(
     Stream.runForEach((entries) =>
       Effect.sync(() => {
-        for (const [lmName, toolName] of Object.entries(LM_TOOL_NAMES)) {
-          const entry = entries.get(toolName);
+        for (const [lmName, { name, tool }] of Object.entries(LM_TOOLS)) {
+          const entry = entries.get(name);
           const held = registered.get(lmName);
           if (entry !== undefined && held === undefined) {
-            registered.set(lmName, register(lmName, toolName, entry));
+            registered.set(lmName, register(lmName, name, tool, entry.plugin));
           } else if (entry === undefined && held !== undefined) {
             held.dispose();
             registered.delete(lmName);

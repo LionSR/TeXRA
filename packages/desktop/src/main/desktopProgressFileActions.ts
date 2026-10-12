@@ -172,7 +172,9 @@ export class DesktopProgressFileActions {
         runLatexdiffForRun({
           runId,
           roots: this.host.session.roots,
-          runDiscovery: runOutputReader(this.host.session),
+          runDiscovery: runOutputReader((id) =>
+            this.host.session.view.read([id]),
+          ),
           channel: DESKTOP_LATEXDIFF_CHANNEL,
           progress: { report: () => undefined },
         }),

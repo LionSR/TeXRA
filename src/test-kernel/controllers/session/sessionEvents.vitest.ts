@@ -43,7 +43,9 @@ import {
   Exit,
   Scope,
   Fiber,
+  type FileSystem,
   Layer,
+  type Path,
   Stream,
   SubscriptionRef,
 } from 'effect';
@@ -858,7 +860,9 @@ describe('Sessions owner', () => {
           log: { ...db, removeRun: events.removeRun, detach: events.detach },
           local,
           plugins: toolTable([]),
-          globalDatabase: yield* GlobalDatabase,
+          services: yield* Effect.context<
+            GlobalDatabase | FileSystem.FileSystem | Path.Path
+          >(),
           closed: () => false,
         });
         // The displayed fold was built as SELF and considers this run writable.
@@ -900,6 +904,7 @@ describe('Sessions owner', () => {
             Layer.orDie,
           ),
         ),
+        Effect.provide(nodePlatformLayer),
       ),
   );
 
@@ -926,7 +931,9 @@ describe('Sessions owner', () => {
             }),
           ),
           plugins: toolTable([]),
-          globalDatabase: yield* GlobalDatabase,
+          services: yield* Effect.context<
+            GlobalDatabase | FileSystem.FileSystem | Path.Path
+          >(),
           closed: () => false,
         });
         yield* settle(view.ref, (v) => v.runs.has(RUN));
@@ -957,9 +964,7 @@ describe('Sessions owner', () => {
 
         // A second Resume while the first is in flight is refused at once,
         // not queued behind the first's whole run.
-        const guard = runActionGuard(
-          {} as Pick<SessionHandle, 'view' | 'runs'>,
-        );
+        const guard = runActionGuard({ run: () => undefined });
         const finish = yield* Deferred.make<void>();
         const first = yield* Effect.forkChild(
           guard.resuming(Deferred.await(finish), RUN),
@@ -981,6 +986,7 @@ describe('Sessions owner', () => {
             Layer.orDie,
           ),
         ),
+        Effect.provide(nodePlatformLayer),
       ),
   );
 

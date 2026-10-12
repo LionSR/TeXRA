@@ -10,7 +10,6 @@ import {
   Exit,
   Layer,
   ManagedRuntime,
-  Result,
   Scope,
 } from 'effect';
 
@@ -38,7 +37,6 @@ import { EXTENSION_COMMANDS } from '@commands/extensionCommandIds';
 import { setApiKey as apiSetApiKey } from '@commands/api/apiKeyCommands';
 import { openGettingStarted } from '@commands/system/walkthroughCommands';
 import { createSampleProjectWithoutWorkspace } from '@commands/system/sampleProjectCommands';
-import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
 import {
   appStateStoreFromDatabase,
   openProjectStateStore,
@@ -78,7 +76,6 @@ import { FileSecrets, secretsDirectory } from '@platform/defaults/fileSecrets';
 import { defaultNodeStorageRoot } from '@platform/defaults/nodeStorage';
 import { openTexraConfigStores } from '@platform/defaults/nodeStores';
 import { JsonConfigProvider } from '@platform/defaults/jsonConfigProvider';
-import { StorageFs, withSessionFs } from '@platform/rootedFs';
 import { GlobalDatabase } from '@shared/session/database';
 import {
   formatTexraApprovalPolicy,
@@ -89,7 +86,6 @@ import {
 import { readState, StateFlagSchema } from '@shared/config/settingsAccess';
 import { telemetryNoticeIfDue } from '@telemetry/telemetryNotice';
 import { usageLogLayer } from '@telemetry/UsageLogService';
-import { serviceSession } from '@texra/controllers/server/serviceSession';
 import { TEXRA_SETTING_ROWS } from '@texra/shared/settingsView/texraSettings';
 import type { CommandId } from '@texra/shared/commands/catalog';
 import { fromHost } from '@texra/controllers/session/hostCallFailure';
@@ -101,10 +97,10 @@ import { LeanLanguageServices } from '@texra/tools/lean/leanLanguageServices';
 import { USER_MCP_CONFIG_PATH } from '@tools/mcp/mcpConfig';
 import { ToolAvailability } from '@tools/toolAvailabilityService';
 import { usageCostLabel } from '@ui/copy/modelAccess';
-import { sessionStoreMovedAsideMessage } from '@ui/copy/sessionStore';
 import { readConfigSettingFrom } from '@utils/config/platformSettings';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { reachExtensionService } from './common/extensionService';
+import { openWindowSession } from './windowSession';
 
 // Local file imports
 import { ProgressViewProvider } from './progressView/ProgressViewProvider';
@@ -485,52 +481,25 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
   // Every window is a client of the one background service, so its tasks
   // keep running when it closes and other windows and terminals see them.
   // A window that cannot reach it runs them here, and says so once.
-  const service = yield* reachExtensionService(context.extensionPath).pipe(
+  const reached = yield* reachExtensionService(context.extensionPath).pipe(
     Effect.result,
   );
-  const owner = yield* SessionOwner;
-  const runtimeSession = yield* owner.open({
+  const windowSession = yield* openWindowSession(
+    reached,
     roots,
-    // The service follows the interrupted tasks of a window that is its
-    // client.
-    ...(Result.isFailure(service) && { interruptedTasks: 'offer' }),
-  });
-  // Where this window's runs run: the service's session, or this one.
-  const session = Result.isSuccess(service)
-    ? yield* serviceSession(service.success, roots.workspace ?? '', roots)
-    : yield* sessions.open(roots, { persistent: true });
-  if (Result.isFailure(service)) {
-    const reason = `TeXRA runs this window's tasks here only, so other windows and terminals will not see them: ${service.failure.message}`;
-    yield* Effect.logWarning(reason).pipe(withLogChannel(EXTENSION_CHANNEL));
-    yield* Effect.forkDetach(
-      announce(
-        EXTENSION_CHANNEL,
-        vscodeUi.showWarningMessage(reason),
-        undefined,
-      ),
-    );
-  }
-  if (runtimeSession.log.movedAside) {
-    yield* Effect.forkDetach(
-      announce(
-        EXTENSION_CHANNEL,
-        vscodeUi.showWarningMessage(
-          sessionStoreMovedAsideMessage(runtimeSession.log.movedAside),
+    sessions,
+    (message) =>
+      Effect.asVoid(
+        Effect.forkDetach(
+          announce(
+            EXTENSION_CHANNEL,
+            vscodeUi.showWarningMessage(message),
+            undefined,
+          ),
         ),
-        undefined,
       ),
-    );
-  }
-  // The run-storage directory of the session just initialized, through that
-  // session's own storage view rather than a static that re-reads the root.
-  yield* withSessionFs(
-    roots,
-    Effect.flatMap(Effect.service(StorageFs), (storageFs) =>
-      storageFs.makeDirectory(WORKSPACE_STORAGE_LAYOUT.runs, {
-        recursive: true,
-      }),
-    ),
   );
+  const { session } = windowSession;
 
   // The setup pill: shown only while no credential is usable, the one
   // credential answer the "Connect a model" card also reads (a ChatGPT
@@ -552,9 +521,8 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
     globalState,
     secrets,
     runtime,
-    runtimeSession,
-    session,
-    Result.isSuccess(service) ? service.success : undefined,
+    roots,
+    windowSession,
     editors,
     (usable) => (usable ? setupPill.hide() : setupPill.show()),
   );
@@ -565,7 +533,9 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
   // Registered last, so the first thing the activation scope's close runs:
   // every session stops and settles its runs before the view and the host
   // resources registered above tear down around them.
-  yield* Effect.addFinalizer(() => Effect.asVoid(owner.closeAll));
+  yield* Effect.addFinalizer(() =>
+    Effect.asVoid(Effect.flatMap(SessionOwner, (owner) => owner.closeAll)),
+  );
 
   registerCommands(
     context,
@@ -574,7 +544,7 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
     secrets,
     runtime,
     roots,
-    runtimeSession.interactions,
+    progressViewProvider.present,
     session,
   );
   registerWalkthroughWorkspaceAction(context, true, runtime);

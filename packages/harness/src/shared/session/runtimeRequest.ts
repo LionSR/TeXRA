@@ -15,7 +15,11 @@
 import { z } from 'zod';
 
 import { APPROVAL_BYPASS_KINDS } from '@shared/approvalBypassKind';
-import { RequestDecisionSchema, RunIdSchema } from '@shared/schemas';
+import {
+  FileOpResultSchema,
+  RequestDecisionSchema,
+  RunIdSchema,
+} from '@shared/schemas';
 
 const runScoped = { runId: RunIdSchema };
 
@@ -70,6 +74,19 @@ export const RuntimeRequestSchema = z.discriminatedUnion('kind', [
     kind: z.literal('run.model'),
     ...runScoped,
     model: z.string().min(1),
+  }),
+  /**
+   * The toolbar's pack and clean of a stopped run's files, done under its
+   * claim by the process that holds the run's session: `pack` copies the
+   * run's directory to `to` (workspace-relative), `clean` removes it.
+   */
+  z.object({
+    kind: z.literal('run.files'),
+    ...runScoped,
+    files: z.discriminatedUnion('action', [
+      z.object({ action: z.literal('pack'), to: z.string().min(1) }),
+      z.object({ action: z.literal('clean') }),
+    ]),
   }),
   z.object({
     kind: z.literal('followUp.send'),
@@ -141,5 +158,6 @@ export const OutcomeSchema = z.discriminatedUnion('kind', [
     kind: z.literal('preview'),
     preview: ToolEditContentSchema.nullable(),
   }),
+  z.object({ kind: z.literal('runFiles'), result: FileOpResultSchema }),
 ]);
 export type Outcome = z.infer<typeof OutcomeSchema>;
