@@ -74,6 +74,14 @@ export {
 } from '@shared/session/database';
 export type { SessionOpenError } from '@shared/session/database';
 
+// Follow-up delivery, error-presentation and prompt-escaping helpers hosts share.
+export {
+  describeFollowUpFailure,
+  presentFollowUpResult,
+} from '@agent/followUp/ToolUseFollowUp';
+export { hasErrorPresentationClaimed } from '@common/errors/sdkError/errorMetadata';
+export { escapeText } from '@shared/utils/xmlEscape';
+
 // The payloads, as the runtime defines them.
 export { aggregateId } from '@shared/schemas';
 export type { AgentEvent } from '@agent/trace';

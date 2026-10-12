@@ -16,16 +16,25 @@ import {
 } from 'effect';
 
 import {
+  describeFollowUpFailure,
+  escapeText,
+  hasErrorPresentationClaimed,
+  presentFollowUpResult,
+  type PlatformSecrets,
+  type ProcessRuntime,
+  type ProcessServices,
+  type RunStopReason,
+  type RuntimeRequest,
+  type RunView,
+  type Session,
+  type SessionView,
+} from '@texra-ai/harness';
+import {
   AgentConfigSchema,
   terminalFailurePresented,
   type AgentConfig,
   type AgentConfigPayload,
 } from '@agent/runtime';
-import {
-  describeFollowUpFailure,
-  presentFollowUpResult,
-} from '@agent/followUp';
-
 import { launchApproval, type CliContext } from '@cli/runtime/cliContext';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import { readCliTeamName } from '@cli/runtime/cliTeams';
@@ -39,7 +48,6 @@ import {
   runOutcomeExitCode,
   type TurnOutcome,
 } from '@cli/runtime/terminalStatus';
-import { hasErrorPresentationClaimed } from '@common/errors/sdkError/errorMetadata';
 import type { RunModelDecisionReason } from '@model/runModelDecision';
 import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
 import type { SettingsStores } from '@shared/config/settingsAccess';
@@ -47,7 +55,6 @@ import { acceptsFollowUp, isLiveRun } from '@shared/session/sessionView';
 import { isTerminalOutcomePhase } from '@shared/runs/runStatus';
 import { isDocumentTaskConfig, RUN_OUTCOME, type RunId } from '@shared/schemas';
 import { heldElsewhereBy } from '@shared/session/database';
-import { escapeText } from '@shared/utils/xmlEscape';
 import type { DisposableStore } from '@texra/platform/disposable';
 import { FOCUSED_AGENT } from '@ui/copy/nestedRuns';
 import { generateRunId } from '@utils/core';
@@ -87,17 +94,6 @@ import {
   reportRequestDefect,
 } from './tui/state/transcript';
 import { sessionAgentRuns, type ChatAgentRuns } from './sessionAgentRuns';
-import type { RunView, SessionView } from '@texra-ai/harness';
-import type {
-  ProcessRuntime,
-  ProcessServices,
-  Session,
-} from '@texra-ai/harness';
-import type {
-  RunStopReason,
-  RuntimeRequest,
-  PlatformSecrets,
-} from '@texra-ai/harness';
 import type { FollowUpDeliveryQueue } from './followUpDeliveryQueue';
 import type { SessionRequests } from './tui/state/approvalQueue';
 import type { SkillActivation } from './tui/forms/SkillsListForm';
