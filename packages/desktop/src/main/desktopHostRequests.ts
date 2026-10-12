@@ -7,14 +7,7 @@
 
 import path from 'node:path';
 
-import {
-  Cause,
-  Effect,
-  Exit,
-  FileSystem,
-  Layer,
-  SubscriptionRef,
-} from 'effect';
+import { Cause, Effect, Exit, FileSystem, Layer } from 'effect';
 import {
   Cancelled,
   Rejected,
@@ -28,6 +21,7 @@ import {
   workspaceEnvironmentLayer,
   type ProcessRuntime,
   type ProcessServices,
+  type Session,
 } from '@texra-ai/harness';
 import { presentRunFailure, type SessionHandle } from '@agent/runtime';
 import {
@@ -57,7 +51,6 @@ import type {
 import { ExternalOpenFailed } from '@texra/hosts/uiHosts';
 
 import type { ChatExportController } from '@texra/controllers/progressView/ChatExportController';
-import type { SessionBackend } from '@texra/controllers/session/sessionBackend';
 import { exportRunTranscript } from '@texra/controllers/progressView/exportTranscript';
 import { ApiKeyPromptFailed } from '@texra/controllers/progressView/ProgressApiKeyRetryController';
 import { ProgressWorkflowFileActionsController } from '@texra/controllers/progressView/ProgressWorkflowFileActionsController';
@@ -105,7 +98,7 @@ interface DesktopHostRequestsOptions {
   /** The process secret store the model catalog reads. */
   secrets: PlatformSecrets;
   /** Where this project's runs run: the session here, or the service's. */
-  backend: SessionBackend;
+  runSession: Session;
   host: DesktopAgentRunHost;
   run: DesktopAgentRun;
   files: DesktopFileSelection;
@@ -170,8 +163,8 @@ export function createDesktopHostRequests(
   const runActions = runtime.runSync(
     createHostRunActions({
       ...run, // this window's launcher and output opener
-      session,
-      backend: options.backend,
+      handle: session,
+      session: options.runSession,
       loadModelOptions: () =>
         withProcessServices(
           runtime,
@@ -235,8 +228,9 @@ export function createDesktopHostRequests(
     {
       session,
       runtime,
-      // The request schedules a merge; its later run failure belongs to this
-      // lifecycle callback, after the request has already completed.
+      // The request schedules a merge; a failure to start it belongs to
+      // this lifecycle callback, after the request has already completed,
+      // and one after that to the run's own result.
       startRun: (request) => {
         runtime.runFork(
           run.runValidated(request).pipe(
@@ -390,9 +384,7 @@ export function createDesktopHostRequests(
 
   const exportTranscript = (runId: RunId) =>
     Effect.gen(function* () {
-      if (
-        !SubscriptionRef.getUnsafe(options.backend.view.ref).runs.has(runId)
-      ) {
+      if (!options.runSession.view.current().runs.has(runId)) {
         return yield* Effect.fail(
           new Unavailable({ runId, reason: 'The run is no longer open.' }),
         );

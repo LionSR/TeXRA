@@ -36,7 +36,10 @@ export async function bindTestSessionView(): Promise<void> {
   const ref = await testRuntime().runPromise(
     SubscriptionRef.make(emptySessionView('test')),
   );
-  unbind = bindSessionView(testRuntime(), ref);
+  unbind = bindSessionView(testRuntime(), {
+    current: () => SubscriptionRef.getUnsafe(ref),
+    changes: SubscriptionRef.changes(ref),
+  });
 }
 
 /** Replace the whole view the components read. */

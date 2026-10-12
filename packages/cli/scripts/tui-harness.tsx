@@ -371,6 +371,9 @@ if (HARNESS_MEMORY_FILES.length > 0) {
 const harnessRuntimeSession = await harnessRuntime.runPromise(
   HARNESS_PLATFORM_SERVICES.session,
 );
+const harnessRunSession = await harnessRuntime.runPromise(
+  HARNESS_PLATFORM_SERVICES.runSession,
+);
 harnessRuntimeSession.approvals.override(TEXRA_APPROVAL_POLICY_DEFAULT);
 if (process.env.HARNESS_VISIBLE_AGENTS !== undefined) {
   await harnessRuntime.runPromise(
@@ -454,7 +457,7 @@ const isCellRow = (draft: SeedRow): draft is CellRow =>
 
 // The TUI reads the session fold (PRD 10.1): bind it and subscribe every
 // run's transcript tier the way `runChat` does.
-HARNESS_DISPOSERS.push(bindSessionView(harnessRuntime, session().view.ref));
+HARNESS_DISPOSERS.push(bindSessionView(harnessRuntime, harnessRunSession.view));
 {
   let subscribed = '';
   const syncTranscriptSubscriptions = (): void => {
@@ -1656,13 +1659,14 @@ function handleHarnessSlashCommand(line: string): boolean {
 }
 
 /** The harness's root-run claim, held the way `texra chat` holds its own. */
-const harnessSession = new TuiSession(() => undefined);
+const harnessSession = new TuiSession();
 
 registerBuiltinSlashCommands({
   secrets: HARNESS_PLATFORM_SERVICES.secrets,
   stores: HARNESS_PLATFORM_SERVICES,
   runtime: HARNESS_PLATFORM_SERVICES.runtime,
   runtimeSession: harnessRuntimeSession,
+  runSession: harnessRunSession,
   // Mirror `texra chat`: agent selection is open exactly while no root run
   // is pending.
   canSelectAgent: () => chatTuiCanStartRootRun(harnessSession),
@@ -1830,7 +1834,12 @@ if (process.env.HARNESS_SESSION_TREE === '1') {
     }),
   ]);
   const ref = await harnessRuntime.runPromise(SubscriptionRef.make(view));
-  HARNESS_DISPOSERS.push(bindSessionView(harnessRuntime, ref));
+  HARNESS_DISPOSERS.push(
+    bindSessionView(harnessRuntime, {
+      current: () => SubscriptionRef.getUnsafe(ref),
+      changes: SubscriptionRef.changes(ref),
+    }),
+  );
   rootRunId.set(interrupted);
   focusRun(PROCESS);
 }

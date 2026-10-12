@@ -29,7 +29,6 @@ import { showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
 import { withSessionFs } from '@platform/rootedFs';
 import type { ProgressViewProvider } from '@progressView/ProgressViewProvider';
 import type { SettingsViewProvider } from '@settingsView/SettingsViewProvider';
-import type { SessionBackend } from '@texra/controllers/session/sessionBackend';
 import { dispatchCommandFromRegistry } from '@texra/shared/commands/registry';
 
 // Local file imports
@@ -37,7 +36,7 @@ import {
   EXTENSION_COMMAND_HANDLERS,
   type ExtensionCommandActions,
 } from './extensionCommandHandlers';
-import type { ProcessRuntime } from '@texra-ai/harness';
+import type { ProcessRuntime, Session } from '@texra-ai/harness';
 import type { PlatformSecrets } from '@texra-ai/harness';
 
 const externalOpener = new VscodeExternalOpener();
@@ -49,7 +48,7 @@ export function createExtensionCommandActions(
   secrets: PlatformSecrets,
   session: SessionHandle,
   /** Where this window's runs run. */
-  backend: SessionBackend,
+  runSession: Session,
 ): ExtensionCommandActions {
   return {
     showSettings: (tab) => settingsViewProvider.showSettingsView(tab),
@@ -63,7 +62,7 @@ export function createExtensionCommandActions(
         launchSetupAssistant(
           secrets,
           session,
-          backend,
+          runSession,
           (runId) =>
             Effect.sync(() => progressViewProvider.presentLaunchedRun(runId)),
           progressViewProvider.showConnectModel(),
@@ -92,7 +91,7 @@ export function createExtensionCommandActions(
     execute: (input) =>
       input === undefined
         ? progressViewProvider.submit()
-        : agentRunExecuteCommand(input, session, backend, (runId) =>
+        : agentRunExecuteCommand(input, session, runSession, (runId) =>
             Effect.sync(() => progressViewProvider.presentLaunchedRun(runId)),
           ),
   };

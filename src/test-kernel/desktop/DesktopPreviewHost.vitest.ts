@@ -12,7 +12,7 @@ import { withProcessServices } from '@platform/processRuntime';
 import type { RunId } from '@shared/schemas';
 import { Rejected } from '@shared/session/requestErrors';
 import { closeSessionOf } from '@test/support/sessionEnd';
-import { testRuntime } from '@test/support/testProcessRuntime';
+import { testRuntime, testSessionOf } from '@test/support/testProcessRuntime';
 import { createFakeWorkspaceRoots } from '@test/support/FakePlatform';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import {
@@ -24,7 +24,6 @@ import { createTestSession } from '@test/support/sessionTestUtils';
 import type { HostRequest } from '@texra/shared/session/hostRequest';
 import { HostDraftRequests } from '@texra/controllers/session/hostDraftRequests';
 import { createHostSnapshotSource } from '@texra/controllers/session/hostSnapshotSource';
-import { localSessionBackend } from '@texra/controllers/session/sessionBackend';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { createExternalLocation } from '@utils/files/fileLocation';
 import { createStubDesktopAgentRunHost } from './desktopAgentRunTestHarness.ts';
@@ -152,7 +151,7 @@ describe('desktop preview host', () => {
         const handler = createDesktopHostRequests({
           runtime: testRuntime(),
           session,
-          backend: localSessionBackend(session),
+          runSession: testSessionOf(session),
           host: createStubDesktopAgentRunHost({
             ...preview,
             showErrorMessage,

@@ -12,7 +12,7 @@
 import * as path from 'node:path';
 
 import * as vscode from 'vscode';
-import { Effect, FileSystem } from 'effect';
+import { Effect, FileSystem, type Scope } from 'effect';
 
 import {
   AgentDirectories,
@@ -30,8 +30,9 @@ import {
   withProcessServices,
   type ProcessRuntime,
   type ProcessServices,
+  type Session,
 } from '@texra-ai/harness';
-import type { SessionHandle } from '@agent/runtime';
+import { presentRunFailure, type SessionHandle } from '@agent/runtime';
 import {
   handleLatexdiff,
   handleLatexdiffCommitAction,
@@ -98,7 +99,6 @@ import {
   type HostRunActionPorts,
 } from '@texra/controllers/session/hostRunActions';
 import type { HostSnapshotSource } from '@texra/controllers/session/hostSnapshotSource';
-import type { SessionBackend } from '@texra/controllers/session/sessionBackend';
 import {
   handleSharedHostRequest,
   isSharedHostRequest,
@@ -121,7 +121,7 @@ const CHANNEL = 'ExtensionHostRequests';
 interface ExtensionHostRequestsOptions {
   readonly session: SessionHandle;
   /** Where this window's runs run: the session here, or the service's. */
-  readonly backend: SessionBackend;
+  readonly runSession: Session;
   readonly extensionPath: string;
   readonly globalState: StateStore;
   /** The process secret store the extension root holds (model availability). */
@@ -132,6 +132,8 @@ interface ExtensionHostRequestsOptions {
   /** The process runtime the extension root holds; every request arm that
    *  settles an Effect runs it here. */
   readonly runtime: ProcessRuntime;
+  /** The view's scope: what a run's end does lives as long as the view. */
+  readonly scope: Scope.Scope;
   /** A host-initiated change to the surface (PRD 8.5). */
   surfaceAction(action: SurfaceActionMessage['action']): void;
   /** Select a run this window just launched (the launch's `onAdmitted`). */
@@ -207,7 +209,7 @@ export function createExtensionHostRequests(
 ): ExtensionHostRequests {
   const {
     session,
-    backend,
+    runSession,
     snapshot,
     toolEditApprovals,
     secrets,
@@ -223,33 +225,44 @@ export function createExtensionHostRequests(
   const multipleFilePickers = createFileSelectionPickers(session);
 
   /**
-   * Launch a validated fresh request through the window's backend, here or
-   * in the service, and open its final output once it ends: the surface's
-   * launch and the shared run actions both reach it. The launch program
-   * takes its process services from this runtime's context on the fiber
-   * that runs it.
+   * Start a validated fresh request on the window's session, here or in the
+   * service, and open its final output once it ends: the surface's launch
+   * and the shared run actions both reach it. A failure before the run
+   * opens is presented here, once. The launch program takes its process
+   * services from this runtime's context on the fiber that runs it.
    */
   const runValidated: HostRunActionPorts['runValidated'] = (
     request,
     runOptions = {},
-  ) => {
-    const launch = backend
-      .launch(request, {
-        preferHelperModel: runOptions.preferHelperModel ?? false,
-        ownApiKeyFallback: runOptions.ownApiKeyFallback,
-        approveDelegatedWork: runOptions.approveDelegatedWork,
-        onRun: runOptions.onRun,
-        onAdmitted: (runId) =>
-          Effect.sync(() => options.presentLaunchedRun(runId)),
-      })
-      .pipe(Effect.flatMap(openFinalOutputIfAvailable(session.roots)));
-    return withProcessServices(runtime, launch);
-  };
+  ) =>
+    withProcessServices(
+      runtime,
+      runSession
+        .start({ config: request.config, ...runOptions, interactive: true })
+        .pipe(
+          Effect.tapError((error) =>
+            presentRunFailure(session.interactions, error),
+          ),
+          Effect.tap((run) =>
+            Effect.sync(() => options.presentLaunchedRun(run.runId)),
+          ),
+          Effect.tap((run) =>
+            Effect.forkIn(
+              run.result.pipe(
+                Effect.flatMap(openFinalOutputIfAvailable(session.roots)),
+                Effect.ignore({ log: 'Warn', message: 'Opening the output' }),
+              ),
+              options.scope,
+            ),
+          ),
+        ),
+    );
 
   const runActions = runtime.runSync(
     createHostRunActions({
-      session,
-      backend,
+      handle: session,
+      session: runSession,
+      scope: options.scope,
       runValidated,
       openWorkflowOutput: (result) =>
         withProcessServices(

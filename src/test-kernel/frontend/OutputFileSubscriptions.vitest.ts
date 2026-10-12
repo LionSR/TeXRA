@@ -7,7 +7,7 @@ import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { aggregateId, type RunId } from '@shared/schemas';
-import { testRuntime } from '@test/support/testProcessRuntime';
+import { testRuntime, testSessionOf } from '@test/support/testProcessRuntime';
 import { waitForCondition } from '@test/support/asyncTestUtils';
 import { makeFakeSettingsStores } from '@test/support/settingsStoresFake';
 import { publishTestRows } from '@test/support/sessionTestUtils';
@@ -205,7 +205,7 @@ describe('output-file run fact frontend subscriptions', () => {
       const scope = yield* Scope.make();
       yield* registerFileDecorations(
         context as unknown as VSCode.ExtensionContext,
-        session,
+        testSessionOf(session),
       ).pipe(Scope.provide(scope));
       const provider = mocks.registeredProviders.at(-1) as {
         provideFileDecoration(uri: { scheme: string; fsPath: string }): unknown;
@@ -267,7 +267,7 @@ describe('output-file run fact frontend subscriptions', () => {
         yield* registerInlineCriticism(
           context as unknown as VSCode.ExtensionContext,
           testRuntime(),
-          session,
+          testSessionOf(session),
           stores,
         );
 

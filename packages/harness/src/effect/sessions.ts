@@ -27,6 +27,7 @@ import type {
   RunId,
   TranscriptSubscription,
 } from '@shared/schemas';
+import type { ReadonlyDeep } from '@shared/session/readonlyDeep';
 import type { StateSettingEntry } from '@shared/state/stateSettings';
 import type { RequestError } from '@shared/session/requestErrors';
 import type { Outcome, RuntimeRequest } from '@shared/session/runtimeRequest';
@@ -77,33 +78,6 @@ export interface Composition {
   readonly plugins: readonly Plugin[];
   readonly settings?: readonly StateSettingEntry[];
 }
-
-/**
- * A runtime value as the embedder may hold it: read-only all the way down,
- * every map, array, and record included. The value itself is not copied
- * (the fold publishes immutable levels); the type is what keeps a write
- * from reaching it. A primitive stays itself, so a branded id (a `RunId`)
- * is still that id.
- */
-type ReadonlyDeep<T> = T extends
-  | string
-  | number
-  | boolean
-  | bigint
-  | symbol
-  | null
-  | undefined
-  | ((...args: never[]) => unknown)
-  ? T
-  : T extends ReadonlyMap<infer K, infer V>
-    ? ReadonlyMap<K, ReadonlyDeep<V>>
-    : T extends ReadonlySet<infer V>
-      ? ReadonlySet<ReadonlyDeep<V>>
-      : T extends readonly (infer E)[]
-        ? readonly ReadonlyDeep<E>[]
-        : T extends object
-          ? { readonly [P in keyof T]: ReadonlyDeep<T[P]> }
-          : T;
 
 /** One published level of the session's fold: an immutable value. */
 export type SessionView = ReadonlyDeep<RuntimeSessionView>;
@@ -246,7 +220,8 @@ export interface Session {
    * published and its trace live. Interrupting the caller before admission
    * aborts the launch; interrupting it during the handoff that follows ends
    * the run too, so a caller that does not receive a {@link Run} has none
-   * running.
+   * running. A failure before admission is the caller's to present: `start`
+   * presents nothing.
    */
   readonly start: (
     input: StartInput,

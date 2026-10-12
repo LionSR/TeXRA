@@ -7,10 +7,10 @@
 import { Effect, Stream } from 'effect';
 
 import { withLogChannel } from '@logger/effectLog';
-import { attentionOf, type SessionView } from '@shared/session/sessionView';
-import type { SessionBackend } from '@texra/controllers/session/sessionBackend';
+import { attentionOf } from '@shared/session/sessionView';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { formatResultCount } from '@utils/text/stringUtils';
+import type { Session, SessionView } from '@texra-ai/harness';
 import type { RunId } from '@texra-ai/harness/schemas';
 import type * as vscode from 'vscode';
 
@@ -34,7 +34,7 @@ export class RequestAttention {
     view.badge = this.badge;
   }
 
-  follow(session: Pick<SessionBackend, 'view'>): Effect.Effect<void> {
+  follow(session: Pick<Session, 'view'>): Effect.Effect<void> {
     // Unseeded: the first view is what was already pending when the window
     // subscribed, which the badge shows and nothing reveals.
     let previous: SessionView | undefined;

@@ -2,8 +2,6 @@
 import { Cause, Effect } from 'effect';
 
 // Local imports
-import { SubscriptionRef } from 'effect';
-
 import { AgentConfigSchema, type SessionHandle } from '@agent/runtime';
 import { EXTENSION_COMMANDS } from '@commands/extensionCommandIds';
 import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
@@ -19,14 +17,13 @@ import { agentName, type RunId } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { SETUP_AGENT_NAME } from '@shared/constants/agents';
 import { SETUP_INSTRUCTION } from '@texra/controllers/onboarding/setupLaunch';
-import type { SessionBackend } from '@texra/controllers/session/sessionBackend';
 import {
   hasUsableSetupCredential,
   resolveSetupLaunchModel,
 } from '@texra/model/setupCredentialAccess';
 import { getUseOpenRouter } from '@utils/config/providerConfig';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import type { ProcessServices } from '@texra-ai/harness';
+import type { ProcessServices, Session } from '@texra-ai/harness';
 import type {
   PlatformSecrets,
   StateReadFailed,
@@ -129,7 +126,7 @@ export function launchSetupAssistant(
   secrets: PlatformSecrets,
   session: SessionHandle,
   /** Where the setup conversation runs: here, or in the service. */
-  backend: SessionBackend,
+  runSession: Session,
   onAdmitted: (runId: RunId) => Effect.Effect<void, Error>,
   /** Bring the panel's "Connect a model" card into view: the one credential
    *  prompt, which the setup card follows once a credential lands. */
@@ -141,7 +138,7 @@ export function launchSetupAssistant(
     // a second concurrent setup conversation would race the first one's
     // installs and config writes. The launcher's manual Execute path is
     // deliberately not gated — an explicit user action wins.
-    const running = SubscriptionRef.getUnsafe(backend.view.ref).runs.values();
+    const running = runSession.view.current().runs.values();
     if (
       [...running].some(
         (run) =>
@@ -216,7 +213,20 @@ export function launchSetupAssistant(
       instruction: SETUP_INSTRUCTION,
     });
 
-    const launch = backend.launch({ config }, { onAdmitted });
+    // The conversation, from its start through its end: the OpenRouter
+    // flag it asked for holds until then. A failure once it started is its
+    // result row's to show, not a failure to launch.
+    const launch = runSession.start({ config, interactive: true }).pipe(
+      Effect.tap((run) => onAdmitted(run.runId)),
+      Effect.flatMap((run) =>
+        run.result.pipe(
+          Effect.asVoid,
+          Effect.catch((failure) =>
+            Effect.logDebug(`The setup run failed: ${failure.message}`),
+          ),
+        ),
+      ),
+    );
 
     yield* resolution.requiresOpenRouter
       ? withOpenRouterFlagOn(session.roots, launch)

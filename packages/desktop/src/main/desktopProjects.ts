@@ -14,7 +14,7 @@ import {
   type PlatformError,
 } from 'effect';
 
-import { SessionOwner } from '@texra-ai/harness';
+import { SessionOwner, type Session, type Sessions } from '@texra-ai/harness';
 import {
   createNodeWorkspaceRoots,
   canonicalizeWorkspacePath,
@@ -37,11 +37,7 @@ import {
   projectDisplayOf,
   type ProjectDisplay,
 } from '@texra/shared/session/hostSnapshot';
-import {
-  localSessionBackend,
-  type SessionBackend,
-} from '@texra/controllers/session/sessionBackend';
-import { serviceSessionBackend } from '@texra/controllers/server/serviceBackend';
+import { serviceSession } from '@texra/controllers/server/serviceSession';
 import type { ServiceLink } from '@texra/controllers/server/client';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { withPerKeyLane, type PerKeyLane } from '@utils/core/perKeyQueue';
@@ -64,8 +60,8 @@ export interface DesktopProject {
   readonly session: SessionHandle;
   /** Where this project's runs run: the background service, for a folder
    *  while the app is its client, or this session. */
-  readonly backend: SessionBackend;
-  /** The service the backend reaches, when it is the service's. */
+  readonly runSession: Session;
+  /** The service `runSession` reaches, when it is the service's. */
   readonly service: ServiceLink | undefined;
   /** Release the session from its owner; settles once its entry has unwound. */
   dispose(): Effect.Effect<void>;
@@ -103,6 +99,9 @@ interface DesktopProjectRegistryOptions {
   /** The background service, when the app is its client: a folder's
    *  runs run there. */
   readonly service: ServiceLink | undefined;
+  /** The process's sessions: each project's session, as every host drives
+   *  it, is opened through them beside the owner's handle. */
+  readonly sessions: Sessions['Service'];
 }
 
 export interface DesktopProjectRegistry {
@@ -217,6 +216,7 @@ function openProjectSession(
   scope: Scope.Closeable,
   service: ServiceLink | undefined,
   owner: SessionOwner['Service'],
+  sessions: Sessions['Service'],
 ): Effect.Effect<DesktopProject, Error, Scope.Scope> {
   return Effect.gen(function* () {
     // A folder's runs run in the service, which follows its interrupted
@@ -233,17 +233,19 @@ function openProjectSession(
       // artifacts flushed, its entry released.
       (session) => Effect.asVoid(owner.close(session.roots.storage)),
     );
-    const backend =
+    // The same session as every host drives it: the service's, or the one
+    // just opened here.
+    const runSession =
       served === undefined || root === undefined
-        ? localSessionBackend(session)
-        : yield* serviceSessionBackend(served, root, roots.storage);
+        ? yield* sessions.open(roots, { persistent: true })
+        : yield* serviceSession(served, root, roots);
     return {
       key: roots.storage,
       root,
       display: projectDisplayOf(roots.storage, root),
       roots,
       session,
-      backend,
+      runSession,
       service: served,
       dispose: () => Scope.close(scope, Exit.void),
     };
@@ -263,6 +265,7 @@ export function openDesktopProjectRegistry(
 > {
   return Effect.gen(function* () {
     const owner = yield* SessionOwner;
+    const { sessions } = options;
     const records = yield* DesktopProjectRecords;
     const globalDatabase = yield* GlobalDatabase;
     const lanes = new Map<string | symbol, PerKeyLane>();
@@ -274,6 +277,7 @@ export function openDesktopProjectRegistry(
         options.processScope,
         undefined,
         owner,
+        sessions,
       ).pipe(
         Scope.provide(options.processScope),
         Effect.onError(() => Scope.close(options.processScope, Exit.void)),
@@ -352,6 +356,7 @@ export function openDesktopProjectRegistry(
                 projectScope,
                 options.service,
                 owner,
+                sessions,
               ).pipe(
                 Effect.tap((project) =>
                   Effect.gen(function* () {

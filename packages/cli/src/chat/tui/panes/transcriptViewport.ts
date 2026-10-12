@@ -1,6 +1,6 @@
 // Pure viewport math for bounded pending transcript panes.
 
-import type { TranscriptRow } from '@shared/transcript';
+import type { TranscriptRow } from '@cli/chat/tui/state/sessionView';
 import {
   transcriptEntryLayout,
   transcriptEntryLayoutRows,

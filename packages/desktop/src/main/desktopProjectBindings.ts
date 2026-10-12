@@ -208,7 +208,7 @@ export const openProjectBindings = Effect.fn('desktop.openProjectBindings')(
       // Install the recipient before host requests publish the recorder's
       // state.
       const bridge = yield* SessionBridge.make({
-        backend: project.backend,
+        session: project.runSession,
         handleHostRequest: (request, portId) =>
           hostRequests.handleHostRequest(request, portId),
         onPortClosed: (portId) => hostRequests.closePort(portId),
@@ -278,7 +278,7 @@ export const openProjectBindings = Effect.fn('desktop.openProjectBindings')(
         host: hosts.run,
         toolEditPreview: hosts.toolEditPreview,
         session: project.session,
-        backend: project.backend,
+        runSession: project.runSession,
         service: project.service,
         root: project.root,
         focused,
@@ -300,7 +300,7 @@ export const openProjectBindings = Effect.fn('desktop.openProjectBindings')(
       const hostRequests = createDesktopHostRequests({
         runtime,
         session: project.session,
-        backend: project.backend,
+        runSession: project.runSession,
         secrets: options.secrets,
         draftRequests: options.draftRequests,
         workspaceFile: workspace.file,

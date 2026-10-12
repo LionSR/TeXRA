@@ -33,7 +33,7 @@ import { documentTaskConfig } from '@texra/agent/output/documentRecipe';
 import { pastedImageFullPath } from '@texra/utils/files/pastedImageUtils';
 import { assertNever } from '@utils/core';
 import { isPastedImage } from '@utils/files/pastedImageName';
-import type { AgentCatalogServices } from '@texra-ai/harness';
+import type { AgentCatalogServices, StartInput } from '@texra-ai/harness';
 
 type LaunchRequest = Extract<HostRequest, { kind: 'launch' }>;
 
@@ -114,11 +114,11 @@ function buildLaunchRequest(
  * switch writes, so the header shows it and the user can take it back
  * mid-run. Block still denies: the policy is decided before any bypass.
  */
-export function launchApprovalOptions({ launch }: LaunchRequest): {
-  approveDelegatedWork?: true;
-} {
+export function launchApprovalOptions({
+  launch,
+}: LaunchRequest): Pick<StartInput, 'approval'> {
   return launch.approval === 'autoApprove'
-    ? { approveDelegatedWork: true }
+    ? { approval: { delegated: true } }
     : {};
 }
 

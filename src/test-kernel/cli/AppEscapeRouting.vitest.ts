@@ -181,7 +181,7 @@ function seedParentEdge(runId: RunId, parentRunId: RunId | null): void {
 }
 function seedRootRun(): void {
   rootRunId.set(ROOT);
-  new TuiSession(() => undefined).markRunPending(Effect.never);
+  new TuiSession().markRunPending(Effect.never);
   setRunning(ROOT);
   focusRun(ROOT);
 }

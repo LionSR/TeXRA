@@ -207,7 +207,8 @@ handover window with nobody reading has no reader, so it logs a warning
 naming the run and detaches its trace. Taking only `result` therefore never
 retains a long run's whole trace. A reader that attaches after that, or
 after the run settled unread, fails with `TraceUnavailable` (`truncated` or
-`ended`) rather than reading an empty trace. A reader that did attach in
+`ended`) rather than reading an empty trace; so does any reader of a run
+another process runs, which keeps its trace (`remote`). A reader that did attach in
 time is never dropped: past its first pull the buffer is that reader's, and
 nothing discards what it has yet to read.
 

@@ -18,10 +18,9 @@
  * - `task.watch`: a project's session feed (a stream of `EventsFrame`s)
  *   for one `Subscribe`, the frames the webview bridge already carries.
  * - `task.request`: one `RuntimeRequest` (send, approve, stop, fork, a
- *   pending tool edit's preview, …).
+ *   model switch, a pending tool edit's preview, …).
  * - `task.start` / `task.resume`: launch or continue a task in the service;
  *   `task.ended`: the outcome it ends with.
- * - `task.model`: switch a running task's model.
  * - `host.attach` / `host.focus` / `host.answer`: a window offering its host
  *   capabilities to its project's tasks (see `hostCalls.ts`).
  */
@@ -63,7 +62,7 @@ export const BUILD_VERSION: string =
 
 /** Bumped whenever a procedure or a payload changes shape. A client newer
  *  than the running service retires it; an older one stays in process. */
-export const PROTOCOL_VERSION = 18;
+export const PROTOCOL_VERSION = 19;
 
 /** `value` as JSON carries it: an absent field (`undefined`) is left out,
  *  which the wire's JSON check otherwise refuses. */
@@ -199,26 +198,19 @@ export const TexraRpcs = RpcGroup.make(
   }),
   Rpc.make('task.resume', {
     payload: { workspace, runId: zodWire(RunIdSchema) },
-    /** The run that resumed: the asked one, or the parent that owns it,
-     *  and whether it is a workflow, which settles with its whole run (what
-     *  `task.ended` answers); null when something it needs (its agent, a
-     *  plugin) is missing, so it stays interrupted. */
-    success: zodWire(
-      z.object({ runId: RunIdSchema, workflow: z.boolean() }).nullable(),
-    ),
+    /** The run that resumed: the asked one, or the parent that owns it;
+     *  null when something it needs (its agent, a plugin) is missing, so it
+     *  stays interrupted. */
+    success: zodWire(RunIdSchema.nullable()),
     error: zodWire(TaskFailedSchema),
   }),
   /** What a task's current activation ends with, once it ends: its
-   *  outcome and output. */
+   *  outcome, output, and the error a failed one ended with. */
   Rpc.make('task.ended', {
     payload: { workspace, runId: zodWire(RunIdSchema) },
-    success: zodWire(RunEndSchema.pick({ outcome: true, output: true })),
-    error: zodWire(TaskFailedSchema),
-  }),
-  /** Switch a run the service is running to `model` from its next turn;
-   *  refused with the run's reason. */
-  Rpc.make('task.model', {
-    payload: { workspace, runId: zodWire(RunIdSchema), model: Schema.String },
+    success: zodWire(
+      RunEndSchema.pick({ outcome: true, output: true, error: true }),
+    ),
     error: zodWire(TaskFailedSchema),
   }),
   Rpc.make('host.attach', {

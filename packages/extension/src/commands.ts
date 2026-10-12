@@ -10,9 +10,8 @@ import {
 
 // Local imports - components
 import { SettingsViewProvider } from '@settingsView/SettingsViewProvider';
-import type { SessionBackend } from '@texra/controllers/session/sessionBackend';
 import { ProgressViewProvider } from './progressView/ProgressViewProvider';
-import type { ProcessRuntime } from '@texra-ai/harness';
+import type { ProcessRuntime, Session } from '@texra-ai/harness';
 import type { PlatformSecrets, StateStore } from '@texra-ai/harness';
 
 export function registerCommands(
@@ -22,7 +21,8 @@ export function registerCommands(
   secrets: PlatformSecrets,
   runtime: ProcessRuntime,
   session: SessionHandle,
-  backend: SessionBackend,
+  /** Where this window's runs run. */
+  runSession: Session,
 ): void {
   const settingsViewProvider = new SettingsViewProvider(
     context,
@@ -42,7 +42,7 @@ export function registerCommands(
       progressViewProvider,
       secrets,
       session,
-      backend,
+      runSession,
     ),
     runtime,
     session,

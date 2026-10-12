@@ -59,7 +59,6 @@ import {
   HostSnapshotReadFailed,
   type HostSnapshotSource,
 } from '@texra/controllers/session/hostSnapshotSource';
-import type { SessionBackend } from '@texra/controllers/session/sessionBackend';
 import {
   SessionBridge,
   type AttachedPort,
@@ -72,7 +71,11 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { createExtensionHostRequests } from './extensionHostRequests';
 import { RequestAttention } from './requestAttention';
-import type { ProcessRuntime, ProcessServices } from '@texra-ai/harness';
+import type {
+  ProcessRuntime,
+  ProcessServices,
+  Session,
+} from '@texra-ai/harness';
 import type {
   PlatformSecrets,
   StateStore,
@@ -175,7 +178,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     /** Session created by the extension entry. */
     public readonly session: SessionHandle,
     /** Where this window's runs run: the session here, or the service's. */
-    private readonly backend: SessionBackend,
+    private readonly runSession: Session,
     /** The background service, when this window is its client. */
     private readonly service: ServiceLink | undefined,
     /** The editor registry the extension's plugins read (`texraPlugins`). */
@@ -214,7 +217,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     // Install the recipient before host requests publish the recorder's state.
     this.bridge = this.runtime.runSync(
       SessionBridge.make({
-        backend,
+        session: runSession,
         handleHostRequest: (request, port) =>
           hostRequests.handleHostRequest(request, port),
         onPortClosed: (port) => hostRequests.closePort(port),
@@ -302,16 +305,17 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
         session,
       ),
       // A decision goes where the run runs.
-      session: { requests: backend },
+      session: { requests: runSession },
     });
     this.runtime.runSync(
-      Effect.forkIn(this.attention.follow(backend), this.scope),
+      Effect.forkIn(this.attention.follow(runSession), this.scope),
     );
 
     const hostRequests = createExtensionHostRequests({
       session,
-      backend,
+      runSession,
       runtime: this.runtime,
+      scope: this.scope,
       extensionPath: context.extensionPath,
       globalState,
       secrets,
@@ -475,7 +479,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
   private chimeOnServiceDocuments(): Effect.Effect<void> {
     return Effect.suspend(() => {
       let live = new Set<RunId>();
-      return Stream.runForEach(this.backend.view.changes, (view) =>
+      return Stream.runForEach(this.runSession.view.changes, (view) =>
         Effect.sync(() => {
           const now = new Set<RunId>();
           for (const run of view.runs.values()) {
@@ -795,9 +799,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       if (!options?.inPlace) yield* this.showInSidebar();
       // Each surface decides from its own selection: one on the New-task
       // state opens the newest session, one showing a session keeps it.
-      const newest = SubscriptionRef.getUnsafe(this.backend.view.ref).order.at(
-        0,
-      );
+      const newest = this.runSession.view.current().order.at(0);
       if (newest !== undefined)
         this.surfaceAction({ kind: 'showSessions', runId: newest });
     });
@@ -815,7 +817,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     runId: RunId,
   ): Effect.Effect<ProgressRunRevealResult, SurfacePlacementFailed> {
     return Effect.gen({ self: this }, function* () {
-      const view = SubscriptionRef.getUnsafe(this.backend.view.ref);
+      const view = this.runSession.view.current();
       if (!view.runs.has(runId)) return 'missing' as const;
       yield* this.showProgressView();
       this.surfaceAction({ kind: 'select', runId });
@@ -824,8 +826,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
   }
 
   public runLabel(runId: RunId): string | undefined {
-    return SubscriptionRef.getUnsafe(this.backend.view.ref).runs.get(runId)
-      ?.label;
+    return this.runSession.view.current().runs.get(runId)?.label;
   }
 
   public popOutToEditor() {

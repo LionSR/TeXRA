@@ -10,7 +10,12 @@
 
 import { Effect, Scope, type Stream } from 'effect';
 
-import { type ProcessRuntime, withProcessServices } from '@texra-ai/harness';
+import {
+  type ProcessRuntime,
+  type Run,
+  type Session,
+  withProcessServices,
+} from '@texra-ai/harness';
 import {
   type RunEndResult,
   type HostPresentation,
@@ -25,7 +30,6 @@ import { ToolEditApprovalController } from '@texra/controllers/approval/ToolEdit
 import { attachSessionHost } from '@texra/controllers/session/attachSessionHost';
 import type { ServiceLink } from '@texra/controllers/server/client';
 import { attachWindowHost } from '@texra/controllers/server/windowHost';
-import type { SessionBackend } from '@texra/controllers/session/sessionBackend';
 
 import {
   DesktopToolEditApprovalHost,
@@ -45,8 +49,8 @@ export interface DesktopAgentRunOptions {
   toolEditPreview: Omit<DesktopToolEditApprovalUi, 'showErrorMessage'>;
   session: SessionHandle;
   /** Where this project's runs run: the session here, or the service's. */
-  backend: SessionBackend;
-  /** The service, when the backend is the service's: this window serves
+  runSession: Session;
+  /** The service, when `runSession` is the service's: this window serves
    *  its project's runs there with its notices and tool-edit previews. */
   service: ServiceLink | undefined;
   /** The project folder; none for the no-workspace session. */
@@ -62,21 +66,26 @@ export interface DesktopAgentRunOptions {
   /** The process runtime this window was handed; the run and its approval
    *  wiring settle on it. */
   runtime: ProcessRuntime;
-  /** Runs when a launch this window started settles. That is after
-   *  `AgentRunLifecycle` writes `firstRunDone` on a successful run, so the
-   *  host can recompute the onboarding funnel from the updated flag. The
-   *  refresh is idempotent and runs on every settle. */
+  /** Runs when a launch this window started settles: when its run ends
+   *  (after `AgentRunLifecycle` writes `firstRunDone` on a successful run,
+   *  so the host can recompute the onboarding funnel from the updated
+   *  flag), or when it fails to start. The refresh is idempotent and runs
+   *  on every settle. */
   onRunCompleted?: Effect.Effect<void>;
 }
 
 export interface DesktopAgentRun {
-  /** Launch a validated request, settling with the run itself
+  /** Start a validated request, answering once its run is admitted
    *  (`HostRunActionPorts.runValidated`). It fails with the launch's own
-   *  bare `Error`; a caller that needs a named channel names it. */
+   *  error, presenting nothing; a caller that needs a named channel names
+   *  it. */
   runValidated(
     request: ValidatedRunRequest,
-    options?: DesktopRunOptions & { readonly approveDelegatedWork?: boolean },
-  ): Effect.Effect<void, Error>;
+    options?: DesktopRunOptions,
+  ): Effect.Effect<Run, Error>;
+  /** The window's scope, which what its runs do when they end lives in
+   *  (`HostRunActionPorts.scope`). */
+  readonly scope: Scope.Scope;
   /** Open a resumed workflow's final output, as a launch opens a fresh one's
    *  (`HostRunActionPorts.openWorkflowOutput`). */
   openWorkflowOutput(result: RunEndResult): Effect.Effect<void, Error>;
@@ -95,7 +104,7 @@ export const createDesktopAgentRun = Effect.fn('desktop.createAgentRun')(
   function* (
     options: DesktopAgentRunOptions,
   ): Effect.fn.Return<DesktopAgentRun, never, Scope.Scope> {
-    const { session, backend, host, runtime } = options;
+    const { session, runSession, host, runtime } = options;
 
     /**
      * Each arm answers with the program that presents its notice; the session
@@ -150,7 +159,7 @@ export const createDesktopAgentRun = Effect.fn('desktop.createAgentRun')(
         spawn,
       }),
       // A decision goes where the run runs.
-      session: { requests: backend },
+      session: { requests: runSession },
     });
     // Dispose joins any tool-edit LaTeX build still displaying, which has no
     // cancellation signal, so the window's release must not wait on it: it
@@ -202,29 +211,37 @@ export const createDesktopAgentRun = Effect.fn('desktop.createAgentRun')(
       );
 
     /**
-     * The launch, settling with the run. `onRunCompleted` fires on every
-     * settlement, as the old `finally` did — after the launch, including
-     * `setFirstRunDone`. Do not hook the run.end row: it commits
-     * inside finalizeTerminal, before the flag write.
+     * The launch, answering at admission. `onRunCompleted` fires on every
+     * settlement: once the run's `result` has settled, including
+     * `setFirstRunDone`, or when the start fails. Do not hook the run.end
+     * row: it commits inside finalizeTerminal, before the flag write.
      */
     function runValidated(
       request: ValidatedRunRequest,
-      runOptions: DesktopRunOptions & {
-        readonly approveDelegatedWork?: boolean;
-      } = {},
-    ): Effect.Effect<void, Error> {
+      runOptions: DesktopRunOptions = {},
+    ): Effect.Effect<Run, Error> {
+      const completed = options.onRunCompleted ?? Effect.void;
       return launchDesktopAgent(
         request,
-        { session, backend, runtime },
+        { session, runSession, runtime, scope },
         {
           onAdmitted: (runId) => Effect.sync(() => options.onLaunched?.(runId)),
           ...runOptions,
         },
-      ).pipe(Effect.ensuring(options.onRunCompleted ?? Effect.void));
+      ).pipe(
+        Effect.tapError(() => completed),
+        Effect.tap((run) =>
+          Effect.forkIn(
+            run.result.pipe(Effect.ignore, Effect.ensuring(completed)),
+            scope,
+          ),
+        ),
+      );
     }
 
     return {
       runValidated,
+      scope,
       openWorkflowOutput: (result) =>
         withProcessServices(
           runtime,

@@ -13,6 +13,7 @@ import {
 import { isTerminalOutcomePhase } from '@shared/runs/runStatus';
 
 import { isLiveRun, type RunView } from './sessionView';
+import type { ReadonlyDeep } from './readonlyDeep';
 
 /** Opening the run's folder, exporting its conversation, copying its
  *  diagnostics: what any run offers, a fresh list per run so no two views
@@ -105,7 +106,10 @@ const forkable = (
 
 /** Why a run no longer takes `action`: the refusal every handler words. */
 export function runActionRefusal(
-  run: Pick<RunView, 'readOnly' | 'group' | 'status' | 'substate' | 'label'>,
+  run: Pick<
+    ReadonlyDeep<RunView>,
+    'readOnly' | 'group' | 'status' | 'substate' | 'label'
+  >,
   action: RunAction,
 ): string {
   const what = ACTION_LABEL[action];

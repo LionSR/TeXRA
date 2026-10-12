@@ -5,6 +5,7 @@ import * as path from 'node:path';
 import * as vscode from 'vscode';
 import {
   Cause,
+  Context,
   Effect,
   Exit,
   Layer,
@@ -18,6 +19,7 @@ import {
   AppState,
   processLayer,
   SessionOwner,
+  Sessions,
   UNAVAILABLE_LANGUAGE_MODEL_PORT,
   type LanguageModelPort,
   type ProcessRuntime,
@@ -88,8 +90,7 @@ import {
 import { readState, StateFlagSchema } from '@shared/config/settingsAccess';
 import { telemetryNoticeIfDue } from '@telemetry/telemetryNotice';
 import { usageLogLayer } from '@telemetry/UsageLogService';
-import { localSessionBackend } from '@texra/controllers/session/sessionBackend';
-import { serviceSessionBackend } from '@texra/controllers/server/serviceBackend';
+import { serviceSession } from '@texra/controllers/server/serviceSession';
 import { TEXRA_SETTING_ROWS } from '@texra/shared/settingsView/texraSettings';
 import type { CommandId } from '@texra/shared/commands/catalog';
 import { fromHost } from '@texra/controllers/session/hostCallFailure';
@@ -161,7 +162,7 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
     typeof context.extension.packageJSON?.version === 'string'
       ? context.extension.packageJSON.version
       : undefined;
-  const runtime: ProcessRuntime = withForkFailureReporting(
+  const managed = withForkFailureReporting(
     ManagedRuntime.make(
       processLayer({
         globalStorage,
@@ -217,6 +218,7 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
       }),
     ),
   );
+  const runtime: ProcessRuntime = managed;
   // The activation scope's finalizers are this host's shutdown, run in the
   // reverse of their registration: every session closes first (registered
   // at the end of activation), then the host's own resources, then the
@@ -294,7 +296,13 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
         ? yield* telemetryNoticeIfDue(roots.config)
         : null;
       if (notice) void vscode.window.showInformationMessage(notice);
-      return { secrets, runtime, roots, editors };
+      // The process's sessions, read once here from the runtime that
+      // serves them and threaded to the window's activation.
+      const sessions = yield* Effect.map(
+        managed.contextEffect,
+        Context.get(Sessions),
+      );
+      return { secrets, runtime, roots, editors, sessions };
     }),
   );
 });
@@ -432,11 +440,11 @@ const activateExtension = Effect.fn('activateExtension')(function* (
   // not leave a disposed host surface installed.
   context.subscriptions.push({ dispose: () => setLogSink(null) });
   const languageModel = createLanguageModelPort(context);
-  const { secrets, runtime, roots, editors } = yield* initVscodePlatform(
-    context,
-    workspaceRoot,
-    { languageModel, toolMissingHandler: vscodeToolMissingReporter },
-  );
+  const { secrets, runtime, roots, editors, sessions } =
+    yield* initVscodePlatform(context, workspaceRoot, {
+      languageModel,
+      toolMissingHandler: vscodeToolMissingReporter,
+    });
   // The host entry holds the process runtime in a local and threads it to the
   // surfaces registered below, so code under `activate` settles its Effects on
   // the runtime it was handed instead of reading the global back.
@@ -445,7 +453,7 @@ const activateExtension = Effect.fn('activateExtension')(function* (
   const activationScope = yield* Scope.Scope;
   yield* withProcessServices(
     runtime,
-    activateWorkspace(context, secrets, runtime, roots, editors).pipe(
+    activateWorkspace(context, secrets, runtime, roots, editors, sessions).pipe(
       Effect.provideService(Scope.Scope, activationScope),
     ),
   );
@@ -463,6 +471,7 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
   runtime: ProcessRuntime,
   roots: WorkspaceRoots,
   editors: EditorRegistry,
+  sessions: Context.Service.Shape<typeof Sessions>,
 ) {
   const { globalState } = roots;
   // Compatible editors may omit the language-model API. Its events belong
@@ -489,13 +498,14 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
     ...(Result.isFailure(service) && { interruptedTasks: 'offer' }),
   });
   workspaceSession = runtimeSession;
-  const backend = Result.isSuccess(service)
-    ? yield* serviceSessionBackend(
+  // Where this window's runs run: the service's session, or this one.
+  const session = Result.isSuccess(service)
+    ? yield* serviceSession(
         service.success,
         roots.workspace ?? '',
-        runtimeSession.roots.storage,
+        runtimeSession.roots,
       )
-    : localSessionBackend(runtimeSession);
+    : yield* sessions.open(roots, { persistent: true });
   if (Result.isFailure(service)) {
     const reason = `TeXRA runs this window's tasks here only, so other windows and terminals will not see them: ${service.failure.message}`;
     yield* Effect.logWarning(reason).pipe(withLogChannel(EXTENSION_CHANNEL));
@@ -550,7 +560,7 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
     secrets,
     runtime,
     runtimeSession,
-    backend,
+    session,
     Result.isSuccess(service) ? service.success : undefined,
     editors,
     (usable) => (usable ? setupPill.hide() : setupPill.show()),
@@ -571,14 +581,14 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
     secrets,
     runtime,
     runtimeSession,
-    backend,
+    session,
   );
   registerWalkthroughWorkspaceAction(context, true, runtime);
   // Keys another window or the service writes reach this one's surfaces.
   yield* Effect.forkScoped(
     secrets.watch().pipe(Effect.provide(nodeFileServices)),
   );
-  yield* registerFileDecorations(context, backend);
+  yield* registerFileDecorations(context, session);
 
   // VS Code's event emitters don't await async listeners, so we funnel
   // fire-and-forget async work through this program, which logs a failed
@@ -622,7 +632,7 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
     }),
     { startImmediately: true },
   );
-  yield* registerInlineCriticism(context, runtime, backend, roots);
+  yield* registerInlineCriticism(context, runtime, session, roots);
   registerInlineComments(context);
 
   const statusBarItem = vscode.window.createStatusBarItem(
@@ -633,7 +643,7 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
   statusBarItem.command = 'texra.showProgressView';
   // Shown only while a run is active (`updateStatusBarText`).
 
-  const statusBarUsageTracker = new StatusBarUsageTracker(backend);
+  const statusBarUsageTracker = new StatusBarUsageTracker(session);
   const updateStatusBarTooltip = () => {
     // The project's persisted policy: what a run here, or the service's
     // for this project, decides under.
@@ -691,7 +701,7 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
 
   yield* Effect.forkScoped(
     refreshStatusBarOnViewChanges({
-      session: backend,
+      session,
       tracker: statusBarUsageTracker,
       onStatusChanged: () => {
         updateStatusBarTooltip();

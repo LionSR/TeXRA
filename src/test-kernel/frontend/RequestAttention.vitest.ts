@@ -1,5 +1,5 @@
 import { it } from '@effect/vitest';
-import { Effect, Stream, SubscriptionRef } from 'effect';
+import { Effect, Stream } from 'effect';
 import { describe, expect, vi } from 'vitest';
 
 import { RequestAttention } from '@progressView/requestAttention';
@@ -43,8 +43,9 @@ describe('RequestAttention', () => {
 
       yield* attention.follow({
         view: {
-          ref: yield* SubscriptionRef.make(viewWith([])),
+          current: () => viewWith([]),
           changes: Stream.make(viewWith([]), viewWith([bash])),
+          watch: () => Stream.empty,
         },
       });
 

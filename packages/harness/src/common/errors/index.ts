@@ -15,6 +15,7 @@ export {
 } from './errorPredicates';
 export {
   AGENT_ERROR_OUTCOME,
+  agentErrorPresentation,
   classifyAgentError,
 } from './agentErrorClassification';
 
