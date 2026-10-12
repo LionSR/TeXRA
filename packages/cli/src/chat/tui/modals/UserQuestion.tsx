@@ -28,7 +28,7 @@ import type {
   UserQuestionPrompt,
 } from '@shared/schemas';
 
-import type { SurfaceDecision } from '@shared/session/approvalDecision';
+import type { SurfaceDecision } from '@texra/shared/session/surfaceDecision';
 import {
   toggleUserQuestionSelection,
   updateUserQuestionAnswers,

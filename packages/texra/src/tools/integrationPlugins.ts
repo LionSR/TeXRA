@@ -9,6 +9,7 @@
 import { Effect } from 'effect';
 
 // Local imports
+import { EXTERNAL_INQUIRY_THREAD_ARM } from '@texra/shared/plugins/externalInquiry';
 import {
   ClaudeAgentSessions,
   claudeAgentSessionsLayer,
@@ -106,15 +107,16 @@ export const githubActivity = definePlugin<GitHubSubscriptions>({
 export const externalInquiry: Plugin = {
   id: 'external-inquiry',
   tools: { inquiry: ExternalInquiryTool },
+  arms: [EXTERNAL_INQUIRY_THREAD_ARM],
   toggle: 'off',
   availability: ALWAYS_AVAILABLE,
   // The answer is recorded on the thread and delivered to the run that
   // asked, before the decision commits.
   decision: {
     kind: 'externalInquiry',
-    record: ({ payload, decision, session }) =>
+    record: ({ payload, decision, inbox, commit }) =>
       payload.kind === 'externalInquiry'
-        ? recordInquiryDecision(payload.data, decision, session).pipe(
+        ? recordInquiryDecision(payload.data, decision, inbox, commit).pipe(
             Effect.provide(inquiryRecordsLayer),
           )
         : Effect.die(

@@ -31,11 +31,15 @@ import {
 import { z } from 'zod';
 
 import type { HostInteractions } from '@agent/runtime/HostInteractions';
+import type { SessionHandle } from '@agent/runtime/SessionHandle';
+import type { ToolEditContent } from '@shared/session/runtimeRequest';
 import {
   DiagnosticsReadFailed,
   PdfOpenFailed,
-} from '@agent/runtime/runtimePresentationEvents';
-import type { SessionHandle } from '@agent/runtime/SessionHandle';
+  type EditorCapabilities,
+  type EditorHostShape,
+} from '@texra/tools/editorHost';
+import { isPathWithin } from '@utils/core/pathCore';
 
 import {
   CALL_CAPABILITY,
@@ -46,7 +50,6 @@ import {
   type HostFrame,
   type Notice,
 } from './hostCalls';
-import type { ToolEditPreview } from './protocol';
 
 /** Why a call a run waited on got no answer from a window. */
 export class WindowCallFailed extends Data.TaggedError('WindowCallFailed')<{
@@ -122,7 +125,7 @@ interface Staged {
   seen: boolean;
 }
 
-const previewOf = (entry: Staged | undefined): ToolEditPreview | null =>
+const previewOf = (entry: Staged | undefined): ToolEditContent | null =>
   entry === undefined
     ? null
     : {
@@ -143,19 +146,23 @@ export interface HostWindows {
     session: SessionHandle,
     capabilities: readonly HostCapability[],
   ) => Stream.Stream<HostFrame>;
+  /** Files a task wrote past the editor's own write path, as this
+   *  process's announcer heard them from the task's rows: every window
+   *  whose project holds one hears it, so its file tree and decorations
+   *  follow the service's tasks. */
+  readonly filesWritten: (
+    absolutePaths: readonly string[],
+  ) => Effect.Effect<void>;
   /** The window was focused: its project's calls go to it first. */
   readonly focus: (attachment: string) => Effect.Effect<void>;
   /** A window's answer to one call. */
   readonly answer: (id: string, answer: HostAnswer) => Effect.Effect<void>;
-  /** Give `session` the forwarding surface, for the scope's life. */
+  /** Give `session` the forwarding surface, and attach its project's
+   *  windows' editors to `editors`, for the scope's life. */
   readonly adopt: (
     session: SessionHandle,
+    editors: EditorHostShape,
   ) => Effect.Effect<void, never, Scope.Scope>;
-  /** The staged preview of one of `session`'s pending requests. */
-  readonly preview: (
-    session: SessionHandle,
-    requestId: string,
-  ) => Effect.Effect<ToolEditPreview | null>;
 }
 
 export const makeHostWindows = Effect.sync((): HostWindows => {
@@ -364,36 +371,6 @@ export const makeHostWindows = Effect.sync((): HostWindows => {
             call: { kind: 'approvalDenied', denial, runId },
           });
       },
-      get readDiagnostics(): HostInteractions['readDiagnostics'] {
-        if (!offers(key, 'readDiagnostics')) return undefined;
-        return (path: string) =>
-          ask(
-            key,
-            { kind: 'readDiagnostics', path },
-            CallResultSchemas.readDiagnostics,
-          ).pipe(
-            Effect.mapError(
-              (failure) =>
-                new DiagnosticsReadFailed({
-                  reason:
-                    failure.reason === 'failed'
-                      ? 'read-failed'
-                      : failure.reason,
-                  path,
-                  message: failure.message,
-                }),
-            ),
-          );
-      },
-      get addCriticism(): HostInteractions['addCriticism'] {
-        if (!offers(key, 'addCriticism')) return undefined;
-        return (entry) =>
-          ask(
-            key,
-            { kind: 'addCriticism', entry },
-            CallResultSchemas.addCriticism,
-          );
-      },
       get languageModel(): HostInteractions['languageModel'] {
         if (!offers(key, 'languageModel')) return undefined;
         return {
@@ -430,20 +407,13 @@ export const makeHostWindows = Effect.sync((): HostWindows => {
             }),
         };
       },
-      get openPdf(): HostInteractions['openPdf'] {
-        if (!offers(key, 'openPdf')) return undefined;
-        return ({ location, preserveFocus }) =>
-          ask(key, { kind: 'openPdf', location, preserveFocus }, z.null()).pipe(
-            Effect.asVoid,
-            Effect.mapError(
-              (failure) =>
-                new PdfOpenFailed({
-                  path: location.absolutePath,
-                  message: failure.message,
-                }),
-            ),
-          );
-      },
+      // The staged preview of a request the session still lists.
+      preview: (requestId) =>
+        Effect.map(SubscriptionRef.get(session.view.ref), (view) =>
+          view.requests.some((request) => request.requestId === requestId)
+            ? previewOf(stagedIn(key).get(requestId))
+            : null,
+        ),
       // The service keeps every preview for `request.preview`; the window
       // that stages it as well is the one asked to release or approve it.
       presentToolEdit: (request) => {
@@ -493,6 +463,52 @@ export const makeHostWindows = Effect.sync((): HostWindows => {
         }),
     };
   };
+  /** What `session`'s project's windows offer its runs' editor tools,
+   *  routed to the window focused last that offers each. */
+  const editorOf = (key: string): EditorCapabilities => ({
+    get readDiagnostics(): EditorCapabilities['readDiagnostics'] {
+      if (!offers(key, 'readDiagnostics')) return undefined;
+      return (path: string) =>
+        ask(
+          key,
+          { kind: 'readDiagnostics', path },
+          CallResultSchemas.readDiagnostics,
+        ).pipe(
+          Effect.mapError(
+            (failure) =>
+              new DiagnosticsReadFailed({
+                reason:
+                  failure.reason === 'failed' ? 'read-failed' : failure.reason,
+                path,
+                message: failure.message,
+              }),
+          ),
+        );
+    },
+    get addCriticism(): EditorCapabilities['addCriticism'] {
+      if (!offers(key, 'addCriticism')) return undefined;
+      return (entry) =>
+        ask(
+          key,
+          { kind: 'addCriticism', entry },
+          CallResultSchemas.addCriticism,
+        );
+    },
+    get openPdf(): EditorCapabilities['openPdf'] {
+      if (!offers(key, 'openPdf')) return undefined;
+      return ({ location, preserveFocus }) =>
+        ask(key, { kind: 'openPdf', location, preserveFocus }, z.null()).pipe(
+          Effect.asVoid,
+          Effect.mapError(
+            (failure) =>
+              new PdfOpenFailed({
+                path: location.absolutePath,
+                message: failure.message,
+              }),
+          ),
+        );
+    },
+  });
   /** Stage `entry` in `window`, which then holds it. */
   const stage = (entry: Staged, window: Window | undefined) => {
     entry.window = window;
@@ -538,6 +554,16 @@ export const makeHostWindows = Effect.sync((): HostWindows => {
           ).pipe(Stream.ensuring(detach(window)));
         }),
       ),
+    filesWritten: (absolutePaths) =>
+      Effect.forEach(
+        [...windows].filter(
+          (window) =>
+            window.capabilities.has('notices') &&
+            absolutePaths.some((path) => isPathWithin(window.project, path)),
+        ),
+        (window) => tell(window, { kind: 'filesWritten', absolutePaths }),
+        { discard: true },
+      ),
     focus: (attachment) =>
       Effect.sync(() => {
         for (const window of windows)
@@ -547,7 +573,7 @@ export const makeHostWindows = Effect.sync((): HostWindows => {
       Effect.suspend(
         () => calls.get(id)?.pending.get(id)?.answer(answer) ?? Effect.void,
       ),
-    adopt: (session) =>
+    adopt: (session, editors) =>
       Effect.gen(function* () {
         const key = session.roots.storage;
         // A staged preview whose request the session listed and no longer
@@ -576,12 +602,7 @@ export const makeHostWindows = Effect.sync((): HostWindows => {
           session.interactions.use(interactionsOf(session)),
           (release) => Effect.sync(release),
         );
+        yield* editors.attach(key, editorOf(key));
       }),
-    preview: (session, requestId) =>
-      Effect.map(SubscriptionRef.get(session.view.ref), (view) =>
-        view.requests.some((request) => request.requestId === requestId)
-          ? previewOf(stagedIn(session.roots.storage).get(requestId))
-          : null,
-      ),
   };
 });

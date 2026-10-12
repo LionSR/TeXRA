@@ -11,10 +11,10 @@
  */
 import { signal, type Signal } from '@lit-labs/signals';
 
-import type { HostRequest } from '@shared/session/hostRequest';
-import type { HostSnapshot } from '@shared/session/hostSnapshot';
-import type { Response, UpMessage } from '@shared/session/sessionFrames';
 import type { SessionView } from '@shared/session/sessionView';
+import type { HostRequest } from '@texra/shared/session/hostRequest';
+import type { HostSnapshot } from '@texra/shared/session/hostSnapshot';
+import type { Response, UpMessage } from '@texra/shared/session/sessionFrames';
 import {
   applySurfaceAction,
   canSendFollowUp,
@@ -26,7 +26,7 @@ import {
   reconcileLaunch,
   type Surface,
   type SurfaceAction,
-} from '@shared/session/surface';
+} from '@texra/shared/session/surface';
 import {
   PersistedState,
   type KeyValueStore,

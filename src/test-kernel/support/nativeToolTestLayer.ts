@@ -1,5 +1,5 @@
 /** Explicit call capabilities over the test host's existing process services. */
-import { type Effect, Layer, Scope, SynchronizedRef } from 'effect';
+import { Effect, Layer, Scope, SynchronizedRef } from 'effect';
 
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { Runs } from '@agent/runtime/runRegistry';
@@ -13,15 +13,14 @@ import {
   ScriptCalls,
   RunCall,
   type RunCallShape,
-  type ToolRun,
 } from '@agent/runtime/RunCall';
 import type { AgentRunShape } from '@agent/runtime/run/AgentRun';
 import type { OpenStep } from '@agent/runtime/loop/step';
-import type { RuntimeTool } from '@agent/runtime/ToolServices';
+import { childRunsLayer, type RuntimeTool } from '@agent/runtime/ToolServices';
 import type { BoundModel } from '@agent/runtime/modelAccess/ModelAccess';
 import type { ModelOptionStores } from '@model/computeModelOptions';
 import { sessionFsLayer } from '@platform/rootedFs';
-import type { PermissionPayload } from '@shared/schemas';
+import { aggregateId, type PermissionPayload } from '@shared/schemas';
 import { noopTrace } from '@test/support/noopTrace';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { testRuntime } from '@test/support/testProcessRuntime';
@@ -32,8 +31,11 @@ import { RunFileService } from '@utils/files/runStorage';
 
 /** The run a test call is made under: what every fixture names, plus whatever
  *  else of the run the case under test actually reads. */
-type TestCallRun = Pick<ToolRun, 'session' | 'runId' | 'toolPolicy'> &
-  Partial<ToolRun>;
+type TestCallRun = Pick<
+  RunCallShape['run'],
+  'session' | 'runId' | 'toolPolicy'
+> &
+  Partial<RunCallShape['run']>;
 
 /** A run's live model cell holding only the id a tool reads off it. */
 export const testModelCell = (modelId: string) =>
@@ -65,7 +67,7 @@ export const testRunTools = (
  *  roots it answers for. The call's `Runs` are its run's session's; a call
  *  outside any run gets a registry over an empty fold, as it tracks no run. */
 export function nativeToolTestLayer(
-  options: Partial<ToolEnv> &
+  options: Partial<Omit<ToolEnv, 'run'>> &
     Partial<Pick<ToolContextShape, 'callId' | 'emit'>> & {
       run?: TestCallRun;
       readFiles?: Set<string>;
@@ -77,6 +79,27 @@ export function nativeToolTestLayer(
   const roots = options.roots ?? testWorkspaceRoots();
   const { run, readFiles, origin, workingDirectory, stepRoots } = options;
   const callId = options.callId ?? `call-${generateShortId()}`;
+  // A fixture is the slice of the run its case reads; the run answers for
+  // its own config and trace with the inert pair.
+  const toolRun: RunCallShape['run'] | undefined = run && {
+    config: AgentConfigSchema.parse({ agent: 'test', model: 'test-model' }),
+    model: testModelCell('test-model'),
+    logger: noopTrace,
+    steps: noStep(),
+    scope: Scope.makeUnsafe(),
+    task: null,
+    opening: null,
+    // The run's files hold what it read: a case that seeds or checks that
+    // set shares its own with the run.
+    fileService: Object.assign(
+      new RunFileService(run.runId, roots),
+      readFiles && { readFiles },
+    ),
+    callbacks: {},
+    ...run,
+  };
+  // One layer value, so the child door and the plugin services share it.
+  const runs = Layer.sync(Runs, () => run?.session.runs ?? testRunRegistry());
   return Layer.mergeAll(
     Layer.effectContext(testRuntime().contextEffect),
     // The call's rooted filesystems, from the same roots it is given.
@@ -89,9 +112,10 @@ export function nativeToolTestLayer(
         roots,
         ...(workingDirectory !== undefined && { workingDirectory }),
         ...(stepRoots !== undefined && { stepRoots }),
+        ...(toolRun !== undefined && { run: toolRun }),
       },
       emit: options.emit ?? (() => undefined),
-      ...(run !== undefined && {
+      ...(toolRun !== undefined && {
         // A run's requests open unbound on its session: a test call has no
         // loop to bind them to.
         requests: {
@@ -99,46 +123,48 @@ export function nativeToolTestLayer(
           open: (
             payload: PermissionPayload,
             opened?: { readonly onNeverCommitted?: Effect.Effect<void> },
-          ) => run.session.requests.ask(run.runId, payload, opened),
+          ) => toolRun.session.requests.ask(toolRun.runId, payload, opened),
+          post: (requestId: string, payload: PermissionPayload) =>
+            toolRun.session.runHistory.open(toolRun.runId).pipe(
+              Effect.flatMap((cell) =>
+                cell.append([
+                  {
+                    type: 'request.opened',
+                    aggregateId: aggregateId('run', toolRun.runId),
+                    requestId,
+                    payload,
+                  },
+                ]),
+              ),
+              Effect.asVoid,
+            ),
+          present: (event, payload) =>
+            toolRun.session.interactions.emit(event, payload),
         },
       }),
     })),
-    // A test call is no script's and issues none.
+    // A test call is no script's and issues none; it launches children
+    // through the harness's capability over its own place in the run.
     Layer.succeed(ScriptCalls)(null),
-    Layer.succeed(IssuingScript)(null),
-    run === undefined
-      ? Layer.succeed(RunCall)(null)
-      : Layer.succeed(RunCall)({
-          // A fixture is the slice of the run its case reads; the run
-          // answers for its own config and trace with the inert pair.
-          run: {
-            config: AgentConfigSchema.parse({
-              agent: 'test',
-              model: 'test-model',
+    Layer.provideMerge(
+      childRunsLayer,
+      Layer.mergeAll(
+        runs,
+        Layer.succeed(IssuingScript)(null),
+        toolRun === undefined
+          ? Layer.succeed(RunCall)(null)
+          : Layer.succeed(RunCall)({
+              run: toolRun,
+              responseId: 'test-response',
+              instruction: undefined,
+              attempt: 1,
+              logId: `log-${callId}`,
+              ...origin,
             }),
-            model: testModelCell('test-model'),
-            logger: noopTrace,
-            steps: noStep(),
-            scope: Scope.makeUnsafe(),
-            task: null,
-            opening: null,
-            fileService: new RunFileService(run.runId, roots),
-            callbacks: {},
-            ...run,
-          },
-          readFiles: readFiles ?? new Set<string>(),
-          responseId: 'test-response',
-          instruction: undefined,
-          attempt: 1,
-          logId: `log-${callId}`,
-          ...origin,
-        }),
-    // The session's plugin services, over the same `Runs`, as a step pins
-    // them for the call.
-    testCallPluginServices.pipe(
-      Layer.provideMerge(
-        Layer.sync(Runs, () => run?.session.runs ?? testRunRegistry()),
       ),
     ),
+    // The session's plugin services, over the same `Runs`, as a step pins
+    // them for the call.
+    testCallPluginServices.pipe(Layer.provideMerge(runs)),
   );
 }

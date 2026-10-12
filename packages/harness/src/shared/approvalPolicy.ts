@@ -122,9 +122,12 @@ export function decideTexraApproval(input: {
  * What an approval-policy denial closed, as the session reports it to its
  * host: a command, edit or plan, a delegation proposal, the approval-gated
  * tools withheld from the model when the run resolved its tools, the human
- * retry permit after a model error, or a question the model asked the user.
+ * retry permit after a model error, or a question the model asked the user;
+ * and the policy that closed it, which a host names in what it says.
  */
-export type ApprovalPolicyDenial =
+export type ApprovalPolicyDenial = {
+  readonly policy: TexraApprovalPolicy;
+} & (
   | { readonly kind: 'executable' }
   | { readonly kind: 'plan' }
   | { readonly kind: 'proposal' }
@@ -136,7 +139,8 @@ export type ApprovalPolicyDenial =
   | {
       readonly kind: 'humanInput';
       readonly deny: Exclude<TexraHumanInputDecision, 'present'>['deny'];
-    };
+    }
+);
 
 /**
  * Decide one delegation proposal. `never` denies it as it denies every other

@@ -1,15 +1,13 @@
 // Third-party imports
 import { Effect, FileSystem } from 'effect';
 import { z } from 'zod';
-import { ToolContext } from '@texra-ai/harness';
-import type { RunCall } from '@agent/runtime/RunCall';
+import { defineTool, ToolContext } from '@texra-ai/harness';
 
 // Local imports - tools
 import { extractFigurePathsFromLatex } from '@latex/extractFigure';
 import type { ToolResult } from '@shared/schemas';
 import { resolveToolPath } from '@tools/pathResolution';
 import { formatToolOutput } from '@tools/formatting';
-import { defineTool } from '@tools/core/define';
 import { unique } from '@utils/core';
 import { pathToLocationIn } from '@utils/files/fileLocation';
 import { formatResultCount } from '@utils/text/stringUtils';
@@ -33,7 +31,7 @@ const extractFigures = Effect.fn('ExtractLatexFiguresTool.execute')(function* ({
 }: ExtractFiguresInput): Effect.fn.Return<
   ToolResult,
   Error,
-  ToolContext | RunCall | FileSystem.FileSystem
+  ToolContext | FileSystem.FileSystem
 > {
   const call = yield* ToolContext;
   const { path, display } = yield* resolveLatexFile(texPath);

@@ -14,8 +14,8 @@ import {
   type DocumentFileType,
   type FileSelectConfig,
 } from '@shared/schemas';
-import type { SurfaceAction } from '@shared/session/surface';
 import type { TeXRAIconName } from '@shared/iconNames';
+import type { SurfaceAction } from '@texra/shared/session/surface';
 import { SessionUiEvents } from '@texra/shared/session/uiEvents';
 import { SortableController } from '@texra/shared/litControllers/SortableController';
 import { dropCueStyles } from '@ui/styles/commonViewStyles';

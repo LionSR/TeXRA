@@ -1,6 +1,6 @@
 import { Box } from 'ink';
 
-import { documentsOf } from '@shared/plugins/documents';
+import { documentsOf } from '@texra/shared/plugins/documents';
 
 import { selectedRunId as selectedRunIdSignal } from '../state/cliState';
 import { sessionView, runPhaseOf, runViewOf } from '../state/sessionView';

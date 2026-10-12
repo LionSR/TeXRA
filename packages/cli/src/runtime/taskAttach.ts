@@ -24,11 +24,11 @@ import stripAnsi from 'strip-ansi';
 import { fullTranscriptEntryLayout } from '@cli/chat/tui/panes/transcriptEntryLayout';
 import { isTerminalOutcomePhase } from '@shared/runs/runStatus';
 import { aggregateId, type RunOutcome } from '@shared/schemas';
+import type { RunView, SessionView } from '@shared/session/sessionView';
 import type {
   EventsFrame,
   RequestErrorWire,
-} from '@shared/session/sessionFrames';
-import type { RunView, SessionView } from '@shared/session/sessionView';
+} from '@texra/shared/session/sessionFrames';
 import type { TaskSummary } from '@texra/controllers/server/protocol';
 import type { ServiceClient } from '@texra/controllers/server/client';
 import { WebviewSessions } from '@texra/controllers/session/webviewSessionLayer';

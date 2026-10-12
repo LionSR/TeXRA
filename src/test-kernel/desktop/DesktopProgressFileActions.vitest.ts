@@ -4,8 +4,6 @@ import { Context, Effect } from 'effect';
 import { it } from '@effect/vitest';
 import { describe, expect, vi } from 'vitest';
 
-import type { SessionHandle } from '@agent/runtime';
-
 import { DesktopProgressFileActions } from '@desktop/main/desktopProgressFileActions';
 import type { DiffRunOutcome, DiffRunResult } from '@latex/latexdiff/types';
 import type { ProcessRuntime } from '@platform/processRuntime';
@@ -13,6 +11,7 @@ import type { RunId } from '@shared/schemas';
 import { Rejected } from '@shared/session/requestErrors';
 
 import { createStubDesktopAgentRunHost } from './desktopAgentRunTestHarness.ts';
+import type { Session } from '@texra-ai/harness';
 
 // The desktop adapter delegates the read + dispatch to the shared
 // host-neutral `runLatexdiffForRun`; mock it at that boundary so this suite
@@ -90,9 +89,8 @@ function loadFileActions(outcome: DiffRunOutcome): {
       startRun: vi.fn(),
       listWorkspaceCandidateFiles: vi.fn(() => Effect.succeed([])),
       session: {
-        snapshots: { read: vi.fn() },
         roots: { workspace: absolutePath('workspace') },
-      } as unknown as SessionHandle,
+      } as unknown as Session,
       // Every latexdiff program this suite reaches is mocked, so the services
       // the actions take from the window's runtime are never read.
       runtime: {

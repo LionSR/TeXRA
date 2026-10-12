@@ -17,14 +17,15 @@
  * - `tasks.list`: every task in every project this storage root holds.
  * - `task.watch`: a project's session feed (a stream of `EventsFrame`s)
  *   for one `Subscribe`, the frames the webview bridge already carries.
- * - `task.request`: one `RuntimeRequest` (send, approve, stop, fork, …).
+ * - `task.request`: one `RuntimeRequest` (send, approve, stop, fork, a
+ *   model switch, a pending tool edit's preview, …).
  * - `task.start` / `task.resume`: launch or continue a task in the service;
  *   `task.ended`: the outcome it ends with.
- * - `task.model`: switch a running task's model.
+ * - `task.config` / `task.exportInput` / `task.exportTrace`: a task's saved
+ *   setup, and what its transcript exports read, from the service's own
+ *   records.
  * - `host.attach` / `host.focus` / `host.answer`: a window offering its host
  *   capabilities to its project's tasks (see `hostCalls.ts`).
- * - `request.preview`: a pending tool edit's original and proposed content,
- *   which the durable request does not carry.
  */
 import { Effect, Schema } from 'effect';
 import { Rpc, RpcGroup } from 'effect/rpc';
@@ -32,8 +33,14 @@ import * as SchemaIssue from 'effect/SchemaIssue';
 import { z } from 'zod';
 
 import { AgentConfigSchema } from '@texra-ai/harness/schemas';
+import { ChatExportInputSchema } from '@agent/export/schemas';
 import { TexraApprovalPolicySchema } from '@shared/approvalPolicy';
-import { RunEndSchema, RunIdSchema } from '@shared/schemas';
+import {
+  DisplaySessionEventSchema,
+  RunEndSchema,
+  RunIdSchema,
+  RunRecordFieldsSchema,
+} from '@shared/schemas';
 
 import {
   OutcomeSchema,
@@ -43,7 +50,7 @@ import {
   EventsFrameSchema,
   RequestErrorWireSchema,
   SubscribeSchema,
-} from '@shared/session/sessionFrames';
+} from '@texra/shared/session/sessionFrames';
 import {
   HostAnswerSchema,
   HostCapabilitySchema,
@@ -64,7 +71,7 @@ export const BUILD_VERSION: string =
 
 /** Bumped whenever a procedure or a payload changes shape. A client newer
  *  than the running service retires it; an older one stays in process. */
-export const PROTOCOL_VERSION = 15;
+export const PROTOCOL_VERSION = 23;
 
 /** `value` as JSON carries it: an absent field (`undefined`) is left out,
  *  which the wire's JSON check otherwise refuses. */
@@ -144,16 +151,20 @@ export type TaskSummary = z.infer<typeof TaskSummarySchema>;
 const TaskFailedSchema = z.object({
   _tag: z.literal('TaskFailed'),
   message: z.string(),
+  /** The service already presented it, through the window attached to the
+   *  project: the caller does not present it again. */
+  presented: z.boolean().optional(),
 });
 export type TaskFailed = z.infer<typeof TaskFailedSchema>;
 
-/** What a pending tool edit would change: the preview a window shows
- *  beside the request's path and line counts. */
-const ToolEditPreviewSchema = z.object({
-  originalContent: z.string(),
-  proposedContent: z.string(),
+/** Why a task's records have no answer: the service holds no such run in
+ *  the project, or its records would not read. */
+const TaskRecordsFailedSchema = z.object({
+  _tag: z.literal('TaskRecordsFailed'),
+  reason: z.enum(['unknownRun', 'unreadable']),
+  message: z.string(),
 });
-export type ToolEditPreview = z.infer<typeof ToolEditPreviewSchema>;
+export type TaskRecordsFailed = z.infer<typeof TaskRecordsFailedSchema>;
 
 /** The project a call addresses: its folder, as the client spells it. */
 const workspace = Schema.String;
@@ -205,33 +216,58 @@ export const TexraRpcs = RpcGroup.make(
   }),
   Rpc.make('task.resume', {
     payload: { workspace, runId: zodWire(RunIdSchema) },
-    /** The run that resumed: the asked one, or the parent that owns it,
-     *  and whether it is a workflow, which settles with its whole run (what
-     *  `task.ended` answers); null when something it needs (its agent, a
-     *  plugin) is missing, so it stays interrupted. */
-    success: zodWire(
-      z.object({ runId: RunIdSchema, workflow: z.boolean() }).nullable(),
-    ),
+    /** The run that resumed: the asked one, or the parent that owns it;
+     *  null when something it needs (its agent, a plugin) is missing, so it
+     *  stays interrupted. */
+    success: zodWire(RunIdSchema.nullable()),
     error: zodWire(TaskFailedSchema),
   }),
   /** What a task's current activation ends with, once it ends: its
-   *  outcome and output. */
+   *  outcome, output, and the error a failed one ended with. */
   Rpc.make('task.ended', {
     payload: { workspace, runId: zodWire(RunIdSchema) },
-    success: zodWire(RunEndSchema.pick({ outcome: true, output: true })),
+    success: zodWire(
+      RunEndSchema.pick({ outcome: true, output: true, error: true }),
+    ),
     error: zodWire(TaskFailedSchema),
   }),
-  Rpc.make('request.preview', {
-    payload: { workspace, requestId: Schema.String },
-    /** Null once the request is settled, or when the service staged none. */
-    success: zodWire(ToolEditPreviewSchema.nullable()),
-    error: zodWire(TaskFailedSchema),
+  /** The run's saved setup; null when it saved none. */
+  Rpc.make('task.config', {
+    payload: { workspace, runId: zodWire(RunIdSchema) },
+    success: zodWire(AgentConfigSchema.nullable()),
+    error: zodWire(TaskRecordsFailedSchema),
   }),
-  /** Switch a run the service is running to `model` from its next turn;
-   *  refused with the run's reason. */
-  Rpc.make('task.model', {
-    payload: { workspace, runId: zodWire(RunIdSchema), model: Schema.String },
-    error: zodWire(TaskFailedSchema),
+  /** What the HTML transcript export reads: the run's display rows and its
+   *  record (`assembleTrace`), or why it has none. */
+  Rpc.make('task.exportTrace', {
+    payload: { workspace, runId: zodWire(RunIdSchema) },
+    success: zodWire(
+      z.discriminatedUnion('status', [
+        z.object({
+          status: z.literal('ok'),
+          // A `TraceDocument`: the run's display rows, in commit order.
+          trace: z.object({
+            runId: RunIdSchema,
+            events: z.array(DisplaySessionEventSchema),
+          }),
+          record: RunRecordFieldsSchema,
+        }),
+        z.object({ status: z.enum(['config_missing', 'streamLogs_missing']) }),
+      ]),
+    ),
+    error: zodWire(TaskRecordsFailedSchema),
+  }),
+  /** What the transcript export reads: the run's setup and the assembled
+   *  input, each null when the run has none (`loadChatExportInput`). */
+  Rpc.make('task.exportInput', {
+    payload: { workspace, runId: zodWire(RunIdSchema) },
+    success: zodWire(
+      z.object({
+        config: AgentConfigSchema.nullable(),
+        exportInput: ChatExportInputSchema.nullable(),
+      }),
+    ),
+    error: zodWire(TaskRecordsFailedSchema),
   }),
   Rpc.make('host.attach', {
     payload: {

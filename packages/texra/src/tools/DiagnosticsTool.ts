@@ -3,16 +3,13 @@
 // Third-party imports
 import { Effect } from 'effect';
 import { z } from 'zod';
-import { ToolContext } from '@texra-ai/harness';
-import { callerRun } from '@agent/runtime/RunCall';
+import { defineTool, ToolContext } from '@texra-ai/harness';
 
 // Local imports
-import type { HostInteractions } from '@agent/runtime/HostInteractions';
 import { withLogChannel } from '@logger/effectLog';
 import { type ToolResult, ToolError } from '@shared/schemas';
 import { resolveToolPath, type ToolPathCall } from '@tools/pathResolution';
 import { executed } from '@tools/core/result';
-import { defineTool } from '@tools/core/define';
 import {
   countBySeverity,
   formatCounts,
@@ -21,6 +18,11 @@ import {
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local file imports
+import {
+  EditorHost,
+  type EditorCapabilities,
+  type EditorCapability,
+} from './editorHost';
 
 const CHANNEL = 'DiagnosticsTool';
 
@@ -30,8 +32,8 @@ const CHANNEL = 'DiagnosticsTool';
  */
 interface DiagnosticsPorts {
   readonly call: ToolPathCall;
-  readonly readDiagnostics: HostInteractions['readDiagnostics'];
-  readonly addCriticism: HostInteractions['addCriticism'];
+  readonly readDiagnostics: EditorCapabilities['readDiagnostics'];
+  readonly addCriticism: EditorCapabilities['addCriticism'];
 }
 
 const DiagnosticsPathSchema = z
@@ -195,15 +197,11 @@ const diagnose = Effect.fn('DiagnosticsTool.call')(function* (
   input: DiagnosticsInput,
 ) {
   const { env } = yield* ToolContext;
-  const interactions = (yield* callerRun)?.session.interactions;
-  if (!interactions)
-    return yield* Effect.fail(
-      new ToolError('Diagnostics requires an active session.'),
-    );
+  const editor = (yield* EditorHost).at(env.roots.storage);
   const ports: DiagnosticsPorts = {
     call: env,
-    readDiagnostics: interactions.readDiagnostics,
-    addCriticism: interactions.addCriticism,
+    readDiagnostics: editor.readDiagnostics,
+    addCriticism: editor.addCriticism,
   };
   return yield* input.command === 'add'
     ? addCriticism(ports, input)
@@ -212,9 +210,10 @@ const diagnose = Effect.fn('DiagnosticsTool.call')(function* (
 
 export const DiagnosticsTool = defineTool({
   name: 'diagnostics',
-  // Offered while the session's host reads an editor's diagnostics: the
-  // extension's own session, or a service task with one of its windows.
-  hostCapability: 'diagnostics',
+  // Offered while an editor attached for the session reads diagnostics
+  // (`EditorHost`): the extension's own session, or a service task with
+  // one of its windows.
+  hostCapability: 'diagnostics' satisfies EditorCapability,
   unavailableHosts: ['desktop', 'sdk'],
   description:
     'Inspect or annotate diagnostics for a file. Use "list"/"count" to retrieve linter diagnostics; use "add" to push a critique annotation as a VS Code diagnostic (squiggle + Problems panel entry) instead of inserting a literal \\criticize{...}{...}{...} macro. The "add" command requires the experimental "texra.inlineCriticism.enabled" setting and reports "not accepted" if disabled; criticisms pushed this way are read back by "list".',

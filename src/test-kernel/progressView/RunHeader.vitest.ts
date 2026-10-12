@@ -5,12 +5,12 @@ import { describe, expect, it } from 'vitest';
 import type { RunHeader } from '@progressView/frontend/components/RunHeader';
 import { ELEMENT_IDS } from '@progressView/frontend/constants';
 import { RUN_PHASE, RUN_SUBSTATE, type RunId } from '@shared/schemas';
-import type { HostRequest } from '@shared/session/hostRequest';
 import { runActions } from '@shared/session/runActions';
 import type { SessionView, RunView } from '@shared/session/sessionView';
-import type { SurfaceAction } from '@shared/session/surface';
 import type { RuntimeRequest } from '@shared/session/runtimeRequest';
 import { CHILD, fanOutView, ROOT } from '@test/shared/session/fanOutScenario';
+import type { SurfaceAction } from '@texra/shared/session/surface';
+import type { HostRequest } from '@texra/shared/session/hostRequest';
 
 // Local file imports
 import {
@@ -109,7 +109,7 @@ describe('run-header over the fold', () => {
       } as RunView;
       const { element } = await mountHeader(view, {
         ...fields,
-        actions: runActions(fields),
+        actions: runActions(fields, false),
       });
       return (
         element.shadowRoot?.querySelector(

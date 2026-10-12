@@ -1,7 +1,6 @@
 // Third-party imports
 import { Effect, FileSystem } from 'effect';
 import { z } from 'zod';
-import type { RunCall } from '@agent/runtime/RunCall';
 import { ToolContext } from '@agent/core/tools/ToolTypes';
 
 // Local imports - tools
@@ -17,7 +16,7 @@ import { pluralize } from '@utils/text/stringUtils';
 import { ensureError } from '@utils/errors/errorMessage';
 
 // Local file imports
-import { defineTool } from './core/define';
+import { defineTool } from './core/definition';
 
 const EditInputSchema = z.strictObject({
   path: z
@@ -44,11 +43,7 @@ const edit = Effect.fn('EditFileTool.execute')(function* (
 ): Effect.fn.Return<
   ToolResult,
   Error,
-  | ToolContext
-  | RunCall
-  | FileSystem.FileSystem
-  | WorkspaceFs
-  | AgentCatalogServices
+  ToolContext | FileSystem.FileSystem | WorkspaceFs | AgentCatalogServices
 > {
   const { old_str, new_str, replace_all } = input;
   const prepared = yield* resolveWritableTarget(input.path, {

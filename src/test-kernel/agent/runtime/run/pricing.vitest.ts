@@ -5,11 +5,13 @@
  * rather than falling out of the turn's cost (#12316).
  */
 // Third-party imports
+import { Effect } from 'effect';
 import { describe, expect, it } from 'vitest';
 
 // Local imports
 import { priceTurnUsage } from '@agent/runtime/run/pricing';
 import type { BoundModel } from '@agent/runtime/modelAccess/ModelAccess';
+import { routePolicies } from '@agent/runtime/modelAccess/failureInfo';
 import { MODEL_RETRY_MAX_ATTEMPTS_SETTING } from '@shared/schemas';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 
@@ -47,7 +49,6 @@ const boundAnthropic: BoundModel = {
     outputPrice: OUTPUT_PRICE,
     capabilities: { cacheDiscountFactor: CACHE_DISCOUNT },
   }),
-  reasoning: { thinking: false, effort: null, mode: null },
   backend: 'anthropic',
   model: unusedModel,
   origin: {
@@ -60,16 +61,11 @@ const boundAnthropic: BoundModel = {
     },
   },
   route: { kind: 'api-key', provider: 'anthropic', usageRoute: 'api-key' },
-  usageRoute: 'api-key',
-  contextWindow: 200_000,
-  supportsVision: false,
-  supportsNativePdf: false,
-  supportsNativeAudio: false,
-  supportsForcedToolChoice: true,
-  wireRouteKey: 'test-route',
-  modelRetryRouteKey: 'test-route/test-model',
-  backgroundCapable: false,
+  forcedToolChoice: true,
   persistentConnection: false,
+  billing: {},
+  routes: routePolicies(['test-route'], 'test-model'),
+  delivery: Effect.succeed('foreground'),
   automaticRetries: MODEL_RETRY_MAX_ATTEMPTS_SETTING.defaultValue,
   textOnly: false,
 };
@@ -157,7 +153,7 @@ describe('priceTurnUsage on a GPT-6 turn', () => {
 
   it('bills a fast-tier binding at the fast rates', () => {
     const fast = priceTurnUsage(
-      { ...boundSol, serviceTier: 'fast' },
+      { ...boundSol, billing: { serviceTier: 'fast' } },
       usageAt(100_000),
       1,
     );

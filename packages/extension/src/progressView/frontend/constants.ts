@@ -1,6 +1,6 @@
-import type { HostRequest } from '@shared/session/hostRequest';
 import type { RunAction } from '@shared/schemas';
 import type { TeXRAIconName } from '@shared/iconNames';
+import type { HostRequest } from '@texra/shared/session/hostRequest';
 import { TASK_ACTIONS } from '@ui/copy/nestedRuns';
 
 /** One run action in the run header's menu. Stop sits in the row itself. */

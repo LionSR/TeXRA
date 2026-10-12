@@ -29,7 +29,7 @@ import { WorkspaceRoots } from '@controllers/session/WorkspaceRoots';
 import { writeLogEntry } from '@logger/logSink';
 import { withForkFailureReporting } from '@platform/processRuntime';
 import { SessionInputs } from '@shared/session/sessionInputs';
-import { SessionFrames } from '@shared/session/sessionFrames';
+import { SessionFrames } from '@texra/shared/session/sessionFrames';
 
 /** The graph of one session key. `Layer.fresh` for the same reason as the
  *  runtime's: static layers memoize by reference across the map. */

@@ -7,7 +7,7 @@ import {
   type ApiKeyProviderId,
   providerDisplayName,
 } from '@texra-ai/llm';
-import { CODING_PLAN_BY_API_PROVIDER } from '@shared/schemas';
+import { CODING_PLAN_BY_API_PROVIDER } from '@texra/shared/model/codingPlans';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { ApiKeyEntryForm } from './ApiKeyEntryForm';

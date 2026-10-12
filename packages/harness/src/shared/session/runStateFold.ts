@@ -32,6 +32,7 @@ import {
   copyById,
   freshRunPosition,
   isFollowUpRow,
+  type FOLLOW_UP_TYPES,
   isSharedRunRow,
   phaseAfter,
   type RunLoopPhase,
@@ -53,12 +54,10 @@ import {
 import type { HistoryMessage, Live, RunHistoryRow } from './historyTurns';
 
 /**
- * The rows `RunHistory.appendBatch` commits: the run history arms plus the
- * display arms a batch commits atomically with them (a card with its
- * `tool.result`, an open stream with the `waiting` step, a binding as its
- * `run.config`, a child's settlement with its boundary, a final answer).
- * Published apart, each is a crash window. Narrowed from the drafts.
- */
+ * The rows `RunCell.append` commits: the run history arms plus the display
+ * arms a batch commits atomically with them (a card with its `tool.result`,
+ * a child's settlement with its boundary): published apart, each is a crash
+ * window. Narrowed from the drafts. */
 export type RunHistoryDraft = Live<
   Extract<SessionEventDraft, { type: RunHistoryDraftType }>
 >;
@@ -73,14 +72,11 @@ type RunHistoryDraftType =
   | 'tools.offered'
   | 'context.blob'
   | 'hook.outcome'
-  | 'tool.start'
-  | 'tool.end'
-  | 'stream.end'
   | 'request.opened'
   | 'request.decided'
+  | 'followup.queued'
   | 'followup.consumed'
-  | 'response.finalized'
-  | SettlementType;
+  | CardRowType;
 
 export class RunHistoryInconsistent extends Data.TaggedError(
   'RunHistoryInconsistent',
@@ -107,8 +103,7 @@ export type RunState = RunPosition &
     readonly round: number;
     /** The last folded row. */
     readonly commit: CommitOrdinal;
-    /** Run history rows folded into this state: zero means only queued input
-     *  has folded (an unopened, not broken, run). */
+    /** Run history rows folded: zero is an unopened run. */
     readonly runHistoryRows: number;
     /** `null` until the opening `run.position` (then moved by
      *  {@link phaseAfter}): no row that presupposes an opened run precedes it. */
@@ -120,9 +115,8 @@ export type RunState = RunPosition &
     /** The failure that stopped the turn's invocation or that a person was
      *  asked about, until a response or the input of a new turn retires it. */
     readonly lastError: RetryErrorInfo | null;
-    /** Subscription routes this run declines: the launch's seed, on its
-     *  `run.config` binding, plus each retry the user answered with their own
-     *  API key, folded from that answer. */
+    /** Subscription routes this run declines: its `run.config` binding's, and
+     *  each retry answered with the user's own API key. */
     readonly declinedRoutes: readonly DeclinableUsageRoute[];
     /** Canonical provider history, in order. The pending response's assistant
      *  message enters only with its delivering `append`. */
@@ -134,9 +128,8 @@ export type RunState = RunPosition &
     /** The last completed turn, from its `response` row: the finish reason a
      *  loop reads when it processes a response it did not just receive. */
     readonly lastTurn: TurnResult | null;
-    /** An edit changed the view's messages since `lastTurn`: its count
-     *  measures a history the view no longer holds. An edit of an empty range
-     *  (a model switch) leaves it. */
+    /** An edit (not an empty one: a model switch) changed the view since
+     *  `lastTurn`, whose count measures a history it no longer holds. */
     readonly countStale: boolean;
     readonly pendingResponse: PendingResponse | null;
     /** The requests decided since the run's latest `run.activate`: answers
@@ -144,8 +137,7 @@ export type RunState = RunPosition &
      *  no waiter has read them. A decision from before the activation was
      *  read by the process that asked, whose body went on with it. */
     readonly decidedSinceActivation: ReadonlySet<string>;
-    /** Derived (D12): the priced usage on every `response` and `context.edit`
-     *  row. */
+    /** Derived (D12): the priced usage on its `response`/`context.edit` rows. */
     readonly usage: RunUsageTotals;
     /** The latest `context.edit`'s `seq`: the next edit's `base`. */
     readonly lastEdit: number | null;
@@ -157,8 +149,8 @@ export type RunState = RunPosition &
     readonly offeredSkills: readonly string[];
     /** The address of the system text the run's context froze. */
     readonly offeredSystem: string | null;
-    /** The address of the context its model has been told; `null` before the
-     *  first step and after a view edit, which each open it anew. */
+    /** The address of the context its model was told; `null` until a step
+     *  opens it (the first, and after a view edit). */
     readonly offeredContext: string | null;
     readonly offeredHooks: readonly string[]; // the hooks it pinned
     /** The run's `context.blob` rows: model-facing content by address. */
@@ -168,17 +160,19 @@ export type RunState = RunPosition &
   };
 
 /** Companions committed beside a history fact, which the loop ignores. */
-type CardRowType = CardType | SettlementType;
+type CardRowType = CardType | SettlementType | EndType | 'plugin.fact';
 type CardType = 'tool.start' | 'tool.end' | 'stream.end' | 'response.finalized';
-type SettlementType = 'run.report' | 'run.result' | 'child.turn';
-
-/** The rows `foldRow` applies: the shared rows and the run history's own arms. */
-type FoldedRowType =
-  | SharedRunRow['type']
-  | Exclude<RunHistoryDraft['type'], CardRowType>
-  | 'run.activate';
-/** Every row kind the run's state (its facts too) is read from. */
+type SettlementType = 'run.report' | 'run.result' | 'child.turn' | 'child.park';
+type EndType = 'run.end' | 'stage.end' | 'followup.closed'; // and what it closes
+/** The rows `foldRow` applies (never a run's input, the inbox's). */
+type FoldedRowType = Exclude<
+  SharedRunRow['type'] | RunHistoryDraft['type'] | 'run.activate',
+  CardRowType | (typeof FOLLOW_UP_TYPES)[number]
+>;
+/** Every kind the run's state reads: its cell and the requests write them. */
 export type RunStateRowType = FoldedRowType | 'response.finalized';
+/** A run's input and turn companions: any job commits them, no cell. */
+export type RunInputDraft = Exclude<RunHistoryDraft, { type: RunStateRowType }>;
 
 /**
  * Display rows ignored by name: any other unfolded row on the run aggregate
@@ -212,11 +206,12 @@ const IGNORED_ROW_TYPES: Readonly<
   'run.report': true,
   'run.result': true,
   'followup.closed': true,
+  'followup.queued': true,
+  'followup.consumed': true,
   // The child loop's own bookkeeping: folded by its readers, not the loop.
   'child.turn': true,
 };
 const IGNORED = new Set<string>(Object.keys(IGNORED_ROW_TYPES));
-
 /** The state a run starts from: every field at its zero, no family bound
  *  yet. The run program opens from this and stamps its family. */
 export const freshRunState = (commit: CommitOrdinal): RunState => ({
@@ -376,11 +371,7 @@ function foldRow(
     records[callId] = call;
     return { ...advance(state), pendingResponse: { ...pending, records } };
   };
-  // Pending input is the publisher's: a queued row only opens an empty run.
-  if (isFollowUpRow(row))
-    return current === null && row.type === 'followup.queued'
-      ? Result.succeed(freshRunState(commit))
-      : null;
+  if (isFollowUpRow(row)) return null; // the inbox's input (`RunInput`)
   if (isSharedRunRow(row)) {
     // The rows `sessionFold` reads too: applied once, in `runRows.ts`.
     // `unresolved` is a malformed aggregate here: this fold reads a run's

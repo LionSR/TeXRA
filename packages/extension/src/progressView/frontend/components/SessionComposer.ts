@@ -24,14 +24,14 @@ import '@awesome.me/webawesome/dist/components/dropdown-item/dropdown-item.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 
-import type { HostSnapshot } from '@shared/session/hostSnapshot';
 import type { SessionView, RunView } from '@shared/session/sessionView';
+import type { HostSnapshot } from '@texra/shared/session/hostSnapshot';
 import {
   canSendFollowUp,
   EMPTY_DRAFT,
   type Draft,
   type Surface,
-} from '@shared/session/surface';
+} from '@texra/shared/session/surface';
 import { SessionUiEvents } from '@texra/shared/session/uiEvents';
 import { appendClipboardImageChips } from '@texra/shared/utils/clipboard';
 import {

@@ -18,7 +18,6 @@ import type { AgentTrace } from '@agent/trace';
 import type { BoundModel } from '@agent/runtime/modelAccess/ModelAccess';
 import {
   offersRetry,
-  routePolicies,
   type CallFailure,
 } from '@agent/runtime/modelAccess/failureInfo';
 import { RouteUnavailable } from '@common/errors/agentErrors';
@@ -158,7 +157,7 @@ const credentialRenewal = <R>(
     failure: AttemptFailure,
     bound: BoundModel,
   ): Effect.Effect<AttemptFailure | true, never, R> => {
-    const route = bound.usageRoute;
+    const route = bound.route.kind;
     if (
       spent ||
       !(failure.error instanceof ModelError) ||
@@ -212,7 +211,7 @@ const tryAttempt = <A, E, R>(
   Effect.exit(
     move.kind === 'send'
       ? Effect.flatMap(RouteRetries, (gate) =>
-          gate.withRoutes(routePolicies(bound), {
+          gate.withRoutes(bound.routes, {
             baseBackoffMs: RETRY_BACKOFF_MS,
             onWait: (delayMs) =>
               driver.logger.debug(

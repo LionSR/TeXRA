@@ -15,7 +15,7 @@ import {
   resolveDelegationScopeAgents,
   type WorkspaceAgentsStores,
 } from '@agent/index/agentRegistry';
-import type { RunToolCall } from '@agent/runtime/RunCall';
+import { type RunToolCall } from '@agent/runtime/RunCall';
 import { isDocumentTaskConfig } from '@shared/schemas';
 import type {
   AgentProposal,
@@ -163,14 +163,18 @@ const requestDelegationProposal = Effect.fn('requestDelegationProposal')(
     // launch got.
     if (isDocumentTaskConfig(config))
       return { result: { action: 'approve' }, childApproval: 'inherit' };
+    const policy = session.approvals.policy(runId);
     const decision = decideProposalApproval({
-      policy: session.approvals.policy(runId),
+      policy,
       scopedBypass: session.approvals.bypass(runId, 'superYolo') !== null,
       canPresent: parent.run.toolPolicy.approvalPromptsUnavailable !== true,
     });
     switch (decision) {
       case 'deny-policy':
-        session.interactions.approvalDenied({ kind: 'proposal' }, runId);
+        session.interactions.approvalDenied(
+          { kind: 'proposal', policy },
+          runId,
+        );
         return {
           result: {
             action: 'deny',

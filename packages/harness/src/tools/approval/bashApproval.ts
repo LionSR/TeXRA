@@ -1,8 +1,8 @@
 import { Effect } from 'effect';
 
 import { type SessionHandle } from '@agent/runtime/SessionHandle';
+import { requireRun, sessionOf } from '@agent/runtime/RunCall';
 import { ToolContext } from '@agent/core/tools/ToolTypes';
-import { requireToolRun, type RunCall } from '@agent/runtime/RunCall';
 import {
   BASH_APPROVAL_CONFIG_KEY,
   type BashPermission,
@@ -78,20 +78,22 @@ function prepareBashApprovalPrompt(
  */
 export const requestBashApproval = Effect.fn('requestBashApproval')(function* (
   request: BashApprovalRequest,
-): Effect.fn.Return<BashDecision, Error, ToolContext | RunCall> {
-  const { env, run, requests } = yield* requireToolRun('A bash approval');
+): Effect.fn.Return<BashDecision, Error, ToolContext> {
+  const { env, run, requests } = yield* requireRun('A bash approval');
   const approvalsEnabled = yield* readSettingFrom<boolean>(
     env.roots,
     BASH_APPROVAL_CONFIG_KEY,
   );
-  const { session, runId } = run;
+  const { runId } = run;
+  const session = sessionOf(run);
   const granted = () =>
     session.approvals.bypass(
       runId,
       request.grant === 'shell' ? 'bash' : 'superYolo',
     ) !== null;
+  const policy = session.approvals.policy(runId);
   const decision = decideTexraApproval({
-    policy: session.approvals.policy(runId),
+    policy,
     promptRequired: approvalsEnabled,
     scopedBypass: granted(),
     canPresent: run.toolPolicy.approvalPromptsUnavailable !== true,
@@ -99,7 +101,7 @@ export const requestBashApproval = Effect.fn('requestBashApproval')(function* (
 
   if (decision === 'allow') return { action: 'approve' };
   if (isTexraApprovalDenied(decision)) {
-    session.interactions.approvalDenied({ kind: 'executable' }, runId);
+    session.interactions.approvalDenied({ kind: 'executable', policy }, runId);
     return { action: 'deny', reason: texraApprovalDenialMessage(decision) };
   }
 

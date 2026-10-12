@@ -27,9 +27,9 @@ import {
   type RunId,
 } from '@shared/schemas';
 import { formatRoundStageLabel } from '@shared/runs/runStatusDisplay';
-import type { HostRequest } from '@shared/session/hostRequest';
-import type { Surface } from '@shared/session/surface';
 import type { TeXRAIconName } from '@shared/iconNames';
+import type { HostRequest } from '@texra/shared/session/hostRequest';
+import type { Surface } from '@texra/shared/session/surface';
 import { SessionUiEvents } from '@texra/shared/session/uiEvents';
 import { designTokens, commonViewStyles } from '@ui/styles';
 import { renderIconActionButton } from '@ui/wa/actionButtons';

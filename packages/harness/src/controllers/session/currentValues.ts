@@ -86,10 +86,7 @@ export function currentValues(store: {
   readonly level: SubscriptionRef.SubscriptionRef<number>;
   /** Record for the gate that a value was written at this build's version. */
   readonly valueWritten: Effect.Effect<void, SqlError>;
-}): Pick<
-  Database['Service'],
-  'values' | 'readInputHistory' | 'appendInputHistory'
-> {
+}): Pick<Database['Service'], 'values' | 'inputHistory'> {
   const { exec, execOne, transact, query, level, valueWritten } = store;
   /** One value's row. */
   const valueRow = (family: string, key: string) =>
@@ -186,31 +183,32 @@ export function currentValues(store: {
   };
   return {
     values,
-    readInputHistory: () =>
-      query(
+    inputHistory: {
+      read: query(
         exec('SELECT at, value FROM input_history ORDER BY id').pipe(
           Effect.map((rows) =>
             rows.map((row) => InputHistoryRecordSchema.parse(row)),
           ),
         ),
       ),
-    appendInputHistory: ({ at, value }) =>
-      transact(
-        Effect.gen(function* () {
-          const latest = yield* execOne(
-            'SELECT value FROM input_history ORDER BY id DESC LIMIT 1',
-          );
-          if (latest?.value !== value) {
-            yield* exec('INSERT INTO input_history (at, value) VALUES (?, ?)', [
-              at,
-              value,
-            ]);
-            yield* exec(
-              'DELETE FROM input_history WHERE id NOT IN (SELECT id FROM input_history ORDER BY id DESC LIMIT ?)',
-              [INPUT_HISTORY_LIMIT],
+      append: ({ at, value }) =>
+        transact(
+          Effect.gen(function* () {
+            const latest = yield* execOne(
+              'SELECT value FROM input_history ORDER BY id DESC LIMIT 1',
             );
-          }
-        }),
-      ),
+            if (latest?.value !== value) {
+              yield* exec(
+                'INSERT INTO input_history (at, value) VALUES (?, ?)',
+                [at, value],
+              );
+              yield* exec(
+                'DELETE FROM input_history WHERE id NOT IN (SELECT id FROM input_history ORDER BY id DESC LIMIT ?)',
+                [INPUT_HISTORY_LIMIT],
+              );
+            }
+          }),
+        ),
+    },
   };
 }

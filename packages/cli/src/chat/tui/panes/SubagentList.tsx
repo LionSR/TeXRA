@@ -7,7 +7,6 @@ import { COLOR_HINT } from '@cli/tui/ui/colors';
 import { TICK } from '@cli/tui/ui/glyphs';
 import { useLiveNowMsSince } from '@cli/tui/useLiveNowMs';
 import { truncateSummaryToWidth } from '@cli/runtime/terminalText';
-import type { RunView } from '@shared/session/sessionView';
 import { formatLoopPositionLabel } from '@shared/runs/runStatusDisplay';
 import { formatResultCount } from '@utils/text/stringUtils';
 
@@ -26,6 +25,7 @@ import {
   type PendingApprovalKind,
 } from '../state/approvalQueue';
 import { useSignal } from '../state/useSignal';
+import type { RunView } from '@texra-ai/harness';
 
 const SUBAGENT_SUMMARY_MAX_COLUMNS = 100;
 

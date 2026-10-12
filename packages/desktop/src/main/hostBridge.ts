@@ -1,6 +1,6 @@
 import { ipcMain, type BrowserWindow, type IpcMainEvent } from 'electron';
 
-import type { DownMessage } from '@shared/session/sessionFrames';
+import type { DownMessage } from '@texra/shared/session/sessionFrames';
 import { assertKnownOutboundMessage } from '@texra/shared/utils/dispatcher';
 
 import { DesktopOutboundMessageSchema } from '../shared/desktopOutboundMessages.js';

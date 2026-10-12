@@ -8,12 +8,10 @@ import {
   acceptedEfforts,
   chooseReasoning,
   CODEX_ROUTE_EFFORTS,
-  defaultReasoningLevel,
   type ReasoningChoice,
   type ReasoningRequest,
 } from '@texra-ai/llm';
 import type { StateStore } from '@platform/interfaces';
-import { REASONING_LEVEL_LABELS } from '@shared/model/reasoningLabels';
 import { readState } from '@shared/config/settingsAccess';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { ensureError } from '@utils/errors/errorMessage';
@@ -117,23 +115,4 @@ export function decideReasoning(
       }),
     catch: ensureError,
   });
-}
-
-/**
- * The reasoning column of a model row: the user's saved level, else the
- * default a run uses; `(fixed)` where the model offers no choice; nothing for
- * a model that never thinks.
- */
-export function reasoningLevelLabel(
-  config: Pick<ModelConfig, 'label' | 'reasoning' | 'modes'>,
-  saved: ReasoningEffort | undefined,
-): string | undefined {
-  if (config.reasoning === undefined) return undefined;
-  const fallback = defaultReasoningLevel(config);
-  if (fallback === undefined) return 'Default';
-  const defaultLevel = REASONING_LEVEL_LABELS[fallback];
-  if (!supportsReasoningLevel(config)) return `${defaultLevel} (fixed)`;
-  return saved === undefined
-    ? `Default (${defaultLevel})`
-    : REASONING_LEVEL_LABELS[saved];
 }

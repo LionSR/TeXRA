@@ -4,6 +4,7 @@
 import { it } from '@effect/vitest';
 import { Effect } from 'effect';
 import { afterEach, describe, expect, vi } from 'vitest';
+import { registryOf } from '@agent/runtime/runRegistry';
 
 // Local imports
 
@@ -27,9 +28,12 @@ describe('agent shutdown', () => {
         ),
       );
       const compatibilitySession = testDefaultSession();
-      const firstDrain = vi.spyOn(firstSession.runs, 'close');
-      const secondDrain = vi.spyOn(secondSession.runs, 'close');
-      const compatibilityDrain = vi.spyOn(compatibilitySession.runs, 'close');
+      const firstDrain = vi.spyOn(registryOf(firstSession.runs), 'stopAll');
+      const secondDrain = vi.spyOn(registryOf(secondSession.runs), 'stopAll');
+      const compatibilityDrain = vi.spyOn(
+        registryOf(compatibilitySession.runs),
+        'stopAll',
+      );
 
       // A host's shutdown closes every held session; a later close finds
       // them released and drains nothing again.

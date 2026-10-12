@@ -1,6 +1,8 @@
 import * as path from 'node:path';
 
+import { modelConfig } from '@texra-ai/llm';
 import { WORKFLOW_OUTPUT_BASENAME } from '@shared/constants/workflowOutput';
+import { agentFileName } from '@shared/schemas';
 import { normalizeFilePath } from '@utils/core';
 
 function getSafeDocumentPathParts(source: string): {
@@ -73,4 +75,39 @@ export function getExtractedDocOutputFileName(
       ? `${WORKFLOW_OUTPUT_BASENAME}_extracted`
       : safe.name;
   return path.posix.join(roundDir, safe.dir, `${safeName}${safe.ext}`);
+}
+
+/**
+ * A model string as it may appear in a file or folder name: the model's API
+ * id without its provider or selection suffix (`gpt-6.1-sol`), or the string
+ * with path and shell-unsafe characters replaced when it names no model.
+ */
+export function modelFileName(id: string): string {
+  return (modelConfig(id)?.id ?? id).replaceAll(/[\\/:*?"<>|@+\s]/g, '-');
+}
+
+/** First-name chunk used in the "Save as copy" stem. */
+function agentFirstNameChunk(agent: string): string {
+  const cleanAgent = agentFileName(agent);
+  // A `write-` tool takes the chunk after that prefix; every other agent takes
+  // its first word, delimited by `_` when the name uses that convention and by
+  // `-` otherwise.
+  if (cleanAgent.startsWith('write-')) {
+    return cleanAgent.split('-')[1];
+  }
+  return cleanAgent.split(cleanAgent.includes('_') ? '_' : '-')[0];
+}
+
+/**
+ * The `<base>_<chunk>_r{round}_<model>` stem the extension's "Save as copy"
+ * writes beside a base file. The copies are ordinary user files: no reader
+ * parses that name.
+ */
+export function workflowOutputCopyStem(params: {
+  base: string;
+  agent: string;
+  model: string;
+  round: number;
+}): string {
+  return `${params.base}_${agentFirstNameChunk(params.agent)}_r${params.round}_${modelFileName(params.model)}`;
 }

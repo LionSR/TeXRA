@@ -5,21 +5,18 @@ import { lookup } from 'node:dns';
 import { Effect, Stream } from 'effect';
 import { FetchHttpClient, HttpClient, type HttpClientError } from 'effect/http';
 import ipaddr from 'ipaddr.js';
-import {
-  EnvHttpProxyAgent,
-  fetch as undiciFetch,
-  type Dispatcher,
-} from 'undici';
+import { EnvHttpProxyAgent, type Dispatcher } from 'undici';
 import { z } from 'zod';
 
 // Local imports - core
+import { undiciFetchThrough } from '@platform/defaults/longRunningModelTransport';
 import { ToolError } from '@shared/schemas';
 import {
   retryTransientFetch,
   scopedClient,
   toFetchToolError,
 } from '@tools/timeouts';
-import { defineTool } from '@tools/core/define';
+import { defineTool } from '@tools/core/definition';
 import { executed } from '@tools/core/result';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { createHtmlToMarkdown } from '@utils/text/htmlToMarkdown';
@@ -127,12 +124,7 @@ function webFetchDispatcher(): Dispatcher {
  * (see `longRunningModelFetch`).
  */
 const publicFetch: typeof fetch = (input, init) =>
-  undiciFetch(
-    input as Parameters<typeof undiciFetch>[0],
-    { ...init, dispatcher: webFetchDispatcher() } as Parameters<
-      typeof undiciFetch
-    >[1],
-  ) as unknown as Promise<Response>;
+  undiciFetchThrough(webFetchDispatcher(), input, init);
 
 /** Refuse an IP-literal host, the one form {@link publicOnlyLookup} never sees. */
 function assertPublicLiteral(url: URL) {
@@ -322,7 +314,7 @@ export const WebFetchTool = defineTool({
   name: 'web_fetch',
   replay: 'safe',
   slow: true,
-  parallelSafe: true,
+  lane: 'parallel',
   description:
     'Fetch content from a URL and return it as clean text. Fetches the HTML and converts it to Markdown locally. Include an optional prompt to explain what context you need so the fetched content can be interpreted correctly.',
   schema: WebFetchInputSchema,

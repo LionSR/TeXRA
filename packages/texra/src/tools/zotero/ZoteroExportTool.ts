@@ -10,8 +10,8 @@ import { Effect } from 'effect';
 import { z } from 'zod';
 
 // Local imports - core
+import { defineTool } from '@texra-ai/harness';
 import { ToolError } from '@shared/schemas';
-import { defineTool } from '@tools/core/define';
 import { executed } from '@tools/core/result';
 import { pluralize } from '@utils/text/stringUtils';
 

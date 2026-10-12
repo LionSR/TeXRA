@@ -14,7 +14,7 @@ import {
 import { POINTER } from '@cli/tui/ui/glyphs';
 import { CONFIRM_CARD_HORIZONTAL_DECORATION } from '@cli/tui/ui/theme';
 import { useLiveNowMs } from '@cli/tui/useLiveNowMs';
-import type { SurfaceDecision } from '@shared/session/approvalDecision';
+import type { SurfaceDecision } from '@texra/shared/session/surfaceDecision';
 import {
   confirmCardCompactHintLayout,
   confirmCardFeedbackHints,

@@ -45,6 +45,8 @@ export const retrieveSessionResumeData = Effect.fn('retrieveSessionResumeData')(
         ),
       );
     }
+    if (resumability.kind === 'earlierBuild')
+      return yield* Effect.fail(resumability.refusal);
     if (resumability.kind === 'none') {
       yield* Effect.logWarning('Run is not resumable').pipe(
         Effect.annotateLogs({ data: { agent: agentConfig.agent, runId } }),

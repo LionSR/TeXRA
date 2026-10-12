@@ -10,16 +10,11 @@
  */
 
 export { getRunRecords } from './runRecords';
-export { deliveredOutput, type RunResult } from './resultMeta';
+export type { RunResult } from './resultMeta';
 export {
   listRunWorkspaceFiles,
   resolveRunWorkspaceFilePath,
 } from './runWorkspaceFiles';
-export {
-  registerRun,
-  type FinalizeRunInput,
-  type FinalizeRunResult,
-} from './runLifecycle';
 export {
   type AgentRunListingEntry,
   listRuns,
@@ -27,4 +22,3 @@ export {
 } from './runListing';
 export { deriveResumability, type ResumabilityDecision } from './resumability';
 export { formatConversationMessage } from './conversationFormat';
-export { resolveChildRunOutput } from './childRunOutput';

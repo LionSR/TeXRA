@@ -27,9 +27,8 @@ import { it } from '@effect/vitest';
 import { MODEL_CONFIGS } from 'llm-zoo';
 
 import { APIError as OpenAIAPIError } from 'openai';
-import { afterEach, describe, expect, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 import {
-  chooseReasoning,
   type Model,
   ModelError,
   type ModelOrigin,
@@ -50,7 +49,6 @@ import {
 } from '@agent/runtime/ModelInvoker';
 import { ModelRetryGate } from '@agent/runtime/ModelRetryGate';
 import { RouteRetries } from '@agent/runtime/run/invocation';
-import { makeRunCell } from '@agent/runtime/loop/runProgram';
 import { AgentRun, type AgentRunShape } from '@agent/runtime/run/AgentRun';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { TraceEmitter, type AgentTrace } from '@agent/trace';
@@ -73,9 +71,14 @@ import {
   DatabaseReadFailed,
   DatabaseWriteFailed,
 } from '@shared/session/database';
-import { RunHistory, RunHistoryRefused } from '@shared/session/runHistory';
+import {
+  RunHistory,
+  RunHistoryRefused,
+  type RunCell,
+} from '@shared/session/runHistory';
 import { UsageLog } from '@shared/usageLog';
 import { freshRunState, type RunState } from '@shared/session/runStateFold';
+import { setTestApprovalPolicy } from '@test/support/sessionTestUtils';
 import { testAgentRun } from '@test/support/scriptedRunLayers';
 import { closeSessionOf } from '@test/support/sessionEnd';
 import { noopTrace } from '@test/support/noopTrace';
@@ -241,26 +244,15 @@ function boundModel(
   return {
     modelId: GPT54,
     config: MODEL_CONFIGS[GPT54],
-    reasoning: chooseReasoning(MODEL_CONFIGS[GPT54]),
     backend: 'openai',
     model,
     origin: ORIGIN,
     route: { kind: 'api-key', provider: 'openai', usageRoute: 'api-key' },
-    usageRoute: 'api-key',
-    contextWindow: MODEL_CONFIGS[GPT54].contextWindow,
-    supportsVision: false,
-    supportsNativePdf: false,
-    supportsNativeAudio: false,
-    supportsForcedToolChoice: true,
-    wireRouteKey: JSON.stringify(['openai', 'api-key', ORIGIN.requestedModel]),
-    modelRetryRouteKey: JSON.stringify([
-      'openai',
-      'api-key',
-      ORIGIN.requestedModel,
-      GPT54,
-    ]),
-    backgroundCapable: false,
+    forcedToolChoice: true,
     persistentConnection: false,
+    billing: {},
+    routes: routePolicies(['openai', 'api-key', ORIGIN.requestedModel], GPT54),
+    delivery: Effect.succeed('foreground'),
     automaticRetries: MODEL_RETRY_MAX_ATTEMPTS_SETTING.defaultValue,
     textOnly: false,
     ...overrides,
@@ -325,8 +317,8 @@ const freshState = (): RunState => ({
 
 interface InvokerKit {
   readonly runId: RunId;
-  /** The folded state of the freshly opened run. */
-  readonly state: RunState;
+  /** The run's cell, holding the folded state of the freshly opened run. */
+  readonly cell: RunCell;
   /** `ModelInvoker` and this run's history, with nothing left to provide. */
   readonly layer: Layer.Layer<ModelInvoker | RunHistory | RouteRetries>;
 }
@@ -348,8 +340,10 @@ const openRun = Effect.fn('openRun')(function* (
   const runId = retryRunId();
   publishTestRunStart(session, runId);
   yield* session.log.settled.pipe(Effect.orDie);
-  yield* session.runHistory.acquire(runId);
-  const state = yield* session.runHistory.appendBatch(runId, null, [
+  const cell = yield* session.runHistory.open(runId, {
+    activation: () => Effect.succeed([]),
+  });
+  yield* cell.append([
     appendRow(runId, [
       { role: 'user', content: [{ kind: 'text', text: 'go' }] },
     ]),
@@ -383,14 +377,14 @@ const openRun = Effect.fn('openRun')(function* (
     // The process's route gate, as `processLayer` serves it.
     Layer.provideMerge(Layer.effect(RouteRetries, ModelRetryGate.make)),
   );
-  return { runId, state, layer };
+  return { runId, cell, layer };
 });
 
 /** One invocation on an opened run. */
-const invokeOn = ({ layer, runId, state }: InvokerKit) =>
+const invokeOn = ({ layer, cell }: InvokerKit) =>
   Effect.gen(function* () {
     const invoker = yield* ModelInvoker;
-    return yield* invoker.invoke(yield* makeRunCell(runId, state), REQUEST);
+    return yield* invoker.invoke(cell, REQUEST);
   }).pipe(
     // `invoke`'s debug-object sink writes through the process `FileSystem`;
     // this suite runs on `it.effect`'s own runtime, so the service comes from
@@ -458,7 +452,7 @@ const BOUND = boundModel(stubModel([]).model);
  * route cools on shared-route evidence, the model route only on a limit the
  * provider scoped to one model.
  */
-const [modelRoute, wireRoute] = routePolicies(BOUND);
+const [modelRoute, wireRoute] = BOUND.routes;
 const wireRouteRecovery = (error: Error) => wireRoute.classifyFailure(error);
 const modelRouteRecovery = (error: Error) => modelRoute.classifyFailure(error);
 
@@ -597,6 +591,8 @@ describe('recovery-route verdicts', () => {
 });
 
 describe('ModelInvoker retry', () => {
+  // The project's policy is the fake host's setting, shared by the file.
+  beforeEach(() => setTestApprovalPolicy('ask'));
   afterEach(async () => {
     await installPlatform();
   });
@@ -782,7 +778,6 @@ describe('ModelInvoker retry', () => {
 
         const kit = yield* openRun(session, stub.model, {
           route: { kind: 'chatgpt-subscription' },
-          usageRoute: 'chatgpt-subscription',
         });
         yield* Effect.promise(() => seedActiveRun(session, kit.runId));
         const outcome = yield* invokeOn(kit);
@@ -895,9 +890,9 @@ describe('ModelInvoker retry', () => {
         while (stub.attempts() < 2) yield* settle;
         yield* Fiber.interrupt(fiber);
 
-        const state = yield* session.runHistory.load(kit.runId);
-        if (state === null) throw new Error('The run has no run history.');
-        const resumed = yield* invokeOn({ ...kit, state });
+        // The resume opens the run again from its stored rows.
+        const cell = yield* session.runHistory.open(kit.runId);
+        const resumed = yield* invokeOn({ ...kit, cell });
 
         expect(resumed.kind).toBe('response');
         // The interrupted attempt was asked about again, then sent once.
@@ -919,7 +914,7 @@ describe('ModelInvoker retry', () => {
         installPlatform({ config: { 'texra.model.retry.maxAttempts': 0 } }),
       );
       const session = yield* sessionWithInteractions(undefined);
-      session.approvals.override('yolo');
+      setTestApprovalPolicy('yolo');
       const stub = stubModel([
         { fail: new Error('stream dropped before first token') },
       ]);
@@ -1072,16 +1067,12 @@ describe('ModelInvoker retry', () => {
         expect(first.state.continuation).not.toBeNull();
 
         // The next turn's message, sent on top of the stored response.
-        const next = yield* session.runHistory.appendBatch(
-          kit.runId,
-          first.state,
-          [
-            appendRow(kit.runId, [
-              { role: 'user', content: [{ kind: 'text', text: 'again' }] },
-            ]),
-          ],
-        );
-        const outcome = yield* invokeOn({ ...kit, state: next });
+        yield* kit.cell.append([
+          appendRow(kit.runId, [
+            { role: 'user', content: [{ kind: 'text', text: 'again' }] },
+          ]),
+        ]);
+        const outcome = yield* invokeOn(kit);
 
         expect(outcome.kind).toBe('response');
         expect(chained).toEqual([false, true, false]);
@@ -1098,9 +1089,23 @@ describe('ModelInvoker retry', () => {
       Effect.gen(function* () {
         const session = yield* sessionWithInteractions(undefined);
         const stopped = new Map<RunId, 'user' | 'shutdown'>();
-        vi.spyOn(session.runs, 'stopReason').mockImplementation((runId) =>
-          stopped.get(runId),
-        );
+        const get = session.runs.get.bind(session.runs);
+        vi.spyOn(session.runs, 'get').mockImplementation(((runId?: RunId) => {
+          if (runId === undefined) return get();
+          const live = get(runId);
+          const stopReason = stopped.get(runId);
+          if (stopReason === undefined) return live;
+          // The run's stop, whether or not this registry holds it.
+          return {
+            runId,
+            handle: undefined,
+            live: false,
+            parent: null,
+            drained: Effect.void,
+            ...live,
+            stopReason,
+          };
+        }) as typeof session.runs.get);
         const background = BACKGROUND_PREPARED;
         const operation = RemoteOperationSchema.parse({
           origin: ORIGIN,
@@ -1153,7 +1158,10 @@ describe('ModelInvoker retry', () => {
           const state = yield* session.runHistory.load(kit.runId);
           if (state === null)
             throw new Error('The run has no run history state.');
-          const resumed = yield* invokeOn({ ...kit, state });
+          const resumed = yield* invokeOn({
+            ...kit,
+            cell: yield* session.runHistory.open(kit.runId),
+          });
           return {
             calls,
             accepted: state.invocation?.current.accepted,

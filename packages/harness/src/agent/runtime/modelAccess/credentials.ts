@@ -50,13 +50,36 @@ type CredentialRoute = Extract<
   }
 >;
 
+/**
+ * What a route bills: the plan a direct key pays through, a subscription, or
+ * the user's own key (OpenRouter, the editor, the validation model). The one
+ * owner of the fact: the binding sends it as the wire's billing and pricing
+ * stamps it on each turn's usage.
+ */
+export function usageRouteOf(route: ModelRoute): UsageRoute {
+  switch (route.kind) {
+    case 'api-key':
+      return route.usageRoute;
+    case 'chatgpt-subscription':
+    case 'xai-subscription':
+      return route.kind;
+    case 'openrouter':
+    case 'copilot':
+    case 'validation':
+    case 'no-api-key':
+    case 'openrouter-unsupported':
+      return 'api-key';
+    default:
+      return route satisfies never;
+  }
+}
+
 /** The credential and endpoint of one route, resolved together. */
 export type RouteCredential = {
   readonly provider: ApiKeyProviderId;
   readonly endpoint: string;
   /** The secret the transport sends as its bearer. */
   readonly bearer: string;
-  readonly usageRoute: UsageRoute;
 } & (
   | { readonly route: 'api-key' | 'openrouter' | 'xai-subscription' }
   | {
@@ -112,14 +135,12 @@ const subscriptionCredential = (
           accountId: fresh.accountId ?? null,
           plan: fresh.planType,
           endpoint: CODEX_BACKEND_BASE_URL,
-          usageRoute: route,
         }))
       : Effect.map(xaiCoordinator(secrets).getFreshAccessToken(), (token) => ({
           route,
           provider: 'xai',
           bearer: token,
           endpoint: XAI_SUBSCRIPTION_ENDPOINT,
-          usageRoute: route,
         }));
   const refresh =
     route === 'chatgpt-subscription'
@@ -180,7 +201,6 @@ const apiKeyCredential = Effect.fn('credentials.apiKey')(function* (
     provider,
     bearer,
     endpoint,
-    usageRoute: route.kind === 'openrouter' ? 'api-key' : route.usageRoute,
   };
 });
 

@@ -36,7 +36,7 @@ Design rules in `AGENTS.md` → "Zod v4 Schema Patterns" (including "Schemas as 
 - **Retry outside `ModelInvoker`** (a `p-retry` around a model call, a provider SDK retry re-enabled, a hand-rolled prompt loop) → the two owners live in the invoker only.
 - **Plain `console.log` or untagged `logger.info` in agent flows** → use `AgentTrace` (`@agent/trace`) for grouped, tool-use-aware channels; route non-agent logging through `@logger/logUtils`.
 - **Log payloads built by string interpolation** (file lists, missing outputs, latexdiff results, usage stats) → pass via the structured `data` argument so the progress view can render them.
-- **Commands invoking flow factories directly** → must launch via `runAgent` (`packages/harness/src/agent/runtime/runAgent.ts`) so the run gets a `runId`, is registered in storage, and session filters and resume actions stay coherent. `executeAgent` is correct only when the caller already owns the `runId` (subagent dispatch, resume paths); a resume goes through `resumeToolUseFromResumeData`.
+- **Commands invoking flow factories directly** → must launch via `session.runs.launch({ request, options })` (`packages/harness/src/agent/runtime/runRegistry.ts`) so the run gets a `runId`, is registered in storage, and session filters and resume actions stay coherent. `executeAgent` is correct only when the caller already owns the `runId` (subagent dispatch, resume paths); a resume goes through `resumeToolUseFromResumeData`.
 
 ## 4. Configuration, storage, files
 
