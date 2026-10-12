@@ -13,7 +13,7 @@ Pin: verified against `main` at `d8d4a6b`, the merge target (branch
 `claude/eager-noether-avb5l0`, which carries this note merged onto that `main`).
 An earlier draft of this note was pinned to `f668a87`, ~44 commits behind
 `main`; it has been re-verified against `d8d4a6b` after merging `main` in, since
-a few of those commits touched the audited areas (see §What moved). The
+a few of those commits touched the audited areas (see the structure section). The
 2026-10-04 pass's pin, `ae953c3` (branch `claude/eager-noether-hiwxl7`), is not
 reachable from this shallow clone, so the delta below is read from the tree
 itself, not a `git rev-list` range. The headline delta is the one that pass
@@ -21,45 +21,54 @@ anticipated: **the harness package-split landed**
 (`2026-10-02-harness-package-split.md`). `packages/agent` is gone;
 the SDK package is now `packages/harness` (`@texra-ai/harness`). Code under
 `packages/**/src` no longer names `@texra-ai/agent` at all (that grep is empty);
-the old name lingers only in docs and changelog prose (`CHANGELOG.md`, a stale
-`docs/architecture/2026-07-26-embedding-the-agent-runtime.md:475` corrected in
-this PR, and historical `.agents/docs/**` references). Alignment has **held or
-improved**, entirely through the human-owned program, not this routine.
+the old name lingers only outside the package source — in `CHANGELOG.md`, a
+stale `docs/architecture/2026-07-26-embedding-the-agent-runtime.md:475`
+corrected in this PR, and several `.agents/docs/**` notes. Not all of the latter
+are historical: `2026-09-06-effect-runtime-delivery-plan.md:322` (a proposed
+note) still says `@texra-ai/agent/effect` owns the SDK operations, which is
+live-ish guidance pointing at a deleted name — outstanding rename work that
+belongs with §Open.1's manifest re-scope, not a settled reference. Alignment has
+**held or improved**, entirely through the human-owned program, not this routine.
 
-## What moved since 2026-10-04 (all human-owned, none from this routine)
+## Current structure at the merge target (`d8d4a6b`)
+
+The 2026-10-04 pin (`ae953c3`) is unreachable from this shallow clone, so this
+section states what the audited areas look like **at the current pin** rather
+than attributing precise line-count deltas or file lineage to the interval.
+Where a module is called absent, it is absent at `d8d4a6b` — not a claim about
+exactly when or how it left.
 
 - **Package rename / split.** `packages/agent` → `packages/harness`;
   `@texra-ai/agent` → `@texra-ai/harness`. CLAUDE.md, `src/README.md`,
   `packages/harness/README.md` and the path aliases are all consistent with the
   new name. There is no `@texra/core` (deleted by #7099); the SDK surface is
   `@texra-ai/harness`, built and fenced, not published.
-- **Model handler consolidated into one subsystem.** #13919 replaced **four**
-  previously-separate modules — `run/modelBinding.ts` (423 lines just before
-  deletion), `modelRoutes.ts` (447), `model/modelRoute.ts` (257) and
-  `run/modelFailure.ts` (304), **~1,431 lines in all** — with the
-  `runtime/modelAccess/` subsystem: five files, `ModelAccess.ts` (251),
-  `binding.ts` (279), `routeDecision.ts` (311), `credentials.ts` (251),
-  `failureInfo.ts` (159), **~1,251 lines total**. So it is a consolidation by
-  concern (binding, route decision, credentials, failure reading) that modestly
-  *reduced* net lines while fusing four top-level modules into one, not an added
-  tier. The bound-`Model` route is unchanged. (The 966-line `modelBinding.ts`
-  the 2026-10-04 pass cited had itself already shrunk to 423 before #13919
-  deleted it.)
-- **SDK center `effect/` decomposed.** The single `effect/runtime.ts` the prior
-  pass named is gone; the directory is now
-  `effect/{sessions,sessionPrograms,runHandle,requestAnswerer,errors}.ts`. This
-  is an Effect-native decomposition of one surface, not an added tier — the
-  public barrel (`index.ts`) still re-exports from it with no in-package
-  `Effect.run*`.
-- **Run loop folded further.** `loop/rounds.ts` (the round-mode entry the prior
-  pass cited) is gone; the loop is now
-  `loop/{toolUse,runProgram,step,rows,toolUseDispatch,toolGuard,modelSwitch,hooks}.ts`
-  — still one `Effect` per run appending one history.
-- **Subagent delegation grew its own home.** `tools/delegation/`
-  (`childRun.ts`, `detachedChildRun.ts`, `inBandSubagentRun.ts`,
-  `subagentRun.ts`) plus `runtime/{childRunLoop,nativeSubagentStrategy,scriptRun}.ts`.
-  The boundaries the charter asks about are now first-class and more legible
-  than the prior pass described, not less.
+- **Model handler is the `runtime/modelAccess/` subsystem.** Five files —
+  `ModelAccess.ts` (251), `binding.ts` (279), `routeDecision.ts` (311),
+  `credentials.ts` (251), `failureInfo.ts` (159) — plus `model/modelSettings.ts`
+  (255), the settings reader `ModelAccess.ts` imports. #13919 created this by
+  consolidating the former binding/route/failure modules (`run/modelBinding.ts`,
+  `modelRoutes.ts`, `model/modelRoute.ts`, `run/modelFailure.ts`), all absent at
+  `d8d4a6b`. The bound-`Model` route is unchanged. No net line-count claim is
+  made: the predecessor and successor module boundaries don't line up cleanly
+  enough to state a reliable delta.
+- **SDK center `effect/`.** At `d8d4a6b` the directory is
+  `effect/{sessions,sessionPrograms,runHandle,requestAnswerer,errors}.ts`, and
+  the former single `effect/runtime.ts` is absent (per #13825 its composition
+  duplicated `processLayer`). The public barrel (`index.ts`) re-exports from
+  these with no in-package `Effect.run*`. These five are **not** presented as a
+  decomposition of `runtime.ts` — the other files arrived through separate
+  changes.
+- **Run loop.** `loop/{toolUse,runProgram,step,rows,toolUseDispatch,toolGuard,modelSwitch,hooks}.ts`;
+  the former `loop/rounds.ts` is absent. Still one `Effect` per run appending
+  one history.
+- **Subagent delegation.** `tools/delegation/` (`childRun.ts`,
+  `detachedChildRun.ts`, `inBandSubagentRun.ts`, `subagentRun.ts`, plus
+  `AgentTool.ts`, `agentChild.ts`, …) and
+  `runtime/{childRunLoop,nativeSubagentStrategy,scriptRun}.ts`. These are the
+  first-class subagent boundaries the charter asks about. This layout is not
+  presented as new this interval — it is the current home, stated for the
+  §4-ask re-confirmation below.
 
 ## Verdict (unchanged)
 
@@ -91,9 +100,8 @@ set; nothing in these areas reopened a retained refusal.
      path binds its own `Model` through the same `modelAccess/ModelAccess.ts`
      route rather than bypassing it.
    - Model handler: provider calls are reached only through the `packages/llm`
-     (`@texra-ai/llm`) `Model` bound by `runtime/modelAccess/binding.ts` (279
-     lines) — one of the five files of the `runtime/modelAccess/` subsystem
-     (~1,251 lines total) #13919/#13920 introduced.
+     (`@texra-ai/llm`) `Model` bound by `runtime/modelAccess/binding.ts` — one of
+     the files of the `runtime/modelAccess/` subsystem #13919 introduced.
      Deliberate exceptions outside that route are unchanged (audio
      transcription builds `OpenAI` directly; the `codex`/`claude_code` tools
      load their own provider SDKs; the settings-view consent probe acquires a VS
@@ -116,11 +124,12 @@ set; nothing in these areas reopened a retained refusal.
      it.
    - **Model handler** was consolidated, not inflated: #13919 fused four
      predecessor modules (`run/modelBinding.ts`, `modelRoutes.ts`,
-     `model/modelRoute.ts`, `run/modelFailure.ts`, ~1,431 lines) into the
-     five-file `runtime/modelAccess/` subsystem (~1,251 lines, by concern —
-     binding, route decision, credentials, failure reading), a net reduction.
-     The `Model` interface still takes only a Zod-guarded materialized
-     `TurnRequest` and keeps host concerns in `BoundModel`.
+     `model/modelRoute.ts`, `run/modelFailure.ts`) into the `runtime/modelAccess/`
+     subsystem (five files plus `model/modelSettings.ts`), organized by concern —
+     binding, route decision, credentials, failure reading. Fewer top-level
+     modules, one bound-`Model` route; no net line-count claim is made (see the
+     structure section). The `Model` interface still takes only a Zod-guarded
+     materialized `TurnRequest` and keeps host concerns in `BoundModel`.
    - **Logger** is a clean host-agnostic producer port (`Effect.log*` +
      `withLogChannel`) with a single render→redact→truncate owner
      (`logSink.ts`). One structural item is still open — the sink→Layer
@@ -138,8 +147,8 @@ set; nothing in these areas reopened a retained refusal.
    ratification of the 2026-09-10 static-export manifest. The SDK speaks pure
    Effect end-to-end; the Promise boundary is deliberately gone.
 
-4. **Design subagent boundaries.** Already first-class, re-confirmed and now
-   better-factored (see §What moved): (a) native subagents via `executeAgent`
+4. **Design subagent boundaries.** Already first-class, re-confirmed at the
+   current pin (see the structure section): (a) native subagents via `executeAgent`
    with an owned `RunId` (`runtime/nativeSubagentStrategy.ts`); (b) the
    workflow-script run plus its `agent()` grandchildren (`runtime/scriptRun.ts`);
    and (c) the agent-CLI children (`claude_code`, `codex`) through the
