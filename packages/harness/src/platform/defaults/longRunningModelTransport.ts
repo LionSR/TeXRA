@@ -20,7 +20,7 @@ import {
   setGlobalDispatcher,
 } from 'undici';
 
-import { ProjectEnvironment } from '@platform/defaults/nodeWorkspace';
+import { ProjectEnvironment } from '@utils/system/nodeWorkspace';
 
 /** A streamed reasoning turn may sit silent this long between chunks. */
 const MODEL_STREAM_INACTIVITY_TIMEOUT_MS = 30 * 60 * 1000;

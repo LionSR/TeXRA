@@ -10,12 +10,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { NO_PLATFORM_INSTALL } from '@cli/runtime/cliProcessRuntime';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import { overleafGitClone } from '@latex/overleafProject';
-import { canonicalizeWorkspacePath } from '@platform/defaults/nodeWorkspace';
 import { defaultNodeStorageRoot } from '@platform/defaults/nodeStorage';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { spyOnStreamWrite } from '@test/cli/fixtures/streamWriteSpy';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 import { scriptedSpawnerLayer } from '@test/support/childProcessTestLayer';
+import { canonicalizeWorkspacePath } from '@utils/system/nodeWorkspace';
 import { makeMachineGitEnv } from '@utils/system/gitEnv';
 import type * as ChildProcess from 'effect/process/ChildProcess';
 

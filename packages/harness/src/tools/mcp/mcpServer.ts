@@ -30,11 +30,11 @@ import {
 } from '@agent/runtime/run/toolResultText';
 import type { McpServerConfig } from '@common/plugins/mcpServers';
 import { withLogChannel } from '@logger/effectLog';
-import { environment } from '@platform/defaults/nodeWorkspace';
 import type { ToolResult } from '@shared/schemas';
 import { makeJsonRpcConnection, type JsonRpcConnection } from '@tools/jsonRpc';
 import { errorResult, executed } from '@tools/core/result';
 import type { LoadedPluginTools } from '@tools/toolTable';
+import { environment } from '@utils/system/nodeWorkspace';
 import { truncatedHexId } from '@utils/core/idHash';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { appendHead, appendTail } from '@utils/text/appendTail';
