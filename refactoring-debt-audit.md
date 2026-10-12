@@ -5,6 +5,18 @@ harness, the app (`texra`/`llm`), and the three hosts (`extension`/`cli`/`deskto
 in parallel; findings were cross-checked against the repo's own
 `config/ratchets/core-quality/` baselines and spot-verified with grep._
 
+> **Verification update (2026-10-12).** Before implementing any finding, each top
+> candidate was read in full to confirm the refactor was real. **It wasn't.** Every
+> "duplication / cheap win" below collapses on close reading: the maintainers have
+> already extracted the shared cores, and what the structural scan flagged as
+> parallel code is either already-shared-plus-irreducible-per-case-specifics,
+> divergent-by-design with documented intent, or a cleanly-decomposed large file.
+> No code refactor was shipped, because forcing one would be net-negative churn
+> that this repo's own rules (single-caller-extraction ban, "build nothing for a
+> problem we don't have", "never split a file mechanically") are designed to reject.
+> See **Verification results** below for the per-finding evidence. The headline
+> stands, now stronger: **this is an unusually well-refactored codebase.**
+
 ## Headline
 
 The codebase is **well-disciplined, not messy in the usual sense**. Debt is not
@@ -137,6 +149,70 @@ ratchet baselines (42 harness files are frozen over the 400-line bar).
 **Suggested sequencing:** #5 (cheap wins, build momentum) → #1 (highest payoff) →
 #2/#3 (harness god-files) → #4 (CLI factory). Each is behavior-preserving, so per
 repo rules they carry zero new tests (a regression test only if one earns its place).
+
+## Verification results (per finding)
+
+Each finding was opened and read against its actual source before any edit.
+
+- **#1 `codex*`/`claudeAgent*` — already shared.** The common machinery is already
+  extracted: `importForeignSdk` and `createCachedBinaryResolver`/`binaryIfPresent`/
+  `resolvePackageDir` in `@texra/tools/support/externalBinaryUtils` (both `*Import.ts`
+  use them), `buildAgentCliLaunch`/`dispatchAgentCliTool` in `agentCliShared.ts`, and
+  `emitToolUseCard`/`endToolUseCard`/`endOpenToolUseCards` shared by both card
+  builders. The two `runStreamedTurn` bodies share only a ~5–10-line stream-drain
+  skeleton; the bulk is irreducibly provider-specific (different SDK event
+  vocabularies, promise-returning `runStreamed` vs synchronous `query()`, abort-link
+  + background-task finalizer vs turn-card finalizer, different return types,
+  throw-vs-flag error models). A `drainAgentStream` wrapper would be a leaky
+  abstraction saving almost nothing. The only literal twins are the two-line
+  `IS_WINDOWS ? 'x.exe' : 'x'` and the per-provider platform-package maps, which are
+  data, not logic. **No clean refactor.**
+- **#2 `sessionFold`/`runStateFold` — not god-functions.** `sessionFold.ts` is ~40
+  small, well-named functions (`applyOwnArm`, `withAggregates`, `foldDurable`,
+  `reconcileExistence`, …); it is large by line count because an event fold
+  legitimately has many arms, each doing real projection work. The "2 over-complex
+  functions" are two inherently-branchy arm handlers. The two folds project different
+  things and share the event-type contract, not code. Unifying their dispatch
+  skeleton saves little and couples two independently-evolving projections; splitting
+  the file is the mechanical split the harness AGENTS.md explicitly forbids.
+  **No clean refactor.**
+- **#3 `Database.ts` god-layer — real but risky, not cheap.** This one is genuine
+  structural concentration (the repo's own ratchet tracks it), but a sound
+  decomposition (extract a projection runner + row codec/exec) is behavior-preserving
+  surgery on the session DB layer, needs the full suite (minutes) to validate, and
+  should be a dedicated reviewed effort — not an autonomous drive-by. Deferred, not
+  dismissed.
+- **#5a GitHub per-scope formatters — divergent by design.** The genuinely shared
+  parts are already in `formatUtils.ts` (`formatCommentEvent`, `authorOf`, `sections`,
+  `truncate`, `wrapWebhookEvent`, `formatPreviousStateHint`), used by all three
+  scopes. The remaining divergence is documented intent: the repo-level formatter uses
+  a "denser single-line shape and intentionally does not route through" the shared
+  comment path, and `formatPRIssueComment` is deliberately named and kept distinct
+  from the issue path because the two are not interchangeable and TypeScript can't
+  catch a swap. The subscription-error one-liners differ only by a subject noun; one
+  parameterized helper saves ~6 lines against a 3-caller indirection. **Not worth it.**
+- **#5b `LatexMediaManager` mirror methods — shared skeleton already extracted.**
+  `forEachFile` (the concurrency + best-effort-recover + log skeleton), `resolveLatexDir`,
+  `pathToLocationIn`, and `extractFigurePathsFromLatex` are already shared across the
+  mirror methods. What remains per method is real orchestration difference (BFS
+  recursion with a worklist, `.tex` snapshotting, stat-gating, vision-context vs
+  mirror-only). Only micro-win: a `texFilesOf()` helper for the 5 `files.filter(f =>
+  hasExtension(f.absolutePath, '.tex'))` sites (~8 LOC), borderline against the
+  one-expression-helper bar. **Optional micro-nit, not a refactor.**
+- **#5d llm per-provider token-usage mapping — divergent semantics.** OpenAI's
+  `input_tokens` is already the combined input (and `total_tokens` comes from the
+  provider); Anthropic's `input_tokens` excludes cache, so it sums `uncached + cached
+  + creation` and computes the total itself; the `providerUsage` shapes
+  (`xai`-conditional vs always-`anthropic` with cache breakdown) differ entirely. A
+  `buildUsage` normalizer would have to be parameterized enough to obscure the real
+  per-provider arithmetic. **No clean refactor.**
+
+**Net:** the dedup space is exhausted — the maintainers got there first. The only
+genuine remaining debt is size/complexity concentration in a few files (#3, #4),
+which the repo already tracks in its ratchets and deliberately has not prioritized.
+Those are worth doing as dedicated, reviewed, behavior-preserving efforts with the
+full suite green — not as an autonomous batch. Happy to take one on if you want it
+scoped (the `Database.ts` projection-runner extraction is the strongest candidate).
 
 ## Not worth refactoring (checked, came back clean)
 - LLM provider `streamTurn`/wire codecs — genuinely provider-specific, already on
