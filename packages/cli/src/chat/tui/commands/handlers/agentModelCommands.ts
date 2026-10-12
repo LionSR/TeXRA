@@ -150,17 +150,19 @@ export const applyCliModelSelection = Effect.fn('applyCliModelSelection')(
   function* (model: string, context: SlashCommandContext) {
     const nextModel = model.trim();
     if (chatTuiCanStartRootRun(context.session)) {
-      const selection = yield* selectCliRunnableModel(nextModel, {
-        stores: {
-          ...context.stores,
-          secrets: context.secrets,
-          runtime: context.runtime,
+      const selection = yield* selectCliRunnableModel(
+        [{ model: nextModel, reason: 'explicit-override' }],
+        {
+          stores: {
+            ...context.stores,
+            secrets: context.secrets,
+            runtime: context.runtime,
+          },
+          noAvailableModelsMessage: formatCliNoAvailableModelsRecovery(
+            CHAT_API_MODE_MODEL_RECOVERY,
+          ),
         },
-        fallbackReason: 'explicit-override',
-        noAvailableModelsMessage: formatCliNoAvailableModelsRecovery(
-          CHAT_API_MODE_MODEL_RECOVERY,
-        ),
-      });
+      );
       yield* setCliHelperModel(context.stores.globalState, selection.model);
       setCliSessionModelOverride(selection.model);
       appendLocalNotice(`Root model set to ${selection.model}.`);

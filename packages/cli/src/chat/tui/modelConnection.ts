@@ -15,6 +15,7 @@ import {
 import type { CliPlatformServices } from '@cli/runtime/initPlatform';
 import { SETUP_AGENT_HANDOFF_NOTICE } from '@cli/onboarding/setupContinuation';
 import { withLogChannel } from '@logger/effectLog';
+import type { RunModelDecisionReason } from '@model/runModelDecision';
 import { hasUsableSetupCredential } from '@texra/model/setupCredentialAccess';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -92,9 +93,7 @@ export const connectChatModel = Effect.fn('connectChatModel')(function* (
   context: SlashCommandContext,
   options: {
     readonly startupModel: string;
-    readonly modelSource: Parameters<
-      typeof selectCliRunnableModel
-    >[1]['fallbackReason'];
+    readonly modelSource: RunModelDecisionReason;
     readonly recovery: CliNoAvailableModelsRecoveryOptions;
     readonly firstRunSetupAgent: string | undefined;
   },
@@ -108,13 +107,20 @@ export const connectChatModel = Effect.fn('connectChatModel')(function* (
   if (!ready) return;
   modelConnectionNeeded.set(false);
   const selection = yield* Effect.exit(
-    selectCliRunnableModel(sessionMeta.get().model || options.startupModel, {
-      stores: { ...stores, secrets, runtime },
-      fallbackReason: options.modelSource,
-      noAvailableModelsMessage: formatCliNoAvailableModelsRecovery(
-        options.recovery,
-      ),
-    }),
+    selectCliRunnableModel(
+      [
+        {
+          model: sessionMeta.get().model || options.startupModel,
+          reason: options.modelSource,
+        },
+      ],
+      {
+        stores: { ...stores, secrets, runtime },
+        noAvailableModelsMessage: formatCliNoAvailableModelsRecovery(
+          options.recovery,
+        ),
+      },
+    ),
   );
   if (Exit.isFailure(selection)) {
     appendLocalErrorTranscript(toErrorMessage(Cause.squash(selection.cause)));

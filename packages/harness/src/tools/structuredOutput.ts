@@ -4,7 +4,10 @@ import { z } from 'zod';
 
 // Internal imports
 import type { RuntimeTool as ITool } from '@agent/runtime/ToolServices';
-import { convertToolSchema } from '@agent/core/tools/toolSchema';
+import {
+  convertToolSchema,
+  type JSONSchemaObject,
+} from '@agent/core/tools/toolSchema';
 import {
   ToolError,
   JsonValueSchema,
@@ -16,7 +19,7 @@ import {
 import { defineTool } from './core/definition';
 
 type StructuredOutputSchema = {
-  readonly jsonSchema: Record<string, unknown>;
+  readonly jsonSchema: JSONSchemaObject;
   readonly zodSchema: z.ZodType;
 };
 
@@ -147,7 +150,7 @@ export function normalizeStructuredOutputSchema(
 ): StructuredOutputSchema {
   const fromZod = input instanceof z.ZodType;
   if (!fromZod) assertSafeSandboxSchema(input);
-  const zodSchema = fromZod ? input : (z.fromJSONSchema(input) as z.ZodType);
+  const zodSchema = fromZod ? input : z.fromJSONSchema(input);
   const jsonSchema = convertToolSchema({
     name: STRUCTURED_OUTPUT_TOOL_NAME,
     zodSchema,

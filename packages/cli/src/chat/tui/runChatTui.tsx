@@ -264,13 +264,15 @@ export async function runChat(
       // same value so they can never disagree.
       const modelSelectionExit = yield* Effect.exit(
         hasCredential
-          ? selectCliRunnableModel(defaults.model, {
-              stores: services,
-              fallbackReason: defaults.modelSource,
-              noAvailableModelsMessage: formatCliNoAvailableModelsRecovery(
-                CHAT_STARTUP_MODEL_RECOVERY,
-              ),
-            }).pipe(
+          ? selectCliRunnableModel(
+              [{ model: defaults.model, reason: defaults.modelSource }],
+              {
+                stores: services,
+                noAvailableModelsMessage: formatCliNoAvailableModelsRecovery(
+                  CHAT_STARTUP_MODEL_RECOVERY,
+                ),
+              },
+            ).pipe(
               Effect.tap((selection) =>
                 setCliHelperModel(services.globalState, selection.model),
               ),

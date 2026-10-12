@@ -101,6 +101,18 @@ class RunConfigUnreadable extends Data.TaggedError('RunConfigUnreadable')<{
   readonly cause: DatabaseReadFailed;
 }> {}
 
+/** How {@link HostRunActionPorts.runValidated} launches a run. */
+interface RunValidatedOptions {
+  preferHelperModel?: boolean;
+  /** This launch replaces a quota-exhausted retry the user answered
+   *  with their own API key. */
+  ownApiKeyFallback?: boolean;
+  /** An Auto-approve launch: the run starts with delegated work
+   *  approved. */
+  approveDelegatedWork?: boolean;
+  onRun?: (runId: RunId) => Effect.Effect<void>;
+}
+
 export interface HostRunActionPorts {
   readonly session: SessionHandle;
   /** Where this window's run actions land: its own session, or the
@@ -115,16 +127,7 @@ export interface HostRunActionPorts {
    */
   runValidated(
     request: ValidatedRunRequest,
-    options?: {
-      preferHelperModel?: boolean;
-      /** This launch replaces a quota-exhausted retry the user answered
-       *  with their own API key. */
-      ownApiKeyFallback?: boolean;
-      /** An Auto-approve launch: the run starts with delegated work
-       *  approved. */
-      approveDelegatedWork?: boolean;
-      onRun?: (runId: RunId) => Effect.Effect<void>;
-    },
+    options?: RunValidatedOptions,
   ): Effect.Effect<void, Error>;
   /** Open a resumed workflow's final output, as the launcher does a fresh one's. */
   openWorkflowOutput(result: RunEndResult): Effect.Effect<void, Error>;
@@ -240,7 +243,7 @@ export const createHostRunActions = (
      *  launcher worded travels as itself, anything else is RunLaunchFailed. */
     const runAgentRequest = (
       request: RunRequest,
-      options?: Parameters<HostRunActionPorts['runValidated']>[1],
+      options?: RunValidatedOptions,
     ): Effect.Effect<void, RequestRefusal | RunLaunchFailed> => {
       const validated = validateRunRequest(request);
       if (!validated.valid) {

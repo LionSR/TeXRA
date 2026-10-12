@@ -371,13 +371,11 @@ export type TransientNotice =
       readonly resumeId?: string;
     };
 
-type TransientNoticeOptions =
-  | { readonly kind?: 'message'; readonly ttlMs?: number }
-  | {
-      readonly kind: 'exit';
-      readonly resumeId?: string;
-      readonly ttlMs?: number;
-    };
+/** A notice's fields other than its text, `kind` defaulting to `message`. */
+type TransientNoticeOptions = { readonly ttlMs?: number } & (
+  | { readonly kind?: 'message' }
+  | Omit<Extract<TransientNotice, { kind: 'exit' }>, 'text'>
+);
 
 const DEFAULT_TRANSIENT_NOTICE_TTL_MS = 4_000;
 

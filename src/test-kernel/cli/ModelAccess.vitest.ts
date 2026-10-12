@@ -10,6 +10,7 @@ import {
   selectCliRunnableModel,
   type CliModelAccess,
 } from '@cli/runtime/modelAccess';
+import type { RunModelDecisionReason } from '@model/runModelDecision';
 import type { ProcessServices } from '@platform/processRuntime';
 import type { ModelOptionData } from '@shared/schemas';
 import { testRuntime } from '@test/support/testProcessRuntime';
@@ -69,10 +70,6 @@ function missingKeyModel(value: string): CliModelAccess {
   });
 }
 
-type ResolveCliRunnableModelOptions = Parameters<
-  typeof selectCliRunnableModel
->[1];
-
 /**
  * The process stores every access lookup reads, threaded in by the caller the
  * way the CLI composition root threads its own.
@@ -90,9 +87,14 @@ function run<A, E>(effect: Effect.Effect<A, E, ProcessServices>): Promise<A> {
 function resolveModelFromAccessList(
   accessList: readonly CliModelAccess[],
   model: string,
-  options: Omit<ResolveCliRunnableModelOptions, 'accessList' | 'stores'>,
+  { fallbackReason }: { readonly fallbackReason: RunModelDecisionReason },
 ) {
-  return run(selectCliRunnableModel(model, { ...options, accessList, stores }));
+  return run(
+    selectCliRunnableModel([{ model, reason: fallbackReason }], {
+      accessList,
+      stores,
+    }),
+  );
 }
 
 const MISSING_KEY_ONLY_ENTRIES: CliModelAccess[] = [
@@ -268,11 +270,15 @@ describe('CLI model access resolution', () => {
 
     await expect(
       run(
-        selectCliRunnableModel('anthropic/claude-3-haiku-20240307', {
-          fallbackReason: 'explicit-override',
-          accessList: [],
-          stores,
-        }),
+        selectCliRunnableModel(
+          [
+            {
+              model: 'anthropic/claude-3-haiku-20240307',
+              reason: 'explicit-override',
+            },
+          ],
+          { accessList: [], stores },
+        ),
       ),
     ).rejects.toThrow(
       'Model "anthropic/claude-3-haiku-20240307" is not available (retired).',
@@ -359,10 +365,10 @@ describe('CLI model access resolution', () => {
 
     await expect(
       run(
-        selectCliRunnableModel(HIDDEN_MODEL.toUpperCase(), {
-          fallbackReason: 'explicit-override',
-          stores,
-        }),
+        selectCliRunnableModel(
+          [{ model: HIDDEN_MODEL.toUpperCase(), reason: 'explicit-override' }],
+          { stores },
+        ),
       ),
     ).resolves.toEqual({ model: HIDDEN_MODEL });
     expect(readModelAvailabilityInputsMock).toHaveBeenNthCalledWith(2, stores, [
@@ -464,10 +470,10 @@ describe('CLI model access resolution', () => {
 
     await expect(
       run(
-        selectCliRunnableModel(HIDDEN_MODEL, {
-          fallbackReason: 'explicit-override',
-          stores,
-        }),
+        selectCliRunnableModel(
+          [{ model: HIDDEN_MODEL, reason: 'explicit-override' }],
+          { stores },
+        ),
       ),
     ).rejects.toThrow(
       `Model "${HIDDEN_MODEL}" is configured but has no option data.`,

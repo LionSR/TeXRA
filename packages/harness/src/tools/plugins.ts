@@ -155,15 +155,18 @@ export interface Plugin {
  * `definePlugin` checks that at compile time (a tool that needs a service no
  * layer of its plugin serves does not compile) and erases it: the table
  * holds every plugin alike, and the step that pins a plugin provides its
- * layers' services to its calls.
+ * layers' services to its calls. `RCall` is what the runtime serves its
+ * tools' calls: a plugin's tool gets `PluginToolServices`; only the
+ * harness's built-ins, which the run loop serves more, widen it.
  */
-export interface PluginDefinition<ROut> extends Omit<
+export interface PluginDefinition<
+  ROut,
+  RCall = PluginToolServices,
+> extends Omit<
   Plugin,
   'tools' | 'continuation' | 'processLayer' | 'sessionLayer' | 'availability'
 > {
-  readonly tools?: Readonly<
-    Record<string, RuntimeTool<Error, PluginToolServices | ROut>>
-  >;
+  readonly tools?: Readonly<Record<string, RuntimeTool<Error, RCall | ROut>>>;
   readonly continuation?: Continuation<ROut>;
   readonly processLayer?: ProcessPluginLayer<ROut>;
   readonly sessionLayer?: Layer.Layer<ROut, never, Runs | PluginHold>;
@@ -174,8 +177,8 @@ export interface PluginDefinition<ROut> extends Omit<
 }
 
 /** A plugin value from its definition, its own services erased. */
-export const definePlugin = <ROut = never>(
-  plugin: PluginDefinition<ROut>,
+export const definePlugin = <ROut = never, RCall = PluginToolServices>(
+  plugin: PluginDefinition<ROut, RCall>,
 ): Plugin => plugin as unknown as Plugin;
 
 const DisabledToolIdsSchema = z.array(z.string());

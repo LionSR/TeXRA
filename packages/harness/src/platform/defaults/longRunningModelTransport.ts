@@ -17,6 +17,7 @@ import {
   EnvHttpProxyAgent,
   fetch as undiciFetch,
   setGlobalDispatcher,
+  type Dispatcher,
 } from 'undici';
 
 import { ProjectEnvironment } from '@platform/defaults/nodeWorkspace';
@@ -55,7 +56,9 @@ interface ProxyPolicy {
 const projectDispatchers = new Map<string, EnvHttpProxyAgent>();
 
 /**
- * The fetch every model factory is constructed with. It is undici's own
+ * A fetch over `dispatch`'s agent: the one every model factory is
+ * constructed with, and `web_fetch`'s over its public-only resolver. It is
+ * undici's own
  * `fetch`, not the global one: the global is the runtime's bundled undici
  * (Electron 44 ships 7.x), which rejects a dispatcher built by this
  * package's undici ("invalid onRequestStart method").
@@ -69,8 +72,8 @@ const projectDispatchers = new Map<string, EnvHttpProxyAgent>();
  * The request is held until the fetch settles: a cloned `Request`'s signal
  * follows its parent only while the clone is alive.
  */
-const fetchThrough =
-  (dispatch: () => EnvHttpProxyAgent): typeof fetch =>
+export const fetchThrough =
+  (dispatch: () => Dispatcher): typeof fetch =>
   (input, init) => {
     const request =
       typeof input === 'string' || input instanceof URL ? undefined : input;

@@ -15,7 +15,10 @@ import {
   setWorkbenchTabDirty,
   type DesktopShellState,
 } from '../shared/desktopShellState';
-import { DESKTOP_WORKSPACE_COMMANDS } from '../shared/desktopWorkspaceMessages';
+import {
+  DESKTOP_WORKSPACE_COMMANDS,
+  type DesktopWorkspaceRequest,
+} from '../shared/desktopWorkspaceMessages';
 import { createEditorPane } from './editorPane';
 import { createPdfPane } from './pdfPane';
 import { createReviewPane } from './reviewPane';
@@ -75,8 +78,8 @@ export function createProjectWorkbench(options: {
     surfaces.act(session, { kind: 'workbench', layout: next });
     options.onLayoutChanged(session, previous, next);
   }
-  const send = (command: string, payload?: Record<string, unknown>) =>
-    postMessage(command, { ...payload, session });
+  const send = (message: DesktopWorkspaceRequest) =>
+    postMessage(message.command, { ...message, session });
   // The editor's file I/O is a host request answered to the pane; the
   // session's close fails whatever is still pending.
   const unexpected = (outcome: HostOutcome) =>
@@ -146,7 +149,8 @@ export function createProjectWorkbench(options: {
   const terminalPane = createTerminalPane({
     start: (sessionId, cols, rows) => {
       const initialCommand = workbench.takePendingTerminalCommand(sessionId);
-      send(DESKTOP_WORKSPACE_COMMANDS.TERMINAL_START, {
+      send({
+        command: DESKTOP_WORKSPACE_COMMANDS.TERMINAL_START,
         sessionId,
         cols,
         rows,
@@ -154,15 +158,20 @@ export function createProjectWorkbench(options: {
       });
     },
     sendInput: (sessionId, data) =>
-      send(DESKTOP_WORKSPACE_COMMANDS.TERMINAL_INPUT, { sessionId, data }),
+      send({
+        command: DESKTOP_WORKSPACE_COMMANDS.TERMINAL_INPUT,
+        sessionId,
+        data,
+      }),
     resize: (sessionId, cols, rows) =>
-      send(DESKTOP_WORKSPACE_COMMANDS.TERMINAL_RESIZE, {
+      send({
+        command: DESKTOP_WORKSPACE_COMMANDS.TERMINAL_RESIZE,
         sessionId,
         cols,
         rows,
       }),
     close: (sessionId) =>
-      send(DESKTOP_WORKSPACE_COMMANDS.TERMINAL_CLOSE, { sessionId }),
+      send({ command: DESKTOP_WORKSPACE_COMMANDS.TERMINAL_CLOSE, sessionId }),
   });
   const reviewPane = createReviewPane();
   const pdfPane = createPdfPane();
@@ -224,7 +233,10 @@ export function createProjectWorkbench(options: {
       for (const tab of getState().workbenchTabs) {
         if (tab.kind === 'pdf') pdfPane.dispose(tab.id);
         if (tab.kind === 'browser')
-          send(DESKTOP_WORKSPACE_COMMANDS.BROWSER_CLOSE, { tabId: tab.id });
+          send({
+            command: DESKTOP_WORKSPACE_COMMANDS.BROWSER_CLOSE,
+            tabId: tab.id,
+          });
       }
       reviewPane.clear();
     },
