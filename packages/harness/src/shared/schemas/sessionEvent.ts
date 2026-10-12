@@ -507,10 +507,7 @@ export function edgesOf(draft: SessionEventDraft): AggregateEdges {
   switch (draft.type) {
     case 'run.start':
       return {
-        parent:
-          draft.parent === null
-            ? null
-            : qualifyAggregateId('run', draft.parent.id),
+        parent: draft.parent && qualifyAggregateId('run', draft.parent.id),
         borrowsClaim: false,
         closes: false,
       };
@@ -519,10 +516,7 @@ export function edgesOf(draft: SessionEventDraft): AggregateEdges {
         ? { parent: null, borrowsClaim: false, closes: false }
         : {
             parent: null,
-            reparent:
-              draft.parent === null
-                ? null
-                : qualifyAggregateId('run', draft.parent),
+            reparent: draft.parent && qualifyAggregateId('run', draft.parent),
             borrowsClaim: true,
             closes: false,
           };

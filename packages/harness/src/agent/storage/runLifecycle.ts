@@ -86,18 +86,17 @@ export const configChange = Effect.fn('configChange')(function* (
 
 /** A resume's activation: its `run.activate` and the grants it ends, as one
  *  batch. */
-export const commitResumedActivation = (session: SessionHandle, runId: RunId) =>
-  session.approvals.activationRows(runId).pipe(
-    Effect.flatMap((grants) =>
-      session.log.transact([
-        {
-          type: 'run.activate',
-          aggregateId: qualifyAggregateId('run', runId),
-        },
-        ...grants,
-      ]),
-    ),
-  );
+export const commitResumedActivation = (session: SessionHandle, id: RunId) =>
+  session.approvals
+    .activationRows(id)
+    .pipe(
+      Effect.flatMap((grants) =>
+        session.log.transact([
+          { type: 'run.activate', aggregateId: qualifyAggregateId('run', id) },
+          ...grants,
+        ]),
+      ),
+    );
 
 interface RegisterRunOptions {
   /** The launching run: the whole parent edge, stamped on `run.start`. */

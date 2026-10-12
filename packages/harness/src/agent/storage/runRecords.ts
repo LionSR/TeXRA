@@ -66,23 +66,22 @@ export function readChildTurnState(
   session: SessionHandle,
   runId: RunId,
 ): Effect.Effect<ChildTurnState, DatabaseReadFailed> {
-  return session.log
-    .rows(qualifyAggregateId('run', runId), ['child.turn'])
-    .pipe(
-      Effect.map((rows) => {
-        let active: AttemptKey | null = null;
-        let lastCompleted: AttemptKey | null = null;
-        for (const row of rows) {
-          if (row.type !== 'child.turn') continue;
-          const turn = { key: row.attemptId, index: row.turnIndex };
-          if (row.phase !== 'settled') active = turn;
-          else if (active?.key === turn.key && active.index === turn.index)
-            active = null;
-          if (row.phase === 'settled') lastCompleted = turn;
-        }
-        return { active, lastCompleted };
-      }),
-    );
+  const id = qualifyAggregateId('run', runId);
+  return session.log.rows(id, ['child.turn']).pipe(
+    Effect.map((rows) => {
+      let active: AttemptKey | null = null;
+      let lastCompleted: AttemptKey | null = null;
+      for (const row of rows) {
+        if (row.type !== 'child.turn') continue;
+        const turn = { key: row.attemptId, index: row.turnIndex };
+        if (row.phase !== 'settled') active = turn;
+        else if (active?.key === turn.key && active.index === turn.index)
+          active = null;
+        if (row.phase === 'settled') lastCompleted = turn;
+      }
+      return { active, lastCompleted };
+    }),
+  );
 }
 
 /**
