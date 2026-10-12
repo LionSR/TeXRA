@@ -138,7 +138,7 @@ function createHandler(): SettingsViewMessageHandler {
     globalState,
     secrets,
     testRuntime(),
-    testDefaultSession(),
+    testDefaultSession().roots,
     {
       refreshCatalogs: mocks.refreshCatalogs,
       refreshApiKeyStatus: Effect.void,

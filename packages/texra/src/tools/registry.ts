@@ -13,7 +13,7 @@ import { HostCapabilities } from '@texra-ai/harness/plugins';
 import replacementEngine, {
   logReplacementDiagnostics,
 } from '@replacement/engine';
-import { isTexFile } from '@texra/common/files/fileTypeUtils';
+import { isTexFile } from '@texra/shared/latexFileTypes';
 import {
   DOCUMENTS_ACCEPTED_ARM,
   DOCUMENTS_OUTPUT_ARM,

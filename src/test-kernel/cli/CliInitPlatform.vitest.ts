@@ -93,8 +93,8 @@ vi.mock('@platform/defaults/nodeHost', () => ({
 // First-init dependencies: only exercised while no earlier init in the same
 // module instance installed its roots, so these stubs only drive the "first
 // init" tests below.
-vi.mock('@utils/files/externalRoots', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@utils/files/externalRoots')>()),
+vi.mock('@utils/system/nodeWorkspace', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@utils/system/nodeWorkspace')>()),
   canonicalizeWorkspacePath: vi.fn((workspacePath: string) => workspacePath),
 }));
 

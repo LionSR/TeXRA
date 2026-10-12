@@ -53,7 +53,12 @@ function createSession(activity: Activity = 'idle') {
   );
   return {
     // The fold's level stream, over the fake's own ref.
-    session: { view: { ref: view, changes: SubscriptionRef.changes(view) } },
+    session: {
+      view: {
+        current: () => SubscriptionRef.getUnsafe(view),
+        changes: SubscriptionRef.changes(view),
+      },
+    },
     setActivity(next: Activity) {
       testRuntime().runSync(SubscriptionRef.set(view, viewFor(next)));
     },

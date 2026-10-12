@@ -25,13 +25,15 @@
 // scope, so nothing is held without a scope to end it.
 export type { AgentPlatform, Composition } from './effect/sessions.js';
 export type { Plugin } from '@tools/plugins';
-export { Sessions } from './effect/sessions.js';
+export { Sessions, processLayer } from './effect/processLayer.js';
 export type {
   ApprovalHandler,
   OpenOptions,
   PendingRequest,
+  ResumeInput,
   Run,
   Session,
+  SessionHost,
   SessionView,
   StartInput,
   RunView,
@@ -42,10 +44,7 @@ export type { InlinePersona } from '@shared/schemas';
 // The process the hosts compose and the session owner it serves: one
 // `processLayer` for every TeXRA host and for `Sessions.layer` above.
 export { SessionOwner } from '@platform/processRuntime';
-export {
-  processLayer,
-  type ProcessLayerOptions,
-} from '@controllers/session/sessionLayer';
+export type { ProcessLayerOptions } from '@controllers/session/sessionLayer';
 // A project's `.env` over the process environment, for a host surface that
 // serves one project (the desktop's), as each run reads it.
 export { workspaceEnvironmentLayer } from '@platform/defaults/nodePlatform';
@@ -64,15 +63,24 @@ export {
   PluginsRefused,
   ResumeRefused,
   RunFailure,
-  SessionOptionsConflict,
   ToolsRefused,
+  TraceUnavailable,
 } from './effect/errors.js';
 export type { LaunchError } from './effect/errors.js';
 export {
   DatabaseOpenFailed,
   DatabaseReadFailed,
+  SessionOptionsConflict,
 } from '@shared/session/database';
 export type { SessionOpenError } from '@shared/session/database';
+
+// Follow-up delivery, error-presentation and prompt-escaping helpers hosts share.
+export {
+  describeFollowUpFailure,
+  presentFollowUpResult,
+} from '@agent/followUp/ToolUseFollowUp';
+export { hasErrorPresentationClaimed } from '@common/errors/sdkError/errorMetadata';
+export { escapeText } from '@shared/utils/xmlEscape';
 
 // The payloads, as the runtime defines them.
 export { aggregateId } from '@shared/schemas';

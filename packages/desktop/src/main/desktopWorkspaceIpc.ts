@@ -16,9 +16,9 @@ import { basename, dirname, join } from 'node:path';
 import { Data, Effect, FileSystem, type PlatformError } from 'effect';
 
 import { Rejected } from '@texra-ai/harness';
-import { onAppSignal } from '@eventBus/AppSignals';
 import { FILE_HANDLING_RULES } from '@texra/common/files/fileHandlingRules';
 import { getIncludedExtensions } from '@texra/common/files/fileTypeUtils';
+import { onAppSignal } from '@eventBus/AppSignals';
 import type { HostRequest } from '@texra/shared/session/hostRequest';
 import type { HostOutcome } from '@texra/shared/session/sessionFrames';
 import {

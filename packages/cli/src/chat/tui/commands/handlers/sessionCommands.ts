@@ -1,4 +1,4 @@
-import { Effect, Result, Stream, SubscriptionRef } from 'effect';
+import { Effect, Result, Stream } from 'effect';
 
 import type { SessionHandle } from '@agent/runtime';
 import { defaultShortcutModifierLabel } from '@cli/runtime/shortcutLabels';
@@ -29,7 +29,6 @@ import { readProspectiveUsageRoute } from '@model/computeModelOptions';
 import { runBypasses } from '@shared/approvalBypassKind';
 import { goalStateOf } from '@shared/plugins/goal';
 import { isLiveRun } from '@shared/session/sessionView';
-import type { SessionBackend } from '@texra/controllers/session/sessionBackend';
 import { interruptedTasks } from '@ui/copy/interruptedTasks';
 import { TASK_ACTIONS } from '@ui/copy/nestedRuns';
 import { formatResultCount } from '@utils/text/stringUtils';
@@ -43,6 +42,7 @@ import {
   type SlashCommandContext,
   type SlashCommandEffect,
 } from './slashContext';
+import type { Session } from '@texra-ai/harness';
 import type { RunId } from '@texra-ai/harness/schemas';
 
 export function showCliSlashCommandHelp(): void {
@@ -56,14 +56,14 @@ export function showCliSlashCommandHelp(): void {
 }
 
 /** Open the focused run's work plan from the view it is rendered from. */
-export function showCliWorkPlan(session: SessionHandle): void {
+export function showCliWorkPlan(): void {
   const runId = selectedRunIdSignal.get();
   if (!runId) {
     setTransientNotice('No focused agent.');
     return;
   }
   clearTransientNotice();
-  const run = session.view.run(runId);
+  const run = runViewOf(currentView(), runId);
   if (run && run.plan !== null) {
     openWorkPlanReader(runId);
   } else {
@@ -138,16 +138,14 @@ export const showCliSessionStatus = Effect.fn('showCliSessionStatus')(
 
 /** `/compact`: one runtime request on the chat's session; the outcome or
  *  refusal becomes a notice. */
-function requestCliSessionCompaction(
-  backend: SessionBackend,
-): Effect.Effect<void> {
+function requestCliSessionCompaction(runSession: Session): Effect.Effect<void> {
   return Effect.suspend(() => {
     const runId = selectedRunIdSignal.get();
     if (runId === undefined) {
       setTransientNotice('No agent to compact.');
       return Effect.void;
     }
-    return backend.request({ kind: 'run.compact', runId }).pipe(
+    return runSession.request({ kind: 'run.compact', runId }).pipe(
       Effect.match({
         onFailure: (error) => appendLocalRequestRefusal(error, runId),
         onSuccess: () => {
@@ -168,7 +166,7 @@ function requestCliSessionCompaction(
  * continues once what it needs is back.
  */
 export function resumeInterruptedTasks(
-  backend: SessionBackend,
+  runSession: Session,
 ): Effect.Effect<void> {
   return Effect.suspend(() => {
     const tasks = interruptedTasks(currentView());
@@ -185,8 +183,8 @@ export function resumeInterruptedTasks(
       tasks,
       // A refusal is the task's own line; the rest still resume.
       (task) =>
-        backend
-          .resume(task.runId)
+        runSession
+          .resume(task.runId, { interactive: true })
           .pipe(
             Effect.ignore({ log: 'Warn', message: `Resuming ${task.runId}` }),
           ),
@@ -198,7 +196,7 @@ export function resumeInterruptedTasks(
 /** `/rename <title>`: the focused task's own title, which a later model
  *  title does not replace. */
 function renameCliTask(
-  backend: SessionBackend,
+  runSession: Session,
   title: string,
 ): Effect.Effect<void> {
   return Effect.suspend(() => {
@@ -211,7 +209,7 @@ function renameCliTask(
       setTransientNotice('Usage: /rename <title>');
       return Effect.void;
     }
-    return backend
+    return runSession
       .request({ kind: 'run.rename', runId, title: title.trim() })
       .pipe(
         Effect.match({
@@ -239,7 +237,7 @@ function forkCliTask(context: SlashCommandContext): SlashCommandEffect {
     // Cut before this chat lets go of the source, so the fork reads it as
     // it stands now.
     const forked = yield* Effect.result(
-      context.backend.request({ kind: 'run.fork', runId }),
+      context.runSession.request({ kind: 'run.fork', runId }),
     );
     if (Result.isFailure(forked)) {
       appendLocalRequestRefusal(forked.failure, runId);
@@ -261,7 +259,7 @@ function forkCliTask(context: SlashCommandContext): SlashCommandEffect {
       );
       return;
     }
-    const ended = yield* SubscriptionRef.changes(context.backend.view.ref).pipe(
+    const ended = yield* context.runSession.view.changes.pipe(
       Stream.takeUntil((view) => {
         const run = view.runs.get(runId);
         return run === undefined || !isLiveRun(run);
@@ -288,7 +286,7 @@ function forkCliTask(context: SlashCommandContext): SlashCommandEffect {
 /** `/handoff <text>` and `/reset`: the focused task continues in a fresh
  *  context, from the text, or from the next message. */
 function resetCliTask(
-  backend: SessionBackend,
+  runSession: Session,
   handoff: string | null,
 ): Effect.Effect<void> {
   return Effect.suspend(() => {
@@ -297,7 +295,7 @@ function resetCliTask(
       setTransientNotice('No task to hand off.');
       return Effect.void;
     }
-    return backend.request({ kind: 'run.reset', runId, handoff }).pipe(
+    return runSession.request({ kind: 'run.reset', runId, handoff }).pipe(
       Effect.match({
         onFailure: (error) => appendLocalRequestRefusal(error, runId),
         onSuccess: () =>
@@ -316,7 +314,7 @@ function resetCliTask(
  *  The agent list (Tab) lists and focuses the task's agents; typing to a
  *  focused agent messages it. */
 export function sessionContributions(
-  backend: SessionBackend,
+  runSession: Session,
 ): SlashCommandContribution[] {
   return [
     {
@@ -327,7 +325,7 @@ export function sessionContributions(
           description: 'Request context compaction',
           category: 'session',
           echo: 'ifPersists',
-          handler: () => requestCliSessionCompaction(backend),
+          handler: () => requestCliSessionCompaction(runSession),
         },
         {
           name: 'fork',
@@ -345,7 +343,7 @@ export function sessionContributions(
           echo: 'ifPersists',
           handler: (remainder) => {
             const text = remainder.trim();
-            if (text !== '') return resetCliTask(backend, text);
+            if (text !== '') return resetCliTask(runSession, text);
             setTransientNotice(
               'Usage: /handoff <text the task continues from>',
             );
@@ -358,14 +356,14 @@ export function sessionContributions(
             'Clear what the model sees of this task; it answers your next message alone',
           category: 'session',
           echo: 'ifPersists',
-          handler: () => resetCliTask(backend, null),
+          handler: () => resetCliTask(runSession, null),
         },
         {
           name: 'rename',
           description: 'Give the focused task a title of your own',
           category: 'session',
           echo: 'ifPersists',
-          handler: (remainder) => renameCliTask(backend, remainder),
+          handler: (remainder) => renameCliTask(runSession, remainder),
         },
         {
           name: 'exit',

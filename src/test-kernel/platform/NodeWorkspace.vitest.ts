@@ -11,7 +11,7 @@ import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 import {
   canonicalizeWorkspacePath,
   relativeToRoot,
-} from '@utils/files/externalRoots';
+} from '@utils/system/nodeWorkspace';
 
 describe('Node workspace identity', () => {
   const tempDirs = useTempDirs();

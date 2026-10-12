@@ -17,7 +17,7 @@ import {
 
 import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 
-import { testRuntime } from '@test/support/testProcessRuntime';
+import { testRuntime, testSessionOf } from '@test/support/testProcessRuntime';
 
 import {
   createFakeHost,
@@ -296,6 +296,9 @@ describe('CLI history runtime', () => {
         globalState: host.roots.globalState,
         secrets: host.secrets,
         session: Effect.succeed(testDefaultSession()),
+        runSession: Effect.sync(() =>
+          testSessionOf(testDefaultSession(), { persistent: true }),
+        ),
         roots: host.roots,
         runtime: testRuntime(),
       }),

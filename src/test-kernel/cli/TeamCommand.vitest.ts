@@ -237,7 +237,11 @@ describe('CLI team run command', () => {
     vi.clearAllMocks();
     // The CLI init hands its caller the platform's stores; the commands
     // under test read `secrets`/`globalState` off what it returns.
-    const services = { ...installedHost().platform, runtime: testRuntime() };
+    const services = {
+      ...installedHost().platform,
+      config: installedHost().roots.config,
+      runtime: testRuntime(),
+    };
     cliInitPlatformMock.initCliPlatform.mockReturnValue(
       Effect.succeed(services),
     );

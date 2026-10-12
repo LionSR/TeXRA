@@ -3,7 +3,7 @@ import { Effect } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports
-import type { SessionHandle } from '@agent/runtime';
+import type { SessionHostInteractions } from '@agent/runtime';
 import { runExecuteCommand as agentRunExecuteCommand } from '@commands/agent/executeCommand';
 import { downloadArXivSource as latexDownloadArXivSource } from '@commands/latex/arXivCommands';
 import { confirmCleanBuild } from '@commands/housekeeping/cleanCommands';
@@ -29,7 +29,6 @@ import { showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
 import { withSessionFs } from '@platform/rootedFs';
 import type { ProgressViewProvider } from '@progressView/ProgressViewProvider';
 import type { SettingsViewProvider } from '@settingsView/SettingsViewProvider';
-import type { SessionBackend } from '@texra/controllers/session/sessionBackend';
 import { dispatchCommandFromRegistry } from '@texra/shared/commands/registry';
 
 // Local file imports
@@ -37,8 +36,9 @@ import {
   EXTENSION_COMMAND_HANDLERS,
   type ExtensionCommandActions,
 } from './extensionCommandHandlers';
-import type { ProcessRuntime } from '@texra-ai/harness';
+import type { ProcessRuntime, Session } from '@texra-ai/harness';
 import type { PlatformSecrets } from '@texra-ai/harness';
+import type { WorkspaceRoots } from '@texra-ai/harness';
 
 const externalOpener = new VscodeExternalOpener();
 
@@ -47,9 +47,10 @@ export function createExtensionCommandActions(
   settingsViewProvider: SettingsViewProvider,
   progressViewProvider: ProgressViewProvider,
   secrets: PlatformSecrets,
-  session: SessionHandle,
+  roots: WorkspaceRoots,
+  present: Pick<SessionHostInteractions, 'emit'>,
   /** Where this window's runs run. */
-  backend: SessionBackend,
+  runSession: Session,
 ): ExtensionCommandActions {
   return {
     showSettings: (tab) => settingsViewProvider.showSettingsView(tab),
@@ -62,37 +63,38 @@ export function createExtensionCommandActions(
       Effect.asVoid(
         launchSetupAssistant(
           secrets,
-          session,
-          backend,
-          (runId) => progressViewProvider.presentLaunchedRun(runId),
+          roots,
+          runSession,
+          (runId) =>
+            Effect.sync(() => progressViewProvider.presentLaunchedRun(runId)),
           progressViewProvider.showConnectModel(),
         ),
       ),
     openGettingStarted: () => sysOpenGettingStarted(context.extension.id),
     createSampleProject: () => sysCreateSampleProject(context.extensionPath),
-    downloadArXivSource: () => latexDownloadArXivSource(session),
+    downloadArXivSource: () => latexDownloadArXivSource(roots),
     openProgressViewInTab: () => progressViewProvider.popOutToEditor(),
     openDoc: (page) =>
       page
         ? externalOpener.openExternal(`https://texra.ai/guide/${page}.html`)
         : Effect.void,
-    indentCurrentTeX: () => latexIndentCurrentTeX(session),
-    fixCompilation: () => latexFixCompilation(session),
-    getTeXCount: () => latexGetTeXCount(session),
-    extractTikzFigures: () => latexExtractTikzFigures(session),
-    compileTikzFigures: () => latexCompileTikzFigures(session),
-    cloneOverleafProject: () => gitCloneOverleafProject(session, secrets),
-    removeApiKey: () => apiRemoveApiKey(session.roots, secrets),
+    indentCurrentTeX: () => latexIndentCurrentTeX(roots),
+    fixCompilation: () => latexFixCompilation(roots),
+    getTeXCount: () => latexGetTeXCount(roots),
+    extractTikzFigures: () => latexExtractTikzFigures(roots),
+    compileTikzFigures: () => latexCompileTikzFigures(roots),
+    cloneOverleafProject: () => gitCloneOverleafProject(secrets),
+    removeApiKey: () => apiRemoveApiKey(roots, secrets),
     showProgressView: (inPlace) =>
       progressViewProvider.showProgressView({ inPlace }),
-    setApiKey: (provider) => apiSetApiKey(session.roots, secrets, provider),
+    setApiKey: (provider) => apiSetApiKey(roots, secrets, provider),
     // Without a configuration the command is the composer's accelerator
     // (Cmd+Alt+E): its Send, in the view the user is in.
     execute: (input) =>
       input === undefined
         ? progressViewProvider.submit()
-        : agentRunExecuteCommand(input, session, backend, (runId) =>
-            progressViewProvider.presentLaunchedRun(runId),
+        : agentRunExecuteCommand(input, roots, present, runSession, (runId) =>
+            Effect.sync(() => progressViewProvider.presentLaunchedRun(runId)),
           ),
   };
 }
@@ -114,7 +116,7 @@ export function createExtensionCommandActions(
  * routing each invocation through `dispatchCommandFromRegistry` so the
  * dispatch path is identical to the desktop's. The registered callback is
  * the command's one execution boundary: it runs the handler's program over
- * the session's rooted filesystems and returns that promise, so VS Code
+ * the window's rooted filesystems and returns that promise, so VS Code
  * forwards the program's value and rejection to `executeCommand` callers
  * (the bug fixed by #3782 was a swallowed rejection).
  */
@@ -122,7 +124,7 @@ export function registerExtensionCommandRegistry(
   context: vscode.ExtensionContext,
   actions: ExtensionCommandActions,
   runtime: ProcessRuntime,
-  session: SessionHandle,
+  roots: WorkspaceRoots,
 ): void {
   for (const id of Object.keys(EXTENSION_COMMAND_HANDLERS) as ReadonlyArray<
     keyof typeof EXTENSION_COMMAND_HANDLERS
@@ -151,7 +153,7 @@ export function registerExtensionCommandRegistry(
         );
         return program === false
           ? false
-          : runtime.runPromise(withSessionFs(session.roots, program));
+          : runtime.runPromise(withSessionFs(roots, program));
       }),
     );
   }

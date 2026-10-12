@@ -6,7 +6,7 @@ import * as vscode from 'vscode';
 import { invokeLatexWorkshopBuild } from '@frontend/latex/openBuild';
 import { openFileInEditor } from '@frontend/vscode/vscodeEditor';
 import { waitForDiagnosticsChange } from '@frontend/vscode/vscodeDiagnostics';
-import { isTexFile } from '@texra/common/files/fileTypeUtils';
+import { isTexFile } from '@texra/shared/latexFileTypes';
 import { DiagnosticsReadFailed } from '@texra/tools/editorHost';
 
 const CHANNEL = 'LinterUtils';

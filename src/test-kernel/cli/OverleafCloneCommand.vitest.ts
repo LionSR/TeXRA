@@ -15,7 +15,7 @@ import { testRuntime } from '@test/support/testProcessRuntime';
 import { spyOnStreamWrite } from '@test/cli/fixtures/streamWriteSpy';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 import { scriptedSpawnerLayer } from '@test/support/childProcessTestLayer';
-import { canonicalizeWorkspacePath } from '@utils/files/externalRoots';
+import { canonicalizeWorkspacePath } from '@utils/system/nodeWorkspace';
 import { makeMachineGitEnv } from '@utils/system/gitEnv';
 import type * as ChildProcess from 'effect/process/ChildProcess';
 

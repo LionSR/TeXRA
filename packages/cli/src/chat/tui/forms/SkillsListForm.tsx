@@ -5,11 +5,11 @@
 import { Text } from 'ink';
 import { Effect } from 'effect';
 
+import { escapeText, type ProcessRuntime } from '@texra-ai/harness';
 import type { SelectItem } from '@cli/tui/ui/Select';
 import { readCliSkillsOffNotice } from '@cli/runtime/skills';
 import { readInstalledPluginLoad } from '@common/plugins/pluginTrust';
 import type { SettingsStores } from '@shared/config/settingsAccess';
-import { escapeText } from '@shared/utils/xmlEscape';
 import {
   formatRuntimeSkillActivation,
   loadEnabledRuntimeSkills,
@@ -23,7 +23,6 @@ import type {
 import { formatResultCount } from '@utils/text/stringUtils';
 
 import { AsyncListForm } from './_shared/ListForm';
-import type { ProcessRuntime } from '@texra-ai/harness';
 
 interface SkillsListFormProps {
   readonly availableRows?: number;

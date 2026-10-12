@@ -11,8 +11,8 @@ import {
   Rejected,
   ownKeyCredential,
   type LanguageModel,
+  type WorkspaceRoots,
 } from '@texra-ai/harness';
-import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { RouteRetries } from '@agent/runtime';
 import { withLogChannel } from '@logger/effectLog';
 import type { StorageFs } from '@platform/rootedFs';
@@ -44,7 +44,7 @@ type DraftRequest = Extract<
 type Recording = NonNullable<HostSnapshot['recording']>;
 
 interface Take {
-  readonly session: SessionHandle;
+  readonly roots: WorkspaceRoots;
   readonly port: string;
   readonly descriptor: Recording;
   /** Start's answer: the transcription, or why the take ended without one. */
@@ -65,17 +65,17 @@ export class HostDraftRequests {
 
   /** Bind one session's requests, recorder level, and disposal together. */
   attach(
-    session: SessionHandle,
+    roots: WorkspaceRoots,
     onRecording: (recording: Recording | null) => void,
   ) {
     const stopObserving = this.subscribe(onRecording);
     return {
       handle: (request: DraftRequest, port: string) =>
-        this.handle(session, request, port),
-      closePort: (port: string) => this.cancel(session, port),
+        this.handle(roots, request, port),
+      closePort: (port: string) => this.cancel(roots, port),
       dispose: () => {
         stopObserving();
-        this.cancel(session);
+        this.cancel(roots);
       },
     };
   }
@@ -87,11 +87,11 @@ export class HostDraftRequests {
     return () => this.listeners.delete(listener);
   }
 
-  /** Answer one draft request of `session`, arriving on `port`. The host
+  /** Answer one draft request of the session at `roots`, on `port`. The host
    *  that took the request runs this where it stands. */
   readonly handle = Effect.fn('HostDraftRequests.handle')(function* (
     this: HostDraftRequests,
-    session: SessionHandle,
+    roots: WorkspaceRoots,
     request: DraftRequest,
     port: string,
   ): Effect.fn.Return<
@@ -112,11 +112,7 @@ export class HostDraftRequests {
         // A host port takes no services, so the secret store the helper
         // model is resolved against is read here.
         const secrets = yield* Secrets;
-        const text = yield* polishTextWithAI(
-          request.text,
-          session,
-          secrets,
-        ).pipe(
+        const text = yield* polishTextWithAI(request.text, roots, secrets).pipe(
           Effect.mapError((error) => new Rejected({ reason: error.message })),
         );
         return { kind: 'text', text };
@@ -131,7 +127,7 @@ export class HostDraftRequests {
         };
       case 'record':
         if (request.action.kind === 'start') {
-          return yield* this.start(session, port, request.action.target);
+          return yield* this.start(roots, port, request.action.target);
         }
         this.stop();
         return { kind: 'done' };
@@ -139,11 +135,11 @@ export class HostDraftRequests {
   });
 
   /** Closing the originating session discards its take without transcription. */
-  cancel(session: SessionHandle, port?: string): void {
+  cancel(roots: WorkspaceRoots, port?: string): void {
     const take = this.take;
     if (
       !take ||
-      take.session !== session ||
+      take.roots !== roots ||
       (port !== undefined && take.port !== port)
     )
       return;
@@ -156,13 +152,13 @@ export class HostDraftRequests {
   /** Host shutdown: answer the current take as cancelled and interrupt its
    *  fiber, whose scope stops sox and joins its exit before this returns. */
   readonly shutdown: Effect.Effect<void> = Effect.suspend(() => {
-    if (this.take) this.cancel(this.take.session);
+    if (this.take) this.cancel(this.take.roots);
     return this.takeFiber ? Fiber.interrupt(this.takeFiber) : Effect.void;
   });
 
   private readonly start = Effect.fn('HostDraftRequests.start')(function* (
     this: HostDraftRequests,
-    session: SessionHandle,
+    roots: WorkspaceRoots,
     port: string,
     target: string,
   ) {
@@ -172,9 +168,9 @@ export class HostDraftRequests {
       });
     }
     const take: Take = {
-      session,
+      roots,
       port,
-      descriptor: { session: session.roots.storage, target },
+      descriptor: { session: roots.storage, target },
       result: yield* Deferred.make<HostOutcome, Rejected | Cancelled>(),
       settled: yield* Deferred.make<void>(),
       stopping: false,
@@ -210,7 +206,7 @@ export class HostDraftRequests {
       // session storage, so its roots travel with the call.
       const capturedPath = yield* Effect.scoped(
         Effect.gen(function* () {
-          const recorder = yield* startRecording(take.session.roots).pipe(
+          const recorder = yield* startRecording(take.roots).pipe(
             Effect.mapError((error) => new Rejected({ reason: error.message })),
           );
           // sox exiting before Stop or Cancel ends the take, a clean exit
@@ -252,7 +248,7 @@ export class HostDraftRequests {
       // transcription as data.
       const postStop = Effect.gen(function* () {
         const credential = yield* ownKeyCredential(
-          { ...take.session.roots, secrets },
+          { ...take.roots, secrets },
           MODEL_CONFIGS['openai/gpt-4o-2024-11-20'],
           'openai',
         ).pipe(
@@ -265,7 +261,7 @@ export class HostDraftRequests {
         // than by an ambient read of the calling fiber's roots.
         yield* sweepStaleFiles(
           yield* FileSystem.FileSystem,
-          recordingsDir(take.session.roots),
+          recordingsDir(take.roots),
         );
         return { kind: 'text', text } satisfies HostOutcome;
       });

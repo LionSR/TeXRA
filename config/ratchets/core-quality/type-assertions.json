@@ -29,7 +29,7 @@
   "packages/harness/src/tools/jsonRpc.ts": 2,
   "packages/harness/src/tools/plugins.ts": 2,
   "packages/harness/src/tools/structuredOutput.ts": 2,
-  "packages/harness/src/tools/web/WebFetchTool.ts": 5,
+  "packages/harness/src/tools/web/WebFetchTool.ts": 1,
   "packages/llm/src/api/openaiResponses.ts": 1,
   "packages/llm/src/api/openaiResponsesRequest.ts": 1,
   "packages/llm/src/api/openaiResponsesWebSocket.ts": 2,

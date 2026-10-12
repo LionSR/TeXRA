@@ -2,7 +2,7 @@
 import * as path from 'node:path';
 
 // Local imports
-import { relativeToRoot } from '@utils/files/externalRoots';
+import { relativeToRoot } from '@utils/system/nodeWorkspace';
 import { normalizeFilePath } from '@utils/core';
 import { escapesRoot } from '@utils/core/pathCore';
 

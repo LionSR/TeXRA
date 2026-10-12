@@ -12,7 +12,7 @@ import {
 import { type ProcessRuntime, withProcessServices } from '@texra-ai/harness';
 import { withSessionFs } from '@platform/rootedFs';
 import type { FileLocation } from '@shared/schemas';
-import { isLatexFile } from '@texra/common/files/fileTypeUtils';
+import { isLatexFile } from '@texra/shared/latexFileTypes';
 import { ExternalOpenFailed, type MessageHost } from '@texra/hosts/uiHosts';
 import type { BuildDisplayFn } from '@texra/tools/latex/latexPreview';
 import { createExternalLocation } from '@utils/files/fileLocation';

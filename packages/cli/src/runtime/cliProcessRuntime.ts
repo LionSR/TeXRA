@@ -32,14 +32,17 @@
  * scoped connection. Platform-less entries provide refusing services instead.
  * initCliPlatform reads that AppState and opens only the workspace scope.
  */
-import { Effect, Layer, ManagedRuntime, Stream } from 'effect';
+import { Context, Effect, Layer, ManagedRuntime, Stream } from 'effect';
 
 import {
   AgentDirectories,
   AppState,
   processLayer,
+  Sessions,
   StateWriteFailed,
   type ProcessRuntime,
+  type ProcessServices,
+  type SessionOwner,
   type StateStore,
   UNAVAILABLE_LANGUAGE_MODEL_PORT,
   withForkFailureReporting,
@@ -163,7 +166,13 @@ export const NO_PLATFORM_INSTALL: CliProcessRuntimeInstall = Object.freeze({
 /** The runtime this module built, with the editor registry its plugins
  *  read, until its disposal starts. */
 let installed:
-  | { readonly runtime: ProcessRuntime; readonly editors: EditorRegistry }
+  | {
+      readonly runtime: ManagedRuntime.ManagedRuntime<
+        ProcessServices | SessionOwner | Sessions,
+        never
+      >;
+      readonly editors: EditorRegistry;
+    }
   | undefined;
 
 /**
@@ -221,7 +230,7 @@ export function installCliProcessRuntime(
         }),
     ),
   );
-  const runtime: ProcessRuntime = withForkFailureReporting(
+  const runtime = withForkFailureReporting(
     ManagedRuntime.make(
       processLayer({
         globalStorage: globalStoragePath,
@@ -268,6 +277,16 @@ export function installCliProcessRuntime(
  *  its disposal starts. */
 export const installedEditorHost = (): EditorRegistry | undefined =>
   installed?.editors;
+
+/** The sessions of the runtime installed now: the `Session` every entry
+ *  that drives a project's runs takes (`initCliPlatform`'s, `texra
+ *  serve`'s); a defect before an install or after its disposal starts. */
+export const installedSessions: Effect.Effect<Sessions['Service']> =
+  Effect.suspend(() =>
+    installed === undefined
+      ? Effect.die(new Error('No TeXRA process runtime is installed.'))
+      : Effect.map(installed.runtime.contextEffect, Context.get(Sessions)),
+  );
 
 /**
  * Dispose this process's runtime, if one is installed: the CLI's own end of

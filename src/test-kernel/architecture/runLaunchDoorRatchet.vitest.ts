@@ -47,6 +47,9 @@ const DETACHED_FORK_ALLOWLIST: Readonly<Record<string, number>> = {
   // `resumeRun`, whose run starts at the door) and the view drain a `Run`
   // owns.
   'packages/harness/src/effect/runHandle.ts': 2,
+  // A host's approval prompt, in its handler's own set so a newer host's
+  // attach withdraws it: it decides a request and starts no run.
+  'packages/harness/src/effect/requestAnswerer.ts': 1,
 };
 
 /**

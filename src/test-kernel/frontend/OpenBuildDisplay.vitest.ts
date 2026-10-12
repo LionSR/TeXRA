@@ -3,7 +3,6 @@ import { Effect, Fiber, FileSystem, type Path } from 'effect';
 import { TestClock } from 'effect/testing';
 import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 
-import type { SessionHandle } from '@agent/runtime';
 import {
   openBuildDisplayIfTex,
   prepareBuildDisplay,
@@ -17,6 +16,7 @@ import {
   LATEX_VIEWER_OPEN_DELAY_MS,
   LATEX_VIEWER_REFRESH_DELAY_MS,
 } from '@texra/shared/constants/latexTiming';
+import type { WorkspaceRoots } from '@texra-ai/harness';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 const mocks = vi.hoisted(() => ({
@@ -43,7 +43,7 @@ const mocks = vi.hoisted(() => ({
   ),
 }));
 
-vi.mock('@texra/common/files/fileTypeUtils', () => ({
+vi.mock('@texra/shared/latexFileTypes', () => ({
   isLatexFile: mocks.isLatexFile,
 }));
 
@@ -59,8 +59,8 @@ vi.mock('@platform/rootedFs', () => ({
   withSessionFs: (_roots: unknown, program: unknown) => program,
 }));
 
-/** The session the host would thread in; only its roots reach the compile. */
-const session = { roots: { config: {} } } as unknown as SessionHandle;
+/** The roots the host would thread in. */
+const roots = { config: {} } as unknown as WorkspaceRoots;
 
 /**
  * The host entry's provision for the programs under test: the real
@@ -143,7 +143,7 @@ describe('openBuildDisplayIfTex viewer delivery', () => {
       });
 
       const delivery = yield* Effect.forkChild(
-        withHostFs(openBuildDisplayIfTex(session, workspaceTex)).pipe(
+        withHostFs(openBuildDisplayIfTex(roots, workspaceTex)).pipe(
           Effect.provide(effectDiagnosticsLayer('Trace')),
         ),
         { startImmediately: true },
@@ -167,7 +167,7 @@ describe('openBuildDisplayIfTex viewer delivery', () => {
       Effect.gen(function* () {
         let settled = false;
         const delivery = yield* Effect.forkChild(
-          withHostFs(openBuildDisplayIfTex(session, workspaceTex)),
+          withHostFs(openBuildDisplayIfTex(roots, workspaceTex)),
           { startImmediately: true },
         );
         delivery.addObserver(() => {
@@ -201,7 +201,7 @@ describe('openBuildDisplayIfTex viewer delivery', () => {
         });
 
         const delivery = yield* Effect.forkChild(
-          withHostFs(openBuildDisplayIfTex(session, workspaceTex)).pipe(
+          withHostFs(openBuildDisplayIfTex(roots, workspaceTex)).pipe(
             Effect.provide(effectDiagnosticsLayer('Trace')),
           ),
           { startImmediately: true },
@@ -231,7 +231,7 @@ describe('openBuildDisplayIfTex viewer delivery', () => {
         });
 
         const delivery = yield* Effect.forkChild(
-          withHostFs(openBuildDisplayIfTex(session, workspaceTex)).pipe(
+          withHostFs(openBuildDisplayIfTex(roots, workspaceTex)).pipe(
             Effect.provide(effectDiagnosticsLayer('Trace')),
           ),
           { startImmediately: true },
@@ -261,7 +261,7 @@ describe('openBuildDisplayIfTex viewer delivery', () => {
         });
 
         const delivery = yield* Effect.forkChild(
-          withHostFs(openBuildDisplayIfTex(session, workspaceTex)).pipe(
+          withHostFs(openBuildDisplayIfTex(roots, workspaceTex)).pipe(
             Effect.provide(effectDiagnosticsLayer('Trace')),
           ),
           { startImmediately: true },
@@ -285,7 +285,7 @@ describe('openBuildDisplayIfTex viewer delivery', () => {
         mocks.openTextDocument.mockRejectedValueOnce(new Error('open failed'));
 
         const error = yield* Effect.flip(
-          withHostFs(prepareBuildDisplay(session, workspaceTex)),
+          withHostFs(prepareBuildDisplay(roots, workspaceTex)),
         );
         expect(error).toBeInstanceOf(Error);
         expect(error.message).toContain('open failed');
@@ -306,7 +306,7 @@ describe('openBuildDisplayIfTex viewer delivery', () => {
       };
 
       const ready = yield* withHostFs(
-        prepareBuildDisplay(session, externalTex, { scheduleViewer: false }),
+        prepareBuildDisplay(roots, externalTex, { scheduleViewer: false }),
       );
       expect(ready).toBe(false);
       yield* TestClock.adjust(LATEX_VIEWER_OPEN_DELAY_MS);
@@ -347,11 +347,11 @@ describe('openBuildDisplayIfTex viewer delivery', () => {
         };
 
         yield* withHostFs(
-          prepareBuildDisplay(session, first, { scheduleViewer: false }),
+          prepareBuildDisplay(roots, first, { scheduleViewer: false }),
         );
         const error = yield* Effect.flip(
           withHostFs(
-            prepareBuildDisplay(session, second, { scheduleViewer: false }),
+            prepareBuildDisplay(roots, second, { scheduleViewer: false }),
           ),
         );
         expect(error).toBeInstanceOf(Error);
@@ -398,7 +398,7 @@ describe('openBuildDisplayIfTex viewer delivery', () => {
         // multi-result latexdiff loop does (#10553).
         for (const diff of diffs) {
           yield* withHostFs(
-            prepareBuildDisplay(session, diff, {
+            prepareBuildDisplay(roots, diff, {
               preserveFocus: true,
               scheduleViewer: false,
             }),

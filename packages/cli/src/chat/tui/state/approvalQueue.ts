@@ -19,13 +19,12 @@ import type {
   RequestDecision,
   RunId,
 } from '@shared/schemas';
-import { attentionOf, type SessionView } from '@shared/session/sessionView';
+import { attentionOf } from '@shared/session/sessionView';
 import {
   approvalDecisionArms,
   type SurfaceDecision,
 } from '@texra/shared/session/surfaceDecision';
 import type { HostRequest } from '@texra/shared/session/hostRequest';
-import type { SessionBackend } from '@texra/controllers/session/sessionBackend';
 import { assertNever } from '@utils/core';
 
 import { registerCliStateResetHook, sessionRunIds } from './cliState';
@@ -35,7 +34,8 @@ import {
   appendLocalRequestRefusal,
   reportRequestDefect,
 } from './transcript';
-import type { ProcessRuntime } from '@texra-ai/harness';
+import type { SessionView } from '@texra-ai/harness';
+import type { ProcessRuntime, Session } from '@texra-ai/harness';
 import type { RuntimeRequest } from '@texra-ai/harness';
 
 interface TuiApprovalAdornments {
@@ -79,7 +79,7 @@ export type ToolEditApprovalPayload = Extract<
 export type RetryApprovalPayload = Extract<ApprovalPayload, { kind: 'retry' }>;
 
 /** Where a decision lands: the chat's session, here or in the service. */
-export type SessionRequests = Pick<SessionBackend, 'request'>;
+export type SessionRequests = Pick<Session, 'request'>;
 
 export interface PendingApproval {
   readonly payload: ApprovalPayload;

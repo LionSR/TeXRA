@@ -508,9 +508,11 @@ texra tasks stop <id>                              # stop it; it can be resumed 
 `list` marks the tasks the service is running now with `*`. Any number of
 terminals can attach to the same task at once and all of them print the
 same transcript; Ctrl-C detaches one terminal and leaves the task running.
-An id may be shortened to any prefix only one task has. `tasks start` applies its
-approval policy (`--approval-policy`, `--no-input`, or your config) to that
-project in the service before the task starts. A service task that asks
+An id may be shortened to any prefix only one task has. `tasks start` runs
+the task under the project's approval policy; an approval policy it asks for
+(`--approval-policy`, `--no-input`, `TEXRA_APPROVAL_POLICY`) applies to that
+task alone: it narrows the project's, and `yolo` auto-approves the task. It
+never changes the project's policy. A service task that asks
 for approval waits for an answer: `texra tasks attach` only watches, so
 answer it from the chat with `/tasks`. With
 `--output-format ndjson`, `attach` writes the task's own rows (not its

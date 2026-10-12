@@ -16,7 +16,7 @@ import {
 } from '@platform/defaults/workspaceStorage';
 import { UNAVAILABLE_LANGUAGE_MODEL_PORT } from '@platform/languageModel';
 import { mcpConfigPathOf } from '@tools/mcp/mcpConfig';
-import { canonicalizeWorkspacePath } from '@utils/files/externalRoots';
+import { canonicalizeWorkspacePath } from '@utils/system/nodeWorkspace';
 
 import type { AgentPlatform } from './index.js';
 
@@ -27,7 +27,7 @@ export { createNodeWorkspaceRoots } from '@platform/defaults/nodeHost';
 export {
   canonicalizeWorkspacePath,
   relativeToRoot,
-} from '@utils/files/externalRoots';
+} from '@utils/system/nodeWorkspace';
 export {
   resolveGlobalStoragePath,
   resolveWorkspaceStoragePath,

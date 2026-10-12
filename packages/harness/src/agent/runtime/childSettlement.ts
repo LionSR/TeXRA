@@ -31,11 +31,7 @@ import {
   type DeliveredResult,
   type RunId,
 } from '@shared/schemas';
-import {
-  DatabaseNotOwner,
-  DatabaseReadFailed,
-  DatabaseRowCorrupt,
-} from '@shared/session/database';
+import { DatabaseNotOwner, DatabaseReadFailed } from '@shared/session/database';
 import type { QueuedFollowUp } from '@shared/session/runRows';
 import type { RunInputDraft } from '@shared/session/runStateFold';
 import type { CoWrite } from '@shared/session/sessionEvents';
@@ -96,7 +92,7 @@ export type TransactionPart = Effect.Effect<
  * prompt's, so a re-execution after a crash is judged a replay, else the
  * `child.turn` key (run, attempt, turn index), distinct across attempts.
  */
-export function settlementOf(params: {
+export function childSettlementOf(params: {
   readonly runId: RunId;
   readonly turn: AttemptKey;
   readonly message: string;
@@ -170,8 +166,7 @@ export const parentAdmission = (
     Effect.catchIf(
       (error) =>
         (error instanceof DatabaseNotOwner && error.closed) ||
-        error instanceof DatabaseReadFailed ||
-        error instanceof DatabaseRowCorrupt,
+        error instanceof DatabaseReadFailed,
       (error) =>
         Effect.succeed({
           rows: [],

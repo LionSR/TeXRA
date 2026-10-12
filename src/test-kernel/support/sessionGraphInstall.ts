@@ -1,9 +1,10 @@
-import { Effect, ManagedRuntime } from 'effect';
+import { Context, Effect, ManagedRuntime } from 'effect';
 
 import {
   processLayer,
+  Sessions,
   type ProcessLayerOptions,
-} from '@controllers/session/sessionLayer';
+} from '@texra-ai/harness';
 import { AppState, AgentDirectories } from '@platform/interfaces';
 import { withForkFailureReporting } from '@platform/processRuntime';
 import type { StateSettingEntry } from '@shared/state/stateSettings';
@@ -107,7 +108,10 @@ export async function installTestSessionGraph(
       }),
     ),
   );
-  initTestProcessRuntime(runtime);
+  initTestProcessRuntime(
+    runtime,
+    Effect.map(runtime.contextEffect, Context.get(Sessions)),
+  );
   // Built here, once, as a composition root's first `runPromise` builds it:
   // opening the global database reads the mount table through the spawner,
   // which is asynchronous, so the synchronous session opens the suites run

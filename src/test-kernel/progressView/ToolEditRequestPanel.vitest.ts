@@ -75,7 +75,7 @@ describe('tool-edit-request-panel', () => {
 
   it('dispatches the primary and menu diff actions', async () => {
     const element = await mountPanel(
-      createPermission({ path: '/workspace/example.tex' }),
+      createPermission({ path: '/workspace/main.tex' }),
     );
     const actions = recordPermissionActions(element);
 

@@ -2,11 +2,12 @@
 import * as path from 'node:path';
 
 // Third-party imports
-import { Effect, FileSystem, PlatformError } from 'effect';
+import { Effect, FileSystem, Path, PlatformError } from 'effect';
 
 // Local imports
 import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
 import { withLogChannel } from '@logger/effectLog';
+import { StorageFs, WorkspaceFs } from '@platform/rootedFs';
 import {
   RunIdSchema,
   type RunId,
@@ -18,6 +19,7 @@ import { getPathSegments, isPathWithin } from '@utils/core/pathCore';
 
 // Local file imports
 import { createRunStorageLocation } from './fileLocation';
+import { copyDereferenced } from './fsDurability';
 import { entryExists, entryTypeIn } from './fsEntryExists';
 
 export const CHANNEL = 'runStorage';
@@ -29,7 +31,7 @@ export const CHANNEL = 'runStorage';
  */
 
 /** A storage-relative (POSIX) path under the runs directory. */
-export function resolveRunStoragePath(...segments: string[]): string {
+function resolveRunStoragePath(...segments: string[]): string {
   return path.posix.join(WORKSPACE_STORAGE_LAYOUT.runs, ...segments);
 }
 
@@ -308,3 +310,38 @@ export function shouldSkipRelocation(relativePath: string): boolean {
   const segments = getPathSegments(relativePath);
   return segments.length > 0 && IGNORED_WORKSPACE_ROOTS.has(segments[0]);
 }
+
+/**
+ * Copy a stopped run's directory to the workspace path `to`, or remove it;
+ * `false` when the run has no directory. Symlinks are dereferenced so a copy
+ * stands alone, and a copy onto an existing folder fails rather than merging
+ * into it.
+ */
+export const copyOrRemoveRunDir = Effect.fn('runStorage.copyOrRemoveRunDir')(
+  function* (
+    runId: RunId,
+    files:
+      { readonly op: 'copy'; readonly to: string } | { readonly op: 'remove' },
+  ) {
+    const storageFs = yield* StorageFs;
+    const runDir = resolveRunStoragePath(runId);
+    if (!(yield* storageFs.exists(runDir))) {
+      yield* Effect.logWarning(`Run directory not found for run ${runId}`);
+      return false;
+    }
+    if (files.op === 'remove') {
+      yield* Effect.logInfo(`Removing the run directory ${runDir}`);
+      yield* storageFs.remove(runDir, { recursive: true, force: true });
+      return true;
+    }
+    const workspaceFs = yield* WorkspaceFs;
+    const source = yield* storageFs.resolve(runDir);
+    const destination = yield* workspaceFs.resolve(files.to);
+    yield* workspaceFs.makeDirectory((yield* Path.Path).dirname(files.to), {
+      recursive: true,
+    });
+    yield* copyDereferenced(source, destination);
+    yield* Effect.logInfo(`Copied ${source} -> ${destination}`);
+    return true;
+  },
+);

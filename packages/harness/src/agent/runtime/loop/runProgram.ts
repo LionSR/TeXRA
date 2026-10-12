@@ -163,8 +163,11 @@ export const stoppedBy =
 /**
  * A trace stage whose verdict is the body's own exit. acquireUseRelease, not
  * a Scope: a Scope's finalizer sees `Exit<unknown, unknown>` and cannot read
- * the body's value, which is why both loops used to close their stage from a
- * mutable verdict instead.
+ * the body's value, which is why a stage closed from a mutable verdict was the
+ * older shape. This serves the run loop, whose stage closes with its body;
+ * `childRunLoop` deliberately keeps a mutable `stage` field, because a detached
+ * or process child's stage outlives the body and closes on the settlement a
+ * surviving fiber delivers, so it cannot be expressed as acquireUseRelease.
  */
 export const stagedBy =
   <A>(open: () => StageHandle, outcomeOf: (value: A) => RunOutcome) =>
