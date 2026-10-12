@@ -101,9 +101,12 @@ added indirection tiers.
 1. **Identify the areas.** Re-confirmed at their new homes:
    - Agent core: `packages/harness/src/agent/core/` (`definition/`, `state/`,
      `tools/`); run program `@agent/runtime/loop/toolUse.ts` over the run
-     history; the loop's model call is `@agent/runtime/ModelInvoker.ts` (with
-     `helperModel.ts` and `run/compaction.ts` invoking the bound `Model`
-     directly — deliberate exceptions, not a second handler).
+     history; the loop's turn call is `ModelInvoker.invoke`
+     (`@agent/runtime/ModelInvoker.ts`), and a compaction summary reuses that
+     same invoker's `call` while a helper call uses the shared `callModel` seam
+     (`run/modelCall.ts`, tagged `ModelInvoker.call`) — reuse of the one
+     model-call path, not a second handler, and not the bound `Model` reached
+     directly.
    - Model handler: provider calls are reached only through the `packages/llm`
      (`@texra-ai/llm`) `Model`, bound by the one
      `packages/harness/src/agent/runtime/modelAccess/` service (was
