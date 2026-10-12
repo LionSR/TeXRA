@@ -262,12 +262,12 @@ function effectOf(asked: HookAsked, output: HookOutput) {
         post.decision === 'block' ? post.reason : undefined,
         hso?.additionalContext,
       ]);
-      if (hso?.updatedToolOutput !== undefined)
-        ignored.push('updatedToolOutput');
-      if (hso?.updatedMCPToolOutput !== undefined)
-        ignored.push('updatedMCPToolOutput');
-      if (hso?.classifierContext !== undefined)
-        ignored.push('classifierContext');
+      for (const field of [
+        'updatedToolOutput',
+        'updatedMCPToolOutput',
+        'classifierContext',
+      ] as const)
+        if (hso?.[field] !== undefined) ignored.push(field);
       break;
     }
     case 'UserPromptSubmit': {
@@ -275,10 +275,9 @@ function effectOf(asked: HookAsked, output: HookOutput) {
       context = joined([prompt.hookSpecificOutput?.additionalContext]);
       if (prompt.decision === 'block')
         ignored.push('decision: "block" (blocking a prompt)');
-      if (prompt.hookSpecificOutput?.sessionTitle !== undefined)
-        ignored.push('sessionTitle');
-      if (prompt.hookSpecificOutput?.suppressOriginalPrompt !== undefined)
-        ignored.push('suppressOriginalPrompt');
+      for (const field of ['sessionTitle', 'suppressOriginalPrompt'] as const)
+        if (prompt.hookSpecificOutput?.[field] !== undefined)
+          ignored.push(field);
       break;
     }
     case 'SessionStart': {
