@@ -195,13 +195,18 @@ export interface ChatSessionController {
    */
   submit(
     line: string,
-    mediaFiles?: readonly string[],
-    images?: readonly PastedImageEntry[],
+    attachments?: ChatAttachments,
   ): Effect.Effect<void, Error, ProcessServices>;
   /** Reserve a skill activation for the next submitted message. */
   activateSkill(selection: SkillActivation): void;
   /** Drop every reserved skill activation. */
   clearPendingSkills(): void;
+}
+
+/** What rides along with a submitted line: files and pasted images. */
+interface ChatAttachments {
+  readonly mediaFiles?: readonly string[];
+  readonly images?: readonly PastedImageEntry[];
 }
 
 export interface ChatSessionControllerInit {
@@ -949,8 +954,7 @@ export function createChatSessionController(
 
   const submitChatMessage = Effect.fn('submitChatMessage')(function* (
     line: string,
-    mediaFiles?: readonly string[],
-    images?: readonly PastedImageEntry[],
+    { mediaFiles, images }: ChatAttachments = {},
   ) {
     const focusedChild = focusedChildTarget();
     if (focusedChild.kind === 'reject') {
@@ -1147,11 +1151,10 @@ export function createChatSessionController(
 
   const submit = Effect.fn('chatSubmit')(function* (
     line: string,
-    mediaFiles?: readonly string[],
-    images?: readonly PastedImageEntry[],
+    attachments?: ChatAttachments,
   ) {
     if (yield* handleTuiSlashCommand(line, getSlashCommandContext())) return;
-    yield* submitChatMessage(line, mediaFiles, images);
+    yield* submitChatMessage(line, attachments);
   });
 
   const activateSkill = (selection: SkillActivation): void => {
