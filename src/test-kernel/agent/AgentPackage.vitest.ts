@@ -417,7 +417,7 @@ describe('agent package sessions', () => {
     }),
   );
 
-  it.live(
+  it.effect(
     "installs the embedder's log sink for the layer's scope and restores it on release",
     () =>
       Effect.gen(function* () {
