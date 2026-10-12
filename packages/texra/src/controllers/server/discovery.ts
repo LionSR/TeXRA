@@ -10,13 +10,13 @@
  * and a hash of the root. Windows has no service yet: a named pipe
  * there would take the default ACL, which is not the user's alone.
  */
-import { createHash } from 'node:crypto';
 import { lstatSync } from 'node:fs';
 import * as path from 'node:path';
 
 import { Effect, FileSystem, PlatformError } from 'effect';
 import { z } from 'zod';
 
+import { truncatedHexId } from '@utils/core/idHash';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { absentReason } from '@utils/files/fsEntryExists';
 
@@ -57,10 +57,7 @@ export function servicePaths(storageRoot: string): ServicePaths {
   const runDirectory = path.join(storageRoot, 'run');
   const record = path.join(runDirectory, 'serve.json');
   const log = path.join(runDirectory, 'serve.log');
-  const tag = createHash('sha256')
-    .update(path.resolve(storageRoot))
-    .digest('hex')
-    .slice(0, 16);
+  const tag = truncatedHexId(path.resolve(storageRoot), 16);
   // Sized for the longest pid a socket can name.
   const local = path.join(runDirectory, socketName(4_294_967_295));
   if (Buffer.byteLength(local) <= MAX_UNIX_SOCKET_PATH) {
