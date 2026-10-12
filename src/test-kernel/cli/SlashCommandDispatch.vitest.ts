@@ -218,9 +218,10 @@ function createContext(
     initialModel: 'deepseek/deepseek-v4-flash',
     requestInputExit: vi.fn(),
     getApprovalPolicy: () => approvalPolicy,
-    setApprovalPolicy: (policy) => {
-      approvalPolicy = policy;
-    },
+    setApprovalPolicy: (policy) =>
+      Effect.sync(() => {
+        approvalPolicy = policy;
+      }),
     resetSession: vi.fn(),
     resumeRun: (_id: RunId) => Effect.void,
     ...overrides,

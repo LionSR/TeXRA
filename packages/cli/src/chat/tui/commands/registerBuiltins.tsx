@@ -119,8 +119,9 @@ export function registerBuiltinSlashCommands(options: {
   onAccountChanged?: () => Effect.Effect<void, never, ProcessServices>;
   canSelectAgent?: () => boolean;
   getApprovalPolicy?: () => TexraApprovalPolicy;
-  /** `/approval`'s choice: the chat's own launch policy. */
-  onApprovalPolicySelect?: (policy: TexraApprovalPolicy) => void;
+  /** `/approval`'s choice: the chat's own launch policy, settled once the
+   *  chat's run has recorded it. */
+  onApprovalPolicySelect?: (policy: TexraApprovalPolicy) => Effect.Effect<void>;
   /** The project's policy `/config` wrote. Stays a plain callback: the
    *  shared write path takes it as a void-returning port. */
   onProjectApprovalPolicyChanged?: (policy: TexraApprovalPolicy) => void;
@@ -246,9 +247,7 @@ export function registerBuiltinSlashCommands(options: {
               case 'ask':
               case 'never':
               case 'yolo':
-                return Effect.sync(() =>
-                  options.onApprovalPolicySelect?.(value),
-                );
+                return options.onApprovalPolicySelect?.(value) ?? Effect.void;
               default:
                 return value satisfies never;
             }
@@ -502,9 +501,7 @@ export function registerBuiltinSlashCommands(options: {
           category: 'configuration',
           echo: 'ifPersists',
           handler: (remainder, context) =>
-            Effect.sync(() =>
-              applyCliApprovalPolicySelection(remainder, context),
-            ),
+            applyCliApprovalPolicySelection(remainder, context),
           formRemainders: ['status'],
           formComponent: ApprovalPolicyFormAdapter,
         },

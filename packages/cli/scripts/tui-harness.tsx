@@ -1682,7 +1682,8 @@ registerBuiltinSlashCommands({
         : undefined,
     ),
   getApprovalPolicy: harnessApprovalPolicy,
-  onApprovalPolicySelect: setHarnessApprovalPolicy,
+  onApprovalPolicySelect: (policy) =>
+    Effect.sync(() => setHarnessApprovalPolicy(policy)),
   onProjectApprovalPolicyChanged: (policy) =>
     appendHarnessAssistantTranscript(
       `Project approval policy: ${formatTexraApprovalPolicy(policy)}`,

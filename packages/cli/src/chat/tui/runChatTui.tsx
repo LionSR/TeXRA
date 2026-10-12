@@ -375,12 +375,14 @@ export async function runChat(
   // Auto-approve turns them off, so the next round inherits them cleared;
   // a stricter policy lowers a live run's limit at once, even below the
   // project's.
-  const setApprovalPolicy = (policy: TexraApprovalPolicy): void => {
+  const setApprovalPolicy = (
+    policy: TexraApprovalPolicy,
+  ): Effect.Effect<void> => {
     const leaving = getApprovalPolicy() === 'yolo' && policy !== 'yolo';
     chatPolicy = policy;
     patchSessionMeta({ approvalPolicy: getApprovalPolicy() });
     const run = runViewOf(currentView(), session.runId ?? rootRunId.get());
-    if (run === undefined) return;
+    if (run === undefined) return Effect.void;
     const bypass = (enabled: boolean): PolicyChange => ({
       field: 'bypass',
       runId: run.id,
@@ -397,19 +399,19 @@ export async function runChat(
         ? [{ field: 'limit' as const, runId: run.id, limit: policy }]
         : []),
     ];
-    runtime.runFork(
-      Effect.forEach(
-        changes,
-        (change) =>
-          runSession
-            .request({ kind: 'policy.set', change })
-            .pipe(
-              Effect.catch((error) =>
-                Effect.sync(() => appendLocalRequestRefusal(error, run.id)),
-              ),
+    // Durable before the selection settles, so nothing the chat sends next
+    // runs under, or inherits, the grant just left.
+    return Effect.forEach(
+      changes,
+      (change) =>
+        runSession
+          .request({ kind: 'policy.set', change })
+          .pipe(
+            Effect.catch((error) =>
+              Effect.sync(() => appendLocalRequestRefusal(error, run.id)),
             ),
-        { discard: true },
-      ),
+          ),
+      { discard: true },
     );
   };
   // The slash-command context is identical at every call site; build it once
@@ -642,10 +644,16 @@ export async function runChat(
     onTeamSelect: (teamId) =>
       applyCliTeamSelection(teamId, slashCommandContext()),
     getApprovalPolicy,
-    onApprovalPolicySelect: (policy) => {
-      setApprovalPolicy(policy);
-      appendLocalNotice(`Approval mode: ${formatTexraApprovalPolicy(policy)}`);
-    },
+    onApprovalPolicySelect: (policy) =>
+      setApprovalPolicy(policy).pipe(
+        Effect.andThen(
+          Effect.sync(() =>
+            appendLocalNotice(
+              `Approval mode: ${formatTexraApprovalPolicy(policy)}`,
+            ),
+          ),
+        ),
+      ),
     onProjectApprovalPolicyChanged: (policy) => {
       patchSessionMeta({
         approvalPolicy: effectiveApprovalPolicy(chatPolicy, policy),
