@@ -3,7 +3,6 @@ import { Effect } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports
-import type { SessionHandle } from '@agent/runtime';
 import { runGuardedLatexCommand } from '@frontend/editor/activeFileGuards';
 import {
   showLoggedInfoMessage,
@@ -21,13 +20,13 @@ import { LATEX_COMMANDS_CHANNEL as CHANNEL } from '@latex/latexLogging';
 import { resolveLatexFormatter } from '@latex/formatter/texFormatter';
 import { buildLatexdiffAwareFixInstruction } from '@latex/latexdiff/diffFileNameManager';
 import { withLogChannel } from '@logger/effectLog';
-import type { ProcessServices } from '@texra-ai/harness';
+import type { ProcessServices, WorkspaceRoots } from '@texra-ai/harness';
 
 export function handleFixCompilation(
-  session: SessionHandle,
+  roots: WorkspaceRoots,
 ): Effect.Effect<void, Error, ProcessServices> {
   return runGuardedLatexCommand(
-    session,
+    roots,
     {
       channel: CHANNEL,
       action: 'fix compilation',
@@ -43,7 +42,7 @@ export function handleFixCompilation(
         const instruction = yield* buildLatexdiffAwareFixInstruction(
           `Fix the LaTeX compilation errors in ${relativePath}.`,
           editor.document.fileName,
-          session.roots.workspace,
+          roots.workspace,
         );
 
         yield* safeExecuteCommand(
@@ -65,10 +64,10 @@ export function handleFixCompilation(
 }
 
 export function handleIndentCurrentTeX(
-  session: SessionHandle,
+  roots: WorkspaceRoots,
 ): Effect.Effect<void, Error, ProcessServices> {
   return runGuardedLatexCommand(
-    session,
+    roots,
     {
       channel: CHANNEL,
       action: 'indent LaTeX document',
@@ -83,7 +82,7 @@ export function handleIndentCurrentTeX(
 
         // An explicit user action: a disabled formatter notifies instead of
         // succeeding quietly.
-        const formatter = yield* resolveLatexFormatter(session.roots);
+        const formatter = yield* resolveLatexFormatter(roots);
         if (!formatter) {
           yield* showLoggedInfoMessage(
             CHANNEL,
@@ -94,9 +93,9 @@ export function handleIndentCurrentTeX(
 
         const success = yield* formatter.run(
           relativePath,
-          session.roots.workspace,
+          roots.workspace,
           formatter.configPath,
-          session.roots,
+          roots,
         );
 
         if (success) {
@@ -113,10 +112,10 @@ export function handleIndentCurrentTeX(
 }
 
 export function handleGetTeXCount(
-  session: SessionHandle,
+  roots: WorkspaceRoots,
 ): Effect.Effect<void, Error, ProcessServices> {
   return runGuardedLatexCommand(
-    session,
+    roots,
     {
       channel: CHANNEL,
       action: 'get TeX count',
@@ -161,11 +160,11 @@ export function handleGetTeXCount(
               progress.report({ message: 'Running texcount...' });
 
               const { output, errors } = yield* getTeXCount(
-                session.roots.workspace,
+                roots.workspace,
                 relativePath,
                 {
                   mode: countingMode.value,
-                  settings: session.roots,
+                  settings: roots,
                 },
               );
 

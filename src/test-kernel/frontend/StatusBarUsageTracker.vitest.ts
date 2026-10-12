@@ -1,5 +1,5 @@
 // Third-party imports
-import { Effect, SubscriptionRef } from 'effect';
+import { Effect, Stream, SubscriptionRef } from 'effect';
 import { describe, expect, it } from 'vitest';
 
 // Local imports - run state
@@ -82,7 +82,11 @@ function trackerOverSessionView(): {
   };
   return {
     tracker: new StatusBarUsageTracker({
-      view: { ref: view, changes: SubscriptionRef.changes(view) },
+      view: {
+        current: () => SubscriptionRef.getUnsafe(view),
+        changes: SubscriptionRef.changes(view),
+        watch: () => Stream.empty,
+      },
     }),
     setRun(
       runId,

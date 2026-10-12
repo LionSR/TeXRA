@@ -208,7 +208,7 @@ export const openProjectBindings = Effect.fn('desktop.openProjectBindings')(
       // Install the recipient before host requests publish the recorder's
       // state.
       const bridge = yield* SessionBridge.make({
-        backend: project.backend,
+        session: project.session,
         handleHostRequest: (request, portId) =>
           hostRequests.handleHostRequest(request, portId),
         onPortClosed: (portId) => hostRequests.closePort(portId),
@@ -219,7 +219,7 @@ export const openProjectBindings = Effect.fn('desktop.openProjectBindings')(
       const snapshot = createHostSnapshotSource({
         project: project.display,
         root: project.root,
-        stores: project.session.roots,
+        stores: project.roots,
         secrets: options.secrets,
         fileOptions: () =>
           files.fileOptions().pipe(
@@ -277,10 +277,7 @@ export const openProjectBindings = Effect.fn('desktop.openProjectBindings')(
         runtime,
         host: hosts.run,
         toolEditPreview: hosts.toolEditPreview,
-        session: project.session,
-        backend: project.backend,
-        service: project.service,
-        root: project.root,
+        project,
         focused,
         showAgentConfigBanner: ({ agentName }) =>
           withProcessServices(
@@ -299,8 +296,7 @@ export const openProjectBindings = Effect.fn('desktop.openProjectBindings')(
       });
       const hostRequests = createDesktopHostRequests({
         runtime,
-        session: project.session,
-        backend: project.backend,
+        project,
         secrets: options.secrets,
         draftRequests: options.draftRequests,
         workspaceFile: workspace.file,
@@ -308,7 +304,6 @@ export const openProjectBindings = Effect.fn('desktop.openProjectBindings')(
         run,
         files,
         snapshot,
-        workspacePath: project.root,
         resourcesPath: options.resourcesPath,
         postToRenderer: host.post,
         postSurfaceAction: (action) => bridge.surfaceAction(action),

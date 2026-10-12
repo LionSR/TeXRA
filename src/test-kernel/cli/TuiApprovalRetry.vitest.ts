@@ -84,7 +84,10 @@ import { createTuiCliContext } from '@test/cli/fixtures/cliContext';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { installedHost } from '@test/support/setupPlatform';
 import { makeFakeSettingsStores } from '@test/support/settingsStoresFake';
-import { publishTestRunStart } from '@test/support/sessionTestUtils';
+import {
+  publishTestRunStart,
+  setTestApprovalPolicy,
+} from '@test/support/sessionTestUtils';
 import {
   APPROVE_ALL_DELEGATED_WORK_ACTION,
   APPROVE_SESSION_ACTION,
@@ -112,7 +115,7 @@ function tui(
   contextOverrides: Partial<CliContext> = {},
 ): { readonly presentationHost: CliRuntimeHost; readonly dispose: () => void } {
   const cliContext = createTuiCliContext(contextOverrides);
-  testDefaultSession().approvals.override(cliContext.approvalPolicy);
+  setTestApprovalPolicy(cliContext.approvalPolicy);
   // The installed fake host's secret store: the credential work takes it
   // directly, and the key-check expectations name exactly this object.
   const { secrets } = installedHost();
@@ -120,7 +123,7 @@ function tui(
   detachHost = Effect.runSync(
     testDefaultSession().interactions.use(
       createTuiHostInteractions(presentationHost, cliContext, {
-        session: testDefaultSession(),
+        requests: testDefaultSession().requests,
         secrets,
         settings: makeFakeSettingsStores('cli').stores,
         runtime: testRuntime(),
@@ -310,7 +313,11 @@ function waitForNoApproval(): Effect.Effect<void> {
 }
 
 beforeAll(() => {
-  bindSessionView(testRuntime(), testDefaultSession().view.ref);
+  const { view } = testDefaultSession();
+  bindSessionView(testRuntime(), {
+    current: () => SubscriptionRef.getUnsafe(view.ref),
+    changes: view.changes,
+  });
 });
 
 beforeEach(() => {

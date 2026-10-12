@@ -5,9 +5,9 @@
 // Third-party imports
 import { memo } from 'react';
 import { Box, Text } from 'ink';
+import type { TranscriptRow } from '@cli/chat/tui/state/sessionView';
 import { COLOR_ERROR, COLOR_HINT } from '@cli/tui/ui/colors';
 import { fillRows } from '@cli/runtime/terminalText';
-import type { TranscriptRow } from '@shared/transcript';
 
 // Local imports - CLI TUI rendering
 import { Markdown } from '../render/Markdown';

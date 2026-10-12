@@ -3,7 +3,6 @@ import { Effect } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports - utilities
-import type { SessionHandle } from '@agent/runtime';
 import { VscodeExternalOpener } from '@frontend/hosts/VscodeExternalOpener';
 import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
 import { type HostPromptFailed, inputBox } from '@frontend/ui/dialogs';
@@ -28,7 +27,7 @@ import type { RootedFileSystem } from '@utils/files/rootedFileSystem';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { executeCommand } from '@utils/system/execUtils';
 import { whichOnExtendedPath } from '@utils/system/platformPaths';
-import type { PlatformSecrets } from '@texra-ai/harness';
+import type { PlatformSecrets, WorkspaceRoots } from '@texra-ai/harness';
 
 const CHANNEL = 'gitCommands';
 
@@ -46,7 +45,7 @@ const openUrl = (url: string) =>
     );
 
 export function findCommitInHistory(
-  session: SessionHandle,
+  roots: WorkspaceRoots,
   commitHash: string,
   rootPath?: string,
 ) {
@@ -60,14 +59,14 @@ export function findCommitInHistory(
       return null;
     }
 
-    const workspacePath = rootPath ?? session.roots.workspace;
+    const workspacePath = rootPath ?? roots.workspace;
     if (!workspacePath) {
       return null;
     }
 
     const gitOptions = {
       cwd: workspacePath,
-      settings: session.roots,
+      settings: roots,
       quiet: true,
     };
     const verifyResult = yield* executeCommand(
@@ -290,10 +289,7 @@ function buildOverleafClonePorts(
   };
 }
 
-export function cloneOverleafProject(
-  session: SessionHandle,
-  secrets: PlatformSecrets,
-) {
+export function cloneOverleafProject(secrets: PlatformSecrets) {
   return Effect.gen(function* () {
     const input = yield* promptInput(
       'Clone Overleaf/ShareLaTeX Project',

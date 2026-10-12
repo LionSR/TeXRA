@@ -6,7 +6,7 @@
  * the desktop attaches its renderer per open paper; each port's frames are
  * cut from the same session graph and each port's transcript set is one
  * member of the union the fold sees. What the host renders but does not own
- * rides every port's frames as the `host` snapshot, one level per backend
+ * rides every port's frames as the `host` snapshot, one level per session
  * that the host's producers write through `setHost`.
  *
  * Ownership is scoped (7.7): `make` builds the bridge in the scope its host
@@ -19,7 +19,7 @@
  * the bridge drains the requests in flight rather than cutting them; an
  * answer whose port is gone is dropped.
  *
- * A `runtime.request` runs the backend's `request` and posts one
+ * A `runtime.request` runs the session's `request` and posts one
  * `Response` under the request's id; a `host.request` runs the host's
  * handler the same way. A message the bridge cannot parse is answered
  * `Invalid` when it names a request id, and reported otherwise: a silent
@@ -44,6 +44,7 @@ import {
   isRequestRefusal,
   type HostRequestFailure,
   type RequestError,
+  type Session,
 } from '@texra-ai/harness';
 import { withLogChannel } from '@logger/effectLog';
 import type { HostRequest } from '@texra/shared/session/hostRequest';
@@ -57,7 +58,7 @@ import {
   type Subscribe,
   type SurfaceActionMessage,
 } from '@texra/shared/session/sessionFrames';
-import type { SessionBackend } from '@texra/controllers/session/sessionBackend';
+import { frameSubscription } from '@texra/controllers/session/SessionFramer';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import type { ProcessServices } from '@texra-ai/harness';
 
@@ -72,7 +73,7 @@ const RequestEnvelopeSchema = z.object({
 
 interface SessionBridgeOptions {
   /** The session this bridge frames and requests through. */
-  readonly backend: SessionBackend;
+  readonly session: Session;
   readonly onPortClosed: (port: string) => void;
   /** The host's capabilities (8.3), performed on the surface's behalf, as
    *  one program per request that takes the process services from the fiber
@@ -96,7 +97,7 @@ interface SessionPort {
   readonly send: (message: DownMessage) => void;
 }
 
-/** What the backend gives a host per attached port. */
+/** What the bridge gives a host per attached port. */
 export interface AttachedPort {
   /** One message from the port, unparsed. */
   readonly receive: (
@@ -188,7 +189,7 @@ export class SessionBridge {
     private readonly host: SubscriptionRef.SubscriptionRef<HostSnapshot | null>,
     private readonly scope: Scope.Scope,
   ) {
-    this.key = options.backend.key;
+    this.key = options.session.roots.storage;
   }
 
   /** The host's producers write the snapshot every port frames (8.1). */
@@ -245,15 +246,13 @@ export class SessionBridge {
         fiber: null,
         held: [],
       };
-      const { backend, onPortClosed } = this.options;
+      const { onPortClosed } = this.options;
       yield* Scope.addFinalizer(
         scope,
         Effect.suspend(() => {
           if (this.ports.get(port.id) !== entry) return Effect.void;
           this.ports.delete(port.id);
-          return backend
-            .transcripts(port.id, [])
-            .pipe(Effect.andThen(Effect.sync(() => onPortClosed(port.id))));
+          return Effect.sync(() => onPortClosed(port.id));
         }),
       );
       this.ports.set(port.id, entry);
@@ -282,7 +281,11 @@ export class SessionBridge {
       // Nothing joins this fiber: a failed replay or tail read would stop the
       // port's transcript with no trace, so its death is logged here.
       const frames = Stream.runForEach(
-        this.options.backend.frames(entry.port.id, this.host, subscribe),
+        frameSubscription(
+          { key: this.key, view: this.options.session.view },
+          this.host,
+          subscribe,
+        ),
         (frame) => Effect.sync(() => entry.port.send(frame)),
       ).pipe(
         Effect.tapCause((cause) =>
@@ -336,7 +339,7 @@ export class SessionBridge {
       const up = parsed.data;
       if (up.session !== this.key) {
         return Effect.logWarning(
-          `Port ${port.id} addressed session ${up.session}; this backend is ${this.key}`,
+          `Port ${port.id} addressed session ${up.session}; this session is ${this.key}`,
         ).pipe(withLogChannel(CHANNEL));
       }
       switch (up.kind) {
@@ -352,7 +355,7 @@ export class SessionBridge {
           return this.answer(
             entry,
             up.requestId,
-            this.options.backend.request(up.request).pipe(
+            this.options.session.request(up.request).pipe(
               Effect.match({
                 onFailure: (error): Response['result'] => ({
                   ok: false,

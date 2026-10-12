@@ -278,7 +278,7 @@ export function createDesktopWindowHost(options: {
      * are the ones that do not.
      */
     forProject(project: DesktopProject) {
-      const { roots } = project.session;
+      const { roots } = project;
       const name = project.display.name;
       const diff = diffHost.inProject(roots);
       const requestDiff = requestDiffHost.inProject(roots);

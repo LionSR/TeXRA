@@ -1,4 +1,17 @@
-/** The root-scoped event store contract. SQLite and its resource lifetime belong to the controller layer. */
+/**
+ * The root-scoped event store contract; SQLite and its lifetime belong to
+ * the controller layer. Each storage error has one outcome (README
+ * "Storage failures"):
+ * - `DatabaseOpenFailed`: the session does not open.
+ * - `DatabaseReadFailed`: the call that read fails. A run whose own row is
+ *   `DatabaseRowCorrupt` or `DatabaseRowEarlier` is unreadable, never resumed.
+ * - `DatabaseWriteFailed`: nothing written, the call fails; in a run, the run
+ *   ends (`findStorageRefusal`).
+ * - `DatabaseStoreNewer`, the cause of any of these: the store is refused whole.
+ * - `DatabaseNotOwner`, or a `DatabaseClaimRefused` cause: nothing written; a
+ *   run that lost its own claim stops, and one another process holds is
+ *   refused as held elsewhere ({@link heldElsewhereBy}).
+ */
 import {
   Context,
   Data,
@@ -79,12 +92,8 @@ export function claimStanding(claim: AggregateClaim): ClaimStanding {
   return { kind: 'free' };
 }
 
-/**
- * A store failure's text. A `SqlError`'s own message is the driver's generic
- * `Failed to execute statement`; the SQLite error that says why (`column
- * index out of range`, `database is locked`) is its reason's cause, so the
- * message carries both.
- */
+/** A store failure's text: a `SqlError`'s generic message, and the SQLite
+ *  error that says why (`database is locked`), its reason's cause. */
 const storeFailureMessage = (cause: unknown): string =>
   isSqlError(cause) && cause.reason.cause != null
     ? `${cause.message}: ${toErrorMessage(cause.reason.cause)}`
@@ -98,10 +107,7 @@ export class DatabaseOpenFailed extends Data.TaggedError('DatabaseOpenFailed')<{
   override readonly message = storeFailureMessage(this.cause);
 }
 
-/**
- * A batch was rejected. C6 is all-or-nothing: the transaction rolled back, so
- * no member and no sequence change survives, and the wake level did not move.
- */
+/** A batch was rejected whole (C6): no member, sequence or wake level moved. */
 export class DatabaseWriteFailed extends Data.TaggedError(
   'DatabaseWriteFailed',
 )<{
@@ -111,18 +117,17 @@ export class DatabaseWriteFailed extends Data.TaggedError(
   override readonly message = storeFailureMessage(this.cause);
 }
 
-/**
- * C5: a batch member targets an aggregate this process does not hold open (the
- * claim moved, was never held, or the aggregate closed); nothing was written.
- * A fact about ownership, not the disk, so `appendAll` fails with it typed,
- * not wrapped in `DatabaseWriteFailed` (D6 b): a caller that lost its claim
- * stops, never mistaking a disk error for a stolen claim or the reverse. */
+/** C5: a batch member targets an aggregate this process does not hold open;
+ *  nothing was written. Ownership, not the disk, so it is never wrapped in
+ *  `DatabaseWriteFailed` (D6 b). */
 export class DatabaseNotOwner extends Data.TaggedError('DatabaseNotOwner')<{
   readonly aggregateId: AggregateId;
   /** The holder and closure at refusal time, read in the refusing transaction. */
   readonly ownerId: OwnerId | null;
   readonly closed: boolean;
-}> {}
+}> {
+  override readonly message = `${this.aggregateId} is ${this.closed ? 'closed' : `held by ${this.ownerId ?? 'no process'}, not this one`}; nothing was written.`;
+}
 
 /** A claim cannot be acquired under the requested deletion policy. */
 export class DatabaseClaimRefused extends Data.TaggedError(
@@ -130,13 +135,12 @@ export class DatabaseClaimRefused extends Data.TaggedError(
 )<{
   readonly ownerId: OwnerId;
   readonly verdict: 'alive' | 'unprovable';
-}> {}
+}> {
+  override readonly message = `Another TeXRA process (${this.ownerId}) holds this run${this.verdict === 'alive' ? '' : ', or could not be proven to have exited'}.`;
+}
 
-/**
- * The owner a refusal names as holding an aggregate (not proven alive: a
- * verdict may be `unprovable`), from a claim verdict (a write failure's cause)
- * or a `DatabaseNotOwner` of an open aggregate; null otherwise, since a closed
- * aggregate is finished and an ownerless one is free. */
+/** The owner a claim refusal or a `DatabaseNotOwner` of an open aggregate
+ *  names (not proven alive); null for a closed or ownerless one. */
 export const heldElsewhereBy = (error: unknown): OwnerId | null => {
   const refusal = error instanceof DatabaseWriteFailed ? error.cause : error;
   if (refusal instanceof DatabaseClaimRefused) return refusal.ownerId;
@@ -163,12 +167,8 @@ export interface SessionStoreMovedAside {
   readonly reason: 'pre-1.0' | 'corrupt';
 }
 
-/**
- * The store gate's refusal (`storeGate`): the store holds a kind or version
- * this build does not read (a newer TeXRA, or a pre-release of another
- * format, wrote it). The store is refused whole, never read in part or
- * written beside; it rides as the cause of the open, read or write failure.
- */
+/** The store gate's refusal (`storeGate`): the store holds a kind or version
+ *  this build does not read, so it is refused whole. */
 export class DatabaseStoreNewer extends Data.TaggedError('DatabaseStoreNewer')<{
   readonly type: string;
   readonly version: number;
@@ -176,8 +176,7 @@ export class DatabaseStoreNewer extends Data.TaggedError('DatabaseStoreNewer')<{
   override readonly message = `The session store holds ${this.type} rows at version ${this.version}, which this build does not read: a newer TeXRA wrote them, or a pre-release of a different format. Update TeXRA, or move the store aside to start a fresh one. Nothing in the store was changed.`;
 }
 
-/** A stored row that does not decode as its kind's shape: its read fails,
- *  naming the row, as the cause of the `DatabaseReadFailed`. */
+/** A stored row that does not decode as its kind's shape. */
 export class DatabaseRowCorrupt extends Data.TaggedError('DatabaseRowCorrupt')<{
   readonly commit: number;
   readonly type: string;
@@ -241,9 +240,19 @@ export interface CurrentValues {
   ) => Stream.Stream<void>;
 }
 
-/** Why a session's root could not be opened: its database would not open,
- *  or the reads the session is built from failed. */
-export type SessionOpenError = DatabaseOpenFailed | DatabaseReadFailed;
+/** A root's session is already open over the other store (persistent or
+ *  in memory), which it keeps: an open asking for the other is refused. */
+export class SessionOptionsConflict extends Data.TaggedError(
+  'SessionOptionsConflict',
+)<{
+  readonly storage: string;
+  readonly message: string;
+}> {}
+
+/** Why a session's root could not be opened: its database or its reads
+ *  failed, or it is open over the other store. */
+export type SessionOpenError =
+  DatabaseOpenFailed | DatabaseReadFailed | SessionOptionsConflict;
 
 export class Database extends Context.Service<
   Database,
@@ -390,30 +399,20 @@ export class Database extends Context.Service<
 >()('@texra/session/Database') {}
 
 /**
- * The process's one handle on the global storage root, built beside
- * `GlobalStorageFs` by the entry that installs the process runtime and held
- * for that runtime's life. Every application record of that root — the
- * settings, the repository settings, the inquiry threads, the update check,
- * the CLI's input history, the desktop's remembered projects — reads and
- * writes through it, so the root's `data_version` poll is forked once per
- * process instead of once per operation, and the connection is neither
- * opened nor torn down on a single-row read. The per-workspace
- * {@link Database} of a session's root is unchanged and unrelated.
- *
- * The shape is that handle's current values and input history, and nothing
- * else: the global root holds no session and no event rows, so its event
- * reads, claims and moved-aside report have no reader here. What does follow this root is a
- * reader of named settings (the tool switches, the plugin install record),
- * which `values.changes` serves already narrowed to them.
+ * The process's one handle on the global storage root, held for the process
+ * runtime's life: every application record of that root (settings, inquiry
+ * threads, the update check, input history, remembered projects) goes
+ * through it, so its `data_version` poll is forked once per process and no
+ * single-row read opens a connection. Its current values and input history
+ * only: the global root holds no session and no event rows.
  */
 export class GlobalDatabase extends Context.Service<
   GlobalDatabase,
   Pick<Context.Service.Shape<typeof Database>, 'values' | 'inputHistory'>
 >()('@texra/session/GlobalDatabase') {}
 
-/** Persistent project connections, retained by project and session scopes.
- *  The last borrower releases the connection; an ephemeral transcript never
- *  substitutes its in-memory database for this persistent application state. */
+/** Persistent project connections, retained by project and session scopes
+ *  until the last borrower releases one (never an ephemeral in-memory one). */
 export class ProjectDatabases extends Context.Service<
   ProjectDatabases,
   RcMap.RcMap<string, Database['Service'], DatabaseOpenFailed>

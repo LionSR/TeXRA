@@ -106,11 +106,16 @@ export function modelSwitchPort(
       // Queued on the run's input, durable at once; the loop binds and
       // records it at its next model boundary, which consumes it. A switch
       // back to the current model is queued too: the latest request wins.
-      yield* run.session.followUps.send(run.runId, {
+      const sent = yield* run.session.followUps.send(run.runId, {
         text: `/model ${model}`,
         from: { kind: 'user' },
         control: { kind: 'model', model },
       });
+      // Its input closed while the switch was admitted: nothing switches.
+      if (sent.kind === 'refused')
+        return yield* Effect.fail(
+          new Error('This conversation takes no more input.'),
+        );
     }),
   };
 }

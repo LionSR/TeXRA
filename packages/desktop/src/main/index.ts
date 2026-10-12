@@ -107,7 +107,7 @@ if (ownsSingleInstanceLock) {
       let projects: DesktopProjectRegistry | undefined;
       // The shutdown handlers, the startup program, and every surface they
       // wire run on the process runtime the platform builds.
-      const { runtime, processScope, initialize } =
+      const { runtime, processScope, initialize, sessions } =
         yield* initializeElectronPlatform(moduleDirname);
       // Recording has one process owner, shared by every project and window.
       const draftRequests = new HostDraftRequests();
@@ -193,6 +193,7 @@ if (ownsSingleInstanceLock) {
             );
           const registry = yield* openDesktopProjectRegistry({
             service: Result.isSuccess(service) ? service.success : undefined,
+            sessions: yield* sessions,
             dataRoot: platformInit.dataRoot,
             processRoots: platformInit.processRoots,
             processScope,
