@@ -15,7 +15,7 @@ import {
   resolveDelegationScopeAgents,
   type WorkspaceAgentsStores,
 } from '@agent/index/agentRegistry';
-import type { RunToolCall } from '@agent/runtime/RunCall';
+import { type RunToolCall } from '@agent/runtime/RunCall';
 import { isDocumentTaskConfig } from '@shared/schemas';
 import type {
   AgentProposal,

@@ -12,7 +12,7 @@
 import { Effect } from 'effect';
 import { z } from 'zod';
 
-import { ToolContext } from '@texra-ai/harness';
+import { defineTool, ToolContext } from '@texra-ai/harness';
 import { ToolError } from '@shared/schemas';
 import {
   settingSchemaWithoutPrefault,
@@ -21,7 +21,6 @@ import {
 import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
 
 import { executed } from '@tools/core/result';
-import { defineTool } from '@tools/core/define';
 
 /**
  * Keys `update_config` may write. Read access (`read_config`) is open across

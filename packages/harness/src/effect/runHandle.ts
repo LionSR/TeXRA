@@ -20,6 +20,7 @@ import {
 
 import type { SessionHandle as RuntimeSessionHandle } from '@agent/runtime/SessionHandle';
 import type { RunEndResult } from '@agent/runtime/RunEndResult';
+import { registryOf } from '@agent/runtime/runRegistry';
 import type { AgentEvent } from '@agent/trace';
 import { withLogChannel } from '@logger/effectLog';
 import type { ProcessServices } from '@platform/processRuntime';
@@ -172,7 +173,7 @@ export function handOver(
     let cancelled = false;
     const interruptLaunch = (): boolean => {
       cancelled = true;
-      return session.runs.interrupt(runId);
+      return registryOf(session.runs).interrupt(runId);
     };
     const spawned: Fiber.Fiber<unknown, Error>[] = [];
     return yield* Effect.uninterruptibleMask((restore) =>

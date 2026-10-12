@@ -7,7 +7,7 @@
  */
 import * as path from 'node:path';
 
-import { DEFAULT_NODE_STORAGE_ROOT } from '@platform/defaults/nodeStorage';
+import { defaultNodeStorageRoot } from '@platform/defaults/nodeStorage';
 import {
   linkService,
   spawnService,
@@ -21,9 +21,9 @@ export function reachExtensionService(
   extensionPath: string,
 ): Effect.Effect<ServiceLink, Error, Scope.Scope> {
   return linkService(
-    DEFAULT_NODE_STORAGE_ROOT,
+    defaultNodeStorageRoot(),
     spawnService(
-      DEFAULT_NODE_STORAGE_ROOT,
+      defaultNodeStorageRoot(),
       process.execPath,
       [path.join(extensionPath, 'serve', 'texra-serve.mjs'), 'serve'],
       { ELECTRON_RUN_AS_NODE: '1' },

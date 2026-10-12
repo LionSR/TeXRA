@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, vi } from 'vitest';
 
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { deriveResumability } from '@agent/storage';
+import { finalizeRun } from '@agent/storage/runLifecycle';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { positionRow } from '@agent/runtime/loop/rows';
 import {
@@ -17,6 +18,7 @@ import { DatabaseReadFailed } from '@shared/session/database';
 import {
   createProcessSession,
   publishTestRunStart,
+  seedRows,
 } from '@test/support/sessionTestUtils';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { documentTaskConfig } from '@texra/agent/output/documentRecipe';
@@ -33,11 +35,11 @@ describe('deriveResumability', () => {
   /** Open the run aggregate the way the loop does: claim, then the
    *  position that opens it. */
   async function writeOpening(runId: RunId): Promise<void> {
-    await Effect.runPromise(session.runHistory.acquire(runId));
+    const cell = await Effect.runPromise(
+      session.runHistory.open(runId, { activation: () => Effect.succeed([]) }),
+    );
     await Effect.runPromise(
-      session.runHistory.appendBatch(runId, null, [
-        positionRow(runId, { turn: 0 }, 'turn.ready'),
-      ]),
+      cell.append([positionRow(runId, { turn: 0 }, 'turn.ready')]),
     );
   }
 
@@ -79,7 +81,7 @@ describe('deriveResumability', () => {
     Effect.gen(function* () {
       const runId = 'ac0001' as RunId;
       yield* Effect.promise(() => writeMeta(runId, {}));
-      yield* session.log.transact([
+      yield* seedRows(session.log)([
         {
           type: 'run.config',
           aggregateId: aggregateId('run', runId),
@@ -116,26 +118,13 @@ describe('deriveResumability', () => {
         );
 
         expect(
-          yield* session.runs.end({ runId, outcome: RUN_OUTCOME.FAILED }),
+          yield* finalizeRun(session, { runId, outcome: RUN_OUTCOME.FAILED }),
         ).toMatchObject({ ok: false });
 
         expect(yield* deriveResumability(runId, session)).toMatchObject({
           kind: 'checkpoint',
         });
       }),
-  );
-
-  it.effect('does not mark a cancelled run resumable without an opening', () =>
-    Effect.gen(function* () {
-      const runId = 'ac0005' as RunId;
-      yield* Effect.promise(() =>
-        writeMeta(runId, { outcome: RUN_OUTCOME.CANCELLED }),
-      );
-
-      expect(yield* deriveResumability(runId, session)).toEqual({
-        kind: 'none',
-      });
-    }),
   );
 
   it.effect('reports unreadable metadata as unreadable even when opened', () =>

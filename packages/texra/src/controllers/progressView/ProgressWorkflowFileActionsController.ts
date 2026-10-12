@@ -7,7 +7,7 @@ import { Effect, FileSystem } from 'effect';
 // Local imports
 import { withLogChannel } from '@logger/effectLog';
 import type { AcceptCopyMeta, RunId } from '@shared/schemas';
-import type { HostRequest } from '@shared/session/hostRequest';
+import type { HostRequest } from '@texra/shared/session/hostRequest';
 import {
   ensureRunDirUnder,
   findRunDirUnder,

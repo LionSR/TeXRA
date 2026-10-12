@@ -74,14 +74,16 @@ import { withLogChannel } from '@logger/effectLog';
 import { setLogSink } from '@logger/logSink';
 import { nodeFileServices } from '@platform/defaults/jsonStore';
 import { FileSecrets, secretsDirectory } from '@platform/defaults/fileSecrets';
-import { DEFAULT_NODE_STORAGE_ROOT } from '@platform/defaults/nodeStorage';
+import { defaultNodeStorageRoot } from '@platform/defaults/nodeStorage';
 import { openTexraConfigStores } from '@platform/defaults/nodeStores';
 import { JsonConfigProvider } from '@platform/defaults/jsonConfigProvider';
 import { StorageFs, withSessionFs } from '@platform/rootedFs';
 import { GlobalDatabase } from '@shared/session/database';
 import {
   formatTexraApprovalPolicy,
+  TEXRA_APPROVAL_POLICY_CONFIG_KEY,
   texraApprovalPolicyLabel,
+  type TexraApprovalPolicy,
 } from '@shared/approvalPolicy';
 import { readState, StateFlagSchema } from '@shared/config/settingsAccess';
 import { telemetryNoticeIfDue } from '@telemetry/telemetryNotice';
@@ -92,6 +94,7 @@ import { TEXRA_SETTING_ROWS } from '@texra/shared/settingsView/texraSettings';
 import type { CommandId } from '@texra/shared/commands/catalog';
 import { fromHost } from '@texra/controllers/session/hostCallFailure';
 import { bootstrapHost } from '@texra/controllers/hostBootstrap';
+import { makeEditorHost, type EditorRegistry } from '@texra/tools/editorHost';
 import { texraPlugins } from '@texra/tools/registry';
 import { gitHubTokenRejectedMessage } from '@texra/tools/github/githubAuth';
 import { LeanLanguageServices } from '@texra/tools/lean/leanLanguageServices';
@@ -99,6 +102,7 @@ import { USER_MCP_CONFIG_PATH } from '@tools/mcp/mcpConfig';
 import { ToolAvailability } from '@tools/toolAvailabilityService';
 import { usageCostLabel } from '@ui/copy/modelAccess';
 import { sessionStoreMovedAsideMessage } from '@ui/copy/sessionStore';
+import { readConfigSettingFrom } from '@utils/config/platformSettings';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { reachExtensionService } from './common/extensionService';
 
@@ -139,16 +143,19 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
   // `~/.texra` is one history across CLI/desktop/extension (#8622). The
   // process runtime precedes the config stores below, which open on it.
   const storage = resolveWorkspaceStoragePath(
-    DEFAULT_NODE_STORAGE_ROOT,
+    defaultNodeStorageRoot(),
     workspaceRoot,
   );
-  const globalStorage = resolveGlobalStoragePath(DEFAULT_NODE_STORAGE_ROOT);
+  const globalStorage = resolveGlobalStoragePath(defaultNodeStorageRoot());
   // The one credential store every host shares (`~/.texra/secrets/`):
   // the background service reads the keys this window saves.
   const secrets = new FileSecrets(
-    secretsDirectory(DEFAULT_NODE_STORAGE_ROOT),
+    secretsDirectory(defaultNodeStorageRoot()),
     (key) => emitAppSignal('credentialChanged', { key }),
   );
+  // The editor registry the plugins' editor tools read; the progress view
+  // attaches this window's editor to it.
+  const editors = makeEditorHost();
   // Usage logging is anonymous: a runtime service with no account behind it.
   const extensionVersion =
     typeof context.extension.packageJSON?.version === 'string'
@@ -161,6 +168,7 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
         // TeXRA's plugins, with Copilot's TeXRA tools where a default session
         // runs their calls.
         plugins: texraPlugins({
+          editors,
           ...(workspaceRoot && {
             copilot: copilotToolsLayer(
               () => runtime,
@@ -245,7 +253,7 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
       // changes, so the configuration stores stay pinned for this process.
       const config = new JsonConfigProvider(
         yield* openTexraConfigStores(
-          DEFAULT_NODE_STORAGE_ROOT,
+          defaultNodeStorageRoot(),
           workspaceRoot,
           (message) => {
             runtime.runFork(
@@ -286,7 +294,7 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
         ? yield* telemetryNoticeIfDue(roots.config)
         : null;
       if (notice) void vscode.window.showInformationMessage(notice);
-      return { secrets, runtime, roots };
+      return { secrets, runtime, roots, editors };
     }),
   );
 });
@@ -424,7 +432,7 @@ const activateExtension = Effect.fn('activateExtension')(function* (
   // not leave a disposed host surface installed.
   context.subscriptions.push({ dispose: () => setLogSink(null) });
   const languageModel = createLanguageModelPort(context);
-  const { secrets, runtime, roots } = yield* initVscodePlatform(
+  const { secrets, runtime, roots, editors } = yield* initVscodePlatform(
     context,
     workspaceRoot,
     { languageModel, toolMissingHandler: vscodeToolMissingReporter },
@@ -437,7 +445,7 @@ const activateExtension = Effect.fn('activateExtension')(function* (
   const activationScope = yield* Scope.Scope;
   yield* withProcessServices(
     runtime,
-    activateWorkspace(context, secrets, runtime, roots).pipe(
+    activateWorkspace(context, secrets, runtime, roots, editors).pipe(
       Effect.provideService(Scope.Scope, activationScope),
     ),
   );
@@ -454,6 +462,7 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
   secrets: FileSecrets,
   runtime: ProcessRuntime,
   roots: WorkspaceRoots,
+  editors: EditorRegistry,
 ) {
   const { globalState } = roots;
   // Compatible editors may omit the language-model API. Its events belong
@@ -543,6 +552,7 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
     runtimeSession,
     backend,
     Result.isSuccess(service) ? service.success : undefined,
+    editors,
     (usable) => (usable ? setupPill.hide() : setupPill.show()),
   );
   yield* Effect.andThen(
@@ -625,7 +635,12 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
 
   const statusBarUsageTracker = new StatusBarUsageTracker(backend);
   const updateStatusBarTooltip = () => {
-    const policy = runtimeSession.approvals.policy();
+    // The project's persisted policy: what a run here, or the service's
+    // for this project, decides under.
+    const policy = readConfigSettingFrom<TexraApprovalPolicy>(
+      runtimeSession.roots.config,
+      TEXRA_APPROVAL_POLICY_CONFIG_KEY,
+    );
     const policyLine = `Approval policy: ${texraApprovalPolicyLabel(policy)} — ${formatTexraApprovalPolicy(policy)}`;
     const usage = statusBarUsageTracker.totalUsage;
     const { cost, inputTokens, outputTokens } = usage;

@@ -18,14 +18,13 @@
 // (`nodeSpawnerLayer`).
 import * as NodeFileSystem from '@effect/platform-node/NodeFileSystem';
 import * as NodePath from '@effect/platform-node/NodePath';
-import { ConfigProvider, Effect, RcMap } from 'effect';
+import { ConfigProvider, Effect, Layer, RcMap } from 'effect';
 import { afterEach, beforeEach } from 'vitest';
 
-import { AgentEngine } from '@agent/runtime/AgentEngine';
 import { ModelRetryGate } from '@agent/runtime/ModelRetryGate';
 import { RouteRetries } from '@agent/runtime/run/invocation';
 import type { ModelOptionStores } from '@model/computeModelOptions';
-import type { ProcessServices } from '@platform/processRuntime';
+import type { ProcessServices, SessionOwner } from '@platform/processRuntime';
 import type { AgentDirectoriesPort, StateStore } from '@platform/interfaces';
 import {
   UNAVAILABLE_LANGUAGE_MODEL_PORT,
@@ -44,14 +43,21 @@ import {
   type DatabaseOpenFailed,
 } from '@shared/session/database';
 import { UsageLog } from '@shared/usageLog';
+import { GOAL_STATE_ARM } from '@shared/plugins/goal';
+import {
+  DOCUMENTS_ACCEPTED_ARM,
+  DOCUMENTS_OUTPUT_ARM,
+} from '@texra/shared/plugins/documents';
+import { EXTERNAL_INQUIRY_THREAD_ARM } from '@texra/shared/plugins/externalInquiry';
+import type { SetupPlatformShape } from '@texra/tools/setup/platform';
 import {
   LeanLanguageServices,
   type LeanLanguageServicesShape,
 } from '@texra/tools/lean/leanLanguageServices';
-import type { SetupPlatformShape } from '@texra/tools/setup/platform';
 import { goalContinuation } from '@tools/goal/goalContinuation';
-import { toolTableLayer } from '@tools/liveTools';
-import { toolTable } from '@tools/toolTable';
+import { toolCatalogLayer } from '@tools/liveTools';
+import type { Plugin } from '@tools/plugins';
+import { ToolRegistry, toolTable } from '@tools/toolTable';
 import { nodeSpawnerLayer } from './childProcessTestLayer';
 import {
   createFakePlatform,
@@ -61,7 +67,19 @@ import {
   type FakeProcessPorts,
   type FakePlatformOptions,
 } from './FakePlatform';
-import type { Layer } from 'effect';
+
+/** TeXRA's plugins that own row kinds, as their arms only: what a store
+ *  under test reads their rows with. */
+const ARMED_PLUGINS: readonly Plugin[] = [
+  { id: 'documents', arms: [DOCUMENTS_OUTPUT_ARM, DOCUMENTS_ACCEPTED_ARM] },
+  { id: 'external-inquiry', arms: [EXTERNAL_INQUIRY_THREAD_ARM] },
+];
+
+/** The plugin table a store suite opens its database over: every row kind
+ *  TeXRA's plugins own, and no tool. */
+export const storePluginsLayer = Layer.succeed(ToolRegistry)(
+  toolTable([{ id: 'goal', arms: [GOAL_STATE_ARM] }, ...ARMED_PLUGINS]),
+);
 
 /**
  * A host's process ports and the workspace roots installed beside them, plus the
@@ -236,8 +254,9 @@ export const fakeHostAgentDirectories: AgentDirectoriesPort = {
   builtIn: () => installedHost().platform.agentDirectories.builtIn(),
 };
 
-/** The process services a fake host provides to a program. */
-export type FakeProcessServices = ProcessServices;
+/** The process services a fake host provides to a program, and the
+ *  installed runtime's session owner, which a root launch asks. */
+export type FakeProcessServices = ProcessServices | SessionOwner;
 
 type FakeProcessServicesLayer = Layer.Layer<FakeProcessServices>;
 
@@ -277,14 +296,14 @@ export function fakeProcessServices(): FakeProcessServicesLayer {
 export async function installFakeHost(host: FakeHost): Promise<void> {
   const [
     { initTestWorkspaceRoots },
-    { initTestProcessRuntime, tryTestProcessRuntime },
+    { initTestProcessRuntime, testSessionOwner, tryTestProcessRuntime },
     { Layer, ManagedRuntime },
     { testHttpClientLayer },
     { Secrets },
     { AgentDirectories, AppState },
     { LanguageModel },
     { unprobedToolAvailability },
-    { SessionOwner },
+    { SessionOwner: SessionOwnerTag },
   ] = await Promise.all([
     import('@test/support/testWorkspaceRoots'),
     import('./testProcessRuntime'),
@@ -305,6 +324,18 @@ export async function installFakeHost(host: FakeHost): Promise<void> {
   // `testRuntime().runSync` callers, so a lazily imported (asynchronous)
   // layer here fails every one of them.
   processServices ??= Layer.mergeAll(
+    // The installed runtime's session owner, read per call: a root launch
+    // asks it whether its session is still open.
+    Layer.succeed(SessionOwnerTag)({
+      open: (init) =>
+        Effect.flatMap(testSessionOwner, (owner) => owner.open(init)),
+      list: Effect.flatMap(testSessionOwner, (owner) => owner.list),
+      holds: (session) =>
+        Effect.flatMap(testSessionOwner, (owner) => owner.holds(session)),
+      close: (root) =>
+        Effect.flatMap(testSessionOwner, (owner) => owner.close(root)),
+      closeAll: Effect.flatMap(testSessionOwner, (owner) => owner.closeAll),
+    }),
     UsageLog.disabled,
     ProcessIdentity.layer(processOwnerId('test')),
     testHttpClientLayer,
@@ -318,26 +349,20 @@ export async function installFakeHost(host: FakeHost): Promise<void> {
     ConfigProvider.layer(ConfigProvider.fromEnvRecord(harnessEnv)),
     // The process's one route retry gate, as `processLayer` serves it.
     Layer.effect(RouteRetries, ModelRetryGate.make),
-    // A wake resumes as in production. The module is read per call, so a
-    // suite's own mock or spy of it is the resume the wake reaches.
-    Layer.mock(AgentEngine, {
-      resumeRun: (runId, options) =>
-        Effect.flatMap(
-          Effect.promise(() => import('@agent/runtime/resumeRun')),
-          (resume) => resume.resumeRun(runId, options),
-        ),
-    }),
     // An empty tool table (the real one loads every tool), with goal mode's
-    // continuation (and its switch): a suite that resolves a run's tools runs
-    // on the session graph's runtime or provides `pluginCatalogLayer`.
-    toolTableLayer(
+    // continuation (and its switch) and the row kinds TeXRA's plugins own: a
+    // suite that resolves a run's tools runs on the session graph's runtime
+    // or provides `pluginCatalogLayer`.
+    toolCatalogLayer(
       toolTable([
         {
           id: 'goal',
           toggle: 'off',
           availability: { check: () => Effect.succeed(true) },
           continuation: goalContinuation,
+          arms: [GOAL_STATE_ARM],
         },
+        ...ARMED_PLUGINS,
       ]),
     ).pipe(
       // What a plugin's process layer is built over.
@@ -353,6 +378,7 @@ export async function installFakeHost(host: FakeHost): Promise<void> {
     // is too: a suite that reads it provides its own innermost.
     Layer.mock(GlobalDatabase, {
       values: {} as CurrentValues,
+      inputHistory: {} as GlobalDatabase['Service']['inputHistory'],
     }),
     Layer.effect(
       ProjectDatabases,
@@ -399,7 +425,7 @@ export async function installFakeHost(host: FakeHost): Promise<void> {
         // naming the missing member.
         Layer.merge(
           processServices,
-          Layer.mock(SessionOwner, { list: Effect.succeed([]) }),
+          Layer.mock(SessionOwnerTag, { list: Effect.succeed([]) }),
         ),
       ),
     );

@@ -3,7 +3,7 @@ import { Effect } from 'effect';
 import { z } from 'zod';
 
 // Local imports
-import { ToolContext, Secrets } from '@texra-ai/harness';
+import { defineTool, Secrets, ToolContext } from '@texra-ai/harness';
 import { withLogChannel } from '@logger/effectLog';
 import { ToolError } from '@shared/schemas';
 import { hasUsableSetupCredential } from '@texra/model/setupCredentialAccess';
@@ -11,7 +11,6 @@ import { IMAGE_TOOL_LABEL } from '@texra/shared/constants/latexToolchain';
 
 // Local file imports
 import { executed } from '@tools/core/result';
-import { defineTool } from '@tools/core/define';
 import { forgetToolMisses } from '@utils/system/binaryResolver';
 import { SetupPlatform } from './platform';
 import { collectCoreSetupStatus, locateTool } from './toolProbing';

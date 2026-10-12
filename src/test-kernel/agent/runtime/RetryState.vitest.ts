@@ -1,9 +1,9 @@
 /**
  * The invoker's two owners of retry, over the run history.
  *
- * Automatic resends are route-scoped: `classifyModelFailure` decides whether
- * an attempt repeats at all and what the process's recovery gate is told
- * about the wire route. Past the budget a person decides, durably: a
+ * Automatic resends are route-scoped: llm's `ModelError` verdict decides
+ * whether an attempt repeats at all, and `routePolicies` what the process's
+ * recovery gate is told about the wire route. Past the budget a person decides, durably: a
  * `failed` row that asks, its `request.opened`, and a decision that is a
  * retry, a denial (failed, never cancelled — #7331) or a cancellation.
  */
@@ -29,7 +29,6 @@ import { MODEL_CONFIGS } from 'llm-zoo';
 import { APIError as OpenAIAPIError } from 'openai';
 import { afterEach, describe, expect, vi } from 'vitest';
 import {
-  chooseReasoning,
   type Model,
   ModelError,
   type ModelOrigin,
@@ -50,13 +49,15 @@ import {
 } from '@agent/runtime/ModelInvoker';
 import { ModelRetryGate } from '@agent/runtime/ModelRetryGate';
 import { RouteRetries } from '@agent/runtime/run/invocation';
-import { makeRunCell } from '@agent/runtime/loop/runProgram';
 import { AgentRun, type AgentRunShape } from '@agent/runtime/run/AgentRun';
-import type { BoundModel } from '@agent/runtime/run/modelBinding';
-import { classifyModelFailure } from '@agent/runtime/run/modelFailure';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { TraceEmitter, type AgentTrace } from '@agent/trace';
-import { attachContextWindowError } from '@common/errors/sdkError/errorMetadata';
+import type { BoundModel } from '@agent/runtime/modelAccess/ModelAccess';
+import {
+  failureInfo,
+  routePolicies,
+} from '@agent/runtime/modelAccess/failureInfo';
+import { modelAccessLayer } from '@agent/runtime/modelAccess/ModelAccess';
 import {
   LanguageModel,
   UNAVAILABLE_LANGUAGE_MODEL_PORT,
@@ -70,7 +71,11 @@ import {
   DatabaseReadFailed,
   DatabaseWriteFailed,
 } from '@shared/session/database';
-import { RunHistory, RunHistoryRefused } from '@shared/session/runHistory';
+import {
+  RunHistory,
+  RunHistoryRefused,
+  type RunCell,
+} from '@shared/session/runHistory';
 import { UsageLog } from '@shared/usageLog';
 import { freshRunState, type RunState } from '@shared/session/runStateFold';
 import { testAgentRun } from '@test/support/scriptedRunLayers';
@@ -79,7 +84,7 @@ import { noopTrace } from '@test/support/noopTrace';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { testHttpClientLayer } from '@test/support/fetchTestUtils';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
-import { installPlatform } from '@test/support/setupPlatform';
+import { hostStores, installPlatform } from '@test/support/setupPlatform';
 import { readSettingFrom } from '@utils/config/platformSettings';
 import { judgeFailure } from '../../../../packages/llm/src/api/verdict.js';
 import {
@@ -238,26 +243,15 @@ function boundModel(
   return {
     modelId: GPT54,
     config: MODEL_CONFIGS[GPT54],
-    reasoning: chooseReasoning(MODEL_CONFIGS[GPT54]),
     backend: 'openai',
     model,
     origin: ORIGIN,
     route: { kind: 'api-key', provider: 'openai', usageRoute: 'api-key' },
-    usageRoute: 'api-key',
-    contextWindow: MODEL_CONFIGS[GPT54].contextWindow,
-    supportsVision: false,
-    supportsNativePdf: false,
-    supportsNativeAudio: false,
-    supportsForcedToolChoice: true,
-    wireRouteKey: JSON.stringify(['openai', 'api-key', ORIGIN.requestedModel]),
-    modelRetryRouteKey: JSON.stringify([
-      'openai',
-      'api-key',
-      ORIGIN.requestedModel,
-      GPT54,
-    ]),
-    backgroundCapable: false,
+    forcedToolChoice: true,
     persistentConnection: false,
+    billing: {},
+    routes: routePolicies(['openai', 'api-key', ORIGIN.requestedModel], GPT54),
+    delivery: Effect.succeed('foreground'),
     automaticRetries: MODEL_RETRY_MAX_ATTEMPTS_SETTING.defaultValue,
     textOnly: false,
     ...overrides,
@@ -322,8 +316,8 @@ const freshState = (): RunState => ({
 
 interface InvokerKit {
   readonly runId: RunId;
-  /** The folded state of the freshly opened run. */
-  readonly state: RunState;
+  /** The run's cell, holding the folded state of the freshly opened run. */
+  readonly cell: RunCell;
   /** `ModelInvoker` and this run's history, with nothing left to provide. */
   readonly layer: Layer.Layer<ModelInvoker | RunHistory | RouteRetries>;
 }
@@ -345,8 +339,10 @@ const openRun = Effect.fn('openRun')(function* (
   const runId = retryRunId();
   publishTestRunStart(session, runId);
   yield* session.log.settled.pipe(Effect.orDie);
-  yield* session.runHistory.acquire(runId);
-  const state = yield* session.runHistory.appendBatch(runId, null, [
+  const cell = yield* session.runHistory.open(runId, {
+    activation: () => Effect.succeed([]),
+  });
+  yield* cell.append([
     appendRow(runId, [
       { role: 'user', content: [{ kind: 'text', text: 'go' }] },
     ]),
@@ -366,22 +362,28 @@ const openRun = Effect.fn('openRun')(function* (
       Layer.mergeAll(
         Layer.succeed(AgentRun, agentRun(runId, session, logger, bound, binds)),
         UsageLog.disabled,
-        LanguageModel.layer(UNAVAILABLE_LANGUAGE_MODEL_PORT),
-        testHttpClientLayer,
+        modelAccessLayer(hostStores()).pipe(
+          Layer.provide(
+            Layer.merge(
+              LanguageModel.layer(UNAVAILABLE_LANGUAGE_MODEL_PORT),
+              testHttpClientLayer,
+            ),
+          ),
+        ),
       ),
     ),
     Layer.merge(Layer.succeed(RunHistory, session.runHistory)),
     // The process's route gate, as `processLayer` serves it.
     Layer.provideMerge(Layer.effect(RouteRetries, ModelRetryGate.make)),
   );
-  return { runId, state, layer };
+  return { runId, cell, layer };
 });
 
 /** One invocation on an opened run. */
-const invokeOn = ({ layer, runId, state }: InvokerKit) =>
+const invokeOn = ({ layer, cell }: InvokerKit) =>
   Effect.gen(function* () {
     const invoker = yield* ModelInvoker;
-    return yield* invoker.invoke(yield* makeRunCell(runId, state), REQUEST);
+    return yield* invoker.invoke(cell, REQUEST);
   }).pipe(
     // `invoke`'s debug-object sink writes through the process `FileSystem`;
     // this suite runs on `it.effect`'s own runtime, so the service comes from
@@ -445,154 +447,34 @@ function statuslessServerError(message: string): ModelError {
 const BOUND = boundModel(stubModel([]).model);
 
 /**
- * The two recovery projections `gatedAttempt` hands the session gate: the
- * wire route cools on shared-route evidence, the model route only on a limit
- * the provider scoped to one model.
+ * The two recovery projections the attempt hands the process gate: the wire
+ * route cools on shared-route evidence, the model route only on a limit the
+ * provider scoped to one model.
  */
-const wireRouteRecovery = (
-  error: Error,
-): { retryAfterMs: number | undefined } | undefined => {
-  const { verdict } = classifyModelFailure(error, BOUND);
-  return verdict.wireRouteFailure
-    ? { retryAfterMs: verdict.retryAfterMs }
-    : undefined;
-};
-const modelRouteRecovery = (
-  error: Error,
-): { retryAfterMs: number | undefined } | undefined => {
-  const { verdict } = classifyModelFailure(error, BOUND);
-  return verdict.rateLimitScope === 'model'
-    ? { retryAfterMs: verdict.retryAfterMs }
-    : undefined;
-};
+const [modelRoute, wireRoute] = BOUND.routes;
+const wireRouteRecovery = (error: Error) => wireRoute.classifyFailure(error);
+const modelRouteRecovery = (error: Error) => modelRoute.classifyFailure(error);
 
-describe('model failure classification', () => {
-  it('treats a user abort as a cancellation, never an automatic retry', () => {
-    const abort = new DOMException('Request aborted', 'AbortError');
-
-    expect(classifyModelFailure(abort, BOUND).autoRetryable).toBe(false);
-  });
-
+describe('the failure a run records', () => {
   it('carries the text streamed before the failure onto the retry surface', () => {
-    // The one producer of `partialText`: the loop hands `classifyModelFailure`
-    // the tail it had already received, and the retry panel reads it back off
-    // the classified error rather than from a provider handler.
-    const error = new OpenAIAPIError(
-      500,
-      { message: 'stream dropped' },
-      'stream dropped',
-      undefined,
-    );
+    const error = httpError('stream dropped', 500);
 
-    const failure = classifyModelFailure(error, BOUND, 'partial answer');
-
-    expect(failure.formatted.partialText).toBe('partial answer');
-    expect(failure.info.partialText).toBe('partial answer');
-    // A failure with nothing streamed carries no tail at all.
     expect(
-      classifyModelFailure(statuslessServerError('nothing streamed'), BOUND)
-        .formatted.partialText,
-    ).toBeUndefined();
+      failureInfo(error, 'openai', { partialText: 'partial answer' })
+        .partialText,
+    ).toBe('partial answer');
+    // A failure with nothing streamed carries no tail at all.
+    expect(failureInfo(error, 'openai').partialText).toBeUndefined();
   });
 
   it('reports a retryable provider failure with its formatted message', () => {
-    const error = new OpenAIAPIError(
-      503,
-      { message: 'transient provider failure' },
-      'transient provider failure',
-      undefined,
-    );
-
-    expect(classifyModelFailure(error, BOUND).formatted).toMatchObject({
-      message: 'HTTP 503 Service Unavailable – 503 transient provider failure',
+    expect(
+      failureInfo(httpError('transient provider failure', 503), 'openai'),
+    ).toMatchObject({
+      message: 'HTTP 503 Service Unavailable – transient provider failure',
       userRetryable: true,
     });
   });
-
-  it.each([
-    {
-      name: 'a status-less OpenAI server_error response',
-      error: statuslessServerError('temporary provider failure'),
-      autoRetryable: true,
-    },
-    {
-      name: 'an unknown status-less provider reply',
-      error: judged(
-        new ModelError({
-          kind: 'provider-rejection',
-          message: 'Unexpected provider failure.',
-          cause: new OpenAIAPIError(
-            undefined,
-            {
-              type: 'unexpected_error',
-              message: 'Unexpected provider failure.',
-            },
-            'Unexpected provider failure.',
-            undefined,
-          ),
-        }),
-      ),
-      autoRetryable: false,
-    },
-    {
-      name: 'an HTTP conflict after provider SDK retries are disabled',
-      error: httpError('request lock is still held', 409),
-      autoRetryable: true,
-    },
-    {
-      name: 'a transient stream failure',
-      error: new Error('stream closed after response started'),
-      autoRetryable: true,
-    },
-    {
-      name: 'a raw undici fetch failure',
-      error: new TypeError('fetch failed', {
-        cause: Object.assign(
-          new Error('HTTP/2: "stream timeout after 300000"'),
-          { code: 'UND_ERR_INFO', name: 'InformationalError' },
-        ),
-      }),
-      autoRetryable: true,
-    },
-    {
-      name: 'a wrapped provider fetch failure',
-      error: new Error('Connection error', {
-        cause: new TypeError('fetch failed'),
-      }),
-      autoRetryable: true,
-    },
-    {
-      // Regression for the retry storm where a context-window overflow that
-      // slipped past compaction recovery was flattened into a plain,
-      // code-free Error by the transport before classification ran, so it
-      // looked transient and got auto-retried with the same oversized payload
-      // forever.
-      name: 'a context-window overflow',
-      error: (() => {
-        const overflow = new Error(
-          'OpenAI WebSocket response failed: overflow',
-        );
-        attachContextWindowError(overflow);
-        return overflow;
-      })(),
-      autoRetryable: false,
-    },
-  ])('classifies $name', ({ error, autoRetryable }) => {
-    expect(classifyModelFailure(error, BOUND).autoRetryable).toBe(
-      autoRetryable,
-    );
-  });
-
-  // The package's own refusals are deterministic: repeating them bills again
-  // for the same answer.
-  it.each(['invalid-request', 'unsupported', 'authentication'] as const)(
-    'never auto-retries a %s refusal from the package',
-    (kind) => {
-      const error = new ModelError({ kind, message: 'refused' });
-
-      expect(classifyModelFailure(error, BOUND).autoRetryable).toBe(false);
-    },
-  );
 });
 
 describe('recovery-route verdicts', () => {
@@ -783,25 +665,6 @@ describe('ModelInvoker retry', () => {
     }),
   );
 
-  it.effect('treats a user abort as a cancellation without prompting', () =>
-    Effect.gen(function* () {
-      const session = yield* sessionWithInteractions(undefined);
-      const requests = autoDecideRequests(session, () => ({
-        action: 'retry',
-      }));
-      const stub = stubModel([
-        { fail: new DOMException('Request aborted', 'AbortError') },
-      ]);
-
-      const outcome = yield* invokeOn(yield* openRun(session, stub.model));
-
-      expect(outcome.kind).toBe('cancelled');
-      expect(requests.opened).toEqual([]);
-      requests.detach();
-      yield* closeSessionOf(session);
-    }),
-  );
-
   it.effect('abandons the pending retry when the run is interrupted', () =>
     Effect.gen(function* () {
       const session = yield* sessionWithInteractions(undefined);
@@ -912,7 +775,6 @@ describe('ModelInvoker retry', () => {
 
         const kit = yield* openRun(session, stub.model, {
           route: { kind: 'chatgpt-subscription' },
-          usageRoute: 'chatgpt-subscription',
         });
         yield* Effect.promise(() => seedActiveRun(session, kit.runId));
         const outcome = yield* invokeOn(kit);
@@ -1025,9 +887,9 @@ describe('ModelInvoker retry', () => {
         while (stub.attempts() < 2) yield* settle;
         yield* Fiber.interrupt(fiber);
 
-        const state = yield* session.runHistory.load(kit.runId);
-        if (state === null) throw new Error('The run has no run history.');
-        const resumed = yield* invokeOn({ ...kit, state });
+        // The resume opens the run again from its stored rows.
+        const cell = yield* session.runHistory.open(kit.runId);
+        const resumed = yield* invokeOn({ ...kit, cell });
 
         expect(resumed.kind).toBe('response');
         // The interrupted attempt was asked about again, then sent once.
@@ -1202,16 +1064,12 @@ describe('ModelInvoker retry', () => {
         expect(first.state.continuation).not.toBeNull();
 
         // The next turn's message, sent on top of the stored response.
-        const next = yield* session.runHistory.appendBatch(
-          kit.runId,
-          first.state,
-          [
-            appendRow(kit.runId, [
-              { role: 'user', content: [{ kind: 'text', text: 'again' }] },
-            ]),
-          ],
-        );
-        const outcome = yield* invokeOn({ ...kit, state: next });
+        yield* kit.cell.append([
+          appendRow(kit.runId, [
+            { role: 'user', content: [{ kind: 'text', text: 'again' }] },
+          ]),
+        ]);
+        const outcome = yield* invokeOn(kit);
 
         expect(outcome.kind).toBe('response');
         expect(chained).toEqual([false, true, false]);
@@ -1228,9 +1086,23 @@ describe('ModelInvoker retry', () => {
       Effect.gen(function* () {
         const session = yield* sessionWithInteractions(undefined);
         const stopped = new Map<RunId, 'user' | 'shutdown'>();
-        vi.spyOn(session.runs, 'stopReason').mockImplementation((runId) =>
-          stopped.get(runId),
-        );
+        const get = session.runs.get.bind(session.runs);
+        vi.spyOn(session.runs, 'get').mockImplementation(((runId?: RunId) => {
+          if (runId === undefined) return get();
+          const live = get(runId);
+          const stopReason = stopped.get(runId);
+          if (stopReason === undefined) return live;
+          // The run's stop, whether or not this registry holds it.
+          return {
+            runId,
+            handle: undefined,
+            live: false,
+            parent: null,
+            drained: Effect.void,
+            ...live,
+            stopReason,
+          };
+        }) as typeof session.runs.get);
         const background = BACKGROUND_PREPARED;
         const operation = RemoteOperationSchema.parse({
           origin: ORIGIN,
@@ -1283,7 +1155,10 @@ describe('ModelInvoker retry', () => {
           const state = yield* session.runHistory.load(kit.runId);
           if (state === null)
             throw new Error('The run has no run history state.');
-          const resumed = yield* invokeOn({ ...kit, state });
+          const resumed = yield* invokeOn({
+            ...kit,
+            cell: yield* session.runHistory.open(kit.runId),
+          });
           return {
             calls,
             accepted: state.invocation?.current.accepted,

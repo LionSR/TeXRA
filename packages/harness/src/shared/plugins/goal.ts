@@ -1,5 +1,5 @@
 /**
- * The goal plugin's rows (`PLUGIN_EVENT_ARMS` in `@tools/pluginArms`): the
+ * The goal plugin's rows (its `arms`, `@tools/plugins`): the
  * goal of a run is its latest `plugin.fact` of kind `goal/state`, which
  * carries the whole pursuit. Core stores and folds the row without reading
  * it (`RunView.facts`); this module is its schema and its one reader, which
@@ -55,7 +55,7 @@ export const GOAL_STATE_ARM = {
 export function goalStateRow(
   runId: RunId,
   state: GoalState,
-): SessionEventDraft {
+): Extract<SessionEventDraft, { type: 'plugin.fact' }> {
   return {
     type: 'plugin.fact',
     aggregateId: aggregateId('run', runId),

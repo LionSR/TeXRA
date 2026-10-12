@@ -854,7 +854,10 @@ async function generate(root) {
   await cli.serve(async ({ client, call, handle: service }) => {
     // The tombstone, made once the service holds the project open (any
     // project call opens it): a later open would collect it.
-    await call('request.preview', { workspace: cli.project, requestId: '-' });
+    await call('task.request', {
+      workspace: cli.project,
+      request: { kind: 'request.preview', runId: doomed, requestId: '-' },
+    });
     cli.run(['history', 'delete', doomed, '--yes', '--print']);
     const { runId: task } = JSON.parse(
       client([

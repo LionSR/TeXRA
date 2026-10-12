@@ -3,12 +3,12 @@ import { Effect } from 'effect';
 import { z } from 'zod';
 
 // Local imports
+import { defineTool } from '@texra-ai/harness';
 import { ToolError } from '@shared/schemas';
 import type { CommandId } from '@texra/shared/commands/catalog';
 
 // Local file imports
 import { executed } from '@tools/core/result';
-import { defineTool } from '@tools/core/define';
 import { assertInSetupAllowlist, SetupPlatform } from './platform';
 
 /**

@@ -12,16 +12,17 @@ import '@awesome.me/webawesome/dist/components/dropdown/dropdown.js';
 import '@awesome.me/webawesome/dist/components/dropdown-item/dropdown-item.js';
 import { html, nothing, type TemplateResult } from 'lit';
 
-import type { ProjectDisplay } from '@shared/session/hostSnapshot';
 import type { SessionView } from '@shared/session/sessionView';
-import type { Surface } from '@shared/session/surface';
-import { unseenRuns } from '@shared/session/unseenRuns';
 import type { TeXRAIconName } from '@shared/iconNames';
+import type { ProjectDisplay } from '@texra/shared/session/hostSnapshot';
+import type { Surface } from '@texra/shared/session/surface';
+import { unseenRuns } from '@texra/shared/session/unseenRuns';
 import type { Shell } from '@texra/shared/session/shell';
 import {
   renderIconActionButton,
   renderLabeledActionButton,
 } from '@ui/wa/actionButtons';
+import { afterDropdownHides } from '@ui/wa/selectTemplates';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 
 /** One open project as the rail lists it: how its host names it, its session,
@@ -171,11 +172,11 @@ function projectSection(
         placement="bottom-end"
         @wa-select=${(event: CustomEvent<{ item: { value: string } }>) => {
           const action = event.detail.item.value;
-          if (
-            action === 'new-task' ||
-            action === 'rename' ||
-            action === 'close'
-          )
+          if (action === 'rename')
+            afterDropdownHides(event, () =>
+              callbacks.onProjectAction(key, action),
+            );
+          if (action === 'new-task' || action === 'close')
             callbacks.onProjectAction(key, action);
         }}
       >

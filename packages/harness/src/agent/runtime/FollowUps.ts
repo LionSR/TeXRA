@@ -3,7 +3,7 @@
  * `followup.consumed` (the session publisher's pending set), the blocking
  * wait and the non-blocking probe, and `consume`, which commits one batch's
  * `followup.consumed` rows with the user message they become and
- * `run.position turn.ready`, in one run history transaction (C3). A crash before
+ * `run.position turn.ready`, in one batch of the run's cell (C3). A crash before
  * that commit leaves the rows queued, so the next consumer delivers them
  * again; after it, nothing re-delivers them.
  *
@@ -45,10 +45,10 @@ import {
 } from '@shared/schemas';
 import { isTerminalOutcomePhase } from '@shared/runs/runStatus';
 import { subagentProgressRunId } from '@shared/subagentFollowup';
-import type { RunHistory } from '@shared/session/runHistory';
 import type { QueuedFollowUp } from '@shared/session/runRows';
 import type { RunHistoryDraft, RunState } from '@shared/session/runStateFold';
-
+import type { CoWrite } from '@shared/session/sessionEvents';
+import type { RunCell } from '@shared/session/runHistory';
 import { activatedSkillNames } from '@skills/runtimeSkills';
 import { sha256 } from '@utils/core/idHash';
 import { ensureError } from '@utils/errors/errorMessage';
@@ -76,9 +76,10 @@ export interface JoinedFollowUps {
   readonly delivered: () => void;
 }
 
-/** A turn's end, committed in the batch that consumes the next input. */
+/** A turn's end and a child's delivery, committed with the next input. */
 export interface Boundary {
   readonly rows: readonly RunHistoryDraft[];
+  readonly alongside?: Effect.Effect<CoWrite, Error, Scope.Scope>;
 }
 
 export interface ConsumedFollowUps {
@@ -115,18 +116,19 @@ export interface FollowUps {
   /** End the reader: the run stays recoverable, or takes no more input. */
   readonly release: (next: 'recoverable' | 'terminal') => void;
   /**
-   * Commit a batch: its `followup.consumed` rows, its user message, and
-   * `run.position turn.ready` in one transaction. On failure nothing is
-   * consumed and the run's rows still queue the batch. A view edit commits
-   * its `context.edit`, and a handoff's note as the message, the same way,
-   * and settles the edit's `done` with the commit.
+   * Commit a batch through the run's cell: its `followup.consumed` rows, its
+   * user message, and `run.position turn.ready` in one batch, answering the
+   * state it folds to. On failure nothing is consumed and the run's rows
+   * still queue the batch. A view edit commits its `context.edit`, and a
+   * handoff's note as the message, the same way, and settles the edit's
+   * `done` with the commit.
    */
   readonly consume: (
-    state: RunState,
+    cell: RunCell,
     batch: FollowUpBatch,
-    /** What the batch commits on: `state`, moved first by a step that
-     *  must precede it (a background compaction a reset settles). */
-    prepare?: (state: RunState) => Effect.Effect<RunState, Error>,
+    /** A step that must commit before the batch, on the same cell (a
+     *  background compaction a reset settles). */
+    prepare?: (cell: RunCell) => Effect.Effect<RunState, Error>,
     /** The turn boundary this batch commits with (input already queued
      *  when the turn ended). */
     boundary?: Boundary,
@@ -140,7 +142,6 @@ export interface FollowUps {
 /** Open `run`'s own reader for the enclosing scope. */
 export const claimFollowUps = Effect.fn('FollowUps.claim')(function* (
   run: AgentRunShape,
-  runHistory: RunHistory['Service'],
 ): Effect.fn.Return<FollowUps, never, Scope.Scope> {
   const { runId, session, logger } = run;
   // Ended with the scope; the run's settleRun arm ends it first, saying
@@ -164,7 +165,7 @@ export const claimFollowUps = Effect.fn('FollowUps.claim')(function* (
       const files = content.mediaFiles ?? [];
       const media = yield* mediaInputParts(
         files.map((path) => run.fileService.createLocation(path)),
-        bound,
+        bound.config.capabilities,
         logger,
         run.session.roots.config,
       );
@@ -343,28 +344,26 @@ export const claimFollowUps = Effect.fn('FollowUps.claim')(function* (
    *  commit, a refusal, or a stop before either. */
   const consume = Effect.fn('FollowUps.consume')(
     function* (
-      current: RunState,
+      cell: RunCell,
       batch: FollowUpBatch,
-      prepare?: (state: RunState) => Effect.Effect<RunState, Error>,
+      prepare?: (cell: RunCell) => Effect.Effect<RunState, Error>,
       boundary?: Boundary,
     ): Effect.fn.Return<
       ConsumedFollowUps,
       Error,
       FileSystem.FileSystem | ChildProcessSpawner
     > {
-      const state = prepare === undefined ? current : yield* prepare(current);
+      const state = yield* prepare?.(cell) ?? cell.current;
       const joined = yield* batchRows(state, batch);
-      const committed = yield* Effect.uninterruptible(
-        runHistory.appendBatch(runId, state, [
-          ...(boundary?.rows ?? []),
-          ...joined.rows,
-          ...(joined.turn ? [positionRow(runId, state, 'turn.ready')] : []),
-        ]),
+      const rows = [...(boundary?.rows ?? []), ...joined.rows];
+      const committed = yield* cell.append(
+        joined.turn ? [...rows, positionRow(runId, state, 'turn.ready')] : rows,
+        boundary?.alongside,
       );
       joined.delivered();
       return { state: committed, turn: joined.turn };
     },
-    (effect, _state, batch) =>
+    (effect, _cell, batch) =>
       batch.kind !== 'edit'
         ? effect
         : effect.pipe(
@@ -424,8 +423,7 @@ export const claimFollowUps = Effect.fn('FollowUps.claim')(function* (
       session.followUps.release(
         runId,
         input,
-        next === 'terminal' ||
-          (session.runs.getHandle(runId)?.parent ?? null) !== null,
+        next === 'terminal' || session.runs.get(runId)?.parent != null,
       ),
     consume,
   };

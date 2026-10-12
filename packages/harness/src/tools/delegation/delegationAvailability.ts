@@ -19,33 +19,33 @@ import { Effect } from 'effect';
 // Local imports
 import { modelRefOf } from '@texra-ai/llm';
 import { resolveDelegationScopeAgents } from '@agent/index/agentRegistry';
+import type { StepTools } from '@agent/runtime/loop/step';
 import { withLogChannel } from '@logger/effectLog';
 import {
-  modelOptionsFrom,
+  modelVerdictsFrom,
   readModelAvailabilityInputs,
+  type ModelAvailabilityInputs,
   type ModelOptionStores,
 } from '@model/computeModelOptions';
 import { decideRunModel } from '@model/runModelDecision';
 import { Secrets } from '@platform/secrets';
 import type { SettingsStores } from '@shared/config/settingsAccess';
-import type {
-  AgentDelegationScope,
-  DelegationTargets,
-  ModelOptionData,
-  ToolDefinition,
-} from '@shared/schemas';
-import { isModelOptionAvailable } from '@shared/schemas';
 import {
-  AGENT_TOOL_NAME,
-  DOCUMENT_TASK_TOOL_NAME,
-} from '@shared/constants/delegationTools';
+  MODEL_AVAILABILITY_STATUS,
+  type AgentDelegationScope,
+  type DelegationTargets,
+} from '@shared/schemas';
+import { AGENT_TOOL_NAME } from '@shared/constants/delegationTools';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { unique } from '@utils/core';
 import { readSettingFrom } from '@utils/config/platformSettings';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
-const availableModelNames = (models: readonly ModelOptionData[]): string[] =>
-  models.filter(isModelOptionAvailable).map((model) => model.value);
+/** The models that can run now, in picker order. */
+const availableModelNames = (inputs: ModelAvailabilityInputs): string[] =>
+  modelVerdictsFrom(inputs).flatMap(({ model, availability }) =>
+    MODEL_AVAILABILITY_STATUS[availability].available ? [model] : [],
+  );
 
 /* -------------------------------------------------------------------------
  * Reading
@@ -55,17 +55,19 @@ const availableModelNames = (models: readonly ModelOptionData[]): string[] =>
  * The targets the offered `definitions` can launch, or `undefined` when they
  * hold no delegation tool: the run's pinned delegation scope's agents, or
  * the workspace's visible ones, each marked when it is a document task;
- * only those when `document_task` is offered without `agent`.
+ * only those when a tool that launches tasks is offered without `agent`.
  */
 export const readDelegationTargets = Effect.fn('readDelegationTargets')(
   function* (
-    definitions: readonly ToolDefinition[],
+    { definitions, registry }: Pick<StepTools, 'definitions' | 'registry'>,
     stores: ModelOptionStores,
     scope: AgentDelegationScope | undefined,
   ) {
-    const names = new Set(definitions.map(({ name }) => name));
-    const chats = names.has(AGENT_TOOL_NAME);
-    if (!chats && !names.has(DOCUMENT_TASK_TOOL_NAME)) return undefined;
+    const chats = registry.get(AGENT_TOOL_NAME) !== undefined;
+    const tasks = definitions.some(
+      ({ name }) => registry.get(name)?.launchesTasks,
+    );
+    if (!chats && !tasks) return undefined;
     const entries = yield* resolveDelegationScopeAgents(stores, scope);
     const agents = entries.flatMap(
       ({ name, description, tools: agentTools, task }) =>
@@ -86,7 +88,7 @@ export const readDelegationTargets = Effect.fn('readDelegationTargets')(
           : [],
     );
     const models = yield* readModelAvailabilityInputs(stores).pipe(
-      Effect.map((inputs) => availableModelNames(modelOptionsFrom(inputs))),
+      Effect.map(availableModelNames),
       // A failed read (an unreadable store, a host call that rejected) tells
       // the model the list is unknown rather than failing the step, and is
       // logged. `Effect.catch` recovers typed failures only: the finisher's
@@ -225,9 +227,8 @@ export const selectAvailableDelegationModel = Effect.fn(
     ...input.settings,
     secrets: yield* Secrets,
   });
-  const models = modelOptionsFrom(inputs);
   const availableModels = unique(
-    availableModelNames(models)
+    availableModelNames(inputs)
       .map((model) => model.trim())
       .filter(Boolean),
   );

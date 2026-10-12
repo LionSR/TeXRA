@@ -67,3 +67,8 @@ errorLogs/
 
 # The headless service bundle the extension ships (packages/extension/scripts/build-serve.mjs).
 packages/extension/serve/
+
+# Leftover @texra-ai/agent packaging smoke test: the agent package was
+# consolidated into packages/harness/src/agent. This directory holds only
+# generated output (dist/, node_modules/, example/agent.tgz). Runtime-only.
+packages/agent/

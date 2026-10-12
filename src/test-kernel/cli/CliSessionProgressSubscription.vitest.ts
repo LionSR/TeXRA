@@ -9,7 +9,6 @@ import {
   type CliNdjsonProgressRecordWriter,
 } from '@cli/runtime/sessionProgressSubscription';
 import type { CliNdjsonRecord } from '@cli/schemas/cliOutput';
-import { inquiryThreadRow } from '@shared/plugins/externalInquiry';
 import {
   aggregateId as qualifyAggregateId,
   type SessionEventDraft,
@@ -21,6 +20,7 @@ import {
   publishTestRunStart,
   publishTestRows,
 } from '@test/support/sessionTestUtils';
+import { inquiryThreadRow } from '@test/support/inquiryThreadRow';
 
 const runId = 'c11a01' as RunId;
 const childRunId = 'c11c01' as RunId;
@@ -175,7 +175,7 @@ const projectionOver = Effect.fnUntraced(function* (session: SessionHandle) {
     writeRecord,
   );
   const publish = async (source: Source): Promise<void> => {
-    if ('run' in source) session.trace.publish(runId, source.run);
+    if ('run' in source) session.log.publish(runId, source.run);
     else publishTestRows(session, [source.draft]);
     await Effect.runPromise(session.log.settled);
   };

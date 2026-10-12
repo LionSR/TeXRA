@@ -120,7 +120,7 @@ const ensureRoutingConfigured = Effect.fn('ensureRoutingConfigured')(function* (
 /**
  * The launch program the command surface runs on the process runtime: it
  * folds every failure — a failed host call, a failed model resolution, a
- * failed `runAgent` — into one error report and a `not-started` result,
+ * failed root launch — into one error report and a `not-started` result,
  * which is the contract its host caller relies on. An interrupted launch is
  * not a failure: the cause is re-raised so a runtime disposal stays a
  * cancellation instead of a launch-failure notice.

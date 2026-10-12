@@ -17,8 +17,11 @@ import {
 import {
   emptyHostSnapshot,
   type HostSnapshot,
-} from '@shared/session/hostSnapshot';
-import type { EventsFrame, Subscribe } from '@shared/session/sessionFrames';
+} from '@texra/shared/session/hostSnapshot';
+import type {
+  EventsFrame,
+  Subscribe,
+} from '@texra/shared/session/sessionFrames';
 import type { TraceDocument } from '@transcript';
 
 /** One position of the run's loop: the row the scrubber cuts the trace at. */

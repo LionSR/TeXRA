@@ -14,6 +14,7 @@ import type {
   ChildRunPorts,
   ChildRunStrategy,
 } from '@agent/runtime/childRunLoop';
+import type { RunHandle } from '@agent/runtime/RunHandle';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { RunId } from '@shared/schemas';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
@@ -32,26 +33,31 @@ const mocks = vi.hoisted(() => ({
   submitFollowUp: vi.fn(),
 }));
 
+// A run's input sends through the suite's `submitFollowUp`.
 vi.mock('@agent/followUp/ToolUseFollowUp', () => ({
   submitFollowUp: mocks.submitFollowUp,
+  runInbox: (session: unknown, runId: RunId) => ({
+    send: (item: unknown, options: object = {}) =>
+      mocks.submitFollowUp(runId, item, { ...options, session }),
+    onClosed: () => () => {},
+  }),
 }));
 
-// Session-keyed registries: the suite pins one fake session and reads the
-// registry that dispatch resolves for it through the same accessor.
-// The session-keyed registry resolves live handles through its session's
-// RunRegistry. Tests stage a handle here for the lookups they exercise;
-// unset slots miss, like an untracked run.
-const sessionHandles: { byRunId?: unknown } = {};
+// The suite pins one fake session; a call reads a run's live state through
+// its runs. Tests stage a handle here for the lookups they exercise; unset
+// slots miss, like an untracked run.
+const sessionHandles: { byRunId?: RunHandle } = {};
 const testSession = {
   followUps: { acquire: () => ({ enqueue: vi.fn() }) },
   runs: {
-    getHandle: () => sessionHandles.byRunId,
+    // A staged handle's edge is the one its launch named.
+    get: () => {
+      const handle = sessionHandles.byRunId;
+      return handle && { handle, live: true, parent: handle.launchParent };
+    },
   },
 } as unknown as SessionHandle;
-const ClaudeAgentSessions = new AgentCliSessionRegistry(
-  testSession.runs,
-  noPluginHold,
-);
+const ClaudeAgentSessions = new AgentCliSessionRegistry(noPluginHold);
 /** The tool's call layer, serving the suite's one registry as the step would. */
 const toolLayer = (...options: Parameters<typeof nativeToolTestLayer>) =>
   Layer.merge(
@@ -59,7 +65,8 @@ const toolLayer = (...options: Parameters<typeof nativeToolTestLayer>) =>
     Layer.succeed(ClaudeAgentSessionsService)(ClaudeAgentSessions),
   );
 
-vi.mock('@agent/storage', () => ({
+vi.mock('@agent/storage/runLifecycle', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@agent/storage/runLifecycle')>()),
   registerRun: mocks.registerRun,
 }));
 
@@ -70,7 +77,7 @@ vi.mock('@tools/delegation/childRun', async () => {
     createChildRun: mocks.createChildRun,
     childRunDescription: (raw: string) => raw,
     // No paused child to reactivate here: every launch takes a fresh id.
-    agentCliChildRunId: () => Effect.sync(generateRunId),
+    resumedChildRunId: () => Effect.sync(generateRunId),
   };
 });
 
@@ -108,7 +115,7 @@ function completedChildRunLoop() {
 
 function stubRuns(): any {
   return {
-    getHandle: () => undefined,
+    get: () => undefined,
   };
 }
 
@@ -311,8 +318,12 @@ describe('claude_agent tool launch and resume fallback', () => {
           {
             turnPermit: (turn) => turn,
             settleBoundary: () =>
-              Effect.succeed({ rows: [], settled: Effect.void }),
-            settleEnd: () => Effect.succeed([]),
+              Effect.succeed({
+                rows: [],
+                alongside: undefined,
+                settled: Effect.void,
+              }),
+            settleEnd: () => Effect.succeed(undefined),
           },
         );
 
@@ -362,8 +373,12 @@ describe('claude_agent tool launch and resume fallback', () => {
           {
             turnPermit: (turn) => turn,
             settleBoundary: () =>
-              Effect.succeed({ rows: [], settled: Effect.void }),
-            settleEnd: () => Effect.succeed([]),
+              Effect.succeed({
+                rows: [],
+                alongside: undefined,
+                settled: Effect.void,
+              }),
+            settleEnd: () => Effect.succeed(undefined),
           },
         );
         const [callArgs] = mocks.query.mock.calls[0] as [
@@ -435,8 +450,12 @@ describe('claude_agent tool launch and resume fallback', () => {
         {
           turnPermit: (turn) => turn,
           settleBoundary: () =>
-            Effect.succeed({ rows: [], settled: Effect.void }),
-          settleEnd: () => Effect.succeed([]),
+            Effect.succeed({
+              rows: [],
+              alongside: undefined,
+              settled: Effect.void,
+            }),
+          settleEnd: () => Effect.succeed(undefined),
         },
       );
       if (!turn) throw new Error('Expected a Claude turn result');
@@ -685,8 +704,12 @@ describe('claude_agent tool launch and resume fallback', () => {
           {
             turnPermit: (turn) => turn,
             settleBoundary: () =>
-              Effect.succeed({ rows: [], settled: Effect.void }),
-            settleEnd: () => Effect.succeed([]),
+              Effect.succeed({
+                rows: [],
+                alongside: undefined,
+                settled: Effect.void,
+              }),
+            settleEnd: () => Effect.succeed(undefined),
           },
         );
         if (!firstTurn) throw new Error('Expected a Claude fork turn');
@@ -775,8 +798,12 @@ describe('claude_agent tool launch and resume fallback', () => {
         {
           turnPermit: (turn) => turn,
           settleBoundary: () =>
-            Effect.succeed({ rows: [], settled: Effect.void }),
-          settleEnd: () => Effect.succeed([]),
+            Effect.succeed({
+              rows: [],
+              alongside: undefined,
+              settled: Effect.void,
+            }),
+          settleEnd: () => Effect.succeed(undefined),
         },
       );
       expect(firstTurn).toMatchObject({

@@ -2,13 +2,23 @@
  * The session store's aside copies: the files a store open moved beside it
  * (a pre-1.0 store to `.pre1`, a damaged file to `.corrupt-<stamp>`), each
  * at a name no earlier copy holds and kept until
- * `texra doctor --prune-storage` deletes them; the busy retry; and the test
+ * `texra doctor --prune-storage` deletes them; the outermost transaction's
+ * two retries (a busy lock, claim owners proven off the lock); and the test
  * of whether a failed open is SQLite reporting the file damaged.
  */
 import { randomUUID } from 'node:crypto';
 import { basename, dirname, join } from 'node:path';
-import { type Cause, Duration, Effect, FileSystem, Schedule } from 'effect';
+import {
+  type Cause,
+  Context,
+  Duration,
+  Effect,
+  FileSystem,
+  Schedule,
+} from 'effect';
 import { isSqlError } from 'effect/sql/SqlError';
+import type { OwnerId, OwnerLiveness } from '@shared/schemas';
+import { DatabaseClaimRefused } from '@shared/session/database';
 import type * as SqlClient from 'effect/sql/SqlClient';
 
 export type Sql = SqlClient.SqlClient;
@@ -35,6 +45,70 @@ export const isBusy = (error: unknown): boolean =>
   isSqlError(error) && error.reason._tag === 'LockTimeoutError';
 export const retryBusy = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
   effect.pipe(Effect.retry({ schedule: BUSY_RETRY, while: isBusy }));
+
+/** The claim owners' liveness verdicts an attempt of the outermost
+ *  transaction runs with, each proven off the write lock before it. */
+export const ProvenOwners = Context.Reference<
+  ReadonlyMap<OwnerId, OwnerLiveness>
+>('@texra/session/ProvenOwners', { defaultValue: () => new Map() });
+
+/** A claim met owners its attempt has no verdict for. Raised as a defect,
+ *  so no body's error handling swallows it: the outermost transaction rolls
+ *  back whole, proves them ({@link provingOwners}), and runs again. */
+export class OwnersUnproven {
+  readonly owners: readonly OwnerId[];
+  constructor(owners: readonly OwnerId[]) {
+    this.owners = owners;
+  }
+}
+
+/** Every one of `owners` proven dead by this attempt (`unprovable` will do
+ *  when `single`), or the refusal naming the first that is not. An owner it
+ *  has no verdict for restarts the outermost transaction ({@link
+ *  provingOwners}). */
+export const reclaimable = (
+  owners: ReadonlySet<OwnerId>,
+  single: boolean,
+): Effect.Effect<void, DatabaseClaimRefused> =>
+  Effect.gen(function* () {
+    const proven = yield* ProvenOwners;
+    const unproven = [...owners].filter((owner) => !proven.has(owner));
+    if (unproven.length > 0)
+      return yield* Effect.die(new OwnersUnproven(unproven));
+    for (const ownerId of owners) {
+      const verdict = proven.get(ownerId);
+      if (verdict === 'alive' || (verdict === 'unprovable' && !single))
+        return yield* new DatabaseClaimRefused({ ownerId, verdict });
+    }
+  });
+
+/** Run the outermost transaction's `attempt`; one that met claim owners it
+ *  has no verdict for rolled back whole, so they are proven here, off the
+ *  write lock, and it runs again with every verdict so far. Each round
+ *  proves an owner the last did not, so the rounds end. */
+export const provingOwners =
+  <R>(prove: (owner: OwnerId) => Effect.Effect<OwnerLiveness, never, R>) =>
+  <A, E, R2>(
+    attempt: Effect.Effect<A, E, R2>,
+    proven: ReadonlyMap<OwnerId, OwnerLiveness> = new Map(),
+  ): Effect.Effect<A, E, R | R2> =>
+    attempt.pipe(
+      Effect.provideService(ProvenOwners, proven),
+      Effect.catchDefect((defect) =>
+        defect instanceof OwnersUnproven
+          ? Effect.flatMap(
+              Effect.forEach(defect.owners, (owner) =>
+                Effect.map(prove(owner), (v) => [owner, v] as const),
+              ),
+              (verdicts) =>
+                provingOwners(prove)(
+                  attempt,
+                  new Map([...proven, ...verdicts]),
+                ),
+            )
+          : Effect.die(defect),
+      ),
+    );
 
 /**
  * The first of `base`, `base.2`, `base.3`, … that names no file (with its
@@ -121,20 +195,34 @@ export const asideCopies = Effect.fnUntraced(function* (filename: string) {
   return copies;
 });
 
-/** Whether a failed open is SQLite reporting the file damaged or foreign:
- *  `SQLITE_CORRUPT` (11) or `SQLITE_NOTADB` (26), as a driver defect or a
- *  statement's classified cause. */
-export function isDamaged(cause: Cause.Cause<unknown>): boolean {
+/** Whether `cause` carries a SQLite primary result code among `codes`, as a
+ *  driver defect or in a classified failure's cause chain. */
+function hasSqliteCode(
+  cause: Cause.Cause<unknown>,
+  codes: readonly number[],
+): boolean {
   return cause.reasons.some((reason) => {
     if (reason._tag === 'Interrupt') return false;
     let error: unknown = reason._tag === 'Fail' ? reason.error : reason.defect;
     while (error !== null && typeof error === 'object') {
       const code = (error as { errcode?: unknown }).errcode;
-      if (typeof code === 'number') return [11, 26].includes(code & 0xff);
+      if (typeof code === 'number') return codes.includes(code & 0xff);
       error =
         (error as { reason?: { cause?: unknown } }).reason?.cause ??
         (error as { cause?: unknown }).cause;
     }
     return false;
   });
+}
+
+/** Whether a failed open is SQLite reporting the file damaged or foreign:
+ *  `SQLITE_CORRUPT` (11) or `SQLITE_NOTADB` (26). */
+export function isDamaged(cause: Cause.Cause<unknown>): boolean {
+  return hasSqliteCode(cause, [11, 26]);
+}
+
+/** Whether a failed open is SQLite unable to open the file at all
+ *  (`SQLITE_CANTOPEN`, 14): for a read-only probe, no store there yet. */
+export function cannotOpen(cause: Cause.Cause<unknown>): boolean {
+  return hasSqliteCode(cause, [14]);
 }

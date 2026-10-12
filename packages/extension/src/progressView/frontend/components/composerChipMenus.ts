@@ -13,14 +13,14 @@ import {
   type AgentOptionData,
   type SessionType,
 } from '@shared/schemas';
-import type { HostSnapshot } from '@shared/session/hostSnapshot';
-import type { Surface } from '@shared/session/surface';
 import type { TeXRAIconName } from '@shared/iconNames';
 import {
   texraApprovalPolicyLabel,
   formatTexraApprovalPolicy,
   type TexraApprovalPolicy,
 } from '@shared/approvalPolicy';
+import type { HostSnapshot } from '@texra/shared/session/hostSnapshot';
+import type { Surface } from '@texra/shared/session/surface';
 import { TASK_APPROVAL } from '@ui/copy/taskApproval';
 
 /** The agent menu's sections, one per launch mode: every agent chats, and

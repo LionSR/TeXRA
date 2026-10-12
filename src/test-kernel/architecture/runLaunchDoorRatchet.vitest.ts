@@ -43,7 +43,7 @@ const DETACHED_FORK_ALLOWLIST: Readonly<Record<string, number>> = {
   'packages/harness/src/agent/codeSandbox/codeSandbox.ts': 1,
   // A GitHub delivery into its poller's own set.
   'packages/texra/src/tools/github/PollingSourceBase.ts': 1,
-  // The package boundary: the awaiter of a launch (`runAgent` or
+  // The package boundary: the awaiter of a launch (a root launch or
   // `resumeRun`, whose run starts at the door) and the view drain a `Run`
   // owns.
   'packages/harness/src/effect/runHandle.ts': 2,

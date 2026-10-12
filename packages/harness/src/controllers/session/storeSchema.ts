@@ -13,10 +13,11 @@
  *
  * This module knows no row kind and no payload field.
  */
-import { Cause, Clock, Effect, Exit, FileSystem, Scope } from 'effect';
+import { Clock, Effect, Exit, FileSystem, Scope } from 'effect';
 import { withLogChannel } from '@logger/effectLog';
 import type { SessionStoreMovedAside } from '@shared/session/database';
 import {
+  cannotOpen,
   freeName,
   isDamaged,
   pragmaValue,
@@ -345,15 +346,14 @@ export const openStore = Effect.fnUntraced(function* <E, R>(
   filename: string,
 ) {
   const fs = yield* FileSystem.FileSystem;
-  // A file the probe cannot open (none yet) is the store's open to create,
-  // and one whose first read SQLite reports damaged (a store cut short
-  // inside its first page) is the attempt's below to move aside.
+  // A file the probe cannot open (none yet) is the open's to create; one
+  // SQLite reads as damaged (cut short in its first page) is moved below.
   if (mode === 'persistent')
     yield* Effect.scoped(
       Effect.flatMap(probe, (sql) => checkStamps(sql, path)),
     ).pipe(
       Effect.catchCause((cause) =>
-        Cause.hasDies(cause) || isDamaged(cause)
+        cannotOpen(cause) || isDamaged(cause)
           ? Effect.void
           : Effect.failCause(cause),
       ),

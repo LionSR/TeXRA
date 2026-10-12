@@ -11,7 +11,7 @@ import {
   resolveRouteEndpoint,
 } from '@texra-ai/llm';
 import { readProspectiveUsageRoute } from '@model/computeModelOptions';
-import { readRouteFacts } from '@model/modelRoute';
+import { readModelSettings, routeFactsFor } from '@model/modelSettings';
 import {
   LanguageModel,
   UNAVAILABLE_LANGUAGE_MODEL_PORT,
@@ -28,7 +28,10 @@ const boundEndpoint = (
   declinedRoutes?: readonly DeclinableUsageRoute[],
 ) =>
   Effect.gen(function* () {
-    const facts = yield* readRouteFacts(hostStores(), declinedRoutes);
+    const facts = routeFactsFor(
+      yield* readModelSettings(hostStores()),
+      declinedRoutes ?? [],
+    );
     const route = decideModelRoute(config, {
       ...facts,
       validation: false,

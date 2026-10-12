@@ -17,14 +17,13 @@
  * - `tasks.list`: every task in every project this storage root holds.
  * - `task.watch`: a project's session feed (a stream of `EventsFrame`s)
  *   for one `Subscribe`, the frames the webview bridge already carries.
- * - `task.request`: one `RuntimeRequest` (send, approve, stop, fork, …).
+ * - `task.request`: one `RuntimeRequest` (send, approve, stop, fork, a
+ *   pending tool edit's preview, …).
  * - `task.start` / `task.resume`: launch or continue a task in the service;
  *   `task.ended`: the outcome it ends with.
  * - `task.model`: switch a running task's model.
  * - `host.attach` / `host.focus` / `host.answer`: a window offering its host
  *   capabilities to its project's tasks (see `hostCalls.ts`).
- * - `request.preview`: a pending tool edit's original and proposed content,
- *   which the durable request does not carry.
  */
 import { Effect, Schema } from 'effect';
 import { Rpc, RpcGroup } from 'effect/rpc';
@@ -43,7 +42,7 @@ import {
   EventsFrameSchema,
   RequestErrorWireSchema,
   SubscribeSchema,
-} from '@shared/session/sessionFrames';
+} from '@texra/shared/session/sessionFrames';
 import {
   HostAnswerSchema,
   HostCapabilitySchema,
@@ -64,7 +63,7 @@ export const BUILD_VERSION: string =
 
 /** Bumped whenever a procedure or a payload changes shape. A client newer
  *  than the running service retires it; an older one stays in process. */
-export const PROTOCOL_VERSION = 14;
+export const PROTOCOL_VERSION = 17;
 
 /** `value` as JSON carries it: an absent field (`undefined`) is left out,
  *  which the wire's JSON check otherwise refuses. */
@@ -144,16 +143,11 @@ export type TaskSummary = z.infer<typeof TaskSummarySchema>;
 const TaskFailedSchema = z.object({
   _tag: z.literal('TaskFailed'),
   message: z.string(),
+  /** The service already presented it, through the window attached to the
+   *  project: the caller does not present it again. */
+  presented: z.boolean().optional(),
 });
 export type TaskFailed = z.infer<typeof TaskFailedSchema>;
-
-/** What a pending tool edit would change: the preview a window shows
- *  beside the request's path and line counts. */
-const ToolEditPreviewSchema = z.object({
-  originalContent: z.string(),
-  proposedContent: z.string(),
-});
-export type ToolEditPreview = z.infer<typeof ToolEditPreviewSchema>;
 
 /** The project a call addresses: its folder, as the client spells it. */
 const workspace = Schema.String;
@@ -219,12 +213,6 @@ export const TexraRpcs = RpcGroup.make(
   Rpc.make('task.ended', {
     payload: { workspace, runId: zodWire(RunIdSchema) },
     success: zodWire(RunEndSchema.pick({ outcome: true, output: true })),
-    error: zodWire(TaskFailedSchema),
-  }),
-  Rpc.make('request.preview', {
-    payload: { workspace, requestId: Schema.String },
-    /** Null once the request is settled, or when the service staged none. */
-    success: zodWire(ToolEditPreviewSchema.nullable()),
     error: zodWire(TaskFailedSchema),
   }),
   /** Switch a run the service is running to `model` from its next turn;

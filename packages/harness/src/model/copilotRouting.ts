@@ -134,16 +134,6 @@ const liveRouteModels = (stored: readonly string[]) =>
     (model) => !modelConfig(model)?.retired && !modelConfig(model)?.deprecated,
   );
 
-/** Whether the user prefers the Copilot route for this canonical base model. */
-export function prefersCopilotRoute(
-  model: string,
-  state: Pick<StateStore, 'get'>,
-) {
-  return Effect.gen(function* () {
-    return (yield* preferredCopilotRouteModels(state)).includes(model);
-  });
-}
-
 /**
  * Persist (or clear) the Copilot route preference for one base model. A
  * stored list that fails the reader's schema reads as empty, as it does for
@@ -200,7 +190,7 @@ export function copilotRouteUnavailableReason(
       return `Copilot access to "${model}" is temporarily unavailable in VS Code.`;
     // No discovered route means Copilot cannot serve the model right now.
     case undefined:
-      return `VS Code does not currently offer "${model}" through Copilot.`;
+      return `No VS Code window offers "${model}" through Copilot: Copilot models run through a VS Code window of this project. Open the project in VS Code with GitHub Copilot, or stop using Copilot for this model.`;
     default:
       return access satisfies never;
   }

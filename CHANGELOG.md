@@ -6,6 +6,45 @@ All notable changes to this project will be documented in this file.
 
 ### Breaking Changes
 
+- **A run that fails before it starts is reported as a launch error, not
+  listed as a failed task.** A task, subagent or background script is
+  recorded together with its first batch of history, so one that fails
+  before it gets there (an agent file that does not render, an attachment
+  that cannot be read, a model that cannot be bound) leaves no entry in the
+  task list: the CLI exits non-zero with the cause, the desktop app and the
+  extension show the error where the task was started, `task.start` on the
+  service returns it, and the SDK's `start` fails with a `RunFailure` that
+  carries it. A parent whose subagent failed that way still receives the
+  failure as a follow-up. A resume that fails before it reopens the task
+  leaves the task as it was, instead of marking it failed.
+- **`ProcessServices` no longer includes `AgentEngine`.** An SDK host that
+  builds its own layer over `ProcessServices` no longer provides it.
+- **Plugin tools: a narrower run, and their own services.** A plugin's
+  tool reads the run its call works for from `ToolContext`, with
+  `requireRun`, `callerRun` and the `ToolRun` type from
+  `@texra-ai/harness/plugins`; `ToolRun` carries only what plugin tools
+  use, and the files a run read are read-only there. A plugin's tools are
+  typed by `PluginToolServices`: a tool that requires the harness's own
+  call services no longer compiles. To launch a child agent from a tool,
+  use the `ChildRuns` service (`launch`) from the same entry; a script's
+  children stay within its concurrency budget. Plugin authors who imported
+  `RunCall` or typed tools by `ToolServices` move to these. A tool that
+  drives an external agent process as the calling run's child registers it
+  with `ChildRuns.launchProcess`, and a plugin's session layer no longer
+  reaches the session's runs. A host launches a root run with
+  `session.runs.launch({ request, options })` under its `SessionOwner`,
+  which answers whether it still holds that session with `holds`;
+  `runAgent` is gone.
+- **SDK tool and plugin contract: `lane`, `arms` and `facts`.** A tool
+  declares where its calls run with `lane: 'parallel' | 'barrier' | 'own'`,
+  replacing `parallelSafe` and `ownsConcurrency`. A plugin lists its own row
+  kinds as `arms` on its `Plugin` value, and a tool states a fact about its
+  run by returning it in its result's `facts`: the fact is committed with
+  the call's result, never apart from it. A task an earlier build saved
+  after it reached the model cannot be opened: the task list, `texra
+history`, a resume and a follow-up say it was "written by an earlier
+  build of TeXRA; it can't be opened by this one" instead of calling it
+  damaged or offering to resume it.
 - **Some tasks saved by an earlier build can no longer be opened.** Fields
   nothing read were removed from the stored records, and these records are
   checked strictly: a document task (any run that produced revisions), a
@@ -908,6 +947,39 @@ show` print the same notice, and the new `texra agents customize`,
 
 ### Bug Fixes
 
+- **A task whose end could not be saved no longer stays listed as
+  running.** When only its result could not be saved, it ends as it did,
+  its card says "Result lost" with the cause, and the task that started it
+  is told; otherwise it is recorded as failed. A task whose saved history
+  is damaged can still be stopped, and so can the subagents under it.
+- **A subagent's result can no longer be lost to a crash.** A background
+  subagent, script or command used to record its result and then, as a
+  second step, queue it for the task that started it; a crash between the
+  two left the result only in the subagent's report until that task was
+  resumed a particular way. Both now commit together, so a task waiting on
+  its subagents always finds the result queued once the subagent reads as
+  done. `/compact` is now confirmed only after it is queued, and says so
+  when the conversation takes no more input.
+- **A crash no longer leaves half of one write on disk.** When TeXRA wrote
+  several related records as one step (a goal and the approval it grants, a
+  run's history with its registration, a request and its answer), each
+  record was saved on its own, so a crash between them could keep one
+  without the other. Each step is now saved whole or not at all.
+- **A model failure that a retry cannot fix no longer offers Retry.** When
+  a provider refused a request as invalid or unsupported, or rejected its
+  credentials, without an HTTP status, the retry prompt still offered a
+  Retry that sent the same request and failed again. It now offers one only
+  when the provider's reply says the same request can succeed, or after a
+  used-up plan (where the retry switches to your own key). The offer follows
+  the model's retryable and quota classification rather than the HTTP
+  status, so a 429 or 5xx whose reply says the context overflowed is not
+  offered Retry either.
+- **Reopening the desktop window works with the TeXRA service.** When the
+  app used the background service (the macOS default), clicking the Dock icon
+  after closing the window logged "could not be reopened", clicking a
+  notification did not show its task, and a second click could open a second
+  window. The window now reopens once, and a notification shows its task
+  after the window is back.
 - **Read conversations stay read after restarting.** Loading older chat history
   no longer resets the sidebar's read marker. Later activity still makes the
   conversation unread until it is viewed.
@@ -917,6 +989,13 @@ show` print the same notice, and the new `texra agents customize`,
   file badges and agent lists did not update until you refreshed them. The
   change is now recorded on the task, and every window that shows the
   project picks it up.
+- **Copilot models work in service tasks again.** Since tasks moved into
+  the TeXRA service, a model routed through GitHub Copilot failed there:
+  the service has no editor. A task now runs its Copilot turns through a
+  VS Code window of its project, streaming the reply back and stopping the
+  turn when the task stops; the window's own model error is shown as it
+  is. With no such window open, the task says so: open the project in VS
+  Code with GitHub Copilot, or stop using Copilot for that model.
 - **A project's `.env` reaches its tasks again, in every TeXRA app.**
   Since tasks moved into the TeXRA service, a key kept only in the
   project's `.env` was missing there, and a different key from your login
@@ -929,6 +1008,15 @@ show` print the same notice, and the new `texra agents customize`,
   lists and key checks. A key you set only in the terminal that
   starts a chat or `texra tasks start` does not reach a task in the
   service, and the CLI now says so.
+- **MCP servers start with their project's `.env`.** Each project now runs
+  its own MCP servers, from `~/.texra/mcp.json` and from installed
+  plugins: a server starts with that project's `.env` variables over the
+  environment (never a provider key), stays up for the project's next task
+  (30 minutes after the last one used it), and stops when the project
+  closes. In the TeXRA service,
+  one project's server is never shared with another's, and a server no
+  longer starts without its project's variables. An edited `.env` starts a
+  fresh server for the next task.
 
 - **The TeXRA service no longer grows with every project it ever
   opened.** A project's session in the service now closes once no window

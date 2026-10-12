@@ -6,14 +6,7 @@ import { customElement, property, state } from 'lit/decorators.js';
 // Local imports - shared styles
 import { providerDisplayName } from '@texra-ai/llm';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
-import {
-  EXPENSIVE_MODEL_HINT,
-  MODEL_AVAILABILITY_STATUS,
-} from '@shared/schemas';
-import {
-  REASONING_LEVEL_LABELS,
-  REASONING_LEVEL_OPTIONS,
-} from '@shared/model/reasoningLabels';
+import { MODEL_AVAILABILITY_STATUS } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { postMessage } from '@texra/shared/hostBridge';
 import {
@@ -21,6 +14,11 @@ import {
   type ModelSelectionItem,
   type ProviderKeyStatus,
 } from '@texra/shared/settingsView/settingsViewMessages';
+import {
+  REASONING_LEVEL_LABELS,
+  REASONING_LEVEL_OPTIONS,
+} from '@texra/shared/model/modelPicker';
+import { EXPENSIVE_MODEL_HINT } from '@texra/shared/model/modelPicker';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import { renderKeyStatusIcon, statusCheckIconStyles } from '@ui/wa/statusIcons';
 import { renderSettingsSectionHeading } from '@ui/wa/settingsSection';

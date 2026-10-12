@@ -14,7 +14,7 @@ import { customElement, property } from 'lit/decorators.js';
 import { repeat } from 'lit/directives/repeat.js';
 
 import type { SessionView } from '@shared/session/sessionView';
-import type { Surface } from '@shared/session/surface';
+import type { Surface } from '@texra/shared/session/surface';
 import { SessionUiEvents } from '@texra/shared/session/uiEvents';
 import {
   INTERRUPTED_NOTICE,

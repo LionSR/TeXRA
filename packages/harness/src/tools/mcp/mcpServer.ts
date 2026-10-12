@@ -1,9 +1,10 @@
 /**
  * One stdio MCP server, brought up in a scope: spawned with a scrubbed
  * environment, initialized, its tools listed, and stopped (SIGTERM, then
- * SIGKILL) when the scope closes. The scope is the hold the live catalog
- * counts for its spec and revision (`@tools/liveTools`), so the process
- * lives exactly as long as some open run names it.
+ * SIGKILL) when the scope closes. The scope is its project's catalog entry
+ * for its spec, revision and project variables (`@tools/liveTools`), so the
+ * process lives exactly as long as some open run or step of that project
+ * holds it.
  *
  * JSON-RPC runs over the same Effect connection the Lean language server
  * uses (`@tools/jsonRpc`), in newline framing. Each listed tool becomes a

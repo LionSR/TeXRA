@@ -17,7 +17,7 @@ import {
 import { withLogChannel } from '@logger/effectLog';
 import type { ProcessServices } from '@platform/processRuntime';
 import { aggregateId, RUN_PHASE, type RunId } from '@shared/schemas';
-import { heldElsewhereBy } from '@shared/session/database';
+import { DatabaseRowEarlier, heldElsewhereBy } from '@shared/session/database';
 import { RunHistoryRefused } from '@shared/session/runHistory';
 import { FOLLOW_UP_TYPES, foldRunRows } from '@shared/session/runRows';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
@@ -31,16 +31,19 @@ import {
   resumeToolUseFromResumeData,
   type ResumeToolUseFromResumeDataOptions,
 } from './executeAgent';
-import { relayChildDeliveries } from './childSettlement';
+import { deliverHeld } from './runLaunchGuard';
 import { startChildRunLoop } from './childRunLoop';
-import { Runs } from './runRegistry';
-import { RunLive } from './runRegistry';
+import {
+  registryOf,
+  type AgentRunServices,
+  Runs,
+  RunLive,
+} from './runRegistry';
 import {
   retrieveSessionResumeData,
   type ResumeData,
 } from './SessionResumeRetrieval';
 import type { SessionHandle } from './SessionHandle';
-import type { AgentRunServices } from './runRegistry';
 
 type ResumeRunCompletion = Effect.Effect<RunEndResult, Error>;
 /** A resume settles at the run's idle turn or at run termination, after admitted input is consumed. */
@@ -56,13 +59,17 @@ export type ResumeRunResult =
       readonly result?: RunEndResult;
     }
   /** `read_failed` is a follow-up's alone: a resume reads under its claim. */
-  | { readonly failed: Exclude<FollowUpFailureReason, 'read_failed'> };
+  | {
+      readonly failed: Exclude<
+        FollowUpFailureReason,
+        'read_failed' | 'not_parent'
+      >;
+    };
 
 export interface ResumeRunOptions extends Pick<
   ResumeToolUseFromResumeDataOptions,
   | 'publishWorkflowOutput'
   | 'beforeRunEnd'
-  | 'onRunClaimed'
   | 'onRun'
   | 'onRunResolved'
   | 'onTraceEvent'
@@ -168,7 +175,7 @@ const resumeHere = Effect.fn('resumeHere')(function* (
 ): Effect.fn.Return<ResumeRunResult, Error, AgentRunServices | Scope.Scope> {
   const session = options.session;
   const cancelled = () => options.isCancellationRequested?.() === true;
-  if (session.runs.isLive(runId)) return REFUSED;
+  if (session.runs.get(runId)?.live === true) return REFUSED;
   const store = getRunRecords(session, runId);
   const [config, exists] = yield* Effect.all([
     store.readConfig(),
@@ -176,7 +183,7 @@ const resumeHere = Effect.fn('resumeHere')(function* (
   ]);
   if (!config || !exists) {
     // A run whose records are gone: with nothing queued its input ends.
-    session.followUps.closeInput(runId);
+    yield* session.followUps.closeInput(runId);
     return REFUSED;
   }
   // Deleted, or its input closed, while those reads ran.
@@ -191,6 +198,8 @@ const resumeHere = Effect.fn('resumeHere')(function* (
   yield* Effect.addFinalizer(() => Scope.close(claim, Exit.void));
   const heldBy = yield* holdClaim(session, runId).pipe(Scope.provide(claim));
   if (heldBy !== null) return { failed: 'owned_elsewhere' };
+  // What its children hold for it, it reads once it runs here.
+  yield* deliverHeld(session, runId);
   const resume = yield* retrieveSessionResumeData(runId, config, session);
   if (cancelled()) return REFUSED;
   // Nothing to continue from.
@@ -218,7 +227,6 @@ const runLaunchOptions = (options: ResumeRunOptions) => ({
   isCancellationRequested: options.isCancellationRequested,
   publishWorkflowOutput: options.publishWorkflowOutput,
   beforeRunEnd: options.beforeRunEnd,
-  onRunClaimed: options.onRunClaimed,
   onRun: options.onRun,
   onRunResolved: options.onRunResolved,
   onTraceEvent: options.onTraceEvent,
@@ -249,6 +257,8 @@ function refusalFor(
   if (error instanceof ResumeSessionUnavailableError) {
     return Effect.succeed({ failed: 'finished' });
   }
+  if (error instanceof DatabaseRowEarlier)
+    return Effect.succeed({ failed: 'earlier_build' });
   if (namesUnusableCheckpoint(error)) {
     return Effect.logWarning(
       `Refusing to resume ${runId}: its saved state cannot be continued: ${toErrorMessage(error)}`,
@@ -275,15 +285,12 @@ const resumeQueuedToolUse = Effect.fn('resumeQueuedToolUse')(function* (
 
   // Do not revive a generation while its stop is settling: a live run registry
   // entry is a run whose fiber has not settled yet.
-  if ((yield* Runs).isLive(resume.runId)) return REFUSED;
+  if ((yield* Runs).get(resume.runId)?.live === true) return REFUSED;
 
   let rootCompletion: ResumeRunCompletion | undefined;
   const admitted = new Set<string>();
   const isAdmitted = (input: { readonly followUpId: string }): boolean =>
     admitted.has(input.followUpId);
-  // What its children settled and a crash kept from its inbox comes first:
-  // a relay that fails fails the resume, which a later one retries.
-  yield* relayChildDeliveries(session, runId);
   const queuedInput = queuedFollowUps(session, runId);
   const resumed = yield* Effect.result(
     Effect.gen(function* () {
@@ -307,7 +314,7 @@ const resumeQueuedToolUse = Effect.fn('resumeQueuedToolUse')(function* (
       const parentRunId = yield* persistedParentRunId(session, runId);
       let completion: Fiber.Fiber<RunEndResult | undefined, Error>;
       if (parentRunId === undefined) {
-        const root = yield* session.runs.launch(
+        const root = yield* registryOf(session.runs).start(
           runId,
           resumeToolUseFromResumeData(resume, { ...launchOptions, onIdle }),
           (admitted) => admitted,

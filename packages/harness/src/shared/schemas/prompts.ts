@@ -41,7 +41,7 @@ export type BashPermission = z.infer<typeof BashPermissionSchema>;
 /**
  * The API-key providers a stored retry offer names. Storage owns the enum
  * (the llm catalog's `ApiKeyProviderId` must stay assignable to it, which
- * `routeCredentialSwitch` checks where it builds an offer), so a catalog
+ * `credentialSwitch` checks where it builds an offer), so a catalog
  * change is never a silent stored format change.
  */
 const ApiKeyProviderIdSchema = z.enum([

@@ -5,13 +5,11 @@
  * Every process that shows a session runs it; the transport carries its
  * input, never its output.
  *
- * Pure in the sense that matters: no IO, no clock, no platform, no store reads,
- * and the same input sequence yields the same view. Incremental in the sense
- * the PRD requires: an event recomputes the arm for its run, walks `parentId`
- * to the root refreshing each ancestor's `childIds`, `rollup`, `treeUsage`,
- * `approval`, `group`, and `forceExpanded`, then touches `order` only when a
- * top-level run appeared, moved, or left. O(depth) per event, never a whole-view pass. A text
- * chunk costs the chunk, never the row's text.
+ * Pure: no IO, clock, platform or store reads; the same input yields the
+ * same view. Incremental: an event recomputes its run's arm and walks
+ * `parentId` to the root refreshing each ancestor's aggregates, touching
+ * `order` only when a top-level run moved. O(depth) per event; a text chunk
+ * costs the chunk, never the row's text.
  *
  * Three rules govern the event arm before any fact applies (5.2). A listing
  * fact is ordered by commit within its `(aggregate, listing type)` entry in
@@ -26,16 +24,12 @@
  * (7.2): at the replay marker every run no listing row of that sequence
  * named is removed the way a tombstone removes it.
  *
- * Publication (D5): returned views are immutable; untouched branches retain
- * identity. `writable` and the transcript fold copy each changed container
- * at most once per fold, and writes stop when fold returns. No-op writes keep
- * the previous branch. RunView, TranscriptView, and SessionView are replaced
- * on change, preserving older views and identity-based host comparisons.
- * Indexes are module-private, keyed by their transcript/view, and advance only
- * with the latest level: row/group positions, text and thinking state, claims,
- * listing commits, owners, ended/listed runs, snapshots, and shared-row slices.
- * So `fold` refuses any view but the level it last returned.
- * Every container write must report changed so foldWith publishes its copy.
+ * Publication (D5): returned views are immutable and untouched branches keep
+ * identity, preserving older views and identity-based host comparisons; each
+ * changed container is copied at most once per fold, no-op writes keep the
+ * previous branch, and every write reports changed so foldWith publishes its
+ * copy. The module-private indexes advance only with the latest level, so
+ * `fold` refuses any view but the one it last returned.
  */
 
 import {
@@ -44,7 +38,9 @@ import {
   MESSAGE_TYPES,
   RUN_PHASE,
   RUN_LIFECYCLE_READY,
+  RESTING_SUBSTATES,
   RUN_SUBSTATE,
+  parkSubstate,
   isDocumentTaskConfig,
   isPlainAgentIdentity,
   listingKeyOf,
@@ -60,6 +56,7 @@ import {
   type ExistenceReconciliation,
   type LocalRuntimeState,
   type DisplaySessionEvent,
+  type RunEnd,
   type RunId,
   type TextChunk,
   type TranscriptSubscription,
@@ -330,6 +327,7 @@ function createRun(
     substate: null,
     durableOutcome: null,
     statusDetail: null,
+    lost: null,
     ...runStatusCopy(status),
     createdAt: event.commit,
     launchedAt: event.at,
@@ -512,13 +510,11 @@ function refreshAncestors(view: SessionView, runId: RunId): void {
 // ---------------------------------------------------------------------------
 
 /**
- * `group`, `approval`, `readOnly`, `actions`, `forceExpanded`, `rollup`,
- * `treeUsage`, `durableOutcome` and the status copy, from the run's facts, the local
- * snapshot and its children (5.2). Interrupted is owner loss: a non-terminal
- * run nobody holds (this process, or one whose lease this one may not
- * touch), pending approval or not. Waiting needs a held owner and a request
- * that parks its tool; unheld, that request reads as interrupted, since
- * nothing listens for the answer, and stays listed so a resume can re-ask.
+ * A run's aggregates and status copy, from its facts, the local snapshot and
+ * its children (5.2). Interrupted is owner loss: a non-terminal run nobody
+ * holds, pending approval or not. Waiting needs a held owner and a request
+ * that parks its tool; unheld, it reads as interrupted, since nothing
+ * listens for the answer, and stays listed so a resume can re-ask.
  */
 function withAggregates(view: SessionView, run: RunView): RunView {
   const { local } = sessionIndexesOf(view);
@@ -526,9 +522,8 @@ function withAggregates(view: SessionView, run: RunView): RunView {
   const own = owner !== null && local.self.includes(owner);
   const heldBy =
     owner !== null && !own && !local.dead.includes(owner) ? owner : null;
-  const heldElsewhere = heldBy !== null;
-  const held = own || heldElsewhere;
-  const paused = run.substate === RUN_SUBSTATE.PAUSED;
+  const held = own || heldBy !== null;
+  const paused = RESTING_SUBSTATES.has(run.substate);
   // Only a request that parks its tool is a wait: a dispatched inquiry left
   // its run working, listed for the panel but still Running.
   const pendingOwn = view.requests.some(
@@ -562,7 +557,7 @@ function withAggregates(view: SessionView, run: RunView): RunView {
     interrupted,
     waiting,
   });
-  const readOnly = heldElsewhere || unreadable !== undefined;
+  const readOnly = heldBy !== null || unreadable !== undefined;
   const actions = runActions({ ...run, readOnly, group });
   const forceExpanded = waiting || interrupted || descendantNeedsUser;
   const blockedEntry = local.resumeBlocked.find((b) => b.runId === run.id);
@@ -577,6 +572,7 @@ function withAggregates(view: SessionView, run: RunView): RunView {
     statusDetail = runInterruptedMessage();
   else if (statusDetail === null && heldBy !== null)
     statusDetail = runHeldMessage(ownerPid(heldBy));
+  else if (statusDetail === null) statusDetail = run.lost;
   if (
     run.group === group &&
     run.approval === approval &&
@@ -642,9 +638,11 @@ function walkUp(view: SessionView, startId: RunId | null): void {
 }
 
 /** Finalize unmatched compaction starts when the turn settles. */
-function withSettledTranscript(run: RunView, finishedAt: number): RunView {
+function withSettledTranscript(run: RunView, at: number, e?: RunEnd['error']) {
+  if (e?.kind === 'result-lost')
+    run = { ...run, lost: e.message ?? 'Result lost' };
   if (!isTranscriptSettlementPhase(run.status)) return run;
-  const transcript = settleTranscript(run.transcript, finishedAt);
+  const transcript = settleTranscript(run.transcript, at);
   return transcript === run.transcript ? run : { ...run, transcript };
 }
 
@@ -826,6 +824,7 @@ function applyOwnArm(run: RunView, event: OwnEvent): RunView {
         substate,
         runStartedAt: event.at,
         turn: null,
+        lost: null,
       };
     }
     case 'run.config': {
@@ -871,10 +870,8 @@ function applyOwnArm(run: RunView, event: OwnEvent): RunView {
         facts: { ...run.facts, [`${event.plugin}/${event.kind}`]: event.value },
       };
     case 'child.park':
-      // A loop-driven child's park or pause; no run history, so `turn` stays null.
-      return event.phase === 'paused'
-        ? { ...parked(run, true, event.at), substate: RUN_SUBSTATE.PAUSED }
-        : parked(run, phaseMoveOf(event) === RUN_PHASE.WAITING, event.at);
+      run = parked(run, event.phase !== 'resumed', event.at);
+      return { ...run, substate: parkSubstate(event) };
     case 'run.detach':
       // The edge severed (one run model, 3.2); a run never gets a new parent.
       return run.parentId === null ? run : { ...run, parentId: null };
@@ -890,11 +887,11 @@ function applyOwnArm(run: RunView, event: OwnEvent): RunView {
             title: event.description || run.label,
           };
     case 'run.end':
-      // The terminal fact: the phase is its outcome (one run model, section
-      // 3.3). The caller records that the run ended.
+      // The terminal fact: its outcome (3.3), and any result it lost.
       return withSettledTranscript(
         { ...run, status: event.outcome, substate: null, runStartedAt: null },
         event.at,
+        event.error,
       );
   }
 }
@@ -1099,9 +1096,8 @@ function foldDurable(
     return true;
   }
   const known = view.runs.get(runId);
-  // Existence: only `run.start` mints a run, once. A fact for a run
-  // the view has no `run.start` for changes nothing and leaves no entry (its
-  // publisher logs it).
+  // Existence: only `run.start` mints a run, once. A fact for a run without
+  // one changes nothing and leaves no entry (its publisher logs it).
   if (!known && event.type !== 'run.start') return false;
   latest.set(listingKey, event.commit);
   if (event.type === 'run.removed') return foldRunRemoved(view, runId);
@@ -1136,12 +1132,9 @@ function foldDurable(
   }
   // A fresh incarnation can end again.
   if (event.type === 'run.activate') sessionIndexesOf(view).ended.delete(runId);
-  // Listing and transcript reads can arrive in either order. Replaying older
-  // history must not move the activity clock (and persisted read marker) back.
-  let next: RunView = {
-    ...own,
-    lastTimestamp: Math.max(own.lastTimestamp ?? event.at, event.at),
-  };
+  // Reads arrive in any order: older history never moves the clock back.
+  const lastTimestamp = Math.max(own.lastTimestamp ?? event.at, event.at);
+  let next: RunView = { ...own, lastTimestamp };
   setRun(view, next);
 
   if (created || next.parentId !== before.parentId) {
@@ -1179,14 +1172,8 @@ function foldTraceEvent(
   // A filtered fact still advances its source cursor. Keep the run and
   // transcript references stable when that fact produced no presentation.
   if (transcript === run.transcript) return true;
-  setRun(
-    view,
-    withTranscriptFacts({
-      ...run,
-      transcript,
-      lastTimestamp: Math.max(run.lastTimestamp ?? event.at, event.at),
-    }),
-  );
+  const lastTimestamp = Math.max(run.lastTimestamp ?? event.at, event.at);
+  setRun(view, withTranscriptFacts({ ...run, transcript, lastTimestamp }));
   return true;
 }
 

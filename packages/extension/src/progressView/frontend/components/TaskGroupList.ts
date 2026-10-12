@@ -20,7 +20,6 @@ import type {
   SessionView,
   TranscriptView,
 } from '@shared/session/sessionView';
-import type { Surface } from '@shared/session/surface';
 import { isInFlightPhase } from '@shared/runs/runStatus';
 import { taskGroupDisplayStatus } from '@shared/runs/taskGroupProjection';
 import {
@@ -37,6 +36,7 @@ import {
   formatWorkflowPhaseHeading,
   workflowPhaseHeadingOfGroup,
 } from '@shared/transcript/workflowCall';
+import type { Surface } from '@texra/shared/session/surface';
 import { designTokens } from '@ui/styles';
 
 // Side-effect imports - register Web Awesome components

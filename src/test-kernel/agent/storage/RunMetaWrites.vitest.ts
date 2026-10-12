@@ -2,6 +2,7 @@ import { it } from '@effect/vitest';
 import { Effect, SynchronizedRef } from 'effect';
 import { beforeEach, describe, expect } from 'vitest';
 import { getRunRecords } from '@agent/storage';
+import { finalizeRun } from '@agent/storage/runLifecycle';
 import {
   appendRow,
   handedDown,
@@ -9,11 +10,13 @@ import {
   rowAggregate,
 } from '@agent/runtime/loop/rows';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
+import { storedDraft } from '@agent/runtime/storedTurn';
 import { aggregateId, type RunId } from '@shared/schemas';
 import { freshRunState } from '@shared/session/runStateFold';
 import {
   createTestSession,
   publishTestRunStart,
+  seedRows,
 } from '@test/support/sessionTestUtils';
 import { setupPlatform } from '@test/support/setupPlatform';
 
@@ -41,7 +44,7 @@ describe('run metadata updates', () => {
                 description: 'A described session',
               },
             ]),
-            session.runs.end({
+            finalizeRun(session, {
               runId: id,
               outcome: 'completed',
             }),
@@ -64,23 +67,46 @@ describe('run metadata updates', () => {
         control: { kind: 'model', model: 'gone' },
       });
       expect((yield* session.followUps.read(id)).followUps).toHaveLength(1);
-      yield* session.runs.end({ runId: id, outcome: 'failed' });
+      yield* finalizeRun(session, { runId: id, outcome: 'failed' });
       expect((yield* session.followUps.read(id)).followUps).toEqual([]);
+    }),
+  );
+  // A history that does not fold (here, input with no opening position)
+  // must not keep the run listed as running: its end still lands.
+  it.effect('ends a run whose history does not load', () =>
+    Effect.gen(function* () {
+      yield* seedRows(session.log)([
+        storedDraft(
+          appendRow(id, [
+            { role: 'user', content: [{ kind: 'text', text: 'go' }] },
+          ]),
+        ),
+      ]);
+      expect(yield* Effect.flip(session.runHistory.load(id))).toMatchObject({
+        reason: 'inconsistent',
+      });
+      const ended = yield* finalizeRun(session, {
+        runId: id,
+        outcome: 'failed',
+      });
+      expect(ended).toMatchObject({ ok: true, outcome: 'failed' });
+      const ends = yield* session.log.rows(aggregateId('run', id), ['run.end']);
+      expect(ends).toHaveLength(1);
     }),
   );
   it.effect('keeps a driver outcome when host-exit finalization follows', () =>
     Effect.gen(function* () {
-      yield* session.runs.end({
+      yield* finalizeRun(session, {
         runId: id,
         outcome: 'completed',
       });
       expect(
-        yield* session.runs.end({
+        yield* finalizeRun(session, {
           runId: id,
           outcome: 'cancelled',
           keepExistingOutcome: true,
         }),
-      ).toEqual({ ok: true, outcome: 'completed' });
+      ).toEqual({ ok: true, outcome: 'completed', recorded: true });
       expect(yield* getRunRecords(session, id).readRunEnd()).toMatchObject({
         outcome: 'completed',
       });
@@ -105,20 +131,22 @@ describe('run metadata updates', () => {
             credentialScope: 'openai',
           },
         } as const;
-        yield* session.runHistory.acquire(id);
+        const cell = yield* session.runHistory.open(id, {
+          activation: () => Effect.succeed([]),
+        });
         const opening = {
           ...freshRunState(0),
           family: 'toolUse' as const,
           modelId: 'openai/gpt-5.4-2026-03-05',
           backend: 'openai' as const,
         };
-        const opened = yield* session.runHistory.appendBatch(id, null, [
+        yield* cell.append([
           appendRow(id, [
             { role: 'user', content: [{ kind: 'text', text: 'go' }] },
           ]),
           positionRow(id, opening, 'turn.ready'),
         ]);
-        yield* session.runHistory.appendBatch(id, opened, [
+        yield* cell.append([
           {
             type: 'model.message',
             aggregateId: rowAggregate(id),
@@ -161,7 +189,7 @@ describe('run metadata updates', () => {
           },
         ]);
 
-        yield* session.runs.end({ runId: id, outcome: 'failed' });
+        yield* finalizeRun(session, { runId: id, outcome: 'failed' });
 
         expect(yield* getRunRecords(session, id).readRunEnd()).toMatchObject({
           outcome: 'failed',
@@ -180,8 +208,10 @@ describe('run metadata updates', () => {
     "commits a script run's handed-down call with no model origin",
     () =>
       Effect.gen(function* () {
-        yield* session.runHistory.acquire(id);
-        const opened = yield* session.runHistory.appendBatch(id, null, [
+        const cell = yield* session.runHistory.open(id, {
+          activation: () => Effect.succeed([]),
+        });
+        const opened = yield* cell.append([
           appendRow(id, [
             { role: 'user', content: [{ kind: 'text', text: 'polish' }] },
           ]),
@@ -203,7 +233,7 @@ describe('run metadata updates', () => {
             row.type === 'model.message' ? row.payload.kind : row.type,
           ),
         ).toEqual(['handed-down', 'run.position']);
-        const state = yield* session.runHistory.appendBatch(id, opened, rows);
+        const state = yield* cell.append(rows);
         expect(state.pendingResponse?.calls.map((c) => c.toolName)).toEqual([
           'script',
         ]);

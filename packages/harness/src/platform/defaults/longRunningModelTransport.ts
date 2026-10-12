@@ -4,7 +4,7 @@
  * streamed model response needs, which undici's defaults (a 300 s body
  * timeout) cut short.
  *
- * Model traffic carries it as a bound fetch: `modelBinding` hands
+ * Model traffic carries it as a bound fetch: `ModelAccess` hands
  * {@link modelFetch} to every `packages/llm` model it constructs,
  * so a run gets this transport in any process, the agent package's embedder
  * included, without touching that process's global dispatcher. A host's

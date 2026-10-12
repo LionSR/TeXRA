@@ -1,6 +1,9 @@
 import { Effect, ManagedRuntime } from 'effect';
 
-import { processLayer } from '@controllers/session/sessionLayer';
+import {
+  processLayer,
+  type ProcessLayerOptions,
+} from '@controllers/session/sessionLayer';
 import { AppState, AgentDirectories } from '@platform/interfaces';
 import { withForkFailureReporting } from '@platform/processRuntime';
 import type { StateSettingEntry } from '@shared/state/stateSettings';
@@ -52,6 +55,41 @@ const { globalStorage } = createFakeWorkspaceRoots();
  *  process service, so it builds once however many sessions open. */
 export const identityReads = { count: 0 };
 
+/** The kernel's composition over the fake host: `processLayer`'s options
+ *  with `plugins` (and the app's setting rows, as a host passes them) under
+ *  the global root `root`. */
+const testProcessOptions = (
+  plugins: readonly Plugin[],
+  settings?: readonly StateSettingEntry[],
+  root: string = globalStorage,
+): ProcessLayerOptions => ({
+  globalStorage: root,
+  // Under the fake global root, never the developer's `~/.texra/mcp.json`.
+  plugins,
+  ...(settings ? { settings } : {}),
+  mcpConfigPath: mcpConfigPathOf(root),
+  secrets: fakeHostSecrets,
+  appState: AppState.layer(fakeHostAppState),
+  languageModel: fakeHostLanguageModel,
+  agentDirectories: AgentDirectories.layer(fakeHostAgentDirectories),
+  toolAvailability: unprobedToolAvailability,
+  // The harness reports no usage; the telemetry suite starts its own.
+  usageLog: UsageLog.disabled,
+  // The suite's captured entries are the assertion surface: emit every
+  // level the programs run and let each test filter what it reads.
+  minimumLogLevel: 'Trace',
+});
+
+/** A second composition in this process, for a suite that needs one: the
+ *  kernel's, under the global root `root`, reading its own process start
+ *  (only the install's reads count in `identityReads`). */
+export const testProcessLayer = (
+  plugins: readonly Plugin[],
+  settings: readonly StateSettingEntry[],
+  root: string,
+): ReturnType<typeof processLayer> =>
+  processLayer(testProcessOptions(plugins, settings, root));
+
 /** Install the harness's process runtime over `plugins` (and the app's
  *  setting rows, as a host passes them) and build it. */
 export async function installTestSessionGraph(
@@ -61,25 +99,11 @@ export async function installTestSessionGraph(
   const runtime = withForkFailureReporting(
     ManagedRuntime.make(
       processLayer({
+        ...testProcessOptions(plugins, settings),
         processStart: Effect.sync(() => {
           identityReads.count += 1;
           return 'vitest';
         }),
-        globalStorage,
-        // Under the fake global root, never the developer's `~/.texra/mcp.json`.
-        plugins,
-        ...(settings ? { settings } : {}),
-        mcpConfigPath: mcpConfigPathOf(globalStorage),
-        secrets: fakeHostSecrets,
-        appState: AppState.layer(fakeHostAppState),
-        languageModel: fakeHostLanguageModel,
-        agentDirectories: AgentDirectories.layer(fakeHostAgentDirectories),
-        toolAvailability: unprobedToolAvailability,
-        // The harness reports no usage; the telemetry suite starts its own.
-        usageLog: UsageLog.disabled,
-        // The suite's captured entries are the assertion surface: emit every
-        // level the programs run and let each test filter what it reads.
-        minimumLogLevel: 'Trace',
       }),
     ),
   );

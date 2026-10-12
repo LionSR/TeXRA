@@ -48,12 +48,12 @@ import {
   type WorkspaceFs,
 } from '@platform/rootedFs';
 import latexPreamble from '@resources/templates/chatExport.tex';
-import type { HostRequest } from '@shared/session/hostRequest';
 import { type FileOpResult, type RunId } from '@shared/schemas';
+import type { HostRequest } from '@texra/shared/session/hostRequest';
 import type {
   HostOutcome,
   SurfaceActionMessage,
-} from '@shared/session/sessionFrames';
+} from '@texra/shared/session/sessionFrames';
 import { ExternalOpenFailed } from '@texra/hosts/uiHosts';
 
 import type { ChatExportController } from '@texra/controllers/progressView/ChatExportController';

@@ -8,11 +8,10 @@ import {
   acceptedEfforts,
   chooseReasoning,
   CODEX_ROUTE_EFFORTS,
-  defaultReasoningLevel,
+  type ReasoningChoice,
   type ReasoningRequest,
 } from '@texra-ai/llm';
 import type { StateStore } from '@platform/interfaces';
-import { REASONING_LEVEL_LABELS } from '@shared/model/reasoningLabels';
 import { readState } from '@shared/config/settingsAccess';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { ensureError } from '@utils/errors/errorMessage';
@@ -96,62 +95,24 @@ function routeReasoning(
 }
 
 /**
- * {@link reasoningFor} without logging its substitution note: a check made
- * ahead of the bind (a model switch's admission), which logs it when it runs.
- */
-export const decideReasoning = Effect.fn('decideReasoning')(function* (
-  config: ModelConfig,
-  request: ReasoningRequest,
-  globalState: StateStore,
-  route: ReasoningRoute,
-) {
-  const userEffort = (yield* reasoningEffortOverrides(globalState))[config.ref];
-  const routeEfforts = route.codexSubscription
-    ? CODEX_ROUTE_EFFORTS
-    : undefined;
-  return yield* Effect.try({
-    try: () =>
-      chooseReasoning(routeReasoning(config, route), request, {
-        userEffort,
-        routeEfforts,
-      }),
-    catch: ensureError,
-  });
-});
-
-/**
  * The run's reasoning decision: the model string's own request, else the
  * user's saved level for the model, else the default, for the reasoning the
  * route can control; the Codex subscription narrows the levels. A level the
- * model lacks is substituted and logged; a request it cannot run fails the
- * bind.
+ * model lacks is substituted (the choice's `note` says so); a request the
+ * route cannot carry fails.
  */
-export const reasoningFor = Effect.fn('reasoningFor')(function* (
+export function decideReasoning(
   config: ModelConfig,
   request: ReasoningRequest,
-  globalState: StateStore,
+  userEffort: ReasoningEffort | undefined,
   route: ReasoningRoute,
-) {
-  const choice = yield* decideReasoning(config, request, globalState, route);
-  if (choice.note !== undefined) yield* Effect.logInfo(choice.note);
-  return choice;
-});
-
-/**
- * The reasoning column of a model row: the user's saved level, else the
- * default a run uses; `(fixed)` where the model offers no choice; nothing for
- * a model that never thinks.
- */
-export function reasoningLevelLabel(
-  config: Pick<ModelConfig, 'label' | 'reasoning' | 'modes'>,
-  saved: ReasoningEffort | undefined,
-): string | undefined {
-  if (config.reasoning === undefined) return undefined;
-  const fallback = defaultReasoningLevel(config);
-  if (fallback === undefined) return 'Default';
-  const defaultLevel = REASONING_LEVEL_LABELS[fallback];
-  if (!supportsReasoningLevel(config)) return `${defaultLevel} (fixed)`;
-  return saved === undefined
-    ? `Default (${defaultLevel})`
-    : REASONING_LEVEL_LABELS[saved];
+): Effect.Effect<ReasoningChoice, Error> {
+  return Effect.try({
+    try: () =>
+      chooseReasoning(routeReasoning(config, route), request, {
+        userEffort,
+        routeEfforts: route.codexSubscription ? CODEX_ROUTE_EFFORTS : undefined,
+      }),
+    catch: ensureError,
+  });
 }

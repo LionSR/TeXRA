@@ -13,7 +13,7 @@ import {
 } from '@shared/schemas';
 
 // Local file imports
-import { defineTool } from './core/define';
+import { defineTool } from './core/definition';
 
 type StructuredOutputSchema = {
   readonly jsonSchema: Record<string, unknown>;

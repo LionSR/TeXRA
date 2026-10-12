@@ -3,14 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 // Local imports
 import type { RunTabs } from '@progressView/frontend/components/RunTabs';
-import type { HostRequest } from '@shared/session/hostRequest';
 import type { SessionView } from '@shared/session/sessionView';
-import {
-  applySurfaceAction,
-  emptySurface,
-  type Surface,
-  type SurfaceAction,
-} from '@shared/session/surface';
 import type { RuntimeRequest } from '@shared/session/runtimeRequest';
 import {
   CHILD,
@@ -18,6 +11,13 @@ import {
   GRANDCHILD,
   ROOT,
 } from '@test/shared/session/fanOutScenario';
+import {
+  applySurfaceAction,
+  emptySurface,
+  type Surface,
+  type SurfaceAction,
+} from '@texra/shared/session/surface';
+import type { HostRequest } from '@texra/shared/session/hostRequest';
 
 // Local file imports
 import {

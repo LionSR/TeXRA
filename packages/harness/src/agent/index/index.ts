@@ -32,10 +32,8 @@ export {
   getCatalogAgent,
   resolveAgentForLaunch,
   getCatalogAgents,
-  getCatalogLoadFailure,
   getCustomAgentScanIssues,
   refresh,
-  settledCatalog,
   // Typed data options
   computeAgentOptionsData,
   // Visible agents (for dropdowns and tools)

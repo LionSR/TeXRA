@@ -16,13 +16,13 @@ import { repeat } from 'lit/directives/repeat.js';
 
 // Local imports - shared contracts
 import type { SessionView } from '@shared/session/sessionView';
-import type { Surface, SurfaceRefusal } from '@shared/session/surface';
 import {
   SCRIPT_CALL_STATUS_LABEL,
   TALK_TO_AGENT,
   type ScriptCallView,
   type ScriptStageView,
 } from '@shared/transcript';
+import type { Surface, SurfaceRefusal } from '@texra/shared/session/surface';
 import { SessionUiEvents } from '@texra/shared/session/uiEvents';
 import { designTokens } from '@ui/styles';
 import { terminalStatusIcon } from '@ui/wa/statusIcons';

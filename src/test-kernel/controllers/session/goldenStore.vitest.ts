@@ -44,14 +44,11 @@ import { afterAll, afterEach, beforeEach, describe, expect } from 'vitest';
 
 import { refresh } from '@agent/index';
 import { resumeRun } from '@agent/runtime/resumeRun';
-import { runHistoryLayer } from '@agent/runtime/RunHistory';
+import { makeRunHistory } from '@agent/runtime/RunHistory';
 import { sessionEventsLayer } from '@agent/runtime/SessionEvents';
 import { databaseLayer } from '@controllers/session/Database';
-import {
-  EVENT_COLUMNS,
-  EVENT_FROM,
-  rowReader,
-} from '@controllers/session/rowCodec';
+import { EVENT_COLUMNS, EVENT_FROM } from '@controllers/session/rowCodec';
+import { rowReader } from '@controllers/session/rowReader';
 import {
   LocalRuntimeSource,
   TextChunkSource,
@@ -59,6 +56,7 @@ import {
 } from '@controllers/session/sessionSources';
 import { SessionViewService } from '@controllers/session/SessionView';
 import { sessionInputsLayer } from '@controllers/session/sessionInputs';
+import { makeSessionStore } from '@controllers/session/sessionStore';
 import { WorkspaceRoots } from '@controllers/session/WorkspaceRoots';
 import { AgentDirectories, AppState } from '@platform/interfaces';
 import { withProcessServices } from '@platform/processRuntime';
@@ -70,7 +68,6 @@ import {
   type RunId,
 } from '@shared/schemas';
 import { Database } from '@shared/session/database';
-import { RunHistory } from '@shared/session/runHistory';
 import { ProcessIdentity } from '@shared/session/sessionEvents';
 import { fold } from '@shared/session/sessionFold';
 import {
@@ -92,6 +89,7 @@ import {
 import {
   fakeHostAgentDirectories,
   setupPlatform,
+  storePluginsLayer,
 } from '@test/support/setupPlatform';
 import {
   createTempDirPlatform,
@@ -99,6 +97,8 @@ import {
 } from '@test/support/tempDirPlatform';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
+import { texraPlugins } from '@texra/tools/registry';
+import { armsOf } from '@tools/plugins';
 
 const GOLDEN = readFileSync(
   resolve(REPO_ROOT, 'src/test-kernel/fixtures/storage/golden-1.0.sql'),
@@ -165,6 +165,7 @@ const raw = <T>(storage: string, read: (db: DatabaseSync) => T): T => {
 const substrate = (storage: string) =>
   databaseLayer('persistent').pipe(
     Layer.provide(Layer.succeed(WorkspaceRoots)({ storage })),
+    Layer.provide(storePluginsLayer),
     Layer.provide(ProcessIdentity.layer(SELF)),
     Layer.provide(nodeSpawnerLayer),
     Layer.provide(nodePlatformLayer),
@@ -231,7 +232,18 @@ describe('the golden 1.0 store', () => {
         .all(),
     );
     return Effect.gen(function* () {
-      const events = yield* rowReader(storage).read(rows, true);
+      // The fixture's own connection runs the reader's earlier-build scan.
+      const exec = (statement: string, params: readonly unknown[]) =>
+        Effect.sync(() =>
+          raw(storage, (db) =>
+            db.prepare(statement).all(...(params as (string | number)[])),
+          ),
+        );
+      const events = yield* rowReader(
+        storage,
+        armsOf(texraPlugins()),
+        exec,
+      ).read(rows, true);
       expect(events).toHaveLength(rows.length);
       const types = new Set(events.map((event) => event.type));
       // Every row kind is in the fixture, the decode test of a released store,
@@ -428,7 +440,7 @@ describe('the golden 1.0 store', () => {
       expect(
         [...folded.queuedFollowUps].map(([id, queued]) => [id, queued.length]),
       ).toEqual([[CHAT, 2]]);
-      const runHistory = yield* RunHistory;
+      const runHistory = makeRunHistory((yield* makeSessionStore(storage)).log);
       const stateOf = (id: RunId) =>
         Effect.map(runHistory.load(id), (state) => ({
           at: state?.at,
@@ -453,7 +465,8 @@ describe('the golden 1.0 store', () => {
       });
       expect((yield* runHistory.load(CHAT))?.modelId).toBe('gemini38f');
     }).pipe(
-      Effect.provide(runHistoryLayer.pipe(Layer.provideMerge(graph(storage)))),
+      Effect.provide(graph(storage)),
+      Effect.provide(ProcessIdentity.layer(SELF)),
       Effect.scoped,
     );
   });
@@ -607,11 +620,13 @@ describe('the golden run killed after its effect', () => {
     mkdirSync(workspace, { recursive: true });
     cpSync(EFFECT, join(workspace, 'approved.txt'));
     raw(storage, (db) => {
+      // The path lands inside a JSON string, so it goes in escaped as one:
+      // a Windows path's backslashes would otherwise corrupt the row.
       db.prepare(
         `UPDATE event SET data = replace(data, '/golden/project', ?)
          WHERE type IN ('run.start', 'run.config') AND aggregate =
            (SELECT id FROM event_sequence WHERE logical_id = ?)`,
-      ).run(workspace, KILLED);
+      ).run(JSON.stringify(workspace).slice(1, -1), KILLED);
       // The kill, on this host: an owner whose process is gone.
       db.prepare(
         'UPDATE event_sequence SET owner_id = ? WHERE logical_id = ?',
@@ -670,7 +685,7 @@ describe('the golden run killed after its effect', () => {
       // The effect the killed process left, and nothing more.
       expect(
         readFileSync(join(workspace!, 'approved.txt'), 'utf8')
-          .split('\n')
+          .split(/\r?\n/)
           .filter(Boolean),
       ).toEqual(['approved']);
     }),

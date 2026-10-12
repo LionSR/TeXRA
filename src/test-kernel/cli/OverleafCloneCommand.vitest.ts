@@ -11,7 +11,7 @@ import { NO_PLATFORM_INSTALL } from '@cli/runtime/cliProcessRuntime';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import { overleafGitClone } from '@latex/overleafProject';
 import { canonicalizeWorkspacePath } from '@platform/defaults/nodeWorkspace';
-import { DEFAULT_NODE_STORAGE_ROOT } from '@platform/defaults/nodeStorage';
+import { defaultNodeStorageRoot } from '@platform/defaults/nodeStorage';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { spyOnStreamWrite } from '@test/cli/fixtures/streamWriteSpy';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
@@ -193,7 +193,7 @@ describe('CLI Overleaf clone command', () => {
     // The platform-less handoff itself: clone opens no global state store and
     // no global-root handle, so it holds the event loop open past nothing.
     expect(mocks.installCliProcessRuntime).toHaveBeenCalledWith(
-      DEFAULT_NODE_STORAGE_ROOT,
+      defaultNodeStorageRoot(),
       {
         ...NO_PLATFORM_INSTALL,
         minimumLogLevel: 'Info',

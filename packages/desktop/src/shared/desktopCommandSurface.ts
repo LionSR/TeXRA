@@ -59,7 +59,7 @@ export function vsCodeOnlyGettingStartedMessage(
 type DesktopLocalCommandId =
   (typeof DESKTOP_LOCAL_COMMANDS)[keyof typeof DESKTOP_LOCAL_COMMANDS];
 
-export const DESKTOP_MENU_GROUPS = [
+const DESKTOP_MENU_GROUPS = [
   [
     'texra.showMainView',
     DESKTOP_LOCAL_COMMANDS.SHOW_LOGS,
@@ -79,7 +79,7 @@ export const DESKTOP_MENU_GROUPS = [
   ],
 ] as const satisfies readonly (readonly CommandId[])[];
 
-export const DESKTOP_FILE_COMMANDS = [
+const DESKTOP_FILE_COMMANDS = [
   DESKTOP_LOCAL_COMMANDS.SAVE_FILE,
   DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_FOLDER,
 ] as const satisfies readonly DesktopLocalCommandId[];

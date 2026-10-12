@@ -4,7 +4,7 @@
  * China-region toggle of each provider with two platforms, with the toggle's
  * default and its Models tab control copy. The catalog (`@texra-ai/llm`)
  * owns the provider data; these rows are the host's, read into
- * `RouteFacts.endpoints` by `readProviderEndpoints` and catalogued in
+ * `RouteFacts.endpoints` by `readModelSettings` and catalogued in
  * `stateSettings.ts`.
  *
  * Plain data with no import of the catalog: the settings catalog is reachable

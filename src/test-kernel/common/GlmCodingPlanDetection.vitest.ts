@@ -2,7 +2,7 @@ import { ModelProvider } from 'llm-zoo';
 import { describe, expect, it } from 'vitest';
 import { ModelError } from '@texra-ai/llm';
 
-import { classifyModelFailure } from '@agent/runtime/run/modelFailure';
+import { failureInfo } from '@agent/runtime/modelAccess/failureInfo';
 import { judgeFailure } from '../../../packages/llm/src/api/verdict.js';
 
 const WEEKLY_LIMIT_BODY = {
@@ -91,9 +91,10 @@ describe('the GLM Coding Plan quota codes', () => {
   });
 
   it('offer the switch to the regular GLM endpoint on a used-up plan', () => {
-    const { formatted } = classifyModelFailure(glmFailure(WEEKLY_LIMIT_BODY), {
-      config: { provider: ModelProvider.GLM },
-    });
+    const formatted = failureInfo(
+      glmFailure(WEEKLY_LIMIT_BODY),
+      ModelProvider.GLM,
+    );
 
     expect(formatted.classification?.kind).toBe('glm-coding-plan');
     expect(formatted.userRetryable).toBe(true);

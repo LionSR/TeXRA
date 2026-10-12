@@ -2,6 +2,7 @@ import '@test/support/defaultSessionTestSetup';
 
 import { Effect } from 'effect';
 import { describe, expect, it, vi } from 'vitest';
+import { registryOf } from '@agent/runtime/runRegistry';
 
 import type { ResultEvent } from '@agent/trace';
 import { aggregateId, INSTRUCTION_ACTION, type RunId } from '@shared/schemas';
@@ -39,7 +40,7 @@ async function toastsFor(
   // The folded tail presents the row, then sweeps the run's children.
   const swept = new Promise<void>((resolve) =>
     vi
-      .spyOn(session.runs, 'sweepChildrenOfFoldedStop')
+      .spyOn(registryOf(session.runs), 'sweepChildrenOfFoldedStop')
       .mockImplementation(() => resolve()),
   );
   try {

@@ -16,16 +16,17 @@ import {
   startCompactionActivity,
   type AgentTrace,
 } from '@agent/trace';
+import type { BoundModel } from '@agent/runtime/modelAccess/ModelAccess';
 import type { StateReadFailed } from '@platform/interfaces';
 import { roundedUtilizationPercent } from '@shared/runs/contextUtilization';
 import {
   MODEL_COMPACTION_THRESHOLD_SETTING,
   type RunId,
 } from '@shared/schemas';
-import type { DatabaseWriteFailed } from '@shared/session/database';
-import type { RunHistoryRefused } from '@shared/session/runHistory';
+import type { CellError } from '@shared/session/runHistory';
 import type { RunHistoryDraft, RunState } from '@shared/session/runStateFold';
 import type { SettingsStores } from '@shared/config/settingsAccess';
+import type { RunCell } from '@shared/session/runHistory';
 import { readSettingFrom } from '@utils/config/platformSettings';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -34,8 +35,6 @@ import { contextTokens, estimateMessageTokens } from './contextTokens';
 import { turnText } from './turnText';
 import type { ModelInvoker } from '../ModelInvoker';
 import type { CallResult } from './modelCall';
-import type { BoundModel } from './modelBinding';
-import type { RunCell } from '../loop/runProgram';
 
 /**
  * Prefix prepended to a compaction summary when it is folded back into the
@@ -144,7 +143,7 @@ const overThreshold = Effect.fn('compaction.overThreshold')(function* (
     input.stores,
     MODEL_COMPACTION_THRESHOLD_SETTING.configKey,
   );
-  const contextWindow = input.bound.contextWindow;
+  const contextWindow = input.bound.config.contextWindow;
   return (
     percent > 0 &&
     contextWindow > 0 &&
@@ -170,7 +169,7 @@ const summarize = Effect.fn('compaction.summarize')(function* (
     }
     return null;
   }
-  const contextWindow = bound.contextWindow;
+  const contextWindow = bound.config.contextWindow;
   const tokensBefore = contextTokens(state);
   logger.debug(`Compacting conversation (${COMPACTION_REASON[reason]})`, {
     data: {
@@ -296,15 +295,12 @@ const land = Effect.fn('compaction.land')(function* (
 const compactIfNeeded = Effect.fn('compaction.check')(function* (
   state: RunState,
   input: CompactionInput,
-): Effect.fn.Return<
-  RunState,
-  RunHistoryRefused | DatabaseWriteFailed | StateReadFailed
-> {
+): Effect.fn.Return<RunState, CellError | StateReadFailed> {
   const reason = input.force ?? 'threshold';
   if (input.force === null && !(yield* overThreshold(state, input)))
     return state;
   const summary = yield* summarize(state, input, reason);
-  if (summary === null) return state;
+  if (summary === null) return yield* input.cell.current; // its attempts
   return yield* land(input, summary, state.lastEdit, reason);
 });
 
@@ -321,31 +317,25 @@ const compactIfNeeded = Effect.fn('compaction.check')(function* (
  */
 export interface BackgroundCompaction {
   /** At a request boundary, no attempt open; `requests` consume `/compact`s.
-   *  A summary's attempts commit through `cell`. */
+   *  Each operation commits through `cell` and answers its state. */
   readonly atBoundary: (
-    state: RunState,
     cell: RunCell,
     bound: BoundModel,
     requests: readonly RunHistoryDraft[],
-  ) => Effect.Effect<
-    RunState,
-    RunHistoryRefused | DatabaseWriteFailed | StateReadFailed
-  >;
+  ) => Effect.Effect<RunState, CellError | StateReadFailed>;
   /**
    * At the end of a turn: wait for the summary being made, and land it. A
    * summary does not outlive the turn that started it, so a process that
    * exits while the run is idle loses none, and its activity closes before
    * the turn's `waiting`.
    */
-  readonly finish: (
-    state: RunState,
-  ) => Effect.Effect<RunState, RunHistoryRefused | DatabaseWriteFailed>;
+  readonly finish: (cell: RunCell) => Effect.Effect<RunState, CellError>;
   /** Before another edit of the view: land a finished summary, cut short
    *  one still running (`why` says what edit is coming). */
   readonly settle: (
-    state: RunState,
+    cell: RunCell,
     why: string,
-  ) => Effect.Effect<RunState, RunHistoryRefused | DatabaseWriteFailed>;
+  ) => Effect.Effect<RunState, CellError>;
 }
 
 export const backgroundCompaction = Effect.fn('compaction.background')(
@@ -360,12 +350,12 @@ export const backgroundCompaction = Effect.fn('compaction.background')(
     } | null = null;
 
     /** Land the pending summary's outcome, and forget it. */
-    const landPending = (state: RunState, exit: Exit.Exit<Summary | null>) => {
+    const landPending = (cell: RunCell, exit: Exit.Exit<Summary | null>) => {
       const base = pending?.base ?? null;
       pending = null;
       if (Exit.isSuccess(exit))
         return exit.value === null
-          ? Effect.succeed(state)
+          ? cell.current
           : land(input, exit.value, base, 'threshold');
       // A failed summary call is the summary's own warning; this is a
       // defect in making one.
@@ -373,37 +363,36 @@ export const backgroundCompaction = Effect.fn('compaction.background')(
         `A background compaction stopped: ${toErrorMessage(Cause.squash(exit.cause))}`,
         { data: Cause.squash(exit.cause) },
       );
-      return Effect.succeed(state);
+      return cell.current;
     };
 
     const settle = Effect.fn('compaction.settle')(function* (
-      state: RunState,
+      cell: RunCell,
       why: string,
     ) {
-      if (pending === null) return state;
+      if (pending === null) return yield* cell.current;
       const running = pending.fiber;
       const finished = yield* Effect.sync(() => running.pollUnsafe());
-      if (finished !== undefined) return yield* landPending(state, finished);
+      if (finished !== undefined) return yield* landPending(cell, finished);
       yield* Fiber.interrupt(running);
       // It may have finished as the interrupt landed: that summary lands.
       const raced = running.pollUnsafe();
       if (raced !== undefined && Exit.isSuccess(raced))
-        return yield* landPending(state, raced);
+        return yield* landPending(cell, raced);
       pending = null;
       input.logger.warn(
         `A background compaction was cut short (${why}); nothing it summarized was applied.`,
       );
-      return state;
+      return yield* cell.current;
     });
 
     const atBoundary = Effect.fn('compaction.atBoundary')(function* (
-      state: RunState,
       cell: RunCell,
       bound: BoundModel,
       requests: readonly RunHistoryDraft[],
     ) {
       if (requests.length > 0) {
-        const settled = yield* settle(state, 'a /compact replaces it');
+        const settled = yield* settle(cell, 'a /compact replaces it');
         return yield* compactIfNeeded(settled, {
           ...input,
           cell,
@@ -412,19 +401,21 @@ export const backgroundCompaction = Effect.fn('compaction.background')(
           answers: requests,
         });
       }
+      let state = yield* cell.current;
       // A history past the window cannot go out: it waits for the summary.
-      const full =
-        bound.contextWindow > 0 && contextTokens(state) >= bound.contextWindow;
+      const { contextWindow } = bound.config;
+      const full = contextWindow > 0 && contextTokens(state) >= contextWindow;
       if (pending !== null) {
         const running = pending.fiber;
         const finished = full
           ? yield* Fiber.await(running)
           : yield* Effect.sync(() => running.pollUnsafe());
         if (finished === undefined) return state;
-        const landed = yield* landPending(state, finished);
+        const landed = yield* landPending(cell, finished);
         // One that produced no summary leaves the decision to this
         // boundary's history.
-        if (landed !== state) return landed;
+        if (landed.lastEdit !== state.lastEdit) return landed;
+        state = landed;
       }
       // A binding that carries one turn at a time (a Responses WebSocket)
       // cannot make the summary beside the request: it waits.
@@ -444,13 +435,13 @@ export const backgroundCompaction = Effect.fn('compaction.background')(
           'threshold',
         ).pipe(Effect.forkIn(scope)),
       };
-      return full ? yield* finish(state) : state;
+      return full ? yield* finish(cell) : state;
     });
 
     /** Wait for the summary being made, and land it. */
-    const finish = Effect.fn('compaction.finish')(function* (state: RunState) {
-      if (pending === null) return state;
-      return yield* landPending(state, yield* Fiber.await(pending.fiber));
+    const finish = Effect.fn('compaction.finish')(function* (cell: RunCell) {
+      if (pending === null) return yield* cell.current;
+      return yield* landPending(cell, yield* Fiber.await(pending.fiber));
     });
 
     return { atBoundary, settle, finish };

@@ -35,8 +35,7 @@ export const polishTextWithAI = Effect.fn('polishTextWithAI')(function* (
 > {
   return yield* Effect.gen(function* () {
     const responseText = yield* helperCall(
-      session,
-      secrets,
+      { ...session.roots, secrets },
       { userPrompt: POLISH_PROMPT_PREFIX + text },
       // A draft polish serves no run and no agent category.
       { agentName: 'polish', runId: null },

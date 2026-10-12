@@ -15,7 +15,7 @@ import {
   texraApprovalPolicyLabel,
   type TexraApprovalPolicy,
 } from '@shared/approvalPolicy';
-import type { RequestErrorWire } from '@shared/session/sessionFrames';
+import type { RequestErrorWire } from '@texra/shared/session/sessionFrames';
 import type { TaskSummary } from '@texra/controllers/server/protocol';
 import type { ServiceClient } from '@texra/controllers/server/client';
 import { readConfigSettingFrom } from '@utils/config/platformSettings';

@@ -16,7 +16,6 @@ import {
   referencedAggregates,
   isDisplaySessionEvent,
   RunIdSchema,
-  aggregateTarget,
   type AggregateId,
   type LocalRuntimeState,
   type ExistenceReconciliation,
@@ -28,7 +27,6 @@ import {
   type AggregateState,
   type DatabaseReadFailed,
 } from '@shared/session/database';
-import { RUN_DAMAGED_MESSAGE } from '@shared/runs/runStatusDisplay';
 import { SessionInputs } from '@shared/session/sessionInputs';
 import { readConfigSettingFrom } from '@utils/config/platformSettings';
 import {
@@ -255,21 +253,16 @@ export const sessionInputsLayer = Layer.effect(
   }),
 );
 
-/** Show each damaged run read-only with why (`unreadable`): one of its rows
- *  does not decode, so it never opens. */
+/** Show each run that cannot open read-only with why (`unreadable`): a
+ *  row of it does not decode, or an earlier build wrote one. */
 const markDamaged = (
   ref: SubscriptionRef.SubscriptionRef<LocalRuntimeState>,
-  damaged: readonly AggregateId[],
+  damaged: LocalRuntimeState['unreadable'],
 ) =>
   Effect.gen(function* () {
     const local = yield* SubscriptionRef.get(ref);
     const known = new Set(local.unreadable.map(({ runId }) => runId));
-    const fresh = damaged.flatMap((id) => {
-      const target = aggregateTarget(id);
-      return target.kind === 'run' && !known.has(target.id)
-        ? [{ runId: RunIdSchema.parse(target.id), detail: RUN_DAMAGED_MESSAGE }]
-        : [];
-    });
+    const fresh = damaged.filter(({ runId }) => !known.has(runId));
     // Only a new damaged run moves the level: an unchanged one would wake
     // this reader again for nothing, forever.
     if (fresh.length > 0)

@@ -11,16 +11,9 @@ import { Effect } from 'effect';
  */
 
 // Local imports - agent
-import { submitFollowUp } from '@agent/followUp/ToolUseFollowUp';
-import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { withLogChannel } from '@logger/effectLog';
 
 // Local imports - shared
-import {
-  InquiryRecords,
-  inquiryThreadRow,
-  type InquiryThreadRecord,
-} from '@shared/plugins/externalInquiry';
 import {
   type ExternalInquiryPermission,
   type InquiryThreadId,
@@ -29,10 +22,17 @@ import {
   type RunId,
 } from '@shared/schemas';
 import {
+  InquiryRecords,
+  inquiryThreadFact,
+  type InquiryThreadRecord,
+} from '@texra/shared/plugins/externalInquiry';
+import type { RequestDecisionHook } from '@tools/toolTable';
+import {
   formatRelativeTime,
   previewLabel,
   truncateSummary,
 } from '@utils/text/stringUtils';
+import type { RunInbox } from '@texra-ai/harness/plugins';
 
 const CHANNEL = 'InquiryTool';
 
@@ -99,26 +99,27 @@ function buildContinuationText(params: {
   return lines.join('\n');
 }
 
+/** Commits the decision's facts, hung under the run that asked. */
+type CommitFacts = Parameters<RequestDecisionHook['record']>[0]['commit'];
+
 /** The Background Tasks panel's row for the thread. */
 const publishThreadUpdate = Effect.fn('publishInquiryThreadUpdate')(function* (
   threadId: InquiryThreadId,
-  session: SessionHandle,
+  commit: CommitFacts,
 ): Effect.fn.Return<void, Error, InquiryRecords> {
   const records = yield* InquiryRecords;
   const summary = yield* records.getThreadSummary(threadId);
   if (!summary) return;
   // The panel's row only: the thread record is the authority, so a refused
   // row is logged, never the action's failure.
-  yield* session.log
-    .transact([inquiryThreadRow(summary)])
-    .pipe(
-      Effect.catch((error) =>
-        Effect.logWarning('The inquiry thread row was not written').pipe(
-          Effect.annotateLogs({ data: error }),
-          withLogChannel(CHANNEL),
-        ),
+  yield* commit([inquiryThreadFact(summary)]).pipe(
+    Effect.catch((error) =>
+      Effect.logWarning('The inquiry thread row was not written').pipe(
+        Effect.annotateLogs({ data: error }),
+        withLogChannel(CHANNEL),
       ),
-    );
+    ),
+  );
 });
 
 /**
@@ -143,10 +144,10 @@ const closedByEarlierAttempt = Effect.fn('inquiryClosedByEarlierAttempt')(
 
 /**
  * Record one inquiry decision on its thread and deliver the continuation to
- * the run that asked. The run either drains it at its next turn boundary or
- * resumes from the fold (`submitFollowUp` owns that choice); a run that
- * refuses it has nothing left to continue and the thread is archived as
- * such. A decision for a turn no longer open (a duplicate, a decision after a
+ * the run that asked (`inbox`), and commit the thread's panel row. The run
+ * either drains it at its next turn boundary or resumes from the fold (the
+ * inbox owns that choice); a run that refuses it has nothing left to
+ * continue and the thread is archived as such. A decision for a turn no longer open (a duplicate, a decision after a
  * follow-up reopened the thread) records nothing and delivers nothing.
  *
  * The one exception is the turn this decision itself closed on an earlier
@@ -160,7 +161,8 @@ export const recordInquiryDecision = Effect.fn('recordInquiryDecision')(
   function* (
     permission: ExternalInquiryPermission,
     decision: RequestDecision,
-    session: SessionHandle,
+    inbox: (runId: RunId) => RunInbox,
+    commit: CommitFacts,
   ): Effect.fn.Return<void, Error, InquiryRecords> {
     const records = yield* InquiryRecords;
     const { threadId } = permission;
@@ -200,10 +202,8 @@ export const recordInquiryDecision = Effect.fn('recordInquiryDecision')(
     }
     const lastTurn = manifest.turns.at(-1);
     const parentRunId: RunId | null | undefined = manifest.parentRunId;
-    if (!lastTurn || parentRunId == null) {
-      yield* publishThreadUpdate(threadId, session);
-      return;
-    }
+    if (!lastTurn || parentRunId == null)
+      return yield* publishThreadUpdate(threadId, commit);
     const stillOpen = yield* records.listThreadsByStatus({
       status: 'open',
       scope: 'run',
@@ -222,20 +222,16 @@ export const recordInquiryDecision = Effect.fn('recordInquiryDecision')(
     // Keyed on the turn: the queue admits one continuation per inquiry turn,
     // so re-delivering after a failure the queue never saw reaches the run
     // and re-delivering after one it did is a no-op.
-    const result = yield* submitFollowUp(
-      parentRunId,
-      {
-        text,
-        from: { kind: 'user' },
-        deliveryId: `inquiry:${threadId}:${lastTurn.turnIndex}`,
-      },
-      { session },
-    );
+    const result = yield* inbox(parentRunId).send({
+      text,
+      from: { kind: 'user' },
+      deliveryId: `inquiry:${threadId}:${lastTurn.turnIndex}`,
+    });
     if (result.status === 'failed') {
       yield* Effect.logWarning(
         `Inquiry continuation for ${threadId}: run ${parentRunId} refused it (${result.reason}).`,
       ).pipe(withLogChannel(CHANNEL));
     }
-    yield* publishThreadUpdate(threadId, session);
+    yield* publishThreadUpdate(threadId, commit);
   },
 );

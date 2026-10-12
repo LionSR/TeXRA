@@ -4,12 +4,11 @@
  * with code highlighting.
  */
 
+import { highlightCode } from '@texra/shared/highlighting/highlightCode';
 import {
   createMarkdownRenderer,
   type MarkdownItInstance,
-} from '@ui/markdown/createMarkdownRenderer';
-
-import { highlightCode } from './highlightCode';
+} from './createMarkdownRenderer';
 
 let md: MarkdownItInstance | null = null;
 

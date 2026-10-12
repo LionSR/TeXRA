@@ -14,13 +14,13 @@ import {
   type ResolvedTurn,
   type TurnResult,
 } from '@texra-ai/llm';
+import type { BoundModel } from '@agent/runtime/modelAccess/ModelAccess';
 import type { InvocationRef } from '@shared/schemas';
 
+import type { RunCell } from '@shared/session/runHistory';
 import { rowAggregate } from '../loop/rows';
-import type { RunCell } from '../loop/runProgram';
 import type { InvokeError } from '../ModelInvoker';
 import type { AgentRunShape } from './AgentRun';
-import type { BoundModel } from './modelBinding';
 
 type BackgroundTurn = Extract<ResolvedTurn, { mode: 'background' }>;
 type Background = NonNullable<Model['background']>;
@@ -83,7 +83,9 @@ export const observeBackground = <E>(
     onEvent,
   ).pipe(
     Effect.onInterrupt(() =>
-      run.session.runs.stopReason(run.runId) === 'user' ? cancel : Effect.void,
+      run.session.runs.get(run.runId)?.stopReason === 'user'
+        ? cancel
+        : Effect.void,
     ),
   );
 };

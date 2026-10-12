@@ -18,7 +18,6 @@ import { it } from '@effect/vitest';
 import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 import {
   apiKeySecretName,
-  chooseReasoning,
   type Model,
   ModelError,
   type ModelOrigin,
@@ -29,34 +28,49 @@ import {
   TurnResultSchema,
 } from '@texra-ai/llm';
 
-const modelBindingMocks = vi.hoisted(() => ({
+const bindingMocks = vi.hoisted(() => ({
   bindModel: vi.fn(),
 }));
 
-vi.mock('@agent/runtime/run/modelBinding', async (importActual) => ({
-  ...(await importActual<typeof import('@agent/runtime/run/modelBinding')>()),
-  bindModel: modelBindingMocks.bindModel,
-}));
+// Every run binds its model through the scripted binder: model access is
+// the one seam between a run and its provider.
+vi.mock('@agent/runtime/modelAccess/ModelAccess', async (importActual) => {
+  const actual =
+    await importActual<
+      typeof import('@agent/runtime/modelAccess/ModelAccess')
+    >();
+  const { Effect: E, Layer: L } = await import('effect');
+  return {
+    ...actual,
+    modelAccessLayer: () =>
+      L.succeed(actual.ModelAccess, {
+        bind: (request) => bindingMocks.bindModel(request),
+        admit: () => E.succeed(null),
+        credentialSwitch: () => E.succeed(null),
+      }),
+  };
+});
 
 // Local imports - agent runtime
 import { refresh } from '@agent/index';
-import { getRunRecords, registerRun } from '@agent/storage';
+import { getRunRecords } from '@agent/storage';
 import { readChildTurnState } from '@agent/storage/runRecords';
 import { prepareAgentDefinition } from '@agent/runtime/AgentLaunchContext';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import type { ITool } from '@agent/core/tools/ToolTypes';
 import { requireToolRun } from '@agent/runtime/RunCall';
 import { offeredBy } from '@agent/runtime/loop/step';
-import type { BoundModel } from '@agent/runtime/run/modelBinding';
 import type { Message } from '@agent/runtime/loop/rows';
 import { executeAgent } from '@agent/runtime/executeAgent';
 import { resumeRun } from '@agent/runtime/resumeRun';
-import { Runs } from '@agent/runtime/runRegistry';
+import { registryOf, Runs } from '@agent/runtime/runRegistry';
 import { type SessionHandle } from '@agent/runtime/SessionHandle';
 
 // Local imports - shared/runtime boundaries
 import { submitFollowUp } from '@agent/followUp/ToolUseFollowUp';
 import type { RunToolCall } from '@agent/runtime/RunCall';
+import type { BoundModel } from '@agent/runtime/modelAccess/ModelAccess';
+import { routePolicies } from '@agent/runtime/modelAccess/failureInfo';
 import { launchDesktopAgent } from '@desktop/main/desktopAgentLaunch';
 import { AgentDirectories, AppState } from '@platform/interfaces';
 import { withProcessServices } from '@platform/processRuntime';
@@ -70,6 +84,7 @@ import {
 } from '@shared/schemas';
 import { NO_APPROVAL_GRANTS } from '@shared/approvalBypassKind';
 import { FakeStateStore } from '@test/support/FakePlatform';
+import { startAwaited } from '@test/support/runHandleFixtures';
 import { noopTrace } from '@test/support/noopTrace';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { testRuntime } from '@test/support/testProcessRuntime';
@@ -301,26 +316,15 @@ function scriptedBoundModel(
   return {
     modelId: config.ref,
     config,
-    reasoning: chooseReasoning(config),
     backend: 'openai',
     model,
     origin,
     route: { kind: 'api-key', provider: 'openai', usageRoute: 'api-key' },
-    usageRoute: 'api-key',
-    contextWindow: config.contextWindow,
-    supportsVision: false,
-    supportsNativePdf: false,
-    supportsNativeAudio: false,
-    supportsForcedToolChoice: true,
-    wireRouteKey: JSON.stringify(['openai', 'api-key', config.id]),
-    modelRetryRouteKey: JSON.stringify([
-      'openai',
-      'api-key',
-      config.id,
-      config.ref,
-    ]),
-    backgroundCapable: false,
+    forcedToolChoice: true,
     persistentConnection: false,
+    billing: {},
+    routes: routePolicies(['openai', 'api-key', config.id], config.ref),
+    delivery: Effect.succeed('foreground'),
     automaticRetries: MODEL_RETRY_MAX_ATTEMPTS_SETTING.defaultValue,
     textOnly: false,
   };
@@ -403,8 +407,8 @@ function childRunId(resultOutput: string | undefined): RunId {
 }
 
 function interruptActiveRuns(session: SessionHandle): void {
-  for (const runId of session.runs.activeIds()) {
-    session.runs.interrupt(runId);
+  for (const runId of session.runs.get().map((run) => run.runId)) {
+    registryOf(session.runs).interrupt(runId);
   }
 }
 
@@ -522,7 +526,7 @@ async function launchWaitingChild(options: {
   readonly observedRequests: ObservedRequest[];
 }> {
   const observedRequests: ObservedRequest[] = [];
-  modelBindingMocks.bindModel.mockImplementation(
+  bindingMocks.bindModel.mockImplementation(
     (input: { readonly config: BoundModel['config'] }) =>
       Effect.succeed(
         scriptedBoundModel(
@@ -543,22 +547,21 @@ async function launchWaitingChild(options: {
     instruction: 'Coordinate the child proof review.',
     workingDirectory: process.cwd(),
   });
-  await Effect.runPromise(
-    registerRun(session, PARENT_RUN_ID, parentConfig, {
-      identity: { kind: 'agent', agent: PARENT_AGENT },
-      parentRunId: OUTER_RUN_ID,
-    }),
-  );
   // Admitted on the run's lane like every production launch, so the run's
   // fiber is its stop target by run id.
   parentFiber = testRuntime().runFork(
-    session.runs.launchRun(
+    startAwaited(
+      session.runs,
       PARENT_RUN_ID,
       prepareAgentDefinition({ config: parentConfig, session }).pipe(
         Effect.flatMap((definition) =>
           executeAgent(definition, PARENT_RUN_ID, {
             session,
             parentRunId: OUTER_RUN_ID,
+            registration: {
+              identity: { kind: 'agent', agent: PARENT_AGENT },
+              parentRunId: OUTER_RUN_ID,
+            },
           }),
         ),
       ),
@@ -571,19 +574,21 @@ async function launchWaitingChild(options: {
     session,
     model: PARENT_MODEL,
   };
+  const fixtureRequests = {
+    nextId: (prefix: string) => prefix,
+    open: () => Effect.die(new Error('This fixture opens no request.')),
+    post: () => Effect.die(new Error('This fixture posts no request.')),
+    present: () => Effect.void,
+  };
   const parentCall = {
     callId: 'parent-call',
     env: { roots: session.roots, workingDirectory: process.cwd() },
     emit: () => undefined,
-    readFiles: new Set<string>(),
     responseId: 'parent-response',
     instruction: undefined,
     attempt: 1,
     logId: 'parent-card',
-    requests: {
-      nextId: (prefix: string) => prefix,
-      open: () => Effect.die(new Error('This fixture opens no request.')),
-    },
+    requests: fixtureRequests,
     run: {
       runId: PARENT_RUN_ID,
       session,
@@ -690,10 +695,10 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
           );
 
         yield* Effect.promise(() => waitForPersistedResult(runId, 'Result A.'));
-        const firstHandle = session.runs.getHandle(runId);
-        const initialBindings = modelBindingMocks.bindModel.mock.calls.length;
+        const firstHandle = session.runs.get(runId)?.handle;
+        const initialBindings = bindingMocks.bindModel.mock.calls.length;
         yield* waitForParentTurns(1);
-        const budget = yield* session.runs.childRunBudget(1);
+        const budget = yield* registryOf(session.runs).childRunBudget(1);
         expect(yield* budget.takeIfAvailable(1)).toBe(true);
         yield* budget.release(1);
 
@@ -704,10 +709,8 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
 
         yield* Effect.promise(() => waitForPersistedResult(runId, 'Result B.'));
         yield* waitForParentTurns(2);
-        expect(session.runs.getHandle(runId)).toBe(firstHandle);
-        expect(modelBindingMocks.bindModel).toHaveBeenCalledTimes(
-          initialBindings,
-        );
+        expect(session.runs.get(runId)?.handle).toBe(firstHandle);
+        expect(bindingMocks.bindModel).toHaveBeenCalledTimes(initialBindings);
 
         // The next turn asks the model with the follow-up as its last message
         // and turn 1's answer still in the history it carries.
@@ -785,9 +788,9 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
           delivered: true,
           outcome: RUN_PHASE.WAITING,
         });
-        const recoveredHandle = session.runs.getHandle(runId);
+        const recoveredHandle = session.runs.get(runId)?.handle;
         expect(recoveredHandle).toBeDefined();
-        expect(session.runs.isLive(runId)).toBe(true);
+        expect(session.runs.get(runId)?.live === true).toBe(true);
         childTurns.push({ text: 'Recovered result D.' });
         parentTurns.push({ text: 'Parent received recovered result D.' });
         yield* submitFollowUp(
@@ -804,7 +807,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
           waitForPersistedResult(runId, 'Recovered result D.'),
         );
         yield* waitForParentTurns(4);
-        expect(session.runs.getHandle(runId)).toBe(recoveredHandle);
+        expect(session.runs.get(runId)?.handle).toBe(recoveredHandle);
         yield* session.runs.stop(runId, { reason: 'user' }).settlement;
         yield* Effect.promise(() => waitForClaimRelease(runId));
 
@@ -822,7 +825,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
           delivered: true,
           outcome: RUN_PHASE.WAITING,
         });
-        expect(session.runs.getHandle(runId)).toBeDefined();
+        expect(session.runs.get(runId)?.handle).toBeDefined();
         yield* session.view.changes.pipe(
           Stream.filter(
             (view) => view.runs.get(runId)?.status === RUN_PHASE.WAITING,
@@ -834,7 +837,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
         expect(childTurns).toHaveLength(0);
         yield* session.runs.stop(runId, { reason: 'user' }).settlement;
         yield* Effect.promise(() => waitForClaimRelease(runId));
-        modelBindingMocks.bindModel.mockReturnValueOnce(
+        bindingMocks.bindModel.mockReturnValueOnce(
           Effect.fail(new Error('Recovered model binding failed.')),
         );
         parentTurns.push({ text: 'Parent received failed recovery.' });
@@ -1259,7 +1262,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
             text: '<documents>\n<document name="notes.md">\nPolished notes.\n</document>\n</documents>',
           },
         ];
-        modelBindingMocks.bindModel.mockImplementation(
+        bindingMocks.bindModel.mockImplementation(
           (input: { readonly config: BoundModel['config'] }) =>
             Effect.succeed(
               scriptedBoundModel(
@@ -1307,14 +1310,11 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
           instruction: 'Polish the notes through the workflow child.',
           workingDirectory: workspace,
         });
-        yield* registerRun(session, PARENT_RUN_ID, parentConfig, {
-          identity: { kind: 'agent', agent: PARENT_AGENT },
-          parentRunId: OUTER_RUN_ID,
-        });
         parentFiber = yield* Effect.forkChild(
           withProcessServices(
             testRuntime(),
-            session.runs.launchRun(
+            startAwaited(
+              session.runs,
               PARENT_RUN_ID,
               prepareAgentDefinition({ config: parentConfig, session }).pipe(
                 Effect.flatMap((definition) =>
@@ -1322,6 +1322,10 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
                     session,
                     parentRunId: OUTER_RUN_ID,
                     tools: [launchWorkflowChild],
+                    registration: {
+                      identity: { kind: 'agent', agent: PARENT_AGENT },
+                      parentRunId: OUTER_RUN_ID,
+                    },
                   }),
                 ),
               ),
@@ -1353,7 +1357,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
         expect(
           delivery?.messages.at(-1) && messageText(delivery.messages.at(-1)!),
         ).toContain('<subagent-result');
-        expect(session.runs.isLive(PARENT_RUN_ID)).toBe(true);
+        expect(session.runs.get(PARENT_RUN_ID)?.live === true).toBe(true);
         expect(parentTurns).toHaveLength(0);
       }),
     30_000,
@@ -1373,7 +1377,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
     () =>
       Effect.gen(function* () {
         const runId = 'b9531b9531b9' as RunId;
-        modelBindingMocks.bindModel.mockImplementation(
+        bindingMocks.bindModel.mockImplementation(
           (input: { readonly config: BoundModel['config'] }) =>
             Effect.succeed(
               scriptedBoundModel(

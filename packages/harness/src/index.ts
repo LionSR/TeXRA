@@ -123,6 +123,7 @@ export type {
   Outcome,
   RunStopReason,
   RuntimeRequest,
+  ToolEditContent,
 } from '@shared/session/runtimeRequest';
 
 // The platform's ports: what an `AgentPlatform` implements, the failures its
@@ -163,3 +164,11 @@ export type {
   ToolProbeInputs,
   ToolProbeServices,
 } from '@tools/toolProbes';
+
+// The budget a session close waits for its runs: a plugin's drain fits it.
+export { SESSION_CLOSE_DEADLINE_MS } from '@agent/runtime/SessionHandle';
+// Model access a host request makes outside a run: the user's own key and
+// the endpoint they set (audio transcription).
+export { ownKeyCredential } from '@agent/runtime/modelAccess/credentials';
+// What a used-up plan falls back to, as the retry copy names it.
+export { quotaFallbackRouteFor } from '@shared/quotaFallbackRoutes';

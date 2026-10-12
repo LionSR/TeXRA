@@ -9,18 +9,17 @@ import {
   Secrets,
   Cancelled,
   Rejected,
+  ownKeyCredential,
   type LanguageModel,
 } from '@texra-ai/harness';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { RouteRetries } from '@agent/runtime';
-import { resolveRouteCredential } from '@agent/runtime/modelRoutes';
 import { withLogChannel } from '@logger/effectLog';
-import { readProviderEndpoints } from '@model/modelRoute';
 import type { StorageFs } from '@platform/rootedFs';
-import type { HostSnapshot } from '@shared/session/hostSnapshot';
-import type { HostRequest } from '@shared/session/hostRequest';
-import type { HostOutcome } from '@shared/session/sessionFrames';
 import type { UsageLog } from '@shared/usageLog';
+import type { HostSnapshot } from '@texra/shared/session/hostSnapshot';
+import type { HostRequest } from '@texra/shared/session/hostRequest';
+import type { HostOutcome } from '@texra/shared/session/sessionFrames';
 import { polishTextWithAI } from '@texra/agent/runtime/textEnhancement';
 import {
   recordingsDir,
@@ -252,17 +251,11 @@ export class HostDraftRequests {
       // calling frame, and the resolved credential reaches the
       // transcription as data.
       const postStop = Effect.gen(function* () {
-        const credential = yield* readProviderEndpoints(
-          take.session.roots,
+        const credential = yield* ownKeyCredential(
+          { ...take.session.roots, secrets },
+          MODEL_CONFIGS['openai/gpt-4o-2024-11-20'],
+          'openai',
         ).pipe(
-          Effect.flatMap((endpoints) =>
-            resolveRouteCredential(
-              { endpoints },
-              MODEL_CONFIGS['openai/gpt-4o-2024-11-20'],
-              { kind: 'api-key', provider: 'openai', usageRoute: 'api-key' },
-              secrets,
-            ),
-          ),
           Effect.mapError((error) => new Rejected({ reason: error.message })),
         );
         const text = yield* transcribeRecording(recordingPath, credential).pipe(

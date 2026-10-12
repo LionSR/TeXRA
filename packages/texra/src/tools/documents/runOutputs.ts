@@ -4,20 +4,24 @@
  */
 import { Effect } from 'effect';
 
-import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import { documentsOf } from '@shared/plugins/documents';
 import type {
   OutputFileInfo,
   ReadonlyRoundIndexed,
   RunId,
 } from '@shared/schemas';
+import type { SessionView } from '@shared/session/sessionView';
+import { documentsOf } from '@texra/shared/plugins/documents';
 
 /**
  * One run's recorded output files by round, from the session's fold: a
  * document task's documents. Hosts hand it to latexdiff orchestration, whose
  * run-discovery port it satisfies.
  */
-export function runOutputReader(session: SessionHandle): {
+export function runOutputReader(session: {
+  readonly view: {
+    readonly read: (runIds: readonly RunId[]) => Effect.Effect<SessionView>;
+  };
+}): {
   readonly readRunOutputs: (
     runId: RunId,
   ) => Effect.Effect<ReadonlyRoundIndexed<OutputFileInfo>, Error>;

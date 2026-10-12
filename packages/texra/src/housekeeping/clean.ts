@@ -27,10 +27,16 @@ export const findBuildDirectories = Effect.gen(function* () {
 
   // The trailing slash makes glob match directories only, so a plain file
   // named `build` is never listed for recursive removal; results still come
-  // back without the slash.
+  // back without the slash. `posix` keeps them `/`-separated on Windows too,
+  // the workspace-relative form every listing here uses.
   const pattern = '**/build/';
   const directories = yield* Effect.tryPromise({
-    try: () => glob(pattern, { cwd: workspacePath, ignore: ignorePatterns }),
+    try: () =>
+      glob(pattern, {
+        cwd: workspacePath,
+        ignore: ignorePatterns,
+        posix: true,
+      }),
     catch: (cause) => new GlobFailed({ pattern, cause }),
   });
   return directories.toSorted();

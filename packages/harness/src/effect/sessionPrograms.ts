@@ -28,18 +28,17 @@ import {
 
 // Each runtime value comes from the module that defines it: the
 // `@agent/runtime` barrel would evaluate runtime files no session here runs.
-import { getAgent } from '@agent/index';
+import { getAgent } from '@agent/index/agentRegistry';
 import { describeFollowUpFailure } from '@agent/followUp/ToolUseFollowUp';
 import { resumeRun } from '@agent/runtime/resumeRun';
 import { owningCall } from '@agent/storage/runRecords';
-import { runAgent as runValidatedAgent } from '@agent/runtime/runAgent';
 import type { SessionHandle as RuntimeSessionHandle } from '@agent/runtime/SessionHandle';
 import type { ITool } from '@agent/core/tools/ToolTypes';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 
 // The composition root supplies its existing scoped services privately;
 // public Session capabilities carry no process implementation types.
-import type { ProcessServices, SessionOwner } from '@platform/processRuntime';
+import { SessionOwner, type ProcessServices } from '@platform/processRuntime';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import { InlinePersonaSchema, type RunId } from '@shared/schemas';
 import { generateRunId } from '@utils/core';
@@ -136,10 +135,12 @@ function admitInput(
   });
 }
 
-/** Start one run on `session`: the runtime's `runAgent`, one cycle long. */
+/** Start one run on `session`: a root launch of its runs, one cycle long,
+ *  under the process's session owner. */
 function start(
   session: RuntimeSessionHandle,
   services: Context.Context<ProcessServices>,
+  owner: Context.Service.Shape<typeof SessionOwner>,
   input: StartInput,
 ): Effect.Effect<Run, LaunchError | RunFailure> {
   return Effect.gen(function* () {
@@ -147,10 +148,15 @@ function start(
     const config = yield* admitInput(input, canAsk);
     const runId = generateRunId();
     return yield* handOver(session, services, runId, (hooks) =>
-      runValidatedAgent(
-        { config, runId },
-        { ...hooks, session, stopAfterCycle: true, tools: input.tools },
-      ).pipe(Effect.mapError(runFailure)),
+      session.runs
+        .launch({
+          request: { config, runId },
+          options: { ...hooks, stopAfterCycle: true, tools: input.tools },
+        })
+        .pipe(
+          Effect.provideService(SessionOwner, owner),
+          Effect.mapError(runFailure),
+        ),
     );
   });
 }
@@ -229,11 +235,12 @@ let readerPorts = 0;
 function sessionOf(
   handle: RuntimeSessionHandle,
   services: Context.Context<ProcessServices>,
+  owner: Context.Service.Shape<typeof SessionOwner>,
   resumeJoined: Session['resume'],
 ): Session {
   return {
     roots: handle.roots,
-    start: (input) => start(handle, services, input),
+    start: (input) => start(handle, services, owner, input),
     resume: resumeJoined,
     request: (request) => handle.requests.request(request),
     view: { changes: handle.view.changes },
@@ -303,7 +310,7 @@ export function makeSessions(
           );
         });
     const sessionFor = (handle: RuntimeSessionHandle): Session =>
-      sessionOf(handle, services, resumeJoined(handle));
+      sessionOf(handle, services, owner, resumeJoined(handle));
     const open = (roots?: WorkspaceRoots, options: OpenOptions = {}) =>
       Effect.gen(function* () {
         const ended = yield* Deferred.make<void>();

@@ -16,7 +16,7 @@ import {
   Effect,
   Option,
   RcMap,
-  type Scope,
+  Scope,
   Stream,
   SubscriptionRef,
 } from 'effect';
@@ -35,7 +35,6 @@ import {
   type CommitOrdinal,
   type RunId,
   type SessionEvent,
-  type SessionEventDraft,
 } from '@shared/schemas';
 import {
   Database,
@@ -45,9 +44,12 @@ import {
 } from '@shared/session/database';
 import {
   ProcessIdentity,
+  PublisherJob,
+  afterCommit,
   SessionEvents,
   type Append,
   type SessionEventsShape,
+  type UnfoldedDraft,
 } from '@shared/session/sessionEvents';
 
 import { makeRunTrace } from './runTrace';
@@ -56,13 +58,17 @@ import { TextChunkSource } from './sessionSources';
 
 const CHANNEL = 'sessionStore';
 
-/** What the session layer composes a session from, beside the handle. */
+/** What the session layer composes a session from, beside the handle. The
+ *  store is the one owner of the session's publisher: nothing else reaches
+ *  its transactions. */
 export interface SessionStore {
   readonly log: SessionLog;
   readonly trace: RunTrace;
   /** The publisher's detached door: for a producer with no fiber to wait on
    *  (the inbox's own sends, an interrupted request's cancellation). */
   readonly detach: SessionEventsShape['detach'];
+  /** Remove a run and its dependents, as the publisher's next job. */
+  readonly removeRun: SessionEventsShape['removeRun'];
   /** The tail as the view has folded it: every row above the store's
    *  opening commit, released once the view holds the state that folded
    *  it, for a reader that reads the view beside each row. */
@@ -76,10 +82,11 @@ export interface SessionStore {
   readonly deliver: (
     removed: (runId: RunId) => void,
   ) => Effect.Effect<void, never, Scope.Scope>;
-  /** Shut the doors: from here on a trace row, a transcript subscription and
-   *  an interrupted request's cancellation write nothing, and the first late
-   *  trace row says so. */
-  readonly close: () => void;
+  /** Drain the publisher inside the close deadline, then shut the doors:
+   *  from here on a trace row, a transcript subscription and an interrupted
+   *  request's cancellation write nothing, and the first late trace row
+   *  says so. */
+  readonly close: Effect.Effect<void>;
   readonly closed: () => boolean;
 }
 
@@ -143,40 +150,58 @@ function settlement(
  * decided when the last holder's scope closes: given back to how the first
  * found it, or released when a hold `ends` it. The map closes with the
  * session, deciding whatever is still held.
+ *
+ * A hold inside a publisher job is the job's own, never the map's: the map's
+ * lookup could wait on the connection the job holds, and its release would
+ * run in the job's transaction after it ended. It is taken in the job's
+ * transaction and decided by the scope that closes it, in that closer's
+ * transaction (`Scope.addFinalizer` keeps no context).
  */
-const claimHolds = (database: DatabaseShape) =>
-  Effect.map(
+const claimHolds = (database: DatabaseShape) => {
+  const take = (id: AggregateId) =>
+    Effect.map(database.acquireClaims([id]), (ids) => ({
+      taken: ids.length > 0,
+      ended: false,
+    }));
+  const decide = (id: AggregateId, hold: { taken: boolean; ended: boolean }) =>
+    hold.taken || hold.ended
+      ? database
+          .releaseClaims([id])
+          .pipe(
+            Effect.catch(
+              logFailure(
+                `The claim on ${id} was not released; the next process proves this one dead before it takes the claim.`,
+              ),
+            ),
+          )
+      : Effect.void;
+  return Effect.map(
     RcMap.make({
       lookup: (id: AggregateId) =>
-        Effect.acquireRelease(
-          database
-            .acquireClaims([id])
-            .pipe(
-              Effect.map((ids) => ({ taken: ids.length > 0, ended: false })),
-            ),
-          (hold) =>
-            hold.taken || hold.ended
-              ? database
-                  .releaseClaims([id])
-                  .pipe(
-                    Effect.catch(
-                      logFailure(
-                        `The claim on ${id} was not released; the next process proves this one dead before it takes the claim.`,
-                      ),
-                    ),
-                  )
-              : Effect.void,
-        ),
+        Effect.acquireRelease(take(id), (hold) => decide(id, hold)),
     }),
     (claims): SessionLog['hold'] =>
-      (runId, options = {}) =>
-        Effect.map(
-          RcMap.get(claims, qualifyAggregateId('run', runId)),
-          (hold) => {
-            if (options.ends === true) hold.ended = true;
-          },
-        ),
+      (runId, options = {}) => {
+        const id = qualifyAggregateId('run', runId);
+        const held = (hold: { ended: boolean }) => {
+          if (options.ends === true) hold.ended = true;
+        };
+        return Effect.flatMap(PublisherJob, (job) =>
+          job !== null
+            ? Effect.flatMap(take(id), (hold) => {
+                held(hold);
+                return Effect.flatMap(Effect.scope, (scope) =>
+                  Scope.addFinalizer(
+                    scope,
+                    Effect.suspend(() => decide(id, hold)),
+                  ),
+                );
+              })
+            : Effect.map(RcMap.get(claims, id), held),
+        );
+      },
   );
+};
 
 /**
  * One transaction on the publisher, settled against its own last commit,
@@ -227,9 +252,15 @@ const transaction =
             Effect.sync(() => owned.push(...taken)),
           );
         },
+        afterCommit,
       });
       const value = yield* events
-        .transact((append) => job(tx(append)))
+        .transact((append) => {
+          // An attempt that rolled back committed nothing and took nothing.
+          committed = null;
+          owned.length = 0;
+          return job(tx(append));
+        })
         .pipe(Effect.onError(() => release));
       if (committed !== null)
         yield* settleTo(committed).pipe(Effect.onError(() => release));
@@ -267,18 +298,31 @@ export const makeSessionStore = (
     const transact = transaction(events, database, settle.to);
     let doorsShut = false;
     const closed = () => doorsShut;
+    /** Every job enqueued before it has run, and the view folded it. */
+    const settled = events
+      .transact(() => database.currentCommit, { order: true })
+      .pipe(Effect.orDie, Effect.flatMap(settle.to));
+    const trace = makeRunTrace({
+      storage,
+      events,
+      text: chunks.ref,
+      settled,
+      closed,
+    });
     const log: SessionLog = {
       transact: <A, E>(
         work:
-          | readonly SessionEventDraft[]
+          | readonly UnfoldedDraft[]
           | ((tx: SessionTransaction) => Effect.Effect<A, E>),
-      ) =>
-        typeof work === 'function'
-          ? transact(work)
-          : transact((tx) => tx.append(work)),
-      settled: events
-        .transact(() => database.currentCommit)
-        .pipe(Effect.orDie, Effect.flatMap(settle.to)),
+      ) => {
+        if (typeof work === 'function') return transact(work);
+        // An empty batch is a barrier: every job before it has run.
+        return work.length === 0
+          ? events.transact(() => Effect.succeed([]), { order: true })
+          : transact((tx) => tx.append(work));
+      },
+      publish: trace.publish,
+      settled,
       now: () => SubscriptionRef.getUnsafe(database.observedCommit),
       rows: (id, types) => database.readAggregate(id, 1, types),
       records: (runId) =>
@@ -305,17 +349,11 @@ export const makeSessionStore = (
       owner: (runId) => database.claimOwner(qualifyAggregateId('run', runId)),
       movedAside: database.movedAside,
     };
-    const trace = makeRunTrace({
-      storage,
-      events,
-      text: chunks.ref,
-      settled: log.settled,
-      closed,
-    });
     return {
       log,
       trace,
       detach: events.detach,
+      removeRun: events.removeRun,
       folded: tailFrom(
         database.readDisplay,
         { get: Effect.sync(settle.cursor), changes: settle.changes },
@@ -342,9 +380,13 @@ export const makeSessionStore = (
           Effect.forkScoped,
           Effect.asVoid,
         ),
-      close: () => {
-        doorsShut = true;
-      },
+      close: events.drain.pipe(
+        Effect.ensuring(
+          Effect.sync(() => {
+            doorsShut = true;
+          }),
+        ),
+      ),
       closed,
     };
   });

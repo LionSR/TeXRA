@@ -38,9 +38,9 @@ import { FOLLOW_UP_WAKE_FAILED_MESSAGE } from '@agent/followUp/ToolUseFollowUp';
 import { withLogChannel } from '@logger/effectLog';
 import { getRuntimeModelDirectFallback } from '@model/copilotRouting';
 import type { ModelHostFactUnreadable } from '@model/computeModelOptions';
-import type { HostRequest } from '@shared/session/hostRequest';
 import { isDocumentTaskConfig, type RunId } from '@shared/schemas';
-import { documentsOf } from '@shared/plugins/documents';
+import type { HostRequest } from '@texra/shared/session/hostRequest';
+import { documentsOf } from '@texra/shared/plugins/documents';
 import type { MessageHost, NotificationFailed } from '@texra/hosts/uiHosts';
 import { runActionGuard } from '@texra/controllers/session/runActionGuard';
 import { getUseOpenRouter } from '@utils/config/providerConfig';
@@ -108,7 +108,7 @@ export interface HostRunActionPorts {
   readonly backend: SessionBackend;
   /**
    * Launch a validated fresh run; the host's own launcher reaches
-   * `runAgent`. The Effect settles with the launched run itself — a caller
+   * the session's root launch (`Runs.launch`). The Effect settles with the launched run itself — a caller
    * that wants only the launch acknowledged races it against the `onRun`
    * gate instead of awaiting it. It fails with the launcher's own error; the
    * actions below name that channel once.

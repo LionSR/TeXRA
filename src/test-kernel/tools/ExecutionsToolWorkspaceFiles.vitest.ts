@@ -10,6 +10,7 @@ import { it } from '@effect/vitest';
 import { Effect, Fiber } from 'effect';
 
 import { beforeEach, describe, expect, vi } from 'vitest';
+import { registryOf } from '@agent/runtime/runRegistry';
 import type { ToolServices } from '@agent/runtime/ToolServices';
 
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
@@ -202,7 +203,7 @@ describe('ExecutionsTool', () => {
 
           publishTestRunStart(session, parentRunId);
           publishTestRunStart(session, childRunId, { parent: parentRunId });
-          session.runs.track(handle);
+          registryOf(session.runs).track(handle);
           yield* foldRunPhase(
             session,
             childRunId,
@@ -267,7 +268,7 @@ describe('ExecutionsTool', () => {
   // child's queued delivery pending, so the parent took the same result
   // again as a follow-up and ran a second turn.
   it.live(
-    'withdraws the queued delivery of a child whose result a wait returned',
+    'answers the queued delivery of a child whose result a wait returned',
     () =>
       withSession((session) =>
         Effect.gen(function* () {
@@ -275,7 +276,7 @@ describe('ExecutionsTool', () => {
           const childRunId = RunIdSchema.parse('c41d0000000d');
           publishTestRunStart(session, parentRunId);
           publishTestRunStart(session, childRunId, { parent: parentRunId });
-          session.runs.track(
+          registryOf(session.runs).track(
             testRunHandle({
               runId: childRunId,
               parent: parentRunId,
@@ -315,16 +316,14 @@ describe('ExecutionsTool', () => {
           expect(waited.output).toContain(
             '<subagent-result>full report</subagent-result>',
           );
+          // The result names the delivery it answers; the call's settlement
+          // consumes it, so until then it stays queued.
+          expect(
+            waited.status === 'executed' ? waited.consumedFollowUps : null,
+          ).toEqual([delivery.deliveryId]);
           expect(
             (yield* session.followUps.read(parentRunId)).followUps,
-          ).toEqual([]);
-          // The child loop's replayed wake finds the row consumed.
-          expect(yield* session.followUps.send(parentRunId, delivery)).toEqual({
-            kind: 'duplicate',
-          });
-          expect(
-            (yield* session.followUps.read(parentRunId)).followUps,
-          ).toEqual([]);
+          ).toHaveLength(1);
         }),
       ),
   );
@@ -340,7 +339,7 @@ describe('ExecutionsTool', () => {
           const childRunId = RunIdSchema.parse('c41d0000000c');
           publishTestRunStart(session, parentRunId);
           publishTestRunStart(session, childRunId, { parent: parentRunId });
-          session.runs.track(
+          registryOf(session.runs).track(
             testRunHandle({
               runId: childRunId,
               parent: parentRunId,
@@ -389,7 +388,7 @@ describe('ExecutionsTool', () => {
           const childRunId = RunIdSchema.parse('c41d0000000d');
           publishTestRunStart(session, parentRunId);
           publishTestRunStart(session, childRunId, { parent: parentRunId });
-          session.runs.track(
+          registryOf(session.runs).track(
             testRunHandle({
               runId: childRunId,
               parent: parentRunId,

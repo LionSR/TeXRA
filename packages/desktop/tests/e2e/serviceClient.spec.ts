@@ -251,6 +251,30 @@ test('the desktop app shares the service with a CLI of its build, reaches the on
       await launched.page.screenshot({
         path: test.info().outputPath('desktop-accepted-file.png'),
       });
+      // On macOS, closing the window keeps the app; activating it reopens
+      // the window, which waits for the service to attach it. The reopened
+      // window lists the service's task, and the open is not refused.
+      let reopenedWithService: boolean | 'not macOS' = 'not macOS';
+      if (process.platform === 'darwin') {
+        let mainErrors = '';
+        launched.app.process().stderr?.on('data', (chunk: Buffer) => {
+          mainErrors += chunk.toString();
+        });
+        const window = await launched.app.browserWindow(launched.page);
+        await window.evaluate((closing) => closing.close());
+        await expect.poll(() => launched.app.windows().length).toBe(0);
+        const reopenedPage = launched.app.waitForEvent('window');
+        await launched.app.evaluate(({ app }) => app.emit('activate'));
+        const reopened = await reopenedPage;
+        await expect(
+          reopened
+            .locator('.shell-project-runs run-tab')
+            .filter({ has: reopened.locator(`[data-run="${task.runId}"]`) }),
+        ).toHaveCount(1, { timeout: 60_000 });
+        expect(mainErrors).not.toContain('could not be reopened');
+        expect(launched.app.windows()).toHaveLength(1);
+        reopenedWithService = true;
+      }
       const accepted = readFileSync(join(work, 'accepted.tex'), 'utf8');
       const reconnected = status(nextBuild, home);
       const nextTasks = JSON.parse(
@@ -268,6 +292,7 @@ test('the desktop app shares the service with a CLI of its build, reaches the on
           serviceTaskAcceptedTheFile: accepted === draft,
           appListsTheAcceptedFile: true,
           acceptingTaskListed: nextTasks.some((t) => t.runId === accept.runId),
+          reopenedWithService,
         },
         shared: { record: started, cliStatus: shared, cliTasks: sharedTasks },
         next: { status: reconnected, tasks: nextTasks },

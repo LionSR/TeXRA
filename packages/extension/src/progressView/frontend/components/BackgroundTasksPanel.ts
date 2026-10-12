@@ -30,16 +30,16 @@ import '@awesome.me/webawesome/dist/components/relative-time/relative-time.js';
 import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 
 // Local imports
-import { inquiryThreadsUnder } from '@shared/plugins/externalInquiry';
 import type { InquiryThreadSummary, RunId } from '@shared/schemas';
 import {
   rollupOf,
   type SessionView,
   type RunView,
 } from '@shared/session/sessionView';
-import type { Surface } from '@shared/session/surface';
 import type { TeXRAIconName } from '@shared/iconNames';
 import { dispatchedChildren } from '@shared/transcript';
+import type { Surface } from '@texra/shared/session/surface';
+import { inquiryThreadsUnder } from '@texra/shared/plugins/externalInquiry';
 import { SessionUiEvents } from '@texra/shared/session/uiEvents';
 import { TickerController } from '@texra/shared/litControllers/TickerController';
 import { designTokens, commonViewStyles } from '@ui/styles';

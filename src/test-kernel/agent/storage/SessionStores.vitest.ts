@@ -12,11 +12,13 @@ import {
   SubscriptionRef,
 } from 'effect';
 import { afterEach, describe, expect, vi } from 'vitest';
+import { registryOf } from '@agent/runtime/runRegistry';
 
 // Local imports
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { sweepLeftoverRuns } from '@controllers/session/sweepLeftoverRuns';
 import { aggregateId, type RunId } from '@shared/schemas';
+import { startAwaited } from '@test/support/runHandleFixtures';
 import { closeSessionOf } from '@test/support/sessionEnd';
 import {
   createTestSession,
@@ -58,7 +60,7 @@ describe('committed run removal', () => {
             parent,
             agent: 'chat',
           });
-          session.runs.track(handle);
+          registryOf(session.runs).track(handle);
           yield* session.log.settled;
           yield* startGoal(
             session,
@@ -106,7 +108,9 @@ describe('committed run removal', () => {
           expect(SubscriptionRef.getUnsafe(session.view.ref).requests).toEqual(
             [],
           );
-          expect(handle.isOwnedBy(parent)).toBe(false);
+          expect(registryOf(session.runs).parentOf(handle.runId)).not.toBe(
+            parent,
+          );
           expect(session.log.now()).toBe(before + 1);
           expect(goalOf(session, parent)).toBeNull();
         }),
@@ -134,7 +138,10 @@ describe('committed run removal', () => {
                 ),
             );
             const deletion = yield* Effect.forkScoped(
-              session.runs.withInactiveRunStep('aabbccdd' as RunId, operation),
+              registryOf(session.runs).withInactiveRunStep(
+                'aabbccdd' as RunId,
+                operation,
+              ),
             );
             yield* Deferred.await(started);
             const interruption = yield* Effect.forkScoped(
@@ -143,7 +150,8 @@ describe('committed run removal', () => {
             yield* Deferred.await(cleaning);
             let launched = false;
             const launch = yield* Effect.forkScoped(
-              session.runs.launchRun(
+              startAwaited(
+                session.runs,
                 'aabbccdd' as RunId,
                 Effect.sync(() => {
                   launched = true;
@@ -151,7 +159,7 @@ describe('committed run removal', () => {
               ),
               { startImmediately: true },
             );
-            yield* session.runs.launchRun('11223344' as RunId, Effect.void);
+            yield* startAwaited(session.runs, '11223344' as RunId, Effect.void);
             expect(launched).toBe(false);
             yield* Deferred.succeed(releaseCleanup, undefined);
             yield* Fiber.join(interruption);
@@ -174,7 +182,7 @@ describe('indexed background-shell cleanup', () => {
           // Not a background shell: the sweep only removes `process` runs.
           const notAShell = 'cc0003' as RunId;
           const agent = 'cc0004' as RunId;
-          session.runs.track(
+          registryOf(session.runs).track(
             testRunHandle({
               runId: active,
               agent: 'bash',

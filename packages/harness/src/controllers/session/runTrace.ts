@@ -10,9 +10,10 @@ import { Effect, SubscriptionRef } from 'effect';
 import type {
   ClosureFact,
   RunTrace,
+  SessionLog,
   StreamClosure,
 } from '@agent/runtime/SessionHandle';
-import { runEventDraft } from '@agent/runtime/SessionEvents';
+import { runEventDraft } from '@agent/trace/TraceEmitter';
 import { classifyAgentError } from '@common/errors';
 import { writeLogLine } from '@logger/logSink';
 import {
@@ -23,17 +24,16 @@ import {
   type RunOutcome,
   type SessionEvent,
 } from '@shared/schemas';
-import type {
-  DatabaseNotOwner,
-  DatabaseWriteFailed,
-} from '@shared/session/database';
 import { closesRunWindow } from '@shared/session/runRows';
 import type { SessionEventsShape } from '@shared/session/sessionEvents';
+import { ensureError } from '@utils/errors/errorMessage';
 
 import type { InflightText, InflightTextChunk } from './sessionSources';
 
 /** A session's trace sink, and the tail's hand-off of each committed row. */
 export interface RunTraceSink extends RunTrace {
+  /** The session log's display door ({@link SessionLog.publish}). */
+  readonly publish: SessionLog['publish'];
   /** Drop the transient text a committed row closes: a stream's final text
    *  or a card's terminal result its own, a phase move that rests or ends
    *  the run, and its removal, every chunk of the run. */
@@ -62,7 +62,10 @@ export function makeRunTrace({
   closed,
 }: RunTraceInit): RunTraceSink {
   /** Each run's first refused row, until its end takes it. */
-  const lost = new Map<RunId, DatabaseNotOwner | DatabaseWriteFailed>();
+  const lost = new Map<RunId, Error>();
+  const keep = (runId: RunId, refusal: unknown) => {
+    if (!lost.has(runId)) lost.set(runId, ensureError(refusal));
+  };
   let reportedLateWrite = false;
   /** A row after the doors shut writes nothing, and the first says so: what
    *  still publishes then is a run that outlived its session's close. */
@@ -126,32 +129,37 @@ export function makeRunTrace({
       if (refusedAfterClose()) return;
       if (event.type === 'stream.chunk') {
         const chunk = event.text;
-        events.detach(() => appendText(runId, event.id, chunk));
+        events.detach(() => appendText(runId, event.id, chunk), {
+          order: true,
+        });
         return;
       }
       // The call fixes the row's place in the order; the draft is built when
       // the publisher runs the job, after every chunk enqueued before it
       // reached the text, so a `stream.end` with no final text of its own
       // closes on the complete streamed text. The first refusal is kept.
-      events.detach((append) => {
-        const draft = runEventDraft(
-          runId,
-          event.type === 'stream.end'
-            ? {
-                ...event,
-                finalText: event.finalText ?? readText(runId, event.id),
-              }
-            : event,
-        );
-        if (draft === null) return Effect.void;
-        return append([draft]).pipe(
-          Effect.tapError((refusal) =>
-            Effect.sync(() => {
-              if (!lost.has(runId)) lost.set(runId, refusal);
-            }),
-          ),
-        );
-      });
+      events.detach(
+        (append) => {
+          const draft = runEventDraft(
+            runId,
+            event.type === 'stream.end'
+              ? {
+                  ...event,
+                  finalText: event.finalText ?? readText(runId, event.id),
+                }
+              : event,
+          );
+          if (draft === null) return Effect.void;
+          return append([draft]).pipe(
+            Effect.tapError((refusal) =>
+              Effect.sync(() => keep(runId, refusal)),
+            ),
+          );
+          // Its transaction failing (a busy lock past the budget, the store
+          // gate, the commit) loses the row as surely as a refusal does.
+        },
+        { failed: (error) => keep(runId, error) },
+      );
     },
     lost: (runId) =>
       Effect.map(settled, () => {

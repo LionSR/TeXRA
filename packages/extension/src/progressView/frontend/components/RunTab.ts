@@ -23,6 +23,7 @@ import {
   formControlStyles,
 } from '@ui/styles/controlStyles';
 import { renderIconActionButton } from '@ui/wa/actionButtons';
+import { afterDropdownHides } from '@ui/wa/selectTemplates';
 import { AGENT_DECORATORS, type RunDecorator } from '@ui/wa/icons';
 
 // Side-effect imports - register WA components
@@ -353,7 +354,8 @@ export class RunTab extends LitElement {
                   event: CustomEvent<{ item: { value: string } }>,
                 ) => {
                   event.stopPropagation();
-                  if (event.detail.item.value === 'rename') this.startRename();
+                  if (event.detail.item.value === 'rename')
+                    afterDropdownHides(event, () => this.startRename());
                   if (event.detail.item.value === 'delete') {
                     this.dispatchEvent(
                       new CustomEvent('run-row-delete', {

@@ -21,11 +21,11 @@ import { Rejected, type HostRequestFailure } from '@texra-ai/harness';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { getIncludedExtensions } from '@common/files/fileTypeUtils';
 import type { StorageFs, WorkspaceFs } from '@platform/rootedFs';
-import type { HostRequest } from '@shared/session/hostRequest';
+import type { HostRequest } from '@texra/shared/session/hostRequest';
 import type {
   HostOutcome,
   SurfaceActionMessage,
-} from '@shared/session/sessionFrames';
+} from '@texra/shared/session/sessionFrames';
 import type { ToolEditApprovalController } from '@texra/controllers/approval/ToolEditApprovalController';
 import { attachDroppedFiles } from '@texra/controllers/mainView/MainViewDroppedFilesController';
 import type { ProgressWorkflowFileActionsController } from '@texra/controllers/progressView/ProgressWorkflowFileActionsController';

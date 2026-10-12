@@ -8,7 +8,7 @@ import {
   scopedOkClient,
   toFetchToolError,
 } from '@tools/timeouts';
-import { defineTool } from '@tools/core/define';
+import { defineTool } from '@tools/core/definition';
 import { nullishWithDefault } from '@tools/core/inputSchema';
 import { executed } from '@tools/core/result';
 
@@ -178,7 +178,7 @@ export const WebSearchTool = defineTool({
   name: 'web_search',
   replay: 'safe',
   slow: true,
-  parallelSafe: true,
+  lane: 'parallel',
   description:
     'Search the web and return top results from the DuckDuckGo Instant Answers API.',
   schema: WebSearchInputSchema,

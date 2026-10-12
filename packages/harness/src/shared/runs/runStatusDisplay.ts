@@ -61,6 +61,7 @@ const RUN_STATUS_LABELS: Record<RunStatusCopyKey, string> = {
   [RUN_PHASE.WAITING]: 'Idle',
   [RUN_SUBSTATE.RESUMING]: 'Resuming',
   [RUN_SUBSTATE.PAUSED]: 'Paused',
+  [RUN_SUBSTATE.RESULT_WAITING]: 'Result waiting: parent is open elsewhere',
   [RUN_DISPLAY_INTERRUPTED]: 'Interrupted',
   [RUN_DISPLAY_WAITING_ON_USER]: 'Waiting on you',
 };
@@ -90,6 +91,7 @@ const RUN_STATUS_TONES: Record<RunStatusCopyKey, RunStatusTone> = {
   [RUN_PHASE.WAITING]: RUN_STATUS_TONE.NEUTRAL,
   [RUN_SUBSTATE.RESUMING]: RUN_STATUS_TONE.RUNNING,
   [RUN_SUBSTATE.PAUSED]: RUN_STATUS_TONE.WARNING,
+  [RUN_SUBSTATE.RESULT_WAITING]: RUN_STATUS_TONE.WARNING,
   [RUN_DISPLAY_INTERRUPTED]: RUN_STATUS_TONE.WARNING,
   [RUN_DISPLAY_WAITING_ON_USER]: RUN_STATUS_TONE.WARNING,
 };
@@ -143,6 +145,11 @@ export function runResumeBlockedMessage(
  *  opened. */
 export const RUN_DAMAGED_MESSAGE =
   "Part of this task's saved history is damaged, so it cannot be opened or resumed.";
+
+/** Banner copy for a run with a row an earlier build wrote at a version
+ *  this one has no upcaster for: shown, never opened. */
+export const RUN_EARLIER_BUILD_MESSAGE =
+  "This task was written by an earlier build of TeXRA; it can't be opened by this one.";
 
 /** Banner and tooltip copy for a run another TeXRA process holds, named by
  *  its pid: the one part of a process identity a user can act on. */

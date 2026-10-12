@@ -15,13 +15,11 @@ import {
 } from '@desktop/renderer/desktopShell.js';
 import type { WorkbenchTab } from '@desktop/shared/desktopShellState.js';
 import { MESSAGE_TYPES, type RunId } from '@shared/schemas';
-import type { ProjectDisplay } from '@shared/session/hostSnapshot';
 import {
   emptySessionView,
   type SessionView,
   type RunView,
 } from '@shared/session/sessionView';
-import { emptySurface, type Surface } from '@shared/session/surface';
 import {
   BOARD_NOW,
   buildScenario,
@@ -32,6 +30,8 @@ import {
   OWNER,
   tail,
 } from '@test/shared/session/fanOutScenario';
+import type { ProjectDisplay } from '@texra/shared/session/hostSnapshot';
+import { emptySurface, type Surface } from '@texra/shared/session/surface';
 import type { Shell } from '@texra/shared/session/shell';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 

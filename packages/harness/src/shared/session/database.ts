@@ -20,6 +20,7 @@ import type {
   OwnerLiveness,
   SessionEvent,
   SessionEventDraft,
+  LocalRuntimeState,
 } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import type { ValueFamily } from './valueFamily';
@@ -52,23 +53,19 @@ export const AggregateStateSchema = z.object({
 export type AggregateState = z.infer<typeof AggregateStateSchema>;
 
 /**
- * C5's current claim on one aggregate, with the liveness of its owner proved
- * in the same call: `self` is this process, and a null owner (with a null
- * verdict) is an unclaimed or absent aggregate. The read a resume gate and
- * the run listing ask, never the fold, whose liveness comes from a prober
- * that only watches owners of runs already resident in the view.
- */
+ * C5's current claim on one aggregate, its owner's liveness proved in the same
+ * call (`self` is this process; a null owner is unclaimed or absent): what a
+ * resume gate and the run listing ask, never the fold, whose prober watches
+ * only owners of runs already resident in the view. */
 export interface AggregateClaim {
   readonly ownerId: OwnerId | null;
   readonly liveness: OwnerLiveness | 'self' | null;
 }
 
 /**
- * Who holds a claim relative to this process: this process itself, an owner
- * that is alive or cannot be proven dead, or nobody. The one derivation every
- * ladder that reads a claim shares — the run listing, the run
- * classification, and the resume gate all answer the same question of the
- * same two fields, and a run whose owner is provably dead is free.
+ * Who holds a claim relative to this process: itself, an owner alive or not
+ * proven dead, or nobody (a provably dead owner frees it). The one reading the
+ * run listing, the run classification and the resume gate all share.
  */
 type ClaimStanding =
   | { readonly kind: 'self' }
@@ -115,13 +112,11 @@ export class DatabaseWriteFailed extends Data.TaggedError(
 }
 
 /**
- * C5: a batch member targets an aggregate this process does not hold open,
- * because the claim moved, was never held, or the aggregate closed. Nothing
- * was written. The one write refusal that is a fact about ownership rather
- * than the disk, which is why `appendAll` fails with it typed instead of
- * wrapped in `DatabaseWriteFailed` (D6 b): a caller that lost its claim
- * stops, and never mistakes a disk error for a stolen claim or the reverse.
- */
+ * C5: a batch member targets an aggregate this process does not hold open (the
+ * claim moved, was never held, or the aggregate closed); nothing was written.
+ * A fact about ownership, not the disk, so `appendAll` fails with it typed,
+ * not wrapped in `DatabaseWriteFailed` (D6 b): a caller that lost its claim
+ * stops, never mistaking a disk error for a stolen claim or the reverse. */
 export class DatabaseNotOwner extends Data.TaggedError('DatabaseNotOwner')<{
   readonly aggregateId: AggregateId;
   /** The holder and closure at refusal time, read in the refusing transaction. */
@@ -138,13 +133,10 @@ export class DatabaseClaimRefused extends Data.TaggedError(
 }> {}
 
 /**
- * The owner the database names as holding an aggregate this caller was
- * refused (not proven alive: a claim verdict may be `unprovable`), or null
- * when the refusal names none: the claim verdict (carried as the write
- * failure's cause), or a `DatabaseNotOwner` naming an owner of an open
- * aggregate. A closed aggregate is finished and an ownerless one is free, so
- * neither is held elsewhere.
- */
+ * The owner a refusal names as holding an aggregate (not proven alive: a
+ * verdict may be `unprovable`), from a claim verdict (a write failure's cause)
+ * or a `DatabaseNotOwner` of an open aggregate; null otherwise, since a closed
+ * aggregate is finished and an ownerless one is free. */
 export const heldElsewhereBy = (error: unknown): OwnerId | null => {
   const refusal = error instanceof DatabaseWriteFailed ? error.cause : error;
   if (refusal instanceof DatabaseClaimRefused) return refusal.ownerId;
@@ -162,11 +154,9 @@ export class DatabaseReadFailed extends Data.TaggedError('DatabaseReadFailed')<{
 }
 
 /**
- * What opening a store moved aside, whole: a store written before 1.0, which
- * this build never reads, or a file SQLite reports damaged or not a
- * database. Null when nothing was moved. The one fact a host presents about
- * it; this build never reads the moved file.
- */
+ * What opening a store moved aside, whole (never read again): a store written
+ * before 1.0, or a file SQLite reports damaged or not a database. Null when
+ * nothing was moved. The one fact a host presents about it. */
 export interface SessionStoreMovedAside {
   readonly path: string;
   readonly aside: string;
@@ -194,6 +184,14 @@ export class DatabaseRowCorrupt extends Data.TaggedError('DatabaseRowCorrupt')<{
   readonly detail: string;
 }> {
   override readonly message = `The session store's ${this.type} row at commit ${this.commit} does not decode (${this.detail}).`;
+}
+
+/** A row an earlier build wrote below the version this one reads: its run cannot open. */
+export class DatabaseRowEarlier extends Data.TaggedError('DatabaseRowEarlier')<{
+  readonly commit: number;
+  readonly type: string;
+}> {
+  override readonly message = `The session store's ${this.type} row at commit ${this.commit} was written by an earlier build of TeXRA; it can't be opened by this one.`;
 }
 
 /**
@@ -253,15 +251,12 @@ export class Database extends Context.Service<
     /** Set when this open moved a pre-1.0 or damaged store aside. */
     readonly movedAside: SessionStoreMovedAside | null;
     /**
-     * C6: append an ordered batch, possibly across several aggregates, in one
-     * `BEGIN IMMEDIATE` under the process's single permit. Each target's
-     * `seq` and the database-wide `commit` are assigned in batch order, the
-     * writer is this process (C5, derived here, never supplied by a caller),
-     * and a failure of any member rolls back every member and every sequence
-     * change. Returns the complete committed batch, which is what the fold
-     * reads before exposing the state it produced. A target this process
-     * does not hold open refuses the batch as `DatabaseNotOwner`; every
-     * other rollback is `DatabaseWriteFailed`.
+     * C6: append an ordered batch, possibly across several aggregates, whole
+     * or not at all, in the caller's {@link job} or a transaction of its
+     * own. `seq` and `commit` are assigned in batch order and the writer is
+     * this process (C5, never a caller's). A target this process does not
+     * hold open refuses the batch as `DatabaseNotOwner`; every other
+     * rollback is `DatabaseWriteFailed`.
      */
     readonly appendAll: (
       drafts: readonly SessionEventDraft[],
@@ -269,6 +264,13 @@ export class Database extends Context.Service<
       readonly SessionEvent[],
       DatabaseNotOwner | DatabaseWriteFailed
     >;
+    /** Run `body` as one write transaction behind the store gate, whole or
+     *  not at all; readers wake after. It holds the write lock, so `body` is
+     *  database-only and may run again whole (a busy lock; claim owners
+     *  proven off the lock); `afterCommit` actions run after. */
+    readonly job: <A, E>(
+      body: Effect.Effect<A, E>,
+    ) => Effect.Effect<A, E | DatabaseWriteFailed>;
     /** Replaying wake counter. Local commits and foreign data-version changes
      *  advance it; it is never interpreted as an event ordinal. */
     readonly level: SubscriptionRef.SubscriptionRef<number>;
@@ -298,14 +300,16 @@ export class Database extends Context.Service<
     readonly readRunRecords: (
       id: AggregateId,
     ) => Effect.Effect<readonly SessionEvent[], DatabaseReadFailed>;
-    /** Bounded current CLI input rows, ordered oldest first. */
-    readonly readInputHistory: () => Effect.Effect<
-      readonly InputHistoryRecord[],
-      DatabaseReadFailed
-    >;
-    readonly appendInputHistory: (
-      record: InputHistoryRecord,
-    ) => Effect.Effect<void, DatabaseWriteFailed>;
+    /** The bounded CLI input rows, oldest first, and a new last one. */
+    readonly inputHistory: {
+      readonly read: Effect.Effect<
+        readonly InputHistoryRecord[],
+        DatabaseReadFailed
+      >;
+      readonly append: (
+        record: InputHistoryRecord,
+      ) => Effect.Effect<void, DatabaseWriteFailed>;
+    };
     /** The root's current values: application state, not history. */
     readonly values: CurrentValues;
     /** One aggregate's rows from `fromSeq`, or only those of `types`
@@ -329,21 +333,17 @@ export class Database extends Context.Service<
     readonly claimOwner: (
       id: AggregateId,
     ) => Effect.Effect<AggregateClaim, DatabaseReadFailed>;
-    /** Atomically acquire existing, open aggregates after proving prior
-     *  owners dead. A claim another process takes between that proof and
-     *  the acquiring transaction refuses as `DatabaseNotOwner`. */
+    /** Atomically acquire existing, open aggregates whose prior owners are
+     *  proven dead (off the lock, {@link job}), in the caller's transaction
+     *  when it has one. */
     readonly acquireClaims: (
       ids: readonly AggregateId[],
     ) => Effect.Effect<
       readonly AggregateId[],
       DatabaseNotOwner | DatabaseReadFailed | DatabaseWriteFailed
     >;
-    /** C9: read the owning tree and prove its owners reclaimable, then
-     *  answer the one transaction that rechecks that tree, acquires its
-     *  claims, appends the tombstone and closes all dependents. The
-     *  transaction is a publisher job (`SessionEvents.removeRun`), never
-     *  run on its own. The recorded start identifies the lifetime admitted
-     *  by the caller. */
+    /** C9: prove the tree's owners off the publisher, then answer its job
+     *  (`SessionEvents.removeRun`): reread, claim, append the tombstone. */
     readonly prepareRunRemoval: (
       id: AggregateId,
       mode: DeletionMode,
@@ -379,7 +379,7 @@ export class Database extends Context.Service<
         readonly events: readonly SessionEvent[];
         readonly checkedAggregateIds: readonly AggregateId[];
         readonly state: readonly AggregateState[];
-        readonly damaged: readonly AggregateId[];
+        readonly damaged: LocalRuntimeState['unreadable'];
       },
       DatabaseReadFailed
     >;
@@ -408,10 +408,7 @@ export class Database extends Context.Service<
  */
 export class GlobalDatabase extends Context.Service<
   GlobalDatabase,
-  Pick<
-    Context.Service.Shape<typeof Database>,
-    'values' | 'readInputHistory' | 'appendInputHistory'
-  >
+  Pick<Context.Service.Shape<typeof Database>, 'values' | 'inputHistory'>
 >()('@texra/session/GlobalDatabase') {}
 
 /** Persistent project connections, retained by project and session scopes.

@@ -39,12 +39,13 @@ export function runActionGuard(session: {
               new Rejected({ reason: runActionRefusal(run, action) }),
             );
       }),
-    /** Hold a stopped run for the caller's scope: the registry's inactive
-     *  hold takes the run's claim and refuses a run live in this process,
-     *  and a resume that starts meanwhile is refused by the hold. */
+    /** Hold a stopped run for the caller's scope (a pack or clean of its
+     *  files, the one host action that is no session request): the hold
+     *  takes the run's claim and refuses a run live in this process, and a
+     *  resume that starts meanwhile is refused by the hold. */
     hold: (runId: RunId): Effect.Effect<void, Rejected, Scope.Scope> =>
       idle(runId).pipe(
-        Effect.andThen(session.runs.holdInactiveRun(runId)),
+        Effect.andThen(session.runs.launch({ hold: runId })),
         Effect.mapError((cause) =>
           cause instanceof Rejected
             ? cause

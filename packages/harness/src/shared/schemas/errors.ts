@@ -67,7 +67,7 @@ const ProviderErrorObjectSchema = z.object({
   requestId: z.string().optional(),
   rawErrorBody: z.unknown().optional(),
   /** Tail of the text the model streamed before the attempt failed, written
-   *  by `classifyModelFailure` from what the run loop had already received.
+   *  by `failureInfo` from what the run loop had already received.
    *  Lets the retry surface show the user that the work so far is not lost.
    *  The producer truncates to a few KB; this schema is inferred only, not
    *  parsed at runtime, so size enforcement stays the producer's. */

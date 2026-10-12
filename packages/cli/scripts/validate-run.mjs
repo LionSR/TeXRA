@@ -2454,6 +2454,171 @@ prompt: |
 }
 
 /**
+ * Each project runs its own MCP servers, started with its own `.env`
+ * (ruled 2026-10-07: the catalog is per session). One service holds two
+ * projects whose `.env` give the same variable different values; each runs
+ * a task whose agent calls the same configured stdio server. Each call must
+ * see its own project's value, from a process of its own: one server
+ * shared across the projects would answer both with the first project's
+ * value. A second task in the first project then reaches the same process
+ * (its call count goes on), as a chat's next message does. What each call
+ * saw is the artifact.
+ */
+async function validateServiceProjectMcp() {
+  const cwd = makeScratch('texra-cli-service-mcp-');
+  const alpha = echoProject(cwd);
+  const home = path.join(cwd, 'home');
+  const storageRoot = path.join(home, '.texra');
+  const beta = path.join(cwd, 'beta');
+  mkdirSync(path.join(beta, '.texra'), { recursive: true });
+  const server = path.join(cwd, 'server.cjs');
+  writeFileSync(
+    server,
+    `const fs = require('node:fs');
+const send = (message) => process.stdout.write(JSON.stringify(message) + '\\n');
+let calls = 0;
+require('node:readline').createInterface({ input: process.stdin }).on('line', (line) => {
+  const { id, method, params } = JSON.parse(line);
+  if (method === 'initialize')
+    send({ jsonrpc: '2.0', id, result: { protocolVersion: params.protocolVersion,
+      capabilities: { tools: {} }, serverInfo: { name: 'fixture', version: '0' } } });
+  else if (method === 'tools/list')
+    send({ jsonrpc: '2.0', id, result: { tools: [{ name: 'echo',
+      description: 'Say which project this server runs for.',
+      inputSchema: { type: 'object', properties: { command: { type: 'string' } } } }] } });
+  else if (method === 'tools/call') {
+    const project = process.env.FIXTURE_PROJECT ?? 'unset';
+    calls += 1;
+    fs.writeFileSync(process.env.FIXTURE_OUT, project + '|' + process.pid + '|' + calls);
+    send({ jsonrpc: '2.0', id, result: { content: [{ type: 'text', text: 'project: ' + project }] } });
+  } else if (id !== undefined)
+    send({ jsonrpc: '2.0', id, error: { code: -32601, message: method } });
+});
+`,
+  );
+  writeFileSync(
+    path.join(storageRoot, 'mcp.json'),
+    `${JSON.stringify({ mcpServers: { fixture: { command: process.execPath, args: [server] } } })}\n`,
+  );
+  writeFileSync(
+    path.join(storageRoot, 'v1', 'global-storage', 'custom_agents', 'mcp.yaml'),
+    `name: mcp_validation
+description: Ask the configured MCP server which project it runs for.
+tools: [mcp__fixture__echo]
+
+prompt: |
+  GOLDEN-APPROVAL mcp__fixture__echo report
+`,
+  );
+  const projects = { alpha: alpha.work, beta };
+  for (const [name, dir] of Object.entries(projects))
+    writeFileSync(
+      path.join(dir, '.env'),
+      `FIXTURE_PROJECT=${name}\nFIXTURE_OUT=${path.join(dir, 'mcp.txt')}\n`,
+    );
+  const env = {
+    ...alpha.ptyEnv,
+    TEXRA_NO_TELEMETRY: '1',
+    TEXRA_INTERNAL_VALIDATE_GOLDEN: '1',
+  };
+  const start = (dir, agent, instruction) =>
+    assertSuccess(
+      run(
+        process.execPath,
+        [
+          binaryPath,
+          'tasks',
+          'start',
+          agent,
+          '--model',
+          'openai/gpt-5.6-sol',
+          '--instruction',
+          instruction,
+          '--cwd',
+          dir,
+        ],
+        { cwd: dir, env },
+      ),
+      `texra tasks start ${agent} in ${path.basename(dir)}`,
+    );
+  const waitFor = async (what, found) => {
+    const deadline = Date.now() + 120_000;
+    let value;
+    while ((value = found()) === undefined) {
+      assert(Date.now() < deadline, `timed out waiting for ${what}`);
+      await new Promise((resolve) => setTimeout(resolve, 250));
+    }
+    return value;
+  };
+  const storage = path.join(storageRoot, 'v1', 'workspace-storage');
+  try {
+    // A first task opens each project in the service, which makes its
+    // store; its local setting is then Auto-approve, so the MCP call runs
+    // unasked.
+    for (const [name, dir] of Object.entries(projects)) {
+      start(dir, 'echo_validation', `Open ${name}`);
+      const prefix = `${path.basename(dir)}-`;
+      const store = await waitFor(`${name}'s project store`, () =>
+        existsSync(storage)
+          ? readdirSync(storage).find((entry) => entry.startsWith(prefix))
+          : undefined,
+      );
+      writeFileSync(
+        path.join(storage, store, 'config.json'),
+        `${JSON.stringify({ 'texra.approvalPolicy': 'yolo' })}\n`,
+      );
+    }
+    for (const [name, dir] of Object.entries(projects))
+      start(dir, 'mcp_validation', `Report ${name}`);
+    const call = async (name, dir) => {
+      const out = path.join(dir, 'mcp.txt');
+      const line = await waitFor(`${name}'s MCP call`, () =>
+        existsSync(out) ? readFileSync(out, 'utf8') : undefined,
+      );
+      rmSync(out);
+      const [project, pid, calls] = line.split('|');
+      return { project, pid, calls: Number(calls) };
+    };
+    const seen = {};
+    for (const [name, dir] of Object.entries(projects))
+      seen[name] = await call(name, dir);
+    // The project's next task, as a chat's next message.
+    start(alpha.work, 'mcp_validation', 'Report alpha again');
+    const again = await call('alpha (again)', alpha.work);
+    const artifactPath = writeArtifact('service-project-mcp.json', {
+      alpha: seen.alpha.project,
+      beta: seen.beta.project,
+      oneServerPerProject: seen.alpha.pid !== seen.beta.pid,
+      alphaNextTask: {
+        project: again.project,
+        sameServer: again.pid === seen.alpha.pid,
+        calls: again.calls,
+      },
+    });
+    assert(
+      seen.alpha.project === 'alpha' && seen.beta.project === 'beta',
+      `each project's MCP call should see its own .env value (artifact: ${artifactPath})`,
+    );
+    assert(
+      seen.alpha.pid !== seen.beta.pid,
+      `the two projects should not share one MCP server process (artifact: ${artifactPath})`,
+    );
+    assert(
+      again.project === 'alpha' &&
+        again.pid === seen.alpha.pid &&
+        again.calls === 2,
+      `a project's next task should reach the same MCP server (artifact: ${artifactPath})`,
+    );
+  } finally {
+    run(process.execPath, [binaryPath, 'service', 'stop'], {
+      cwd: alpha.work,
+      env,
+    });
+    removeScratch(cwd);
+  }
+}
+
+/**
  * The project's approval policy has one owner, its persisted setting, which
  * the service reads itself (audit 2026-10-07 #1). Window A attaches while
  * the setting is Auto-approve; window B then sets Ask (a settings write);
@@ -2659,6 +2824,160 @@ prompt: |
     texra(['tasks', 'stop', narrowed], 'texra tasks stop (narrowed)');
   } finally {
     windowA?.child.kill('SIGKILL');
+    run(process.execPath, [binaryPath, 'service', 'stop'], {
+      cwd: project.work,
+      env,
+    });
+    removeScratch(cwd);
+  }
+}
+
+/**
+ * Editor models in the service (audit 2026-10-07 #2): Copilot runs through a
+ * VS Code window of the project. With Copilot preferred for a model and no
+ * window offering editor models, a service task fails saying so; with a
+ * window that offers them (the harness's `lm` mode: one Copilot model that
+ * streams its reply in pieces, and refuses a turn another acquisition
+ * prepared, as the editor does), the service discovers the route, prepares
+ * the turn and streams it through that window, and the task finalizes the
+ * streamed reply. The windowless task's end, the reply's rows and the
+ * window's calls are the artifact.
+ */
+async function validateServiceEditorModels() {
+  const cwd = makeScratch('texra-cli-service-lm-');
+  const project = echoProject(cwd);
+  const storageRoot = path.join(cwd, 'home', '.texra');
+  // No validation model: the route is decided as for a user. A key only
+  // gets the launch past the CLI's own check; Copilot is a hard route.
+  const env = {
+    ...isolatedCliHomeEnv(path.join(cwd, 'home')),
+    TEXRA_NO_TELEMETRY: '1',
+    OPENAI_API_KEY: VALIDATION_FAKE_API_KEY,
+  };
+  const texra = (args, label) => {
+    const result = run(
+      process.execPath,
+      [binaryPath, ...args, '--cwd', project.work],
+      { cwd: project.work, env },
+    );
+    assertSuccess(result, label);
+    return result.stdout.trim();
+  };
+  const waitFor = async (label, check, timeoutMs = 120_000) => {
+    const deadline = Date.now() + timeoutMs;
+    while (!check()) {
+      assert(Date.now() < deadline, `timed out waiting for ${label}`);
+      await new Promise((resolve) => setTimeout(resolve, 250));
+    }
+  };
+  /** The run's rows that carry `needle`, by type. */
+  const saying = (runId, needle) =>
+    project
+      .readStore(
+        `SELECT e.type FROM event e JOIN event_sequence s ON s.id = e.aggregate
+         WHERE s.logical_id = '${runId}' AND e.data LIKE '%${needle}%'`,
+      )
+      .map((row) => row.type);
+  let window;
+  try {
+    // Opens the global store; then Copilot is preferred for the model, as
+    // the settings view's "Use Copilot" saves it.
+    texra(['config', 'show'], 'texra config show');
+    const global = new DatabaseSync(
+      path.join(storageRoot, 'v1', 'global-storage', 'texra.db'),
+    );
+    try {
+      global
+        .prepare(
+          `INSERT INTO current_value (family, key, version, value, at)
+           VALUES ('app-state', 'texra.copilotRouteModels', 1, ?, ?)`,
+        )
+        .run(JSON.stringify(['openai/gpt-5.6-terra']), Date.now());
+    } finally {
+      global.close();
+    }
+    // The CLI has no editor models: it refuses a Copilot model, plainly.
+    const refused = run(
+      process.execPath,
+      [
+        binaryPath,
+        'tasks',
+        'start',
+        'echo_validation',
+        '--model',
+        'openai/gpt-5.6-terra',
+        '--instruction',
+        'From a terminal',
+        '--cwd',
+        project.work,
+      ],
+      { cwd: project.work, env },
+    );
+    // Any client starts the service; the harness only attaches to one.
+    texra(['tasks', 'list'], 'texra tasks list');
+    // A window that starts tasks: without editor models, then with them.
+    const startWindow = async (mode) => {
+      const child = spawn(
+        process.execPath,
+        [
+          hostHarnessPath,
+          storageRoot,
+          project.work,
+          mode,
+          'openai/gpt-5.6-terra',
+        ],
+        { cwd: project.work, env: { ...process.env, ...env } },
+      );
+      const state = { child, stdout: '', stderr: '' };
+      child.stdout.on('data', (chunk) => (state.stdout += chunk));
+      child.stderr.on('data', (chunk) => (state.stderr += chunk));
+      await waitFor(`the ${mode} window to start its task`, () =>
+        /(STARTED [0-9a-f]{12}|REFUSED .)/.test(state.stdout),
+      );
+      return state;
+    };
+    // With no editor models the task cannot bind its model, so it fails
+    // before it starts: its launch's error, and no run (`task.start`).
+    window = await startWindow('start');
+    const alone = /REFUSED (.*)/.exec(window.stdout)?.[1] ?? null;
+    window.child.kill('SIGKILL');
+    window = await startWindow('lm');
+    const served = /STARTED ([0-9a-f]{12})/.exec(window.stdout)[1];
+    // The window's model streamed the turn: the run finalizes its reply
+    // and waits for a follow-up.
+    const reply = 'HARNESS-COPILOT streamed this reply.';
+    await waitFor('the windowed task to finalize the streamed reply', () =>
+      saying(served, reply).includes('response.finalized'),
+    );
+    const artifactPath = writeArtifact('service-editor-models.json', {
+      terminal: refused.stderr.trim().split('\n').at(-1),
+      alone,
+      streamed: saying(served, reply),
+      window: window.stdout.trim().split('\n'),
+    });
+    assert(
+      refused.status !== 0 && refused.stderr.includes('copilot unavailable'),
+      `the CLI should refuse a Copilot model it cannot run (artifact: ${artifactPath})`,
+    );
+    assert(
+      alone?.includes(
+        'Copilot models run through a VS Code window of this project',
+      ) === true,
+      `a Copilot task with no window should be refused, saying a VS Code window serves Copilot (artifact: ${artifactPath})`,
+    );
+    assert(
+      window.stdout.includes('CALLED lmModels') &&
+        window.stdout.includes('CALLED lmPrepare') &&
+        window.stdout.includes('CALLED lmStream') &&
+        // One acquisition, which prepared and streamed the turn.
+        window.stdout.split('ACQUIRED').length === 2 &&
+        saying(served, 'another acquisition').length === 0 &&
+        saying(served, reply).includes('stream.end') &&
+        saying(served, reply).includes('model.message'),
+      `a Copilot task should stream its turn through the attached window (artifact: ${artifactPath})`,
+    );
+  } finally {
+    window?.child.kill('SIGKILL');
     run(process.execPath, [binaryPath, 'service', 'stop'], {
       cwd: project.work,
       env,
@@ -3309,7 +3628,9 @@ async function validateCliRunArtifacts(options = {}) {
   await validateServiceTasksInTui();
   await validateServiceChatsSeeEachOther();
   await validateServiceHostCalls();
+  await validateServiceEditorModels();
   await validateServiceProjectEnv();
+  await validateServiceProjectMcp();
   await validateServiceSessionIdle();
   await validateServicePolicyOwner();
   await validateServiceBuildIdentity();

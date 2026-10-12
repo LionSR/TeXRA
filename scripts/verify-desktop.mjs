@@ -1530,6 +1530,7 @@ const hostSnapshot = {
   isGitRepo: false,
   recording: null,
   debugMode: false,
+  approvalPolicy: 'ask',
   banners: {
     apiKey: { visible: false },
     agentConfig: { visible: false },

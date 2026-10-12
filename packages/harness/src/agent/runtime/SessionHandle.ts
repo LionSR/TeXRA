@@ -50,9 +50,10 @@ import type { RequestError } from '@shared/session/requestErrors';
 import type { RunHistory } from '@shared/session/runHistory';
 import type { Outcome, RuntimeRequest } from '@shared/session/runtimeRequest';
 import type { RunHistoryDraft } from '@shared/session/runStateFold';
-import type { Append } from '@shared/session/sessionEvents';
+import type { Append, UnfoldedDraft } from '@shared/session/sessionEvents';
 import type { SessionInputs } from '@shared/session/sessionInputs';
 import type { RunView, SessionView } from '@shared/session/sessionView';
+import type { SessionTools } from '@tools/sessionTools';
 import type { Context, Effect, Scope, Stream, SubscriptionRef } from 'effect';
 
 import type {
@@ -61,7 +62,7 @@ import type {
 } from './HostInteractions';
 import type { HistoryQuery } from './historyQuery/HistoryQuery';
 import type { SessionApprovals } from './runApprovalQueue';
-import type { RunRegistry } from './runRegistry';
+import type { RunsShape } from './runs';
 
 /** A write the store refused: nothing was written (D6 b). */
 export type LogWriteError = DatabaseNotOwner | DatabaseWriteFailed;
@@ -69,26 +70,25 @@ export type LogWriteError = DatabaseNotOwner | DatabaseWriteFailed;
 /** A claim the store would not give this process. */
 type ClaimError = DatabaseNotOwner | DatabaseReadFailed | DatabaseWriteFailed;
 
-/** What one transaction's job holds: the ordered append, and the claim
- *  take-over a registration makes before it appends. */
+/** What one transaction's job holds: the ordered append (each in this
+ *  transaction's order), a registration's claim take-over, and what runs
+ *  once it commits. */
 export interface SessionTransaction {
-  /** Append one batch; every row commits in this transaction's order. */
   readonly append: Append;
-  /**
-   * Take `runId`'s claim for this process (a dead owner's, proved dead
-   * first, or this process's own) and leave it standing for the run's
-   * driver. A claim the job took is given back if the job fails, or if what
-   * it committed never reaches the view.
-   */
+  /** Take `runId`'s claim for this process (a dead owner's, proved dead,
+   *  or its own) and leave it for the run's driver; given back if the job
+   *  fails, or if what it committed never reaches the view. */
   readonly claim: (runId: RunId) => Effect.Effect<void, ClaimError>;
+  /** Run `action` once this transaction committed, before the publisher's
+   *  next job; never if it rolls back. */
+  readonly afterCommit: (action: Effect.Effect<void>) => Effect.Effect<void>;
 }
 
 /**
- * The session's one door to its store: ordered transactions on the
- * session's one publisher, and the reads beside them. Every awaited write of
- * a session fact is one {@link transact}; a run's own trace rows go through
- * {@link SessionHandle.trace} and its loop's rows through
- * {@link SessionHandle.runHistory}, both on the same publisher order.
+ * The session's doors to its store, on its one publisher, and the reads
+ * beside them. Every awaited write is one {@link transact} (a run's own rows
+ * too, through {@link SessionHandle.runHistory}); trace rows go through
+ * {@link publish}.
  */
 export interface SessionLog {
   /**
@@ -99,11 +99,16 @@ export interface SessionLog {
    * typed; it is never retried here.
    */
   transact(
-    events: readonly SessionEventDraft[],
+    events: readonly UnfoldedDraft[],
   ): Effect.Effect<readonly SessionEvent[], LogWriteError>;
   transact<A, E>(
     job: (tx: SessionTransaction) => Effect.Effect<A, E>,
   ): Effect.Effect<A, E | LogWriteError>;
+  /** Publish one trace event (display rows only: no {@link AgentEvent} arm
+   *  is a row the run's state folds) as its durable arm, a chunk as
+   *  transient text; its order is this call, a refusal the run's own
+   *  ({@link RunTrace.lost}). */
+  publish(runId: RunId, event: AgentEvent): void;
   /** A barrier: every job enqueued before it has run and the view has
    *  folded what they committed. A refused detached row is heard by its own
    *  writer (a run's trace, at its end), never here. */
@@ -209,14 +214,10 @@ export type ClosureFact =
   StreamClosure | Extract<SessionEventDraft, { type: 'stage.end' }>;
 
 /**
- * Each run's trace sink: its rows in publication order, the transient text
- * of what it streams, and what it left open. A refused row is the run's own
- * to hear at its end ({@link lost}), never another writer's.
+ * What each run's trace ({@link SessionLog.publish}) left: the first row the
+ * store refused, the run's own to hear at its end, and its open work.
  */
 export interface RunTrace {
-  /** Publish one trace event as its durable arm (a chunk as transient
-   *  text); its place in the order is this call. */
-  publish(runId: RunId, event: AgentEvent): void;
   /** The first of `runId`'s rows the store refused, taken, as the error
    *  its `run.end` carries; read after every row before it was tried. */
   lost(runId: RunId): Effect.Effect<RunEnd['error'] | undefined>;
@@ -347,9 +348,10 @@ export interface SessionHandle {
   readonly log: SessionLog;
   /** The fold every renderer reads, and the local truth beside it. */
   readonly view: SessionViewAccess;
-  /** Registration, lookup, stop, lineage, and the run's one terminal
-   *  writer (`end`). */
-  readonly runs: RunRegistry;
+  /** Its runs: launch, resume, stop, and what this process holds. */
+  readonly runs: RunsShape;
+  /** The project's tools: its plugin layers and MCP servers, closed with it. */
+  readonly tools: SessionTools;
   /** The one handler of every request a surface issues, and the run's
    *  questions to a person (`ask`, `decide`). */
   readonly requests: SessionRequests;
@@ -359,10 +361,10 @@ export interface SessionHandle {
   readonly interactions: SessionHostInteractions;
   /** Every run's input, one reader each. */
   readonly followUps: Inbox;
-  /** Every run's trace sink. */
+  /** What every run's trace left: its refused rows and open work. */
   readonly trace: RunTrace;
-  /** The run history over this session's log: the loop's one writer of run
-   *  rows, provided to each run's program at launch. */
+  /** The run history over this session's log: each run's cell commits
+   *  through it, provided to each run's program at launch. */
   readonly runHistory: Context.Service.Shape<typeof RunHistory>;
   /** The history query store (`executions` `query`), closed with the
    *  session. */
@@ -376,10 +378,9 @@ export interface SessionHandle {
  * from context: the hosts' default sessions, the desktop's projects, the
  * service's tasks and the SDK's `Sessions`.
  *
- * A handle `open` returns is borrowed access (PR #11893, agent SDK
- * architecture proposal, section 3): holding it carries no disposal
- * obligation; `close` is how a session ends, and the process layer's own
- * release closes whatever is still open.
+ * A handle `open` returns is borrowed access: holding it carries no
+ * disposal obligation; `close` is how a session ends, and the process
+ * layer's own release closes whatever is still open.
  */
 export interface SessionOwnerShape {
   /** The session of `init.roots`' storage root: the one already open there,
@@ -389,15 +390,14 @@ export interface SessionOwnerShape {
   readonly open: (
     init: SessionHandleInit,
   ) => Effect.Effect<SessionHandle, SessionOpenError>;
-  /** Every session the owner holds, entries still building waited for
-   *  within the close budget. */
+  /** Every session the owner holds, waiting within the close budget. */
   readonly list: Effect.Effect<readonly SessionHandle[]>;
-  /**
-   * Close the session of a storage root: refuse new runs, interrupt the
-   * ones it owns and wait for them inside {@link SESSION_CLOSE_DEADLINE_MS},
-   * settle the ones still live, flush, release. A root with no open
-   * session reports `settled`. Never touches another root's session.
-   */
+  /** Whether it still holds `session`: its own root's entry, never another's. */
+  readonly holds: (session: SessionHandle) => Effect.Effect<boolean>;
+  /** Close the session of a storage root: refuse new runs, interrupt the
+   *  ones it owns and wait for them inside {@link SESSION_CLOSE_DEADLINE_MS},
+   *  settle the ones still live, flush, release. A root with no open
+   *  session reports `settled`. Never touches another root's session. */
   readonly close: (root: string) => Effect.Effect<SessionCloseReport>;
   /** A process shutdown's close: drain what the plugins' pollers admitted,
    *  then close every held session at once, under one deadline. */

@@ -36,7 +36,7 @@ import {
 import {
   projectDisplayOf,
   type ProjectDisplay,
-} from '@shared/session/hostSnapshot';
+} from '@texra/shared/session/hostSnapshot';
 import {
   localSessionBackend,
   type SessionBackend,
