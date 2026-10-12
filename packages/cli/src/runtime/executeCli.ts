@@ -2,6 +2,7 @@ import { Cause, Deferred, Effect, Exit, Result, Scope } from 'effect';
 
 import { RUN_OUTCOME, type RunId } from '@texra-ai/harness/schemas';
 import {
+  hasErrorPresentationClaimed,
   withProcessServices,
   type ProcessRuntime,
   type ProcessServices,
@@ -21,7 +22,6 @@ import {
 import { deriveResumability } from '@agent/storage';
 import { AgentError } from '@common/errors';
 import { isUserAbort } from '@common/errors/sdkError/errorPatterns';
-import { hasErrorPresentationClaimed } from '@common/errors/sdkError/errorMetadata';
 import {
   DatabaseNotOwner,
   type SessionOpenError,
