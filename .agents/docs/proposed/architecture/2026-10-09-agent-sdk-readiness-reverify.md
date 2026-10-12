@@ -74,9 +74,11 @@ irreducible durability/resume/stop invariants, enforced by `check:core-quality`.
      from the folded `RunState` (`shared/session/runStateFold.ts`); peers
      `rows.ts`, `step.ts`, `modelSwitch.ts`, `toolGuard.ts`, `hooks.ts`,
      `runProgram.ts` are one program's parts. The loop's model call is
-     `@agent/runtime/ModelInvoker.ts` (the only service that calls the `packages/llm`
-     `Model`); `run/compaction.ts` and `helperModel.ts` invoke the bound `Model`
-     directly — deliberate exceptions, not a second handler.
+     `@agent/runtime/ModelInvoker.ts` (the service that calls the `packages/llm`
+     `Model`); a compaction summary rides that same service
+     (`run/compaction.ts` calls `invoker.call(...)`, gated and priced like any
+     turn). The one deliberate exception is `helperModel.ts`, which invokes
+     `run/modelCall.ts` directly, outside `ModelInvoker` — not a second handler.
    - **Model handler:** `packages/harness/src/agent/runtime/modelAccess/` (the one
      service a run binds through) over the `packages/llm` (`@texra-ai/llm`)
      `Model`. A new provider is a `packages/llm` protocol arm plus its route and
@@ -96,7 +98,7 @@ irreducible durability/resume/stop invariants, enforced by `check:core-quality`.
    - **Agent core** is still written against the exact anti-patterns the charter
      names. `SessionHandle` re-exposes owners as fields rather than forwarding
      per-method; `loop/runProgram.ts` is shared scaffolding, not a pass-through.
-   - **Model handler** got *more* consolidated this cycle (#13919); the `Model`
+   - **Model handler** got _more_ consolidated this cycle (#13919); the `Model`
      interface still takes only a Zod-guarded materialized `TurnRequest` and keeps
      host concerns in `BoundModel`.
    - **Logger** is clean except the one remaining host leak (§Open.2).
@@ -143,7 +145,7 @@ irreducible durability/resume/stop invariants, enforced by `check:core-quality`.
    `entryMessage` — so an embedder of `@texra-ai/harness` can route the process's
    diagnostics to its own surface through the public boundary, which it could not
    before. `logSink.ts` still holds the mutable module global (`let sink =
-   consoleLogSink`, `setLogSink`, `writeLogEntry`, ~165–205): it is load-bearing
+consoleLogSink`, `setLogSink`, `writeLogEntry`, ~165–205): it is load-bearing
    for the synchronous, no-fiber publication points (the trace emitter, the
    pre-runtime and shutdown paths) that have no Effect context to read a sink
    service from, so removing it is still the expensive
@@ -170,9 +172,12 @@ irreducible durability/resume/stop invariants, enforced by `check:core-quality`.
   file in the ModelAccess consolidation; the format/route-mismatch guard it
   described now lives in `modelAccess/routeDecision.ts` / `binding.ts`.
 
-**Do not collapse** (unchanged): `executeAgent.ts` `resumeToolUse*` chain — each
-level is a distinct `Effect.scoped`/`acquireRelease` region whose nesting order is
-load-bearing for finalizer-before-release ordering.
+**Resume path (re-pinned):** the prior pass's "do not collapse the
+`executeAgent.ts` `resumeToolUse*` three-level chain" ruling named a shape that
+no longer exists — a repo-wide search finds only `resumeToolUseFromResumeData`
+(`executeAgent.ts:429`), the single resume entry. The three-level wrapper chain
+is gone, so the ruling is retired; nothing here blocks the direct-entry
+simplification the codebase now favors.
 
 ## Recommendation
 
@@ -190,6 +195,7 @@ contract, closing the one real SDK-relevant host leak at the public boundary
 single bounded, behavior-preserving code change the three audited areas offered;
 the agent core, model handler, and remaining llm reads stayed clean on
 inspection, so nothing else was touched. Re-running this audit as a routine will
-again add no signal until the durable-harness program moves further (next:
-`Session.resume` after reopen, the sink global→service rewrite, and the manifest
-re-scope).
+again add no signal until the durable-harness program moves further. `Session.resume`
+itself is already implemented and documented, so the genuinely unlanded items are
+reattaching a run's live handle after a process reopen (durable-harness gap 5),
+the sink global→service rewrite, and the manifest re-scope.
