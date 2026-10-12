@@ -79,7 +79,7 @@ export {
   describeFollowUpFailure,
   presentFollowUpResult,
   resumeOnSession,
-} from '@agent/followUp';
+} from '@agent/followUp/ToolUseFollowUp';
 export { hasErrorPresentationClaimed } from '@common/errors/sdkError/errorMetadata';
 export { escapeText } from '@shared/utils/xmlEscape';
 
