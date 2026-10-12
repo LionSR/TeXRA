@@ -5,13 +5,13 @@ import * as vscode from 'vscode';
 import { Effect, FileSystem, type Path, type PlatformError } from 'effect';
 
 import type { SessionHandle } from '@agent/runtime';
-import { isLatexFile } from '@texra/shared/latexFileTypes';
 import { showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
 import { openFileInEditor } from '@frontend/vscode/vscodeEditor';
 import { compileLatex2Pdf } from '@latex/texTools';
 import { withLogChannel } from '@logger/effectLog';
 import { withSessionFs } from '@platform/rootedFs';
 import type { FileLocation } from '@shared/schemas';
+import { isLatexFile } from '@texra/shared/latexFileTypes';
 import {
   LATEX_VIEWER_OPEN_DELAY_MS,
   LATEX_VIEWER_REFRESH_DELAY_MS,
