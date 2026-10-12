@@ -76,7 +76,7 @@ export interface ResumeRunOptions extends Pick<
   | 'publishWorkflowOutput'
   | 'beforeRunEnd'
   | 'onRun'
-  | 'onRunResolved'
+  | 'onAdmitted'
   | 'onTraceEvent'
   | 'stopAfterCycle'
   | 'tools'
@@ -85,15 +85,6 @@ export interface ResumeRunOptions extends Pick<
   readonly session: SessionHandle;
   /** Monotone per-attempt cancellation signal: once true it stays true. */
   readonly isCancellationRequested?: () => boolean;
-  /**
-   * Rearrange the host only after state retrieval and ownership checks have
-   * accepted this run. It hears the run actually resumed, which is the
-   * parent when the run asked for is an owned child. Failures propagate;
-   * cancellation is re-read afterwards.
-   */
-  readonly onResumeResolved?: (
-    resumed: RunId,
-  ) => Effect.Effect<void, Error, ProcessServices>;
 }
 
 const CHANNEL = 'ResumeRun';
@@ -154,12 +145,13 @@ export const resumeOwnRun = Effect.fn('resumeOwnRun')(function* (
     resumeHere(runId, options).pipe(Effect.provideService(Runs, session.runs)),
   );
   if (!joined || 'ownedBy' in result) return result;
-  // A caller that joined a resume already in flight still gets its own
-  // cancellation and its own host step, once that resume has the run.
-  if (cancelled() || !('started' in result) || !options.onResumeResolved)
+  // A joiner of a resume already in flight hears that resume's refusal or
+  // failure as its own; once that resume has the run it gets its own
+  // cancellation and its own admission, under the run's claim as the
+  // resume's own is, a failure of which fails this joiner alone.
+  if (cancelled() || !('started' in result) || !options.onAdmitted)
     return result;
-  // The host step runs under the run's claim, as the resume's own does.
-  const hook = options.onResumeResolved;
+  const hook = options.onAdmitted;
   return yield* Effect.scoped(
     Effect.gen(function* () {
       const heldBy = yield* holdClaim(session, runId);
@@ -231,8 +223,8 @@ const resumeHere = Effect.fn('resumeHere')(function* (
     blocker === null ? null : { reason: blocker, retry: true },
   );
   if (blocker !== null) return { failed: 'blocked' };
-  if (options.onResumeResolved) {
-    yield* options.onResumeResolved(runId);
+  if (options.onAdmitted) {
+    yield* options.onAdmitted(runId);
     if (cancelled()) return REFUSED;
   }
   return yield* resumeQueuedToolUse(session, resume, options);
@@ -245,7 +237,7 @@ const runLaunchOptions = (options: ResumeRunOptions) => ({
   publishWorkflowOutput: options.publishWorkflowOutput,
   beforeRunEnd: options.beforeRunEnd,
   onRun: options.onRun,
-  onRunResolved: options.onRunResolved,
+  // Admitted under the claim already (`resumeHere`): not again at entry.
   onTraceEvent: options.onTraceEvent,
   stopAfterCycle: options.stopAfterCycle,
   tools: options.tools,

@@ -102,9 +102,8 @@ interface AgentLaunchInput {
    * activates it, and the initial instruction is not logged again.
    */
   registration?: RegisterRunOptions;
-  /** Fires once the run exists for every fold (a fresh run's opening
-   *  committed), so a host may select it (its own surface state). */
-  onRunResolved?: (runId: RunId) => void;
+  /** A fresh run's admission, once its opening committed: it never waits. */
+  onAdmitted?: (runId: RunId) => Effect.Effect<void>;
   /** A second sink of the run's trace: every event from the first until
    *  the run ends, `stream.chunk` text included, which no row carries. */
   onTraceEvent?: (event: AgentEvent) => void;
@@ -337,8 +336,7 @@ const enterRun = Effect.fn('enterRun')(function* (
   const entered = Effect.sync(() => {
     for (const e of (held ?? []).slice(carried)) session.log.publish(runId, e);
     held = null;
-    input.onRunResolved?.(runId);
-  });
+  }).pipe(Effect.andThen(input.onAdmitted?.(runId) ?? Effect.void));
   return { logger, entry: { registration, opening, entered } };
 });
 

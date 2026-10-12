@@ -49,8 +49,8 @@ export interface ChildRunLaunchOptions {
    * resumed child is held to its own record.
    */
   readonly parentOffered?: readonly OfferedTool[];
-  /** Fires with the resolved child run id — the caller inherits approvals onto it. */
-  readonly onRunResolved?: (runId: RunId) => void;
+  /** The child's admission (`ExecuteAgentOptions.onAdmitted`). */
+  readonly onAdmitted?: ExecuteAgentOptions['onAdmitted'];
 }
 
 interface NativeSubagentStrategyBase extends ChildRunLaunchOptions {
@@ -150,7 +150,7 @@ export function createNativeSubagentStrategy(
             ...params.resume?.options,
             session: params.session,
             parentOffered: params.parentOffered,
-            onRunResolved: params.onRunResolved,
+            onAdmitted: params.onAdmitted,
             onProgress: (update) => ports.notify(update),
             turns: {
               turnPermit: turns.turnPermit,

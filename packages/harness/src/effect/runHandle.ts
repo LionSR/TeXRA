@@ -139,7 +139,7 @@ interface LaunchHooks {
    *  id: a launch that reads it starts no run once it is true. */
   readonly isCancellationRequested: () => boolean;
   readonly onTraceEvent: (event: AgentEvent) => void;
-  readonly onRunResolved: () => void;
+  readonly onAdmitted: () => Effect.Effect<void>;
 }
 
 /** One launch of `runId`, fresh or resumed, wired to the hooks its handle
@@ -207,9 +207,7 @@ export function handOver(
             // from its first event.
             onTraceEvent: trace.offer,
             isCancellationRequested: () => cancelled,
-            onRunResolved: () => {
-              Deferred.doneUnsafe(admitted, Effect.void);
-            },
+            onAdmitted: () => Deferred.done(admitted, Exit.void),
           }).pipe(
             Effect.onExit(settle),
             // The embedder owns this runtime. Provide the process's existing

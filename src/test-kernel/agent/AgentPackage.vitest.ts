@@ -19,7 +19,7 @@ import { beforeEach, describe, expect, onTestFinished, vi } from 'vitest';
 
 interface RootLaunchOptions {
   readonly onRun?: (handle: unknown) => Effect.Effect<void>;
-  readonly onRunResolved?: (runId: string, trace: unknown) => void;
+  readonly onAdmitted?: (runId: string) => Effect.Effect<void, Error>;
 }
 
 /** A session view run entry as the package's fold keys it. */
@@ -240,8 +240,6 @@ const PLATFORM = {
   roots: { storage: '/storage', globalState: new MemoryStateStore() },
   storage: { getGlobalStoragePath: () => '/global-storage' },
 } as unknown as AgentPlatform;
-/** The run's trace as `onRunResolved` hands it over: the event source. */
-const TRACE = { subscribe: mocks.subscribe };
 /** The run's handle as `onRun` hands it over: the interrupt target. */
 const HANDLE = { runId: mocks.runId, interrupt: vi.fn() };
 const RESULT = { outcome: 'COMPLETED' } as never;
@@ -294,7 +292,7 @@ function completeRunView(): Promise<void> {
 
 /** The run entering the session, then its final view folding. */
 async function driveRun(options: RootLaunchOptions): Promise<typeof RESULT> {
-  options.onRunResolved?.('ae0001', TRACE);
+  await Effect.runPromise(options.onAdmitted?.('ae0001') ?? Effect.void);
   await enterRun('ae0001');
   await Effect.runPromise(options.onRun?.(HANDLE) ?? Effect.void);
   await completeRunView();
@@ -566,7 +564,9 @@ describe('agent package sessions', () => {
         // rather than wait on a level that never comes.
         mocks.runValidatedAgent.mockImplementationOnce(
           async (_input: unknown, options: RootLaunchOptions) => {
-            options.onRunResolved?.('ae0001', TRACE);
+            await Effect.runPromise(
+              options.onAdmitted?.('ae0001') ?? Effect.void,
+            );
             await enterRun('ae0001');
             await runOnRun(options);
             return RESULT;

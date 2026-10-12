@@ -36,7 +36,7 @@ export interface RootLaunchOptions
       | 'tools'
       | 'ownApiKeyFallback'
       | 'onRun'
-      | 'onRunResolved'
+      | 'onAdmitted'
       | 'onTraceEvent'
       | 'publishWorkflowOutput'
     >,

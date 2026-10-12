@@ -108,8 +108,8 @@ interface SessionLaunchOptions {
   readonly approveDelegatedWork?: boolean;
   /** The run is registered (its id is final); before its body runs here. */
   readonly onRun?: (runId: RunId) => Effect.Effect<void, Error>;
-  /** The run this launch resolved, for the window to select. */
-  readonly onRunResolved?: (runId: RunId) => void;
+  /** The run this launch admitted, for the window to select. */
+  readonly onAdmitted?: (runId: RunId) => Effect.Effect<void, Error>;
   /** The window presents failures itself. */
   readonly suppressErrorNotification?: boolean;
   /** The chat's previous root: its approval bypasses carry over. */
@@ -183,7 +183,7 @@ export function localSessionBackend(session: SessionHandle): SessionBackend {
           approveDelegatedWork: options.approveDelegatedWork,
           onRun: options.onRun,
           continues: options.continues,
-          onRunResolved: options.onRunResolved,
+          onAdmitted: options.onAdmitted,
           suppressErrorNotification: options.suppressErrorNotification,
           approvalPolicy: options.approvalPolicy,
         },

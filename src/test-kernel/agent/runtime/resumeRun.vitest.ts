@@ -242,7 +242,7 @@ describe('resumeRun tool-use queue ownership', () => {
       expect(
         yield* resumeOne(RUN, {
           session,
-          onResumeResolved: () =>
+          onAdmitted: () =>
             Effect.gen(function* () {
               expect(
                 yield* session.followUps.send(
@@ -263,40 +263,52 @@ describe('resumeRun tool-use queue ownership', () => {
     }),
   );
 
-  it.effect('joins a competing resume to the one in flight', () =>
-    Effect.gen(function* () {
-      const session = yield* createSession();
-      yield* seedRecoverable(session, 'once');
-      const entered = yield* Deferred.make<void>();
-      const barrier = yield* Deferred.make<void>();
-      resumeToolUseFromResumeDataMock.mockReturnValueOnce(
-        Deferred.succeed(entered, undefined).pipe(
-          Effect.andThen(Deferred.await(barrier)),
-          Effect.as(completed),
-        ),
-      );
-
-      const first = yield* Effect.forkChild(resumeOne(RUN, { session }));
-      yield* Deferred.await(entered);
-      expect(resumeToolUseFromResumeDataMock).toHaveBeenCalledOnce();
-      // The second resume signals as it reaches the resume in flight.
-      const joining = yield* Deferred.make<void>();
-      const resumeOnce = session.followUps.resumeOnce.bind(session.followUps);
-      vi.spyOn(session.followUps, 'resumeOnce').mockImplementationOnce(
-        (runId, resume) =>
-          Deferred.succeed(joining, undefined).pipe(
-            Effect.andThen(resumeOnce(runId, resume)),
+  // Failure mode: the joiner never hears its admission (a handoff waiting
+  // on it fails as never entered), or the owner hears it twice.
+  it.effect(
+    'joins a competing resume to the one in flight, each admitted once',
+    () =>
+      Effect.gen(function* () {
+        const session = yield* createSession();
+        yield* seedRecoverable(session, 'once');
+        const entered = yield* Deferred.make<void>();
+        const barrier = yield* Deferred.make<void>();
+        resumeToolUseFromResumeDataMock.mockReturnValueOnce(
+          Deferred.succeed(entered, undefined).pipe(
+            Effect.andThen(Deferred.await(barrier)),
+            Effect.as(completed),
           ),
-      );
-      const second = yield* Effect.forkChild(resumeOne(RUN, { session }));
-      yield* Deferred.await(joining);
-      // Its join is already queued behind the signal: one turn of the event
-      // loop lets it run before the first resume is released.
-      yield* Effect.promise(() => new Promise((done) => setImmediate(done)));
-      yield* Deferred.succeed(barrier, undefined);
-      expect(yield* Fiber.join(second)).toEqual(yield* Fiber.join(first));
-      expect(resumeToolUseFromResumeDataMock).toHaveBeenCalledOnce();
-    }),
+        );
+
+        const admittedFirst = vi.fn(() => Effect.void);
+        const admittedSecond = vi.fn(() => Effect.void);
+        const first = yield* Effect.forkChild(
+          resumeOne(RUN, { session, onAdmitted: admittedFirst }),
+        );
+        yield* Deferred.await(entered);
+        expect(resumeToolUseFromResumeDataMock).toHaveBeenCalledOnce();
+        // The second resume signals as it reaches the resume in flight.
+        const joining = yield* Deferred.make<void>();
+        const resumeOnce = session.followUps.resumeOnce.bind(session.followUps);
+        vi.spyOn(session.followUps, 'resumeOnce').mockImplementationOnce(
+          (runId, resume) =>
+            Deferred.succeed(joining, undefined).pipe(
+              Effect.andThen(resumeOnce(runId, resume)),
+            ),
+        );
+        const second = yield* Effect.forkChild(
+          resumeOne(RUN, { session, onAdmitted: admittedSecond }),
+        );
+        yield* Deferred.await(joining);
+        // Its join is already queued behind the signal: one turn of the event
+        // loop lets it run before the first resume is released.
+        yield* Effect.promise(() => new Promise((done) => setImmediate(done)));
+        yield* Deferred.succeed(barrier, undefined);
+        expect(yield* Fiber.join(second)).toEqual(yield* Fiber.join(first));
+        expect(resumeToolUseFromResumeDataMock).toHaveBeenCalledOnce();
+        expect(admittedFirst.mock.calls).toEqual([[RUN]]);
+        expect(admittedSecond.mock.calls).toEqual([[RUN]]);
+      }),
   );
 
   it.effect('refuses a run whose input closed during storage reads', () =>
@@ -499,15 +511,15 @@ describe('resumeRun tool-use queue ownership', () => {
             }),
           ),
         );
-        const onResumeResolved = vi.fn(() => Effect.void);
+        const onAdmitted = vi.fn(() => Effect.void);
 
         expect(
           yield* resumeOne(RUN, {
             session,
-            onResumeResolved,
+            onAdmitted,
           }),
         ).toEqual({ failed: 'owned_elsewhere' });
-        expect(onResumeResolved).not.toHaveBeenCalled();
+        expect(onAdmitted).not.toHaveBeenCalled();
         expect(resumeToolUseFromResumeDataMock).not.toHaveBeenCalled();
       }),
   );

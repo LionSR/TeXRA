@@ -258,7 +258,7 @@ type ToolUseRunResult<Outcome> = {
 
 /** The subset of `executeAgent`'s options every mock implementation below reads. */
 type ExecuteAgentMockOptions = {
-  readonly onRunResolved?: (id: RunId) => void;
+  readonly onAdmitted?: (id: RunId) => Effect.Effect<void, Error>;
 };
 
 function makeInit(
@@ -439,7 +439,7 @@ const defaultResumeRun = (runId: RunId, options: ResumeRunOptions) =>
     // The real `resumeRun` rearranges the host onto the resumed run only
     // after its own retrieval succeeded, so every stand-in that reaches a launch
     // must run the hook or the caller never adopts the run.
-    if (options.onResumeResolved) yield* options.onResumeResolved(runId);
+    if (options.onAdmitted) yield* options.onAdmitted(runId);
     return STARTED;
   });
 
@@ -650,7 +650,7 @@ describe('createChatSessionController', () => {
                 outcome: RUN_OUTCOME.CANCELLED,
               });
             });
-            options.onRunResolved?.(runId);
+            Effect.runSync(options.onAdmitted?.(runId) ?? Effect.void);
             return rootRunResult.promise;
           },
         );
@@ -855,7 +855,7 @@ describe('createChatSessionController', () => {
     mocks.resumeRun.mockImplementationOnce(
       (id: RunId, options: ResumeRunOptions) =>
         Effect.gen(function* () {
-          if (options.onResumeResolved) yield* options.onResumeResolved(id);
+          if (options.onAdmitted) yield* options.onAdmitted(id);
           return { ...STARTED, outcome: RUN_PHASE.WAITING };
         }),
     );
@@ -900,7 +900,7 @@ describe('createChatSessionController', () => {
     mocks.resumeRun.mockImplementationOnce(
       (id: RunId, options: ResumeRunOptions) =>
         Effect.gen(function* () {
-          if (options.onResumeResolved) yield* options.onResumeResolved(id);
+          if (options.onAdmitted) yield* options.onAdmitted(id);
           yield* Effect.promise(() => rehydrated.promise);
           return options.isCancellationRequested?.()
             ? { failed: 'not_resumable' as const }
@@ -941,7 +941,7 @@ describe('createChatSessionController', () => {
 
   it('marks the resumed run, not the previous one, for a Ctrl-C issued before adoption', async () => {
     // The synchronous slot claim drops the pre-resume run, so a stop in the
-    // window before `onResumeResolved` has no run to mark: without the
+    // window before `onAdmitted` has no run to mark: without the
     // re-read at adoption the user's Ctrl-C would leave no recoverable
     // conversation, and any stale run it did find would be the wrong one.
     const resumeReached = createDeferred<void>();
@@ -955,7 +955,7 @@ describe('createChatSessionController', () => {
         resumeStarted.resolve();
         return Effect.gen(function* () {
           yield* Effect.promise(() => resumeReached.promise);
-          if (options.onResumeResolved) yield* options.onResumeResolved(id);
+          if (options.onAdmitted) yield* options.onAdmitted(id);
           return options.isCancellationRequested?.()
             ? { failed: 'not_resumable' as const }
             : STARTED;
@@ -1102,7 +1102,7 @@ describe('createChatSessionController', () => {
       (id: RunId, options: ResumeRunOptions) => {
         resumeCalled.resolve();
         return Effect.gen(function* () {
-          if (options.onResumeResolved) yield* options.onResumeResolved(id);
+          if (options.onAdmitted) yield* options.onAdmitted(id);
           return {
             ...STARTED,
             outcome: options.isCancellationRequested?.()

@@ -17,6 +17,7 @@ import {
   SubscriptionRef,
 } from 'effect';
 
+import type { HostInteractions } from '@agent/runtime/HostInteractions';
 import type { SessionHandle as RuntimeSessionHandle } from '@agent/runtime/SessionHandle';
 import { withLogChannel } from '@logger/effectLog';
 import { requestParksItsCaller, type RequestDecision } from '@shared/schemas';
@@ -37,10 +38,11 @@ const APPROVAL_HANDLER_TIMEOUT = Duration.minutes(10);
 /** The handler's decision on `pending`, or a denial naming why it gave
  *  none: a failure, a throw, or no answer in time. */
 const decisionOf = (
-  approve: ApprovalHandler,
+  host: AnsweringHost,
   pending: PendingRequest,
 ): Effect.Effect<RequestDecision> =>
-  Effect.suspend(() => approve(pending)).pipe(
+  // Called on the host itself: a class-based host keeps its receiver.
+  Effect.suspend(() => host.approve(pending)).pipe(
     Effect.timeout(APPROVAL_HANDLER_TIMEOUT),
     Effect.catchCause((cause) =>
       Effect.logWarning(
@@ -62,7 +64,7 @@ const decisionOf = (
  *  hears that a decision it made went to a newer one. A host without a
  *  handler (a viewer) is not on the list: it never takes prompts over. */
 export interface Approver {
-  readonly approve: ApprovalHandler;
+  readonly host: AnsweringHost;
   readonly wake: Queue.Queue<void>;
   readonly prompts: FiberSet.FiberSet<void>;
   readonly superseded: (pending: PendingRequest) => Effect.Effect<void>;
@@ -79,7 +81,7 @@ export interface Approver {
  */
 function answerRequests(
   session: RuntimeSessionHandle,
-  { approve, wake, prompts, superseded }: Approver,
+  { host, wake, prompts, superseded }: Approver,
   active: () => boolean,
 ): Effect.Effect<void> {
   // Keyed by run and request, as the fold keys a pending request.
@@ -87,7 +89,7 @@ function answerRequests(
   const keyOf = (request: PendingRequest): string =>
     `${request.runId}\0${request.requestId}`;
   const answer = (pending: PendingRequest): Effect.Effect<void> =>
-    decisionOf(approve, pending).pipe(
+    decisionOf(host, pending).pipe(
       Effect.flatMap((decision) =>
         // A newer handler attached as this one decided (its prompt is
         // withdrawn on attach; this is the backstop): the newer one answers.
@@ -160,29 +162,27 @@ function answerRequests(
  */
 export function attachHost(
   session: RuntimeSessionHandle,
-  { approve, ...interactions }: SessionHost,
+  host: SessionHost,
   approvers: Approver[],
 ): Effect.Effect<void, never, Scope.Scope> {
   return Effect.gen(function* () {
     // The session disposes its hosts as it closes: the answerer ends then.
     const ended = yield* Deferred.make<void>();
     yield* Effect.acquireRelease(
-      session.interactions.use({
-        ...interactions,
-        ...(approve && { approvalPromptsUnavailable: false }),
-        dispose: () => Deferred.doneUnsafe(ended, Effect.void),
-      }),
+      session.interactions.use(
+        overlay(host, () => Deferred.doneUnsafe(ended, Effect.void)),
+      ),
       (detach) => Effect.sync(detach),
     );
-    if (approve === undefined) return;
+    if (!answers(host)) return;
     const self: Approver = {
-      approve,
+      host,
       wake: yield* Queue.unbounded<void>(),
       prompts: yield* FiberSet.make<void>(),
       superseded: (pending) =>
         Effect.suspend(
           () =>
-            interactions.emit?.('requestShowInstruction', {
+            host.emit?.('requestShowInstruction', {
               key: `superseded-${pending.requestId}`,
               message: 'This request was answered in a newer window.',
             }) ?? Effect.void,
@@ -218,7 +218,36 @@ export function attachHost(
     yield* Effect.forkScoped(
       answerRequests(session, self, () => approvers.at(-1) === self).pipe(
         Effect.raceFirst(Deferred.await(ended)),
+        // The session ended: no prompt still out decides against it.
+        Effect.ensuring(FiberSet.clear(self.prompts)),
       ),
     );
+  });
+}
+
+/** A host that answers the runs' requests. */
+type AnsweringHost = SessionHost & { readonly approve: ApprovalHandler };
+
+const answers = (host: SessionHost): host is AnsweringHost =>
+  host.approve !== undefined;
+
+/**
+ * `host` as the session's attachment sees it: the host object itself, its
+ * members read off it with their receiver (a class-based host keeps its
+ * prototype's methods and private state), with the session's `dispose`
+ * and, for a host that answers, `approvalPromptsUnavailable: false` laid
+ * over it.
+ */
+function overlay(host: SessionHost, dispose: () => void): HostInteractions {
+  // A `SessionHost` is a `HostInteractions` (every member optional) with an
+  // `approve` the session never reads through this view.
+  const view: HostInteractions = host;
+  return new Proxy(view, {
+    get(target, key) {
+      if (key === 'dispose') return dispose;
+      if (key === 'approvalPromptsUnavailable' && answers(host)) return false;
+      const value: unknown = Reflect.get(target, key, target);
+      return typeof value === 'function' ? value.bind(target) : value;
+    },
   });
 }

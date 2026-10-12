@@ -45,7 +45,7 @@ export function serviceAgentRuns(
     launch: ({ request, options }) =>
       backend.launch(request, {
         continues: options.continues,
-        onRunResolved: options.onRunResolved,
+        onAdmitted: options.onAdmitted,
         approvalPolicy: approvalPolicy(),
       }),
     resumeBeside: (runId) =>
@@ -68,9 +68,7 @@ export function serviceAgentRuns(
           // back, as a window's own session would.
           if (resumed === null)
             return Effect.succeed<ResumeRunResult>({ failed: 'blocked' });
-          return (
-            options.onResumeResolved?.(resumed.runId) ?? Effect.void
-          ).pipe(
+          return (options.onAdmitted?.(resumed.runId) ?? Effect.void).pipe(
             Effect.as<ResumeRunResult>({
               started: true,
               delivered: true,

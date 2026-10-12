@@ -346,7 +346,7 @@ function mockTrackedChildOnce(
         agent: 'review',
       });
       registryOf(testDefaultSession().runs).track(handle);
-      runOptions.onRunResolved?.(runId);
+      Effect.runSync(runOptions.onAdmitted?.(runId) ?? Effect.void);
       Effect.runSync(runOptions.onRun?.(runId) ?? Effect.void);
       await options.afterRun?.(handle);
       return {

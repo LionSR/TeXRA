@@ -804,7 +804,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
   }
 
   /** Select a stream this window just launched (the launch's
-   *  `onRunResolved` callback): the launching surface selects it, and a
+   *  `onAdmitted` hook): the launching surface selects it, and a
    *  resolved agent retires the missing-agent warning. */
   public presentLaunchedRun(runId: RunId): void {
     this.surfaceAction({ kind: 'select', runId });

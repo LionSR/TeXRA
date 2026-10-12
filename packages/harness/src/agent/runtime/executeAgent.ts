@@ -255,16 +255,11 @@ export interface ExecuteAgentOptions extends SubagentRunOptions {
    *  born with its opening or not at all. */
   readonly registration: RegisterRunOptions;
   /**
-   * Publish a workflow's host-owned output (copies to user-requested
-   * destinations, the result record) while its run handle and durable
-   * checkpoint are still live, before the run's terminal commit. A stop
-   * during this operation can therefore preserve the checkpoint instead of
-   * interrupting an already-terminal run.
-   *
-   * The host reports a fact, `failed` when requested output could not be
-   * delivered, and the run decides its verdict from it. It runs on the run's
-   * own fiber, so a stop reaches it, and reads session-rooted facts from the
-   * session it was given.
+   * Publish a workflow's host-owned output (copies, the result record)
+   * while its run and checkpoint are live, before its terminal commit, on
+   * the run's own fiber (a stop reaches it and keeps the checkpoint). The
+   * host reports `failed` when output could not be delivered; the run
+   * decides its verdict from it.
    */
   publishWorkflowOutput?: (
     result: RunEndResult,
@@ -276,10 +271,12 @@ export interface ExecuteAgentOptions extends SubagentRunOptions {
     agentDefaultOutputFiles: readonly string[],
   ) => Effect.Effect<'published' | 'failed', Error>;
   /**
-   * Fires with the run id once the run exists for every fold (its opening
-   * committed), so a host may select it as its own surface state.
+   * The one admission hook, once per caller, with the run admitted. A fresh
+   * launch runs it as its opening commits, which it holds: keep it short (a
+   * failure warns; the run goes on). A resume, or a joiner once the resume
+   * has the run, runs it under the claim; a failure aborts that one.
    */
-  onRunResolved?: (runId: RunId) => void;
+  onAdmitted?: (runId: RunId) => Effect.Effect<void, Error>;
   /** A sink of every event the run's trace emits, beside the session's. */
   onTraceEvent?: (event: AgentEvent) => void;
   /** Stop a tool-use run after one model/tool cycle instead of waiting for follow-up input. */
@@ -307,10 +304,15 @@ export function executeAgent(
       definition,
       runId,
       registration: options.registration,
-      onRunResolved: (resolved) => {
-        Deferred.doneUnsafe(opened, Effect.void);
-        options.onRunResolved?.(resolved);
-      },
+      onAdmitted: (resolved) =>
+        Deferred.succeed(opened, undefined).pipe(
+          Effect.andThen(options.onAdmitted?.(resolved) ?? Effect.void),
+          Effect.catch((error) =>
+            Effect.logWarning(`Run ${resolved}'s admission failed`).pipe(
+              Effect.annotateLogs({ data: error }),
+            ),
+          ),
+        ),
       onTraceEvent: options.onTraceEvent,
       session: options.session,
       ownApiKeyFallback: options.ownApiKeyFallback,
@@ -414,15 +416,11 @@ export interface ResumeToolUseFromResumeDataOptions
 
 /**
  * Resume one run (a conversation, or a document task's recipe) from its
- * durable cursor, in place: a standalone resume is launched through the
- * session's door (`Runs.launch`), and a recovered child's continuous driver
- * (`options.turns`) runs it inside its own launch. A standalone resume owns
- * the run for its whole life under the launch terminal
- * ({@link runWithLaunchGuard}), whose claim is held before the cursor read so
- * no concurrent owner mutates the run between the read and the launch; the
- * resume's own scope, and the compensating finalizers the launch registered
- * in it, close before that claim goes. Lineage is `run.start.parent`, minus a
- * committed detach.
+ * durable cursor, in place: standalone through the session's door
+ * (`Runs.launch`), owned for its life by the launch terminal
+ * ({@link runWithLaunchGuard}, its claim held before the cursor read), or
+ * inside a recovered child's continuous driver (`options.turns`). Lineage is
+ * `run.start.parent`, minus a committed detach.
  */
 export function resumeToolUseFromResumeData(
   identity: ResumeTurnIdentity,
@@ -452,7 +450,6 @@ export function resumeToolUseFromResumeData(
     const ctx = yield* buildAgentLaunchContext({
       definition,
       runId: resume.runId,
-      onRunResolved: options.onRunResolved,
       onTraceEvent: options.onTraceEvent,
       session: runSession,
       toolPolicy: {
