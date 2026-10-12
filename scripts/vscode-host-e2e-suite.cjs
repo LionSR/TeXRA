@@ -48,6 +48,19 @@ async function run() {
 }
 
 async function checks() {
+  // The runner swapped the home: nothing here may reach the developer's.
+  const realHome = process.env.TEXRA_E2E_REAL_HOME;
+  assert.ok(realHome, 'the runner did not say which home it replaced');
+  assert.notEqual(
+    path.resolve(os.homedir()),
+    path.resolve(realHome),
+    `the extension host still resolves the real home (${realHome})`,
+  );
+  assert.ok(
+    path.relative(path.join(realHome, '.texra'), serviceRun).startsWith('..'),
+    `the service record would land in the real ~/.texra (${serviceRun})`,
+  );
+
   const extension = vscode.extensions.getExtension(EXTENSION_ID);
   assert.ok(
     extension,

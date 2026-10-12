@@ -17,17 +17,11 @@ import { mkdtempSync, realpathSync, rmSync } from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 
-/** The directories the swap replaces. */
-const DIRECTORY_KEYS = [
-  'HOME',
-  'USERPROFILE',
-  'XDG_CONFIG_HOME',
-  'XDG_DATA_HOME',
-  'XDG_STATE_HOME',
-  'XDG_CACHE_HOME',
-  'APPDATA',
-  'LOCALAPPDATA',
-] as const;
+import {
+  HOME_DIRECTORY_KEYS as DIRECTORY_KEYS,
+  isolatedHomeEnv,
+} from '../../../scripts/isolated-home.mjs';
+
 /** This worker's pid once it swapped; the real directories it replaced. */
 const SWAPPED_BY = 'TEXRA_TEST_HOME_SWAPPED_BY';
 const REAL_DIRECTORIES = 'TEXRA_TEST_REAL_DIRECTORIES';
@@ -42,14 +36,7 @@ if (process.env[SWAPPED_BY] !== String(process.pid)) {
     mkdtempSync(path.join(os.tmpdir(), 'texra-test-home-')),
   );
   Object.assign(process.env, {
-    HOME: home,
-    USERPROFILE: home,
-    XDG_CONFIG_HOME: path.join(home, '.config'),
-    XDG_DATA_HOME: path.join(home, '.local', 'share'),
-    XDG_STATE_HOME: path.join(home, '.local', 'state'),
-    XDG_CACHE_HOME: path.join(home, '.cache'),
-    APPDATA: path.join(home, 'AppData', 'Roaming'),
-    LOCALAPPDATA: path.join(home, 'AppData', 'Local'),
+    ...isolatedHomeEnv(home),
     [REAL_DIRECTORIES]: JSON.stringify(real),
     [SWAPPED_BY]: String(process.pid),
   });
