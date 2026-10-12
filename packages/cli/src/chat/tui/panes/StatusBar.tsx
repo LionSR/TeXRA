@@ -21,6 +21,7 @@ import {
   sessionMeta as sessionMetaSignal,
 } from '../state/cliState';
 import { sessionView, runPhaseOf, runViewOf } from '../state/sessionView';
+import { activeStartedAt } from '../state/childControls';
 import {
   chatTuiCanStopActiveRun,
   chatTuiCanStopVisibleRun,
@@ -213,13 +214,9 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
       ? quotaRead.value
       : undefined;
 
-  // A run parked on the user's answer is not working: no clock, no spinner.
-  const runStartedAt =
-    isActivePhase(displayStatus) &&
-    displayRun?.group !== 'waiting' &&
-    displayRun?.runStartedAt !== null
-      ? displayRun?.runStartedAt
-      : undefined;
+  const runStartedAt = isActivePhase(displayStatus)
+    ? activeStartedAt(displayRun)
+    : undefined;
   const now = useLiveNowMsSince([runStartedAt]);
 
   // Every request awaiting the user: the fold's pending approvals, the
