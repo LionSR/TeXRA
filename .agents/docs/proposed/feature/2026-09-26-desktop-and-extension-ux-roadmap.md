@@ -35,10 +35,9 @@ The UI should be quiet and should never mislead the user. In priority order:
 
 ## Done in the first pass
 
-- **Starter prompts on New task.** The hero now offers four one-click
-  starters: polish, referee review, proof check and related work
-  (`src/ui/copy/newTaskStarters.ts`, `NewTaskHero.ts`). A starter fills the
-  composer and never sends.
+- **Starter prompts on New task.** Landed, then removed at the owner's
+  request in #13752: the hero offers no one-click starters, and
+  `newTaskStarters.ts` is gone.
 - **Approval policy wording.** "Never" is now **Block**, because it denies,
   and a user reads "Never" as "never ask". The "Under Ask: … Inert under …"
   wording is gone from the two toggles, which only render under Ask anyway.
