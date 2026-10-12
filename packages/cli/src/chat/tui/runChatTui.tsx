@@ -574,7 +574,7 @@ export async function runChat(
           firstRunSetupAgent: startup.firstRunSetupAgent,
         },
         (held) =>
-          chatController.submit(held.line, held.mediaFiles, held.images),
+          chatController.submit(held.line, held),
       ),
     secrets: services.secrets,
     stores: services,
@@ -629,7 +629,7 @@ export async function runChat(
       requests={backend}
       onSubmit={(line, mediaFiles, images) => {
         if (holdUntilConnected({ line, mediaFiles, images })) return;
-        runtime.runFork(chatController.submit(line, mediaFiles, images));
+        runtime.runFork(chatController.submit(line, { mediaFiles, images }));
       }}
       commandName={context.commandName}
       onStaticTranscriptChange={viewportController.repaintTranscript}
