@@ -19,7 +19,7 @@ import {
   type SessionEventDraft,
 } from '@shared/schemas';
 import { closeSessionOf } from '@test/support/sessionEnd';
-import { testRuntime, testSessionOf } from '@test/support/testProcessRuntime';
+import { testRuntime } from '@test/support/testProcessRuntime';
 import {
   createTestSession,
   publishTestRunStart,
@@ -28,7 +28,10 @@ import {
 import { generateRunId } from '@utils/core';
 
 // Local file imports
-import { createStubDesktopAgentRunHost } from './desktopAgentRunTestHarness.ts';
+import {
+  createStubDesktopAgentRunHost,
+  localTestProject,
+} from './desktopAgentRunTestHarness.ts';
 
 function completedRunEnd(runId: RunId): SessionEventDraft {
   return {
@@ -74,11 +77,8 @@ describe('desktop agent run completion hook', () => {
           openDiff: host.openDiff,
           closeDiff: () => Effect.void,
         },
-        session,
-        runSession: testSessionOf(session),
+        project: localTestProject(session),
         focused: Stream.empty,
-        service: undefined,
-        root: undefined,
         runtime: testRuntime(),
         showAgentConfigBanner: () => Effect.void,
         onRunCompleted: Effect.sync(onRunCompleted),

@@ -1,17 +1,11 @@
 import { Effect, type Scope } from 'effect';
 
-import {
-  Cancelled,
-  type PlatformSecrets,
-  type Run,
-  type Session,
-} from '@texra-ai/harness';
+import { Cancelled, type PlatformSecrets, type Run } from '@texra-ai/harness';
 import { type ProcessRuntime, withProcessServices } from '@texra-ai/harness';
 import {
   presentRunFailure,
   type RunEndResult,
   type RootLaunchRequest,
-  type SessionHandle,
 } from '@agent/runtime';
 import type { RequestOpenFilePayload, RunId } from '@shared/schemas';
 import type { RunValidatedOptions } from '@texra/controllers/session/hostRunActions';
@@ -23,11 +17,14 @@ import {
   createWorkspaceLocation,
 } from '@utils/files/fileLocation';
 import type { DesktopAgentRun } from './desktopAgentRun.js';
+import type { DesktopProject } from './desktopProjects.js';
+
+/** What a launch and its output read of the project: where it runs, its
+ *  roots, and where it presents. */
+type LaunchProject = Pick<DesktopProject, 'session' | 'roots' | 'present'>;
 
 interface DesktopAgentLaunchContext {
-  readonly session: SessionHandle;
-  /** Where the run runs: this session, or the service's. */
-  readonly runSession: Session;
+  readonly project: LaunchProject;
   /** The process runtime this host's launch runs on, handed down from the
    *  composition root rather than looked up. */
   readonly runtime: ProcessRuntime;
@@ -53,7 +50,7 @@ export function launchDesktopAgent(
   context: DesktopAgentLaunchContext,
   { onAdmitted, ...options }: DesktopAgentLaunchOptions = {},
 ): Effect.Effect<Run, Error> {
-  const launch = context.runSession
+  const launch = context.project.session
     .start({ ...request, ...options, interactive: true })
     .pipe(
       Effect.tap((run) => onAdmitted?.(run.runId) ?? Effect.void),
@@ -62,7 +59,7 @@ export function launchDesktopAgent(
       Effect.tap((run) =>
         Effect.forkIn(
           run.result.pipe(
-            Effect.flatMap(presentDesktopFinalOutput(context.session)),
+            Effect.flatMap(presentDesktopFinalOutput(context.project)),
             Effect.ignore({ log: 'Warn', message: 'Opening the output' }),
           ),
           context.scope,
@@ -74,9 +71,9 @@ export function launchDesktopAgent(
 
 /** Open a settled run's final output, as a fresh launch and a resume both do. */
 export const presentDesktopFinalOutput =
-  (session: SessionHandle) => (result: RunEndResult) =>
+  (project: Omit<LaunchProject, 'session'>) => (result: RunEndResult) =>
     Effect.gen(function* () {
-      const output = yield* selectAutoOpenFinalOutput(session.roots, result);
+      const output = yield* selectAutoOpenFinalOutput(project.roots, result);
       if (!output) return;
       let location: RequestOpenFilePayload['location'];
       if (output.location === 'workspace') {
@@ -93,7 +90,7 @@ export const presentDesktopFinalOutput =
       } else {
         location = createExternalLocation(output.absolutePath);
       }
-      yield* session.interactions.emit(
+      yield* project.present.emit(
         'requestOpenFile',
         { location, preserveFocus: false },
         { replayWhenAttached: true },
@@ -104,14 +101,14 @@ export const presentDesktopFinalOutput =
  * Launch the setup conversation from the setup card: resolve a model the
  * user's credentials can call, build the setup execute request, and run it
  * through the same desktop execute path the renderer's Execute button uses.
- * `run` and `session` are the project the user started setup in, taken before
+ * `run` and `project` are the project the user started setup in, taken before
  * the first suspension: the run and its presentation belong to it even when
  * the window moves to another project while the model resolves and agents
  * load. Setup continues after its initiating request has completed, so a
  * failure is presented here and the kickoff settles.
  */
 export const kickoffDesktopSetup = (options: {
-  readonly session: SessionHandle;
+  readonly project: Omit<LaunchProject, 'session'>;
   /** The project's launch path; none when no folder is open. */
   readonly run: Pick<DesktopAgentRun, 'runValidated'> | undefined;
   readonly secrets: PlatformSecrets;
@@ -130,7 +127,7 @@ export const kickoffDesktopSetup = (options: {
         catch: ensureError,
       });
       const request = yield* buildDesktopSetupRunRequest(
-        options.session.roots,
+        options.project.roots,
         options.secrets,
       );
       if (!request) {
@@ -144,7 +141,7 @@ export const kickoffDesktopSetup = (options: {
     }).pipe(
       Effect.catch((error) => {
         if (error instanceof Cancelled) return Effect.void;
-        return presentRunFailure(options.session.interactions, error);
+        return presentRunFailure(options.project.present, error);
       }),
       // The kickoff settles with the setup run, so a second Run Setup
       // waits for it; the run's own failure is its result row's to show.

@@ -12,7 +12,7 @@ import { withProcessServices } from '@platform/processRuntime';
 import type { RunId } from '@shared/schemas';
 import { Rejected } from '@shared/session/requestErrors';
 import { closeSessionOf } from '@test/support/sessionEnd';
-import { testRuntime, testSessionOf } from '@test/support/testProcessRuntime';
+import { testRuntime } from '@test/support/testProcessRuntime';
 import { createFakeWorkspaceRoots } from '@test/support/FakePlatform';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import {
@@ -26,7 +26,10 @@ import { HostDraftRequests } from '@texra/controllers/session/hostDraftRequests'
 import { createHostSnapshotSource } from '@texra/controllers/session/hostSnapshotSource';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { createExternalLocation } from '@utils/files/fileLocation';
-import { createStubDesktopAgentRunHost } from './desktopAgentRunTestHarness.ts';
+import {
+  createStubDesktopAgentRunHost,
+  localTestProject,
+} from './desktopAgentRunTestHarness.ts';
 
 // The LaTeX engine and toolchain probe, mocked once for the file. Each test
 // sets their behaviour through `loadDesktopPreviewHost`; the module graph is
@@ -150,8 +153,7 @@ describe('desktop preview host', () => {
         });
         const handler = createDesktopHostRequests({
           runtime: testRuntime(),
-          session,
-          runSession: testSessionOf(session),
+          project: localTestProject(session),
           host: createStubDesktopAgentRunHost({
             ...preview,
             showErrorMessage,
@@ -175,7 +177,6 @@ describe('desktop preview host', () => {
           }),
           draftRequests,
           workspaceFile: () => Effect.succeed({ kind: 'done' }),
-          workspacePath: undefined,
           resourcesPath: '/resources',
           postToRenderer: () => {},
           postSurfaceAction: () => {},

@@ -5,12 +5,12 @@ import { Data, Effect, FileSystem, type PlatformError } from 'effect';
 import {
   type ProcessRuntime,
   type ProcessServices,
+  type Session,
   withProcessServices,
 } from '@texra-ai/harness';
 import {
   getHelperModelName,
   validateRunRequest,
-  type SessionHandle,
   type ValidatedRunRequest,
 } from '@agent/runtime';
 import { emitAppSignal } from '@eventBus/AppSignals';
@@ -75,7 +75,8 @@ type DesktopProgressFileActionUi = Pick<
  * full progress bridge.
  */
 interface DesktopProgressFileActionHost {
-  readonly session: SessionHandle;
+  /** The project's session, here or in the service. */
+  readonly session: Session;
   /** The process runtime the window root holds; the latexdiff programs and
    *  the file reads and writes below take their services from it. Nothing
    *  settles here: every member of this class is a program its caller runs. */
@@ -172,8 +173,8 @@ export class DesktopProgressFileActions {
         runLatexdiffForRun({
           runId,
           roots: this.host.session.roots,
-          runDiscovery: runOutputReader((id) =>
-            this.host.session.view.read([id]),
+          runDiscovery: runOutputReader(() =>
+            Effect.sync(() => this.host.session.view.current()),
           ),
           channel: DESKTOP_LATEXDIFF_CHANNEL,
           progress: { report: () => undefined },

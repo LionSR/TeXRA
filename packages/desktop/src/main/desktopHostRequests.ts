@@ -21,9 +21,8 @@ import {
   workspaceEnvironmentLayer,
   type ProcessRuntime,
   type ProcessServices,
-  type Session,
 } from '@texra-ai/harness';
-import { presentRunFailure, type SessionHandle } from '@agent/runtime';
+import { presentRunFailure } from '@agent/runtime';
 import { fileOpResultMessage } from '@housekeeping/runDirOps';
 import {
   latexdiffPackMessage,
@@ -69,6 +68,7 @@ import {
   type SharedHostRequestPorts,
 } from '@texra/controllers/session/sharedHostRequests';
 import { listWorkspaceFilesOfType } from '@texra/controllers/session/workspaceFileOptions';
+import { serviceRecords } from '@texra/controllers/server/serviceSession';
 import { loadModelOptions } from '@texra/model/setupCredentialAccess';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import {
@@ -86,22 +86,22 @@ import type { DesktopOnboardingIpc } from './desktopOnboardingIpc.js';
 import type { PreviewUnavailable } from './desktopPreviewHost.js';
 import type { DesktopAgentRun } from './desktopAgentRun.js';
 import type { DesktopAgentRunHost } from './desktopAgentRunHost.js';
+import type { DesktopProject } from './desktopProjects.js';
 import type { DesktopFileSelection } from './desktopFileSelection.js';
 import type { createDesktopWorkspaceIpc } from './desktopWorkspaceIpc.js';
 
 interface DesktopHostRequestsOptions {
-  session: SessionHandle;
+  /** The project this window serves: its runs run in its session, here or
+   *  in the service, whose records answer what the window reads of them. */
+  project: DesktopProject;
   /** The process secret store the model catalog reads. */
   secrets: PlatformSecrets;
-  /** Where this project's runs run: the session here, or the service's. */
-  runSession: Session;
   host: DesktopAgentRunHost;
   run: DesktopAgentRun;
   files: DesktopFileSelection;
   snapshot: HostSnapshotSource;
   draftRequests: HostDraftRequests;
   workspaceFile: ReturnType<typeof createDesktopWorkspaceIpc>['file'];
-  workspacePath: string | undefined;
   /** Packaged app resources root (`…/resources`), for export templates. */
   resourcesPath: string;
   postToRenderer(message: unknown): boolean | void;
@@ -139,15 +139,15 @@ const CHANNEL = 'DesktopHostRequests';
 export function createDesktopHostRequests(
   options: DesktopHostRequestsOptions,
 ): DesktopHostRequests {
-  const { session, host, run, runtime } = options;
-  const { roots } = session;
+  const { project, host, run, runtime } = options;
+  const { roots } = project;
   /** The rooted filesystems of this window's paper, built once from the
    *  roots its session holds for its lifetime, never from an ambient store. */
   const sessionFiles = sessionFsLayer(roots);
   /** The project's `.env` over the process's: what this window asks about
    *  its project (model options, a polish's helper model) answers from it,
    *  as the project's runs do. */
-  const projectEnv = workspaceEnvironmentLayer(options.workspacePath);
+  const projectEnv = workspaceEnvironmentLayer(project.root);
   // A shared controller's notice IS the refusal the request answers with.
   const rejectRequestEffect = (reason: string): Effect.Effect<void, Rejected> =>
     Effect.fail(new Rejected({ reason }));
@@ -158,8 +158,15 @@ export function createDesktopHostRequests(
   const runActions = runtime.runSync(
     createHostRunActions({
       ...run, // this window's launcher and output opener
-      ...localRunActionPorts(session),
-      session: options.runSession,
+      ...(project.handle !== undefined
+        ? localRunActionPorts(project.handle)
+        : {
+            roots,
+            readConfig: serviceRecords(project.service, project.root)
+              .readConfig,
+            present: project.present,
+          }),
+      session: project.session,
       loadModelOptions: () =>
         withProcessServices(
           runtime,
@@ -201,7 +208,7 @@ export function createDesktopHostRequests(
    *  so nothing settles here. */
   const listWorkspaceCandidateFiles = () =>
     Effect.suspend(() => {
-      const workspacePath = options.workspacePath;
+      const workspacePath = project.root;
       if (!workspacePath) return Effect.succeed([]);
       return Effect.all([
         listWorkspaceFilesOfType('input', workspacePath),
@@ -221,7 +228,7 @@ export function createDesktopHostRequests(
       showErrorMessage: rejectRequestEffect,
     },
     {
-      session,
+      session: project.session,
       runtime,
       // The request schedules a merge; a failure to start it belongs to
       // this lifecycle callback, after the request has already completed,
@@ -242,7 +249,7 @@ export function createDesktopHostRequests(
                       withLogChannel(CHANNEL),
                     );
                     return yield* presentRunFailure(
-                      session.interactions,
+                      project.present,
                       error,
                       'Merge failed: ',
                     );
@@ -315,7 +322,15 @@ export function createDesktopHostRequests(
             await import('@texra/controllers/progressView/ChatExportController');
           return new Controller({
             roots,
-            records: localExportRecords(session),
+            records:
+              project.handle !== undefined
+                ? localExportRecords(project.handle)
+                : {
+                    input: serviceRecords(project.service, project.root)
+                      .exportInput,
+                    trace: serviceRecords(project.service, project.root)
+                      .exportTrace,
+                  },
             latexPreamble,
           });
         },
@@ -332,7 +347,7 @@ export function createDesktopHostRequests(
 
   const exportTranscript = (runId: RunId) =>
     Effect.gen(function* () {
-      if (!options.runSession.view.current().runs.has(runId)) {
+      if (!project.session.view.current().runs.has(runId)) {
         return yield* Effect.fail(
           new Unavailable({ runId, reason: 'The run is no longer open.' }),
         );

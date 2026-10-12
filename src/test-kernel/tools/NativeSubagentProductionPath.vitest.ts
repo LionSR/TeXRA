@@ -1420,8 +1420,11 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
             ),
           },
           {
-            session,
-            runSession: testSessionOf(session, { persistent: true }),
+            project: {
+              session: testSessionOf(session, { persistent: true }),
+              roots: session.roots,
+              present: session.interactions,
+            },
             runtime: testRuntime(),
             scope: yield* Scope.make(),
           },

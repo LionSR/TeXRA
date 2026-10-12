@@ -19,6 +19,11 @@ All notable changes to this project will be documented in this file.
   export (HTML, Markdown, LaTeX) are done by the service, which holds the
   task while it packs or cleans. An older window is refused by a newer
   service and asked to update.
+- **The desktop app opens no session of its own for a folder the TeXRA
+  service serves.** Its run actions, pack and clean, and transcript exports
+  for that folder are done by the service, as a VS Code window's are. Only
+  the no-folder session, and every folder when the service cannot be
+  reached, run in the app itself.
 - **A run that fails before it starts is reported as a launch error, not
   listed as a failed task.** A task, subagent or background script is
   recorded together with its first batch of history, so one that fails
