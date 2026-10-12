@@ -10,10 +10,13 @@ supersedes the 2026-10-04 pass (`2026-10-04-agent-sdk-readiness-reverify.md`),
 which is now deleted; version control keeps it, per `.agents/docs/README.md`.
 
 Pin: verified against branch `claude/eager-noether-zpwosl` at `ff8097d`. The
-2026-10-04 pass's pin, `ae953c3` (branch `claude/eager-noether-hiwxl7`), is
-**not** an ancestor of this HEAD and is absent from the working clone, so this
-pass re-verifies the live tree directly and reads the delta from the recent
-`git log` and `CHANGELOG.md` rather than from a `rev-list` range. Four fresh
+2026-10-04 pass's pin, `ae953c3` (branch `claude/eager-noether-hiwxl7`), is a
+reachable ancestor of this HEAD in full history (~200 commits back) but is
+**absent from this shallow working clone** (`git cat-file -t ae953c3` fails
+until the clone is deepened — the same shallow-clone caveat the prior pass
+recorded for its own pin). Rather than deepen, this pass re-verifies the live
+tree directly and reads the delta from the recent `git log` and `CHANGELOG.md`
+instead of a `rev-list` range. Four fresh
 read-only audits — one each over the agent core, the model handler, the logger,
 and the SDK public surface — were run at this pin; their verdicts match the
 2026-10-04 pass.
@@ -100,7 +103,7 @@ guardrail, which is why it stays:
   core-quality line ceiling.
 - **Logger** (`packages/harness/src/logger/`, 5 files, 551 LOC). A clean
   single-owner producer→sink pipeline: `Effect.log*` + `withLogChannel`
-  (386 call sites) on the producer side; render→redact→truncate at one sink;
+  (386 `withLogChannel(` call sites) on the producer side; render→redact→truncate at one sink;
   `LogEntry` *is* Effect's structured record type, not a parallel type. The
   obvious wrapper candidates (`createLog`, `logUtils`, the CLI's former
   parallel `createCliLogger`/`LogRecord`) were already deleted (0 hits).
@@ -180,7 +183,7 @@ guardrail, which is why it stays:
    — a further, not-yet-designed public-API step. Owner-gated; no autonomous
    refactor.
 3. **Two `packages/llm` ambient `process.env.*_CUSTOM_HEADERS` reads need
-   filing** — `anthropicMessages.ts:460` and `openaiResponsesRequest.ts:254`
+   filing** — `anthropicMessages.ts:715` and `openaiResponsesRequest.ts:254`
    (the third went with `openaiChat.ts` in the earlier chat-codec
    consolidation). Moving the check to the host boundary is a relocation that
    must be passed explicitly into every factory (the `packages/llm/test-live/`
