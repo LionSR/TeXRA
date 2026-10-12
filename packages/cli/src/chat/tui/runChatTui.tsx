@@ -25,6 +25,7 @@ import {
 } from '@texra-ai/harness';
 import type { AgentConfig } from '@agent/runtime';
 import { getVisibleAgents } from '@agent/index';
+import { getRunRecords } from '@agent/storage';
 import {
   CliUsageError,
   effectiveApprovalPolicy,
@@ -70,11 +71,10 @@ import {
 } from '@shared/runs/runStatus';
 import { DisposableStore } from '@texra/platform/disposable';
 import { subscribeToSignalChanges } from '@texra/shared/signals';
-import { attachWindowHost } from '@texra/controllers/server/windowHost';
 import { serviceSession } from '@texra/controllers/server/serviceSession';
+import { sessionStoreMovedAsideMessage } from '@ui/copy/sessionStore';
 import { readConfigSettingFrom } from '@utils/config/platformSettings';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import { serviceAgentRuns } from '../serviceAgentRuns';
 
 import {
   createChatSessionController,
@@ -237,6 +237,12 @@ export async function runChat(
         projectApprovalPolicy(runtimeSession.roots),
       );
       if (refused !== undefined) startupNotices.push(refused);
+      // A store this process moved aside at open is said in the transcript,
+      // not on stderr before Ink mounts, where it would sit above the header.
+      if (runtimeSession.log.movedAside)
+        startupNotices.push(
+          sessionStoreMovedAsideMessage(runtimeSession.log.movedAside),
+        );
       if (Result.isFailure(service)) {
         startupNotices.push(
           `This chat runs here only, so other terminals and windows will not see it: ${service.failure.message}`,
@@ -561,7 +567,9 @@ export async function runChat(
   // state transition flows through one of the controller's narrow commands.
   const chatController: ChatSessionController = createChatSessionController({
     session,
-    runtimeSession,
+    runSession,
+    served: runsElsewhere,
+    records: (runId) => getRunRecords(runtimeSession, runId),
     getSessionContext: currentSessionContext,
     disposables,
     shutdownScope: services.shutdownScope,
@@ -575,17 +583,6 @@ export async function runChat(
     stores: services,
     runtime,
     approvalPolicy: () => chatPolicy,
-    ...(link !== undefined && {
-      serviceSession: runSession,
-      agentRuns: serviceAgentRuns(runSession),
-      attachWindow: (host) => {
-        runtime.runFork(
-          attachWindowHost(link, context.cwd, host).pipe(
-            Scope.provide(chatScope),
-          ),
-        );
-      },
-    }),
   });
 
   const resetSessionForClear = (): boolean => {
@@ -699,8 +696,7 @@ export async function runChat(
       secrets={services.secrets}
       stores={services}
       runtime={runtime}
-      session={runtimeSession}
-      requests={runSession}
+      session={runSession}
       onSubmit={(line, mediaFiles, images) => {
         if (holdUntilConnected({ line, mediaFiles, images })) return;
         runtime.runFork(chatController.submit(line, mediaFiles, images));

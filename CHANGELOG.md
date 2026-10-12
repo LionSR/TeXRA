@@ -999,6 +999,11 @@ show` print the same notice, and the new `texra agents customize`,
   used to offer only Open folder, Export and Copy, so it stayed in the
   desktop and extension task lists for good. It now offers Delete as well,
   unless another running TeXRA window holds it.
+- **`texra chat` as a client of the TeXRA service shows the service's
+  tasks in its work-plan reader**, as it does in its transcript; it read
+  the terminal's own session before. A chat with or without the service
+  now starts, resumes and stops its tasks the same way, and a Ctrl-C while
+  a resume is still settling stops the resumed task.
 - **A task whose end could not be saved no longer stays listed as
   running.** When only its result could not be saved, it ends as it did,
   its card says "Result lost" with the cause, and the task that started it

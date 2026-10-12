@@ -123,7 +123,7 @@ function tui(
   detachHost = Effect.runSync(
     testDefaultSession().interactions.use(
       createTuiHostInteractions(presentationHost, cliContext, {
-        session: testDefaultSession(),
+        requests: testDefaultSession().requests,
         secrets,
         settings: makeFakeSettingsStores('cli').stores,
         runtime: testRuntime(),

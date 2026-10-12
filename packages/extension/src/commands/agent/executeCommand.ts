@@ -31,8 +31,8 @@ const WrappedExecuteInputSchema = z.object({
 
 /**
  * Execute a fresh run of an agent with the given configuration: a raw
- * config or `{ config }`. A persisted run resumes through
- * `resumeOnSession` instead.
+ * config or `{ config }`. A persisted run resumes through the session's
+ * `resume` instead.
  *
  * The launch is the Effect this returns: the extension's command surface
  * settles it on the host entry's runtime.

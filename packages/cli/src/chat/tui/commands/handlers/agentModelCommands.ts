@@ -96,9 +96,7 @@ export const applyCliTeamSelection = Effect.fn('applyCliTeamSelection')(
     }
     const resolution = resolveTeamLaunch({
       teamId,
-      ...(yield* createTeamCatalogPorts(
-        context.runtimeSession.roots.repoState,
-      )),
+      ...(yield* createTeamCatalogPorts(context.runSession.roots.repoState)),
     });
     switch (resolution.status) {
       case 'unknown-team':
@@ -126,7 +124,7 @@ export const applyCliTeamSelection = Effect.fn('applyCliTeamSelection')(
       return;
     }
     const teamName = yield* readCliTeamName(
-      context.runtimeSession.roots.repoState,
+      context.runSession.roots.repoState,
       fields.cli.teamId,
     );
     patchSessionMeta({

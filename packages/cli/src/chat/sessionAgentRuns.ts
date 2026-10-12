@@ -1,10 +1,8 @@
 /**
- * The chat's run boundary when its runs run in the TeXRA service: the same
- * launch and resume the controller drives in-process, answered by the
- * service's session. A launch or resume is admitted there, and the service
- * says when the run ends: the chat holds its turn until then, as a root
- * launch and a resume's `completion` do. The view folded here could still
- * show the run's previous end right after a resume.
+ * The chat's run boundary over its `Session`, here or in the TeXRA service:
+ * a launch or resume is admitted by the session, which says when the run
+ * ends; the chat holds its turn until then. The view folded here could
+ * still show the run's previous end right after a resume.
  */
 import { Effect } from 'effect';
 
@@ -17,6 +15,15 @@ import type {
 import type { ProcessServices, Session, SessionOwner } from '@texra-ai/harness';
 import type { RunId } from '@texra-ai/harness/schemas';
 
+/** A resume's answer: the run's, or the session's refusal in its own
+ *  words (a run held elsewhere names its holder). */
+type ChatResumeResult =
+  | ResumeRunResult
+  | {
+      readonly failed: Extract<ResumeRunResult, { failed: unknown }>['failed'];
+      readonly message: string;
+    };
+
 /** The run boundary `ChatSessionController` takes. */
 export interface ChatAgentRuns {
   /** A root launch on the chat's session. */
@@ -25,16 +32,16 @@ export interface ChatAgentRuns {
   ) => Effect.Effect<Pick<RunEndResult, 'outcome'>, Error, SessionOwner>;
   readonly resume: (
     runId: RunId,
-    options: ResumeRunOptions,
-  ) => Effect.Effect<ResumeRunResult, Error, ProcessServices>;
-  /** Resume a run beside the chat (a workflow), which the chat does not
-   *  adopt; its refusal is told where it runs. */
-  readonly resumeBeside: (runId: RunId) => Effect.Effect<void>;
+    options: Pick<ResumeRunOptions, 'onAdmitted'>,
+  ) => Effect.Effect<ChatResumeResult, Error, ProcessServices>;
+  /** Resume a run beside the chat (a document task), which the chat does
+   *  not adopt; it fails with the session's refusal, in its words. */
+  readonly resumeBeside: (runId: RunId) => Effect.Effect<void, Error>;
 }
 
-/** The chat's run boundary over the service's `session`; each launch asks
- *  for the approval its options carry (`launchApproval`). */
-export function serviceAgentRuns(session: Session): ChatAgentRuns {
+/** The chat's run boundary over `session`; each launch asks for the
+ *  approval its options carry (`launchApproval`). */
+export function sessionAgentRuns(session: Session): ChatAgentRuns {
   const resume = (runId: RunId) => session.resume(runId, { interactive: true });
   return {
     launch: ({ request, options }) =>
@@ -54,7 +61,8 @@ export function serviceAgentRuns(session: Session): ChatAgentRuns {
       }),
     resumeBeside: (runId) =>
       resume(runId).pipe(
-        Effect.ignore({ log: 'Warn', message: `Resuming ${runId}` }),
+        Effect.asVoid,
+        Effect.mapError((refusal) => new Error(refusal.message)),
       ),
     resume: (runId, options) =>
       resume(runId).pipe(
@@ -67,13 +75,14 @@ export function serviceAgentRuns(session: Session): ChatAgentRuns {
             }),
           ),
         ),
-        // Waiting for what blocks it: the service resumes it once that is
-        // back, as a window's own session would. The service words any
-        // other refusal; the chat shows it as it is.
+        // A refusal is the resume's answer, not a failure: the chat says it
+        // in the session's words and exits as a usage error. One waiting for
+        // what blocks it resumes once that is back.
         Effect.catchTag('ResumeRefused', (refusal) =>
-          refusal.reason === 'blocked'
-            ? Effect.succeed<ResumeRunResult>({ failed: 'blocked' })
-            : Effect.fail(new Error(refusal.message)),
+          Effect.succeed<ChatResumeResult>({
+            failed: refusal.reason,
+            message: refusal.message,
+          }),
         ),
       ),
   };
