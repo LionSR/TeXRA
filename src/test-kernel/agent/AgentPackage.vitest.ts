@@ -11,6 +11,7 @@ import {
   Effect,
   Exit,
   Fiber,
+  Scope,
   Stream,
   SubscriptionRef,
 } from 'effect';
@@ -418,6 +419,60 @@ describe('agent package sessions', () => {
       Effect.scoped,
       Effect.provide(Sessions.layer({ platform: PLATFORM, plugins: PLUGINS })),
     ),
+  );
+
+  // Failure mode: the newest handler leaves mid-prompt on a parked run,
+  // which publishes no view, so the handler left behind never answers.
+  it.effect(
+    'hands a request to the older handler when the newest leaves mid-prompt',
+    () =>
+      Effect.gen(function* () {
+        const decided = yield* Deferred.make<unknown>();
+        mocks.decide.mockImplementationOnce((request: unknown) =>
+          Deferred.succeed(decided, request).pipe(Effect.as({ kind: 'done' })),
+        );
+        const session = yield* (yield* Sessions).open(PLATFORM.roots);
+        yield* session.attach({
+          approve: () => Effect.succeed({ action: 'approve' as const }),
+        });
+        const prompting = yield* Deferred.make<void>();
+        const newest = yield* Scope.make();
+        yield* session
+          .attach({
+            approve: () =>
+              Deferred.succeed(prompting, undefined).pipe(
+                Effect.andThen(Effect.never),
+              ),
+          })
+          .pipe(Scope.provide(newest));
+        yield* Effect.promise(() =>
+          enterRun('ae0001', { approval: 'own' } as Partial<FakeRunView>),
+        );
+        yield* SubscriptionRef.update(sessionView(), (current) => ({
+          ...current,
+          requests: [
+            {
+              runId: 'ae0001' as RunId,
+              requestId: 'r1',
+              payload: { kind: 'bash', data: {} } as never,
+              thread: null,
+            },
+          ],
+        }));
+        yield* Deferred.await(prompting);
+        yield* Scope.close(newest, Exit.void);
+        expect(yield* Deferred.await(decided)).toEqual({
+          kind: 'request.decide',
+          runId: 'ae0001',
+          requestId: 'r1',
+          decision: { action: 'approve' },
+        });
+      }).pipe(
+        Effect.scoped,
+        Effect.provide(
+          Sessions.layer({ platform: PLATFORM, plugins: PLUGINS }),
+        ),
+      ),
   );
 
   it.live("serves the embedder's tool-missing handler", () =>

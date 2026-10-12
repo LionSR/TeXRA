@@ -5,7 +5,16 @@
  * never left parked on a handler that failed, threw, or went quiet: that is
  * a denial, with the cause logged.
  */
-import { Cause, Deferred, Duration, Effect, type Scope, Stream } from 'effect';
+import {
+  Cause,
+  Deferred,
+  Duration,
+  Effect,
+  Queue,
+  type Scope,
+  Stream,
+  SubscriptionRef,
+} from 'effect';
 
 import type { SessionHandle as RuntimeSessionHandle } from '@agent/runtime/SessionHandle';
 import { withLogChannel } from '@logger/effectLog';
@@ -46,17 +55,25 @@ const decisionOf = (
     ),
   );
 
+/** One attached handler on a session's list (newest last), and the wake
+ *  that tells it it became the newest. */
+export interface Approver {
+  readonly approve: ApprovalHandler;
+  readonly wake: Queue.Queue<void>;
+}
+
 /**
  * Answer the runs' requests of `session` with `approve` while it is the
  * newest attached handler (`active`), until interrupted: every request a
  * parked run waits on here (the attention rule every host reads), once,
- * through the session's one `request.decide`. A decision the session
- * refuses to record is logged and its request offered again on the next
- * view.
+ * through the session's one `request.decide`. It reads each view, and the
+ * current one again when `wake` says it became the newest, since a parked
+ * run publishes none. A decision the session refuses to record is logged
+ * and its request offered again on the next view.
  */
 function answerRequests(
   session: RuntimeSessionHandle,
-  approve: ApprovalHandler,
+  { approve, wake }: Approver,
   active: () => boolean,
 ): Effect.Effect<void> {
   // Keyed by run and request, as the fold keys a pending request.
@@ -84,7 +101,10 @@ function answerRequests(
         ),
       ),
     );
-  return session.view.changes.pipe(
+  const woken = Stream.fromQueue(wake).pipe(
+    Stream.mapEffect(() => SubscriptionRef.get(session.view.ref)),
+  );
+  return Stream.merge(session.view.changes, woken).pipe(
     Stream.runForEach((view) =>
       Effect.forEach(
         attentionOf(view).requests.filter(
@@ -121,7 +141,7 @@ function answerRequests(
 export function attachHost(
   session: RuntimeSessionHandle,
   { approve, ...interactions }: SessionHost,
-  approvers: ApprovalHandler[],
+  approvers: Approver[],
 ): Effect.Effect<void, never, Scope.Scope> {
   return Effect.gen(function* () {
     // The session disposes its hosts as it closes: the answerer ends then.
@@ -135,12 +155,22 @@ export function attachHost(
       (detach) => Effect.sync(detach),
     );
     if (approve === undefined) return;
+    const self: Approver = { approve, wake: yield* Queue.unbounded<void>() };
+    // Leaving wakes the handler that becomes the newest: it re-reads the
+    // current view, where a request this one was asking still waits.
     yield* Effect.acquireRelease(
-      Effect.sync(() => approvers.push(approve)),
-      () => Effect.sync(() => approvers.splice(approvers.indexOf(approve), 1)),
+      Effect.sync(() => approvers.push(self)),
+      () =>
+        Effect.suspend(() => {
+          approvers.splice(approvers.indexOf(self), 1);
+          const next = approvers.at(-1);
+          return next === undefined
+            ? Effect.void
+            : Effect.asVoid(Queue.offer(next.wake, undefined));
+        }),
     );
     yield* Effect.forkScoped(
-      answerRequests(session, approve, () => approvers.at(-1) === approve).pipe(
+      answerRequests(session, self, () => approvers.at(-1) === self).pipe(
         Effect.raceFirst(Deferred.await(ended)),
       ),
     );

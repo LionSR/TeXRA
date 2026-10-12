@@ -50,11 +50,10 @@ import {
   ToolsRefused,
   type LaunchError,
 } from './errors.js';
-import { attachHost } from './requestAnswerer.js';
+import { attachHost, type Approver } from './requestAnswerer.js';
 import { handOver } from './runHandle.js';
 import type { Sessions } from './processLayer.js';
 import type {
-  ApprovalHandler,
   OpenOptions,
   ResumeInput,
   Run,
@@ -259,7 +258,7 @@ function sessionOf(
   services: Context.Context<ProcessServices>,
   owner: Context.Service.Shape<typeof SessionOwner>,
   resumeJoined: Session['resume'],
-  approvers: ApprovalHandler[],
+  approvers: Approver[],
 ): Session {
   return {
     roots: handle.roots,
@@ -338,7 +337,7 @@ export function makeSessions(
           );
         });
     // Each session's attached handlers, newest last: only it answers.
-    const approvers = new WeakMap<RuntimeSessionHandle, ApprovalHandler[]>();
+    const approvers = new WeakMap<RuntimeSessionHandle, Approver[]>();
     const sessionFor = (handle: RuntimeSessionHandle): Session => {
       const handlers = approvers.get(handle) ?? [];
       approvers.set(handle, handlers);
