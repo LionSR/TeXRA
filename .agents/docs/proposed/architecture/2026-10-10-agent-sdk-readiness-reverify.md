@@ -64,14 +64,14 @@ the harness-package-split and durable-harness program landing in the tree:
 The codebase is still well-aligned, and this audit remains a standing program,
 not a gap. No autonomous refactor is warranted from this charter. Four
 read-only audits — two of them independent adversarial sweeps run this pass over
-the *restructured* agent core/run-loop and the *consolidated* model handler —
+the _restructured_ agent core/run-loop and the _consolidated_ model handler —
 found **no wrapper layer that only forwards, no second run-history writer, no
 services-bag, no re-export shim** introduced by the restructuring:
 
 - **Single live append path confirmed.** `runHistory.appendBatch` has two call
   sites: `loop/runProgram.ts:102` inside `RunCell.append` (the one writer for a
   run's live rows — adds the `SynchronizedRef` lock, fold-back, uninterruptible
-  mask), and `forkRun.ts:173`, the one-time atomic birth of a *new* forked run
+  mask), and `forkRun.ts:173`, the one-time atomic birth of a _new_ forked run
   (`state=null` + a `registration` `run.start`), not a second writer into an
   existing run. `RunHistory.ts`'s internal `transact` writes only
   `request.decided` cancellations inside the service itself. Every loop module
@@ -126,7 +126,7 @@ added indirection tiers.
    - **Model handler**: the consolidation removed a whole binder file and left
      no leftover routing/failure-reading. The `Model` interface still takes a
      Zod-guarded materialized request and keeps host concerns out.
-   - **Logger**: still a clean host-agnostic *producer* port (`Effect.log*` +
+   - **Logger**: still a clean host-agnostic _producer_ port (`Effect.log*` +
      `withLogChannel` in `effectLog.ts`), render→redact→truncate single-owner.
      The one structural item is the sink→Layer conversion (§New.1), still
      unlanded.
@@ -156,7 +156,7 @@ added indirection tiers.
 1. **The logger sink→Layer step is still unlanded, and the composition root
    still installs no sink.** `packages/harness/src/logger/logSink.ts` still holds
    the mutable module global (`let sink = consoleLogSink`, `let sinkTrusted =
-   false`, `setLogSink`, `writeLogEntry`, lines ~165–186), set by the host
+false`, `setLogSink`, `writeLogEntry`, lines ~165–186), set by the host
    bootstraps (`packages/{extension,desktop,cli}` call `setLogSink`). The
    embedder-facing composition — `packages/harness/src/effect/sessions.ts` and
    `packages/harness/src/platform/processRuntime.ts` — installs no sink (grep for
@@ -192,14 +192,14 @@ added indirection tiers.
 3. **The `packages/llm` ambient-header reads are now refusal guards on both
    paths — effectively closed in the audited code.** The prior pass carried "two
    ambient reads to file into llm-package-hardening." At this pin neither path
-   *honors* an ambient value: `openaiResponsesRequest.ts:254` throws a
+   _honors_ an ambient value: `openaiResponsesRequest.ts:254` throws a
    `ModelError` (`kind 'unsupported'`, "Ambient OpenAI headers cannot override
    the selected deployment.") when `OPENAI_CUSTOM_HEADERS` is set, and
    `anthropicMessages.ts:715` throws a `ModelError` ("Anthropic Messages does not
    support ANTHROPIC_CUSTOM_HEADERS; the selected binding must determine its
    request headers.") — both make the selected binding the sole source of
    request headers. These are intentional guardrails, not value-honoring reads;
-   relocating the `process.env` *check* to the host boundary remains a low-value
+   relocating the `process.env` _check_ to the host boundary remains a low-value
    relocation (each llm factory would have to be passed the decision explicitly,
    and `packages/llm/test-live/` constructs factories without it), not a lift.
    Low priority; file into `2026-09-20-llm-package-hardening.md` only if the
@@ -272,9 +272,9 @@ deleted `HeldSessions` and moved session ownership onto `SessionMap` with
 effectful owner methods (`controllers/session/sessionLayer.ts`), the exact
 refactor that entry had refused. So the earlier "stay ruled 2026-09-20" ruling
 was superseded by the composition-root rework, not left standing. This does not
-bear on the audit *verdict* — the landed change is a consolidation consistent
+bear on the audit _verdict_ — the landed change is a consolidation consistent
 with alignment improving — but the delta is a reversal, not only re-pins. No
-*other* retained refusal was reversed.
+_other_ retained refusal was reversed.
 
 ## Genuinely open (carried, still human-owned)
 
