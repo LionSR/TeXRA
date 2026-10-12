@@ -161,7 +161,7 @@ set; nothing in these areas reopened a retained refusal.
 
 1. **Re-scope the Tier-1 manifest around the harness SDK, and now also against
    the rename.** `2026-09-10-agent-sdk-tier-1-manifest.md` (status: proposed) is
-   stale two ways: it predates the durable-harness pivot *and* it is written
+   stale two ways: it predates the durable-harness pivot _and_ it is written
    entirely against the deleted `packages/agent` / `@texra-ai/agent` names (its
    §3.1 export table, the `npm run typecheck:agent` / `@texra-ai/agent/{schemas,node}`
    entries). The live root entry (`packages/harness/src/index.ts`) now exports
