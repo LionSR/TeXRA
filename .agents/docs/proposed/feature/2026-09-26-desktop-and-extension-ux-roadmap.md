@@ -92,10 +92,11 @@ The UI should be quiet and should never mislead the user. In priority order:
 
 Notion's AI design principles mapped onto TeXRA:
 
-- **Right tool at the right moment, from context.** Starter prompts on an
-  empty task. The getting-started card when a folder has no LaTeX yet.
-  Setup while the funnel is pending.
-- **Pre-built skills and plain prompts share one interface.** Starters fill
+- **Right tool at the right moment, from context.** The getting-started
+  card when a folder has no LaTeX yet. Setup while the funnel is pending.
+  (The starter prompts that once filled an empty task were removed in
+  #13752.)
+- **Pre-built skills and plain prompts share one interface.** A skill fills
   the same composer a typed prompt uses; follow-ups refine.
 - **Compare before replacing.** Edits arrive as diffs to accept or merge.
 
@@ -114,12 +115,13 @@ a regression test in `SessionResultEvent.vitest.ts` pins that order.
 
 Next in this line, in order:
 
-1. **Context-aware starters.** Starters that name the open `.tex` file,
-   plus a selection-first path ("Improve this passage", with a before/after
-   diff), the way Notion keys its menu on empty, content, or selection.
-2. **Saved prompts (favorites).** Save a composer prompt as a named
-   starter; it appears beside the built-in four and runs with one click.
-   Settings-backed, one list per project.
+1. **Selection-first path.** "Improve this passage" on a selection, with a
+   before/after diff, the way Notion keys its menu on content or selection.
+   The one-click starters it would have sat beside are gone (#13752), so it
+   needs its own home in the composer first.
+2. **Saved prompts (favorites).** Save a composer prompt as a named entry
+   that runs with one click. Settings-backed, one list per project. Its
+   home is the same open question as 1.
 
 ## Open work, in order
 
