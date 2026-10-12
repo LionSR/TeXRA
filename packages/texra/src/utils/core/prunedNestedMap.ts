@@ -20,8 +20,8 @@ export class PrunedNestedMap<A, B, V> {
   /** Remove one entry; returns it, or `undefined` when there was none. */
   delete(a: A, b: B): V | undefined {
     const inner = this.outer.get(a);
-    const value = inner?.get(b);
-    if (inner === undefined || value === undefined) return undefined;
+    if (inner === undefined || !inner.has(b)) return undefined;
+    const value = inner.get(b);
     inner.delete(b);
     if (inner.size === 0) this.outer.delete(a);
     return value;
