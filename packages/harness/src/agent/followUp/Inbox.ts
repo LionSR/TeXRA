@@ -9,7 +9,7 @@
  */
 import { Deferred, Effect, Result, type Scope } from 'effect';
 
-import type { ResumeRunResult } from '@agent/runtime/resumeRun';
+import type { ResumeAttempt } from '@agent/runtime/resumeRun';
 import type { SessionLog } from '@agent/runtime/SessionHandle';
 import { withLogChannel } from '@logger/effectLog';
 import { aggregateId, type RunId } from '@shared/schemas';
@@ -93,7 +93,7 @@ export interface SendOptions {
 }
 
 /** A resume's result, and whether this caller joined one in flight. */
-type Resumed = { readonly result: ResumeRunResult; readonly joined: boolean };
+type Resumed = { readonly result: ResumeAttempt; readonly joined: boolean };
 
 /** A send decided inside a job: its rows, and how it landed. */
 type Admission = { rows: readonly RunInputDraft[]; sent: Sent };
@@ -108,7 +108,7 @@ export class Inbox {
   private readonly readers = new Map<RunId, RunInput>();
   private readonly resumes = new Map<
     RunId,
-    Deferred.Deferred<ResumeRunResult, Error>
+    Deferred.Deferred<ResumeAttempt, Error>
   >();
   private readonly observers = new Set<(closed: InboxClosed) => void>();
   private disposed = false;
@@ -230,7 +230,7 @@ export class Inbox {
    *  hears its result (`joined`). */
   resumeOnce<R>(
     runId: RunId,
-    resume: Effect.Effect<ResumeRunResult, Error, R>,
+    resume: Effect.Effect<ResumeAttempt, Error, R>,
   ): Effect.Effect<Resumed, Error, R> {
     return Effect.suspend((): Effect.Effect<Resumed, Error, R> => {
       const running = this.resumes.get(runId);
@@ -239,7 +239,7 @@ export class Inbox {
           result,
           joined: true,
         }));
-      const done = Deferred.makeUnsafe<ResumeRunResult, Error>();
+      const done = Deferred.makeUnsafe<ResumeAttempt, Error>();
       this.resumes.set(runId, done);
       return resume.pipe(
         Effect.onExit((exit) =>

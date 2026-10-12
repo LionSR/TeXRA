@@ -15,7 +15,7 @@ import {
   Fiber,
   Queue,
   Stream,
-  type Cause,
+  Cause,
 } from 'effect';
 
 import type { SessionHandle as RuntimeSessionHandle } from '@agent/runtime/SessionHandle';
@@ -71,7 +71,9 @@ const traceHandover = (runId: RunId): Effect.Effect<TraceHandover> =>
     const trace = yield* Queue.unbounded<AgentEvent, RunFailure | Cause.Done>();
     let tapping = true;
     let reading = false;
-    let settledUnread = false;
+    /** How the run settled before any reader came: a failed run's reader
+     *  hears its failure, which the queue holds; a succeeded one's nothing. */
+    let settledUnread: 'succeeded' | 'failed' | null = null;
     let buffered = 0;
     /** Stop taking the run's trace events: the reader's close does it while
      *  the run continues, and the run's settlement does it for a reader that
@@ -91,8 +93,9 @@ const traceHandover = (runId: RunId): Effect.Effect<TraceHandover> =>
       settle: (exit) =>
         Effect.gen(function* () {
           release();
-          settledUnread = !reading;
-          if (buffered > TRACE_HANDOVER_EVENTS) {
+          if (!reading)
+            settledUnread = Exit.isSuccess(exit) ? 'succeeded' : 'failed';
+          if (!reading && buffered > TRACE_HANDOVER_EVENTS) {
             yield* Effect.logWarning(
               `Run ${runId} buffered ${TRACE_HANDOVER_EVENTS} trace events with no reader attached; its trace was detached. Iterate the run's events in the turn that starts it, or await only its result.`,
             ).pipe(withLogChannel(CHANNEL));
@@ -106,11 +109,15 @@ const traceHandover = (runId: RunId): Effect.Effect<TraceHandover> =>
         Effect.suspend(() => {
           // A reader past the buffer, or after an unread settlement, has no
           // trace left to read: it hears why rather than an empty stream.
+          // A failed run's reader hears its failure from the queue instead.
           let lost: TraceUnavailable['reason'] | null = null;
-          if (settledUnread) lost = 'ended';
+          if (settledUnread === 'succeeded') lost = 'ended';
           if (buffered > TRACE_HANDOVER_EVENTS) lost = 'truncated';
-          reading = true;
-          if (lost === null) return Effect.succeed(Stream.fromQueue(trace));
+          if (settledUnread === 'failed') lost = null;
+          if (lost === null) {
+            reading = true;
+            return Effect.succeed(Stream.fromQueue(trace));
+          }
           const message = `Run ${runId}'s trace is ${lost === 'ended' ? 'gone: the run settled with no reader attached' : 'detached: it passed the handover buffer before a reader attached'}.`;
           return Effect.logWarning(message).pipe(
             withLogChannel(CHANNEL),
@@ -276,7 +283,10 @@ export function handOver(
         Exit.isSuccess(exit)
           ? Effect.void
           : Effect.suspend(() => {
-              interruptLaunch();
+              // Only a handoff the caller abandoned has a launch to stop by
+              // id: one the launch failed has settled it, and the id may
+              // name another run (a supplied id already live).
+              if (Cause.hasInterrupts(exit.cause)) interruptLaunch();
               return Fiber.interruptAll(spawned);
             }),
       ),

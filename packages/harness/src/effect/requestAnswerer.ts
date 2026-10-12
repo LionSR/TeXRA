@@ -5,7 +5,7 @@
  * never left parked on a handler that failed, threw, or went quiet: that is
  * a denial, with the cause logged.
  */
-import { Cause, Duration, Effect, type Scope, Stream } from 'effect';
+import { Cause, Deferred, Duration, Effect, type Scope, Stream } from 'effect';
 
 import type { SessionHandle as RuntimeSessionHandle } from '@agent/runtime/SessionHandle';
 import { withLogChannel } from '@logger/effectLog';
@@ -47,15 +47,17 @@ const decisionOf = (
   );
 
 /**
- * Answer the runs' requests of `session` with `approve` until interrupted:
- * every request a parked run waits on here (the attention rule every host
- * reads), once, through the session's one `request.decide`. A decision the
- * session refuses to record is logged and its request offered again on the
- * next view.
+ * Answer the runs' requests of `session` with `approve` while it is the
+ * newest attached handler (`active`), until interrupted: every request a
+ * parked run waits on here (the attention rule every host reads), once,
+ * through the session's one `request.decide`. A decision the session
+ * refuses to record is logged and its request offered again on the next
+ * view.
  */
 function answerRequests(
   session: RuntimeSessionHandle,
   approve: ApprovalHandler,
+  active: () => boolean,
 ): Effect.Effect<void> {
   // Keyed by run and request, as the fold keys a pending request.
   const acted = new Set<string>();
@@ -87,6 +89,7 @@ function answerRequests(
       Effect.forEach(
         attentionOf(view).requests.filter(
           (pending) =>
+            active() &&
             requestParksItsCaller(pending.payload) &&
             !acted.has(keyOf(pending)),
         ),
@@ -111,21 +114,35 @@ function answerRequests(
 
 /**
  * Attach `host` to `session` for the caller's scope: the newest host
- * presents, and one with `approve` answers the runs' requests until the
- * scope closes. A host with a handler can answer whatever its surface says.
+ * presents, and the newest handler in `approvers` (the session's own list)
+ * answers the runs' requests, until the scope or the session closes. A
+ * host with a handler can answer whatever its surface says.
  */
 export function attachHost(
   session: RuntimeSessionHandle,
   { approve, ...interactions }: SessionHost,
+  approvers: ApprovalHandler[],
 ): Effect.Effect<void, never, Scope.Scope> {
   return Effect.gen(function* () {
+    // The session disposes its hosts as it closes: the answerer ends then.
+    const ended = yield* Deferred.make<void>();
     yield* Effect.acquireRelease(
       session.interactions.use({
         ...interactions,
         ...(approve && { approvalPromptsUnavailable: false }),
+        dispose: () => Deferred.doneUnsafe(ended, Effect.void),
       }),
       (detach) => Effect.sync(detach),
     );
-    if (approve) yield* Effect.forkScoped(answerRequests(session, approve));
+    if (approve === undefined) return;
+    yield* Effect.acquireRelease(
+      Effect.sync(() => approvers.push(approve)),
+      () => Effect.sync(() => approvers.splice(approvers.indexOf(approve), 1)),
+    );
+    yield* Effect.forkScoped(
+      answerRequests(session, approve, () => approvers.at(-1) === approve).pipe(
+        Effect.raceFirst(Deferred.await(ended)),
+      ),
+    );
   });
 }

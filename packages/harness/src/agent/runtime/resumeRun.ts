@@ -66,6 +66,11 @@ export type ResumeRunResult =
       >;
     };
 
+/** One resume job's answer ({@link resumeOwnRun}): its result, or that an
+ *  open call of `ownedBy` owns the run, as its records said under its claim
+ *  in the job, so it resumes with that parent. */
+export type ResumeAttempt = ResumeRunResult | { readonly ownedBy: RunId };
+
 export interface ResumeRunOptions extends Pick<
   ResumeToolUseFromResumeDataOptions,
   | 'publishWorkflowOutput'
@@ -116,31 +121,39 @@ function namesUnusableCheckpoint(error: unknown): boolean {
 
 /**
  * Resume a stream through the single host entry path. A run live here is
- * refused before anything is read; one being resumed already is joined.
- * The resume is on the session's `Runs`, provided here from that one
- * session.
+ * refused before anything is read; one being resumed already is joined. An
+ * owned child is resumed through its parent (HQ6): the parent's open call
+ * reattaches it, so it never runs alone or twice.
  */
 export const resumeRun = Effect.fn('resumeRun')(function* (
   runId: RunId,
   options: ResumeRunOptions,
 ): Effect.fn.Return<ResumeRunResult, Error, ProcessServices> {
+  const result = yield* resumeOwnRun(runId, options);
+  if (!('ownedBy' in result)) return result;
+  yield* Effect.logInfo(
+    `Run ${runId} belongs to an open call of run ${result.ownedBy}: resuming that run, which reattaches it`,
+  ).pipe(withLogChannel(CHANNEL));
+  return yield* resumeRun(result.ownedBy, options);
+}, Effect.uninterruptible);
+
+/**
+ * One resume job of `runId` itself, on the session's `Runs`: an owned child
+ * answers `ownedBy`, decided in the job, for a caller that follows the
+ * parent itself (the package's `Session.resume`).
+ */
+export const resumeOwnRun = Effect.fn('resumeOwnRun')(function* (
+  runId: RunId,
+  options: ResumeRunOptions,
+): Effect.fn.Return<ResumeAttempt, Error, ProcessServices> {
   const session = options.session;
   const cancelled = () => options.isCancellationRequested?.() === true;
   if (cancelled()) return REFUSED;
-  // An owned child is resumed through its parent (HQ6): the parent's open
-  // call reattaches it, so it never runs alone or twice.
-  const owner = yield* owningCall(session, runId);
-  if (owner !== null) {
-    yield* Effect.logInfo(
-      `Run ${runId} belongs to the open call ${owner.callId} of run ${owner.parentRunId}: resuming that run, which reattaches it`,
-    ).pipe(withLogChannel(CHANNEL));
-    return yield* resumeRun(owner.parentRunId, options);
-  }
   const { result, joined } = yield* session.followUps.resumeOnce(
     runId,
     resumeHere(runId, options).pipe(Effect.provideService(Runs, session.runs)),
   );
-  if (!joined) return result;
+  if (!joined || 'ownedBy' in result) return result;
   // A caller that joined a resume already in flight still gets its own
   // cancellation and its own host step, once that resume has the run.
   if (cancelled() || !('started' in result) || !options.onResumeResolved)
@@ -172,7 +185,7 @@ const holdClaim = (session: SessionHandle, runId: RunId) =>
 const resumeHere = Effect.fn('resumeHere')(function* (
   runId: RunId,
   options: ResumeRunOptions,
-): Effect.fn.Return<ResumeRunResult, Error, AgentRunServices | Scope.Scope> {
+): Effect.fn.Return<ResumeAttempt, Error, AgentRunServices | Scope.Scope> {
   const session = options.session;
   const cancelled = () => options.isCancellationRequested?.() === true;
   if (session.runs.get(runId)?.live === true) return REFUSED;
@@ -198,6 +211,10 @@ const resumeHere = Effect.fn('resumeHere')(function* (
   yield* Effect.addFinalizer(() => Scope.close(claim, Exit.void));
   const heldBy = yield* holdClaim(session, runId).pipe(Scope.provide(claim));
   if (heldBy !== null) return { failed: 'owned_elsewhere' };
+  // Whether an open call owns it, read under its claim in this resume's
+  // job, so the answer and the activation below are one decision.
+  const owner = yield* owningCall(session, runId);
+  if (owner !== null) return { ownedBy: owner.parentRunId };
   // What its children hold for it, it reads once it runs here.
   yield* deliverHeld(session, runId);
   const resume = yield* retrieveSessionResumeData(runId, config, session);

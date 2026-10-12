@@ -17,6 +17,7 @@
  */
 import {
   type Context,
+  Data,
   Deferred,
   Effect,
   Exit,
@@ -29,8 +30,7 @@ import {
 // `@agent/runtime` barrel would evaluate runtime files no session here runs.
 import { getAgent } from '@agent/index/agentRegistry';
 import { describeFollowUpFailure } from '@agent/followUp/ToolUseFollowUp';
-import { resumeRun } from '@agent/runtime/resumeRun';
-import { owningCall } from '@agent/storage/runRecords';
+import { resumeOwnRun } from '@agent/runtime/resumeRun';
 import type { SessionHandle as RuntimeSessionHandle } from '@agent/runtime/SessionHandle';
 import type { ITool } from '@agent/core/tools/ToolTypes';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
@@ -54,6 +54,7 @@ import { attachHost } from './requestAnswerer.js';
 import { handOver } from './runHandle.js';
 import type { Sessions } from './processLayer.js';
 import type {
+  ApprovalHandler,
   OpenOptions,
   ResumeInput,
   Run,
@@ -174,19 +175,27 @@ function start(
 /** What a resume fails with before its run is handed over. */
 type ResumeError = ResumeRefused | ToolsRefused | RunFailure;
 
+/** The run an open call of `parent` owns resumes with that parent: what
+ *  the run's own resume job answers, under its claim. */
+class OwnedByParent extends Data.TaggedError('OwnedByParent')<{
+  readonly parent: RunId;
+}> {}
+
 /**
  * Continue a persisted run of `session` through the one resume path every
  * host takes (`resumeRun`), with the caller's custom tools. A child an open
- * call of its parent owns, as the child's records say, resumes with that
- * parent, under the parent's handle, which names the child it was asked
- * for; one whose edge is cut resumes itself. A refusal arrives before the
- * run is admitted, so it fails this rather than the handle.
+ * call of its parent owns, as its records say under its claim in its own
+ * resume job, is not resumed here: `follow` resumes the parent, whose
+ * handle names the child it was asked for. One whose edge is cut resumes
+ * itself. A refusal arrives before the run is admitted, so it fails this
+ * rather than the handle, naming the run refused.
  */
 function resume(
   session: RuntimeSessionHandle,
   services: Context.Context<ProcessServices>,
   runId: RunId,
   { tools, interactive }: ResumeInput,
+  follow: (parent: RunId) => Effect.Effect<Run, ResumeError>,
 ): Effect.Effect<Run, ResumeError> {
   const refused = (reason: ResumeRefused['reason'], message: string) =>
     new ResumeRefused({ runId, reason, message });
@@ -195,12 +204,8 @@ function resume(
       tools ?? [],
       !session.interactions.approvalPromptsUnavailable,
     );
-    const owner = yield* owningCall(session, runId).pipe(
-      Effect.mapError(runFailure),
-    );
-    const target = owner?.parentRunId ?? runId;
-    const run = yield* handOver(session, services, target, (hooks) =>
-      resumeRun(target, {
+    return yield* handOver(session, services, runId, (hooks) =>
+      resumeOwnRun(runId, {
         ...hooks,
         session,
         stopAfterCycle: interactive !== true,
@@ -208,6 +213,10 @@ function resume(
       }).pipe(
         Effect.mapError(runFailure),
         Effect.flatMap((resumed) => {
+          if ('ownedBy' in resumed)
+            return Effect.fail(
+              runFailure(new OwnedByParent({ parent: resumed.ownedBy })),
+            );
           if ('failed' in resumed)
             return Effect.fail(
               runFailure(
@@ -222,20 +231,21 @@ function resume(
           return resumed.completion
             ? resumed.completion.pipe(Effect.mapError(runFailure))
             : Effect.fail(
-                runFailure(
-                  new Error(`Run ${target} has no result of its own.`),
-                ),
+                runFailure(new Error(`Run ${runId} has no result of its own.`)),
               );
         }),
       ),
     ).pipe(
-      Effect.catch((failure) =>
-        Effect.fail(
-          failure.cause instanceof ResumeRefused ? failure.cause : failure,
-        ),
-      ),
+      Effect.catch((failure): Effect.Effect<Run, ResumeError> => {
+        const { cause } = failure;
+        if (cause instanceof OwnedByParent)
+          return Effect.map(follow(cause.parent), (run) => ({
+            ...run,
+            redirectedFrom: runId,
+          }));
+        return Effect.fail(cause instanceof ResumeRefused ? cause : failure);
+      }),
     );
-    return owner === null ? run : { ...run, redirectedFrom: runId };
   });
 }
 
@@ -249,6 +259,7 @@ function sessionOf(
   services: Context.Context<ProcessServices>,
   owner: Context.Service.Shape<typeof SessionOwner>,
   resumeJoined: Session['resume'],
+  approvers: ApprovalHandler[],
 ): Session {
   return {
     roots: handle.roots,
@@ -269,7 +280,7 @@ function sessionOf(
           ).pipe(Effect.as(handle.view.inputs(set, from.cursor, from.debug))),
         ),
     },
-    attach: (host) => attachHost(handle, host),
+    attach: (host) => attachHost(handle, host, approvers),
   };
 }
 
@@ -288,6 +299,8 @@ export function makeSessions(
       RuntimeSessionHandle,
       Map<RunId, Deferred.Deferred<Run, ResumeError>>
     >();
+    // Keyed by the run the resume job admits: a child's follows its parent
+    // through here, so it joins a resume of that parent already in flight.
     const resumeJoined =
       (handle: RuntimeSessionHandle): Session['resume'] =>
       (runId, input = {}) =>
@@ -303,7 +316,9 @@ export function makeSessions(
           const forget = Effect.sync(() => {
             inFlight.delete(runId);
           });
-          return resume(handle, services, runId, input).pipe(
+          return resume(handle, services, runId, input, (parent) =>
+            resumeJoined(handle)(parent, input),
+          ).pipe(
             Effect.onExit((exit) =>
               Deferred.done(handOff, exit).pipe(
                 Effect.andThen(
@@ -322,8 +337,13 @@ export function makeSessions(
             ),
           );
         });
-    const sessionFor = (handle: RuntimeSessionHandle): Session =>
-      sessionOf(handle, services, owner, resumeJoined(handle));
+    // Each session's attached handlers, newest last: only it answers.
+    const approvers = new WeakMap<RuntimeSessionHandle, ApprovalHandler[]>();
+    const sessionFor = (handle: RuntimeSessionHandle): Session => {
+      const handlers = approvers.get(handle) ?? [];
+      approvers.set(handle, handlers);
+      return sessionOf(handle, services, owner, resumeJoined(handle), handlers);
+    };
     return {
       // An open asking for the other store than the session's is the
       // owner's refusal. Until a host that can prompt attaches, nobody here

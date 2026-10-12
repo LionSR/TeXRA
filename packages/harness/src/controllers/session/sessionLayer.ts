@@ -402,7 +402,10 @@ const openSession = (open: SessionHandleInit) =>
         globalState: roots.globalState,
       },
     });
-    // One entry per root: an open asking for the other store is refused.
+    const context = yield* sessions
+      .contextEffect(key)
+      .pipe(Effect.onError(() => sessions.invalidate(key)));
+    // Read once held, so racing first opens agree: the other store refused.
     const store = (init: SessionHandleInit) => init.transcriptMode?.kind;
     for (const held of yield* RcMap.keys(sessions.rcMap))
       if (held.storage === key.storage && store(held.open) !== store(open))
@@ -410,9 +413,6 @@ const openSession = (open: SessionHandleInit) =>
           storage: key.storage,
           message: `The session of ${key.storage} is already open over the other store; close it before opening it differently.`,
         });
-    const context = yield* sessions
-      .contextEffect(key)
-      .pipe(Effect.onError(() => sessions.invalidate(key)));
     return Context.get(context, Session);
   }).pipe(Effect.scoped);
 

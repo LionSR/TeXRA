@@ -24,11 +24,7 @@ import { afterEach, beforeEach } from 'vitest';
 import { ModelRetryGate } from '@agent/runtime/ModelRetryGate';
 import { RouteRetries } from '@agent/runtime/run/invocation';
 import type { ModelOptionStores } from '@model/computeModelOptions';
-import type {
-  ProcessRuntime,
-  ProcessServices,
-  SessionOwner,
-} from '@platform/processRuntime';
+import type { ProcessServices, SessionOwner } from '@platform/processRuntime';
 import type { AgentDirectoriesPort, StateStore } from '@platform/interfaces';
 import {
   UNAVAILABLE_LANGUAGE_MODEL_PORT,
@@ -424,9 +420,6 @@ export async function installFakeHost(host: FakeHost): Promise<void> {
   // this install, called from a setup file or a `beforeEach`, cannot promise.
   if (tryTestProcessRuntime() == null) {
     initTestProcessRuntime(
-      // cast: the bare runtime holds no session graph, so it serves no
-      // `Sessions` (the harness's tag is not loaded here, before a suite's
-      // mocks): reading it is a defect, as an open on its owner dies.
       ManagedRuntime.make(
         // No session graph here: it holds no session, and an open dies,
         // naming the missing member.
@@ -434,7 +427,7 @@ export async function installFakeHost(host: FakeHost): Promise<void> {
           processServices,
           Layer.mock(SessionOwnerTag, { list: Effect.succeed([]) }),
         ),
-      ) as unknown as ProcessRuntime,
+      ),
     );
   }
 }
