@@ -34,9 +34,9 @@ export interface ChatAgentRuns {
     runId: RunId,
     options: Pick<ResumeRunOptions, 'onAdmitted'>,
   ) => Effect.Effect<ChatResumeResult, Error, ProcessServices>;
-  /** Resume a run beside the chat (a workflow), which the chat does not
-   *  adopt; its refusal is told where it runs. */
-  readonly resumeBeside: (runId: RunId) => Effect.Effect<void>;
+  /** Resume a run beside the chat (a document task), which the chat does
+   *  not adopt; it fails with the session's refusal, in its words. */
+  readonly resumeBeside: (runId: RunId) => Effect.Effect<void, Error>;
 }
 
 /** The chat's run boundary over `session`; each launch asks for the
@@ -61,7 +61,8 @@ export function sessionAgentRuns(session: Session): ChatAgentRuns {
       }),
     resumeBeside: (runId) =>
       resume(runId).pipe(
-        Effect.ignore({ log: 'Warn', message: `Resuming ${runId}` }),
+        Effect.asVoid,
+        Effect.mapError((refusal) => new Error(refusal.message)),
       ),
     resume: (runId, options) =>
       resume(runId).pipe(

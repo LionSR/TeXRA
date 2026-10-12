@@ -412,12 +412,14 @@ export function createChatSessionController(
   // Internal helpers
   // -----------------------------------------------------------------------
 
-  const interruptActiveRun = (): void => {
-    // The run id is known from the mint, but a stop can only land on a run
-    // the fold holds; `onAdmitted` re-reads `stopRequested` for a stop
-    // asked in the launch gap.
+  /** Stop the chat's run. A stop lands only on a run the session holds:
+   *  one the view shows, or `admitted`, which the session has just admitted
+   *  whether or not the view has folded it yet (`onAdmitted` re-reads
+   *  `stopRequested` for a stop asked in the launch gap). */
+  const interruptActiveRun = (admitted?: RunId): void => {
     const runId = session.runId;
-    if (!runId || !runViewOf(currentView(), runId)) return;
+    if (!runId) return;
+    if (runId !== admitted && !runViewOf(currentView(), runId)) return;
     session.interruptedRunId = runId;
     // Ctrl-C leaves the child policy unset, so the session's request handler
     // applies the configured "Keep agents running".
@@ -541,7 +543,7 @@ export function createChatSessionController(
                   rootRunId.set(resolvedRunId);
                   moveLocalTranscriptToRun(resolvedRunId);
                   focusRun(resolvedRunId);
-                  if (session.stopRequested) interruptActiveRun();
+                  if (session.stopRequested) interruptActiveRun(resolvedRunId);
                 }),
             },
           });
@@ -617,7 +619,17 @@ export function createChatSessionController(
           endResumeUnstarted(() =>
             appendLocalNotice(`Resuming document task ${id}. Tab lists it.`),
           );
-          yield* Effect.forkDetach(agentRuns.resumeBeside(id));
+          yield* Effect.forkDetach(
+            agentRuns
+              .resumeBeside(id)
+              .pipe(
+                Effect.catch((refused) =>
+                  Effect.sync(() =>
+                    appendLocalErrorTranscript(toErrorMessage(refused)),
+                  ),
+                ),
+              ),
+          );
           return;
         }
 
@@ -646,7 +658,7 @@ export function createChatSessionController(
           // above, so a Ctrl-C before adoption had nothing to interrupt;
           // re-read the request here and let it land on the run the user
           // asked to continue.
-          if (session.stopRequested) interruptActiveRun();
+          if (session.stopRequested) interruptActiveRun(resumed);
 
           // The transcript and the work plan are the fold's: the TUI
           // subscribes the run's aggregate and renders `transcript.rows`, and
