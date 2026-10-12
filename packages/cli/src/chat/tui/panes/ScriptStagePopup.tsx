@@ -12,6 +12,7 @@ import { Box, Text, useInput, useWindowSize } from 'ink';
 // Local imports - TUI primitives
 import { isCtrlInput, isEscapeInput } from '@cli/tui/inputKeys';
 import { ReaderPanel, readerLayout } from '@cli/tui/ui/BorderedPanel';
+import { CROSS, SKIP_CIRCLE, TICK } from '@cli/tui/ui/glyphs';
 import { KeyHints, type KeyHint } from '@cli/tui/ui/KeyHints';
 import { Select, type SelectItem } from '@cli/tui/ui/Select';
 import {
@@ -51,11 +52,11 @@ const STATUS_GLYPH = {
   queued: '○',
   running: '◐',
   interrupted: '◌',
-  finished: '✓',
+  finished: TICK,
   reused: '↺',
-  skipped: '⊘',
-  cancelled: '⊘',
-  failed: '✗',
+  skipped: SKIP_CIRCLE,
+  cancelled: SKIP_CIRCLE,
+  failed: CROSS,
   'not run': '·',
 } as const satisfies Record<ScriptCallView['status'], string>;
 
