@@ -18,6 +18,7 @@ import type { SessionHandle } from '@agent/runtime/SessionHandle';
 
 import { emitAppSignal } from '@eventBus/AppSignals';
 import { withLogChannel } from '@logger/effectLog';
+import { PrunedNestedMap } from '@texra/utils/core/prunedNestedMap';
 import type { Disposable } from '@texra-ai/harness';
 import type { RunId } from '@texra-ai/harness/schemas';
 
@@ -61,7 +62,7 @@ interface BoundSubscription {
 }
 
 export class RunSubscriptionRegistry<K extends string, Input> {
-  private readonly perRun = new Map<RunId, Map<K, BoundSubscription>>();
+  private readonly perRun = new PrunedNestedMap<RunId, K, BoundSubscription>();
   private readonly releaseHooks = new Map<SessionHandle, () => void>();
   private readonly keysListener: Disposable;
   /** The polling source this registry binds runs to. */
@@ -86,7 +87,7 @@ export class RunSubscriptionRegistry<K extends string, Input> {
     this.keysListener.dispose();
     for (const detach of this.releaseHooks.values()) detach();
     this.releaseHooks.clear();
-    const bindings = [...this.perRun.values()].flatMap((bound) => [
+    const bindings = [...this.perRun.groups()].flatMap(([, bound]) => [
       ...bound.values(),
     ]);
     this.perRun.clear();
@@ -107,8 +108,7 @@ export class RunSubscriptionRegistry<K extends string, Input> {
   ): Effect.Effect<boolean, never, GitHubServices> {
     return Effect.suspend(() => {
       const key = this.opts.keyOf(input);
-      const bound = this.perRun.get(runId) ?? new Map<K, BoundSubscription>();
-      const existing = bound.get(key);
+      const existing = this.perRun.get(runId, key);
       if (existing) {
         this.ensureReleaseHook(session);
         const previousOwner = existing.owner;
@@ -124,7 +124,7 @@ export class RunSubscriptionRegistry<K extends string, Input> {
         // capture the binding and its owner now — bind() reassigns the owner
         // on rebind, and the delivery belongs to the session the event came
         // through. Only the delivery itself runs in the source-owned FiberSet.
-        const subscription = bound.get(key);
+        const subscription = this.perRun.get(runId, key);
         if (!subscription) return Effect.void;
         const owner = subscription.owner;
         // The identifiers ride in the message: the sink renders `data` with
@@ -160,8 +160,7 @@ export class RunSubscriptionRegistry<K extends string, Input> {
             onEvent,
             owner: session,
           };
-          bound.set(key, subscription);
-          this.perRun.set(runId, bound);
+          this.perRun.set(runId, key, subscription);
           this.ensureReleaseHook(session);
           return Effect.logInfo(
             `Bound subscription ${key} → run ${runId}`,
@@ -182,9 +181,8 @@ export class RunSubscriptionRegistry<K extends string, Input> {
   /** Returns true if a subscription existed and was removed. */
   unbind(runId: RunId, input: Input): boolean {
     const key = this.opts.keyOf(input);
-    const bound = this.perRun.get(runId);
-    const binding = bound && this.deleteBoundKey(runId, bound, key);
-    if (!bound || !binding) return false;
+    const binding = this.perRun.delete(runId, key);
+    if (!binding) return false;
     this.detachReleaseHookIfUnused(binding.owner);
     binding.disposable.dispose();
     this.emitBindingsChanged();
@@ -200,8 +198,8 @@ export class RunSubscriptionRegistry<K extends string, Input> {
     const canonicalKey = key as K;
     const removedBindings: BoundSubscription[] = [];
     const owners = new Set<SessionHandle>();
-    for (const [runId, bound] of [...this.perRun]) {
-      const binding = this.deleteBoundKey(runId, bound, canonicalKey);
+    for (const [runId] of [...this.perRun.groups()]) {
+      const binding = this.perRun.delete(runId, canonicalKey);
       if (!binding) continue;
       removedBindings.push(binding);
       owners.add(binding.owner);
@@ -220,7 +218,7 @@ export class RunSubscriptionRegistry<K extends string, Input> {
     keys: readonly K[] = this.opts.source.activeKeys(),
   ): SubscriptionBinding<K>[] {
     const runIdsByKey = new Map<K, RunId[]>();
-    for (const [runId, bound] of this.perRun) {
+    for (const [runId, bound] of this.perRun.groups()) {
       for (const key of bound.keys()) {
         const runIds = runIdsByKey.get(key);
         if (runIds) runIds.push(runId);
@@ -237,15 +235,14 @@ export class RunSubscriptionRegistry<K extends string, Input> {
     if (this.releaseHooks.has(session)) return;
     const detach = session.followUps.onClosed((closed) => {
       const runIds =
-        closed.kind === 'run' ? [closed.runId] : [...this.perRun.keys()];
-      const removed = runIds.flatMap((runId) => {
-        const bound = this.perRun.get(runId);
-        return bound === undefined
-          ? []
-          : [...bound]
-              .filter(([, binding]) => binding.owner === session)
-              .flatMap(([key]) => this.deleteBoundKey(runId, bound, key) ?? []);
-      });
+        closed.kind === 'run'
+          ? [closed.runId]
+          : [...this.perRun.groups()].map(([runId]) => runId);
+      const removed = runIds.flatMap((runId) =>
+        [...this.perRun.group(runId)]
+          .filter(([, binding]) => binding.owner === session)
+          .flatMap(([key]) => this.perRun.delete(runId, key) ?? []),
+      );
       if (removed.length === 0) return;
       this.detachReleaseHookIfUnused(session);
       for (const binding of removed) binding.disposable.dispose();
@@ -255,7 +252,7 @@ export class RunSubscriptionRegistry<K extends string, Input> {
   }
 
   private detachReleaseHookIfUnused(session: SessionHandle): void {
-    for (const bound of this.perRun.values()) {
+    for (const [, bound] of this.perRun.groups()) {
       for (const binding of bound.values()) {
         if (binding.owner === session) return;
       }
@@ -267,34 +264,16 @@ export class RunSubscriptionRegistry<K extends string, Input> {
   private pruneMissingSourceKeys(keys: readonly K[]): void {
     const active = new Set<string>(keys);
     const removedOwners = new Set<SessionHandle>();
-    for (const [runId, bound] of [...this.perRun]) {
+    for (const [runId, bound] of [...this.perRun.groups()]) {
       for (const key of [...bound.keys()]) {
         if (active.has(key)) continue;
-        const binding = this.deleteBoundKey(runId, bound, key);
+        const binding = this.perRun.delete(runId, key);
         if (!binding) continue;
         removedOwners.add(binding.owner);
       }
     }
     for (const owner of removedOwners) this.detachReleaseHookIfUnused(owner);
     if (removedOwners.size > 0) this.emitBindingsChanged();
-  }
-
-  /**
-   * Remove one binding, pruning the run's map (and, once empty, `perRun`
-   * itself) in the same step. The single place every unbind path shrinks the
-   * (runId, key) → binding maps — callers still own disposing the returned
-   * binding's `disposable`.
-   */
-  private deleteBoundKey(
-    runId: RunId,
-    bound: Map<K, BoundSubscription>,
-    key: K,
-  ): BoundSubscription | undefined {
-    const binding = bound.get(key);
-    if (!binding) return undefined;
-    bound.delete(key);
-    if (bound.size === 0) this.perRun.delete(runId);
-    return binding;
   }
 
   private emitBindingsChanged(): void {

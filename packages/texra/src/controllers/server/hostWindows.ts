@@ -34,6 +34,7 @@ import {
   PdfOpenFailed,
 } from '@agent/runtime/runtimePresentationEvents';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
+import { PrunedNestedMap } from '@texra/utils/core/prunedNestedMap';
 
 import {
   CALL_CAPABILITY,
@@ -131,12 +132,7 @@ export const makeHostWindows = Effect.sync((): HostWindows => {
   const windows = new Set<Window>();
   /** Every unanswered call's window, by call id. */
   const calls = new Map<string, Window>();
-  const staged = new Map<string, Map<string, Staged>>();
-  const stagedIn = (key: string) => {
-    const held = staged.get(key) ?? new Map<string, Staged>();
-    staged.set(key, held);
-    return held;
-  };
+  const staged = new PrunedNestedMap<string, string, Staged>();
 
   /** The window a call of `key`'s project goes to. */
   const target = (key: string, capability: HostCapability) => {
@@ -316,13 +312,12 @@ export const makeHostWindows = Effect.sync((): HostWindows => {
           window: undefined,
           seen: false,
         };
-        stagedIn(key).set(requestId, entry);
+        staged.set(key, requestId, entry);
         stage(entry, target(key, 'toolEdits'));
       },
       releaseToolEdit: (requestId) =>
         Effect.suspend(() => {
-          const entry = stagedIn(key).get(requestId);
-          stagedIn(key).delete(requestId);
+          const entry = staged.delete(key, requestId);
           return tell(liveWindow(entry), {
             kind: 'releaseToolEdit',
             requestId,
@@ -330,7 +325,7 @@ export const makeHostWindows = Effect.sync((): HostWindows => {
         }),
       approveToolEdit: (requestId) =>
         Effect.suspend(() => {
-          const window = liveWindow(stagedIn(key).get(requestId));
+          const window = liveWindow(staged.get(key, requestId));
           if (window === undefined) return Effect.succeed(false);
           // The window that staged it holds the user's edit, whichever
           // window is focused now.
@@ -383,7 +378,7 @@ export const makeHostWindows = Effect.sync((): HostWindows => {
           // none was, or by one that went) are staged here, so this
           // window's Approve reads the edit it shows.
           if (window.capabilities.has('toolEdits'))
-            for (const entry of stagedIn(window.key).values())
+            for (const entry of staged.group(window.key).values())
               if (liveWindow(entry) === undefined) stage(entry, window);
           return Stream.concat(
             Stream.succeed<HostFrame>({
@@ -422,13 +417,13 @@ export const makeHostWindows = Effect.sync((): HostWindows => {
         yield* Effect.forkScoped(
           Stream.runForEach(SubscriptionRef.changes(session.view.ref), (view) =>
             Effect.gen(function* () {
-              const held = stagedIn(key);
+              const held = staged.group(key);
               if (held.size === 0) return;
               const pending = new Set(view.requests.map((r) => r.requestId));
-              for (const [requestId, entry] of held) {
+              for (const [requestId, entry] of [...held]) {
                 if (pending.has(requestId)) entry.seen = true;
                 else if (entry.seen) {
-                  held.delete(requestId);
+                  staged.delete(key, requestId);
                   yield* tell(liveWindow(entry), {
                     kind: 'releaseToolEdit',
                     requestId,
@@ -446,7 +441,7 @@ export const makeHostWindows = Effect.sync((): HostWindows => {
     preview: (session, requestId) =>
       Effect.map(SubscriptionRef.get(session.view.ref), (view) =>
         view.requests.some((request) => request.requestId === requestId)
-          ? previewOf(stagedIn(session.roots.storage).get(requestId))
+          ? previewOf(staged.get(session.roots.storage, requestId))
           : null,
       ),
   };
