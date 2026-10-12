@@ -152,13 +152,13 @@ Re-scoped around the harness SDK per the pivot:
    open/read failures belong on Tier-1 is a ratification question.
 4. **The approval / interaction channel — built; ratify its defaults.** The
    channel already exists: the root entry exports `ApprovalHandler`,
-   `OpenOptions`, `PendingRequest`, and `RequestDecision`, and
-   `Sessions.open(roots, { approve })` (`effect/sessions.ts`) installs the
-   embedder's Effect handler for approvals, retries, and questions. Approval-
-   gated tools are refused only when the caller omits that handler — which is
-   why the headless Node default keeps the subagent boundary open. What is open
-   is whether the headless default and that refusal behavior are the ratified
-   contract, not whether the channel exists.
+   `SessionHost`, `PendingRequest`, and `RequestDecision`, and an embedder
+   installs its handler with `session.attach({ approve })` for a scope
+   (`effect/sessions.ts`) — `OpenOptions` on `Sessions.open` carries only
+   `persistent`, not the handler. Approval-gated tools are refused only when no
+   attached host answers — which is why the headless Node default keeps the
+   subagent boundary open. What is open is whether the headless default and that
+   refusal behavior are the ratified contract, not whether the channel exists.
 5. **The `AgentPlatform` roots coupling** (`effect/sessions.ts`; the interface
    now directly carries `roots` rather than `extends Platform`) that
    `2026-09-05` §4 proposes removing as consumers move to explicit sessions —
