@@ -1,4 +1,14 @@
+---
+created: 2026-10-11
+updated: 2026-10-12
+status: proposed
+---
+
 # TeXRA refactoring-debt audit
+
+> **Status:** proposed. A dated audit of candidate refactors; the verification
+> pass (2026-10-12) refuted the dedup findings, leaving the `Database.ts`
+> projection-runner extraction as the one live candidate. No code has landed.
 
 _Generated 2026-10-11 by a scheduled codebase scan. Three subagents scanned the
 harness, the app (`texra`/`llm`), and the three hosts (`extension`/`cli`/`desktop`)
@@ -20,9 +30,9 @@ in parallel; findings were cross-checked against the repo's own
 ## Headline
 
 The codebase is **well-disciplined, not messy in the usual sense**. Debt is not
-comment-marked (only 4 files carry any TODO/FIXME/HACK; zero `FIXME`/`HACK`/`XXX`),
-and the cross-cutting concerns you'd expect to be copy-pasted are already
-centralized:
+comment-marked (only 2 source files carry a `TODO`: `replacement/rulesRegex.ts`
+and `tools/claudeAgentConfig.ts`; zero carry `FIXME`/`HACK`/`XXX`), and the
+cross-cutting concerns you'd expect to be copy-pasted are already centralized:
 
 - error formatting → `@utils/errors/errorMessage` (279 uses)
 - JSON parsing → `@common/parsing/safeParseJson`
@@ -31,11 +41,12 @@ centralized:
 - cross-host rendering → `sharedHostRequests`, `@shared/transcript`, `@ui/markdown`
 - LLM wire transport → `packages/llm/src/api/transport.ts` + `assembleTurn` + `parts`
 
-So the remaining debt is **structural concentration** — a few god-files/factories
-and one genuine large-scale parallel-implementation pair — rather than scattered
-duplication. Net LOC savings are therefore moderate; the real payoff is
-maintainability, testability, and clearing the project's own grandfathered
-ratchet baselines (42 harness files are frozen over the 400-line bar).
+So the remaining debt is **structural concentration** — a few god-files/factories —
+rather than scattered duplication. (The scan initially flagged a "parallel
+CLI-agent pair" too, but verification found its shared core already extracted; see
+below.) Net LOC savings are therefore moderate; the real payoff is maintainability,
+testability, and clearing the project's own grandfathered ratchet baselines (41
+harness files are frozen over the 400-line bar in `file-size.json`).
 
 ---
 
@@ -100,13 +111,15 @@ ratchet baselines (42 harness files are frozen over the 400-line bar).
   three error-wrappers into one tagged-error helper.
 
 ### 4. CLI `createChatSessionController` — an 844-line factory function
-**Impact: high maintenance burden. Savings: ~50–100 net LOC. Effort: L. Confidence: verified.**
+**Impact: high maintenance burden. Savings: ~50–100 net LOC. Effort: L. Confidence: the function-length figure is ratchet-independent but `wc -l`-verified; the sibling counts below are hand-counted (corrected 2026-10-12).**
 
-- **Where:** `packages/cli/src/chat/chatSessionController.ts` (lines 309–1153) —
-  one function holding ~25 nested closures (`startRootRun`, `resume`,
-  `startSession`, `activateSkill`, …) over shared mutable state
+- **Where:** `packages/cli/src/chat/chatSessionController.ts` (lines 309–1153, an
+  844-line function) — one function holding ~25 nested closures (`startRootRun`,
+  `resume`, `startSession`, `activateSkill`, …) over shared mutable state
   (`preparingRoot`, `pendingSkillActivations`, …). Siblings in the same shape:
-  `runChatTui.tsx` `runChat` (~568 lines) and `App.tsx` (~549 lines, 17 hooks).
+  `runChatTui.tsx` `runChat` (733-line file) and `App.tsx` (697-line file, ~28
+  hook call sites across ~10 distinct hooks). `packages/cli/` is not covered by
+  `file-size.json`, so these are not ratchet-corroborated.
 - **What's messy:** The entire chat-session lifecycle lives in one closure sharing
   mutable vars — hard to test in isolation, high change-risk. This is the host-side
   twin of the harness god-files.
