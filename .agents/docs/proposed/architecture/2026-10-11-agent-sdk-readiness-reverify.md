@@ -226,8 +226,8 @@ public); it is not a routine edit.
 - The prior pass's `finalizeRunTerminalBody` single-caller item is **resolved**:
   no such symbol exists at this pin; `finalizeRunTerminal`
   (`AgentRunLifecycle.ts:113`) is already `Effect.uninterruptible`-wrapped and
-  has multiple consumers (`AgentRunLifecycle.ts`, `tools/delegation/childRun.ts`,
-  `shared/runs/taskGroupProjection.ts`). Dropped.
+  has two executable call sites (`AgentRunLifecycle.ts:276`,
+  `tools/delegation/childRun.ts:147`). Dropped.
 - `redaction.ts` `redactDisplayValue` docblock wording is slightly stale (claims
   "other callers hand it raw values"; its only production caller is
   `logSink.redactEntry`, though the raw-`Error` branch stays reachable). Not

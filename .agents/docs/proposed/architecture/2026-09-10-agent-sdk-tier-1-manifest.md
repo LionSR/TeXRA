@@ -61,8 +61,10 @@ The root entry **is** the Effect surface: the Promise/AsyncIterable rendering
 and the `/effect` subpath were deleted in the 2026-09-21 flip (rulings ledger's
 supersession of R1 boundary kind (c)); the scope owns each composition
 (`Sessions.layer`), and `RunFailure` reaches the embedder as the typed error it
-is. The `/plugins` entry is the extend surface the durable-harness pivot makes
-central.
+is. The **root entry** carries the extend contracts (`Plugin`, `Sessions.layer`)
+the durable-harness pivot makes central; the `/plugins` entry provides the
+built-in plugins (`harnessBuiltins`) and plugin-tool run services to compose
+with them.
 
 ## 2. The enumeration lives in the api-reports, not here
 
