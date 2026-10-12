@@ -949,7 +949,7 @@ describe('Sessions owner', () => {
                 group: 'running' as const,
                 readOnly: false,
               };
-              return [id, { ...started, actions: runActions(started) }];
+              return [id, { ...started, actions: runActions(started, false) }];
             }),
           ),
         }));
@@ -1865,7 +1865,8 @@ describe('the C1 event table and the C6 publisher', () => {
           });
         }).pipe(Effect.provide(substrate(storage)));
         // A fresh session over the store opens: the healthy run lists, and
-        // the damaged one lists too, shown damaged and read-only.
+        // the damaged one lists too, shown damaged and read-only, with
+        // delete its one way out of the list.
         yield* Effect.gen(function* () {
           const view = yield* SessionViewService;
           yield* settle(
@@ -1877,6 +1878,7 @@ describe('the C1 event table and the C6 publisher', () => {
           ).toMatchObject({
             readOnly: true,
             statusDetail: RUN_DAMAGED_MESSAGE,
+            actions: ['delete', 'openRunStorage', 'export', 'copy'],
           });
         }).pipe(
           Effect.provide(graph([], substrate(storage).pipe(Layer.orDie))),

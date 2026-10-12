@@ -993,6 +993,12 @@ show` print the same notice, and the new `texra agents customize`,
 
 ### Bug Fixes
 
+- **A task that can no longer be read can be deleted from the task list.**
+  A task whose saved history is damaged, or was written by an earlier
+  build in a format this one does not read, is listed as unreadable. It
+  used to offer only Open folder, Export and Copy, so it stayed in the
+  desktop and extension task lists for good. It now offers Delete as well,
+  unless another running TeXRA window holds it.
 - **A task whose end could not be saved no longer stays listed as
   running.** When only its result could not be saved, it ends as it did,
   its card says "Result lost" with the cause, and the task that started it

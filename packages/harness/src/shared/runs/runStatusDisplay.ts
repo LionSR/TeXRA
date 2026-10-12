@@ -126,10 +126,13 @@ export function runInterruptedMessage(): string {
 
 /** Banner copy for a run a resume found blocked: what it waits for, and
  *  whether it continues by itself then (`retry`: a resume was asked for). */
-export function runResumeBlockedMessage(
-  reason: ResumeBlocker,
-  retry: boolean,
-): string {
+export function runResumeBlockedMessage({
+  reason,
+  retry,
+}: {
+  readonly reason: ResumeBlocker;
+  readonly retry: boolean;
+}): string {
   const then = retry ? 'It continues once' : 'You can resume it once';
   switch (reason.kind) {
     case 'agentMissing':

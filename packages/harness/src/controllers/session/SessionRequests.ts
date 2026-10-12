@@ -501,9 +501,7 @@ export function sessionRequests(init: SessionRequestsInit): SessionRequests {
     // Listing-driven removal (`texra history delete`, the leftover-shell
     // sweep) acts through the registry's inactive-run step and the claim,
     // which refuse a run anything still holds. Deliberately not gated on
-    // `actions` either: an explicit delete is how a user clears a run this
-    // process cannot read (the UI never offers it), and the claim still
-    // protects a run a live process holds.
+    // `actions` either: the claim protects a run a live process holds.
     const admitted = yield* admit(deps, { kind: 'run.delete', runId });
     if (admitted.startCommit !== expectedStartCommit) {
       return yield* Effect.fail(
