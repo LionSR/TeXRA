@@ -9,14 +9,13 @@ import {
   firstFittingCandidate,
   textDisplayWidth,
 } from '@cli/runtime/terminalText';
-import { STATUS_DOT } from '@cli/tui/ui/glyphs';
 import {
   APPROVE_SESSION_ACTION,
   type SurfaceDecision,
-} from '@shared/session/approvalDecision';
+} from '@texra/shared/session/surfaceDecision';
 import { DELEGATION_APPROVAL_COPY } from '@ui/copy/delegationApproval';
 
-const APPROVAL_PULSE_FRAMES = [STATUS_DOT, '○'] as const;
+const APPROVAL_PULSE_FRAMES = ['●', '○'] as const;
 
 export type ConfirmCardRejectionMode = 'feedback' | 'immediate';
 
