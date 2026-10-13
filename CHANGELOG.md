@@ -24,10 +24,11 @@ All notable changes to this project will be documented in this file.
   stamps them now; earlier runs keep what they recorded.
 - **A document task checks its files at its first revision, whichever
   surface launched it.** A task over input files that no longer exist, or
-  with a context `.bib` over 100 KB, fails there with the same message a
-  delegated task got; launches from the main view, the CLI, the desktop app
-  and VS Code are now checked too. Its Input, Context and template-file
-  cards appear under "Revision 1".
+  with a context `.bib` over 100 KB, fails there; the `.bib` refusal now
+  names the file by its absolute path. Launches from the main view, the CLI,
+  the desktop app and VS Code are now checked too, and a missing context
+  file is still skipped. Its Input, Context and template-file cards appear
+  under "Revision 1".
 - **SDK: an embedder's setting rows go to its platform, not its
   composition.** `Sessions.layer` no longer takes `settings`; pass them to
   `nodePlatform({ settings })`. A `ConfigProvider` of your own must now

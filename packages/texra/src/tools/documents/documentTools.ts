@@ -42,7 +42,6 @@ import {
   openDocuments,
   rejectsOnCompileFailure,
   revisionPrompt,
-  taskInputs,
   type Documents,
 } from '@texra/tools/documents/documentState';
 import { rejectOversizedBibAttachments } from '@texra/tools/documents/documentTask';
@@ -94,7 +93,8 @@ const autoOpensPdf = (docs: Documents) =>
  * What the first revision checks before the task does any work, whichever
  * launcher or resume reached it: the documents it revises exist, and no
  * context `.bib` is too large to attach whole. It writes the files-loaded
- * cards of the task's inputs, context and template files. An error result
+ * cards of the task's inputs and context (its template files' card comes
+ * with the revision's prompt, which reads them). An error result
  * fails the call, and with it the task.
  */
 const openTask = Effect.fn('documents.openTask')(function* (docs: Documents) {
@@ -117,15 +117,15 @@ const openTask = Effect.fn('documents.openTask')(function* (docs: Documents) {
       ),
     );
   const contexts = yield* located(config.contextFiles);
+  // A missing context file is skipped, as the prompt skips it; only the
+  // files found are measured.
   const oversized = yield* rejectOversizedBibAttachments(
     docs.deps.roots.workspace,
-    contexts.map((context) => context.absolutePath),
+    contexts.filter((context) => context.ok).map((c) => c.absolutePath),
   );
   if (oversized) return oversized;
   logFileCategory(logger, 'Input Files', inputs);
   logFileCategory(logger, 'Context Files', contexts);
-  const { entries } = yield* taskInputs(docs);
-  if (entries.length > 0) logFilesLoaded(logger, entries);
   return null;
 });
 
@@ -158,6 +158,8 @@ export const DocumentContextTool = defineTool({
         ),
       );
     const revised = yield* revisionPrompt(docs, revision);
+    if (revision === 0 && revised.loaded.length > 0)
+      logFilesLoaded(docs.run.logger, revised.loaded);
     // The critic's review of the last revision, after this one's request.
     const prompt = critique?.trim()
       ? `${revised.prompt}\n\nA reviewer read your last revision. Apply the corrections that hold, and the suggested improvement where it serves this request:\n<critique revision="${revision}">\n${critique.trim()}\n</critique>`

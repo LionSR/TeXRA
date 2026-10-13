@@ -69,7 +69,7 @@ return (await tools.document_propose({})).documents;`;
 }
 
 /** What a launch as an agent's document task adds to its config. */
-export type DocumentTaskPatch = Required<
+type DocumentTaskPatch = Required<
   Pick<AgentConfig, 'script' | 'outputFiles' | 'agentSource'>
 >;
 

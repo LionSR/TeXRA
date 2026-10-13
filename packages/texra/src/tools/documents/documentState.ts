@@ -212,7 +212,7 @@ export const revisionPrompt = Effect.fn('documents.revisionPrompt')(function* (
   revision: number,
 ) {
   const { task, run, deps } = docs;
-  const { inputs } = yield* taskInputs(docs);
+  const { inputs, entries } = yield* taskInputs(docs);
   const fs = yield* FileSystem.FileSystem;
   const parts: string[] = [];
   const files = revisionFiles(docs, revision);
@@ -250,6 +250,8 @@ export const revisionPrompt = Effect.fn('documents.revisionPrompt')(function* (
   return {
     prompt: parts.filter(Boolean).join('\n\n'),
     media: yield* revisionMedia(docs, revision, files),
+    /** The task's template files the prompt read, for their card. */
+    loaded: entries,
   };
 });
 
