@@ -27,10 +27,11 @@ Status: proposed
 >    `Scope`, `Session.resume`) — not a frozen static-export list. The standing
 >    readiness re-verification
 >    ([`2026-10-12-agent-sdk-readiness-reverify.md`](./2026-10-12-agent-sdk-readiness-reverify.md),
->    §Carried.3) therefore calls for re-scoping this manifest around the harness SDK
->    rather than ratifying the old static enumeration — which would pin deleted
->    names (`ToolHost`, `PlatformConflict`) and omit the extend surface
->    (`Plugin`, `Composition`) the pivot is built on.
+>    §Carried.3) is the standing re-verification of that surface; this rework
+>    re-scopes the manifest around the harness SDK rather than ratifying the old
+>    static enumeration — which would pin deleted names (`ToolHost`,
+>    `PlatformConflict`) and omit the extend surface (`Plugin`, `Composition`)
+>    the pivot is built on.
 >
 > The earlier revisions re-enumerated the surface by hand four times
 > (`cf88d2d`, then `697663eff1`, then the 2026-09-21 flip, then the

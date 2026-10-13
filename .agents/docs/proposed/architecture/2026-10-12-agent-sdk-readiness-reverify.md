@@ -103,12 +103,18 @@ an added indirection tier — one `Effect` per run appending one history, one
 
 2. **Audit for unnecessary abstraction.** Done, four ways.
    - **Agent core.** One run-history writer intact: `makeRunHistory`
-     (`runtime/RunHistory.ts`) is the sole implementation; `appendBatch`'s live
-     call site is `RunCell.append` (the one writer, with the `SynchronizedRef`
-     lock, fold-back and uninterruptible mask), and `finalizeRun`
-     (`storage/runLifecycle.ts`, "the one writer of a run's end") appends through
-     the same cell door. `forkRun.ts` is the one-time atomic birth of a _new_
-     forked run, not a second writer into an existing one. `SessionHandle`
+     (`runtime/RunHistory.ts`) is the sole implementation, and after the D1/D2
+     "one door, one cell" refactor every live write funnels through
+     `RunCell.append` → its internal `commit` → `sessionLog.transact` (the one
+     writer, with the `SynchronizedRef` lock, fold-back and uninterruptible
+     mask); `finalizeRun` (`storage/runLifecycle.ts`, "the one writer of a run's
+     end") appends through that same cell door. `forkRun.ts` is the one-time
+     atomic birth of a _new_ forked run, not a second writer into an existing
+     one. The one documented, guarded exception is `endIn`'s degraded "run ends
+     unloaded" path (`runLifecycle.ts:285`), which writes the closing rows
+     _beside_ the cell when the cell is unloadable — so the single-writer
+     invariant is one cell door plus that loud fallback, not literally every row
+     through the cell. `SessionHandle`
      remains a flat record of owner fields that "does no work and forwards
      nothing" (`SessionHandle.ts:342-372`). `ChildRuns` (lane E5,
      `runtime/ToolServices.ts`) is a capability-narrowing door that hides
@@ -183,17 +189,18 @@ an added indirection tier — one `Effect` per run appending one history, one
    priority; file into `2026-09-20-llm-package-hardening.md` only if the
    relocation is ever wanted.
 
-3. **Re-scope the Tier-1 manifest around the harness SDK — overdue.** The
-   2026-09-10 static-export manifest (`2026-09-10-agent-sdk-tier-1-manifest.md`,
-   status: proposed) still names the **old package** throughout (`packages/agent`,
-   `@texra-ai/agent`, `@texra-ai/agent/{schemas,node}`, `typecheck:agent`), a
-   package that no longer exists, and carries the earlier drift: it lists
-   `ToolHost` as a root type (a `ToolHost` grep of `packages/harness/src` is empty)
-   and omits `Plugin`, `Composition`, `InlinePersona`, which the live root entry
-   (`packages/harness/src/index.ts`) now carries as the harness extend surface.
-   Ratifying it as-is would pin a dead package name and a deleted type, so it
-   should be retired or rewritten around `@texra-ai/harness` and its entries
-   (`.`, `/schemas`, `/plugins`, `/node`) — durable-harness program, not this
+3. **Ratify the re-scoped Tier-1 manifest — the re-scope has landed; only the
+   ratification is open.** The 2026-09-10 manifest
+   (`2026-09-10-agent-sdk-tier-1-manifest.md`, status: proposed) carries a
+   **2026-10-12 rework** that already did the re-scoping this charter's earlier
+   passes asked for: it removed the hand-maintained static export inventory
+   rather than re-pin it a fourth time, renamed the surface to `@texra-ai/harness`
+   / `packages/harness`, and delegated the authoritative, non-drifting
+   enumeration to the committed `config/api-reports/` snapshots. So the manifest
+   no longer names a dead package or pins deleted types — the stale-coordinate
+   problem the prior passes flagged is resolved. What stays **open** is the
+   manifest's own stated gap: its §ratification (what Tier-1 keeps, seals, or
+   sheds) is "open, awaiting an owner" — the durable-harness program, not this
    routine. The shed/leak questions that survive the pivot are unchanged:
    `SettingHost` (TeXRA's internal host enum reaching the public tool-definition
    contract via `unavailableHosts`) and the `MapToolRegistry`/`IToolRegistry`
@@ -235,8 +242,10 @@ an added indirection tier — one `Effect` per run appending one history, one
 No refactor to land autonomously from this charter. "Agent SDK readiness" tracks
 the durable-harness program (`2026-10-02-durable-harness.md` H1–H6), which
 continued through its D/E/G lanes this delta; the one owner-level action the
-surface audit asks for is to **re-scope the Tier-1 manifest around the harness
-SDK rather than ratify the 2026-09-10 static list** (§Carried.3) — overdue. The
+surface audit asks for is to **ratify the already-re-scoped Tier-1 manifest**
+(§Carried.3) — its 2026-10-12 rework landed the re-scope around `@texra-ai/harness`
+and delegated enumeration to `config/api-reports/`, leaving only the owner
+ratification open. The
 logger sink→Layer step (§Carried.1) rides
 `2026-09-21-effect-design-synchronous-facades.md`; the two `packages/llm` ambient
 reads (§Carried.2) are effectively closed as refusal guards. **Separately, the
