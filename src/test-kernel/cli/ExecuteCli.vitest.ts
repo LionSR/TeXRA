@@ -111,11 +111,18 @@ const agentRunsFake = {
     }).pipe(
       Effect.map((): Run => ({
         runId: input.request.runId as RunId,
+        // A stopped run commits its CANCELLED end and re-raises the stop.
         result: Effect.tryPromise({
           try: () => mocks.rootLaunch(input.request, input),
           catch: (cause) =>
             new RunFailure({ cause, message: toErrorMessage(cause) }),
-        }),
+        }).pipe(
+          Effect.flatMap((ended): Run['result'] =>
+            ended === STOPPED
+              ? Effect.interrupt
+              : Effect.succeed(ended as Effect.Success<Run['result']>),
+          ),
+        ),
         view: Stream.empty,
         events: Stream.empty,
         interrupt: Effect.void,
@@ -183,6 +190,10 @@ const COMPLETED_RUN = {
 
 /** What a run the shutdown stopped ends with. */
 const CANCELLED_RUN = { ...COMPLETED_RUN, outcome: 'cancelled' } as const;
+
+/** A run the shutdown stopped whose result re-raises the stop, as
+ *  `AgentRunLifecycle` does once its CANCELLED end is committed. */
+const STOPPED = Symbol('stopped');
 
 function baseRequest(): CliRequest {
   return { config: {}, runId: 'exec-1' } as unknown as CliRequest;
@@ -655,7 +666,7 @@ describe('executeCliRequest', () => {
       });
 
       mockCancelledOutcome();
-      hangingRun.resolve(CANCELLED_RUN);
+      hangingRun.resolve(STOPPED);
       yield* Deferred.await(finalized);
       yield* settle;
       expect(onInterruptedRunFinalized).toHaveBeenCalledOnce();
@@ -672,13 +683,8 @@ describe('executeCliRequest', () => {
         'exec-1',
       );
       expect(yield* Fiber.join(run)).toEqual({
-        ok: true,
-        outcomePersisted: true,
-        result: {
-          outcome: 'cancelled',
-          output: { response: '', files: [] },
-          runId: 'exec-1',
-        },
+        ok: false,
+        exitCode: CliExitCode.Interrupted,
       });
     }),
   );
