@@ -139,8 +139,9 @@ function deliveredFilePath(
     : workspaceRelativePath(roots.workspace, output.originalPath);
 }
 
-/** A document's count over the calls that wrote it: a call that reports
- *  none (an agent's edit) leaves the total unknown from then on. */
+/** A document's count over the calls that wrote it: the counted calls
+ *  add up, and a call that reports none (an agent's edit) leaves the
+ *  total unknown until a later call reports one, which starts it over. */
 const summed = (
   prior: number | null | undefined,
   next: number | null,
