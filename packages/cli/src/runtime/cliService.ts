@@ -42,6 +42,7 @@ import type {
   ProjectDatabases,
 } from '@shared/session/database';
 import { ownerIdentity, type OwnerId } from '@shared/schemas';
+import { isLiveRun } from '@shared/session/sessionView';
 import type { EditorHostShape } from '@texra/tools/editorHost';
 import type { ServiceInfo } from '@texra/controllers/server/protocol';
 import type {
@@ -201,17 +202,22 @@ export const cliServiceProjects = Effect.fn('cliServiceProjects')(function* (
       const project = projects.get(root);
       if (project === undefined || project.leases > 0) return undefined;
       const now = Date.now();
-      if (project.handle.runs.get().length > 0) {
+      const { session } = project;
+      if (
+        [...session.view.current().runs.values()].some(
+          (run) => run.ownedHere && isLiveRun(run),
+        )
+      ) {
         project.idleSince = now;
         return undefined;
       }
       if (now - project.idleSince < idleMs) return undefined;
       projects.delete(root);
       // The stores close even if the session's close fails.
-      yield* (yield* SessionOwner)
-        .close(project.handle.roots.storage)
+      yield* sessions
+        .close(session.roots)
         .pipe(Effect.ensuring(Scope.close(project.scope, Exit.void)));
-      return project.handle;
+      return session;
     }).pipe(withPerKeyLane(lanes, root), Effect.provideContext(services));
   return {
     storageRoot,
@@ -227,9 +233,9 @@ export const cliServiceProjects = Effect.fn('cliServiceProjects')(function* (
     opened: Effect.sync(
       () =>
         new Map(
-          [...projects.values()].map(({ handle }) => [
-            handle.roots.storage,
-            handle,
+          [...projects.values()].map(({ session }) => [
+            session.roots.storage,
+            session,
           ]),
         ),
     ),
