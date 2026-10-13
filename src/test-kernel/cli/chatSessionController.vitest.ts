@@ -828,7 +828,13 @@ describe('createChatSessionController', () => {
       const previousMetadata = sessionMeta.get();
       installResumeRunStore(makeResumeConfig({ cli: { teamId: 'physicist' } }));
       // Both runtime refusals precede the hook that adopts the target run.
-      mocks.resumeRun.mockReturnValueOnce(Effect.succeed({ failed: failure }));
+      // The session's refusal, in its words, as `sessionAgentRuns` answers it.
+      mocks.resumeRun.mockReturnValueOnce(
+        Effect.succeed({
+          failed: failure,
+          message: describeFollowUpFailure(failure),
+        }),
+      );
       const ctrl = createChatSessionController(makeInit({ session }));
 
       await runResume(ctrl, 'ec0001' as RunId);

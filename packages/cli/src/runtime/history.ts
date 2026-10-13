@@ -11,7 +11,7 @@ import {
   type AgentRunListingEntry,
   type RunResult,
 } from '@agent/storage';
-import type { AgentConfig, SessionHandle } from '@agent/runtime';
+import type { SessionHandle } from '@agent/runtime';
 import type { CliNdjsonRecord } from '@cli/schemas/cliOutput';
 import {
   RunIdSchema,
@@ -49,6 +49,7 @@ import {
   formatConversationPreview,
   formatConversationTranscript,
 } from './history/conversationFormat';
+import type { AgentConfig } from '@texra-ai/harness/schemas';
 import type { SessionOpenError } from '@texra-ai/harness';
 
 /** A run's generated files and its edited workspace files render alike.

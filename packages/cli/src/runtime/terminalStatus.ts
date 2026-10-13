@@ -1,7 +1,7 @@
 import { Effect } from 'effect';
 
 import { getRunRecords } from '@agent/storage';
-import type { RunEndResult, SessionHandle } from '@agent/runtime';
+import type { SessionHandle } from '@agent/runtime';
 import { readInstalledPluginLoad } from '@common/plugins/pluginTrust';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import { RUN_OUTCOME, type RunOutcome, RUN_PHASE } from '@shared/schemas';
@@ -9,7 +9,7 @@ import { runOutcomeToCliRunStatus } from '@shared/runs/runStatus';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { CliExitCode } from './exitCodes';
-import type { DatabaseReadFailed } from '@texra-ai/harness';
+import type { DatabaseReadFailed, RunEndResult } from '@texra-ai/harness';
 import type { CliPluginPin } from '../schemas/cliOutput';
 
 export type ExecuteAgentResult = RunEndResult;

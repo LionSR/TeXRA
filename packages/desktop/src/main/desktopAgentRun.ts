@@ -14,14 +14,14 @@ import {
   type ProcessRuntime,
   type Run,
   withProcessServices,
-} from '@texra-ai/harness';
-import {
   type RunEndResult,
   type HostPresentation,
-  type PresentationEventHandlers,
   type RuntimePresentationEvent,
   type RuntimePresentationEventPayloads,
-  type ValidatedRunRequest,
+} from '@texra-ai/harness';
+import type {
+  PresentationEventHandlers,
+  ValidatedRunRequest,
 } from '@agent/runtime';
 import { emitAppSignal } from '@eventBus/AppSignals';
 import type { RequestOpenFilePayload, RunId } from '@shared/schemas';

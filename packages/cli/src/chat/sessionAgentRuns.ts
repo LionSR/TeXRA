@@ -7,33 +7,42 @@
 import { Effect } from 'effect';
 
 import type {
-  ResumeRunOptions,
-  ResumeRunResult,
-  RootLaunch,
+  ResumeRefused,
+  Run,
   RunEndResult,
-} from '@agent/runtime';
-import type { ProcessServices, Session, SessionOwner } from '@texra-ai/harness';
-import type { RunId } from '@texra-ai/harness/schemas';
+  Session,
+} from '@texra-ai/harness';
+import type { AgentConfig, RunId } from '@texra-ai/harness/schemas';
 
-/** A resume's answer: the run's, or the session's refusal in its own
- *  words (a run held elsewhere names its holder). */
+import type { launchApproval } from '../runtime/cliContext';
+
+/** A chat round's launch: its configuration under the id the chat minted,
+ *  and the launch's facts: its approval (`launchApproval`), the round it
+ *  continues, and what runs once the session admits it. */
+interface ChatLaunch {
+  readonly request: { readonly config: AgentConfig; readonly runId: RunId };
+  readonly options: ReturnType<typeof launchApproval> & {
+    readonly continues?: RunId;
+    readonly onAdmitted?: (runId: RunId) => Effect.Effect<void, Error>;
+  };
+}
+
+/** A resume's answer: the admitted run's end, or the session's refusal in
+ *  its own words (a run held elsewhere names its holder). */
 type ChatResumeResult =
-  | ResumeRunResult
-  | {
-      readonly failed: Extract<ResumeRunResult, { failed: unknown }>['failed'];
-      readonly message: string;
-    };
+  | { readonly started: true; readonly completion: Run['result'] }
+  | { readonly failed: ResumeRefused['reason']; readonly message: string };
 
 /** The run boundary `ChatSessionController` takes. */
 export interface ChatAgentRuns {
-  /** A root launch on the chat's session. */
+  /** A round's launch on the chat's session. */
   readonly launch: (
-    launch: RootLaunch,
-  ) => Effect.Effect<Pick<RunEndResult, 'outcome'>, Error, SessionOwner>;
+    launch: ChatLaunch,
+  ) => Effect.Effect<Pick<RunEndResult, 'outcome'>, Error>;
   readonly resume: (
     runId: RunId,
-    options: Pick<ResumeRunOptions, 'onAdmitted'>,
-  ) => Effect.Effect<ChatResumeResult, Error, ProcessServices>;
+    options: Pick<ChatLaunch['options'], 'onAdmitted'>,
+  ) => Effect.Effect<ChatResumeResult, Error>;
   /** Resume a run beside the chat (a document task), which the chat does
    *  not adopt; it fails with the session's refusal, in its words. */
   readonly resumeBeside: (runId: RunId) => Effect.Effect<void, Error>;
@@ -68,9 +77,8 @@ export function sessionAgentRuns(session: Session): ChatAgentRuns {
       resume(runId).pipe(
         Effect.flatMap((run) =>
           (options.onAdmitted?.(run.runId) ?? Effect.void).pipe(
-            Effect.as<ResumeRunResult>({
+            Effect.as<ChatResumeResult>({
               started: true,
-              delivered: true,
               completion: run.result,
             }),
           ),

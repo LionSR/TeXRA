@@ -2,11 +2,7 @@ import * as path from 'node:path';
 
 import { Effect, FileSystem, Path, PlatformError } from 'effect';
 
-import {
-  withWorkflowDiffs,
-  type AgentConfigPayload,
-  type RunEndResult,
-} from '@agent/runtime';
+import { withWorkflowDiffs } from '@agent/runtime';
 import { isNotADirectoryError } from '@common/errors';
 import type {
   OutputFileSummary,
@@ -36,6 +32,8 @@ import { CliUsageError, type CliContext } from './cliContext';
 import { writeTextStderr } from './logSinks';
 import { type CliRunResult } from './terminalStatus';
 import { STDIN_WORKFLOW_INPUT_BASENAME } from './workflowInputs';
+import type { RunEndResult } from '@texra-ai/harness';
+import type { AgentConfigPayload } from '@texra-ai/harness/schemas';
 
 /** Resolve a user-supplied path against `cwd` when it isn't already absolute. */
 function joinCwdRelative(target: string, cwd: string): string {

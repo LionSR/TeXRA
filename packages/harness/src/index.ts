@@ -40,6 +40,13 @@ export type {
   TranscriptView,
 } from './effect/sessions.js';
 export type { InlinePersona } from '@shared/schemas';
+// What `SessionHost.emit` takes and answers: the notices a session's runs
+// ask a host to present.
+export type {
+  HostPresentation,
+  RuntimePresentationEvent,
+  RuntimePresentationEventPayloads,
+} from '@agent/runtime/runtimePresentationEvents';
 
 // The process the hosts compose and the session owner it serves: one
 // `processLayer` for every TeXRA host and for `Sessions.layer` above.

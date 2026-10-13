@@ -2,7 +2,7 @@ import * as path from 'node:path';
 import { Effect, FileSystem, Result } from 'effect';
 
 import { deriveResumability, getRunRecords } from '@agent/storage';
-import { type AgentConfigPayload, type SessionHandle } from '@agent/runtime';
+import type { SessionHandle } from '@agent/runtime';
 import { DEFAULT_TOOL_CONFIG, RUN_OUTCOME, type RunId } from '@shared/schemas';
 import {
   DatabaseClaimRefused,
@@ -73,6 +73,7 @@ import {
   resumeWorkflowOutputDirectory,
   resumeWorkflowOutputFile,
 } from '../runtime/workflowOutput';
+import type { AgentConfigPayload } from '@texra-ai/harness/schemas';
 import type { SessionOpenError } from '@texra-ai/harness';
 
 const MULTI_INPUT_OUTPUT_MESSAGE =

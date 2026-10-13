@@ -9,7 +9,11 @@ import {
   Stream,
 } from 'effect';
 
-import { RUN_OUTCOME, type RunId } from '@texra-ai/harness/schemas';
+import {
+  RUN_OUTCOME,
+  type RunId,
+  type AgentConfigPayload,
+} from '@texra-ai/harness/schemas';
 import {
   hasErrorPresentationClaimed,
   RunFailure,
@@ -19,14 +23,13 @@ import {
   type Run,
   type Session,
   type SessionOwner,
+  type StartInput,
+  SESSION_CLOSE_DEADLINE_MS,
 } from '@texra-ai/harness';
 import {
-  SESSION_CLOSE_DEADLINE_MS,
   type SessionHandle,
   terminalFailurePresented,
   validateRunRequest,
-  type AgentConfigPayload,
-  type RootLaunchRequest,
 } from '@agent/runtime';
 import { deriveResumability, getRunRecords } from '@agent/storage';
 import { AgentError } from '@common/errors';
@@ -75,11 +78,17 @@ import {
  *  the process's session owner. */
 export type CliRunServices = ProcessServices | SessionOwner;
 
+/** What a headless run starts: a host's whole configuration (the
+ *  `StartInput` arm a host launches with), under the id the CLI minted. */
+type CliRunRequest = Required<
+  Pick<Extract<StartInput, { readonly config: unknown }>, 'config' | 'runId'>
+>;
+
 /** What a headless run asks its session for: the request, the approval it
  *  rides (`launchApproval`), and whether the run parks for input after a
  *  cycle. */
 interface CliLaunchInput {
-  readonly request: RootLaunchRequest & { readonly runId: RunId };
+  readonly request: CliRunRequest;
   readonly approval: ReturnType<typeof launchApproval>;
   readonly interactive: boolean;
 }
@@ -269,7 +278,7 @@ export function executeCliRequest(
   // the session's registry under it (`runs.stop`), which the launch tracks
   // (or attaches to a parked predecessor) before the first resume lineage
   // read, so this kill has a target from that first await on.
-  request: RootLaunchRequest & { readonly runId: RunId },
+  request: CliRunRequest,
   runContext: CliContext,
   options: CliExecuteOptions,
 ): Effect.Effect<

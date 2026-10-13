@@ -8,7 +8,11 @@
 import { defineCommand } from 'citty';
 import { Effect, Fiber } from 'effect';
 
-import { AgentConfigSchema, type AgentConfigPayload } from '@agent/runtime';
+import {
+  type RunId,
+  AgentConfigSchema,
+  type AgentConfigPayload,
+} from '@texra-ai/harness/schemas';
 import {
   TEXRA_APPROVAL_POLICY_CONFIG_KEY,
   type TexraApprovalPolicy,
@@ -40,7 +44,6 @@ import { GLOBAL_ARGS, optString } from './_helpers/globalArgs';
 import { emitCliResult } from './_helpers/output';
 import { formatToolUseAgentRunInstruction } from './_helpers/runInstructions';
 import type { Outcome, RuntimeRequest } from '@texra-ai/harness';
-import type { RunId } from '@texra-ai/harness/schemas';
 
 /** The text width an attach lays rows out at when stdout is not a terminal,
  *  so a saved transcript does not depend on who saved it. */
