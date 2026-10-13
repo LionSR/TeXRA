@@ -43,7 +43,8 @@ const APPROVAL_HANDLER_TIMEOUT = Duration.minutes(10);
 const DECIDE_RETRY = Schedule.exponential('100 millis').pipe(Schedule.jittered);
 
 /** The handler's decision on `pending`, or a denial naming why it gave
- *  none: a failure, a throw, or no answer in time. */
+ *  none: a failure, a throw, or no answer in time. A withdrawal (the
+ *  prompt interrupted) stays one: it is no decision at all. */
 const decisionOf = (
   host: AnsweringHost,
   pending: PendingRequest,
@@ -52,16 +53,18 @@ const decisionOf = (
   Effect.suspend(() => host.approve(pending)).pipe(
     Effect.timeout(APPROVAL_HANDLER_TIMEOUT),
     Effect.catchCause((cause) =>
-      Effect.logWarning(
-        `The approval handler gave no decision on request ${pending.requestId}; it is denied`,
-      ).pipe(
-        Effect.annotateLogs({ data: cause }),
-        withLogChannel(CHANNEL),
-        Effect.as<RequestDecision>({
-          action: 'deny',
-          reason: `The approval handler gave no decision: ${toErrorMessage(Cause.squash(cause))}`,
-        }),
-      ),
+      Cause.hasInterruptsOnly(cause)
+        ? Effect.interrupt
+        : Effect.logWarning(
+            `The approval handler gave no decision on request ${pending.requestId}; it is denied`,
+          ).pipe(
+            Effect.annotateLogs({ data: cause }),
+            withLogChannel(CHANNEL),
+            Effect.as<RequestDecision>({
+              action: 'deny',
+              reason: `The approval handler gave no decision: ${toErrorMessage(Cause.squash(cause))}`,
+            }),
+          ),
     ),
   );
 
