@@ -20,7 +20,7 @@ import { testRuntime } from '@test/support/testProcessRuntime';
 import { createProcessSession } from '@test/support/sessionTestUtils';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
 import { seedRunRecord as commitRunRecord } from '@test/support/runRecordSeeds';
-import { documentTaskConfig } from '@texra/agent/output/documentRecipe';
+import { asDocumentTask } from '@test/support/ProgressControllerHarnesses';
 
 const mocks = vi.hoisted(() => ({
   assertOutputDirAvailable: vi.fn(),
@@ -69,7 +69,7 @@ const TOOL_USE_CONFIG = AgentConfigSchema.parse({
 });
 
 const WORKFLOW_CONFIG = AgentConfigSchema.parse(
-  documentTaskConfig({
+  asDocumentTask({
     agent: 'correct',
     model: 'google/gemini-3.1-pro-preview',
   }),

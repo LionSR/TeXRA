@@ -4,19 +4,19 @@
 `vscode`, no `packages/*` imports). Three modules remain, named after the
 concern they carry:
 
-| Module        | Concern                          | Contents                                                                                                                                                                                                      |
-| ------------- | -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `definition/` | What an agent **is** (configure) | `AgentConfig` (launch/run configuration + payload), `RunRecord`; the definition format itself (`AgentDefinition`, `Persona`, `DocumentTask`) is a schema in `@shared/schemas` (`agent.ts`)                    |
-| `state/`      | Run-state snapshots              | `runRequests` (request validation)                                                                                                                                                                            |
-| `tools/`      | Tool contracts and tool calls    | `ToolTypes` (`ITool`, `IToolRegistry`, `MapToolRegistry`, `ToolContext`), `toolAttachmentExtraction`, `toolCallParsing` (duplicate-call partitioning and tool-call error normalization, used by the run loop) |
+| Module        | Concern                          | Contents                                                                                                                                                                                                            |
+| ------------- | -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `definition/` | What an agent **is** (configure) | `AgentConfig` (launch/run configuration + payload), `RunRecord`; the definition format itself (`AgentDefinition`, `Persona`) is a schema in `@shared/schemas` (`agent.ts`), a plugin's block its own (`AgentBlock`) |
+| `state/`      | Run-state snapshots              | `runRequests` (request validation)                                                                                                                                                                                  |
+| `tools/`      | Tool contracts and tool calls    | `ToolTypes` (`ITool`, `IToolRegistry`, `MapToolRegistry`, `ToolContext`), `toolAttachmentExtraction`, `toolCallParsing` (duplicate-call partitioning and tool-call error normalization, used by the run loop)       |
 
 What is **not** here, and where it lives instead:
 
 - The run snapshot and the run usage totals are schemas, not classes:
   `runSnapshotState.ts` and `usage.ts` in `@shared/schemas`. There is no usage
   accumulator type in `core`.
-- The run program is `@agent/runtime/loop/toolUse.ts` (a document task's
-  recipe, `@agent/output/documentRecipe.ts`, calls it per revision), its
+- The run program is `@agent/runtime/loop/toolUse.ts` (a task's recipe, a
+  plugin's script, runs as its one call), its
   per-run services `@agent/runtime/run/`, the model call
   `@agent/runtime/ModelInvoker.ts`. `core` holds none of the loop.
 - The process's global state store is the `AppState` service from

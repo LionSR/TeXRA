@@ -4,14 +4,18 @@ import { resolve } from 'node:path';
 
 // Third-party imports
 import { it } from '@effect/vitest';
-import { Effect } from 'effect';
+import { Effect, Layer } from 'effect';
 import { beforeAll, describe, expect } from 'vitest';
 
 // Local imports
 import { scanDirectory } from '@agent/index/agentYamlScanner';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
-import { installPlatform } from '@test/support/setupPlatform';
+import {
+  installPlatform,
+  storePluginsLayer,
+} from '@test/support/setupPlatform';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
+import { documentTaskOf } from '@texra/tools/documents/documentTask';
 
 const tempDirs = useTempDirs();
 
@@ -32,7 +36,9 @@ const agentDir = (files: Record<string, readonly string[]>) =>
 
 /** The scan on the process filesystem it now reads its YAML through. */
 const scanCustom = (dir: string) =>
-  scanDirectory([dir], 'custom').pipe(Effect.provide(nodePlatformLayer));
+  scanDirectory([dir], 'custom').pipe(
+    Effect.provide(Layer.merge(nodePlatformLayer, storePluginsLayer)),
+  );
 
 function toolUseAgent(name: string, systemPrompt: string): string[] {
   return [`name: ${name}`, `prompt: ${systemPrompt}`];
@@ -52,9 +58,12 @@ describe('agent YAML scanner', () => {
 
         const { entries, issues } = yield* scanCustom(dir);
 
-        expect(entries.map((entry) => [entry.name, entry.rounds])).toEqual([
-          ['base', 2],
-        ]);
+        expect(
+          entries.map((entry) => [
+            entry.name,
+            documentTaskOf(entry)?.requests.length,
+          ]),
+        ).toEqual([['base', 2]]);
         expect(issues).toEqual([
           {
             path: 'child.yaml',

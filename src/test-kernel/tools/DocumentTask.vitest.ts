@@ -7,22 +7,17 @@ import * as path from 'node:path';
 // Third-party imports
 import { Effect } from 'effect';
 import { it } from '@effect/vitest';
-import { describe, afterEach, beforeEach, vi } from 'vitest';
-
-const mocks = vi.hoisted(() => ({
-  submitFollowUp: vi.fn(),
-}));
-
-vi.mock('@agent/followUp/ToolUseFollowUp', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@agent/followUp/ToolUseFollowUp')>()),
-  submitFollowUp: mocks.submitFollowUp,
-}));
+import { describe, afterEach, beforeEach, expect } from 'vitest';
 
 // Local imports
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
-import { rejectOversizedBibAttachments } from '@tools/delegation/inputFields';
+import { DOCUMENT_TASK_BLOCK } from '@texra/shared/plugins/documents';
+import {
+  rejectOversizedBibAttachments,
+  taskFileVars,
+} from '@texra/tools/documents/documentTask';
 
-describe('DelegationTools', () => {
+describe('documentTask', () => {
   // The bib-size probe reads the real filesystem, so the cases build a real
   // tree whose files carry the sizes under test rather than stubbing a `stat`.
   let workspaceRoot: string;
@@ -88,4 +83,54 @@ describe('DelegationTools', () => {
       assert.strictEqual(result, null);
     }),
   );
+
+  describe('task.files custom variables', () => {
+    const task = (files: Record<string, string>) =>
+      DOCUMENT_TASK_BLOCK.schema.parse({ files, requests: ['Revise.'] });
+    const agentPath = () => path.join(workspaceRoot, 'agents', 'generic.yaml');
+
+    beforeEach(async () => {
+      await mkdir(path.join(workspaceRoot, 'agents'), { recursive: true });
+      await writeFile(
+        path.join(workspaceRoot, 'agents', 'brief.txt'),
+        'briefing notes',
+      );
+    });
+
+    // A required file named after a file category generates the fixed X_FILE /
+    // X_CONTENT variables and would silently override them. The guard fails
+    // loudly at variable-build time instead.
+    it.effect.each(['INPUT', 'CONTEXT', 'EDITED', 'MEDIA'])(
+      'rejects a required file named %s whose generated variables collide with the fixed vocabulary',
+      (varName) =>
+        Effect.gen(function* () {
+          const failure = yield* Effect.flip(
+            taskFileVars(task({ [varName]: 'brief.txt' }), agentPath()).pipe(
+              Effect.provide(nodePlatformLayer),
+            ),
+          );
+          expect(String(failure)).toContain(
+            'collides with a fixed template variable',
+          );
+        }),
+    );
+
+    it.effect('binds a custom required file beside the agent file', () =>
+      Effect.gen(function* () {
+        const { vars, entries } = yield* taskFileVars(
+          task({ BRIEF: 'brief.txt' }),
+          agentPath(),
+        ).pipe(Effect.provide(nodePlatformLayer));
+        const briefPath = path.join(workspaceRoot, 'agents', 'brief.txt');
+
+        expect(vars).toStrictEqual({
+          BRIEF_FILE: briefPath,
+          BRIEF_CONTENT: 'briefing notes',
+        });
+        expect(entries).toStrictEqual([
+          { path: briefPath, ok: true, varName: 'BRIEF', source: 'task.files' },
+        ]);
+      }),
+    );
+  });
 });

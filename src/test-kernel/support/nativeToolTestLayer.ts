@@ -87,7 +87,6 @@ export function nativeToolTestLayer(
     logger: noopTrace,
     steps: noStep(),
     scope: Scope.makeUnsafe(),
-    task: null,
     opening: null,
     // The run's files hold what it read: a case that seeds or checks that
     // set shares its own with the run.

@@ -203,9 +203,9 @@ const RunViewSchema = z.object({
    *  any other run's newest user instruction or settled model reply. */
   latestLine: z.string().nullable(),
   transcript: TranscriptViewSchema,
-  /** A document task's run: opened on its recipe (`run.config`), it
-   *  revises files and takes no messages. */
-  documentTask: z.boolean(),
+  /** A task's run: opened on its plugin's recipe (`run.config`), it
+   *  works over files and takes no messages. */
+  recipe: z.boolean(),
   plan: PlanSchema.nullable(),
 });
 export type RunView = z.infer<typeof RunViewSchema>;
@@ -274,7 +274,7 @@ export function acceptsFollowUp(run: ReadRunView, host: FollowUpHost): boolean {
     run.followUpSupport === 'nativeInteractive' &&
     run.identity.kind === 'agent' &&
     run.parentId === null &&
-    !run.documentTask &&
+    !run.recipe &&
     run.resumeBlocked === null &&
     (run.turn !== null || run.forkPoint !== null)
   );

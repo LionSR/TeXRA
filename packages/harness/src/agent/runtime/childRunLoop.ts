@@ -214,7 +214,7 @@ export interface ChildRunStrategy<TTurn, R = never> {
   onTurnSuccess?(turn: TTurn, session: SessionHandle): void;
 
   /**
-   * Format the success delivery XML. A native document-task subagent
+   * Format the success delivery XML. A native recipe-run subagent
    * reads and writes on the way (diff files land in the run directory
    * first), so this is an Effect over the same `R` the turns read; every
    * other strategy formats from what it already holds.

@@ -13,9 +13,9 @@
  * Rules: an id is persisted (the disabled-tools key, and the plugin a run's
  * offered tool records), so it never changes and is never reused; every
  * tool belongs to exactly one plugin (checked when the table is built). No
- * hooks, task kinds or second event channels: a plugin holds state only in
- * its process or session layer and writes rows only of its own kinds
- * (`arms`), through the one publisher.
+ * hooks or second event channels; one agent-file block at most. A plugin
+ * holds state only in its process or session layer and writes rows only of
+ * its own kinds (`arms`), through the one publisher.
  */
 
 // Third-party imports
@@ -47,6 +47,7 @@ import type { SessionView } from '@shared/session/sessionView';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import type { ToolAvailabilityChecks } from '@tools/toolProbes';
 import type {
+  AgentBlock,
   Continuation,
   PluginHold,
   ProcessPluginLayer,
@@ -55,8 +56,7 @@ import type {
   SessionPluginLayer,
 } from '@tools/toolTable';
 
-/** What a transition rule reads of a plugin row: its value and its parent
- *  edge. */
+/** What a transition rule reads of a plugin row: value and parent edge. */
 interface PluginRow {
   readonly value: JsonValue;
   readonly parent: RunId | null;
@@ -126,7 +126,7 @@ export interface Plugin {
    *  while the plugin is on and a boolean catalog setting is on: tool name to
    *  setting key, or `true` for no setting but the plugin's own switch. An
    *  injected tool still passes the host and approval gates; a script's
-   *  run (a document task's) and a text-only persona get none. */
+   *  run (a task's recipe) and a text-only persona get none. */
   readonly injectedWhen?: Readonly<Record<string, string | true>>;
   /** Decides what a parked run of its category does next; a run's step pins
    *  it while the plugin is switched on. */
@@ -141,12 +141,12 @@ export interface Plugin {
   /** Session-lifetime services, one per open session, up while the plugin
    *  is switched on or a step of that session pins it. */
   readonly sessionLayer?: SessionPluginLayer;
-  /** Its side of a decision on a pending request of the kind it owns, run
-   *  whether or not it is switched on: the request outlives the switch. */
+  /** Its side of a decision on a pending request of its kind, on or off. */
   readonly decision?: RequestDecisionHook;
-  /** The row kinds it owns (`plugin.fact`), whether or not it is switched
-   *  on: its rows outlive the switch. */
+  /** The row kinds it owns (`plugin.fact`), on or off: rows outlive it. */
   readonly arms?: readonly PluginArm[];
+  /** The agent-file block it owns (`AgentBlock`), on or off. */
+  readonly agentBlock?: AgentBlock;
 }
 
 /**

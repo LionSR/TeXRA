@@ -27,6 +27,7 @@ import {
   fakeHostAgentDirectories,
   hostStores,
   installPlatform,
+  storePluginsLayer,
 } from '@test/support/setupPlatform';
 import { cleanupTempDirs, makeTempDir } from '@test/support/tempDirPlatform';
 import { testHttpClientLayer } from '@test/support/fetchTestUtils';
@@ -104,7 +105,11 @@ describe('shadowed agent resolution', () => {
           Effect.provideService(AgentDirectories, fakeHostAgentDirectories),
           Effect.provideService(AppState, new FakeStateStore()),
         ),
-        Layer.merge(nodePlatformLayer, testHttpClientLayer),
+        Layer.mergeAll(
+          nodePlatformLayer,
+          testHttpClientLayer,
+          storePluginsLayer,
+        ),
       ),
     );
   });
@@ -197,7 +202,7 @@ describe('findAgentByIdentifier (shared identity rule)', () => {
       source,
       path: '',
       persona: PersonaSchema.parse({}),
-      task: null,
+      blocks: {},
     };
   }
   const entries = [entry('review', 'builtIn'), entry('review', 'custom')];

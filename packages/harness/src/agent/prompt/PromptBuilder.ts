@@ -137,7 +137,7 @@ const getSystemPromptWithRules = Effect.fn('prompt.systemWithRules')(function* (
  * The system text a conversation opens with: its persona's prompt rendered
  * with the project's rules (`getSystemPromptWithRules`), and the suffix of
  * tool-use instructions and workspace facts, which a text-only persona (a
- * document task's writer) goes without. What each step's plugins add is
+ * task's writer) goes without. What each step's plugins add is
  * appended per request (`stepInstructions`).
  */
 export const buildInitialToolUsePrompts = Effect.fn('prompt.initialToolUse')(

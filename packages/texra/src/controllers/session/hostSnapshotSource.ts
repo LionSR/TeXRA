@@ -15,7 +15,6 @@ import {
   type LanguageModel,
   type PlatformSecrets,
 } from '@texra-ai/harness';
-import { computeAgentOptionsData } from '@agent/index';
 import { loadTeamOptions } from '@common/teams/TeamPlan';
 import {
   getEnabledModels,
@@ -27,6 +26,7 @@ import {
   TEXRA_APPROVAL_POLICY_CONFIG_KEY,
   type TexraApprovalPolicy,
 } from '@shared/approvalPolicy';
+import { agentOptionsData } from '@texra/tools/documents/documentTask';
 import type {
   HostSnapshot,
   ProjectDisplay,
@@ -209,7 +209,7 @@ export function createHostSnapshotSource(
   // the record as it was when the load started and writes that copy back on
   // resume, erasing whatever a sibling load stored in between.
   const loadAgents = Effect.gen(function* () {
-    const agentOptions = yield* computeAgentOptionsData(options.stores);
+    const agentOptions = yield* agentOptionsData(options.stores);
     catalogs = { ...catalogs, agentOptions };
   });
 

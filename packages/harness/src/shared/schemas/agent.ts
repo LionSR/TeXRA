@@ -58,7 +58,7 @@ const CatalogAgentNameSchema = z
  */
 export const AgentMetadataBaseSchema = z.object({
   name: CatalogAgentNameSchema,
-  /** Its file has a `task` block: it is also launchable as a document task. */
+  /** Its file has a plugin's block: it is also launchable as a task. */
   hasTask: z.boolean(),
   description: z.string().optional(),
 });
@@ -153,36 +153,9 @@ export const PersonaSchema = z.strictObject({
 export type Persona = z.infer<typeof PersonaSchema>;
 
 /**
- * A document task: what the documents recipe runs over its persona. Each
- * request (Nunjucks) opens one revision, in order, after the `prefix` that
- * lays out the documents; `outputs` are the files a task writes when the
- * launch names none, and `files` binds template variables to files beside
- * the YAML (`X` renders as `X_FILE` and `X_CONTENT`).
- */
-export const DocumentTaskSchema = z.strictObject({
-  /** Edits existing documents (diffed against them), rather than writing
-   *  new ones. */
-  rewrite: z.boolean().prefault(true),
-  outputs: z.array(z.string()).prefault([]),
-  files: z.record(z.string(), z.string()).prefault({}),
-  prefix: z.string().prefault(''),
-  requests: z.array(z.string()).min(1, 'a task needs at least one request'),
-});
-/** A document task with its defaults applied. */
-export type DocumentTask = z.infer<typeof DocumentTaskSchema>;
-
-/** A document task as a file writes it, before defaults. */
-const DocumentTaskInputSchema = z.strictObject({
-  rewrite: z.boolean().optional(),
-  outputs: z.array(z.string()).optional(),
-  files: z.record(z.string(), z.string()).optional(),
-  prefix: z.string().optional(),
-  requests: z.array(z.string()).optional(),
-});
-
-/**
- * An agent file as written: a flat persona, made a document task by its
- * `task` block.
+ * An agent file as written: a flat persona. A plugin may own one more
+ * top-level block (`AgentBlock`), which the catalog scan adds to this
+ * schema; an agent carrying one is a task.
  */
 export const AgentDefinitionSchema = z.strictObject({
   name: AgentNameSchema,
@@ -196,7 +169,6 @@ export const AgentDefinitionSchema = z.strictObject({
   prompt: z.string().optional(),
   tools: ToolsSchema.optional(),
   temperature: TemperatureSchema.optional(),
-  task: DocumentTaskInputSchema.optional(),
 });
 /** An agent definition as written, before defaults. */
 export type AgentDefinition = z.infer<typeof AgentDefinitionSchema>;
@@ -204,13 +176,11 @@ export type AgentDefinition = z.infer<typeof AgentDefinitionSchema>;
 /**
  * A persona an embedder passes inline (`StartInput.agent`) instead of a
  * file: the same definition with nothing a file alone can mean. It has no
- * bundled original, and a document task is
- * the app's recipe, which the package does not ship; each is refused as an
- * unrecognized key.
+ * bundled original and no plugin's block (a task is its plugin's recipe);
+ * each is refused as an unrecognized key.
  */
 export const InlinePersonaSchema = AgentDefinitionSchema.omit({
   basedOn: true,
-  task: true,
 }).extend({
   /** The tools it is offered, by name, as a file names them: what the run
    *  records is plain data, never a runtime tool definition. */

@@ -134,8 +134,7 @@ export function createNativeSubagentStrategy(
     // passes) — its only reader is the loop's non-throwing-failure message,
     // which becomes the persisted terminal `error.message` for the run
     // record.
-    stageLabel:
-      config.script == null ? 'Native subagent' : 'Native document task',
+    stageLabel: config.script == null ? 'Native subagent' : 'Native recipe run',
 
     // An awaited child has no later turn to consume a follow-up delivery;
     // its awaiting caller reads the persisted report/result instead.

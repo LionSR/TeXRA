@@ -12,10 +12,10 @@ import { passLabel } from '@ui/copy/taskDiagnostics';
  * agent's planned pass count, when the catalog knows it.
  */
 export function progressBadgeLabel(
-  run: Pick<RunView, 'documentTask' | 'facts'>,
+  run: Pick<RunView, 'recipe' | 'facts'>,
   plannedPasses: number | undefined,
 ): string | undefined {
-  if (!run.documentTask) return undefined;
+  if (!run.recipe) return undefined;
   const passes = documentRoundsOf(run.facts[DOCUMENTS_OUTPUT_KEY]).length;
   return passes === 0 ? undefined : passLabel(passes - 1, plannedPasses);
 }

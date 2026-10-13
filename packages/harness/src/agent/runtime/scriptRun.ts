@@ -114,7 +114,7 @@ export const scriptRunCalls = Effect.fn('scriptRun.calls')(function* (
 });
 
 /** The files a call's child wrote, when its value is a run's envelope: a
- *  document task's outputs, or an agent's edits. */
+ *  task's documents, or an agent's edits. */
 const EnvelopeFilesSchema = z.object({
   files: z.array(z.string()),
   documents: z.object({ outputs: z.array(OutputFileSummarySchema) }).optional(),

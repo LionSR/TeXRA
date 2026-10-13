@@ -60,7 +60,7 @@ import { getBasename } from '@utils/core';
  *  source-qualified key names one agent exactly, so a same-named agent from
  *  another source never lends it its count. */
 function plannedPassesOf(run: RunView, host: HostSnapshot): number | undefined {
-  if (!run.documentTask || run.identity.kind !== 'agent') {
+  if (!run.recipe || run.identity.kind !== 'agent') {
     return undefined;
   }
   const id = run.identity.agent;

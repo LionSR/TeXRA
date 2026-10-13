@@ -291,7 +291,6 @@ export function testAgentRun(
       instruction: 'Do the thing.',
     }),
     persona: PersonaSchema.parse({}),
-    task: null,
     parentStage: logger.openStage('Run: chat'),
     stores: hostStores(),
     toolPolicy: {},

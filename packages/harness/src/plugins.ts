@@ -9,7 +9,8 @@
  * if any), typed `ToolRun`. A plugin's tool may require `PluginToolServices`
  * (never the harness's own call services), and reaches the session's runs
  * only through `ChildRuns`: it launches a child, and sends a run its input
- * (`RunInbox`).
+ * (`RunInbox`). A plugin that owns a block of an agent file (`AgentBlock`)
+ * reads an agent's block with `agentBlockOf`.
  */
 export { harnessBuiltins } from '@tools/builtinPlugins';
 /** The `web` plugin's fetch tool, typed with what its call requires, for a
@@ -23,3 +24,4 @@ export {
 export type { RunInbox } from '@agent/followUp/ToolUseFollowUp';
 export type { ToolRun } from '@agent/core/tools/ToolTypes';
 export { HostCapabilities } from '@agent/runtime/agentToolResolution';
+export { agentBlockOf, type AgentBlock } from '@tools/toolTable';

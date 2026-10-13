@@ -10,7 +10,18 @@
  * one value the source takes; a run records the source it ran, so a resume
  * replays the same program.
  */
+import { Data, Effect } from 'effect';
+
+import {
+  getCatalogLoadFailure,
+  refresh,
+  resolveAgentForLaunch,
+  settledCatalog,
+  type WorkspaceAgentsStores,
+} from '@agent/index/agentRegistry';
+import type { AgentEntry } from '@agent/index';
 import { agentKey } from '@shared/schemas';
+import { documentTaskOf } from '@texra/tools/documents/documentTask';
 import type { AgentConfig } from '@texra-ai/harness/schemas';
 
 /** The tools the recipe calls: what a document task's run offers it. */
@@ -57,16 +68,33 @@ for (let revision = 0; revision < revisions; revision += 1) {
 return (await tools.document_propose({})).documents;`;
 }
 
+/** What a launch as an agent's document task adds to its config. */
+export type DocumentTaskPatch = Required<
+  Pick<AgentConfig, 'script' | 'outputFiles' | 'agentSource'>
+>;
+
 /**
- * The launch of `config`'s agent as a document task: its run opens on the
- * recipe, offers the recipe's tools, and its revisions' agent calls were
- * approved with the launch.
+ * The patch that launches `config` as the document task of `entry`, or null
+ * when `entry` has no task block: its run opens on the recipe and offers the
+ * recipe's tools, and its revisions' agent calls were approved with the
+ * launch. The outputs are the launch's explicit list unless it names only
+ * inputs, else the task's own (`task.outputs`).
  */
-export function documentTaskConfig<
-  C extends Pick<AgentConfig, 'agent'> & Partial<AgentConfig>,
->(config: C): C & { readonly script: NonNullable<AgentConfig['script']> } {
+export function documentTaskPatch(
+  config: Pick<
+    AgentConfig,
+    'agent' | 'agentSource' | 'inputFiles' | 'outputFiles'
+  >,
+  entry: AgentEntry,
+): DocumentTaskPatch | null {
+  const task = documentTaskOf(entry);
+  if (task === null) return null;
+  const explicit = config.outputFiles.filter(Boolean);
   return {
-    ...config,
+    agentSource: entry.source,
+    outputFiles: explicit.some((file) => !config.inputFiles.includes(file))
+      ? explicit
+      : task.outputs.filter(Boolean),
     script: {
       // The exact entry: a bare name would re-resolve to whatever shadows it.
       code: recipeSource(
@@ -80,3 +108,49 @@ export function documentTaskConfig<
     },
   };
 }
+
+/** A launch as a document task that cannot be built: its agent is not in
+ *  the catalog, or has no task block. */
+class DocumentTaskRefused extends Data.TaggedError('DocumentTaskRefused')<{
+  readonly message: string;
+}> {}
+
+/**
+ * `config` launched as its agent's document task. The agent resolves over a
+ * settled catalog by the rule a launch's preparation uses
+ * (`resolveAgentForLaunch`; a miss rescans once), and its source is stamped
+ * so the preparation pins the same entry. A catalog that never loaded, an
+ * unknown agent and a chat agent each fail loudly; no outputs are guessed.
+ */
+export const documentTaskConfig = Effect.fn('documentTaskConfig')(function* <
+  C extends Pick<AgentConfig, 'agent'> & Partial<AgentConfig>,
+>(config: C, stores: WorkspaceAgentsStores) {
+  const resolve = resolveAgentForLaunch(
+    stores,
+    config.agent,
+    config.agentSource,
+  );
+  const entry =
+    (yield* Effect.andThen(settledCatalog, resolve)) ??
+    (yield* Effect.andThen(refresh(), resolve));
+  if (entry === undefined) {
+    const failure = getCatalogLoadFailure();
+    return yield* new DocumentTaskRefused({
+      message: `Could not find agent: ${config.agent}${failure === undefined ? '' : `. The agent catalog did not load: ${failure}`}`,
+    });
+  }
+  const patch = documentTaskPatch(
+    {
+      agent: config.agent,
+      agentSource: config.agentSource,
+      inputFiles: config.inputFiles ?? [],
+      outputFiles: config.outputFiles ?? [],
+    },
+    entry,
+  );
+  if (patch === null)
+    return yield* new DocumentTaskRefused({
+      message: `'${config.agent}' has no document task: run it as a chat instead.`,
+    });
+  return { ...config, ...patch };
+});

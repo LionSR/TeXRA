@@ -17,6 +17,7 @@ import {
   fakeHostAgentDirectories,
   hostStores,
   installPlatform,
+  storePluginsLayer,
 } from '@test/support/setupPlatform';
 import {
   nodePlatformLayer,
@@ -80,6 +81,7 @@ beforeAll(async () => {
       refresh(),
       Layer.mergeAll(
         unusedGlobalStorageFs(),
+        storePluginsLayer,
         nodePlatformLayer,
         testHttpClientLayer,
         AgentDirectories.layer(fakeHostAgentDirectories),

@@ -104,6 +104,7 @@ import {
   fakeHostSecrets,
   setupPlatform,
   type FakeHost,
+  storePluginsLayer,
 } from '@test/support/setupPlatform';
 import {
   nodePlatformLayer,
@@ -114,7 +115,7 @@ import {
   closeTestDefaultSession,
   openTestDefaultSession,
 } from '@test/support/sessionEnd';
-import { documentTaskConfig } from '@texra/agent/output/documentRecipe';
+import { asDocumentTask } from '@test/support/ProgressControllerHarnesses';
 import { ExecutionsTool } from '@tools/ExecutionsTool';
 import { launchDetachedSubagent } from '@tools/delegation/subagentRun';
 import { readCompletedRunConversation } from '@transcript';
@@ -591,7 +592,6 @@ async function launchWaitingChild(options: {
     run: {
       runId: PARENT_RUN_ID,
       session,
-      task: null,
       opening: null,
       callbacks: {},
       fileService: new RunFileService(PARENT_RUN_ID, session.roots),
@@ -633,6 +633,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
         refresh(),
         Layer.mergeAll(
           unusedGlobalStorageFs(),
+          storePluginsLayer,
           nodePlatformLayer,
           testHttpClientLayer,
           AgentDirectories.layer(fakeHostAgentDirectories),
@@ -1289,7 +1290,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
               const parent = yield* requireToolRun('launch_workflow_child');
               const launched = yield* launchChild(
                 parent,
-                documentTaskConfig({
+                asDocumentTask({
                   agent: WORKFLOW_CHILD_AGENT,
                   agentSource: 'custom',
                   model: CHILD_MODEL,
@@ -1410,7 +1411,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
           {
             runId,
             config: AgentConfigSchema.parse(
-              documentTaskConfig({
+              asDocumentTask({
                 agent: WORKFLOW_CHILD_AGENT,
                 agentSource: 'custom',
                 model: CHILD_MODEL,

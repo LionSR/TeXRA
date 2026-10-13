@@ -115,7 +115,7 @@ describe('CLI run command, tool-use agents', () => {
         source: 'builtIn',
         path: '/agents/chat.yaml',
         tools: ['read_file'],
-        task: null,
+        blocks: {},
       }),
     );
     mocks.selectCliRunModel.mockImplementation(

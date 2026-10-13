@@ -19,7 +19,7 @@ import { ToolConfigFieldsSchema } from '../toolConfig';
 // ============================================================
 
 /**
- * What the main view launches: a document task over the selected files, or
+ * What the main view launches: a task over the selected files, or
  * a chat with the selected agent.
  */
 export const SessionTypeSchema = z.enum(['task', 'chat']);
@@ -183,8 +183,8 @@ export const AgentOptionDataSchema = PickerOptionBaseSchema.extend({
   isOrchestrator: z.boolean().optional(),
   /** Provenance, in the canonical agent vocabulary rather than one-hot flags. */
   source: AgentSourceSchema.optional(),
-  /** A document task's revision count (the header's "Pass 2 of 3"):
-   *  present exactly when the agent is also a document task. */
+  /** A task's revision count (the header's "Pass 2 of 3"): present
+   *  exactly when the agent is also a task, filled by the app. */
   rounds: z.int().positive().optional(),
 });
 export type AgentOptionData = z.infer<typeof AgentOptionDataSchema>;

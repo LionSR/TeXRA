@@ -101,13 +101,13 @@ export type RetryPermission = z.infer<typeof RetryPermissionSchema>;
 
 /**
  * A delegation awaiting approval: the agent and its prompt, and, for a
- * document task (`task`), the files it revises and the tool configuration
+ * task (`task`), the files it works over and the tool configuration
  * its file options give it. A chat delegation has no files.
  */
 export const AgentProposalSchema = BaseProposalFieldsSchema.extend(
   TaskProposalFieldsSchema.shape,
 ).extend({
-  /** Runs the agent's document task over the files, not a conversation. */
+  /** Runs the agent's task over the files, not a conversation. */
   task: z.boolean(),
   rootUserInstruction: z.string().nullish(),
 });

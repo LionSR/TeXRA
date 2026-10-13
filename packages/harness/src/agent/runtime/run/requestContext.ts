@@ -104,13 +104,12 @@ export function blobRows(
 /** The recorded context of a request that sends `resolved`, and the
  *  resolved agent definition it names. */
 function recorded(
-  run: Pick<AgentRunShape, 'config' | 'persona' | 'task'>,
+  run: Pick<AgentRunShape, 'config' | 'persona'>,
   resolved: ResolvedTurn,
 ) {
   const agent = {
     agent: run.config.agent,
     persona: run.persona,
-    task: run.task,
   };
   const request = {
     mode: resolved.mode,
@@ -125,7 +124,7 @@ function recorded(
 /** The address of the recorded context of a request that sends `resolved`:
  *  what its `attempt` row names. */
 export const attemptRequest = (
-  run: Pick<AgentRunShape, 'config' | 'persona' | 'task'>,
+  run: Pick<AgentRunShape, 'config' | 'persona'>,
   resolved: ResolvedTurn,
 ): string => sha256(recorded(run, resolved).request);
 
@@ -135,7 +134,7 @@ export const attemptRequest = (
  * names the request's recorded context and the binding's origin.
  */
 export function attemptRows(
-  run: Pick<AgentRunShape, 'runId' | 'config' | 'persona' | 'task'>,
+  run: Pick<AgentRunShape, 'runId' | 'config' | 'persona'>,
   state: RunState,
   invocation: InvocationRef,
   purpose: InvocationPurpose,

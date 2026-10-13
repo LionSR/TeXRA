@@ -48,7 +48,7 @@ export {
   storedResultMeta,
   storedRunOutput,
   RunDocumentsSchema,
-  isDocumentTaskConfig,
+  isRecipeConfig,
   type ResultDiffSummary,
   type RunDocuments,
   type DeliveredResult,

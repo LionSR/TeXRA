@@ -145,7 +145,6 @@ function resumeToolUseFromResumeData(
 function buildResumeContext(runId: RunId): AgentLaunchContext {
   return {
     persona: { prompt: '', tools: [], temperature: 1 },
-    task: null,
     runId,
     session: LANE_SESSION,
     config: { agent: 'test-agent', model: 'test-model' },

@@ -48,7 +48,7 @@ import {
   withTempDirEffect,
 } from '@test/support/tempDirPlatform';
 import { openTestDefaultSession } from '@test/support/sessionEnd';
-import { documentTaskConfig } from '@texra/agent/output/documentRecipe';
+import { asDocumentTask } from '@test/support/ProgressControllerHarnesses';
 import { runDirUnder } from '@utils/files/runStorageFs';
 
 type StoredResumeConfig = Parameters<typeof resumeWorkflowOutputFile>[0];
@@ -57,7 +57,7 @@ function storedConfig(
   overrides: Partial<StoredResumeConfig> = {},
 ): StoredResumeConfig {
   return {
-    ...documentTaskConfig({
+    ...asDocumentTask({
       agent: 'polish',
       model: 'deepseek/deepseek-v4-flash',
       inputFiles: ['paper.tex'],

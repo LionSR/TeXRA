@@ -1,6 +1,7 @@
 /**
  * The documents plugin's state of one document task run, rebuilt from the
- * run's rows on every call: the task, its launch inputs, and the revisions
+ * run's rows on every call: the task (its agent's `task:` block, read from
+ * the catalog), its launch inputs, and the revisions
  * its latest `documents/output` row records. Each document tool
  * (`./documentTools`) opens it, does its one step over one revision, and
  * commits the documents again through the one publisher. Nothing is held
@@ -16,6 +17,7 @@ import { dirname } from 'node:path';
 import { Cause, Effect, Exit, FileSystem, SynchronizedRef } from 'effect';
 
 import { ChildRuns, type ToolRun } from '@texra-ai/harness/plugins';
+import { getCatalogAgent, type AgentEntry } from '@agent/index';
 import { LatexMediaManager } from '@latex/LatexMediaManager';
 import { getTeXCountStats } from '@latex/texcount';
 import {
@@ -23,6 +25,7 @@ import {
   workflowOutputPath,
 } from '@shared/constants/workflowOutput';
 import {
+  agentKey,
   qualifyAggregateId,
   fileLocationDisplayPath,
   ToolError,
@@ -48,6 +51,11 @@ import {
   failureContextFromLogs,
 } from '@texra/agent/output/compileFailureRoundContext';
 import { DocumentsStateKey } from '@texra/shared/settingsView/documentsSettings';
+import type { DocumentTask } from '@texra/shared/plugins/documents';
+import {
+  documentTaskOf,
+  taskFileVars,
+} from '@texra/tools/documents/documentTask';
 import { readSettingFrom } from '@utils/config/platformSettings';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { pathToLocationIn } from '@utils/files/fileLocation';
@@ -58,7 +66,7 @@ import type { AgentConfig } from '@texra-ai/harness/schemas';
 /** What the documents read of the run their tool call serves. */
 type DocumentRun = Pick<
   ToolRun,
-  'task' | 'config' | 'logger' | 'fileService' | 'runId' | 'opening' | 'model'
+  'config' | 'logger' | 'fileService' | 'runId' | 'opening' | 'model'
 >;
 
 /** The tool call the documents are opened for: its run, its roots, and
@@ -74,7 +82,10 @@ export interface Documents {
   readonly run: DocumentRun;
   /** Where the call shows the person what the step wrote. */
   readonly requests: DocumentCall['requests'];
-  readonly task: NonNullable<DocumentRun['task']>;
+  readonly task: DocumentTask;
+  /** The catalog entry whose `task:` block it is: its file's directory holds
+   *  the task's `files`. */
+  readonly entry: AgentEntry;
   readonly deps: OutputDependencies;
   readonly state: OutputState;
   readonly xml: XmlOutputManager;
@@ -122,8 +133,16 @@ export const openDocuments = Effect.fn('documents.open')(function* ({
   env: { roots },
   requests,
 }: DocumentCall) {
-  const { task, config, logger, fileService, runId } = run;
-  if (task === null)
+  const { config, logger, fileService, runId } = run;
+  // The block as the catalog holds it now: the run's exact entry, which its
+  // launch stamped.
+  const entry = getCatalogAgent(
+    config.agentSource
+      ? agentKey(config.agentSource, config.agent)
+      : config.agent,
+  );
+  const task = entry && documentTaskOf(entry);
+  if (!entry || !task)
     return yield* Effect.fail(
       new ToolError(
         `Run ${runId} is not a document task: its agent '${config.agent}' has no task.`,
@@ -166,6 +185,7 @@ export const openDocuments = Effect.fn('documents.open')(function* ({
     run,
     requests,
     task,
+    entry,
     deps,
     state,
     xml: new XmlOutputManager(config, logger, fileService, state, roots.config),
@@ -192,7 +212,7 @@ export const revisionPrompt = Effect.fn('documents.revisionPrompt')(function* (
   revision: number,
 ) {
   const { task, run, deps } = docs;
-  const inputs = run.opening?.inputs ?? {};
+  const { inputs } = yield* taskInputs(docs);
   const fs = yield* FileSystem.FileSystem;
   const parts: string[] = [];
   const files = revisionFiles(docs, revision);
@@ -231,6 +251,18 @@ export const revisionPrompt = Effect.fn('documents.revisionPrompt')(function* (
     prompt: parts.filter(Boolean).join('\n\n'),
     media: yield* revisionMedia(docs, revision, files),
   };
+});
+
+/**
+ * What a task's templates render from: the run's opening, with the task's
+ * `files` variables beside it, and the card entries of the files those
+ * variables read.
+ */
+export const taskInputs = Effect.fn('documents.taskInputs')(function* (
+  docs: Documents,
+) {
+  const { vars, entries } = yield* taskFileVars(docs.task, docs.entry.path);
+  return { inputs: { ...docs.run.opening?.inputs, ...vars }, entries };
 });
 
 /** The word counts of `files`; none when TeXCount fails, which costs the

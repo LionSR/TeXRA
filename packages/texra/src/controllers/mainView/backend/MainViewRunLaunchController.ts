@@ -6,15 +6,12 @@ import { Effect } from 'effect';
 // Local imports - main-view run
 
 // Local imports - shared types and errors
-import {
-  Rejected,
-  type StateReadFailed,
-  type StateStore,
-} from '@texra-ai/harness';
+import { Rejected, type StateReadFailed } from '@texra-ai/harness';
 import {
   validateRunRequest,
   type ValidatedRunRequest,
 } from '@agent/core/state/runRequests';
+import type { WorkspaceAgentsStores } from '@agent/index';
 import {
   formatTeamLaunchBlockedMessage,
   formatUnknownTeamMessage,
@@ -41,19 +38,22 @@ type LaunchPreparation =
   | { valid: true; request: ValidatedRunRequest }
   | { valid: false; message: string; docsPage?: string };
 
+/** The session's slots a launch reads: its agent selection and storage
+ *  root, under which its pasted images live. */
+type LaunchRoots = WorkspaceAgentsStores & { readonly storage: string };
+
 /** Turn the launcher's selections into a validated run request. */
-function buildLaunchRequest(
+const buildLaunchRequest = Effect.fn('buildLaunchRequest')(function* (
   launch: LaunchRequest['launch'],
   instruction: string,
   agent: string,
   sessionType: SessionType,
-  /** The session's storage root, under which its pasted images live. */
-  storageRoot: string,
+  roots: LaunchRoots,
   team?: {
     readonly delegationAgentScope: AgentDelegationScope;
     readonly cli: { readonly teamId: string };
   },
-): LaunchPreparation {
+): Effect.fn.Return<LaunchPreparation, StateReadFailed, AgentCatalogServices> {
   const task = sessionType === 'task';
   if (task && launch.inputFiles.length === 0) {
     return {
@@ -88,25 +88,35 @@ function buildLaunchRequest(
           cli: { teamId: team.cli.teamId },
         }
       : {}),
-    // A task's output paths are implicit in the input list. Its definition
-    // may still declare generated filenames (`task.outputs`).
+    // A task's output paths are implicit in the input list; the task
+    // stamps the generated filenames its definition declares.
     outputFiles: [],
     toolConfig: toolConfigResult.data,
     mediaFiles: launch.mediaFiles.map((file) =>
-      isPastedImage(file) ? pastedImageFullPath(storageRoot, file) : file,
+      isPastedImage(file) ? pastedImageFullPath(roots.storage, file) : file,
     ),
   };
   // A document task runs its agent's recipe over the files.
-  const validation = validateRunRequest({
-    config: task ? documentTaskConfig(config) : config,
-  });
+  const launched = task
+    ? yield* documentTaskConfig(config, roots).pipe(
+        Effect.map((built) => ({ ok: true as const, config: built })),
+        Effect.catchTags({
+          DocumentTaskRefused: (refused) =>
+            Effect.succeed({ ok: false as const, message: refused.message }),
+          AgentCatalogLoadError: (failed) =>
+            Effect.succeed({ ok: false as const, message: failed.message }),
+        }),
+      )
+    : { ok: true as const, config };
+  if (!launched.ok) return { valid: false, message: launched.message };
+  const validation = validateRunRequest({ config: launched.config });
 
   if (!validation.valid) {
     return { valid: false, message: validation.message };
   }
 
   return { valid: true, request: validation.request };
-}
+});
 
 /**
  * The run option an Auto-approve launch adds: its run starts with the
@@ -125,11 +135,10 @@ export function launchApprovalOptions({
 /** Both GUI hosts launch the selections carried by the requesting surface. */
 export function prepareSurfaceLaunch(
   { launch, instruction }: LaunchRequest,
-  repoState: StateStore,
-  /** The requesting session's storage root, carried as data: the pasted-image
-   *  paths it names are joined onto it rather than resolved from an ambient
-   *  read at this depth. */
-  storageRoot: string,
+  /** The requesting session's slots and storage root, carried as data: the
+   *  pasted-image paths it names are joined onto its root rather than
+   *  resolved from an ambient read at this depth. */
+  roots: LaunchRoots,
 ): Effect.Effect<
   ValidatedRunRequest,
   Rejected | StateReadFailed,
@@ -143,12 +152,12 @@ export function prepareSurfaceLaunch(
       preparation =
         !launch.agent || !launch.model
           ? { valid: false, message: 'Choose an agent and a model first.' }
-          : buildLaunchRequest(
+          : yield* buildLaunchRequest(
               launch,
               instruction,
               launch.agent,
               launch.sessionType,
-              storageRoot,
+              roots,
             );
     } else {
       const teamId = launch.selectedTeamId || undefined;
@@ -156,7 +165,7 @@ export function prepareSurfaceLaunch(
         return yield* new Rejected({ reason: TEAM_SELECTION_REQUIRED_MESSAGE });
       const resolution = resolveTeamLaunch({
         teamId,
-        ...(yield* createTeamCatalogPorts(repoState)),
+        ...(yield* createTeamCatalogPorts(roots.repoState)),
       });
       switch (resolution.status) {
         case 'unknown-team':
@@ -173,12 +182,12 @@ export function prepareSurfaceLaunch(
           // agent list at launch time.
           preparation = !launch.model
             ? { valid: false, message: 'Choose a model first.' }
-            : buildLaunchRequest(
+            : yield* buildLaunchRequest(
                 launch,
                 instruction,
                 resolution.fields.agent,
                 'chat',
-                storageRoot,
+                roots,
                 resolution.fields,
               );
           break;

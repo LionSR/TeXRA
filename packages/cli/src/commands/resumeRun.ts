@@ -8,7 +8,7 @@ import { getRunRecords } from '@agent/storage';
 import {
   agentKey,
   agentName,
-  isDocumentTaskConfig,
+  isRecipeConfig,
   type RunId,
 } from '@shared/schemas';
 import { texraApprovalPolicyLabel } from '@shared/approvalPolicy';
@@ -112,7 +112,7 @@ export function runResumeCommand(
       writeTextStderr(`Run not found: ${id}`);
       return CliExitCode.Usage;
     }
-    const documentTask = isDocumentTaskConfig(config);
+    const documentTask = isRecipeConfig(config);
     if (action !== undefined && documentTask) {
       writeTextStderr(
         `Task ${id} is a document task: only a conversation can be forked, reset or handed off.`,

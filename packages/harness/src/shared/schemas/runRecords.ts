@@ -23,8 +23,9 @@ export const RunRecordFieldsSchema = z.union([
   AgentConfigFieldsSchema,
 ]);
 
-/** Whether a run's config opens a document task: its run is the recipe. */
-export function isDocumentTaskConfig(
+/** Whether a run's config opens it on an app's recipe (`script.kind`): the
+ *  run is a task, and its program the script its plugin wrote. */
+export function isRecipeConfig(
   config: z.input<typeof RunRecordFieldsSchema>,
 ): boolean {
   return 'script' in config && config.script?.kind === 'recipe';

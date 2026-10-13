@@ -422,21 +422,6 @@ const launchSubagentInBand = Effect.fn('executeSubagentInBand')(function* (
     session: options.session,
     suppressErrorNotification: true,
   });
-  // Validate the current definition, not metadata left by an earlier
-  // catalog load.
-  if (
-    definition.config.script != null &&
-    definition.task !== null &&
-    definition.config.inputFiles.length === 0
-  ) {
-    return yield* Effect.fail(
-      new Error(
-        `The document task of '${definition.config.agent}' revises files: pass inputFiles ` +
-          `with files that still exist (its result carries output files and ` +
-          `diffs, not response text).`,
-      ),
-    );
-  }
   return yield* executeInBand(
     options,
     { kind: 'fresh', definition },

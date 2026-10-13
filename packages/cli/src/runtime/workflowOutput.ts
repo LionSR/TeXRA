@@ -11,7 +11,7 @@ import type {
 } from '@shared/schemas';
 import {
   finalWorkflowOutput,
-  isDocumentTaskConfig,
+  isRecipeConfig,
   RUN_OUTCOME,
 } from '@shared/schemas';
 import { runOutcomeToCliRunStatus } from '@shared/runs/runStatus';
@@ -458,7 +458,7 @@ export function formatWorkflowTextResult(result: CliWorkflowRunResult): string {
 export function resumeWorkflowOutputFile(
   config: AgentConfigPayload,
 ): string | undefined {
-  if (!isDocumentTaskConfig(config)) return undefined;
+  if (!isRecipeConfig(config)) return undefined;
 
   const cliOutputFile = config.cli?.outputFile;
   if (isNonEmptyString(cliOutputFile)) {
@@ -485,7 +485,7 @@ export function resumeWorkflowOutputFile(
 export function resumeWorkflowOutputDirectory(
   config: AgentConfigPayload,
 ): string | undefined {
-  if (!isDocumentTaskConfig(config)) return undefined;
+  if (!isRecipeConfig(config)) return undefined;
 
   const outputDirectory = config.cli?.outputDirectory;
   if (!isNonEmptyString(outputDirectory)) return undefined;

@@ -28,26 +28,26 @@ const AGENTS: SettingsAgentCatalogEntry[] = [
   {
     source: 'plugin',
     name: 'writer',
-    task: null,
+    blocks: {},
     description: 'Plugin writer',
   },
   {
     source: 'builtIn',
     name: 'correct',
-    task: null,
+    blocks: {},
     path: '/agents/correct.yaml',
   },
   {
     source: 'builtIn',
     name: 'review',
-    task: null,
+    blocks: {},
     path: '/tools/review.yaml',
     tools: ['grep'],
   },
   {
     source: 'custom',
     name: 'customTool',
-    task: null,
+    blocks: {},
     path: '/custom/customTool.yaml',
   },
 ];
@@ -160,7 +160,7 @@ describe('SettingsAgentCatalogController', () => {
         const delegating = (name: string): SettingsAgentCatalogEntry => ({
           source: 'builtIn',
           name,
-          task: null,
+          blocks: {},
           tools: ['agent'],
         });
         const { controller } = createController({
@@ -192,13 +192,13 @@ describe('SettingsAgentCatalogController', () => {
         const delegatingLean: SettingsAgentCatalogEntry = {
           source: 'plugin',
           name: 'lean',
-          task: null,
+          blocks: {},
           tools: ['agent'],
         };
         const orchestrator: SettingsAgentCatalogEntry = {
           source: 'builtIn',
           name: 'orchestrator',
-          task: null,
+          blocks: {},
           tools: ['agent'],
         };
         const { controller } = createController({
@@ -249,7 +249,7 @@ describe('SettingsAgentCatalogController', () => {
             {
               source: 'custom',
               name: 'teamLead',
-              task: null,
+              blocks: {},
               tools: ['agent'],
             },
           ],

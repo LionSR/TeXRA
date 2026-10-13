@@ -1,7 +1,7 @@
 /**
  * The `document_task` tool: run a named agent's document task as a child of
  * the calling run. The child is a run of the agent opened on the document
- * recipe (`@agent/output/documentRecipe`), launched through the same core as
+ * recipe (`@texra/agent/output/documentRecipe`), launched through the same core as
  * `agent` (the `ChildRuns` launch): one proposal, one reuse key, one in-band or
  * detached child. A model that wants a conversation calls `agent` instead.
  */
@@ -17,7 +17,8 @@ import {
   resolveDelegationScopeAgents,
 } from '@agent/index/agentRegistry';
 import { agentKey, DEFAULT_TOOL_CONFIG } from '@shared/schemas';
-import { documentTaskConfig } from '@texra/agent/output/documentRecipe';
+import { documentTaskPatch } from '@texra/agent/output/documentRecipe';
+import { documentTaskOf } from '@texra/tools/documents/documentTask';
 import { errorResult } from '@tools/core/result';
 import { CALL_FIELDS, fileList } from '@tools/delegation/AgentTool';
 
@@ -72,7 +73,7 @@ const runDocumentTask = Effect.fn('DocumentTaskTool.call')(function* (
     call.run.delegationAgentScope ?? undefined,
   );
   const agent = findAgentByIdentifier(agents, input.agentName);
-  if (agent !== undefined && agent.task === null)
+  if (agent !== undefined && documentTaskOf(agent) === null)
     return errorResult(
       `'${input.agentName}' has no document task: call \`agent\` to run it with a prompt.`,
     );
@@ -98,11 +99,20 @@ const runDocumentTask = Effect.fn('DocumentTaskTool.call')(function* (
       outputFiles: input.outputFiles,
     },
     task: {
-      recipeFor: ({ agent: name, agentSource: source }) => {
-        const key = source ? agentKey(source, name) : name;
+      configFor: (chosen) => {
         // The exact entry: a bare name would re-resolve to what shadows it.
-        return getCatalogAgent(key)?.task
-          ? documentTaskConfig({ agent: key }).script
+        const key = chosen.agentSource
+          ? agentKey(chosen.agentSource, chosen.agent)
+          : chosen.agent;
+        const entry = getCatalogAgent(key);
+        const patch =
+          entry &&
+          documentTaskPatch(
+            { ...chosen, agent: key, agentSource: null },
+            entry,
+          );
+        return patch
+          ? { script: patch.script, outputFiles: patch.outputFiles }
           : null;
       },
       toolConfig: {

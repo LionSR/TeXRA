@@ -54,7 +54,8 @@ const availableModelNames = (inputs: ModelAvailabilityInputs): string[] =>
 /**
  * The targets the offered `definitions` can launch, or `undefined` when they
  * hold no delegation tool: the run's pinned delegation scope's agents, or
- * the workspace's visible ones, each marked when it is a document task;
+ * the workspace's visible ones, each marked when it is a task (it holds a
+ * plugin's block);
  * only those when a tool that launches tasks is offered without `agent`.
  */
 export const readDelegationTargets = Effect.fn('readDelegationTargets')(
@@ -70,8 +71,9 @@ export const readDelegationTargets = Effect.fn('readDelegationTargets')(
     if (!chats && !tasks) return undefined;
     const entries = yield* resolveDelegationScopeAgents(stores, scope);
     const agents = entries.flatMap(
-      ({ name, description, tools: agentTools, task }) =>
-        chats || task !== null
+      ({ name, description, tools: agentTools, blocks }) => {
+        const task = Object.keys(blocks).length > 0;
+        return chats || task
           ? [
               {
                 name,
@@ -82,10 +84,11 @@ export const readDelegationTargets = Effect.fn('readDelegationTargets')(
                   ' ',
                 ),
                 tools: agentTools ?? [],
-                task: task !== null,
+                task,
               },
             ]
-          : [],
+          : [];
+      },
     );
     const models = yield* readModelAvailabilityInputs(stores).pipe(
       Effect.map(availableModelNames),
@@ -123,8 +126,7 @@ const worktreeLine = (enabled: boolean): string =>
 
 /** The system text's delegation section, rendered once, at the freeze. */
 export function delegationSection(targets: DelegationTargets): string {
-  const head =
-    'Available agents (a document task also runs over files with `document_task`):';
+  const head = 'Available agents:';
   const lines =
     targets.agents.length === 0
       ? [
@@ -134,7 +136,7 @@ export function delegationSection(targets: DelegationTargets): string {
           head,
           ...targets.agents.map(
             ({ name, description, tools: agentTools, task }) =>
-              `- ${name}${task ? ' (document task)' : ''}: ${description}${agentTools.length > 0 ? `\n  Tools: ${agentTools.join(', ')}` : ''}`,
+              `- ${name}${task ? ' (task)' : ''}: ${description}${agentTools.length > 0 ? `\n  Tools: ${agentTools.join(', ')}` : ''}`,
           ),
         ];
   if (targets.models === null)

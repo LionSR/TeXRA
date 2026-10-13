@@ -377,7 +377,6 @@ function entriesToOptionData(
     label: entry.name,
     isOrchestrator: hasDelegationTool(entry.tools),
     source: entry.source,
-    ...(entry.rounds === undefined ? {} : { rounds: entry.rounds }),
   }));
 }
 
@@ -402,8 +401,8 @@ function sortAgentEntries(
 }
 
 /** Compute typed agent options data for Lit-native rendering: every
- *  visible agent, the preferred ones first. A document task carries its
- *  `rounds`. */
+ *  visible agent, the preferred ones first. An app fills a task's `rounds`
+ *  from the block it owns. */
 export function computeAgentOptionsData(
   stores: WorkspaceAgentsStores,
 ): Effect.Effect<AgentOptionData[], StateReadFailed> {

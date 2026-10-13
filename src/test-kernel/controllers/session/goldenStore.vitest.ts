@@ -641,6 +641,7 @@ describe('the golden run killed after its effect', () => {
         refresh(),
         Layer.mergeAll(
           unusedGlobalStorageFs(),
+          storePluginsLayer,
           nodePlatformLayer,
           testHttpClientLayer,
           AgentDirectories.layer(fakeHostAgentDirectories),

@@ -71,6 +71,7 @@ import {
 import { DisposableStore } from '@texra/platform/disposable';
 import { subscribeToSignalChanges } from '@texra/shared/signals';
 import { serviceSession } from '@texra/controllers/server/serviceSession';
+import { documentTaskOf } from '@texra/tools/documents/documentTask';
 import { sessionStoreMovedAsideMessage } from '@ui/copy/sessionStore';
 import { readConfigSettingFrom } from '@utils/config/platformSettings';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -267,7 +268,7 @@ export async function runChat(
         envModel: context.envModel,
         // The implicit chat default is a persona with no document task.
         visibleToolUseAgents: (yield* getVisibleAgents(services)).filter(
-          (agent) => agent.task === null,
+          (agent) => documentTaskOf(agent) === null,
         ),
       });
       const agentEntry = yield* resolveChatToolUseAgent(

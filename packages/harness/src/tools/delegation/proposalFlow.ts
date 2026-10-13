@@ -16,7 +16,7 @@ import {
   type WorkspaceAgentsStores,
 } from '@agent/index/agentRegistry';
 import { type RunToolCall } from '@agent/runtime/RunCall';
-import { isDocumentTaskConfig } from '@shared/schemas';
+import { isRecipeConfig } from '@shared/schemas';
 import type {
   AgentProposal,
   RequestDecision,
@@ -56,9 +56,7 @@ export const requireAgent = Effect.fn('requireAgent')(function* (
   name: string,
   run: Pick<RunToolCall['run'], 'config' | 'delegationAgentScope'>,
 ) {
-  const pinned = isDocumentTaskConfig(run.config)
-    ? getCatalogAgent(name)
-    : undefined;
+  const pinned = isRecipeConfig(run.config) ? getCatalogAgent(name) : undefined;
   if (pinned) return pinned;
   const agents = yield* resolveDelegationScopeAgents(
     stores,
@@ -159,9 +157,9 @@ const requestDelegationProposal = Effect.fn('requestDelegationProposal')(
     ask?: Effect.Effect<RequestDecision, ProposalRequestError>,
   ): Effect.fn.Return<DelegationProposalDecision, ProposalRequestError> {
     const { session, runId, config } = parent.run;
-    // A document task's recipe calls its persona under the approval its
+    // A task's recipe calls its persona under the approval its
     // launch got.
-    if (isDocumentTaskConfig(config))
+    if (isRecipeConfig(config))
       return { result: { action: 'approve' }, childApproval: 'inherit' };
     const policy = session.approvals.policy(runId);
     const decision = decideProposalApproval({

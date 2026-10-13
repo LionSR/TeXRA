@@ -35,11 +35,7 @@ import { FOLLOW_UP_WAKE_FAILED_MESSAGE } from '@agent/followUp/ToolUseFollowUp';
 import { withLogChannel } from '@logger/effectLog';
 import { getRuntimeModelDirectFallback } from '@model/copilotRouting';
 import type { ModelHostFactUnreadable } from '@model/computeModelOptions';
-import {
-  isDocumentTaskConfig,
-  type FileOpResult,
-  type RunId,
-} from '@shared/schemas';
+import { isRecipeConfig, type FileOpResult, type RunId } from '@shared/schemas';
 import { packDestination } from '@texra/tools/documents/runOutputs';
 import type { HostRequest } from '@texra/shared/session/hostRequest';
 import { documentsOf } from '@texra/shared/plugins/documents';
@@ -335,7 +331,7 @@ export const createHostRunActions = (
           ).pipe(withLogChannel(CHANNEL));
           return undefined;
         }
-        return isDocumentTaskConfig(config) ? config : undefined;
+        return isRecipeConfig(config) ? config : undefined;
       },
     );
 
@@ -586,7 +582,7 @@ export const createHostRunActions = (
         );
         if (run === null) return;
         const config = yield* readConfig(run.runId);
-        if (config === undefined || !isDocumentTaskConfig(config)) return;
+        if (config === undefined || !isRecipeConfig(config)) return;
         const result = yield* run.result.pipe(
           Effect.mapError(
             (failure) =>

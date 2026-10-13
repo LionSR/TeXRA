@@ -33,10 +33,10 @@ const inspectActions = (): RunAction[] => ['openRunStorage', 'export', 'copy'];
  * removes a run's files or history is offered while it is live. Any run this
  * process can act on can be renamed, and a conversation whose first turn has
  * ended forked (at its latest settled point, before any turn it is in now). After, a
- * run can be deleted; a plain agent's run again; a document task's outputs
+ * run can be deleted; a plain agent's run again; a task's outputs
  * diffed, archived, or removed. Resume is offered where it is the way to
  * continue: on any loop-driven run that was interrupted, and on a background
- * script that did not complete. A settled document task runs again; a
+ * script that did not complete. A settled task runs again; a
  * settled conversation continues through its composer. Whether a resume can
  * proceed is `deriveResumability`'s.
  */
@@ -48,7 +48,7 @@ export function runActions(
     | 'status'
     | 'substate'
     | 'identity'
-    | 'documentTask'
+    | 'recipe'
     | 'parentId'
     | 'forkPoint'
   >,
@@ -60,7 +60,7 @@ export function runActions(
     const working = run.group === 'running' || run.group === 'waiting';
     const agent = working && run.identity.kind === 'agent';
     const compact =
-      agent && !run.documentTask && run.substate !== RUN_SUBSTATE.STARTING;
+      agent && !run.recipe && run.substate !== RUN_SUBSTATE.STARTING;
     return [
       'stop',
       ...(agent ? (['grant'] as const) : []),
@@ -84,30 +84,28 @@ export function runActions(
     actions.push('runNew');
     if (forkable(run)) actions.push('fork');
   }
-  if (run.identity.kind === 'agent' && run.documentTask)
+  if (run.identity.kind === 'agent' && run.recipe)
     actions.push('diff', 'pack', 'clean');
   return [...actions, ...inspectActions()];
 }
 
 /**
  * Whether a run continues from its own rows: a loop-driven run (born with
- * its opening) does, whatever its outcome, unless it is a document task that
+ * its opening) does, whatever its outcome, unless it is a task that
  * ended (its recipe's result is settled, so it runs again). The one standing
  * `deriveResumability` reads from a run's records and `runActions` from its
  * view, so the two never decide apart.
  */
 export const continuesFromRows = (
-  run: Pick<RunView, 'identity' | 'documentTask'> & { readonly ended: boolean },
-): boolean => isLoopDriven(run.identity) && !(run.ended && run.documentTask);
+  run: Pick<RunView, 'identity' | 'recipe'> & { readonly ended: boolean },
+): boolean => isLoopDriven(run.identity) && !(run.ended && run.recipe);
 
 /** A conversation with a settled point to cut at: a plain agent's run, not
- *  a document task, whose first turn has ended. */
+ *  a task's recipe, whose first turn has ended. */
 const forkable = (
-  run: Pick<RunView, 'identity' | 'documentTask' | 'forkPoint'>,
+  run: Pick<RunView, 'identity' | 'recipe' | 'forkPoint'>,
 ): boolean =>
-  isPlainAgentIdentity(run.identity) &&
-  !run.documentTask &&
-  run.forkPoint !== null;
+  isPlainAgentIdentity(run.identity) && !run.recipe && run.forkPoint !== null;
 
 /** Why a run no longer takes `action`: the refusal every handler words. */
 export function runActionRefusal(

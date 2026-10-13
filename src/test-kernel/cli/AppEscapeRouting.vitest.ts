@@ -117,16 +117,14 @@ function seedRunMeta(
   meta: {
     identity?: RunView['identity'];
     userFollowUpSupport?: RunView['followUpSupport'];
-    documentTask?: boolean;
+    recipe?: boolean;
   },
 ): void {
   seedRun(runId, {
     identity: meta.identity,
     followUpSupport:
       meta.userFollowUpSupport ?? USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
-    ...(meta.documentTask !== undefined
-      ? { documentTask: meta.documentTask }
-      : {}),
+    ...(meta.recipe !== undefined ? { recipe: meta.recipe } : {}),
   });
 }
 function markToolUseAgent(...runIds: RunId[]): void {
@@ -611,7 +609,7 @@ describe('App foreground Escape ownership', () => {
       name: 'document task',
       identity: { kind: 'agent' as const, agent: 'workflow-child' },
       userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
-      documentTask: true,
+      recipe: true,
     },
     {
       name: 'background script',
@@ -644,7 +642,7 @@ describe('App foreground Escape ownership', () => {
       seedRunMeta(CHILD, {
         identity: fixture.identity,
         userFollowUpSupport: fixture.userFollowUpSupport,
-        documentTask: fixture.documentTask,
+        recipe: fixture.recipe,
       });
       focusRun(CHILD);
       const onSubmit = vi.fn();

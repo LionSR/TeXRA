@@ -34,7 +34,7 @@ export const BaseProposalFieldsSchema = z.object({
     .nullish(),
 });
 
-/** A document task's files and the tool configuration its options give it;
+/** A task's files and the tool configuration its options give it;
  *  empty on a chat delegation. */
 export const TaskProposalFieldsSchema = NullableFileFieldsSchema.omit({
   editedFile: true,

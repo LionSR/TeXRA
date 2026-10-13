@@ -7,11 +7,12 @@
  * from its rows and commits them again; none holds state between calls, so
  * a resumed recipe replays against the rows.
  */
-import { Cause, Effect } from 'effect';
+import { Cause, Effect, FileSystem } from 'effect';
 import { z } from 'zod';
 
 import { defineTool } from '@texra-ai/harness';
 import { ChildRuns, requireRun } from '@texra-ai/harness/plugins';
+import { logFileCategory, logFilesLoaded } from '@agent/trace';
 import { postProcessResponse } from '@latex/texraResponseTextProcessing';
 import {
   fileLocationDisplayPath,
@@ -41,8 +42,10 @@ import {
   openDocuments,
   rejectsOnCompileFailure,
   revisionPrompt,
+  taskInputs,
   type Documents,
 } from '@texra/tools/documents/documentState';
+import { rejectOversizedBibAttachments } from '@texra/tools/documents/documentTask';
 import { executed } from '@tools/core/result';
 import { readSettingFrom } from '@utils/config/platformSettings';
 
@@ -87,6 +90,45 @@ const autoOpensPdf = (docs: Documents) =>
     DocumentsStateKey.WORKFLOW_AUTO_OPEN_PDF,
   );
 
+/**
+ * What the first revision checks before the task does any work, whichever
+ * launcher or resume reached it: the documents it revises exist, and no
+ * context `.bib` is too large to attach whole. It writes the files-loaded
+ * cards of the task's inputs, context and template files. An error result
+ * fails the call, and with it the task.
+ */
+const openTask = Effect.fn('documents.openTask')(function* (docs: Documents) {
+  const { config, logger } = docs.run;
+  const { fileService } = docs.deps;
+  const fs = yield* FileSystem.FileSystem;
+  const located = (files: readonly string[]) =>
+    Effect.forEach(files.filter(Boolean), (file) => {
+      const absolutePath = fileService.locateSource(file).absolutePath;
+      return Effect.map(
+        fs.exists(absolutePath).pipe(Effect.orElseSucceed(() => false)),
+        (ok) => ({ path: file, absolutePath, ok }),
+      );
+    });
+  const inputs = yield* located(config.inputFiles);
+  if (inputs.length === 0 || inputs.some((input) => !input.ok))
+    return yield* Effect.fail(
+      new ToolError(
+        `The document task of '${config.agent}' revises files: pass inputFiles with files that still exist (its result carries output files and diffs, not response text).`,
+      ),
+    );
+  const contexts = yield* located(config.contextFiles);
+  const oversized = yield* rejectOversizedBibAttachments(
+    docs.deps.roots.workspace,
+    contexts.map((context) => context.absolutePath),
+  );
+  if (oversized) return oversized;
+  logFileCategory(logger, 'Input Files', inputs);
+  logFileCategory(logger, 'Context Files', contexts);
+  const { entries } = yield* taskInputs(docs);
+  if (entries.length > 0) logFilesLoaded(logger, entries);
+  return null;
+});
+
 /** `document_context`: the prompt and media of one revision. */
 export const DocumentContextTool = defineTool({
   name: 'document_context',
@@ -104,6 +146,10 @@ export const DocumentContextTool = defineTool({
   }),
   execute: Effect.fn('document_context')(function* ({ revision, critique }) {
     const docs = yield* documentsOfCall('document_context');
+    if (revision === 0) {
+      const refused = yield* openTask(docs);
+      if (refused) return refused;
+    }
     const revisions = docs.task.requests.length;
     if (revision >= revisions)
       return yield* Effect.fail(

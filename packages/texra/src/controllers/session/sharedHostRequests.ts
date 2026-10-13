@@ -292,11 +292,7 @@ export function handleSharedHostRequest(
       }
       case 'launch':
         yield* host.admitLaunch(request.launch);
-        yield* prepareSurfaceLaunch(
-          request,
-          ports.roots.repoState,
-          ports.roots.storage,
-        ).pipe(
+        yield* prepareSurfaceLaunch(request, ports.roots).pipe(
           Effect.flatMap((prepared) =>
             ports.runActions
               .runValidated(prepared, launchApprovalOptions(request))

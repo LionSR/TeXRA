@@ -6,6 +6,28 @@ All notable changes to this project will be documented in this file.
 
 ### Breaking Changes
 
+- **SDK: document tasks are TeXRA's, not the harness's.** The harness no
+  longer reads an agent file's `task:` block: a plugin owns a block of its
+  own (`Plugin.agentBlock`, an `AgentBlock` with its key and schema, read
+  with `agentBlockOf` from `@texra-ai/harness/plugins`), and an agent
+  carrying one is a task, which that plugin launches on its recipe.
+  A session view's `documentTask` is `recipe` (a run opened on a plugin's
+  recipe), and `AgentCatalogServices` now includes `ToolRegistry`, whose
+  plugins' blocks a catalog scan admits; a file holding a block no listed
+  plugin owns is refused. An older window is refused by a newer service and
+  asked to update.
+- **A chat no longer lists output files it never writes.** A chat with an
+  agent that also defines a document task with declared outputs (ocr,
+  transcribe_audio, paper2slide, paper2poster) recorded those outputs: a
+  chat export's "Output files:" line and the VS Code toast shown when the
+  progress view cannot open both named them. Only a document task launch
+  stamps them now; earlier runs keep what they recorded.
+- **A document task checks its files at its first revision, whichever
+  surface launched it.** A task over input files that no longer exist, or
+  with a context `.bib` over 100 KB, fails there with the same message a
+  delegated task got; launches from the main view, the CLI, the desktop app
+  and VS Code are now checked too. Its Input, Context and template-file
+  cards appear under "Revision 1".
 - **SDK: an embedder's setting rows go to its platform, not its
   composition.** `Sessions.layer` no longer takes `settings`; pass them to
   `nodePlatform({ settings })`. A `ConfigProvider` of your own must now

@@ -3,6 +3,7 @@ import { Effect, FileSystem } from 'effect';
 import { getVisibleAgents } from '@agent/index';
 import { workspaceTexraConfigPath } from '@platform/defaults/nodeStorage';
 import { implicitDefaultToolUseAgents } from '@shared/constants/agents';
+import { documentTaskOf } from '@texra/tools/documents/documentTask';
 import { pathExists } from '@utils/files/fsDurability';
 
 import { CLI_CHEAP_START_MODEL } from '../runtime/cliConfig';
@@ -157,7 +158,9 @@ const runInit = Effect.fn('runInit')(function* (
 
   // The chat default is a persona with no document task.
   const agents = implicitDefaultToolUseAgents(
-    (yield* getVisibleAgents(services)).filter((agent) => agent.task === null),
+    (yield* getVisibleAgents(services)).filter(
+      (agent) => documentTaskOf(agent) === null,
+    ),
   );
   const models = yield* getCliModelAccessList({ stores: services });
 

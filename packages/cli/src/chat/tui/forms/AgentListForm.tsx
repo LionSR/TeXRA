@@ -5,11 +5,7 @@
 import { Box, Text } from 'ink';
 import { Effect } from 'effect';
 
-import {
-  computeAgentOptionsData,
-  getCatalogAgent,
-  type WorkspaceAgentsStores,
-} from '@agent/index';
+import { getCatalogAgent, type WorkspaceAgentsStores } from '@agent/index';
 import { Select } from '@cli/tui/ui/Select';
 import {
   computeSelectWindowSize,
@@ -19,6 +15,7 @@ import type { SelectItem } from '@cli/tui/ui/Select';
 import { loadTeamOptions } from '@common/teams/TeamPlan';
 import type { AgentOptionData, TeamOptionData } from '@shared/schemas';
 import { agentName } from '@shared/schemas';
+import { agentOptionsData } from '@texra/tools/documents/documentTask';
 import { createTeamCatalogPorts } from '@texra/controllers/mainView/teamCatalogPorts';
 
 import {
@@ -129,7 +126,7 @@ export function AgentListForm(props: AgentListFormProps): React.JSX.Element {
     loadingLabel: 'Loading agents...',
     load: () =>
       Effect.gen(function* () {
-        const agents = yield* computeAgentOptionsData(props.stores);
+        const agents = yield* agentOptionsData(props.stores);
         const teams = loadTeamOptions(
           yield* createTeamCatalogPorts(props.stores.repoState),
         );

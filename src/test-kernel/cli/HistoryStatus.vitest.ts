@@ -35,7 +35,7 @@ import {
   closeTestDefaultSession,
   openTestDefaultSession,
 } from '@test/support/sessionEnd';
-import { documentTaskConfig } from '@texra/agent/output/documentRecipe';
+import { asDocumentTask } from '@test/support/ProgressControllerHarnesses';
 
 const TOOL_USE_CONFIG: AgentConfig = AgentConfigSchema.parse({
   agent: 'orchestrator',
@@ -44,7 +44,7 @@ const TOOL_USE_CONFIG: AgentConfig = AgentConfigSchema.parse({
   workingDirectory: '/workspace',
 });
 const WORKFLOW_CONFIG: AgentConfig = AgentConfigSchema.parse(
-  documentTaskConfig({
+  asDocumentTask({
     ...TOOL_USE_CONFIG,
     agent: 'correct',
     instruction: 'Continue the workflow.',

@@ -3,10 +3,9 @@ import * as path from 'node:path';
 import { Effect, FileSystem } from 'effect';
 import { z } from 'zod';
 
-import { logFileCategory, logFilesLoaded, type AgentTrace } from '@agent/trace';
+import type { AgentTrace } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
-import type { DocumentTask } from '@shared/schemas';
-import type { AttachedMemoryMiss, FileListEntry } from '@shared/schemas';
+import { isRecipeConfig, type AttachedMemoryMiss } from '@shared/schemas';
 import { activatedSkillNames } from '@skills/runtimeSkills';
 import { parseFrontmatter } from '@tools/memory/memoryMeta';
 import { displayToStoragePath } from '@tools/memory/memoryUtils';
@@ -19,10 +18,7 @@ import {
   type ExternalRootKind,
 } from '@utils/files/externalRoots';
 import { readNormalizedFile } from '@utils/files/fsDurability';
-import {
-  getXmlFormatFromReadableFiles,
-  setVarFromFile,
-} from '@utils/files/varsUtils';
+import { getXmlFormatFromReadableFiles } from '@utils/files/varsUtils';
 
 /**
  * The fixed template vocabulary {@link buildTemplateInputs} produces to
@@ -34,9 +30,8 @@ import {
  * what follows the step (the tool-call mechanics, the skills) is rendered
  * per request (`stepInstructions`).
  *
- * A task's `files` variables have user-defined names, so
- * they are not in this vocabulary; they ride beside it as custom string keys
- * (see {@link TemplateVars}) and only templates read them.
+ * A plugin may render its own templates with more variables beside these
+ * (see {@link TemplateVars}); they are not in this vocabulary.
  */
 const TemplateInputsSchema = z.object({
   /** The launch instruction. */
@@ -81,19 +76,16 @@ type TemplateInputs = z.infer<typeof TemplateInputsSchema>;
 /**
  * The template-variable map accepted at the render boundary (PromptBuilder):
  * fixed variables may be absent (template rendering keeps `throwOnUndefined`
- * off, so templates must tolerate absence), and a task's
- * `files` variables add custom keys beside the fixed ones.
+ * off, so templates must tolerate absence), and a plugin's own variables add
+ * custom keys beside the fixed ones.
  */
 export type TemplateVars = Partial<TemplateInputs> & Record<string, unknown>;
 
-/** The fixed vocabulary as a runtime list; both readers build a set or a
- *  map from it, so its order is irrelevant. */
+/** The fixed vocabulary as a runtime list; its reader builds a map from it,
+ *  so its order is irrelevant. */
 const TEMPLATE_INPUT_TOKENS = Object.keys(
   TemplateInputsSchema.shape,
 ) as (keyof TemplateInputs)[];
-
-/** Runtime view of the fixed vocabulary for the required-file collision guard. */
-const FIXED_TEMPLATE_KEYS: ReadonlySet<string> = new Set(TEMPLATE_INPUT_TOKENS);
 
 /**
  * Render the fixed runtime template variables as literal `{{ TOKEN }}` text.
@@ -101,9 +93,8 @@ const FIXED_TEMPLATE_KEYS: ReadonlySet<string> = new Set(TEMPLATE_INPUT_TOKENS);
  * Agent-creation templates render once when a YAML file is produced, then the
  * generated agent renders again at runtime. These tokens must pass through the
  * creation render literally so the runtime render can substitute them later.
- * A task's `files` variables are intentionally not in this
- * fixed list; they remain caller-supplied names and `throwOnUndefined` stays
- * disabled until there is a separate validation story for them.
+ * A plugin's own variables are not in this fixed list; `throwOnUndefined`
+ * stays disabled, so a template tolerates their absence.
  */
 export function buildTemplatePassthrough(): Readonly<Record<string, string>> {
   return Object.freeze(
@@ -112,16 +103,6 @@ export function buildTemplatePassthrough(): Readonly<Record<string, string>> {
     ),
   );
 }
-
-/**
- * Information about a loaded file for prompt variable substitution.
- * Extends FileListEntry with required source and varName fields.
- * Compatible with FileListEntry (can be passed to AgentTrace.fileList).
- */
-type LoadedFileEntry = FileListEntry & {
-  source: string;
-  varName: string;
-};
 
 /**
  * The roots of the session this run belongs to, held as data, so a run never
@@ -134,24 +115,7 @@ type LoadedFileEntry = FileListEntry & {
 interface BuildTemplateInputsOptions {
   workspacePath: string | undefined;
   storageRoot: string;
-  /** Explicit trace stage for diagnostics emitted while loading variables. */
-  stageId?: string;
 }
-
-/**
- * A task's `files` variables: each YAML-named variable
- * `X` contributes a string `X_FILE`/`X_CONTENT` pair. The names are dynamic
- * by design, so they live outside the fixed {@link TemplateInputs} vocabulary.
- */
-type RequiredFileVars = Record<string, string>;
-
-/**
- * Result of loading file-based variables
- */
-type FileVarsResult = {
-  vars: RequiredFileVars;
-  files: LoadedFileEntry[];
-};
 
 type AttachedMemoriesResult = {
   xml: string | null;
@@ -159,10 +123,9 @@ type AttachedMemoriesResult = {
 };
 
 /**
- * What a launch opens from: the template inputs (the agent's required-file
- * pairs beside the fixed vocabulary); the names of the skills a tool-use
- * run's instruction activated; and the attached memories that could not be
- * read.
+ * What a launch opens from: the template inputs; the names of the skills a
+ * tool-use run's instruction activated; and the attached memories that could
+ * not be read.
  */
 export interface TemplateOpening {
   readonly inputs: TemplateVars;
@@ -177,34 +140,17 @@ export interface TemplateOpening {
  */
 export const buildTemplateInputs = Effect.fn('buildTemplateInputs')(function* (
   agentConfig: AgentConfig,
-  /** The document task the agent defines, null for a chat agent. */
-  task: DocumentTask | null,
-  agentPath: string,
   isAnthropicModel: boolean,
   logger: AgentTrace,
   options: BuildTemplateInputsOptions,
-): Effect.fn.Return<TemplateOpening, Error, FileSystem.FileSystem> {
-  // Parallelize independent I/O: required files and memories
-  const [{ vars: requiredVars, files: requiredFiles }, attachedMemories] =
-    yield* Effect.all(
-      [
-        getRequiredFileVars(task?.files ?? {}, agentPath),
-        getAttachedMemories(agentConfig.memories, options.storageRoot),
-      ],
-      { concurrency: 'unbounded' },
-    );
-
-  // The task's custom `files` keys ride beside the fixed vocabulary.
-  const inputs: TemplateInputs & Record<string, unknown> = {
+): Effect.fn.Return<TemplateOpening, never, FileSystem.FileSystem> {
+  const attachedMemories = yield* getAttachedMemories(
+    agentConfig.memories,
+    options.storageRoot,
+  );
+  const inputs: TemplateInputs = {
     ...getBasicVars(agentConfig, isAnthropicModel, options),
-    ...(yield* getFileVars(
-      agentConfig,
-      task !== null,
-      logger,
-      options.workspacePath,
-      options.stageId,
-    )),
-    ...requiredVars,
+    ...(yield* getFileVars(agentConfig, logger, options.workspacePath)),
     // `prepareAgentDefinition` normalized the list.
     ...(agentConfig.outputFiles.length > 0
       ? { OUTPUT_FILES: agentConfig.outputFiles }
@@ -212,17 +158,13 @@ export const buildTemplateInputs = Effect.fn('buildTemplateInputs')(function* (
     ATTACHED_MEMORIES: attachedMemories.xml,
   };
 
-  // Emit aggregated file list if any files were loaded
-  if (requiredFiles.length > 0) {
-    logFilesLoaded(logger, requiredFiles, options.stageId);
-  }
-
   return {
     inputs,
     // What the launch instruction activates (`/skills`): each step resolves
-    // the names against its own catalog.
-    activated:
-      task === null ? activatedSkillNames([agentConfig.instruction]) : [],
+    // the names against its own catalog. A recipe's run activates none.
+    activated: isRecipeConfig(agentConfig)
+      ? []
+      : activatedSkillNames([agentConfig.instruction]),
     attachedMemoryMisses: attachedMemories.misses,
   };
 });
@@ -307,15 +249,6 @@ const FILE_VAR_CATEGORIES: readonly FileCategoryPrefix[] = [
   'EDITED',
 ];
 
-/**
- * Files-loaded card label per category. `EDITED` is absent because prompt
- * assembly has never emitted a card for it.
- */
-const FILE_CATEGORY_CARD_LABEL: Partial<Record<FileCategoryPrefix, string>> = {
-  INPUT: 'Input Files',
-  CONTEXT: 'Context Files',
-};
-
 /** Variables contributed by the readable file categories. */
 type FileCategoryVars = {
   [P in FileCategoryPrefix as `${P}_FILE`]: string | null;
@@ -334,16 +267,13 @@ type FileVars = FileCategoryVars & Pick<TemplateInputs, 'MEDIA_FILE'>;
 
 const getFileVars = Effect.fn('userVars.getFileVars')(function* (
   agentConfig: AgentConfig,
-  /** A document task's run, which lists the files it loaded. */
-  documentTask: boolean,
   logger: AgentTrace,
   workspaceRoot: string | undefined,
-  stageId: string | undefined,
 ): Effect.fn.Return<FileVars, never, FileSystem.FileSystem> {
   // Compiler-checked completeness: every FileVars key starts at its
   // empty-file default here, so a future FileVars key without a matching
   // default is a type error at this literal. The loop below only overwrites
-  // the defaults, and a failed `setVarFromFile` leaves the null pair standing.
+  // the defaults, and an unreadable file leaves the null pair standing.
   const userVars: FileVars = {
     INPUT_FILE: null,
     INPUT_CONTENT: null,
@@ -383,20 +313,7 @@ const getFileVars = Effect.fn('userVars.getFileVars')(function* (
     for (const { file, reason } of skipped) {
       logger.warn(
         `Skipping unreadable file in prompt context: ${file} (${reason})`,
-        { stageId },
       );
-    }
-
-    // The rows use the read that fills the list vars and the primary pair.
-    // Only a document task's files get a card; media files never do (no user vars).
-    const cardLabel = FILE_CATEGORY_CARD_LABEL[prefix];
-    if (cardLabel != null && documentTask) {
-      const readableSet = new Set(readableFiles);
-      const entries = allFiles.map((file) => ({
-        path: file,
-        ok: readableSet.has(file),
-      }));
-      logFileCategory(logger, cardLabel, entries, stageId);
     }
 
     userVars[`ALL_${prefix}S`] = xml;
@@ -414,62 +331,6 @@ const getFileVars = Effect.fn('userVars.getFileVars')(function* (
 
   return userVars;
 });
-
-/**
- * A required-file variable `X` generates the `X_FILE`/`X_CONTENT` pair, which
- * `buildTemplateInputs` spreads after the fixed variables — so a name like `MEDIA`
- * or `INPUT` would silently override a fixed variable. Fail loudly when the
- * variables are built instead.
- */
-function assertNoFixedVarCollision(
-  varName: string,
-): Effect.Effect<void, Error> {
-  for (const generatedKey of [`${varName}_FILE`, `${varName}_CONTENT`]) {
-    if (FIXED_TEMPLATE_KEYS.has(generatedKey)) {
-      return Effect.fail(
-        new Error(
-          `task.files name "${varName}" generates "${generatedKey}", which collides with a fixed template variable. Rename the variable.`,
-        ),
-      );
-    }
-  }
-  return Effect.void;
-}
-
-/**
- * Load the files an agent bundles next to its YAML. Paths are resolved against
- * the agent's directory; an absolute path is used as written.
- */
-const getRequiredFileVars = Effect.fn('userVars.getRequiredFileVars')(
-  function* (
-    bindings: Readonly<Record<string, string>>,
-    agentPath: string,
-  ): Effect.fn.Return<FileVarsResult, Error, FileSystem.FileSystem> {
-    const vars: RequiredFileVars = {};
-    const files: LoadedFileEntry[] = [];
-
-    for (const [varName, filePath] of Object.entries(bindings)) {
-      if (!filePath) continue;
-
-      yield* assertNoFixedVarCollision(varName);
-      const fullPath = path.resolve(agentPath, filePath);
-      // Resolved against the agent's own directory, so it is already absolute
-      // and needs no workspace root to resolve against.
-      const result = yield* setVarFromFile(fullPath, varName, undefined);
-      if (result != null) {
-        vars[`${varName}_FILE`] = result.file;
-        vars[`${varName}_CONTENT`] = result.content;
-      }
-      files.push({
-        path: fullPath,
-        ok: result != null,
-        varName,
-        source: 'task.files',
-      });
-    }
-    return { vars, files };
-  },
-);
 
 /**
  * Load attached memory files and format them as an XML block for prompt injection.

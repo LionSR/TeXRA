@@ -522,7 +522,7 @@ export class RunHeader extends LitElement {
     // listed after them.
     const actions = (
       run.identity.kind === 'agent'
-        ? runMenuActions(run.documentTask)
+        ? runMenuActions(run.recipe)
         : NEUTRAL_RUN_ACTIONS
     ).filter((action) => run.actions.includes(action.action));
     const copied = this.copyDiagnostics.state.copied;

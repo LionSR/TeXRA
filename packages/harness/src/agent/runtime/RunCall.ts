@@ -123,8 +123,8 @@ export interface ScriptScope extends ScriptSource {
  * The rest of what a plugin's tool reads of its run (`ToolRun`, whose id
  * the core declares): exactly the fields the app's tools read. Its policy,
  * configuration, model, delegation scope, scope (a tool that starts
- * something the run should stop registers that stop there) and opening;
- * and, for the documents plugin, its document task and trace; and its run
+ * something the run should stop registers that stop there), opening and
+ * trace; and its run
  * files, which hold what the run read (`fileService.readFiles`). Never its
  * session: a plugin reaches the session's runs through `ChildRuns`, and
  * shows the person something through its call's `requests.present`.
@@ -138,7 +138,6 @@ declare module '../core/tools/ToolTypes.js' {
     readonly delegationAgentScope?: AgentRunShape['delegationAgentScope'];
     readonly scope: AgentRunShape['scope'];
     readonly opening: AgentRunShape['opening'];
-    readonly task: AgentRunShape['task'];
     readonly logger: AgentRunShape['logger'];
     readonly fileService: AgentRunShape['fileService'];
   }

@@ -21,7 +21,7 @@ import {
   seedRows,
 } from '@test/support/sessionTestUtils';
 import { setupPlatform } from '@test/support/setupPlatform';
-import { documentTaskConfig } from '@texra/agent/output/documentRecipe';
+import { asDocumentTask } from '@test/support/ProgressControllerHarnesses';
 
 describe('deriveResumability', () => {
   setupPlatform({ workspacePath: '/workspace' });
@@ -86,7 +86,7 @@ describe('deriveResumability', () => {
           type: 'run.config',
           aggregateId: qualifyAggregateId('run', runId),
           config: AgentConfigSchema.parse(
-            documentTaskConfig({ agent: 'polish', model: 'test-model' }),
+            asDocumentTask({ agent: 'polish', model: 'test-model' }),
           ),
         },
       ]);

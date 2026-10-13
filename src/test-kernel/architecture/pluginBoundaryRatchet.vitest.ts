@@ -140,6 +140,24 @@ describe('plugin boundaries (invariants 1 and 6)', () => {
     expect(offenders).toEqual([]);
   });
 
+  // Document tasks are TeXRA's documents plugin's: the harness knows a
+  // plugin's block (`AgentBlock`) and a recipe run, never this one. Still to
+  // go with the stored output shapes (lane H3, which tightens this to
+  // /document[ _-]?task/i): `kind="document-task"` in subagentResults.ts,
+  // AgentTool.ts's "The document task run … produced no output files",
+  // childRunOutput.ts's "no completed document task output manifest", and
+  // agentProposalLabel's 'document task' copy.
+  it('keeps the document task out of the harness', () => {
+    const offenders = files()
+      .filter((file) => file.startsWith('packages/harness/src/'))
+      .filter((file) =>
+        /\bdocument_task\b|\bDocumentTask|\bdocumentTask\b|\bX_(?:FILE|CONTENT)\b/.test(
+          source(file),
+        ),
+      );
+    expect(offenders).toEqual([]);
+  });
+
   it('actually scans the production source roots', () => {
     expectRealCoverage(ALL_HOST_PRODUCTION_ROOTS);
   });

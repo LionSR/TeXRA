@@ -60,7 +60,7 @@ export const ToolsOfferedPayloadSchema = z.strictObject({
 
 /**
  * What the run's delegation tools can launch: the visible agents, each
- * marked when it is also a document task; the models available for
+ * marked when it is also a task (it holds a plugin's block); the models available for
  * delegation (null when they could not be read); and whether worktrees are
  * on (null when no agent can be launched).
  */
