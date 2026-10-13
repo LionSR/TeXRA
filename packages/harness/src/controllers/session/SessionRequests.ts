@@ -272,10 +272,7 @@ const decideRequest = (
   )(withRunClaim(deps, req.runId, heldHere, answer));
 };
 
-/** A request the run's live loop answers; refused when none runs here. A
- *  run being resumed here is admitted before its loop runs, so the request
- *  waits for that resume (`texra resume --handoff` asks right after the
- *  admission). A `/compact` is answered once its row commits, never before. */
+/** Answered by the run's live loop once its resume here settles (none: refused). */
 const viaControls = (
   deps: RequestDeps,
   req: Extract<
@@ -285,10 +282,10 @@ const viaControls = (
 ): Effect.Effect<Outcome, RequestError> =>
   Effect.gen(function* () {
     const { runId } = req;
-    const noun = runNoun(deps.session(), runId);
     const unavailable = (reason: string) => new Unavailable({ runId, reason });
     yield* deps.session().followUps.resumeSettled(runId);
     const controls = deps.session().runs.get(runId)?.controls;
+    const noun = runNoun(deps.session(), runId);
     if (controls === undefined)
       return yield* unavailable(
         req.kind === 'run.compact'
