@@ -32,7 +32,7 @@ import type { ConfigStore } from '@platform/defaults/jsonConfigProvider';
 import { openTexraConfigStores } from '@platform/defaults/nodeStores';
 import { GlobalDatabase } from '@shared/session/database';
 import { usageLogLayer } from '@telemetry/UsageLogService';
-import { TEXRA_SETTING_ROWS } from '@texra/shared/settingsView/texraSettings';
+import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
 import { bootstrapHost } from '@texra/controllers/hostBootstrap';
 import { texraPlugins } from '@texra/tools/registry';
 import { USER_MCP_CONFIG_PATH } from '@tools/mcp/mcpConfig';
@@ -105,6 +105,7 @@ export const initializeElectronPlatform = Effect.fn(
       const mainDir = yield* resolveDesktopMainDir(moduleDirname);
       const resourcesPath = yield* resolveResourcesPath(mainDir);
       const configStores = yield* openTexraConfigStores(
+        TEXRA_SETTINGS,
         dataRoot,
         undefined,
         (message) => console.warn(`[desktop] ${message}`),
@@ -138,7 +139,6 @@ export const initializeElectronPlatform = Effect.fn(
       processLayer({
         globalStorage,
         plugins: texraPlugins(),
-        settings: TEXRA_SETTING_ROWS,
         mcpConfigPath: USER_MCP_CONFIG_PATH,
         secrets,
         // Application state is the one the CLI and the extension keep, in the

@@ -14,6 +14,7 @@ import type { JsonStore } from '@platform/defaults/jsonStore';
 // Local imports - test support
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
+import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
 import { loadSourceModule } from './loadSourceModule.ts';
 
 describe('desktop JsonConfigProvider (dual-store)', () => {
@@ -51,6 +52,7 @@ describe('desktop JsonConfigProvider (dual-store)', () => {
           workspace: workspaceStore,
           global: globalStore,
           local: localStore,
+          catalog: TEXRA_SETTINGS,
         }),
         globalStore,
         workspaceStore,

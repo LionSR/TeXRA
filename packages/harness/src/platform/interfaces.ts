@@ -12,6 +12,7 @@ import {
   type Result,
 } from 'effect';
 import type { AgentSource } from '@shared/schemas';
+import type { SettingsCatalog } from '@shared/state/stateSettings';
 
 import type { GlobalStorageFs } from './rootedFs';
 
@@ -41,10 +42,10 @@ export interface Disposable {
  */
 export type ConfigTarget = 'global' | 'workspace' | 'local';
 
-export interface ConfigInspection<T = unknown> {
-  globalValue?: T;
-  workspaceValue?: T;
-}
+/** One key's stored values, by the scope that holds each. */
+export type ConfigInspection<T = unknown> = Partial<
+  Record<'globalValue' | 'workspaceValue', T>
+>;
 
 /**
  * A configuration write the store refused. Every implementation bottoms out in
@@ -70,7 +71,7 @@ export interface ConfigProvider {
   /**
    * Resolution order an implementation must honor: stored workspace value,
    * stored global value, the setting catalog's own default
-   * (`getCoreSettingDefault`), and only then the caller's `defaultValue`.
+   * (`catalog.configDefault`), and only then the caller's `defaultValue`.
    * Callers of a cataloged `texra.*` key therefore omit `defaultValue`; it is
    * for keys the catalog does not own.
    *
@@ -101,6 +102,9 @@ export interface ConfigProvider {
     target?: ConfigTarget,
   ): Effect.Effect<void, ConfigWriteFailed>;
   inspect<T = unknown>(key: string): ConfigInspection<T>;
+  /** The setting rows this provider resolves against: the harness's and
+   *  its host's, built once per composition and carried with the stores. */
+  readonly catalog: SettingsCatalog;
 }
 
 // ---------------------------------------------------------------------------

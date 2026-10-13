@@ -631,20 +631,20 @@ describe('agent package Node configuration', () => {
         workspaceDir: '/workspace',
       }).roots;
 
-      yield* config.update('texra.agentOutputs.autoOpenFinal', true, 'global');
-      expect(config.get('agentOutputs.autoOpenFinal')).toBe(true);
-      expect(config.inspect('agentOutputs.autoOpenFinal')?.globalValue).toBe(
+      yield* config.update('texra.toolUse.requireBashApproval', true, 'global');
+      expect(config.get('toolUse.requireBashApproval')).toBe(true);
+      expect(config.inspect('toolUse.requireBashApproval')?.globalValue).toBe(
         true,
       );
 
-      yield* config.update('agentOutputs.autoOpenFinal', undefined, 'global');
-      // With no explicit value, resolution matches every host: the core-schema
-      // default (true) wins over the caller fallback.
-      expect(config.get('texra.agentOutputs.autoOpenFinal', false)).toBe(true);
+      yield* config.update('toolUse.requireBashApproval', undefined, 'global');
+      // With no explicit value, resolution matches every host: the harness
+      // row's default (true) wins over the caller fallback.
+      expect(config.get('texra.toolUse.requireBashApproval', false)).toBe(true);
       // A key outside the core schema still falls back to the caller default.
       expect(config.get('custom.nonCoreKey', false)).toBe(false);
       expect(
-        config.inspect('texra.agentOutputs.autoOpenFinal')?.globalValue,
+        config.inspect('texra.toolUse.requireBashApproval')?.globalValue,
       ).toBeUndefined();
     }),
   );

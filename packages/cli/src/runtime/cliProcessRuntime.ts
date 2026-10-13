@@ -40,7 +40,6 @@ import {
   processLayer,
   Sessions,
   StateWriteFailed,
-  type ProcessRuntime,
   type ProcessServices,
   type SessionOwner,
   type StateStore,
@@ -53,7 +52,6 @@ import { appStateStoreFromDatabase } from '@controllers/session/appStateStore';
 import type { MinimumLogLevel } from '@logger/effectDiagnostics';
 import { GlobalDatabase } from '@shared/session/database';
 import { usageLogLayer } from '@telemetry/UsageLogService';
-import { TEXRA_SETTING_ROWS } from '@texra/shared/settingsView/texraSettings';
 import { makeEditorHost, type EditorRegistry } from '@texra/tools/editorHost';
 import { texraPlugins } from '@texra/tools/registry';
 import { USER_MCP_CONFIG_PATH } from '@tools/mcp/mcpConfig';
@@ -163,17 +161,25 @@ export const NO_PLATFORM_INSTALL: CliProcessRuntimeInstall = Object.freeze({
   globalDatabase: refusingGlobalDatabase,
 });
 
-/** The runtime this module built, with the editor registry its plugins
- *  read, until its disposal starts. */
-let installed:
-  | {
-      readonly runtime: ManagedRuntime.ManagedRuntime<
-        ProcessServices | SessionOwner | Sessions,
-        never
-      >;
-      readonly editors: EditorRegistry;
-    }
-  | undefined;
+/** The editor registry this process's plugins read, as a value the CLI
+ *  holds: `texra serve` attaches its windows' editors to it. */
+export class CliEditors extends Context.Service<CliEditors, EditorRegistry>()(
+  '@texra/cli/CliEditors',
+) {}
+
+/** What a CLI command's program runs over: the process services, its
+ *  sessions, and the editor registry its plugins read. */
+export type CliServices =
+  ProcessServices | SessionOwner | Sessions | CliEditors;
+
+/** The process runtime the CLI installs: {@link CliServices}. */
+export type CliProcessRuntime = ManagedRuntime.ManagedRuntime<
+  CliServices,
+  never
+>;
+
+/** The runtime this module built, until its disposal starts. */
+let installed: CliProcessRuntime | undefined;
 
 /**
  * Install the process runtime, or join the one already installed: every entry
@@ -199,14 +205,14 @@ let installed:
 export function installCliProcessRuntime(
   storageRoot: string,
   options?: CliProcessRuntimeInstall,
-): ProcessRuntime {
-  if (installed) return installed.runtime;
+): CliProcessRuntime {
+  if (installed) return installed;
   // The global root resolves here, at install, with the pure calculator:
   // the directory is the state store's and the global database's to create
   // when they open below, and clone — whose storage root may be read-only,
   // and which runs no records operation — must not create it at all.
-  // The editor registry this install's plugins read; `texra serve`
-  // attaches its windows' editors to it (`installedEditorHost`).
+  // The editor registry this install's plugins read, served beside the
+  // process services: `texra serve` attaches its windows' editors to it.
   const editors = makeEditorHost();
   const globalStoragePath = resolveGlobalStoragePath(storageRoot);
   const version = readCliVersion();
@@ -232,61 +238,47 @@ export function installCliProcessRuntime(
   );
   const runtime = withForkFailureReporting(
     ManagedRuntime.make(
-      processLayer({
-        globalStorage: globalStoragePath,
-        plugins: texraPlugins({ editors }),
-        settings: TEXRA_SETTING_ROWS,
-        mcpConfigPath: USER_MCP_CONFIG_PATH,
-        secrets,
-        appState: options?.appState
-          ? AppState.layer(options.appState)
-          : Layer.effect(
-              AppState,
-              Effect.map(GlobalDatabase, (database) =>
-                appStateStoreFromDatabase(globalStoragePath, database.values),
+      Layer.merge(
+        Layer.succeed(CliEditors)(editors),
+        processLayer({
+          globalStorage: globalStoragePath,
+          plugins: texraPlugins({ editors }),
+          mcpConfigPath: USER_MCP_CONFIG_PATH,
+          secrets,
+          appState: options?.appState
+            ? AppState.layer(options.appState)
+            : Layer.effect(
+                AppState,
+                Effect.map(GlobalDatabase, (database) =>
+                  appStateStoreFromDatabase(globalStoragePath, database.values),
+                ),
               ),
-            ),
-        // A terminal has no editor language models; the CLI's platform installs
-        // the same port.
-        languageModel: UNAVAILABLE_LANGUAGE_MODEL_PORT,
-        agentDirectories: agentDirectoriesLayer,
-        // CLI model traffic goes to the same anonymous usage log the other hosts
-        // write to, tagged with editorType 'cli' and the CLI version. The
-        // runtime's disposal drains the queue, and that disposal is the last
-        // shutdown step of every exit path this process has.
-        usageLog: usageLogLayer({ version, editorType: 'cli' }),
-        // Absent, the one handle on the global root, held for this runtime's
-        // life and closed with it; clone's refusal opens nothing.
-        ...(options?.globalDatabase && {
-          globalDatabase: options.globalDatabase,
+          // A terminal has no editor language models; the CLI's platform installs
+          // the same port.
+          languageModel: UNAVAILABLE_LANGUAGE_MODEL_PORT,
+          agentDirectories: agentDirectoriesLayer,
+          // CLI model traffic goes to the same anonymous usage log the other hosts
+          // write to, tagged with editorType 'cli' and the CLI version. The
+          // runtime's disposal drains the queue, and that disposal is the last
+          // shutdown step of every exit path this process has.
+          usageLog: usageLogLayer({ version, editorType: 'cli' }),
+          // Absent, the one handle on the global root, held for this runtime's
+          // life and closed with it; clone's refusal opens nothing.
+          ...(options?.globalDatabase && {
+            globalDatabase: options.globalDatabase,
+          }),
+          minimumLogLevel: options?.minimumLogLevel ?? 'Info',
+          workspace: options?.workspace,
         }),
-        minimumLogLevel: options?.minimumLogLevel ?? 'Info',
-        workspace: options?.workspace,
-      }),
+      ),
     ),
   );
-  installed = { runtime, editors };
+  installed = runtime;
   // The output plane runs its Effects on this runtime from here on; the
   // disposal below hands it back the no-runtime state.
   setCliLogRuntime(runtime);
   return runtime;
 }
-
-/** The editor registry of the runtime installed now, for the one entry
- *  that serves windows (`texra serve`); none before an install or after
- *  its disposal starts. */
-export const installedEditorHost = (): EditorRegistry | undefined =>
-  installed?.editors;
-
-/** The sessions of the runtime installed now: the `Session` every entry
- *  that drives a project's runs takes (`initCliPlatform`'s, `texra
- *  serve`'s); a defect before an install or after its disposal starts. */
-export const installedSessions: Effect.Effect<Sessions['Service']> =
-  Effect.suspend(() =>
-    installed === undefined
-      ? Effect.die(new Error('No TeXRA process runtime is installed.'))
-      : Effect.map(installed.runtime.contextEffect, Context.get(Sessions)),
-  );
 
 /**
  * Dispose this process's runtime, if one is installed: the CLI's own end of
@@ -303,7 +295,7 @@ export const installedSessions: Effect.Effect<Sessions['Service']> =
  */
 export const disposeCliProcessRuntime: Effect.Effect<void> = Effect.suspend(
   () => {
-    const runtime = installed?.runtime;
+    const runtime = installed;
     if (!runtime) return Effect.void;
     installed = undefined;
     return runtime.disposeEffect.pipe(

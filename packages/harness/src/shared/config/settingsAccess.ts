@@ -17,7 +17,6 @@ import type {
   StateSettingEntry,
 } from '@shared/state/stateSettings';
 import { GlobalStateKey } from '@shared/state/stateKeys';
-import { settingByKey } from '@shared/state/stateSettings';
 
 const CHANNEL = 'settingsAccess';
 
@@ -243,7 +242,7 @@ export function writeSetting(
     yield* writeSlot(entry, entry.schema.parse(value), stores, target);
     if (value !== true) return;
     for (const excludedKey of entry.onWrite?.disablesWhenEnabled ?? []) {
-      const excluded = settingByKey(excludedKey);
+      const excluded = stores.config.catalog.byKey(excludedKey);
       if (!excluded) {
         return yield* Effect.die(
           new Error(

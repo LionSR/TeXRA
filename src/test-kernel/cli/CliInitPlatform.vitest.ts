@@ -14,6 +14,7 @@ import { MemoryConfigProvider } from '@platform/defaults/memoryConfigProvider';
 import { StateWriteFailed } from '@platform/interfaces';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { testStorageRoot } from '@test/cli/fixtures/cliContext';
+import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
 
 type SignalSpyEvent = 'SIGINT' | 'SIGTERM';
 type SignalRegistration = {
@@ -127,7 +128,7 @@ function cliContext(
     skillSourceOptions: {},
     // The provider the startup read opens and this init installs as the
     // roots' config, handed over rather than opened a second time here.
-    config: new MemoryConfigProvider(),
+    config: new MemoryConfigProvider(TEXRA_SETTINGS),
     ...overrides,
   };
 }

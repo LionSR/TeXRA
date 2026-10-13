@@ -89,7 +89,7 @@ import {
 import { readState, StateFlagSchema } from '@shared/config/settingsAccess';
 import { telemetryNoticeIfDue } from '@telemetry/telemetryNotice';
 import { usageLogLayer } from '@telemetry/UsageLogService';
-import { TEXRA_SETTING_ROWS } from '@texra/shared/settingsView/texraSettings';
+import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
 import type { CommandId } from '@texra/shared/commands/catalog';
 import {
   serviceProjectState,
@@ -191,7 +191,6 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
           // and the Lean 4 probe.
           setup: vscodeSetupPlatform,
         }),
-        settings: TEXRA_SETTING_ROWS,
         mcpConfigPath: USER_MCP_CONFIG_PATH,
         secrets,
         appState: Layer.effect(
@@ -273,6 +272,7 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
       // changes, so the configuration stores stay pinned for this process.
       const config = new JsonConfigProvider(
         yield* openTexraConfigStores(
+          TEXRA_SETTINGS,
           defaultNodeStorageRoot(),
           workspaceRoot,
           (message) => {

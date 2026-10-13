@@ -13,7 +13,7 @@ import {
   MODEL_COMPACTION_THRESHOLD_SETTING,
   MODEL_RETRY_MAX_ATTEMPTS_SETTING,
 } from '@shared/schemas';
-import { settingEnumOptions, settingByKey } from '@shared/state/stateSettings';
+import { settingEnumOptions } from '@shared/state/stateSettings';
 import type {
   SettingHost,
   StateSettingEntry,
@@ -47,7 +47,7 @@ import { orchestratorKillDenial } from '@tools/executions/killPolicy';
 import { readSettingFrom } from '@utils/config/platformSettings';
 
 function entryByKey(key: string): StateSettingEntry {
-  const entry = settingByKey(key);
+  const entry = TEXRA_SETTINGS.byKey(key);
   assert.ok(entry, `missing catalog entry ${key}`);
   return entry;
 }
@@ -387,7 +387,7 @@ describe('settingsAccess', () => {
           'texra.model.openaiParallelToolCalls',
         ];
         for (const key of rows) {
-          const entry = settingByKey(key);
+          const entry = TEXRA_SETTINGS.byKey(key);
           assert.ok(entry, `missing catalog entry ${key}`);
           assert.equal(entry.configTarget, 'global', `${key} configTarget`);
           const config = new FakeScopedConfigProvider();

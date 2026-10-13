@@ -17,6 +17,7 @@ import * as path from 'node:path';
 import { Effect } from 'effect';
 
 // Local imports - utilities
+import type { SettingsCatalog } from '@shared/state/stateSettings';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local file imports
@@ -66,6 +67,7 @@ import {
 export const openTexraWorkspaceConfigStores = Effect.fn(
   'nodeStores.openTexraWorkspaceConfigStores',
 )(function* (
+  catalog: SettingsCatalog,
   workspaceStoragePath: string,
   workspaceRoot: string | undefined,
   warn: (message: string) => void,
@@ -94,7 +96,7 @@ export const openTexraWorkspaceConfigStores = Effect.fn(
     { concurrency: 'unbounded' },
   );
   for (const key of workspace.keys()) {
-    if (!projectValueIgnored(key, workspace.get(key))) continue;
+    if (!projectValueIgnored(catalog, key, workspace.get(key))) continue;
     warn(
       `Ignoring "${key}" in ${projectConfigPath}: a project file cannot set it. Set it in the settings view or with /config.`,
     );
@@ -113,6 +115,7 @@ export const openTexraWorkspaceConfigStores = Effect.fn(
 export const openTexraConfigStores = Effect.fn(
   'nodeStores.openTexraConfigStores',
 )(function* (
+  catalog: SettingsCatalog,
   storageRoot: string,
   workspaceRoot: string | undefined,
   warn: (message: string) => void,
@@ -121,6 +124,7 @@ export const openTexraConfigStores = Effect.fn(
   const [{ workspace, local }, global] = yield* Effect.all(
     [
       openTexraWorkspaceConfigStores(
+        catalog,
         resolveWorkspaceStoragePath(storageRoot, workspaceRoot),
         workspaceRoot,
         warn,
@@ -136,5 +140,10 @@ export const openTexraConfigStores = Effect.fn(
     ],
     { concurrency: 'unbounded' },
   );
-  return { workspace, global, local } satisfies JsonConfigProviderOptions;
+  return {
+    workspace,
+    global,
+    local,
+    catalog,
+  } satisfies JsonConfigProviderOptions;
 });

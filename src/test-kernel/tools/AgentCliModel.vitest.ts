@@ -17,10 +17,6 @@ import {
   isCodexModel,
 } from '@shared/schemas';
 import {
-  installSettingsCatalog,
-  settingByKey,
-} from '@shared/state/stateSettings';
-import {
   ClaudeAgentStateKey,
   CodexStateKey,
 } from '@texra/shared/settingsView/integrationSettings';
@@ -37,14 +33,10 @@ const CLAUDE_AGENT_DEFAULT_MODEL = 'anthropic/claude-sonnet-5-5';
 const CODEX_DEFAULT_MODEL = 'openai/gpt-6.1-sol';
 const CodexModelSchema = CODEX_MODEL_SETTING.schema.unwrap();
 
-// The plugins' rows, as a host's `processLayer` installs them: this
-// suite runs in the pure tier, which has no fake platform to do it.
-installSettingsCatalog(TEXRA_SETTINGS);
-
 describe('agent CLI model settings', () => {
   it('defaults both efforts to medium and both models to registry models', () => {
     const row = (key: string) => {
-      const entry = settingByKey(key);
+      const entry = TEXRA_SETTINGS.byKey(key);
       if (!entry) throw new Error(`no row ${key}`);
       return settingDefault(entry);
     };

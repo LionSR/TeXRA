@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { MemoryConfigProvider } from '@platform/defaults/memoryConfigProvider';
+import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
 import { memoryPromptSection } from '@tools/memory/memoryPromptSection';
 
 describe('PromptBuilder', () => {
@@ -11,7 +12,7 @@ describe('PromptBuilder', () => {
       offered: ['memory'],
       isChild: false,
       isAnthropic: false,
-      config: new MemoryConfigProvider(),
+      config: new MemoryConfigProvider(TEXRA_SETTINGS),
     });
 
     // Behavioral contract, not exact prose (review note on #7959): pinned

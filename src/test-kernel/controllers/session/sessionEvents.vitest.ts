@@ -141,7 +141,6 @@ import {
 import { REPO_ROOT } from '@test/support/repoScan';
 import { storePluginsLayer } from '@test/support/setupPlatform';
 import { inquiryThreadRow } from '@test/support/inquiryThreadRow';
-import { TEXRA_SETTING_ROWS } from '@texra/shared/settingsView/texraSettings';
 import {
   DOCUMENTS_ACCEPTED_ARM,
   documentsAcceptedFact,
@@ -1324,8 +1323,6 @@ describe('Sessions owner', () => {
   // opens a root the first holds (two owners of its runs), also through a
   // second copy of the module or an alias of the root; a root the first does
   // not hold is refused; a root stays refused after the first closes it.
-  // Known gap until G11: both compositions still share the module-global
-  // settings catalog (`installSettingsCatalog`), which this does not test.
   it.live(
     'refuses a second composition a root the first holds, until it closes',
     () =>
@@ -1352,7 +1349,7 @@ describe('Sessions owner', () => {
           // Its scope closes it, and its sessions, whatever fails.
           const second = Context.get(
             yield* Layer.buildWithMemoMap(
-              testProcessLayer([], TEXRA_SETTING_ROWS, globalStorage),
+              testProcessLayer([], globalStorage),
               Layer.makeMemoMapUnsafe(),
               yield* Effect.scope,
             ),

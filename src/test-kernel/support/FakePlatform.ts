@@ -26,10 +26,8 @@ import { MemoryStateStore } from '@platform/defaults/memoryState';
 import type { LanguageModelPort } from '@platform/languageModel';
 import type { PlatformSecrets } from '@platform/secrets';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
-import {
-  getCoreSettingDefault,
-  type SettingHost,
-} from '@shared/state/stateSettings';
+import type { SettingHost } from '@shared/state/stateSettings';
+import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
 import type { SetupPlatformShape } from '@texra/tools/setup/platform';
 import type { SecretsFailed } from '@texra-ai/llm';
 
@@ -149,6 +147,9 @@ function seedFakeRoot(files: Record<string, string | Uint8Array>): void {
 }
 
 export class FakeConfigProvider implements ConfigProvider {
+  /** TeXRA's rows, as every host's config carries them. */
+  readonly catalog = TEXRA_SETTINGS;
+
   private readonly values = new Map<string, unknown>();
 
   private readonly targets = new Map<string, ConfigTarget>();
@@ -163,7 +164,7 @@ export class FakeConfigProvider implements ConfigProvider {
   get<T>(key: string, defaultValue?: T): T {
     const resolvedKey = this.resolveExistingKey(key);
     if (resolvedKey === undefined) {
-      const catalogDefault = getCoreSettingDefault(key) as T | undefined;
+      const catalogDefault = this.catalog.configDefault(key) as T | undefined;
       return catalogDefault === undefined
         ? (defaultValue as T)
         : catalogDefault;
@@ -227,6 +228,9 @@ export class FakeConfigProvider implements ConfigProvider {
  * #7085) that a defaulted target would mask.
  */
 export class FakeScopedConfigProvider implements ConfigProvider {
+  /** TeXRA's rows, as every host's config carries them. */
+  readonly catalog = TEXRA_SETTINGS;
+
   private readonly globalValues = new Map<string, unknown>();
 
   private readonly workspaceValues = new Map<string, unknown>();
@@ -247,7 +251,7 @@ export class FakeScopedConfigProvider implements ConfigProvider {
     if (this.workspaceValues.has(key))
       return this.workspaceValues.get(key) as T;
     if (this.globalValues.has(key)) return this.globalValues.get(key) as T;
-    const catalogDefault = getCoreSettingDefault(key) as T | undefined;
+    const catalogDefault = this.catalog.configDefault(key) as T | undefined;
     return catalogDefault === undefined ? (defaultValue as T) : catalogDefault;
   }
 

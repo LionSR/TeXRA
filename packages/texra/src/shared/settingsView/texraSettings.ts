@@ -2,9 +2,8 @@
  * TeXRA's own setting rows and keys, and the static catalog its settings
  * surfaces read: the harness's rows (`@shared/state/stateSettings`), these,
  * and the rows its plugins declare (`./documentsSettings`,
- * `./integrationSettings`). The hosts pass {@link TEXRA_SETTING_ROWS} to
- * `processLayer`; the webview and the CLI, which render the
- * catalog before or without a runtime, read {@link TEXRA_SETTINGS}.
+ * `./integrationSettings`). Every host's config carries {@link TEXRA_SETTINGS}
+ * (`ConfigProvider.catalog`), and the settings surfaces read it.
  *
  * Owner by key: the CLI's startup rows (`agent`, `model`, `chat`, `run`,
  * `outputFormat`), `agentOutputs.autoOpenFinal`, the bibliography
@@ -215,7 +214,7 @@ const TEXRA_CONFIG_ROWS: Record<
 };
 
 /** TeXRA's rows, its plugins' last, in catalog order. */
-export const TEXRA_SETTING_ROWS: readonly StateSettingEntry[] = [
+const TEXRA_SETTING_ROWS: readonly StateSettingEntry[] = [
   ...configTreeRows(TEXRA_CONFIG_ROWS),
   // --- LaTeX formatter -------------------------------------------------------
   surfacedSetting({
