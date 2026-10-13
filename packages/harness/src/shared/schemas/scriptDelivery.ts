@@ -13,6 +13,9 @@ const ScriptTallySchema = z.strictObject({
 });
 export type ScriptTally = z.infer<typeof ScriptTallySchema>;
 
+/** A file the script's calls wrote, by the workspace path it replaces, with
+ *  its line counts summed over the calls that wrote it (null once a call
+ *  reported none). */
 const ScriptDeliveryFileSchema = z.strictObject({
   path: z.string(),
   added: LineCountSchema.nullable(),
