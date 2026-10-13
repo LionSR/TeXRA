@@ -16,6 +16,7 @@ import {
   Effect,
   Exit,
   Layer,
+  Ref,
   Schedule,
   Scope,
   Stream,
@@ -324,6 +325,9 @@ export interface ServiceLink {
    *  ({@link SERVICE_OFFLINE}), or refused by a newer service
    *  ({@link WINDOW_OUTDATED}). */
   readonly away: SubscriptionRef.SubscriptionRef<string>;
+  /** Whether a window was told of the refusal `away` holds: once per
+   *  link, however many projects' windows attached through it. */
+  readonly refusalTold: Ref.Ref<boolean>;
 }
 
 /** Why `link` holds no service now, at each change: its `away` while its
@@ -380,6 +384,7 @@ export const linkService = Effect.fn('server.linkService')(function* (
     current.connection.client,
   );
   const away = yield* SubscriptionRef.make(SERVICE_OFFLINE);
+  const refusalTold = yield* Ref.make(false);
   yield* Effect.addFinalizer(() =>
     Effect.suspend(() => Scope.close(current.scope, Exit.void)),
   );
@@ -426,11 +431,12 @@ export const linkService = Effect.fn('server.linkService')(function* (
           `Reconnected to the TeXRA service ${current.connection.info.version} (pid ${current.connection.info.pid}).`,
         );
         // Reached again: whatever kept it away no longer holds, so a host
-        // that attaches later is not told it.
+        // that attaches later is not told it, and a later refusal is told.
         yield* SubscriptionRef.set(away, SERVICE_OFFLINE);
+        yield* Ref.set(refusalTold, false);
         yield* SubscriptionRef.set(client, current.connection.client);
       }),
     ),
   );
-  return { client, away };
+  return { client, away, refusalTold };
 });

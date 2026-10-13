@@ -12,6 +12,7 @@ import {
   FiberHandle,
   FiberMap,
   RcMap,
+  Ref,
   type Scope,
   Stream,
   SubscriptionRef,
@@ -214,18 +215,29 @@ export const attachWindowHost = Effect.fn('server.attachWindowHost')(function* (
   // which.
   const attached = yield* Deferred.make<void>();
   const attachment = yield* FiberHandle.make<void, never>();
-  // A newer TeXRA's service that refused this window is said once, in the
-  // window: every call it makes says it too, but none reconnects.
+  // A newer TeXRA's service that refused this window settles the wait (no
+  // attachment comes) and is said once per link, in the first window that
+  // hears it: every call it makes says it too, but none reconnects.
   yield* Effect.forkScoped(
     SubscriptionRef.changes(link.away).pipe(
       Stream.filter((reason) => reason === WINDOW_OUTDATED),
       Stream.take(1),
       Stream.runForEach((message) =>
-        Effect.suspend(
-          () => host.emit?.('requestShowError', { message }) ?? Effect.void,
-        ).pipe(
-          Effect.catch((error) =>
-            Effect.logWarning(`${message} (not shown: ${error.message})`),
+        Deferred.succeed(attached, undefined).pipe(
+          Effect.andThen(Ref.getAndSet(link.refusalTold, true)),
+          Effect.flatMap((told) =>
+            told
+              ? Effect.void
+              : Effect.suspend(
+                  () =>
+                    host.emit?.('requestShowError', { message }) ?? Effect.void,
+                ).pipe(
+                  Effect.catch((error) =>
+                    Effect.logWarning(
+                      `${message} (not shown: ${error.message})`,
+                    ).pipe(withLogChannel(CHANNEL)),
+                  ),
+                ),
           ),
         ),
       ),
