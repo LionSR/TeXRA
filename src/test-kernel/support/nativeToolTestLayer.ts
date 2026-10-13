@@ -85,6 +85,7 @@ export function nativeToolTestLayer(
     config: AgentConfigSchema.parse({ agent: 'test', model: 'test-model' }),
     model: testModelCell('test-model'),
     logger: noopTrace,
+    parentStage: noopTrace.openStage('Run: test'),
     steps: noStep(),
     scope: Scope.makeUnsafe(),
     opening: null,

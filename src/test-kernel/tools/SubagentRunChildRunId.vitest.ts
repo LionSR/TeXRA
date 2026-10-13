@@ -90,6 +90,7 @@ describe('launchDetachedSubagent child run launch', () => {
       }),
       model: testModelCell('openai/gpt-5-2025-08-07'),
       logger: noopTrace,
+      parentStage: noopTrace.openStage('Run: chat'),
       toolPolicy: {
         approvalPromptsUnavailable: false,
       },

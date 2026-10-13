@@ -16,8 +16,11 @@ import {
   getCatalogAgent,
   resolveDelegationScopeAgents,
 } from '@agent/index/agentRegistry';
-import { agentKey, DEFAULT_TOOL_CONFIG } from '@shared/schemas';
-import { documentTaskPatch } from '@texra/agent/output/documentRecipe';
+import { DEFAULT_TOOL_CONFIG } from '@shared/schemas';
+import {
+  documentTaskKey,
+  documentTaskPatch,
+} from '@texra/agent/output/documentRecipe';
 import { documentTaskOf } from '@texra/tools/documents/documentTask';
 import { errorResult } from '@tools/core/result';
 import { CALL_FIELDS, fileList } from '@tools/delegation/AgentTool';
@@ -101,9 +104,7 @@ const runDocumentTask = Effect.fn('DocumentTaskTool.call')(function* (
     task: {
       configFor: (chosen) => {
         // The exact entry: a bare name would re-resolve to what shadows it.
-        const key = chosen.agentSource
-          ? agentKey(chosen.agentSource, chosen.agent)
-          : chosen.agent;
+        const key = documentTaskKey(chosen);
         const entry = getCatalogAgent(key);
         const patch =
           entry &&

@@ -11,6 +11,7 @@ import { describe, afterEach, beforeEach, expect } from 'vitest';
 
 // Local imports
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
+import { documentTaskKey } from '@texra/agent/output/documentRecipe';
 import { DOCUMENT_TASK_BLOCK } from '@texra/shared/plugins/documents';
 import {
   rejectOversizedBibAttachments,
@@ -132,5 +133,16 @@ describe('documentTask', () => {
         ]);
       }),
     );
+  });
+
+  // The main view's picker spells the agent source-qualified and the launch
+  // stamps the resolved source beside it: the task's tools must look up that
+  // one entry, never `builtIn:builtIn:polish`.
+  it.each([
+    { agent: 'builtIn:polish', agentSource: 'builtIn' as const },
+    { agent: 'polish', agentSource: 'builtIn' as const },
+    { agent: 'builtIn:polish', agentSource: undefined },
+  ])('keys $agent with source $agentSource to builtIn:polish', (config) => {
+    expect(documentTaskKey(config)).toBe('builtIn:polish');
   });
 });

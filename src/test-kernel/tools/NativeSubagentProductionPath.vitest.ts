@@ -602,6 +602,7 @@ async function launchWaitingChild(options: {
       }),
       model: testModelCell(PARENT_MODEL),
       logger: noopTrace,
+      parentStage: noopTrace.openStage('Run: chat'),
       toolPolicy: {
         approvalPromptsUnavailable: false,
       },

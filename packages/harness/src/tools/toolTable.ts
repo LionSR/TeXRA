@@ -302,8 +302,8 @@ export function toolTable(plugins: readonly Plugin[]): ToolTable {
   const blocks = new Map(owned.map((block) => [block.key, block] as const));
   if (
     owned.some(
-      (block) =>
-        blocks.get(block.key) !== block ||
+      (block, index) =>
+        owned.findIndex(({ key }) => key === block.key) !== index ||
         block.key in AgentDefinitionSchema.shape,
     )
   )

@@ -20,7 +20,7 @@ import {
   type WorkspaceAgentsStores,
 } from '@agent/index/agentRegistry';
 import type { AgentEntry } from '@agent/index';
-import { agentKey } from '@shared/schemas';
+import { agentKey, agentName } from '@shared/schemas';
 import { documentTaskOf } from '@texra/tools/documents/documentTask';
 import type { AgentConfig } from '@texra-ai/harness/schemas';
 
@@ -68,6 +68,19 @@ for (let revision = 0; revision < revisions; revision += 1) {
 return (await tools.document_propose({})).documents;`;
 }
 
+/**
+ * The catalog key of the exact entry a document task's config names: its
+ * stamped source with the agent's bare name (the agent may be spelled
+ * source-qualified, as the launcher's picker spells it), or the agent as
+ * spelled when no source is stamped.
+ */
+export const documentTaskKey = (
+  config: Pick<AgentConfig, 'agent' | 'agentSource'>,
+): string =>
+  config.agentSource
+    ? agentKey(config.agentSource, agentName(config.agent))
+    : config.agent;
+
 /** What a launch as an agent's document task adds to its config. */
 type DocumentTaskPatch = Required<
   Pick<AgentConfig, 'script' | 'outputFiles' | 'agentSource'>
@@ -97,11 +110,7 @@ export function documentTaskPatch(
       : task.outputs.filter(Boolean),
     script: {
       // The exact entry: a bare name would re-resolve to whatever shadows it.
-      code: recipeSource(
-        config.agentSource
-          ? agentKey(config.agentSource, config.agent)
-          : config.agent,
-      ),
+      code: recipeSource(documentTaskKey(config)),
       title: config.agent,
       tools: [...DOCUMENT_TASK_TOOLS],
       kind: 'recipe',

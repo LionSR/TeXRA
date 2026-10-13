@@ -18,6 +18,7 @@ import {
   type WorkspaceAgentsStores,
 } from '@agent/index';
 import { buildTemplatePassthrough } from '@agent/prompt/templateInputs';
+import { withLogChannel } from '@logger/effectLog';
 import type { FileListEntry, ToolResult } from '@shared/schemas';
 import {
   DOCUMENT_TASK_BLOCK,
@@ -78,9 +79,16 @@ export const taskFileVars = Effect.fn('documents.taskFileVars')(function* (
     const fullPath = path.resolve(path.dirname(agentPath), filePath);
     const content = yield* readNormalizedFile(fs, fullPath).pipe(
       Effect.catch((error) =>
+        // The variable is simply absent from the prompt after this, so a
+        // mistyped path and a permission error must not read like a real
+        // absence.
         Effect.logWarning(
           `Failed to read ${varName} from file ${fullPath}: ${toErrorMessage(error)}`,
-        ).pipe(Effect.as(null)),
+        ).pipe(
+          withLogChannel('DocumentTask'),
+          Effect.annotateLogs({ data: error }),
+          Effect.as(null),
+        ),
       ),
     );
     if (content !== null) {

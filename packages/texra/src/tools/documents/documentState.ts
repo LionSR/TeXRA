@@ -25,7 +25,6 @@ import {
   workflowOutputPath,
 } from '@shared/constants/workflowOutput';
 import {
-  agentKey,
   qualifyAggregateId,
   fileLocationDisplayPath,
   ToolError,
@@ -37,6 +36,7 @@ import {
   latestDocumentRounds,
 } from '@texra/shared/plugins/documents';
 import { XmlOutputManager } from '@texra/agent/output/XmlOutputManager';
+import { documentTaskKey } from '@texra/agent/output/documentRecipe';
 import {
   createOutputState,
   getOutputFilesByRound,
@@ -66,7 +66,13 @@ import type { AgentConfig } from '@texra-ai/harness/schemas';
 /** What the documents read of the run their tool call serves. */
 type DocumentRun = Pick<
   ToolRun,
-  'config' | 'logger' | 'fileService' | 'runId' | 'opening' | 'model'
+  | 'config'
+  | 'logger'
+  | 'parentStage'
+  | 'fileService'
+  | 'runId'
+  | 'opening'
+  | 'model'
 >;
 
 /** The tool call the documents are opened for: its run, its roots, and
@@ -136,11 +142,7 @@ export const openDocuments = Effect.fn('documents.open')(function* ({
   const { config, logger, fileService, runId } = run;
   // The block as the catalog holds it now: the run's exact entry, which its
   // launch stamped.
-  const entry = getCatalogAgent(
-    config.agentSource
-      ? agentKey(config.agentSource, config.agent)
-      : config.agent,
-  );
+  const entry = getCatalogAgent(documentTaskKey(config));
   const task = entry && documentTaskOf(entry);
   if (!entry || !task)
     return yield* Effect.fail(

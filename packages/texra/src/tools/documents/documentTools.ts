@@ -7,7 +7,7 @@
  * from its rows and commits them again; none holds state between calls, so
  * a resumed recipe replays against the rows.
  */
-import { Cause, Effect, FileSystem } from 'effect';
+import { Cause, Effect, Exit, FileSystem } from 'effect';
 import { z } from 'zod';
 
 import { defineTool } from '@texra-ai/harness';
@@ -17,6 +17,7 @@ import { postProcessResponse } from '@latex/texraResponseTextProcessing';
 import {
   fileLocationDisplayPath,
   OUTPUT_END_TAG,
+  RUN_OUTCOME,
   RunIdSchema,
   ToolError,
   type FileLocation,
@@ -93,19 +94,27 @@ const autoOpensPdf = (docs: Documents) =>
  * What the first revision checks before the task does any work, whichever
  * launcher or resume reached it: the documents it revises exist, and no
  * context `.bib` is too large to attach whole. It writes the files-loaded
- * cards of the task's inputs and context (its template files' card comes
- * with the revision's prompt, which reads them). An error result
- * fails the call, and with it the task.
+ * cards of the task's inputs and context under `stageId` (its template
+ * files' card comes with the revision's prompt, which reads them). An error
+ * result fails the call, and with it the task.
  */
-const openTask = Effect.fn('documents.openTask')(function* (docs: Documents) {
+const openTask = Effect.fn('documents.openTask')(function* (
+  docs: Documents,
+  stageId: string,
+) {
   const { config, logger } = docs.run;
   const { fileService } = docs.deps;
   const fs = yield* FileSystem.FileSystem;
+  // A file is loaded when it reads: a directory or an unreadable path is
+  // not, though it exists.
   const located = (files: readonly string[]) =>
     Effect.forEach(files.filter(Boolean), (file) => {
       const absolutePath = fileService.locateSource(file).absolutePath;
       return Effect.map(
-        fs.exists(absolutePath).pipe(Effect.orElseSucceed(() => false)),
+        fs.readFile(absolutePath).pipe(
+          Effect.as(true),
+          Effect.orElseSucceed(() => false),
+        ),
         (ok) => ({ path: file, absolutePath, ok }),
       );
     });
@@ -113,7 +122,7 @@ const openTask = Effect.fn('documents.openTask')(function* (docs: Documents) {
   if (inputs.length === 0 || inputs.some((input) => !input.ok))
     return yield* Effect.fail(
       new ToolError(
-        `The document task of '${config.agent}' revises files: pass inputFiles with files that still exist (its result carries output files and diffs, not response text).`,
+        `The document task of '${config.agent}' revises files: pass inputFiles with files that still exist and can be read (its result carries output files and diffs, not response text).`,
       ),
     );
   const contexts = yield* located(config.contextFiles);
@@ -124,8 +133,8 @@ const openTask = Effect.fn('documents.openTask')(function* (docs: Documents) {
     contexts.filter((context) => context.ok).map((c) => c.absolutePath),
   );
   if (oversized) return oversized;
-  logFileCategory(logger, 'Input Files', inputs);
-  logFileCategory(logger, 'Context Files', contexts);
+  logFileCategory(logger, 'Input Files', inputs, stageId);
+  logFileCategory(logger, 'Context Files', contexts, stageId);
   return null;
 });
 
@@ -146,35 +155,60 @@ export const DocumentContextTool = defineTool({
   }),
   execute: Effect.fn('document_context')(function* ({ revision, critique }) {
     const docs = yield* documentsOfCall('document_context');
-    if (revision === 0) {
-      const refused = yield* openTask(docs);
-      if (refused) return refused;
-    }
-    const revisions = docs.task.requests.length;
-    if (revision >= revisions)
-      return yield* Effect.fail(
-        new ToolError(
-          `The task has ${revisions} revisions; revision ${revision} is not one of them.`,
+    // The first revision's checks and file cards nest under a stage of the
+    // run's own, closed with the call.
+    const stage =
+      revision === 0 ? docs.run.parentStage.child('Revision 1') : null;
+    return yield* revisionContext(docs, revision, critique, stage?.id).pipe(
+      Effect.onExit((exit) =>
+        Effect.sync(() =>
+          stage?.end(
+            Exit.isSuccess(exit) && exit.value.status !== 'error'
+              ? RUN_OUTCOME.COMPLETED
+              : RUN_OUTCOME.FAILED,
+          ),
         ),
-      );
-    const revised = yield* revisionPrompt(docs, revision);
-    if (revision === 0 && revised.loaded.length > 0)
-      logFilesLoaded(docs.run.logger, revised.loaded);
-    // The critic's review of the last revision, after this one's request.
-    const prompt = critique?.trim()
-      ? `${revised.prompt}\n\nA reviewer read your last revision. Apply the corrections that hold, and the suggested improvement where it serves this request:\n<critique revision="${revision}">\n${critique.trim()}\n</critique>`
-      : revised.prompt;
-    return {
-      ...executed(prompt, `Revision ${revision + 1} of ${revisions}`),
-      value: {
-        prompt,
-        mediaFiles: revised.media,
-        memories: docs.run.config.memories,
-        revisions,
-        reflect: docs.run.config.toolConfig.reflect,
-      },
-    };
+      ),
+    );
   }),
+});
+
+/** The prompt and media of `revision`, after the first revision's checks
+ *  (`openTask`) when `stageId` is its stage. */
+const revisionContext = Effect.fn('documents.revisionContext')(function* (
+  docs: Documents,
+  revision: number,
+  critique: string | null | undefined,
+  stageId: string | undefined,
+) {
+  if (stageId !== undefined) {
+    const refused = yield* openTask(docs, stageId);
+    if (refused) return refused;
+  }
+  const revisions = docs.task.requests.length;
+  if (revision >= revisions)
+    return yield* Effect.fail(
+      new ToolError(
+        `The task has ${revisions} revisions; revision ${revision} is not one of them.`,
+      ),
+    );
+  const revised = yield* revisionPrompt(docs, revision);
+  if (stageId !== undefined && revised.loaded.length > 0)
+    logFilesLoaded(docs.run.logger, revised.loaded, stageId);
+  // The critic's review of the last revision, after this one's request.
+  const prompt = critique?.trim()
+    ? `${revised.prompt}\n\nA reviewer read your last revision. Apply the corrections that hold, and the suggested improvement where it serves this request:\n<critique revision="${revision}">\n${critique.trim()}\n</critique>`
+    : revised.prompt;
+  return {
+    ...executed(prompt, `Revision ${revision + 1} of ${revisions}`),
+    value: {
+      prompt,
+      mediaFiles: revised.media,
+      memories: docs.run.config.memories,
+      revisions,
+      reflect: docs.run.config.toolConfig.reflect,
+    },
+  };
 });
 
 /** `document_extract`: the files a revision's reply holds. */
