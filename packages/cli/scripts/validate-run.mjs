@@ -1417,7 +1417,12 @@ async function validateSdkResumeApproval() {
         .filter((text) => text.startsWith(`{"${key}"`))
         .map((text) => JSON.parse(text)[key])
         .at(0);
-    await waitFor('the SDK approval handler to be asked', () => line('asked'));
+    // Both lines, in either order: the run's `started` can print after the
+    // handler's `asked`, and the resume below needs the run id.
+    await waitFor(
+      'the SDK run to start and its approval handler to be asked',
+      () => line('asked') !== undefined && line('started') !== undefined,
+    );
     asking.kill('SIGKILL');
     await exited;
     liveChildren.delete(asking);
