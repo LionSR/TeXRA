@@ -63,9 +63,37 @@ export function stricterPolicy(
   return STRICTNESS[a] <= STRICTNESS[b] ? a : b;
 }
 
+/** A run's policy: the project's (`project`), narrowed by the strictest
+ *  launch limit on its ancestry; without a run, the project's. */
+export function runPolicy<Id>(
+  project: TexraApprovalPolicy,
+  source: ApprovalGrantSource<Id>,
+  runId: Id | undefined,
+): TexraApprovalPolicy {
+  const limit = runId === undefined ? undefined : policyLimit(source, runId);
+  return limit === undefined ? project : stricterPolicy(project, limit);
+}
+
+/** `source` holding a run it has not folded yet with the parent edge and
+ *  grants its `run.start` names: what the run is born with, read before
+ *  that row commits. A run `source` holds is read as it holds it. */
+export function withUnborn<Id>(
+  source: ApprovalGrantSource<Id>,
+  runId: Id,
+  parentId: Id | null,
+  grants: ApprovalGrants | null | undefined,
+): ApprovalGrantSource<Id> {
+  if (source.runs.has(runId)) return source;
+  const runs = new Map<Id, { readonly parentId: Id | null }>(source.runs);
+  return {
+    runs: runs.set(runId, { parentId }),
+    policy: new Map(source.policy).set(runId, grants ?? NO_APPROVAL_GRANTS),
+  };
+}
+
 /** The strictest launch limit on a run's ancestry while its edges stand,
  *  or undefined when no launch narrowed it. */
-export function policyLimit<Id>(
+function policyLimit<Id>(
   source: ApprovalGrantSource<Id>,
   runId: Id,
 ): ApprovalPolicyLimit | undefined {

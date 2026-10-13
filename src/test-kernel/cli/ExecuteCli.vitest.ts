@@ -451,7 +451,11 @@ describe('executeCliRequest', () => {
           ]);
           await testRuntime().runPromise(session.log.settled);
         }
-        seen = liveToolGates(session, request.runId).approvalPromptsUnavailable;
+        seen = liveToolGates({
+          session,
+          runId: request.runId,
+          entry: { registration: null },
+        }).approvalPromptsUnavailable;
         return COMPLETED_RUN;
       },
     );

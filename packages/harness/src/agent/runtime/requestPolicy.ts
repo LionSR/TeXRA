@@ -14,10 +14,23 @@
  * present.
  */
 
-import { Cause, Context, Effect, Option, Scope, Stream } from 'effect';
+import {
+  Cause,
+  Context,
+  Effect,
+  Option,
+  Scope,
+  Stream,
+  SubscriptionRef,
+} from 'effect';
 import { withLogChannel } from '@logger/effectLog';
 import { runStateAppend } from '@shared/session/runHistory';
 
+import {
+  resolveBypass,
+  runPolicy,
+  withUnborn,
+} from '@shared/approvalBypassKind';
 import {
   decideHumanInputRequest,
   decideRetryApproval,
@@ -43,6 +56,7 @@ import type { Append } from '@shared/session/sessionEvents';
 import type { ToolStep } from '@tools/sessionTools';
 
 import { HostCapabilities, type StepToolInputs } from './agentToolResolution';
+import type { AgentRunShape } from './run/AgentRun';
 import type {
   AskOptions,
   LogWriteError,
@@ -65,13 +79,14 @@ const executableDecision = (
   session: SessionHandle,
   runId: RunId,
   policy = session.approvals.policy(runId),
+  // A run whose delegated work is bypassed (an Auto-approve launch) is
+  // asked nothing: every approval it would open is granted.
+  scopedBypass = session.approvals.bypass(runId, 'superYolo') !== null,
 ) =>
   decideTexraApproval({
     policy,
     promptRequired: true,
-    // A run whose delegated work is bypassed (an Auto-approve launch) is
-    // asked nothing: every approval it would open is granted.
-    scopedBypass: session.approvals.bypass(runId, 'superYolo') !== null,
+    scopedBypass,
     canPresent: canPresent(session),
   });
 
@@ -165,19 +180,29 @@ export function policyDecidedRows(
   ];
 }
 
-/** Whether a step's approval-gated tools are withheld: read live from its
- *  session's policy, its grants and its host; and the policy read, which a
- *  denial of the withheld tools names. */
-export function liveToolGates(
-  session: SessionHandle,
-  runId: RunId,
-): Pick<StepToolInputs, 'approvalPromptsUnavailable'> & {
+/** Whether a step's approval-gated tools are withheld, read live from its
+ *  session's policy, its grants and its host, and the policy read (which a
+ *  denial names). A fresh run's opening reads its uncommitted `run.start`. */
+export function liveToolGates({
+  session,
+  runId,
+  entry,
+}: Pick<AgentRunShape, 'session' | 'runId'> & {
+  readonly entry: Pick<AgentRunShape['entry'], 'registration'>;
+}): Pick<StepToolInputs, 'approvalPromptsUnavailable'> & {
   readonly policy: TexraApprovalPolicy;
 } {
-  const policy = session.approvals.policy(runId);
+  const view = SubscriptionRef.getUnsafe(session.view.ref);
+  const start = entry.registration?.[0];
+  const source =
+    start?.type === 'run.start'
+      ? withUnborn(view, runId, start.parent?.id ?? null, start.approvalPolicy)
+      : view;
+  const policy = runPolicy(session.approvals.policy(), source, runId);
+  const bypassed = resolveBypass(source, runId, 'superYolo') !== null;
   return {
     approvalPromptsUnavailable: isTexraApprovalDenied(
-      executableDecision(session, runId, policy),
+      executableDecision(session, runId, policy, bypassed),
     ),
     policy,
   };

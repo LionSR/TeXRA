@@ -273,34 +273,37 @@ const decideRequest = (
 };
 
 /** A request the run's live loop answers; refused when none runs here. A
- *  `/compact` is answered once its row commits, never before. */
+ *  run being resumed here is admitted before its loop runs, so the request
+ *  waits for that resume (`texra resume --handoff` asks right after the
+ *  admission). A `/compact` is answered once its row commits, never before. */
 const viaControls = (
   deps: RequestDeps,
   req: Extract<
     RuntimeRequest,
     { kind: `run.${'compact' | 'reset' | 'model'}` }
   >,
-): Effect.Effect<Outcome, RequestError> => {
-  const { runId } = req;
-  const noun = runNoun(deps.session(), runId);
-  const unavailable = (reason: string) => new Unavailable({ runId, reason });
-  const controls = deps.session().runs.get(runId)?.controls;
-  if (controls === undefined)
-    return Effect.fail(
-      unavailable(
+): Effect.Effect<Outcome, RequestError> =>
+  Effect.gen(function* () {
+    const { runId } = req;
+    const noun = runNoun(deps.session(), runId);
+    const unavailable = (reason: string) => new Unavailable({ runId, reason });
+    yield* deps.session().followUps.resumeSettled(runId);
+    const controls = deps.session().runs.get(runId)?.controls;
+    if (controls === undefined)
+      return yield* unavailable(
         req.kind === 'run.compact'
           ? `This ${noun} has no conversation to compact.`
           : `Resume the ${noun} to ${req.kind === 'run.reset' ? 'reset it' : 'switch its model'}.`,
-      ),
+      );
+    let action = controls.requestImmediateCompaction();
+    if (req.kind === 'run.reset')
+      action = controls.editView(req.handoff ?? null);
+    if (req.kind === 'run.model') action = controls.switchModel(req.model);
+    return yield* action.pipe(
+      Effect.mapError((error) => unavailable(error.message)),
+      Effect.as(done),
     );
-  let action = controls.requestImmediateCompaction();
-  if (req.kind === 'run.reset') action = controls.editView(req.handoff ?? null);
-  if (req.kind === 'run.model') action = controls.switchModel(req.model);
-  return action.pipe(
-    Effect.mapError((error) => unavailable(error.message)),
-    Effect.as(done),
-  );
-};
+  });
 
 /** Delete the admitted lifetime after acquiring its inactive run slot. */
 const deleteAdmittedRun = (

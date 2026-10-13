@@ -1521,12 +1521,16 @@ async function validateSdkResumeApproval() {
  * answers one message; `texra resume --fork` continues a new task holding
  * that conversation, `--handoff` continues it from a note alone, and
  * `--reset` from nothing. The store's `run.start` and `context.edit` rows
- * are kept as the artifact.
+ * are kept as the artifact. It runs in the service, and with the chat as
+ * its tasks' writer (`TEXRA_NO_SERVICE`), where the chat resumes the task
+ * in process and asks for the reset as soon as the resume is admitted.
  */
-async function validateForkResetHandoff() {
-  const cwd = makeScratch('texra-cli-fork-');
+async function validateForkResetHandoff({ inProcess }) {
+  const mode = inProcess ? 'in-process' : 'service';
+  const cwd = makeScratch(`texra-cli-fork-${mode}-`);
   try {
     const project = echoProject(cwd);
+    if (inProcess) project.ptyEnv.TEXRA_NO_SERVICE = '1';
     const source = project.firstRun('First message');
     // The source's `turn.begin`: inside its turn, which a fork refuses.
     const [inside] = project.readStore(
@@ -1569,7 +1573,7 @@ async function validateForkResetHandoff() {
     );
 
     const rows = project.readStore(VIEW_ROWS);
-    const artifactPath = writeArtifact('fork-reset-handoff.json', {
+    const artifactPath = writeArtifact(`fork-reset-handoff-${mode}.json`, {
       source,
       fork,
       replies,
@@ -3624,7 +3628,8 @@ async function validateCliRunArtifacts(options = {}) {
   validateStopHookBlock();
   validateSdkInlinePersona();
   await validateSdkResumeApproval();
-  await validateForkResetHandoff();
+  await validateForkResetHandoff({ inProcess: false });
+  await validateForkResetHandoff({ inProcess: true });
   await validateTuiForkHandoffReset();
   await validateBackgroundCompaction();
   await validateInterruptedTasks();

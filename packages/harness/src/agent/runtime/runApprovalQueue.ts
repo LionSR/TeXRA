@@ -24,9 +24,8 @@ import {
 import {
   APPROVAL_BYPASS_KINDS,
   NO_APPROVAL_GRANTS,
-  policyLimit,
   resolveBypass,
-  stricterPolicy,
+  runPolicy,
   type ApprovalBypassKind,
   type ApprovalGrants,
   type ApprovalGrantSource,
@@ -153,7 +152,7 @@ export interface SessionApprovals {
   /**
    * The approval policy `runId`'s requests are decided under: the
    * project's persisted `texra.approvalPolicy`, read at each call, narrowed
-   * by the strictest launch limit on the run's ancestry (`policyLimit`).
+   * by the strictest launch limit on the run's ancestry (`runPolicy`).
    * The persisted setting is the one owner of a project's policy; a client
    * changes it by writing that setting, never by telling a session, and a
    * launch widens it only for its own run, by its grants (an Auto-approve
@@ -179,15 +178,15 @@ export function createSessionApprovals(
     resolveBypass(view(), runId, kind);
   return {
     bypass,
-    policy: (runId) => {
-      const policy = readConfigSettingFrom<TexraApprovalPolicy>(
-        session().roots.config,
-        TEXRA_APPROVAL_POLICY_CONFIG_KEY,
-      );
-      const limit =
-        runId === undefined ? undefined : policyLimit(view(), runId);
-      return limit === undefined ? policy : stricterPolicy(policy, limit);
-    },
+    policy: (runId) =>
+      runPolicy(
+        readConfigSettingFrom<TexraApprovalPolicy>(
+          session().roots.config,
+          TEXRA_APPROVAL_POLICY_CONFIG_KEY,
+        ),
+        view(),
+        runId,
+      ),
     enqueue: (kind, runId, approval) =>
       Effect.suspend(() =>
         runId !== undefined && bypass(runId, kind) !== null

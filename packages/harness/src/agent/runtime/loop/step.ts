@@ -262,7 +262,7 @@ const openStep = Effect.fn('Step.open')(function* (
     const pinned = yield* run.session.tools
       .pin(off, { installed: true, held: run.toolInputs.held })
       .pipe(Scope.provide(scope));
-    const { policy, ...gates } = liveToolGates(run.session, run.runId);
+    const { policy, ...gates } = liveToolGates(run);
     const resolved = yield* resolveStepTools(pinned.entries, {
       ...run.toolInputs,
       ...gates,
