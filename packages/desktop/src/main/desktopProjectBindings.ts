@@ -22,6 +22,7 @@ import {
   type ProcessRuntime,
   type ProcessServices,
 } from '@texra-ai/harness';
+import { linkOutage } from '@texra/controllers/server/client';
 import type { HostDraftRequests } from '@texra/controllers/session/hostDraftRequests';
 import {
   createHostSnapshotSource,
@@ -235,13 +236,14 @@ export const openProjectBindings = Effect.fn('desktop.openProjectBindings')(
         onError: host.reportBackgroundError,
         publish: (next) => bridge.setHost(next),
       });
-      // The service link's state: offline while it reaches the service
-      // again, so the window never sits frozen without saying why.
+      // Why the service link holds no service, while it holds none (reaching
+      // it again, or refused by a newer TeXRA), so the window never sits
+      // frozen without saying so.
       const service = project.service;
       if (service !== undefined)
         yield* Effect.forkScoped(
-          Stream.runForEach(SubscriptionRef.changes(service.client), (client) =>
-            snapshot.setServiceOffline(client === null),
+          Stream.runForEach(linkOutage(service), (reason) =>
+            snapshot.setServiceOffline(reason),
           ),
         );
       // The funnel is host state every open project's snapshot carries (8.1).

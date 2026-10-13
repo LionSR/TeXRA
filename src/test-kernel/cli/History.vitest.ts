@@ -36,6 +36,7 @@ import {
   type RunOutcome,
 } from '@shared/schemas';
 import { type SessionHandle } from '@agent/runtime/SessionHandle';
+import type { CliProcessRuntime } from '@cli/runtime/cliProcessRuntime';
 
 const mocks = vi.hoisted(() => ({
   readConfig: vi.fn(),
@@ -300,7 +301,8 @@ describe('CLI history runtime', () => {
           testSessionOf(testDefaultSession(), { persistent: true }),
         ),
         roots: host.roots,
-        runtime: testRuntime(),
+        // The history command reads no `Sessions` or `CliEditors` from it.
+        runtime: testRuntime() as CliProcessRuntime,
       }),
     );
     mocks.readConfig.mockResolvedValue(config);

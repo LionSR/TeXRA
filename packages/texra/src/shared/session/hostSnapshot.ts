@@ -87,9 +87,10 @@ export const HostSnapshotSchema = z.object({
     agentConfig: AgentConfigBannerDataSchema.extend(visible),
     dependency: DependencyBannerDataSchema.extend(visible),
     gettingStarted: z.boolean(),
-    /** The background service this window's tasks run in went away, and
-     *  the window is reaching it again. */
-    serviceOffline: z.boolean(),
+    /** Why the background service this window's tasks run in is out of
+     *  reach (it went away and the window is reaching it again, or a newer
+     *  TeXRA's service refused this window); null while it is reached. */
+    serviceOffline: z.string().nullable(),
   }),
   onboarding: OnboardingFunnelStateSchema,
 });
@@ -111,7 +112,7 @@ export function emptyHostSnapshot(project: ProjectDisplay): HostSnapshot {
       agentConfig: { visible: false },
       dependency: { visible: false },
       gettingStarted: false,
-      serviceOffline: false,
+      serviceOffline: null,
     },
     onboarding: 'done',
   };

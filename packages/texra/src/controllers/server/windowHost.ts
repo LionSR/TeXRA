@@ -23,10 +23,14 @@ import type { HostInteractions } from '@agent/runtime/HostInteractions';
 import { withLogChannel } from '@logger/effectLog';
 import type { EditorCapabilities } from '@texra/tools/editorHost';
 import { toErrorMessage } from '@utils/errors/errorMessage';
+import {
+  WINDOW_OUTDATED,
+  type ServiceClient,
+  type ServiceLink,
+} from './client';
 import type { RpcClientError } from 'effect/rpc';
 import type { LanguageModelPort } from '@texra-ai/harness';
 
-import type { ServiceClient, ServiceLink } from './client';
 import type {
   HostAnswer,
   HostCall,
@@ -210,6 +214,23 @@ export const attachWindowHost = Effect.fn('server.attachWindowHost')(function* (
   // which.
   const attached = yield* Deferred.make<void>();
   const attachment = yield* FiberHandle.make<void, never>();
+  // A newer TeXRA's service that refused this window is said once, in the
+  // window: every call it makes says it too, but none reconnects.
+  yield* Effect.forkScoped(
+    SubscriptionRef.changes(link.away).pipe(
+      Stream.filter((reason) => reason === WINDOW_OUTDATED),
+      Stream.take(1),
+      Stream.runForEach((message) =>
+        Effect.suspend(
+          () => host.emit?.('requestShowError', { message }) ?? Effect.void,
+        ).pipe(
+          Effect.catch((error) =>
+            Effect.logWarning(`${message} (not shown: ${error.message})`),
+          ),
+        ),
+      ),
+    ),
+  );
   yield* Effect.forkScoped(
     Stream.runForEach(SubscriptionRef.changes(link.client), (client) =>
       client === null

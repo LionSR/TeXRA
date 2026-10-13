@@ -3,16 +3,7 @@
 import * as path from 'node:path';
 
 import * as vscode from 'vscode';
-import {
-  Data,
-  Effect,
-  Exit,
-  FileSystem,
-  Queue,
-  Scope,
-  Stream,
-  SubscriptionRef,
-} from 'effect';
+import { Data, Effect, Exit, FileSystem, Queue, Scope, Stream } from 'effect';
 
 import { LanguageModel, withProcessServices } from '@texra-ai/harness';
 import {
@@ -52,7 +43,7 @@ import type {
 } from '@texra/shared/session/sessionFrames';
 import { ToolEditApprovalController } from '@texra/controllers/approval/ToolEditApprovalController';
 import { OnboardingFunnelRefresher } from '@texra/controllers/onboarding/onboardingFunnel';
-import type { ServiceLink } from '@texra/controllers/server/client';
+import { linkOutage, type ServiceLink } from '@texra/controllers/server/client';
 import { serviceRecords } from '@texra/controllers/server/serviceSession';
 import {
   attachWindowHost,
@@ -549,11 +540,12 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
           : focused,
       );
       yield* Effect.forkScoped(this.chimeOnServiceDocuments());
-      // Offline while the link reaches the service again, so the view never
-      // sits frozen without saying why.
+      // While the link holds no service, the banner says why (reaching it
+      // again, or refused by a newer TeXRA), so the view never sits frozen
+      // without saying so.
       yield* Effect.forkScoped(
-        Stream.runForEach(SubscriptionRef.changes(service.client), (client) =>
-          this.snapshot.setServiceOffline(client === null),
+        Stream.runForEach(linkOutage(service), (reason) =>
+          this.snapshot.setServiceOffline(reason),
         ),
       );
     });
