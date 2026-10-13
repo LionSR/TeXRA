@@ -190,12 +190,11 @@ const internal = (cause: Cause.Cause<unknown>) =>
 
 /**
  * What `runId` ends with in `session`: once every owner of the run here has
- * left (its end committed) and the session's view, folded at least to the
- * log's commit then, shows it ended or gone, its `run.end` as the run's
- * records hold it, and `at`, that level's cursor, past the run's end and
- * past its removal if it was removed. The wait ends with the session's
- * fold. A run that ended with no `run.end` it could read (deleted, or its
- * store unreadable) ends with the outcome its view shows, without output.
+ * left, its `run.end` as the run's records hold it, and `at`, the log's
+ * commit ordinal then, past the run's end and past its removal if it was
+ * removed, whatever the live fold has drained. A run that ended with no
+ * `run.end` it could read (deleted, or its store unreadable) ends with the
+ * outcome its view shows, without output.
  */
 function runEnded(
   { session, handle }: ServiceProject,
@@ -205,19 +204,13 @@ function runEnded(
 > {
   return Effect.gen(function* () {
     yield* handle.runs.get(runId)?.drained ?? Effect.void;
-    const settled = handle.log.now();
     const head = yield* session.view.changes.pipe(
-      Stream.filter((level) => {
-        const run = level.runs.get(runId);
-        return (
-          level.cursor >= settled && (run === undefined || !isLiveRun(run))
-        );
-      }),
+      Stream.map((view) => view.runs.get(runId)),
+      Stream.filter((run) => run === undefined || !isLiveRun(run)),
       Stream.runHead,
     );
-    const level = Option.getOrUndefined(head);
-    const run = level?.runs.get(runId);
-    const at = level?.cursor ?? handle.log.now();
+    const run = Option.getOrUndefined(head);
+    const at = handle.log.now();
     const end = yield* getRunRecords(handle, runId)
       .readRunEnd()
       .pipe(
