@@ -42,6 +42,7 @@ import { markFailurePresented } from '@agent/runtime/terminalResultToast';
 import { agentErrorPresentation } from '@common/errors';
 import {
   RUN_OUTCOME,
+  type CommitOrdinal,
   type FoldInput,
   type RunId,
   type TranscriptSubscription,
@@ -264,13 +265,27 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
       ),
     ),
   );
+  /** This window's fold at or past `at`, the service's position when it
+   *  saw the run end. The service's answer to `task.ended` and the fold's
+   *  `task.watch` stream arrive apart, so a result that settled on the
+   *  answer alone could find the window still showing the run live, or a
+   *  resumed run with the outcome its previous activation left. At `at`
+   *  the fold holds every row the service had folded then: the run's end,
+   *  or its removal. */
+  const endedInView = (at: CommitOrdinal): Effect.Effect<void> =>
+    Stream.runDrain(
+      SubscriptionRef.changes(graph.view.ref).pipe(
+        Stream.takeUntil((level) => level.cursor >= at),
+      ),
+    );
   /** What a task the service runs ends with: asked of the service the
    *  link holds, again of the next one if the link is lost meanwhile (a
-   *  retired service finishes its tasks first). A run that failed fails
-   *  this, as a run here does: with its error, which the service's
-   *  terminal presenter showed this window, so it is marked presented, or
-   *  without one (an end with no error recorded) as a plain failure. A
-   *  service that cannot answer fails it offline. */
+   *  retired service finishes its tasks first), and held until this
+   *  window's fold shows it too. A run that failed fails this, as a run
+   *  here does: with its error, which the service's terminal presenter
+   *  showed this window, so it is marked presented, or without one (an
+   *  end with no error recorded) as a plain failure. A service that
+   *  cannot answer fails it offline. */
   const ended = (runId: RunId): Effect.Effect<RunEndResult, RunFailure> =>
     Effect.flatMap(connected, (client) =>
       client['task.ended']({ workspace, runId }),
@@ -284,6 +299,7 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
           Effect.andThen(Effect.fail(runFailure(OFFLINE))),
         ),
       ),
+      Effect.flatMap(({ at, ...end }) => Effect.as(endedInView(at), end)),
       Effect.flatMap(({ error, ...end }) => {
         if (end.outcome !== RUN_OUTCOME.FAILED)
           return Effect.succeed({ ...end, runId });
@@ -304,83 +320,38 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
           Effect.mapError(requestError),
         ),
     );
-  /** This window's fold now: what a start or resume reads before it asks
-   *  the service, so the run's end can be told from the one its previous
-   *  activation left. */
-  const levelNow = () => SubscriptionRef.getUnsafe(graph.view.ref);
-  /** The level of this window's fold that shows the run ended: the first
-   *  where the run holds a durable outcome, or is gone. The service's
-   *  answer to `task.ended` and the fold's `task.watch` stream arrive
-   *  apart, so a result that settled on the answer alone could find the
-   *  window still showing the run live. A run the fold had not shown
-   *  before the ask is awaited there first: its rows may still be on
-   *  their way, so its absence is not yet its removal. A resumed run's
-   *  fold can still show the outcome it ended with before, until its
-   *  `run.activate` folds: that outcome is known from `before`, read
-   *  ahead of the resume, and the new activation's rows all stamp a later
-   *  `lastTimestamp`. */
-  const endedInView = (
-    runId: RunId,
-    before: ReturnType<typeof levelNow>,
-  ): Effect.Effect<void> => {
-    const stale = before.runs.get(runId);
-    const staleAt = stale?.durableOutcome == null ? null : stale.lastTimestamp;
-    return Stream.runDrain(
-      SubscriptionRef.changes(graph.view.ref).pipe(
-        Stream.dropWhile(
-          (level) => stale === undefined && !level.runs.has(runId),
-        ),
-        Stream.takeUntil((level) => {
-          const run = level.runs.get(runId);
-          return (
-            run === undefined ||
-            (run.durableOutcome != null && run.lastTimestamp !== staleAt)
-          );
-        }),
-      ),
-    );
-  };
   /** The run the service admitted, as this window holds it: its end is the
    *  service's answer (asked once), held until this window's fold shows it
    *  too; its view this window's fold sliced to this activation; and its
    *  trace stays in the service. */
-  const runOf = (
-    runId: RunId,
-    before: ReturnType<typeof levelNow>,
-    redirectedFrom?: RunId,
-  ): Effect.Effect<Run> =>
-    Effect.map(
-      Effect.cached(
-        ended(runId).pipe(Effect.tap(() => endedInView(runId, before))),
+  const runOf = (runId: RunId, redirectedFrom?: RunId): Effect.Effect<Run> =>
+    Effect.map(Effect.cached(ended(runId)), (result) => ({
+      runId,
+      ...(redirectedFrom !== undefined && { redirectedFrom }),
+      result,
+      // A resumed run's levels can still show the outcome its previous
+      // activation ended with: the slice starts at a level where it is
+      // live, and ends with the outcome after that, or with the result.
+      view: SubscriptionRef.changes(graph.view.ref).pipe(
+        Stream.dropWhile(
+          (level) => level.runs.get(runId)?.durableOutcome !== null,
+        ),
+        Stream.takeUntil(
+          (level) => level.runs.get(runId)?.durableOutcome != null,
+        ),
+        Stream.haltWhen(Effect.exit(result)),
       ),
-      (result) => ({
-        runId,
-        ...(redirectedFrom !== undefined && { redirectedFrom }),
-        result,
-        // A resumed run's levels can still show the outcome its previous
-        // activation ended with: the slice starts at a level where it is
-        // live, and ends with the outcome after that, or with the result.
-        view: SubscriptionRef.changes(graph.view.ref).pipe(
-          Stream.dropWhile(
-            (level) => level.runs.get(runId)?.durableOutcome !== null,
-          ),
-          Stream.takeUntil(
-            (level) => level.runs.get(runId)?.durableOutcome != null,
-          ),
-          Stream.haltWhen(Effect.exit(result)),
-        ),
-        events: Stream.fail(
-          new TraceUnavailable({
-            runId,
-            reason: 'remote',
-            message: `Task ${runId} runs in the TeXRA service, which keeps its trace.`,
-          }),
-        ),
-        interrupt: request({ kind: 'run.stop', runId, reason: 'user' }).pipe(
-          Effect.ignore({ log: 'Warn', message: `Stopping task ${runId}` }),
-        ),
-      }),
-    );
+      events: Stream.fail(
+        new TraceUnavailable({
+          runId,
+          reason: 'remote',
+          message: `Task ${runId} runs in the TeXRA service, which keeps its trace.`,
+        }),
+      ),
+      interrupt: request({ kind: 'run.stop', runId, reason: 'user' }).pipe(
+        Effect.ignore({ log: 'Warn', message: `Stopping task ${runId}` }),
+      ),
+    }));
   const offline = () => runFailure(OFFLINE);
   /** A start or resume naming a window's own tools is refused: the service
    *  runs its own, so a run continued with them would wait on a tool no
@@ -469,7 +440,6 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
         return Effect.fail(runFailure('A service task needs its config.'));
       const refused = windowTools(input.tools);
       if (refused) return Effect.fail(refused);
-      const before = levelNow();
       return callService(link, offline, (client) =>
         client['task.start']({
           workspace,
@@ -491,12 +461,11 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
             return runFailure(cause.message, cause);
           }),
         ),
-      ).pipe(Effect.flatMap((runId) => runOf(runId, before)));
+      ).pipe(Effect.flatMap(runOf));
     },
     resume: (runId, input) => {
       const refused = windowTools(input?.tools);
       if (refused) return Effect.fail(refused);
-      const before = levelNow();
       return callService(link, offline, (client) =>
         client['task.resume']({ workspace, runId }).pipe(
           Effect.mapError((error) => runFailure(error.message)),
@@ -513,7 +482,7 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
                   message: describeFollowUpFailure('blocked'),
                 }),
               )
-            : runOf(resumed, before, resumed === runId ? undefined : runId),
+            : runOf(resumed, resumed === runId ? undefined : runId),
         ),
       );
     },

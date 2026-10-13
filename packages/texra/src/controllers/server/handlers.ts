@@ -36,6 +36,7 @@ import {
   emptyRunEndOutput,
   RUN_OUTCOME,
   RUN_PHASE,
+  type CommitOrdinal,
   type RunEnd,
   type RunId,
 } from '@shared/schemas';
@@ -184,22 +185,30 @@ const internal = (cause: Cause.Cause<unknown>) =>
 
 /**
  * What `runId` ends with in `session`: once every owner of the run has
- * left, its `run.end` as the run's records hold it. A run that ended with
- * no `run.end` it could read (deleted, or its store unreadable) ends with
- * the outcome its view shows, without output.
+ * left, its `run.end` as the run's records hold it, and `at`, the fold's
+ * position where the run first read as ended (or gone). A run that ended
+ * with no `run.end` it could read (deleted, or its store unreadable) ends
+ * with the outcome its view shows, without output.
  */
 function runEnded(
   session: SessionHandle,
   runId: RunId,
-): Effect.Effect<Pick<RunEnd, 'outcome' | 'output' | 'error'>> {
+): Effect.Effect<
+  Pick<RunEnd, 'outcome' | 'output' | 'error'> & { at: CommitOrdinal }
+> {
   return Effect.gen(function* () {
     yield* session.runs.get(runId)?.drained ?? Effect.void;
-    const head = yield* SubscriptionRef.changes(session.view.ref).pipe(
-      Stream.map((view) => view.runs.get(runId)),
-      Stream.filter((run) => run === undefined || !isLiveRun(run)),
+    const level = yield* SubscriptionRef.changes(session.view.ref).pipe(
+      Stream.filter((view) => {
+        const run = view.runs.get(runId);
+        return run === undefined || !isLiveRun(run);
+      }),
       Stream.runHead,
+      // The fold's stream never ends: a head is always found.
+      Effect.map(Option.getOrThrow),
     );
-    const run = Option.getOrUndefined(head);
+    const run = level.runs.get(runId);
+    const at = level.cursor;
     const end = yield* getRunRecords(session, runId)
       .readRunEnd()
       .pipe(
@@ -211,11 +220,12 @@ function runEnded(
       );
     if (end !== null) {
       const { outcome, output, error } = end;
-      return { outcome, output, ...(error !== undefined && { error }) };
+      return { outcome, output, at, ...(error !== undefined && { error }) };
     }
     return {
       outcome: run?.durableOutcome ?? RUN_OUTCOME.CANCELLED,
       output: emptyRunEndOutput(),
+      at,
     };
   });
 }
