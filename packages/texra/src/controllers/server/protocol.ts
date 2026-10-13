@@ -26,6 +26,8 @@
  *   records.
  * - `host.attach` / `host.focus` / `host.answer`: a window offering its host
  *   capabilities to its project's tasks (see `hostCalls.ts`).
+ * - `state.get` / `state.set`: the project's state store, which a window
+ *   reads and writes here rather than opening the project's store itself.
  */
 import { Effect, Schema } from 'effect';
 import { Rpc, RpcGroup } from 'effect/rpc';
@@ -38,6 +40,7 @@ import { TexraApprovalPolicySchema } from '@shared/approvalPolicy';
 import {
   CommitOrdinalSchema,
   DisplaySessionEventSchema,
+  JsonValueSchema,
   RunEndSchema,
   RunIdSchema,
   RunRecordFieldsSchema,
@@ -72,7 +75,7 @@ export const BUILD_VERSION: string =
 
 /** Bumped whenever a procedure or a payload changes shape. A client newer
  *  than the running service retires it; an older one stays in process. */
-export const PROTOCOL_VERSION = 24;
+export const PROTOCOL_VERSION = 25;
 
 /** `value` as JSON carries it: an absent field (`undefined`) is left out,
  *  which the wire's JSON check otherwise refuses. */
@@ -166,6 +169,17 @@ const TaskRecordsFailedSchema = z.object({
   message: z.string(),
 });
 export type TaskRecordsFailed = z.infer<typeof TaskRecordsFailedSchema>;
+
+/** Why the project's state has no answer: the service could not open the
+ *  project, or its store refused the read or the write. */
+const ProjectStateFailedSchema = z.object({
+  _tag: z.literal('ProjectStateFailed'),
+  message: z.string(),
+});
+export type ProjectStateFailed = z.infer<typeof ProjectStateFailedSchema>;
+
+/** A state key's stored value: `value` absent when the key is unset. */
+const StoredStateSchema = z.object({ value: JsonValueSchema.optional() });
 
 /** The project a call addresses: its folder, as the client spells it. */
 const workspace = Schema.String;
@@ -282,6 +296,25 @@ export const TexraRpcs = RpcGroup.make(
     success: zodWire(HostFrameSchema),
     error: zodWire(TaskFailedSchema),
     stream: true,
+  }),
+  /** A key of the project's state store, as it is stored now. */
+  Rpc.make('state.get', {
+    payload: { workspace, key: Schema.String },
+    success: zodWire(StoredStateSchema),
+    error: zodWire(ProjectStateFailedSchema),
+  }),
+  /** Store `next` under a key of the project's state store (an absent
+   *  value clears it); with `ifCurrent`, only while the stored value is
+   *  still that one. Answers whether it was written. */
+  Rpc.make('state.set', {
+    payload: {
+      workspace,
+      key: Schema.String,
+      next: zodWire(StoredStateSchema),
+      ifCurrent: zodWire(StoredStateSchema.nullable()),
+    },
+    success: Schema.Boolean,
+    error: zodWire(ProjectStateFailedSchema),
   }),
   Rpc.make('host.focus', { payload: { attachment: Schema.String } }),
   Rpc.make('host.answer', {

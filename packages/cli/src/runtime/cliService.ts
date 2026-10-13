@@ -58,6 +58,7 @@ import {
   type ServiceUnavailable,
 } from '@texra/controllers/server/client';
 import { bootstrapHost } from '@texra/controllers/hostBootstrap';
+import { sessionStoreMovedAsideMessage } from '@ui/copy/sessionStore';
 import { envFlag } from '@utils/system/envFlags';
 import { withPerKeyLane, type PerKeyLane } from '@utils/core/perKeyQueue';
 import { ensureError } from '@utils/errors/errorMessage';
@@ -168,6 +169,19 @@ export const cliServiceProjects = Effect.fn('cliServiceProjects')(function* (
             roots,
             interruptedTasks: 'offer',
           });
+          // A store moved aside at open (pre-1.0 or corrupt) is said once,
+          // in the service's log and to the project's first window: the
+          // windows open no store of their own to notice it.
+          const moved = handle.log.movedAside;
+          if (moved) {
+            const message = sessionStoreMovedAsideMessage(moved);
+            warn(message);
+            yield* handle.interactions.emit(
+              'requestShowInstruction',
+              { key: `store-moved-aside-${moved.aside}`, message },
+              { replayWhenAttached: true },
+            );
+          }
           // The same session, as every host drives it.
           const session = yield* sessions.open(roots, { persistent: true });
           return { handle, session };

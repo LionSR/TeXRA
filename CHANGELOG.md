@@ -24,6 +24,12 @@ All notable changes to this project will be documented in this file.
   for that folder are done by the service, as a VS Code window's are. Only
   the no-folder session, and every folder when the service cannot be
   reached, run in the app itself.
+- **A window of the TeXRA service keeps its project's settings in the
+  service.** A VS Code window or a desktop folder the service serves no
+  longer opens the project's store: project settings are read and written
+  through the service, and a store the service had to move aside (written
+  before 1.0, or damaged) is announced in the project's window. An older
+  window is refused by a newer service and asked to update.
 - **An explicit `--approval-policy yolo` is an Auto-approve launch, in the
   TeXRA service too.** The flag (or `TEXRA_APPROVAL_POLICY=yolo`) grants
   that run, and only that run, every approval it would open, recorded on

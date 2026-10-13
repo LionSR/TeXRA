@@ -17,6 +17,7 @@ import {
   Fiber,
   FiberSet,
   Option,
+  Result,
   Schedule,
   Scope,
   Stream,
@@ -37,6 +38,7 @@ import {
   RUN_OUTCOME,
   RUN_PHASE,
   type CommitOrdinal,
+  type JsonValue,
   type RunEnd,
   type RunId,
 } from '@shared/schemas';
@@ -55,6 +57,7 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 import {
   PROTOCOL_VERSION,
   TexraRpcs,
+  type ProjectStateFailed,
   type ServiceInfo,
   type TaskFailed,
   type TaskRecordsFailed,
@@ -167,6 +170,11 @@ const failed = (message: string, presented?: boolean): TaskFailed => ({
   _tag: 'TaskFailed',
   message,
   ...(presented === true && { presented }),
+});
+
+const stateFailed = (error: Error): ProjectStateFailed => ({
+  _tag: 'ProjectStateFailed',
+  message: error.message,
 });
 
 const recordsFailed = (
@@ -482,6 +490,43 @@ export const serviceHandlers = TexraRpcs.toLayer(
                 ),
               ),
           ),
+        ),
+      // The project's state store, the service's own: a window opens none.
+      'state.get': ({ workspace, key }) =>
+        Effect.scoped(
+          Effect.flatMap(projects.open(workspace), ({ session }) =>
+            session.roots.workspaceState.get(key),
+          ).pipe(
+            // The store answers what it holds, which is JSON.
+            Effect.map((value) => ({
+              ...(value !== undefined && { value: value as JsonValue }),
+            })),
+            Effect.mapError(stateFailed),
+          ),
+        ),
+      'state.set': ({ workspace, key, next, ifCurrent }) =>
+        Effect.scoped(
+          Effect.flatMap(projects.open(workspace), ({ session }) => {
+            const state = session.roots.workspaceState;
+            if (ifCurrent === null)
+              return Effect.as(state.update(key, next.value), true);
+            // Written only while the stored value is the one the window
+            // read: the window's read-modify-write, as one step here.
+            const expected = JSON.stringify(ifCurrent.value);
+            return state
+              .modify(key, (current) =>
+                JSON.stringify(current) === expected
+                  ? Result.succeed(next.value)
+                  : Result.fail('changed' as const),
+              )
+              .pipe(
+                Effect.as(true),
+                Effect.catchIf(
+                  (error) => error === 'changed',
+                  () => Effect.succeed(false),
+                ),
+              );
+          }).pipe(Effect.mapError(stateFailed)),
         ),
       'host.focus': ({ attachment }) => hosts.focus(attachment),
       'host.answer': ({ id, answer }) => hosts.answer(id, answer),
