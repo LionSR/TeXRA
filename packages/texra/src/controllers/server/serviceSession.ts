@@ -30,6 +30,7 @@ import {
   ToolsRefused,
   TraceUnavailable,
   Unavailable,
+  type ITool,
   type RequestError,
   type Run,
   type Session,
@@ -303,38 +304,69 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
           Effect.mapError(requestError),
         ),
     );
-  /** The run the service admitted, as this window holds it: its end is the
-   *  service's answer (asked once), its view this window's fold sliced to
-   *  this activation, and its trace stays in the service. */
-  const runOf = (runId: RunId, redirectedFrom?: RunId): Effect.Effect<Run> =>
-    Effect.map(Effect.cached(ended(runId)), (result) => ({
-      runId,
-      ...(redirectedFrom !== undefined && { redirectedFrom }),
-      result,
-      // A resumed run's levels can still show the outcome its previous
-      // activation ended with: the slice starts at a level where it is
-      // live, and ends with the outcome after that, or with the result.
-      view: SubscriptionRef.changes(graph.view.ref).pipe(
-        Stream.dropWhile(
-          (level) => level.runs.get(runId)?.durableOutcome !== null,
-        ),
-        Stream.takeUntil(
-          (level) => level.runs.get(runId)?.durableOutcome != null,
-        ),
-        Stream.haltWhen(Effect.exit(result)),
-      ),
-      events: Stream.fail(
-        new TraceUnavailable({
-          runId,
-          reason: 'remote',
-          message: `Task ${runId} runs in the TeXRA service, which keeps its trace.`,
+  /** The level of this window's fold that shows the run ended: the first,
+   *  once the run is in the fold, where it holds a durable outcome or is
+   *  gone. The service's answer to `task.ended` and the fold's `task.watch`
+   *  stream arrive apart, so a result that settled on the answer alone
+   *  could find the window still showing the run live. */
+  const endedInView = (runId: RunId): Effect.Effect<void> =>
+    Stream.runDrain(
+      SubscriptionRef.changes(graph.view.ref).pipe(
+        Stream.dropWhile((level) => !level.runs.has(runId)),
+        Stream.takeUntil((level) => {
+          const run = level.runs.get(runId);
+          return run === undefined || run.durableOutcome != null;
         }),
       ),
-      interrupt: request({ kind: 'run.stop', runId, reason: 'user' }).pipe(
-        Effect.ignore({ log: 'Warn', message: `Stopping task ${runId}` }),
-      ),
-    }));
+    );
+  /** The run the service admitted, as this window holds it: its end is the
+   *  service's answer (asked once), held until this window's fold shows it
+   *  too; its view this window's fold sliced to this activation; and its
+   *  trace stays in the service. */
+  const runOf = (runId: RunId, redirectedFrom?: RunId): Effect.Effect<Run> =>
+    Effect.map(
+      Effect.cached(ended(runId).pipe(Effect.tap(() => endedInView(runId)))),
+      (result) => ({
+        runId,
+        ...(redirectedFrom !== undefined && { redirectedFrom }),
+        result,
+        // A resumed run's levels can still show the outcome its previous
+        // activation ended with: the slice starts at a level where it is
+        // live, and ends with the outcome after that, or with the result.
+        view: SubscriptionRef.changes(graph.view.ref).pipe(
+          Stream.dropWhile(
+            (level) => level.runs.get(runId)?.durableOutcome !== null,
+          ),
+          Stream.takeUntil(
+            (level) => level.runs.get(runId)?.durableOutcome != null,
+          ),
+          Stream.haltWhen(Effect.exit(result)),
+        ),
+        events: Stream.fail(
+          new TraceUnavailable({
+            runId,
+            reason: 'remote',
+            message: `Task ${runId} runs in the TeXRA service, which keeps its trace.`,
+          }),
+        ),
+        interrupt: request({ kind: 'run.stop', runId, reason: 'user' }).pipe(
+          Effect.ignore({ log: 'Warn', message: `Stopping task ${runId}` }),
+        ),
+      }),
+    );
   const offline = () => runFailure(OFFLINE);
+  /** A start or resume naming a window's own tools is refused: the service
+   *  runs its own, so a run continued with them would wait on a tool no
+   *  one serves. */
+  const windowTools = (
+    tools: readonly ITool[] | undefined,
+  ): ToolsRefused | undefined =>
+    tools === undefined || tools.length === 0
+      ? undefined
+      : new ToolsRefused({
+          tools: tools.map((tool) => tool.definition.name),
+          message: "The TeXRA service cannot run a window's own tools.",
+        });
   return {
     roots,
     view: {
@@ -408,14 +440,8 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
       if (!('config' in input))
         // The service takes a host's whole configuration.
         return Effect.fail(runFailure('A service task needs its config.'));
-      const tools = input.tools ?? [];
-      if (tools.length > 0)
-        return Effect.fail(
-          new ToolsRefused({
-            tools: tools.map((tool) => tool.definition.name),
-            message: "The TeXRA service cannot run a window's own tools.",
-          }),
-        );
+      const refused = windowTools(input.tools);
+      if (refused) return Effect.fail(refused);
       return callService(link, offline, (client) =>
         client['task.start']({
           workspace,
@@ -439,8 +465,10 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
         ),
       ).pipe(Effect.flatMap((runId) => runOf(runId)));
     },
-    resume: (runId) =>
-      callService(link, offline, (client) =>
+    resume: (runId, input) => {
+      const refused = windowTools(input?.tools);
+      if (refused) return Effect.fail(refused);
+      return callService(link, offline, (client) =>
         client['task.resume']({ workspace, runId }).pipe(
           Effect.mapError((error) => runFailure(error.message)),
         ),
@@ -458,7 +486,8 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
               )
             : runOf(resumed, resumed === runId ? undefined : runId),
         ),
-      ),
+      );
+    },
     // The notices; a window's editor and previews are its own attachment.
     // An approval handler is a defect here: the service's windows answer
     // its prompts, so a handler would be asked nothing.
