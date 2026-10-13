@@ -1006,16 +1006,6 @@ view` on a sub-agent the parent waited for shows its report instead of
   recorded run.** `texra run` and `texra resume` copy a document task's
   output once the task has ended: a copy that fails exits non-zero with its
   cause, and the task stays recorded as completed.
-- **`texra resume <id> --handoff` and `--reset` work again when the chat is
-  its tasks' writer (`TEXRA_NO_SERVICE=1`).** The reset was refused with
-  "Resume the task to reset it.", so the handoff note never reached the
-  model and the chat sat idle. A reset, `/compact` or model switch sent
-  while a task is still resuming now waits for the resume to finish.
-- **An Auto-approve run offers its approval-gated tools from the first
-  step.** A run launched with `--approval-policy yolo` now offers the plan
-  tool and the memory instructions from its opening. Before, they appeared
-  only at its second step, with an extra "These tools are now available"
-  message in the conversation.
 - **A task that can no longer be read can be deleted from the task list.**
   A task whose saved history is damaged, or was written by an earlier
   build in a format this one does not read, is listed as unreadable. It

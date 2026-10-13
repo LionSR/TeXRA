@@ -1534,7 +1534,9 @@ async function validateForkResetHandoff({ inProcess }) {
   const cwd = makeScratch(`texra-cli-fork-${mode}-`);
   try {
     const project = echoProject(cwd);
+    // Each mode as named, whatever the validator itself was started with.
     if (inProcess) project.ptyEnv.TEXRA_NO_SERVICE = '1';
+    else delete project.ptyEnv.TEXRA_NO_SERVICE;
     const source = project.firstRun('First message');
     // The source's `turn.begin`: inside its turn, which a fork refuses.
     const [inside] = project.readStore(
