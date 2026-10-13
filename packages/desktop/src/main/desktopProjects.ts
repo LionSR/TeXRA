@@ -39,7 +39,10 @@ import {
   projectDisplayOf,
   type ProjectDisplay,
 } from '@texra/shared/session/hostSnapshot';
-import { serviceSession } from '@texra/controllers/server/serviceSession';
+import {
+  serviceProjectState,
+  serviceSession,
+} from '@texra/controllers/server/serviceSession';
 import type { ServiceLink } from '@texra/controllers/server/client';
 import { sessionStoreMovedAsideMessage } from '@ui/copy/sessionStore';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
@@ -219,6 +222,16 @@ export const readRememberedDesktopProjects = Effect.fn(
   return remembered satisfies RememberedDesktopProjects;
 });
 
+/** Show `message` in a warning dialog, unawaited: a dialog that cannot be
+ *  shown is logged, with the message it carried. */
+const warnInDialog = (message: string): void => {
+  showDesktopWarningDialog(message).catch((error: unknown) =>
+    console.warn(
+      `[desktop] A warning dialog could not be shown (${toErrorMessage(error)}): ${message}`,
+    ),
+  );
+};
+
 /**
  * Open one session over `roots`. Every fact this project's services answer
  * with comes from `roots` as data — the approval policy below — so a
@@ -267,9 +280,7 @@ function openProjectSession(
     // A store moved aside at open (pre-1.0 or corrupt) is said once, as the
     // extension and the CLI say it.
     if (handle.log.movedAside)
-      void showDesktopWarningDialog(
-        sessionStoreMovedAsideMessage(handle.log.movedAside),
-      );
+      warnInDialog(sessionStoreMovedAsideMessage(handle.log.movedAside));
     return {
       ...facts,
       root,
@@ -349,15 +360,19 @@ export function openDesktopProjectRegistry(
             const [workspaceState, repoState, workspaceConfigs] =
               yield* Effect.all(
                 [
-                  openProjectStateStore(storage, root).pipe(
-                    Effect.provideService(GlobalDatabase, globalDatabase),
-                  ),
+                  // A folder of the service keeps its state there: this
+                  // process opens no store of that project.
+                  options.service !== undefined
+                    ? Effect.succeed(serviceProjectState(options.service, root))
+                    : openProjectStateStore(storage, root).pipe(
+                        Effect.provideService(GlobalDatabase, globalDatabase),
+                      ),
                   openRepoStateStore(root, storage).pipe(
                     Effect.provideService(GlobalDatabase, globalDatabase),
                   ),
                   openTexraWorkspaceConfigStores(storage, root, (message) => {
                     console.warn(`[desktop] ${message}`);
-                    void showDesktopWarningDialog(message);
+                    warnInDialog(message);
                   }),
                 ],
                 { concurrency: 'unbounded' },

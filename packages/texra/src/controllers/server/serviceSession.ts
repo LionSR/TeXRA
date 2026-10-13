@@ -13,6 +13,7 @@ import {
   FiberHandle,
   Layer,
   Option,
+  Result,
   Semaphore,
   Ref,
   type Scope,
@@ -27,6 +28,8 @@ import {
   Rejected,
   ResumeRefused,
   RunFailure,
+  StateReadFailed,
+  StateWriteFailed,
   ToolsRefused,
   TraceUnavailable,
   Unavailable,
@@ -34,6 +37,7 @@ import {
   type RequestError,
   type Run,
   type Session,
+  type StateStore,
   type WorkspaceRoots,
 } from '@texra-ai/harness';
 import { describeFollowUpFailure } from '@agent/followUp/ToolUseFollowUp';
@@ -55,7 +59,7 @@ import { generateRunId } from '@utils/core';
 
 import { attachWindowHost } from './windowHost';
 import type { ServiceClient, ServiceLink } from './client';
-import type { TaskRecordsFailed } from './protocol';
+import type { ProjectStateFailed, TaskRecordsFailed } from './protocol';
 
 /** What a call made while the link reconnects is told. */
 const OFFLINE = 'The TeXRA service is offline; TeXRA is reconnecting to it.';
@@ -176,6 +180,100 @@ export const serviceRecords = (link: ServiceLink, workspace: string) => {
       ask(runId, (client) => client['task.exportInput']({ workspace, runId })),
     exportTrace: (runId: RunId) =>
       ask(runId, (client) => client['task.exportTrace']({ workspace, runId })),
+  };
+};
+
+/** How many times a change to a project state key is tried again while
+ *  another writer moves the key between its read and its write. */
+const STATE_CHANGE_ATTEMPTS = 8;
+
+/**
+ * The project's state store (`roots.workspaceState`) as the service holds
+ * it: a window in service mode opens no project store of its own. A change
+ * is a compare-and-set in the service, tried again while another writer
+ * moves the key between the read and the write.
+ */
+export const serviceProjectState = (
+  link: ServiceLink,
+  workspace: string,
+): StateStore => {
+  const call = <A, E>(
+    failed: (message: string, cause: unknown) => E,
+    use: (
+      client: ServiceClient,
+    ) => Effect.Effect<
+      A,
+      ProjectStateFailed | { readonly _tag: 'RpcClientError'; message: string }
+    >,
+  ): Effect.Effect<A, E> =>
+    callService(
+      link,
+      () => failed(OFFLINE, undefined),
+      (client) =>
+        use(client).pipe(
+          Effect.mapError((error) =>
+            failed(
+              error._tag === 'ProjectStateFailed'
+                ? error.message
+                : `The TeXRA service did not answer: ${error.message}`,
+              error,
+            ),
+          ),
+        ),
+    );
+  const get = (key: string) =>
+    call(
+      (message, cause) => new StateReadFailed({ key, message, cause }),
+      (client) =>
+        Effect.map(
+          client['state.get']({ workspace, key }),
+          (stored) => stored.value,
+        ),
+    );
+  const set = (
+    key: string,
+    next: unknown,
+    ifCurrent: { value: unknown } | null,
+  ) =>
+    call(
+      (message, cause) => new StateWriteFailed({ key, message, cause }),
+      (client) =>
+        client['state.set']({
+          workspace,
+          key,
+          next: { value: next },
+          ifCurrent,
+        } as Parameters<ServiceClient['state.set']>[0]),
+    );
+  return {
+    get,
+    update: (key, value) => Effect.asVoid(set(key, value, null)),
+    modify: (key, change) =>
+      Effect.gen(function* () {
+        for (let attempt = 0; attempt < STATE_CHANGE_ATTEMPTS; attempt += 1) {
+          const current = yield* get(key).pipe(
+            Effect.mapError(
+              (error) =>
+                new StateWriteFailed({
+                  key,
+                  message: error.message,
+                  cause: error,
+                }),
+            ),
+          );
+          const next = change(current);
+          if (Result.isFailure(next)) return yield* Effect.fail(next.failure);
+          if (yield* set(key, next.success, { value: current }))
+            return next.success;
+        }
+        return yield* Effect.fail(
+          new StateWriteFailed({
+            key,
+            message: `"${key}" kept changing in the TeXRA service while this window wrote it; try again.`,
+            cause: undefined,
+          }),
+        );
+      }),
   };
 };
 
