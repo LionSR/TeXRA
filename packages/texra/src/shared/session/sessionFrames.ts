@@ -26,6 +26,8 @@ import {
 } from 'effect';
 import { z } from 'zod';
 
+import type { RequestError } from '@texra-ai/harness';
+
 import {
   CommitOrdinalSchema,
   ExistenceReconciliationSchema,
@@ -108,6 +110,10 @@ export const RequestErrorWireSchema = z.discriminatedUnion('_tag', [
   z.object({ _tag: z.literal('Internal'), ref: RequestIdSchema }),
 ]);
 export type RequestErrorWire = z.infer<typeof RequestErrorWireSchema>;
+
+/** A request error in its wire shape: the fields the wire schema names. */
+export const wireError = (error: RequestError): RequestErrorWire =>
+  RequestErrorWireSchema.parse(error);
 
 /** What the host answers a `host.request` with (PRD 8.3): the pickers and
  *  the drop return the paths they accepted, a polish returns its text, a

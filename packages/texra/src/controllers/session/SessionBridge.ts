@@ -43,7 +43,6 @@ import {
   Internal,
   isRequestRefusal,
   type HostRequestFailure,
-  type RequestError,
   type Session,
 } from '@texra-ai/harness';
 import { withLogChannel } from '@logger/effectLog';
@@ -51,9 +50,9 @@ import type { HostRequest } from '@texra/shared/session/hostRequest';
 import type { HostSnapshot } from '@texra/shared/session/hostSnapshot';
 import {
   UpMessageSchema,
+  wireError,
   type DownMessage,
   type HostOutcome,
-  type RequestErrorWire,
   type Response,
   type Subscribe,
   type SurfaceActionMessage,
@@ -118,29 +117,6 @@ class SessionBridgeClosedError extends Data.TaggedError(
 ) {
   override get message(): string {
     return 'SessionBridge is closed; cannot attach a port';
-  }
-}
-
-function wireError(error: RequestError): RequestErrorWire {
-  switch (error._tag) {
-    case 'NotOwner':
-      return { _tag: 'NotOwner', runId: error.runId };
-    case 'Unavailable':
-      return {
-        _tag: 'Unavailable',
-        runId: error.runId,
-        reason: error.reason,
-      };
-    case 'Cancelled':
-      return { _tag: 'Cancelled' };
-    case 'Rejected':
-      return {
-        _tag: 'Rejected',
-        reason: error.reason,
-        ...(error.docsPage && { docsPage: error.docsPage }),
-      };
-    case 'Internal':
-      return { _tag: 'Internal', ref: error.ref };
   }
 }
 

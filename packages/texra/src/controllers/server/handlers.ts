@@ -25,7 +25,6 @@ import {
 
 import {
   Internal,
-  type RequestError,
   type Run,
   type Session,
 } from '@texra-ai/harness';
@@ -44,7 +43,7 @@ import { isLiveRun, type SessionView } from '@shared/session/sessionView';
 import { loadChatExportInput } from '@texra/agent/export/loadChatExportInput';
 import type { HostSnapshot } from '@texra/shared/session/hostSnapshot';
 import {
-  RequestErrorWireSchema,
+  wireError,
   type RequestErrorWire,
 } from '@texra/shared/session/sessionFrames';
 import { frameSubscription } from '@texra/controllers/session/SessionFramer';
@@ -158,10 +157,6 @@ function liveRoot(
     root = parent;
   return root;
 }
-
-/** A request error in its wire shape: the fields the wire schema names. */
-const wireError = (error: RequestError): RequestErrorWire =>
-  RequestErrorWireSchema.parse(error);
 
 const failed = (message: string, presented?: boolean): TaskFailed => ({
   _tag: 'TaskFailed',
