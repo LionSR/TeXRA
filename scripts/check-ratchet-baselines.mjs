@@ -18,6 +18,12 @@
  * `config/storage/row-kinds-ever.json` runs the other way: it lists every row
  * kind a build ever stored, so it may only grow; a name the base lists and the
  * tree does not is a problem.
+ *
+ * The hosts' internal door (`@agent/runtime`) only shrinks: its report
+ * (`config/api-reports/harness.agent-runtime.api.md`, read with the parser
+ * beside its writer) may list no name the base's does not, may not go while
+ * the door stays, and may be missing at the base only in the change that
+ * adds it.
  */
 
 // Node imports
@@ -27,6 +33,8 @@ import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
+
+import { HOST_DOOR, reportedNames } from './core-quality-api-report.mjs';
 
 const rootDir = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -312,6 +320,28 @@ function main() {
   for (const kind of everBefore)
     if (!everNow.has(kind))
       problems.push(`${ROW_KINDS_EVER}: ${kind} removed (the list only grows)`);
+  // The host door's names: a subset of the base's, the report kept while
+  // the door is, new only in the change that adds it.
+  const doorReport = `config/api-reports/${HOST_DOOR.report}`;
+  const atBase = (file) =>
+    git('ls-tree', '--name-only', base, '--', file).trim() !== '';
+  const doorNow = existsSync(path.join(rootDir, doorReport))
+    ? reportedNames(readFileSync(path.join(rootDir, doorReport), 'utf8'))
+    : null;
+  if (atBase(doorReport)) {
+    const doorBefore = new Set(
+      reportedNames(git('show', `${base}:${doorReport}`)),
+    );
+    if (doorNow === null) {
+      if (existsSync(path.join(rootDir, HOST_DOOR.source)))
+        problems.push(
+          `${doorReport}: deleted while ${HOST_DOOR.source} stays (only deleting the door retires it)`,
+        );
+    } else
+      for (const name of doorNow)
+        if (!doorBefore.has(name))
+          problems.push(`${doorReport}: ${name} added (the door only shrinks)`);
+  }
   const present = new Set(files);
   for (const file of baseFiles)
     if (file && !present.has(file))

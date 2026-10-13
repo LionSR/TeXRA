@@ -43,12 +43,12 @@ export function coreEntries(rootDir) {
  * (`isShrinkOnly`): a new name, or a missing report, fails even under
  * `--update`.
  */
-const HOST_DOOR = {
+export const HOST_DOOR = Object.freeze({
   name: '@agent/runtime',
   subpath: '.',
   source: 'packages/harness/src/agent/runtime/index.ts',
   report: 'harness.agent-runtime.api.md',
-};
+});
 
 /** Whether report `name`'s export list may only shrink. */
 export const isShrinkOnly = (name) => name === HOST_DOOR.report;

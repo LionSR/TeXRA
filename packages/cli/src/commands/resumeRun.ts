@@ -2,7 +2,8 @@ import * as path from 'node:path';
 
 import { Effect, FileSystem, PlatformError, Result } from 'effect';
 
-import { describeFollowUpFailure, runRefusal } from '@agent/runtime';
+import { describeFollowUpFailure } from '@texra-ai/harness';
+import { runRefusal } from '@agent/runtime';
 import { getRunRecords } from '@agent/storage';
 import {
   agentKey,

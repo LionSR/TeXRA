@@ -41,9 +41,6 @@ export {
   terminalFailurePresented,
 } from './terminalResultToast';
 
-// The refusal wording a host applies to a resume that did not start.
-export { describeFollowUpFailure } from '@agent/followUp/ToolUseFollowUp';
-
 // A host's emit handlers, one per presentation event.
 export type { PresentationEventHandlers } from './runtimePresentationEvents';
 

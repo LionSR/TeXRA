@@ -2,9 +2,8 @@
 
 Generated from `packages/harness/src/agent/runtime/index.ts` by `node scripts/check-core-quality.mjs --update`; do not edit. The hosts' one internal door, not SDK surface: its names only shrink.
 
-Exports: 15
+Exports: 14
 
-- `describeFollowUpFailure` — `function describeFollowUpFailure: (reason: FollowUpFailureReason) => string`
 - `getHelperModelName` — `function getHelperModelName: (stores: SettingsStores) => Effect<string, StateReadFailed, never>`
 - `HostInteractions` — `interface HostInteractions { emit?<K extends RuntimePresentationEvent>(event: K, payload: RuntimePresentationEventPayloads[K]): HostPresentation; readonly approvalPromptsUnavailable?: boolean; approvalDenied?(denial: ApprovalPolicyDenial, runId: RunId): void; readonly languageModel?: LanguageModelPort; presentToolEdit?(request: ToolEditApprovalRequest): void; releaseToolEdit?(requestId: string): Effect.Effect<void>; approveToolEdit?(requestId: string): Effect.Effect<boolean>; preview?(requestId: string): Effect.Effect<ToolEditContent | null>; dispose?(): void; }`
 - `PresentationEventHandlers` — `type PresentationEventHandlers<Payloads = RuntimePresentationEventPayloads, Result = unknown> = { [K in keyof Payloads]: (payload: Payloads[K]) => Result; }; ≡ PresentationEventHandlers<Payloads, Result>`
