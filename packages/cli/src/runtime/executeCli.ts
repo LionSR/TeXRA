@@ -406,8 +406,14 @@ export function executeCliRequest(
               );
               return;
             }
+            // Before admission the launch is aborted; one born all the same
+            // is drained by the finalization, which the handler waits for
+            // so its recovery notice lands before the sessions close.
             if (!admitted) {
               yield* Fiber.interrupt(launched);
+              yield* Effect.uninterruptible(
+                Deferred.await(shutdownFinalizationDone),
+              );
               return;
             }
             const stopped = yield* runSession

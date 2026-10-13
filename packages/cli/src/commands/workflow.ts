@@ -4,7 +4,10 @@ import { Effect, FileSystem, Result } from 'effect';
 import { deriveResumability, getRunRecords } from '@agent/storage';
 import { type AgentConfigPayload, type SessionHandle } from '@agent/runtime';
 import { DEFAULT_TOOL_CONFIG, RUN_OUTCOME, type RunId } from '@shared/schemas';
-import { DatabaseClaimRefused } from '@shared/session/database';
+import {
+  DatabaseClaimRefused,
+  DatabaseWriteFailed,
+} from '@shared/session/database';
 import { documentTaskConfig } from '@texra/agent/output/documentRecipe';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -424,7 +427,14 @@ export const executeCliWorkflowConfig = Effect.fn('executeCliWorkflowConfig')(
           }
           // Written under the run's claim, held again for the write: the run
           // released it with its end. Another process that took the run
-          // meanwhile keeps it; the run's own outcome stands.
+          // meanwhile keeps it, and a run deleted meanwhile has no record to
+          // keep; either way the run's own outcome stands.
+          const unsaved = (message: string) =>
+            Effect.sync(() =>
+              writeTextStderr(
+                `[warn] The result record of task ${ended.runId} was not saved: ${message}`,
+              ),
+            );
           yield* Effect.scoped(
             session.log.hold(ended.runId).pipe(
               Effect.andThen(
@@ -437,11 +447,17 @@ export const executeCliWorkflowConfig = Effect.fn('executeCliWorkflowConfig')(
           ).pipe(
             Effect.catchIf(
               (error) => error instanceof DatabaseClaimRefused,
-              (refused) =>
-                Effect.sync(() =>
-                  writeTextStderr(
-                    `[warn] The result record of task ${ended.runId} was not saved: ${refused.message}`,
-                  ),
+              (refused) => unsaved(refused.message),
+            ),
+            Effect.catchIf(
+              (error) => error instanceof DatabaseWriteFailed,
+              (failed) =>
+                Effect.flatMap(
+                  getRunRecords(session, ended.runId).exists(),
+                  (exists) =>
+                    exists
+                      ? Effect.fail(failed)
+                      : unsaved('the task was deleted after it ended.'),
                 ),
             ),
           );
