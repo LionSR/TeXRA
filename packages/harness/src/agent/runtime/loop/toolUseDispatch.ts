@@ -235,9 +235,10 @@ const captureAttachments = Effect.fn('toolUse.captureAttachments')(function* (
 const UPLOAD_DEADLINE = '5 seconds';
 
 /**
- * The model-visible content of one settlement: text, then inline media. The
- * run history keeps the bytes; whether a later request sends them or a file id is
- * the bound model's in-memory upload cache's decision, made when it lowers.
+ * The model-visible content of one settlement: text, then inline media, each
+ * with its attachment's path. The run history keeps the bytes; whether a later
+ * request sends them or a file id is the bound model's in-memory upload
+ * cache's decision, made when it lowers.
  *
  * An attachment the binding cannot carry inline (a PDF on a route without
  * native PDF support, an image on a text-only route, any other type) reaches
@@ -248,19 +249,18 @@ function settlementContent(
   settlement: Pick<Settlement, 'result' | 'attachments'>,
   capabilities: Parameters<typeof inlineMediaPart>[2],
   logger: AgentTrace,
-): readonly InputPart[] {
-  const attachments: ToolFileAttachment[] = settlement.attachments.map(
-    (attachment) => ({
-      path: attachment.path,
-      mimeType: attachment.mimeType,
-      ...(attachment.description !== undefined
-        ? { description: attachment.description }
-        : {}),
-    }),
-  );
+): {
+  readonly text: InputPart;
+  readonly media: readonly {
+    readonly path: string;
+    readonly part: InputPart;
+  }[];
+} {
   const text = formatToolResultAsText(
     settlement.result,
-    attachments.length > 0 ? formatAttachmentSummary(attachments) : undefined,
+    settlement.attachments.length > 0
+      ? formatAttachmentSummary(settlement.attachments)
+      : undefined,
   );
   const media = settlement.attachments.flatMap((attachment) => {
     if (attachment.content.kind !== 'base64') {
@@ -280,9 +280,9 @@ function settlementContent(
       );
       return [];
     }
-    return [part];
+    return [{ path: attachment.path, part }];
   });
-  return [{ kind: 'text', text }, ...media];
+  return { text: { kind: 'text', text }, media };
 }
 
 /** A response call's lane: its tool's (`ITool.lane`) when parallel, else a
@@ -777,7 +777,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
     if (
       raised > 0 &&
       (own === null ||
-        !own.request.resolved ||
+        own.request.decision === null ||
         current.decidedSinceActivation.has(own.requestId))
     )
       return yield* execute(fact, input, reached, raised, own);
@@ -1108,11 +1108,18 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
     return settled !== null && endsTurn(settled);
   });
   const bound = yield* SynchronizedRef.get(run.model);
+  const media: { readonly path: string; readonly part: InputPart }[] = [];
   const results = settledPending.calls.map((fact, ordinal) => {
     const settlement = callSettlementOf(settledPending, fact.callId);
     if (settlement === null) {
       throw new Error(`Call ${fact.callId} is unsettled at delivery.`);
     }
+    const content = settlementContent(
+      settlement,
+      bound.config.capabilities,
+      logger,
+    );
+    media.push(...content.media);
     return {
       callOrdinal: ordinal,
       status:
@@ -1120,7 +1127,8 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
           ? ('success' as const)
           : ('error' as const),
       content: [
-        ...settlementContent(settlement, bound.config.capabilities, logger),
+        content.text,
+        ...content.media.map(({ part }) => part),
         // What the call's hooks add, after its result.
         ...callHookText(settledState, responseId, fact.callId),
       ],
@@ -1138,21 +1146,8 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
     (yield* run.session.followUps.read(run.runId)).followUps.some(
       (f) => f.control?.kind === 'model',
     );
-  const documents = (endTurn || switching ? [] : settledPending.calls).flatMap(
-    (fact) =>
-      (
-        callSettlementOf(settledPending, fact.callId)?.attachments ?? []
-      ).flatMap((attachment) => {
-        if (attachment.content.kind !== 'base64') return [];
-        const part = inlineMediaPart(
-          attachment.mimeType,
-          attachment.content.data,
-          bound.config.capabilities,
-        );
-        return part?.kind === 'document'
-          ? [{ path: attachment.path, part }]
-          : [];
-      }),
+  const documents = (endTurn || switching ? [] : media).flatMap(
+    ({ path, part }) => (part.kind === 'document' ? [{ path, part }] : []),
   );
   const uploadFile =
     documents.length === 0 ? undefined : bound.model.uploadFile;

@@ -18,7 +18,7 @@ export type RoundStage = z.infer<typeof RoundStageSchema>;
 
 export const ConversationProgressSchema = z.object({
   /** Cumulative number of individual tool calls executed. */
-  toolCallCount: z.number().prefault(0),
+  toolCallCount: z.number(),
 });
 
 export const RoundKeyedOutputSidecarValueSchemas = {

@@ -67,9 +67,7 @@ function buildTooltip(run: RunView): string {
   ]
     .filter(Boolean)
     .join(' · ');
-  const lastSeen = run.lastTimestamp
-    ? formatRelativeTime(run.lastTimestamp)
-    : '';
+  const lastSeen = formatRelativeTime(run.lastTimestamp);
   // No raw id: two parallel agents differ by title, model and time, and
   // the id is for bug reports ("Copy diagnostics").
   return [
@@ -304,16 +302,12 @@ export class RunTab extends LitElement {
                   ? html`<worktree-chip .info=${run.worktree}></worktree-chip>`
                   : nothing
               }
-              ${
-                run.lastTimestamp
-                  ? html`<wa-relative-time
-                      class="last-active"
-                      .date=${new Date(run.lastTimestamp)}
-                      format="narrow"
-                      sync
-                    ></wa-relative-time>`
-                  : nothing
-              }
+              <wa-relative-time
+                class="last-active"
+                .date=${new Date(run.lastTimestamp)}
+                format="narrow"
+                sync
+              ></wa-relative-time>
               <span class="model"
                 >${
                   run.identity.kind === 'agent'

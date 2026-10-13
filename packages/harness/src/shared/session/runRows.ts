@@ -51,7 +51,6 @@ export const isSharedRunRow = <E extends Pick<SessionEvent, 'type'>>(
 
 type RequestState = {
   readonly payload: PermissionPayload;
-  readonly resolved: boolean;
   /** The recorded decision (R5): the `request.decided` row's, null while
    *  the request is open. */
   readonly decision: RequestDecision | null;
@@ -291,7 +290,6 @@ export function applyRunRow(
       const requests = writable(pass, current.requests, copyById);
       requests[row.requestId] = {
         payload: row.payload,
-        resolved: false,
         decision: null,
       };
       return applied({ requests });
@@ -303,11 +301,7 @@ export function applyRunRow(
         return { kind: 'unresolved', requestId: row.requestId };
       }
       const requests = writable(pass, current.requests, copyById);
-      requests[row.requestId] = {
-        ...request,
-        resolved: true,
-        decision: row.decision,
-      };
+      requests[row.requestId] = { ...request, decision: row.decision };
       return applied({ requests });
     }
     case 'followup.queued': {

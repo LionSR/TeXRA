@@ -88,7 +88,7 @@ function runViewFields(over: RunViewOverrides): RunView {
     createdAt: 1,
     launchedAt: 1,
     runStartedAt: null,
-    lastTimestamp: null,
+    lastTimestamp: 1,
     conversationProgress: { toolCallCount: 0 },
     turn: null,
     followUpSupport: USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,

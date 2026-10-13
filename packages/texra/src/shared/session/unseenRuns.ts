@@ -17,7 +17,6 @@ export function markShownRunSeen(surface: Surface, view: SessionView): Surface {
   if (
     run === undefined ||
     run.parentId !== null ||
-    run.lastTimestamp === null ||
     (surface.seen.get(run.id) ?? -Infinity) >= run.lastTimestamp
   )
     return surface;
@@ -43,7 +42,6 @@ export function unseenRuns(
       run.parentId === null &&
       run.durableOutcome !== null &&
       seen !== undefined &&
-      run.lastTimestamp !== null &&
       seen < run.lastTimestamp
     )
       unseen.add(run.id);

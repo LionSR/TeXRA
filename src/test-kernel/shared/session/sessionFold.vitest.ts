@@ -1589,7 +1589,7 @@ describe('foldRunState', () => {
         // Asked before its body started: nothing ran, whatever the answer,
         // and a resume re-enters the request rather than retiring it.
         const asking = stateOf(through(5, approval));
-        expect(asking?.requests[requestId]?.resolved).toBe(false);
+        expect(asking?.requests[requestId]?.decision).toBeNull();
         expect(asking?.pendingResponse?.records['call-a']?.status).toEqual({
           kind: 'issued',
         });
@@ -1629,7 +1629,7 @@ describe('foldRunState', () => {
             }),
           ),
         );
-        expect(inquiry?.requests['req-2']?.resolved).toBe(false);
+        expect(inquiry?.requests['req-2']?.decision).toBeNull();
         expect(inquiry === null ? [] : unboundRequests(inquiry)).toEqual([]);
         // A request that parks a tool is not that case: nothing in a later
         // process could answer it, so a resume retires it first

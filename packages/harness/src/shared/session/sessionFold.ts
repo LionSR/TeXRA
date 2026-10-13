@@ -994,7 +994,7 @@ function applyRowFacts(
  *  left where they are. Identity is (runId, requestId), so the dedupe of
  *  already-listed requests is scoped to this run, never another's. */
 function projectRequests(view: SessionView, runId: RunId, rows: RunRows) {
-  const open = Object.entries(rows.requests).filter(([, r]) => !r.resolved);
+  const open = Object.entries(rows.requests).filter(([, r]) => !r.decision);
   const ids = new Set(open.map(([requestId]) => requestId));
   const kept = view.requests.filter(
     (r) => r.runId !== runId || ids.has(r.requestId),
@@ -1131,7 +1131,7 @@ function foldDurable(
   // A fresh incarnation can end again.
   if (event.type === 'run.activate') sessionIndexesOf(view).ended.delete(runId);
   // Reads arrive in any order: older history never moves the clock back.
-  const lastTimestamp = Math.max(own.lastTimestamp ?? event.at, event.at);
+  const lastTimestamp = Math.max(own.lastTimestamp, event.at);
   let next: RunView = { ...own, lastTimestamp };
   setRun(view, next);
 
@@ -1170,7 +1170,7 @@ function foldTraceEvent(
   // A filtered fact still advances its source cursor. Keep the run and
   // transcript references stable when that fact produced no presentation.
   if (transcript === run.transcript) return true;
-  const lastTimestamp = Math.max(run.lastTimestamp ?? event.at, event.at);
+  const lastTimestamp = Math.max(run.lastTimestamp, event.at);
   setRun(view, withTranscriptFacts({ ...run, transcript, lastTimestamp }));
   return true;
 }

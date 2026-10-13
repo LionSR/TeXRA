@@ -3441,7 +3441,7 @@ describe('RunHistory', () => {
         expect(refusalOf(orphanGroup)?.reason).toBe('unprepared-history');
         expect((yield* log.readAggregate(AGGREGATE, 1)).length).toBe(written);
         state = yield* cell.append([approvalRequested]);
-        expect(state.requests['req-1']?.resolved).toBe(false);
+        expect(state.requests['req-1']?.decision).toBeNull();
         expect(state.pendingResponse?.records['call-a']?.status).toEqual({
           kind: 'started',
           attempt: 1,
