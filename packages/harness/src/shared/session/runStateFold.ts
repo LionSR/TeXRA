@@ -3,14 +3,16 @@
  * state at a commit is exactly the state resume continues from, without IO,
  * clocks, platform reads, synthetic ids, or output-order dependence on Maps.
  * sessionFold produces the view; this fold produces the loop's continuation.
+ *
+ * The run's row grammar has one owner, `GRAMMAR`: a row commits above the
+ * last, its kind's line admits it (on any state, a held one, an opened run,
+ * an unopened one, or skipped), and the line's pure move refuses only what
+ * its own transition rules out. `RunCell.append` folds every batch through
+ * it before publishing, so the writer checks only what a batch alone shows.
  */
 import { Data, Result } from 'effect';
 
-import {
-  assistantMessageFromResult,
-  type Continuation,
-  type TurnResult,
-} from '@texra-ai/llm';
+import { type Continuation, type TurnResult } from '@texra-ai/llm';
 import {
   addTurnUsage,
   EMPTY_RUN_USAGE_TOTALS,
@@ -29,11 +31,8 @@ import {
 import { foldRunFacts, NO_FACTS, type RunFacts } from './runFacts';
 import {
   applyRunRow,
-  copyById,
   freshRunPosition,
-  isFollowUpRow,
   type FOLLOW_UP_TYPES,
-  isSharedRunRow,
   phaseAfter,
   type RunLoopPhase,
   type FoldPass,
@@ -44,13 +43,10 @@ import {
 import {
   attemptOf,
   attemptRequests,
-  invocationAfter,
-  pendingResponseOf,
-  callSettlementOf,
   type Invocation,
-  type PendingCall,
   type PendingResponse,
 } from './inFlight';
+import { appended, outOfOrder, TURN_GRAMMAR } from './turnMoves';
 import type { HistoryMessage, Live, RunHistoryRow } from './historyTurns';
 
 /**
@@ -305,131 +301,93 @@ function declinedBy(
     : state.declinedRoutes;
 }
 
-type Fold = Result.Result<RunState, RunHistoryInconsistent>;
-
-const refuse = (
-  reason: RunHistoryInconsistent['reason'],
-  detail: string,
-  commit: CommitOrdinal | null,
-): Result.Result<never, RunHistoryInconsistent> =>
-  Result.fail(new RunHistoryInconsistent({ reason, detail, commit }));
-
-/** Why a row of `attempt` cannot move a call standing at `status`, or null:
- *  a settled call is closed, and a call's attempt never goes back. */
-const openFor = (
-  callId: string,
-  status: PendingCall['status'],
-  attempt: number,
-): string | null => {
-  if (status.kind === 'settled')
-    return `${callId} is already settled at attempt ${status.attempt}`;
-  const reached = attemptOf(status);
-  return attempt < reached
-    ? `${callId} attempt ${attempt} is below ${reached}`
-    : null;
-};
+/** Why a row cannot fold: `foldRow` stamps it with the row's commit. */
+export type Refusal = Pick<RunHistoryInconsistent, 'reason' | 'detail'>;
+/** A line's move: the state after its row, or why the row cannot fold. */
+export type Move = Result.Result<RunState, Refusal>;
 
 const opened = (state: RunState | null): state is RunState =>
   state !== null && state.phase !== null;
 
-function foldRow(
-  current: RunState | null,
-  row: RunHistoryRow,
-  pass: FoldPass,
-): Fold | null {
-  const commit = row.commit;
-  /** `messages` with `added` appended: the pass's own array, written once
-   *  copied, so a batch of rows appends without re-copying the history. */
-  const appended = (state: RunState, ...added: readonly HistoryMessage[]) => {
-    const messages = writable(pass, state.messages, (m) => [...m]);
-    for (const message of added) messages.push(message);
-    return messages;
-  };
-  /** A row out of the order the run history writes. */
-  const outOfOrder = (detail: string) => refuse('out-of-order', detail, commit);
-  if (current !== null && commit <= current.commit) {
-    return outOfOrder(`commit ${commit} is not above ${current.commit}`);
-  }
-  /** A row that presupposes the opening position, folded before it. */
-  const beforeOpening = (what: string) =>
-    outOfOrder(`${what} before the opening run.position`);
-  /** The state with this run history row counted in. */
-  const advance = (state: RunState): RunState => ({
-    ...state,
-    commit,
-    runHistoryRows: state.runHistoryRows + 1,
-  });
-  /** `state` with this row counted and `call` as `pending`'s record of
-   *  `callId`. */
-  const withCall = (
+/** The row of kind `K`, as the fold reads it. */
+type RowOf<K extends FoldedRowType> = Extract<RunHistoryRow, { type: K }>;
+
+/** Where a row may fold: on any state (a fresh one if none), on one an
+ *  earlier row folded, after the opening `run.position`, before it (a
+ *  fork's seed), or nowhere. */
+type Admission = 'any' | 'held' | 'opened' | 'unopened' | 'skip';
+
+/** One row kind's line of the run's grammar. */
+export type Transition<K extends FoldedRowType> = {
+  /** Where it may fold, or the classifier that reads that off the row. */
+  readonly admits: Admission | ((row: RowOf<K>) => Admission);
+  /** Its move from an admitted state with its commit and count in; `null`
+   *  moves nothing. */
+  readonly apply: (
     state: RunState,
-    pending: PendingResponse,
-    callId: string,
-    call: PendingCall,
-  ): RunState => {
-    const records = writable(pass, pending.records, copyById);
-    records[callId] = call;
-    return { ...advance(state), pendingResponse: { ...pending, records } };
-  };
-  if (isFollowUpRow(row)) return null; // the inbox's input (`RunInput`)
-  if (isSharedRunRow(row)) {
-    // The rows `sessionFold` reads too: applied once, in `runRows.ts`.
-    // `unresolved` is a malformed aggregate here: this fold reads a run's
-    // whole history, so a decision always follows the opening it answers.
-    const verdict = applyRunRow(current, row, pass);
-    if (verdict.kind === 'unchanged') return null;
-    if (verdict.kind === 'unresolved') {
-      return outOfOrder(`decision names no request ${verdict.requestId}`);
-    }
-    if (verdict.kind === 'contradiction') {
-      return outOfOrder(verdict.detail);
-    }
-    const state = current ?? freshRunState(commit);
-    const at = verdict.rows.at;
-    return Result.succeed({
-      ...state,
-      ...(row.type === 'request.decided'
-        ? {
-            decidedSinceActivation: new Set([
-              ...state.decidedSinceActivation,
-              row.requestId,
-            ]),
-            declinedRoutes: declinedBy(state, row),
-          }
-        : {}),
-      commit,
-      // Only the loop's own position is a run history row; queued input, output
-      // and the requests a session opens do not open a run.
-      runHistoryRows: state.runHistoryRows + (at === undefined ? 0 : 1),
-      ...verdict.rows,
-      phase: phaseAfter(state.phase, at),
-    });
-  }
-  switch (row.type) {
-    case 'run.activate':
-      // A new owner's lifecycle: whatever it decides from here, no earlier
-      // process waited on.
-      return current === null
-        ? null
-        : Result.succeed({
-            ...current,
-            commit,
-            decidedSinceActivation: new Set(),
-          });
-    case 'run.config': {
-      // What the run runs on: its model, and once it binds, its backend and
-      // the routes its launch declined. The opening batch writes the first
-      // the loop reads (a registration's, before any history, folds
-      // nothing); a new model drops the old one's continuation, and the next
-      // step renders the system text anew.
-      if (current === null) return null;
-      const state = current;
+    row: RowOf<K>,
+    pass: FoldPass,
+  ) => Move | null;
+};
+
+/** The rows `runRows.ts` applies for both folds, projected onto the state. */
+const sharedRow = (
+  state: RunState,
+  row: RowOf<'run.position' | 'request.opened' | 'request.decided'>,
+  pass: FoldPass,
+): Move | null => {
+  // `unresolved` is a malformed aggregate here: this fold reads a run's
+  // whole history, so a decision always follows the opening it answers.
+  const verdict = applyRunRow(state, row, pass);
+  if (verdict.kind === 'unchanged') return null;
+  if (verdict.kind === 'unresolved')
+    return outOfOrder(`decision names no request ${verdict.requestId}`);
+  if (verdict.kind === 'contradiction') return outOfOrder(verdict.detail);
+  return Result.succeed({
+    ...state,
+    ...(row.type === 'request.decided'
+      ? {
+          decidedSinceActivation: new Set([
+            ...state.decidedSinceActivation,
+            row.requestId,
+          ]),
+          declinedRoutes: declinedBy(state, row),
+        }
+      : {}),
+    ...verdict.rows,
+    phase: phaseAfter(state.phase, verdict.rows.at),
+  });
+};
+
+/** The run's row grammar, total over the kinds the loop continues from:
+ *  `foldRow` checks each line's admission once, so no move re-asks it. */
+const GRAMMAR: { readonly [K in FoldedRowType]: Transition<K> } = {
+  ...TURN_GRAMMAR,
+  // Only the loop's own position is a run history row; the requests a
+  // session opens do not open a run.
+  'run.position': { admits: 'any', apply: sharedRow },
+  'request.opened': { admits: 'held', apply: sharedRow },
+  'request.decided': { admits: 'held', apply: sharedRow },
+  'run.activate': {
+    // A new owner's lifecycle: whatever it decides from here, no earlier
+    // process waited on.
+    admits: 'held',
+    apply: (state) =>
+      Result.succeed({ ...state, decidedSinceActivation: new Set() }),
+  },
+  'run.config': {
+    // What the run runs on: its model, and once it binds, its backend and
+    // the routes its launch declined. The opening batch writes the first
+    // the loop reads (a registration's, before any history, folds
+    // nothing); a new model drops the old one's continuation, and the next
+    // step renders the system text anew.
+    admits: 'held',
+    apply: (state, row) => {
       const modelId = row.config.model ?? state.modelId;
       const binding = row.binding ?? null;
       const switched = state.modelId !== null && modelId !== state.modelId;
       return Result.succeed({
         ...state,
-        commit,
         modelId,
         backend: binding?.backend ?? state.backend,
         declinedRoutes:
@@ -445,297 +403,136 @@ function foldRow(
           ? { continuation: null, offeredSystem: null, offeredContext: null }
           : {}),
       });
-    }
-    case 'model.message': {
+    },
+  },
+  'context.edit': {
+    // A fork's seed is its run's first view: it opens nothing, like an
+    // undelivered append, and comes before the opening position. Every
+    // other edit edits a view an opened run already holds.
+    admits: ({ payload }) => (payload.cause === 'fork' ? 'unopened' : 'opened'),
+    apply: (state, row, pass) => {
       const p = row.payload;
-      // A summary's attempts record its billed calls; the loop continues
-      // from none of them (its `context.edit` carries its usage).
-      if (
-        (p.kind === 'attempt' || p.kind === 'failed') &&
-        p.purpose === 'summary'
-      )
-        return null;
-      if (p.kind === 'append' && p.sourceResponse === null) {
-        // Input: a new turn, which retires the last one's invocation and
-        // its failure.
-        const state = current ?? freshRunState(commit);
-        return Result.succeed({
-          ...advance(state),
-          messages: appended(state, ...p.messages),
-          invocation: null,
-          lastError: null,
-        });
-      }
-      if (!opened(current)) return beforeOpening(`${row.type} ${p.kind}`);
-      const state = advance(current);
-      switch (p.kind) {
-        case 'attempt':
-        case 'identified':
-        case 'accepted':
-        case 'cancelled':
-        case 'failed':
-        case 'response': {
-          const invocation = invocationAfter(state.invocation, p);
-          if (typeof invocation === 'string') return outOfOrder(invocation);
-          const moved = { ...state, invocation };
-          if (p.kind === 'attempt')
-            return Result.succeed({
-              ...moved,
-              phase: 'model.submitted',
-              round: p.invocation.attempt === 1 ? state.round + 1 : state.round,
-            });
-          if (p.kind === 'failed') {
-            if (
-              p.next.kind === 'ask' &&
-              state.requests[p.next.requestId] === undefined
-            )
-              return outOfOrder(`a failed attempt asks ${p.next.requestId}`);
-            // A failure that ends the turn or asks; a lost chain is dropped.
-            const { kind } = p.next;
-            return Result.succeed({
-              ...moved,
-              lastError:
-                kind === 'stop' || kind === 'ask' ? p.error : state.lastError,
-              continuation: kind === 'unchain' ? null : state.continuation,
-            });
-          }
-          if (p.kind !== 'response') return Result.succeed(moved);
-          if (state.pendingResponse !== null) {
-            return outOfOrder(
-              `response ${p.responseId} while ${state.pendingResponse.responseId} is undelivered`,
-            );
-          }
-          const settled: RunState = {
-            ...moved,
-            continuation:
-              p.turn.kind === 'http' ? (p.turn.continuation ?? null) : null,
-            lastError: null,
-            lastTurn: p.turn,
-            countStale: false,
-            usage: addTurnUsage(state.usage, p.usage),
-          };
-          if (p.calls.length === 0) {
-            return Result.succeed({
-              ...settled,
-              messages: appended(settled, assistantMessageFromResult(p.turn)),
-            });
-          }
-          return Result.succeed({
-            ...settled,
-            pendingResponse: pendingResponseOf(p),
-          });
-        }
-        case 'handed-down':
-          if (state.invocation !== null || state.pendingResponse !== null)
-            return outOfOrder(`handed-down ${p.responseId} over an open call`);
-          return Result.succeed({
-            ...state,
-            round: state.round + 1,
-            pendingResponse: pendingResponseOf(p),
-          });
-        case 'append': {
-          const pending = state.pendingResponse;
-          if (pending === null || pending.responseId !== p.sourceResponse) {
-            return refuse(
-              'mismatched-delivery',
-              `append delivers ${p.sourceResponse}, pending is ${pending?.responseId ?? 'none'}`,
-              commit,
-            );
-          }
-          const unsettled = pending.calls.filter(
-            (call) => callSettlementOf(pending, call.callId) === null,
-          );
-          if (unsettled.length > 0) {
-            return refuse(
-              'mismatched-delivery',
-              `calls ${unsettled.map((call) => call.callId).join(', ')} are unsettled`,
-              commit,
-            );
-          }
-          return Result.succeed({
-            ...state,
-            messages: appended(state, pending.assistant, ...p.messages),
-            pendingResponse: null,
-          });
-        }
-      }
-      // Exhaustive over `ModelMessagePayloadSchema`'s kinds: a new arm is a
-      // compile error here, never a silently ignored row.
-      return p satisfies never;
-    }
-    case 'context.edit': {
-      const p = row.payload;
-      // A fork's seed is its run's first view: it opens nothing, like an
-      // undelivered append, and comes before the opening position. Every
-      // other edit edits a view an opened run already holds.
-      if ((p.cause === 'fork') === opened(current)) {
-        return p.cause === 'fork'
-          ? outOfOrder('a fork edit on a run that is already open')
-          : beforeOpening(row.type);
-      }
-      if (!opened(current)) {
-        const state = current ?? freshRunState(commit);
-        if (p.base !== null || p.range.to !== 0 || state.messages.length > 0) {
+      if (p.cause === 'fork') {
+        if (p.base !== null || p.range.to !== 0 || state.messages.length > 0)
           return outOfOrder('a fork edit replaces no earlier view');
-        }
         return Result.succeed({
-          ...advance(state),
-          messages: appended(state, ...p.messages),
+          ...state,
+          messages: appended(pass, state, ...p.messages),
           lastEdit: row.seq,
         });
       }
-      const base = current.lastEdit;
-      if (p.base !== base) {
+      if (p.base !== state.lastEdit)
         return outOfOrder(
-          `an edit computed at ${p.base ?? 'no edit'} lands after ${base ?? 'no edit'}`,
+          `an edit computed at ${p.base ?? 'no edit'} lands after ${state.lastEdit ?? 'no edit'}`,
         );
-      }
-      if (p.range.to > current.messages.length) {
+      if (p.range.to > state.messages.length)
         return outOfOrder(
-          `an edit of messages [${p.range.from}, ${p.range.to}) over ${current.messages.length}`,
+          `an edit of messages [${p.range.from}, ${p.range.to}) over ${state.messages.length}`,
         );
-      }
       const messages = [
-        ...current.messages.slice(0, p.range.from),
+        ...state.messages.slice(0, p.range.from),
         ...p.messages,
-        ...current.messages.slice(p.range.to),
+        ...state.messages.slice(p.range.to),
       ];
       pass.add(messages);
       return Result.succeed({
-        ...advance(current),
+        ...state,
         messages,
         continuation: null,
         // The next step renders the system text anew, every change in it.
         offeredSystem: null,
         offeredContext: null,
-        usage: addTurnUsage(current.usage, p.usage),
+        usage: addTurnUsage(state.usage, p.usage),
         countStale:
-          current.countStale ||
+          state.countStale ||
           p.range.from !== p.range.to ||
           p.messages.length > 0,
         lastEdit: row.seq,
       });
-    }
-    case 'script.call': {
-      if (!opened(current)) return beforeOpening(row.type);
-      const p = row.payload;
-      const pending = current.pendingResponse;
-      if (
-        pending === null ||
-        !pending.calls.some((call) => call.callId === p.scriptCallId)
-      ) {
-        return outOfOrder(
-          `${p.callId} names no pending call ${p.scriptCallId}`,
-        );
-      }
-      if (Object.hasOwn(pending.records, p.callId)) {
-        return outOfOrder(`${p.callId} is already recorded`);
-      }
-      return Result.succeed(
-        withCall(current, pending, p.callId, {
-          script: p,
-          status: { kind: 'issued' },
-        }),
-      );
-    }
-    case 'tool.intent': {
-      // The call's body begins: from here it may have run. Once per
-      // attempt, and an attempt never goes back.
-      if (!opened(current)) return beforeOpening(row.type);
-      const p = row.payload;
-      const pending = current.pendingResponse;
-      const call = pending?.records[p.callId];
-      const issuer = p.origin.kind === 'script' ? p.origin.scriptCallId : null;
-      if (
-        pending === null ||
-        call === undefined ||
-        (p.origin.kind === 'response' &&
-          pending.responseId !== p.origin.responseId) ||
-        (call.script?.scriptCallId ?? null) !== issuer
-      ) {
-        return outOfOrder(`intent names ${p.callId}, no call of its origin`);
-      }
-      const { status } = call;
-      const refusal =
-        status.kind === 'started' && status.attempt === p.attempt
-          ? `${p.callId} attempt ${p.attempt} already started`
-          : openFor(p.callId, status, p.attempt);
-      if (refusal !== null) return outOfOrder(refusal);
-      return Result.succeed(
-        withCall(current, pending, p.callId, {
-          ...call,
-          status: { kind: 'started', attempt: p.attempt },
-        }),
-      );
-    }
-    case 'tools.offered': // a fresh run's comes in its opening batch
-      return Result.succeed({
-        ...advance(current ?? freshRunState(commit)),
-        offeredTools: row.payload.tools,
-        offeredContinuation: row.payload.continuation,
-        offeredSkills: row.payload.skills,
-        offeredSystem: row.payload.system,
-        offeredContext: row.payload.context,
-        offeredHooks: row.payload.hooks,
-      });
-    case 'context.blob': {
-      const { digest, value } = row.payload;
-      const state = advance(current ?? freshRunState(commit));
+    },
+  },
+  // A fresh run's comes in its opening batch.
+  'tools.offered': {
+    admits: 'any',
+    apply: (state, { payload }) =>
+      Result.succeed({
+        ...state,
+        offeredTools: payload.tools,
+        offeredContinuation: payload.continuation,
+        offeredSkills: payload.skills,
+        offeredSystem: payload.system,
+        offeredContext: payload.context,
+        offeredHooks: payload.hooks,
+      }),
+  },
+  'context.blob': {
+    admits: 'any',
+    apply: (state, { payload }, pass) => {
       // A digest is 64 hex characters, never `__proto__`: plain assignment.
       const contents = writable(pass, state.contents, (c) => ({ ...c }));
-      contents[digest] = value;
+      contents[payload.digest] = payload.value;
       return Result.succeed({ ...state, contents });
-    }
-    case 'hook.outcome': {
-      // An opening batch carries its opening hooks: no opened run needed.
-      const p = row.payload;
-      const state = advance(current ?? freshRunState(commit));
+    },
+  },
+  // An opening batch carries its opening hooks: no opened run needed.
+  'hook.outcome': {
+    admits: 'any',
+    apply: (state, { payload }, pass) => {
       const byPoint = writable(pass, state.hookOutcomes, (h) => ({ ...h }));
-      byPoint[p.point] = [...(byPoint[p.point] ?? []), p];
+      byPoint[payload.point] = [...(byPoint[payload.point] ?? []), payload];
       return Result.succeed({ ...state, hookOutcomes: byPoint });
-    }
-    case 'tool.result': {
-      if (!opened(current)) return beforeOpening(row.type);
-      const p = row.payload;
-      const pending = current.pendingResponse;
-      const call =
-        pending?.responseId === p.responseId
-          ? pending.records[p.callId]
-          : undefined;
-      if (pending === null || call === undefined) {
-        return refuse(
-          'orphan-settlement',
-          `${p.callId} settles no pending call of ${p.responseId}`,
-          commit,
-        );
-      }
-      // Only the attempt the rows reached, or a later one that settled
-      // before its body started, closes the call; and only once.
-      const refusal = openFor(p.callId, call.status, p.attempt);
-      if (refusal !== null) {
-        return call.status.kind === 'settled'
-          ? refuse('orphan-settlement', refusal, commit)
-          : outOfOrder(refusal);
-      }
-      return Result.succeed(
-        withCall(current, pending, p.callId, {
-          ...call,
-          status: {
-            kind: 'settled',
-            at: commit,
-            attempt: p.attempt,
-            disposition: p.disposition,
-            duplicateOf: p.duplicateOf,
-            result: p.result,
-            attachments: p.attachments,
-          },
-        }),
+    },
+  },
+};
+
+/** Whether the grammar holds a line for the row's kind. */
+const isFolded = (row: RunHistoryRow): row is RowOf<FoldedRowType> =>
+  Object.hasOwn(GRAMMAR, row.type);
+
+/** `type`'s line of {@link GRAMMAR}. */
+const lineOf = <K extends FoldedRowType>(type: K): Transition<K> =>
+  GRAMMAR[type];
+
+/** One row folded onto `current`: refused, moved, or (`null`) ignored. */
+function foldRow(
+  current: RunState | null,
+  row: RunHistoryRow,
+  pass: FoldPass,
+): Result.Result<RunState, RunHistoryInconsistent> | null {
+  const { commit } = row;
+  const refused = (reason: Refusal['reason'], detail: string) =>
+    Result.fail(new RunHistoryInconsistent({ reason, detail, commit }));
+  if (current !== null && commit <= current.commit)
+    return refused(
+      'out-of-order',
+      `commit ${commit} is not above ${current.commit}`,
+    );
+  if (!isFolded(row))
+    return IGNORED.has(row.type) ? null : refused('unknown-run-row', row.type);
+  const line = lineOf(row.type);
+  const admission =
+    typeof line.admits === 'function' ? line.admits(row) : line.admits;
+  if (admission === 'skip' || (admission === 'held' && current === null))
+    return null;
+  if (admission === 'opened' && !opened(current))
+    return refused(
+      'out-of-order',
+      `${row.type} before the opening run.position`,
+    );
+  if (admission === 'unopened' && opened(current))
+    return refused('out-of-order', `${row.type} on a run that is already open`);
+  // A row that only moves a state an earlier row folded is no run history
+  // row; every other admitted row is one.
+  const state = current ?? freshRunState(commit);
+  const runHistoryRows = state.runHistoryRows + (admission === 'held' ? 0 : 1);
+  const moved = line.apply({ ...state, commit, runHistoryRows }, row, pass);
+  return moved === null
+    ? null
+    : Result.mapError(
+        moved,
+        ({ reason, detail }) =>
+          new RunHistoryInconsistent({ reason, detail, commit }),
       );
-    }
-    default:
-      if (IGNORED.has(row.type)) return null;
-      return refuse('unknown-run-row', row.type, commit);
-  }
 }
 
 /**

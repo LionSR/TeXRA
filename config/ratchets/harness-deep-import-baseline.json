@@ -138,7 +138,6 @@
     "extension": [
       "@agent/index",
       "@agent/runtime",
-      "@common/errors",
       "@common/storage/storageLayout",
       "@controllers/session/appStateStore",
       "@eventBus/AppSignals",
@@ -232,7 +231,6 @@
       "@agent/trace/AgentTrace",
       "@agent/workspaceAgents/WorkspaceAgentsController",
       "@common/errors",
-      "@common/errors/errorFormatUtils",
       "@common/errors/errorPredicates",
       "@common/errors/sdkError/providerErrorFormat",
       "@common/plugins/installedPlugins",

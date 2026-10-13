@@ -5,7 +5,6 @@
  */
 import { Cause, Effect } from 'effect';
 
-import { formatError } from '@common/errors/errorFormatUtils';
 import { withLogChannel } from '@logger/effectLog';
 import type {
   ExternalOpener,
@@ -16,6 +15,7 @@ import type {
 import type { LatexEditorStatus } from '@texra/controllers/settingsView/LatexToolingController';
 import type { SubscriptionProviderId } from '@texra/controllers/modelAccess/subscriptionProviders';
 import type { SettingsViewOutboundMessage } from '@texra/shared/settingsView/settingsViewMessages';
+import { formatError } from '@utils/errors/errorMessage';
 import type { ProcessServices } from '@texra-ai/harness';
 import type { RunId } from '@texra-ai/harness/schemas';
 
