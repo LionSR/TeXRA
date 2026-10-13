@@ -3,10 +3,13 @@ import { Effect } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports
-import { formatError } from '@common/errors';
 import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
 import { withLogChannel } from '@logger/effectLog';
-import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
+import {
+  ensureError,
+  formatError,
+  toErrorMessage,
+} from '@utils/errors/errorMessage';
 
 /** Valid documentation identifiers for error messages. */
 type DocId = 'intelligent-merge' | 'custom-agents' | 'latex-diff';

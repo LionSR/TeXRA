@@ -1,4 +1,7 @@
-import { isNonEmptyString } from '@utils/text/stringUtils';
+import {
+  isNonEmptyString,
+  truncateWithEllipsis,
+} from '@utils/text/stringUtils';
 
 /** Normalize any thrown value into a user-friendly error message string. */
 export function toErrorMessage(err: unknown): string {
@@ -6,6 +9,14 @@ export function toErrorMessage(err: unknown): string {
     return err.message;
   }
   return String(err);
+}
+
+const MAX_ERROR_LENGTH = 500;
+
+/** Format an error with a prefix for logging or user messages. */
+export function formatError(prefix: string, err: unknown): string {
+  const detail = truncateWithEllipsis(toErrorMessage(err), MAX_ERROR_LENGTH);
+  return `${prefix}: ${detail}`;
 }
 
 /** Coerce any thrown value to an Error instance. */

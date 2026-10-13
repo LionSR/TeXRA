@@ -55,77 +55,34 @@ const isMessageBearing = (row: RunHistoryDraft): boolean =>
   (row.type === 'model.message' &&
     (row.payload.kind === 'append' || row.payload.kind === 'response'));
 
-/** The provider-side status a settled call reports in its tool group. */
-const settlementStatus = (status: 'executed' | 'error'): 'success' | 'error' =>
-  status === 'executed' ? 'success' : 'error';
-
-/** The first violated precondition of `RunCell.append`, or null. */
+/**
+ * The first violated precondition of `RunCell.append` that only the batch
+ * shows, or null. Which row may follow which, a delivery's tool group
+ * included, is the fold's grammar (`foldRunState`), which `commit` folds
+ * the batch through before publishing it.
+ */
 function contractViolation(
   run: RunId,
-  state: RunState,
   rows: readonly RunHistoryDraft[],
 ): string | null {
   const aggregate = qualifyAggregateId('run', run);
-  const settledInBatch = new Map<string, 'success' | 'error'>();
-  const hasResponse = rows.some(isResponse);
   // A row naming another aggregate would fold into the live state and be
   // invisible to a reload, which reads the run's aggregate.
   const foreign = rows.find((row) => row.aggregateId !== aggregate);
   if (foreign !== undefined) {
     return `a ${foreign.type} targets ${foreign.aggregateId}, not ${aggregate}`;
   }
+  const hasResponse = rows.some(isResponse);
   for (const [index, row] of rows.entries()) {
-    if (row.type === 'context.edit') {
-      if (hasResponse) {
-        const next = rows[index + 1];
-        if (next === undefined || !isResponse(next)) {
-          return 'a context.edit is not immediately followed by the response that used it';
-        }
-      }
-      // `range` indexes the history the batch starts from, so no earlier
-      // row of the batch may have shifted it.
-      if (rows.slice(0, index).some(isMessageBearing)) {
-        return 'a context.edit is not the first message-bearing row of its batch';
-      }
+    if (row.type !== 'context.edit') continue;
+    const next = rows[index + 1];
+    if (hasResponse && (next === undefined || !isResponse(next))) {
+      return 'a context.edit is not immediately followed by the response that used it';
     }
-    if (row.type === 'tool.result') {
-      settledInBatch.set(
-        `${row.payload.responseId}/${row.payload.callId}`,
-        settlementStatus(row.payload.result.status),
-      );
-    }
-    if (row.type !== 'model.message' || row.payload.kind !== 'append') {
-      continue;
-    }
-    const { sourceResponse, messages } = row.payload;
-    if (sourceResponse === null) continue;
-    const pending = state.pendingResponse;
-    if (pending === null || pending.responseId !== sourceResponse) {
-      return `a delivering append names ${sourceResponse}, which is not the pending response`;
-    }
-    const group = messages[0];
-    if (group === undefined || group.role !== 'tool') {
-      return 'a delivering append does not start with a tool group';
-    }
-    if (group.results.length !== pending.calls.length) {
-      return `the tool group carries ${group.results.length} results for ${pending.calls.length} calls`;
-    }
-    for (const [ordinal, call] of pending.calls.entries()) {
-      const result = group.results[ordinal];
-      if (result === undefined || result.callOrdinal !== ordinal) {
-        return `the tool group carries no result at ordinal ${ordinal}`;
-      }
-      const settled = pending.records[call.callId]?.status;
-      const expected =
-        settled?.kind === 'settled'
-          ? settlementStatus(settled.result.status)
-          : settledInBatch.get(`${pending.responseId}/${call.callId}`);
-      if (expected === undefined) {
-        return `call ${call.callId} has no committed settlement`;
-      }
-      if (result.status !== expected) {
-        return `ordinal ${ordinal} reports ${result.status} for an ${expected} settlement`;
-      }
+    // `range` indexes the history the batch starts from, so no earlier row
+    // of the batch may have shifted it.
+    if (rows.slice(0, index).some(isMessageBearing)) {
+      return 'a context.edit is not the first message-bearing row of its batch';
     }
   }
   return null;
@@ -302,7 +259,7 @@ const commit = Effect.fn('RunCell.commit')(function* <E>(
   alongside: Effect.Effect<CoWrite, E, Scope.Scope>,
   within: Append | undefined,
 ) {
-  const violation = contractViolation(run, state, rows);
+  const violation = contractViolation(run, rows);
   if (violation !== null) return yield* broken(violation);
   for (const row of rows)
     for (const unsafe of rowOrigins(row).map(unsafeEndpoint))
@@ -313,12 +270,12 @@ const commit = Effect.fn('RunCell.commit')(function* <E>(
           detail: `a ${row.type} origin is not a scheme, host and path alone: ${unsafe}`,
         });
   // `load`'s answer with the batch in, before publishing it: a committed
-  // batch `load` cannot fold is a run nothing can read again.
-  const after = yield* loaded(
-    run,
-    foldRunState(state, candidates(state, rows)),
-    false,
-  );
+  // batch `load` cannot fold is a run nothing can read again. A delivery
+  // its settlements do not match is the writer's own batch: a defect.
+  const batch = foldRunState(state, candidates(state, rows));
+  if (Result.isFailure(batch) && batch.failure.reason === 'mismatched-delivery')
+    return yield* broken(batch.failure.detail);
+  const after = yield* loaded(run, batch, false);
   // D11: the history `load` checks with `PreparedHistorySchema`, checked
   // here from what the batch changes on (an edit's range start, else the
   // already-checked history's end); re-checking all is quadratic.

@@ -2,11 +2,11 @@ import * as path from 'node:path';
 
 import { Effect, FileSystem, PlatformError } from 'effect';
 
-import { formatError } from '@common/errors';
 import { withLogChannel } from '@logger/effectLog';
 import { redactSecrets } from '@logger/redaction';
 import type { FileLocation } from '@shared/schemas';
 import type { LatexdiffMathMarkupValue } from '@texra/shared/constants/latexConfig';
+import { formatError } from '@utils/errors/errorMessage';
 import { readNormalizedFile } from '@utils/files/fsDurability';
 import { pathToLocationIn } from '@utils/files/fileLocation';
 import { executeCommand } from '@utils/system/execUtils';

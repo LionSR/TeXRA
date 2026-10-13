@@ -12,7 +12,6 @@ import { z } from 'zod';
 // Local imports
 import { resolveChildRunOutput } from '@agent/storage/childRunOutput';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import { formatError } from '@common/errors';
 import type { RunId } from '@shared/schemas';
 import type { ToolResult } from '@shared/schemas';
 import type { SettingsStores } from '@shared/config/settingsAccess';
@@ -28,6 +27,7 @@ import { readSettingFrom } from '@utils/config/platformSettings';
 import {
   ensureError,
   extractErrorMessage,
+  formatError,
   toErrorMessage,
 } from '@utils/errors/errorMessage';
 import { escapesRoot, hasExtension } from '@utils/core/pathCore';
