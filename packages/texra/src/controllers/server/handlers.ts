@@ -66,8 +66,10 @@ import { listTasks } from './taskList';
 
 /** A project the service serves: its session, as every host drives it;
  *  `handle` is the owner's, read only for what the session does not carry:
- *  a run's records (its config, end, export and trace) and the
- *  presentation of a start that failed before its run opened. */
+ *  a run's records (its config, end, export and trace) and the log's
+ *  position, which runs this process runs now (the view's `ownedHere` is
+ *  the claim, which a fork's rows also take), and the presentation of a
+ *  start that failed before its run opened. */
 export interface ServiceProject {
   readonly handle: SessionHandle;
   readonly session: Session;
@@ -143,12 +145,14 @@ export const runningTasks = Effect.fn('server.runningTasks')(function* (
 });
 
 /** The live run `runId` continues in: itself, or the live run its parent
- *  chain reaches; null when `runId` is not live here. */
-function liveRoot(view: SessionView, runId: RunId): RunId | null {
-  const live = (id: RunId) => {
-    const run = view.runs.get(id);
-    return run !== undefined && run.ownedHere && isLiveRun(run);
-  };
+ *  chain reaches; null when `runId` is not live here. Live is what this
+ *  process runs (its registry), not the claim the view shows. */
+function liveRoot(
+  view: SessionView,
+  handle: SessionHandle,
+  runId: RunId,
+): RunId | null {
+  const live = (id: RunId) => handle.runs.get(id)?.live === true;
   if (!live(runId)) return null;
   let root = runId;
   for (
@@ -185,14 +189,13 @@ const internal = (cause: Cause.Cause<unknown>) =>
   });
 
 /**
- * What `runId` ends with in `session`: once the session's view, folded at
- * least to the log's commit when asked (so a resume's own rows are in it,
- * not the previous activation's end), shows the run ended or gone, its
- * `run.end` as the run's records hold it, and `at`, that level's cursor,
- * past the run's end and past its removal if it was removed. The wait ends
- * with the session's fold. A run that ended with no `run.end` it could read
- * (deleted, or its store unreadable) ends with the outcome its view shows,
- * without output.
+ * What `runId` ends with in `session`: once every owner of the run here has
+ * left (its end committed) and the session's view, folded at least to the
+ * log's commit then, shows it ended or gone, its `run.end` as the run's
+ * records hold it, and `at`, that level's cursor, past the run's end and
+ * past its removal if it was removed. The wait ends with the session's
+ * fold. A run that ended with no `run.end` it could read (deleted, or its
+ * store unreadable) ends with the outcome its view shows, without output.
  */
 function runEnded(
   { session, handle }: ServiceProject,
@@ -201,11 +204,14 @@ function runEnded(
   Pick<RunEnd, 'outcome' | 'output' | 'error'> & { at: CommitOrdinal }
 > {
   return Effect.gen(function* () {
-    const asked = handle.log.now();
+    yield* handle.runs.get(runId)?.drained ?? Effect.void;
+    const settled = handle.log.now();
     const head = yield* session.view.changes.pipe(
       Stream.filter((level) => {
         const run = level.runs.get(runId);
-        return level.cursor >= asked && (run === undefined || !isLiveRun(run));
+        return (
+          level.cursor >= settled && (run === undefined || !isLiveRun(run))
+        );
       }),
       Stream.runHead,
     );
@@ -289,16 +295,16 @@ export const serviceHandlers = TexraRpcs.toLayer(
     yield* Effect.forkScoped(
       Stream.runForEach(projects.filesWritten, hosts.filesWritten),
     );
-    /** Each session's presentation surface, by storage root, given once
-     *  (claimed in one step) and closed with the session: what its runs ask
-     *  of a host goes to the project's windows. */
-    const presented = new Map<string, Scope.Closeable>();
+    /** Each session's presentation surface, given once (claimed in one
+     *  step) and closed with the session: what its runs ask of a host goes
+     *  to the project's windows. Keyed by the session itself: a project
+     *  reopened after an idle close is a new session, given its own. */
+    const presented = new Map<Session, Scope.Closeable>();
     const present = (session: Session): Effect.Effect<void> =>
       Effect.suspend(() => {
-        const key = session.roots.storage;
-        if (presented.has(key)) return Effect.void;
+        if (presented.has(session)) return Effect.void;
         const surface = Scope.forkUnsafe(scope);
-        presented.set(key, surface);
+        presented.set(session, surface);
         return hosts
           .adopt(session, projects.editors)
           .pipe(Scope.provide(surface));
@@ -310,10 +316,11 @@ export const serviceHandlers = TexraRpcs.toLayer(
     yield* Effect.forkScoped(
       Effect.gen(function* () {
         for (const session of yield* projects.closeIdle(control.idleAfter)) {
-          const key = session.roots.storage;
-          yield* Effect.logInfo(`Closed the idle session of ${key}`);
-          const surface = presented.get(key);
-          presented.delete(key);
+          yield* Effect.logInfo(
+            `Closed the idle session of ${session.roots.storage}`,
+          );
+          const surface = presented.get(session);
+          presented.delete(session);
           if (surface !== undefined) yield* Scope.close(surface, Exit.void);
         }
       }).pipe(
@@ -495,11 +502,11 @@ export const serviceHandlers = TexraRpcs.toLayer(
         Effect.scoped(
           Effect.gen(function* () {
             yield* refuseWhileDraining;
-            const { session } = yield* open(workspace);
+            const { handle, session } = yield* open(workspace);
             // A run this service is running needs no resume: the client that
             // asks takes up the conversation it belongs to, where it is (a
             // chat left it waiting here).
-            const live = liveRoot(session.view.current(), runId);
+            const live = liveRoot(session.view.current(), handle, runId);
             if (live !== null) return live;
             return yield* admit(
               runs,

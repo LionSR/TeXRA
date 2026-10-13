@@ -42,7 +42,6 @@ import type {
   ProjectDatabases,
 } from '@shared/session/database';
 import { ownerIdentity, type OwnerId } from '@shared/schemas';
-import { isLiveRun } from '@shared/session/sessionView';
 import type { EditorHostShape } from '@texra/tools/editorHost';
 import type { ServiceInfo } from '@texra/controllers/server/protocol';
 import type {
@@ -202,12 +201,10 @@ export const cliServiceProjects = Effect.fn('cliServiceProjects')(function* (
       const project = projects.get(root);
       if (project === undefined || project.leases > 0) return undefined;
       const now = Date.now();
-      const { session } = project;
-      if (
-        [...session.view.current().runs.values()].some(
-          (run) => run.ownedHere && isLiveRun(run),
-        )
-      ) {
+      const { handle, session } = project;
+      // What this process runs now (its registry), not the claims the view
+      // shows: a run held here keeps the project open.
+      if (handle.runs.get().length > 0) {
         project.idleSince = now;
         return undefined;
       }
