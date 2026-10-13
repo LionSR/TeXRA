@@ -312,10 +312,13 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
    *  where the run holds a durable outcome, or is gone. The service's
    *  answer to `task.ended` and the fold's `task.watch` stream arrive
    *  apart, so a result that settled on the answer alone could find the
-   *  window still showing the run live. A resumed run's fold can still
-   *  show the outcome it ended with before, until its `run.activate`
-   *  folds: that outcome is known from `before`, read ahead of the resume,
-   *  and the new activation's rows all stamp a later `lastTimestamp`. */
+   *  window still showing the run live. A run the fold had not shown
+   *  before the ask is awaited there first: its rows may still be on
+   *  their way, so its absence is not yet its removal. A resumed run's
+   *  fold can still show the outcome it ended with before, until its
+   *  `run.activate` folds: that outcome is known from `before`, read
+   *  ahead of the resume, and the new activation's rows all stamp a later
+   *  `lastTimestamp`. */
   const endedInView = (
     runId: RunId,
     before: ReturnType<typeof levelNow>,
@@ -324,6 +327,9 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
     const staleAt = stale?.durableOutcome == null ? null : stale.lastTimestamp;
     return Stream.runDrain(
       SubscriptionRef.changes(graph.view.ref).pipe(
+        Stream.dropWhile(
+          (level) => stale === undefined && !level.runs.has(runId),
+        ),
         Stream.takeUntil((level) => {
           const run = level.runs.get(runId);
           return (
