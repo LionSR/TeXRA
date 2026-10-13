@@ -39,6 +39,7 @@ import {
   projectDisplayOf,
   type ProjectDisplay,
 } from '@texra/shared/session/hostSnapshot';
+import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
 import {
   serviceProjectState,
   serviceSession,
@@ -370,10 +371,15 @@ export function openDesktopProjectRegistry(
                   openRepoStateStore(root, storage).pipe(
                     Effect.provideService(GlobalDatabase, globalDatabase),
                   ),
-                  openTexraWorkspaceConfigStores(storage, root, (message) => {
-                    console.warn(`[desktop] ${message}`);
-                    warnInDialog(message);
-                  }),
+                  openTexraWorkspaceConfigStores(
+                    TEXRA_SETTINGS,
+                    storage,
+                    root,
+                    (message) => {
+                      console.warn(`[desktop] ${message}`);
+                      warnInDialog(message);
+                    },
+                  ),
                 ],
                 { concurrency: 'unbounded' },
               );
@@ -385,6 +391,7 @@ export function openDesktopProjectRegistry(
               config: {
                 ...workspaceConfigs,
                 global: options.globalConfigStore,
+                catalog: TEXRA_SETTINGS,
               },
               workspaceState,
               repoState,

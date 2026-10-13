@@ -20,6 +20,7 @@ import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { closeSessionOf } from '@test/support/sessionEnd';
 import { testRunHandle } from '@test/support/runHandleFixtures';
 import { createTestSession } from '@test/support/sessionTestUtils';
+import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
 import { generateRunId } from '@utils/core';
 
 function trackAgent(session: SessionHandle, runId: RunId): RunHandle {
@@ -71,6 +72,7 @@ describe('SessionHandle', () => {
           workspace: yield* JsonStore.open(`${file}.workspace`, { follow }),
           global: yield* JsonStore.open(`${file}.global`, { follow }),
           local: service,
+          catalog: TEXRA_SETTINGS,
         });
         yield* windowB.set(TEXRA_APPROVAL_POLICY_CONFIG_KEY, 'yolo');
         const roots = { ...testWorkspaceRoots(), config };

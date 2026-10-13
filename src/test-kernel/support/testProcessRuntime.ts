@@ -27,7 +27,7 @@ import type { ProcessRuntime } from '@platform/processRuntime';
 import type { OpenOptions, Session, Sessions } from '@texra-ai/harness';
 
 let runtime: ProcessRuntime | undefined;
-let installedSessions: Effect.Effect<Sessions['Service']> | undefined;
+let graphSessions: Effect.Effect<Sessions['Service']> | undefined;
 
 /** Install the harness's runtime, and the sessions it serves when it holds
  *  the session graph (`installTestSessionGraph`). */
@@ -36,7 +36,7 @@ export function initTestProcessRuntime(
   sessions?: Effect.Effect<Sessions['Service']>,
 ): void {
   runtime = instance;
-  installedSessions = sessions;
+  graphSessions = sessions;
 }
 
 /** The harness's runtime, or `undefined` — the non-throwing read, which
@@ -66,7 +66,7 @@ export const testSessionOwner: Effect.Effect<SessionOwner['Service']> =
 /** The sessions the harness's session graph serves. */
 export const testSessions: Effect.Effect<Sessions['Service']> = Effect.suspend(
   () =>
-    installedSessions ??
+    graphSessions ??
     Effect.die(new Error('No test session graph is installed.')),
 );
 

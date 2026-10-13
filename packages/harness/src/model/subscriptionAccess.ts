@@ -12,7 +12,6 @@ import {
   type SettingsStores,
 } from '@shared/config/settingsAccess';
 import type { SubscriptionAuthStatus } from '@shared/model/subscriptionAuth';
-import { settingByKey } from '@shared/state/stateSettings';
 import { writeSettingTo } from '@utils/config/platformSettings';
 import type { Effect } from 'effect';
 
@@ -32,7 +31,7 @@ export function isPreferSubscription(
   stores: SettingsStores,
 ): boolean {
   const configKey = PREFER_SUBSCRIPTION_KEYS[provider];
-  const entry = settingByKey(configKey);
+  const entry = stores.config.catalog.byKey(configKey);
   if (!entry) throw new Error(`No setting catalog entry for key: ${configKey}`);
   return readConfigSetting(entry, stores.config) as boolean;
 }

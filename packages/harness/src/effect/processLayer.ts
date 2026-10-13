@@ -64,7 +64,6 @@ export class Sessions extends Context.Service<
   static layer({
     platform,
     plugins,
-    settings = [],
   }: Composition): Layer.Layer<Sessions, PluginsRefused> {
     // The list is checked before anything is composed, so a refusal names
     // the plugin rather than failing the first session open, and leaves the
@@ -72,8 +71,7 @@ export class Sessions extends Context.Service<
     // every host's bootstrap seeds them, before the process's catalog first
     // reads them: the opt-in plugins stay off until the embedder switches
     // them on. A store that cannot be read or written is a platform defect.
-    // The process layer is built only then: constructing it installs the
-    // settings catalog, which only a composition that passed may do.
+    // The process layer is built only then.
     return Layer.unwrap(
       Effect.try({
         try: () => toolTable(plugins),
@@ -89,7 +87,6 @@ export class Sessions extends Context.Service<
           processLayer({
             globalStorage: platform.roots.globalStorage,
             plugins,
-            settings,
             mcpConfigPath: platform.mcpConfigPath,
             secrets: platform.secrets,
             appState: AppState.layer(platform.roots.globalState),

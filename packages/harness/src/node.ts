@@ -15,6 +15,10 @@ import {
   resolveWorkspaceStoragePath,
 } from '@platform/defaults/workspaceStorage';
 import { UNAVAILABLE_LANGUAGE_MODEL_PORT } from '@platform/languageModel';
+import {
+  settingsCatalog,
+  type StateSettingEntry,
+} from '@shared/state/stateSettings';
 import { mcpConfigPathOf } from '@tools/mcp/mcpConfig';
 import { canonicalizeWorkspacePath } from '@utils/system/nodeWorkspace';
 
@@ -44,6 +48,9 @@ export interface NodePlatformOptions {
    * TeXRA hosts.
    */
   readonly storageDir: string;
+  /** The setting rows the embedder's plugins read, resolved beside the
+   *  harness's own by the platform's config. */
+  readonly settings?: readonly StateSettingEntry[];
 }
 
 const NO_PERSISTED_SECRETS =
@@ -98,7 +105,7 @@ export function nodePlatform(options: NodePlatformOptions): AgentPlatform {
       globalStorage: resolveGlobalStoragePath(options.storageDir),
       // Process-local configuration: an embedder's settings must not be read
       // from, or written to, the user's `.texra/config.json`.
-      config: new MemoryConfigProvider(),
+      config: new MemoryConfigProvider(settingsCatalog(options.settings ?? [])),
       workspaceState: new MemoryStateStore(),
       repoState: new MemoryStateStore(),
       globalState,

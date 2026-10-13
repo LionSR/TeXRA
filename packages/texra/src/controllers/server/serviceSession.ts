@@ -45,6 +45,7 @@ import type { RunEndResult } from '@agent/runtime/RunEndResult';
 import { markFailurePresented } from '@agent/runtime/terminalResultToast';
 import { agentErrorPresentation } from '@common/errors';
 import {
+  JsonValueSchema,
   RUN_OUTCOME,
   type FoldInput,
   type RunId,
@@ -230,21 +231,40 @@ export const serviceProjectState = (
           (stored) => stored.value,
         ),
     );
+  /** `value` as the wire carries it: JSON, or absent. Anything else is
+   *  refused here, as the local store refuses it. */
+  const json = (key: string, value: unknown) => {
+    const parsed = JsonValueSchema.optional().safeParse(value);
+    return parsed.success
+      ? Effect.succeed({ value: parsed.data })
+      : Effect.fail(
+          new StateWriteFailed({
+            key,
+            message: `State key ${key} was given a value that is not JSON`,
+            cause: parsed.error,
+          }),
+        );
+  };
   const set = (
     key: string,
     next: unknown,
     ifCurrent: { value: unknown } | null,
   ) =>
-    call(
-      (message, cause) => new StateWriteFailed({ key, message, cause }),
-      (client) =>
-        client['state.set']({
-          workspace,
-          key,
-          next: { value: next },
-          ifCurrent,
-        } as Parameters<ServiceClient['state.set']>[0]),
-    );
+    Effect.gen(function* () {
+      const nextJson = yield* json(key, next);
+      const currentJson =
+        ifCurrent === null ? null : yield* json(key, ifCurrent.value);
+      return yield* call(
+        (message, cause) => new StateWriteFailed({ key, message, cause }),
+        (client) =>
+          client['state.set']({
+            workspace,
+            key,
+            next: nextJson,
+            ifCurrent: currentJson,
+          }),
+      );
+    });
   return {
     get,
     update: (key, value) => Effect.asVoid(set(key, value, null)),

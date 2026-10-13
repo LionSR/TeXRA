@@ -20,7 +20,6 @@ import { openTexraConfigStores } from '@platform/defaults/nodeStores';
 // Local imports - shared
 import { canonicalConfigKey } from '@shared/config/configKeys';
 import type { SettingsStores } from '@shared/config/settingsAccess';
-import { installSettingsCatalog } from '@shared/state/stateSettings';
 import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
 
 // Local imports - tools
@@ -278,16 +277,12 @@ export function loadCliStartupConfig(
 ): Effect.Effect<CliStartupConfig, Error> {
   return Effect.provide(
     Effect.gen(function* () {
-      // The pre-runtime phase reads and scans TeXRA's rows (the startup
-      // rows, telemetry's project rule) before `installCliProcessRuntime`
-      // installs the process's catalog, so it installs TeXRA's static one,
-      // which holds the same rows.
-      installSettingsCatalog(TEXRA_SETTINGS);
       const degradations: string[] = [];
       // Following their files: a run that follows the project's settings
       // (its approval policy, read at each decision) sees what another
       // window or terminal saves while it runs.
       const stores = yield* openTexraConfigStores(
+        TEXRA_SETTINGS,
         storageRoot,
         cwd,
         (message) => degradations.push(message),
@@ -325,6 +320,7 @@ export function loadCliStartupConfig(
           workspace: withoutInvalid(stores.workspace),
           global: withoutInvalid(stores.global),
           local: withoutInvalid(stores.local),
+          catalog: TEXRA_SETTINGS,
         }),
         warnings: [
           ...configFileWarnings([

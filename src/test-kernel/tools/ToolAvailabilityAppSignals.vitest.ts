@@ -22,6 +22,7 @@ import type { ConfigProvider } from '@platform/interfaces';
 import { Secrets, type PlatformSecrets } from '@platform/secrets';
 import { testHttpClientLayer } from '@test/support/fetchTestUtils';
 import { nodeSpawnerLayer } from '@test/support/childProcessTestLayer';
+import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
 import { LeanLanguageServices } from '@texra/tools/lean/leanLanguageServices';
 import type { Plugin } from '@tools/plugins';
 import type { ToolProbeInputs } from '@tools/toolProbes';
@@ -47,6 +48,7 @@ const probeInputs: ToolProbeInputs = {
     get: unreadConfig,
     update: unreadConfig,
     inspect: unreadConfig,
+    catalog: TEXRA_SETTINGS,
   } satisfies ConfigProvider,
   host: 'cli',
 };

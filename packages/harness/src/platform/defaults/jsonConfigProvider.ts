@@ -1,9 +1,6 @@
 import { Effect } from 'effect';
 
-import {
-  getCoreSettingDefault,
-  settingByKey,
-} from '@shared/state/stateSettings';
+import type { SettingsCatalog } from '@shared/state/stateSettings';
 import { canonicalConfigKey } from '@shared/config/configKeys';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -34,6 +31,8 @@ export interface JsonConfigProviderOptions {
   global: ConfigStore;
   /** This user's private store for the workspace; see {@link ConfigTarget}. */
   local: ConfigStore;
+  /** The rows the stores' keys resolve against (`ConfigProvider.catalog`). */
+  catalog: SettingsCatalog;
 }
 
 /**
@@ -43,8 +42,12 @@ export interface JsonConfigProviderOptions {
  * approval settings) does not, so a cloned repository cannot set it, except
  * that a `projectMayOptOut` row (telemetry) still takes anything but `true`.
  */
-export function projectValueIgnored(key: string, value: unknown): boolean {
-  const row = settingByKey(key);
+export function projectValueIgnored(
+  catalog: SettingsCatalog,
+  key: string,
+  value: unknown,
+): boolean {
+  const row = catalog.byKey(key);
   if ((row?.configTarget ?? 'workspace') === 'workspace') return false;
   return row?.projectMayOptOut !== true || value === true;
 }
@@ -60,11 +63,18 @@ export class JsonConfigProvider implements ConfigProvider {
   private readonly workspaceStore: ConfigStore;
   private readonly globalStore: ConfigStore;
   private readonly localStore: ConfigStore;
+  readonly catalog: SettingsCatalog;
 
-  constructor({ workspace, global, local }: JsonConfigProviderOptions) {
+  constructor({
+    workspace,
+    global,
+    local,
+    catalog,
+  }: JsonConfigProviderOptions) {
     this.workspaceStore = workspace;
     this.globalStore = global;
     this.localStore = local;
+    this.catalog = catalog;
   }
 
   get<T>(key: string, defaultValue?: T): T {
@@ -72,19 +82,20 @@ export class JsonConfigProvider implements ConfigProvider {
     const projectValue = this.workspaceStore.get<T>(storedKey);
     if (
       projectValue !== undefined &&
-      !projectValueIgnored(storedKey, projectValue)
+      !projectValueIgnored(this.catalog, storedKey, projectValue)
     ) {
       return projectValue;
     }
     const layers =
-      settingByKey(storedKey)?.configTarget === 'local'
+      this.catalog.byKey(storedKey)?.configTarget === 'local'
         ? [this.localStore, this.globalStore]
         : [this.globalStore];
     for (const store of layers) {
       const value = store.get<T>(storedKey);
       if (value !== undefined) return value;
     }
-    const schemaDefault = getCoreSettingDefault(storedKey) as T | undefined;
+    const schemaDefault = this.catalog.configDefault(storedKey) as
+      T | undefined;
     return schemaDefault === undefined ? (defaultValue as T) : schemaDefault;
   }
 

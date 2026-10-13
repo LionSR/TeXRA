@@ -4,6 +4,7 @@ import { Cause, Effect, Exit, Result } from 'effect';
 import {
   installCliProcessRuntime,
   NO_PLATFORM_INSTALL,
+  type CliServices,
 } from '@cli/runtime/cliProcessRuntime';
 import {
   prePlatformDiagnosticSink,
@@ -18,7 +19,6 @@ import { ensureError } from '@utils/errors/errorMessage';
 
 import { contextFromArgs } from './context';
 import { setExitCode } from './exitCode';
-import type { ProcessServices, SessionOwner } from '@texra-ai/harness';
 
 // citty hands `run` a context whose `args` is keyed by the command's `ArgsDef`.
 // We mirror that shape so handlers keep full literal-typed access to `ctx.args`
@@ -67,7 +67,7 @@ interface DefineCliCommandOptions<A extends ArgsDef, E> {
   readonly run: (
     context: CliContext,
     ctx: CliCommandRunContext<A>,
-  ) => Effect.Effect<CliCommandOutcome, E, ProcessServices | SessionOwner>;
+  ) => Effect.Effect<CliCommandOutcome, E, CliServices>;
   /**
    * Set by the two commands that bring no platform up. Their program still
    * runs on a process runtime, but one installed with `NO_PLATFORM_INSTALL`:

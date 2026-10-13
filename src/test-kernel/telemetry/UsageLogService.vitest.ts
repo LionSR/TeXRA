@@ -16,6 +16,7 @@ import { testRuntime } from '@test/support/testProcessRuntime';
 import { createDeferred } from '@test/support/asyncTestUtils';
 import { jsonResponse } from '@test/support/fetchTestUtils';
 import { setupPlatform } from '@test/support/setupPlatform';
+import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
 
 function usageEntry(model: string) {
   return {
@@ -329,7 +330,7 @@ describe('UsageLogService', () => {
     // is shared — and a stray `enabled: false` silently disables logging for
     // every suite that runs afterwards.
     // The real provider, so the project-file scope rule is the one tested.
-    setupPlatform({}, { config: new MemoryConfigProvider() });
+    setupPlatform({}, { config: new MemoryConfigProvider(TEXRA_SETTINGS) });
 
     // Optional entries must be discarded without a request.
     async function expectNoOptionalUsageSent(): Promise<void> {

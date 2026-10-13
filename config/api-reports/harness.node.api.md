@@ -7,7 +7,7 @@ Exports: 7
 - `canonicalizeWorkspacePath` — `function canonicalizeWorkspacePath: (workspacePath: string) => string`
 - `createNodeWorkspaceRoots` — `function createNodeWorkspaceRoots: (init: NodeWorkspaceRootsInit) => WorkspaceRoots`
 - `nodePlatform` — `function nodePlatform: (options: NodePlatformOptions) => AgentPlatform`
-- `NodePlatformOptions` — `interface NodePlatformOptions { readonly agentsDir: string; readonly workspaceDir?: string; readonly storageDir: string; }`
+- `NodePlatformOptions` — `interface NodePlatformOptions { readonly agentsDir: string; readonly workspaceDir?: string; readonly storageDir: string; readonly settings?: readonly StateSettingEntry[]; }`
 - `relativeToRoot` — `function relativeToRoot: (root: string, filePath: string) => string | undefined`
 - `resolveGlobalStoragePath` — `function resolveGlobalStoragePath: (storageRoot: string) => string`
 - `resolveWorkspaceStoragePath` — `function resolveWorkspaceStoragePath: (storageRoot: string, workspacePath: string | undefined) => string`

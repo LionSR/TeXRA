@@ -1,5 +1,7 @@
 import { Effect } from 'effect';
 
+import type { SettingsCatalog } from '@shared/state/stateSettings';
+
 import { JsonConfigProvider, type ConfigStore } from './jsonConfigProvider';
 
 /** Process-local {@link ConfigStore}, the in-memory twin of a `JsonStore`. */
@@ -31,11 +33,12 @@ class MemoryConfigStore implements ConfigStore {
  * not a second implementation of the same rule.
  */
 export class MemoryConfigProvider extends JsonConfigProvider {
-  constructor() {
+  constructor(catalog: SettingsCatalog) {
     super({
       workspace: new MemoryConfigStore(),
       global: new MemoryConfigStore(),
       local: new MemoryConfigStore(),
+      catalog,
     });
   }
 }

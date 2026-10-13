@@ -79,6 +79,7 @@ import {
   PROCESS,
   tail,
 } from '@test/shared/session/fanOutScenario';
+import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
 import { subscribeToSignalChanges } from '@texra/shared/signals';
 import { clearGoal, startGoal } from '@tools/goal';
 import { prepareToolEditApprovalPrompt } from '@tools/approval/toolEditApproval';
@@ -249,7 +250,7 @@ const HARNESS_RESOURCES_PATH = await Effect.runPromise(
 const HARNESS_CLI_CONTEXT: CliContext = {
   storageRoot: HARNESS_STORAGE_ROOT,
   approvalPolicy: TEXRA_APPROVAL_POLICY_DEFAULT,
-  config: new MemoryConfigProvider(),
+  config: new MemoryConfigProvider(TEXRA_SETTINGS),
   commandName: 'texra',
   configWarnings: [],
   configDegradations: [],

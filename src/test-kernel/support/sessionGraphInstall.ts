@@ -7,7 +7,6 @@ import {
 } from '@texra-ai/harness';
 import { AppState, AgentDirectories } from '@platform/interfaces';
 import { withForkFailureReporting } from '@platform/processRuntime';
-import type { StateSettingEntry } from '@shared/state/stateSettings';
 import { UsageLog } from '@shared/usageLog';
 import { mcpConfigPathOf } from '@tools/mcp/mcpConfig';
 import type { Plugin } from '@tools/plugins';
@@ -57,17 +56,15 @@ const { globalStorage } = createFakeWorkspaceRoots();
 export const identityReads = { count: 0 };
 
 /** The kernel's composition over the fake host: `processLayer`'s options
- *  with `plugins` (and the app's setting rows, as a host passes them) under
- *  the global root `root`. */
+ *  with `plugins` under the global root `root`. The setting rows travel
+ *  with the fake host's config (`ConfigProvider.catalog`). */
 const testProcessOptions = (
   plugins: readonly Plugin[],
-  settings?: readonly StateSettingEntry[],
   root: string = globalStorage,
 ): ProcessLayerOptions => ({
   globalStorage: root,
   // Under the fake global root, never the developer's `~/.texra/mcp.json`.
   plugins,
-  ...(settings ? { settings } : {}),
   mcpConfigPath: mcpConfigPathOf(root),
   secrets: fakeHostSecrets,
   appState: AppState.layer(fakeHostAppState),
@@ -86,21 +83,18 @@ const testProcessOptions = (
  *  (only the install's reads count in `identityReads`). */
 export const testProcessLayer = (
   plugins: readonly Plugin[],
-  settings: readonly StateSettingEntry[],
   root: string,
 ): ReturnType<typeof processLayer> =>
-  processLayer(testProcessOptions(plugins, settings, root));
+  processLayer(testProcessOptions(plugins, root));
 
-/** Install the harness's process runtime over `plugins` (and the app's
- *  setting rows, as a host passes them) and build it. */
+/** Install the harness's process runtime over `plugins` and build it. */
 export async function installTestSessionGraph(
   plugins: readonly Plugin[],
-  settings?: readonly StateSettingEntry[],
 ): Promise<void> {
   const runtime = withForkFailureReporting(
     ManagedRuntime.make(
       processLayer({
-        ...testProcessOptions(plugins, settings),
+        ...testProcessOptions(plugins),
         processStart: Effect.sync(() => {
           identityReads.count += 1;
           return 'vitest';

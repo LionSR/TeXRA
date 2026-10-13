@@ -28,7 +28,6 @@ import type {
   TranscriptSubscription,
 } from '@shared/schemas';
 import type { ReadonlyDeep } from '@shared/session/readonlyDeep';
-import type { StateSettingEntry } from '@shared/state/stateSettings';
 import type { RequestError } from '@shared/session/requestErrors';
 import type { Outcome, RuntimeRequest } from '@shared/session/runtimeRequest';
 import type {
@@ -70,13 +69,12 @@ export interface AgentPlatform {
   readonly mcpConfigPath: string;
 }
 
-/** What an embedder composes the process from: its platform, its
- *  plugins (the harness's built-ins among them), and the setting rows its
- *  plugins read, installed beside the harness's. */
+/** What an embedder composes the process from: its platform and its
+ *  plugins (the harness's built-ins among them). The setting rows its
+ *  plugins read travel with the platform's config (`ConfigProvider.catalog`). */
 export interface Composition {
   readonly platform: AgentPlatform;
   readonly plugins: readonly Plugin[];
-  readonly settings?: readonly StateSettingEntry[];
 }
 
 /** One published level of the session's fold: an immutable value. */

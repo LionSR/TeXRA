@@ -6,6 +6,11 @@ All notable changes to this project will be documented in this file.
 
 ### Breaking Changes
 
+- **SDK: an embedder's setting rows go to its platform, not its
+  composition.** `Sessions.layer` no longer takes `settings`; pass them to
+  `nodePlatform({ settings })`, or carry them on your own `ConfigProvider`
+  (its new `catalog`). Each composition now resolves settings against its
+  own rows, so two in one process no longer share one catalog.
 - **SDK: a run whose trace cannot be read says why.** A run's `events`
   stream fails with `TraceUnavailable` instead of ending with no events.
   Its reason is `ended` (the run finished before anyone read its trace),

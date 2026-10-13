@@ -906,29 +906,6 @@ export function settingsCatalog(
   };
 }
 
-/**
- * The process's catalog: the harness's rows until `processLayer`
- * installs the app's rows beside them, once per process, as
- * it installs the session owner. The harness reads a setting by key through
- * it, so it never imports an app's rows.
- */
-let installed = settingsCatalog([]);
-
-/** Install the process's catalog; `processLayer` calls it once. */
-export function installSettingsCatalog(catalog: SettingsCatalog): void {
-  installed = catalog;
-}
-
-/** Look up any installed row by its key. */
-export function settingByKey(key: string): StateSettingEntry | undefined {
-  return installed.byKey(key);
-}
-
-/** An installed config-file-backed row's default (see `SettingsCatalog.configDefault`). */
-export function getCoreSettingDefault(key: string): unknown {
-  return installed.configDefault(key);
-}
-
 // ============================================================================
 // Row helpers
 // ============================================================================

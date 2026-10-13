@@ -5,7 +5,6 @@ import type {
   ConfigWriteFailed,
   StateReadFailed,
 } from '@platform/interfaces';
-import { settingByKey } from '@shared/state/stateSettings';
 import {
   inspectSetting,
   readConfigSetting,
@@ -15,8 +14,8 @@ import {
   type StoredSetting,
 } from '@shared/config/settingsAccess';
 
-function requireEntry(key: string) {
-  const entry = settingByKey(key);
+function requireEntry(config: ConfigProvider, key: string) {
+  const entry = config.catalog.byKey(key);
   if (!entry) {
     throw new Error(`No setting catalog entry for key: ${key}`);
   }
@@ -34,7 +33,7 @@ export function readSettingFrom<T>(
   stores: SettingsStores,
   key: string,
 ): Effect.Effect<T, StateReadFailed> {
-  return readSetting(requireEntry(key), stores) as Effect.Effect<
+  return readSetting(requireEntry(stores.config, key), stores) as Effect.Effect<
     T,
     StateReadFailed
   >;
@@ -63,10 +62,10 @@ export function inspectSettingFrom<T>(
   stores: SettingsStores,
   key: string,
 ): Effect.Effect<StoredSetting<T>, StateReadFailed> {
-  return inspectSetting(requireEntry(key), stores) as Effect.Effect<
-    StoredSetting<T>,
-    StateReadFailed
-  >;
+  return inspectSetting(
+    requireEntry(stores.config, key),
+    stores,
+  ) as Effect.Effect<StoredSetting<T>, StateReadFailed>;
 }
 
 /** Read and validate one catalog-backed value from its config slot. */
@@ -74,7 +73,7 @@ export function readConfigSettingFrom<T>(
   config: ConfigProvider,
   key: string,
 ): T {
-  return readConfigSetting(requireEntry(key), config) as T;
+  return readConfigSetting(requireEntry(config, key), config) as T;
 }
 
 /**
@@ -103,5 +102,5 @@ export function writeSettingTo(
   value: unknown,
   target?: ConfigTarget,
 ): Effect.Effect<void, ConfigWriteFailed | Error> {
-  return writeSetting(requireEntry(key), value, stores, target);
+  return writeSetting(requireEntry(stores.config, key), value, stores, target);
 }

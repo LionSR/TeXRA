@@ -1,7 +1,7 @@
 import { defineCommand } from 'citty';
 import { Deferred, Effect, Exit, Schedule, Scope } from 'effect';
 
-import { SessionOwner } from '@texra-ai/harness';
+import { SessionOwner, Sessions } from '@texra-ai/harness';
 import { entryChannel, entryMessage, setLogSink } from '@logger/logSink';
 import { adoptLoginShellEnvironment } from '@platform/defaults/loginShellEnv';
 import { askServiceToStop } from '@texra/controllers/server/client';
@@ -16,10 +16,7 @@ import {
   connectCliService,
   probeCliService,
 } from '../runtime/cliService';
-import {
-  installedEditorHost,
-  installedSessions,
-} from '../runtime/cliProcessRuntime';
+import { CliEditors } from '../runtime/cliProcessRuntime';
 import { CliExitCode } from '../runtime/exitCodes';
 import { writeTextStderr } from '../runtime/logSinks';
 
@@ -91,18 +88,13 @@ function runServe(context: CliContext, idleSeconds: number) {
     const scope = yield* Scope.make();
     const owner = yield* SessionOwner;
     const served = Effect.gen(function* () {
-      // The registry the installed runtime's plugins read: windows attach
-      // their editors to it.
-      const editors = installedEditorHost();
-      if (editors === undefined)
-        return yield* Effect.die(
-          new Error('texra serve runs on an installed runtime; none is.'),
-        );
+      // The registry the runtime's plugins read: windows attach their
+      // editors to it.
       const projects = yield* cliServiceProjects(
         context,
         scope,
-        editors,
-        yield* installedSessions,
+        yield* CliEditors,
+        yield* Sessions,
       );
       return yield* serve({
         idleAfter: `${idleSeconds} seconds`,

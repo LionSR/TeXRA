@@ -93,11 +93,6 @@ import {
   type SessionOpenError,
 } from '@shared/session/database';
 import { UsageLog } from '@shared/usageLog';
-import {
-  installSettingsCatalog,
-  settingsCatalog,
-  type StateSettingEntry,
-} from '@shared/state/stateSettings';
 import { releaseRunResources } from '@tools/approval';
 import { ToolCatalog } from '@tools/liveTools';
 import { pluginCatalogLayer } from '@tools/pluginCatalog';
@@ -575,8 +570,6 @@ export interface ProcessLayerOptions {
    * pass `texraPlugins` (`@tools/registry`).
    */
   readonly plugins: readonly Plugin[];
-  /** The app's setting rows (its plugins' among them), installed with the harness's. */
-  readonly settings?: readonly StateSettingEntry[];
   /** The MCP config file (`.mcp.json` shape) the catalog reads. */
   readonly mcpConfigPath: string;
   readonly secrets: PlatformSecrets;
@@ -645,7 +638,6 @@ export function ownerProcessLayer({
   processStart = nodeProcesses.selfIdentity(),
   globalStorage,
   plugins,
-  settings = [],
   mcpConfigPath,
   secrets,
   appState,
@@ -658,7 +650,6 @@ export function ownerProcessLayer({
   minimumLogLevel,
   workspace,
 }: ProcessLayerOptions): Layer.Layer<ProcessServices | SessionOwner> {
-  installSettingsCatalog(settingsCatalog(settings));
   const catalog = pluginCatalogLayer(plugins, mcpConfigPath);
   // Non-failing: `selfIdentity()` reads an unreadable identity as undefined.
   const identity = Layer.effect(

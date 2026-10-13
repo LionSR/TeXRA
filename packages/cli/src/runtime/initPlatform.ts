@@ -1,10 +1,11 @@
 // Third-party imports
-import { Cause, Effect, Exit, Scope } from 'effect';
+import { Cause, Context, Effect, Exit, Scope } from 'effect';
 
 // Local imports
 import {
   AppState,
   SessionOwner,
+  Sessions,
   type ProcessRuntime,
   type StateStore,
   type StateWriteFailed,
@@ -38,7 +39,6 @@ import { ensureError } from '@utils/errors/errorMessage';
 import {
   disposeCliProcessRuntime,
   installCliProcessRuntime,
-  installedSessions,
 } from './cliProcessRuntime';
 import {
   flushNdjsonStdout,
@@ -430,8 +430,9 @@ export function initCliPlatform(
           sessionOpen = openSession;
           runSessionOpen = yield* Effect.cached(
             Effect.flatMap(openSession, (handle) =>
-              Effect.flatMap(installedSessions, (sessions) =>
-                sessions.open(handle.roots, { persistent: true }),
+              Effect.flatMap(
+                Effect.map(runtime.contextEffect, Context.get(Sessions)),
+                (sessions) => sessions.open(handle.roots, { persistent: true }),
               ),
             ),
           );

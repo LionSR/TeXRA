@@ -16,6 +16,7 @@ import {
 } from '@platform/defaults/workspaceStorage';
 import { nodePlatformLayer, pathExists } from '@test/support/fsTestUtils';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
+import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
 
 describe('workspace storage defaults', () => {
   const tempDirs = useTempDirs();
@@ -154,8 +155,11 @@ describe('workspace storage defaults', () => {
         );
         const warnings: string[] = [];
 
-        const stores = yield* openTexraConfigStores(root, workspacePath, (m) =>
-          warnings.push(m),
+        const stores = yield* openTexraConfigStores(
+          TEXRA_SETTINGS,
+          root,
+          workspacePath,
+          (m: string) => warnings.push(m),
         );
         const write = yield* Effect.exit(
           stores.workspace.set('texra.files.exclude', ['dist']),

@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { afterAll } from 'vitest';
 import type { CliContext } from '@cli/runtime/cliContext';
 import { MemoryConfigProvider } from '@platform/defaults/memoryConfigProvider';
+import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
 
 /**
  * This test file's own storage root, removed when the file finishes. A fixed
@@ -31,7 +32,7 @@ const BASE_CLI_CONTEXT = {
   commandName: 'texra',
   version: '0.0.0',
   resourcesPath: '/tmp/resources',
-  config: new MemoryConfigProvider(),
+  config: new MemoryConfigProvider(TEXRA_SETTINGS),
   configWarnings: [],
   configDegradations: [],
   skillSourceOptions: {},

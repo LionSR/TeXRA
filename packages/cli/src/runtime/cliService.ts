@@ -58,6 +58,7 @@ import {
   type ServiceUnavailable,
 } from '@texra/controllers/server/client';
 import { bootstrapHost } from '@texra/controllers/hostBootstrap';
+import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
 import { sessionStoreMovedAsideMessage } from '@ui/copy/sessionStore';
 import { envFlag } from '@utils/system/envFlags';
 import { withPerKeyLane, type PerKeyLane } from '@utils/core/perKeyQueue';
@@ -109,7 +110,13 @@ export const cliServiceProjects = Effect.fn('cliServiceProjects')(function* (
       [
         openProjectStateStore(storage, workspace),
         openRepoStateStore(workspace, storage),
-        openTexraWorkspaceConfigStores(storage, workspace, warn, follow),
+        openTexraWorkspaceConfigStores(
+          TEXRA_SETTINGS,
+          storage,
+          workspace,
+          warn,
+          follow,
+        ),
       ],
       { concurrency: 'unbounded' },
     ).pipe(Scope.provide(within));
@@ -118,7 +125,7 @@ export const cliServiceProjects = Effect.fn('cliServiceProjects')(function* (
       workspacePath: workspace,
       storage,
       globalStorage,
-      config: { ...configs, global: globalConfig },
+      config: { ...configs, global: globalConfig, catalog: TEXRA_SETTINGS },
       workspaceState,
       repoState,
       globalState,
