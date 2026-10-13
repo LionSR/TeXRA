@@ -42,7 +42,6 @@ import { markFailurePresented } from '@agent/runtime/terminalResultToast';
 import { agentErrorPresentation } from '@common/errors';
 import {
   RUN_OUTCOME,
-  type CommitOrdinal,
   type FoldInput,
   type RunId,
   type TranscriptSubscription,
@@ -265,27 +264,14 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
       ),
     ),
   );
-  /** This window's fold at or past `at`, the service's position when it
-   *  saw the run end. The service's answer to `task.ended` and the fold's
-   *  `task.watch` stream arrive apart, so a result that settled on the
-   *  answer alone could find the window still showing the run live, or a
-   *  resumed run with the outcome its previous activation left. At `at`
-   *  the fold holds every row the service had folded then: the run's end,
-   *  or its removal. */
-  const endedInView = (at: CommitOrdinal): Effect.Effect<void> =>
-    Stream.runDrain(
-      SubscriptionRef.changes(graph.view.ref).pipe(
-        Stream.takeUntil((level) => level.cursor >= at),
-      ),
-    );
   /** What a task the service runs ends with: asked of the service the
    *  link holds, again of the next one if the link is lost meanwhile (a
    *  retired service finishes its tasks first), and held until this
-   *  window's fold shows it too. A run that failed fails this, as a run
-   *  here does: with its error, which the service's terminal presenter
-   *  showed this window, so it is marked presented, or without one (an
-   *  end with no error recorded) as a plain failure. A service that
-   *  cannot answer fails it offline. */
+   *  window's fold shows it too. A run that failed fails this at once, as
+   *  a run here does: with its error, which the service's terminal
+   *  presenter showed this window, so it is marked presented, or without
+   *  one (an end with no error recorded) as a plain failure. A service
+   *  that cannot answer fails it offline. */
   const ended = (runId: RunId): Effect.Effect<RunEndResult, RunFailure> =>
     Effect.flatMap(connected, (client) =>
       client['task.ended']({ workspace, runId }),
@@ -299,16 +285,30 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
           Effect.andThen(Effect.fail(runFailure(OFFLINE))),
         ),
       ),
-      Effect.flatMap(({ at, ...end }) => Effect.as(endedInView(at), end)),
-      Effect.flatMap(({ error, ...end }) => {
-        if (end.outcome !== RUN_OUTCOME.FAILED)
-          return Effect.succeed({ ...end, runId });
-        const cause = new Error(
-          error?.message ?? `The task failed (run ${runId}).`,
+      Effect.flatMap(({ at, error, ...end }) => {
+        if (end.outcome === RUN_OUTCOME.FAILED) {
+          const cause = new Error(
+            error?.message ?? `The task failed (run ${runId}).`,
+          );
+          if (error !== undefined && agentErrorPresentation(error) !== null)
+            markFailurePresented(cause);
+          return Effect.fail(runFailure(cause.message, cause));
+        }
+        // The answer and the fold's `task.watch` stream arrive apart: a
+        // result that settled on the answer alone could find the window
+        // still showing the run live, or a resumed run with the outcome
+        // its previous activation left. Held until this window's fold is
+        // at or past `at`, the log's commit when the service answered,
+        // where it holds the run's end, or its removal. The fold-aware
+        // stream ends the wait with the fold, never parks on it.
+        return Effect.as(
+          Stream.runDrain(
+            graph.view.changes.pipe(
+              Stream.takeUntil((level) => level.cursor >= at),
+            ),
+          ),
+          { ...end, runId },
         );
-        if (error !== undefined && agentErrorPresentation(error) !== null)
-          markFailurePresented(cause);
-        return Effect.fail(runFailure(cause.message, cause));
       }),
     );
   const request: Session['request'] = (runtimeRequest) =>

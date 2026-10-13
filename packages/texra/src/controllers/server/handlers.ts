@@ -185,11 +185,11 @@ const internal = (cause: Cause.Cause<unknown>) =>
 
 /**
  * What `runId` ends with in `session`: once every owner of the run has
- * left, its `run.end` as the run's records hold it, and `at`, the fold's
- * position where the run first read as ended (or gone). A run that ended
- * with no `run.end` it could read (deleted, or its store unreadable) ends
- * with the outcome its view shows, without output; a run the log does not
- * hold ended cancelled, at no position.
+ * left, its `run.end` as the run's records hold it, and `at`, the log's
+ * commit ordinal then, past the run's end and past its removal if it was
+ * removed, whatever the live fold has drained. A run that ended with no
+ * `run.end` it could read (deleted, or its store unreadable) ends with the
+ * outcome its view shows, without output.
  */
 function runEnded(
   session: SessionHandle,
@@ -199,29 +199,13 @@ function runEnded(
 > {
   return Effect.gen(function* () {
     yield* session.runs.get(runId)?.drained ?? Effect.void;
-    // Whether the run exists, from the log rather than the live fold: a
-    // session the open just (re)built has folded nothing yet.
-    if (!(yield* session.view.read([runId])).runs.has(runId))
-      return {
-        outcome: RUN_OUTCOME.CANCELLED,
-        output: emptyRunEndOutput(),
-        at: 0,
-      };
-    const level = yield* SubscriptionRef.changes(session.view.ref).pipe(
-      Stream.filter((view) => {
-        // Past the fold's first drain, which publishes the log's commit
-        // (above zero: the run has rows), so the empty view a rebuilt
-        // session starts from never reads as the run gone.
-        if (view.cursor === 0) return false;
-        const run = view.runs.get(runId);
-        return run === undefined || !isLiveRun(run);
-      }),
+    const head = yield* SubscriptionRef.changes(session.view.ref).pipe(
+      Stream.map((view) => view.runs.get(runId)),
+      Stream.filter((run) => run === undefined || !isLiveRun(run)),
       Stream.runHead,
-      // The fold's stream never ends: a head is always found.
-      Effect.map(Option.getOrThrow),
     );
-    const run = level.runs.get(runId);
-    const at = level.cursor;
+    const run = Option.getOrUndefined(head);
+    const at = session.log.now();
     const end = yield* getRunRecords(session, runId)
       .readRunEnd()
       .pipe(
