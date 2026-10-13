@@ -97,14 +97,16 @@ an added indirection tier — one `Effect` per run appending one history, one
      path, not a second handler.
    - Model handler: `packages/harness/src/agent/runtime/modelAccess/`
      (`ModelAccess.ts`, `binding.ts`, `credentials.ts`, `failureInfo.ts`,
-     `routeDecision.ts`) — one service over the `@texra-ai/llm` `Model`. Provider
-     SDKs are constructed only inside the llm Model, loaded only by `bindModel`
-     (`packages/llm/src/node.ts`), whose one caller is `modelAccess/binding.ts`.
-     The deliberate exceptions outside that route are unchanged: audio
-     transcription builds `OpenAI` directly
-     (`packages/texra/src/tools/media/audio.ts:253`); the `codex`/`claude_code`
-     tools load their own provider SDKs; the settings-view consent probe
-     acquires a VS Code `Model`.
+     `routeDecision.ts`) is the one binding service a run goes through. It binds
+     two kinds of route: the wire `@texra-ai/llm` `Model` through `bindModel`
+     (`packages/llm/src/node.ts`, whose one caller is `modelAccess/binding.ts`),
+     and the editor-backed route (`bindEditor` → `LanguageModel.acquire`, served
+     by the extension's `acquireVscodeLanguageModel`) for VS Code/Copilot runs —
+     so acquiring a VS Code `Model` is a real inference route, not only the
+     settings-view consent probe. The model work that stays outside ModelAccess
+     is the known set of tools that load their own provider SDK directly: audio
+     transcription builds `OpenAI` (`packages/texra/src/tools/media/audio.ts:253`)
+     and the `codex`/`claude_code` agent-CLI tools.
    - Logger: `packages/harness/src/logger/` (`effectLog.ts`, `logSink.ts`,
      `effectDiagnostics.ts`, `formatLogData.ts`, `redaction.ts`) — same five-file
      set.
@@ -123,17 +125,17 @@ an added indirection tier — one `Effect` per run appending one history, one
      one. The invariant is that the loop is the one writer of its own run
      history through that cell, not that literally every run-state row is written
      through the cell: several other run-state row kinds are written directly
-     through `session.log.transact`/`runStateAppend` by their own single owners —
-     the request surface (`request.*`, `requestPolicy.ts`), settlement and meta
-     rows such as `child.turn` (`childRunLoop.ts`), `run.description`
-     (`sessionDescription.ts`) and `run.result` (`storage/runRecords.ts`), and
-     `endIn`'s loud "run ends unloaded" fallback (`runLifecycle.ts:285`). Each is
-     written by its own single owner, and none is a second writer of the loop's
-     history. (The run-state fold, `shared/session/runStateFold.ts`, classifies
-     which row types it folds into `RunState` versus ignores — `run.description`,
-     `run.result` and `child.turn` sit in its ignored set, folded by their own
-     readers — so it is a row-type classification, not a row-to-writer map; the
-     owners are the modules named above.) `SessionHandle`
+     through `session.log.transact`/`runStateAppend` by other parts of the system
+     — among them the request surface (`request.*`), settlement/meta rows
+     (`child.turn`, `run.description`, `run.result`), and `endIn`'s loud "run ends
+     unloaded" fallback (`runLifecycle.ts:285`). Some have more than one writer
+     (e.g. a row's birth, its user/model update, and its settled form), which is
+     fine — none of them is a second writer of the **loop's** history, and that
+     is the single-writer invariant this audit checks. (The run-state fold,
+     `shared/session/runStateFold.ts`, classifies which row types it folds into
+     `RunState` versus ignores — `run.description`, `run.result` and `child.turn`
+     sit in its ignored set, folded by their own readers — so it is a row-type
+     classification, not a row-to-writer map.) `SessionHandle`
      remains a flat record of owner fields that "does no work and forwards
      nothing" (`SessionHandle.ts:342-372`). `ChildRuns` (lane E5,
      `runtime/ToolServices.ts`) is a capability-narrowing door that hides
