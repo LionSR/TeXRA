@@ -55,7 +55,8 @@ The files have distinct roles:
   loads the actual entries from those referenced `.bib` files
   (`loadBibliographyEntries`) — the two stages have different inputs, don't
   conflate them. `extractFileDependencies.ts` resolves
-  `\input`/`\include`/`\bibliography`/`\addbibresource` targets so
+  `\input`/`\include`/`\bibliography`/`\addbibresource` targets, plus a
+  `\usepackage` whose `.sty` sits beside the file, so
   `LatexMediaManager` can mirror them into run storage.
   `latexParsingUtils.ts` holds comment-stripping (shared by all three
   extractors above) and the bibliography-directive matching that

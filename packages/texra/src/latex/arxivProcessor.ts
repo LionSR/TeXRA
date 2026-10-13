@@ -31,21 +31,15 @@ import { normaliseArxivIdentifier } from './arxivIdentifier';
 import { indentLatexFilesInDirectory } from './formatter/indentDirectory';
 import type { LatexFormatter } from './formatter/texFormatter';
 
-interface ExtractResult {
-  success: boolean;
-  error?: string;
-}
-
-interface ExtractOptions {
-  timeout?: number;
-}
-
 // Cover the entire request, including body streaming, while allowing large
 // tarballs to complete on a slow link.
 const DOWNLOAD_TIMEOUT_MS = 120_000; // 2 min
 
 /** Retries after the first download attempt. */
 const DOWNLOAD_RETRIES = 2;
+
+/** How long a tar extraction may run before it is abandoned. */
+const EXTRACT_TIMEOUT_MS = 30_000;
 
 /**
  * A source-download failure that ends the retry loop immediately — a PDF-only
@@ -90,61 +84,6 @@ const permanentFs = <T, R>(
 ): Effect.Effect<T, ArxivSourcePermanentError, R> =>
   effect.pipe(Effect.mapError(permanentFsError));
 
-/**
- * Abort foreign stream work on interruption, then join its actual promise.
- * Join outside the timeout race so a late rejection remains observable.
- */
-function joinedStream<T, A, E>(
-  start: (signal: AbortSignal) => Promise<T>,
-  onError: (error: unknown) => Effect.Effect<A, E>,
-  timeout?: number,
-): Effect.Effect<T | A, E> {
-  return Effect.suspend(() => {
-    let pending: Promise<T> | undefined;
-    let signal: AbortSignal | undefined;
-    let primary: { error: unknown } | undefined;
-    const operation = Effect.tryPromise({
-      try: (requestSignal) => {
-        signal = requestSignal;
-        pending = start(requestSignal);
-        return pending;
-      },
-      catch: (error) => error,
-    });
-    return (
-      timeout == null
-        ? operation
-        : operation.pipe(Effect.timeout(Duration.millis(timeout)))
-    ).pipe(
-      Effect.catch((error) => {
-        primary = { error };
-        return onError(error);
-      }),
-      Effect.onExit(() =>
-        Effect.promise(
-          () =>
-            pending?.then(
-              () => {},
-              (error: unknown) => {
-                if (primary !== undefined && primary.error === error) return;
-                if (
-                  signal?.aborted &&
-                  (error === signal.reason ||
-                    (error instanceof Error &&
-                      error.name === 'AbortError' &&
-                      error.cause === signal.reason))
-                )
-                  return;
-                // A distinct late stream failure must survive interruption.
-                throw error;
-              },
-            ) ?? Promise.resolve(),
-        ),
-      ),
-    );
-  });
-}
-
 export type ArxivDownloadDestination = 'root' | 'references';
 
 interface DownloadSourceOptions {
@@ -160,17 +99,6 @@ const INVALID_ARXIV_INPUT_ERROR =
 
 const PDF_ONLY_SUBMISSION_ERROR =
   'This arXiv paper only has a PDF submission — no LaTeX source is available for download';
-
-/**
- * Normalize input that may be a URL or plain ID into a valid arXiv ID.
- * Accepts formats like:
- * - Plain ID: 2404.12175, 2404.12175v2, cs/0501072
- * - URLs: https://arxiv.org/abs/2404.12175, https://arxiv.org/pdf/2404.12175.pdf
- * @returns The normalized arXiv ID, or null if extraction fails
- */
-function normalizeArxivInput(input: string): string | null {
-  return normaliseArxivIdentifier(input.trim());
-}
 
 /**
  * Determine file extension from content-type header.
@@ -229,12 +157,12 @@ class ArxivSourceProcessor {
   /** @returns Error message if invalid, null if valid */
   public validateId(input: string): string | null {
     if (!input) return 'arXiv ID or URL is required';
-    return normalizeArxivInput(input) ? null : INVALID_ARXIV_INPUT_ERROR;
+    return normaliseArxivIdentifier(input) ? null : INVALID_ARXIV_INPUT_ERROR;
   }
 
   /** Sanitized directory name for a paper (e.g. `2404.12175` or `cs_0501072`). */
   public getPaperDirName(input: string): string {
-    const id = normalizeArxivInput(input);
+    const id = normaliseArxivIdentifier(input);
     return id ? id.replaceAll('/', '_') : input;
   }
 
@@ -404,31 +332,72 @@ class ArxivSourceProcessor {
     );
   }
 
-  public extractTarFile(
+  /**
+   * Extract `tarPath` into `destDir`. tar has no abort option, so
+   * interruption (the deadline's included) stops admitting entries, and tar's
+   * own promise is joined outside the timeout race so a distinct late
+   * rejection stays observable. The join is unbounded; a rejection need not
+   * mean every write closed.
+   */
+  private extractTarFile(
     tarPath: string,
     destDir: string,
-    options: ExtractOptions = {},
-  ): Effect.Effect<ExtractResult> {
+  ): Effect.Effect<void, ArxivSourcePermanentError> {
     return Effect.gen(function* () {
       yield* Effect.logDebug(`Extracting tar file: ${tarPath} to ${destDir}`);
-      const result = yield* joinedStream(
-        (signal) =>
-          // tar has no abort option. Stop admitting entries and join its
-          // public promise. This is unbounded; rejection need not mean all
-          // writes closed.
-          tar.x({ file: tarPath, cwd: destDir, filter: () => !signal.aborted }),
-        (cause) =>
-          Effect.suspend((): Effect.Effect<ExtractResult> => {
-            const error = Cause.isTimeoutError(cause)
-              ? 'Extraction timed out'
-              : toErrorMessage(cause);
-            return Effect.logError(`Failed to extract tar file: ${error}`).pipe(
-              Effect.as({ success: false, error }),
-            );
-          }),
-        options.timeout,
+      let pending: Promise<void> | undefined;
+      let signal: AbortSignal | undefined;
+      let primary: { error: unknown } | undefined;
+      yield* Effect.tryPromise({
+        try: (requestSignal) => {
+          signal = requestSignal;
+          pending = tar.x({
+            file: tarPath,
+            cwd: destDir,
+            filter: () => !requestSignal.aborted,
+          });
+          return pending;
+        },
+        catch: (error) => error,
+      }).pipe(
+        Effect.timeout(Duration.millis(EXTRACT_TIMEOUT_MS)),
+        Effect.catch((cause) => {
+          primary = { error: cause };
+          const error = Cause.isTimeoutError(cause)
+            ? 'Extraction timed out'
+            : toErrorMessage(cause);
+          return Effect.logError(`Failed to extract tar file: ${error}`).pipe(
+            Effect.andThen(
+              Effect.fail(
+                new ArxivSourcePermanentError({
+                  message: `Failed to extract arXiv source: ${error}`,
+                }),
+              ),
+            ),
+          );
+        }),
+        Effect.onExit(() =>
+          Effect.promise(
+            () =>
+              pending?.then(
+                () => {},
+                (error: unknown) => {
+                  if (primary !== undefined && primary.error === error) return;
+                  if (
+                    signal?.aborted &&
+                    (error === signal.reason ||
+                      (error instanceof Error &&
+                        error.name === 'AbortError' &&
+                        error.cause === signal.reason))
+                  )
+                    return;
+                  // A distinct late tar failure must survive interruption.
+                  throw error;
+                },
+              ) ?? Promise.resolve(),
+          ),
+        ),
       );
-      return result ?? { success: true };
     }).pipe(withLogChannel(ARXIV_CHANNEL));
   }
 
@@ -447,7 +416,7 @@ class ArxivSourceProcessor {
         destination = 'references',
       } = options;
       // Normalize input (URL or ID) to plain arXiv ID
-      const id = normalizeArxivInput(input);
+      const id = normaliseArxivIdentifier(input);
       if (!id) {
         return yield* Effect.fail(
           new ArxivSourcePermanentError({ message: INVALID_ARXIV_INPUT_ERROR }),
@@ -658,18 +627,7 @@ class ArxivSourceProcessor {
         );
         const staged = (entry: string) => path.join(extractedDir, entry);
         const placed = (entry: string) => path.join(paperDirFull, entry);
-        const extractResult = yield* this.extractTarFile(
-          downloadedPath,
-          extractedDir,
-          { timeout: 30000 },
-        );
-        if (!extractResult.success) {
-          return yield* Effect.fail(
-            new ArxivSourcePermanentError({
-              message: `Failed to extract arXiv source: ${extractResult.error}`,
-            }),
-          );
-        }
+        yield* this.extractTarFile(downloadedPath, extractedDir);
         const entries = yield* permanentFs(fs.readDirectory(extractedDir));
         const collisions = yield* Effect.filter(entries, (entry) =>
           permanentFs(entryExists(fs, placed(entry))),
