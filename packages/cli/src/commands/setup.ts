@@ -1,11 +1,7 @@
 import { Effect } from 'effect';
 
-import { withLogChannel } from '@logger/effectLog';
 import { SETUP_AGENT_NAME } from '@shared/constants/agents';
-import { hasUsableSetupCredential } from '@texra/model/setupCredentialAccess';
 
-import { CliExitCode } from '../runtime/exitCodes';
-import { initCliPlatform } from '../runtime/initPlatform';
 import {
   formatInteractiveTerminalFailure,
   interactiveTerminalFailure,
@@ -37,41 +33,13 @@ export function runSetup(context: CliContext) {
     );
   }
 
-  // Always ends in the chat TUI (setup agent) or returns cleanly before it —
-  // either way the platform's own handler covers signals until the TUI mounts
-  // and takes over. This entry never passes `installSignalHandlers: false`,
-  // so that handler stays live through the whole window below (see
-  // `initCliPlatform`).
-  //
-  // State 0 first (2026-06-11-agent-native-onboarding.md): a credential is the
-  // one step no agent can do for the user. With a credential already in place
-  // the picker is skipped; a subscription sign-in is `texra auth <provider>
-  // login`.
-  return Effect.gen(function* () {
-    const services = yield* initCliPlatform(context);
-    if (
-      !(yield* hasUsableSetupCredential(services, services.secrets).pipe(
-        withLogChannel('Setup Credentials'),
-      ))
-    ) {
-      const { runCliOnboarding } = yield* Effect.promise(
-        () => import('../onboarding/runOnboarding'),
-      );
-      // Skipped or abandoned the picker: exit cleanly (the skip summary
-      // already printed) — there is no credential for the setup agent to run
-      // on.
-      if (
-        !(yield* runCliOnboarding(services, context.stdoutColorEnabled))
-          .configured
-      ) {
-        return CliExitCode.Success;
-      }
-    }
-    // Credential present (pre-existing or just configured): the setup agent
-    // owns the session — environment checks, workspace agents, first task. Same
-    // chat startup path as `texra chat`, with the agent pinned.
-    return { chat: { agentOverride: SETUP_AGENT_NAME } };
-  });
+  // The setup agent owns the session: environment checks, workspace agents,
+  // first task. Same chat startup path as `texra chat`, with the agent
+  // pinned. A credential is the one step no agent can do for the user
+  // (2026-06-11-agent-native-onboarding.md): without one the chat opens on
+  // its "Connect a model" panel, and the first message waits for the
+  // connection.
+  return Effect.succeed({ chat: { agentOverride: SETUP_AGENT_NAME } });
 }
 
 export const setupCommand = withUsageSections(
