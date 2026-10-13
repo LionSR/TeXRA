@@ -12,13 +12,16 @@
 import { Cause, Effect } from 'effect';
 import * as vscode from 'vscode';
 
-import { withProcessServices, type ProcessRuntime } from '@texra-ai/harness';
 import {
-  type HostInteractions,
+  withProcessServices,
+  type ProcessRuntime,
   type HostPresentation,
-  type PresentationEventHandlers,
   type RuntimePresentationEvent,
   type RuntimePresentationEventPayloads,
+} from '@texra-ai/harness';
+import type {
+  HostInteractions,
+  PresentationEventHandlers,
 } from '@agent/runtime';
 import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
 import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';

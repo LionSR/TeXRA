@@ -31,10 +31,10 @@ import {
 } from '@texra-ai/harness';
 import {
   AgentConfigSchema,
-  terminalFailurePresented,
   type AgentConfig,
   type AgentConfigPayload,
-} from '@agent/runtime';
+} from '@texra-ai/harness/schemas';
+import { terminalFailurePresented } from '@agent/runtime';
 import { launchApproval, type CliContext } from '@cli/runtime/cliContext';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import { readCliTeamName } from '@cli/runtime/cliTeams';
@@ -691,11 +691,7 @@ export function createChatSessionController(
             } else if (session.stopRequested) {
               session.settleExitCode(claim, CliExitCode.Interrupted);
             } else {
-              appendLocalErrorTranscript(
-                'message' in result
-                  ? result.message
-                  : describeFollowUpFailure(result.failed),
-              );
+              appendLocalErrorTranscript(result.message);
               session.settleExitCode(claim, CliExitCode.Usage);
             }
           }).pipe(

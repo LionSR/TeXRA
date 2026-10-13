@@ -2,12 +2,7 @@
 import { Effect, type Scope } from 'effect';
 
 // Local imports - runtime
-import {
-  type PresentationEventHandlers,
-  type RuntimePresentationEvent,
-  type RuntimePresentationEventPayloads,
-  type SessionHandle,
-} from '@agent/runtime';
+import type { PresentationEventHandlers, SessionHandle } from '@agent/runtime';
 import type { LogLevel, RunId } from '@shared/schemas';
 import { formatInstructionActionHint } from '@ui/copy/instructionActionHint';
 
@@ -19,6 +14,10 @@ import {
 } from './logSinks';
 import { createRunProgressRenderer } from './runProgressRenderer';
 import { missingAgentMessage } from './agents';
+import type {
+  RuntimePresentationEvent,
+  RuntimePresentationEventPayloads,
+} from '@texra-ai/harness';
 import type { CliContext } from './cliContext';
 
 export interface CliRuntimeHost {

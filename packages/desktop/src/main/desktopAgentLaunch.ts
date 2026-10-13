@@ -1,12 +1,13 @@
 import { Effect, type Scope } from 'effect';
 
-import { Cancelled, type PlatformSecrets, type Run } from '@texra-ai/harness';
-import { type ProcessRuntime, withProcessServices } from '@texra-ai/harness';
 import {
-  presentRunFailure,
+  Cancelled,
+  type PlatformSecrets,
+  type Run,
   type RunEndResult,
-  type RootLaunchRequest,
-} from '@agent/runtime';
+} from '@texra-ai/harness';
+import { type ProcessRuntime, withProcessServices } from '@texra-ai/harness';
+import { presentRunFailure, type RootLaunchRequest } from '@agent/runtime';
 import type { RequestOpenFilePayload, RunId } from '@shared/schemas';
 import type { RunValidatedOptions } from '@texra/controllers/session/hostRunActions';
 import { selectAutoOpenFinalOutput } from '@texra/agent/output/selectAutoOpenFinalOutput';

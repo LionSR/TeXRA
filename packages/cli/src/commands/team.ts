@@ -2,7 +2,6 @@ import { Effect } from 'effect';
 import { defineCommand } from 'citty';
 
 import { getCatalogAgent } from '@agent/index';
-import type { AgentConfigPayload } from '@agent/runtime';
 import {
   canLaunchTeam,
   planTeamRun,
@@ -60,6 +59,7 @@ import {
 } from '../runtime/executeCli';
 import { toolUseResultText } from '../runtime/terminalStatus';
 import { withExpandedRunInputs } from '../runtime/workflowInputs';
+import type { AgentConfigPayload } from '@texra-ai/harness/schemas';
 
 interface TeamRunInit {
   readonly team: string;

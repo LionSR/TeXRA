@@ -23,7 +23,6 @@ import {
   type ConfigProvider,
   type RuntimeRequest,
 } from '@texra-ai/harness';
-import type { AgentConfig } from '@agent/runtime';
 import { getVisibleAgents } from '@agent/index';
 import { getRunRecords } from '@agent/storage';
 import {
@@ -137,7 +136,7 @@ import {
   TuiSession,
 } from './state/sessionRunState';
 import { createSessionExitController } from './sessionExitController';
-import type { RunId } from '@texra-ai/harness/schemas';
+import type { RunId, AgentConfig } from '@texra-ai/harness/schemas';
 
 interface ChatResult {
   exitCode: number;

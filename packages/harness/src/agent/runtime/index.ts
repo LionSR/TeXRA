@@ -1,80 +1,52 @@
 /**
- * Agent runtime — the cross-host public surface of `packages/harness/src/agent/runtime`.
+ * Agent runtime — what the hosts (CLI, desktop, extension) still take from
+ * `packages/harness/src/agent/runtime` that the public `Session` does not
+ * carry yet: the session handle and the engine helpers over it. It is the
+ * single door the harness deep-import ratchet
+ * (`config/ratchets/harness-deep-import-baseline.json`) allows each host.
  *
- * One curated barrel the hosts (CLI, desktop, extension) import instead of
- * deep-reaching each runtime module by path. Following the same pattern as
- * `@agent/trace` and `@agent/storage`, this decouples host code from the
- * runtime's internal file layout: moving or splitting a module below no longer
- * ripples into every host, and the harness deep-import ratchet
- * (`config/ratchets/harness-deep-import-baseline.json`) collapses each host's
- * many `@agent/runtime/*` specifiers to this single door.
- *
- * The surface is derived from use — exactly the symbols the three hosts reach
- * for today — per the Agent-SDK north star
- * (`2026-07-09-agent-sdk-north-star.md`, §2) and the fold-in
- * plan (`2026-08-04-agent-sdk-readiness-review.md`, §3/§5).
- * Internal runtime modules keep importing each other by direct path; nothing
- * inside `src/agent` imports this barrel, so it introduces no import cycle.
+ * It shrinks as hosts move onto `Session`, and is deleted (G12b) once the
+ * record reads the handle still serves and the app tools that still hold one
+ * (E5) are gone. Everything a host can take from a public entry
+ * (`@texra-ai/harness`, `./schemas`) comes from there instead. Internal
+ * runtime modules import each other by direct path; nothing inside
+ * `src/agent` imports this barrel, so it introduces no import cycle.
  */
 
-// SessionHandle
+// The session handle: the record reads, the run log and the view a host
+// still reads from it.
 export type { SessionHandle, SessionViewAccess } from './SessionHandle';
-
-// The shutdown budget a host spends closing its sessions.
-export { SESSION_CLOSE_DEADLINE_MS } from './SessionHandle';
 
 // The process's one route retry gate, which a helper call reads from context.
 export type { RouteRetries } from './run/invocation';
 
-// HostInteractions; a host with no session of its own presents through a
-// `SessionHostInteractions` it attaches its presentation host to.
+// A host's presentation surface on a handle, and the `SessionHostInteractions`
+// a host with no session of its own presents through.
 export type { HostInteractions } from './HostInteractions';
 export { SessionHostInteractions } from './HostInteractions';
 
-// rootLaunch: what `Runs.launch({ request, options })` takes.
+// What `Runs.launch` takes: the desktop's launch still goes through it.
 export type { RootLaunchRequest } from './rootLaunch';
-export type { RootLaunch } from './runs';
 
-// SessionResumeRetrieval
-
-// runClassification
+// Whether a run can be resumed here, naming the process holding it.
 export { runRefusal } from './runClassification';
 
-// terminalResultToast
+// A launch failure's presentation, once.
 export {
   presentRunFailure,
   terminalFailurePresented,
 } from './terminalResultToast';
 
-// resumeRun
-export type { ResumeRunOptions, ResumeRunResult } from './resumeRun';
-// The refusal wording a host applies to a `ResumeRunResult` failure.
+// The refusal wording a host applies to a resume that did not start.
 export { describeFollowUpFailure } from '@agent/followUp/ToolUseFollowUp';
 
-// runtimePresentationEvents
-export type {
-  HostPresentation,
-  PresentationEventHandlers,
-  RuntimePresentationEvent,
-  RuntimePresentationEventPayloads,
-} from './runtimePresentationEvents';
+// A host's emit handlers, one per presentation event.
+export type { PresentationEventHandlers } from './runtimePresentationEvents';
 
-// helperModelName
+// The helper model the "fix LaTeX" actions run on.
 export { getHelperModelName } from './helperModelName';
 
-// RunHandle
-
-// RunEndResult
-export type { RunEndResult } from './RunEndResult';
-
-// core/definition config contract used by host launch/resume seams.
-export {
-  AgentConfigSchema,
-  type AgentConfig,
-  type AgentConfigPayload,
-} from '../core/definition/AgentConfig';
-
-// core/state run-request validation at the host launch boundary.
+// Run-request validation at the host launch boundary.
 export {
   validateRunRequest,
   type ValidatedRunRequest,

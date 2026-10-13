@@ -22,7 +22,7 @@ import { Effect, Stream, SubscriptionRef } from 'effect';
 
 import { ModelError, TurnResultSchema, type Model } from '@texra-ai/llm';
 
-import { AgentConfigSchema } from '@agent/runtime';
+import { AgentConfigSchema } from '@texra-ai/harness/schemas';
 import { linkService } from '@texra/controllers/server/client';
 import { attachWindowHost } from '@texra/controllers/server/windowHost';
 import { generateRunId } from '@utils/core';

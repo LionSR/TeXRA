@@ -3,8 +3,8 @@ import { Effect } from 'effect';
 import { z, ZodError } from 'zod';
 
 // Local imports
+import { type RunId, AgentConfigSchema } from '@texra-ai/harness/schemas';
 import {
-  AgentConfigSchema,
   presentRunFailure,
   type SessionHostInteractions,
 } from '@agent/runtime';
@@ -13,7 +13,6 @@ import { withLogChannel } from '@logger/effectLog';
 import { ensureError } from '@utils/errors/errorMessage';
 import type { ProcessServices, Session } from '@texra-ai/harness';
 import type { WorkspaceRoots } from '@texra-ai/harness';
-import type { RunId } from '@texra-ai/harness/schemas';
 
 const CHANNEL = 'ExecuteCommand';
 

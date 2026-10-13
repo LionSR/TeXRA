@@ -2,7 +2,7 @@
 import { Cause, Effect } from 'effect';
 
 // Local imports
-import { AgentConfigSchema } from '@agent/runtime';
+import { AgentConfigSchema } from '@texra-ai/harness/schemas';
 import { EXTENSION_COMMANDS } from '@commands/extensionCommandIds';
 import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
 import { safeExecuteCommand } from '@frontend/system/commandUtils';
