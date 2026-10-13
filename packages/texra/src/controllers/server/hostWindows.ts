@@ -339,6 +339,12 @@ export const makeHostWindows = Effect.sync((): HostWindows => {
         );
       }
       window.pending.clear();
+      // The edits this window staged go to the project's window focused
+      // last that offers them, so its Approve reads an edit it shows; with
+      // none left, they wait for the next to attach.
+      const next = target(window.key, 'toolEdits');
+      for (const entry of staged.group(window.key).values())
+        if (entry.window === window) stage(entry, next);
       if (![...windows].some((other) => other.key === window.key))
         yield* Effect.logWarning(
           `No TeXRA window of ${window.project} is attached: its tasks run without diagnostics, inline criticism, PDF opening or editable tool-edit previews until one attaches.`,
