@@ -23,7 +23,6 @@ import { z } from 'zod';
 
 import { resolveWorkspaceStoragePath } from '@texra-ai/harness/node';
 import { proveOwnerLiveness } from '@agent/storage/leaseOwnerLiveness';
-import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { sessionInputsLayer } from '@controllers/session/sessionInputs';
 import {
   LocalRuntimeSource,
@@ -46,11 +45,8 @@ import {
 import { WORKSPACE_STORES } from '@shared/session/valueFamily';
 import { fold } from '@shared/session/sessionFold';
 import { SessionInputs } from '@shared/session/sessionInputs';
-import {
-  emptySessionView,
-  isLiveRun,
-  type SessionView,
-} from '@shared/session/sessionView';
+import { emptySessionView, isLiveRun } from '@shared/session/sessionView';
+import type { Session, SessionView } from '@texra-ai/harness';
 
 import type { TaskSummary } from './protocol';
 
@@ -136,7 +132,7 @@ const coldView = Effect.fn('taskList.coldView')(function* (
  */
 export const listTasks = Effect.fn('taskList.listTasks')(function* (
   storageRoot: string,
-  open: ReadonlyMap<string, SessionHandle>,
+  open: ReadonlyMap<string, Session>,
   all: boolean,
 ): Effect.fn.Return<
   TaskSummary[],
@@ -164,9 +160,7 @@ export const listTasks = Effect.fn('taskList.listTasks')(function* (
     const storage = path.join(stores, record.key);
     const session = open.get(storage);
     if (session !== undefined) {
-      tasks.push(
-        ...summaries(yield* SubscriptionRef.get(session.view.ref), workspace),
-      );
+      tasks.push(...summaries(session.view.current(), workspace));
       continue;
     }
     // One project's read, isolated whole: a store that cannot be opened or

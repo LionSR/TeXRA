@@ -25,13 +25,10 @@ import {
   Queue,
   type Scope,
   Stream,
-  SubscriptionRef,
 } from 'effect';
 
 import { z } from 'zod';
 
-import type { HostInteractions } from '@agent/runtime/HostInteractions';
-import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { ToolEditContent } from '@shared/session/runtimeRequest';
 import {
   DiagnosticsReadFailed,
@@ -51,6 +48,7 @@ import {
   type HostFrame,
   type Notice,
 } from './hostCalls';
+import type { Session, SessionHost } from '@texra-ai/harness';
 
 /** Why a call a run waited on got no answer from a window. */
 export class WindowCallFailed extends Data.TaggedError('WindowCallFailed')<{
@@ -136,7 +134,7 @@ const previewOf = (entry: Staged | undefined): ToolEditContent | null =>
 
 /** The project folder a session holds, or its store for a session with
  *  no folder. */
-const projectOf = (session: SessionHandle): string =>
+const projectOf = (session: Session): string =>
   session.roots.workspace ?? session.roots.storage;
 
 /** The service's attached windows. */
@@ -144,7 +142,7 @@ export interface HostWindows {
   /** Attach a window of `session`'s project offering `capabilities`: its
    *  id, then the calls for it, until the stream ends (the window went). */
   readonly attach: (
-    session: SessionHandle,
+    session: Session,
     capabilities: readonly HostCapability[],
   ) => Stream.Stream<HostFrame>;
   /** Files a task wrote past the editor's own write path, as this
@@ -161,7 +159,7 @@ export interface HostWindows {
   /** Give `session` the forwarding surface, and attach its project's
    *  windows' editors to `editors`, for the scope's life. */
   readonly adopt: (
-    session: SessionHandle,
+    session: Session,
     editors: EditorHostShape,
   ) => Effect.Effect<void, never, Scope.Scope>;
 }
@@ -351,7 +349,7 @@ export const makeHostWindows = Effect.sync((): HostWindows => {
         );
     });
 
-  const interactionsOf = (session: SessionHandle): HostInteractions => {
+  const interactionsOf = (session: Session): SessionHost => {
     const key = session.roots.storage;
     return {
       emit: (event, payload) => {
@@ -373,7 +371,7 @@ export const makeHostWindows = Effect.sync((): HostWindows => {
             call: { kind: 'approvalDenied', denial, runId },
           });
       },
-      get languageModel(): HostInteractions['languageModel'] {
+      get languageModel(): SessionHost['languageModel'] {
         if (!offers(key, 'languageModel')) return undefined;
         return {
           selectModels: (selector) =>
@@ -411,8 +409,10 @@ export const makeHostWindows = Effect.sync((): HostWindows => {
       },
       // The staged preview of a request the session still lists.
       preview: (requestId) =>
-        Effect.map(SubscriptionRef.get(session.view.ref), (view) =>
-          view.requests.some((request) => request.requestId === requestId)
+        Effect.sync(() =>
+          session.view
+            .current()
+            .requests.some((request) => request.requestId === requestId)
             ? previewOf(staged.get(key, requestId))
             : null,
         ),
@@ -581,7 +581,7 @@ export const makeHostWindows = Effect.sync((): HostWindows => {
         // lists has settled: it is dropped, and its window releases its
         // view. One not listed yet is kept: staging precedes the row.
         yield* Effect.forkScoped(
-          Stream.runForEach(SubscriptionRef.changes(session.view.ref), (view) =>
+          Stream.runForEach(session.view.changes, (view) =>
             Effect.gen(function* () {
               const held = staged.group(key);
               if (held.size === 0) return;
@@ -599,10 +599,7 @@ export const makeHostWindows = Effect.sync((): HostWindows => {
             }),
           ),
         );
-        yield* Effect.acquireRelease(
-          session.interactions.use(interactionsOf(session)),
-          (release) => Effect.sync(release),
-        );
+        yield* session.attach(interactionsOf(session));
         yield* editors.attach(key, editorOf(key));
       }),
   };

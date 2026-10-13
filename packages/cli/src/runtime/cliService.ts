@@ -201,17 +201,20 @@ export const cliServiceProjects = Effect.fn('cliServiceProjects')(function* (
       const project = projects.get(root);
       if (project === undefined || project.leases > 0) return undefined;
       const now = Date.now();
-      if (project.handle.runs.get().length > 0) {
+      const { handle, session } = project;
+      // What this process runs now (its registry), not the claims the view
+      // shows: a run held here keeps the project open.
+      if (handle.runs.get().length > 0) {
         project.idleSince = now;
         return undefined;
       }
       if (now - project.idleSince < idleMs) return undefined;
       projects.delete(root);
       // The stores close even if the session's close fails.
-      yield* (yield* SessionOwner)
-        .close(project.handle.roots.storage)
+      yield* sessions
+        .close(session.roots)
         .pipe(Effect.ensuring(Scope.close(project.scope, Exit.void)));
-      return project.handle;
+      return session;
     }).pipe(withPerKeyLane(lanes, root), Effect.provideContext(services));
   return {
     storageRoot,
@@ -227,9 +230,9 @@ export const cliServiceProjects = Effect.fn('cliServiceProjects')(function* (
     opened: Effect.sync(
       () =>
         new Map(
-          [...projects.values()].map(({ handle }) => [
-            handle.roots.storage,
-            handle,
+          [...projects.values()].map(({ session }) => [
+            session.roots.storage,
+            session,
           ]),
         ),
     ),
