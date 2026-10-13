@@ -272,7 +272,7 @@ const decideRequest = (
   )(withRunClaim(deps, req.runId, heldHere, answer));
 };
 
-/** Answered by the run's live loop once its resume here settles (none: refused). */
+/** Answered by the run's live loop once its resume here settles (none: refused): a /compact or /model sent mid-resume waits until the run rests. */
 const viaControls = (
   deps: RequestDeps,
   req: Extract<

@@ -6,7 +6,6 @@ import {
   AppState,
   SessionOwner,
   Sessions,
-  type ProcessRuntime,
   type StateStore,
   type StateWriteFailed,
   Secrets,
@@ -39,6 +38,7 @@ import { ensureError } from '@utils/errors/errorMessage';
 import {
   disposeCliProcessRuntime,
   installCliProcessRuntime,
+  type CliProcessRuntime,
 } from './cliProcessRuntime';
 import {
   flushNdjsonStdout,
@@ -109,7 +109,7 @@ export type CliPlatformServices = SettingsStores & {
    * every entry point runs its programs on it and threads it to the modules
    * that run programs at a Promise edge, instead of looking it up.
    */
-  readonly runtime: ProcessRuntime;
+  readonly runtime: CliProcessRuntime;
   /** The process's cross-workspace storage root, from the roots built below. */
   readonly globalStorage: string;
   /**

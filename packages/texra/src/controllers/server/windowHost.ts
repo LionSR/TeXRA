@@ -12,6 +12,7 @@ import {
   FiberHandle,
   FiberMap,
   RcMap,
+  Ref,
   type Scope,
   Stream,
   SubscriptionRef,
@@ -23,10 +24,14 @@ import type { HostInteractions } from '@agent/runtime/HostInteractions';
 import { withLogChannel } from '@logger/effectLog';
 import type { EditorCapabilities } from '@texra/tools/editorHost';
 import { toErrorMessage } from '@utils/errors/errorMessage';
+import {
+  WINDOW_OUTDATED,
+  type ServiceClient,
+  type ServiceLink,
+} from './client';
 import type { RpcClientError } from 'effect/rpc';
 import type { LanguageModelPort } from '@texra-ai/harness';
 
-import type { ServiceClient, ServiceLink } from './client';
 import type {
   HostAnswer,
   HostCall,
@@ -210,6 +215,34 @@ export const attachWindowHost = Effect.fn('server.attachWindowHost')(function* (
   // which.
   const attached = yield* Deferred.make<void>();
   const attachment = yield* FiberHandle.make<void, never>();
+  // A newer TeXRA's service that refused this window settles the wait (no
+  // attachment comes) and is said once per refusal and link, in the first
+  // window that hears it (a reconnect resets `refusalTold`, so a later
+  // refusal is said again): every call it makes says it too.
+  yield* Effect.forkScoped(
+    SubscriptionRef.changes(link.away).pipe(
+      Stream.filter((reason) => reason === WINDOW_OUTDATED),
+      Stream.runForEach((message) =>
+        Deferred.succeed(attached, undefined).pipe(
+          Effect.andThen(Ref.getAndSet(link.refusalTold, true)),
+          Effect.flatMap((told) =>
+            told
+              ? Effect.void
+              : Effect.suspend(
+                  () =>
+                    host.emit?.('requestShowError', { message }) ?? Effect.void,
+                ).pipe(
+                  Effect.catch((error) =>
+                    Effect.logWarning(
+                      `${message} (not shown: ${error.message})`,
+                    ).pipe(withLogChannel(CHANNEL)),
+                  ),
+                ),
+          ),
+        ),
+      ),
+    ),
+  );
   yield* Effect.forkScoped(
     Stream.runForEach(SubscriptionRef.changes(link.client), (client) =>
       client === null

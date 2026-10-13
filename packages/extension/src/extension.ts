@@ -23,6 +23,7 @@ import {
   UNAVAILABLE_LANGUAGE_MODEL_PORT,
   type LanguageModelPort,
   type ProcessRuntime,
+  type StateStore,
   WorkspaceRoots,
   ToolMissingHandler,
   withForkFailureReporting,
@@ -139,6 +140,9 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
     readonly toolMissingHandler?: ToolMissingHandler;
     /** The editor's LM bridge, served as `LanguageModel` below. */
     readonly languageModel?: LanguageModelPort;
+    /** The project's state as the background service holds it, when the
+     *  window reached the service: no project store opens here. */
+    readonly projectState?: StateStore;
   } = {},
 ) {
   // `~/.texra` is one history across CLI/desktop/extension (#8622). The
@@ -229,8 +233,6 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
   // (see the push near the end of activation), matching the setup pill.
   yield* Effect.addFinalizer(() => runtime.disposeEffect);
   const projectScope = yield* Scope.make();
-  // The service link lives for the activation, as the window does.
-  const activationScope = yield* Scope.Scope;
   // The window's session closes before the project state it reads.
   yield* Effect.addFinalizer(() =>
     withProcessServices(
@@ -250,24 +252,11 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
     runtime,
     Effect.gen(function* () {
       const globalState = yield* AppState;
-      // A folder's window is a client of the one background service, so
-      // its tasks keep running when it closes and other windows and
-      // terminals see them; it reads the project's state there and opens
-      // no project store of its own. Decided once: a reconnect never
-      // re-enters it. The window without a folder uses no service.
-      const reached =
-        workspaceRoot === undefined
-          ? undefined
-          : yield* reachExtensionService(context.extensionPath).pipe(
-              Scope.provide(activationScope),
-              Effect.result,
-            );
       const projectState =
-        reached !== undefined && Result.isSuccess(reached)
-          ? serviceProjectState(reached.success, workspaceRoot ?? '')
-          : yield* openProjectStateStore(storage, workspaceRoot).pipe(
-              Scope.provide(projectScope),
-            );
+        extras.projectState ??
+        (yield* openProjectStateStore(storage, workspaceRoot).pipe(
+          Scope.provide(projectScope),
+        ));
       // VS Code restarts the extension host when the first workspace folder
       // changes, so the configuration stores stay pinned for this process.
       const config = new JsonConfigProvider(
@@ -321,7 +310,7 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
         managed.contextEffect,
         Context.get(Sessions),
       );
-      return { secrets, runtime, roots, editors, sessions, reached };
+      return { secrets, runtime, roots, editors, sessions };
     }),
   );
 });
@@ -459,10 +448,23 @@ const activateExtension = Effect.fn('activateExtension')(function* (
   // not leave a disposed host surface installed.
   context.subscriptions.push({ dispose: () => setLogSink(null) });
   const languageModel = createLanguageModelPort(context);
-  const { secrets, runtime, roots, editors, sessions, reached } =
+  // A folder's window is a client of the one background service, so its
+  // tasks keep running when it closes and other windows and terminals see
+  // them; it reads the project's state there and opens no project store of
+  // its own. Decided once: a reconnect never re-enters it.
+  // Before the runtime exists: its link's warnings reach this host's log
+  // through the diagnostics the runtime would serve.
+  const reached = yield* reachExtensionService(context.extensionPath).pipe(
+    Effect.provide(effectDiagnosticsLayer('Trace')),
+    Effect.result,
+  );
+  const { secrets, runtime, roots, editors, sessions } =
     yield* initVscodePlatform(context, workspaceRoot, {
       languageModel,
       toolMissingHandler: vscodeToolMissingReporter,
+      ...(Result.isSuccess(reached) && {
+        projectState: serviceProjectState(reached.success, workspaceRoot),
+      }),
     });
   // The host entry holds the process runtime in a local and threads it to the
   // surfaces registered below, so code under `activate` settles its Effects on
@@ -470,11 +472,6 @@ const activateExtension = Effect.fn('activateExtension')(function* (
   // The activation scope carries the shutdown: the workspace activation
   // registers its own finalizers there.
   const activationScope = yield* Scope.Scope;
-  // A folder's platform always decides on the service.
-  if (reached === undefined)
-    return yield* Effect.die(
-      new Error('The folder window was built without a service decision.'),
-    );
   yield* withProcessServices(
     runtime,
     activateWorkspace(
@@ -502,7 +499,7 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
   roots: WorkspaceRoots,
   editors: EditorRegistry,
   sessions: Context.Service.Shape<typeof Sessions>,
-  /** The background service, as `initVscodePlatform` reached it once. */
+  /** The background service, as the activation reached it once. */
   reached: Result.Result<ServiceLink, Error>,
 ) {
   const { globalState } = roots;

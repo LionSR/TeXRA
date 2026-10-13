@@ -413,7 +413,10 @@ process-wide global state), and the `mcpConfigPath` its tool registry reads.
 TeXRA's ordinary storage layout under the `storageDir` you name (required; the
 package never writes to the user's `~/.texra`), that directory's `mcp.json`,
 and environment-variable secrets (so provider API keys are read from
-`process.env`; nothing is persisted).
+`process.env`; nothing is persisted). The setting rows your own plugins read
+go to it as `nodePlatform({ settings })`, resolved after the harness's own; a
+platform with its own `ConfigProvider` carries them as its `catalog`, built
+with `settingsCatalog(rows)` from `@texra-ai/harness/node`.
 
 Model requests carry their own HTTP transport: the environment's proxy policy
 (`HTTP_PROXY`, `HTTPS_PROXY`, `NO_PROXY`) and a 30-minute stream inactivity

@@ -59,11 +59,14 @@ import { WebviewSessions } from '@texra/controllers/session/webviewSessionLayer'
 import { generateRunId } from '@utils/core';
 
 import { attachWindowHost } from './windowHost';
-import type { ServiceClient, ServiceLink } from './client';
+import {
+  WINDOW_OUTDATED,
+  type ServiceClient,
+  type ServiceLink,
+} from './client';
 import type { ProjectStateFailed, TaskRecordsFailed } from './protocol';
 
 /** What a call made while the link reconnects is told. */
-const OFFLINE = 'The TeXRA service is offline; TeXRA is reconnecting to it.';
 
 /** The transcript port of the window's own view. */
 const WINDOW_PORT = 'window';
@@ -114,15 +117,20 @@ function frameInputs(frame: EventsFrame): FoldInput[] {
   return inputs;
 }
 
-/** The service's client now; `offline` answers a call made while the link
- *  holds none. A reconnect needs nothing here: the next call takes it. */
+/** The service's client now; `offline` words a call made while the link
+ *  holds none, with why it holds none (`ServiceLink.away`). A reconnect
+ *  needs nothing here: the next call takes it. */
 const callService = <A, E>(
   link: ServiceLink,
-  offline: () => E,
+  offline: (reason: string) => E,
   use: (client: ServiceClient) => Effect.Effect<A, E>,
 ): Effect.Effect<A, E> =>
   Effect.flatMap(SubscriptionRef.get(link.client), (client) =>
-    client === null ? Effect.fail(offline()) : use(client),
+    client === null
+      ? Effect.flatMap(SubscriptionRef.get(link.away), (reason) =>
+          Effect.fail(offline(reason)),
+        )
+      : use(client),
   );
 
 /** A task's records the service could not answer for: it is offline (or
@@ -152,11 +160,11 @@ export const serviceRecords = (link: ServiceLink, workspace: string) => {
   ): Effect.Effect<A, TaskRecordsUnavailable> =>
     callService(
       link,
-      () =>
+      (message) =>
         new TaskRecordsUnavailable({
           runId,
           reason: 'offline',
-          message: OFFLINE,
+          message,
         }),
       (client) =>
         use(client).pipe(
@@ -209,7 +217,7 @@ export const serviceProjectState = (
   ): Effect.Effect<A, E> =>
     callService(
       link,
-      () => failed(OFFLINE, undefined),
+      (reason) => failed(reason, undefined),
       (client) =>
         use(client).pipe(
           Effect.mapError((error) =>
@@ -313,10 +321,25 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
 ): Effect.fn.Return<Session, never, Scope.Scope> {
   const key = roots.storage;
   /** The client, once the link has one. */
-  const connected = SubscriptionRef.changes(link.client).pipe(
-    Stream.filter((client) => client !== null),
+  /** The client, once the link has one; or the refusal, once a newer
+   *  TeXRA's service refused this window, which no reconnect undoes. */
+  const connected = Stream.merge(
+    SubscriptionRef.changes(link.client).pipe(
+      Stream.filter((client) => client !== null),
+      Stream.map((client) => ({ client })),
+    ),
+    SubscriptionRef.changes(link.away).pipe(
+      Stream.filter((reason) => reason === WINDOW_OUTDATED),
+      Stream.map((refused) => ({ refused })),
+    ),
+  ).pipe(
     Stream.runHead,
     Effect.map(Option.getOrThrow),
+    Effect.flatMap((reached) =>
+      'client' in reached
+        ? Effect.succeed(reached.client)
+        : Effect.fail(new Error(reached.refused)),
+    ),
   );
   const sessions = yield* Layer.build(WebviewSessions.layerNoDeps);
   const graph = yield* WebviewSessions.open(key).pipe(
@@ -400,7 +423,8 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
           `The TeXRA service stopped before task ${runId} ended`,
         ).pipe(
           Effect.annotateLogs({ data: error }),
-          Effect.andThen(Effect.fail(runFailure(OFFLINE))),
+          Effect.andThen(SubscriptionRef.get(link.away)),
+          Effect.flatMap((reason) => Effect.fail(runFailure(reason))),
         ),
       ),
       Effect.flatMap(({ at, error, ...end }) => {
@@ -432,7 +456,7 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
   const request: Session['request'] = (runtimeRequest) =>
     callService(
       link,
-      () => new Rejected({ reason: OFFLINE }),
+      (reason) => new Rejected({ reason }),
       (client) =>
         client['task.request']({ workspace, request: runtimeRequest }).pipe(
           Effect.mapError(requestError),
@@ -470,7 +494,7 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
         Effect.ignore({ log: 'Warn', message: `Stopping task ${runId}` }),
       ),
     }));
-  const offline = () => runFailure(OFFLINE);
+  const offline = (reason: string) => runFailure(reason);
   /** A start or resume naming a window's own tools is refused: the service
    *  runs its own, so a run continued with them would wait on a tool no
    *  one serves. */

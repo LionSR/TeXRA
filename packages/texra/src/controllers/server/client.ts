@@ -16,8 +16,10 @@ import {
   Effect,
   Exit,
   Layer,
+  Ref,
   Schedule,
   Scope,
+  Stream,
   SubscriptionRef,
 } from 'effect';
 import { lt as semverLt, valid as semverValid } from 'semver';
@@ -54,6 +56,9 @@ export interface ServiceConnection {
 /** No service could be reached or started; the message says why. */
 export class ServiceUnavailable extends Data.TaggedError('ServiceUnavailable')<{
   readonly reason: string;
+  /** The running service speaks a newer protocol than this client: it
+   *  stays until it exits, so waiting does not bring this client back. */
+  readonly newer?: true;
 }> {
   override get message(): string {
     return this.reason;
@@ -219,6 +224,13 @@ export function askServiceToStop(
   );
 }
 
+/** The refusal of a running service that speaks a newer protocol. */
+const newerService = (info: ServiceInfo) =>
+  new ServiceUnavailable({
+    reason: `The running TeXRA service (${info.version}, pid ${info.pid}) speaks protocol ${info.protocol}; this TeXRA speaks ${PROTOCOL_VERSION}. Update TeXRA, or stop the service with \`texra service stop\`.`,
+    newer: true,
+  });
+
 /**
  * Connect to this storage root's service, starting it with `start` (which
  * spawns the service detached and returns) when none answers, and retiring
@@ -239,11 +251,7 @@ export const ensureService = Effect.fn('server.ensureService')(function* (
     );
   let info = yield* probeRecordedService(storageRoot);
   if (info !== null && info.protocol > PROTOCOL_VERSION)
-    return yield* Effect.fail(
-      new ServiceUnavailable({
-        reason: `The running TeXRA service (${info.version}, pid ${info.pid}) speaks protocol ${info.protocol}; this TeXRA speaks ${PROTOCOL_VERSION}. Update TeXRA, or stop the service with \`texra service stop\`.`,
-      }),
-    );
+    return yield* Effect.fail(newerService(info));
   let retired: number | null = null;
   if (info !== null && isOlder(info)) {
     const retiring = info;
@@ -272,15 +280,27 @@ export const ensureService = Effect.fn('server.ensureService')(function* (
     );
     // Not listening yet, listening but still starting, or still the
     // retiring service: all wait for this protocol's own service.
+    // A newer protocol's service that came up meanwhile (a newer build
+    // replaced the one this window spoke to) refuses this one at once: no
+    // wait for a service of this protocol that will not come.
     info = yield* probeRecordedService(storageRoot).pipe(
-      Effect.flatMap((answer) =>
-        answer?.protocol === PROTOCOL_VERSION && answer.pid !== retired
+      Effect.flatMap((answer) => {
+        if (answer !== null && answer.protocol > PROTOCOL_VERSION)
+          return Effect.fail(newerService(answer));
+        return answer?.protocol === PROTOCOL_VERSION && answer.pid !== retired
           ? Effect.succeed(answer)
-          : Effect.fail(new ServiceUnavailable({ reason: 'not yet up' })),
-      ),
-      Effect.retry(Schedule.spaced('200 millis')),
+          : Effect.fail(new ServiceUnavailable({ reason: 'not yet up' }));
+      }),
+      Effect.retry({
+        schedule: Schedule.spaced('200 millis'),
+        while: (error) => error.newer !== true,
+      }),
       Effect.timeout(START_TIMEOUT),
-      Effect.catch(() => Effect.succeed(null)),
+      Effect.catch((error) =>
+        error instanceof ServiceUnavailable && error.newer === true
+          ? Effect.fail(error)
+          : Effect.succeed(null),
+      ),
     );
   }
   if (info === null)
@@ -301,12 +321,47 @@ export const ensureService = Effect.fn('server.ensureService')(function* (
   return { info, client };
 });
 
+/** What a call made while the link reconnects is told. */
+const SERVICE_OFFLINE =
+  'The TeXRA service is offline; TeXRA is reconnecting to it.';
+
+/** What a window is told when a newer TeXRA's service replaced the one it
+ *  spoke to: it cannot reconnect until it is reloaded or updated. */
+export const WINDOW_OUTDATED =
+  'This window is older than the running TeXRA service; reload or update TeXRA.';
+
 /** A window's lasting hold on the service: the client it is connected
  *  through, or null while the service is away and the link reaches it
- *  again. */
+ *  again; and, while it is null, why. */
 export interface ServiceLink {
   readonly client: SubscriptionRef.SubscriptionRef<ServiceClient | null>;
+  /** Why `client` is null, as a window says it: reconnecting
+   *  ({@link SERVICE_OFFLINE}), or refused by a newer service
+   *  ({@link WINDOW_OUTDATED}). */
+  readonly away: SubscriptionRef.SubscriptionRef<string>;
+  /** Whether a window was told of the refusal `away` holds: once per
+   *  link, however many projects' windows attached through it. */
+  readonly refusalTold: Ref.Ref<boolean>;
 }
+
+/** Why `link` holds no service now, at each change: its `away` while its
+ *  client is null, null while it holds one. What a window's banner says. */
+export const linkOutage = (link: ServiceLink): Stream.Stream<string | null> =>
+  Stream.merge(
+    SubscriptionRef.changes(link.client),
+    SubscriptionRef.changes(link.away),
+  ).pipe(
+    Stream.mapEffect(() =>
+      Effect.map(
+        Effect.all([
+          SubscriptionRef.get(link.client),
+          SubscriptionRef.get(link.away),
+        ]),
+        ([client, away]) => (client === null ? away : null),
+      ),
+    ),
+    Stream.changes,
+  );
 
 /** Between attempts to reach a service that went away: from half a second,
  *  growing, never more than ten seconds apart. */
@@ -342,6 +397,8 @@ export const linkService = Effect.fn('server.linkService')(function* (
   const client = yield* SubscriptionRef.make<ServiceClient | null>(
     current.connection.client,
   );
+  const away = yield* SubscriptionRef.make(SERVICE_OFFLINE);
+  const refusalTold = yield* Ref.make(false);
   yield* Effect.addFinalizer(() =>
     Effect.suspend(() => Scope.close(current.scope, Exit.void)),
   );
@@ -349,6 +406,7 @@ export const linkService = Effect.fn('server.linkService')(function* (
     Effect.forever(
       Effect.gen(function* () {
         yield* Deferred.await(current.lost);
+        yield* SubscriptionRef.set(away, SERVICE_OFFLINE);
         yield* SubscriptionRef.set(client, null);
         yield* Scope.close(current.scope, Exit.void);
         yield* Effect.logWarning(
@@ -367,8 +425,15 @@ export const linkService = Effect.fn('server.linkService')(function* (
             Effect.suspend(() => {
               if (error.message === told) return Effect.void;
               told = error.message;
-              return Effect.logWarning(
-                `The TeXRA service is not back yet: ${error.message}`,
+              return SubscriptionRef.set(
+                away,
+                error.newer === true ? WINDOW_OUTDATED : SERVICE_OFFLINE,
+              ).pipe(
+                Effect.andThen(
+                  Effect.logWarning(
+                    `The TeXRA service is not back yet: ${error.message}`,
+                  ),
+                ),
               );
             }),
           ),
@@ -379,9 +444,13 @@ export const linkService = Effect.fn('server.linkService')(function* (
         yield* Effect.logInfo(
           `Reconnected to the TeXRA service ${current.connection.info.version} (pid ${current.connection.info.pid}).`,
         );
+        // Reached again: whatever kept it away no longer holds, so a host
+        // that attaches later is not told it, and a later refusal is told.
+        yield* SubscriptionRef.set(away, SERVICE_OFFLINE);
+        yield* Ref.set(refusalTold, false);
         yield* SubscriptionRef.set(client, current.connection.client);
       }),
     ),
   );
-  return { client };
+  return { client, away, refusalTold };
 });

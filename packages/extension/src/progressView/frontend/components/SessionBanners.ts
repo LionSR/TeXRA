@@ -39,14 +39,11 @@ export class SessionBanners extends LitElement {
   override render(): TemplateResult | typeof nothing {
     const { apiKey, agentConfig, dependency, serviceOffline } = this.banners;
     let warning: TemplateResult;
-    if (serviceOffline) {
+    if (serviceOffline !== null) {
       warning = renderWarningBanner({
         id: 'serviceOfflineBanner',
         role: 'status',
-        body: html`<span
-          >The TeXRA service is offline; TeXRA is reconnecting. If another
-          window runs a newer TeXRA, update this one.</span
-        >`,
+        body: html`<span>${serviceOffline}</span>`,
       });
     } else if (apiKey.visible) {
       warning = html`<api-key-banner></api-key-banner>`;
