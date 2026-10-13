@@ -384,14 +384,23 @@ export const executeCliWorkflowConfig = Effect.fn('executeCliWorkflowConfig')(
           // states them (the launch resolves an empty output list to the
           // agent's declared ones); the input-derived
           // `cli.expectedOutputFiles` stand in when the agent declares none.
-          // A configuration that does not read leaves the copy undone.
+          // A configuration that does not read leaves the copy undone: that
+          // fails the command when a completed run's copy was asked for, and
+          // only warns otherwise.
           const recorded = yield* Effect.result(
             getRunRecords(session, ended.runId).readConfig(),
           );
-          if (Result.isFailure(recorded))
-            writeTextStderr(
-              `[warn] The output of task ${ended.runId} was not copied: its recorded configuration could not be read: ${toErrorMessage(recorded.failure)}`,
-            );
+          if (Result.isFailure(recorded)) {
+            const message = `The output of task ${ended.runId} was not copied: its recorded configuration could not be read: ${toErrorMessage(recorded.failure)}`;
+            if (
+              (output || outputDir) &&
+              ended.outcome === RUN_OUTCOME.COMPLETED
+            )
+              workflowOutputError = new Error(message, {
+                cause: recorded.failure,
+              });
+            else writeTextStderr(`[warn] ${message}`);
+          }
           const copied = Result.isSuccess(recorded);
           const declaredOutputFiles = copied
             ? (recorded.success?.outputFiles ?? []).filter(Boolean)
@@ -409,7 +418,7 @@ export const executeCliWorkflowConfig = Effect.fn('executeCliWorkflowConfig')(
             ).pipe(Effect.provideService(FileSystem.FileSystem, fileSystem)),
           );
           if (Result.isFailure(outputResult)) {
-            workflowOutputError = outputResult.failure;
+            workflowOutputError ??= outputResult.failure;
           } else {
             workflowResult = outputResult.success;
           }

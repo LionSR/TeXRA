@@ -350,12 +350,13 @@ export function executeCliRequest(
     let shutdownRequested = false;
     let admitted = false;
     const shutdownFinalizationDone = Deferred.makeUnsafe<void>();
-    /** The run's end as the view folds it: no longer live here. */
+    /** The run's end as the view folds it: a view that holds the run (its
+     *  committed opening always folds) and shows it no longer live here. */
     const settledHere = (runId: RunId): Effect.Effect<void> =>
       runSession.view.changes.pipe(
         Stream.filter((view) => {
           const run = view.runs.get(runId);
-          return run === undefined || !run.ownedHere || !isLiveRun(run);
+          return run !== undefined && (!run.ownedHere || !isLiveRun(run));
         }),
         Stream.runHead,
         Effect.asVoid,
