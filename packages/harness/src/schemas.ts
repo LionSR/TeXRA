@@ -9,6 +9,15 @@ export {
   PersonaSchema,
 } from '@shared/schemas';
 export type { AgentDefinition, InlinePersona, Persona } from '@shared/schemas';
+// The payloads `RuntimePresentationEventPayloads` (root) names, one per
+// notice a session's runs ask a host to present.
+export type {
+  RequestEnsureProgressViewPayload,
+  RequestOpenFilePayload,
+  RequestShowErrorPayload,
+  RequestShowInstructionPayload,
+  ShowAgentConfigBannerPayload,
+} from '@shared/schemas';
 export type { RunEndResult } from '@agent/runtime/RunEndResult';
 export { DEFAULT_AGENT_MODEL } from '@shared/constants/defaultModels';
 export {
