@@ -5,11 +5,7 @@ import { Effect, FileSystem } from 'effect';
 import { it } from '@effect/vitest';
 import { afterEach, describe, expect, vi } from 'vitest';
 
-import {
-  LatexMediaManager,
-  type LatexTrace,
-  type MediaWorkspaceState,
-} from '@latex/LatexMediaManager';
+import { LatexMediaManager, type LatexTrace } from '@latex/LatexMediaManager';
 import { DiffFileProcessor } from '@latex/latexdiff/diffFileProcessor';
 import { sessionFsLayer } from '@platform/rootedFs';
 import {
@@ -56,19 +52,6 @@ const tempDirs = useTempDirs();
 afterEach(async () => {
   vi.clearAllMocks();
 });
-
-/** A media sink that keeps what the manager adds, in order. */
-const mediaCollector = () => {
-  const files: FileLocation[] = [];
-  return {
-    files,
-    media: {
-      addMediaFiles: (locations: readonly FileLocation[]) => {
-        files.push(...locations);
-      },
-    },
-  };
-};
 
 describe('DiffFileProcessor line formatting', () => {
   it('preserves package blank-line insertion order', () => {
@@ -155,21 +138,21 @@ describe('LatexMediaManager PDF compilation', () => {
           }),
       );
 
-      const workspaceState = mediaCollector();
       const roots = testWorkspaceRoots();
-      const manager = new LatexMediaManager(logger, roots);
-      yield* manager
+      const manager = new LatexMediaManager(
+        logger,
+        roots,
+        new RunFileService('compile-pdf' as RunId, roots),
+      );
+      const media = yield* manager
         .processInputFiles(
           inputPaths.map(createExternalLocation),
-          workspaceState,
           compilePdfConfig,
         )
         .pipe(Effect.provide(sessionFsLayer(roots)));
 
       expect(mocks.compileLatex2Pdf).toHaveBeenCalledTimes(2);
-      expect(workspaceState.files.map((file) => file.absolutePath)).toEqual([
-        compiledPdfPath,
-      ]);
+      expect(media.map((file) => file.absolutePath)).toEqual([compiledPdfPath]);
     }).pipe(Effect.provide(nodePlatformLayer)),
   );
 });
@@ -177,11 +160,7 @@ describe('LatexMediaManager PDF compilation', () => {
 type LatexMediaManagerFigureInternals = {
   extractFiguresFromFiles(
     files: FileLocation[],
-    workspaceState: MediaWorkspaceState,
-  ): Effect.Effect<void, Error, FileSystem.FileSystem>;
-  mirrorFiguresForFiles(
-    files: FileLocation[],
-  ): Effect.Effect<void, never, FileSystem.FileSystem>;
+  ): Effect.Effect<FileLocation[], Error, FileSystem.FileSystem>;
 };
 
 describe('LatexMediaManager figure extraction', () => {
@@ -241,20 +220,16 @@ describe('LatexMediaManager figure extraction', () => {
         const runId = 'extract-figure' as RunId;
         const { texPath, figurePath } = yield* Effect.promise(writeFixture);
 
-        const workspaceState = mediaCollector();
         const manager = new LatexMediaManager(
           logger,
           testWorkspaceRoots(),
           new RunFileService(runId, testWorkspaceRoots()),
         ) as unknown as LatexMediaManagerFigureInternals;
-        yield* manager.extractFiguresFromFiles(
-          [createWorkspaceLocation(texPath, 'main.tex')],
-          workspaceState,
-        );
-
-        expect(workspaceState.files.map((f) => f.absolutePath)).toEqual([
-          figurePath,
+        const media = yield* manager.extractFiguresFromFiles([
+          createWorkspaceLocation(texPath, 'main.tex'),
         ]);
+
+        expect(media.map((f) => f.absolutePath)).toEqual([figurePath]);
         yield* Effect.promise(() => expectFigureMirrored(runId, figurePath));
       }).pipe(Effect.provide(nodePlatformLayer)),
   );

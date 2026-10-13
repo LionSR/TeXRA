@@ -1,11 +1,14 @@
 /**
  * Extract file dependencies from LaTeX content.
  *
- * Parses \input{}, \include{}, \bibliography{}, and \addbibresource{}
- * commands to discover files that the main document depends on.
+ * Parses \input{}, \include{}, \bibliography{}, \addbibresource{}, and
+ * \usepackage{} commands to discover files that the main document depends on.
  * Used by LatexMediaManager to mirror these dependencies into run storage
  * so that output files can be compiled outside the workspace.
  */
+
+// Node imports
+import * as path from 'node:path';
 
 // Third-party imports
 import { Effect, FileSystem } from 'effect';
@@ -20,6 +23,7 @@ import { ensureExtension, joinLatexPath } from '@utils/core/pathCore';
 // Local file imports
 import {
   collectBibliographyPaths,
+  collectCommaSeparatedMatches,
   existingExternalPath,
   resolveLatexDir,
   stripLatexComments,
@@ -27,6 +31,8 @@ import {
 
 const INPUT_PATTERN = /\\input\s*\{([^}]+)\}/g;
 const INCLUDE_PATTERN = /\\include\s*\{([^}]+)\}/g;
+const USEPACKAGE_PATTERN =
+  /\\(?:usepackage|RequirePackage)\s*(?:\[[^\]]*\])?\s*\{([^}]+)\}/g;
 
 /** Dependency probes hit the filesystem, so bound the fan-out. */
 const RESOLVE_CONCURRENCY = 8;
@@ -58,8 +64,9 @@ const resolveTexInputPath = Effect.fn('latex.resolveTexInputPath')(function* (
 });
 
 /**
- * Extract file dependencies (\input, \include, \bibliography, \addbibresource)
- * from a LaTeX file. Returns absolute paths to existing files.
+ * Extract file dependencies (\input, \include, \bibliography, \addbibresource,
+ * and a \usepackage{name} whose `name.sty` sits beside the file) from a LaTeX
+ * file. Returns absolute paths to existing files.
  *
  * Uses resolveLatexDir to follow symlinks so that when the input file lives in
  * run storage (as a symlink to the workspace), dependencies are resolved
@@ -85,11 +92,15 @@ export const extractLatexFileDependencies = Effect.fn(
   );
 
   const bibCandidates = collectBibliographyPaths(latexDir, uncommented);
+  const styCandidates = collectCommaSeparatedMatches(
+    uncommented,
+    USEPACKAGE_PATTERN,
+  ).map((name) => path.join(latexDir, `${name}.sty`));
 
-  // The two probe sets run as one bounded fan-out under the calling fiber:
+  // The probe sets run as one bounded fan-out under the calling fiber:
   // a failure interrupts the siblings instead of leaving them running behind
   // a settled aggregate, which is what `stopOnError: false` used to do.
-  const [texResolved, bibResolved] = yield* Effect.all(
+  const [texResolved, bibResolved, styResolved] = yield* Effect.all(
     [
       Effect.forEach(
         texInputPaths,
@@ -99,9 +110,14 @@ export const extractLatexFileDependencies = Effect.fn(
       Effect.forEach(bibCandidates, existingExternalPath, {
         concurrency: RESOLVE_CONCURRENCY,
       }),
+      Effect.forEach(styCandidates, existingExternalPath, {
+        concurrency: RESOLVE_CONCURRENCY,
+      }),
     ],
-    { concurrency: 2 },
+    { concurrency: 3 },
   );
 
-  return unique([...texResolved, ...bibResolved].filter(filterNotNull));
+  return unique(
+    [...texResolved, ...bibResolved, ...styResolved].filter(filterNotNull),
+  );
 });

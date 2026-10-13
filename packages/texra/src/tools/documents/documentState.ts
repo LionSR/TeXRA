@@ -277,23 +277,14 @@ const revisionMedia = Effect.fn('documents.revisionMedia')(function* (
     deps.roots,
     deps.fileService,
   );
-  const found: string[] = [];
-  const workspace = {
-    media: {
-      addMediaFiles: (locations: readonly FileLocation[]) => {
-        found.push(...locations.map((file) => file.absolutePath));
-      },
-    },
-  };
   // Each revision is a fresh conversation: it gets the figures of the files
   // it works on (the last outputs, mirrored so their references resolve).
   const extracted = yield* Effect.exit(
     Effect.gen(function* () {
       if (revision > 0)
         yield* deps.fileService.ensureMirroredInRoundDir(revision);
-      yield* media.processInputFiles(
+      return yield* media.processInputFiles(
         files,
-        workspace,
         run.config.toolConfig,
         run.config.mediaFiles.map((file) =>
           deps.fileService.createLocation(file),
@@ -308,6 +299,7 @@ const revisionMedia = Effect.fn('documents.revisionMedia')(function* (
     });
     return configured;
   }
+  const found = extracted.value.map((file) => file.absolutePath);
   return [...new Set([...configured, ...found])];
 });
 
