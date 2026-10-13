@@ -77,8 +77,11 @@ an added indirection tier — one `Effect` per run appending one history, one
 1. **Identify the areas.** Re-confirmed:
    - Agent core: `packages/harness/src/agent/core/` (`definition/`, `state/`,
      `tools/`); run program `@agent/runtime/loop/toolUse.ts` over the run history
-     (`RunHistory.ts`, one `makeRunHistory`), round mode via `loop/rounds.ts`,
-     shared scaffolding in `loop/runProgram.ts`; the loop's turn call is
+     (`RunHistory.ts`, one `makeRunHistory`), with shared
+     scaffolding in `loop/runProgram.ts` and the loop decomposed into
+     `loop/{step,modelSwitch,toolGuard,hooks,rows,toolUseDispatch}.ts` (there is
+     no `loop/rounds.ts` at this pin — the earlier round-mode file is gone from
+     the harness loop); the loop's turn call is
      `ModelInvoker.ts`, with `helperModel.ts` and `run/compaction.ts` reusing the
      same `callModel` seam (`run/modelCall.ts`) — reuse of the one model-call
      path, not a second handler.
@@ -87,6 +90,11 @@ an added indirection tier — one `Effect` per run appending one history, one
      `routeDecision.ts`) — one service over the `@texra-ai/llm` `Model`. Provider
      SDKs are constructed only inside the llm Model, loaded only by `bindModel`
      (`packages/llm/src/node.ts`), whose one caller is `modelAccess/binding.ts`.
+     The deliberate exceptions outside that route are unchanged: audio
+     transcription builds `OpenAI` directly
+     (`packages/texra/src/tools/media/audio.ts:253`); the `codex`/`claude_code`
+     tools load their own provider SDKs; the settings-view consent probe
+     acquires a VS Code `Model`.
    - Logger: `packages/harness/src/logger/` (`effectLog.ts`, `logSink.ts`,
      `effectDiagnostics.ts`, `formatLogData.ts`, `redaction.ts`) — same five-file
      set.
@@ -99,7 +107,7 @@ an added indirection tier — one `Effect` per run appending one history, one
      call site is `RunCell.append` (the one writer, with the `SynchronizedRef`
      lock, fold-back and uninterruptible mask), and `finalizeRun`
      (`storage/runLifecycle.ts`, "the one writer of a run's end") appends through
-     the same cell door. `forkRun.ts` is the one-time atomic birth of a *new*
+     the same cell door. `forkRun.ts` is the one-time atomic birth of a _new_
      forked run, not a second writer into an existing one. `SessionHandle`
      remains a flat record of owner fields that "does no work and forwards
      nothing" (`SessionHandle.ts:342-372`). `ChildRuns` (lane E5,
@@ -135,10 +143,14 @@ an added indirection tier — one `Effect` per run appending one history, one
    `agent()` grandchildren (`runtime/scriptRun.ts`); (c) the agent-CLI children —
    `claude_code` (`packages/texra/src/tools/claudeAgent.ts`) and `codex`
    (`packages/texra/src/tools/codex.ts`), each loading its own provider SDK —
-   through a provider-specific `ChildRunStrategy` (`runtime/childRunLoop.ts`,
-   `runtime/nativeSubagentStrategy.ts`). The non-candidates (round-output
-   extraction, `compileCheck`, `LatexDiffManager`) still have no independent run
-   or model lifecycle. No boundary change is warranted.
+   which enter through `ChildRuns.launchProcess` (`runtime/ToolServices.ts`) and
+   build their provider-specific strategies in the app tool modules
+   (`packages/texra/src/tools/agentCliShared.ts`), the detached driver being
+   `startDetachedChildRunLoop` (`tools/delegation/detachedChildRun.ts`);
+   `runtime/nativeSubagentStrategy.ts` is the separate in-process native
+   strategy, not the CLI-child path. The non-candidates (`compileCheck`,
+   `LatexDiffManager`) still have no independent run or model lifecycle. No
+   boundary change is warranted.
 
 ## Carried (needs an owner, not a routine)
 
@@ -158,14 +170,14 @@ an added indirection tier — one `Effect` per run appending one history, one
    not-yet-designed public-API step.
 
 2. **The two `packages/llm` ambient-header reads are refusal guards, effectively
-   closed.** At this pin neither path *honors* an ambient value:
+   closed.** At this pin neither path _honors_ an ambient value:
    `openaiResponsesRequest.ts:254` throws a `ModelError` (`kind 'unsupported'`,
    "Ambient OpenAI headers cannot override the selected deployment.") when
    `OPENAI_CUSTOM_HEADERS` is set, and `anthropicMessages.ts:715` throws a
    `ModelError` ("Anthropic Messages does not support ANTHROPIC_CUSTOM_HEADERS
    …") — both make the selected binding the sole source of request headers. These
    are intentional guardrails, not value-honoring reads; relocating the
-   `process.env` *check* to the host boundary stays a low-value relocation (each
+   `process.env` _check_ to the host boundary stays a low-value relocation (each
    llm factory would have to be passed the decision explicitly, and
    `packages/llm/test-live/` constructs factories without it), not a lift. Low
    priority; file into `2026-09-20-llm-package-hardening.md` only if the
