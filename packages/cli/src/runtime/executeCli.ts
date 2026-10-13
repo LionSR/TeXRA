@@ -353,17 +353,30 @@ export function executeCliRequest(
     const shutdownFinalizationDone = Deferred.makeUnsafe<void>();
     /** The run's end as the view folds it: a level that holds the run (its
      *  committed opening always folds) and shows it no longer live here, or
-     *  one without it once it was seen (it was deleted). The wait also ends
-     *  with the session's fold. */
+     *  one without it once it was seen or once its rows are gone (it was
+     *  deleted). The wait also ends with the session's fold. */
     const settledHere = (runId: RunId): Effect.Effect<void> =>
       Effect.suspend(() => {
         let seen = false;
         return runSession.view.changes.pipe(
-          Stream.filter((view) => {
+          Stream.filterEffect((view) => {
             const run = view.runs.get(runId);
-            if (run === undefined) return seen;
-            seen = true;
-            return !run.ownedHere || !isLiveRun(run);
+            if (run !== undefined) {
+              seen = true;
+              return Effect.succeed(!run.ownedHere || !isLiveRun(run));
+            }
+            if (seen) return Effect.succeed(true);
+            // Not folded yet, or deleted before it was: its rows decide.
+            return getRunRecords(session, runId)
+              .exists()
+              .pipe(
+                Effect.map((exists) => !exists),
+                Effect.catch((error) =>
+                  Effect.logWarning(
+                    `Whether run ${runId} still exists could not be read; its drain goes on without waiting`,
+                  ).pipe(Effect.annotateLogs({ data: error }), Effect.as(true)),
+                ),
+              );
           }),
           Stream.runHead,
           Effect.asVoid,
