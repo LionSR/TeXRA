@@ -121,9 +121,9 @@ const EnvelopeFilesSchema = z.object({
 
 /**
  * A delivered file as the workspace file it replaces, not the run-storage
- * copy that carries it. Its diff base can itself be run storage (a child's
- * `original/` snapshot of the input), and then the output's round-relative
- * name is the workspace path.
+ * copy that carries it. A diff base in run storage that no earlier call
+ * delivered is a child's `original/` snapshot of the input, and then the
+ * output's round-relative name is the workspace path.
  */
 function deliveredFilePath(
   roots: SessionHandle['roots'],
@@ -137,6 +137,15 @@ function deliveredFilePath(
     ? stripWorkflowRoundDir(output.relativePath)
     : workspaceRelativePath(roots.workspace, output.originalPath);
 }
+
+/** A document's count over its stages: unknown once any stage's is. */
+const summed = (
+  prior: number | null | undefined,
+  next: number | null,
+): number | null => {
+  if (prior === undefined) return next;
+  return prior === null || next === null ? null : prior + next;
+};
 
 /**
  * The summary line of a script run, folded from its rows: the tally of its
@@ -164,6 +173,10 @@ const scriptRunSummary = Effect.fn('scriptRun.summary')(function* (
     skipped: 0,
   };
   const files = new Map<string, ScriptDeliverySummary['files'][number]>();
+  /** Each delivered output by its absolute path: a later call whose diff
+   *  base is that output (a merge stage over a fix stage's file) continues
+   *  the same row, so a document is one row with its stages' counts summed. */
+  const delivered = new Map<string, string>();
   for (const call of calls) {
     switch (call.status) {
       case 'completed':
@@ -185,8 +198,18 @@ const scriptRunSummary = Effect.fn('scriptRun.summary')(function* (
     const { documents } = envelope.data;
     if (documents !== undefined)
       for (const output of documents.outputs) {
-        const path = deliveredFilePath(session.roots, output);
-        files.set(path, { path, added: output.added, removed: output.removed });
+        const path =
+          (output.originalPath === null
+            ? undefined
+            : delivered.get(output.originalPath)) ??
+          deliveredFilePath(session.roots, output);
+        delivered.set(output.absolutePath, path);
+        const prior = files.get(path);
+        files.set(path, {
+          path,
+          added: summed(prior?.added, output.added),
+          removed: summed(prior?.removed, output.removed),
+        });
       }
     else
       for (const path of envelope.data.files)
