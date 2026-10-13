@@ -8,6 +8,12 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 
+import { isolateProcessHome } from '../../../scripts/isolated-home.mjs';
+
+// The installed `texra` this script runs resolves `~/.texra` in a
+// temporary home.
+isolateProcessHome();
+
 const cliRoot = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const packageName = '@texra-ai/cli';
 const packageDir = 'package/';

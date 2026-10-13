@@ -203,21 +203,18 @@ export class Inbox {
             { type: 'followup.closed', aggregateId: run },
           ]);
           // Only a closed input that committed ends the reader.
-          yield* afterCommit(
-            Effect.sync(() => {
-              this.endReader(runId);
-              this.notify({ kind: 'run', runId });
-            }),
-          );
+          yield* afterCommit(Effect.sync(() => this.forget(runId)));
         }).pipe(Effect.scoped),
       )
       .pipe(Effect.catch(warnWith(`Run ${runId}: closing its input failed`)));
   }
 
-  /** A deleted run: its reader ends; its `run.removed` row closes its input. */
+  /** A run that takes no more input (deleted: its `run.removed` row closes
+   *  its input; or closed): its reader ends and the observers hear it. */
   forget(runId: RunId): void {
     if (this.disposed) return;
-    this.endReader(runId);
+    this.readers.get(runId)?.end();
+    this.readers.delete(runId);
     this.notify({ kind: 'run', runId });
   }
 
@@ -251,6 +248,14 @@ export class Inbox {
     });
   }
 
+  /** Settles when `runId`'s resume in flight here ends; at once if none. */
+  resumeSettled(runId: RunId): Effect.Effect<void> {
+    const done = this.resumes.get(runId)?.done;
+    return done
+      ? Effect.asVoid(Effect.exit(Deferred.await(done)))
+      : Effect.void;
+  }
+
   /** Whether a caller is joined to `runId`'s resume in flight. */
   joined(runId: RunId): boolean {
     return (this.resumes.get(runId)?.joiners ?? 0) > 0;
@@ -260,9 +265,7 @@ export class Inbox {
   onClosed(observer: (closed: InboxClosed) => void): () => void {
     if (this.disposed) return () => {};
     this.observers.add(observer);
-    return () => {
-      this.observers.delete(observer);
-    };
+    return () => this.observers.delete(observer);
   }
 
   /** End every reader and refuse every later send. */
@@ -365,11 +368,6 @@ export class Inbox {
         closed: lifecycleOf(rows).closed,
       })),
     );
-  }
-
-  private endReader(runId: RunId): void {
-    this.readers.get(runId)?.end();
-    this.readers.delete(runId);
   }
 
   private notify(closed: InboxClosed): void {

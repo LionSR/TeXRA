@@ -35,6 +35,11 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 
+import { isolateProcessHome } from '../../../scripts/isolated-home.mjs';
+
+// Every `texra` this script starts resolves `~/.texra` in a temporary home.
+isolateProcessHome();
+
 const cliRoot = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const fixtureRoot = path.join(
   cliRoot,
