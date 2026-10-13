@@ -17,9 +17,11 @@ import { Data } from 'effect';
 import type { FollowUpFailureReason } from '@agent/followUp/ToolUseFollowUp';
 
 /**
- * The plugin list cannot be composed: an id that is not lowercase letters,
- * digits and dashes, an id or tool name listed twice, two plugins that
- * continue parked runs, or a switch on a plugin with no availability probe.
+ * The plugin list cannot be composed, for a defect `toolTable` refuses: an
+ * id that is not lowercase letters, digits and dashes, an id or tool name
+ * listed twice, a second plugin continuing parked runs or recording one
+ * request kind's decisions, or a switch on a plugin with no availability
+ * probe.
  */
 export class PluginsRefused extends Data.TaggedError('PluginsRefused')<{
   readonly message: string;
