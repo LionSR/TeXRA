@@ -16,7 +16,7 @@ import {
 import {
   RUN_OUTCOME,
   RunRecordFieldsSchema,
-  aggregateId,
+  qualifyAggregateId,
   storedRunOutput,
   type SessionEventDraft,
   USER_FOLLOW_UP_SUPPORT,
@@ -60,7 +60,7 @@ export const activationRows = Effect.fn('activationRows')(function* (
   runId: RunId,
   config: RunRecord,
 ): Effect.fn.Return<readonly SessionEventDraft[], Error> {
-  const target = aggregateId('run', runId);
+  const target = qualifyAggregateId('run', runId);
   const stored = yield* getRunRecords(session, runId).readRunRecord();
   const next = RunRecordFieldsSchema.parse(
     pinRunWorkingDirectory(
@@ -145,7 +145,7 @@ export const registrationRows = Effect.fn('registrationRows')(function* (
         );
     }
     const pinned = pinRunWorkingDirectory(record, session.roots.workspace);
-    const target = aggregateId('run', runId);
+    const target = qualifyAggregateId('run', runId);
     // Its configuration rides the batch that takes the claim, never
     // compared before it is held (a takeover skips nothing on a stale read).
     const config = {
@@ -228,7 +228,7 @@ export const endIn = Effect.fn('endIn')(function* (
   input: FinalizeRunInput,
 ) {
   const { runId, outcome, keepExistingOutcome, error } = input;
-  const target = aggregateId('run', runId);
+  const target = qualifyAggregateId('run', runId);
   const co: Effect.Success<TransactionPart> = yield* input.settlement ??
     Effect.succeed({ rows: [], committed: Effect.void });
   const rows = yield* session.log.records(runId);

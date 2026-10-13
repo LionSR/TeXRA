@@ -19,7 +19,7 @@ import {
 import { render, type Instance as InkInstance } from 'ink';
 
 import {
-  aggregateId,
+  qualifyAggregateId,
   type ConfigProvider,
   type RuntimeRequest,
 } from '@texra-ai/harness';
@@ -532,7 +532,10 @@ export async function runChat(
         transcriptWatch,
         Stream.runDrain(
           runSession.view.watch(
-            ids.map((id) => ({ id: aggregateId('run', id), fromSeq: 0 })),
+            ids.map((id) => ({
+              id: qualifyAggregateId('run', id),
+              fromSeq: 0,
+            })),
             { cursor: view.cursor, debug: view.debug },
           ),
         ),

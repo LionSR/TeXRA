@@ -22,7 +22,7 @@ import type {
   SessionRequests,
 } from '@agent/runtime/SessionHandle';
 import {
-  aggregateId as qualifyAggregateId,
+  qualifyAggregateId,
   requestParksItsCaller,
   type CommitOrdinal,
   type LocalRuntimeState,

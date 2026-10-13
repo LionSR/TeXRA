@@ -31,7 +31,7 @@ import type {
 import { emitAppSignal } from '@eventBus/AppSignals';
 import { StateReadFailed, type StateStore } from '@platform/interfaces';
 import {
-  aggregateId,
+  qualifyAggregateId,
   type CommitOrdinal,
   type JsonValue,
   type RunId,
@@ -330,7 +330,7 @@ export const ownFactRow = (
 ): OwnFactRow => ({
   type: 'plugin.fact',
   ...fact,
-  aggregateId: aggregateId('plugin', aggregate),
+  aggregateId: qualifyAggregateId('plugin', aggregate),
   parent: runId,
 });
 
@@ -359,7 +359,7 @@ export function factRows(
       run.push({
         type: 'plugin.fact',
         ...fact,
-        aggregateId: aggregateId('run', runId),
+        aggregateId: qualifyAggregateId('run', runId),
         parent: null,
       });
     else own.push(ownFactRow({ ...fact, aggregate }, runId));

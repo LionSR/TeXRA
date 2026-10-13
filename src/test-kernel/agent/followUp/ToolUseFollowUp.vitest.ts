@@ -15,7 +15,7 @@ import type {
   SessionTransaction,
 } from '@agent/runtime/SessionHandle';
 import {
-  aggregateId,
+  qualifyAggregateId,
   type RunId,
   type SessionEvent,
   type SessionEventDraft,
@@ -123,7 +123,9 @@ function recordedFollowUps(
     // A run's record rows: what a parent-only send reads its edge from.
     records: (runId: RunId) =>
       Effect.sync(() =>
-        rows.filter((row) => row.aggregateId === aggregateId('run', runId)),
+        rows.filter(
+          (row) => row.aggregateId === qualifyAggregateId('run', runId),
+        ),
       ),
     hold: (runId) =>
       Effect.suspend(() => {
@@ -152,7 +154,7 @@ function recordedFollowUps(
   const queuedRows = (runId: RunId) =>
     rows.flatMap((row) =>
       row.type === 'followup.queued' &&
-      row.aggregateId === aggregateId('run', runId)
+      row.aggregateId === qualifyAggregateId('run', runId)
         ? [row]
         : [],
     );
@@ -550,7 +552,7 @@ describe('Inbox readers', () => {
     const owner = JSON.stringify(['other-host', 4321, null]);
     const notOwner = (ownerId: string | null, closed: boolean) =>
       new DatabaseNotOwner({
-        aggregateId: aggregateId('run', generateRunId()),
+        aggregateId: qualifyAggregateId('run', generateRunId()),
         ownerId,
         closed,
       });

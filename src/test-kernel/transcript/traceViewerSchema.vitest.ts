@@ -7,7 +7,7 @@ import {
   type AgentConfig,
 } from '@agent/core/definition/AgentConfig';
 import {
-  aggregateId,
+  qualifyAggregateId,
   emptyRunEndOutput,
   LOG_LEVELS,
   MESSAGE_TYPES,
@@ -60,14 +60,14 @@ describe('trace-viewer TraceDocumentSchema', () => {
       publishTestRows(session, [
         {
           type: 'log',
-          aggregateId: aggregateId('run', runId),
+          aggregateId: qualifyAggregateId('run', runId),
           message: 'hello',
           level: LOG_LEVELS.INFO,
           messageType: MESSAGE_TYPES.DEFAULT,
         },
         {
           type: 'run.end',
-          aggregateId: aggregateId('run', runId),
+          aggregateId: qualifyAggregateId('run', runId),
           outcome: RUN_OUTCOME.COMPLETED,
           output: emptyRunEndOutput(),
         },

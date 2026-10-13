@@ -18,7 +18,7 @@ import { runEventDraft } from '@agent/trace/TraceEmitter';
 import { classifyAgentError } from '@common/errors';
 import { writeLogLine } from '@logger/logSink';
 import {
-  aggregateId as qualifyAggregateId,
+  qualifyAggregateId,
   aggregateTarget,
   TOOL_CALL_STATUS,
   type RunId,

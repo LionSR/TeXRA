@@ -23,7 +23,7 @@ import {
   APPROVAL_BYPASS_KINDS,
   NO_APPROVAL_GRANTS,
 } from '@shared/approvalBypassKind';
-import { aggregateId, RUN_OUTCOME } from '@shared/schemas';
+import { qualifyAggregateId, RUN_OUTCOME } from '@shared/schemas';
 import type { RunId } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { untrackRun } from '@test/support/sessionEnd';
@@ -420,7 +420,7 @@ describe('executeCliRequest', () => {
           publishTestRows(options.session, [
             {
               type: 'run.start',
-              aggregateId: aggregateId('run', request.runId),
+              aggregateId: qualifyAggregateId('run', request.runId),
               identity: { kind: 'agent', agent: 'chat' },
               userFollowUpSupport: 'unsupported',
               parent: null,

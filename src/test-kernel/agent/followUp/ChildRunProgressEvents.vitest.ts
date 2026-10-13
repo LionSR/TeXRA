@@ -16,7 +16,7 @@ import type {
 } from '@agent/runtime/childRunLoop';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import {
-  aggregateId as qualifyAggregateId,
+  qualifyAggregateId,
   aggregateTarget,
   RUN_OUTCOME,
   RUN_PHASE,

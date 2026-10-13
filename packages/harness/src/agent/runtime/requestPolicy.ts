@@ -30,7 +30,7 @@ import {
   type TexraApprovalPolicy,
 } from '@shared/approvalPolicy';
 import {
-  aggregateId as qualifyAggregateId,
+  qualifyAggregateId,
   isCredentialRetryFailure,
   type CommitOrdinal,
   type PermissionPayload,

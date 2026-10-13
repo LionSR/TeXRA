@@ -11,7 +11,7 @@ import { getRunRecords } from '@agent/storage/runRecords';
 import { classifyAgentError } from '@common/errors';
 import { getSdkErrorMessage } from '@common/errors/sdkError/providerErrorFormat';
 import {
-  aggregateId,
+  qualifyAggregateId,
   aggregateTarget,
   RUN_OUTCOME,
   RUN_SUBSTATE,
@@ -240,7 +240,7 @@ const deliverOne = (
   parent: RunId,
 ): Effect.Effect<Effect.Effect<void>, Error, Scope.Scope> =>
   Effect.gen(function* () {
-    const rows = yield* session.log.rows(aggregateId('run', child), [
+    const rows = yield* session.log.rows(qualifyAggregateId('run', child), [
       'child.park',
       'run.end',
       'run.activate',
@@ -343,7 +343,7 @@ const clearHeld = (
     .transact((tx) =>
       Effect.gen(function* () {
         if (!(yield* session.log.owns(child))) return;
-        const rows = yield* session.log.rows(aggregateId('run', child), [
+        const rows = yield* session.log.rows(qualifyAggregateId('run', child), [
           'child.park',
         ]);
         const park = rows.at(-1);

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
-  aggregateId as qualifyAggregateId,
+  qualifyAggregateId,
   DisplaySessionEventSchema,
   LOG_LEVELS,
   MESSAGE_TYPES,

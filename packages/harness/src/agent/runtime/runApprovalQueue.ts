@@ -32,7 +32,7 @@ import {
   type ApprovalGrantSource,
 } from '@shared/approvalBypassKind';
 import {
-  aggregateId,
+  qualifyAggregateId,
   type PermissionPayload,
   type RunId,
   type SessionEvent,
@@ -224,7 +224,7 @@ export function createSessionApprovals(
           : [
               {
                 type: 'approval.policy' as const,
-                aggregateId: aggregateId('run', runId),
+                aggregateId: qualifyAggregateId('run', runId),
                 snapshot: next,
               },
             ];
@@ -248,7 +248,7 @@ export function createSessionApprovals(
             : [
                 {
                   type: 'approval.policy',
-                  aggregateId: aggregateId('run', runId),
+                  aggregateId: qualifyAggregateId('run', runId),
                   snapshot: next,
                 },
               ];

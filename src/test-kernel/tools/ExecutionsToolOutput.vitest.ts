@@ -14,7 +14,7 @@ import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import * as toolUseFollowUp from '@agent/followUp/ToolUseFollowUp';
 
 import {
-  aggregateId,
+  qualifyAggregateId,
   LOG_LEVELS,
   MESSAGE_TYPES,
   type ExecResult,
@@ -168,7 +168,7 @@ function registerScriptRun(name: string, model?: string) {
       publishTestRows(session, [
         {
           type: 'run.config',
-          aggregateId: aggregateId('run', runId),
+          aggregateId: qualifyAggregateId('run', runId),
           config: AgentConfigSchema.parse({
             agent: name,
             model,
@@ -368,7 +368,7 @@ describe('ExecutionsTool /executions/{id}/output', () => {
         publishTestRows(session, [
           {
             type: 'log',
-            aggregateId: aggregateId('run', runId),
+            aggregateId: qualifyAggregateId('run', runId),
             level,
             messageType: MESSAGE_TYPES.DEFAULT,
             message: text,

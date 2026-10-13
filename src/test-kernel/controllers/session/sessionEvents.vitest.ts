@@ -89,7 +89,7 @@ import { SessionOwner, withProcessServices } from '@platform/processRuntime';
 import { AppState, type StateStore } from '@platform/interfaces';
 import type { ProcessProbe } from '@platform/defaults/nodeProcesses';
 import {
-  aggregateId as qualifyAggregateId,
+  qualifyAggregateId,
   AgentConfigFieldsSchema,
   emptyRunEndOutput,
   LocalRuntimeStateSchema,
@@ -179,12 +179,12 @@ import { databaseLayer } from '@controllers/session/Database';
 import { ToolRegistry, toolTable } from '@tools/toolTable';
 import { WorkspaceRoots } from '@controllers/session/WorkspaceRoots';
 import { nodePlatformServices } from '@platform/defaults/nodePlatform';
-import { aggregateId } from '@shared/schemas';
+import { qualifyAggregateId } from '@shared/schemas';
 import { Database } from '@shared/session/database';
 import { ProcessIdentity } from '@shared/session/sessionEvents';
 
 const [storage, owner, run, rows, hold] = process.argv.slice(2);
-const id = aggregateId('run', run);
+const id = qualifyAggregateId('run', run);
 const append = Effect.gen(function* () {
   const db = yield* Database;
   yield* db.appendAll([{ type: 'run.start', aggregateId: id,

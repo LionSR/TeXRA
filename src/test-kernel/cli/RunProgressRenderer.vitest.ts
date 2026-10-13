@@ -19,7 +19,7 @@ import { attachCliSessionProgressProjection } from '@cli/runtime/sessionProgress
 import { textDisplayWidth } from '@cli/runtime/terminalText';
 import type { CliContext } from '@cli/runtime/cliContext';
 import {
-  aggregateId as qualifyAggregateId,
+  qualifyAggregateId,
   RUN_PHASE,
   type RunId,
   type RunIdentity,
