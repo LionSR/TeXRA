@@ -216,12 +216,12 @@ export const attachWindowHost = Effect.fn('server.attachWindowHost')(function* (
   const attached = yield* Deferred.make<void>();
   const attachment = yield* FiberHandle.make<void, never>();
   // A newer TeXRA's service that refused this window settles the wait (no
-  // attachment comes) and is said once per link, in the first window that
-  // hears it: every call it makes says it too, but none reconnects.
+  // attachment comes) and is said once per refusal and link, in the first
+  // window that hears it (a reconnect resets `refusalTold`, so a later
+  // refusal is said again): every call it makes says it too.
   yield* Effect.forkScoped(
     SubscriptionRef.changes(link.away).pipe(
       Stream.filter((reason) => reason === WINDOW_OUTDATED),
-      Stream.take(1),
       Stream.runForEach((message) =>
         Deferred.succeed(attached, undefined).pipe(
           Effect.andThen(Ref.getAndSet(link.refusalTold, true)),
