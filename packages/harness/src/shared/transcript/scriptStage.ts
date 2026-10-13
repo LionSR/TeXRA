@@ -240,7 +240,7 @@ function callView(
           media: namesOf(input.mediaFiles),
         })
       : undefined,
-    ended !== undefined && ended.lastTimestamp !== null
+    ended !== undefined
       ? formatCompactDuration(ended.lastTimestamp - ended.launchedAt)
       : undefined,
     ended !== undefined && ended.treeUsage.cost > 0

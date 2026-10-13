@@ -457,7 +457,7 @@ function renderClock(
   child: RunView,
   pendingApproval: boolean,
   nowMs: number,
-): TemplateResult | typeof nothing {
+): TemplateResult {
   if (pendingApproval) {
     return html`<span class="task-elapsed is-approval">approval</span>`;
   }
@@ -467,15 +467,12 @@ function renderClock(
       >${formatCompactDuration(nowMs - child.runStartedAt)}</span
     >`;
   }
-  if (child.lastTimestamp !== null) {
-    return html`<wa-relative-time
-      class="task-elapsed"
-      .date=${new Date(child.lastTimestamp)}
-      format="narrow"
-      sync
-    ></wa-relative-time>`;
-  }
-  return nothing;
+  return html`<wa-relative-time
+    class="task-elapsed"
+    .date=${new Date(child.lastTimestamp)}
+    format="narrow"
+    sync
+  ></wa-relative-time>`;
 }
 
 function inquiryStatusVariant(

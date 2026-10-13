@@ -277,7 +277,7 @@ export function unboundRequests(state: RunState): readonly string[] {
   const asked = state.invocation?.current.failed?.next;
   if (asked?.kind === 'ask') own.add(asked.requestId);
   return Object.entries(state.requests).flatMap(([requestId, request]) =>
-    request.resolved ||
+    request.decision !== null ||
     own.has(requestId) ||
     !requestParksItsCaller(request.payload)
       ? []

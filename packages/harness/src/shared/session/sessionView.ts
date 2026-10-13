@@ -138,7 +138,7 @@ const RunViewSchema = z.object({
    *  host prints. `createdAt` orders; this never does. */
   launchedAt: z.int().positive(),
   runStartedAt: z.int().positive().nullable(),
-  lastTimestamp: z.number().nullable(),
+  lastTimestamp: z.number(),
   conversationProgress: ConversationProgressSchema,
   /** The run's one-based turn, folded from its latest `run.position`
    *  (the loop commits `state.turn + 1`; the row's `round` counts model
@@ -185,10 +185,10 @@ const RunViewSchema = z.object({
    *  collapsed choice. */
   forceExpanded: z.boolean(),
   group: RunGroupSchema,
-  /** The run's metered total: the newest `usage` row this run has folded.
-   *  Each row carries the run's cumulative totals, not a round's delta, so a
-   *  cold listing read — which delivers only the newest row per run — leaves
-   *  the same total here as a full aggregate replay. */
+  /** The run's metered total. A `usage` row is one priced turn and the fold
+   *  sums them; a cold listing read delivers the store's per-run sum as one
+   *  row instead, which the fold takes as the total, so both reads leave the
+   *  same figure here. */
   usage: TokenUsageStatsSchema,
   /** The spend of this run and every run under it, finished or not: its own
    *  `usage` plus each child's `treeUsage`, folded once per change on the
@@ -261,25 +261,23 @@ export interface FollowUpHost {
  * Whether a run takes a follow-up at all, the one rule every host reads (it
  * decides whether the composer shows). A run with no follow-up support, a
  * terminal-backed run on a host that cannot drive one, and a run this process
- * may not act on take none; a run still going or waiting takes one, as do a
- * conversation not yet started (`ready`, nothing written) and a stopped native
- * one with saved steps, which admission resumes from its history.
+ * may not act on take none; a run still going or waiting takes one, as does a
+ * stopped native one with saved steps, which admission resumes from its
+ * history.
  */
 export function acceptsFollowUp(run: ReadRunView, host: FollowUpHost): boolean {
   if (run.followUpSupport === 'unsupported' || run.readOnly) return false;
   if (run.followUpSupport === 'terminalBacked' && !host.terminalBacked)
     return false;
   if (run.group === 'running' || run.group === 'waiting') return true;
-  if (
+  return (
     run.followUpSupport === 'nativeInteractive' &&
     run.identity.kind === 'agent' &&
     run.parentId === null &&
     !run.documentTask &&
     run.resumeBlocked === null &&
     (run.turn !== null || run.forkPoint !== null)
-  )
-    return true;
-  return run.status === 'ready' && run.lastTimestamp === null;
+  );
 }
 
 /**
