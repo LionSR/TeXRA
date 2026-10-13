@@ -12,6 +12,8 @@ export type { AgentDefinition, InlinePersona, Persona } from '@shared/schemas';
 // The payloads `RuntimePresentationEventPayloads` (root) names, one per
 // notice a session's runs ask a host to present.
 export type {
+  FileLocation,
+  InstructionAction,
   RequestEnsureProgressViewPayload,
   RequestOpenFilePayload,
   RequestShowErrorPayload,
