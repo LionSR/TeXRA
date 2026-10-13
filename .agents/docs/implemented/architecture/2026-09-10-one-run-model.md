@@ -468,8 +468,8 @@ the 1.0 direction no transitional alias outlives its PR, and
   admits, under PR1 §4.4's reconcile-never-overwrite rule; its §2.6 open
   problem (reflection state no row carries) is closed by rows, per R1.
 - The `Surface`, per-viewer state, and the one-fold renderer contract.
-- `RunIdentity`, `AgentCategory`, and `aggregateId`'s canonical encoding.
-  `aggregateId` accepts the branded run id for the `run` kind; Codex's review
+- `RunIdentity`, `AgentCategory`, and `qualifyAggregateId`'s canonical encoding.
+  `qualifyAggregateId` accepts the branded run id for the `run` kind; Codex's review
   note on the census that the current signature rejects branded strings is
   correct and is a two-line change in the same PR as the brand.
 - Retention (C9): rows are never scrubbed by age; one aggregate does not

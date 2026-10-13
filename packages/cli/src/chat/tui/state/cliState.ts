@@ -14,7 +14,7 @@ import {
   type AgentSource,
   type RunId,
 } from '@shared/schemas';
-import { descendantRuns, type RunView } from '@shared/session/sessionView';
+import { descendantRuns } from '@shared/session/sessionView';
 import { RUN_GROUP_LABELS } from '@shared/runs/runStatusDisplay';
 import { compareByNewestCreationTime } from '@shared/runs/runOrdering';
 import {
@@ -26,6 +26,7 @@ import {
   type SurfaceAction,
 } from '@texra/shared/session/surface';
 import { sessionView } from './sessionView';
+import type { RunView } from '@texra-ai/harness';
 import type { PastedImageEntry } from '../input/draftAttachments';
 
 // ---------------------------------------------------------------------------
@@ -371,13 +372,11 @@ export type TransientNotice =
       readonly resumeId?: string;
     };
 
-type TransientNoticeOptions =
-  | { readonly kind?: 'message'; readonly ttlMs?: number }
-  | {
-      readonly kind: 'exit';
-      readonly resumeId?: string;
-      readonly ttlMs?: number;
-    };
+/** A notice's fields other than its text, `kind` defaulting to `message`. */
+type TransientNoticeOptions = { readonly ttlMs?: number } & (
+  | { readonly kind?: 'message' }
+  | Omit<Extract<TransientNotice, { kind: 'exit' }>, 'text'>
+);
 
 const DEFAULT_TRANSIENT_NOTICE_TTL_MS = 4_000;
 

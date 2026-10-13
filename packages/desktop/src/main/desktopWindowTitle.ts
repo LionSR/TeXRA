@@ -1,11 +1,11 @@
 import { type BrowserWindow } from 'electron';
-import { Effect, type Scope, Stream, SubscriptionRef } from 'effect';
-import type { SessionViewAccess } from '@agent/runtime';
+import { Effect, type Scope, Stream } from 'effect';
 import { formatSessionTitle, NATIVE_WINDOW_TITLE } from '@shared/sessionTitle';
 import { sessionActivity } from '@shared/session/sessionView';
+import type { Session } from '@texra-ai/harness';
 
 type DesktopTitleSession = {
-  readonly view: Pick<SessionViewAccess, 'ref' | 'changes'>;
+  readonly view: Pick<Session['view'], 'current' | 'changes'>;
 };
 
 type DesktopTitleWindow = Pick<
@@ -21,7 +21,7 @@ export function getDesktopWindowTitle(
 ): string {
   return formatSessionTitle(
     projectName,
-    sessionActivity(SubscriptionRef.getUnsafe(session.view.ref)),
+    sessionActivity(session.view.current()),
     { style: NATIVE_WINDOW_TITLE },
   );
 }

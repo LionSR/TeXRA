@@ -10,7 +10,7 @@ import { registryOf, Runs } from '@agent/runtime/runRegistry';
 import { runWithLifecycle } from '@agent/runtime/AgentRunLifecycle';
 import {
   RUN_OUTCOME,
-  aggregateId,
+  qualifyAggregateId,
   emptyRunEndOutput,
   RunIdSchema,
   type RunId,
@@ -82,7 +82,6 @@ describe('session isolation', () => {
       Effect.gen(function* () {
         // Persistent stores, so each root's rows outlive its session's close
         // and are read back from the root they landed in.
-        const persistent = { kind: 'persistent' } as const;
         const rootsA = createFakeWorkspaceRoots({
           workspacePath: fakePath('papers/a'),
           storagePath: fakePath('storage/a'),
@@ -93,12 +92,12 @@ describe('session isolation', () => {
         });
         const sessionA = yield* createTestSession({
           roots: rootsA,
-          transcriptMode: persistent,
+          persistent: true,
         });
         yield* Effect.addFinalizer(() => closeSessionOf(sessionA));
         const sessionB = yield* createTestSession({
           roots: rootsB,
-          transcriptMode: persistent,
+          persistent: true,
         });
         yield* Effect.addFinalizer(() => closeSessionOf(sessionB));
         const live = [
@@ -110,7 +109,7 @@ describe('session isolation', () => {
           publishTestRows(session, [
             {
               type: 'stage.start',
-              aggregateId: aggregateId('run', runId),
+              aggregateId: qualifyAggregateId('run', runId),
               id: `stage:${runId}`,
               label: 'Running stage',
             },
@@ -141,12 +140,13 @@ describe('session isolation', () => {
         ] as const) {
           const reopened = yield* createTestSession({
             roots,
-            transcriptMode: persistent,
+            persistent: true,
           });
           const ends = (runId: string) =>
-            reopened.log.rows(aggregateId('run', RunIdSchema.parse(runId)), [
-              'run.end',
-            ]);
+            reopened.log.rows(
+              qualifyAggregateId('run', RunIdSchema.parse(runId)),
+              ['run.end'],
+            );
           expect(yield* ends(own)).toMatchObject([
             { outcome: RUN_OUTCOME.CANCELLED },
           ]);
@@ -184,7 +184,7 @@ describe('session isolation', () => {
           yield* session.log.transact([
             {
               type: 'run.start',
-              aggregateId: aggregateId('run', 'c0c002' as RunId),
+              aggregateId: qualifyAggregateId('run', 'c0c002' as RunId),
               identity: { kind: 'agent', agent: 'chat' },
               userFollowUpSupport: 'unsupported',
               parent: null,

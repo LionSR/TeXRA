@@ -39,9 +39,6 @@ import { readSettingUnlessOverridden } from '@utils/config/platformSettings';
 import { IS_WINDOWS } from '@utils/system/platformPaths';
 import type { StateReadFailed } from '@texra-ai/harness';
 
-// The native `Codex` class value; `typeof` gives its construct signature
-// (`new (options?: CodexOptions) => Codex`) so construction stays type-checked.
-type CodexConstructor = typeof import('@openai/codex-sdk').Codex;
 type SandboxMode = import('@openai/codex-sdk').SandboxMode;
 type PlatformInfo = { pkg: string; triple: string };
 
@@ -73,7 +70,7 @@ type _CodexSandboxModeAligned = _AssertExtends<
  * esbuild's benefit; {@link importForeignSdk} wraps everything downstream of
  * it (the shape shared with `importClaudeAgentSdk`).
  */
-export function importCodexClass(): Effect.Effect<CodexConstructor, Error> {
+export function importCodexClass() {
   return importForeignSdk({
     load: () => import('@openai/codex-sdk'),
     notFoundMessage:

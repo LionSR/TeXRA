@@ -277,8 +277,8 @@ same rule governs the persisted `Surface` (9).
 
 Aggregate kinds share one key shape and one placement rule (contract C2).
 `AggregateId` is a kind-qualified storage key, encoded only through
-`aggregateId(kind, logicalId) = JSON.stringify([kind, logicalId])`. Thus
-`aggregateId('stream', id)` and `aggregateId('execution', id)` are distinct
+`qualifyAggregateId(kind, logicalId) = JSON.stringify([kind, logicalId])`. Thus
+`qualifyAggregateId('stream', id)` and `qualifyAggregateId('execution', id)` are distinct
 even when their logical ids are equal. The same encoding applies to inquiry,
 `workflow-checkpoint`, and singleton-session ids. C2 fixes the session logical id as `singleton`
 and the reserved migration logical id as `cutover`, in their distinct kinds. Event envelopes, read/claim arguments, `parent_id`,
@@ -309,8 +309,8 @@ proposal owns this placement and the substrate contract owns the schema, with th
 execution-to-stream edge on `run.start`: consumers qualify its logical
 `executionId` with kind `execution` and its logical `streamId` with kind
 `stream`. An inquiry thread's facts (`inquiryThreadUpdated`, parented or not)
-use `aggregateId('inquiry', threadId)`. A workflow's shared journal uses
-`aggregateId('workflow-checkpoint', checkpointId)`, an independently claimed
+use `qualifyAggregateId('inquiry', threadId)`. A workflow's shared journal uses
+`qualifyAggregateId('workflow-checkpoint', checkpointId)`, an independently claimed
 root named by its `run.start.checkpointId` edge (decision 9, C5). Deleting
 one execution does not cascade that journal. Explicit deletion of its last
 referring run may collect it under C9 only after acquiring a reclaimable
@@ -538,7 +538,7 @@ a different saved run cannot release an active run's checkpoint claim.
   item 6). `RunIdentity` does not encode `AgentCategory`, and the runtime
   supplies `isRemote`; the fold does not query a registry. The event
   envelope's `ownerId` records who wrote that event. `StreamView.ownerId`
-  instead reads `claims[aggregateId('stream', stream.id)]`; it never changes
+  instead reads `claims[qualifyAggregateId('stream', stream.id)]`; it never changes
   merely because an event with a different writer was replayed.
 - **Current ownership** is held when that aggregate has a non-null claim
   whose process is self, alive, or unprovable. A null claim is released;
@@ -2887,7 +2887,7 @@ As tests:
    fresh-lease acquisition fails closed rather than starting a second run
    over one journal (`WorkflowScriptTool.ts:465-477`). Fresh ids would
    remove that guard, so a workflow launch/resume atomically claims
-   `aggregateId('workflow-checkpoint', checkpointId)` together with its
+   `qualifyAggregateId('workflow-checkpoint', checkpointId)` together with its
    stream and execution aggregates before any journal or run mutation (C5).
    The journal lives on that independent checkpoint aggregate, so both
    exclusion and replay use its stable identity. Deleting an execution

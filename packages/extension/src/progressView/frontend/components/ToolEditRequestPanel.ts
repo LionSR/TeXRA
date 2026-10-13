@@ -11,6 +11,7 @@ import '@awesome.me/webawesome/dist/components/dropdown-item/dropdown-item.js';
 import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 
 // Local imports - shared styles
+import { isLatexFile } from '@texra/shared/latexFileTypes';
 import { APPROVE_SESSION_ACTION } from '@texra/shared/session/surfaceDecision';
 import { SessionUiEvents } from '@texra/shared/session/uiEvents';
 import { RUN_GRANT_LABEL } from '@ui/copy/delegationApproval';
@@ -110,7 +111,8 @@ export class ToolEditRequestPanel extends BaseRequestPanel<'toolEdit'> {
       disabled: this.readOnly,
       onClick: this.handleDiffAction,
     });
-    if (!this.permission.data.isLatex || this.readOnly) return openDiff;
+    if (!isLatexFile(this.permission.data.path) || this.readOnly)
+      return openDiff;
 
     return html`
       ${openDiff}

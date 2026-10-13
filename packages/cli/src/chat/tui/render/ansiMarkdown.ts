@@ -395,20 +395,13 @@ function configureAnsi(
   // would fall through to markdown-it's default HTML renderer.
   r.ansi_table = (tokens, idx) => `${tokens[idx]?.content ?? ''}\n\n`;
 
-  // The submodule's renderer typings narrow tokens to `unknown[]` and omit
-  // `renderInline`; recover the real shapes locally.
-  const renderInline = (
-    md.renderer as unknown as {
-      renderInline(tokens: Token[], options: unknown, env: unknown): string;
-    }
-  ).renderInline.bind(md.renderer);
+  const renderInline = md.renderer.renderInline.bind(md.renderer);
   const render = md.renderer.render.bind(md.renderer);
-  md.renderer.render = (rawTokens, options, env) => {
+  md.renderer.render = (tokens, options, env) => {
     quoteDepth = 0;
     headingDepth = 0;
     listDepth = 0;
     linkHref = undefined;
-    const tokens = rawTokens as Token[];
     const collapsed: Token[] = [];
     for (let i = 0; i < tokens.length; i++) {
       if (tokens[i]?.type !== 'table_open') {

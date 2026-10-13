@@ -36,7 +36,10 @@ export async function bindTestSessionView(): Promise<void> {
   const ref = await testRuntime().runPromise(
     SubscriptionRef.make(emptySessionView('test')),
   );
-  unbind = bindSessionView(testRuntime(), ref);
+  unbind = bindSessionView(testRuntime(), {
+    current: () => SubscriptionRef.getUnsafe(ref),
+    changes: SubscriptionRef.changes(ref),
+  });
 }
 
 /** Replace the whole view the components read. */
@@ -54,7 +57,7 @@ export function makeRunView(over: RunViewOverrides): RunView {
   // A case may blank the identity to stand for metadata not yet folded; the
   // fold never states such a run, so it offers nothing.
   const identity = run.identity as RunView['identity'] | undefined;
-  return { ...run, actions: identity ? runActions(run) : [] };
+  return { ...run, actions: identity ? runActions(run, false) : [] };
 }
 
 function runViewFields(over: RunViewOverrides): RunView {
@@ -180,8 +183,10 @@ export function viewWith(
     return rollup;
   };
   // A held run with a request that parks its caller is waiting on it, as the
-  // fold's aggregates derive it. Fixture runs model runs this process holds;
-  // one built interrupted (unheld) or with its own approval keeps it.
+  // fold's aggregates derive it, label and tone included (the same
+  // `runStatusCopy` reading `withAggregates` makes). Fixture runs model runs
+  // this process holds; one built interrupted (unheld) or with its own
+  // approval keeps it.
   for (const request of over.requests ?? []) {
     const run = byId.get(request.runId);
     if (
@@ -191,7 +196,15 @@ export function viewWith(
       !requestParksItsCaller(request.payload)
     )
       continue;
-    byId.set(run.id, { ...run, approval: 'own', group: 'waiting' });
+    byId.set(run.id, {
+      ...run,
+      ...runStatusCopy(run.status, {
+        substate: run.substate ?? undefined,
+        waiting: true,
+      }),
+      approval: 'own',
+      group: 'waiting',
+    });
   }
   for (const stream of [...byId.values()]) {
     if (stream.childIds.length === 0) continue;

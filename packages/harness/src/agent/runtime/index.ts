@@ -26,12 +26,10 @@ export { SESSION_CLOSE_DEADLINE_MS } from './SessionHandle';
 // The process's one route retry gate, which a helper call reads from context.
 export type { RouteRetries } from './run/invocation';
 
-// HostInteractions
+// HostInteractions; a host with no session of its own presents through a
+// `SessionHostInteractions` it attaches its presentation host to.
 export type { HostInteractions } from './HostInteractions';
-
-// runRegistry: the session's `Runs`. A launch provides it from the session it
-// is on; a host invoking a tool outside any run provides `session.runs`.
-export { Runs } from './runRegistry';
+export { SessionHostInteractions } from './HostInteractions';
 
 // rootLaunch: what `Runs.launch({ request, options })` takes.
 export type { RootLaunchOptions, RootLaunchRequest } from './rootLaunch';
@@ -82,11 +80,6 @@ export {
   validateRunRequest,
   type ValidatedRunRequest,
 } from '../core/state/runRequests';
-
-// Native tool host capabilities, supplied per standalone invocation.
-export { ToolContext } from '@agent/core/tools/ToolTypes';
-export { IssuingScript, RunCall, ScriptCalls } from './RunCall';
-export { childRunsLayer } from './ToolServices';
 
 // A workflow run's delivered outputs with their diffs, for a host that prints them.
 export { withWorkflowDiffs } from './subagentResults';

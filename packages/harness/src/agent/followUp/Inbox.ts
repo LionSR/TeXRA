@@ -1,18 +1,15 @@
 /**
- * The session's follow-up inbox. A run's input is a file appended to: each
- * message is one `followup.queued` row, and what a run still has to read is
- * its queued rows less its `followup.consumed` ones, read from the store
- * inside the job that acts on them (`read`). There is one reader per run, the generation running it here, which
- * the run registry already admits one at a time; the run's database claim is
- * the only lock. When a row may be read is data on the row (`holdUntil`),
- * evaluated by the fold a take reads (`RunInput`).
+ * The session's follow-up inbox: a run's input is its `followup.queued` rows
+ * less its `followup.consumed` ones, read inside the job acting on them, by
+ * one reader per run (its generation here); the run's claim is the only
+ * lock, and when a row may be read is data on it (`holdUntil`, `RunInput`).
  */
 import { Deferred, Effect, Result, type Scope } from 'effect';
 
-import type { ResumeRunResult } from '@agent/runtime/resumeRun';
+import type { ResumeAttempt } from '@agent/runtime/resumeRun';
 import type { SessionLog } from '@agent/runtime/SessionHandle';
 import { withLogChannel } from '@logger/effectLog';
-import { aggregateId, type RunId } from '@shared/schemas';
+import { qualifyAggregateId, type RunId } from '@shared/schemas';
 import {
   heldElsewhereBy,
   type DatabaseReadFailed,
@@ -93,7 +90,7 @@ export interface SendOptions {
 }
 
 /** A resume's result, and whether this caller joined one in flight. */
-type Resumed = { readonly result: ResumeRunResult; readonly joined: boolean };
+type Resumed = { readonly result: ResumeAttempt; readonly joined: boolean };
 
 /** A send decided inside a job: its rows, and how it landed. */
 type Admission = { rows: readonly RunInputDraft[]; sent: Sent };
@@ -108,7 +105,7 @@ export class Inbox {
   private readonly readers = new Map<RunId, RunInput>();
   private readonly resumes = new Map<
     RunId,
-    Deferred.Deferred<ResumeRunResult, Error>
+    { readonly done: Deferred.Deferred<ResumeAttempt, Error>; joiners: number }
   >();
   private readonly observers = new Set<(closed: InboxClosed) => void>();
   private disposed = false;
@@ -156,8 +153,6 @@ export class Inbox {
         const input = new RunInput(
           this.read(runId).pipe(
             Effect.map(({ followUps }) => followUps),
-            // The run's own rows, read while this process holds its claim:
-            // a store that cannot read them cannot run it either.
             Effect.orDie,
           ),
         );
@@ -191,7 +186,7 @@ export class Inbox {
    *  message is queued, read in the same transaction; a failure is logged. */
   closeInput(runId: RunId): Effect.Effect<void> {
     if (this.disposed) return Effect.void;
-    const run = aggregateId('run', runId);
+    const run = qualifyAggregateId('run', runId);
     return this.port.log
       .transact((tx) =>
         Effect.gen({ self: this }, function* () {
@@ -226,21 +221,24 @@ export class Inbox {
     this.notify({ kind: 'run', runId });
   }
 
-  /** One resume of `runId` at a time: a second caller joins the first and
-   *  hears its result (`joined`). */
+  /** One resume of `runId` at a time; a joiner (`onJoined`) hears its result. */
   resumeOnce<R>(
     runId: RunId,
-    resume: Effect.Effect<ResumeRunResult, Error, R>,
+    resume: Effect.Effect<ResumeAttempt, Error, R>,
+    onJoined?: () => void,
   ): Effect.Effect<Resumed, Error, R> {
     return Effect.suspend((): Effect.Effect<Resumed, Error, R> => {
       const running = this.resumes.get(runId);
-      if (running !== undefined)
-        return Effect.map(Deferred.await(running), (result) => ({
+      if (running !== undefined) {
+        running.joiners += 1;
+        onJoined?.();
+        return Effect.map(Deferred.await(running.done), (result) => ({
           result,
           joined: true,
-        }));
-      const done = Deferred.makeUnsafe<ResumeRunResult, Error>();
-      this.resumes.set(runId, done);
+        })).pipe(Effect.ensuring(Effect.sync(() => (running.joiners -= 1))));
+      }
+      const done = Deferred.makeUnsafe<ResumeAttempt, Error>();
+      this.resumes.set(runId, { done, joiners: 0 });
       return resume.pipe(
         Effect.onExit((exit) =>
           Effect.sync(() => {
@@ -251,6 +249,11 @@ export class Inbox {
         Effect.map((result) => ({ result, joined: false })),
       );
     });
+  }
+
+  /** Whether a caller is joined to `runId`'s resume in flight. */
+  joined(runId: RunId): boolean {
+    return (this.resumes.get(runId)?.joiners ?? 0) > 0;
   }
 
   /** Hear each run that takes no more input, and the inbox's own close. */
@@ -292,7 +295,6 @@ export class Inbox {
     item: InboxItem,
     options: SendOptions,
   ): Effect.Effect<Admission, Error, Scope.Scope> {
-    // No reader here: "closed" is read from rows, again once claimed.
     const closed = (input: InputRows) =>
       this.disposed || (!this.readers.has(runId) && input.closed);
     const only = (sent: Sent): Admission => ({ rows: [], sent });
@@ -330,7 +332,7 @@ export class Inbox {
         runRelation(sender, runId, this.port.parentOf),
       );
       if (!input.followUpIds.has(row.followUpId)) {
-        const aggregate = aggregateId('run', runId);
+        const aggregate = qualifyAggregateId('run', runId);
         const queued = { type: 'followup.queued', ...row } as const;
         return {
           rows: [{ ...queued, aggregateId: aggregate }],
@@ -356,7 +358,7 @@ export class Inbox {
   /** The run's input as its committed rows say it (`InputRows`). */
   read(runId: RunId): Effect.Effect<InputRows, DatabaseReadFailed> {
     return Effect.suspend(() =>
-      this.port.log.rows(aggregateId('run', runId), INPUT_TYPES),
+      this.port.log.rows(qualifyAggregateId('run', runId), INPUT_TYPES),
     ).pipe(
       Effect.map((rows) => ({
         ...foldRunRows(rows.filter(isFollowUpRow)),

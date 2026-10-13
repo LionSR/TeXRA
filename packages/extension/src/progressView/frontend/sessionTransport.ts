@@ -20,7 +20,7 @@ import {
   SubscriptionRef,
 } from 'effect';
 
-import { aggregateId as qualifyAggregateId, type RunId } from '@shared/schemas';
+import { qualifyAggregateId, type RunId } from '@shared/schemas';
 import type { SessionView } from '@shared/session/sessionView';
 import type { HostSnapshot } from '@texra/shared/session/hostSnapshot';
 import {

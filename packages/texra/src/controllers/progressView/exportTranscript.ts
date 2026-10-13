@@ -21,6 +21,7 @@ import type {
   NotificationFailed,
 } from '@texra/hosts/uiHosts';
 import type { ChatExportInputUnreadable } from '@texra/agent/export/loadChatExportInput';
+import type { TaskRecordsUnavailable } from '@texra/controllers/server/serviceSession';
 import type { RunId } from '@texra-ai/harness/schemas';
 import type { Rejected } from '@texra-ai/harness';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
@@ -98,13 +99,15 @@ const RUN_NOT_FOUND_MESSAGE = 'This run has no saved data to export.';
 /**
  * Every way a transcript export fails. Each member is a tag: the export's own
  * steps ({@link TranscriptExportFailed}), the run read
- * ({@link ChatExportInputUnreadable}), the storage write
+ * ({@link ChatExportInputUnreadable}, or {@link TaskRecordsUnavailable} from
+ * the service that holds the run), the storage write
  * (`PlatformError`), the host's open verb ({@link ExternalOpenFailed}), and
  * the host's notices ({@link NotificationFailed}, or the {@link Rejected} a
  * host answers an error notice with).
  */
 type TranscriptExportFailure =
   | ChatExportInputUnreadable
+  | TaskRecordsUnavailable
   | ExternalOpenFailed
   | NotificationFailed
   | PlatformError.PlatformError

@@ -9,7 +9,7 @@
   "src/test-kernel/cli/ApiStatusLoad.vitest.ts": 1,
   "src/test-kernel/cli/ChatgptLoginBrowser.vitest.ts": 1,
   "src/test-kernel/cli/CliContext.vitest.ts": 1,
-  "src/test-kernel/cli/CliInitPlatform.vitest.ts": 3,
+  "src/test-kernel/cli/CliInitPlatform.vitest.ts": 2,
   "src/test-kernel/cli/CliMemory.vitest.ts": 1,
   "src/test-kernel/cli/ConfigForm.vitest.ts": 1,
   "src/test-kernel/cli/History.vitest.ts": 1,

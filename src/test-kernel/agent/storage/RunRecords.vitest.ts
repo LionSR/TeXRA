@@ -5,7 +5,7 @@ import { beforeEach, describe, expect } from 'vitest';
 import { getRunRecords } from '@agent/storage';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import {
-  aggregateId,
+  qualifyAggregateId,
   AgentConfigFieldsSchema,
   type RunId,
 } from '@shared/schemas';
@@ -26,7 +26,7 @@ beforeEach(async () => {
     session.log.transact([
       {
         type: 'run.start',
-        aggregateId: aggregateId('run', runId),
+        aggregateId: qualifyAggregateId('run', runId),
         identity: { kind: 'agent', agent: 'worker' },
         userFollowUpSupport: 'unsupported',
         parent: null,
@@ -79,7 +79,7 @@ describe('canonical run records', () => {
         yield* session.log.transact([
           {
             type: 'run.end',
-            aggregateId: aggregateId('run', runId),
+            aggregateId: qualifyAggregateId('run', runId),
             outcome: 'completed',
             output: { response: '', files: [] },
           },
@@ -94,7 +94,7 @@ describe('canonical run records', () => {
         yield* session.log.transact([
           {
             type: 'run.removed',
-            aggregateId: aggregateId('run', runId),
+            aggregateId: qualifyAggregateId('run', runId),
           },
         ]);
         expect(
@@ -106,7 +106,9 @@ describe('canonical run records', () => {
             records.readResultMeta(),
           ]),
         ).toEqual([false, null, null, [], null]);
-        const retained = yield* session.log.rows(aggregateId('run', runId));
+        const retained = yield* session.log.rows(
+          qualifyAggregateId('run', runId),
+        );
         expect(retained.some((row) => row.type === 'run.removed')).toBe(true);
       }),
   );

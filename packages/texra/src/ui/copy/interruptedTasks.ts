@@ -10,8 +10,8 @@
  * Plugins (the TUI's `/plugins`), which the notice links to.
  */
 import type { ResumeBlocker, RunId } from '@shared/schemas';
-import type { RunView, SessionView } from '@shared/session/sessionView';
 import { formatResultCount } from '@utils/text/stringUtils';
+import type { RunView, SessionView } from '@texra-ai/harness';
 
 /** One interrupted task, as the notice lists it. */
 export interface InterruptedTask {
@@ -50,7 +50,7 @@ export function interruptedTasks(
     }));
 }
 
-function agentProgress(run: RunView): string | null {
+function agentProgress(run: Pick<RunView, 'rollup'>): string | null {
   const { total, finished } = run.rollup;
   if (total === 0) return null;
   return `${finished} of ${formatResultCount(total, 'agent')} done`;

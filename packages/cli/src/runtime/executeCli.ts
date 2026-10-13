@@ -2,6 +2,7 @@ import { Cause, Deferred, Effect, Exit, Result, Scope } from 'effect';
 
 import { RUN_OUTCOME, type RunId } from '@texra-ai/harness/schemas';
 import {
+  hasErrorPresentationClaimed,
   withProcessServices,
   type ProcessRuntime,
   type ProcessServices,
@@ -21,11 +22,15 @@ import {
 import { deriveResumability } from '@agent/storage';
 import { AgentError } from '@common/errors';
 import { isUserAbort } from '@common/errors/sdkError/errorPatterns';
-import { hasErrorPresentationClaimed } from '@common/errors/sdkError/errorMetadata';
 import {
   DatabaseNotOwner,
   type SessionOpenError,
 } from '@shared/session/database';
+import {
+  TEXRA_APPROVAL_POLICY_CONFIG_KEY,
+  type TexraApprovalPolicy,
+} from '@shared/approvalPolicy';
+import { readConfigSettingFrom } from '@utils/config/platformSettings';
 import { aggregateError, generateRunId } from '@utils/core';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -49,7 +54,12 @@ import {
   runOutcomeExitCode,
   type ExecuteAgentResult,
 } from './terminalStatus';
-import { CliUsageError, type CliContext } from './cliContext';
+import {
+  CliUsageError,
+  launchApproval,
+  launchApprovalNotice,
+  type CliContext,
+} from './cliContext';
 
 type RunAgentWorkflowOutput = NonNullable<
   RootLaunchOptions['publishWorkflowOutput']
@@ -246,10 +256,16 @@ export function executeCliRequest(
       ...options.agentRuns,
     };
     const session = yield* options.session;
-    // Only a policy this invocation asked for overrides the session; with
-    // none, the run follows the project's setting, read at each decision.
-    if (runContext.requestedApprovalPolicy !== undefined)
-      session.approvals.override(runContext.requestedApprovalPolicy);
+    // The run follows the project's setting, read at each decision, with
+    // what this invocation asked for riding its launch (`launchApproval`).
+    const refused = launchApprovalNotice(
+      runContext.requestedApprovalPolicy,
+      readConfigSettingFrom<TexraApprovalPolicy>(
+        session.roots.config,
+        TEXRA_APPROVAL_POLICY_CONFIG_KEY,
+      ),
+    );
+    if (refused !== undefined) writeTextStderr(refused);
     const presentationHost = createCliRuntimeHost(runContext);
     // Everything the run attaches to the session for its output: closed once,
     // after the last result read, so the last line is on the wire before the
@@ -477,6 +493,7 @@ export function executeCliRequest(
       agentRuns.launch(() => shutdownRequested)(session, {
         request,
         options: {
+          ...launchApproval(runContext.requestedApprovalPolicy),
           publishWorkflowOutput:
             publishWorkflowOutput === undefined
               ? undefined

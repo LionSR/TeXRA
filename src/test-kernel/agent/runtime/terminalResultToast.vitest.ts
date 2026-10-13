@@ -5,7 +5,11 @@ import { describe, expect, it, vi } from 'vitest';
 import { registryOf } from '@agent/runtime/runRegistry';
 
 import type { ResultEvent } from '@agent/trace';
-import { aggregateId, INSTRUCTION_ACTION, type RunId } from '@shared/schemas';
+import {
+  qualifyAggregateId,
+  INSTRUCTION_ACTION,
+  type RunId,
+} from '@shared/schemas';
 import { closeSessionOf } from '@test/support/sessionEnd';
 import {
   createTestSession,
@@ -48,7 +52,7 @@ async function toastsFor(
     publishTestRunStart(session, event.runId, { parent });
     const { runId, ...row } = event;
     publishTestRows(session, [
-      { ...row, aggregateId: aggregateId('run', runId) },
+      { ...row, aggregateId: qualifyAggregateId('run', runId) },
     ]);
     await swept;
   } finally {

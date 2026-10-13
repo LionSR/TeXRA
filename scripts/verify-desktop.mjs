@@ -1649,7 +1649,6 @@ function conversationEvents({ approval = false } = {}) {
           sourceTool: 'edit_file',
           addedLines: 1,
           removedLines: 1,
-          isLatex: true,
         },
       },
       thread: null,

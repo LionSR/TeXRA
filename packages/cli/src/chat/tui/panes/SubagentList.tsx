@@ -7,11 +7,10 @@ import { COLOR_HINT } from '@cli/tui/ui/colors';
 import { TICK } from '@cli/tui/ui/glyphs';
 import { useLiveNowMsSince } from '@cli/tui/useLiveNowMs';
 import { truncateSummaryToWidth } from '@cli/runtime/terminalText';
-import type { RunView } from '@shared/session/sessionView';
 import { formatLoopPositionLabel } from '@shared/runs/runStatusDisplay';
 import { formatResultCount } from '@utils/text/stringUtils';
 
-import { childElapsed } from '../state/childControls';
+import { activeStartedAt, childElapsed } from '../state/childControls';
 import { killableRunId, runPhaseOf } from '../state/sessionView';
 import {
   CHILD_ROW_METADATA_MIN_COLUMNS,
@@ -26,6 +25,7 @@ import {
   type PendingApprovalKind,
 } from '../state/approvalQueue';
 import { useSignal } from '../state/useSignal';
+import type { RunView } from '@texra-ai/harness';
 
 const SUBAGENT_SUMMARY_MAX_COLUMNS = 100;
 
@@ -100,7 +100,7 @@ function SessionRow({
   const status = runPhaseOf(run);
   const statusLabel = run.statusLabel;
   const elapsed = childElapsed(
-    { status, startedAt: run.runStartedAt ?? undefined },
+    { status, startedAt: activeStartedAt(run) },
     nowMs,
   );
   const approval = pendingApprovalRowDisplay(pendingKinds);
@@ -200,7 +200,7 @@ export function SubagentList(
   const startedAts = useMemo(
     () =>
       rows.flatMap((row) =>
-        row.kind === 'run' ? [row.run.runStartedAt ?? undefined] : [],
+        row.kind === 'run' ? [activeStartedAt(row.run)] : [],
       ),
     [rows],
   );

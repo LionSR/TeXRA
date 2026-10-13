@@ -9,20 +9,27 @@
  * case to paper over with an empty view.
  */
 import { signal, type Signal } from '@lit-labs/signals';
-import { Cause, Stream, SubscriptionRef } from 'effect';
+import { Cause, Stream } from 'effect';
 import {
   RUN_LIFECYCLE_READY,
   RUN_PHASE,
   type RunPhase,
   type RunId,
 } from '@shared/schemas';
-import type {
-  FollowUpHost,
-  SessionView,
-  RunView,
-} from '@shared/session/sessionView';
+import type { FollowUpHost } from '@shared/session/sessionView';
 import { toSignal, type StreamSignal } from '@texra/shared/signals';
-import type { ProcessRuntime } from '@texra-ai/harness';
+import type {
+  ProcessRuntime,
+  RunView,
+  Session,
+  SessionView,
+  TranscriptView,
+} from '@texra-ai/harness';
+
+/** A transcript row as the TUI reads it off the session view. */
+export type TranscriptRow = TranscriptView['rows'][number];
+/** A tool call's row. */
+export type ToolRow = Extract<TranscriptRow, { kind: 'tool' }>;
 
 /** The bound bridge, itself a signal so a computed over the view (the
  *  approval Surface's foreground) re-tracks when a chat session rebinds. */
@@ -35,23 +42,18 @@ const bound = signal<StreamSignal<SessionView> | undefined>(undefined);
  * runtime the chat entry point holds, since the bridge lives as long as the
  * session it binds.
  *
- * A session binds `changes` to `SessionHandle.view.changes`, the level stream
- * that fails when the fold dies: the ref's own changes never fail, so a TUI
- * reading only those would freeze on a dead fold with nothing to say.
+ * A session's `view.changes` is the level stream that fails when the fold
+ * dies, so a TUI never freezes on a dead fold with nothing to say.
  * `onFailure` is that word, as the one error the cause squashes to, so the
- * entry that binds needs no Effect vocabulary; a fixture that binds a bare
- * ref needs neither.
+ * entry that binds needs no Effect vocabulary.
  */
 export function bindSessionView(
   runtime: ProcessRuntime,
-  view: SubscriptionRef.SubscriptionRef<SessionView>,
-  options: {
-    readonly changes?: Stream.Stream<SessionView>;
-    readonly onFailure?: (error: unknown) => void;
-  } = {},
+  view: Pick<Session['view'], 'current' | 'changes'>,
+  options: { readonly onFailure?: (error: unknown) => void } = {},
 ): () => void {
   bound.get()?.dispose();
-  const changes = (options.changes ?? SubscriptionRef.changes(view)).pipe(
+  const changes = view.changes.pipe(
     Stream.catchCause((cause) => {
       if (!Cause.hasInterruptsOnly(cause)) {
         options.onFailure?.(Cause.squash(cause));
@@ -59,11 +61,7 @@ export function bindSessionView(
       return Stream.empty;
     }),
   );
-  const bridgedBound = toSignal(
-    runtime,
-    changes,
-    SubscriptionRef.getUnsafe(view),
-  );
+  const bridgedBound = toSignal(runtime, changes, view.current());
   bound.set(bridgedBound);
   return () => {
     if (bound.get() !== bridgedBound) return;

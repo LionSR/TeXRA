@@ -13,7 +13,6 @@ quality bar, and tool input schemas.
     - `utils/core/perKeyQueue.ts` - `withPerKeyLane`, the one per-key serialization lane (Effect-based; `KeyedMutex` and `async-mutex` were retired by #12696)
 
 - `packages/harness/src/platform/` - Platform abstraction layer: the host ports and the process runtime types. Each host's composition root builds one `ManagedRuntime` over `processLayer()` at startup; agnostic code reads the ports from the Effect context that runtime serves, and the root opens and closes sessions through its `SessionOwner`.
-- Retrieve included file extensions via `getIncludedExtensions` in `packages/harness/src/common/files/fileTypeUtils.ts`.
 
 ## Configuration, storage, and workspace files
 

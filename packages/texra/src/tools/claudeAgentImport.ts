@@ -34,8 +34,6 @@ import {
 import { readSettingUnlessOverridden } from '@utils/config/platformSettings';
 import { IS_WINDOWS } from '@utils/system/platformPaths';
 import type { StateReadFailed } from '@texra-ai/harness';
-// Mirror the native `query` signature exactly (no hand-rolled structural copy).
-type QueryFn = typeof import('@anthropic-ai/claude-agent-sdk').query;
 
 // ---------------------------------------------------------------------------
 // SDK import
@@ -54,7 +52,7 @@ type QueryFn = typeof import('@anthropic-ai/claude-agent-sdk').query;
  * module cache, so a repeat call is a cache hit — the same shape
  * `importCodexClass` has.
  */
-export function importClaudeAgentSdk(): Effect.Effect<QueryFn, Error> {
+export function importClaudeAgentSdk() {
   return importForeignSdk({
     load: () => import('@anthropic-ai/claude-agent-sdk'),
     notFoundMessage:

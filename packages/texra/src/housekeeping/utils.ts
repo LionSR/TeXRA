@@ -7,24 +7,10 @@ import { Data, Effect, FileSystem, type PlatformError } from 'effect';
 // Local imports
 import { relativeToRoot } from '@texra-ai/harness/node';
 import { withLogChannel } from '@logger/effectLog';
-import type { FileOpResult } from '@shared/schemas';
 import { type RootedFileSystem } from '@utils/files/rootedFileSystem';
-import { toErrorMessage } from '@utils/errors/errorMessage';
 import { normalizeFilePath } from '@utils/core';
 
 import { CHANNEL } from './constants';
-
-/**
- * Every housekeeping failure reaches the host as the same result shape: the
- * operation is logged at the shared channel with the error attached, and the
- * caller sees `{status: 'error'}` instead of a rejection.
- */
-export const asErrorResult = (operation: string) => (error: unknown) =>
-  Effect.logError(`${operation} failed`).pipe(
-    Effect.annotateLogs({ data: error }),
-    withLogChannel(CHANNEL),
-    Effect.as<FileOpResult>({ status: 'error', error: toErrorMessage(error) }),
-  );
 
 /**
  * A workspace listing that did not complete. The `glob` package rejects, and

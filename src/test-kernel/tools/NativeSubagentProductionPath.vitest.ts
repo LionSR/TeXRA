@@ -1,7 +1,7 @@
 import { mkdir, writeFile } from 'node:fs/promises';
 import * as path from 'node:path';
 
-import { Effect, Exit, Fiber, Layer, Scope, Stream } from 'effect';
+import { Effect, Fiber, Layer, Scope, Stream } from 'effect';
 
 /**
  * Production-shaped regression for #9531. Agent registration, launch, child
@@ -76,7 +76,7 @@ import { AgentDirectories, AppState } from '@platform/interfaces';
 import { withProcessServices } from '@platform/processRuntime';
 import { MODEL_RETRY_MAX_ATTEMPTS_SETTING } from '@shared/schemas';
 import {
-  aggregateId,
+  qualifyAggregateId,
   RUN_OUTCOME,
   RUN_PHASE,
   type RunId,
@@ -87,7 +87,7 @@ import { FakeStateStore } from '@test/support/FakePlatform';
 import { startAwaited } from '@test/support/runHandleFixtures';
 import { noopTrace } from '@test/support/noopTrace';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
-import { testRuntime } from '@test/support/testProcessRuntime';
+import { testRuntime, testSessionOf } from '@test/support/testProcessRuntime';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
 import {
   nativeToolTestLayer,
@@ -115,7 +115,6 @@ import {
   openTestDefaultSession,
 } from '@test/support/sessionEnd';
 import { documentTaskConfig } from '@texra/agent/output/documentRecipe';
-import { localSessionBackend } from '@texra/controllers/session/sessionBackend';
 import { ExecutionsTool } from '@tools/ExecutionsTool';
 import { launchDetachedSubagent } from '@tools/delegation/subagentRun';
 import { readCompletedRunConversation } from '@transcript';
@@ -1014,7 +1013,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
         // Admission order is the rows' commit order, and the child reads the
         // sends in exactly that order, each once.
         const admitted = followUpTexts(
-          yield* session.log.rows(aggregateId('run', runId)),
+          yield* session.log.rows(qualifyAggregateId('run', runId)),
         )
           .map((text) => text.match(/(second|third) assertion/)?.[1])
           .filter((word) => word !== undefined);
@@ -1369,8 +1368,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
    * - the host's open-final-output presentation runs inside the run, so its
    *   failure ends a completed run FAILED;
    * - the presentation is dropped rather than moved, so a completed run
-   *   never reaches its auto-open gate;
-   * - the presentation failure is swallowed instead of reaching the caller.
+   *   never reaches its auto-open gate.
    */
   it.live(
     'records a completed workflow as completed when its host presentation fails',
@@ -1408,33 +1406,39 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
           throw presentationFailure;
         }) as typeof config.get);
 
-        const launch = yield* Effect.exit(
-          launchDesktopAgent(
-            {
-              runId,
-              config: AgentConfigSchema.parse(
-                documentTaskConfig({
-                  agent: WORKFLOW_CHILD_AGENT,
-                  agentSource: 'custom',
-                  model: CHILD_MODEL,
-                  instruction: 'Polish the notes.',
-                  inputFiles: ['notes.md'],
-                }),
-              ),
+        const run = yield* launchDesktopAgent(
+          {
+            runId,
+            config: AgentConfigSchema.parse(
+              documentTaskConfig({
+                agent: WORKFLOW_CHILD_AGENT,
+                agentSource: 'custom',
+                model: CHILD_MODEL,
+                instruction: 'Polish the notes.',
+                inputFiles: ['notes.md'],
+              }),
+            ),
+          },
+          {
+            project: {
+              session: testSessionOf(session, { persistent: true }),
+              roots: session.roots,
+              present: session.interactions,
             },
-            {
-              session,
-              backend: localSessionBackend(session),
-              runtime: testRuntime(),
-            },
-          ),
+            runtime: testRuntime(),
+            scope: yield* Scope.make(),
+          },
         );
+        yield* run.result;
 
         expect(
           (yield* getRunRecords(session, runId).readRunEnd())?.outcome,
         ).toBe(RUN_OUTCOME.COMPLETED);
-        expect(gateReads).toHaveLength(1);
-        expect(launch).toStrictEqual(Exit.die(presentationFailure));
+        yield* Effect.promise(() =>
+          vi.waitFor(() => {
+            expect(gateReads).toHaveLength(1);
+          }),
+        );
       }),
     30_000,
   );

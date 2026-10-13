@@ -11,6 +11,7 @@ import {
   Secrets,
   type PlatformSecrets,
   type WorkspaceRoots,
+  type Session,
   type SessionOpenError,
   withProcessServices,
 } from '@texra-ai/harness';
@@ -37,6 +38,7 @@ import { ensureError } from '@utils/errors/errorMessage';
 import {
   disposeCliProcessRuntime,
   installCliProcessRuntime,
+  installedSessions,
 } from './cliProcessRuntime';
 import {
   flushNdjsonStdout,
@@ -58,6 +60,8 @@ let shutdownHandlers: DisposableStore | undefined;
 // The one memoized open of the process session (`CliPlatformServices.session`),
 // built by the first init beside the roots it installs.
 let sessionOpen: Effect.Effect<SessionHandle, SessionOpenError> | undefined;
+// The same session as every host drives it (`CliPlatformServices.runSession`).
+let runSessionOpen: Effect.Effect<Session, SessionOpenError> | undefined;
 // The process's shutdown scope, made by the first init: its close is the
 // CLI's shutdown, run once whichever exit path asks first (`shutdown`).
 let shutdownScope: Scope.Closeable | undefined;
@@ -131,6 +135,9 @@ export type CliPlatformServices = SettingsStores & {
    * nothing can write to fails a command only when it asks for a transcript.
    */
   readonly session: Effect.Effect<SessionHandle, SessionOpenError>;
+  /** The process session as every host drives it (`Session`): opened with
+   *  {@link session}, the one it is a view of. */
+  readonly runSession: Effect.Effect<Session, SessionOpenError>;
 };
 
 /**
@@ -421,6 +428,13 @@ export function initCliPlatform(
 
           installedRoots = roots;
           sessionOpen = openSession;
+          runSessionOpen = yield* Effect.cached(
+            Effect.flatMap(openSession, (handle) =>
+              Effect.flatMap(installedSessions, (sessions) =>
+                sessions.open(handle.roots, { persistent: true }),
+              ),
+            ),
+          );
           if (context.installSignalHandlers !== false) {
             installCliShutdownSignalHandlers(context.quietLogs);
           }
@@ -454,6 +468,9 @@ export function initCliPlatform(
       secrets,
       session:
         sessionOpen ??
+        Effect.die(new Error('The CLI process session was never opened.')),
+      runSession:
+        runSessionOpen ??
         Effect.die(new Error('The CLI process session was never opened.')),
       shutdownScope: shutdownScope ?? Scope.makeUnsafe(),
       roots,

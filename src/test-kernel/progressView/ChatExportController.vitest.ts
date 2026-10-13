@@ -13,7 +13,7 @@ import {
   resolveWorkspaceStoragePath,
 } from '@platform/defaults/workspaceStorage';
 import {
-  aggregateId,
+  qualifyAggregateId,
   LOG_LEVELS,
   MESSAGE_TYPES,
   DEFAULT_TOOL_CONFIG,
@@ -28,7 +28,10 @@ import { installPlatform } from '@test/support/setupPlatform';
 import { rootedFsLayer } from '@test/support/fsTestUtils';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 import { seedRunRecord } from '@test/support/runRecordSeeds';
-import { ChatExportController } from '@texra/controllers/progressView/ChatExportController';
+import {
+  ChatExportController,
+  localExportRecords,
+} from '@texra/controllers/progressView/ChatExportController';
 
 const TEMPLATE =
   '<!doctype html><html><head><title>t</title>' +
@@ -84,7 +87,7 @@ const persistTranscriptEntry = (runId: RunId) =>
   session.log.transact([
     {
       type: 'log',
-      aggregateId: aggregateId('run', runId),
+      aggregateId: qualifyAggregateId('run', runId),
       level: LOG_LEVELS.INFO,
       messageType: MESSAGE_TYPES.USER_MESSAGE,
       message: 'hello',
@@ -103,7 +106,8 @@ describe('ChatExportController.exportAsHtml', () => {
     );
     controller = new ChatExportController({
       latexPreamble: '',
-      session,
+      roots: session.roots,
+      records: localExportRecords(session),
     });
   });
 
@@ -165,7 +169,8 @@ describe('ChatExportController.buildExportInput', () => {
     );
     controller = new ChatExportController({
       latexPreamble: '',
-      session,
+      roots: session.roots,
+      records: localExportRecords(session),
     });
   });
 

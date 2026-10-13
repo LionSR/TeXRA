@@ -10,7 +10,7 @@ import type { ITool } from '@agent/core/tools/ToolTypes';
 import type { InvokeRequest } from '@agent/runtime/ModelInvoker';
 import { runToolUse } from '@agent/runtime/loop/toolUse';
 import { TraceEmitter } from '@agent/trace';
-import { aggregateId, RUN_OUTCOME } from '@shared/schemas';
+import { qualifyAggregateId, RUN_OUTCOME } from '@shared/schemas';
 import { RunHistory } from '@shared/session/runHistory';
 import type { RunState } from '@shared/session/runStateFold';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
@@ -107,9 +107,10 @@ describe('the tool-use turn', () => {
         // The tool-calling round is not the end of the turn, so only the
         // text round's response is finalized, once, with its text, as a row
         // of the run's history (never a detached trace row).
-        const finalized = yield* session.log.rows(aggregateId('run', runId), [
-          'response.finalized',
-        ]);
+        const finalized = yield* session.log.rows(
+          qualifyAggregateId('run', runId),
+          ['response.finalized'],
+        );
         expect(
           finalized.map((row) =>
             row.type === 'response.finalized' ? row.text : null,

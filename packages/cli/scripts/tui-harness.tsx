@@ -35,7 +35,7 @@ import {
   type TexraApprovalPolicy,
 } from '@shared/approvalPolicy';
 import {
-  aggregateId as qualifyAggregateId,
+  qualifyAggregateId,
   AgentProposalPermissionSchema,
   AgentConfigFieldsSchema,
   LOG_LEVELS,
@@ -371,7 +371,9 @@ if (HARNESS_MEMORY_FILES.length > 0) {
 const harnessRuntimeSession = await harnessRuntime.runPromise(
   HARNESS_PLATFORM_SERVICES.session,
 );
-harnessRuntimeSession.approvals.override(TEXRA_APPROVAL_POLICY_DEFAULT);
+const harnessRunSession = await harnessRuntime.runPromise(
+  HARNESS_PLATFORM_SERVICES.runSession,
+);
 if (process.env.HARNESS_VISIBLE_AGENTS !== undefined) {
   await harnessRuntime.runPromise(
     harnessRoots.repoState.update(WorkspaceStateKey.WORKSPACE_AGENTS, {
@@ -454,7 +456,7 @@ const isCellRow = (draft: SeedRow): draft is CellRow =>
 
 // The TUI reads the session fold (PRD 10.1): bind it and subscribe every
 // run's transcript tier the way `runChat` does.
-HARNESS_DISPOSERS.push(bindSessionView(harnessRuntime, session().view.ref));
+HARNESS_DISPOSERS.push(bindSessionView(harnessRuntime, harnessRunSession.view));
 {
   let subscribed = '';
   const syncTranscriptSubscriptions = (): void => {
@@ -482,7 +484,7 @@ HARNESS_DISPOSERS.push(
   Effect.runSync(
     session().interactions.use(
       createTuiHostInteractions(harnessRuntimeHost, HARNESS_CLI_CONTEXT, {
-        session: session(),
+        requests: session().requests,
         secrets: HARNESS_PLATFORM_SERVICES.secrets,
         settings: HARNESS_PLATFORM_SERVICES,
         runtime: harnessRuntime,
@@ -1511,8 +1513,13 @@ function appendHarnessTranscript(
   }
 }
 
+/** The harness chat's launch policy, which `/approval` sets, as the chat's
+ *  does; it never writes the project's. */
+let harnessPolicy: TexraApprovalPolicy = TEXRA_APPROVAL_POLICY_DEFAULT;
+const harnessApprovalPolicy = (): TexraApprovalPolicy => harnessPolicy;
+
 function setHarnessApprovalPolicy(policy: TexraApprovalPolicy): void {
-  harnessRuntimeSession.approvals.override(policy);
+  harnessPolicy = policy;
   sessionMeta.set({
     ...sessionMeta.get(),
     approvalPolicy: policy,
@@ -1569,7 +1576,7 @@ function appendHarnessStatus(): void {
       model: meta.model,
       teamName: meta.teamName,
       modelAccess: run?.usage.usageRoute,
-      approvalPolicy: harnessRuntimeSession.approvals.policy(),
+      approvalPolicy: harnessApprovalPolicy(),
       approvalBypasses: runBypasses(view, runId),
       statusLabel: run?.statusLabel,
       activeChildSessions: runningChildCount(view, run),
@@ -1626,7 +1633,7 @@ function handleHarnessSlashCommand(line: string): boolean {
       appendHarnessStatus();
       return true;
     case 'plan':
-      void showCliWorkPlan(session());
+      showCliWorkPlan();
       return true;
     case 'clear':
       resetHarnessForClear();
@@ -1656,13 +1663,14 @@ function handleHarnessSlashCommand(line: string): boolean {
 }
 
 /** The harness's root-run claim, held the way `texra chat` holds its own. */
-const harnessSession = new TuiSession(() => undefined);
+const harnessSession = new TuiSession();
 
 registerBuiltinSlashCommands({
   secrets: HARNESS_PLATFORM_SERVICES.secrets,
   stores: HARNESS_PLATFORM_SERVICES,
   runtime: HARNESS_PLATFORM_SERVICES.runtime,
   runtimeSession: harnessRuntimeSession,
+  runSession: harnessRunSession,
   // Mirror `texra chat`: agent selection is open exactly while no root run
   // is pending.
   canSelectAgent: () => chatTuiCanStartRootRun(harnessSession),
@@ -1673,8 +1681,13 @@ registerBuiltinSlashCommands({
         ? DISABLED_MODEL_SWITCH_REASON
         : undefined,
     ),
-  getApprovalPolicy: () => harnessRuntimeSession.approvals.policy(),
-  onApprovalPolicySelect: setHarnessApprovalPolicy,
+  getApprovalPolicy: harnessApprovalPolicy,
+  onApprovalPolicySelect: (policy) =>
+    Effect.sync(() => setHarnessApprovalPolicy(policy)),
+  onProjectApprovalPolicyChanged: (policy) =>
+    appendHarnessAssistantTranscript(
+      `Project approval policy: ${formatTexraApprovalPolicy(policy)}`,
+    ),
   onModelSelect: (model) =>
     Effect.sync(() => {
       setCliSessionModelOverride(model);
@@ -1750,7 +1763,7 @@ function renderHarnessApp(): React.JSX.Element {
       secrets={HARNESS_PLATFORM_SERVICES.secrets}
       stores={HARNESS_PLATFORM_SERVICES}
       runtime={harnessRuntime}
-      session={session()}
+      session={harnessRunSession}
       onSubmit={handleHarnessSubmit}
       onStaticTranscriptChange={viewportController.repaintTranscript}
       onCtrlC={handleHarnessCtrlC}
@@ -1830,7 +1843,12 @@ if (process.env.HARNESS_SESSION_TREE === '1') {
     }),
   ]);
   const ref = await harnessRuntime.runPromise(SubscriptionRef.make(view));
-  HARNESS_DISPOSERS.push(bindSessionView(harnessRuntime, ref));
+  HARNESS_DISPOSERS.push(
+    bindSessionView(harnessRuntime, {
+      current: () => SubscriptionRef.getUnsafe(ref),
+      changes: SubscriptionRef.changes(ref),
+    }),
+  );
   rootRunId.set(interrupted);
   focusRun(PROCESS);
 }

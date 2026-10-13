@@ -29,12 +29,14 @@ import {
   listTestSessions,
 } from '@test/support/sessionEnd';
 import { createTestSession } from '@test/support/sessionTestUtils';
+import { testSessions } from '@test/support/testProcessRuntime';
 
 import { sourceFilesUnder } from '@test/support/repoScan';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 import { withEnv } from '@test/support/testEnv';
 import { normalizeFilePath } from '@utils/core';
 import { DESKTOP_SRC_DIR, REPO_ROOT } from './desktopTestPaths.ts';
+import type { Sessions } from '@texra-ai/harness';
 
 /**
  * The records over a temp profile's global root, on a handle the caller's
@@ -71,6 +73,15 @@ const ephemeralOwner = (reason: string): SessionOwner['Service'] => ({
     Effect.map(listTestSessions, (held) => held.includes(session)),
   closeAll: closeAllTestSessions,
 });
+
+/** The kernel's sessions, over the ephemeral store the owner above opens. */
+const ephemeralSessions = Effect.map(
+  testSessions,
+  (sessions): Sessions['Service'] => ({
+    ...sessions,
+    open: (roots) => sessions.open(roots),
+  }),
+);
 
 describe('desktop composition root and launch environment', () => {
   const tempDirs = useTempDirs();
@@ -145,6 +156,7 @@ describe('desktop composition root and launch environment', () => {
             globalConfigStore: config,
             stores: { ...host.roots, secrets: host.secrets },
             service: undefined,
+            sessions: yield* ephemeralSessions,
           }).pipe(
             Effect.provideService(DesktopProjectRecords, records),
             Effect.provideService(
@@ -231,6 +243,7 @@ describe('desktop composition root and launch environment', () => {
           globalConfigStore: config,
           stores: { ...host.roots, secrets: host.secrets },
           service: undefined,
+          sessions: yield* ephemeralSessions,
         }).pipe(
           Effect.provideService(DesktopProjectRecords, records),
           Effect.provideService(

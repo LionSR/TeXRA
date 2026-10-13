@@ -9,7 +9,7 @@ import { Effect, Result, type Scope, SynchronizedRef } from 'effect';
 
 import { PreparedHistorySchema, type ModelOrigin } from '@texra-ai/llm';
 import {
-  aggregateId as qualifyAggregateId,
+  qualifyAggregateId,
   type RunId,
   type SessionEvent,
   type SessionEventDraft,
@@ -17,7 +17,6 @@ import {
 import {
   DatabaseClaimRefused,
   DatabaseNotOwner,
-  DatabaseWriteFailed,
 } from '@shared/session/database';
 import {
   type RunCell,
@@ -217,26 +216,24 @@ const unprepared = (
   });
 };
 
+type Refusal = DatabaseNotOwner | DatabaseClaimRefused;
 /** A lost claim's refusal, worded from the refusing row; any other
  *  rollback stays the write failure it is (F3). */
 const notOwner =
   (runId: RunId) =>
   <A, E, R>(
     effect: Effect.Effect<A, E, R>,
-  ): Effect.Effect<A, Exclude<E, DatabaseNotOwner> | RunHistoryRefused, R> =>
+  ): Effect.Effect<A, Exclude<E, Refusal> | RunHistoryRefused, R> =>
     Effect.mapError(effect, (failure) => {
       // A live foreign owner refusing a claim is the same refusal.
-      if (
-        failure instanceof DatabaseWriteFailed &&
-        failure.cause instanceof DatabaseClaimRefused
-      ) {
-        const { ownerId, verdict } = failure.cause;
+      if (failure instanceof DatabaseClaimRefused) {
+        const { ownerId, verdict } = failure;
         const detail = `held by ${ownerId} (${verdict})`;
         return new RunHistoryRefused({ reason: 'not-owner', runId, detail });
       }
       if (!(failure instanceof DatabaseNotOwner))
-        // cast: the instanceof test above ruled DatabaseNotOwner out.
-        return failure as Exclude<E, DatabaseNotOwner>;
+        // cast: the instanceof tests above ruled both refusals out.
+        return failure as Exclude<E, Refusal>;
       let detail = `held by ${failure.ownerId}`;
       if (failure.ownerId === null) detail = 'the claim is unheld';
       if (failure.closed) detail = 'the run aggregate is closed';

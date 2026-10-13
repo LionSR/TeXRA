@@ -5,7 +5,7 @@
 // the window switches projects.
 
 import { app, shell } from 'electron';
-import { Effect, Exit, Scope, SubscriptionRef } from 'effect';
+import { Effect, Exit, Scope } from 'effect';
 
 import { DESKTOP_WORKSPACE_COMMANDS } from '../shared/desktopWorkspaceMessages.js';
 import {
@@ -176,17 +176,13 @@ export const openProjectSurface = Effect.fn('desktop.openProjectSurface')(
           Effect.sync(() => {
             const binding = bindings.active();
             if (!binding) return 'unavailable' as const;
-            const view = SubscriptionRef.getUnsafe(
-              binding.project.backend.view.ref,
-            );
+            const view = binding.project.session.view.current();
             if (!view.runs.has(runId)) return 'missing' as const;
             binding.bridge.surfaceAction({ kind: 'select', runId });
             return 'revealed' as const;
           }),
         runLabel: (runId) =>
-          SubscriptionRef.getUnsafe(
-            projects.active().backend.view.ref,
-          ).runs.get(runId)?.label,
+          projects.active().session.view.current().runs.get(runId)?.label,
         stateSettingApplied: () => Effect.void,
         runInTerminal: (_name, command) =>
           Effect.sync(() => {
@@ -231,7 +227,7 @@ export const openProjectSurface = Effect.fn('desktop.openProjectSurface')(
             host.previewHost.openExternal,
           ),
         },
-        session: project.session,
+        roots: project.roots,
         secrets: options.secrets,
         resourcesPath: options.resourcesPath,
         spawn: desktopSpawner(runtime, owner, project.root),
@@ -242,7 +238,7 @@ export const openProjectSurface = Effect.fn('desktop.openProjectSurface')(
         Effect.tap(() =>
           installDesktopWindowTitle(
             host.window,
-            project.backend,
+            project.session,
             project.root && project.display.name,
             () => surfaceScope === owner,
           ),

@@ -7,7 +7,7 @@ import {
 } from '@agent/runtime/HostInteractions';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import {
-  aggregateId as qualifyAggregateId,
+  qualifyAggregateId,
   aggregateTarget,
   emptyRunEndOutput,
   type BashPermission,
@@ -76,7 +76,7 @@ async function readSessionEvents(
 
 /**
  * Read public events committed since this call. Each read captures its own
- * finite upper bound; `aggregateId` narrows to one stream's facts.
+ * finite upper bound; `qualifyAggregateId` narrows to one stream's facts.
  */
 export function recordSessionEvents(
   session: SessionEventReader,

@@ -39,6 +39,7 @@ import type {
 } from '@shared/schemas';
 import type {
   AggregateClaim,
+  DatabaseClaimError,
   DatabaseNotOwner,
   DatabaseReadFailed,
   DatabaseWriteFailed,
@@ -68,7 +69,7 @@ import type { RunsShape } from './runs';
 export type LogWriteError = DatabaseNotOwner | DatabaseWriteFailed;
 
 /** A claim the store would not give this process. */
-type ClaimError = DatabaseNotOwner | DatabaseReadFailed | DatabaseWriteFailed;
+type ClaimError = DatabaseReadFailed | DatabaseClaimError;
 
 /** What one transaction's job holds: the ordered append (each in this
  *  transaction's order), a registration's claim take-over, and what runs
@@ -93,10 +94,9 @@ export interface SessionTransaction {
 export interface SessionLog {
   /**
    * One transaction, run as the next job of the session's publisher and
-   * returned once the view has folded what it committed: a batch of rows,
-   * or a job that reads committed rows and appends what depends on them
-   * with no other write between. A refusal wrote nothing and comes back
-   * typed; it is never retried here.
+   * returned once the view has folded what it committed: a batch of rows, or
+   * a job that reads committed rows and appends what depends on them with no
+   * other write between. A refusal wrote nothing, comes back typed, never retried.
    */
   transact(
     events: readonly UnfoldedDraft[],
@@ -213,19 +213,19 @@ export type StreamClosure = Extract<RunHistoryDraft, { type: 'stream.end' }>;
 export type ClosureFact =
   StreamClosure | Extract<SessionEventDraft, { type: 'stage.end' }>;
 
-/**
- * What each run's trace ({@link SessionLog.publish}) left: the first row the
- * store refused, the run's own to hear at its end, and its open work.
- */
+/** Each run's trace ({@link SessionLog.publish}): the first row the store
+ *  refused, its open work, and its port every reader of its events hears. */
 export interface RunTrace {
-  /** The first of `runId`'s rows the store refused, taken, as the error
-   *  its `run.end` carries; read after every row before it was tried. */
+  /** The first refused row of `runId`, taken, as its `run.end` error. */
   lost(runId: RunId): Effect.Effect<RunEnd['error'] | undefined>;
-  /** What closes what is still open on `runId`: every stream, with its
-   *  text, and with an `outcome` every stage. Read inside a job of the
-   *  session's publisher, or once the log has settled. */
+  /** What closes `runId`'s open streams (and stages, with an `outcome`);
+   *  read in a publisher job or once the log settled. */
   closure(runId: RunId): StreamClosure[];
   closure(runId: RunId, outcome: RunOutcome): ClosureFact[];
+  /** The run's trace port: hand `event` to every listener of `runId`. */
+  tap(runId: RunId, event: AgentEvent): void;
+  /** Listen on `runId`'s port, from now until the returned release. */
+  listen(runId: RunId, listener: (event: AgentEvent) => void): () => void;
 }
 
 /**
@@ -249,11 +249,11 @@ export interface SessionHandleInit {
    * SDK leave it unset: their policy is off (ruling Q2).
    */
   readonly interruptedTasks?: 'offer' | 'retry';
-  /** An ephemeral session opens a throwaway database instead of the
-   *  project's. */
-  readonly transcriptMode?:
-    | { readonly kind: 'persistent' }
-    | { readonly kind: 'ephemeral'; readonly reason: string };
+  /** Absent, the project's database; ephemeral, a throwaway one. */
+  readonly transcriptMode?: {
+    readonly kind: 'ephemeral';
+    readonly reason: string;
+  };
 }
 
 /** The rows that open a request: its `request.opened`, and the

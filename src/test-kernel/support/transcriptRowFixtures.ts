@@ -11,6 +11,7 @@ import {
   orderedStaticTranscriptEntries,
   pendingTranscriptEntries,
 } from '@cli/chat/tui/panes/transcriptEntries';
+import type { TranscriptRow as TuiRow } from '@cli/chat/tui/state/sessionView';
 import {
   TOOL_CALL_STATUS,
   type NormalizedToolUse,
@@ -142,12 +143,12 @@ export function compactionRowFixture(
  *  the live rows. Production reads each half from its own pane; suites that
  *  assert on the partition read both here. */
 export function splitTranscriptEntries(
-  entries: readonly TranscriptRow[],
+  entries: readonly TuiRow[],
   finalizedFrontier: number,
   status: RunPhase | undefined,
 ): {
-  readonly finalized: readonly TranscriptRow[];
-  readonly pending: readonly TranscriptRow[];
+  readonly finalized: readonly TuiRow[];
+  readonly pending: readonly TuiRow[];
 } {
   return {
     finalized: orderedStaticTranscriptEntries(

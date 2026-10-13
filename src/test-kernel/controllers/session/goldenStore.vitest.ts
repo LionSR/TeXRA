@@ -61,7 +61,7 @@ import { WorkspaceRoots } from '@controllers/session/WorkspaceRoots';
 import { AgentDirectories, AppState } from '@platform/interfaces';
 import { withProcessServices } from '@platform/processRuntime';
 import {
-  aggregateId,
+  qualifyAggregateId,
   isDisplaySessionEvent,
   ROW_KINDS,
   RunIdSchema,
@@ -265,7 +265,7 @@ describe('the golden 1.0 store', () => {
         expect(types, type).toContain(type);
       // The chat's `/model` switch: the configs naming the model before and
       // after it; and its `/compact`, the one edit.
-      const chat = aggregateId('run', CHAT);
+      const chat = qualifyAggregateId('run', CHAT);
       expect(
         events.flatMap((event) =>
           event.type === 'context.edit' && event.aggregateId === chat
@@ -310,7 +310,7 @@ describe('the golden 1.0 store', () => {
       // source, and its first history row seeds the source's view; a handoff
       // cuts the fork's view to its note; an awaited child names the call
       // that owns it, and a Codex child, which nobody awaits, names none.
-      const forked = aggregateId('run', FORKED);
+      const forked = qualifyAggregateId('run', FORKED);
       expect(
         events.flatMap((event) =>
           event.type === 'run.start' && event.aggregateId === forked

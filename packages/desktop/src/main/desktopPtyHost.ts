@@ -19,9 +19,9 @@ import { dirname, join } from 'node:path';
 import { withExtendedPath } from '@utils/system/platformPaths';
 
 /**
- * Structural subset of node-pty we depend on. Declared locally so this module
- * type-checks without the native addon's types resolving at build time, and so
- * the import can stay dynamic.
+ * The subset of node-pty this host depends on: node-pty's own module type
+ * satisfies it structurally, and a test fakes only this much through
+ * `loadPty`.
  */
 interface PtyProcess {
   onData(listener: (data: string) => void): void;
@@ -167,7 +167,7 @@ function loadNodePty(): Promise<NodePtyModule> {
   nodePtyLoad ??= import('node-pty')
     .then((module) => {
       ensureSpawnHelperExecutable();
-      return module as unknown as NodePtyModule;
+      return module;
     })
     .catch((error: unknown) => {
       nodePtyLoad = undefined;

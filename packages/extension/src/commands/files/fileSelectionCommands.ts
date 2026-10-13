@@ -3,15 +3,15 @@ import { Effect } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports
-import type { SessionHandle } from '@agent/runtime';
-import { getFilterExtensions } from '@common/files/fileTypeUtils';
 import {
   showLoggedErrorMessage,
   showLoggedInfoMessage,
 } from '@frontend/ui/errorHandlingUtils';
 import { selectFiles } from '@frontend/ui/dialogs';
 import type { MultipleDocumentFileType } from '@shared/schemas';
+import { getFilterExtensions } from '@texra/common/files/fileTypeUtils';
 import { workspaceRelativePath } from '@utils/files/workspaceFS';
+import type { WorkspaceRoots } from '@texra-ai/harness';
 
 const CHANNEL = 'fileSelectionCommands';
 
@@ -47,13 +47,13 @@ function announceSelection<E>(
 }
 
 function createMultiPicker(
-  session: SessionHandle,
+  roots: WorkspaceRoots,
   options: PickerOptions,
 ): () => Effect.Effect<string[] | null> {
   return () =>
     announceSelection(
       selectFiles({
-        workspacePath: session.roots.workspace,
+        workspacePath: roots.workspace,
         openLabel: options.openLabel,
         filters: options.filters(),
       }),
@@ -65,28 +65,28 @@ function createMultiPicker(
  * session so the dialog's starting folder is that session's workspace.
  */
 export function createFileSelectionPickers(
-  session: SessionHandle,
+  roots: WorkspaceRoots,
 ): Record<MultipleDocumentFileType, () => Effect.Effect<string[] | null>> {
   return {
-    input: createMultiPicker(session, {
+    input: createMultiPicker(roots, {
       openLabel: 'Select Files',
       filters: () => ({
         'Text files': getFilterExtensions('input'),
       }),
     }),
-    context: createMultiPicker(session, {
+    context: createMultiPicker(roots, {
       openLabel: 'Select Context Files',
       filters: () => ({
         'Text files': getFilterExtensions('context'),
       }),
     }),
-    media: createMultiPicker(session, {
+    media: createMultiPicker(roots, {
       openLabel: 'Select Media',
       filters: () => ({
         'Image files': getFilterExtensions('media'),
       }),
     }),
-    output: createMultiPicker(session, {
+    output: createMultiPicker(roots, {
       openLabel: 'Select Output Files',
       filters: () => ({ 'Text files': ['tex', 'txt', 'md'] }),
     }),
@@ -94,10 +94,10 @@ export function createFileSelectionPickers(
 }
 
 export function getCurrentFile(
-  session: SessionHandle,
+  roots: WorkspaceRoots,
 ): Effect.Effect<string | null> {
   return Effect.sync(() => {
-    const workspaceRoot = session.roots.workspace;
+    const workspaceRoot = roots.workspace;
     // Try activeTextEditor first (for text files)
     const doc = vscode.window.activeTextEditor?.document;
     if (doc?.uri.scheme === 'file') {

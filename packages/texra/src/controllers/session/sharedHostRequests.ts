@@ -18,9 +18,8 @@ import * as path from 'node:path';
 import { Effect } from 'effect';
 
 import { Rejected, type HostRequestFailure } from '@texra-ai/harness';
-import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import { getIncludedExtensions } from '@common/files/fileTypeUtils';
 import type { StorageFs, WorkspaceFs } from '@platform/rootedFs';
+import { getIncludedExtensions } from '@texra/common/files/fileTypeUtils';
 import type { HostRequest } from '@texra/shared/session/hostRequest';
 import type {
   HostOutcome,
@@ -38,11 +37,11 @@ import type { HostDraftRequests } from '@texra/controllers/session/hostDraftRequ
 import {
   type HostRunActions,
   type WorkflowDiffRequest,
-  type WorkflowFileOperationRequest,
+  type WorkflowFileOperationResult,
 } from '@texra/controllers/session/hostRunActions';
 import type { HostSnapshotSource } from '@texra/controllers/session/hostSnapshotSource';
 import { formatResultCount } from '@utils/text/stringUtils';
-import type { ProcessServices } from '@texra-ai/harness';
+import type { ProcessServices, WorkspaceRoots } from '@texra-ai/harness';
 import type { RunId } from '@texra-ai/harness/schemas';
 
 /** The kinds {@link handleSharedHostRequest} answers. */
@@ -134,9 +133,10 @@ export interface SharedHostRequestBindings {
    *  directory. */
   admitLaunch(form: LaunchRequest['launch']): HostVerb<void>;
   runWorkflowDiff(request: WorkflowDiffRequest): HostVerb<void>;
-  runWorkflowFileOperation(
+  /** Tell the user what a pack or clean did. */
+  presentWorkflowFileOperation(
     operation: 'pack' | 'clean',
-    request: WorkflowFileOperationRequest,
+    done: WorkflowFileOperationResult,
   ): HostVerb<void>;
   /** latexdiff-vc over the base file against a commit, and the pack and
    *  clean housekeeping of what it produced. */
@@ -182,7 +182,7 @@ export interface SharedHostRequestPorts {
    *  {@link HostDraftRequests.attach} bound it. */
   readonly draftRequests: ReturnType<HostDraftRequests['attach']>;
   readonly toolEditApprovals: ToolEditApprovalController;
-  readonly session: Pick<SessionHandle, 'roots' | 'approvals'>;
+  readonly roots: WorkspaceRoots;
   readonly host: SharedHostRequestBindings;
 }
 
@@ -271,7 +271,7 @@ export function handleSharedHostRequest(
         return done;
       case 'attachDroppedFiles': {
         const attached = yield* attachDroppedFiles(
-          ports.session.roots.workspace,
+          ports.roots.workspace,
           request.paths,
           getIncludedExtensions(request.category),
         );
@@ -294,8 +294,8 @@ export function handleSharedHostRequest(
         yield* host.admitLaunch(request.launch);
         yield* prepareSurfaceLaunch(
           request,
-          ports.session.roots.repoState,
-          ports.session.roots.storage,
+          ports.roots.repoState,
+          ports.roots.storage,
         ).pipe(
           Effect.flatMap((prepared) =>
             ports.runActions
@@ -376,11 +376,12 @@ export function handleSharedHostRequest(
       }
       case 'pack':
       case 'clean': {
-        yield* ports.runActions.workflowFileOperation(
+        const files = yield* ports.runActions.workflowFileOperation(
           request.runId,
           request.kind,
-          (operation) => host.runWorkflowFileOperation(request.kind, operation),
         );
+        if (files)
+          yield* host.presentWorkflowFileOperation(request.kind, files);
         return done;
       }
       case 'latexdiffs':

@@ -34,7 +34,9 @@ import {
 import {
   loadChatExportInput,
   type ChatExportInputUnreadable,
+  type ChatExportLoadResult,
 } from '@texra/agent/export/loadChatExportInput';
+import type { TaskRecordsUnavailable } from '@texra/controllers/server/serviceSession';
 import {
   assembleTrace,
   injectStandaloneTrace,
@@ -46,6 +48,7 @@ import { readNormalizedFile } from '@utils/files/fsDurability';
 import { absentReason } from '@utils/files/fsEntryExists';
 
 import { TranscriptExportFailed } from './transcriptExportFailure';
+import type { WorkspaceRoots } from '@texra-ai/harness';
 import type { RunId } from '@texra-ai/harness/schemas';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
@@ -93,13 +96,36 @@ function bundleFailure(
   );
 }
 
+/** The run records an export reads: from this process's session handle
+ *  ({@link localExportRecords}), or from the service that holds the run. */
+export interface ChatExportRecords {
+  /** The run's setup and assembled export input (`loadChatExportInput`). */
+  readonly input: (
+    runId: RunId,
+  ) => Effect.Effect<
+    Pick<ChatExportLoadResult, 'config' | 'exportInput'>,
+    ChatExportInputUnreadable | TaskRecordsUnavailable
+  >;
+  /** The run's static trace, for the HTML export. */
+  readonly trace: (runId: RunId) => Effect.Effect<AssembleTraceResult, Error>;
+}
+
+/** The export records of a window whose process holds its session. */
+export const localExportRecords = (
+  session: SessionHandle,
+): ChatExportRecords => ({
+  input: (runId) => loadChatExportInput(runId, session),
+  trace: (runId) => assembleTrace(runId, session),
+});
+
 interface ChatExportControllerDeps {
   /**
    * LaTeX document preamble prepended to `.tex` exports. Host-supplied because
    * the template lives under the extension's `resources/` tree.
    */
   readonly latexPreamble: string;
-  readonly session: SessionHandle;
+  readonly roots: WorkspaceRoots;
+  readonly records: ChatExportRecords;
 }
 
 export class ChatExportController {
@@ -120,11 +146,11 @@ export class ChatExportController {
   )(function* (
     this: ChatExportController,
     runId: RunId,
-  ): Effect.fn.Return<ExportInputResult, ChatExportInputUnreadable> {
-    const { config, exportInput } = yield* loadChatExportInput(
-      runId,
-      this.deps.session,
-    );
+  ): Effect.fn.Return<
+    ExportInputResult,
+    ChatExportInputUnreadable | TaskRecordsUnavailable
+  > {
+    const { config, exportInput } = yield* this.deps.records.input(runId);
 
     if (!config) {
       return { status: 'config_missing' };
@@ -182,8 +208,8 @@ export class ChatExportController {
       );
 
       const compiled = yield* compileLatex2Pdf(
-        pathToLocationIn(this.deps.session.roots.workspace, absolutePath),
-        this.deps.session.roots,
+        pathToLocationIn(this.deps.roots.workspace, absolutePath),
+        this.deps.roots,
       );
 
       return {
@@ -214,7 +240,7 @@ export class ChatExportController {
       PlatformError.PlatformError | TranscriptExportFailed,
       FileSystem.FileSystem | StorageFs
     > {
-      const traceResult = yield* assembleTrace(runId, this.deps.session).pipe(
+      const traceResult = yield* this.deps.records.trace(runId).pipe(
         Effect.mapError(
           (cause) =>
             new TranscriptExportFailed({

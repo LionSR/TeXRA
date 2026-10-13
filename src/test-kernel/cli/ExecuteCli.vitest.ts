@@ -8,6 +8,7 @@ import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 import { Deferred, Effect, Exit, Fiber, Scope } from 'effect';
 
 import { liveToolGates } from '@agent/runtime/requestPolicy';
+import { humanGrant } from '@agent/runtime/runApprovalQueue';
 import type { RootLaunchOptions } from '@agent/runtime/rootLaunch';
 import { RunHandle } from '@agent/runtime/RunHandle';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
@@ -18,7 +19,11 @@ import { CliExitCode } from '@cli/runtime/exitCodes';
 import type { executeCliRequest } from '@cli/runtime/executeCli';
 import { AgentError } from '@common/errors';
 import { enablePlugin } from '@common/plugins/pluginTrust';
-import { RUN_OUTCOME } from '@shared/schemas';
+import {
+  APPROVAL_BYPASS_KINDS,
+  NO_APPROVAL_GRANTS,
+} from '@shared/approvalBypassKind';
+import { qualifyAggregateId, RUN_OUTCOME } from '@shared/schemas';
 import type { RunId } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { untrackRun } from '@test/support/sessionEnd';
@@ -36,7 +41,9 @@ import {
   useTempDirs,
 } from '@test/support/tempDirPlatform';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
+import { publishTestRows } from '@test/support/sessionTestUtils';
 import { admitInterruptibleRun } from '@test/support/runHandleFixtures';
+import { generateRunId } from '@utils/core';
 
 const mocks = vi.hoisted(() => ({
   close: vi.fn(),
@@ -399,14 +406,33 @@ describe('executeCliRequest', () => {
   );
 
   /** Whether the session withheld approval-gated tools while the run
-   *  launched: its policy applied to what the attached host can answer. */
+   *  launched: its policy and the grants its `run.start` records, as the
+   *  root launch records them, applied to what the attached host can
+   *  answer. */
   const promptsUnavailableAtLaunch = (): (() => boolean | undefined) => {
     let seen: boolean | undefined;
     mocks.rootLaunch.mockImplementationOnce(
       async (
         request: { runId: RunId },
-        options: { session: SessionHandle },
+        options: { session: SessionHandle; approveDelegatedWork?: boolean },
       ) => {
+        if (options.approveDelegatedWork === true) {
+          publishTestRows(options.session, [
+            {
+              type: 'run.start',
+              aggregateId: qualifyAggregateId('run', request.runId),
+              identity: { kind: 'agent', agent: 'chat' },
+              userFollowUpSupport: 'unsupported',
+              parent: null,
+              provenance: null,
+              approvalPolicy: humanGrant(
+                APPROVAL_BYPASS_KINDS,
+                true,
+              )(NO_APPROVAL_GRANTS),
+            },
+          ]);
+          await testRuntime().runPromise(options.session.log.settled);
+        }
         seen = liveToolGates(
           options.session,
           request.runId,
@@ -439,11 +465,20 @@ describe('executeCliRequest', () => {
       const seen = promptsUnavailableAtLaunch();
 
       yield* executeCliRequest(
-        baseRequest(),
+        { ...baseRequest(), runId: generateRunId() },
         cliContext({ approvalPolicy: 'yolo', requestedApprovalPolicy: 'yolo' }),
       );
 
-      expect(testDefaultSession().approvals.policy()).toBe('yolo');
+      // An explicit yolo rides the launch as an Auto-approve launch; the
+      // project's policy is never touched.
+      expect(mocks.rootLaunch).toHaveBeenLastCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          approvalPolicy: 'yolo',
+          approveDelegatedWork: true,
+        }),
+      );
+      // The Auto-approve grant keeps its gated tools offered, headless.
       expect(seen()).toBe(false);
     }),
   );

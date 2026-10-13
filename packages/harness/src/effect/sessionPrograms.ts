@@ -10,28 +10,27 @@
  * holds.
  *
  * What a session is opened with is decided here: its store (memory, or the
- * root's SQLite store that every host keeps), and who answers its runs'
- * requests (nobody, so the session's policy denies them, or the embedder's
- * handler). A run's handle is `runHandle.ts`'s; `start` and `resume` differ
- * only in the launch they hand it. The root entry
- * (`packages/harness/src/index.ts`) re-exports these services as the
- * package's surface.
+ * root's SQLite store that every host keeps). Who answers its runs'
+ * requests is the hosts attached to it (`requestAnswerer.ts`). A run's
+ * handle is `runHandle.ts`'s; `start` and `resume` differ only in the
+ * launch they hand it.
  */
 import {
   type Context,
+  Data,
   Deferred,
   Effect,
   Exit,
   type Scope,
-  Semaphore,
+  Stream,
+  SubscriptionRef,
 } from 'effect';
 
 // Each runtime value comes from the module that defines it: the
 // `@agent/runtime` barrel would evaluate runtime files no session here runs.
 import { getAgent } from '@agent/index/agentRegistry';
 import { describeFollowUpFailure } from '@agent/followUp/ToolUseFollowUp';
-import { resumeRun } from '@agent/runtime/resumeRun';
-import { owningCall } from '@agent/storage/runRecords';
+import { resumeOwnRun } from '@agent/runtime/resumeRun';
 import type { SessionHandle as RuntimeSessionHandle } from '@agent/runtime/SessionHandle';
 import type { ITool } from '@agent/core/tools/ToolTypes';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
@@ -48,17 +47,17 @@ import {
   AgentNotFound,
   ResumeRefused,
   RunFailure,
-  SessionOptionsConflict,
   ToolsRefused,
   type LaunchError,
 } from './errors.js';
-import { answerRequests } from './requestAnswerer.js';
+import { attachHost, type Approver } from './requestAnswerer.js';
 import { handOver } from './runHandle.js';
+import type { Sessions } from './processLayer.js';
 import type {
   OpenOptions,
-  Sessions,
-  Session,
+  ResumeInput,
   Run,
+  Session,
   StartInput,
 } from './sessions.js';
 
@@ -83,16 +82,16 @@ function admitTools(
     ? Effect.fail(
         new ToolsRefused({
           tools: needApproval,
-          message: `A session opened without an approval handler cannot run approval-requiring tools: ${needApproval.join(', ')}`,
+          message: `A session no host can answer cannot run approval-requiring tools: ${needApproval.join(', ')}`,
         }),
       )
     : Effect.void;
 }
 
 /** The run's configuration, or the refusal that stops it before any model
- *  work: the three the package states. A named agent is looked up; an
- *  inline persona is the agent, recorded on the config and validated by its
- *  schema there. */
+ *  work: the three the package states. A host's whole configuration is the
+ *  config; a named agent is looked up; an inline persona is the agent,
+ *  recorded on the config and validated by its schema there. */
 function admitInput(
   input: StartInput,
   canAsk: boolean,
@@ -102,6 +101,8 @@ function admitInput(
 > {
   return Effect.gen(function* () {
     yield* admitTools(input.tools ?? [], canAsk);
+    // A host's whole configuration: its launch resolves the agent itself.
+    if ('config' in input) return input.config;
     const { agent } = input;
     const resolved =
       typeof agent === 'string'
@@ -135,70 +136,107 @@ function admitInput(
   });
 }
 
-/** Start one run on `session`: a root launch of its runs, one cycle long,
- *  under the process's session owner. */
+/** Start one run on `session`: a root launch of its runs under the
+ *  process's session owner, one cycle long unless it is a window's. */
 function start(
   session: RuntimeSessionHandle,
   services: Context.Context<ProcessServices>,
   owner: Context.Service.Shape<typeof SessionOwner>,
+  starting: Set<RunId>,
   input: StartInput,
 ): Effect.Effect<Run, LaunchError | RunFailure> {
   return Effect.gen(function* () {
     const canAsk = !session.interactions.approvalPromptsUnavailable;
     const config = yield* admitInput(input, canAsk);
-    const runId = generateRunId();
+    const runId = input.runId ?? generateRunId();
+    // A supplied id is checked and reserved in one step (`starting`, held
+    // until the handoff ends, when the run is in the registry): a second
+    // start of it is refused, so the id a handoff stops on abandonment is
+    // only ever its own launch's.
+    if (input.runId !== undefined) {
+      const taken =
+        starting.has(runId) ||
+        SubscriptionRef.getUnsafe(session.view.ref).runs.has(runId) ||
+        session.runs.get(runId) !== undefined;
+      if (taken)
+        return yield* runFailure(
+          new Error(`Run ${runId} already exists in this session.`),
+        );
+      starting.add(runId);
+      yield* Effect.addFinalizer(() =>
+        Effect.sync(() => starting.delete(runId)),
+      );
+    }
     return yield* handOver(session, services, runId, (hooks) =>
       session.runs
         .launch({
           request: { config, runId },
-          options: { ...hooks, stopAfterCycle: true, tools: input.tools },
+          options: {
+            ...hooks,
+            stopAfterCycle: input.interactive !== true,
+            // A failure before the run opens is the caller's to present.
+            suppressErrorNotification: true,
+            tools: input.tools,
+            continues: input.continues,
+            preferHelperModel: input.helperModel,
+            ownApiKeyFallback: input.ownKeyFallback,
+            approveDelegatedWork: input.approval?.delegated,
+            approvalPolicy: input.approval?.policy,
+          },
         })
         .pipe(
           Effect.provideService(SessionOwner, owner),
           Effect.mapError(runFailure),
         ),
     );
-  });
+  }).pipe(Effect.scoped);
 }
 
 /** What a resume fails with before its run is handed over. */
 type ResumeError = ResumeRefused | ToolsRefused | RunFailure;
 
+/** The run an open call of `parent` owns resumes with that parent: what
+ *  the run's own resume job answers, under its claim. */
+class OwnedByParent extends Data.TaggedError('OwnedByParent')<{
+  readonly parent: RunId;
+}> {}
+
 /**
  * Continue a persisted run of `session` through the one resume path every
- * host takes (`resumeRun`), one cycle long as `start`'s are, with the
- * caller's custom tools. A child an open call of its parent owns is
- * refused: it resumes with that parent, under the parent's handle. A
- * refusal arrives before the run is admitted, so it fails this rather than
- * the handle.
+ * host takes (`resumeRun`), with the caller's custom tools. A child an open
+ * call of its parent owns, as its records say under its claim in its own
+ * resume job, is not resumed here: `follow` resumes the parent, whose
+ * handle names the child it was asked for. One whose edge is cut resumes
+ * itself. A refusal arrives before the run is admitted, so it fails this
+ * rather than the handle, naming the run refused.
  */
 function resume(
   session: RuntimeSessionHandle,
   services: Context.Context<ProcessServices>,
   runId: RunId,
-  tools: readonly ITool[] | undefined,
+  { tools, interactive }: ResumeInput,
+  follow: (parent: RunId) => Effect.Effect<Run, ResumeError>,
 ): Effect.Effect<Run, ResumeError> {
-  const refused = (
-    reason: ResumeRefused['reason'],
-    message: string,
-  ): ResumeRefused => new ResumeRefused({ runId, reason, message });
+  const refused = (reason: ResumeRefused['reason'], message: string) =>
+    new ResumeRefused({ runId, reason, message });
   return Effect.gen(function* () {
     yield* admitTools(
       tools ?? [],
       !session.interactions.approvalPromptsUnavailable,
     );
-    const owner = yield* owningCall(session, runId).pipe(
-      Effect.mapError(runFailure),
-    );
-    if (owner !== null)
-      return yield* refused(
-        'not_resumable',
-        `Run ${runId} belongs to the open call ${owner.callId} of run ${owner.parentRunId}: resume that run.`,
-      );
     return yield* handOver(session, services, runId, (hooks) =>
-      resumeRun(runId, { ...hooks, session, stopAfterCycle: true, tools }).pipe(
+      resumeOwnRun(runId, {
+        ...hooks,
+        session,
+        stopAfterCycle: interactive !== true,
+        tools,
+      }).pipe(
         Effect.mapError(runFailure),
         Effect.flatMap((resumed) => {
+          if ('ownedBy' in resumed)
+            return Effect.fail(
+              runFailure(new OwnedByParent({ parent: resumed.ownedBy })),
+            );
           if ('failed' in resumed)
             return Effect.fail(
               runFailure(
@@ -218,16 +256,27 @@ function resume(
         }),
       ),
     ).pipe(
-      Effect.catch((failure) =>
-        Effect.fail(
-          failure.cause instanceof ResumeRefused ? failure.cause : failure,
-        ),
-      ),
+      Effect.catch((failure): Effect.Effect<Run, ResumeError> => {
+        const { cause } = failure;
+        if (cause instanceof OwnedByParent)
+          return Effect.map(follow(cause.parent), (run) => ({
+            ...run,
+            redirectedFrom: runId,
+          }));
+        return Effect.fail(cause instanceof ResumeRefused ? cause : failure);
+      }),
     );
   });
 }
 
-/** One reader port per `subscribe`, so no reader disturbs another's set. */
+/** What the package keeps per session beside the owner's handle: its
+ *  attached handlers (newest last) and the supplied run ids starting now. */
+interface SessionState {
+  readonly approvers: Approver[];
+  readonly starting: Set<RunId>;
+}
+
+/** One reader port per `watch`, so no reader disturbs another's set. */
 let readerPorts = 0;
 
 /** The session as this package works on it: a pure function of the owner's
@@ -237,44 +286,48 @@ function sessionOf(
   services: Context.Context<ProcessServices>,
   owner: Context.Service.Shape<typeof SessionOwner>,
   resumeJoined: Session['resume'],
+  { approvers, starting }: SessionState,
 ): Session {
   return {
     roots: handle.roots,
-    start: (input) => start(handle, services, owner, input),
+    start: (input) => start(handle, services, owner, starting, input),
     resume: resumeJoined,
     request: (request) => handle.requests.request(request),
-    view: { changes: handle.view.changes },
-    subscribe: (interests) =>
-      Effect.acquireRelease(
-        Effect.suspend(() => {
-          const port = `sdk/reader/${(readerPorts += 1)}`;
-          return Effect.as(handle.view.subscribe(port, interests), port);
-        }),
-        (port) => handle.view.subscribe(port, []),
-      ).pipe(Effect.asVoid),
+    view: {
+      current: () => SubscriptionRef.getUnsafe(handle.view.ref),
+      changes: handle.view.changes,
+      watch: (set, from) =>
+        Stream.unwrap(
+          Effect.acquireRelease(
+            Effect.suspend(() => {
+              const port = `sdk/reader/${(readerPorts += 1)}`;
+              return Effect.as(handle.view.subscribe(port, set), port);
+            }),
+            (port) => handle.view.subscribe(port, []),
+          ).pipe(Effect.as(handle.view.inputs(set, from.cursor, from.debug))),
+        ),
+    },
+    attach: (host) => attachHost(handle, host, approvers),
   };
 }
 
 /** The package's sessions over the process's owner. `services` is the
  *  process's context, which every run's fiber is provided; `scope` is the
- *  layer's, which every session's request answerer is forked into. */
+ *  layer's, which a joined resume's settlement is forked into. */
 export function makeSessions(
-  processRoots: WorkspaceRoots,
   owner: Context.Service.Shape<typeof SessionOwner>,
   services: Context.Context<ProcessServices>,
   scope: Scope.Scope,
 ): Effect.Effect<Context.Service.Shape<typeof Sessions>> {
-  return Effect.gen(function* () {
-    // Opens are one at a time, so the first open to see a session is the
-    // one that built it, with the options it was built with.
-    const opening = yield* Semaphore.make(1);
-    const built = new WeakMap<RuntimeSessionHandle, OpenOptions>();
+  return Effect.sync(() => {
     // The resumes in flight on each session, so a second resume of a run
     // joins the first instead of being refused as live.
     const resuming = new WeakMap<
       RuntimeSessionHandle,
       Map<RunId, Deferred.Deferred<Run, ResumeError>>
     >();
+    // Keyed by the run the resume job admits: a child's follows its parent
+    // through here, so it joins a resume of that parent already in flight.
     const resumeJoined =
       (handle: RuntimeSessionHandle): Session['resume'] =>
       (runId, input = {}) =>
@@ -290,7 +343,9 @@ export function makeSessions(
           const forget = Effect.sync(() => {
             inFlight.delete(runId);
           });
-          return resume(handle, services, runId, input.tools).pipe(
+          return resume(handle, services, runId, input, (parent) =>
+            resumeJoined(handle)(parent, input),
+          ).pipe(
             Effect.onExit((exit) =>
               Deferred.done(handOff, exit).pipe(
                 Effect.andThen(
@@ -309,47 +364,36 @@ export function makeSessions(
             ),
           );
         });
-    const sessionFor = (handle: RuntimeSessionHandle): Session =>
-      sessionOf(handle, services, owner, resumeJoined(handle));
-    const open = (roots?: WorkspaceRoots, options: OpenOptions = {}) =>
-      Effect.gen(function* () {
-        const ended = yield* Deferred.make<void>();
-        const handle = yield* owner.open({
-          roots: roots ?? processRoots,
-          // With no handler, nothing here can answer an approval prompt:
-          // the session's policy denies every request its runs raise and
-          // offers them no approval-gated tool.
-          interactions: {
-            approvalPromptsUnavailable: options.approve === undefined,
-            dispose: () => Deferred.doneUnsafe(ended, Effect.void),
-          },
-          transcriptMode: options.persistent
-            ? { kind: 'persistent' }
-            : { kind: 'ephemeral', reason: 'npm package consumer' },
-        });
-        const first = built.get(handle);
-        if (first === undefined) {
-          built.set(handle, options);
-          if (options.approve)
-            yield* Effect.forkIn(
-              answerRequests(handle, options.approve, ended),
-              scope,
-            );
-        } else if (
-          (first.persistent === true) !== (options.persistent === true) ||
-          first.approve !== options.approve
-        ) {
-          return yield* new SessionOptionsConflict({
-            storage: handle.roots.storage,
-            message: `The session of ${handle.roots.storage} is already open with another store or approval handler; close it before opening it differently.`,
-          });
-        }
-        return sessionFor(handle);
-      }).pipe(opening.withPermit);
+    // Each session's own state beside its handle (`SessionState`).
+    const states = new WeakMap<RuntimeSessionHandle, SessionState>();
+    const sessionFor = (handle: RuntimeSessionHandle): Session => {
+      const state = states.get(handle) ?? {
+        approvers: [],
+        starting: new Set(),
+      };
+      states.set(handle, state);
+      return sessionOf(handle, services, owner, resumeJoined(handle), state);
+    };
     return {
-      open,
-      close: (roots?: WorkspaceRoots) =>
-        owner.close((roots ?? processRoots).storage),
+      // An open asking for the other store than the session's is the
+      // owner's refusal. Until a host that can prompt attaches, nobody here
+      // can answer: the session's policy denies every request its runs
+      // raise and offers them no approval-gated tool.
+      open: (roots: WorkspaceRoots, options: OpenOptions = {}) =>
+        Effect.map(
+          owner.open({
+            roots,
+            interactions: { approvalPromptsUnavailable: true },
+            ...(!options.persistent && {
+              transcriptMode: {
+                kind: 'ephemeral',
+                reason: 'npm package consumer',
+              },
+            }),
+          }),
+          sessionFor,
+        ),
+      close: (roots: WorkspaceRoots) => owner.close(roots.storage),
       list: Effect.map(owner.list, (handles) => handles.map(sessionFor)),
     };
   });

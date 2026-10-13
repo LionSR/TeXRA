@@ -43,7 +43,9 @@ import {
   Exit,
   Scope,
   Fiber,
+  type FileSystem,
   Layer,
+  type Path,
   Stream,
   SubscriptionRef,
 } from 'effect';
@@ -87,7 +89,7 @@ import { SessionOwner, withProcessServices } from '@platform/processRuntime';
 import { AppState, type StateStore } from '@platform/interfaces';
 import type { ProcessProbe } from '@platform/defaults/nodeProcesses';
 import {
-  aggregateId as qualifyAggregateId,
+  qualifyAggregateId,
   AgentConfigFieldsSchema,
   emptyRunEndOutput,
   LocalRuntimeStateSchema,
@@ -177,12 +179,12 @@ import { databaseLayer } from '@controllers/session/Database';
 import { ToolRegistry, toolTable } from '@tools/toolTable';
 import { WorkspaceRoots } from '@controllers/session/WorkspaceRoots';
 import { nodePlatformServices } from '@platform/defaults/nodePlatform';
-import { aggregateId } from '@shared/schemas';
+import { qualifyAggregateId } from '@shared/schemas';
 import { Database } from '@shared/session/database';
 import { ProcessIdentity } from '@shared/session/sessionEvents';
 
 const [storage, owner, run, rows, hold] = process.argv.slice(2);
-const id = aggregateId('run', run);
+const id = qualifyAggregateId('run', run);
 const append = Effect.gen(function* () {
   const db = yield* Database;
   yield* db.appendAll([{ type: 'run.start', aggregateId: id,
@@ -858,7 +860,9 @@ describe('Sessions owner', () => {
           log: { ...db, removeRun: events.removeRun, detach: events.detach },
           local,
           plugins: toolTable([]),
-          globalDatabase: yield* GlobalDatabase,
+          services: yield* Effect.context<
+            GlobalDatabase | FileSystem.FileSystem | Path.Path
+          >(),
           closed: () => false,
         });
         // The displayed fold was built as SELF and considers this run writable.
@@ -900,6 +904,7 @@ describe('Sessions owner', () => {
             Layer.orDie,
           ),
         ),
+        Effect.provide(nodePlatformLayer),
       ),
   );
 
@@ -926,7 +931,9 @@ describe('Sessions owner', () => {
             }),
           ),
           plugins: toolTable([]),
-          globalDatabase: yield* GlobalDatabase,
+          services: yield* Effect.context<
+            GlobalDatabase | FileSystem.FileSystem | Path.Path
+          >(),
           closed: () => false,
         });
         yield* settle(view.ref, (v) => v.runs.has(RUN));
@@ -942,7 +949,7 @@ describe('Sessions owner', () => {
                 group: 'running' as const,
                 readOnly: false,
               };
-              return [id, { ...started, actions: runActions(started) }];
+              return [id, { ...started, actions: runActions(started, false) }];
             }),
           ),
         }));
@@ -957,9 +964,7 @@ describe('Sessions owner', () => {
 
         // A second Resume while the first is in flight is refused at once,
         // not queued behind the first's whole run.
-        const guard = runActionGuard(
-          {} as Pick<SessionHandle, 'view' | 'runs'>,
-        );
+        const guard = runActionGuard({ run: () => undefined });
         const finish = yield* Deferred.make<void>();
         const first = yield* Effect.forkChild(
           guard.resuming(Deferred.await(finish), RUN),
@@ -981,6 +986,7 @@ describe('Sessions owner', () => {
             Layer.orDie,
           ),
         ),
+        Effect.provide(nodePlatformLayer),
       ),
   );
 
@@ -1859,7 +1865,8 @@ describe('the C1 event table and the C6 publisher', () => {
           });
         }).pipe(Effect.provide(substrate(storage)));
         // A fresh session over the store opens: the healthy run lists, and
-        // the damaged one lists too, shown damaged and read-only.
+        // the damaged one lists too, shown damaged and read-only, with
+        // delete its one way out of the list.
         yield* Effect.gen(function* () {
           const view = yield* SessionViewService;
           yield* settle(
@@ -1871,6 +1878,7 @@ describe('the C1 event table and the C6 publisher', () => {
           ).toMatchObject({
             readOnly: true,
             statusDetail: RUN_DAMAGED_MESSAGE,
+            actions: ['delete', 'openRunStorage', 'export', 'copy'],
           });
         }).pipe(
           Effect.provide(graph([], substrate(storage).pipe(Layer.orDie))),
@@ -2779,9 +2787,7 @@ describe('the C1 event table and the C6 publisher', () => {
                 first.prepareRunRemoval(root, 'bulk', initial[0]!.commit),
               ),
             ),
-          ).toMatchObject({
-            _tag: 'DatabaseWriteFailed',
-          });
+          ).toMatchObject({ _tag: 'DatabaseClaimRefused' });
           expect(yield* first.readAll(0)).toEqual(initial);
           yield* second.releaseClaims([inquiry]);
         }).pipe(Effect.provide(substrate(storage, OTHER)));
@@ -3073,7 +3079,7 @@ describe('the C1 event table and the C6 publisher', () => {
             closed: false,
           });
           expect((yield* Effect.flip(second.acquireClaims(targets)))._tag).toBe(
-            'DatabaseWriteFailed',
+            'DatabaseClaimRefused',
           );
           yield* second.releaseClaims(targets);
           expect(
@@ -3118,8 +3124,8 @@ describe('the C1 event table and the C6 publisher', () => {
                 ),
               ),
             ).toMatchObject({
-              _tag: 'DatabaseWriteFailed',
-              cause: { _tag: 'DatabaseClaimRefused', verdict: 'unprovable' },
+              _tag: 'DatabaseClaimRefused',
+              verdict: 'unprovable',
             });
           }
           expect((yield* first.aggregateState([otherRoot]))[0]?.closed).toBe(

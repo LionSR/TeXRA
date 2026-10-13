@@ -20,7 +20,6 @@ import {
   loadApiKeyStatusMap,
 } from '@texra-ai/llm';
 
-import type { SessionHandle } from '@agent/runtime';
 import { withLogChannel } from '@logger/effectLog';
 import { readModelAvailabilityInputs } from '@model/computeModelOptions';
 import { discoverCopilotRoutes } from '@model/copilotRouting';
@@ -70,7 +69,7 @@ import { allSettledVoid } from '@texra/utils/core/allSettledVoid';
 import { getProviderKeyUrl } from '@texra/model/providerPresentation';
 import { CODING_PLAN_BY_API_PROVIDER } from '@texra/shared/model/codingPlans';
 import type { ProcessServices } from '@texra-ai/harness';
-import type { PlatformSecrets } from '@texra-ai/harness';
+import type { PlatformSecrets, WorkspaceRoots } from '@texra-ai/harness';
 
 type HostEffect<A = void> = Effect.Effect<A, Error, ProcessServices>;
 type SettingsArms = SettingsViewInboundHandlerRegistry<
@@ -88,7 +87,7 @@ const SUBSCRIPTION_USAGE_PROVIDERS_BY_ID: Readonly<
 
 interface SettingsViewBodyPorts {
   readonly host: 'vscode' | 'desktop';
-  readonly session: Pick<SessionHandle, 'roots'>;
+  readonly roots: WorkspaceRoots;
   readonly secrets: PlatformSecrets;
   /** The packaged resources root; the agent templates live under it. */
   readonly resourcesPath: string;
@@ -111,8 +110,7 @@ interface SettingsViewBodyPorts {
 
 /** Build the settings body over one host's bindings. */
 export function createSettingsViewBody(ports: SettingsViewBodyPorts) {
-  const { bindings, secrets } = ports;
-  const { roots } = ports.session;
+  const { bindings, secrets, roots } = ports;
 
   const present = settingsPresentation(bindings);
   const { notice, report, reported } = present;

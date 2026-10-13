@@ -8,7 +8,7 @@
 import { Effect, type Scope, Stream, SubscriptionRef } from 'effect';
 
 import type { SessionHandle } from '@agent/runtime';
-import { aggregateId, RUN_PHASE, type RunId } from '@shared/schemas';
+import { qualifyAggregateId, RUN_PHASE, type RunId } from '@shared/schemas';
 import { isTerminalOutcomePhase } from '@shared/runs/runStatus';
 import {
   descendantRuns,
@@ -121,7 +121,7 @@ export function attachScriptPlainOutput(
             yield* session.view.subscribe(
               'script-plain-output',
               scriptRuns.map((run) => ({
-                id: aggregateId('run', run.id),
+                id: qualifyAggregateId('run', run.id),
                 fromSeq: 0,
               })),
             );
