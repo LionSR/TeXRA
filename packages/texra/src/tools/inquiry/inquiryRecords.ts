@@ -15,7 +15,7 @@ import {
   InquiryRecords,
   type InquiryThreadRecord,
 } from '@texra/shared/plugins/externalInquiry';
-import { toNewestFirstByTimestamp, unique, hexId12 } from '@utils/core';
+import { toNewestFirstByTimestamp, hexId12 } from '@utils/core';
 import { ensureError } from '@utils/errors/errorMessage';
 
 const QUESTION_PREVIEW_CHARS = 200;
@@ -54,9 +54,11 @@ function inquiryOperations({
   ): string[] | undefined {
     if (!links?.length) return undefined;
 
-    const normalized = unique(
-      links.map((link) => link.trim()).filter((link) => link.length > 0),
-    );
+    const normalized = [
+      ...new Set(
+        links.map((link) => link.trim()).filter((link) => link.length > 0),
+      ),
+    ];
 
     return normalized.length ? normalized : undefined;
   }

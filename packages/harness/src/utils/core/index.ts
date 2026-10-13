@@ -42,11 +42,6 @@ export function ensureArray<T>(value: T | T[]): T[] {
   return Array.isArray(value) ? value : [value];
 }
 
-/** Return a new array with duplicate values removed, preserving first-occurrence order. */
-export function unique<T>(iterable: Iterable<T>): T[] {
-  return [...new Set(iterable)];
-}
-
 /**
  * Look up `key` in a string-keyed `Record`, guarded with `Object.hasOwn` so
  * an arbitrary/untrusted key (`toString`, `__proto__`, `constructor`, …)

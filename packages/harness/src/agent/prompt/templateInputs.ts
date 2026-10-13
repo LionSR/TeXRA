@@ -9,7 +9,7 @@ import { isRecipeConfig, type AttachedMemoryMiss } from '@shared/schemas';
 import { activatedSkillNames } from '@skills/runtimeSkills';
 import { parseFrontmatter } from '@tools/memory/memoryMeta';
 import { displayToStoragePath } from '@tools/memory/memoryUtils';
-import { filterNotNull, unique } from '@utils/core';
+import { filterNotNull } from '@utils/core';
 import { isNonEmptyString } from '@utils/text/stringUtils';
 import { getListOfFiles, getPromptFileName } from '@utils/prompt';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
@@ -238,7 +238,8 @@ function getCategoryFiles(
   config: AgentConfig,
   category: FileCategoryPrefix | 'MEDIA',
 ): string[] {
-  return unique(FILE_CATEGORIES[category](config).filter(isNonEmptyString));
+  const files = FILE_CATEGORIES[category](config).filter(isNonEmptyString);
+  return [...new Set(files)];
 }
 
 /** Categories used for building file vars (excludes MEDIA which is display-only) */
@@ -326,8 +327,7 @@ const getFileVars = Effect.fn('userVars.getFileVars')(function* (
     );
   }
 
-  const mediaFiles = getCategoryFiles(agentConfig, 'MEDIA');
-  userVars.MEDIA_FILE = mediaFiles[0] ?? null;
+  userVars.MEDIA_FILE = getCategoryFiles(agentConfig, 'MEDIA')[0] ?? null;
 
   return userVars;
 });

@@ -1,6 +1,5 @@
 /** Formatting of canonical inquiry records for tools and the inquiry panel. */
 import type { InquiryThreadRecord } from '@texra/shared/plugins/externalInquiry';
-import { unique } from '@utils/core';
 
 /**
  * Collect distinct external session links (most-recent-first) across all
@@ -12,12 +11,14 @@ export function collectKnownSessionLinks(
 ): string[] | undefined {
   if (!manifest) return undefined;
 
-  const known = unique(
-    manifest.turns
-      .toReversed()
-      .filter((turn) => turn.kind !== 'open')
-      .flatMap((turn) => turn.sessionLinks ?? []),
-  );
+  const known = [
+    ...new Set(
+      manifest.turns
+        .toReversed()
+        .filter((turn) => turn.kind !== 'open')
+        .flatMap((turn) => turn.sessionLinks ?? []),
+    ),
+  ];
 
   return known.length ? known : undefined;
 }

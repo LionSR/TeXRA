@@ -8,7 +8,7 @@ import { extractFigurePathsFromLatex } from '@latex/extractFigure';
 import type { ToolResult } from '@shared/schemas';
 import { resolveToolPath } from '@tools/pathResolution';
 import { formatToolOutput } from '@tools/formatting';
-import { unique } from '@utils/core';
+
 import { pathToLocationIn } from '@utils/files/fileLocation';
 import { formatResultCount } from '@utils/text/stringUtils';
 import {
@@ -39,7 +39,7 @@ const extractFigures = Effect.fn('ExtractLatexFiguresTool.execute')(function* ({
   const figurePaths = yield* extractFigurePathsFromLatex(
     pathToLocationIn(call.env.roots.workspace, path.absolute),
   );
-  const uniqueFigures = unique(figurePaths);
+  const uniqueFigures = [...new Set(figurePaths)];
 
   if (uniqueFigures.length === 0) {
     return emptyExtractionResult('Figures', `No figures found in ${display}.`);

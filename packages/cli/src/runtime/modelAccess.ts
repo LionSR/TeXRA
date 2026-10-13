@@ -19,7 +19,7 @@ import {
   MODEL_AVAILABILITY_STATUS,
 } from '@shared/schemas';
 import { modelOptionsFrom } from '@texra/model/modelOptions';
-import { assertNever, unique } from '@utils/core';
+import { assertNever } from '@utils/core';
 
 // Local file imports
 import { resolveKnownCliModelId } from './cliConfig';
@@ -406,9 +406,9 @@ export const selectCliRunnableModel = Effect.fn('selectCliRunnableModel')(
             ]
           : [];
       });
-    const requestedModels = unique(
-      requestedCandidates.map((candidate) => candidate.model),
-    );
+    const requestedModels = [
+      ...new Set(requestedCandidates.map((candidate) => candidate.model)),
+    ];
     // Every requested id gets its own hidden-entry lookup, and a failed one
     // is carried as a value so a sibling's success still counts: only the id
     // the decision actually lands on re-raises its failure below.

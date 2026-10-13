@@ -10,7 +10,7 @@ import which from 'which';
 
 // Local imports
 import { writeLogLine } from '@logger/logSink';
-import { normalizeFilePath, unique } from '@utils/core';
+import { normalizeFilePath } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 /**
@@ -291,7 +291,7 @@ export function getExtraDirs(): string[] {
     dirs.push(...globDescending(pattern));
   }
 
-  cachedExtraDirs = unique(dirs);
+  cachedExtraDirs = [...new Set(dirs)];
   return cachedExtraDirs;
 }
 
