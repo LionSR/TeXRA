@@ -27,6 +27,7 @@ import {
   COMPACTION_ACTIVITY_LABEL,
   type CompactionActivityBlock,
 } from '@shared/runs/compactionActivityProjection';
+import type { ReadonlyDeep } from '@shared/session/readonlyDeep';
 import { assertNever } from '@utils/core';
 import { formatCompactTokenCount } from '@utils/text/stringUtils';
 
@@ -325,7 +326,7 @@ export function isSettledRow(
 
 /** The headline a row leads with: its own text, untrimmed and unsanitized;
  *  a host sanitizes for its surface at paint. */
-export function rowHeadline(row: TranscriptRow): string {
+export function rowHeadline(row: ReadonlyDeep<TranscriptRow>): string {
   switch (row.kind) {
     case 'assistant':
     case 'log':

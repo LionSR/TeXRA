@@ -23,7 +23,10 @@ import {
   SUBSCRIPTION_AUTH_COPY,
 } from '@shared/model/accountAuth';
 import type { SubscriptionProviderId } from '@texra/controllers/modelAccess/subscriptionProviders';
-import { ONBOARDING_CHOICE_CHATGPT } from '@ui/copy/onboarding';
+import {
+  ONBOARDING_CARD_TITLE,
+  ONBOARDING_CHOICE_CHATGPT,
+} from '@ui/copy/onboarding';
 import { ListForm } from './_shared/ListForm';
 import { useAsyncResource } from './_shared/useAsyncListForm';
 import type { ProcessRuntime } from '@texra-ai/harness';
@@ -235,7 +238,9 @@ export function AccountAccessForm(
 
   return (
     <ListForm
-      title={props.connecting === true ? 'Connect a model' : 'Account & access'}
+      title={
+        props.connecting === true ? ONBOARDING_CARD_TITLE : 'Account & access'
+      }
       availableRows={props.availableRows}
       items={items}
       compactVisibleItems={items.length}

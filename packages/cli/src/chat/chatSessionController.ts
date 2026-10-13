@@ -8,27 +8,34 @@ import {
   Data,
   Deferred,
   Effect,
+  Exit,
   Fiber,
   Option,
   Scope,
   Stream,
 } from 'effect';
 
-import { getRunRecords } from '@agent/storage';
-import {
-  AgentConfigSchema,
-  resumeRun,
-  type AgentConfig,
-  type AgentConfigPayload,
-  type RootLaunch,
-  type SessionHandle,
-} from '@agent/runtime';
 import {
   describeFollowUpFailure,
+  escapeText,
+  hasErrorPresentationClaimed,
   presentFollowUpResult,
-  resumeOnSession,
-} from '@agent/followUp';
-import { type CliContext } from '@cli/runtime/cliContext';
+  type PlatformSecrets,
+  type ProcessRuntime,
+  type ProcessServices,
+  type RunStopReason,
+  type RuntimeRequest,
+  type RunView,
+  type Session,
+  type SessionView,
+} from '@texra-ai/harness';
+import {
+  AgentConfigSchema,
+  terminalFailurePresented,
+  type AgentConfig,
+  type AgentConfigPayload,
+} from '@agent/runtime';
+import { launchApproval, type CliContext } from '@cli/runtime/cliContext';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import { readCliTeamName } from '@cli/runtime/cliTeams';
 import { setCliHelperModel } from '@cli/runtime/initPlatform';
@@ -41,24 +48,15 @@ import {
   runOutcomeExitCode,
   type TurnOutcome,
 } from '@cli/runtime/terminalStatus';
-import { hasErrorPresentationClaimed } from '@common/errors/sdkError/errorMetadata';
 import type { RunModelDecisionReason } from '@model/runModelDecision';
+import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
 import type { SettingsStores } from '@shared/config/settingsAccess';
-import {
-  acceptsFollowUp,
-  isLiveRun,
-  type RunView,
-  type SessionView,
-} from '@shared/session/sessionView';
+import { acceptsFollowUp, isLiveRun } from '@shared/session/sessionView';
 import { isTerminalOutcomePhase } from '@shared/runs/runStatus';
 import { isDocumentTaskConfig, RUN_OUTCOME, type RunId } from '@shared/schemas';
 import { heldElsewhereBy } from '@shared/session/database';
-import { escapeText } from '@shared/utils/xmlEscape';
 import type { DisposableStore } from '@texra/platform/disposable';
-import type { WindowHost } from '@texra/controllers/server/windowHost';
-import type { SessionBackend } from '@texra/controllers/session/sessionBackend';
 import { FOCUSED_AGENT } from '@ui/copy/nestedRuns';
-import { sessionStoreMovedAsideMessage } from '@ui/copy/sessionStore';
 import { generateRunId } from '@utils/core';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { handleTuiSlashCommand } from './tui/commands/handleSlashCommand';
@@ -95,14 +93,8 @@ import {
   moveLocalTranscriptToRun,
   reportRequestDefect,
 } from './tui/state/transcript';
-import type { ProcessRuntime, ProcessServices } from '@texra-ai/harness';
-import type {
-  RunStopReason,
-  RuntimeRequest,
-  PlatformSecrets,
-} from '@texra-ai/harness';
+import { sessionAgentRuns, type ChatAgentRuns } from './sessionAgentRuns';
 import type { FollowUpDeliveryQueue } from './followUpDeliveryQueue';
-import type { ChatAgentRuns } from './serviceAgentRuns';
 import type { SessionRequests } from './tui/state/approvalQueue';
 import type { SkillActivation } from './tui/forms/SkillsListForm';
 import type { PastedImageEntry } from './tui/input/draftAttachments';
@@ -203,8 +195,7 @@ export interface ChatSessionController {
    */
   submit(
     line: string,
-    mediaFiles?: readonly string[],
-    images?: readonly PastedImageEntry[],
+    attachments?: ChatAttachments,
   ): Effect.Effect<void, Error, ProcessServices>;
   /** Reserve a skill activation for the next submitted message. */
   activateSkill(selection: SkillActivation): void;
@@ -212,12 +203,26 @@ export interface ChatSessionController {
   clearPendingSkills(): void;
 }
 
+/** What rides along with a submitted line: files and pasted images. */
+interface ChatAttachments {
+  readonly mediaFiles?: readonly string[];
+  readonly images?: readonly PastedImageEntry[];
+}
+
 export interface ChatSessionControllerInit {
   /** Mutable session state the controller owns. */
   readonly session: TuiSession;
 
-  /** Runtime session that owns executions, storage, and interactions. */
-  readonly runtimeSession: SessionHandle;
+  /** The chat's session, here or in the background service: its runs are
+   *  launched and resumed, its requests land and its view is read there,
+   *  and the chat's host attaches to it. */
+  readonly runSession: Session;
+  /** The chat is a client of the background service, whose view also holds
+   *  other terminals' conversations. */
+  readonly served: boolean;
+  /** A run's records (its saved setup, whether it exists), read from this
+   *  process's store. */
+  readonly records: (runId: RunId) => ChatRunRecords;
 
   /** The chat session's {@link CliContext}, read once: the controller
    *  attaches one interaction host for the session's lifetime. */
@@ -249,18 +254,21 @@ export interface ChatSessionControllerInit {
    *  here: the controller lives for the length of the chat session, and its
    *  Promise-facing methods are that session's run edge. */
   readonly runtime: ProcessRuntime;
+  /** The policy the chat asked for itself (its flag, then `/approval`),
+   *  which each launch carries (`launchApproval`); none follows the
+   *  project's. */
+  readonly approvalPolicy: () => TexraApprovalPolicy | undefined;
   /** The agent run boundary the controller drives. Composition leaves it
-   *  unset and gets the agent runtime's own; a test harness injects its
-   *  stand-ins here rather than mocking agent modules. */
-  readonly agentRuns?: Partial<ChatAgentRuns> & {
-    readonly records?: typeof getRunRecords;
-  };
-  /** Where run requests land (edit previews included) and run state is
-   *  read, when the chat is a client of the background service; its own
-   *  session otherwise. */
-  readonly backend?: Pick<SessionBackend, 'request' | 'view'>;
-  /** Offer the service what this chat shows for its project's tasks. */
-  readonly attachWindow?: (host: WindowHost) => void;
+   *  unset and gets the session's own; a test harness injects its stand-ins
+   *  here rather than mocking agent modules. */
+  readonly agentRuns?: Partial<ChatAgentRuns>;
+}
+
+/** What the chat reads of a run's records: its saved setup, and whether
+ *  it exists. */
+interface ChatRunRecords {
+  readonly readConfig: () => Effect.Effect<AgentConfig | null, Error>;
+  readonly exists: () => Effect.Effect<boolean, Error>;
 }
 
 interface PreparedChatInstruction {
@@ -311,7 +319,8 @@ export function createChatSessionController(
 ): ChatSessionController {
   const {
     session,
-    runtimeSession,
+    runSession,
+    served,
     getSessionContext,
     disposables,
     shutdownScope,
@@ -325,24 +334,20 @@ export function createChatSessionController(
     stores,
     runtime,
   } = init;
-  const agentRuns = {
-    launch: (launch: RootLaunch) => runtimeSession.runs.launch(launch),
-    resume: resumeRun,
-    resumeBeside: (id: RunId) =>
-      Effect.asVoid(resumeOnSession(id, runtimeSession)),
-    records: getRunRecords,
-    ...init.agentRuns,
-  };
-  const requests: SessionRequests = init.backend ?? runtimeSession.requests;
+  const agentRuns = { ...sessionAgentRuns(runSession), ...init.agentRuns };
+  const requests: SessionRequests = runSession;
   // The fold the chat's runs appear in: the service's, or this session's.
-  const viewChanges = (init.backend ?? runtimeSession).view.changes;
-  // Said in the transcript the controller writes to, not on stderr before
-  // Ink mounts, where it would be left above the header.
-  if (runtimeSession.log.movedAside) {
-    appendLocalNotice(
-      sessionStoreMovedAsideMessage(runtimeSession.log.movedAside),
+  const viewChanges: Stream.Stream<SessionView> = runSession.view.changes;
+  /** A run that is no longer live here: its generation let go. */
+  const settledHere = (runId: RunId): Effect.Effect<void> =>
+    viewChanges.pipe(
+      Stream.filter((view) => {
+        const run = view.runs.get(runId);
+        return run === undefined || !run.ownedHere || !isLiveRun(run);
+      }),
+      Stream.runHead,
+      Effect.asVoid,
     );
-  }
   let preparingRoot: PreparingRoot | undefined;
   const pendingSkillActivations = new Map<string, string>();
   let pendingSkillActivationClearEpoch = 0;
@@ -380,7 +385,7 @@ export function createChatSessionController(
     Effect.gen(function* () {
       const cliTeamId = config.cli?.teamId ?? undefined;
       const teamName = yield* readCliTeamName(
-        runtimeSession.roots.repoState,
+        runSession.roots.repoState,
         cliTeamId,
       );
       patchSessionMeta({
@@ -408,12 +413,14 @@ export function createChatSessionController(
   // Internal helpers
   // -----------------------------------------------------------------------
 
-  const interruptActiveRun = (): void => {
-    // The run id is known from the mint, but a stop can only land on a run
-    // the fold holds; `onRunResolved` re-reads `stopRequested` for a stop
-    // asked in the launch gap.
+  /** Stop the chat's run. A stop lands only on a run the session holds:
+   *  one the view shows, or `admitted`, which the session has just admitted
+   *  whether or not the view has folded it yet (`onAdmitted` re-reads
+   *  `stopRequested` for a stop asked in the launch gap). */
+  const interruptActiveRun = (admitted?: RunId): void => {
     const runId = session.runId;
-    if (!runId || !runViewOf(currentView(), runId)) return;
+    if (!runId) return;
+    if (runId !== admitted && !runViewOf(currentView(), runId)) return;
     session.interruptedRunId = runId;
     // Ctrl-C leaves the child policy unset, so the session's request handler
     // applies the configured "Keep agents running".
@@ -431,9 +438,13 @@ export function createChatSessionController(
       return;
     }
     // A launch failure already rendered through a targeted presentation
-    // (e.g. the model-not-recognized instruction) is marked -- skip the
-    // generic transcript line so the TUI doesn't show the same failure twice.
-    if (!hasErrorPresentationClaimed(error)) {
+    // (e.g. the model-not-recognized instruction), or presented already (by
+    // the service, to this chat) is marked -- skip the generic transcript
+    // line so the TUI doesn't show the same failure twice.
+    if (
+      !hasErrorPresentationClaimed(error) &&
+      !terminalFailurePresented(error)
+    ) {
       appendLocalErrorTranscript(toErrorMessage(error));
     }
     // Another live process holds the run: it refused the claim, or took it
@@ -460,31 +471,32 @@ export function createChatSessionController(
     presentationHost,
     sessionContext,
     {
-      session: runtimeSession,
       requests,
-      preview:
-        init.backend &&
-        ((runId, requestId) =>
-          requests
-            .request({ kind: 'request.preview', runId, requestId })
-            .pipe(
-              Effect.map((outcome) =>
-                outcome.kind === 'preview' ? outcome.preview : null,
+      preview: !served
+        ? undefined
+        : (runId, requestId) =>
+            requests
+              .request({ kind: 'request.preview', runId, requestId })
+              .pipe(
+                Effect.map((outcome) =>
+                  outcome.kind === 'preview' ? outcome.preview : null,
+                ),
               ),
-            )),
       secrets,
       settings: stores,
       runtime,
     },
   );
-  disposables.add(
-    runtime.runSync(runtimeSession.interactions.use(interactions)),
+  // Attached to the chat's session for its lifetime: here, its requests'
+  // host; in the service, one of its project's windows, whose notices its
+  // tasks raise here.
+  const attached = runtime.runSync(Scope.make());
+  runtime.runFork(
+    runSession.attach(interactions).pipe(Scope.provide(attached)),
   );
-  // A chat of the service is one of its project's windows: the notices
-  // its tasks raise are shown here.
-  init.attachWindow?.({
-    emit: interactions.emit,
-    approvalDenied: interactions.approvalDenied,
+  disposables.add(() => {
+    interactions.dispose?.();
+    runtime.runFork(Scope.close(attached, Exit.void));
   });
 
   // -----------------------------------------------------------------------
@@ -523,15 +535,17 @@ export function createChatSessionController(
           const result = yield* agentRuns.launch({
             request: { config: registeredConfig, runId },
             options: {
+              ...launchApproval(init.approvalPolicy()),
               ...(previousRootRunId !== undefined && {
                 continues: previousRootRunId,
               }),
-              onRunResolved: (resolvedRunId) => {
-                rootRunId.set(resolvedRunId);
-                moveLocalTranscriptToRun(resolvedRunId);
-                focusRun(resolvedRunId);
-                if (session.stopRequested) interruptActiveRun();
-              },
+              onAdmitted: (resolvedRunId) =>
+                Effect.sync(() => {
+                  rootRunId.set(resolvedRunId);
+                  moveLocalTranscriptToRun(resolvedRunId);
+                  focusRun(resolvedRunId);
+                  if (session.stopRequested) interruptActiveRun(resolvedRunId);
+                }),
             },
           });
           session.settleExitCode(claim, runOutcomeExitCode(result.outcome));
@@ -551,8 +565,8 @@ export function createChatSessionController(
   // -----------------------------------------------------------------------
 
   // The user's resume of a conversation they pick. Config is adopted inside
-  // `onResumeResolved`, which `resumeRun` calls only once the saved state
-  // loaded. The stopped conversation it supersedes stays the chat's target
+  // `onAdmitted`, which the session calls once it admitted the resumed
+  // run. The stopped conversation it supersedes stays the chat's target
   // again when the resume never reaches its run.
   const resume = (id: RunId, edit?: ResumeEdit): Effect.Effect<void, Error> =>
     // `Effect.suspend` is what keeps the claim handshake synchronous: its
@@ -589,7 +603,7 @@ export function createChatSessionController(
       };
       const attemptResume = Effect.gen(function* () {
         // The durable record carries the config the TUI adopts before the run.
-        const store = agentRuns.records(runtimeSession, id);
+        const store = init.records(id);
         const [config, exists] = yield* Effect.all([
           store.readConfig(),
           store.exists(),
@@ -606,24 +620,30 @@ export function createChatSessionController(
           endResumeUnstarted(() =>
             appendLocalNotice(`Resuming document task ${id}. Tab lists it.`),
           );
-          yield* Effect.forkDetach(agentRuns.resumeBeside(id));
+          yield* Effect.forkDetach(
+            agentRuns
+              .resumeBeside(id)
+              .pipe(
+                Effect.catch((refused) =>
+                  Effect.sync(() =>
+                    appendLocalErrorTranscript(toErrorMessage(refused)),
+                  ),
+                ),
+              ),
+          );
           return;
         }
 
         // Adopting the resumed stream is the mutation a refusal must not cost:
-        // `resumeRun` calls this only once the saved state loaded, so the
-        // refusal reaches the chat the user is looking at instead of a cleared
-        // transcript switched onto a dead stream. A Ctrl-C during the steps
-        // below lands as `session.stopRequested`, which `resumeRun` re-reads
-        // once this returns, rather than starting an agent the user cancelled.
-        // The run resumed is the one asked for, or the parent that owns it.
+        // the session calls this only once it admitted the run, so a refusal
+        // reaches the chat the user is looking at instead of a cleared
+        // transcript switched onto a dead stream. The run resumed is the one
+        // asked for, or the parent that owns it.
         const adoptResumedRun = Effect.fn('adoptResumedRun')(function* (
           resumed: RunId,
         ) {
           const adoptedConfig =
-            resumed === id
-              ? config
-              : yield* agentRuns.records(runtimeSession, resumed).readConfig();
+            resumed === id ? config : yield* init.records(resumed).readConfig();
           if (adoptedConfig === null)
             return yield* Effect.fail(
               new Error(`Run ${resumed} has no configuration to resume`),
@@ -638,10 +658,8 @@ export function createChatSessionController(
           // The pre-resume stream was dropped by the synchronous slot claim
           // above, so a Ctrl-C before adoption had nothing to interrupt;
           // re-read the request here and let it land on the run the user
-          // asked to continue. `resumeRun` re-reads `isCancellationRequested`
-          // once this hook returns, so the stop still refuses the launch; this
-          // only decides which stream it marks recoverable.
-          if (session.stopRequested) interruptActiveRun();
+          // asked to continue.
+          if (session.stopRequested) interruptActiveRun(resumed);
 
           // The transcript and the work plan are the fold's: the TUI
           // subscribes the run's aggregate and renders `transcript.rows`, and
@@ -652,9 +670,7 @@ export function createChatSessionController(
         runtime.runFork(
           Effect.gen(function* () {
             const result = yield* agentRuns.resume(id, {
-              session: runtimeSession,
-              onResumeResolved: adoptResumedRun,
-              isCancellationRequested: () => session.stopRequested,
+              onAdmitted: adoptResumedRun,
             });
             if ('started' in result) {
               // A resume of an owned child continues its parent: the edit
@@ -676,7 +692,9 @@ export function createChatSessionController(
               session.settleExitCode(claim, CliExitCode.Interrupted);
             } else {
               appendLocalErrorTranscript(
-                describeFollowUpFailure(result.failed),
+                'message' in result
+                  ? result.message
+                  : describeFollowUpFailure(result.failed),
               );
               session.settleExitCode(claim, CliExitCode.Usage);
             }
@@ -746,9 +764,7 @@ export function createChatSessionController(
   /** Adopt a resumed run's configuration and helper model. */
   const adoptRunRecord = (runId: RunId) =>
     Effect.gen(function* () {
-      const config = yield* agentRuns
-        .records(runtimeSession, runId)
-        .readConfig();
+      const config = yield* init.records(runId).readConfig();
       if (!config) return;
       yield* adoptRunConfig(config, 'history');
       yield* setCliHelperModel(stores.globalState, config.model);
@@ -792,8 +808,8 @@ export function createChatSessionController(
     runtime.runFork(
       Effect.gen(function* () {
         yield* adoptRunRecord(run.id);
-        yield* runtimeSession.runs.get(run.id)?.drained ?? Effect.void;
-        const status = runtimeSession.view.run(run.id)?.status;
+        yield* settledHere(run.id);
+        const status = runSession.view.current().runs.get(run.id)?.status;
         session.settleExitCode(
           claim,
           isTerminalOutcomePhase(status)
@@ -812,10 +828,7 @@ export function createChatSessionController(
       const previous = liveHere;
       liveHere = new Set(
         [...view.runs.values()]
-          .filter(
-            (run) =>
-              isLiveRun(run) && runtimeSession.runs.get(run.id)?.live === true,
-          )
+          .filter((run) => isLiveRun(run) && run.ownedHere)
           .map((run) => run.id),
       );
       for (const id of liveHere) {
@@ -825,9 +838,9 @@ export function createChatSessionController(
     });
   // A chat of the service adopts only the runs it launches or resumes: the
   // service's view also holds other terminals' conversations.
-  if (init.backend === undefined) {
+  if (!served) {
     const resumedRoots = runtime.runFork(
-      Stream.runForEach(runtimeSession.view.changes, observeResumedRoots),
+      Stream.runForEach(viewChanges, observeResumedRoots),
     );
     disposables.add(() => {
       runtime.runFork(Fiber.interrupt(resumedRoots));
@@ -841,7 +854,7 @@ export function createChatSessionController(
   const stop = (reason: RunStopReason): void => {
     // A chat of the background service leaves its task running when the
     // terminal goes: only the user's own stop reaches it.
-    if (reason === 'shutdown' && init.backend !== undefined) return;
+    if (reason === 'shutdown' && served) return;
     requestStop(reason);
     interruptActiveRun();
   };
@@ -864,13 +877,20 @@ export function createChatSessionController(
         Effect.gen(function* () {
           const meta = sessionMetaSignal.get();
           const currentModel = meta.model || initialModel;
-          const selection = yield* selectCliRunnableModel(currentModel, {
-            stores: { ...stores, secrets, runtime },
-            fallbackReason: meta.model ? meta.modelSource : initialModelSource,
-            noAvailableModelsMessage: formatCliNoAvailableModelsRecovery(
-              CHAT_API_MODE_MODEL_RECOVERY,
-            ),
-          }).pipe(
+          const selection = yield* selectCliRunnableModel(
+            [
+              {
+                model: currentModel,
+                reason: meta.model ? meta.modelSource : initialModelSource,
+              },
+            ],
+            {
+              stores: { ...stores, secrets, runtime },
+              noAvailableModelsMessage: formatCliNoAvailableModelsRecovery(
+                CHAT_API_MODE_MODEL_RECOVERY,
+              ),
+            },
+          ).pipe(
             Effect.mapError(
               (cause) =>
                 // The selection's own failure is the user-facing text: it
@@ -934,8 +954,7 @@ export function createChatSessionController(
 
   const submitChatMessage = Effect.fn('submitChatMessage')(function* (
     line: string,
-    mediaFiles?: readonly string[],
-    images?: readonly PastedImageEntry[],
+    { mediaFiles, images }: ChatAttachments = {},
   ) {
     const focusedChild = focusedChildTarget();
     if (focusedChild.kind === 'reject') {
@@ -994,7 +1013,7 @@ export function createChatSessionController(
         // The stopped generation leaves the session before the message
         // continues the run, and the chat holds the slot while it resumes.
         yield* Effect.ignoreCause(session.runSettled ?? Effect.void);
-        yield* runtimeSession.runs.get(interrupted)?.drained ?? Effect.void;
+        yield* settledHere(interrupted);
         if (session.interruptedRunId === interrupted)
           preparing = claimPreparingRoot(interrupted);
       }
@@ -1132,11 +1151,10 @@ export function createChatSessionController(
 
   const submit = Effect.fn('chatSubmit')(function* (
     line: string,
-    mediaFiles?: readonly string[],
-    images?: readonly PastedImageEntry[],
+    attachments?: ChatAttachments,
   ) {
     if (yield* handleTuiSlashCommand(line, getSlashCommandContext())) return;
-    yield* submitChatMessage(line, mediaFiles, images);
+    yield* submitChatMessage(line, attachments);
   });
 
   const activateSkill = (selection: SkillActivation): void => {

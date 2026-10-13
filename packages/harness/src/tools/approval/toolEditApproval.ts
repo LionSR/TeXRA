@@ -3,7 +3,6 @@ import { Cause, Effect } from 'effect';
 import { type SessionHandle } from '@agent/runtime/SessionHandle';
 import { requireRun, sessionOf } from '@agent/runtime/RunCall';
 import { ToolContext } from '@agent/core/tools/ToolTypes';
-import { isLatexFile } from '@common/files/fileTypeUtils';
 import { withLogChannel } from '@logger/effectLog';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import {
@@ -126,7 +125,6 @@ export function prepareToolEditApprovalPrompt(
       runId: runId ?? '',
       addedLines: lineChanges.added,
       removedLines: lineChanges.removed,
-      isLatex: isLatexFile(request.path),
     },
     diffTimeout: timeout,
   };
@@ -233,15 +231,19 @@ export const requestToolEditApproval = Effect.fn('requestToolEditApproval')(
         { action: 'apply', appliedContent: preparedRequest.proposedContent },
         preparedRequest,
       );
+    const policy = session.approvals.policy(runId ?? undefined);
     const decision = decideTexraApproval({
-      policy: session.approvals.policy(runId ?? undefined),
+      policy,
       promptRequired: approvalsEnabled,
       scopedBypass: isRunBypassed,
       canPresent: run.toolPolicy.approvalPromptsUnavailable !== true,
     });
     if (decision === 'allow') return yield* acceptProposedAsIs();
     if (isTexraApprovalDenied(decision)) {
-      session.interactions.approvalDenied({ kind: 'executable' }, run.runId);
+      session.interactions.approvalDenied(
+        { kind: 'executable', policy },
+        run.runId,
+      );
       return { action: 'deny', reason: texraApprovalDenialMessage(decision) };
     }
     if (!runId) {

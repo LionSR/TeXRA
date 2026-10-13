@@ -52,6 +52,8 @@ const looseFiniteNumber = z.preprocess((value) => {
   return value;
 }, z.number().finite());
 
+const nonBlankString = z.string().trim().min(1);
+
 /** A wire timestamp expressed as an epoch number (seconds or milliseconds,
  *  whichever `looseFiniteNumber` resolves to) or an ISO 8601 (or otherwise
  *  `Date.parse`-able) string, normalized to epoch ms. A value that parses as
@@ -102,7 +104,7 @@ export function stringField(
   object: JsonObject | undefined,
   ...keys: readonly string[]
 ): string | undefined {
-  return pickField(z.string().trim().min(1), object, keys);
+  return pickField(nonBlankString, object, keys);
 }
 
 export function numberField(

@@ -40,7 +40,7 @@ import { IssuingScript, requireToolRun } from '@agent/runtime/RunCall';
 import type { RunToolCall, ScriptScope } from '@agent/runtime/RunCall';
 import {
   isDocumentTaskConfig,
-  aggregateId,
+  qualifyAggregateId,
   AgentProposalSchema,
   type AgentProposal,
   toJsonValue,
@@ -295,9 +295,8 @@ const reusable = Effect.fn('agent.reusable')(function* (
     'agent:keys',
     Effect.sync(() => new Map<string, string>()),
   );
-  const callId = call.callId ?? '';
-  // Claimed before the read below yields, so two calls of the script
-  // issued together cannot both pass.
+  const { callId } = call;
+  // Claimed before the read yields, so two calls at once cannot both pass.
   const claimed = siblings.get(key);
   if (claimed !== undefined && claimed !== callId)
     return errorResult(
@@ -305,8 +304,9 @@ const reusable = Effect.fn('agent.reusable')(function* (
       { name: 'DuplicateCall' },
     );
   siblings.set(key, callId);
+  const { log } = call.run.session;
   const rows = (yield* Effect.forEach(yield* reuseScope(call), (runId) =>
-    call.run.session.log.rows(aggregateId('run', runId), ['tool.result']),
+    log.rows(qualifyAggregateId('run', runId), ['tool.result']),
   )).flat();
   const found = rows.flatMap((row) =>
     row.type === 'tool.result' &&

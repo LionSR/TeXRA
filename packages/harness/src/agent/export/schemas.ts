@@ -1,5 +1,5 @@
 /**
- * Format-agnostic intermediate representation types for chat export.
+ * Format-agnostic intermediate representation for chat export.
  *
  * These describe the `ExportNode` that `readCompletedRunConversation`
  * (`@transcript/completedRunArchive`) projects from transcript rows and every
@@ -8,58 +8,73 @@
  * provider-specific types — the command-layer export package imports these
  * without pulling in `openai/*` or `@google/genai`.
  *
- * These types describe an in-process representation rather than a validation
- * boundary.
+ * The export input also crosses the service's RPC edge (`task.exportInput`),
+ * so its shapes are Zod schemas and the types derive from them.
  */
 
-import type { MediaAttachmentKind } from '@shared/schemas';
+import { z } from 'zod';
+
+import { MediaAttachmentKindSchema } from '@shared/schemas';
 
 // ============================================================
 // Export configuration (caller-supplied)
 // ============================================================
 
-export interface ExportConfig {
-  agent?: string;
-  model?: string;
-  instruction?: string;
-  inputFiles?: string[];
-  mediaFiles?: string[];
-  contextFiles?: string[];
-  outputFiles?: string[];
-}
-
-export interface ChatExportInput {
-  timestamp: string;
-  description?: string;
-  config: ExportConfig;
-  nodes: readonly ExportNode[];
-}
+const ExportConfigSchema = z.object({
+  agent: z.string().optional(),
+  model: z.string().optional(),
+  instruction: z.string().optional(),
+  inputFiles: z.array(z.string()).optional(),
+  mediaFiles: z.array(z.string()).optional(),
+  contextFiles: z.array(z.string()).optional(),
+  outputFiles: z.array(z.string()).optional(),
+});
+export type ExportConfig = z.infer<typeof ExportConfigSchema>;
 
 // ============================================================
 // Intermediate representation — format-agnostic
 // ============================================================
 
 /**
- * Attachment kinds a renderer must be able to label. Kept in step with the
- * canonical {@link MediaAttachmentKind} vocabulary: the transcript row and the
- * exported document describe the same attachment, so a kind added there must
- * also gain a label in every format spec.
+ * Attachment kinds a renderer must be able to label: the canonical
+ * {@link MediaAttachmentKindSchema} vocabulary, since the transcript row and
+ * the exported document describe the same attachment, so a kind added there
+ * must also gain a label in every format spec.
  */
-export type ExportAttachmentType = MediaAttachmentKind;
+export type ExportAttachmentType = z.infer<typeof MediaAttachmentKindSchema>;
 
-type UserPart =
-  | { type: 'text'; text: string }
-  | { type: 'attachment'; attachmentType: ExportAttachmentType };
+const UserPartSchema = z.discriminatedUnion('type', [
+  z.object({ type: z.literal('text'), text: z.string() }),
+  z.object({
+    type: z.literal('attachment'),
+    attachmentType: MediaAttachmentKindSchema,
+  }),
+]);
 
-export type ExportNode =
-  | { kind: 'user-message'; parts: UserPart[] }
-  | { kind: 'assistant-text'; text: string }
+const ExportNodeSchema = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('user-message'), parts: z.array(UserPartSchema) }),
+  z.object({ kind: z.literal('assistant-text'), text: z.string() }),
   /** Provider reasoning; document exports omit it, text views may show it. */
-  | { kind: 'thinking'; text: string }
+  z.object({ kind: z.literal('thinking'), text: z.string() }),
   /** `input` is the call's raw arguments; each renderer serializes them. */
-  | { kind: 'tool-call'; name: string; input: unknown }
-  | { kind: 'tool-result'; text: string }
-  | { kind: 'web-search'; query: string };
+  z.object({
+    kind: z.literal('tool-call'),
+    name: z.string(),
+    input: z.unknown(),
+  }),
+  z.object({ kind: z.literal('tool-result'), text: z.string() }),
+  z.object({ kind: z.literal('web-search'), query: z.string() }),
+]);
+export type ExportNode = z.infer<typeof ExportNodeSchema>;
+
+/** A run's export input: its setup and its conversation's nodes. */
+export const ChatExportInputSchema = z.object({
+  timestamp: z.string(),
+  description: z.string().optional(),
+  config: ExportConfigSchema,
+  nodes: z.array(ExportNodeSchema).readonly(),
+});
+export type ChatExportInput = z.infer<typeof ChatExportInputSchema>;
 
 // ============================================================
 // Document metadata

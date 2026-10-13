@@ -20,10 +20,15 @@ import { harnessBuiltins } from '@texra-ai/harness/plugins';
 const workspace = await mkdtemp(join(tmpdir(), 'texra-harness-example-'));
 const agentsDir = join(workspace, 'agents');
 await mkdir(agentsDir, { recursive: true });
+const platform = nodePlatform({
+  agentsDir,
+  storageDir: join(workspace, 'storage'),
+  workspaceDir: workspace,
+});
 
 const program = Effect.gen(function* () {
   const sessions = yield* Sessions;
-  const session = yield* sessions.open();
+  const session = yield* sessions.open(platform.roots);
   console.log('session root:', session.roots.storage);
 
   const level = yield* Stream.runHead(session.view.changes);
@@ -43,16 +48,7 @@ const program = Effect.gen(function* () {
   console.log(`refusal: ${refusal._tag} - ${refusal.message}`);
 }).pipe(
   Effect.scoped,
-  Effect.provide(
-    Sessions.layer({
-      platform: nodePlatform({
-        agentsDir,
-        storageDir: join(workspace, 'storage'),
-        workspaceDir: workspace,
-      }),
-      plugins: harnessBuiltins.all,
-    }),
-  ),
+  Effect.provide(Sessions.layer({ platform, plugins: harnessBuiltins.all })),
 );
 
 await Effect.runPromise(program);

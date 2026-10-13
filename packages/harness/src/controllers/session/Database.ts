@@ -3,14 +3,14 @@
  * reshaped by `2026-09-28-storage-v1-design.md`): the connection, its
  * transactions and busy retry, the run history's one write path, claims, the
  * aggregate lifecycle, deletion and collection, and the reads. One database
- * per session root (`WorkspaceRoots`), never a process singleton; an
- * ephemeral session runs the same schema in SQLite memory, and a failed file
- * open is an error, never the ephemeral mode. `storeSchema.ts` owns the DDL
- * and the open sequence; `rowCodec.ts` every stored shape, by the arms the
- * process's plugins contribute (this module reads no payload); `projections`
- * the projectors whose operations run in the append transaction. This module
- * owns the envelope: the writer (C5, `ProcessIdentity`), the publish clock,
- * and the `seq` and `commit` ordinals, none of which a caller supplies.
+ * per session root (`WorkspaceRoots`), never a process singleton; an ephemeral
+ * session runs the same schema in SQLite memory, and a failed file open is an
+ * error, never the ephemeral mode. `storeSchema.ts` owns the DDL and the open
+ * sequence; `rowCodec.ts` every stored shape, by the arms the process's
+ * plugins contribute (this module reads no payload); `projections` the
+ * projectors run in the append transaction. This module owns the envelope:
+ * the writer (C5, `ProcessIdentity`), the publish clock, and the `seq` and
+ * `commit` ordinals, none of which a caller supplies.
  */
 import { randomUUID } from 'node:crypto';
 import { join } from 'node:path';
@@ -58,6 +58,7 @@ import {
   type AggregateState,
   Database,
   GlobalDatabase,
+  DatabaseClaimRefused,
   DatabaseOpenFailed,
   DatabaseNotOwner,
   DatabaseReadFailed,
@@ -408,10 +409,9 @@ export const databaseLayer = (
       });
       // Every body is database-only, so a busy one runs again whole. The
       // store gate runs inside every outermost write and derive: a store
-      // holding a kind this build does not read takes no write from it. The
-      // one exception (`gated` false) is `releaseClaims`, which gives back
-      // this process's own claims, writes no row, and lets the newer build
-      // take them. Inside a caller's transaction a body is its savepoint.
+      // holding a kind this build does not read takes no write from it, bar
+      // `releaseClaims` (`gated` false), which writes no row and gives back
+      // this process's claims. In a caller's transaction a body is a savepoint.
       const own = <A, E>(
         mode: 'read' | 'write' | 'derive',
         body: Effect.Effect<A, E>,
@@ -484,10 +484,14 @@ export const databaseLayer = (
             closed,
           });
         });
-      /** The refusal leaves typed (D6 b); the transaction wrapper carried it
-       *  as the write failure's cause. */
-      const typedRefusal = Effect.mapError((failure: DatabaseWriteFailed) =>
-        failure.cause instanceof DatabaseNotOwner ? failure.cause : failure,
+      /** A refusal about ownership leaves typed (D6 b); the transaction
+       *  wrapper carried it as the write failure's cause. A claiming
+       *  transaction's refusal may be the claim's. */
+      const ownershipRefusal = (failure: DatabaseWriteFailed) =>
+        failure.cause instanceof DatabaseNotOwner ? failure.cause : failure;
+      const typedRefusal = Effect.mapError(ownershipRefusal);
+      const typedClaimRefusal = Effect.mapError((f: DatabaseWriteFailed) =>
+        f.cause instanceof DatabaseClaimRefused ? f.cause : ownershipRefusal(f),
       );
       const othersOf = (observed: readonly AggregateState[]) =>
         new Set(
@@ -593,9 +597,8 @@ export const databaseLayer = (
             }),
           ),
         );
-      /** A projection another build versioned is emptied and rebuilt, and
-       *  one behind the high-water commit catches up, 1,000 rows per
-       *  transaction. */
+      /** A projection another build versioned is emptied and rebuilt; one
+       *  behind the high-water commit catches up, 1,000 rows a transaction. */
       const catchUpProjections = Effect.gen(function* () {
         let done = false;
         while (!done) {
@@ -642,9 +645,8 @@ export const databaseLayer = (
         }
       });
       /** A read of the projections, in the same read transaction as the
-       *  check that they are current, so another build's rebuild can never
-       *  hand it a half-built projection. When one is not current, it
-       *  catches up and the read runs again. */
+       *  check that they are current, so another build's rebuild never hands
+       *  it a half-built one; a stale one catches up and the read runs again. */
       const projected = <A, E>(read: Effect.Effect<A, E>) =>
         Effect.gen(function* () {
           for (;;) {
@@ -684,9 +686,8 @@ export const databaseLayer = (
           );
           for (const [type, version] of kinds)
             yield* exec(UPSERT_KIND, [type, version]);
-          // A projection of this build's version that has read every row
-          // before the batch follows it; any other is left for its owner's
-          // next read to catch up.
+          // A projection of this build's version that read every row before
+          // the batch follows it; any other catches up on its owner's next read.
           const states = yield* projectionStates;
           const current = PROJECTION_NAMES.filter((name) => {
             const state = states.get(name);
@@ -1020,7 +1021,7 @@ export const databaseLayer = (
                     .filter((row) => row.ownerId !== identity.ownerId)
                     .map((row) => row.aggregateId);
                 }),
-              ),
+              ).pipe(typedClaimRefusal),
         prepareRunRemoval: (id, mode, expectedStartCommit) =>
           Effect.gen(function* () {
             const seen = yield* query(readDependents(id));
@@ -1050,6 +1051,7 @@ export const databaseLayer = (
             });
             return Effect.flatMap(ProvenOwners, (proven) =>
               transact(removing).pipe(
+                typedClaimRefusal,
                 Effect.provideService(
                   ProvenOwners,
                   new Map([...verdicts, ...proven]),
@@ -1150,8 +1152,7 @@ export const storeOpenElsewhere = (filename: string) =>
  * The process's handle on the global storage root: one connection, schema and
  * `data_version` poll for every application record of that root, closed with
  * the entry's runtime. Building it creates the directory, the file and the
- * poll fiber, so an entry that must create none passes a refusing layer.
- */
+ * poll fiber; an entry that must create none passes a refusing layer. */
 export const globalDatabaseLayer = (
   storage: string,
 ): Layer.Layer<
@@ -1168,9 +1169,8 @@ export const globalDatabaseLayer = (
     ),
   );
 
-/** Interruption stays; a failure or a driver defect becomes `failed`'s.
- *  An attempt's unproven claim owners stay a defect, for the outermost
- *  transaction to prove. */
+/** Interruption stays; a failure or a driver defect becomes `failed`'s. An
+ *  attempt's unproven claim owners stay a defect for the outermost transaction. */
 function mapDatabaseFailure<E>(failed: (cause: unknown) => E) {
   return <A, EOp, R>(
     operation: Effect.Effect<A, EOp, R>,

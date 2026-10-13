@@ -73,7 +73,7 @@ describe('chat TUI session exit controller', () => {
   }
 
   it('prints an artifact flush failure during signal teardown despite quiet logging', async () => {
-    const session = new TuiSession(() => undefined);
+    const session = new TuiSession();
     session.runId = 'exec-flush-warning' as RunId;
     session.runExitCode = CliExitCode.Success;
     const exitCalled = createDeferred();
@@ -115,7 +115,7 @@ describe('chat TUI session exit controller', () => {
   });
 
   it('restores the terminal and prints the hint when the graceful flush fails', async () => {
-    const session = new TuiSession(() => undefined);
+    const session = new TuiSession();
     session.runId = 'exec-graceful-flush' as RunId;
     const { controller, terminal } = createController(session);
 

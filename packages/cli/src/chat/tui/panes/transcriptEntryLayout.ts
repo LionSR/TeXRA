@@ -21,8 +21,9 @@ import {
   TOOL_OUTPUT_CORNER,
   USER_ENTRY_PREFIX,
 } from '@cli/tui/ui/glyphs';
+import type { TranscriptRow } from '@cli/chat/tui/state/sessionView';
 import type { CompactionActivityStatus } from '@shared/runs/compactionActivityProjection';
-import type { TranscriptRow, TranscriptRowKind } from '@shared/transcript';
+import type { TranscriptRowKind } from '@shared/transcript';
 import { renderAnsiMarkdown } from '../render/ansiMarkdown';
 import { transcriptRowBodyLines } from '../render/transcriptRowLines';
 import {

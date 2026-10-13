@@ -14,7 +14,7 @@ import { formatDelivery } from '@agent/runtime/deliveryEnvelope';
 import { persistedParentRunId } from '@agent/storage/runRecords';
 import { classifyAgentError } from '@common/errors';
 import {
-  aggregateId,
+  qualifyAggregateId,
   aggregateTarget,
   RUN_OUTCOME,
   RUN_SUBSTATE,
@@ -196,7 +196,7 @@ const pauseChildRun = (
       lines: [escapeText(notice)],
     });
     options.stage?.end(RUN_OUTCOME.CANCELLED);
-    const target = aggregateId('run', runId);
+    const target = qualifyAggregateId('run', runId);
     // The last turn's settlement first: the pause notice is the newer
     // report. The notice is read with the parent's next input and offered
     // to nobody: a pause starts no model turn, parked or busy, and wakes no

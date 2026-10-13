@@ -39,6 +39,8 @@ import {
   type EditorCapabilities,
   type EditorHostShape,
 } from '@texra/tools/editorHost';
+import { PrunedNestedMap } from '@texra/utils/core/prunedNestedMap';
+import { isPathWithin } from '@utils/core/pathCore';
 
 import {
   CALL_CAPABILITY,
@@ -145,6 +147,13 @@ export interface HostWindows {
     session: SessionHandle,
     capabilities: readonly HostCapability[],
   ) => Stream.Stream<HostFrame>;
+  /** Files a task wrote past the editor's own write path, as this
+   *  process's announcer heard them from the task's rows: every window
+   *  whose project holds one hears it, so its file tree and decorations
+   *  follow the service's tasks. */
+  readonly filesWritten: (
+    absolutePaths: readonly string[],
+  ) => Effect.Effect<void>;
   /** The window was focused: its project's calls go to it first. */
   readonly focus: (attachment: string) => Effect.Effect<void>;
   /** A window's answer to one call. */
@@ -161,12 +170,7 @@ export const makeHostWindows = Effect.sync((): HostWindows => {
   const windows = new Set<Window>();
   /** Every unanswered call's window, by call id. */
   const calls = new Map<string, Window>();
-  const staged = new Map<string, Map<string, Staged>>();
-  const stagedIn = (key: string) => {
-    const held = staged.get(key) ?? new Map<string, Staged>();
-    staged.set(key, held);
-    return held;
-  };
+  const staged = new PrunedNestedMap<string, string, Staged>();
 
   /** The window a call of `key`'s project goes to. */
   const target = (key: string, capability: HostCapability) => {
@@ -335,6 +339,12 @@ export const makeHostWindows = Effect.sync((): HostWindows => {
         );
       }
       window.pending.clear();
+      // The edits this window staged go to the project's window focused
+      // last that offers them, so its Approve reads an edit it shows; with
+      // none left, they wait for the next to attach.
+      const next = target(window.key, 'toolEdits');
+      for (const entry of staged.group(window.key).values())
+        if (entry.window === window) stage(entry, next);
       if (![...windows].some((other) => other.key === window.key))
         yield* Effect.logWarning(
           `No TeXRA window of ${window.project} is attached: its tasks run without diagnostics, inline criticism, PDF opening or editable tool-edit previews until one attaches.`,
@@ -403,7 +413,7 @@ export const makeHostWindows = Effect.sync((): HostWindows => {
       preview: (requestId) =>
         Effect.map(SubscriptionRef.get(session.view.ref), (view) =>
           view.requests.some((request) => request.requestId === requestId)
-            ? previewOf(stagedIn(key).get(requestId))
+            ? previewOf(staged.get(key, requestId))
             : null,
         ),
       // The service keeps every preview for `request.preview`; the window
@@ -422,13 +432,12 @@ export const makeHostWindows = Effect.sync((): HostWindows => {
           window: undefined,
           seen: false,
         };
-        stagedIn(key).set(requestId, entry);
+        staged.set(key, requestId, entry);
         stage(entry, target(key, 'toolEdits'));
       },
       releaseToolEdit: (requestId) =>
         Effect.suspend(() => {
-          const entry = stagedIn(key).get(requestId);
-          stagedIn(key).delete(requestId);
+          const entry = staged.delete(key, requestId);
           return tell(liveWindow(entry), {
             kind: 'releaseToolEdit',
             requestId,
@@ -436,7 +445,7 @@ export const makeHostWindows = Effect.sync((): HostWindows => {
         }),
       approveToolEdit: (requestId) =>
         Effect.suspend(() => {
-          const window = liveWindow(stagedIn(key).get(requestId));
+          const window = liveWindow(staged.get(key, requestId));
           if (window === undefined) return Effect.succeed(false);
           // The window that staged it holds the user's edit, whichever
           // window is focused now.
@@ -535,7 +544,7 @@ export const makeHostWindows = Effect.sync((): HostWindows => {
           // none was, or by one that went) are staged here, so this
           // window's Approve reads the edit it shows.
           if (window.capabilities.has('toolEdits'))
-            for (const entry of stagedIn(window.key).values())
+            for (const entry of staged.group(window.key).values())
               if (liveWindow(entry) === undefined) stage(entry, window);
           return Stream.concat(
             Stream.succeed<HostFrame>({
@@ -545,6 +554,16 @@ export const makeHostWindows = Effect.sync((): HostWindows => {
             Stream.fromQueue(window.frames),
           ).pipe(Stream.ensuring(detach(window)));
         }),
+      ),
+    filesWritten: (absolutePaths) =>
+      Effect.forEach(
+        [...windows].filter(
+          (window) =>
+            window.capabilities.has('notices') &&
+            absolutePaths.some((path) => isPathWithin(window.project, path)),
+        ),
+        (window) => tell(window, { kind: 'filesWritten', absolutePaths }),
+        { discard: true },
       ),
     focus: (attachment) =>
       Effect.sync(() => {
@@ -564,13 +583,13 @@ export const makeHostWindows = Effect.sync((): HostWindows => {
         yield* Effect.forkScoped(
           Stream.runForEach(SubscriptionRef.changes(session.view.ref), (view) =>
             Effect.gen(function* () {
-              const held = stagedIn(key);
+              const held = staged.group(key);
               if (held.size === 0) return;
               const pending = new Set(view.requests.map((r) => r.requestId));
-              for (const [requestId, entry] of held) {
+              for (const [requestId, entry] of [...held]) {
                 if (pending.has(requestId)) entry.seen = true;
                 else if (entry.seen) {
-                  held.delete(requestId);
+                  staged.delete(key, requestId);
                   yield* tell(liveWindow(entry), {
                     kind: 'releaseToolEdit',
                     requestId,

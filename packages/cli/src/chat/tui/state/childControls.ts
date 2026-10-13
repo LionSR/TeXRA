@@ -5,9 +5,20 @@
  * here derives topology.
  */
 import { RUN_PHASE, type RunPhase, type RunId } from '@shared/schemas';
-import type { SessionView } from '@shared/session/sessionView';
 import { formatCompactDuration } from '@utils/text/stringUtils';
 import { runViewOf } from './sessionView';
+import type { RunView, SessionView } from '@texra-ai/harness';
+
+/**
+ * When a run's active time started, or nothing: a run parked on the user's
+ * answer is not working, so no clock or spinner runs for it.
+ */
+export function activeStartedAt(
+  run: Pick<RunView, 'group' | 'runStartedAt'> | undefined,
+): number | undefined {
+  if (run === undefined || run.group === 'waiting') return undefined;
+  return run.runStartedAt ?? undefined;
+}
 
 /**
  * How long a running child has been at it, formatted: the caller selects the

@@ -8,11 +8,12 @@ import {
   type RunId,
   type TokenUsageStats,
 } from '@shared/schemas';
-import { descendantRuns, type SessionView } from '@shared/session/sessionView';
+import { descendantRuns } from '@shared/session/sessionView';
 import { usageCostLabel } from '@ui/copy/modelAccess';
 import { TASK_ACTIONS } from '@ui/copy/nestedRuns';
 
 import { runViewOf } from './sessionView';
+import type { SessionView } from '@texra-ai/harness';
 
 export interface ResumeTarget {
   readonly runId: string;

@@ -31,7 +31,7 @@ import {
 import { activeForm, closeActiveForm } from '@cli/chat/tui/state/formSlot';
 import { notices, noticesFor } from '@cli/chat/tui/state/transcript';
 import type { CliModelAccessSelection } from '@cli/runtime/modelAccessRoute';
-import { testRuntime } from '@test/support/testProcessRuntime';
+import { testRuntime, testSessionOf } from '@test/support/testProcessRuntime';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { FakeSecrets } from '@test/support/FakePlatform';
 import { makeFakeSettingsStores } from '@test/support/settingsStoresFake';
@@ -71,7 +71,7 @@ const CHATGPT_PREFERENCE_FORM_VALUE: AccountAccessFormValue = {
 function registerBuiltins(
   options: Omit<
     Parameters<typeof registerBuiltinSlashCommands>[0],
-    'secrets' | 'stores' | 'runtime' | 'runtimeSession'
+    'secrets' | 'stores' | 'runtime' | 'runtimeSession' | 'runSession'
   > = {},
 ): void {
   registerBuiltinSlashCommands({
@@ -79,6 +79,7 @@ function registerBuiltins(
     stores: makeFakeSettingsStores('cli').stores,
     runtime: testRuntime(),
     runtimeSession: testDefaultSession(),
+    runSession: testSessionOf(testDefaultSession()),
     ...options,
   });
 }

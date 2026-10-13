@@ -14,7 +14,7 @@ import { Effect, SynchronizedRef } from 'effect';
 
 import type { RunRecord } from '@agent/core/definition/RunRecord';
 import {
-  aggregateId as qualifyAggregateId,
+  qualifyAggregateId,
   type JsonValue,
   type PositionAt,
   type RunBinding,

@@ -10,7 +10,7 @@ import {
 } from '@cli/runtime/sessionProgressSubscription';
 import type { CliNdjsonRecord } from '@cli/schemas/cliOutput';
 import {
-  aggregateId as qualifyAggregateId,
+  qualifyAggregateId,
   type SessionEventDraft,
   USER_FOLLOW_UP_SUPPORT,
 } from '@shared/schemas';

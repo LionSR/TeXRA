@@ -20,7 +20,7 @@ import { childRunsLayer, type RuntimeTool } from '@agent/runtime/ToolServices';
 import type { BoundModel } from '@agent/runtime/modelAccess/ModelAccess';
 import type { ModelOptionStores } from '@model/computeModelOptions';
 import { sessionFsLayer } from '@platform/rootedFs';
-import { aggregateId, type PermissionPayload } from '@shared/schemas';
+import { qualifyAggregateId, type PermissionPayload } from '@shared/schemas';
 import { noopTrace } from '@test/support/noopTrace';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { testRuntime } from '@test/support/testProcessRuntime';
@@ -130,7 +130,7 @@ export function nativeToolTestLayer(
                 cell.append([
                   {
                     type: 'request.opened',
-                    aggregateId: aggregateId('run', toolRun.runId),
+                    aggregateId: qualifyAggregateId('run', toolRun.runId),
                     requestId,
                     payload,
                   },

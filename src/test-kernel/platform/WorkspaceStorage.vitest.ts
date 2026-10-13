@@ -16,7 +16,6 @@ import {
 } from '@platform/defaults/workspaceStorage';
 import { nodePlatformLayer, pathExists } from '@test/support/fsTestUtils';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
-import { resolveRunStoragePath } from '@utils/files/runStorageFs';
 
 describe('workspace storage defaults', () => {
   const tempDirs = useTempDirs();
@@ -47,7 +46,7 @@ describe('workspace storage defaults', () => {
     expect(storageIdOf(root, undefined)).toMatch(/^no-workspace-[0-9a-f]{8}$/);
   });
 
-  it('snapshots global, workspace, memory, and run storage layout paths', async () => {
+  it('snapshots global, workspace and memory storage layout paths', async () => {
     const root = await makeStorageRoot();
     const workspacePath = '/workspace/a';
 
@@ -56,13 +55,11 @@ describe('workspace storage defaults', () => {
       resolveWorkspaceStoragePath(root, workspacePath),
       resolveMemoryStoragePath(),
       resolveMemoryStoragePath('memories/project.md'),
-      resolveRunStoragePath('run-1', 'result.json'),
     ]).toEqual([
       join(root, 'v1', 'global-storage'),
       join(root, 'v1', 'workspace-storage', storageIdOf(root, workspacePath)),
       'memories',
       'memories/project.md',
-      'executions/run-1/result.json',
     ]);
     expect(() => resolveMemoryStoragePath('not-memories/project.md')).toThrow(
       'Invalid memory path',

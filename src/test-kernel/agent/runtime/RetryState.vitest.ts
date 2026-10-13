@@ -27,7 +27,7 @@ import { it } from '@effect/vitest';
 import { MODEL_CONFIGS } from 'llm-zoo';
 
 import { APIError as OpenAIAPIError } from 'openai';
-import { afterEach, describe, expect, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 import {
   type Model,
   ModelError,
@@ -78,6 +78,7 @@ import {
 } from '@shared/session/runHistory';
 import { UsageLog } from '@shared/usageLog';
 import { freshRunState, type RunState } from '@shared/session/runStateFold';
+import { setTestApprovalPolicy } from '@test/support/sessionTestUtils';
 import { testAgentRun } from '@test/support/scriptedRunLayers';
 import { closeSessionOf } from '@test/support/sessionEnd';
 import { noopTrace } from '@test/support/noopTrace';
@@ -590,6 +591,8 @@ describe('recovery-route verdicts', () => {
 });
 
 describe('ModelInvoker retry', () => {
+  // The project's policy is the fake host's setting, shared by the file.
+  beforeEach(() => setTestApprovalPolicy('ask'));
   afterEach(async () => {
     await installPlatform();
   });
@@ -911,7 +914,7 @@ describe('ModelInvoker retry', () => {
         installPlatform({ config: { 'texra.model.retry.maxAttempts': 0 } }),
       );
       const session = yield* sessionWithInteractions(undefined);
-      session.approvals.override('yolo');
+      setTestApprovalPolicy('yolo');
       const stub = stubModel([
         { fail: new Error('stream dropped before first token') },
       ]);

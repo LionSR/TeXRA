@@ -97,7 +97,6 @@ const CLI_PROCESS_OUTPUT_BOUNDARY = [
   // Ink mounts onto the real process streams in these launchers; the rest of
   // the TUI goes through logSinks.
   'packages/cli/src/init/runInitWizard.tsx',
-  'packages/cli/src/onboarding/runOnboarding.tsx',
   'packages/cli/src/config/runConfigTui.tsx',
 ];
 // The chat TUI also hands Ink the real `process.stdin`, so it is both.

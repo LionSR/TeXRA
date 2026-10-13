@@ -13,11 +13,12 @@ import type {
   SessionLog,
   StreamClosure,
 } from '@agent/runtime/SessionHandle';
+import type { AgentEvent } from '@agent/trace';
 import { runEventDraft } from '@agent/trace/TraceEmitter';
 import { classifyAgentError } from '@common/errors';
 import { writeLogLine } from '@logger/logSink';
 import {
-  aggregateId as qualifyAggregateId,
+  qualifyAggregateId,
   aggregateTarget,
   TOOL_CALL_STATUS,
   type RunId,
@@ -51,6 +52,25 @@ export interface RunTraceInit {
   readonly settled: Effect.Effect<void>;
   /** Whether the session's doors are shut. */
   readonly closed: () => boolean;
+}
+
+/** Each run's trace port: every caller reading the run's events, the
+ *  launcher's and a joiner's alike, hears what the run emits from then on. */
+function tracePorts(): Pick<RunTrace, 'tap' | 'listen'> {
+  const ports = new Map<RunId, Set<(event: AgentEvent) => void>>();
+  return {
+    tap: (runId, event) => {
+      for (const listener of ports.get(runId) ?? []) listener(event);
+    },
+    listen: (runId, listener) => {
+      const port = ports.get(runId) ?? new Set();
+      ports.set(runId, port.add(listener));
+      return () => {
+        port.delete(listener);
+        if (port.size === 0) ports.delete(runId);
+      };
+    },
+  };
 }
 
 /** Build a session's {@link RunTraceSink}. */
@@ -125,6 +145,7 @@ export function makeRunTrace({
       });
   }
   return {
+    ...tracePorts(),
     publish: (runId, event) => {
       if (refusedAfterClose()) return;
       if (event.type === 'stream.chunk') {

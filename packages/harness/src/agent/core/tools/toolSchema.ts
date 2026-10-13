@@ -11,7 +11,8 @@ import { toJSONSchema } from 'zod';
 import type { ToolDefinition } from '@shared/schemas';
 import { TOOL_JSON_SCHEMA_OPTIONS } from '@shared/tools/toolJsonSchema';
 
-interface JSONSchemaObject {
+/** A JSON Schema node as a provider's function-calling API reads it. */
+export interface JSONSchemaObject {
   type?: string | string[];
   properties?: Record<string, JSONSchemaObject>;
   required?: string[];

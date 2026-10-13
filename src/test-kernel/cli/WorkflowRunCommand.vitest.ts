@@ -27,7 +27,7 @@ import type {
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import {
-  aggregateId,
+  qualifyAggregateId,
   RUN_OUTCOME,
   type RunId,
   type SessionEventDraft,
@@ -337,7 +337,7 @@ const seedStartedRun = (session: SessionHandle, runId: string) =>
     yield* session.log.transact([
       {
         type: 'run.start',
-        aggregateId: aggregateId('run', runId as RunId),
+        aggregateId: qualifyAggregateId('run', runId as RunId),
         identity: { kind: 'agent', agent: 'polish' },
         userFollowUpSupport: 'unsupported',
         parent: null,
@@ -361,7 +361,7 @@ const seedResumableCheckpoint = (session: SessionHandle, runId: string) =>
     yield* cell.append([
       {
         type: 'run.position',
-        aggregateId: aggregateId('run', runId as RunId),
+        aggregateId: qualifyAggregateId('run', runId as RunId),
         payload: { family: 'toolUse', at: 'turn.ready', turn: 0 },
       },
     ]);
@@ -767,7 +767,7 @@ describe('CLI run command, workflow agents', () => {
         yield* session.log.transact([
           {
             type: 'run.start',
-            aggregateId: aggregateId('run', run.result.runId),
+            aggregateId: qualifyAggregateId('run', run.result.runId),
             identity: { kind: 'agent', agent: 'polish' },
             userFollowUpSupport: 'unsupported',
             parent: null,

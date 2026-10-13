@@ -52,13 +52,13 @@ const CHANNEL = 'ExternalBinaryUtils';
  * callers classify it off the cause chain rather than the message text; a
  * present package resolves its export via {@link resolveSdkExport}.
  */
-export function importForeignSdk<T>(opts: {
-  readonly load: () => Promise<Record<string, unknown>>;
+export function importForeignSdk<M, K extends keyof M & string>(opts: {
+  readonly load: () => Promise<M>;
   readonly notFoundMessage: string;
-  readonly exportName: string;
+  readonly exportName: K;
   readonly specifier: string;
   readonly errorLabel: string;
-}): Effect.Effect<T, Error> {
+}): Effect.Effect<M[K], Error> {
   return Effect.tryPromise({
     try: opts.load,
     catch: (err) =>
@@ -69,7 +69,7 @@ export function importForeignSdk<T>(opts: {
     Effect.flatMap((mod) =>
       Effect.try({
         try: () =>
-          resolveSdkExport<T>(mod, {
+          resolveSdkExport(mod, {
             exportName: opts.exportName,
             specifier: opts.specifier,
             errorLabel: opts.errorLabel,
@@ -96,30 +96,35 @@ export function importForeignSdk<T>(opts: {
  * @throws if the export is missing or not a function — a build-configuration
  * error (the package landed in esbuild's `external` array).
  */
-function resolveSdkExport<T>(
-  mod: Record<string, unknown>,
+function resolveSdkExport<M, K extends keyof M & string>(
+  mod: M,
   opts: {
     /** Property name of the export inside the module (e.g. `query`, `Codex`). */
-    readonly exportName: string;
+    readonly exportName: K;
     /** Package specifier, for the error message (e.g. `@openai/codex-sdk`). */
     readonly specifier: string;
     /** Human label for the export in the error (e.g. `query()`, `Codex class`). */
     readonly errorLabel: string;
   },
-): T {
+): M[K] {
+  // The bundler's interop shape is not what the module's type declares, so
+  // the lookup reads the namespace as the plain record it is at runtime.
+  const record = mod as Record<string, unknown>;
   const value =
-    mod[opts.exportName] ??
-    (mod.default as Record<string, unknown> | undefined)?.[opts.exportName] ??
-    mod.default;
+    record[opts.exportName] ??
+    (record.default as Record<string, unknown> | undefined)?.[
+      opts.exportName
+    ] ??
+    record.default;
 
   if (typeof value !== 'function') {
-    const keys = Object.keys(mod).join(', ');
+    const keys = Object.keys(record).join(', ');
     throw new Error(
       `${opts.errorLabel} not found in ${opts.specifier}. Module keys: [${keys}]. ` +
         `Ensure ${opts.specifier} is NOT in esbuild externals.`,
     );
   }
-  return value as T;
+  return value as M[K];
 }
 
 // ---------------------------------------------------------------------------

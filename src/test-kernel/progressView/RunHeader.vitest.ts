@@ -109,7 +109,7 @@ describe('run-header over the fold', () => {
       } as RunView;
       const { element } = await mountHeader(view, {
         ...fields,
-        actions: runActions(fields),
+        actions: runActions(fields, false),
       });
       return (
         element.shadowRoot?.querySelector(

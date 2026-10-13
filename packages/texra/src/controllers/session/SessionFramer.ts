@@ -22,26 +22,24 @@
  * Rows are framed as committed: secrets never enter the event table, so no
  * framer redacts.
  */
-import { Effect, Stream, SubscriptionRef, type Context } from 'effect';
+import { Effect, Stream, SubscriptionRef } from 'effect';
 
 import {
-  aggregateId as qualifyAggregateId,
+  qualifyAggregateId,
   listingTypeOf,
   type CommitOrdinal,
   type ExistenceReconciliation,
   type FoldInput,
   type LocalRuntimeState,
   type TextChunk,
-  type TranscriptSubscription,
 } from '@shared/schemas';
-import type { SessionInputs } from '@shared/session/sessionInputs';
-import type { SessionView } from '@shared/session/sessionView';
 import type { HostSnapshot } from '@texra/shared/session/hostSnapshot';
 import type {
   EventsFrame,
   FoldEvent,
   Subscribe,
 } from '@texra/shared/session/sessionFrames';
+import type { Session } from '@texra-ai/harness';
 
 /** Rows per frame before the window cuts it. */
 const FRAME_ROWS = 256;
@@ -50,16 +48,11 @@ const FRAME_WINDOW = '16 millis';
 /** Frames buffered ahead of the port before the framer suspends. */
 const FRAME_BUFFER = 64;
 
-/** The session view, ordered input reader, and per-port subscription setter. */
+/** What a framer reads: the session key every frame carries, and the
+ *  session's view, whose `watch` is the ordered input reader. */
 export interface FramerSource {
-  /** The session key on every frame. */
   readonly key: string;
-  readonly view: SubscriptionRef.SubscriptionRef<SessionView>;
-  readonly inputs: Context.Service.Shape<typeof SessionInputs>['read'];
-  readonly setTranscriptSubscriptions: (
-    port: string,
-    set: readonly TranscriptSubscription[],
-  ) => Effect.Effect<void>;
+  readonly view: Pick<Session['view'], 'current' | 'watch'>;
 }
 
 type FrameItem =
@@ -149,22 +142,24 @@ function cutFrame(
  */
 export function frameSubscription(
   source: FramerSource,
-  port: string,
   host: SubscriptionRef.SubscriptionRef<HostSnapshot | null>,
   subscribe: Subscribe,
 ): Stream.Stream<EventsFrame> {
   const named = new Set(subscribe.aggregates.map((s) => s.id));
   return Stream.unwrap(
-    Effect.gen(function* () {
-      yield* source.setTranscriptSubscriptions(port, subscribe.aggregates);
-      // The tail position: the runtime view's cursor, read before the
+    Effect.sync(() => {
+      // The tail position: the session view's cursor, read before the
       // reads below, on a cold mount; the subscriber's own on a resubscribe.
+      // The watch holds the subscriber's transcript set while it runs.
       const tailFrom =
         subscribe.cursor === 0
-          ? (yield* SubscriptionRef.get(source.view)).cursor
+          ? source.view.current().cursor
           : subscribe.cursor;
-      const inputs = source
-        .inputs(subscribe.aggregates, tailFrom, subscribe.debug)
+      const inputs = source.view
+        .watch(subscribe.aggregates, {
+          cursor: tailFrom,
+          debug: subscribe.debug,
+        })
         .pipe(
           Stream.flatMap((batch) =>
             Stream.fromIterable(batch).pipe(

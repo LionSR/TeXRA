@@ -1,14 +1,13 @@
 // The CLI's binding of the shared provider-key controller. Every terminal
-// surface that writes a provider key — first-run onboarding, `/key`,
+// surface that writes a provider key — the "Connect a model" panel, `/key`,
 // `/config`'s API-keys row, and the retry that asks for a key before
 // switching a run onto it — goes through this one program, so the secret
 // name, the label and the post-write refresh are the same three ways they
 // are on the two graphical hosts.
 //
-// What each surface still owns is where the controller's notice lands: the
-// chat TUI has a transcript to put it in, the onboarding wizard prints its
-// own confirmation on exit. So the prompt port is the parameter of the one
-// body below and each surface binds its own.
+// What each surface still owns is where the controller's notice lands (the
+// chat TUI has a transcript to put it in), so the prompt port is the
+// parameter of the one body below and each surface binds its own.
 
 // Third-party imports
 import { Effect, Fiber } from 'effect';
@@ -24,7 +23,7 @@ import { onAppSignal } from '@eventBus/AppSignals';
 // Local imports - platform
 // Local imports - shared
 import type { SettingsStores } from '@shared/config/settingsAccess';
-import { PromptFailed, type PromptHost } from '@texra/hosts/uiHosts';
+import type { PromptHost } from '@texra/hosts/uiHosts';
 import {
   ProviderKeyActionFailed,
   SettingsProfileKeyController,
@@ -79,57 +78,6 @@ export const commitCliProviderApiKey = (
   key: string,
 ): Effect.Effect<void, Error> =>
   commitProviderApiKeyVia(tuiUi, secrets, stores, provider, key);
-
-/**
- * The onboarding wizard's dialog surface. The wizard is its own Ink app, run
- * before the chat TUI mounts (and, under `texra setup`, in the same process
- * as the chat TUI that follows): it renders every step in its own frame and
- * states the outcome in the summary it prints on exit.
- *
- * `info` is silent here by design, not by omission. The one notice this path
- * raises — "<Provider> API key has been set" — is the fact the wizard already
- * prints, with the secret name and the environment variable the generic
- * notice cannot know. Sending it to the chat transcript instead would post a
- * row into a signal the wizard does not render, which the user's first chat
- * run then adopts as its opening line.
- *
- * `confirm` and `input` have no surface here at all: nothing on the
- * onboarding path reaches them (the controller opens them only from
- * `setProviderKey`/`removeProviderKey`, which the wizard does not call). They
- * fail rather than answer a dismissal the user never made, so a caller that
- * did reach them sees the fault instead of a silent "no".
- */
-const onboardingUi: Pick<PromptHost, 'input' | 'info' | 'confirm'> = {
-  info: () => Effect.succeed(undefined),
-  confirm: (message) =>
-    Effect.fail(
-      new PromptFailed({
-        reason: 'host-unavailable',
-        member: 'confirm',
-        message: `The onboarding wizard has no confirmation dialog: ${message}`,
-      }),
-    ),
-  input: (options) =>
-    Effect.fail(
-      new PromptFailed({
-        reason: 'host-unavailable',
-        member: 'input',
-        message: `The onboarding wizard has no input dialog: ${options.prompt ?? 'input'}`,
-      }),
-    ),
-};
-
-/**
- * The onboarding wizard's binding: the same write, the same refresh, the same
- * relayed failure the wizard shows in place — and no transcript notice.
- */
-export const commitOnboardingProviderApiKey = (
-  secrets: PlatformSecrets,
-  stores: SettingsStores,
-  provider: ApiKeyProviderId,
-  key: string,
-): Effect.Effect<void, Error> =>
-  commitProviderApiKeyVia(onboardingUi, secrets, stores, provider, key);
 
 /**
  * Ask for a provider key and write it: the `promptForApiKey` the shared

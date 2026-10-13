@@ -17,7 +17,7 @@ import {
 
 import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 
-import { testRuntime } from '@test/support/testProcessRuntime';
+import { testRuntime, testSessionOf } from '@test/support/testProcessRuntime';
 
 import {
   createFakeHost,
@@ -28,7 +28,7 @@ import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { documentTaskConfig } from '@texra/agent/output/documentRecipe';
 import {
-  aggregateId,
+  qualifyAggregateId,
   emptyRunEndOutput,
   MESSAGE_TYPES,
   RUN_OUTCOME,
@@ -225,7 +225,7 @@ async function publishRunFacts(
       {
         type: 'run.description',
         by: 'model',
-        aggregateId: aggregateId('run', runId),
+        aggregateId: qualifyAggregateId('run', runId),
         description: facts.description,
       },
     ]);
@@ -234,7 +234,7 @@ async function publishRunFacts(
     publishTestRows(session, [
       {
         type: 'run.end',
-        aggregateId: aggregateId('run', runId),
+        aggregateId: qualifyAggregateId('run', runId),
         outcome: facts.outcome,
         output: emptyRunEndOutput(),
       },
@@ -296,6 +296,9 @@ describe('CLI history runtime', () => {
         globalState: host.roots.globalState,
         secrets: host.secrets,
         session: Effect.succeed(testDefaultSession()),
+        runSession: Effect.sync(() =>
+          testSessionOf(testDefaultSession(), { persistent: true }),
+        ),
         roots: host.roots,
         runtime: testRuntime(),
       }),

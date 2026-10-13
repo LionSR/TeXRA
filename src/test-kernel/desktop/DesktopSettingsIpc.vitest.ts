@@ -149,7 +149,7 @@ async function createSettingsFixture(overrides: SettingsFixtureOverrides = {}) {
       },
       secrets: new FakeSecrets(),
       resourcesPath: '/resources',
-      session,
+      roots: session.roots,
     }).pipe(
       // Runs an owned command's program the way the window's router does.
       Effect.map((ipc) => ({

@@ -30,7 +30,6 @@ import {
   type ModelOptionStores,
 } from '@model/computeModelOptions';
 import { readModelSettings } from '@model/modelSettings';
-import { ProjectEnvironment } from '@platform/defaults/nodeWorkspace';
 import type { StateReadFailed } from '@platform/interfaces';
 import { LanguageModel } from '@platform/languageModel';
 import type {
@@ -39,6 +38,7 @@ import type {
   ModelBackend,
   RetryErrorInfo,
 } from '@shared/schemas';
+import { ProjectEnvironment } from '@utils/system/nodeWorkspace';
 
 import { bindRoute } from './binding';
 import {

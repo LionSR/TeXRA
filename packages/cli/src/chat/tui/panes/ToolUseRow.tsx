@@ -4,10 +4,10 @@
 
 import { memo } from 'react';
 import { Box, Text } from 'ink';
+import type { ToolRow } from '@cli/chat/tui/state/sessionView';
 
 import { TOOL_OUTPUT_CORNER } from '@cli/tui/ui/glyphs';
 import { clipToWidth } from '@cli/runtime/terminalText';
-import type { ToolRow } from '@shared/transcript';
 
 import { DiffView } from '../render/DiffView';
 import {

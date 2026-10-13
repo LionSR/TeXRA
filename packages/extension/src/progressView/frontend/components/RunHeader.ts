@@ -669,7 +669,12 @@ export class RunHeader extends LitElement {
   }
 
   private renderRunElapsed(run: RunView): TemplateResult | typeof nothing {
-    if (run.runStartedAt === null || run.group === 'recent') {
+    // A run parked on the user's answer is not working: no live clock.
+    if (
+      run.runStartedAt === null ||
+      run.group === 'recent' ||
+      run.group === 'waiting'
+    ) {
       return nothing;
     }
     return html`<tool-timer .startTime=${run.runStartedAt}></tool-timer>`;

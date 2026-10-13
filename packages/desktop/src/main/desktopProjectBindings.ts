@@ -208,7 +208,7 @@ export const openProjectBindings = Effect.fn('desktop.openProjectBindings')(
       // Install the recipient before host requests publish the recorder's
       // state.
       const bridge = yield* SessionBridge.make({
-        backend: project.backend,
+        session: project.session,
         handleHostRequest: (request, portId) =>
           hostRequests.handleHostRequest(request, portId),
         onPortClosed: (portId) => hostRequests.closePort(portId),
@@ -219,7 +219,7 @@ export const openProjectBindings = Effect.fn('desktop.openProjectBindings')(
       const snapshot = createHostSnapshotSource({
         project: project.display,
         root: project.root,
-        stores: project.session.roots,
+        stores: project.roots,
         secrets: options.secrets,
         fileOptions: () =>
           files.fileOptions().pipe(
@@ -259,28 +259,41 @@ export const openProjectBindings = Effect.fn('desktop.openProjectBindings')(
         : snapshot.refresh;
       // The window's focus, told to the service as a VS Code window's is:
       // the project's host calls go to the window the user last worked in.
-      const focused = Stream.callback<void>((queue) =>
-        Effect.acquireRelease(
-          Effect.sync(() => {
-            const onFocus = () => Queue.offerUnsafe(queue, undefined);
-            host.window.on('focus', onFocus);
-            if (host.window.isFocused()) onFocus();
-            return onFocus;
-          }),
-          (onFocus) =>
+      // The window shows one project at a time, so only that project's
+      // binding reports its focus, and a project shown while the window is
+      // focused reports it then.
+      const shown = () =>
+        SubscriptionRef.getUnsafe(projects.state).activeKey === project.key;
+      const focused = Stream.merge(
+        Stream.callback<void>((queue) =>
+          Effect.acquireRelease(
             Effect.sync(() => {
-              if (!host.window.isDestroyed()) host.window.off('focus', onFocus);
+              const onFocus = () => {
+                if (shown()) Queue.offerUnsafe(queue, undefined);
+              };
+              host.window.on('focus', onFocus);
+              if (host.window.isFocused()) onFocus();
+              return onFocus;
             }),
+            (onFocus) =>
+              Effect.sync(() => {
+                if (!host.window.isDestroyed())
+                  host.window.off('focus', onFocus);
+              }),
+          ),
+        ),
+        SubscriptionRef.changes(projects.state).pipe(
+          Stream.map((state) => state.activeKey === project.key),
+          Stream.changes,
+          Stream.filter((isShown) => isShown && host.window.isFocused()),
+          Stream.map(() => undefined),
         ),
       );
       const run = yield* createDesktopAgentRun({
         runtime,
         host: hosts.run,
         toolEditPreview: hosts.toolEditPreview,
-        session: project.session,
-        backend: project.backend,
-        service: project.service,
-        root: project.root,
+        project,
         focused,
         showAgentConfigBanner: ({ agentName }) =>
           withProcessServices(
@@ -299,8 +312,7 @@ export const openProjectBindings = Effect.fn('desktop.openProjectBindings')(
       });
       const hostRequests = createDesktopHostRequests({
         runtime,
-        session: project.session,
-        backend: project.backend,
+        project,
         secrets: options.secrets,
         draftRequests: options.draftRequests,
         workspaceFile: workspace.file,
@@ -308,7 +320,6 @@ export const openProjectBindings = Effect.fn('desktop.openProjectBindings')(
         run,
         files,
         snapshot,
-        workspacePath: project.root,
         resourcesPath: options.resourcesPath,
         postToRenderer: host.post,
         postSurfaceAction: (action) => bridge.surfaceAction(action),

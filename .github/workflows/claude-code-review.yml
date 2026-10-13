@@ -132,8 +132,10 @@ jobs:
       # a count in the log. Name each one so the allowlist can be fixed instead
       # of guessed at. The input stays hidden, as the action intends: secret
       # masking misses unregistered values, so a denial shows only its tool
-      # and, for Bash, the program and a word-shaped subcommand (the prefix an
-      # allowlist pattern like Bash(gh pr:*) matches), never its arguments.
+      # and, for Bash, the program and its word-shaped subcommand (the prefix
+      # an allowlist pattern like Bash(gh pr:*) matches; for `gh`, whose
+      # groups take a subcommand of their own, one word more, as
+      # Bash(gh pr checks:*) needs), never its arguments.
       - name: Report denied tool calls
         continue-on-error: true
         if: always() && steps.claude-review.outcome != 'skipped'
@@ -163,10 +165,15 @@ jobs:
             name=$(jq -r '.tool_name | tostring' <<<"$denial" | tr -cd 'A-Za-z0-9_.-')
             if [ "$name" = "Bash" ]; then
               # Program name, then the next word only when it is a bare
-              # lowercase word (a subcommand), never a path, URL or value.
+              # lowercase word (a subcommand), never a path, URL or value;
+              # under a `gh` command group (pr, issue, repo, ...) the
+              # subcommand is the word after. `gh api` takes an endpoint
+              # there (`graphql` aside) and `gh browse` an argument: a word
+              # the group list leaves out is never shown.
               name=$(jq -r '.tool_input.command // "" | tostring' <<<"$denial" | head -n1 |
                 awk '{ p = $1; sub(/.*\//, "", p); gsub(/[^A-Za-z0-9_.-]/, "", p)
                        s = ($2 ~ /^[a-z][a-z-]*$/) ? " " $2 : ""
+                       if (p == "gh" && s != "" && $3 ~ /^[a-z][a-z-]*$/ && ($2 ~ /^(pr|issue|repo|run|workflow|release|search|label|gist|project)$/ || ($2 == "api" && $3 == "graphql"))) s = s " " $3
                        printf "Bash(%s%s)", p, s }')
             fi
             echo "::warning title=Denied tool call::$name"

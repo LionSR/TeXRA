@@ -3,7 +3,6 @@ import { Cause, Effect } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports - utils
-import type { SessionHandle } from '@agent/runtime';
 import {
   showLoggedErrorMessage,
   showLoggedMessage,
@@ -13,6 +12,7 @@ import { withLogChannel } from '@logger/effectLog';
 import type { NotificationFailed } from '@texra/hosts/uiHosts';
 import { workspaceRelativePath } from '@utils/files/workspaceFS';
 import { ensureError } from '@utils/errors/errorMessage';
+import type { WorkspaceRoots } from '@texra-ai/harness';
 
 const CHANNEL = 'ActiveFileGuards';
 
@@ -59,7 +59,7 @@ type ActiveFileGuardResult =
  * saving it first when dirty.
  */
 const getActiveLatexEditor = (
-  session: SessionHandle,
+  roots: WorkspaceRoots,
   saveDocument: boolean,
 ): Effect.Effect<ActiveFileGuardResult, NotificationFailed> =>
   Effect.gen(function* () {
@@ -99,7 +99,7 @@ const getActiveLatexEditor = (
     }
 
     const relativePath = workspaceRelativePath(
-      session.roots.workspace,
+      roots.workspace,
       editor.document.fileName,
     );
 
@@ -128,7 +128,7 @@ interface GuardedLatexCommandOptions {
  * through that same channel.
  */
 export function runGuardedLatexCommand<R = never>(
-  session: SessionHandle,
+  roots: WorkspaceRoots,
   options: GuardedLatexCommandOptions,
   operation: (
     guardResult: ActiveFileGuardSuccess,
@@ -137,7 +137,7 @@ export function runGuardedLatexCommand<R = never>(
   const { channel, action, saveDocument = false, errorMessage } = options;
 
   return Effect.gen(function* () {
-    const guardResult = yield* getActiveLatexEditor(session, saveDocument);
+    const guardResult = yield* getActiveLatexEditor(roots, saveDocument);
 
     if (guardResult.status !== 'ok') {
       const failure = GUARD_FAILURE_MESSAGES[guardResult.status];

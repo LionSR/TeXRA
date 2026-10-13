@@ -96,8 +96,6 @@ interface CliRunnableModelOptions extends Pick<
   CliModelAccessEntryOptions,
   'stores' | 'accessList'
 > {
-  /** Decision reason that owns unavailable-model fallback behavior. */
-  readonly fallbackReason?: RunModelDecisionReason;
   readonly noAvailableModelsMessage?: string;
 }
 
@@ -382,26 +380,19 @@ type NormalizedCliModelCandidate = RunModelCandidate & {
   readonly model: string;
 };
 
+/**
+ * Each candidate's `reason` owns its unavailable-model fallback behavior
+ * (`CLI_MODEL_FALLBACK_MODE_BY_REASON`) unless it names its own
+ * `fallbackMode`.
+ */
 export const selectCliRunnableModel = Effect.fn('selectCliRunnableModel')(
   function* (
-    request: string | readonly RunModelCandidate[],
+    candidates: readonly RunModelCandidate[],
     options: CliRunnableModelOptions,
   ) {
     const models = yield* loadCliModelAccessList(options);
-    let rawCandidates: readonly RunModelCandidate[];
-    if (typeof request === 'string') {
-      const fallbackReason = options.fallbackReason;
-      if (!fallbackReason) {
-        return yield* Effect.fail(
-          new Error('fallbackReason is required for single-model resolution'),
-        );
-      }
-      rawCandidates = [{ model: request, reason: fallbackReason }];
-    } else {
-      rawCandidates = request;
-    }
     const requestedCandidates: NormalizedCliModelCandidate[] =
-      rawCandidates.flatMap((candidate) => {
+      candidates.flatMap((candidate) => {
         const model = candidate.model?.trim();
         return model
           ? [
@@ -498,10 +489,7 @@ export const selectCliRunnableModel = Effect.fn('selectCliRunnableModel')(
     if (selectedLoadError) return yield* Effect.fail(selectedLoadError);
 
     const requestedModel =
-      (decision?.model ??
-        requestedCandidates[0]?.model ??
-        (typeof request === 'string' ? request.trim() : '')) ||
-      '<empty>';
+      (decision?.model ?? requestedCandidates[0]?.model) || '<empty>';
     const unavailableMessage = formatUnavailableModelMessage(
       requestedModel,
       findCliModelAccessEntry(modelsWithHiddenEntry, requestedModel),

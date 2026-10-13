@@ -15,7 +15,6 @@ import {
 
 // Local imports - shared runtime
 import { type RunId } from '@texra-ai/harness/schemas';
-import { type SessionHandle } from '@agent/runtime';
 import {
   isCtrlInput,
   isEscapeInput,
@@ -43,11 +42,7 @@ import { ScriptStagePopup } from './panes/ScriptStagePopup';
 import { InputBar, type InputBarHandle } from './panes/InputBar';
 import { ConversationRegion } from './panes/ConversationRegion';
 import { StatusBar } from './panes/StatusBar';
-import {
-  currentApproval,
-  promoteApprovalsForRun,
-  type SessionRequests,
-} from './state/approvalQueue';
+import { currentApproval, promoteApprovalsForRun } from './state/approvalQueue';
 import {
   ActiveDraftScope,
   createActiveDraftRegistry,
@@ -91,16 +86,15 @@ import {
   runningChildCount,
 } from './state/sessionView';
 import { useSignal } from './state/useSignal';
+import type { EventEmitter } from 'node:events';
 import type { ProcessRuntime } from '@texra-ai/harness';
-import type { PlatformSecrets, RuntimeRequest } from '@texra-ai/harness';
+import type {
+  PlatformSecrets,
+  RuntimeRequest,
+  Session,
+} from '@texra-ai/harness';
 import type { InputHistory } from './history/inputHistory';
 import type { PastedImageEntry } from './input/draftAttachments';
-
-interface InputEventEmitterLike {
-  emit(event: 'input', data: string): void;
-  on(event: 'input', listener: (data: string) => void): void;
-  off(event: 'input', listener: (data: string) => void): void;
-}
 
 // Jump-to-waiting: surface the newly focused run's pending approval right
 // away instead of leaving it queued behind other runs' items.
@@ -122,13 +116,10 @@ export interface AppProps {
    * requests run on, threaded from the same chat surface.
    */
   readonly runtime: ProcessRuntime;
-  /** The chat's session: approval decisions and run requests land on it and
-   *  the work-plan reader renders from it, threaded from the chat surface that
-   *  opened it. */
-  readonly session: SessionHandle;
-  /** Where run requests and approval decisions land: the chat's session in
-   *  the service; `session`'s own when unset. */
-  readonly requests?: SessionRequests;
+  /** The chat's session, here or in the service: approval decisions and
+   *  run requests land on it and the work-plan reader renders from it,
+   *  threaded from the chat surface that opened it. */
+  readonly session: Session;
   readonly onSubmit: (
     line: string,
     mediaFiles?: readonly string[],
@@ -146,7 +137,7 @@ export interface AppProps {
 }
 
 export function App(props: AppProps): React.JSX.Element {
-  const requests = props.requests ?? props.session.requests;
+  const requests = props.session;
   const view = useSignal(sessionView());
   const pending = useSignal(currentApproval);
   // The selection and the reader arrive already resolved against the view
@@ -226,8 +217,10 @@ export function App(props: AppProps): React.JSX.Element {
   // only while the main draft input is active; standalone Shift+Enter is
   // already parsed by Ink and must not be emitted twice.
   useEffect(() => {
+    // Ink's stdin context carries its input emitter at runtime (Ink's own
+    // `Props` type declares it), but `useStdin` types only the public subset.
     const emitter = (
-      stdin as unknown as { internal_eventEmitter?: InputEventEmitterLike }
+      stdin as typeof stdin & { internal_eventEmitter?: EventEmitter }
     ).internal_eventEmitter;
     if (!emitter) return;
     const onInput = (data: string): void => {
@@ -237,7 +230,9 @@ export function App(props: AppProps): React.JSX.Element {
       if (rewritten !== undefined) emitter.emit('input', rewritten);
     };
     emitter.on('input', onInput);
-    return () => emitter.off('input', onInput);
+    return () => {
+      emitter.off('input', onInput);
+    };
   }, [inputDisabled, stdin]);
 
   const sessions = useSignal(sessionListRunIds);
@@ -351,7 +346,6 @@ export function App(props: AppProps): React.JSX.Element {
             availableRows={availableRows}
             onClose={closeForegroundReader}
             runId={reader.runId}
-            session={props.session}
             title={`Work plan: ${label}`}
           />
         );

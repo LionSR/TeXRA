@@ -26,16 +26,12 @@ import {
 } from '@agent/storage/runRecords';
 import { withLogChannel } from '@logger/effectLog';
 import {
-  aggregateId,
+  qualifyAggregateId,
   storedResultMeta,
   type DeliveredResult,
   type RunId,
 } from '@shared/schemas';
-import {
-  DatabaseNotOwner,
-  DatabaseReadFailed,
-  DatabaseRowCorrupt,
-} from '@shared/session/database';
+import { DatabaseNotOwner, DatabaseReadFailed } from '@shared/session/database';
 import type { QueuedFollowUp } from '@shared/session/runRows';
 import type { RunInputDraft } from '@shared/session/runStateFold';
 import type { CoWrite } from '@shared/session/sessionEvents';
@@ -96,7 +92,7 @@ export type TransactionPart = Effect.Effect<
  * prompt's, so a re-execution after a crash is judged a replay, else the
  * `child.turn` key (run, attempt, turn index), distinct across attempts.
  */
-export function settlementOf(params: {
+export function childSettlementOf(params: {
   readonly runId: RunId;
   readonly turn: AttemptKey;
   readonly message: string;
@@ -108,7 +104,7 @@ export function settlementOf(params: {
   readonly end?: ChildDelivery['end'];
 }): ChildSettlement {
   const { runId, turn, to } = params;
-  const target = aggregateId('run', runId);
+  const target = qualifyAggregateId('run', runId);
   const prompt = params.consumed[0]?.followUpId;
   const deliveryId =
     params.deliveryId ??
@@ -170,8 +166,7 @@ export const parentAdmission = (
     Effect.catchIf(
       (error) =>
         (error instanceof DatabaseNotOwner && error.closed) ||
-        error instanceof DatabaseReadFailed ||
-        error instanceof DatabaseRowCorrupt,
+        error instanceof DatabaseReadFailed,
       (error) =>
         Effect.succeed({
           rows: [],
@@ -229,7 +224,7 @@ export const deliverIn = (
         rows: [
           {
             type: 'child.park' as const,
-            aggregateId: aggregateId('run', child),
+            aggregateId: qualifyAggregateId('run', child),
             phase: 'parked' as const,
             heldFor: item.deliveryId,
             ...(end !== undefined && { ends: end }),

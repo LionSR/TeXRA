@@ -23,7 +23,7 @@ import {
 } from '@shared/approvalPolicy';
 import type { SurfacedSettingEntry } from '@shared/state/stateSettings';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
-import { testRuntime } from '@test/support/testProcessRuntime';
+import { testRuntime, testSessionOf } from '@test/support/testProcessRuntime';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import {
   createDeferred,
@@ -181,6 +181,7 @@ async function openConfigFormProps(
     stores,
     runtime: testRuntime(),
     runtimeSession: testDefaultSession(),
+    runSession: testSessionOf(testDefaultSession()),
     configStores: stores,
   });
   openCliSlashCommandForm('config', '');
@@ -391,6 +392,7 @@ describe('/config slash command wiring', () => {
           stores,
           runtime: testRuntime(),
           runtimeSession: testDefaultSession(),
+          runSession: testSessionOf(testDefaultSession()),
           configStores: stores,
         });
         expect(openCliSlashCommandForm('config', '')).toBe(true);
@@ -420,8 +422,9 @@ describe('/config slash command wiring', () => {
           stores,
           runtime: testRuntime(),
           runtimeSession: testDefaultSession(),
+          runSession: testSessionOf(testDefaultSession()),
           configStores: stores,
-          onApprovalPolicySelect: (policy) => {
+          onProjectApprovalPolicyChanged: (policy) => {
             applied.push(policy);
           },
         });

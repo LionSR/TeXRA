@@ -7,7 +7,7 @@ import { describe, expect, it, onTestFinished, vi } from 'vitest';
 
 // Local imports
 import {
-  aggregateId as qualifyAggregateId,
+  qualifyAggregateId,
   RunIdSchema,
   type SessionEvent,
 } from '@shared/schemas';

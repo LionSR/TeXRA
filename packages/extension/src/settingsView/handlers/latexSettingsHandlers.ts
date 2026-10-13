@@ -18,43 +18,34 @@ const CHANNEL = 'latexSettingsHandlers';
 
 type LatexRecommendedSettingField = 'outDir' | 'autoRevealExclude';
 
-/** A recommended setting whose target value is a single scalar. */
-interface LatexRecommendedScalarSetting {
-  kind: 'scalar';
-  key: string;
-  value: string;
-  field: LatexRecommendedSettingField;
-}
-
 /**
- * A recommended setting whose target value is an object merged key-by-key
- * into whatever the user already has set (rather than overwritten wholesale).
+ * A recommended setting: a scalar written as is, or an object merged
+ * key-by-key into whatever the user already has set (rather than overwritten
+ * wholesale).
  */
-interface LatexRecommendedObjectSetting {
-  kind: 'object';
-  key: string;
-  value: Record<string, unknown>;
-  field: LatexRecommendedSettingField;
-}
-
 type LatexRecommendedSetting =
-  LatexRecommendedScalarSetting | LatexRecommendedObjectSetting;
+  | { readonly kind: 'scalar'; readonly key: string; readonly value: string }
+  | {
+      readonly kind: 'object';
+      readonly key: string;
+      readonly value: Readonly<Record<string, boolean>>;
+    };
 
 /** Recommended LaTeX-related VS Code settings and their target values. */
-const LATEX_RECOMMENDED_SETTINGS: LatexRecommendedSetting[] = [
-  {
+const LATEX_RECOMMENDED_SETTINGS: Readonly<
+  Record<LatexRecommendedSettingField, LatexRecommendedSetting>
+> = {
+  outDir: {
     kind: 'scalar',
     key: 'latex-workshop.latex.outDir',
     value: '%DIR%/build/',
-    field: 'outDir',
   },
-  {
+  autoRevealExclude: {
     kind: 'object',
     key: 'explorer.autoRevealExclude',
     value: { '**/build/': true },
-    field: 'autoRevealExclude',
   },
-];
+};
 
 /**
  * Whether a recommended setting is explicitly set to its recommended value.
@@ -62,10 +53,7 @@ const LATEX_RECOMMENDED_SETTINGS: LatexRecommendedSetting[] = [
  * the user's other keys are irrelevant.
  */
 function isRecommendedValueSet(field: LatexRecommendedSettingField): boolean {
-  const setting = LATEX_RECOMMENDED_SETTINGS.find(
-    (candidate) => candidate.field === field,
-  );
-  if (!setting) return false;
+  const setting = LATEX_RECOMMENDED_SETTINGS[field];
   const inspection = vscode.workspace.getConfiguration().inspect(setting.key);
   const explicitlySet =
     inspection?.globalValue !== undefined ||
@@ -172,10 +160,8 @@ export function vscodeLatexSettingsHandlers(
         Effect.gen(function* () {
           const reset = data.reset ?? false;
           const targets = data.field
-            ? LATEX_RECOMMENDED_SETTINGS.filter(
-                (setting) => setting.field === data.field,
-              )
-            : LATEX_RECOMMENDED_SETTINGS;
+            ? [LATEX_RECOMMENDED_SETTINGS[data.field]]
+            : Object.values(LATEX_RECOMMENDED_SETTINGS);
           for (const setting of targets) {
             yield* Effect.tryPromise({
               try: () =>

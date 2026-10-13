@@ -19,7 +19,10 @@ import {
   type WorkbenchKind,
   type WorkbenchTab,
 } from '../shared/desktopShellState';
-import { DESKTOP_WORKSPACE_COMMANDS } from '../shared/desktopWorkspaceMessages';
+import {
+  DESKTOP_WORKSPACE_COMMANDS,
+  type DesktopWorkspaceRequest,
+} from '../shared/desktopWorkspaceMessages';
 import { dockGroupActions, dockTab } from './dockControls';
 import type { createEditorPane } from './editorPane';
 import type { createPdfPane } from './pdfPane';
@@ -40,7 +43,7 @@ interface WorkbenchControllerDeps {
   logsPane: HTMLElement;
   getState(): DesktopShellState;
   updateShell(next: DesktopShellState): void;
-  postMessage(command: string, payload?: Record<string, unknown>): void;
+  postMessage(message: DesktopWorkspaceRequest): void;
 }
 
 /** A project owns one dock. Reparenting a panel never disposes its resources. */
@@ -111,12 +114,13 @@ export function createWorkbenchController(deps: WorkbenchControllerDeps) {
       deps.isBrowserCovered() ||
       dragging
     ) {
-      postMessage(DESKTOP_WORKSPACE_COMMANDS.BROWSER_HIDE);
+      postMessage({ command: DESKTOP_WORKSPACE_COMMANDS.BROWSER_HIDE });
       return;
     }
     const rect = slot.getBoundingClientRect();
     if (!rect.width || !rect.height) return;
-    postMessage(DESKTOP_WORKSPACE_COMMANDS.BROWSER_BOUNDS, {
+    postMessage({
+      command: DESKTOP_WORKSPACE_COMMANDS.BROWSER_BOUNDS,
       tabId: tab.id,
       bounds: {
         x: Math.round(rect.x),
@@ -177,7 +181,8 @@ export function createWorkbenchController(deps: WorkbenchControllerDeps) {
           !loadedBrowserTabs.has(tab.id)
         ) {
           loadedBrowserTabs.add(tab.id);
-          postMessage(DESKTOP_WORKSPACE_COMMANDS.BROWSER_OPEN, {
+          postMessage({
+            command: DESKTOP_WORKSPACE_COMMANDS.BROWSER_OPEN,
             tabId: tab.id,
             url: tab.target,
           });
@@ -240,7 +245,10 @@ export function createWorkbenchController(deps: WorkbenchControllerDeps) {
     if (tab.kind === 'pdf') deps.pdfPane.dispose(tab.id);
     if (tab.kind === 'browser') {
       loadedBrowserTabs.delete(tab.id);
-      postMessage(DESKTOP_WORKSPACE_COMMANDS.BROWSER_CLOSE, { tabId: tab.id });
+      postMessage({
+        command: DESKTOP_WORKSPACE_COMMANDS.BROWSER_CLOSE,
+        tabId: tab.id,
+      });
     }
   }
 

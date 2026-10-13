@@ -2,21 +2,22 @@
  * Canonical onboarding-funnel copy (PRD: agent-native onboarding — one
  * funnel, three surfaces).
  *
- * The CLI first-run picker, the extension/desktop welcome card, and the
- * walkthrough import these strings instead of paraphrasing each other, so the
- * choice order can never drift between surfaces.
+ * The extension/desktop welcome card and the walkthrough import these strings
+ * instead of paraphrasing each other, so the choice order can never drift
+ * between surfaces; the CLI's "Connect a model" panel shares the title and
+ * the ChatGPT choice, and names the key choice as its own `/key` row does.
  * Surface-specific hints (e.g. "run `texra auth chatgpt login`" vs. a settings link) stay
  * in the surface that owns them.
  *
  * Where a choice names one of the two ways model calls are paid for, the name
- * comes from `modelAccess.ts` so the first-run picker and the model-access
+ * comes from `modelAccess.ts` so the welcome card and the model-access
  * setting cannot call the same choice two different things.
  */
 
 import { OWN_API_KEYS } from './modelAccess';
 
 /** The one credential prompt: the extension/desktop card and the CLI's
- *  first-run picker carry the same title. */
+ *  connect panel carry the same title. */
 export const ONBOARDING_CARD_TITLE = 'Connect a model';
 
 /**
@@ -34,8 +35,8 @@ export const ONBOARDING_CHOICE_CHATGPT = {
 
 /**
  * State 0 choice 2. Same name as the model-access setting's option, so the
- * first-run picker and the settings radio group cannot drift apart; the
- * description stays short here because the picker shows one line per choice.
+ * welcome card and the settings radio group cannot drift apart; the
+ * description stays short here because the card shows one line per choice.
  */
 export const ONBOARDING_CHOICE_API_KEY = {
   label: OWN_API_KEYS.option.label,
