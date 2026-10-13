@@ -110,15 +110,17 @@ an added indirection tier — one `Effect` per run appending one history, one
      mask); `finalizeRun` (`storage/runLifecycle.ts`, "the one writer of a run's
      end") appends through that same cell door, and `forkRun.ts` is the one-time
      atomic birth of a _new_ forked run, not a second writer into an existing
-     one. The invariant is one writer per concern, not literally every row
-     through the cell: two row kinds are written outside it and are not loop
-     history — (a) the **request surface** rows `request.opened`/`request.decided`,
-     written through `session.log.transact`/`runStateAppend` by `requestPolicy.ts`
-     (the ask/decide path, a separate owner, folded into run state via its type
-     index), and (b) `endIn`'s degraded "run ends unloaded" fallback
-     (`runLifecycle.ts:285`), which writes the closing rows _beside_ the cell,
-     loudly, when the cell is unloadable. Neither is a second writer of the
-     loop's history. `SessionHandle`
+     one. The invariant is that the loop is the one writer of its own run
+     history through that cell, not that literally every run-state row is written
+     through the cell: several other run-state row kinds are written directly
+     through `session.log.transact`/`runStateAppend` by their own single owners —
+     the request surface (`request.*`, `requestPolicy.ts`), settlement and meta
+     rows such as `child.turn` (`childRunLoop.ts`), `run.description`
+     (`sessionDescription.ts`) and `run.result` (`storage/runRecords.ts`), and
+     `endIn`'s loud "run ends unloaded" fallback (`runLifecycle.ts:285`) — and
+     folded into run state through the type index, which is the authoritative
+     list of row owners (`shared/session/runStateFold.ts`), not this note. None
+     is a second writer of the loop's history. `SessionHandle`
      remains a flat record of owner fields that "does no work and forwards
      nothing" (`SessionHandle.ts:342-372`). `ChildRuns` (lane E5,
      `runtime/ToolServices.ts`) is a capability-narrowing door that hides
@@ -226,23 +228,22 @@ an added indirection tier — one `Effect` per run appending one history, one
 
 ## Observations this pass (not defects, recorded so the next pass need not re-derive)
 
-- **Error vocabulary: eight lifecycle+store, seventeen tagged classes in all; the
-  "eight in all" wording is scoped.** `packages/harness/src/effect/errors.ts`
-  defines six lifecycle tagged errors (`PluginsRefused`, `SessionOptionsConflict`,
-  `AgentNotFound`, `ToolsRefused`, `ResumeRefused`, `RunFailure`) plus two
-  re-exported store errors (`DatabaseOpenFailed`, `DatabaseReadFailed`, the
-  `SessionOpenError` union) — eight, which both the `errors.ts` header and
-  `packages/harness/README.md` state with the same breakdown; that reconcile held
-  through the growth from the 2026-10-04 six. But the root entry also re-exports
-  the `RequestError` union values (`NotOwner`, `Unavailable`, `Cancelled`,
-  `Rejected`, `Internal`) and the platform error classes (`ConfigWriteFailed`,
-  `StateReadFailed`, `StateWriteFailed`, `AgentDirectoriesFailed`), for seventeen
-  tagged-error classes in all. Those are separately documented families (the
-  request vocabulary every host reads; the platform-port write failures), not a
-  second launch-error vocabulary — so the eight is the lifecycle+store count
-  correctly, but the "eight … in all" phrasing reads as a total it is not. A
-  one-line clarification in `errors.ts`/README is a cheap owner-level follow-up,
-  not a reconcile this pass owns.
+- **The error-vocabulary "N in all" wording is scoped to one family — a cheap
+  owner-level clarification.** `packages/harness/src/effect/errors.ts` and
+  `packages/harness/README.md` carry a headline count ("… in all") that both
+  keep in sync and that moves as the surface grows (the lifecycle errors defined
+  in `errors.ts` plus the re-exported store family — the count has stepped from
+  six to the current nine as errors were added and `SessionOptionsConflict` moved
+  into the store family). The authoritative, non-drifting enumeration is
+  `errors.ts`/README plus the committed `config/api-reports/` snapshots, so this
+  note deliberately asserts no fixed total of its own. The only point worth
+  recording is that the "… in all" phrasing is scoped to the lifecycle+store
+  family and is **not** the whole tagged-error surface: the root entry also
+  re-exports the `RequestError` family (the request vocabulary every host reads)
+  and the platform-port write-failure classes, which that headline does not
+  count. A one-line scope clarification in `errors.ts`/README is the cheap
+  owner-level follow-up; it is not a reconcile this pass owns, and the exact
+  counts live in the api-report, not here.
 - **One direct `bound.model.*` call outside invoker/helper/compaction, and it is
   not inference.** `loop/toolUseDispatch.ts:1158` binds `bound.model.uploadFile`
   (invoked during tool-result delivery to offer delivered documents to the
