@@ -10,8 +10,10 @@ import {
   Deferred,
   Duration,
   Effect,
+  Fiber,
   FiberSet,
   Queue,
+  Schedule,
   type Scope,
   Stream,
   SubscriptionRef,
@@ -21,6 +23,7 @@ import type { HostInteractions } from '@agent/runtime/HostInteractions';
 import type { SessionHandle as RuntimeSessionHandle } from '@agent/runtime/SessionHandle';
 import { withLogChannel } from '@logger/effectLog';
 import { requestParksItsCaller, type RequestDecision } from '@shared/schemas';
+import type { RequestError } from '@shared/session/requestErrors';
 import { attentionOf } from '@shared/session/sessionView';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -34,6 +37,10 @@ const CHANNEL = 'agentPackage';
 
 /** How long the handler has to answer one request before it is denied. */
 const APPROVAL_HANDLER_TIMEOUT = Duration.minutes(10);
+
+/** How a decision the session refused to record is tried again, briefly,
+ *  before the next view offers its request again. */
+const DECIDE_RETRY = Schedule.exponential('100 millis').pipe(Schedule.jittered);
 
 /** The handler's decision on `pending`, or a denial naming why it gave
  *  none: a failure, a throw, or no answer in time. */
@@ -76,30 +83,46 @@ export interface Approver {
  * parked run waits on here (the attention rule every host reads), once,
  * through the session's one `request.decide`. It reads each view, and the
  * current one again when `wake` says it became the newest, since a parked
- * run publishes none. A decision the session refuses to record is logged
- * and its request offered again on the next view.
+ * run publishes none. A decision the session refuses to record is tried
+ * again briefly, then logged and its request offered again on the next
+ * view; a handler still deciding a request that left the view (another
+ * surface answered it) is interrupted.
  */
 function answerRequests(
   session: RuntimeSessionHandle,
   { host, wake, prompts, superseded }: Approver,
   active: () => boolean,
 ): Effect.Effect<void> {
-  // Keyed by run and request, as the fold keys a pending request.
-  const acted = new Set<string>();
+  // The handler fiber asked about each request, keyed by run and request
+  // as the fold keys a pending request.
+  const asked = new Map<string, Fiber.Fiber<void>>();
   const keyOf = (request: PendingRequest): string =>
     `${request.runId}\0${request.requestId}`;
+  const forget = (pending: PendingRequest): Effect.Effect<void> =>
+    Effect.sync(() => {
+      asked.delete(keyOf(pending));
+    });
+  // The session's one `request.decide`, tried again when its write is
+  // refused.
+  const record = (
+    pending: PendingRequest,
+    decision: RequestDecision,
+  ): Effect.Effect<void, RequestError> =>
+    session.requests
+      .request({
+        kind: 'request.decide',
+        runId: pending.runId,
+        requestId: pending.requestId,
+        decision,
+      })
+      .pipe(Effect.retry({ schedule: DECIDE_RETRY, times: 3 }), Effect.asVoid);
   const answer = (pending: PendingRequest): Effect.Effect<void> =>
     decisionOf(host, pending).pipe(
       Effect.flatMap((decision) =>
         // A newer handler attached as this one decided (its prompt is
         // withdrawn on attach; this is the backstop): the newer one answers.
         active()
-          ? session.requests.request({
-              kind: 'request.decide',
-              runId: pending.runId,
-              requestId: pending.requestId,
-              decision,
-            })
+          ? record(pending, decision)
           : Effect.logWarning(
               `A decision on request ${pending.requestId} came from a handler no longer the newest; the newer one answers it`,
             ).pipe(
@@ -108,16 +131,19 @@ function answerRequests(
             ),
       ),
       // Withdrawn: asked again should this handler become the newest.
-      Effect.onInterrupt(() => Effect.sync(() => acted.delete(keyOf(pending)))),
+      Effect.onInterrupt(() => forget(pending)),
       Effect.asVoid,
+      // An interrupt is a withdrawal, handled above; anything else is logged.
       Effect.catchCause((cause) =>
-        Effect.logWarning(
-          `The decision on request ${pending.requestId} was not recorded; it is offered again on the next view`,
-        ).pipe(
-          Effect.annotateLogs({ data: cause }),
-          withLogChannel(CHANNEL),
-          Effect.andThen(Effect.sync(() => acted.delete(keyOf(pending)))),
-        ),
+        Cause.hasInterruptsOnly(cause)
+          ? Effect.void
+          : Effect.logWarning(
+              `The decision on request ${pending.requestId} was not recorded; it is offered again on the next view`,
+            ).pipe(
+              Effect.annotateLogs({ data: cause }),
+              withLogChannel(CHANNEL),
+              Effect.andThen(forget(pending)),
+            ),
       ),
     );
   const woken = Stream.fromQueue(wake).pipe(
@@ -130,23 +156,34 @@ function answerRequests(
           (pending) =>
             active() &&
             requestParksItsCaller(pending.payload) &&
-            !acted.has(keyOf(pending)),
+            !asked.has(keyOf(pending)),
         ),
-        (pending) => {
-          acted.add(keyOf(pending));
+        (pending) =>
           // One handler awaiting its embedder never holds the next. Held
-          // in the set before it starts, so an attach can withdraw it.
-          return FiberSet.run(prompts, answer(pending), {
+          // in the map before it starts, so an attach can withdraw it.
+          FiberSet.run(prompts, answer(pending), {
             startImmediately: false,
-          });
-        },
+          }).pipe(
+            Effect.tap((fiber) =>
+              Effect.sync(() => asked.set(keyOf(pending), fiber)),
+            ),
+          ),
         { discard: true },
       ).pipe(
-        // A request gone from the list is decided for good: forget it.
+        // A request gone from the list is decided for good: a handler still
+        // deciding it lost to another surface's decision, so it stops.
         Effect.andThen(
-          Effect.sync(() => {
+          Effect.suspend(() => {
             const listed = new Set(view.requests.map(keyOf));
-            for (const id of acted) if (!listed.has(id)) acted.delete(id);
+            return Effect.forEach(
+              [...asked].filter(([id]) => !listed.has(id)),
+              ([id, fiber]) => {
+                asked.delete(id);
+                // Forked: the view loop never waits on an embedder's handler.
+                return Effect.forkChild(Fiber.interrupt(fiber));
+              },
+              { discard: true },
+            );
           }),
         ),
       ),
