@@ -169,6 +169,14 @@ export type DesktopWorkspaceInboundMessage = z.infer<
   typeof DesktopWorkspaceInboundMessageSchema
 >;
 
+/** A workspace request before the project transport stamps its `session`. */
+export type DesktopWorkspaceRequest =
+  DesktopWorkspaceInboundMessage extends infer M
+    ? M extends DesktopWorkspaceInboundMessage
+      ? Omit<M, 'session'>
+      : never
+    : never;
+
 /** The commands the main process routes to a project's workspace. */
 export const DESKTOP_WORKSPACE_INBOUND_COMMANDS =
   DesktopWorkspaceInboundMessageSchema.options.flatMap((option) => [

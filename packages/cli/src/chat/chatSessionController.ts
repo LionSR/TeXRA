@@ -877,13 +877,20 @@ export function createChatSessionController(
         Effect.gen(function* () {
           const meta = sessionMetaSignal.get();
           const currentModel = meta.model || initialModel;
-          const selection = yield* selectCliRunnableModel(currentModel, {
-            stores: { ...stores, secrets, runtime },
-            fallbackReason: meta.model ? meta.modelSource : initialModelSource,
-            noAvailableModelsMessage: formatCliNoAvailableModelsRecovery(
-              CHAT_API_MODE_MODEL_RECOVERY,
-            ),
-          }).pipe(
+          const selection = yield* selectCliRunnableModel(
+            [
+              {
+                model: currentModel,
+                reason: meta.model ? meta.modelSource : initialModelSource,
+              },
+            ],
+            {
+              stores: { ...stores, secrets, runtime },
+              noAvailableModelsMessage: formatCliNoAvailableModelsRecovery(
+                CHAT_API_MODE_MODEL_RECOVERY,
+              ),
+            },
+          ).pipe(
             Effect.mapError(
               (cause) =>
                 // The selection's own failure is the user-facing text: it

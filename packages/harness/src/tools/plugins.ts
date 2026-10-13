@@ -27,6 +27,7 @@ import type { SessionLog } from '@agent/runtime/SessionHandle';
 import type {
   PluginToolServices,
   RuntimeTool,
+  ToolServices,
 } from '@agent/runtime/ToolServices';
 import { emitAppSignal } from '@eventBus/AppSignals';
 import { StateReadFailed, type StateStore } from '@platform/interfaces';
@@ -154,15 +155,12 @@ export interface Plugin {
  * `definePlugin` checks that at compile time (a tool that needs a service no
  * layer of its plugin serves does not compile) and erases it: the table
  * holds every plugin alike, and the step that pins a plugin provides its
- * layers' services to its calls.
- */
-export interface PluginDefinition<ROut> extends Omit<
+ * layers' services to its calls. `C`: what a tool's calls are served. */
+export interface PluginDefinition<ROut, C = PluginToolServices> extends Omit<
   Plugin,
   'tools' | 'continuation' | 'processLayer' | 'sessionLayer' | 'availability'
 > {
-  readonly tools?: Readonly<
-    Record<string, RuntimeTool<Error, PluginToolServices | ROut>>
-  >;
+  readonly tools?: Readonly<Record<string, RuntimeTool<Error, C | ROut>>>;
   readonly continuation?: Continuation<ROut>;
   readonly processLayer?: ProcessPluginLayer<ROut>;
   readonly sessionLayer?: Layer.Layer<ROut, never, PluginHold>;
@@ -172,10 +170,18 @@ export interface PluginDefinition<ROut> extends Omit<
   readonly availability?: ToolAvailabilityChecks;
 }
 
+const erase = <ROut, C>(plugin: PluginDefinition<ROut, C>): Plugin =>
+  plugin as unknown as Plugin;
+
 /** A plugin value from its definition, its own services erased. */
-export const definePlugin = <ROut = never>(
+export const definePlugin: <ROut = never>(
   plugin: PluginDefinition<ROut>,
-): Plugin => plugin as unknown as Plugin;
+) => Plugin = erase;
+
+/** A built-in's value: its tools may read `ToolServices`, as no app's may. */
+export const defineBuiltinPlugin: <ROut = never>(
+  plugin: PluginDefinition<ROut, ToolServices>,
+) => Plugin = erase;
 
 const DisabledToolIdsSchema = z.array(z.string());
 
