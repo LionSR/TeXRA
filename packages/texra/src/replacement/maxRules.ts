@@ -47,38 +47,28 @@ const BOLD_GREEK_SHORTCUTS: Record<string, string> = {
 
 /**
  * Shortcuts for decorated Greek letters, resolving the destination suffix
- * through a shortcut map: \tilde{\gamma} -> \tga. Letters without a shortcut
- * fall through to the bare letter.
+ * through a shortcut map: \tilde{\gamma} -> \tga. With `boldsymbol`, the Greek
+ * letter is matched inside \boldsymbol{...}: \hat{\boldsymbol{\zeta}} -> \hbze.
+ * Letters without a shortcut fall through to the bare letter.
  */
 function generateGreekShortcuts(
   decorator: string,
   letters: string[],
   prefix: string,
-  shortcuts: Record<string, string> = GREEK_LETTER_SHORTCUTS,
+  options: {
+    readonly boldsymbol?: boolean;
+    readonly shortcuts?: Record<string, string>;
+  } = {},
 ): Record<string, string> {
-  return createPatterns(letters, (letter) => [
-    [
-      `\\${decorator}{\\${letter}}`,
-      `\\${prefix}${shortcuts[letter] ?? letter}`,
-    ],
-  ]);
-}
-
-/**
- * Same, with the Greek letter wrapped in \boldsymbol{...}:
- * \hat{\boldsymbol{\zeta}} -> \hbze.
- */
-function generateGreekBoldsymbolShortcuts(
-  decorator: string,
-  letters: string[],
-  prefix: string,
-): Record<string, string> {
-  return createPatterns(letters, (letter) => [
-    [
-      `\\${decorator}{\\boldsymbol{\\${letter}}}`,
-      `\\${prefix}${GREEK_LETTER_SHORTCUTS[letter] ?? letter}`,
-    ],
-  ]);
+  const shortcuts = options.shortcuts ?? GREEK_LETTER_SHORTCUTS;
+  return createPatterns(letters, (letter) => {
+    const body = options.boldsymbol
+      ? `\\boldsymbol{\\${letter}}`
+      : `\\${letter}`;
+    return [
+      [`\\${decorator}{${body}}`, `\\${prefix}${shortcuts[letter] ?? letter}`],
+    ];
+  });
 }
 
 // Automatically generated replacement patterns
@@ -251,12 +241,9 @@ const MAX_AUTO_PATTERNS: Record<string, string> = (() => {
     // Greek shortcuts below: applyReplacements walks the merged pattern object
     // in insertion order, so the bare-Greek rules would otherwise fire inside
     // \boldsymbol{...} first and shadow these destinations.
-    ...generateGreekShortcuts(
-      'boldsymbol',
-      greekBoldLetters,
-      'b',
-      BOLD_GREEK_SHORTCUTS,
-    ),
+    ...generateGreekShortcuts('boldsymbol', greekBoldLetters, 'b', {
+      shortcuts: BOLD_GREEK_SHORTCUTS,
+    }),
     ...generateCommandShortcuts(GREEK_LETTER_SHORTCUTS),
     // Combined shortcuts: keep these before the \mathcal, \hat, and effH
     // component rules so the decorated-H combinations are not consumed
@@ -316,7 +303,9 @@ const MAX_AUTO_PATTERNS: Record<string, string> = (() => {
     // Tilde with Greek: \tilde{\gamma} -> \tga
     ...generateGreekShortcuts('tilde', tildeGreekLetters, 't'),
     // Tilde with boldsymbol+Greek: \tilde{\boldsymbol{\zeta}} -> \tbze
-    ...generateGreekBoldsymbolShortcuts('tilde', tildeGreekBoldLetters, 'tb'),
+    ...generateGreekShortcuts('tilde', tildeGreekBoldLetters, 'tb', {
+      boldsymbol: true,
+    }),
     // Hat variables: \hat{H} -> \hH
     ...generateDecoratorShortcuts('hat', hatLetters, 'h'),
     // Hat with Greek: \hat{\sigma} -> \hsg
@@ -330,7 +319,9 @@ const MAX_AUTO_PATTERNS: Record<string, string> = (() => {
       'b',
     ),
     // Hat with boldsymbol+Greek: \hat{\boldsymbol{\zeta}} -> \hbze
-    ...generateGreekBoldsymbolShortcuts('hat', hatBoldsymbolLetters, 'hb'),
+    ...generateGreekShortcuts('hat', hatBoldsymbolLetters, 'hb', {
+      boldsymbol: true,
+    }),
     // Bold backslash fixes: \\ba -> \ba (lowercase), \\bA -> \bA (uppercase)
     ...generateBackslashFixes(
       [...lowerLetters, ...mathbfUpperLetters].map((letter) => `b${letter}`),
