@@ -17,7 +17,6 @@ import {
 } from '@agent/core/definition/AgentConfig';
 import { createNativeSubagentStrategy } from '@agent/runtime/nativeSubagentStrategy';
 import { type RunToolCall } from '@agent/runtime/RunCall';
-import { withLogChannel } from '@logger/effectLog';
 import type { ApprovalGrants } from '@shared/approvalBypassKind';
 import {
   USER_FOLLOW_UP_SUPPORT,
@@ -143,16 +142,7 @@ export const launchDetachedSubagent = Effect.fn('launchDetachedSubagent')(
           buildLaunch: () =>
             restore(Effect.void).pipe(
               Effect.andThen(
-                Effect.sync(() => ({
-                  strategy: createNativeSubagentStrategy(strategyParams),
-                  onLoopFailed: (error: unknown) =>
-                    Effect.logError(
-                      `Subagent '${agentName}' run loop failed after launch`,
-                    ).pipe(
-                      Effect.annotateLogs({ data: error }),
-                      withLogChannel('childRunLoop'),
-                    ),
-                })),
+                Effect.sync(() => createNativeSubagentStrategy(strategyParams)),
               ),
             ),
         });

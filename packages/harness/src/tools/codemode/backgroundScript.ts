@@ -13,7 +13,6 @@ import { prepareAgentDefinition } from '@agent/runtime/AgentLaunchContext';
 import { offeredBy } from '@agent/runtime/loop/step';
 import { createScriptRunStrategy } from '@agent/runtime/scriptRun';
 import { type RunToolCall } from '@agent/runtime/RunCall';
-import { withLogChannel } from '@logger/effectLog';
 import { USER_FOLLOW_UP_SUPPORT, type RunId } from '@shared/schemas';
 import { executed } from '@tools/core/result';
 import { agentChildRunId, earlierChild } from '@tools/delegation/agentChild';
@@ -98,8 +97,8 @@ export const launchBackgroundScript = Effect.fn('script.background')(function* (
         notify: () => undefined,
         buildLaunch: () =>
           restore(Effect.void).pipe(
-            Effect.as({
-              strategy: createScriptRunStrategy({
+            Effect.as(
+              createScriptRunStrategy({
                 definition,
                 // Registered with its opening, which its run commits.
                 registration: {
@@ -118,14 +117,7 @@ export const launchBackgroundScript = Effect.fn('script.background')(function* (
                 parentOffered,
                 title,
               }),
-              onLoopFailed: (error: unknown) =>
-                Effect.logError(
-                  `Background script '${title}' run loop failed after launch`,
-                ).pipe(
-                  Effect.annotateLogs({ data: error }),
-                  withLogChannel('childRunLoop'),
-                ),
-            }),
+            ),
           ),
       });
     }),

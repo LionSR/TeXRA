@@ -993,6 +993,9 @@ show` print the same notice, and the new `texra agents customize`,
 
 ### Bug Fixes
 
+- **An awaited sub-agent's report is now kept and viewable.** `executions
+view` on a sub-agent the parent waited for shows its report instead of
+  "No report found".
 - **A task that can no longer be read can be deleted from the task list.**
   A task whose saved history is damaged, or was written by an earlier
   build in a format this one does not read, is listed as unreadable. It

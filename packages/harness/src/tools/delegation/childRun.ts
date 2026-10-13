@@ -2,7 +2,7 @@
 import { Cause, Effect, Exit, Stream } from 'effect';
 
 // Local imports
-import { TraceEmitter, type AgentTrace } from '@agent/trace';
+import { TraceEmitter } from '@agent/trace';
 import { finalizeRunTerminal } from '@agent/runtime/AgentRunLifecycle';
 import type { ChildRunPause, ChildRunPort } from '@agent/runtime/childRunLoop';
 
@@ -27,11 +27,6 @@ import { truncateWithEllipsis } from '@utils/text/stringUtils';
 import { generateRunId } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
-interface CreateChildRunOptions {
-  /** What owns this run — the launch site declares the truth once. */
-  run: RunIdentity;
-}
-
 /**
  * Normalize a child task's raw label to the ≤80-char description
  * `registerRun` writes as the run's one `run.description` row (#9590 A4).
@@ -49,7 +44,8 @@ export const createChildRun = Effect.fn('createChildRun')(function* (
   session: SessionHandle,
   runId: RunId,
   parentRunId: RunId,
-  options: CreateChildRunOptions,
+  /** What owns this run — the launch site declares the truth once. */
+  identity: RunIdentity,
 ): Effect.fn.Return<ChildRunPort, never, Runs> {
   // No barrier here: registration committed the launch and its activation
   // awaited (`registerRun`), and every write below is either awaited or this
@@ -60,14 +56,7 @@ export const createChildRun = Effect.fn('createChildRun')(function* (
   // The run's canonical event publication, from its first event: the trace
   // is built with the session as its sink, and closed with the run.
   const trace = new TraceEmitter((event) => session.log.publish(runId, event));
-  const handle = new RunHandle(
-    {
-      runId,
-      identity: options.run,
-    },
-    parentRunId,
-    trace,
-  );
+  const handle = new RunHandle({ runId, identity }, parentRunId, trace);
   // Registration already committed the launch, its configuration and its
   // activation together. The handle is tracked by the loop (`track`) once
   // its stop target exists, so a stop never finds this handle with nothing
@@ -79,8 +68,7 @@ export const createChildRun = Effect.fn('createChildRun')(function* (
       finalizeChildRun({
         handle,
         session,
-        logger: trace,
-        closeTrace: () => trace.close(),
+        trace,
         options: finalizeOptions,
       }),
   } satisfies ChildRunPort;
@@ -89,8 +77,8 @@ export const createChildRun = Effect.fn('createChildRun')(function* (
 interface FinalizeChildRunArgs {
   handle: RunHandle;
   session: SessionHandle;
-  logger: AgentTrace;
-  closeTrace: () => void;
+  /** The child's trace: its diagnostics, closed with the run. */
+  trace: TraceEmitter;
   options: Parameters<ChildRunPort['finalize']>[0];
 }
 
@@ -108,7 +96,7 @@ interface FinalizeChildRunArgs {
 const finalizeChildRun = Effect.fn('finalizeChildRun')(function* (
   args: FinalizeChildRunArgs,
 ) {
-  const { handle, session, logger, closeTrace, options } = args;
+  const { handle, session, trace: logger, options } = args;
   const pause =
     options.outcome === RUN_OUTCOME.CANCELLED
       ? options.pauseNotice?.()
@@ -157,7 +145,7 @@ const finalizeChildRun = Effect.fn('finalizeChildRun')(function* (
     stopped: options.stopped,
     settle: () => Effect.succeed(options.settlement),
   });
-  closeTrace();
+  logger.close();
 
   // The port's contract is "resolves once the terminal finalizer has
   // persisted": a `run.end` row that never wrote is this finalize's failure,
@@ -184,7 +172,7 @@ const finalizeChildRun = Effect.fn('finalizeChildRun')(function* (
  * registry never keeps a finished generation live.
  */
 const pauseChildRun = (
-  { handle, session, logger, closeTrace, options }: FinalizeChildRunArgs,
+  { handle, session, trace: logger, options }: FinalizeChildRunArgs,
   { text: notice, resumeId }: ChildRunPause,
 ) => {
   let paused = true;
@@ -257,7 +245,7 @@ const pauseChildRun = (
       Effect.gen(function* () {
         if (!paused) return;
         registryOf(yield* Runs).untrackIfCurrent(handle);
-        closeTrace();
+        logger.close();
       }),
     ),
     Effect.withSpan('pauseChildRun'),

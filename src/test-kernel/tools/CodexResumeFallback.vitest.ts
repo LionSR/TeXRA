@@ -192,7 +192,7 @@ describe('codex tool - atomic resume fallback', () => {
         // spy itself is the wake; nothing is polled.
         yield* Deferred.await(logged);
         expect(error).toHaveBeenCalledWith(
-          'Codex run loop failed after launch',
+          "Child 'codex' run loop failed after launch",
           {
             data: lateFailure,
           },

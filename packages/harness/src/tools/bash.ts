@@ -510,33 +510,22 @@ const executeBackground = Effect.fn('BashTool.executeBackground')(function* (
           restore(Effect.void).pipe(
             Effect.andThen(
               createChildRun(session, runId, parentRunId, {
-                run: { kind: 'process', tool: 'bash' },
+                kind: 'process',
+                tool: 'bash',
               }),
             ),
           ),
         buildLaunch: (childRun) =>
-          Effect.sync(() => {
-            return {
-              strategy: createBackgroundBashStrategy({
-                runId,
-                call,
-                timeoutMs,
-                cwd,
-                settings: session.roots,
-                logger: childRun.logger,
-              }),
-              // Nobody awaits this run: own late loop failures here as trace
-              // diagnostics, since the loop already owns its one user-facing
-              // result delivery.
-              onLoopFailed: (error: unknown) =>
-                Effect.sync(() =>
-                  childRun.logger.error(
-                    'Background command run loop failed after launch',
-                    { data: error },
-                  ),
-                ),
-            };
-          }),
+          Effect.sync(() =>
+            createBackgroundBashStrategy({
+              runId,
+              call,
+              timeoutMs,
+              cwd,
+              settings: session.roots,
+              logger: childRun.logger,
+            }),
+          ),
       });
 
       return executed(

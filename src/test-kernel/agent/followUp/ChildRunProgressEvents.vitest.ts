@@ -56,7 +56,8 @@ const createRegisteredChildRun = Effect.fn('createRegisteredChildRun')(
     session: SessionHandle,
     runId: RunId,
     parentRunId: RunId,
-    options: Parameters<typeof createChildRun>[3] & {
+    options: {
+      readonly run: Parameters<typeof createChildRun>[3];
       readonly config: typeof config;
       readonly userFollowUpSupport: UserFollowUpSupport;
       readonly description: string;
@@ -68,9 +69,12 @@ const createRegisteredChildRun = Effect.fn('createRegisteredChildRun')(
       parentRunId,
       description: options.description,
     });
-    const child = yield* createChildRun(session, runId, parentRunId, {
-      run: options.run,
-    }).pipe(Effect.provideService(Runs, session.runs));
+    const child = yield* createChildRun(
+      session,
+      runId,
+      parentRunId,
+      options.run,
+    ).pipe(Effect.provideService(Runs, session.runs));
     // What the child loop does once its stop target is reserved.
     child.track();
     return {
@@ -363,9 +367,7 @@ describe('child run progress events', () => {
         yield* Effect.addFinalizer(() =>
           Effect.sync(() => publication.mockRestore()),
         );
-        const buildLaunch = vi.fn(() =>
-          Effect.succeed({ strategy: neverRunStrategy }),
-        );
+        const buildLaunch = vi.fn(() => Effect.succeed(neverRunStrategy));
         const launching = yield* Effect.forkChild(
           launchProcessChild(session, parentRunId, {
             identity: { kind: 'agent', agent: 'codex', tool: 'codex' },

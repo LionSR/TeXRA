@@ -139,7 +139,7 @@ describe('launchDetachedSubagent child run launch', () => {
         }
         const [entry] = logs.at('ERROR', 'childRunLoop');
         expect(entry?.message).toBe(
-          "Subagent 'proof-checker' run loop failed after launch",
+          "Child 'proof-checker' run loop failed after launch",
         );
         expect(String(entry?.annotations['data'])).toContain(
           'late subagent finalization failed',

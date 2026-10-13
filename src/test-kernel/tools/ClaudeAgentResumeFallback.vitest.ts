@@ -273,7 +273,7 @@ describe('claude_agent tool launch and resume fallback', () => {
       // spy itself is the wake; nothing is polled.
       yield* Deferred.await(logged);
       expect(error).toHaveBeenCalledWith(
-        'Claude Agent run loop failed after launch',
+        "Child 'claude_code' run loop failed after launch",
         { data: lateFailure },
       );
     }).pipe(
@@ -427,7 +427,7 @@ describe('claude_agent tool launch and resume fallback', () => {
   it.live('preserves legacy usage when a result has no modelUsage', () =>
     Effect.gen(function* () {
       const childRun = createFakeAgentCliChildRun(childRunId);
-      const publishUsage = vi.spyOn(childRun.logger, 'emit');
+      const emit = vi.spyOn(childRun.logger, 'emit');
       mocks.createChildRun.mockReturnValue(Effect.succeed(childRun));
       mocks.query.mockReturnValue(
         (async function* () {
@@ -459,9 +459,9 @@ describe('claude_agent tool launch and resume fallback', () => {
         },
       );
       if (!turn) throw new Error('Expected a Claude turn result');
-      captured.strategy?.publishUsage?.(turn);
 
-      expect(publishUsage).toHaveBeenCalledWith(
+      // The turn publishes its own usage as it returns.
+      expect(emit).toHaveBeenCalledWith(
         expect.objectContaining({
           type: 'usage',
           usage: expect.objectContaining({ inputTokens: 12, outputTokens: 3 }),

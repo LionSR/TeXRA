@@ -36,7 +36,10 @@ import {
   type OpenToolUseCard,
   type ToolUseCardRef,
 } from '@agent/trace';
-import type { ChildRunPort } from '@agent/runtime/childRunLoop';
+import type {
+  ChildRunPort,
+  ChildRunStrategy,
+} from '@agent/runtime/childRunLoop';
 import { formatDelivery } from '@agent/runtime/deliveryEnvelope';
 import { withLogChannel } from '@logger/effectLog';
 import type {
@@ -56,7 +59,6 @@ import { DELIVERY_TAG } from '@shared/deliveryTags';
 import { CodexStateKey } from '@texra/shared/settingsView/integrationSettings';
 import { buildSyntheticToolUseConfig } from '@texra/tools/core/syntheticAgentConfig';
 import { buildAgentWorkspaceOptions } from '@texra/tools/agentWorkspaceOptions';
-import type { DetachedChildRunLaunch } from '@tools/delegation/detachedChildRun';
 import { readSettingFrom } from '@utils/config/platformSettings';
 import { formatWallTimeSeconds, previewLabel } from '@utils/text/stringUtils';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
@@ -351,7 +353,7 @@ function buildCodexLaunch(params: {
   /** Release the fallback claim if the loop exits before promoting it. */
   releaseFallbackClaim: (() => void) | undefined;
   registry: AgentCliSessionRegistry;
-}): Effect.Effect<DetachedChildRunLaunch<RunResult>> {
+}): Effect.Effect<ChildRunStrategy<RunResult>> {
   const {
     thread,
     childRun,
@@ -389,7 +391,6 @@ function buildCodexLaunch(params: {
         prompt: lastPrompt,
         message: toErrorMessage(err),
       }),
-    loopFailedMessage: 'Codex run loop failed after launch',
     continueWith: ['codex', 'thread_id', fallbackThreadId],
   });
 }

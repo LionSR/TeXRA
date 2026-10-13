@@ -298,7 +298,6 @@
       "@tools/core/inputSchema",
       "@tools/core/result",
       "@tools/delegation/AgentTool",
-      "@tools/delegation/detachedChildRun",
       "@tools/formatting",
       "@tools/gitignore",
       "@tools/jsonRpc",
