@@ -40,7 +40,7 @@ import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 
 import { CORE_QUALITY_DIRS } from '../eslint.config.mjs';
-import { apiReports } from './core-quality-api-report.mjs';
+import { apiReports, SHRINK_ONLY_REPORTS } from './core-quality-api-report.mjs';
 import { MEASURED_ONLY, RULES, measure } from './core-quality-measure.mjs';
 
 const rootDir = path.resolve(
@@ -134,6 +134,19 @@ function checkReports(reports, update) {
     const file = path.join(reportDir, name);
     const current = existsSync(file) ? readFileSync(file, 'utf8') : null;
     if (current === text) continue;
+    // A shrink-only report refuses a name it does not list, `--update` too.
+    if (SHRINK_ONLY_REPORTS.has(name) && current != null) {
+      const listed = (report) =>
+        new Set([...report.matchAll(/^- `([^`]+)`/gm)].map((m) => m[1]));
+      const before = listed(current);
+      const added = [...listed(text)].filter((n) => !before.has(n));
+      if (added.length > 0) {
+        problems.push(
+          `api-report: config/api-reports/${name} gains ${added.join(', ')}: this host-internal door only shrinks; reach the harness through a public entry instead`,
+        );
+        continue;
+      }
+    }
     if (update) writeFileSync(file, text);
     else
       problems.push(

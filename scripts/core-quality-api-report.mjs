@@ -36,6 +36,22 @@ export function coreEntries(rootDir) {
   });
 }
 
+/**
+ * The hosts' one internal door into the harness, `@agent/runtime`: not SDK
+ * surface and in no package `exports`, so it reaches no entry budget, but
+ * its names are reported beside the entries' and frozen shrink-only
+ * (`SHRINK_ONLY_REPORTS`): a new name fails even under `--update`.
+ */
+const HOST_DOOR = {
+  name: '@agent/runtime',
+  subpath: '.',
+  source: 'packages/harness/src/agent/runtime/index.ts',
+  report: 'harness.agent-runtime.api.md',
+};
+
+/** Reports whose export list may only shrink. */
+export const SHRINK_ONLY_REPORTS = new Set([HOST_DOOR.report]);
+
 function kindOf(declaration) {
   if (ts.isInterfaceDeclaration(declaration)) return 'interface';
   if (ts.isTypeAliasDeclaration(declaration)) return 'type';
@@ -120,7 +136,10 @@ function describe(checker, symbol) {
 
 /** Report file name → report text, one per core package entry. */
 export function apiReports(rootDir) {
-  const list = coreEntries(rootDir);
+  const list = [
+    ...coreEntries(rootDir),
+    { ...HOST_DOOR, file: path.join(rootDir, HOST_DOOR.source) },
+  ];
   const configPath = path.join(rootDir, 'tsconfig.build.json');
   const { config } = ts.readConfigFile(configPath, ts.sys.readFile);
   const { options } = ts.parseJsonConfigFileContent(config, ts.sys, rootDir);
@@ -145,7 +164,11 @@ export function apiReports(rootDir) {
         [
           `# \`${entry}\` API report`,
           '',
-          `Generated from \`${path.relative(rootDir, file)}\` by \`node scripts/check-core-quality.mjs --update\`; do not edit. A diff here is a change to the public surface.`,
+          `Generated from \`${path.relative(rootDir, file)}\` by \`node scripts/check-core-quality.mjs --update\`; do not edit. ${
+            SHRINK_ONLY_REPORTS.has(report)
+              ? "The hosts' one internal door, not SDK surface: its names only shrink."
+              : 'A diff here is a change to the public surface.'
+          }`,
           '',
           `Exports: ${exports.length}`,
           '',
