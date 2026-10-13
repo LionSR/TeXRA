@@ -5,15 +5,17 @@ import * as path from 'node:path';
 import * as NodeFileSystem from '@effect/platform-node/NodeFileSystem';
 import { it } from '@effect/vitest';
 import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
-import { Deferred, Effect, Exit, Fiber, Scope } from 'effect';
+import { Deferred, Effect, Exit, Fiber, Scope, Stream } from 'effect';
 
+import {
+  RunFailure,
+  type Outcome,
+  type Run,
+  type RuntimeRequest,
+  type Session,
+} from '@texra-ai/harness';
 import { liveToolGates } from '@agent/runtime/requestPolicy';
 import { humanGrant } from '@agent/runtime/runApprovalQueue';
-import type { RootLaunchOptions } from '@agent/runtime/rootLaunch';
-import { RunHandle } from '@agent/runtime/RunHandle';
-import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import { registryOf } from '@agent/runtime/runRegistry';
-import type { RootLaunch } from '@agent/runtime/runs';
 import type { CliContext } from '@cli/runtime/cliContext';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import type { executeCliRequest } from '@cli/runtime/executeCli';
@@ -26,9 +28,8 @@ import {
 import { qualifyAggregateId, RUN_OUTCOME } from '@shared/schemas';
 import type { RunId } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
-import { untrackRun } from '@test/support/sessionEnd';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
-import { testRuntime } from '@test/support/testProcessRuntime';
+import { testRuntime, testSessionOf } from '@test/support/testProcessRuntime';
 import {
   fakeProcessServices,
   installFakeHost,
@@ -42,8 +43,8 @@ import {
 } from '@test/support/tempDirPlatform';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { publishTestRows } from '@test/support/sessionTestUtils';
-import { admitInterruptibleRun } from '@test/support/runHandleFixtures';
 import { generateRunId } from '@utils/core';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 const mocks = vi.hoisted(() => ({
   close: vi.fn(),
@@ -58,6 +59,8 @@ const mocks = vi.hoisted(() => ({
   readCliRunOutcomeState: vi.fn(),
   deriveResumability: vi.fn(),
   rootLaunch: vi.fn(),
+  admit: vi.fn(),
+  stopRequest: vi.fn(),
   writeTextStderr: vi.fn(),
   writeTextStderrAndWait: vi.fn<() => Effect.Effect<void>>(() => Effect.void),
 }));
@@ -84,21 +87,66 @@ async function installStoragePlatform(): Promise<void> {
   await installFakeHost(await createTempDirPlatform('texra-run-', tempDirs));
 }
 
+/** What the suite's launch stand-in receives: the request and the
+ *  approval and parking it asks the session for. */
+type LaunchInput = {
+  readonly request: { readonly runId: RunId };
+  readonly approval: {
+    readonly approvalPolicy?: string;
+    readonly approveDelegatedWork: boolean;
+  };
+};
+
 /**
  * The agent boundary `executeCliRequest` runs through, injected through its
- * own options seam: the launch and the resumability read land in the
- * suite's mock bag.
+ * own options seam: the session admits the run once `admit` settles, its
+ * result is the suite's `rootLaunch`, and the resumability read lands in
+ * the mock bag.
  */
 const agentRunsFake = {
-  // The mock bag takes a launch as `(request, options)`, the session among
-  // the options.
-  launch:
-    () =>
-    (session: SessionHandle, { request, options }: RootLaunch) =>
-      Effect.promise(() => mocks.rootLaunch(request, { ...options, session })),
+  launch: (_session: Session, input: LaunchInput) =>
+    Effect.tryPromise({
+      try: () => mocks.admit(input),
+      catch: (error) => error as Error,
+    }).pipe(
+      Effect.map((): Run => ({
+        runId: input.request.runId as RunId,
+        // A stopped run commits its CANCELLED end and re-raises the stop.
+        result: Effect.tryPromise({
+          try: () => mocks.rootLaunch(input.request, input),
+          catch: (cause) =>
+            new RunFailure({ cause, message: toErrorMessage(cause) }),
+        }).pipe(
+          Effect.flatMap((ended): Run['result'] =>
+            ended === STOPPED
+              ? Effect.interrupt
+              : Effect.succeed(ended as Effect.Success<Run['result']>),
+          ),
+        ),
+        view: Stream.empty,
+        events: Stream.empty,
+        interrupt: Effect.void,
+      })),
+    ),
   resumability: (...args: unknown[]) =>
     Effect.promise(() => mocks.deriveResumability(...args)),
 } as NonNullable<Parameters<typeof executeCliRequest>[2]['agentRuns']>;
+
+/** The process session as every host drives it, its stops recorded in the
+ *  mock bag (`stopRequest` may answer one). */
+function runSessionFake(): Session {
+  const session = testSessionOf(testDefaultSession(), { persistent: true });
+  return {
+    ...session,
+    request: (req: RuntimeRequest) =>
+      req.kind === 'run.stop'
+        ? Effect.suspend(
+            (): Effect.Effect<Outcome, never> =>
+              mocks.stopRequest(req) ?? Effect.succeed({ kind: 'done' }),
+          )
+        : session.request(req),
+  };
+}
 
 vi.mock('@cli/runtime/cliPresentationHost', () => ({
   createCliRuntimeHost: mocks.createCliRuntimeHost,
@@ -140,17 +188,12 @@ const COMPLETED_RUN = {
   runId: 'exec-1',
 } as const;
 
-const COMPLETED_WORKFLOW_RUN: Parameters<
-  NonNullable<RootLaunchOptions['publishWorkflowOutput']>
->[0] = {
-  outcome: 'completed',
-  output: {
-    response: '',
-    files: [],
-    documents: { outputs: [], compileFailures: [], diffs: [] },
-  },
-  runId: 'exec-1' as RunId,
-};
+/** What a run the shutdown stopped ends with. */
+const CANCELLED_RUN = { ...COMPLETED_RUN, outcome: 'cancelled' } as const;
+
+/** A run the shutdown stopped whose result re-raises the stop, as
+ *  `AgentRunLifecycle` does once its CANCELLED end is committed. */
+const STOPPED = Symbol('stopped');
 
 function baseRequest(): CliRequest {
   return { config: {}, runId: 'exec-1' } as unknown as CliRequest;
@@ -169,7 +212,10 @@ function toolUseConfig() {
 
 /** A run program's options with the session, runtime and shutdown scope
  *  the wrapper below supplies. */
-type WithoutSession<O> = Omit<O, 'session' | 'runtime' | 'shutdownScope'>;
+type WithoutSession<O> = Omit<
+  O,
+  'session' | 'runSession' | 'runtime' | 'shutdownScope'
+>;
 
 async function loadExecuteCli() {
   const runtime = await import('@cli/runtime/executeCli');
@@ -188,6 +234,7 @@ async function loadExecuteCli() {
       Effect.provide(
         runtime.executeCliRequest(request, context, {
           session: Effect.succeed(testDefaultSession()),
+          runSession: Effect.sync(runSessionFake),
           runtime: testRuntime(),
           shutdownScope: installedHost().platform.shutdownScope,
           agentRuns: agentRunsFake,
@@ -205,6 +252,7 @@ async function loadExecuteCli() {
       Effect.provide(
         runtime.executeCliConfig(config, context, {
           session: Effect.succeed(testDefaultSession()),
+          runSession: Effect.sync(runSessionFake),
           runtime: testRuntime(),
           shutdownScope: installedHost().platform.shutdownScope,
           agentRuns: agentRunsFake,
@@ -222,6 +270,7 @@ async function loadExecuteCli() {
       Effect.provide(
         runtime.executeCliToolUseConfig(config, context, {
           session: Effect.succeed(testDefaultSession()),
+          runSession: Effect.sync(runSessionFake),
           runtime: testRuntime(),
           shutdownScope: installedHost().platform.shutdownScope,
           agentRuns: agentRunsFake,
@@ -232,55 +281,24 @@ async function loadExecuteCli() {
   };
 }
 
-type LeaseOptions = {
-  beforeRunEnd?: () => Effect.Effect<boolean | void, Error>;
-  publishWorkflowOutput?: RootLaunchOptions['publishWorkflowOutput'];
-  session?: SessionHandle;
-};
-
 /**
- * Stubs the launch to publish its lease options through `published` and then
- * hang until the test resolves it — the shape the shutdown-interrupt tests
- * drive.
+ * Stubs the run to publish its admission through `published` and then hang
+ * until the test resolves it: the shape the shutdown tests drive. Its stop
+ * reaches the session as a `run.stop` request (`stopRequest`).
  */
-function stubHangingRun(published: Deferred.Deferred<LeaseOptions>): {
+function stubHangingRun(published: Deferred.Deferred<void>): {
   resolve: (result: unknown) => void;
   reject: (error: unknown) => void;
 } {
   let resolveRun!: (result: unknown) => void;
   let rejectRun!: (error: unknown) => void;
   mocks.rootLaunch.mockImplementation(
-    async (request, options: LeaseOptions) => {
-      Deferred.doneUnsafe(published, Effect.succeed(options));
-      const runId = request.runId as RunId;
-      const launchHandle = new RunHandle(
-        {
-          runId,
-          identity: { kind: 'agent', agent: 'chat' },
-        },
-        null,
-      );
-      const runs = options.session?.runs;
-      // The launch's stop target is its run's run registry fiber; the hanging
-      // promise is the test's to resolve, as the run's own result is, and the
-      // generation ends with it.
-      let generation: { interruptUnsafe(): void } | undefined;
-      if (runs) {
-        registryOf(runs).track(launchHandle);
-        generation = admitInterruptibleRun(runs, runId, () => undefined);
-      }
-      try {
-        return await new Promise((resolve, reject) => {
-          resolveRun = resolve;
-          rejectRun = reject;
-        });
-      } finally {
-        generation?.interruptUnsafe();
-        if (runs && runs.get(runId)?.handle === launchHandle) {
-          if (runs) untrackRun(runs, runId);
-        }
-      }
-    },
+    () =>
+      new Promise((resolve, reject) => {
+        resolveRun = resolve;
+        rejectRun = reject;
+        Deferred.doneUnsafe(published, Effect.void);
+      }),
   );
   return {
     resolve: (result: unknown) => resolveRun(result),
@@ -311,7 +329,7 @@ async function stubExecuteCliDeps(): Promise<void> {
   // The host answers the session's approval question the way the headless
   // adapter does: whether this context can answer a prompt.
   mocks.createHeadlessCliHostInteractions.mockImplementation(
-    (_session: SessionHandle, _runtime: unknown, context: CliContext) => ({
+    (_session: unknown, _runtime: unknown, context: CliContext) => ({
       emit: mocks.emit,
       pending: vi.fn(() => []),
       resolve: vi.fn(() => false),
@@ -332,6 +350,8 @@ async function stubExecuteCliDeps(): Promise<void> {
   });
   mocks.deriveResumability.mockResolvedValue({ kind: 'checkpoint' });
   mocks.rootLaunch.mockResolvedValue(COMPLETED_RUN);
+  mocks.admit.mockResolvedValue(undefined);
+  mocks.stopRequest.mockReturnValue(undefined);
 }
 
 /** Queues one cancelled, persisted outcome read for the next resolution. */
@@ -412,12 +432,10 @@ describe('executeCliRequest', () => {
   const promptsUnavailableAtLaunch = (): (() => boolean | undefined) => {
     let seen: boolean | undefined;
     mocks.rootLaunch.mockImplementationOnce(
-      async (
-        request: { runId: RunId },
-        options: { session: SessionHandle; approveDelegatedWork?: boolean },
-      ) => {
-        if (options.approveDelegatedWork === true) {
-          publishTestRows(options.session, [
+      async (request: { runId: RunId }, input: LaunchInput) => {
+        const session = testDefaultSession();
+        if (input.approval.approveDelegatedWork) {
+          publishTestRows(session, [
             {
               type: 'run.start',
               aggregateId: qualifyAggregateId('run', request.runId),
@@ -431,12 +449,9 @@ describe('executeCliRequest', () => {
               )(NO_APPROVAL_GRANTS),
             },
           ]);
-          await testRuntime().runPromise(options.session.log.settled);
+          await testRuntime().runPromise(session.log.settled);
         }
-        seen = liveToolGates(
-          options.session,
-          request.runId,
-        ).approvalPromptsUnavailable;
+        seen = liveToolGates(session, request.runId).approvalPromptsUnavailable;
         return COMPLETED_RUN;
       },
     );
@@ -474,8 +489,7 @@ describe('executeCliRequest', () => {
       expect(mocks.rootLaunch).toHaveBeenLastCalledWith(
         expect.anything(),
         expect.objectContaining({
-          approvalPolicy: 'yolo',
-          approveDelegatedWork: true,
+          approval: { approvalPolicy: 'yolo', approveDelegatedWork: true },
         }),
       );
       // The Auto-approve grant keeps its gated tools offered, headless.
@@ -573,7 +587,7 @@ describe('executeCliRequest', () => {
         // enters through the injected launch stand-in.
         const defectLaunch: typeof agentRunsFake = {
           ...agentRunsFake,
-          launch: () => () => Effect.die(new Error('disk full')),
+          launch: () => Effect.die(new Error('disk full')),
         };
 
         const error = yield* Effect.flip(
@@ -618,7 +632,6 @@ describe('executeCliRequest', () => {
         loadExecuteCliOnInstalledHost,
       );
       const { flushSpy } = yield* Effect.promise(spyOnArtifactFlush);
-      const killSpy = vi.spyOn(testDefaultSession().runs, 'stop');
       let settleRecoveryWrite!: () => void;
       const recoveryWrite = new Promise<void>((resolve) => {
         settleRecoveryWrite = resolve;
@@ -628,7 +641,7 @@ describe('executeCliRequest', () => {
         Deferred.doneUnsafe(finalized, Effect.void);
         return Effect.promise(() => recoveryWrite);
       });
-      const published = yield* Deferred.make<LeaseOptions>();
+      const published = yield* Deferred.make<void>();
       const hangingRun = stubHangingRun(published);
 
       const run = yield* Effect.forkChild(
@@ -645,13 +658,15 @@ describe('executeCliRequest', () => {
         { startImmediately: true },
       );
       yield* settle;
-      expect(killSpy).toHaveBeenCalledExactlyOnceWith('exec-1', {
+      expect(mocks.stopRequest).toHaveBeenCalledExactlyOnceWith({
+        kind: 'run.stop',
+        runId: 'exec-1',
         detachActiveChildren: false,
         reason: 'shutdown',
       });
 
       mockCancelledOutcome();
-      hangingRun.resolve(COMPLETED_RUN);
+      hangingRun.resolve(STOPPED);
       yield* Deferred.await(finalized);
       yield* settle;
       expect(onInterruptedRunFinalized).toHaveBeenCalledOnce();
@@ -668,13 +683,8 @@ describe('executeCliRequest', () => {
         'exec-1',
       );
       expect(yield* Fiber.join(run)).toEqual({
-        ok: true,
-        outcomePersisted: true,
-        result: {
-          outcome: 'cancelled',
-          output: { response: '', files: [] },
-          runId: 'exec-1',
-        },
+        ok: false,
+        exitCode: CliExitCode.Interrupted,
       });
     }),
   );
@@ -692,7 +702,7 @@ describe('executeCliRequest', () => {
           outcome: RUN_OUTCOME.CANCELLED,
         });
         const onInterruptedRunFinalized = vi.fn();
-        const published = yield* Deferred.make<LeaseOptions>();
+        const published = yield* Deferred.make<void>();
         const hangingRun = stubHangingRun(published);
 
         const run = yield* Effect.forkChild(
@@ -707,7 +717,7 @@ describe('executeCliRequest', () => {
           { startImmediately: true },
         );
         mockCancelledOutcome();
-        hangingRun.resolve(COMPLETED_RUN);
+        hangingRun.resolve(CANCELLED_RUN);
 
         yield* Fiber.join(shutdown);
         yield* Fiber.join(run);
@@ -728,33 +738,21 @@ describe('executeCliRequest', () => {
           loadExecuteCliOnInstalledHost,
         );
         const launch = yield* Deferred.make<void>();
-        mocks.rootLaunch.mockImplementationOnce(
-          async (request: { runId: RunId }, options: LeaseOptions) => {
-            const runId = request.runId;
-            // The launch's fiber is its stop: shutdown interrupts the run by
-            // id, which fails the launch the way a real preparation unwinds.
-            let rejectRun!: (error: unknown) => void;
-            const runs = options.session?.runs;
-            if (runs)
-              admitInterruptibleRun(runs, runId, () => {
-                rejectRun(new DOMException('Launch stopped.', 'AbortError'));
-              });
-            try {
-              return await new Promise((_resolve, reject) => {
-                rejectRun = reject;
-                // Published once the stop target is live: the gate resumes
-                // the test fiber synchronously and its shutdown stops the
-                // launch.
-                Deferred.doneUnsafe(launch, Effect.void);
-              });
-            } finally {
-              if (runs) untrackRun(runs, runId);
-            }
-          },
+        // The session has not admitted the run when the shutdown comes: the
+        // launch is interrupted, which aborts it.
+        mocks.admit.mockImplementationOnce(
+          () =>
+            new Promise<never>(() => {
+              Deferred.doneUnsafe(launch, Effect.void);
+            }),
         );
 
         const run = yield* Effect.forkChild(
-          executeCliRequest(baseRequest(), cliContext(), {}),
+          executeCliRequest(
+            { ...baseRequest(), runId: generateRunId() },
+            cliContext(),
+            {},
+          ),
         );
         yield* Deferred.await(launch);
         yield* settle;
@@ -774,18 +772,17 @@ describe('executeCliRequest', () => {
         const { platform, executeCliRequest } = yield* Effect.promise(
           loadExecuteCliOnInstalledHost,
         );
-        vi.spyOn(testDefaultSession().runs, 'stop').mockReturnValue({
-          accepted: () => false,
-          settlement: Effect.void,
-        });
-        const published = yield* Deferred.make<LeaseOptions>();
+        // The run has ended: the session refuses its stop.
+        mocks.stopRequest.mockReturnValue(
+          Effect.fail(new Error('The task is no longer open.')),
+        );
+        const published = yield* Deferred.make<void>();
         const hangingRun = stubHangingRun(published);
         const run = yield* Effect.forkChild(
           executeCliRequest(baseRequest(), cliContext(), {}),
         );
-        const leaseOptions = yield* Deferred.await(published);
+        yield* Deferred.await(published);
         yield* settle;
-        expect(leaseOptions).toBeDefined();
 
         const shutdown = yield* Effect.forkChild(
           Scope.close(platform.shutdownScope, Exit.void),
@@ -798,185 +795,6 @@ describe('executeCliRequest', () => {
         // A stop that reached no live run never reads the launch as
         // interrupted, so nothing inspects it for recovery.
         expect(mocks.deriveResumability).not.toHaveBeenCalled();
-      }),
-  );
-
-  it.live(
-    'denies workflow output publication after shutdown interruption commits',
-    () =>
-      Effect.gen(function* () {
-        const { platform, executeCliRequest } = yield* Effect.promise(
-          loadExecuteCliOnInstalledHost,
-        );
-        const published = yield* Deferred.make<LeaseOptions>();
-        const hangingRun = stubHangingRun(published);
-        let publicationCommitted: boolean | undefined;
-        const run = yield* Effect.forkChild(
-          executeCliRequest(baseRequest(), cliContext(), {
-            publishWorkflowOutput: (
-              _result,
-              _agentDefaultOutputFiles,
-              tryCommitPublication,
-            ) =>
-              Effect.sync(() => {
-                publicationCommitted = tryCommitPublication();
-                return 'published' as const;
-              }),
-          }),
-        );
-        const leaseOptions = yield* Deferred.await(published);
-        yield* settle;
-        expect(leaseOptions).toBeDefined();
-
-        const shutdown = yield* Effect.forkChild(
-          Scope.close(platform.shutdownScope, Exit.void),
-          { startImmediately: true },
-        );
-        yield* settle;
-        yield* leaseOptions.publishWorkflowOutput?.(
-          COMPLETED_WORKFLOW_RUN,
-          [],
-        ) ?? Effect.void;
-        mockCancelledOutcome();
-        hangingRun.resolve(COMPLETED_WORKFLOW_RUN);
-
-        yield* Fiber.join(shutdown);
-        expect(yield* Fiber.join(run)).toMatchObject({
-          ok: true,
-          result: { outcome: RUN_OUTCOME.CANCELLED },
-        });
-        expect(publicationCommitted).toBe(false);
-      }),
-  );
-
-  it.live(
-    'preserves the workflow verdict after output publication commits',
-    () =>
-      Effect.gen(function* () {
-        const { platform, executeCliRequest } = yield* Effect.promise(
-          loadExecuteCliOnInstalledHost,
-        );
-        const killSpy = vi.spyOn(testDefaultSession().runs, 'stop');
-        const published = yield* Deferred.make<LeaseOptions>();
-        const hangingRun = stubHangingRun(published);
-        let publicationCommitted: boolean | undefined;
-        const run = yield* Effect.forkChild(
-          executeCliRequest(baseRequest(), cliContext(), {
-            publishWorkflowOutput: (
-              _result,
-              _agentDefaultOutputFiles,
-              tryCommitPublication,
-            ) =>
-              Effect.sync(() => {
-                publicationCommitted = tryCommitPublication();
-                return 'published' as const;
-              }),
-          }),
-        );
-        const leaseOptions = yield* Deferred.await(published);
-        yield* settle;
-        expect(leaseOptions).toBeDefined();
-        yield* settle;
-        yield* leaseOptions.publishWorkflowOutput?.(
-          COMPLETED_WORKFLOW_RUN,
-          [],
-        ) ?? Effect.void;
-
-        const shutdown = yield* Effect.forkChild(
-          Scope.close(platform.shutdownScope, Exit.void),
-          { startImmediately: true },
-        );
-        hangingRun.resolve(COMPLETED_WORKFLOW_RUN);
-
-        yield* Fiber.join(shutdown);
-        expect(yield* Fiber.join(run)).toMatchObject({
-          ok: true,
-          result: { outcome: RUN_OUTCOME.COMPLETED },
-        });
-        expect(publicationCommitted).toBe(true);
-        expect(killSpy).not.toHaveBeenCalled();
-      }),
-  );
-
-  it.live(
-    'does not convert a committed output failure to cancelled by a later shutdown',
-    () =>
-      Effect.gen(function* () {
-        const { platform, executeCliRequest } = yield* Effect.promise(
-          loadExecuteCliOnInstalledHost,
-        );
-        // Imported dynamically (like the lease test below) so the `instanceof`
-        // check in executeCli.ts sees the same module instance even after an
-        // earlier test's `vi.resetModules()` in this file.
-        const { AgentError: RuntimeAgentError } = yield* Effect.promise(
-          () => import('@common/errors'),
-        );
-        const killSpy = vi.spyOn(testDefaultSession().runs, 'stop');
-        const outputFailure = new Error(
-          'Document task completed without generated outputs; nothing was copied to out.',
-        );
-        let publicationCommitted: boolean | undefined;
-        let outputResolutionFailed = false;
-        const outputFailed = yield* Deferred.make<void>();
-        let releaseRun!: () => void;
-        const runGate = new Promise<void>((resolve) => {
-          releaseRun = resolve;
-        });
-        mocks.rootLaunch.mockImplementationOnce(
-          async (_request: unknown, options: LeaseOptions) => {
-            try {
-              await testRuntime().runPromise(
-                options.publishWorkflowOutput?.(COMPLETED_WORKFLOW_RUN, []) ??
-                  Effect.void,
-              );
-            } catch {
-              outputResolutionFailed = true;
-              Deferred.doneUnsafe(outputFailed, Effect.void);
-            }
-            await runGate;
-            // rootLaunch classifies the host output failure before it reaches the
-            // CLI boundary. Emit the same prefixed AgentError finalizeFailedRun
-            // throws so this test pins the production message, not the mock's raw
-            // copy error.
-            throw new RuntimeAgentError(
-              `Error executing agent polish: ${outputFailure.message}`,
-            );
-          },
-        );
-
-        const run = yield* Effect.forkChild(
-          executeCliRequest(baseRequest(), cliContext(), {
-            publishWorkflowOutput: (
-              _result,
-              _agentDefaultOutputFiles,
-              tryCommitPublication,
-            ) =>
-              Effect.sync(() => {
-                publicationCommitted = tryCommitPublication();
-              }).pipe(Effect.andThen(Effect.fail(outputFailure))),
-          }),
-        );
-
-        yield* Deferred.await(outputFailed);
-        yield* settle;
-        expect(outputResolutionFailed).toBe(true);
-        const shutdown = yield* Effect.forkChild(
-          Scope.close(platform.shutdownScope, Exit.void),
-          { startImmediately: true },
-        );
-        yield* settle;
-        expect(killSpy).not.toHaveBeenCalled();
-
-        releaseRun();
-        yield* Fiber.join(shutdown);
-        expect(yield* Fiber.join(run)).toEqual({
-          ok: false,
-          exitCode: CliExitCode.AgentError,
-        });
-        expect(publicationCommitted).toBe(true);
-        expect(mocks.emit).toHaveBeenCalledExactlyOnceWith('requestShowError', {
-          message: `Error executing agent polish: ${outputFailure.message}`,
-        });
       }),
   );
 
@@ -1020,7 +838,7 @@ describe('executeCliConfig', () => {
             additionalPaths: ['/tmp/skill path'],
           },
         });
-        const published = yield* Deferred.make<LeaseOptions>();
+        const published = yield* Deferred.make<void>();
         const hangingRun = stubHangingRun(published);
         const recoveryWrite = yield* Deferred.make<void>();
         const noticeStarted = yield* Deferred.make<void>();
@@ -1041,7 +859,7 @@ describe('executeCliConfig', () => {
           { startImmediately: true },
         );
         mockCancelledOutcome();
-        hangingRun.resolve(COMPLETED_RUN);
+        hangingRun.resolve(CANCELLED_RUN);
 
         yield* Deferred.await(noticeStarted);
         yield* settle;
@@ -1075,7 +893,7 @@ describe('executeCliConfig', () => {
         );
         const { executeCliToolUseConfig } =
           yield* Effect.promise(loadExecuteCli);
-        const published = yield* Deferred.make<LeaseOptions>();
+        const published = yield* Deferred.make<void>();
         const hangingRun = stubHangingRun(published);
 
         const run = yield* Effect.forkChild(
@@ -1090,7 +908,7 @@ describe('executeCliConfig', () => {
           { startImmediately: true },
         );
         mockCancelledOutcome();
-        hangingRun.resolve(COMPLETED_RUN);
+        hangingRun.resolve(CANCELLED_RUN);
 
         yield* Fiber.join(shutdown);
         yield* Fiber.join(run);

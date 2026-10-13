@@ -11,7 +11,7 @@
  */
 import { Effect, Exit, Fiber, Result, Stream } from 'effect';
 
-import { type HostInteractions, type SessionHandle } from '@agent/runtime';
+import { type HostInteractions } from '@agent/runtime';
 import { withLogChannel } from '@logger/effectLog';
 import { texraApprovalDenialMessage } from '@shared/approvalPolicy';
 import { requestParksItsCaller } from '@shared/schemas';
@@ -22,7 +22,6 @@ import type {
   UserQuestionAnswers,
   UserQuestionPermission,
 } from '@shared/schemas';
-import type { SessionView } from '@shared/session/sessionView';
 import { type ToolEditApprovalRequest } from '@tools/approval/toolEditApproval';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import {
@@ -45,7 +44,7 @@ import {
 } from './userQuestionAnswer';
 import { type CliContext } from './cliContext';
 import { writeTextStderr } from './logSinks';
-import type { ProcessRuntime } from '@texra-ai/harness';
+import type { ProcessRuntime, Session, SessionView } from '@texra-ai/harness';
 
 const CHANNEL = 'cli.approval';
 
@@ -137,7 +136,7 @@ const askHeadlessUserQuestion = Effect.fn(
  *  subscription below is a fiber of it, interrupted on dispose. `session` is
  *  the headless run's session, threaded from the composition that opened it. */
 export function createHeadlessCliHostInteractions(
-  session: SessionHandle,
+  session: Pick<Session, 'request' | 'view'>,
   runtime: ProcessRuntime,
   context: CliContext,
   hooks: HeadlessCliHostInteractionHooks = {},
@@ -158,7 +157,7 @@ export function createHeadlessCliHostInteractions(
     requestId: string,
     decision: RequestDecision,
   ): Effect.Effect<boolean> =>
-    session.requests
+    session
       .request({ kind: 'request.decide', runId, requestId, decision })
       .pipe(
         Effect.matchEffect({

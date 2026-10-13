@@ -73,12 +73,7 @@ export type ResumeAttempt = ResumeRunResult | { readonly ownedBy: RunId };
 
 export interface ResumeRunOptions extends Pick<
   ResumeToolUseFromResumeDataOptions,
-  | 'publishWorkflowOutput'
-  | 'beforeRunEnd'
-  | 'onRun'
-  | 'onAdmitted'
-  | 'stopAfterCycle'
-  | 'tools'
+  'onRun' | 'onAdmitted' | 'stopAfterCycle' | 'tools'
 > {
   /** Session owning the resumed run's coordination state. */
   readonly session: SessionHandle;
@@ -241,8 +236,6 @@ const resumeHere = Effect.fn('resumeHere')(function* (
 const runLaunchOptions = (options: ResumeRunOptions) => ({
   session: options.session,
   isCancellationRequested: options.isCancellationRequested,
-  publishWorkflowOutput: options.publishWorkflowOutput,
-  beforeRunEnd: options.beforeRunEnd,
   onRun: options.onRun,
   // Admitted under the claim already (`resumeHere`): not again at entry.
   stopAfterCycle: options.stopAfterCycle,

@@ -9,7 +9,6 @@ import type { ProcessServices } from '@platform/processRuntime';
 import { sessionFsLayer } from '@platform/rootedFs';
 import {
   RunDocumentsSchema,
-  RUN_OUTCOME,
   type OfferedTool,
   type RunId,
   type RequestEnsureProgressViewPayload,
@@ -36,7 +35,7 @@ import {
 import { modelInvokerLayer } from './ModelInvoker';
 import { agentRunLayer } from './run/AgentRun';
 import { runToolUse } from './loop/toolUse';
-import { runWithLaunchGuard, type RunTerminalOwner } from './runLaunchGuard';
+import { runWithLaunchGuard } from './runLaunchGuard';
 import { Runs, type AgentRunServices } from './runRegistry';
 import type { RegisterRunOptions } from '../storage/runLifecycle';
 import type { ChildRunTurns } from './childRunLoop';
@@ -121,8 +120,7 @@ function runLayerFor(
 function launchRun(
   ctx: AgentLaunchContext,
   handle: RunHandle,
-  shared: SubagentRunOptions &
-    Pick<ExecuteAgentOptions, 'publishWorkflowOutput'>,
+  shared: SubagentRunOptions,
   variant: LaunchVariant,
 ): Effect.Effect<RunEndResult, Error, AgentRunServices> {
   const toResult = (
@@ -145,24 +143,11 @@ function launchRun(
     }),
   });
   const { turns } = shared;
-  /** A document task's result, with its revisions' spend, published by the
-   *  host before the terminal commit; the verdict stays this function's. */
+  /** A document task's result, with its revisions' spend. */
   const withDocuments = (ended: RunEndResult) =>
-    Effect.gen(function* () {
-      if (ctx.task === null) return ended;
-      const result = yield* withChildSpend(ctx.session, ended);
-      if (result.error || !shared.publishWorkflowOutput) return result;
-      const publication = yield* shared.publishWorkflowOutput(
-        result,
-        ctx.task.outputs,
-      );
-      // Output the user asked for and did not get fails the run; a stop
-      // still reads as the stop it was.
-      return publication === 'failed' &&
-        result.outcome !== RUN_OUTCOME.CANCELLED
-        ? { ...result, outcome: RUN_OUTCOME.FAILED }
-        : result;
-    });
+    ctx.task === null
+      ? Effect.succeed(ended)
+      : withChildSpend(ctx.session, ended);
   // A stop asked before the run was reachable is this fiber's interruption,
   // taken before the loop does any work.
   return Effect.suspend(() =>
@@ -253,22 +238,6 @@ export interface ExecuteAgentOptions extends SubagentRunOptions {
   /** The run's registration, which its opening batch commits: the run is
    *  born with its opening or not at all. */
   readonly registration: RegisterRunOptions;
-  /**
-   * Publish a workflow's host-owned output (copies, the result record)
-   * while its run and checkpoint are live, before its terminal commit, on
-   * the run's own fiber (a stop reaches it and keeps the checkpoint). The
-   * host reports `failed` when output could not be delivered; the run
-   * decides its verdict from it.
-   */
-  publishWorkflowOutput?: (
-    result: RunEndResult,
-    /**
-     * The `task.outputs` declared by the definition this run loaded —
-     * the run's own copy, so a host never re-reads a catalog entry that may
-     * have been refreshed since the launch.
-     */
-    agentDefaultOutputFiles: readonly string[],
-  ) => Effect.Effect<'published' | 'failed', Error>;
   /**
    * The one admission hook, once per caller, with the run admitted. A fresh
    * launch runs it as its opening commits, which it holds: keep it short (a
@@ -400,10 +369,10 @@ export function executeAgent(
 export type ResumeTurnIdentity = Pick<ResumeData, 'runId' | 'agentConfig'>;
 
 /** What a fresh launch takes, but its registration and own-key fallback. */
-export interface ResumeToolUseFromResumeDataOptions
-  extends
-    Omit<ExecuteAgentOptions, 'ownApiKeyFallback' | 'registration'>,
-    RunTerminalOwner {
+export interface ResumeToolUseFromResumeDataOptions extends Omit<
+  ExecuteAgentOptions,
+  'ownApiKeyFallback' | 'registration'
+> {
   /** A resumed cycle is idle after its child delivery, while its run stays live. */
   readonly onIdle?: () => void;
   /** Caller-owned cancellation, read on the run's fiber before its loop. */
@@ -472,6 +441,6 @@ export function resumeToolUseFromResumeData(
   return (
     options.turns
       ? resumed
-      : runWithLaunchGuard(runSession, identity.runId, resumed, options)
+      : runWithLaunchGuard(runSession, identity.runId, resumed, true)
   ).pipe(Effect.provideService(Runs, runSession.runs));
 }

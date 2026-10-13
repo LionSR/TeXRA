@@ -39,7 +39,7 @@ import {
   type RetryPermission,
   type RunId,
 } from '@shared/schemas';
-import { testRuntime } from '@test/support/testProcessRuntime';
+import { testRuntime, testSessionOf } from '@test/support/testProcessRuntime';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
 import {
@@ -74,7 +74,7 @@ function useCliHostInteractions(
   detachHostInteractions = Effect.runSync(
     testDefaultSession().interactions.use(
       createHeadlessCliHostInteractions(
-        testDefaultSession(),
+        testSessionOf(testDefaultSession()),
         testRuntime(),
         cliContext,
         hooks,

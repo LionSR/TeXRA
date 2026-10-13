@@ -81,27 +81,15 @@ export const letGoOfClaim = (
     ),
   );
 
-/** A launch that owns its run for the run's whole life. */
-export interface RunTerminalOwner {
-  /**
-   * Host-owned final state, persisted before the run's claim goes. Its
-   * failure is one more failure reported.
-   */
-  readonly beforeRunEnd?: (
-    session: SessionHandle,
-  ) => Effect.Effect<void, Error>;
-}
-
 /**
  * The one terminal of a run's launch, in the exit-protocol pattern: a stop
- * lands before it or after it, never inside. It persists the host's final
- * artifacts, then lets the claim go.
+ * lands before it or after it, never inside. It lets the claim go.
  *
- * With an `owner`, the launch owns the run for its whole life (a fresh root,
+ * When `owned`, the launch owns the run for its whole life (a fresh root,
  * a standalone resume): a run that already exists (a resume) has its claim
  * held around `operation`, so no other owner moves it between the resume's
  * read and its launch; a fresh run is born with its claim at its opening.
- * Without an owner, `operation` only hands a registered child to its loop,
+ * Otherwise `operation` only hands a registered child to its loop,
  * which owns the ending from there: the guard ends the run when the
  * handoff fails ({@link endRunOutsideLifecycle}). Either way a claim no hold
  * here took (a birth's) is let go once the operation is done; a loop still
@@ -114,7 +102,7 @@ export function runWithLaunchGuard<A, E, R>(
   session: SessionHandle,
   runId: RunId,
   operation: Effect.Effect<A, E, R>,
-  owner?: RunTerminalOwner,
+  owned = false,
 ): Effect.Effect<A, E | Error, R> {
   return Effect.suspend(() => {
     const failures: unknown[] = [];
@@ -123,7 +111,7 @@ export function runWithLaunchGuard<A, E, R>(
     };
     const terminal = (held: boolean) => (exit: Exit.Exit<A, E>) =>
       Effect.gen(function* () {
-        if (owner === undefined && Exit.isFailure(exit))
+        if (!owned && Exit.isFailure(exit))
           collect(
             yield* Effect.exit(
               endRunOutsideLifecycle(
@@ -136,34 +124,28 @@ export function runWithLaunchGuard<A, E, R>(
               ),
             ),
           );
-        collect(
-          yield* Effect.exit(
-            Effect.suspend(() => owner?.beforeRunEnd?.(session) ?? Effect.void),
-          ),
-        );
         if (!held) yield* letGoOfClaim(session, runId);
       }).pipe(Effect.uninterruptible);
-    const guarded: Effect.Effect<A, E | Error, R> =
-      owner === undefined
-        ? operation.pipe(
-            Effect.onExit((exit) =>
-              Exit.isSuccess(exit) ? Effect.void : terminal(false)(exit),
-            ),
-          )
-        : // No interrupt lands between taking the hold and attaching the
-          // terminal, so a held run always gets its terminal; a refused
-          // hold still fails as itself.
-          Effect.scoped(
-            Effect.uninterruptibleMask((restore) =>
-              Effect.gen(function* () {
-                const held = yield* getRunRecords(session, runId).exists();
-                if (held) yield* session.log.hold(runId, { ends: true });
-                return yield* restore(operation).pipe(
-                  Effect.onExit(terminal(held)),
-                );
-              }),
-            ),
-          );
+    const guarded: Effect.Effect<A, E | Error, R> = !owned
+      ? operation.pipe(
+          Effect.onExit((exit) =>
+            Exit.isSuccess(exit) ? Effect.void : terminal(false)(exit),
+          ),
+        )
+      : // No interrupt lands between taking the hold and attaching the
+        // terminal, so a held run always gets its terminal; a refused
+        // hold still fails as itself.
+        Effect.scoped(
+          Effect.uninterruptibleMask((restore) =>
+            Effect.gen(function* () {
+              const held = yield* getRunRecords(session, runId).exists();
+              if (held) yield* session.log.hold(runId, { ends: true });
+              return yield* restore(operation).pipe(
+                Effect.onExit(terminal(held)),
+              );
+            }),
+          ),
+        );
     return Effect.exit(guarded).pipe(
       Effect.flatMap((exit) => {
         if (

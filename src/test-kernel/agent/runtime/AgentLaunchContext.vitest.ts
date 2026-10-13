@@ -422,7 +422,7 @@ describe('AgentLaunchContext', () => {
             registration: { identity: { kind: 'agent', agent: 'chat' } },
             suppressErrorNotification: true,
           }),
-          {},
+          true,
         ),
       );
       expect(error).toBe(failure);

@@ -25,10 +25,11 @@ import type {
   CliConfigExecuteResult,
 } from '@cli/runtime/executeCli';
 import { CliExitCode } from '@cli/runtime/exitCodes';
-import { testRuntime } from '@test/support/testProcessRuntime';
+import { testRuntime, testSessionOf } from '@test/support/testProcessRuntime';
 import {
   qualifyAggregateId,
   RUN_OUTCOME,
+  RunRecordFieldsSchema,
   type RunId,
   type SessionEventDraft,
 } from '@shared/schemas';
@@ -38,7 +39,7 @@ import {
   fakeProcessServices,
   installedHost,
 } from '@test/support/setupPlatform';
-import { createTestSession } from '@test/support/sessionTestUtils';
+import { createTestSession, seedRows } from '@test/support/sessionTestUtils';
 import { withTempDirEffect } from '@test/support/tempDirPlatform';
 
 const mocks = vi.hoisted(() => {
@@ -146,6 +147,9 @@ function currentSession(): SessionHandle {
  */
 let pendingRunStarts: string[] = [];
 const seededRunIds = new Set<string>();
+/** The output files a run's recorded configuration names, for the runs
+ *  that record some. */
+const recordedOutputFiles = new Map<string, readonly string[]>();
 
 /** The workflow command's program over the shared happy-path inputs. */
 function workflowProgram(
@@ -224,72 +228,27 @@ function workflowRun(
 function mockWorkflowRun(
   result: WorkflowExecuteResult,
   once = false,
-  /** What the launch loaded off the agent's definition, as the run hands it on. */
+  /** What the launch resolved the agent's declared outputs to, as the
+   *  run's recorded configuration states them. */
   agentDefaultOutputFiles: readonly string[] = [],
 ): void {
+  // The finalization runs the command's post-run step on the committed
+  // result, as the real skeleton does.
   const implementation = (
     _config: unknown,
     _context: unknown,
-    options: {
-      readonly publishWorkflowOutput?: CliConfigExecuteOptions['publishWorkflowOutput'];
-    },
+    options: Pick<CliConfigExecuteOptions, 'afterRun'>,
   ) =>
-    Effect.gen(function* () {
-      if (result.ok && options.publishWorkflowOutput) {
-        const publication = yield* options.publishWorkflowOutput(
-          result.result,
-          agentDefaultOutputFiles,
-          () => true,
-        );
-        // The verdict rule the run applies (`launchWorkflowRun`).
-        if (
-          publication === 'failed' &&
-          result.result.outcome !== RUN_OUTCOME.CANCELLED
-        ) {
-          return {
-            ...result,
-            result: { ...result.result, outcome: RUN_OUTCOME.FAILED },
-          };
-        }
-      }
-      return result;
-    });
-  if (result.ok) pendingRunStarts.push(result.result.runId);
+    result.ok && options.afterRun
+      ? Effect.as(options.afterRun(result.result), result)
+      : Effect.succeed(result);
+  if (result.ok) {
+    pendingRunStarts.push(result.result.runId);
+    if (agentDefaultOutputFiles.length > 0)
+      recordedOutputFiles.set(result.result.runId, agentDefaultOutputFiles);
+  }
   if (once) mocks.executeCliConfig.mockImplementationOnce(implementation);
   else mocks.executeCliConfig.mockImplementation(implementation);
-}
-
-/** Mocks a run whose cancellation lands during output finalization. */
-function mockCancellationDuringOutputFinalization(
-  provisional: WorkflowExecuteResult,
-  tryCommitPublication: () => boolean,
-): void {
-  if (!provisional.ok) throw new Error('Expected a workflow result.');
-  pendingRunStarts.push(provisional.result.runId);
-  mocks.executeCliConfig.mockImplementationOnce(
-    (
-      _config: unknown,
-      _context: unknown,
-      options: {
-        readonly publishWorkflowOutput?: CliConfigExecuteOptions['publishWorkflowOutput'];
-      },
-    ) =>
-      Effect.gen(function* () {
-        if (options.publishWorkflowOutput)
-          yield* options.publishWorkflowOutput(
-            provisional.result,
-            [],
-            tryCommitPublication,
-          );
-        return {
-          ...provisional,
-          result: {
-            ...provisional.result,
-            outcome: RUN_OUTCOME.CANCELLED,
-          },
-        };
-      }),
-  );
 }
 
 /**
@@ -344,6 +303,24 @@ const seedStartedRun = (session: SessionHandle, runId: string) =>
         provenance: null,
       },
     ]);
+    // The configuration the launch recorded, for a run that names its
+    // output files there.
+    const outputFiles = recordedOutputFiles.get(runId);
+    if (outputFiles !== undefined)
+      yield* seedRows(session.log)([
+        {
+          type: 'run.config',
+          aggregateId: qualifyAggregateId('run', runId as RunId),
+          config: RunRecordFieldsSchema.parse(
+            documentTaskConfig({
+              agent: 'polish',
+              model: 'test-model',
+              inputFiles: ['paper.tex'],
+              outputFiles: [...outputFiles],
+            }),
+          ),
+        },
+      ]);
     seededRunIds.add(runId);
   });
 
@@ -396,6 +373,7 @@ describe('CLI run command, workflow agents', () => {
   beforeEach(async () => {
     vi.clearAllMocks();
     pendingRunStarts = [];
+    recordedOutputFiles.clear();
     seededRunIds.clear();
     // The CLI init hands its caller the platform's stores; the commands
     // under test read `secrets`/`globalState` off what it returns.
@@ -741,7 +719,7 @@ describe('CLI run command, workflow agents', () => {
   );
 
   // it.live: the body drives a real session through the process runtime.
-  it.live('persists workflow metadata before the run claim is released', () =>
+  it.live('persists workflow metadata under the run claim, after its end', () =>
     Effect.scoped(
       Effect.gen(function* () {
         const { createTestSession } = yield* Effect.promise(
@@ -774,21 +752,17 @@ describe('CLI run command, workflow agents', () => {
             provenance: null,
           },
         ]);
-        // The executeCliConfig stub is an Effect port. Its run owns output
-        // finalization, and the driver it stands in for holds the real
-        // claim, released once the run's ending has committed.
+        // The executeCliConfig stub is an Effect port. The driver it stands
+        // in for holds the real claim and releases it once the run's ending
+        // has committed; the command persists its record after that.
         mocks.executeCliConfig.mockImplementationOnce(
           (_config, _context, options) =>
             Effect.scoped(
               session.log
                 .hold(runId, { ends: true })
-                .pipe(
-                  Effect.andThen(
-                    options.publishWorkflowOutput(run.result, [], () => true),
-                  ),
-                  Effect.as(run),
-                  Effect.orDie,
-                ),
+                .pipe(Effect.as(run), Effect.orDie),
+            ).pipe(
+              Effect.tap(() => options.afterRun?.(run.result) ?? Effect.void),
             ),
         );
         expect(yield* workflowProgram({}, createRunCommandCliContext())).toBe(
@@ -1113,116 +1087,6 @@ describe('CLI run command, workflow agents', () => {
   );
 
   it.effect(
-    'presents the lifecycle verdict when cancellation lands during output finalization',
-    () =>
-      Effect.gen(function* () {
-        mockCancellationDuringOutputFinalization(
-          workflowRun('abc00c'),
-          () => true,
-        );
-
-        const exitCode = yield* workflowProgram();
-
-        expect(exitCode).toBe(CliExitCode.Interrupted);
-        expect(yield* readResultMeta(currentSession(), 'abc00c')).toMatchObject(
-          EXPECTED_RESULT_META,
-        );
-        expect(mocks.emitCliResult).toHaveBeenCalledWith(
-          expect.any(Object),
-          expect.objectContaining({
-            json: expect.objectContaining({ outcome: RUN_OUTCOME.CANCELLED }),
-          }),
-        );
-      }),
-  );
-
-  it.effect.each([
-    {
-      label: '--output',
-      state: 'missing',
-      existing: false,
-      init: { output: 'published.tex' },
-      destination: (root: string) => path.join(root, 'published.tex'),
-    },
-    {
-      label: '--output-dir',
-      state: 'missing',
-      existing: false,
-      init: { outputDir: 'published' },
-      destination: (root: string) => path.join(root, 'published', 'paper.tex'),
-    },
-    {
-      label: '--output',
-      state: 'existing',
-      existing: true,
-      init: { output: 'published.tex' },
-      destination: (root: string) => path.join(root, 'published.tex'),
-    },
-    {
-      label: '--output-dir',
-      state: 'existing',
-      existing: true,
-      init: { outputDir: 'published' },
-      destination: (root: string) => path.join(root, 'published', 'paper.tex'),
-    },
-  ])(
-    'leaves a $state $label destination untouched when cancellation commits first',
-    ({ init, destination, existing }) =>
-      withTempDirEffect('texra-workflow-', (root) =>
-        Effect.gen(function* () {
-          const generated = yield* Effect.promise(() =>
-            writeGeneratedOutput(root),
-          );
-          const outputSummary = runOutputSummary(
-            generated,
-            path.join(root, 'paper.tex'),
-          );
-          mockCancellationDuringOutputFinalization(
-            workflowRun('abc00c', {
-              outputs: [outputSummary],
-            }),
-            () => false,
-          );
-          const target = destination(root);
-          if (existing) {
-            yield* Effect.promise(() =>
-              fs.mkdir(path.dirname(target), { recursive: true }),
-            );
-            yield* Effect.promise(() => fs.writeFile(target, 'existing'));
-          }
-
-          const exitCode = yield* workflowProgram(
-            init,
-            createRunCommandCliContext({ cwd: root }),
-          );
-
-          expect(exitCode).toBe(CliExitCode.Interrupted);
-          if (existing) {
-            expect(
-              yield* Effect.promise(() => fs.readFile(target, 'utf8')),
-            ).toBe('existing');
-          } else {
-            expect(
-              Exit.isFailure(
-                yield* Effect.exit(Effect.tryPromise(() => fs.stat(target))),
-              ),
-            ).toBe(true);
-          }
-          expect(
-            yield* readResultMeta(currentSession(), 'abc00c'),
-          ).toMatchObject(EXPECTED_RESULT_META);
-          const emitted = mocks.emitCliResult.mock.calls[0]?.[1]?.json;
-          expect(emitted).toMatchObject({
-            outcome: RUN_OUTCOME.CANCELLED,
-            runDirectory: '/tmp/runs/abc00c',
-          });
-          expect(emitted).not.toHaveProperty('copiedOutput');
-          expect(emitted).not.toHaveProperty('copiedOutputs');
-        }),
-      ),
-  );
-
-  it.effect(
     'does not advertise resume when cancelled status is not durable',
     () =>
       Effect.gen(function* () {
@@ -1318,14 +1182,9 @@ describe('CLI run command, workflow agents', () => {
           (_config, _context, options) =>
             Effect.gen(function* () {
               if (!run.ok) return run;
-              if (options.publishWorkflowOutput)
-                yield* options.publishWorkflowOutput(
-                  run.result,
-                  [],
-                  () => true,
-                );
               yield* options.onInterruptedRunFinalized?.('abc010') ??
                 Effect.void;
+              yield* options.afterRun?.(run.result) ?? Effect.void;
               return run;
             }),
         );
@@ -1362,6 +1221,7 @@ describe('CLI run command, workflow agents', () => {
           context,
           {
             session: Effect.succeed(session),
+            runSession: Effect.succeed(testSessionOf(session)),
             runtime: testRuntime(),
             shutdownScope: installedHost().platform.shutdownScope,
           },
@@ -1413,6 +1273,7 @@ describe('CLI run command, workflow agents', () => {
           context,
           {
             session: Effect.succeed(session),
+            runSession: Effect.succeed(testSessionOf(session)),
             runtime: testRuntime(),
             shutdownScope: installedHost().platform.shutdownScope,
           },

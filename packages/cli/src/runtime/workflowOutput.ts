@@ -209,7 +209,6 @@ interface WorkflowOutputResolutionOptions {
   readonly expectedOutputFiles?: readonly string[];
   /** Storage root of the session that ran the workflow. */
   readonly storageRoot: string;
-  readonly tryCommitPublication?: () => boolean;
 }
 
 function outputCopyRelativePath(output: OutputFileSummary): string {
@@ -363,14 +362,6 @@ export function resolveWorkflowOutput(
     // Only completed runs may publish to user-requested destinations. Partial or
     // rejected artifacts remain inspectable in run storage through baseResult.
     if (result.outcome !== RUN_OUTCOME.COMPLETED) return baseResult;
-    // Commit before validation as well as copying: once output finalization owns
-    // the verdict, its missing-output and filesystem failures must stay visible.
-    if (
-      (outputFile || outputDir) &&
-      options.tryCommitPublication?.() === false
-    ) {
-      return baseResult;
-    }
     const terminalStatus = runOutcomeToCliRunStatus(result.outcome);
     if (documents.outputs.length === 0 && (outputFile || outputDir)) {
       return yield* Effect.fail(

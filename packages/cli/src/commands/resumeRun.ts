@@ -2,7 +2,7 @@ import * as path from 'node:path';
 
 import { Effect, FileSystem, PlatformError, Result } from 'effect';
 
-import { describeFollowUpFailure, resumeRun, runRefusal } from '@agent/runtime';
+import { describeFollowUpFailure, runRefusal } from '@agent/runtime';
 import { getRunRecords } from '@agent/storage';
 import {
   agentKey,
@@ -82,7 +82,7 @@ const workflowRecoveryInputsAreDurable = Effect.fn(
 });
 
 /**
- * Continue a stored session through the shared `resumeRun`: a tool-use
+ * Continue a stored session through the session's resume: a tool-use
  * session reopens the interactive chat TUI (so a usable terminal is
  * required), whose `/resume` calls it; a workflow run resumes headless under
  * its persisted run id, in the same run skeleton as `texra run`. The chat arm names the session with its persisted
@@ -252,46 +252,34 @@ export function runResumeCommand(
           config,
           context.cwd,
         );
-        // The run continues through the one core resume path (`resumeRun`),
-        // inside the headless run skeleton the fresh launch uses.
+        // The run continues through the session's resume, inside the
+        // headless run skeleton the fresh launch uses.
         return yield* executeCliWorkflowConfig(
           config,
           buildHeadlessRunContext(context),
           {
             session: stores.session,
+            runSession: stores.runSession,
             runtime: stores.runtime,
             shutdownScope: stores.shutdownScope,
             runId: id,
             recoveryInputIsDurable,
             agentRuns: {
-              // The headless run skeleton launches the persisted run through
-              // the one core resume path, settling with its whole run.
-              // A shutdown before the run's lane exists stops the resume through
-              // its predicate; the refusal it causes reads as that abort.
-              launch:
-                (shutdown) =>
-                (session, { options }) =>
-                  resumeRun(id, {
-                    ...options,
-                    session,
-                    isCancellationRequested: shutdown,
-                  }).pipe(
-                    Effect.flatMap((resumed) => {
-                      if ('failed' in resumed)
-                        return Effect.fail(
-                          shutdown()
-                            ? new DOMException('Resume stopped', 'AbortError')
-                            : new CliUsageError(
-                                describeFollowUpFailure(resumed.failed),
-                              ),
-                        );
-                      if (resumed.result) return Effect.succeed(resumed.result);
-                      return Effect.fail(
-                        new Error(
-                          `Run ${id} did not resume as a document task.`,
+              // The headless run skeleton enters the persisted run through
+              // the session's resume, settling with its whole run; a
+              // shutdown before admission aborts the resume. A refusal is
+              // the caller's usage exit.
+              launch: (session) =>
+                session
+                  .resume(id)
+                  .pipe(
+                    Effect.catchTag('ResumeRefused', (refusal) =>
+                      Effect.fail(
+                        new CliUsageError(
+                          describeFollowUpFailure(refusal.reason),
                         ),
-                      );
-                    }),
+                      ),
+                    ),
                   ),
             },
           },
