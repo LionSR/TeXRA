@@ -32,6 +32,16 @@ commits back; the 2026-10-10 pass already read the bulk of that arc (the
 the `BoundModel` slimming), so this pass does not re-narrate it — it reads the
 18-commit delta since 2026-10-10 and re-confirms the whole.
 
+**Pin vs. landing tree.** Module paths and line numbers below are as of the pin
+`d8d4a6b`. This note lands on a branch that has since merged `main` (≈40 further
+commits), which relocated a few cited coordinates — e.g. the process
+composition moved from `effect/sessions.ts` to `effect/processLayer.ts`, and the
+tagged-error headline count stepped up — so where the merge moved a cited path,
+the landing-tree location governs and the authoritative, non-drifting references
+are the type index (`shared/session/runStateFold.ts`) and `config/api-reports/`,
+not a path pinned here. Fully re-pinning every coordinate to the merged tree is
+owner-level follow-up, not this routine.
+
 ## What moved in the 18-commit delta (abstractions removed, by review)
 
 The delta since the 2026-10-10 pin is the D/E/G lanes of the durable-harness and
@@ -176,8 +186,10 @@ an added indirection tier — one `Effect` per run appending one history, one
    mutable module global (`const consoleLogSink` :133, `let sink = consoleLogSink`
    :165, `let sinkTrusted = false` :166, `setLogSink` :173, `writeLogEntry` :183),
    set by the host bootstraps (`packages/{extension,desktop,cli}` call
-   `setLogSink`). The embedder-facing composition (`effect/sessions.ts`,
-   `platform/processRuntime.ts`) installs no sink, so an embedder of
+   `setLogSink`). The embedder-facing composition — `effect/processLayer.ts`
+   (which defines `Sessions`/`Sessions.layer`/`processLayer` at the landing tree;
+   it was in `effect/sessions.ts` at the pin) and `platform/processRuntime.ts` —
+   installs no sink, so an embedder of
    `@texra-ai/harness` gets whatever process-global sink is set and cannot inject
    its own through `Sessions.layer`/`AgentPlatform`, and two embedders in one
    process share one global. This is the one real SDK-relevant host leak; step 6
