@@ -153,10 +153,15 @@ export function startDetachedChildRunLoop<
           Fiber.join(completion).pipe(
             Effect.catchCause((cause) => {
               const error = Cause.squash(cause);
-              childRun?.logger.error(message, { data: error });
-              return Effect.logWarning(message).pipe(
-                Effect.annotateLogs({ data: error }),
-                withLogChannel('childRunLoop'),
+              return Effect.sync(() =>
+                childRun?.logger.error(message, { data: error }),
+              ).pipe(
+                Effect.andThen(
+                  Effect.logError(message).pipe(
+                    Effect.annotateLogs({ data: error }),
+                    withLogChannel('childRunLoop'),
+                  ),
+                ),
               );
             }),
           ),
