@@ -104,17 +104,21 @@ an added indirection tier — one `Effect` per run appending one history, one
 2. **Audit for unnecessary abstraction.** Done, four ways.
    - **Agent core.** One run-history writer intact: `makeRunHistory`
      (`runtime/RunHistory.ts`) is the sole implementation, and after the D1/D2
-     "one door, one cell" refactor every live write funnels through
+     "one door, one cell" refactor the loop's run-history writes funnel through
      `RunCell.append` → its internal `commit` → `sessionLog.transact` (the one
      writer, with the `SynchronizedRef` lock, fold-back and uninterruptible
      mask); `finalizeRun` (`storage/runLifecycle.ts`, "the one writer of a run's
-     end") appends through that same cell door. `forkRun.ts` is the one-time
+     end") appends through that same cell door, and `forkRun.ts` is the one-time
      atomic birth of a _new_ forked run, not a second writer into an existing
-     one. The one documented, guarded exception is `endIn`'s degraded "run ends
-     unloaded" path (`runLifecycle.ts:285`), which writes the closing rows
-     _beside_ the cell when the cell is unloadable — so the single-writer
-     invariant is one cell door plus that loud fallback, not literally every row
-     through the cell. `SessionHandle`
+     one. The invariant is one writer per concern, not literally every row
+     through the cell: two row kinds are written outside it and are not loop
+     history — (a) the **request surface** rows `request.opened`/`request.decided`,
+     written through `session.log.transact`/`runStateAppend` by `requestPolicy.ts`
+     (the ask/decide path, a separate owner, folded into run state via its type
+     index), and (b) `endIn`'s degraded "run ends unloaded" fallback
+     (`runLifecycle.ts:285`), which writes the closing rows _beside_ the cell,
+     loudly, when the cell is unloadable. Neither is a second writer of the
+     loop's history. `SessionHandle`
      remains a flat record of owner fields that "does no work and forwards
      nothing" (`SessionHandle.ts:342-372`). `ChildRuns` (lane E5,
      `runtime/ToolServices.ts`) is a capability-narrowing door that hides
@@ -207,6 +211,19 @@ an added indirection tier — one `Effect` per run appending one history, one
    registry plumbing an embedder on the documented `StartInput.tools`/`defineTool`
    path never constructs (both still exported from `index.ts`).
 
+4. **Reconcile the stale package-name decision in the durable-harness note**
+   (carried from the 2026-10-10 pass). `2026-10-02-durable-harness.md` still
+   records "the package names (Q5) stay open" (line 15) and, under "Proposed
+   names, still open (Q5)" (line 353), proposes `packages/theorist` /
+   `@texra-ai/theorist` for the app plugins — but the tree resolved this: the
+   app shipped as `packages/texra` / `@texra-ai/texra` and the SDK as
+   `packages/harness` / `@texra-ai/harness`. The manifest's 2026-10-12 rework
+   already treats Q5 as settled by the rename, so the durable-harness note is now
+   the lone unreconciled post-rename document — its Q5 section should be closed
+   against the landed names. Doc-only reconciliation, owner-level, not this
+   routine; so manifest ratification (§Carried.3) is not the _only_ open owner
+   action.
+
 ## Observations this pass (not defects, recorded so the next pass need not re-derive)
 
 - **Error vocabulary: eight lifecycle+store, seventeen tagged classes in all; the
@@ -241,11 +258,12 @@ an added indirection tier — one `Effect` per run appending one history, one
 
 No refactor to land autonomously from this charter. "Agent SDK readiness" tracks
 the durable-harness program (`2026-10-02-durable-harness.md` H1–H6), which
-continued through its D/E/G lanes this delta; the one owner-level action the
-surface audit asks for is to **ratify the already-re-scoped Tier-1 manifest**
-(§Carried.3) — its 2026-10-12 rework landed the re-scope around `@texra-ai/harness`
-and delegated enumeration to `config/api-reports/`, leaving only the owner
-ratification open. The
+continued through its D/E/G lanes this delta. Two doc-only, owner-level actions
+remain: **ratify the already-re-scoped Tier-1 manifest** (§Carried.3) — its
+2026-10-12 rework landed the re-scope around `@texra-ai/harness` and delegated
+enumeration to `config/api-reports/`, leaving the owner ratification open — and
+**reconcile the durable-harness note's stale Q5 package-name section**
+(§Carried.4) against the landed `@texra-ai/texra`/`@texra-ai/harness` names. The
 logger sink→Layer step (§Carried.1) rides
 `2026-09-21-effect-design-synchronous-facades.md`; the two `packages/llm` ambient
 reads (§Carried.2) are effectively closed as refusal guards. **Separately, the
