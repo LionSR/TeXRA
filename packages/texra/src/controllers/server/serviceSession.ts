@@ -304,28 +304,49 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
           Effect.mapError(requestError),
         ),
     );
-  /** The level of this window's fold that shows the run ended: the first,
-   *  once the run is in the fold, where it holds a durable outcome or is
-   *  gone. The service's answer to `task.ended` and the fold's `task.watch`
-   *  stream arrive apart, so a result that settled on the answer alone
-   *  could find the window still showing the run live. */
-  const endedInView = (runId: RunId): Effect.Effect<void> =>
-    Stream.runDrain(
+  /** This window's fold now: what a start or resume reads before it asks
+   *  the service, so the run's end can be told from the one its previous
+   *  activation left. */
+  const levelNow = () => SubscriptionRef.getUnsafe(graph.view.ref);
+  /** The level of this window's fold that shows the run ended: the first
+   *  where the run holds a durable outcome, or is gone. The service's
+   *  answer to `task.ended` and the fold's `task.watch` stream arrive
+   *  apart, so a result that settled on the answer alone could find the
+   *  window still showing the run live. A resumed run's fold can still
+   *  show the outcome it ended with before, until its `run.activate`
+   *  folds: that outcome is known from `before`, read ahead of the resume,
+   *  and the new activation's rows all stamp a later `lastTimestamp`. */
+  const endedInView = (
+    runId: RunId,
+    before: ReturnType<typeof levelNow>,
+  ): Effect.Effect<void> => {
+    const stale = before.runs.get(runId);
+    const staleAt = stale?.durableOutcome == null ? null : stale.lastTimestamp;
+    return Stream.runDrain(
       SubscriptionRef.changes(graph.view.ref).pipe(
-        Stream.dropWhile((level) => !level.runs.has(runId)),
         Stream.takeUntil((level) => {
           const run = level.runs.get(runId);
-          return run === undefined || run.durableOutcome != null;
+          return (
+            run === undefined ||
+            (run.durableOutcome != null && run.lastTimestamp !== staleAt)
+          );
         }),
       ),
     );
+  };
   /** The run the service admitted, as this window holds it: its end is the
    *  service's answer (asked once), held until this window's fold shows it
    *  too; its view this window's fold sliced to this activation; and its
    *  trace stays in the service. */
-  const runOf = (runId: RunId, redirectedFrom?: RunId): Effect.Effect<Run> =>
+  const runOf = (
+    runId: RunId,
+    before: ReturnType<typeof levelNow>,
+    redirectedFrom?: RunId,
+  ): Effect.Effect<Run> =>
     Effect.map(
-      Effect.cached(ended(runId).pipe(Effect.tap(() => endedInView(runId)))),
+      Effect.cached(
+        ended(runId).pipe(Effect.tap(() => endedInView(runId, before))),
+      ),
       (result) => ({
         runId,
         ...(redirectedFrom !== undefined && { redirectedFrom }),
@@ -442,6 +463,7 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
         return Effect.fail(runFailure('A service task needs its config.'));
       const refused = windowTools(input.tools);
       if (refused) return Effect.fail(refused);
+      const before = levelNow();
       return callService(link, offline, (client) =>
         client['task.start']({
           workspace,
@@ -463,11 +485,12 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
             return runFailure(cause.message, cause);
           }),
         ),
-      ).pipe(Effect.flatMap((runId) => runOf(runId)));
+      ).pipe(Effect.flatMap((runId) => runOf(runId, before)));
     },
     resume: (runId, input) => {
       const refused = windowTools(input?.tools);
       if (refused) return Effect.fail(refused);
+      const before = levelNow();
       return callService(link, offline, (client) =>
         client['task.resume']({ workspace, runId }).pipe(
           Effect.mapError((error) => runFailure(error.message)),
@@ -484,7 +507,7 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
                   message: describeFollowUpFailure('blocked'),
                 }),
               )
-            : runOf(resumed, resumed === runId ? undefined : runId),
+            : runOf(resumed, before, resumed === runId ? undefined : runId),
         ),
       );
     },
