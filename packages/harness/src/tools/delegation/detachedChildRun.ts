@@ -143,22 +143,21 @@ export function startDetachedChildRunLoop<
         return yield* Effect.failCause(setup.cause);
       }
       const completion = setup.value;
-      // An awaiting caller (`onTurnSettled`) owns the loop's failure; nobody
-      // reads a detached loop's, so a late failure is diagnosed here: on the
-      // child's own trace when it has one, else on the loop's log channel.
+      // A caller that awaits the loop (the only one passing `onTurnSettled`)
+      // owns its failure; nobody reads a detached loop's, so a late failure
+      // is said here: always on the loop's log channel (the child's trace
+      // may already be closed by its finalize), and on that trace too.
       if (input.onTurnSettled === undefined) {
         const message = `Child '${input.agentName}' run loop failed after launch`;
         yield* Effect.forkDetach(
           Fiber.join(completion).pipe(
             Effect.catchCause((cause) => {
               const error = Cause.squash(cause);
-              const trace = childRun?.logger;
-              return trace
-                ? Effect.sync(() => trace.error(message, { data: error }))
-                : Effect.logError(message).pipe(
-                    Effect.annotateLogs({ data: error }),
-                    withLogChannel('childRunLoop'),
-                  );
+              childRun?.logger.error(message, { data: error });
+              return Effect.logWarning(message).pipe(
+                Effect.annotateLogs({ data: error }),
+                withLogChannel('childRunLoop'),
+              );
             }),
           ),
         );
