@@ -43,9 +43,10 @@ one landed through human review, not this routine:
   session's one run surface (lane D2b-2, #13952), simplified after lanes C and D
   (#13954). An `AgentEngine`/`runAgent` grep over `packages/harness/src` is now
   empty.
-- **The run history is one door, one cell**: every run writes through its cell
-  and runs are born with their opening (lane D1, #13932); every row a run's state
-  folds commits through its cell (lane D2a, #13938).
+- **The run history is one door, one cell**: the loop's run-history writes go
+  through its cell and runs are born with their opening (lane D1, #13932; lane
+  D2a, #13938) — scoped to the loop's own history, not every run-state row (see
+  the writer-map note under ask 2).
 - **App concerns left the harness**: app plugin tools hold no `SessionHandle` —
   `ChildRuns` and call requests serve them (lane E5, #13955); editor capabilities
   left `HostInteractions` (lane G3, #13945); the auto-open policy moved to the app
@@ -65,8 +66,8 @@ reads; the SDK extend surface (`Plugin`, `Composition`, `Sessions`,
 The codebase is still well-aligned, and this audit remains a standing program,
 not a gap. **No autonomous refactor is warranted from this charter.** Four
 read-only audits this pass — agent core, model handler, logger, SDK surface —
-found **no wrapper layer that only forwards, no second run-history writer, no
-services-bag, no re-export shim** introduced by the lane work. The loop and the
+found **no wrapper layer that only forwards, no second writer of the loop's run
+history, no services-bag, no re-export shim** introduced by the lane work. The loop and the
 model handler each carry many files, but each is an Effect-native,
 concern-separated decomposition of one program under the 400-line core rule, not
 an added indirection tier — one `Effect` per run appending one history, one
@@ -139,9 +140,13 @@ an added indirection tier — one `Effect` per run appending one history, one
      one remaining structural item is the sink→Layer conversion (§Carried.1),
      still unlanded.
    - **SDK surface.** The center (Sessions/Session/Run + tagged errors +
-     `defineTool`, pure Effect, no in-package `runPromise`/`runSync`/`runFork`) is
-     minimal and clean. The redundancy that remains is at the edges
-     (§Carried.3).
+     `defineTool`) is pure Effect with no `Effect.run*` at the data/center
+     surface. The deliberate exception is the runtime-entry module
+     `platform/processRuntime.ts`, the named runtime entry where the publicly
+     exported `withForkFailureReporting` wraps `runtime.runFork` (the Tier-1
+     manifest records this), per the ESLint `no-restricted-syntax` carve-out for
+     runtime entries — not a stray `run*` in the center. The center is minimal
+     and clean; the redundancy that remains is at the edges (§Carried.3).
 
 3. **Plan API-surface simplification.** The durable-harness "extend" half
    (`Plugin`, `Sessions.layer({ plugins })`, `Plugins.contribute`,
@@ -208,8 +213,12 @@ an added indirection tier — one `Effect` per run appending one history, one
    manifest's own stated gap: its §ratification (what Tier-1 keeps, seals, or
    sheds) is "open, awaiting an owner" — the durable-harness program, not this
    routine. The shed/leak questions that survive the pivot are unchanged:
-   `SettingHost` (TeXRA's internal host enum reaching the public tool-definition
-   contract via `unavailableHosts`) and the `MapToolRegistry`/`IToolRegistry`
+   `SettingHost` (TeXRA's internal host enum reaching the public surface on more
+   than one path — `ITool.unavailableHosts` and the required `host` field of
+   `WorkspaceRoots`, exposed through the public `AgentPlatform.roots`/`Session.roots`
+   (`platform/workspaceRoots.ts`) — so a seal/remove decision must cover the
+   composition contract, not only the tool contract) and the
+   `MapToolRegistry`/`IToolRegistry`
    registry plumbing an embedder on the documented `StartInput.tools`/`defineTool`
    path never constructs (both still exported from `index.ts`).
 
