@@ -1,8 +1,8 @@
 // State 1 continuation for the CLI (2026-06-11-agent-native-onboarding.md).
 //
-// The moment a credential lands on a true first run, the setup agent owns the
-// session: the post-picker continuation enters chat with `setup` selected
-// instead of the bare launcher / default agent. Pure decision logic so the
+// The moment a credential lands on a true first run (the chat's "Connect a
+// model" panel), the setup agent owns the session: the continuation selects
+// `setup` instead of the default agent. Pure decision logic so the
 // Ink-free test kernel can cover it — callers read `firstRunDone` from
 // platform global state and pass it in.
 
@@ -10,7 +10,7 @@ import { SETUP_AGENT_NAME } from '@shared/constants/agents';
 import { ONBOARDING_SETUP_HANDOFF } from '@ui/copy/onboarding';
 
 interface FirstRunSetupContinuationInputs {
-  /** The first-run picker just configured a credential in this process. */
+  /** The connect panel just configured a credential in this process. */
   readonly onboardingConfigured: boolean;
   /** User-scoped flag: a run has completed or the setup agent handed off. */
   readonly firstRunDone: boolean;
