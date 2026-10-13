@@ -169,8 +169,11 @@ an added indirection tier — one `Effect` per run appending one history, one
    item the surface audit still asks for is §Carried.3.
 
 4. **Design subagent boundaries.** First-class and unchanged: (a) native
-   subagents via `executeAgent` with an owned `RunId` (dispatch in
-   `tools/delegation/inBandSubagentRun.ts`); (b) the workflow-script run plus its
+   subagents via `executeAgent`/`resumeTurn` with an owned `RunId`, dispatched in
+   the shared `runtime/nativeSubagentStrategy.ts` (`programs.executeAgent`/
+   `resumeTurn`) that `subagentRun`/`scriptRun`/`resumeRun` reuse —
+   `tools/delegation/inBandSubagentRun.ts` constructs that strategy and starts
+   the shared child loop rather than dispatching itself; (b) the workflow-script run plus its
    `agent()` grandchildren (`runtime/scriptRun.ts`); (c) the agent-CLI children —
    `claude_code` (`packages/texra/src/tools/claudeAgent.ts`) and `codex`
    (`packages/texra/src/tools/codex.ts`), each loading its own provider SDK —
@@ -284,12 +287,14 @@ an added indirection tier — one `Effect` per run appending one history, one
 
 No refactor to land autonomously from this charter. "Agent SDK readiness" tracks
 the durable-harness program (`2026-10-02-durable-harness.md` H1–H6), which
-continued through its D/E/G lanes this delta. Two doc-only, owner-level actions
-remain: **ratify the already-re-scoped Tier-1 manifest** (§Carried.3) — its
-2026-10-12 rework landed the re-scope around `@texra-ai/harness` and delegated
-enumeration to `config/api-reports/`, leaving the owner ratification open — and
-**reconcile the durable-harness note's stale Q5 package-name section**
-(§Carried.4) against the landed `@texra-ai/texra`/`@texra-ai/harness` names. The
+continued through its D/E/G lanes this delta. The doc-only, owner-level actions
+that remain are: **ratify the already-re-scoped Tier-1 manifest** (§Carried.3) —
+its 2026-10-12 rework landed the re-scope around `@texra-ai/harness` and
+delegated enumeration to `config/api-reports/`, leaving the owner ratification
+open; **reconcile the durable-harness note's stale Q5 package-name section**
+(§Carried.4) against the landed `@texra-ai/texra`/`@texra-ai/harness` names; and
+the one-line `errors.ts`/README scope clarification noted in Observations (the
+"… in all" headline is scoped to the lifecycle+store family). The
 logger sink→Layer step (§Carried.1) rides
 `2026-09-21-effect-design-synchronous-facades.md`; the two `packages/llm` ambient
 reads (§Carried.2) are effectively closed as refusal guards. **Separately, the
