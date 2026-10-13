@@ -25,7 +25,7 @@
 import { Effect, Stream, SubscriptionRef } from 'effect';
 
 import {
-  aggregateId as qualifyAggregateId,
+  qualifyAggregateId,
   listingTypeOf,
   type CommitOrdinal,
   type ExistenceReconciliation,

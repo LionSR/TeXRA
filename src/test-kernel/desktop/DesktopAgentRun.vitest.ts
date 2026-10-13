@@ -12,7 +12,7 @@ import type { RunEndResult } from '@agent/runtime/RunEndResult';
 import * as DesktopAgentLaunch from '@desktop/main/desktopAgentLaunch';
 import { createDesktopAgentRun } from '@desktop/main/desktopAgentRun';
 import {
-  aggregateId,
+  qualifyAggregateId,
   emptyRunEndOutput,
   RUN_OUTCOME,
   type RunId,
@@ -36,7 +36,7 @@ import {
 function completedRunEnd(runId: RunId): SessionEventDraft {
   return {
     type: 'run.end',
-    aggregateId: aggregateId('run', runId),
+    aggregateId: qualifyAggregateId('run', runId),
     outcome: RUN_OUTCOME.COMPLETED,
     output: emptyRunEndOutput(),
   };

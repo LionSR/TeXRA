@@ -9,7 +9,7 @@ import { Effect, Result, type Scope, SynchronizedRef } from 'effect';
 
 import { PreparedHistorySchema, type ModelOrigin } from '@texra-ai/llm';
 import {
-  aggregateId as qualifyAggregateId,
+  qualifyAggregateId,
   type RunId,
   type SessionEvent,
   type SessionEventDraft,

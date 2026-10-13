@@ -54,7 +54,7 @@ import {
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { RunHandle } from '@agent/runtime/RunHandle';
 import {
-  aggregateId as qualifyAggregateId,
+  qualifyAggregateId,
   emptyRunEndOutput,
   RUN_OUTCOME,
   RUN_PHASE,

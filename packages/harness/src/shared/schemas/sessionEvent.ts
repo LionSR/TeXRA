@@ -134,12 +134,12 @@ type LogicalId = string & {
 };
 
 /** Qualify a logical id once. An already-qualified key is not an input. */
-export function aggregateId(kind: 'run', logicalId: RunId): AggregateId;
-export function aggregateId(
+export function qualifyAggregateId(kind: 'run', logicalId: RunId): AggregateId;
+export function qualifyAggregateId(
   kind: Exclude<AggregateKind, 'run'>,
   logicalId: LogicalId,
 ): AggregateId;
-export function aggregateId(
+export function qualifyAggregateId(
   kind: AggregateKind,
   logicalId: string,
 ): AggregateId {
@@ -481,9 +481,9 @@ export type SessionEventDraft = z.infer<typeof SessionEventDraftSchema>;
 export function referencedAggregates(event: SessionEvent): AggregateId[] {
   const ids = [event.aggregateId];
   if (event.type === 'run.start' && event.parent !== null)
-    ids.push(aggregateId('run', event.parent.id));
+    ids.push(qualifyAggregateId('run', event.parent.id));
   if (event.type === 'plugin.fact' && event.parent !== null)
-    ids.push(aggregateId('run', event.parent));
+    ids.push(qualifyAggregateId('run', event.parent));
   return ids;
 }
 
@@ -507,21 +507,17 @@ export function edgesOf(draft: SessionEventDraft): AggregateEdges {
   switch (draft.type) {
     case 'run.start':
       return {
-        parent:
-          draft.parent === null ? null : aggregateId('run', draft.parent.id),
+        parent: draft.parent && qualifyAggregateId('run', draft.parent.id),
         borrowsClaim: false,
         closes: false,
       };
-    case 'plugin.fact':
-      return aggregateTarget(draft.aggregateId).kind === 'run'
-        ? { parent: null, borrowsClaim: false, closes: false }
-        : {
-            parent: null,
-            reparent:
-              draft.parent === null ? null : aggregateId('run', draft.parent),
-            borrowsClaim: true,
-            closes: false,
-          };
+    case 'plugin.fact': {
+      if (aggregateTarget(draft.aggregateId).kind === 'run')
+        return { parent: null, borrowsClaim: false, closes: false };
+      const reparent =
+        draft.parent === null ? null : qualifyAggregateId('run', draft.parent);
+      return { parent: null, reparent, borrowsClaim: true, closes: false };
+    }
     case 'run.removed':
       return { parent: null, borrowsClaim: false, closes: true };
     default:

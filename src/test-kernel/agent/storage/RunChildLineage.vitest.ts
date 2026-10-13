@@ -2,7 +2,7 @@ import { it } from '@effect/vitest';
 import { Effect } from 'effect';
 import { beforeEach, describe, expect } from 'vitest';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import { aggregateId, type RunId } from '@shared/schemas';
+import { qualifyAggregateId, type RunId } from '@shared/schemas';
 import {
   createTestSession,
   publishTestRunStart,
@@ -32,7 +32,7 @@ describe('persisted parent edge', () => {
         const rows = yield* session.log.transact([
           {
             type: 'run.start',
-            aggregateId: aggregateId('run', 'aaa010' as RunId),
+            aggregateId: qualifyAggregateId('run', 'aaa010' as RunId),
             identity: { kind: 'agent', agent: 'assistant' },
             userFollowUpSupport: 'unsupported',
             parent: { id: 'aaa0ff' as RunId, callId: null },

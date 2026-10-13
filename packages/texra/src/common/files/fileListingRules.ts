@@ -1,8 +1,8 @@
-import { FILE_HANDLING_RULES } from '@common/files/fileHandlingRules';
+import { FILE_HANDLING_RULES } from '@texra/common/files/fileHandlingRules';
 import {
   getIncludedExtensions,
   type ExtensionCategory,
-} from '@common/files/fileTypeUtils';
+} from '@texra/common/files/fileTypeUtils';
 import { getBasename, normalizeFilePath } from '@utils/core';
 
 // Edited files have their own entry point (getEditedFileListConfig), so they

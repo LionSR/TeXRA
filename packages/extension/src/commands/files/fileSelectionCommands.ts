@@ -3,13 +3,13 @@ import { Effect } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports
-import { getFilterExtensions } from '@common/files/fileTypeUtils';
 import {
   showLoggedErrorMessage,
   showLoggedInfoMessage,
 } from '@frontend/ui/errorHandlingUtils';
 import { selectFiles } from '@frontend/ui/dialogs';
 import type { MultipleDocumentFileType } from '@shared/schemas';
+import { getFilterExtensions } from '@texra/common/files/fileTypeUtils';
 import { workspaceRelativePath } from '@utils/files/workspaceFS';
 import type { WorkspaceRoots } from '@texra-ai/harness';
 

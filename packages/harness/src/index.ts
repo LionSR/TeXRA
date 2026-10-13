@@ -83,7 +83,7 @@ export { hasErrorPresentationClaimed } from '@common/errors/sdkError/errorMetada
 export { escapeText } from '@shared/utils/xmlEscape';
 
 // The payloads, as the runtime defines them.
-export { aggregateId } from '@shared/schemas';
+export { qualifyAggregateId } from '@shared/schemas';
 export type { AgentEvent } from '@agent/trace';
 
 // `RunEndResult` is deliberately sourced from its own module rather than

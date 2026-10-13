@@ -10,7 +10,7 @@ import { registryOf, Runs } from '@agent/runtime/runRegistry';
 import { runWithLifecycle } from '@agent/runtime/AgentRunLifecycle';
 import {
   RUN_OUTCOME,
-  aggregateId,
+  qualifyAggregateId,
   emptyRunEndOutput,
   RunIdSchema,
   type RunId,
@@ -109,7 +109,7 @@ describe('session isolation', () => {
           publishTestRows(session, [
             {
               type: 'stage.start',
-              aggregateId: aggregateId('run', runId),
+              aggregateId: qualifyAggregateId('run', runId),
               id: `stage:${runId}`,
               label: 'Running stage',
             },
@@ -143,9 +143,10 @@ describe('session isolation', () => {
             persistent: true,
           });
           const ends = (runId: string) =>
-            reopened.log.rows(aggregateId('run', RunIdSchema.parse(runId)), [
-              'run.end',
-            ]);
+            reopened.log.rows(
+              qualifyAggregateId('run', RunIdSchema.parse(runId)),
+              ['run.end'],
+            );
           expect(yield* ends(own)).toMatchObject([
             { outcome: RUN_OUTCOME.CANCELLED },
           ]);
@@ -183,7 +184,7 @@ describe('session isolation', () => {
           yield* session.log.transact([
             {
               type: 'run.start',
-              aggregateId: aggregateId('run', 'c0c002' as RunId),
+              aggregateId: qualifyAggregateId('run', 'c0c002' as RunId),
               identity: { kind: 'agent', agent: 'chat' },
               userFollowUpSupport: 'unsupported',
               parent: null,

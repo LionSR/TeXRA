@@ -13,7 +13,7 @@ import {
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { CliUsageError, type CliContext } from '@cli/runtime/cliContext';
 import { CliExitCode } from '@cli/runtime/exitCodes';
-import { aggregateId } from '@shared/schemas';
+import { qualifyAggregateId } from '@shared/schemas';
 import type { RunId } from '@shared/schemas';
 import { DatabaseReadFailed } from '@shared/session/database';
 import { testRuntime } from '@test/support/testProcessRuntime';
@@ -96,7 +96,7 @@ async function seedRunRecord(seed: {
     session.log.transact([
       {
         type: 'run.start',
-        aggregateId: aggregateId('run', RUN_ID),
+        aggregateId: qualifyAggregateId('run', RUN_ID),
         identity: { kind: 'agent', agent: seed.config?.agent ?? 'planner' },
         userFollowUpSupport: 'unsupported',
         parent: null,
@@ -115,7 +115,7 @@ async function seedRunRecord(seed: {
       cell.append([
         {
           type: 'run.position',
-          aggregateId: aggregateId('run', RUN_ID),
+          aggregateId: qualifyAggregateId('run', RUN_ID),
           payload: { family: 'toolUse', at: 'turn.ready', turn: 0 },
         },
       ]),

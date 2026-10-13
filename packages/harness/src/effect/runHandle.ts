@@ -24,7 +24,7 @@ import { registryOf } from '@agent/runtime/runRegistry';
 import type { AgentEvent } from '@agent/trace';
 import { withLogChannel } from '@logger/effectLog';
 import type { ProcessServices } from '@platform/processRuntime';
-import { aggregateId as qualifyAggregateId, type RunId } from '@shared/schemas';
+import { qualifyAggregateId, type RunId } from '@shared/schemas';
 import { descendantRuns } from '@shared/session/sessionView';
 
 import { RunFailure, TraceUnavailable } from './errors.js';

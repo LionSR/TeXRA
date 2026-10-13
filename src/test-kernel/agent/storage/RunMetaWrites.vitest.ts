@@ -11,7 +11,7 @@ import {
 } from '@agent/runtime/loop/rows';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { storedDraft } from '@agent/runtime/storedTurn';
-import { aggregateId, type RunId } from '@shared/schemas';
+import { qualifyAggregateId, type RunId } from '@shared/schemas';
 import { freshRunState } from '@shared/session/runStateFold';
 import {
   createTestSession,
@@ -40,7 +40,7 @@ describe('run metadata updates', () => {
               {
                 type: 'run.description',
                 by: 'model',
-                aggregateId: aggregateId('run', id),
+                aggregateId: qualifyAggregateId('run', id),
                 description: 'A described session',
               },
             ]),
@@ -90,7 +90,9 @@ describe('run metadata updates', () => {
         outcome: 'failed',
       });
       expect(ended).toMatchObject({ ok: true, outcome: 'failed' });
-      const ends = yield* session.log.rows(aggregateId('run', id), ['run.end']);
+      const ends = yield* session.log.rows(qualifyAggregateId('run', id), [
+        'run.end',
+      ]);
       expect(ends).toHaveLength(1);
     }),
   );

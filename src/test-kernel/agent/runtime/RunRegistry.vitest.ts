@@ -19,7 +19,7 @@ import {
   type ApprovalGrants,
 } from '@shared/approvalBypassKind';
 import {
-  aggregateId as qualifyAggregateId,
+  qualifyAggregateId,
   aggregateTarget,
   RUN_OUTCOME,
   RUN_PHASE,

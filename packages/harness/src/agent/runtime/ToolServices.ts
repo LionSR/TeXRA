@@ -9,7 +9,7 @@ import { getRunRecords } from '@agent/storage/runRecords';
 import type { ProcessServices } from '@platform/processRuntime';
 import type { StorageFs, WorkspaceFs } from '@platform/rootedFs';
 import {
-  aggregateId,
+  qualifyAggregateId,
   type RunEnd,
   type RunId,
   type SessionEvent,
@@ -115,7 +115,9 @@ export const childRunsLayer: Layer.Layer<
         end: read((session) => getRunRecords(session, runId).readRunEnd()),
       }),
       rows: (runId, types) =>
-        read((session) => session.log.rows(aggregateId('run', runId), types)),
+        read((session) =>
+          session.log.rows(qualifyAggregateId('run', runId), types),
+        ),
     };
   }),
 );

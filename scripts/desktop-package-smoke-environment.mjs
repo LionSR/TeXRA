@@ -85,7 +85,7 @@ export async function loadDatabaseFixture(userDataPath) {
         export { WorkspaceRoots } from '@controllers/session/WorkspaceRoots';
         export { Database } from '@shared/session/database';
         export { ProcessIdentity } from '@shared/session/sessionEvents';
-        export { aggregateId } from '@shared/schemas';
+        export { qualifyAggregateId } from '@shared/schemas';
         export { resolveGlobalStoragePath, resolveWorkspaceStoragePath } from '@platform/defaults/workspaceStorage';
         export { openDesktopProjectRecords } from '@desktop/main/desktopProjectRecords';
         export { nodeProcesses, processOwnerId } from '@platform/defaults/nodeProcesses';
