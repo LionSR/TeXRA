@@ -95,6 +95,11 @@ import { constants, zstdCompressSync, zstdDecompressSync } from 'node:zlib';
 import stableStringify from 'safe-stable-stringify';
 
 import { ensureNodePtySpawnHelperExecutable } from './nodePtySpawnHelper.mjs';
+import { isolateProcessHome } from '../../../scripts/isolated-home.mjs';
+
+// Beside each scenario's own home: nothing this script starts, the build
+// included, resolves the user's `~/.texra`.
+isolateProcessHome();
 
 const cliRoot = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const repoRoot = path.dirname(path.dirname(cliRoot));

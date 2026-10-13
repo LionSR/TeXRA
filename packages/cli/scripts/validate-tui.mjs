@@ -41,6 +41,10 @@ import { spawnSync } from 'node:child_process';
 import { parseArgs as parseCittyArgs } from 'citty';
 
 import { ensureNodePtySpawnHelperExecutable } from './nodePtySpawnHelper.mjs';
+import { isolateProcessHome } from '../../../scripts/isolated-home.mjs';
+
+// Every harness this script starts resolves `~/.texra` in a temporary home.
+isolateProcessHome();
 
 const ESC = String.fromCharCode(27);
 const ETX = String.fromCharCode(3); // Ctrl-C

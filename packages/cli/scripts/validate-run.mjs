@@ -20,6 +20,10 @@ import { stripVTControlCharacters } from 'node:util';
 import { parseArgs as parseCittyArgs } from 'citty';
 
 import { ensureNodePtySpawnHelperExecutable } from './nodePtySpawnHelper.mjs';
+import { isolateProcessHome } from '../../../scripts/isolated-home.mjs';
+
+// Every `texra` this script starts resolves `~/.texra` in a temporary home.
+isolateProcessHome();
 
 const cliRoot = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const repoRoot = path.dirname(path.dirname(cliRoot));
