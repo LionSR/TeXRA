@@ -11,7 +11,6 @@ import { qualifyAggregateId, RUN_OUTCOME } from '@shared/schemas';
 import {
   DatabaseClaimRefused,
   DatabaseReadFailed,
-  DatabaseWriteFailed,
 } from '@shared/session/database';
 import { RunHistoryRefused } from '@shared/session/runHistory';
 import { closeSessionOf } from '@test/support/sessionEnd';
@@ -558,12 +557,7 @@ describe('resumeRun tool-use queue ownership', () => {
         const ownerId = JSON.stringify(['other-host', 4321, 'start-1']);
         // The claim the host's resume takes is refused by its live owner.
         vi.spyOn(session.log, 'hold').mockReturnValue(
-          Effect.fail(
-            new DatabaseWriteFailed({
-              path: ':memory:',
-              cause: new DatabaseClaimRefused({ ownerId, verdict: 'alive' }),
-            }),
-          ),
+          Effect.fail(new DatabaseClaimRefused({ ownerId, verdict: 'alive' })),
         );
         const onAdmitted = vi.fn(() => Effect.void);
 

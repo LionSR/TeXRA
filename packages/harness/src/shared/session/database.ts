@@ -5,12 +5,11 @@
  * - `DatabaseOpenFailed`: the session does not open.
  * - `DatabaseReadFailed`: the call that read fails. A run whose own row is
  *   `DatabaseRowCorrupt` or `DatabaseRowEarlier` is unreadable, never resumed.
- * - `DatabaseWriteFailed`: nothing written, the call fails; in a run, the run
- *   ends (`findStorageRefusal`).
+ * - `DatabaseWriteFailed`: nothing written; a run ends (`findStorageRefusal`).
  * - `DatabaseStoreNewer`, the cause of any of these: the store is refused whole.
- * - `DatabaseNotOwner`, or a `DatabaseClaimRefused` cause: nothing written; a
- *   run that lost its own claim stops, and one another process holds is
- *   refused as held elsewhere ({@link heldElsewhereBy}).
+ * - `DatabaseNotOwner` and `DatabaseClaimRefused`, never wrapped (D6 b):
+ *   nothing written; a run that lost its own claim stops, and one another
+ *   process holds is refused as held elsewhere ({@link heldElsewhereBy}).
  */
 import {
   Context,
@@ -129,7 +128,7 @@ export class DatabaseNotOwner extends Data.TaggedError('DatabaseNotOwner')<{
   override readonly message = `${this.aggregateId} is ${this.closed ? 'closed' : `held by ${this.ownerId ?? 'no process'}, not this one`}; nothing was written.`;
 }
 
-/** A claim cannot be acquired under the requested deletion policy. */
+/** A claim the deletion policy refuses: its owner is alive, or unproven dead. */
 export class DatabaseClaimRefused extends Data.TaggedError(
   'DatabaseClaimRefused',
 )<{
@@ -139,13 +138,16 @@ export class DatabaseClaimRefused extends Data.TaggedError(
   override readonly message = `Another TeXRA process (${this.ownerId}) holds this run${this.verdict === 'alive' ? '' : ', or could not be proven to have exited'}.`;
 }
 
+/** A claiming transaction's refusals: the claim's, a writer's, or the write. */
+export type DatabaseClaimError =
+  DatabaseNotOwner | DatabaseClaimRefused | DatabaseWriteFailed;
+
 /** The owner a claim refusal or a `DatabaseNotOwner` of an open aggregate
  *  names (not proven alive); null for a closed or ownerless one. */
 export const heldElsewhereBy = (error: unknown): OwnerId | null => {
-  const refusal = error instanceof DatabaseWriteFailed ? error.cause : error;
-  if (refusal instanceof DatabaseClaimRefused) return refusal.ownerId;
-  return refusal instanceof DatabaseNotOwner && !refusal.closed
-    ? refusal.ownerId
+  if (error instanceof DatabaseClaimRefused) return error.ownerId;
+  return error instanceof DatabaseNotOwner && !error.closed
+    ? error.ownerId
     : null;
 };
 
@@ -260,12 +262,11 @@ export class Database extends Context.Service<
     /** Set when this open moved a pre-1.0 or damaged store aside. */
     readonly movedAside: SessionStoreMovedAside | null;
     /**
-     * C6: append an ordered batch, possibly across several aggregates, whole
-     * or not at all, in the caller's {@link job} or a transaction of its
-     * own. `seq` and `commit` are assigned in batch order and the writer is
-     * this process (C5, never a caller's). A target this process does not
-     * hold open refuses the batch as `DatabaseNotOwner`; every other
-     * rollback is `DatabaseWriteFailed`.
+     * C6: append an ordered batch across aggregates, whole or not at all, in
+     * the caller's {@link job} or its own transaction; `seq` and `commit`
+     * follow batch order and the writer is this process (C5). A target this
+     * process does not hold open refuses the batch as `DatabaseNotOwner`;
+     * any other rollback is `DatabaseWriteFailed`.
      */
     readonly appendAll: (
       drafts: readonly SessionEventDraft[],
@@ -349,7 +350,7 @@ export class Database extends Context.Service<
       ids: readonly AggregateId[],
     ) => Effect.Effect<
       readonly AggregateId[],
-      DatabaseNotOwner | DatabaseReadFailed | DatabaseWriteFailed
+      DatabaseReadFailed | DatabaseClaimError
     >;
     /** C9: prove the tree's owners off the publisher, then answer its job
      *  (`SessionEvents.removeRun`): reread, claim, append the tombstone. */
@@ -358,7 +359,7 @@ export class Database extends Context.Service<
       mode: DeletionMode,
       expectedStartCommit: CommitOrdinal,
     ) => Effect.Effect<
-      Effect.Effect<readonly SessionEvent[], DatabaseWriteFailed>,
+      Effect.Effect<readonly SessionEvent[], DatabaseClaimError>,
       DatabaseReadFailed | DatabaseWriteFailed
     >;
     /** C9: the `run.removed` tombstones cleanup has not collected. */
@@ -401,11 +402,10 @@ export class Database extends Context.Service<
 /**
  * The process's one handle on the global storage root, held for the process
  * runtime's life: every application record of that root (settings, inquiry
- * threads, the update check, input history, remembered projects) goes
- * through it, so its `data_version` poll is forked once per process and no
- * single-row read opens a connection. Its current values and input history
- * only: the global root holds no session and no event rows.
- */
+ * threads, the update check, input history, remembered projects) goes through
+ * it, so its `data_version` poll is forked once per process and no single-row
+ * read opens a connection. Current values and input history only: the global
+ * root holds no session and no event rows. */
 export class GlobalDatabase extends Context.Service<
   GlobalDatabase,
   Pick<Context.Service.Shape<typeof Database>, 'values' | 'inputHistory'>

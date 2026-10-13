@@ -31,7 +31,6 @@ import {
 } from '@shared/schemas';
 import {
   DatabaseClaimRefused,
-  DatabaseWriteFailed,
   GlobalDatabase,
   type AggregateState,
   type Database,
@@ -345,11 +344,8 @@ const deleteAdmittedRun = (
               runId,
               reason: `Stop the ${runNoun(deps.session(), runId)} before deleting it.`,
             });
-          if (
-            error instanceof DatabaseWriteFailed &&
-            error.cause instanceof DatabaseClaimRefused
-          ) {
-            return error.cause.verdict === 'alive'
+          if (error instanceof DatabaseClaimRefused) {
+            return error.verdict === 'alive'
               ? new NotOwner({ runId })
               : new Rejected({
                   reason:

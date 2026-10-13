@@ -132,12 +132,9 @@ function recordedFollowUps(
         claims.push(runId);
         return options.claimRefused
           ? Effect.fail(
-              new DatabaseWriteFailed({
-                path: ':memory:',
-                cause: new DatabaseClaimRefused({
-                  ownerId: JSON.stringify(['other-host', 4321, null]),
-                  verdict: 'alive',
-                }),
+              new DatabaseClaimRefused({
+                ownerId: JSON.stringify(['other-host', 4321, null]),
+                verdict: 'alive',
               }),
             )
           : Effect.void;
@@ -556,9 +553,9 @@ describe('Inbox readers', () => {
         ownerId,
         closed,
       });
-    const refused = new DatabaseWriteFailed({
-      path: ':memory:',
-      cause: new DatabaseClaimRefused({ ownerId: owner, verdict: 'alive' }),
+    const refused = new DatabaseClaimRefused({
+      ownerId: owner,
+      verdict: 'alive',
     });
     expect(heldElsewhereBy(refused)).toBe(owner);
     expect(heldElsewhereBy(notOwner(owner, false))).toBe(owner);
