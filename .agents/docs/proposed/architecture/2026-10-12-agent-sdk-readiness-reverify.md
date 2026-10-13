@@ -37,9 +37,8 @@ the `BoundModel` slimming), so this pass does not re-narrate it — it reads the
 commits), which relocated a few cited coordinates — e.g. the process
 composition moved from `effect/sessions.ts` to `effect/processLayer.ts`, and the
 tagged-error headline count stepped up — so where the merge moved a cited path,
-the landing-tree location governs and the authoritative, non-drifting references
-are the type index (`shared/session/runStateFold.ts`) and `config/api-reports/`,
-not a path pinned here. Fully re-pinning every coordinate to the merged tree is
+the landing-tree location governs and the authoritative, non-drifting reference
+for the public export surface is `config/api-reports/`, not a path pinned here. Fully re-pinning every coordinate to the merged tree is
 owner-level follow-up, not this routine.
 
 ## What moved in the 18-commit delta (abstractions removed, by review)
@@ -128,10 +127,13 @@ an added indirection tier — one `Effect` per run appending one history, one
      the request surface (`request.*`, `requestPolicy.ts`), settlement and meta
      rows such as `child.turn` (`childRunLoop.ts`), `run.description`
      (`sessionDescription.ts`) and `run.result` (`storage/runRecords.ts`), and
-     `endIn`'s loud "run ends unloaded" fallback (`runLifecycle.ts:285`) — and
-     folded into run state through the type index, which is the authoritative
-     list of row owners (`shared/session/runStateFold.ts`), not this note. None
-     is a second writer of the loop's history. `SessionHandle`
+     `endIn`'s loud "run ends unloaded" fallback (`runLifecycle.ts:285`). Each is
+     written by its own single owner, and none is a second writer of the loop's
+     history. (The run-state fold, `shared/session/runStateFold.ts`, classifies
+     which row types it folds into `RunState` versus ignores — `run.description`,
+     `run.result` and `child.turn` sit in its ignored set, folded by their own
+     readers — so it is a row-type classification, not a row-to-writer map; the
+     owners are the modules named above.) `SessionHandle`
      remains a flat record of owner fields that "does no work and forwards
      nothing" (`SessionHandle.ts:342-372`). `ChildRuns` (lane E5,
      `runtime/ToolServices.ts`) is a capability-narrowing door that hides
