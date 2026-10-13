@@ -68,10 +68,9 @@ describe('selectCliRunModel precedence', () => {
     vi.resetAllMocks();
     selectCliRunnableModelMock.mockImplementation((request) =>
       Effect.succeed({
-        model: Array.isArray(request)
-          ? (request.find((candidate) => candidate.model)?.model ??
-            CLI_CHEAP_START_MODEL)
-          : request,
+        model:
+          request.find((candidate) => candidate.model)?.model ??
+          CLI_CHEAP_START_MODEL,
       }),
     );
   });

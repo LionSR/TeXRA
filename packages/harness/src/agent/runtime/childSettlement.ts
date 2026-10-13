@@ -26,7 +26,7 @@ import {
 } from '@agent/storage/runRecords';
 import { withLogChannel } from '@logger/effectLog';
 import {
-  aggregateId,
+  qualifyAggregateId,
   storedResultMeta,
   type DeliveredResult,
   type RunId,
@@ -104,7 +104,7 @@ export function childSettlementOf(params: {
   readonly end?: ChildDelivery['end'];
 }): ChildSettlement {
   const { runId, turn, to } = params;
-  const target = aggregateId('run', runId);
+  const target = qualifyAggregateId('run', runId);
   const prompt = params.consumed[0]?.followUpId;
   const deliveryId =
     params.deliveryId ??
@@ -224,7 +224,7 @@ export const deliverIn = (
         rows: [
           {
             type: 'child.park' as const,
-            aggregateId: aggregateId('run', child),
+            aggregateId: qualifyAggregateId('run', child),
             phase: 'parked' as const,
             heldFor: item.deliveryId,
             ...(end !== undefined && { ends: end }),

@@ -33,7 +33,7 @@ import { sessionInputsLayer } from '@controllers/session/sessionInputs';
 import { WorkspaceRoots } from '@controllers/session/WorkspaceRoots';
 import { runStateAppend } from '@shared/session/runHistory';
 import {
-  aggregateId as qualifyAggregateId,
+  qualifyAggregateId,
   DEBUG_MODE_KEY,
   FoldEventSchema,
   MESSAGE_TYPES,

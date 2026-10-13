@@ -19,7 +19,7 @@ import {
 import { render, type Instance as InkInstance } from 'ink';
 
 import {
-  aggregateId,
+  qualifyAggregateId,
   type ConfigProvider,
   type RuntimeRequest,
 } from '@texra-ai/harness';
@@ -285,13 +285,15 @@ export async function runChat(
       // same value so they can never disagree.
       const modelSelectionExit = yield* Effect.exit(
         hasCredential
-          ? selectCliRunnableModel(defaults.model, {
-              stores: services,
-              fallbackReason: defaults.modelSource,
-              noAvailableModelsMessage: formatCliNoAvailableModelsRecovery(
-                CHAT_STARTUP_MODEL_RECOVERY,
-              ),
-            }).pipe(
+          ? selectCliRunnableModel(
+              [{ model: defaults.model, reason: defaults.modelSource }],
+              {
+                stores: services,
+                noAvailableModelsMessage: formatCliNoAvailableModelsRecovery(
+                  CHAT_STARTUP_MODEL_RECOVERY,
+                ),
+              },
+            ).pipe(
               Effect.tap((selection) =>
                 setCliHelperModel(services.globalState, selection.model),
               ),
@@ -532,7 +534,10 @@ export async function runChat(
         transcriptWatch,
         Stream.runDrain(
           runSession.view.watch(
-            ids.map((id) => ({ id: aggregateId('run', id), fromSeq: 0 })),
+            ids.map((id) => ({
+              id: qualifyAggregateId('run', id),
+              fromSeq: 0,
+            })),
             { cursor: view.cursor, debug: view.debug },
           ),
         ),
@@ -630,8 +635,7 @@ export async function runChat(
           recovery: CHAT_STARTUP_MODEL_RECOVERY,
           firstRunSetupAgent: startup.firstRunSetupAgent,
         },
-        (held) =>
-          chatController.submit(held.line, held.mediaFiles, held.images),
+        (held) => chatController.submit(held.line, held),
       ),
     secrets: services.secrets,
     stores: services,
@@ -699,7 +703,7 @@ export async function runChat(
       session={runSession}
       onSubmit={(line, mediaFiles, images) => {
         if (holdUntilConnected({ line, mediaFiles, images })) return;
-        runtime.runFork(chatController.submit(line, mediaFiles, images));
+        runtime.runFork(chatController.submit(line, { mediaFiles, images }));
       }}
       commandName={context.commandName}
       onStaticTranscriptChange={viewportController.repaintTranscript}

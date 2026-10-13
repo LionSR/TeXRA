@@ -1,4 +1,4 @@
-import { aggregateId, type SessionEventDraft } from '@shared/schemas';
+import { qualifyAggregateId, type SessionEventDraft } from '@shared/schemas';
 import { inquiryThreadFact } from '@texra/shared/plugins/externalInquiry';
 
 /** An inquiry thread's row as a decision commits it, under the run that
@@ -9,7 +9,7 @@ export const inquiryThreadRow = (
   const { aggregate, ...fact } = inquiryThreadFact(summary);
   return {
     type: 'plugin.fact',
-    aggregateId: aggregateId('plugin', aggregate),
+    aggregateId: qualifyAggregateId('plugin', aggregate),
     ...fact,
     parent: summary.parentRunId,
   };

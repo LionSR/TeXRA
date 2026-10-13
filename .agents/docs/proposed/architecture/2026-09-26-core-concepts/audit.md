@@ -90,7 +90,7 @@ Tags: [v] means read in the code; [i] means inferred (traced, not reproduced).
 ### Log
 
 1. [v] **`removeRun` outside the publisher** (`Database.ts:1013-1083`). Callers: `SessionRequests.ts:310`, `sweepLeftoverRuns.ts:45`.
-   - The tracker arm prunes only `aggregateId`, not `runIds`.
+   - The tracker arm prunes only `qualifyAggregateId`, not `runIds`.
    - The local tail (`sessionLayer.ts:650-651,674`) handles only the target, so removed dependents keep ancestry, follow-ups and chunks [i].
    - Fix: add `removeRun` to the job ops via `exclusive`, and prune every id in `runIds` at all three sites.
 2. [v] **App-state rows skip the publisher:** `appStateStore.ts:72-87` uses `database.appendAll`, and `Database.updateAppStateKey` (`:830-849`) calls `appendPrepared` directly. They share the session DB and use `borrowsClaim` (`:582,689,1223`). Fix: the `CurrentValues` table (move 12).

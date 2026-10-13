@@ -14,7 +14,7 @@ import { Effect } from 'effect';
 import { z } from 'zod';
 
 import { ToolContext, type CallRequests } from '@agent/core/tools/ToolTypes';
-import { aggregateId, type ToolResult } from '@shared/schemas';
+import { qualifyAggregateId, type ToolResult } from '@shared/schemas';
 import { callRequestId, type AttemptRequests } from '@shared/session/inFlight';
 import type { CellError, RunCell } from '@shared/session/runHistory';
 import type { RunHistoryDraft } from '@shared/session/runStateFold';
@@ -222,7 +222,7 @@ export const callRequests = (
         commit([
           {
             type: 'request.opened',
-            aggregateId: aggregateId('run', runId),
+            aggregateId: qualifyAggregateId('run', runId),
             requestId,
             payload,
           },

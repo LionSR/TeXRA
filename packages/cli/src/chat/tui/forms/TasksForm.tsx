@@ -155,22 +155,33 @@ function AttachedTask(props: AttachedTaskProps): React.JSX.Element {
     };
   }, [runtime, props.connect, task]);
 
-  /** Run one action on the service, saying so when it fails. */
+  /** Run one action on the service, saying so when it fails. The notice
+   *  is about the latest attempt: a new one clears it, and an older attempt
+   *  that settles later says nothing. */
+  const attempt = useRef(0);
   const act = (
-    program: (a: AttachedTaskActions) => Effect.Effect<void, Error>,
+    program: (
+      a: AttachedTaskActions,
+      say: (notice: string) => void,
+    ) => Effect.Effect<void, Error>,
     onFailed?: () => void,
   ) => {
+    const current = ++attempt.current;
+    const say = (notice: string) => {
+      if (attempt.current === current) setNotice(notice);
+    };
+    setNotice(undefined);
     const ready = actions.current;
     if (!ready) {
-      setNotice('Still connecting to the TeXRA service.');
+      say('Still connecting to the TeXRA service.');
       return;
     }
     runtime.runFork(
-      program(ready).pipe(
+      program(ready, say).pipe(
         Effect.catch((error) =>
           Effect.sync(() => {
             onFailed?.();
-            setNotice(toErrorMessage(error));
+            say(toErrorMessage(error));
           }),
         ),
       ),
@@ -342,7 +353,7 @@ function AttachedTask(props: AttachedTaskProps): React.JSX.Element {
                 if (!message) return;
                 setDraft('');
                 act(
-                  (ready) =>
+                  (ready, say) =>
                     ready
                       .request({
                         kind: 'followUp.send',
@@ -357,7 +368,7 @@ function AttachedTask(props: AttachedTaskProps): React.JSX.Element {
                             outcome.kind === 'followUp' &&
                             outcome.wake === 'failed'
                           )
-                            setNotice(
+                            say(
                               'The message is queued, but the task did not wake to read it.',
                             );
                         }),

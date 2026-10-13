@@ -10,7 +10,7 @@ import type {
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import { runStateAppend } from '@shared/session/runHistory';
 import {
-  aggregateId,
+  qualifyAggregateId,
   isTranscriptEvent,
   type AggregateId,
   RUN_PHASE,
@@ -143,7 +143,7 @@ export function publishTestRunStart(
   publishTestRows(session, [
     {
       type: 'run.start',
-      aggregateId: aggregateId('run', runId),
+      aggregateId: qualifyAggregateId('run', runId),
       identity: { kind: 'agent', agent: 'chat' },
       userFollowUpSupport: 'unsupported',
       parent:

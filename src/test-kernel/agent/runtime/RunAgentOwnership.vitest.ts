@@ -50,7 +50,7 @@ import {
 } from '@common/errors/agentErrorClassification';
 import { AgentError, RouteUnavailable } from '@common/errors/agentErrors';
 import { SessionOwner } from '@platform/processRuntime';
-import { aggregateId as qualifyAggregateId, type RunId } from '@shared/schemas';
+import { qualifyAggregateId, type RunId } from '@shared/schemas';
 import { fakeProcessServices } from '@test/support/setupPlatform';
 import { testRunFork, testRunPrograms } from '@test/support/runHandleFixtures';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';

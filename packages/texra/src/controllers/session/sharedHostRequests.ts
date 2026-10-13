@@ -18,8 +18,8 @@ import * as path from 'node:path';
 import { Effect } from 'effect';
 
 import { Rejected, type HostRequestFailure } from '@texra-ai/harness';
-import { getIncludedExtensions } from '@common/files/fileTypeUtils';
 import type { StorageFs, WorkspaceFs } from '@platform/rootedFs';
+import { getIncludedExtensions } from '@texra/common/files/fileTypeUtils';
 import type { HostRequest } from '@texra/shared/session/hostRequest';
 import type {
   HostOutcome,

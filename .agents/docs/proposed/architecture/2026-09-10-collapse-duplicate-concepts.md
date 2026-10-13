@@ -130,7 +130,7 @@ the same struct, both of the values that value is made of.
 `RunIdentitySchema` / `runIdentityDisplayName` remains the one owner of a run's
 human-orienting name — it already is, via
 [sessionFold.ts:464](../../../../src/shared/session/sessionFold.ts).
-`aggregateId(kind, logicalId)`
+`qualifyAggregateId(kind, logicalId)`
 ([sessionEvent.ts:131](../../../../src/shared/schemas/sessionEvent.ts)) remains
 the one owner of the stream-versus-execution _lifecycle_ distinction.
 

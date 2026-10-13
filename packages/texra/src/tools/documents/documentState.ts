@@ -23,7 +23,7 @@ import {
   workflowOutputPath,
 } from '@shared/constants/workflowOutput';
 import {
-  aggregateId,
+  qualifyAggregateId,
   fileLocationDisplayPath,
   ToolError,
   type FileLocation,
@@ -132,7 +132,7 @@ export const openDocuments = Effect.fn('documents.open')(function* ({
   const rows = yield* (yield* ChildRuns).rows(runId, ['plugin.fact']);
   const state = createOutputState(
     roundsFromPersisted(
-      latestDocumentRounds(rows, aggregateId('run', runId)) ?? [],
+      latestDocumentRounds(rows, qualifyAggregateId('run', runId)) ?? [],
     ),
   );
   const sources: FileLocation[] = (

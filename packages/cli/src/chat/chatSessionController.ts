@@ -195,13 +195,18 @@ export interface ChatSessionController {
    */
   submit(
     line: string,
-    mediaFiles?: readonly string[],
-    images?: readonly PastedImageEntry[],
+    attachments?: ChatAttachments,
   ): Effect.Effect<void, Error, ProcessServices>;
   /** Reserve a skill activation for the next submitted message. */
   activateSkill(selection: SkillActivation): void;
   /** Drop every reserved skill activation. */
   clearPendingSkills(): void;
+}
+
+/** What rides along with a submitted line: files and pasted images. */
+interface ChatAttachments {
+  readonly mediaFiles?: readonly string[];
+  readonly images?: readonly PastedImageEntry[];
 }
 
 export interface ChatSessionControllerInit {
@@ -872,13 +877,20 @@ export function createChatSessionController(
         Effect.gen(function* () {
           const meta = sessionMetaSignal.get();
           const currentModel = meta.model || initialModel;
-          const selection = yield* selectCliRunnableModel(currentModel, {
-            stores: { ...stores, secrets, runtime },
-            fallbackReason: meta.model ? meta.modelSource : initialModelSource,
-            noAvailableModelsMessage: formatCliNoAvailableModelsRecovery(
-              CHAT_API_MODE_MODEL_RECOVERY,
-            ),
-          }).pipe(
+          const selection = yield* selectCliRunnableModel(
+            [
+              {
+                model: currentModel,
+                reason: meta.model ? meta.modelSource : initialModelSource,
+              },
+            ],
+            {
+              stores: { ...stores, secrets, runtime },
+              noAvailableModelsMessage: formatCliNoAvailableModelsRecovery(
+                CHAT_API_MODE_MODEL_RECOVERY,
+              ),
+            },
+          ).pipe(
             Effect.mapError(
               (cause) =>
                 // The selection's own failure is the user-facing text: it
@@ -942,8 +954,7 @@ export function createChatSessionController(
 
   const submitChatMessage = Effect.fn('submitChatMessage')(function* (
     line: string,
-    mediaFiles?: readonly string[],
-    images?: readonly PastedImageEntry[],
+    { mediaFiles, images }: ChatAttachments = {},
   ) {
     const focusedChild = focusedChildTarget();
     if (focusedChild.kind === 'reject') {
@@ -1140,11 +1151,10 @@ export function createChatSessionController(
 
   const submit = Effect.fn('chatSubmit')(function* (
     line: string,
-    mediaFiles?: readonly string[],
-    images?: readonly PastedImageEntry[],
+    attachments?: ChatAttachments,
   ) {
     if (yield* handleTuiSlashCommand(line, getSlashCommandContext())) return;
-    yield* submitChatMessage(line, mediaFiles, images);
+    yield* submitChatMessage(line, attachments);
   });
 
   const activateSkill = (selection: SkillActivation): void => {
