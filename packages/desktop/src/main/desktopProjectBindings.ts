@@ -259,18 +259,34 @@ export const openProjectBindings = Effect.fn('desktop.openProjectBindings')(
         : snapshot.refresh;
       // The window's focus, told to the service as a VS Code window's is:
       // the project's host calls go to the window the user last worked in.
-      const focused = Stream.callback<void>((queue) =>
-        Effect.acquireRelease(
-          Effect.sync(() => {
-            const onFocus = () => Queue.offerUnsafe(queue, undefined);
-            host.window.on('focus', onFocus);
-            if (host.window.isFocused()) onFocus();
-            return onFocus;
-          }),
-          (onFocus) =>
+      // The window shows one project at a time, so only that project's
+      // binding reports its focus, and a project shown while the window is
+      // focused reports it then.
+      const shown = () =>
+        SubscriptionRef.getUnsafe(projects.state).activeKey === project.key;
+      const focused = Stream.merge(
+        Stream.callback<void>((queue) =>
+          Effect.acquireRelease(
             Effect.sync(() => {
-              if (!host.window.isDestroyed()) host.window.off('focus', onFocus);
+              const onFocus = () => {
+                if (shown()) Queue.offerUnsafe(queue, undefined);
+              };
+              host.window.on('focus', onFocus);
+              if (host.window.isFocused()) onFocus();
+              return onFocus;
             }),
+            (onFocus) =>
+              Effect.sync(() => {
+                if (!host.window.isDestroyed())
+                  host.window.off('focus', onFocus);
+              }),
+          ),
+        ),
+        SubscriptionRef.changes(projects.state).pipe(
+          Stream.map((state) => state.activeKey === project.key),
+          Stream.changes,
+          Stream.filter((isShown) => isShown && host.window.isFocused()),
+          Stream.map(() => undefined),
         ),
       );
       const run = yield* createDesktopAgentRun({
