@@ -224,6 +224,13 @@ export function askServiceToStop(
   );
 }
 
+/** The refusal of a running service that speaks a newer protocol. */
+const newerService = (info: ServiceInfo) =>
+  new ServiceUnavailable({
+    reason: `The running TeXRA service (${info.version}, pid ${info.pid}) speaks protocol ${info.protocol}; this TeXRA speaks ${PROTOCOL_VERSION}. Update TeXRA, or stop the service with \`texra service stop\`.`,
+    newer: true,
+  });
+
 /**
  * Connect to this storage root's service, starting it with `start` (which
  * spawns the service detached and returns) when none answers, and retiring
@@ -244,12 +251,7 @@ export const ensureService = Effect.fn('server.ensureService')(function* (
     );
   let info = yield* probeRecordedService(storageRoot);
   if (info !== null && info.protocol > PROTOCOL_VERSION)
-    return yield* Effect.fail(
-      new ServiceUnavailable({
-        reason: `The running TeXRA service (${info.version}, pid ${info.pid}) speaks protocol ${info.protocol}; this TeXRA speaks ${PROTOCOL_VERSION}. Update TeXRA, or stop the service with \`texra service stop\`.`,
-        newer: true,
-      }),
-    );
+    return yield* Effect.fail(newerService(info));
   let retired: number | null = null;
   if (info !== null && isOlder(info)) {
     const retiring = info;
@@ -278,15 +280,27 @@ export const ensureService = Effect.fn('server.ensureService')(function* (
     );
     // Not listening yet, listening but still starting, or still the
     // retiring service: all wait for this protocol's own service.
+    // A newer protocol's service that came up meanwhile (a newer build
+    // replaced the one this window spoke to) refuses this one at once: no
+    // wait for a service of this protocol that will not come.
     info = yield* probeRecordedService(storageRoot).pipe(
-      Effect.flatMap((answer) =>
-        answer?.protocol === PROTOCOL_VERSION && answer.pid !== retired
+      Effect.flatMap((answer) => {
+        if (answer !== null && answer.protocol > PROTOCOL_VERSION)
+          return Effect.fail(newerService(answer));
+        return answer?.protocol === PROTOCOL_VERSION && answer.pid !== retired
           ? Effect.succeed(answer)
-          : Effect.fail(new ServiceUnavailable({ reason: 'not yet up' })),
-      ),
-      Effect.retry(Schedule.spaced('200 millis')),
+          : Effect.fail(new ServiceUnavailable({ reason: 'not yet up' }));
+      }),
+      Effect.retry({
+        schedule: Schedule.spaced('200 millis'),
+        while: (error) => error.newer !== true,
+      }),
       Effect.timeout(START_TIMEOUT),
-      Effect.catch(() => Effect.succeed(null)),
+      Effect.catch((error) =>
+        error instanceof ServiceUnavailable && error.newer === true
+          ? Effect.fail(error)
+          : Effect.succeed(null),
+      ),
     );
   }
   if (info === null)
