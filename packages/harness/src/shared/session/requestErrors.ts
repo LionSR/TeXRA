@@ -59,13 +59,23 @@ export function writeRefused(
 ): (error: unknown) => RequestError {
   return (error) => {
     const cause = error instanceof DatabaseWriteFailed ? error.cause : error;
-    if (cause instanceof DatabaseClaimRefused && cause.verdict === 'unprovable')
-      return new Rejected({ reason: cause.message });
-    return heldElsewhereBy(error) === null
-      ? new Unavailable(refusal)
-      : new NotOwner({ runId: refusal.runId });
+    if (heldElsewhereBy(cause) === null) return new Unavailable(refusal);
+    return claimRefused(refusal.runId)(cause);
   };
 }
+
+/** How a claim the request needed fails it: `Rejected`, in the claim's own
+ *  words, when its holder could not be proven to have exited; else
+ *  `NotOwner`, another owner holding the run. */
+export const claimRefused =
+  (runId: RunId) =>
+  (error: unknown): RequestError => {
+    const cause = error instanceof DatabaseWriteFailed ? error.cause : error;
+    return cause instanceof DatabaseClaimRefused &&
+      cause.verdict === 'unprovable'
+      ? new Rejected({ reason: cause.message })
+      : new NotOwner({ runId });
+  };
 
 /**
  * How a host's request handler fails (PRD one-fold-three-renderers, 8.3):

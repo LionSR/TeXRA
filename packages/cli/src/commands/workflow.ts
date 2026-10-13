@@ -4,7 +4,9 @@ import { Effect, FileSystem, Result } from 'effect';
 import { deriveResumability, getRunRecords } from '@agent/storage';
 import { type AgentConfigPayload, type SessionHandle } from '@agent/runtime';
 import { DEFAULT_TOOL_CONFIG, RUN_OUTCOME, type RunId } from '@shared/schemas';
+import { DatabaseClaimRefused } from '@shared/session/database';
 import { documentTaskConfig } from '@texra/agent/output/documentRecipe';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import {
   failUsage,
@@ -19,7 +21,7 @@ import {
   tryReadCliCwd,
   writeInterruptedResumeHint,
 } from '../runtime/interruptedResumeHint';
-import { writeErrorStderr } from '../runtime/logSinks';
+import { writeErrorStderr, writeTextStderr } from '../runtime/logSinks';
 import {
   buildHeadlessRunContext,
   selectCliRunModel,
@@ -371,48 +373,74 @@ export const executeCliWorkflowConfig = Effect.fn('executeCliWorkflowConfig')(
         ? (runId) => writeResumeHint(runId, true)
         : undefined,
       canAdvertiseInterruptedRun,
+      // The run's output is published after its end commits, gated on that
+      // committed outcome (`resolveWorkflowOutput` copies only a completed
+      // run's): output that cannot be written fails this command, never the
+      // recorded run. Inside the finalization a shutdown waits for.
+      afterRun: (ended) =>
+        Effect.gen(function* () {
+          if (ended.error) return;
+          // The defaults the run executed, as its recorded configuration
+          // states them (the launch resolves an empty output list to the
+          // agent's declared ones); the input-derived
+          // `cli.expectedOutputFiles` stand in when the agent declares none.
+          // A configuration that does not read leaves the copy undone.
+          const recorded = yield* Effect.result(
+            getRunRecords(session, ended.runId).readConfig(),
+          );
+          if (Result.isFailure(recorded))
+            writeTextStderr(
+              `[warn] The output of task ${ended.runId} was not copied: its recorded configuration could not be read: ${toErrorMessage(recorded.failure)}`,
+            );
+          const copied = Result.isSuccess(recorded);
+          const declaredOutputFiles = copied
+            ? (recorded.success?.outputFiles ?? []).filter(Boolean)
+            : [];
+          const expectedOutputFiles = declaredOutputFiles.length
+            ? declaredOutputFiles
+            : (config.cli?.expectedOutputFiles ?? undefined);
+          const outputResult = yield* Effect.result(
+            resolveWorkflowOutput(
+              copied ? output : undefined,
+              copied ? outputDir : undefined,
+              ended,
+              runContext,
+              { expectedOutputFiles, storageRoot: session.roots.storage },
+            ).pipe(Effect.provideService(FileSystem.FileSystem, fileSystem)),
+          );
+          if (Result.isFailure(outputResult)) {
+            workflowOutputError = outputResult.failure;
+          } else {
+            workflowResult = outputResult.success;
+          }
+          // Written under the run's claim, held again for the write: the run
+          // released it with its end. Another process that took the run
+          // meanwhile keeps it; the run's own outcome stands.
+          yield* Effect.scoped(
+            session.log.hold(ended.runId).pipe(
+              Effect.andThen(
+                getRunRecords(session, ended.runId).writeResultMeta({
+                  producer: 'cliWorkflow',
+                  output: workflowResult?.output ?? ended.output,
+                }),
+              ),
+            ),
+          ).pipe(
+            Effect.catchIf(
+              (error) => error instanceof DatabaseClaimRefused,
+              (refused) =>
+                Effect.sync(() =>
+                  writeTextStderr(
+                    `[warn] The result record of task ${ended.runId} was not saved: ${refused.message}`,
+                  ),
+                ),
+            ),
+          );
+        }),
     });
     if (!run.ok) return run.exitCode;
 
     const { result } = run;
-    // The run's output is published after its end commits, gated on that
-    // committed outcome (`resolveWorkflowOutput` copies only a completed
-    // run's): output that cannot be written fails this command, never the
-    // recorded run.
-    if (!result.error) {
-      // The defaults the run executed, as its recorded configuration states
-      // them (the launch resolves an empty output list to the agent's
-      // declared ones); the input-derived `cli.expectedOutputFiles` stand in
-      // when the agent declares none.
-      const recorded = yield* getRunRecords(session, result.runId).readConfig();
-      const declaredOutputFiles = (recorded?.outputFiles ?? []).filter(Boolean);
-      const expectedOutputFiles = declaredOutputFiles.length
-        ? declaredOutputFiles
-        : (config.cli?.expectedOutputFiles ?? undefined);
-      const outputResult = yield* Effect.result(
-        resolveWorkflowOutput(output, outputDir, result, runContext, {
-          expectedOutputFiles,
-          storageRoot: session.roots.storage,
-        }).pipe(Effect.provideService(FileSystem.FileSystem, fileSystem)),
-      );
-      if (Result.isFailure(outputResult)) {
-        workflowOutputError = outputResult.failure;
-      } else {
-        workflowResult = outputResult.success;
-      }
-      // Written under the run's claim, held again for the write: the run
-      // released it with its end.
-      yield* Effect.scoped(
-        session.log.hold(result.runId).pipe(
-          Effect.andThen(
-            getRunRecords(session, result.runId).writeResultMeta({
-              producer: 'cliWorkflow',
-              output: workflowResult?.output ?? result.output,
-            }),
-          ),
-        ),
-      );
-    }
     if (workflowOutputError !== undefined) {
       writeErrorStderr(workflowOutputError);
       if (result.outcome === RUN_OUTCOME.CANCELLED) {

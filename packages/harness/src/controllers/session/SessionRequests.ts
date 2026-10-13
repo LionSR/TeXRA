@@ -37,6 +37,7 @@ import {
   type DeletionMode,
 } from '@shared/session/database';
 import {
+  claimRefused,
   NotOwner,
   Rejected,
   Unavailable,
@@ -108,10 +109,7 @@ const withRunClaim = <A, R>(
         deps
           .session()
           .log.hold(runId)
-          .pipe(
-            Effect.mapError((): RequestError => new NotOwner({ runId })),
-            Effect.andThen(write),
-          ),
+          .pipe(Effect.mapError(claimRefused(runId)), Effect.andThen(write)),
       );
 
 /** Refuse a gated request the run's `actions` no longer hold (a files copy

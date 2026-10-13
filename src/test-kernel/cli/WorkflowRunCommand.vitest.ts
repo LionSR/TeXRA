@@ -20,7 +20,10 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 import type { runHeadlessAgent } from '@cli/commands/workflow';
 import { formatResumeCommand } from '@cli/chat/tui/state/resumeHint';
 import type { CliContext } from '@cli/runtime/cliContext';
-import type { CliConfigExecuteResult } from '@cli/runtime/executeCli';
+import type {
+  CliConfigExecuteOptions,
+  CliConfigExecuteResult,
+} from '@cli/runtime/executeCli';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import { testRuntime, testSessionOf } from '@test/support/testProcessRuntime';
 import {
@@ -229,7 +232,16 @@ function mockWorkflowRun(
    *  run's recorded configuration states them. */
   agentDefaultOutputFiles: readonly string[] = [],
 ): void {
-  const implementation = () => Effect.succeed(result);
+  // The finalization runs the command's post-run step on the committed
+  // result, as the real skeleton does.
+  const implementation = (
+    _config: unknown,
+    _context: unknown,
+    options: Pick<CliConfigExecuteOptions, 'afterRun'>,
+  ) =>
+    result.ok && options.afterRun
+      ? Effect.as(options.afterRun(result.result), result)
+      : Effect.succeed(result);
   if (result.ok) {
     pendingRunStarts.push(result.result.runId);
     if (agentDefaultOutputFiles.length > 0)
@@ -743,12 +755,15 @@ describe('CLI run command, workflow agents', () => {
         // The executeCliConfig stub is an Effect port. The driver it stands
         // in for holds the real claim and releases it once the run's ending
         // has committed; the command persists its record after that.
-        mocks.executeCliConfig.mockImplementationOnce(() =>
-          Effect.scoped(
-            session.log
-              .hold(runId, { ends: true })
-              .pipe(Effect.as(run), Effect.orDie),
-          ),
+        mocks.executeCliConfig.mockImplementationOnce(
+          (_config, _context, options) =>
+            Effect.scoped(
+              session.log
+                .hold(runId, { ends: true })
+                .pipe(Effect.as(run), Effect.orDie),
+            ).pipe(
+              Effect.tap(() => options.afterRun?.(run.result) ?? Effect.void),
+            ),
         );
         expect(yield* workflowProgram({}, createRunCommandCliContext())).toBe(
           0,
@@ -1169,6 +1184,7 @@ describe('CLI run command, workflow agents', () => {
               if (!run.ok) return run;
               yield* options.onInterruptedRunFinalized?.('abc010') ??
                 Effect.void;
+              yield* options.afterRun?.(run.result) ?? Effect.void;
               return run;
             }),
         );

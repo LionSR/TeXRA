@@ -1,4 +1,13 @@
-import { Cause, Deferred, Effect, Exit, Fiber, Result, Scope } from 'effect';
+import {
+  Cause,
+  Deferred,
+  Effect,
+  Exit,
+  Fiber,
+  Result,
+  Scope,
+  Stream,
+} from 'effect';
 
 import { RUN_OUTCOME, type RunId } from '@texra-ai/harness/schemas';
 import {
@@ -19,9 +28,10 @@ import {
   type AgentConfigPayload,
   type RootLaunchRequest,
 } from '@agent/runtime';
-import { deriveResumability } from '@agent/storage';
+import { deriveResumability, getRunRecords } from '@agent/storage';
 import { AgentError } from '@common/errors';
 import { isUserAbort } from '@common/errors/sdkError/errorPatterns';
+import { isLiveRun } from '@shared/session/sessionView';
 import {
   DatabaseNotOwner,
   type SessionOpenError,
@@ -119,6 +129,13 @@ interface CliExecuteOptions {
   readonly onInterruptedRunFinalized?: (runId: RunId) => Effect.Effect<void>;
   /** Refine generic flow resumability for the launched workflow's state. */
   readonly canAdvertiseInterruptedRun?: CheckpointRefinement;
+  /** What the command does with the run once its end is committed (a
+   *  document task's output copy and result record), with its committed
+   *  outcome: part of the finalization a shutdown waits for, so a signal
+   *  never cuts it short. Its failure fails the finalization. */
+  readonly afterRun?: (
+    result: ExecuteAgentResult,
+  ) => Effect.Effect<void, Error>;
   /** The agent boundary the request runs through: unset, the session's
    *  start; `texra resume`'s is the session's resume; a test harness
    *  injects stand-ins rather than mocking. */
@@ -333,6 +350,16 @@ export function executeCliRequest(
     let shutdownRequested = false;
     let admitted = false;
     const shutdownFinalizationDone = Deferred.makeUnsafe<void>();
+    /** The run's end as the view folds it: no longer live here. */
+    const settledHere = (runId: RunId): Effect.Effect<void> =>
+      runSession.view.changes.pipe(
+        Stream.filter((view) => {
+          const run = view.runs.get(runId);
+          return run === undefined || !run.ownedHere || !isLiveRun(run);
+        }),
+        Stream.runHead,
+        Effect.asVoid,
+      );
     const recoveryNoticeStarted = Deferred.makeUnsafe<void>();
     /** The run's admission and its committed end, on a fiber a shutdown
      *  that comes before admission interrupts. */
@@ -494,7 +521,8 @@ export function executeCliRequest(
         // session presents none); one after it carries the session
         // presenter's receipt, and one that presented itself through a
         // targeted notification is marked claimed at its throw site.
-        if (
+        if (!(err instanceof AgentError)) primaryRunFailure = { error: err };
+        else if (
           !failurePresented &&
           !hasErrorPresentationClaimed(err) &&
           !terminalFailurePresented(err)
@@ -502,7 +530,6 @@ export function executeCliRequest(
           presentationHost.emit('requestShowError', {
             message: toErrorMessage(err),
           });
-        if (!(err instanceof AgentError)) primaryRunFailure = { error: err };
       }
     }
 
@@ -515,10 +542,19 @@ export function executeCliRequest(
         // resumed: read once its end is committed, and the recovery notice
         // written from them. A drain that fails fails the run's
         // finalization, after its end.
+        // A launch the shutdown interrupted may have been admitted all the
+        // same (the interrupt landed in the admission's tail, which stops
+        // the run): its rows decide, once its end is committed.
+        const born =
+          shutdownLaunchAborted &&
+          (yield* getRunRecords(session, launchRunId).exists());
+        if (born) yield* settledHere(launchRunId);
         const stopped =
           shutdownRequested &&
-          !shutdownLaunchAborted &&
-          (!runResult.ok || runResult.result.outcome === RUN_OUTCOME.CANCELLED);
+          (born ||
+            (!shutdownLaunchAborted &&
+              (!runResult.ok ||
+                runResult.result.outcome === RUN_OUTCOME.CANCELLED)));
         if (stopped) {
           const drain = Effect.gen(function* () {
             const resumability = yield* agentRuns.resumability(
@@ -548,14 +584,18 @@ export function executeCliRequest(
           );
         }
         yield* session.log.settled;
-        if (runResult.ok) {
-          return yield* readCliRunOutcomeState(
-            session,
-            runResult.result,
-            reportFinalizationFailure,
-          );
-        }
-        return undefined;
+        if (!runResult.ok) return undefined;
+        const state = yield* readCliRunOutcomeState(
+          session,
+          runResult.result,
+          reportFinalizationFailure,
+        );
+        if (options.afterRun)
+          yield* options.afterRun({
+            ...runResult.result,
+            outcome: state.outcome,
+          });
+        return state;
       }),
     );
     Deferred.doneUnsafe(shutdownFinalizationDone, Effect.void);

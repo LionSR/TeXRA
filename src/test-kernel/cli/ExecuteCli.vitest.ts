@@ -742,7 +742,11 @@ describe('executeCliRequest', () => {
         );
 
         const run = yield* Effect.forkChild(
-          executeCliRequest(baseRequest(), cliContext(), {}),
+          executeCliRequest(
+            { ...baseRequest(), runId: generateRunId() },
+            cliContext(),
+            {},
+          ),
         );
         yield* Deferred.await(launch);
         yield* settle;
