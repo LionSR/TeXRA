@@ -35,8 +35,6 @@ export { SessionHostInteractions } from './HostInteractions';
 export type { RootLaunchOptions, RootLaunchRequest } from './rootLaunch';
 export type { RootLaunch } from './runs';
 
-// SessionResumeRetrieval
-
 // runClassification
 export { runRefusal } from './runClassification';
 
@@ -62,8 +60,6 @@ export type {
 
 // helperModelName
 export { getHelperModelName } from './helperModelName';
-
-// RunHandle
 
 // RunEndResult
 export type { RunEndResult } from './RunEndResult';

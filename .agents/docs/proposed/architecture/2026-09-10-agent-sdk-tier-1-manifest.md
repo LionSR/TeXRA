@@ -26,8 +26,8 @@ Status: proposed
 >    surface (`Plugin`, `Sessions.layer({ plugins })`, `Plugins.contribute` in a
 >    `Scope`, `Session.resume`) — not a frozen static-export list. The standing
 >    readiness re-verification
->    ([`2026-10-10-agent-sdk-readiness-reverify.md`](./2026-10-10-agent-sdk-readiness-reverify.md),
->    New.2) therefore calls for re-scoping this manifest around the harness SDK
+>    ([`2026-10-13-agent-sdk-readiness-reverify.md`](./2026-10-13-agent-sdk-readiness-reverify.md))
+>    therefore calls for re-scoping this manifest around the harness SDK
 >    rather than ratifying the old static enumeration — which would pin deleted
 >    names (`ToolHost`, `PlatformConflict`) and omit the extend surface
 >    (`Plugin`, `Composition`) the pivot is built on.
