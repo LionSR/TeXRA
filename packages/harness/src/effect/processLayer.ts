@@ -50,9 +50,12 @@ export class Sessions extends Context.Service<
    * its plugins (`harnessBuiltins.all` from `@texra-ai/harness/plugins`, or a
    * list of the embedder's own beside them), and serve its sessions for
    * this layer's lifetime; the layer's release closes every session still
-   * open. A plugin list the harness cannot compose (an id that is not
-   * lowercase letters, digits and dashes, an id or tool name listed twice)
-   * fails with {@link PluginsRefused}, before anything is built.
+   * open. A plugin list the harness cannot compose (the defects `toolTable`
+   * refuses: an id that is not lowercase letters, digits and dashes, an id
+   * or tool name listed twice, a second plugin continuing parked runs or
+   * recording one request kind's decisions, a switch on a plugin with no
+   * availability probe) fails with {@link PluginsRefused}, before anything
+   * is built.
    *
    * Build it once per process, as any Effect layer is memoized: a second
    * live build that opens a root the first holds is refused at open

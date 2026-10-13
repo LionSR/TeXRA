@@ -295,7 +295,7 @@ const reusable = Effect.fn('agent.reusable')(function* (
     'agent:keys',
     Effect.sync(() => new Map<string, string>()),
   );
-  const callId = call.callId ?? '';
+  const { callId } = call;
   // Claimed before the read yields, so two calls at once cannot both pass.
   const claimed = siblings.get(key);
   if (claimed !== undefined && claimed !== callId)
