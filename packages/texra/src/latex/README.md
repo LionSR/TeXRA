@@ -76,9 +76,9 @@ The files have distinct roles:
   between-round forms; the `latexdiff/` subdirectory below adds full-run
   discovery and operation planning around it, not the execution itself.
 - **Media and file management** — `LatexMediaManager.ts` compiles PDFs and
-  mirrors figure dependencies into run storage, writing results into a
-  `MediaWorkspaceState` the caller owns (the manager itself holds only a
-  logger and an optional file service, no state);
+  mirrors figure dependencies into run storage, and returns the media it
+  produced to the caller (the manager itself holds only a logger and the
+  run's file service, no state);
   `TikzPictureManager.ts` extracts and renders standalone TikZ pictures;
   `acceptedFileTarget.ts` resolves where an
   accepted/edited file should land and commits the replacement.
