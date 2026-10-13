@@ -139,14 +139,12 @@ function deliveredFilePath(
     : workspaceRelativePath(roots.workspace, output.originalPath);
 }
 
-/** A document's count over its stages: unknown once any stage's is. */
+/** A document's count over the calls that wrote it: a call that reports
+ *  none (an agent's edit) leaves the total unknown from then on. */
 const summed = (
   prior: number | null | undefined,
   next: number | null,
-): number | null => {
-  if (prior === undefined) return next;
-  return prior === null || next === null ? null : prior + next;
-};
+): number | null => (prior == null || next === null ? next : prior + next);
 
 /**
  * The files the calls wrote, one row per workspace document. A later call
