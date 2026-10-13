@@ -40,7 +40,11 @@ import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 
 import { CORE_QUALITY_DIRS } from '../eslint.config.mjs';
-import { apiReports, SHRINK_ONLY_REPORTS } from './core-quality-api-report.mjs';
+import {
+  apiReports,
+  isShrinkOnly,
+  reportedNames,
+} from './core-quality-api-report.mjs';
 import { MEASURED_ONLY, RULES, measure } from './core-quality-measure.mjs';
 
 const rootDir = path.resolve(
@@ -129,17 +133,23 @@ function checkReports(reports, update) {
   const existing = new Set(
     readdirSync(reportDir).filter((name) => name.endsWith('.api.md')),
   );
-  for (const [name, text] of reports) {
+  for (const [name, { text, names }] of reports) {
     existing.delete(name);
     const file = path.join(reportDir, name);
     const current = existsSync(file) ? readFileSync(file, 'utf8') : null;
     if (current === text) continue;
-    // A shrink-only report refuses a name it does not list, `--update` too.
-    if (SHRINK_ONLY_REPORTS.has(name) && current != null) {
-      const listed = (report) =>
-        new Set([...report.matchAll(/^- `([^`]+)`/gm)].map((m) => m[1]));
-      const before = listed(current);
-      const added = [...listed(text)].filter((n) => !before.has(n));
+    // A shrink-only report refuses, `--update` too: a missing report (its
+    // baseline gone), one whose names cannot be read back, and a name it
+    // does not list.
+    if (isShrinkOnly(name)) {
+      const before = current == null ? [] : reportedNames(current);
+      if (before.length === 0) {
+        problems.push(
+          `api-report: config/api-reports/${name} ${current == null ? 'is missing' : 'lists no export that can be read back'}: it is this host-internal door's shrink-only baseline; restore the committed copy rather than regenerating it`,
+        );
+        continue;
+      }
+      const added = names.filter((n) => !before.includes(n));
       if (added.length > 0) {
         problems.push(
           `api-report: config/api-reports/${name} gains ${added.join(', ')}: this host-internal door only shrinks; reach the harness through a public entry instead`,
