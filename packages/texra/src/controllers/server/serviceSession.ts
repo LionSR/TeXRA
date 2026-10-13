@@ -30,6 +30,7 @@ import {
   ToolsRefused,
   TraceUnavailable,
   Unavailable,
+  type ITool,
   type RequestError,
   type Run,
   type Session,
@@ -265,11 +266,12 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
   );
   /** What a task the service runs ends with: asked of the service the
    *  link holds, again of the next one if the link is lost meanwhile (a
-   *  retired service finishes its tasks first). A run that failed fails
-   *  this, as a run here does: with its error, which the service's
-   *  terminal presenter showed this window, so it is marked presented, or
-   *  without one (an end with no error recorded) as a plain failure. A
-   *  service that cannot answer fails it offline. */
+   *  retired service finishes its tasks first), and held until this
+   *  window's fold shows it too. A run that failed fails this at once, as
+   *  a run here does: with its error, which the service's terminal
+   *  presenter showed this window, so it is marked presented, or without
+   *  one (an end with no error recorded) as a plain failure. A service
+   *  that cannot answer fails it offline. */
   const ended = (runId: RunId): Effect.Effect<RunEndResult, RunFailure> =>
     Effect.flatMap(connected, (client) =>
       client['task.ended']({ workspace, runId }),
@@ -283,15 +285,30 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
           Effect.andThen(Effect.fail(runFailure(OFFLINE))),
         ),
       ),
-      Effect.flatMap(({ error, ...end }) => {
-        if (end.outcome !== RUN_OUTCOME.FAILED)
-          return Effect.succeed({ ...end, runId });
-        const cause = new Error(
-          error?.message ?? `The task failed (run ${runId}).`,
+      Effect.flatMap(({ at, error, ...end }) => {
+        if (end.outcome === RUN_OUTCOME.FAILED) {
+          const cause = new Error(
+            error?.message ?? `The task failed (run ${runId}).`,
+          );
+          if (error !== undefined && agentErrorPresentation(error) !== null)
+            markFailurePresented(cause);
+          return Effect.fail(runFailure(cause.message, cause));
+        }
+        // The answer and the fold's `task.watch` stream arrive apart: a
+        // result that settled on the answer alone could find the window
+        // still showing the run live, or a resumed run with the outcome
+        // its previous activation left. Held until this window's fold is
+        // at or past `at`, the log's commit when the service answered,
+        // where it holds the run's end, or its removal. The fold-aware
+        // stream ends the wait with the fold, never parks on it.
+        return Effect.as(
+          Stream.runDrain(
+            graph.view.changes.pipe(
+              Stream.takeUntil((level) => level.cursor >= at),
+            ),
+          ),
+          { ...end, runId },
         );
-        if (error !== undefined && agentErrorPresentation(error) !== null)
-          markFailurePresented(cause);
-        return Effect.fail(runFailure(cause.message, cause));
       }),
     );
   const request: Session['request'] = (runtimeRequest) =>
@@ -304,8 +321,9 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
         ),
     );
   /** The run the service admitted, as this window holds it: its end is the
-   *  service's answer (asked once), its view this window's fold sliced to
-   *  this activation, and its trace stays in the service. */
+   *  service's answer (asked once), held until this window's fold shows it
+   *  too; its view this window's fold sliced to this activation; and its
+   *  trace stays in the service. */
   const runOf = (runId: RunId, redirectedFrom?: RunId): Effect.Effect<Run> =>
     Effect.map(Effect.cached(ended(runId)), (result) => ({
       runId,
@@ -335,6 +353,18 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
       ),
     }));
   const offline = () => runFailure(OFFLINE);
+  /** A start or resume naming a window's own tools is refused: the service
+   *  runs its own, so a run continued with them would wait on a tool no
+   *  one serves. */
+  const windowTools = (
+    tools: readonly ITool[] | undefined,
+  ): ToolsRefused | undefined =>
+    tools === undefined || tools.length === 0
+      ? undefined
+      : new ToolsRefused({
+          tools: tools.map((tool) => tool.definition.name),
+          message: "The TeXRA service cannot run a window's own tools.",
+        });
   return {
     roots,
     view: {
@@ -408,14 +438,8 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
       if (!('config' in input))
         // The service takes a host's whole configuration.
         return Effect.fail(runFailure('A service task needs its config.'));
-      const tools = input.tools ?? [];
-      if (tools.length > 0)
-        return Effect.fail(
-          new ToolsRefused({
-            tools: tools.map((tool) => tool.definition.name),
-            message: "The TeXRA service cannot run a window's own tools.",
-          }),
-        );
+      const refused = windowTools(input.tools);
+      if (refused) return Effect.fail(refused);
       return callService(link, offline, (client) =>
         client['task.start']({
           workspace,
@@ -437,10 +461,12 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
             return runFailure(cause.message, cause);
           }),
         ),
-      ).pipe(Effect.flatMap((runId) => runOf(runId)));
+      ).pipe(Effect.flatMap(runOf));
     },
-    resume: (runId) =>
-      callService(link, offline, (client) =>
+    resume: (runId, input) => {
+      const refused = windowTools(input?.tools);
+      if (refused) return Effect.fail(refused);
+      return callService(link, offline, (client) =>
         client['task.resume']({ workspace, runId }).pipe(
           Effect.mapError((error) => runFailure(error.message)),
         ),
@@ -458,7 +484,8 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
               )
             : runOf(resumed, resumed === runId ? undefined : runId),
         ),
-      ),
+      );
+    },
     // The notices; a window's editor and previews are its own attachment.
     // An approval handler is a defect here: the service's windows answer
     // its prompts, so a handler would be asked nothing.

@@ -36,6 +36,7 @@ import { AgentConfigSchema } from '@texra-ai/harness/schemas';
 import { ChatExportInputSchema } from '@agent/export/schemas';
 import { TexraApprovalPolicySchema } from '@shared/approvalPolicy';
 import {
+  CommitOrdinalSchema,
   DisplaySessionEventSchema,
   RunEndSchema,
   RunIdSchema,
@@ -71,7 +72,7 @@ export const BUILD_VERSION: string =
 
 /** Bumped whenever a procedure or a payload changes shape. A client newer
  *  than the running service retires it; an older one stays in process. */
-export const PROTOCOL_VERSION = 23;
+export const PROTOCOL_VERSION = 24;
 
 /** `value` as JSON carries it: an absent field (`undefined`) is left out,
  *  which the wire's JSON check otherwise refuses. */
@@ -223,11 +224,15 @@ export const TexraRpcs = RpcGroup.make(
     error: zodWire(TaskFailedSchema),
   }),
   /** What a task's current activation ends with, once it ends: its
-   *  outcome, output, and the error a failed one ended with. */
+   *  outcome, output, and the error a failed one ended with; and `at`,
+   *  the service's fold position where it saw the end, so a window's
+   *  fold at or past it shows the end (or the run's removal) too. */
   Rpc.make('task.ended', {
     payload: { workspace, runId: zodWire(RunIdSchema) },
     success: zodWire(
-      RunEndSchema.pick({ outcome: true, output: true, error: true }),
+      RunEndSchema.pick({ outcome: true, output: true, error: true }).extend({
+        at: CommitOrdinalSchema,
+      }),
     ),
     error: zodWire(TaskFailedSchema),
   }),
