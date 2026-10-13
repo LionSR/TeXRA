@@ -166,12 +166,14 @@ jobs:
             if [ "$name" = "Bash" ]; then
               # Program name, then the next word only when it is a bare
               # lowercase word (a subcommand), never a path, URL or value;
-              # `gh` groups its commands, so its subcommand is the word after,
-              # except `gh api`, whose next word is an endpoint (`graphql` aside).
+              # under a `gh` command group (pr, issue, repo, ...) the
+              # subcommand is the word after. `gh api` takes an endpoint
+              # there (`graphql` aside) and `gh browse` an argument: a word
+              # the group list leaves out is never shown.
               name=$(jq -r '.tool_input.command // "" | tostring' <<<"$denial" | head -n1 |
                 awk '{ p = $1; sub(/.*\//, "", p); gsub(/[^A-Za-z0-9_.-]/, "", p)
                        s = ($2 ~ /^[a-z][a-z-]*$/) ? " " $2 : ""
-                       if (p == "gh" && s != "" && $3 ~ /^[a-z][a-z-]*$/ && ($2 != "api" || $3 == "graphql")) s = s " " $3
+                       if (p == "gh" && s != "" && $3 ~ /^[a-z][a-z-]*$/ && ($2 ~ /^(pr|issue|repo|run|workflow|release|search|label|gist|project)$/ || ($2 == "api" && $3 == "graphql"))) s = s " " $3
                        printf "Bash(%s%s)", p, s }')
             fi
             echo "::warning title=Denied tool call::$name"
