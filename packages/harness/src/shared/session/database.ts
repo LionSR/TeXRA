@@ -135,7 +135,7 @@ export class DatabaseClaimRefused extends Data.TaggedError(
   readonly ownerId: OwnerId;
   readonly verdict: 'alive' | 'unprovable';
 }> {
-  override readonly message = `Another TeXRA process (${this.ownerId}) holds this run${this.verdict === 'alive' ? '' : ', or could not be proven to have exited'}.`;
+  override readonly message = `Another TeXRA process (${this.ownerId}) ${this.verdict === 'alive' ? 'holds this run.' : 'may hold this run: it could not be proven to have exited.'}`;
 }
 
 /** A claiming transaction's refusals: the claim's, a writer's, or the write. */

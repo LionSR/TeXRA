@@ -38,22 +38,15 @@ vi.mock('@agent/runtime/executeAgent', async () => {
   };
 });
 
-import { ModelError } from '@texra-ai/llm';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { RunRegistry } from '@agent/runtime/runRegistry';
 import type { RootLaunchOptions } from '@agent/runtime/rootLaunch';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import {
-  agentErrorPresentation,
-  classifyAgentError,
-  primaryAgentError,
-} from '@common/errors/agentErrorClassification';
-import { AgentError, RouteUnavailable } from '@common/errors/agentErrors';
 import { SessionOwner } from '@platform/processRuntime';
 import { qualifyAggregateId, type RunId } from '@shared/schemas';
 import { fakeProcessServices } from '@test/support/setupPlatform';
 import { testRunFork, testRunPrograms } from '@test/support/runHandleFixtures';
-import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
+import { ensureError } from '@utils/errors/errorMessage';
 
 const RUN_ID = 'a9e70a9e7001' as RunId;
 // The persisted lineage a resume reads after tracking its launch handle.
@@ -253,113 +246,6 @@ describe('root launch run ownership', () => {
           'requestShowError',
           expect.objectContaining({ message: 'launch failed' }),
           { replayWhenAttached: true },
-        );
-      }),
-  );
-
-  it.effect('persists final host artifacts before releasing ownership', () =>
-    Effect.gen(function* () {
-      const order: string[] = [];
-      mocks.executeAgent.mockImplementationOnce(
-        opened(() => {
-          order.push('execute');
-          return EXECUTE_RESULT;
-        }),
-      );
-      mocks.releaseClaims.mockImplementationOnce(() =>
-        Effect.sync(() => {
-          order.push('release');
-        }),
-      );
-
-      yield* launch({
-        beforeRunEnd: () =>
-          Effect.sync(() => {
-            order.push('artifacts');
-          }),
-      });
-
-      expect(order).toEqual(['execute', 'artifacts', 'release']);
-    }),
-  );
-
-  it.effect(
-    'delegates workflow output finalization to the live run lifecycle',
-    () =>
-      Effect.gen(function* () {
-        const publishWorkflowOutput = vi.fn();
-
-        yield* launch({ publishWorkflowOutput });
-
-        expect(mocks.executeAgent).toHaveBeenCalledWith(
-          { config: CONFIG },
-          RUN_ID,
-          expect.objectContaining({ publishWorkflowOutput }),
-        );
-        expect(publishWorkflowOutput).not.toHaveBeenCalled();
-      }),
-  );
-
-  it.effect.each(['missing-api-key', 'context-window', 'unexpected'] as const)(
-    'preserves the %s run failure and cleanup diagnostics before releasing ownership',
-    (kind) =>
-      Effect.gen(function* () {
-        // Model access's missing key, and the package's overflow verdict.
-        const primaryError: Error = {
-          'missing-api-key': new RouteUnavailable({
-            reason: 'missing-api-key',
-            message: 'run failed',
-          }),
-          'context-window': new ModelError({
-            kind: 'context-overflow',
-            message: 'maximum context length is 128000',
-          }),
-          unexpected: new Error('run failed'),
-        }[kind];
-        const runError = new AgentError(primaryError.message, {
-          cause: primaryError,
-        });
-        const artifactError = Object.assign(
-          new Error('artifact writer failed'),
-          {
-            code: 'ENOSPC',
-          },
-        );
-        // The run opened, then failed: its claim is the launch's to let go.
-        mocks.executeAgent.mockImplementationOnce(
-          opened(() => {
-            throw runError;
-          }),
-        );
-
-        const failure = yield* Effect.flip(
-          launch({
-            beforeRunEnd: () => Effect.fail(artifactError),
-          }),
-        );
-
-        expect(failure).toBeInstanceOf(AggregateError);
-        expect((failure as AggregateError).errors).toEqual([
-          runError,
-          artifactError,
-        ]);
-        expect(classifyAgentError(failure)).toBe(kind);
-        const primary = primaryAgentError(failure);
-        expect(primary).toBe(runError);
-        expect(
-          agentErrorPresentation({
-            kind: classifyAgentError(primary),
-            message: toErrorMessage(primary),
-          }),
-        ).toMatchObject(
-          kind === 'missing-api-key'
-            ? { type: 'instruction', payload: { key: 'missingApiKey' } }
-            : { type: 'error', payload: { message: primaryError.message } },
-        );
-        // A failed host hook never changes ownership: the launch still
-        // releases the claim.
-        expect(mocks.releaseClaims).toHaveBeenCalledWith(
-          qualifyAggregateId('run', RUN_ID),
         );
       }),
   );

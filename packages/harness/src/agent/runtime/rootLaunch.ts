@@ -14,7 +14,7 @@ import { type RunId, USER_FOLLOW_UP_SUPPORT } from '@shared/schemas';
 import { generateRunId } from '@utils/core';
 import { humanGrant } from './runApprovalQueue';
 import { prepareAgentDefinition } from './AgentLaunchContext';
-import { runWithLaunchGuard, type RunTerminalOwner } from './runLaunchGuard';
+import { runWithLaunchGuard } from './runLaunchGuard';
 import { executeAgent, type ExecuteAgentOptions } from './executeAgent';
 import { applyHelperModelPreference } from './helperModelName';
 import { registryOf } from './runRegistry';
@@ -28,18 +28,10 @@ import type { RunEndResult } from './RunEndResult';
  * `ExecuteAgentOptions` (and forwarded as-is) so the two option types can't
  * drift apart silently; see that interface for their docs.
  */
-export interface RootLaunchOptions
-  extends
-    Pick<
-      ExecuteAgentOptions,
-      | 'stopAfterCycle'
-      | 'tools'
-      | 'ownApiKeyFallback'
-      | 'onRun'
-      | 'onAdmitted'
-      | 'publishWorkflowOutput'
-    >,
-    RunTerminalOwner {
+export interface RootLaunchOptions extends Pick<
+  ExecuteAgentOptions,
+  'stopAfterCycle' | 'tools' | 'ownApiKeyFallback' | 'onRun' | 'onAdmitted'
+> {
   /**
    * The caller owns presentation for failures before registration; after
    * that the run's `result` event presents.
@@ -122,7 +114,7 @@ export const rootRun = Effect.fn('rootRun')(
 /**
  * The run a root launch admits, on the launched fiber: it resolves the model
  * and runs the run under the launch terminal ({@link runWithLaunchGuard}),
- * which awaits the host's `beforeRunEnd` before the run's claim goes. The
+ * which lets the run's claim go once it ends. The
  * run is born with its opening, so a launch that fails before it leaves no
  * run: its failure is the launch's.
  */
@@ -132,7 +124,6 @@ const admittedRun = Effect.fn('admittedRun')(function* (
   options: RootLaunchOptions & { readonly session: SessionHandle },
 ) {
   const {
-    beforeRunEnd,
     preferHelperModel,
     suppressErrorNotification,
     continues,
@@ -190,6 +181,6 @@ const admittedRun = Effect.fn('admittedRun')(function* (
         grants: limit === undefined ? grants : { ...grants, limit },
       },
     }),
-    { beforeRunEnd },
+    true,
   );
 });

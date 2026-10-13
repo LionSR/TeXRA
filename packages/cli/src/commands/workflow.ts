@@ -201,6 +201,7 @@ export const runHeadlessAgent = Effect.fn('runHeadlessAgent')(function* (
 
         return yield* executeCliWorkflowConfig(config, runContext, {
           session: services.session,
+          runSession: services.runSession,
           runtime: services.runtime,
           shutdownScope: services.shutdownScope,
           recoveryInputIsDurable: stdinInputPath === undefined,
@@ -266,6 +267,7 @@ const runToolUseAgent = Effect.fn('runToolUseAgent')(function* (
 
         const run = yield* executeCliToolUseConfig(config, runContext, {
           session: services.session,
+          runSession: services.runSession,
           runtime: services.runtime,
           shutdownScope: services.shutdownScope,
           stopAfterCycle: true,
@@ -287,8 +289,8 @@ const runToolUseAgent = Effect.fn('runToolUseAgent')(function* (
 /**
  * Execute a workflow config headless and surface its outputs: run through the
  * shared CLI run skeleton, copy `--output`/`--output-dir` artifacts,
- * persist the result metadata, report an output failure back to the live run
- * lifecycle, emit the result in the requested format, and map the outcome to
+ * persist the result metadata once the run's end commits, emit the result in
+ * the requested format, and map the outcome (or a failed copy) to
  * an exit code. Shared by `texra run` (fresh runs) and `texra resume`
  * (workflow continuation under the persisted run id).
  */
@@ -297,9 +299,11 @@ export const executeCliWorkflowConfig = Effect.fn('executeCliWorkflowConfig')(
     config: AgentConfigPayload,
     runContext: CliContext,
     options: {
-      /** The process session the run executes under: `initCliPlatform`'s one
-       *  memoized open. */
+      /** The process session whose records the run's output reads:
+       *  `initCliPlatform`'s one memoized open. */
       readonly session: Effect.Effect<SessionHandle, SessionOpenError>;
+      /** The same session as every host drives it, where the run runs. */
+      readonly runSession: CliConfigExecuteOptions['runSession'];
       /** The process runtime the shared skeleton runs its Promise-edge
        *  callbacks on, from the same services. */
       readonly runtime: CliConfigExecuteOptions['runtime'];
@@ -358,6 +362,7 @@ export const executeCliWorkflowConfig = Effect.fn('executeCliWorkflowConfig')(
       });
     const run = yield* executeCliConfig(config, runContext, {
       session: options.session,
+      runSession: options.runSession,
       runtime: options.runtime,
       shutdownScope: options.shutdownScope,
       runId: options.runId,
@@ -366,44 +371,48 @@ export const executeCliWorkflowConfig = Effect.fn('executeCliWorkflowConfig')(
         ? (runId) => writeResumeHint(runId, true)
         : undefined,
       canAdvertiseInterruptedRun,
-      publishWorkflowOutput: (
-        result,
-        agentDefaultOutputFiles,
-        tryCommitPublication,
-      ) =>
-        Effect.gen(function* () {
-          // Handed over by the launch (the only load of this run's definition):
-          // the defaults this run actually executed, not a reread of a catalog
-          // entry a nested refresh may have swapped since. The input-derived `cli.expectedOutputFiles` the
-          // launch computed stand in when the agent declares none.
-          const declaredOutputFiles = agentDefaultOutputFiles.filter(Boolean);
-          const expectedOutputFiles = declaredOutputFiles.length
-            ? declaredOutputFiles
-            : (config.cli?.expectedOutputFiles ?? undefined);
-          const outputResult = yield* Effect.result(
-            resolveWorkflowOutput(output, outputDir, result, runContext, {
-              expectedOutputFiles,
-              storageRoot: session.roots.storage,
-              tryCommitPublication,
-            }).pipe(Effect.provideService(FileSystem.FileSystem, fileSystem)),
-          );
-          if (Result.isFailure(outputResult)) {
-            workflowOutputError = outputResult.failure;
-          } else {
-            workflowResult = outputResult.success;
-          }
-          yield* getRunRecords(session, result.runId).writeResultMeta({
-            producer: 'cliWorkflow',
-            output: workflowResult?.output ?? result.output,
-          });
-          // The fact the run decides its verdict from; the run, not this
-          // host, commits the outcome.
-          return Result.isFailure(outputResult) ? 'failed' : 'published';
-        }),
     });
     if (!run.ok) return run.exitCode;
 
     const { result } = run;
+    // The run's output is published after its end commits, gated on that
+    // committed outcome (`resolveWorkflowOutput` copies only a completed
+    // run's): output that cannot be written fails this command, never the
+    // recorded run.
+    if (!result.error) {
+      // The defaults the run executed, as its recorded configuration states
+      // them (the launch resolves an empty output list to the agent's
+      // declared ones); the input-derived `cli.expectedOutputFiles` stand in
+      // when the agent declares none.
+      const recorded = yield* getRunRecords(session, result.runId).readConfig();
+      const declaredOutputFiles = (recorded?.outputFiles ?? []).filter(Boolean);
+      const expectedOutputFiles = declaredOutputFiles.length
+        ? declaredOutputFiles
+        : (config.cli?.expectedOutputFiles ?? undefined);
+      const outputResult = yield* Effect.result(
+        resolveWorkflowOutput(output, outputDir, result, runContext, {
+          expectedOutputFiles,
+          storageRoot: session.roots.storage,
+        }).pipe(Effect.provideService(FileSystem.FileSystem, fileSystem)),
+      );
+      if (Result.isFailure(outputResult)) {
+        workflowOutputError = outputResult.failure;
+      } else {
+        workflowResult = outputResult.success;
+      }
+      // Written under the run's claim, held again for the write: the run
+      // released it with its end.
+      yield* Effect.scoped(
+        session.log.hold(result.runId).pipe(
+          Effect.andThen(
+            getRunRecords(session, result.runId).writeResultMeta({
+              producer: 'cliWorkflow',
+              output: workflowResult?.output ?? result.output,
+            }),
+          ),
+        ),
+      );
+    }
     if (workflowOutputError !== undefined) {
       writeErrorStderr(workflowOutputError);
       if (result.outcome === RUN_OUTCOME.CANCELLED) {
@@ -420,9 +429,8 @@ export const executeCliWorkflowConfig = Effect.fn('executeCliWorkflowConfig')(
       );
     }
 
-    // Copying runs while the run is interruptible, so the envelope takes the
-    // lifecycle-resolved verdict (a signal during the copy must not leave a
-    // completed presentation) and the invocation's own fields, its plugins.
+    // The envelope takes the committed verdict and the invocation's own
+    // fields, its plugins.
     workflowResult = { ...result, ...workflowResult, outcome: result.outcome };
 
     emitCliResult(runContext, {

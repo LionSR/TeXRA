@@ -32,7 +32,7 @@ export type { HostInteractions } from './HostInteractions';
 export { SessionHostInteractions } from './HostInteractions';
 
 // rootLaunch: what `Runs.launch({ request, options })` takes.
-export type { RootLaunchOptions, RootLaunchRequest } from './rootLaunch';
+export type { RootLaunchRequest } from './rootLaunch';
 export type { RootLaunch } from './runs';
 
 // SessionResumeRetrieval
@@ -47,7 +47,6 @@ export {
 } from './terminalResultToast';
 
 // resumeRun
-export { resumeRun } from './resumeRun';
 export type { ResumeRunOptions, ResumeRunResult } from './resumeRun';
 // The refusal wording a host applies to a `ResumeRunResult` failure.
 export { describeFollowUpFailure } from '@agent/followUp/ToolUseFollowUp';

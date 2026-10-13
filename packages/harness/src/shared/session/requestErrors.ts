@@ -11,7 +11,11 @@ import { Data } from 'effect';
 
 import type { RunId } from '@shared/schemas';
 
-import { heldElsewhereBy } from './database';
+import {
+  DatabaseClaimRefused,
+  DatabaseWriteFailed,
+  heldElsewhereBy,
+} from './database';
 
 /** Another live owner holds the run this request would act on. */
 export class NotOwner extends Data.TaggedError('NotOwner')<{
@@ -45,16 +49,22 @@ export type RequestError =
 
 /**
  * How a session write the request made fails it: `NotOwner` when another
- * owner holds the run ({@link heldElsewhereBy}), else the `Unavailable` that
- * `refusal` describes, a closed run's included.
+ * owner holds the run ({@link heldElsewhereBy}); `Rejected`, in the claim's
+ * own words, when an owner could not be proven to have exited (as a
+ * deletion refuses it); else the `Unavailable` that `refusal` describes, a
+ * closed run's included.
  */
 export function writeRefused(
   refusal: ConstructorParameters<typeof Unavailable>[0],
 ): (error: unknown) => RequestError {
-  return (error) =>
-    heldElsewhereBy(error) === null
+  return (error) => {
+    const cause = error instanceof DatabaseWriteFailed ? error.cause : error;
+    if (cause instanceof DatabaseClaimRefused && cause.verdict === 'unprovable')
+      return new Rejected({ reason: cause.message });
+    return heldElsewhereBy(error) === null
       ? new Unavailable(refusal)
       : new NotOwner({ runId: refusal.runId });
+  };
 }
 
 /**

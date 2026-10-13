@@ -161,7 +161,7 @@ describe('native agent launch activation', () => {
                       ...(parentRunId !== undefined && { parentRunId }),
                     },
                   }),
-                  {},
+                  true,
                 ),
               ),
             ),

@@ -996,6 +996,10 @@ show` print the same notice, and the new `texra agents customize`,
 - **An awaited sub-agent's report is now kept and viewable.** `executions
 view` on a sub-agent the parent waited for shows its report instead of
   "No report found".
+- **`--output` that can't be written now fails the command, not the
+  recorded run.** `texra run` and `texra resume` copy a document task's
+  output once the task has ended: a copy that fails exits non-zero with its
+  cause, and the task stays recorded as completed.
 - **A task that can no longer be read can be deleted from the task list.**
   A task whose saved history is damaged, or was written by an earlier
   build in a format this one does not read, is listed as unreadable. It
