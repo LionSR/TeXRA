@@ -135,8 +135,9 @@ Two wiring points fail silently if you forget them: a new VS Code command must
 be registered through `packages/extension/src/commands.ts`, and a new setting
 must be declared in the Zod catalog by its owner (the harness's rows in
 `packages/harness/src/shared/state/stateSettings.ts`, schemas in `packages/harness/src/shared/schemas/coreSettings.ts`;
-TeXRA's rows in `packages/texra/src/shared/settingsView/texraSettings.ts`, a plugin's rows on
-its `Plugin` value's `settings`) and the native TeXRA settings view —
+TeXRA's rows in `packages/texra/src/shared/settingsView/texraSettings.ts`, a plugin's rows in
+its settings module, listed there; each host's config carries the catalog as
+`ConfigProvider.catalog`) and the native TeXRA settings view —
 `packages/extension/package.json` must NOT contribute `configuration`;
 `scripts/sync-package-contributes.mjs` throws if it does.
 

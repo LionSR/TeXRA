@@ -36,6 +36,14 @@ export {
   resolveGlobalStoragePath,
   resolveWorkspaceStoragePath,
 } from '@platform/defaults/workspaceStorage';
+// The setting rows a `ConfigProvider` resolves against (its `catalog`): an
+// embedder with its own provider builds one from its rows, which
+// `settingsCatalog` puts after the harness's own.
+export {
+  settingsCatalog,
+  type SettingsCatalog,
+  type StateSettingEntry,
+} from '@shared/state/stateSettings';
 
 /** Filesystem locations used by the default Node platform. */
 export interface NodePlatformOptions {
