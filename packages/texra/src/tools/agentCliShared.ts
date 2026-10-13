@@ -26,7 +26,6 @@ import {
   type ToolResult,
 } from '@shared/schemas';
 import { executed } from '@tools/core/result';
-import type { DetachedChildRunLaunch } from '@tools/delegation/detachedChildRun';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { previewLabel } from '@utils/text/stringUtils';
 import type { AgentConfig } from '@texra-ai/harness/schemas';
@@ -151,13 +150,13 @@ interface AgentCliLaunchParams<TTurn> {
   config: AgentConfig;
   registerFailedMessage: string;
   /**
-   * Build the provider's loop strategy (and its late-failure trace) around the
-   * child stream the launch guard created. See {@link buildAgentCliLaunch}.
+   * Build the provider's loop strategy around the child stream the launch
+   * guard created. See {@link buildAgentCliLaunch}.
    */
   buildLaunch: (ctx: {
     childRun: ChildRunPort;
     runId: RunId;
-  }) => Effect.Effect<DetachedChildRunLaunch<TTurn>, Error>;
+  }) => Effect.Effect<ChildRunStrategy<TTurn>, Error>;
   summary: string;
   launchedLine: string;
   followUpLine: string;
@@ -360,8 +359,8 @@ interface AgentCliLoopParams<TTurn> {
    * entries (not-yet-known ids) are skipped.
    */
   resolveSessionIds: (turn: TTurn) => readonly (string | null | undefined)[];
-  /** The turn's own spend: the turn summary logs it and the loop adds it to
-   *  the child run's published total. Null when the provider reported none. */
+  /** The turn's own spend, logged and published on the child's trace as
+   *  each turn returns. Null when the provider reported none. */
   getUsage: (turn: TTurn) => TokenUsageStats | null;
   formatDelivery: (
     turn: TTurn,
@@ -372,8 +371,6 @@ interface AgentCliLoopParams<TTurn> {
   /** Omitted by providers (codex) that always throw on failure. */
   isTurnError?: (turn: TTurn) => boolean;
   turnErrorMessage?: (turn: TTurn) => string | undefined;
-  /** Logged if the loop fails after launch. */
-  loopFailedMessage: string;
   /** The call continuing this session after a stop, and the id it resumed. */
   continueWith: readonly [tool: string, idParam: string, id?: string];
 }
@@ -386,15 +383,14 @@ interface AgentCliLoopParams<TTurn> {
  * the `ChildRunStrategy` scaffolding common to every agent-CLI provider
  * (codex, claudeAgent): a dedup'd session/thread registration closure, the
  * `lastPrompt` capture feeding `formatDelivery`/`formatError`, and the
- * boilerplate-identical strategy fields (`isTerminal`, `getUsage`,
- * `onTurnSuccess`, `publishUsage`,
- * `releaseSessionOwnership`).
+ * boilerplate-identical strategy fields (`isTerminal`, `onTurnSuccess`,
+ * `releaseSessionOwnership`), and each turn's usage on the child's trace.
  * Callers supply only their provider-specific turn run, usage/delivery
  * formatting, and registry entry construction.
  */
 export function buildAgentCliLaunch<TTurn>(
   params: AgentCliLoopParams<TTurn>,
-): Effect.Effect<DetachedChildRunLaunch<TTurn>> {
+): Effect.Effect<ChildRunStrategy<TTurn>> {
   return Effect.gen(function* () {
     const {
       childRun,
@@ -410,7 +406,6 @@ export function buildAgentCliLaunch<TTurn>(
       formatError,
       isTurnError,
       turnErrorMessage,
-      loopFailedMessage,
     } = params;
     const { logger } = childRun;
     // Released with the child's aliases (`releaseSessionOwnership`).
@@ -434,6 +429,26 @@ export function buildAgentCliLaunch<TTurn>(
     // captured here (rather than threaded through the loop contract) since
     // `formatDelivery`/`formatError` run strictly after the turn that set it.
     let lastPrompt = initialPrompt;
+    // Every turn the provider returns, an error turn included, reports its
+    // spend: the child has no run history, so its `usage` rows are its one
+    // record of spend, one per turn, which is what each provider reports.
+    const providerTurn = (
+      prompt: string,
+      ports: ChildRunPorts,
+      signal: AbortSignal,
+    ): Effect.Effect<TTurn, Error> =>
+      runProviderTurn(prompt, ports, signal).pipe(
+        Effect.tap((turn) =>
+          Effect.sync(() => {
+            const usage = getUsage(turn);
+            if (!usage) return;
+            logger.info('Tokens', {
+              data: { input: usage.inputTokens, output: usage.outputTokens },
+            });
+            logger.emit({ type: 'usage', usage });
+          }),
+        ),
+      );
     const runTurn = (
       followUps: readonly FollowUpContent[],
       ports: ChildRunPorts,
@@ -441,28 +456,20 @@ export function buildAgentCliLaunch<TTurn>(
     ): Effect.Effect<TTurn, Error> =>
       Effect.suspend(() => {
         lastPrompt = followUps.map((f) => f.text).join('\n\n');
-        return runProviderTurn(lastPrompt, ports, signal);
+        return providerTurn(lastPrompt, ports, signal);
       });
 
-    const strategy: ChildRunStrategy<TTurn> = {
+    return {
       stageLabel,
-      launch: (ports, signal) => runProviderTurn(initialPrompt, ports, signal),
+      launch: (ports, signal) => providerTurn(initialPrompt, ports, signal),
       runTurn,
       isTerminal: () => false,
-      getUsage,
       isTurnError,
       turnErrorMessage,
       onTurnSuccess: (turn) => {
         for (const id of resolveSessionIds(turn)) {
           if (id) registerSessionId(id);
         }
-      },
-      publishUsage: (turn) => {
-        const usage = getUsage(turn);
-        if (!usage) return;
-        // The child has no run history, so its `usage` rows are its one record of
-        // spend: one per turn, which is what each provider reports.
-        logger.emit({ type: 'usage', usage });
       },
       formatDelivery: (turn, wallTimeMs) =>
         Effect.try({
@@ -481,15 +488,6 @@ export function buildAgentCliLaunch<TTurn>(
         releaseFallbackClaim?.();
         registry.releaseByRunId(runId);
       },
-    };
-
-    return {
-      strategy,
-      // Nobody awaits an agent-CLI child: own a late loop failure here as a
-      // trace diagnostic, since the loop already owns its one user-facing
-      // result delivery.
-      onLoopFailed: (error: unknown) =>
-        Effect.sync(() => logger.error(loopFailedMessage, { data: error })),
     };
   });
 }

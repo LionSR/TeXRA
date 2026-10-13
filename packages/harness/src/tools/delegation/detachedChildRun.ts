@@ -25,6 +25,7 @@ import {
 import { registerRun } from '@agent/storage/runLifecycle';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
+import { withLogChannel } from '@logger/effectLog';
 import {
   RUN_OUTCOME,
   USER_FOLLOW_UP_SUPPORT,
@@ -36,17 +37,6 @@ import {
   createChildRun,
   resumedChildRunId,
 } from './childRun';
-
-/** The strategy wiring a launch site supplies inside the guard. */
-export interface DetachedChildRunLaunch<TTurn, R = never> {
-  /** Provider-specific run strategy for the child loop. */
-  readonly strategy: ChildRunStrategy<TTurn, R>;
-  /**
-   * Attach a completion error trace so a late loop failure is diagnosed. Omit
-   * when the caller awaits completion in-band (no unhandled rejection).
-   */
-  readonly onLoopFailed?: (error: unknown) => Effect.Effect<void>;
-}
 
 /**
  * Everything the choreography forwards to the child run loop verbatim: the
@@ -72,7 +62,7 @@ export type DetachedChildRunInput<
          * session's `Runs` (the agent-CLI strategies resolve their registry there). */
         readonly buildLaunch: (
           childRun: ChildRunPort,
-        ) => Effect.Effect<DetachedChildRunLaunch<TTurn, R>, Error, R | Runs>;
+        ) => Effect.Effect<ChildRunStrategy<TTurn, R>, Error, R | Runs>;
       }
     | {
         /** Native strategies let `executeAgent` own one handle for the native lifetime. */
@@ -82,7 +72,7 @@ export type DetachedChildRunInput<
          * launch guard so a throw releases the run's claim.
          */
         readonly buildLaunch: () => Effect.Effect<
-          DetachedChildRunLaunch<TTurn, R>,
+          ChildRunStrategy<TTurn, R>,
           Error,
           R | Runs
         >;
@@ -112,12 +102,12 @@ export function startDetachedChildRunLoop<
       let childRun: ChildRunPort | undefined;
       const setup = yield* Effect.exit(
         Effect.gen(function* () {
-          let launch: DetachedChildRunLaunch<TTurn, R>;
+          let strategy: ChildRunStrategy<TTurn, R>;
           if (input.createChildRun) {
             childRun = yield* input.createChildRun();
-            launch = yield* input.buildLaunch(childRun);
+            strategy = yield* input.buildLaunch(childRun);
           } else {
-            launch = yield* input.buildLaunch();
+            strategy = yield* input.buildLaunch();
           }
           const {
             createChildRun: _createChildRun,
@@ -127,9 +117,9 @@ export function startDetachedChildRunLoop<
           const completion = yield* startChildRunLoop({
             ...loopParams,
             ...(childRun !== undefined && { childRun }),
-            strategy: launch.strategy,
+            strategy,
           });
-          return { launch, completion };
+          return completion;
         }),
       );
       if (Exit.isFailure(setup)) {
@@ -152,12 +142,24 @@ export function startDetachedChildRunLoop<
         }
         return yield* Effect.failCause(setup.cause);
       }
-      const { launch, completion } = setup.value;
-      const { onLoopFailed } = launch;
-      if (onLoopFailed) {
+      const completion = setup.value;
+      // An awaiting caller (`onTurnSettled`) owns the loop's failure; nobody
+      // reads a detached loop's, so a late failure is diagnosed here: on the
+      // child's own trace when it has one, else on the loop's log channel.
+      if (input.onTurnSettled === undefined) {
+        const message = `Child '${input.agentName}' run loop failed after launch`;
         yield* Effect.forkDetach(
           Fiber.join(completion).pipe(
-            Effect.catchCause((cause) => onLoopFailed(Cause.squash(cause))),
+            Effect.catchCause((cause) => {
+              const error = Cause.squash(cause);
+              const trace = childRun?.logger;
+              return trace
+                ? Effect.sync(() => trace.error(message, { data: error }))
+                : Effect.logError(message).pipe(
+                    Effect.annotateLogs({ data: error }),
+                    withLogChannel('childRunLoop'),
+                  );
+            }),
           ),
         );
       }
@@ -181,7 +183,7 @@ export interface ProcessChildLaunch<TTurn> {
   readonly buildLaunch: (ctx: {
     readonly childRun: ChildRunPort;
     readonly runId: RunId;
-  }) => Effect.Effect<DetachedChildRunLaunch<TTurn>, Error>;
+  }) => Effect.Effect<ChildRunStrategy<TTurn>, Error>;
 }
 
 /**
@@ -221,9 +223,7 @@ export const launchProcessChild = <TTurn>(
         createChildRun: () =>
           restore(Effect.void).pipe(
             Effect.andThen(
-              createChildRun(session, runId, parentRunId, {
-                run: launch.identity,
-              }),
+              createChildRun(session, runId, parentRunId, launch.identity),
             ),
           ),
         buildLaunch: (childRun) => launch.buildLaunch({ childRun, runId }),

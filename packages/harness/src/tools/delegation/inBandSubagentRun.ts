@@ -175,8 +175,8 @@ const executeInBand = Effect.fn('executeInBand')(
       // Built inside the loop's launch guard, like every attempt-scoped
       // setup: a throw here ends the run and releases its claim.
       buildLaunch: () =>
-        Effect.succeed({
-          strategy: createNativeSubagentStrategy({
+        Effect.succeed(
+          createNativeSubagentStrategy({
             ...options,
             ...(launch.kind === 'fresh'
               ? {
@@ -201,12 +201,7 @@ const executeInBand = Effect.fn('executeInBand')(
               : {
                   resume: {
                     identity: launch.identity,
-                    // Single cycle: the resumed turn ends the run, as the
-                    // launch's own would have.
-                    options: {
-                      session: options.session,
-                      stopAfterCycle: true,
-                    },
+                    options: { session: options.session },
                   },
                 }),
             runId,
@@ -214,7 +209,7 @@ const executeInBand = Effect.fn('executeInBand')(
             workingDirectory,
             inBand: true,
           }),
-        }),
+        ),
     });
 
     const completionExit = yield* Effect.exit(Fiber.join(completion));

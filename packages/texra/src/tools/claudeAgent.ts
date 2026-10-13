@@ -39,7 +39,10 @@ import {
   type AgentTrace,
   type OpenToolUseCard,
 } from '@agent/trace';
-import type { ChildRunPort } from '@agent/runtime/childRunLoop';
+import type {
+  ChildRunPort,
+  ChildRunStrategy,
+} from '@agent/runtime/childRunLoop';
 import { formatDelivery } from '@agent/runtime/deliveryEnvelope';
 import {
   AgentCliEffortSchema,
@@ -58,7 +61,6 @@ import type {
 import { DELIVERY_TAG } from '@shared/deliveryTags';
 import { buildSyntheticToolUseConfig } from '@texra/tools/core/syntheticAgentConfig';
 import { buildAgentWorkspaceOptions } from '@texra/tools/agentWorkspaceOptions';
-import type { DetachedChildRunLaunch } from '@tools/delegation/detachedChildRun';
 import { linkAbortSignals } from '@utils/core';
 import {
   formatWallTimeSeconds,
@@ -425,7 +427,7 @@ function buildClaudeAgentLaunch(params: {
   /** Release the fallback claim if the loop exits before promoting it. */
   releaseFallbackClaim: (() => void) | undefined;
   registry: AgentCliSessionRegistry;
-}): Effect.Effect<DetachedChildRunLaunch<TurnResult>> {
+}): Effect.Effect<ChildRunStrategy<TurnResult>> {
   const { childRun, runId, initialPrompt } = params;
   const { logger } = childRun;
 
@@ -500,7 +502,6 @@ function buildClaudeAgentLaunch(params: {
           err ?? turn?.errorMessage ?? turn?.finalResponse,
         ),
       }),
-    loopFailedMessage: 'Claude Agent run loop failed after launch',
     continueWith: [CLAUDE_AGENT_NAME, 'session_id', fallbackSessionId],
   });
 }

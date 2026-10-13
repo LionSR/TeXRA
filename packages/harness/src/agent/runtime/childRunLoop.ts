@@ -50,7 +50,6 @@ import {
   type RunId,
   type RunOutcome,
   type SubagentProgressUpdate,
-  type TokenUsageStats,
 } from '@shared/schemas';
 import {
   DatabaseNotOwner,
@@ -200,9 +199,6 @@ export interface ChildRunStrategy<TTurn, R = never> {
   /** True when `turn` ends this child's run; no further turns follow. */
   isTerminal(turn: TTurn): boolean;
 
-  /** Token usage for the turn summary (null when none). */
-  getUsage?(turn: TTurn): TokenUsageStats | null;
-
   /**
    * Application-level error reported by a turn that did NOT throw (e.g. the SDK
    * returned an error result). Omit for providers that always throw on failure.
@@ -216,9 +212,6 @@ export interface ChildRunStrategy<TTurn, R = never> {
 
   /** After a successful turn: register the session/thread id, etc. */
   onTurnSuccess?(turn: TTurn, session: SessionHandle): void;
-
-  /** Publish token usage to the UI. */
-  publishUsage?(turn: TTurn): void;
 
   /**
    * Format the success delivery XML. A native document-task subagent
@@ -412,19 +405,12 @@ function attemptTurn<TTurn, R, RTurn>(
     const attempt = yield* Effect.exit(
       Effect.gen(function* () {
         const turn = yield* runner(loop.signal);
-        // The turn summary (duration + token usage) on the child stream.
+        // The turn summary on the child stream.
         const wallTimeMs = (yield* Clock.currentTimeMillis) - startedAt;
         yield* loop.log(
           'info',
           `Turn completed in ${formatDuration(wallTimeMs)}`,
         );
-        const usage = strategy.getUsage?.(turn);
-        if (usage) {
-          yield* loop.log('info', 'Tokens', {
-            input: usage.inputTokens,
-            output: usage.outputTokens,
-          });
-        }
         const turnIsError = strategy.isTurnError?.(turn) === true;
         const turnError = turnIsError
           ? strategy.turnErrorMessage?.(turn)
@@ -561,7 +547,6 @@ const settleTurn = <TTurn, R>(
     if (loop.turnIndex === 0) yield* beginTurn(loop, false);
     const wallTimeMs = (yield* Clock.currentTimeMillis) - loop.turnStart;
     const isError = err != null || turnIsError;
-    if (turn != null) strategy.publishUsage?.(turn);
     const message =
       turn != null && !isError
         ? yield* strategy.formatDelivery(turn, wallTimeMs)

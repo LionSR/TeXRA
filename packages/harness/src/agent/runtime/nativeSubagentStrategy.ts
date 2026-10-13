@@ -57,8 +57,8 @@ interface NativeSubagentStrategyBase extends ChildRunLaunchOptions {
   readonly runId: RunId;
   readonly startedAt: number;
   readonly workingDirectory?: string;
-  /** An awaited call's child: it ends after one cycle, and its typed result
-   *  is persisted without the prose delivery an interactive one gets. */
+  /** An awaited call's child: it ends after one cycle, fresh or resumed,
+   *  and its report is persisted, not delivered: its caller reads it. */
   readonly inBand?: true;
 }
 
@@ -154,6 +154,7 @@ export function createNativeSubagentStrategy(
             parentOffered: params.parentOffered,
             onAdmitted: params.onAdmitted,
             onProgress: (update) => ports.notify(update),
+            ...(params.inBand === true && { stopAfterCycle: true }),
             turns: {
               turnPermit: turns.turnPermit,
               settleBoundary: (turn: RunEndResult) =>
@@ -181,7 +182,6 @@ export function createNativeSubagentStrategy(
               registration: params.registration,
               // The live handle owns this edge, including a later detach.
               parentRunId: params.parentRunId,
-              ...(params.inBand === true ? { stopAfterCycle: true } : {}),
             },
           );
           return turn;
@@ -201,7 +201,6 @@ export function createNativeSubagentStrategy(
     ) {
       if (cachedDelivery === undefined) {
         const built = yield* buildResult(turn);
-        if (params.inBand === true) return '';
         // The formatter is the one fallible step left here, and its throw is
         // this turn's failure — not a defect — exactly as it was when the
         // loop adopted this method's rejected promise.
@@ -224,7 +223,6 @@ export function createNativeSubagentStrategy(
     }),
 
     formatError: (turn, err) => {
-      if (params.inBand === true) return '';
       const wallTimeMs = Date.now() - params.startedAt;
       const result = turn ?? lastResult;
       return formatSubagentError(
