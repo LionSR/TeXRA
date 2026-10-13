@@ -4,7 +4,7 @@ import { useMemo } from 'react';
 import { type RunId } from '@texra-ai/harness/schemas';
 import { Select, type SelectItem } from '@cli/tui/ui/Select';
 import { COLOR_HINT } from '@cli/tui/ui/colors';
-import { TICK } from '@cli/tui/ui/glyphs';
+import { COLLAPSED, EXPANDED, TICK } from '@cli/tui/ui/glyphs';
 import { useLiveNowMsSince } from '@cli/tui/useLiveNowMs';
 import { truncateSummaryToWidth } from '@cli/runtime/terminalText';
 import { formatLoopPositionLabel } from '@shared/runs/runStatusDisplay';
@@ -133,7 +133,9 @@ function SessionRow({
       </Text>
       <Text aria-hidden color={color}>
         {'  '.repeat(depth)}
-        {run.childIds.length > 0 ? `${expanded ? '▾' : '▸'} ` : '  '}
+        {run.childIds.length > 0
+          ? `${expanded ? EXPANDED : COLLAPSED} `
+          : '  '}
         {CHILD_STATUS_MARKER}
       </Text>
       <RowSegment bold={active} color={color} flexShrink={1}>

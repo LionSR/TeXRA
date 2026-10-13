@@ -13,6 +13,7 @@ import { Box, Text, useInput, useWindowSize } from 'ink';
 import { isCtrlInput, isEscapeInput } from '@cli/tui/inputKeys';
 import { ReaderPanel, readerLayout } from '@cli/tui/ui/BorderedPanel';
 import { KeyHints, type KeyHint } from '@cli/tui/ui/KeyHints';
+import { CROSS, SKIP_CIRCLE, TICK } from '@cli/tui/ui/glyphs';
 import { Select, type SelectItem } from '@cli/tui/ui/Select';
 import { CROSS, HOLLOW_DOT, SKIP_CIRCLE, TICK } from '@cli/tui/ui/glyphs';
 import {
