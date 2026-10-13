@@ -21,6 +21,7 @@ import { stripWorkflowRoundDir } from '@shared/constants/workflowOutput';
 import {
   qualifyAggregateId,
   OutputFileSummarySchema,
+  type OutputFileSummary,
   type RunId,
   type ToolResultPayload,
   type ScriptDeliverySummary,
@@ -148,6 +149,56 @@ const summed = (
 };
 
 /**
+ * The files the calls wrote, one row per workspace document. A later call
+ * whose diff base is an earlier call's output (a merge stage over a fix
+ * stage's file) continues that document's row, with its counts summed over
+ * the calls; within a call, every revision is diffed against the same
+ * pre-run snapshot, so the call's change is its last revision's.
+ */
+function deliveredFiles(
+  roots: SessionHandle['roots'],
+  calls: readonly ScriptCallCard[],
+): ScriptDeliverySummary['files'] {
+  const files = new Map<string, ScriptDeliverySummary['files'][number]>();
+  /** Each delivered output by its absolute path, for a later call's base. */
+  const delivered = new Map<string, string>();
+  const add = (
+    path: string,
+    added: number | null,
+    removed: number | null,
+  ): void => {
+    const prior = files.get(path);
+    files.set(path, {
+      path,
+      added: summed(prior?.added, added),
+      removed: summed(prior?.removed, removed),
+    });
+  };
+  for (const call of calls) {
+    const envelope = EnvelopeFilesSchema.safeParse(call.value);
+    if (!envelope.success) continue;
+    const { documents } = envelope.data;
+    if (documents === undefined) {
+      for (const path of envelope.data.files) add(path, null, null);
+      continue;
+    }
+    const latest = new Map<string, OutputFileSummary>();
+    for (const output of documents.outputs) {
+      const path =
+        (output.originalPath === null
+          ? undefined
+          : delivered.get(output.originalPath)) ??
+        deliveredFilePath(roots, output);
+      delivered.set(output.absolutePath, path);
+      if ((latest.get(path)?.round ?? -1) <= output.round)
+        latest.set(path, output);
+    }
+    for (const [path, { added, removed }] of latest) add(path, added, removed);
+  }
+  return [...files.values()];
+}
+
+/**
  * The summary line of a script run, folded from its rows: the tally of its
  * calls, what the runs under it spent, how long it has run, the files its
  * agent calls wrote with their diffstat, and the cause when it failed.
@@ -172,11 +223,6 @@ const scriptRunSummary = Effect.fn('scriptRun.summary')(function* (
     cancelled: 0,
     skipped: 0,
   };
-  const files = new Map<string, ScriptDeliverySummary['files'][number]>();
-  /** Each delivered output by its absolute path: a later call whose diff
-   *  base is that output (a merge stage over a fix stage's file) continues
-   *  the same row, so a document is one row with its stages' counts summed. */
-  const delivered = new Map<string, string>();
   for (const call of calls) {
     switch (call.status) {
       case 'completed':
@@ -193,27 +239,6 @@ const scriptRunSummary = Effect.fn('scriptRun.summary')(function* (
       default:
         call.status satisfies never;
     }
-    const envelope = EnvelopeFilesSchema.safeParse(call.value);
-    if (!envelope.success) continue;
-    const { documents } = envelope.data;
-    if (documents !== undefined)
-      for (const output of documents.outputs) {
-        const path =
-          (output.originalPath === null
-            ? undefined
-            : delivered.get(output.originalPath)) ??
-          deliveredFilePath(session.roots, output);
-        delivered.set(output.absolutePath, path);
-        const prior = files.get(path);
-        files.set(path, {
-          path,
-          added: summed(prior?.added, output.added),
-          removed: summed(prior?.removed, output.removed),
-        });
-      }
-    else
-      for (const path of envelope.data.files)
-        files.set(path, { path, added: null, removed: null });
   }
   return {
     name,
@@ -222,7 +247,7 @@ const scriptRunSummary = Effect.fn('scriptRun.summary')(function* (
     tally,
     costUsd: view.runs.get(runId)?.treeUsage.cost ?? 0,
     durationMs: Math.max(0, Math.round(now - startedAt)),
-    files: [...files.values()],
+    files: deliveredFiles(session.roots, calls),
     errorCause,
   } satisfies ScriptDeliverySummary;
 });
