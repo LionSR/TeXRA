@@ -44,6 +44,7 @@ import type {
 } from '@shared/session/database';
 import { writeRefused, type RequestError } from '@shared/session/requestErrors';
 import type { Outcome, RuntimeRequest } from '@shared/session/runtimeRequest';
+import { parentEdgeOf } from '@shared/session/runRelation';
 import type { UnfoldedDraft } from '@shared/session/sessionEvents';
 import { readConfigSettingFrom } from '@utils/config/platformSettings';
 import { type PerKeyLane, withPerKeyLane } from '@utils/core/perKeyQueue';
@@ -200,15 +201,7 @@ export function createSessionApprovals(
         for (let id: RunId | null = runId; id !== null && !runs.has(id);) {
           const rows: readonly SessionEvent[] =
             yield* session().log.records(id);
-          const start = rows.find(
-            (row: SessionEvent) => row.type === 'run.start',
-          );
-          // A severed edge never comes back (`run.detach`).
-          const parentId: RunId | null =
-            start?.type === 'run.start' &&
-            !rows.some((row: SessionEvent) => row.type === 'run.detach')
-              ? (start.parent?.id ?? null)
-              : null;
+          const parentId: RunId | null = parentEdgeOf(rows)?.id ?? null;
           runs.set(id, { parentId });
           policy.set(id, recordedGrants(rows));
           id = parentId;

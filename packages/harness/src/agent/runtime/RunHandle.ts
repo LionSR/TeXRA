@@ -49,7 +49,7 @@ export interface RunControls {
 }
 
 /**
- * Handle for agent-based runs (workflow or toolUse subagents). The parent
+ * Handle for one live agent run. The parent
  * edge is not the handle's: it is the run's rows (`RunRegistry.parentOf`).
  */
 export class RunHandle<

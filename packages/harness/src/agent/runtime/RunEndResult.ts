@@ -15,9 +15,7 @@ import {
  * misses the delivery reports. `error` is the run's own provider/runtime
  * error, not yet classified; `runWithLifecycle` classifies it into the
  * `run.end` row's error, and the result it returns for a failed child carries
- * the normalized error the child's delivery reports. Domain verdicts such as
- * rejected document output end FAILED without one, their diagnostics staying
- * in the output.
+ * the normalized error the child's delivery reports.
  */
 const RunEndResultSchema = RunEndSchema.omit({ error: true }).extend({
   runId: RunIdSchema,

@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({
   buildVars: vi.fn(),
   helperCall: vi.fn(),
-  retrieveSessionResumeData: vi.fn(),
+  canResume: vi.fn(),
   resolve: vi.fn(),
   runWithLifecycle: vi.fn(),
 }));
@@ -18,8 +18,9 @@ vi.mock('@agent/index/agentRegistry', async (importActual) => ({
 vi.mock('@agent/prompt/templateInputs', () => ({
   buildTemplateInputs: mocks.buildVars,
 }));
-vi.mock('@agent/runtime/SessionResumeRetrieval', () => ({
-  retrieveSessionResumeData: mocks.retrieveSessionResumeData,
+vi.mock('@agent/storage/resumability', async (importActual) => ({
+  ...(await importActual<typeof import('@agent/storage/resumability')>()),
+  canResume: mocks.canResume,
 }));
 vi.mock('@agent/runtime/helperModel', async (importActual) => ({
   ...(await importActual<typeof import('@agent/runtime/helperModel')>()),
@@ -183,9 +184,7 @@ describe('native agent launch activation', () => {
           runId,
           agentConfig: config,
         });
-        mocks.retrieveSessionResumeData.mockReturnValueOnce(
-          Effect.succeed(resume),
-        );
+        mocks.canResume.mockReturnValueOnce(Effect.succeed(true));
         const rows = yield* rowsOfFailedLaunch(
           (session) => resumeToolUseFromResumeData(resume, { session }),
           { parentRunId, resumedRunId: runId },

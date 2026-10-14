@@ -44,7 +44,6 @@ import {
   type Append,
   type JobOptions,
   type OpenWork,
-  type SessionCursor,
   type SessionEventsShape,
 } from '@shared/session/sessionEvents';
 
@@ -153,12 +152,12 @@ function settling<A, E>(
  * on this coordinate, never on the events alone.
  */
 export function tailFrom<A extends SessionEvent, E>(
-  read: (fromCommit: SessionCursor) => Stream.Stream<A, E>,
+  read: (fromCommit: CommitOrdinal) => Stream.Stream<A, E>,
   level: {
     readonly get: Effect.Effect<CommitOrdinal, E>;
     readonly changes: Stream.Stream<CommitOrdinal>;
   },
-  fromCommit: SessionCursor,
+  fromCommit: CommitOrdinal,
   drained?: SubscriptionRef.SubscriptionRef<CommitOrdinal>,
 ): Stream.Stream<A, E> {
   return Stream.unwrap(
@@ -343,7 +342,7 @@ export const sessionEventsLayer = Layer.effect(
     };
     // THE tail (C7): the drain woken by the log's level.
     const all = (
-      fromCommit: SessionCursor,
+      fromCommit: CommitOrdinal,
       drained?: SubscriptionRef.SubscriptionRef<CommitOrdinal>,
     ): Stream.Stream<DisplaySessionEvent, DatabaseReadFailed> =>
       tailFrom(

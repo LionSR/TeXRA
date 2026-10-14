@@ -1,5 +1,5 @@
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
-import type { ResumeData } from '@agent/runtime/SessionResumeRetrieval';
+import type { ResumeTurnIdentity } from '@agent/runtime/executeAgent';
 import type { RunId } from '@shared/schemas';
 
 /**
@@ -8,8 +8,8 @@ import type { RunId } from '@shared/schemas';
  * from the run history.
  */
 export function createToolUseResumeData(
-  overrides: Partial<ResumeData> = {},
-): ResumeData {
+  overrides: Partial<ResumeTurnIdentity> = {},
+): ResumeTurnIdentity {
   return {
     runId: '7e57ec000001' as RunId,
     agentConfig: AgentConfigSchema.parse({

@@ -6,7 +6,8 @@
  *
  * - `held_elsewhere`: its claim is held by an owner that is alive or cannot
  *   be proven dead (another TeXRA process);
- * - `finished`: `deriveResumability` finds no point to continue from.
+ * - `finished`: `deriveResumability` finds no point to continue from;
+ * - `earlier_build`: its rows were written by an earlier build.
  *
  * Null when a resume may proceed: nobody alive holds the claim, or this
  * process does with no loop behind it, which the resume takes over. The

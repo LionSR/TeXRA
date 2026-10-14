@@ -2,7 +2,6 @@ import { defineCommand } from 'citty';
 import { Cause, Effect } from 'effect';
 
 import { type RunId } from '@texra-ai/harness/schemas';
-import { listRuns } from '@agent/storage';
 import { formatChatAsMarkdown } from '@texra/agent/export';
 import { assembleTrace, injectStandaloneTrace } from '@transcript';
 import { formatCliHistoryDeletionSummary } from '@ui/copy/runHistory';
@@ -172,11 +171,9 @@ function runHistoryDelete(
     // `--all` is destructive and unrecoverable. Refuse it unless the caller
     // also passes `--yes`, and quote the count so the stakes are explicit.
     if (options.all && !options.yes) {
-      // Unlike list, a full wipe intentionally counts (and later clears)
-      // every stored run, including `isUserVisibleRun`-hidden
-      // process-bookkeeping entries and agent-spawned child runs — don't add
-      // the visibility filter here.
-      const count = (yield* listRuns(session)).length;
+      // Unlike list, a full wipe counts (and later clears) every stored
+      // run, process entries and agent-spawned children included.
+      const count = (yield* session.view.read([])).runs.size;
       writeTextStderr(
         `Refusing to delete ${formatResultCount(count, 'stored task')}. Re-run with --yes to confirm.`,
       );

@@ -16,6 +16,7 @@ import {
 } from '@shared/schemas';
 import { RunHistory } from '@shared/session/runHistory';
 
+import { canResume } from '../storage/resumability';
 import { persistedParentRunId, withChildSpend } from '../storage/runRecords';
 import {
   buildAgentLaunchContext,
@@ -28,10 +29,6 @@ import {
   generateSessionDescription,
   settleDescriptionOnExit,
 } from './sessionDescription';
-import {
-  retrieveSessionResumeData,
-  type ResumeData,
-} from './SessionResumeRetrieval';
 import { modelInvokerLayer } from './ModelInvoker';
 import { agentRunLayer } from './run/AgentRun';
 import { runToolUse } from './loop/toolUse';
@@ -362,7 +359,11 @@ export function executeAgent(
  * The snapshot is not part of it — the turn reads it once, under the run
  * lease it just acquired, so no caller can hand in a stale one.
  */
-export type ResumeTurnIdentity = Pick<ResumeData, 'runId' | 'agentConfig'>;
+export interface ResumeTurnIdentity {
+  readonly runId: RunId;
+  /** The run's configuration, as its newest `run.config` holds it. */
+  readonly agentConfig: AgentConfig;
+}
 
 /** What a fresh launch takes, but its registration and own-key fallback. */
 export interface ResumeToolUseFromResumeDataOptions extends Omit<
@@ -389,28 +390,19 @@ export function resumeToolUseFromResumeData(
 ): Effect.Effect<RunEndResult, Error, ProcessServices> {
   const runSession = options.session;
   const resumed = Effect.gen(function* () {
-    const resume = yield* retrieveSessionResumeData(
-      identity.runId,
-      identity.agentConfig,
-      runSession,
-    ).pipe(
-      Effect.flatMap((retrieved) =>
-        retrieved
-          ? Effect.succeed(retrieved)
-          : Effect.fail(
-              new ResumeSessionUnavailableError({ runId: identity.runId }),
-            ),
-      ),
-    );
-    const parentRunId = yield* persistedParentRunId(runSession, resume.runId);
+    if (!(yield* canResume(identity.runId, runSession)))
+      return yield* new ResumeSessionUnavailableError({
+        runId: identity.runId,
+      });
+    const parentRunId = yield* persistedParentRunId(runSession, identity.runId);
     const definition = yield* prepareAgentDefinition({
-      config: resume.agentConfig,
+      config: identity.agentConfig,
       session: runSession,
       suppressErrorNotification: true,
     });
     const ctx = yield* buildAgentLaunchContext({
       definition,
-      runId: resume.runId,
+      runId: identity.runId,
       session: runSession,
       toolPolicy: {
         stopAfterCycle: options.stopAfterCycle,
