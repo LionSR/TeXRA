@@ -41,7 +41,6 @@ import {
 import { isInFlightPhase } from '@shared/runs/runStatus';
 import type { RunStopReason } from '@shared/session/runtimeRequest';
 import { type PerKeyLane, withPerKeyLane } from '@utils/core/perKeyQueue';
-import { ensureError } from '@utils/errors/errorMessage';
 import type { RunHandle } from './RunHandle';
 import type { rootRun } from './rootLaunch';
 import type { SessionHandle } from './SessionHandle';
@@ -698,13 +697,7 @@ export class RunRegistry implements RunsShape {
                   runId,
                   outcome: RUN_OUTCOME.CANCELLED,
                   keepExistingOutcome: true,
-                }).pipe(
-                  Effect.flatMap((ended) =>
-                    ended.ok
-                      ? Effect.void
-                      : Effect.fail(ensureError(ended.error)),
-                  ),
-                ),
+                }).pipe(Effect.asVoid),
           ),
         ),
       );

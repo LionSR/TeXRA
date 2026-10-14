@@ -110,16 +110,7 @@ vi.mock('@agent/storage/runLifecycle', async (importOriginal) => {
       Effect.tryPromise({
         try: () => persistSettlement(input.runId, input.settlement),
         catch: ensureError,
-      }).pipe(
-        Effect.matchEffect({
-          onFailure: (error) =>
-            Effect.succeed({
-              ok: false as const,
-              error,
-            }),
-          onSuccess: () => actual.finalizeRun(session, input),
-        }),
-      ),
+      }).pipe(Effect.andThen(actual.finalizeRun(session, input))),
   };
 });
 

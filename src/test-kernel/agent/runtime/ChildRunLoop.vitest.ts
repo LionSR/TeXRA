@@ -15,20 +15,7 @@ import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 import { registryOf, Runs } from '@agent/runtime/runRegistry';
 
 const mocks = vi.hoisted(() => ({
-  finalizeRun: vi.fn(),
   startFollowUpWake: vi.fn(),
-}));
-
-// Turn attribution is committed as `child.turn` rows on the run aggregate,
-// so the fixtures read it back through the fold rather than a store mock.
-vi.mock('@agent/storage', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@agent/storage')>()),
-  finalizeRun: mocks.finalizeRun,
-}));
-// A run retired from inside the store's own lifecycle code.
-vi.mock('@agent/storage/runLifecycle', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@agent/storage/runLifecycle')>()),
-  finalizeRun: mocks.finalizeRun,
 }));
 
 // A delivery commits with its settlement; the parent's wake after it is
@@ -40,10 +27,6 @@ vi.mock('@agent/followUp/ToolUseFollowUp', async (importOriginal) => ({
 
 import { getRunRecords } from '@agent/storage';
 import { readChildTurnState } from '@agent/storage/runRecords';
-import type { FinalizeRunInput } from '@agent/storage/runLifecycle';
-const { finalizeRun: realFinalizeRun } = await vi.importActual<
-  typeof import('@agent/storage/runLifecycle')
->('@agent/storage/runLifecycle');
 import { submitFollowUp } from '@agent/followUp/ToolUseFollowUp';
 import {
   startChildRunLoop,
@@ -271,6 +254,12 @@ const startLoop = (
     ...extras,
   }).pipe(Effect.provideService(Runs, session.runs));
 
+/** The store refuses every write from here on, as a full disk does. */
+const refuseWrites = (message: string) =>
+  vi
+    .spyOn(session.log, 'transact')
+    .mockReturnValue(Effect.fail(new Error(message)) as never);
+
 /** The host's stop gesture on a child run: kill it, and settle the stop. */
 const stopChildRun = (runId: RunId): Effect.Effect<void, Error> =>
   Effect.gen(function* () {
@@ -284,24 +273,6 @@ beforeEach(async () => {
   publishTestRunStart(session, PARENT_RUN_ID);
   await Effect.runPromise(session.log.settled);
   vi.clearAllMocks();
-  // The fake end commits what a real one carries with its row: the last
-  // turn's settlement.
-  mocks.finalizeRun.mockImplementation(
-    (target: SessionHandle, input: FinalizeRunInput) =>
-      Effect.as(
-        target.log.transact((tx) =>
-          Effect.scoped(
-            Effect.gen(function* () {
-              if (input.settlement === undefined) return;
-              const co = yield* input.settlement;
-              yield* tx.append(co.rows);
-              yield* co.committed;
-            }),
-          ),
-        ),
-        { ok: true, outcome: input.outcome, recorded: true },
-      ),
-  );
   mocks.startFollowUpWake.mockReturnValue(Effect.succeed(true));
 });
 
@@ -320,7 +291,6 @@ describe('childRunLoop E2E fixtures', () => {
         const runId = loopRunId();
         yield* session.log.settled;
         yield* session.log.hold(runId);
-        mocks.finalizeRun.mockImplementation(realFinalizeRun);
         const launch = vi.fn(() =>
           Effect.fail(new Error('Engine startup failed')),
         );
@@ -896,12 +866,7 @@ describe('childRunLoop E2E fixtures', () => {
 
         // The last turn's settlement rides the child's `run.end`, which
         // the store refuses.
-        mocks.finalizeRun.mockReturnValue(
-          Effect.succeed({
-            ok: false,
-            error: new Error('disk full'),
-          }),
-        );
+        refuseWrites('disk full');
         yield* resolveTurn(2, { kind: 'terminal', value: 'final' });
 
         expect(Exit.isFailure(yield* Fiber.await(loop))).toBe(true);
@@ -1001,13 +966,6 @@ describe('childRunLoop E2E fixtures', () => {
         mocks.startFollowUpWake.mockImplementation(() =>
           Effect.as(Deferred.succeed(delivered, undefined), true),
         );
-        mocks.finalizeRun.mockReturnValueOnce(
-          Effect.succeed({
-            ok: false,
-            error: new Error('metadata disk full'),
-          }),
-        );
-
         const loop = yield* startLoop(runId, strategy, { childRun });
 
         yield* resolveTurn(1, { kind: 'interim', value: 'first' });
@@ -1015,6 +973,7 @@ describe('childRunLoop E2E fixtures', () => {
         expect(mocks.startFollowUpWake).toHaveBeenCalledTimes(1);
         // One macrotask lets the loop reach its queue wait before the stop lands.
         yield* settle;
+        refuseWrites('metadata disk full');
 
         // Loop is now between turns; the stop reaches it through its run registry
         // activation and the run's fiber.
@@ -1026,16 +985,7 @@ describe('childRunLoop E2E fixtures', () => {
 
         // Metadata failure must not retain the child handle or queue ownership.
         expect(session.runs.get(runId)?.handle).toBeUndefined();
-        // The loop routes the cancellation through the durable outcome's only
-        // writer; the interim result envelope is left exactly as its turn wrote
-        // it, and reads project the durable outcome onto it.
-        expect(mocks.finalizeRun).toHaveBeenCalledWith(session, {
-          runId,
-          outcome: RUN_OUTCOME.CANCELLED,
-          error: undefined,
-          usage: undefined,
-          output: { response: '', files: [] },
-        });
+        expect(yield* getRunRecords(session, runId).readRunEnd()).toBeNull();
       }),
   );
 
@@ -1228,16 +1178,11 @@ describe('childRunLoop E2E fixtures', () => {
 
         yield* Effect.all(stopSettlements, { discard: true });
         expect(interruptAfterFailure).toHaveBeenCalledOnce();
-        expect(mocks.finalizeRun).toHaveBeenCalledWith(
-          session,
-          expect.objectContaining({
-            runId,
-            outcome: RUN_OUTCOME.CANCELLED,
-            // Error facts classified for a failure the stop outranked are not
-            // facts about this run's outcome.
-            error: undefined,
-          }),
-        );
+        // Error facts classified for a failure the stop outranked are not
+        // facts about this run's outcome.
+        const end = yield* getRunRecords(session, runId).readRunEnd();
+        expect(end).toMatchObject({ outcome: RUN_OUTCOME.CANCELLED });
+        expect(end?.error).toBeUndefined();
       }),
   );
 

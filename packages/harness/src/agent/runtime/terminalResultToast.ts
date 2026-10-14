@@ -64,13 +64,11 @@ export function receiveTerminalFailure(
   failure: Error,
   terminal: {
     readonly event: ResultEvent;
-    readonly persistFailure?: unknown;
     readonly recorded: boolean;
   },
 ): void {
   const { error } = terminal.event;
-  if (terminal.persistFailure !== undefined || !terminal.recorded || !error)
-    return;
+  if (!terminal.recorded || !error) return;
   if (agentErrorPresentation(error) !== null) presentedFailures.add(failure);
 }
 

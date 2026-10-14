@@ -8,17 +8,7 @@ const mocks = vi.hoisted(() => ({
   prepareAgentDefinition: vi.fn(),
   executeAgent: vi.fn(),
   emit: vi.fn(),
-  finalizeRun: vi.fn(),
   releaseClaims: vi.fn(),
-}));
-
-vi.mock('@agent/storage/runLifecycle', async (importActual) => ({
-  ...(await importActual<typeof import('@agent/storage/runLifecycle')>()),
-  finalizeRun: (...args: unknown[]) =>
-    Effect.tryPromise({
-      try: () => mocks.finalizeRun(...args),
-      catch: ensureError,
-    }),
 }));
 
 vi.mock('@agent/runtime/AgentLaunchContext', () => ({
@@ -238,7 +228,6 @@ describe('root launch run ownership', () => {
 
         // A run is born with its opening, so a launch failing before it
         // leaves no run to end and no claim to let go.
-        expect(mocks.finalizeRun).not.toHaveBeenCalled();
         expect(mocks.acquireClaims).not.toHaveBeenCalled();
         expect(mocks.releaseClaims).not.toHaveBeenCalled();
         // With no row to present it, the launch presents its own failure.
