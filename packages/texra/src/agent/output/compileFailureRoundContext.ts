@@ -1,7 +1,10 @@
 import { Effect, FileSystem } from 'effect';
 
 import type { AgentTrace } from '@agent/trace';
-import type { CompileFailure, CompileResult } from '@shared/schemas';
+import {
+  type CompileFailure,
+  type CompileResult,
+} from '@texra/shared/plugins/documentOutputs';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 const COMPILE_LOG_EXCERPT_CHAR_LIMIT = 12000;

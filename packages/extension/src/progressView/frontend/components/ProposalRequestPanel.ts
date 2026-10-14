@@ -289,11 +289,14 @@ export class ProposalRequestPanel extends BaseRequestPanel<'proposal'> {
   private renderExtractFlags(
     data: AgentProposalPermission,
   ): TemplateResult | typeof nothing {
-    const options = DocumentTaskOptionsSchema.parse(data.options ?? {});
+    // Options the documents plugin cannot read show no flags.
+    const options = DocumentTaskOptionsSchema.safeParse(
+      data.options ?? {},
+    ).data;
     const flags: string[] = [];
-    if (options.autoExtractFigure) flags.push('Extract figures');
-    if (options.autoExtractTikzFigure) flags.push('Extract TikZ');
-    if (options.reflect) flags.push('Critic review');
+    if (options?.autoExtractFigure) flags.push('Extract figures');
+    if (options?.autoExtractTikzFigure) flags.push('Extract TikZ');
+    if (options?.reflect) flags.push('Critic review');
     if (flags.length === 0) return nothing;
     return html`<div class="workflow-proposal__extract-flags">
       ${repeat(

@@ -91,6 +91,8 @@ vi.mock('@agent/storage/runRecords', async (importActual) => ({
         try: () => mocks.childRecords(runId).readRunEnd(),
         catch: ensureError,
       }),
+    // No child here is a recipe's run.
+    readConfig: () => Effect.succeed(null),
   }),
 }));
 

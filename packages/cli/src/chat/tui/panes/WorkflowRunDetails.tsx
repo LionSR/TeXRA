@@ -15,7 +15,6 @@ import {
   outputDiffCounts,
   outputDisplayName,
   roundIndexedEntries,
-  type CompileFailure,
   type OutputFileInfo,
   type ReadonlyRoundIndexed,
   type RunOutcome,
@@ -27,6 +26,7 @@ import {
   formatRunStatusLabel,
 } from '@shared/runs/runStatusDisplay';
 import { taskGroupDisplayStatus } from '@shared/runs/taskGroupProjection';
+import { type CompileFailure } from '@texra/shared/plugins/documentOutputs';
 import { filterNotNullish } from '@utils/core';
 import { formatCompactDuration } from '@utils/text/stringUtils';
 

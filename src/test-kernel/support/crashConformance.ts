@@ -117,6 +117,7 @@ import {
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { asDocumentTask } from '@test/support/ProgressControllerHarnesses';
+import { documentsResultOf } from '@texra/shared/plugins/documentOutputs';
 import { generateRunId } from '@utils/core';
 
 const AGENTS = resolve(REPO_ROOT, 'src/test-kernel/fixtures/storage/agents');
@@ -1387,9 +1388,9 @@ export function crashConformanceSuite(plugins: string): void {
               };
               return {
                 outcome,
-                outputs: (output.documents?.outputs ?? []).map(
-                  (file) => `${file.round} ${file.relativePath}`,
-                ),
+                outputs: (
+                  documentsResultOf(output.structured)?.outputs ?? []
+                ).map((file) => `${file.round} ${file.relativePath}`),
               };
             };
             const cleanRows = rowsOf(roots.storage);

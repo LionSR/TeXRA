@@ -9,7 +9,6 @@ import type { ProcessServices } from '@platform/processRuntime';
 import { sessionFsLayer } from '@platform/rootedFs';
 import {
   isRecipeConfig,
-  RunDocumentsSchema,
   type OfferedTool,
   type RunId,
   type RequestEnsureProgressViewPayload,
@@ -113,7 +112,7 @@ function runLayerFor(
  * Run the loop for a single agent run, fresh or resumed.
  *
  * Owns all run wiring: progress counters and model-change side effects, and
- * for a recipe's run its documents and their children's spend. A failed run
+ * for a recipe's run its children's spend. A failed run
  * arrives as a FAILED result carrying its structured error, so there is
  * nothing to unwrap here. The callers (`executeAgent`,
  * `resumeToolUseFromResumeData`) own lifecycle and stream-status.
@@ -132,10 +131,10 @@ function launchRun(
     output: {
       response: result.response,
       files: [...result.files],
-      // A recipe's structured value is its documents (its tools').
-      ...(recipe
-        ? { documents: RunDocumentsSchema.parse(result.structured ?? {}) }
-        : result.structured !== undefined && { structured: result.structured }),
+      // A recipe's return value, which its block reads (`AgentBlock.result`).
+      ...(result.structured !== undefined && {
+        structured: result.structured,
+      }),
     },
     runId: ctx.runId,
     usage: result.usage,
@@ -146,7 +145,7 @@ function launchRun(
   });
   const { turns } = shared;
   /** A recipe's result, with its children's spend. */
-  const withDocuments = (ended: RunEndResult) =>
+  const withChildrenSpend = (ended: RunEndResult) =>
     recipe ? withChildSpend(ctx.session, ended) : Effect.succeed(ended);
   // A stop asked before the run was reachable is this fiber's interruption,
   // taken before the loop does any work.
@@ -170,7 +169,7 @@ function launchRun(
         }),
   ).pipe(
     Effect.map(toResult),
-    Effect.flatMap(withDocuments),
+    Effect.flatMap(withChildrenSpend),
     Effect.provide(
       runLayerFor(
         ctx,

@@ -27,8 +27,7 @@ import {
 import { withLogChannel } from '@logger/effectLog';
 import {
   qualifyAggregateId,
-  storedResultMeta,
-  type DeliveredResult,
+  type ResultMeta,
   type RunId,
 } from '@shared/schemas';
 import { DatabaseNotOwner, DatabaseReadFailed } from '@shared/session/database';
@@ -96,7 +95,7 @@ export function childSettlementOf(params: {
   readonly runId: RunId;
   readonly turn: AttemptKey;
   readonly message: string;
-  readonly resultMeta: DeliveredResult | undefined;
+  readonly resultMeta: ResultMeta | undefined;
   readonly consumed: readonly QueuedFollowUp[];
   readonly deliveryId: string | undefined;
   readonly to: RunId | null;
@@ -120,7 +119,7 @@ export function childSettlementOf(params: {
             {
               type: 'run.result' as const,
               aggregateId: target,
-              result: storedResultMeta(params.resultMeta),
+              result: params.resultMeta,
             },
           ]),
       ...params.consumed.map((followUp) => ({

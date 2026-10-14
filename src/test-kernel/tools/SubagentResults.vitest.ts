@@ -13,12 +13,12 @@ import {
   type RunEndOutput,
   type RunId,
 } from '@shared/schemas';
+import { DocumentsResultSchema } from '@texra/shared/plugins/documentOutputs';
+import { DOCUMENT_TASK_RESULT } from '@texra/tools/documents/documentResult';
 import {
   formatBashDelivery,
   formatBashError,
 } from '@tools/delegation/bashDelivery';
-
-type DocumentsOutput = NonNullable<RunEndOutput['documents']>;
 
 function toolUseResult(
   outcome: RunEnd['outcome'] = RUN_OUTCOME.COMPLETED,
@@ -28,12 +28,6 @@ function toolUseResult(
     outcome,
     output: { response: '', files: [], ...output },
   };
-}
-
-function documentTaskResult(documents: Partial<DocumentsOutput> = {}): RunEnd {
-  return toolUseResult(RUN_OUTCOME.COMPLETED, {
-    documents: { outputs: [], compileFailures: [], diffs: [], ...documents },
-  });
 }
 
 function seconds(milliseconds: number): string {
@@ -85,8 +79,9 @@ describe('formatSubagentDelivery', () => {
     expect(delivery).not.toContain('Keep </response> literal');
   });
 
-  it('flags failed diff computation so orchestrators read outputs directly', () => {
-    const result = documentTaskResult({
+  it('delivers a recipe through its block, kind named by the block key', () => {
+    const runId = 'abc123' as RunId;
+    const value = DocumentsResultSchema.parse({
       outputs: [
         {
           round: 0,
@@ -98,13 +93,24 @@ describe('formatSubagentDelivery', () => {
           removed: 1,
         },
       ],
+      compileFailures: [],
       diffsUnavailable: 'ENOSPC: no space left & disk full',
     });
 
-    const delivery = formatSubagentDelivery('polish', result, {
-      runId: 'abc123' as RunId,
-    });
+    const delivery = formatSubagentDelivery(
+      'polish',
+      toolUseResult(RUN_OUTCOME.COMPLETED, { structured: value }),
+      {
+        runId,
+        recipe: {
+          key: 'task',
+          delivery: DOCUMENT_TASK_RESULT.delivery(value, runId),
+          changes: [],
+        },
+      },
+    );
 
+    expect(delivery).toContain('kind="task"');
     expect(delivery).toContain(
       '<diffs-unavailable reason="ENOSPC: no space left &amp; disk full">',
     );

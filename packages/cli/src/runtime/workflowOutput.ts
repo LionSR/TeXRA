@@ -2,21 +2,18 @@ import * as path from 'node:path';
 
 import { Effect, FileSystem, Path, PlatformError } from 'effect';
 
-import { withWorkflowDiffs } from '@agent/runtime';
 import { isNotADirectoryError } from '@common/errors';
-import type {
-  OutputFileSummary,
-  RunDocuments,
-  RunEndOutput,
-} from '@shared/schemas';
-import {
-  finalWorkflowOutput,
-  isRecipeConfig,
-  RUN_OUTCOME,
-} from '@shared/schemas';
+import type { RunEndOutput } from '@shared/schemas';
+import { isRecipeConfig, RUN_OUTCOME } from '@shared/schemas';
 import { runOutcomeToCliRunStatus } from '@shared/runs/runStatus';
-import { stripWorkflowRoundDir } from '@shared/constants/workflowOutput';
+import { stripWorkflowRoundDir } from '@texra/shared/constants/workflowOutput';
 import { getSafeDocumentRelativePath } from '@texra/utils/files/outputFileUtils';
+import {
+  documentsResultOf,
+  finalWorkflowOutput,
+  type DocumentsResult,
+  type OutputFileSummary,
+} from '@texra/shared/plugins/documentOutputs';
 import { runDirUnder } from '@utils/files/runStorageFs';
 // toPosixPath also trims and resolves `.`/`..` segments beyond a bare slash
 // swap; safe here since these paths come from getSafeDocumentRelativePath /
@@ -200,7 +197,11 @@ export function assertOutputFileAvailable(
 
 /** A document task's run result: its output always carries its documents. */
 export type CliWorkflowRunResult = CliRunResult & {
-  readonly output: RunEndOutput & { readonly documents: RunDocuments };
+  /** The run's output with its documents projected as `documents` (the
+   *  CLI's JSON contract), not as the run's `structured` value. */
+  readonly output: Omit<RunEndOutput, 'structured'> & {
+    readonly documents: DocumentsResult;
+  };
 };
 
 interface WorkflowOutputResolutionOptions {
@@ -319,25 +320,19 @@ export function resolveWorkflowOutput(
   options: WorkflowOutputResolutionOptions,
 ): Effect.Effect<CliWorkflowRunResult, Error, FileSystem.FileSystem> {
   return Effect.gen(function* () {
-    // The launch attaches a document task's documents before it publishes.
-    const { documents } = result.output;
+    // A document task's recipe returns its documents, diffs included: its
+    // run's `structured` value, which the CLI's result names `documents`.
+    const { structured, ...output } = result.output;
+    const documents = documentsResultOf(structured);
     if (documents === undefined) {
       return yield* Effect.die(
         new Error(`Document task ${result.runId} ended without its documents.`),
       );
     }
     const runDirectory = runDirUnder(options.storageRoot, result.runId);
-    // The flow reports no diffs: computing them is the delivery's, and
-    // this is the CLI's, so its result carries the diffs a subagent's
-    // record does.
-    const { documents: withDiffs = documents } = yield* withWorkflowDiffs(
-      options.storageRoot,
-      result.runId,
-      result.output,
-    );
     const baseResult = {
       ...result,
-      output: { ...result.output, documents: withDiffs },
+      output: { ...output, documents },
       workingDirectory: context.cwd,
       runDirectory,
     };

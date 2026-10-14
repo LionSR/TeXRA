@@ -1,10 +1,11 @@
 import { Stream } from 'effect';
 
-import type { AddOutputFilesPayload, RunId } from '@shared/schemas';
+import type { RunId } from '@shared/schemas';
 import {
   DOCUMENTS_OUTPUT_KEY,
   documentRoundsOf,
 } from '@texra/shared/plugins/documents';
+import { type AddOutputFilesPayload } from '@texra/shared/plugins/documentOutputs';
 import type { SessionView } from '@texra-ai/harness';
 
 /**

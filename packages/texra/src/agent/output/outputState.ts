@@ -14,12 +14,14 @@
 import type { AgentTrace } from '@agent/trace';
 import {
   MESSAGE_TYPES,
-  type CompileFailure,
   type FileLocation,
   type OutputFileInfo,
   type RoundIndexed,
-  type RoundOutput,
 } from '@shared/schemas';
+import {
+  type CompileFailure,
+  type RoundOutput,
+} from '@texra/shared/plugins/documentOutputs';
 import { RunFileService } from '@utils/files/runStorage';
 import { formatResultCount } from '@utils/text/stringUtils';
 import type { WorkspaceRoots } from '@texra-ai/harness';

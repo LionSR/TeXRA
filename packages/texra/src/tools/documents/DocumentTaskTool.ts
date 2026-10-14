@@ -5,7 +5,7 @@
  * `agent` (the `ChildRuns` launch): one proposal, one reuse key, one in-band or
  * detached child. A model that wants a conversation calls `agent` instead.
  */
-import { Effect } from 'effect';
+import { Effect, Predicate } from 'effect';
 import { z } from 'zod';
 
 import { defineTool } from '@texra-ai/harness';
@@ -16,6 +16,7 @@ import {
   getCatalogAgent,
   resolveDelegationScopeAgents,
 } from '@agent/index/agentRegistry';
+import { toJsonValue, type ToolResult } from '@shared/schemas';
 import { DocumentTaskOptionsSchema } from '@texra/shared/plugins/documents';
 import {
   documentTaskKey,
@@ -84,7 +85,7 @@ const runDocumentTask = Effect.fn('DocumentTaskTool.call')(function* (
     return errorResult(
       `'${input.agentName}' revises files: pass the files it revises as \`inputFiles\`.`,
     );
-  return yield* (yield* ChildRuns).launch({
+  const launched = yield* (yield* ChildRuns).launch({
     tool: 'document_task',
     agentName: input.agentName,
     prompt: input.prompt,
@@ -128,7 +129,23 @@ const runDocumentTask = Effect.fn('DocumentTaskTool.call')(function* (
       }),
     },
   });
+  return withDocuments(launched);
 });
+
+/**
+ * A task's envelope as a script reads it (`scriptReturns`): its run's value
+ * is its documents, so `documents` names it. Any other result (a refusal,
+ * a background launch's `{ runId }`) is as the launch returned it.
+ */
+function withDocuments(result: ToolResult): ToolResult {
+  if (result.status !== 'executed' || !Predicate.isObject(result.value))
+    return result;
+  // cast: an executed child call's value is its run's envelope, an object.
+  const { structured, ...envelope } = result.value as Record<string, unknown>;
+  return structured === undefined
+    ? result
+    : { ...result, value: toJsonValue({ ...envelope, documents: structured }) };
+}
 
 /** The `document_task` tool. */
 export const DocumentTaskTool = defineTool({

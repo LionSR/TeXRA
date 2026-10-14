@@ -17,20 +17,15 @@ import { formatDelivery } from '@agent/runtime/deliveryEnvelope';
 import type { RunEndResult } from '@agent/runtime/RunEndResult';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { DELIVERY_TAG } from '@shared/deliveryTags';
-import { stripWorkflowRoundDir } from '@shared/constants/workflowOutput';
 import {
   qualifyAggregateId,
-  OutputFileSummarySchema,
-  type OutputFileSummary,
   type RunId,
   type ToolResultPayload,
   type ScriptDeliverySummary,
   type ScriptTally,
 } from '@shared/schemas';
 import { scriptSummaryElement } from '@shared/subagentFollowup';
-import { isPathWithin } from '@utils/core/pathCore';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import { workspaceRelativePath } from '@utils/files/workspaceFS';
 
 /** What became of one call a script issued, as its rows say. */
 type ScriptCallStatus =
@@ -114,30 +109,22 @@ export const scriptRunCalls = Effect.fn('scriptRun.calls')(function* (
 });
 
 /** The files a call's child wrote, when its value is a run's envelope: a
- *  task's documents, or an agent's edits. */
+ *  recipe's changes (`AgentBlock.result.changes`, in the order it wrote
+ *  them), or an agent's edits. */
 const EnvelopeFilesSchema = z.object({
   files: z.array(z.string()),
-  documents: z.object({ outputs: z.array(OutputFileSummarySchema) }).optional(),
+  changes: z
+    .array(
+      z.object({
+        path: z.string(),
+        absolutePath: z.string(),
+        base: z.string().nullable(),
+        added: z.number().nullable(),
+        removed: z.number().nullable(),
+      }),
+    )
+    .optional(),
 });
-
-/**
- * A delivered file as the workspace file it replaces, not the run-storage
- * copy that carries it. A diff base in run storage that no earlier call
- * delivered is a child's `original/` snapshot of the input, and then the
- * output's round-relative name is the workspace path.
- */
-function deliveredFilePath(
-  roots: SessionHandle['roots'],
-  output: {
-    readonly relativePath: string;
-    readonly originalPath: string | null;
-  },
-): string {
-  return output.originalPath === null ||
-    isPathWithin(roots.storage, output.originalPath)
-    ? stripWorkflowRoundDir(output.relativePath)
-    : workspaceRelativePath(roots.workspace, output.originalPath);
-}
 
 /** A document's count over the calls that wrote it: the counted calls
  *  add up, and a call that reports none (an agent's edit) leaves the
@@ -155,7 +142,6 @@ const summed = (
  * pre-run snapshot, so the call's change is its last revision's.
  */
 function deliveredFiles(
-  roots: SessionHandle['roots'],
   calls: readonly ScriptCallCard[],
 ): ScriptDeliverySummary['files'] {
   const files = new Map<string, ScriptDeliverySummary['files'][number]>();
@@ -176,21 +162,19 @@ function deliveredFiles(
   for (const call of calls) {
     const envelope = EnvelopeFilesSchema.safeParse(call.value);
     if (!envelope.success) continue;
-    const { documents } = envelope.data;
-    if (documents === undefined) {
+    const { changes } = envelope.data;
+    if (changes === undefined) {
       for (const path of envelope.data.files) add(path, null, null);
       continue;
     }
-    const latest = new Map<string, OutputFileSummary>();
-    for (const output of documents.outputs) {
+    // A later entry for the same document is its later revision.
+    const latest = new Map<string, (typeof changes)[number]>();
+    for (const change of changes) {
       const path =
-        (output.originalPath === null
-          ? undefined
-          : delivered.get(output.originalPath)) ??
-        deliveredFilePath(roots, output);
-      delivered.set(output.absolutePath, path);
-      if ((latest.get(path)?.round ?? -1) <= output.round)
-        latest.set(path, output);
+        (change.base === null ? undefined : delivered.get(change.base)) ??
+        change.path;
+      delivered.set(change.absolutePath, path);
+      latest.set(path, change);
     }
     for (const [path, { added, removed }] of latest) add(path, added, removed);
   }
@@ -246,7 +230,7 @@ const scriptRunSummary = Effect.fn('scriptRun.summary')(function* (
     tally,
     costUsd: view.runs.get(runId)?.treeUsage.cost ?? 0,
     durationMs: Math.max(0, Math.round(now - startedAt)),
-    files: deliveredFiles(session.roots, calls),
+    files: deliveredFiles(calls),
     errorCause,
   } satisfies ScriptDeliverySummary;
 });

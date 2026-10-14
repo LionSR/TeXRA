@@ -6,10 +6,6 @@ import { Effect, FileSystem, PlatformError } from 'effect';
 
 import { withLogChannel } from '@logger/effectLog';
 import { type RunId, type FileLocation } from '@shared/schemas';
-import {
-  WORKFLOW_OUTPUT_BASENAME,
-  workflowOutputRoundDir,
-} from '@shared/constants/workflowOutput';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import {
   createExternalLocation,
@@ -245,45 +241,20 @@ export class RunFileService {
 
   /**
    * For every mirrored top-level dependency, ensure a symlink also exists at
-   * `<runDir>/r{round}/<relativePath>`. This lets `latexmk`, `pdflatex`, and
-   * `latexdiff` run with `cwd = runDir/r{round}` and resolve `\input{foo}`
-   * against sibling symlinks. Idempotent; safe to call every round.
+   * `<runDir>/<relativeDirectory>/<relativePath>`, so a build run there
+   * (`latexmk`, `latexdiff` with that `cwd`) resolves `\input{foo}` against
+   * sibling symlinks. Idempotent; safe to call every time.
    *
-   * Collisions with primary workflow artifacts are skipped:
-   *   - `output.{ext}` at runDir root (the fixed round-output basename from
-   *     `WORKFLOW_OUTPUT_BASENAME`).
-   *   - Any existing real file at the destination — e.g. an extracted
-   *     multi-document output written to `r{round}/<source>.tex` by the
-   *     XML output manager when the same path is also an `\input`
-   *     dependency. Replacing that real file with a symlink to the
-   *     original workspace source would silently destroy the round's
-   *     revised content.
+   * Collisions with the caller's own artifacts are skipped:
+   *   - a dependency at runDir root named `options.protectedStem` (any
+   *     extension), which would symlink over the artifact of that name the
+   *     directory holds;
+   *   - any existing real file at the destination, which a symlink to the
+   *     original workspace source would silently destroy.
    */
-  public ensureMirroredInRoundDir(
-    round: number,
-  ): Effect.Effect<void, never, FileSystem.FileSystem> {
-    return this.ensureMirroredInRunSubdir(workflowOutputRoundDir(round), {
-      protectPrimaryOutput: true,
-    });
-  }
-
-  /**
-   * Ensure mirrored workspace dependencies are also reachable from
-   * `<runDir>/diff/r{round}/...`, where workflow latexdiff sources and build
-   * artifacts live.
-   */
-  public ensureMirroredInDiffRoundDir(
-    round: number,
-  ): Effect.Effect<void, never, FileSystem.FileSystem> {
-    return this.ensureMirroredInRunSubdir(
-      path.join('diff', workflowOutputRoundDir(round)),
-      { protectPrimaryOutput: false },
-    );
-  }
-
-  private ensureMirroredInRunSubdir(
+  public ensureMirroredInRunSubdir(
     relativeDirectory: string,
-    options: { protectPrimaryOutput: boolean },
+    options: { readonly protectedStem?: string } = {},
   ): Effect.Effect<void, never, FileSystem.FileSystem> {
     return Effect.gen({ self: this }, function* () {
       if (this.mirroredDependencies.size === 0) return;
@@ -293,19 +264,13 @@ export class RunFileService {
         [...this.mirroredDependencies],
         (relativePath) =>
           Effect.gen({ self: this }, function* () {
-            // A dep whose path ends at `output.{ext}` (no subdirectory within
-            // the round) would symlink over the primary revised output that
-            // lives at `r{round}/output.{ext}`. `createSymlink` replaces any
-            // existing entry on EEXIST, so an unguarded mirror would silently
-            // destroy the round's result. Skip these — the dependency is still
-            // reachable at `r{round}/../<relativePath>`, i.e.
-            // `<runDir>/<relativePath>`.
+            // A root dep named as the directory's own artifact would symlink
+            // over it: `createSymlink` replaces any existing entry on EEXIST,
+            // so an unguarded mirror would silently destroy it. Skip these;
+            // the dependency is still reachable at
+            // `<relativeDirectory>/../<relativePath>`.
             const { dir: depDir, name: depName } = path.parse(relativePath);
-            if (
-              options.protectPrimaryOutput &&
-              depDir === '' &&
-              depName === WORKFLOW_OUTPUT_BASENAME
-            ) {
+            if (depDir === '' && depName === options.protectedStem) {
               yield* Effect.logDebug(
                 `Skipping run-dir mirror of ${relativePath}: would clobber primary output in ${relativeDirectory}`,
               ).pipe(withLogChannel(CHANNEL));

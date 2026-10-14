@@ -22,12 +22,12 @@ import {
   outputDiffCounts,
   outputDisplayName,
   roundIndexedEntries,
-  type CompileFailure,
   type OutputFileInfo,
   type RunId,
 } from '@shared/schemas';
 import { formatRoundStageLabel } from '@shared/runs/runStatusDisplay';
 import type { TeXRAIconName } from '@shared/iconNames';
+import type { CompileFailure } from '@texra/shared/plugins/documentOutputs';
 import type { HostRequest } from '@texra/shared/session/hostRequest';
 import type { Surface } from '@texra/shared/session/surface';
 import { SessionUiEvents } from '@texra/shared/session/uiEvents';

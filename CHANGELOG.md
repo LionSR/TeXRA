@@ -6,6 +6,22 @@ All notable changes to this project will be documented in this file.
 
 ### Breaking Changes
 
+- **SDK: a recipe's result is its `structured` value; `output.documents` is
+  gone.** Every run's output is `{ response, files, structured? }`: a
+  recipe's return value is `structured`, which the plugin owning its block
+  reads (`AgentBlock.result`: the value's schema, its delivery body and the
+  files it changed). A document task's documents, diffs included, are that
+  value, and their diffs are computed when the task proposes, for every
+  launch. `withWorkflowDiffs` leaves `@agent/runtime`, and a run's result
+  record no longer carries diffs. `texra run --json` still reports a
+  document task's documents as `output.documents`. A subagent delivery
+  names its kind by the block key (`kind="task"`, was
+  `kind="document-task"`). Runs written by an earlier build are listed as
+  such and are not resumed. An older window is refused by a newer service
+  and asked to update.
+- **A store this build wrote is refused by an earlier build.** Going back
+  to an older build after this one refuses the whole store as newer than
+  that build (`DatabaseStoreNewer`) rather than reading it wrong.
 - **SDK: a task's options travel with its recipe, not as `toolConfig`.**
   `AgentConfig.toolConfig` is gone: a recipe's `script` now names its
   plugin's block (`block`) and carries that task's `options`, which only

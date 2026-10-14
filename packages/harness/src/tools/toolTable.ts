@@ -24,6 +24,7 @@ import type {
 import type { AgentEntry } from '@agent/index/agentEntry';
 import type { LoadablePlugin } from '@common/plugins/pluginTrust';
 import type { AppState, ConfigProvider } from '@platform/interfaces';
+import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import {
   AgentDefinitionSchema,
   type PermissionPayload,
@@ -219,12 +220,47 @@ export interface RequestDecisionHook {
  * `launchesTasks`, and it runs as one only through a launch its plugin
  * builds (a `script` of kind `recipe`). The harness reads nothing inside it.
  */
-export interface AgentBlock<A = unknown> {
+export interface AgentBlock<A = unknown, R = unknown> {
   /** The key in an agent file: unique across the plugin list, and never a
    *  key of the persona itself. */
   readonly key: string;
   /** The block as written, to its value with defaults applied. */
   readonly schema: z.ZodType<A>;
+  /** How a run of this block's recipe reads to whoever launched it. */
+  readonly result?: AgentBlockResult<R>;
+}
+
+/**
+ * How a recipe's return value (its run's `output.structured`) reads: to the
+ * launching model, and to a script's summary of the files its calls wrote.
+ * The harness reads the value only through these.
+ */
+export interface AgentBlockResult<R = unknown> {
+  /** Checks the value where it is read; a value that fails it is delivered
+   *  as an invalid result naming the issue, never shaped. */
+  readonly schema: z.ZodType<R>;
+  /** The delivery body inside the harness's own result envelope. */
+  delivery(value: R, runId: RunId): readonly string[];
+  /** The files the recipe wrote, in the order it wrote them (a document
+   *  revised twice appears twice, the later entry its latest): the files a
+   *  parent may read of its child's storage, and a script's summary. */
+  changes(
+    value: R,
+    roots: Pick<WorkspaceRoots, 'workspace' | 'storage'>,
+  ): readonly RecipeChange[];
+}
+
+/** One file a recipe wrote, as a script summary counts it. */
+export interface RecipeChange {
+  /** The workspace path the file replaces. */
+  readonly path: string;
+  /** The file the recipe wrote. */
+  readonly absolutePath: string;
+  /** The file it was diffed against, when it continues one: an earlier
+   *  call's `absolutePath` continues that call's row. */
+  readonly base: string | null;
+  readonly added: number | null;
+  readonly removed: number | null;
 }
 
 /** The value of `block` on `entry`, as the catalog scan parsed it with the

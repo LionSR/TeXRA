@@ -328,12 +328,6 @@ function publishRun(
         mediaFiles: [],
         outputFiles: [],
         editedFile: null,
-        toolConfig: {
-          autoExtractFigure: false,
-          autoExtractTikzFigure: false,
-          attachTeXCount: false,
-          autoCompileInputPdf: false,
-        },
         memories: [],
         instruction: '',
         workingDirectory: '/tmp/project',

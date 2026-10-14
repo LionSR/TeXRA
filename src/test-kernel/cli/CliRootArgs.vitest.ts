@@ -798,7 +798,7 @@ describe('CLI root argument routing', () => {
             output: {
               response: '',
               files: [],
-              documents: { outputs: [], compileFailures: [], diffs: [] },
+              structured: { outputs: [], compileFailures: [], diffs: [] },
             },
             runId: 'run-without-output' as RunId,
           },
@@ -914,7 +914,7 @@ describe('CLI root argument routing', () => {
               output: {
                 response: '',
                 files: [],
-                documents: { outputs: [], compileFailures: [], diffs: [] },
+                structured: { outputs: [], compileFailures: [], diffs: [] },
               },
               runId: 'completed-without-output' as RunId,
             },
@@ -943,7 +943,7 @@ describe('CLI root argument routing', () => {
             output: {
               response: '',
               files: [],
-              documents: { outputs: [], compileFailures: [], diffs: [] },
+              structured: { outputs: [], compileFailures: [], diffs: [] },
             },
             runId: 'stopped-without-output' as RunId,
           },

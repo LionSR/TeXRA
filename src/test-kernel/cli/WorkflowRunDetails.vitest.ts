@@ -9,9 +9,10 @@ import {
   rootRunId,
   focusRun,
 } from '@cli/chat/tui/state/cliState';
-import { type CompileFailure, RUN_PHASE, type RunId } from '@shared/schemas';
+import { RUN_PHASE, type RunId } from '@shared/schemas';
 import { loadInk } from '@test/support/inkTestHarness.ts';
 import { textRowFixture } from '@test/support/transcriptRowFixtures';
+import { type CompileFailure } from '@texra/shared/plugins/documentOutputs';
 import {
   bindTestSessionView,
   makeRunView,

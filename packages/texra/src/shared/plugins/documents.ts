@@ -14,17 +14,21 @@ import { z } from 'zod';
 import {
   DEFAULT_TOOL_CONFIG,
   ToolConfigFieldsSchema,
-  roundOutputsToCompileFailureSummaries,
-  roundOutputsToOutputSummaries,
-  RunDocumentsSchema,
-  type RunDocuments,
   type AggregateId,
   type SessionEvent,
-  RoundKeyedOutputSidecarValueSchemas,
-  RoundOutputSchema,
-  type RoundOutput,
   type ToolFact,
 } from '@shared/schemas';
+import {
+  DocumentDiffsSchema,
+  DocumentsResultSchema,
+  RoundKeyedOutputSidecarValueSchemas,
+  RoundOutputSchema,
+  roundOutputsToCompileFailureSummaries,
+  roundOutputsToOutputSummaries,
+  type DocumentDiffs,
+  type DocumentsResult,
+  type RoundOutput,
+} from '@texra/shared/plugins/documentOutputs';
 import type { RunView } from '@texra-ai/harness';
 import type { AgentConfig } from '@texra-ai/harness/schemas';
 import type { AgentBlock } from '@texra-ai/harness/plugins';
@@ -32,6 +36,11 @@ import type { AgentBlock } from '@texra-ai/harness/plugins';
 const DocumentsOutputSchema = z.strictObject({
   /** Every revision so far, by its zero-based `round`. */
   rounds: z.array(RoundOutputSchema),
+  /** The proposed revision's diffs, once the task proposed: the one record
+   *  of them, which its run's result is derived from. Optional, so a row
+   *  written before the task proposed (or by an earlier build) reads as
+   *  it was written. */
+  ...DocumentDiffsSchema.shape,
 });
 
 /** The documents plugin's one row kind. */
@@ -46,14 +55,17 @@ export const DOCUMENTS_OUTPUT_ARM = {
 /** The key a run's documents fold under in `RunView.facts`. */
 export const DOCUMENTS_OUTPUT_KEY = `${DOCUMENTS_OUTPUT_ARM.plugin}/${DOCUMENTS_OUTPUT_ARM.kind}`;
 
-/** The fact that makes `rounds` the calling run's documents, for its
- *  call's result (`ToolResult.facts`). */
-export function documentsOutputFact(rounds: readonly RoundOutput[]): ToolFact {
+/** The fact that makes `rounds` (and, once proposed, the final `diffs`)
+ *  the calling run's documents, for its call's result (`ToolResult.facts`). */
+export function documentsOutputFact(
+  rounds: readonly RoundOutput[],
+  diffs: DocumentDiffs = {},
+): ToolFact {
   return {
     plugin: DOCUMENTS_OUTPUT_ARM.plugin,
     kind: DOCUMENTS_OUTPUT_ARM.kind,
     version: DOCUMENTS_OUTPUT_ARM.version,
-    value: DocumentsOutputSchema.parse({ rounds }),
+    value: DocumentsOutputSchema.parse({ rounds, ...diffs }),
   };
 }
 
@@ -114,12 +126,14 @@ export function latestDocumentRounds(
   return row?.type === 'plugin.fact' ? documentRoundsOf(row.value) : undefined;
 }
 
-/** The documents a run's end reports of `rounds`: every revision's
- *  outputs and compile failures. */
-export function documentsSummary(rounds: RoundOutput[]): RunDocuments {
-  return RunDocumentsSchema.parse({
+/** The documents a run's end reports of its documents fact: every
+ *  revision's outputs and compile failures, and the proposed diffs. */
+export function documentsSummary(fact: ToolFact): DocumentsResult {
+  const { rounds, ...diffs } = DocumentsOutputSchema.parse(fact.value);
+  return DocumentsResultSchema.parse({
     outputs: roundOutputsToOutputSummaries(rounds),
     compileFailures: roundOutputsToCompileFailureSummaries(rounds),
+    ...diffs,
   });
 }
 
@@ -205,8 +219,10 @@ export function agentProposalLabel(proposal: {
   readonly options?: Readonly<Record<string, unknown>> | null;
 }): string {
   if (!proposal.task) return 'agent';
-  // A reflecting task also runs a critic after every revision but the last.
-  return DocumentTaskOptionsSchema.parse(proposal.options ?? {}).reflect
+  // A reflecting task also runs a critic after every revision but the last;
+  // options this plugin cannot read name no critic.
+  return DocumentTaskOptionsSchema.safeParse(proposal.options ?? {}).data
+    ?.reflect
     ? 'document task, with critic'
     : 'document task';
 }

@@ -15,6 +15,7 @@ import { RUN_OUTCOME, type RunId, type RunOutcome } from '@shared/schemas';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
+import { DocumentsResultSchema } from '@texra/shared/plugins/documentOutputs';
 import { runDirUnder } from '@utils/files/runStorageFs';
 
 type WorkflowResult = Parameters<typeof resolveWorkflowOutput>[2];
@@ -57,13 +58,14 @@ function workflowResult(
     round?: number;
   }>,
   outcome: RunOutcome = RUN_OUTCOME.COMPLETED,
-): WorkflowResult & { readonly output: CliWorkflowRunResult['output'] } {
+): WorkflowResult {
   return {
     outcome,
     output: {
       response: '',
       files: [],
-      documents: {
+      // A document task's recipe returns its documents.
+      structured: {
         compileFailures: [],
         diffs: [],
         outputs: outputs.map((output) => ({
@@ -78,6 +80,22 @@ function workflowResult(
       },
     },
     runId: TEST_RUN_ID,
+  };
+}
+
+/** `outputs` as the CLI's result reports them: the run's documents named
+ *  `output.documents`. */
+function cliWorkflowResult(
+  outputs: Parameters<typeof workflowResult>[0],
+  outcome?: RunOutcome,
+) {
+  const {
+    output: { structured, ...output },
+    ...result
+  } = workflowResult(outputs, outcome);
+  return {
+    ...result,
+    output: { ...output, documents: DocumentsResultSchema.parse(structured) },
   };
 }
 
@@ -478,7 +496,7 @@ describe('CLI workflow output resolution', () => {
 
   it('reports the last output of the final round as the text result', () => {
     const result: CliWorkflowRunResult = {
-      ...workflowResult([
+      ...cliWorkflowResult([
         { absolutePath: '/run/r1/main.tex', relativePath: 'r1/main.tex' },
         {
           absolutePath: '/run/r2/main.tex',
@@ -500,7 +518,7 @@ describe('CLI workflow output resolution', () => {
 
   it('reports run storage instead of one provisional file after cancellation', () => {
     const result: CliWorkflowRunResult = {
-      ...workflowResult(
+      ...cliWorkflowResult(
         [
           { absolutePath: '/run/r0/main.tex', relativePath: 'r0/main.tex' },
           {
@@ -519,7 +537,7 @@ describe('CLI workflow output resolution', () => {
 
   it('reports destinations that were copied before cancellation', () => {
     const result: CliWorkflowRunResult = {
-      ...workflowResult(
+      ...cliWorkflowResult(
         [{ absolutePath: '/run/r0/main.tex', relativePath: 'r0/main.tex' }],
         RUN_OUTCOME.CANCELLED,
       ),

@@ -5,7 +5,6 @@ import { byString, normalizeFilePath } from '@utils/core';
 
 import { AgentConfigFieldsSchema } from './agentConfig';
 import { JsonValueSchema } from './jsonValue';
-import { CompileFailureSummarySchema, OutputFileSummarySchema } from './output';
 import { RetryErrorInfoSchema } from './errors';
 import { RunOutcomeSchema } from './run';
 import { RunUsageTotalsSchema } from './usage';
@@ -31,13 +30,6 @@ export function isRecipeConfig(
   return 'script' in config && config.script?.kind === 'recipe';
 }
 
-const ResultDiffSummarySchema = z.strictObject({
-  path: z.string(),
-  diffRelPath: z.string(),
-  largeChange: z.boolean(),
-});
-export type ResultDiffSummary = z.infer<typeof ResultDiffSummarySchema>;
-
 /** Terminal errors keep the classified kind beside the provider detail. */
 const RunEndErrorSchema = z
   .discriminatedUnion('kind', [
@@ -57,33 +49,18 @@ const RunEndErrorSchema = z
   .readonly();
 
 /**
- * The documents a document task produced: its newest documents output, and
- * the diffs the delivery computed after the run ended.
- */
-export const RunDocumentsSchema = z.strictObject({
-  outputs: z.array(OutputFileSummarySchema).prefault(() => []),
-  compileFailures: z.array(CompileFailureSummarySchema).prefault(() => []),
-  /** Written by the delivery that computes them, after the run ended. */
-  diffs: z.array(ResultDiffSummarySchema).prefault(() => []),
-  diffsUnavailable: z.string().optional(),
-});
-export type RunDocuments = z.infer<typeof RunDocumentsSchema>;
-
-/**
  * What a run produced (one run model, section 3.4): the value the flow hands
- * its lifecycle and every result reader returns. It is read, not stored
- * whole: the reply and a document task's documents are the `run.end` row
- * ({@link RunEndRowSchema}), its diffs the `run.result` of the delivery
- * that computed them.
+ * its lifecycle and every result reader returns, stored whole as the
+ * `run.end` row ({@link RunEndRowSchema}).
  */
 const RunEndOutputSchema = z.strictObject({
   response: z.string().prefault(''),
   /** Workspace-relative paths of files edited by tool calls during the run. */
   files: z.array(z.string()).prefault(() => []),
-  /** Value captured by the `submit_output` terminal tool, if the run used one. */
+  /** Value captured by the `submit_output` terminal tool, or the value a
+   *  recipe's script returned (its plugin's block reads it:
+   *  `AgentBlock.result`). */
   structured: JsonValueSchema.optional(),
-  /** Present on a document task's run. */
-  documents: RunDocumentsSchema.optional(),
 });
 export type RunEndOutput = z.infer<typeof RunEndOutputSchema>;
 
@@ -108,39 +85,16 @@ export const RunEndSchema = z.strictObject({
 export type RunEnd = z.infer<typeof RunEndSchema>;
 
 /**
- * The part of a run's output a row stores: all of it but a document task's
- * diffs, which the delivery that computes them records (`run.result`).
- */
-const StoredRunOutputSchema = RunEndOutputSchema;
-
-export function storedRunOutput(output: RunEndOutput): RunEndOutput {
-  const { documents } = output;
-  if (documents === undefined) return output;
-  const { outputs, compileFailures } = documents;
-  return { ...output, documents: { outputs, compileFailures, diffs: [] } };
-}
-
-/**
  * The terminal fact, written once per lifecycle as the `run.end` row: the
  * outcome, the classified error and the stored output. Every run's usage is
  * its priced response rows'.
  */
-export const RunEndRowSchema = RunEndSchema.omit({
-  usage: true,
-  output: true,
-}).extend({ output: StoredRunOutputSchema });
-
-/** The part of a result's diffs a delivery computes after the run ended. */
-const DeliveredDiffsSchema = RunDocumentsSchema.pick({
-  diffs: true,
-  diffsUnavailable: true,
-});
+export const RunEndRowSchema = RunEndSchema.omit({ usage: true });
 
 /**
  * What a producer recorded beside a run's terminal fact, written as the
  * `run.result` row. It carries only what no other row does: the producer's
- * own context, the diffs the delivery computed after the flow reported, and
- * a subagent's delivered reply (a child loop's `run.end` carries none, by
+ * own context and a subagent's delivered reply (a child loop's `run.end` carries none, by
  * rule, and a child waiting for its next turn has none yet). Outcome, error,
  * usage and a workflow's files are read from their own rows — never copied
  * here (one run model, section 3.3).
@@ -154,49 +108,12 @@ export const ResultMetaSchema = z.discriminatedUnion('producer', [
     timedOut: z.boolean().optional(),
     command: z.string(),
   }),
-  DeliveredDiffsSchema.extend({
-    producer: z.literal('cliWorkflow'),
-  }),
-  DeliveredDiffsSchema.extend({
+  z.strictObject({
     producer: z.literal('subagent'),
-    output: StoredRunOutputSchema,
+    output: RunEndOutputSchema,
   }),
 ]);
 export type ResultMeta = z.infer<typeof ResultMetaSchema>;
-
-/**
- * A producer's record as its delivery holds it in memory: its whole output.
- * {@link storedResultMeta} keeps of it what no other row holds.
- */
-export type DeliveredResult =
-  | Extract<ResultMeta, { producer: 'backgroundBash' }>
-  | (Omit<
-      Extract<ResultMeta, { producer: 'cliWorkflow' }>,
-      'diffs' | 'diffsUnavailable'
-    > & { readonly output: RunEndOutput })
-  | (Omit<
-      Extract<ResultMeta, { producer: 'subagent' }>,
-      'diffs' | 'diffsUnavailable' | 'output'
-    > & { readonly output: RunEndOutput });
-
-/** The `run.result` row of a delivered record. */
-export function storedResultMeta(result: DeliveredResult): ResultMeta {
-  if (result.producer === 'backgroundBash') return result;
-  const { output, ...context } = result;
-  const { documents } = output;
-  const diffs =
-    documents === undefined
-      ? { diffs: [] }
-      : {
-          diffs: documents.diffs,
-          ...(documents.diffsUnavailable !== undefined
-            ? { diffsUnavailable: documents.diffsUnavailable }
-            : {}),
-        };
-  return context.producer === 'subagent'
-    ? { ...context, ...diffs, output: storedRunOutput(output) }
-    : { ...context, ...diffs };
-}
 
 /** Canonical workspace paths at the record boundary. */
 export const RunWorkspaceFilesSchema = z

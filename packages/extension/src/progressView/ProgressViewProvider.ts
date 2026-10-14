@@ -37,6 +37,7 @@ import {
 } from '@texra/tools/editorHost';
 import { projectDisplayOf } from '@texra/shared/session/hostSnapshot';
 import { DOCUMENTS_OUTPUT_KEY } from '@texra/shared/plugins/documents';
+import { documentsResultOf } from '@texra/shared/plugins/documentOutputs';
 import type {
   DownMessage,
   SurfaceActionMessage,
@@ -426,7 +427,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
               // A document task's end carries its documents.
               if (
                 event.type === 'run.end' &&
-                event.output.documents !== undefined &&
+                documentsResultOf(event.output.structured) !== undefined &&
                 event.outcome !== 'failed'
               )
                 this.chime();

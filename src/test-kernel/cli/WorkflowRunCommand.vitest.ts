@@ -11,12 +11,10 @@ import { cliInitPlatformMock } from '@test/support/cliInitPlatformMock';
 import { cliLogSinksMock } from '@test/support/cliLogSinksMock';
 
 import { it } from '@effect/vitest';
-import { Cause, Effect, Exit, Result } from 'effect';
+import { Cause, Effect, Exit } from 'effect';
 import type { SessionHandle } from '@agent/runtime';
-import { getRunRecords } from '@agent/storage';
 import { asDocumentTask } from '@test/support/ProgressControllerHarnesses';
-import { DatabaseWriteFailed } from '@shared/session/database';
-import { toErrorMessage } from '@utils/errors/errorMessage';
+import type { DocumentsResult } from '@texra/shared/plugins/documentOutputs';
 import type { runHeadlessAgent } from '@cli/commands/workflow';
 import { formatResumeCommand } from '@cli/chat/tui/state/resumeHint';
 import type { CliContext } from '@cli/runtime/cliContext';
@@ -31,7 +29,6 @@ import {
   RUN_OUTCOME,
   RunRecordFieldsSchema,
   type RunId,
-  type SessionEventDraft,
 } from '@shared/schemas';
 import { closeSessionOf } from '@test/support/sessionEnd';
 import { createRunCommandCliContext } from '@test/cli/fixtures/cliContext';
@@ -197,10 +194,7 @@ function workflowRun(
   runId: string,
   overrides: Partial<
     Pick<WorkflowRunPayload, 'outcome'> &
-      Pick<
-        NonNullable<WorkflowRunPayload['output']['documents']>,
-        'outputs' | 'compileFailures'
-      >
+      Pick<DocumentsResult, 'outputs' | 'compileFailures'>
   > = {},
 ): WorkflowExecuteResult {
   const { outcome = RUN_OUTCOME.COMPLETED, ...output } = overrides;
@@ -213,7 +207,8 @@ function workflowRun(
       output: {
         response: '',
         files: [],
-        documents: {
+        // A document task's recipe returns its documents.
+        structured: {
           outputs: [],
           compileFailures: [],
           diffs: [],
@@ -251,13 +246,6 @@ function mockWorkflowRun(
   else mocks.executeCliConfig.mockImplementation(implementation);
 }
 
-/**
- * The result record the command persists: the diffs it computed. How the run
- * ended is the `run.end` row's fact and its files are the documents plugin's
- * output fact, so neither is copied.
- */
-const EXPECTED_RESULT_META = { producer: 'cliWorkflow', diffs: [] };
-
 /** Materializes the round-1 output file the copy target is sourced from. */
 async function writeGeneratedOutput(root: string): Promise<string> {
   const generated = path.join(root, 'run', 'r1', 'paper.tex');
@@ -280,10 +268,6 @@ async function setupCancelledOutput(
     true,
   );
 }
-
-/** The metadata the command last persisted for a run, read back for real. */
-const readResultMeta = (session: SessionHandle, runId: string) =>
-  getRunRecords(session, runId as RunId).readResultMeta();
 
 /**
  * The run's opening row, committed by the fixture session itself: the first
@@ -343,26 +327,6 @@ const seedResumableCheckpoint = (session: SessionHandle, runId: string) =>
       },
     ]);
   });
-
-/** The commit the command's result-metadata write makes, for ordering. */
-const resultMetaCommitOrder = (commitSpy: {
-  readonly mock: {
-    readonly calls: readonly (readonly [unknown])[];
-    readonly invocationCallOrder: readonly number[];
-  };
-}): number => {
-  // A transaction is rows or a job; the result write is rows.
-  const index = commitSpy.mock.calls.findIndex(
-    ([work]) =>
-      Array.isArray(work) &&
-      work.some((draft: SessionEventDraft) => draft.type === 'run.result'),
-  );
-  if (index < 0) throw new Error('The run.result commit never happened.');
-  const order = commitSpy.mock.invocationCallOrder[index];
-  if (order === undefined)
-    throw new Error('The run.result commit never happened.');
-  return order;
-};
 
 function expectNoModelOrInputWork(): void {
   expect(mocks.selectCliRunModel).not.toHaveBeenCalled();
@@ -611,9 +575,6 @@ describe('CLI run command, workflow agents', () => {
               fs.readFile(path.join(root, 'polished.tex'), 'utf8'),
             ),
           ).toBe('polished');
-          expect(
-            yield* readResultMeta(currentSession(), 'abc002'),
-          ).toMatchObject(EXPECTED_RESULT_META);
           const emission = mocks.emitCliResult.mock.calls[0]?.[1];
           expect(emission?.json).toMatchObject({
             outcome: RUN_OUTCOME.COMPLETED,
@@ -673,9 +634,6 @@ describe('CLI run command, workflow agents', () => {
             fs.readFile(path.join(workspace, 'out', 'paper.tex'), 'utf8'),
           ),
         ).toBe('polished');
-        expect(yield* readResultMeta(currentSession(), 'abc003')).toMatchObject(
-          EXPECTED_RESULT_META,
-        );
       }),
     ),
   );
@@ -720,119 +678,6 @@ describe('CLI run command, workflow agents', () => {
     ),
   );
 
-  // it.live: the body drives a real session through the process runtime.
-  it.live('persists workflow metadata under the run claim, after its end', () =>
-    Effect.scoped(
-      Effect.gen(function* () {
-        const { createTestSession } = yield* Effect.promise(
-          () => import('@test/support/sessionTestUtils'),
-        );
-        const session = yield* Effect.acquireRelease(
-          createTestSession(),
-          (owned) => closeSessionOf(owned),
-        );
-        const runId = 'abc123abc123' as RunId;
-        const run = workflowRun(runId);
-        if (!run.ok) throw new Error('Expected workflow result.');
-        // The command reads the session off the services its init returns.
-        cliInitPlatformMock.initCliPlatform.mockReturnValueOnce(
-          Effect.succeed({
-            ...installedHost().platform,
-            session: Effect.succeed(session),
-          }),
-        );
-        const records = getRunRecords(session, runId);
-        // The run's first append claims its aggregate for this process; the
-        // release below is what makes a later write refuse.
-        yield* session.log.transact([
-          {
-            type: 'run.start',
-            aggregateId: qualifyAggregateId('run', run.result.runId),
-            identity: { kind: 'agent', agent: 'polish' },
-            userFollowUpSupport: 'unsupported',
-            parent: null,
-            provenance: null,
-          },
-        ]);
-        // The executeCliConfig stub is an Effect port. The driver it stands
-        // in for holds the real claim and releases it once the run's ending
-        // has committed; the command persists its record after that.
-        mocks.executeCliConfig.mockImplementationOnce(
-          (_config, _context, options) =>
-            Effect.scoped(
-              session.log
-                .hold(runId, { ends: true })
-                .pipe(Effect.as(run), Effect.orDie),
-            ).pipe(
-              Effect.tap(() => options.afterRun?.(run.result) ?? Effect.void),
-            ),
-        );
-        expect(yield* workflowProgram({}, createRunCommandCliContext())).toBe(
-          0,
-        );
-        expect(yield* records.readResultMeta()).toMatchObject({
-          producer: 'cliWorkflow',
-          diffs: [],
-        });
-        const afterRelease = yield* Effect.result(
-          records.writeResultMeta({
-            producer: 'cliWorkflow',
-            output: run.result.output,
-          }),
-        );
-        expect(Result.isFailure(afterRelease)).toBe(true);
-      }),
-    ),
-  );
-
-  it.effect(
-    'reports failure when completed workflow metadata cannot be persisted',
-    () =>
-      withTempDirEffect('texra-workflow-', (root) =>
-        Effect.gen(function* () {
-          const generated = yield* Effect.promise(() =>
-            writeGeneratedOutput(root),
-          );
-          mockWorkflowRun(
-            workflowRun('abc005', {
-              outputs: [
-                runOutputSummary(generated, path.join(root, 'paper.tex')),
-              ],
-            }),
-            true,
-          );
-          // The run's opening row commits before the spy installs, so the one
-          // commit the spy fails is the metadata write itself — the record
-          // store's own DatabaseWriteFailed, carried out on the typed Error
-          // channel, unlike the usage errors above.
-          yield* seedStartedRun(currentSession(), 'abc005');
-          vi.spyOn(currentSession().log, 'transact').mockReturnValueOnce(
-            Effect.fail(
-              new DatabaseWriteFailed({
-                path: 'run-records',
-                cause: new Error('metadata disk full'),
-              }),
-            ),
-          );
-
-          const error = yield* Effect.flip(
-            workflowProgram(
-              { outputDir: 'out' },
-              createRunCommandCliContext({ cwd: root }),
-            ),
-          );
-          expect(toErrorMessage(error.cause)).toContain('metadata disk full');
-
-          expect(
-            yield* Effect.promise(() =>
-              fs.readFile(path.join(root, 'out', 'paper.tex'), 'utf8'),
-            ),
-          ).toBe('polished');
-          expect(mocks.emitCliResult).not.toHaveBeenCalled();
-        }),
-      ),
-  );
-
   it.effect(
     'persists a failed runtime envelope when copying the requested output fails',
     () =>
@@ -849,14 +694,11 @@ describe('CLI run command, workflow agents', () => {
         const exitCode = yield* workflowProgram({ output: 'polished.tex' });
 
         expect(exitCode).toBe(CliExitCode.AgentError);
-        expect(yield* readResultMeta(currentSession(), 'abc006')).toMatchObject(
-          EXPECTED_RESULT_META,
-        );
       }),
   );
 
   it.effect(
-    'prints a resumable recovery command after persisting a cancelled workflow',
+    'prints a resumable recovery command for a cancelled workflow',
     () =>
       withTempDirEffect('texra-workflow-', (root) =>
         Effect.gen(function* () {
@@ -869,7 +711,6 @@ describe('CLI run command, workflow agents', () => {
           // The hint advertises only a resumable run: the cancelled run's own
           // checkpoint is what the real resumability read has to find.
           yield* seedResumableCheckpoint(currentSession(), 'abc007');
-          const commitSpy = vi.spyOn(currentSession().log, 'transact');
 
           const context = createRunCommandCliContext({
             cwd: root,
@@ -892,15 +733,9 @@ describe('CLI run command, workflow agents', () => {
             ),
           ).toBe(true);
           expect(
-            yield* readResultMeta(currentSession(), 'abc007'),
-          ).toMatchObject(EXPECTED_RESULT_META);
-          expect(
             cliLogSinksMock.writeTextStderr,
           ).toHaveBeenCalledExactlyOnceWith(
             expectedRecoveryHint(context, 'abc007'),
-          );
-          expect(resultMetaCommitOrder(commitSpy)).toBeLessThan(
-            cliLogSinksMock.writeTextStderr.mock.invocationCallOrder[0]!,
           );
         }),
       ),
@@ -935,9 +770,6 @@ describe('CLI run command, workflow agents', () => {
               ),
             ),
           ).toBe(true);
-          expect(
-            yield* readResultMeta(currentSession(), 'abc008'),
-          ).toMatchObject(EXPECTED_RESULT_META);
           const emission = mocks.emitCliResult.mock.calls[0]?.[1];
           expect(emission?.json).toMatchObject({
             outcome: RUN_OUTCOME.CANCELLED,
@@ -986,9 +818,6 @@ describe('CLI run command, workflow agents', () => {
               ),
             ),
           ).toBe(true);
-          expect(
-            yield* readResultMeta(currentSession(), 'abc009'),
-          ).toMatchObject(EXPECTED_RESULT_META);
           const emission = mocks.emitCliResult.mock.calls[0]?.[1];
           expect(emission?.json).toMatchObject({
             outcome: RUN_OUTCOME.CANCELLED,

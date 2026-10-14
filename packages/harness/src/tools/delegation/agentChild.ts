@@ -16,7 +16,6 @@ import { Effect } from 'effect';
 import type { AgentRunServices } from '@agent/runtime/runRegistry';
 
 // Local imports
-import { deliveredOutput } from '@agent/storage/resultMeta';
 import { getRunRecords } from '@agent/storage/runRecords';
 import { callChildRunId, readChildTurnState } from '@agent/storage/runRecords';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
@@ -114,7 +113,7 @@ const standingOf = Effect.fn('agent.childStanding')(function* (
     kind: 'answered',
     result:
       delivered !== null && end.outcome === RUN_OUTCOME.COMPLETED
-        ? { ...end, output: deliveredOutput(delivered, end.output) }
+        ? { ...end, output: { ...end.output, ...delivered.output } }
         : end,
   };
 });

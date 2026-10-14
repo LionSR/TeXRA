@@ -12,7 +12,7 @@ import {
   type FileLocation,
   type RunStorageFileLocation,
 } from '@shared/schemas';
-import { stripWorkflowRoundDir } from '@shared/constants/workflowOutput';
+import { stripWorkflowRoundDir } from '@texra/shared/constants/workflowOutput';
 import { createRunStorageLocation } from '@utils/files/fileLocation';
 import { normalizeFilePath } from '@utils/core';
 import { hasExtension } from '@utils/core/pathCore';

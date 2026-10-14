@@ -1,13 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
+import { type FileLocation, type OutputFileInfo } from '@shared/schemas';
 import {
   roundOutputsToCompileFailureSummaries,
   roundOutputsToOutputSummaries,
   type CompileFailure,
-  type FileLocation,
-  type OutputFileInfo,
   type RoundOutput,
-} from '@shared/schemas';
+} from '@texra/shared/plugins/documentOutputs';
 
 function workspace(
   relativePath: string,

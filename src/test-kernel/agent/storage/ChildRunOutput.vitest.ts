@@ -2,27 +2,37 @@ import { mkdir, rm, writeFile } from 'node:fs/promises';
 import * as path from 'node:path';
 
 import { it } from '@effect/vitest';
-import { Effect } from 'effect';
+import { Effect, Layer } from 'effect';
 import { beforeEach, describe, expect } from 'vitest';
 
 import { getRunRecords } from '@agent/storage';
 import { resolveChildRunOutput } from '@agent/storage/childRunOutput';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
+import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import {
   qualifyAggregateId,
-  RoundOutputSchema,
-  type DeliveredResult,
-  type RoundOutput,
+  type ResultMeta,
   type RunId,
 } from '@shared/schemas';
 import {
   createProcessSession,
   publishTestRunStart,
+  seedRows,
 } from '@test/support/sessionTestUtils';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { fakePath } from '@test/support/FakePlatform';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
-import { documentsSummary } from '@texra/shared/plugins/documents';
+import {
+  DOCUMENT_TASK_BLOCK,
+  documentsOutputFact,
+  documentsSummary,
+} from '@texra/shared/plugins/documents';
+import { DOCUMENT_TASK_RESULT } from '@texra/tools/documents/documentResult';
+import {
+  RoundOutputSchema,
+  type RoundOutput,
+} from '@texra/shared/plugins/documentOutputs';
+import { ToolRegistry, toolTable } from '@tools/toolTable';
 
 const parentRunId = 'aaaaaa111111' as RunId;
 const childRunId = 'bbbbbb222222' as RunId;
@@ -61,14 +71,24 @@ function workflowRounds(absolutePath: string): RoundOutput[] {
   ];
 }
 
-const completedWorkflowResult: DeliveredResult = {
+const completedWorkflowResult: ResultMeta = {
   producer: 'subagent',
-  output: {
-    response: '',
-    files: [],
-    documents: { outputs: [], compileFailures: [], diffs: [] },
-  },
+  output: { response: '', files: [] },
 };
+
+/** The filesystem, and the documents plugin's block, whose result names a
+ *  completed task's files. */
+const resolveLayer = Layer.merge(
+  nodePlatformLayer,
+  Layer.succeed(ToolRegistry)(
+    toolTable([
+      {
+        id: 'documents',
+        agentBlock: { ...DOCUMENT_TASK_BLOCK, result: DOCUMENT_TASK_RESULT },
+      },
+    ]),
+  ),
+);
 
 const persistCompletedChild = (parentId: RunId = parentRunId) =>
   Effect.gen(function* () {
@@ -79,7 +99,7 @@ const persistCompletedChild = (parentId: RunId = parentRunId) =>
     );
     publishTestRunStart(session, parentId);
     yield* session.log.settled;
-    yield* session.log.transact([
+    yield* seedRows(session.log)([
       {
         type: 'run.start',
         aggregateId: qualifyAggregateId('run', childRunId),
@@ -87,6 +107,21 @@ const persistCompletedChild = (parentId: RunId = parentRunId) =>
         userFollowUpSupport: 'unsupported',
         parent: { id: parentId, callId: null },
         provenance: null,
+      },
+      {
+        type: 'run.config',
+        aggregateId: qualifyAggregateId('run', childRunId),
+        config: AgentConfigSchema.parse({
+          agent: 'draft',
+          script: {
+            code: 'return 1;',
+            title: 'draft',
+            tools: [],
+            kind: 'recipe',
+            block: 'task',
+            options: {},
+          },
+        }),
       },
     ]);
     yield* getRunRecords(session, childRunId).writeResultMeta(
@@ -101,7 +136,9 @@ const persistCompletedChild = (parentId: RunId = parentRunId) =>
         output: {
           response: '',
           files: [],
-          documents: documentsSummary(workflowRounds(absolutePath)),
+          structured: documentsSummary(
+            documentsOutputFact(workflowRounds(absolutePath)),
+          ),
         },
       },
     ]);
@@ -123,7 +160,7 @@ describe('resolveChildRunOutput', () => {
 
         expect(
           yield* resolveChildRunOutput(parentRunId, absolutePath, session).pipe(
-            Effect.provide(nodePlatformLayer),
+            Effect.provide(resolveLayer),
           ),
         ).toEqual({
           kind: 'runStorage',
@@ -140,7 +177,7 @@ describe('resolveChildRunOutput', () => {
 
       const error = yield* Effect.flip(
         resolveChildRunOutput(parentRunId, absolutePath, session).pipe(
-          Effect.provide(nodePlatformLayer),
+          Effect.provide(resolveLayer),
         ),
       );
       expect(error.message).toContain('is not a direct child');
@@ -157,7 +194,7 @@ describe('resolveChildRunOutput', () => {
 
         const error = yield* Effect.flip(
           resolveChildRunOutput(parentRunId, undeclaredPath, session).pipe(
-            Effect.provide(nodePlatformLayer),
+            Effect.provide(resolveLayer),
           ),
         );
         expect(error.message).toContain('is not a declared output');
@@ -171,7 +208,7 @@ describe('resolveChildRunOutput', () => {
 
       const error = yield* Effect.flip(
         resolveChildRunOutput(parentRunId, absolutePath, session).pipe(
-          Effect.provide(nodePlatformLayer),
+          Effect.provide(resolveLayer),
         ),
       );
       expect(error.message).toContain('is missing');
@@ -185,7 +222,7 @@ describe('resolveChildRunOutput', () => {
           parentRunId,
           fakePath('workspace/draft.tex'),
           session,
-        ).pipe(Effect.provide(nodePlatformLayer)),
+        ).pipe(Effect.provide(resolveLayer)),
       );
       expect(error.message).toContain('not inside run storage');
     }),

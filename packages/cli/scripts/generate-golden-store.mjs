@@ -24,7 +24,8 @@
  *   delegation runs in band, so every row commits in one order.
  * - two `review` runs over the same notes: the context blobs they share.
  * - a `polish` document task with `--output`: the documents plugin's output
- *   fact and the CLI's `run.result` (producer `cliWorkflow`).
+ *   fact, its diffs included, and the recipe's `run.end` with its documents
+ *   as `output.structured`.
  * - `golden_chat`, the interactive `texra chat` driven under a PTY, with
  *   "Keep agents running" turned on in `/config` and a plugin's
  *   `PostToolUse` hook on `codex` enabled: a plan the user runs as a goal
@@ -507,7 +508,7 @@ async function generate(root) {
     ]);
 
   // A document task through `texra run --output`: the documents plugin's
-  // output fact and the CLI's `run.result` (producer `cliWorkflow`).
+  // output fact, diffs included, and the recipe's `run.end` (`structured`).
   cli.run([
     'run',
     'polish',

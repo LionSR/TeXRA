@@ -10,13 +10,13 @@ import {
   isRecipeConfig,
   fileLocationAddressPath,
   MODEL_AVAILABILITY_STATUS,
-  type CompileFailure,
   type ModelAvailabilityKind,
   type OutputFileInfo,
   type ReadonlyRoundIndexed,
   type RunId,
 } from '@shared/schemas';
 import { formatRoundStageLabel } from '@shared/runs/runStatusDisplay';
+import { type CompileFailure } from '@texra/shared/plugins/documentOutputs';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { pluralize } from '@utils/text/stringUtils';
 import type { StateReadFailed } from '@texra-ai/harness';

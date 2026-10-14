@@ -70,7 +70,9 @@ export const ROW_KINDS: Readonly<Record<SessionEventDraft['type'], RowKind>> = {
   'run.config': { version: 2, upcast: [] },
   'run.model': V1,
   'run.detach': V1,
-  'run.end': V1,
+  // v2: a recipe's value is `structured`, with no `documents` (no upcaster,
+  // as `run.config`).
+  'run.end': { version: 2, upcast: [] },
   'conversation.progress': V1,
   'run.fact': V1,
   'child.park': V1,
@@ -96,7 +98,9 @@ export const ROW_KINDS: Readonly<Record<SessionEventDraft['type'], RowKind>> = {
   'stream.end': V1,
   'response.finalized': V1,
   'run.report': V1,
-  'run.result': V1,
+  // v2: no `cliWorkflow` producer and no delivery-time diffs (no upcaster,
+  // as `run.config`).
+  'run.result': { version: 2, upcast: [] },
   'followup.closed': V1,
   // v2: dispatch facts record `lane`, not `parallelSafe` (no upcaster: an
   // earlier build's v1 row refuses its run as written by that build).
