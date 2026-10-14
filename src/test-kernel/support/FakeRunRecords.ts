@@ -14,7 +14,6 @@ export function createFakeRunRecords(
     readResultMeta: () => Effect.succeed(null),
     readRunEnd: () => Effect.succeed(null),
     readResult: () => Effect.succeed(null),
-    writeResultMeta: () => Effect.void,
     ...overrides,
   };
 }

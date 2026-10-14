@@ -5,7 +5,6 @@ import { it } from '@effect/vitest';
 import { Effect, Layer } from 'effect';
 import { beforeEach, describe, expect } from 'vitest';
 
-import { getRunRecords } from '@agent/storage';
 import { resolveChildRunOutput } from '@agent/storage/childRunOutput';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
@@ -124,9 +123,13 @@ const persistCompletedChild = (parentId: RunId = parentRunId) =>
         }),
       },
     ]);
-    yield* getRunRecords(session, childRunId).writeResultMeta(
-      completedWorkflowResult,
-    );
+    yield* session.log.transact([
+      {
+        type: 'run.result',
+        aggregateId: qualifyAggregateId('run', childRunId),
+        result: completedWorkflowResult,
+      },
+    ]);
     // How the child ended, and what it declared, is its `run.end` row's.
     yield* session.log.transact([
       {

@@ -11,17 +11,12 @@ import {
   isAgentRunRecord,
   type RunRecord,
 } from '@agent/core/definition/RunRecord';
-import {
-  DatabaseReadFailed,
-  type DatabaseNotOwner,
-  type DatabaseWriteFailed,
-} from '@shared/session/database';
+import { DatabaseReadFailed } from '@shared/session/database';
 import { attemptOf } from '@shared/session/inFlight';
 import { unloadable } from '@shared/session/runHistory';
 import { foldRunState, type RunState } from '@shared/session/runStateFold';
 import { parentEdgeOf } from '@shared/session/runRelation';
 import {
-  ResultMetaSchema,
   qualifyAggregateId,
   aggregateTarget,
   emptyRunEndOutput,
@@ -379,17 +374,5 @@ export function getRunRecords(session: SessionHandle, runId: RunId) {
           output: { ...(end?.output ?? emptyRunEndOutput()), ...meta.output },
         };
       }),
-    writeResultMeta: (
-      result: ResultMeta,
-    ): Effect.Effect<void, DatabaseNotOwner | DatabaseWriteFailed> =>
-      Effect.suspend(() =>
-        session.log.transact([
-          {
-            type: 'run.result',
-            aggregateId: id,
-            result: ResultMetaSchema.parse(result),
-          },
-        ]),
-      ).pipe(Effect.asVoid),
   };
 }
