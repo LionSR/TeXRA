@@ -1,17 +1,14 @@
 import { Effect } from 'effect';
-import type { RouteRetries } from '@agent/runtime';
 
 import { POLISH_PROMPT_PREFIX } from '@agent/runtime/bundledPrompts';
 import { helperCall } from '@agent/runtime/helperModel';
 import { getSdkErrorMessage } from '@common/errors/sdkError/providerErrorFormat';
 import { withLogChannel } from '@logger/effectLog';
 import type { ModelOptionStores } from '@model/computeModelOptions';
-import type { UsageLog } from '@shared/usageLog';
 import { extractTextFromTag } from '@texra/utils/text/xmlExtraction';
 import { isNonEmptyString } from '@utils/text/stringUtils';
 
-import type { LanguageModel, WorkspaceRoots } from '@texra-ai/harness';
-import type { HttpClient } from 'effect/http';
+import type { WorkspaceRoots } from '@texra-ai/harness';
 
 const CHANNEL = 'TextEnhancement';
 
@@ -27,11 +24,7 @@ export const polishTextWithAI = Effect.fn('polishTextWithAI')(function* (
   text: string,
   roots: WorkspaceRoots,
   secrets: ModelOptionStores['secrets'],
-): Effect.fn.Return<
-  string,
-  Error,
-  LanguageModel | HttpClient.HttpClient | UsageLog | RouteRetries
-> {
+) {
   return yield* Effect.gen(function* () {
     const responseText = yield* helperCall(
       { ...roots, secrets },

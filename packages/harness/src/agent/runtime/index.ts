@@ -1,7 +1,8 @@
 /**
- * Agent runtime — what the hosts (CLI, desktop, extension) still take from
+ * Agent runtime — what the hosts (CLI, desktop, extension) take from
  * `packages/harness/src/agent/runtime` that the public `Session` does not
- * carry yet: the session handle and the engine helpers over it. It is the
+ * carry: the session handle and the presentation helpers over it, every
+ * name with a host consumer. It is the
  * single door the harness deep-import ratchet
  * (`config/ratchets/harness-deep-import-baseline.json`) allows each host.
  *
@@ -19,10 +20,6 @@
 // The session handle: the record reads, the run log and the view a host
 // still reads from it.
 export type { SessionHandle } from './SessionHandle';
-
-// The process's one route retry gate, which a helper call reads from context:
-// the app's helper calls (`textEnhancement`, `hostDraftRequests`) name it.
-export type { RouteRetries } from './run/invocation';
 
 // A host's presentation surface on a handle, and the `SessionHostInteractions`
 // a host with no session of its own presents through.

@@ -10,13 +10,10 @@ import {
   Cancelled,
   Rejected,
   ownKeyCredential,
-  type LanguageModel,
   type WorkspaceRoots,
 } from '@texra-ai/harness';
-import type { RouteRetries } from '@agent/runtime';
 import { withLogChannel } from '@logger/effectLog';
 import type { StorageFs } from '@platform/rootedFs';
-import type { UsageLog } from '@shared/usageLog';
 import type { HostSnapshot } from '@texra/shared/session/hostSnapshot';
 import type { HostRequest } from '@texra/shared/session/hostRequest';
 import type { HostOutcome } from '@texra/shared/session/sessionFrames';
@@ -32,7 +29,6 @@ import {
   sweepStaleFiles,
   type PastedImageSaveFailed,
 } from '@texra/utils/files/pastedImageUtils';
-import type { HttpClient } from 'effect/http';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 const CHANNEL = 'HostDraftRequests';
@@ -100,12 +96,10 @@ export class HostDraftRequests {
     | AppState
     | Secrets
     | FileSystem.FileSystem
-    | LanguageModel
     | StorageFs
-    | HttpClient.HttpClient
     | ChildProcessSpawner
-    | UsageLog
-    | RouteRetries
+    // The polish's helper call: its model, client, usage log and retry gate.
+    | Effect.Services<ReturnType<typeof polishTextWithAI>>
   > {
     switch (request.kind) {
       case 'polish': {

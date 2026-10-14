@@ -213,7 +213,6 @@
       "@agent/index/agentRegistry",
       "@agent/index/customAgentCopy",
       "@agent/prompt/templateInputs",
-      "@agent/runtime",
       "@agent/runtime/bundledPrompts",
       "@agent/runtime/childRunLoop",
       "@agent/runtime/deliveryEnvelope",
