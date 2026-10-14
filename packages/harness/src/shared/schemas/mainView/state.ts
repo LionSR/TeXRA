@@ -12,7 +12,6 @@ import {
   type TeXRAIconName,
 } from '@shared/iconNames';
 import { DocumentFileTypeSchema } from '../fileTypes';
-import { ToolConfigFieldsSchema } from '../toolConfig';
 
 // ============================================================
 // Session Schemas
@@ -256,8 +255,6 @@ const FileSelectConfigSchema = z.object({
   toolConfig: z.enum(['tool', 'autoExtract']).nullish(),
 });
 export type FileSelectConfig = z.infer<typeof FileSelectConfigSchema>;
-
-export type CheckboxValues = z.infer<typeof ToolConfigFieldsSchema>;
 
 export const FileOptionsSchema = z.object({
   baseFile: z.array(z.string()),

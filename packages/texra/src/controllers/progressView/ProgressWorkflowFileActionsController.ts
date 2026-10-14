@@ -6,9 +6,10 @@ import { Effect, FileSystem } from 'effect';
 
 // Local imports
 import { withLogChannel } from '@logger/effectLog';
-import type { AcceptCopyMeta, RunId } from '@shared/schemas';
+import type { RunId } from '@shared/schemas';
 import type { HostRequest } from '@texra/shared/session/hostRequest';
 import { PrunedNestedMap } from '@texra/utils/core/prunedNestedMap';
+import { type AcceptCopyMeta } from '@texra/shared/plugins/documentOutputs';
 import {
   ensureRunDirUnder,
   findRunDirUnder,

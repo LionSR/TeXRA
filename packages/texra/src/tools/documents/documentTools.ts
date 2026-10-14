@@ -16,7 +16,6 @@ import { logFileCategory, logFilesLoaded } from '@agent/trace';
 import { postProcessResponse } from '@latex/texraResponseTextProcessing';
 import {
   fileLocationDisplayPath,
-  OUTPUT_END_TAG,
   RUN_OUTCOME,
   RunIdSchema,
   ToolError,
@@ -47,7 +46,10 @@ import {
 } from '@texra/tools/documents/documentState';
 import { computeDocumentDiffs } from '@texra/tools/documents/documentResult';
 import { rejectOversizedBibAttachments } from '@texra/tools/documents/documentTask';
-import { roundOutputsToOutputSummaries } from '@texra/shared/plugins/documentOutputs';
+import {
+  roundOutputsToOutputSummaries,
+  OUTPUT_END_TAG,
+} from '@texra/shared/plugins/documentOutputs';
 import { executed } from '@tools/core/result';
 import { readSettingFrom } from '@utils/config/platformSettings';
 

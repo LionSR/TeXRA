@@ -20,16 +20,18 @@ import { Effect, type FileSystem, type Path } from 'effect';
 // Local imports
 import { withLogChannel } from '@logger/effectLog';
 import {
-  getEffectiveDiffBase,
-  roundIndexedEntries,
   type FileLocation,
   type OutputFileInfo,
-  type ReadonlyRoundIndexed,
   type RunId,
 } from '@shared/schemas';
 import type { LatexdiffMathMarkupValue } from '@texra/shared/constants/latexConfig';
 import { DocumentsStateKey } from '@texra/shared/settingsView/documentsSettings';
 import { getSafeDocumentRelativePath } from '@texra/utils/files/outputFileUtils';
+import {
+  getEffectiveDiffBase,
+  roundIndexedEntries,
+  type ReadonlyRoundIndexed,
+} from '@texra/shared/plugins/documentOutputs';
 import { readSettingFrom } from '@utils/config/platformSettings';
 
 // Local file imports

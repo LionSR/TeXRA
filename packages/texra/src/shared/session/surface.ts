@@ -18,7 +18,6 @@ import {
   InquiryDraftSchema,
   LaunchTargetSchema,
   SessionTypeSchema,
-  ToolConfigFieldsSchema,
   UIFileFieldsSchema,
   RunIdSchema,
   isModelOptionAvailable,
@@ -31,6 +30,7 @@ import {
   type SessionView,
   type RunView,
 } from '@shared/session/sessionView';
+import { DocumentTaskOptionsSchema } from '@texra/shared/plugins/documents';
 import { markShownRunSeen } from './unseenRuns';
 import type { SessionView as ReadSessionView } from '@texra-ai/harness';
 import type { HostSnapshot } from './hostSnapshot';
@@ -43,7 +43,7 @@ import type { RequestErrorWire } from './sessionFrames';
  * on its own.
  */
 export const LaunchSurfaceSchema = UIFileFieldsSchema.merge(
-  ToolConfigFieldsSchema,
+  DocumentTaskOptionsSchema,
 ).extend({
   sessionType: SessionTypeSchema.prefault('chat'),
   launchTarget: LaunchTargetSchema.prefault('agent'),

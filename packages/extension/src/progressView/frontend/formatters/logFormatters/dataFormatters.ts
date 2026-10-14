@@ -18,13 +18,13 @@ import { html, type TemplateResult } from 'lit';
 import { ifDefined } from 'lit/directives/if-defined.js';
 
 // Local imports - shared schemas and utilities
-import { OUTPUT_DOCUMENTS_TAG } from '@shared/schemas';
 import type { TeXRAIconName } from '@shared/iconNames';
 import type {
   FileListRow,
   LatexdiffRow,
   MissingOutputsRow,
 } from '@shared/transcript';
+import { OUTPUT_DOCUMENTS_TAG } from '@texra/shared/plugins/documentOutputs';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import { getBasename } from '@utils/core';
 

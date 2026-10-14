@@ -10,7 +10,6 @@ export * from './fileFields';
 export * from './fileTypes';
 export * from './lineChanges';
 export * from './proposalFields';
-export * from './toolConfig';
 export * from './errors';
 export * from './usage';
 export * from './contextManagement';
@@ -33,7 +32,6 @@ export * from './toolResult';
 
 // Layer 2: Depends on layer 1 only
 export * from './run';
-export * from './roundIndexed';
 export * from './output';
 export * from './progressEvents';
 export * from './scriptDelivery';

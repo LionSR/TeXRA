@@ -6,9 +6,9 @@
  * diff, so blocks can be routed to filenames without trusting response order.
  */
 
-import { SCRATCHPAD_TAG } from '@shared/schemas';
 import { diffTextLevenshtein } from '@texra/utils/text/diff';
 import type { NamedDocument } from '@texra/utils/text/xmlExtraction';
+import { SCRATCHPAD_TAG } from '@texra/shared/plugins/documentOutputs';
 
 // ---------------------------------------------------------------------------
 // responseText

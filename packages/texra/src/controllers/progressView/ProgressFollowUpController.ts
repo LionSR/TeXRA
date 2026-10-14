@@ -12,11 +12,13 @@ import {
   MODEL_AVAILABILITY_STATUS,
   type ModelAvailabilityKind,
   type OutputFileInfo,
-  type ReadonlyRoundIndexed,
   type RunId,
 } from '@shared/schemas';
-import { formatRoundStageLabel } from '@shared/runs/runStatusDisplay';
-import { type CompileFailure } from '@texra/shared/plugins/documentOutputs';
+import {
+  type CompileFailure,
+  type ReadonlyRoundIndexed,
+  formatRoundLabel,
+} from '@texra/shared/plugins/documentOutputs';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { pluralize } from '@utils/text/stringUtils';
 import type { StateReadFailed } from '@texra-ai/harness';
@@ -247,7 +249,7 @@ export class ProgressFollowUpController {
     // stream), it is the wrong one.
     const failureLines = compileFailures.map(
       (failure) =>
-        `- ${formatRoundStageLabel({ index: failure.round })} ${failure.displayName}: output ${fileLocationAddressPath(failure.output)}; compile log ${fileLocationAddressPath(failure.log)}`,
+        `- ${formatRoundLabel(failure.round)} ${failure.displayName}: output ${fileLocationAddressPath(failure.output)}; compile log ${fileLocationAddressPath(failure.log)}`,
     );
 
     return [

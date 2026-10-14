@@ -5,7 +5,6 @@ import {
   RUN_SUBSTATE,
   type OwnerId,
   type ResumeBlocker,
-  type RoundStage,
   type RunId,
   type RunLifecycleStatus,
   type RunSubstate,
@@ -180,11 +179,6 @@ export function runHeldByProcessMessage(
 
 export function formatRunStatusLabel(status: RunLifecycleStatus): string {
   return RUN_STATUS_LABELS[runStatusDisplayKey(status)];
-}
-
-/** Compact round label: `r2`. Zero-based `index` renders one-based. */
-export function formatRoundStageLabel(stage: Readonly<RoundStage>): string {
-  return `r${stage.index + 1}`;
 }
 
 /** Compact position label: `t2` for a run's second turn. */

@@ -18,16 +18,18 @@ import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 // Local imports
 import {
   fileLocationDisplayPath,
+  type OutputFileInfo,
+  type RunId,
+} from '@shared/schemas';
+import type { TeXRAIconName } from '@shared/iconNames';
+import {
+  type CompileFailure,
   getEffectiveDiffBase,
   outputDiffCounts,
   outputDisplayName,
   roundIndexedEntries,
-  type OutputFileInfo,
-  type RunId,
-} from '@shared/schemas';
-import { formatRoundStageLabel } from '@shared/runs/runStatusDisplay';
-import type { TeXRAIconName } from '@shared/iconNames';
-import type { CompileFailure } from '@texra/shared/plugins/documentOutputs';
+  formatRoundLabel,
+} from '@texra/shared/plugins/documentOutputs';
 import type { HostRequest } from '@texra/shared/session/hostRequest';
 import type { Surface } from '@texra/shared/session/surface';
 import { SessionUiEvents } from '@texra/shared/session/uiEvents';
@@ -233,7 +235,7 @@ export class FileList extends LitElement {
     return html`
       <wa-details
         class="round-collapsible panel-collapsible"
-        summary=${formatRoundStageLabel({ index: round })}
+        summary=${formatRoundLabel(round)}
         open
       >
         ${rows}

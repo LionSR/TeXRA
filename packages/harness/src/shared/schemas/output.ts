@@ -1,9 +1,11 @@
 import { z } from 'zod';
 
 import { getBasename } from '@utils/core';
-import { DiffStatsSchema, type DiffStats } from './lineChanges';
+import { DiffStatsSchema } from './lineChanges';
 import { RunIdSchema } from './identifiers';
-import { RoundNumberSchema } from './roundIndexed';
+
+/** A zero-based round (a document task's revision) number. */
+export const RoundNumberSchema = z.int().nonnegative();
 
 const WorkspaceFileLocationSchema = z.strictObject({
   kind: z.literal('workspace'),
@@ -97,24 +99,6 @@ export function fileLocationAddressPath(location: FileLocation): string {
     : fileLocationDisplayPath(location);
 }
 
-// Generic raw-wrapper stems are run-storage internals, not the meaningful
-// document name, so they must never surface as an artifact's name.
-const GENERIC_OUTPUT_STEMS = new Set(['output', 'output.xml', 'output.tex']);
-
-/** Whether a document name is a generic raw-wrapper stem rather than a name. */
-export function isGenericOutputStem(name: string): boolean {
-  return GENERIC_OUTPUT_STEMS.has(name);
-}
-
-/** Run identity used when accepting an edited file as a postfixed copy. */
-const AcceptCopyMetaSchema = z.strictObject({
-  agent: z.string(),
-  model: z.string(),
-  round: RoundNumberSchema,
-});
-
-export type AcceptCopyMeta = z.infer<typeof AcceptCopyMetaSchema>;
-
 const OutputFileSchema = z.strictObject({
   source: z.string(),
   location: FileLocationSchema,
@@ -124,19 +108,10 @@ const FileLineageSchema = z.strictObject({
   original: FileLocationSchema.nullable(),
   diffBase: FileLocationSchema.nullable(),
 });
-type FileLineage = z.infer<typeof FileLineageSchema>;
 
-/**
- * The file location a diff should render against: the explicit `diffBase`
- * when the file was rewritten in place (so a diff against the current path
- * would show no change), falling back to `original`.
- */
-export function getEffectiveDiffBase(
-  lineage: FileLineage | null | undefined,
-): FileLocation | null {
-  return lineage?.diffBase ?? lineage?.original ?? null;
-}
-
+/** A file a document task wrote, with its lineage and diff stats: the
+ *  documents plugin's record, which the latexdiff log payload
+ *  (`diffResult.ts`) still names until that payload leaves the harness. */
 export const OutputFileInfoSchema = OutputFileSchema.extend({
   round: RoundNumberSchema.prefault(() => 0),
   lineage: FileLineageSchema.nullable(),
@@ -144,67 +119,3 @@ export const OutputFileInfoSchema = OutputFileSchema.extend({
 });
 
 export type OutputFileInfo = z.infer<typeof OutputFileInfoSchema>;
-
-/**
- * The name an output artifact reads by. The workspace document it descends
- * from wins, because that is the file the user recognizes; failing that the
- * document name the model emitted, unless it is a generic raw-wrapper stem;
- * and only then the artifact's own path, which carries run-storage internals
- * such as the `r<round>/` prefix.
- */
-export function outputDisplayName(file: OutputFileInfo): string {
-  const original = file.lineage?.original;
-  if (original) return fileLocationShortDisplayPath(original);
-
-  const { source } = file;
-  if (source && !isGenericOutputStem(source)) {
-    // Treat a trailing all-alpha suffix as a real extension (.tex, .txt,
-    // .bib…). Suffixes containing digits (.v2, .r3) are version qualifiers,
-    // not extensions, so `.tex` is appended in those cases.
-    return /\.[a-zA-Z]+$/.test(source) ? source : `${source}.tex`;
-  }
-  return fileLocationShortDisplayPath(file.location);
-}
-
-/**
- * The +/- counts an artifact's diff chip shows, or `null` when there is no
- * chip to show. `DiffStats` is partial because a brand-new file is recorded as
- * `{ added }` with nothing removed, so a present-but-absent side reads as
- * zero — but stats with neither side are a *failed* diff computation, and
- * rendering those as `+0 -0` would state a change count nobody measured.
- */
-export function outputDiffCounts(
-  diff: DiffStats | null | undefined,
-): { added: number; removed: number } | null {
-  if (!diff || (diff.added === undefined && diff.removed === undefined)) {
-    return null;
-  }
-  return { added: diff.added ?? 0, removed: diff.removed ?? 0 };
-}
-
-// ============================================================================
-// Unified output protocol tag names
-// (`2026-04-30-unified-output-protocol.md`)
-// ============================================================================
-//
-// Every bundled and custom agent converged on one output container —
-// `<documents><document name="...">...</document></documents>` — so these
-// are fixed protocol constants, not per-agent configuration. They used to be
-// threaded through as `settings.documentTag` / `settings.endTag`; that
-// configurability is gone, and every consumer reads these constants directly.
-
-/** Outer container tag wrapping every document the model emits. */
-export const OUTPUT_DOCUMENTS_TAG = 'documents';
-
-/** Per-document child tag inside the container, carrying a `name` attribute. */
-export const OUTPUT_DOCUMENT_TAG = 'document';
-
-/** Closing tag that marks a complete response. */
-export const OUTPUT_END_TAG = `</${OUTPUT_DOCUMENTS_TAG}>`;
-
-/**
- * The tag a model wraps its thinking in, before the documents container. Like
- * the tags above this is a fixed protocol constant: the agent prompts hardcode
- * `<scratchpad>`, so nothing else could ever match.
- */
-export const SCRATCHPAD_TAG = 'scratchpad';

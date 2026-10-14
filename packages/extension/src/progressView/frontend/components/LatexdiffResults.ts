@@ -13,9 +13,9 @@ import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 
 // Local imports - shared styles
 import type { DiffResultDisplay, DiffStatus } from '@shared/schemas';
-import { formatRoundStageLabel } from '@shared/runs/runStatusDisplay';
 import type { TeXRAIconName } from '@shared/iconNames';
 import { SessionUiEvents } from '@texra/shared/session/uiEvents';
+import { formatRoundLabel } from '@texra/shared/plugins/documentOutputs';
 import { designTokens, commonViewStyles } from '@ui/styles';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 
@@ -142,8 +142,8 @@ export class LatexdiffResults extends LitElement {
     const baseLabel =
       baseRound === null
         ? displayName
-        : `${displayName} [${formatRoundStageLabel({ index: baseRound })}]`;
-    const revisedLabel = `[${formatRoundStageLabel({ index: revisedRound })}]`;
+        : `${displayName} [${formatRoundLabel(baseRound)}]`;
+    const revisedLabel = `[${formatRoundLabel(revisedRound)}]`;
 
     const entryId = `latexdiff-entry-${index}`;
     return html`
