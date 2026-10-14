@@ -4,8 +4,6 @@
  */
 import * as path from 'node:path';
 
-import { Effect } from 'effect';
-
 import { HISTORY_DIR } from '@housekeeping/constants';
 import { generateTimestamp } from '@housekeeping/utils';
 import {
@@ -20,25 +18,14 @@ import type { SessionView } from '@texra-ai/harness';
 
 /**
  * One run's recorded output files by round, from a view of the session that
- * holds it (`view`, asked for the run): a document task's documents. Hosts
- * hand it to latexdiff orchestration, whose run-discovery port it satisfies.
+ * holds it: a document task's documents, which hosts hand to latexdiff.
  */
-export function runOutputReader(
-  view: (runId: RunId) => Effect.Effect<SessionView>,
-): {
-  readonly readRunOutputs: (
-    runId: RunId,
-  ) => Effect.Effect<ReadonlyRoundIndexed<OutputFileInfo>, Error>;
-} {
-  return {
-    readRunOutputs: (runId) =>
-      view(runId).pipe(
-        Effect.map((level) => {
-          const run = level.runs.get(runId);
-          return run === undefined ? {} : documentsOf(run).files;
-        }),
-      ),
-  };
+export function runOutputFiles(
+  view: SessionView,
+  runId: RunId,
+): ReadonlyRoundIndexed<OutputFileInfo> {
+  const run = view.runs.get(runId);
+  return run === undefined ? {} : documentsOf(run).files;
 }
 
 /**

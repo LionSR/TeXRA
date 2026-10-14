@@ -101,10 +101,9 @@ The files have distinct roles:
   `LaTeXdiffService`. `diffOperations.ts` (`runLatexdiffForRun`) is the
   host-neutral entry point the VS Code command and the desktop stream-toolbar
   action call (the CLI's latexdiff workflow instead goes through the agent's
-  own `LatexDiffManager`, which uses `LaTeXdiffService` directly); it reads
-  the run's recorded round outputs through the narrow `runDiscovery.ts` port
-  (which lets `latex` stay out of `@agent/storage`), then builds and
-  dispatches the diff operations through `LaTeXdiffService.runDiff` and
+  own `LatexDiffManager`, which uses `LaTeXdiffService` directly). Hosts
+  pass the run's `rounds` (`runOutputFiles(view, runId)`) to
+  `runLatexdiffForRun`, which builds and dispatches the diff operations through `LaTeXdiffService.runDiff` and
   `diffCommandExecutor.ts`, naming
   output files with `diffFileNameManager.ts` (the math markup mode is the
   `texra.latexdiff.mathMarkup` catalog row). `diffFileProcessor.ts` is the post-processor

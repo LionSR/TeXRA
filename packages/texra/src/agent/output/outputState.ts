@@ -1,23 +1,12 @@
 /**
- * State management for output processing.
- *
- * Manages mutable state for output files across rounds, including
- * round data and workspace preparation.
- *
- * `OutputState.rounds` is the canonical live collection, keyed by round
- * index (`Map<number, RoundOutput>`). The documents plugin hydrates it from
- * the persisted `roundOutputs` array on startup via `roundsFromPersisted`
- * and projects it back to that array shape via `roundsToPersisted` for
- * each durable `output.produced` row.
+ * The documents of one document task run, by revision (`rounds`, keyed by
+ * round index). A tool call rebuilds it from the latest `documents/output`
+ * fact (`roundsFromPersisted`) and commits it again as that fact's array
+ * (`roundsToPersisted`).
  */
 
 import type { AgentTrace } from '@agent/trace';
-import {
-  MESSAGE_TYPES,
-  type FileLocation,
-  type OutputFileInfo,
-  type RoundIndexed,
-} from '@shared/schemas';
+import { MESSAGE_TYPES, type FileLocation } from '@shared/schemas';
 import {
   type CompileFailure,
   type RoundOutput,
@@ -29,7 +18,6 @@ import type { AgentConfig } from '@texra-ai/harness/schemas';
 
 export interface OutputState {
   rounds: Map<number, RoundOutput>;
-  openedOutputs: Set<string>;
 }
 
 /** What the output pipeline reads of the workflow run. */
@@ -46,10 +34,7 @@ export interface OutputDependencies {
 export function createOutputState(
   rounds: Map<number, RoundOutput> = new Map(),
 ): OutputState {
-  return {
-    rounds,
-    openedOutputs: new Set(),
-  };
+  return { rounds };
 }
 
 /**
@@ -82,15 +67,6 @@ export function ensureRoundData(
   };
   state.rounds.set(round, data);
   return data;
-}
-
-/** Output files keyed by round for the diff pipeline. */
-export function getOutputFilesByRound(
-  state: OutputState,
-): RoundIndexed<OutputFileInfo> {
-  return Object.fromEntries(
-    Array.from(state.rounds, ([round, data]) => [round, data.outputs]),
-  );
 }
 
 export function setCompileFailures(

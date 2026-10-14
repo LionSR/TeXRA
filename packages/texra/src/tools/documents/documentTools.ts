@@ -26,10 +26,7 @@ import {
   documentsSummary,
   documentTaskOptions,
 } from '@texra/shared/plugins/documents';
-import {
-  compileFailuresOf,
-  runCompileCheck,
-} from '@texra/agent/output/compileCheck';
+import { runCompileCheck } from '@texra/agent/output/compileCheck';
 import { traceFileLineage } from '@texra/agent/output/lineageMapping';
 import { extractFilesFromXml } from '@texra/agent/output/outputFileExtraction';
 import { recoverOutputFailure } from '@texra/agent/output/outputOperations';
@@ -39,7 +36,7 @@ import {
   setCompileFailures,
 } from '@texra/agent/output/outputState';
 import { checkExpectedOutputs } from '@texra/agent/output/outputValidation';
-import { summarizeRound } from '@texra/agent/output/roundSummary';
+import { computeOutputDiffStats } from '@texra/agent/output/diffComputation';
 import { DocumentsStateKey } from '@texra/shared/settingsView/documentsSettings';
 import {
   keepReply,
@@ -66,16 +63,6 @@ export const documentsOfCall = Effect.fn('documents.ofCall')(function* (
 ) {
   return yield* openDocuments(yield* requireRun(tool));
 });
-
-/** A step whose failure costs that step, not the revision: reported at
- *  `warn` on the transcript, then the recipe carries on. */
-const recoverWarn = (docs: Documents, label: string) =>
-  recoverOutputFailure({
-    logger: docs.deps.logger,
-    level: 'warn' as const,
-    label,
-    recover: () => Effect.void,
-  });
 
 /** Open `locations` for the user, beside what they are looking at. */
 const present = (docs: Documents, locations: readonly FileLocation[]) =>
@@ -246,25 +233,30 @@ export const DocumentExtractTool = defineTool({
     round.outputs = [];
     round.missingOutputs = [];
     round.compileFailures = [];
-    yield* docs.xml
-      .ensureCorrectXmlStructure(location)
-      .pipe(recoverWarn(docs, 'XML structure'));
+    // A broken structure costs the repair, not the revision: reported, and
+    // extraction reads the reply as it is.
+    yield* docs.xml.ensureCorrectXmlStructure(location).pipe(
+      recoverOutputFailure({
+        logger,
+        level: 'warn',
+        label: 'XML structure',
+        recover: () => Effect.void,
+      }),
+    );
     yield* extractFilesFromXml(
       docs.state,
       docs.deps,
       docs.xml,
       location,
       revision,
-    ).pipe(recoverWarn(docs, 'Output processing'));
-    const mapping =
-      round.outputs.length > 0
-        ? traceFileLineage(docs.state, docs.baseFiles, revision)
-        : undefined;
-    const summary = yield* summarizeRound(docs.state, docs.deps, revision, {
-      mapping,
-      isRewrite: docs.task.rewrite,
-      baseFiles: docs.baseFiles,
-    });
+    );
+    round.outputs = yield* computeOutputDiffStats(
+      docs.state,
+      docs.deps.roots.workspace,
+      docs.baseFiles,
+      revision,
+      docs.task.rewrite,
+    );
     const { missing } = yield* checkExpectedOutputs(
       docs.state,
       docs.deps,
@@ -285,7 +277,10 @@ export const DocumentExtractTool = defineTool({
         message,
       });
     }
-    yield* present(docs, summary.filesToOpen);
+    yield* present(
+      docs,
+      round.outputs.map((output) => output.location),
+    );
     const files = round.outputs.map((output) =>
       fileLocationDisplayPath(output.location),
     );
@@ -329,11 +324,10 @@ export const DocumentCompileTool = defineTool({
         logger,
         level: 'warn',
         label: 'Compile check',
-        recover: () =>
-          Effect.succeed({ artifacts: [], compileResult: undefined }),
+        recover: () => Effect.succeed({ artifacts: [], failures: undefined }),
       }),
     );
-    const failures = compileFailuresOf(check.compileResult);
+    const failures = check.failures ?? [];
     setCompileFailures(docs.state, revision, failures);
     if (yield* autoOpensPdf(docs))
       yield* present(
@@ -345,7 +339,7 @@ export const DocumentCompileTool = defineTool({
       log: failure.logRelativePath,
     }));
     let message = `Revision ${revision + 1} compiles.`;
-    if (check.compileResult === undefined) message = 'No compile check ran.';
+    if (check.failures === undefined) message = 'No compile check ran.';
     else if (failures.length > 0)
       message = `Revision ${revision + 1} failed to compile: ${summary.map((f) => `${f.output} (${f.log})`).join(', ')}`;
     return {
@@ -353,7 +347,7 @@ export const DocumentCompileTool = defineTool({
         message,
         failures.length === 0 ? 'Compiles' : `${failures.length} failed`,
       ),
-      value: { failures: summary, checked: check.compileResult !== undefined },
+      value: { failures: summary, checked: check.failures !== undefined },
       facts: [docs.fact()],
     };
   }),
@@ -369,7 +363,8 @@ export const DocumentDiffTool = defineTool({
   schema: z.strictObject({ revision: RevisionSchema }),
   execute: Effect.fn('document_diff')(function* ({ revision }) {
     const docs = yield* documentsOfCall('document_diff');
-    if ((docs.state.rounds.get(revision)?.outputs.length ?? 0) === 0)
+    const outputs = docs.state.rounds.get(revision)?.outputs ?? [];
+    if (outputs.length === 0)
       return {
         ...executed(
           `Revision ${revision + 1} has no outputs to diff.`,
@@ -380,6 +375,7 @@ export const DocumentDiffTool = defineTool({
     const artifacts = yield* docs.diff
       .handleLatexdiffOfOutput(
         revision,
+        outputs,
         traceFileLineage(docs.state, docs.baseFiles, revision),
       )
       .pipe(

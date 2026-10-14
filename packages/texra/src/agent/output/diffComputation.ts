@@ -23,7 +23,6 @@ import { absentReason } from '@utils/files/fsEntryExists';
 
 import { traceFileLineage } from './lineageMapping';
 import { ensureRoundData, type OutputState } from './outputState';
-import type { RoundFileMapping } from './types';
 
 const CHANNEL = 'OutputDiffStats';
 
@@ -111,14 +110,10 @@ function toWorkspaceOrigin(
 // Public API
 // ============================================================================
 
-/** Computes diff stats for all output files in a round.
- *
- *  Callers in workflows must pass snapshot-resolved baseFiles (the list
- *  `RunFileService.prepareRunWorkspace` returns); passing the live workspace path would
- *  collapse in-place diffs to 0/0. The precomputedMapping, if provided,
- *  must have been built against the same snapshot-resolved baseFiles —
- *  otherwise the mapping's base locations still point at the overwritten
- *  files. */
+/** The diff stats and lineage of a round's outputs, against the
+ *  snapshot-resolved `baseFiles` (the list `RunFileService.prepareRunWorkspace`
+ *  returns): the live workspace path would collapse in-place diffs to 0/0. A
+ *  task that does not rewrite its documents gets no lineage. */
 export const computeOutputDiffStats = Effect.fn(
   'documents.computeOutputDiffStats',
 )(function* (
@@ -127,13 +122,11 @@ export const computeOutputDiffStats = Effect.fn(
   workspace: string | undefined,
   baseFiles: FileLocation[],
   currRound: number,
-  precomputedMapping?: RoundFileMapping,
-  options?: { isRewrite?: boolean },
+  rewrite: boolean,
 ) {
   const roundOutputs = ensureRoundData(state, currRound).outputs;
-  const mapping =
-    precomputedMapping ?? traceFileLineage(state, baseFiles, currRound);
-  const suppressLineage = options?.isRewrite === false;
+  const mapping = traceFileLineage(state, baseFiles, currRound);
+  const suppressLineage = !rewrite;
 
   return yield* Effect.forEach(
     roundOutputs,

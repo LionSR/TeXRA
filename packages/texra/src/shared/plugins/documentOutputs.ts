@@ -16,7 +16,6 @@ import {
   OutputFileInfoSchema,
   roundIndexedRecord,
   RoundNumberSchema,
-  type RunId,
 } from '@shared/schemas';
 
 /**
@@ -69,20 +68,6 @@ const CompileFailureSummarySchema = z.object({
   logAbsolutePath: z.string(),
 });
 type CompileFailureSummary = z.infer<typeof CompileFailureSummarySchema>;
-
-const CompileResultSchema = z.discriminatedUnion('status', [
-  z.strictObject({
-    status: z.literal('ok'),
-    round: RoundNumberSchema,
-  }),
-  z.strictObject({
-    status: z.literal('failed'),
-    round: RoundNumberSchema,
-    failures: z.array(CompileFailureSchema),
-    logExcerpt: z.string(),
-  }),
-]);
-export type CompileResult = z.infer<typeof CompileResultSchema>;
 
 export const RoundOutputSchema = z.strictObject({
   round: RoundNumberSchema,
@@ -189,9 +174,3 @@ export const RoundKeyedOutputSidecarValueSchemas = {
   missingOutputs: roundIndexedRecord(z.string()),
   compileFailures: roundIndexedRecord(CompileFailureSchema),
 } as const;
-
-/** A run's output files by round, for a host's file decorations. */
-export interface AddOutputFilesPayload {
-  runId: RunId;
-  filesByRound: z.infer<typeof RoundKeyedOutputSidecarValueSchemas.outputFiles>;
-}

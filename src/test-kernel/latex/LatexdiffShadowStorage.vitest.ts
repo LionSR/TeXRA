@@ -241,12 +241,9 @@ describe('LaTeXdiffService shadow output', () => {
       const result = yield* runLatexdiffForRun({
         runId,
         roots: testWorkspaceRoots(),
-        runDiscovery: {
-          readRunOutputs: () =>
-            Effect.succeed({
-              1: [output(1, first)],
-              2: [output(2, second, './paper.tex')],
-            }),
+        rounds: {
+          1: [output(1, first)],
+          2: [output(2, second, './paper.tex')],
         },
         channel: 'test',
         progress: { report: vi.fn() },

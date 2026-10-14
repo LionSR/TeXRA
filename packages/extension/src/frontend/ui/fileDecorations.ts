@@ -57,18 +57,16 @@ export function registerFileDecorations(
   return Effect.gen(function* () {
     const provider = new TeXRAFileDecorationProvider();
     yield* Effect.forkScoped(
-      Stream.runForEach(outputFilesProduced(session), ({ filesByRound }) =>
+      Stream.runForEach(outputFilesProduced(session), (files) =>
         Effect.sync(() => {
           // Only mark the primary output location. Lineage entries (original,
           // diffBase) are reference points; marking them would badge the
           // source file as "Modified by TeXRA" before the user has actually
           // accepted the workflow output.
           const paths = new Set<string>();
-          for (const roundFiles of Object.values(filesByRound)) {
-            for (const info of roundFiles) {
-              if (info.location.kind === 'workspace') {
-                paths.add(info.location.absolutePath);
-              }
+          for (const info of files) {
+            if (info.location.kind === 'workspace') {
+              paths.add(info.location.absolutePath);
             }
           }
           provider.markTouched(paths);

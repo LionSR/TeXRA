@@ -1,19 +1,8 @@
 /**
- * Chat export — the cross-host public surface of `packages/harness/src/agent/export`.
- *
- * One curated barrel the hosts import instead of deep-reaching each export
- * module by path: loading a conversation into the export input shape
- * (`loadChatExportInput`), rendering it to Markdown (`formatChatAsMarkdown`),
- * and the `ChatExportInput` type hosts name at that seam — decoupling host
- * code from the export internals' file layout, per the module-level barrel
- * pattern set by `@agent/runtime` (#10011) and `@agent/followUp`. The harness
- * deep-import ratchet (`config/ratchets/harness-deep-import-baseline.json`)
- * records each host's single `@agent/export` specifier; the former
- * `@agent/export/{loadChatExportInput,chatExportFormatter,schemas}` deep
- * imports collapsed to this door.
- *
- * Internal export modules keep importing each other by direct path; nothing
- * inside `src/agent` imports this barrel, so it introduces no import cycle.
+ * Chat export, the door the CLI imports (`@texra/agent/export`): loading a
+ * conversation into the export input shape (`loadChatExportInput`),
+ * rendering it to Markdown (`formatChatAsMarkdown`), and the types named at
+ * that seam. The input schemas are the harness's (`@agent/export/schemas`).
  */
 
 export { loadChatExportInput } from './loadChatExportInput';

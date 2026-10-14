@@ -30,8 +30,6 @@ import {
 } from '@shared/schemas';
 import {
   WORKFLOW_OUTPUT_BASENAME,
-  WORKFLOW_RAW_OUTPUT_EXT,
-  workflowOutputPath,
   workflowOutputRoundDir,
 } from '@texra/shared/constants/workflowOutput';
 import {
@@ -43,7 +41,6 @@ import { XmlOutputManager } from '@texra/agent/output/XmlOutputManager';
 import { documentTaskKey } from '@texra/agent/output/documentRecipe';
 import {
   createOutputState,
-  getOutputFilesByRound,
   roundsFromPersisted,
   roundsToPersisted,
   type OutputDependencies,
@@ -122,10 +119,12 @@ function revisionFiles(docs: Documents, revision: number): FileLocation[] {
   return config.outputFiles.map((file) => fileService.createLocation(file));
 }
 
-/** Where a revision's reply is kept, whole, beside its outputs. */
+/** Where a revision's reply is kept, whole, beside its outputs:
+ *  `r{revision}/output.xml` in the run's storage, whose per-run directory
+ *  keeps the fixed name from colliding across runs. */
 const replyLocation = (docs: Documents, revision: number) =>
   docs.deps.fileService.createLocation(
-    workflowOutputPath({ ext: WORKFLOW_RAW_OUTPUT_EXT, round: revision }),
+    `${workflowOutputRoundDir(revision)}/${WORKFLOW_OUTPUT_BASENAME}.xml`,
   );
 
 /** The rejection setting: a failed compile fails the task. */
@@ -198,14 +197,7 @@ export const openDocuments = Effect.fn('documents.open')(function* ({
     deps,
     state,
     xml: new XmlOutputManager(config, logger, fileService, state, roots.config),
-    diff: new LatexDiffManager(
-      task.rewrite,
-      () => getOutputFilesByRound(state),
-      logger,
-      runId,
-      fileService,
-      roots,
-    ),
+    diff: new LatexDiffManager(task.rewrite, logger, runId, fileService, roots),
     baseFiles,
     fact: (diffs?: DocumentDiffs) =>
       documentsOutputFact(roundsToPersisted(state), diffs),

@@ -21,23 +21,21 @@ describe('runLatexdiffForRun', () => {
     vi.restoreAllMocks();
   });
 
-  // #10635: the caller's channel covers the whole run, the read included.
+  // #10635: the caller's channel covers the whole run.
   it.effect(
     'reports no diff operations, on the caller channel, when the run recorded no outputs',
     () =>
       Effect.gen(function* () {
-        const readRunOutputs = vi.fn(() => Effect.succeed({ 1: [] }));
         const logs = captureLogEntries();
 
         const outcome = yield* runLatexdiffForRun({
           runId: 'abc123' as RunId,
           roots: testWorkspaceRoots(),
-          runDiscovery: { readRunOutputs },
+          rounds: { 1: [] },
           channel: 'test',
           progress: { report: () => undefined },
         });
 
-        expect(readRunOutputs).toHaveBeenCalledWith('abc123');
         expect(outcome.results).toEqual([]);
         expect(
           logs.has(
