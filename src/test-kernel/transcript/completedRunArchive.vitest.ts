@@ -1,7 +1,9 @@
 import { it } from '@effect/vitest';
 /** Completed conversation reads and task reads through the archive facade. */
 import { Effect } from 'effect';
-import { beforeEach, describe, expect } from 'vitest';
+import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
+
+import { API_KEY_ENV_NAMES } from '@texra-ai/llm';
 
 import {
   AgentConfigSchema,
@@ -162,7 +164,15 @@ describe('completedRunArchive facade', () => {
   });
 
   beforeEach(async () => {
+    // The session runtime reads key variables from the process environment;
+    // a blank one counts as unset, so the resume below finds no key whatever
+    // the developer's or CI's shell holds.
+    for (const name of API_KEY_ENV_NAMES) vi.stubEnv(name, '');
     taskSession = await Effect.runPromise(createProcessSession());
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
   });
 
   // it.live: the release at the end of this test closes both sessions through

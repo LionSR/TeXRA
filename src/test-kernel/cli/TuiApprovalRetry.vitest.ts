@@ -13,7 +13,11 @@ import {
   type MockInstance,
   vi,
 } from 'vitest';
-import { apiKeySecretName, SecretsFailed } from '@texra-ai/llm';
+import {
+  API_KEY_ENV_NAMES,
+  apiKeySecretName,
+  SecretsFailed,
+} from '@texra-ai/llm';
 import { goalGrant, humanGrant } from '@agent/runtime/runApprovalQueue';
 
 const mocks = vi.hoisted(() => ({
@@ -338,6 +342,9 @@ beforeEach(() => {
   const { secrets } = installedHost();
   readSecret = secrets.get.bind(secrets);
   secretReads = vi.spyOn(secrets, 'get');
+  // The session runtime reads key variables from the process environment; a
+  // blank one counts as unset, so an ambient key never stands in for one.
+  for (const name of API_KEY_ENV_NAMES) vi.stubEnv(name, '');
   mocks.setCliSubscriptionPreference.mockImplementation((_id, enabled) => {
     mocks.preferSubscription = enabled;
     return Effect.void;
@@ -345,6 +352,7 @@ beforeEach(() => {
 });
 
 afterEach(async () => {
+  vi.unstubAllEnvs();
   detachHost();
   detachHost = () => {};
   // A request left open outlives its test on the file's session, so close

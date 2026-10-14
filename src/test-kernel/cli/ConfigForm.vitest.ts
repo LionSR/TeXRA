@@ -6,6 +6,7 @@ import stripAnsi from 'strip-ansi';
 import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 
 import {
+  API_KEY_ENV_NAMES,
   API_KEY_PROVIDER_IDS,
   apiKeySecretName,
   SecretsFailed,
@@ -114,9 +115,14 @@ let formSecrets = new KeyStatusSecrets();
 
 beforeEach(() => {
   formSecrets = new KeyStatusSecrets();
+  // The form's runtime reads key variables from the process environment; a
+  // blank one counts as unset, so a developer's or CI's own keys never decide
+  // a status here.
+  for (const name of API_KEY_ENV_NAMES) vi.stubEnv(name, '');
 });
 
 afterEach(() => {
+  vi.unstubAllEnvs();
   installSlashCommands([]);
   resetCliState();
 });

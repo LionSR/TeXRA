@@ -167,7 +167,7 @@ describe('CLI model access routes', () => {
       expect(yield* readCliModelAccessStatus(stores, secrets)).toEqual(
         expectedAccessStatus({ signedIn: false, preferSubscription: true }),
       );
-    }),
+    }).pipe(withHost),
   );
 
   it.effect(
