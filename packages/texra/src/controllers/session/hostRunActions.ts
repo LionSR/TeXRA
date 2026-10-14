@@ -635,6 +635,15 @@ export const createHostRunActions = (
       runValidated,
       merge: Effect.fn('HostRunActions.merge')(
         function* (baseFile, editedFile) {
+          // A launch that cannot be built (no catalog, no merge task) says
+          // why, beside the merge docs.
+          const refuse = ({ message }: { readonly message: string }) =>
+            ports.present
+              .emit('requestShowError', {
+                message: `Merge: ${message}`,
+                docsPage: 'intelligent-merge',
+              })
+              .pipe(Effect.as(null));
           const config = yield* documentTaskConfig(
             {
               agent: 'merge',
@@ -645,15 +654,12 @@ export const createHostRunActions = (
             roots,
           ).pipe(
             Effect.provideContext(catalog),
-            // A launch that cannot be built (no catalog, no merge task) says why.
             Effect.catchTags({
-              DocumentTaskRefused: ({ message }) =>
-                Effect.fail(new Rejected({ reason: `Merge: ${message}` })),
-              AgentCatalogLoadError: ({ message }) =>
-                Effect.fail(new Rejected({ reason: `Merge: ${message}` })),
+              DocumentTaskRefused: refuse,
+              AgentCatalogLoadError: refuse,
             }),
           );
-          yield* startAgentRequest({ config });
+          if (config !== null) yield* startAgentRequest({ config });
         },
       ),
       readConfig,

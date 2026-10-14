@@ -90,12 +90,23 @@ const INSTRUCTION_ACTION_VIEW: Record<
 
 function handleRequestShowError({
   message,
+  docsPage,
 }: RequestShowErrorPayload): Effect.Effect<void, Error> {
-  // `showErrorMessage` settles only on dismissal, which no caller waits on:
-  // the session forks this program, so the handoff and a post-handoff
-  // rejection (the extension host tearing down) are reported there rather
-  // than becoming an unhandled rejection.
-  return vscodeUi.showErrorMessage(message);
+  // The notice settles only on dismissal, which no caller waits on: the
+  // session forks this program, so the handoff and a post-handoff rejection
+  // (the extension host tearing down) are reported there rather than
+  // becoming an unhandled rejection. A docs page is offered as a button.
+  return vscodeUi
+    .error(message, { items: docsPage ? ['View Docs'] : [] })
+    .pipe(
+      Effect.flatMap((choice) =>
+        choice && docsPage
+          ? Effect.asVoid(
+              safeExecuteCommand('texra.openDoc', [docsPage], CHANNEL),
+            )
+          : Effect.void,
+      ),
+    );
 }
 
 function handleRequestShowInstruction(
