@@ -3,7 +3,6 @@ import { describe, expect, it } from 'vitest';
 
 // Local imports
 import type { ProposalRequestPanel } from '@progressView/frontend/components/ProposalRequestPanel';
-import { DEFAULT_TOOL_CONFIG } from '@shared/schemas';
 import type { RunId } from '@shared/schemas';
 import { recordPermissionActions } from '@test/support/permissionPanelEvents';
 
@@ -31,7 +30,7 @@ function createPermission(): ProposalRequestPanel['permission'] {
       contextFiles: [],
       mediaFiles: [],
       outputFiles: ['/workspace/paper_revised.tex'],
-      toolConfig: { ...DEFAULT_TOOL_CONFIG },
+      options: {},
     },
   };
 }

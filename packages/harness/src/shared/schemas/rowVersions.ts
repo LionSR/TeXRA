@@ -12,9 +12,11 @@
  *
  * The release watermark is the frozen schemas, `config/storage/frozen/`
  * (`npm run storage:freeze` at a release; `rowVersions.vitest.ts`): a
- * version frozen there never changes in place. Before the 1.0 release every
- * kind is unreleased: its shape may change with no upcaster and no bump, and
- * no upcaster exists yet.
+ * version frozen there never changes in place. Before 1.0 a kind changes with
+ * no upcaster; its version is bumped when an older build's row would read
+ * wrong (or fail): such a row then reads as an earlier build's
+ * (`DatabaseRowEarlier`, its whole run listed as written by an earlier
+ * build), never as damaged or silently stripped.
  */
 import type { JsonValue } from './jsonValue';
 import type { SessionEventDraft } from './sessionEvent';
@@ -62,7 +64,10 @@ export const CURRENT_VALUE_VERSION = 1;
 export const ROW_KINDS: Readonly<Record<SessionEventDraft['type'], RowKind>> = {
   'run.start': V1,
   'run.activate': V1,
-  'run.config': V1,
+  // v2: a recipe's script names its block and options; `toolConfig` is
+  // gone (no upcaster: an earlier build's v1 row refuses its run as written
+  // by that build, rather than launching with its options dropped).
+  'run.config': { version: 2, upcast: [] },
   'run.model': V1,
   'run.detach': V1,
   'run.end': V1,
@@ -74,7 +79,9 @@ export const ROW_KINDS: Readonly<Record<SessionEventDraft['type'], RowKind>> = {
   'plugin.fact': V1,
   'followup.queued': V1,
   'followup.consumed': V1,
-  'request.opened': V1,
+  // v2: a task proposal carries its plugin's `options`, not `toolConfig`
+  // (no upcaster, as `run.config`).
+  'request.opened': { version: 2, upcast: [] },
   'request.decided': V1,
   'approval.policy': V1,
   'run.position': V1,

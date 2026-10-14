@@ -3,12 +3,13 @@ import { Effect, FileSystem, Result } from 'effect';
 
 import { deriveResumability, getRunRecords } from '@agent/storage';
 import type { SessionHandle } from '@agent/runtime';
-import { DEFAULT_TOOL_CONFIG, RUN_OUTCOME, type RunId } from '@shared/schemas';
+import { RUN_OUTCOME, type RunId } from '@shared/schemas';
 import {
   DatabaseClaimRefused,
   DatabaseWriteFailed,
 } from '@shared/session/database';
 import { documentTaskPatch } from '@texra/agent/output/documentRecipe';
+import { DocumentTaskOptionsSchema } from '@texra/shared/plugins/documents';
 import { documentTaskOf } from '@texra/tools/documents/documentTask';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -189,9 +190,6 @@ export const runHeadlessAgent = Effect.fn('runHeadlessAgent')(function* (
           inputFiles,
           contextFiles,
           outputFiles: [],
-          ...(init.reflect && {
-            toolConfig: { ...DEFAULT_TOOL_CONFIG, reflect: true },
-          }),
           ...(cliOutputFile !== undefined || cliOutputDirectory !== undefined
             ? {
                 cli: {
@@ -209,7 +207,11 @@ export const runHeadlessAgent = Effect.fn('runHeadlessAgent')(function* (
         // The entry resolved above has a task, so the patch is never null.
         const config: AgentConfigPayload = {
           ...launch,
-          ...documentTaskPatch(launch, agent),
+          ...documentTaskPatch(
+            launch,
+            agent,
+            DocumentTaskOptionsSchema.parse({ reflect: init.reflect }),
+          ),
         };
 
         return yield* executeCliWorkflowConfig(config, runContext, {

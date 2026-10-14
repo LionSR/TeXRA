@@ -97,7 +97,7 @@
   "packages/harness/src/shared/schemas/subagentProgress.ts": 1,
   "packages/harness/src/shared/schemas/subscriptionUsage.ts": 5,
   "packages/harness/src/shared/schemas/taskGroup.ts": 3,
-  "packages/harness/src/shared/schemas/toolConfig.ts": 2,
+  "packages/harness/src/shared/schemas/toolConfig.ts": 1,
   "packages/harness/src/shared/schemas/toolResult.ts": 8,
   "packages/harness/src/shared/schemas/traceEvent.ts": 1,
   "packages/harness/src/shared/schemas/updateCheck.ts": 3,

@@ -16,7 +16,7 @@ import {
   getCatalogAgent,
   resolveDelegationScopeAgents,
 } from '@agent/index/agentRegistry';
-import { DEFAULT_TOOL_CONFIG } from '@shared/schemas';
+import { DocumentTaskOptionsSchema } from '@texra/shared/plugins/documents';
 import {
   documentTaskKey,
   documentTaskPatch,
@@ -111,13 +111,13 @@ const runDocumentTask = Effect.fn('DocumentTaskTool.call')(function* (
           documentTaskPatch(
             { ...chosen, agent: key, agentSource: null },
             entry,
+            DocumentTaskOptionsSchema.parse(chosen.options ?? {}),
           );
         return patch
           ? { script: patch.script, outputFiles: patch.outputFiles }
           : null;
       },
-      toolConfig: {
-        ...DEFAULT_TOOL_CONFIG,
+      options: DocumentTaskOptionsSchema.parse({
         ...(input.extractFigures != null && {
           autoExtractFigure: input.extractFigures,
         }),
@@ -125,7 +125,7 @@ const runDocumentTask = Effect.fn('DocumentTaskTool.call')(function* (
           autoExtractTikzFigure: input.extractTikz,
         }),
         ...(input.reflect != null && { reflect: input.reflect }),
-      },
+      }),
     },
   });
 });

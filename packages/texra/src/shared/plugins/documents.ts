@@ -12,6 +12,8 @@
 import { z } from 'zod';
 
 import {
+  DEFAULT_TOOL_CONFIG,
+  ToolConfigFieldsSchema,
   roundOutputsToCompileFailureSummaries,
   roundOutputsToOutputSummaries,
   RunDocumentsSchema,
@@ -24,6 +26,7 @@ import {
   type ToolFact,
 } from '@shared/schemas';
 import type { RunView } from '@texra-ai/harness';
+import type { AgentConfig } from '@texra-ai/harness/schemas';
 import type { AgentBlock } from '@texra-ai/harness/plugins';
 
 const DocumentsOutputSchema = z.strictObject({
@@ -174,3 +177,36 @@ export const DOCUMENT_TASK_BLOCK: AgentBlock<DocumentTask> = Object.freeze({
   key: 'task',
   schema: DocumentTaskSchema,
 });
+
+/**
+ * A document task's launch options, as its recipe's run records them
+ * (`script.options`) and its approval shows them (`AgentProposal.options`):
+ * the figure, TeXCount and compile switches and the critic review. Built
+ * from the main view's switches (`ToolConfigFieldsSchema`), so the two
+ * name the same fields.
+ */
+export const DocumentTaskOptionsSchema =
+  ToolConfigFieldsSchema.prefault(DEFAULT_TOOL_CONFIG);
+/** A document task's launch options with their defaults applied. */
+export type DocumentTaskOptions = z.infer<typeof DocumentTaskOptionsSchema>;
+
+/** The options a document task's run was launched with: its recipe's
+ *  `script.options`, defaults for any it does not name. */
+export const documentTaskOptions = (
+  config: Pick<AgentConfig, 'script'>,
+): DocumentTaskOptions =>
+  DocumentTaskOptionsSchema.parse(
+    config.script?.kind === 'recipe' ? config.script.options : {},
+  );
+
+/** What a proposal launches, as its approval copy names it. */
+export function agentProposalLabel(proposal: {
+  readonly task: boolean;
+  readonly options?: Readonly<Record<string, unknown>> | null;
+}): string {
+  if (!proposal.task) return 'agent';
+  // A reflecting task also runs a critic after every revision but the last.
+  return DocumentTaskOptionsSchema.parse(proposal.options ?? {}).reflect
+    ? 'document task, with critic'
+    : 'document task';
+}

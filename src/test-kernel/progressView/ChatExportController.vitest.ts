@@ -12,12 +12,7 @@ import {
   resolveGlobalStoragePath,
   resolveWorkspaceStoragePath,
 } from '@platform/defaults/workspaceStorage';
-import {
-  qualifyAggregateId,
-  LOG_LEVELS,
-  MESSAGE_TYPES,
-  DEFAULT_TOOL_CONFIG,
-} from '@shared/schemas';
+import { qualifyAggregateId, LOG_LEVELS, MESSAGE_TYPES } from '@shared/schemas';
 import type { RunId } from '@shared/schemas';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import {
@@ -75,7 +70,6 @@ function config(overrides: Partial<AgentConfig> = {}): AgentConfig {
     agent: 'orchestrator',
     model: 'deepseek/deepseek-v4-flash',
     instruction: 'Solve the problem.',
-    toolConfig: DEFAULT_TOOL_CONFIG,
     memories: [],
     workingDirectory: '/workspace',
     cli: { outputFile: null, teamId: null },

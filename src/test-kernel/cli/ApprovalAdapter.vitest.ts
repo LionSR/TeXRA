@@ -31,7 +31,6 @@ import {
   formatRetryRequestMessage,
 } from '@cli/runtime/approval/approvalSummaries';
 import {
-  DEFAULT_TOOL_CONFIG,
   RUN_OUTCOME,
   type AgentProposalPermission,
   type PermissionPayload,
@@ -166,7 +165,7 @@ function agentProposal(
     mediaFiles: [],
     outputFiles: [],
     task: false,
-    toolConfig: DEFAULT_TOOL_CONFIG,
+    options: {},
     ...overrides,
   };
 }

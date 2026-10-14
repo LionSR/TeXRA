@@ -23,6 +23,7 @@ import { getProposalFileGroups } from '@shared/schemas';
 import { getModelLabel } from '@shared/model/modelLabel';
 import { APPROVE_ALL_DELEGATED_WORK_ACTION } from '@texra/shared/session/surfaceDecision';
 import { SessionUiEvents } from '@texra/shared/session/uiEvents';
+import { DocumentTaskOptionsSchema } from '@texra/shared/plugins/documents';
 import { selectStyles } from '@ui/styles';
 import {
   DELEGATION_APPROVAL_COPY,
@@ -288,10 +289,11 @@ export class ProposalRequestPanel extends BaseRequestPanel<'proposal'> {
   private renderExtractFlags(
     data: AgentProposalPermission,
   ): TemplateResult | typeof nothing {
+    const options = DocumentTaskOptionsSchema.parse(data.options ?? {});
     const flags: string[] = [];
-    if (data.toolConfig.autoExtractFigure) flags.push('Extract figures');
-    if (data.toolConfig.autoExtractTikzFigure) flags.push('Extract TikZ');
-    if (data.toolConfig.reflect) flags.push('Critic review');
+    if (options.autoExtractFigure) flags.push('Extract figures');
+    if (options.autoExtractTikzFigure) flags.push('Extract TikZ');
+    if (options.reflect) flags.push('Critic review');
     if (flags.length === 0) return nothing;
     return html`<div class="workflow-proposal__extract-flags">
       ${repeat(

@@ -12,12 +12,13 @@ import {
   resolveGlobalStoragePath,
   resolveWorkspaceStoragePath,
 } from '@platform/defaults/workspaceStorage';
-import type { FileLocation, RunId, ToolConfig } from '@shared/schemas';
+import type { FileLocation, RunId } from '@shared/schemas';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { installPlatform } from '@test/support/setupPlatform';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { spiedTrace } from '@test/support/spiedTrace';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
+import type { DocumentTaskOptions } from '@texra/shared/plugins/documents';
 import {
   createExternalLocation,
   createWorkspaceLocation,
@@ -37,7 +38,7 @@ type DiffFileProcessorInternals = {
   processLineByLine(content: string): string;
 };
 
-const compilePdfConfig: ToolConfig = {
+const compilePdfConfig: DocumentTaskOptions = {
   autoExtractFigure: false,
   autoExtractTikzFigure: false,
   attachTeXCount: false,

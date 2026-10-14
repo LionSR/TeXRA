@@ -2396,7 +2396,7 @@ describe('the C1 event table and the C6 publisher', () => {
         };
         const malformed = {
           ...configured,
-          config: { ...config, toolConfig: { autoCompileInputPdf: 'yes' } },
+          config: { ...config, memories: 'yes' },
         } as unknown as SessionEventDraft;
         const failure = yield* Effect.flip(db.appendAll([runStart, malformed]));
         expect(failure._tag).toBe('DatabaseWriteFailed');

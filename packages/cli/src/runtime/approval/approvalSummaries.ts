@@ -1,6 +1,5 @@
 import { hiddenRowsText } from '@cli/tui/overflowText';
 import {
-  agentProposalLabel,
   getProposalFileGroups,
   type AgentProposalPermission,
   type BashPermission,
@@ -8,6 +7,7 @@ import {
   type UserQuestionPermission,
 } from '@shared/schemas';
 import { getModelLabel } from '@shared/model/modelLabel';
+import { agentProposalLabel } from '@texra/shared/plugins/documents';
 import type { ToolEditApprovalRequest } from '@tools/approval/toolEditApproval';
 import {
   SCRIPT_REQUEST_COPY,

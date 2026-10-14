@@ -5,12 +5,12 @@ import { confirmCardContentWidth } from '@cli/tui/ui/theme';
 import { wrappedRowCount } from '@cli/tui/ansiWrap';
 import { formatAgentProposalFileGroup } from '@cli/runtime/approval/approvalSummaries';
 import {
-  agentProposalLabel,
   getProposalFileGroups,
   type AgentProposalPermission,
 } from '@shared/schemas';
 import { getModelLabel } from '@shared/model/modelLabel';
 import type { SurfaceDecision } from '@texra/shared/session/surfaceDecision';
+import { agentProposalLabel } from '@texra/shared/plugins/documents';
 import { DELEGATION_APPROVAL_COPY } from '@ui/copy/delegationApproval';
 import {
   SCRIPT_REQUEST_COPY,

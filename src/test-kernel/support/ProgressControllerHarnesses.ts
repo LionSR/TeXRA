@@ -5,6 +5,7 @@ import {
 } from '@agent/core/definition/AgentConfig';
 import type { OutputFileInfo, RunId } from '@shared/schemas';
 import { documentTaskPatch } from '@texra/agent/output/documentRecipe';
+import { DocumentTaskOptionsSchema } from '@texra/shared/plugins/documents';
 
 function createAgentConfig(overrides: Partial<AgentConfig> = {}): AgentConfig {
   return AgentConfigSchema.parse({
@@ -47,6 +48,7 @@ export function asDocumentTask<
         },
       },
     },
+    DocumentTaskOptionsSchema.parse({}),
   );
   if (patch === null) throw new Error('a task entry always patches');
   // The recipe only: the launch's outputs stay as the case wrote them.
