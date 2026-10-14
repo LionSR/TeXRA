@@ -4,7 +4,6 @@ import { Deferred, Effect, Fiber, type Scope, SubscriptionRef } from 'effect';
 import { describe, expect, vi } from 'vitest';
 
 // Local imports
-import type { AgentTrace } from '@agent/trace';
 import type { RunHandle, RunControls } from '@agent/runtime/RunHandle';
 import { RunRegistry, RunLive } from '@agent/runtime/runRegistry';
 import { humanGrant } from '@agent/runtime/runApprovalQueue';
@@ -50,7 +49,6 @@ setupPlatform({ workspacePath: '/workspace' });
 
 type HandleOverrides = {
   agentName?: string;
-  trace?: AgentTrace;
 };
 
 /** Builds a `RunHandle` for a toolUse test-subagent, the shape most tests need. */
@@ -63,7 +61,6 @@ function createHandle(
     runId,
     parent,
     agent: overrides.agentName ?? 'test-subagent',
-    trace: overrides.trace,
   });
   return handle;
 }

@@ -8,8 +8,10 @@ import {
   Scope,
   Stream,
 } from 'effect';
+import { z } from 'zod';
 
 import {
+  AgentConfigSchema,
   RUN_OUTCOME,
   type RunId,
   type AgentConfigPayload,
@@ -27,11 +29,7 @@ import {
   type StartInput,
   SESSION_CLOSE_DEADLINE_MS,
 } from '@texra-ai/harness';
-import {
-  type SessionHandle,
-  terminalFailurePresented,
-  validateRunRequest,
-} from '@agent/runtime';
+import { type SessionHandle, terminalFailurePresented } from '@agent/runtime';
 import { deriveResumability, getRunRecords } from '@agent/storage';
 import { AgentError } from '@common/errors';
 import { isUserAbort } from '@common/errors/sdkError/errorPatterns';
@@ -185,16 +183,18 @@ export function executeCliConfig(
   return Effect.gen(function* () {
     const { runId: resumedRunId, ...executeOptions } = options;
     const runId = resumedRunId ?? generateRunId();
-    const validation = validateRunRequest({ config });
-    if (!validation.valid) {
-      writeTextStderr(validation.message);
+    const parsed = AgentConfigSchema.safeParse(config);
+    if (!parsed.success) {
+      writeTextStderr(
+        `Invalid configuration: ${z.prettifyError(parsed.error)}`,
+      );
       return { ok: false as const, exitCode: CliExitCode.Usage };
     }
 
     const plugins = yield* readCliPluginPins(
       (yield* options.services.session).roots,
     );
-    const request = { ...validation.request, runId };
+    const request = { config: parsed.data, runId };
     const run = yield* executeCliRequest(request, runContext, executeOptions);
     if (!run.ok) {
       return run;

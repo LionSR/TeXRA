@@ -52,8 +52,6 @@ vi.mock('@utils/config/providerConfig', () => ({
   getUseOpenRouter: mocks.getUseOpenRouter,
 }));
 
-const { buildDesktopSetupRunRequest } =
-  await import('@texra/controllers/onboarding/setupLaunch');
 const { resolveSetupLaunchModel } =
   await import('@texra/model/setupCredentialAccess');
 
@@ -74,16 +72,16 @@ const runSetup = <A, E>(program: Effect.Effect<A, E, LanguageModel>) =>
     ),
   );
 
-/** Desktop's launch model, read back off the request its host builds. */
-async function desktopSetupModel(): Promise<string | null> {
-  const request = await runSetup(buildDesktopSetupRunRequest(stores, secrets));
-  return request?.config.model ?? null;
-}
-
 function launchModel(includeAccessListFallback: boolean) {
   return runSetup(
     resolveSetupLaunchModel(stores, secrets, includeAccessListFallback),
   );
+}
+
+/** Desktop's launch model: no access-list fallback (it has no routing
+ *  prompt). */
+async function desktopSetupModel(): Promise<string | null> {
+  return (await launchModel(false))?.model ?? null;
 }
 
 describe('resolveSetupLaunchModel', () => {

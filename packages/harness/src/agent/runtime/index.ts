@@ -18,9 +18,10 @@
 
 // The session handle: the record reads, the run log and the view a host
 // still reads from it.
-export type { SessionHandle, SessionViewAccess } from './SessionHandle';
+export type { SessionHandle } from './SessionHandle';
 
-// The process's one route retry gate, which a helper call reads from context.
+// The process's one route retry gate, which a helper call reads from context:
+// the app's helper calls (`textEnhancement`, `hostDraftRequests`) name it.
 export type { RouteRetries } from './run/invocation';
 
 // A host's presentation surface on a handle, and the `SessionHostInteractions`
@@ -31,19 +32,9 @@ export { SessionHostInteractions } from './HostInteractions';
 // Whether a run can be resumed here, naming the process holding it.
 export { runRefusal } from './runClassification';
 
-// A launch failure's presentation, once.
-export {
-  presentRunFailure,
-  terminalFailurePresented,
-} from './terminalResultToast';
+// Whether a launch failure was already presented, so a host's own
+// fallback does not print it twice.
+export { terminalFailurePresented } from './terminalResultToast';
 
 // A host's emit handlers, one per presentation event.
 export type { PresentationEventHandlers } from './runtimePresentationEvents';
-
-// The helper model the "fix LaTeX" actions run on.
-export { getHelperModelName } from './helperModelName';
-
-// Run-request validation at the host launch boundary.
-export { validateRunRequest } from '../core/state/runRequests';
-
-// A workflow run's delivered outputs with their diffs, for a host that prints them.

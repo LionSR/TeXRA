@@ -12,7 +12,7 @@ import {
 } from '@utils/errors/errorMessage';
 
 /** Valid documentation identifiers for error messages. */
-type DocId = 'intelligent-merge' | 'custom-agents' | 'latex-diff';
+type DocId = 'custom-agents' | 'latex-diff';
 
 /**
  * Present a notice and keep these helpers' own failure channel empty.

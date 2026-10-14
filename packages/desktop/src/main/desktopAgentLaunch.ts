@@ -1,21 +1,13 @@
 import { Effect } from 'effect';
 
-import {
-  Cancelled,
-  type PlatformSecrets,
-  type RunEndResult,
-} from '@texra-ai/harness';
-import { type ProcessRuntime, withProcessServices } from '@texra-ai/harness';
-import { presentRunFailure } from '@agent/runtime';
 import type { RequestOpenFilePayload } from '@shared/schemas';
-import type { HostRunActions } from '@texra/controllers/session/hostRunActions';
 import { selectAutoOpenFinalOutput } from '@texra/agent/output/selectAutoOpenFinalOutput';
-import { ensureError } from '@utils/errors/errorMessage';
 import {
   createExternalLocation,
   createRunStorageLocation,
   createWorkspaceLocation,
 } from '@utils/files/fileLocation';
+import type { RunEndResult } from '@texra-ai/harness';
 import type { AgentConfig } from '@texra-ai/harness/schemas';
 import type { DesktopProject } from './desktopProjects.js';
 
@@ -51,64 +43,3 @@ export const presentDesktopFinalOutput =
         { replayWhenAttached: true },
       );
     });
-
-/**
- * Launch the setup conversation from the setup card: resolve a model the
- * user's credentials can call, build the setup execute request, and run it
- * through the same desktop execute path the renderer's Execute button uses.
- * `run` and `project` are the project the user started setup in, taken before
- * the first suspension: the run and its presentation belong to it even when
- * the window moves to another project while the model resolves and agents
- * load. Setup continues after its initiating request has completed, so a
- * failure is presented here and the kickoff settles.
- */
-export const kickoffDesktopSetup = (options: {
-  readonly project: LaunchProject;
-  /** The project's launch path; none when no folder is open. */
-  readonly run: Pick<HostRunActions, 'runValidated'> | undefined;
-  readonly secrets: PlatformSecrets;
-  readonly runtime: ProcessRuntime;
-}): Effect.Effect<void> =>
-  withProcessServices(
-    options.runtime,
-    Effect.gen(function* () {
-      if (!options.run) {
-        return yield* Effect.fail(
-          new Error('Open a folder before running setup.'),
-        );
-      }
-      const { buildDesktopSetupRunRequest } = yield* Effect.tryPromise({
-        try: () => import('@texra/controllers/onboarding/setupLaunch'),
-        catch: ensureError,
-      });
-      const request = yield* buildDesktopSetupRunRequest(
-        options.project.roots,
-        options.secrets,
-      );
-      if (!request) {
-        return yield* Effect.fail(
-          new Error(
-            'No model is available for your current credentials. Sign in with ChatGPT or add a provider or coding-plan API key in Models, then try setup again.',
-          ),
-        );
-      }
-      return yield* options.run.runValidated(request);
-    }).pipe(
-      Effect.catch((error) => {
-        if (error instanceof Cancelled) return Effect.void;
-        return presentRunFailure(options.project.present, error);
-      }),
-      // The kickoff settles with the setup run, so a second Run Setup
-      // waits for it; the run's own failure is its result row's to show.
-      Effect.flatMap((run) =>
-        run === undefined
-          ? Effect.void
-          : run.result.pipe(
-              Effect.asVoid,
-              Effect.catch((failure) =>
-                Effect.logDebug(`The setup run failed: ${failure.message}`),
-              ),
-            ),
-      ),
-    ),
-  );

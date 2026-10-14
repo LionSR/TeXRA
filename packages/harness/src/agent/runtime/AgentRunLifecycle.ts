@@ -258,7 +258,6 @@ export const runWithLifecycle = Effect.fn('runWithLifecycle')(function* <R>(
           : { kind: 'agent', agent: agentIdentifier },
     },
     options?.parentRunId ?? null,
-    ctx.logger,
   );
   const settleEnd = options?.settleEnd;
   // The terminal finalizer; outcome and error facts vary per exit, and a

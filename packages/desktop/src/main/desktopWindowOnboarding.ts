@@ -6,9 +6,9 @@ import { Data, Effect, Scope } from 'effect';
 import { withProcessServices, type ProcessRuntime } from '@texra-ai/harness';
 import { withLogChannel } from '@logger/effectLog';
 import { hasUsableSetupCredential } from '@texra/model/setupCredentialAccess';
+import { kickoffDesktopSetup } from '@texra/controllers/onboarding/setupLaunch';
 import type { HostRunActions } from '@texra/controllers/session/hostRunActions';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import { kickoffDesktopSetup } from './desktopAgentLaunch.js';
 import { createDesktopOnboardingIpc } from './desktopOnboardingIpc.js';
 import type {
   PlatformSecrets,
@@ -72,12 +72,14 @@ export const openWindowOnboarding = Effect.fn('desktop.openWindowOnboarding')(
       // this one-shot.
       kickoffSetup: () =>
         Effect.suspend(() =>
-          kickoffDesktopSetup({
-            project: projects.active(),
-            run: options.activeRun(),
-            secrets: options.secrets,
+          withProcessServices(
             runtime,
-          }),
+            kickoffDesktopSetup({
+              project: projects.active(),
+              run: options.activeRun(),
+              secrets: options.secrets,
+            }),
+          ),
         ),
       // Suspended so the "settings IPC not attached" guard raises when the
       // card's program runs, not when the port is built.

@@ -8,7 +8,6 @@
  * policy lives with the owning registry.
  */
 
-import type { AgentTrace } from '@agent/trace';
 import type { RunId, RunIdentity } from '@shared/schemas';
 import { runIdentityName } from '@shared/schemas';
 import type { Effect } from 'effect';
@@ -52,9 +51,7 @@ export interface RunControls {
  * Handle for one live agent run. The parent
  * edge is not the handle's: it is the run's rows (`RunRegistry.parentOf`).
  */
-export class RunHandle<
-  Trace extends AgentTrace | undefined = AgentTrace | undefined,
-> {
+export class RunHandle {
   private liveControls?: RunControls;
   /** The run that launched this one, as its launch named it: the parent its
    *  birth writes, never cut. A detach is the rows' (`parentOf`). */
@@ -68,10 +65,6 @@ export class RunHandle<
      */
     readonly run: RunFacts,
     launchParent: RunId | null,
-    /** The run's discriminated-event channel, for run-scoped subscribers:
-     *  present on every launched run, absent on a process or external-CLI
-     *  run's handle, which the type parameter records. */
-    readonly trace: Trace = undefined as Trace,
   ) {
     this.launchParent = launchParent;
   }
