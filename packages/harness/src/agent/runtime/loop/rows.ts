@@ -15,7 +15,6 @@ import { Effect, SynchronizedRef } from 'effect';
 import type { RunRecord } from '@agent/core/definition/RunRecord';
 import {
   qualifyAggregateId,
-  type JsonValue,
   type PositionAt,
   type RunBinding,
   type RunId,
@@ -24,7 +23,6 @@ import {
   type SessionEvent,
   type SessionEventDraft,
 } from '@shared/schemas';
-import type { DatabaseReadFailed } from '@shared/session/database';
 import type { QueuedFollowUp } from '@shared/session/runRows';
 import type { RunHistoryDraft, RunState } from '@shared/session/runStateFold';
 import { generateShortId } from '@utils/core';
@@ -33,7 +31,6 @@ import type { MessageSchema } from '@texra-ai/llm';
 import type { z } from 'zod';
 
 import type { AgentRunShape } from '../run/AgentRun';
-import type { SessionHandle } from '../SessionHandle';
 
 export type Message = z.infer<typeof MessageSchema>;
 
@@ -148,11 +145,10 @@ const SCRIPT_TOOL_NAME = 'script';
  * The row of a script's run's one call (`AgentConfig.script`): the call the
  * application handed it, which no model produced, so it records no attempt,
  * origin or usage. It stands as the pending response the loop dispatches.
- * Committed once, at its first turn.
+ * Committed once, in the run's opening batch.
  */
 export const handedDown = Effect.fn('rows.handedDown')(function* (
   run: Pick<AgentRunShape, 'steps' | 'logger' | 'runId'>,
-  state: RunState,
   call: NonNullable<AgentRunShape['config']['script']>,
 ) {
   const { runId } = run;
@@ -169,53 +165,21 @@ export const handedDown = Effect.fn('rows.handedDown')(function* (
   );
   if (facts === undefined)
     return yield* Effect.die(new Error('One call in, one dispatch fact out.'));
-  return [
-    {
-      type: 'model.message',
-      aggregateId: rowAggregate(runId),
-      payload: {
-        kind: 'handed-down',
-        responseId: randomUUID(),
-        call: facts,
-        argumentsText,
-      },
+  return {
+    type: 'model.message',
+    aggregateId: rowAggregate(runId),
+    payload: {
+      kind: 'handed-down',
+      responseId: randomUUID(),
+      call: facts,
+      argumentsText,
     },
-    positionRow(runId, state, 'response.ready'),
-  ] satisfies readonly RunHistoryDraft[];
+  } satisfies RunHistoryDraft;
 });
 
 /** The call id of a script run's one call (`AgentConfig.script`): its
  *  nested calls are `script/<seq>`. */
 const SCRIPT_CALL_ID = 'script';
-
-/** How a script's run's one call settled, as its journaled row says. */
-interface ScriptSettlement {
-  readonly failed: boolean;
-  /** A failed script's error, the run's reply. */
-  readonly reply: string;
-  /** What the script returned, the run's structured value (a document
-   *  task's documents). */
-  readonly value: JsonValue | undefined;
-}
-
-/** The settlement of `runId`'s script call; null before it settled. */
-export const scriptSettlement = Effect.fn('toolUse.scriptSettlement')(
-  function* (
-    session: Pick<SessionHandle, 'log'>,
-    runId: RunId,
-  ): Effect.fn.Return<ScriptSettlement | null, DatabaseReadFailed> {
-    const rows = yield* session.log.rows(rowAggregate(runId), ['tool.result']);
-    const settled = rows.findLast(
-      (row) =>
-        row.type === 'tool.result' && row.payload.callId === SCRIPT_CALL_ID,
-    );
-    if (settled?.type !== 'tool.result') return null;
-    const { result } = settled.payload;
-    return result.status === 'error'
-      ? { failed: true, reply: result.error, value: undefined }
-      : { failed: false, reply: '', value: result.value };
-  },
-);
 
 /** The `followup.consumed` rows of the run's pending requests of `kind`,
  *  or of every kind. */

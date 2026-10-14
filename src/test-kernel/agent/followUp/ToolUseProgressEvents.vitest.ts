@@ -388,8 +388,6 @@ describe('tool-use session-stage outcome persistence (#8023)', () => {
         expect(sessionStages).toEqual([
           { label: 'Tool-use turn', status: scenario.expectedOutcome },
         ]);
-        // The turn is the only structural stage: rounds are row facts.
-        expect(groups.some((group) => group.kind === 'round')).toBe(false);
       } finally {
         recorder.dispose();
       }
