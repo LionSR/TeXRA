@@ -18,13 +18,11 @@ All notable changes to this project will be documented in this file.
   reads (`AgentBlock.result`: the value's schema, its delivery body and the
   files it changed). A document task's documents, diffs included, are that
   value, and their diffs are computed when the task proposes, for every
-  launch. `withWorkflowDiffs` leaves `@agent/runtime`, and a run's result
-  record no longer carries diffs. `texra run --json` still reports a
-  document task's documents as `output.documents`. A subagent delivery
-  names its kind by the block key (`kind="task"`, was
-  `kind="document-task"`). Runs written by an earlier build are listed as
-  such and are not resumed. An older window is refused by a newer service
-  and asked to update.
+  launch. `texra run --json` still reports a document task's documents as
+  `output.documents`. A subagent delivery names its kind by the block key
+  (`kind="task"`, was `kind="document-task"`). Runs written by an earlier
+  build are listed as such and are not resumed. An older window is refused
+  by a newer service and asked to update.
 - **Only a document task's proposed revision carries diffs.** Earlier
   revisions' files no longer have a `diff=` attribute in a subagent
   delivery or an entry in `texra run --json`'s `documents.diffs`; the

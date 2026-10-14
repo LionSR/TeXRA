@@ -17,7 +17,7 @@ import {
   aggregateTarget,
   HISTORY_RUN_STATUS,
   HISTORY_RUN_STATUS_LABEL,
-  isRecipeConfig,
+  isTaskConfig,
   RUN_SUBSTATE,
   type RunId,
   type HistoryRunStatus,
@@ -543,7 +543,7 @@ function toCliHistoryEntry(entry: AgentRunListingEntry): CliHistoryEntry {
 
 /** A document task's run, or a chat: what its launch config ran. */
 function runKindOf(config: AgentConfig): 'task' | 'chat' {
-  return isRecipeConfig(config) ? 'task' : 'chat';
+  return isTaskConfig(config) ? 'task' : 'chat';
 }
 
 function teamIdOf(config: AgentConfig | null): string | undefined {

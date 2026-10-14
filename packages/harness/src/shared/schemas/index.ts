@@ -44,7 +44,7 @@ export {
   RunRecordFieldsSchema,
   RunEndSchema,
   RunWorkspaceFilesSchema,
-  isRecipeConfig,
+  isTaskConfig,
   type ResultMeta,
   type RunEnd,
   type RunEndOutput,

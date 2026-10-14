@@ -7,7 +7,7 @@ import { detectGeneratedLatexdiffArtifact } from '@latex/latexdiff/diffFileNameM
 import type { ModelHostFactUnreadable } from '@model/computeModelOptions';
 import { decideRunModel } from '@model/runModelDecision';
 import {
-  isRecipeConfig,
+  isTaskConfig,
   fileLocationAddressPath,
   MODEL_AVAILABILITY_STATUS,
   type ModelAvailabilityKind,
@@ -144,7 +144,7 @@ export class ProgressFollowUpController {
     ): Effect.fn.Return<ProgressFollowUpPlan, PlatformError.PlatformError> {
       // The compile-fixer planner serves document tasks only.
       const workflowConfig =
-        input.runConfig && isRecipeConfig(input.runConfig)
+        input.runConfig && isTaskConfig(input.runConfig)
           ? input.runConfig
           : undefined;
       if (!workflowConfig) {

@@ -41,11 +41,11 @@ import { z } from 'zod';
 import { stepInstructions } from '@agent/prompt/PromptBuilder';
 import type { RuntimeToolRegistry } from '@agent/runtime/ToolServices';
 import { MapToolRegistry } from '@agent/core/tools/ToolTypes';
+import { isTrustedScript } from '@agent/core/definition/RunRecord';
 import type { LoadablePlugin } from '@common/plugins/pluginTrust';
 import { withLogChannel } from '@logger/effectLog';
 import type { PluginContext } from '@platform/processRuntime';
 import {
-  isRecipeConfig,
   AGENT_SKILLS_CONFIG_KEY,
   AgentSkillsEnabledSchema,
   sameIdentity,
@@ -254,9 +254,9 @@ const openStep = Effect.fn('Step.open')(function* (
   const { roots } = run.session;
   const scope = yield* Scope.fork(run.scope);
   const step = yield* Effect.gen(function* () {
-    // No switch or approval withholds a recipe's fixed tools; else read live.
-    const recipe = isRecipeConfig(run.config);
-    const off = recipe
+    // A trusted script's tools are fixed; else read the switches live.
+    const trusted = isTrustedScript(run.config);
+    const off = trusted
       ? Effect.succeed(new Set<string>())
       : readDisabledTools(run.stores.globalState);
     const pinned = yield* run.session.tools
@@ -267,7 +267,7 @@ const openStep = Effect.fn('Step.open')(function* (
       ...run.toolInputs,
       ...gates,
       hostCapabilities: yield* hostCapabilitiesOf(run.session, pinned, scope),
-      ...(recipe && { approvalPromptsUnavailable: false }),
+      ...(trusted && { approvalPromptsUnavailable: false }),
     });
     const held = recorded === null ? null : heldToRecord(resolved, recorded);
     const tools = describedAtFreeze(

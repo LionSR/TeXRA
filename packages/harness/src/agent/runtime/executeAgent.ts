@@ -8,7 +8,7 @@ import { withLogChannel } from '@logger/effectLog';
 import type { ProcessServices } from '@platform/processRuntime';
 import { sessionFsLayer } from '@platform/rootedFs';
 import {
-  isRecipeConfig,
+  isTaskConfig,
   type OfferedTool,
   type RunId,
   type RequestEnsureProgressViewPayload,
@@ -109,7 +109,7 @@ function runLayerFor(
  * Run the loop for a single agent run, fresh or resumed.
  *
  * Owns all run wiring: progress counters and model-change side effects, and
- * for a recipe's run its children's spend. A failed run
+ * for a task its children's spend. A failed run
  * arrives as a FAILED result carrying its structured error, so there is
  * nothing to unwrap here. The callers (`executeAgent`,
  * `resumeToolUseFromResumeData`) own lifecycle and stream-status.
@@ -120,7 +120,7 @@ function launchRun(
   shared: SubagentRunOptions,
   variant: LaunchVariant,
 ): Effect.Effect<RunEndResult, Error, AgentRunServices> {
-  const recipe = isRecipeConfig(ctx.config);
+  const task = isTaskConfig(ctx.config);
   const toResult = (
     result: Effect.Success<ReturnType<typeof runToolUse>>,
   ): RunEndResult => ({
@@ -141,9 +141,9 @@ function launchRun(
     }),
   });
   const { turns } = shared;
-  /** A recipe's result, with its children's spend. */
+  /** A task's result, with its children's spend. */
   const withChildrenSpend = (ended: RunEndResult) =>
-    recipe ? withChildSpend(ctx.session, ended) : Effect.succeed(ended);
+    task ? withChildSpend(ctx.session, ended) : Effect.succeed(ended);
   // A stop asked before the run was reachable is this fiber's interruption,
   // taken before the loop does any work.
   return Effect.suspend(() =>

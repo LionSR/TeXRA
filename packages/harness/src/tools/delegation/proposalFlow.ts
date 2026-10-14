@@ -16,7 +16,7 @@ import {
   type WorkspaceAgentsStores,
 } from '@agent/index/agentRegistry';
 import { type RunToolCall } from '@agent/runtime/RunCall';
-import { isRecipeConfig } from '@shared/schemas';
+import { isTrustedScript } from '@agent/core/definition/RunRecord';
 import type {
   AgentProposal,
   RequestDecision,
@@ -49,14 +49,16 @@ const DEFAULT_DELEGATION_REJECTION_FEEDBACK = [
 ].join(' ');
 
 /** Resolve `name` from the agents `run` may launch, listing them on
- *  failure. A recipe's calls name the agents TeXRA chose (its persona by
- *  key, the bundled `critic`), so they resolve past any scope or shadowing. */
+ *  failure. A trusted script's calls resolve in the catalog, past any scope
+ *  or shadowing. */
 export const requireAgent = Effect.fn('requireAgent')(function* (
   stores: WorkspaceAgentsStores,
   name: string,
   run: Pick<RunToolCall['run'], 'config' | 'delegationAgentScope'>,
 ) {
-  const pinned = isRecipeConfig(run.config) ? getCatalogAgent(name) : undefined;
+  const pinned = isTrustedScript(run.config)
+    ? getCatalogAgent(name)
+    : undefined;
   if (pinned) return pinned;
   const agents = yield* resolveDelegationScopeAgents(
     stores,
@@ -157,9 +159,7 @@ const requestDelegationProposal = Effect.fn('requestDelegationProposal')(
     ask?: Effect.Effect<RequestDecision, ProposalRequestError>,
   ): Effect.fn.Return<DelegationProposalDecision, ProposalRequestError> {
     const { session, runId, config } = parent.run;
-    // A task's recipe calls its persona under the approval its
-    // launch got.
-    if (isRecipeConfig(config))
+    if (isTrustedScript(config))
       return { result: { action: 'approve' }, childApproval: 'inherit' };
     const policy = session.approvals.policy(runId);
     const decision = decideProposalApproval({

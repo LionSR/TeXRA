@@ -38,7 +38,7 @@ import { AppState } from '@platform/interfaces';
 import { Secrets } from '@platform/secrets';
 import {
   INSTRUCTION_ACTION,
-  isRecipeConfig,
+  isTaskConfig,
   RUN_OUTCOME,
   type AttachedMemoryMiss,
   type RunId,
@@ -393,13 +393,10 @@ export const buildAgentLaunchContext = Effect.fn('buildAgentLaunchContext')(
           : Effect.sync(() => stage.end(RUN_OUTCOME.FAILED)),
     );
 
-    // A recipe's run renders nothing itself: its plugin's tools render their
-    // templates from this opening at every call, a resumed run's included,
-    // so it is built on resume too. A resumed conversation's rows hold its
-    // opening, which renders nothing again.
-    const recipe = isRecipeConfig(config);
+    // A task's tools render their templates from this opening at every
+    // call, so it is built on resume too; a conversation's rows hold its own.
     const opening =
-      resumed && !recipe
+      resumed && !isTaskConfig(config)
         ? null
         : yield* buildTemplateInputs(
             config,

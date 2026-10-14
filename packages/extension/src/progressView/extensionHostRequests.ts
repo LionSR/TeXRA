@@ -256,7 +256,9 @@ export function createExtensionHostRequests(
           Effect.tap((run) =>
             Effect.forkIn(
               run.result.pipe(
-                Effect.flatMap(openFinalOutputIfAvailable(roots)),
+                Effect.flatMap(
+                  openFinalOutputIfAvailable(roots, request.config),
+                ),
                 Effect.ignore({ log: 'Warn', message: 'Opening the output' }),
               ),
               options.scope,
@@ -271,8 +273,11 @@ export function createExtensionHostRequests(
       session: runSession,
       scope: options.scope,
       runValidated,
-      openWorkflowOutput: (result) =>
-        withProcessServices(runtime, openFinalOutputIfAvailable(roots)(result)),
+      openWorkflowOutput: (config, result) =>
+        withProcessServices(
+          runtime,
+          openFinalOutputIfAvailable(roots, config)(result),
+        ),
       loadModelOptions: () =>
         withProcessServices(runtime, loadModelOptions({ ...roots, secrets })),
       // The set-key quick pick is a VS Code command: it either runs or

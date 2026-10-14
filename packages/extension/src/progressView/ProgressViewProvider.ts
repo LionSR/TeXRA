@@ -21,7 +21,6 @@ import { pushManualCriticism } from '@frontend/latex/inlineCriticism';
 import { getLinterMessages } from '@frontend/latex/linter';
 import { withLogChannel } from '@logger/effectLog';
 import { agentKeyOf, type FileLocation, type RunId } from '@shared/schemas';
-import { isLiveRun } from '@shared/session/sessionView';
 import {
   getFirstRunDone,
   setOnboardingDeclined,
@@ -37,7 +36,6 @@ import {
 } from '@texra/tools/editorHost';
 import { projectDisplayOf } from '@texra/shared/session/hostSnapshot';
 import { DOCUMENTS_OUTPUT_KEY } from '@texra/shared/plugins/documents';
-import { documentsResultOf } from '@texra/shared/plugins/documentOutputs';
 import type {
   DownMessage,
   SurfaceActionMessage,
@@ -337,6 +335,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     this.runtime.runSync(
       Effect.forkIn(this.attention.follow(runSession), this.scope),
     );
+    this.runtime.runSync(Effect.forkIn(this.chimeOnDocuments(), this.scope));
 
     const presentation = createAgentPresentationHost(
       this,
@@ -373,9 +372,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     // Attached for the window's life, before the first run of this window
     // asks anything. Requests this host does not present (bash, plan,
     // proposal, retry, question) stay pending in the fold until the view's
-    // request row decides them. A document task's `run.end` is the completion
-    // chime, one per process (PRD 12.4), never a renderer transition hook
-    // that every subscriber would replay. A failed run does not chime.
+    // request row decides them.
     // What this window does for a run, whether it runs here or in the
     // service: notices, and the editor's diagnostics, inline criticism and
     // PDF viewer, which the editor tools read through the registry.
@@ -420,19 +417,9 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
           .pipe(Scope.provide(this.scope)),
       );
       this.runtime.runSync(
-        attachSessionHost(handle, this.toolEditApprovals, {
-          ...presentation,
-          onEvent: (event) =>
-            Effect.sync(() => {
-              // A document task's end carries its documents.
-              if (
-                event.type === 'run.end' &&
-                documentsResultOf(event.output.structured) !== undefined &&
-                event.outcome !== 'failed'
-              )
-                this.chime();
-            }),
-        }).pipe(Scope.provide(this.scope)),
+        attachSessionHost(handle, this.toolEditApprovals, presentation).pipe(
+          Scope.provide(this.scope),
+        ),
       );
     }
     if (service !== undefined)
@@ -489,10 +476,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     };
   }
 
-  /**
-   * Offer the service this window's capabilities for its project's runs,
-   * and chime when one of its document tasks ends, as a run here does.
-   */
+  /** Offer the service this window's capabilities for its project's runs. */
   private attachToService(
     service: ServiceLink,
     capabilities: Omit<WindowHost, 'toolEdits'>,
@@ -540,7 +524,6 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
           ? Stream.concat(Stream.succeed(undefined), focused)
           : focused,
       );
-      yield* Effect.forkScoped(this.chimeOnServiceDocuments());
       // While the link holds no service, the banner says why (reaching it
       // again, or refused by a newer TeXRA), so the view never sits frozen
       // without saying so.
@@ -552,24 +535,27 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     });
   }
 
-  /** Chime when a document task the service runs ends with its documents,
-   *  as the session's own `run.end` does for one run here. */
-  private chimeOnServiceDocuments(): Effect.Effect<void> {
+  /** The completion chime (PRD 12.4), one per process and never a renderer
+   *  transition hook every subscriber would replay: a document task (its
+   *  run holds the documents fact, which only its recipe records)
+   *  completing, here or in the service. A failed or cancelled run does not
+   *  chime; neither does one already ended when this window first sees it. */
+  private chimeOnDocuments(): Effect.Effect<void> {
     return Effect.suspend(() => {
-      let live = new Set<RunId>();
+      let open = new Set<RunId>();
       return Stream.runForEach(this.runSession.view.changes, (view) =>
         Effect.sync(() => {
           const now = new Set<RunId>();
           for (const run of view.runs.values()) {
-            if (isLiveRun(run)) now.add(run.id);
+            if (run.durableOutcome === null) now.add(run.id);
             else if (
-              live.has(run.id) &&
+              open.has(run.id) &&
               run.facts[DOCUMENTS_OUTPUT_KEY] !== undefined &&
-              run.durableOutcome !== 'failed'
+              run.durableOutcome === 'completed'
             )
               this.chime();
           }
-          live = now;
+          open = now;
         }),
       );
     });

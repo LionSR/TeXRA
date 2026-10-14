@@ -1,18 +1,17 @@
 /**
  * What both GUI hosts attach to a session for the life of their window: the
- * tool-edit preview its controller stages, and what the host presents itself
- * (`extras`). The session hands `presentToolEdit` its request and does not
- * wait; the request is staged on a fiber of the caller's scope. The events
- * the session commits drain into the controller, so a decided request
- * releases its preview whichever surface decided it, and into the host's own
- * `onEvent`. The host closes the scope to detach.
+ * tool-edit preview its controller stages, and what the host presents
+ * itself (`interactions`). The session hands `presentToolEdit` its request
+ * and does not wait; the request is staged on a fiber of the caller's
+ * scope. The events the session commits drain into the controller, so a
+ * decided request releases its preview whichever surface decided it. The
+ * host closes the scope to detach.
  */
 import { Cause, Effect, Queue, type Scope, Stream } from 'effect';
 
 import type { HostInteractions } from '@agent/runtime/HostInteractions';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { withLogChannel } from '@logger/effectLog';
-import type { SessionEvent } from '@shared/schemas';
 import type { ToolEditApprovalController } from '@texra/controllers/approval/ToolEditApprovalController';
 import type { ToolEditApprovalRequest } from '@tools/approval/toolEditApproval';
 
@@ -25,14 +24,11 @@ type PreviewServices = Effect.Services<
 export const attachSessionHost = Effect.fn('session.attachHost')(function* (
   session: SessionHandle,
   controller: ToolEditApprovalController,
-  extras: Omit<
+  interactions: Omit<
     HostInteractions,
     'presentToolEdit' | 'releaseToolEdit' | 'approveToolEdit'
-  > & {
-    readonly onEvent?: (event: SessionEvent) => Effect.Effect<void>;
-  },
+  >,
 ): Effect.fn.Return<void, never, Scope.Scope | PreviewServices> {
-  const { onEvent, ...interactions } = extras;
   const services = yield* Effect.context<PreviewServices>();
   const stagings = yield* Queue.unbounded<ToolEditApprovalRequest>();
   // A staging failure is logged here: the request stays open in the fold, and
@@ -60,9 +56,7 @@ export const attachSessionHost = Effect.fn('session.attachHost')(function* (
   // every staged preview waiting on a `request.decided`.
   yield* Effect.forkScoped(
     Stream.runForEach(session.log.tail(session.log.now()), (event) =>
-      controller
-        .handleSessionEvent(event)
-        .pipe(Effect.andThen(onEvent?.(event) ?? Effect.void)),
+      controller.handleSessionEvent(event),
     ).pipe(
       Effect.catchCause((cause) =>
         Cause.hasInterruptsOnly(cause)
