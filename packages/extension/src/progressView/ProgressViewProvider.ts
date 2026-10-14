@@ -537,9 +537,9 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
 
   /** The completion chime (PRD 12.4), one per process and never a renderer
    *  transition hook every subscriber would replay: a document task (its
-   *  run holds the documents fact, which only its recipe records) reaching
-   *  its durable outcome, here or in the service. A failed run does not
-   *  chime. */
+   *  run holds the documents fact, which only its recipe records)
+   *  completing, here or in the service. A failed or cancelled run does not
+   *  chime; neither does one already ended when this window first sees it. */
   private chimeOnDocuments(): Effect.Effect<void> {
     return Effect.suspend(() => {
       let open = new Set<RunId>();
@@ -551,7 +551,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
             else if (
               open.has(run.id) &&
               run.facts[DOCUMENTS_OUTPUT_KEY] !== undefined &&
-              run.durableOutcome !== 'failed'
+              run.durableOutcome === 'completed'
             )
               this.chime();
           }
