@@ -165,7 +165,7 @@ const requestDelegationProposal = Effect.fn('requestDelegationProposal')(
     const decision = decideProposalApproval({
       policy,
       scopedBypass: session.approvals.bypass(runId, 'superYolo') !== null,
-      canPresent: parent.run.toolPolicy.approvalPromptsUnavailable !== true,
+      canPresent: !session.interactions.approvalPromptsUnavailable,
     });
     switch (decision) {
       case 'deny-policy':

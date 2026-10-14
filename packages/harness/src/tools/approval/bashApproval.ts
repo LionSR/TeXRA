@@ -96,7 +96,7 @@ export const requestBashApproval = Effect.fn('requestBashApproval')(function* (
     policy,
     promptRequired: approvalsEnabled,
     scopedBypass: granted(),
-    canPresent: run.toolPolicy.approvalPromptsUnavailable !== true,
+    canPresent: !session.interactions.approvalPromptsUnavailable,
   });
 
   if (decision === 'allow') return { action: 'approve' };

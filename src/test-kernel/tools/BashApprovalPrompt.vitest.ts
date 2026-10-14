@@ -93,13 +93,10 @@ describe('requestBashApproval queueing', () => {
           const project = createFakeHost({
             config: Object.fromEntries(keys.map((key) => [key, true])),
           });
+          yield* session.interactions.use({ approvalPromptsUnavailable: true });
           const layer = nativeToolTestLayer({
             roots: project.roots,
-            run: {
-              session,
-              runId: generateRunId(),
-              toolPolicy: { approvalPromptsUnavailable: true },
-            },
+            run: { session, runId: generateRunId(), toolPolicy: {} },
           });
           const bash = yield* requestBashApproval({
             command: 'echo scoped',

@@ -160,7 +160,6 @@ function parentRunContext(
     runId: RunId;
     stopAfterCycle: boolean;
     session: SessionHandle;
-    approvalPromptsUnavailable: boolean;
     userInstruction: string;
   }> = {},
 ): Parameters<typeof nativeToolTestLayer>[0] {
@@ -177,11 +176,7 @@ function parentRunContext(
         agent: 'chat',
         model: 'deepseek/deepseek-v4-flash',
       }),
-      toolPolicy: {
-        stopAfterCycle,
-        approvalPromptsUnavailable:
-          overrides.approvalPromptsUnavailable ?? false,
-      },
+      toolPolicy: { stopAfterCycle },
     },
   };
 }
@@ -870,12 +865,13 @@ describe('headless delegation', () => {
           // (a script's `agent` calls). The proposal gate must not settle a
           // guaranteed denial; the child stays on inherited approval state.
           const session = yield* createTestSession();
+          yield* session.interactions.use({ approvalPromptsUnavailable: true });
           const decider = answerOpenedRequests(session, { action: 'approve' });
           yield* Effect.addFinalizer(() =>
             decider.stop().pipe(Effect.ensuring(closeSessionOf(session))),
           );
           const result = yield* callDelegateReview(
-            parentRunContext({ session, approvalPromptsUnavailable: true }),
+            parentRunContext({ session }),
           );
 
           yield* registryOf(session.runs).awaitDrained();
@@ -902,12 +898,13 @@ describe('headless delegation', () => {
           // cannot present prompts, or opens a prompt nobody may answer.
           const session = yield* createTestSession();
           setTestApprovalPolicy('never');
+          yield* session.interactions.use({ approvalPromptsUnavailable: true });
           const decider = answerOpenedRequests(session, { action: 'approve' });
           yield* Effect.addFinalizer(() =>
             decider.stop().pipe(Effect.ensuring(closeSessionOf(session))),
           );
           const result = yield* callDelegateReview(
-            parentRunContext({ session, approvalPromptsUnavailable: true }),
+            parentRunContext({ session }),
           );
 
           expect(decider.openedKinds).toEqual([]);

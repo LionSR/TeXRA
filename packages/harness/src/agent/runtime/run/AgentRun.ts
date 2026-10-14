@@ -67,9 +67,6 @@ interface LaunchEntry {
  * beneath it — the property an SDK embedder wants.
  */
 export interface ToolPolicy {
-  /** The host cannot answer an approval prompt: the gates deny what they
-   *  would present. Which tools a step offers reads the session live. */
-  readonly approvalPromptsUnavailable?: boolean;
   /** Stop a tool-use run after one model/tool cycle instead of waiting. */
   readonly stopAfterCycle?: boolean;
   /** What the parent's step offered when it launched this delegated child:

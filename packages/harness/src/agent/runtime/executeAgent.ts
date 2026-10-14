@@ -282,9 +282,6 @@ export function executeAgent(
       session: options.session,
       ownApiKeyFallback: options.ownApiKeyFallback,
       toolPolicy: {
-        // The session's host decides whether an approval can be asked.
-        approvalPromptsUnavailable:
-          options.session.interactions.approvalPromptsUnavailable,
         stopAfterCycle: options.stopAfterCycle,
         parentOffered: options.parentOffered,
       },
@@ -417,8 +414,6 @@ export function resumeToolUseFromResumeData(
       runId: resume.runId,
       session: runSession,
       toolPolicy: {
-        approvalPromptsUnavailable:
-          runSession.interactions.approvalPromptsUnavailable,
         stopAfterCycle: options.stopAfterCycle,
       },
     });
