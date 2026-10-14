@@ -209,7 +209,7 @@ const revisionContext = Effect.fn('documents.revisionContext')(function* (
 export const DocumentExtractTool = defineTool({
   name: 'document_extract',
   description:
-    "Take the documents out of the reply a revision's agent run gave (`run`, the run id `agent()` resolved with): they become the revision's output files, with their lineage and diff stats. Resolves to `{ files, missing }`.",
+    "Take the documents out of the reply a revision's agent run gave (`run`, the run id `agent()` resolved with): they become the revision's output files, with their lineage and diff stats. Resolves to `{ files, missing }`: `missing` names the expected files the revision lacks, and `<unextracted document N>` for each document its reply held that did not extract.",
   scriptReturns: '{ files: string[]; missing: string[] }',
   replay: 'safe',
   schema: z.strictObject({
@@ -235,6 +235,8 @@ export const DocumentExtractTool = defineTool({
     round.outputs = [];
     round.missingOutputs = [];
     round.compileFailures = [];
+    round.latexdiffs = [];
+    round.reply = location;
     // A broken structure costs the repair, not the revision: reported, and
     // extraction reads the reply as it is.
     yield* docs.xml.ensureCorrectXmlStructure(location).pipe(
@@ -259,12 +261,8 @@ export const DocumentExtractTool = defineTool({
       revision,
       docs.task.rewrite,
     );
-    const { missing } = yield* checkExpectedOutputs(
-      docs.state,
-      docs.deps,
-      location,
-      revision,
-    );
+    yield* checkExpectedOutputs(docs.state, docs.deps, revision);
+    const missing = round.missingOutputs;
     if (missing.length > 0)
       yield* docs.requests.present('requestShowInstruction', {
         key: 'missingOutputsInfo',
@@ -288,9 +286,10 @@ export const DocumentExtractTool = defineTool({
     );
     return {
       ...executed(
-        files.length > 0
+        (files.length > 0
           ? `Revision ${revision + 1} wrote: ${files.join(', ')}`
-          : `Revision ${revision + 1} wrote no documents.`,
+          : `Revision ${revision + 1} wrote no documents.`) +
+          (missing.length > 0 ? ` Missing: ${missing.join(', ')}.` : ''),
         `Revision ${revision + 1}: ${files.length} files`,
       ),
       value: { files, missing },
@@ -303,7 +302,7 @@ export const DocumentExtractTool = defineTool({
 export const DocumentCompileTool = defineTool({
   name: 'document_compile',
   description:
-    "Compile a revision's .tex outputs. Resolves to `{ failures, checked }`: the outputs that failed with their logs, and whether a check ran at all (auto-compile off, or no LaTeX toolchain, runs none).",
+    "Compile a revision's .tex outputs. Resolves to `{ failures, checked }`: the outputs that failed with their logs, and whether a check ran at all (auto-compile off, or no LaTeX toolchain, runs none). Run it before `document_diff`, not beside it: each call records the run's documents whole.",
   scriptReturns:
     '{ failures: { output: string; log: string }[]; checked: boolean }',
   replay: 'safe',
@@ -359,7 +358,7 @@ export const DocumentCompileTool = defineTool({
 export const DocumentDiffTool = defineTool({
   name: 'document_diff',
   description:
-    "Run latexdiff of a revision's outputs against the documents the task started from. Resolves to `{ diffs }`, the diff files it wrote.",
+    "Run latexdiff of a revision's outputs against the documents the task started from. Resolves to `{ diffs }`, the diff files it wrote. Run it after `document_compile`, not beside it: each call records the run's documents whole.",
   scriptReturns: '{ diffs: string[] }',
   replay: 'safe',
   schema: z.strictObject({ revision: RevisionSchema }),
@@ -374,7 +373,7 @@ export const DocumentDiffTool = defineTool({
         ),
         value: { diffs: [] },
       };
-    const artifacts = yield* docs.diff
+    const { artifacts, entries } = yield* docs.diff
       .handleLatexdiffOfOutput(
         revision,
         outputs,
@@ -388,10 +387,11 @@ export const DocumentDiffTool = defineTool({
                 docs.deps.logger.warn('latexdiff failed', {
                   data: Cause.squash(cause),
                 });
-                return [];
+                return { artifacts: [], entries: [] };
               }),
         ),
       );
+    ensureRoundData(docs.state, revision).latexdiffs = entries;
     if (yield* autoOpensPdf(docs)) yield* present(docs, artifacts);
     const diffs = artifacts.map(fileLocationDisplayPath);
     return {
@@ -400,6 +400,7 @@ export const DocumentDiffTool = defineTool({
         `${diffs.length} diffs`,
       ),
       value: { diffs },
+      facts: [docs.fact()],
     };
   }),
 });

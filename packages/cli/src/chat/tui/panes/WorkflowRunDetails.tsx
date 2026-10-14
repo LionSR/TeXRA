@@ -8,11 +8,11 @@ import { Box, Text } from 'ink';
 
 import { safeTerminalText } from '@cli/runtime/terminalText';
 import { COLOR_BORDER, COLOR_ERROR, COLOR_WARNING } from '@cli/tui/ui/colors';
-import { CROSS, PENDING_BOX, WARNING } from '@cli/tui/ui/glyphs';
+import { CROSS, PENDING_BOX, TICK, WARNING } from '@cli/tui/ui/glyphs';
 import {
   RUN_PHASE,
   fileLocationDisplayPath,
-  type OutputFileInfo,
+  type FileLocation,
   type RunOutcome,
   type TaskGroup,
   type TaskGroupStatus,
@@ -21,11 +21,14 @@ import { formatRunStatusLabel } from '@shared/runs/runStatusDisplay';
 import { taskGroupDisplayStatus } from '@shared/runs/taskGroupProjection';
 import {
   formatRoundLabel,
+  latexdiffDisplayName,
   outputDiffCounts,
   outputDisplayName,
   roundIndexedEntries,
   type CompileFailure,
+  type LatexdiffEntry,
   type ReadonlyRoundIndexed,
+  type OutputFileInfo,
 } from '@texra/shared/plugins/documentOutputs';
 import { formatCompactDuration } from '@utils/text/stringUtils';
 
@@ -49,6 +52,9 @@ type WorkflowRunFacts = {
   readonly outputFilesByRound: ReadonlyRoundIndexed<OutputFileInfo>;
   readonly missingOutputsByRound: ReadonlyRoundIndexed<string>;
   readonly compileFailuresByRound: ReadonlyRoundIndexed<CompileFailure>;
+  readonly latexdiffsByRound: ReadonlyRoundIndexed<LatexdiffEntry>;
+  /** Each round's kept reply: a round that wrote nothing shows where. */
+  readonly repliesByRound: { readonly [round: number]: FileLocation };
 };
 
 interface WorkflowRunDetailGroup {
@@ -117,9 +123,13 @@ function workflowRunDetailGroups(
       ([, missing]) => missing.length > 0,
     ),
     ...roundIndexedEntries(facts.compileFailuresByRound),
+    ...roundIndexedEntries(facts.latexdiffsByRound),
   ]) {
     rounds.add(round);
   }
+  // As the webview's file list: a round that kept a reply shows.
+  for (const round of Object.keys(facts.repliesByRound))
+    rounds.add(Number(round));
 
   for (const round of [...rounds].toSorted((left, right) => left - right)) {
     const lines: WorkflowRunDetailLine[] = [
@@ -156,12 +166,19 @@ function workflowRunDetailGroups(
         });
       }
     }
-    for (const [index, path] of (
-      facts.missingOutputsByRound[round] ?? []
-    ).entries()) {
+    const missing = facts.missingOutputsByRound[round] ?? [];
+    const reply = facts.repliesByRound[round];
+    if (reply && (outputs.length === 0 || missing.length > 0))
+      lines.push({
+        key: `reply:${round}`,
+        text: `  ${WARNING} ${formatRoundLabel(round)} · ${outputs.length === 0 ? 'Wrote no documents; reply' : 'Reply'} kept at ${safeTerminalText(reply.absolutePath)}`,
+        color: COLOR_WARNING,
+        role: 'alert',
+      });
+    for (const [index, path] of missing.entries()) {
       lines.push({
         key: `missing:${round}:${path}:${index}`,
-        text: `  ${WARNING} ${formatRoundLabel(round)} · Missing expected output: ${safeTerminalText(path)}`,
+        text: `  ${WARNING} ${formatRoundLabel(round)} · Missing output: ${safeTerminalText(path)}`,
         color: COLOR_WARNING,
         role: 'alert',
       });
@@ -174,6 +191,16 @@ function workflowRunDetailGroups(
         text: `  ${CROSS} ${formatRoundLabel(round)} · Compile check failed: ${safeTerminalText(failure.displayName)} · ${safeTerminalText(failure.logRelativePath)}`,
         color: COLOR_ERROR,
         role: 'alert',
+      });
+    }
+    for (const [index, entry] of (
+      facts.latexdiffsByRound[round] ?? []
+    ).entries()) {
+      lines.push({
+        key: `latexdiff:${round}:${index}`,
+        text: `  ${entry.status === 'ok' ? TICK : CROSS} ${formatRoundLabel(round)} · Latexdiff: ${safeTerminalText(latexdiffDisplayName(entry))}${entry.status === 'failed' ? ` — ${safeTerminalText(entry.error)}` : ''}`,
+        color: entry.status === 'ok' ? undefined : COLOR_ERROR,
+        role: entry.status === 'ok' ? 'output' : 'alert',
       });
     }
     groups.push({ key: `round:${round}`, lines, priority: ROUND_PRIORITY });

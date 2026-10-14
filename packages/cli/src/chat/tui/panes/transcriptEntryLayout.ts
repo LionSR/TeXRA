@@ -63,8 +63,8 @@ const PROSE_GEOMETRY: RowGeometry = {
   marginTopRows: 0,
 };
 
-// Compact informational rows (thinking, web search/fetch, missing outputs,
-// latexdiff, usage, context management, status). The `●` is the marker every
+// Compact informational rows (thinking, web search/fetch, usage, context
+// management, status). The `●` is the marker every
 // one-line activity row leads with; detail rows paint it dim, so they stay
 // distinct from the bold, status-colored tool header that shares the glyph.
 const DETAIL_GEOMETRY: RowGeometry = {
@@ -84,8 +84,6 @@ const ROW_GEOMETRY = {
   thinking: DETAIL_GEOMETRY,
   scratchpad: DETAIL_GEOMETRY,
   webSearch: DETAIL_GEOMETRY,
-  missingOutputs: DETAIL_GEOMETRY,
-  latexdiff: DETAIL_GEOMETRY,
   contextManagement: DETAIL_GEOMETRY,
   progressStatus: DETAIL_GEOMETRY,
   error: {

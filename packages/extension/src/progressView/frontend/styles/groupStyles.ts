@@ -84,15 +84,14 @@ export const groupStyles = css`
       .log-group-content,
       .log-line,
       .banner-details,
-      context-management,
-      latexdiff-results
+      context-management
     ) {
     margin-inline-start: var(--wa-space-2xs);
   }
 
   .log-group-content
     .log-group-content
-    :is(.log-line, .banner-details, context-management, latexdiff-results) {
+    :is(.log-line, .banner-details, context-management) {
     margin-inline-start: 0;
   }
 `;

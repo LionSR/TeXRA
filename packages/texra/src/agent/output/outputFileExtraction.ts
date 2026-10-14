@@ -20,7 +20,6 @@ import { replaceInputCommands } from './fileMapping';
 import { recoverOutputFailure } from './outputOperations';
 import {
   ensureRoundData,
-  reportMissingOutputs,
   type OutputState,
   type OutputDependencies,
 } from './outputState';
@@ -71,7 +70,8 @@ function similarityBaseFiles(
 }
 
 /**
- * Signal a missing/empty round to the UI, then persist the empty round summary.
+ * Warn of a round that wrote nothing, then persist its empty outputs (its
+ * kept reply, which hosts offer to open, is the round's `reply`).
  */
 const handleNoOutputs = Effect.fn('documents.handleNoOutputs')(function* (
   state: OutputState,
@@ -85,8 +85,9 @@ const handleNoOutputs = Effect.fn('documents.handleNoOutputs')(function* (
   // it almost always means it did not wrap each file in
   // `<document name="…">`. Surface that as a warning so the round is not a
   // silent "success" that writes no files; the raw response is kept for recovery.
-  // An unreadable raw response reads as empty here — the missing-output report
-  // below still fires, so the round is never recorded as a quiet success.
+  // An unreadable raw response reads as empty here: the round still records
+  // no outputs beside its kept `reply`, which hosts show as a round that
+  // wrote no documents, so it is never a quiet success.
   const rawText = yield* fs.readFileString(outputLocation.absolutePath).pipe(
     Effect.map(normalizeLineEndings),
     Effect.catch((error) =>
@@ -109,12 +110,6 @@ const handleNoOutputs = Effect.fn('documents.handleNoOutputs')(function* (
       },
     );
   }
-  reportMissingOutputs(state, deps.logger, {
-    round: currRound,
-    missing: [],
-    xmlFile: outputLocation.absolutePath,
-  });
-
   ensureRoundData(state, currRound).outputs = [];
 });
 

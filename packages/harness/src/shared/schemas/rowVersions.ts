@@ -55,6 +55,14 @@ export const RETIRED_ROW_KINDS: ReadonlySet<string> = new Set<string>([
   'workflow.script',
 ]);
 
+/** The lowest stored version of a plugin arm's value this build reads: an
+ *  older one has no upcaster here, so an earlier build wrote it. The store
+ *  (`decodeRow`, `earlierRuns`) and an imported trace refuse it alike. */
+export const pluginFactFloor = (arm: {
+  readonly version: number;
+  readonly upcasters: readonly unknown[];
+}): number => arm.version - arm.upcasters.length;
+
 /** The version every current-value family writes and reads
  *  (each `ValueFamily`), until one gains an upcaster. */
 export const CURRENT_VALUE_VERSION = 1;
@@ -90,7 +98,9 @@ export const ROW_KINDS: Readonly<Record<SessionEventDraft['type'], RowKind>> = {
   'request.decided': V1,
   'approval.policy': V1,
   'run.position': V1,
-  log: V1,
+  // v2: no `latexdiff` or `missingOutputs` message type; the documents
+  // plugin's fact holds both (no upcaster, as `run.config`).
+  log: { version: 2, upcast: [] },
   // v2: no `phase` kind and no `index`/`total` (no upcaster, as
   // `run.config`: an earlier build's workflow phase stage would fail its
   // run as damaged rather than read as that build's).

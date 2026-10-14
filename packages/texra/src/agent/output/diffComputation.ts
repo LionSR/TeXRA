@@ -12,8 +12,8 @@ import {
   fileLocationDisplayPath,
   type DiffStats,
   type FileLocation,
-  type OutputFileInfo,
 } from '@shared/schemas';
+import type { OutputFileInfo } from '@texra/shared/plugins/documentOutputs';
 import { diffLineChanges } from '@texra/utils/text/diff';
 import { createWorkspaceLocation } from '@utils/files/fileLocation';
 import { locateInWorkspace } from '@utils/files/workspaceFS';

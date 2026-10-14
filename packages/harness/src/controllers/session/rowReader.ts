@@ -15,6 +15,7 @@ import {
   RUN_EARLIER_BUILD_MESSAGE,
 } from '@shared/runs/runStatusDisplay';
 import {
+  pluginFactFloor,
   RunIdSchema,
   type LocalRuntimeState,
   type RunId,
@@ -31,6 +32,8 @@ import {
   aggregateOf,
   decodeRow,
   EARLIER_RUNS,
+  pluginFactArm,
+  EVENT_FROM,
   RowSchema,
   type SqlRow,
 } from './rowCodec';
@@ -41,6 +44,28 @@ const EarlierRowSchema = z.object({
   commit: z.int(),
   type: z.string(),
 });
+
+/** Every run's plugin fact, its envelope and raw payload: a fact's version
+ *  is in its payload, read in TypeScript. Large strings are blob refs, so
+ *  the payload's header is small; no blob is joined or inflated. */
+const RUN_PLUGIN_FACTS = `SELECT s.logical_id AS logicalId, e."commit" AS "commit",
+  e.data AS data FROM ${EVENT_FROM}
+  WHERE s.kind = 'run' AND e.type = 'plugin.fact'`;
+
+/** A plugin fact row's header: the top-level fields `decodeRow` reads. A
+ *  row this cannot read is left to `decodeRow`, which reads it as damaged. */
+const PluginFactHeaderSchema = z.object({
+  plugin: z.string(),
+  kind: z.string(),
+  version: z.int(),
+});
+const factHeader = (data: unknown) => {
+  try {
+    return PluginFactHeaderSchema.safeParse(JSON.parse(String(data))).data;
+  } catch {
+    return undefined;
+  }
+};
 
 /** A statement runner over the reader's connection. */
 type Exec<E> = (
@@ -98,16 +123,36 @@ export function rowReader<E>(
           Effect.andThen(Effect.logWarning(message)),
           withLogChannel('sessionDatabase'),
         );
+  const markEarlier = (runId: RunId, row: DatabaseRowEarlier) => {
+    mark(runId, true);
+    if (!earlier.has(runId)) earlier.set(runId, row);
+  };
+  // Only an arm with a floor can hold an earlier build's fact.
+  const floored = Object.values(arms).some((arm) => pluginFactFloor(arm) > 1);
   /** Find, once, every run holding an earlier build's row. */
   const scan = Effect.gen(function* () {
-    for (const [statement, params] of scanned ? [] : EARLIER_RUNS)
+    if (scanned) return;
+    for (const [statement, params] of EARLIER_RUNS)
       for (const row of yield* exec(statement, params)) {
         const { logicalId, commit, type } = EarlierRowSchema.parse(row);
-        const runId = RunIdSchema.parse(logicalId);
-        mark(runId, true);
-        if (!earlier.has(runId))
-          earlier.set(runId, new DatabaseRowEarlier({ commit, type }));
+        markEarlier(
+          RunIdSchema.parse(logicalId),
+          new DatabaseRowEarlier({ commit, type }),
+        );
       }
+    for (const row of floored ? yield* exec(RUN_PLUGIN_FACTS, []) : []) {
+      const { logicalId, commit } = EarlierRowSchema.omit({
+        type: true,
+      }).parse(row);
+      const header = factHeader(row.data);
+      const arm = header && pluginFactArm(header, commit, arms);
+      if (
+        arm &&
+        Result.isFailure(arm) &&
+        arm.failure._tag === 'DatabaseRowEarlier'
+      )
+        markEarlier(RunIdSchema.parse(logicalId), arm.failure);
+    }
     scanned = true;
   });
   const read = (rows: readonly SqlRow[], whole: boolean) =>

@@ -14,11 +14,8 @@ import replacementEngine, {
   logReplacementDiagnostics,
 } from '@replacement/engine';
 import { isTexFile } from '@texra/shared/latexFileTypes';
-import {
-  DOCUMENTS_ACCEPTED_ARM,
-  DOCUMENTS_OUTPUT_ARM,
-  DOCUMENT_TASK_BLOCK,
-} from '@texra/shared/plugins/documents';
+import { APP_PLUGIN_ARMS } from '@texra/shared/plugins/appArms';
+import { DOCUMENT_TASK_BLOCK } from '@texra/shared/plugins/documents';
 import {
   claudeAgent,
   codex,
@@ -230,7 +227,7 @@ const documents: Plugin = {
     document_review: DocumentReviewTool,
     document_propose: DocumentProposeTool,
   },
-  arms: [DOCUMENTS_OUTPUT_ARM, DOCUMENTS_ACCEPTED_ARM],
+  arms: APP_PLUGIN_ARMS.documents,
 };
 
 /**

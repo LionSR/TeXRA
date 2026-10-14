@@ -12,7 +12,6 @@
 import {
   TOOL_CALL_STATUS,
   type ContextManagementData,
-  type DiffResultDisplay,
   type ErrorLogData,
   type FileListEntry,
   type LoadedMediaMetadata,
@@ -161,20 +160,6 @@ export interface FileListRow extends TranscriptRowBase {
   readonly media: readonly LoadedMediaRef[];
 }
 
-export interface MissingOutputsRow extends TranscriptRowBase {
-  readonly kind: 'missingOutputs';
-  readonly missing: readonly string[];
-  readonly xmlFile: string | null;
-  /** `Missing outputs (2)` */
-  readonly summary: string;
-}
-
-export interface LatexdiffRow extends TranscriptRowBase {
-  readonly kind: 'latexdiff';
-  readonly entries: readonly DiffResultDisplay[];
-  readonly runId?: string;
-}
-
 /** One labeled number from a context-management row. */
 export interface StatItem {
   /** Stable key hosts use to pick an icon; never shown as-is. */
@@ -218,8 +203,6 @@ export type TranscriptRow =
   | ToolRow
   | WebSearchRow
   | FileListRow
-  | MissingOutputsRow
-  | LatexdiffRow
   | ContextManagementRow
   | ProgressStatusRow
   | CompactionActivityRow
@@ -241,8 +224,6 @@ const IMMEDIATELY_SETTLED_ROW_KINDS = new Set<TranscriptRowKind>([
   'user',
   'error',
   'fileList',
-  'missingOutputs',
-  'latexdiff',
   'contextManagement',
   'progressStatus',
 ]);
@@ -301,8 +282,6 @@ export function isSettledRow(
     case 'user':
     case 'error':
     case 'fileList':
-    case 'missingOutputs':
-    case 'latexdiff':
     case 'contextManagement':
     case 'progressStatus':
     case 'log':
@@ -332,10 +311,7 @@ export function rowHeadline(row: ReadonlyDeep<TranscriptRow>): string {
     case 'compactionActivity':
       return row.label;
     case 'fileList':
-    case 'missingOutputs':
       return row.summary;
-    case 'latexdiff':
-      return `Latexdiff results (${row.entries.length})`;
     case 'tool':
       return '';
   }

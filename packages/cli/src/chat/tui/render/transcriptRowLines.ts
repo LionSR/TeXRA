@@ -106,15 +106,6 @@ export function transcriptRowBodyLines(
         return elidedTextLines(row.detailText, elide);
       case 'fileList':
         return fileListLines(row);
-      case 'missingOutputs':
-        return [...row.missing, ...(row.xmlFile ? [row.xmlFile] : [])];
-      case 'latexdiff':
-        return row.entries.map(
-          (entry) =>
-            `${entry.status === 'success' ? TICK : CROSS} ${entry.displayName}${
-              entry.message ? ` — ${entry.message}` : ''
-            }`,
-        );
       case 'contextManagement':
         return [
           ...statItemLines(row.items),

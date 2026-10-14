@@ -30,6 +30,7 @@ import {
   aggregateTarget,
   CURRENT_VALUE_VERSION,
   DISPLAY_EVENT_TYPES,
+  pluginFactFloor,
   RETIRED_ROW_KINDS,
   ROW_KINDS,
   SessionEventDraftSchema,
@@ -315,21 +316,44 @@ export function decodeRow(
   const event = parsed.data;
   if (event.type !== 'plugin.fact') return Result.succeed(event);
   const name = `${event.plugin}/${event.kind}`;
-  const arm = arms[name];
-  if (arm === undefined) return Result.succeed({ _tag: 'leftOut', kind: name });
-  if (event.version > arm.version)
-    return Result.fail(
-      new DatabaseStoreNewer({
-        type: `plugin.fact/${name}`,
-        version: event.version,
-      }),
-    );
+  const arm = pluginFactArm(event, row.commit, arms);
+  if (Result.isFailure(arm)) return Result.fail(arm.failure);
+  if (arm.success === undefined)
+    return Result.succeed({ _tag: 'leftOut', kind: name });
   let value = event.value;
-  for (const step of arm.upcasters.slice(event.version - 1))
+  for (const step of arm.success.upcasters.slice(event.version - 1))
     value = step(value);
-  const { error } = arm.schema.safeParse(value);
+  const { error } = arm.success.schema.safeParse(value);
   if (error) return corrupt(error, `plugin.fact/${name}`);
-  return Result.succeed({ ...event, version: arm.version, value });
+  return Result.succeed({ ...event, version: arm.success.version, value });
+}
+
+/**
+ * A stored plugin fact's header, its row's top-level `plugin`, `kind` and
+ * `version`, against its arm: the arm, none when this build lacks the
+ * plugin (the row is left out), or a newer or an earlier build's version.
+ * `decodeRow` and the reader's earlier-run scan both ask it.
+ */
+export function pluginFactArm(
+  fact: {
+    readonly plugin: string;
+    readonly kind: string;
+    readonly version: number;
+  },
+  commit: number,
+  arms: PluginArms,
+): Result.Result<
+  PluginArms[string] | undefined,
+  DatabaseStoreNewer | DatabaseRowEarlier
+> {
+  const type = pluginKind(fact.plugin, fact.kind);
+  const arm = arms[`${fact.plugin}/${fact.kind}`];
+  if (arm === undefined) return Result.succeed(undefined);
+  if (fact.version > arm.version)
+    return Result.fail(new DatabaseStoreNewer({ type, version: fact.version }));
+  if (fact.version < pluginFactFloor(arm))
+    return Result.fail(new DatabaseRowEarlier({ commit, type }));
+  return Result.succeed(arm);
 }
 
 /** The `stored_kind` entry a plugin value is recorded under: each arm

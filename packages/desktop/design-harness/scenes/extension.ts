@@ -609,6 +609,8 @@ export const extensionScenes: Record<string, () => TemplateResult> = {
           outputs: [],
           compileFailures: [],
           missingOutputs: [],
+          latexdiffs: [],
+          reply: null,
         })),
       },
     });

@@ -57,7 +57,6 @@ export * from './subagentProgress';
 export * from './inquiry';
 export * from './prompts';
 export * from './request';
-export * from './diffResult';
 
 // Layer 4: MainView schemas
 export * from './mainView/state';

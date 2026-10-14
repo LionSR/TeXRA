@@ -4,23 +4,39 @@
  * summaries its run's result reports (`DocumentsResult`, the recipe's return
  * value and its run's `output.structured`, with the proposed revision's diffs),
  * the output protocol's tags, and how hosts name and label an output. The
- * harness holds none of it but the `OutputFileInfo` record, which its
- * latexdiff log payload still names.
- * Browser-safe: it imports only schemas.
+ * harness holds none of it. Browser-safe: it imports only schemas and
+ * browser-safe path helpers.
  */
 import { z } from 'zod';
 
 import {
+  DiffStatsSchema,
   FileLocationSchema,
   fileLocationDisplayPath,
   fileLocationShortDisplayPath,
   LineCountSchema,
-  OutputFileInfoSchema,
-  RoundNumberSchema,
   type DiffStats,
   type FileLocation,
-  type OutputFileInfo,
 } from '@shared/schemas';
+import { getBasename } from '@utils/core';
+
+/** A zero-based round (a document task's revision) number. */
+const RoundNumberSchema = z.int().nonnegative();
+
+const FileLineageSchema = z.strictObject({
+  original: FileLocationSchema.nullable(),
+  diffBase: FileLocationSchema.nullable(),
+});
+
+/** A file a document task wrote, with its lineage and diff stats. */
+const OutputFileInfoSchema = z.strictObject({
+  source: z.string(),
+  location: FileLocationSchema,
+  round: RoundNumberSchema.prefault(() => 0),
+  lineage: FileLineageSchema.nullable(),
+  diff: DiffStatsSchema.nullable(),
+});
+export type OutputFileInfo = z.infer<typeof OutputFileInfoSchema>;
 
 // The output protocol: every agent wraps its documents in
 // `<documents><document name="...">...</document></documents>`, after its
@@ -175,16 +191,55 @@ const CompileFailureSummarySchema = z.object({
 });
 type CompileFailureSummary = z.infer<typeof CompileFailureSummarySchema>;
 
+const LatexdiffPairSchema = z.strictObject({
+  /** The round's output the diff marks up. */
+  revised: FileLocationSchema,
+  /** The workspace document the output descends from, which names it. */
+  original: FileLocationSchema.nullable(),
+  base: FileLocationSchema,
+  /** The round the base came from; null for the task's starting document. */
+  baseRound: RoundNumberSchema.nullable(),
+});
+
+/** One latexdiff of a round's output against a base: its marked-up file,
+ *  or why latexdiff failed. */
+const LatexdiffEntrySchema = z.discriminatedUnion('status', [
+  LatexdiffPairSchema.extend({
+    status: z.literal('ok'),
+    diff: FileLocationSchema,
+  }),
+  LatexdiffPairSchema.extend({
+    status: z.literal('failed'),
+    error: z.string(),
+  }),
+]);
+export type LatexdiffEntry = z.infer<typeof LatexdiffEntrySchema>;
+
+/** The name a latexdiff entry reads by: its workspace document's file name,
+ *  else its base's path. */
+export function latexdiffDisplayName(entry: LatexdiffEntry): string {
+  return entry.original
+    ? getBasename(fileLocationShortDisplayPath(entry.original))
+    : fileLocationShortDisplayPath(entry.base);
+}
+
 export const RoundOutputSchema = z.strictObject({
   round: RoundNumberSchema,
   outputs: OutputFileInfoSchema.array(),
   compileFailures: CompileFailureSchema.array().prefault(() => []),
-  /** The expected output files this round did not produce, as last reported.
-   *  Persisted with all round outputs in the documents plugin's output fact. */
+  /** What this round should have written and did not: the expected output
+   *  files it lacks (the disk check owns those) and the documents its reply
+   *  held that did not extract. Persisted with all round outputs in the
+   *  documents plugin's output fact. */
   missingOutputs: z
     .string()
     .array()
     .prefault(() => []),
+  /** The round's latexdiffs, as its last `document_diff` wrote them. */
+  latexdiffs: z.array(LatexdiffEntrySchema),
+  /** Where the round's reply is kept, which a reader opens to check the
+   *  documents it should have held; null until extraction keeps it. */
+  reply: FileLocationSchema.nullable(),
 });
 export type RoundOutput = z.infer<typeof RoundOutputSchema>;
 

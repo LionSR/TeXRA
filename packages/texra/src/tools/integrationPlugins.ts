@@ -9,7 +9,7 @@
 import { Effect } from 'effect';
 
 // Local imports
-import { EXTERNAL_INQUIRY_THREAD_ARM } from '@texra/shared/plugins/externalInquiry';
+import { APP_PLUGIN_ARMS } from '@texra/shared/plugins/appArms';
 import {
   ClaudeAgentSessions,
   claudeAgentSessionsLayer,
@@ -107,7 +107,7 @@ export const githubActivity = definePlugin<GitHubSubscriptions>({
 export const externalInquiry: Plugin = {
   id: 'external-inquiry',
   tools: { inquiry: ExternalInquiryTool },
-  arms: [EXTERNAL_INQUIRY_THREAD_ARM],
+  arms: APP_PLUGIN_ARMS['external-inquiry'],
   toggle: 'off',
   availability: ALWAYS_AVAILABLE,
   // The answer is recorded on the thread and delivered to the run that

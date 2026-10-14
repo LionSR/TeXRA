@@ -13,7 +13,7 @@ import { z } from 'zod';
 
 import {
   type AggregateId,
-  type OutputFileInfo,
+  type FileLocation,
   type SessionEvent,
   type ToolFact,
 } from '@shared/schemas';
@@ -26,6 +26,8 @@ import {
   type DocumentDiffs,
   type CompileFailure,
   type DocumentsResult,
+  type LatexdiffEntry,
+  type OutputFileInfo,
   type ReadonlyRoundIndexed,
   type RoundOutput,
 } from '@texra/shared/plugins/documentOutputs';
@@ -37,9 +39,8 @@ const DocumentsOutputSchema = z.strictObject({
   /** Every revision so far, by its zero-based `round`. */
   rounds: z.array(RoundOutputSchema),
   /** The proposed revision's diffs, once the task proposed: the one record
-   *  of them, which its run's result is derived from. Optional, so a row
-   *  written before the task proposed (or a v1 row) reads as it was
-   *  written. */
+   *  of them, which its run's result is derived from. Optional: a row
+   *  written before the task proposed holds none. */
   ...DocumentDiffsSchema.shape,
 });
 
@@ -47,9 +48,11 @@ const DocumentsOutputSchema = z.strictObject({
 export const DOCUMENTS_OUTPUT_ARM = {
   plugin: 'documents',
   kind: 'output',
-  // v2: a proposed task's fact carries its `diffs` (no upcaster: a v1 fact
-  // reads as is, and an earlier build reads a v2 one as a newer build's).
-  version: 2,
+  // v2: a proposed task's fact carries its `diffs`. v3: each round holds
+  // its `latexdiffs` and its `reply`, which were log rows. No upcaster: an
+  // earlier version is an earlier build's row (`pluginFactFloor`), and an
+  // earlier build reads a v3 one as a newer build's.
+  version: 3,
   schema: DocumentsOutputSchema,
   upcasters: [],
 } as const;
@@ -145,6 +148,10 @@ export function documentsOf(run: Pick<RunView, 'facts'>): {
   readonly files: ReadonlyRoundIndexed<OutputFileInfo>;
   readonly missingOutputs: ReadonlyRoundIndexed<string>;
   readonly compileFailures: ReadonlyRoundIndexed<CompileFailure>;
+  readonly latexdiffs: ReadonlyRoundIndexed<LatexdiffEntry>;
+  /** Each round's kept reply, for a round that wrote nothing or lacks
+   *  documents. */
+  readonly replies: { readonly [round: number]: FileLocation };
 } {
   const rounds = documentRoundsOf(run.facts[DOCUMENTS_OUTPUT_KEY]);
   const byRound = <T>(pick: (round: RoundOutput) => readonly T[]) =>
@@ -157,6 +164,12 @@ export function documentsOf(run: Pick<RunView, 'facts'>): {
     files: byRound((round) => round.outputs),
     missingOutputs: byRound((round) => round.missingOutputs),
     compileFailures: byRound((round) => round.compileFailures),
+    latexdiffs: byRound((round) => round.latexdiffs),
+    replies: Object.fromEntries(
+      rounds.flatMap((round) =>
+        round.reply ? [[round.round, round.reply]] : [],
+      ),
+    ),
   };
 }
 

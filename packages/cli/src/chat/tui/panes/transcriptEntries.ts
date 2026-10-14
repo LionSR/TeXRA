@@ -126,8 +126,6 @@ const ROW_KIND_IS_WIDGET = {
   user: false,
   contextManagement: true,
   fileList: true,
-  latexdiff: true,
-  missingOutputs: true,
   progressStatus: true,
   scratchpad: true,
   thinking: true,

@@ -10,7 +10,6 @@ import {
   fileLocationDisplayPath,
   type RunId,
   type FileLocation,
-  type OutputFileInfo,
   type RunStorageFileLocation,
 } from '@shared/schemas';
 import { stripWorkflowRoundDir } from '@texra/shared/constants/workflowOutput';
@@ -19,6 +18,7 @@ import { LATEX_CONFIG_RANGES } from '@texra/shared/constants/latexConfig';
 import {
   type CompileFailure,
   isGenericOutputStem,
+  type OutputFileInfo,
 } from '@texra/shared/plugins/documentOutputs';
 import { createRunStorageLocation } from '@utils/files/fileLocation';
 import { readNormalizedFile } from '@utils/files/fsDurability';

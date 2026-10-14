@@ -44,13 +44,17 @@ const GoalSchema = ActiveGoalSchema.extend({ runId: RunIdSchema });
 export type Goal = z.infer<typeof GoalSchema>;
 
 /** The goal plugin's one row kind. */
-export const GOAL_STATE_ARM = {
+const GOAL_STATE_ARM = {
   plugin: 'goal',
   kind: 'state',
   version: 1,
   schema: GoalStateSchema,
   upcasters: [],
 } as const;
+
+/** The row kinds the harness's built-in plugins own, by plugin id: what
+ *  `builtinPlugins` gives each, and what an imported trace checks. */
+export const HARNESS_PLUGIN_ARMS = { goal: [GOAL_STATE_ARM] } as const;
 
 /** The row that makes `state` the run's goal, for the one publisher. */
 export function goalStateRow(

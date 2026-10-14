@@ -11,13 +11,13 @@ import {
   fileLocationAddressPath,
   MODEL_AVAILABILITY_STATUS,
   type ModelAvailabilityKind,
-  type OutputFileInfo,
   type RunId,
 } from '@shared/schemas';
 import {
   type CompileFailure,
   type ReadonlyRoundIndexed,
   formatRoundLabel,
+  type OutputFileInfo,
 } from '@texra/shared/plugins/documentOutputs';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { pluralize } from '@utils/text/stringUtils';

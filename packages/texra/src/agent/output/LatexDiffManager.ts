@@ -8,14 +8,15 @@ import { buildBetweenRoundDiffSuffix } from '@latex/latexdiff/diffFileNameManage
 import { compileLatex2Pdf } from '@latex/texTools';
 import type { WorkspaceFs } from '@platform/rootedFs';
 import {
-  MESSAGE_TYPES,
   fileLocationDisplayPath,
-  type DiffResult,
   type RunId,
   type FileLocation,
-  type OutputFileInfo,
   type RunStorageFileLocation,
 } from '@shared/schemas';
+import type {
+  LatexdiffEntry,
+  OutputFileInfo,
+} from '@texra/shared/plugins/documentOutputs';
 import {
   WORKFLOW_OUTPUT_BASENAME,
   workflowOutputRoundDir,
@@ -51,9 +52,20 @@ interface DiffOutputDirectory {
 }
 
 type SingleDiffOutcome = {
-  diffResult: DiffResult;
+  entry: LatexdiffEntry;
   artifact: RunStorageFileLocation | null;
 };
+
+/** What a round's latexdiff pass wrote: the PDFs it published, and one entry
+ *  per diffed pair for the round's documents fact. */
+export interface RoundLatexdiffs {
+  readonly artifacts: RunStorageFileLocation[];
+  readonly entries: LatexdiffEntry[];
+}
+
+/** A pass that diffed nothing: a fresh value, since a caller owns the
+ *  arrays it is handed. */
+const noLatexdiffs = (): RoundLatexdiffs => ({ artifacts: [], entries: [] });
 
 export class LatexDiffManager {
   private readonly latexdiffService: LaTeXdiffService;
@@ -143,20 +155,20 @@ export class LatexDiffManager {
     currRound: number,
     outputFiles: readonly OutputFileInfo[],
     mapping: RoundFileMapping,
-  ): Effect.Effect<RunStorageFileLocation[], never, DiffServices> {
+  ): Effect.Effect<RoundLatexdiffs, never, DiffServices> {
     const execute = Effect.gen({ self: this }, function* () {
       if (!(yield* checkToolInstalled('latexdiff'))) {
         this.logger.warn(
           'Skipping latexdiff operations - latexdiff not installed',
         );
-        return [];
+        return noLatexdiffs();
       }
 
       if (outputFiles.length === 0) {
         this.logger.warn(
           `No output files found for round ${currRound}, skipping latexdiff operations`,
         );
-        return [];
+        return noLatexdiffs();
       }
 
       // Ensure round-dir has symlinks to all mirrored deps so latexdiff's
@@ -185,11 +197,11 @@ export class LatexDiffManager {
         data: outputFiles.map((f) => f.location.absolutePath),
       });
 
-      const aggregated: DiffResult[] = [];
+      const entries: LatexdiffEntry[] = [];
       const artifacts: RunStorageFileLocation[] = [];
       const collect = (outcome: SingleDiffOutcome | null): void => {
         if (!outcome) return;
-        aggregated.push(outcome.diffResult);
+        entries.push(outcome.entry);
         if (outcome.artifact) artifacts.push(outcome.artifact);
       };
       const collectPairs = (
@@ -288,23 +300,14 @@ export class LatexDiffManager {
         );
       }
 
-      if (aggregated.length > 0) {
-        this.logger.info(`Latexdiff results: ${aggregated.length}`, {
-          messageType: MESSAGE_TYPES.LATEXDIFF,
-          data: aggregated,
-        });
-      } else {
-        this.logger.debug('No latexdiff results to report');
-      }
-
-      return artifacts;
+      return { artifacts, entries };
     });
     return execute.pipe(
       recoverOutputFailure({
         logger: this.logger,
         level: 'error',
         label: 'Error during latexdiff processing',
-        recover: () => Effect.succeed<RunStorageFileLocation[]>([]),
+        recover: () => Effect.sync(noLatexdiffs),
       }),
     );
   }
@@ -354,7 +357,7 @@ export class LatexDiffManager {
     label: string;
     pdfStemSuffix: string;
     diffDirectory: DiffOutputDirectory;
-  }): Effect.Effect<SingleDiffOutcome | null, Error, DiffServices> {
+  }): Effect.Effect<SingleDiffOutcome | null, never, DiffServices> {
     return Effect.gen({ self: this }, function* () {
       const revisedFile = outputByPath.get(outputPath);
       if (!revisedFile) {
@@ -364,47 +367,55 @@ export class LatexDiffManager {
         return null;
       }
 
-      yield* this.ensureWorkspaceDependency(baseLocation);
-      yield* this.ensureWorkspaceDependency(revisedFile.location);
-
-      const cwd = yield* this.getWorkingDirectory(revisedFile.location);
-      const result = yield* runDiff(baseLocation, revisedFile.location, cwd);
-      this.logLatexdiffResult(result, label);
-
-      const compiled = yield* this.compileDiffIfSuccessful(
-        result,
-        baseLocation,
-        diffDirectory,
-        revisedFile.round,
-        revisedFile.location,
-        pdfStemSuffix,
-      );
-      const diffLocation = compiled?.diffLocation ?? null;
-
-      const revisedWithLineage: OutputFileInfo = {
-        ...revisedFile,
-        lineage: {
-          original: originalLocation,
-          diffBase: baseLocation,
-        },
+      const pair = {
+        revised: revisedFile.location,
+        original: originalLocation,
+        base: baseLocation,
+        baseRound,
       };
+      const failed = (error: string): SingleDiffOutcome => ({
+        entry: { ...pair, status: 'failed', error },
+        artifact: null,
+      });
+      // One pair's failure is that pair's entry, never the round's: the
+      // other pairs keep their diffs.
+      return yield* Effect.gen({ self: this }, function* () {
+        yield* this.ensureWorkspaceDependency(baseLocation);
+        yield* this.ensureWorkspaceDependency(revisedFile.location);
 
-      return {
-        diffResult: {
+        const cwd = yield* this.getWorkingDirectory(revisedFile.location);
+        const result = yield* runDiff(baseLocation, revisedFile.location, cwd);
+        this.logLatexdiffResult(result, label);
+        if (!result.success) return failed(result.message);
+
+        const compiled = yield* this.compileDiff(
+          result.diffPath,
           baseLocation,
-          baseRound,
-          revised: revisedWithLineage,
-          diffLocation,
-          status: result.success ? 'success' : 'error',
-          message: result.success ? undefined : result.message,
-        },
-        artifact: compiled?.artifact ?? null,
-      };
+          diffDirectory,
+          revisedFile.round,
+          revisedFile.location,
+          pdfStemSuffix,
+        );
+        return {
+          entry: { ...pair, status: 'ok', diff: compiled.diffLocation },
+          artifact: compiled.artifact,
+        } satisfies SingleDiffOutcome;
+      }).pipe(
+        Effect.catch((error) =>
+          Effect.sync(() => {
+            const message = toErrorMessage(error);
+            this.logger.warn(`${label} failed for ${outputPath}: ${message}`, {
+              data: error,
+            });
+            return failed(message);
+          }),
+        ),
+      );
     });
   }
 
-  private compileDiffIfSuccessful(
-    result: LaTeXdiffResult,
+  private compileDiff(
+    diffPath: string,
     referenceLocation: FileLocation,
     diffDirectory: DiffOutputDirectory,
     round: number,
@@ -414,16 +425,12 @@ export class LatexDiffManager {
     {
       diffLocation: FileLocation;
       artifact: RunStorageFileLocation | null;
-    } | null,
+    },
     Error,
     DiffServices
   > {
     return Effect.gen({ self: this }, function* () {
-      if (!result.success) {
-        return null;
-      }
-
-      const diffFileName = path.basename(result.diffPath);
+      const diffFileName = path.basename(diffPath);
       const diffLocation = createRunStorageLocation(
         path.join(diffDirectory.absolutePath, diffFileName),
         path.join(diffDirectory.relativePath, diffFileName),

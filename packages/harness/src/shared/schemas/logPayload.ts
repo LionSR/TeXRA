@@ -4,11 +4,9 @@ import {
   CompactionActivityDataSchema,
   ContextManagementDataSchema,
 } from './contextManagement';
-import { parseDiffResultEntries } from './diffResult';
 import { ErrorLogDataSchema } from './errors';
 import { FileListEntrySchema, MESSAGE_TYPES, type MessageType } from './log';
 import {
-  MissingOutputsPayloadSchema,
   ToolUseLogSchema,
   UserMessagePayloadSchema,
   WebSearchPayloadSchema,
@@ -27,8 +25,6 @@ const LOG_PAYLOAD_SCHEMAS = {
   [MESSAGE_TYPES.THINKING]: StreamingTextDataSchema.optional(),
   [MESSAGE_TYPES.SCRATCHPAD]: StreamingTextDataSchema.optional(),
   [MESSAGE_TYPES.FILE_LIST]: z.array(FileListEntrySchema),
-  [MESSAGE_TYPES.MISSING_OUTPUTS]: MissingOutputsPayloadSchema,
-  [MESSAGE_TYPES.LATEXDIFF]: z.unknown().transform(parseDiffResultEntries),
   // Passthrough: a tool's extra fields (e.g. `files`) are forwarded as-is.
   [MESSAGE_TYPES.TOOL_USE]: ToolUseLogSchema.loose(),
   [MESSAGE_TYPES.WEB_SEARCH]: WebSearchPayloadSchema,

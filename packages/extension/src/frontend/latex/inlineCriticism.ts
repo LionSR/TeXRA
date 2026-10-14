@@ -27,7 +27,7 @@ import { lineToRange } from '@frontend/vscode/vscodeEditor';
 import { parseCriticismAnnotations } from '@latex/criticismParser';
 import { withLogChannel } from '@logger/effectLog';
 import type { SettingsStores } from '@shared/config/settingsAccess';
-import type { OutputFileInfo } from '@shared/schemas';
+import type { OutputFileInfo } from '@texra/shared/plugins/documentOutputs';
 import type { ManualCriticismEntry } from '@texra/tools/editorHost';
 import { TexraStateKey } from '@texra/shared/settingsView/texraSettings';
 import { readSettingFrom } from '@utils/config/platformSettings';

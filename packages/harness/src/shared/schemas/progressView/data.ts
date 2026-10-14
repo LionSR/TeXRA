@@ -24,11 +24,6 @@ import { ScriptDeliverySummarySchema } from '../scriptDelivery';
 // Shared Field Schemas
 // ============================================================
 
-export const MissingOutputsPayloadSchema = z.object({
-  missing: z.array(z.string()).prefault([]),
-  xmlFile: z.string().nullable().prefault(null),
-});
-
 /**
  * Coarse media-attachment classification: `image` vs everything else. Matches
  * the `image-attachment` / `document-attachment` split that

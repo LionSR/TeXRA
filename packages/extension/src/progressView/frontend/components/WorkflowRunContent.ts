@@ -49,6 +49,9 @@ export class WorkflowRunContent extends BaseRunContent {
             .surface=${surface}
             .filesByRound=${documents.files}
             .failuresByRound=${documents.compileFailures}
+            .missingByRound=${documents.missingOutputs}
+            .latexdiffsByRound=${documents.latexdiffs}
+            .repliesByRound=${documents.replies}
           ></file-list>
 
           ${this.renderUsagePanel(run)}
