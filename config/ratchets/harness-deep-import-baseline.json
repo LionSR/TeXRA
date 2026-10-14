@@ -183,7 +183,6 @@
       "@shared/tools/toolKind",
       "@shared/toolUse",
       "@shared/transcript",
-      "@shared/transcript/workflowCall",
       "@shared/utils/xmlEscape",
       "@skills/runtimeSkills",
       "@tools/approval/toolEditApproval",

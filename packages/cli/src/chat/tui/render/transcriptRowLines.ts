@@ -127,7 +127,6 @@ export function transcriptRowBodyLines(
       case 'tool':
       case 'webSearch':
       case 'compactionActivity':
-      case 'phase':
       case 'log':
         return [];
     }

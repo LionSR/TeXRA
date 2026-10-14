@@ -98,7 +98,6 @@ function conversationNodesForRow(
     case 'contextManagement':
     case 'progressStatus':
     case 'compactionActivity':
-    case 'phase':
     case 'log':
       return [];
     default:

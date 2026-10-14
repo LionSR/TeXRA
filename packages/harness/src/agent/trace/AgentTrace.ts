@@ -22,11 +22,7 @@ export type AgentTraceSink = (event: AgentEvent) => void;
 /** Options accepted by `openStage`. */
 export interface StageOptions {
   /** Semantic stage kind consumed by host progress surfaces. */
-  readonly kind?: 'run' | 'phase' | 'session';
-  /** Zero-based position of a phase stage. */
-  readonly index?: number;
-  /** Planned phase count, when known. */
-  readonly total?: number;
+  readonly kind?: 'run' | 'session';
   /** Parent handle for nested stages; without one the stage opens as a root. */
   readonly parent?: StageHandle;
 }

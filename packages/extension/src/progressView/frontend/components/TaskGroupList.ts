@@ -29,10 +29,6 @@ import {
   type ScriptStageView,
   type TranscriptRow,
 } from '@shared/transcript';
-import {
-  formatWorkflowPhaseHeading,
-  workflowPhaseHeadingOfGroup,
-} from '@shared/transcript/workflowCall';
 import type { Surface } from '@texra/shared/session/surface';
 import { designTokens } from '@ui/styles';
 
@@ -435,16 +431,13 @@ export class TaskGroupList extends LitElement {
       this.durableOutcome ?? undefined,
     );
     const statusIcon = terminalStatusIcon(status);
-    const title = formatWorkflowPhaseHeading(
-      workflowPhaseHeadingOfGroup(group),
-    );
     return html`
       <span class="group-status-icon">
         ${waIcon(statusIcon, {
           label: formatRunStatusLabel(status),
         })}
       </span>
-      <bdi class="group-title">${title}</bdi>
+      <bdi class="group-title">${group.name}</bdi>
       <span class="group-time">
         <span class="group-start-time">
           ${waIcon('clock')}

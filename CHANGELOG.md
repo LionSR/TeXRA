@@ -6,6 +6,12 @@ All notable changes to this project will be documented in this file.
 
 ### Breaking Changes
 
+- **SDK: the workflow phase stage is gone.** No producer has opened one
+  since the workflow engine left: `openStage` takes no `'phase'` kind and
+  no `index`/`total`, a task group carries neither, and the transcript has
+  no `phase` row. A script's `phase()` titles still group its calls. Runs
+  written by an earlier build are listed as such and are not resumed.
+
 - **SDK: a recipe's result is its `structured` value; `output.documents` is
   gone.** Every run's output is `{ response, files, structured? }`: a
   recipe's return value is `structured`, which the plugin owning its block

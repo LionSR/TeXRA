@@ -99,7 +99,6 @@ function workflowRunDetailGroups(
     taskGroupDisplayStatus(group, facts.runDurableOutcome);
   const rounds = new Set<number>();
   for (const group of facts.taskGroups) {
-    if (group.kind === 'phase') continue;
     groups.push({
       key: `lifecycle:${group.id}`,
       lines: [
