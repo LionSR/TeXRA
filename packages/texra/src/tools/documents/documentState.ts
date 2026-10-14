@@ -257,16 +257,30 @@ export const revisionPrompt = Effect.fn('documents.revisionPrompt')(function* (
   };
 });
 
+/** The task's `files` variables as each run opening first read them. */
+const taskFileSnapshots = new WeakMap<
+  NonNullable<ToolRun['opening']>,
+  Effect.Success<ReturnType<typeof taskFileVars>>
+>();
+
 /**
  * What a task's templates render from: the run's opening, with the task's
  * `files` variables beside it, and the card entries of the files those
- * variables read.
+ * variables read. The files are read once per opening (one per launch or
+ * resume, held in memory, as the opening itself is), so editing a template
+ * file mid-run leaves the run's later revisions as they began.
  */
 export const taskInputs = Effect.fn('documents.taskInputs')(function* (
   docs: Documents,
 ) {
-  const { vars, entries } = yield* taskFileVars(docs.task, docs.entry.path);
-  return { inputs: { ...docs.run.opening?.inputs, ...vars }, entries };
+  const { opening } = docs.run;
+  const snapshot = opening ? taskFileSnapshots.get(opening) : undefined;
+  const read = snapshot ?? (yield* taskFileVars(docs.task, docs.entry.path));
+  if (opening && snapshot === undefined) taskFileSnapshots.set(opening, read);
+  return {
+    inputs: { ...opening?.inputs, ...read.vars },
+    entries: read.entries,
+  };
 });
 
 /** The word counts of `files`; none when TeXCount fails, which costs the

@@ -170,7 +170,7 @@ const DocumentTaskSchema = z.strictObject({
 export type DocumentTask = z.infer<typeof DocumentTaskSchema>;
 
 /** The `task:` block of an agent file, owned by the documents plugin. */
-export const DOCUMENT_TASK_BLOCK: AgentBlock<DocumentTask> = {
+export const DOCUMENT_TASK_BLOCK: AgentBlock<DocumentTask> = Object.freeze({
   key: 'task',
   schema: DocumentTaskSchema,
-};
+});
