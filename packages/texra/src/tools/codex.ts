@@ -38,7 +38,7 @@ import {
 } from '@agent/trace';
 import type {
   ChildRunPort,
-  ChildRunStrategy,
+  ProcessChildStrategy,
 } from '@agent/runtime/childRunLoop';
 import { formatDelivery } from '@agent/runtime/deliveryEnvelope';
 import { withLogChannel } from '@logger/effectLog';
@@ -353,7 +353,7 @@ function buildCodexLaunch(params: {
   /** Release the fallback claim if the loop exits before promoting it. */
   releaseFallbackClaim: (() => void) | undefined;
   registry: AgentCliSessionRegistry;
-}): Effect.Effect<ChildRunStrategy<RunResult>> {
+}): Effect.Effect<ProcessChildStrategy<RunResult>> {
   const {
     thread,
     childRun,

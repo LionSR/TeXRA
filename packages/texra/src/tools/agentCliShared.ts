@@ -10,7 +10,7 @@ import { ChildRuns, requireRun, type ToolRun } from '@texra-ai/harness/plugins';
 import type {
   ChildRunPort,
   ChildRunPorts,
-  ChildRunStrategy,
+  ProcessChildStrategy,
 } from '@agent/runtime/childRunLoop';
 import {
   describeFollowUpFailure,
@@ -156,7 +156,7 @@ interface AgentCliLaunchParams<TTurn> {
   buildLaunch: (ctx: {
     childRun: ChildRunPort;
     runId: RunId;
-  }) => Effect.Effect<ChildRunStrategy<TTurn>, Error>;
+  }) => Effect.Effect<ProcessChildStrategy<TTurn>, Error>;
   summary: string;
   launchedLine: string;
   followUpLine: string;
@@ -380,7 +380,7 @@ interface AgentCliLoopParams<TTurn> {
  * through {@link launchAgentCliSession}'s detached-launch choreography)
  * processes prompts from the child's follow-up queue one at a time and
  * delivers each turn's result to the parent's follow-up queue; this supplies
- * the `ChildRunStrategy` scaffolding common to every agent-CLI provider
+ * the `ProcessChildStrategy` scaffolding common to every agent-CLI provider
  * (codex, claudeAgent): a dedup'd session/thread registration closure, the
  * `lastPrompt` capture feeding `formatDelivery`/`formatError`, and the
  * boilerplate-identical strategy fields (`isTerminal`, `onTurnSuccess`,
@@ -390,7 +390,7 @@ interface AgentCliLoopParams<TTurn> {
  */
 export function buildAgentCliLaunch<TTurn>(
   params: AgentCliLoopParams<TTurn>,
-): Effect.Effect<ChildRunStrategy<TTurn>> {
+): Effect.Effect<ProcessChildStrategy<TTurn>> {
   return Effect.gen(function* () {
     const {
       childRun,

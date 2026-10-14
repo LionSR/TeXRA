@@ -11,7 +11,7 @@ import { Clock, Effect } from 'effect';
 import { z } from 'zod';
 import type { AgentRunServices } from '@agent/runtime/runRegistry';
 
-import type { ChildRunStrategy } from '@agent/runtime/childRunLoop';
+import type { NativeChildStrategy } from '@agent/runtime/childRunLoop';
 import { createNativeSubagentStrategy } from '@agent/runtime/nativeSubagentStrategy';
 import { formatDelivery } from '@agent/runtime/deliveryEnvelope';
 import type { RunEndResult } from '@agent/runtime/RunEndResult';
@@ -249,7 +249,7 @@ export function createScriptRunStrategy(
   params: Parameters<typeof createNativeSubagentStrategy>[0] & {
     readonly title: string;
   },
-): ChildRunStrategy<RunEndResult, AgentRunServices> {
+): NativeChildStrategy<RunEndResult, AgentRunServices> {
   const { session, runId, title, startedAt } = params;
   const attributes = [{ name: 'title', value: title }];
   return {

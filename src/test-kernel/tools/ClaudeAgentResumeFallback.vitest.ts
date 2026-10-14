@@ -12,7 +12,7 @@ import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 
 import type {
   ChildRunPorts,
-  ChildRunStrategy,
+  ProcessChildStrategy,
 } from '@agent/runtime/childRunLoop';
 import type { RunHandle } from '@agent/runtime/RunHandle';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
@@ -123,10 +123,10 @@ function fakePorts(): ChildRunPorts {
   return { notify: () => {} };
 }
 
-function captureStrategy(): { strategy?: ChildRunStrategy<unknown> } {
-  const captured: { strategy?: ChildRunStrategy<unknown> } = {};
+function captureStrategy(): { strategy?: ProcessChildStrategy<unknown> } {
+  const captured: { strategy?: ProcessChildStrategy<unknown> } = {};
   mocks.startChildRunLoop.mockImplementation(
-    (params: { strategy: ChildRunStrategy<unknown> }) => {
+    (params: { strategy: ProcessChildStrategy<unknown> }) => {
       captured.strategy = params.strategy;
       return completedChildRunLoop();
     },
@@ -310,21 +310,11 @@ describe('claude_agent tool launch and resume fallback', () => {
 
         expect(mocks.startChildRunLoop).toHaveBeenCalledTimes(1);
         const [loopParams] = mocks.startChildRunLoop.mock.calls[0] as [
-          { strategy: ChildRunStrategy<unknown> },
+          { strategy: ProcessChildStrategy<unknown> },
         ];
         yield* loopParams.strategy.launch(
           fakePorts(),
           new AbortController().signal,
-          {
-            turnPermit: (turn) => turn,
-            settleBoundary: () =>
-              Effect.succeed({
-                rows: [],
-                alongside: undefined,
-                settled: Effect.void,
-              }),
-            settleEnd: () => Effect.succeed(undefined),
-          },
         );
 
         expect(mocks.query).toHaveBeenCalledTimes(1);
@@ -365,21 +355,11 @@ describe('claude_agent tool launch and resume fallback', () => {
         expect(result).toMatchObject({ status: 'executed' });
 
         const [loopParams] = mocks.startChildRunLoop.mock.calls[0] as [
-          { strategy: ChildRunStrategy<unknown> },
+          { strategy: ProcessChildStrategy<unknown> },
         ];
         yield* loopParams.strategy.launch(
           fakePorts(),
           new AbortController().signal,
-          {
-            turnPermit: (turn) => turn,
-            settleBoundary: () =>
-              Effect.succeed({
-                rows: [],
-                alongside: undefined,
-                settled: Effect.void,
-              }),
-            settleEnd: () => Effect.succeed(undefined),
-          },
         );
         const [callArgs] = mocks.query.mock.calls[0] as [
           { options: { model?: string; effort?: string; thinking?: unknown } },
@@ -447,16 +427,6 @@ describe('claude_agent tool launch and resume fallback', () => {
       const turn = yield* captured.strategy.launch(
         fakePorts(),
         new AbortController().signal,
-        {
-          turnPermit: (turn) => turn,
-          settleBoundary: () =>
-            Effect.succeed({
-              rows: [],
-              alongside: undefined,
-              settled: Effect.void,
-            }),
-          settleEnd: () => Effect.succeed(undefined),
-        },
       );
       if (!turn) throw new Error('Expected a Claude turn result');
 
@@ -701,16 +671,6 @@ describe('claude_agent tool launch and resume fallback', () => {
         const firstTurn = yield* captured.strategy.launch(
           ports,
           new AbortController().signal,
-          {
-            turnPermit: (turn) => turn,
-            settleBoundary: () =>
-              Effect.succeed({
-                rows: [],
-                alongside: undefined,
-                settled: Effect.void,
-              }),
-            settleEnd: () => Effect.succeed(undefined),
-          },
         );
         if (!firstTurn) throw new Error('Expected a Claude fork turn');
         captured.strategy?.onTurnSuccess?.(firstTurn, {
@@ -795,16 +755,6 @@ describe('claude_agent tool launch and resume fallback', () => {
       const firstTurn = yield* captured.strategy.launch(
         ports,
         new AbortController().signal,
-        {
-          turnPermit: (turn) => turn,
-          settleBoundary: () =>
-            Effect.succeed({
-              rows: [],
-              alongside: undefined,
-              settled: Effect.void,
-            }),
-          settleEnd: () => Effect.succeed(undefined),
-        },
       );
       expect(firstTurn).toMatchObject({
         isError: true,
