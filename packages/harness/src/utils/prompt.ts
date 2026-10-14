@@ -52,9 +52,11 @@ let promptEnvironmentPromise: Promise<import('nunjucks').Environment> | null =
   null;
 
 /**
- * The shared prompt-rendering environment: no loader, since a prompt is an
- * in-memory string and names no template file, and autoescape off, since a
- * prompt is raw text, not HTML. The lazy `nunjucks` import is this module's
+ * The shared prompt-rendering environment: an empty loader list, since a
+ * prompt is an in-memory string and names no template file (a `null` list
+ * would get nunjucks' default `views/` loader; an empty one makes any
+ * `{% include %}` fail as "template not found"), and autoescape off, since
+ * a prompt is raw text, not HTML. The lazy `nunjucks` import is this module's
  * one foreign async edge — memoized, so every render after the first
  * resolves from the already-settled promise.
  */
@@ -63,7 +65,7 @@ const promptEnvironment: Effect.Effect<import('nunjucks').Environment, Error> =
     try: () =>
       (promptEnvironmentPromise ??= import('nunjucks').then(
         ({ default: nunjucks }) =>
-          new nunjucks.Environment(null, { autoescape: false }),
+          new nunjucks.Environment([], { autoescape: false }),
       )),
     catch: ensureError,
   });

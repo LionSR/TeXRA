@@ -9,9 +9,11 @@ export const AGENT_TEMPLATE_FILES: Record<AgentTemplateKind, string> = {
   workflowSingle: 'agentTemplate-workflowSingle.yaml',
 };
 
-// No loader: this environment only renders in-memory template strings, never
-// named template files. Autoescape off: the output is agent YAML, not HTML.
-const env = new nunjucks.Environment(null, { autoescape: false });
+// No loaders (`[]`, not `null`, which gets nunjucks' default `views/`
+// loader): this environment renders only in-memory template strings, and an
+// `{% include %}` fails as "template not found". Autoescape off: the output
+// is agent YAML, not HTML.
+const env = new nunjucks.Environment([], { autoescape: false });
 
 // Frozen so the shared module-level instance can't be mutated even if a
 // caller forgets to spread it before passing to nunjucks.renderString.
