@@ -67,7 +67,10 @@ export const ROW_KINDS: Readonly<Record<SessionEventDraft['type'], RowKind>> = {
   // v2: a recipe's script names its block and options; `toolConfig` is
   // gone (no upcaster: an earlier build's v1 row refuses its run as written
   // by that build, rather than launching with its options dropped).
-  'run.config': { version: 2, upcast: [] },
+  // v3: a script's handed-down call commits in the run's opening batch (no
+  // upcaster: a v2 script run cut before its handed-down row would resume
+  // into a model call instead of its script).
+  'run.config': { version: 3, upcast: [] },
   'run.model': V1,
   'run.detach': V1,
   // v2: a recipe's value is `structured`, with no `documents` (no upcaster,
