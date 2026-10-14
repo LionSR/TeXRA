@@ -1,5 +1,5 @@
 // Test composition imports
-import '@test/support/defaultSessionTestSetup';
+import '@test/support/sessionGraphTestSetup';
 
 // E2E fixtures for the promoted "one loop, N strategies" child-run driver.
 // These exercise the loop's own mechanics (queue acquire/drain, one
@@ -871,7 +871,8 @@ describe('childRunLoop E2E fixtures', () => {
         yield* refuseNextRunEnd;
         yield* resolveTurn(2, { kind: 'terminal', value: 'final' });
 
-        yield* Fiber.await(loop);
+        // The lost result is the end's, not the loop's: the loop ends cleanly.
+        expect(Exit.isSuccess(yield* Fiber.await(loop))).toBe(true);
         expect(yield* queuedTexts(runId)).toEqual(['keep going']);
         expect(yield* runEnds(runId)).toMatchObject([
           {

@@ -30,7 +30,6 @@ import {
   type Cause,
   Deferred,
   Effect,
-  Fiber,
   Layer,
   RcMap,
   Ref,
@@ -112,7 +111,7 @@ interface StoreFaults {
     rowType?: SessionEventDraft['type'],
   ) => Effect.Effect<void>;
   /** The next matching call waits, before it starts, until the hold is
-   *  released or failed. */
+   *  released or failed; the faults' scope releases any hold left. */
   readonly holdNext: (
     operation: StoreOperation,
     rowType?: SessionEventDraft['type'],
@@ -190,6 +189,16 @@ export const sessionStoreFaults = (
       Effect.sync(() => Object.assign(database, faulty)),
       () => Effect.sync(() => Object.assign(database, originals)),
     );
+    // A case that fails while a call is held leaves the publisher parked:
+    // the scope lets every hold run, so closing the session never hangs.
+    const holds = yield* Ref.make<readonly Deferred.Deferred<boolean>[]>([]);
+    yield* Effect.addFinalizer(() =>
+      Effect.flatMap(Ref.get(holds), (released) =>
+        Effect.forEach(released, (hold) => Deferred.succeed(hold, true), {
+          discard: true,
+        }),
+      ),
+    );
     const arm = (entry: Armed) =>
       Ref.update(armed, (entries) => [...entries, entry]);
     return {
@@ -199,6 +208,7 @@ export const sessionStoreFaults = (
         Effect.gen(function* () {
           const reached = yield* Deferred.make<void>();
           const released = yield* Deferred.make<boolean>();
+          yield* Ref.update(holds, (all) => [...all, released]);
           yield* arm({
             operation,
             rowType,
@@ -512,24 +522,30 @@ export const parkedRunAfterCrash = (
     const roots = testWorkspaceRoots();
     const runId = generateRunId();
     const session = yield* openTestDefaultSession({ roots });
-    const launch = yield* withProcessServices(
-      testRuntime(),
-      session.runs.launch({
-        request: {
-          config: AgentConfigSchema.parse({
-            agent: 'assistant',
-            model: 'gpt56',
-            instruction: options.instruction ?? 'Start here.',
+    // The launch lives in this scope: closing it, after the session, is the
+    // kill, and a setup that fails on the way kills it too.
+    const storage = yield* Effect.scoped(
+      Effect.gen(function* () {
+        yield* withProcessServices(
+          testRuntime(),
+          session.runs.launch({
+            request: {
+              config: AgentConfigSchema.parse({
+                agent: 'assistant',
+                model: 'gpt56',
+                instruction: options.instruction ?? 'Start here.',
+              }),
+              runId,
+            },
+            options: {},
           }),
-          runId,
-        },
-        options: {},
+        ).pipe(Effect.forkScoped);
+        yield* untilStored(roots.storage, parkedAfter(runId, 1, roots.storage));
+        const copy = crashedCopy(roots.storage, options.owner);
+        yield* closeTestDefaultSession;
+        return copy;
       }),
-    ).pipe(Effect.forkDetach);
-    yield* untilStored(roots.storage, parkedAfter(runId, 1, roots.storage));
-    const storage = crashedCopy(roots.storage, options.owner);
-    yield* closeTestDefaultSession;
-    yield* Fiber.interrupt(launch);
+    );
     const reopened = yield* openTestDefaultSession({
       roots: { ...roots, storage },
       ...(options.interactions && { interactions: options.interactions }),

@@ -26,7 +26,7 @@ import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 
 import { it } from '@effect/vitest';
-import { Deferred, Effect, Fiber } from 'effect';
+import { Deferred, Effect, Exit, Fiber } from 'effect';
 import { describe, expect } from 'vitest';
 
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
@@ -42,6 +42,7 @@ import { openTestDefaultSession } from '@test/support/sessionEnd';
 import { queuedFollowUps } from '@test/support/sessionTestUtils';
 import {
   answersOf,
+  claimHolder,
   parkedRunAfterCrash,
   sessionStoreFaults,
   storedRows,
@@ -101,16 +102,29 @@ describe(
     validationHost('texra-resume-');
 
     it.live(
-      "a store read that fails during a resume fails it with the store's error and keeps the queued input",
+      "a store read that fails under a resume's claim fails it with the store's error, releases the claim, activates nothing and keeps the queued input",
       () =>
         Effect.gen(function* () {
-          const { session, runId } = yield* parkedRunAfterCrash();
+          const { session, runId, storage } = yield* parkedRunAfterCrash();
           yield* send(session, runId, 'Keep this input.');
-          const faults = yield* sessionStoreFaults(session.roots.storage);
+          const faults = yield* sessionStoreFaults(storage);
+          // Under the claim, the resume reads the run's queued input and
+          // then its lineage (`persistedParentRunId`): that read fails.
+          const claim = yield* faults.holdNext('acquireClaims');
+          const resumed = yield* Effect.forkChild(
+            Effect.flip(resume(runId, { session })),
+          );
+          yield* claim.reached;
+          const input = yield* faults.holdNext('readAggregate');
+          yield* claim.release;
+          yield* input.reached;
           yield* faults.failNext('readRunRecords');
+          yield* input.release;
 
-          const error = yield* Effect.flip(resume(runId, { session }));
+          const error = yield* Fiber.join(resumed);
           expect(error.message).toContain('injected readRunRecords fault');
+          expect(activations(storage, runId)).toBe(1);
+          expect(claimHolder(storage, runId)).toBeNull();
           expect(yield* queuedTexts(session, runId)).toEqual([
             'Keep this input.',
           ]);
@@ -138,8 +152,15 @@ describe(
             wake: false,
           });
           yield* config.release;
-          expect(yield* Fiber.join(resumed)).toMatchObject(DELIVERED);
+          const result = yield* Fiber.join(resumed);
+          expect(result).toMatchObject(DELIVERED);
           expect(answersOf(storage, runId).at(-1)).toContain('raced');
+
+          // A root's lifetime is the caller's to await past the
+          // acknowledgement: its input ending ends it.
+          if (!('started' in result)) throw new Error('resume refused');
+          yield* session.followUps.closeInput(runId);
+          expect((yield* result.completion!)?.outcome).toBe('cancelled');
         }),
     );
 
@@ -355,7 +376,7 @@ describe(
           yield* send(session, runId, 'held over');
           let stopped = false;
 
-          yield* Effect.exit(
+          const exit = yield* Effect.exit(
             resume(runId, {
               session,
               isCancellationRequested: () => stopped,
@@ -365,6 +386,7 @@ describe(
                 }),
             }),
           );
+          expect(Exit.hasInterrupts(exit)).toBe(true);
           expect(answersOf(storage, runId)).toHaveLength(1);
           expect(yield* queuedTexts(session, runId)).toEqual(['held over']);
 

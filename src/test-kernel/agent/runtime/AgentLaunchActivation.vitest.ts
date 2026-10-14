@@ -140,8 +140,8 @@ describe(
             }),
           );
           const faults = yield* sessionStoreFaults(roots.storage);
+          const end = yield* faults.holdNext('appendAll', 'run.end');
           // The run's first read after it opened fails it.
-          const failed = yield* Deferred.make<void>();
           const launch = yield* withProcessServices(
             testRuntime(),
             session.runs.launch({
@@ -154,12 +154,7 @@ describe(
                         .holdNext('readAggregate')
                         .pipe(
                           Effect.flatMap((hold) =>
-                            hold.reached.pipe(
-                              Effect.andThen(hold.fail),
-                              Effect.andThen(
-                                Deferred.succeed(failed, undefined),
-                              ),
-                            ),
+                            hold.reached.pipe(Effect.andThen(hold.fail)),
                           ),
                         ),
                     );
@@ -168,13 +163,30 @@ describe(
             }),
           ).pipe(Effect.flip, Effect.forkChild);
           yield* Deferred.await(generating);
-          yield* Deferred.await(failed);
 
-          // The run fails with its description still being generated.
-          yield* Effect.promise(
-            () => new Promise((done) => setImmediate(done)),
+          // The run fails with its description still being generated: its
+          // loop's stop is logged on the way to the description's settle.
+          yield* untilStored(roots.storage, (rows) =>
+            rows.some(
+              (row) =>
+                row.run === runId &&
+                row.type === 'log' &&
+                row.data.includes('stopped: injected readAggregate fault'),
+            ),
           );
+          // The settle joins the description: no `run.end` is attempted
+          // while it is unanswered (a run that left it in flight ends at once).
+          const early = yield* end.reached.pipe(
+            Effect.as(true),
+            Effect.timeoutOrElse({
+              duration: '1 second',
+              orElse: () => Effect.succeed(false),
+            }),
+          );
+          expect(early).toBe(false);
           answer('Fixing grammar in the introduction');
+          yield* end.reached;
+          yield* end.release;
           expect((yield* Fiber.join(launch)).message).toContain(
             'injected readAggregate fault',
           );
