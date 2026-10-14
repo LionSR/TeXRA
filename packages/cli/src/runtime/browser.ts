@@ -51,15 +51,12 @@ function resolveBrowserLaunch(
 
 /**
  * Hand one URL to the OS browser, or fail with what the launch faulted with.
- * Exported for `CliExternalOpener`, which words the failure as the
- * host-neutral `ExternalOpenFailed` the {@link ExternalOpener} port carries;
- * the sign-in callers keep their own manual-URL wording.
  *
  * The launcher stays in our process group: in its own group, the scope's
  * release after `xdg-open` exits 0 would signal that group, which can hold
  * the browser it just forked.
  */
-export const launchBrowser = Effect.fn('launchBrowser')(function* (
+const launchBrowser = Effect.fn('launchBrowser')(function* (
   url: string,
 ): Effect.fn.Return<void, BrowserLaunchFailed, ChildProcessSpawner> {
   const wsl =

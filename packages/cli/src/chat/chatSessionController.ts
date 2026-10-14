@@ -44,16 +44,13 @@ import {
   selectCliRunnableModel,
 } from '@cli/runtime/modelAccess';
 import { createCliRuntimeHost } from '@cli/runtime/cliPresentationHost';
-import {
-  runOutcomeExitCode,
-  type TurnOutcome,
-} from '@cli/runtime/terminalStatus';
+import { runOutcomeExitCode } from '@cli/runtime/terminalStatus';
 import type { RunModelDecisionReason } from '@model/runModelDecision';
 import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import { acceptsFollowUp, isLiveRun } from '@shared/session/sessionView';
 import { isTerminalOutcomePhase } from '@shared/runs/runStatus';
-import { isRecipeConfig, RUN_OUTCOME, type RunId } from '@shared/schemas';
+import { isRecipeConfig, type RunId } from '@shared/schemas';
 import { heldElsewhereBy } from '@shared/session/database';
 import type { DisposableStore } from '@texra/platform/disposable';
 import { FOCUSED_AGENT } from '@ui/copy/nestedRuns';
@@ -93,7 +90,6 @@ import {
   moveLocalTranscriptToRun,
   reportRequestDefect,
 } from './tui/state/transcript';
-import { sessionAgentRuns, type ChatAgentRuns } from './sessionAgentRuns';
 import type { FollowUpDeliveryQueue } from './followUpDeliveryQueue';
 import type { SessionRequests } from './tui/state/approvalQueue';
 import type { SkillActivation } from './tui/forms/SkillsListForm';
@@ -258,10 +254,6 @@ export interface ChatSessionControllerInit {
    *  which each launch carries (`launchApproval`); none follows the
    *  project's. */
   readonly approvalPolicy: () => TexraApprovalPolicy | undefined;
-  /** The agent run boundary the controller drives. Composition leaves it
-   *  unset and gets the session's own; a test harness injects its stand-ins
-   *  here rather than mocking agent modules. */
-  readonly agentRuns?: Partial<ChatAgentRuns>;
 }
 
 /** What the chat reads of a run's records: its saved setup, and whether
@@ -334,7 +326,6 @@ export function createChatSessionController(
     stores,
     runtime,
   } = init;
-  const agentRuns = { ...sessionAgentRuns(runSession), ...init.agentRuns };
   const requests: SessionRequests = runSession;
   // The fold the chat's runs appear in: the service's, or this session's.
   const viewChanges: Stream.Stream<SessionView> = runSession.view.changes;
@@ -415,7 +406,7 @@ export function createChatSessionController(
 
   /** Stop the chat's run. A stop lands only on a run the session holds:
    *  one the view shows, or `admitted`, which the session has just admitted
-   *  whether or not the view has folded it yet (`onAdmitted` re-reads
+   *  whether or not the view has folded it yet (admission re-reads
    *  `stopRequested` for a stop asked in the launch gap). */
   const interruptActiveRun = (admitted?: RunId): void => {
     const runId = session.runId;
@@ -531,24 +522,23 @@ export function createChatSessionController(
           // conversation. The new round continues the previous one, so bypass
           // resolution falls through to whatever the prior round had, unless
           // this round sets its own explicit value.
-          const previousRootRunId = rootRunId.get();
-          const result = yield* agentRuns.launch({
-            request: { config: registeredConfig, runId },
-            options: {
-              ...launchApproval(init.approvalPolicy()),
-              ...(previousRootRunId !== undefined && {
-                continues: previousRootRunId,
-              }),
-              onAdmitted: (resolvedRunId) =>
-                Effect.sync(() => {
-                  rootRunId.set(resolvedRunId);
-                  moveLocalTranscriptToRun(resolvedRunId);
-                  focusRun(resolvedRunId);
-                  if (session.stopRequested) interruptActiveRun(resolvedRunId);
-                }),
+          const approval = launchApproval(init.approvalPolicy());
+          const run = yield* runSession.start({
+            config: registeredConfig,
+            runId,
+            continues: rootRunId.get(),
+            approval: {
+              policy: approval.approvalPolicy,
+              delegated: approval.approveDelegatedWork,
             },
+            interactive: true,
           });
-          session.settleExitCode(claim, runOutcomeExitCode(result.outcome));
+          rootRunId.set(run.runId);
+          moveLocalTranscriptToRun(run.runId);
+          focusRun(run.runId);
+          if (session.stopRequested) interruptActiveRun(run.runId);
+          const { outcome } = yield* run.result;
+          session.settleExitCode(claim, runOutcomeExitCode(outcome));
         }),
         (error) => reportRunFailure(error, claim),
       ).pipe(
@@ -564,9 +554,8 @@ export function createChatSessionController(
   // resume
   // -----------------------------------------------------------------------
 
-  // The user's resume of a conversation they pick. Config is adopted inside
-  // `onAdmitted`, which the session calls once it admitted the resumed
-  // run. The stopped conversation it supersedes stays the chat's target
+  // The user's resume of a conversation they pick. Config is adopted once
+  // the session admitted the resumed run. The stopped conversation it supersedes stays the chat's target
   // again when the resume never reaches its run.
   const resume = (id: RunId, edit?: ResumeEdit): Effect.Effect<void, Error> =>
     // `Effect.suspend` is what keeps the claim handshake synchronous: its
@@ -621,8 +610,8 @@ export function createChatSessionController(
             appendLocalNotice(`Resuming document task ${id}. Tab lists it.`),
           );
           yield* Effect.forkDetach(
-            agentRuns
-              .resumeBeside(id)
+            runSession
+              .resume(id, { interactive: true })
               .pipe(
                 Effect.catch((refused) =>
                   Effect.sync(() =>
@@ -635,7 +624,7 @@ export function createChatSessionController(
         }
 
         // Adopting the resumed stream is the mutation a refusal must not cost:
-        // the session calls this only once it admitted the run, so a refusal
+        // it runs only once the session admitted the run, so a refusal
         // reaches the chat the user is looking at instead of a cleared
         // transcript switched onto a dead stream. The run resumed is the one
         // asked for, or the parent that owns it.
@@ -669,31 +658,43 @@ export function createChatSessionController(
 
         runtime.runFork(
           Effect.gen(function* () {
-            const result = yield* agentRuns.resume(id, {
-              onAdmitted: adoptResumedRun,
-            });
-            if ('started' in result) {
-              // A resume of an owned child continues its parent: the edit
-              // was asked of the child, never of the parent.
-              if (edit !== undefined && session.runId !== id) {
-                appendLocalErrorTranscript(
-                  `Task ${id} is an agent of task ${session.runId}, which was resumed instead; it was not reset.`,
-                );
-              } else if (edit !== undefined) {
-                const refused = yield* request({
-                  kind: 'run.reset',
-                  runId: id,
-                  handoff: edit.handoff,
-                });
-                if (refused !== undefined) appendLocalErrorTranscript(refused);
-              }
-              yield* settleResumedTurn(result, claim);
-            } else if (session.stopRequested) {
-              session.settleExitCode(claim, CliExitCode.Interrupted);
-            } else {
-              appendLocalErrorTranscript(result.message);
-              session.settleExitCode(claim, CliExitCode.Usage);
+            const run = yield* runSession
+              .resume(id, { interactive: true })
+              .pipe(
+                // A refusal is the resume's answer, not a failure: the chat
+                // says it in the session's words and exits as a usage error.
+                Effect.catchTag('ResumeRefused', (refusal) =>
+                  Effect.sync(() => {
+                    if (session.stopRequested) {
+                      session.settleExitCode(claim, CliExitCode.Interrupted);
+                    } else {
+                      appendLocalErrorTranscript(refusal.message);
+                      session.settleExitCode(claim, CliExitCode.Usage);
+                    }
+                    return undefined;
+                  }),
+                ),
+              );
+            if (run === undefined) return;
+            yield* adoptResumedRun(run.runId);
+            // A resume of an owned child continues its parent: the edit was
+            // asked of the child, never of the parent.
+            if (edit !== undefined && session.runId !== id) {
+              appendLocalErrorTranscript(
+                `Task ${id} is an agent of task ${session.runId}, which was resumed instead; it was not reset.`,
+              );
+            } else if (edit !== undefined) {
+              const refused = yield* request({
+                kind: 'run.reset',
+                runId: id,
+                handoff: edit.handoff,
+              });
+              if (refused !== undefined) appendLocalErrorTranscript(refused);
             }
+            // A root acknowledges at idle, so its result holds this chain,
+            // and the root-run slot it settles, until the run ends.
+            const { outcome } = yield* run.result;
+            session.settleExitCode(claim, runOutcomeExitCode(outcome));
           }).pipe(
             Effect.catch((error) =>
               Effect.sync(() => reportRunFailure(error, claim)),
@@ -717,26 +718,6 @@ export function createChatSessionController(
         endResumeUnstarted(() => reportRunFailure(error, claim));
       });
     });
-
-  /** Settle a resumed turn. A root acknowledges at idle, so its `completion`
-   *  holds this chain, and the root-run slot it settles, until the run ends.
-   *  A subagent back at WAITING is a completed turn. */
-  const settleResumedTurn = Effect.fn('settleResumedTurn')(function* (
-    result: {
-      readonly outcome?: TurnOutcome;
-      readonly completion?: Effect.Effect<
-        { readonly outcome: TurnOutcome },
-        Error
-      >;
-    },
-    claim: RootRunSettled,
-  ) {
-    const outcome =
-      (result.completion
-        ? (yield* result.completion).outcome
-        : result.outcome) ?? RUN_OUTCOME.COMPLETED;
-    session.settleExitCode(claim, runOutcomeExitCode(outcome));
-  });
 
   /** Hold the root-run slot while a message continues the stopped
    *  conversation `runId`, once the slot is free. */

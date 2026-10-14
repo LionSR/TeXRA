@@ -16,7 +16,6 @@ import {
   detectUnknownCliFlag,
 } from '@cli/commands/_helpers/dispatch';
 import { CliUsageError, formatCrashReportLine } from '@cli/runtime/cliContext';
-import { formatCliModelListError } from '@cli/commands/_helpers/fetchSilencer';
 import {
   collectStringFlagValues,
   optionalStringFlagValue,
@@ -958,16 +957,6 @@ describe('CLI root argument routing', () => {
         expect(Object.hasOwn(result, 'copiedOutput')).toBe(false);
       }),
   );
-
-  it('formats model list network failures without raw stack traces', () => {
-    const error = new Error('fetch failed', {
-      cause: new Error('getaddrinfo ENOTFOUND api.example.com'),
-    });
-
-    expect(formatCliModelListError(error)).toBe(
-      'texra: could not reach the network to list models: getaddrinfo ENOTFOUND api.example.com',
-    );
-  });
 });
 
 describe('CLI global color/input flags', () => {

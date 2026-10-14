@@ -212,10 +212,15 @@ function toolUseConfig() {
 
 /** A run program's options with the session, runtime and shutdown scope
  *  the wrapper below supplies. */
-type WithoutSession<O> = Omit<
-  O,
-  'session' | 'runSession' | 'runtime' | 'shutdownScope'
->;
+type WithoutSession<O> = Omit<O, 'services'>;
+
+/** The run's services over the default test session. */
+const testServices = () => ({
+  session: Effect.succeed(testDefaultSession()),
+  runSession: Effect.sync(runSessionFake),
+  runtime: testRuntime(),
+  shutdownScope: installedHost().platform.shutdownScope,
+});
 
 async function loadExecuteCli() {
   const runtime = await import('@cli/runtime/executeCli');
@@ -233,10 +238,7 @@ async function loadExecuteCli() {
     ) =>
       Effect.provide(
         runtime.executeCliRequest(request, context, {
-          session: Effect.succeed(testDefaultSession()),
-          runSession: Effect.sync(runSessionFake),
-          runtime: testRuntime(),
-          shutdownScope: installedHost().platform.shutdownScope,
+          services: testServices(),
           agentRuns: agentRunsFake,
           ...options,
         }),
@@ -251,10 +253,7 @@ async function loadExecuteCli() {
     ) =>
       Effect.provide(
         runtime.executeCliConfig(config, context, {
-          session: Effect.succeed(testDefaultSession()),
-          runSession: Effect.sync(runSessionFake),
-          runtime: testRuntime(),
-          shutdownScope: installedHost().platform.shutdownScope,
+          services: testServices(),
           agentRuns: agentRunsFake,
           ...options,
         }),
@@ -269,10 +268,7 @@ async function loadExecuteCli() {
     ) =>
       Effect.provide(
         runtime.executeCliToolUseConfig(config, context, {
-          session: Effect.succeed(testDefaultSession()),
-          runSession: Effect.sync(runSessionFake),
-          runtime: testRuntime(),
-          shutdownScope: installedHost().platform.shutdownScope,
+          services: testServices(),
           agentRuns: agentRunsFake,
           ...options,
         }),

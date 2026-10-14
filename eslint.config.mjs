@@ -1041,21 +1041,6 @@ export default tseslint.config(
     files: CLI_PROCESS_IO_BOUNDARY,
     rules: { 'no-restricted-properties': 'off' },
   },
-  // The fetch silencer swaps `console.error` for a filter around one call and
-  // restores it; it intercepts a library's logging rather than writing output.
-  {
-    files: ['packages/cli/src/commands/_helpers/fetchSilencer.ts'],
-    rules: {
-      'no-restricted-properties': [
-        'error',
-        ...CLI_PROCESS_INPUT_RESTRICTIONS,
-        ...CLI_PROCESS_OUTPUT_RESTRICTIONS.filter(
-          ({ object, property }) =>
-            object !== 'console' || property !== 'error',
-        ),
-      ],
-    },
-  },
 
   // `<wa-icon>` is constructed in exactly one place (`waIcon()`), so the
   // Font Awesome / Web Awesome icon set stays the single icon standard

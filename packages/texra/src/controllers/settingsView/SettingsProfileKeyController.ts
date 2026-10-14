@@ -4,12 +4,7 @@ import { Data, Effect } from 'effect';
 // Local imports - secrets
 import { apiKeySecretName, isApiProvider } from '@texra-ai/llm';
 import { storeCredential } from '@texra/common/secrets/storeCredential';
-import type {
-  ExternalOpenFailed,
-  ExternalOpener,
-  PromptFailed,
-  PromptHost,
-} from '@texra/hosts/uiHosts';
+import type { PromptFailed, PromptHost } from '@texra/hosts/uiHosts';
 import type { StateReadFailed, PlatformSecrets } from '@texra-ai/harness';
 // Local imports - hosts
 // Local imports - model
@@ -19,13 +14,9 @@ interface SettingsProfileKeyControllerDeps {
   /** The process secret store the host holds, where the keys are written. */
   secrets: PlatformSecrets;
   prompt: Pick<PromptHost, 'input' | 'info' | 'confirm'>;
-  externalOpener: Pick<ExternalOpener, 'openExternal'>;
   getProviderDisplayName(
     provider: string,
   ): Effect.Effect<string, StateReadFailed>;
-  getProviderKeyUrl(
-    provider: string,
-  ): Effect.Effect<string | undefined, StateReadFailed>;
 }
 
 /**
@@ -87,18 +78,6 @@ export class SettingsProfileKeyController {
         yield* this.notify(`${displayName} API key has been removed`);
       }),
     );
-  }
-
-  openProviderKeyUrl(
-    provider: string,
-  ): Effect.Effect<void, ExternalOpenFailed | StateReadFailed> {
-    return this.deps
-      .getProviderKeyUrl(provider)
-      .pipe(
-        Effect.flatMap((url) =>
-          url ? this.deps.externalOpener.openExternal(url) : Effect.void,
-        ),
-      );
   }
 
   private storeProviderKey(

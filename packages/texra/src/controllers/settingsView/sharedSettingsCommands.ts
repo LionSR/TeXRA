@@ -298,10 +298,8 @@ export function createSettingsViewBody(ports: SettingsViewBodyPorts) {
   const profileKeys = new SettingsProfileKeyController({
     secrets,
     prompt: bindings.prompt,
-    externalOpener: bindings.externalOpener,
     getProviderDisplayName: (provider) =>
       profile.getProviderDisplayName(provider),
-    getProviderKeyUrl: (provider) => getProviderKeyUrl(roots, provider),
   });
   // A failed key write leaves the profile and the Models page showing the
   // key as it was before the attempt. The report is the notice: a repaint
@@ -356,7 +354,11 @@ export function createSettingsViewBody(ports: SettingsViewBodyPorts) {
     removeProviderKey: (message) =>
       keyAction(profileKeys.removeProviderKey(message.provider)),
     openProviderKeyUrl: (message) =>
-      profileKeys.openProviderKeyUrl(message.provider),
+      getProviderKeyUrl(roots, message.provider).pipe(
+        Effect.flatMap((url) =>
+          url ? bindings.externalOpener.openExternal(url) : Effect.void,
+        ),
+      ),
     openExternalUrl: (message) =>
       bindings.externalOpener.openExternal(message.url),
     openGitHubTokenUrl: () =>

@@ -2,7 +2,6 @@ import * as path from 'node:path';
 import { Effect, FileSystem, Result } from 'effect';
 
 import { deriveResumability, getRunRecords } from '@agent/storage';
-import type { SessionHandle } from '@agent/runtime';
 import { RUN_OUTCOME, type RunId } from '@shared/schemas';
 import { documentTaskPatch } from '@texra/agent/output/documentRecipe';
 import { DocumentTaskOptionsSchema } from '@texra/shared/plugins/documents';
@@ -72,18 +71,9 @@ import {
   resumeWorkflowOutputFile,
 } from '../runtime/workflowOutput';
 import type { AgentConfigPayload } from '@texra-ai/harness/schemas';
-import type { SessionOpenError } from '@texra-ai/harness';
 
 const MULTI_INPUT_OUTPUT_MESSAGE =
   'Use --output-dir for multi-input document tasks; --output is only for a single final artifact.';
-
-function absoluteOutputDestination(
-  destination: string | undefined,
-  cwd: string,
-): string | undefined {
-  if (!destination) return undefined;
-  return path.resolve(cwd, destination);
-}
 
 interface HeadlessRunInit {
   readonly agent: string;
@@ -171,14 +161,12 @@ export const runHeadlessAgent = Effect.fn('runHeadlessAgent')(function* (
           : undefined;
         // Persist CLI destinations absolutely so resumption has one path
         // representation and never reconstructs output locations.
-        const cliOutputFile = absoluteOutputDestination(
-          init.output,
-          runContext.cwd,
-        );
-        const cliOutputDirectory = absoluteOutputDestination(
-          init.outputDir,
-          runContext.cwd,
-        );
+        const cliOutputFile = init.output
+          ? path.resolve(runContext.cwd, init.output)
+          : undefined;
+        const cliOutputDirectory = init.outputDir
+          ? path.resolve(runContext.cwd, init.outputDir)
+          : undefined;
         const launch = {
           agent: init.agent,
           agentSource: source,
@@ -211,10 +199,7 @@ export const runHeadlessAgent = Effect.fn('runHeadlessAgent')(function* (
         };
 
         return yield* executeCliWorkflowConfig(config, runContext, {
-          session: services.session,
-          runSession: services.runSession,
-          runtime: services.runtime,
-          shutdownScope: services.shutdownScope,
+          services,
           recoveryInputIsDurable: stdinInputPath === undefined,
         });
       }),
@@ -277,10 +262,7 @@ const runToolUseAgent = Effect.fn('runToolUseAgent')(function* (
         };
 
         const run = yield* executeCliToolUseConfig(config, runContext, {
-          session: services.session,
-          runSession: services.runSession,
-          runtime: services.runtime,
-          shutdownScope: services.shutdownScope,
+          services,
           stopAfterCycle: true,
           recoveryInputIsDurable: stdinInputPath === undefined,
         });
@@ -310,22 +292,13 @@ export const executeCliWorkflowConfig = Effect.fn('executeCliWorkflowConfig')(
     config: AgentConfigPayload,
     runContext: CliContext,
     options: {
-      /** The process session whose records the run's output reads:
-       *  `initCliPlatform`'s one memoized open. */
-      readonly session: Effect.Effect<SessionHandle, SessionOpenError>;
-      /** The same session as every host drives it, where the run runs. */
-      readonly runSession: CliConfigExecuteOptions['runSession'];
-      /** The process runtime the shared skeleton runs its Promise-edge
-       *  callbacks on, from the same services. */
-      readonly runtime: CliConfigExecuteOptions['runtime'];
-      /** The host's shutdown registry, from the same services. */
-      readonly shutdownScope: CliConfigExecuteOptions['shutdownScope'];
+      readonly services: CliConfigExecuteOptions['services'];
       readonly recoveryInputIsDurable?: boolean;
       readonly runId?: RunId;
       readonly agentRuns?: CliConfigExecuteOptions['agentRuns'];
     },
   ): Effect.fn.Return<number, Error, CliRunServices> {
-    const session = yield* options.session;
+    const session = yield* options.services.session;
     const fileSystem = yield* FileSystem.FileSystem;
     let workflowResult: CliWorkflowRunResult | undefined;
     let workflowOutputError: unknown;
@@ -372,10 +345,7 @@ export const executeCliWorkflowConfig = Effect.fn('executeCliWorkflowConfig')(
           yield* writeResumeHint(runId);
       });
     const run = yield* executeCliConfig(config, runContext, {
-      session: options.session,
-      runSession: options.runSession,
-      runtime: options.runtime,
-      shutdownScope: options.shutdownScope,
+      services: options.services,
       runId: options.runId,
       agentRuns: options.agentRuns,
       onInterruptedRunFinalized: recoveryInputIsDurable

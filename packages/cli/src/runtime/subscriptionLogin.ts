@@ -18,9 +18,8 @@ import {
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 import { presentCliSignInUrl, type CliSignInProgress } from './signInUrl';
-import { isLikelyRemoteSession } from './remoteSession';
 import { interactiveTerminalFailure } from './terminalRequirements';
-import type { CliContext } from './cliContext';
+import { cliEnvValue, type CliContext } from './cliContext';
 
 export interface CliSubscriptionLoginTransportInit {
   readonly device: boolean;
@@ -47,7 +46,11 @@ export function shouldUseSubscriptionDeviceCode(
   return (
     context.outputFormat !== 'text' ||
     interactiveTerminalFailure(context) !== undefined ||
-    isLikelyRemoteSession()
+    // An SSH session (one of these set) probably cannot open a local
+    // browser or receive a loopback callback.
+    ['SSH_CONNECTION', 'SSH_CLIENT', 'SSH_TTY'].some((name) =>
+      Boolean(cliEnvValue(name)),
+    )
   );
 }
 

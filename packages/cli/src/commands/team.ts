@@ -239,10 +239,7 @@ export const runTeam = Effect.fn('runTeam')(function* (
         };
 
         const run = yield* executeCliToolUseConfig(config, runContext, {
-          session: services.session,
-          runSession: services.runSession,
-          runtime: services.runtime,
-          shutdownScope: services.shutdownScope,
+          services,
           stopAfterCycle: true,
           recoveryInputIsDurable: stdinInputPath === undefined,
         });

@@ -27,10 +27,6 @@ import {
 } from '../runtime/modelAccess';
 
 import { defineCliCommand } from './_helpers/defineCliCommand';
-import {
-  formatCliModelListError,
-  suppressCliFetchStackLogs,
-} from './_helpers/fetchSilencer';
 import { GLOBAL_ARGS } from './_helpers/globalArgs';
 import { emitCliResult, emitPagedCliResult } from './_helpers/output';
 import type { CliContext } from '../runtime/cliContext';
@@ -43,85 +39,86 @@ import type { CliContext } from '../runtime/cliContext';
  * reads the same way an init failure inside one does.
  */
 function reportModelPlatformFailure(cause: unknown): number {
-  writeTextStderr(formatCliModelListError(cause));
+  const message = toErrorMessage(cause);
+  const detail =
+    cause instanceof Error && cause.cause instanceof Error
+      ? toErrorMessage(cause.cause)
+      : message;
+  writeTextStderr(
+    /ENOTFOUND|EAI_AGAIN|getaddrinfo|fetch failed/i.test(detail)
+      ? `texra: could not reach the network to list models: ${detail}`
+      : `texra: could not list models: ${message}`,
+  );
   return CliExitCode.ModelOrNetworkError;
 }
 
 function listModels(context: CliContext, options: CliModelListOptions) {
   // The init and the access read are one program on the process runtime the
-  // command entry installs; the whole of it stays inside the fetch-log
-  // suppression window the access read needs. Any cause counts, defects and
-  // interruption included, exactly as the `runPromiseExit` this replaces
-  // reported them.
-  return suppressCliFetchStackLogs(
-    Effect.gen(function* () {
-      const outcome = yield* Effect.exit(
-        Effect.gen(function* () {
-          const services = yield* initCliPlatform(context);
-          return yield* getCliModelAccessList({
-            stores: services,
-            models:
-              options.includeUnavailable === true
-                ? knownCliModelIds()
-                : undefined,
-          });
-        }),
-      );
-      if (Exit.isFailure(outcome)) {
-        return reportModelPlatformFailure(Cause.squash(outcome.cause));
-      }
-      const models: readonly CliModelAccess[] = outcome.value;
+  // command entry installs. Any cause counts, defects and interruption
+  // included.
+  return Effect.gen(function* () {
+    const outcome = yield* Effect.exit(
+      Effect.gen(function* () {
+        const services = yield* initCliPlatform(context);
+        return yield* getCliModelAccessList({
+          stores: services,
+          models:
+            options.includeUnavailable === true
+              ? knownCliModelIds()
+              : undefined,
+        });
+      }),
+    );
+    if (Exit.isFailure(outcome)) {
+      return reportModelPlatformFailure(Cause.squash(outcome.cause));
+    }
+    const models: readonly CliModelAccess[] = outcome.value;
 
-      const listedModels = listableModelAccessEntries(models, options);
-      if (context.outputFormat === 'text' && listedModels.length === 0) {
-        writeTextStderr(formatNoListableModelsMessage(options));
-      }
-      const records = listedModels.map(({ model }) => cliModelRecord(model));
-      yield* emitPagedCliResult(context, {
-        json: records,
-        ndjson: records.map((model) => ({ kind: 'model', model })),
-        text: listedModels
-          .map(
-            ({ model, status }) => `${model.value}\t${model.label}\t${status}`,
-          )
-          .join('\n'),
-      });
-      return CliExitCode.Success;
-    }),
-  );
+    const listedModels = listableModelAccessEntries(models, options);
+    if (context.outputFormat === 'text' && listedModels.length === 0) {
+      writeTextStderr(formatNoListableModelsMessage(options));
+    }
+    const records = listedModels.map(({ model }) => cliModelRecord(model));
+    yield* emitPagedCliResult(context, {
+      json: records,
+      ndjson: records.map((model) => ({ kind: 'model', model })),
+      text: listedModels
+        .map(({ model, status }) => `${model.value}\t${model.label}\t${status}`)
+        .join('\n'),
+    });
+    return CliExitCode.Success;
+  });
 }
 
 function showModel(context: CliContext, id: string) {
   // One program for the init and the entry lookup: the lookup loads the
   // access list itself, so `show` settles neither the init nor the list into
   // a Promise only to hand it straight back to a second run.
-  return suppressCliFetchStackLogs(
-    Effect.gen(function* () {
-      const outcome = yield* Effect.exit(
-        Effect.gen(function* () {
-          const services = yield* initCliPlatform(context);
-          return yield* loadCliModelAccessEntry(id, { stores: services });
-        }),
-      );
-      if (Exit.isFailure(outcome)) {
-        return reportModelPlatformFailure(Cause.squash(outcome.cause));
-      }
-      const entry: CliModelAccess | undefined = outcome.value;
+  return Effect.gen(function* () {
+    const outcome = yield* Effect.exit(
+      Effect.gen(function* () {
+        const services = yield* initCliPlatform(context);
+        return yield* loadCliModelAccessEntry(id, { stores: services });
+      }),
+    );
+    if (Exit.isFailure(outcome)) {
+      return reportModelPlatformFailure(Cause.squash(outcome.cause));
+    }
+    const entry: CliModelAccess | undefined = outcome.value;
 
-      if (!entry) {
-        writeTextStderr(`Model not found: ${id}`);
-        return CliExitCode.Usage;
-      }
+    if (!entry) {
+      writeTextStderr(`Model not found: ${id}`);
+      return CliExitCode.Usage;
+    }
 
-      const record = cliModelRecord(entry.model);
-      emitCliResult(context, {
-        json: record,
-        ndjson: { kind: 'model', model: record },
-        text: formatCliModelDetails(entry),
-      });
-      return CliExitCode.Success;
-    }),
-  );
+    const record = cliModelRecord(entry.model);
+    emitCliResult(context, {
+      json: record,
+      ndjson: { kind: 'model', model: record },
+      text: formatCliModelDetails(entry),
+    });
+    return CliExitCode.Success;
+  });
 }
 
 const modelsListCommand = defineCliCommand({

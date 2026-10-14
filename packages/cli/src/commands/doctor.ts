@@ -20,7 +20,6 @@ import { getCliModelAccessList } from '../runtime/modelAccess';
 import { contextFromArgs } from './_helpers/context';
 import { defineCliCommand } from './_helpers/defineCliCommand';
 import { setExitCode } from './_helpers/exitCode';
-import { suppressCliFetchStackLogs } from './_helpers/fetchSilencer';
 import { GLOBAL_ARGS } from './_helpers/globalArgs';
 import type { CliContext } from '../runtime/cliContext';
 
@@ -111,9 +110,7 @@ export const doctorCommand = defineCommand({
           const context = yield* contextFromArgs(ctx.args, ctx.rawArgs, {
             printConfigWarnings: false,
           });
-          const report = yield* suppressCliFetchStackLogs(
-            doctorReport(context),
-          );
+          const report = yield* doctorReport(context);
           writeDoctorReport(context, report);
           return doctorExitCode(report);
         }),

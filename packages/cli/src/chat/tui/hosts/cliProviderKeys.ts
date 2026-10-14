@@ -1,38 +1,21 @@
 // The CLI's binding of the shared provider-key controller. Every terminal
 // surface that writes a provider key — the "Connect a model" panel, `/key`,
 // `/config`'s API-keys row, and the retry that asks for a key before
-// switching a run onto it — goes through this one program, so the secret
-// name, the label and the post-write refresh are the same three ways they
-// are on the two graphical hosts.
-//
-// What each surface still owns is where the controller's notice lands (the
-// chat TUI has a transcript to put it in), so the prompt port is the
-// parameter of the one body below and each surface binds its own.
+// switching a run onto it — goes through it, so the secret name, the label
+// and the post-write refresh are the same three ways they are on the two
+// graphical hosts. Its notices land in the chat transcript.
 
 // Third-party imports
 import { Effect, Fiber } from 'effect';
 
-// Local imports - CLI runtime
 import { type ApiKeyProviderId, apiProviderOfSecretName } from '@texra-ai/llm';
-import { cliExternalOpener } from '@cli/runtime/hosts/cliExternalOpener';
-// Local imports - controllers
-// Local imports - event bus
 import { onAppSignal } from '@eventBus/AppSignals';
-// Local imports - hosts
-// Local imports - model
-// Local imports - platform
-// Local imports - shared
 import type { SettingsStores } from '@shared/config/settingsAccess';
-import type { PromptHost } from '@texra/hosts/uiHosts';
 import {
   ProviderKeyActionFailed,
   SettingsProfileKeyController,
 } from '@texra/controllers/settingsView/SettingsProfileKeyController';
-// Local imports - utils
-import {
-  getProviderDisplayName,
-  getProviderKeyUrl,
-} from '@texra/model/providerPresentation';
+import { getProviderDisplayName } from '@texra/model/providerPresentation';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { bumpCodexPreferenceVersion } from '../state/cliState';
@@ -40,23 +23,23 @@ import { tuiUi } from './tuiUiHost';
 import type { ProcessRuntime } from '@texra-ai/harness';
 import type { PlatformSecrets } from '@texra-ai/harness';
 
-/** Write through the calling surface; failures stay in the Effect channel. */
-const commitProviderApiKeyVia = Effect.fn('commitProviderApiKeyVia')(function* (
-  prompt: Pick<PromptHost, 'input' | 'info' | 'confirm'>,
+/** Run one controller action on the TUI's prompt; a failure names its cause
+ *  and stays in the Effect channel. */
+const viaTui = (
   secrets: PlatformSecrets,
   stores: SettingsStores,
-  provider: ApiKeyProviderId,
-  key: string,
-) {
-  const controller = new SettingsProfileKeyController({
-    secrets,
-    prompt,
-    externalOpener: cliExternalOpener,
-    getProviderDisplayName: (candidate) =>
-      getProviderDisplayName(stores, candidate),
-    getProviderKeyUrl: (candidate) => getProviderKeyUrl(stores, candidate),
-  });
-  yield* controller.commitProviderKey(provider, key).pipe(
+  action: (
+    controller: SettingsProfileKeyController,
+  ) => Effect.Effect<void, Error>,
+): Effect.Effect<void, Error> =>
+  action(
+    new SettingsProfileKeyController({
+      secrets,
+      prompt: tuiUi,
+      getProviderDisplayName: (candidate) =>
+        getProviderDisplayName(stores, candidate),
+    }),
+  ).pipe(
     Effect.mapError((error) =>
       error instanceof ProviderKeyActionFailed
         ? new Error(`${error.message}: ${toErrorMessage(error.cause)}`, {
@@ -65,19 +48,17 @@ const commitProviderApiKeyVia = Effect.fn('commitProviderApiKeyVia')(function* (
         : error,
     ),
   );
-});
 
-/**
- * The chat TUI's binding: the notice the controller raises lands in the
- * transcript, beside the `/key` or `/config` row that asked for the write.
- */
+/** Write a key the calling surface already holds. */
 export const commitCliProviderApiKey = (
   secrets: PlatformSecrets,
   stores: SettingsStores,
   provider: ApiKeyProviderId,
   key: string,
 ): Effect.Effect<void, Error> =>
-  commitProviderApiKeyVia(tuiUi, secrets, stores, provider, key);
+  viaTui(secrets, stores, (controller) =>
+    controller.commitProviderKey(provider, key),
+  );
 
 /**
  * Ask for a provider key and write it: the `promptForApiKey` the shared
@@ -86,22 +67,12 @@ export const commitCliProviderApiKey = (
  * failure — the retry controller re-reads the store and reports `false`
  * itself.
  */
-export const promptForCliProviderApiKey = Effect.fn(
-  'promptForCliProviderApiKey',
-)(function* (
+export const promptForCliProviderApiKey = (
   secrets: PlatformSecrets,
   stores: SettingsStores,
   provider: ApiKeyProviderId,
-) {
-  const label = yield* getProviderDisplayName(stores, provider);
-  const key = yield* tuiUi.input({
-    prompt: `Enter ${label} API key`,
-    placeHolder: 'enter your API key (hidden)',
-    password: true,
-  });
-  if (key == null) return;
-  yield* commitCliProviderApiKey(secrets, stores, provider, key);
-});
+): Effect.Effect<void, Error> =>
+  viaTui(secrets, stores, (controller) => controller.setProviderKey(provider));
 
 /**
  * The chat TUI's `credentialChanged` subscriber, forked at its run edge (R1)
