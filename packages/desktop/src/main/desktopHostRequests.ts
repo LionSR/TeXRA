@@ -7,7 +7,7 @@
 
 import path from 'node:path';
 
-import { Cause, Effect, Exit, FileSystem, Layer } from 'effect';
+import { Effect, Exit, FileSystem, Layer } from 'effect';
 import {
   Cancelled,
   Rejected,
@@ -22,14 +22,12 @@ import {
   type ProcessRuntime,
   type ProcessServices,
 } from '@texra-ai/harness';
-import { presentRunFailure } from '@agent/runtime';
 import { fileOpResultMessage } from '@housekeeping/runDirOps';
 import {
   latexdiffPackMessage,
   runPackLatexdiffvc,
 } from '@housekeeping/packLatexdiffvc';
 import { LaTeXdiffService } from '@latex/latexdiff';
-import { withLogChannel } from '@logger/effectLog';
 import {
   sessionFsLayer,
   type GlobalStorageFs,
@@ -58,6 +56,7 @@ import type { HostDraftRequests } from '@texra/controllers/session/hostDraftRequ
 import {
   createHostRunActions,
   localRunActionPorts,
+  type HostRunActions,
   type WorkflowDiffRequest,
 } from '@texra/controllers/session/hostRunActions';
 import type { HostSnapshotSource } from '@texra/controllers/session/hostSnapshotSource';
@@ -125,6 +124,8 @@ interface DesktopHostRequestsOptions {
 }
 
 export interface DesktopHostRequests {
+  /** The window's launcher, which the setup card starts its run on. */
+  readonly runValidated: HostRunActions['runValidated'];
   handleHostRequest(
     request: HostRequest,
     port: string,
@@ -163,7 +164,7 @@ export function createDesktopHostRequests(
   });
   const runActions = runtime.runSync(
     createHostRunActions({
-      ...run, // this window's launcher and output opener
+      ...run, // this window's launch follow-up and output opener
       ...(records.remote === undefined
         ? localRunActionPorts(records.handle)
         : {
@@ -232,39 +233,7 @@ export function createDesktopHostRequests(
       // request answers with, exactly as the rejecting promise did.
       showErrorMessage: rejectRequestEffect,
     },
-    {
-      session: project.session,
-      runtime,
-      // The request schedules a merge; a failure to start it belongs to
-      // this lifecycle callback, after the request has already completed,
-      // and one after that to the run's own result.
-      startRun: (request) => {
-        runtime.runFork(
-          run.runValidated(request).pipe(
-            Effect.catchCause((cause) =>
-              // A window torn down mid-merge interrupts this fiber; that is
-              // not a merge failure, so it is re-raised for the fork's own
-              // interrupts-only silence rather than presented.
-              Cause.hasInterruptsOnly(cause)
-                ? Effect.failCause(cause)
-                : Effect.gen(function* () {
-                    const error = Cause.squash(cause);
-                    yield* Effect.logError('Desktop merge run failed').pipe(
-                      Effect.annotateLogs({ data: error }),
-                      withLogChannel(CHANNEL),
-                    );
-                    return yield* presentRunFailure(
-                      project.present,
-                      error,
-                      'Merge failed: ',
-                    );
-                  }),
-            ),
-          ),
-        );
-      },
-      listWorkspaceCandidateFiles,
-    },
+    { session: project.session, runtime, listWorkspaceCandidateFiles },
   );
 
   const workflowFileActions = new ProgressWorkflowFileActionsController({
@@ -275,8 +244,6 @@ export function createDesktopHostRequests(
         fileActions.compareFiles(baseFile, editedFile),
       acceptEditedFile: (baseFile, editedFile) =>
         fileActions.acceptEditedFile(baseFile, editedFile),
-      mergeFile: (baseFile, editedFile) =>
-        fileActions.runMergeFile(baseFile, editedFile),
       latexdiffFile: (baseFile, editedFile) =>
         fileActions
           .runLatexdiffFile(baseFile, editedFile)
@@ -296,7 +263,7 @@ export function createDesktopHostRequests(
       showInfo: (message) => host.showInfoMessage(message),
       showError: rejectRequestEffect,
     },
-    sendFollowUp: (runId, text) => runActions.sendFollowUp(runId, text),
+    runs: runActions,
   });
 
   const runWorkflowDiff = (request: WorkflowDiffRequest) =>
@@ -597,6 +564,7 @@ export function createDesktopHostRequests(
   }
 
   return {
+    runValidated: runActions.runValidated,
     handleHostRequest,
     closePort: draftRequests.closePort,
     dispose: draftRequests.dispose,

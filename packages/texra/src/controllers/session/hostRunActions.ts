@@ -19,9 +19,11 @@ import {
   StateReadFailed,
   type Run,
   type Session,
+  type AgentCatalogServices,
   type StartInput,
   type WorkspaceRoots,
 } from '@texra-ai/harness';
+import { getHelperModelName } from '@agent/runtime';
 import { presentRunFailure } from '@agent/runtime/terminalResultToast';
 import type { SessionHostInteractions } from '@agent/runtime/HostInteractions';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
@@ -36,6 +38,7 @@ import { withLogChannel } from '@logger/effectLog';
 import { getRuntimeModelDirectFallback } from '@model/copilotRouting';
 import type { ModelHostFactUnreadable } from '@model/computeModelOptions';
 import { isTaskConfig, type FileOpResult, type RunId } from '@shared/schemas';
+import { documentTaskConfig } from '@texra/agent/output/documentRecipe';
 import { packDestination } from '@texra/tools/documents/runOutputs';
 import type { HostRequest } from '@texra/shared/session/hostRequest';
 import { documentsOf } from '@texra/shared/plugins/documents';
@@ -98,7 +101,7 @@ class RunConfigUnreadable extends Data.TaggedError('RunConfigUnreadable')<{
 
 /** The launch facts an action adds to a validated request, as the
  *  session's `start` takes them. */
-export type RunValidatedOptions = Pick<
+type RunValidatedOptions = Pick<
   StartInput,
   'helperModel' | 'ownKeyFallback' | 'approval'
 >;
@@ -136,20 +139,11 @@ export interface HostRunActionPorts extends RunActionRecordPorts {
   /** The host's scope: what an action does when its run ends lives as long
    *  as the host. */
   readonly scope: Scope.Scope;
-  /**
-   * Start a validated fresh run through the host's own launcher (the
-   * session's `start`), answering once it is admitted. What the host does
-   * when the run ends (open its output) follows the run's `result`, so a
-   * caller that waits for the run waits on that. It fails with the
-   * launcher's own error; the actions below present a failure before the
-   * run opens, once, unless the launcher already did.
-   */
-  runValidated(
-    request: ValidatedRunRequest,
-    options?: RunValidatedOptions,
-  ): Effect.Effect<Run, Error>;
-  /** Open a resumed workflow's final output, as the launcher does a fresh one's. */
-  openWorkflowOutput(
+  /** The host's follow-up for a run this window started, once admitted:
+   *  select it, and retire the missing-agent banner its agent resolved. */
+  launched(run: Run): Effect.Effect<void>;
+  /** Open a settled run's final output, when its agent names one. */
+  openFinalOutput(
     config: AgentConfig,
     result: RunEndResult,
   ): Effect.Effect<void, Error>;
@@ -175,8 +169,23 @@ export interface HostRunActionPorts extends RunActionRecordPorts {
 /** What a host's request arms do once {@link createHostRunActions} has bound
  *  that host's launcher, catalogs, key prompt, and notifications. */
 export interface HostRunActions {
-  /** The host's launcher, as the launcher's Send reaches it. */
-  readonly runValidated: HostRunActionPorts['runValidated'];
+  /**
+   * The window's launcher: start a validated fresh run on its session,
+   * answering once it is admitted. A failure before the run opens is
+   * presented here, once, and fails with the launch's own error; the
+   * launched run is the host's to select, and its final output opens when
+   * it ends.
+   */
+  runValidated(
+    request: ValidatedRunRequest,
+    options?: RunValidatedOptions,
+  ): Effect.Effect<Run, Error>;
+  /** Merge `editedFile` into `baseFile`: the merge agent's document task on
+   *  the helper model, answering once its run is admitted. */
+  merge(
+    baseFile: string,
+    editedFile: string,
+  ): Effect.Effect<void, RequestRefusal | RunLaunchFailed | StateReadFailed>;
   resume(
     runId: RunId,
   ): Effect.Effect<void, RequestRefusal | RunConfigUnreadable>;
@@ -245,9 +254,15 @@ export interface HostRunActions {
 
 export const createHostRunActions = (
   ports: HostRunActionPorts,
-): Effect.Effect<HostRunActions, never, FileSystem.FileSystem | Secrets> =>
+): Effect.Effect<
+  HostRunActions,
+  never,
+  FileSystem.FileSystem | Secrets | AgentCatalogServices
+> =>
   Effect.gen(function* () {
     const secrets = yield* Secrets;
+    // The catalog the merge's task resolves its agent against.
+    const catalog = yield* Effect.context<AgentCatalogServices>();
     // Resolved once here and carried: the planner's workspace probes below
     // read through this filesystem rather than taking one from whatever
     // context each of its callers happens to run on.
@@ -261,14 +276,32 @@ export const createHostRunActions = (
         ? cause
         : new RunLaunchFailed({ message: toErrorMessage(cause), cause });
 
+    const runValidated: HostRunActions['runValidated'] = (
+      { config },
+      options,
+    ) =>
+      session.start({ config, ...options, interactive: true }).pipe(
+        // A failure before the run opens has no row to show it.
+        Effect.tapError((error) => presentRunFailure(ports.present, error)),
+        Effect.tap(ports.launched),
+        // Presentation reacts to the outcome the run committed; it never
+        // runs inside the run, so it cannot change that outcome.
+        Effect.tap((run) =>
+          Effect.forkIn(
+            run.result.pipe(
+              Effect.flatMap((result) => ports.openFinalOutput(config, result)),
+              Effect.ignore({ log: 'Warn', message: 'Opening the output' }),
+            ),
+            ports.scope,
+          ),
+        ),
+      );
     /** Validate a request an action built, then start it: one that does
      *  not validate is refused before anything starts, a refusal the
-     *  launcher worded travels as itself, anything else is RunLaunchFailed.
-     *  A failure before the run opens has no row to show it: it is
-     *  presented here, once. */
+     *  launcher worded travels as itself, anything else is RunLaunchFailed. */
     const startAgentRequest = (
       request: RunRequest,
-      options?: Parameters<HostRunActionPorts['runValidated']>[1],
+      options?: RunValidatedOptions,
     ): Effect.Effect<Run, RequestRefusal | RunLaunchFailed> => {
       const validated = validateRunRequest(request);
       if (!validated.valid) {
@@ -280,15 +313,14 @@ export const createHostRunActions = (
           ),
         );
       }
-      return ports.runValidated(validated.request, options).pipe(
-        Effect.tapError((cause) => presentRunFailure(ports.present, cause)),
+      return runValidated(validated.request, options).pipe(
         Effect.mapError(launchFailed),
       );
     };
     /** Start a request an action built and wait for its run to end. */
     const runAgentRequest = (
       request: RunRequest,
-      options?: Parameters<HostRunActionPorts['runValidated']>[1],
+      options?: RunValidatedOptions,
     ): Effect.Effect<void, RequestRefusal | RunLaunchFailed> =>
       startAgentRequest(request, options).pipe(
         Effect.flatMap((run) =>
@@ -593,14 +625,37 @@ export const createHostRunActions = (
           ),
         );
         yield* ports
-          .openWorkflowOutput(config, result)
+          .openFinalOutput(config, result)
           .pipe(Effect.ignore({ log: 'Warn' }), withLogChannel(CHANNEL));
       }, guard.resuming),
       runNew: Effect.fn('HostRunActions.runNew')(function* (runId) {
         const config = yield* nativeAgentRun(runId, 'runNew');
         yield* runAgentRequest({ config });
       }),
-      runValidated: ports.runValidated,
+      runValidated,
+      merge: Effect.fn('HostRunActions.merge')(
+        function* (baseFile, editedFile) {
+          const config = yield* documentTaskConfig(
+            {
+              agent: 'merge',
+              model: yield* getHelperModelName(roots),
+              inputFiles: [baseFile],
+              editedFile,
+            },
+            roots,
+          ).pipe(
+            Effect.provideContext(catalog),
+            // A launch that cannot be built (no catalog, no merge task) says why.
+            Effect.catchTags({
+              DocumentTaskRefused: ({ message }) =>
+                Effect.fail(new Rejected({ reason: `Merge: ${message}` })),
+              AgentCatalogLoadError: ({ message }) =>
+                Effect.fail(new Rejected({ reason: `Merge: ${message}` })),
+            }),
+          );
+          yield* startAgentRequest({ config });
+        },
+      ),
       readConfig,
       workflowDiffRequest: Effect.fn('HostRunActions.workflowDiffRequest')(
         function* (runId) {

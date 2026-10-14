@@ -3,7 +3,6 @@ import { Effect } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports
-import type { SessionHostInteractions } from '@agent/runtime';
 import { runExecuteCommand as agentRunExecuteCommand } from '@commands/agent/executeCommand';
 import { downloadArXivSource as latexDownloadArXivSource } from '@commands/latex/arXivCommands';
 import { confirmCleanBuild } from '@commands/housekeeping/cleanCommands';
@@ -48,7 +47,6 @@ export function createExtensionCommandActions(
   progressViewProvider: ProgressViewProvider,
   secrets: PlatformSecrets,
   roots: WorkspaceRoots,
-  present: Pick<SessionHostInteractions, 'emit'>,
   /** Where this window's runs run. */
   runSession: Session,
 ): ExtensionCommandActions {
@@ -93,9 +91,7 @@ export function createExtensionCommandActions(
     execute: (input) =>
       input === undefined
         ? progressViewProvider.submit()
-        : agentRunExecuteCommand(input, roots, present, runSession, (runId) =>
-            Effect.sync(() => progressViewProvider.presentLaunchedRun(runId)),
-          ),
+        : agentRunExecuteCommand(input, progressViewProvider.runValidated),
   };
 }
 

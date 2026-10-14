@@ -8,11 +8,6 @@ import {
   type Session,
   withProcessServices,
 } from '@texra-ai/harness';
-import {
-  getHelperModelName,
-  validateRunRequest,
-  type ValidatedRunRequest,
-} from '@agent/runtime';
 import { emitAppSignal } from '@eventBus/AppSignals';
 import { acceptEditedFileReplace } from '@latex/acceptedFileTarget';
 import { openFirstLabelMatch } from '@latex/labelSearch';
@@ -22,9 +17,7 @@ import {
   NO_LATEXDIFF_OPERATIONS_MESSAGE,
 } from '@latex/latexdiff/latexdiffCopy';
 import { runLatexdiffForRun } from '@latex/latexdiff/diffOperations';
-import type { DiffRunOutcome } from '@latex/latexdiff/types';
 import type { NotificationFailed, PromptFailed } from '@texra/hosts/uiHosts';
-import { documentTaskConfig } from '@texra/agent/output/documentRecipe';
 import type { LatexdiffMathMarkupValue } from '@texra/shared/constants/latexConfig';
 import { DocumentsStateKey } from '@texra/shared/settingsView/documentsSettings';
 import { runOutputFiles } from '@texra/tools/documents/runOutputs';
@@ -34,7 +27,7 @@ import {
   createExternalLocation,
   pathToLocationIn,
 } from '@utils/files/fileLocation';
-import type { Rejected, StateReadFailed } from '@texra-ai/harness';
+import type { Rejected } from '@texra-ai/harness';
 import type { RunId } from '@texra-ai/harness/schemas';
 import type { DesktopAgentRunHost } from './desktopAgentRunHost.js';
 
@@ -69,8 +62,8 @@ type DesktopProgressFileActionUi = Pick<
 };
 
 /**
- * Bridge-owned capabilities the file actions reach back into: starting a fresh
- * agent run (merge) and enumerating workspace input/context files (label
+ * Bridge-owned capabilities the file actions reach back into: the project's
+ * session and runtime, and enumerating workspace input/context files (label
  * search). Kept as a narrow interface so the actions stay decoupled from the
  * full progress bridge.
  */
@@ -81,7 +74,6 @@ interface DesktopProgressFileActionHost {
    *  the file reads and writes below take their services from it. Nothing
    *  settles here: every member of this class is a program its caller runs. */
   readonly runtime: ProcessRuntime;
-  startRun(request: ValidatedRunRequest): void;
   listWorkspaceCandidateFiles(): Effect.Effect<
     readonly string[],
     PlatformError.PlatformError,
@@ -111,41 +103,6 @@ export class DesktopProgressFileActions {
             new DiffViewUnavailable({ message: toErrorMessage(cause), cause }),
         ),
       );
-  }
-
-  runMergeFile(
-    baseFile: string,
-    editedFile: string,
-  ): Effect.Effect<void, Rejected | StateReadFailed> {
-    return Effect.gen({ self: this }, function* () {
-      const { roots } = this.host.session;
-      const built = yield* documentTaskConfig(
-        {
-          agent: 'merge',
-          model: yield* getHelperModelName(roots),
-          inputFiles: [baseFile],
-          editedFile,
-        },
-        roots,
-      ).pipe(
-        (program) => withProcessServices(this.host.runtime, program),
-        Effect.map((config) => ({ ok: true as const, config })),
-        Effect.catchTags({
-          DocumentTaskRefused: (refused) =>
-            Effect.succeed({ ok: false as const, message: refused.message }),
-          AgentCatalogLoadError: (failed) =>
-            Effect.succeed({ ok: false as const, message: failed.message }),
-        }),
-      );
-      const validation = built.ok
-        ? validateRunRequest({ config: built.config })
-        : { valid: false as const, message: built.message };
-      if (!validation.valid) {
-        yield* this.ui.showErrorMessage(`Merge: ${validation.message}`);
-        return;
-      }
-      this.host.startRun(validation.request);
-    });
   }
 
   /**
@@ -197,7 +154,13 @@ export class DesktopProgressFileActions {
         return;
       }
 
-      if (yield* this.openSharedLatexdiffResults(outcome)) return;
+      // Open every successful diff (between-round runs produce many),
+      // mirroring the VS Code command.
+      const successes = outcome.results.filter((entry) => entry.success);
+      for (const result of successes) {
+        yield* this.openDiffOutput(result.diffPath);
+      }
+      if (successes.length > 0) return;
 
       yield* this.ui.showErrorMessage(
         latexdiffAllFailedMessage(
@@ -252,25 +215,6 @@ export class DesktopProgressFileActions {
         );
       }),
     );
-  }
-
-  /**
-   * Open every successful diff (between-round runs produce many), mirroring the
-   * VS Code command. Answers whether at least one diff was opened, so the
-   * caller can report when none were.
-   */
-  private openSharedLatexdiffResults(
-    outcome: DiffRunOutcome,
-  ): Effect.Effect<boolean, Error> {
-    return Effect.gen({ self: this }, function* () {
-      const successes = outcome.results.filter((entry) => entry.success);
-
-      for (const result of successes) {
-        yield* this.openDiffOutput(result.diffPath);
-      }
-
-      return successes.length > 0;
-    });
   }
 
   /** Open a generated diff file via the desktop LaTeX build display. */

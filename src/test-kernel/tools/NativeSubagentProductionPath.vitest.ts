@@ -71,7 +71,7 @@ import { submitFollowUp } from '@agent/followUp/ToolUseFollowUp';
 import type { RunToolCall } from '@agent/runtime/RunCall';
 import type { BoundModel } from '@agent/runtime/modelAccess/ModelAccess';
 import { routePolicies } from '@agent/runtime/modelAccess/failureInfo';
-import { launchDesktopAgent } from '@desktop/main/desktopAgentLaunch';
+import { presentDesktopFinalOutput } from '@desktop/main/desktopAgentLaunch';
 import { AgentDirectories, AppState } from '@platform/interfaces';
 import { withProcessServices } from '@platform/processRuntime';
 import { MODEL_RETRY_MAX_ATTEMPTS_SETTING } from '@shared/schemas';
@@ -116,6 +116,10 @@ import {
   openTestDefaultSession,
 } from '@test/support/sessionEnd';
 import { asDocumentTask } from '@test/support/ProgressControllerHarnesses';
+import {
+  createHostRunActions,
+  localRunActionPorts,
+} from '@texra/controllers/session/hostRunActions';
 import { ExecutionsTool } from '@tools/ExecutionsTool';
 import { launchDetachedSubagent } from '@tools/delegation/subagentRun';
 import { readCompletedRunConversation } from '@transcript';
@@ -1372,7 +1376,6 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
     'records a completed workflow as completed when its host presentation fails',
     () =>
       Effect.gen(function* () {
-        const runId = 'b9531b9531b9' as RunId;
         bindingMocks.bindModel.mockImplementation(
           (input: { readonly config: BoundModel['config'] }) =>
             Effect.succeed(
@@ -1404,33 +1407,44 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
           throw presentationFailure;
         }) as typeof config.get);
 
-        const run = yield* launchDesktopAgent(
-          {
-            runId,
-            config: AgentConfigSchema.parse(
-              asDocumentTask({
-                agent: WORKFLOW_CHILD_AGENT,
-                agentSource: 'custom',
-                model: CHILD_MODEL,
-                instruction: 'Polish the notes.',
-                inputFiles: ['notes.md'],
-              }),
-            ),
-          },
-          {
-            project: {
-              session: testSessionOf(session, { persistent: true }),
-              roots: session.roots,
-              present: session.interactions,
-            },
-            runtime: testRuntime(),
+        // The desktop's launch: the shared run actions over its output opener.
+        const runtime = testRuntime();
+        const actions = yield* withProcessServices(
+          runtime,
+          createHostRunActions({
+            ...localRunActionPorts(session),
+            session: testSessionOf(session, { persistent: true }),
             scope: yield* Scope.make(),
-          },
+            launched: () => Effect.void,
+            openFinalOutput: (config, result) =>
+              withProcessServices(
+                runtime,
+                presentDesktopFinalOutput(
+                  { roots: session.roots, present: session.interactions },
+                  config,
+                )(result),
+              ),
+            loadModelOptions: () => Effect.succeed([]),
+            promptForApiKey: () => Effect.void,
+            showInfo: () => Effect.void,
+            showWarning: () => Effect.void,
+          }),
         );
+        const run = yield* actions.runValidated({
+          config: AgentConfigSchema.parse(
+            asDocumentTask({
+              agent: WORKFLOW_CHILD_AGENT,
+              agentSource: 'custom',
+              model: CHILD_MODEL,
+              instruction: 'Polish the notes.',
+              inputFiles: ['notes.md'],
+            }),
+          ),
+        });
         yield* run.result;
 
         expect(
-          (yield* getRunRecords(session, runId).readRunEnd())?.outcome,
+          (yield* getRunRecords(session, run.runId).readRunEnd())?.outcome,
         ).toBe(RUN_OUTCOME.COMPLETED);
         yield* Effect.promise(() =>
           vi.waitFor(() => {

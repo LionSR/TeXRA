@@ -151,7 +151,7 @@ export const openDesktopWindow = Effect.fn('desktop.openWindow')(function* (
     globalState: options.globalState,
     secrets: options.secrets,
     settings: () => surface.settings(),
-    activeRun: () => bindings.active()?.run,
+    activeRun: () => bindings.active(),
   });
   yield* refreshFunnelAfterLaunch;
 

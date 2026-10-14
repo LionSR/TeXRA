@@ -3,16 +3,10 @@ import { Effect } from 'effect';
 import { z, ZodError } from 'zod';
 
 // Local imports
-import { type RunId, AgentConfigSchema } from '@texra-ai/harness/schemas';
-import {
-  presentRunFailure,
-  type SessionHostInteractions,
-} from '@agent/runtime';
-import { openFinalOutputIfAvailable } from '@frontend/agents/finalOutputOpener';
+import { AgentConfigSchema } from '@texra-ai/harness/schemas';
 import { withLogChannel } from '@logger/effectLog';
+import type { HostRunActions } from '@texra/controllers/session/hostRunActions';
 import { ensureError } from '@utils/errors/errorMessage';
-import type { ProcessServices, Session } from '@texra-ai/harness';
-import type { WorkspaceRoots } from '@texra-ai/harness';
 
 const CHANNEL = 'ExecuteCommand';
 
@@ -25,26 +19,18 @@ const CHANNEL = 'ExecuteCommand';
 const WrappedExecuteInputSchema = z.object({
   config: z.unknown(),
   preferHelperModel: z.boolean().optional(),
-  ownApiKeyFallback: z.boolean().optional(),
 });
 
 /**
  * Execute a fresh run of an agent with the given configuration: a raw
- * config or `{ config }`. A persisted run resumes through the session's
- * `resume` instead.
- *
- * The launch is the Effect this returns: the extension's command surface
- * settles it on the host entry's runtime.
+ * config or `{ config }`, started on the window's launcher. A persisted run
+ * resumes through the session's `resume` instead. The command settles when
+ * the run ends.
  */
 export const runExecuteCommand = Effect.fn('runExecuteCommand')(function* (
   input: unknown,
-  roots: WorkspaceRoots,
-  present: Pick<SessionHostInteractions, 'emit'>,
-  /** Where the run runs: this window's session, or the service's. */
-  runSession: Session,
-  /** Select the run this launch resolved: the launching surface's own. */
-  onAdmitted: (runId: RunId) => Effect.Effect<void, Error>,
-): Effect.fn.Return<void, Error, ProcessServices> {
+  launch: HostRunActions['runValidated'],
+) {
   // A configuration that does not parse fails the command, so its caller
   // hears the refusal instead of a settled launch that never started.
   const { wrapped, config } = yield* Effect.try({
@@ -68,33 +54,12 @@ export const runExecuteCommand = Effect.fn('runExecuteCommand')(function* (
     ),
   );
 
-  // A failure before the run opens has no row to show it: it is presented
-  // here, once. Post-start failures are already logged and surfaced by the
-  // run lifecycle, so they travel the failure channel without a second
-  // (mislabeled) log entry.
-  const run = yield* runSession
-    .start({
-      config,
-      // Set only by the "fix LaTeX" actions (see handleFixCompilation and the
-      // progress-view compile fixer); a direct main-view launch omits it and
-      // keeps the user's selected model.
-      helperModel: wrapped?.preferHelperModel ?? false,
-      ownKeyFallback: wrapped?.ownApiKeyFallback,
-      interactive: true,
-    })
-    .pipe(Effect.tapError((error) => presentRunFailure(present, error)));
-  yield* onAdmitted(run.runId);
-  const result = yield* run.result;
-  // Presentation reacts to the committed outcome; it never runs inside the run,
-  // and its failure never fails the launch that produced the run.
-  yield* openFinalOutputIfAvailable(
-    roots,
-    config,
-  )(result).pipe(
-    Effect.catchCause((cause) =>
-      Effect.logWarning('Opening the final output failed', cause).pipe(
-        withLogChannel(CHANNEL),
-      ),
-    ),
+  const run = yield* launch(
+    { config },
+    // Set only by the "fix LaTeX" actions (see handleFixCompilation and the
+    // progress-view compile fixer); a direct main-view launch omits it and
+    // keeps the user's selected model.
+    { helperModel: wrapped?.preferHelperModel ?? false },
   );
+  yield* run.result;
 });

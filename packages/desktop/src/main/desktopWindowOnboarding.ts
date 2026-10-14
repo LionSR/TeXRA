@@ -6,6 +6,7 @@ import { Data, Effect, Scope } from 'effect';
 import { withProcessServices, type ProcessRuntime } from '@texra-ai/harness';
 import { withLogChannel } from '@logger/effectLog';
 import { hasUsableSetupCredential } from '@texra/model/setupCredentialAccess';
+import type { HostRunActions } from '@texra/controllers/session/hostRunActions';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { kickoffDesktopSetup } from './desktopAgentLaunch.js';
 import { createDesktopOnboardingIpc } from './desktopOnboardingIpc.js';
@@ -15,7 +16,6 @@ import type {
   StateStore,
   StateWriteFailed,
 } from '@texra-ai/harness';
-import type { DesktopAgentRun } from './desktopAgentRun.js';
 import type { DesktopProjectRegistry } from './desktopProjects.js';
 import type { DesktopSettingsIpc } from './desktopSettingsIpc.js';
 import type { DesktopWindowHost } from './desktopWindowHost.js';
@@ -44,7 +44,7 @@ export const openWindowOnboarding = Effect.fn('desktop.openWindowOnboarding')(
     /** The settings surface and the launch path of the shown project, read
      *  when a card asks, since both are built after this surface. */
     readonly settings: () => DesktopSettingsIpc | undefined;
-    readonly activeRun: () => Pick<DesktopAgentRun, 'runValidated'> | undefined;
+    readonly activeRun: () => Pick<HostRunActions, 'runValidated'> | undefined;
   }): Effect.fn.Return<
     {
       readonly onboarding: ReturnType<typeof createDesktopOnboardingIpc>;

@@ -38,7 +38,6 @@ function createDeps(
     errors,
     compareFiles: () => Effect.void,
     acceptEditedFile: () => Effect.void,
-    mergeFile: () => Effect.void,
     latexdiffFile: () => Effect.void,
     openDirectory: () => Effect.void,
     readFile: () => Effect.succeed(''),
@@ -59,7 +58,7 @@ function createDeps(
     },
     host,
     storageRoot: '/storage',
-    sendFollowUp: () => Effect.void,
+    runs: { merge: () => Effect.void, sendFollowUp: () => Effect.void },
   };
 }
 
@@ -76,7 +75,7 @@ describe('ProgressWorkflowFileActionsController', () => {
       acceptEditedFile: () => Effect.sync(() => acceptResults.shift()),
       readFile: () => Effect.sync(() => readResults.shift() ?? ''),
     });
-    deps.sendFollowUp = (_stream, text) =>
+    deps.runs.sendFollowUp = (_stream, text) =>
       Effect.sync(() => {
         followUps.push(text);
       });

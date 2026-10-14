@@ -7,9 +7,7 @@ import { Deferred, Effect, Stream } from 'effect';
 import { describe, expect, onTestFinished, vi } from 'vitest';
 
 // Local imports
-import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import type { RunEndResult } from '@agent/runtime/RunEndResult';
-import * as DesktopAgentLaunch from '@desktop/main/desktopAgentLaunch';
 import { createDesktopAgentRun } from '@desktop/main/desktopAgentRun';
 import {
   qualifyAggregateId,
@@ -55,20 +53,6 @@ describe('desktop agent run completion hook', () => {
       const host = createStubDesktopAgentRunHost();
       const launched = generateRunId();
       const result = yield* Deferred.make<RunEndResult>();
-      const launch = vi
-        .spyOn(DesktopAgentLaunch, 'launchDesktopAgent')
-        .mockReturnValue(
-          Effect.succeed({
-            runId: launched,
-            result: Deferred.await(result),
-            view: Stream.empty,
-            events: Stream.empty,
-            interrupt: Effect.void,
-          }),
-        );
-      onTestFinished(() => {
-        launch.mockRestore();
-      });
       const run = yield* createDesktopAgentRun({
         host,
         toolEditPreview: {
@@ -87,11 +71,12 @@ describe('desktop agent run completion hook', () => {
         await testRuntime().runPromise(closeSessionOf(session));
       });
 
-      yield* run.runValidated({
-        config: AgentConfigSchema.parse({
-          agent: 'proofreader',
-          model: 'deepseek/deepseek-v4-pro',
-        }),
+      yield* run.launched({
+        runId: launched,
+        result: Deferred.await(result),
+        view: Stream.empty,
+        events: Stream.empty,
+        interrupt: Effect.void,
       });
       const completedRun = publishTestRunStart(session, generateRunId());
       publishTestRows(session, [completedRunEnd(completedRun)]);

@@ -6,6 +6,7 @@
  */
 import {
   Cause,
+  type Context,
   Deferred,
   Duration,
   Effect,
@@ -22,6 +23,7 @@ import { ModelError, ModelErrorFieldsSchema, type Model } from '@texra-ai/llm';
 
 import type { HostInteractions } from '@agent/runtime/HostInteractions';
 import { withLogChannel } from '@logger/effectLog';
+import type { ToolEditApprovalController } from '@texra/controllers/approval/ToolEditApprovalController';
 import type { EditorCapabilities } from '@texra/tools/editorHost';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import {
@@ -30,16 +32,15 @@ import {
   type ServiceLink,
 } from './client';
 import type { RpcClientError } from 'effect/rpc';
-import type { LanguageModelPort } from '@texra-ai/harness';
+import type { LanguageModelPort, WorkspaceRoots } from '@texra-ai/harness';
 
-import type {
-  HostAnswer,
-  HostCall,
-  HostCapability,
-  ToolEditStaging,
-} from './hostCalls';
+import type { HostAnswer, HostCall, HostCapability } from './hostCalls';
 
 const CHANNEL = 'WindowHost';
+
+type PreviewServices = Effect.Services<
+  ReturnType<ToolEditApprovalController['dispose']>
+>;
 
 /** What a window does for its project's tasks; a capability it leaves out
  *  is one it does not offer. */
@@ -56,11 +57,12 @@ export interface WindowHost
   readonly filesWritten?: (absolutePaths: readonly string[]) => void;
   /** The tool-edit preview a window stages beside the request, which the
    *  window releases when the request settles, and whose edited content an
-   *  approve-all reads. */
+   *  approve-all reads: its controller, the window's roots the staged files
+   *  resolve against, and the services its previews take. */
   readonly toolEdits?: {
-    readonly stage: (request: ToolEditStaging) => Effect.Effect<void, Error>;
-    readonly release: (requestId: string) => Effect.Effect<void>;
-    readonly approve: (requestId: string) => Effect.Effect<boolean>;
+    readonly controller: ToolEditApprovalController;
+    readonly roots: WorkspaceRoots;
+    readonly services: Context.Context<PreviewServices>;
   };
 }
 
@@ -146,17 +148,17 @@ function perform(
           .pipe(Effect.as(null)) ?? unoffered(call)
       );
     case 'presentToolEdit':
-      return (
-        host.toolEdits?.stage(call.request).pipe(Effect.as(null)) ??
-        unoffered(call)
+      return previews(host, call, ({ controller, roots }) =>
+        controller.present({ ...call.request, roots }).pipe(Effect.as(null)),
       );
     case 'releaseToolEdit':
-      return (
-        host.toolEdits?.release(call.requestId).pipe(Effect.as(null)) ??
-        unoffered(call)
+      return previews(host, call, ({ controller }) =>
+        controller.release(call.requestId).pipe(Effect.as(null)),
       );
     case 'approveToolEdit':
-      return host.toolEdits?.approve(call.requestId) ?? unoffered(call);
+      return previews(host, call, ({ controller }) =>
+        controller.approveStaged(call.requestId),
+      );
     case 'notice':
       return Effect.suspend(() => {
         const presented = host.emit?.(
@@ -191,6 +193,20 @@ function perform(
     case 'cancel':
       return unoffered(call);
   }
+}
+
+/** A tool-edit call on the window's preview controller, under the services
+ *  its previews take. */
+function previews(
+  host: WindowHost,
+  call: HostCall,
+  program: (
+    toolEdits: NonNullable<WindowHost['toolEdits']>,
+  ) => Effect.Effect<unknown, Error, PreviewServices>,
+): Effect.Effect<unknown, Error> {
+  const { toolEdits } = host;
+  if (toolEdits === undefined) return unoffered(call);
+  return Effect.provideContext(program(toolEdits), toolEdits.services);
 }
 
 const unofferedError = (call: HostCall) =>
