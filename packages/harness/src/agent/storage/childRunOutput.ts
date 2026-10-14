@@ -1,11 +1,13 @@
 import { Effect, type FileSystem } from 'effect';
 
+import { readRecipeResult } from '@agent/runtime/recipeResult';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import {
   RUN_OUTCOME,
   type RunId,
   type RunStorageFileLocation,
 } from '@shared/schemas';
+import type { ToolRegistry } from '@tools/toolTable';
 import { normalizeFilePath } from '@utils/core';
 import {
   inspectRunStorageEntryUnder,
@@ -20,12 +22,16 @@ const checkDeclaredChildOutput = Effect.fn('checkDeclaredChildOutput')(
   function* (
     session: SessionHandle,
     parentRunId: RunId,
-    reference: { readonly runId: RunId; readonly relativePath: string },
+    reference: Pick<
+      RunStorageFileLocation,
+      'runId' | 'relativePath' | 'absolutePath'
+    >,
   ) {
     const store = getRunRecords(session, reference.runId);
-    const [runEnd, resultMeta] = yield* Effect.all([
+    const [runEnd, resultMeta, config] = yield* Effect.all([
       store.readRunEnd(),
       store.readResultMeta(),
+      store.readConfig(),
     ]);
     if (session.view.run(reference.runId)?.parentId !== parentRunId) {
       return yield* Effect.fail(
@@ -34,22 +40,29 @@ const checkDeclaredChildOutput = Effect.fn('checkDeclaredChildOutput')(
         ),
       );
     }
-    const documents = runEnd?.output.documents;
-    if (
-      resultMeta?.producer !== 'subagent' ||
-      documents === undefined ||
-      runEnd?.outcome !== RUN_OUTCOME.COMPLETED
-    ) {
+    // A completed recipe's changes are its declared outputs: the files it
+    // wrote, which its block names (`AgentBlock.result.changes`).
+    const recipe =
+      resultMeta?.producer === 'subagent' &&
+      runEnd?.outcome === RUN_OUTCOME.COMPLETED
+        ? yield* readRecipeResult(
+            config,
+            runEnd.output,
+            reference.runId,
+            session.roots,
+          )
+        : undefined;
+    if (recipe === undefined) {
       return yield* Effect.fail(
         new Error(
-          `Run ${reference.runId} has no completed document task output manifest.`,
+          `Run ${reference.runId} has no completed task output manifest.`,
         ),
       );
     }
-    const declared = documents.outputs.some(
-      (output) =>
-        output.location === 'runStorage' &&
-        normalizeFilePath(output.relativePath) === reference.relativePath,
+    const declared = recipe.changes.some(
+      ({ absolutePath }) =>
+        normalizeFilePath(absolutePath) ===
+        normalizeFilePath(reference.absolutePath),
     );
     if (!declared) {
       return yield* Effect.fail(
@@ -62,7 +75,7 @@ const checkDeclaredChildOutput = Effect.fn('checkDeclaredChildOutput')(
 );
 
 /**
- * Resolve a file of the calling run's own storage (a document task's
+ * Resolve a file of the calling run's own storage (a recipe's
  * figures), or a declared output of a completed direct child run. The
  * absolute path is only a lookup token; persisted lineage and result
  * metadata are the source of authority.
@@ -75,7 +88,7 @@ export const resolveChildRunOutput = Effect.fn('resolveChildRunOutput')(
   ): Effect.fn.Return<
     RunStorageFileLocation | undefined,
     Error,
-    FileSystem.FileSystem
+    FileSystem.FileSystem | ToolRegistry
   > {
     const storageRoot = session.roots.storage;
     const reference = runStorageLocationUnder(storageRoot, absolutePath);

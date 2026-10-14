@@ -445,7 +445,7 @@ describe('LaTeXdiffService shadow output', () => {
         yield* fileService.mirrorWorkspaceFile(
           createWorkspaceLocation(dependencyPath, 'refs/macros.sty'),
         );
-        yield* fileService.ensureMirroredInDiffRoundDir(2);
+        yield* fileService.ensureMirroredInRunSubdir('diff/r2');
       }).pipe(Effect.provide(nodePlatformLayer));
 
       expect(

@@ -1,7 +1,11 @@
 import { Effect } from 'effect';
 import type { RunEndResult } from '@agent/runtime/RunEndResult';
 import type { SettingsStores } from '@shared/config/settingsAccess';
-import { finalWorkflowOutput, RUN_OUTCOME } from '@shared/schemas';
+import { RUN_OUTCOME } from '@shared/schemas';
+import {
+  documentsResultOf,
+  finalWorkflowOutput,
+} from '@texra/shared/plugins/documentOutputs';
 import { readSettingFrom } from '@utils/config/platformSettings';
 
 /**
@@ -29,7 +33,7 @@ export function selectAutoOpenFinalOutput(
   result: RunEndResult,
 ) {
   return Effect.gen(function* () {
-    const { documents } = result.output;
+    const documents = documentsResultOf(result.output.structured);
     if (documents === undefined || result.outcome !== RUN_OUTCOME.COMPLETED) {
       return undefined;
     }

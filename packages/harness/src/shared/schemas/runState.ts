@@ -1,8 +1,5 @@
 import { z } from 'zod';
 
-import { CompileFailureSchema, OutputFileInfoSchema } from './output';
-import { roundIndexedRecord } from './roundIndexed';
-
 // Round Stage (ephemeral round label from typed stage.start metadata)
 
 const RoundStageSchema = z.object({
@@ -20,9 +17,3 @@ export const ConversationProgressSchema = z.object({
   /** Cumulative number of individual tool calls executed. */
   toolCallCount: z.number(),
 });
-
-export const RoundKeyedOutputSidecarValueSchemas = {
-  outputFiles: roundIndexedRecord(OutputFileInfoSchema),
-  missingOutputs: roundIndexedRecord(z.string()),
-  compileFailures: roundIndexedRecord(CompileFailureSchema),
-} as const;

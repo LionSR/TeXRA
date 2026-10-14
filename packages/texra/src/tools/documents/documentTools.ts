@@ -48,7 +48,9 @@ import {
   revisionPrompt,
   type Documents,
 } from '@texra/tools/documents/documentState';
+import { computeDocumentDiffs } from '@texra/tools/documents/documentResult';
 import { rejectOversizedBibAttachments } from '@texra/tools/documents/documentTask';
+import { roundOutputsToOutputSummaries } from '@texra/shared/plugins/documentOutputs';
 import { executed } from '@tools/core/result';
 import { readSettingFrom } from '@utils/config/platformSettings';
 
@@ -412,7 +414,7 @@ export const DocumentDiffTool = defineTool({
 export const DocumentProposeTool = defineTool({
   name: 'document_propose',
   description:
-    "End the document task: propose the outputs of its latest revision that wrote any for the user to accept. Fails, naming the failed outputs, when that revision did not compile and failed compiles are rejected. Resolves to `{ files, documents }`: the proposed files and every revision's documents, which the task's run ends with.",
+    "End the document task: propose the outputs of its latest revision that wrote any for the user to accept, with their diffs against the documents they started from. Fails, naming the failed outputs, when that revision did not compile and failed compiles are rejected. Resolves to `{ files, documents }`: the proposed files and every revision's documents with the proposed ones' diffs, which the task's run ends with.",
   scriptReturns: '{ files: string[]; documents: unknown }',
   replay: 'safe',
   schema: z.strictObject({}),
@@ -436,9 +438,22 @@ export const DocumentProposeTool = defineTool({
     const files = last.outputs.map((output) =>
       fileLocationDisplayPath(output.location),
     );
+    // The proposed revision's diffs, written beside the outputs: the
+    // documents fact records them, and the task's result is read from that
+    // fact. Still `replay: 'safe'`: the `.diff` files are deterministic
+    // overwrites under fixed run-relative names from fixed inputs, and the
+    // fact commits with this call's result, so a rerun after a crash
+    // rewrites the same files and commits the fact once.
+    const diffs = yield* computeDocumentDiffs(
+      docs.deps.roots.storage,
+      docs.run.runId,
+      roundOutputsToOutputSummaries([last]),
+    );
+    const fact = docs.fact(diffs);
     return {
       ...executed(`Proposed: ${files.join(', ')}`, `${files.length} documents`),
-      value: { files, documents: documentsSummary(rounds) },
+      value: { files, documents: documentsSummary(fact) },
+      facts: [fact],
     };
   }),
 });

@@ -24,4 +24,9 @@ export {
 export type { RunInbox } from '@agent/followUp/ToolUseFollowUp';
 export type { ToolRun } from '@agent/core/tools/ToolTypes';
 export { HostCapabilities } from '@agent/runtime/agentToolResolution';
-export { agentBlockOf, type AgentBlock } from '@tools/toolTable';
+export {
+  agentBlockOf,
+  type AgentBlock,
+  type AgentBlockResult,
+  type RecipeChange,
+} from '@tools/toolTable';

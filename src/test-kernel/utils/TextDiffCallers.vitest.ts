@@ -8,13 +8,13 @@ import { Effect, FileSystem } from 'effect';
 import { describe, expect } from 'vitest';
 
 // Local imports
-import { buildSubagentResult } from '@agent/runtime/subagentResults';
 import { type RunId } from '@shared/schemas';
 import { installPlatform } from '@test/support/setupPlatform';
 import { fakePath } from '@test/support/FakePlatform';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
+import { computeDocumentDiffs } from '@texra/tools/documents/documentResult';
 import {
   approvedWriteConflict,
   writeApprovedContent,
@@ -38,7 +38,7 @@ const tempDirs = useTempDirs();
 describe('shared text-diff caller fixtures', () => {
   // The writer reads and writes through the process filesystem, so this
   // fixture works on real files under a temp root of its own.
-  it.effect('preserves subagent line-mode diff files', () =>
+  it.effect('preserves document task line-mode diff files', () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
       const root = yield* Effect.promise(() =>
@@ -52,31 +52,19 @@ describe('shared text-diff caller fixtures', () => {
       yield* fs.writeFileString(absolutePath, 'one\nTWO\nthree\nfour\n');
 
       const runId = 'abcdef' as RunId;
-      const meta = yield* buildSubagentResult(
-        runId,
+      const computed = yield* computeDocumentDiffs(storageRoot, runId, [
         {
-          response: '',
-          files: [],
-          documents: {
-            outputs: [
-              {
-                round: 0,
-                relativePath: 'section/paper.tex',
-                absolutePath,
-                location: 'workspace',
-                originalPath,
-                added: 2,
-                removed: 1,
-              },
-            ],
-            compileFailures: [],
-            diffs: [],
-          },
+          round: 0,
+          relativePath: 'section/paper.tex',
+          absolutePath,
+          location: 'workspace',
+          originalPath,
+          added: 2,
+          removed: 1,
         },
-        storageRoot,
-      );
+      ]);
 
-      expect(meta.output.documents?.diffs).toEqual([
+      expect(computed.diffs).toEqual([
         {
           path: absolutePath,
           diffRelPath: 'diffs/section_paper.tex.diff',

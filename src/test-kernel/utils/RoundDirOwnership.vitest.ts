@@ -22,6 +22,10 @@ import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { installPlatform as installFakePlatform } from '@test/support/setupPlatform';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
+import {
+  WORKFLOW_OUTPUT_BASENAME,
+  workflowOutputRoundDir,
+} from '@texra/shared/constants/workflowOutput';
 import { createWorkspaceLocation } from '@utils/files/fileLocation';
 import {
   originalSnapshotPathUnder,
@@ -102,7 +106,11 @@ describe('round-dir ownership and editable .tex inheritance', () => {
       workspaceOriginal,
     );
 
-    await runFileServiceProgram(fileService.ensureMirroredInRoundDir(1));
+    await runFileServiceProgram(
+      fileService.ensureMirroredInRunSubdir(workflowOutputRoundDir(1), {
+        protectedStem: WORKFLOW_OUTPUT_BASENAME,
+      }),
+    );
 
     const roundFilePath = path.join(
       runDirUnder(testWorkspaceRoots().storage, runId),
@@ -159,7 +167,11 @@ describe('round-dir ownership and editable .tex inheritance', () => {
     );
     await expect(stat(snapshotPath)).rejects.toMatchObject({ code: 'ENOENT' });
 
-    await runFileServiceProgram(fileService.ensureMirroredInRoundDir(1));
+    await runFileServiceProgram(
+      fileService.ensureMirroredInRunSubdir(workflowOutputRoundDir(1), {
+        protectedStem: WORKFLOW_OUTPUT_BASENAME,
+      }),
+    );
 
     const roundFilePath = path.join(
       runDirUnder(testWorkspaceRoots().storage, runId),
@@ -174,6 +186,6 @@ describe('round-dir ownership and editable .tex inheritance', () => {
 
   // Pins ensureMirroredInDiffRoundDir's `diff/r{round}` segment, which
   // (like ensureMirroredInRoundDir's `r{round}`) is now built from the
-  // shared workflowOutputRoundDir helper (@shared/constants/workflowOutput)
+  // shared workflowOutputRoundDir helper (@texra/shared/constants/workflowOutput)
   // instead of an inlined path.dirname(workflowOutputPath(...)).
 });

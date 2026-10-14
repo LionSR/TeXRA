@@ -63,6 +63,7 @@ import {
 } from './documents/documentTools';
 import { DocumentReviewTool } from './documents/DocumentReviewTool';
 import { DocumentTaskTool } from './documents/DocumentTaskTool';
+import { DOCUMENT_TASK_RESULT } from './documents/documentResult';
 import { ExtractBibliographyTool } from './latex/ExtractBibliographyTool';
 import { ExtractLatexFiguresTool } from './latex/ExtractFiguresTool';
 import { ExtractTikzFiguresTool } from './latex/ExtractTikzFiguresTool';
@@ -209,7 +210,11 @@ const setup = (platform: SetupPlatformShape) =>
  *  the documents a run produced into the workspace. */
 const documents: Plugin = {
   id: 'documents',
-  agentBlock: DOCUMENT_TASK_BLOCK,
+  // The `task:` block, and how its runs read (`DOCUMENT_TASK_RESULT`).
+  agentBlock: Object.freeze({
+    ...DOCUMENT_TASK_BLOCK,
+    result: DOCUMENT_TASK_RESULT,
+  }),
   // The delegation targets mark a task's agent `(task)`.
   prompt: ({ offered }) =>
     offered.includes('document_task')

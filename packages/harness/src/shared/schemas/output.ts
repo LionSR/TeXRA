@@ -1,11 +1,7 @@
 import { z } from 'zod';
 
 import { getBasename } from '@utils/core';
-import {
-  DiffStatsSchema,
-  LineCountSchema,
-  type DiffStats,
-} from './lineChanges';
+import { DiffStatsSchema, type DiffStats } from './lineChanges';
 import { RunIdSchema } from './identifiers';
 import { RoundNumberSchema } from './roundIndexed';
 
@@ -147,32 +143,7 @@ export const OutputFileInfoSchema = OutputFileSchema.extend({
   diff: DiffStatsSchema.nullable(),
 });
 
-/**
- * Flattened projection of {@link OutputFileInfo} for agent results and
- * run metadata. It keeps persisted workflow summaries independent from
- * the richer file-location internals used while a run is active.
- */
-export const OutputFileSummarySchema = z.object({
-  round: RoundNumberSchema,
-  relativePath: z.string(),
-  absolutePath: z.string(),
-  location: z.enum(['workspace', 'runStorage', 'external']),
-  originalPath: z.string().nullable(),
-  added: LineCountSchema.nullable(),
-  removed: LineCountSchema.nullable(),
-});
-
-export const CompileFailureSchema = z.strictObject({
-  round: RoundNumberSchema,
-  displayName: z.string(),
-  output: FileLocationSchema,
-  log: FileLocationSchema,
-  logRelativePath: z.string(),
-});
-
 export type OutputFileInfo = z.infer<typeof OutputFileInfoSchema>;
-export type OutputFileSummary = z.infer<typeof OutputFileSummarySchema>;
-export type CompileFailure = z.infer<typeof CompileFailureSchema>;
 
 /**
  * The name an output artifact reads by. The workspace document it descends
@@ -209,106 +180,6 @@ export function outputDiffCounts(
     return null;
   }
   return { added: diff.added ?? 0, removed: diff.removed ?? 0 };
-}
-
-/**
- * The output a finished run treats as final: the last output of the highest
- * round. The CLI's prior pickers both kept the later element on a round tie,
- * and callers' output order is not guaranteed to lead with the primary
- * document.
- */
-export function finalWorkflowOutput(
-  outputs: readonly OutputFileSummary[],
-): OutputFileSummary | undefined {
-  if (outputs.length === 0) return undefined;
-
-  const finalRound = Math.max(...outputs.map((output) => output.round));
-  return outputs.findLast((output) => output.round === finalRound);
-}
-
-/**
- * Flattened projection of {@link CompileFailure} for agent results and
- * run metadata.
- */
-export const CompileFailureSummarySchema = z.object({
-  round: RoundNumberSchema,
-  displayName: z.string(),
-  outputPath: z.string(),
-  logPath: z.string(),
-  logAbsolutePath: z.string(),
-});
-type CompileFailureSummary = z.infer<typeof CompileFailureSummarySchema>;
-
-const CompileResultSchema = z.discriminatedUnion('status', [
-  z.strictObject({
-    status: z.literal('ok'),
-    round: RoundNumberSchema,
-  }),
-  z.strictObject({
-    status: z.literal('failed'),
-    round: RoundNumberSchema,
-    failures: z.array(CompileFailureSchema),
-    logExcerpt: z.string(),
-  }),
-]);
-export type CompileResult = z.infer<typeof CompileResultSchema>;
-
-export const RoundOutputSchema = z.strictObject({
-  round: RoundNumberSchema,
-  outputs: OutputFileInfoSchema.array(),
-  compileFailures: CompileFailureSchema.array().prefault(() => []),
-  /** The expected output files this round did not produce, as last reported.
-   *  Persisted with all round outputs in the documents plugin's output fact. */
-  missingOutputs: z
-    .string()
-    .array()
-    .prefault(() => []),
-});
-export type RoundOutput = z.infer<typeof RoundOutputSchema>;
-
-const OutputFileSummaryFromInfoSchema = OutputFileInfoSchema.transform(
-  (output) => ({
-    round: output.round,
-    relativePath: fileLocationDisplayPath(output.location),
-    absolutePath: output.location.absolutePath,
-    location: output.location.kind,
-    originalPath: getEffectiveDiffBase(output.lineage)?.absolutePath ?? null,
-    added: output.diff?.added ?? null,
-    removed: output.diff?.removed ?? null,
-  }),
-).pipe(OutputFileSummarySchema);
-
-const CompileFailureSummaryFromFailureSchema = CompileFailureSchema.transform(
-  (failure) => ({
-    round: failure.round,
-    displayName: failure.displayName,
-    outputPath: fileLocationDisplayPath(failure.output),
-    logPath: failure.logRelativePath,
-    logAbsolutePath: failure.log.absolutePath,
-  }),
-).pipe(CompileFailureSummarySchema);
-
-export function roundOutputsToOutputSummaries(
-  roundOutputs: RoundOutput[],
-): OutputFileSummary[] {
-  return roundOutputs.flatMap((roundOutput) =>
-    roundOutput.outputs.map((output) =>
-      OutputFileSummaryFromInfoSchema.parse({
-        ...output,
-        round: roundOutput.round,
-      }),
-    ),
-  );
-}
-
-export function roundOutputsToCompileFailureSummaries(
-  roundOutputs: RoundOutput[],
-): CompileFailureSummary[] {
-  return roundOutputs.flatMap((roundOutput) =>
-    roundOutput.compileFailures.map((failure) =>
-      CompileFailureSummaryFromFailureSchema.parse(failure),
-    ),
-  );
 }
 
 // ============================================================================

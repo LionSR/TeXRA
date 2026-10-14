@@ -35,7 +35,9 @@ import { z } from 'zod';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { resolveChildRunConcurrencyBudget } from '@agent/runtime/childRunBudget';
 import { offeredBy } from '@agent/runtime/loop/step';
+import { readRecipeResult } from '@agent/runtime/recipeResult';
 import { formatSubagentDelivery } from '@agent/runtime/subagentResults';
+import { getRunRecords } from '@agent/storage/runRecords';
 import { IssuingScript, requireToolRun } from '@agent/runtime/RunCall';
 import type { RunToolCall, ScriptScope } from '@agent/runtime/RunCall';
 import {
@@ -347,14 +349,14 @@ const reusable = Effect.fn('agent.reusable')(function* (
   } satisfies ToolResult;
 });
 
-/** What an ended child becomes for its call: its envelope, or the error a
- *  script's `await` throws for it. */
-function childResult(
+/** What an ended child becomes for its call: its envelope (a recipe's read
+ *  through its block), or the error a script's `await` throws for it. */
+const childResult = Effect.fn('AgentTool.childResult')(function* (
+  call: RunToolCall,
   agentName: string,
-  runId: RunId,
-  result: RunEnd,
+  { runId, result }: { readonly runId: RunId; readonly result: RunEnd },
   key: string | undefined,
-): ToolResult {
+) {
   if (result.outcome === 'cancelled')
     return errorResult(
       `The agent run ${runId} for '${agentName}' was stopped, so this call was skipped.`,
@@ -369,25 +371,28 @@ function childResult(
       `The agent run ${runId} for '${agentName}' ended ${result.outcome}${result.error?.message ? `: ${result.error.message}` : '.'}`,
       { name: 'AgentFailed', summary: `'${agentName}' failed` },
     );
-  if (result.output.documents?.outputs.length === 0)
-    return errorResult(
-      `The document task run ${runId} for '${agentName}' completed without producing any output files.`,
-      { name: 'AgentFailed', summary: `'${agentName}' produced nothing` },
-    );
+  const config = yield* getRunRecords(call.run.session, runId).readConfig();
+  const recipe = yield* readRecipeResult(
+    config,
+    result.output,
+    runId,
+    call.env.roots,
+  );
   return {
     ...executed(
-      formatSubagentDelivery(agentName, result, { runId }),
+      formatSubagentDelivery(agentName, result, { runId, recipe }),
       `Completed '${agentName}'`,
     ),
     value: toJsonValue({
       ...result.output,
+      ...(recipe !== undefined && { changes: recipe.changes }),
       runId,
       outcome: result.outcome,
       cost: result.usage?.totalCost ?? 0,
     }),
     ...(key !== undefined && { reuseKey: key }),
   };
-}
+});
 
 /**
  * One call. A script's awaited calls hold one of the session's child-run
@@ -555,7 +560,7 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
       return failedResult(agent.name, recovered.failure);
     const settled = recovered.success;
     if (settled.kind === 'ended')
-      return childResult(agent.name, settled.runId, settled.result, key);
+      return yield* childResult(call, agent.name, settled, key);
   }
 
   // An unavailable model fails this call, which a script may catch (Q6).
@@ -675,12 +680,7 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
   );
   return Result.isFailure(launched)
     ? failedResult(approved.agent, launched.failure)
-    : childResult(
-        approved.agent,
-        launched.success.runId,
-        launched.success.result,
-        key,
-      );
+    : yield* childResult(call, approved.agent, launched.success, key);
 });
 
 /** The `agent` tool. */

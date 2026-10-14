@@ -25,12 +25,11 @@ import {
   type RunId,
 } from '@shared/schemas';
 import { ensureError } from '@utils/errors/errorMessage';
+import { readRecipeResult } from './recipeResult';
 import {
-  buildSubagentResult,
   buildSubagentResultMeta,
   formatSubagentDelivery,
   formatSubagentError,
-  type SubagentResultMeta,
 } from './subagentResults';
 
 /**
@@ -90,19 +89,14 @@ export function createNativeSubagentStrategy(
   // (`runWithLifecycle` returns a terminal failed result rather than
   // rejecting); a thrown call reaches `formatError` as its `err`.
   let lastResult: RunEndResult | undefined;
-  // Result construction computes and persists diffs, so every consumer of a
-  // turn shares one result. Formatting remains separate: if it throws, the
-  // already-built result manifest is still available for persistence.
-  let cachedBuilt: SubagentResultMeta | undefined;
+  // Formatting is cached per turn: if it throws, the result manifest is still
+  // built from the turn for persistence.
   let cachedDelivery: string | undefined;
 
-  // Adopt `turn` as the latest result and drop the caches derived from the
-  // prior one: the next build/delivery recomputes from this turn. Every point
-  // that advances the turn must clear both caches together, so they live here
-  // once rather than at each site.
+  // Adopt `turn` as the latest result and drop the delivery derived from the
+  // prior one: the next delivery recomputes from this turn.
   const recordTurn = (turn: RunEndResult | undefined): void => {
     lastResult = turn;
-    cachedBuilt = undefined;
     cachedDelivery = undefined;
   };
 
@@ -113,19 +107,6 @@ export function createNativeSubagentStrategy(
     return yield* call.pipe(
       Effect.tap((result) => Effect.sync(() => recordTurn(result))),
     );
-  });
-
-  const buildResult = Effect.fn('nativeSubagent.buildResult')(function* (
-    turn: RunEndResult,
-  ) {
-    if (!cachedBuilt) {
-      cachedBuilt = yield* buildSubagentResult(
-        params.runId,
-        turn.output,
-        params.session.roots.storage,
-      );
-    }
-    return cachedBuilt;
   });
 
   return {
@@ -199,7 +180,17 @@ export function createNativeSubagentStrategy(
       wallTimeMs: number,
     ) {
       if (cachedDelivery === undefined) {
-        const built = yield* buildResult(turn);
+        // A completed recipe's value reads as its block says
+        // (`AgentBlock.result`); a failed one is delivered as its failure.
+        const recipe =
+          turn.outcome === RUN_OUTCOME.COMPLETED
+            ? yield* readRecipeResult(
+                config,
+                turn.output,
+                params.runId,
+                params.session.roots,
+              )
+            : undefined;
         // The formatter is the one fallible step left here, and its throw is
         // this turn's failure — not a defect — exactly as it was when the
         // loop adopted this method's rejected promise.
@@ -207,9 +198,10 @@ export function createNativeSubagentStrategy(
           try: () =>
             formatSubagentDelivery(
               config.agent,
-              { outcome: turn.outcome, output: built.output },
+              { outcome: turn.outcome, output: turn.output },
               {
                 runId: params.runId,
+                recipe,
                 memoryMisses: turn.memoryMisses,
                 wallTimeMs,
                 workingDirectory: params.workingDirectory,
@@ -237,15 +229,12 @@ export function createNativeSubagentStrategy(
     },
 
     buildResultMeta: (turn, isError) =>
-      Effect.gen(function* () {
-        if (isError || turn === null) {
-          // Overwrite any interim success manifest from an earlier turn: the
-          // failed run's own output, or an empty one when the turn produced
-          // none.
-          const result = turn ?? lastResult;
-          return buildSubagentResultMeta(result?.output ?? emptyRunEndOutput());
-        }
-        return yield* buildResult(turn);
+      Effect.sync(() => {
+        // A failed turn overwrites any interim success manifest from an
+        // earlier turn: the failed run's own output, or an empty one when
+        // the turn produced none.
+        const result = isError || turn === null ? (turn ?? lastResult) : turn;
+        return buildSubagentResultMeta(result?.output ?? emptyRunEndOutput());
       }),
   };
 }

@@ -1,18 +1,9 @@
-import type { z } from 'zod';
-
-import type { RunId } from './identifiers';
 import type { FileLocation } from './output';
-import type { RoundKeyedOutputSidecarValueSchemas } from './runState';
 
 /**
  * Shared output-file and host-presentation payloads. Session state is
  * defined by SessionEvent.
  */
-
-export interface AddOutputFilesPayload {
-  runId: RunId;
-  filesByRound: z.infer<typeof RoundKeyedOutputSidecarValueSchemas.outputFiles>;
-}
 
 /**
  * Host-agnostic action tokens for {@link RequestShowInstructionPayload}.

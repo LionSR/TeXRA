@@ -46,7 +46,7 @@ import {
   RUN_OUTCOME,
   qualifyAggregateId,
   type FollowUpContent,
-  type DeliveredResult,
+  type ResultMeta,
   type RunId,
   type RunOutcome,
   type SubagentProgressUpdate,
@@ -242,7 +242,7 @@ export interface ChildRunStrategy<TTurn, R = never> {
      * message even when no flow result exists to carry it.
      */
     error?: unknown,
-  ): Effect.Effect<DeliveredResult | undefined, Error, R>;
+  ): Effect.Effect<ResultMeta | undefined, Error, R>;
 
   /**
    * Release provider-owned registry entries. The loop calls this exactly once,
@@ -285,7 +285,7 @@ export interface ChildRunLoopParams<TTurn, R = never> {
    */
   readonly onTurnSettled?: (settled: {
     readonly message: string;
-    readonly resultMeta?: DeliveredResult;
+    readonly resultMeta?: ResultMeta;
     readonly isError: boolean;
     readonly error?: unknown;
   }) => void;

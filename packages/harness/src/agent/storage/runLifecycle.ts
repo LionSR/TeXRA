@@ -17,7 +17,6 @@ import {
   RUN_OUTCOME,
   RunRecordFieldsSchema,
   qualifyAggregateId,
-  storedRunOutput,
   type SessionEventDraft,
   USER_FOLLOW_UP_SUPPORT,
   emptyRunEndOutput,
@@ -267,7 +266,7 @@ export const endIn = Effect.fn('endIn')(function* (
               message: [error.message, co.note].filter(Boolean).join('; '),
             },
           }),
-          output: storedRunOutput(input.output ?? emptyRunEndOutput()),
+          output: input.output ?? emptyRunEndOutput(),
         },
       ];
   const result = { persisted, recorded: true, after: co.committed };

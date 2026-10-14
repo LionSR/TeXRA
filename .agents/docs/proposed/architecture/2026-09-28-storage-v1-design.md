@@ -441,13 +441,16 @@ export const ROW_KINDS = {
 version of each kind in the last released build.
 
 - A kind whose current version is above the watermark is unreleased. Its
-  schema may change freely, with no upcaster and no bump, until the next
-  release freezes it.
+  schema changes with no upcaster until the next release freezes it; its
+  version is bumped when an older build's row would read wrong (or fail),
+  so that row reads as an earlier build's (`DatabaseRowEarlier`, its run
+  listed as written by an earlier build) rather than as damaged or
+  silently stripped.
 - Before 1.0 ships, every kind is unreleased. So Lanes 2–4 (§12) change row
-  shapes without a physical bump.
-- A dev store holding a churned unreleased row shows that run as `Corrupt`.
-  That is the accepted cost; `texra doctor --prune-storage` or deleting the
-  file resets it.
+  shapes without a physical (`SCHEMA_VERSION`) bump.
+- A dev store holding an older build's row lists that run as written by an
+  earlier build. That is the accepted cost; `texra doctor --prune-storage`
+  or deleting the file resets it.
 
 **Per-kind fingerprints and frozen schemas** replace the single
 `sessionEventFormat.vitest.ts` snapshot.
@@ -514,7 +517,8 @@ versions are read forever through their upcasters, up to the next major
 compaction. The upcasters run in the codec and nowhere else; that is the
 one sanctioned compatibility reader. Before the release, AGENTS.md's "no
 compatibility readers" rule stands unchanged: every kind is unreleased, no
-upcaster exists, and a pre-1.0 store is moved aside whole.
+upcaster exists (a changed kind's version is bumped, so an older row reads
+as an earlier build's), and a pre-1.0 store is moved aside whole.
 
 Lane 4, which ships with the freeze, changes the session-database sentences
 of AGENTS.md "Compatibility and format retirement" to this wording:

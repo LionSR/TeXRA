@@ -17,6 +17,10 @@ import {
   type RoundIndexed,
   type RunStorageFileLocation,
 } from '@shared/schemas';
+import {
+  WORKFLOW_OUTPUT_BASENAME,
+  workflowOutputRoundDir,
+} from '@texra/shared/constants/workflowOutput';
 import { DocumentsStateKey } from '@texra/shared/settingsView/documentsSettings';
 import { checkToolInstalled } from '@texra/utils/system/toolChecks';
 import { createRunStorageLocation } from '@utils/files/fileLocation';
@@ -159,8 +163,15 @@ export class LatexDiffManager {
 
       // Ensure round-dir has symlinks to all mirrored deps so latexdiff's
       // relative \input{} resolution works when its cwd is runDir/r{round}.
-      yield* this.fileService.ensureMirroredInRoundDir(currRound);
-      yield* this.fileService.ensureMirroredInDiffRoundDir(currRound);
+      // The round's sources resolve beside its output, never over it; the
+      // latexdiff directory holds no output of that name.
+      yield* this.fileService.ensureMirroredInRunSubdir(
+        workflowOutputRoundDir(currRound),
+        { protectedStem: WORKFLOW_OUTPUT_BASENAME },
+      );
+      yield* this.fileService.ensureMirroredInRunSubdir(
+        `diff/${workflowOutputRoundDir(currRound)}`,
+      );
       const relativePath = path.join('diff', `r${currRound}`);
       const diffDirectory: DiffOutputDirectory = {
         absolutePath: path.join(this.fileService.runDirectory, relativePath),

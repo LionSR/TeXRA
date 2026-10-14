@@ -5,7 +5,8 @@
  * its latest `documents/output` row records. Each document tool
  * (`./documentTools`) opens it, does its one step over one revision, and
  * commits the documents again through the one publisher. Nothing is held
- * between calls, so a resumed recipe sees what the rows say.
+ * between calls, except the task's file variables, read once per opening,
+ * so a resumed recipe sees what the rows say.
  *
  * A revision is one call of the task's persona. Its prompt is the whole
  * conversation so far as one message: the task's prefix (the documents),
@@ -21,10 +22,6 @@ import { getCatalogAgent, type AgentEntry } from '@agent/index';
 import { LatexMediaManager } from '@latex/LatexMediaManager';
 import { getTeXCountStats } from '@latex/texcount';
 import {
-  WORKFLOW_RAW_OUTPUT_EXT,
-  workflowOutputPath,
-} from '@shared/constants/workflowOutput';
-import {
   qualifyAggregateId,
   fileLocationDisplayPath,
   ToolError,
@@ -32,9 +29,16 @@ import {
   type ToolFact,
 } from '@shared/schemas';
 import {
+  WORKFLOW_OUTPUT_BASENAME,
+  WORKFLOW_RAW_OUTPUT_EXT,
+  workflowOutputPath,
+  workflowOutputRoundDir,
+} from '@texra/shared/constants/workflowOutput';
+import {
   documentsOutputFact,
   latestDocumentRounds,
 } from '@texra/shared/plugins/documents';
+import type { DocumentDiffs } from '@texra/shared/plugins/documentOutputs';
 import { XmlOutputManager } from '@texra/agent/output/XmlOutputManager';
 import { documentTaskKey } from '@texra/agent/output/documentRecipe';
 import {
@@ -104,7 +108,7 @@ export interface Documents {
   readonly baseFiles: FileLocation[];
   /** The revisions as the run's documents: the fact the call's result
    *  states (`ToolResult.facts`), built from the state as the call left it. */
-  readonly fact: () => ToolFact;
+  readonly fact: (diffs?: DocumentDiffs) => ToolFact;
 }
 
 /** The files a revision works on: the inputs, then the last outputs. */
@@ -203,7 +207,8 @@ export const openDocuments = Effect.fn('documents.open')(function* ({
       roots,
     ),
     baseFiles,
-    fact: () => documentsOutputFact(roundsToPersisted(state)),
+    fact: (diffs?: DocumentDiffs) =>
+      documentsOutputFact(roundsToPersisted(state), diffs),
   } satisfies Documents;
 });
 
@@ -335,7 +340,10 @@ const revisionMedia = Effect.fn('documents.revisionMedia')(function* (
   const extracted = yield* Effect.exit(
     Effect.gen(function* () {
       if (revision > 0)
-        yield* deps.fileService.ensureMirroredInRoundDir(revision);
+        yield* deps.fileService.ensureMirroredInRunSubdir(
+          workflowOutputRoundDir(revision),
+          { protectedStem: WORKFLOW_OUTPUT_BASENAME },
+        );
       return yield* media.processInputFiles(
         files,
         documentTaskOptions(run.config),

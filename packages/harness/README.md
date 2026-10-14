@@ -338,13 +338,13 @@ happens without reading the code. The table is in the header of
 There is exactly one result shape: `RunEndResult`, the run's `run.end`
 payload plus the `runId` it belongs to. It carries an `outcome`, an optional
 `usage`, an `output`, and, on a failed run, a structured `error`. Every run's
-output is one shape, `{ response, files, structured?, documents? }`: the reply
-text, the workspace-relative files its tool calls edited, and the `structured`
-value of a `submit_output` tool when the run used one. `documents` is present
-only on a recipe's run (`script.kind: 'recipe'`): `{ outputs, compileFailures, diffs,
-diffsUnavailable? }`, the output files of its newest revision and the
-compilation failures. There is no category to switch on; test for
-`output.documents`.
+output is one shape, `{ response, files, structured? }`: the reply text, the
+workspace-relative files its tool calls edited, and the `structured` value of
+a `submit_output` tool when the run used one. A recipe's run (`script.kind:
+'recipe'`) ends with its script's return value as `structured`; the plugin
+that owns the recipe's block reads it (`AgentBlock.result`, exported from
+`@texra-ai/harness/plugins`: the value's schema, its delivery body, and the
+files it changed). There is no category to switch on.
 
 `run.result` is terminal-only. A run of this package runs one cycle and
 ends; one parked on a request (an approval, a retry, a question) has no
@@ -354,9 +354,9 @@ lists what it waits for.
 
 Accounting is `usage`, present once a round recorded any: one totals record
 covering the run and its subagents, whose `usage.totalCost` is the run's cost
-and the only cost this surface states. The per-file `documents.diffs` are
-written by the delivery that computes them after the run ended, so
-the embedding contract leaves diffing to the embedder, which already owns the
+and the only cost this surface states. The harness computes no diffs: a
+recipe's plugin records any it computes in its own value, and otherwise the
+embedding contract leaves diffing to the embedder, which already owns the
 files.
 
 ## Entry points

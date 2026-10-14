@@ -7,8 +7,8 @@
 
 import { Effect, FileSystem } from 'effect';
 
-import { workflowOutputRoundDir } from '@shared/constants/workflowOutput';
 import type { FileLocation } from '@shared/schemas';
+import { workflowOutputRoundDir } from '@texra/shared/constants/workflowOutput';
 
 import {
   ensureRoundData,

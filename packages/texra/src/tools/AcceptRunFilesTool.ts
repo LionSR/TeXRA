@@ -488,7 +488,7 @@ export const AcceptRunFilesTool = defineTool({
   requiresApproval: 'inBody',
   description: `Accept output files from a completed document task into the workspace.
 
-Only document-task results (<subagent-result kind="document-task">) list output
+Only document task results (<subagent-result kind="task">) list output
 files to accept; other agents' results have nothing for this tool.
 
 Locates output files in run storage and writes them to the workspace.

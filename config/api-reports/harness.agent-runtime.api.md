@@ -2,7 +2,7 @@
 
 Generated from `packages/harness/src/agent/runtime/index.ts` by `node scripts/check-core-quality.mjs --update`; do not edit. The hosts' one internal door, not SDK surface: its names only shrink.
 
-Exports: 14
+Exports: 13
 
 - `getHelperModelName` — `function getHelperModelName: (stores: SettingsStores) => Effect<string, StateReadFailed, never>`
 - `HostInteractions` — `interface HostInteractions { emit?<K extends RuntimePresentationEvent>(event: K, payload: RuntimePresentationEventPayloads[K]): HostPresentation; readonly approvalPromptsUnavailable?: boolean; approvalDenied?(denial: ApprovalPolicyDenial, runId: RunId): void; readonly languageModel?: LanguageModelPort; presentToolEdit?(request: ToolEditApprovalRequest): void; releaseToolEdit?(requestId: string): Effect.Effect<void>; approveToolEdit?(requestId: string): Effect.Effect<boolean>; preview?(requestId: string): Effect.Effect<ToolEditContent | null>; dispose?(): void; }`
@@ -17,4 +17,3 @@ Exports: 14
 - `terminalFailurePresented` — `function terminalFailurePresented: (error: unknown) => boolean`
 - `ValidatedRunRequest` — `interface ValidatedRunRequest { config: AgentConfig; }`
 - `validateRunRequest` — `function validateRunRequest: (request: RunRequest) => RunValidationResult`
-- `withWorkflowDiffs` — `const withWorkflowDiffs: (storageRoot: string, runId: string & $brand<"RunId">, run: { response: string; files: string[]; structured?: JSONType | undefined; documents?: { outputs: { round: number; relativePath: string; absolutePath: string; location: "external" | "workspace" | "runStorage"; originalPath: string | null; added: number | null; removed: number | null; }[]; compileFailures: { round: number; displayName: string; outputPath: string; logPath: string; logAbsolutePath: string; }[]; diffs: { path: string; diffRelPath: string; largeChange: boolean; }[]; diffsUnavailable?: string | undefined; } | undefined; }) => Effect<{ response: string; files: string[]; structured?: JSONType | undefined; documents?: { outputs: { round: number; relativePath: string; absolutePath: string; location: "external" | "workspace" | "runStorage"; originalPath: string | null; added: number | null; removed: number | null; }[]; compileFailures: { round: number; displayName: string; outputPath: string; logPath: string; logAbsolutePath: string; }[]; diffs: { path: string; diffRelPath: string; largeChange: boolean; }[]; diffsUnavailable?: string | undefined; } | undefined; }, never, FileSystem>`

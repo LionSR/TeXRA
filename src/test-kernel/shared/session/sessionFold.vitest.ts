@@ -21,7 +21,6 @@ import {
   RunIdSchema,
   runIdentityDisplayName,
   SessionEventSchema,
-  type CompileFailure,
   type DisplaySessionEvent,
   type FoldInput,
   type OutputFileInfo,
@@ -54,6 +53,7 @@ import {
   documentsOf,
 } from '@texra/shared/plugins/documents';
 
+import { type CompileFailure } from '@texra/shared/plugins/documentOutputs';
 import { createExternalLocation } from '@utils/files/fileLocation';
 
 import {

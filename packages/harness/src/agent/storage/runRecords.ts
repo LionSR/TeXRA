@@ -22,7 +22,6 @@ import { foldRunState, type RunState } from '@shared/session/runStateFold';
 import { parentEdgeOf } from '@shared/session/runRelation';
 import {
   ResultMetaSchema,
-  storedResultMeta,
   qualifyAggregateId,
   aggregateTarget,
   emptyRunEndOutput,
@@ -31,7 +30,6 @@ import {
   type RunUsageTotals,
   RunWorkspaceFilesSchema,
   type AggregateId,
-  type DeliveredResult,
   type ResultMeta,
   type RunEnd,
   type SessionEvent,
@@ -39,7 +37,7 @@ import {
 } from '@shared/schemas';
 import { deriveRunId } from '@utils/core/idHash';
 
-import { deliveredOutput, type RunResult } from './resultMeta';
+import type { RunResult } from './resultMeta';
 
 /** One child turn's identity: `key` names the child-run attempt that
  *  accepted it and `index` its position in that attempt. */
@@ -360,28 +358,36 @@ export function getRunRecords(session: SessionHandle, runId: RunId) {
     readRunEnd: (): Effect.Effect<RunEnd | null, DatabaseReadFailed> =>
       runRows.pipe(Effect.flatMap(runEndOf)),
     /** The run's result: its producer record joined to its terminal result,
-     *  the output as delivered ({@link deliveredOutput}). Null with no
-     *  producer record; a background command's record is its own result. */
+     *  the output as delivered (the subagent's reply, which only its record
+     *  holds, over the run's own output). A background
+     *  command's record is its own result, and an ended recipe's run (whose
+     *  value is its result) needs none. Null otherwise with no record. */
     readResult: (): Effect.Effect<RunResult | null, DatabaseReadFailed> =>
       Effect.gen(function* () {
         const rows = yield* runRows;
         const meta = latestOfType(rows, id, 'run.result')?.result ?? null;
-        if (meta === null || meta.producer === 'backgroundBash') return meta;
+        if (meta?.producer === 'backgroundBash') return meta;
+        if (meta === null) {
+          const config = latestOfType(rows, id, 'run.config')?.config;
+          return config && isRecipeConfig(config)
+            ? yield* runEndOf(rows)
+            : null;
+        }
         const end = yield* runEndOf(rows);
         return {
           ...(end ?? {}),
-          output: deliveredOutput(meta, end?.output ?? emptyRunEndOutput()),
+          output: { ...(end?.output ?? emptyRunEndOutput()), ...meta.output },
         };
       }),
     writeResultMeta: (
-      result: DeliveredResult,
+      result: ResultMeta,
     ): Effect.Effect<void, DatabaseNotOwner | DatabaseWriteFailed> =>
       Effect.suspend(() =>
         session.log.transact([
           {
             type: 'run.result',
             aggregateId: id,
-            result: ResultMetaSchema.parse(storedResultMeta(result)),
+            result: ResultMetaSchema.parse(result),
           },
         ]),
       ).pipe(Effect.asVoid),

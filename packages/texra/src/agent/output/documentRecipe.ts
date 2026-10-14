@@ -122,7 +122,7 @@ export function documentTaskPatch(
       tools: [...DOCUMENT_TASK_TOOLS],
       kind: 'recipe',
       block: DOCUMENT_TASK_BLOCK.key,
-      options: DocumentTaskOptionsSchema.parse(options),
+      options,
     },
   };
 }

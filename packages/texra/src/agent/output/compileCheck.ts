@@ -9,16 +9,18 @@ import type { WorkspaceFs } from '@platform/rootedFs';
 import {
   fileLocationDisplayPath,
   isGenericOutputStem,
-  type CompileFailure,
-  type CompileResult,
   type RunId,
   type FileLocation,
   type OutputFileInfo,
   type RunStorageFileLocation,
 } from '@shared/schemas';
-import { stripWorkflowRoundDir } from '@shared/constants/workflowOutput';
+import { stripWorkflowRoundDir } from '@texra/shared/constants/workflowOutput';
 import { DocumentsStateKey } from '@texra/shared/settingsView/documentsSettings';
 import { LATEX_CONFIG_RANGES } from '@texra/shared/constants/latexConfig';
+import {
+  type CompileFailure,
+  type CompileResult,
+} from '@texra/shared/plugins/documentOutputs';
 import { createRunStorageLocation } from '@utils/files/fileLocation';
 import { readNormalizedFile } from '@utils/files/fsDurability';
 import { runDirUnder } from '@utils/files/runStorageFs';

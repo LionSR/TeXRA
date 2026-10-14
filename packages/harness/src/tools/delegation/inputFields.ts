@@ -18,6 +18,7 @@ import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { displayToStoragePath } from '@tools/memory/memoryUtils';
 import { parseWorkingDirectory } from '@tools/pathResolution';
 import { errorResult } from '@tools/core/result';
+import type { ToolRegistry } from '@tools/toolTable';
 import { nullishWithDefault } from '@tools/core/inputSchema';
 import { runStorageLocationUnder } from '@utils/files/runStorageFs';
 import { workspaceAbsolutePath } from '@utils/files/workspaceFS';
@@ -209,7 +210,7 @@ export const resolveInvocationFileList = Effect.fn('resolveInvocationFileList')(
   ): Effect.fn.Return<
     { file: string; absolutePath: string }[],
     Error,
-    FileSystem.FileSystem
+    FileSystem.FileSystem | ToolRegistry
   > {
     const fs = yield* FileSystem.FileSystem;
     return yield* Effect.gen(function* () {
