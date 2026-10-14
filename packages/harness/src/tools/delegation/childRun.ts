@@ -194,10 +194,10 @@ const pauseChildRun = (
         const parentRunId = yield* persistedParentRunId(session, runId);
         if (parentRunId === undefined) return undefined;
         const settlement = yield* options.settlement ??
-          Effect.succeed({ rows: [], committed: Effect.void });
+          Effect.succeed({ rows: [], committed: Effect.void, held: false });
         // A last turn held for a parent open elsewhere is the park: no
         // pause after it (its notice would be refused the same way).
-        if (settlement.rows.some((row) => row.type === 'child.park')) {
+        if (settlement.held === true) {
           yield* tx.append(settlement.rows);
           return {
             parentRunId,

@@ -32,10 +32,10 @@ import {
   startChildRunLoop,
   type ChildRunLoopParams,
   type ChildRunPorts,
-  type ChildRunStrategy,
+  type NativeChildStrategy,
+  type ProcessChildStrategy,
 } from '@agent/runtime/childRunLoop';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import type { RunHandle } from '@agent/runtime/RunHandle';
 import {
   qualifyAggregateId,
   emptyRunEndOutput,
@@ -55,7 +55,6 @@ import {
   publishTestRows,
 } from '@test/support/sessionTestUtils';
 import { FakeConfigProvider } from '@test/support/FakePlatform';
-import { testRunHandle } from '@test/support/runHandleFixtures';
 import { createChildRun } from '@tools/delegation/childRun';
 import { generateRunId } from '@utils/core';
 
@@ -70,18 +69,6 @@ function loopRunId(): RunId {
   const runId = generateRunId();
   publishTestRunStart(session, runId, { parent: PARENT_RUN_ID });
   return runId;
-}
-
-function trackChildHandle(runId: RunId, parentRunId: RunId): RunHandle {
-  const handle = testRunHandle({
-    runId,
-    parent: parentRunId,
-    agent: 'fake',
-    trace: { emit: vi.fn() } as never,
-  });
-  registryOf(session.runs).track(handle);
-  trackedRunIds.add(runId);
-  return handle;
 }
 
 /**
@@ -130,7 +117,7 @@ interface FakeTurn {
 }
 
 interface FakeStrategyHandle {
-  readonly strategy: ChildRunStrategy<FakeTurn>;
+  readonly strategy: ProcessChildStrategy<FakeTurn>;
   /** Number of launch/runTurn calls made so far. */
   callCount: () => number;
   /** Wait for the Nth (1-indexed) launch/runTurn call to have started. */
@@ -172,7 +159,7 @@ function createFakeStrategy(): FakeStrategyHandle {
     return yield* Deferred.await(deferred);
   });
 
-  const strategy: ChildRunStrategy<FakeTurn> = {
+  const strategy: ProcessChildStrategy<FakeTurn> = {
     stageLabel: 'Fake child run',
     launch: () => runTurn,
     runTurn: () => runTurn,
@@ -221,9 +208,9 @@ function createTerminalStrategy(
     signal: AbortSignal,
   ) => Effect.Effect<FakeTurn, Error> = () =>
     Effect.succeed({ kind: 'terminal', value: 'done' }),
-  formatDelivery: ChildRunStrategy<FakeTurn>['formatDelivery'] = (turn) =>
+  formatDelivery: ProcessChildStrategy<FakeTurn>['formatDelivery'] = (turn) =>
     Effect.succeed(`delivered:${turn.value}`),
-): ChildRunStrategy<FakeTurn> {
+): ProcessChildStrategy<FakeTurn> {
   return {
     stageLabel,
     launch,
@@ -233,25 +220,55 @@ function createTerminalStrategy(
   };
 }
 
+/** A process child's port for `runId`, untracked after the test. */
+const childRunPort = (runId: RunId) =>
+  createChildRun(session, runId, PARENT_RUN_ID, {
+    kind: 'agent',
+    agent: 'fake-cli',
+    tool: 'codex',
+  }).pipe(
+    Effect.provideService(Runs, session.runs),
+    Effect.tap(() => Effect.sync(() => trackedRunIds.add(runId))),
+  );
+
 /**
- * Start the loop with the fixture defaults; extras override any param. Setup
- * is synchronous through the queue claim, so the loop owns the run's queue by
+ * Start a process child's loop with the fixture defaults (a port of its own
+ * unless `extras` brings one); extras override any param. Setup is
+ * synchronous through the queue claim, so the loop owns the run's queue by
  * the time the returned fiber is in hand; the fiber itself is detached, so
  * every test joins it before its body ends.
  */
 const startLoop = (
   runId: RunId,
-  strategy: ChildRunStrategy<FakeTurn>,
-  extras: Partial<ChildRunLoopParams<FakeTurn>> = {},
+  strategy: ProcessChildStrategy<FakeTurn>,
+  extras: Partial<Omit<ChildRunLoopParams<FakeTurn>, 'strategy'>> = {},
+) =>
+  Effect.gen(function* () {
+    const childRun = extras.childRun ?? (yield* childRunPort(runId));
+    return yield* startChildRunLoop({
+      session,
+      runId,
+      parentRunId: PARENT_RUN_ID,
+      agentName: 'fake',
+      ...extras,
+      childRun,
+      strategy,
+    }).pipe(Effect.provideService(Runs, session.runs));
+  });
+
+/** Start a native child's loop: no port, its launch its whole run. */
+const startNativeLoop = (
+  runId: RunId,
+  strategy: NativeChildStrategy<FakeTurn>,
+  budgeted = false,
 ) =>
   startChildRunLoop({
     session,
     runId,
     parentRunId: PARENT_RUN_ID,
     agentName: 'fake',
-    budgeted: false,
+    budgeted,
     strategy,
-    ...extras,
   }).pipe(Effect.provideService(Runs, session.runs));
 
 /** The store refuses every write from here on, as a full disk does. */
@@ -308,9 +325,11 @@ describe('childRunLoop E2E fixtures', () => {
               stop = session.runs.stop(runId, { reason: 'user' });
             return release;
           });
-        const loop = yield* startLoop(runId, {
-          ...createTerminalStrategy('Engine startup', launch),
-          continuous: true,
+        const loop = yield* startNativeLoop(runId, {
+          stageLabel: 'Engine startup',
+          launch,
+          formatDelivery: (turn) => Effect.succeed(`delivered:${turn.value}`),
+          formatError: () => 'error',
         }).pipe(Effect.ensuring(Effect.sync(() => claim.mockRestore())));
         if (stop) {
           expect(stop.accepted()).toBe(true);
@@ -365,12 +384,7 @@ describe('childRunLoop E2E fixtures', () => {
       Effect.gen(function* () {
         const runId = loopRunId();
         const releaseSessionOwnership = vi.fn();
-        const childRun = yield* createChildRun(session, runId, PARENT_RUN_ID, {
-          kind: 'agent',
-          agent: 'fake-cli',
-          tool: 'codex',
-        }).pipe(Effect.provideService(Runs, session.runs));
-        trackedRunIds.add(runId);
+        const childRun = yield* childRunPort(runId);
         // The setup's own step fails: the run refuses its tracking.
         vi.spyOn(childRun, 'track').mockImplementation(() => {
           throw new Error('loop registration failed');
@@ -405,15 +419,9 @@ describe('childRunLoop E2E fixtures', () => {
         // in-flight launch. A native-shaped fixture would take the stop as
         // the run fiber's interruption instead, which the launch's abort
         // listener is not guaranteed to observe.
-        const childRun = yield* createChildRun(session, runId, PARENT_RUN_ID, {
-          kind: 'agent',
-          agent: 'fake-cli',
-          tool: 'codex',
-        }).pipe(Effect.provideService(Runs, session.runs));
-        trackedRunIds.add(runId);
         const launched = yield* Deferred.make<void>();
 
-        const strategy: ChildRunStrategy<FakeTurn> = {
+        const strategy: ProcessChildStrategy<FakeTurn> = {
           stageLabel: 'fake-cli session',
           launch: (_ports, signal) =>
             Effect.gen(function* () {
@@ -437,7 +445,6 @@ describe('childRunLoop E2E fixtures', () => {
 
         const loop = yield* startLoop(runId, strategy, {
           agentName: 'fake-cli',
-          childRun,
         });
 
         // The loop body is a generation on the run's lane: it starts once
@@ -471,19 +478,16 @@ describe('childRunLoop E2E fixtures', () => {
           lastCompleted: null,
         });
 
-        // Interrupt the loop through its parent lineage: no turn handle is
-        // tracked in this fixture, so the stop reaches the loop via its
-        // child activation.
+        // Stop the loop through its parent lineage: the stop reaches it via
+        // its child activation.
         const stopping = yield* Effect.forkChild(
           session.runs.stop(PARENT_RUN_ID, { reason: 'user' }).settlement,
           { startImmediately: true },
         );
         yield* rejectTurn(1, createAbortError());
         yield* Fiber.join(stopping);
-        // The stop ends the loop fiber by interruption; `await` observes the
-        // exit where `join` would inherit it.
-        const exit = yield* Fiber.await(loop);
-        expect(Exit.isFailure(exit)).toBe(true);
+        // A process child's loop fiber survives the stop and ends the run.
+        yield* Fiber.join(loop);
 
         // An interrupted turn never settles, so the acceptance row stands and
         // the lease is released only once the loop is done with it.
@@ -522,15 +526,7 @@ describe('childRunLoop E2E fixtures', () => {
             }),
         );
         publishTestRunStart(session, runId, { parent: PARENT_RUN_ID });
-        const childRun = yield* createChildRun(session, runId, PARENT_RUN_ID, {
-          kind: 'agent',
-          agent: 'fake-cli',
-          tool: 'codex',
-        }).pipe(Effect.provideService(Runs, session.runs));
-        trackedRunIds.add(runId);
-        const loop = yield* startLoop(runId, strategy, {
-          childRun,
-        });
+        const loop = yield* startLoop(runId, strategy);
         yield* Deferred.await(launchStarted);
 
         try {
@@ -716,12 +712,10 @@ describe('childRunLoop E2E fixtures', () => {
         yield* turnStarted(1);
 
         yield* stopChildRun(runId);
-        // Releasing the aborted call's gate is cleanup: the stop interrupted
-        // the fiber awaiting it.
+        // The stop aborts the in-flight turn, as a real process's would.
         yield* rejectTurn(1, createAbortError());
 
-        const exit = yield* Fiber.await(loop);
-        expect(Exit.isFailure(exit)).toBe(true);
+        yield* Fiber.join(loop);
         expect(mocks.startFollowUpWake).not.toHaveBeenCalled();
       }),
   );
@@ -804,13 +798,7 @@ describe('childRunLoop E2E fixtures', () => {
       Effect.gen(function* () {
         const runId = loopRunId();
         const { strategy, resolveTurn, turnStarted } = createFakeStrategy();
-        const childRun = yield* createChildRun(session, runId, PARENT_RUN_ID, {
-          kind: 'agent',
-          agent: 'fake-cli',
-          tool: 'codex',
-        }).pipe(Effect.provideService(Runs, session.runs));
-        trackedRunIds.add(runId);
-        const loop = yield* startLoop(runId, strategy, { childRun });
+        const loop = yield* startLoop(runId, strategy);
 
         yield* resolveTurn(1, { kind: 'interim', value: 'first' });
 
@@ -849,13 +837,7 @@ describe('childRunLoop E2E fixtures', () => {
         // loop seeds the prompt and runs it again.
         const runId = loopRunId();
         const { strategy, resolveTurn, turnStarted } = createFakeStrategy();
-        const childRun = yield* createChildRun(session, runId, PARENT_RUN_ID, {
-          kind: 'agent',
-          agent: 'fake-cli',
-          tool: 'codex',
-        }).pipe(Effect.provideService(Runs, session.runs));
-        trackedRunIds.add(runId);
-        const loop = yield* startLoop(runId, strategy, { childRun });
+        const loop = yield* startLoop(runId, strategy);
 
         yield* resolveTurn(1, { kind: 'interim', value: 'first' });
         yield* session.followUps.send(runId, {
@@ -885,21 +867,11 @@ describe('childRunLoop E2E fixtures', () => {
         // normally after the stop landed.
         const runId = loopRunId();
         const { strategy, resolveTurn, turnStarted } = createFakeStrategy();
-        const childRun = yield* createChildRun(session, runId, PARENT_RUN_ID, {
-          kind: 'agent',
-          agent: 'fake-cli',
-          tool: 'codex',
-        }).pipe(Effect.provideService(Runs, session.runs));
-        trackedRunIds.add(runId);
         const releaseSessionOwnership = vi.fn();
-        const loop = yield* startLoop(
-          runId,
-          {
-            ...strategy,
-            releaseSessionOwnership,
-          },
-          { childRun },
-        );
+        const loop = yield* startLoop(runId, {
+          ...strategy,
+          releaseSessionOwnership,
+        });
 
         yield* turnStarted(1);
         // Stop the loop, then let the in-flight turn resolve normally (not
@@ -924,7 +896,6 @@ describe('childRunLoop E2E fixtures', () => {
       Effect.gen(function* () {
         const runId = loopRunId();
         const { strategy, resolveTurn } = createFakeStrategy();
-        trackChildHandle(runId, PARENT_RUN_ID);
         const delivered = yield* Deferred.make<void>();
         mocks.startFollowUpWake.mockImplementation(() =>
           Effect.as(Deferred.succeed(delivered, undefined), true),
@@ -942,8 +913,7 @@ describe('childRunLoop E2E fixtures', () => {
         // activation its start reserved on the run's run registry entry.
         yield* stopChildRun(runId);
 
-        const exit = yield* Fiber.await(loop);
-        expect(Exit.isFailure(exit)).toBe(true);
+        yield* Fiber.join(loop);
         expect(session.runs.get(runId)?.live === true).toBe(false);
         // Only the one interim delivery — the kill did not spawn another turn.
         expect(mocks.startFollowUpWake).toHaveBeenCalledTimes(1);
@@ -956,17 +926,11 @@ describe('childRunLoop E2E fixtures', () => {
       Effect.gen(function* () {
         const runId = loopRunId();
         const { strategy, resolveTurn } = createFakeStrategy();
-        const childRun = yield* createChildRun(session, runId, PARENT_RUN_ID, {
-          kind: 'agent',
-          agent: 'fake-cli',
-          tool: 'codex',
-        }).pipe(Effect.provideService(Runs, session.runs));
-        trackedRunIds.add(runId);
         const delivered = yield* Deferred.make<void>();
         mocks.startFollowUpWake.mockImplementation(() =>
           Effect.as(Deferred.succeed(delivered, undefined), true),
         );
-        const loop = yield* startLoop(runId, strategy, { childRun });
+        const loop = yield* startLoop(runId, strategy);
 
         yield* resolveTurn(1, { kind: 'interim', value: 'first' });
         yield* Deferred.await(delivered);
@@ -998,7 +962,6 @@ describe('childRunLoop E2E fixtures', () => {
         // stop/kill landing in that window finds nothing left to interrupt. The
         // test inspects the run handle while delivery is deliberately held open.
         const runId = loopRunId();
-        trackChildHandle(runId, PARENT_RUN_ID);
         const deliveryStarted = yield* Deferred.make<void>();
         const deliveryGate = yield* Deferred.make<void>();
         mocks.startFollowUpWake.mockImplementation(() =>
@@ -1024,8 +987,7 @@ describe('childRunLoop E2E fixtures', () => {
         expect(stop.accepted()).toBe(true);
 
         yield* Deferred.succeed(deliveryGate, undefined);
-        const exit = yield* Fiber.await(loop);
-        expect(Exit.isFailure(exit)).toBe(true);
+        yield* Fiber.join(loop);
         expect(mocks.startFollowUpWake).toHaveBeenCalledTimes(1);
         expect(session.runs.get(runId)?.live === true).toBe(false);
         yield* stop.settlement;
@@ -1048,12 +1010,6 @@ describe('childRunLoop E2E fixtures', () => {
         // — a resumed parent's wait would resolve immediately instead of racing
         // its own wake.
         const runId = loopRunId();
-        const childRun = yield* createChildRun(session, runId, PARENT_RUN_ID, {
-          kind: 'agent',
-          agent: 'fake-cli',
-          tool: 'codex',
-        }).pipe(Effect.provideService(Runs, session.runs));
-        trackedRunIds.add(runId);
 
         const wakeReached = yield* Deferred.make<void>();
         const releaseWake = yield* Deferred.make<void>();
@@ -1071,7 +1027,7 @@ describe('childRunLoop E2E fixtures', () => {
 
         const strategy = createTerminalStrategy('Finalize-before-wake test');
 
-        const loop = yield* startLoop(runId, strategy, { childRun });
+        const loop = yield* startLoop(runId, strategy);
 
         yield* Deferred.await(wakeReached);
         expect(handleAtWakeTime).toBeUndefined();
@@ -1148,12 +1104,6 @@ describe('childRunLoop E2E fixtures', () => {
       Effect.gen(function* () {
         const runId = 'fa11ed01' as RunId;
         publishTestRunStart(session, runId, { parent: PARENT_RUN_ID });
-        const childRun = yield* createChildRun(session, runId, PARENT_RUN_ID, {
-          kind: 'agent',
-          agent: 'fake-cli',
-          tool: 'codex',
-        }).pipe(Effect.provideService(Runs, session.runs));
-        trackedRunIds.add(runId);
         const { strategy, rejectTurn } = createFakeStrategy();
         // Fires once the failed turn settled, before the loop's finalize: the
         // window the stop latch has to win. Kill admission is synchronous, so
@@ -1167,7 +1117,6 @@ describe('childRunLoop E2E fixtures', () => {
         });
 
         const loop = yield* startLoop(runId, strategy, {
-          childRun,
           agentName: 'fake-cli',
           onTurnSettled: interruptAfterFailure,
         });
@@ -1199,40 +1148,39 @@ describe('childRunLoop E2E fixtures', () => {
           const firstStarted = yield* Deferred.make<void>();
           const firstRelease = yield* Deferred.make<FakeTurn>();
 
-          const firstStrategy = createTerminalStrategy(
-            'Budgeted first child',
-            () =>
+          // Native children, each turn under the run's permit.
+          const budgeted = (
+            stageLabel: string,
+            turn: Effect.Effect<FakeTurn>,
+          ): NativeChildStrategy<FakeTurn> => ({
+            stageLabel,
+            launch: (_ports, turns) => turns.turnPermit(turn),
+            formatDelivery: (done) => Effect.succeed(`delivered:${done.value}`),
+            formatError: () => 'error',
+          });
+          const firstLoop = yield* startNativeLoop(
+            first,
+            budgeted(
+              'Budgeted first child',
               Effect.gen(function* () {
                 started.push('first');
                 yield* Deferred.succeed(firstStarted, undefined);
                 return yield* Deferred.await(firstRelease);
               }),
+            ),
+            true,
           );
-          const secondStrategy = createTerminalStrategy(
-            'Budgeted second child',
-            () =>
+          const secondLoop = yield* startNativeLoop(
+            second,
+            budgeted(
+              'Budgeted second child',
               Effect.sync((): FakeTurn => {
                 started.push('second');
                 return { kind: 'terminal', value: 'done' };
               }),
+            ),
+            true,
           );
-
-          const firstLoop = yield* startLoop(first, firstStrategy, {
-            budgeted: true,
-          });
-          // A process child: its stop reaches it through the loop signal
-          // alone, not a fiber interrupt.
-          const childRun = yield* createChildRun(
-            session,
-            second,
-            PARENT_RUN_ID,
-            { kind: 'agent', agent: 'fake-cli', tool: 'codex' },
-          ).pipe(Effect.provideService(Runs, session.runs));
-          trackedRunIds.add(second);
-          const secondLoop = yield* startLoop(second, secondStrategy, {
-            budgeted: true,
-            childRun,
-          });
 
           yield* Deferred.await(firstStarted);
           // One slot: the second child's turn must not start while the first
@@ -1246,7 +1194,7 @@ describe('childRunLoop E2E fixtures', () => {
           // A stop while it waits for the slot settles it at once, although
           // the first child still holds the slot.
           yield* stopChildRun(second);
-          yield* Fiber.join(secondLoop);
+          yield* Fiber.await(secondLoop);
           expect(started).toEqual(['first']);
 
           yield* Deferred.succeed<FakeTurn, never>(firstRelease, {

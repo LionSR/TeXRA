@@ -8,7 +8,7 @@ import { Deferred, Effect, Fiber, Layer } from 'effect';
 
 import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 
-import type { ChildRunStrategy } from '@agent/runtime/childRunLoop';
+import type { ProcessChildStrategy } from '@agent/runtime/childRunLoop';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { RunId } from '@shared/schemas';
 import { createFakeWorkspaceRoots } from '@test/support/FakePlatform';
@@ -121,11 +121,11 @@ function completedChildRunLoop() {
  */
 function captureRunLoopLaunch(): () => {
   runId?: RunId;
-  strategy?: ChildRunStrategy<unknown>;
+  strategy?: ProcessChildStrategy<unknown>;
 } {
-  let launch: { runId?: RunId; strategy?: ChildRunStrategy<unknown> } = {};
+  let launch: { runId?: RunId; strategy?: ProcessChildStrategy<unknown> } = {};
   mocks.startChildRunLoop.mockImplementation(
-    (params: { runId: RunId; strategy: ChildRunStrategy<unknown> }) => {
+    (params: { runId: RunId; strategy: ProcessChildStrategy<unknown> }) => {
       launch = { runId: params.runId, strategy: params.strategy };
       return completedChildRunLoop();
     },

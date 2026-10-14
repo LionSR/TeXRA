@@ -38,18 +38,36 @@ import type { SessionHandle } from './SessionHandle';
 
 const CHANNEL = 'childSettlement';
 
-/** A delivery's warning: on an agent-CLI child's trace, else the log. */
+const LOG = {
+  debug: Effect.logDebug,
+  info: Effect.logInfo,
+  warn: Effect.logWarning,
+  error: Effect.logError,
+} as const;
+
+/** A child diagnostic: on an agent-CLI child's own trace; every other child
+ *  has no loop-owned stream, so on the process log under `channel`. */
+export const traceLog = (
+  trace: AgentTrace | undefined,
+  channel: string,
+  level: keyof typeof LOG,
+  message: string,
+  data?: unknown,
+): Effect.Effect<void> => {
+  if (trace)
+    return Effect.sync(() =>
+      trace[level](message, data === undefined ? undefined : { data }),
+    );
+  const entry = LOG[level](message).pipe(withLogChannel(channel));
+  return data === undefined ? entry : Effect.annotateLogs(entry, { data });
+};
+
+/** A delivery's warning (every caller names its data). */
 export const warn = (
   trace: AgentTrace | undefined,
   message: string,
   data: unknown,
-): Effect.Effect<void> =>
-  trace
-    ? Effect.sync(() => trace.warn(message, { data }))
-    : Effect.logWarning(message).pipe(
-        Effect.annotateLogs({ data }),
-        withLogChannel(CHANNEL),
-      );
+): Effect.Effect<void> => traceLog(trace, CHANNEL, 'warn', message, data);
 
 /** The rows a settlement commits, all on the child's aggregate. */
 export type SettlementRow = Extract<
@@ -57,11 +75,15 @@ export type SettlementRow = Extract<
   { type: 'run.report' | 'run.result' | 'child.turn' | 'followup.consumed' }
 >;
 
-/** A result on its way to the parent's inbox; `end`: the turn was the
- *  child's last, and ends it as this outcome. */
+/** A result on its way to the parent's inbox, from its child's run under
+ *  the id that makes a repeat a replay; `end`: the turn was the child's
+ *  last, and ends it as this outcome. */
 export interface ChildDelivery {
   readonly to: RunId;
-  readonly item: InboxItem;
+  readonly item: InboxItem & {
+    readonly from: { readonly kind: 'run'; readonly runId: RunId };
+    readonly deliveryId: string;
+  };
   readonly end?: 'completed' | 'failed';
 }
 
@@ -76,8 +98,9 @@ export interface ChildSettlement {
 /**
  * Rows decided inside a job, under holds its scope keeps until the job's one
  * append writes them with its own (`CoWrite`). `held`: the child parked
- * holding its last result, so its end is not written now. `note`: what the
- * end's error adds from the part (a loss notice its parent refused).
+ * holding the result (that park is its turn's; a held last turn's end is
+ * not written now). `note`: what the end's error adds from the part (a loss
+ * notice its parent refused).
  */
 export type TransactionPart = Effect.Effect<
   CoWrite & { readonly held?: boolean; readonly note?: string },
@@ -193,11 +216,8 @@ export const deliverIn = (
   trace: AgentTrace | undefined,
 ): TransactionPart =>
   Effect.gen(function* () {
-    const child = item.from.kind === 'run' ? item.from.runId : undefined;
-    if (
-      child !== undefined &&
-      (yield* persistedParentRunId(session, child)) !== to
-    )
+    const child = item.from.runId;
+    if ((yield* persistedParentRunId(session, child)) !== to)
       return {
         rows: [],
         committed: warn(
@@ -213,12 +233,7 @@ export const deliverIn = (
       {},
       trace,
     );
-    if (
-      sent.kind === 'refused' &&
-      sent.reason === 'owned_elsewhere' &&
-      child !== undefined &&
-      item.deliveryId !== undefined
-    )
+    if (sent.kind === 'refused' && sent.reason === 'owned_elsewhere')
       return {
         rows: [
           {
@@ -229,7 +244,7 @@ export const deliverIn = (
             ...(end !== undefined && { ends: end }),
           },
         ],
-        held: end !== undefined,
+        held: true,
         committed: warn(trace, 'Result waiting: parent is open elsewhere.', {
           parentRunId: to,
         }),
@@ -266,11 +281,7 @@ export const settleChildTurn = (
     ? Effect.succeed({ rows: [...rows, ...own], committed: Effect.void })
     : Effect.map(deliverIn(session, delivery, trace), (parent) => ({
         ...parent,
-        rows: [
-          ...rows,
-          ...parent.rows,
-          ...(parent.rows.some((row) => row.type === 'child.park') ? [] : own),
-        ],
+        rows: [...rows, ...parent.rows, ...(parent.held === true ? [] : own)],
       }));
 };
 
@@ -300,27 +311,22 @@ export const sendToParent = (
   options: SendOptions,
   trace: AgentTrace | undefined,
 ): Effect.Effect<RunId | null, Error> =>
-  Effect.gen(function* () {
-    const sent = yield* session.log.transact((tx) =>
-      Effect.gen(function* () {
-        const to = yield* parentEdgeIn(session, item.from.runId);
-        if (to === null) return { to, committed: Effect.void };
-        const co = yield* parentAdmission(
-          session.followUps,
-          to,
-          item,
-          options,
-          trace,
-        );
-        yield* tx.append(co.rows);
-        return {
-          to: co.sent.kind === 'refused' ? null : to,
-          committed: co.committed,
-        };
-      }).pipe(Effect.scoped),
-    );
-    yield* sent.committed;
-    return sent.to;
+  Effect.suspend(() => {
+    let reached: RunId | null = null;
+    const part = Effect.gen(function* () {
+      const to = yield* parentEdgeIn(session, item.from.runId);
+      if (to === null) return { rows: [], committed: Effect.void };
+      const co = yield* parentAdmission(
+        session.followUps,
+        to,
+        item,
+        options,
+        trace,
+      );
+      reached = co.sent.kind === 'refused' ? null : to;
+      return co;
+    });
+    return Effect.map(commitPart(session, part), () => reached);
   });
 
 /**
@@ -369,13 +375,12 @@ export const wakeParent = (
   trace: AgentTrace | undefined,
 ): Effect.Effect<void, Error> =>
   Effect.gen(function* () {
-    const id = delivery?.item.deliveryId;
-    if (delivery === undefined || id === undefined) return;
-    const from = delivery.item.from;
-    const lost = from.kind === 'run' ? lostResultId(from.runId) : null;
+    if (delivery === undefined) return;
+    const { deliveryId, from } = delivery.item;
+    const lost = lostResultId(from.runId);
     const { followUps } = yield* session.followUps.read(delivery.to);
     const waits = ({ followUpId }: { readonly followUpId: string }) =>
-      followUpId === id || (lost !== null && followUpId.startsWith(lost));
+      followUpId === deliveryId || followUpId.startsWith(lost);
     if (!followUps.some(waits)) return;
     if (!(yield* startFollowUpWake(delivery.to, session)))
       yield* warn(

@@ -12,7 +12,7 @@ import { registerRun } from '@agent/storage/runLifecycle';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import type {
   ChildRunPort,
-  ChildRunStrategy,
+  ProcessChildStrategy,
 } from '@agent/runtime/childRunLoop';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import {
@@ -100,7 +100,7 @@ function startBashChild(runId: RunId) {
 
 /** A launch strategy for the cancelled-admission test: the loop never starts,
  *  so none of these run. */
-const neverRunStrategy: ChildRunStrategy<void> = {
+const neverRunStrategy: ProcessChildStrategy<void> = {
   stageLabel: 'unreachable',
   launch: () => Effect.void,
   isTerminal: () => true,

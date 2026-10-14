@@ -10,7 +10,7 @@ import {
   TOOL_RESULT_TRUNCATION_HEAD_CHARS,
   TOOL_RESULT_TRUNCATION_TAIL_CHARS,
 } from '@agent/runtime/run/toolResultText';
-import type { ChildRunStrategy } from '@agent/runtime/childRunLoop';
+import type { ProcessChildStrategy } from '@agent/runtime/childRunLoop';
 import { ToolContext } from '@agent/core/tools/ToolTypes';
 import { requireToolRun } from '@agent/runtime/RunCall';
 import { type SessionHandle } from '@agent/runtime/SessionHandle';
@@ -237,7 +237,7 @@ function createBackgroundBashStrategy(params: {
    */
   settings: SettingsStores;
   logger: AgentTrace;
-}): ChildRunStrategy<ExecResult, ChildProcessSpawner> {
+}): ProcessChildStrategy<ExecResult, ChildProcessSpawner> {
   const { runId, call, logger } = params;
   const { command } = call;
   // Whitespace normalization is off here: a background log is delivered
@@ -503,9 +503,6 @@ const executeBackground = Effect.fn('BashTool.executeBackground')(function* (
         runId,
         parentRunId,
         agentName: 'bash',
-        // A background shell is an external process on no model budget, like
-        // the agent-CLI children (see the child-run concurrency budget note).
-        budgeted: false,
         createChildRun: () =>
           restore(Effect.void).pipe(
             Effect.andThen(

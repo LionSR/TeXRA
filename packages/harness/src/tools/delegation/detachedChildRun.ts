@@ -20,7 +20,8 @@ import {
   startChildRunLoop,
   type ChildRunLoopParams,
   type ChildRunPort,
-  type ChildRunStrategy,
+  type NativeChildStrategy,
+  type ProcessChildStrategy,
 } from '@agent/runtime/childRunLoop';
 import { registerRun } from '@agent/storage/runLifecycle';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
@@ -42,7 +43,8 @@ import {
  * Everything the choreography forwards to the child run loop verbatim: the
  * loop owns these field contracts, and the two members the guard supplies
  * itself (`strategy` from `buildLaunch`, `childRun` from
- * `createChildRun`) are the only ones a launch site does not pass through.
+ * `createChildRun`) are the only ones a launch site does not pass through;
+ * a native launch also says whether it is `budgeted`.
  */
 type DetachedChildRunInputBase = Omit<
   ChildRunLoopParams<never>,
@@ -62,17 +64,18 @@ export type DetachedChildRunInput<
          * session's `Runs` (the agent-CLI strategies resolve their registry there). */
         readonly buildLaunch: (
           childRun: ChildRunPort,
-        ) => Effect.Effect<ChildRunStrategy<TTurn, R>, Error, R | Runs>;
+        ) => Effect.Effect<ProcessChildStrategy<TTurn, R>, Error, R | Runs>;
       }
     | {
         /** Native strategies let `executeAgent` own one handle for the native lifetime. */
         readonly createChildRun?: undefined;
+        readonly budgeted: boolean;
         /**
          * Build the strategy (and any attempt-scoped setup) inside the owned-run
          * launch guard so a throw releases the run's claim.
          */
         readonly buildLaunch: () => Effect.Effect<
-          ChildRunStrategy<TTurn, R>,
+          NativeChildStrategy<TTurn, R>,
           Error,
           R | Runs
         >;
@@ -102,24 +105,19 @@ export function startDetachedChildRunLoop<
       let childRun: ChildRunPort | undefined;
       const setup = yield* Effect.exit(
         Effect.gen(function* () {
-          let strategy: ChildRunStrategy<TTurn, R>;
-          if (input.createChildRun) {
-            childRun = yield* input.createChildRun();
-            strategy = yield* input.buildLaunch(childRun);
-          } else {
-            strategy = yield* input.buildLaunch();
+          if (input.createChildRun === undefined) {
+            const { buildLaunch, ...loopParams } = input;
+            const strategy = yield* buildLaunch();
+            return yield* startChildRunLoop({ ...loopParams, strategy });
           }
-          const {
-            createChildRun: _createChildRun,
-            buildLaunch: _buildLaunch,
-            ...loopParams
-          } = input;
-          const completion = yield* startChildRunLoop({
+          const { createChildRun, buildLaunch, ...loopParams } = input;
+          childRun = yield* createChildRun();
+          const strategy = yield* buildLaunch(childRun);
+          return yield* startChildRunLoop({
             ...loopParams,
-            ...(childRun !== undefined && { childRun }),
+            childRun,
             strategy,
           });
-          return completion;
         }),
       );
       if (Exit.isFailure(setup)) {
@@ -187,7 +185,7 @@ export interface ProcessChildLaunch<TTurn> {
   readonly buildLaunch: (ctx: {
     readonly childRun: ChildRunPort;
     readonly runId: RunId;
-  }) => Effect.Effect<ChildRunStrategy<TTurn>, Error>;
+  }) => Effect.Effect<ProcessChildStrategy<TTurn>, Error>;
 }
 
 /**
@@ -220,7 +218,6 @@ export const launchProcessChild = <TTurn>(
         runId,
         parentRunId,
         agentName: launch.identity.agent,
-        budgeted: false,
         // The one interruption checkpoint: from here to the started loop is
         // uninterruptible, so a cancel arriving once the record committed
         // leaves the run CANCELLED with no loop behind it.

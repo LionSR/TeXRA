@@ -15,7 +15,7 @@ import {
   type AgentRunServices,
   Runs,
 } from '@agent/runtime/runRegistry';
-import type { ChildRunStrategy } from '@agent/runtime/childRunLoop';
+import type { NativeChildStrategy } from '@agent/runtime/childRunLoop';
 import type { PreparedAgentDefinition } from '@agent/runtime/AgentLaunchContext';
 import { normalizeProviderError } from '@common/errors/sdkError/providerErrorFormat';
 import {
@@ -81,7 +81,7 @@ type NativeSubagentStrategyParams = NativeSubagentStrategyBase &
 
 export function createNativeSubagentStrategy(
   params: NativeSubagentStrategyParams,
-): ChildRunStrategy<RunEndResult, AgentRunServices> {
+): NativeChildStrategy<RunEndResult, AgentRunServices> {
   const config = params.definition
     ? params.definition.config
     : params.resume.identity.agentConfig;
@@ -123,8 +123,7 @@ export function createNativeSubagentStrategy(
       deliveryMode: 'persistOnly' as const,
     }),
 
-    continuous: true,
-    launch: (ports, _signal, turns) =>
+    launch: (ports, turns) =>
       runNative(
         Effect.gen(function* () {
           const { programs } = registryOf(yield* Runs);
@@ -168,7 +167,6 @@ export function createNativeSubagentStrategy(
         }),
       ),
 
-    isTerminal: () => true,
     isTurnInterrupted: (turn) =>
       params.inBand !== true && turn.outcome === RUN_OUTCOME.CANCELLED,
     isTurnError: (turn) => turn.error !== undefined,

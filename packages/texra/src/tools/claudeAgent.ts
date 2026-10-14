@@ -41,7 +41,7 @@ import {
 } from '@agent/trace';
 import type {
   ChildRunPort,
-  ChildRunStrategy,
+  ProcessChildStrategy,
 } from '@agent/runtime/childRunLoop';
 import { formatDelivery } from '@agent/runtime/deliveryEnvelope';
 import {
@@ -427,7 +427,7 @@ function buildClaudeAgentLaunch(params: {
   /** Release the fallback claim if the loop exits before promoting it. */
   releaseFallbackClaim: (() => void) | undefined;
   registry: AgentCliSessionRegistry;
-}): Effect.Effect<ChildRunStrategy<TurnResult>> {
+}): Effect.Effect<ProcessChildStrategy<TurnResult>> {
   const { childRun, runId, initialPrompt } = params;
   const { logger } = childRun;
 
