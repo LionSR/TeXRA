@@ -603,9 +603,7 @@ async function launchWaitingChild(options: {
       model: testModelCell(PARENT_MODEL),
       logger: noopTrace,
       parentStage: noopTrace.openStage('Run: chat'),
-      toolPolicy: {
-        approvalPromptsUnavailable: false,
-      },
+      toolPolicy: {},
       steps: noStep(),
     },
   };
@@ -1216,9 +1214,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
           run: {
             runId: PARENT_RUN_ID,
             session,
-            toolPolicy: {
-              approvalPromptsUnavailable: false,
-            },
+            toolPolicy: {},
           },
         });
         const reportView = yield* ExecutionsTool.call({

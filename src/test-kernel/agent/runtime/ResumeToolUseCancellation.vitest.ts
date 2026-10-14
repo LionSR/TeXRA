@@ -83,24 +83,11 @@ import {
   ResumeSessionUnavailableError,
   type ResumeToolUseFromResumeDataOptions,
 } from '@agent/runtime/executeAgent';
-import { qualifyAggregateId, RUN_OUTCOME, type RunId } from '@shared/schemas';
+import { qualifyAggregateId, type RunId } from '@shared/schemas';
 import { createFakeWorkspaceRoots } from '@test/support/FakePlatform';
 import { fakeProcessServices } from '@test/support/setupPlatform';
 import { createToolUseResumeData } from '@test/support/toolUseResumeTestUtils';
 import { ensureError } from '@utils/errors/errorMessage';
-
-/** Empty totals: this suite never bills a turn. */
-const NO_USAGE = {
-  firstInputTokens: 0,
-  totalInputTokens: 0,
-  totalOutputTokens: 0,
-  totalCost: 0,
-  totalCacheReadInputTokens: 0,
-  totalCacheMissInputTokens: 0,
-  totalCacheCreationInputTokens: 0,
-  totalReasoningTokens: 0,
-  totalToolUsePromptTokens: 0,
-};
 
 /** The session the resume runs on. */
 const LANE_SESSION = {
@@ -156,18 +143,6 @@ function buildResumeContext(runId: RunId): AgentLaunchContext {
     },
     attachedMemoryMisses: [],
   } as unknown as AgentLaunchContext;
-}
-
-/** A turn that completed with nothing to report. */
-function completedTurn() {
-  return {
-    outcome: RUN_OUTCOME.COMPLETED,
-    response: '',
-    files: [],
-    usage: NO_USAGE,
-    structured: undefined,
-    memoryMisses: [],
-  };
 }
 
 /** Handle stub for tests that only need the flow to run to completion. */
@@ -240,34 +215,6 @@ describe('resumeToolUseFromResumeData cancellation handoff', () => {
           yield* Effect.flip(resumeToolUseFromResumeData(snapshot)),
         ).toBeInstanceOf(ResumeSessionUnavailableError);
         expect(mocks.buildAgentLaunchContext).not.toHaveBeenCalled();
-      }),
-  );
-
-  it.effect(
-    'withholds approval-gated tools on a resume when the session surface cannot present prompts',
-    () =>
-      Effect.gen(function* () {
-        // An automatic resume passes no approval option: the fact is the
-        // session's, as an embedder with no approval channel declares it.
-        const runId = 'e80490' as RunId;
-        mocks.buildAgentLaunchContext.mockResolvedValueOnce(
-          buildResumeContext(runId),
-        );
-        mocks.runToolUse.mockReturnValueOnce(Effect.succeed(completedTurn()));
-        yield* Effect.provide(
-          resumeOnLane(createToolUseResumeData({ runId }), {
-            session: {
-              ...(LANE_SESSION as object),
-              interactions: { approvalPromptsUnavailable: true },
-            } as never,
-          }),
-          fakeProcessServices(),
-        ).pipe(Effect.ignore);
-        expect(mocks.buildAgentLaunchContext).toHaveBeenCalledWith(
-          expect.objectContaining({
-            toolPolicy: { approvalPromptsUnavailable: true },
-          }),
-        );
       }),
   );
 

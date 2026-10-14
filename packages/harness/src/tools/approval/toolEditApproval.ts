@@ -236,7 +236,7 @@ export const requestToolEditApproval = Effect.fn('requestToolEditApproval')(
       policy,
       promptRequired: approvalsEnabled,
       scopedBypass: isRunBypassed,
-      canPresent: run.toolPolicy.approvalPromptsUnavailable !== true,
+      canPresent: !session.interactions.approvalPromptsUnavailable,
     });
     if (decision === 'allow') return yield* acceptProposedAsIs();
     if (isTexraApprovalDenied(decision)) {
