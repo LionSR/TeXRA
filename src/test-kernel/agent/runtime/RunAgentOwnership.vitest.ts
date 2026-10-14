@@ -13,7 +13,7 @@
 import '@test/support/sessionGraphTestSetup';
 
 import { it } from '@effect/vitest';
-import { Effect, Fiber } from 'effect';
+import { Cause, Effect, Exit, Fiber } from 'effect';
 import { describe, expect } from 'vitest';
 
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
@@ -70,7 +70,11 @@ describe('root launch run ownership', { timeout: REAL_RUN_TIMEOUT }, () => {
       const stop = session.runs.stop(runId, { reason: 'user' });
       expect(stop.accepted()).toBe(true);
       yield* stop.settlement;
-      yield* Fiber.await(first);
+      // The first launch's stop is its fiber's interruption.
+      const exit = yield* Fiber.await(first);
+      expect(Exit.isFailure(exit) && Cause.hasInterrupts(exit.cause)).toBe(
+        true,
+      );
       expect(
         storedRows(roots.storage).filter(
           (row) => row.run === runId && row.type === 'run.activate',
@@ -105,15 +109,8 @@ describe('root launch run ownership', { timeout: REAL_RUN_TIMEOUT }, () => {
     () =>
       Effect.gen(function* () {
         const roots = testWorkspaceRoots();
-        const shown: unknown[] = [];
-        const session = yield* openTestDefaultSession({
-          roots,
-          interactions: {
-            emit: (event, payload) => {
-              shown.push({ event, payload });
-            },
-          },
-        });
+        // No UI is attached when the launch fails.
+        const session = yield* openTestDefaultSession({ roots });
         const runId = generateRunId();
         const faults = yield* sessionStoreFaults(roots.storage);
         yield* faults.failNext('appendAll', 'run.start');
@@ -124,6 +121,13 @@ describe('root launch run ownership', { timeout: REAL_RUN_TIMEOUT }, () => {
         expect(
           storedRows(roots.storage).filter((row) => row.run === runId),
         ).toEqual([]);
+        // A UI that attaches after the launch failed is still shown it.
+        const shown: unknown[] = [];
+        yield* session.interactions.use({
+          emit: (event, payload) => {
+            shown.push({ event, payload });
+          },
+        });
         expect(shown).toContainEqual({
           event: 'requestShowError',
           payload: expect.objectContaining({
