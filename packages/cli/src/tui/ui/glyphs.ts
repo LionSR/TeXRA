@@ -35,6 +35,10 @@ export const SKIP_CIRCLE = '⊘';
 /** Hollow dot: the off beat of a pulse, and a step queued but not started. */
 export const HOLLOW_DOT = '○';
 
+/** Disclosure markers for a collapsible tree row. */
+export const EXPANDED = '▾';
+export const COLLAPSED = '▸';
+
 /** Transcript row prefixes (trailing space included for the gutter). User rows
  *  (and the default fallback) reuse the same chevron as selects (POINTER) so the
  *  look stays consistent; error rows use a bang. Assistant rows carry no prefix
