@@ -36,6 +36,32 @@ export function coreEntries(rootDir) {
   });
 }
 
+/**
+ * The hosts' one internal door into the harness, `@agent/runtime`: not SDK
+ * surface and in no package `exports`, so it reaches no entry budget, but
+ * its names are reported beside the entries' and frozen shrink-only
+ * (`isShrinkOnly`): a new name, or a missing report, fails even under
+ * `--update`.
+ */
+export const HOST_DOOR = Object.freeze({
+  name: '@agent/runtime',
+  subpath: '.',
+  source: 'packages/harness/src/agent/runtime/index.ts',
+  report: 'harness.agent-runtime.api.md',
+});
+
+/** Whether report `name`'s export list may only shrink. */
+export const isShrinkOnly = (name) => name === HOST_DOOR.report;
+
+/** One export's line in a report; {@link reportedNames} reads it back. */
+const reportLine = (name, description) => `- \`${name}\` — \`${description}\``;
+
+/** The export names a report's text lists, in the shape {@link reportLine}
+ *  writes them: the committed side of a shrink-only comparison. */
+export function reportedNames(text) {
+  return [...text.matchAll(/^- `([^`]+)` — `/gm)].map((match) => match[1]);
+}
+
 function kindOf(declaration) {
   if (ts.isInterfaceDeclaration(declaration)) return 'interface';
   if (ts.isTypeAliasDeclaration(declaration)) return 'type';
@@ -118,9 +144,13 @@ function describe(checker, symbol) {
   return `${kind} ${symbol.name}: ${checker.typeToString(type, undefined, FULL)}`;
 }
 
-/** Report file name → report text, one per core package entry. */
+/** Report file name → `{ text, names }` (the report and the export names
+ *  it lists), one per core package entry and the host door. */
 export function apiReports(rootDir) {
-  const list = coreEntries(rootDir);
+  const list = [
+    ...coreEntries(rootDir),
+    { ...HOST_DOOR, file: path.join(rootDir, HOST_DOOR.source) },
+  ];
   const configPath = path.join(rootDir, 'tsconfig.build.json');
   const { config } = ts.readConfigFile(configPath, ts.sys.readFile);
   const { options } = ts.parseJsonConfigFileContent(config, ts.sys, rootDir);
@@ -136,22 +166,29 @@ export function apiReports(rootDir) {
       const exports = checker
         .getExportsOfModule(moduleSymbol)
         .toSorted((left, right) => left.name.localeCompare(right.name));
-      const lines = exports.map(
-        (symbol) => `- \`${symbol.name}\` — \`${describe(checker, symbol)}\``,
+      const lines = exports.map((symbol) =>
+        reportLine(symbol.name, describe(checker, symbol)),
       );
       const entry = subpath === '.' ? name : `${name}/${subpath.slice(2)}`;
       return [
         report,
-        [
-          `# \`${entry}\` API report`,
-          '',
-          `Generated from \`${path.relative(rootDir, file)}\` by \`node scripts/check-core-quality.mjs --update\`; do not edit. A diff here is a change to the public surface.`,
-          '',
-          `Exports: ${exports.length}`,
-          '',
-          ...lines,
-          '',
-        ].join('\n'),
+        {
+          names: exports.map((symbol) => symbol.name),
+          text: [
+            `# \`${entry}\` API report`,
+            '',
+            `Generated from \`${path.relative(rootDir, file)}\` by \`node scripts/check-core-quality.mjs --update\`; do not edit. ${
+              isShrinkOnly(report)
+                ? "The hosts' one internal door, not SDK surface: its names only shrink."
+                : 'A diff here is a change to the public surface.'
+            }`,
+            '',
+            `Exports: ${exports.length}`,
+            '',
+            ...lines,
+            '',
+          ].join('\n'),
+        },
       ];
     }),
   );
