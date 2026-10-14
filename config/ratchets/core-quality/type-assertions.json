@@ -5,7 +5,6 @@
   "packages/harness/src/agent/runtime/FollowUps.ts": 1,
   "packages/harness/src/agent/runtime/loop/toolGuard.ts": 1,
   "packages/harness/src/agent/runtime/loop/toolUseDispatch.ts": 2,
-  "packages/harness/src/agent/runtime/RunHandle.ts": 1,
   "packages/harness/src/agent/runtime/storedTurn.ts": 2,
   "packages/harness/src/agent/runtime/terminalResultToast.ts": 1,
   "packages/harness/src/controllers/session/projections.ts": 1,

@@ -1,7 +1,6 @@
 import { Effect, Fiber, SubscriptionRef } from 'effect';
 
 // Local imports
-import type { AgentTrace } from '@agent/trace';
 import { RunHandle, type RunFacts } from '@agent/runtime/RunHandle';
 import {
   registryOf,
@@ -34,13 +33,12 @@ export function testRunHandle(input: {
   agent: string;
   /** Defaults to a native agent identity for `agent`. */
   identity?: RunIdentity;
-  trace?: AgentTrace;
 }): RunHandle {
   const run: RunFacts = {
     runId: input.runId,
     identity: input.identity ?? { kind: 'agent', agent: input.agent },
   };
-  return new RunHandle(run, input.parent ?? null, input.trace);
+  return new RunHandle(run, input.parent ?? null);
 }
 
 /** A registry over an empty fold: no run has a view, which is what a

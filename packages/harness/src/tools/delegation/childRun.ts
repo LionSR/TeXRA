@@ -56,7 +56,7 @@ export const createChildRun = Effect.fn('createChildRun')(function* (
   // The run's canonical event publication, from its first event: the trace
   // is built with the session as its sink, and closed with the run.
   const trace = new TraceEmitter((event) => session.log.publish(runId, event));
-  const handle = new RunHandle({ runId, identity }, parentRunId, trace);
+  const handle = new RunHandle({ runId, identity }, parentRunId);
   // Registration already committed the launch, its configuration and its
   // activation together. The handle is tracked by the loop (`track`) once
   // its stop target exists, so a stop never finds this handle with nothing

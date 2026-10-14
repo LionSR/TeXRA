@@ -23,7 +23,7 @@ import {
   type StartInput,
   type WorkspaceRoots,
 } from '@texra-ai/harness';
-import { getHelperModelName } from '@agent/runtime';
+import { getHelperModelName } from '@agent/runtime/helperModelName';
 import { presentRunFailure } from '@agent/runtime/terminalResultToast';
 import type { SessionHostInteractions } from '@agent/runtime/HostInteractions';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
@@ -636,14 +636,18 @@ export const createHostRunActions = (
       merge: Effect.fn('HostRunActions.merge')(
         function* (baseFile, editedFile) {
           // A launch that cannot be built (no catalog, no merge task) says
-          // why, beside the merge docs.
+          // why, beside the merge docs, and logs it.
           const refuse = ({ message }: { readonly message: string }) =>
-            ports.present
-              .emit('requestShowError', {
-                message: `Merge: ${message}`,
-                docsPage: 'intelligent-merge',
-              })
-              .pipe(Effect.as(null));
+            Effect.logWarning(message).pipe(
+              withLogChannel(CHANNEL),
+              Effect.andThen(
+                ports.present.emit('requestShowError', {
+                  message,
+                  docsPage: 'intelligent-merge',
+                }),
+              ),
+              Effect.as(null),
+            );
           const config = yield* documentTaskConfig(
             {
               agent: 'merge',

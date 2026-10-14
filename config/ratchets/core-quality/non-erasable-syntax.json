@@ -3,7 +3,7 @@
   "packages/harness/src/agent/runtime/childRunLoop.ts": 2,
   "packages/harness/src/agent/runtime/historyQuery/HistoryQuery.ts": 3,
   "packages/harness/src/agent/runtime/ModelRetryGate.ts": 1,
-  "packages/harness/src/agent/runtime/RunHandle.ts": 2,
+  "packages/harness/src/agent/runtime/RunHandle.ts": 1,
   "packages/harness/src/agent/runtime/runRegistry.ts": 1,
   "packages/harness/src/agent/trace/TraceEmitter.ts": 5,
   "packages/harness/src/agent/workspaceAgents/WorkspaceAgentsController.ts": 1,
