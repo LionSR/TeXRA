@@ -100,6 +100,23 @@ function cliWorkflowResult(
 }
 
 describe('CLI workflow output resolution', () => {
+  it('reports a task that failed before it proposed with no documents', async () => {
+    const cwd = await makeTempDir('texra-workflow-output-', tempDirs);
+    const failed = workflowResult([], RUN_OUTCOME.FAILED);
+    const { structured: _documents, ...output } = failed.output;
+
+    const resolved = await resolveOutput(
+      'out.tex',
+      undefined,
+      { ...failed, output },
+      testContext(cwd),
+      { storageRoot: join(cwd, 'storage') },
+    );
+
+    expect(resolved.outcome).toBe(RUN_OUTCOME.FAILED);
+    expect(resolved.output.documents.outputs).toEqual([]);
+  });
+
   it('fails --output-dir resolution when an expected multi-input output is missing', async () => {
     const cwd = await makeTempDir('texra-workflow-output-', tempDirs);
     const runOutput = await writeRunFile(cwd, 'r1/a.tex', 'A');

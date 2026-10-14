@@ -32,6 +32,13 @@ import { STDIN_WORKFLOW_INPUT_BASENAME } from './workflowInputs';
 import type { RunEndResult } from '@texra-ai/harness';
 import type { AgentConfigPayload } from '@texra-ai/harness/schemas';
 
+/** The documents of a task that ended before it proposed any. */
+const NO_DOCUMENTS: DocumentsResult = {
+  outputs: [],
+  compileFailures: [],
+  diffs: [],
+};
+
 /** Resolve a user-supplied path against `cwd` when it isn't already absolute. */
 function joinCwdRelative(target: string, cwd: string): string {
   return path.isAbsolute(target) ? target : path.join(cwd, target);
@@ -323,12 +330,18 @@ export function resolveWorkflowOutput(
     // A document task's recipe returns its documents, diffs included: its
     // run's `structured` value, which the CLI's result names `documents`.
     const { structured, ...output } = result.output;
-    const documents = documentsResultOf(structured);
-    if (documents === undefined) {
-      return yield* Effect.die(
-        new Error(`Document task ${result.runId} ended without its documents.`),
-      );
-    }
+    // A task that failed or stopped before it proposed returned none: it
+    // reports its own outcome with no documents. A completed one without
+    // them is a defect.
+    const documents =
+      documentsResultOf(structured) ??
+      (result.outcome === RUN_OUTCOME.COMPLETED
+        ? yield* Effect.die(
+            new Error(
+              `Document task ${result.runId} ended without its documents.`,
+            ),
+          )
+        : NO_DOCUMENTS);
     const runDirectory = runDirUnder(options.storageRoot, result.runId);
     const baseResult = {
       ...result,

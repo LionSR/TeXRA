@@ -19,6 +19,10 @@ All notable changes to this project will be documented in this file.
   `kind="document-task"`). Runs written by an earlier build are listed as
   such and are not resumed. An older window is refused by a newer service
   and asked to update.
+- **Only a document task's proposed revision carries diffs.** Earlier
+  revisions' files no longer have a `diff=` attribute in a subagent
+  delivery or an entry in `texra run --json`'s `documents.diffs`; the
+  proposed revision's diffs are still against the pre-run snapshot.
 - **A store this build wrote is refused by an earlier build.** Going back
   to an older build after this one refuses the whole store as newer than
   that build (`DatabaseStoreNewer`) rather than reading it wrong.

@@ -180,13 +180,17 @@ export function createNativeSubagentStrategy(
       wallTimeMs: number,
     ) {
       if (cachedDelivery === undefined) {
-        // A recipe's value reads as its block says (`AgentBlock.result`).
-        const recipe = yield* readRecipeResult(
-          config,
-          turn.output,
-          params.runId,
-          params.session.roots,
-        );
+        // A completed recipe's value reads as its block says
+        // (`AgentBlock.result`); a failed one is delivered as its failure.
+        const recipe =
+          turn.outcome === RUN_OUTCOME.COMPLETED
+            ? yield* readRecipeResult(
+                config,
+                turn.output,
+                params.runId,
+                params.session.roots,
+              )
+            : undefined;
         // The formatter is the one fallible step left here, and its throw is
         // this turn's failure — not a defect — exactly as it was when the
         // loop adopted this method's rejected promise.
