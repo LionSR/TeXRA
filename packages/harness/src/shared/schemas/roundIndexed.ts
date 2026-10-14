@@ -16,15 +16,9 @@
 import { z } from 'zod';
 
 /**
- * Round number → items for that round. Runtime keys are strings (JSON), so a
- * `Record<string, T[]>` (e.g. a parsed {@link roundIndexedRecord}) is
- * assignable to this type; index it with a number.
- */
-export type RoundIndexed<T> = { [round: number]: T[] };
-
-/**
- * A caller-visible view of a {@link RoundIndexed} record: the same shape, with
- * mutation closed off at the type level.
+ * Round number → items for that round, read-only. Runtime keys are strings
+ * (JSON), so a parsed {@link roundIndexedRecord} is assignable to this type;
+ * index it with a number.
  *
  * Store accessors hand this back instead of a defensive copy. Every reader
  * only enumerates, filters, or forwards these records, so the copy bought
@@ -56,7 +50,7 @@ const RoundKeyStringSchema = z
  * and by round-POINTER fields that reference a round
  * without holding a per-round collection (`DiffResult.baseRound` /
  * `revisedRound` in `diffResult.ts`). Those pointer fields are a genuinely
- * different concept from {@link RoundIndexed} — "which round does this diff
+ * different concept from {@link ReadonlyRoundIndexed} — "which round does this diff
  * compare" rather than "items grouped by round" — so they are not folded into
  * the record container, but they still mean the same "this integer is a
  * round number" (non-negative integer, matching {@link RoundKeyStringSchema}) and
@@ -78,7 +72,7 @@ export function roundIndexedRecord<T extends z.ZodType>(valueSchema: T) {
 /**
  * Entries with numeric round keys, ascending by round. Prefer plain
  * `Object.entries()`/`Object.values()` when the record is already known to
- * come from a schema-validated {@link RoundIndexed} (its keys already
+ * come from a schema-validated {@link ReadonlyRoundIndexed} (its keys already
  * enumerate in ascending order per spec); reach for this when a caller wants
  * `[round, items]` pairs rather than the enumeration order itself, or is
  * handling a record that was not necessarily schema-validated.

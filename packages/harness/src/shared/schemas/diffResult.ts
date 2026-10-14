@@ -25,7 +25,7 @@ const DiffMetadataSchema = z.object({
  * (which round the base file came from — null when the base isn't
  * round-scoped, e.g. an original pre-round source), not a round-indexed
  * collection: it shares {@link RoundNumberSchema} with the round-indexed
- * item fields but deliberately does not join the {@link RoundIndexed}
+ * item fields but deliberately does not join the {@link ReadonlyRoundIndexed}
  * container shape. `revisedRound` (see {@link DiffResultDisplaySchema}) is
  * derived from `revised.round` rather than duplicated here.
  */
