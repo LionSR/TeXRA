@@ -50,9 +50,7 @@ describe('task-group projection from stage events', () => {
           id: 'round-1',
           label: 'Round 1',
           parentId: 'run-1',
-          kind: 'round',
-          index: 1,
-          total: 2,
+          kind: 'phase',
         },
         100,
       ],
@@ -77,9 +75,7 @@ describe('task-group projection from stage events', () => {
         endTime: 180,
         status: RUN_OUTCOME.COMPLETED,
         parentGroupId: 'run-1',
-        kind: 'round',
-        index: 1,
-        total: 2,
+        kind: 'phase',
       },
     ]);
   });
@@ -88,7 +84,7 @@ describe('task-group projection from stage events', () => {
     expect(
       project([
         [{ type: 'stage.start', id: 'p', label: 'Map', kind: 'phase' }, 1],
-        [{ type: 'stage.start', id: 'r', label: 'r0', kind: 'round' }, 2],
+        [{ type: 'stage.start', id: 'r', label: 'r0', kind: 'session' }, 2],
         [{ type: 'stage.end', id: 'never', status: RUN_OUTCOME.FAILED }, 3],
       ]),
     ).toStrictEqual([
@@ -104,7 +100,7 @@ describe('task-group projection from stage events', () => {
         name: 'r0',
         startTime: 2,
         status: RUN_PHASE.RUNNING,
-        kind: 'round',
+        kind: 'session',
       },
     ]);
   });

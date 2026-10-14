@@ -83,8 +83,8 @@ function record(d: Draft, event: TranscriptEvent): void {
       // A new model-turn boundary starts fresh: whatever MODEL_RESPONSE
       // stream the previous turn may have opened is no longer this turn's
       // to reuse. Tool-use turns are session stages containing several
-      // inner model/tool rounds, while other flows expose round stages.
-      if (event.kind === 'round' || event.kind === 'session') {
+      // inner model/tool rounds.
+      if (event.kind === 'session') {
         ix.pendingModelResponseId = undefined;
       }
       const index = event.index ?? undefined;

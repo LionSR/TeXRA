@@ -11,6 +11,7 @@ import {
   STRUCTURED_OUTPUT_TOOL_NAME,
   type JsonValue,
   type RunInput,
+  type ToolResultPayload,
 } from '@shared/schemas';
 
 import type { RunHistoryRow } from './historyTurns';
@@ -30,6 +31,9 @@ export type RunFacts = {
   /** The settled value of a `submit_output` call, whether the response or
    *  one of its scripts issued it, or of a script run's handed-down call. */
   readonly structured: { readonly value: JsonValue } | null;
+  /** The result a script run's handed-down call settled with: no model
+   *  answers it, so its turn ends there, and an error fails it. */
+  readonly handedDown: ToolResultPayload['result'] | null;
   /** The turn whose final-tool nudge was appended, so it is asked once. */
   readonly finalToolTurn: number | null;
   /** The final-tool nudge stands unanswered: the next response is forced. */
@@ -44,6 +48,7 @@ export const NO_FACTS: RunFacts = {
   edited: [],
   toolCalls: 0,
   structured: null,
+  handedDown: null,
   finalToolTurn: null,
   forceFinalTool: false,
   answerFinalized: false,
@@ -106,10 +111,10 @@ export function foldRunFacts<F extends RunFacts>(
 }
 
 /** `facts` after one settlement: the files it edited, whether it ran, and,
- *  when it is the run's submitted output, its value. */
+ *  when it is the run's output, its value (and a handed-down call's result). */
 function afterResult<F extends RunFacts>(
   facts: F,
-  p: Extract<RunHistoryRow, { type: 'tool.result' }>['payload'],
+  p: ToolResultPayload,
   pending: PendingResponse | null,
 ): F {
   const ran = p.disposition === 'executed' || p.disposition === 'failed';
@@ -117,29 +122,30 @@ function afterResult<F extends RunFacts>(
   const fresh = [
     ...new Set(edits.map(({ path }) => path).filter(Boolean)),
   ].filter((path) => !facts.edited.includes(path));
-  const submits = isOutputCall(pending, p.callId);
+  const output = outputOf(pending, p.callId);
   const value = p.result.status === 'executed' ? p.result.value : undefined;
   return {
     ...facts,
     edited: fresh.length === 0 ? facts.edited : [...facts.edited, ...fresh],
     toolCalls: facts.toolCalls + (ran ? 1 : 0),
-    structured: submits && value !== undefined ? { value } : facts.structured,
+    structured:
+      output !== null && value !== undefined ? { value } : facts.structured,
+    ...(output === 'handed-down' && { handedDown: p.result }),
   };
 }
 
-/** Whether `callId` submits the run's structured output: a `submit_output`
- *  call, the response's or one of its scripts' (a script's call names its
- *  tool on its `script.call`), or a script run's handed-down call, the one
- *  call of a response no model produced. */
-function isOutputCall(
+/** What `callId` is to the run's output: a script run's handed-down call,
+ *  the one call of a response no model produced; a `submit_output` call,
+ *  the response's or one of its scripts' (a script's call names its tool on
+ *  its `script.call`); or neither. */
+function outputOf(
   pending: PendingResponse | null,
   callId: string,
-): boolean {
-  if (pending === null) return false;
+): 'handed-down' | 'submitted' | null {
+  if (pending === null) return null;
   const own = pending.calls.find((call) => call.callId === callId);
+  if (own !== undefined && pending.assistant.origin === null)
+    return 'handed-down';
   const tool = pending.records[callId]?.script?.toolName ?? own?.toolName;
-  return (
-    tool === STRUCTURED_OUTPUT_TOOL_NAME ||
-    (own !== undefined && pending.assistant.origin === null)
-  );
+  return tool === STRUCTURED_OUTPUT_TOOL_NAME ? 'submitted' : null;
 }

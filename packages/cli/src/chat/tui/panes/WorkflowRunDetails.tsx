@@ -27,7 +27,6 @@ import {
 } from '@shared/runs/runStatusDisplay';
 import { taskGroupDisplayStatus } from '@shared/runs/taskGroupProjection';
 import { type CompileFailure } from '@texra/shared/plugins/documentOutputs';
-import { filterNotNullish } from '@utils/core';
 import { formatCompactDuration } from '@utils/text/stringUtils';
 
 import { COMPACTION_ACTIVITY_STATUS_STYLE } from './transcriptEntryLayout';
@@ -56,7 +55,6 @@ interface WorkflowRunDetailGroup {
   readonly key: string;
   readonly lines: readonly WorkflowRunDetailLine[];
   readonly priority: number;
-  readonly planned: boolean;
 }
 
 function taskGroupLine(
@@ -80,20 +78,14 @@ function taskGroupLine(
   };
 }
 
-/** A workflow-agent round the run has not reached yet. */
-const ROUND_PLANNED_LABEL = 'Planned';
-
-function lifecyclePriority(
-  status: TaskGroupStatus | undefined,
-  currentRound: boolean,
-  planned: boolean,
-): number {
+function lifecyclePriority(status: TaskGroupStatus): number {
   if (status === RUN_PHASE.FAILED) return 0;
   if (status === RUN_PHASE.RUNNING) return 1;
-  if (currentRound) return 2;
-  if (!planned) return 3;
-  return 5;
+  return 3;
 }
+
+/** A round's results rank after failed and running groups. */
+const ROUND_PRIORITY = 3;
 
 function workflowRunDetailGroups(
   facts: WorkflowRunFacts | undefined,
@@ -105,18 +97,8 @@ function workflowRunDetailGroups(
   // ordering priority cannot disagree about an unclosed group.
   const displayStatus = (group: TaskGroup): TaskGroupStatus =>
     taskGroupDisplayStatus(group, facts.runDurableOutcome);
-  const roundGroups = new Map<number, TaskGroup>();
   const rounds = new Set<number>();
   for (const group of facts.taskGroups) {
-    const index = group.kind === 'round' ? group.index : undefined;
-    if (index !== undefined) {
-      roundGroups.set(index, group);
-      rounds.add(index);
-      if (group.total !== undefined) {
-        for (let round = 0; round < group.total; round += 1) rounds.add(round);
-      }
-      continue;
-    }
     if (group.kind === 'phase') continue;
     groups.push({
       key: `lifecycle:${group.id}`,
@@ -127,8 +109,7 @@ function workflowRunDetailGroups(
           displayStatus(group),
         ),
       ],
-      priority: lifecyclePriority(displayStatus(group), false, false) + 1,
-      planned: false,
+      priority: lifecyclePriority(displayStatus(group)) + 1,
     });
   }
   for (const [round] of [
@@ -141,36 +122,15 @@ function workflowRunDetailGroups(
     rounds.add(round);
   }
 
-  const plannedTotal = Math.max(
-    0,
-    ...[...roundGroups.values()]
-      .map((group) => group.total)
-      .filter(filterNotNullish),
-  );
-  const currentRound = Math.max(-1, ...roundGroups.keys());
   for (const round of [...rounds].toSorted((left, right) => left - right)) {
-    const group = roundGroups.get(round);
-    const planned = group === undefined && round < plannedTotal;
-    const lines: WorkflowRunDetailLine[] = [];
-    if (group) {
-      lines.push(
-        taskGroupLine(
-          group,
-          formatRoundStageLabel({ index: round, total: group.total }),
-          displayStatus(group),
-        ),
-      );
-    } else {
-      const label = planned
-        ? `${formatRoundStageLabel({ index: round, total: plannedTotal })} ${ROUND_PLANNED_LABEL}`
-        : `${formatRoundStageLabel({ index: round })} results`;
-      lines.push({
+    const lines: WorkflowRunDetailLine[] = [
+      {
         key: `round:${round}`,
-        text: `${PENDING_BOX} ${label}`,
+        text: `${PENDING_BOX} ${formatRoundStageLabel({ index: round })} results`,
         color: COLOR_BORDER,
         role: 'lifecycle',
-      });
-    }
+      },
+    ];
 
     const outputs = facts.outputFilesByRound[round] ?? [];
     if (outputs.length > 0) {
@@ -217,16 +177,7 @@ function workflowRunDetailGroups(
         role: 'alert',
       });
     }
-    groups.push({
-      key: `round:${round}`,
-      lines,
-      priority: lifecyclePriority(
-        group && displayStatus(group),
-        group !== undefined && round === currentRound,
-        planned,
-      ),
-      planned,
-    });
+    groups.push({ key: `round:${round}`, lines, priority: ROUND_PRIORITY });
   }
 
   return groups;
@@ -234,8 +185,8 @@ function workflowRunDetailGroups(
 
 /**
  * Select a compact, structurally valid workflow summary for a constrained
- * viewport. Alerts and the current lifecycle receive space before future
- * plans; an artifact is never shown without its round and section headings.
+ * viewport. Alerts receive space before lifecycle and artifacts; an artifact
+ * is never shown without its round and section headings.
  */
 export function selectWorkflowRunDetailLines(
   facts: WorkflowRunFacts | undefined,
@@ -285,10 +236,8 @@ export function selectWorkflowRunDetailLines(
     }
   }
 
-  // Then retain active, failed, current, and completed lifecycle context.
-  for (const group of rankedGroups) {
-    if (!group.planned) addLine(group, 0);
-  }
+  // Then retain active, failed, and completed lifecycle context.
+  for (const group of rankedGroups) addLine(group, 0);
 
   // Generated paths require both their round and "Generated files" heading.
   for (const group of rankedGroups) {
@@ -307,11 +256,6 @@ export function selectWorkflowRunDetailLines(
       addLine(group, headingIndex);
       addLine(group, index);
     }
-  }
-
-  // Planned rounds are useful orientation, but never displace live evidence.
-  for (const group of rankedGroups) {
-    if (group.planned) addLine(group, 0);
   }
 
   return groups.flatMap((group) => {

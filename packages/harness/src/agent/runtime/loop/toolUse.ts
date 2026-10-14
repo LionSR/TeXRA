@@ -22,8 +22,9 @@
  * waits for its input.
  *
  * A run opened on a script (`AgentConfig.script`: a background script, a
- * task's recipe) makes that one call instead of asking its model
- * and ends when it settles.
+ * task's recipe) opens on that one call, handed down in its opening batch
+ * instead of asked of its model; its settlement (`RunState.handedDown`)
+ * ends the turn.
  */
 
 import { Deferred, Effect, Exit, type Scope, SynchronizedRef } from 'effect';
@@ -62,7 +63,6 @@ import {
   handedDown,
   finalizedRows,
   positionRow,
-  scriptSettlement,
 } from './rows';
 import {
   openRun,
@@ -145,9 +145,6 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
   const access = yield* ModelAccess;
   const { runId, session, logger } = run;
   const isChild = () => runs.parentOf(runId) !== null;
-  // A script's run: it opens on the call it was handed and ends when that
-  // call settles.
-  const script = run.config.script ?? null;
   // A conversation claims its own input lease, never a parent's (FollowUps).
   const followUps = yield* claimFollowUps(run);
   const compaction = yield* backgroundCompaction({
@@ -235,15 +232,17 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
       ...{ modelId: bound.modelId, ...binding },
     };
     // Keep preparation interruptible inside the masked acquire.
-    const { content, offered } = yield* Effect.interruptible(
+    const { content, offered, handed } = yield* Effect.interruptible(
       Effect.gen(function* () {
         // A script's run renders no prompt: what it runs is its call.
-        if (script !== null) {
+        const { script } = run.config;
+        if (script != null) {
           const step = yield* openStep(opening, 'request');
           const content: InputPart[] = [
             { kind: 'text', text: `Run the script "${script.title}".` },
           ];
-          return { content, offered: step.rows };
+          const handed = [yield* handedDown(run, script)];
+          return { content, offered: step.rows, handed };
         }
         const { inputs } =
           run.opening ?? (yield* Effect.die(new Error(`${runId}: no opening`)));
@@ -289,7 +288,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
         content.push(...media.value.parts, { kind: 'text', text: userRequest });
         const hooked = yield* openingHooks(run, opening, userRequest);
         content.push(...hooked.parts);
-        return { content, offered: [...step.rows, ...hooked.rows] };
+        return { content, offered: [...step.rows, ...hooked.rows], handed: [] };
       }),
     );
     const { activated = [], attachedMemoryMisses: misses = [] } =
@@ -306,6 +305,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
       ...offered,
       configRow(runId, run.config, bound.modelId, binding),
       positionRow(runId, opening, 'turn.ready'),
+      ...handed,
     ];
     yield* cell
       .append(rows, run.entry.opening)
@@ -321,17 +321,14 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
     let state = yield* cell.current;
     // A turn begins at a settled boundary; a resumed one where its rows left.
     const begins = state.phase === 'waiting' || state.phase === 'halted';
-    /** The turn's completed exit; the stage closes with its own verdict. */
-    const completeTurn = (at: RunState): RunExit => ({
-      state: at,
-      outcome: 'completed',
-    });
-    const scriptEnd = Effect.fn('toolUse.scriptEnd')(function* (at: RunState) {
-      const settled = yield* scriptSettlement(session, runId);
-      if (settled?.failed !== true) return completeTurn(at);
-      response = settled.reply;
-      return { state: at, outcome: 'failed' } satisfies RunExit;
-    });
+    /** The turn's exit; the stage closes with its own verdict. A failed
+     *  handed-down call fails the turn, and its error is the reply. */
+    const completeTurn = (at: RunState): RunExit => {
+      if (at.handedDown?.status !== 'error')
+        return { state: at, outcome: 'completed' };
+      response = at.handedDown.error;
+      return { state: at, outcome: 'failed' };
+    };
     const body = Effect.gen(function* () {
       if (begins) {
         response = '';
@@ -339,8 +336,6 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
           positionRow(runId, { ...state, turn: state.turn + 1 }, 'turn.begin'),
         ]);
       }
-      if (script !== null && state.round === 0)
-        state = yield* cell.append(yield* handedDown(run, state, script));
       /**
        * The policy a committed text-only response runs, read off the rows:
        * a blank turn after a tool result asks once more, the terminal tool
@@ -397,13 +392,11 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
           );
           state = dispatched.state;
           joined?.delivered();
-          // A script's run ends with its one call.
-          if (script !== null && !joined) return yield* scriptEnd(state);
           if (dispatched.endTurn && !joined) return completeTurn(state);
           continue;
         }
-        // A script's run asks no model: delivered, it ends as its call did.
-        if (script !== null && state.round > 0) return yield* scriptEnd(state);
+        // A handed-down call asks no model: delivered, the turn ends.
+        if (state.handedDown !== null) return completeTurn(state);
         // A committed text-only response whose policy has not run: the
         // response this turn just received, or one a resume finds.
         const last =
@@ -579,9 +572,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
         // delivery, and a Stop hook's block or input already queued.
         const { rows: hooks, block } = yield* stopHooks(run, turn, response);
         const goesOn =
-          script === null &&
-          !run.toolPolicy.stopAfterCycle &&
-          turn.outcome === 'completed';
+          !run.toolPolicy.stopAfterCycle && turn.outcome === 'completed';
         const settlement =
           start.turns && goesOn && block === null
             ? yield* start.turns.settleBoundary(result(turn.outcome, state))
@@ -614,9 +605,13 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
           });
         }
         if (block !== null) continue;
-        if (run.toolPolicy.stopAfterCycle && turn.outcome === 'completed')
+        // A one-shot run ends with its completed turn; a handed-down
+        // call's run with its turn, however it ended.
+        if (
+          (run.toolPolicy.stopAfterCycle && turn.outcome === 'completed') ||
+          state.handedDown !== null
+        )
           return finish(state, turn.outcome);
-        if (script !== null) return finish(state, turn.outcome);
         if (settlement !== null)
           yield* Effect.uninterruptible(settlement.settled);
       }

@@ -181,7 +181,7 @@ describe('sessionFold', () => {
       type: 'stage.start',
       id: 'round',
       label: 'Round 1',
-      kind: 'round',
+      kind: 'session',
     });
     const opened = log.emit(CHILD, 1020, {
       type: 'stream.start',

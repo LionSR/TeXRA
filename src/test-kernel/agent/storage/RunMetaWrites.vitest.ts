@@ -213,7 +213,7 @@ describe('run metadata updates', () => {
         const cell = yield* session.runHistory.open(id, {
           activation: () => Effect.succeed([]),
         });
-        const opened = yield* cell.append([
+        yield* cell.append([
           appendRow(id, [
             { role: 'user', content: [{ kind: 'text', text: 'polish' }] },
           ]),
@@ -224,10 +224,9 @@ describe('run metadata updates', () => {
           steps: yield* SynchronizedRef.make(null),
           logger: {},
         };
-        const rows = yield* handedDown(
+        const row = yield* handedDown(
           // The only fields `handedDown` reads: no step, so no registry.
           run as unknown as Parameters<typeof handedDown>[0],
-          opened,
           {
             code: 'return 1;',
             title: 'polish',
@@ -237,12 +236,10 @@ describe('run metadata updates', () => {
             options: {},
           },
         );
-        expect(
-          rows.map((row) =>
-            row.type === 'model.message' ? row.payload.kind : row.type,
-          ),
-        ).toEqual(['handed-down', 'run.position']);
-        const state = yield* cell.append(rows);
+        expect(row.type === 'model.message' ? row.payload.kind : row.type).toBe(
+          'handed-down',
+        );
+        const state = yield* cell.append([row]);
         expect(state.pendingResponse?.calls.map((c) => c.toolName)).toEqual([
           'script',
         ]);

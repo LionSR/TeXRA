@@ -175,8 +175,8 @@ const withoutEffects = (result: Settlement['result']): Settlement['result'] => {
   return rest;
 };
 
-const endsTurn = (settlement: Pick<Settlement, 'result'>): boolean =>
-  settlement.result.status === 'executed' && settlement.result.endTurn === true;
+const endsTurn = (settled: Pick<Settlement, 'result'> | null): boolean =>
+  settled?.result.status === 'executed' && settled.result.endTurn === true;
 
 /**
  * Attachment bytes captured as immutable content before the settlement
@@ -384,11 +384,11 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
   const pending = initial.pendingResponse;
   if (pending === null) return { state: initial, endTurn: false };
   const { responseId } = pending;
-  // A stored call nothing of which ran is reported, not run, unless a
-  // script's run made it (no model to report to).
+  // A stored call nothing of which ran is reported, not run, unless it was
+  // handed down (no model to report to).
   const replan =
     cell.opened.pendingResponse?.responseId === responseId &&
-    !run.config.script;
+    pending.assistant.origin !== null;
   const calls = localCallsOf(pending.assistant.content);
   const { entries } = yield* ToolRegistry;
   const pluginOf = new Map(step.offered.map((t) => [t.name, t.plugin]));
@@ -1080,8 +1080,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
         ),
       );
     }
-    const settled = settledOf(yield* cell.current, fact.callId);
-    return settled !== null && endsTurn(settled);
+    return endsTurn(settledOf(yield* cell.current, fact.callId));
   });
 
   yield* Effect.forEach(
@@ -1101,12 +1100,13 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
       new Error('The pending response changed during dispatch.'),
     );
   }
-  // A script's calls are not the response's: its own result says whether
-  // one of them ended the turn.
-  const endTurn = settledPending.calls.some((fact) => {
-    const settled = callSettlementOf(settledPending, fact.callId);
-    return settled !== null && endsTurn(settled);
-  });
+  // A handed-down call has no model to answer it, so it ends the turn; else
+  // one of the response's own calls (never a script's) may, by its result.
+  const endTurn =
+    settledState.handedDown !== null ||
+    settledPending.calls.some(({ callId }) =>
+      endsTurn(callSettlementOf(settledPending, callId)),
+    );
   const bound = yield* SynchronizedRef.get(run.model);
   const media: { readonly path: string; readonly part: InputPart }[] = [];
   const results = settledPending.calls.map((fact, ordinal) => {

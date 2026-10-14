@@ -35,7 +35,7 @@ describe('createTestRunTrace RunPhase-native group rows (issue #7993)', () => {
   it('defaults a stage end to the literal RunOutcome.COMPLETED', () => {
     const { trace, group } = attachRecorder();
 
-    const stage = trace.openStage('r0', { kind: 'round' });
+    const stage = trace.openStage('r0', { kind: 'session' });
     stage.end();
 
     expect(group(stage.id)?.status).toBe(RUN_OUTCOME.COMPLETED);
@@ -44,7 +44,7 @@ describe('createTestRunTrace RunPhase-native group rows (issue #7993)', () => {
   it('records a failed stage end as RunOutcome.FAILED', () => {
     const { trace, group } = attachRecorder();
 
-    const stage = trace.openStage('r0', { kind: 'round' });
+    const stage = trace.openStage('r0', { kind: 'session' });
     stage.end(RUN_OUTCOME.FAILED);
 
     expect(group(stage.id)?.status).toBe(RUN_OUTCOME.FAILED);
@@ -52,14 +52,14 @@ describe('createTestRunTrace RunPhase-native group rows (issue #7993)', () => {
 });
 
 describe('createTestRunTrace stage kind (issue #7267)', () => {
-  it("preserves a round stage's kind onto its closed group", () => {
+  it("preserves a stage's kind onto its closed group", () => {
     const { trace, group } = attachRecorder();
 
-    const round = trace.openStage('r0', { kind: 'round', index: 0 });
+    const round = trace.openStage('r0', { kind: 'session' });
     round.end();
 
     expect(group(round.id)).toMatchObject({
-      kind: 'round',
+      kind: 'session',
       status: RUN_OUTCOME.COMPLETED,
     });
   });
@@ -120,7 +120,7 @@ describe('createTestRunTrace response.finalized (issue #7086)', () => {
   it('does not let an earlier round leak its stream id into a later round', () => {
     const { trace, finalize, rows } = attachRecorder();
 
-    const round0 = trace.openStage('r0', { kind: 'round', index: 0 });
+    const round0 = trace.openStage('r0', { kind: 'session' });
     const output = trace.openRun(MESSAGE_TYPES.MODEL_RESPONSE);
     output.append('Let me check that.');
     output.finalize();
@@ -129,7 +129,7 @@ describe('createTestRunTrace response.finalized (issue #7086)', () => {
     // Round 1 never opens its own stream (e.g. a non-streaming provider
     // call) — its `response.finalized` must append a new entry, not
     // overwrite round 0's already-closed stream entry.
-    const round1 = trace.openStage('r1', { kind: 'round', index: 1 });
+    const round1 = trace.openStage('r1', { kind: 'session' });
     finalize('Final answer.');
     round1.end();
 
@@ -145,7 +145,7 @@ describe('createTestRunTrace response.finalized (issue #7086)', () => {
   it('does not let an earlier invocation in the same round stage overwrite a later finalized response', () => {
     const { trace, finalize, rows } = attachRecorder();
 
-    const round = trace.openStage('r0', { kind: 'round', index: 0 });
+    const round = trace.openStage('r0', { kind: 'session' });
     const toolRequest = trace.openRun(MESSAGE_TYPES.MODEL_RESPONSE);
     toolRequest.append('I will inspect the file.');
     toolRequest.finalize();

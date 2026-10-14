@@ -1,12 +1,10 @@
 import { z } from 'zod';
 
-// Round Stage (ephemeral round label from typed stage.start metadata)
+// Round Stage (the round an output or a diff names)
 
 const RoundStageSchema = z.object({
-  /** Zero-based round/turn index. */
+  /** Zero-based round index. */
   index: z.int().nonnegative(),
-  /** Planned total, when known. */
-  total: z.int().positive().optional(),
 });
 
 export type RoundStage = z.infer<typeof RoundStageSchema>;

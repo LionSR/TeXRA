@@ -89,8 +89,8 @@ async function writeCanonicalRunFixtures(
             type: 'stage.start',
             aggregateId: id,
             id: `${runFixture.runId}-running-group`,
-            label: 'Persisted round',
-            kind: 'round',
+            label: 'Persisted turn',
+            kind: 'session',
           },
           {
             type: 'response.finalized',

@@ -22,10 +22,7 @@ import type {
 } from '@shared/session/sessionView';
 import { isInFlightPhase } from '@shared/runs/runStatus';
 import { taskGroupDisplayStatus } from '@shared/runs/taskGroupProjection';
-import {
-  formatRoundStageLabel,
-  formatRunStatusLabel,
-} from '@shared/runs/runStatusDisplay';
+import { formatRunStatusLabel } from '@shared/runs/runStatusDisplay';
 import { compareBySeqNo } from '@shared/runs/runOrdering';
 import {
   scriptStages,
@@ -438,13 +435,9 @@ export class TaskGroupList extends LitElement {
       this.durableOutcome ?? undefined,
     );
     const statusIcon = terminalStatusIcon(status);
-    const title =
-      group.kind === 'round' && group.index !== undefined
-        ? formatRoundStageLabel({
-            index: group.index,
-            total: group.total,
-          })
-        : formatWorkflowPhaseHeading(workflowPhaseHeadingOfGroup(group));
+    const title = formatWorkflowPhaseHeading(
+      workflowPhaseHeadingOfGroup(group),
+    );
     return html`
       <span class="group-status-icon">
         ${waIcon(statusIcon, {
