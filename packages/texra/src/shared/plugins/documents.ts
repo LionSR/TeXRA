@@ -38,8 +38,8 @@ const DocumentsOutputSchema = z.strictObject({
   rounds: z.array(RoundOutputSchema),
   /** The proposed revision's diffs, once the task proposed: the one record
    *  of them, which its run's result is derived from. Optional, so a row
-   *  written before the task proposed (or by an earlier build) reads as
-   *  it was written. */
+   *  written before the task proposed (or a v1 row) reads as it was
+   *  written. */
   ...DocumentDiffsSchema.shape,
 });
 
@@ -47,7 +47,9 @@ const DocumentsOutputSchema = z.strictObject({
 export const DOCUMENTS_OUTPUT_ARM = {
   plugin: 'documents',
   kind: 'output',
-  version: 1,
+  // v2: a proposed task's fact carries its `diffs` (no upcaster: a v1 fact
+  // reads as is, and an earlier build reads a v2 one as a newer build's).
+  version: 2,
   schema: DocumentsOutputSchema,
   upcasters: [],
 } as const;
