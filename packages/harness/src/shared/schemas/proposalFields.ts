@@ -2,7 +2,7 @@ import { z } from 'zod';
 
 import { AgentSourceSchema } from './agent';
 import { NullableFileFieldsSchema } from './fileFields';
-import { ToolConfigSchema } from './toolConfig';
+import { JsonValueSchema } from './jsonValue';
 
 export const BaseProposalFieldsSchema = z.object({
   agent: z.string(),
@@ -34,11 +34,12 @@ export const BaseProposalFieldsSchema = z.object({
     .nullish(),
 });
 
-/** A task's files and the tool configuration its options give it;
- *  empty on a chat delegation. */
+/** A task's files and the options its launching plugin gives it (as the
+ *  plugin reads them; the harness reads nothing inside); a chat delegation
+ *  has no files and no options. */
 export const TaskProposalFieldsSchema = NullableFileFieldsSchema.omit({
   editedFile: true,
-}).extend({ toolConfig: ToolConfigSchema });
+}).extend({ options: z.record(z.string(), JsonValueSchema).nullish() });
 
 /** File fields shape consumed by {@link getProposalFileGroups} — the helper
  *  behind every proposal file list (tool-row model, ProposalRequestPanel,
@@ -78,16 +79,4 @@ export function getProposalFileGroups(data: FileFields): ProposalFileGroup[] {
     { label: 'Output', files: data.outputFiles ?? [], clickable: true },
     { label: 'Memories', files: data.memories ?? [], clickable: false },
   ].filter((g) => g.files.length > 0);
-}
-
-/** What a proposal launches, as its approval copy names it. */
-export function agentProposalLabel(proposal: {
-  readonly task: boolean;
-  readonly toolConfig?: { readonly reflect?: boolean };
-}): string {
-  if (!proposal.task) return 'agent';
-  // A reflecting task also runs a critic after every revision but the last.
-  return proposal.toolConfig?.reflect
-    ? 'document task, with critic'
-    : 'document task';
 }

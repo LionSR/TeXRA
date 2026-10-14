@@ -179,12 +179,12 @@ export interface ChildLaunch {
   };
   /** A task: the child opens on what the launching plugin builds for the
    *  approved agent (its recipe and outputs; null for an agent with no task
-   *  block), and the proposal says it works over `files`. */
+   *  block); the proposal says it works over `files` with `options`. */
   readonly task: {
     readonly configFor: (
       chosen: AgentProposal,
     ) => Pick<AgentConfig, 'script' | 'outputFiles'> | null;
-    readonly toolConfig: Record<string, unknown>;
+    readonly options: NonNullable<AgentProposal['options']>;
   } | null;
 }
 
@@ -499,7 +499,7 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
           model: launch.model ?? null,
           schema: outputSchema ?? null,
           ...files,
-          toolConfig: task?.toolConfig ?? null,
+          options: task?.options ?? null,
           memories: launch.memories,
           workingDirectory: launch.workingDirectory ?? null,
           id: launch.id ?? null,
@@ -592,8 +592,8 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
     contextFiles,
     mediaFiles: media.map(({ file }) => file),
     outputFiles: files.outputFiles,
-    // A task's file options reach the child as its tool configuration.
-    ...(task !== null && { toolConfig: task.toolConfig }),
+    // A task's options reach the child through its plugin's recipe.
+    ...(task !== null && { options: task.options }),
     ...(task === null && { rootUserInstruction: call.instruction }),
   });
 
@@ -629,8 +629,8 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
     launches.count += 1;
   }
 
-  // The proposal's `script` names the script that asked; the child's is set below.
-  const { task: _task, script: _askingScript, ...approved } = decided.proposal;
+  // The asking script's `script`; the child's (with `options`) is set below.
+  const { task: _t, script: _s, options: _o, ...approved } = decided.proposal;
   // An approval may pick another agent: a task's recipe is that agent's.
   const taskConfig = task?.configFor(decided.proposal);
   if (taskConfig === null)

@@ -4,7 +4,7 @@
  * persona opened on this script (`AgentConfig.script`) instead of a model
  * turn; the script calls the persona once per revision through `agent()`
  * and does everything else with the document tools (`./documentTools`).
- * A task launched with `toolConfig.reflect` also has the bundled `critic`
+ * A task launched with the `reflect` option also has the bundled `critic`
  * review each revision but the last, and the next revision reads its
  * critique; the revision count stays the task's. The persona's name is the
  * one value the source takes; a run records the source it ran, so a resume
@@ -21,6 +21,11 @@ import {
 } from '@agent/index/agentRegistry';
 import type { AgentEntry } from '@agent/index';
 import { agentKey, agentName } from '@shared/schemas';
+import {
+  DOCUMENT_TASK_BLOCK,
+  DocumentTaskOptionsSchema,
+  type DocumentTaskOptions,
+} from '@texra/shared/plugins/documents';
 import { documentTaskOf } from '@texra/tools/documents/documentTask';
 import type { AgentConfig } from '@texra-ai/harness/schemas';
 
@@ -89,9 +94,10 @@ type DocumentTaskPatch = Required<
 /**
  * The patch that launches `config` as the document task of `entry`, or null
  * when `entry` has no task block: its run opens on the recipe and offers the
- * recipe's tools, and its revisions' agent calls were approved with the
- * launch. The outputs are the launch's explicit list unless it names only
- * inputs, else the task's own (`task.outputs`).
+ * recipe's tools with the launch's `options`, and its revisions' agent
+ * calls were approved with the launch. The outputs are the launch's
+ * explicit list unless it names only inputs, else the task's own
+ * (`task.outputs`).
  */
 export function documentTaskPatch(
   config: Pick<
@@ -99,6 +105,7 @@ export function documentTaskPatch(
     'agent' | 'agentSource' | 'inputFiles' | 'outputFiles'
   >,
   entry: AgentEntry,
+  options: DocumentTaskOptions,
 ): DocumentTaskPatch | null {
   const task = documentTaskOf(entry);
   if (task === null) return null;
@@ -114,6 +121,8 @@ export function documentTaskPatch(
       title: config.agent,
       tools: [...DOCUMENT_TASK_TOOLS],
       kind: 'recipe',
+      block: DOCUMENT_TASK_BLOCK.key,
+      options: DocumentTaskOptionsSchema.parse(options),
     },
   };
 }
@@ -133,7 +142,11 @@ class DocumentTaskRefused extends Data.TaggedError('DocumentTaskRefused')<{
  */
 export const documentTaskConfig = Effect.fn('documentTaskConfig')(function* <
   C extends Pick<AgentConfig, 'agent'> & Partial<AgentConfig>,
->(config: C, stores: WorkspaceAgentsStores) {
+>(
+  config: C,
+  stores: WorkspaceAgentsStores,
+  options: Partial<DocumentTaskOptions> = {},
+) {
   const resolve = resolveAgentForLaunch(
     stores,
     config.agent,
@@ -156,6 +169,7 @@ export const documentTaskConfig = Effect.fn('documentTaskConfig')(function* <
       outputFiles: config.outputFiles ?? [],
     },
     entry,
+    DocumentTaskOptionsSchema.parse(options),
   );
   if (patch === null)
     return yield* new DocumentTaskRefused({

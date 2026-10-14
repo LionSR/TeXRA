@@ -591,6 +591,8 @@ export const extensionScenes: Record<string, () => TemplateResult> = {
           title: 'review',
           tools: ['agent'],
           kind: 'recipe',
+          block: 'task',
+          options: {},
         },
       }),
     });

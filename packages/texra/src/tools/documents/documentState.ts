@@ -51,7 +51,10 @@ import {
   failureContextFromLogs,
 } from '@texra/agent/output/compileFailureRoundContext';
 import { DocumentsStateKey } from '@texra/shared/settingsView/documentsSettings';
-import type { DocumentTask } from '@texra/shared/plugins/documents';
+import {
+  documentTaskOptions,
+  type DocumentTask,
+} from '@texra/shared/plugins/documents';
 import {
   documentTaskOf,
   taskFileVars,
@@ -218,7 +221,7 @@ export const revisionPrompt = Effect.fn('documents.revisionPrompt')(function* (
   const fs = yield* FileSystem.FileSystem;
   const parts: string[] = [];
   const files = revisionFiles(docs, revision);
-  if (run.config.toolConfig.attachTeXCount && files.length > 0) {
+  if (documentTaskOptions(run.config).attachTeXCount && files.length > 0) {
     const counted = yield* texCount(docs, files);
     if (counted) parts.push(counted);
   }
@@ -335,7 +338,7 @@ const revisionMedia = Effect.fn('documents.revisionMedia')(function* (
         yield* deps.fileService.ensureMirroredInRoundDir(revision);
       return yield* media.processInputFiles(
         files,
-        run.config.toolConfig,
+        documentTaskOptions(run.config),
         run.config.mediaFiles.map((file) =>
           deps.fileService.createLocation(file),
         ),

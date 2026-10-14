@@ -15,11 +15,7 @@ import type { ToolServices } from '@agent/runtime/ToolServices';
 
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { type SessionHandle } from '@agent/runtime/SessionHandle';
-import {
-  RUN_PHASE,
-  DEFAULT_TOOL_CONFIG,
-  qualifyAggregateId,
-} from '@shared/schemas';
+import { RUN_PHASE, qualifyAggregateId } from '@shared/schemas';
 import { RunIdSchema, type RunId, type RunPhase } from '@shared/schemas';
 import { closeSessionOf } from '@test/support/sessionEnd';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
@@ -122,7 +118,6 @@ const config = {
   mediaFiles: [],
   editedFile: null,
   memories: [],
-  toolConfig: DEFAULT_TOOL_CONFIG,
 } as AgentConfig;
 
 /** Installs a real filesystem-backed storage root for sidecar persistence tests. */

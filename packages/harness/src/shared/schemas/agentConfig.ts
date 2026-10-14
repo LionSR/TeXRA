@@ -5,7 +5,7 @@ import { DEFAULT_AGENT_MODEL } from '@shared/constants/defaultModels';
 import { AgentSourceSchema, InlinePersonaSchema } from './agent';
 import { AgentDelegationScopeSchema } from './workspaceAgents';
 import { NullableFileFieldsSchema } from './fileFields';
-import { ToolConfigSchema } from './toolConfig';
+import { JsonValueSchema } from './jsonValue';
 
 /** Agent selected when launch input names none. */
 export const DEFAULT_WORKFLOW_AGENT = 'correct';
@@ -30,6 +30,17 @@ const CliOutputFieldsSchema = z.object({
    * `texra chat` session. Preserved across resume.
    */
   teamId: z.string().nullish(),
+});
+
+/** What every script a run opens on records: its source, title, the tools
+ *  it is offered, and its wall-clock limit. */
+const ScriptFieldsSchema = z.strictObject({
+  code: z.string().min(1),
+  title: z.string().min(1),
+  /** The tools the run offers the script, by name. */
+  tools: z.array(z.string().min(1)),
+  /** The script's wall-clock limit, when it set one. */
+  timeoutMs: z.int().positive().nullish(),
 });
 
 /** A run's launch configuration, as its `run.config` row records it. */
@@ -62,7 +73,6 @@ const AgentConfigObjectSchema = NullableFileFieldsSchema.extend({
       error: '`editedFiles` was removed; name the edited file in `editedFile`',
     })
     .optional(),
-  toolConfig: ToolConfigSchema,
   /** Memory display paths attached to this delegation (e.g. /memories/conventions.md). */
   memories: z.array(z.string()).prefault([]),
   /** Working directory override for subagent tool calls (e.g. a git worktree). */
@@ -85,20 +95,21 @@ const AgentConfigObjectSchema = NullableFileFieldsSchema.extend({
    * task's recipe. Absent for every other run.
    */
   script: z
-    .strictObject({
-      code: z.string().min(1),
-      title: z.string().min(1),
-      /** The tools the run offers the script, by name. */
-      tools: z.array(z.string().min(1)),
-      /** The script's wall-clock limit, when it set one. */
-      timeoutMs: z.int().positive().nullish(),
-      /** Who wrote it. `background`: the parent's model, sent to the
-       *  background; the run is that script, and its `agent` calls propose
-       *  themselves. `recipe`: a plugin (a task's recipe); the run
-       *  is its agent's, and its `agent` calls were approved with its
-       *  launch. */
-      kind: z.enum(['background', 'recipe']),
-    })
+    .discriminatedUnion('kind', [
+      /** The parent's model wrote it and sent it to the background; the run
+       *  is that script, and its `agent` calls propose themselves. */
+      ScriptFieldsSchema.extend({ kind: z.literal('background') }),
+      /** A plugin wrote it: a task's recipe. The run is its agent's, and its
+       *  `agent` calls were approved with its launch. */
+      ScriptFieldsSchema.extend({
+        kind: z.literal('recipe'),
+        /** The agent-file block (`AgentBlock.key`) whose task it runs. */
+        block: z.string().min(1),
+        /** The launch's options for that task, as its plugin reads them
+         *  (the documents plugin's figure, TeXCount and critic switches). */
+        options: z.record(z.string(), JsonValueSchema),
+      }),
+    ])
     .nullish(),
 });
 

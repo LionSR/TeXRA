@@ -6,6 +6,13 @@ All notable changes to this project will be documented in this file.
 
 ### Breaking Changes
 
+- **SDK: a task's options travel with its recipe, not as `toolConfig`.**
+  `AgentConfig.toolConfig` is gone: a recipe's `script` now names its
+  plugin's block (`block`) and carries that task's `options`, which only
+  the plugin reads, and a task proposal carries `options` in place of
+  `toolConfig`. `ChildLaunch.task.toolConfig` is `options`. Runs written by
+  an earlier build are listed as such and are not resumed. An older window
+  is refused by a newer service and asked to update.
 - **SDK: document tasks are TeXRA's, not the harness's.** The harness no
   longer reads an agent file's `task:` block: a plugin owns a block of its
   own (`Plugin.agentBlock`, an `AgentBlock` with its key and schema, read

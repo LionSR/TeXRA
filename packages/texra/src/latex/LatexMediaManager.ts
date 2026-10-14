@@ -7,7 +7,7 @@ import { Effect, FileSystem } from 'effect';
 // Local imports
 import type { WorkspaceFs } from '@platform/rootedFs';
 import type { FileLocation } from '@shared/schemas';
-import { ToolConfig } from '@shared/schemas';
+import type { DocumentTaskOptions } from '@texra/shared/plugins/documents';
 import { filterNotNullish } from '@utils/core';
 import { pathToLocationIn } from '@utils/files/fileLocation';
 import { RunFileService } from '@utils/files/runStorage';
@@ -508,7 +508,7 @@ export class LatexMediaManager {
    */
   processInputFiles(
     inputFiles: readonly FileLocation[],
-    cfg: ToolConfig,
+    cfg: DocumentTaskOptions,
     extraMediaFiles: readonly FileLocation[] = [],
   ): Effect.Effect<FileLocation[], Error, MediaServices> {
     return Effect.gen({ self: this }, function* () {

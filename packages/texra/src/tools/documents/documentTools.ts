@@ -22,7 +22,10 @@ import {
   ToolError,
   type FileLocation,
 } from '@shared/schemas';
-import { documentsSummary } from '@texra/shared/plugins/documents';
+import {
+  documentsSummary,
+  documentTaskOptions,
+} from '@texra/shared/plugins/documents';
 import {
   compileFailuresOf,
   runCompileCheck,
@@ -206,7 +209,7 @@ const revisionContext = Effect.fn('documents.revisionContext')(function* (
       mediaFiles: revised.media,
       memories: docs.run.config.memories,
       revisions,
-      reflect: docs.run.config.toolConfig.reflect,
+      reflect: documentTaskOptions(docs.run.config).reflect,
     },
   };
 });

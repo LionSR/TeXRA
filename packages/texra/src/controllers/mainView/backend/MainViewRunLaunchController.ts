@@ -18,15 +18,11 @@ import {
   resolveTeamLaunch,
   TEAM_SELECTION_REQUIRED_MESSAGE,
 } from '@common/teams/TeamPlan';
-import {
-  DEFAULT_TOOL_CONFIG,
-  ToolConfigSchema,
-  type AgentDelegationScope,
-  type SessionType,
-} from '@shared/schemas';
+import { type AgentDelegationScope, type SessionType } from '@shared/schemas';
 import type { HostRequest } from '@texra/shared/session/hostRequest';
 import { createTeamCatalogPorts } from '@texra/controllers/mainView/teamCatalogPorts';
 import { documentTaskConfig } from '@texra/agent/output/documentRecipe';
+import { DocumentTaskOptionsSchema } from '@texra/shared/plugins/documents';
 import { pastedImageFullPath } from '@texra/utils/files/pastedImageUtils';
 import { assertNever } from '@utils/core';
 import { isPastedImage } from '@utils/files/pastedImageName';
@@ -63,15 +59,16 @@ const buildLaunchRequest = Effect.fn('buildLaunchRequest')(function* (
     };
   }
 
-  const toolConfigResult = task
-    ? ToolConfigSchema.safeParse(launch)
-    : { success: true as const, data: DEFAULT_TOOL_CONFIG };
-  if (!toolConfigResult.success) {
-    const issue = toolConfigResult.error.issues[0];
-    const path = issue?.path.join('.') || 'toolConfig';
+  // A task's options are the form's switches; a chat takes none.
+  const optionsResult = task
+    ? DocumentTaskOptionsSchema.safeParse(launch)
+    : undefined;
+  if (optionsResult !== undefined && !optionsResult.success) {
+    const issue = optionsResult.error.issues[0];
+    const path = issue?.path.join('.') || 'options';
     return {
       valid: false,
-      message: `Invalid tool configuration (${path}): ${issue?.message ?? 'validation failed'}`,
+      message: `Invalid task options (${path}): ${issue?.message ?? 'validation failed'}`,
     };
   }
 
@@ -91,14 +88,13 @@ const buildLaunchRequest = Effect.fn('buildLaunchRequest')(function* (
     // A task's output paths are implicit in the input list; the task
     // stamps the generated filenames its definition declares.
     outputFiles: [],
-    toolConfig: toolConfigResult.data,
     mediaFiles: launch.mediaFiles.map((file) =>
       isPastedImage(file) ? pastedImageFullPath(roots.storage, file) : file,
     ),
   };
   // A document task runs its agent's recipe over the files.
   const launched = task
-    ? yield* documentTaskConfig(config, roots).pipe(
+    ? yield* documentTaskConfig(config, roots, optionsResult?.data).pipe(
         Effect.map((built) => ({ ok: true as const, config: built })),
         Effect.catchTags({
           DocumentTaskRefused: (refused) =>

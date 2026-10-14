@@ -228,7 +228,14 @@ describe('run metadata updates', () => {
           // The only fields `handedDown` reads: no step, so no registry.
           run as unknown as Parameters<typeof handedDown>[0],
           opened,
-          { code: 'return 1;', title: 'polish', tools: [], kind: 'recipe' },
+          {
+            code: 'return 1;',
+            title: 'polish',
+            tools: [],
+            kind: 'recipe',
+            block: 'task',
+            options: {},
+          },
         );
         expect(
           rows.map((row) =>

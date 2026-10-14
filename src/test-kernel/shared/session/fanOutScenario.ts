@@ -12,7 +12,6 @@ import {
   emptyRunEndOutput,
   MESSAGE_TYPES,
   RunIdSchema,
-  ToolConfigSchema,
   type FoldInput,
   type LocalRuntimeState,
   type RunIdentity,
@@ -376,7 +375,6 @@ export function buildScenario({ proposal = false } = {}) {
           contextFiles: ['refs.bib'],
           mediaFiles: [],
           outputFiles: [],
-          toolConfig: ToolConfigSchema.parse(undefined),
           script: {
             title: 'review',
             source: [

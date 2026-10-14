@@ -50,8 +50,11 @@ the root "Compatibility and format retirement" stance made mechanical: `storeSch
 and moves a store written before 1.0 aside whole at open (`texra.db.pre1`,
 never read again, settings included) and refuses one of a newer schema. Row
 kinds carry their own versions (`packages/harness/src/shared/schemas/rowVersions.ts`), read by
-the row codec (`rowCodec.ts`) alone; until the 1.0 release freezes them, every
-kind is unreleased and changes with no upcaster and no bump.
+the row codec (`rowCodec.ts`) alone. Before 1.0 a kind changes with no
+upcaster; its version is bumped when an older build's row would read wrong (or
+fail), so that row reads as an earlier build's (`DatabaseRowEarlier`, its run
+listed as written by an earlier build) and never as damaged or silently
+stripped.
 
 ## Core quality
 
