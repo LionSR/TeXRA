@@ -2,12 +2,13 @@
 import * as path from 'node:path';
 
 // Local imports
-import type { RunId, FileLocation, OutputFileInfo } from '@shared/schemas';
+import type { RunId, FileLocation } from '@shared/schemas';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { installPlatform } from '@test/support/setupPlatform';
 import { fakePath } from '@test/support/FakePlatform';
 import { rootedFsLayer } from '@test/support/fsTestUtils';
 import { spiedTrace } from '@test/support/spiedTrace';
+import type { OutputFileInfo } from '@texra/shared/plugins/documentOutputs';
 import { DocumentsStateKey } from '@texra/shared/settingsView/documentsSettings';
 import type { OutputState } from '@texra/agent/output/outputState';
 import type { runCompileCheck } from '@texra/agent/output/compileCheck';

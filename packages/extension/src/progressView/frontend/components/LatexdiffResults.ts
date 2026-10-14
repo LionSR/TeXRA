@@ -4,7 +4,6 @@
 import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 import { repeat } from 'lit/directives/repeat.js';
-import { ifDefined } from 'lit/directives/if-defined.js';
 
 // Side-effect imports - register WA components
 import '@awesome.me/webawesome/dist/components/details/details.js';
@@ -12,10 +11,13 @@ import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 
 // Local imports - shared styles
-import type { DiffResultDisplay, DiffStatus } from '@shared/schemas';
 import type { TeXRAIconName } from '@shared/iconNames';
 import { SessionUiEvents } from '@texra/shared/session/uiEvents';
-import { formatRoundLabel } from '@texra/shared/plugins/documentOutputs';
+import {
+  formatRoundLabel,
+  latexdiffDisplayName,
+  type LatexdiffEntry,
+} from '@texra/shared/plugins/documentOutputs';
 import { designTokens, commonViewStyles } from '@ui/styles';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 
@@ -28,15 +30,16 @@ import { buildDetailsSummary } from '../formatters/htmlBuilders';
 import { bannerDetailsWaDetailsStyles } from '../styles/logEntryStyles';
 
 /** Status wa-icon name lookup for latexdiff entries. */
-const LATEXDIFF_STATUS_ICONS: Record<DiffStatus, TeXRAIconName> = {
-  success: 'check',
-  error: 'circle-exclamation',
-};
+const LATEXDIFF_STATUS_ICONS: Record<LatexdiffEntry['status'], TeXRAIconName> =
+  {
+    ok: 'check',
+    failed: 'circle-exclamation',
+  };
 
 /** Screen-reader labels for the otherwise icon-only result status. */
-const LATEXDIFF_STATUS_LABELS: Record<DiffStatus, string> = {
-  success: 'Comparison succeeded',
-  error: 'Comparison failed',
+const LATEXDIFF_STATUS_LABELS: Record<LatexdiffEntry['status'], string> = {
+  ok: 'Comparison succeeded',
+  failed: 'Comparison failed',
 };
 
 @customElement('latexdiff-results')
@@ -90,14 +93,11 @@ export class LatexdiffResults extends LitElement {
     `,
   ];
 
-  /** Log ID for tracking */
-  @property({ attribute: false }) logId = '';
+  /** The round the entries diff. */
+  @property({ attribute: false }) round = 0;
 
-  /** Run ID for tracking */
-  @property({ attribute: false }) runId = '';
-
-  /** Diff result entries to display */
-  @property({ attribute: false }) entries: DiffResultDisplay[] = [];
+  /** The round's latexdiff entries, from the run's documents. */
+  @property({ attribute: false }) entries: readonly LatexdiffEntry[] = [];
 
   private handleFileClick(filePath: string): void {
     this.dispatchEvent(
@@ -110,9 +110,6 @@ export class LatexdiffResults extends LitElement {
     label: string,
     accessibleLabel: string,
   ): TemplateResult {
-    if (!filePath) {
-      return html`<span>${label}</span>`;
-    }
     return html`<button
       type="button"
       class="file-link"
@@ -124,40 +121,31 @@ export class LatexdiffResults extends LitElement {
     </button>`;
   }
 
-  private renderEntry(entry: DiffResultDisplay, index: number): TemplateResult {
-    const {
-      baseFile,
-      revisedFile,
-      diffFile,
-      displayName,
-      baseRound,
-      revisedRound,
-      status,
-      message,
-      runId,
-    } = entry;
-
-    const icon = LATEXDIFF_STATUS_ICONS[status];
-    const statusLabel = LATEXDIFF_STATUS_LABELS[status];
+  private renderEntry(entry: LatexdiffEntry, index: number): TemplateResult {
+    const displayName = latexdiffDisplayName(entry);
+    const statusLabel = LATEXDIFF_STATUS_LABELS[entry.status];
     const baseLabel =
-      baseRound === null
+      entry.baseRound === null
         ? displayName
-        : `${displayName} [${formatRoundLabel(baseRound)}]`;
-    const revisedLabel = `[${formatRoundLabel(revisedRound)}]`;
+        : `${displayName} [${formatRoundLabel(entry.baseRound)}]`;
+    const revisedLabel = `[${formatRoundLabel(this.round)}]`;
 
     const entryId = `latexdiff-entry-${index}`;
     return html`
-      <li id=${entryId} class="detail-item" data-run-id=${ifDefined(runId)}>
-        ${waIcon(icon, { label: statusLabel })}
-        ${this.renderFileLink(baseFile, baseLabel, `Open base file: ${baseLabel}`)}
+      <li id=${entryId} class="detail-item">
+        ${waIcon(LATEXDIFF_STATUS_ICONS[entry.status], { label: statusLabel })}
+        ${this.renderFileLink(entry.base.absolutePath, baseLabel, `Open base file: ${baseLabel}`)}
         ${waIcon('arrow-right', { className: 'arrow' })}
         ${this.renderFileLink(
-          revisedFile,
+          entry.revised.absolutePath,
           revisedLabel,
           `Open revised file ${revisedLabel} for ${displayName}`,
         )}
-        (${this.renderFileLink(diffFile, 'diff', `Open ${displayName} diff`)})
-        ${message ? html`<wa-tooltip for=${entryId}>${message}</wa-tooltip>` : nothing}
+        ${
+          entry.status === 'ok'
+            ? html`(${this.renderFileLink(entry.diff.absolutePath, 'diff', `Open ${displayName} diff`)})`
+            : html`<wa-tooltip for=${entryId}>${entry.error}</wa-tooltip>`
+        }
       </li>
     `;
   }
@@ -173,13 +161,7 @@ export class LatexdiffResults extends LitElement {
         : `Latexdiff results (${this.entries.length})`;
 
     return html`
-      <wa-details
-        class="banner-details"
-        appearance="plain"
-        open
-        data-log-id=${ifDefined(this.logId || undefined)}
-        data-run-id=${ifDefined(this.runId || undefined)}
-      >
+      <wa-details class="banner-details" appearance="plain" open>
         ${buildDetailsSummary({
           iconName: 'code-compare',
           label: summaryText,
@@ -188,7 +170,7 @@ export class LatexdiffResults extends LitElement {
           ${repeat(
             this.entries,
             (entry, index) =>
-              `${entry.baseFile}-${entry.revisedFile}-${entry.baseRound ?? 'base'}-${entry.revisedRound ?? 'rev'}-${index}`,
+              `${entry.base.absolutePath}-${entry.revised.absolutePath}-${entry.baseRound ?? 'base'}-${index}`,
             (entry, index) => this.renderEntry(entry, index),
           )}
         </ul>

@@ -1,6 +1,7 @@
 import { Stream } from 'effect';
 
-import type { OutputFileInfo, RunId } from '@shared/schemas';
+import type { RunId } from '@shared/schemas';
+import type { OutputFileInfo } from '@texra/shared/plugins/documentOutputs';
 import {
   DOCUMENTS_OUTPUT_KEY,
   documentRoundsOf,

@@ -20,11 +20,7 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 import { formatBannerContentTemplate } from './logFormatters/bannerFormatters';
 import { formatCompactionActivityTemplate } from './logFormatters/compactionActivityFormatter';
 import { formatContextManagementTemplate } from './logFormatters/contextManagementFormatters';
-import {
-  formatFileListTemplate,
-  formatLatexdiffTemplate,
-  formatMissingOutputsTemplate,
-} from './logFormatters/dataFormatters';
+import { formatFileListTemplate } from './logFormatters/dataFormatters';
 import {
   formatDefaultLogMessageTemplate,
   formatErrorTemplate,
@@ -56,8 +52,6 @@ const ROW_FORMATTERS: RowFormatters = {
   tool: formatToolUseTemplate,
   webSearch: formatWebSearchTemplate,
   fileList: formatFileListTemplate,
-  missingOutputs: formatMissingOutputsTemplate,
-  latexdiff: formatLatexdiffTemplate,
   contextManagement: formatContextManagementTemplate,
   progressStatus: formatProgressStatusTemplate,
   compactionActivity: formatCompactionActivityTemplate,

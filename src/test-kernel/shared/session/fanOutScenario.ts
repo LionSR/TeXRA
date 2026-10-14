@@ -307,6 +307,8 @@ export function buildScenario({ proposal = false } = {}) {
           outputs: [],
           compileFailures: [],
           missingOutputs: [],
+          latexdiffs: [],
+          reply: null,
         },
       ],
     },

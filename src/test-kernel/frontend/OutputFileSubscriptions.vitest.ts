@@ -142,6 +142,8 @@ async function emitOutputFiles(
           round: emissions,
           compileFailures: [],
           missingOutputs: [],
+          latexdiffs: [],
+          reply: null,
           outputs: [
             {
               source: absolutePath,

@@ -14,9 +14,9 @@
  * not a trace arm: the storage finalizer writes it once, and the in-memory
  * `ResultEvent` below is that row named by its run.
  *
- * Host-specific facts that don't belong in the core union (TeXRA's
- * file-list payloads, latexdiff, missing outputs, etc.) ride a log arm:
- * `trace.info(text, { messageType, data })`.
+ * Display text rides a log arm (`trace.info(text, { messageType, data })`)
+ * with a core message type; a plugin's own facts are `plugin.fact` rows
+ * (`ToolResult.facts`), never a log payload.
  */
 import type { RunId, SessionEventDraft } from '@shared/schemas';
 import type { RunStateRowType } from '@shared/session/runStateFold';

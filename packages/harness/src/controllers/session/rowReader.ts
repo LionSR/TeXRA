@@ -15,6 +15,7 @@ import {
   RUN_EARLIER_BUILD_MESSAGE,
 } from '@shared/runs/runStatusDisplay';
 import {
+  pluginFactFloor,
   RunIdSchema,
   type LocalRuntimeState,
   type RunId,
@@ -31,6 +32,8 @@ import {
   aggregateOf,
   decodeRow,
   EARLIER_RUNS,
+  EVENT_COLUMNS,
+  EVENT_FROM,
   RowSchema,
   type SqlRow,
 } from './rowCodec';
@@ -41,6 +44,15 @@ const EarlierRowSchema = z.object({
   commit: z.int(),
   type: z.string(),
 });
+
+/** Every run's plugin facts, when an arm has a floor: a fact's version is
+ *  in its payload, so the reader decodes each (`decodeRow`) to find the
+ *  runs holding one an earlier build wrote. */
+const earlierPluginFactRows = (arms: PluginArms): string | null =>
+  Object.values(arms).some((arm) => pluginFactFloor(arm) > 1)
+    ? `SELECT ${EVENT_COLUMNS} FROM ${EVENT_FROM}
+        WHERE s.kind = 'run' AND e.type = 'plugin.fact'`
+    : null;
 
 /** A statement runner over the reader's connection. */
 type Exec<E> = (
@@ -98,16 +110,33 @@ export function rowReader<E>(
           Effect.andThen(Effect.logWarning(message)),
           withLogChannel('sessionDatabase'),
         );
+  const markEarlier = (runId: RunId, row: DatabaseRowEarlier) => {
+    mark(runId, true);
+    if (!earlier.has(runId)) earlier.set(runId, row);
+  };
+  const facts = earlierPluginFactRows(arms);
   /** Find, once, every run holding an earlier build's row. */
   const scan = Effect.gen(function* () {
-    for (const [statement, params] of scanned ? [] : EARLIER_RUNS)
+    if (scanned) return;
+    for (const [statement, params] of EARLIER_RUNS)
       for (const row of yield* exec(statement, params)) {
         const { logicalId, commit, type } = EarlierRowSchema.parse(row);
-        const runId = RunIdSchema.parse(logicalId);
-        mark(runId, true);
-        if (!earlier.has(runId))
-          earlier.set(runId, new DatabaseRowEarlier({ commit, type }));
+        markEarlier(
+          RunIdSchema.parse(logicalId),
+          new DatabaseRowEarlier({ commit, type }),
+        );
       }
+    for (const row of facts === null ? [] : yield* exec(facts, [])) {
+      const decoded = decodeRow(row, arms);
+      if (
+        Result.isFailure(decoded) &&
+        decoded.failure._tag === 'DatabaseRowEarlier'
+      )
+        markEarlier(
+          RunIdSchema.parse(RowSchema.parse(row).logicalId),
+          decoded.failure,
+        );
+    }
     scanned = true;
   });
   const read = (rows: readonly SqlRow[], whole: boolean) =>

@@ -6,14 +6,17 @@ import {
   AgentConfigSchema,
   type AgentConfig,
 } from '@agent/core/definition/AgentConfig';
-import type { OutputFileInfo, RunId } from '@shared/schemas';
+import type { RunId } from '@shared/schemas';
 import { asDocumentTask } from '@test/support/ProgressControllerHarnesses';
 import {
   ProgressFollowUpController,
   type ProgressFollowUpModelOption,
   type ProgressFollowUpState,
 } from '@texra/controllers/progressView/ProgressFollowUpController';
-import { type CompileFailure } from '@texra/shared/plugins/documentOutputs';
+import {
+  type CompileFailure,
+  type OutputFileInfo,
+} from '@texra/shared/plugins/documentOutputs';
 import {
   createOutputFile,
   createWorkflowConfig,

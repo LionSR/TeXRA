@@ -18,7 +18,7 @@ import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 // Local imports
 import {
   fileLocationDisplayPath,
-  type OutputFileInfo,
+  type FileLocation,
   type RunId,
 } from '@shared/schemas';
 import type { TeXRAIconName } from '@shared/iconNames';
@@ -27,8 +27,10 @@ import {
   getEffectiveDiffBase,
   outputDiffCounts,
   outputDisplayName,
-  roundIndexedEntries,
   formatRoundLabel,
+  OUTPUT_DOCUMENTS_TAG,
+  type LatexdiffEntry,
+  type OutputFileInfo,
 } from '@texra/shared/plugins/documentOutputs';
 import type { HostRequest } from '@texra/shared/session/hostRequest';
 import type { Surface } from '@texra/shared/session/surface';
@@ -42,6 +44,8 @@ import { getComposedPathElement } from '../utils';
 
 // Local imports - styles
 import { fileListStyles } from './FileList.styles';
+
+import './LatexdiffResults';
 
 /** The `data-command` of a file name: open it in the editor. */
 const OPEN_FILE = 'openFile';
@@ -120,20 +124,39 @@ export class FileList extends LitElement {
     string,
     CompileFailure[]
   > = {};
+  /** What each round should have written and did not. */
+  @property({ attribute: false }) missingByRound: Record<
+    string,
+    readonly string[]
+  > = {};
+  @property({ attribute: false }) latexdiffsByRound: Record<
+    string,
+    readonly LatexdiffEntry[]
+  > = {};
+  /** Each round's kept reply, opened to check what it should have held. */
+  @property({ attribute: false }) repliesByRound: Record<string, FileLocation> =
+    {};
 
   /** The surface owns the hint's dismissal (PRD 9). */
   @property({ attribute: false }) surface: Surface | null = null;
 
   // Flattened from failuresByRound to avoid O(rounds) scan per file item in render.
   private failureByPath = new Map<string, CompileFailure>();
-  private sortedRounds: [number, readonly OutputFileInfo[]][] = [];
+  private sortedRounds: number[] = [];
 
   protected override willUpdate(changedProperties: PropertyValues): void {
-    if (changedProperties.has('filesByRound')) {
-      this.sortedRounds = roundIndexedEntries(this.filesByRound).filter(
-        ([, files]) => files.length > 0,
-      );
-    }
+    // A round shows when it wrote files, lacks any, was diffed, or kept a
+    // reply that held no documents.
+    this.sortedRounds = [
+      ...new Set(
+        [
+          this.filesByRound,
+          this.missingByRound,
+          this.latexdiffsByRound,
+          this.repliesByRound,
+        ].flatMap((byRound) => Object.keys(byRound).map(Number)),
+      ),
+    ].toSorted((a, b) => a - b);
     if (changedProperties.has('failuresByRound')) {
       this.failureByPath = new Map();
       for (const [roundStr, failures] of Object.entries(this.failuresByRound)) {
@@ -160,8 +183,8 @@ export class FileList extends LitElement {
         >
           ${repeat(
             this.sortedRounds,
-            ([round]) => round,
-            ([round, files]) => this.renderRound(round, files),
+            (round) => round,
+            (round) => this.renderRound(round),
           )}
         </div>
         ${
@@ -212,10 +235,11 @@ export class FileList extends LitElement {
     this.dispatchEvent(SessionUiEvents.surface({ kind: 'dismissStorageHint' }));
   };
 
-  private renderRound(
-    round: number,
-    files: readonly OutputFileInfo[],
-  ): TemplateResult {
+  private renderRound(round: number): TemplateResult {
+    const files = this.filesByRound[round] ?? [];
+    const missing = this.missingByRound[round] ?? [];
+    const reply = this.repliesByRound[round];
+    const latexdiffs = this.latexdiffsByRound[round] ?? [];
     const rows = html`
       <ul class="file-round-list">
         ${repeat(
@@ -223,7 +247,27 @@ export class FileList extends LitElement {
           (file, index) => `${round}-${file.location?.absolutePath ?? index}`,
           (file, index) => this.renderFileItem(file, round, index),
         )}
+        ${files.length === 0 ? html`<li class="file-item">${waIcon('triangle-exclamation')} Wrote no documents</li>` : nothing}
+        ${missing.map((name) => html`<li class="file-item">${waIcon('triangle-exclamation')} Missing: <bdi dir="auto">${name}</bdi></li>`)}
+        ${
+          reply && (files.length === 0 || missing.length > 0)
+            ? html`<li class="file-item">
+                ${waIcon('file-code')}
+                <span
+                  class="file-path clickable-link"
+                  data-command=${OPEN_FILE}
+                  data-file=${reply.absolutePath}
+                  role="button"
+                  tabindex="0"
+                  >Open the reply</span
+                >
+                to check its
+                <code dir="ltr">&lt;${OUTPUT_DOCUMENTS_TAG}&gt;</code> block
+              </li>`
+            : nothing
+        }
       </ul>
+      ${latexdiffs.length > 0 ? html`<latexdiff-results .round=${round} .entries=${latexdiffs}></latexdiff-results>` : nothing}
     `;
 
     // A per-round disclosure only earns its chrome when there are multiple

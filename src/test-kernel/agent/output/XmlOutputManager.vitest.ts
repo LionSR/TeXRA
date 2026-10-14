@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, vi } from 'vitest';
 import { TraceEmitter, type AgentTrace } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 
-import { MESSAGE_TYPES, type FileLocation, type RunId } from '@shared/schemas';
+import { type FileLocation, type RunId } from '@shared/schemas';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { installPlatform } from '@test/support/setupPlatform';
 import { fakePath } from '@test/support/FakePlatform';
@@ -1501,6 +1501,7 @@ Appendix.
     () =>
       Effect.gen(function* () {
         const logger = spiedTrace();
+        const state = createOutputState();
         yield* fsEffect.write(
           fakePath('tmp/run/cost.tex'),
           '\\section{Computational cost}\nPreliminary numbers from the local interactive logs.\n',
@@ -1518,17 +1519,11 @@ Appendix.
             '```',
           ],
           ['cost.tex', 'arch.tex'],
-          { logger, baseFiles: ['cost.tex', 'arch.tex'] },
+          { logger, baseFiles: ['cost.tex', 'arch.tex'], outputState: state },
         );
 
         expectSources(outputs, ['cost.tex']);
-        expect(logger.info).toHaveBeenCalledWith(
-          expect.any(String),
-          expect.objectContaining({
-            messageType: MESSAGE_TYPES.MISSING_OUTPUTS,
-            data: expect.objectContaining({ missing: ['arch.tex'] }),
-          }),
-        );
+        expect(state.rounds.get(0)?.missingOutputs).toEqual(['arch.tex']);
       }).pipe(Effect.provide(nodePlatformLayer)),
   );
 
@@ -1537,6 +1532,7 @@ Appendix.
     () =>
       Effect.gen(function* () {
         const logger = spiedTrace();
+        const state = createOutputState();
         const outputs = yield* writeAndSplitDocuments(
           [
             'main.tex:',
@@ -1549,17 +1545,11 @@ Appendix.
             '```',
           ],
           ['main.tex', 'appendix.tex'],
-          { logger },
+          { logger, outputState: state },
         );
 
         expectSources(outputs, ['main.tex']);
-        expect(logger.info).toHaveBeenCalledWith(
-          expect.any(String),
-          expect.objectContaining({
-            messageType: MESSAGE_TYPES.MISSING_OUTPUTS,
-            data: expect.objectContaining({ missing: ['appendix.tex'] }),
-          }),
-        );
+        expect(state.rounds.get(0)?.missingOutputs).toEqual(['appendix.tex']);
       }).pipe(Effect.provide(nodePlatformLayer)),
   );
 

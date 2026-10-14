@@ -7,7 +7,7 @@ import type { AgentTrace } from '@agent/trace';
 import replacementEngine, {
   logReplacementDiagnostics,
 } from '@replacement/engine';
-import type { FileLocation, OutputFileInfo } from '@shared/schemas';
+import type { FileLocation } from '@shared/schemas';
 import { getExtractedDocOutputFileName } from '@texra/utils/files/outputFileUtils';
 import {
   DOCUMENT_NAME_REGEX,
@@ -17,6 +17,7 @@ import {
 import {
   OUTPUT_DOCUMENT_TAG,
   OUTPUT_DOCUMENTS_TAG,
+  type OutputFileInfo,
 } from '@texra/shared/plugins/documentOutputs';
 import { entryTypeAt } from '@utils/files/fsDurability';
 import {
@@ -102,7 +103,6 @@ export class XmlOutputManager {
   }
 
   private warnPartialExtraction(
-    outputLocation: FileLocation,
     round: number,
     expectedCount: number,
     extractedCount: number,
@@ -116,15 +116,10 @@ export class XmlOutputManager {
       (_, i) => `<unextracted document ${i + 1}>`,
     );
 
-    reportMissingOutputs(this.outputState, this.logger, {
-      round,
-      missing,
-      xmlFile: outputLocation.absolutePath,
-    });
+    reportMissingOutputs(this.outputState, round, missing);
   }
 
   private warnMissingExpectedFiles(
-    outputLocation: FileLocation,
     round: number,
     expectedFiles: readonly string[],
     documents: ReadonlyArray<{ name: string }>,
@@ -137,11 +132,7 @@ export class XmlOutputManager {
     );
     if (missing.length === 0) return;
 
-    reportMissingOutputs(this.outputState, this.logger, {
-      round,
-      missing,
-      xmlFile: outputLocation.absolutePath,
-    });
+    reportMissingOutputs(this.outputState, round, missing);
   }
 
   private collectLatexFencedBlocks(outputContent: string): string[] {
@@ -164,7 +155,6 @@ export class XmlOutputManager {
    */
   private extractDocumentsByContentSimilarity(
     outputContent: string,
-    outputLocation: FileLocation,
     round: number,
     baseFiles: readonly FileLocation[],
   ): Effect.Effect<NamedDocument[] | null, never, FileSystem.FileSystem> {
@@ -216,11 +206,7 @@ export class XmlOutputManager {
         .map((file) => file.name)
         .filter((name) => !matchedNames.has(name));
       if (unmatchedFiles.length > 0) {
-        reportMissingOutputs(this.outputState, this.logger, {
-          round,
-          missing: unmatchedFiles,
-          xmlFile: outputLocation.absolutePath,
-        });
+        reportMissingOutputs(this.outputState, round, unmatchedFiles);
       }
       if (documents.length < blocks.length) {
         this.logger.debug(
@@ -287,12 +273,7 @@ export class XmlOutputManager {
             `Recovered ${OUTPUT_DOCUMENTS_TAG} from filename headers (${formatResultCount(documents.length, 'document')})`,
           );
           if (expectedFiles.length > 1) {
-            this.warnMissingExpectedFiles(
-              outputLocation,
-              round,
-              expectedFiles,
-              documents,
-            );
+            this.warnMissingExpectedFiles(round, expectedFiles, documents);
           }
         }
       }
@@ -360,24 +341,17 @@ export class XmlOutputManager {
         // label a matched block with the wrong input filename.
         documents = yield* this.extractDocumentsByContentSimilarity(
           rawOutputContent,
-          outputLocation,
           round,
           baseFiles,
         );
       }
 
       if (!documents) {
-        this.warnPartialExtraction(
-          outputLocation,
-          round,
-          expectedDocumentCount,
-          0,
-        );
+        this.warnPartialExtraction(round, expectedDocumentCount, 0);
         return [];
       }
 
       this.warnPartialExtraction(
-        outputLocation,
         round,
         expectedDocumentCount,
         documents.length,

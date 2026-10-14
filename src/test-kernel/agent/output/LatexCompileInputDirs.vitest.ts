@@ -81,8 +81,8 @@ function createDiffCompiler(runId: RunId, logger: AgentTrace) {
   );
 
   return manager as unknown as {
-    compileDiffIfSuccessful(
-      result: { success: boolean; diffPath?: string },
+    compileDiff(
+      diffPath: string,
       referenceLocation: FileLocation,
       diffDirectory: {
         absolutePath: string;
@@ -105,8 +105,8 @@ function compileDiff(
   trace: AgentTrace = spiedTrace(),
 ): Effect.Effect<unknown, Error, FileSystem.FileSystem | WorkspaceFs> {
   const diffAbsoluteDir = path.join(runDir(runId), 'diff', `r${round}`);
-  return createDiffCompiler(runId, trace).compileDiffIfSuccessful(
-    { success: true, diffPath: path.join(diffAbsoluteDir, 'main-diff.tex') },
+  return createDiffCompiler(runId, trace).compileDiff(
+    path.join(diffAbsoluteDir, 'main-diff.tex'),
     referenceLocation,
     {
       absolutePath: diffAbsoluteDir,

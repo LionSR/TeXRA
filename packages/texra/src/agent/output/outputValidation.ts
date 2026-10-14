@@ -7,71 +7,51 @@
 
 import { Effect, FileSystem } from 'effect';
 
-import type { FileLocation } from '@shared/schemas';
 import { workflowOutputRoundDir } from '@texra/shared/constants/workflowOutput';
 
 import {
   ensureRoundData,
-  reportMissingOutputs,
   type OutputDependencies,
   type OutputState,
 } from './outputState';
 
-/** Checks that expected output files exist. */
+/**
+ * Checks that expected output files exist. The disk is the authority on
+ * the expected files alone: their entries in the round's missing outputs
+ * are recomputed, and every other entry (a document the reply held that
+ * did not extract) is kept.
+ */
 export const checkExpectedOutputs = Effect.fn('documents.checkExpectedOutputs')(
-  function* (
-    state: OutputState,
-    deps: OutputDependencies,
-    outputLocation: FileLocation,
-    currRound: number,
-  ) {
+  function* (state: OutputState, deps: OutputDependencies, currRound: number) {
     const fs = yield* FileSystem.FileSystem;
     const expected = deps.config.outputFiles;
-    let missing: string[] = [];
+    const results = yield* Effect.forEach(
+      expected,
+      (file) =>
+        fs
+          // The round writes its outputs into its own directory; the
+          // run-root entry of the same name is the workspace file, which
+          // exists only once an output has been delivered there.
+          .exists(
+            deps.fileService.createLocation(
+              `${workflowOutputRoundDir(currRound)}/${file}`,
+            ).absolutePath,
+          )
+          .pipe(Effect.map((exists) => ({ file, exists }))),
+      { concurrency: 'unbounded' },
+    );
+    const missing = results.filter((r) => !r.exists).map((r) => r.file);
+    deps.logger.debug(
+      missing.length > 0
+        ? `Missing expected outputs for round ${currRound}`
+        : `All ${expected.length} expected outputs exist after round ${currRound}`,
+      { data: missing },
+    );
 
-    if (expected?.length) {
-      const results = yield* Effect.forEach(
-        expected,
-        (file) =>
-          fs
-            // The round writes its outputs into its own directory; the
-            // run-root entry of the same name is the workspace file, which
-            // exists only once an output has been delivered there.
-            .exists(
-              deps.fileService.createLocation(
-                `${workflowOutputRoundDir(currRound)}/${file}`,
-              ).absolutePath,
-            )
-            .pipe(Effect.map((exists) => ({ file, exists }))),
-        { concurrency: 'unbounded' },
-      );
-      missing = results.filter((r) => !r.exists).map((r) => r.file);
-
-      if (missing.length > 0) {
-        const xmlExists = yield* fs.exists(outputLocation.absolutePath);
-        reportMissingOutputs(state, deps.logger, {
-          round: currRound,
-          missing,
-          xmlFile: xmlExists ? outputLocation.absolutePath : null,
-        });
-        deps.logger.debug(`Missing expected outputs for round ${currRound}`, {
-          data: missing,
-        });
-      } else {
-        deps.logger.debug(
-          `All expected outputs exist after round ${currRound}`,
-        );
-      }
-    } else {
-      deps.logger.debug(`No expected outputs for round ${currRound}`);
-    }
-
-    // Clear an earlier missing report if this round is reprocessed and all
-    // expected outputs are now present. Empty means none are known missing.
-    if (missing.length === 0) {
-      ensureRoundData(state, currRound).missingOutputs = [];
-    }
-
-    return { missing };
+    const round = ensureRoundData(state, currRound);
+    round.missingOutputs = [
+      ...round.missingOutputs.filter((entry) => !expected.includes(entry)),
+      ...missing,
+    ];
   },
 );

@@ -104,7 +104,10 @@ export interface Documents {
    *  against these, never the live file an in-place revision overwrote. */
   readonly baseFiles: FileLocation[];
   /** The revisions as the run's documents: the fact the call's result
-   *  states (`ToolResult.facts`), built from the state as the call left it. */
+   *  states (`ToolResult.facts`), built from the state as the call left it.
+   *  It is the whole state, read when the call opened, so one run's document
+   *  tools run one at a time (the recipe's order): two at once would each
+   *  record the documents without the other's fields. */
   readonly fact: (diffs?: DocumentDiffs) => ToolFact;
 }
 

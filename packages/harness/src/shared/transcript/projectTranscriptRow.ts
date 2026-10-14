@@ -274,30 +274,6 @@ export function logPayloadRow(
       };
     }
 
-    case MESSAGE_TYPES.MISSING_OUTPUTS: {
-      const { missing, xmlFile } = payload.data;
-      if (missing.length === 0 && !xmlFile) return undefined;
-      return {
-        ...base,
-        kind: 'missingOutputs',
-        missing,
-        xmlFile,
-        summary: `Missing outputs (${missing.length})`,
-      };
-    }
-
-    case MESSAGE_TYPES.LATEXDIFF: {
-      const entries = payload.data;
-      if (entries.length === 0) return undefined;
-      const runId = entries.find((item) => item.runId)?.runId;
-      return {
-        ...base,
-        kind: 'latexdiff',
-        entries,
-        ...(runId ? { runId } : {}),
-      };
-    }
-
     case MESSAGE_TYPES.CONTEXT_MANAGEMENT: {
       const data = payload.data;
       // A client compaction is one row, its activity, which carries these

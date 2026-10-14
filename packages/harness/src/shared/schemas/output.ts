@@ -1,11 +1,7 @@
 import { z } from 'zod';
 
 import { getBasename } from '@utils/core';
-import { DiffStatsSchema } from './lineChanges';
 import { RunIdSchema } from './identifiers';
-
-/** A zero-based round (a document task's revision) number. */
-export const RoundNumberSchema = z.int().nonnegative();
 
 const WorkspaceFileLocationSchema = z.strictObject({
   kind: z.literal('workspace'),
@@ -98,24 +94,3 @@ export function fileLocationAddressPath(location: FileLocation): string {
     ? runStorageFilePath(location.runId, location.relativePath)
     : fileLocationDisplayPath(location);
 }
-
-const OutputFileSchema = z.strictObject({
-  source: z.string(),
-  location: FileLocationSchema,
-});
-
-const FileLineageSchema = z.strictObject({
-  original: FileLocationSchema.nullable(),
-  diffBase: FileLocationSchema.nullable(),
-});
-
-/** A file a document task wrote, with its lineage and diff stats: the
- *  documents plugin's record, which the latexdiff log payload
- *  (`diffResult.ts`) still names until that payload leaves the harness. */
-export const OutputFileInfoSchema = OutputFileSchema.extend({
-  round: RoundNumberSchema.prefault(() => 0),
-  lineage: FileLineageSchema.nullable(),
-  diff: DiffStatsSchema.nullable(),
-});
-
-export type OutputFileInfo = z.infer<typeof OutputFileInfoSchema>;

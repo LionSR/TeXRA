@@ -28,6 +28,7 @@ describe('selectWorkflowRunDetailLines', () => {
         outputFilesByRound: {},
         missingOutputsByRound: { 0: [] },
         compileFailuresByRound: {},
+        latexdiffsByRound: {},
       },
       100,
     );
@@ -42,13 +43,14 @@ describe('selectWorkflowRunDetailLines', () => {
         outputFilesByRound: {},
         missingOutputsByRound: { 3: ['bad\u001b[31m.tex'] },
         compileFailuresByRound: {},
+        latexdiffsByRound: {},
       },
       100,
     );
 
     expect(lines.map((line) => line.text)).toEqual([
       `${PENDING_BOX} r4 results`,
-      '  ⚠ r4 · Missing expected output: bad.tex',
+      '  ⚠ r4 · Missing output: bad.tex',
     ]);
   });
 
@@ -59,6 +61,7 @@ describe('selectWorkflowRunDetailLines', () => {
         outputFilesByRound: {},
         missingOutputsByRound: { 0: ['missing.tex'] },
         compileFailuresByRound: COMPILE_FAILURES_BY_ROUND,
+        latexdiffsByRound: {},
       },
       1,
     );

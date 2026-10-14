@@ -8,11 +8,10 @@ import { Box, Text } from 'ink';
 
 import { safeTerminalText } from '@cli/runtime/terminalText';
 import { COLOR_BORDER, COLOR_ERROR, COLOR_WARNING } from '@cli/tui/ui/colors';
-import { CROSS, PENDING_BOX, WARNING } from '@cli/tui/ui/glyphs';
+import { CROSS, PENDING_BOX, TICK, WARNING } from '@cli/tui/ui/glyphs';
 import {
   RUN_PHASE,
   fileLocationDisplayPath,
-  type OutputFileInfo,
   type RunOutcome,
   type TaskGroup,
   type TaskGroupStatus,
@@ -21,11 +20,14 @@ import { formatRunStatusLabel } from '@shared/runs/runStatusDisplay';
 import { taskGroupDisplayStatus } from '@shared/runs/taskGroupProjection';
 import {
   formatRoundLabel,
+  latexdiffDisplayName,
   outputDiffCounts,
   outputDisplayName,
   roundIndexedEntries,
   type CompileFailure,
+  type LatexdiffEntry,
   type ReadonlyRoundIndexed,
+  type OutputFileInfo,
 } from '@texra/shared/plugins/documentOutputs';
 import { formatCompactDuration } from '@utils/text/stringUtils';
 
@@ -49,6 +51,7 @@ type WorkflowRunFacts = {
   readonly outputFilesByRound: ReadonlyRoundIndexed<OutputFileInfo>;
   readonly missingOutputsByRound: ReadonlyRoundIndexed<string>;
   readonly compileFailuresByRound: ReadonlyRoundIndexed<CompileFailure>;
+  readonly latexdiffsByRound: ReadonlyRoundIndexed<LatexdiffEntry>;
 };
 
 interface WorkflowRunDetailGroup {
@@ -117,6 +120,7 @@ function workflowRunDetailGroups(
       ([, missing]) => missing.length > 0,
     ),
     ...roundIndexedEntries(facts.compileFailuresByRound),
+    ...roundIndexedEntries(facts.latexdiffsByRound),
   ]) {
     rounds.add(round);
   }
@@ -161,7 +165,7 @@ function workflowRunDetailGroups(
     ).entries()) {
       lines.push({
         key: `missing:${round}:${path}:${index}`,
-        text: `  ${WARNING} ${formatRoundLabel(round)} · Missing expected output: ${safeTerminalText(path)}`,
+        text: `  ${WARNING} ${formatRoundLabel(round)} · Missing output: ${safeTerminalText(path)}`,
         color: COLOR_WARNING,
         role: 'alert',
       });
@@ -174,6 +178,16 @@ function workflowRunDetailGroups(
         text: `  ${CROSS} ${formatRoundLabel(round)} · Compile check failed: ${safeTerminalText(failure.displayName)} · ${safeTerminalText(failure.logRelativePath)}`,
         color: COLOR_ERROR,
         role: 'alert',
+      });
+    }
+    for (const [index, entry] of (
+      facts.latexdiffsByRound[round] ?? []
+    ).entries()) {
+      lines.push({
+        key: `latexdiff:${round}:${index}`,
+        text: `  ${entry.status === 'ok' ? TICK : CROSS} ${formatRoundLabel(round)} · Latexdiff: ${safeTerminalText(latexdiffDisplayName(entry))}${entry.status === 'failed' ? ` — ${safeTerminalText(entry.error)}` : ''}`,
+        color: entry.status === 'ok' ? undefined : COLOR_ERROR,
+        role: entry.status === 'ok' ? 'output' : 'alert',
       });
     }
     groups.push({ key: `round:${round}`, lines, priority: ROUND_PRIORITY });

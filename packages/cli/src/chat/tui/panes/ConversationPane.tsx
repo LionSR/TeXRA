@@ -69,6 +69,7 @@ export function ConversationPane(
           outputFilesByRound: documents.files,
           missingOutputsByRound: documents.missingOutputs,
           compileFailuresByRound: documents.compileFailures,
+          latexdiffsByRound: documents.latexdiffs,
         }
       : undefined;
   const visibleWorkflowDetails = selectWorkflowRunDetailLines(

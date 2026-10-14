@@ -96,25 +96,6 @@ export const logEntryStyles = css`
     font-style: italic;
   }
 
-  .xml-link-container {
-    margin-top: var(--wa-space-2xs);
-    padding-top: var(--wa-space-2xs);
-    border-top: var(--border-thin) solid var(--wa-color-surface-border);
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: var(--wa-space-2xs);
-  }
-
-  .xml-link-container wa-icon {
-    color: var(--color-text-muted);
-  }
-
-  .xml-link-container .document-tag {
-    color: var(--color-text-muted);
-    font-style: italic;
-  }
-
   /* Note: .detail-item base styles are in commonViewStyles; this adds log-specific variants */
 
   .file-link {
@@ -362,7 +343,7 @@ export const logEntryStyles = css`
 
 /**
  * Shared collapsing rules for the custom-element banner panels
- * (`<context-management>`, `<latexdiff-results>`). These run inside the
+ * (`<context-management>`, and `<latexdiff-results>` in the file list). These run inside the
  * component shadow root, so the class-scoped `.banner-details` rule in this
  * sheet cannot reach them; each panel loads this block alongside its own
  * `wa-details` margin.

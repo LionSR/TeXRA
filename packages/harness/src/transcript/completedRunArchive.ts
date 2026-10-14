@@ -93,8 +93,6 @@ function conversationNodesForRow(
     case 'scratchpad':
     case 'error':
     case 'fileList':
-    case 'missingOutputs':
-    case 'latexdiff':
     case 'contextManagement':
     case 'progressStatus':
     case 'compactionActivity':

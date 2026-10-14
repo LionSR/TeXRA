@@ -6,14 +6,13 @@ import * as path from 'node:path';
 
 import { HISTORY_DIR } from '@housekeeping/constants';
 import { generateTimestamp } from '@housekeeping/utils';
-import {
-  agentFileName,
-  type OutputFileInfo,
-  type RunId,
-} from '@shared/schemas';
+import { agentFileName, type RunId } from '@shared/schemas';
 import { modelFileName } from '@texra/utils/files/outputFileUtils';
 import { documentsOf } from '@texra/shared/plugins/documents';
-import { type ReadonlyRoundIndexed } from '@texra/shared/plugins/documentOutputs';
+import {
+  type ReadonlyRoundIndexed,
+  type OutputFileInfo,
+} from '@texra/shared/plugins/documentOutputs';
 import type { SessionView } from '@texra-ai/harness';
 
 /**

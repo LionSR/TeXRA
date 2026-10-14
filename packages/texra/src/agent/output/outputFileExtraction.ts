@@ -20,7 +20,6 @@ import { replaceInputCommands } from './fileMapping';
 import { recoverOutputFailure } from './outputOperations';
 import {
   ensureRoundData,
-  reportMissingOutputs,
   type OutputState,
   type OutputDependencies,
 } from './outputState';
@@ -71,7 +70,8 @@ function similarityBaseFiles(
 }
 
 /**
- * Signal a missing/empty round to the UI, then persist the empty round summary.
+ * Warn of a round that wrote nothing, then persist its empty outputs (its
+ * kept reply, which hosts offer to open, is the round's `reply`).
  */
 const handleNoOutputs = Effect.fn('documents.handleNoOutputs')(function* (
   state: OutputState,
@@ -109,12 +109,6 @@ const handleNoOutputs = Effect.fn('documents.handleNoOutputs')(function* (
       },
     );
   }
-  reportMissingOutputs(state, deps.logger, {
-    round: currRound,
-    missing: [],
-    xmlFile: outputLocation.absolutePath,
-  });
-
   ensureRoundData(state, currRound).outputs = [];
 });
 

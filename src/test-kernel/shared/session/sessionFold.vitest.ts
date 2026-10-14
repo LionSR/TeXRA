@@ -23,7 +23,6 @@ import {
   SessionEventSchema,
   type DisplaySessionEvent,
   type FoldInput,
-  type OutputFileInfo,
   type RunId,
 } from '@shared/schemas';
 
@@ -53,7 +52,10 @@ import {
   documentsOf,
 } from '@texra/shared/plugins/documents';
 
-import { type CompileFailure } from '@texra/shared/plugins/documentOutputs';
+import {
+  type CompileFailure,
+  type OutputFileInfo,
+} from '@texra/shared/plugins/documentOutputs';
 import { createExternalLocation } from '@utils/files/fileLocation';
 
 import {
@@ -908,6 +910,8 @@ describe('sessionFold', () => {
       outputs: [outputOf(round)],
       compileFailures: round === 0 ? [failureOf(0)] : [],
       missingOutputs: round === 0 ? ['intro.tex'] : [],
+      latexdiffs: [],
+      reply: null,
     });
     const documentsRow = (rounds: ReturnType<typeof roundOutput>[]) => ({
       type: 'plugin.fact' as const,
@@ -927,6 +931,8 @@ describe('sessionFold', () => {
       files: { 0: [outputOf(0)], 1: [outputOf(1)] },
       missingOutputs: { 0: ['intro.tex'] },
       compileFailures: { 0: [failureOf(0)] },
+      latexdiffs: {},
+      replies: {},
     };
 
     // The cold listing read: the start plus the newest row of each type.

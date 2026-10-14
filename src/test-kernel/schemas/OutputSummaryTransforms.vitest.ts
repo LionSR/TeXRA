@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'vitest';
 
-import { type FileLocation, type OutputFileInfo } from '@shared/schemas';
+import { type FileLocation } from '@shared/schemas';
 import {
+  latexdiffDisplayName,
   roundOutputsToCompileFailureSummaries,
   roundOutputsToOutputSummaries,
   type CompileFailure,
   type RoundOutput,
+  type OutputFileInfo,
 } from '@texra/shared/plugins/documentOutputs';
 
 function workspace(
@@ -56,6 +58,8 @@ function roundOutput(overrides: Partial<RoundOutput> = {}): RoundOutput {
     outputs: [],
     compileFailures: [],
     missingOutputs: [],
+    latexdiffs: [],
+    reply: null,
     ...overrides,
   };
 }
@@ -132,5 +136,18 @@ describe('output summary transforms', () => {
     expect(workspaceSummary.logPath).toBe('logs/main.log');
     expect(workspaceSummary.logAbsolutePath).toBe('/workspace/logs/main.log');
     expect(externalSummary.outputPath).toBe('/tmp/main.pdf');
+  });
+
+  it('names a latexdiff by its workspace document, else by its base', () => {
+    const entry = {
+      revised: external('/tmp/run/r2/main.tex'),
+      original: workspace('src/main.tex'),
+      base: workspace('main.tex'),
+      baseRound: 1,
+      status: 'ok',
+      diff: external('/tmp/run/diff/r2/main_diff.tex'),
+    } as const;
+    expect(latexdiffDisplayName(entry)).toBe('main.tex');
+    expect(latexdiffDisplayName({ ...entry, original: null })).toBe('main.tex');
   });
 });

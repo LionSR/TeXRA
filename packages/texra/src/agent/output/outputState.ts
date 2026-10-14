@@ -6,13 +6,12 @@
  */
 
 import type { AgentTrace } from '@agent/trace';
-import { MESSAGE_TYPES, type FileLocation } from '@shared/schemas';
+import type { FileLocation } from '@shared/schemas';
 import {
   type CompileFailure,
   type RoundOutput,
 } from '@texra/shared/plugins/documentOutputs';
 import { RunFileService } from '@utils/files/runStorage';
-import { formatResultCount } from '@utils/text/stringUtils';
 import type { WorkspaceRoots } from '@texra-ai/harness';
 import type { AgentConfig } from '@texra-ai/harness/schemas';
 
@@ -64,6 +63,8 @@ export function ensureRoundData(
     outputs: [],
     compileFailures: [],
     missingOutputs: [],
+    latexdiffs: [],
+    reply: null,
   };
   state.rounds.set(round, data);
   return data;
@@ -77,20 +78,13 @@ export function setCompileFailures(
   ensureRoundData(state, round).compileFailures = failures;
 }
 
-/** Record missing outputs and their human-facing diagnostic. */
+/** Add `missing` to the round's missing outputs: every report of one
+ *  extraction is kept (the round is reset when its extraction starts). */
 export function reportMissingOutputs(
   state: OutputState,
-  trace: AgentTrace,
-  info: {
-    round: number;
-    missing: string[];
-    xmlFile: string | null;
-  },
+  round: number,
+  missing: readonly string[],
 ): void {
-  const { round, missing, xmlFile } = info;
-  trace.info(`${formatResultCount(missing.length, 'output file')} missing`, {
-    messageType: MESSAGE_TYPES.MISSING_OUTPUTS,
-    data: { missing, xmlFile },
-  });
-  ensureRoundData(state, round).missingOutputs = missing;
+  const data = ensureRoundData(state, round);
+  data.missingOutputs = [...new Set([...data.missingOutputs, ...missing])];
 }

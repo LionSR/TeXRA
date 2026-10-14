@@ -30,6 +30,7 @@ import {
   aggregateTarget,
   CURRENT_VALUE_VERSION,
   DISPLAY_EVENT_TYPES,
+  pluginFactFloor,
   RETIRED_ROW_KINDS,
   ROW_KINDS,
   SessionEventDraftSchema,
@@ -314,21 +315,45 @@ export function decodeRow(
   if (!parsed.success) return corrupt(parsed.error);
   const event = parsed.data;
   if (event.type !== 'plugin.fact') return Result.succeed(event);
+  return decodePluginFact(event, row.commit, arms);
+}
+
+/** A stored plugin fact through its arm: left out when this build lacks its
+ *  plugin; a newer build's version, an earlier build's (below the arm's
+ *  floor), or a value the arm's schema refuses fails the read. */
+function decodePluginFact<
+  E extends {
+    readonly plugin: string;
+    readonly kind: string;
+    readonly version: number;
+    readonly value: JsonValue;
+  },
+>(
+  event: E,
+  commit: number,
+  arms: PluginArms,
+): Result.Result<
+  E | LeftOut,
+  DatabaseStoreNewer | DatabaseRowCorrupt | DatabaseRowEarlier
+> {
   const name = `${event.plugin}/${event.kind}`;
+  const type = `plugin.fact/${name}`;
   const arm = arms[name];
   if (arm === undefined) return Result.succeed({ _tag: 'leftOut', kind: name });
   if (event.version > arm.version)
     return Result.fail(
-      new DatabaseStoreNewer({
-        type: `plugin.fact/${name}`,
-        version: event.version,
-      }),
+      new DatabaseStoreNewer({ type, version: event.version }),
     );
+  if (event.version < pluginFactFloor(arm))
+    return Result.fail(new DatabaseRowEarlier({ commit, type }));
   let value = event.value;
   for (const step of arm.upcasters.slice(event.version - 1))
     value = step(value);
   const { error } = arm.schema.safeParse(value);
-  if (error) return corrupt(error, `plugin.fact/${name}`);
+  if (error)
+    return Result.fail(
+      new DatabaseRowCorrupt({ commit, type, detail: causeOf(error) }),
+    );
   return Result.succeed({ ...event, version: arm.version, value });
 }
 
