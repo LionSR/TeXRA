@@ -16,6 +16,7 @@ import {
   MESSAGE_TYPES,
   RUN_PHASE,
   TOOL_CALL_STATUS,
+  isPlainAgentIdentity,
   isTranscriptEvent,
   type RunPhase,
   type SessionEvent,
@@ -33,7 +34,6 @@ import { recordLogRow, STREAMING_TEXT_ROW_KIND } from './transcriptLogRows';
 import {
   emptyTranscript,
   indexesOf,
-  lifecycleToTaskGroups,
   open,
   paint,
   replaceTranscript,
@@ -351,7 +351,7 @@ export function foldRunTranscript(
   }
   const ctx: TranscriptContext = {
     debug,
-    lifecycleToTaskGroups: lifecycleToTaskGroups(start),
+    lifecycleToTaskGroups: isPlainAgentIdentity(start.identity),
   };
   for (const event of events) {
     transcript = foldTranscriptEvent(transcript, event, ctx);

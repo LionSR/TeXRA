@@ -93,7 +93,6 @@ import {
 } from './transcriptReads';
 import {
   emptyTranscript,
-  lifecycleToTaskGroups,
   replaceTranscript,
   resetTranscriptOwnership,
 } from './transcriptState';
@@ -224,8 +223,8 @@ interface SessionIndexes {
   /** Current sequence-row claims for the checked resident scope. */
   readonly claims: Map<AggregateId, string | null>;
   /** What the rows both folds read say about each run (`runRows.ts`);
-   *  `view.requests`, `view.queuedFollowUps`, `RunView.turn` and the run's
-   *  output rounds project it. */
+   *  `view.requests`, `view.queuedFollowUps` and `RunView.turn` project
+   *  it. */
   readonly rows: Map<RunId, RunRows>;
   /** One entry per `${aggregate}/${listing type}`: the commit of the latest
    *  listing fact folded for it, so a replayed older one is ignored. The
@@ -1158,7 +1157,7 @@ function foldTraceEvent(
   if (!run) return false;
   const transcript = foldTranscriptEvent(run.transcript, event, {
     debug: view.debug,
-    lifecycleToTaskGroups: lifecycleToTaskGroups(run),
+    lifecycleToTaskGroups: isPlainAgentIdentity(run.identity),
     runLabels: view.runs,
   });
   view.folded = writable(view.folded).set(event.aggregateId, event.seq);
