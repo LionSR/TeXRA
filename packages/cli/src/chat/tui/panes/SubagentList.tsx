@@ -133,9 +133,7 @@ function SessionRow({
       </Text>
       <Text aria-hidden color={color}>
         {'  '.repeat(depth)}
-        {run.childIds.length > 0
-          ? `${expanded ? EXPANDED : COLLAPSED} `
-          : '  '}
+        {run.childIds.length > 0 ? `${expanded ? EXPANDED : COLLAPSED} ` : '  '}
         {CHILD_STATUS_MARKER}
       </Text>
       <RowSegment bold={active} color={color} flexShrink={1}>
