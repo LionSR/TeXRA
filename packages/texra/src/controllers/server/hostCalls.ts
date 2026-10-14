@@ -145,7 +145,6 @@ const ToolEditStagingSchema = z.object({
   runId: RunIdSchema.nullable(),
   permission: ToolEditPermissionSchema,
 });
-export type ToolEditStaging = z.infer<typeof ToolEditStagingSchema>;
 
 const LanguageModelInfoSchema = z.object({
   id: z.string(),

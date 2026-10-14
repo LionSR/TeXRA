@@ -2,7 +2,6 @@
 import * as vscode from 'vscode';
 
 // Local imports - commands
-import type { SessionHostInteractions } from '@agent/runtime';
 import {
   createExtensionCommandActions,
   registerExtensionCommandRegistry,
@@ -22,7 +21,6 @@ export function registerCommands(
   secrets: PlatformSecrets,
   runtime: ProcessRuntime,
   roots: WorkspaceRoots,
-  present: Pick<SessionHostInteractions, 'emit'>,
   /** Where this window's runs run. */
   runSession: Session,
 ): void {
@@ -44,7 +42,6 @@ export function registerCommands(
       progressViewProvider,
       secrets,
       roots,
-      present,
       runSession,
     ),
     runtime,

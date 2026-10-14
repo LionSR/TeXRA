@@ -1,15 +1,14 @@
-import { Effect, type Scope } from 'effect';
+import { Effect } from 'effect';
 
 import {
   Cancelled,
   type PlatformSecrets,
-  type Run,
   type RunEndResult,
 } from '@texra-ai/harness';
 import { type ProcessRuntime, withProcessServices } from '@texra-ai/harness';
-import { presentRunFailure, type RootLaunchRequest } from '@agent/runtime';
-import type { RequestOpenFilePayload, RunId } from '@shared/schemas';
-import type { RunValidatedOptions } from '@texra/controllers/session/hostRunActions';
+import { presentRunFailure } from '@agent/runtime';
+import type { RequestOpenFilePayload } from '@shared/schemas';
+import type { HostRunActions } from '@texra/controllers/session/hostRunActions';
 import { selectAutoOpenFinalOutput } from '@texra/agent/output/selectAutoOpenFinalOutput';
 import { ensureError } from '@utils/errors/errorMessage';
 import {
@@ -18,64 +17,15 @@ import {
   createWorkspaceLocation,
 } from '@utils/files/fileLocation';
 import type { AgentConfig } from '@texra-ai/harness/schemas';
-import type { DesktopAgentRun } from './desktopAgentRun.js';
 import type { DesktopProject } from './desktopProjects.js';
 
-/** What a launch and its output read of the project: where it runs, its
- *  roots, and where it presents. */
-type LaunchProject = Pick<DesktopProject, 'session' | 'roots' | 'present'>;
-
-interface DesktopAgentLaunchContext {
-  readonly project: LaunchProject;
-  /** The process runtime this host's launch runs on, handed down from the
-   *  composition root rather than looked up. */
-  readonly runtime: ProcessRuntime;
-  /** The window's scope: what the launch does when its run ends lives as
-   *  long as the window. */
-  readonly scope: Scope.Scope;
-}
-
-export type DesktopAgentLaunchOptions = RunValidatedOptions & {
-  /** The run is admitted: its id, for the window to select. */
-  readonly onAdmitted?: (runId: RunId) => Effect.Effect<void, Error>;
-};
-
-/**
- * Start a desktop run, answering once it is admitted; its awaiting host
- * owns the presentation of a failure to start. Its final output opens when
- * it ends. The program takes the process services from the runtime's own
- * context on the fiber that runs it, as the resume port's program does, so
- * the effect itself requires nothing.
- */
-export function launchDesktopAgent(
-  request: RootLaunchRequest,
-  context: DesktopAgentLaunchContext,
-  { onAdmitted, ...options }: DesktopAgentLaunchOptions = {},
-): Effect.Effect<Run, Error> {
-  const launch = context.project.session
-    .start({ ...request, ...options, interactive: true })
-    .pipe(
-      Effect.tap((run) => onAdmitted?.(run.runId) ?? Effect.void),
-      // Presentation reacts to the outcome the run committed; it never runs
-      // inside the run, so it cannot change that outcome.
-      Effect.tap((run) =>
-        Effect.forkIn(
-          run.result.pipe(
-            Effect.flatMap(
-              presentDesktopFinalOutput(context.project, request.config),
-            ),
-            Effect.ignore({ log: 'Warn', message: 'Opening the output' }),
-          ),
-          context.scope,
-        ),
-      ),
-    );
-  return withProcessServices(context.runtime, launch);
-}
+/** What a run's output reads of the project: its roots, and where it
+ *  presents. */
+type LaunchProject = Pick<DesktopProject, 'roots' | 'present'>;
 
 /** Open a settled run's final output, as a fresh launch and a resume both do. */
 export const presentDesktopFinalOutput =
-  ({ roots, present }: Omit<LaunchProject, 'session'>, config: AgentConfig) =>
+  ({ roots, present }: LaunchProject, config: AgentConfig) =>
   (result: RunEndResult) =>
     Effect.gen(function* () {
       const output = yield* selectAutoOpenFinalOutput(roots, config, result);
@@ -113,9 +63,9 @@ export const presentDesktopFinalOutput =
  * failure is presented here and the kickoff settles.
  */
 export const kickoffDesktopSetup = (options: {
-  readonly project: Omit<LaunchProject, 'session'>;
+  readonly project: LaunchProject;
   /** The project's launch path; none when no folder is open. */
-  readonly run: Pick<DesktopAgentRun, 'runValidated'> | undefined;
+  readonly run: Pick<HostRunActions, 'runValidated'> | undefined;
   readonly secrets: PlatformSecrets;
   readonly runtime: ProcessRuntime;
 }): Effect.Effect<void> =>

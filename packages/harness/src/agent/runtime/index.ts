@@ -6,9 +6,8 @@
  * (`config/ratchets/harness-deep-import-baseline.json`) allows each host.
  *
  * It is the hosts' one internal door, not SDK surface: it stays for the
- * record reads the handle serves, the presentation host class
- * (`SessionHostInteractions`) and the desktop's `Runs.launch`, which no
- * public entry carries (lead ruling G12b; public record reads are post-1.0,
+ * record reads the handle serves and the presentation host class
+ * (`SessionHostInteractions`), which no public entry carries (lead ruling G12b; public record reads are post-1.0,
  * on an embedder's need). Its names are frozen shrink-only by
  * `config/api-reports/harness.agent-runtime.api.md`: a new one fails
  * `check:core-quality`. Everything a host can take from a public entry
@@ -29,9 +28,6 @@ export type { RouteRetries } from './run/invocation';
 export type { HostInteractions } from './HostInteractions';
 export { SessionHostInteractions } from './HostInteractions';
 
-// What `Runs.launch` takes: the desktop's launch still goes through it.
-export type { RootLaunchRequest } from './rootLaunch';
-
 // Whether a run can be resumed here, naming the process holding it.
 export { runRefusal } from './runClassification';
 
@@ -48,9 +44,6 @@ export type { PresentationEventHandlers } from './runtimePresentationEvents';
 export { getHelperModelName } from './helperModelName';
 
 // Run-request validation at the host launch boundary.
-export {
-  validateRunRequest,
-  type ValidatedRunRequest,
-} from '../core/state/runRequests';
+export { validateRunRequest } from '../core/state/runRequests';
 
 // A workflow run's delivered outputs with their diffs, for a host that prints them.

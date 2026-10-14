@@ -19,6 +19,7 @@ import { truncatedHexId } from '@utils/core/idHash';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import type { HostRequestFailure } from '@texra-ai/harness';
 import type { AgentConfig } from '@texra-ai/harness/schemas';
+import type { HostRunActions } from '../session/hostRunActions';
 import type { RunOutputsSource } from './runOutputs';
 
 const CHANNEL = 'ProgressWorkflowFileActions';
@@ -46,7 +47,6 @@ interface ProgressWorkflowFileActionsHost {
     editedFile: string,
     copyMeta?: AcceptCopyMeta,
   ): FileAction<boolean | void>;
-  mergeFile(baseFile: string, editedFile: string): FileAction<void>;
   latexdiffFile(baseFile: string, editedFile: string): FileAction<void>;
   openDirectory(directory: string): FileAction<void>;
   readFile(file: string): FileAction<string>;
@@ -59,7 +59,8 @@ interface ProgressWorkflowFileActionsControllerDeps {
   host: ProgressWorkflowFileActionsHost;
   /** Storage root of the session whose runs this controller acts on. */
   storageRoot: string;
-  sendFollowUp(stream: RunId, text: string): Effect.Effect<void>;
+  /** The window's run actions this controller starts or follows up. */
+  runs: Pick<HostRunActions, 'merge' | 'sendFollowUp'>;
 }
 
 export class ProgressWorkflowFileActionsController {
@@ -198,7 +199,7 @@ export class ProgressWorkflowFileActionsController {
         contentDigest(currentContent) !== backup
       ) {
         const fileName = path.basename(file);
-        yield* this.deps.sendFollowUp(
+        yield* this.deps.runs.sendFollowUp(
           activeRun,
           `[System: User modified the model's suggested output for "${fileName}" before accepting. The accepted version differs from the original model output.]`,
         );
@@ -215,7 +216,7 @@ export class ProgressWorkflowFileActionsController {
       file,
       base,
       'Merge',
-      (targetFile, baseFile) => this.deps.host.mergeFile(baseFile, targetFile),
+      (targetFile, baseFile) => this.deps.runs.merge(baseFile, targetFile),
     ).pipe(Effect.asVoid);
   }
 

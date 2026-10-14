@@ -32,7 +32,6 @@ import {
   type ProcessServices,
   type Session,
 } from '@texra-ai/harness';
-import { presentRunFailure } from '@agent/runtime';
 import {
   handleLatexdiff,
   handleLatexdiffCommitAction,
@@ -51,7 +50,6 @@ import {
   getCurrentFile,
 } from '@commands/files/fileSelectionCommands';
 import { EXTENSION_COMMANDS } from '@commands/extensionCommandIds';
-import { handleMerge } from '@commands/agent/mergeCommands';
 import { openFileInEditor } from '@frontend/vscode/vscodeEditor';
 import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
 import { signInWithSubscription } from '@frontend/auth/subscriptionSignIn';
@@ -99,7 +97,7 @@ import {
 import type { HostDraftRequests } from '@texra/controllers/session/hostDraftRequests';
 import {
   createHostRunActions,
-  type HostRunActionPorts,
+  type HostRunActions,
   type RunActionRecordPorts,
 } from '@texra/controllers/session/hostRunActions';
 import type { HostSnapshotSource } from '@texra/controllers/session/hostSnapshotSource';
@@ -144,7 +142,7 @@ interface ExtensionHostRequestsOptions {
   readonly scope: Scope.Scope;
   /** A host-initiated change to the surface (PRD 8.5). */
   surfaceAction(action: SurfaceActionMessage['action']): void;
-  /** Select a run this window just launched (the launch's `onAdmitted`). */
+  /** Select a run this window just launched (the run actions' `launched`). */
   presentLaunchedRun(runId: RunId): void;
   /** The placement commands the sidebar and the editor tab share. */
   popOutToEditor(): Effect.Effect<void, HostRequestFailure, ProcessServices>;
@@ -160,6 +158,8 @@ interface ExtensionHostRequestsOptions {
 }
 
 interface ExtensionHostRequests {
+  /** The window's launcher, which `texra.execute` starts its run on. */
+  readonly runValidated: HostRunActions['runValidated'];
   handleHostRequest(
     request: HostRequest,
     port: string,
@@ -233,47 +233,14 @@ export function createExtensionHostRequests(
   /** The native picker of each multi-file launcher list. */
   const multipleFilePickers = createFileSelectionPickers(roots);
 
-  /**
-   * Start a validated fresh request on the window's session, here or in the
-   * service, and open its final output once it ends: the surface's launch
-   * and the shared run actions both reach it. A failure before the run
-   * opens is presented here, once. The launch program takes its process
-   * services from this runtime's context on the fiber that runs it.
-   */
-  const runValidated: HostRunActionPorts['runValidated'] = (
-    request,
-    runOptions = {},
-  ) =>
-    withProcessServices(
-      runtime,
-      runSession
-        .start({ config: request.config, ...runOptions, interactive: true })
-        .pipe(
-          Effect.tapError((error) => presentRunFailure(records.present, error)),
-          Effect.tap((run) =>
-            Effect.sync(() => options.presentLaunchedRun(run.runId)),
-          ),
-          Effect.tap((run) =>
-            Effect.forkIn(
-              run.result.pipe(
-                Effect.flatMap(
-                  openFinalOutputIfAvailable(roots, request.config),
-                ),
-                Effect.ignore({ log: 'Warn', message: 'Opening the output' }),
-              ),
-              options.scope,
-            ),
-          ),
-        ),
-    );
-
   const runActions = runtime.runSync(
     createHostRunActions({
       ...records,
       session: runSession,
       scope: options.scope,
-      runValidated,
-      openWorkflowOutput: (config, result) =>
+      launched: (run) =>
+        Effect.sync(() => options.presentLaunchedRun(run.runId)),
+      openFinalOutput: (config, result) =>
         withProcessServices(
           runtime,
           openFinalOutputIfAvailable(roots, config)(result),
@@ -318,8 +285,6 @@ export function createExtensionHostRequests(
           'acceptEdited',
           handleAcceptEdited(at(base), at(edited), copyMeta),
         ),
-      mergeFile: (base, edited) =>
-        runFileAction('merge', handleMerge(roots, base, edited)),
       latexdiffFile: (base, edited) =>
         runFileAction('latexdiff', handleLatexdiff(roots, base, edited)),
       openDirectory: (directory) =>
@@ -335,7 +300,7 @@ export function createExtensionHostRequests(
       showInfo: (message) => vscodeUi.showInfoMessage(message),
       showError: (message) => vscodeUi.showErrorMessage(message),
     },
-    sendFollowUp: (runId, text) => runActions.sendFollowUp(runId, text),
+    runs: runActions,
   });
 
   let chatExportController: ChatExportController | undefined;
@@ -733,6 +698,7 @@ export function createExtensionHostRequests(
   }
 
   return {
+    runValidated: runActions.runValidated,
     // The bridge takes the dispatch program itself: it runs on the fiber the
     // webview's message pump already owns, and its failure reaches the
     // bridge's refusal-versus-defect fold as the value the arm carried. Over

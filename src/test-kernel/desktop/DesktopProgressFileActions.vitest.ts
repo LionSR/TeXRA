@@ -86,7 +86,6 @@ function loadFileActions(outcome: DiffRunOutcome): {
         Effect.fail(new Rejected({ reason: message })),
     },
     {
-      startRun: vi.fn(),
       listWorkspaceCandidateFiles: vi.fn(() => Effect.succeed([])),
       session: {
         roots: { workspace: absolutePath('workspace') },

@@ -607,7 +607,6 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
     secrets,
     runtime,
     roots,
-    progressViewProvider.present,
     session,
   );
   registerWalkthroughWorkspaceAction(context, true, runtime);
@@ -734,8 +733,8 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
         updateStatusBarTooltip();
         updateStatusBarText();
       },
-      // The snapshot store accumulates the per-round deltas; the tracker
-      // projects the running runs' totals from it on each refresh.
+      // The tracker projects the running runs' usage totals from the
+      // session view; the tooltip repaints when they change.
       onUsageChanged: updateStatusBarTooltip,
     }),
     { startImmediately: true },

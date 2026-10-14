@@ -38,16 +38,16 @@ import {
   DesktopWorkspaceInboundMessageSchema,
   type DesktopWorkspaceReply,
 } from '../shared/desktopWorkspaceMessages.js';
-import {
-  createDesktopAgentRun,
-  type DesktopAgentRun,
-} from './desktopAgentRun.js';
+import { createDesktopAgentRun } from './desktopAgentRun.js';
 import {
   createDesktopBrowserViews,
   type DesktopBrowserViews,
 } from './desktopBrowserViews.js';
 import { createDesktopFileSelection } from './desktopFileSelection.js';
-import { createDesktopHostRequests } from './desktopHostRequests.js';
+import {
+  createDesktopHostRequests,
+  type DesktopHostRequests,
+} from './desktopHostRequests.js';
 import { createDesktopPtyHost } from './desktopPtyHost.js';
 import { createDesktopWorkspaceIpc } from './desktopWorkspaceIpc.js';
 import { desktopSpawner } from './desktopWindows.js';
@@ -66,7 +66,8 @@ export interface ProjectBinding {
   /** This window's port on the project's bridge. */
   readonly port: AttachedPort;
   readonly snapshot: ReturnType<typeof createHostSnapshotSource>;
-  readonly run: DesktopAgentRun;
+  /** The project's launcher (`HostRunActions.runValidated`). */
+  readonly runValidated: DesktopHostRequests['runValidated'];
   readonly workspace: ReturnType<typeof createDesktopWorkspaceIpc>;
   readonly browserViews: DesktopBrowserViews;
   /** The project's `.env` over the process's: every question about this
@@ -352,7 +353,7 @@ export const openProjectBindings = Effect.fn('desktop.openProjectBindings')(
         bridge,
         port,
         snapshot,
-        run,
+        runValidated: hostRequests.runValidated,
         workspace,
         browserViews,
         env,

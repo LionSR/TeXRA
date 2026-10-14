@@ -54,6 +54,7 @@ import {
 } from '@texra/controllers/progressView/ChatExportController';
 import {
   localRunActionPorts,
+  type HostRunActions,
   type RunActionRecordPorts,
 } from '@texra/controllers/session/hostRunActions';
 import { attachSessionHost } from '@texra/controllers/session/attachSessionHost';
@@ -144,10 +145,8 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
   private sidebarPort: Port | undefined;
   /** The popped-out tab and its port, attached and released together. */
   private editor: { panel: vscode.WebviewPanel; port: Port } | undefined;
-  /** Where a failure before a run opens is presented: the window's own
-   *  session's surface, or, in service mode, this window's presentation
-   *  host directly. */
-  public readonly present: Pick<SessionHostInteractions, 'emit'>;
+  /** The window's launcher (`HostRunActions.runValidated`). */
+  public readonly runValidated: HostRunActions['runValidated'];
   /** Where this window's runs run: the service's session, or this one. */
   private readonly runSession: Session;
   /** The last credential answer the API-key banner's producer read. */
@@ -347,7 +346,6 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       windowSession,
       presentation,
     );
-    this.present = records.present;
     const hostRequests = createExtensionHostRequests({
       records,
       exportRecords,
@@ -368,6 +366,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       refreshApiKeyStatus: this.refreshApiKeyStatus,
     });
     this.own(hostRequests);
+    this.runValidated = hostRequests.runValidated;
 
     // Attached for the window's life, before the first run of this window
     // asks anything. Requests this host does not present (bash, plan,
@@ -483,13 +482,6 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
   ): Effect.Effect<void, never, Scope.Scope> {
     const workspace = this.roots.workspace;
     if (workspace === undefined) return Effect.void;
-    const previews = <A, E>(
-      program: Effect.Effect<
-        A,
-        E,
-        Effect.Services<ReturnType<ToolEditApprovalController['dispose']>>
-      >,
-    ) => withProcessServices(this.runtime, program);
     const focused = Stream.callback<void>((queue) =>
       Effect.acquireRelease(
         Effect.sync(() =>
@@ -507,17 +499,12 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
         {
           ...capabilities,
           toolEdits: {
-            stage: (staging) =>
-              previews(
-                this.toolEditApprovals.present({
-                  ...staging,
-                  roots: this.roots,
-                }),
-              ).pipe(Effect.mapError((failure) => new Error(failure.message))),
-            release: (requestId) =>
-              previews(this.toolEditApprovals.release(requestId)),
-            approve: (requestId) =>
-              previews(this.toolEditApprovals.approveStaged(requestId)),
+            controller: this.toolEditApprovals,
+            roots: this.roots,
+            services: yield* withProcessServices(
+              this.runtime,
+              Effect.context(),
+            ),
           },
         },
         vscode.window.state.focused
