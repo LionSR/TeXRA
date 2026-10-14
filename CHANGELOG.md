@@ -20,8 +20,10 @@ All notable changes to this project will be documented in this file.
   agent that also defines a document task with declared outputs (ocr,
   transcribe_audio, paper2slide, paper2poster) recorded those outputs: a
   chat export's "Output files:" line and the VS Code toast shown when the
-  progress view cannot open both named them. Only a document task launch
-  stamps them now; earlier runs keep what they recorded.
+  progress view cannot open both named them, and a persona prompt that
+  read `OUTPUT_FILES` got them (no bundled persona prompt does; the agent
+  docs reserve it for task templates). Only a document task launch stamps
+  them now; earlier runs keep what they recorded.
 - **A document task checks its files at its first revision, whichever
   surface launched it.** A task over input files that no longer exist, or
   with a context `.bib` over 100 KB, fails there; the `.bib` refusal now
