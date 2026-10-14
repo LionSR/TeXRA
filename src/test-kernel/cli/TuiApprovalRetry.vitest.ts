@@ -4,11 +4,19 @@
 
 import { it } from '@effect/vitest';
 import { Deferred, Effect, Fiber, SubscriptionRef } from 'effect';
-import { afterEach, beforeAll, beforeEach, describe, expect, vi } from 'vitest';
+import {
+  afterEach,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  type MockInstance,
+  vi,
+} from 'vitest';
+import { apiKeySecretName, SecretsFailed } from '@texra-ai/llm';
 import { goalGrant, humanGrant } from '@agent/runtime/runApprovalQueue';
 
 const mocks = vi.hoisted(() => ({
-  hasUsableApiKey: vi.fn(),
   /** The key prompt: the user closes it without entering a key. */
   promptForCliProviderApiKey: vi.fn(() => Effect.void),
   preferSubscription: true,
@@ -56,14 +64,6 @@ vi.mock('@utils/config/providerConfig', async (importActual) => {
   };
 });
 
-vi.mock('@texra-ai/llm', async (importActual) => {
-  const actual = await importActual<typeof import('@texra-ai/llm')>();
-  return {
-    ...actual,
-    hasUsableApiKey: mocks.hasUsableApiKey,
-  };
-});
-
 import { currentApproval } from '@cli/chat/tui/state/approvalQueue';
 import { bindSessionView } from '@cli/chat/tui/state/sessionView';
 import { resetCliState, rootRunId } from '@cli/chat/tui/state/cliState';
@@ -94,6 +94,7 @@ import {
 } from '@texra/shared/session/surfaceDecision';
 import { requestToolEditApproval } from '@tools/approval/toolEditApproval';
 import { bashApprovalRequest } from '../agent/progressTestUtils';
+import type { PlatformSecrets } from '@texra-ai/harness';
 
 let detachHost = (): void => {};
 
@@ -319,9 +320,24 @@ beforeAll(() => {
   });
 });
 
+/** The OpenAI key's entry in the installed host's secret store. */
+const OPENAI_KEY = apiKeySecretName('openai');
+
+/** Reads of the installed host's secret store; a key check is a read of
+ *  the provider's entry. Each case starts with no OpenAI key stored. */
+let secretReads: MockInstance<PlatformSecrets['get']>;
+/** The store's own read, for a case that holds only the OpenAI entry. */
+let readSecret: PlatformSecrets['get'];
+
+/** Whether the store's OpenAI key entry was read: the own-key check. */
+const openAiKeyChecks = (): number =>
+  secretReads.mock.calls.filter(([key]) => key === OPENAI_KEY).length;
+
 beforeEach(() => {
   mocks.preferSubscription = true;
-  mocks.hasUsableApiKey.mockReturnValue(Effect.succeed(false));
+  const { secrets } = installedHost();
+  readSecret = secrets.get.bind(secrets);
+  secretReads = vi.spyOn(secrets, 'get');
   mocks.setCliSubscriptionPreference.mockImplementation((_id, enabled) => {
     mocks.preferSubscription = enabled;
     return Effect.void;
@@ -348,7 +364,8 @@ afterEach(async () => {
   }
   await Effect.runPromise(session.log.settled);
   resetCliState();
-  mocks.hasUsableApiKey.mockReset();
+  secretReads.mockRestore();
+  await Effect.runPromise(installedHost().secrets.delete(OPENAI_KEY));
   mocks.notify.mockReset();
   mocks.setCliSubscriptionPreference.mockReset();
   mocks.setCliCodingPlanSubscription.mockReset();
@@ -543,7 +560,7 @@ describe('TUI request decisions', () => {
     'switches a ChatGPT subscription retry to the API key only on the explicit decision',
     () =>
       Effect.gen(function* () {
-        mocks.hasUsableApiKey.mockReturnValue(Effect.succeed(true));
+        yield* installedHost().secrets.set(OPENAI_KEY, 'sk-own-key');
         tui();
         const pending = yield* Effect.forkChild(
           openRetry(chatGptSubscriptionRetry('s3')),
@@ -553,7 +570,7 @@ describe('TUI request decisions', () => {
           runId: runIdFor('s3'),
           errorMessage: 'ChatGPT subscription usage limit reached.',
         });
-        expect(mocks.hasUsableApiKey).not.toHaveBeenCalled();
+        expect(openAiKeyChecks()).toBe(0);
 
         decideRetry(PERSONAL_KEY_RETRY);
 
@@ -562,11 +579,10 @@ describe('TUI request decisions', () => {
         // route on its own run history, so the user's stored preference is not
         // rewritten on their behalf.
         expectNoPreferenceWrites();
-        // The shared key entry checks the provider the run's offer named.
-        expect(mocks.hasUsableApiKey).toHaveBeenCalledExactlyOnceWith(
-          installedHost().secrets,
-          'openai',
-        );
+        // The shared key entry checks the provider the run's offer named,
+        // finds its key, and asks for none.
+        expect(openAiKeyChecks()).toBe(1);
+        expect(mocks.promptForCliProviderApiKey).not.toHaveBeenCalled();
         yield* waitForNoApproval();
       }),
   );
@@ -577,14 +593,24 @@ describe('TUI request decisions', () => {
       Effect.gen(function* () {
         let finishLookup: (() => void) | undefined;
         const lookupCaptured = Deferred.makeUnsafe<void>();
-        mocks.hasUsableApiKey.mockImplementation(() =>
-          Effect.tryPromise(
-            () =>
-              new Promise<boolean>((_resolve, reject) => {
-                finishLookup = () => reject(new Error('Keychain unavailable'));
-                Deferred.doneUnsafe(lookupCaptured, Effect.void);
+        secretReads.mockImplementation((key) =>
+          key !== OPENAI_KEY
+            ? readSecret(key)
+            : Effect.tryPromise({
+                try: () =>
+                  new Promise<string | undefined>((_resolve, reject) => {
+                    finishLookup = () =>
+                      reject(new Error('Keychain unavailable'));
+                    Deferred.doneUnsafe(lookupCaptured, Effect.void);
+                  }),
+                catch: (cause) =>
+                  new SecretsFailed({
+                    reason: 'io',
+                    operation: 'get',
+                    message: String(cause),
+                    key,
+                  }),
               }),
-          ),
         );
         const attached = tui();
         const permission = chatGptSubscriptionRetry('disposed-key');
@@ -649,7 +675,7 @@ describe('TUI request decisions', () => {
         decideRetry({ action: 'retry' });
 
         expect(yield* Fiber.join(pending)).toEqual({ action: 'retry' });
-        expect(mocks.hasUsableApiKey).not.toHaveBeenCalled();
+        expect(openAiKeyChecks()).toBe(0);
         expectNoPreferenceWrites();
         expectChatGptSubscriptionRoute();
       }),
@@ -657,7 +683,6 @@ describe('TUI request decisions', () => {
 
   it.effect('cancels the retry modal when the run interrupts its request', () =>
     Effect.gen(function* () {
-      mocks.hasUsableApiKey.mockReturnValue(Effect.succeed(false));
       tui();
       const pending = yield* Effect.forkChild(
         openRetry(chatGptSubscriptionRetry('modal-interrupt')),

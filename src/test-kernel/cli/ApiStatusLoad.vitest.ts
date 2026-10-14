@@ -2,14 +2,19 @@ import { it } from '@effect/vitest';
 import { Effect } from 'effect';
 import { beforeEach, describe, expect, vi } from 'vitest';
 
+import {
+  apiKeySecretName,
+  SecretsFailed,
+  type ApiKeyProviderId,
+} from '@texra-ai/llm';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { FakeSecrets } from '@test/support/FakePlatform';
 import { testHttpClientLayer } from '@test/support/fetchTestUtils';
 import { makeFakeSettingsStores } from '@test/support/settingsStoresFake';
+import { withEnv } from '@test/support/testEnv';
 
 const mocks = vi.hoisted(() => ({
   readCliModelAccessStatus: vi.fn(),
-  lookupApiKeyOrigin: vi.fn(),
   getSubscriptionUsage: vi.fn(),
 }));
 
@@ -26,29 +31,12 @@ vi.mock('@cli/runtime/modelAccessSelection', () => ({
   readCliModelAccessStatus: mocks.readCliModelAccessStatus,
 }));
 
-vi.mock('@texra-ai/llm', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@texra-ai/llm')>()),
-  API_KEY_PROVIDER_IDS: ['deepseek', 'glm', 'kimiCode'],
-  lookupApiKeyOrigin: mocks.lookupApiKeyOrigin,
-  configuredApiKeyProviders: () =>
-    Effect.map(
-      Effect.forEach(
-        ['deepseek', 'glm', 'kimiCode'],
-        (provider: string) =>
-          mocks.lookupApiKeyOrigin({}, provider) as Effect.Effect<string>,
-        { concurrency: 'unbounded' },
-      ),
-      (origins: readonly string[]) =>
-        ['deepseek', 'glm', 'kimiCode'].filter(
-          (_, index) => origins[index] !== 'none',
-        ),
-    ),
-}));
-
 const { loadCliDetailedAccountStatusLines, loadCliModelAccessOverview } =
   await import('@cli/runtime/apiStatus');
 
-const secrets = new FakeSecrets();
+/** The key store each case starts empty. Keys are read from it and from an
+ *  empty environment (`withEnv({})`), never the developer's shell. */
+let secrets = new FakeSecrets();
 const stores = makeFakeSettingsStores('cli').stores;
 
 function lineFor(lines: readonly string[], route: string): string {
@@ -57,11 +45,9 @@ function lineFor(lines: readonly string[], route: string): string {
   return matches[0] ?? '';
 }
 
-function setPersonalKeys(...providers: string[]): void {
-  mocks.lookupApiKeyOrigin.mockImplementation(
-    (_secrets: unknown, provider: string) =>
-      Effect.succeed(providers.includes(provider) ? 'env' : 'none'),
-  );
+function setPersonalKeys(...providers: ApiKeyProviderId[]): void {
+  for (const provider of providers)
+    Effect.runSync(secrets.set(apiKeySecretName(provider), `${provider}-key`));
 }
 
 function codingPlans(
@@ -92,7 +78,7 @@ function accountStatusLines(): Promise<string[]> {
   // the process HTTP client from context — so it settles on the kernel's
   // runtime, not a bare one.
   return testRuntime().runPromise(
-    loadCliDetailedAccountStatusLines(stores, secrets),
+    loadCliDetailedAccountStatusLines(stores, secrets).pipe(withEnv({})),
   );
 }
 
@@ -131,9 +117,7 @@ describe('CLI model-access status lines', () => {
         codingPlans: codingPlans(),
       }),
     );
-    mocks.lookupApiKeyOrigin
-      .mockReset()
-      .mockReturnValue(Effect.succeed('none'));
+    secrets = new FakeSecrets();
     mocks.getSubscriptionUsage
       .mockReset()
       .mockImplementation((provider: string) =>
@@ -235,7 +219,7 @@ describe('CLI model-access status lines', () => {
           stores,
           secrets,
           { now: 1_800_000_000_000 },
-        ).pipe(Effect.provide(testHttpClientLayer));
+        ).pipe(withEnv({}), Effect.provide(testHttpClientLayer));
 
         expect(lineFor(lines, 'Kimi Code')).toBe(
           'Kimi Code: preferred · key configured · 5-hour: 0% · resets in 2h · 7-day: 100% · resets in 1d 21h',
@@ -336,11 +320,20 @@ describe('CLI model-access status lines', () => {
             codingPlans: codingPlans(),
           }),
         );
-        mocks.lookupApiKeyOrigin.mockReturnValue(
-          Effect.fail(new Error('keychain offline')),
-        );
+        // A key store that cannot be read: the overview settles anyway,
+        // because it never reads a key.
+        const offline = new FakeSecrets();
+        offline.get = (key: string) =>
+          Effect.fail(
+            new SecretsFailed({
+              reason: 'io',
+              operation: 'get',
+              message: 'keychain offline',
+              key,
+            }),
+          );
 
-        expect(yield* loadCliModelAccessOverview(stores, secrets)).toEqual({
+        expect(yield* loadCliModelAccessOverview(stores, offline)).toEqual({
           access: {
             subscriptions: subscriptions({
               preferSubscription: true,
@@ -357,7 +350,6 @@ describe('CLI model-access status lines', () => {
             'Otherwise: Your own API keys',
           ],
         });
-        expect(mocks.lookupApiKeyOrigin).not.toHaveBeenCalled();
       }),
   );
 });

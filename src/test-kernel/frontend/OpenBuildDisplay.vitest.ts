@@ -10,6 +10,7 @@ import {
 } from '@frontend/latex/openBuild';
 import { effectDiagnosticsLayer } from '@logger/effectDiagnostics';
 import { setLogSink } from '@logger/logSink';
+import { StorageFs, WorkspaceFs } from '@platform/rootedFs';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { captureLogEntries } from '@test/support/logSinkCapture';
 import {
@@ -21,16 +22,16 @@ import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 const mocks = vi.hoisted(() => ({
   exists: vi.fn(async (_path: string) => true),
-  isLatexFile: vi.fn((_path: string) => true),
-  compileLatex2Pdf: vi.fn((): Effect.Effect<{ ok: boolean; logTail: string }> =>
-    Effect.succeed({ ok: true, logTail: '' }),
-  ),
-  pathToLocationIn: vi.fn(
-    (_root: string | undefined, absolutePath: string) => ({
-      kind: 'workspace' as const,
-      absolutePath,
-      relativePath: 'paper.tex',
-    }),
+  compileLatex2Pdf: vi.fn(
+    (
+      _location: unknown,
+      _roots: unknown,
+      _options: unknown,
+    ): Effect.Effect<
+      { ok: boolean; logTail: string },
+      never,
+      WorkspaceFs | StorageFs
+    > => Effect.succeed({ ok: true, logTail: '' }),
   ),
   executeCommand: vi.fn(
     async (_command: string, ..._args: unknown[]) => undefined,
@@ -43,24 +44,17 @@ const mocks = vi.hoisted(() => ({
   ),
 }));
 
-vi.mock('@texra/shared/latexFileTypes', () => ({
-  isLatexFile: mocks.isLatexFile,
-}));
-
-vi.mock('@utils/files/fileLocation', () => ({
-  pathToLocationIn: mocks.pathToLocationIn,
-}));
-
 vi.mock('@latex/texTools', () => ({
   compileLatex2Pdf: mocks.compileLatex2Pdf,
 }));
 
-vi.mock('@platform/rootedFs', () => ({
-  withSessionFs: (_roots: unknown, program: unknown) => program,
-}));
-
-/** The roots the host would thread in. */
-const roots = { config: {} } as unknown as WorkspaceRoots;
+/** The roots the host would thread in. Nothing under test reads or writes
+ *  through them: the compiler that would is mocked. */
+const roots = {
+  workspace: '/workspace',
+  storage: '/workspace-storage',
+  config: {},
+} as unknown as WorkspaceRoots;
 
 /**
  * The host entry's provision for the programs under test: the real
@@ -121,7 +115,6 @@ describe('openBuildDisplayIfTex viewer delivery', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.exists.mockResolvedValue(true);
-    mocks.isLatexFile.mockReturnValue(true);
     mocks.compileLatex2Pdf.mockReturnValue(
       Effect.succeed({ ok: true, logTail: '' }),
     );
@@ -297,8 +290,14 @@ describe('openBuildDisplayIfTex viewer delivery', () => {
 
   it.effect('reports external compile failure as not viewer-ready', () =>
     Effect.gen(function* () {
+      // The compiler reads the session's rooted views, which the real
+      // `withSessionFs` serves from the roots the host threads in.
+      const compiledOver: (string | undefined)[] = [];
       mocks.compileLatex2Pdf.mockReturnValue(
-        Effect.succeed({ ok: false, logTail: 'compilation failed' }),
+        Effect.gen(function* () {
+          compiledOver.push((yield* WorkspaceFs).root, (yield* StorageFs).root);
+          return { ok: false, logTail: 'compilation failed' };
+        }),
       );
       const externalTex = {
         kind: 'external' as const,
@@ -309,6 +308,10 @@ describe('openBuildDisplayIfTex viewer delivery', () => {
         prepareBuildDisplay(roots, externalTex, { scheduleViewer: false }),
       );
       expect(ready).toBe(false);
+      expect(mocks.compileLatex2Pdf).toHaveBeenCalledWith(externalTex, roots, {
+        outputDirectory: '/tmp/build',
+      });
+      expect(compiledOver).toStrictEqual(['/workspace', '/workspace-storage']);
       yield* TestClock.adjust(LATEX_VIEWER_OPEN_DELAY_MS);
       expect(mocks.executeCommand).not.toHaveBeenCalledWith(
         'latex-workshop.view',

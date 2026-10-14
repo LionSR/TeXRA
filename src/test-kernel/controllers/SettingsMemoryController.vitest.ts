@@ -1,46 +1,17 @@
-/* eslint-disable import/order -- Vitest mocks must be declared before importing the module under test. */
 import { strict as assert } from 'node:assert';
+import { existsSync } from 'node:fs';
+import * as path from 'node:path';
+
 import { it } from '@effect/vitest';
-import { Effect } from 'effect';
-import { afterEach, describe, vi } from 'vitest';
+import { Effect, FileSystem } from 'effect';
+import { describe } from 'vitest';
+
+import { sessionFsLayer, type StorageFs } from '@platform/rootedFs';
+import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
+import { SettingsMemoryController } from '@texra/controllers/settingsView/SettingsMemoryController';
 
 import { createFakeUIHosts } from '../support/FakeHosts';
-
-const mocks = vi.hoisted(() => ({
-  resolveMemoryStoragePath: vi.fn(
-    (storagePath: string) => `mem/${storagePath}`,
-  ),
-  loadMemoryItems: vi.fn(),
-  loadMemoryPreview: vi.fn(),
-}));
-
-vi.mock('@platform/defaults/workspaceStorage', () => ({
-  resolveMemoryStoragePath: mocks.resolveMemoryStoragePath,
-}));
-
-vi.mock('@tools/memory/memoryFileSystem', async (importOriginal) => {
-  const actual =
-    await importOriginal<typeof import('@tools/memory/memoryFileSystem')>();
-  return {
-    // `deleteMemoryPath` stays real: it is the call whose target path and
-    // options this suite pins, on the storage view provided below.
-    ...actual,
-    loadMemoryItems: mocks.loadMemoryItems,
-    loadMemoryPreview: mocks.loadMemoryPreview,
-  };
-});
-
-// Imported after vi.mock so the mocked dependencies are in place.
-import { SettingsMemoryController } from '@texra/controllers/settingsView/SettingsMemoryController';
-import { StorageFs } from '@platform/rootedFs';
-import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
-import type { RootedFileSystem } from '@utils/files/rootedFileSystem';
-
-/** The session's storage view, with the one operation this suite exercises. */
-const storageRemove = vi.fn(() => Effect.void);
-const storageFsStub = {
-  remove: storageRemove,
-} as unknown as RootedFileSystem;
+import { nodePlatformLayer } from '../support/fsTestUtils';
 
 function createController(options?: {
   confirmResponses?: readonly boolean[];
@@ -58,41 +29,87 @@ function createController(options?: {
   };
 }
 
+/**
+ * Runs `test` over a temp storage root whose memory tree holds a folder,
+ * `memories/notes/` (one file inside), and a file beside it,
+ * `memories/keep.md`. `test` gets the storage root's absolute path.
+ */
+const withMemoryTree = <A, E>(
+  test: (storage: string) => Effect.Effect<A, E, StorageFs>,
+): Effect.Effect<A, E> =>
+  Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem;
+    const storage = yield* Effect.orDie(
+      Effect.gen(function* () {
+        const root = yield* fs.makeTempDirectoryScoped({
+          prefix: 'texra-settings-memory-',
+        });
+        yield* fs.makeDirectory(path.join(root, 'memories', 'notes'), {
+          recursive: true,
+        });
+        yield* fs.writeFileString(
+          path.join(root, 'memories', 'notes', 'item.md'),
+          'note',
+        );
+        yield* fs.writeFileString(
+          path.join(root, 'memories', 'keep.md'),
+          'keep',
+        );
+        return root;
+      }),
+    );
+    return yield* test(storage).pipe(
+      Effect.provide(sessionFsLayer({ workspace: undefined, storage })),
+    );
+  }).pipe(Effect.scoped, Effect.provide(nodePlatformLayer));
+
 describe('SettingsMemoryController', () => {
-  afterEach(() => {
-    vi.clearAllMocks();
-  });
-
   it.effect('leaves memory files untouched when deletion is cancelled', () =>
-    Effect.gen(function* () {
-      const { controller } = createController({ confirmResponses: [false] });
+    withMemoryTree((storage) =>
+      Effect.gen(function* () {
+        const { controller } = createController({ confirmResponses: [false] });
 
-      assert.equal(
-        yield* controller.deleteMemory({
-          storagePath: 'item.md',
-          displayPath: 'item.md',
-        }),
-        null,
-      );
-      assert.equal(storageRemove.mock.calls.length, 0);
-    }).pipe(Effect.provideService(StorageFs, storageFsStub)),
+        assert.equal(
+          yield* controller.deleteMemory({
+            storagePath: 'memories/notes',
+            displayPath: '/memories/notes',
+          }),
+          null,
+        );
+        assert.equal(
+          existsSync(path.join(storage, 'memories', 'notes', 'item.md')),
+          true,
+        );
+      }),
+    ),
   );
 
   it.effect('deletes confirmed memory files and returns refreshed data', () =>
-    Effect.gen(function* () {
-      mocks.loadMemoryItems.mockReturnValue(Effect.succeed([]));
-      const { controller } = createController({ confirmResponses: [true] });
+    withMemoryTree((storage) =>
+      Effect.gen(function* () {
+        const { controller } = createController({ confirmResponses: [true] });
 
-      const message = yield* controller.deleteMemory({
-        storagePath: 'item.md',
-        displayPath: 'item.md',
-      });
+        const message = yield* controller.deleteMemory({
+          storagePath: 'memories/notes',
+          displayPath: '/memories/notes',
+        });
 
-      assert.deepEqual(storageRemove.mock.calls[0], [
-        'mem/item.md',
-        { recursive: true },
-      ]);
-      assert.equal(message?.command, SETTINGS_VIEW_COMMANDS.UPDATE_MEMORY);
-    }).pipe(Effect.provideService(StorageFs, storageFsStub)),
+        // The folder goes with its contents (a recursive remove), inside the
+        // session's storage root; the file beside it stays.
+        assert.equal(
+          existsSync(path.join(storage, 'memories', 'notes')),
+          false,
+        );
+        assert.equal(
+          existsSync(path.join(storage, 'memories', 'keep.md')),
+          true,
+        );
+        assert.equal(message?.command, SETTINGS_VIEW_COMMANDS.UPDATE_MEMORY);
+        assert.deepEqual(
+          message?.items.map((item) => item.storagePath),
+          ['memories/keep.md'],
+        );
+      }),
+    ),
   );
 });

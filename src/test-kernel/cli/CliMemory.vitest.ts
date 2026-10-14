@@ -1,7 +1,10 @@
+// Node imports
+import * as path from 'node:path';
+
 // Third-party imports
 import { it } from '@effect/vitest';
-import { Cause, Effect, Exit } from 'effect';
-import { describe, expect, vi } from 'vitest';
+import { Cause, Effect, Exit, FileSystem } from 'effect';
+import { describe, expect } from 'vitest';
 
 // Local imports
 import {
@@ -10,17 +13,34 @@ import {
   formatCliMemoryList,
   loadCliMemoryDetail,
 } from '@cli/runtime/memory';
-import { StorageFs } from '@platform/rootedFs';
+import { sessionFsLayer, type StorageFs } from '@platform/rootedFs';
 import type { MemoryViewItem } from '@shared/tools/memoryView';
-import type { RootedFileSystem } from '@utils/files/rootedFileSystem';
+import { nodePlatformLayer } from '@test/support/fsTestUtils';
 
-vi.mock('@tools/memory/memoryFileSystem', () => ({
-  loadMemoryPreview: () => Effect.succeed({ lineCount: 1, preview: 'preview' }),
-}));
-
-/** The storage view `loadCliMemoryDetail` takes from context. The mocked
- *  preview never touches it, so nothing on it is reached. */
-const storageFsStub = {} as RootedFileSystem;
+/** Runs `program` over a temp storage root holding one stored memory,
+ *  `memories/project.md`, whose whole text is `preview`. */
+const withStoredMemory = <A, E>(
+  program: Effect.Effect<A, E, StorageFs>,
+): Effect.Effect<A, E> =>
+  Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem;
+    const storage = yield* Effect.orDie(
+      Effect.gen(function* () {
+        const root = yield* fs.makeTempDirectoryScoped({
+          prefix: 'texra-cli-memory-',
+        });
+        yield* fs.makeDirectory(path.join(root, 'memories'));
+        yield* fs.writeFileString(
+          path.join(root, 'memories', 'project.md'),
+          'preview',
+        );
+        return root;
+      }),
+    );
+    return yield* program.pipe(
+      Effect.provide(sessionFsLayer({ workspace: undefined, storage })),
+    );
+  }).pipe(Effect.scoped, Effect.provide(nodePlatformLayer));
 
 const item: MemoryViewItem = {
   displayPath: '/memories/project.md',
@@ -68,10 +88,12 @@ describe('CLI memory formatting', () => {
   ])('accepts the path form %s', (input) =>
     Effect.gen(function* () {
       const detail = yield* loadCliMemoryDetail(input);
-      expect(detail).toMatchObject({
+      expect(detail).toStrictEqual({
         path: '/memories/project.md',
+        lineCount: 1,
+        preview: 'preview',
       });
-    }).pipe(Effect.provideService(StorageFs, storageFsStub)),
+    }).pipe(withStoredMemory),
   );
 
   it.effect('rejects absolute paths outside the memory display root', () =>
@@ -81,7 +103,7 @@ describe('CLI memory formatting', () => {
       );
       expect(error).toBeInstanceOf(Error);
       expect((error as Error).message).toContain('Invalid memory path');
-    }).pipe(Effect.provideService(StorageFs, storageFsStub)),
+    }).pipe(withStoredMemory),
   );
 
   it.effect(
@@ -95,6 +117,6 @@ describe('CLI memory formatting', () => {
         expect((error as Error).message).toContain(
           'Invalid memory path: /memories/../outside.md',
         );
-      }).pipe(Effect.provideService(StorageFs, storageFsStub)),
+      }).pipe(withStoredMemory),
   );
 });

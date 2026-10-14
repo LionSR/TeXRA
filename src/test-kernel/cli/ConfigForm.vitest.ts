@@ -7,8 +7,8 @@ import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 
 import {
   API_KEY_PROVIDER_IDS,
-  type ApiKeyStatus,
-  type ApiKeyProviderId,
+  apiKeySecretName,
+  SecretsFailed,
 } from '@texra-ai/llm';
 import { CliConfigForm } from '@cli/chat/tui/forms/CliConfigForm';
 import { formatProviderApiKeySummary } from '@cli/chat/tui/forms/ProviderApiKeyForm';
@@ -44,19 +44,6 @@ import {
 import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
 import { GITHUB_TOKEN_STORAGE_KEY } from '@texra/tools/github/githubAuth';
 
-const providerApiKeyRuntime = vi.hoisted(() => ({
-  load: vi.fn(),
-  save: vi.fn(),
-}));
-
-vi.mock('@texra-ai/llm', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@texra-ai/llm')>();
-  return { ...actual, loadApiKeyStatusMap: providerApiKeyRuntime.load };
-});
-vi.mock('@cli/chat/tui/hosts/cliProviderKeys', () => ({
-  commitCliProviderApiKey: providerApiKeyRuntime.save,
-}));
-
 type ConfigFormProps = Parameters<
   typeof import('@cli/chat/tui/forms/ConfigForm').ConfigForm
 >[0];
@@ -77,22 +64,56 @@ vi.mock('@cli/chat/tui/forms/ConfigForm', async (importOriginal) => {
   };
 });
 
-function apiKeyStatuses(
-  overrides: Partial<Record<ApiKeyProviderId, ApiKeyStatus>> = {},
-): Record<ApiKeyProviderId, ApiKeyStatus> {
-  return Object.fromEntries(
-    API_KEY_PROVIDER_IDS.map((provider) => [
-      provider,
-      overrides[provider] ?? 'not-set',
-    ]),
-  ) as Record<ApiKeyProviderId, ApiKeyStatus>;
+/** The key every status load reads first: one load, one read of it. */
+const FIRST_PROVIDER_KEY = apiKeySecretName(API_KEY_PROVIDER_IDS[0]!);
+
+/**
+ * The secret store the rendered form reads and writes through, as a host
+ * would pass it. A key-status load reads one key per API-key provider; a
+ * test can hold a load's answer, taken when the load started, on a gate it
+ * settles later (a rejected gate fails that load), to order the answer
+ * against the form's other work.
+ */
+class KeyStatusSecrets extends FakeSecrets {
+  /** The key-status loads started so far. */
+  loads = 0;
+  private readonly held: Promise<unknown>[] = [];
+  private gate: Promise<unknown> = Promise.resolve();
+
+  /** Hold the answer of the next load that has not started yet. */
+  holdNextLoad(gate: Promise<unknown>): void {
+    this.held.push(gate);
+  }
+
+  override get(key: string): Effect.Effect<string | undefined, SecretsFailed> {
+    if (!key.startsWith('apiKey.')) return super.get(key);
+    if (key === FIRST_PROVIDER_KEY) {
+      this.loads += 1;
+      this.gate = this.held.shift() ?? Promise.resolve();
+    }
+    const gate = this.gate;
+    return super.get(key).pipe(
+      Effect.tap(() =>
+        Effect.tryPromise({
+          try: () => gate,
+          catch: (cause) =>
+            new SecretsFailed({
+              reason: 'io',
+              operation: 'get',
+              message: 'The key store could not be read',
+              key,
+              cause,
+            }),
+        }),
+      ),
+    );
+  }
 }
 
+let formSecrets = new KeyStatusSecrets();
+
 beforeEach(() => {
-  providerApiKeyRuntime.load.mockReset();
-  providerApiKeyRuntime.load.mockReturnValue(Effect.succeed(apiKeyStatuses()));
-  providerApiKeyRuntime.save.mockReset();
-  providerApiKeyRuntime.save.mockReturnValue(Effect.void);
+  formSecrets = new KeyStatusSecrets();
 });
 
 afterEach(() => {
@@ -114,9 +135,6 @@ async function renderInkElement(element: unknown): Promise<InkRenderHandles> {
   await waitFor(() => handles.stdin.listenerCount('readable') > 0);
   return handles;
 }
-
-/** The secret store the rendered form writes through, as a host would pass it. */
-const formSecrets = new FakeSecrets();
 
 async function renderCliConfigForm(
   onError?: (error: unknown) => void,
@@ -210,11 +228,9 @@ describe('ConfigForm helpers', () => {
 
 describe('CliConfigForm API-key status lifecycle', () => {
   it('settles a failed initial load to a stable unavailable state', async () => {
-    const initial = createDeferred<Record<ApiKeyProviderId, ApiKeyStatus>>();
+    const initial = createDeferred();
     const onError = vi.fn();
-    providerApiKeyRuntime.load.mockReturnValueOnce(
-      Effect.tryPromise(() => initial.promise),
-    );
+    formSecrets.holdNextLoad(initial.promise);
     const rendered = await renderCliConfigForm(onError);
 
     try {
@@ -234,27 +250,22 @@ describe('CliConfigForm API-key status lifecycle', () => {
   });
 
   it('refreshes provider status after saving without rendering the secret', async () => {
-    const refreshed = createDeferred<Record<ApiKeyProviderId, ApiKeyStatus>>();
-    providerApiKeyRuntime.load
-      .mockReturnValueOnce(Effect.succeed(apiKeyStatuses()))
-      .mockReturnValueOnce(Effect.tryPromise(() => refreshed.promise));
+    const refreshed = createDeferred();
     const rendered = await renderCliConfigForm();
 
     try {
       await waitFor(() =>
         rendered.stdout.output.includes('No provider keys set'),
       );
+      formSecrets.holdNextLoad(refreshed.promise);
       rendered.stdout.output = '';
       await submitOpenAiApiKey(rendered.stdin, rendered.stdout);
-      await waitFor(() => providerApiKeyRuntime.load.mock.calls.length === 2);
-      expect(providerApiKeyRuntime.save).toHaveBeenCalledWith(
-        formSecrets,
-        expect.anything(),
-        'openai',
-        'sk-private-test-key',
-      );
+      await waitFor(() => formSecrets.loads === 2);
+      expect(
+        await Effect.runPromise(formSecrets.get(apiKeySecretName('openai'))),
+      ).toBe('sk-private-test-key');
       expect(rendered.stdout.output).not.toContain('sk-private-test-key');
-      refreshed.resolve(apiKeyStatuses({ openai: 'set' }));
+      refreshed.resolve();
       await waitFor(() =>
         rendered.stdout.output.includes('Configured: OpenAI'),
       );
@@ -264,22 +275,18 @@ describe('CliConfigForm API-key status lifecycle', () => {
   });
 
   it('keeps a successfully saved key configured when its refresh fails', async () => {
-    const refreshed = createDeferred<Record<ApiKeyProviderId, ApiKeyStatus>>();
+    const refreshed = createDeferred();
     const onError = vi.fn();
-    providerApiKeyRuntime.load
-      .mockReturnValueOnce(
-        Effect.succeed(apiKeyStatuses({ openai: 'not-set' })),
-      )
-      .mockReturnValueOnce(Effect.tryPromise(() => refreshed.promise));
     const rendered = await renderCliConfigForm(onError);
 
     try {
       await waitFor(() =>
         rendered.stdout.output.includes('No provider keys set'),
       );
+      formSecrets.holdNextLoad(refreshed.promise);
       rendered.stdout.output = '';
       await submitOpenAiApiKey(rendered.stdin, rendered.stdout);
-      await waitFor(() => providerApiKeyRuntime.load.mock.calls.length === 2);
+      await waitFor(() => formSecrets.loads === 2);
       rendered.stdout.output = '';
       refreshed.reject(new Error('refresh failed'));
       await waitFor(() =>
@@ -301,11 +308,12 @@ describe('CliConfigForm API-key status lifecycle', () => {
   });
 
   it('suppresses a stale mount response after the post-save refresh wins', async () => {
-    const initial = createDeferred<Record<ApiKeyProviderId, ApiKeyStatus>>();
-    const refreshed = createDeferred<Record<ApiKeyProviderId, ApiKeyStatus>>();
-    providerApiKeyRuntime.load
-      .mockReturnValueOnce(Effect.tryPromise(() => initial.promise))
-      .mockReturnValueOnce(Effect.tryPromise(() => refreshed.promise));
+    // The mount's load read the store before the key was saved, so its
+    // stale answer is "no keys"; the refresh read it after.
+    const initial = createDeferred();
+    const refreshed = createDeferred();
+    formSecrets.holdNextLoad(initial.promise);
+    formSecrets.holdNextLoad(refreshed.promise);
     const rendered = await renderCliConfigForm();
 
     try {
@@ -313,13 +321,13 @@ describe('CliConfigForm API-key status lifecycle', () => {
         rendered.stdout.output.includes('Checking configured keys'),
       );
       await submitOpenAiApiKey(rendered.stdin, rendered.stdout);
-      await waitFor(() => providerApiKeyRuntime.load.mock.calls.length === 2);
-      refreshed.resolve(apiKeyStatuses({ openai: 'set' }));
+      await waitFor(() => formSecrets.loads === 2);
+      refreshed.resolve();
       await waitFor(() =>
         rendered.stdout.output.includes('Configured: OpenAI'),
       );
       rendered.stdout.output = '';
-      initial.resolve(apiKeyStatuses());
+      initial.resolve();
       await sleep(20);
       expect(stripAnsi(rendered.stdout.output)).toBe('');
     } finally {
@@ -328,17 +336,15 @@ describe('CliConfigForm API-key status lifecycle', () => {
   });
 
   it('ignores a pending status response after unmount', async () => {
-    const initial = createDeferred<Record<ApiKeyProviderId, ApiKeyStatus>>();
+    const initial = createDeferred();
     const onError = vi.fn();
-    providerApiKeyRuntime.load.mockReturnValueOnce(
-      Effect.tryPromise(() => initial.promise),
-    );
+    formSecrets.holdNextLoad(initial.promise);
     const rendered = await renderCliConfigForm(onError);
 
-    await waitFor(() => providerApiKeyRuntime.load.mock.calls.length === 1);
+    await waitFor(() => formSecrets.loads === 1);
     rendered.instance.unmount();
     rendered.stdout.output = '';
-    initial.resolve(apiKeyStatuses({ openai: 'set' }));
+    initial.resolve();
     await sleep(20);
     expect(stripAnsi(rendered.stdout.output)).toBe('');
     expect(onError).not.toHaveBeenCalled();

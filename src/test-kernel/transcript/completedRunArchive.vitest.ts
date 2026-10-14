@@ -1,16 +1,7 @@
 import { it } from '@effect/vitest';
 /** Completed conversation reads and task reads through the archive facade. */
 import { Effect } from 'effect';
-import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
-
-const launchMocks = vi.hoisted(() => ({
-  resolveAgent: vi.fn(),
-}));
-
-vi.mock('@agent/index/agentRegistry', async (importActual) => ({
-  ...(await importActual<typeof import('@agent/index/agentRegistry')>()),
-  resolveAgentForLaunch: launchMocks.resolveAgent,
-}));
+import { beforeEach, describe, expect } from 'vitest';
 
 import {
   AgentConfigSchema,
@@ -28,6 +19,7 @@ import {
   useTempDirs,
 } from '@test/support/tempDirPlatform';
 import { setupPlatform } from '@test/support/setupPlatform';
+import { BUNDLED_AGENTS } from '@test/support/storeFaults';
 import {
   createProcessSession,
   createTestSession,
@@ -153,15 +145,24 @@ async function writeArchiveFixture(runId: RunId): Promise<void> {
 }
 
 describe('completedRunArchive facade', () => {
-  setupPlatform(() => createTempDirPlatform('texra-archive-', tempDirs));
-
-  beforeEach(async () => {
-    vi.resetAllMocks();
-    taskSession = await Effect.runPromise(createProcessSession());
+  // The built-in agents are the bundled personas, so a resume resolves the
+  // run's `orchestrator` the way a real host does.
+  setupPlatform(async () => {
+    const host = await createTempDirPlatform('texra-archive-', tempDirs);
+    return {
+      ...host,
+      platform: {
+        ...host.platform,
+        agentDirectories: {
+          ...host.platform.agentDirectories,
+          builtIn: () => Effect.succeed(BUNDLED_AGENTS),
+        },
+      },
+    };
   });
 
-  afterEach(async () => {
-    vi.restoreAllMocks();
+  beforeEach(async () => {
+    taskSession = await Effect.runPromise(createProcessSession());
   });
 
   // it.live: the release at the end of this test closes both sessions through
@@ -317,14 +318,6 @@ describe('completedRunArchive facade', () => {
           },
         ]);
         yield* session.log.settled;
-
-        launchMocks.resolveAgent.mockReturnValue(
-          Effect.succeed({
-            path: '/agents/orchestrator.yaml',
-            persona: { prompt: '', tools: [], temperature: 1 },
-            blocks: {},
-          }),
-        );
 
         // The one fact a resume reads: the run's opening `run.position`.
         yield* seedRows(session.log)([
