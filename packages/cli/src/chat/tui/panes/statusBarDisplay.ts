@@ -28,7 +28,7 @@ import {
 import { codingPlanForUsageRoute } from '@texra/shared/model/codingPlans';
 import { AGENT_LIST, NESTED_AGENT, TASK_ACTIONS } from '@ui/copy/nestedRuns';
 import { APPROVAL_BYPASS_BADGE } from '@ui/copy/approvalBypass';
-import { assertNever, filterNotNullish, unique } from '@utils/core';
+import { assertNever, filterNotNullish } from '@utils/core';
 import {
   formatCompactDuration,
   formatCompactTokenCount,
@@ -489,11 +489,13 @@ function fitStatusBarLeftSegments(
   }
 
   const compacted = [...segments];
-  const priorities = unique(
-    compacted
-      .map((segment) => segment.compactPriority)
-      .filter(filterNotNullish),
-  ).sort((a, b) => a - b);
+  const priorities = [
+    ...new Set(
+      compacted
+        .map((segment) => segment.compactPriority)
+        .filter(filterNotNullish),
+    ),
+  ].sort((a, b) => a - b);
 
   // Lowest-priority segments compact first; returns as soon as the row fits.
   const sweep = (

@@ -21,7 +21,6 @@ import {
   setDefaultTeamId,
 } from '@shared/state/onboardingState';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
-import { unique } from '@utils/core';
 
 import {
   forgetHiddenAgent,
@@ -154,7 +153,7 @@ export class WorkspaceAgentsController<
         effectiveSelection,
         defaultTeamId: yield* this.getDefaultTeamId(),
         missingTeamId,
-        unresolvedNames: unique(unresolvedNames),
+        unresolvedNames: [...new Set(unresolvedNames)],
       };
     });
   }
@@ -172,7 +171,7 @@ export class WorkspaceAgentsController<
       // has names left to resolve; the kind is the same for every identifier.
       const keys =
         selection.kind === 'custom'
-          ? unique(identifiers)
+          ? [...new Set(identifiers)]
           : this.resolveIdentifiers(identifiers).keys;
       const unlisted = yield* unlistedCustomAgents(
         this.deps.repoState,
@@ -326,7 +325,7 @@ export class WorkspaceAgentsController<
         );
         yield* this.writeSelection({
           kind: 'custom',
-          agentKeys: unique(agentKeys),
+          agentKeys: [...new Set(agentKeys)],
         });
       }),
     );

@@ -8,7 +8,6 @@ import {
 import { agentKeyOf } from '@shared/schemas';
 import { readSetting } from '@shared/config/settingsAccess';
 import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
-import { unique } from '@utils/core';
 
 import {
   CliUsageError,
@@ -34,12 +33,14 @@ import { GLOBAL_ARGS, optString } from './_helpers/globalArgs';
 import { emitCliResult } from './_helpers/output';
 
 function parseAgentKeys(value = ''): string[] {
-  return unique(
-    value
-      .split(',')
-      .map((item) => item.trim())
-      .filter(Boolean),
-  );
+  return [
+    ...new Set(
+      value
+        .split(',')
+        .map((item) => item.trim())
+        .filter(Boolean),
+    ),
+  ];
 }
 
 function formatConfigValue(value: unknown): string {

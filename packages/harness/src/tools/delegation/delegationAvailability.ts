@@ -37,7 +37,7 @@ import {
 } from '@shared/schemas';
 import { AGENT_TOOL_NAME } from '@shared/constants/delegationTools';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
-import { unique } from '@utils/core';
+
 import { readSettingFrom } from '@utils/config/platformSettings';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -229,11 +229,13 @@ export const selectAvailableDelegationModel = Effect.fn(
     ...input.settings,
     secrets: yield* Secrets,
   });
-  const availableModels = unique(
-    availableModelNames(inputs)
-      .map((model) => model.trim())
-      .filter(Boolean),
-  );
+  const availableModels = [
+    ...new Set(
+      availableModelNames(inputs)
+        .map((model) => model.trim())
+        .filter(Boolean),
+    ),
+  ];
   if (availableModels.length === 0) {
     return yield* Effect.fail(new Error(NO_DELEGATION_MODELS_MESSAGE));
   }

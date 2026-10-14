@@ -40,7 +40,7 @@ import { isLiveRun, type SessionView } from '@shared/session/sessionView';
 import { assertNoParentTraversal } from '@tools/pathResolution';
 import { executed } from '@tools/core/result';
 import { readCompletedRunConversation } from '@transcript';
-import { assertNever, unique } from '@utils/core';
+import { assertNever } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { readNormalizedFile } from '@utils/files/fsDurability';
 import { findExistingRunStoragePathUnder } from '@utils/files/runStorageFs';
@@ -324,10 +324,10 @@ const waitForRuns = Effect.fn('ExecutionsTool.waitForRuns')(function* (
   ids?: readonly RunId[] | null,
 ) {
   const runs = yield* Runs;
-  const candidates = ids?.length ? unique(ids) : runs.get().map((r) => r.runId);
+  const candidates = ids?.length ? ids : runs.get().map((r) => r.runId);
   // Exclude runs that are already effectively done
   // (completed, inactive, or tool-use subagent WAITING with result delivered).
-  const pendingIds = candidates.filter(
+  const pendingIds = [...new Set(candidates)].filter(
     (id) => !shouldSkipWait(context.session, id),
   );
   if (pendingIds.length === 0) return;

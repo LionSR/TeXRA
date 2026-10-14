@@ -6,7 +6,6 @@ import {
   type TexraApprovalPolicy,
 } from '@shared/approvalPolicy';
 import { INTEROP_SKILL_DIRS } from '@skills/skillSources';
-import { unique } from '@utils/core';
 
 /**
  * Single source of truth for the global flags accepted by every TeXRA
@@ -250,11 +249,13 @@ export function rejectHeadlessOnlyFlags(
   rawArgs: readonly string[],
   commandName: string,
 ): void {
-  const labels = unique(
-    rawArgs
-      .map(headlessOnlyFlagLabel)
-      .filter((label): label is string => label !== undefined),
-  );
+  const labels = [
+    ...new Set(
+      rawArgs
+        .map(headlessOnlyFlagLabel)
+        .filter((label): label is string => label !== undefined),
+    ),
+  ];
   if (labels.length === 0) return;
 
   throw new CliUsageError(

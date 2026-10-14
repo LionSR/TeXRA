@@ -21,7 +21,6 @@ import {
   type OutputFileSummary,
   type ResultDiffSummary,
 } from '@texra/shared/plugins/documentOutputs';
-import { unique } from '@utils/core';
 import { isPathWithin } from '@utils/core/pathCore';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { readNormalizedFile } from '@utils/files/fsDurability';
@@ -81,20 +80,19 @@ function formatWorkflowOutputs(
 ): string[] {
   const format = (o: OutputFileSummary): string =>
     formatOutputFile(o, runId, diffInfos?.get(o.absolutePath));
-  const rounds = unique(outputs.map((o) => o.round)).sort((a, b) => a - b);
-  if (rounds.length <= 1) {
-    return ['<output-files>', ...outputs.map(format), '</output-files>'];
-  }
+  const byRound = Map.groupBy(outputs, (o) => o.round);
   // Multiple rounds — group files under <round> tags
-  return [
-    '<output-files>',
-    ...rounds.flatMap((round) => [
-      `<round number="${round}">`,
-      ...outputs.filter((o) => o.round === round).map(format),
-      '</round>',
-    ]),
-    '</output-files>',
-  ];
+  const body =
+    byRound.size <= 1
+      ? outputs.map(format)
+      : [...byRound]
+          .sort(([a], [b]) => a - b)
+          .flatMap(([round, files]) => [
+            `<round number="${round}">`,
+            ...files.map(format),
+            '</round>',
+          ]);
+  return ['<output-files>', ...body, '</output-files>'];
 }
 
 /** The delivery body of a document task's result. Diff files are readable

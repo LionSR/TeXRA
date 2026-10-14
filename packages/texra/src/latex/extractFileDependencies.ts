@@ -15,7 +15,7 @@ import { Effect, FileSystem } from 'effect';
 
 // Local imports
 import type { FileLocation } from '@shared/schemas';
-import { filterNotNull, unique } from '@utils/core';
+import { filterNotNull } from '@utils/core';
 import { ensureError } from '@utils/errors/errorMessage';
 import { normalizeLineEndings } from '@utils/text/stringUtils';
 import { ensureExtension, joinLatexPath } from '@utils/core/pathCore';
@@ -117,7 +117,9 @@ export const extractLatexFileDependencies = Effect.fn(
     { concurrency: 3 },
   );
 
-  return unique(
-    [...texResolved, ...bibResolved, ...styResolved].filter(filterNotNull),
-  );
+  return [
+    ...new Set(
+      [...texResolved, ...bibResolved, ...styResolved].filter(filterNotNull),
+    ),
+  ];
 });

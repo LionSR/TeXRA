@@ -4,7 +4,7 @@ import { glob, hasMagic } from 'glob';
 import { Effect, FileSystem, Scope } from 'effect';
 
 import { CliUsageError } from '@cli/runtime/cliContext';
-import { unique } from '@utils/core';
+
 import { ensureError } from '@utils/errors/errorMessage';
 import { absentReason } from '@utils/files/fsEntryExists';
 // toPosixPath also trims and resolves `.`/`..` segments beyond a bare slash
@@ -263,7 +263,7 @@ const finishWorkflowInputExpansion = Effect.fn('finishWorkflowInputExpansion')(
       }
       expanded.push(...entry);
     }
-    const deduped = unique(expanded);
+    const deduped = [...new Set(expanded)];
     if (deduped.length === 0 && options.allowEmpty !== true) {
       return yield* Effect.fail(
         new CliUsageError(WORKFLOW_INPUT_REQUIRED_MESSAGE),
