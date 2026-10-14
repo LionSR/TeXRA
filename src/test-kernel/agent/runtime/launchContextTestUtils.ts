@@ -51,6 +51,7 @@ export function createTestLaunchContext({
     opening: {
       inputs: {},
       activated: [],
+      attachedMemories: null,
       attachedMemoryMisses: [],
     },
     entry: {

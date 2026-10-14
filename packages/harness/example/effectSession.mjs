@@ -48,7 +48,7 @@ const program = Effect.gen(function* () {
   console.log(`refusal: ${refusal._tag} - ${refusal.message}`);
 }).pipe(
   Effect.scoped,
-  Effect.provide(Sessions.layer({ platform, plugins: harnessBuiltins.all })),
+  Effect.provide(Sessions.layer({ platform, plugins: harnessBuiltins })),
 );
 
 await Effect.runPromise(program);

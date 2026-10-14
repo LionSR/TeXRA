@@ -48,26 +48,16 @@ export function getListOfFiles(
     .join(', ');
 }
 
-/**
- * Build a Nunjucks environment configured the way every TeXRA template render
- * needs: autoescape off, since prompts and generated agent YAML render raw
- * text, not HTML. Centralized so that option isn't hand-copied at each call
- * site — pass a loader to enable `{% include %}`/`{% extends %}`, or `null`
- * for a renderString-only environment.
- */
-export function createTexraNunjucksEnvironment(
-  nunjucksModule: typeof import('nunjucks'),
-  loader: import('nunjucks').ILoader | null = null,
-): import('nunjucks').Environment {
-  return new nunjucksModule.Environment(loader, { autoescape: false });
-}
-
 let promptEnvironmentPromise: Promise<import('nunjucks').Environment> | null =
   null;
 
 /**
- * The shared prompt-rendering environment. The lazy `nunjucks` import is this
- * module's one foreign async edge — memoized, so every render after the first
+ * The shared prompt-rendering environment: an empty loader list, since a
+ * prompt is an in-memory string and names no template file (a `null` list
+ * would get nunjucks' default `views/` loader; an empty one makes any
+ * `{% include %}` fail as "template not found"), and autoescape off, since
+ * a prompt is raw text, not HTML. The lazy `nunjucks` import is this module's
+ * one foreign async edge — memoized, so every render after the first
  * resolves from the already-settled promise.
  */
 const promptEnvironment: Effect.Effect<import('nunjucks').Environment, Error> =
@@ -75,10 +65,7 @@ const promptEnvironment: Effect.Effect<import('nunjucks').Environment, Error> =
     try: () =>
       (promptEnvironmentPromise ??= import('nunjucks').then(
         ({ default: nunjucks }) =>
-          createTexraNunjucksEnvironment(
-            nunjucks,
-            new nunjucks.FileSystemLoader('.'),
-          ),
+          new nunjucks.Environment([], { autoescape: false }),
       )),
     catch: ensureError,
   });

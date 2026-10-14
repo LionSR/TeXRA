@@ -244,11 +244,9 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
           const handed = [yield* handedDown(run, script)];
           return { content, offered: step.rows, handed };
         }
-        const { inputs } =
-          run.opening ?? (yield* Effect.die(new Error(`${runId}: no opening`)));
         const prompts = yield* buildInitialToolUsePrompts(
           run.persona.prompt,
-          inputs,
+          run.opening ?? (yield* Effect.die(new Error(`${runId}: no opening`))),
           {
             workspace: session.roots.workspace,
             settings: session.roots,

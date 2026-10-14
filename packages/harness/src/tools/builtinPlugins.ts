@@ -1,9 +1,8 @@
 /**
  * The harness's built-in plugins: files and the shell, the web, memory and
  * tasks, goal mode, child agents and code mode. An app lists them beside its
- * own (`@tools/registry` for TeXRA); `harnessBuiltins.all` is every one with
- * no app options, and `harnessBuiltins.minimal` only files and the shell: a
- * complete harness whose other tools are absent.
+ * own (`@tools/registry` for TeXRA); `harnessBuiltins` is every one with
+ * no app options.
  */
 
 // Local imports
@@ -122,12 +121,12 @@ export const codemode = builtin<CodeSandbox>({
   sessionLayer: codeSandboxLayer,
 });
 
-/** The built-in lists: every built-in with no app options, and files and
- *  the shell alone. */
-export const harnessBuiltins: {
-  readonly all: readonly Plugin[];
-  readonly minimal: readonly Plugin[];
-} = {
-  all: [fileOps(), web, memoryWorkflow, goal, multiAgent, codemode],
-  minimal: [fileOps()],
-};
+/** Every built-in, with no app options. */
+export const harnessBuiltins: readonly Plugin[] = [
+  fileOps(),
+  web,
+  memoryWorkflow,
+  goal,
+  multiAgent,
+  codemode,
+];

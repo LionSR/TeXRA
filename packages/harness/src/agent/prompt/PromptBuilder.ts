@@ -2,7 +2,7 @@
 import { Effect, FileSystem } from 'effect';
 
 // Local imports - agent
-import type { TemplateVars } from '@agent/prompt/templateInputs';
+import type { TemplateOpening } from '@agent/prompt/templateInputs';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import type { RunContext, SkillCatalogEntry } from '@shared/schemas';
 import { delegationUpdate } from '@tools/delegation/delegationAvailability';
@@ -107,35 +107,8 @@ export function contextUpdate(told: RunContext, now: RunContext): string {
 }
 
 /**
- * Combine the base system prompt with the project's `AGENTS.md`, if any.
- *
- * @param systemPrompt Base system prompt template
- * @param userVars Variables for template rendering
- * @param workspace The run's workspace root, whose `AGENTS.md` applies
- * @returns Full system prompt string
- */
-const getSystemPromptWithRules = Effect.fn('prompt.systemWithRules')(function* (
-  systemPrompt: string,
-  userVars: TemplateVars,
-  workspace: string | undefined,
-): Effect.fn.Return<string, Error, FileSystem.FileSystem> {
-  const parts = [yield* renderPrompt(systemPrompt, userVars)];
-
-  const instructions = yield* loadAgentsMd(workspace);
-  if (instructions) parts.push(instructions);
-
-  // Append attached memories (read-only context from orchestrator)
-  const attachedMemories = userVars.ATTACHED_MEMORIES;
-  if (typeof attachedMemories === 'string' && attachedMemories) {
-    parts.push(attachedMemories);
-  }
-
-  return parts.join('\n');
-});
-
-/**
- * The system text a conversation opens with: its persona's prompt rendered
- * with the project's rules (`getSystemPromptWithRules`), and the suffix of
+ * The system text a conversation opens with: its persona's prompt rendered,
+ * then the project's `AGENTS.md` and the attached memories, and the suffix of
  * tool-use instructions and workspace facts, which a text-only persona (a
  * task's writer) goes without. What each step's plugins add is
  * appended per request (`stepInstructions`).
@@ -143,7 +116,7 @@ const getSystemPromptWithRules = Effect.fn('prompt.systemWithRules')(function* (
 export const buildInitialToolUsePrompts = Effect.fn('prompt.initialToolUse')(
   function* (
     personaPrompt: string,
-    userVars: TemplateVars,
+    { inputs, attachedMemories }: TemplateOpening,
     options: {
       /** The run's workspace root: its `AGENTS.md` and `<workspace_info>`. */
       workspace: string | undefined;
@@ -157,11 +130,12 @@ export const buildInitialToolUsePrompts = Effect.fn('prompt.initialToolUse')(
     Error,
     FileSystem.FileSystem | ChildProcessSpawner
   > {
-    const systemPrompt = yield* getSystemPromptWithRules(
-      personaPrompt,
-      userVars,
-      options.workspace,
-    );
+    const systemPrompt = [
+      yield* renderPrompt(personaPrompt, inputs),
+      ...[yield* loadAgentsMd(options.workspace), attachedMemories].filter(
+        Boolean,
+      ),
+    ].join('\n');
     if (options.textOnly) return { systemPrompt, instructionSuffix: '' };
     const suffixParts = [
       TOOL_USE_INSTRUCTIONS,
@@ -169,7 +143,7 @@ export const buildInitialToolUsePrompts = Effect.fn('prompt.initialToolUse')(
     ];
     return {
       systemPrompt,
-      instructionSuffix: yield* renderPrompt(suffixParts.join('\n'), userVars),
+      instructionSuffix: yield* renderPrompt(suffixParts.join('\n'), inputs),
     };
   },
 );

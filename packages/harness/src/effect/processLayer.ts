@@ -47,7 +47,7 @@ export class Sessions extends Context.Service<
 >()('@texra-ai/harness/Sessions') {
   /**
    * The Effect embedder's entry: compose the process from its platform and
-   * its plugins (`harnessBuiltins.all` from `@texra-ai/harness/plugins`, or a
+   * its plugins (`harnessBuiltins` from `@texra-ai/harness/plugins`, or a
    * list of the embedder's own beside them), and serve its sessions for
    * this layer's lifetime; the layer's release closes every session still
    * open. A plugin list the harness cannot compose (the defects `toolTable`

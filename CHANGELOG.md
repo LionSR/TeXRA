@@ -11,7 +11,12 @@ All notable changes to this project will be documented in this file.
   no `index`/`total`, a task group carries neither, and the transcript has
   no `phase` row. A script's `phase()` titles still group its calls. Runs
   written by an earlier build are listed as such and are not resumed.
-
+- **A prompt's `{% include %}` reads no file.** Prompts render from their
+  own text alone, so an include fails as "template not found" instead of
+  reading a file relative to the process's working directory.
+- **SDK: `harnessBuiltins` is the list itself.** `harnessBuiltins.all` is
+  now `harnessBuiltins`, and `harnessBuiltins.minimal` is gone: for files
+  and the shell alone, keep the plugin whose `id` is `file-ops`.
 - **SDK: a recipe's result is its `structured` value; `output.documents` is
   gone.** Every run's output is `{ response, files, structured? }`: a
   recipe's return value is `structured`, which the plugin owning its block
@@ -162,8 +167,8 @@ history`, a resume and a follow-up say it was "written by an earlier
   checked strictly: a document task (any run that produced revisions), a
   `texra run --output` / `--output-dir` run, and a finished subagent run
   (the child's own record) now read as damaged: they
-  cannot be opened, resumed or shown in history. Other tasks are unaffected. A launch configuration that still
-  lists files in `editedFiles` is refused with a message naming
+  cannot be opened, resumed or shown in history. Other tasks are unaffected. A launch configuration's
+  `editedFiles` is ignored, like any unknown field: the edited file is
   `editedFile`.
 - **The built-in agents ship in one directory.** The split between
   `agents/` (agents with a document task) and `tool_use_agents/` came from
@@ -171,14 +176,14 @@ history`, a resume and a follow-up say it was "written by an earlier
   every bundled agent now lives in `resources/agents/`. The prompt variables
   `BUILTIN_WORKFLOW_DIR` and `BUILTIN_TOOLUSE_DIR` become one,
   `BUILTIN_AGENTS_DIR`. A custom agent (for example a customized copy of
-  `creator`) that still names one of the old two is listed as an issue
-  saying so, instead of rendering it empty.
+  `creator`) that still names one of the old two renders it empty, like
+  any unknown variable.
 - **Agent files no longer inherit from each other.** The `inherits:` field
   is gone: an agent file is complete on its own, and customizing a
   built-in agent already gives you a full copy. A custom agent file that
   still has `inherits:` is not listed; the Agents tab and `texra agents`
-  show it as an issue saying "`inherits` was removed in 1.0; copy the fields you need into this
-  agent". No built-in agent used it.
+  show it as an issue naming the unrecognized key. No built-in agent used
+  it.
 - **`/login` takes `chatgpt` or `grok` only.** The undocumented spellings
   `codex`, `subscription`, `xai` and `supergrok` are gone; one of them now
   shows the `/login` usage instead of signing in.

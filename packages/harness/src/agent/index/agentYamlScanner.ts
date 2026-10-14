@@ -245,20 +245,10 @@ function formatScanFailure(error: unknown): string {
 function formatSchemaIssue(issue: ZodIssue): string {
   const where = issue.path.join('.');
   const prefix = where ? `${where}: ` : '';
-  if (issue.code === 'unrecognized_keys') {
-    const unrecognized = `${prefix}unrecognized keys ${issue.keys.join(', ')}`;
-    // A file written before 1.0 can still name a parent; say what replaces it.
-    return issue.keys.includes('inherits')
-      ? `${unrecognized} (\`inherits\` was removed in 1.0; copy the fields you need into this agent)`
-      : unrecognized;
-  }
+  if (issue.code === 'unrecognized_keys')
+    return `${prefix}unrecognized keys ${issue.keys.join(', ')}`;
   return issue.message ? `${prefix}${issue.message}` : '';
 }
-
-/** The template variables 1.0 removed, named anywhere in a prompt: in an
- *  output, a tag (`{% if %}`, `{% set %}`) or any other expression. */
-const RETIRED_TEMPLATE_VARIABLE =
-  /\b(BUILTIN_WORKFLOW_DIR|BUILTIN_TOOLUSE_DIR)\b/;
 
 /**
  * The entry a definition makes: its persona with the schema's defaults
@@ -276,14 +266,6 @@ export function agentEntryOf(
 ): AgentEntry {
   const { name, description, basedOn, ...fields } = definition;
   const persona = PersonaSchema.parse(fields);
-  const retired = [persona.prompt, JSON.stringify(blocks)]
-    .join('\n')
-    .match(RETIRED_TEMPLATE_VARIABLE);
-  // An unknown variable renders empty, so a removed one is refused here.
-  if (retired !== null)
-    throw new Error(
-      `\`${retired[1]}\` was removed in 1.0: the built-in agents are one directory, \`BUILTIN_AGENTS_DIR\`.`,
-    );
   const keys = Object.keys(blocks);
   if (keys.length > 0 && persona.tools.length > 0)
     throw new Error(

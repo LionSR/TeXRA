@@ -258,29 +258,18 @@ describe('plugin rosters', () => {
     ]);
   });
 
-  it("pins the harness's built-in lists", () => {
-    expect({
-      all: roster(harnessBuiltins.all),
-      minimal: roster(harnessBuiltins.minimal),
-    }).toEqual({
-      all: [
-        [
-          'file-ops',
-          ['bash', 'read_file', 'write_file', 'edit_file', 'glob', 'grep'],
-        ],
-        ['web', ['web_search', 'web_fetch']],
-        ['memory-workflow', ['memory', 'executions']],
-        ['goal', ['plan']],
-        ['multi-agent', ['agent']],
-        ['codemode', ['script']],
+  it("pins the harness's built-in list", () => {
+    expect(roster(harnessBuiltins)).toEqual([
+      [
+        'file-ops',
+        ['bash', 'read_file', 'write_file', 'edit_file', 'glob', 'grep'],
       ],
-      minimal: [
-        [
-          'file-ops',
-          ['bash', 'read_file', 'write_file', 'edit_file', 'glob', 'grep'],
-        ],
-      ],
-    });
+      ['web', ['web_search', 'web_fetch']],
+      ['memory-workflow', ['memory', 'executions']],
+      ['goal', ['plan']],
+      ['multi-agent', ['agent']],
+      ['codemode', ['script']],
+    ]);
   });
 
   // Failure mode: a plugin's tool requires the built-ins' call services, so
