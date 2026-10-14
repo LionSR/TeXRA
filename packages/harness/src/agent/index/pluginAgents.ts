@@ -53,14 +53,7 @@ const CLAUDE_CODE_TOOLS: Readonly<Record<string, string>> = {
  *  beside the installed plugins' tools (a child inherits its parent's
  *  offered tools instead): the file, shell and web tools. */
 export const PLUGIN_AGENT_DEFAULT_TOOLS = [
-  'read_file',
-  'write_file',
-  'edit_file',
-  'bash',
-  'glob',
-  'grep',
-  'web_fetch',
-  'web_search',
+  ...new Set(Object.values(CLAUDE_CODE_TOOLS)),
 ];
 
 /** One plugin agent as its file defines it. */

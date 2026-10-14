@@ -1,7 +1,6 @@
 import nunjucks from 'nunjucks';
 
 import { buildTemplatePassthrough } from '@agent/prompt/templateInputs';
-import { createTexraNunjucksEnvironment } from '@utils/prompt';
 
 type AgentTemplateKind = 'toolUse' | 'workflowSingle';
 
@@ -11,8 +10,8 @@ export const AGENT_TEMPLATE_FILES: Record<AgentTemplateKind, string> = {
 };
 
 // No loader: this environment only renders in-memory template strings, never
-// named template files, so `{% include %}`/`{% extends %}` never resolve.
-const env = createTexraNunjucksEnvironment(nunjucks);
+// named template files. Autoescape off: the output is agent YAML, not HTML.
+const env = new nunjucks.Environment(null, { autoescape: false });
 
 // Frozen so the shared module-level instance can't be mutated even if a
 // caller forgets to spread it before passing to nunjucks.renderString.

@@ -294,7 +294,12 @@ export function testAgentRun(
     parentStage: logger.openStage('Run: chat'),
     stores: hostStores(),
     toolPolicy: {},
-    opening: { inputs: {}, activated: [], attachedMemoryMisses: [] },
+    opening: {
+      inputs: {},
+      activated: [],
+      attachedMemories: null,
+      attachedMemoryMisses: [],
+    },
     entry: {
       registration: null,
       opening: noCoWrite,

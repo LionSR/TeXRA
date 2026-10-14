@@ -48,7 +48,7 @@ describe('agent YAML scanner', () => {
   beforeAll(() => installPlatform({}));
 
   it.live(
-    'refuses a file that still names a parent, saying inherits was removed',
+    'refuses a file that still names a parent as an unrecognized key',
     () =>
       Effect.gen(function* () {
         const dir = yield* agentDir({
@@ -67,9 +67,7 @@ describe('agent YAML scanner', () => {
         expect(issues).toEqual([
           {
             path: 'child.yaml',
-            message: expect.stringContaining(
-              '`inherits` was removed in 1.0; copy the fields you need into this agent',
-            ),
+            message: expect.stringContaining('unrecognized keys inherits'),
           },
         ]);
       }),

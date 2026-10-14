@@ -68,8 +68,6 @@ const TemplateInputsSchema = z.object({
   MEDIA_FILE: z.string().nullable(),
   /** The run's output file list; absent when it has none. */
   OUTPUT_FILES: z.array(z.string()).optional(),
-  /** XML block of attached memory contents, null when none are attached. */
-  ATTACHED_MEMORIES: z.string().nullable(),
 });
 
 type TemplateInputs = z.infer<typeof TemplateInputsSchema>;
@@ -80,7 +78,7 @@ type TemplateInputs = z.infer<typeof TemplateInputsSchema>;
  * off, so templates must tolerate absence), and a plugin's own variables add
  * custom keys beside the fixed ones.
  */
-export type TemplateVars = Partial<TemplateInputs> & Record<string, unknown>;
+type TemplateVars = Partial<TemplateInputs> & Record<string, unknown>;
 
 /** The fixed vocabulary as a runtime list; its reader builds a map from it,
  *  so its order is irrelevant. */
@@ -125,12 +123,14 @@ type AttachedMemoriesResult = {
 
 /**
  * What a launch opens from: the template inputs; the names of the skills a
- * tool-use run's instruction activated; and the attached memories that could
- * not be read.
+ * tool-use run's instruction activated; the attached memories' XML block,
+ * appended to the system prompt (null when none are attached); and the
+ * attached memories that could not be read.
  */
 export interface TemplateOpening {
   readonly inputs: TemplateVars;
   readonly activated: readonly string[];
+  readonly attachedMemories: string | null;
   readonly attachedMemoryMisses: AttachedMemoryMiss[];
 }
 
@@ -156,7 +156,6 @@ export const buildTemplateInputs = Effect.fn('buildTemplateInputs')(function* (
     ...(agentConfig.outputFiles.length > 0
       ? { OUTPUT_FILES: agentConfig.outputFiles }
       : {}),
-    ATTACHED_MEMORIES: attachedMemories.xml,
   };
 
   return {
@@ -166,6 +165,7 @@ export const buildTemplateInputs = Effect.fn('buildTemplateInputs')(function* (
     activated: isTrustedScript(agentConfig)
       ? []
       : activatedSkillNames([agentConfig.instruction]),
+    attachedMemories: attachedMemories.xml,
     attachedMemoryMisses: attachedMemories.misses,
   };
 });

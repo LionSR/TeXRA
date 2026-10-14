@@ -39,9 +39,8 @@ one copy rather than a second nested one.
 The package's surface is Effect: `Sessions.layer({ platform, plugins })`
 composes the process and provides the session owner for one `Scope`, and the
 embedder runs the program at its own entry point. `plugins` is the list of
-what the runs can use: the harness's built-ins (`harnessBuiltins.all`, or
-`harnessBuiltins.minimal` for files and the shell alone), and any plugin of
-the embedder's own beside them. `session.start` runs an agent as a
+what the runs can use: the harness's built-ins (`harnessBuiltins`) and any
+plugin of the embedder's own beside them. `session.start` runs an agent as a
 conversation. A plugin may own one more block of an agent file
 (`Plugin.agentBlock`, an `AgentBlock`): an agent carrying it is a task, which
 that plugin launches on its own recipe script (TeXRA's `documents` plugin owns
@@ -75,7 +74,7 @@ const program = Effect.gen(function* () {
   return yield* run.result;
 }).pipe(
   Effect.scoped,
-  Effect.provide(Sessions.layer({ platform, plugins: harnessBuiltins.all })),
+  Effect.provide(Sessions.layer({ platform, plugins: harnessBuiltins })),
 );
 
 const result = await Effect.runPromise(program);
@@ -365,7 +364,7 @@ files.
 | --------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
 | `@texra-ai/harness`         | `Sessions`, `Session`, `Run`, the tagged errors, and the tool-definition helpers (`defineTool`, `MapToolRegistry`) with their types |
 | `@texra-ai/harness/schemas` | Zod schemas + inferred types for agent definitions, configs, and run results                                                        |
-| `@texra-ai/harness/plugins` | `harnessBuiltins`: the built-in plugins, `.all` and `.minimal`                                                                      |
+| `@texra-ai/harness/plugins` | `harnessBuiltins`: the built-in plugins                                                                                             |
 | `@texra-ai/harness/node`    | `nodePlatform(options)`, a ready-made Node `AgentPlatform` with its workspace roots                                                 |
 
 Every entry needs the `effect` and `zod` peers installed. See

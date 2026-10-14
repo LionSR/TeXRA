@@ -72,7 +72,7 @@ describe('buildTemplateInputs with missing configured files', () => {
   });
 
   it('records attached memory read misses from the prompt-load pass', async () => {
-    const { inputs: vars, attachedMemoryMisses } = await buildVars(
+    const { attachedMemories, attachedMemoryMisses } = await buildVars(
       AgentConfigSchema.parse({
         agent: 'generic',
         model: 'test-model',
@@ -80,7 +80,7 @@ describe('buildTemplateInputs with missing configured files', () => {
       }),
     );
 
-    expect(vars.ATTACHED_MEMORIES).toBe(
+    expect(attachedMemories).toBe(
       '<attached_memories>\n<memory name="/memories/present.md">\nRemember this convention.\n</memory>\n</attached_memories>',
     );
     expect(attachedMemoryMisses).toEqual([

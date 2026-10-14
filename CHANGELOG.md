@@ -11,7 +11,16 @@ All notable changes to this project will be documented in this file.
   no `index`/`total`, a task group carries neither, and the transcript has
   no `phase` row. A script's `phase()` titles still group its calls. Runs
   written by an earlier build are listed as such and are not resumed.
-
+- **Pre-1.0 agent-file hints are gone.** An agent file with `inherits:` is
+  refused as an unrecognized key, without the hint to copy the parent's
+  fields; a prompt naming `BUILTIN_WORKFLOW_DIR` or `BUILTIN_TOOLUSE_DIR`
+  is no longer refused and renders them empty, like any unknown variable;
+  and a launch configuration's `editedFiles` is ignored, like any unknown
+  field (the edited file is `editedFile`). A prompt's `{% include %}` no
+  longer reads files relative to the process's working directory.
+- **SDK: `harnessBuiltins` is the list itself.** `harnessBuiltins.all` is
+  now `harnessBuiltins`, and `harnessBuiltins.minimal` is gone: for files
+  and the shell alone, keep the plugin whose `id` is `file-ops`.
 - **SDK: a recipe's result is its `structured` value; `output.documents` is
   gone.** Every run's output is `{ response, files, structured? }`: a
   recipe's return value is `structured`, which the plugin owning its block
