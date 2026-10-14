@@ -7,7 +7,7 @@ All notable changes to this project will be documented in this file.
 ### Breaking Changes
 
 - **A document task's latexdiff results and missing outputs moved out of
-  its log.** `texra run --json` no longer streams them as separate log
+  its log.** `texra run --output-format ndjson` no longer streams them as separate log
   records; they arrive with the task's documents, in its `plugin.fact`
   progress records, per revision, beside the reply each revision kept.
   The task panel and the terminal show both under each revision's files.
@@ -33,14 +33,14 @@ All notable changes to this project will be documented in this file.
   reads (`AgentBlock.result`: the value's schema, its delivery body and the
   files it changed). A document task's documents, diffs included, are that
   value, and their diffs are computed when the task proposes, for every
-  launch. `texra run --json` still reports a document task's documents as
+  launch. `texra run --output-format json` still reports a document task's documents as
   `output.documents`. A subagent delivery names its kind by the block key
   (`kind="task"`, was `kind="document-task"`). Runs written by an earlier
   build are listed as such and are not resumed. An older window is refused
   by a newer service and asked to update.
 - **Only a document task's proposed revision carries diffs.** Earlier
   revisions' files no longer have a `diff=` attribute in a subagent
-  delivery or an entry in `texra run --json`'s `documents.diffs`; the
+  delivery or an entry in `texra run --output-format json`'s `documents.diffs`; the
   proposed revision's diffs are still against the pre-run snapshot.
 - **A store this build wrote is refused by an earlier build.** Going back
   to an older build after this one refuses the whole store as newer than
