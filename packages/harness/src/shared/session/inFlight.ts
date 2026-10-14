@@ -7,11 +7,6 @@
  * model's `response`, or the `handed-down` call a script's run opens on,
  * which no model made, so its assistant message has a null origin.
  */
-import {
-  assistantMessageFromResult,
-  type ModelOrigin,
-  type RemoteOperation,
-} from '@texra-ai/llm';
 import type {
   CommitOrdinal,
   DispatchFacts,
@@ -22,7 +17,8 @@ import type {
   ScriptCallPayload,
   ToolResultPayload,
 } from '@shared/schemas';
-import { byId, type RunPosition } from './runRows';
+import type { ModelOrigin, RemoteOperation } from '@texra-ai/llm';
+import type { RunPosition } from './runRows';
 import type { HistoryMessage, ModelMessagePayload } from './historyTurns';
 
 /** How an attempt ended, as its `failed` row records it. */
@@ -325,6 +321,13 @@ export interface AttemptRequests {
   } | null;
 }
 
+/** The attempt a call runs at and what it asked; `mayHaveRun`, a replay of
+ *  a started body with nothing to re-enter ({@link resumedAttempt}). */
+export type ResumedAttempt = AttemptRequests & {
+  readonly attempt: number;
+  readonly mayHaveRun: boolean;
+};
+
 /** What `at` has asked, read off the run's `requests` by derived id. */
 export function attemptRequests(
   requests: RunPosition['requests'],
@@ -338,6 +341,32 @@ export function attemptRequests(
     if (own === null && request.decision?.action !== 'cancel')
       own = { requestId, request };
   }
+}
+
+/** The attempt a resume continues an unsettled call at. An unstarted body
+ *  re-enters whatever it asked; a started one, its own request while it
+ *  stands or while no waiter read its answer (decided since this owner took
+ *  the run; a stop's cancel decides nothing). Else the body may have run. */
+export function resumedAttempt(
+  state: {
+    readonly requests: RunPosition['requests'];
+    readonly decidedSinceActivation: ReadonlySet<string>;
+  },
+  at: Omit<CallAttempt, 'attempt'>,
+  status: Exclude<CallStatus, { kind: 'settled' }>,
+): ResumedAttempt {
+  const asked = (attempt: number) => ({
+    attempt,
+    mayHaveRun: false,
+    ...attemptRequests(state.requests, { ...at, attempt }),
+  });
+  const next = asked(attemptOf(status) + 1);
+  if (status.kind === 'issued' || next.raised > 0) return next;
+  const started = asked(status.attempt);
+  const stands =
+    started.own?.request.decision == null ||
+    state.decidedSinceActivation.has(started.own.requestId);
+  return started.raised > 0 && stands ? started : { ...next, mayHaveRun: true };
 }
 
 /** A response whose calls are not yet all settled and delivered. */
@@ -360,38 +389,3 @@ export const callSettlementOf = (
   const status = pending.records[callId]?.status;
   return status?.kind === 'settled' ? status : null;
 };
-
-/** The pending response row `p` opens, with every call issued. */
-export function pendingResponseOf(
-  p: Extract<ModelMessagePayload, { kind: 'response' | 'handed-down' }>,
-): PendingResponse {
-  const calls = p.kind === 'response' ? p.calls : [p.call];
-  const opened = {
-    responseId: p.responseId,
-    calls,
-    records: byId(
-      calls.map((call): [string, PendingCall] => [
-        call.callId,
-        { script: null, status: { kind: 'issued' } },
-      ]),
-    ),
-  };
-  if (p.kind === 'response')
-    return { ...opened, assistant: assistantMessageFromResult(p.turn) };
-  const { call, argumentsText } = p;
-  return {
-    ...opened,
-    assistant: {
-      role: 'assistant',
-      origin: null,
-      content: [
-        {
-          kind: 'local-call',
-          providerCallId: call.callId,
-          name: call.toolName,
-          argumentsText,
-        },
-      ],
-    },
-  };
-}

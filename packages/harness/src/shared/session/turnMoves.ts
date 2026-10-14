@@ -16,17 +16,51 @@ import { Result } from 'effect';
 
 import { assistantMessageFromResult } from '@texra-ai/llm';
 import { addTurnUsage } from '@shared/schemas';
-import { copyById, writable, type FoldPass } from './runRows';
+import { byId, copyById, writable, type FoldPass } from './runRows';
 import {
   attemptOf,
   callSettlementOf,
   invocationAfter,
-  pendingResponseOf,
   type PendingCall,
   type PendingResponse,
 } from './inFlight';
 import type { HistoryMessage, ModelMessagePayload } from './historyTurns';
 import type { Move, Refusal, RunState, Transition } from './runStateFold';
+
+/** The pending response row `p` opens, with every call issued. */
+function pendingResponseOf(
+  p: Extract<ModelMessagePayload, { kind: 'response' | 'handed-down' }>,
+): PendingResponse {
+  const calls = p.kind === 'response' ? p.calls : [p.call];
+  const opened = {
+    responseId: p.responseId,
+    calls,
+    records: byId(
+      calls.map((call): [string, PendingCall] => [
+        call.callId,
+        { script: null, status: { kind: 'issued' } },
+      ]),
+    ),
+  };
+  if (p.kind === 'response')
+    return { ...opened, assistant: assistantMessageFromResult(p.turn) };
+  const { call, argumentsText } = p;
+  return {
+    ...opened,
+    assistant: {
+      role: 'assistant',
+      origin: null,
+      content: [
+        {
+          kind: 'local-call',
+          providerCallId: call.callId,
+          name: call.toolName,
+          argumentsText,
+        },
+      ],
+    },
+  };
+}
 
 /** A row out of the order the run history writes. */
 export const outOfOrder = (detail: string): Result.Result<never, Refusal> =>

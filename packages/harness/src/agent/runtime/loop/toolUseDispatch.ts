@@ -77,9 +77,9 @@ import {
 } from '@shared/session/runStateFold';
 import {
   attemptOf,
-  attemptRequests,
   callSettlementOf,
-  type AttemptRequests,
+  resumedAttempt,
+  type ResumedAttempt,
   type CallStatus,
   type PendingCall,
 } from '@shared/session/inFlight';
@@ -404,10 +404,10 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
     state.pendingResponse?.responseId === responseId
       ? (state.pendingResponse.records[callId] ?? null)
       : null;
-  const settledOf = (state: RunState, callId: string) => {
-    const status = recordOf(state, callId)?.status;
-    return status?.kind === 'settled' ? status : null;
-  };
+  const settledOf = (state: RunState, callId: string) =>
+    state.pendingResponse?.responseId === responseId
+      ? callSettlementOf(state.pendingResponse, callId)
+      : null;
   const startedAt = (state: RunState, callId: string, attempt: number) => {
     const status = recordOf(state, callId)?.status;
     return status?.kind === 'started' && status.attempt === attempt;
@@ -526,17 +526,13 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
     attachments: [],
   });
 
-  /** Execute one call and commit its settlement. Never fails: a throwing
-   *  tool is an error result. Interruption leaves no settlement. `raised`
-   *  counts the requests the attempt opened before, and `standing` is the
-   *  one a resumed attempt re-enters: still open, or answered and not yet
-   *  read. */
+  /** Execute one call at `attempt` and commit its settlement, re-entering
+   *  the request a resumed attempt left standing (`own`). Never fails: a
+   *  throwing tool is an error result. Interruption leaves no settlement. */
   const execute = Effect.fn('toolUse.executeCall')(function* (
     fact: CallFacts,
     parsedInput: unknown,
-    attempt: number,
-    raised: number,
-    standing: AttemptRequests['own'],
+    { attempt, raised, own: standing }: ResumedAttempt,
   ): Effect.fn.Return<
     void,
     InvokeError,
@@ -735,19 +731,11 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
     );
   });
 
-  /**
-   * A call not yet settled, continued from where its rows left it (from
-   * nothing, for a fresh call). A response's call untouched in a recovered
-   * response is reported not started. An attempt whose body never started
-   * re-enters whatever it asked: any answer is the attempt's, since nothing
-   * ran yet. A started attempt re-enters its own request while it stands,
-   * or once answered if no waiter read the answer (decided since this owner
-   * took the run); one a stop retired as cancelled decides nothing, and
-   * the body asks again. Otherwise the body may have run: the replay rule
-   * re-runs it, or it settles as outcome unknown, closing the card the
-   * interrupted attempt opened, and the model decides from that what to do
-   * (verify, ask, or call again under its own approval).
-   */
+  /** A call not yet settled, continued at its `resumedAttempt`; a call
+   *  untouched in a recovered response is reported not started. Otherwise
+   *  the body may have run: the replay rule re-runs it, or it settles as
+   *  outcome unknown, closing the card the interrupted attempt opened, and
+   *  the model decides what to do (verify, ask, or call again). */
   const resumeCall = Effect.fn('toolUse.resumeCall')(function* (
     fact: CallFacts,
     input: unknown,
@@ -757,38 +745,24 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
     InvokeError,
     ProcessServices | Runs | WorkspaceFs | StorageFs | ScriptServices
   > {
-    const current = yield* cell.current;
+    const at = { responseId, callId: fact.callId };
+    const entered = resumedAttempt(yield* cell.current, at, status);
+    const untouched = status.kind === 'issued' && entered.raised === 0;
     const reached = attemptOf(status);
-    const asked = (attempt: number) =>
-      attemptRequests(current.requests, {
-        responseId,
-        callId: fact.callId,
-        attempt,
-      });
-    const next = asked(reached + 1);
-    const untouched = status.kind === 'issued' && next.raised === 0;
-    if (untouched && replan && scriptOf(fact) === null) {
+    if (untouched && replan && scriptOf(fact) === null)
       yield* settle(fact, 1, syntheticSettlement(SKIPPED_NOT_STARTED));
-      return;
-    }
-    if (status.kind === 'issued' || next.raised > 0)
-      return yield* execute(fact, input, reached + 1, next.raised, next.own);
-    const { raised, own } = asked(reached);
-    if (
-      raised > 0 &&
-      (own === null ||
-        own.request.decision === null ||
-        current.decidedSinceActivation.has(own.requestId))
+    else if (
+      !entered.mayHaveRun ||
+      (yield* replayable(fact, step.registry, input, logger))
     )
-      return yield* execute(fact, input, reached, raised, own);
-    if (yield* replayable(fact, step.registry, input, logger))
-      return yield* execute(fact, input, reached + 1, 0, null);
-    yield* settle(
-      fact,
-      reached,
-      syntheticSettlement(SKIPPED_OUTCOME_UNKNOWN),
-      settledCards(fact, input, 'failed', reached),
-    );
+      yield* execute(fact, input, entered);
+    else
+      yield* settle(
+        fact,
+        reached,
+        syntheticSettlement(SKIPPED_OUTCOME_UNKNOWN),
+        settledCards(fact, input, 'failed', reached),
+      );
   });
 
   /**

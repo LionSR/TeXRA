@@ -32,6 +32,7 @@
  * `fold` refuses any view but the one it last returned.
  */
 
+import { Equal } from 'effect';
 import {
   aggregateTarget,
   qualifyAggregateId,
@@ -50,7 +51,6 @@ import {
   runIdentityDisplayName,
   emptyUsageStats,
   sumUsageStats,
-  type TokenUsageStats,
   type AggregateId,
   type FoldInput,
   type ExistenceReconciliation,
@@ -493,14 +493,8 @@ function isDescendantOf(
 function refreshAncestors(view: SessionView, runId: RunId): void {
   const run = view.runs.get(runId);
   if (!run) return;
-  const ancestors = ancestorsOf(view, run);
-  const unchanged =
-    ancestors.length === run.ancestors.length &&
-    ancestors.every(
-      (a, i) =>
-        a.id === run.ancestors[i].id && a.label === run.ancestors[i].label,
-    );
-  if (!unchanged) setRun(view, { ...run, ancestors });
+  const next = withDerived(run, { ancestors: ancestorsOf(view, run) });
+  if (next !== run) setRun(view, next);
   for (const childId of run.childIds) refreshAncestors(view, childId);
 }
 
@@ -570,27 +564,7 @@ function withAggregates(view: SessionView, run: RunView): RunView {
   else if (statusDetail === null && heldBy !== null)
     statusDetail = runHeldMessage(ownerPid(heldBy));
   else if (statusDetail === null) statusDetail = run.lost;
-  if (
-    run.group === group &&
-    run.approval === approval &&
-    run.readOnly === readOnly &&
-    run.actions.join() === actions.join() &&
-    run.ownedHere === own &&
-    run.forceExpanded === forceExpanded &&
-    run.durableOutcome === durableOutcome &&
-    run.rollup.total === rollup.total &&
-    run.rollup.running === rollup.running &&
-    run.rollup.finished === rollup.finished &&
-    sameUsage(run.treeUsage, treeUsage) &&
-    run.statusLabel === copy.statusLabel &&
-    run.tone === copy.tone &&
-    run.statusDetail === statusDetail &&
-    run.resumeBlocked === resumeBlocked
-  ) {
-    return run;
-  }
-  return {
-    ...run,
+  return withDerived(run, {
     group,
     approval,
     readOnly,
@@ -603,21 +577,21 @@ function withAggregates(view: SessionView, run: RunView): RunView {
     ...copy,
     statusDetail,
     resumeBlocked,
-  };
+  });
 }
 
-function sameUsage(a: TokenUsageStats, b: TokenUsageStats): boolean {
-  return (
-    a.cost === b.cost &&
-    a.inputTokens === b.inputTokens &&
-    a.outputTokens === b.outputTokens &&
-    a.cacheReadInputTokens === b.cacheReadInputTokens &&
-    a.cacheMissInputTokens === b.cacheMissInputTokens &&
-    a.cacheCreationInputTokens === b.cacheCreationInputTokens &&
-    a.reasoningTokens === b.reasoningTokens &&
-    a.usageRoute === b.usageRoute &&
-    a.usagePlan === b.usagePlan
-  );
+/**
+ * `run` with its `derived` fields, or `run` itself when every one is
+ * structurally unchanged. Derived values are built fresh and never mutated,
+ * so `Equal.equals` caching their hashes is safe; a mutable value (the
+ * transcript, which live text edits in place) never goes through here.
+ */
+function withDerived(run: RunView, derived: Partial<RunView>): RunView {
+  return Object.entries(derived).every(([key, value]) =>
+    Equal.equals(Reflect.get(run, key), value),
+  )
+    ? run
+    : { ...run, ...derived };
 }
 
 /** Re-derive the aggregates of `startId` and every ancestor above it. */
@@ -742,24 +716,17 @@ function withTranscriptFacts(run: RunView): RunView {
     latestConversationLine(transcript.rows, settledRows) ??
     operationalLatestLine(transcript.rows) ??
     run.latestLine;
-  if (
-    settledRows === transcript.settledRows &&
-    thinkingActive === run.thinkingActive &&
-    compactingActive === run.compactingActive &&
-    latestLine === run.latestLine
-  ) {
-    return run;
-  }
-  return {
-    ...run,
+  const next = withDerived(run, {
     thinkingActive,
     compactingActive,
     latestLine,
-    transcript:
-      settledRows === transcript.settledRows
-        ? transcript
-        : replaceTranscript(transcript, { settledRows }),
-  };
+  });
+  return settledRows === transcript.settledRows
+    ? next
+    : {
+        ...next,
+        transcript: replaceTranscript(transcript, { settledRows }),
+      };
 }
 
 /** Apply one live chunk (5.2, "Live text") to its run's transcript; a chunk

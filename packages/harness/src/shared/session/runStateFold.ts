@@ -41,8 +41,8 @@ import {
   writable,
 } from './runRows';
 import {
-  attemptOf,
   attemptRequests,
+  resumedAttempt,
   type Invocation,
   type PendingResponse,
 } from './inFlight';
@@ -241,38 +241,30 @@ export const freshRunState = (commit: CommitOrdinal): RunState => ({
 });
 
 /**
- * The undecided requests nothing can recover. A tool call attempt's own
- * request (a command, an edit, a plan, a delegation, a question) carries
- * an id derived from the attempt, and a resume re-enters it: the started
- * attempt's own, or the next attempt's, asked before its body started.
- * What is left is a later request of an attempt already past its own
- * answer, which parks a body nothing can re-enter, so a resume retires
- * those as cancelled before it continues the run (`RunHistory.acquire`).
- * An `externalInquiry` is the exception by contract: its tool returns at
- * once and its answer arrives as a follow-up, whichever process is running
- * the run by then, so it stands across every batch its run writes.
+ * The undecided requests nothing can recover (R5): any but the turn's retry
+ * ask and, per pending call, the request its `resumedAttempt` re-enters and
+ * the one its script's calls share (attempt 0). The rest park a body past
+ * its own answer, so a resume retires them as cancelled before it continues
+ * the run (`RunHistory.activate`). An `externalInquiry` is the exception by
+ * contract: its tool returns at once and its answer arrives as a follow-up,
+ * whichever process is running the run by then, so it stands across every
+ * batch its run writes.
  */
 export function unboundRequests(state: RunState): readonly string[] {
-  // What the rows can recover (R5): the turn's retry ask and each pending
-  // call's own requests, those its attempts share included.
-  const pending = state.pendingResponse;
+  const { pendingResponse: pending, requests } = state;
   const own = new Set<string | undefined>(
-    Object.entries(pending?.records ?? {}).flatMap(([callId, { status }]) =>
-      pending === null || status.kind === 'settled'
-        ? []
-        : [0, attemptOf(status), attemptOf(status) + 1].map(
-            (attempt) =>
-              attemptRequests(state.requests, {
-                responseId: pending.responseId,
-                callId,
-                attempt,
-              }).own?.requestId,
-          ),
-    ),
+    Object.entries(pending?.records ?? {}).flatMap(([callId, { status }]) => {
+      if (pending === null || status.kind === 'settled') return [];
+      const at = { responseId: pending.responseId, callId };
+      return [
+        attemptRequests(requests, { ...at, attempt: 0 }).own?.requestId,
+        resumedAttempt(state, at, status).own?.requestId,
+      ];
+    }),
   );
   const asked = state.invocation?.current.failed?.next;
   if (asked?.kind === 'ask') own.add(asked.requestId);
-  return Object.entries(state.requests).flatMap(([requestId, request]) =>
+  return Object.entries(requests).flatMap(([requestId, request]) =>
     request.decision !== null ||
     own.has(requestId) ||
     !requestParksItsCaller(request.payload)
