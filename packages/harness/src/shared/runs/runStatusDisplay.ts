@@ -104,7 +104,7 @@ export function runStatusCopy(
   let key: RunStatusCopyKey = runStatusDisplayKey(status, options.substate);
   if (options.interrupted) key = RUN_DISPLAY_INTERRUPTED;
   else if (options.waiting) key = RUN_DISPLAY_WAITING_ON_USER;
-  return RUN_STATUS_COPY[key];
+  return { ...RUN_STATUS_COPY[key] };
 }
 
 /** Banner copy for the fold's interrupted reading: the process running the
