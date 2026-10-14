@@ -21,9 +21,10 @@ import {
   type CommitAcceptedFilePorts,
 } from '@latex/acceptedFileTarget';
 import { withLogChannel } from '@logger/effectLog';
-import type { AcceptCopyMeta, FileLocation } from '@shared/schemas';
+import type { FileLocation } from '@shared/schemas';
 import { DIFF_REGISTRATION_DELAY_MS } from '@texra/shared/constants/latexTiming';
 import { workflowOutputCopyStem } from '@texra/utils/files/outputFileUtils';
+import { type AcceptCopyMeta } from '@texra/shared/plugins/documentOutputs';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 const CHANNEL = 'CompareCommands';

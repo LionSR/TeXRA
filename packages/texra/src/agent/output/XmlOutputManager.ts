@@ -8,13 +8,16 @@ import replacementEngine, {
   logReplacementDiagnostics,
 } from '@replacement/engine';
 import type { FileLocation, OutputFileInfo } from '@shared/schemas';
-import { OUTPUT_DOCUMENT_TAG, OUTPUT_DOCUMENTS_TAG } from '@shared/schemas';
 import { getExtractedDocOutputFileName } from '@texra/utils/files/outputFileUtils';
 import {
   DOCUMENT_NAME_REGEX,
   extractDocuments,
   type NamedDocument,
 } from '@texra/utils/text/xmlExtraction';
+import {
+  OUTPUT_DOCUMENT_TAG,
+  OUTPUT_DOCUMENTS_TAG,
+} from '@texra/shared/plugins/documentOutputs';
 import { entryTypeAt } from '@utils/files/fsDurability';
 import {
   createExternalLocation,

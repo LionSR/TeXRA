@@ -8,13 +8,12 @@ import '@awesome.me/webawesome/dist/components/dropdown/dropdown.js';
 import '@awesome.me/webawesome/dist/components/dropdown-item/dropdown-item.js';
 import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 
-import {
-  ToolConfigFieldsSchema,
-  type CheckboxValues,
-  type DocumentFileType,
-  type FileSelectConfig,
-} from '@shared/schemas';
+import type { DocumentFileType, FileSelectConfig } from '@shared/schemas';
 import type { TeXRAIconName } from '@shared/iconNames';
+import {
+  DocumentTaskOptionsSchema,
+  type DocumentTaskOptions,
+} from '@texra/shared/plugins/documents';
 import type { SurfaceAction } from '@texra/shared/session/surface';
 import { SessionUiEvents } from '@texra/shared/session/uiEvents';
 import { SortableController } from '@texra/shared/litControllers/SortableController';
@@ -64,8 +63,8 @@ export class FileSelectGroup extends LitElement {
   @property({ attribute: false }) files: readonly string[] = [];
 
   /** The tool and auto-extract toggles (`Surface.launch`). */
-  @property({ attribute: false }) checkboxValues: CheckboxValues =
-    ToolConfigFieldsSchema.parse({});
+  @property({ attribute: false }) checkboxValues: DocumentTaskOptions =
+    DocumentTaskOptionsSchema.parse({});
 
   @query('.multiple-files-list')
   private fileListElement?: HTMLElement;

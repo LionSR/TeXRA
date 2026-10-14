@@ -7,8 +7,8 @@ import {
   fileLocationShortDisplayPath,
   type OutputFileInfo,
   OutputFileInfoSchema,
+  RoundNumberSchema,
 } from './output';
-import { RoundNumberSchema } from './roundIndexed';
 
 const DiffStatusSchema = z.enum(['success', 'error']);
 export type DiffStatus = z.infer<typeof DiffStatusSchema>;
@@ -21,13 +21,11 @@ const DiffMetadataSchema = z.object({
 });
 
 /**
- * Canonical DiffResult format from backend. `baseRound` is a round POINTER
- * (which round the base file came from — null when the base isn't
- * round-scoped, e.g. an original pre-round source), not a round-indexed
- * collection: it shares {@link RoundNumberSchema} with the round-indexed
- * item fields but deliberately does not join the {@link ReadonlyRoundIndexed}
- * container shape. `revisedRound` (see {@link DiffResultDisplaySchema}) is
- * derived from `revised.round` rather than duplicated here.
+ * Canonical DiffResult format from backend. `baseRound` is the round the
+ * base file came from (null when the base isn't round-scoped, e.g. an
+ * original pre-round source). `revisedRound` (see
+ * {@link DiffResultDisplaySchema}) is derived from `revised.round` rather
+ * than duplicated here.
  */
 const DiffResultSchema = DiffMetadataSchema.extend({
   baseLocation: FileLocationSchema.nullable(),

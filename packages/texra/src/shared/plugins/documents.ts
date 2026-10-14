@@ -12,21 +12,21 @@
 import { z } from 'zod';
 
 import {
-  DEFAULT_TOOL_CONFIG,
-  ToolConfigFieldsSchema,
   type AggregateId,
+  type OutputFileInfo,
   type SessionEvent,
   type ToolFact,
 } from '@shared/schemas';
 import {
   DocumentDiffsSchema,
   DocumentsResultSchema,
-  RoundKeyedOutputSidecarValueSchemas,
   RoundOutputSchema,
   roundOutputsToCompileFailureSummaries,
   roundOutputsToOutputSummaries,
   type DocumentDiffs,
+  type CompileFailure,
   type DocumentsResult,
+  type ReadonlyRoundIndexed,
   type RoundOutput,
 } from '@texra/shared/plugins/documentOutputs';
 import type { RunView } from '@texra-ai/harness';
@@ -139,22 +139,13 @@ export function documentsSummary(fact: ToolFact): DocumentsResult {
   });
 }
 
-/** What a host shows of a run's documents, each keyed by round. */
-export interface RunDocumentsView {
-  readonly files: z.infer<
-    typeof RoundKeyedOutputSidecarValueSchemas.outputFiles
-  >;
-  readonly missingOutputs: z.infer<
-    typeof RoundKeyedOutputSidecarValueSchemas.missingOutputs
-  >;
-  readonly compileFailures: z.infer<
-    typeof RoundKeyedOutputSidecarValueSchemas.compileFailures
-  >;
-}
-
 /** The run's documents by round, from its latest documents row; empty for a
  *  run that is no document task. */
-export function documentsOf(run: Pick<RunView, 'facts'>): RunDocumentsView {
+export function documentsOf(run: Pick<RunView, 'facts'>): {
+  readonly files: ReadonlyRoundIndexed<OutputFileInfo>;
+  readonly missingOutputs: ReadonlyRoundIndexed<string>;
+  readonly compileFailures: ReadonlyRoundIndexed<CompileFailure>;
+} {
   const rounds = documentRoundsOf(run.facts[DOCUMENTS_OUTPUT_KEY]);
   const byRound = <T>(pick: (round: RoundOutput) => readonly T[]) =>
     Object.fromEntries(
@@ -197,12 +188,18 @@ export const DOCUMENT_TASK_BLOCK: AgentBlock<DocumentTask> = Object.freeze({
 /**
  * A document task's launch options, as its recipe's run records them
  * (`script.options`) and its approval shows them (`AgentProposal.options`):
- * the figure, TeXCount and compile switches and the critic review. Built
- * from the main view's switches (`ToolConfigFieldsSchema`), so the two
- * name the same fields.
+ * the figure, TeXCount and compile switches and the critic review. The main
+ * view's launch composer offers the same switches (`LaunchSurfaceSchema`).
  */
-export const DocumentTaskOptionsSchema =
-  ToolConfigFieldsSchema.prefault(DEFAULT_TOOL_CONFIG);
+export const DocumentTaskOptionsSchema = z.object({
+  autoExtractFigure: z.boolean().prefault(false),
+  autoExtractTikzFigure: z.boolean().prefault(false),
+  attachTeXCount: z.boolean().prefault(false),
+  autoCompileInputPdf: z.boolean().prefault(false),
+  /** A task reviews each revision but the last with the bundled `critic`
+   *  and feeds its critique into the next revision. */
+  reflect: z.boolean().prefault(false),
+});
 /** A document task's launch options with their defaults applied. */
 export type DocumentTaskOptions = z.infer<typeof DocumentTaskOptionsSchema>;
 

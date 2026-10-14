@@ -1,8 +1,5 @@
-import type {
-  OutputFileInfo,
-  ReadonlyRoundIndexed,
-  RunId,
-} from '@shared/schemas';
+import type { OutputFileInfo, RunId } from '@shared/schemas';
+import { type ReadonlyRoundIndexed } from '@texra/shared/plugins/documentOutputs';
 
 /**
  * The run-output accessors shared by the progress-view controllers

@@ -20,7 +20,6 @@
   "packages/harness/src/shared/schemas/fileTypes.ts": 1,
   "packages/harness/src/shared/schemas/logPayload.ts": 1,
   "packages/harness/src/shared/schemas/sessionEvent.ts": 2,
-  "packages/harness/src/shared/schemas/toolConfig.ts": 1,
   "packages/harness/src/shared/session/runRows.ts": 3,
   "packages/harness/src/shared/session/sessionFold.ts": 1,
   "packages/harness/src/shared/session/transcriptState.ts": 1,

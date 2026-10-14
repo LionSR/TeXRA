@@ -11,11 +11,8 @@
 
 import { Effect, FileSystem } from 'effect';
 
-import {
-  fileLocationDisplayPath,
-  OUTPUT_DOCUMENTS_TAG,
-  type FileLocation,
-} from '@shared/schemas';
+import { fileLocationDisplayPath, type FileLocation } from '@shared/schemas';
+import { OUTPUT_DOCUMENTS_TAG } from '@texra/shared/plugins/documentOutputs';
 import { normalizeFilePath } from '@utils/core';
 import { normalizeLineEndings } from '@utils/text/stringUtils';
 

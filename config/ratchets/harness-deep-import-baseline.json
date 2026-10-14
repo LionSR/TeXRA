@@ -267,7 +267,6 @@
       "@shared/ipc",
       "@shared/model/subscriptionAuth",
       "@shared/runs/runStatus",
-      "@shared/runs/runStatusDisplay",
       "@shared/schemas",
       "@shared/session/approvalDecision",
       "@shared/session/database",

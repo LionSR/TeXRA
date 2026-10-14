@@ -12,21 +12,21 @@ import { CROSS, PENDING_BOX, WARNING } from '@cli/tui/ui/glyphs';
 import {
   RUN_PHASE,
   fileLocationDisplayPath,
-  outputDiffCounts,
-  outputDisplayName,
-  roundIndexedEntries,
   type OutputFileInfo,
-  type ReadonlyRoundIndexed,
   type RunOutcome,
   type TaskGroup,
   type TaskGroupStatus,
 } from '@shared/schemas';
-import {
-  formatRoundStageLabel,
-  formatRunStatusLabel,
-} from '@shared/runs/runStatusDisplay';
+import { formatRunStatusLabel } from '@shared/runs/runStatusDisplay';
 import { taskGroupDisplayStatus } from '@shared/runs/taskGroupProjection';
-import { type CompileFailure } from '@texra/shared/plugins/documentOutputs';
+import {
+  formatRoundLabel,
+  outputDiffCounts,
+  outputDisplayName,
+  roundIndexedEntries,
+  type CompileFailure,
+  type ReadonlyRoundIndexed,
+} from '@texra/shared/plugins/documentOutputs';
 import { formatCompactDuration } from '@utils/text/stringUtils';
 
 import { COMPACTION_ACTIVITY_STATUS_STYLE } from './transcriptEntryLayout';
@@ -125,7 +125,7 @@ function workflowRunDetailGroups(
     const lines: WorkflowRunDetailLine[] = [
       {
         key: `round:${round}`,
-        text: `${PENDING_BOX} ${formatRoundStageLabel({ index: round })} results`,
+        text: `${PENDING_BOX} ${formatRoundLabel(round)} results`,
         color: COLOR_BORDER,
         role: 'lifecycle',
       },
@@ -161,7 +161,7 @@ function workflowRunDetailGroups(
     ).entries()) {
       lines.push({
         key: `missing:${round}:${path}:${index}`,
-        text: `  ${WARNING} ${formatRoundStageLabel({ index: round })} · Missing expected output: ${safeTerminalText(path)}`,
+        text: `  ${WARNING} ${formatRoundLabel(round)} · Missing expected output: ${safeTerminalText(path)}`,
         color: COLOR_WARNING,
         role: 'alert',
       });
@@ -171,7 +171,7 @@ function workflowRunDetailGroups(
     ).entries()) {
       lines.push({
         key: `compile:${round}:${failure.log.absolutePath}:${index}`,
-        text: `  ${CROSS} ${formatRoundStageLabel({ index: round })} · Compile check failed: ${safeTerminalText(failure.displayName)} · ${safeTerminalText(failure.logRelativePath)}`,
+        text: `  ${CROSS} ${formatRoundLabel(round)} · Compile check failed: ${safeTerminalText(failure.displayName)} · ${safeTerminalText(failure.logRelativePath)}`,
         color: COLOR_ERROR,
         role: 'alert',
       });

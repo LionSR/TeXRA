@@ -1,6 +1,7 @@
-import { fileLocationAddressPath, roundIndexedEntries } from '@shared/schemas';
+import { fileLocationAddressPath } from '@shared/schemas';
 import type { RunView } from '@shared/session/sessionView';
 import { documentsOf } from '@texra/shared/plugins/documents';
+import { roundIndexedEntries } from '@texra/shared/plugins/documentOutputs';
 import { filterNotNullish } from '@utils/core';
 
 /**

@@ -8,7 +8,6 @@ import { hasLatexCompiler } from '@latex/latexToolchain';
 import type { WorkspaceFs } from '@platform/rootedFs';
 import {
   fileLocationDisplayPath,
-  isGenericOutputStem,
   type RunId,
   type FileLocation,
   type OutputFileInfo,
@@ -17,7 +16,10 @@ import {
 import { stripWorkflowRoundDir } from '@texra/shared/constants/workflowOutput';
 import { DocumentsStateKey } from '@texra/shared/settingsView/documentsSettings';
 import { LATEX_CONFIG_RANGES } from '@texra/shared/constants/latexConfig';
-import type { CompileFailure } from '@texra/shared/plugins/documentOutputs';
+import {
+  type CompileFailure,
+  isGenericOutputStem,
+} from '@texra/shared/plugins/documentOutputs';
 import { createRunStorageLocation } from '@utils/files/fileLocation';
 import { readNormalizedFile } from '@utils/files/fsDurability';
 import { runDirUnder } from '@utils/files/runStorageFs';

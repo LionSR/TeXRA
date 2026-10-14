@@ -9,11 +9,11 @@ import { generateTimestamp } from '@housekeeping/utils';
 import {
   agentFileName,
   type OutputFileInfo,
-  type ReadonlyRoundIndexed,
   type RunId,
 } from '@shared/schemas';
 import { modelFileName } from '@texra/utils/files/outputFileUtils';
 import { documentsOf } from '@texra/shared/plugins/documents';
+import { type ReadonlyRoundIndexed } from '@texra/shared/plugins/documentOutputs';
 import type { SessionView } from '@texra-ai/harness';
 
 /**
