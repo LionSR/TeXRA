@@ -314,6 +314,15 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
     return cell;
   });
 
+  /** A turn's exit, and a handed-down call's run's at its park: a failed
+   *  call's error fails it and is the reply. */
+  const completeTurn = (at: RunState): RunExit => {
+    if (at.handedDown?.status !== 'error')
+      return { state: at, outcome: 'completed' };
+    response = at.handedDown.error;
+    return { state: at, outcome: 'failed' };
+  };
+
   // ------------------------------------------------------------ the turn
   const runTurn = Effect.fn('toolUse.turn')(function* (
     cell: RunCell,
@@ -321,14 +330,6 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
     let state = yield* cell.current;
     // A turn begins at a settled boundary; a resumed one where its rows left.
     const begins = state.phase === 'waiting' || state.phase === 'halted';
-    /** The turn's exit; the stage closes with its own verdict. A failed
-     *  handed-down call fails the turn, and its error is the reply. */
-    const completeTurn = (at: RunState): RunExit => {
-      if (at.handedDown?.status !== 'error')
-        return { state: at, outcome: 'completed' };
-      response = at.handedDown.error;
-      return { state: at, outcome: 'failed' };
-    };
     const body = Effect.gen(function* () {
       if (begins) {
         response = '';
@@ -497,6 +498,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
         // recovers the run clears it, so the fold is the one place to read it.
         const afterError = state.lastError !== null;
         if (parked) {
+          if (state.handedDown !== null) return completeTurn(state);
           // A native child waits in this same run scope, just like its root:
           // its loop has already delivered the turn offered at the boundary.
           const queued = yield* followUps.hasQueued;
@@ -605,12 +607,9 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
           });
         }
         if (block !== null) continue;
-        // A one-shot run ends with its completed turn; a handed-down
-        // call's run with its turn, however it ended.
-        if (
-          (run.toolPolicy.stopAfterCycle && turn.outcome === 'completed') ||
-          state.handedDown !== null
-        )
+        // A one-shot run ends with its completed turn; a handed-down call's
+        // run ends at its park, however its turn ended.
+        if (run.toolPolicy.stopAfterCycle && turn.outcome === 'completed')
           return finish(state, turn.outcome);
         if (settlement !== null)
           yield* Effect.uninterruptible(settlement.settled);
