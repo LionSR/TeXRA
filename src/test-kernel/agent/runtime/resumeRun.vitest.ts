@@ -36,11 +36,12 @@ vi.mock('@agent/runtime/resumeBlocker', () => ({
   resumeBlocker: () => Effect.succeed(null),
 }));
 
-const retrieveSessionResumeDataMock = vi.hoisted(() => vi.fn());
-vi.mock('@agent/runtime/SessionResumeRetrieval', () => ({
-  retrieveSessionResumeData: (...args: unknown[]) =>
+const canResumeMock = vi.hoisted(() => vi.fn());
+vi.mock('@agent/storage/resumability', async (importActual) => ({
+  ...(await importActual<typeof import('@agent/storage/resumability')>()),
+  canResume: (...args: unknown[]) =>
     Effect.tryPromise({
-      try: () => retrieveSessionResumeDataMock(...args),
+      try: () => canResumeMock(...args),
       catch: ensureError,
     }),
 }));
@@ -143,7 +144,7 @@ describe('resumeRun tool-use queue ownership', () => {
       .mockReset()
       .mockReturnValue(Effect.succeed(snapshot().agentConfig));
     runExistsMock.mockReset().mockReturnValue(Effect.succeed(true));
-    retrieveSessionResumeDataMock.mockReset().mockResolvedValue(snapshot());
+    canResumeMock.mockReset().mockResolvedValue(true);
     resumeToolUseFromResumeDataMock.mockReset();
     taken.length = 0;
     resumeToolUseFromResumeDataMock.mockImplementation(
@@ -168,7 +169,7 @@ describe('resumeRun tool-use queue ownership', () => {
         });
         runExistsMock.mockReturnValueOnce(Effect.fail(failure));
         expect(yield* Effect.flip(resumeOne(RUN, { session }))).toBe(failure);
-        expect(retrieveSessionResumeDataMock).not.toHaveBeenCalled();
+        expect(canResumeMock).not.toHaveBeenCalled();
         expect(yield* queuedTexts(session)).toEqual(['Keep this input.']);
       }),
   );
@@ -480,7 +481,7 @@ describe('resumeRun tool-use queue ownership', () => {
             { wake: true },
           ),
         ).toEqual({ kind: 'queued', read: false, wake: true });
-        retrieveSessionResumeDataMock.mockResolvedValueOnce(null);
+        canResumeMock.mockResolvedValueOnce(false);
 
         expect(yield* resumeOne(RUN, { session })).toEqual({
           failed: 'finished',
@@ -492,7 +493,7 @@ describe('resumeRun tool-use queue ownership', () => {
   it.effect('refuses with `finished` when no checkpoint remains', () =>
     Effect.gen(function* () {
       const session = yield* createSession();
-      retrieveSessionResumeDataMock.mockResolvedValueOnce(null);
+      canResumeMock.mockResolvedValueOnce(false);
 
       expect(yield* resumeOne(RUN, { session })).toEqual({
         failed: 'finished',
@@ -537,9 +538,7 @@ describe('resumeRun tool-use queue ownership', () => {
     () =>
       Effect.gen(function* () {
         const session = yield* createSession();
-        retrieveSessionResumeDataMock.mockRejectedValueOnce(
-          new Error('record read timeout'),
-        );
+        canResumeMock.mockRejectedValueOnce(new Error('record read timeout'));
 
         expect(
           (yield* Effect.flip(resumeOne(RUN, { session }))).message,

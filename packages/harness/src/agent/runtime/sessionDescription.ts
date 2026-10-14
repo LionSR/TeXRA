@@ -92,10 +92,8 @@ const DESCRIPTION_DEADLINE = '20 seconds';
  * warned about and the run keeps its agent-name label. Stopping the run
  * interrupts it.
  *
- * Every category qualifies. Workflow runs were excluded while "session" meant
- * a tool-use conversation, which left the whole workflow-subagent population —
- * the rows a script's `agent()` calls create, and the ones a reader
- * can least tell apart — labelled by nothing but their agent name.
+ * Every run qualifies, the children a script's `agent()` calls create
+ * included: without one they are labelled by their agent name alone.
  * Uses the configured helper model for a one-shot, non-streaming call.
  * On success, commits the run's `run.description` row, which the meta fold
  * and every renderer read.

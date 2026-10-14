@@ -72,10 +72,16 @@ describe('canonical run records', () => {
           }),
         );
         yield* seedReport(session, runId, 'retained report bytes');
-        yield* records.writeResultMeta({
-          producer: 'subagent',
-          output: { response: 'done', files: [] },
-        });
+        yield* session.log.transact([
+          {
+            type: 'run.result',
+            aggregateId: qualifyAggregateId('run', runId),
+            result: {
+              producer: 'subagent',
+              output: { response: 'done', files: [] },
+            },
+          },
+        ]);
         yield* session.log.transact([
           {
             type: 'run.end',

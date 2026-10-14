@@ -123,9 +123,6 @@ export type Append = (
   DatabaseNotOwner | DatabaseWriteFailed
 >;
 
-/** A publisher's position in the commit space: what `all` reads from. */
-export type SessionCursor = CommitOrdinal;
-
 /**
  * The canonical hostname, pid, and nullable process-start tuple (C5): the
  * `ownerId` stamped on every event the process appends and the `self` entry
@@ -225,7 +222,7 @@ export class SessionEvents extends Context.Service<
      *  of that read has reached the reader; the transport plane never sets
      *  it. */
     readonly all: (
-      fromCommit: SessionCursor,
+      fromCommit: CommitOrdinal,
       drained?: SubscriptionRef.SubscriptionRef<CommitOrdinal>,
     ) => Stream.Stream<DisplaySessionEvent, DatabaseReadFailed>;
   }

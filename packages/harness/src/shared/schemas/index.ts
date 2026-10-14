@@ -42,7 +42,6 @@ export {
   emptyRunEndOutput,
   NonAgentRunRecordSchema,
   RunRecordFieldsSchema,
-  ResultMetaSchema,
   RunEndSchema,
   RunWorkspaceFilesSchema,
   isRecipeConfig,

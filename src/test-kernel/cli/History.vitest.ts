@@ -252,7 +252,6 @@ function runListEntry(
   overrides: Record<string, unknown> = {},
 ): Record<string, unknown> {
   return {
-    kind: 'run',
     identity: { kind: 'agent', agent: 'correct' },
     id: id as RunId,
     timestamp: '2026-05-18T08:00:00.000Z',
@@ -346,7 +345,6 @@ describe('CLI history runtime', () => {
             ['b4', undefined],
           ] as const
         ).map(([id, outcome]) => ({
-          kind: 'run',
           identity: { kind: 'agent', agent: 'correct' },
           id: id as RunId,
           timestamp: '2026-05-18T08:00:00.000Z',
@@ -381,43 +379,6 @@ describe('CLI history runtime', () => {
       kind: 'history-detail',
       detail: { id: 'c1c1c1', status: 'error' },
     });
-  });
-
-  it('hides internal process-bookkeeping entries from the history list', async () => {
-    const processConfig = toolUseAgentConfig({ agent: 'bash' });
-    mocks.listRuns.mockReturnValue(
-      Effect.succeed([
-        runListEntry('visible'),
-        {
-          kind: 'run',
-          identity: { kind: 'process', tool: 'bash' },
-          id: 'bash-process' as RunId,
-          timestamp: '2026-05-18T08:01:00.000Z',
-          record: processConfig,
-          status: 'completed',
-        },
-      ]),
-    );
-
-    const entries = await historyEntries();
-
-    expect(entries.map((entry) => entry.id)).toEqual(['visible']);
-  });
-
-  it('hides agent-spawned child runs from the history list', async () => {
-    mocks.listRuns.mockReturnValue(
-      Effect.succeed([
-        runListEntry('root'),
-        runListEntry('de1e6a', {
-          timestamp: '2026-05-18T08:01:00.000Z',
-          parentRunId: 'root' as RunId,
-        }),
-      ]),
-    );
-
-    const entries = await historyEntries();
-
-    expect(entries.map((entry) => entry.id)).toEqual(['root']);
   });
 
   it('labels team runs by preset in history lists', async () => {

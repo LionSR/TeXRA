@@ -175,8 +175,7 @@ export function createNativeSubagentStrategy(
 
     formatDelivery: Effect.fn('nativeSubagent.formatDelivery')(function* (
       turn: RunEndResult,
-      /** The turn's wall time, measured by the loop before this result
-       *  computes its diffs. */
+      /** The turn's wall time, measured by the loop. */
       wallTimeMs: number,
     ) {
       if (cachedDelivery === undefined) {

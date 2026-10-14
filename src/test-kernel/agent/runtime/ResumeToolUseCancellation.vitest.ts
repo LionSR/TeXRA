@@ -9,7 +9,7 @@ const mocks = vi.hoisted(() => ({
   runWithLifecycle: vi.fn(),
   runToolUse: vi.fn(),
   agentRunLayer: vi.fn(),
-  retrieveSessionResumeData: vi.fn(),
+  canResume: vi.fn(),
   releaseClaims: vi.fn(),
 }));
 
@@ -60,10 +60,11 @@ vi.mock('@agent/runtime/ModelInvoker', async () => {
   return { modelInvokerLayer: () => Layer.empty };
 });
 
-vi.mock('@agent/runtime/SessionResumeRetrieval', () => ({
-  retrieveSessionResumeData: (...args: unknown[]) =>
+vi.mock('@agent/storage/resumability', async (importActual) => ({
+  ...(await importActual<typeof import('@agent/storage/resumability')>()),
+  canResume: (...args: unknown[]) =>
     Effect.tryPromise({
-      try: () => mocks.retrieveSessionResumeData(...args),
+      try: () => mocks.canResume(...args),
       catch: ensureError,
     }),
 }));
@@ -149,10 +150,7 @@ function noopRunHandle(): unknown {
 describe('resumeToolUseFromResumeData cancellation handoff', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.retrieveSessionResumeData.mockImplementation(
-      async (runId, agentConfig) =>
-        createToolUseResumeData({ runId, agentConfig }),
-    );
+    mocks.canResume.mockResolvedValue(true);
     mocks.releaseClaims.mockReturnValue(Effect.void);
     // A resume's run exists: its stored `run.start`, a root's.
     mocks.readRunRecords
@@ -202,7 +200,7 @@ describe('resumeToolUseFromResumeData cancellation handoff', () => {
     () =>
       Effect.gen(function* () {
         const snapshot = createToolUseResumeData({ runId: 'e80482' as RunId });
-        mocks.retrieveSessionResumeData.mockResolvedValueOnce(null);
+        mocks.canResume.mockResolvedValueOnce(false);
 
         expect(
           yield* Effect.flip(resumeToolUseFromResumeData(snapshot)),

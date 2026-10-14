@@ -5,7 +5,6 @@ import { Effect, FileSystem, PlatformError, Result, Stream } from 'effect';
 import {
   deriveResumability,
   getRunRecords,
-  isUserVisibleRun,
   listRuns,
   listRunWorkspaceFiles,
   type AgentRunListingEntry,
@@ -81,7 +80,6 @@ export interface CliHistoryEntry {
   readonly kind?: 'task' | 'chat';
   readonly description?: string;
   readonly teamId?: string;
-  readonly parentRunId?: RunId;
 }
 
 interface CliHistoryDetails {
@@ -154,9 +152,7 @@ export function parseCliHistoryId(raw: string): RunId | undefined {
 export const listCliHistoryEntries = Effect.fn('cli.listCliHistoryEntries')(
   function* (session: Effect.Effect<SessionHandle, SessionOpenError>) {
     const opened = yield* session;
-    return (yield* listRuns(opened))
-      .filter(isUserVisibleRun)
-      .map(toCliHistoryEntry);
+    return (yield* listRuns(opened)).map(toCliHistoryEntry);
   },
 );
 
@@ -542,7 +538,6 @@ function toCliHistoryEntry(entry: AgentRunListingEntry): CliHistoryEntry {
     kind: runKindOf(config),
     description: entry.description,
     teamId: teamIdOf(config),
-    parentRunId: entry.parentRunId,
   };
 }
 

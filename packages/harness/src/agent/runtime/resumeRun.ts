@@ -9,11 +9,13 @@ import { Effect, Exit, Fiber, Latch, Result, Scope } from 'effect';
  * acknowledge each resumed turn separately.
  */
 import type { FollowUpFailureReason } from '@agent/followUp/ToolUseFollowUp';
+import { canResume } from '@agent/storage/resumability';
 import {
   getRunRecords,
   owningCall,
   persistedParentRunId,
 } from '@agent/storage/runRecords';
+import { findInCauseChain } from '@common/errors/errorPredicates';
 import { withLogChannel } from '@logger/effectLog';
 import type { ProcessServices } from '@platform/processRuntime';
 import { qualifyAggregateId, RUN_PHASE, type RunId } from '@shared/schemas';
@@ -30,6 +32,7 @@ import {
   ResumeSessionUnavailableError,
   resumeToolUseFromResumeData,
   type ResumeToolUseFromResumeDataOptions,
+  type ResumeTurnIdentity,
 } from './executeAgent';
 import { deliverHeld } from './runLaunchGuard';
 import { startChildRunLoop } from './childRunLoop';
@@ -39,10 +42,6 @@ import {
   Runs,
   RunLive,
 } from './runRegistry';
-import {
-  retrieveSessionResumeData,
-  type ResumeData,
-} from './SessionResumeRetrieval';
 import type { SessionHandle } from './SessionHandle';
 
 type ResumeRunCompletion = Effect.Effect<RunEndResult, Error>;
@@ -55,8 +54,6 @@ export type ResumeRunResult =
       /** A root's lifetime past its idle acknowledgement, ending with its
        *  result; children have none. */
       readonly completion?: ResumeRunCompletion;
-      /** A workflow resume settles with its whole run: this is that run. */
-      readonly result?: RunEndResult;
     }
   /** `read_failed` is a follow-up's alone: a resume reads under its claim. */
   | {
@@ -92,18 +89,10 @@ const REFUSED: ResumeRunResult = { failed: 'not_resumable' };
  * Ownership, metadata and lease failures remain operational errors.
  */
 function namesUnusableCheckpoint(error: unknown): boolean {
-  for (let current = error, depth = 0; depth < 8; depth++) {
-    if (current instanceof RunHistoryRefused) {
-      return (
-        current.reason === 'inconsistent' ||
-        current.reason === 'unprepared-history'
-      );
-    }
-    if (!(current instanceof Error) || current.cause === undefined)
-      return false;
-    current = current.cause;
-  }
-  return false;
+  const reason = findInCauseChain(error, (cause) =>
+    cause instanceof RunHistoryRefused ? cause.reason : undefined,
+  );
+  return reason === 'inconsistent' || reason === 'unprepared-history';
 }
 
 /**
@@ -211,10 +200,10 @@ const resumeHere = Effect.fn('resumeHere')(function* (
   if (owner !== null) return { ownedBy: owner.parentRunId };
   // What its children hold for it, it reads once it runs here.
   yield* deliverHeld(session, runId);
-  const resume = yield* retrieveSessionResumeData(runId, config, session);
+  const resumable = yield* canResume(runId, session);
   if (cancelled()) return REFUSED;
   // Nothing to continue from.
-  if (!resume) return { failed: 'finished' };
+  if (!resumable) return { failed: 'finished' };
   // An agent or plugin this process cannot run now leaves the run
   // interrupted with the reason (D5), for the session's follower to
   // resume once it is back; nothing is launched. Another process's run
@@ -229,7 +218,11 @@ const resumeHere = Effect.fn('resumeHere')(function* (
     yield* options.onAdmitted(runId);
     if (cancelled()) return REFUSED;
   }
-  return yield* resumeQueuedToolUse(session, resume, options);
+  return yield* resumeQueuedToolUse(
+    session,
+    { runId, agentConfig: config },
+    options,
+  );
 }, Effect.scoped);
 
 /** What every resumed run takes from the resume's caller. */
@@ -286,7 +279,7 @@ function refusalFor(
  */
 const resumeQueuedToolUse = Effect.fn('resumeQueuedToolUse')(function* (
   session: SessionHandle,
-  resume: ResumeData,
+  resume: ResumeTurnIdentity,
   options: ResumeRunOptions,
 ): Effect.fn.Return<ResumeRunResult, Error, AgentRunServices> {
   const runId = resume.runId;

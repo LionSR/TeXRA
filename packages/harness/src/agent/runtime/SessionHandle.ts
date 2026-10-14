@@ -13,9 +13,6 @@
  * (#7694). It has no readiness gate: a restored session is usable the
  * moment it exists, and what a run with no loop in this process is gets
  * decided by the fold's `readOnly` and `group` rules over the view.
- *
- * It is deliberately NOT a conversation API (send/stream/resume/history):
- * continuity stays in options and storage (`ValidatedRunRequest`).
  */
 
 import type { AgentEvent } from '@agent/trace';

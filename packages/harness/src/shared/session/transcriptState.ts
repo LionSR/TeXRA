@@ -8,7 +8,6 @@
  */
 import {
   TOOL_CALL_STATUS,
-  isPlainAgentIdentity,
   type LogLevel,
   type MessageType,
   type ToolUseLog,
@@ -34,29 +33,18 @@ import {
   type TranscriptText,
 } from '@shared/transcript';
 
-import type { RunView, TranscriptView } from './sessionView';
+import type { TranscriptView } from './sessionView';
 
 /** What a run's transcript is folded under. */
 export interface TranscriptContext {
   /** The surface shows debug-level log rows. */
   readonly debug: boolean;
-  /** Run, round, and session headings go to the task-group surface rather
-   *  than the rows (`lifecycleToTaskGroups`). */
+  /** Run and session headings go to the task-group surface rather than the
+   *  rows: a plain agent run's (`isPlainAgentIdentity`). A full-log child,
+   *  a detached process or an external-CLI session keeps its verbatim log. */
   readonly lifecycleToTaskGroups: boolean;
   /** The session's runs by id, for the `executions` tool header. */
   readonly runLabels?: RunLabels;
-}
-
-/**
- * Whether a run's run, round, and session headings go to the task-group
- * surface rather than the rows (keyed on the identity, never the id format):
- * every workflow run and every plain agent run. The one exception is a
- * full-log child that is not a workflow run, a detached process or an
- * external-CLI session, whose verbatim log is the point of opening it. Phase
- * headers are unaffected: they stay rows everywhere.
- */
-export function lifecycleToTaskGroups(run: Pick<RunView, 'identity'>): boolean {
-  return isPlainAgentIdentity(run.identity);
 }
 
 // ---------------------------------------------------------------------------

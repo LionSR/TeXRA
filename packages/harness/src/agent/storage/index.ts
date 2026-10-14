@@ -15,10 +15,6 @@ export {
   listRunWorkspaceFiles,
   resolveRunWorkspaceFilePath,
 } from './runWorkspaceFiles';
-export {
-  type AgentRunListingEntry,
-  listRuns,
-  isUserVisibleRun,
-} from './runListing';
+export { type AgentRunListingEntry, listRuns } from './runListing';
 export { deriveResumability, type ResumabilityDecision } from './resumability';
 export { formatConversationMessage } from './conversationFormat';

@@ -2,7 +2,7 @@ import { it } from '@effect/vitest';
 import { Effect } from 'effect';
 import { beforeEach, describe, expect, vi } from 'vitest';
 
-import { getRunRecords, isUserVisibleRun, listRuns } from '@agent/storage';
+import { getRunRecords, listRuns } from '@agent/storage';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import {
   AgentConfigSchema,
@@ -124,7 +124,6 @@ describe('run listing normalization', () => {
       expect(yield* listRuns(session)).toEqual([
         expect.objectContaining({
           id,
-          kind: 'run',
           identity: { kind: 'agent', agent: 'assistant' },
         }),
       ]);
@@ -153,7 +152,6 @@ describe('run listing normalization', () => {
       expect(yield* listRuns(session)).toEqual([
         expect.objectContaining({
           id,
-          kind: 'run',
           resumable: false,
         }),
       ]);
@@ -205,7 +203,6 @@ describe('run listing normalization', () => {
 
         expect(entries).toEqual([
           {
-            kind: 'run',
             id,
             timestamp: '2026-07-15T10:00:00.000Z',
             identity: { kind: 'agent', agent: 'assistant' },
@@ -219,13 +216,12 @@ describe('run listing normalization', () => {
             resumable: true,
           },
         ]);
-        expect(entries.filter(isUserVisibleRun)).toHaveLength(1);
         expect(entries[0]).not.toHaveProperty('agent');
         expect(entries[0]).not.toHaveProperty('category');
       }),
   );
 
-  it.effect('classifies process storage rows explicitly', () =>
+  it.effect('lists agent runs only, not process storage rows', () =>
     Effect.gen(function* () {
       const processId = 'bbb222' as RunId;
       const customBashAgentId = 'ccc333' as RunId;
@@ -240,51 +236,14 @@ describe('run listing normalization', () => {
         writeRun(customBashAgentId, '2026-07-15T08:00:00.000Z', config('bash')),
       );
 
-      const entries = yield* listRuns(session);
-
-      expect(entries.map(({ kind }) => kind)).toEqual(['run', 'run']);
-      expect(entries[0]).toMatchObject({
-        kind: 'run',
-        identity: { kind: 'process', tool: 'assistant' },
-        record: { agent: 'assistant' },
-      });
-      expect(entries[1]).toMatchObject({
-        kind: 'run',
-        identity: { kind: 'agent', agent: 'bash' },
-        record: { agent: 'bash' },
-      });
-      expect(entries.filter(isUserVisibleRun)).toEqual([entries[1]]);
+      expect(yield* listRuns(session)).toEqual([
+        expect.objectContaining({
+          id: customBashAgentId,
+          identity: { kind: 'agent', agent: 'bash' },
+          record: expect.objectContaining({ agent: 'bash' }),
+        }),
+      ]);
     }),
-  );
-
-  it.effect(
-    'lists an honest non-agent record as kind run without fabricated fields',
-    () =>
-      Effect.gen(function* () {
-        const id = 'abe001' as RunId;
-        yield* Effect.promise(() =>
-          writeMetadata(id, {
-            timestamp: '2026-07-15T04:00:00.000Z',
-            identity: { kind: 'process', tool: 'bash' },
-          }),
-        );
-        yield* seedRunRecord(session, id, {
-          name: 'bash',
-          instruction: 'ls -la',
-        });
-
-        const entries = yield* listRuns(session);
-        const entry = entries.find((candidate) => candidate.id === id);
-        expect(entry).toMatchObject({
-          kind: 'run',
-          identity: { kind: 'process', tool: 'bash' },
-          record: { name: 'bash', instruction: 'ls -la' },
-        });
-        expect(entry && 'record' in entry && entry.record).not.toHaveProperty(
-          'model',
-        );
-        expect(entries.filter(isUserVisibleRun)).toHaveLength(0);
-      }),
   );
 
   it.effect('keeps agent-spawned child runs out of history listings', () =>
@@ -298,14 +257,8 @@ describe('run listing normalization', () => {
         writeRun(childId, '2026-07-15T10:05:00.000Z', config('search'), rootId),
       );
 
-      const entries = yield* listRuns(session);
-
-      // The raw listing still carries the child so tool-facing callers can walk
-      // the lineage; only the history-listing filter drops it.
-      expect(entries.map(({ id }) => id)).toEqual([childId, rootId]);
-      expect(entries.filter(isUserVisibleRun).map(({ id }) => id)).toEqual([
-        rootId,
-      ]);
+      // A child belongs to its parent's transcript, not to the history list.
+      expect((yield* listRuns(session)).map(({ id }) => id)).toEqual([rootId]);
     }),
   );
 });
