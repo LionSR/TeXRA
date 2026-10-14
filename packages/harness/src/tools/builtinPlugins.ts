@@ -10,7 +10,7 @@ import type { CodeSandbox } from '@agent/codeSandbox/codeSandbox';
 import { AGENT_TOOL_NAME } from '@shared/constants/delegationTools';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import type { CanonicalToolDisplayName } from '@shared/tools/toolKind';
-import { GOAL_STATE_ARM } from '@shared/plugins/goal';
+import { HARNESS_PLUGIN_ARMS } from '@shared/plugins/goal';
 import { BashTool } from '@tools/bash';
 import { codeSandboxLayer, ScriptTool } from '@tools/codemode/ScriptTool';
 import { agentTool } from '@tools/delegation/AgentTool';
@@ -98,7 +98,7 @@ export const goal: Plugin = builtin({
   toggle: 'on',
   availability: ALWAYS_AVAILABLE,
   continuation: goalContinuation,
-  arms: [GOAL_STATE_ARM],
+  arms: HARNESS_PLUGIN_ARMS.goal,
 });
 
 /** Child agents: the `agent` tool. */

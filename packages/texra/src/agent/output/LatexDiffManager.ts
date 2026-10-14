@@ -63,7 +63,9 @@ export interface RoundLatexdiffs {
   readonly entries: LatexdiffEntry[];
 }
 
-const NO_LATEXDIFFS: RoundLatexdiffs = { artifacts: [], entries: [] };
+/** A pass that diffed nothing: a fresh value, since a caller owns the
+ *  arrays it is handed. */
+const noLatexdiffs = (): RoundLatexdiffs => ({ artifacts: [], entries: [] });
 
 export class LatexDiffManager {
   private readonly latexdiffService: LaTeXdiffService;
@@ -159,14 +161,14 @@ export class LatexDiffManager {
         this.logger.warn(
           'Skipping latexdiff operations - latexdiff not installed',
         );
-        return NO_LATEXDIFFS;
+        return noLatexdiffs();
       }
 
       if (outputFiles.length === 0) {
         this.logger.warn(
           `No output files found for round ${currRound}, skipping latexdiff operations`,
         );
-        return NO_LATEXDIFFS;
+        return noLatexdiffs();
       }
 
       // Ensure round-dir has symlinks to all mirrored deps so latexdiff's
@@ -305,7 +307,7 @@ export class LatexDiffManager {
         logger: this.logger,
         level: 'error',
         label: 'Error during latexdiff processing',
-        recover: () => Effect.succeed(NO_LATEXDIFFS),
+        recover: () => Effect.sync(noLatexdiffs),
       }),
     );
   }

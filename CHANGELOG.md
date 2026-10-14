@@ -6,19 +6,16 @@ All notable changes to this project will be documented in this file.
 
 ### Breaking Changes
 
-- **`texra run --json` no longer streams `latexdiff` or `missingOutputs`
-  log rows.** A document task's latexdiff results and missing outputs are
-  its documents fact's: read them from the `plugin.fact` progress row
-  (`documents/output`), under `value.rounds[].latexdiffs` (each `ok` with
-  its `diff` file, or `failed` with its `error`) and
-  `value.rounds[].missingOutputs`; each round also names its kept `reply`.
-  The webview and the TUI show both in each round's files panel. Runs
-  written by an earlier build are listed as such and are not resumed.
+- **A document task's latexdiff results and missing outputs moved out of
+  its log.** `texra run --json` no longer streams them as separate log
+  records; they arrive with the task's documents, in its `plugin.fact`
+  progress records, per revision, beside the reply each revision kept.
+  The task panel and the terminal show both under each revision's files.
+  Tasks run by an earlier build are listed as such and are not resumed.
 - **The trace viewer refuses a trace an earlier build exported.** A trace
-  holding a `latexdiff` or `missingOutputs` row, or a plugin fact at a
-  version this build does not read (a `documents/output` fact below
-  version 3), is refused as exported by an incompatible TeXRA version
-  instead of opening, or crashing while it renders.
+  whose document results this build cannot read is refused as exported by
+  an incompatible TeXRA version, instead of opening or failing while it
+  renders.
 - **SDK: the workflow phase stage is gone.** No producer has opened one
   since the workflow engine left: `openStage` takes no `'phase'` kind and
   no `index`/`total`, a task group carries neither, and the transcript has
