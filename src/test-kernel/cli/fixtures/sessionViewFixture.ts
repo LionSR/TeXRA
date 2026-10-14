@@ -150,8 +150,8 @@ export function viewWith(
     }
   }
   const orderingKey = (id: RunId) => ({
-    name: id,
-    creationTimestamp: byId.get(id)?.createdAt ?? 0,
+    id,
+    createdAt: byId.get(id)?.createdAt ?? 0,
   });
   for (const parentId of completed) {
     const parent = byId.get(parentId);

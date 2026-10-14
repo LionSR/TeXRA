@@ -208,11 +208,12 @@ describe('run-scoped tool resolution', () => {
         // `gone` vanished and `added` appeared since the run opened.
         const resumed = yield* Effect.gen(function* () {
           const state = yield* session.runHistory.load(runId);
-          const step = yield* stepFor(yield* AgentRun, state!, 'request', {
-            base: () => undefined,
-            isChild: () => false,
-            activated: () => [],
-          });
+          const step = yield* stepFor(
+            yield* AgentRun,
+            state!,
+            'request',
+            false,
+          );
           return { state: state!, step };
         }).pipe(
           Effect.provide(runLayer(ctx, [tool('kept'), tool('added')])),
@@ -286,11 +287,7 @@ describe('run-scoped tool resolution', () => {
 
         yield* ctx.stores.secrets.set(apiKeySecretName('deepseek'), 'sk-test');
         const step = yield* Effect.gen(function* () {
-          return yield* stepFor(yield* AgentRun, before, 'request', {
-            base: () => 'base',
-            isChild: () => false,
-            activated: () => [],
-          });
+          return yield* stepFor(yield* AgentRun, before, 'request', false);
         }).pipe(Effect.provide(runLayer(ctx, [])), Effect.orDie);
 
         const offered = step.rows.find((row) => row.type === 'tools.offered');
@@ -354,16 +351,11 @@ describe('run-scoped tool resolution', () => {
 
         const step = yield* Effect.gen(function* () {
           const run = yield* AgentRun;
-          const system = {
-            base: () => 'base',
-            isChild: () => false,
-            activated: () => [],
-          };
           // The activation's first step is held to the record; the switch
           // reaches the one after it.
-          yield* stepFor(run, before, 'request', system);
+          yield* stepFor(run, before, 'request', false);
           yield* switches.update(GlobalStateKey.DISABLED_TOOLS, []);
-          return yield* stepFor(run, before, 'request', system);
+          return yield* stepFor(run, before, 'request', false);
         }).pipe(Effect.provide(runLayer(ctx, [])), Effect.orDie);
 
         const offered = step.rows.find((row) => row.type === 'tools.offered');

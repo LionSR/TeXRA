@@ -88,15 +88,6 @@ export interface StepTools {
   readonly hooks: readonly StepHook[];
 }
 
-/** What a step's system text and skill roots are built from that the run
- *  holds, all recorded in its rows: its base text, the names of the skills
- *  its user activated, and whether it is a child. */
-export interface RunSystem {
-  readonly base: (state: RunState) => string | undefined;
-  readonly activated: (state: RunState) => readonly string[];
-  readonly isChild: () => boolean;
-}
-
 /** The run's current step, the scope that holds its pin, the tools it
  *  withheld for approval, and its continuation. `holding` while only parks
  *  have opened steps in a resumed activation: its hold on the record is not
@@ -240,15 +231,17 @@ function describedAtFreeze<
  * step's pin, and resolve what it offers.
  * `recorded` holds a resumed activation's first step to it, and
  * `recordedHooks` a resumed dispatch to the hooks its calls were offered
- * under; `holding` says the hold outlives this step (a park's). The rows
- * are what the loop appends before a request: the new offered set, when it
- * differs from `state`'s. */
+ * under; `holding` says the hold outlives this step (a park's). Its base
+ * text and activated skills are the recorded ones, or until the opening
+ * commits, the opening's. The rows are what the loop appends before a
+ * request: the new offered set, when it differs from `state`'s. */
 const openStep = Effect.fn('Step.open')(function* (
   run: AgentRunShape,
   state: RunState,
   recorded: readonly OfferedTool[] | null,
   holding: boolean,
-  runSystem: RunSystem,
+  isChild: boolean,
+  openingSystem: string | undefined,
   recordedHooks: readonly string[] | null = null,
 ) {
   const { roots } = run.session;
@@ -301,11 +294,11 @@ const openStep = Effect.fn('Step.open')(function* (
       ...pinned.plugins.map(({ id }) => id),
       ...pinned.installed.keys(),
     ]);
-    const skills = {
-      plugins: [...pinned.installed.values()],
-      contributors,
-    };
-    const names = runSystem.activated(state);
+    const skills = { plugins: [...pinned.installed.values()], contributors };
+    const names =
+      state.phase === null
+        ? (run.opening?.activated ?? [])
+        : (state.input.activated ?? []);
     const recordedSkills = recorded === null ? null : state.offeredSkills;
     const listing =
       recordedSkills === null
@@ -396,13 +389,16 @@ const openStep = Effect.fn('Step.open')(function* (
   const context = {
     ...stepInstructions(step.contributing, listed, {
       offered: step.tools.definitions.map(({ name }) => name),
-      isChild: runSystem.isChild(),
+      isChild,
       isAnthropic: model.config.provider === ModelProvider.ANTHROPIC,
       config: roots.config,
     }),
     ...(delegation && { delegation }),
   };
-  const base = runSystem.base(state);
+  const base =
+    state.input.system === undefined
+      ? openingSystem
+      : stored(state, state.input.system, z.string());
   const { system, update } = contextAt(state, base, context);
   const toolsChanged = !sameSet(state.offeredTools, step.tools.offered);
   const skills = listed.map(({ name }) => name);
@@ -480,7 +476,8 @@ export const stepFor = Effect.fn('Step.for')(function* (
   run: AgentRunShape,
   state: RunState,
   kind: 'request' | 'dispatch' | 'park',
-  runSystem: RunSystem,
+  isChild: boolean,
+  openingSystem?: string,
 ) {
   const open = yield* SynchronizedRef.get(run.steps);
   if (open !== null && kind === 'dispatch')
@@ -496,7 +493,8 @@ export const stepFor = Effect.fn('Step.for')(function* (
     state,
     held ? state.offeredTools : null,
     held && kind === 'park',
-    runSystem,
+    isChild,
+    openingSystem,
     held && kind === 'dispatch' ? state.offeredHooks : null,
   );
   return kind === 'dispatch' ? { ...step, rows: [] } : step;

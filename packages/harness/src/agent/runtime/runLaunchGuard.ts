@@ -223,7 +223,6 @@ const deliverOne = (
       'run.end',
       'run.activate',
       'run.report',
-      'run.position',
     ]);
     const parks = heldParks(rows);
     const held = parks.filter(({ park }) => park.heldFor !== undefined);

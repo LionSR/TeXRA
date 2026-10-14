@@ -158,7 +158,6 @@ const MESSAGE_MOVES: {
     Result.map(invoked(state, p), (moved) => ({
       ...moved,
       phase: 'model.submitted',
-      round: p.invocation.attempt === 1 ? state.round + 1 : state.round,
     })),
   identified: invoked,
   accepted: invoked,
@@ -209,7 +208,6 @@ const MESSAGE_MOVES: {
       ? outOfOrder(`handed-down ${p.responseId} over an open call`)
       : Result.succeed({
           ...state,
-          round: state.round + 1,
           pendingResponse: pendingResponseOf(p),
         }),
   append: (state, p, pass) => {

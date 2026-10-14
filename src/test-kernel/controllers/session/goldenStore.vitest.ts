@@ -445,7 +445,6 @@ describe('the golden 1.0 store', () => {
         Effect.map(runHistory.load(id), (state) => ({
           at: state?.at,
           phase: state?.phase,
-          round: state?.round,
           modelId: state?.modelId,
           messages: state?.messages.map((message) => message.role),
           openAttempt: state?.invocation != null,
@@ -453,7 +452,6 @@ describe('the golden 1.0 store', () => {
       expect(yield* stateOf(PARENT)).toEqual({
         at: 'halted',
         phase: 'waiting',
-        round: 4,
         modelId: 'openai/gpt-5.6-sol@medium',
         messages: [
           'user',

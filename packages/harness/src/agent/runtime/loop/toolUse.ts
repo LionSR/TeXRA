@@ -28,7 +28,6 @@
  */
 
 import { Deferred, Effect, Exit, type Scope, SynchronizedRef } from 'effect';
-import { z } from 'zod';
 
 import type { FollowUpBatch } from '@agent/followUp/RunInput';
 import { buildInitialToolUsePrompts } from '@agent/prompt/PromptBuilder';
@@ -52,7 +51,6 @@ import { sha256 } from '@utils/core/idHash';
 import { AgentRun } from '../run/AgentRun';
 import { backgroundCompaction } from '../run/compaction';
 import { mediaInputParts, type InputPart } from '../run/mediaInput';
-import { stored } from '../run/requestContext';
 import { claimFollowUps, type ConsumedFollowUps } from '../FollowUps';
 import { ModelInvoker } from '../ModelInvoker';
 import { registryOf, Runs } from '../runRegistry';
@@ -73,7 +71,7 @@ import {
 } from './runProgram';
 import { dispatchPendingResponse } from './toolUseDispatch';
 import { openingHooks, stopHooks } from './hooks';
-import { stepFor, type RunSystem } from './step';
+import { stepFor } from './step';
 import { applyPendingModelSwitch, modelSwitchPort } from './modelSwitch';
 import type { RunControls } from '../RunHandle';
 import type { ChildRunBoundary } from '../childRunLoop';
@@ -162,21 +160,8 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
 
   // A resumed root's first continuation-pinning step stands it down first.
   let resumeUnseen = start.resume;
-  // What a step's system text and skill roots are built from: the run's
-  // recorded input, or before its opening commits, the opening's own.
-  const system: RunSystem = {
-    base: (state) =>
-      state.input.system === undefined
-        ? openingSystem
-        : stored(state, state.input.system, z.string()),
-    activated: (state) =>
-      state.phase === null
-        ? (run.opening?.activated ?? [])
-        : (state.input.activated ?? []),
-    isChild,
-  };
   const openStep = (state: RunState, kind: 'request' | 'dispatch' | 'park') =>
-    Effect.tap(stepFor(run, state, kind, system), (step) => {
+    Effect.tap(stepFor(run, state, kind, isChild(), openingSystem), (step) => {
       if (!resumeUnseen || step.continuation === null || isChild())
         return Effect.void;
       resumeUnseen = false;
@@ -447,10 +432,6 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
           tools,
           toolChoice,
           system: step.system,
-          // The model call this request is: the attempt row counts a new
-          // one, a retry of the open attempt is the same call.
-          round: state.invocation === null ? state.round + 1 : state.round,
-          debugName: 'tooluse',
         });
         state = outcome.state;
         if (outcome.kind === 'cancelled') {
