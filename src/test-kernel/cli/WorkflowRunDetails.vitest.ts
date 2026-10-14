@@ -29,6 +29,7 @@ describe('selectWorkflowRunDetailLines', () => {
         missingOutputsByRound: { 0: [] },
         compileFailuresByRound: {},
         latexdiffsByRound: {},
+        repliesByRound: {},
       },
       100,
     );
@@ -44,6 +45,7 @@ describe('selectWorkflowRunDetailLines', () => {
         missingOutputsByRound: { 3: ['bad\u001b[31m.tex'] },
         compileFailuresByRound: {},
         latexdiffsByRound: {},
+        repliesByRound: {},
       },
       100,
     );
@@ -62,6 +64,7 @@ describe('selectWorkflowRunDetailLines', () => {
         missingOutputsByRound: { 0: ['missing.tex'] },
         compileFailuresByRound: COMPILE_FAILURES_BY_ROUND,
         latexdiffsByRound: {},
+        repliesByRound: {},
       },
       1,
     );

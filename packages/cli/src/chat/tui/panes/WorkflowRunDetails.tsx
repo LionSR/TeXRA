@@ -12,6 +12,7 @@ import { CROSS, PENDING_BOX, TICK, WARNING } from '@cli/tui/ui/glyphs';
 import {
   RUN_PHASE,
   fileLocationDisplayPath,
+  type FileLocation,
   type RunOutcome,
   type TaskGroup,
   type TaskGroupStatus,
@@ -52,6 +53,8 @@ type WorkflowRunFacts = {
   readonly missingOutputsByRound: ReadonlyRoundIndexed<string>;
   readonly compileFailuresByRound: ReadonlyRoundIndexed<CompileFailure>;
   readonly latexdiffsByRound: ReadonlyRoundIndexed<LatexdiffEntry>;
+  /** Each round's kept reply: a round that wrote nothing shows where. */
+  readonly repliesByRound: { readonly [round: number]: FileLocation };
 };
 
 interface WorkflowRunDetailGroup {
@@ -124,6 +127,9 @@ function workflowRunDetailGroups(
   ]) {
     rounds.add(round);
   }
+  // As the webview's file list: a round that kept a reply shows.
+  for (const round of Object.keys(facts.repliesByRound))
+    rounds.add(Number(round));
 
   for (const round of [...rounds].toSorted((left, right) => left - right)) {
     const lines: WorkflowRunDetailLine[] = [
@@ -160,9 +166,16 @@ function workflowRunDetailGroups(
         });
       }
     }
-    for (const [index, path] of (
-      facts.missingOutputsByRound[round] ?? []
-    ).entries()) {
+    const missing = facts.missingOutputsByRound[round] ?? [];
+    const reply = facts.repliesByRound[round];
+    if (reply && (outputs.length === 0 || missing.length > 0))
+      lines.push({
+        key: `reply:${round}`,
+        text: `  ${WARNING} ${formatRoundLabel(round)} · ${outputs.length === 0 ? 'Wrote no documents; reply' : 'Reply'} kept at ${safeTerminalText(reply.absolutePath)}`,
+        color: COLOR_WARNING,
+        role: 'alert',
+      });
+    for (const [index, path] of missing.entries()) {
       lines.push({
         key: `missing:${round}:${path}:${index}`,
         text: `  ${WARNING} ${formatRoundLabel(round)} · Missing output: ${safeTerminalText(path)}`,
