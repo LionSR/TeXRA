@@ -12,7 +12,6 @@ import { SettingsProfileKeyController } from '@texra/controllers/settingsView/Se
 async function createController(options?: {
   inputResponses?: readonly (string | undefined)[];
   confirmResponses?: readonly boolean[];
-  urls?: Record<string, string | undefined>;
   setError?: Error;
   deleteError?: Error;
 }): Promise<{
@@ -47,11 +46,8 @@ async function createController(options?: {
     controller: new SettingsProfileKeyController({
       secrets,
       prompt: hosts.prompt,
-      externalOpener: hosts.externalOpener,
       getProviderDisplayName: (provider) =>
         Effect.succeed(provider === 'openai' ? 'OpenAI' : provider),
-      getProviderKeyUrl: (provider) =>
-        Effect.succeed(options?.urls?.[provider]),
     }),
     hosts,
     secrets,

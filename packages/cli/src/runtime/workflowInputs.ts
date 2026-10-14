@@ -30,12 +30,8 @@ export const STDIN_WORKFLOW_INPUT_BASENAME = 'stdin.tex';
 export const WORKFLOW_INPUT_REQUIRED_MESSAGE =
   'At least one input file is required for a document task.';
 
-function resolveAgainstCwd(candidate: string, cwd: string): string {
-  return path.resolve(cwd, candidate);
-}
-
 function normalizeCliInputPath(candidate: string, cwd: string): string {
-  const absolutePath = resolveAgainstCwd(candidate, cwd);
+  const absolutePath = path.resolve(cwd, candidate);
   return isStrictlyWithin(cwd, absolutePath)
     ? toPosixPath(path.relative(cwd, absolutePath))
     : absolutePath;
@@ -50,7 +46,7 @@ const normalizeCliInputPathForRun = Effect.fn('normalizeCliInputPathForRun')(
   ): Effect.fn.Return<string, CliUsageError> {
     if (
       options.requireWorkspaceFiles === true &&
-      !isPathWithin(cwd, resolveAgainstCwd(candidate, cwd))
+      !isPathWithin(cwd, path.resolve(cwd, candidate))
     ) {
       return yield* Effect.fail(
         new CliUsageError(`${flagLabel}: file is outside --cwd: ${candidate}`),
@@ -144,7 +140,7 @@ const expandWorkflowInputSpec = Effect.fn('expandWorkflowInputSpec')(function* (
       normalizeCliInputPathForRun(match, cwd, flagLabel, options),
     );
 
-  const absolutePath = resolveAgainstCwd(trimmed, cwd);
+  const absolutePath = path.resolve(cwd, trimmed);
   // Prefer an exact existing path even when its valid filename contains glob
   // syntax. Windows glob mode deliberately has no backslash escape channel.
   const fs = yield* FileSystem.FileSystem;

@@ -259,10 +259,7 @@ export function runResumeCommand(
           config,
           buildHeadlessRunContext(context),
           {
-            session: stores.session,
-            runSession: stores.runSession,
-            runtime: stores.runtime,
-            shutdownScope: stores.shutdownScope,
+            services: stores,
             runId: id,
             recoveryInputIsDurable,
             agentRuns: {

@@ -4,15 +4,13 @@ import { getRunRecords } from '@agent/storage';
 import type { SessionHandle } from '@agent/runtime';
 import { readInstalledPluginLoad } from '@common/plugins/pluginTrust';
 import type { SettingsStores } from '@shared/config/settingsAccess';
-import { RUN_OUTCOME, type RunOutcome, RUN_PHASE } from '@shared/schemas';
+import { RUN_OUTCOME, type RunOutcome } from '@shared/schemas';
 import { runOutcomeToCliRunStatus } from '@shared/runs/runStatus';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { CliExitCode } from './exitCodes';
 import type { DatabaseReadFailed, RunEndResult } from '@texra-ai/harness';
 import type { CliPluginPin } from '../schemas/cliOutput';
-
-export type ExecuteAgentResult = RunEndResult;
 
 // A type alias, not an interface: the result line types its payload as a
 // loose object, which an interface (no implicit index signature) cannot meet.
@@ -27,7 +25,7 @@ type CliRunResultMetadata = {
 
 // Intersecting distributes over the run result union, attaching the
 // CLI-only metadata fields to every member.
-export type CliRunResult = ExecuteAgentResult & CliRunResultMetadata;
+export type CliRunResult = RunEndResult & CliRunResultMetadata;
 
 /**
  * The plugins that load as a run result names them, read the way this
@@ -59,19 +57,14 @@ export function toolUseResultText(result: CliRunResult): string {
   );
 }
 
-/** Terminal state of a CLI turn: a run outcome, or a resumed subagent parked
- *  back to WAITING (a successfully completed turn, not a finished agent). */
-export type TurnOutcome = RunOutcome | typeof RUN_PHASE.WAITING;
-
-/** Map a run outcome to the CLI process exit code. A resumed subagent that
- *  parks back to WAITING is a successfully completed turn.
+/** Map a run outcome to the CLI process exit code.
  *
  *  A denied approval gate never reaches this mapping. The gate returns feedback
  *  to the model, which routes around it, so a denial is not a run outcome at
  *  all — it has no dedicated exit code. An earlier design gave it one, which
  *  made callers that treat a nonzero exit as "did not produce a result" discard
  *  perfectly good runs; TeXRA's own PR review workflow was among them. */
-export function runOutcomeExitCode(outcome: TurnOutcome): CliExitCode {
+export function runOutcomeExitCode(outcome: RunOutcome): CliExitCode {
   if (outcome === RUN_OUTCOME.CANCELLED) {
     return CliExitCode.Interrupted;
   }
@@ -86,7 +79,7 @@ export function runOutcomeExitCode(outcome: TurnOutcome): CliExitCode {
 export const readCliRunOutcomeState = Effect.fn('readCliRunOutcomeState')(
   function* (
     session: SessionHandle,
-    result: ExecuteAgentResult,
+    result: RunEndResult,
     reportReadFailure: (error: Error) => void,
   ): Effect.fn.Return<{ outcome: RunOutcome; outcomePersisted: boolean }> {
     return yield* getRunRecords(session, result.runId)

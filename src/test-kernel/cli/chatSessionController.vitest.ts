@@ -1,9 +1,8 @@
 // Unit tests for the chat-session controller's run-slot ownership, stop and
-// resume paths, and presentation-host lifecycle. The agent run boundary
-// (launch, resume, result toast, record reads) is injected through the
-// controller's own `agentRuns` init seam; the session surfaces the controller
-// reasons about (run registry, event hub, run status, host interactions) are
-// the real runtime objects wherever a test asserts through them.
+// resume paths, and presentation-host lifecycle. The session's `start` and
+// `resume` are stand-ins; the session surfaces the controller reasons about
+// (run registry, event hub, run status, host interactions) are the real
+// runtime objects wherever a test asserts through them.
 
 import {
   Cause,
@@ -72,14 +71,17 @@ vi.mock('@cli/chat/tui/state/transcript', () => ({
   reportRequestDefect: mocks.reportRequestDefect,
 }));
 
+import {
+  ResumeRefused,
+  type Session,
+  type SessionView,
+} from '@texra-ai/harness';
 import { describeFollowUpFailure } from '@agent/followUp/ToolUseFollowUp';
 import { registryOf } from '@agent/runtime/runRegistry';
-import type { RootLaunch } from '@agent/runtime/runs';
 import type {
   AgentConfig,
   AgentConfigPayload,
 } from '@agent/core/definition/AgentConfig';
-import type { ResumeRunOptions } from '@agent/runtime/resumeRun';
 import type { CliContext } from '@cli/runtime/cliContext';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import type { CliRuntimeHost } from '@cli/runtime/cliPresentationHost';
@@ -106,8 +108,8 @@ import {
   qualifyAggregateId,
   emptyRunEndOutput,
   RUN_OUTCOME,
-  RUN_PHASE,
   type RunId,
+  type RunOutcome,
 } from '@shared/schemas';
 import { DatabaseReadFailed } from '@shared/session/database';
 import type { Outcome, RuntimeRequest } from '@shared/session/runtimeRequest';
@@ -139,7 +141,6 @@ import {
   seedView,
   viewWith,
 } from './fixtures/sessionViewFixture';
-import type { Session, SessionView } from '@texra-ai/harness';
 
 // The state stores the controller's setting reads land on, as ports of the
 // installed fake host rather than a module mock of `platform()`: the setting
@@ -254,11 +255,6 @@ type ToolUseRunResult<Outcome> = {
   outcome: Outcome;
 };
 
-/** The subset of `executeAgent`'s options every mock implementation below reads. */
-type ExecuteAgentMockOptions = {
-  readonly onAdmitted?: (id: RunId) => Effect.Effect<void, Error>;
-};
-
 function makeInit(
   overrides: Partial<ChatSessionControllerInit> = {},
 ): ChatSessionControllerInit {
@@ -299,14 +295,6 @@ function makeInit(
     stores: makeFakeSettingsStores('cli').stores,
     runtime: testRuntime(),
     approvalPolicy: () => undefined,
-    // The agent boundary, injected the way the init seam intends: the bag is
-    // the suite's own, so assertions read the same `mocks` entries the old
-    // module mocks fed.
-    agentRuns: {
-      launch: ({ request, options }: RootLaunch) =>
-        mocks.rootLaunch(request, options),
-      resume: (...args: unknown[]) => mocks.resumeRun(...args),
-    } as ChatSessionControllerInit['agentRuns'],
     ...overrides,
   };
 }
@@ -354,6 +342,8 @@ function installSession(overrides: Record<string, unknown> = {}): void {
       Effect.addFinalizer(() => Effect.sync(mocks.detachHostInteractions)),
     ),
     request: mocks.request,
+    start: mocks.rootLaunch,
+    resume: mocks.resumeRun,
     // The fold's level and its stream, over whichever view ref the case
     // installed.
     view: {
@@ -392,7 +382,11 @@ const installOwnerSession = Effect.fn('installOwnerSession')(function* () {
         return { kind: 'done' };
       }),
   };
-  mocks.sessionStub.mockReturnValue(owner);
+  mocks.sessionStub.mockReturnValue({
+    ...owner,
+    start: mocks.rootLaunch,
+    resume: mocks.resumeRun,
+  });
   return {
     session,
     runs: registryOf(session.runs),
@@ -407,9 +401,6 @@ function holdRun(runId: RunId): void {
   seedView(viewWith([makeRunView({ id: runId })]));
 }
 
-/** `resumeRun`'s started result: the run ran and the batch reached it. */
-const STARTED = { started: true, delivered: true } as const;
-
 /** The stops the chat asked of each run through its session, recorded by
  *  {@link recordStops}: a resumed run the chat stopped ends cancelled. */
 const recordStops = (): RunId[] => {
@@ -423,17 +414,17 @@ const recordStops = (): RunId[] => {
   return stops;
 };
 
-const defaultResumeRun = (
+/** A resumed run whose result reads `outcome` when the chat awaits it. */
+const resumedRun = (
   runId: RunId,
-  options: Pick<ResumeRunOptions, 'onAdmitted'>,
-) =>
-  Effect.gen(function* () {
-    // The real `resumeRun` rearranges the host onto the resumed run only
-    // after its own retrieval succeeded, so every stand-in that reaches a launch
-    // must run the hook or the caller never adopts the run.
-    if (options.onAdmitted) yield* options.onAdmitted(runId);
-    return STARTED;
-  });
+  outcome: () => RunOutcome = () => RUN_OUTCOME.COMPLETED,
+) => ({ runId, result: Effect.sync(() => ({ outcome: outcome() })) });
+
+/** A resumed run that ends cancelled once the chat stopped it. */
+const stoppableRun = (runId: RunId, stops: readonly RunId[]) =>
+  resumedRun(runId, () =>
+    stops.includes(runId) ? RUN_OUTCOME.CANCELLED : RUN_OUTCOME.COMPLETED,
+  );
 
 describe('CLI terminal outcome resolution', () => {
   // The persisted outcome is a committed `run.end` row on a real session over
@@ -534,10 +525,13 @@ describe('createChatSessionController', () => {
       outcome: RUN_OUTCOME.COMPLETED,
     });
     mocks.rootLaunch.mockImplementation(
-      (request: { config: unknown; runId: RunId }, options: object) =>
-        Effect.tryPromise({
-          try: () => mocks.executeAgent(request.config, request.runId, options),
-          catch: ensureError,
+      (input: { config: unknown; runId: RunId }) =>
+        Effect.succeed({
+          runId: input.runId,
+          result: Effect.tryPromise({
+            try: () => mocks.executeAgent(input.config, input.runId),
+            catch: ensureError,
+          }),
         }),
     );
     // Return the caller-provided default (undefined for workspace agents keys) — a
@@ -565,7 +559,9 @@ describe('createChatSessionController', () => {
       Effect.succeed('The request failed inside TeXRA; see the log.'),
     );
     installSession();
-    mocks.resumeRun.mockImplementation(defaultResumeRun);
+    mocks.resumeRun.mockImplementation((runId: RunId) =>
+      Effect.succeed(resumedRun(runId)),
+    );
     installResumeRunStore();
     seedView(viewWith([]));
     rootRunId.set(undefined);
@@ -614,11 +610,7 @@ describe('createChatSessionController', () => {
         // The launch mints the root run id, so the fixture takes it from the
         // launch instead of naming one of its own.
         mocks.executeAgent.mockImplementationOnce(
-          async (
-            _config: unknown,
-            runId: RunId,
-            options: ExecuteAgentMockOptions,
-          ) => {
+          async (_config: unknown, runId: RunId) => {
             const rootHandle = testRunHandle({
               runId,
               parent: null,
@@ -646,7 +638,6 @@ describe('createChatSessionController', () => {
                 outcome: RUN_OUTCOME.CANCELLED,
               });
             });
-            Effect.runSync(options.onAdmitted?.(runId) ?? Effect.void);
             return rootRunResult.promise;
           },
         );
@@ -828,12 +819,15 @@ describe('createChatSessionController', () => {
       const previousMetadata = sessionMeta.get();
       installResumeRunStore(makeResumeConfig({ cli: { teamId: 'physicist' } }));
       // Both runtime refusals precede the hook that adopts the target run.
-      // The session's refusal, in its words, as `sessionAgentRuns` answers it.
+      // The session's refusal, in its words.
       mocks.resumeRun.mockReturnValueOnce(
-        Effect.succeed({
-          failed: failure,
-          message: describeFollowUpFailure(failure),
-        }),
+        Effect.fail(
+          new ResumeRefused({
+            runId: 'ec0001',
+            reason: failure,
+            message: describeFollowUpFailure(failure),
+          }),
+        ),
       );
       const ctrl = createChatSessionController(makeInit({ session }));
 
@@ -851,27 +845,6 @@ describe('createChatSessionController', () => {
       expect(session.runCompleted).toBe(true);
     },
   );
-
-  it('treats a manually resumed subagent returning to WAITING as a successful turn', async () => {
-    const session = makeSession({ runCompleted: true });
-    mocks.resumeRun.mockImplementationOnce(
-      (id: RunId, options: ResumeRunOptions) =>
-        Effect.gen(function* () {
-          if (options.onAdmitted) yield* options.onAdmitted(id);
-          return { ...STARTED, outcome: RUN_PHASE.WAITING };
-        }),
-    );
-    // A fake records reader, like every other resume test: the real
-    // `getRunRecords` against this harness's storage-less platform fails
-    // loudly, which resume() treats as a rehydration failure by contract.
-    const init = makeInit({ session });
-    const ctrl = createChatSessionController(init);
-
-    await runResume(ctrl, 'ec0001' as RunId);
-    await awaitRunSettled(session);
-
-    expect(session.runExitCode).toBe(CliExitCode.Success);
-  });
 
   it('manual resume supersedes stale interrupted recovery state', async () => {
     const session = makeSession({
@@ -898,19 +871,16 @@ describe('createChatSessionController', () => {
       runCompleted: true,
     });
     const stops = recordStops();
-    mocks.resumeRun.mockImplementationOnce(
-      (id: RunId, options: Pick<ResumeRunOptions, 'onAdmitted'>) =>
-        Effect.gen(function* () {
-          if (options.onAdmitted) yield* options.onAdmitted(id);
-          yield* Effect.promise(() => rehydrated.promise);
-          return {
-            ...STARTED,
-            outcome: stops.includes(id)
-              ? RUN_OUTCOME.CANCELLED
-              : RUN_OUTCOME.COMPLETED,
-          };
-        }),
-    );
+    mocks.resumeRun.mockImplementationOnce((id: RunId) => {
+      const run = stoppableRun(id, stops);
+      return Effect.succeed({
+        ...run,
+        result: Effect.andThen(
+          Effect.promise(() => rehydrated.promise),
+          run.result,
+        ),
+      });
+    });
     const ctrl = createChatSessionController(makeInit({ session }));
 
     holdRun('aaaaaa' as RunId);
@@ -955,21 +925,13 @@ describe('createChatSessionController', () => {
       runCompleted: true,
     });
     const stops = recordStops();
-    mocks.resumeRun.mockImplementationOnce(
-      (id: RunId, options: Pick<ResumeRunOptions, 'onAdmitted'>) => {
-        resumeStarted.resolve();
-        return Effect.gen(function* () {
-          yield* Effect.promise(() => resumeReached.promise);
-          if (options.onAdmitted) yield* options.onAdmitted(id);
-          return {
-            ...STARTED,
-            outcome: stops.includes(id)
-              ? RUN_OUTCOME.CANCELLED
-              : RUN_OUTCOME.COMPLETED,
-          };
-        });
-      },
-    );
+    mocks.resumeRun.mockImplementationOnce((id: RunId) => {
+      resumeStarted.resolve();
+      return Effect.as(
+        Effect.promise(() => resumeReached.promise),
+        stoppableRun(id, stops),
+      );
+    });
     const ctrl = createChatSessionController(makeInit({ session }));
 
     holdRun('aaaaaa' as RunId);
@@ -1108,20 +1070,10 @@ describe('createChatSessionController', () => {
     const resumeCalled = createDeferred();
     holdRun('aaaaaa' as RunId);
     const stops = recordStops();
-    mocks.resumeRun.mockImplementationOnce(
-      (id: RunId, options: Pick<ResumeRunOptions, 'onAdmitted'>) => {
-        resumeCalled.resolve();
-        return Effect.gen(function* () {
-          if (options.onAdmitted) yield* options.onAdmitted(id);
-          return {
-            ...STARTED,
-            outcome: stops.includes(id)
-              ? RUN_OUTCOME.CANCELLED
-              : RUN_OUTCOME.COMPLETED,
-          };
-        });
-      },
-    );
+    mocks.resumeRun.mockImplementationOnce((id: RunId) => {
+      resumeCalled.resolve();
+      return Effect.succeed(stoppableRun(id, stops));
+    });
 
     const resumeStarted = runResume(ctrl, 'aaaaaa' as RunId);
     await helperModelStarted.promise;

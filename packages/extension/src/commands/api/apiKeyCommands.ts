@@ -9,7 +9,6 @@ import {
   loadApiKeyStatusMap,
 } from '@texra-ai/llm';
 import { settleQuickInput } from '@commands/_shared/quickInputUtils';
-import { VscodeExternalOpener } from '@frontend/hosts/VscodeExternalOpener';
 import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
 import { quickPick } from '@frontend/ui/dialogs';
 import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
@@ -39,10 +38,8 @@ function createProfileKeyController(
   return new SettingsProfileKeyController({
     secrets,
     prompt: vscodeUi,
-    externalOpener: new VscodeExternalOpener(),
     getProviderDisplayName: (provider) =>
       getProviderDisplayName(stores, provider),
-    getProviderKeyUrl: (provider) => getProviderKeyUrl(stores, provider),
   });
 }
 

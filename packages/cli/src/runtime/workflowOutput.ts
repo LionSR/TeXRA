@@ -39,11 +39,6 @@ const NO_DOCUMENTS: DocumentsResult = {
   diffs: [],
 };
 
-/** Resolve a user-supplied path against `cwd` when it isn't already absolute. */
-function joinCwdRelative(target: string, cwd: string): string {
-  return path.isAbsolute(target) ? target : path.join(cwd, target);
-}
-
 type OutputFlag = '--output' | '--output-dir';
 
 const notADirectory = (error: PlatformError.PlatformError): boolean =>
@@ -106,7 +101,7 @@ function outputPathError(
  * it handles missing depth, Windows ENOENT-through-file behavior, and symlink
  * resolution natively. The Path service serves dirname so tests can supply
  * NodePath.layerWin32; at runtime NodePath.layer is node:path, so it agrees
- * with joinCwdRelative.
+ * with path.resolve.
  */
 const probeOutputPath = Effect.fn('probeOutputPath')(
   function* (
@@ -166,7 +161,7 @@ export function assertOutputDirAvailable(
   FileSystem.FileSystem | Path.Path
 > {
   if (!outputDir) return Effect.void;
-  const target = joinCwdRelative(outputDir, cwd);
+  const target = path.resolve(cwd, outputDir);
   return probeOutputPath(target, '--output-dir').pipe(
     Effect.flatMap((stats) =>
       stats && stats.type !== 'Directory'
@@ -188,7 +183,7 @@ export function assertOutputFileAvailable(
   FileSystem.FileSystem | Path.Path
 > {
   if (!outputFile) return Effect.void;
-  const target = joinCwdRelative(outputFile, cwd);
+  const target = path.resolve(cwd, outputFile);
   return probeOutputPath(target, '--output').pipe(
     Effect.flatMap((stats) =>
       stats?.type === 'Directory'
@@ -380,7 +375,7 @@ export function resolveWorkflowOutput(
     }
 
     if (outputDir) {
-      const targetRoot = joinCwdRelative(outputDir, context.cwd);
+      const targetRoot = path.resolve(context.cwd, outputDir);
       const expectedRelativePaths = (options.expectedOutputFiles ?? []).map(
         (file) => getSafeDocumentRelativePath(file),
       );
@@ -422,8 +417,8 @@ export function resolveWorkflowOutput(
       return baseResult;
     }
 
-    const targetPath = joinCwdRelative(outputFile, context.cwd);
-    if (path.resolve(finalOutput.absolutePath) !== path.resolve(targetPath)) {
+    const targetPath = path.resolve(context.cwd, outputFile);
+    if (path.resolve(finalOutput.absolutePath) !== targetPath) {
       yield* copyOutputFile(finalOutput.absolutePath, targetPath, '--output');
     }
 

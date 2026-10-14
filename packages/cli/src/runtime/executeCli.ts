@@ -21,6 +21,7 @@ import {
   type ProcessRuntime,
   type ProcessServices,
   type Run,
+  type RunEndResult,
   type Session,
   type SessionOwner,
   type StartInput,
@@ -65,7 +66,6 @@ import {
   readCliPluginPins,
   readCliRunOutcomeState,
   runOutcomeExitCode,
-  type ExecuteAgentResult,
 } from './terminalStatus';
 import {
   CliUsageError,
@@ -116,20 +116,19 @@ const startOnSession: CliLaunch = (
   });
 
 interface CliExecuteOptions {
-  /** The process session whose records and rows the run's output reads:
-   *  `initCliPlatform`'s one memoized open, threaded from the command that
-   *  holds its services. */
-  readonly session: Effect.Effect<SessionHandle, SessionOpenError>;
-  /** The same session as every host drives it: the run starts, resumes,
-   *  stops and asks its host there. */
-  readonly runSession: Effect.Effect<Session, SessionOpenError>;
-  /** The process runtime, from the same services: the shutdown step below
-   *  runs on the process's shutdown fiber, so it runs its programs on this. */
-  readonly runtime: ProcessRuntime;
-  /** The process's shutdown scope, from the same services: the run's
-   *  shutdown-status step is a finalizer of a child scope of it, so it runs
-   *  before the sessions close. */
-  readonly shutdownScope: Scope.Scope;
+  /** The `initCliPlatform` services the run uses, from the command that
+   *  holds them: `session`, whose records and rows the run's output reads;
+   *  `runSession`, the same session as every host drives it, where the run
+   *  starts, resumes, stops and asks its host; `runtime`, which the shutdown
+   *  step runs its programs on (it runs on the process's shutdown fiber);
+   *  and `shutdownScope`, of which the run's shutdown-status step is a child
+   *  scope's finalizer, so it runs before the sessions close. */
+  readonly services: {
+    readonly session: Effect.Effect<SessionHandle, SessionOpenError>;
+    readonly runSession: Effect.Effect<Session, SessionOpenError>;
+    readonly runtime: ProcessRuntime;
+    readonly shutdownScope: Scope.Scope;
+  };
   /** Stop a tool-use run after one model/tool cycle. */
   readonly stopAfterCycle?: boolean;
   /** Called during signal shutdown once the run's CANCELLED end is
@@ -142,9 +141,7 @@ interface CliExecuteOptions {
    *  document task's output copy and result record), with its committed
    *  outcome: part of the finalization a shutdown waits for, so a signal
    *  never cuts it short. Its failure fails the finalization. */
-  readonly afterRun?: (
-    result: ExecuteAgentResult,
-  ) => Effect.Effect<void, Error>;
+  readonly afterRun?: (result: RunEndResult) => Effect.Effect<void, Error>;
   /** The agent boundary the request runs through: unset, the session's
    *  start; `texra resume`'s is the session's resume; a test harness
    *  injects stand-ins rather than mocking. */
@@ -194,7 +191,9 @@ export function executeCliConfig(
       return { ok: false as const, exitCode: CliExitCode.Usage };
     }
 
-    const plugins = yield* readCliPluginPins((yield* options.session).roots);
+    const plugins = yield* readCliPluginPins(
+      (yield* options.services.session).roots,
+    );
     const request = { ...validation.request, runId };
     const run = yield* executeCliRequest(request, runContext, executeOptions);
     if (!run.ok) {
@@ -285,7 +284,7 @@ export function executeCliRequest(
   | {
       ok: true;
       outcomePersisted: boolean;
-      result: ExecuteAgentResult;
+      result: RunEndResult;
     }
   | { ok: false; exitCode: CliExitCode },
   Error,
@@ -297,8 +296,8 @@ export function executeCliRequest(
       resumability: deriveResumability,
       ...options.agentRuns,
     };
-    const session = yield* options.session;
-    const runSession = yield* options.runSession;
+    const session = yield* options.services.session;
+    const runSession = yield* options.services.runSession;
     // The run follows the project's setting, read at each decision, with
     // what this invocation asked for riding its launch (`launchApproval`).
     const refused = launchApprovalNotice(
@@ -324,7 +323,7 @@ export function executeCliRequest(
       .pipe(Scope.provide(presentationScope));
     const host = createHeadlessCliHostInteractions(
       runSession,
-      options.runtime,
+      options.services.runtime,
       runContext,
       {
         beforePrompt: () => presentationHost.prepareInteractivePrompt?.(),
@@ -417,7 +416,7 @@ export function executeCliRequest(
         // cannot outlive the exiting CLI process, so the detach-on-stop
         // toggle is not consulted here.
         yield* withProcessServices(
-          options.runtime,
+          options.services.runtime,
           Effect.gen(function* () {
             // The run has ended: what is left is its finalization (the
             // recovery notice, a document task's output copy), which the
@@ -508,7 +507,9 @@ export function executeCliRequest(
     // scope, so a shutdown runs this step before it closes the sessions;
     // closed with the step disarmed once the run's finalization is done, so
     // a completed run leaves nothing behind.
-    const shutdownStatusScope = yield* Scope.fork(options.shutdownScope);
+    const shutdownStatusScope = yield* Scope.fork(
+      options.services.shutdownScope,
+    );
     let shutdownStatusArmed = true;
     yield* Scope.addFinalizer(
       shutdownStatusScope,
@@ -535,7 +536,7 @@ export function executeCliRequest(
       });
     };
     let runResult:
-      | { readonly ok: true; readonly result: ExecuteAgentResult }
+      | { readonly ok: true; readonly result: RunEndResult }
       | { readonly ok: false } = { ok: false };
     let primaryRunFailure: { readonly error: unknown } | undefined;
     let shutdownLaunchAborted = false;
