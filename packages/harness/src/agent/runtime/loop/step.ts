@@ -45,7 +45,7 @@ import type { LoadablePlugin } from '@common/plugins/pluginTrust';
 import { withLogChannel } from '@logger/effectLog';
 import type { PluginContext } from '@platform/processRuntime';
 import {
-  isDocumentTaskConfig,
+  isRecipeConfig,
   AGENT_SKILLS_CONFIG_KEY,
   AgentSkillsEnabledSchema,
   sameIdentity,
@@ -255,7 +255,7 @@ const openStep = Effect.fn('Step.open')(function* (
   const scope = yield* Scope.fork(run.scope);
   const step = yield* Effect.gen(function* () {
     // No switch or approval withholds a recipe's fixed tools; else read live.
-    const recipe = isDocumentTaskConfig(run.config);
+    const recipe = isRecipeConfig(run.config);
     const off = recipe
       ? Effect.succeed(new Set<string>())
       : readDisabledTools(run.stores.globalState);

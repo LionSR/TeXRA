@@ -242,15 +242,18 @@ Core lives in `packages/harness/src/agent/`: `core/` is the host-agnostic domain
 takes from context (`AgentRun`, model binding, pricing, media, tools) and
 `runtime/ModelInvoker.ts` the one service that calls the `packages/llm`
 `Model`. `core/tools/` holds `toolCallParsing`, which parses a response's
-tool calls. `output/` holds the document recipe (`documentRecipe.ts`), the
-script a document task's run executes over the documents plugin's tools
-(`packages/texra/src/tools/documents/`), and its output pipeline. Provider APIs are reached
+tool calls. A plugin may own one block of an agent file
+(`Plugin.agentBlock`); an agent carrying it is a task, which its plugin
+launches on its own recipe (`script.kind: 'recipe'`), and the harness reads
+nothing inside the block. Provider APIs are reached
 only through the `packages/llm` `Model` that `runtime/modelAccess/ModelAccess.ts`
 binds; the `helperModel` path binds through that same route. New agents come
 from the built-in `creator` agent or the settings view's "Create from
 template". Agents are flat persona YAML (`name`, `description`, `prompt`,
 `tools`, `temperature`) in `packages/extension/resources/`; a `task:` block
-makes one also launchable as a document task.
+(the documents plugin's, `packages/texra/src/tools/documents/documentTask.ts`)
+makes one also launchable as a document task, which the plugin's recipe
+(`packages/texra/src/agent/output/documentRecipe.ts`) runs.
 
 **Launch executions via `session.runs.launch({ request, options })`** (the
 session's `Runs`, `packages/harness/src/agent/runtime/runRegistry.ts`) — it

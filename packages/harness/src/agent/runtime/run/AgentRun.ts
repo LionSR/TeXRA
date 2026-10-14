@@ -25,7 +25,7 @@ import {
 } from '@agent/runtime/modelAccess/ModelAccess';
 import type { ModelOptionStores } from '@model/computeModelOptions';
 import type { LanguageModel } from '@platform/languageModel';
-import type { DocumentTask, Persona, SessionEventDraft } from '@shared/schemas';
+import type { Persona, SessionEventDraft } from '@shared/schemas';
 import { RunHistory } from '@shared/session/runHistory';
 import type { CoWrite } from '@shared/session/sessionEvents';
 import {
@@ -93,9 +93,6 @@ export interface AgentRunShape {
   readonly config: AgentConfig;
   /** The persona the run is, with the tools it declares. */
   readonly persona: Persona;
-  /** The document task it runs, or null for a conversation (a task's
-   *  persona called by its recipe or chatted with included). */
-  readonly task: DocumentTask | null;
   readonly logger: AgentTrace;
   readonly parentStage: StageHandle;
   readonly toolPolicy: ToolPolicy;
@@ -191,7 +188,7 @@ export const agentRunLayer = (
       // each release runs concurrently under its own deadline.
       const scope = yield* Scope.fork(layerScope, 'parallel');
 
-      const { persona, task } = ctx;
+      const { persona } = ctx;
 
       // Unforced structured-output floor: when the config declares an output
       // schema, a synthetic `submit_output` terminal tool joins the run's own
@@ -204,7 +201,7 @@ export const agentRunLayer = (
         : undefined;
       const finalToolName = terminalTool?.definition.name ?? null;
       // A script's run offers its script and exactly the tools its launch
-      // names (a background script's parent's, a document task's recipe's).
+      // names (a background script's parent's, a task's recipe's).
       const script = config.script ?? null;
       // A plugin agent that names no tools inherits them, as a Claude Code
       // subagent does: a child every tool its parent's step offered (the
@@ -321,7 +318,6 @@ export const agentRunLayer = (
         session,
         config,
         persona,
-        task,
         logger,
         parentStage: ctx.parentStage,
         toolPolicy: ctx.toolPolicy,

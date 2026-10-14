@@ -112,7 +112,7 @@ const rowsOfFailedLaunch = Effect.fn(function* (
             Effect.succeed({
               path: '/agents/chat.yaml',
               persona: { prompt: '', tools: [], temperature: 1 },
-              task: null,
+              blocks: {},
             }),
           );
           mocks.buildVars.mockReturnValueOnce(Effect.fail(LAUNCH_FAILURE));
@@ -233,7 +233,7 @@ describe('native agent launch activation', () => {
           Effect.succeed({
             path: '/agents/chat.yaml',
             persona: { prompt: '', tools: [], temperature: 1 },
-            task: null,
+            blocks: {},
           }),
         );
         mocks.buildVars.mockReturnValueOnce(

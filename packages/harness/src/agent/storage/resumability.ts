@@ -2,7 +2,7 @@ import { Effect } from 'effect';
 
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { withLogChannel } from '@logger/effectLog';
-import { isDocumentTaskConfig, type RunId } from '@shared/schemas';
+import { isRecipeConfig, type RunId } from '@shared/schemas';
 import { DatabaseRowEarlier } from '@shared/session/database';
 import { continuesFromRows } from '@shared/session/runActions';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -32,7 +32,7 @@ const earlierRefusal = (error: unknown): DatabaseRowEarlier | undefined =>
  * The one answer to "can this run resume?", before ownership (`runRefusal`
  * adds the claim). An opened run continues whatever its outcome: rows live
  * until deletion, so a failed or cancelled run continues from where they
- * left it. A document task that ended does not: its recipe's result is
+ * left it. A task that ended does not: its recipe's result is
  * settled, so it runs again instead.
  */
 export const deriveResumability = Effect.fn('deriveResumability')(function* (
@@ -56,8 +56,7 @@ export const deriveResumability = Effect.fn('deriveResumability')(function* (
   const config = records.findLast((row) => row.type === 'run.config');
   const standing = {
     ended: runEndFromEvents(records, runId) !== null,
-    documentTask:
-      config?.type === 'run.config' && isDocumentTaskConfig(config.config),
+    recipe: config?.type === 'run.config' && isRecipeConfig(config.config),
   };
   return start?.type === 'run.start' &&
     continuesFromRows({ ...standing, identity: start.identity })

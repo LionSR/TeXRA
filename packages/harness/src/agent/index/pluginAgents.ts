@@ -172,7 +172,7 @@ function pluginAgentEntry(agent: PluginAgent, file: string): AgentEntry {
       prompt: agent.systemPrompt,
       tools: agent.tools ?? [],
     }),
-    task: null,
+    blocks: {},
   };
 }
 

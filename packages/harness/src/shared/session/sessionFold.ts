@@ -41,7 +41,7 @@ import {
   RESTING_SUBSTATES,
   RUN_SUBSTATE,
   parkSubstate,
-  isDocumentTaskConfig,
+  isRecipeConfig,
   isPlainAgentIdentity,
   listingKeyOf,
   isTranscriptEvent,
@@ -361,7 +361,7 @@ function createRun(
     latestLine: null,
     transcript: emptyTranscript(),
   };
-  return { ...common, documentTask: false, plan: null };
+  return { ...common, recipe: false, plan: null };
 }
 
 /**
@@ -653,7 +653,7 @@ function nonEmpty(text: string | undefined): string | undefined {
 }
 
 /** A run's newest operational summary, for one with no reply to show (a
- *  script's run, a document task): what its tool, phase, card, error, or
+ *  script's run, a task's recipe): what its tool, phase, card, error, or
  *  plain log row last said. */
 function operationalLatestLine(
   rows: readonly TranscriptRow[],
@@ -836,7 +836,7 @@ function applyOwnArm(run: RunView, event: OwnEvent): RunView {
         modelLabel: model === null ? null : getModelLabel(model),
         command: run.identity.kind === 'process' ? config.instruction : null,
         inputFiles: 'inputFiles' in config ? config.inputFiles : [],
-        documentTask: isDocumentTaskConfig(config),
+        recipe: isRecipeConfig(config),
       };
     }
     case 'run.model':

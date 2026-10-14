@@ -14,24 +14,28 @@ import {
   type Path,
   type Scope,
 } from 'effect';
+
 import type { RunInbox } from '@agent/followUp/ToolUseFollowUp';
 import type { RuntimeTool as ITool } from '@agent/runtime/ToolServices';
 import type {
   LogWriteError,
   SessionHandle,
 } from '@agent/runtime/SessionHandle';
+import type { AgentEntry } from '@agent/index/agentEntry';
 import type { LoadablePlugin } from '@common/plugins/pluginTrust';
 import type { AppState, ConfigProvider } from '@platform/interfaces';
-import type {
-  PermissionPayload,
-  RequestDecision,
-  RunId,
-  ToolFact,
+import {
+  AgentDefinitionSchema,
+  type PermissionPayload,
+  type RequestDecision,
+  type RunId,
+  type ToolFact,
 } from '@shared/schemas';
 import type { GlobalDatabase } from '@shared/session/database';
 import type { RunState } from '@shared/session/runStateFold';
 import type { ToolCatalog } from '@tools/liveTools';
 import type { Plugin } from '@tools/plugins';
+import type { z } from 'zod';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 /**
@@ -205,6 +209,34 @@ export interface RequestDecisionHook {
   }) => Effect.Effect<void, Error, GlobalDatabase>;
 }
 
+/**
+ * A top-level block a plugin owns in an agent file (TeXRA's documents plugin
+ * owns `task:`). The catalog scan checks a file's block against `schema`
+ * and keeps the parsed value on the entry (`AgentEntry.blocks`); a file
+ * whose block fails it, or that holds a key no listed plugin owns, is
+ * refused like any other invalid definition. An agent with a block is a
+ * task: it declares no tools, delegation marks it for the tools that
+ * `launchesTasks`, and it runs as one only through a launch its plugin
+ * builds (a `script` of kind `recipe`). The harness reads nothing inside it.
+ */
+export interface AgentBlock<A = unknown> {
+  /** The key in an agent file: unique across the plugin list, and never a
+   *  key of the persona itself. */
+  readonly key: string;
+  /** The block as written, to its value with defaults applied. */
+  readonly schema: z.ZodType<A>;
+}
+
+/** The value of `block` on `entry`, as the catalog scan parsed it with the
+ *  block's schema; undefined when the agent has none. */
+export function agentBlockOf<A>(
+  entry: Pick<AgentEntry, 'blocks'>,
+  block: AgentBlock<A>,
+): A | undefined {
+  // cast: the scan stored this key's value as `block.schema` parsed it.
+  return entry.blocks[block.key] as A | undefined;
+}
+
 /** The process's plugins by plugin id: what each contributes (its tools,
  *  continuation, prompt section and layers) is read off its value. */
 export interface ToolTable {
@@ -214,14 +246,18 @@ export interface ToolTable {
   readonly get: (name: string) => ITool | undefined;
   /** Each request kind's decision hook, from the plugin that owns it. */
   readonly decisions: ReadonlyMap<string, RequestDecisionHook>;
+  /** The agent-file blocks the plugins own, by key (`Plugin.agentBlock`). */
+  readonly blocks: ReadonlyMap<string, AgentBlock>;
 }
 
 /**
  * The table over `plugins`, which the app lists in order. A list that
  * spells an id other than lowercase letters, digits and dashes, repeats a
  * plugin id or a tool name, claims the parked runs'
- * continuation or one request kind's decisions twice, or gives a switch to a plugin with no availability
- * probe is a defect of the list, refused when it is built.
+ * continuation or one request kind's decisions twice, claims an agent-file
+ * block another plugin or the persona owns, or gives a switch to a plugin
+ * with no availability probe is a defect of the list, refused when it is
+ * built.
  */
 export function toolTable(plugins: readonly Plugin[]): ToolTable {
   const entries = new Map<string, Plugin>();
@@ -262,7 +298,17 @@ export function toolTable(plugins: readonly Plugin[]): ToolTable {
     if (plugin.availability === undefined && plugin.toggle !== undefined)
       refuse(`plugin ${plugin.id} has a switch but no availability probe.`);
   }
-  return { entries, get: (name) => byName.get(name), decisions };
+  const owned = plugins.flatMap(({ agentBlock }) => agentBlock ?? []);
+  const blocks = new Map(owned.map((block) => [block.key, block] as const));
+  if (
+    owned.some(
+      (block, index) =>
+        owned.findIndex(({ key }) => key === block.key) !== index ||
+        block.key in AgentDefinitionSchema.shape,
+    )
+  )
+    refuse('an agent-file key is owned twice, or is a persona key.');
+  return { entries, get: (name) => byName.get(name), decisions, blocks };
 }
 
 /** The process's plugin table, which every run's offered tools come from. */

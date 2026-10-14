@@ -26,7 +26,7 @@ export class WorkflowRunContent extends BaseRunContent {
 
   override render(): TemplateResult | typeof nothing {
     const { run, view, surface } = this;
-    if (!run || !view || !surface || !run.documentTask) return nothing;
+    if (!run || !view || !surface || !run.recipe) return nothing;
     const documents = documentsOf(run);
     return html`
       <div class="conversation-content">

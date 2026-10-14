@@ -16,14 +16,15 @@ import {
 import { BUILTIN_TEAM_ROOT_AGENT_NAMES } from '@shared/constants/agents';
 import { hasDelegationTool } from '@shared/constants/delegationTools';
 import { type AgentSelectionItem } from '@texra/shared/settingsView/settingsViewMessages';
+import { documentTaskOf } from '@texra/tools/documents/documentTask';
 import { byName } from '@utils/core';
 import type { StateStore } from '@texra-ai/harness';
 
 interface SettingsAgentCatalogEntry {
   name: string;
   source: AgentSource;
-  /** Its file's `task` block, or null for a chat agent. */
-  task: object | null;
+  /** The plugins' blocks its file holds (the documents plugin's `task`). */
+  blocks: Readonly<Record<string, unknown>>;
   description?: string;
   path?: string;
   tools?: string[];
@@ -207,7 +208,7 @@ export class SettingsAgentCatalogController {
     return {
       name: entry.name,
       source: entry.source,
-      hasTask: entry.task !== null,
+      hasTask: documentTaskOf(entry) !== null,
       description: entry.description,
       filePath: entry.path || undefined,
       tools: entry.tools,

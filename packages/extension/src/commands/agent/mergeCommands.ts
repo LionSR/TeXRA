@@ -28,16 +28,23 @@ export const handleMerge = Effect.fn('mergeCommands.handleMerge')(function* (
   }
 
   const model = yield* getHelperModelName(roots);
-  yield* safeExecuteCommand(
-    'texra.execute',
-    [
-      documentTaskConfig({
-        agent: 'merge',
-        model,
-        inputFiles: [baseFile],
-        editedFile,
-      }),
-    ],
-    CHANNEL,
+  // A launch that cannot be built (no catalog, no merge task) says why.
+  const refuse = ({ message }: { readonly message: string }) =>
+    showLoggedMessageWithDocs(
+      CHANNEL,
+      `Merge: ${message}`,
+      'intelligent-merge',
+      'View Merge Docs',
+    ).pipe(Effect.as(null));
+  const config = yield* documentTaskConfig(
+    { agent: 'merge', model, inputFiles: [baseFile], editedFile },
+    roots,
+  ).pipe(
+    Effect.catchTags({
+      DocumentTaskRefused: refuse,
+      AgentCatalogLoadError: refuse,
+    }),
   );
+  if (config === null) return;
+  yield* safeExecuteCommand('texra.execute', [config], CHANNEL);
 });

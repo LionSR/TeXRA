@@ -116,7 +116,7 @@ describe('selectWorkflowRunDetailLines', () => {
       viewWith([
         makeRunView({
           id: STREAM_ID,
-          documentTask: true,
+          recipe: true,
           status: RUN_PHASE.RUNNING,
           transcript: {
             rows: [textRowFixture('live', 'log', 'live workflow log')],

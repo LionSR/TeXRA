@@ -26,7 +26,6 @@ import {
 } from '@test/support/sessionTestUtils';
 import { fakeProcessServices } from '@test/support/setupPlatform';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
-import { documentTaskConfig } from '@texra/agent/output/documentRecipe';
 import { agentTool } from '@tools/delegation/AgentTool';
 import {
   executeSubagentInBand as executeSubagentInBandEffect,
@@ -449,7 +448,7 @@ describe('headless delegation', () => {
     await Effect.runPromise(inBandSession.log.settled);
     mocks.prepareAgentDefinition.mockImplementation(
       ({ config }: { config: unknown }) =>
-        Effect.succeed({ config, persona: { tools: [] }, task: null }),
+        Effect.succeed({ config, persona: { tools: [] } }),
     );
     testEngine = {
       // No root launch runs in this suite.
@@ -541,56 +540,6 @@ describe('headless delegation', () => {
       },
     });
   });
-
-  it.effect(
-    'validates workflow inputs against its once-loaded definition before registration',
-    () =>
-      Effect.gen(function* () {
-        const task = { outputs: ['generated.tex'] };
-        mocks.prepareAgentDefinition.mockImplementation(
-          ({ config }: { config: unknown }) =>
-            Effect.succeed({ config, persona: { tools: [] }, task }),
-        );
-        const run = (inputFiles: string[]) => {
-          const options = delegationOptions({
-            configPayload: documentTaskConfig({
-              agent: 'review',
-              agentSource: 'plugin',
-              model: 'deepseek/deepseek-v4-flash',
-              inputFiles,
-            }),
-          });
-          return Effect.provide(
-            executeSubagentInBandEffect({
-              ...options,
-              runId: IN_BAND_RUN_ID,
-            }).pipe(Effect.provideService(Runs, options.session.runs)),
-            fakeProcessServices(),
-          );
-        };
-        // Declared outputs do not stand in for the files it revises.
-        expect(yield* Effect.flip(run([]))).toMatchObject({
-          message: expect.stringContaining('pass inputFiles'),
-        });
-        expect(mocks.executeAgent).not.toHaveBeenCalled();
-        mocks.prepareAgentDefinition.mockClear();
-        mocks.executeAgent.mockResolvedValue({
-          outcome: 'completed',
-          output: {
-            response: '',
-            files: [],
-            documents: { outputs: [], compileFailures: [], diffs: [] },
-          },
-        });
-        yield* run(['main.tex']);
-        expect(mocks.prepareAgentDefinition).toHaveBeenCalledOnce();
-        expect(mocks.executeAgent).toHaveBeenCalledWith(
-          expect.objectContaining({ task }),
-          expect.any(String),
-          expect.any(Object),
-        );
-      }),
-  );
 
   afterEach(async () => {
     const session = testDefaultSession();

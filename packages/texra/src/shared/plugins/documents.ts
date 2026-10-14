@@ -5,7 +5,9 @@
  * a run last accepted into the workspace are its `documents/accepted`. Core
  * stores and folds the rows without reading them (`RunView.facts`); this
  * module is their schemas and their one reader, which hosts, webviews and the
- * plugin's own tools share. Browser-safe: it imports only schemas.
+ * plugin's own tools share. It also holds the `task:` block of an agent
+ * file the plugin owns (`DOCUMENT_TASK_BLOCK`), which the catalog scans
+ * with. Browser-safe: it imports only schemas.
  */
 import { z } from 'zod';
 
@@ -22,6 +24,7 @@ import {
   type ToolFact,
 } from '@shared/schemas';
 import type { RunView } from '@texra-ai/harness';
+import type { AgentBlock } from '@texra-ai/harness/plugins';
 
 const DocumentsOutputSchema = z.strictObject({
   /** Every revision so far, by its zero-based `round`. */
@@ -146,3 +149,28 @@ export function documentsOf(run: Pick<RunView, 'facts'>): RunDocumentsView {
     compileFailures: byRound((round) => round.compileFailures),
   };
 }
+
+/**
+ * A document task: what the documents recipe runs over its persona. Each
+ * request (Nunjucks) opens one revision, in order, after the `prefix` that
+ * lays out the documents; `outputs` are the files a task writes when the
+ * launch names none, and `files` binds template variables to files beside
+ * the YAML (`X` renders as `X_FILE` and `X_CONTENT`).
+ */
+const DocumentTaskSchema = z.strictObject({
+  /** Edits existing documents (diffed against them), rather than writing
+   *  new ones. */
+  rewrite: z.boolean().prefault(true),
+  outputs: z.array(z.string()).prefault([]),
+  files: z.record(z.string(), z.string()).prefault({}),
+  prefix: z.string().prefault(''),
+  requests: z.array(z.string()).min(1, 'a task needs at least one request'),
+});
+/** A document task with its defaults applied. */
+export type DocumentTask = z.infer<typeof DocumentTaskSchema>;
+
+/** The `task:` block of an agent file, owned by the documents plugin. */
+export const DOCUMENT_TASK_BLOCK: AgentBlock<DocumentTask> = Object.freeze({
+  key: 'task',
+  schema: DocumentTaskSchema,
+});

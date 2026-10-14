@@ -7,7 +7,7 @@ import {
   type AgentConfig,
 } from '@agent/core/definition/AgentConfig';
 import type { CompileFailure, OutputFileInfo, RunId } from '@shared/schemas';
-import { documentTaskConfig } from '@texra/agent/output/documentRecipe';
+import { asDocumentTask } from '@test/support/ProgressControllerHarnesses';
 import {
   ProgressFollowUpController,
   type ProgressFollowUpModelOption,
@@ -55,7 +55,7 @@ function createFollowUpWorkflowConfig(
 function createExactInputsConfig(
   overrides: Partial<AgentConfig> = {},
 ): AgentConfig {
-  return documentTaskConfig(
+  return asDocumentTask(
     AgentConfigSchema.parse({
       agent: 'writer',
       model: 'google/gemini-3.1-pro-preview',

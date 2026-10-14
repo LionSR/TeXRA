@@ -14,7 +14,7 @@ import { it } from '@effect/vitest';
 import { Cause, Effect, Exit, Result } from 'effect';
 import type { SessionHandle } from '@agent/runtime';
 import { getRunRecords } from '@agent/storage';
-import { documentTaskConfig } from '@texra/agent/output/documentRecipe';
+import { asDocumentTask } from '@test/support/ProgressControllerHarnesses';
 import { DatabaseWriteFailed } from '@shared/session/database';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import type { runHeadlessAgent } from '@cli/commands/workflow';
@@ -312,7 +312,7 @@ const seedStartedRun = (session: SessionHandle, runId: string) =>
           type: 'run.config',
           aggregateId: qualifyAggregateId('run', runId as RunId),
           config: RunRecordFieldsSchema.parse(
-            documentTaskConfig({
+            asDocumentTask({
               agent: 'polish',
               model: 'test-model',
               inputFiles: ['paper.tex'],
@@ -393,12 +393,14 @@ describe('CLI run command, workflow agents', () => {
         source: 'builtIn',
         path: '/agents/polish.yaml',
         tools: [],
-        task: {
-          rewrite: true,
-          outputs: [],
-          files: {},
-          prefix: '',
-          requests: ['Polish the documents.'],
+        blocks: {
+          task: {
+            rewrite: true,
+            outputs: [],
+            files: {},
+            prefix: '',
+            requests: ['Polish the documents.'],
+          },
         },
       }),
     );
@@ -1213,7 +1215,7 @@ describe('CLI run command, workflow agents', () => {
         // commit; the session opens the run before finalization writes it.
         yield* seedStartedRun(session, 'abc010');
         const exitCode = yield* executeCliWorkflowConfig(
-          documentTaskConfig({
+          asDocumentTask({
             agent: 'polish',
             model: 'deepseek/deepseek-v4-flash',
             workingDirectory: persistedWorkspace,
@@ -1265,7 +1267,7 @@ describe('CLI run command, workflow agents', () => {
         // launch's `run.start` commit the mock boundary skips rides with it.
         yield* seedResumableCheckpoint(session, 'abc011');
         const exitCode = yield* executeCliWorkflowConfig(
-          documentTaskConfig({
+          asDocumentTask({
             agent: 'polish',
             model: 'deepseek/deepseek-v4-flash',
             workingDirectory: stableWorkspace,

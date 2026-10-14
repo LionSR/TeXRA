@@ -8,7 +8,8 @@ import {
   DatabaseClaimRefused,
   DatabaseWriteFailed,
 } from '@shared/session/database';
-import { documentTaskConfig } from '@texra/agent/output/documentRecipe';
+import { documentTaskPatch } from '@texra/agent/output/documentRecipe';
+import { documentTaskOf } from '@texra/tools/documents/documentTask';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import {
@@ -127,8 +128,9 @@ export const runHeadlessAgent = Effect.fn('runHeadlessAgent')(function* (
   const services = yield* initCliPlatform(context);
   // Resolve once, before stdin is read or the runtime host starts; the run
   // pins the resolved source.
-  const { task, source } = yield* resolveCliRunAgent(services, init.agent);
-  if (task === null) {
+  const agent = yield* resolveCliRunAgent(services, init.agent);
+  const { source } = agent;
+  if (documentTaskOf(agent) === null) {
     return yield* runToolUseAgent(context, init, source, instruction, services);
   }
 
@@ -164,9 +166,9 @@ export const runHeadlessAgent = Effect.fn('runHeadlessAgent')(function* (
           services,
         );
         const runContext = buildHeadlessRunContext(context);
-        // Only the input-derived names are knowable here: the agent's declared
-        // defaults live in a definition the launch below loads, and loading it
-        // twice could observe a different revision than the run executes. They are applied at finalization.
+        // Only the input-derived names: the task's declared outputs are
+        // stamped on the config below, from the entry resolved above, and
+        // read back from the recorded config at finalization.
         const expectedOutputFiles = init.outputDir
           ? inputDerivedOutputFiles(inputFiles, stdinInputPath)
           : undefined;
@@ -180,7 +182,7 @@ export const runHeadlessAgent = Effect.fn('runHeadlessAgent')(function* (
           init.outputDir,
           runContext.cwd,
         );
-        const config: AgentConfigPayload = documentTaskConfig({
+        const launch = {
           agent: init.agent,
           agentSource: source,
           model,
@@ -203,7 +205,12 @@ export const runHeadlessAgent = Effect.fn('runHeadlessAgent')(function* (
             : {}),
           instruction,
           workingDirectory: runContext.cwd,
-        });
+        };
+        // The entry resolved above has a task, so the patch is never null.
+        const config: AgentConfigPayload = {
+          ...launch,
+          ...documentTaskPatch(launch, agent),
+        };
 
         return yield* executeCliWorkflowConfig(config, runContext, {
           session: services.session,

@@ -14,13 +14,13 @@ import { formatTimestamp } from '@utils/text/stringUtils';
 
 /**
  * The display category of a run: an agent run is a conversation (`agent`)
- * or a document task (`task`); every other run
+ * or a task (`task`, a run opened on a plugin's recipe); every other run
  * shows what it IS (`process` / `script`).
  */
 type RunDisplayCategory = 'task' | RunIdentity['kind'];
 
 export function runDisplayCategory(run: RunView): RunDisplayCategory {
-  return run.identity.kind === 'agent' && run.documentTask
+  return run.identity.kind === 'agent' && run.recipe
     ? 'task'
     : run.identity.kind;
 }

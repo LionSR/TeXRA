@@ -60,7 +60,7 @@ export function ConversationPane(
       )
     : 0;
   const detailCapacity = Math.max(0, maxRows - pendingRowReserve);
-  const documents = stream?.documentTask ? documentsOf(stream) : undefined;
+  const documents = stream?.recipe ? documentsOf(stream) : undefined;
   const workflowFacts =
     stream && documents
       ? {

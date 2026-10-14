@@ -73,7 +73,8 @@ export interface ITool<E = Error, R = never> {
    *  `HostCapabilities`) the session's host must serve for this tool to be
    *  offered, read live each step: a window that attaches mid-run brings it. */
   readonly hostCapability?: string;
-  /** Launches agents' document tasks: its step lists the agents with one. */
+  /** Launches agents' tasks (a plugin's block): its step lists the agents
+   *  with one. */
   readonly launchesTasks?: true;
   /**
    * Where its calls run beside their siblings (omitted: `'barrier'`).

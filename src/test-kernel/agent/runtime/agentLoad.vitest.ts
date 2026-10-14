@@ -17,6 +17,7 @@ import { FakeStateStore } from '@test/support/FakePlatform';
 import {
   fakeHostAgentDirectories,
   installPlatform,
+  storePluginsLayer,
 } from '@test/support/setupPlatform';
 import {
   nodePlatformLayer,
@@ -37,6 +38,7 @@ function onGlobalStorage<A, E>(
     program,
     Layer.mergeAll(
       unusedGlobalStorageFs(),
+      storePluginsLayer,
       nodePlatformLayer,
       testHttpClientLayer,
       AgentDirectories.layer(fakeHostAgentDirectories),

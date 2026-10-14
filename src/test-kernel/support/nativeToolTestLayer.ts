@@ -85,9 +85,9 @@ export function nativeToolTestLayer(
     config: AgentConfigSchema.parse({ agent: 'test', model: 'test-model' }),
     model: testModelCell('test-model'),
     logger: noopTrace,
+    parentStage: noopTrace.openStage('Run: test'),
     steps: noStep(),
     scope: Scope.makeUnsafe(),
-    task: null,
     opening: null,
     // The run's files hold what it read: a case that seeds or checks that
     // set shares its own with the run.

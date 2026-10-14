@@ -41,7 +41,6 @@ export function createTestLaunchContext({
   return {
     config,
     persona: PersonaSchema.parse({}),
-    task: null,
     ownApiKeyFallback: false,
     // The launch stores a real run carries; no fixture reads through them.
     stores: fakeStores(),

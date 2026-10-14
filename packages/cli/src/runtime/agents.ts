@@ -9,6 +9,7 @@ import {
   type WorkspaceAgentsStores,
 } from '@agent/index';
 import { agentKeyOf } from '@shared/schemas';
+import { documentTaskOf } from '@texra/tools/documents/documentTask';
 import { formatResultCount } from '@utils/text/stringUtils';
 
 import { CliUsageError } from './cliContext';
@@ -114,15 +115,16 @@ export function formatCliAgentList(
   return agents
     .map(
       (agent) =>
-        `${agent.task === null ? 'chat' : 'task'}\t${collidingNames.has(agent.name) ? agentKeyOf(agent) : agent.name}\t${agent.description ?? ''}`,
+        `${documentTaskOf(agent) === null ? 'chat' : 'task'}\t${collidingNames.has(agent.name) ? agentKeyOf(agent) : agent.name}\t${agent.description ?? ''}`,
     )
     .join('\n');
 }
 
 export function formatCliAgentDetails(entry: AgentEntry): string {
+  const task = documentTaskOf(entry);
   const lines: string[] = [
     `name: ${entry.name}`,
-    `kind: ${entry.task === null ? 'chat' : 'document task'}`,
+    `kind: ${task === null ? 'chat' : 'document task'}`,
     `source: ${entry.source}`,
   ];
   if (entry.path) lines.push(`path: ${entry.path}`);
@@ -132,7 +134,7 @@ export function formatCliAgentDetails(entry: AgentEntry): string {
   }
   const metadataFields: readonly [string, readonly string[] | undefined][] = [
     ['tools', entry.tools],
-    ['outputs', entry.task?.outputs],
+    ['outputs', task?.outputs],
   ];
   const metadataLines = metadataFields.flatMap(([label, values]) =>
     values?.length ? [`${label}: ${values.join(', ')}`] : [],
@@ -141,9 +143,9 @@ export function formatCliAgentDetails(entry: AgentEntry): string {
     lines.push('');
     lines.push(...metadataLines);
   }
-  if (entry.rounds) {
+  if (task !== null) {
     if (metadataLines.length === 0) lines.push('');
-    lines.push(`revisions: ${entry.rounds}`);
+    lines.push(`revisions: ${task.requests.length}`);
   }
   return lines.join('\n');
 }
@@ -185,6 +187,6 @@ function collectCliAgents(
       ? getVisibleAgents(stores)
       : Effect.succeed(getCatalogAgents()),
     (agents) =>
-      tasks ? agents.filter((agent) => agent.task !== null) : agents,
+      tasks ? agents.filter((agent) => documentTaskOf(agent) !== null) : agents,
   );
 }

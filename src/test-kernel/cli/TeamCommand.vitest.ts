@@ -117,7 +117,7 @@ type TeamRunInit = Parameters<typeof nativeRun>[1];
 const ORCHESTRATOR_AGENT = {
   name: 'orchestrator',
   source: 'builtIn',
-  task: null,
+  blocks: {},
   path: '/agents/orchestrator.yaml',
   tools: ['agent'],
 };

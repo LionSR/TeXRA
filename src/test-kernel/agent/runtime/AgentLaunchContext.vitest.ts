@@ -230,7 +230,7 @@ describe('AgentLaunchContext', () => {
           Effect.succeed({
             path: '/agents/chat.yaml',
             persona: { prompt: '', tools: [], temperature: 1 },
-            task: null,
+            blocks: {},
           }),
         );
 
@@ -281,7 +281,7 @@ describe('AgentLaunchContext', () => {
           Effect.succeed({
             path: '/agents/chat.yaml',
             persona: { prompt: '', tools: [], temperature: 1 },
-            task: null,
+            blocks: {},
           }),
         );
         mocks.buildVars.mockReturnValueOnce(
@@ -403,7 +403,7 @@ describe('AgentLaunchContext', () => {
         Effect.succeed({
           path: '/agents/chat.yaml',
           persona: { prompt: '', tools: [], temperature: 1 },
-          task: null,
+          blocks: {},
         }),
       );
       mocks.buildVars.mockReturnValueOnce(Effect.fail(failure));
@@ -427,10 +427,9 @@ describe('AgentLaunchContext', () => {
       );
       expect(error).toBe(failure);
 
-      expect(mocks.buildVars.mock.calls.at(-1)?.at(5)).toEqual({
+      expect(mocks.buildVars.mock.calls.at(-1)?.at(3)).toEqual({
         workspacePath: session.roots.workspace,
         storageRoot: session.roots.storage,
-        stageId: undefined,
       });
       expect(endStage).toHaveBeenCalledExactlyOnceWith(RUN_OUTCOME.FAILED);
       expect(close).toHaveBeenCalledOnce();

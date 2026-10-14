@@ -26,7 +26,7 @@ import {
 } from '@test/support/setupPlatform';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
-import { documentTaskConfig } from '@texra/agent/output/documentRecipe';
+import { asDocumentTask } from '@test/support/ProgressControllerHarnesses';
 import {
   qualifyAggregateId,
   emptyRunEndOutput,
@@ -127,7 +127,7 @@ import { closeSessionOf } from '@test/support/sessionEnd';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 
 const config = AgentConfigSchema.parse(
-  documentTaskConfig({
+  asDocumentTask({
     agent: 'correct',
     model: 'deepseek/deepseek-v4-flash',
     instruction: 'Polish the introduction.',

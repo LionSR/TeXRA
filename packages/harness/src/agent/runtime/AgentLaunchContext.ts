@@ -1,5 +1,3 @@
-import * as path from 'node:path';
-
 import { Cause, Effect, Exit, FileSystem, Scope } from 'effect';
 import { ZodError } from 'zod';
 import { ModelProvider, type ModelConfig } from 'llm-zoo';
@@ -40,7 +38,7 @@ import { AppState } from '@platform/interfaces';
 import { Secrets } from '@platform/secrets';
 import {
   INSTRUCTION_ACTION,
-  isDocumentTaskConfig,
+  isRecipeConfig,
   RUN_OUTCOME,
   type AttachedMemoryMiss,
   type RunId,
@@ -72,7 +70,6 @@ type LaunchResolvedRunFacts = Pick<
   | 'delegationAgentScope'
   | 'config'
   | 'persona'
-  | 'task'
   | 'logger'
   | 'parentStage'
   | 'toolPolicy'
@@ -228,7 +225,7 @@ export const prepareAgentDefinition = Effect.fn('prepareAgentDefinition')(
         agentEntry,
         yield* readInstalledPluginLoad(input.session.roots),
       );
-    const { persona, task } = agentEntry;
+    const { persona } = agentEntry;
 
     // A declared tool nothing could serve is a configuration error: the run
     // is refused (a plugin switched off withholds its tools at the step).
@@ -250,19 +247,13 @@ export const prepareAgentDefinition = Effect.fn('prepareAgentDefinition')(
       interactions,
     );
 
-    // The resolved source is stamped (`agent` stays as spelled); the outputs
-    // are the explicit list unless it names only inputs, else the defaults.
-    const explicit = fullConfig.outputFiles.filter(Boolean);
+    // The resolved source is stamped (`agent` stays as spelled); a task's
+    // outputs are its plugin's, stamped by the launch that built it.
     const config: AgentConfig = {
       ...fullConfig,
       agentSource: agentEntry.source,
-      outputFiles: explicit.some(
-        (file) => !fullConfig.inputFiles.includes(file),
-      )
-        ? explicit
-        : (task?.outputs ?? []).filter(Boolean),
     };
-    return { config, persona, task, agentEntry, modelConfig };
+    return { config, persona, agentEntry, modelConfig };
   },
   // No run exists yet, so no `result` event will present this failure: the
   // generic toast is its one surface. Once assembly begins, the terminal
@@ -352,7 +343,7 @@ export const buildAgentLaunchContext = Effect.fn('buildAgentLaunchContext')(
     Error,
     Secrets | AppState | FileSystem.FileSystem | Scope.Scope
   > {
-    const { config, persona, task, agentEntry, modelConfig } = input.definition;
+    const { config, persona, agentEntry, modelConfig } = input.definition;
     // The run's working directory is decided here, once: absolute or absent.
     // Every tool call of the run carries it as `ToolContext.env.workingDirectory`
     // and trusts it rather than re-validating.
@@ -402,42 +393,26 @@ export const buildAgentLaunchContext = Effect.fn('buildAgentLaunchContext')(
           : Effect.sync(() => stage.end(RUN_OUTCOME.FAILED)),
     );
 
-    const agentPath = path.dirname(agentEntry.path);
-    // Only a run opened on the recipe is a document task; its persona chats.
-    const documentTask = isDocumentTaskConfig(config) ? task : null;
-    const buildVars = (stageId?: string) =>
-      buildTemplateInputs(
-        config,
-        documentTask,
-        agentPath,
-        modelConfig.provider === ModelProvider.ANTHROPIC,
-        agentLogger,
-        {
-          // The session's own roots, handed to prompt assembly as data, so
-          // file reads resolve in this project, not the calling fiber's.
-          workspacePath: session.roots.workspace,
-          storageRoot: session.roots.storage,
-          stageId,
-        },
-      );
-
-    // A resumed conversation's rows hold its opening, which renders nothing
-    // again; a document task's tools render its templates from it at every
-    // call, a resumed run's included.
-    const opening = yield* Effect.suspend(() => {
-      if (documentTask === null)
-        return resumed ? Effect.succeed(null) : buildVars();
-
-      const initStage = parentStage.child('Init');
-      return buildVars(initStage.id).pipe(
-        Effect.tap(() =>
-          Effect.sync(() => initStage.end(RUN_OUTCOME.COMPLETED)),
-        ),
-        Effect.onError(() =>
-          Effect.sync(() => initStage.end(RUN_OUTCOME.FAILED)),
-        ),
-      );
-    });
+    // A recipe's run renders nothing itself: its plugin's tools render their
+    // templates from this opening at every call, a resumed run's included,
+    // so it is built on resume too. A resumed conversation's rows hold its
+    // opening, which renders nothing again.
+    const recipe = isRecipeConfig(config);
+    const opening =
+      resumed && !recipe
+        ? null
+        : yield* buildTemplateInputs(
+            config,
+            modelConfig.provider === ModelProvider.ANTHROPIC,
+            agentLogger,
+            {
+              // The session's own roots, handed to prompt assembly as data,
+              // so file reads resolve in this project, not the calling
+              // fiber's.
+              workspacePath: session.roots.workspace,
+              storageRoot: session.roots.storage,
+            },
+          );
 
     const context: AgentLaunchContext = {
       runId,
@@ -447,7 +422,6 @@ export const buildAgentLaunchContext = Effect.fn('buildAgentLaunchContext')(
       config,
       resolvedAgentDescription: agentEntry.description,
       persona,
-      task: documentTask,
       modelConfig,
       ownApiKeyFallback: input.ownApiKeyFallback ?? false,
       // Frozen so nothing mutates it mid-run. A script's run ends when its

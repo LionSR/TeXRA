@@ -17,6 +17,7 @@ import { isTexFile } from '@texra/shared/latexFileTypes';
 import {
   DOCUMENTS_ACCEPTED_ARM,
   DOCUMENTS_OUTPUT_ARM,
+  DOCUMENT_TASK_BLOCK,
 } from '@texra/shared/plugins/documents';
 import {
   claudeAgent,
@@ -203,11 +204,17 @@ const setup = (platform: SetupPlatformShape) =>
     },
   });
 
-/** Document tasks: the tools their recipe calls, launching one as a child
- *  (`document_task`), and accepting the documents a run produced into the
- *  workspace. */
+/** Document tasks: the `task:` block of an agent file, the tools their
+ *  recipe calls, launching one as a child (`document_task`), and accepting
+ *  the documents a run produced into the workspace. */
 const documents: Plugin = {
   id: 'documents',
+  agentBlock: DOCUMENT_TASK_BLOCK,
+  // The delegation targets mark a task's agent `(task)`.
+  prompt: ({ offered }) =>
+    offered.includes('document_task')
+      ? 'An agent marked (task) in the available agents also runs a document task over files with `document_task`.'
+      : '',
   tools: {
     accept_run_files: AcceptRunFilesTool,
     document_task: DocumentTaskTool,

@@ -1,8 +1,8 @@
 /**
  * The `agent` tool: run a named agent as a child of the calling run, with
  * its prompt and its own tools. `launchChildAgent` is the launch it shares
- * with an app's task tools (TeXRA's `document_task`), which launch the same
- * child opened on a script.
+ * with a plugin's task tools (`launchesTasks`), which launch the same child
+ * opened on the plugin's recipe.
  *
  * Called from a script it awaits the child and returns the child's envelope
  * (`{ ...output, outcome, cost }`), unless `background` detaches it; called
@@ -39,7 +39,7 @@ import { formatSubagentDelivery } from '@agent/runtime/subagentResults';
 import { IssuingScript, requireToolRun } from '@agent/runtime/RunCall';
 import type { RunToolCall, ScriptScope } from '@agent/runtime/RunCall';
 import {
-  isDocumentTaskConfig,
+  isRecipeConfig,
   qualifyAggregateId,
   AgentProposalSchema,
   type AgentProposal,
@@ -59,7 +59,7 @@ import { errorResult, executed } from '@tools/core/result';
 import { normalizeStructuredOutputSchema } from '@tools/structuredOutput';
 import { sha256 } from '@utils/core/idHash';
 import { truncateWithEllipsis } from '@utils/text/stringUtils';
-import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local file imports
 import { agentChildRunId, earlierChild, recoverAgentChild } from './agentChild';
@@ -70,7 +70,6 @@ import {
 } from './inBandSubagentRun';
 import {
   memoriesField,
-  rejectOversizedBibAttachments,
   rejectUnusableWorkingDirectory,
   resolveInvocationFileList,
   withToolUseSubagentHandoffInstruction,
@@ -157,9 +156,9 @@ type AgentInput = z.infer<typeof AgentInputSchema>;
 
 /**
  * One child launch as the shared core runs it: the agent and its prompt,
- * the files a document task revises (empty for a chat), and the script a
- * task's run opens on. `tool` names the launching tool in its reuse key and
- * its copy.
+ * the files a task works over (empty for a chat), and the recipe a task's
+ * run opens on. `tool` names the launching tool in its reuse key and its
+ * copy.
  */
 export interface ChildLaunch {
   readonly tool: string;
@@ -178,10 +177,13 @@ export interface ChildLaunch {
     readonly mediaFiles: readonly string[];
     readonly outputFiles: readonly string[];
   };
-  /** A document task: the child opens on the approved agent's recipe (null
-   *  for one with no task), and the proposal says it revises `files`. */
+  /** A task: the child opens on what the launching plugin builds for the
+   *  approved agent (its recipe and outputs; null for an agent with no task
+   *  block), and the proposal says it works over `files`. */
   readonly task: {
-    readonly recipeFor: (chosen: AgentProposal) => AgentConfig['script'];
+    readonly configFor: (
+      chosen: AgentProposal,
+    ) => Pick<AgentConfig, 'script' | 'outputFiles'> | null;
     readonly toolConfig: Record<string, unknown>;
   } | null;
 }
@@ -451,7 +453,7 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
   // The call's files, resolved where they live: a run-storage file must be
   // this run's own or a declared output of a completed child of it; a
   // recipe's (a revision's figures and media, TeXRA's choice) pass as named.
-  const recipe = isDocumentTaskConfig(run.config);
+  const recipe = isRecipeConfig(run.config);
   const resolved = yield* Effect.exit(
     Effect.all(
       (
@@ -471,13 +473,6 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
     return errorResult(toErrorMessage(Cause.squash(resolved.cause)));
   const [inputs = [], contexts = [], media = []] = resolved.value;
   const contextFiles = contexts.map(({ file }) => file);
-  if (task !== null) {
-    const oversized = yield* rejectOversizedBibAttachments(
-      call.env.roots.workspace,
-      contextFiles,
-    ).pipe(Effect.mapError(ensureError));
-    if (oversized) return oversized;
-  }
 
   // Awaited in a script unless sent to the background, and always in a
   // one-shot run, which has no later turn for a follow-up to reach.
@@ -637,16 +632,16 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
   // The proposal's `script` names the script that asked; the child's is set below.
   const { task: _task, script: _askingScript, ...approved } = decided.proposal;
   // An approval may pick another agent: a task's recipe is that agent's.
-  const taskScript = task?.recipeFor(decided.proposal);
-  if (taskScript === null)
-    return errorResult(`'${approved.agent}' has no document task.`);
+  const taskConfig = task?.configFor(decided.proposal);
+  if (taskConfig === null)
+    return errorResult(`'${approved.agent}' has no task block.`);
   const childApproval = decided.approvalMeta.childApproval ?? 'inherit';
   const grants = delegatedChildGrants(childApproval);
   const configPayload = {
     ...approved,
     ...(outputSchema !== undefined && { outputSchema }),
     delegationAgentScope: run.delegationAgentScope,
-    ...(taskScript != null && { script: taskScript }),
+    ...taskConfig,
   };
   const parentOffered = yield* offeredBy(run);
 

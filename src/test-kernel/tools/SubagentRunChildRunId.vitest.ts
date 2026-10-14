@@ -26,7 +26,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('@agent/runtime/AgentLaunchContext', () => ({
   prepareAgentDefinition: ({ config }: { config: unknown }) =>
-    Effect.succeed({ config, persona: { tools: [] }, task: null }),
+    Effect.succeed({ config, persona: { tools: [] } }),
 }));
 
 vi.mock('@agent/runtime/runLaunchGuard', () => ({
@@ -79,7 +79,6 @@ describe('launchDetachedSubagent child run launch', () => {
     run: {
       runId: 'parent-exec' as RunId,
       session: { tag: 'parent-session' } as never,
-      task: null,
       opening: null,
       callbacks: {},
       fileService: new RunFileService('parent-exec' as RunId, roots),
@@ -91,6 +90,7 @@ describe('launchDetachedSubagent child run launch', () => {
       }),
       model: testModelCell('openai/gpt-5-2025-08-07'),
       logger: noopTrace,
+      parentStage: noopTrace.openStage('Run: chat'),
       toolPolicy: {
         approvalPromptsUnavailable: false,
       },

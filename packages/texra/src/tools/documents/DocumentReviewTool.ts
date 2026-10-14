@@ -11,7 +11,10 @@ import { defineTool } from '@texra-ai/harness';
 import { fileLocationDisplayPath, type RoundOutput } from '@shared/schemas';
 import { failureContextFromLogs } from '@texra/agent/output/compileFailureRoundContext';
 import { traceFileLineage } from '@texra/agent/output/lineageMapping';
-import type { Documents } from '@texra/tools/documents/documentState';
+import {
+  taskInputs,
+  type Documents,
+} from '@texra/tools/documents/documentState';
 import {
   documentsOfCall,
   RevisionSchema,
@@ -83,7 +86,7 @@ export const DocumentReviewTool = defineTool({
     const docs = yield* documentsOfCall('document_review');
     const round = docs.state.rounds.get(revision);
     const fs = yield* FileSystem.FileSystem;
-    const inputs = docs.run.opening?.inputs ?? {};
+    const { inputs } = yield* taskInputs(docs);
     const instruction = docs.run.config.instruction.trim();
     const parts = instruction
       ? [`<instruction>\n${instruction}\n</instruction>`]

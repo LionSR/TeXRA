@@ -26,7 +26,7 @@ import {
   qualifyAggregateId,
   aggregateTarget,
   emptyRunEndOutput,
-  isDocumentTaskConfig,
+  isRecipeConfig,
   sumRunUsageTotals,
   type RunUsageTotals,
   RunWorkspaceFilesSchema,
@@ -271,7 +271,7 @@ export function getRunRecords(session: SessionHandle, runId: RunId) {
   /**
    * The run's terminal result: the `run.end` row's outcome, error and
    * output, and the usage its run history folds from its priced response
-   * rows (a document task's: its revisions', {@link withChildSpend}); none
+   * rows (a recipe's: its children's, {@link withChildSpend}); none
    * for a run without one; an unreadable one is logged and reads the same,
    * so it never also costs the run its terminal fact.
    */
@@ -292,7 +292,7 @@ export function getRunRecords(session: SessionHandle, runId: RunId) {
       const own = Result.isSuccess(folded) ? folded.success?.usage : undefined;
       const config = latestOfType(rows, id, 'run.config')?.config;
       const usage =
-        config && isDocumentTaskConfig(config)
+        config && isRecipeConfig(config)
           ? (yield* withChildSpend(session, { runId, usage: own })).usage
           : own;
       const { outcome, error, output } = end;

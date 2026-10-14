@@ -104,7 +104,7 @@ describe('run-header over the fold', () => {
       const fields = {
         ...root,
         identity: { kind: 'agent', agent: 'correct' },
-        documentTask: true,
+        recipe: true,
         ...over,
       } as RunView;
       const { element } = await mountHeader(view, {

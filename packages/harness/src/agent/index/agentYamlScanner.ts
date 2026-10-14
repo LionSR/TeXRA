@@ -10,12 +10,12 @@ import { parseYamlWith } from '@common/parsing/safeParseYaml';
 import { withLogChannel } from '@logger/effectLog';
 import {
   AgentDefinitionSchema,
-  DocumentTaskSchema,
   PersonaSchema,
   type AgentDefinition,
 } from '@shared/schemas';
 import type { AgentSource } from '@shared/schemas';
 import type { AgentScanIssue } from '@shared/schemas';
+import { ToolRegistry } from '@tools/toolTable';
 import { truncatedHexId } from '@utils/core/idHash';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { readNormalizedFile } from '@utils/files/fsDurability';
@@ -47,6 +47,9 @@ interface ParsedAgentYaml {
   /** The scanned root the file was found under; issues name paths from it. */
   readonly root: string;
   readonly definition: AgentDefinition;
+  /** The plugins' blocks the file holds, by key, as their schemas parsed
+   *  them. */
+  readonly blocks: Readonly<Record<string, unknown>>;
   readonly digest: string;
 }
 
@@ -61,11 +64,23 @@ interface ParsedAgentYaml {
 export function scanDirectory(
   roots: readonly string[],
   source: AgentSource,
-): Effect.Effect<AgentDirectoryScan, never, FileSystem.FileSystem> {
+): Effect.Effect<
+  AgentDirectoryScan,
+  never,
+  FileSystem.FileSystem | ToolRegistry
+> {
   const dirs = roots.filter((root) => root !== '');
   if (dirs.length === 0) return Effect.succeed({ entries: [], issues: [] });
 
   return Effect.gen(function* () {
+    // A file is the persona's keys plus the blocks the listed plugins own;
+    // any other key is refused, as before.
+    const { blocks } = yield* ToolRegistry;
+    const fileSchema = AgentDefinitionSchema.extend(
+      Object.fromEntries(
+        [...blocks].map(([key, block]) => [key, block.schema.optional()]),
+      ),
+    );
     const issues: AgentScanIssue[] = [];
     // Each file with the root it was found under; a path two roots share
     // keeps the first.
@@ -99,7 +114,10 @@ export function scanDirectory(
     for (const result of yield* Effect.forEach(
       // Code-unit order, which the default sort gave one directory's paths.
       [...rootOf].toSorted(([a], [b]) => Number(a > b) - Number(a < b)),
-      ([yamlPath, root]) => Effect.result(readYamlDefinition(yamlPath, root)),
+      ([yamlPath, root]) =>
+        Effect.result(
+          readYamlDefinition(yamlPath, root, fileSchema, [...blocks.keys()]),
+        ),
       { concurrency: 8 },
     )) {
       if (Result.isSuccess(result)) parsed.push(result.success);
@@ -164,6 +182,8 @@ function entriesWithUniqueNames(
 function readYamlDefinition(
   yamlPath: string,
   dir: string,
+  fileSchema: z.ZodType<Record<string, unknown>>,
+  blockKeys: readonly string[],
 ): Effect.Effect<ParsedAgentYaml, AgentScanError, FileSystem.FileSystem> {
   const displayPath = path.relative(dir, yamlPath);
   const scanError = (cause: unknown) =>
@@ -177,15 +197,17 @@ function readYamlDefinition(
     Effect.mapError(scanError),
   ).pipe(
     Effect.flatMap((content) => {
-      const parsed = parseYamlWith(content, AgentDefinitionSchema);
+      const parsed = parseYamlWith(content, fileSchema);
       if (Result.isFailure(parsed)) {
         return Effect.fail(scanError(parsed.failure));
       }
+      const { definition, blocks } = splitBlocks(parsed.success, blockKeys);
       return Effect.succeed({
-        name: parsed.success.name,
+        name: definition.name,
         path: yamlPath,
         root: dir,
-        definition: parsed.success,
+        definition,
+        blocks,
         digest: truncatedHexId(content, 12),
       });
     }),
@@ -195,6 +217,21 @@ function readYamlDefinition(
       ),
     ),
   );
+}
+
+/** A parsed file as its persona's definition and the blocks it holds. */
+function splitBlocks(
+  parsed: Record<string, unknown>,
+  blockKeys: readonly string[],
+): Pick<ParsedAgentYaml, 'definition' | 'blocks'> {
+  const definition: Record<string, unknown> = { ...parsed };
+  const blocks: Record<string, unknown> = {};
+  for (const key of blockKeys) {
+    if (definition[key] !== undefined) blocks[key] = definition[key];
+    delete definition[key];
+  }
+  // The file schema checked these keys already; this reads them typed.
+  return { definition: AgentDefinitionSchema.parse(definition), blocks };
 }
 
 function formatScanFailure(error: unknown): string {
@@ -224,33 +261,22 @@ const RETIRED_TEMPLATE_VARIABLE =
   /\b(BUILTIN_WORKFLOW_DIR|BUILTIN_TOOLUSE_DIR)\b/;
 
 /**
- * The entry a definition makes: its persona
- * and task with the schema's defaults applied, the one validation a launch
- * reads, for a file and an inline persona alike. A task's persona works
- * text-only: the recipe owns extraction, compilation and the proposal, so a
- * definition that names tools beside a task is refused rather than run with
+ * The entry a definition makes: its persona with the schema's defaults
+ * applied, and the plugins' blocks it holds, the one validation a launch
+ * reads, for a file and an inline persona alike. An agent with a block is a
+ * task, which its plugin's recipe runs over a text-only persona, so a
+ * definition that names tools beside a block is refused rather than run with
  * tools it would never be offered. Throws the validation's error.
  */
 export function agentEntryOf(
   // As written (a file's tools are parsed, an inline persona's are names).
   definition: z.input<typeof AgentDefinitionSchema>,
   at: Pick<AgentEntry, 'source' | 'path' | 'digest'>,
+  blocks: Readonly<Record<string, unknown>> = {},
 ): AgentEntry {
-  const {
-    name,
-    description,
-    basedOn,
-    task: taskFields,
-    ...fields
-  } = definition;
+  const { name, description, basedOn, ...fields } = definition;
   const persona = PersonaSchema.parse(fields);
-  const task =
-    taskFields === undefined ? null : DocumentTaskSchema.parse(taskFields);
-  const retired = [
-    persona.prompt,
-    task?.prefix ?? '',
-    ...(task?.requests ?? []),
-  ]
+  const retired = [persona.prompt, JSON.stringify(blocks)]
     .join('\n')
     .match(RETIRED_TEMPLATE_VARIABLE);
   // An unknown variable renders empty, so a removed one is refused here.
@@ -258,9 +284,10 @@ export function agentEntryOf(
     throw new Error(
       `\`${retired[1]}\` was removed in 1.0: the built-in agents are one directory, \`BUILTIN_AGENTS_DIR\`.`,
     );
-  if (task !== null && persona.tools.length > 0)
+  const keys = Object.keys(blocks);
+  if (keys.length > 0 && persona.tools.length > 0)
     throw new Error(
-      'A document task works text-only, so `tools` and `task` cannot be combined: remove one.',
+      `A task works text-only, so \`tools\` and \`${keys[0]}\` cannot be combined: remove one.`,
     );
   const tools = persona.tools.map((tool) => tool.name);
   return {
@@ -268,10 +295,9 @@ export function agentEntryOf(
     ...at,
     description,
     tools: tools.length ? tools : undefined,
-    rounds: task?.requests.length,
     basedOn,
     persona,
-    task,
+    blocks,
   };
 }
 
@@ -282,11 +308,11 @@ function scanYaml(
 ): Effect.Effect<AgentEntry, AgentScanError> {
   return Effect.try({
     try: (): AgentEntry =>
-      agentEntryOf(entry.definition, {
-        source,
-        path: entry.path,
-        digest: entry.digest,
-      }),
+      agentEntryOf(
+        entry.definition,
+        { source, path: entry.path, digest: entry.digest },
+        entry.blocks,
+      ),
     catch: (cause) =>
       new AgentScanError({
         path: entry.path,

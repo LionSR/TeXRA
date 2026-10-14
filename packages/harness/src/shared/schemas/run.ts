@@ -125,7 +125,7 @@ const RUN_ACTIONS = [
   'stop',
   /** Grant the run an approval bypass while it works (a live agent's run). */
   'grant',
-  /** Compact a live conversation (not a document task). */
+  /** Compact a live conversation (not a task's recipe). */
   'compact',
   /** Continue the run where it stopped. */
   'resume',
@@ -136,7 +136,7 @@ const RUN_ACTIONS = [
   /** Clear the model's view of a live conversation, or start it from a
    *  handoff's text (`run.reset`). */
   'reset',
-  /** A finished document task's latexdiff, archive, and output removal. */
+  /** A finished task's diff, archive, and output removal. */
   'diff',
   'pack',
   'clean',

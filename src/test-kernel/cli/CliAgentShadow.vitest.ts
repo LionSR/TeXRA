@@ -26,9 +26,11 @@ import {
   fakeHostAgentDirectories,
   hostStores,
   installPlatform,
+  storePluginsLayer,
 } from '@test/support/setupPlatform';
 import { cleanupTempDirs, makeTempDir } from '@test/support/tempDirPlatform';
 import { testHttpClientLayer } from '@test/support/fetchTestUtils';
+import { documentTaskOf } from '@texra/tools/documents/documentTask';
 import type { RootedFileSystem } from '@utils/files/rootedFileSystem';
 
 // The root-agent selection writes a local notice, whose sink reads the bound
@@ -87,7 +89,11 @@ describe('CLI agent validation with a shadowed name', () => {
           Effect.provideService(AgentDirectories, fakeHostAgentDirectories),
           Effect.provideService(AppState, new FakeStateStore()),
         ),
-        Layer.merge(nodePlatformLayer, testHttpClientLayer),
+        Layer.mergeAll(
+          nodePlatformLayer,
+          testHttpClientLayer,
+          storePluginsLayer,
+        ),
       ),
     );
   });
@@ -103,7 +109,7 @@ describe('CLI agent validation with a shadowed name', () => {
         const entry = yield* resolveAgentForLaunch(hostStores(), 'assistant');
 
         expect(entry?.source).toBe('custom');
-        expect(entry?.task).not.toBeNull();
+        expect(entry && documentTaskOf(entry)).not.toBeNull();
         expect(yield* resolveChatToolUseAgent(hostStores(), 'assistant')).toBe(
           entry,
         );

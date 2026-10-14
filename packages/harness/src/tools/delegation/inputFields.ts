@@ -13,7 +13,6 @@ import { z } from 'zod';
 import { resolveChildRunOutput } from '@agent/storage/childRunOutput';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { RunId } from '@shared/schemas';
-import type { ToolResult } from '@shared/schemas';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { displayToStoragePath } from '@tools/memory/memoryUtils';
@@ -30,10 +29,8 @@ import {
   formatError,
   toErrorMessage,
 } from '@utils/errors/errorMessage';
-import { escapesRoot, hasExtension } from '@utils/core/pathCore';
-import { formatBytes, isNonEmptyString } from '@utils/text/stringUtils';
-
-const LARGE_BIB_LIMIT_BYTES = 100 * 1024;
+import { escapesRoot } from '@utils/core/pathCore';
+import { isNonEmptyString } from '@utils/text/stringUtils';
 
 /**
  * Shared Zod field for the `memories` parameter on delegation tools.
@@ -161,61 +158,6 @@ const absoluteWorkspacePath = (
     try: () => workspaceAbsolutePath(workspaceRoot, target),
     catch: ensureError,
   });
-
-/**
- * Reject delegated workflow context that attaches oversized bibliography
- * files. `workspaceRoot` is the owning session's workspace folder, handed in
- * as data so a relative dependency resolves against its own session rather
- * than against whichever roots the calling fiber happens to carry.
- */
-export const rejectOversizedBibAttachments = Effect.fn(
-  'rejectOversizedBibAttachments',
-)(function* (
-  workspaceRoot: string | undefined,
-  contextFiles: readonly string[],
-): Effect.fn.Return<
-  Extract<ToolResult, { status: 'error' }> | null,
-  Error,
-  FileSystem.FileSystem
-> {
-  const fs = yield* FileSystem.FileSystem;
-  const bibFiles = contextFiles
-    .filter(isNonEmptyString)
-    .filter((file) => hasExtension(file, '.bib'));
-
-  for (const bibFile of bibFiles) {
-    const absolute = yield* absoluteWorkspacePath(workspaceRoot, bibFile);
-    // The facade's `stat` was lstat-backed: a link whose target does not
-    // resolve still answered, with the link's own size, which never crossed
-    // this limit. `FileSystem.stat` follows the link instead, so it fails
-    // where the facade measured the link itself; a path `readLink` cannot
-    // name is no entry at all and fails just as the facade's probe did.
-    const stats = yield* fs.stat(absolute).pipe(
-      Effect.catch((error) =>
-        fs.readLink(absolute).pipe(
-          Effect.as(undefined),
-          Effect.mapError(() => error),
-        ),
-      ),
-    );
-    if (stats === undefined) continue;
-    if (Number(stats.size) <= LARGE_BIB_LIMIT_BYTES) continue;
-
-    const sizeBytes = Number(stats.size);
-    const message = `${bibFile} is ${sizeBytes} bytes (${formatBytes(sizeBytes)}), over the ${LARGE_BIB_LIMIT_BYTES} byte (${formatBytes(LARGE_BIB_LIMIT_BYTES)}) limit. Call extract_bib_entries first if citations are needed, then re-propose without the full .bib file.`;
-    return errorResult(message, {
-      summary: `Rejected oversized BibTeX attachment`,
-      diagnostics: {
-        type: 'oversized_bib_attachment',
-        path: bibFile,
-        sizeBytes,
-        limitBytes: LARGE_BIB_LIMIT_BYTES,
-      },
-    });
-  }
-
-  return null;
-});
 
 interface WorkflowFileGroup {
   readonly label: string;

@@ -8,6 +8,7 @@ import { withLogChannel } from '@logger/effectLog';
 import type { ProcessServices } from '@platform/processRuntime';
 import { sessionFsLayer } from '@platform/rootedFs';
 import {
+  isRecipeConfig,
   RunDocumentsSchema,
   type OfferedTool,
   type RunId,
@@ -112,7 +113,7 @@ function runLayerFor(
  * Run the loop for a single agent run, fresh or resumed.
  *
  * Owns all run wiring: progress counters and model-change side effects, and
- * for a document task its documents and their publication. A failed run
+ * for a recipe's run its documents and their children's spend. A failed run
  * arrives as a FAILED result carrying its structured error, so there is
  * nothing to unwrap here. The callers (`executeAgent`,
  * `resumeToolUseFromResumeData`) own lifecycle and stream-status.
@@ -123,6 +124,7 @@ function launchRun(
   shared: SubagentRunOptions,
   variant: LaunchVariant,
 ): Effect.Effect<RunEndResult, Error, AgentRunServices> {
+  const recipe = isRecipeConfig(ctx.config);
   const toResult = (
     result: Effect.Success<ReturnType<typeof runToolUse>>,
   ): RunEndResult => ({
@@ -130,8 +132,8 @@ function launchRun(
     output: {
       response: result.response,
       files: [...result.files],
-      // A document task's structured value is its documents (its tools').
-      ...(ctx.task !== null
+      // A recipe's structured value is its documents (its tools').
+      ...(recipe
         ? { documents: RunDocumentsSchema.parse(result.structured ?? {}) }
         : result.structured !== undefined && { structured: result.structured }),
     },
@@ -143,11 +145,9 @@ function launchRun(
     }),
   });
   const { turns } = shared;
-  /** A document task's result, with its revisions' spend. */
+  /** A recipe's result, with its children's spend. */
   const withDocuments = (ended: RunEndResult) =>
-    ctx.task === null
-      ? Effect.succeed(ended)
-      : withChildSpend(ctx.session, ended);
+    recipe ? withChildSpend(ctx.session, ended) : Effect.succeed(ended);
   // A stop asked before the run was reachable is this fiber's interruption,
   // taken before the loop does any work.
   return Effect.suspend(() =>
@@ -380,7 +380,7 @@ export interface ResumeToolUseFromResumeDataOptions extends Omit<
 }
 
 /**
- * Resume one run (a conversation, or a document task's recipe) from its
+ * Resume one run (a conversation, or a task's recipe) from its
  * durable cursor, in place: standalone through the session's door
  * (`Runs.launch`), owned for its life by the launch terminal
  * ({@link runWithLaunchGuard}, its claim held before the cursor read), or

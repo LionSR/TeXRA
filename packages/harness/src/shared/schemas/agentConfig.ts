@@ -82,7 +82,7 @@ const AgentConfigObjectSchema = NullableFileFieldsSchema.extend({
    * The `script` call this run makes instead of asking its model: it opens
    * with that call as its one response, offers exactly `tools`, and ends when
    * the call settles. A script a parent sent to the background, or a
-   * document task's recipe. Absent for every other run.
+   * task's recipe. Absent for every other run.
    */
   script: z
     .strictObject({
@@ -94,7 +94,7 @@ const AgentConfigObjectSchema = NullableFileFieldsSchema.extend({
       timeoutMs: z.int().positive().nullish(),
       /** Who wrote it. `background`: the parent's model, sent to the
        *  background; the run is that script, and its `agent` calls propose
-       *  themselves. `recipe`: the app (a document task's recipe); the run
+       *  themselves. `recipe`: a plugin (a task's recipe); the run
        *  is its agent's, and its `agent` calls were approved with its
        *  launch. */
       kind: z.enum(['background', 'recipe']),

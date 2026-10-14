@@ -104,6 +104,7 @@ import {
   fakeHostAgentDirectories,
   fakeHostSecrets,
   setupPlatform,
+  storePluginsLayer,
 } from '@test/support/setupPlatform';
 import {
   createTempDirPlatform,
@@ -115,7 +116,7 @@ import {
 } from '@test/support/sessionEnd';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
-import { documentTaskConfig } from '@texra/agent/output/documentRecipe';
+import { asDocumentTask } from '@test/support/ProgressControllerHarnesses';
 import { generateRunId } from '@utils/core';
 
 const AGENTS = resolve(REPO_ROOT, 'src/test-kernel/fixtures/storage/agents');
@@ -897,6 +898,7 @@ export function crashConformanceSuite(plugins: string): void {
           refresh(),
           Layer.mergeAll(
             unusedGlobalStorageFs(),
+            storePluginsLayer,
             nodePlatformLayer,
             testHttpClientLayer,
             AgentDirectories.layer(fakeHostAgentDirectories),
@@ -1357,7 +1359,7 @@ export function crashConformanceSuite(plugins: string): void {
                   session.runs.launch({
                     request: {
                       config: AgentConfigSchema.parse(
-                        documentTaskConfig({
+                        asDocumentTask({
                           agent: 'polish',
                           agentSource: 'builtIn',
                           model: 'gpt56',

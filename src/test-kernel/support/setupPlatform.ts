@@ -47,6 +47,7 @@ import { GOAL_STATE_ARM } from '@shared/plugins/goal';
 import {
   DOCUMENTS_ACCEPTED_ARM,
   DOCUMENTS_OUTPUT_ARM,
+  DOCUMENT_TASK_BLOCK,
 } from '@texra/shared/plugins/documents';
 import { EXTERNAL_INQUIRY_THREAD_ARM } from '@texra/shared/plugins/externalInquiry';
 import type { SetupPlatformShape } from '@texra/tools/setup/platform';
@@ -68,15 +69,20 @@ import {
   type FakePlatformOptions,
 } from './FakePlatform';
 
-/** TeXRA's plugins that own row kinds, as their arms only: what a store
- *  under test reads their rows with. */
+/** TeXRA's plugins that own row kinds or an agent-file block, as those
+ *  only: what a store under test reads their rows with, and a catalog under
+ *  test scans the bundled agents with. */
 const ARMED_PLUGINS: readonly Plugin[] = [
-  { id: 'documents', arms: [DOCUMENTS_OUTPUT_ARM, DOCUMENTS_ACCEPTED_ARM] },
+  {
+    id: 'documents',
+    arms: [DOCUMENTS_OUTPUT_ARM, DOCUMENTS_ACCEPTED_ARM],
+    agentBlock: DOCUMENT_TASK_BLOCK,
+  },
   { id: 'external-inquiry', arms: [EXTERNAL_INQUIRY_THREAD_ARM] },
 ];
 
-/** The plugin table a store suite opens its database over: every row kind
- *  TeXRA's plugins own, and no tool. */
+/** The plugin table a store or catalog suite runs over: every row kind and
+ *  agent-file block TeXRA's plugins own, and no tool. */
 export const storePluginsLayer = Layer.succeed(ToolRegistry)(
   toolTable([{ id: 'goal', arms: [GOAL_STATE_ARM] }, ...ARMED_PLUGINS]),
 );

@@ -2,7 +2,6 @@ import { beforeEach, describe, expect, it } from 'vitest';
 
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { buildTemplateInputs } from '@agent/prompt/templateInputs';
-import { DocumentTaskSchema } from '@shared/schemas';
 import { noopTrace } from '@test/support/noopTrace';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { installPlatform, setupPlatform } from '@test/support/setupPlatform';
@@ -25,19 +24,11 @@ setupPlatform({}, { config: fakeConfig });
 // this file.
 function buildVars(
   agentConfig: ReturnType<typeof AgentConfigSchema.parse>,
-  files: Record<string, string> = {},
 ): ReturnType<typeof buildOpening> {
-  return buildOpening(
-    agentConfig,
-    DocumentTaskSchema.parse({ files, requests: ['Revise.'] }),
-    fakePath('agents/generic'),
-    false,
-    noopTrace,
-    {
-      workspacePath: fakePath('workspace'),
-      storageRoot: testWorkspaceRoots().storage,
-    },
-  );
+  return buildOpening(agentConfig, false, noopTrace, {
+    workspacePath: fakePath('workspace'),
+    storageRoot: testWorkspaceRoots().storage,
+  });
 }
 
 describe('buildTemplateInputs with missing configured files', () => {
@@ -95,44 +86,5 @@ describe('buildTemplateInputs with missing configured files', () => {
     expect(attachedMemoryMisses).toEqual([
       expect.objectContaining({ path: '/memories/missing.md' }),
     ]);
-  });
-});
-
-describe('task.files custom variables', () => {
-  const briefPath = fakePath('agents/generic', 'brief.txt');
-
-  beforeEach(async () => {
-    await installPlatform({
-      workspacePath: fakePath('workspace'),
-      files: { [briefPath]: 'briefing notes' },
-    });
-  });
-
-  // A required file named after a file category generates the fixed X_FILE /
-  // X_CONTENT variables and would silently override them. The guard fails
-  // loudly at variable-build time instead.
-  it.each(['INPUT', 'CONTEXT', 'EDITED', 'MEDIA'])(
-    'rejects a required file named %s whose generated variables collide with the fixed vocabulary',
-    async (varName) => {
-      await expect(
-        buildVars(
-          AgentConfigSchema.parse({ agent: 'generic', model: 'test-model' }),
-          { [varName]: 'brief.txt' },
-        ),
-      ).rejects.toThrow('collides with a fixed template variable');
-    },
-  );
-
-  it('passes custom required-file variables through beside the fixed vocabulary', async () => {
-    const { inputs: vars } = await buildVars(
-      AgentConfigSchema.parse({ agent: 'generic', model: 'test-model' }),
-      { BRIEF: 'brief.txt' },
-    );
-
-    expect(vars['BRIEF_FILE']).toBe(briefPath);
-    expect(vars['BRIEF_CONTENT']).toBe('briefing notes');
-    // The fixed slots the collision guard protects keep their built values.
-    expect(vars.MEDIA_FILE).toBeNull();
-    expect(vars.INSTRUCTION).toBe('');
   });
 });

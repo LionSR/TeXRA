@@ -328,7 +328,7 @@ describe('completedRunArchive facade', () => {
           Effect.succeed({
             path: '/agents/orchestrator.yaml',
             persona: { prompt: '', tools: [], temperature: 1 },
-            task: null,
+            blocks: {},
           }),
         );
 

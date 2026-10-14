@@ -129,10 +129,8 @@ const CONVERSATION_RUN_ACTIONS: readonly RunMenuAction[] = [
 ];
 
 /** An agent run's menu: a document task's, or a conversation's. */
-export function runMenuActions(
-  documentTask: boolean,
-): readonly RunMenuAction[] {
-  return documentTask ? TASK_RUN_ACTIONS : CONVERSATION_RUN_ACTIONS;
+export function runMenuActions(recipe: boolean): readonly RunMenuAction[] {
+  return recipe ? TASK_RUN_ACTIONS : CONVERSATION_RUN_ACTIONS;
 }
 
 /**

@@ -12,7 +12,10 @@ import {
 } from '@test/support/fsTestUtils';
 import { testHttpClientLayer } from '@test/support/fetchTestUtils';
 import { FakeStateStore } from '@test/support/FakePlatform';
-import { fakeHostAgentDirectories } from '@test/support/setupPlatform';
+import {
+  fakeHostAgentDirectories,
+  storePluginsLayer,
+} from '@test/support/setupPlatform';
 import { LaunchSurfaceSchema } from '@texra/shared/session/surface';
 import type { HostRequest } from '@texra/shared/session/hostRequest';
 
@@ -28,6 +31,7 @@ function onGlobalStorage<A, E>(
     program,
     Layer.mergeAll(
       unusedGlobalStorageFs(),
+      storePluginsLayer,
       nodePlatformLayer,
       testHttpClientLayer,
       AgentDirectories.layer(fakeHostAgentDirectories),
@@ -55,10 +59,13 @@ vi.mock('@texra/controllers/mainView/teamCatalogPorts', () => ({
 const { prepareSurfaceLaunch } =
   await import('@texra/controllers/mainView/backend/MainViewRunLaunchController');
 
-const workspaceState = new FakeStateStore();
-
-/** The requesting session's storage root, under which its pasted images live. */
-const STORAGE_ROOT = '/papers/first/.texra';
+/** The requesting session's slots and the storage root its pasted images
+ *  live under. */
+const ROOTS = {
+  repoState: new FakeStateStore(),
+  globalState: new FakeStateStore(),
+  storage: '/papers/first/.texra',
+};
 
 function launchRequest(
   patch: Record<string, unknown> = {},
@@ -78,11 +85,7 @@ describe('main-view run launch controller', () => {
   it.effect('prepares ordinary launches without loading the team catalog', () =>
     Effect.gen(function* () {
       const { config } = yield* onGlobalStorage(
-        prepareSurfaceLaunch(
-          launchRequest({ agent: 'orchestrator' }),
-          workspaceState,
-          STORAGE_ROOT,
-        ),
+        prepareSurfaceLaunch(launchRequest({ agent: 'orchestrator' }), ROOTS),
       );
 
       expect(config).toMatchObject({
@@ -100,11 +103,7 @@ describe('main-view run launch controller', () => {
       Effect.gen(function* () {
         const error = yield* Effect.flip(
           onGlobalStorage(
-            prepareSurfaceLaunch(
-              launchRequest({ model: '' }),
-              workspaceState,
-              STORAGE_ROOT,
-            ),
+            prepareSurfaceLaunch(launchRequest({ model: '' }), ROOTS),
           ),
         );
 
@@ -121,8 +120,7 @@ describe('main-view run launch controller', () => {
         onGlobalStorage(
           prepareSurfaceLaunch(
             launchRequest({ sessionType: 'task', agent: 'correct' }),
-            workspaceState,
-            STORAGE_ROOT,
+            ROOTS,
           ),
         ),
       );
@@ -155,8 +153,7 @@ describe('main-view run launch controller', () => {
             selectedTeamId: 'physicist',
             agent: 'stale-renderer-agent',
           }),
-          workspaceState,
-          STORAGE_ROOT,
+          ROOTS,
         ),
       );
 

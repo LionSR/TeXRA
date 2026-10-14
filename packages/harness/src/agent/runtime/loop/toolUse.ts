@@ -22,7 +22,7 @@
  * waits for its input.
  *
  * A run opened on a script (`AgentConfig.script`: a background script, a
- * document task's recipe) makes that one call instead of asking its model
+ * task's recipe) makes that one call instead of asking its model
  * and ends when it settles.
  */
 

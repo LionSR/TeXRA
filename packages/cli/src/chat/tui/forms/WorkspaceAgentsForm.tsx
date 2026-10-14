@@ -24,6 +24,7 @@ import {
   type AgentModePreset,
 } from '@shared/schemas';
 
+import { documentTaskOf } from '@texra/tools/documents/documentTask';
 import { renderAsyncListFormTransient } from './_shared/FormFrame';
 import { ListForm } from './_shared/ListForm';
 import { runFormWrite, useAsyncListForm } from './_shared/useAsyncListForm';
@@ -291,7 +292,7 @@ export function WorkspaceAgentsForm(
       const key = agentKeyOf(agent);
       return {
         value: key,
-        label: `${selected.has(key) ? `${TICK} ` : ''}${agent.name}${agent.task === null ? '' : ' · document task'}`,
+        label: `${selected.has(key) ? `${TICK} ` : ''}${agent.name}${documentTaskOf(agent) === null ? '' : ' · document task'}`,
         description: agent.description,
       };
     }),

@@ -4,7 +4,7 @@ import {
   type AgentConfig,
 } from '@agent/core/definition/AgentConfig';
 import type { OutputFileInfo, RunId } from '@shared/schemas';
-import { documentTaskConfig } from '@texra/agent/output/documentRecipe';
+import { documentTaskPatch } from '@texra/agent/output/documentRecipe';
 
 function createAgentConfig(overrides: Partial<AgentConfig> = {}): AgentConfig {
   return AgentConfigSchema.parse({
@@ -16,11 +16,48 @@ function createAgentConfig(overrides: Partial<AgentConfig> = {}): AgentConfig {
   });
 }
 
+/**
+ * `config` opened on the document recipe of its agent, as a launcher builds
+ * it once the catalog resolved an entry with a `task:` block; the outputs
+ * stay as the case wrote them.
+ */
+export function asDocumentTask<
+  C extends Pick<AgentConfig, 'agent'> & Partial<AgentConfig>,
+>(config: C) {
+  const source = config.agentSource ?? 'builtIn';
+  const patch = documentTaskPatch(
+    {
+      agent: config.agent,
+      agentSource: config.agentSource,
+      inputFiles: config.inputFiles ?? [],
+      outputFiles: config.outputFiles ?? [],
+    },
+    {
+      name: config.agent,
+      source,
+      path: `/agents/${config.agent}.yaml`,
+      persona: { prompt: '', tools: [], temperature: 1 },
+      blocks: {
+        task: {
+          rewrite: true,
+          outputs: [],
+          files: {},
+          prefix: '',
+          requests: ['Revise.'],
+        },
+      },
+    },
+  );
+  if (patch === null) throw new Error('a task entry always patches');
+  // The recipe only: the launch's outputs stay as the case wrote them.
+  return { ...config, script: patch.script };
+}
+
 /** A document task's config: the persona's config opened on the recipe. */
 export function createWorkflowConfig(
   overrides: Partial<AgentConfig> = {},
 ): AgentConfig {
-  return documentTaskConfig(createAgentConfig(overrides));
+  return asDocumentTask(createAgentConfig(overrides));
 }
 
 type WorkspaceLocationOverrides = {

@@ -42,9 +42,10 @@ embedder runs the program at its own entry point. `plugins` is the list of
 what the runs can use: the harness's built-ins (`harnessBuiltins.all`, or
 `harnessBuiltins.minimal` for files and the shell alone), and any plugin of
 the embedder's own beside them. `session.start` runs an agent as a
-conversation. A document task (an agent's `task:` block, run as revisions
-that rewrite documents) is a recipe script over the tools of TeXRA's
-`documents` plugin, which is the app's and which the package does not ship.
+conversation. A plugin may own one more block of an agent file
+(`Plugin.agentBlock`, an `AgentBlock`): an agent carrying it is a task, which
+that plugin launches on its own recipe script (TeXRA's `documents` plugin owns
+`task:`, which the package does not ship).
 
 ```ts
 import { Effect, Stream } from 'effect';
@@ -88,7 +89,7 @@ persona itself, written in the same format as the file
 (`InlinePersonaSchema` from `@texra-ai/harness/schemas`): `name`,
 `description`, `prompt`, `tools` and `temperature`. The run records the
 persona with its configuration, so nothing has to be written to disk. An
-inline persona has no bundled original (`basedOn`) and no `task:` block;
+inline persona has no bundled original (`basedOn`) and no plugin's block;
 each is refused with a `RunFailure`. A tool
 it names that no plugin offers fails the run before any model call, as it
 would in a file.
@@ -340,7 +341,7 @@ payload plus the `runId` it belongs to. It carries an `outcome`, an optional
 output is one shape, `{ response, files, structured?, documents? }`: the reply
 text, the workspace-relative files its tool calls edited, and the `structured`
 value of a `submit_output` tool when the run used one. `documents` is present
-only on a document task's run: `{ outputs, compileFailures, diffs,
+only on a recipe's run (`script.kind: 'recipe'`): `{ outputs, compileFailures, diffs,
 diffsUnavailable? }`, the output files of its newest revision and the
 compilation failures. There is no category to switch on; test for
 `output.documents`.

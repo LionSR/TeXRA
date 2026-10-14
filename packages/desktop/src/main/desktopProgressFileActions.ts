@@ -118,14 +118,28 @@ export class DesktopProgressFileActions {
     editedFile: string,
   ): Effect.Effect<void, Rejected | StateReadFailed> {
     return Effect.gen({ self: this }, function* () {
-      const validation = validateRunRequest({
-        config: documentTaskConfig({
+      const { roots } = this.host.session;
+      const built = yield* documentTaskConfig(
+        {
           agent: 'merge',
-          model: yield* getHelperModelName(this.host.session.roots),
+          model: yield* getHelperModelName(roots),
           inputFiles: [baseFile],
           editedFile,
+        },
+        roots,
+      ).pipe(
+        (program) => withProcessServices(this.host.runtime, program),
+        Effect.map((config) => ({ ok: true as const, config })),
+        Effect.catchTags({
+          DocumentTaskRefused: (refused) =>
+            Effect.succeed({ ok: false as const, message: refused.message }),
+          AgentCatalogLoadError: (failed) =>
+            Effect.succeed({ ok: false as const, message: failed.message }),
         }),
-      });
+      );
+      const validation = built.ok
+        ? validateRunRequest({ config: built.config })
+        : { valid: false as const, message: built.message };
       if (!validation.valid) {
         yield* this.ui.showErrorMessage(`Merge: ${validation.message}`);
         return;
