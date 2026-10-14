@@ -63,8 +63,7 @@ import {
   rmSync,
   writeFileSync,
 } from 'node:fs';
-import * as os from 'node:os';
-import { join, resolve } from 'node:path';
+import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 
 import { it } from '@effect/vitest';
@@ -72,19 +71,15 @@ import {
   Duration,
   Effect,
   Fiber,
-  Layer,
   RcMap,
   Stream,
   SubscriptionRef,
 } from 'effect';
-import { afterEach, beforeEach, describe, expect } from 'vitest';
+import { beforeEach, describe, expect } from 'vitest';
 
-import { apiKeySecretName } from '@texra-ai/llm';
-import { refresh } from '@agent/index';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { resumeRun } from '@agent/runtime/resumeRun';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import { AgentDirectories, AppState } from '@platform/interfaces';
 import { withProcessServices } from '@platform/processRuntime';
 import {
   qualifyAggregateId,
@@ -93,76 +88,23 @@ import {
   type RunId,
 } from '@shared/schemas';
 import { ProjectDatabases } from '@shared/session/database';
-import { FakeStateStore } from '@test/support/FakePlatform';
-import { testHttpClientLayer } from '@test/support/fetchTestUtils';
-import {
-  nodePlatformLayer,
-  unusedGlobalStorageFs,
-} from '@test/support/fsTestUtils';
-import { REPO_ROOT } from '@test/support/repoScan';
-import {
-  fakeHostAgentDirectories,
-  fakeHostSecrets,
-  setupPlatform,
-  storePluginsLayer,
-} from '@test/support/setupPlatform';
-import {
-  createTempDirPlatform,
-  useTempDirs,
-} from '@test/support/tempDirPlatform';
 import {
   closeTestDefaultSession,
   openTestDefaultSession,
 } from '@test/support/sessionEnd';
+import {
+  crashAt,
+  storedRows as rowsOf,
+  type StoredRow as Row,
+  validationHost,
+} from '@test/support/storeFaults';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { asDocumentTask } from '@test/support/ProgressControllerHarnesses';
 import { documentsResultOf } from '@texra/shared/plugins/documentOutputs';
 import { generateRunId } from '@utils/core';
 
-const AGENTS = resolve(REPO_ROOT, 'src/test-kernel/fixtures/storage/agents');
-const BUNDLED_AGENTS = resolve(
-  REPO_ROOT,
-  'packages/extension/resources/agents',
-);
 const HANDOFF = 'CRASH-HANDOFF: carry on from here.';
-const VALIDATION = {
-  TEXRA_CLI_INCLUDE_INTERNAL_VALIDATION_MODEL: '1',
-  TEXRA_CLI_INTERNAL_VALIDATION_MODEL_ENV: 'TEXRA_INTERNAL_VALIDATE_MODEL',
-  TEXRA_CLI_INTERNAL_VALIDATION_MODEL_FLAG_ENV:
-    'TEXRA_INTERNAL_VALIDATE_MODEL_FLAG',
-  TEXRA_CLI_INTERNAL_VALIDATION_MODEL_FLAG_CONTENT: 'texra-cli-run-validation',
-  TEXRA_INTERNAL_VALIDATE_MODEL: '1',
-  TEXRA_INTERNAL_VALIDATE_GOLDEN: '1',
-  TEXRA_INTERNAL_VALIDATE_ECHO: '1',
-};
-
-interface Row {
-  readonly commit: number;
-  readonly run: string;
-  readonly parent: string | null;
-  readonly type: string;
-  readonly data: string;
-}
-
-const rowsOf = (storage: string): Row[] => {
-  const db = new DatabaseSync(join(storage, 'texra.db'));
-  try {
-    db.exec('PRAGMA busy_timeout = 5000');
-    return db
-      .prepare(
-        `SELECT e."commit" AS "commit", s.logical_id AS run,
-           (SELECT json_extract(f.data, '$.parent.id') FROM event f
-            WHERE f.aggregate = s.id AND f.type = 'run.start') AS parent,
-           e.type AS type, e.data AS data
-         FROM event e JOIN event_sequence s ON s.id = e.aggregate
-         WHERE s.kind = 'run' ORDER BY e."commit"`,
-      )
-      .all() as unknown as Row[];
-  } finally {
-    db.close();
-  }
-};
 
 /** A file's lines, none when it is absent. */
 const linesOf = (file: string): string[] =>
@@ -302,58 +244,6 @@ function outcome(rows: readonly Row[], root: string) {
       ),
     })),
   };
-}
-
-/**
- * Rebuild a copy of the clean store as a process killed after commit `n`
- * left it, its claims held by a dead owner: every durable table at the cut,
- * not the later store with rows cut away. Rows, their blobs and sequences
- * go back to commit `n`; a plugin aggregate hangs where its last fact at
- * the cut put it; current values and input history written after the cut's
- * clock go (one the later run overwrote in place reads as never written).
- * `stored_kind` is append-only and kept: every version in it is this
- * build's, so the gate reads it as it would at the cut.
- * The projections rebuild from the rows on open.
- */
-function crashAt(clean: string, storage: string, n: number): void {
-  mkdirSync(storage, { recursive: true });
-  cpSync(clean, join(storage, 'texra.db'));
-  const dead = JSON.stringify([
-    os.hostname().toLowerCase(),
-    process.pid,
-    'killed',
-  ]);
-  const db = new DatabaseSync(join(storage, 'texra.db'));
-  try {
-    const at = db
-      .prepare(
-        'SELECT at FROM event WHERE "commit" <= ? ORDER BY "commit" DESC LIMIT 1',
-      )
-      .get(n)?.at;
-    db.exec(`
-      DELETE FROM projection_state; DELETE FROM projected_row;
-      DELETE FROM listing_entry; DELETE FROM run_usage; DELETE FROM run_model;
-      DELETE FROM event_blob WHERE "commit" > ${n};
-      DELETE FROM event WHERE "commit" > ${n};
-      DELETE FROM event_sequence WHERE id NOT IN (SELECT aggregate FROM event);
-      DELETE FROM blob WHERE digest NOT IN (SELECT digest FROM event_blob);
-      UPDATE event_sequence SET
-        seq = (SELECT max(seq) FROM event WHERE aggregate = event_sequence.id),
-        closed_by = CASE WHEN closed_by > ${n} THEN NULL ELSE closed_by END,
-        owner_id = CASE WHEN owner_id IS NULL THEN NULL ELSE '${dead}' END;
-      UPDATE event_sequence SET parent_id = (
-        SELECT p.id FROM event e JOIN event_sequence p
-          ON p.kind = 'run' AND p.logical_id = json_extract(e.data, '$.parent')
-        WHERE e.aggregate = event_sequence.id AND e.type = 'plugin.fact'
-        ORDER BY e.seq DESC LIMIT 1)
-      WHERE kind <> 'run';
-      DELETE FROM current_value WHERE at > ${Number(at ?? 0)};
-      DELETE FROM input_history WHERE at > ${Number(at ?? 0)};
-      UPDATE sqlite_sequence SET seq = ${n} WHERE name = 'event';
-    `);
-  } finally {
-    db.close();
-  }
 }
 
 /** The files a run keeps beside the store and the command effects in the
@@ -859,66 +749,12 @@ const resumeFrom = (
 
 export function crashConformanceSuite(plugins: string): void {
   describe(`crash-point conformance (${plugins})`, () => {
-    const tempDirs = useTempDirs();
-    setupPlatform(async () => {
-      const host = await createTempDirPlatform('texra-crash-', tempDirs);
-      const agents = {
-        custom: () => Effect.succeed(AGENTS),
-        customConfigured: () => Effect.succeed(false),
-        // The bundled personas, `polish` among them: the golden agents
-        // resolve from the custom source first.
-        builtIn: () => Effect.succeed(BUNDLED_AGENTS),
-      };
-      return {
-        ...host,
-        platform: { ...host.platform, agentDirectories: agents },
-      };
-    });
-
-    let restore: Record<string, string | undefined> = {};
-    beforeEach(async () => {
-      const { storage, workspace } = testWorkspaceRoots();
-      const flag = join(storage, 'validation-flag');
-      restore = Object.fromEntries(
-        [...Object.keys(VALIDATION), 'TEXRA_INTERNAL_VALIDATE_MODEL_FLAG'].map(
-          (key) => [key, process.env[key]],
-        ),
-      );
-      Object.assign(process.env, VALIDATION, {
-        TEXRA_INTERNAL_VALIDATE_MODEL_FLAG: flag,
-      });
-      mkdirSync(storage, { recursive: true });
-      mkdirSync(workspace!, { recursive: true });
-      writeFileSync(flag, 'texra-cli-run-validation\n');
+    validationHost('texra-crash-');
+    beforeEach(() => {
       writeFileSync(
-        join(workspace!, 'notes.tex'),
+        join(testWorkspaceRoots().workspace!, 'notes.tex'),
         '\\section{Notes}\nThe crash suite reads this file.\n',
       );
-      await Effect.runPromise(
-        Effect.provide(
-          refresh(),
-          Layer.mergeAll(
-            unusedGlobalStorageFs(),
-            storePluginsLayer,
-            nodePlatformLayer,
-            testHttpClientLayer,
-            AgentDirectories.layer(fakeHostAgentDirectories),
-            AppState.layer(new FakeStateStore()),
-          ),
-        ),
-      );
-      // The child's model is chosen among those a key makes available.
-      await Effect.runPromise(
-        fakeHostSecrets.set(apiKeySecretName('openai'), 'validation-fake-key'),
-      );
-      await Effect.runPromise(closeTestDefaultSession);
-    });
-    afterEach(async () => {
-      await Effect.runPromise(closeTestDefaultSession);
-      for (const [key, value] of Object.entries(restore)) {
-        if (value === undefined) delete process.env[key];
-        else process.env[key] = value;
-      }
     });
 
     it.live(

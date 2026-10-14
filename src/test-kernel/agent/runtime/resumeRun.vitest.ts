@@ -1,573 +1,495 @@
-import { Deferred, Effect, Fiber } from 'effect';
+/**
+ * `resumeRun`, the one door every host resumes a persisted run through, over
+ * a real store: each case parks a root run, crashes its process, and resumes
+ * it in a fresh session on the validation model, failing or holding the
+ * store's own operations where the case needs a race (`StoreFaults`).
+ *
+ * Failure modes:
+ * - a store failure during a resume reads as a refusal, or loses input;
+ * - input sent while a resume reads the run, or from its host step, is
+ *   lost, left unread, or delivered out of order;
+ * - two resumes of one run both launch it;
+ * - a run whose input closed while the resume read it is launched anyway;
+ * - a resume whose launch fails loses input that raced it, keeps the run
+ *   live here, or wedges the next resume;
+ * - a host that cannot answer approval prompts has approval-gated tools
+ *   offered to the run it resumed;
+ * - a stop asked as the resumed run opens still runs a turn;
+ * - a run another live process holds is resumed here, or the host
+ *   rearranges itself before the refusal;
+ * - a run whose rows do not fold is reported as finished.
+ */
+import '@test/support/sessionGraphTestSetup';
+
+import { writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { DatabaseSync } from 'node:sqlite';
+
 import { it } from '@effect/vitest';
-import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
+import { Deferred, Effect, Exit, Fiber } from 'effect';
+import { describe, expect } from 'vitest';
 
-import type { RunEndResult } from '@agent/runtime/RunEndResult';
-import type { ResumeToolUseFromResumeDataOptions } from '@agent/runtime/executeAgent';
-import { resumeOwnRun, resumeRun } from '@agent/runtime/resumeRun';
+import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
+import {
+  resumeOwnRun,
+  resumeRun,
+  type ResumeRunOptions,
+} from '@agent/runtime/resumeRun';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
+import { withProcessServices } from '@platform/processRuntime';
 import type { RunId } from '@shared/schemas';
-import { qualifyAggregateId, RUN_OUTCOME } from '@shared/schemas';
+import { openTestDefaultSession } from '@test/support/sessionEnd';
+import { queuedFollowUps } from '@test/support/sessionTestUtils';
 import {
-  DatabaseClaimRefused,
-  DatabaseReadFailed,
-} from '@shared/session/database';
-import { RunHistoryRefused } from '@shared/session/runHistory';
-import { closeSessionOf } from '@test/support/sessionEnd';
-import { createFakeRunRecords } from '@test/support/FakeRunRecords';
-import {
-  createTestSession,
-  publishTestRunStart,
-  queuedFollowUps,
-  seedRows,
-} from '@test/support/sessionTestUtils';
-import { fakeProcessServices } from '@test/support/setupPlatform';
-import { createToolUseResumeData } from '@test/support/toolUseResumeTestUtils';
-import { ensureError } from '@utils/errors/errorMessage';
+  answersOf,
+  claimHolder,
+  parkedRunAfterCrash,
+  sessionStoreFaults,
+  storedRows,
+  REAL_RUN_TIMEOUT,
+  validationHost,
+} from '@test/support/storeFaults';
+import { asDocumentTask } from '@test/support/ProgressControllerHarnesses';
+import { testRuntime } from '@test/support/testProcessRuntime';
+import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
+import { generateRunId } from '@utils/core';
 
-const resumeToolUseFromResumeDataMock = vi.hoisted(() => vi.fn());
-vi.mock('@agent/runtime/executeAgent', async (importActual) => ({
-  ...(await importActual<typeof import('@agent/runtime/executeAgent')>()),
-  resumeToolUseFromResumeData: resumeToolUseFromResumeDataMock,
-}));
+/** A resume on the test process's runtime. */
+const resume = (runId: RunId, options: ResumeRunOptions) =>
+  withProcessServices(testRuntime(), resumeRun(runId, options));
 
-// These runs' agents are not in a catalog: nothing blocks their resume.
-vi.mock('@agent/runtime/resumeBlocker', () => ({
-  resumeBlocker: () => Effect.succeed(null),
-}));
+/** Send `text` to the run as its user, owing it a wake. */
+const send = (session: SessionHandle, runId: RunId, text: string) =>
+  session.followUps.send(
+    runId,
+    { from: { kind: 'user' }, text },
+    { wake: true },
+  );
 
-const canResumeMock = vi.hoisted(() => vi.fn());
-vi.mock('@agent/storage/resumability', async (importActual) => ({
-  ...(await importActual<typeof import('@agent/storage/resumability')>()),
-  canResume: (...args: unknown[]) =>
-    Effect.tryPromise({
-      try: () => canResumeMock(...args),
-      catch: ensureError,
-    }),
-}));
+/** The texts the run's rows still queue. */
+const queuedTexts = (session: SessionHandle, runId: RunId) =>
+  Effect.map(queuedFollowUps(session, runId), (queued) =>
+    queued.map((followUp) => followUp.text),
+  );
 
-// The two record reads the resume programs make: `readConfig()` is the run's
-// committed config row, `exists()` answers "the log still lists this run".
-const readConfigMock = vi.hoisted(() => vi.fn());
-const runExistsMock = vi.hoisted(() => vi.fn());
-vi.mock('@agent/storage/runRecords', async (importActual) => ({
-  ...(await importActual<typeof import('@agent/storage/runRecords')>()),
-  getRunRecords: () =>
-    createFakeRunRecords({
-      readConfig: () => readConfigMock(),
-      exists: () => runExistsMock(),
-    }),
-}));
+/** How many times the run has been activated: once per launch. */
+const activations = (storage: string, runId: RunId) =>
+  storedRows(storage).filter(
+    (row) => row.run === runId && row.type === 'run.activate',
+  ).length;
 
-const RUN = 'aabbcc' as RunId;
-const completed: RunEndResult = {
-  outcome: RUN_OUTCOME.COMPLETED,
-  runId: RUN,
-  output: { response: 'done', files: [] },
+/** The names of the tools the run's newest `tools.offered` row offers. */
+const offeredTools = (storage: string, runId: RunId) => {
+  const rows = storedRows(storage).filter(
+    (row) => row.run === runId && row.type === 'tools.offered',
+  );
+  return rows.map((row) =>
+    (
+      JSON.parse(row.data) as {
+        payload: { tools: readonly { name: string }[] };
+      }
+    ).payload.tools.map((tool) => tool.name),
+  );
 };
 
-function snapshot() {
-  return createToolUseResumeData({ runId: RUN });
-}
+/** What a resume that reached the run's next idle turn answers. */
+const DELIVERED = { started: true, delivered: true, outcome: 'waiting' };
 
-const seedRecoverable = Effect.fn('test.seedRecoverable')(function* (
-  session: SessionHandle,
-  ...texts: string[]
-) {
-  for (const text of texts) {
-    yield* session.followUps.send(RUN, {
-      from: { kind: 'user' as const },
-      text,
-    });
-  }
-});
+describe(
+  'resumeRun over a crashed store',
+  { timeout: REAL_RUN_TIMEOUT },
+  () => {
+    validationHost('texra-resume-');
 
-/** The text of each follow-up the run's rows still queue. */
-const queuedTexts = (session: SessionHandle) =>
-  Effect.map(queuedFollowUps(session, RUN), (followUps) =>
-    followUps.map((followUp) => followUp.text),
-  );
+    it.live(
+      "a store read that fails under a resume's claim fails it with the store's error, releases the claim, activates nothing and keeps the queued input",
+      () =>
+        Effect.gen(function* () {
+          const { session, runId, storage } = yield* parkedRunAfterCrash();
+          yield* send(session, runId, 'Keep this input.');
+          const faults = yield* sessionStoreFaults(storage);
+          // Under the claim, the resume reads the run's queued input and
+          // then its lineage (`persistedParentRunId`): that read fails.
+          const claim = yield* faults.holdNext('acquireClaims');
+          const resumed = yield* Effect.forkChild(
+            Effect.flip(resume(runId, { session })),
+          );
+          yield* claim.reached;
+          const input = yield* faults.holdNext('readAggregate');
+          yield* claim.release;
+          yield* input.reached;
+          yield* faults.failNext('readRunRecords');
+          yield* input.release;
 
-/** What each resumed generation took from its queue, in order. */
-const taken: string[] = [];
-
-/**
- * The resumed flow's side of the queue: open its own reader and take what
- * the rows still queue.
- */
-const resumedFlowTakes = (session: SessionHandle) =>
-  Effect.gen(function* () {
-    const input = yield* session.followUps.open(RUN);
-    const batch = (yield* input.hasQueued) ? yield* input.take : null;
-    if (batch?.kind === 'followUps') {
-      taken.push(...batch.followUps.map((followUp) => followUp.content.text));
-      // What the loop's consume commits: the rows stop queueing the batch.
-      yield* seedRows(session.log)(
-        batch.followUps.map((followUp) => ({
-          type: 'followup.consumed' as const,
-          aggregateId: qualifyAggregateId('run', RUN),
-          followUpId: followUp.followUpId,
-        })),
-      );
-    }
-  }).pipe(Effect.scoped);
-
-const sessions: SessionHandle[] = [];
-
-afterEach(async () => {
-  for (const session of sessions.splice(0)) {
-    await Effect.runPromise(closeSessionOf(session));
-  }
-});
-
-/** A session holding the run, its `run.start` landed. */
-const createSession = Effect.fn('test.createSession')(function* () {
-  const session = yield* createTestSession();
-  publishTestRunStart(session, RUN);
-  sessions.push(session);
-  yield* session.log.settled;
-  return session;
-});
-
-/**
- * The resume program over the fake host's process services: the suite runs
- * it on the default runtime rather than a process runtime, so the services
- * it requires are provided here.
- */
-function resumeOne(...args: Parameters<typeof resumeRun>) {
-  return Effect.provide(resumeRun(...args), fakeProcessServices());
-}
-
-describe('resumeRun tool-use queue ownership', () => {
-  beforeEach(() => {
-    readConfigMock
-      .mockReset()
-      .mockReturnValue(Effect.succeed(snapshot().agentConfig));
-    runExistsMock.mockReset().mockReturnValue(Effect.succeed(true));
-    canResumeMock.mockReset().mockResolvedValue(true);
-    resumeToolUseFromResumeDataMock.mockReset();
-    taken.length = 0;
-    resumeToolUseFromResumeDataMock.mockImplementation(
-      (
-        _resume: unknown,
-        options: ResumeToolUseFromResumeDataOptions & {
-          session: SessionHandle;
-        },
-      ) => resumedFlowTakes(options.session).pipe(Effect.as(completed)),
-    );
-  });
-
-  it.effect(
-    'reads the durable records before retrieval and retains input when they fail',
-    () =>
-      Effect.gen(function* () {
-        const session = yield* createSession();
-        yield* seedRecoverable(session, 'Keep this input.');
-        const failure = new DatabaseReadFailed({
-          path: ':memory:',
-          cause: new Error('Corrupt record'),
-        });
-        runExistsMock.mockReturnValueOnce(Effect.fail(failure));
-        expect(yield* Effect.flip(resumeOne(RUN, { session }))).toBe(failure);
-        expect(canResumeMock).not.toHaveBeenCalled();
-        expect(yield* queuedTexts(session)).toEqual(['Keep this input.']);
-      }),
-  );
-
-  it.effect('hands input sent during its record reads to the resumed run', () =>
-    Effect.gen(function* () {
-      const session = yield* createSession();
-      const config =
-        yield* Deferred.make<ReturnType<typeof snapshot>['agentConfig']>();
-      const configRead = yield* Deferred.make<void>();
-      readConfigMock.mockImplementationOnce(() =>
-        Deferred.succeed(configRead, undefined).pipe(
-          Effect.andThen(Deferred.await(config)),
-        ),
-      );
-
-      const resumed = yield* Effect.forkChild(resumeOne(RUN, { session }));
-      yield* Deferred.await(configRead);
-      expect(
-        yield* session.followUps.send(
-          RUN,
-          { from: { kind: 'user' as const }, text: 'raced' },
-          { wake: true },
-        ),
-      ).toEqual({ kind: 'queued', read: false, wake: false });
-
-      yield* Deferred.succeed(config, snapshot().agentConfig);
-      expect(yield* Fiber.join(resumed)).toMatchObject({
-        started: true,
-        delivered: true,
-        outcome: RUN_OUTCOME.COMPLETED,
-      });
-      expect(taken).toEqual(['raced']);
-    }),
-  );
-
-  it.effect('preserves raced input when the run has no persisted record', () =>
-    Effect.gen(function* () {
-      const session = yield* createSession();
-      const exists = yield* Deferred.make<boolean>();
-      const existsRead = yield* Deferred.make<void>();
-      runExistsMock.mockImplementationOnce(() =>
-        Deferred.succeed(existsRead, undefined).pipe(
-          Effect.andThen(Deferred.await(exists)),
-        ),
-      );
-
-      const resumed = yield* Effect.forkChild(resumeOne(RUN, { session }));
-      yield* Deferred.await(existsRead);
-      expect(
-        yield* session.followUps.send(
-          RUN,
-          { from: { kind: 'user' as const }, text: 'raced' },
-          { wake: true },
-        ),
-      ).toEqual({ kind: 'queued', read: false, wake: false });
-
-      yield* Deferred.succeed(exists, false);
-      yield* session.log.settled;
-      expect(yield* Fiber.join(resumed)).toEqual({ failed: 'not_resumable' });
-      expect(yield* queuedTexts(session)).toEqual(['raced']);
-    }),
-  );
-
-  it.effect('preserves ordered input sent while it resumes', () =>
-    Effect.gen(function* () {
-      const session = yield* createSession();
-      yield* seedRecoverable(session, 'first');
-
-      expect(
-        yield* resumeOne(RUN, {
-          session,
-          onAdmitted: () =>
-            Effect.gen(function* () {
-              expect(
-                yield* session.followUps.send(
-                  RUN,
-                  { from: { kind: 'user' as const }, text: 'second' },
-                  { wake: true },
-                ),
-              ).toEqual({ kind: 'queued', read: false, wake: false });
-            }),
+          const error = yield* Fiber.join(resumed);
+          expect(error.message).toContain('injected readRunRecords fault');
+          expect(activations(storage, runId)).toBe(1);
+          expect(claimHolder(storage, runId)).toBeNull();
+          expect(yield* queuedTexts(session, runId)).toEqual([
+            'Keep this input.',
+          ]);
         }),
-      ).toMatchObject({
-        started: true,
-        delivered: true,
-        outcome: RUN_OUTCOME.COMPLETED,
-      });
+    );
 
-      expect(taken).toEqual(['first', 'second']);
-    }),
-  );
+    it.live(
+      'input sent while a resume reads the run reaches the resumed run',
+      () =>
+        Effect.gen(function* () {
+          const { session, runId, storage } = yield* parkedRunAfterCrash();
+          const faults = yield* sessionStoreFaults(storage);
+          // The first records read finds the run's owner; the second, its
+          // config, is inside the resume.
+          const owner = yield* faults.holdNext('readRunRecords');
+          const resumed = yield* Effect.forkChild(resume(runId, { session }));
+          yield* owner.reached;
+          const config = yield* faults.holdNext('readRunRecords');
+          yield* owner.release;
+          yield* config.reached;
 
-  // Failure mode: the joiner never hears its admission (a handoff waiting
-  // on it fails as never entered), or the owner hears it twice.
-  it.effect(
-    'joins a competing resume to the one in flight, each admitted once',
-    () =>
-      Effect.gen(function* () {
-        const session = yield* createSession();
-        yield* seedRecoverable(session, 'once');
-        const entered = yield* Deferred.make<void>();
-        const barrier = yield* Deferred.make<void>();
-        resumeToolUseFromResumeDataMock.mockReturnValueOnce(
-          Deferred.succeed(entered, undefined).pipe(
-            Effect.andThen(Deferred.await(barrier)),
-            Effect.as(completed),
-          ),
-        );
+          expect(yield* send(session, runId, 'raced')).toEqual({
+            kind: 'queued',
+            read: false,
+            wake: false,
+          });
+          yield* config.release;
+          const result = yield* Fiber.join(resumed);
+          expect(result).toMatchObject(DELIVERED);
+          expect(answersOf(storage, runId).at(-1)).toContain('raced');
 
-        const admittedFirst = vi.fn(() => Effect.void);
-        const admittedSecond = vi.fn(() => Effect.void);
-        const first = yield* Effect.forkChild(
-          resumeOne(RUN, { session, onAdmitted: admittedFirst }),
-        );
-        yield* Deferred.await(entered);
-        expect(resumeToolUseFromResumeDataMock).toHaveBeenCalledOnce();
-        // The second resume signals as it reaches the resume in flight.
-        const joining = yield* Deferred.make<void>();
-        const resumeOnce = session.followUps.resumeOnce.bind(session.followUps);
-        vi.spyOn(session.followUps, 'resumeOnce').mockImplementationOnce(
-          (runId, resume) =>
-            Deferred.succeed(joining, undefined).pipe(
-              Effect.andThen(resumeOnce(runId, resume)),
-            ),
-        );
-        const second = yield* Effect.forkChild(
-          resumeOne(RUN, { session, onAdmitted: admittedSecond }),
-        );
-        yield* Deferred.await(joining);
-        // Its join is already queued behind the signal: one turn of the event
-        // loop lets it run before the first resume is released.
-        yield* Effect.promise(() => new Promise((done) => setImmediate(done)));
-        yield* Deferred.succeed(barrier, undefined);
-        expect(yield* Fiber.join(second)).toEqual(yield* Fiber.join(first));
-        expect(resumeToolUseFromResumeDataMock).toHaveBeenCalledOnce();
-        expect(admittedFirst.mock.calls).toEqual([[RUN]]);
-        expect(admittedSecond.mock.calls).toEqual([[RUN]]);
-      }),
-  );
+          // A root's lifetime is the caller's to await past the
+          // acknowledgement: its input ending ends it.
+          if (!('started' in result)) throw new Error('resume refused');
+          yield* session.followUps.closeInput(runId);
+          expect((yield* result.completion!)?.outcome).toBe('cancelled');
+        }),
+    );
 
-  // Failure modes: interrupting a joiner stops the resume it joined (the
-  // run), or blocks on it; a joiner hears none of the run's events.
-  it.live(
-    'a joiner is an observer: its interruption leaves the resume running, and it hears the run on its trace port',
-    () =>
-      Effect.gen(function* () {
-        const session = yield* createSession();
-        yield* seedRecoverable(session, 'once');
-        const entered = yield* Deferred.make<void>();
-        const barrier = yield* Deferred.make<void>();
-        resumeToolUseFromResumeDataMock.mockReturnValueOnce(
-          Deferred.succeed(entered, undefined).pipe(
-            Effect.andThen(Deferred.await(barrier)),
-            Effect.andThen(
-              Effect.sync(() =>
-                session.trace.tap(RUN, {
-                  type: 'stream.chunk',
-                  id: 's1',
-                  text: 'hello',
-                } as never),
-              ),
-            ),
-            Effect.as(completed),
-          ),
-        );
-        const owner = yield* Effect.forkChild(resumeOne(RUN, { session }));
-        yield* Deferred.await(entered);
-        const heard: unknown[] = [];
-        const unlisten = session.trace.listen(RUN, (event) =>
-          heard.push(event),
-        );
-        const joining = yield* Deferred.make<void>();
-        const joiner = yield* Effect.forkChild(
-          Effect.provide(
-            resumeOwnRun(RUN, {
+    it.live(
+      'input sent from the host step of a resume follows the input queued before it',
+      () =>
+        Effect.gen(function* () {
+          const { session, runId, storage } = yield* parkedRunAfterCrash();
+          yield* send(session, runId, 'first');
+
+          const result = yield* resume(runId, {
+            session,
+            onAdmitted: () =>
+              Effect.gen(function* () {
+                expect(yield* send(session, runId, 'second')).toEqual({
+                  kind: 'queued',
+                  read: false,
+                  wake: false,
+                });
+              }),
+          });
+          expect(result).toMatchObject(DELIVERED);
+          const seen = answersOf(storage, runId).join('\n');
+          expect(seen.indexOf('first')).toBeGreaterThan(-1);
+          expect(seen.indexOf('second')).toBeGreaterThan(seen.indexOf('first'));
+        }),
+    );
+
+    it.live(
+      'a second resume of a run joins the one in flight, each admitted once',
+      () =>
+        Effect.gen(function* () {
+          const { session, runId, storage } = yield* parkedRunAfterCrash();
+          yield* send(session, runId, 'once');
+          const faults = yield* sessionStoreFaults(storage);
+          // The first resume waits on the run's claim, inside its resume.
+          const claim = yield* faults.holdNext('acquireClaims');
+          const admitted: string[] = [];
+          const admit = (who: string) => () =>
+            Effect.sync(() => void admitted.push(who));
+          const first = yield* Effect.forkChild(
+            resume(runId, { session, onAdmitted: admit('first') }),
+          );
+          yield* claim.reached;
+          const joining = yield* Deferred.make<void>();
+          const second = yield* Effect.forkChild(
+            resume(runId, {
               session,
+              onAdmitted: admit('second'),
               onJoined: () => Deferred.doneUnsafe(joining, Effect.void),
             }),
-            fakeProcessServices(),
-          ),
-        );
-        yield* Deferred.await(joining);
-        // Its own wait ends at once; the resume it joined does not.
-        yield* Fiber.interrupt(joiner);
-        expect(owner.pollUnsafe()).toBeUndefined();
-        yield* Deferred.succeed(barrier, undefined);
-        expect(yield* Fiber.join(owner)).toMatchObject({ started: true });
-        unlisten();
-        expect(heard).toEqual([
-          { type: 'stream.chunk', id: 's1', text: 'hello' },
-        ]);
-      }),
-  );
+          );
+          yield* Deferred.await(joining);
+          yield* claim.release;
 
-  it.effect('refuses a run whose input closed during storage reads', () =>
-    Effect.gen(function* () {
-      const session = yield* createSession();
-      const config =
-        yield* Deferred.make<ReturnType<typeof snapshot>['agentConfig']>();
-      const configRead = yield* Deferred.make<void>();
-      readConfigMock.mockImplementationOnce(() =>
-        Deferred.succeed(configRead, undefined).pipe(
-          Effect.andThen(Deferred.await(config)),
-        ),
-      );
+          const joined = yield* Fiber.join(second);
+          expect(joined).toMatchObject(DELIVERED);
+          expect(yield* Fiber.join(first)).toEqual(joined);
+          expect(activations(storage, runId)).toBe(2);
+          expect(admitted.toSorted()).toEqual(['first', 'second']);
+        }),
+    );
 
-      const resumed = yield* Effect.forkChild(resumeOne(RUN, { session }));
-      yield* Deferred.await(configRead);
-      yield* session.followUps.closeInput(RUN);
-      yield* session.log.settled;
-      yield* Deferred.succeed(config, snapshot().agentConfig);
-
-      expect(yield* Fiber.join(resumed)).toEqual({ failed: 'not_resumable' });
-      expect(resumeToolUseFromResumeDataMock).not.toHaveBeenCalled();
-    }),
-  );
-
-  it.effect('keeps an untaken batch queued after resume failure', () =>
-    Effect.gen(function* () {
-      const session = yield* createSession();
-      yield* seedRecoverable(session, 'keep me');
-      resumeToolUseFromResumeDataMock.mockReturnValueOnce(
-        Effect.fail(new Error('failed')),
-      );
-
-      expect(
-        (yield* Effect.flip(resumeOne(RUN, { session }))).message,
-      ).toContain('failed');
-      expect(yield* queuedTexts(session)).toEqual(['keep me']);
-      // Nothing here holds the run: the next resume may take it.
-      expect(session.runs.get(RUN)?.live === true).toBe(false);
-    }),
-  );
-
-  it.effect(
-    'replays a completed-child result that races a failed recovery',
-    () =>
-      Effect.gen(function* () {
-        const session = yield* createSession();
-        yield* seedRecoverable(session, 'original');
-        const entered = yield* Deferred.make<void>();
-        const failing = yield* Deferred.make<never, Error>();
-        resumeToolUseFromResumeDataMock.mockReturnValueOnce(
-          Deferred.succeed(entered, undefined).pipe(
-            Effect.andThen(Deferred.await(failing)),
-          ),
-        );
-
-        const resuming = yield* Effect.forkChild(resumeOne(RUN, { session }));
-        yield* Deferred.await(entered);
-        expect(resumeToolUseFromResumeDataMock).toHaveBeenCalledOnce();
-
-        expect(
-          yield* session.followUps.send(
-            RUN,
-            {
-              text: 'completed child',
-              from: { kind: 'run' as const, runId: 'c41dc41dc41d' as RunId },
-            },
-            { wake: true },
-          ),
-        ).toEqual({ kind: 'queued', read: false, wake: false });
-        yield* Deferred.fail(failing, new Error('resume failed'));
-
-        expect((yield* Effect.flip(Fiber.join(resuming))).message).toContain(
-          'resume failed',
-        );
-        expect(yield* queuedTexts(session)).toEqual([
-          'original',
-          'completed child',
-        ]);
-      }),
-  );
-
-  it.effect('resumes the run a send owed a wake', () =>
-    Effect.gen(function* () {
-      const session = yield* createSession();
-      expect(
-        yield* session.followUps.send(
-          RUN,
-          { from: { kind: 'user' as const }, text: 'claimed' },
-          { wake: true },
-        ),
-      ).toEqual({ kind: 'queued', read: false, wake: true });
-
-      const result = yield* resumeOne(RUN, { session });
-      expect(result).toMatchObject({
-        started: true,
-        delivered: true,
-        outcome: RUN_OUTCOME.COMPLETED,
-      });
-      // A root's lifetime is the caller's to await past the acknowledgement.
-      if (!('started' in result)) throw new Error('resume refused');
-      expect((yield* result.completion!).outcome).toBe(RUN_OUTCOME.COMPLETED);
-      expect(resumeToolUseFromResumeDataMock).toHaveBeenCalledOnce();
-    }),
-  );
-
-  it.effect(
-    'keeps a woken input on the rows when nothing remains to resume',
-    () =>
-      Effect.gen(function* () {
-        const session = yield* createSession();
-        expect(
-          yield* session.followUps.send(
-            RUN,
-            { from: { kind: 'user' as const }, text: 'workflow input' },
-            { wake: true },
-          ),
-        ).toEqual({ kind: 'queued', read: false, wake: true });
-        canResumeMock.mockResolvedValueOnce(false);
-
-        expect(yield* resumeOne(RUN, { session })).toEqual({
-          failed: 'finished',
-        });
-        expect(yield* queuedTexts(session)).toEqual(['workflow input']);
-      }),
-  );
-
-  it.effect('refuses with `finished` when no checkpoint remains', () =>
-    Effect.gen(function* () {
-      const session = yield* createSession();
-      canResumeMock.mockResolvedValueOnce(false);
-
-      expect(yield* resumeOne(RUN, { session })).toEqual({
-        failed: 'finished',
-      });
-      expect(resumeToolUseFromResumeDataMock).not.toHaveBeenCalled();
-    }),
-  );
-
-  // The fold that continues a run is the one reader of its rows, so an
-  // aggregate that does not fold is refused as unusable state at the launch
-  // that folded it. Telling that user the run "has finished", or throwing the
-  // launch's internal wording at them, are the two ways this used to go wrong.
-  it.effect(
-    'refuses an aggregate the run history cannot fold as unusable state',
-    () =>
-      Effect.gen(function* () {
-        const session = yield* createSession();
-        resumeToolUseFromResumeDataMock.mockReturnValueOnce(
-          Effect.fail(
-            new Error('Failed to launch the resumed run', {
-              cause: new RunHistoryRefused({
-                reason: 'inconsistent',
-                runId: RUN,
-                detail: 'unsupported-record',
+    it.live(
+      'a joiner is an observer: its interruption leaves the resume running, and it hears the run on its trace port',
+      () =>
+        Effect.gen(function* () {
+          const { session, runId, storage } = yield* parkedRunAfterCrash();
+          yield* send(session, runId, 'observed');
+          const faults = yield* sessionStoreFaults(storage);
+          const claim = yield* faults.holdNext('acquireClaims');
+          const owner = yield* Effect.forkChild(resume(runId, { session }));
+          yield* claim.reached;
+          const heard: unknown[] = [];
+          const unlisten = session.trace.listen(runId, (event) =>
+            heard.push(event),
+          );
+          const joining = yield* Deferred.make<void>();
+          // `resumeOwnRun`: `resumeRun` itself is uninterruptible.
+          const joiner = yield* Effect.forkChild(
+            withProcessServices(
+              testRuntime(),
+              resumeOwnRun(runId, {
+                session,
+                onJoined: () => Deferred.doneUnsafe(joining, Effect.void),
               }),
+            ),
+          );
+          yield* Deferred.await(joining);
+          // Its own wait ends at once; the resume it joined does not.
+          yield* Fiber.interrupt(joiner);
+          expect(owner.pollUnsafe()).toBeUndefined();
+          yield* claim.release;
+
+          expect(yield* Fiber.join(owner)).toMatchObject(DELIVERED);
+          unlisten();
+          expect(heard.length).toBeGreaterThan(0);
+          expect(answersOf(storage, runId).at(-1)).toContain('observed');
+        }),
+    );
+
+    it.live(
+      'a resume refuses a run whose input closed while it read the run, launching nothing',
+      () =>
+        Effect.gen(function* () {
+          const { session, runId, storage } = yield* parkedRunAfterCrash();
+          const faults = yield* sessionStoreFaults(storage);
+          const owner = yield* faults.holdNext('readRunRecords');
+          const resumed = yield* Effect.forkChild(resume(runId, { session }));
+          yield* owner.reached;
+          const config = yield* faults.holdNext('readRunRecords');
+          yield* owner.release;
+          yield* config.reached;
+          yield* session.followUps.closeInput(runId);
+          yield* session.log.settled;
+          yield* config.release;
+
+          expect(yield* Fiber.join(resumed)).toEqual({
+            failed: 'not_resumable',
+          });
+          expect(activations(storage, runId)).toBe(1);
+        }),
+    );
+
+    it.live(
+      'a resume whose activation is refused ends the run as failed, keeps the queued input, and leaves the run to the next resume',
+      () =>
+        Effect.gen(function* () {
+          const { session, runId, storage } = yield* parkedRunAfterCrash();
+          yield* send(session, runId, 'keep me');
+          const faults = yield* sessionStoreFaults(storage);
+          yield* faults.failNext('appendAll', 'run.activate');
+
+          const error = yield* Effect.flip(resume(runId, { session }));
+          expect(error.message).toContain('injected appendAll fault');
+          expect(activations(storage, runId)).toBe(1);
+          const ended = storedRows(storage).findLast(
+            (row) => row.run === runId && row.type === 'run.end',
+          );
+          expect(JSON.parse(ended!.data)).toMatchObject({
+            outcome: 'failed',
+            error: { message: expect.stringContaining('injected appendAll') },
+          });
+          expect(yield* queuedTexts(session, runId)).toEqual(['keep me']);
+          expect(session.runs.get(runId)?.live === true).toBe(false);
+
+          expect(yield* resume(runId, { session })).toMatchObject(DELIVERED);
+          expect(answersOf(storage, runId).at(-1)).toContain('keep me');
+        }),
+    );
+
+    it.live(
+      "a child's result that races a failed resume stays queued for the next one",
+      () =>
+        Effect.gen(function* () {
+          const { session, runId, storage } = yield* parkedRunAfterCrash();
+          yield* send(session, runId, 'original');
+          const faults = yield* sessionStoreFaults(storage);
+          // The activation's commit holds the session's publisher, so the
+          // result queues behind it.
+          const activation = yield* faults.holdNext(
+            'appendAll',
+            'run.activate',
+          );
+          const resuming = yield* Effect.forkChild(resume(runId, { session }));
+          yield* activation.reached;
+          const delivered = yield* Effect.forkChild(
+            session.followUps.send(
+              runId,
+              {
+                text: 'completed child',
+                from: { kind: 'run', runId: 'c41dc41dc41d' as RunId },
+              },
+              { wake: true },
+            ),
+          );
+          yield* activation.fail;
+
+          const error = yield* Effect.flip(Fiber.join(resuming));
+          expect(error.message).toContain('injected appendAll fault');
+          yield* Fiber.join(delivered);
+          expect(yield* queuedTexts(session, runId)).toEqual([
+            'original',
+            'completed child',
+          ]);
+          expect(yield* resume(runId, { session })).toMatchObject(DELIVERED);
+          expect(answersOf(storage, runId).at(-1)).toContain('completed child');
+        }),
+    );
+
+    it.live(
+      'a resume on a host that cannot answer approval prompts offers its run no approval-gated tool',
+      () =>
+        Effect.gen(function* () {
+          const { session, runId, storage } = yield* parkedRunAfterCrash({
+            interactions: { approvalPromptsUnavailable: true },
+          });
+          yield* send(session, runId, 'continue');
+
+          expect(yield* resume(runId, { session })).toMatchObject(DELIVERED);
+          const [launched, resumed] = offeredTools(storage, runId);
+          expect(launched).toContain('bash');
+          expect(resumed).toContain('read_file');
+          expect(resumed).not.toContain('bash');
+        }),
+    );
+
+    it.live(
+      'a stop asked as the resumed run opens runs no turn, and the next resume delivers the input',
+      () =>
+        Effect.gen(function* () {
+          const { session, runId, storage } = yield* parkedRunAfterCrash();
+          yield* send(session, runId, 'held over');
+          let stopped = false;
+
+          const exit = yield* Effect.exit(
+            resume(runId, {
+              session,
+              isCancellationRequested: () => stopped,
+              onRun: () =>
+                Effect.sync(() => {
+                  stopped = true;
+                }),
             }),
-          ),
-        );
+          );
+          expect(Exit.hasInterrupts(exit)).toBe(true);
+          expect(answersOf(storage, runId)).toHaveLength(1);
+          expect(yield* queuedTexts(session, runId)).toEqual(['held over']);
 
-        expect(yield* resumeOne(RUN, { session })).toEqual({
-          failed: 'unusable_checkpoint',
-        });
-      }),
-  );
+          expect(yield* resume(runId, { session })).toMatchObject(DELIVERED);
+          expect(answersOf(storage, runId).at(-1)).toContain('held over');
+        }),
+    );
 
-  // Only a cause that names the checkpoint refuses as unusable state. A
-  // transient storage failure is the operational error it has always been, so
-  // the host words it with the cause instead of telling the user to delete a
-  // run whose saved state may be fine.
-  it.effect(
-    'propagates a transient retrieval failure over a run the log still lists',
-    () =>
-      Effect.gen(function* () {
-        const session = yield* createSession();
-        canResumeMock.mockRejectedValueOnce(new Error('record read timeout'));
+    it.live(
+      'a run a live process elsewhere holds is refused before the host rearranges',
+      () =>
+        Effect.gen(function* () {
+          const { session, runId, storage } = yield* parkedRunAfterCrash({
+            owner: JSON.stringify(['other-host', 4321, 'start-1']),
+          });
+          let rearranged = false;
 
-        expect(
-          (yield* Effect.flip(resumeOne(RUN, { session }))).message,
-        ).toContain('record read timeout');
-      }),
-  );
+          expect(
+            yield* resume(runId, {
+              session,
+              onAdmitted: () =>
+                Effect.sync(() => {
+                  rearranged = true;
+                }),
+            }),
+          ).toEqual({ failed: 'owned_elsewhere' });
+          expect(rearranged).toBe(false);
+          expect(activations(storage, runId)).toBe(1);
+        }),
+    );
 
-  // The launch's own claim acquisition would refuse only after the host
-  // cleared its window and switched onto the resumed stream.
-  it.effect(
-    'refuses a run a live foreign owner holds before the host rearranges',
-    () =>
-      Effect.gen(function* () {
-        const session = yield* createSession();
-        const ownerId = JSON.stringify(['other-host', 4321, 'start-1']);
-        // The claim the host's resume takes is refused by its live owner.
-        vi.spyOn(session.log, 'hold').mockReturnValue(
-          Effect.fail(new DatabaseClaimRefused({ ownerId, verdict: 'alive' })),
-        );
-        const onAdmitted = vi.fn(() => Effect.void);
+    it.live(
+      'a document task that ended refuses a resume as finished and keeps the input woken for it',
+      () =>
+        Effect.gen(function* () {
+          const roots = testWorkspaceRoots();
+          const runId = generateRunId();
+          writeFileSync(
+            join(roots.workspace!, 'paper.tex'),
+            'A short draft.\n',
+          );
+          // The persona answers with the validation document, not the echo.
+          delete process.env.TEXRA_INTERNAL_VALIDATE_ECHO;
+          const session = yield* openTestDefaultSession({ roots });
+          const ended = yield* withProcessServices(
+            testRuntime(),
+            session.runs.launch({
+              request: {
+                config: AgentConfigSchema.parse(
+                  asDocumentTask({
+                    agent: 'polish',
+                    agentSource: 'builtIn',
+                    model: 'gpt56',
+                    instruction: 'Polish the draft.',
+                    inputFiles: ['paper.tex'],
+                    workingDirectory: roots.workspace,
+                  }),
+                ),
+                runId,
+              },
+              options: {},
+            }),
+          );
+          expect(ended.outcome).toBe('completed');
+          expect(yield* send(session, runId, 'again')).toEqual({
+            kind: 'queued',
+            read: false,
+            wake: true,
+          });
 
-        expect(
-          yield* resumeOne(RUN, {
-            session,
-            onAdmitted,
-          }),
-        ).toEqual({ failed: 'owned_elsewhere' });
-        expect(onAdmitted).not.toHaveBeenCalled();
-        expect(resumeToolUseFromResumeDataMock).not.toHaveBeenCalled();
-      }),
-  );
-});
+          expect(yield* resume(runId, { session })).toEqual({
+            failed: 'finished',
+          });
+          expect(yield* queuedTexts(session, runId)).toEqual(['again']);
+        }),
+    );
+
+    // Telling the user the run "has finished", or throwing the launch's own
+    // wording at them, are the two ways this used to go wrong.
+    it.live(
+      'a run whose rows no longer fold is refused as unusable, not as finished',
+      () =>
+        Effect.gen(function* () {
+          const { session, runId, storage } = yield* parkedRunAfterCrash();
+          // The run's positions go, so its history has no opening to fold from.
+          const db = new DatabaseSync(join(storage, 'texra.db'));
+          try {
+            db.exec(
+              `DELETE FROM event WHERE type = 'run.position' AND "commit" IN (${storedRows(
+                storage,
+              )
+                .filter((row) => row.run === runId)
+                .map((row) => row.commit)
+                .join(',')})`,
+            );
+          } finally {
+            db.close();
+          }
+
+          expect(yield* resume(runId, { session })).toEqual({
+            failed: 'unusable_checkpoint',
+          });
+        }),
+    );
+  },
+);

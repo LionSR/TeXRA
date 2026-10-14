@@ -1,241 +1,139 @@
+/**
+ * A root launch's ownership of its run, over a real store on the
+ * validation model: the launch is the run's one owner here, holds its claim
+ * for the run's life and lets it go when the run ends.
+ *
+ * Failure modes:
+ * - a second launch of a running run starts it twice;
+ * - a run is born without the identity of the agent it runs, or keeps its
+ *   claim after its launch ends;
+ * - a launch whose opening is refused leaves a run, a claim, or a failure
+ *   nobody presents.
+ */
+import '@test/support/sessionGraphTestSetup';
+
 import { it } from '@effect/vitest';
 import { Cause, Effect, Exit, Fiber } from 'effect';
-
-import { beforeEach, describe, expect, vi } from 'vitest';
-
-const mocks = vi.hoisted(() => ({
-  acquireClaims: vi.fn(),
-  prepareAgentDefinition: vi.fn(),
-  executeAgent: vi.fn(),
-  emit: vi.fn(),
-  releaseClaims: vi.fn(),
-}));
-
-vi.mock('@agent/runtime/AgentLaunchContext', () => ({
-  prepareAgentDefinition: (...args: unknown[]) =>
-    Effect.sync(() => mocks.prepareAgentDefinition(...args)),
-}));
-
-vi.mock('@agent/runtime/executeAgent', async () => {
-  const { Effect } = await import('effect');
-  return {
-    executeAgent: (...args: unknown[]) =>
-      Effect.tryPromise({
-        try: () => mocks.executeAgent(...args),
-        catch: ensureError,
-      }),
-    resumeToolUseFromResumeData: () => Effect.die('Unexpected resume'),
-  };
-});
+import { describe, expect } from 'vitest';
 
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
-import { RunRegistry } from '@agent/runtime/runRegistry';
 import type { RootLaunchOptions } from '@agent/runtime/rootLaunch';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import { SessionOwner } from '@platform/processRuntime';
-import { qualifyAggregateId, type RunId } from '@shared/schemas';
-import { fakeProcessServices } from '@test/support/setupPlatform';
-import { testRunFork, testRunPrograms } from '@test/support/runHandleFixtures';
-import { ensureError } from '@utils/errors/errorMessage';
+import { withProcessServices } from '@platform/processRuntime';
+import type { RunId } from '@shared/schemas';
+import { openTestDefaultSession } from '@test/support/sessionEnd';
+import {
+  claimHolder,
+  parkedAfter,
+  sessionStoreFaults,
+  storedRows,
+  untilStored,
+  REAL_RUN_TIMEOUT,
+  validationHost,
+} from '@test/support/storeFaults';
+import { testRuntime } from '@test/support/testProcessRuntime';
+import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
+import { generateRunId } from '@utils/core';
 
-const RUN_ID = 'a9e70a9e7001' as RunId;
-// The persisted lineage a resume reads after tracking its launch handle.
-// Empty unless a case seeds this run's `run.start` parent.
-const persistedRuns = new Map<RunId, { readonly parentId: RunId }>();
-// The runs whose opening committed: the mocked `executeAgent` opens its run
-// (a `run.start` row) unless a case fails it before birth.
-const bornRuns = new Set<RunId>();
-const birthRows = (runId: RunId) =>
-  Effect.succeed(
-    bornRuns.has(runId)
-      ? [{ type: 'run.start', aggregateId: qualifyAggregateId('run', runId) }]
-      : [],
-  );
-/** What the mocked `executeAgent` does past its opening. */
-const opened =
-  <A>(then: () => A) =>
-  async () => {
-    bornRuns.add(RUN_ID);
-    return then();
-  };
 const CONFIG = AgentConfigSchema.parse({
   agent: 'assistant',
-  model: 'test-model',
+  model: 'gpt56',
+  instruction: 'One answer.',
 });
-const SESSION = {
-  // A failure the launch presents itself (one that never opened a run).
-  interactions: { emit: mocks.emit },
-  view: { read: () => Effect.succeed({ runs: persistedRuns }) },
-  log: {
-    // A root launch is fresh: the log holds no row of its run until
-    // its opening commits (this suite launches the one run).
-    rows: () => birthRows(RUN_ID),
-    records: birthRows,
-    // The launch's hold on the run's claim: its release also reports to
-    // `mocks.releaseClaims`, which the release-order cases observe.
-    hold: (runId: RunId) => {
-      const id = qualifyAggregateId('run', runId);
-      return Effect.asVoid(
-        Effect.acquireRelease(
-          mocks.acquireClaims(id) as Effect.Effect<Effect.Effect<void>>,
-          (release) =>
-            release.pipe(
-              Effect.andThen(
-                Effect.suspend(
-                  () => mocks.releaseClaims(id) as Effect.Effect<void>,
-                ),
-              ),
-            ),
-        ),
-      );
-    },
-  },
-} as never;
 
-const EXECUTE_RESULT = {
-  runId: RUN_ID,
-  outcome: 'COMPLETED',
-};
+/** A root launch of `config` as `runId` on the session. */
+const launch = (
+  session: SessionHandle,
+  runId: RunId,
+  options: RootLaunchOptions = {},
+  config = CONFIG,
+) =>
+  withProcessServices(
+    testRuntime(),
+    session.runs.launch({ request: { config, runId }, options }),
+  );
 
-/** The suite's fake session with a real registry as its runs. */
-function sessionWithRuns(): RunRegistry {
-  const held: { session?: SessionHandle } = {};
-  const runs = new RunRegistry({
-    session: () => held.session as SessionHandle,
-    fork: testRunFork,
-    programs: testRunPrograms,
-  });
-  // cast: the slice of a session this suite's launch reads.
-  held.session = { ...(SESSION as object), runs } as unknown as SessionHandle;
-  return runs;
-}
+describe('root launch run ownership', { timeout: REAL_RUN_TIMEOUT }, () => {
+  validationHost('texra-ownership-');
 
-/**
- * A root launch on `runs` over the fake host's process services, under an
- * owner that holds the session: the suite runs it on the default runtime
- * rather than a process runtime, so the services it requires are provided
- * here.
- */
-function launchOn(runs: RunRegistry, options: RootLaunchOptions = {}) {
-  return runs
-    .launch({ request: { config: CONFIG, runId: RUN_ID }, options })
-    .pipe(
-      Effect.provideService(SessionOwner, {
-        holds: (session: SessionHandle) =>
-          Effect.sync(() => session === runs['init'].session()),
-      } as never),
-      Effect.provide(fakeProcessServices()),
-    );
-}
-
-function launch(options: RootLaunchOptions = {}) {
-  return launchOn(sessionWithRuns(), options);
-}
-
-describe('root launch run ownership', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    persistedRuns.clear();
-    bornRuns.clear();
-    mocks.acquireClaims.mockReturnValue(Effect.succeed(Effect.void));
-    mocks.releaseClaims.mockReturnValue(Effect.void);
-    mocks.emit.mockReturnValue(Effect.void);
-    mocks.prepareAgentDefinition.mockImplementation(({ config }) => ({
-      config,
-    }));
-    mocks.executeAgent.mockImplementation(opened(() => EXECUTE_RESULT));
-  });
-
-  it.effect('refuses a second launch while the first is still running', () =>
+  it.live('refuses a second launch while the first is still running', () =>
     Effect.gen(function* () {
-      // A real registry: the first launch's admission is its fiber on the
-      // run registry, so the duplicate is refused against it wherever the
-      // first launch has got to — here, mid-run.
-      const runs = sessionWithRuns();
-      mocks.executeAgent.mockImplementationOnce(
-        () => new Promise<never>(() => {}),
-      );
-      const first = yield* Effect.forkChild(launchOn(runs), {
-        startImmediately: true,
+      const roots = testWorkspaceRoots();
+      const session = yield* openTestDefaultSession({ roots });
+      const runId = generateRunId();
+      const first = yield* Effect.forkChild(launch(session, runId));
+      yield* untilStored(roots.storage, parkedAfter(runId, 1, roots.storage));
+
+      expect(yield* Effect.flip(launch(session, runId))).toMatchObject({
+        message: `Run is already running: ${runId}`,
       });
-      // Mid-run: the first launch reached its run.
-      yield* Effect.promise(() =>
-        vi.waitFor(() => expect(mocks.executeAgent).toHaveBeenCalledOnce()),
-      );
-      expect(yield* Effect.flip(launchOn(runs))).toMatchObject({
-        message: `Run is already running: ${RUN_ID}`,
-      });
+      const stop = session.runs.stop(runId, { reason: 'user' });
+      expect(stop.accepted()).toBe(true);
+      yield* stop.settlement;
       // The first launch's stop is its fiber's interruption.
-      expect(runs.interrupt(RUN_ID)).toBe(true);
       const exit = yield* Fiber.await(first);
       expect(Exit.isFailure(exit) && Cause.hasInterrupts(exit.cause)).toBe(
         true,
       );
+      expect(
+        storedRows(roots.storage).filter(
+          (row) => row.run === runId && row.type === 'run.activate',
+        ),
+      ).toHaveLength(1);
     }),
   );
 
-  it.effect('registers and releases an explicitly identified fresh run', () =>
-    Effect.gen(function* () {
-      yield* launch();
-
-      // #9590 obligation 1: the run is born with its birth identity, in the
-      // opening `executeAgent` commits — so before any transcript fact.
-      expect(mocks.executeAgent).toHaveBeenCalledOnce();
-      expect(mocks.executeAgent).toHaveBeenCalledWith(
-        { config: CONFIG },
-        RUN_ID,
-        expect.objectContaining({
-          registration: expect.objectContaining({
-            identity: { kind: 'agent', agent: CONFIG.agent },
-          }),
-        }),
-      );
-      // The birth's claim is let go once the launch is done.
-      expect(mocks.releaseClaims).toHaveBeenCalledWith(
-        qualifyAggregateId('run', RUN_ID),
-      );
-    }),
-  );
-
-  it.effect(
-    'registers the resolved config and passes the same definition to run',
+  it.live(
+    "a fresh run is born as its agent's and lets its claim go when the launch ends",
     () =>
       Effect.gen(function* () {
-        const definition = { config: { ...CONFIG, agent: 'resolved' } };
-        mocks.prepareAgentDefinition.mockReturnValueOnce(definition);
+        const roots = testWorkspaceRoots();
+        const session = yield* openTestDefaultSession({ roots });
+        const runId = generateRunId();
 
-        yield* launch();
+        yield* launch(session, runId, { stopAfterCycle: true });
 
-        expect(mocks.executeAgent).toHaveBeenCalledWith(
-          definition,
-          RUN_ID,
-          expect.objectContaining({
-            registration: expect.objectContaining({
-              identity: { kind: 'agent', agent: 'resolved' },
-            }),
-          }),
+        const start = storedRows(roots.storage).find(
+          (row) => row.run === runId,
         );
+        expect(start?.type).toBe('run.start');
+        expect(JSON.parse(start!.data)).toMatchObject({
+          identity: { kind: 'agent', agent: 'assistant' },
+        });
+        expect(claimHolder(roots.storage, runId)).toBeNull();
       }),
   );
 
-  it.effect(
-    'fails an early launch as itself, writing no ending and holding no claim',
+  it.live(
+    'a launch whose opening is refused fails as itself, leaves no run or claim, and presents its failure',
     () =>
       Effect.gen(function* () {
-        const launchError = new Error('launch failed');
-        mocks.executeAgent.mockRejectedValueOnce(launchError);
-        expect(yield* Effect.flip(launch())).toBe(launchError);
+        const roots = testWorkspaceRoots();
+        // No UI is attached when the launch fails.
+        const session = yield* openTestDefaultSession({ roots });
+        const runId = generateRunId();
+        const faults = yield* sessionStoreFaults(roots.storage);
+        yield* faults.failNext('appendAll', 'run.start');
 
-        // A run is born with its opening, so a launch failing before it
-        // leaves no run to end and no claim to let go.
-        expect(mocks.acquireClaims).not.toHaveBeenCalled();
-        expect(mocks.releaseClaims).not.toHaveBeenCalled();
-        // With no row to present it, the launch presents its own failure.
-        expect(mocks.emit).toHaveBeenCalledWith(
-          'requestShowError',
-          expect.objectContaining({ message: 'launch failed' }),
-          { replayWhenAttached: true },
-        );
+        const error = yield* Effect.flip(launch(session, runId));
+        expect(error.message).toContain('injected appendAll fault');
+        expect(claimHolder(roots.storage, runId)).toBeNull();
+        expect(
+          storedRows(roots.storage).filter((row) => row.run === runId),
+        ).toEqual([]);
+        // A UI that attaches after the launch failed is still shown it.
+        const shown: unknown[] = [];
+        yield* session.interactions.use({
+          emit: (event, payload) => {
+            shown.push({ event, payload });
+          },
+        });
+        expect(shown).toContainEqual({
+          event: 'requestShowError',
+          payload: expect.objectContaining({
+            message: expect.stringContaining('injected appendAll fault'),
+          }),
+        });
       }),
   );
 });

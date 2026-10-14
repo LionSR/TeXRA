@@ -102,13 +102,16 @@ export function createProcessSession(
       discard: true,
     });
     // The session over the process roots is the file's default session.
+    const { persistent, ...open } = init;
     return yield* openTestDefaultSession({
-      ...init,
+      ...open,
       roots,
-      transcriptMode: init.transcriptMode ?? {
-        kind: 'ephemeral',
-        reason: 'process test session',
-      },
+      ...(!persistent && {
+        transcriptMode: init.transcriptMode ?? {
+          kind: 'ephemeral',
+          reason: 'process test session',
+        },
+      }),
     });
   });
 }
