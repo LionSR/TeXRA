@@ -2,7 +2,7 @@ import { Effect } from 'effect';
 
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { withLogChannel } from '@logger/effectLog';
-import { isRecipeConfig, type RunId } from '@shared/schemas';
+import { isTaskConfig, type RunId } from '@shared/schemas';
 import { DatabaseRowEarlier } from '@shared/session/database';
 import { continuesFromRows } from '@shared/session/runActions';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -56,7 +56,7 @@ export const deriveResumability = Effect.fn('deriveResumability')(function* (
   const config = records.findLast((row) => row.type === 'run.config');
   const standing = {
     ended: runEndFromEvents(records, runId) !== null,
-    recipe: config?.type === 'run.config' && isRecipeConfig(config.config),
+    recipe: config?.type === 'run.config' && isTaskConfig(config.config),
   };
   return start?.type === 'run.start' &&
     continuesFromRows({ ...standing, identity: start.identity })

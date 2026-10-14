@@ -5,12 +5,7 @@ import { Effect, FileSystem, PlatformError, Result } from 'effect';
 import { describeFollowUpFailure } from '@texra-ai/harness';
 import { runRefusal } from '@agent/runtime';
 import { getRunRecords } from '@agent/storage';
-import {
-  agentKey,
-  agentName,
-  isRecipeConfig,
-  type RunId,
-} from '@shared/schemas';
+import { agentKey, agentName, isTaskConfig, type RunId } from '@shared/schemas';
 import { texraApprovalPolicyLabel } from '@shared/approvalPolicy';
 import { runHeldByProcessMessage } from '@shared/runs/runStatusDisplay';
 import { ensureError } from '@utils/errors/errorMessage';
@@ -112,7 +107,7 @@ export function runResumeCommand(
       writeTextStderr(`Run not found: ${id}`);
       return CliExitCode.Usage;
     }
-    const documentTask = isRecipeConfig(config);
+    const documentTask = isTaskConfig(config);
     if (action !== undefined && documentTask) {
       writeTextStderr(
         `Task ${id} is a document task: only a conversation can be forked, reset or handed off.`,

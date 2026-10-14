@@ -27,3 +27,11 @@ const AGENT_RECORD_KEY: Exclude<
 export function isAgentRunRecord(record: RunRecord): record is AgentConfig {
   return AGENT_RECORD_KEY in record;
 }
+
+/** Whether the run's script is trusted: the app wrote it (a plugin's
+ *  recipe, by `script.kind`), not a model. Its tools are fixed past any
+ *  switch; the agents it calls are the catalog's, under its launch's
+ *  approval, and take its prompts and files as written; it activates no
+ *  skills. */
+export const isTrustedScript = (config: Pick<AgentConfig, 'script'>): boolean =>
+  config.script?.kind === 'recipe';

@@ -33,6 +33,7 @@ import { z } from 'zod';
 
 // Local imports
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
+import { isTrustedScript } from '@agent/core/definition/RunRecord';
 import { resolveChildRunConcurrencyBudget } from '@agent/runtime/childRunBudget';
 import { offeredBy } from '@agent/runtime/loop/step';
 import { readRecipeResult } from '@agent/runtime/recipeResult';
@@ -41,7 +42,6 @@ import { getRunRecords } from '@agent/storage/runRecords';
 import { IssuingScript, requireToolRun } from '@agent/runtime/RunCall';
 import type { RunToolCall, ScriptScope } from '@agent/runtime/RunCall';
 import {
-  isRecipeConfig,
   qualifyAggregateId,
   AgentProposalSchema,
   type AgentProposal,
@@ -457,8 +457,8 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
         });
   // The call's files, resolved where they live: a run-storage file must be
   // this run's own or a declared output of a completed child of it; a
-  // recipe's (a revision's figures and media, TeXRA's choice) pass as named.
-  const recipe = isRecipeConfig(run.config);
+  // trusted script's pass as named.
+  const trusted = isTrustedScript(run.config);
   const resolved = yield* Effect.exit(
     Effect.all(
       (
@@ -468,7 +468,7 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
           ['Media file', files.mediaFiles],
         ] as const
       ).map(([label, list]) =>
-        recipe
+        trusted
           ? Effect.succeed(list.map((file) => ({ file, absolutePath: file })))
           : resolveInvocationFileList(session, parentRunId, label, list),
       ),
@@ -584,10 +584,10 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
     ...(workingDirectory !== undefined && { workingDirectory }),
     task: task !== null,
     // A task's prompt is its instruction, a structured call answers through
-    // its schema, and a recipe's call (app-written, a document revision's
-    // whole prompt) reaches the agent verbatim: none takes a hand-off.
+    // its schema, and a trusted script's call reaches the agent verbatim:
+    // none takes a hand-off.
     instruction:
-      task !== null || outputSchema !== undefined || recipe
+      task !== null || outputSchema !== undefined || trusted
         ? launch.prompt
         : withToolUseSubagentHandoffInstruction(
             launch.prompt,

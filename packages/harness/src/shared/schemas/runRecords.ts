@@ -22,13 +22,12 @@ export const RunRecordFieldsSchema = z.union([
   AgentConfigFieldsSchema,
 ]);
 
-/** Whether a run's config opens it on an app's recipe (`script.kind`): the
- *  run is a task, and its program the script its plugin wrote. */
-export function isRecipeConfig(
+/** Whether the run is a task (an agent carrying a plugin's block, run on
+ *  its recipe): its value and its children's spend are its output, its end
+ *  its record; it resumes from its checkpoint, its opening rebuilt. */
+export const isTaskConfig = (
   config: z.input<typeof RunRecordFieldsSchema>,
-): boolean {
-  return 'script' in config && config.script?.kind === 'recipe';
-}
+): boolean => 'script' in config && config.script?.kind === 'recipe';
 
 /** Terminal errors keep the classified kind beside the provider detail. */
 const RunEndErrorSchema = z

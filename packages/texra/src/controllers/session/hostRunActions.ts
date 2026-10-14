@@ -35,7 +35,7 @@ import { FOLLOW_UP_WAKE_FAILED_MESSAGE } from '@agent/followUp/ToolUseFollowUp';
 import { withLogChannel } from '@logger/effectLog';
 import { getRuntimeModelDirectFallback } from '@model/copilotRouting';
 import type { ModelHostFactUnreadable } from '@model/computeModelOptions';
-import { isRecipeConfig, type FileOpResult, type RunId } from '@shared/schemas';
+import { isTaskConfig, type FileOpResult, type RunId } from '@shared/schemas';
 import { packDestination } from '@texra/tools/documents/runOutputs';
 import type { HostRequest } from '@texra/shared/session/hostRequest';
 import { documentsOf } from '@texra/shared/plugins/documents';
@@ -149,7 +149,10 @@ export interface HostRunActionPorts extends RunActionRecordPorts {
     options?: RunValidatedOptions,
   ): Effect.Effect<Run, Error>;
   /** Open a resumed workflow's final output, as the launcher does a fresh one's. */
-  openWorkflowOutput(result: RunEndResult): Effect.Effect<void, Error>;
+  openWorkflowOutput(
+    config: AgentConfig,
+    result: RunEndResult,
+  ): Effect.Effect<void, Error>;
   loadModelOptions(): Effect.Effect<
     readonly ProgressFollowUpModelOption[],
     ModelHostFactUnreadable | StateReadFailed
@@ -331,7 +334,7 @@ export const createHostRunActions = (
           ).pipe(withLogChannel(CHANNEL));
           return undefined;
         }
-        return isRecipeConfig(config) ? config : undefined;
+        return isTaskConfig(config) ? config : undefined;
       },
     );
 
@@ -582,7 +585,7 @@ export const createHostRunActions = (
         );
         if (run === null) return;
         const config = yield* readConfig(run.runId);
-        if (config === undefined || !isRecipeConfig(config)) return;
+        if (config === undefined || !isTaskConfig(config)) return;
         const result = yield* run.result.pipe(
           Effect.mapError(
             (failure) =>
@@ -590,7 +593,7 @@ export const createHostRunActions = (
           ),
         );
         yield* ports
-          .openWorkflowOutput(result)
+          .openWorkflowOutput(config, result)
           .pipe(Effect.ignore({ log: 'Warn' }), withLogChannel(CHANNEL));
       }, guard.resuming),
       runNew: Effect.fn('HostRunActions.runNew')(function* (runId) {

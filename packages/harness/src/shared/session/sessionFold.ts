@@ -41,7 +41,7 @@ import {
   RESTING_SUBSTATES,
   RUN_SUBSTATE,
   parkSubstate,
-  isRecipeConfig,
+  isTaskConfig,
   isPlainAgentIdentity,
   listingKeyOf,
   isTranscriptEvent,
@@ -831,7 +831,7 @@ function applyOwnArm(run: RunView, event: OwnEvent): RunView {
         modelLabel: model === null ? null : getModelLabel(model),
         command: run.identity.kind === 'process' ? config.instruction : null,
         inputFiles: 'inputFiles' in config ? config.inputFiles : [],
-        recipe: isRecipeConfig(config),
+        recipe: isTaskConfig(config),
       };
     }
     case 'run.model':

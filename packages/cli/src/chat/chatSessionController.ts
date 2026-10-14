@@ -50,7 +50,7 @@ import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import { acceptsFollowUp, isLiveRun } from '@shared/session/sessionView';
 import { isTerminalOutcomePhase } from '@shared/runs/runStatus';
-import { isRecipeConfig, type RunId } from '@shared/schemas';
+import { isTaskConfig, type RunId } from '@shared/schemas';
 import { heldElsewhereBy } from '@shared/session/database';
 import type { DisposableStore } from '@texra/platform/disposable';
 import { FOCUSED_AGENT } from '@ui/copy/nestedRuns';
@@ -605,7 +605,7 @@ export function createChatSessionController(
         }
         // A document task takes no chat: it resumes beside this one, as
         // `/resume all` resumes it, and joins the agent list.
-        if (isRecipeConfig(config)) {
+        if (isTaskConfig(config)) {
           endResumeUnstarted(() =>
             appendLocalNotice(`Resuming document task ${id}. Tab lists it.`),
           );

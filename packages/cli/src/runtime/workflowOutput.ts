@@ -4,7 +4,7 @@ import { Effect, FileSystem, Path, PlatformError } from 'effect';
 
 import { isNotADirectoryError } from '@common/errors';
 import type { RunEndOutput } from '@shared/schemas';
-import { isRecipeConfig, RUN_OUTCOME } from '@shared/schemas';
+import { isTaskConfig, RUN_OUTCOME } from '@shared/schemas';
 import { runOutcomeToCliRunStatus } from '@shared/runs/runStatus';
 import { stripWorkflowRoundDir } from '@texra/shared/constants/workflowOutput';
 import { getSafeDocumentRelativePath } from '@texra/utils/files/outputFileUtils';
@@ -31,13 +31,6 @@ import { type CliRunResult } from './terminalStatus';
 import { STDIN_WORKFLOW_INPUT_BASENAME } from './workflowInputs';
 import type { RunEndResult } from '@texra-ai/harness';
 import type { AgentConfigPayload } from '@texra-ai/harness/schemas';
-
-/** The documents of a task that ended before it proposed any. */
-const NO_DOCUMENTS: DocumentsResult = {
-  outputs: [],
-  compileFailures: [],
-  diffs: [],
-};
 
 type OutputFlag = '--output' | '--output-dir';
 
@@ -336,7 +329,7 @@ export function resolveWorkflowOutput(
               `Document task ${result.runId} ended without its documents.`,
             ),
           )
-        : NO_DOCUMENTS);
+        : { outputs: [], compileFailures: [], diffs: [] });
     const runDirectory = runDirUnder(options.storageRoot, result.runId);
     const baseResult = {
       ...result,
@@ -461,7 +454,7 @@ export function formatWorkflowTextResult(result: CliWorkflowRunResult): string {
 export function resumeWorkflowOutputFile(
   config: AgentConfigPayload,
 ): string | undefined {
-  if (!isRecipeConfig(config)) return undefined;
+  if (!isTaskConfig(config)) return undefined;
 
   const cliOutputFile = config.cli?.outputFile;
   if (isNonEmptyString(cliOutputFile)) {
@@ -488,7 +481,7 @@ export function resumeWorkflowOutputFile(
 export function resumeWorkflowOutputDirectory(
   config: AgentConfigPayload,
 ): string | undefined {
-  if (!isRecipeConfig(config)) return undefined;
+  if (!isTaskConfig(config)) return undefined;
 
   const outputDirectory = config.cli?.outputDirectory;
   if (!isNonEmptyString(outputDirectory)) return undefined;

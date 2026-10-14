@@ -6,7 +6,9 @@ import {
   documentsResultOf,
   finalWorkflowOutput,
 } from '@texra/shared/plugins/documentOutputs';
+import { DOCUMENT_TASK_BLOCK } from '@texra/shared/plugins/documents';
 import { readSettingFrom } from '@utils/config/platformSettings';
+import type { AgentConfig } from '@texra-ai/harness/schemas';
 
 /**
  * Decide whether a finished run should auto-open a final output, and which
@@ -15,8 +17,8 @@ import { readSettingFrom } from '@utils/config/platformSettings';
  * Hosts ask once the launch has returned, so this presentation never runs
  * inside the run whose outcome it shows:
  *
- * - Only a `completed` workflow qualifies — cancelled or failed runs may
- *   carry partial outputs the user did not ask to review.
+ * - Only a `completed` document task (its recipe runs the documents block)
+ *   qualifies — failed or cancelled runs may hold partial outputs.
  * - Gated by `texra.agentOutputs.autoOpenFinal` (default true).
  * - Which file counts as final is {@link finalWorkflowOutput}'s call, shared
  *   with the CLI's `--output` copy and text result.
@@ -30,13 +32,18 @@ import { readSettingFrom } from '@utils/config/platformSettings';
  */
 export function selectAutoOpenFinalOutput(
   stores: SettingsStores,
+  config: AgentConfig,
   result: RunEndResult,
 ) {
   return Effect.gen(function* () {
     const documents = documentsResultOf(result.output.structured);
-    if (documents === undefined || result.outcome !== RUN_OUTCOME.COMPLETED) {
+    if (
+      config.script?.kind !== 'recipe' ||
+      config.script.block !== DOCUMENT_TASK_BLOCK.key ||
+      documents === undefined ||
+      result.outcome !== RUN_OUTCOME.COMPLETED
+    )
       return undefined;
-    }
     if (
       !(yield* readSettingFrom<boolean>(
         stores,

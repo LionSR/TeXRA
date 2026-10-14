@@ -25,7 +25,7 @@ import {
   qualifyAggregateId,
   aggregateTarget,
   emptyRunEndOutput,
-  isRecipeConfig,
+  isTaskConfig,
   sumRunUsageTotals,
   type RunUsageTotals,
   RunWorkspaceFilesSchema,
@@ -290,7 +290,7 @@ export function getRunRecords(session: SessionHandle, runId: RunId) {
       const own = Result.isSuccess(folded) ? folded.success?.usage : undefined;
       const config = latestOfType(rows, id, 'run.config')?.config;
       const usage =
-        config && isRecipeConfig(config)
+        config && isTaskConfig(config)
           ? (yield* withChildSpend(session, { runId, usage: own })).usage
           : own;
       const { outcome, error, output } = end;
@@ -369,9 +369,7 @@ export function getRunRecords(session: SessionHandle, runId: RunId) {
         if (meta?.producer === 'backgroundBash') return meta;
         if (meta === null) {
           const config = latestOfType(rows, id, 'run.config')?.config;
-          return config && isRecipeConfig(config)
-            ? yield* runEndOf(rows)
-            : null;
+          return config && isTaskConfig(config) ? yield* runEndOf(rows) : null;
         }
         const end = yield* runEndOf(rows);
         return {

@@ -5,7 +5,8 @@ import { z } from 'zod';
 
 import type { AgentTrace } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
-import { isRecipeConfig, type AttachedMemoryMiss } from '@shared/schemas';
+import { isTrustedScript } from '@agent/core/definition/RunRecord';
+import type { AttachedMemoryMiss } from '@shared/schemas';
 import { activatedSkillNames } from '@skills/runtimeSkills';
 import { parseFrontmatter } from '@tools/memory/memoryMeta';
 import { displayToStoragePath } from '@tools/memory/memoryUtils';
@@ -161,8 +162,8 @@ export const buildTemplateInputs = Effect.fn('buildTemplateInputs')(function* (
   return {
     inputs,
     // What the launch instruction activates (`/skills`): each step resolves
-    // the names against its own catalog. A recipe's run activates none.
-    activated: isRecipeConfig(agentConfig)
+    // the names against its own catalog; a trusted script's, none.
+    activated: isTrustedScript(agentConfig)
       ? []
       : activatedSkillNames([agentConfig.instruction]),
     attachedMemoryMisses: attachedMemories.misses,

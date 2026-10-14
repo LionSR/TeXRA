@@ -17,6 +17,7 @@ import {
   createRunStorageLocation,
   createWorkspaceLocation,
 } from '@utils/files/fileLocation';
+import type { AgentConfig } from '@texra-ai/harness/schemas';
 import type { DesktopAgentRun } from './desktopAgentRun.js';
 import type { DesktopProject } from './desktopProjects.js';
 
@@ -60,7 +61,9 @@ export function launchDesktopAgent(
       Effect.tap((run) =>
         Effect.forkIn(
           run.result.pipe(
-            Effect.flatMap(presentDesktopFinalOutput(context.project)),
+            Effect.flatMap(
+              presentDesktopFinalOutput(context.project, request.config),
+            ),
             Effect.ignore({ log: 'Warn', message: 'Opening the output' }),
           ),
           context.scope,
@@ -72,9 +75,10 @@ export function launchDesktopAgent(
 
 /** Open a settled run's final output, as a fresh launch and a resume both do. */
 export const presentDesktopFinalOutput =
-  (project: Omit<LaunchProject, 'session'>) => (result: RunEndResult) =>
+  ({ roots, present }: Omit<LaunchProject, 'session'>, config: AgentConfig) =>
+  (result: RunEndResult) =>
     Effect.gen(function* () {
-      const output = yield* selectAutoOpenFinalOutput(project.roots, result);
+      const output = yield* selectAutoOpenFinalOutput(roots, config, result);
       if (!output) return;
       let location: RequestOpenFilePayload['location'];
       if (output.location === 'workspace') {
@@ -91,7 +95,7 @@ export const presentDesktopFinalOutput =
       } else {
         location = createExternalLocation(output.absolutePath);
       }
-      yield* project.present.emit(
+      yield* present.emit(
         'requestOpenFile',
         { location, preserveFocus: false },
         { replayWhenAttached: true },

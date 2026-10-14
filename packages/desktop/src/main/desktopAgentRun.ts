@@ -39,6 +39,7 @@ import {
   type DesktopAgentLaunchOptions as DesktopRunOptions,
 } from './desktopAgentLaunch.js';
 import { desktopSpawner } from './desktopWindows.js';
+import type { AgentConfig } from '@texra-ai/harness/schemas';
 import type { DesktopAgentRunHost } from './desktopAgentRunHost.js';
 import type { DesktopProject } from './desktopProjects.js';
 
@@ -83,7 +84,10 @@ export interface DesktopAgentRun {
   readonly scope: Scope.Scope;
   /** Open a resumed workflow's final output, as a launch opens a fresh one's
    *  (`HostRunActionPorts.openWorkflowOutput`). */
-  openWorkflowOutput(result: RunEndResult): Effect.Effect<void, Error>;
+  openWorkflowOutput(
+    config: AgentConfig,
+    result: RunEndResult,
+  ): Effect.Effect<void, Error>;
   /** The tool-edit approvals this window owns. A prompt's verbs act over its
    *  staged preview: the approval applies the proposed file as the user left
    *  it. The host arm calls `handleAction` directly, as the extension does. */
@@ -250,10 +254,10 @@ export const createDesktopAgentRun = Effect.fn('desktop.createAgentRun')(
     return {
       runValidated,
       scope,
-      openWorkflowOutput: (result) =>
+      openWorkflowOutput: (config, result) =>
         withProcessServices(
           runtime,
-          presentDesktopFinalOutput(project)(result),
+          presentDesktopFinalOutput(project, config)(result),
         ),
       toolEditApprovals,
     };
