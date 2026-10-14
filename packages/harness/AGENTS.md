@@ -14,7 +14,7 @@ quality bar, and tool input schemas.
 
 - `packages/harness/src/platform/` - Platform abstraction layer: the host ports and the process runtime types. Each host's composition root builds one `ManagedRuntime` over `processLayer()` at startup; agnostic code reads the ports from the Effect context that runtime serves, and the root opens and closes sessions through its `SessionOwner`.
 
-- `packages/harness/src/agent/runtime/index.ts` (`@agent/runtime`) is the hosts' one internal door into the harness, not SDK surface: the CLI, desktop and extension reach the session handle's record reads, the presentation host class (`SessionHostInteractions`) and the presentation helpers through it, which no public entry carries; every name has a host consumer. Its names are frozen shrink-only (`config/api-reports/harness.agent-runtime.api.md`; `check:core-quality` fails on a new one, `--update` included): add nothing to it; take a name from `@texra-ai/harness` or `./schemas` when one carries it.
+- `packages/harness/src/agent/runtime/index.ts` (`@agent/runtime`) is the hosts' one internal door into the harness, not SDK surface: the CLI, desktop and extension reach the session handle's record reads, the presentation host class (`SessionHostInteractions`) and the host-facing helpers through it, which no public entry carries; every name has a host consumer. Its names are frozen shrink-only (`config/api-reports/harness.agent-runtime.api.md`; `check:core-quality` fails on a new one, `--update` included): add nothing to it; take a name from `@texra-ai/harness` or `./schemas` when one carries it.
 
 ## Configuration, storage, and workspace files
 

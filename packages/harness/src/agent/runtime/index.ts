@@ -1,7 +1,7 @@
 /**
  * Agent runtime — what the hosts (CLI, desktop, extension) take from
  * `packages/harness/src/agent/runtime` that the public `Session` does not
- * carry: the session handle and the presentation helpers over it, every
+ * carry: the session handle and the host-facing helpers over it, every
  * name with a host consumer. It is the
  * single door the harness deep-import ratchet
  * (`config/ratchets/harness-deep-import-baseline.json`) allows each host.

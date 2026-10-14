@@ -261,7 +261,7 @@ export const DocumentExtractTool = defineTool({
       revision,
       docs.task.rewrite,
     );
-    yield* checkExpectedOutputs(docs.state, docs.deps, revision);
+    checkExpectedOutputs(docs.state, docs.deps, revision);
     const missing = round.missingOutputs;
     if (missing.length > 0)
       yield* docs.requests.present('requestShowInstruction', {
