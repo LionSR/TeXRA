@@ -1062,6 +1062,10 @@ show` print the same notice, and the new `texra agents customize`,
 
 ### Bug Fixes
 
+- **A failed document task now says why in text output.** `texra run`
+  and `texra resume` with `--output-format text` print the run's reply (for
+  example, which documents did not compile and where their logs are)
+  between `FAILED` and the run-artifacts line. JSON output is unchanged.
 - **An awaited sub-agent's report is now kept and viewable.** `executions
 view` on a sub-agent the parent waited for shows its report instead of
   "No report found".

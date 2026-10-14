@@ -407,9 +407,15 @@ export function formatWorkflowTextResult(result: CliWorkflowRunResult): string {
     const diagnosticPath =
       result.runDirectory ??
       finalWorkflowOutput(result.output.documents.outputs)?.absolutePath;
-    return diagnosticPath
-      ? `FAILED\nRun artifacts: ${diagnosticPath}`
-      : 'FAILED';
+    // The reply of a failed run is its error (the uncompiled documents and
+    // their logs), so the text result says it beside where the artifacts are.
+    return [
+      'FAILED',
+      result.output.response.trim(),
+      diagnosticPath && `Run artifacts: ${diagnosticPath}`,
+    ]
+      .filter(Boolean)
+      .join('\n');
   }
   if (
     result.outcome === RUN_OUTCOME.CANCELLED &&

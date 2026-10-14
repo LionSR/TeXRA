@@ -533,6 +533,19 @@ describe('CLI workflow output resolution', () => {
     expect(formatWorkflowTextResult(result)).toBe('/run/r2/appendix.tex');
   });
 
+  it('says a failed task reply in the text result', () => {
+    const failed = cliWorkflowResult([], RUN_OUTCOME.FAILED);
+    const result: CliWorkflowRunResult = {
+      ...failed,
+      output: { ...failed.output, response: 'main.tex did not compile.\n' },
+      runDirectory: '/run',
+    };
+
+    expect(formatWorkflowTextResult(result)).toBe(
+      'FAILED\nmain.tex did not compile.\nRun artifacts: /run',
+    );
+  });
+
   it('reports run storage instead of one provisional file after cancellation', () => {
     const result: CliWorkflowRunResult = {
       ...cliWorkflowResult(
