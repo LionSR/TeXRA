@@ -122,7 +122,9 @@ function describe(checker, symbol) {
         )
         .map(
           (member) =>
-            `${member.name}: ${checker.typeToString(checker.getTypeOfSymbolAtLocation(member, declaration), undefined, FULL)}`,
+            // A symbol-keyed member's name carries the compilation's symbol
+            // id (`__@iterator@127`), which shifts with any dependency.
+            `${member.name.replace(/^__@(.+)@\d+$/, '[$1]')}: ${checker.typeToString(checker.getTypeOfSymbolAtLocation(member, declaration), undefined, FULL)}`,
         )
         .toSorted();
     const staticType = checker.getTypeOfSymbol(target);
