@@ -32,7 +32,7 @@ import {
   aggregateOf,
   decodeRow,
   EARLIER_RUNS,
-  EVENT_COLUMNS,
+  pluginFactArm,
   EVENT_FROM,
   RowSchema,
   type SqlRow,
@@ -45,14 +45,27 @@ const EarlierRowSchema = z.object({
   type: z.string(),
 });
 
-/** Every run's plugin facts, when an arm has a floor: a fact's version is
- *  in its payload, so the reader decodes each (`decodeRow`) to find the
- *  runs holding one an earlier build wrote. */
-const earlierPluginFactRows = (arms: PluginArms): string | null =>
-  Object.values(arms).some((arm) => pluginFactFloor(arm) > 1)
-    ? `SELECT ${EVENT_COLUMNS} FROM ${EVENT_FROM}
-        WHERE s.kind = 'run' AND e.type = 'plugin.fact'`
-    : null;
+/** Every run's plugin fact, its envelope and raw payload: a fact's version
+ *  is in its payload, read in TypeScript. Large strings are blob refs, so
+ *  the payload's header is small; no blob is joined or inflated. */
+const RUN_PLUGIN_FACTS = `SELECT s.logical_id AS logicalId, e."commit" AS "commit",
+  e.data AS data FROM ${EVENT_FROM}
+  WHERE s.kind = 'run' AND e.type = 'plugin.fact'`;
+
+/** A plugin fact row's header: the top-level fields `decodeRow` reads. A
+ *  row this cannot read is left to `decodeRow`, which reads it as damaged. */
+const PluginFactHeaderSchema = z.object({
+  plugin: z.string(),
+  kind: z.string(),
+  version: z.int(),
+});
+const factHeader = (data: unknown) => {
+  try {
+    return PluginFactHeaderSchema.safeParse(JSON.parse(String(data))).data;
+  } catch {
+    return undefined;
+  }
+};
 
 /** A statement runner over the reader's connection. */
 type Exec<E> = (
@@ -114,7 +127,8 @@ export function rowReader<E>(
     mark(runId, true);
     if (!earlier.has(runId)) earlier.set(runId, row);
   };
-  const facts = earlierPluginFactRows(arms);
+  // Only an arm with a floor can hold an earlier build's fact.
+  const floored = Object.values(arms).some((arm) => pluginFactFloor(arm) > 1);
   /** Find, once, every run holding an earlier build's row. */
   const scan = Effect.gen(function* () {
     if (scanned) return;
@@ -126,16 +140,18 @@ export function rowReader<E>(
           new DatabaseRowEarlier({ commit, type }),
         );
       }
-    for (const row of facts === null ? [] : yield* exec(facts, [])) {
-      const decoded = decodeRow(row, arms);
+    for (const row of floored ? yield* exec(RUN_PLUGIN_FACTS, []) : []) {
+      const { logicalId, commit } = EarlierRowSchema.omit({
+        type: true,
+      }).parse(row);
+      const header = factHeader(row.data);
+      const arm = header && pluginFactArm(header, commit, arms);
       if (
-        Result.isFailure(decoded) &&
-        decoded.failure._tag === 'DatabaseRowEarlier'
+        arm &&
+        Result.isFailure(arm) &&
+        arm.failure._tag === 'DatabaseRowEarlier'
       )
-        markEarlier(
-          RunIdSchema.parse(RowSchema.parse(row).logicalId),
-          decoded.failure,
-        );
+        markEarlier(RunIdSchema.parse(logicalId), arm.failure);
     }
     scanned = true;
   });

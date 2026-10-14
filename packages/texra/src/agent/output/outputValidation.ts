@@ -41,12 +41,13 @@ export const checkExpectedOutputs = Effect.fn('documents.checkExpectedOutputs')(
       { concurrency: 'unbounded' },
     );
     const missing = results.filter((r) => !r.exists).map((r) => r.file);
-    deps.logger.debug(
-      missing.length > 0
-        ? `Missing expected outputs for round ${currRound}`
-        : `All ${expected.length} expected outputs exist after round ${currRound}`,
-      { data: missing },
-    );
+    if (expected.length > 0)
+      deps.logger.debug(
+        missing.length > 0
+          ? `Missing expected outputs for round ${currRound}`
+          : `All ${expected.length} expected outputs exist after round ${currRound}`,
+        { data: missing },
+      );
 
     const round = ensureRoundData(state, currRound);
     round.missingOutputs = [

@@ -209,7 +209,7 @@ const revisionContext = Effect.fn('documents.revisionContext')(function* (
 export const DocumentExtractTool = defineTool({
   name: 'document_extract',
   description:
-    "Take the documents out of the reply a revision's agent run gave (`run`, the run id `agent()` resolved with): they become the revision's output files, with their lineage and diff stats. Resolves to `{ files, missing }`.",
+    "Take the documents out of the reply a revision's agent run gave (`run`, the run id `agent()` resolved with): they become the revision's output files, with their lineage and diff stats. Resolves to `{ files, missing }`: `missing` names the expected files the revision lacks, and `<unextracted document N>` for each document its reply held that did not extract.",
   scriptReturns: '{ files: string[]; missing: string[] }',
   replay: 'safe',
   schema: z.strictObject({
