@@ -114,8 +114,6 @@ export class TraceEmitter implements AgentTrace {
       label,
       parentId: options.parent?.id,
       kind: options.kind,
-      index: options.index,
-      total: options.total,
     });
     return new StageHandleImpl(this, id);
   }

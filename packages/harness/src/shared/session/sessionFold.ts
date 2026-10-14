@@ -653,7 +653,7 @@ function nonEmpty(text: string | undefined): string | undefined {
 }
 
 /** A run's newest operational summary, for one with no reply to show (a
- *  script's run, a task's recipe): what its tool, phase, card, error, or
+ *  script's run, a task's recipe): what its tool, card, error, or
  *  plain log row last said. */
 function operationalLatestLine(
   rows: readonly TranscriptRow[],
@@ -663,11 +663,6 @@ function operationalLatestLine(
     if (row.kind === 'tool') {
       const line =
         nonEmpty(row.toolUse.headerSummary) ?? nonEmpty(row.model.headerLabel);
-      if (line) return line;
-      continue;
-    }
-    if (row.kind === 'phase') {
-      const line = nonEmpty(row.phaseLabel);
       if (line) return line;
       continue;
     }

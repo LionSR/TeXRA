@@ -57,8 +57,8 @@ export interface TranscriptRowBase {
   /** True when the row belongs to the verbose tier of its host's chrome. */
   readonly verbose?: boolean;
   readonly groupId?: string;
-  /** Source vocabulary. Absent on the two rows with no message type of their
-   *  own: `phase` (a group row) and `compactionActivity` (a projection). */
+  /** Source vocabulary. Absent on the one row with no message type of its
+   *  own, `compactionActivity` (a projection). */
   readonly messageType?: MessageType;
   /** Present when a host synthesized this row rather than the fold building
    *  it from an event: a local notice the run itself never recorded. Such a
@@ -204,17 +204,8 @@ export interface CompactionActivityRow extends TranscriptRowBase {
   readonly label: string;
 }
 
-export interface PhaseRow extends TranscriptRowBase {
-  readonly kind: 'phase';
-  /** `Reduce (2/3)` */
-  readonly heading: string;
-  readonly phaseLabel: string;
-  readonly phaseIndex?: number;
-  readonly phaseTotal?: number;
-}
-
 /** A plain log line: a `default` row, a row with no message type, or a
- *  non-phase group heading on a stream that keeps its lifecycle inline. */
+ *  group heading on a stream that keeps its lifecycle inline. */
 export interface LogRow extends TranscriptRowBase {
   readonly kind: 'log';
   readonly text: TranscriptText;
@@ -232,7 +223,6 @@ export type TranscriptRow =
   | ContextManagementRow
   | ProgressStatusRow
   | CompactionActivityRow
-  | PhaseRow
   | LogRow;
 
 export type TranscriptRowKind = TranscriptRow['kind'];
@@ -250,7 +240,6 @@ export type TranscriptRowKind = TranscriptRow['kind'];
 const IMMEDIATELY_SETTLED_ROW_KINDS = new Set<TranscriptRowKind>([
   'user',
   'error',
-  'phase',
   'fileList',
   'missingOutputs',
   'latexdiff',
@@ -316,7 +305,6 @@ export function isSettledRow(
     case 'latexdiff':
     case 'contextManagement':
     case 'progressStatus':
-    case 'phase':
     case 'log':
       return true;
     default:
@@ -335,8 +323,6 @@ export function rowHeadline(row: ReadonlyDeep<TranscriptRow>): string {
     case 'error':
     case 'progressStatus':
       return row.summary.full;
-    case 'phase':
-      return row.heading;
     case 'thinking':
       return 'Thinking';
     case 'scratchpad':

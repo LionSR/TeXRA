@@ -14,7 +14,6 @@ import {
   ERROR_ENTRY_PREFIX,
   NOTICE_ENTRY_PREFIX,
   SKIP_CIRCLE,
-  STATUS_DIAMOND,
   STATUS_DOT,
   TICK,
   WARNING,
@@ -103,13 +102,6 @@ const ROW_GEOMETRY = {
     marginBottomRows: 0,
     marginTopRows: 0,
   },
-  phase: {
-    firstPrefix: '',
-    continuationPrefix: '  ',
-    inset: 0,
-    marginBottomRows: 0,
-    marginTopRows: 1,
-  },
   tool: {
     firstPrefix: '',
     continuationPrefix: '',
@@ -166,7 +158,7 @@ function wrapWithPrefix(
   firstPrefix: string,
   continuationPrefix: string,
 ): readonly string[] {
-  // Budget against the wider gutter: roles like `phase` indent continuations
+  // Budget against the wider gutter: roles like `fileList` indent continuations
   // further than the first line, so wrapping to the first prefix alone would
   // push every wrapped row past `columns` and let the terminal re-wrap it.
   const gutter = Math.max(
@@ -290,18 +282,6 @@ function entryLines(
       // terminal row. Other modes paint the wrapped text projection directly.
       return useRichDisplay ? lines : wrapDisplayLines(lines, columns);
     }
-    case 'phase':
-      return [
-        ...wrapWithPrefix(
-          // `row.heading` is `formatWorkflowPhaseHeading` over the same three
-          // fields, computed once by `phaseRow`.
-          `${STATUS_DIAMOND} ${headline}`,
-          columns,
-          ROW_GEOMETRY.phase.firstPrefix,
-          ROW_GEOMETRY.phase.continuationPrefix,
-        ),
-        ...body,
-      ];
     default: {
       const geometry = ROW_GEOMETRY[row.kind];
       return [
@@ -341,7 +321,7 @@ export function transcriptEntryLayout(
     /** The row rendered directly above this one, when the caller knows it.
      *  Yoga does not collapse adjacent margins, so without this a boundary
      *  where both sides declare a separator costs two blank rows instead of
-     *  one (user to user, user to phase, multi-line tool to phase). */
+     *  one (user to user). */
     readonly previousEntry?: TranscriptRow;
     readonly width?: number;
   } = {},

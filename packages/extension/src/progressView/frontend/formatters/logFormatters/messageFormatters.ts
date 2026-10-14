@@ -26,7 +26,6 @@ import type { LogLevel } from '@shared/schemas';
 import type {
   ErrorRow,
   LogRow,
-  PhaseRow,
   ProgressStatusRow,
   UserRow,
 } from '@shared/transcript';
@@ -124,25 +123,10 @@ export function formatErrorTemplate(row: ErrorRow): FormatResult {
   return html`<wa-details appearance="plain" icon-placement="end" class="banner-details banner-details--error message-disclosure" data-log-id=${ifDefined(id)} data-group-id=${ifDefined(groupId)}>${summaryTemplate}${contentTemplate}</wa-details>`;
 }
 
-function plainLineText(row: LogRow | PhaseRow): string {
-  switch (row.kind) {
-    case 'phase':
-      return row.heading;
-    case 'log':
-      return row.text.full;
-  }
-}
-
-/**
- * Format a plain log line as TemplateResult. `PhaseRow` shares the shape and
- * is in the union to keep the row dispatch exhaustive; this host routes every
- * phase heading to its task-group surface.
- */
-export function formatDefaultLogMessageTemplate(
-  row: LogRow | PhaseRow,
-): FormatResult {
+/** Format a plain log line as TemplateResult. */
+export function formatDefaultLogMessageTemplate(row: LogRow): FormatResult {
   const { id, level, timestamp, groupId, verbose } = row;
-  const text = plainLineText(row);
+  const text = row.text.full;
   const levelIcon = buildLevelIcon(level);
   const { timeDisplay, tooltipTimestamp } = formatDisplayTimestamp(
     new Date(timestamp),

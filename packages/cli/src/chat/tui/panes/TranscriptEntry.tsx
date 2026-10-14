@@ -71,14 +71,11 @@ function PlainEntryRows({
     rowColor = COLOR_ERROR;
   } else if (entry.kind === 'compactionActivity') {
     rowColor = COMPACTION_ACTIVITY_STATUS_STYLE[entry.block.status].color;
-  } else if (entry.kind === 'phase') {
-    rowColor = COLOR_HINT;
   }
 
   return (
     <Box {...boxProps}>
       <Text
-        bold={entry.kind === 'phase'}
         color={rowColor}
         dimColor={entry.kind === 'log' && entry.origin === 'local'}
         inverse={entry.kind === 'user'}

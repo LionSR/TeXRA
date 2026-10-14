@@ -22,7 +22,6 @@ import type { RunLabels } from '@shared/tools/executionsDisplay';
 import {
   compactionActivityRow,
   logPayloadRow,
-  phaseRow,
   plainLogRow,
   streamingTextRow,
   toolRow,
@@ -71,8 +70,6 @@ export type Slot =
       readonly kind: 'stage';
       base: TranscriptRowBase;
       readonly label: string;
-      /** Present on a workflow phase, whose heading is always a row. */
-      readonly phase?: { readonly index?: number; readonly total?: number };
       open: boolean;
     }
   | {
@@ -332,26 +329,13 @@ export function write(d: Draft, slot: Slot): void {
 function rowOf(
   slot: Slot,
   live: string | undefined,
-  previous: TranscriptRow | undefined,
   ctx: TranscriptContext,
 ): TranscriptRow | undefined {
   switch (slot.kind) {
-    case 'stage': {
-      if (slot.phase) {
-        // A reopened phase with no counts of its own keeps the ones the
-        // earlier row established, so `(2/3)` does not vanish.
-        const prior = previous?.kind === 'phase' ? previous : undefined;
-        return phaseRow(
-          slot.base,
-          slot.label,
-          slot.phase.index ?? prior?.phaseIndex,
-          slot.phase.total ?? prior?.phaseTotal,
-        );
-      }
+    case 'stage':
       return ctx.lifecycleToTaskGroups
         ? undefined
         : plainLogRow(slot.base, slot.label);
-    }
     case 'text': {
       const text = live ?? slot.text;
       return slot.rowKind
@@ -385,7 +369,7 @@ export function paint(d: Draft, slot: Slot): void {
     ix.live.set(id, slot.text);
   }
   const live = streamingText || runningTool ? ix.live.get(id) : undefined;
-  const row = rowOf(slot, live, rowById(next, id), d.ctx);
+  const row = rowOf(slot, live, d.ctx);
   if (row) upsertRow(next, row);
   const current = rowById(next, id);
   if (current?.kind === 'thinking') {

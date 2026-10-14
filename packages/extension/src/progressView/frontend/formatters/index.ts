@@ -61,7 +61,6 @@ const ROW_FORMATTERS: RowFormatters = {
   contextManagement: formatContextManagementTemplate,
   progressStatus: formatProgressStatusTemplate,
   compactionActivity: formatCompactionActivityTemplate,
-  phase: formatDefaultLogMessageTemplate,
   log: formatDefaultLogMessageTemplate,
 };
 

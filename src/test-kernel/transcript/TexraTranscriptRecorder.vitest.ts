@@ -175,7 +175,6 @@ describe('createTestRunTrace settlement', () => {
     const runId = 'stream:terminal-settlement' as RunId;
     const { trace, finalize, settlePhase, row, rows } = attachRecorder(runId);
 
-    const phase = trace.openStage('Audit', { kind: 'phase' });
     const response = trace.openRun(MESSAGE_TYPES.MODEL_RESPONSE);
     response.append('Partial answer');
     trace.emit({
@@ -187,12 +186,11 @@ describe('createTestRunTrace settlement', () => {
 
     settlePhase(RUN_PHASE.CANCELLED);
 
-    // The phase row settled first (1); the response stream, whose text only
-    // ever streamed live, settles second (2) and has no row of its own.
-    expect(row(phase.id)).toMatchObject({ settlementSeqNo: 1 });
+    // The response stream, whose text only ever streamed live, settles
+    // first (1) and has no row of its own.
     expect(row(response.id)).toBeUndefined();
     expect(row('tool:pending')).toMatchObject({
-      settlementSeqNo: 3,
+      settlementSeqNo: 2,
       log: {
         status: 'failed',
         error: 'The task ended before this tool completed.',
@@ -215,7 +213,7 @@ describe('createTestRunTrace settlement', () => {
     });
     expect(row(response.id)).toBeUndefined();
     expect(row('tool:pending')).toMatchObject({
-      settlementSeqNo: 3,
+      settlementSeqNo: 2,
       log: {
         status: 'failed',
         error: 'The task ended before this tool completed.',
@@ -226,7 +224,7 @@ describe('createTestRunTrace settlement', () => {
     finalize('Fresh turn response');
     const responses = assistantRows(rows());
     expect(responses).toMatchObject([
-      { settlementSeqNo: 4, text: { full: 'Fresh turn response' } },
+      { settlementSeqNo: 3, text: { full: 'Fresh turn response' } },
     ]);
     expect(responses[0]?.id).not.toBe(response.id);
   });

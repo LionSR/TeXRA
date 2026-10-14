@@ -1,12 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
-import { MESSAGE_TYPES, type RunId, type ToolUseLog } from '@shared/schemas';
+import { MESSAGE_TYPES, type ToolUseLog } from '@shared/schemas';
 import {
   logPayloadRow,
   toolRow,
   type TranscriptRowBase,
 } from '@shared/transcript';
-import { createTestRunTrace } from '@test/support/sessionTestUtils';
 
 const base: TranscriptRowBase = {
   id: 'a',
@@ -100,20 +99,5 @@ describe('transcript row builders', () => {
       'Arguments:',
       'Status:',
     ]);
-  });
-
-  it('keeps phase counts when a phase closes', () => {
-    const runTrace = createTestRunTrace('phase' as RunId);
-    const phase = runTrace.trace.openStage('Reduce', {
-      kind: 'phase',
-      index: 1,
-      total: 3,
-    });
-    const heading = () =>
-      runTrace.rows().flatMap((row) => (row.kind === 'phase' ? [row] : []))[0]
-        ?.heading;
-    expect(heading()).toBe('Reduce (2/3)');
-    phase.end();
-    expect(heading()).toBe('Reduce (2/3)');
   });
 });

@@ -10,7 +10,6 @@
  */
 export {
   logPayloadRow,
-  phaseRow,
   plainLogRow,
   streamingTextRow,
   toolRow,
@@ -27,7 +26,6 @@ export {
   type LatexdiffRow,
   type LogRow,
   type MissingOutputsRow,
-  type PhaseRow,
   type ProgressStatusRow,
   type StatItem,
   type StreamingTextRow,

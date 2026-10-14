@@ -31,8 +31,6 @@ export const TranscriptEventSchemas = {
     label: z.string(),
     parentId: z.string().nullish(),
     kind: StageKindSchema.nullish(),
-    index: z.int().nonnegative().nullish(),
-    total: z.int().nonnegative().nullish(),
   }),
   stageEnd: trace('stage.end', { id: z.string(), status: RunOutcomeSchema }),
   toolStart: trace('tool.start', {

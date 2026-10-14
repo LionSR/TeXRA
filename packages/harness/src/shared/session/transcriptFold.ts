@@ -87,8 +87,6 @@ function record(d: Draft, event: TranscriptEvent): void {
       if (event.kind === 'session') {
         ix.pendingModelResponseId = undefined;
       }
-      const index = event.index ?? undefined;
-      const total = event.total ?? undefined;
       write(d, {
         kind: 'stage',
         base: open(
@@ -99,14 +97,6 @@ function record(d: Draft, event: TranscriptEvent): void {
           true,
         ),
         label: event.label,
-        ...(event.kind === 'phase'
-          ? {
-              phase: {
-                ...(index !== undefined ? { index } : {}),
-                ...(total !== undefined ? { total } : {}),
-              },
-            }
-          : {}),
         open: true,
       });
       foldTaskGroup(d, event);

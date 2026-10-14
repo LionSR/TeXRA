@@ -1,4 +1,4 @@
-import { type ScriptTally, type TaskGroup } from '@shared/schemas';
+import { type ScriptTally } from '@shared/schemas';
 import { filterNotNullish } from '@utils/core';
 
 const CALL_FILE_PREVIEW_LIMIT = 3;
@@ -22,50 +22,6 @@ export function formatWorkflowCallFiles(files: {
     files.media.length > 0 ? `${files.media.length} media` : undefined,
   ].filter(filterNotNullish);
   return parts.length > 0 ? parts.join(' · ') : undefined;
-}
-
-/** One workflow phase as its emitter names and orders it. */
-export interface WorkflowPhaseHeading {
-  readonly phaseLabel: string;
-  /** 0-based phase order within the run, when the emitter provides it. */
-  readonly phaseIndex?: number;
-  /** Total phase count for the run, when the emitter provides it. */
-  readonly phaseTotal?: number;
-}
-
-/**
- * One phase task group's heading facts, under the names the heading copy uses.
- * Both hosts hold a phase as a `TaskGroup` — the board's group tree and the
- * terminal's dashboard — so the field mapping is stated once here rather than
- * inlined at each call to `formatWorkflowPhaseHeading`.
- */
-export function workflowPhaseHeadingOfGroup(
-  group: Pick<TaskGroup, 'name' | 'index' | 'total'>,
-): WorkflowPhaseHeading {
-  return {
-    phaseLabel: group.name,
-    ...(group.index !== undefined ? { phaseIndex: group.index } : {}),
-    ...(group.total !== undefined ? { phaseTotal: group.total } : {}),
-  };
-}
-
-/**
- * Canonical heading copy for one workflow phase, shared by every surface that
- * names a phase: the transcript's `◆` divider, the live run-status band, the
- * status bar's stage slot, and the focused run's child-list group headers. The
- * leading glyph is left to the caller — the band deliberately carries none.
- * The index is 0-based on the wire and 1-based in the copy.
- *
- * `Reduce (2/3)` with a position and a planned total, `Reduce (2)` with only a
- * position — a phase appended after the declared list keeps its position rather
- * than losing it — and the bare label for a dynamically opened phase.
- */
-export function formatWorkflowPhaseHeading(
-  phase: WorkflowPhaseHeading,
-): string {
-  if (phase.phaseIndex === undefined) return phase.phaseLabel;
-  const total = phase.phaseTotal !== undefined ? `/${phase.phaseTotal}` : '';
-  return `${phase.phaseLabel} (${phase.phaseIndex + 1}${total})`;
 }
 
 /** Generated-token marker, prefixed to a compact token count (`↓1.2k`)

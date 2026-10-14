@@ -48,7 +48,6 @@ import {
   type ToolRow,
   type TranscriptRow,
 } from '@shared/transcript';
-import { formatWorkflowPhaseHeading } from '@shared/transcript/workflowCall';
 import {
   loadInk,
   renderOutputAtTerminalSize,
@@ -123,24 +122,6 @@ function toolEntry(
   };
 }
 
-function phaseRow(
-  id: string,
-  phaseLabel: string,
-  phaseIndex?: number,
-  phaseTotal?: number,
-): TranscriptRow {
-  return {
-    kind: 'phase',
-    id,
-    timestamp: 0,
-    level: 'info',
-    heading: formatWorkflowPhaseHeading({ phaseLabel, phaseIndex, phaseTotal }),
-    phaseLabel,
-    ...(phaseIndex !== undefined ? { phaseIndex } : {}),
-    ...(phaseTotal !== undefined ? { phaseTotal } : {}),
-  };
-}
-
 describe('CLI conversation transcript', () => {
   it('keeps only explicit finalized entries in scrollback', () => {
     const user = entry('u1', 'user', '1+1', true);
@@ -182,11 +163,11 @@ describe('CLI conversation transcript', () => {
 
   it('keeps finalized rows behind an unfinished tool row live', () => {
     const tool = toolEntry('t1', 'in_progress');
-    const toolPhase = phaseRow('p1', 'After tool');
+    const after = entry('p1', 'user', 'After tool', true);
 
     const toolSplit = splitTranscriptEntries(
-      [tool, toolPhase],
-      settledPrefix([tool, toolPhase]),
+      [tool, after],
+      settledPrefix([tool, after]),
       RUN_PHASE.RUNNING,
     );
     expect(toolSplit.finalized).toEqual([]);
@@ -1156,7 +1137,6 @@ describe('transcript entry margin collapse', () => {
     entry(id, 'user', 'a user turn', true);
   const assistant = (id: string): TranscriptRow =>
     entry(id, 'assistant', 'a reply', true);
-  const phase = (id: string): TranscriptRow => phaseRow(id, 'Scan');
 
   const topRows = (row: TranscriptRow, previousEntry?: TranscriptRow): number =>
     transcriptEntryLayout(row, { previousEntry, width: 60 }).marginTopRows;
@@ -1164,13 +1144,11 @@ describe('transcript entry margin collapse', () => {
   it('absorbs the top margin into the previous entry’s bottom margin', () => {
     // Both sides declare 1, so the boundary is worth 1 row, not 2.
     expect(topRows(user('u2'), user('u1'))).toBe(0);
-    expect(topRows(phase('p1'), user('u1'))).toBe(0);
   });
 
   it('keeps the separator when the entry above declares none', () => {
     // An assistant turn has no bottom margin, so the next turn owns the gap.
     expect(topRows(user('u2'), assistant('a1'))).toBe(1);
-    expect(topRows(phase('p1'), assistant('a1'))).toBe(1);
   });
 });
 

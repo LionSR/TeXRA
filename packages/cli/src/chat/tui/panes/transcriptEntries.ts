@@ -123,7 +123,6 @@ const ROW_KIND_IS_WIDGET = {
   compactionActivity: false,
   error: false,
   log: false,
-  phase: false,
   user: false,
   contextManagement: true,
   fileList: true,

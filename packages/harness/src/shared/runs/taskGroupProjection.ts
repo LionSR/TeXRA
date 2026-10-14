@@ -70,7 +70,5 @@ export function taskGroupOnStage(
     status: RUN_PHASE.RUNNING,
     ...(event.parentId ? { parentGroupId: event.parentId } : {}),
     ...(event.kind != null ? { kind: event.kind } : {}),
-    ...(event.index != null ? { index: event.index } : {}),
-    ...(event.total != null ? { total: event.total } : {}),
   };
 }

@@ -23,7 +23,6 @@ import {
   hasIncompleteEmbeddedSubagentFollowup,
   summarizeSubagentFollowup,
 } from '@shared/subagentFollowup';
-import { formatWorkflowPhaseHeading } from '@shared/transcript/workflowCall';
 import { assertNever } from '@utils/core';
 import { formatCompactTokenCount } from '@utils/text/stringUtils';
 
@@ -34,7 +33,6 @@ import type {
   ErrorRowDetail,
   LoadedMediaRef,
   LogRow,
-  PhaseRow,
   StatItem,
   StreamingTextRow,
   ToolCallFacts,
@@ -180,31 +178,8 @@ const TOKENS_FREED_ACTIONS = new Set(['clear_tool_uses', 'clear_thinking']);
 const MAX_TOKENS_REDUCED_DISPLAY_THRESHOLD = 32_768;
 
 // ---------------------------------------------------------------------------
-// Phase, tool, and workflow-call rows
+// Tool and workflow-call rows
 // ---------------------------------------------------------------------------
-
-/** A workflow phase header, the row a script writes per `phase()`; no row
- *  when the label is blank. */
-export function phaseRow(
-  base: TranscriptRowBase,
-  phaseLabel: string,
-  phaseIndex: number | undefined,
-  phaseTotal: number | undefined,
-): PhaseRow | undefined {
-  if (phaseLabel.trim().length === 0) return undefined;
-  return {
-    ...base,
-    kind: 'phase',
-    heading: formatWorkflowPhaseHeading({
-      phaseLabel,
-      ...(phaseIndex !== undefined ? { phaseIndex } : {}),
-      ...(phaseTotal !== undefined ? { phaseTotal } : {}),
-    }),
-    phaseLabel,
-    ...(phaseIndex !== undefined ? { phaseIndex } : {}),
-    ...(phaseTotal !== undefined ? { phaseTotal } : {}),
-  };
-}
 
 /** A tool card from its decoded payload; `output` is the live text a running
  *  card printed, which paints in place of the durable output. */

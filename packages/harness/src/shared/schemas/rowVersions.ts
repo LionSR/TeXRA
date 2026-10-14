@@ -91,7 +91,10 @@ export const ROW_KINDS: Readonly<Record<SessionEventDraft['type'], RowKind>> = {
   'approval.policy': V1,
   'run.position': V1,
   log: V1,
-  'stage.start': V1,
+  // v2: no `phase` kind and no `index`/`total` (no upcaster, as
+  // `run.config`: an earlier build's workflow phase stage would fail its
+  // run as damaged rather than read as that build's).
+  'stage.start': { version: 2, upcast: [] },
   'stage.end': V1,
   'tool.start': V1,
   'tool.end': V1,
