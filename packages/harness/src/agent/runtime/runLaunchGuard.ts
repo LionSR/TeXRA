@@ -57,11 +57,7 @@ export const endRunOutsideLifecycle = (
           },
         }
       : {}),
-  }).pipe(
-    Effect.flatMap((finalized) =>
-      finalized.ok ? Effect.void : Effect.fail(ensureError(finalized.error)),
-    ),
-  );
+  }).pipe(Effect.asVoid);
 
 /**
  * Let go of `runId`'s claim where no hold of this process keeps it (a

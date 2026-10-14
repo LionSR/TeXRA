@@ -1,4 +1,4 @@
-import { Cause, Effect, Exit } from 'effect';
+import { Cause, Effect, Exit, Result } from 'effect';
 
 import { logSdkError, type ResultEvent, type StageHandle } from '@agent/trace';
 import { finalizeRun } from '@agent/storage/runLifecycle';
@@ -94,7 +94,7 @@ interface FinalizeRunTerminalResult {
   readonly event: ResultEvent;
   /** The `run.end` row write's failure: the terminal still settled and
    *  untracked, and the event reports FAILED with its reason. */
-  readonly persistFailure?: unknown;
+  readonly persistFailure?: Error;
   /** False for a run that never opened: no row was written, so its
    *  failure is its launch's to present. */
   readonly recorded: boolean;
@@ -162,13 +162,7 @@ export const finalizeRunTerminal = Effect.fn('finalizeRunTerminal')(
       error,
       output,
       settlement,
-    });
-    if (!finalization.ok)
-      yield* logLifecycleWarning('Failed to finalize durable run state', {
-        agentIdentifier: handle.agentName,
-        runId: handle.runId,
-        error: finalization.error,
-      });
+    }).pipe(Effect.result);
     // Guard the cleanup: a throw from untrack's listeners must not escape
     // past a settled result. Only this handle's registration goes; a run
     // that started again is its successor's.
@@ -183,14 +177,20 @@ export const finalizeRunTerminal = Effect.fn('finalizeRunTerminal')(
         }),
       ),
     );
-    if (finalization.ok) return { event, recorded: finalization.recorded };
+    if (Result.isSuccess(finalization))
+      return { event, recorded: finalization.success.recorded };
     // A run whose `run.end` did not commit failed, whatever it reported.
-    const unsaved = ensureError(finalization.error);
+    const unsaved = finalization.failure;
+    yield* logLifecycleWarning('Failed to finalize durable run state', {
+      agentIdentifier: handle.agentName,
+      runId: handle.runId,
+      error: unsaved,
+    });
     const message = `The run's end could not be saved: ${unsaved.message}`;
     const failed = { kind: classifyAgentError(unsaved), message };
     return {
       event: { ...event, outcome: RUN_OUTCOME.FAILED, error: failed },
-      persistFailure: finalization.error,
+      persistFailure: unsaved,
       recorded: false,
     };
   },

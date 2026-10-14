@@ -89,7 +89,7 @@ describe('run metadata updates', () => {
         runId: id,
         outcome: 'failed',
       });
-      expect(ended).toMatchObject({ ok: true, outcome: 'failed' });
+      expect(ended.outcome).toBe('failed');
       const ends = yield* session.log.rows(qualifyAggregateId('run', id), [
         'run.end',
       ]);
@@ -108,7 +108,7 @@ describe('run metadata updates', () => {
           outcome: 'cancelled',
           keepExistingOutcome: true,
         }),
-      ).toEqual({ ok: true, outcome: 'completed', recorded: true });
+      ).toEqual({ outcome: 'completed', recorded: true });
       expect(yield* getRunRecords(session, id).readRunEnd()).toMatchObject({
         outcome: 'completed',
       });

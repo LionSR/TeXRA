@@ -51,6 +51,11 @@ function pinRunWorkingDirectory(
   return workingDirectory ? { ...record, workingDirectory } : record;
 }
 
+/** A defect is the path's failure, as a refusal is: its caller words it. */
+const defectAsFailure = Effect.catchDefect((defect) =>
+  Effect.fail(ensureError(defect)),
+);
+
 /** A resume's activation: its `run.activate`, the grants it ends, and a
  *  `run.config` if its configuration changed (its model kept: only a
  *  switch moves it). Read in the activation's transaction, under its claim. */
@@ -116,10 +121,7 @@ export const registerRun = Effect.fn('registerRun')(function* (
         : { activation: () => Effect.succeed(rows) },
     );
     if (born) yield* cell.append([]);
-  }).pipe(
-    // A registration that died wrote nothing: the caller refuses the launch.
-    Effect.catchDefect((defect) => Effect.fail(ensureError(defect))),
-  );
+  }).pipe(defectAsFailure); // one that died wrote nothing: launch refused
 });
 
 /** The rows that register a run, uncommitted (`run.start` first for a
@@ -187,7 +189,7 @@ export const registrationRows = Effect.fn('registrationRows')(function* (
         by: options.descriptionBy ?? 'model',
       });
     return events;
-  }).pipe(Effect.catchDefect((defect) => Effect.fail(ensureError(defect))));
+  }).pipe(defectAsFailure);
 });
 
 export interface FinalizeRunInput {
@@ -205,19 +207,13 @@ export interface FinalizeRunInput {
   readonly settlement?: TransactionPart;
 }
 
-export type FinalizeRunResult =
-  | {
-      readonly ok: true;
-      /** The outcome that stands on disk: the requested one, or the one
-       *  `keepExistingOutcome` retained, which a backstop settles to. */
-      readonly outcome: RunOutcome;
-      /** False for a run never born: its launch reports its failure. */
-      readonly recorded: boolean;
-    }
-  | {
-      readonly ok: false;
-      readonly error: unknown;
-    };
+/** A run's end as it stands on disk: the requested outcome, or the one
+ *  `keepExistingOutcome` retained, which a backstop settles to; `recorded`
+ *  is false for a run never born, whose launch reports its failure. */
+export interface FinalizedRun {
+  readonly outcome: RunOutcome;
+  readonly recorded: boolean;
+}
 
 /** A run's end in `append`'s job (halt, unapplied input, closure, `run.end`,
  *  settlement); an unloadable run's, all but the halt, loudly. */
@@ -301,7 +297,7 @@ const endOwnedChildren = Effect.fn('endOwnedChildren')(function* (
         ),
       );
     // Retired CANCELLED (an outcome it wrote stands), under its own claim.
-    const ended = yield* Effect.scoped(
+    yield* Effect.scoped(
       Effect.andThen(
         session.log.hold(child.runId, { ends: true }),
         finalizeRun(session, {
@@ -311,22 +307,20 @@ const endOwnedChildren = Effect.fn('endOwnedChildren')(function* (
         }),
       ),
     );
-    if (!ended.ok) return yield* Effect.fail(ensureError(ended.error));
   }
 });
 
 /** The one writer of a run's end ({@link endIn}, in its own transaction),
- *  driver's or not. Never fails: a persistence failure is `ok: false`. */
+ *  driver's or not. An end that does not commit fails it, after a FAILED
+ *  backstop end it tries alone, loudly. */
 export const finalizeRun = Effect.fn('finalizeRun')(function* (
   session: SessionHandle,
   input: FinalizeRunInput,
-): Effect.fn.Return<FinalizeRunResult> {
+): Effect.fn.Return<FinalizedRun, Error> {
   const { runId, outcome, keepExistingOutcome } = input;
-  const owned = yield* Effect.exit(
-    endOwnedChildren(session, runId, keepExistingOutcome === true),
+  yield* endOwnedChildren(session, runId, keepExistingOutcome === true).pipe(
+    defectAsFailure,
   );
-  if (Exit.isFailure(owned))
-    return { ok: false, error: ensureError(Cause.squash(owned.cause)) };
   const end = (ending: FinalizeRunInput) =>
     Effect.exit(
       session.log.transact((tx) =>
@@ -353,8 +347,7 @@ export const finalizeRun = Effect.fn('finalizeRun')(function* (
     const cause = ensureError(Cause.squash(status.cause)).message;
     yield* Effect.logWarning(`Run ${runId}: its settled end: ${cause}`);
     const landed = runEndFromEvents(read.success, runId);
-    if (landed !== null)
-      return { ok: true, outcome: landed.outcome, recorded: true };
+    if (landed !== null) return { outcome: landed.outcome, recorded: true };
     // The parent's notice rides this end's append (both commit or neither),
     // one per lifecycle (its `run.activate`) so a later loss is no replay;
     // a parent that refuses it is the end's note, on the card.
@@ -381,11 +374,11 @@ export const finalizeRun = Effect.fn('finalizeRun')(function* (
   if (Exit.isSuccess(status)) {
     const { persisted, recorded, after } = status.value;
     yield* after;
-    return { ok: true, outcome: persisted, recorded };
+    return { outcome: persisted, recorded };
   }
   // The last backstop, loud: the end alone, FAILED.
-  const error = Cause.squash(status.cause);
-  const message = `The run's end was not saved: ${ensureError(error).message}`;
+  const error = ensureError(Cause.squash(status.cause));
+  const message = `The run's end was not saved: ${error.message}`;
   yield* Effect.logWarning(`Run ${runId}: ${message}`);
   const backstop = yield* end({
     runId,
@@ -395,5 +388,5 @@ export const finalizeRun = Effect.fn('finalizeRun')(function* (
   });
   if (Exit.isFailure(backstop))
     yield* Effect.logError(`Run ${runId} reads as running: no end commits`);
-  return { ok: false, error };
+  return yield* Effect.fail(error);
 });

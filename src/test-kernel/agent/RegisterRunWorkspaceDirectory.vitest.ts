@@ -164,12 +164,11 @@ describe('run registration and finalization', () => {
         // The run's rows live until explicit deletion (C9): finalization writes
         // the terminal row and removes nothing beside it, so a failed write is
         // the whole failure and comes back unwrapped.
-        const result = yield* finalizeRun(session, {
-          runId,
-          outcome: 'failed',
-        });
-        expect(result).toMatchObject({ ok: false });
-        if (!result.ok) expect(result.error).toBe(failure);
+        expect(
+          yield* Effect.flip(
+            finalizeRun(session, { runId, outcome: 'failed' }),
+          ),
+        ).toBe(failure);
       }),
   );
 });

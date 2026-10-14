@@ -32,7 +32,7 @@
   "packages/harness/src/agent/runtime/subagentResults.ts": 1,
   "packages/harness/src/agent/runtime/ToolServices.ts": 2,
   "packages/harness/src/agent/storage/conversationFormat.ts": 1,
-  "packages/harness/src/agent/storage/runLifecycle.ts": 2,
+  "packages/harness/src/agent/storage/runLifecycle.ts": 1,
   "packages/harness/src/agent/storage/runListing.ts": 1,
   "packages/harness/src/agent/storage/runWorkspaceFiles.ts": 2,
   "packages/harness/src/agent/trace/helpers.ts": 2,

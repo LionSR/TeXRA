@@ -117,9 +117,9 @@ describe('deriveResumability', () => {
           Effect.die(new Error('metadata disk full')),
         );
 
-        expect(
-          yield* finalizeRun(session, { runId, outcome: RUN_OUTCOME.FAILED }),
-        ).toMatchObject({ ok: false });
+        yield* Effect.flip(
+          finalizeRun(session, { runId, outcome: RUN_OUTCOME.FAILED }),
+        );
 
         expect(yield* deriveResumability(runId, session)).toMatchObject({
           kind: 'checkpoint',
