@@ -1,11 +1,10 @@
 /**
  * Host-neutral orchestration for a full latexdiff run.
  *
- * Reads the run's recorded round outputs from the session's fold (the
- * `output.produced` facts, via {@link LatexRunDiscoveryPort.readRunOutputs}),
- * builds one diff operation per round output (and, when the workspace's
- * between-rounds setting is on, one per consecutive pair of rounds), and runs
- * them. That fold is the only source: run storage is never rescanned and no
+ * Takes the run's recorded round outputs (its documents, as the host's view
+ * of the session folds them), builds one diff operation per round output
+ * (and, when the workspace's between-rounds setting is on, one per
+ * consecutive pair of rounds), and runs them. That fold is the only source: run storage is never rescanned and no
  * workspace filename is parsed, so a run with no recorded outputs has no diff
  * operations. This is the single source of truth shared by every host (VS Code
  * command, desktop); each host keeps only its own UX (progress chrome,
@@ -25,6 +24,7 @@ import {
   roundIndexedEntries,
   type FileLocation,
   type OutputFileInfo,
+  type ReadonlyRoundIndexed,
   type RunId,
 } from '@shared/schemas';
 import type { LatexdiffMathMarkupValue } from '@texra/shared/constants/latexConfig';
@@ -36,7 +36,6 @@ import { readSettingFrom } from '@utils/config/platformSettings';
 import { LaTeXdiffService } from '../latexdiff';
 import { buildBetweenRoundDiffSuffix } from './diffFileNameManager';
 import type { WorkspaceRoots } from '@texra-ai/harness';
-import type { LatexRunDiscoveryPort } from './runDiscovery';
 import type {
   DiffProgressReporter,
   DiffRunOutcome,
@@ -57,6 +56,8 @@ export const runLatexdiffForRun = Effect.fn('runLatexdiffForRun')(
   function* (params: {
     /** The run whose recorded outputs are diffed. */
     readonly runId: RunId;
+    /** The run's recorded output files by round (`runOutputFiles`). */
+    readonly rounds: ReadonlyRoundIndexed<OutputFileInfo>;
     /**
      * The calling session's roots: the between-rounds setting is read from
      * them, the diff service is bound to them, and their workspace folder is
@@ -64,8 +65,6 @@ export const runLatexdiffForRun = Effect.fn('runLatexdiffForRun')(
      * file's folder when no folder is open).
      */
     readonly roots: WorkspaceRoots;
-    /** Agent-owned read of the run's recorded outputs, injected by hosts. */
-    readonly runDiscovery: LatexRunDiscoveryPort;
     readonly mathMarkup?: LatexdiffMathMarkupValue;
     /** Logger channel the diff run reports under (host-specific). */
     readonly channel: string;
@@ -75,8 +74,7 @@ export const runLatexdiffForRun = Effect.fn('runLatexdiffForRun')(
     Error,
     FileSystem.FileSystem | Path.Path | ChildProcessSpawner
   > {
-    const { runId, roots, mathMarkup, progress } = params;
-    const rounds = yield* params.runDiscovery.readRunOutputs(runId);
+    const { runId, rounds, roots, mathMarkup, progress } = params;
 
     // Hosts report an empty outcome as "no diff operations for this run".
     if (!Object.values(rounds).some((files) => files.length > 0)) {

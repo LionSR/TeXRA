@@ -14,7 +14,6 @@ import {
   type RunId,
   type FileLocation,
   type OutputFileInfo,
-  type RoundIndexed,
   type RunStorageFileLocation,
 } from '@shared/schemas';
 import {
@@ -61,7 +60,6 @@ export class LatexDiffManager {
 
   constructor(
     private readonly isRewrite: boolean,
-    private readonly getOutputFiles: () => RoundIndexed<OutputFileInfo>,
     private readonly logger: AgentTrace,
     private readonly runId: RunId,
     private readonly fileService: RunFileService,
@@ -143,6 +141,7 @@ export class LatexDiffManager {
 
   handleLatexdiffOfOutput(
     currRound: number,
+    outputFiles: readonly OutputFileInfo[],
     mapping: RoundFileMapping,
   ): Effect.Effect<RunStorageFileLocation[], never, DiffServices> {
     const execute = Effect.gen({ self: this }, function* () {
@@ -153,7 +152,6 @@ export class LatexDiffManager {
         return [];
       }
 
-      const outputFiles = this.getOutputFiles()[currRound] ?? [];
       if (outputFiles.length === 0) {
         this.logger.warn(
           `No output files found for round ${currRound}, skipping latexdiff operations`,

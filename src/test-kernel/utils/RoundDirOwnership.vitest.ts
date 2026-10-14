@@ -186,6 +186,5 @@ describe('round-dir ownership and editable .tex inheritance', () => {
 
   // Pins ensureMirroredInDiffRoundDir's `diff/r{round}` segment, which
   // (like ensureMirroredInRoundDir's `r{round}`) is now built from the
-  // shared workflowOutputRoundDir helper (@texra/shared/constants/workflowOutput)
-  // instead of an inlined path.dirname(workflowOutputPath(...)).
+  // shared workflowOutputRoundDir helper (@texra/shared/constants/workflowOutput).
 });

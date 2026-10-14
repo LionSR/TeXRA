@@ -1,20 +1,16 @@
 import { Effect, FileSystem } from 'effect';
 
 import type { AgentTrace } from '@agent/trace';
-import {
-  type CompileFailure,
-  type CompileResult,
-} from '@texra/shared/plugins/documentOutputs';
+import type { CompileFailure } from '@texra/shared/plugins/documentOutputs';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 const COMPILE_LOG_EXCERPT_CHAR_LIMIT = 12000;
 
 function formatCompileFailureRoundContext(
-  result: CompileResult | undefined,
-): string | undefined {
-  if (result?.status !== 'failed') return undefined;
-
-  const failedOutputs = result.failures
+  failures: readonly CompileFailure[],
+  logExcerpt: string,
+): string {
+  const failedOutputs = failures
     .map((failure) => `- ${failure.displayName} (${failure.logRelativePath})`)
     .join('\n');
 
@@ -27,7 +23,7 @@ function formatCompileFailureRoundContext(
     failedOutputs,
     '',
     'Log excerpt:',
-    result.logExcerpt.trim(),
+    logExcerpt.trim(),
     '</compile_failure_context>',
   ].join('\n');
 }
@@ -44,7 +40,7 @@ export function appendCompileFailureRoundContext(
 }
 
 /** A round's failure log excerpts as one, keeping the tail past the limit. */
-export function combineFailureLogExcerpts(excerpts: string[]): string {
+function combineFailureLogExcerpts(excerpts: string[]): string {
   const combined = excerpts.filter(Boolean).join('\n\n');
   if (combined.length <= COMPILE_LOG_EXCERPT_CHAR_LIMIT) return combined;
 
@@ -83,13 +79,10 @@ export const failureContextFromLogs = Effect.fn('failureContextFromLogs')(
       }
       excerpts.push(read.success.replace(/\n$/, ''));
     }
-    const [first] = failures;
-    if (first === undefined) return undefined;
-    return formatCompileFailureRoundContext({
-      status: 'failed',
-      round: first.round,
-      failures: [...failures],
-      logExcerpt: combineFailureLogExcerpts(excerpts),
-    });
+    if (failures.length === 0) return undefined;
+    return formatCompileFailureRoundContext(
+      failures,
+      combineFailureLogExcerpts(excerpts),
+    );
   },
 );

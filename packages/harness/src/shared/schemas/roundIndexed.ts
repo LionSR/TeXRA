@@ -52,8 +52,8 @@ const RoundKeyStringSchema = z
 
 /**
  * Scalar round-number schema: the single definition shared by round-indexed
- * collections' own item fields (`OutputFileInfo.round`, `RoundOutput.round`,
- * `CompileResult.round`) and by round-POINTER fields that reference a round
+ * collections' own item fields (`OutputFileInfo.round`, `RoundOutput.round`)
+ * and by round-POINTER fields that reference a round
  * without holding a per-round collection (`DiffResult.baseRound` /
  * `revisedRound` in `diffResult.ts`). Those pointer fields are a genuinely
  * different concept from {@link RoundIndexed} — "which round does this diff

@@ -188,18 +188,9 @@ function truncateDiff(diff: string, maxLines: number): string {
   return lines.slice(0, maxLines).join('\n') + '\n[... diff truncated]';
 }
 
-/** Info about a diff file written to the run's run directory. */
-interface DiffFileInfo {
-  /** The relative path within the run directory (e.g. "diffs/chapter1.tex.diff"). */
-  diffRelPath: string;
-  /** True when the change ratio exceeded the large-change threshold. */
-  largeChange: boolean;
-}
-
 /**
  * Compute diffs for workflow output files and write them to the run's
- * run directory as `.diff` files. Returns a map from output absolutePath to
- * diff file info, so the delivery formatter can reference them by path.
+ * run directory as `.diff` files, in the order of `outputs`.
  *
  * All diffs are written regardless of change size. Large changes (ratio above
  * {@link LARGE_CHANGE_RATIO}) are flagged so the orchestrator knows the diff
@@ -210,15 +201,11 @@ interface DiffFileInfo {
 const computeAndWriteWorkflowDiffs = Effect.fn('documents.computeDiffs')(
   function* (storageRoot: string, runId: RunId, outputs: OutputFileSummary[]) {
     const fs = yield* FileSystem.FileSystem;
-    const results = new Map<string, DiffFileInfo>();
-    const diffsToWrite: { diffRelPath: string; content: string }[] = [];
-
-    // First pass: compute diffs and decide which to write.
-    yield* Effect.forEach(
+    const computed = yield* Effect.forEach(
       outputs,
       (o) =>
         Effect.gen(function* () {
-          if (!o.originalPath) return;
+          if (!o.originalPath) return null;
           const [original, modified] = yield* Effect.all(
             [
               readNormalizedFile(fs, o.originalPath),
@@ -238,21 +225,20 @@ const computeAndWriteWorkflowDiffs = Effect.fn('documents.computeDiffs')(
 
           const { text: diff, timeout } = unifiedDiffText(original, modified);
           yield* reportDiffTimeout(timeout);
-          if (diff) {
-            const limit = largeChange
-              ? LARGE_CHANGE_DIFF_LINES
-              : MAX_DIFF_LINES;
-            const truncated = truncateDiff(diff, limit);
-            // Use full relativePath (with separators replaced) to avoid collisions
-            // when multiple files share the same basename in different directories.
-            const safeName = sanitizePathSegment(o.relativePath, {
-              invalidCharPattern: /[\\/]/g,
-              replacement: '_',
-            });
-            const diffRelPath = `diffs/${safeName}.diff`;
-            results.set(o.absolutePath, { diffRelPath, largeChange });
-            diffsToWrite.push({ diffRelPath, content: truncated });
-          }
+          if (!diff) return null;
+          const limit = largeChange ? LARGE_CHANGE_DIFF_LINES : MAX_DIFF_LINES;
+          // Use full relativePath (with separators replaced) to avoid collisions
+          // when multiple files share the same basename in different directories.
+          const safeName = sanitizePathSegment(o.relativePath, {
+            invalidCharPattern: /[\\/]/g,
+            replacement: '_',
+          });
+          const summary: ResultDiffSummary = {
+            path: o.absolutePath,
+            diffRelPath: `diffs/${safeName}.diff`,
+            largeChange,
+          };
+          return { summary, content: truncateDiff(diff, limit) };
         }).pipe(
           // File read failure is non-fatal — skip diff for this file — but
           // surface the skip so a missing diff is not indistinguishable from an
@@ -261,29 +247,25 @@ const computeAndWriteWorkflowDiffs = Effect.fn('documents.computeDiffs')(
           Effect.catch((error) =>
             Effect.logWarning(
               `Skipping diff for ${o.absolutePath}: ${toErrorMessage(error)}`,
-            ).pipe(withLogChannel(CHANNEL)),
+            ).pipe(withLogChannel(CHANNEL), Effect.as(null)),
           ),
         ),
       { concurrency: 'unbounded' },
     );
-
-    // Second pass: write diff files to disk.
-    if (diffsToWrite.length > 0) {
+    const written = computed.filter((diff) => diff !== null);
+    if (written.length > 0) {
       const runDir = runDirUnder(storageRoot, runId);
       // One recursive create reaches the run directory and the runs root above
       // it, which is all the run-dir ensure ahead of this ever did.
-      const diffsDir = path.join(runDir, 'diffs');
-      yield* fs.makeDirectory(diffsDir, { recursive: true });
-
+      yield* fs.makeDirectory(path.join(runDir, 'diffs'), { recursive: true });
       yield* Effect.forEach(
-        diffsToWrite,
-        ({ diffRelPath, content }) =>
-          fs.writeFileString(path.join(runDir, diffRelPath), content),
+        written,
+        ({ summary, content }) =>
+          fs.writeFileString(path.join(runDir, summary.diffRelPath), content),
         { concurrency: 'unbounded', discard: true },
       );
     }
-
-    return results;
+    return written.map((diff) => diff.summary);
   },
 );
 
@@ -309,11 +291,5 @@ export const computeDocumentDiffs = Effect.fn('documents.diffs')(function* (
     ).pipe(withLogChannel(CHANNEL));
     return { diffsUnavailable: reason };
   }
-  const written = computed.success;
-  return {
-    diffs: outputs.flatMap((file): ResultDiffSummary[] => {
-      const diff = written.get(file.absolutePath);
-      return diff ? [{ path: file.absolutePath, ...diff }] : [];
-    }),
-  };
+  return { diffs: computed.success };
 });

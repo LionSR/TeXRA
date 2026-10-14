@@ -67,8 +67,7 @@ export class XmlOutputManager {
     private readonly agentConfig: AgentConfig,
     private readonly logger: AgentTrace,
     private readonly fileService: RunFileService,
-    /** The run's round map: a missing-output report records the round and
-     *  publishes the whole map, since the fact is a latest-only listing row. */
+    /** The run's round map, where a missing-output report records the round. */
     private readonly outputState: OutputState,
     /** The run's session configuration: the replacement rules it applies. */
     private readonly config: ConfigProvider,

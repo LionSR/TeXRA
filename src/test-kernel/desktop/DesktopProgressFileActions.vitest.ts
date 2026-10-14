@@ -90,6 +90,7 @@ function loadFileActions(outcome: DiffRunOutcome): {
       listWorkspaceCandidateFiles: vi.fn(() => Effect.succeed([])),
       session: {
         roots: { workspace: absolutePath('workspace') },
+        view: { current: () => ({ runs: new Map() }) },
       } as unknown as Session,
       // Every latexdiff program this suite reaches is mocked, so the services
       // the actions take from the window's runtime are never read.

@@ -30,7 +30,6 @@ import type { SettingsStores } from '@shared/config/settingsAccess';
 import type { OutputFileInfo } from '@shared/schemas';
 import type { ManualCriticismEntry } from '@texra/tools/editorHost';
 import { TexraStateKey } from '@texra/shared/settingsView/texraSettings';
-import { type AddOutputFilesPayload } from '@texra/shared/plugins/documentOutputs';
 import { readSettingFrom } from '@utils/config/platformSettings';
 import { hasExtension } from '@utils/core/pathCore';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -136,13 +135,12 @@ const refreshFileDiagnostics = Effect.fnUntraced(function* (
 });
 
 function handleAddOutputFiles(
-  payload: AddOutputFilesPayload,
+  files: readonly OutputFileInfo[],
   runtime: ProcessRuntime,
 ): void {
   if (!collection) return;
-  const allFiles = Object.values(payload.filesByRound).flat();
   runtime.runFork(
-    Effect.forEach(allFiles, refreshFileDiagnostics, {
+    Effect.forEach(files, refreshFileDiagnostics, {
       concurrency: 8,
       discard: true,
     }).pipe(
@@ -163,8 +161,8 @@ function enable({ context, session, runtime }: CriticismRegistration): boolean {
   // The diagnostics toggle with a setting, so this listener's lifetime is
   // theirs: `disable` interrupts it.
   const fiber = runtime.runFork(
-    Stream.runForEach(outputFilesProduced(session), (payload) =>
-      Effect.sync(() => handleAddOutputFiles(payload, runtime)),
+    Stream.runForEach(outputFilesProduced(session), (files) =>
+      Effect.sync(() => handleAddOutputFiles(files, runtime)),
     ),
   );
   outputUnsubscribe = () => {

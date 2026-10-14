@@ -11,14 +11,13 @@ import { beforeEach, describe, expect, vi } from 'vitest';
 import type { CompileLatex2PdfResult } from '@latex/texTools';
 import type { RunId, FileLocation } from '@shared/schemas';
 import { fakePath } from '@test/support/FakePlatform';
+import { spiedTrace } from '@test/support/spiedTrace';
 import {
   createOutputState,
   ensureRoundData,
 } from '@texra/agent/output/outputState';
-import {
-  compileFailuresOf,
-  runCompileCheck,
-} from '@texra/agent/output/compileCheck';
+import { runCompileCheck } from '@texra/agent/output/compileCheck';
+import { failureContextFromLogs } from '@texra/agent/output/compileFailureRoundContext';
 
 // Local file imports
 import {
@@ -69,21 +68,19 @@ function seedMainTexOutput(runId: RunId) {
 const COMPILABLE_TEX =
   '\\documentclass{article}\\begin{document}Hi\\end{document}';
 
+type CompileCheckResult = Effect.Success<ReturnType<typeof runCompileCheck>>;
+
+/** The next revision's context, read back from the logs the failures wrote. */
+const failedExcerpt = (result: CompileCheckResult) =>
+  failureContextFromLogs(result.failures ?? [], spiedTrace()).pipe(
+    Effect.map((context) => context ?? ''),
+  );
+
 /** Seeds a compilable round-0 `main.tex` on the fake FS. */
 async function seedCompilableMainTex(runId: RunId): Promise<void> {
   await initLatexPlatform({
     [path.join(runDir(runId), 'r0', 'main.tex')]: COMPILABLE_TEX,
   });
-}
-
-type CompileCheckResult = Effect.Success<ReturnType<typeof runCompileCheck>>;
-
-/** Requires a failed compile result and returns its combined log excerpt. */
-function failedExcerpt(result: CompileCheckResult): string {
-  if (result.compileResult?.status !== 'failed') {
-    expect.unreachable('expected a failed compile result');
-  }
-  return result.compileResult.logExcerpt;
 }
 
 describe('runCompileCheck', () => {
@@ -108,14 +105,10 @@ describe('runCompileCheck', () => {
         0,
       );
 
-      const failures = compileFailuresOf(result.compileResult);
+      const failures = result.failures ?? [];
       expect(mocks.compileLatex2Pdf).not.toHaveBeenCalled();
-      expect(result.compileResult?.status).toBe('failed');
       expect(failures).toHaveLength(1);
       expect(failures[0].displayName).toBe('main.tex');
-      expect(failedExcerpt(result)).toContain(
-        'Compile check errored for main.tex',
-      );
 
       // The synthetic excerpt is persisted like a real failure so it stays
       // discoverable on disk, not just in-memory.
@@ -149,8 +142,7 @@ describe('runCompileCheck', () => {
         );
 
         expect(mocks.compileLatex2Pdf).not.toHaveBeenCalled();
-        expect(compileFailuresOf(result.compileResult)).toHaveLength(0);
-        expect(result.compileResult?.status).toBe('ok');
+        expect(result.failures).toEqual([]);
       }).pipe(Effect.provide(compileFsLayer)),
   );
 
@@ -182,7 +174,7 @@ describe('runCompileCheck', () => {
           0,
         );
 
-        const excerpt = failedExcerpt(result);
+        const excerpt = yield* failedExcerpt(result);
         expect(excerpt).toContain('L0051');
         expect(excerpt).toContain('L0250');
         expect(excerpt).not.toContain('L0050');
@@ -212,10 +204,8 @@ describe('runCompileCheck', () => {
         0,
       );
 
-      const excerpt = failedExcerpt(result);
-      expect(excerpt.startsWith('[truncated to last 12000 characters]')).toBe(
-        true,
-      );
+      const excerpt = yield* failedExcerpt(result);
+      expect(excerpt).toContain('[truncated to last 12000 characters]');
       expect(excerpt).toContain('END0150');
       expect(excerpt).not.toContain('END0001');
     }).pipe(Effect.provide(compileFsLayer)),
@@ -236,8 +226,7 @@ describe('runCompileCheck', () => {
         const ctx = compileContext(runId, outputState);
 
         const firstResult = yield* runCompileCheck(ctx, 0);
-        expect(firstResult.compileResult?.status).toBe('failed');
-        const logLocation = compileFailuresOf(firstResult.compileResult)[0].log;
+        const logLocation = (firstResult.failures ?? [])[0].log;
         expect(
           yield* Effect.promise(() =>
             readFile(logLocation.absolutePath, 'utf-8'),
@@ -250,7 +239,7 @@ describe('runCompileCheck', () => {
           Effect.succeed({ ok: true, pdfPath: COMPILED_PDF }),
         );
         const secondResult = yield* runCompileCheck(ctx, 0);
-        expect(secondResult.compileResult?.status).toBe('ok');
+        expect(secondResult.failures).toEqual([]);
 
         // The stale failure log from the first attempt must be gone --
         // otherwise "no compile/*.log = success" would still find leftover
@@ -302,8 +291,8 @@ describe('runCompileCheck', () => {
           0,
         );
 
-        expect(compileFailuresOf(result.compileResult)).toHaveLength(2);
-        const [failureA, failureB] = compileFailuresOf(result.compileResult);
+        expect(result.failures).toHaveLength(2);
+        const [failureA, failureB] = result.failures ?? [];
         // Distinct log slots despite the identical sanitized basename.
         expect(failureA.logRelativePath).not.toBe(failureB.logRelativePath);
         expect(failureA.log.absolutePath).not.toBe(failureB.log.absolutePath);

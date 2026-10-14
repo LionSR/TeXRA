@@ -17,10 +17,7 @@ import {
 import { stripWorkflowRoundDir } from '@texra/shared/constants/workflowOutput';
 import { DocumentsStateKey } from '@texra/shared/settingsView/documentsSettings';
 import { LATEX_CONFIG_RANGES } from '@texra/shared/constants/latexConfig';
-import {
-  type CompileFailure,
-  type CompileResult,
-} from '@texra/shared/plugins/documentOutputs';
+import type { CompileFailure } from '@texra/shared/plugins/documentOutputs';
 import { createRunStorageLocation } from '@utils/files/fileLocation';
 import { readNormalizedFile } from '@utils/files/fsDurability';
 import { runDirUnder } from '@utils/files/runStorageFs';
@@ -37,8 +34,7 @@ import {
   publishCompiledPdfArtifact,
   publishCompiledPdfArtifactBestEffort,
 } from './compiledPdfArtifacts';
-import { combineFailureLogExcerpts } from './compileFailureRoundContext';
-import { getOutputFilesByRound, type OutputState } from './outputState';
+import type { OutputState } from './outputState';
 import type { WorkspaceRoots } from '@texra-ai/harness';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
@@ -56,14 +52,7 @@ const MIN_TIMEOUT_MS = LATEX_CONFIG_RANGES.workflowAutoCompileTimeoutMs.min;
 interface CompileCheckResult {
   artifacts: RunStorageFileLocation[];
   /** Absent when no check ran at all, which is not the same as zero failures. */
-  compileResult?: CompileResult;
-}
-
-/** The failures a compile result carries; empty when it passed or never ran. */
-export function compileFailuresOf(
-  result: CompileResult | undefined,
-): CompileFailure[] {
-  return result?.status === 'failed' ? result.failures : [];
+  failures?: CompileFailure[];
 }
 
 /** Workflow auto-compile timeout, floored at the config-range minimum. */
@@ -141,7 +130,7 @@ export const runCompileCheck = Effect.fn('documents.runCompileCheck')(
     const { runDirectory } = ctx.fileService;
 
     const texOutputs = (
-      getOutputFilesByRound(ctx.outputState)[currentRound] ?? []
+      ctx.outputState.rounds.get(currentRound)?.outputs ?? []
     ).filter((f) => hasExtension(f.location.absolutePath, '.tex'));
     if (texOutputs.length === 0) return empty;
 
@@ -161,7 +150,6 @@ export const runCompileCheck = Effect.fn('documents.runCompileCheck')(
     // proof the build succeeded.
     const compileRoot = path.join(runDirectory, 'compile');
     const failures: CompileFailure[] = [];
-    const failureLogExcerpts: string[] = [];
     const artifacts: RunStorageFileLocation[] = [];
 
     for (const outputFile of texOutputs) {
@@ -206,33 +194,16 @@ export const runCompileCheck = Effect.fn('documents.runCompileCheck')(
                       outputFile.location,
                     ),
                   },
-                  failureLogExcerpt: `Compile check errored for ${displayName}\n\n${message}`,
                   artifact: null,
                 };
               }),
         ),
       );
-      if (result.failure) {
-        failures.push(result.failure);
-        failureLogExcerpts.push(result.failureLogExcerpt);
-      }
+      if (result.failure) failures.push(result.failure);
       if (result.artifact) artifacts.push(result.artifact);
     }
 
-    const compileResult: CompileResult =
-      failures.length > 0
-        ? {
-            status: 'failed',
-            round: currentRound,
-            failures,
-            logExcerpt: combineFailureLogExcerpts(failureLogExcerpts),
-          }
-        : {
-            status: 'ok',
-            round: currentRound,
-          };
-
-    return { artifacts, compileResult } satisfies CompileCheckResult;
+    return { artifacts, failures } satisfies CompileCheckResult;
   },
 );
 
@@ -258,7 +229,6 @@ interface CompileTarget {
 /** What one output file contributed to the round's compile check. */
 interface PerFileOutcome {
   failure: CompileFailure | null;
-  failureLogExcerpt: string;
   artifact: RunStorageFileLocation | null;
 }
 
@@ -407,7 +377,7 @@ const compileOne = Effect.fn('documents.compileOne')(function* (
 
   const attempted = yield* attempt;
   if (attempted.kind === 'skipped') {
-    return { failure: null, failureLogExcerpt: '', artifact: null };
+    return { failure: null, artifact: null };
   }
   if (attempted.kind === 'errored') {
     return yield* writeCompileFailure({
@@ -444,7 +414,7 @@ const compileOne = Effect.fn('documents.compileOne')(function* (
         data: artifact.relativePath,
       });
     }
-    return { failure: null, failureLogExcerpt: '', artifact };
+    return { failure: null, artifact };
   }
 
   const failureLogExcerpt = `Compile check failed for ${displayName}\nBuild directory: ${buildDir}\n\n${compileResult.logTail}`;
@@ -512,7 +482,6 @@ const writeCompileFailure = Effect.fn('documents.writeCompileFailure')(
         log: logLocation,
         logRelativePath,
       },
-      failureLogExcerpt,
       artifact: null,
     } satisfies PerFileOutcome;
   },

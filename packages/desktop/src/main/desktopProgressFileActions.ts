@@ -27,7 +27,7 @@ import type { NotificationFailed, PromptFailed } from '@texra/hosts/uiHosts';
 import { documentTaskConfig } from '@texra/agent/output/documentRecipe';
 import type { LatexdiffMathMarkupValue } from '@texra/shared/constants/latexConfig';
 import { DocumentsStateKey } from '@texra/shared/settingsView/documentsSettings';
-import { runOutputReader } from '@texra/tools/documents/runOutputs';
+import { runOutputFiles } from '@texra/tools/documents/runOutputs';
 import { readSettingFrom } from '@utils/config/platformSettings';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import {
@@ -186,10 +186,8 @@ export class DesktopProgressFileActions {
         this.host.runtime,
         runLatexdiffForRun({
           runId,
+          rounds: runOutputFiles(this.host.session.view.current(), runId),
           roots: this.host.session.roots,
-          runDiscovery: runOutputReader(() =>
-            Effect.sync(() => this.host.session.view.current()),
-          ),
           channel: DESKTOP_LATEXDIFF_CHANNEL,
           progress: { report: () => undefined },
         }),

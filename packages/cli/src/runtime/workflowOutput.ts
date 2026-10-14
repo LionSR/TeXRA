@@ -26,7 +26,6 @@ import {
 } from '@utils/text/stringUtils';
 
 import { CliUsageError, type CliContext } from './cliContext';
-import { writeTextStderr } from './logSinks';
 import { type CliRunResult } from './terminalStatus';
 import { STDIN_WORKFLOW_INPUT_BASENAME } from './workflowInputs';
 import type { RunEndResult } from '@texra-ai/harness';
@@ -349,22 +348,6 @@ export function resolveWorkflowOutput(
       workingDirectory: context.cwd,
       runDirectory,
     };
-    // A rejected compile fails the run without an error to present, so the
-    // status line alone would end on a bare "Error": name the documents the
-    // last round failed to compile and where their logs are.
-    if (result.outcome === RUN_OUTCOME.FAILED && !result.error) {
-      const failures = documents.compileFailures;
-      // A failure with neither an error nor a compile failure has nothing
-      // more to name than the status line already says.
-      if (failures.length === 0) return baseResult;
-      const lastRound = Math.max(...failures.map((failure) => failure.round));
-      for (const failure of failures) {
-        if (failure.round !== lastRound) continue;
-        writeTextStderr(
-          `LaTeX compile failed for ${failure.displayName} (revision ${failure.round + 1}); log: ${failure.logAbsolutePath}`,
-        );
-      }
-    }
     // Only completed runs may publish to user-requested destinations. Partial or
     // rejected artifacts remain inspectable in run storage through baseResult.
     if (result.outcome !== RUN_OUTCOME.COMPLETED) return baseResult;

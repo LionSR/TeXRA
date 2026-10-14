@@ -35,7 +35,7 @@ import { DocumentsStateKey } from '@texra/shared/settingsView/documentsSettings'
 import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
 import type { WorkflowDiffRequest } from '@texra/controllers/session/hostRunActions';
 import type { LatexdiffMathMarkupValue } from '@texra/shared/constants/latexConfig';
-import { runOutputReader } from '@texra/tools/documents/runOutputs';
+import { runOutputFiles } from '@texra/tools/documents/runOutputs';
 import { checkToolInstalled } from '@texra/utils/system/toolChecks';
 import { readSettingFrom } from '@utils/config/platformSettings';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
@@ -418,13 +418,11 @@ export const handleRunLatexdiff = Effect.fnUntraced(function* (
           });
           return runLatexdiffForRun({
             runId: request.runId,
-            roots,
-            mathMarkup,
             // The window's own view: where its runs run, here or in the
             // service, it folds their documents.
-            runDiscovery: runOutputReader(() =>
-              Effect.sync(() => session.view.current()),
-            ),
+            rounds: runOutputFiles(session.view.current(), request.runId),
+            roots,
+            mathMarkup,
             channel: CHANNEL,
             progress,
           });
