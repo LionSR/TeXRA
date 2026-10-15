@@ -4,8 +4,6 @@
   "src/test-kernel/cli/ChatgptLoginBrowser.vitest.ts": 1,
   "src/test-kernel/cli/CliInitPlatform.vitest.ts": 2,
   "src/test-kernel/frontend/CodexSubscriptionSignIn.vitest.ts": 1,
-  "src/test-kernel/tools/ClaudeAgentResumeFallback.vitest.ts": 5,
-  "src/test-kernel/tools/CodexResumeFallback.vitest.ts": 5,
   "src/test-kernel/tools/DelegationHeadless.vitest.ts": 5,
   "src/test-kernel/tools/NativeSubagentProductionPath.vitest.ts": 1
 }

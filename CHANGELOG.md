@@ -1077,6 +1077,10 @@ show` print the same notice, and the new `texra agents customize`,
 
 ### Bug Fixes
 
+- **A `codex`/`claude_code` call no longer fails as "This run has finished"
+  while another call resumes the same session.** When two calls resumed the
+  same stale thread or session id at once, the second could be woken
+  mid-turn and refused. It now queues onto the resumed run.
 - **The approval card for a proposed agent run offers its agent and model
   pickers again.** In the task panel (VS Code and desktop), approving a
   proposed delegation or document task lets you pick another agent or model
