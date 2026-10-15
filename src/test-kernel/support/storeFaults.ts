@@ -497,6 +497,37 @@ export const parkedAfter =
     );
   };
 
+/**
+ * Launch a root run of the bundled `assistant` with `instruction` on
+ * `session`, the default session over the process roots, and wait until it
+ * answered and parked waiting for input. The launch lives in the caller's
+ * scope.
+ */
+export const parkedRoot = (
+  session: SessionHandle,
+  instruction = 'Start here.',
+): Effect.Effect<RunId, Cause.TimeoutError, Scope.Scope> =>
+  Effect.gen(function* () {
+    const { storage } = testWorkspaceRoots();
+    const runId = generateRunId();
+    yield* withProcessServices(
+      testRuntime(),
+      session.runs.launch({
+        request: {
+          config: AgentConfigSchema.parse({
+            agent: 'assistant',
+            model: 'gpt56',
+            instruction,
+          }),
+          runId,
+        },
+        options: {},
+      }),
+    ).pipe(Effect.forkScoped);
+    yield* untilStored(storage, parkedAfter(runId, 1, storage));
+    return runId;
+  });
+
 /** A root run parked in a store whose process crashed, and the session
  *  opened over that store since. */
 interface CrashedRun {
@@ -521,30 +552,15 @@ export const parkedRunAfterCrash = (
 ): Effect.Effect<CrashedRun, Error> =>
   Effect.gen(function* () {
     const roots = testWorkspaceRoots();
-    const runId = generateRunId();
     const session = yield* openTestDefaultSession({ roots });
     // The launch lives in this scope: closing it, after the session, is the
     // kill, and a setup that fails on the way kills it too.
-    const storage = yield* Effect.scoped(
+    const { runId, storage } = yield* Effect.scoped(
       Effect.gen(function* () {
-        yield* withProcessServices(
-          testRuntime(),
-          session.runs.launch({
-            request: {
-              config: AgentConfigSchema.parse({
-                agent: 'assistant',
-                model: 'gpt56',
-                instruction: options.instruction ?? 'Start here.',
-              }),
-              runId,
-            },
-            options: {},
-          }),
-        ).pipe(Effect.forkScoped);
-        yield* untilStored(roots.storage, parkedAfter(runId, 1, roots.storage));
+        const runId = yield* parkedRoot(session, options.instruction);
         const copy = crashedCopy(roots.storage, options.owner);
         yield* closeTestDefaultSession;
-        return copy;
+        return { runId, storage: copy };
       }),
     );
     const reopened = yield* openTestDefaultSession({
