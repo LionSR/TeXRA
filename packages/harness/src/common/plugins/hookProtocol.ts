@@ -161,11 +161,7 @@ export type HookRun =
       readonly stdout: string;
       readonly stderr: string;
     }
-  | {
-      readonly kind: 'timeout';
-      readonly stdout: string;
-      readonly stderr: string;
-    }
+  | { readonly kind: 'timeout' }
   | { readonly kind: 'unstartable'; readonly message: string };
 
 /** What reading a run depends on in the input the hook was given: its

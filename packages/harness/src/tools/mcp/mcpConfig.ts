@@ -40,6 +40,7 @@ import {
 import { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 import { z } from 'zod';
 
+import type { RuntimeTool } from '@agent/runtime/ToolServices';
 import {
   envDigest,
   jsonSyntaxError,
@@ -47,11 +48,6 @@ import {
   type McpServerConfig,
 } from '@common/plugins/mcpServers';
 import { TEXRA_STORAGE_DIR_NAME } from '@platform/defaults/nodeStorage';
-import type {
-  LoadedPlugin,
-  LoadedPluginTools,
-  PluginLoader,
-} from '@tools/toolTable';
 import { ProjectEnvironment } from '@utils/system/nodeWorkspace';
 import { sha256 } from '@utils/core/idHash';
 import { safeHomedir } from '@utils/system/platformPaths';
@@ -96,31 +92,16 @@ const readConfigText = (
     ),
   );
 
-/** Parse the config file's servers, skipping each invalid entry loudly. */
-function parseConfig(
-  file: string,
-  json: unknown,
-): ReturnType<typeof parseMcpServers> {
-  const parsed = McpConfigFileSchema.safeParse(json);
-  if (!parsed.success)
-    return {
-      servers: [],
-      warnings: [
-        `${file} must be { "mcpServers": { ... } }: ${z.prettifyError(parsed.error)}`,
-      ],
-    };
-  return parseMcpServers(file, parsed.data.mcpServers);
-}
-
 /**
  * The config file's servers and the warnings its invalid entries raise, or
- * `null` when the file does not exist. Fails on an unreadable file or
- * invalid JSON. The Plugins page lists them read-only from here.
+ * `null` when the file does not exist. An unreadable file, invalid JSON or a
+ * wrong shape is one warning and no servers. The Plugins page lists them
+ * read-only from here, and the CLI warns of a broken file at startup.
  */
 export const readMcpConfig = (
   fs: FileSystem.FileSystem,
   file: string,
-): Effect.Effect<ReturnType<typeof parseConfig> | null, Error> =>
+): Effect.Effect<ReturnType<typeof parseMcpServers> | null> =>
   Effect.gen(function* () {
     const text = yield* readConfigText(fs, file);
     if (text === null) return null;
@@ -129,22 +110,53 @@ export const readMcpConfig = (
       catch: (error) =>
         new Error(`${file} is not valid JSON: ${jsonSyntaxError(error)}`),
     });
-    return parseConfig(file, json);
-  });
+    const parsed = McpConfigFileSchema.safeParse(json);
+    if (!parsed.success)
+      return yield* Effect.fail(
+        new Error(
+          `${file} must be { "mcpServers": { ... } }: ${z.prettifyError(parsed.error)}`,
+        ),
+      );
+    return parseMcpServers(file, parsed.data.mcpServers);
+  }).pipe(
+    Effect.catch((error) =>
+      Effect.succeed({ servers: [], warnings: [error.message] }),
+    ),
+  );
+
+/** What a server answers once up: its tools, or why none. */
+export interface LoadedPluginTools {
+  readonly tools: ReadonlyMap<string, RuntimeTool>;
+  /** Why the server offers no tools (it failed to start). */
+  readonly failure?: string;
+}
 
 /**
- * Every problem the config file at `file` has, for `texra doctor` and the
- * CLI's startup config warnings; a missing file has none, since MCP servers
- * are optional.
+ * One MCP server as a plugin: its tools are known only once it is up, so a
+ * run that names it holds its `spec` and revision in its project's catalog,
+ * whose steps offer its tools while the run holds them (`@tools/liveTools`).
  */
-export const mcpConfigWarnings = (
-  fs: FileSystem.FileSystem,
-  file: string,
-): Effect.Effect<readonly string[]> =>
-  readMcpConfig(fs, file).pipe(
-    Effect.map((config) => config?.warnings ?? []),
-    Effect.catch((error) => Effect.succeed([error.message])),
-  );
+export interface McpServerPlugin {
+  /** `mcp:<server>`, or the installed plugin's id. */
+  readonly id: string;
+  /** What the holds are counted by, with the revision. */
+  readonly spec: Readonly<Record<string, unknown>>;
+  /**
+   * A keyed digest of the env values the spec leaves out: a changed
+   * revision is a new process beside the open ones. Keyed per install, so it
+   * reveals nothing about the values, and never recorded: an offered tool
+   * records its spec's digest.
+   */
+  readonly revision: string;
+  readonly config: McpServerConfig;
+}
+
+/** The configured servers a run's declared tool names reach, read fresh at
+ *  each resolution, and the configuration problems the read found. */
+export type PluginLoader = (declared: readonly string[]) => Effect.Effect<{
+  readonly plugins: readonly McpServerPlugin[];
+  readonly warnings: readonly string[];
+}>;
 
 /**
  * The plugin one server is, its env digested under `key`: a configured
@@ -155,7 +167,7 @@ export function mcpPlugin(
   config: McpServerConfig,
   key: string,
   id = mcpPluginId(config.name),
-): LoadedPlugin {
+): McpServerPlugin {
   return {
     id,
     spec: {
@@ -166,7 +178,7 @@ export function mcpPlugin(
       ...(config.cwd === undefined ? {} : { cwd: config.cwd }),
     },
     revision: envDigest(key, config.env),
-    acquire: acquireMcpServer(config),
+    config,
   };
 }
 
@@ -208,11 +220,11 @@ export const mcpPluginLoader =
 
 /** A project's server pool. */
 export interface ProjectServers {
-  /** A server of `plugin` (of the installed plugin with key `load`, if
+  /** A server of `plugin` (of the installed plugin with trust digest `load`, if
    *  any) with the caller's project variables, for the caller's scope: its
    *  tools under its recorded revision, or why it has none. */
   readonly holdServer: (
-    plugin: LoadedPlugin,
+    plugin: McpServerPlugin,
     load?: string,
   ) => Effect.Effect<HeldServer, never, Scope.Scope>;
   /** At a run's start (a root run first evicts failed starts): hold the
@@ -240,11 +252,11 @@ interface HeldServer extends LoadedPluginTools {
  *  variables: a changed one is a new process beside the open ones. */
 class ServerKey implements Equal.Equal {
   readonly id: string;
-  readonly plugin: LoadedPlugin;
+  readonly plugin: McpServerPlugin;
   readonly env: Readonly<Record<string, string>>;
 
   constructor(
-    plugin: LoadedPlugin,
+    plugin: McpServerPlugin,
     env: Readonly<Record<string, string>>,
     load: string,
   ) {
@@ -279,7 +291,7 @@ export const projectServers = Effect.fnUntraced(function* (
   // session's close stops every one.
   const servers: RcMap.RcMap<ServerKey, LoadedPluginTools> = yield* RcMap.make({
     lookup: (key: ServerKey) =>
-      key.plugin.acquire.pipe(
+      acquireMcpServer(key.plugin.config).pipe(
         Effect.provideService(ChildProcessSpawner, spawner),
         Effect.provideService(ProjectEnvironment, key.env),
       ),

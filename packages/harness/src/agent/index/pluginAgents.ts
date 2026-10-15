@@ -18,6 +18,10 @@ import {
   type InstalledPluginLoad,
 } from '@common/plugins/pluginTrust';
 import { splitFrontmatterFence } from '@common/parsing/frontmatterFence';
+import {
+  CLAUDE_COUNTERPART_TOOLS,
+  texraToolOfClaudeTool,
+} from '@common/plugins/hookConfig';
 import { parseYamlWith } from '@common/parsing/safeParseYaml';
 import { withLogChannel } from '@logger/effectLog';
 import { AppState } from '@platform/interfaces';
@@ -36,25 +40,10 @@ const SubagentFrontmatterSchema = z.object({
   tools: z.union([z.string(), z.array(z.string())]).optional(),
 });
 
-/** Claude Code's tool names, as the TeXRA tools that do the same. */
-const CLAUDE_CODE_TOOLS: Readonly<Record<string, string>> = {
-  Read: 'read_file',
-  Write: 'write_file',
-  Edit: 'edit_file',
-  MultiEdit: 'edit_file',
-  Bash: 'bash',
-  Glob: 'glob',
-  Grep: 'grep',
-  WebFetch: 'web_fetch',
-  WebSearch: 'web_search',
-};
-
 /** What a top-level run of a plugin agent that names no tools inherits,
  *  beside the installed plugins' tools (a child inherits its parent's
  *  offered tools instead): the file, shell and web tools. */
-export const PLUGIN_AGENT_DEFAULT_TOOLS = [
-  ...new Set(Object.values(CLAUDE_CODE_TOOLS)),
-];
+export const PLUGIN_AGENT_DEFAULT_TOOLS = CLAUDE_COUNTERPART_TOOLS;
 
 /** One plugin agent as its file defines it. */
 interface PluginAgent {
@@ -102,7 +91,7 @@ const readPluginAgent = Effect.fn('pluginAgents.read')(function* (
           .map((entry) => entry.trim())
           .filter(Boolean);
   const mapped = (declared ?? []).map((tool) =>
-    tool.startsWith('mcp__') ? tool : CLAUDE_CODE_TOOLS[tool],
+    tool.startsWith('mcp__') ? tool : texraToolOfClaudeTool(tool),
   );
   // Naming only tools TeXRA lacks must not read as naming none, which
   // would widen the agent to everything it inherits.

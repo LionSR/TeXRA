@@ -12,7 +12,6 @@ import {
   type FileSystem,
   type Layer,
   type Path,
-  type Scope,
 } from 'effect';
 
 import type { RunInbox } from '@agent/followUp/ToolUseFollowUp';
@@ -35,6 +34,7 @@ import {
 import type { GlobalDatabase } from '@shared/session/database';
 import type { RunState } from '@shared/session/runStateFold';
 import type { ToolCatalog } from '@tools/liveTools';
+import type { McpServerPlugin } from '@tools/mcp/mcpConfig';
 import type { Plugin } from '@tools/plugins';
 import type { z } from 'zod';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
@@ -84,61 +84,17 @@ export class PluginHold extends Context.Service<
   (until: Effect.Effect<void>) => Effect.Effect<void>
 >()('@texra/tools/PluginHold') {}
 
-/** What a loaded plugin's resources answer once up: its tools, or why none. */
-export interface LoadedPluginTools {
-  readonly tools: ReadonlyMap<string, ITool>;
-  /** Why the plugin offers no tools (its server failed to start). */
-  readonly failure?: string;
-}
-
-/**
- * A plugin read from user configuration rather than the manifest (an MCP
- * server): its tools are known only once its resources are up, so a run
- * that names it holds its `spec` and revision in its project's catalog,
- * whose steps offer its tools while the run holds them (`@tools/liveTools`).
- */
-export interface LoadedPlugin {
-  /** Stable id, e.g. `mcp:<server>`. */
-  readonly id: string;
-  /** What the holds are counted by, with the revision. */
-  readonly spec: Readonly<Record<string, unknown>>;
-  /**
-   * A keyed digest of what the spec leaves out (an MCP server's env values):
-   * a changed revision is a new process beside the open ones. Keyed per process, so it reveals nothing about the values it
-   * digests, and never recorded: an offered tool records its spec's digest.
-   */
-  readonly revision: string;
-  /**
-   * Bring the resources up in the given scope and answer the tools. Never
-   * fails: a plugin that cannot start answers its `failure` instead.
-   */
-  readonly acquire: Effect.Effect<
-    LoadedPluginTools,
-    never,
-    Scope.Scope | ChildProcessSpawner
-  >;
-}
-
-/**
- * The loaded plugins a run's declared tool names reach, read fresh at each
- * resolution, and the configuration problems the read found.
- */
-export type PluginLoader = (declared: readonly string[]) => Effect.Effect<{
-  readonly plugins: readonly LoadedPlugin[];
-  readonly warnings: readonly string[];
-}>;
-
 /**
  * An installed plugin a step loads while it is enabled and trusted: its MCP
  * servers, if any, whose tools the catalog contributes under its one id and every
  * tool-use run is offered (`@tools/liveTools`), and the plugin as read, whose
- * skills the step lists. `key` changes exactly when what it would start or
- * ship does, which replaces its servers and its skills.
+ * skills the step lists. Its servers are held under its trust digest
+ * (`source.trust.digest`), which changes exactly when what it would start
+ * or ship does, and so replaces them.
  */
 interface InstalledToolPlugin {
   readonly id: string;
-  readonly key: string;
-  readonly servers: readonly LoadedPlugin[];
+  readonly servers: readonly McpServerPlugin[];
   readonly source: LoadablePlugin;
 }
 

@@ -29,12 +29,14 @@ const TOOL_LABEL = new Map<string, string>([
 const MCP_PREFIX = 'mcp:';
 const MCP_TOOL_PREFIX = 'mcp__';
 
-/** The `<server>/<tool>` an MCP tool's name carries, in either shape, or
- *  null for any other tool. */
+/** The `<server>/<tool>` an MCP tool's name carries, in either shape (the
+ *  harness's under a sub-agent's `claude:` prefix too), or null for any
+ *  other tool. */
 function mcpServerTool(toolName: string): string | null {
   if (toolName.startsWith(MCP_PREFIX)) return toolName.slice(MCP_PREFIX.length);
-  if (!toolName.startsWith(MCP_TOOL_PREFIX)) return null;
-  const rest = toolName.slice(MCP_TOOL_PREFIX.length);
+  const name = toolName.slice(toolName.lastIndexOf(':') + 1);
+  if (!name.startsWith(MCP_TOOL_PREFIX)) return null;
+  const rest = name.slice(MCP_TOOL_PREFIX.length);
   const cut = rest.indexOf('__');
   return cut > 0 ? `${rest.slice(0, cut)}/${rest.slice(cut + 2)}` : null;
 }

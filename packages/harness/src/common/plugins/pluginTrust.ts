@@ -301,6 +301,9 @@ export interface LoadablePlugin {
 export interface InstalledPluginLoad {
   readonly loadable: readonly LoadablePlugin[];
   readonly withheld: readonly string[];
+  /** The per-install key their servers' env values are digested under,
+   *  read when any plugin is enabled. */
+  readonly envKey?: string;
 }
 
 /**
@@ -351,7 +354,7 @@ export function readInstalledPluginLoad(
       }
       loadable.push({ record, plugin, trust: key });
     }
-    return { loadable, withheld };
+    return { loadable, withheld, envKey };
   }).pipe(
     Effect.catch((error: PluginError | PluginRequestError) =>
       Effect.succeed({

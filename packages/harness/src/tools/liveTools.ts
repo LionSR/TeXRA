@@ -44,9 +44,9 @@ import {
   ToolRegistry,
   type InstalledToolReader,
   type PluginLayerServices,
-  type PluginLoader,
   type ToolTable,
 } from '@tools/toolTable';
+import type { PluginLoader } from '@tools/mcp/mcpConfig';
 
 /** The process's tool catalog. */
 export class ToolCatalog extends Context.Service<

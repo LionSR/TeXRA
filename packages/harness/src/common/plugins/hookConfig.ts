@@ -10,39 +10,6 @@ import { z } from 'zod';
 // Local imports - shared contracts
 import { SUPPORTED_HOOK_EVENTS, type HookEvent } from '@shared/schemas';
 
-/** Every event the reference names; a configured event outside this list is
- *  reported as unknown, one inside it but unsupported as not run. */
-const REFERENCE_HOOK_EVENTS = new Set<string>([
-  ...SUPPORTED_HOOK_EVENTS,
-  'Setup',
-  'UserPromptExpansion',
-  'PermissionRequest',
-  'PermissionDenied',
-  'PostToolUseFailure',
-  'PostToolBatch',
-  'Notification',
-  'MessageDisplay',
-  'SubagentStart',
-  'TaskCreated',
-  'TaskCompleted',
-  'StopFailure',
-  'TeammateIdle',
-  'InstructionsLoaded',
-  'ConfigChange',
-  'CwdChanged',
-  'DirectoryAdded',
-  'FileChanged',
-  'WorktreeCreate',
-  'WorktreeRemove',
-  'PreCompact',
-  'PostCompact',
-  'PreModelSwitch',
-  'PostModelSwitch',
-  'Elicitation',
-  'ElicitationResult',
-  'SessionEnd',
-]);
-
 const isSupportedEvent = (event: string): event is HookEvent =>
   (SUPPORTED_HOOK_EVENTS as readonly string[]).includes(event);
 
@@ -101,8 +68,8 @@ const EXACT_MATCHER = /^[\w\s,|-]+$/;
 
 /**
  * The command hooks of one configuration `source` (a file or the manifest)
- * that TeXRA runs, and one line for each entry it does not: an event outside
- * v1 or the reference, a handler type other than `command`, an `async` or
+ * that TeXRA runs, and one line for each entry it does not: an event TeXRA
+ * does not run, a handler type other than `command`, an `async` or
  * PowerShell hook, a matcher that is not a valid regular expression.
  */
 export function configuredHooks(source: string, config: HooksConfig) {
@@ -112,9 +79,7 @@ export function configuredHooks(source: string, config: HooksConfig) {
     if (!isSupportedEvent(event)) {
       const count = groups.reduce((sum, group) => sum + group.hooks.length, 0);
       unsupported.push(
-        REFERENCE_HOOK_EVENTS.has(event)
-          ? `${event}: ${count} hook(s), an event TeXRA does not run`
-          : `${event}: ${count} hook(s), not an event of the Claude Code hooks reference`,
+        `${event}: ${count} hook(s), an event TeXRA does not run`,
       );
       continue;
     }
@@ -274,6 +239,23 @@ const CLAUDE_TOOLS: Readonly<
   web_fetch: { name: 'WebFetch', input: same('url', 'prompt') },
   web_search: { name: 'WebSearch', input: same('query') },
 };
+
+const TEXRA_TOOL_OF_CLAUDE_TOOL = new Map<string, string>([
+  ...Object.entries(CLAUDE_TOOLS).map(
+    ([texra, { name }]) => [name, texra] as const,
+  ),
+  ['MultiEdit', 'edit_file'],
+]);
+
+/** The TeXRA tool that does what Claude Code's tool `name` does (a
+ *  `MultiEdit` is an `edit_file`), for a plugin agent's `tools` list. */
+export const texraToolOfClaudeTool = (name: string): string | undefined =>
+  TEXRA_TOOL_OF_CLAUDE_TOOL.get(name);
+
+/** The TeXRA tools that have a Claude Code counterpart. */
+export const CLAUDE_COUNTERPART_TOOLS: readonly string[] = Object.freeze(
+  Object.keys(CLAUDE_TOOLS),
+);
 
 /**
  * A call as a Claude Code hook sees it: for a tool with a Claude Code

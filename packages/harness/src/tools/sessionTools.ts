@@ -36,10 +36,13 @@ import type { Plugin } from '@tools/plugins';
 import {
   PluginHold,
   type InstalledToolReader,
-  type PluginLoader,
   type SessionPluginLayer,
 } from '@tools/toolTable';
-import { projectServers, type ProjectServers } from '@tools/mcp/mcpConfig';
+import {
+  projectServers,
+  type PluginLoader,
+  type ProjectServers,
+} from '@tools/mcp/mcpConfig';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 /** What one step pinned: its tools and the plugins they come from. */
@@ -207,11 +210,13 @@ const pinStep = <E>(
     // variables, for the step's scope.
     const loads = yield* Effect.forEach(
       read.plugins,
-      ({ id, key, servers }) =>
+      ({ id, servers, source }) =>
         Effect.map(
-          Effect.forEach(servers, (server) => session.holdServer(server, key), {
-            concurrency: 'unbounded',
-          }),
+          Effect.forEach(
+            servers,
+            (server) => session.holdServer(server, source.trust.digest),
+            { concurrency: 'unbounded' },
+          ),
           (held) => ({ id, held }),
         ),
       { concurrency: 'unbounded' },
