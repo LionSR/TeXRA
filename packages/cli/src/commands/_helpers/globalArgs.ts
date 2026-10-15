@@ -1,4 +1,3 @@
-import type { ParsedArgs } from 'citty';
 
 import { CliUsageError, type CliGlobalArgs } from '@cli/runtime/cliContext';
 import { documentsNegatedBooleanForm } from '@cli/runtime/completionCommandTree';
@@ -9,6 +8,7 @@ import {
 } from '@shared/approvalPolicy';
 import { INTEROP_SKILL_DIRS } from '@skills/skillSources';
 import { isNonEmptyString } from '@utils/text/stringUtils';
+import type { ParsedArgs } from 'citty';
 
 /**
  * Single source of truth for the global flags accepted by every TeXRA
