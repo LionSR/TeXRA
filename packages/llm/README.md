@@ -29,7 +29,7 @@ npm install @texra-ai/llm effect zod
 
 Pick a catalog model, decide its route, bind it, and run one turn. The key is
 read from the environment here; the runnable version of this program,
-[`../harness/example/llm.ts`](../harness/example/llm.ts), passes a `fetch`
+[`packages/harness/example/llm.ts`](https://github.com/LionSR/TeXRA/blob/main/packages/harness/example/llm.ts), passes a `fetch`
 that answers 401 instead so it needs no key.
 
 ```ts
