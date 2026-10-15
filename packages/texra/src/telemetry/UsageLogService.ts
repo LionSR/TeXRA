@@ -15,7 +15,6 @@ import { HttpClient, HttpClientError, HttpClientRequest } from 'effect/http';
 
 import { withLogChannel } from '@logger/effectLog';
 import { writeLogLine } from '@logger/logSink';
-import { TELEMETRY_ENABLED_KEY } from '@shared/schemas';
 import { UsageLog, UsageLogResponseSchema } from '@shared/usageLog';
 import type {
   UsageLogEntry,
@@ -23,6 +22,7 @@ import type {
   UsageLogResponse,
 } from '@shared/usageLog';
 import { readOrCreateInstallId } from '@telemetry/installId';
+import { TELEMETRY_ENABLED_KEY } from '@texra/shared/settingsView/texraSettings';
 import { unrefSleepClock } from '@texra/utils/system/unrefSleepClock';
 import {
   extractErrorMessage,

@@ -16,16 +16,10 @@ import {
   HiddenCustomAgentKeysSchema,
   CHATGPT_CODEX_CONTEXT_WINDOW_SETTING,
   CHILD_RUN_CONCURRENCY_BUDGET_SETTING,
-  ChatgptCodexContextWindowSchema,
-  ChildRunConcurrencyBudgetSchema,
   GOAL_MAX_COST_SETTING,
-  GoalMaxCostSchema,
   MODEL_COMPACTION_THRESHOLD_SETTING,
   MODEL_RETRY_MAX_ATTEMPTS_SETTING,
-  ModelCompactionThresholdPercentSchema,
   RESUME_ON_OPEN_SETTING,
-  ResumeOnOpenSchema,
-  ModelRetryMaxAttemptsSchema,
   INHERITED_WORKSPACE_AGENTS,
   QualifiedSkillNameSchema,
 } from '@shared/schemas';
@@ -206,63 +200,24 @@ export interface PluginSettingRow {
 // Row builders
 // ============================================================================
 
-/** A surfaced row as written: display copy and surfaces are required. */
-export type SurfacedSettingInput = Omit<
-  StateSettingEntry,
-  'surfaces' | 'description' | 'category'
-> & {
-  readonly description: string;
-  readonly category: string;
-  readonly surfaces: SettingSurfaces;
-};
-
 /**
  * A row at least one settings UI renders. Display copy is required at the call
  * site, so a rendered row can never fall back to an empty label.
  */
 export function surfacedSetting(
-  entry: SurfacedSettingInput,
+  entry: SurfacedSettingEntry,
 ): SurfacedSettingEntry {
   return entry;
 }
 
-/**
- * A Models-tab provider toggle: a globally-scoped boolean that renders both as
- * a profile row and as one per-provider control on the Models tab. These rows
- * differ only in their default, copy, and Models-tab control,
- * so the uniform framing is written once here: the `category: 'model'` /
- * `settingsView: 'profile'` / Models-tab surface `globalProviderToggle` gives
- * the GlobalState toggles, plus the `configTarget: 'global'` these config-tree
- * rows require (the GlobalState toggles instead set `cliConfig`). Returns a
- * `CORE_SETTING_ROWS` body (key and slot are added by the config-tree
- * mapping).
- */
-function modelProviderToggle(opts: {
-  readonly default: boolean;
-  readonly title: string;
-  readonly description: string;
-  readonly model: ModelsTabSurface;
-}): Omit<StateSettingEntry, 'key' | 'slot'> {
-  return {
-    schema: z.boolean().prefault(opts.default),
-    configTarget: 'global',
-    title: opts.title,
-    description: opts.description,
-    category: 'model',
-    surfaces: { settingsView: 'profile', models: [opts.model] },
-  };
-}
-
 /** A global provider knob with no settings-view row (`.texra/config.json`). */
-const GLOBAL_MODEL_ROW = { configTarget: 'global', category: 'model' } as const;
-function configToggle(on: boolean, title: string, description: string) {
+function configToggle(on: boolean, description: string) {
   const schema = z.boolean().prefault(on);
-  return { ...GLOBAL_MODEL_ROW, schema, title, description };
+  return { configTarget: 'global', schema, description } as const;
 }
 
 /**
- * The `globalState` analog of `modelProviderToggle`: a boolean every host
- * stores in GlobalState, rendered as a profile row, a CLI `/config` row, and
+ * A Models-tab provider toggle: a boolean every host stores in GlobalState, rendered as a profile row, a CLI `/config` row, and
  * one Models-tab control. The control's label and description are the row's
  * title and description, so the copy is written once.
  */
@@ -316,7 +271,11 @@ const HARNESS_CONFIG_ROWS: Record<
   Omit<StateSettingEntry, 'key' | 'slot'>
 > = {
   childRunConcurrencyBudget: {
-    schema: ChildRunConcurrencyBudgetSchema,
+    schema: z
+      .int()
+      .min(CHILD_RUN_CONCURRENCY_BUDGET_SETTING.min)
+      .max(CHILD_RUN_CONCURRENCY_BUDGET_SETTING.max)
+      .prefault(CHILD_RUN_CONCURRENCY_BUDGET_SETTING.defaultValue),
     title: 'Agents at once',
     description: CHILD_RUN_CONCURRENCY_BUDGET_SETTING.description,
     category: 'agents',
@@ -324,7 +283,9 @@ const HARNESS_CONFIG_ROWS: Record<
   },
   // Global: how one person wants their windows to open.
   resumeOnOpen: {
-    schema: ResumeOnOpenSchema,
+    schema: z
+      .enum(RESUME_ON_OPEN_SETTING.values)
+      .prefault(RESUME_ON_OPEN_SETTING.defaultValue),
     configTarget: 'global',
     title: 'Interrupted tasks',
     description: RESUME_ON_OPEN_SETTING.description,
@@ -334,7 +295,11 @@ const HARNESS_CONFIG_ROWS: Record<
   },
   // Global: a committed project config must not raise or remove the user's cap.
   'goal.maxCostUsd': {
-    schema: GoalMaxCostSchema,
+    schema: z
+      .number()
+      .min(GOAL_MAX_COST_SETTING.min)
+      .max(GOAL_MAX_COST_SETTING.max)
+      .prefault(GOAL_MAX_COST_SETTING.defaultValue),
     configTarget: 'global',
     title: 'Goal spend cap (USD)',
     description: GOAL_MAX_COST_SETTING.description,
@@ -349,53 +314,63 @@ const HARNESS_CONFIG_ROWS: Record<
   // have no settings-view row and live in `.texra/config.json`.
   'model.gpt5ReasoningSummary': configToggle(
     false,
-    'GPT-5 reasoning summary',
     "Show the model's reasoning steps alongside its output when using GPT-5 models. Requires an OpenAI account with access to reasoning features.",
   ),
-  'model.useGoogleInteractionsServerState': modelProviderToggle({
-    default: true,
+  'model.useGoogleInteractionsServerState': {
+    schema: z.boolean().prefault(true),
+    configTarget: 'global',
     title: 'Server-side conversation state',
     description:
       "Store Google Interactions conversation state on Google's servers via previous_interaction_id chaining, sending only the new turn each round. Google then retains the conversation for a limited period to enable chaining. Enabled by default. Disable to keep conversations off Google's servers — stateless mode resends the full transcript each round (store:false).",
-    model: {
-      provider: 'google',
-      label: 'Server-side conversation state',
-      description:
-        "Store Interactions conversation state on Google's servers (send only the new turn each round; Google retains the conversation for a limited period to enable chaining). Disable to keep conversations off Google's servers and resend the full transcript each round.",
+    category: 'model',
+    surfaces: {
+      settingsView: 'profile',
+      models: [
+        {
+          provider: 'google',
+          label: 'Server-side conversation state',
+          description:
+            "Store Interactions conversation state on Google's servers (send only the new turn each round; Google retains the conversation for a limited period to enable chaining). Disable to keep conversations off Google's servers and resend the full transcript each round.",
+        },
+      ],
     },
-  }),
+  },
   'model.useGoogleBackgroundResponses': configToggle(
     false,
-    'Google background responses',
     'Run text-only Google generations as background Interactions (submit + poll) instead of one long streamed request. Requires server-side conversation state and a model that supports background execution. Off by default; unsupported models fall back automatically.',
   ),
   'model.useBackgroundResponses': configToggle(
     true,
-    'Background responses',
     'Keep long-running OpenAI requests alive in the background (polling) instead of timing out after 10 minutes. Applies automatically to GPT models running a text-only agent (one without tools); ignored otherwise. Disable to fall back to synchronous streaming requests.',
   ),
   'model.openaiFastTier': configToggle(
     false,
-    'Fast processing',
     "Send OpenAI requests on OpenAI's fast service tier, for models that offer it: faster responses at a higher per-token price, which run costs reflect.",
   ),
   'model.openaiParallelToolCalls': configToggle(
     true,
-    'Parallel tool calls',
     'Let OpenAI models use multiple tools at the same time for faster results. Enabled by default; disable for models that require sequential tool run.',
   ),
   // No `configTarget`: both runtime readers resolve the *merged* config value
   // through `readSettingFrom`, so narrowing the row to the global scope would
   // hide (and block writes to) a workspace override the runtime honors.
   'model.compactionThresholdPercent': {
-    schema: ModelCompactionThresholdPercentSchema,
+    schema: z
+      .number()
+      .min(MODEL_COMPACTION_THRESHOLD_SETTING.min)
+      .max(MODEL_COMPACTION_THRESHOLD_SETTING.max)
+      .prefault(MODEL_COMPACTION_THRESHOLD_SETTING.defaultValue),
     title: 'Compaction threshold',
     description: MODEL_COMPACTION_THRESHOLD_SETTING.description,
     category: 'model',
     surfaces: { settingsView: 'agents', cliConfig: true },
   },
   'model.retry.maxAttempts': {
-    schema: ModelRetryMaxAttemptsSchema,
+    schema: z
+      .int()
+      .min(MODEL_RETRY_MAX_ATTEMPTS_SETTING.min)
+      .max(MODEL_RETRY_MAX_ATTEMPTS_SETTING.max)
+      .prefault(MODEL_RETRY_MAX_ATTEMPTS_SETTING.defaultValue),
     title: 'Automatic retries',
     description: MODEL_RETRY_MAX_ATTEMPTS_SETTING.description,
     category: 'model',
@@ -408,7 +383,11 @@ const HARNESS_CONFIG_ROWS: Record<
     onWrite: SUBSCRIPTION_PREFERENCE_WRITE,
   },
   'chatgptCodex.contextWindowK': {
-    schema: ChatgptCodexContextWindowSchema,
+    schema: z
+      .int()
+      .min(CHATGPT_CODEX_CONTEXT_WINDOW_SETTING.min)
+      .max(CHATGPT_CODEX_CONTEXT_WINDOW_SETTING.max)
+      .prefault(CHATGPT_CODEX_CONTEXT_WINDOW_SETTING.defaultValue),
     title: 'Subscription input token budget (K tokens)',
     description: CHATGPT_CODEX_CONTEXT_WINDOW_SETTING.description,
     category: 'model',
@@ -953,19 +932,4 @@ export function settingEnumChoices<T extends string = string>(
       description: entry.enumDescriptions[index],
     }),
   }));
-}
-
-/** Whether the setting uses a boolean edit affordance. */
-export function settingIsBoolean(entry: StateSettingEntry): boolean {
-  return settingSchemaWithoutPrefault(entry) instanceof z.ZodBoolean;
-}
-
-/** Whether the setting uses a free-text edit affordance. */
-export function settingIsString(entry: StateSettingEntry): boolean {
-  return settingSchemaWithoutPrefault(entry) instanceof z.ZodString;
-}
-
-/** Whether the setting uses a numeric edit affordance. */
-export function settingIsNumber(entry: StateSettingEntry): boolean {
-  return settingSchemaWithoutPrefault(entry) instanceof z.ZodNumber;
 }

@@ -17,6 +17,8 @@ import {
   keepCustomAgent,
   refresh,
 } from '@agent/index';
+import { readCustomAgentDir } from '@shared/config/settingsAccess';
+import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { agentKey } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { createSettingsAgentActions } from '@texra/controllers/settingsView/backend/SettingsAgentActions';
@@ -28,11 +30,6 @@ import {
 import { SettingsAgentCatalogController } from '@texra/controllers/settingsView/SettingsAgentCatalogController';
 import type { SettingsViewInboundHandlerRegistry } from '@texra/controllers/settingsView/settingsViewDispatch';
 import { applySettingsTeam } from '@texra/controllers/settingsView/SettingsTeamController';
-import {
-  buildAgentModePresetsMessage,
-  buildAgentSelectionMessage,
-  buildCustomAgentDirMessage,
-} from '@texra/shared/settingsView/handlers/agentSelectionHandlers';
 import { allSettledVoid } from '@texra/utils/core/allSettledVoid';
 import { registerCustomAgentRoot } from '@tools/agentCatalogFollower';
 import type { ProcessServices } from '@texra-ai/harness';
@@ -68,19 +65,32 @@ export function settingsAgentCommands(ports: SettingsAgentCommandsPorts) {
   );
 
   const postSelection = present.post(
-    buildAgentSelectionMessage({
-      buildSelectionItems: () => catalog.buildSelectionItems(),
-      getCustomAgentScanIssues,
+    Effect.gen(function* () {
+      return {
+        command: SETTINGS_VIEW_COMMANDS.UPDATE_AGENT_SELECTION,
+        agents: yield* catalog.buildSelectionItems(),
+        customAgentIssues: [...getCustomAgentScanIssues()],
+      };
     }),
   );
   const postCustomDir = present.post(
-    buildCustomAgentDirMessage(globalState, customDirectory),
+    Effect.gen(function* () {
+      const configuredPath = yield* readCustomAgentDir(globalState);
+      return {
+        command: SETTINGS_VIEW_COMMANDS.UPDATE_CUSTOM_AGENT_DIR,
+        path: yield* customDirectory,
+        isDefault: configuredPath === '',
+      };
+    }),
   );
   const postPresets = present.post(
-    buildAgentModePresetsMessage({
-      getCustomPresets: () => catalog.getCustomPresets(),
-      getOrchestratorAgentNames: () => catalog.getOrchestratorAgentNames(),
-      getActiveTeamId: () => workspaceAgents.getActiveTeamId(),
+    Effect.gen(function* () {
+      return {
+        command: SETTINGS_VIEW_COMMANDS.UPDATE_AGENT_MODE_PRESETS,
+        customPresets: yield* catalog.getCustomPresets(),
+        orchestratorAgents: catalog.getOrchestratorAgentNames(),
+        activePresetId: yield* workspaceAgents.getActiveTeamId(),
+      };
     }),
   );
 

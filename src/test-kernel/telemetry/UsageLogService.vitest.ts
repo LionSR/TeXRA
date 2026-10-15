@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, vi, type Mock } from 'vitest';
 import { effectDiagnosticsLayer } from '@logger/effectDiagnostics';
 import { setLogSink } from '@logger/logSink';
 import { MemoryConfigProvider } from '@platform/defaults/memoryConfigProvider';
-import { AGENT_SOURCE, TELEMETRY_ENABLED_KEY } from '@shared/schemas';
+import { AGENT_SOURCE } from '@shared/schemas';
 import { UsageLog, usageAgentName } from '@shared/usageLog';
 import {
   usageLogLayer,
@@ -16,7 +16,10 @@ import { testRuntime } from '@test/support/testProcessRuntime';
 import { createDeferred } from '@test/support/asyncTestUtils';
 import { jsonResponse } from '@test/support/fetchTestUtils';
 import { setupPlatform } from '@test/support/setupPlatform';
-import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
+import {
+  TELEMETRY_ENABLED_KEY,
+  TEXRA_SETTINGS,
+} from '@texra/shared/settingsView/texraSettings';
 
 function usageEntry(model: string) {
   return {

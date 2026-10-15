@@ -28,6 +28,7 @@ import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { TEXRA_APPROVAL_POLICY_CONFIG_KEY } from '@shared/approvalPolicy';
 import type { SubscriptionUsageProvider } from '@shared/schemas';
 import { SUBSCRIPTION_AUTH_PROVIDERS } from '@shared/model/subscriptionAuth';
+import type { SettingsViewSnapshot } from '@shared/state/stateSettings';
 import { modelOptionsFrom } from '@texra/model/modelOptions';
 import { codingPlanForUsageSetting } from '@texra/model/codingPlanSubscriptions';
 import { UnsupportedCommandError } from '@texra/shared/utils/dispatcher';
@@ -55,10 +56,7 @@ import {
   type SettingsViewInboundHandlerRegistry,
 } from '@texra/controllers/settingsView/settingsViewDispatch';
 import { buildSettingsSnapshotMessage } from '@texra/shared/settingsView/handlers/settingsSnapshot';
-import {
-  applyStateSettingUpdate,
-  type SettingsSnapshotPosters,
-} from '@texra/shared/settingsView/handlers/stateSettingWrite';
+import { applyStateSettingUpdate } from '@texra/shared/settingsView/handlers/stateSettingWrite';
 import {
   type DerivedSettingsSnapshot,
   type SettingsViewInboundMessage,
@@ -252,7 +250,8 @@ export function createSettingsViewBody(ports: SettingsViewBodyPorts) {
 
   // ── Catalog-backed settings rows ──
 
-  const stateSnapshotPosters: SettingsSnapshotPosters<HostEffect> = {
+  // A `Record`, so a new snapshot variant fails this literal's type check.
+  const stateSnapshotPosters: Record<SettingsViewSnapshot, () => HostEffect> = {
     approval: () => postSnapshot('approval'),
     'git-author': () => postSnapshot('git-author'),
     latex: () => postSnapshot('latex'),

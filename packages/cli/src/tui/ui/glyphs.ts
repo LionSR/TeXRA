@@ -14,6 +14,9 @@ export const POINTER = '›';
 /** Active/checked marker for selectable values. */
 export const TICK = '✓';
 
+/** Generated-token marker, prefixed to a compact token count (`↓1.2k`). */
+export const TOKENS_GENERATED = '↓';
+
 /** Status dot for tool rows and subagent rows; the on-beat of the approval pulse. */
 export const STATUS_DOT = '●';
 

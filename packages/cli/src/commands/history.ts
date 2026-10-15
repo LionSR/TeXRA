@@ -133,8 +133,7 @@ export function runHistoryExport(
         case 'streamLogs_missing':
           writeTextStderr(
             `Run ${id} exists but has no replayable run-root transcript ` +
-              '(it may predate transcript persistence, the run may have produced ' +
-              'no output, or only proven child transcripts may remain).',
+              "(it produced no output, or only its child runs' transcripts remain).",
           );
           break;
         default:

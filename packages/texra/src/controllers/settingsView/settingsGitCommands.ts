@@ -8,7 +8,6 @@ import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { storeCredential } from '@texra/common/secrets/storeCredential';
 import {
   listGitHubSubscriptionEntries,
-  noActiveGitHubSubscriptionMessage,
   unsubscribeGitHubKey,
 } from '@texra/controllers/settingsView/githubSubscriptions';
 import type { SettingsViewInboundHandlerRegistry } from '@texra/controllers/settingsView/settingsViewDispatch';
@@ -84,7 +83,7 @@ export function settingsGitCommands(ports: {
     unsubscribePR: ({ key }) =>
       Effect.flatMap(unsubscribeGitHubKey(key), (removed) =>
         removed === 0
-          ? notice(noActiveGitHubSubscriptionMessage(key))
+          ? notice(`No active subscription for ${key}.`)
           : postGitHubSubscriptions,
       ),
     // Jump from a subscription to the run that owns it; a run deleted since

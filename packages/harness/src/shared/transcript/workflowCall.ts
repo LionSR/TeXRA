@@ -24,22 +24,18 @@ export function formatWorkflowCallFiles(files: {
   return parts.length > 0 ? parts.join(' · ') : undefined;
 }
 
-/** Generated-token marker, prefixed to a compact token count (`↓1.2k`)
- *  wherever a host shows what a run has produced so far. */
-export const TOKENS_GENERATED = '↓';
-
-const WORKFLOW_TALLY_WORDS = [
-  ['ok', 'ok'],
-  ['failed', 'failed'],
-  ['cancelled', 'cancelled'],
-  ['skipped', 'skipped'],
-] as const satisfies readonly (readonly [keyof ScriptTally, string])[];
+const TALLY_OUTCOMES = [
+  'ok',
+  'failed',
+  'cancelled',
+  'skipped',
+] as const satisfies readonly (keyof ScriptTally)[];
 
 /** `6 ok · 1 failed · 1 cancelled` — the one spelling of a tally, by outcome,
  *  so no count can read as "done" beside a failure it includes. */
 export function formatScriptTally(tally: ScriptTally): string {
-  const parts = WORKFLOW_TALLY_WORDS.filter(([key]) => tally[key] > 0).map(
-    ([key, word]) => `${tally[key]} ${word}`,
+  const parts = TALLY_OUTCOMES.filter((key) => tally[key] > 0).map(
+    (key) => `${tally[key]} ${key}`,
   );
   return parts.length > 0 ? parts.join(' · ') : 'no calls';
 }

@@ -1,9 +1,8 @@
 /**
  * AgentTrace — agent-general SDK surface.
  *
- * Discriminated-event channel for an agent run. Any host (TeXRA, future
- * CLI, future SDK consumer) can subscribe with `subscribe()` and receive
- * every {@link AgentEvent}. Every other method on this interface is sugar
+ * Discriminated-event channel for an agent run. Every {@link AgentEvent}
+ * reaches the sinks the trace was built with ({@link AgentTraceSink}). Every other method on this interface is sugar
  * over `emit()` so the trace channel remains a single source of truth.
  *
  * TeXRA-specific helpers (`logSdkError`/`logProgressStatus`/

@@ -19,7 +19,6 @@ import {
 } from '@shared/approvalPolicy';
 import {
   type SettingHost,
-  type SettingsViewSnapshot,
   type SettingsViewStateSettingEntry,
   type SurfacedSettingEntry,
 } from '@shared/state/stateSettings';
@@ -143,10 +142,3 @@ export function applyStateSettingUpdate<H extends SettingHost>(
     ),
   );
 }
-
-/**
- * Rebroadcast posters for every {@link SettingsViewSnapshot}. A `Record` (not a
- * `switch`) so a new snapshot variant fails the object-literal check at both
- * call sites instead of silently falling through a `default`.
- */
-export type SettingsSnapshotPosters<T> = Record<SettingsViewSnapshot, () => T>;

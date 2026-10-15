@@ -60,7 +60,7 @@
   "packages/harness/src/shared/schemas/codex.ts": 11,
   "packages/harness/src/shared/schemas/commonViewMessages.ts": 2,
   "packages/harness/src/shared/schemas/contextManagement.ts": 6,
-  "packages/harness/src/shared/schemas/coreSettings.ts": 10,
+  "packages/harness/src/shared/schemas/coreSettings.ts": 3,
   "packages/harness/src/shared/schemas/errors.ts": 6,
   "packages/harness/src/shared/schemas/fileTypes.ts": 3,
   "packages/harness/src/shared/schemas/foldInput.ts": 6,
