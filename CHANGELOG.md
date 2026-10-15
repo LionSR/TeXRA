@@ -1077,6 +1077,11 @@ show` print the same notice, and the new `texra agents customize`,
 
 ### Bug Fixes
 
+- **The approval card for a proposed agent run offers its agent and model
+  pickers again.** In the task panel (VS Code and desktop), approving a
+  proposed delegation or document task lets you pick another agent or model
+  first, and the run starts with your pick. A script's request still
+  approves the script as written.
 - **Memory previews show on Windows.** The Settings Memory page listed
   nested memories with backslash paths, so their previews never matched a
   listed item and stayed empty. Memory paths now use forward slashes on

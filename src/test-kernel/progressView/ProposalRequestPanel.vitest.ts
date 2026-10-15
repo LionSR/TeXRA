@@ -5,6 +5,10 @@ import { describe, expect, it } from 'vitest';
 import type { ProposalRequestPanel } from '@progressView/frontend/components/ProposalRequestPanel';
 import type { RunId } from '@shared/schemas';
 import { recordPermissionActions } from '@test/support/permissionPanelEvents';
+import {
+  emptyHostSnapshot,
+  projectDisplayOf,
+} from '@texra/shared/session/hostSnapshot';
 
 // Local file imports
 import {
@@ -109,16 +113,24 @@ describe('proposal-request-panel file-name keyboard activation', () => {
   });
 
   it('attaches selected overrides only to approval decisions', async () => {
-    const permission = createPermission();
-    permission.modelOptionsData = [
-      { value: 'sonnet', label: 'Sonnet' },
-      { value: 'opus', label: 'Opus' },
-    ];
-    permission.agentOptionsData = [
-      { value: 'writer', label: 'Writer' },
-      { value: 'reviewer', label: 'Reviewer' },
-    ];
-    const element = await mountPanel(permission);
+    const element = await mountComponent<ProposalRequestPanel>(
+      'proposal-request-panel',
+      {
+        permission: createPermission(),
+        host: {
+          ...emptyHostSnapshot(projectDisplayOf('/workspace', '/workspace')),
+          modelOptions: [
+            { value: 'sonnet', label: 'Sonnet' },
+            { value: 'opus', label: 'Opus' },
+          ],
+          agentOptions: [
+            { value: 'writer', label: 'Writer', rounds: 1 },
+            { value: 'reviewer', label: 'Reviewer', rounds: 3 },
+            { value: 'chat', label: 'Chat' },
+          ],
+        },
+      },
+    );
     const actions = recordPermissionActions(element);
     const modelSelect = element.shadowRoot?.querySelector(
       '.proposal-model-dropdown',
@@ -126,6 +138,12 @@ describe('proposal-request-panel file-name keyboard activation', () => {
     const agentSelect = element.shadowRoot?.querySelector(
       '.proposal-agent-dropdown',
     ) as HTMLElement & { value?: string };
+    // A task offers only the agents that run one.
+    expect(
+      [...agentSelect.querySelectorAll('wa-option')].map((o) =>
+        o.getAttribute('value'),
+      ),
+    ).toEqual(['writer', 'reviewer']);
 
     modelSelect.value = 'opus';
     modelSelect.dispatchEvent(new Event('change', { bubbles: true }));

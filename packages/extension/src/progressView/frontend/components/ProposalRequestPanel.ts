@@ -2,7 +2,7 @@
 
 // Third-party imports
 import { html, nothing, type PropertyValues, type TemplateResult } from 'lit';
-import { customElement, state } from 'lit/decorators.js';
+import { customElement, property, state } from 'lit/decorators.js';
 import { ifDefined } from 'lit/directives/if-defined.js';
 import { repeat } from 'lit/directives/repeat.js';
 import { unsafeHTML } from 'lit/directives/unsafe-html.js';
@@ -15,12 +15,14 @@ import '@awesome.me/webawesome/dist/components/option/option.js';
 import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 
 // Local imports - shared styles
-import type {
-  AgentProposalPermission,
-  PermissionPayload,
+import {
+  agentName,
+  getProposalFileGroups,
+  type AgentProposalPermission,
+  type PermissionPayload,
 } from '@shared/schemas';
-import { getProposalFileGroups } from '@shared/schemas';
 import { getModelLabel } from '@shared/model/modelLabel';
+import type { HostSnapshot } from '@texra/shared/session/hostSnapshot';
 import { APPROVE_ALL_DELEGATED_WORK_ACTION } from '@texra/shared/session/surfaceDecision';
 import { SessionUiEvents } from '@texra/shared/session/uiEvents';
 import { DocumentTaskOptionsSchema } from '@texra/shared/plugins/documents';
@@ -70,6 +72,9 @@ export class ProposalRequestPanel extends BaseRequestPanel<'proposal'> {
     selectStyles,
   ];
 
+  /** The host's catalogs, the lists the composer launches from. */
+  @property({ attribute: false }) host: HostSnapshot | null = null;
+
   @state() private selectedModel: string | null = null;
   @state() private selectedAgent: string | null = null;
 
@@ -97,14 +102,11 @@ export class ProposalRequestPanel extends BaseRequestPanel<'proposal'> {
     if (data.script) {
       return html`${SCRIPT_REQUEST_COPY.title(data.script)}`;
     }
+    const { agents, models } = this.pickers;
     const agent =
-      (this.permission.agentOptionsData ?? []).length > 0
-        ? nothing
-        : html` <strong>${data.agent}</strong>`;
+      agents.length > 0 ? nothing : html` <strong>${data.agent}</strong>`;
     const model =
-      (this.permission.modelOptionsData ?? []).length > 0
-        ? nothing
-        : html` on ${getModelLabel(data.model)}`;
+      models.length > 0 ? nothing : html` on ${getModelLabel(data.model)}`;
     return data.task
       ? html`Run${agent === nothing ? ' an agent' : agent}${model}`
       : html`Delegate a
@@ -137,11 +139,7 @@ export class ProposalRequestPanel extends BaseRequestPanel<'proposal'> {
 
   override render(): TemplateResult {
     const data = this.permission.data;
-    const modelOptions = this.permission.modelOptionsData ?? [];
-    const agentOptions = this.permission.agentOptionsData ?? [];
-
-    // The transport ships option data only for proposals whose approval
-    // honors a model/agent override; the pickers render iff it arrived.
+    const { agents: agentOptions, models: modelOptions } = this.pickers;
     const pickers =
       agentOptions.length > 0 || modelOptions.length > 0
         ? html`<div class="workflow-proposal__pickers">
@@ -149,7 +147,8 @@ export class ProposalRequestPanel extends BaseRequestPanel<'proposal'> {
               agentOptions.length > 0
                 ? html`<wa-select
                     class="proposal-agent-dropdown"
-                    .value=${this.selectedAgent ?? data.agent}
+                    .value=${this.selectedAgent ?? this.proposedAgent}
+                    ?disabled=${this.readOnly}
                     @change=${this.handleAgentSelectChange}
                   >
                     <span slot="label" class="visually-hidden">Agent</span>
@@ -163,6 +162,7 @@ export class ProposalRequestPanel extends BaseRequestPanel<'proposal'> {
                 ? html`<wa-select
                     class="proposal-model-dropdown"
                     .value=${this.selectedModel ?? data.model}
+                    ?disabled=${this.readOnly}
                     @change=${this.handleSelectChange}
                   >
                     <span slot="label" class="visually-hidden">Model</span>
@@ -388,8 +388,43 @@ export class ProposalRequestPanel extends BaseRequestPanel<'proposal'> {
     }
   };
 
+  /**
+   * What the pickers offer, from the host's catalogs: every agent for a
+   * chat delegation, the agents with a document task for a task. A
+   * script's request approves the script, not one call's agent or model
+   * (`decideDelegation` ignores both there), so it offers none.
+   */
+  private get pickers(): {
+    agents: HostSnapshot['agentOptions'];
+    models: HostSnapshot['modelOptions'];
+  } {
+    const { host } = this;
+    const { script, task } = this.permission.data;
+    if (host === null || script) return { agents: [], models: [] };
+    return {
+      agents: task
+        ? host.agentOptions.filter((option) => option.rounds !== undefined)
+        : host.agentOptions,
+      models: host.modelOptions,
+    };
+  }
+
+  /** The proposed agent's option value: catalog options are
+   *  source-qualified, the proposal names the agent and its source. */
+  private get proposedAgent(): string {
+    const { agent, agentSource } = this.permission.data;
+    return (
+      this.pickers.agents.find(
+        (option) =>
+          agentName(option.value) === agent &&
+          (agentSource == null || option.source === agentSource),
+      )?.value ?? agent
+    );
+  }
+
   private get proposalOverrides(): { model?: string; agent?: string } {
-    const { model, agent } = this.permission.data;
+    const { model } = this.permission.data;
+    const agent = this.proposedAgent;
     const { selectedModel, selectedAgent } = this;
     return {
       ...(selectedModel && selectedModel !== model

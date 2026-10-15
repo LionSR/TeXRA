@@ -20,6 +20,7 @@ const scenes = process.env.SCENES
       'ext-wide',
       'ext-tools',
       'ext-proposal',
+      'ext-proposal-pickers',
       'ext-inline',
       'ext-process',
       'ext-cost',

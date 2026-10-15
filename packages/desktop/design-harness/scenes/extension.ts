@@ -539,6 +539,40 @@ export const extensionScenes: Record<string, () => TemplateResult> = {
     const view = withProposal();
     return sidebar(view, surface(view, { kind: 'select', runId: ROOT }));
   },
+  // A proposed document task on the child, in place of its bash request:
+  // the card's agent and model pickers over the host's catalogs.
+  'ext-proposal-pickers': () => {
+    const log = new Log();
+    log.emit(CHILD, T.childApproval, {
+      type: 'request.opened',
+      requestId: 'req-task',
+      payload: {
+        kind: 'proposal',
+        data: {
+          requestId: 'req-task',
+          runId: CHILD,
+          task: true,
+          agent: 'correct',
+          model: 'gemini-3.8-flash',
+          instruction: 'Fix the typos and notation slips in Section 2.',
+          memories: [],
+          inputFiles: ['/paper/section2.tex'],
+          contextFiles: [],
+          mediaFiles: [],
+          outputFiles: ['/paper/section2_correct.tex'],
+        },
+      },
+    });
+    const view = foldAll([
+      ...buildScenario().pending.filter(
+        (input) =>
+          !(input._tag === 'event' && input.event.type === 'request.opened'),
+      ),
+      ...log.events.map(tail),
+      local({ self: [OWNER] }),
+    ]);
+    return sidebar(view, surface(view, { kind: 'select', runId: CHILD }));
+  },
   // Real-ExtensionInline: the dispatch card inside the child that fanned
   // out (the root is a background script, whose calls its stage lists).
   'ext-inline': () => {

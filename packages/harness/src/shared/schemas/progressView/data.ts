@@ -5,7 +5,6 @@
  */
 import { z } from 'zod';
 
-import { AgentOptionDataSchema, ModelOptionDataSchema } from '../pickerOptions';
 import {
   AgentProposalPermissionSchema,
   BashPermissionSchema,
@@ -104,8 +103,6 @@ export const PermissionPayloadSchema = z.discriminatedUnion('kind', [
   z.object({
     kind: z.literal('proposal'),
     data: AgentProposalPermissionSchema,
-    modelOptionsData: z.array(ModelOptionDataSchema).optional(),
-    agentOptionsData: z.array(AgentOptionDataSchema).optional(),
   }),
   z.object({
     kind: z.literal('planApproval'),

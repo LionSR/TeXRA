@@ -52,6 +52,7 @@ export abstract class BaseRunContent extends LitElement {
         <request-panels
           .permissions=${permissions}
           .surface=${this.surface}
+          .host=${this.host}
           .run=${this.run}
         ></request-panels>
       </div>

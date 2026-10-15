@@ -21,6 +21,7 @@ import {
   requestAnswerability,
   type RunView,
 } from '@shared/session/sessionView';
+import type { HostSnapshot } from '@texra/shared/session/hostSnapshot';
 import type { Surface } from '@texra/shared/session/surface';
 
 // Local imports - progress view component types
@@ -95,6 +96,9 @@ export class RequestPanels extends LitElement {
   /** For the inquiry cards' drafts (`Surface.inquiryDrafts`). */
   @property({ attribute: false }) surface: Surface | null = null;
 
+  /** For the proposal card's agent and model pickers. */
+  @property({ attribute: false }) host: HostSnapshot | null = null;
+
   /** Pending keys seen after the previous update — drives first-appearance focus. */
   private seenKeys = new Set<string>();
 
@@ -120,6 +124,7 @@ export class RequestPanels extends LitElement {
           this.run?.actions.includes('resume') ? this.run.id : null
         }
         .surface=${this.surface}
+        .host=${this.host}
       ></${CARD_TAG[permission.kind]}>`,
     )}`;
   }
