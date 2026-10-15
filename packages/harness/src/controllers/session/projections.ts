@@ -2,9 +2,9 @@
  * The store's projections
  * (`.agents/docs/proposed/architecture/2026-09-28-storage-v1-design.md` §5):
  * the display and listing tables no row stores, each maintained by a pure
- * projector over decoded events. `Database` runs the projectors inside the
- * append transaction and executes the operations they return; a read first
- * rebuilds a projection whose stored version is not this build's and
+ * projector over decoded events. Their upkeep runs the projectors in
+ * `Database`'s append transaction, making the writes they return; before a
+ * read it rebuilds a projection whose stored version is not this build's and
  * catches up one that is behind (`projection_state`). Projections are never
  * migrated: a new version rebuilds from the rows.
  *
@@ -19,7 +19,9 @@
  *
  * This module reads decoded events only, never `event.data`.
  */
+import { Effect } from 'effect';
 import { z } from 'zod';
+import { withLogChannel } from '@logger/effectLog';
 import {
   listingKeyOf,
   listingTypeOf,
@@ -29,20 +31,20 @@ import {
   TokenUsageStatsSchema,
   type AggregateId,
   type ExtendedTokenUsageStats,
-  type JsonValue,
   type SessionEvent,
   type TokenUsageStats,
 } from '@shared/schemas';
 import {
   EVENT_COLUMNS,
   EVENT_FROM,
-  EVENT_JOINS,
-  PROJECTED_COLUMNS,
-  PROJECTED_FROM,
+  AGGREGATE,
+  aggregateColumns,
+  type SqlRow,
 } from './rowCodec';
+import type { RowReader } from './rowReader';
 
-/** One write a projector asks `Database` to make. */
-export type ProjectionOp =
+/** One write a projector asks its upkeep to make. */
+type ProjectionOp =
   | {
       readonly table: 'listing_entry';
       readonly aggregate: AggregateId;
@@ -71,7 +73,7 @@ export type ProjectionOp =
     };
 
 /** A run's prior row in the table a projector reads back. */
-export interface ProjectionPrior {
+interface ProjectionPrior {
   readonly usage?: TokenUsageStats;
   readonly model?: { readonly model: string; readonly commit: number | null };
 }
@@ -82,7 +84,8 @@ interface Projector {
   readonly inputs: readonly string[];
   /** The prior row it reads by primary key before projecting, if any. */
   readonly prior: 'run_usage' | 'run_model' | null;
-  /** The projected display types its rebuild deletes. */
+  /** The table its rebuild empties, and the projected types it deletes. */
+  readonly table: 'listing_entry' | 'run_usage' | 'run_model';
   readonly projects: readonly ('usage' | 'run.model')[];
   readonly project: (
     event: SessionEvent,
@@ -117,11 +120,12 @@ function pricedUsage(event: SessionEvent): ExtendedTokenUsageStats | null {
   };
 }
 
-export const PROJECTORS = {
+const PROJECTORS = {
   listing: {
     version: 1,
     inputs: ALL_TYPES.filter((type) => listingTypeOf({ type }) !== null),
     prior: null,
+    table: 'listing_entry',
     projects: [],
     // Every input has a listing type (`inputs`); a pending key replaces it.
     project: (event) => {
@@ -138,6 +142,7 @@ export const PROJECTORS = {
     version: 1,
     inputs: ['model.message', 'context.edit', 'usage'],
     prior: 'run_usage',
+    table: 'run_usage',
     projects: ['usage'],
     project: (event, prior) => {
       const stored = event.type === 'usage' ? event.usage : null;
@@ -170,6 +175,7 @@ export const PROJECTORS = {
     version: 1,
     inputs: ['run.config'],
     prior: 'run_model',
+    table: 'run_model',
     projects: ['run.model'],
     project: (event, prior) => {
       if (event.type !== 'run.config') return [];
@@ -198,55 +204,35 @@ export const PROJECTORS = {
   },
 } as const satisfies Record<string, Projector>;
 
-export type ProjectionName = keyof typeof PROJECTORS;
-export const PROJECTION_NAMES = Object.keys(PROJECTORS) as ProjectionName[];
-export const PROJECTION_INPUTS = new Map(
+type ProjectionName = keyof typeof PROJECTORS;
+const PROJECTION_NAMES = Object.keys(PROJECTORS) as ProjectionName[];
+const PROJECTION_INPUTS = new Map(
   PROJECTION_NAMES.map((name) => [name, new Set(PROJECTORS[name].inputs)]),
 );
-/** Each projection's table a rebuild empties, beside its projected rows. */
-export const PROJECTION_TABLE: Readonly<Record<ProjectionName, string>> = {
-  listing: 'listing_entry',
-  usage: 'run_usage',
-  model: 'run_model',
-};
-/**
- * One projection's checkpoint: the projector's version and the commit it has
- * read through. A name this build does not know is a later build's
- * projection and is left alone.
- */
+/** The listing's input kinds and the stored `usage` kind, as a JSON list. */
+export const LISTED_TYPES = JSON.stringify([
+  ...PROJECTORS.listing.inputs,
+  'usage',
+]);
+/** One projection's checkpoint: its projector's version and the commit it
+ *  read through. A name this build does not know is a later build's. */
 const ProjectionStateSchema = z.object({
   name: z.string(),
   version: z.int(),
   through: z.int().nonnegative(),
 });
-type ProjectionState = z.infer<typeof ProjectionStateSchema>;
 
-export function projectionStates(
-  rows: readonly Readonly<Record<string, unknown>>[],
-): ReadonlyMap<string, ProjectionState> {
-  return new Map(
-    rows.map((row) => {
-      const state = ProjectionStateSchema.parse(row);
-      return [state.name, state] as const;
-    }),
-  );
-}
-
-/** Whether `state` is this build's projection: its version. */
-export const isOwn = (
+/** A projection this build owns (its version) and that has read every row
+ *  through `top`; one with no state yet is current only on a store that
+ *  never held a row, so a fresh store's first read writes nothing. */
+const isCurrent = (
   name: ProjectionName,
-  state: ProjectionState | undefined,
-): boolean => state?.version === PROJECTORS[name].version;
-
-/** A projection this build owns and that has read every row through `top`;
- *  one with no state yet is current only on a store that never held a row,
- *  so a fresh store's first read writes nothing. */
-export const isCurrent = (
-  name: ProjectionName,
-  state: ProjectionState | undefined,
+  state: z.infer<typeof ProjectionStateSchema> | undefined,
   top: number,
 ): boolean =>
-  state === undefined ? top === 0 : isOwn(name, state) && state.through >= top;
+  state === undefined
+    ? top === 0
+    : state.version === PROJECTORS[name].version && state.through >= top;
 
 const RunUsageSchema = z.object({ usage: TokenUsageStatsSchema });
 const RunModelSchema = z.object({
@@ -254,132 +240,160 @@ const RunModelSchema = z.object({
   commit: z.int().nullable(),
 });
 
-/** A projector's prior row, as `Database` read it by primary key. */
-export function priorOf(
-  table: 'run_usage' | 'run_model',
-  row: Readonly<Record<string, unknown>> | undefined,
-): ProjectionPrior {
-  if (row === undefined) return {};
-  return table === 'run_usage'
-    ? { usage: RunUsageSchema.parse(JSON.parse(String(row.usage))).usage }
-    : { model: RunModelSchema.parse(row) };
+/** The statement and parameters that make one projector's write. */
+function opStatement(op: ProjectionOp): [string, unknown[]] {
+  switch (op.table) {
+    case 'listing_entry':
+      return op.commit === null
+        ? [
+            `DELETE FROM listing_entry WHERE aggregate = ${AGGREGATE} AND key = ?`,
+            [...aggregateColumns(op.aggregate), op.key],
+          ]
+        : [
+            `INSERT INTO listing_entry (aggregate, key, "commit")
+             VALUES (${AGGREGATE}, ?, ?) ON CONFLICT(aggregate, key)
+             DO UPDATE SET "commit" = excluded."commit"`,
+            [...aggregateColumns(op.aggregate), op.key, op.commit],
+          ];
+    case 'projected_row':
+      return [
+        `INSERT INTO projected_row ("commit", type, data) VALUES (?, ?, ?)
+         ON CONFLICT("commit", type) DO UPDATE SET data = excluded.data`,
+        [op.commit, op.type, op.data],
+      ];
+    case 'run_usage':
+      return [
+        `INSERT INTO run_usage (aggregate, "commit", usage)
+         VALUES (${AGGREGATE}, ?, ?) ON CONFLICT(aggregate) DO UPDATE
+         SET "commit" = excluded."commit", usage = excluded.usage`,
+        [...aggregateColumns(op.aggregate), op.commit, op.data],
+      ];
+    case 'run_model':
+      return [
+        `INSERT INTO run_model (aggregate, model, "commit")
+         VALUES (${AGGREGATE}, ?, ?) ON CONFLICT(aggregate) DO UPDATE
+         SET model = excluded.model, "commit" = excluded."commit"`,
+        [...aggregateColumns(op.aggregate), op.model, op.commit],
+      ];
+  }
 }
 
-/**
- * The listing: each aggregate's `listing_entry` rows, each run's spend
- * (`run_usage`, on its newest priced row's envelope) and its latest model
- * switch, in commit order. Primary-key joins only.
- */
-/** The listed rows, driven from `listing_entry` (`CROSS JOIN` holds the
- *  order: a store is never `ANALYZE`d), each by its event's primary key. */
-const LISTED = `listing_entry l CROSS JOIN event e ON e."commit" = l."commit"
-  ${EVENT_JOINS}`;
-
-export const READ_LISTING = `SELECT * FROM (
-  SELECT ${EVENT_COLUMNS} FROM ${LISTED}
-  UNION ALL
-  SELECT u."commit" AS "commit", s.kind AS kind, s.logical_id AS logicalId,
-    s.uid AS uid,
-    e.seq AS seq, 'usage' AS type, NULL AS version, e.origin AS origin,
-    e.at AS at, u.usage AS data, NULL AS blobs
-  FROM run_usage u
-    JOIN event e ON e."commit" = u."commit"
-    JOIN event_sequence s ON s.id = u.aggregate
-  UNION ALL
-  SELECT ${PROJECTED_COLUMNS} FROM ${PROJECTED_FROM}
-    JOIN run_model m ON m."commit" = p."commit" AND p.type = 'run.model'
-) ORDER BY "commit"`;
-
-/** One open run's listing rows, its pending sets left out. */
-export const READ_RUN_RECORDS = `SELECT ${EVENT_COLUMNS} FROM ${LISTED}
-  WHERE l.aggregate = (SELECT id FROM event_sequence
-      WHERE kind = ? AND logical_id = ? AND closed_by IS NULL)
-    AND e.type NOT IN ('request.opened', 'followup.queued')
-  ORDER BY e."commit"`;
-
-/** Aggregates bound as two parallel `json_each(?)` arrays (`aggregateLists`),
- *  joined in this order: a free planner scans both arrays per aggregate. */
-export const AGGREGATE_LIST = `WITH k(key, value) AS MATERIALIZED
-  (SELECT key, value FROM json_each(?))
-  SELECT s.id FROM json_each(?) l CROSS JOIN k ON k.key = l.key
-  CROSS JOIN event_sequence s ON s.kind = k.value AND s.logical_id = l.value`;
-/** Aggregates' claim state, the list bound as `AGGREGATE_LIST` binds. */
-export const READ_STATE = `
-SELECT s.kind, s.logical_id AS logicalId, s.uid, s.owner_id AS ownerId,
-  s.closed_by IS NOT NULL AS closed, p.kind AS parentKind,
-  p.logical_id AS parentLogicalId, s.start_commit AS startCommit
-FROM event_sequence s LEFT JOIN event_sequence p ON p.id = s.parent_id
-WHERE s.id IN (${AGGREGATE_LIST})
-`;
-
-/** Stored rows a display page reads before it runs on to its batch's end. */
-export const DISPLAY_PAGE_ROWS = 2000;
-/** Where a display page after a commit ends: 2,000 stored rows on, run to
- *  the end of the batch the last one is in, as a card's `tool.end` and the
- *  settlement it projects from share one batch (`settleCards`) and a batch's
- *  rows share one `at`. No row, or a NULL `through`: the page runs to the
- *  end. Counted in rows, so a stretch of collected commits bounds nothing. */
-export const DISPLAY_PAGE_END = `WITH last AS (SELECT "commit", at FROM event
-    WHERE "commit" > ? ORDER BY "commit" LIMIT 1 OFFSET ${DISPLAY_PAGE_ROWS - 1})
-  SELECT (SELECT e."commit" - 1 FROM event e
-    WHERE e."commit" > last."commit" AND e.at <> last.at
-    ORDER BY e."commit" LIMIT 1) AS through FROM last`;
-
-/**
- * The one display union: the `event` rows of the types bound first, every
- * projected row, and an optional further arm, narrowed by `where` over the
- * union's columns (`"commit"`, `kind`, `logicalId`, `seq`), which SQLite
- * pushes into each arm, so a range binds once.
- */
-export const displayUnion = (where: string, order: string, arm?: string) =>
-  `SELECT * FROM (
-    SELECT ${EVENT_COLUMNS} FROM ${EVENT_FROM}
-      WHERE e.type IN (SELECT value FROM json_each(?))
-    UNION ALL SELECT ${PROJECTED_COLUMNS} FROM ${PROJECTED_FROM}
-    ${arm === undefined ? '' : `UNION ALL ${arm}`}
-  ) WHERE ${where} ORDER BY ${order}`;
-
-/** The rows a projection's catch-up reads past its checkpoint, bounded. */
-export const CATCH_UP = `SELECT ${EVENT_COLUMNS} FROM ${EVENT_FROM}
-  WHERE e.type IN (SELECT value FROM json_each(?))
-    AND e."commit" > ? AND e."commit" <= ?
-  ORDER BY e."commit" LIMIT 1000`;
-
-/**
- * The read-time projection of a tool card's output (§10): a `tool.end` on a
- * run history stores no `result`; its output is the `tool.result` committed
- * just before it in the same batch (bar the card's `tool.start`). The card
- * keeps its `files`; the fold keeps the name and input it opened with.
- */
-export function settleCards(
-  events: readonly SessionEvent[],
-): readonly SessionEvent[] {
-  const settled = new Map<
-    AggregateId,
-    SessionEvent & { type: 'tool.result' }
-  >();
-  return events.map((event) => {
-    if (event.type === 'tool.result') settled.set(event.aggregateId, event);
-    else if (event.type !== 'tool.start') {
-      const settlement = settled.get(event.aggregateId);
-      settled.delete(event.aggregateId);
-      if (event.type === 'tool.end' && event.result === undefined && settlement)
-        return { ...event, result: cardResult(settlement, event.files) };
-    }
-    return event;
-  });
-}
-
-function cardResult(
-  { payload }: SessionEvent & { type: 'tool.result' },
-  files: Extract<SessionEvent, { type: 'tool.end' }>['files'],
-): JsonValue {
-  const { status: _status, ...rest } = payload.result;
-  const output = { ...rest, ...(files?.length ? { editedFiles: files } : {}) };
-  return JSON.parse(
-    JSON.stringify({
-      ...(Object.keys(output).length > 0 ? { output } : {}),
-      ...(files?.length ? { files } : {}),
-    }),
+/** The upkeep of the store at `path`'s projections, in the caller's
+ *  transaction: `exec` runs a statement, `read` decodes selected rows. */
+export function projectionUpkeep<E>(
+  exec: (
+    statement: string,
+    params?: readonly unknown[],
+  ) => Effect.Effect<readonly SqlRow[], E>,
+  read: RowReader<E>['read'],
+  path: string,
+) {
+  const states = Effect.map(
+    exec(
+      'SELECT name, version, through_commit AS through FROM projection_state',
+    ),
+    (rows) =>
+      new Map(
+        ProjectionStateSchema.array()
+          .parse(rows)
+          .map((s) => [s.name, s]),
+      ),
   );
+  const setState = (name: ProjectionName, through: number) =>
+    exec(
+      `INSERT INTO projection_state (name, version, through_commit)
+       VALUES (?, ?, ?) ON CONFLICT(name) DO UPDATE SET
+       version = excluded.version, through_commit = excluded.through_commit`,
+      [name, PROJECTORS[name].version, through],
+    );
+  /** Run the named projectors over decoded events: a projector with a
+   *  prior row reads it back first. */
+  const project = (
+    events: readonly SessionEvent[],
+    names: readonly ProjectionName[],
+  ) =>
+    Effect.forEach(events, (event) =>
+      Effect.forEach(names, (name) =>
+        Effect.gen(function* () {
+          if (!PROJECTION_INPUTS.get(name)?.has(event.type)) return;
+          const projector = PROJECTORS[name];
+          const row =
+            projector.prior === null
+              ? undefined
+              : (yield* exec(
+                  `SELECT * FROM ${projector.prior} WHERE aggregate = ${AGGREGATE}`,
+                  aggregateColumns(event.aggregateId),
+                ))[0];
+          let prior: ProjectionPrior = {};
+          if (row !== undefined && projector.prior === 'run_usage')
+            prior = RunUsageSchema.parse(JSON.parse(String(row.usage)));
+          if (row !== undefined && projector.prior === 'run_model')
+            prior = { model: RunModelSchema.parse(row) };
+          for (const op of projector.project(event, prior))
+            yield* exec(...opStatement(op));
+        }),
+      ),
+    );
+  return {
+    /** Whether every projection is current through `top`. */
+    current: (top: number) =>
+      Effect.map(states, (current) =>
+        PROJECTION_NAMES.every((name) =>
+          isCurrent(name, current.get(name), top),
+        ),
+      ),
+    /** One catch-up step: a projection another build versioned is emptied
+     *  and rebuilt; one behind `top` reads up to 1,000 rows on. Whether
+     *  every projection reached `top`. */
+    catchUp: (top: number) =>
+      Effect.gen(function* () {
+        const current = yield* states;
+        let all = true;
+        for (const name of PROJECTION_NAMES) {
+          const state = current.get(name);
+          if (isCurrent(name, state, top)) continue;
+          const own = state?.version === PROJECTORS[name].version;
+          if (state !== undefined && !own)
+            yield* Effect.logInfo(
+              `Rebuilding the ${name} projection of ${path} (stored version ${state.version}, this build's ${PROJECTORS[name].version}).`,
+            ).pipe(withLogChannel('sessionDatabase'));
+          if (!own) {
+            yield* exec(`DELETE FROM ${PROJECTORS[name].table}`);
+            yield* exec(
+              'DELETE FROM projected_row WHERE type IN (SELECT value FROM json_each(?))',
+              [JSON.stringify(PROJECTORS[name].projects)],
+            );
+          }
+          const through = own ? (state?.through ?? 0) : 0;
+          const rows =
+            through >= top
+              ? []
+              : yield* exec(
+                  `SELECT ${EVENT_COLUMNS} FROM ${EVENT_FROM}
+                   WHERE e.type IN (SELECT value FROM json_each(?))
+                     AND e."commit" > ? AND e."commit" <= ?
+                   ORDER BY e."commit" LIMIT 1000`,
+                  [JSON.stringify(PROJECTORS[name].inputs), through, top],
+                );
+          yield* project(yield* read(rows, false), [name]);
+          const reached =
+            rows.length < 1000 ? top : z.int().parse(rows.at(-1)?.commit);
+          yield* setState(name, reached);
+          all &&= reached >= top;
+        }
+        return all;
+      }),
+    /** A batch committed after `before`: a projection current through
+     *  `before` follows it; any other catches up on its owner's next read. */
+    follow: (events: readonly SessionEvent[], before: number) =>
+      Effect.gen(function* () {
+        const through = events.at(-1)?.commit ?? before;
+        const current = yield* states;
+        const following = PROJECTION_NAMES.filter((name) =>
+          isCurrent(name, current.get(name), before),
+        );
+        yield* project(events, following);
+        for (const name of following) yield* setState(name, through);
+      }),
+  };
 }

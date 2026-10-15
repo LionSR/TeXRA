@@ -62,11 +62,18 @@ const tableWrite = (tables: string) =>
     'i',
   );
 /** The run history's tables: `event` and `event_sequence`, the store-wide `blob`
- *  table and its `event_blob` references, the `stored_kind` and `projection_state` bookkeeping, and the four
- *  projection tables. `Database.ts` is their one writer. */
+ *  table and its `event_blob` references, and the `stored_kind` bookkeeping.
+ *  `Database.ts` is their one writer. */
 const EVENT_TABLE_WRITE = tableWrite(
-  'event|event_sequence|event_blob|blob|stored_kind|projection_state|projected_row|listing_entry|run_usage|run_model',
+  'event|event_sequence|event_blob|blob|stored_kind',
 );
+/** The four projection tables and their `projection_state` checkpoints,
+ *  written by the projections' upkeep alone, in `Database`'s transactions. */
+const PROJECTION_TABLE_WRITE = tableWrite(
+  'projection_state|projected_row|listing_entry|run_usage|run_model',
+);
+const PROJECTIONS_MODULE =
+  'packages/harness/src/controllers/session/projections.ts';
 /** A root's current values and input history, written by `currentValues.ts`
  *  alone. */
 const CURRENT_TABLE_WRITE = tableWrite('current_value|input_history');
@@ -180,6 +187,7 @@ describe('persistence write boundary', () => {
     const found = [
       ...offenders(EVENT_TABLE_WRITE, [DATABASE_MODULE]),
       ...offenders(CURRENT_TABLE_WRITE, [CURRENT_VALUES_MODULE]),
+      ...offenders(PROJECTION_TABLE_WRITE, [PROJECTIONS_MODULE]),
     ];
 
     expect(
@@ -279,6 +287,13 @@ describe('persistence write boundary', () => {
     // file that no longer writes anything.
     expect(SQLITE_IMPORT.test(source)).toBe(true);
     expect(EVENT_TABLE_WRITE.test(source)).toBe(true);
+    expect(
+      PROJECTION_TABLE_WRITE.test(
+        stripComments(
+          readFileSync(resolve(REPO_ROOT, PROJECTIONS_MODULE), 'utf8'),
+        ),
+      ),
+    ).toBe(true);
     expect(
       CURRENT_TABLE_WRITE.test(
         stripComments(

@@ -40,7 +40,6 @@
   "packages/harness/src/agent/workspaceAgents/workspaceAgentsState.ts": 1,
   "packages/harness/src/controllers/session/currentValues.ts": 1,
   "packages/harness/src/controllers/session/Database.ts": 1,
-  "packages/harness/src/controllers/session/projections.ts": 6,
   "packages/harness/src/controllers/session/rowCodec.ts": 2,
   "packages/harness/src/controllers/session/sessionInputs.ts": 1,
   "packages/harness/src/controllers/session/sessionSources.ts": 3,

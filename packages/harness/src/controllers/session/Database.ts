@@ -8,9 +8,10 @@
  * error, never the ephemeral mode. `storeSchema.ts` owns the DDL and the open
  * sequence; `rowCodec.ts` every stored shape, by the arms the process's
  * plugins contribute (this module reads no payload); `projections` the
- * projectors run in the append transaction. This module owns the envelope:
- * the writer (C5, `ProcessIdentity`), the publish clock, and the `seq` and
- * `commit` ordinals, none of which a caller supplies.
+ * projectors and their upkeep, run in this module's transactions. This
+ * module owns the envelope: the writer (C5, `ProcessIdentity`), the publish
+ * clock, and the `seq` and `commit` ordinals, none of which a caller
+ * supplies.
  */
 import { randomUUID } from 'node:crypto';
 import { join } from 'node:path';
@@ -68,32 +69,15 @@ import { armsOf } from '@tools/plugins';
 import { ToolRegistry, toolTable } from '@tools/toolTable';
 import { currentValues, READ_RETRY } from './currentValues';
 import { localDatabasePath } from './localDatabasePath';
+import { LISTED_TYPES, projectionUpkeep } from './projections';
 import {
-  CATCH_UP,
-  PROJECTION_INPUTS,
-  PROJECTION_NAMES,
-  PROJECTION_TABLE,
-  isOwn,
-  projectionStates as parseProjectionStates,
-  isCurrent,
-  PROJECTORS,
-  AGGREGATE_LIST,
-  READ_LISTING,
-  READ_RUN_RECORDS,
-  READ_STATE,
-  displayUnion,
-  DISPLAY_PAGE_END,
-  DISPLAY_PAGE_ROWS,
-  priorOf,
-  settleCards,
-  type ProjectionName,
-  type ProjectionOp,
-} from './projections';
-import {
+  AGGREGATE,
   DISPLAY_READ_TYPES,
   EVENT_COLUMNS,
   EVENT_FROM,
   EVENT_JOINS,
+  PROJECTED_COLUMNS,
+  PROJECTED_FROM,
   aggregateColumns,
   aggregateLists,
   aggregateOf,
@@ -105,7 +89,7 @@ import {
   type EncodedRow,
   type SqlRow,
 } from './rowCodec';
-import { rowReader } from './rowReader';
+import { rowReader, settleCards } from './rowReader';
 import {
   isBusy,
   isDamaged,
@@ -127,9 +111,6 @@ const TxMode = Context.Reference<'read' | 'write' | 'derive' | null>(
   '@texra/session/TxMode',
   { defaultValue: () => null },
 );
-/** One aggregate's surrogate, from its two columns. */
-const AGGREGATE =
-  '(SELECT id FROM event_sequence WHERE kind = ? AND logical_id = ?)';
 /** First append claims the aggregate and mints its uid; later need the claim. */
 const NEXT_SEQ = `
 INSERT INTO event_sequence (kind, logical_id, uid, seq, owner_id)
@@ -152,6 +133,79 @@ const INSERT_REF = 'INSERT INTO event_blob ("commit", digest) VALUES (?, ?)';
 const UPSERT_KIND = `INSERT INTO stored_kind (type, version) VALUES (?, ?)
   ON CONFLICT(type) DO UPDATE
   SET version = max(stored_kind.version, excluded.version)`;
+/**
+ * The listing: each aggregate's `listing_entry` rows, each run's spend
+ * (`run_usage`, on its newest priced row's envelope) and its latest model
+ * switch, in commit order. Primary-key joins only.
+ */
+/** The listed rows, driven from `listing_entry` (`CROSS JOIN` holds the
+ *  order: a store is never `ANALYZE`d), each by its event's primary key. */
+const LISTED = `listing_entry l CROSS JOIN event e ON e."commit" = l."commit"
+  ${EVENT_JOINS}`;
+
+const READ_LISTING = `SELECT * FROM (
+  SELECT ${EVENT_COLUMNS} FROM ${LISTED}
+  UNION ALL
+  SELECT u."commit" AS "commit", s.kind AS kind, s.logical_id AS logicalId,
+    s.uid AS uid,
+    e.seq AS seq, 'usage' AS type, NULL AS version, e.origin AS origin,
+    e.at AS at, u.usage AS data, NULL AS blobs
+  FROM run_usage u
+    JOIN event e ON e."commit" = u."commit"
+    JOIN event_sequence s ON s.id = u.aggregate
+  UNION ALL
+  SELECT ${PROJECTED_COLUMNS} FROM ${PROJECTED_FROM}
+    JOIN run_model m ON m."commit" = p."commit" AND p.type = 'run.model'
+) ORDER BY "commit"`;
+
+/** One open run's listing rows, its pending sets left out. */
+const READ_RUN_RECORDS = `SELECT ${EVENT_COLUMNS} FROM ${LISTED}
+  WHERE l.aggregate = (SELECT id FROM event_sequence
+      WHERE kind = ? AND logical_id = ? AND closed_by IS NULL)
+    AND e.type NOT IN ('request.opened', 'followup.queued')
+  ORDER BY e."commit"`;
+
+/** Aggregates bound as two parallel `json_each(?)` arrays (`aggregateLists`),
+ *  joined in this order: a free planner scans both arrays per aggregate. */
+const AGGREGATE_LIST = `WITH k(key, value) AS MATERIALIZED
+  (SELECT key, value FROM json_each(?))
+  SELECT s.id FROM json_each(?) l CROSS JOIN k ON k.key = l.key
+  CROSS JOIN event_sequence s ON s.kind = k.value AND s.logical_id = l.value`;
+/** Aggregates' claim state, the list bound as `AGGREGATE_LIST` binds. */
+const READ_STATE = `
+SELECT s.kind, s.logical_id AS logicalId, s.uid, s.owner_id AS ownerId,
+  s.closed_by IS NOT NULL AS closed, p.kind AS parentKind,
+  p.logical_id AS parentLogicalId, s.start_commit AS startCommit
+FROM event_sequence s LEFT JOIN event_sequence p ON p.id = s.parent_id
+WHERE s.id IN (${AGGREGATE_LIST})
+`;
+
+/** Stored rows a display page reads before it runs on to its batch's end. */
+const DISPLAY_PAGE_ROWS = 2000;
+/** Where a display page after a commit ends: 2,000 stored rows on, run to
+ *  the end of the batch the last one is in, as a card's `tool.end` and the
+ *  settlement it projects from share one batch (`settleCards`) and a batch's
+ *  rows share one `at`. No row, or a NULL `through`: the page runs to the
+ *  end. Counted in rows, so a stretch of collected commits bounds nothing. */
+const DISPLAY_PAGE_END = `WITH last AS (SELECT "commit", at FROM event
+    WHERE "commit" > ? ORDER BY "commit" LIMIT 1 OFFSET ${DISPLAY_PAGE_ROWS - 1})
+  SELECT (SELECT e."commit" - 1 FROM event e
+    WHERE e."commit" > last."commit" AND e.at <> last.at
+    ORDER BY e."commit" LIMIT 1) AS through FROM last`;
+
+/**
+ * The one display union: the `event` rows of the types bound first, every
+ * projected row, and an optional further arm, narrowed by `where` over the
+ * union's columns (`"commit"`, `kind`, `logicalId`, `seq`), which SQLite
+ * pushes into each arm, so a range binds once.
+ */
+const displayUnion = (where: string, order: string, arm?: string) =>
+  `SELECT * FROM (
+    SELECT ${EVENT_COLUMNS} FROM ${EVENT_FROM}
+      WHERE e.type IN (SELECT value FROM json_each(?))
+    UNION ALL SELECT ${PROJECTED_COLUMNS} FROM ${PROJECTED_FROM}
+    ${arm === undefined ? '' : `UNION ALL ${arm}`}
+  ) WHERE ${where} ORDER BY ${order}`;
 export const databaseLayer = (
   mode: 'persistent' | 'ephemeral',
 ): Layer.Layer<
@@ -294,10 +348,6 @@ export const databaseLayer = (
         'kind = ? AND logicalId = ? AND seq >= ?',
         'seq',
       );
-      const inputTypes = JSON.stringify([
-        ...PROJECTORS.listing.inputs,
-        'usage',
-      ]);
       // The listing's tail, plus every row of the resident aggregates.
       const inputRows = displayUnion(
         '"commit" > ? AND "commit" <= ?',
@@ -509,149 +559,28 @@ export const databaseLayer = (
             ],
           );
         });
-      const projectionStates = exec(
-        'SELECT name, version, through_commit AS through FROM projection_state',
-      ).pipe(Effect.map(parseProjectionStates));
-      /** Every projection current in the caller's transaction. */
-      const projectionsCurrent = Effect.gen(function* () {
-        const states = yield* projectionStates;
-        const top = yield* currentCommit;
-        return PROJECTION_NAMES.every((name) =>
-          isCurrent(name, states.get(name), top),
-        );
-      });
-      const setProjectionState = (name: ProjectionName, through: number) =>
-        exec(
-          `INSERT INTO projection_state (name, version, through_commit)
-           VALUES (?, ?, ?) ON CONFLICT(name) DO UPDATE SET
-           version = excluded.version, through_commit = excluded.through_commit`,
-          [name, PROJECTORS[name].version, through],
-        );
-      const applyOp = (op: ProjectionOp) => {
-        switch (op.table) {
-          case 'listing_entry':
-            return op.commit === null
-              ? exec(
-                  `DELETE FROM listing_entry WHERE aggregate = ${AGGREGATE} AND key = ?`,
-                  [...aggregateColumns(op.aggregate), op.key],
-                )
-              : exec(
-                  `INSERT INTO listing_entry (aggregate, key, "commit")
-                   VALUES (${AGGREGATE}, ?, ?) ON CONFLICT(aggregate, key)
-                   DO UPDATE SET "commit" = excluded."commit"`,
-                  [...aggregateColumns(op.aggregate), op.key, op.commit],
-                );
-          case 'projected_row':
-            return exec(
-              `INSERT INTO projected_row ("commit", type, data) VALUES (?, ?, ?)
-               ON CONFLICT("commit", type) DO UPDATE SET data = excluded.data`,
-              [op.commit, op.type, op.data],
-            );
-          case 'run_usage':
-            return exec(
-              `INSERT INTO run_usage (aggregate, "commit", usage)
-               VALUES (${AGGREGATE}, ?, ?) ON CONFLICT(aggregate) DO UPDATE
-               SET "commit" = excluded."commit", usage = excluded.usage`,
-              [...aggregateColumns(op.aggregate), op.commit, op.data],
-            );
-          case 'run_model':
-            return exec(
-              `INSERT INTO run_model (aggregate, model, "commit")
-               VALUES (${AGGREGATE}, ?, ?) ON CONFLICT(aggregate) DO UPDATE
-               SET model = excluded.model, "commit" = excluded."commit"`,
-              [...aggregateColumns(op.aggregate), op.model, op.commit],
-            );
-        }
-      };
-      /** Run the named projectors over decoded events, in the caller's
-       *  transaction: a projector with a prior row reads it back first. */
-      const project = (
-        events: readonly SessionEvent[],
-        names: readonly ProjectionName[],
-      ) =>
-        Effect.forEach(events, (event) =>
-          Effect.forEach(names, (name) =>
-            Effect.gen(function* () {
-              if (!PROJECTION_INPUTS.get(name)?.has(event.type)) return;
-              const projector = PROJECTORS[name];
-              const prior =
-                projector.prior === null
-                  ? {}
-                  : priorOf(
-                      projector.prior,
-                      yield* execOne(
-                        `SELECT * FROM ${projector.prior} WHERE aggregate = ${AGGREGATE}`,
-                        aggregateColumns(event.aggregateId),
-                      ),
-                    );
-              for (const op of projector.project(event, prior))
-                yield* applyOp(op);
-            }),
-          ),
-        );
-      /** A projection another build versioned is emptied and rebuilt; one
-       *  behind the high-water commit catches up, 1,000 rows a transaction. */
-      const catchUpProjections = Effect.gen(function* () {
-        let done = false;
-        while (!done) {
-          done = yield* transaction(
-            'derive',
-            Effect.gen(function* () {
-              const current = yield* projectionStates;
-              const top = yield* currentCommit;
-              let all = true;
-              for (const name of PROJECTION_NAMES) {
-                const state = current.get(name);
-                if (isCurrent(name, state, top)) continue;
-                const own = isOwn(name, state);
-                if (state !== undefined && !own)
-                  yield* Effect.logInfo(
-                    `Rebuilding the ${name} projection of ${path} (stored version ${state.version}, this build's ${PROJECTORS[name].version}).`,
-                  ).pipe(withLogChannel(CHANNEL));
-                if (!own) {
-                  yield* exec(`DELETE FROM ${PROJECTION_TABLE[name]}`);
-                  yield* exec(
-                    'DELETE FROM projected_row WHERE type IN (SELECT value FROM json_each(?))',
-                    [JSON.stringify(PROJECTORS[name].projects)],
-                  );
-                }
-                const through = own ? (state?.through ?? 0) : 0;
-                const rows =
-                  through >= top
-                    ? []
-                    : yield* exec(CATCH_UP, [
-                        JSON.stringify(PROJECTORS[name].inputs),
-                        through,
-                        top,
-                      ]);
-                yield* project(yield* decoded(rows, false), [name]);
-                const reached =
-                  rows.length < 1000 ? top : z.int().parse(rows.at(-1)?.commit);
-                yield* setProjectionState(name, reached);
-                all &&= reached >= top;
-              }
-              return all;
-            }),
-            readFailed,
-          );
-        }
-      });
+      const upkeep = projectionUpkeep(exec, decoded, path);
       /** A read of the projections, in the same read transaction as the
        *  check that they are current, so another build's rebuild never hands
-       *  it a half-built one; a stale one catches up and the read runs again. */
+       *  it a half-built one; a stale one catches up, a transaction a step,
+       *  and the read runs again. */
       const projected = <A, E>(read: Effect.Effect<A, E>) =>
         Effect.gen(function* () {
           for (;;) {
             const result = yield* transaction(
               'read',
               Effect.gen(function* () {
-                if (!(yield* projectionsCurrent)) return null;
+                if (!(yield* upkeep.current(yield* currentCommit))) return null;
                 return { value: yield* read };
               }),
               readFailed,
             );
             if (result !== null) return result.value;
-            yield* catchUpProjections;
+            yield* transaction(
+              'derive',
+              Effect.flatMap(currentCommit, upkeep.catchUp),
+              readFailed,
+            ).pipe(Effect.repeat({ until: (done) => done }));
           }
         });
       const appendRows = (
@@ -678,18 +607,7 @@ export const databaseLayer = (
           );
           for (const [type, version] of kinds)
             yield* exec(UPSERT_KIND, [type, version]);
-          // A projection of this build's version that read every row before
-          // the batch follows it; any other catches up on its owner's next read.
-          const states = yield* projectionStates;
-          const current = PROJECTION_NAMES.filter((name) => {
-            const state = states.get(name);
-            return state === undefined
-              ? before === 0
-              : isOwn(name, state) && state.through === before;
-          });
-          yield* project(committed, current);
-          const through = yield* currentCommit;
-          for (const name of current) yield* setProjectionState(name, through);
+          yield* upkeep.follow(committed, before);
           return committed;
         });
       const appendRow = (
@@ -975,9 +893,9 @@ export const databaseLayer = (
             Effect.gen(function* () {
               const cursor = yield* currentCommit;
               const events = yield* decodedRows(inputRows, [
-                inputTypes,
+                LISTED_TYPES,
                 ...aggregateLists(ids),
-                inputTypes,
+                LISTED_TYPES,
                 fromCommit,
                 cursor,
               ]);
