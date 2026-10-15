@@ -130,12 +130,15 @@ const CONVERSATION_RUN_ACTIONS: readonly RunMenuAction[] = [
   COPY_DIAGNOSTICS_ACTION,
 ];
 
-/** An agent run's menu: a document task's, or a conversation's (also
- *  another plugin's recipe run's). */
+/** An agent run's menu: a task's, or a conversation's. The output-file
+ *  entries are the documents plugin's, for its own tasks only. */
 export function runMenuActions(
   run: Pick<RunView, 'recipe'>,
 ): readonly RunMenuAction[] {
-  return isDocumentTaskRun(run) ? TASK_RUN_ACTIONS : CONVERSATION_RUN_ACTIONS;
+  if (!run.recipe) return CONVERSATION_RUN_ACTIONS;
+  return isDocumentTaskRun(run)
+    ? TASK_RUN_ACTIONS
+    : TASK_RUN_ACTIONS.filter((entry) => entry.action !== 'files');
 }
 
 /**
