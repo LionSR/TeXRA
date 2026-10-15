@@ -2,64 +2,32 @@ import { Effect } from 'effect';
 import { useApp, useWindowSize } from 'ink';
 
 import { renderCliPrompt } from '@cli/tui/renderCliPrompt';
-import type { SettingsStores } from '@shared/config/settingsAccess';
-import { CliConfigForm } from '../chat/tui/forms/CliConfigForm';
-import type { ProcessRuntime } from '@texra-ai/harness';
-import type { PlatformSecrets } from '@texra-ai/harness';
+import {
+  CliConfigForm,
+  type CliConfigFormProps,
+} from '../chat/tui/forms/CliConfigForm';
 
-export function ConfigApp(props: {
-  /** The settings slots this view reads and writes, from the command's roots. */
-  readonly stores: SettingsStores;
-  /**
-   * The secret store the API-key rows read and write, threaded from the
-   * command that opened this view; Ink components run no Effect.
-   */
-  readonly secrets: PlatformSecrets;
-  /** The process runtime the tools row runs on, from the same command. */
-  readonly runtime: ProcessRuntime;
-  /** The project the process opened, for the probes that need a workspace. */
-  readonly workspaceRoot: string | undefined;
-  readonly onError?: (error: unknown) => void;
-}) {
+/** `texra config edit` holds no session, so it takes no approval hook. */
+type ConfigAppProps = Omit<
+  CliConfigFormProps,
+  'availableRows' | 'onClose' | 'onApprovalPolicyChanged'
+>;
+
+function ConfigApp(props: ConfigAppProps) {
   const { exit } = useApp();
   const { rows } = useWindowSize();
-  return (
-    <CliConfigForm
-      stores={props.stores}
-      availableRows={rows}
-      secrets={props.secrets}
-      runtime={props.runtime}
-      workspaceRoot={props.workspaceRoot}
-      onClose={exit}
-      onError={props.onError}
-    />
-  );
+  return <CliConfigForm {...props} availableRows={rows} onClose={exit} />;
 }
 
-export function runConfigTui(options: {
-  readonly stores: SettingsStores;
-  readonly secrets: PlatformSecrets;
-  readonly runtime: ProcessRuntime;
-  readonly workspaceRoot: string | undefined;
-  readonly colorEnabled?: boolean;
-  readonly onError?: (error: unknown) => void;
-}): Effect.Effect<void> {
+export function runConfigTui({
+  colorEnabled,
+  ...props
+}: ConfigAppProps & { readonly colorEnabled?: boolean }): Effect.Effect<void> {
   return Effect.asVoid(
-    renderCliPrompt(
-      () => (
-        <ConfigApp
-          stores={options.stores}
-          secrets={options.secrets}
-          workspaceRoot={options.workspaceRoot}
-          runtime={options.runtime}
-          onError={options.onError}
-        />
-      ),
-      {
-        stdout: process.stdout,
-        stderr: process.stderr,
-        colorEnabled: options.colorEnabled,
-      },
-    ),
+    renderCliPrompt(() => <ConfigApp {...props} />, {
+      stdout: process.stdout,
+      stderr: process.stderr,
+      colorEnabled,
+    }),
   );
 }

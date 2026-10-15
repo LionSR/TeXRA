@@ -19,7 +19,7 @@ import type { runHeadlessAgent } from '@cli/commands/workflow';
 import { formatResumeCommand } from '@cli/chat/tui/state/resumeHint';
 import type { CliContext } from '@cli/runtime/cliContext';
 import type {
-  CliConfigExecuteOptions,
+  CliExecuteOptions,
   CliConfigExecuteResult,
 } from '@cli/runtime/executeCli';
 import { CliExitCode } from '@cli/runtime/exitCodes';
@@ -232,7 +232,7 @@ function mockWorkflowRun(
   const implementation = (
     _config: unknown,
     _context: unknown,
-    options: Pick<CliConfigExecuteOptions, 'afterRun'>,
+    options: Pick<CliExecuteOptions, 'afterRun'>,
   ) =>
     result.ok && options.afterRun
       ? Effect.as(options.afterRun(result.result), result)
@@ -511,7 +511,7 @@ describe('CLI run command, workflow agents', () => {
             ['paper.tex'],
             [],
             root,
-            { readStdinText: expect.anything() },
+            {},
             expect.any(Function),
           );
           const config = mocks.executeCliConfig.mock.calls[0]?.[0];

@@ -11,7 +11,6 @@ import {
   writeErrorStderr,
 } from '@cli/runtime/logSinks';
 import type { RunChatInit } from '@cli/chat/tui/runChatTui';
-import type { ParsedGlobalArgs } from '@cli/runtime/globalArgs';
 import type { CliContext } from '@cli/runtime/cliContext';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import { setLogSink, silentLogSink } from '@logger/logSink';
@@ -120,12 +119,9 @@ export function defineCliCommand<const A extends ArgsDef, E>(
     async run(ctx) {
       // The CLI's one pre-runtime run (pinned in `BARE_EFFECT_RUN_SITES`):
       // the context program opens the config stores before any process
-      // runtime exists. citty's `ctx.args` for a generic `ArgsDef` widens
-      // past the precise `ParsedGlobalArgs` shape; every command that uses
-      // this helper spreads `GLOBAL_ARGS`, overriding individual entries such
-      // as `cwd` only when it needs command-specific help text.
+      // runtime exists.
       const context = await Effect.runPromise(
-        contextFromArgs(ctx.args as ParsedGlobalArgs, ctx.rawArgs),
+        contextFromArgs(ctx.args, ctx.rawArgs),
       );
       const runCtx = ctx as CliCommandRunContext<A>;
       // Built before the run below, not inside it: a `CliUsageError` the

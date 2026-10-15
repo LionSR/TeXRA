@@ -13,6 +13,7 @@ import {
   type Run,
   type RuntimeRequest,
   type Session,
+  type StartInput,
 } from '@texra-ai/harness';
 import { liveToolGates } from '@agent/runtime/requestPolicy';
 import { humanGrant } from '@agent/runtime/runApprovalQueue';
@@ -42,7 +43,7 @@ import {
   useTempDirs,
 } from '@test/support/tempDirPlatform';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
-import { publishTestRows } from '@test/support/sessionTestUtils';
+import { publishTestRows, seedRows } from '@test/support/sessionTestUtils';
 import { generateRunId } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -57,7 +58,6 @@ const mocks = vi.hoisted(() => ({
   disposeHostInteractions: vi.fn(),
   prepareInteractivePrompt: vi.fn(),
   readCliRunOutcomeState: vi.fn(),
-  deriveResumability: vi.fn(),
   rootLaunch: vi.fn(),
   admit: vi.fn(),
   stopRequest: vi.fn(),
@@ -87,57 +87,43 @@ async function installStoragePlatform(): Promise<void> {
   await installFakeHost(await createTempDirPlatform('texra-run-', tempDirs));
 }
 
-/** What the suite's launch stand-in receives: the request and the
- *  approval and parking it asks the session for. */
-type LaunchInput = {
-  readonly request: { readonly runId: RunId };
-  readonly approval: {
-    readonly approvalPolicy?: string;
-    readonly approveDelegatedWork: boolean;
-  };
+/** What the session's start receives: the request under the id the CLI
+ *  minted, and the approval and parking it asks for. */
+type LaunchInput = Extract<StartInput, { readonly config: unknown }> & {
+  readonly runId: RunId;
 };
 
 /**
- * The agent boundary `executeCliRequest` runs through, injected through its
- * own options seam: the session admits the run once `admit` settles, its
- * result is the suite's `rootLaunch`, and the resumability read lands in
- * the mock bag.
+ * The process session as every host drives it: it admits a start once
+ * `admit` settles and the run's result is the suite's `rootLaunch`; its
+ * stops are recorded in the mock bag (`stopRequest` may answer one).
  */
-const agentRunsFake = {
-  launch: (_session: Session, input: LaunchInput) =>
-    Effect.tryPromise({
-      try: () => mocks.admit(input),
-      catch: (error) => error as Error,
-    }).pipe(
-      Effect.map((): Run => ({
-        runId: input.request.runId as RunId,
-        // A stopped run commits its CANCELLED end and re-raises the stop.
-        result: Effect.tryPromise({
-          try: () => mocks.rootLaunch(input.request, input),
-          catch: (cause) =>
-            new RunFailure({ cause, message: toErrorMessage(cause) }),
-        }).pipe(
-          Effect.flatMap((ended): Run['result'] =>
-            ended === STOPPED
-              ? Effect.interrupt
-              : Effect.succeed(ended as Effect.Success<Run['result']>),
-          ),
-        ),
-        view: Stream.empty,
-        events: Stream.empty,
-        interrupt: Effect.void,
-      })),
-    ),
-  resumability: (...args: unknown[]) =>
-    Effect.promise(() => mocks.deriveResumability(...args)),
-} as NonNullable<Parameters<typeof executeCliRequest>[2]['agentRuns']>;
-
-/** The process session as every host drives it, its stops recorded in the
- *  mock bag (`stopRequest` may answer one). */
 function runSessionFake(): Session {
   const session = testSessionOf(testDefaultSession(), { persistent: true });
   return {
     ...session,
+    start: (input) =>
+      // A rejected admission is a defect, as an unexpected launch failure is.
+      Effect.promise(() => mocks.admit(input)).pipe(
+        Effect.map((): Run => ({
+          runId: input.runId as RunId,
+          // A stopped run commits its CANCELLED end and re-raises the stop.
+          result: Effect.tryPromise({
+            try: () => mocks.rootLaunch(input),
+            catch: (cause) =>
+              new RunFailure({ cause, message: toErrorMessage(cause) }),
+          }).pipe(
+            Effect.flatMap((ended): Run['result'] =>
+              ended === STOPPED
+                ? Effect.interrupt
+                : Effect.succeed(ended as Effect.Success<Run['result']>),
+            ),
+          ),
+          view: Stream.empty,
+          events: Stream.empty,
+          interrupt: Effect.void,
+        })),
+      ),
     request: (req: RuntimeRequest) =>
       req.kind === 'run.stop'
         ? Effect.suspend(
@@ -185,7 +171,7 @@ type CliRequest = Parameters<typeof executeCliRequest>[0];
 const COMPLETED_RUN = {
   outcome: 'completed',
   output: { response: '', files: [] },
-  runId: 'exec-1',
+  runId: 'ec0000000001',
 } as const;
 
 /** What a run the shutdown stopped ends with. */
@@ -196,7 +182,7 @@ const CANCELLED_RUN = { ...COMPLETED_RUN, outcome: 'cancelled' } as const;
 const STOPPED = Symbol('stopped');
 
 function baseRequest(): CliRequest {
-  return { config: {}, runId: 'exec-1' } as unknown as CliRequest;
+  return { config: {}, runId: 'ec0000000001' } as unknown as CliRequest;
 }
 
 function toolUseConfig() {
@@ -239,7 +225,6 @@ async function loadExecuteCli() {
       Effect.provide(
         runtime.executeCliRequest(request, context, {
           services: testServices(),
-          agentRuns: agentRunsFake,
           ...options,
         }),
         fakeProcessServices(),
@@ -254,7 +239,6 @@ async function loadExecuteCli() {
       Effect.provide(
         runtime.executeCliConfig(config, context, {
           services: testServices(),
-          agentRuns: agentRunsFake,
           ...options,
         }),
         fakeProcessServices(),
@@ -269,7 +253,6 @@ async function loadExecuteCli() {
       Effect.provide(
         runtime.executeCliToolUseConfig(config, context, {
           services: testServices(),
-          agentRuns: agentRunsFake,
           ...options,
         }),
         fakeProcessServices(),
@@ -277,25 +260,46 @@ async function loadExecuteCli() {
   };
 }
 
+/** The opening a run's loop commits: its `run.start` row. */
+const runStartRow = (runId: RunId) => ({
+  type: 'run.start' as const,
+  aggregateId: qualifyAggregateId('run', runId),
+  identity: { kind: 'agent' as const, agent: 'chat' },
+  userFollowUpSupport: 'unsupported' as const,
+  parent: null,
+  provenance: null,
+});
+
 /**
  * Stubs the run to publish its admission through `published` and then hang
  * until the test resolves it: the shape the shutdown tests drive. Its stop
- * reaches the session as a `run.stop` request (`stopRequest`).
+ * reaches the session as a `run.stop` request (`stopRequest`). Unless
+ * `opened` is false, the run's loop has opened it (its `run.start` row), so
+ * it can be resumed from its rows.
  */
-function stubHangingRun(published: Deferred.Deferred<void>): {
+function stubHangingRun(
+  published: Deferred.Deferred<void>,
+  { opened = true } = {},
+): {
   resolve: (result: unknown) => void;
   reject: (error: unknown) => void;
 } {
   let resolveRun!: (result: unknown) => void;
   let rejectRun!: (error: unknown) => void;
-  mocks.rootLaunch.mockImplementation(
-    () =>
-      new Promise((resolve, reject) => {
-        resolveRun = resolve;
-        rejectRun = reject;
-        Deferred.doneUnsafe(published, Effect.void);
-      }),
-  );
+  mocks.rootLaunch.mockImplementation((input: LaunchInput) => {
+    // Committed before the run reports admission, so every later read
+    // of its rows finds the opening.
+    const opening = opened
+      ? testRuntime().runPromise(
+          seedRows(testDefaultSession().log)([runStartRow(input.runId)]),
+        )
+      : Promise.resolve();
+    return new Promise((resolve, reject) => {
+      resolveRun = resolve;
+      rejectRun = reject;
+      void opening.then(() => Deferred.doneUnsafe(published, Effect.void));
+    });
+  });
   return {
     resolve: (result: unknown) => resolveRun(result),
     reject: (error: unknown) => rejectRun(error),
@@ -344,7 +348,6 @@ async function stubExecuteCliDeps(): Promise<void> {
     outcome: 'completed',
     outcomePersisted: true,
   });
-  mocks.deriveResumability.mockResolvedValue({ kind: 'checkpoint' });
   mocks.rootLaunch.mockResolvedValue(COMPLETED_RUN);
   mocks.admit.mockResolvedValue(undefined);
   mocks.stopRequest.mockReturnValue(undefined);
@@ -427,34 +430,32 @@ describe('executeCliRequest', () => {
    *  answer. */
   const promptsUnavailableAtLaunch = (): (() => boolean | undefined) => {
     let seen: boolean | undefined;
-    mocks.rootLaunch.mockImplementationOnce(
-      async (request: { runId: RunId }, input: LaunchInput) => {
-        const session = testDefaultSession();
-        if (input.approval.approveDelegatedWork) {
-          publishTestRows(session, [
-            {
-              type: 'run.start',
-              aggregateId: qualifyAggregateId('run', request.runId),
-              identity: { kind: 'agent', agent: 'chat' },
-              userFollowUpSupport: 'unsupported',
-              parent: null,
-              provenance: null,
-              approvalPolicy: humanGrant(
-                APPROVAL_BYPASS_KINDS,
-                true,
-              )(NO_APPROVAL_GRANTS),
-            },
-          ]);
-          await testRuntime().runPromise(session.log.settled);
-        }
-        seen = liveToolGates({
-          session,
-          runId: request.runId,
-          entry: { registration: null },
-        }).approvalPromptsUnavailable;
-        return COMPLETED_RUN;
-      },
-    );
+    mocks.rootLaunch.mockImplementationOnce(async (request: LaunchInput) => {
+      const session = testDefaultSession();
+      if (request.approval?.delegated) {
+        publishTestRows(session, [
+          {
+            type: 'run.start',
+            aggregateId: qualifyAggregateId('run', request.runId),
+            identity: { kind: 'agent', agent: 'chat' },
+            userFollowUpSupport: 'unsupported',
+            parent: null,
+            provenance: null,
+            approvalPolicy: humanGrant(
+              APPROVAL_BYPASS_KINDS,
+              true,
+            )(NO_APPROVAL_GRANTS),
+          },
+        ]);
+        await testRuntime().runPromise(session.log.settled);
+      }
+      seen = liveToolGates({
+        session,
+        runId: request.runId,
+        entry: { registration: null },
+      }).approvalPromptsUnavailable;
+      return COMPLETED_RUN;
+    });
     return () => seen;
   };
 
@@ -487,9 +488,8 @@ describe('executeCliRequest', () => {
       // An explicit yolo rides the launch as an Auto-approve launch; the
       // project's policy is never touched.
       expect(mocks.rootLaunch).toHaveBeenLastCalledWith(
-        expect.anything(),
         expect.objectContaining({
-          approval: { approvalPolicy: 'yolo', approveDelegatedWork: true },
+          approval: { policy: 'yolo', delegated: true },
         }),
       );
       // The Auto-approve grant keeps its gated tools offered, headless.
@@ -542,7 +542,7 @@ describe('executeCliRequest', () => {
         return {
           outcome: 'completed',
           output: { response: '', files: [] },
-          runId: 'exec-1',
+          runId: 'ec0000000001',
         };
       });
 
@@ -585,13 +585,12 @@ describe('executeCliRequest', () => {
         // propagating so bin/texra.ts's crash handler reports it, instead of
         // being swallowed into a bare non-zero exit with no stderr. The defect
         // enters through the injected launch stand-in.
-        const defectLaunch: typeof agentRunsFake = {
-          ...agentRunsFake,
-          launch: () => Effect.die(new Error('disk full')),
-        };
+        mocks.admit.mockImplementationOnce(() => {
+          throw new Error('disk full');
+        });
 
         const error = yield* Effect.flip(
-          executeCliRequest(request, cliContext(), { agentRuns: defectLaunch }),
+          executeCliRequest(request, cliContext()),
         );
         expect(error.message).toContain('disk full');
 
@@ -660,7 +659,7 @@ describe('executeCliRequest', () => {
       yield* settle;
       expect(mocks.stopRequest).toHaveBeenCalledExactlyOnceWith({
         kind: 'run.stop',
-        runId: 'exec-1',
+        runId: 'ec0000000001',
         detachActiveChildren: false,
         reason: 'shutdown',
       });
@@ -680,7 +679,7 @@ describe('executeCliRequest', () => {
       yield* Fiber.join(shutdown);
       expect(flushSpy).toHaveBeenCalled();
       expect(onInterruptedRunFinalized).toHaveBeenCalledExactlyOnceWith(
-        'exec-1',
+        'ec0000000001',
       );
       expect(yield* Fiber.join(run)).toEqual({
         ok: false,
@@ -696,14 +695,11 @@ describe('executeCliRequest', () => {
         const { platform, executeCliRequest } = yield* Effect.promise(
           loadExecuteCliOnInstalledHost,
         );
-        // Both reads (the shutdown's inspection, the drain's) find none.
-        mocks.deriveResumability.mockResolvedValue({
-          kind: 'none',
-          outcome: RUN_OUTCOME.CANCELLED,
-        });
         const onInterruptedRunFinalized = vi.fn();
         const published = yield* Deferred.make<void>();
-        const hangingRun = stubHangingRun(published);
+        // Its loop never opened it: both reads (the shutdown's inspection,
+        // the drain's) find no rows to continue from.
+        const hangingRun = stubHangingRun(published, { opened: false });
 
         const run = yield* Effect.forkChild(
           executeCliRequest(baseRequest(), cliContext(), {
@@ -722,10 +718,6 @@ describe('executeCliRequest', () => {
         yield* Fiber.join(shutdown);
         yield* Fiber.join(run);
 
-        expect(mocks.deriveResumability).toHaveBeenCalledWith(
-          'exec-1',
-          expect.anything(),
-        );
         expect(onInterruptedRunFinalized).not.toHaveBeenCalled();
       }),
   );
@@ -778,8 +770,11 @@ describe('executeCliRequest', () => {
         );
         const published = yield* Deferred.make<void>();
         const hangingRun = stubHangingRun(published);
+        const onInterruptedRunFinalized = vi.fn(() => Effect.void);
         const run = yield* Effect.forkChild(
-          executeCliRequest(baseRequest(), cliContext(), {}),
+          executeCliRequest(baseRequest(), cliContext(), {
+            onInterruptedRunFinalized,
+          }),
         );
         yield* Deferred.await(published);
         yield* settle;
@@ -793,8 +788,8 @@ describe('executeCliRequest', () => {
         yield* Fiber.join(run);
 
         // A stop that reached no live run never reads the launch as
-        // interrupted, so nothing inspects it for recovery.
-        expect(mocks.deriveResumability).not.toHaveBeenCalled();
+        // interrupted, so its rows promise no recovery.
+        expect(onInterruptedRunFinalized).not.toHaveBeenCalled();
       }),
   );
 
@@ -804,11 +799,16 @@ describe('executeCliRequest', () => {
         loadExecuteCliOnInstalledHost,
       );
       const request = baseRequest();
+      // Its rows could continue it: only a live hook would offer recovery.
+      yield* seedRows(testDefaultSession().log)([runStartRow(request.runId)]);
+      const onInterruptedRunFinalized = vi.fn(() => Effect.void);
 
-      yield* executeCliRequest(request, cliContext(), {});
+      yield* executeCliRequest(request, cliContext(), {
+        onInterruptedRunFinalized,
+      });
       yield* Scope.close(platform.shutdownScope, Exit.void);
 
-      expect(mocks.deriveResumability).not.toHaveBeenCalled();
+      expect(onInterruptedRunFinalized).not.toHaveBeenCalled();
     }),
   );
 });
@@ -956,7 +956,7 @@ describe('executeCliConfig', () => {
             response: 'Done.',
             files: [],
           },
-          runId: 'exec-1',
+          runId: 'ec0000000001',
         });
         mocks.readCliRunOutcomeState.mockResolvedValueOnce({
           outcome: 'completed',

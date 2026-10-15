@@ -63,7 +63,6 @@ function isStdinWorkflowInputSpec(inputSpec: string): boolean {
 interface WorkflowInputExpansionOptions {
   readonly allowEmpty?: boolean;
   readonly requireWorkspaceFiles?: boolean;
-  readonly readStdinText?: Effect.Effect<string, Error>;
 }
 
 type WorkflowInputExpansionEntry = readonly string[] | 'stdin';
@@ -71,8 +70,19 @@ type WorkflowInputExpansionEntry = readonly string[] | 'stdin';
 interface PreparedWorkflowInputExpansion {
   readonly entries: WorkflowInputExpansionEntry[];
   readonly flagLabel: string;
-  readonly readStdinText?: Effect.Effect<string, Error>;
 }
+
+const readProcessStdinText: Effect.Effect<string, Error> = Effect.tryPromise({
+  try: async () => {
+    process.stdin.setEncoding('utf8');
+    const chunks: string[] = [];
+    for await (const chunk of process.stdin) {
+      chunks.push(String(chunk));
+    }
+    return chunks.join('');
+  },
+  catch: ensureError,
+});
 
 export function hasMixedStdinWorkflowInputSpecs(
   inputSpecs: readonly string[],
@@ -215,22 +225,14 @@ const prepareWorkflowInputExpansion = Effect.fn(
   FileSystem.FileSystem
 > {
   const entries: WorkflowInputExpansionEntry[] = [];
-  let readStdinText: Effect.Effect<string, Error> | undefined;
   for (const spec of inputSpecs) {
-    if (isStdinWorkflowInputSpec(spec)) {
-      if (!options.readStdinText)
-        return yield* Effect.fail(
-          new CliUsageError(
-            `${flagLabel}: '-' requires stdin input to be configured.`,
-          ),
-        );
-      readStdinText = options.readStdinText;
-      entries.push('stdin');
-      continue;
-    }
-    entries.push(yield* expandWorkflowInputSpec(spec, cwd, flagLabel, options));
+    entries.push(
+      isStdinWorkflowInputSpec(spec)
+        ? 'stdin'
+        : yield* expandWorkflowInputSpec(spec, cwd, flagLabel, options),
+    );
   }
-  return { entries, flagLabel, readStdinText };
+  return { entries, flagLabel };
 });
 
 const finishWorkflowInputExpansion = Effect.fn('finishWorkflowInputExpansion')(
@@ -238,15 +240,16 @@ const finishWorkflowInputExpansion = Effect.fn('finishWorkflowInputExpansion')(
     prepared: PreparedWorkflowInputExpansion,
     cwd: string,
     options: WorkflowInputExpansionOptions,
+    readStdinText: Effect.Effect<string, Error>,
   ): Effect.fn.Return<
     { readonly files: string[]; readonly stdinPath?: string },
     Error,
     Scope.Scope | FileSystem.FileSystem
   > {
     const expanded: string[] = [];
-    const stdinPath = prepared.readStdinText
+    const stdinPath = prepared.entries.includes('stdin')
       ? yield* normalizeCliInputPathForRun(
-          yield* materializeStdinWorkflowInput(prepared.readStdinText, cwd),
+          yield* materializeStdinWorkflowInput(readStdinText, cwd),
           cwd,
           prepared.flagLabel,
           options,
@@ -291,6 +294,7 @@ export const expandRunInputs = Effect.fn('expandRunInputs')(function* (
   options: {
     readonly allowEmptyInput?: boolean;
     readonly requireWorkspaceFiles?: boolean;
+    /** Where `-` reads from; a test hands in its own text. */
     readonly readStdinText?: Effect.Effect<string, Error>;
   } = {},
 ): Effect.fn.Return<
@@ -309,10 +313,8 @@ export const expandRunInputs = Effect.fn('expandRunInputs')(function* (
     );
   }
 
-  const shared = {
-    requireWorkspaceFiles: options.requireWorkspaceFiles,
-    readStdinText: options.readStdinText,
-  };
+  const shared = { requireWorkspaceFiles: options.requireWorkspaceFiles };
+  const readStdinText = options.readStdinText ?? readProcessStdinText;
   const inputExpansion = yield* prepareWorkflowInputExpansion(
     inputSpecs,
     cwd,
@@ -326,14 +328,18 @@ export const expandRunInputs = Effect.fn('expandRunInputs')(function* (
     shared,
   );
 
-  const inputs = yield* finishWorkflowInputExpansion(inputExpansion, cwd, {
-    ...shared,
-    allowEmpty: options.allowEmptyInput,
-  });
-  const contexts = yield* finishWorkflowInputExpansion(contextExpansion, cwd, {
-    ...shared,
-    allowEmpty: true,
-  });
+  const inputs = yield* finishWorkflowInputExpansion(
+    inputExpansion,
+    cwd,
+    { ...shared, allowEmpty: options.allowEmptyInput },
+    readStdinText,
+  );
+  const contexts = yield* finishWorkflowInputExpansion(
+    contextExpansion,
+    cwd,
+    { ...shared, allowEmpty: true },
+    readStdinText,
+  );
   return {
     inputFiles: inputs.files,
     contextFiles: contexts.files,
@@ -352,11 +358,7 @@ export function withExpandedRunInputs<T, E, R = never>(
   inputSpecs: readonly string[],
   contextSpecs: readonly string[],
   cwd: string,
-  options: {
-    readonly readStdinText: Effect.Effect<string, Error>;
-    readonly allowEmptyInput?: boolean;
-    readonly requireWorkspaceFiles?: boolean;
-  },
+  options: Parameters<typeof expandRunInputs>[3],
   run: (inputs: ExpandedRunInputs) => Effect.Effect<T, E, R>,
 ): Effect.Effect<T, E | Error, R | FileSystem.FileSystem> {
   return Effect.scoped(

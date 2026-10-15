@@ -292,7 +292,6 @@ describe('CLI team run command', () => {
       {
         allowEmptyInput: true,
         requireWorkspaceFiles: true,
-        readStdinText: expect.anything(),
       },
       expect.any(Function),
     );
@@ -392,7 +391,6 @@ describe('CLI team run command', () => {
       {
         allowEmptyInput: true,
         requireWorkspaceFiles: true,
-        readStdinText: expect.anything(),
       },
       expect.any(Function),
     );
