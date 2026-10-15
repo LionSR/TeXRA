@@ -233,6 +233,9 @@ const failingChild = <A, E, R>(
     return yield* Fiber.join(running);
   });
 
+/** The error a {@link failingChild}'s child fails with. */
+const CHILD_FAULT = 'injected appendAll fault (model.message)';
+
 /** Release the validation model's GOLDEN-PARK hold. */
 const releasePark = (parent: Parent) =>
   Effect.sync(() =>
@@ -272,7 +275,18 @@ describe('headless delegation', { timeout: REAL_RUN_TIMEOUT }, () => {
     () =>
       Effect.gen(function* () {
         const parent = yield* parkedParent();
-        const result = yield* runInBand(parent);
+        const runId = generateRunId();
+        // The child holds its claim until its manifest is durable: another
+        // process taking it in between would find nothing to recover.
+        const faults = yield* sessionStoreFaults(parent.storage);
+        const persisting = yield* faults.holdNext('appendAll', 'run.result');
+        const running = yield* Effect.forkChild(
+          runInBand(parent, 'Check the proof.', runId),
+        );
+        yield* persisting.reached;
+        expect(claimHolder(parent.storage, runId)).not.toBeNull();
+        yield* persisting.release;
+        const result = yield* Fiber.join(running);
 
         const rows = storedRows(parent.storage).filter(
           (row) => row.run === result.runId,
@@ -304,7 +318,7 @@ describe('headless delegation', { timeout: REAL_RUN_TIMEOUT }, () => {
         failingChild(parent, runInBand(parent, PARKED)),
       );
       expect(error).not.toBeInstanceOf(SubagentDurabilityError);
-      expect(error.message).toContain('injected appendAll fault');
+      expect(error.message).toContain(CHILD_FAULT);
       const [child] = childrenOf(parent);
       expect(rowOf(parent.storage, child!, 'run.result')).toMatchObject({
         result: { producer: 'subagent' },
@@ -340,7 +354,8 @@ describe('headless delegation', { timeout: REAL_RUN_TIMEOUT }, () => {
           ),
         ).toMatchObject({
           name: 'SubagentDurabilityError',
-          message: expect.stringContaining('injected appendAll fault'),
+          // The child's own failure, not the manifest write's.
+          message: expect.stringContaining(CHILD_FAULT),
           cause: expect.objectContaining({ name: 'AggregateError' }),
         });
       }),
@@ -464,7 +479,7 @@ describe('headless delegation', { timeout: REAL_RUN_TIMEOUT }, () => {
 
       expect(result.summary).toBe("'review' failed");
       expect(result.status).toBe('error');
-      expect(result.error).toContain('injected appendAll fault');
+      expect(result.error).toContain(CHILD_FAULT);
       const [child] = childrenOf(parent);
       expect(rowOf(parent.storage, child!, 'run.result')).toMatchObject({
         result: { producer: 'subagent' },

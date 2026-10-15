@@ -35,9 +35,9 @@ import {
   Ref,
   type Scope,
 } from 'effect';
-import { afterEach, beforeEach } from 'vitest';
+import { afterEach, beforeEach, vi } from 'vitest';
 
-import { apiKeySecretName } from '@texra-ai/llm';
+import { API_KEY_ENV_NAMES, apiKeySecretName } from '@texra-ai/llm';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { refresh } from '@agent/index';
 import type {
@@ -105,7 +105,8 @@ interface Armed {
 /** The faults a case arms on one store. */
 interface StoreFaults {
   /** The next matching call fails as the store would: rolled back, nothing
-   *  written. `rowType` narrows `appendAll` to a batch holding that row. */
+   *  written. `rowType` narrows `appendAll` to a batch holding that row and
+   *  is named in the error (`injected appendAll fault (run.end)`). */
   readonly failNext: (
     operation: StoreOperation,
     rowType?: SessionEventDraft['type'],
@@ -153,8 +154,12 @@ export const sessionStoreFaults = (
           ? [undefined, entries]
           : [entries[index], entries.toSpliced(index, 1)];
       });
-    const failure = (operation: StoreOperation) => {
-      const cause = new Error(`injected ${operation} fault`);
+    // The message names the row type a fault was narrowed to, so a case
+    // with two faults can tell which one an error carries.
+    const failure = ({ operation, rowType }: Armed) => {
+      const cause = new Error(
+        `injected ${operation} fault${rowType ? ` (${rowType})` : ''}`,
+      );
       return (WRITES as readonly string[]).includes(operation)
         ? new DatabaseWriteFailed({ path: storage, cause })
         : new DatabaseReadFailed({ path: storage, cause });
@@ -174,12 +179,11 @@ export const sessionStoreFaults = (
         (...args: unknown[]) =>
           Effect.flatMap(take(operation, args), (entry) => {
             if (entry === undefined) return original(...args);
-            if (entry.fault.kind === 'fail')
-              return Effect.fail(failure(entry.operation));
+            if (entry.fault.kind === 'fail') return Effect.fail(failure(entry));
             return Deferred.succeed(entry.fault.reached, undefined).pipe(
               Effect.andThen(Deferred.await(entry.fault.released)),
               Effect.flatMap((run) =>
-                run ? original(...args) : Effect.fail(failure(entry.operation)),
+                run ? original(...args) : Effect.fail(failure(entry)),
               ),
             );
           }),
@@ -367,7 +371,8 @@ const VALIDATION = {
  * Register, for the calling `describe`, a temp-dir host whose agents are the
  * golden fixtures and the bundled personas and whose model is the
  * validation model: a golden agent plays its script, any other answers with
- * what it was sent. Each test starts with no default session open.
+ * what it was sent. Each test starts with no default session open, and no
+ * provider key from the shell: its keys are the ones its secrets store.
  */
 export function validationHost(prefix: string): void {
   const tempDirs = useTempDirs();
@@ -395,6 +400,9 @@ export function validationHost(prefix: string): void {
     Object.assign(process.env, VALIDATION, {
       TEXRA_INTERNAL_VALIDATE_MODEL_FLAG: flag,
     });
+    // Key lookups read the process environment, where a blank key counts as
+    // unset: the host's keys are the ones it stores, never the shell's.
+    for (const name of API_KEY_ENV_NAMES) vi.stubEnv(name, '');
     mkdirSync(storage, { recursive: true });
     mkdirSync(workspace!, { recursive: true });
     writeFileSync(flag, 'texra-cli-run-validation\n');
@@ -419,6 +427,7 @@ export function validationHost(prefix: string): void {
   });
   afterEach(async () => {
     await Effect.runPromise(closeTestDefaultSession);
+    vi.unstubAllEnvs();
     for (const [key, value] of Object.entries(restore)) {
       if (value === undefined) delete process.env[key];
       else process.env[key] = value;
