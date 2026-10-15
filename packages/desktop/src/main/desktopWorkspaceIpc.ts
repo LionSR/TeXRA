@@ -30,10 +30,8 @@ import { normalizeFilePath } from '@utils/core';
 import { locateInWorkspace } from '@utils/files/workspaceFS';
 import { isPathWithin } from '@utils/core/pathCore';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import {
-  entryTypeAt,
-  readDirectoryTypedTolerant,
-} from '@utils/files/fsDurability';
+import { readDirectoryTypedTolerant } from '@utils/files/fsDurability';
+import { entryTypeIn } from '@utils/files/fsEntryExists';
 import { OFFICE_EXTENSIONS } from '@utils/files/mimeUtils';
 import { normalizeLineEndings } from '@utils/text/stringUtils';
 
@@ -229,12 +227,10 @@ const resolveWorkspaceWritePath = Effect.fn(
 
   // A dangling symlink also makes realPath fail with ENOENT. It must remain
   // rejected: writing through it could create a target outside the workspace.
-  // One lstat on the target itself is what reports a link as itself — `stat`
-  // follows it — on case-insensitive volumes too, and any failure other than
-  // "not there" refuses the write instead of reading as "no link here".
-  const entryType = yield* entryTypeAt(absolutePath).pipe(
-    Effect.catchIf(isAbsent, () => Effect.succeed(undefined)),
-  );
+  // The link-aware probe reports a link as itself — `stat` follows it — and
+  // any failure other than "not there" refuses the write instead of reading
+  // as "no link here".
+  const entryType = yield* entryTypeIn(fs, absolutePath);
   if (entryType === 'SymbolicLink') {
     return yield* Effect.fail(
       new WorkspaceRequestRefused({

@@ -17,7 +17,6 @@ import { defineTool, ToolContext } from '@texra-ai/harness';
 
 import { createWorkspaceAgentsController } from '@agent/index/agentRegistry';
 import { teamPresets } from '@common/teams/TeamPresets';
-import { missingMemberNames } from '@common/teams/TeamPlan';
 import { agentName, ToolError } from '@shared/schemas';
 import { executed } from '@tools/core/result';
 
@@ -74,7 +73,7 @@ const applyTeam = Effect.fn('ApplyTeamTool.execute')(function* (
   // reference and re-resolves `preset.agents` on every read, so a member
   // activates the moment it appears. Say so instead of letting it read as a
   // silent failure.
-  const unresolvedNames = missingMemberNames(result.resolution);
+  const unresolvedNames = result.resolution.missingAgents;
 
   const lines = [
     `Applied the ${preset.name} team to this workspace.`,

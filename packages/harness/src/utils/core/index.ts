@@ -135,32 +135,6 @@ export function onAbort(
 }
 
 /**
- * Abort `controller` (with the source's reason) as soon as any of `signals`
- * aborts; undefined entries are skipped and an already-aborted source aborts
- * immediately. Returns a disposer that detaches every link.
- *
- * Prefer this over `AbortSignal.any([...sources, controller.signal])` when a
- * source outlives the scope being built on it. Node keeps a composite signal
- * that still carries an abort listener reachable from its sources until the
- * composite aborts, so a composite derived from a long-lived source (a run's
- * cancellation signal, say) pins itself — and every listener still attached to
- * it — for the source's whole lifetime: one retained graph per subagent, per
- * request, per tool call. An explicit link is detached when the scope ends and
- * leaves nothing behind.
- */
-export function linkAbortSignals(
-  signals: readonly (AbortSignal | undefined)[],
-  controller: AbortController,
-): () => void {
-  const detachers = signals
-    .filter((signal): signal is AbortSignal => signal !== undefined)
-    .map((signal) => onAbort(signal, () => controller.abort(signal.reason)));
-  return () => {
-    for (const detach of detachers) detach();
-  };
-}
-
-/**
  * A trailing-edge timer batcher with a synchronous flush escape hatch. The
  * library debounce this replaced exposed only `cancel()` (discard the pending
  * call), with no way to force the trailing call to run early.
@@ -314,21 +288,6 @@ export function toNewestFirstByTimestamp<T>(
  */
 export function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
-}
-
-/**
- * Clamp `value` to optional bounds. Each bound is applied only when defined.
- * Equivalent to `clamp` when both are provided and `min <= max`; a no-op when neither is.
- */
-export function clampOptional(
-  value: number,
-  min?: number,
-  max?: number,
-): number {
-  let result = value;
-  if (min != null) result = Math.max(min, result);
-  if (max != null) result = Math.min(max, result);
-  return result;
 }
 
 /**

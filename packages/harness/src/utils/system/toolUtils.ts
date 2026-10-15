@@ -6,9 +6,6 @@
  * one, are the app's own table (TeXRA's: `@texra/utils/system/toolChecks`).
  */
 
-// Node imports
-import * as path from 'node:path';
-
 // Third-party imports
 import { Effect } from 'effect';
 import { parse as shellParse } from 'shell-quote';
@@ -18,7 +15,6 @@ import { withLogChannel } from '@logger/effectLog';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local file imports
-import { extendEnvPath } from './platformPaths';
 import { resolveOptionalCommand } from './binaryResolver';
 import { executeCommand } from './execUtils';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
@@ -62,45 +58,15 @@ const executeWithFallback = Effect.fn('toolUtils.executeWithFallback')(
     cmd: string,
     args: string[],
   ): Effect.fn.Return<boolean, never, ChildProcessSpawner> {
-    yield* Effect.logDebug(
-      `Checking tool '${cmd}' with args [${args.join(', ')}]`,
-    ).pipe(withLogChannel(CHANNEL));
-
     let result = yield* runProbe(cmd, args);
-    yield* Effect.logDebug(
-      `Initial check for '${cmd}': exitCode=${result.exitCode}, ` +
-        `stdout=${result.stdout?.slice(0, 100) || '(empty)'}, ` +
-        `stderr=${result.stderr?.slice(0, 100) || '(empty)'}`,
-    ).pipe(withLogChannel(CHANNEL));
-
     // Accept if exit code is 0, OR if we got version-like output
     // (some tools return non-zero for --version but still output version info)
-    if (result.exitCode === 0 || hasVersionOutput(result)) {
-      yield* Effect.logDebug(`Tool '${cmd}' detected successfully`).pipe(
-        withLogChannel(CHANNEL),
-      );
-      return true;
-    }
+    if (result.exitCode === 0 || hasVersionOutput(result)) return true;
 
     const fallback = yield* resolveOptionalCommand(cmd, args);
-    yield* Effect.logDebug(
-      `Fallback search for '${cmd}': ${fallback?.resolvedPath ?? 'not found'}`,
-    ).pipe(withLogChannel(CHANNEL));
-
     if (fallback) {
-      yield* Effect.logDebug(
-        `Running fallback '${fallback.command}' with args [${fallback.args.join(', ')}]`,
-      ).pipe(withLogChannel(CHANNEL));
       result = yield* runProbe(fallback.command, fallback.args);
-      yield* Effect.logDebug(
-        `Fallback result: exitCode=${result.exitCode}, ` +
-          `stdout=${result.stdout?.slice(0, 100) || '(empty)'}, ` +
-          `stderr=${result.stderr?.slice(0, 100) || '(empty)'}`,
-      ).pipe(withLogChannel(CHANNEL));
-
-      if (result.exitCode === 0 || hasVersionOutput(result)) {
-        return true;
-      }
+      if (result.exitCode === 0 || hasVersionOutput(result)) return true;
     }
 
     // Log at info level so it shows in output channel by default
@@ -134,14 +100,6 @@ export const probeTool = Effect.fn('toolUtils.probeTool')(function* (
   command: string | readonly string[] = `${toolName} --version`,
 ): Effect.fn.Return<ToolProbe, never, ChildProcessSpawner> {
   const probe = Effect.gen(function* () {
-    const extendedPath = extendEnvPath();
-
-    // Log PATH info once (not per-command)
-    yield* Effect.logDebug(
-      `PATH contains ${extendedPath.split(path.delimiter).length} entries, ` +
-        `includes /usr/bin: ${extendedPath.includes('/usr/bin')}`,
-    ).pipe(withLogChannel(CHANNEL));
-
     if (typeof command !== 'string') {
       // Try each command in the array until one succeeds
       for (const cmd of command) {

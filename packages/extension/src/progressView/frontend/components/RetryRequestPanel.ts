@@ -14,7 +14,6 @@ import type { RetryPermission } from '@shared/schemas';
 import { getModelLabel } from '@shared/model/modelLabel';
 import type { TeXRAIconName } from '@shared/iconNames';
 import { renderLabeledActionButton } from '@ui/wa/actionButtons';
-import { tailWithEllipsis, toGraphemes } from '@utils/text/stringUtils';
 
 // Local imports - base class
 import { BaseRequestPanel } from './BaseRequestPanel';
@@ -127,17 +126,19 @@ export class RetryRequestPanel extends BaseRequestPanel<'retry'> {
     const partialText = details.partialText;
     if (partialText) {
       const maxTailChars = 1024;
-      // tailWithEllipsis's budget covers its own leading "…", so pass one
-      // more than the content characters we actually want displayed.
-      const tail = tailWithEllipsis(partialText, maxTailChars + 1);
-      // Derive truncation from what tailWithEllipsis actually did (it
-      // returns the input unchanged when nothing needs cutting) rather than
-      // a separately-computed length comparison — two independent
-      // decisions about the same cutoff disagreed by one grapheme exactly
-      // at the boundary (partialText.length === maxTailChars + 1), where
-      // this said "truncated" but tailWithEllipsis returned the text whole.
-      const isTruncated = tail !== partialText;
-      const totalChars = toGraphemes(partialText).length;
+      // Counted in grapheme clusters, so the cut never tears one. A text one
+      // grapheme over the tail is shown whole: the "…" would take that slot.
+      const graphemes = Array.from(
+        new Intl.Segmenter(undefined, { granularity: 'grapheme' }).segment(
+          partialText,
+        ),
+        (s) => s.segment,
+      );
+      const totalChars = graphemes.length;
+      const isTruncated = totalChars > maxTailChars + 1;
+      const tail = isTruncated
+        ? `…${graphemes.slice(-maxTailChars).join('')}`
+        : partialText;
       const header = isTruncated
         ? `--- Partial Output (last ${maxTailChars} of ${totalChars} chars) ---`
         : `--- Partial Output (${totalChars} chars) ---`;

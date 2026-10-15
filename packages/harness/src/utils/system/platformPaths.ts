@@ -383,13 +383,3 @@ export function whichOnExtendedPath(name: string): string | null {
     pathExt: process.env.PATHEXT,
   });
 }
-
-/**
- * Check if a path is safe (doesn't contain dangerous sequences)
- */
-export function isPathSafe(filepath: string): boolean {
-  // Normalize the path to resolve any .. sequences
-  const normalized = path.normalize(filepath);
-  // Check if the path tries to escape to parent directories
-  return !normalized.includes('..');
-}

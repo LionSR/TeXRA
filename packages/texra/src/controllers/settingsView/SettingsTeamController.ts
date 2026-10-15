@@ -1,9 +1,6 @@
 import { Data, Effect } from 'effect';
 import type { WorkspaceAgentsController } from '@agent/workspaceAgents/WorkspaceAgentsController';
-import {
-  formatUnknownTeamMessage,
-  missingMemberNames,
-} from '@common/teams/TeamPlan';
+import { formatUnknownTeamMessage } from '@common/teams/TeamPlan';
 import type { MessageHost } from '@texra/hosts/uiHosts';
 import { assertNever } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -70,7 +67,7 @@ export function applySettingsTeam<R = never>(
           ),
         );
 
-        const unresolvedCount = missingMemberNames(result.resolution).length;
+        const unresolvedCount = result.resolution.missingAgents.length;
         yield* options.presentation.showInfoMessage(
           unresolvedCount === 0
             ? `Applied "${result.preset.name}" team`

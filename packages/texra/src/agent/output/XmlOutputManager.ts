@@ -7,7 +7,7 @@ import type { AgentTrace } from '@agent/trace';
 import replacementEngine, {
   logReplacementDiagnostics,
 } from '@replacement/engine';
-import type { FileLocation } from '@shared/schemas';
+import { fileLocationDisplayPath, type FileLocation } from '@shared/schemas';
 import { getExtractedDocOutputFileName } from '@texra/utils/files/outputFileUtils';
 import {
   DOCUMENT_NAME_REGEX,
@@ -19,11 +19,7 @@ import {
   OUTPUT_DOCUMENTS_TAG,
   type OutputFileInfo,
 } from '@texra/shared/plugins/documentOutputs';
-import { entryTypeAt } from '@utils/files/fsDurability';
-import {
-  createExternalLocation,
-  getFileDirectory,
-} from '@utils/files/fileLocation';
+import { createExternalLocation } from '@utils/files/fileLocation';
 import { RunFileService } from '@utils/files/runStorage';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import {
@@ -31,7 +27,7 @@ import {
   normalizeLineEndings,
 } from '@utils/text/stringUtils';
 import { addCdataToTagsMultiple } from '@utils/text/xmlCdata';
-import { absentReason } from '@utils/files/fsEntryExists';
+import { entryTypeIn } from '@utils/files/fsEntryExists';
 
 import {
   assignByContentSimilarity,
@@ -51,11 +47,9 @@ const writeRoundOutput = Effect.fn('XmlOutputManager.writeRoundOutput')(
   function* (absolutePath: string, content: string) {
     const fs = yield* FileSystem.FileSystem;
     yield* fs.makeDirectory(path.dirname(absolutePath), { recursive: true });
-    // `FileSystem.stat` follows a link, so the probe is the `lstat`-backed one:
+    // `FileSystem.stat` follows a link, so the probe is the link-aware one:
     // a link must be seen as itself to be removed rather than written through.
-    const type = yield* entryTypeAt(absolutePath).pipe(
-      Effect.catchIf(absentReason, () => Effect.succeed(null)),
-    );
+    const type = yield* entryTypeIn(fs, absolutePath);
     if (type === 'SymbolicLink') {
       yield* fs.remove(absolutePath, { force: true });
     }
@@ -262,7 +256,7 @@ export class XmlOutputManager {
 
       if (!documents) {
         documents = extractFilenameHeaderDocuments(rawOutputContent, {
-          roundDir: getFileDirectory(outputLocation),
+          roundDir: path.dirname(fileLocationDisplayPath(outputLocation)),
           labelFiles: expectedFiles,
           synthesisName: soleExpectedFile,
           coalesceRepeatedName:
@@ -377,7 +371,7 @@ export class XmlOutputManager {
       // path passed through createLocation would be re-classified as external
       // anyway, so skip the round-trip and build the location explicitly.
       const isExternal = outputLocation.kind === 'external';
-      const roundDir = getFileDirectory(outputLocation);
+      const roundDir = path.dirname(fileLocationDisplayPath(outputLocation));
 
       for (const doc of latexDocuments) {
         if (!doc.name || doc.name === 'unknown' || !doc.content) {

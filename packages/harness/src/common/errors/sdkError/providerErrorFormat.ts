@@ -16,7 +16,7 @@ import {
 import { RouteUnavailable } from '../agentErrors';
 import { findInCauseChain, isDiskFullError } from '../errorPredicates';
 import { isUserAbort } from './errorPatterns';
-import { providerErrorMetadata } from './errorMetadata';
+import { attachProviderError, detectProviderError } from './errorMetadata';
 
 /**
  * Format a coarse "1d 20h" / "20h 22m" / "5m" duration from a second count.
@@ -115,9 +115,9 @@ function formatFailure(err: unknown): ProviderError {
  * recovered as recorded; anything else is formatted fresh, uncached.
  */
 export function normalizeProviderError(err: unknown): ProviderError {
-  const cached = findInCauseChain(err, providerErrorMetadata.detect);
+  const cached = findInCauseChain(err, detectProviderError);
   if (cached) {
-    providerErrorMetadata.attach(err, cached);
+    attachProviderError(err, cached);
     return cached;
   }
   return formatFailure(err);

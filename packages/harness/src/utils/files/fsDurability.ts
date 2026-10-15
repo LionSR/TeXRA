@@ -129,19 +129,6 @@ export const pathExists = (
     .exists(target)
     .pipe(Effect.catchIf(absentReason, () => Effect.succeed(false)));
 
-/** The entry type of one path, `lstat`-backed: a link is itself, never what
- * it points at. `FileSystem.stat` follows links, so a containment check that
- * must see the link itself probes with this instead. */
-export const entryTypeAt = Effect.fn('fsDurability.entryTypeAt')(function* (
-  target: string,
-) {
-  const stats = yield* Effect.tryPromise({
-    try: async () => nodeFs.lstat(target),
-    catch: (cause) => systemErrorFrom('entryTypeAt', target, cause),
-  });
-  return entryTypeOf(stats);
-});
-
 /**
  * The entry type and size at `target`, `lstat` first and then `stat` when the
  * entry is a link: a link that resolves reports its target's type and size,
