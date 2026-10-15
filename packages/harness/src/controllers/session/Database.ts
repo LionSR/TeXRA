@@ -310,8 +310,7 @@ export const databaseLayer = (
       let version = (yield* execOne(dataVersion, []).pipe(
         mapDatabaseFailure(openFailed),
       ))?.data_version;
-      // A failed read is logged and retried (`READ_RETRY`); the version is
-      // checkpointed only once its commit is read.
+      // A failed read logs and retries; `version` moves once its commit is read.
       yield* Effect.forkScoped(
         Stream.tick('250 millis').pipe(
           Stream.runForEach(() =>
@@ -334,6 +333,7 @@ export const databaseLayer = (
                 ),
               ),
               Effect.retry(READ_RETRY),
+              Effect.orDie,
             ),
           ),
         ),
