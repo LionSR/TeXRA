@@ -454,11 +454,10 @@ const beginTurn = <TTurn, R>(
  *  the child's rows in the job delivering it (`deliverIn`). */
 const deliveryTarget = <TTurn, R>(
   loop: ChildLoop<TTurn, R>,
-  turn: TTurn | null,
   isError: boolean,
 ): RunId | null => {
   const { params } = loop;
-  const { session, parentRunId: target } = params;
+  const { parentRunId: target } = params;
   if (
     params.childRun === undefined &&
     params.strategy.deliveryMode === 'persistOnly'
@@ -469,7 +468,6 @@ const deliveryTarget = <TTurn, R>(
     return loop.process?.deliverAfterInterrupt === true ? target : null;
   }
   if (isError) loop.releaseOwnership();
-  else if (turn != null) loop.process?.onTurnSuccess?.(turn, session);
   return target;
 };
 
@@ -513,7 +511,7 @@ const settleTurn = <TTurn, R>(
       consumed: loop.consumed,
       deliveryId:
         params.childRun === undefined ? params.strategy.deliveryId : undefined,
-      to: deliveryTarget(loop, turn, isError),
+      to: deliveryTarget(loop, isError),
       ...(last && { end: isError ? 'failed' : 'completed' }),
     });
     const report = Effect.sync(() =>
@@ -617,7 +615,8 @@ function nativeTurns<TTurn, R>(
 /**
  * A process child's interim turn, in one transaction: its settlement, its
  * parent's delivery and (unless stopped) the `parked` row, durable before
- * the loop blocks so a follow-up is admitted; then the report and the wake.
+ * the loop blocks so a follow-up is admitted; then the ids it answers to
+ * (so one sent on them finds it waiting, never mid-turn), report and wake.
  */
 const settleInterim = <TTurn, R>(
   loop: ChildLoop<TTurn, R>,
@@ -625,14 +624,15 @@ const settleInterim = <TTurn, R>(
 ): Effect.Effect<void, Error, R> =>
   Effect.gen(function* () {
     const { session, runId } = loop.params;
-    const settled = yield* settleTurn(loop, turned);
-    const { settlement } = settled;
+    const { settlement, report } = yield* settleTurn(loop, turned);
     const park = loop.isInterrupted() ? undefined : parkRow(runId, 'parked');
     yield* commitPart(
       session,
       settleChildTurn(session, settlement, loop.trace, park),
     );
-    yield* settled.report;
+    if (park && turned.turn !== null)
+      loop.process?.onTurnSuccess?.(turned.turn, session);
+    yield* report;
     yield* wakeParent(session, settlement.delivery, loop.trace);
   });
 
