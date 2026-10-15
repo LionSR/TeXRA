@@ -241,14 +241,22 @@ const CLAUDE_TOOLS: Readonly<
   web_search: { name: 'WebSearch', input: same('query') },
 };
 
-/** Claude Code's tool names, as the TeXRA tools that do the same (a
- *  `MultiEdit` is an `edit_file`), for a plugin agent's `tools` list. */
-export const TEXRA_TOOL_OF_CLAUDE_TOOL: ReadonlyMap<string, string> = new Map([
+const TEXRA_TOOL_OF_CLAUDE_TOOL = new Map<string, string>([
   ...Object.entries(CLAUDE_TOOLS).map(
     ([texra, { name }]) => [name, texra] as const,
   ),
   ['MultiEdit', 'edit_file'],
 ]);
+
+/** The TeXRA tool that does what Claude Code's tool `name` does (a
+ *  `MultiEdit` is an `edit_file`), for a plugin agent's `tools` list. */
+export const texraToolOfClaudeTool = (name: string): string | undefined =>
+  TEXRA_TOOL_OF_CLAUDE_TOOL.get(name);
+
+/** The TeXRA tools that have a Claude Code counterpart. */
+export const CLAUDE_COUNTERPART_TOOLS: readonly string[] = Object.freeze(
+  Object.keys(CLAUDE_TOOLS),
+);
 
 /**
  * A call as a Claude Code hook sees it: for a tool with a Claude Code

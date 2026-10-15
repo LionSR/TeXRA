@@ -73,7 +73,11 @@ export const pluginCatalogLayer = (
       // why each other enabled one loads nothing. One that ships only
       // skills loads with no servers.
       const installed: InstalledToolReader = Effect.gen(function* () {
-        const { loadable, withheld, envKey } = yield* readInstalledPluginLoad({
+        const {
+          loadable,
+          withheld,
+          envKey: installedKey,
+        } = yield* readInstalledPluginLoad({
           globalState: appState,
         }).pipe(Effect.provideService(FileSystem.FileSystem, fs));
         return {
@@ -82,10 +86,10 @@ export const pluginCatalogLayer = (
             return {
               id,
               servers:
-                envKey === undefined
+                installedKey === undefined
                   ? []
                   : source.plugin.mcpServers.map((server) =>
-                      mcpPlugin(server, envKey, id),
+                      mcpPlugin(server, installedKey, id),
                     ),
               source,
             };
