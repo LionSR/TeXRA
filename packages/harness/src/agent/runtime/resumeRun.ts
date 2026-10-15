@@ -225,16 +225,6 @@ const resumeHere = Effect.fn('resumeHere')(function* (
   );
 }, Effect.scoped);
 
-/** What every resumed run takes from the resume's caller. */
-const runLaunchOptions = (options: ResumeRunOptions) => ({
-  session: options.session,
-  isCancellationRequested: options.isCancellationRequested,
-  onRun: options.onRun,
-  // Admitted under the claim already (`resumeHere`): not again at entry.
-  stopAfterCycle: options.stopAfterCycle,
-  tools: options.tools,
-});
-
 /** The follow-ups still queued on the run, folded from its durable rows. */
 const queuedFollowUps = (session: SessionHandle, runId: RunId) =>
   Effect.flatMap(
@@ -311,7 +301,14 @@ const resumeQueuedToolUse = Effect.fn('resumeQueuedToolUse')(function* (
           if (!(yield* queuedInput).some(isAdmitted)) return;
         }
       });
-      const launchOptions = runLaunchOptions(options);
+      // What every resumed run takes from the resume's caller.
+      const launchOptions = {
+        session: options.session,
+        isCancellationRequested: options.isCancellationRequested,
+        onRun: options.onRun,
+        stopAfterCycle: options.stopAfterCycle,
+        tools: options.tools,
+      };
       const parentRunId = yield* persistedParentRunId(session, runId);
       let completion: Fiber.Fiber<RunEndResult | undefined, Error>;
       if (parentRunId === undefined) {
@@ -331,26 +328,17 @@ const resumeQueuedToolUse = Effect.fn('resumeQueuedToolUse')(function* (
           workingDirectory: resume.agentConfig.workingDirectory ?? undefined,
           resume: { identity: resume, options: { ...launchOptions, onIdle } },
         };
-        // A background script reports once, at its end: no progress.
-        const script =
-          resume.agentConfig.script?.kind === 'background'
-            ? resume.agentConfig.script
-            : null;
+        const { script } = resume.agentConfig;
         completion = yield* startChildRunLoop({
           session,
           runId,
           parentRunId,
           agentName: resume.agentConfig.agent,
           budgeted: true,
-          ...(script === null
-            ? { strategy: createNativeSubagentStrategy(native) }
-            : {
-                strategy: createScriptRunStrategy({
-                  ...native,
-                  title: script.title,
-                }),
-                notify: () => undefined,
-              }),
+          strategy:
+            script?.kind === 'background'
+              ? createScriptRunStrategy({ ...native, title: script.title })
+              : createNativeSubagentStrategy(native),
         });
       }
       // Interrupting either observation below cannot interrupt the

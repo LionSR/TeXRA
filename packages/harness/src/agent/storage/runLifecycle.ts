@@ -207,11 +207,9 @@ export interface FinalizeRunInput {
   readonly settlement?: TransactionPart;
 }
 
-/** A run's end as it stands on disk: the requested outcome, or the one
- *  `keepExistingOutcome` retained, which a backstop settles to; `recorded`
- *  is false for a run never born, whose launch reports its failure. */
+/** A run's end as it stands on disk: `recorded` is false for a run never
+ *  born, whose launch reports its failure. */
 export interface FinalizedRun {
-  readonly outcome: RunOutcome;
   readonly recorded: boolean;
 }
 
@@ -229,7 +227,7 @@ export const endIn = Effect.fn('endIn')(function* (
   const rows = yield* session.log.records(runId);
   // A run never born has nothing to end: its launch reports the failure.
   if (!rows.some((row) => row.type === 'run.start'))
-    return { persisted: outcome, recorded: false, after: Effect.void };
+    return { recorded: false, after: Effect.void };
   // Ended in its current lifecycle: a resumed run ends again, even the same
   // way, or every `durableOutcome` reader keeps it RUNNING for want of the row.
   const ended = runEndFromEvents(rows, runId)?.outcome;
@@ -265,7 +263,7 @@ export const endIn = Effect.fn('endIn')(function* (
           output: input.output ?? emptyRunEndOutput(),
         },
       ];
-  const result = { persisted, recorded: true, after: co.committed };
+  const result = { recorded: true, after: co.committed };
   const beside = [...closing, ...co.rows];
   const cell = yield* Effect.result(
     session.runHistory.open(runId, { within: append }),
@@ -347,7 +345,7 @@ export const finalizeRun = Effect.fn('finalizeRun')(function* (
     const cause = ensureError(Cause.squash(status.cause)).message;
     yield* Effect.logWarning(`Run ${runId}: its settled end: ${cause}`);
     const landed = runEndFromEvents(read.success, runId);
-    if (landed !== null) return { outcome: landed.outcome, recorded: true };
+    if (landed !== null) return { recorded: true };
     // The parent's notice rides this end's append (both commit or neither),
     // one per lifecycle (its `run.activate`) so a later loss is no replay;
     // a parent that refuses it is the end's note, on the card.
@@ -372,9 +370,9 @@ export const finalizeRun = Effect.fn('finalizeRun')(function* (
     status = yield* end({ ...requested, error, settlement: notice });
   }
   if (Exit.isSuccess(status)) {
-    const { persisted, recorded, after } = status.value;
+    const { recorded, after } = status.value;
     yield* after;
-    return { outcome: persisted, recorded };
+    return { recorded };
   }
   // The last backstop, loud: the end alone, FAILED.
   const error = ensureError(Cause.squash(status.cause));

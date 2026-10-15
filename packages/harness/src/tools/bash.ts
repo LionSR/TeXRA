@@ -287,7 +287,7 @@ function createBackgroundBashStrategy(params: {
     // A background shell's result survives its own kill.
     deliverAfterInterrupt: true,
 
-    launch: (_ports, signal) =>
+    launch: (signal) =>
       Effect.suspend(() => {
         startedAt = Date.now();
         return executeCommand(command, {
@@ -313,7 +313,6 @@ function createBackgroundBashStrategy(params: {
         });
       }),
 
-    isTerminal: () => true,
     // `executeCommand` never fails on a non-zero exit — it answers with the
     // exit code, so the failure is an application-level one.
     isTurnError: (turn) => !turn.success,

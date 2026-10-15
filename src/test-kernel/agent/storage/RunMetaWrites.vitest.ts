@@ -89,11 +89,11 @@ describe('run metadata updates', () => {
         runId: id,
         outcome: 'failed',
       });
-      expect(ended.outcome).toBe('failed');
+      expect(ended.recorded).toBe(true);
       const ends = yield* session.log.rows(qualifyAggregateId('run', id), [
         'run.end',
       ]);
-      expect(ends).toHaveLength(1);
+      expect(ends).toMatchObject([{ outcome: 'failed' }]);
     }),
   );
   it.effect('keeps a driver outcome when host-exit finalization follows', () =>
@@ -108,7 +108,7 @@ describe('run metadata updates', () => {
           outcome: 'cancelled',
           keepExistingOutcome: true,
         }),
-      ).toEqual({ outcome: 'completed', recorded: true });
+      ).toEqual({ recorded: true });
       expect(yield* getRunRecords(session, id).readRunEnd()).toMatchObject({
         outcome: 'completed',
       });

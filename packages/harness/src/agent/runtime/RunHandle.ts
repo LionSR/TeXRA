@@ -1,9 +1,8 @@
 /**
- * Live run handle and terminal settlement.
+ * Live run handle.
  *
- * A handle owns one run's identity, its launch's parent, its live controls
- * (while a tool-use loop runs), and its exactly-once
- * terminal settlement. A run's stop is its fiber's interruption
+ * A handle owns one run's identity, its launch's parent and its live
+ * controls (while a tool-use loop runs). A run's stop is its fiber's interruption
  * (`RunRegistry.interrupt`), never a call on this handle. Termination
  * policy lives with the owning registry.
  */

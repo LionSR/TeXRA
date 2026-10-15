@@ -31,7 +31,6 @@ import { submitFollowUp } from '@agent/followUp/ToolUseFollowUp';
 import {
   startChildRunLoop,
   type ChildRunLoopParams,
-  type ChildRunPorts,
   type NativeChildStrategy,
   type ProcessChildStrategy,
 } from '@agent/runtime/childRunLoop';
@@ -112,10 +111,6 @@ const queuedTexts = (runId: RunId) =>
     followUps.map((followUp) => followUp.text),
   );
 
-/** Reads a run's queued follow-up texts on the process runtime, for the
- *  real-timer `vi.waitFor` poll the ownership test runs on. */
-const readQueuedTexts = (runId: RunId) => Effect.runPromise(queuedTexts(runId));
-
 /** Lets a forked loop reach its budget permit wait or its queue block. */
 const settle = Effect.promise(
   () => new Promise<void>((resolve) => setTimeout(resolve, 0)),
@@ -174,7 +169,6 @@ function createFakeStrategy(): FakeStrategyHandle {
     stageLabel: 'Fake child run',
     launch: () => runTurn,
     runTurn: () => runTurn,
-    isTerminal: (turn) => turn.kind === 'terminal',
     isTurnError: (turn) => turn.kind === 'error-turn',
     formatDelivery: (turn) => Effect.succeed(`delivered:${turn.value}`),
     formatError: (turn, err) => {
@@ -214,10 +208,7 @@ function createAbortError(): Error {
 /** A strategy whose very first turn is already terminal. */
 function createTerminalStrategy(
   stageLabel: string,
-  launch: (
-    ports: ChildRunPorts,
-    signal: AbortSignal,
-  ) => Effect.Effect<FakeTurn, Error> = () =>
+  launch: (signal: AbortSignal) => Effect.Effect<FakeTurn, Error> = () =>
     Effect.succeed({ kind: 'terminal', value: 'done' }),
   formatDelivery: ProcessChildStrategy<FakeTurn>['formatDelivery'] = (turn) =>
     Effect.succeed(`delivered:${turn.value}`),
@@ -225,7 +216,6 @@ function createTerminalStrategy(
   return {
     stageLabel,
     launch,
-    isTerminal: () => true,
     formatDelivery,
     formatError: () => 'error',
   };
@@ -442,7 +432,7 @@ describe('childRunLoop E2E fixtures', () => {
 
         const strategy: ProcessChildStrategy<FakeTurn> = {
           stageLabel: 'fake-cli session',
-          launch: (_ports, signal) =>
+          launch: (signal) =>
             Effect.gen(function* () {
               yield* Deferred.succeed(launched, undefined);
               return yield* Effect.callback<never, Error>((resume) => {
@@ -456,7 +446,6 @@ describe('childRunLoop E2E fixtures', () => {
                 }
               });
             }),
-          isTerminal: () => false,
           formatDelivery: () => Effect.succeed('unexpected delivery'),
           formatError: () => 'unexpected error',
           releaseSessionOwnership,
@@ -529,12 +518,10 @@ describe('childRunLoop E2E fixtures', () => {
         // formatter signals that it started and then waits for the delivery
         // text this test releases.
         const formattedDelivery = yield* Deferred.make<string>();
-        let notifyProgress: ChildRunPorts['notify'] = () => {};
         const strategy = createTerminalStrategy(
           'Follow-up ownership',
-          (ports) =>
+          () =>
             Effect.gen(function* () {
-              notifyProgress = ports.notify;
               yield* Deferred.succeed(launchStarted, undefined);
               return yield* Deferred.await(turn);
             }),
@@ -598,20 +585,8 @@ describe('childRunLoop E2E fixtures', () => {
             releaseNativeChild();
           }
 
-          const terminalQueue = yield* queuedTexts(PARENT_RUN_ID);
-          notifyProgress({ kind: 'started' });
-          expect(yield* queuedTexts(PARENT_RUN_ID)).toEqual(terminalQueue);
-
+          const queuedBefore = yield* queuedTexts(PARENT_RUN_ID);
           yield* foldParentPhase(true);
-          notifyProgress({ kind: 'started' });
-          // The loop writes progress after the port returns.
-          const progressQueue = yield* Effect.promise(() =>
-            vi.waitFor(async () => {
-              const queued = await readQueuedTexts(PARENT_RUN_ID);
-              expect(queued).toHaveLength(terminalQueue.length + 1);
-              return queued;
-            }),
-          );
 
           yield* Deferred.succeed<FakeTurn, Error>(turn, {
             kind: 'terminal',
@@ -621,11 +596,10 @@ describe('childRunLoop E2E fixtures', () => {
           yield* registryOf(session.runs)['detachActiveChildren'](
             PARENT_RUN_ID,
           );
-          notifyProgress({ kind: 'started' });
           yield* Deferred.succeed(formattedDelivery, 'delivered:done');
           yield* Fiber.join(loop);
 
-          expect(yield* queuedTexts(PARENT_RUN_ID)).toEqual(progressQueue);
+          expect(yield* queuedTexts(PARENT_RUN_ID)).toEqual(queuedBefore);
           expect(mocks.startFollowUpWake).not.toHaveBeenCalled();
         } finally {
           yield* session.followUps.closeInput(PARENT_RUN_ID);
@@ -645,14 +619,13 @@ describe('childRunLoop E2E fixtures', () => {
   it.effect('persists without parent delivery in persist-only mode', () =>
     Effect.gen(function* () {
       const runId = loopRunId();
-      const { strategy, resolveTurn } = createFakeStrategy();
-
-      const loop = yield* startLoop(
-        runId,
-        { ...strategy, deliveryMode: 'persistOnly' },
-        { parentRunId: 'headless-parent' as RunId },
-      );
-      yield* resolveTurn(1, { kind: 'terminal', value: 'saved' });
+      const loop = yield* startNativeLoop(runId, {
+        stageLabel: 'Persist-only child',
+        deliveryMode: 'persistOnly',
+        launch: () => Effect.succeed({ kind: 'terminal', value: 'saved' }),
+        formatDelivery: (turn) => Effect.succeed(`delivered:${turn.value}`),
+        formatError: () => 'error',
+      });
       yield* Fiber.join(loop);
 
       expect(yield* getRunRecords(session, runId).readReport()).toBe(
@@ -750,9 +723,12 @@ describe('childRunLoop E2E fixtures', () => {
         const parentWake = vi.fn();
         const deliveryStarted = yield* Deferred.make<void>();
         const deliveryCompleted = yield* Deferred.make<void>();
+        const secondDelivery = yield* Deferred.make<void>();
         mocks.startFollowUpWake.mockImplementation(() =>
           Effect.gen(function* () {
             parentWake();
+            if (parentWake.mock.calls.length === 2)
+              yield* Deferred.succeed(secondDelivery, undefined);
             yield* Deferred.succeed(deliveryStarted, undefined);
             yield* Deferred.await(deliveryCompleted);
             return true;
@@ -796,7 +772,11 @@ describe('childRunLoop E2E fixtures', () => {
         // enqueue (the fast "someone is already waiting" path never pushes to
         // the backing array at all) well before the loop's own continuation runs.
         yield* turnStarted(2);
-        yield* resolveTurn(2, { kind: 'terminal', value: 'final' });
+        yield* resolveTurn(2, { kind: 'interim', value: 'final' });
+        yield* Deferred.await(secondDelivery);
+        // One macrotask lets the loop reach its queue wait before the stop.
+        yield* settle;
+        yield* stopChildRun(runId);
 
         yield* Fiber.join(loop);
         expect(yield* queuedTexts(PARENT_RUN_ID)).toEqual([
@@ -816,7 +796,8 @@ describe('childRunLoop E2E fixtures', () => {
     () =>
       Effect.gen(function* () {
         const runId = loopRunId();
-        const { strategy, resolveTurn, turnStarted } = createFakeStrategy();
+        const { strategy, resolveTurn, rejectTurn, turnStarted } =
+          createFakeStrategy();
         const loop = yield* startLoop(runId, strategy);
 
         yield* resolveTurn(1, { kind: 'interim', value: 'first' });
@@ -842,7 +823,8 @@ describe('childRunLoop E2E fixtures', () => {
         yield* turnStarted(2);
         yield* session.log.settled;
         expect(session.view.run(runId)?.status).toBe(RUN_PHASE.RUNNING);
-        yield* resolveTurn(2, { kind: 'terminal', value: 'final' });
+        yield* stopChildRun(runId);
+        yield* rejectTurn(2, createAbortError());
         yield* Fiber.join(loop);
       }),
   );
@@ -865,11 +847,11 @@ describe('childRunLoop E2E fixtures', () => {
         });
         yield* turnStarted(2);
 
-        // The last turn's settlement rides the child's `run.end`, which
-        // the store refuses: the end that commits instead records the lost
-        // result, and the prompt it would have consumed stays queued.
+        // The last (failed) turn's settlement rides the child's `run.end`,
+        // which the store refuses: the end that commits instead records the
+        // lost result, and the prompt it would have consumed stays queued.
         yield* refuseNextRunEnd;
-        yield* resolveTurn(2, { kind: 'terminal', value: 'final' });
+        yield* resolveTurn(2, { kind: 'error-turn', value: 'final' });
 
         // The lost result is the end's, not the loop's: the loop ends cleanly.
         expect(Exit.isSuccess(yield* Fiber.await(loop))).toBe(true);
@@ -1191,7 +1173,7 @@ describe('childRunLoop E2E fixtures', () => {
             turn: Effect.Effect<FakeTurn>,
           ): NativeChildStrategy<FakeTurn> => ({
             stageLabel,
-            launch: (_ports, turns) => turns.turnPermit(turn),
+            launch: (_notify, turns) => turns.turnPermit(turn),
             formatDelivery: (done) => Effect.succeed(`delivered:${done.value}`),
             formatError: () => 'error',
           });
