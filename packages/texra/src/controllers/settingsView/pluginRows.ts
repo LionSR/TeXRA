@@ -49,10 +49,6 @@ export const buildPluginRows = Effect.fn('buildPluginRows')(function* (
   const mcp = yield* readMcpConfig(
     yield* FileSystem.FileSystem,
     USER_MCP_CONFIG_PATH,
-  ).pipe(
-    Effect.catch((error) =>
-      Effect.succeed({ servers: [], warnings: [error.message] }),
-    ),
   );
 
   const rows: PluginRow[] = [

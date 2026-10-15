@@ -30,7 +30,6 @@ import { toolCatalogLayer } from '@tools/liveTools';
 import { mcpPlugin, mcpPluginLoader } from '@tools/mcp/mcpConfig';
 import { readDisabledTools, type Plugin } from '@tools/plugins';
 import { toolTable, type InstalledToolReader } from '@tools/toolTable';
-import { sha256 } from '@utils/core/idHash';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 /** A switch apply's backoff: 200 ms doubling, over six retries. */
@@ -57,8 +56,8 @@ export const pluginCatalogLayer = (
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
       const appState = yield* AppState;
-      // Resolved once per process, on the first run that declares an MCP
-      // tool. A failed read is not kept: the next run that needs it reads
+      // The configured servers' key: resolved once per process, on the
+      // first run that declares an MCP tool. A failed read is not kept: the next run that needs it reads
       // again, so one transient store fault does not stop every server.
       const envKey = yield* revisionKey(appState).pipe(
         Effect.tapError((error) =>
@@ -70,47 +69,33 @@ export const pluginCatalogLayer = (
           Exit.isSuccess(exit) ? Duration.infinity : Duration.zero,
         ),
       );
-      // The installed plugins a step loads: the enabled, trusted ones, each
-      // keyed by what it would start, and why each other enabled one loads
-      // nothing. One that ships only skills loads with no servers.
+      // The installed plugins a step loads: the enabled, trusted ones, and
+      // why each other enabled one loads nothing. One that ships only
+      // skills loads with no servers.
       const installed: InstalledToolReader = Effect.gen(function* () {
-        const load = yield* readInstalledPluginLoad({
+        const { loadable, withheld, envKey } = yield* readInstalledPluginLoad({
           globalState: appState,
         }).pipe(Effect.provideService(FileSystem.FileSystem, fs));
-        const withServers = load.loadable.filter(
-          ({ plugin }) => plugin.mcpServers.length > 0,
-        );
-        const warnings = [
-          ...load.withheld,
-          ...withServers.flatMap(({ plugin }) => plugin.warnings),
-        ];
-        const key =
-          withServers.length === 0 ? undefined : yield* Effect.result(envKey);
-        if (key?._tag === 'Failure')
-          warnings.push(
-            `No installed plugin's MCP servers start: ${key.failure.message}`,
-          );
         return {
-          plugins: load.loadable.map((source) => {
-            const { record, plugin, trust } = source;
-            const id = installedPluginId(record.name);
-            const servers =
-              key?._tag === 'Success'
-                ? plugin.mcpServers.map((server) =>
-                    mcpPlugin(server, key.success, id),
-                  )
-                : [];
+          plugins: loadable.map((source) => {
+            const id = installedPluginId(source.record.name);
             return {
               id,
-              key: sha256({
-                trust,
-                servers: servers.map(({ spec, revision }) => [spec, revision]),
-              }),
-              servers,
+              servers:
+                envKey === undefined
+                  ? []
+                  : source.plugin.mcpServers.map((server) =>
+                      mcpPlugin(server, envKey, id),
+                    ),
               source,
             };
           }),
-          warnings,
+          warnings: [
+            ...withheld,
+            ...loadable.flatMap(({ plugin }) =>
+              plugin.mcpServers.length > 0 ? plugin.warnings : [],
+            ),
+          ],
         };
       });
       // The switches as they stand, then again on each change to them,

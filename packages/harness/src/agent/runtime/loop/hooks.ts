@@ -212,7 +212,7 @@ const hooksAt = Effect.fn('Hooks.at')(function* (
           );
         // A failure keeps the start of stderr, or why the process never ran.
         const stderr =
-          verdict.status === 'ok'
+          verdict.status === 'ok' || ended.kind === 'timeout'
             ? ''
             : (ended.kind === 'unstartable'
                 ? ended.message

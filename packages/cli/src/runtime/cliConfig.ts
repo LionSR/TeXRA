@@ -23,7 +23,7 @@ import type { SettingsStores } from '@shared/config/settingsAccess';
 import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
 
 // Local imports - tools
-import { mcpConfigWarnings, USER_MCP_CONFIG_PATH } from '@tools/mcp/mcpConfig';
+import { readMcpConfig, USER_MCP_CONFIG_PATH } from '@tools/mcp/mcpConfig';
 
 // Local imports - utilities
 import {
@@ -295,7 +295,7 @@ export function loadCliStartupConfig(
       );
       // The user's MCP server config, which only a run declaring MCP tools
       // otherwise reads: a broken file warns here, not first mid-run.
-      const mcpWarnings = yield* mcpConfigWarnings(
+      const mcpConfig = yield* readMcpConfig(
         yield* FileSystem.FileSystem,
         USER_MCP_CONFIG_PATH,
       );
@@ -328,7 +328,7 @@ export function loadCliStartupConfig(
             { store: stores.global, isProjectFile: false },
             { store: stores.local, isProjectFile: false },
           ]),
-          ...mcpWarnings,
+          ...(mcpConfig?.warnings ?? []),
         ],
         degradations,
       };

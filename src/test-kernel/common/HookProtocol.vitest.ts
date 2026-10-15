@@ -144,11 +144,7 @@ describe('the Claude Code hooks protocol at our edge', () => {
   it('renders no decision on a timeout', () => {
     const verdict = interpretHookRun(
       { hook_event_name: 'PreToolUse' },
-      {
-        kind: 'timeout',
-        stdout: '',
-        stderr: '',
-      },
+      { kind: 'timeout' },
     );
     expect(verdict).toMatchObject({ status: 'timeout', deny: null });
     expect(verdict.warning).toMatch(/timed out/);
