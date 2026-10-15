@@ -19,7 +19,6 @@ import { missingAgentMessage, missingTeamMessage } from '../runtime/agents';
 import {
   effectiveApprovalPolicy,
   failUsage,
-  readCliStdinText,
   type CliContext,
 } from '../runtime/cliContext';
 import { CliExitCode } from '../runtime/exitCodes';
@@ -196,7 +195,6 @@ export const runTeam = Effect.fn('runTeam')(function* (
     {
       allowEmptyInput: hasInstruction,
       requireWorkspaceFiles: true,
-      readStdinText: readCliStdinText,
     },
     ({ inputFiles, contextFiles, stdinInputPath }) =>
       Effect.gen(function* () {

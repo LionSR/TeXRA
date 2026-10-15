@@ -257,24 +257,6 @@ export function runResumeCommand(
             services: stores,
             runId: id,
             recoveryInputIsDurable,
-            agentRuns: {
-              // The headless run skeleton enters the persisted run through
-              // the session's resume, settling with its whole run; a
-              // shutdown before admission aborts the resume. A refusal is
-              // the caller's usage exit.
-              launch: (session) =>
-                session
-                  .resume(id)
-                  .pipe(
-                    Effect.catchTag('ResumeRefused', (refusal) =>
-                      Effect.fail(
-                        new CliUsageError(
-                          describeFollowUpFailure(refusal.reason),
-                        ),
-                      ),
-                    ),
-                  ),
-            },
           },
         );
       }),

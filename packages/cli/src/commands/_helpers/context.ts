@@ -1,12 +1,11 @@
 import { Effect, Layer } from 'effect';
 
 import { buildCliContext } from '@cli/runtime/cliContext';
-import { pickGlobalArgs, type ParsedGlobalArgs } from '@cli/runtime/globalArgs';
 import { writeTextStderr } from '@cli/runtime/logSinks';
 import { nodeFileServices } from '@platform/defaults/jsonStore';
 import { processEnvConfigLayer } from '@utils/system/envFlags';
 
-import { collectStringFlagValues } from './globalArgs';
+import { pickGlobalArgs, type ParsedGlobalArgs } from './globalArgs';
 
 /**
  * The CLI's pre-runtime context program. It opens the project and user
@@ -27,11 +26,7 @@ export function contextFromArgs(
 ) {
   return Effect.gen(function* () {
     const context = yield* buildCliContext({
-      // Raw argv is the only reader that survives repeated `--source/-s`:
-      // citty's parsed args keep the last value only.
-      globalArgs: pickGlobalArgs(args, {
-        skillSourcePaths: collectStringFlagValues(rawArgs, 'source', 's'),
-      }),
+      globalArgs: pickGlobalArgs(args, rawArgs),
     });
     // Degradation reaches stderr even under `--quiet` (#11080).
     const printed = context.quietLogs

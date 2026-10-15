@@ -104,12 +104,6 @@
       "name": "fetchLatestHomebrewFormulaVersion"
     },
     {
-      "file": "packages/cli/src/runtime/workflowInputs.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "expandRunInputs"
-    },
-    {
       "file": "packages/cli/src/runtime/workflowOutput.ts",
       "category": "production-dead",
       "kind": "exports",

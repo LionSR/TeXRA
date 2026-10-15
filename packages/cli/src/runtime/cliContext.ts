@@ -24,7 +24,7 @@ import { stricterPolicy } from '@shared/approvalBypassKind';
 import type { SkillSourceOptions } from '@skills/skillSources';
 import { readConfigSettingFrom } from '@utils/config/platformSettings';
 import { absentReason } from '@utils/files/fsEntryExists';
-import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import { envVar } from '@utils/system/envFlags';
 import { isNonEmptyString } from '@utils/text/stringUtils';
 
@@ -177,20 +177,6 @@ export function readCliAmbientState(): CliAmbientState {
 export function cliEnvValue(key: string): string | undefined {
   return process.env[key];
 }
-
-export const readCliStdinText: Effect.Effect<string, Error> = Effect.tryPromise(
-  {
-    try: async () => {
-      process.stdin.setEncoding('utf8');
-      const chunks: string[] = [];
-      for await (const chunk of process.stdin) {
-        chunks.push(String(chunk));
-      }
-      return chunks.join('');
-    },
-    catch: ensureError,
-  },
-);
 
 /** Ambient shell cwd for CLI output that will be copied back into that shell. */
 export function readCliCwd(): string {

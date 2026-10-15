@@ -19,6 +19,7 @@ import { CliUsageError, formatCrashReportLine } from '@cli/runtime/cliContext';
 import {
   collectStringFlagValues,
   optionalStringFlagValue,
+  pickGlobalArgs,
 } from '@cli/commands/_helpers/globalArgs';
 import {
   expandRunInputs,
@@ -34,7 +35,6 @@ import {
   knownCliModelIds,
   resolveKnownCliModelId,
 } from '@cli/runtime/cliConfig';
-import { pickGlobalArgs } from '@cli/runtime/globalArgs';
 import { RUN_OUTCOME, type RunId } from '@shared/schemas';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
@@ -961,17 +961,12 @@ describe('CLI root argument routing', () => {
 
 describe('CLI global color/input flags', () => {
   it('preserves whitespace in the explicit workspace argument', () => {
-    expect(
-      pickGlobalArgs({ cwd: ' workspace ' }, { skillSourcePaths: [] }).cwd,
-    ).toBe(' workspace ');
+    expect(pickGlobalArgs({ cwd: ' workspace ' }, []).cwd).toBe(' workspace ');
   });
 
   it('maps CLI color and no-input flags to canonical knobs', () => {
     expect(
-      pickGlobalArgs(
-        { color: false, 'no-input': true },
-        { skillSourcePaths: [] },
-      ),
+      pickGlobalArgs({ color: false, 'no-input': true }, []),
     ).toMatchObject({
       noColor: true,
       noInput: true,
@@ -979,14 +974,10 @@ describe('CLI global color/input flags', () => {
   });
 
   it('maps citty negated input output to --no-input', () => {
-    expect(
-      pickGlobalArgs({ input: false }, { skillSourcePaths: [] }),
-    ).toMatchObject({
+    expect(pickGlobalArgs({ input: false }, [])).toMatchObject({
       noInput: true,
     });
-    expect(
-      pickGlobalArgs({ input: 'file.tex' }, { skillSourcePaths: [] }),
-    ).toMatchObject({
+    expect(pickGlobalArgs({ input: 'file.tex' }, [])).toMatchObject({
       noInput: false,
     });
   });

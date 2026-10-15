@@ -196,6 +196,7 @@ export type CliWorkflowRunResult = CliRunResult & {
   readonly output: Omit<RunEndOutput, 'structured'> & {
     readonly documents: DocumentsResult;
   };
+  readonly runDirectory: string;
 };
 
 interface WorkflowOutputResolutionOptions {
@@ -404,22 +405,18 @@ export function resolveWorkflowOutput(
 
 export function formatWorkflowTextResult(result: CliWorkflowRunResult): string {
   if (result.outcome === RUN_OUTCOME.FAILED) {
-    const diagnosticPath =
-      result.runDirectory ??
-      finalWorkflowOutput(result.output.documents.outputs)?.absolutePath;
     // The reply of a failed run is its error (the uncompiled documents and
     // their logs), so the text result says it beside where the artifacts are.
     return [
       'FAILED',
       result.output.response.trim(),
-      diagnosticPath && `Run artifacts: ${diagnosticPath}`,
+      `Run artifacts: ${result.runDirectory}`,
     ]
       .filter(Boolean)
       .join('\n');
   }
   if (
     result.outcome === RUN_OUTCOME.CANCELLED &&
-    result.runDirectory &&
     !result.copiedOutput &&
     !result.copiedOutputs?.length
   ) {
@@ -433,11 +430,7 @@ export function formatWorkflowTextResult(result: CliWorkflowRunResult): string {
   }
 
   const finalOutput = finalWorkflowOutput(result.output.documents.outputs);
-  return (
-    finalOutput?.absolutePath ??
-    result.runDirectory ??
-    runOutcomeToCliRunStatus(result.outcome)
-  );
+  return finalOutput?.absolutePath ?? result.runDirectory;
 }
 
 export function resumeWorkflowOutputFile(

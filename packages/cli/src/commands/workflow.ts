@@ -8,11 +8,7 @@ import { DocumentTaskOptionsSchema } from '@texra/shared/plugins/documents';
 import { documentTaskOf } from '@texra/tools/documents/documentTask';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
-import {
-  failUsage,
-  readCliStdinText,
-  type CliContext,
-} from '../runtime/cliContext';
+import { failUsage, type CliContext } from '../runtime/cliContext';
 import { CliExitCode } from '../runtime/exitCodes';
 import {
   advertisesInterruptedRun,
@@ -47,7 +43,7 @@ import { resolveFileBackedInstruction } from './_helpers/instructionFile';
 import {
   executeCliConfig,
   executeCliToolUseConfig,
-  type CliConfigExecuteOptions,
+  type CliExecuteOptions,
   type CliRunServices,
 } from '../runtime/executeCli';
 import { formatToolUseAgentRunInstruction } from './_helpers/runInstructions';
@@ -139,7 +135,7 @@ export const runHeadlessAgent = Effect.fn('runHeadlessAgent')(function* (
     init.inputFiles,
     init.contextFiles,
     context.cwd,
-    { readStdinText: readCliStdinText },
+    {},
     ({ inputFiles, contextFiles, stdinInputPath }) =>
       Effect.gen(function* () {
         if (init.output && inputFiles.length > 1) {
@@ -242,7 +238,6 @@ const runToolUseAgent = Effect.fn('runToolUseAgent')(function* (
     {
       allowEmptyInput: true,
       requireWorkspaceFiles: true,
-      readStdinText: readCliStdinText,
     },
     ({ inputFiles, contextFiles, stdinInputPath }) =>
       Effect.gen(function* () {
@@ -292,10 +287,9 @@ export const executeCliWorkflowConfig = Effect.fn('executeCliWorkflowConfig')(
     config: AgentConfigPayload,
     runContext: CliContext,
     options: {
-      readonly services: CliConfigExecuteOptions['services'];
+      readonly services: CliExecuteOptions['services'];
       readonly recoveryInputIsDurable?: boolean;
       readonly runId?: RunId;
-      readonly agentRuns?: CliConfigExecuteOptions['agentRuns'];
     },
   ): Effect.fn.Return<number, Error, CliRunServices> {
     const session = yield* options.services.session;
@@ -347,7 +341,6 @@ export const executeCliWorkflowConfig = Effect.fn('executeCliWorkflowConfig')(
     const run = yield* executeCliConfig(config, runContext, {
       services: options.services,
       runId: options.runId,
-      agentRuns: options.agentRuns,
       onInterruptedRunFinalized: recoveryInputIsDurable
         ? (runId) => writeResumeHint(runId, true)
         : undefined,

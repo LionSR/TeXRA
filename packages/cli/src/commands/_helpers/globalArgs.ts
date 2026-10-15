@@ -1,4 +1,6 @@
-import { CliUsageError } from '@cli/runtime/cliContext';
+import type { ParsedArgs } from 'citty';
+
+import { CliUsageError, type CliGlobalArgs } from '@cli/runtime/cliContext';
 import { documentsNegatedBooleanForm } from '@cli/runtime/completionCommandTree';
 import { CLI_OUTPUT_FORMATS, type CliOutputFormat } from '@shared/schemas';
 import {
@@ -6,6 +8,7 @@ import {
   type TexraApprovalPolicy,
 } from '@shared/approvalPolicy';
 import { INTEROP_SKILL_DIRS } from '@skills/skillSources';
+import { isNonEmptyString } from '@utils/text/stringUtils';
 
 /**
  * Single source of truth for the global flags accepted by every TeXRA
@@ -125,6 +128,36 @@ export const AGENT_RUN_GLOBAL_ARGS = {
   ...GLOBAL_ARGS,
   ...SKILL_SOURCE_ARGS,
 } as const;
+
+/** citty's parse of the global flags; a command declares a subset of them. */
+export type ParsedGlobalArgs = Partial<
+  ParsedArgs<typeof AGENT_RUN_GLOBAL_ARGS>
+>;
+
+export function pickGlobalArgs(
+  args: ParsedGlobalArgs,
+  rawArgs: readonly string[],
+): CliGlobalArgs {
+  return {
+    print: args.print === true,
+    quiet: args.quiet === true,
+    verbose: args.verbose === true,
+    cwd: isNonEmptyString(args.cwd) ? args.cwd : undefined,
+    outputFormat: args['output-format'],
+    approvalPolicy: args['approval-policy'],
+    // citty parses `--no-color` into `color: false`.
+    noColor: args.color === false,
+    // `--no-input` is intentionally not registered as `input` so it does not
+    // become a leading global `--input <file>` flag. citty still parses the
+    // negative spelling as `input: false`, which is safe to recognize here
+    // because command-specific `--input <file>` arrives as a string/array.
+    noInput: args['no-input'] === true || args.input === false,
+    includeInteropSkills: args['include-interop'] === true,
+    // Raw argv is the only reader that survives repeated `--source/-s`:
+    // citty's parsed args keep the last value only.
+    skillSourcePaths: collectStringFlagValues(rawArgs, 'source', 's'),
+  };
+}
 
 export const HEADLESS_ONLY_GLOBAL_ARG_NAMES = [
   'print',

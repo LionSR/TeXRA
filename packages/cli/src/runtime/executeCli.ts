@@ -17,6 +17,7 @@ import {
   type AgentConfigPayload,
 } from '@texra-ai/harness/schemas';
 import {
+  describeFollowUpFailure,
   hasErrorPresentationClaimed,
   RunFailure,
   withProcessServices,
@@ -82,38 +83,7 @@ type CliRunRequest = Required<
   Pick<Extract<StartInput, { readonly config: unknown }>, 'config' | 'runId'>
 >;
 
-/** What a headless run asks its session for: the request, the approval it
- *  rides (`launchApproval`), and whether the run parks for input after a
- *  cycle. */
-interface CliLaunchInput {
-  readonly request: CliRunRequest;
-  readonly approval: ReturnType<typeof launchApproval>;
-  readonly interactive: boolean;
-}
-
-/** How a headless run enters its session: a fresh start, or `texra
- *  resume`'s resume of the persisted run; answers with the admitted run. */
-type CliLaunch = (
-  session: Session,
-  launch: CliLaunchInput,
-) => Effect.Effect<Run, Error>;
-
-/** A fresh start of the request on the session. */
-const startOnSession: CliLaunch = (
-  session,
-  { request, approval, interactive },
-) =>
-  session.start({
-    config: request.config,
-    runId: request.runId,
-    approval: {
-      policy: approval.approvalPolicy,
-      delegated: approval.approveDelegatedWork,
-    },
-    interactive,
-  });
-
-interface CliExecuteOptions {
+export interface CliExecuteOptions {
   /** The `initCliPlatform` services the run uses, from the command that
    *  holds them: `session`, whose records and rows the run's output reads;
    *  `runSession`, the same session as every host drives it, where the run
@@ -140,20 +110,8 @@ interface CliExecuteOptions {
    *  outcome: part of the finalization a shutdown waits for, so a signal
    *  never cuts it short. Its failure fails the finalization. */
   readonly afterRun?: (result: RunEndResult) => Effect.Effect<void, Error>;
-  /** The agent boundary the request runs through: unset, the session's
-   *  start; `texra resume`'s is the session's resume; a test harness
-   *  injects stand-ins rather than mocking. */
-  readonly agentRuns?: Partial<{
-    readonly launch: CliLaunch;
-    readonly resumability: typeof deriveResumability;
-  }>;
-}
-
-export interface CliConfigExecuteOptions extends CliExecuteOptions {
-  /**
-   * The persisted run a resume continues, instead of minting a fresh id; its
-   * `agentRuns.launch` is the resume path.
-   */
+  /** The persisted run `texra resume` continues through the session's
+   *  resume; unset, the run starts fresh under a minted id. */
   readonly runId?: RunId;
 }
 
@@ -178,11 +136,10 @@ export type CliConfigExecuteResult =
 export function executeCliConfig(
   config: AgentConfigPayload,
   runContext: CliContext,
-  options: CliConfigExecuteOptions,
+  options: CliExecuteOptions,
 ): Effect.Effect<CliConfigExecuteResult, Error, CliRunServices> {
   return Effect.gen(function* () {
-    const { runId: resumedRunId, ...executeOptions } = options;
-    const runId = resumedRunId ?? generateRunId();
+    const runId = options.runId ?? generateRunId();
     const parsed = AgentConfigSchema.safeParse(config);
     if (!parsed.success) {
       writeTextStderr(
@@ -195,7 +152,7 @@ export function executeCliConfig(
       (yield* options.services.session).roots,
     );
     const request = { config: parsed.data, runId };
-    const run = yield* executeCliRequest(request, runContext, executeOptions);
+    const run = yield* executeCliRequest(request, runContext, options);
     if (!run.ok) {
       return run;
     }
@@ -213,7 +170,7 @@ export function executeCliConfig(
 export function executeCliToolUseConfig(
   config: AgentConfigPayload,
   runContext: CliContext,
-  options: CliConfigExecuteOptions & {
+  options: CliExecuteOptions & {
     /** False when invocation-owned temporary inputs will not survive exit. */
     readonly recoveryInputIsDurable?: boolean;
   },
@@ -254,6 +211,37 @@ export function executeCliToolUseConfig(
   });
 }
 
+/** How a headless run enters its session: `texra resume`'s resume of the
+ *  persisted run (a refusal is the caller's usage exit), or a fresh start
+ *  with the approval it rides (`launchApproval`). */
+function launchOn(
+  session: Session,
+  request: CliRunRequest,
+  runContext: CliContext,
+  options: CliExecuteOptions,
+): Effect.Effect<Run, Error> {
+  if (options.runId !== undefined)
+    return session
+      .resume(options.runId)
+      .pipe(
+        Effect.catchTag('ResumeRefused', (refusal) =>
+          Effect.fail(
+            new CliUsageError(describeFollowUpFailure(refusal.reason)),
+          ),
+        ),
+      );
+  const approval = launchApproval(runContext.requestedApprovalPolicy);
+  return session.start({
+    config: request.config,
+    runId: request.runId,
+    approval: {
+      policy: approval.approvalPolicy,
+      delegated: approval.approveDelegatedWork,
+    },
+    interactive: options.stopAfterCycle !== true,
+  });
+}
+
 /**
  * Shared headless-run skeleton for `run` and `team run`: stand up a
  * runtime host, run the request, always close the host, and resolve the
@@ -291,11 +279,6 @@ export function executeCliRequest(
   CliRunServices
 > {
   return Effect.gen(function* () {
-    const agentRuns = {
-      launch: startOnSession,
-      resumability: deriveResumability,
-      ...options.agentRuns,
-    };
     const session = yield* options.services.session;
     const runSession = yield* options.services.runSession;
     // The run follows the project's setting, read at each decision, with
@@ -395,11 +378,7 @@ export function executeCliRequest(
      *  that comes before admission interrupts. */
     const launched = yield* Effect.forkChild(
       Effect.suspend(() =>
-        agentRuns.launch(runSession, {
-          request,
-          approval: launchApproval(runContext.requestedApprovalPolicy),
-          interactive: options.stopAfterCycle !== true,
-        }),
+        launchOn(runSession, request, runContext, options),
       ).pipe(
         Effect.tap(() =>
           Effect.sync(() => {
@@ -458,9 +437,7 @@ export function executeCliRequest(
             // A stop that reached no live run (it had ended) promises no
             // recovery: the run's own end is what the handler waits for.
             const inspection = stopped
-              ? yield* Effect.result(
-                  agentRuns.resumability(launchRunId, session),
-                )
+              ? yield* Effect.result(deriveResumability(launchRunId, session))
               : undefined;
             // The ordinary bounded shutdown path below remains authoritative
             // when checkpoint inspection itself is unavailable.
@@ -609,7 +586,7 @@ export function executeCliRequest(
                 runResult.result.outcome === RUN_OUTCOME.CANCELLED)));
         if (stopped) {
           const drain = Effect.gen(function* () {
-            const resumability = yield* agentRuns.resumability(
+            const resumability = yield* deriveResumability(
               launchRunId,
               session,
             );
