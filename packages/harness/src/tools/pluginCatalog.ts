@@ -23,6 +23,7 @@ import {
   installedPluginId,
   readInstalledPluginLoad,
 } from '@common/plugins/pluginTrust';
+import { withLogChannel } from '@logger/effectLog';
 import { AppState } from '@platform/interfaces';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { toolCatalogLayer } from '@tools/liveTools';
@@ -63,7 +64,7 @@ export const pluginCatalogLayer = (
         Effect.tapError((error) =>
           Effect.logWarning(
             `The MCP revision key could not be read; no MCP server starts until it can: ${error.message}`,
-          ),
+          ).pipe(withLogChannel('mcp')),
         ),
         Effect.cachedWithTTL((exit) =>
           Exit.isSuccess(exit) ? Duration.infinity : Duration.zero,

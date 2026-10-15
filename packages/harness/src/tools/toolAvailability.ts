@@ -95,7 +95,7 @@ export function setToolEnabled(
     entries.get(toolId)?.toggle === undefined
       ? Effect.logWarning(`Plugin ${toolId} has no switch; nothing written.`)
       : Effect.asVoid(write),
-  );
+  ).pipe(withLogChannel(CHANNEL));
 }
 
 /**

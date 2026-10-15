@@ -1081,10 +1081,6 @@ show` print the same notice, and the new `texra agents customize`,
   nested memories with backslash paths, so their previews never matched a
   listed item and stayed empty. Memory paths now use forward slashes on
   every platform.
-- **Only a plugin with a switch can be switched off.** A stored switch for
-  a plugin the Plugins page and `/plugins` show no switch for (Wolfram,
-  Lean 4) withheld its tools with no way to turn them back on; it is now
-  ignored.
 - **The VS Code welcome card moves on after a first task ends.** The
   extension now refreshes onboarding when a task it launched ends, as the
   desktop app does, instead of showing the setup step until the next
