@@ -267,9 +267,9 @@ describe('CliConfigForm API-key status lifecycle', () => {
       rendered.stdout.output = '';
       await submitOpenAiApiKey(rendered.stdin, rendered.stdout);
       await waitFor(() => formSecrets.loads === 2);
-      expect(
-        await Effect.runPromise(formSecrets.get(apiKeySecretName('openai'))),
-      ).toBe('sk-private-test-key');
+      expect(formSecrets.values.get(apiKeySecretName('openai'))).toBe(
+        'sk-private-test-key',
+      );
       expect(rendered.stdout.output).not.toContain('sk-private-test-key');
       refreshed.resolve();
       await waitFor(() =>

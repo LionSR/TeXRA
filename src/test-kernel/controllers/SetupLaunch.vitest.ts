@@ -126,17 +126,13 @@ describe('resolveSetupLaunchModel', () => {
 
   it('refuses launch when nothing is available and the OpenRouter flag is on', async () => {
     mocks.getUseOpenRouter.mockReturnValue(Effect.succeed(true));
-    await Effect.runPromise(
-      secrets.set(apiKeySecretName('openRouter'), 'openrouter-key'),
-    );
+    secrets.values.set(apiKeySecretName('openRouter'), 'openrouter-key');
 
     await expect(launchModel(true)).resolves.toBeNull();
   });
 
   it('offers the OpenRouter last resort only when the caller opts in', async () => {
-    await Effect.runPromise(
-      secrets.set(apiKeySecretName('openRouter'), 'openrouter-key'),
-    );
+    secrets.values.set(apiKeySecretName('openRouter'), 'openrouter-key');
 
     await expect(launchModel(true)).resolves.toEqual({
       model: SETUP_MODEL_BY_PROVIDER.openRouter,
