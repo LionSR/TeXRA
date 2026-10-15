@@ -224,6 +224,7 @@
       "@platform/defaults/nodeHost",
       "@platform/defaults/nodeProcesses",
       "@platform/defaults/workspaceStorage",
+      "@platform/processRuntime",
       "@shared/approvalBypassKind",
       "@shared/approvalPolicy",
       "@shared/config/settingsAccess",

@@ -40,14 +40,14 @@ Inside `packages/harness/src/agent`, use the `@agent/core/<module>/<File>` alias
 
 ```ts
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
-import { validateRunRequest } from '@agent/core/state/runRequests';
 ```
 
 There is intentionally no top-level `@agent/core` barrel — internal `packages/harness/src/agent`
 code imports from the specific module so dependency edges stay explicit (and
 re-export shims are not left behind, per the repo's anti-shim convention).
 
-Cross-host consumers (CLI, desktop, extension) that need the stable config
-contract reach the already-approved `@agent/runtime` barrel:
-`AgentConfigSchema`, `AgentConfig`, `AgentConfigPayload`, and the run-request
-validation (`validateRunRequest`, `RunRequest`, `ValidatedRunRequest`).
+Code outside the harness takes the config contract (`AgentConfigSchema`,
+`AgentConfig`, `AgentConfigPayload`, `AgentConfigInput`) from
+`@texra-ai/harness/schemas`. Run-request validation (`validateRunRequest`,
+`RunRequest`, `ValidatedRunRequest`) is the app's, in
+`packages/texra/src/controllers/session/runRequests.ts`.

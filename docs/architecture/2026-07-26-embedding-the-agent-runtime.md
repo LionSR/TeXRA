@@ -191,7 +191,7 @@ import { nodeProcesses } from '@platform/defaults/nodeProcesses';
 import { bootstrapHost } from '@controllers/hostBootstrap';
 import { loadAgents } from '@agent/index/agentRegistry';
 import { initializeDefaultSession } from '@agent/runtime/sessionGraph';
-import { validateRunRequest } from '@agent/core/state/runRequests';
+import { validateRunRequest } from '@texra/controllers/session/runRequests';
 
 // Step 1 — the process services: agent directories, filesystem, secrets,
 // application state, and the rest.
