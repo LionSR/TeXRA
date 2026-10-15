@@ -3,54 +3,16 @@ import { ProviderErrorSchema, type ProviderError } from '@shared/schemas';
 
 import { causeChain } from '../errorPredicates';
 
-/** Factory for symbol-keyed error metadata. Creates matched attach/detect
- *  accessors that share a single Symbol.for key. The optional typeGuard
- *  validates the value on retrieval; without it, raw retrieval is returned. */
-function createErrorMetadata<T>(
-  name: string,
-  typeGuard?: (v: unknown) => v is T,
-): {
-  attach: (err: unknown, value: T) => void;
-  detect: (err: unknown) => T | undefined;
-} {
-  const key = Symbol.for(`texra.${name}`);
-  return {
-    attach: (err, value) => {
-      if (Predicate.isObject(err)) {
-        (err as Record<symbol, unknown>)[key] = value;
-      }
-    },
-    detect: (err) => {
-      if (!Predicate.isObject(err)) return undefined;
-      const value = (err as Record<symbol, unknown>)[key];
-      if (typeGuard) {
-        return typeGuard(value) ? value : undefined;
-      }
-      return value as T | undefined;
-    },
-  };
-}
+// `Symbol.for` keys, so every bundle that carries this module reads one mark.
+const PRESENTATION_CLAIMED = Symbol.for('texra.errorPresentationClaimed');
+const PROVIDER_ERROR = Symbol.for('texra.providerError');
 
-/** Presence-only marker: attached at a throw site, detected anywhere in the
- *  rethrow chain so a wrapper that preserves `{ cause }` stays classifiable. */
-function createErrorMarker(name: string): {
-  attach: (err: unknown) => void;
-  has: (err: unknown) => boolean;
-} {
-  const metadata = createErrorMetadata<boolean>(
-    name,
-    (v): v is boolean => v === true,
-  );
-  return {
-    attach: (err) => metadata.attach(err, true),
-    has: (err) =>
-      causeChain(err).some((current) => metadata.detect(current) === true),
-  };
-}
+const attach = (err: unknown, key: symbol, value: unknown): void => {
+  if (Predicate.isObject(err)) (err as Record<symbol, unknown>)[key] = value;
+};
 
-const errorPresentationClaimedMarker = createErrorMarker(
-  'errorPresentationClaimed',
-);
+const read = (err: unknown, key: symbol): unknown =>
+  Predicate.isObject(err) ? (err as Record<symbol, unknown>)[key] : undefined;
 
 /** Marks that a targeted, actionable notification owns this error's
  *  presentation, so a later generic handler on the same call stack does not
@@ -61,16 +23,28 @@ const errorPresentationClaimedMarker = createErrorMarker(
  *  caller-supplied not-delivered fallback). It is never attached for a
  *  fire-and-forget or declined emit, so a host that could not render the
  *  targeted notification still leaves the generic surface free to fire. */
-export const attachErrorPresentationClaimed =
-  errorPresentationClaimedMarker.attach;
-export const hasErrorPresentationClaimed = errorPresentationClaimedMarker.has;
+export const attachErrorPresentationClaimed = (err: unknown): void =>
+  attach(err, PRESENTATION_CLAIMED, true);
 
-export const providerErrorMetadata = createErrorMetadata<ProviderError>(
-  'providerError',
-  (value): value is ProviderError =>
-    ProviderErrorSchema.safeParse(value).success,
-);
+/** Whether the claim is on `err` or anywhere in its rethrow chain, so a
+ *  wrapper that preserves `{ cause }` stays classifiable. */
+export const hasErrorPresentationClaimed = (err: unknown): boolean =>
+  causeChain(err).some(
+    (current) => read(current, PRESENTATION_CLAIMED) === true,
+  );
 
 /** Cache a structured ProviderError on any object so downstream error
  *  formatters can recover it without sniffing the message string. */
-export const attachProviderError = providerErrorMetadata.attach;
+export const attachProviderError = (err: unknown, value: ProviderError): void =>
+  attach(err, PROVIDER_ERROR, value);
+
+const isProviderError = (value: unknown): value is ProviderError =>
+  ProviderErrorSchema.safeParse(value).success;
+
+/** The ProviderError cached on `err` itself, if a valid one is there. */
+export const detectProviderError = (
+  err: unknown,
+): ProviderError | undefined => {
+  const value = read(err, PROVIDER_ERROR);
+  return isProviderError(value) ? value : undefined;
+};

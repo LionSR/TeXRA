@@ -1,8 +1,4 @@
-// Standard library imports
-import * as path from 'node:path';
-
 import {
-  fileLocationDisplayPath,
   type RunId,
   type ExternalFileLocation,
   type FileLocation,
@@ -42,14 +38,6 @@ export function createExternalLocation(
     kind: 'external',
     absolutePath,
   };
-}
-
-/**
- * Get directory path from a FileLocation.
- * Returns relativePath's directory for workspace/runStorage, absolutePath's for external.
- */
-export function getFileDirectory(location: FileLocation): string {
-  return path.dirname(fileLocationDisplayPath(location));
 }
 
 /**

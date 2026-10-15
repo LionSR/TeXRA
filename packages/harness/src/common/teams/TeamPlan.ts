@@ -191,7 +191,7 @@ function buildTeamOptions(plans: readonly TeamRunPlan[]): TeamOptionData[] {
         icon: plan.preset.icon,
         source: plan.preset.source,
         description: plan.preset.description,
-        unavailableMembers: missingMemberNames(plan),
+        unavailableMembers: [...plan.missingAgents],
         disabled: blockReason ? true : undefined,
         disabledReason: blockReason
           ? formatTeamOptionDisabledReason(blockReason)
@@ -237,7 +237,7 @@ export function resolveTeamLaunch<T extends TeamCatalogAgent>(args: {
   return {
     status: 'ready',
     fields: teamExecutionFields(plan),
-    missingNames: missingMemberNames(plan),
+    missingNames: plan.missingAgents,
   };
 }
 
@@ -257,13 +257,6 @@ export function formatTeamLaunchBlockedMessage(
   reason: string,
 ): string {
   return `Team "${teamId}" cannot run: ${reason}.`;
-}
-
-/** Missing member names, in preset-declaration order. */
-export function missingMemberNames(
-  plan: Pick<TeamRunPlan, 'missingAgents'>,
-): string[] {
-  return [...plan.missingAgents];
 }
 
 function selectTeamRootAgent<T extends TeamCatalogAgent>(

@@ -10,7 +10,6 @@ import {
   IS_WINDOWS,
   existsAtAbsolute,
   getExtraDirs,
-  isPathSafe,
   whichOnExtendedPath,
 } from './platformPaths';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
@@ -85,7 +84,8 @@ function toolCandidates(tool: string): string[] {
 }
 
 const findToolUncached = Effect.fnUntraced(function* (tool: string) {
-  if (!isPathSafe(tool)) {
+  // A tool name that climbs out of the search directories is refused.
+  if (path.normalize(tool).includes('..')) {
     yield* Effect.logWarning(`Unsafe tool name rejected: ${tool}`).pipe(
       withLogChannel('platformPaths'),
     );

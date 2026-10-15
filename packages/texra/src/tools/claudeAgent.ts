@@ -61,7 +61,7 @@ import type {
 import { DELIVERY_TAG } from '@shared/deliveryTags';
 import { buildSyntheticToolUseConfig } from '@texra/tools/core/syntheticAgentConfig';
 import { buildAgentWorkspaceOptions } from '@texra/tools/agentWorkspaceOptions';
-import { linkAbortSignals } from '@utils/core';
+import { onAbort } from '@utils/core';
 import {
   formatWallTimeSeconds,
   isNonEmptyString,
@@ -204,7 +204,9 @@ export function runStreamedTurn(params: {
     // The SDK takes a controller, not a signal: this one exists only at that
     // boundary and follows the turn's signal until the stream is drained.
     const abortController = new AbortController();
-    const detachAbort = linkAbortSignals([params.signal], abortController);
+    const detachAbort = onAbort(params.signal, () =>
+      abortController.abort(params.signal.reason),
+    );
     const sdkOptions: ClaudeAgentSdkOptions = {
       abortController,
       model: params.model,

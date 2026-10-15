@@ -12,7 +12,6 @@ import { resolveToolPath, type ToolPathCall } from '@tools/pathResolution';
 import { getGitignoreMatcher } from '@tools/gitignore';
 import { executed } from '@tools/core/result';
 import { executeCommand } from '@utils/system/execUtils';
-import { splitOutputLines } from '@utils/text/stringUtils';
 
 // Local file imports
 import { defineTool } from './core/definition';
@@ -193,7 +192,7 @@ const runGrep = Effect.fn('GrepTool.execute')(function* (
   }
 
   // Filter empty lines consistently for counting and pagination
-  const allLines = splitOutputLines(result.stdout);
+  const allLines = result.stdout.split(/\r?\n/).filter(Boolean);
   const totalCount = allLines.length;
 
   if (totalCount === 0) {

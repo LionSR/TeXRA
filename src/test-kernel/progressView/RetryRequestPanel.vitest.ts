@@ -145,9 +145,9 @@ describe('retry-request-panel', () => {
   it('agrees on truncation at the exact boundary (maxTailChars + 1 total chars)', async () => {
     const element = await mountPanel();
 
-    // At exactly 1025 chars, tailWithEllipsis(text, 1025) returns the text
-    // unchanged (1025 <= its own budget of 1025) — the header must not
-    // claim truncation when nothing was actually cut.
+    // At exactly 1025 chars the text is shown whole (the "…" would take the
+    // 1025th slot) — the header must not claim truncation when nothing was
+    // actually cut.
     const text = formatPartialOutput(element, 'x'.repeat(1025));
 
     expect(text).toContain('--- Partial Output (1025 chars) ---');

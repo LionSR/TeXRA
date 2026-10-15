@@ -76,7 +76,6 @@ import {
   isLeanServerActive,
   type LeanServerInfo,
 } from '@texra/tools/lean/leanServerRegistry';
-import { splitOutputLines } from '@utils/text/stringUtils';
 
 const FAKE_LAKE = `#!/usr/bin/env node
 const fs = require('node:fs');
@@ -194,7 +193,7 @@ afterEach(() => {
 
 async function countStarts(): Promise<number> {
   const text = await readFile(countPath, 'utf8').catch(() => '');
-  return splitOutputLines(text).length;
+  return text.split(/\r?\n/).filter(Boolean).length;
 }
 
 const starts = Effect.promise(countStarts);
