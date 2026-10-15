@@ -481,15 +481,15 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
    *  only closes, any other opens and closes in the same batch. The card
    *  stores no output: a read projects it from the `tool.result` the batch
    *  commits (`rowCodec.ts`). */
-  const settledCards =
-    (
-      fact: CallFacts,
-      input: unknown,
-      status: ToolCallStatus,
-      attempt: number,
-      files: readonly FileListEntry[] = [],
-    ) =>
-    (state: RunState): RunHistoryDraft[] => [
+  const settledCards = (
+    fact: CallFacts,
+    input: unknown,
+    status: ToolCallStatus,
+    attempt: number,
+    files: readonly FileListEntry[] = [],
+  ) => {
+    const script = scriptOf(fact);
+    return (state: RunState): RunHistoryDraft[] => [
       ...(slow(fact) && startedAt(state, fact.callId, attempt)
         ? []
         : [cardStart(fact, input, attempt)]),
@@ -498,9 +498,10 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
         logId: fact.logId,
         status,
         ...(files.length > 0 ? { files: [...files] } : {}),
-        ...('stageId' in fact ? { stageId: fact.stageId } : {}),
+        ...(script !== null ? { stageId: script.stageId } : {}),
       }),
     ];
+  };
 
   /** The row that says `fact`'s body starts `attempt`. */
   const intentRow = (fact: CallFacts, attempt: number): RunHistoryDraft => {
@@ -1005,9 +1006,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
   });
 
   const lanes = yield* makeScheduler;
-  const ordinalOf = new Map(
-    pending.calls.map((fact, ordinal) => [fact.callId, ordinal]),
-  );
+  const ordinalOf = new Map(pending.calls.map((f, i) => [f.callId, i]));
 
   /** One call of the response, in its place: a duplicate derives its
    *  primary, effects stripped, once the primary is done (and waits with
