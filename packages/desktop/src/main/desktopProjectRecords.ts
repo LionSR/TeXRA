@@ -2,8 +2,8 @@
 import { Context, Effect, Result } from 'effect';
 import { z } from 'zod';
 
-import { GlobalDatabase } from '@texra-ai/harness';
-import type { ValueFamily } from '@texra-ai/harness';
+import { GlobalDatabase } from '@shared/session/database';
+import type { ValueFamily } from '@shared/session/valueFamily';
 
 /** How many closed projects File > Open Recent offers. */
 const RECENT_PROJECT_LIMIT = 10;

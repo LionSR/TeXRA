@@ -35,11 +35,9 @@ import {
   resolveWorkspaceStoragePath,
   canonicalizeWorkspacePath,
 } from '@texra-ai/harness/node';
-import { emitAppSignal, onAppSignal } from '@texra-ai/harness';
 import { withLogChannel } from '@texra-ai/harness';
 import { setLogSink } from '@texra-ai/harness';
 import { StorageFs, withSessionFs } from '@texra-ai/harness';
-import { GlobalDatabase } from '@texra-ai/harness';
 import { ToolAvailability } from '@texra-ai/harness';
 import { readConfigSettingFrom } from '@texra-ai/harness';
 import { EXTENSION_COMMANDS } from '@commands/extensionCommandIds';
@@ -52,6 +50,7 @@ import {
   openProjectStateStore,
   openRepoStateStore,
 } from '@controllers/session/appStateStore';
+import { emitAppSignal, onAppSignal } from '@eventBus/AppSignals';
 import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
 import {
   safeExecuteCommand,
@@ -83,6 +82,7 @@ import { FileSecrets, secretsDirectory } from '@platform/defaults/fileSecrets';
 import { defaultNodeStorageRoot } from '@platform/defaults/nodeStorage';
 import { openTexraConfigStores } from '@platform/defaults/nodeStores';
 import { JsonConfigProvider } from '@platform/defaults/jsonConfigProvider';
+import { GlobalDatabase } from '@shared/session/database';
 import {
   formatTexraApprovalPolicy,
   TEXRA_APPROVAL_POLICY_CONFIG_KEY,

@@ -4,6 +4,5 @@
  * read from the committed event prefix.
  */
 export { assembleTrace, type AssembleTraceResult } from './traceAssembler';
-export type { TraceDocument } from './traceDocumentSchema';
 export { readCompletedRunConversation } from './completedRunArchive';
 export { injectStandaloneTrace } from './standaloneTraceHtml';

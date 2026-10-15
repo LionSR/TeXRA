@@ -10,12 +10,9 @@ import './shell.css';
 import '@ui/wa';
 import 'katex/dist/katex.min.css';
 import '@progressView/frontend/ProgressApp';
-import {
-  formatLoopPositionLabel,
-  type TraceDocument,
-} from '@texra-ai/harness/schemas';
 import { mountProgressWebview } from '@progressView/frontend/progressWebview';
 import type { ProgressApp } from '@progressView/frontend/ProgressApp';
+import { formatLoopPositionLabel } from '@ui/copy/runStatus';
 
 import { setTraceCut, trace } from './traceHostBridge';
 import {
@@ -23,6 +20,7 @@ import {
   tracePositions,
   type TracePosition,
 } from './traceFrames';
+import type { TraceDocument } from '@texra-ai/harness/schemas';
 
 /**
  * Last-resort error surface for a trace that fails to load or parse. A

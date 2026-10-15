@@ -23,7 +23,6 @@ import {
   resolveGlobalStoragePath,
   resolveWorkspaceStoragePath,
 } from '@texra-ai/harness/node';
-import { GlobalDatabase, type ProjectDatabases } from '@texra-ai/harness';
 import { SessionHostInteractions, type SessionHandle } from '@agent/runtime';
 import {
   openProjectStateStore,
@@ -31,6 +30,10 @@ import {
 } from '@controllers/session/appStateStore';
 import type { ConfigStore } from '@platform/defaults/jsonConfigProvider';
 import { openTexraWorkspaceConfigStores } from '@platform/defaults/nodeStores';
+import {
+  GlobalDatabase,
+  type ProjectDatabases,
+} from '@shared/session/database';
 import {
   projectDisplayOf,
   type ProjectDisplay,

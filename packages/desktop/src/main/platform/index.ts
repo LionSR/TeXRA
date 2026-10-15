@@ -19,18 +19,18 @@ import {
   resolveGlobalStoragePath,
   resolveWorkspaceStoragePath,
 } from '@texra-ai/harness/node';
-import { emitAppSignal } from '@texra-ai/harness';
-import { GlobalDatabase } from '@texra-ai/harness';
 import { AgentDirectoryService } from '@agent/index';
 import {
   appStateStoreFromDatabase,
   openProjectStateStore,
   openRepoStateStore,
 } from '@controllers/session/appStateStore';
+import { emitAppSignal } from '@eventBus/AppSignals';
 import { FileSecrets, secretsDirectory } from '@platform/defaults/fileSecrets';
 import { nodeFileServices } from '@platform/defaults/jsonStore';
 import type { ConfigStore } from '@platform/defaults/jsonConfigProvider';
 import { openTexraConfigStores } from '@platform/defaults/nodeStores';
+import { GlobalDatabase } from '@shared/session/database';
 import { usageLogLayer } from '@telemetry/UsageLogService';
 import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
 import { bootstrapHost } from '@texra/controllers/hostBootstrap';

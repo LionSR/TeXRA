@@ -32,8 +32,7 @@ one the view you're touching already uses:
   over the shared settings body
   (`packages/texra/src/controllers/settingsView/sharedSettingsCommands.ts`) and its page
   modules; only the VS Code-specific LaTeX arms live in
-  `settingsView/handlers/latexSettingsHandlers.ts`. Commands are named constants in `packages/texra/src/shared/ipc.ts` (`COMMON_COMMANDS`,
-  `SETTINGS_VIEW_COMMANDS`), not string literals. Frontend state lives in
+  `settingsView/handlers/latexSettingsHandlers.ts`. Commands are named constants in `packages/texra/src/shared/ipc.ts` (`SETTINGS_VIEW_COMMANDS`), not string literals. Frontend state lives in
   module-level reactive signals in `settingsView/frontend/settingsState.ts`
   (`trackedSignal`); `settingsView/frontend/messageDispatcher.ts` holds the one
   outbound handler registry (`settingsViewHandlers`, typed

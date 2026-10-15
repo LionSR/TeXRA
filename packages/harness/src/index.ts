@@ -203,28 +203,16 @@ export { pathToLocationIn } from '@utils/files/fileLocation';
 // Which external tools this machine has, as plugins' `availability` probes
 // answered; a host reads it and asks for a refresh.
 export { ToolAvailability } from '@tools/toolAvailabilityService';
-// The global root's application records: a host keeps its own values there
-// as a `ValueFamily`, beside the project stores a session borrows.
-export { GlobalDatabase } from '@shared/session/database';
-export type { ProjectDatabases } from '@shared/session/database';
-export type { ValueFamily } from '@shared/session/valueFamily';
-// Process-wide app-lifecycle signals (credentials, workspace-file writes):
-// a host reacts to what the harness announces, and announces its own.
-export { emitAppSignal, onAppSignal } from '@eventBus/AppSignals';
-export type { AppSignal, AppSignalPayloads } from '@eventBus/AppSignals';
-// The harness's log output: where its entries go, how an entry reads, and
-// the redaction a host applies before writing anything to disk.
+// The harness's log output: where its entries go and how an entry reads.
 export {
   entryChannel,
   entryMessage,
   LOG_CHANNEL,
   setLogSink,
-  writeLogLine,
   type LogEntry,
   type LogSink,
 } from '@logger/logSink';
 export { withLogChannel } from '@logger/effectLog';
-export { formatFatalErrorDetail, redactSecrets } from '@logger/redaction';
 // A catalog setting, read from the stores a caller holds (a session's
 // roots) or from its config slot alone.
 export {

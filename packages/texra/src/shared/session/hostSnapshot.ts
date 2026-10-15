@@ -99,7 +99,7 @@ export function projectDisplayOf(
  * Where the onboarding funnel stands (PRD: agent-native onboarding): the
  * state hosts push to webviews. `onboardingFunnel.ts` derives it.
  */
-export const OnboardingFunnelStateSchema = z.enum([
+const OnboardingFunnelStateSchema = z.enum([
   'needs-credential',
   'setup',
   'done',

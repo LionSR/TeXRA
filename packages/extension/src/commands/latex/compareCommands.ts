@@ -6,8 +6,8 @@ import { Cause, Data, Effect, FileSystem } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports
-import { emitAppSignal } from '@texra-ai/harness';
 import { withLogChannel } from '@texra-ai/harness';
+import { emitAppSignal } from '@eventBus/AppSignals';
 import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
 import { registerDiffRefresh } from '@frontend/ui/diffView';
 import {

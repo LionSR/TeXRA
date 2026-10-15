@@ -1,7 +1,7 @@
 /** Webview IPC command-name constants, grouped per view. */
 import { z } from 'zod';
 
-export const COMMON_COMMANDS = {
+const COMMON_COMMANDS = {
   WEBVIEW_READY: 'webviewReady',
 } as const;
 

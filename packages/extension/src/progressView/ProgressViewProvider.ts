@@ -10,7 +10,6 @@ import {
   LanguageModel,
   withProcessServices,
 } from '@texra-ai/harness';
-import { emitAppSignal } from '@texra-ai/harness';
 import { withLogChannel } from '@texra-ai/harness';
 import {
   SessionHostInteractions,
@@ -19,6 +18,7 @@ import {
 } from '@agent/runtime';
 import { getCatalogAgent, refresh } from '@agent/index';
 import { BundledViewContentProvider } from '@common/webview';
+import { emitAppSignal } from '@eventBus/AppSignals';
 import { subscribeAppSignal } from '@frontend/events/appSignalSubscriptions';
 import { VscodeToolEditApprovalHost } from '@frontend/approval/VscodeToolEditApprovalHost';
 import { createAgentPresentationHost } from '@frontend/events/agentEventListeners';

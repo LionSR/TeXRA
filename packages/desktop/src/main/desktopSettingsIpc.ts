@@ -4,8 +4,8 @@ import {
   LoopbackTransportUnavailableError,
   type SubscriptionDeviceCodePrompt,
 } from '@texra-ai/llm/node';
-import { onAppSignal } from '@texra-ai/harness';
 import { withLogChannel } from '@texra-ai/harness';
+import { onAppSignal } from '@eventBus/AppSignals';
 import { ACCOUNT_OUTCOME } from '@shared/model/accountAuth';
 import { loadRuntimeSkillDisplay } from '@skills/runtimeSkills';
 import { unsupported } from '@texra/shared/utils/dispatcher';

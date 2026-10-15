@@ -18,7 +18,7 @@ import {
 } from 'electron';
 
 import { setLogSink, type LogEntry } from '@texra-ai/harness';
-import { redactSecrets } from '@texra-ai/harness';
+import { redactSecrets } from '@logger/redaction';
 import { normalizeFilePath } from '@utils/core';
 
 import type { DesktopLogSnapshot } from '../shared/desktopLogMessages.js';

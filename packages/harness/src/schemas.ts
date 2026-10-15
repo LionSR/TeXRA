@@ -68,14 +68,9 @@ export type {
   RequestAnswerability,
   SessionTitleState,
 } from '@shared/session/sessionView';
+// Whether a run's lifecycle status is in flight: running, or waiting for its
+// next input; a ready, completed, failed or stopped run is not.
 export { isInFlightPhase } from '@shared/runs/runStatus';
-// How a run's status, position and group read, in every renderer's words.
-export {
-  formatLoopPositionLabel,
-  formatRunStatusLabel,
-  RUN_GROUP_LABELS,
-  RUN_GROUP_ORDER,
-} from '@shared/runs/runStatusDisplay';
 // The goal plugin's row, as a renderer reads a run's goal from it.
 export { goalStateOf, type GoalState } from '@shared/plugins/goal';
 // An exported run (`assembleTrace`), as a static viewer parses it back.

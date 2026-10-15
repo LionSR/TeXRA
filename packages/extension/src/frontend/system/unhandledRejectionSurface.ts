@@ -7,8 +7,8 @@
 import * as vscode from 'vscode';
 
 // Local imports
-import { writeLogLine } from '@texra-ai/harness';
-import { formatFatalErrorDetail } from '@texra-ai/harness';
+import { writeLogLine } from '@logger/logSink';
+import { formatFatalErrorDetail } from '@logger/redaction';
 import { ensureError } from '@utils/errors/errorMessage';
 
 /** The extension entry's own channel. */

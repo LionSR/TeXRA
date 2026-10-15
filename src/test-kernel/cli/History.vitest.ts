@@ -90,7 +90,7 @@ import { CliExitCode } from '@cli/runtime/exitCodes';
 import { initCliPlatform } from '@cli/runtime/initPlatform';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
 import { spyOnStreamWrite } from '@test/cli/fixtures/streamWriteSpy';
-import type { TraceDocument } from '@transcript';
+import type { TraceDocument } from '@texra-ai/harness/schemas';
 import {
   cliHistoryDetailNdjsonRecord,
   cliHistoryNdjsonRecords,

@@ -12,10 +12,10 @@ import { repeat } from 'lit/directives/repeat.js';
 import { when } from 'lit/directives/when.js';
 
 // Local imports
-import { RUN_GROUP_LABELS, RUN_GROUP_ORDER } from '@texra-ai/harness/schemas';
 import type { Surface } from '@texra/shared/session/surface';
 import { unseenRuns } from '@texra/shared/session/unseenRuns';
 import { SessionUiEvents } from '@texra/shared/session/uiEvents';
+import { RUN_GROUP_LABELS, RUN_GROUP_ORDER } from '@ui/copy/runStatus';
 import { designTokens, commonViewStyles } from '@ui/styles';
 
 // Side-effect imports - register WA components

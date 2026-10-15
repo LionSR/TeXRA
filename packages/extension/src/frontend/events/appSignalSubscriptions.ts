@@ -12,7 +12,7 @@ import {
   onAppSignal,
   type AppSignal,
   type AppSignalPayloads,
-} from '@texra-ai/harness';
+} from '@eventBus/AppSignals';
 import type { ProcessRuntime } from '@texra-ai/harness';
 import type * as vscode from 'vscode';
 

@@ -10,7 +10,7 @@ import { repeat } from 'lit/directives/repeat.js';
 
 // Local imports - shared schemas
 import { isInFlightPhase } from '@texra-ai/harness/schemas';
-import { formatRunStatusLabel } from '@texra-ai/harness/schemas';
+import { formatRunStatusLabel } from '@shared/runs/runStatusDisplay';
 import {
   type RunOutcome,
   type RunLifecycleStatus,

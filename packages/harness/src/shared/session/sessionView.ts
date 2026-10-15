@@ -70,10 +70,9 @@ const TranscriptViewSchema = z.object({
 });
 export type TranscriptView = z.infer<typeof TranscriptViewSchema>;
 
-const RunGroupSchema = z.enum(['running', 'waiting', 'interrupted', 'recent']);
 /** The section a run sorts into. Its labels and section order are one
- *  table in `@shared/runs/runStatusDisplay`, not a per-host switch. */
-export type RunGroup = z.infer<typeof RunGroupSchema>;
+ *  table in the app's `@ui/copy/runStatus`, not a per-host switch. */
+const RunGroupSchema = z.enum(['running', 'waiting', 'interrupted', 'recent']);
 
 const RunViewSchema = z.object({
   /** The run id: the aggregate's logical id, minted once at launch. */

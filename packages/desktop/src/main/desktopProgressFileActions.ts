@@ -8,9 +8,9 @@ import {
   type Session,
   withProcessServices,
 } from '@texra-ai/harness';
-import { emitAppSignal } from '@texra-ai/harness';
 import { readSettingFrom } from '@texra-ai/harness';
 import { pathToLocationIn } from '@texra-ai/harness';
+import { emitAppSignal } from '@eventBus/AppSignals';
 import { acceptEditedFileReplace } from '@latex/acceptedFileTarget';
 import { openFirstLabelMatch } from '@latex/labelSearch';
 import { LaTeXdiffService } from '@latex/latexdiff';
