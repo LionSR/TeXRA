@@ -3,11 +3,15 @@ packages:
 # One source for every version `packages/harness` redeclares: the SDK keeps its
 # own dependency names (pnpm links a workspace package before any build script
 # runs), and both manifests take the version from here through `catalog:`.
+# Effect's packages release in patch lockstep (each @effect/* peers `effect` at
+# its own patch), so `effect` and every @effect/* move together, here and in
+# the `peers` catalog below.
 catalog:
   '@anthropic-ai/claude-agent-sdk': '^0.3.296'
   '@cantoo/pdf-lib': '^2.9.2'
-  '@effect/platform-node': '4.0.4'
-  '@effect/sql-sqlite-node': '4.0.4'
+  '@effect/platform-node': '4.0.5'
+  '@effect/sql-sqlite-node': '4.0.5'
+  '@effect/vitest': '4.0.5'
   '@google/genai': '^2.23.0'
   '@jitl/quickjs-wasmfile-release-sync': '0.32.0'
   '@openai/codex-sdk': '^0.162.1'
@@ -19,7 +23,7 @@ catalog:
   date-fns: '^4.4.0'
   diff: '^9.0.0'
   diff-match-patch: '^1.0.5'
-  effect: '4.0.4'
+  effect: '4.0.5'
   esbuild: '^0.28.2'
   escape-string-regexp: '^5.0.0'
   glob: '^13.0.6'
@@ -51,6 +55,15 @@ catalog:
   write-file-atomic: '^7.0.1'
   yaml: '^2.9.1'
   zod: '^4.4.3'
+# The ranges the published packages (`@texra-ai/harness`, `@texra-ai/llm`)
+# declare as peers: the consumer's one install supplies a single coherent
+# Effect set. The floor is the patch the workspace builds against (the
+# `catalog` versions above); raise both together.
+catalogs:
+  peers:
+    '@effect/platform-node': '^4.0.5'
+    '@effect/sql-sqlite-node': '^4.0.5'
+    effect: '^4.0.5'
 supportedArchitectures:
   os:
     - current

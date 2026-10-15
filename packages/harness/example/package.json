@@ -8,9 +8,11 @@
     "start": "node effectSession.mjs"
   },
   "dependencies": {
+    "@effect/platform-node": "^4.0.5",
+    "@effect/sql-sqlite-node": "^4.0.5",
     "@texra-ai/harness": "file:harness.tgz",
     "@texra-ai/llm": "file:llm.tgz",
-    "effect": "4.0.4",
+    "effect": "^4.0.5",
     "zod": "^4.4.3"
   }
 }

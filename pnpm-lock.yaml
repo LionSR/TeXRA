@@ -13,11 +13,14 @@ catalogs:
       specifier: ^2.9.2
       version: 2.9.2
     '@effect/platform-node':
-      specifier: 4.0.4
-      version: 4.0.4
+      specifier: 4.0.5
+      version: 4.0.5
     '@effect/sql-sqlite-node':
-      specifier: 4.0.4
-      version: 4.0.4
+      specifier: 4.0.5
+      version: 4.0.5
+    '@effect/vitest':
+      specifier: 4.0.5
+      version: 4.0.5
     '@jitl/quickjs-wasmfile-release-sync':
       specifier: 0.32.0
       version: 0.32.0
@@ -46,8 +49,8 @@ catalogs:
       specifier: ^1.0.5
       version: 1.0.5
     effect:
-      specifier: 4.0.4
-      version: 4.0.4
+      specifier: 4.0.5
+      version: 4.0.5
     esbuild:
       specifier: ^0.28.2
       version: 0.28.2
@@ -155,13 +158,13 @@ importers:
         version: 0.87.4
       '@effect/platform-node':
         specifier: 'catalog:'
-        version: 4.0.4(effect@4.0.4)(redis@6.2.1(@opentelemetry/api@1.9.1))
+        version: 4.0.5(effect@4.0.5)(redis@6.2.1(@opentelemetry/api@1.9.1))
       '@effect/sql-sqlite-node':
         specifier: 'catalog:'
-        version: 4.0.4(effect@4.0.4)
+        version: 4.0.5(effect@4.0.5)
       '@effect/vitest':
-        specifier: 4.0.4
-        version: 4.0.4(effect@4.0.4)(vitest@5.0.3(@opentelemetry/api@1.9.1)(@types/node@22.19.17)(jsdom@30.1.2(@noble/hashes@2.2.0))(vite@8.3.4(@types/node@22.19.17)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.48.0)(yaml@2.9.1)))
+        specifier: 'catalog:'
+        version: 4.0.5(effect@4.0.5)(vitest@5.0.3(@opentelemetry/api@1.9.1)(@types/node@22.19.17)(jsdom@30.1.2(@noble/hashes@2.2.0))(vite@8.3.4(@types/node@22.19.17)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.48.0)(yaml@2.9.1)))
       '@electron/asar':
         specifier: ^4.3.1
         version: 4.3.1
@@ -206,7 +209,7 @@ importers:
         version: 6.0.0
       effect:
         specifier: 'catalog:'
-        version: 4.0.4
+        version: 4.0.5
       esbuild:
         specifier: 'catalog:'
         version: 0.28.2
@@ -332,7 +335,7 @@ importers:
         version: 9.0.0
       effect:
         specifier: 'catalog:'
-        version: 4.0.4
+        version: 4.0.5
       esbuild:
         specifier: ^0.28.2
         version: 0.28.2
@@ -432,7 +435,7 @@ importers:
         version: 6.0.0
       effect:
         specifier: 'catalog:'
-        version: 4.0.4
+        version: 4.0.5
       electron:
         specifier: ^44.7.0
         version: 44.7.0(supports-color@10.2.2)
@@ -504,7 +507,7 @@ importers:
         version: 9.0.0
       effect:
         specifier: 'catalog:'
-        version: 4.0.4
+        version: 4.0.5
       esbuild:
         specifier: ^0.28.2
         version: 0.28.2
@@ -535,12 +538,6 @@ importers:
       '@cantoo/pdf-lib':
         specifier: 'catalog:'
         version: 2.9.2(html-entities@2.6.0)
-      '@effect/platform-node':
-        specifier: 'catalog:'
-        version: 4.0.4(effect@4.0.4)(redis@6.2.1(@opentelemetry/api@1.9.1))
-      '@effect/sql-sqlite-node':
-        specifier: 'catalog:'
-        version: 4.0.4(effect@4.0.4)
       '@jitl/quickjs-wasmfile-release-sync':
         specifier: 'catalog:'
         version: 0.32.0
@@ -629,6 +626,12 @@ importers:
         specifier: 'catalog:'
         version: 2.9.1
     devDependencies:
+      '@effect/platform-node':
+        specifier: 'catalog:'
+        version: 4.0.5(effect@4.0.5)(redis@6.2.1(@opentelemetry/api@1.9.1))
+      '@effect/sql-sqlite-node':
+        specifier: 'catalog:'
+        version: 4.0.5(effect@4.0.5)
       '@types/mime-types':
         specifier: ^3.0.1
         version: 3.0.1
@@ -646,7 +649,7 @@ importers:
         version: typescript@7.0.2
       effect:
         specifier: 'catalog:'
-        version: 4.0.4
+        version: 4.0.5
       esbuild:
         specifier: 'catalog:'
         version: 0.28.2
@@ -679,8 +682,8 @@ importers:
         version: 8.22.0
     devDependencies:
       '@effect/vitest':
-        specifier: 4.0.4
-        version: 4.0.4(effect@4.0.4)(vitest@5.0.3(@opentelemetry/api@1.9.1)(@types/node@22.19.17)(jsdom@30.1.2(@noble/hashes@2.2.0))(vite@8.3.4(@types/node@22.19.17)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.48.0)(yaml@2.9.1)))
+        specifier: 'catalog:'
+        version: 4.0.5(effect@4.0.5)(vitest@5.0.3(@opentelemetry/api@1.9.1)(@types/node@22.19.17)(jsdom@30.1.2(@noble/hashes@2.2.0))(vite@8.3.4(@types/node@22.19.17)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.48.0)(yaml@2.9.1)))
       '@types/ws':
         specifier: 8.18.2
         version: 8.18.2
@@ -688,8 +691,8 @@ importers:
         specifier: 'catalog:'
         version: typescript@7.0.2
       effect:
-        specifier: 4.0.4
-        version: 4.0.4
+        specifier: 'catalog:'
+        version: 4.0.5
       esbuild:
         specifier: 'catalog:'
         version: 0.28.2
@@ -710,7 +713,7 @@ importers:
         version: 3.14.0(@floating-ui/utils@0.2.12)(@types/node@22.19.17)(@types/react@19.3.0)
       '@effect/platform-node':
         specifier: 'catalog:'
-        version: 4.0.4(effect@4.0.4)(redis@6.2.1(@opentelemetry/api@1.9.1))
+        version: 4.0.5(effect@4.0.5)(redis@6.2.1(@opentelemetry/api@1.9.1))
       '@fortawesome/free-solid-svg-icons':
         specifier: ^7.3.1
         version: 7.3.1
@@ -740,7 +743,7 @@ importers:
         version: 1.0.5
       effect:
         specifier: 'catalog:'
-        version: 4.0.4
+        version: 4.0.5
       escape-string-regexp:
         specifier: 'catalog:'
         version: 5.0.0
@@ -1216,28 +1219,28 @@ packages:
     resolution: {integrity: sha512-AfFn4K45l84LtbQSwoPWc06nrg7OzfV3uJOnIUqimSOWTCIsY1IKBXZfjSsVTq7jDuL9Jtoz8//bZp9+rkEihg==}
     hasBin: true
 
-  '@effect/platform-node-shared@4.0.4':
-    resolution: {integrity: sha512-gh2KRmqGWrJ0FVL8GqnI1GpB+fCfCUI7sGiUZkxxBHyHj1t94rm6VDJffCfuVZWe6GpvYXtizifVczUrgOce8A==}
+  '@effect/platform-node-shared@4.0.5':
+    resolution: {integrity: sha512-a8rCdEkfZBGe9C6bsIjxVZuRp73svIyK5IHwHdDAVsvZXjrbkxusfI+rZ8WlX31RP1mKizwI/E72GQTNfdMWHw==}
     engines: {node: '>=18.0.0'}
     peerDependencies:
-      effect: ^4.0.4
+      effect: ^4.0.5
 
-  '@effect/platform-node@4.0.4':
-    resolution: {integrity: sha512-SdoyQMrO5zmqBebb2fxDk0sHYyJjBiw4QmLdV2ZcWf3ATpQPge3B5sTLijZg49PadekOwNeO83o5TfdtiiFEig==}
+  '@effect/platform-node@4.0.5':
+    resolution: {integrity: sha512-v4KD5fWvEUa4QmWFpZFbBsRhmfnTP6ETCME2r9ifyXVDPjhfpxpTZl41prjgQFMqZBHdWWCl7YC5ImbXv5ui5g==}
     engines: {node: '>=18.0.0'}
     peerDependencies:
-      effect: ^4.0.4
+      effect: ^4.0.5
       redis: '>=5.0.0 <7.0.0'
 
-  '@effect/sql-sqlite-node@4.0.4':
-    resolution: {integrity: sha512-dKPaiab7UpRvD+CfkcT2qavV83h9k2Vz5cjvNvwa7DyxZWuf10LQiSl8tJDtXMcz69BMLdy7skUUFFnlXVNROw==}
+  '@effect/sql-sqlite-node@4.0.5':
+    resolution: {integrity: sha512-SHza5qNwiI4dRtUk45wvUfvZq7vB950DW2wD6npzt2aH/tesFfPlZJSDBIvwhazoK+gvDknBOONfKyFZsIF+tg==}
     peerDependencies:
-      effect: ^4.0.4
+      effect: ^4.0.5
 
-  '@effect/vitest@4.0.4':
-    resolution: {integrity: sha512-l5KN46RbDVpqZxWzwXZtX6FVQiyzd+/hTYqL543uSDRo7hC0m19IeICh6O9U/nqCtfersqsNZnBjgHFfkuHsBw==}
+  '@effect/vitest@4.0.5':
+    resolution: {integrity: sha512-q64paZ/i4V2NiRhTyqCmT2KiDbFjlxc2EZrZca8GGt+Nf8844946HyJM5bPk/q+YeRkFSxIrlCs+J+LSfky/wA==}
     peerDependencies:
-      effect: ^4.0.4
+      effect: ^4.0.5
       vitest: '>=5.0.0 <6.0.0'
 
   '@electron-internal/extract-zip@1.0.5':
@@ -3363,8 +3366,8 @@ packages:
   ee-first@1.1.1:
     resolution: {integrity: sha512-WMwm9LhRUo+WUaRN+vRuETqG89IgZphVSNkdFgeb6sS/E4OrDIN7t48CAewSHXc6C8lefD8KKfr5vY61brQlow==}
 
-  effect@4.0.4:
-    resolution: {integrity: sha512-Sr50OeVSC3M5UkoUYUhFf3EULryhGaZZUf6OzDHTvaznOw7HRlxOKdF3/4nvQXHL22StOyMG3Cvo8Bt7xUp+Ng==}
+  effect@4.0.5:
+    resolution: {integrity: sha512-BY4/28NlpOd99yzmV741xbVGmp+1U7tks4oB7F/Png64bTa5tm5eCA6W0RiXsnuLDDoJpjfVSo4Dnq4BZb/89Q==}
 
   ejs@3.1.10:
     resolution: {integrity: sha512-UeJmFfOrAQS8OJWPZ4qtgHyWExa088/MtK5UEyoJGFH67cDEXkZSviOiKRCZ4Xij0zxI3JECgYs3oKx+AizQBA==}
@@ -6158,32 +6161,32 @@ snapshots:
 
   '@effect/language-service@0.87.4': {}
 
-  '@effect/platform-node-shared@4.0.4(effect@4.0.4)':
+  '@effect/platform-node-shared@4.0.5(effect@4.0.5)':
     dependencies:
       '@types/ws': 8.18.2
-      effect: 4.0.4
+      effect: 4.0.5
       ws: 8.22.0
     transitivePeerDependencies:
       - bufferutil
       - utf-8-validate
 
-  '@effect/platform-node@4.0.4(effect@4.0.4)(redis@6.2.1(@opentelemetry/api@1.9.1))':
+  '@effect/platform-node@4.0.5(effect@4.0.5)(redis@6.2.1(@opentelemetry/api@1.9.1))':
     dependencies:
-      '@effect/platform-node-shared': 4.0.4(effect@4.0.4)
-      effect: 4.0.4
+      '@effect/platform-node-shared': 4.0.5(effect@4.0.5)
+      effect: 4.0.5
       redis: 6.2.1(@opentelemetry/api@1.9.1)
       undici: 8.11.2
     transitivePeerDependencies:
       - bufferutil
       - utf-8-validate
 
-  '@effect/sql-sqlite-node@4.0.4(effect@4.0.4)':
+  '@effect/sql-sqlite-node@4.0.5(effect@4.0.5)':
     dependencies:
-      effect: 4.0.4
+      effect: 4.0.5
 
-  '@effect/vitest@4.0.4(effect@4.0.4)(vitest@5.0.3(@opentelemetry/api@1.9.1)(@types/node@22.19.17)(jsdom@30.1.2(@noble/hashes@2.2.0))(vite@8.3.4(@types/node@22.19.17)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.48.0)(yaml@2.9.1)))':
+  '@effect/vitest@4.0.5(effect@4.0.5)(vitest@5.0.3(@opentelemetry/api@1.9.1)(@types/node@22.19.17)(jsdom@30.1.2(@noble/hashes@2.2.0))(vite@8.3.4(@types/node@22.19.17)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.48.0)(yaml@2.9.1)))':
     dependencies:
-      effect: 4.0.4
+      effect: 4.0.5
       vitest: 5.0.3(@opentelemetry/api@1.9.1)(@types/node@22.19.17)(jsdom@30.1.2(@noble/hashes@2.2.0))(vite@8.3.4(@types/node@22.19.17)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.48.0)(yaml@2.9.1))
 
   '@electron-internal/extract-zip@1.0.5': {}
@@ -8073,7 +8076,7 @@ snapshots:
 
   ee-first@1.1.1: {}
 
-  effect@4.0.4: {}
+  effect@4.0.5: {}
 
   ejs@3.1.10:
     dependencies:
