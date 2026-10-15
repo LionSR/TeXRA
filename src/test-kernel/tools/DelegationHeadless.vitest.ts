@@ -1,212 +1,188 @@
-// Test composition imports
+/**
+ * Headless delegation over a real session on the validation host: the
+ * `agent` tool and the in-band path launch the bundled `review` persona as a
+ * real child of a parked parent, which answers on the validation model and
+ * settles its report, result manifest and end through the real lifecycle.
+ * Store faults stand in for the write failures and races a case needs.
+ *
+ * Failure modes:
+ * - an awaited child's typed result is returned while its manifest never
+ *   landed, or a child's failure is lost when its manifest fails too;
+ * - interrupting the caller leaves the child running, or registers one that
+ *   never started;
+ * - a caller stop during persistence rewrites a completed result;
+ * - the child is launched without its source, its handoff guidance or the
+ *   parent's constraint context;
+ * - a proposal is approved, denied or asked against the run's policy, or an
+ *   unavailable model override is launched;
+ * - a detached child's result is delivered to the parent that released it.
+ */
+import { writeFileSync } from 'node:fs';
+import { join } from 'node:path';
 
-// Third-party imports
 import { it } from '@effect/vitest';
-import { Deferred, Effect, Exit, Fiber, Stream, SubscriptionRef } from 'effect';
-import { afterEach, beforeEach, describe, expect, vi, type Mock } from 'vitest';
-import { registryOf, type RunPrograms, Runs } from '@agent/runtime/runRegistry';
-import { humanGrant } from '@agent/runtime/runApprovalQueue';
+import { Effect, Exit, Fiber, Stream } from 'effect';
+import { describe, expect } from 'vitest';
+
+import '@test/support/sessionGraphTestSetup';
 
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
-import type { TransactionPart } from '@agent/runtime/childSettlement';
-import type { RunHandle } from '@agent/runtime/RunHandle';
-import { SessionHandle } from '@agent/runtime/SessionHandle';
-import type { UnfoldedDraft } from '@shared/session/sessionEvents';
-import { RUN_OUTCOME, agentMatchesIdentifier } from '@shared/schemas';
-import type { ModelOptionData, RequestDecision, RunId } from '@shared/schemas';
-import { setTestApprovalPolicy } from '@test/support/sessionTestUtils';
-import { untrackRun, closeSessionOf } from '@test/support/sessionEnd';
-import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
-import { testRunHandle } from '@test/support/runHandleFixtures';
+import { humanGrant } from '@agent/runtime/runApprovalQueue';
+import { registryOf, Runs } from '@agent/runtime/runRegistry';
+import type { SessionHandle } from '@agent/runtime/SessionHandle';
+import { withProcessServices } from '@platform/processRuntime';
+import type {
+  RequestDecision,
+  RunId,
+  SessionEventDraft,
+} from '@shared/schemas';
 import {
-  createTestSession,
-  publishTestRunStart,
-  queuedFollowUps,
+  nativeToolTestLayer,
+  testModelCell,
+} from '@test/support/nativeToolTestLayer';
+import { openTestDefaultSession } from '@test/support/sessionEnd';
+import {
   publishTestRows,
+  queuedFollowUps,
+  setTestApprovalPolicy,
 } from '@test/support/sessionTestUtils';
-import { fakeProcessServices } from '@test/support/setupPlatform';
-import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
+import { testRuntime } from '@test/support/testProcessRuntime';
+import {
+  claimHolder,
+  parkedRoot,
+  REAL_RUN_TIMEOUT,
+  sessionStoreFaults,
+  storedRows,
+  untilStored,
+  validationHost,
+  type StoredRow,
+} from '@test/support/storeFaults';
+import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { agentTool } from '@tools/delegation/AgentTool';
 import {
-  executeSubagentInBand as executeSubagentInBandEffect,
+  executeSubagentInBand,
   SubagentDurabilityError,
 } from '@tools/delegation/inBandSubagentRun';
-import { generateShortId } from '@utils/core';
-import { ensureError } from '@utils/errors/errorMessage';
+import { generateRunId, generateShortId } from '@utils/core';
 
-const mocks = vi.hoisted(() => ({
-  executeAgent: vi.fn(),
-  prepareAgentDefinition: vi.fn(),
-  resumeToolUseFromResumeData: vi.fn(),
-  childRecords: vi.fn(),
-  getVisibleAgents: vi.fn(),
-  writeReport: vi.fn(),
-  writeResultMeta: vi.fn(),
-  readModelAvailabilityInputs: vi.fn(),
-}));
+/** The parent's model, which its children inherit: the validation model
+ *  answers it, and the host's OpenAI key makes it available. It is not the
+ *  first model that key makes available, the one a child falls back to. */
+const MODEL = 'openai/gpt-5.6-terra';
 
-vi.mock('@agent/runtime/AgentLaunchContext', () => ({
-  prepareAgentDefinition: mocks.prepareAgentDefinition,
-}));
-
-// A child run starts at the session's launch door, on the session's context:
-// the process engine it reads there is this suite's engine.
-vi.mock('@agent/runtime/executeAgent', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@agent/runtime/executeAgent')>()),
-  executeAgent: (...args: Parameters<RunPrograms['executeAgent']>) =>
-    testEngine.executeAgent(...args),
-  resumeToolUseFromResumeData: (
-    ...args: Parameters<RunPrograms['resumeTurn']>
-  ) => testEngine.resumeTurn(...args),
-}));
-
-// Delegation resolves targets through the scope resolver; with no active run
-// scope that is the workspace-visible agents, and identity matching is
-// agentRegistry's own rule — mirrored here rather than re-implemented.
-vi.mock('@agent/index/agentRegistry', () => ({
-  getVisibleAgents: mocks.getVisibleAgents,
-  resolveDelegationScopeAgents: (_stores: unknown, scope: unknown) =>
-    scope ? [] : mocks.getVisibleAgents(),
-  findAgentByIdentifier: (
-    entries: readonly { source: string; name: string }[],
-    identifier: string,
-  ) => entries.find((entry) => agentMatchesIdentifier(entry, identifier)),
-}));
-
-vi.mock('@agent/storage/runRecords', async (importActual) => ({
-  ...(await importActual<typeof import('@agent/storage/runRecords')>()),
-  getRunRecords: (_session: unknown, runId: RunId) => ({
-    exists: () =>
-      Effect.tryPromise({
-        try: () => mocks.childRecords(runId).exists(),
-        catch: ensureError,
-      }),
-    readResultMeta: () =>
-      Effect.tryPromise({
-        try: () => mocks.childRecords(runId).readResultMeta(),
-        catch: ensureError,
-      }),
-    readRunEnd: () =>
-      Effect.tryPromise({
-        try: () => mocks.childRecords(runId).readRunEnd(),
-        catch: ensureError,
-      }),
-    // No child here is a recipe's run.
-    readConfig: () => Effect.succeed(null),
-  }),
-}));
-
-// A child's last-turn settlement rides the row that ends it: the suite's
-// record store takes its report and manifest, as the run's own rows would.
-vi.mock('@agent/storage/runLifecycle', async (importOriginal) => {
-  const actual =
-    await importOriginal<typeof import('@agent/storage/runLifecycle')>();
-  return {
-    ...actual,
-    finalizeRun: (
-      session: SessionHandle,
-      input: Parameters<typeof actual.finalizeRun>[1],
-    ) =>
-      Effect.tryPromise({
-        try: () => persistSettlement(input.runId, input.settlement),
-        catch: ensureError,
-      }).pipe(Effect.andThen(actual.finalizeRun(session, input))),
-  };
-});
-
-/** Write a settlement's report and manifest to the suite's record store:
- *  the rows its transaction part decides, captured instead of committed. */
-async function persistSettlement(
-  runId: RunId,
-  settlement: TransactionPart | undefined,
-): Promise<void> {
-  const rows: readonly UnfoldedDraft[] =
-    settlement === undefined
-      ? []
-      : (await Effect.runPromise(Effect.scoped(settlement))).rows;
-  for (const row of rows) {
-    if (row.type === 'run.report' && row.report !== null)
-      await mocks.childRecords(runId).writeReport(row.report);
-    if (row.type === 'run.result')
-      await mocks.childRecords(runId).writeResultMeta(row.result);
-  }
+interface Parent {
+  readonly session: SessionHandle;
+  readonly runId: RunId;
+  readonly storage: string;
 }
 
-vi.mock('@model/computeModelOptions', () => ({
-  readModelAvailabilityInputs: mocks.readModelAvailabilityInputs,
-  // Availability is read once and finished purely, so a case seeds the option
-  // rows on the read and the pure finisher hands them straight back.
-  // The availability read is stubbed to rows; their verdicts are the rows'.
-  modelVerdictsFrom: (rows: readonly ModelOptionData[]) =>
-    rows.map(({ value, availability }) => ({
-      model: value,
-      availability: availability ?? 'provider-key',
-    })),
-}));
+/** A parked root run in the file's default session, the parent every case
+ *  delegates from; `bypass` grants it the proposal bypass. */
+const parkedParent = (bypass = true) =>
+  Effect.gen(function* () {
+    const roots = testWorkspaceRoots();
+    const session = yield* openTestDefaultSession({ roots });
+    const runId = yield* parkedRoot(session, 'Parent.');
+    if (bypass)
+      yield* session.approvals.change(runId, humanGrant(['superYolo'], true));
+    return { session, runId, storage: roots.storage } satisfies Parent;
+  });
 
-const PARENT_RUN_ID = 'aaaaaa222222' as RunId;
-const CHILD_RUN_ID = 'bbbbbb333333' as RunId;
-
-/** The run context shared by nearly every case (run/stopAfterCycle/session vary). */
-function parentRunContext(
-  overrides: Partial<{
-    runId: RunId;
-    stopAfterCycle: boolean;
-    session: SessionHandle;
-    userInstruction: string;
-  }> = {},
-): Parameters<typeof nativeToolTestLayer>[0] {
-  const session = overrides.session ?? testDefaultSession();
-  const stopAfterCycle = overrides.stopAfterCycle ?? false;
-  return {
-    ...(overrides.userInstruction !== undefined && {
-      origin: { instruction: overrides.userInstruction },
-    }),
-    run: {
-      runId: overrides.runId ?? PARENT_RUN_ID,
-      session,
-      config: AgentConfigSchema.parse({
-        agent: 'chat',
-        model: 'deepseek/deepseek-v4-flash',
-      }),
-      toolPolicy: { stopAfterCycle },
-    },
-  };
-}
-
-/** The shared delegation call used by nearly every case. */
-let testEngine: RunPrograms;
-
-function callDelegateReview(call = parentRunContext()) {
-  return agentTool()
-    .call({
-      agentName: 'review',
-      prompt: 'Check the proof.',
-    })
+/** The `agent` tool's call to `review` under `parent`'s run. */
+const delegateReview = (
+  parent: Parent,
+  options: {
+    stopAfterCycle?: boolean;
+    userInstruction?: string;
+    prompt?: string;
+  } = {},
+) =>
+  agentTool()
+    .call({ agentName: 'review', prompt: options.prompt ?? 'Check the proof.' })
     .pipe(
-      // The child's run id derives from the call's id: each case is its own
-      // call, so it launches its own child on the shared session.
       Effect.provide(
         nativeToolTestLayer({
-          ...call,
+          // The child's run id derives from the call's id.
           callId: `call-${generateShortId()}`,
+          ...(options.userInstruction !== undefined && {
+            origin: { instruction: options.userInstruction },
+          }),
+          run: {
+            runId: parent.runId,
+            session: parent.session,
+            config: AgentConfigSchema.parse({
+              agent: 'assistant',
+              model: MODEL,
+            }),
+            model: testModelCell(MODEL),
+            toolPolicy: { stopAfterCycle: options.stopAfterCycle ?? false },
+          },
         }),
       ),
     );
-}
+
+/** The in-band path a script's awaited `agent()` takes. */
+const runInBand = (
+  parent: Parent,
+  instruction = 'Check the proof.',
+  runId: RunId = generateRunId(),
+) =>
+  executeSubagentInBand({
+    runId,
+    configPayload: { agent: 'review', model: MODEL, instruction },
+    parentRunId: parent.runId,
+    session: parent.session,
+    parentOffered: [],
+  }).pipe(Effect.provideService(Runs, parent.session.runs), (program) =>
+    withProcessServices(testRuntime(), program),
+  );
+
+/** The child runs `parent` launched, from the store. */
+const childrenOf = (parent: Parent) =>
+  storedRows(parent.storage)
+    .filter((row) => row.type === 'run.start' && row.parent === parent.runId)
+    .map((row) => row.run);
+
+/** `run`'s newest stored row of `type`, decoded. */
+const rowOf = (
+  storage: string,
+  run: string,
+  type: string,
+): Record<string, unknown> | undefined => {
+  const row = storedRows(storage).findLast(
+    (r: StoredRow) => r.run === run && r.type === type,
+  );
+  return row && (JSON.parse(row.data) as Record<string, unknown>);
+};
+
+/** Wait for `parent`'s child to commit `type`, and answer that child. */
+const untilChildRow = (parent: Parent, type: string) =>
+  Effect.gen(function* () {
+    yield* untilStored(parent.storage, (rows) =>
+      rows.some(
+        (row) => row.type === type && childrenOf(parent).includes(row.run),
+      ),
+    );
+    // cast: a child's stored id is the run id it was launched under.
+    return childrenOf(parent)[0]! as RunId;
+  });
+
+/** The config a child was launched with, from its `run.config` row. */
+const childConfig = (parent: Parent, child: string) =>
+  rowOf(parent.storage, child, 'run.config')?.config as Record<string, string>;
 
 /**
- * Answer every request the session opens the way a surface's `request.decide`
- * does — one `request.decided` row on the same run — and record the kinds
- * asked for, so a case can assert that nothing was asked at all.
+ * Answer every request the session opens the way a surface's
+ * `request.decide` does, and record the kinds asked for, so a case can
+ * assert that nothing was asked at all.
  */
-function answerOpenedRequests(
+const answerOpenedRequests = (
   session: SessionHandle,
   decision: RequestDecision,
-) {
-  const openedKinds: string[] = [];
-  const fiber = Effect.runFork(
-    Stream.runForEach(session.log.tail(session.log.now()), (event) =>
+) =>
+  Effect.gen(function* () {
+    const openedKinds: string[] = [];
+    yield* Stream.runForEach(session.log.tail(session.log.now()), (event) =>
       Effect.sync(() => {
         if (event.type !== 'request.opened') return;
         openedKinds.push(event.payload.kind);
@@ -219,775 +195,441 @@ function answerOpenedRequests(
           },
         ]);
       }),
-    ),
-  );
-  return {
-    openedKinds,
-    stop: () => Fiber.interrupt(fiber),
-  };
-}
-
-/** The same delegation routed through the request protocol, with `decision`
- *  answering the proposal the run opens. The session owns the decider, so it
- *  is created and disposed per case. */
-function delegateWithProposalDecision(
-  decision: RequestDecision,
-  options: { launchSignal?: Deferred.Deferred<void> } = {},
-) {
-  return Effect.scoped(
-    Effect.gen(function* () {
-      const session = yield* createTestSession();
-      const decider = answerOpenedRequests(session, decision);
-      yield* Effect.addFinalizer(() =>
-        decider.stop().pipe(Effect.ensuring(closeSessionOf(session))),
-      );
-      // A request is a row on its run, so the parent run must exist first.
-      publishTestRunStart(session, PARENT_RUN_ID);
-      yield* session.log.settled;
-      const result = yield* callDelegateReview(parentRunContext({ session }));
-      // A detached child commits its `child.turn` row before its first turn
-      // runs, so the launch is not observable the moment the tool returns and
-      // the session must not be disposed out from under it.
-      if (options.launchSignal) {
-        yield* Deferred.await(options.launchSignal);
-      }
-      yield* registryOf(session.runs).awaitDrained();
-      return result;
-    }),
-  );
-}
-
-const IN_BAND_PARENT_RUN_ID = 'abcdef123456' as RunId;
-const IN_BAND_RUN_ID = 'aaaaaa111111' as RunId;
-
-/**
- * The in-band caller's session, one per case: a child's rows live on its own
- * aggregate, so a shared database would let one case read the runs another
- * case left behind.
- */
-let inBandSession: SessionHandle;
-
-type InBandSubagentRunOptions = Omit<
-  Parameters<typeof executeSubagentInBandEffect>[0],
-  'runId'
->;
-
-/** The in-band delegation options shared by nearly every case (fields vary). */
-function delegationOptions(
-  overrides: Partial<InBandSubagentRunOptions> = {},
-): InBandSubagentRunOptions {
-  return {
-    configPayload: {
-      agent: 'review',
-      model: 'deepseek/deepseek-v4-flash',
-    },
-    parentRunId: IN_BAND_PARENT_RUN_ID,
-    session: inBandSession,
-    parentOffered: [],
-    ...overrides,
-  };
-}
-
-/** Run the typed required-result path the way production callers reach it. */
-function runInBand(
-  options: InBandSubagentRunOptions,
-  runId: RunId = IN_BAND_RUN_ID,
-) {
-  return executeSubagentInBandEffect({ ...options, runId }).pipe(
-    Effect.provide(fakeProcessServices()),
-    Effect.provideService(Runs, options.session.runs),
-  );
-}
-
-/**
- * One-shot executeAgent mock that returns a failed child result carrying its
- * normalized error and the given subagent cost.
- */
-function mockExecuteAgentErrorOnce(
-  totalCostUsd: number,
-  extra: Record<string, unknown> = {},
-): void {
-  mocks.executeAgent.mockResolvedValueOnce({
-    outcome: 'failed',
-    runId: CHILD_RUN_ID,
-    usage: { totalCost: totalCostUsd },
-    output: { response: '', files: [] },
-    error: { message: 'review model failed', userRetryable: true },
-    ...extra,
+    ).pipe(Effect.forkScoped);
+    return openedKinds;
   });
-}
 
-/**
- * One-shot executeAgent mock that tracks the handle used for delivery routing.
- */
-function mockTrackedChildOnce(
-  options: {
-    memoryMisses?: ReadonlyArray<{ path: string; reason: string }>;
-    afterRun?: (handle: RunHandle) => Promise<void>;
-  } = {},
-): void {
-  mocks.executeAgent.mockImplementationOnce(
-    async (_config, runId: RunId, runOptions) => {
-      const handle = testRunHandle({
-        runId,
-        parent: PARENT_RUN_ID,
-        agent: 'review',
-      });
-      registryOf(testDefaultSession().runs).track(handle);
-      Effect.runSync(runOptions.onAdmitted?.(runId) ?? Effect.void);
-      Effect.runSync(runOptions.onRun?.(runId) ?? Effect.void);
-      await options.afterRun?.(handle);
-      return {
-        outcome: RUN_OUTCOME.COMPLETED,
-        output: {
-          response: 'The proof is correct.',
-          files: [],
-        },
-        runId,
-        ...(options.memoryMisses ? { memoryMisses: options.memoryMisses } : {}),
-      };
-    },
-  );
-}
+/** An instruction whose model call the validation model holds until
+ *  {@link releasePark}. */
+const PARKED = 'GOLDEN-PARK Check the proof.';
 
-/** In-memory child records: the surface a required-result caller reads. */
-function memoryChildRecords() {
-  // The loop persists the manifest and the awaiting caller verifies it by
-  // read-back, so the fixture must retain writes like the real store does.
-  let resultMeta: unknown = null;
-  // Stand-in for the `run.end` row: production writes it inside
-  // `executeAgent`, which this suite replaces with a mock, so the engine
-  // wrapper records the turn's terminal fact here instead.
-  let runEnd: unknown = null;
-  // The run's `run.start` is in the log once the engine's opening births it.
-  let born = false;
-  return {
-    exists: vi.fn(async () => born),
-    bear: () => {
-      born = true;
-    },
-    readResultMeta: vi.fn(async () => resultMeta),
-    readRunEnd: vi.fn(async () => runEnd),
-    recordRunEnd: (value: unknown) => {
-      runEnd = value;
-    },
-    writeReport: mocks.writeReport,
-    writeResultMeta: vi.fn(async (value: unknown) => {
-      // Retain only writes that succeed, like the real store: a rejected
-      // write must stay invisible to the caller's durability read-back.
-      const written = await mocks.writeResultMeta(value);
-      resultMeta = value;
-      return written;
-    }),
-  };
-}
-
-/**
- * Write the `run.end` fact production's `executeAgent` commits through
- * `runWithLifecycle`: the flow's outcome, usage and output, plus the
- * classified error it reported.
- */
-function recordTerminalFact(runId: RunId, turn: unknown): void {
-  const store = mocks.childRecords(runId) as {
-    recordRunEnd?: (value: unknown) => void;
-  };
-  const flow = turn as {
-    outcome?: string;
-    usage?: unknown;
-    output?: unknown;
-    error?: { message: string };
-  } | null;
-  if (!store.recordRunEnd || !flow?.outcome) return;
-  const { outcome } = flow;
-  const error =
-    outcome === 'failed' && flow.error !== undefined
-      ? { kind: 'unexpected', message: flow.error.message }
-      : undefined;
-  store.recordRunEnd({
-    outcome,
-    ...(error ? { error } : {}),
-    ...(flow.usage ? { usage: flow.usage } : {}),
-    output: flow.output,
-  });
-}
-
-describe('headless delegation', () => {
-  /** Called when a claim hold on the in-band session is released: the
-   *  last step of a child's ending, after everything it owes the run. */
-  let releaseClaim: Mock<() => void>;
-
-  beforeEach(async () => {
-    setTestApprovalPolicy('ask');
-    vi.clearAllMocks();
-    // A child registers under its parent, and a run's aggregate must begin
-    // with its own `run.start`.
-    inBandSession = await Effect.runPromise(createTestSession());
-    releaseClaim = vi.fn();
-    // The driver's hold (`ends`) is the one the child's ending releases.
-    const hold = inBandSession.log.hold.bind(inBandSession.log);
-    vi.spyOn(inBandSession.log, 'hold').mockImplementation((runId, options) =>
-      Effect.tap(hold(runId, options), () =>
-        options?.ends === true
-          ? Effect.addFinalizer(() => Effect.sync(releaseClaim))
-          : Effect.void,
+/** Wait until `parent`'s child has a model call in flight. */
+const untilAttempt = (parent: Parent) =>
+  Effect.gen(function* () {
+    yield* untilStored(parent.storage, (rows) =>
+      rows.some(
+        (row) =>
+          row.type === 'model.message' &&
+          row.data.includes('"kind":"attempt"') &&
+          childrenOf(parent).includes(row.run),
       ),
     );
-    publishTestRunStart(inBandSession, IN_BAND_PARENT_RUN_ID);
-    await Effect.runPromise(inBandSession.log.settled);
-    mocks.prepareAgentDefinition.mockImplementation(
-      ({ config }: { config: unknown }) =>
-        Effect.succeed({ config, persona: { tools: [] } }),
-    );
-    testEngine = {
-      // No root launch runs in this suite.
-      root: () => Effect.die(new Error('no root launch here')),
-      executeAgent: (definition, runId, options) =>
-        Effect.tryPromise({
-          try: async (signal) => {
-            // Production's opening births the run with its registration, and
-            // a child's own rows (its terminal fact) are refused without it,
-            // so the engine publishes its `run.start` and awaits durability.
-            publishTestRunStart(options.session, runId, {
-              parent: options.registration.parentRunId,
-            });
-            await Effect.runPromise(options.session.log.settled);
-            (mocks.childRecords(runId) as { bear?: () => void }).bear?.();
-            const turn = await mocks.executeAgent(definition, runId, {
-              ...options,
-              turnSignal: signal,
-            });
-            // Production's lifecycle settles the child's last turn with its
-            // `run.end`; a refused write leaves the run without them.
-            if (options.turns)
-              await persistSettlement(
-                runId,
-                await Effect.runPromise(options.turns.settleEnd(turn)),
-              ).catch(() => undefined);
-            recordTerminalFact(runId, turn);
-            return turn;
-          },
-          catch: ensureError,
-        }),
-      resumeTurn: (...args) =>
-        Effect.tryPromise({
-          try: () => mocks.resumeToolUseFromResumeData(...args),
-          catch: ensureError,
-        }),
-      // No wake in these cases resumes a run.
-      resume: () => Effect.succeed({ failed: 'not_resumable' }),
-    };
-    mocks.getVisibleAgents.mockReturnValue(
-      Effect.succeed([
-        {
-          name: 'review',
-          source: 'builtIn',
-          description: 'Review work.',
-          tools: [],
-        },
-      ]),
-    );
-    mocks.readModelAvailabilityInputs.mockReturnValue(
-      Effect.succeed([
-        {
-          value: 'deepseek/deepseek-v4-flash',
-          label: 'DeepSeek',
-          availability: 'provider-key',
-        },
-      ]),
-    );
-    // Every case delegates without a proposal unless it brings its own
-    // session, whose proposal bypass starts off.
-    const defaultSession = testDefaultSession();
-    if (
-      !SubscriptionRef.getUnsafe(defaultSession.view.ref).runs.has(
-        PARENT_RUN_ID,
-      )
-    )
-      publishTestRunStart(defaultSession, PARENT_RUN_ID);
-    await Effect.runPromise(
-      defaultSession.approvals.change(
-        PARENT_RUN_ID,
-        humanGrant(['superYolo'], true),
-      ),
-    );
-    const records = new Map<RunId, ReturnType<typeof memoryChildRecords>>();
-    mocks.childRecords.mockImplementation((runId: RunId) => {
-      let child = records.get(runId);
-      if (!child) {
-        child = memoryChildRecords();
-        records.set(runId, child);
-      }
-      return child;
-    });
-    mocks.executeAgent.mockResolvedValue({
-      outcome: 'completed',
-      runId: CHILD_RUN_ID,
-      output: {
-        response: 'The proof is correct.',
-        files: [],
-      },
-    });
+    // cast: a child's stored id is the run id it was launched under.
+    return childrenOf(parent)[0]! as RunId;
   });
 
-  afterEach(async () => {
-    const session = testDefaultSession();
-    for (const runId of session.runs.get().map((run) => run.runId)) {
-      // Test handles have no provider interrupt handler. Remove the fake
-      // handle, then stop the real child activation that owns the loop.
-      untrackRun(session.runs, runId);
-      await Effect.runPromise(
-        session.runs.stop(runId, { reason: 'user' }).settlement,
-      );
-    }
-    await Effect.runPromise(session.followUps.closeInput(PARENT_RUN_ID));
-    await Effect.runPromise(session.followUps.closeInput(CHILD_RUN_ID));
-    await Effect.runPromise(registryOf(session.runs).awaitDrained());
-    await Effect.runPromise(closeSessionOf(inBandSession));
+/**
+ * Run `launch`, whose child's instruction is {@link PARKED}, so that child
+ * fails mid-turn: once its model call is held, its response row and then
+ * `alsoFail`'s batch are refused by the store, and the call is released.
+ */
+const failingChild = <A, E, R>(
+  parent: Parent,
+  launch: Effect.Effect<A, E, R>,
+  alsoFail?: SessionEventDraft['type'],
+) =>
+  Effect.gen(function* () {
+    const faults = yield* sessionStoreFaults(parent.storage);
+    const running = yield* Effect.forkChild(launch);
+    yield* untilAttempt(parent);
+    yield* faults.failNext('appendAll', 'model.message');
+    if (alsoFail) yield* faults.failNext('appendAll', alsoFail);
+    yield* releasePark(parent);
+    return yield* Fiber.join(running);
   });
 
-  it.effect('awaits child delegation during one-shot tool-use runs', () =>
+/** The error a {@link failingChild}'s child fails with. */
+const CHILD_FAULT = 'injected appendAll fault (model.message)';
+
+/** Release the validation model's GOLDEN-PARK hold. */
+const releasePark = (parent: Parent) =>
+  Effect.sync(() =>
+    writeFileSync(join(parent.storage, 'golden-park.release'), ''),
+  );
+
+describe('headless delegation', { timeout: REAL_RUN_TIMEOUT }, () => {
+  validationHost('texra-delegation-');
+
+  it.live('awaits child delegation during one-shot tool-use runs', () =>
     Effect.gen(function* () {
-      const result = yield* callDelegateReview(
-        parentRunContext({ stopAfterCycle: true }),
-      );
+      const parent = yield* parkedParent();
+      const result = yield* delegateReview(parent, { stopAfterCycle: true });
 
-      expect(mocks.executeAgent).toHaveBeenCalledWith(
-        expect.objectContaining({
-          config: expect.objectContaining({
-            agent: 'review',
-            instruction: expect.stringContaining('Check the proof.'),
-            model: 'deepseek/deepseek-v4-flash',
-          }),
-        }),
-        expect.any(String),
-        expect.objectContaining({
-          parentRunId: PARENT_RUN_ID,
-          session: expect.any(Object),
-          stopAfterCycle: true,
-        }),
-      );
       expect(result.summary).toBe("Completed 'review'");
       expect(result.output).toContain('<subagent-result');
       expect(result.output).toContain('<response>');
-      expect(result.output).toContain('The proof is correct.');
-    }),
-  );
-
-  it.effect(
-    'composes durable workflow calls through the native launch primitive',
-    () =>
-      Effect.gen(function* () {
-        const result = yield* runInBand(delegationOptions());
-
-        expect(mocks.executeAgent).toHaveBeenCalledWith(
-          expect.objectContaining({
-            config: expect.objectContaining({ agent: 'review' }),
-          }),
-          result.runId,
-          expect.objectContaining({
-            stopAfterCycle: true,
-            registration: expect.objectContaining({
-              identity: { kind: 'agent', agent: 'review' },
-              parentRunId: IN_BAND_PARENT_RUN_ID,
-            }),
-          }),
-        );
-        expect(result.result).toEqual({
-          outcome: 'completed',
-          output: {
-            response: 'The proof is correct.',
-            files: [],
-          },
-        });
-        expect(mocks.writeReport).toHaveBeenCalled();
-        expect(mocks.writeResultMeta).toHaveBeenCalledWith(
-          expect.objectContaining({
-            producer: 'subagent',
-            output: result.result.output,
-          }),
-        );
-        expect(mocks.writeResultMeta.mock.invocationCallOrder[0]).toBeLessThan(
-          releaseClaim.mock.invocationCallOrder[0] ?? 0,
-        );
-      }),
-  );
-
-  it.effect('persists a failed durable in-band child result', () =>
-    Effect.gen(function* () {
-      mockExecuteAgentErrorOnce(0.61, {
-        runId: IN_BAND_RUN_ID,
-        output: {
-          response: 'Partial review.',
-          files: [],
-        },
+      const [child] = childrenOf(parent);
+      expect(childConfig(parent, child!)).toMatchObject({
+        agent: 'review',
+        model: MODEL,
+        instruction: expect.stringContaining('Check the proof.'),
       });
-
-      const error = yield* Effect.flip(runInBand(delegationOptions()));
-      expect(error.message).toContain('review model failed');
-      expect(mocks.writeResultMeta).toHaveBeenCalledOnce();
-      expect(mocks.writeResultMeta).toHaveBeenCalledWith(
-        expect.objectContaining({
-          output: expect.objectContaining({ response: 'Partial review.' }),
-        }),
+      // The child answered, and the call returned that answer.
+      expect(result.output).toContain(
+        (
+          rowOf(parent.storage, child!, 'run.result')?.result as {
+            output: { response: string };
+          }
+        ).output.response,
       );
     }),
   );
 
-  it.effect(
-    'does not return a typed result when its durable manifest cannot be written',
+  it.live(
+    'composes durable workflow calls through the native launch primitive',
     () =>
       Effect.gen(function* () {
-        mocks.writeResultMeta.mockRejectedValueOnce(
-          new Error('storage offline'),
+        const parent = yield* parkedParent();
+        const runId = generateRunId();
+        // The child holds its claim until its manifest is durable: another
+        // process taking it in between would find nothing to recover.
+        const faults = yield* sessionStoreFaults(parent.storage);
+        const persisting = yield* faults.holdNext('appendAll', 'run.result');
+        const running = yield* Effect.forkChild(
+          runInBand(parent, 'Check the proof.', runId),
         );
+        yield* persisting.reached;
+        expect(claimHolder(parent.storage, runId)).not.toBeNull();
+        yield* persisting.release;
+        const result = yield* Fiber.join(running);
+
+        const rows = storedRows(parent.storage).filter(
+          (row) => row.run === result.runId,
+        );
+        expect(rowOf(parent.storage, result.runId, 'run.start')).toMatchObject({
+          identity: { kind: 'agent', agent: 'review' },
+          parent: { id: parent.runId },
+        });
+        expect(result.result).toMatchObject({
+          outcome: 'completed',
+          output: { files: [] },
+        });
+        // The report and the manifest are durable once the call returns,
+        // and the child let its claim go.
+        expect(rows.map((row) => row.type)).toEqual(
+          expect.arrayContaining(['run.report', 'run.result', 'run.end']),
+        );
+        expect(claimHolder(parent.storage, result.runId)).toBeNull();
         expect(
-          yield* Effect.flip(runInBand(delegationOptions())),
-        ).toBeInstanceOf(SubagentDurabilityError);
-        expect(mocks.writeReport).toHaveBeenCalled();
+          rowOf(parent.storage, result.runId, 'run.result')?.result,
+        ).toEqual({ producer: 'subagent', output: result.result.output });
       }),
   );
 
-  it.effect(
+  it.live('persists a failed durable in-band child result', () =>
+    Effect.gen(function* () {
+      const parent = yield* parkedParent();
+      const error = yield* Effect.flip(
+        failingChild(parent, runInBand(parent, PARKED)),
+      );
+      expect(error).not.toBeInstanceOf(SubagentDurabilityError);
+      expect(error.message).toContain(CHILD_FAULT);
+      const [child] = childrenOf(parent);
+      expect(rowOf(parent.storage, child!, 'run.result')).toMatchObject({
+        result: { producer: 'subagent' },
+      });
+      expect(rowOf(parent.storage, child!, 'run.end')).toMatchObject({
+        outcome: 'failed',
+      });
+    }),
+  );
+
+  it.live(
+    'does not return a typed result when its durable manifest cannot be written',
+    () =>
+      Effect.gen(function* () {
+        const parent = yield* parkedParent();
+        const faults = yield* sessionStoreFaults(parent.storage);
+        yield* faults.failNext('appendAll', 'run.result');
+
+        expect(yield* Effect.flip(runInBand(parent))).toBeInstanceOf(
+          SubagentDurabilityError,
+        );
+      }),
+  );
+
+  it.live(
     'preserves the child failure when its failure manifest cannot be written',
     () =>
       Effect.gen(function* () {
-        mocks.executeAgent.mockRejectedValueOnce(
-          new Error('review model failed'),
-        );
-        mocks.writeResultMeta.mockRejectedValueOnce(
-          new Error('storage offline'),
-        );
+        const parent = yield* parkedParent();
         expect(
-          yield* Effect.flip(runInBand(delegationOptions())),
+          yield* Effect.flip(
+            failingChild(parent, runInBand(parent, PARKED), 'run.result'),
+          ),
         ).toMatchObject({
           name: 'SubagentDurabilityError',
-          message: expect.stringContaining('review model failed'),
+          // The child's own failure, not the manifest write's.
+          message: expect.stringContaining(CHILD_FAULT),
           cause: expect.objectContaining({ name: 'AggregateError' }),
         });
       }),
   );
 
-  it.effect(
+  it.live(
     'interrupts the live child when the in-band caller is interrupted',
     () =>
       Effect.gen(function* () {
-        const ready = yield* Deferred.make<void>();
-        mocks.executeAgent.mockImplementationOnce(
-          async (_config, _id, options) => {
-            Deferred.doneUnsafe(ready, Effect.void);
-            // The child's stop is its run fiber's interruption, which the
-            // test engine sees as its turn promise's abort.
-            await new Promise<void>((resolve) => {
-              options.turnSignal.addEventListener('abort', () => resolve());
-            });
-            return {
-              outcome: 'cancelled',
-              runId: CHILD_RUN_ID,
-              output: { response: '', files: [] },
-            };
-          },
+        const parent = yield* parkedParent();
+        yield* Effect.addFinalizer(() => releasePark(parent));
+        const runId = generateRunId();
+        // The validation model holds the child's model call.
+        const running = yield* Effect.forkChild(
+          runInBand(parent, PARKED, runId),
         );
-
-        const running = yield* Effect.forkChild(runInBand(delegationOptions()));
-        yield* Deferred.await(ready);
+        yield* untilAttempt(parent);
 
         // Interruption stops the child by run id and waits for it to settle
         // its own terminal record.
         yield* Fiber.interrupt(running);
-        const exit = yield* Fiber.await(running);
-        expect(Exit.hasInterrupts(exit)).toBe(true);
-        expect(inBandSession.runs.get(IN_BAND_RUN_ID)?.live === true).toBe(
-          false,
-        );
+        expect(Exit.hasInterrupts(yield* Fiber.await(running))).toBe(true);
+        expect(parent.session.runs.get(runId)?.live === true).toBe(false);
+        expect(rowOf(parent.storage, runId, 'run.end')).toMatchObject({
+          outcome: 'cancelled',
+        });
       }),
   );
 
-  it.effect(
+  it.live(
     'keeps the completed child result when the caller stops during persistence',
     () =>
       Effect.gen(function* () {
-        const persisting = yield* Deferred.make<void>();
-        let finishPersistence!: () => void;
-        const persistencePending = new Promise<void>((resolve) => {
-          finishPersistence = resolve;
-        });
-        mocks.writeResultMeta.mockImplementationOnce(() => {
-          Deferred.doneUnsafe(persisting, Effect.void);
-          return persistencePending;
-        });
+        const parent = yield* parkedParent();
+        const faults = yield* sessionStoreFaults(parent.storage);
+        const persisting = yield* faults.holdNext('appendAll', 'run.result');
+        const runId = generateRunId();
 
-        const running = yield* Effect.forkChild(runInBand(delegationOptions()));
-        yield* Deferred.await(persisting);
+        const running = yield* Effect.forkChild(
+          runInBand(parent, 'Check the proof.', runId),
+        );
+        yield* persisting.reached;
         const interrupting = yield* Effect.forkChild(Fiber.interrupt(running), {
           startImmediately: true,
         });
-        finishPersistence();
+        yield* persisting.release;
 
         yield* Fiber.join(interrupting);
-        const exit = yield* Fiber.await(running);
-        expect(Exit.hasInterrupts(exit)).toBe(true);
-        expect(mocks.writeResultMeta).toHaveBeenCalledOnce();
-        expect(mocks.writeResultMeta).toHaveBeenCalledWith(
-          expect.objectContaining({
-            producer: 'subagent',
-            output: expect.objectContaining({
-              response: 'The proof is correct.',
-            }),
-          }),
-        );
+        expect(Exit.hasInterrupts(yield* Fiber.await(running))).toBe(true);
+        expect(rowOf(parent.storage, runId, 'run.result')).toMatchObject({
+          result: { producer: 'subagent' },
+        });
+        expect(rowOf(parent.storage, runId, 'run.end')).toMatchObject({
+          outcome: 'completed',
+        });
       }),
   );
 
-  it.effect(
+  it.live(
     'does not register a child when the in-band caller is interrupted before it starts',
     () =>
       Effect.gen(function* () {
+        const parent = yield* parkedParent();
         // A child fiber is scheduled, not started, so this interrupt lands first.
-        const running = yield* Effect.forkChild(runInBand(delegationOptions()));
+        const running = yield* Effect.forkChild(runInBand(parent));
         yield* Fiber.interrupt(running);
-        const exit = yield* Fiber.await(running);
 
-        expect(Exit.hasInterrupts(exit)).toBe(true);
-        expect(mocks.executeAgent).not.toHaveBeenCalled();
+        expect(Exit.hasInterrupts(yield* Fiber.await(running))).toBe(true);
+        expect(childrenOf(parent)).toEqual([]);
       }),
   );
 
-  it.effect(
-    'carries the validated agent source to executeAgent for source-pinned launch',
+  it.live(
+    'launches the validated agent source with injected handoff guidance',
     () =>
       Effect.gen(function* () {
-        // The delegation validates against the visible agents and must hand the
-        // resolved entry's source to executeAgent, so getAgentPath resolves the exact
-        // (source, name) key instead of re-resolving the ambiguous bare name.
-        yield* callDelegateReview(parentRunContext({ stopAfterCycle: true }));
+        // The delegation must hand the resolved entry's source to the launch,
+        // so the exact (source, name) key resolves instead of the ambiguous
+        // bare name; and it injects handoff guidance rather than handing the
+        // caller's instruction through verbatim (#5864). Wording-free: the
+        // injected copy churns (#9568) without behavior changing.
+        const parent = yield* parkedParent();
+        yield* delegateReview(parent);
+        const child = yield* untilChildRow(parent, 'run.config');
 
-        expect(mocks.executeAgent).toHaveBeenCalledWith(
-          expect.objectContaining({
-            config: expect.objectContaining({
-              agent: 'review',
-              agentSource: 'builtIn',
-            }),
-          }),
-          expect.any(String),
-          expect.anything(),
+        const config = childConfig(parent, child);
+        expect(config.agentSource).toBe('builtIn');
+        expect(config.instruction).toContain('Check the proof.');
+        expect(config.instruction!.length).toBeGreaterThan(
+          'Check the proof.'.length,
         );
       }),
   );
 
-  it.effect('extends the bare instruction with injected handoff guidance', () =>
-    Effect.gen(function* () {
-      // Regression pin for #5864: delegation must inject handoff guidance rather
-      // than hand the caller's instruction through verbatim. Deliberately
-      // wording-free — the injected copy churns (#9568) without behavior changing.
-      yield* callDelegateReview();
-      yield* registryOf(testDefaultSession().runs).awaitDrained();
-
-      const instruction =
-        mocks.executeAgent.mock.calls.at(-1)?.[0].config.instruction;
-      expect(instruction).toContain('Check the proof.');
-      expect(instruction.length).toBeGreaterThan('Check the proof.'.length);
-    }),
-  );
-
-  it.effect(
+  it.live(
     'carries the current parent instruction into the subagent constraint context',
     () =>
       Effect.gen(function* () {
+        const parent = yield* parkedParent();
         const parentInstruction =
           'Do not use plans, todos, files, bash, Wolfram, or other child tools. Delegate exactly once.';
-        yield* callDelegateReview(
-          parentRunContext({ userInstruction: parentInstruction }),
-        );
-        yield* registryOf(testDefaultSession().runs).awaitDrained();
+        yield* delegateReview(parent, { userInstruction: parentInstruction });
+        const child = yield* untilChildRow(parent, 'run.config');
 
-        expect(mocks.executeAgent).toHaveBeenCalledWith(
-          expect.objectContaining({
-            config: expect.objectContaining({
-              rootUserInstruction: parentInstruction,
-              instruction: expect.stringContaining(
-                `Parent user request (constraint context only):\n${parentInstruction}`,
-              ),
-            }),
-          }),
-          expect.any(String),
-          expect.anything(),
-        );
+        expect(childConfig(parent, child)).toMatchObject({
+          rootUserInstruction: parentInstruction,
+          instruction: expect.stringContaining(
+            `Parent user request (constraint context only):\n${parentInstruction}`,
+          ),
+        });
       }),
   );
 
-  it.effect('formats returned child error results as subagent errors', () =>
+  it.live('formats returned child error results as subagent errors', () =>
     Effect.gen(function* () {
-      mockExecuteAgentErrorOnce(0.42);
-
-      const result = yield* callDelegateReview(
-        parentRunContext({ stopAfterCycle: true }),
+      const parent = yield* parkedParent();
+      const result = yield* failingChild(
+        parent,
+        delegateReview(parent, { stopAfterCycle: true, prompt: PARKED }),
       );
 
       expect(result.summary).toBe("'review' failed");
       expect(result.status).toBe('error');
-      expect(result.error).toBe('review model failed');
-      expect(mocks.writeResultMeta).toHaveBeenCalledWith(
-        expect.objectContaining({
-          producer: 'subagent',
-        }),
-      );
+      expect(result.error).toContain(CHILD_FAULT);
+      const [child] = childrenOf(parent);
+      expect(rowOf(parent.storage, child!, 'run.result')).toMatchObject({
+        result: { producer: 'subagent' },
+      });
     }),
   );
 
-  it.effect('does not attribute proposal cancellation to the user', () =>
+  it.live('does not attribute proposal cancellation to the user', () =>
     Effect.gen(function* () {
-      const result = yield* delegateWithProposalDecision({
+      const parent = yield* parkedParent(false);
+      yield* answerOpenedRequests(parent.session, {
         action: 'cancel',
         cause: 'CLI approval prompt failed.',
       });
 
+      const result = yield* delegateReview(parent);
+
       expect(result.summary).toBe("Delegation approval cancelled for 'review'");
       expect(result.error).toContain('CLI approval prompt failed.');
       expect(result.error).not.toContain('User feedback:');
-      expect(mocks.executeAgent).not.toHaveBeenCalled();
+      expect(childrenOf(parent)).toEqual([]);
     }),
   );
 
-  it.effect(
+  it.live(
     'proceeds without a proposal when the run cannot present approval prompts',
     () =>
-      Effect.scoped(
-        Effect.gen(function* () {
-          // Headless `--approval-policy never` withholds `requiresApproval` tools up
-          // front, so a delegation tool that still executes was deliberately offered
-          // (a script's `agent` calls). The proposal gate must not settle a
-          // guaranteed denial; the child stays on inherited approval state.
-          const session = yield* createTestSession();
-          yield* session.interactions.use({ approvalPromptsUnavailable: true });
-          const decider = answerOpenedRequests(session, { action: 'approve' });
-          yield* Effect.addFinalizer(() =>
-            decider.stop().pipe(Effect.ensuring(closeSessionOf(session))),
-          );
-          const result = yield* callDelegateReview(
-            parentRunContext({ session }),
-          );
+      Effect.gen(function* () {
+        // Headless `--approval-policy never` withholds `requiresApproval`
+        // tools up front, so a delegation tool that still executes was
+        // deliberately offered (a script's `agent` calls). The proposal gate
+        // must not settle a guaranteed denial; the child stays on inherited
+        // approval state.
+        const parent = yield* parkedParent(false);
+        yield* parent.session.interactions.use({
+          approvalPromptsUnavailable: true,
+        });
+        const opened = yield* answerOpenedRequests(parent.session, {
+          action: 'approve',
+        });
 
-          yield* registryOf(session.runs).awaitDrained();
-          expect(decider.openedKinds).toEqual([]);
-          expect(result.status).toBe('executed');
-          expect(result.summary).toBe("Launched 'review' (async)");
-          expect(mocks.executeAgent).toHaveBeenCalledWith(
-            expect.objectContaining({
-              config: expect.objectContaining({ agent: 'review' }),
-            }),
-            expect.any(String),
-            expect.anything(),
-          );
-        }),
-      ),
+        const result = yield* delegateReview(parent);
+        yield* untilChildRow(parent, 'run.config');
+
+        expect(opened).toEqual([]);
+        expect(result.status).toBe('executed');
+        expect(result.summary).toBe("Launched 'review' (async)");
+      }),
   );
 
-  it.effect(
+  it.live(
     'denies a proposal under the never policy, as every other request kind',
     () =>
-      Effect.scoped(
-        Effect.gen(function* () {
-          // Failure modes: `never` approves the proposal because the run
-          // cannot present prompts, or opens a prompt nobody may answer.
-          const session = yield* createTestSession();
-          setTestApprovalPolicy('never');
-          yield* session.interactions.use({ approvalPromptsUnavailable: true });
-          const decider = answerOpenedRequests(session, { action: 'approve' });
-          yield* Effect.addFinalizer(() =>
-            decider.stop().pipe(Effect.ensuring(closeSessionOf(session))),
-          );
-          const result = yield* callDelegateReview(
-            parentRunContext({ session }),
-          );
-
-          expect(decider.openedKinds).toEqual([]);
-          expect(result.status).toBe('error');
-          expect(result.summary).toBe("Delegation denied for 'review'");
-          expect(mocks.executeAgent).not.toHaveBeenCalled();
-        }),
-      ),
-  );
-
-  it.effect('approves a proposal under the yolo policy without asking', () =>
-    Effect.scoped(
       Effect.gen(function* () {
-        const session = yield* createTestSession();
-        setTestApprovalPolicy('yolo');
-        const decider = answerOpenedRequests(session, { action: 'approve' });
-        yield* Effect.addFinalizer(() =>
-          decider.stop().pipe(Effect.ensuring(closeSessionOf(session))),
-        );
-        const result = yield* callDelegateReview(parentRunContext({ session }));
+        // Failure modes: `never` approves the proposal because the run
+        // cannot present prompts, or opens a prompt nobody may answer.
+        const parent = yield* parkedParent(false);
+        setTestApprovalPolicy('never');
+        yield* parent.session.interactions.use({
+          approvalPromptsUnavailable: true,
+        });
+        const opened = yield* answerOpenedRequests(parent.session, {
+          action: 'approve',
+        });
 
-        yield* registryOf(session.runs).awaitDrained();
-        expect(decider.openedKinds).toEqual([]);
-        expect(result.status).toBe('executed');
+        const result = yield* delegateReview(parent);
+
+        expect(opened).toEqual([]);
+        expect(result.status).toBe('error');
+        expect(result.summary).toBe("Delegation denied for 'review'");
+        expect(childrenOf(parent)).toEqual([]);
       }),
-    ),
   );
 
-  it.effect(
+  it.live('approves a proposal under the yolo policy without asking', () =>
+    Effect.gen(function* () {
+      const parent = yield* parkedParent(false);
+      setTestApprovalPolicy('yolo');
+      const opened = yield* answerOpenedRequests(parent.session, {
+        action: 'approve',
+      });
+
+      const result = yield* delegateReview(parent);
+
+      expect(opened).toEqual([]);
+      expect(result.status).toBe('executed');
+    }),
+  );
+
+  it.live(
     'rejects an approved model override unavailable in the active API mode',
     () =>
       Effect.gen(function* () {
-        // Only DeepSeek V4 Flash is available (see beforeEach); GPT-5 is not, so the
-        // override must be rejected synchronously, mirroring the initial delegate
-        // path's availability gate.
-        const result = yield* delegateWithProposalDecision({
+        // The host holds no Anthropic key, so the override must be refused
+        // as the initial delegation's availability gate would refuse it.
+        const parent = yield* parkedParent(false);
+        yield* answerOpenedRequests(parent.session, {
           action: 'approve',
-          model: 'openai/gpt-5-2025-08-07',
+          model: 'anthropic/claude-opus-5-5',
         });
+
+        const result = yield* delegateReview(parent);
 
         expect(result.status).toBe('error');
         expect(result.summary).toBe(
-          "Approved model override 'openai/gpt-5-2025-08-07' is not available",
+          "Approved model override 'anthropic/claude-opus-5-5' is not available",
         );
-        expect(mocks.executeAgent).not.toHaveBeenCalled();
+        expect(childrenOf(parent)).toEqual([]);
       }),
   );
 
-  it.effect(
+  it.live(
     'does not deliver detached subagent results back to the released parent',
     () =>
       Effect.gen(function* () {
-        let capturedHandle: RunHandle | undefined;
+        const parent = yield* parkedParent();
+        yield* Effect.addFinalizer(() => releasePark(parent));
+        // The validation model holds the child's turn; the parent releases
+        // its children mid-turn, as a stop-with-detach does.
+        yield* agentTool()
+          .call({ agentName: 'review', prompt: PARKED })
+          .pipe(
+            Effect.provide(
+              nativeToolTestLayer({
+                callId: `call-${generateShortId()}`,
+                run: {
+                  runId: parent.runId,
+                  session: parent.session,
+                  toolPolicy: {},
+                },
+              }),
+            ),
+          );
+        const child = yield* untilAttempt(parent);
+        const registry = registryOf(parent.session.runs);
+        yield* registry['detachActiveChildren'](parent.runId);
+        yield* releasePark(parent);
 
-        mockTrackedChildOnce({
-          // Detach happens between the loop capturing the handle (onRun) and the
-          // loop delivering this turn's result (after the mock resolves) — the
-          // same ordering a real stop-with-detach produces mid-turn.
-          afterRun: (handle) => {
-            capturedHandle = handle;
-            return Effect.runPromise(
-              registryOf(testDefaultSession().runs)['detachActiveChildren'](
-                PARENT_RUN_ID,
-              ),
-            );
-          },
-        });
-
-        const reportWritten = Deferred.makeUnsafe<void>();
-        mocks.writeReport.mockImplementationOnce(() => {
-          Deferred.doneUnsafe(reportWritten, Effect.void);
-        });
-
-        yield* callDelegateReview(parentRunContext({ runId: PARENT_RUN_ID }));
-
-        yield* Deferred.await(reportWritten);
-        expect(mocks.writeReport).toHaveBeenCalledWith(
-          expect.stringContaining('The proof is correct.'),
+        yield* untilStored(parent.storage, (rows) =>
+          rows.some((row) => row.run === child && row.type === 'run.report'),
         );
-        const childRunId = capturedHandle?.runId;
-        expect(
-          childRunId &&
-            registryOf(testDefaultSession().runs).parentOf(childRunId),
-        ).toBeNull();
-        expect(
-          yield* queuedFollowUps(testDefaultSession(), PARENT_RUN_ID),
-        ).toEqual([]);
-        expect(
-          yield* queuedFollowUps(testDefaultSession(), CHILD_RUN_ID),
-        ).toEqual([]);
+        expect(registry.parentOf(child)).toBeNull();
+        expect(yield* queuedFollowUps(parent.session, parent.runId)).toEqual(
+          [],
+        );
       }),
   );
 });

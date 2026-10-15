@@ -43,17 +43,15 @@ vi.mock('@texra/tools/claudeAgentImport', async (importActual) => {
 
 import '@test/support/sessionGraphTestSetup';
 
-import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { setLogSink } from '@logger/logSink';
-import { withProcessServices } from '@platform/processRuntime';
 import type { RunId } from '@shared/schemas';
 import { captureLogEntries } from '@test/support/logSinkCapture';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { openTestDefaultSession } from '@test/support/sessionEnd';
 import { createTestRunTrace } from '@test/support/sessionTestUtils';
 import {
-  parkedAfter,
+  parkedRoot,
   REAL_RUN_TIMEOUT,
   sessionStoreFaults,
   storedRows,
@@ -61,7 +59,6 @@ import {
   validationHost,
 } from '@test/support/storeFaults';
 import { noPluginHold } from '@test/support/testPluginServices';
-import { testRuntime } from '@test/support/testProcessRuntime';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { ClaudeAgentSessions as ClaudeAgentSessionsService } from '@texra/tools/agentCliSessionStores';
 import { AgentCliSessionRegistry } from '@texra/tools/agentCliSessionRegistry';
@@ -80,22 +77,7 @@ interface Parent {
 const parkedParent = Effect.gen(function* () {
   const roots = testWorkspaceRoots();
   const session = yield* openTestDefaultSession({ roots });
-  const runId = generateRunId();
-  yield* withProcessServices(
-    testRuntime(),
-    session.runs.launch({
-      request: {
-        config: AgentConfigSchema.parse({
-          agent: 'assistant',
-          model: 'gpt56',
-          instruction: 'Parent.',
-        }),
-        runId,
-      },
-      options: {},
-    }),
-  ).pipe(Effect.forkChild);
-  yield* untilStored(roots.storage, parkedAfter(runId, 1, roots.storage));
+  const runId = yield* parkedRoot(session, 'Parent.');
   return { session, runId, storage: roots.storage } satisfies Parent;
 });
 
