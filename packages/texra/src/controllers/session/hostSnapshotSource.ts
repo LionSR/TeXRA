@@ -21,11 +21,11 @@ import {
   readModelAvailabilityInputs,
 } from '@model/computeModelOptions';
 import type { SettingsStores } from '@shared/config/settingsAccess';
-import { type FileOptions } from '@shared/schemas';
 import {
   TEXRA_APPROVAL_POLICY_CONFIG_KEY,
   type TexraApprovalPolicy,
 } from '@shared/approvalPolicy';
+import type { FileOptions } from '@texra/shared/session/hostSnapshot';
 import { agentOptionsData } from '@texra/tools/documents/documentTask';
 import type {
   HostSnapshot,

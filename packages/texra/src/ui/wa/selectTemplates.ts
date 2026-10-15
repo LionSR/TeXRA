@@ -9,9 +9,9 @@ import { repeat } from 'lit/directives/repeat.js';
 
 import {
   MODEL_AVAILABILITY_STATUS,
-  type AgentOptionData,
   type ModelOptionData,
 } from '@shared/schemas';
+import type { DocumentAgentOption } from '@texra/shared/plugins/documents';
 import { AGENT_DECORATORS, getModelProviderDecorator } from '@ui/wa/icons';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import type WaDropdownItem from '@awesome.me/webawesome/dist/components/dropdown-item/dropdown-item.js';
@@ -57,7 +57,7 @@ export function afterDropdownHides(event: Event, then: () => void): void {
   dropdown.addEventListener('wa-after-hide', onHidden);
 }
 
-function buildAgentTooltip(opt: AgentOptionData): string {
+function buildAgentTooltip(opt: DocumentAgentOption): string {
   const { properties } = AGENT_DECORATORS;
   const hints: string[] = [];
 
@@ -74,7 +74,7 @@ function buildAgentTooltip(opt: AgentOptionData): string {
   return hints.join('\n');
 }
 
-function renderAgentOption(opt: AgentOptionData): TemplateResult {
+function renderAgentOption(opt: DocumentAgentOption): TemplateResult {
   const tooltip = buildAgentTooltip(opt);
 
   return html`
@@ -92,7 +92,9 @@ function renderAgentOption(opt: AgentOptionData): TemplateResult {
   `;
 }
 
-export function renderAgentOptions(options: AgentOptionData[]): TemplateResult {
+export function renderAgentOptions(
+  options: DocumentAgentOption[],
+): TemplateResult {
   return html` ${repeat(options, (opt) => opt.value, renderAgentOption)} `;
 }
 

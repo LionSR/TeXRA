@@ -1,6 +1,6 @@
-import type { GettingStartedAction } from '@shared/schemas';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import type { TeXRAIconName } from '@shared/iconNames';
+import type { GettingStartedAction } from '@texra/shared/session/hostRequest';
 import type { SettingsTarget } from '@texra/shared/settingsView/settingsViewMessages';
 import {
   toElectronAccelerator,

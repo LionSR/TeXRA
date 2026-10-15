@@ -401,8 +401,7 @@ function sortAgentEntries(
 }
 
 /** Compute typed agent options data for Lit-native rendering: every
- *  visible agent, the preferred ones first. An app fills a task's `rounds`
- *  from the block it owns. */
+ *  visible agent, the preferred ones first. */
 export function computeAgentOptionsData(
   stores: WorkspaceAgentsStores,
 ): Effect.Effect<AgentOptionData[], StateReadFailed> {

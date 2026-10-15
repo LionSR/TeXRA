@@ -516,14 +516,13 @@ export class RunHeader extends LitElement {
     statusLabel: string,
     passLabel: string | undefined,
   ): TemplateResult {
-    // An agent run's menu lists a document task's or a conversation's
-    // actions, a process's or a workflow container's the neutral ones, each
-    // shown only while the run's `actions` holds it. The task's forks are
+    // An agent run's menu lists a task's actions (the file entries only
+    // for a document task) or a conversation's, a process's or a workflow
+    // container's the neutral ones, each shown only while the run's
+    // `actions` holds it. The task's forks are
     // listed after them.
     const actions = (
-      run.identity.kind === 'agent'
-        ? runMenuActions(run.recipe)
-        : NEUTRAL_RUN_ACTIONS
+      run.identity.kind === 'agent' ? runMenuActions(run) : NEUTRAL_RUN_ACTIONS
     ).filter((action) => run.actions.includes(action.action));
     const copied = this.copyDiagnostics.state.copied;
     const canDelete = run.actions.includes('delete');

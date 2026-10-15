@@ -7,7 +7,6 @@ export * from './runIdentity';
 export * from './workspaceAgents';
 export * from './agentCliSettings';
 export * from './fileFields';
-export * from './fileTypes';
 export * from './lineChanges';
 export * from './proposalFields';
 export * from './errors';
@@ -43,6 +42,7 @@ export {
   RunEndSchema,
   RunWorkspaceFilesSchema,
   isTaskConfig,
+  recipeBlockOf,
   type ResultMeta,
   type RunEnd,
   type RunEndOutput,
@@ -59,7 +59,7 @@ export * from './prompts';
 export * from './request';
 
 // Layer 4: MainView schemas
-export * from './mainView/state';
+export * from './pickerOptions';
 
 // Layer 5: ProgressView schemas
 export * from './progressView/data';

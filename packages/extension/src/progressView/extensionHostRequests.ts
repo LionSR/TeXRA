@@ -58,17 +58,17 @@ import { parseVersionControlDiffFilename } from '@latex/latexdiff/diffFileNameMa
 import { withLogChannel } from '@logger/effectLog';
 import { withSessionFs, WorkspaceFs, type StorageFs } from '@platform/rootedFs';
 import latexPreamble from '@resources/templates/chatExport.tex';
-import {
-  GETTING_STARTED_COMMANDS,
-  isMultipleDocumentFileType,
-  type RunId,
-} from '@shared/schemas';
+import { type RunId } from '@shared/schemas';
 import {
   setFirstRunDone,
   setOnboardingDeclined,
 } from '@shared/state/onboardingState';
+import { isMultipleDocumentFileType } from '@texra/shared/launcher/fileTypes';
 import { getIncludedExtensions } from '@texra/common/files/fileTypeUtils';
-import type { HostRequest } from '@texra/shared/session/hostRequest';
+import type {
+  GettingStartedAction,
+  HostRequest,
+} from '@texra/shared/session/hostRequest';
 import type {
   HostOutcome,
   SurfaceActionMessage,
@@ -119,6 +119,15 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 import { normalizeLineEndings } from '@utils/text/stringUtils';
 
 const CHANNEL = 'ExtensionHostRequests';
+
+/** The VS Code command behind each getting-started action. */
+const GETTING_STARTED_COMMANDS = {
+  runSetup: 'texra.runSetupAssistant',
+  createSampleProject: 'texra.createSampleProject',
+  cloneOverleaf: 'texra.cloneOverleafProject',
+  downloadArxiv: 'texra.downloadArXivSource',
+  openWalkthrough: 'texra.openGettingStarted',
+} satisfies Record<GettingStartedAction, string>;
 
 interface ExtensionHostRequestsOptions {
   /** The run records and failure surface the run actions read, from the

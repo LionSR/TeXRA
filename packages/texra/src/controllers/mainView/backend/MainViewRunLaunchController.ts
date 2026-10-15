@@ -18,7 +18,8 @@ import {
   resolveTeamLaunch,
   TEAM_SELECTION_REQUIRED_MESSAGE,
 } from '@common/teams/TeamPlan';
-import { type AgentDelegationScope, type SessionType } from '@shared/schemas';
+import { type AgentDelegationScope } from '@shared/schemas';
+import type { SessionType } from '@texra/shared/session/surface';
 import type { HostRequest } from '@texra/shared/session/hostRequest';
 import { createTeamCatalogPorts } from '@texra/controllers/mainView/teamCatalogPorts';
 import { documentTaskConfig } from '@texra/agent/output/documentRecipe';

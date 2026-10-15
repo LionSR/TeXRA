@@ -1,5 +1,7 @@
 import type { RunAction } from '@shared/schemas';
+import type { RunView } from '@shared/session/sessionView';
 import type { TeXRAIconName } from '@shared/iconNames';
+import { isDocumentTaskRun } from '@texra/shared/plugins/documents';
 import type { HostRequest } from '@texra/shared/session/hostRequest';
 import { TASK_ACTIONS } from '@ui/copy/nestedRuns';
 
@@ -94,21 +96,21 @@ const TASK_RUN_ACTIONS: readonly RunMenuAction[] = [
   COPY_DIAGNOSTICS_ACTION,
   {
     id: ELEMENT_IDS.DIFF_STREAM_BTN,
-    action: 'diff',
+    action: 'files',
     arm: 'latexdiff',
     icon: 'code-compare',
     label: 'Run latexdiff on the outputs',
   },
   {
     id: ELEMENT_IDS.PACK_STREAM_BTN,
-    action: 'pack',
+    action: 'files',
     arm: 'pack',
     icon: 'box-archive',
     label: 'Archive outputs to History',
   },
   {
     id: ELEMENT_IDS.CLEAN_STREAM_BTN,
-    action: 'clean',
+    action: 'files',
     arm: 'clean',
     icon: 'trash',
     label: 'Delete output files',
@@ -128,9 +130,15 @@ const CONVERSATION_RUN_ACTIONS: readonly RunMenuAction[] = [
   COPY_DIAGNOSTICS_ACTION,
 ];
 
-/** An agent run's menu: a document task's, or a conversation's. */
-export function runMenuActions(recipe: boolean): readonly RunMenuAction[] {
-  return recipe ? TASK_RUN_ACTIONS : CONVERSATION_RUN_ACTIONS;
+/** An agent run's menu: a task's, or a conversation's. The output-file
+ *  entries are the documents plugin's, for its own tasks only. */
+export function runMenuActions(
+  run: Pick<RunView, 'recipe'>,
+): readonly RunMenuAction[] {
+  if (!run.recipe) return CONVERSATION_RUN_ACTIONS;
+  return isDocumentTaskRun(run)
+    ? TASK_RUN_ACTIONS
+    : TASK_RUN_ACTIONS.filter((entry) => entry.action !== 'files');
 }
 
 /**

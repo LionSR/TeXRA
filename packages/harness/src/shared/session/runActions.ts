@@ -28,13 +28,13 @@ const inspectActions = (): RunAction[] => ['openRunStorage', 'export', 'copy'];
  * so it offers delete beside inspection, the one way to clear it. A live
  * run (`isLiveRun`: working, waiting, or spawned and not started yet) can
  * be stopped; while it works, an
- * agent's run takes approval grants, and a conversation (not a document
- * task) its compaction and a reset or handoff. Nothing that rewrites or
+ * agent's run takes approval grants, and a conversation (not a task's
+ * recipe) its compaction and a reset or handoff. Nothing that rewrites or
  * removes a run's files or history is offered while it is live. Any run this
  * process can act on can be renamed, and a conversation whose first turn has
  * ended forked (at its latest settled point, before any turn it is in now). After, a
- * run can be deleted; a plain agent's run again; a task's outputs
- * diffed, archived, or removed. Resume is offered where it is the way to
+ * run can be deleted and its files worked on (`run.files`); a plain
+ * agent's run again. Resume is offered where it is the way to
  * continue: on any loop-driven run that was interrupted, and on a background
  * script that did not complete. A settled task runs again; a
  * settled conversation continues through its composer. Whether a resume can
@@ -72,7 +72,7 @@ export function runActions(
       ...inspectActions(),
     ];
   }
-  const actions: RunAction[] = ['delete', 'rename'];
+  const actions: RunAction[] = ['delete', 'rename', 'files'];
   const ended = isTerminalOutcomePhase(run.status);
   if (
     continuesFromRows({ ...run, ended }) &&
@@ -84,8 +84,6 @@ export function runActions(
     actions.push('runNew');
     if (forkable(run)) actions.push('fork');
   }
-  if (run.identity.kind === 'agent' && run.recipe)
-    actions.push('diff', 'pack', 'clean');
   return [...actions, ...inspectActions()];
 }
 
@@ -131,9 +129,7 @@ const ACTION_LABEL: Record<RunAction, string> = {
   runNew: 'Run again',
   fork: 'Forking',
   reset: 'Handing off',
-  diff: 'Latexdiff of the outputs',
-  pack: 'Archiving the outputs',
-  clean: 'Deleting the output files',
+  files: "Working with the run's files",
   delete: 'Deleting',
   rename: 'Renaming',
   openRunStorage: 'Opening the run folder',

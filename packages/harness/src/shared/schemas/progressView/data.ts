@@ -5,10 +5,7 @@
  */
 import { z } from 'zod';
 
-import {
-  AgentOptionDataSchema,
-  ModelOptionDataSchema,
-} from '../mainView/state';
+import { AgentOptionDataSchema, ModelOptionDataSchema } from '../pickerOptions';
 import {
   AgentProposalPermissionSchema,
   BashPermissionSchema,

@@ -27,7 +27,16 @@ export const RunRecordFieldsSchema = z.union([
  *  its record; it resumes from its checkpoint, its opening rebuilt. */
 export const isTaskConfig = (
   config: z.input<typeof RunRecordFieldsSchema>,
-): boolean => 'script' in config && config.script?.kind === 'recipe';
+): boolean => recipeBlockOf(config) !== null;
+
+/** The block key of the plugin whose recipe the run opened on
+ *  (`script.block`), or null for a run that is no task. */
+export const recipeBlockOf = (
+  config: z.input<typeof RunRecordFieldsSchema>,
+): string | null =>
+  'script' in config && config.script?.kind === 'recipe'
+    ? config.script.block
+    : null;
 
 /** Terminal errors keep the classified kind beside the provider detail. */
 const RunEndErrorSchema = z

@@ -12,6 +12,7 @@
 import { z } from 'zod';
 
 import {
+  AgentOptionDataSchema,
   type AggregateId,
   type FileLocation,
   type SessionEvent,
@@ -197,6 +198,18 @@ export const DOCUMENT_TASK_BLOCK: AgentBlock<DocumentTask> = Object.freeze({
   key: 'task',
   schema: DocumentTaskSchema,
 });
+
+/** Whether `run` is a document task: opened on this plugin's recipe, not
+ *  on another plugin's. */
+export const isDocumentTaskRun = (run: Pick<RunView, 'recipe'>): boolean =>
+  run.recipe === DOCUMENT_TASK_BLOCK.key;
+
+/** An agent option as every launcher lists it: one that is also a document
+ *  task carries its revision count (the header's "Pass 2 of 3"). */
+export const DocumentAgentOptionSchema = AgentOptionDataSchema.extend({
+  rounds: z.int().positive().optional(),
+});
+export type DocumentAgentOption = z.infer<typeof DocumentAgentOptionSchema>;
 
 /**
  * A document task's launch options, as its recipe's run records them

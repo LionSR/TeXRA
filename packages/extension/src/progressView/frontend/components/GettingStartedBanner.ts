@@ -2,11 +2,9 @@ import '@awesome.me/webawesome/dist/components/button/button.js';
 import { html, css, LitElement, type TemplateResult } from 'lit';
 import { customElement } from 'lit/decorators.js';
 
-import {
-  GETTING_STARTED_ACTION_PRESENTATION,
-  type GettingStartedAction,
-} from '@shared/schemas';
+import type { GettingStartedAction } from '@texra/shared/session/hostRequest';
 import { SessionUiEvents } from '@texra/shared/session/uiEvents';
+import { GETTING_STARTED_ACTION_PRESENTATION } from '@ui/copy/onboarding';
 import { designTokens, commonViewStyles, bannerStyles } from '@ui/styles';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 

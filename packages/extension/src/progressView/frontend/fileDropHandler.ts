@@ -1,5 +1,5 @@
 // Local imports - shared schemas
-import type { DocumentFileType } from '@shared/schemas';
+import type { DocumentFileType } from '@texra/shared/launcher/fileTypes';
 import { SessionUiEvents } from '@texra/shared/session/uiEvents';
 
 // Third-party type imports

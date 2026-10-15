@@ -83,6 +83,7 @@ const GATED_ACTIONS: Partial<Record<RuntimeRequest['kind'], RunAction>> = {
   'run.delete': 'delete',
   'run.compact': 'compact',
   'run.rename': 'rename',
+  'run.files': 'files',
   'policy.set': 'grant',
 };
 
@@ -112,16 +113,14 @@ const withRunClaim = <A, R>(
           .pipe(Effect.mapError(claimRefused(runId)), Effect.andThen(write)),
       );
 
-/** Refuse a gated request the run's `actions` no longer hold (a files copy
- *  is gated as `pack`, a removal as `clean`); a run not folded yet, or held
- *  elsewhere, is left to `admit` and the claim; a stop is ungated. */
+/** Refuse a gated request the run's `actions` no longer hold; a run not
+ *  folded yet, or held elsewhere, is left to `admit` and the claim; a stop
+ *  is ungated. */
 const requireRunAction = (
   deps: RequestDeps,
   req: RuntimeRequest,
 ): Effect.Effect<void, RequestError> => {
   let action = GATED_ACTIONS[req.kind];
-  if (req.kind === 'run.files')
-    action = req.files.op === 'copy' ? 'pack' : 'clean';
   if (req.kind === 'policy.set' && narrows(req.change)) action = undefined;
   if (action === undefined) return Effect.void;
   const runId = req.kind === 'policy.set' ? req.change.runId : req.runId;

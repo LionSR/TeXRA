@@ -1,5 +1,5 @@
 /**
- * MainView state and data schemas (option rows, banners, and file state).
+ * Picker option rows (models, agents, teams) and their availability.
  * Kept free of any IPC message wrappers so the message modules can compose
  * these without circular dependencies.
  */
@@ -7,25 +7,6 @@ import { z } from 'zod';
 
 import { AgentSourceSchema } from '@shared/schemas/agent';
 import { CHATGPT_AUTH, GROK_AUTH } from '@shared/model/accountAuth';
-import {
-  TEXRA_ICON_CANONICAL_NAMES,
-  type TeXRAIconName,
-} from '@shared/iconNames';
-import { DocumentFileTypeSchema } from '../fileTypes';
-
-// ============================================================
-// Session Schemas
-// ============================================================
-
-/**
- * What the main view launches: a task over the selected files, or
- * a chat with the selected agent.
- */
-export const SessionTypeSchema = z.enum(['task', 'chat']);
-export type SessionType = z.infer<typeof SessionTypeSchema>;
-
-/** Who runs a main-view request: a single agent or a team. */
-export const LaunchTargetSchema = z.enum(['agent', 'team']);
 
 // ============================================================
 // Option Data Schemas
@@ -182,14 +163,8 @@ export const AgentOptionDataSchema = PickerOptionBaseSchema.extend({
   isOrchestrator: z.boolean().optional(),
   /** Provenance, in the canonical agent vocabulary rather than one-hot flags. */
   source: AgentSourceSchema.optional(),
-  /** A task's revision count (the header's "Pass 2 of 3"): present
-   *  exactly when the agent is also a task, filled by the app. */
-  rounds: z.int().positive().optional(),
 });
 export type AgentOptionData = z.infer<typeof AgentOptionDataSchema>;
-
-/** Open workspace folder offered as a run working directory. */
-export const WorkspaceRootOptionDataSchema = PickerOptionBaseSchema;
 
 /**
  * Team picker option row for the main-view "Run with: Team" target. `value`
@@ -212,96 +187,3 @@ export const TeamOptionDataSchema = PickerOptionBaseSchema.extend({
   disabledReason: z.string().nullish(),
 });
 export type TeamOptionData = z.infer<typeof TeamOptionDataSchema>;
-
-// ============================================================
-// Banner Data Schemas
-// ============================================================
-
-export const AgentConfigBannerDataSchema = z.object({
-  agentName: z.string().nullish(),
-  customDirSet: z.boolean().nullish(),
-});
-
-/**
- * One missing dependency as the host reports it: already labeled for
- * display, and marked when another entry in the same list satisfies the same
- * requirement (GraphicsMagick vs ImageMagick) — the wire carries that
- * choose-one fact so no renderer has to decode it from an id.
- */
-const MissingToolSchema = z.object({
-  id: z.string(),
-  label: z.string(),
-  interchangeable: z.boolean(),
-  /** What TeXRA can't do without it, completing "TeXRA can't …". */
-  usedFor: z.string(),
-});
-export type MissingTool = z.infer<typeof MissingToolSchema>;
-
-export const DependencyBannerDataSchema = z.object({
-  missingTools: z.array(MissingToolSchema).nullish(),
-});
-
-// ============================================================
-// File State Schemas
-// ============================================================
-
-const FileSelectConfigSchema = z.object({
-  type: DocumentFileTypeSchema,
-  label: z.string(),
-  icon: z.enum(TEXRA_ICON_CANONICAL_NAMES),
-  addOpenedLabel: z.string(),
-  emptyListLabel: z.string(),
-  selectListLabel: z.string(),
-  toolConfig: z.enum(['tool', 'autoExtract']).nullish(),
-});
-export type FileSelectConfig = z.infer<typeof FileSelectConfigSchema>;
-
-export const FileOptionsSchema = z.object({
-  baseFile: z.array(z.string()),
-  editedFile: z.array(z.string()),
-  commit: z.array(z.string()),
-});
-export type FileOptions = z.infer<typeof FileOptionsSchema>;
-
-export const GettingStartedActionSchema = z.enum([
-  'runSetup',
-  'createSampleProject',
-  'cloneOverleaf',
-  'downloadArxiv',
-  'openWalkthrough',
-]);
-export type GettingStartedAction = z.infer<typeof GettingStartedActionSchema>;
-
-/**
- * Single source of truth for the getting-started action command IDs, shared
- * by the Main view banner and the Progress view empty-state list so the two
- * surfaces can't drift out of sync.
- */
-export const GETTING_STARTED_COMMANDS = {
-  runSetup: 'texra.runSetupAssistant',
-  createSampleProject: 'texra.createSampleProject',
-  cloneOverleaf: 'texra.cloneOverleafProject',
-  downloadArxiv: 'texra.downloadArXivSource',
-  openWalkthrough: 'texra.openGettingStarted',
-} satisfies Record<GettingStartedAction, string>;
-
-/**
- * Button label and leading icon for each getting-started action — the
- * presentation counterpart to {@link GETTING_STARTED_COMMANDS}. The Main view
- * getting-started banner, the Progress view empty state, and the onboarding
- * cards all render the same actions, so the words and glyph live here rather
- * than being re-typed per surface.
- */
-export const GETTING_STARTED_ACTION_PRESENTATION = {
-  runSetup: { label: 'Run setup assistant', icon: 'rocket' },
-  createSampleProject: {
-    label: 'Create sample project',
-    icon: 'file-circle-plus',
-  },
-  cloneOverleaf: { label: 'Import Overleaf', icon: 'cloud-arrow-down' },
-  downloadArxiv: { label: 'Import arXiv', icon: 'download' },
-  openWalkthrough: { label: 'Open walkthrough', icon: 'book' },
-} as const satisfies Record<
-  GettingStartedAction,
-  { readonly label: string; readonly icon: TeXRAIconName }
->;

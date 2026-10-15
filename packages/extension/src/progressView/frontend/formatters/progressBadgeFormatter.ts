@@ -2,6 +2,7 @@ import type { RunView } from '@shared/session/sessionView';
 import {
   DOCUMENTS_OUTPUT_KEY,
   documentRoundsOf,
+  isDocumentTaskRun,
 } from '@texra/shared/plugins/documents';
 import { passLabel } from '@ui/copy/taskDiagnostics';
 
@@ -15,7 +16,7 @@ export function progressBadgeLabel(
   run: Pick<RunView, 'recipe' | 'facts'>,
   plannedPasses: number | undefined,
 ): string | undefined {
-  if (!run.recipe) return undefined;
+  if (!isDocumentTaskRun(run)) return undefined;
   const passes = documentRoundsOf(run.facts[DOCUMENTS_OUTPUT_KEY]).length;
   return passes === 0 ? undefined : passLabel(passes - 1, plannedPasses);
 }

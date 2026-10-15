@@ -3,7 +3,7 @@ import { resolve } from 'node:path';
 import { Effect, FileSystem, type PlatformError } from 'effect';
 
 import { relativeToRoot } from '@texra-ai/harness/node';
-import type { FileOptions } from '@shared/schemas';
+import type { FileOptions } from '@texra/shared/session/hostSnapshot';
 import {
   getFileListConfig,
   type ListableFileType,

@@ -8,7 +8,7 @@ import {
   showLoggedInfoMessage,
 } from '@frontend/ui/errorHandlingUtils';
 import { selectFiles } from '@frontend/ui/dialogs';
-import type { MultipleDocumentFileType } from '@shared/schemas';
+import type { MultipleDocumentFileType } from '@texra/shared/launcher/fileTypes';
 import { getFilterExtensions } from '@texra/common/files/fileTypeUtils';
 import { workspaceRelativePath } from '@utils/files/workspaceFS';
 import type { WorkspaceRoots } from '@texra-ai/harness';

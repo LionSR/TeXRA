@@ -106,7 +106,7 @@ describe('sessionFold', () => {
       const host = { terminalBacked: true };
       expect(acceptsFollowUp(run, host)).toBe(true);
       expect(acceptsFollowUp({ ...run, readOnly: true }, host)).toBe(false);
-      expect(acceptsFollowUp({ ...run, recipe: true }, host)).toBe(false);
+      expect(acceptsFollowUp({ ...run, recipe: 'task' }, host)).toBe(false);
       expect(
         acceptsFollowUp({ ...run, turn: null, forkPoint: null }, host),
       ).toBe(false);

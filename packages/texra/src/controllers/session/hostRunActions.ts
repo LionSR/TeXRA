@@ -37,11 +37,17 @@ import { FOLLOW_UP_WAKE_FAILED_MESSAGE } from '@agent/followUp/ToolUseFollowUp';
 import { withLogChannel } from '@logger/effectLog';
 import { getRuntimeModelDirectFallback } from '@model/copilotRouting';
 import type { ModelHostFactUnreadable } from '@model/computeModelOptions';
-import { isTaskConfig, type FileOpResult, type RunId } from '@shared/schemas';
+import { isTaskConfig, recipeBlockOf, type RunId } from '@shared/schemas';
 import { documentTaskConfig } from '@texra/agent/output/documentRecipe';
 import { packDestination } from '@texra/tools/documents/runOutputs';
-import type { HostRequest } from '@texra/shared/session/hostRequest';
-import { documentsOf } from '@texra/shared/plugins/documents';
+import type {
+  FileOpResult,
+  HostRequest,
+} from '@texra/shared/session/hostRequest';
+import {
+  DOCUMENT_TASK_BLOCK,
+  documentsOf,
+} from '@texra/shared/plugins/documents';
 import type { MessageHost, NotificationFailed } from '@texra/hosts/uiHosts';
 import { runActionGuard } from '@texra/controllers/session/runActionGuard';
 import type { TaskRecordsUnavailable } from '@texra/controllers/server/serviceSession';
@@ -366,7 +372,11 @@ export const createHostRunActions = (
           ).pipe(withLogChannel(CHANNEL));
           return undefined;
         }
-        return isTaskConfig(config) ? config : undefined;
+        // `files` holds on every settled run: this is what keeps a stale
+        // request off a run that is not a document task.
+        return recipeBlockOf(config) === DOCUMENT_TASK_BLOCK.key
+          ? config
+          : undefined;
       },
     );
 
@@ -670,14 +680,14 @@ export const createHostRunActions = (
       workflowDiffRequest: Effect.fn('HostRunActions.workflowDiffRequest')(
         function* (runId) {
           yield* guard.idle(runId);
-          yield* guard.require(runId, 'diff');
+          yield* guard.require(runId, 'files');
           const config = yield* workflowConfig(runId);
           return config ? { runId } : undefined;
         },
       ),
       workflowFileOperation: Effect.fn('HostRunActions.workflowFileOperation')(
         function* (runId, operation) {
-          yield* guard.require(runId, operation);
+          yield* guard.require(runId, 'files');
           yield* guard.idle(runId);
           const config = yield* workflowConfig(runId);
           if (!config) return undefined;

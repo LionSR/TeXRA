@@ -10,15 +10,22 @@
  */
 import { z } from 'zod';
 
+import { CredentialSwitchSchema, RunIdSchema } from '@shared/schemas';
 import {
-  CredentialSwitchSchema,
   CurrentFileTypeSchema,
   DocumentFileTypeSchema,
-  GettingStartedActionSchema,
-  RunIdSchema,
-} from '@shared/schemas';
+} from '@texra/shared/launcher/fileTypes';
 
 import { LaunchSurfaceSchema } from './surface';
+
+const GettingStartedActionSchema = z.enum([
+  'runSetup',
+  'createSampleProject',
+  'cloneOverleaf',
+  'downloadArxiv',
+  'openWalkthrough',
+]);
+export type GettingStartedAction = z.infer<typeof GettingStartedActionSchema>;
 
 const runScoped = { runId: RunIdSchema };
 
@@ -213,3 +220,14 @@ export const HostRequestSchema = z.discriminatedUnion('kind', [
   }),
 ]);
 export type HostRequest = z.infer<typeof HostRequestSchema>;
+
+/** What a `pack` or `clean` did, as the host presents it. */
+export type FileOpResult =
+  | {
+      readonly status: 'success';
+      /** The packed copy's folder. */
+      readonly outputFolder?: string;
+    }
+  | { readonly status: 'noFiles' }
+  | { readonly status: 'missingParams' }
+  | { readonly status: 'error'; readonly error: string };

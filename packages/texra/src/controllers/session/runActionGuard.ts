@@ -2,7 +2,8 @@
  * What a host's run actions check as each request is handled, not only as it
  * was rendered: the run's current `actions`, and whether this window is
  * already resuming it. A pack or clean is held by the process that holds the
- * run (`run.files`), not here.
+ * run (`run.files`), not here. A latexdiff, pack or clean is gated as the
+ * run's `files` action.
  */
 import { Effect } from 'effect';
 

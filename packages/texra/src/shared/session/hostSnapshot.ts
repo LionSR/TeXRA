@@ -9,22 +9,55 @@
 import { z } from 'zod';
 
 import {
-  AgentConfigBannerDataSchema,
-  AgentOptionDataSchema,
-  DependencyBannerDataSchema,
-  FileOptionsSchema,
   ModelOptionDataSchema,
   OnboardingFunnelStateSchema,
   TeamOptionDataSchema,
-  WorkspaceRootOptionDataSchema,
 } from '@shared/schemas';
 import {
   TexraApprovalPolicySchema,
   TEXRA_APPROVAL_POLICY_DEFAULT,
 } from '@shared/approvalPolicy';
+import { DocumentAgentOptionSchema } from '@texra/shared/plugins/documents';
 import { getBasename } from '@utils/core';
 
 const visible = { visible: z.boolean() };
+
+/** Open workspace folder offered as a run working directory. */
+const WorkspaceRootOptionDataSchema = z.object({
+  value: z.string(),
+  label: z.string(),
+});
+
+const AgentConfigBannerDataSchema = z.object({
+  agentName: z.string().nullish(),
+  customDirSet: z.boolean().nullish(),
+});
+
+/**
+ * One missing dependency as the host reports it: already labeled for
+ * display, and marked when another entry in the same list satisfies the same
+ * requirement (GraphicsMagick vs ImageMagick) — the wire carries that
+ * choose-one fact so no renderer has to decode it from an id.
+ */
+const MissingToolSchema = z.object({
+  id: z.string(),
+  label: z.string(),
+  interchangeable: z.boolean(),
+  /** What TeXRA can't do without it, completing "TeXRA can't …". */
+  usedFor: z.string(),
+});
+export type MissingTool = z.infer<typeof MissingToolSchema>;
+
+const DependencyBannerDataSchema = z.object({
+  missingTools: z.array(MissingToolSchema).nullish(),
+});
+
+const FileOptionsSchema = z.object({
+  baseFile: z.array(z.string()),
+  editedFile: z.array(z.string()),
+  commit: z.array(z.string()),
+});
+export type FileOptions = z.infer<typeof FileOptionsSchema>;
 
 /** How a project is named in a rail row, a chip, and the hero subtitle. */
 const ProjectDisplaySchema = z.object({
@@ -69,7 +102,7 @@ export function projectDisplayOf(
 export const HostSnapshotSchema = z.object({
   project: ProjectDisplaySchema,
   /** Every agent; one that is also a document task carries its `rounds`. */
-  agentOptions: z.array(AgentOptionDataSchema),
+  agentOptions: z.array(DocumentAgentOptionSchema),
   modelOptions: z.array(ModelOptionDataSchema),
   teamOptions: z.array(TeamOptionDataSchema),
   workspaceRoots: z.array(WorkspaceRootOptionDataSchema),

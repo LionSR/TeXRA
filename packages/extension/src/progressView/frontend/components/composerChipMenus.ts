@@ -7,26 +7,22 @@ import { html, nothing, type TemplateResult } from 'lit';
 import { live } from 'lit/directives/live.js';
 import { repeat } from 'lit/directives/repeat.js';
 
-import {
-  agentName,
-  isModelOptionAvailable,
-  type AgentOptionData,
-  type SessionType,
-} from '@shared/schemas';
+import { agentName, isModelOptionAvailable } from '@shared/schemas';
 import type { TeXRAIconName } from '@shared/iconNames';
 import {
   texraApprovalPolicyLabel,
   formatTexraApprovalPolicy,
   type TexraApprovalPolicy,
 } from '@shared/approvalPolicy';
+import type { DocumentAgentOption } from '@texra/shared/plugins/documents';
 import type { HostSnapshot } from '@texra/shared/session/hostSnapshot';
-import type { Surface } from '@texra/shared/session/surface';
+import type { SessionType, Surface } from '@texra/shared/session/surface';
 import { TASK_APPROVAL } from '@ui/copy/taskApproval';
 
 /** The agent menu's sections, one per launch mode: every agent chats, and
  *  an agent with a document task (`rounds`) also runs one. */
 const AGENT_SECTIONS: ReadonlyArray<
-  readonly [SessionType, string, (option: AgentOptionData) => boolean]
+  readonly [SessionType, string, (option: DocumentAgentOption) => boolean]
 > = [
   ['chat', 'Chat', () => true],
   ['task', 'Document task', (option) => option.rounds !== undefined],

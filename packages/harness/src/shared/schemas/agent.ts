@@ -40,29 +40,6 @@ export const AgentNameSchema = z
       'Agent names must be identifiers: letters, numbers, underscores, or hyphens.',
   });
 
-/** An agent's name as the catalog lists it: its own, or `<plugin>:<name>`
- *  for an installed plugin's agent. A definition names itself bare. */
-const CatalogAgentNameSchema = z
-  .string()
-  .trim()
-  .min(1)
-  .regex(/^(?:[a-z0-9][a-z0-9-]*:)?[A-Za-z0-9][A-Za-z0-9_-]*$/u, {
-    message:
-      'Agent names must be identifiers (letters, numbers, underscores, or hyphens), optionally after a plugin name and a colon.',
-  });
-
-/**
- * Base schema for agent identity metadata shared across all agent representations.
- * View-specific schemas (AgentSelectionItemSchema, etc.)
- * should extend this via `.extend()` rather than redefining these fields.
- */
-export const AgentMetadataBaseSchema = z.object({
-  name: CatalogAgentNameSchema,
-  /** Its file has a plugin's block: it is also launchable as a task. */
-  hasTask: z.boolean(),
-  description: z.string().optional(),
-});
-
 /** Canonical key format: disambiguates agents with same name across sources. */
 export function agentKey(source: string, name: string): string {
   return `${source}:${name}`;
