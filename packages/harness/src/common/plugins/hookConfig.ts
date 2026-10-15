@@ -194,7 +194,6 @@ const CLAUDE_TOOLS: Readonly<
     name: 'Read',
     input: (input, abs) => {
       const range = (input.range ?? {}) as { start?: unknown; end?: unknown };
-
       const start = typeof range.start === 'number' ? range.start : undefined;
       const end = typeof range.end === 'number' ? range.end : undefined;
       return {
