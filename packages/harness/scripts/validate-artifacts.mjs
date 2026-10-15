@@ -2,7 +2,12 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { isFile, walkFiles } from './fsWalk.mjs';
+import {
+  isFile,
+  moduleSpecifier,
+  reachableDeclarations,
+  walkFiles,
+} from './fsWalk.mjs';
 
 // The built package to check: this package, or the one a build names (the
 // llm build passes its own root). Each is checked against what it publishes:
@@ -65,9 +70,6 @@ if (allFiles.some((file) => file.endsWith('.map'))) {
   throw new Error('Source or declaration maps must not be published.');
 }
 
-const moduleSpecifier =
-  /(?:\bfrom\s*|\bimport\s*\(\s*|\bimport\s+)(?<quote>['"])(?<specifier>[^'"]+)\k<quote>/gu;
-
 function packageName(specifier) {
   if (specifier.startsWith('@'))
     return specifier.split('/').slice(0, 2).join('/');
@@ -104,35 +106,6 @@ for (const declaration of declarationFiles) {
       );
     }
   }
-}
-
-async function reachableDeclarations(entry) {
-  const pending = [entry];
-  const visited = new Set();
-  while (pending.length > 0) {
-    const declaration = pending.pop();
-    if (!declaration || visited.has(declaration)) continue;
-    visited.add(declaration);
-    const source = await readFile(declaration, 'utf8');
-    for (const match of source.matchAll(moduleSpecifier)) {
-      const specifier = match.groups?.specifier;
-      if (!specifier?.startsWith('.')) continue;
-      let target = path.resolve(
-        path.dirname(declaration),
-        specifier.replace(/\.mjs$/u, '.d.mts').replace(/\.js$/u, '.d.ts'),
-      );
-      if (!(await isFile(target)) && path.extname(target) === '') {
-        target = `${target}.d.ts`;
-      }
-      if (!(await isFile(target))) {
-        throw new Error(
-          `Declaration ${declaration} refers to missing target ${specifier}`,
-        );
-      }
-      pending.push(target);
-    }
-  }
-  return visited;
 }
 
 // Every published entry, not only the root: an entry whose declaration
