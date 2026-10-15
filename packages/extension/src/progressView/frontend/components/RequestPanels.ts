@@ -65,6 +65,10 @@ function requestKey(permission: PermissionPayload): string {
   return `${permission.kind}:${id}`;
 }
 
+/** A select and its listbox options: their keys (typeahead, arrows)
+ *  pick an option, never a card shortcut. */
+const CHOOSER = /^wa-(select|option)$/;
+
 /** True for a text field, looking through open shadow roots. */
 function isTextInput(el: Element | null): boolean {
   if (!el) return false;
@@ -130,11 +134,14 @@ export class RequestPanels extends LitElement {
     )}`;
   }
 
-  /** Route a key to the card that holds focus; text fields keep their keys. */
+  /** Route a key to the card that holds focus; text fields and choosers
+   *  keep their keys. */
   private handleKeydown = (event: KeyboardEvent): void => {
     if (event.ctrlKey || event.metaKey || event.altKey) return;
     const path = event.composedPath();
     if (isTextInput((path[0] as Element | undefined) ?? null)) return;
+    if (path.some((t) => t instanceof Element && CHOOSER.test(t.localName)))
+      return;
     const card = path.find(
       (target): target is BaseRequestPanel =>
         target instanceof Element && target.hasAttribute(CARD_MARKER),

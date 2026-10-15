@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 // Local imports
 import type { ProposalRequestPanel } from '@progressView/frontend/components/ProposalRequestPanel';
+import type { RequestPanels } from '@progressView/frontend/components/RequestPanels';
 import type { RunId } from '@shared/schemas';
 import { recordPermissionActions } from '@test/support/permissionPanelEvents';
 import {
@@ -16,6 +17,19 @@ import {
   mountComponent,
   useLitComponentTestDom,
 } from '../settings/litComponentTestUtils';
+
+const HOST = {
+  ...emptyHostSnapshot(projectDisplayOf('/workspace', '/workspace')),
+  modelOptions: [
+    { value: 'sonnet', label: 'Sonnet' },
+    { value: 'opus', label: 'Opus' },
+  ],
+  agentOptions: [
+    { value: 'writer', label: 'Writer', rounds: 1 },
+    { value: 'reviewer', label: 'Reviewer', rounds: 3 },
+    { value: 'chat', label: 'Chat' },
+  ],
+};
 
 function createPermission(): ProposalRequestPanel['permission'] {
   return {
@@ -117,18 +131,7 @@ describe('proposal-request-panel file-name keyboard activation', () => {
       'proposal-request-panel',
       {
         permission: createPermission(),
-        host: {
-          ...emptyHostSnapshot(projectDisplayOf('/workspace', '/workspace')),
-          modelOptions: [
-            { value: 'sonnet', label: 'Sonnet' },
-            { value: 'opus', label: 'Opus' },
-          ],
-          agentOptions: [
-            { value: 'writer', label: 'Writer', rounds: 1 },
-            { value: 'reviewer', label: 'Reviewer', rounds: 3 },
-            { value: 'chat', label: 'Chat' },
-          ],
-        },
+        host: HOST,
       },
     );
     const actions = recordPermissionActions(element);
@@ -163,6 +166,35 @@ describe('proposal-request-panel file-name keyboard activation', () => {
       { action: 'approve', model: 'opus', agent: 'reviewer' },
       { action: 'setup' },
       { action: 'reject' },
+    ]);
+  });
+
+  it('leaves a picker its typeahead keys instead of firing card shortcuts', async () => {
+    await import('@progressView/frontend/components/RequestPanels');
+    // The fixture loads Lit, so after the test DOM is up.
+    const { makeRunView } = await import('../cli/fixtures/sessionViewFixture');
+    const panels = await mountComponent<RequestPanels>('request-panels', {
+      permissions: [createPermission()],
+      run: makeRunView({ id: 'run-a' as RunId, approval: 'own' }),
+      host: HOST,
+    });
+    const card = panels.shadowRoot!.querySelector('proposal-request-panel')!;
+    await card.updateComplete;
+    const actions = recordPermissionActions(card);
+    const key = (target: Element) =>
+      target.dispatchEvent(
+        new KeyboardEvent('keydown', {
+          key: 'y',
+          bubbles: true,
+          composed: true,
+        }),
+      );
+
+    key(card.shadowRoot!.querySelector('.proposal-agent-dropdown')!);
+    expect(actions).toEqual([]);
+    key(card);
+    expect(actions).toEqual([
+      expect.objectContaining({ decision: { action: 'approve' } }),
     ]);
   });
 

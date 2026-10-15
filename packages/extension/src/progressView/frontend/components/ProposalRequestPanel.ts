@@ -397,16 +397,16 @@ export class ProposalRequestPanel extends BaseRequestPanel<'proposal'> {
    * What the pickers offer, from the host's catalogs: the agents the run
    * may delegate to (its team's, which may be hidden from the catalog,
    * else every visible one), and for a task only the catalog's agents
-   * with a document task. A script's request approves the script, not one
-   * call's agent or model (`decideDelegation` ignores both there), so it
-   * offers none.
+   * with a document task, and the proposed one. A script's request
+   * approves the script, not one call's agent or model (`decideDelegation`
+   * ignores both there), so it offers none.
    */
   private get pickers(): {
     agents: HostSnapshot['agentOptions'];
     models: HostSnapshot['modelOptions'];
   } {
     const { host } = this;
-    const { script, task } = this.permission.data;
+    const { script, task, agent } = this.permission.data;
     if (host === null || script) return { agents: [], models: [] };
     const scope = this.run?.agentScope ?? null;
     const offered = (option: HostSnapshot['agentOptions'][number]) =>
@@ -416,10 +416,13 @@ export class ProposalRequestPanel extends BaseRequestPanel<'proposal'> {
         ? host.agentOptions.filter(offered)
         : scope.flatMap((key) => {
             const option = host.agentOptions.find(({ value }) => value === key);
-            // A member the catalog hides is offered as the team names it;
-            // its launch says so if it has no task.
+            // A member the catalog hides is offered as the team names it,
+            // but for a task only when proposed: whether it has a task is
+            // not in the catalog.
             if (option === undefined)
-              return [{ value: key, label: agentName(key) }];
+              return !task || agentName(key) === agent
+                ? [{ value: key, label: agentName(key) }]
+                : [];
             return offered(option) ? [option] : [];
           });
     return { agents, models: host.modelOptions };
