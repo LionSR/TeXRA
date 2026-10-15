@@ -29,7 +29,6 @@ import '@awesome.me/webawesome/dist/components/textarea/textarea.js';
 
 // Local imports - shared schemas
 import type { PermissionPayload, RunId } from '@shared/schemas';
-import type { RequestAnswerability } from '@shared/session/sessionView';
 import type { TeXRAIconName } from '@shared/iconNames';
 import {
   approvalDecisionArms,
@@ -49,6 +48,7 @@ import {
   renderSplitButtonMenuParts,
   splitButtonTriggerStyles,
 } from '@ui/wa/splitButton';
+import type { RequestAnswerability } from '@texra-ai/harness/schemas';
 import type { RuntimeRequest } from '@texra-ai/harness';
 
 /** The three ways a card declines, each with its one word. */

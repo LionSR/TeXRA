@@ -6,8 +6,8 @@ import {
   LanguageModel,
   UNAVAILABLE_LANGUAGE_MODEL_PORT,
 } from '@platform/languageModel';
-import type { OnboardingFunnelState } from '@shared/schemas';
 import { FakeStateStore } from '@test/support/FakePlatform';
+import type { OnboardingFunnelState } from '@texra/shared/session/hostSnapshot';
 import {
   OnboardingFunnelRefresher,
   planOnboardingFunnelTransition,

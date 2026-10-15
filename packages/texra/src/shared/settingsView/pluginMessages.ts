@@ -10,8 +10,8 @@
 import { z } from 'zod';
 
 // Local imports - shared contracts
-import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { SkillNameSchema } from '@shared/schemas';
+import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 
 /** One installed plugin as the Plugins page lists it. */
 export const PluginListItemSchema = z.object({

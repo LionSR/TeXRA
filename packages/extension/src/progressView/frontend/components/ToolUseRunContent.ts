@@ -1,7 +1,7 @@
 import { html, nothing, type TemplateResult } from 'lit';
 import { customElement } from 'lit/decorators.js';
 
-import { acceptsFollowUp } from '@shared/session/sessionView';
+import { acceptsFollowUp } from '@texra-ai/harness/schemas';
 import { BaseRunContent } from './BaseRunContent';
 import { conversationContentStyles } from './ConversationContent.styles';
 import './PlanView';

@@ -198,10 +198,6 @@ if (ownsSingleInstanceLock) {
             processRoots: platformInit.processRoots,
             processScope,
             globalConfigStore: platformInit.globalConfigStore,
-            stores: {
-              ...platformInit.processRoots,
-              secrets: platformInit.secrets,
-            },
           }).pipe(Effect.provideService(DesktopProjectRecords, projectRecords));
           projects = registry;
           const unopenedProjects = remembered.missing.map(

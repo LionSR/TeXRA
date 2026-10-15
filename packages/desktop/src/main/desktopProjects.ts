@@ -23,18 +23,14 @@ import {
   resolveGlobalStoragePath,
   resolveWorkspaceStoragePath,
 } from '@texra-ai/harness/node';
+import { GlobalDatabase, type ProjectDatabases } from '@texra-ai/harness';
 import { SessionHostInteractions, type SessionHandle } from '@agent/runtime';
 import {
   openProjectStateStore,
   openRepoStateStore,
 } from '@controllers/session/appStateStore';
-import type { ModelOptionStores } from '@model/computeModelOptions';
 import type { ConfigStore } from '@platform/defaults/jsonConfigProvider';
 import { openTexraWorkspaceConfigStores } from '@platform/defaults/nodeStores';
-import {
-  GlobalDatabase,
-  type ProjectDatabases,
-} from '@shared/session/database';
 import {
   projectDisplayOf,
   type ProjectDisplay,
@@ -114,8 +110,6 @@ interface DesktopProjectRegistryOptions {
    * another project changed until the next launch.
    */
   readonly globalConfigStore: ConfigStore;
-  /** The process stores; every project's roots share its global state. */
-  readonly stores: ModelOptionStores;
   /** The background service, when the app is its client: a folder's
    *  runs run there. */
   readonly service: ServiceLink | undefined;
@@ -395,7 +389,8 @@ export function openDesktopProjectRegistry(
               },
               workspaceState,
               repoState,
-              globalState: options.stores.globalState,
+              // Every project's roots share the process's global state.
+              globalState: options.processRoots.globalState,
             });
             // Acquire the session and install its registry owner before
             // interruption can leave this operation.

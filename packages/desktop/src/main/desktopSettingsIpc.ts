@@ -4,9 +4,8 @@ import {
   LoopbackTransportUnavailableError,
   type SubscriptionDeviceCodePrompt,
 } from '@texra-ai/llm/node';
-import { onAppSignal } from '@eventBus/AppSignals';
-import { withLogChannel } from '@logger/effectLog';
-import type { StorageFs } from '@platform/rootedFs';
+import { onAppSignal } from '@texra-ai/harness';
+import { withLogChannel } from '@texra-ai/harness';
 import { ACCOUNT_OUTCOME } from '@shared/model/accountAuth';
 import { loadRuntimeSkillDisplay } from '@skills/runtimeSkills';
 import { unsupported } from '@texra/shared/utils/dispatcher';
@@ -25,6 +24,7 @@ import {
 import { gitHubTokenRejectedMessage } from '@texra/tools/github/githubAuth';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { parsedRoute, type DesktopCommandRoute } from './desktopIpcTypes.js';
+import type { StorageFs } from '@texra-ai/harness';
 import type { ProcessServices } from '@texra-ai/harness';
 import type { PlatformSecrets, WorkspaceRoots } from '@texra-ai/harness';
 import type { DesktopSpawn } from './desktopWindows.js';

@@ -154,7 +154,6 @@ describe('desktop composition root and launch environment', () => {
             processRoots: host.roots,
             processScope: yield* Scope.make(),
             globalConfigStore: config,
-            stores: { ...host.roots, secrets: host.secrets },
             service: undefined,
             sessions: yield* ephemeralSessions,
           }).pipe(
@@ -241,7 +240,6 @@ describe('desktop composition root and launch environment', () => {
           processRoots: host.roots,
           processScope: yield* Scope.make(),
           globalConfigStore: config,
-          stores: { ...host.roots, secrets: host.secrets },
           service: undefined,
           sessions: yield* ephemeralSessions,
         }).pipe(

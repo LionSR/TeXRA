@@ -1,10 +1,10 @@
 import { Effect } from 'effect';
 import { API_KEY_PROVIDER_IDS } from '@texra-ai/llm';
-import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import {
   readSetting,
   type SettingsStores,
 } from '@shared/config/settingsAccess';
+import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
 import {
   type ProviderKeyStatus,

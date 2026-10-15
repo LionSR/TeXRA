@@ -5,12 +5,12 @@ import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 
 // Local imports - shared styles
-import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import {
   DEFAULT_GIT_AUTHOR_EMAIL,
   DEFAULT_GIT_AUTHOR_NAME,
 } from '@shared/state/stateSettings';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
+import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 import { postMessage } from '@texra/shared/hostBridge';
 import { type PRSubscriptionEntry } from '@texra/shared/settingsView/settingsViewMessages';
 import { renderSetStatusIcon, statusCheckIconStyles } from '@ui/wa/statusIcons';

@@ -24,7 +24,6 @@ import {
   type PermissionPayload,
 } from '@shared/schemas';
 import { getModelLabel } from '@shared/model/modelLabel';
-import type { RunView } from '@shared/session/sessionView';
 import type { HostSnapshot } from '@texra/shared/session/hostSnapshot';
 import { APPROVE_ALL_DELEGATED_WORK_ACTION } from '@texra/shared/session/surfaceDecision';
 import { SessionUiEvents } from '@texra/shared/session/uiEvents';
@@ -59,6 +58,7 @@ import { proposalRequestPanelStyles } from './ProposalRequestPanel.styles';
 import { buildStatusBadge } from '../formatters/htmlBuilders';
 import { processMarkdownContent } from '../formatters/markdownRenderer';
 import { getComposedPathElement } from '../utils';
+import type { RunView } from '@texra-ai/harness';
 
 /** The proposal's agent as an option value: options carry source-qualified
  *  keys, and a proposal with no source names the agent bare. */

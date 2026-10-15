@@ -3,12 +3,12 @@ import { Cause, Effect } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports - utils
+import { withLogChannel } from '@texra-ai/harness';
 import {
   showLoggedErrorMessage,
   showLoggedMessage,
 } from '@frontend/ui/errorHandlingUtils';
 import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
-import { withLogChannel } from '@logger/effectLog';
 import type { NotificationFailed } from '@texra/hosts/uiHosts';
 import { workspaceRelativePath } from '@utils/files/workspaceFS';
 import { ensureError } from '@utils/errors/errorMessage';

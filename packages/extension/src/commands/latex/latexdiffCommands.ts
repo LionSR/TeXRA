@@ -3,6 +3,10 @@ import { Cause, Effect, FileSystem } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports
+import { withLogChannel } from '@texra-ai/harness';
+import { withSessionFs } from '@texra-ai/harness';
+import { readSettingFrom } from '@texra-ai/harness';
+import { pathToLocationIn } from '@texra-ai/harness';
 import {
   prepareBuildDisplay,
   scheduleViewerDisplay,
@@ -27,8 +31,6 @@ import {
   latexdiffAllFailedMessage,
   NO_LATEXDIFF_OPERATIONS_MESSAGE,
 } from '@latex/latexdiff/latexdiffCopy';
-import { withLogChannel } from '@logger/effectLog';
-import { withSessionFs } from '@platform/rootedFs';
 import type { FileLocation } from '@shared/schemas';
 import { settingEnumChoices } from '@shared/state/stateSettings';
 import { DocumentsStateKey } from '@texra/shared/settingsView/documentsSettings';
@@ -37,9 +39,7 @@ import type { WorkflowDiffRequest } from '@texra/controllers/session/hostRunActi
 import type { LatexdiffMathMarkupValue } from '@texra/shared/constants/latexConfig';
 import { runOutputFiles } from '@texra/tools/documents/runOutputs';
 import { checkToolInstalled } from '@texra/utils/system/toolChecks';
-import { readSettingFrom } from '@utils/config/platformSettings';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
-import { pathToLocationIn } from '@utils/files/fileLocation';
 import { entryExists } from '@utils/files/fsEntryExists';
 import type { Session, WorkspaceRoots } from '@texra-ai/harness';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';

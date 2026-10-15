@@ -18,7 +18,6 @@ import { MESSAGE_TYPES, type RunId } from '@shared/schemas';
 import {
   emptySessionView,
   type SessionView,
-  type RunView,
 } from '@shared/session/sessionView';
 import {
   BOARD_NOW,
@@ -34,6 +33,7 @@ import type { ProjectDisplay } from '@texra/shared/session/hostSnapshot';
 import { emptySurface, type Surface } from '@texra/shared/session/surface';
 import type { Shell } from '@texra/shared/session/shell';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
+import type { RunView } from '@texra-ai/harness';
 
 // ── fixtures: three projects, three folded views ────────────────────────────
 

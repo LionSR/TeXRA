@@ -8,13 +8,13 @@ import { LitElement, html, nothing, type TemplateResult } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 
 // Local imports - shared styles
-import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import {
   AGENT_SOURCE,
   agentKey as agentKeyFromSourceName,
   isPackagedAgentSource,
 } from '@shared/schemas';
 import type { TeXRAIconName } from '@shared/iconNames';
+import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 import { postMessage } from '@texra/shared/hostBridge';
 import type { AgentSelectionItem } from '@texra/shared/settingsView/settingsViewMessages';
 import {

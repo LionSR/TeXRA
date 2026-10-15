@@ -32,7 +32,7 @@ import {
   WebFetchTool,
   type PluginToolServices,
 } from '@texra-ai/harness/plugins';
-import { sessionFsLayer } from '@platform/rootedFs';
+import { sessionFsLayer } from '@texra-ai/harness';
 
 import type { ToolResult } from '@shared/schemas';
 import { ArxivSearchTool } from '@texra/tools/arxiv/ArxivSearchTool';

@@ -17,7 +17,6 @@ import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/input/input.js';
 import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 
-import type { SessionView } from '@shared/session/sessionView';
 import type { HostSnapshot } from '@texra/shared/session/hostSnapshot';
 import type { Surface } from '@texra/shared/session/surface';
 import { SessionUiEvents } from '@texra/shared/session/uiEvents';
@@ -25,6 +24,7 @@ import { overlaySurfaceStyles } from '@ui/styles/overlaySurfaceStyles';
 import { designTokens, commonViewStyles } from '@ui/styles';
 import { renderIconActionButton } from '@ui/wa/actionButtons';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
+import type { SessionView } from '@texra-ai/harness';
 import './RunTabs';
 
 @customElement('session-drawer')

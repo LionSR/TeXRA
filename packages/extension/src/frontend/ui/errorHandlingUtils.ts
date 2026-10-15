@@ -3,8 +3,8 @@ import { Effect } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports
+import { withLogChannel } from '@texra-ai/harness';
 import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
-import { withLogChannel } from '@logger/effectLog';
 import {
   ensureError,
   formatError,

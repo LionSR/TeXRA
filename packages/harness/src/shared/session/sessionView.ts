@@ -13,8 +13,6 @@
 import { z } from 'zod';
 
 import { ApprovalPolicySnapshotSchema } from '@shared/approvalBypassKind';
-import type { SessionTitleState } from '@shared/sessionTitle';
-
 import {
   AggregateIdSchema,
   ResumeBlockerSchema,
@@ -395,6 +393,8 @@ export function isWorkingRun(run: ReadRunView): boolean {
   return isLiveRun(run) && isActivePhase(run.status);
 }
 
+/** How busy a session reads in a title: idle, running, or awaiting approval. */
+export type SessionTitleState = 'idle' | 'running' | 'approval';
 /**
  * The paper-level activity every title and status pill shows, read from the
  * fold and nothing else: a request this window can answer outranks a run

@@ -4,7 +4,7 @@ import '@awesome.me/webawesome/dist/components/input/input.js';
 import './TexraDiffView';
 import { html, nothing, render, type TemplateResult } from 'lit';
 
-import { DESKTOP_THEME_KIND, type Theme } from '@shared/schemas';
+import { DESKTOP_THEME_KIND, type Theme } from '@texra/shared/ipc';
 import { renderIconActionButton } from '@ui/wa/actionButtons';
 import { renderEmptyState } from '@ui/wa/emptyState';
 import { waIcon } from '@ui/wa/webAwesomeIcons';

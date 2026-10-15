@@ -19,9 +19,8 @@ import {
   type RuntimePresentationEvent,
   type RuntimePresentationEventPayloads,
 } from '@texra-ai/harness';
+import { emitAppSignal } from '@texra-ai/harness';
 import type { PresentationEventHandlers } from '@agent/runtime';
-import { emitAppSignal } from '@eventBus/AppSignals';
-import type { RequestOpenFilePayload, RunId } from '@shared/schemas';
 import { ToolEditApprovalController } from '@texra/controllers/approval/ToolEditApprovalController';
 import { attachSessionHost } from '@texra/controllers/session/attachSessionHost';
 import { attachWindowHost } from '@texra/controllers/server/windowHost';
@@ -32,6 +31,7 @@ import {
 } from './desktopToolEditApproval.js';
 import { presentDesktopFinalOutput } from './desktopAgentLaunch.js';
 import { desktopSpawner } from './desktopWindows.js';
+import type { RequestOpenFilePayload, RunId } from '@texra-ai/harness/schemas';
 import type { AgentConfig } from '@texra-ai/harness/schemas';
 import type { DesktopAgentRunHost } from './desktopAgentRunHost.js';
 import type { DesktopProject } from './desktopProjects.js';

@@ -9,7 +9,7 @@
 import { html, nothing, type TemplateResult } from 'lit';
 import { customElement } from 'lit/decorators.js';
 
-import { isLiveRun } from '@shared/session/sessionView';
+import { isLiveRun } from '@texra-ai/harness/schemas';
 import {
   documentsOf,
   isDocumentTaskRun,

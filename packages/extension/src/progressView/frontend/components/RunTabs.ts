@@ -12,11 +12,7 @@ import { repeat } from 'lit/directives/repeat.js';
 import { when } from 'lit/directives/when.js';
 
 // Local imports
-import type { SessionView, RunView } from '@shared/session/sessionView';
-import {
-  RUN_GROUP_LABELS,
-  RUN_GROUP_ORDER,
-} from '@shared/runs/runStatusDisplay';
+import { RUN_GROUP_LABELS, RUN_GROUP_ORDER } from '@texra-ai/harness/schemas';
 import type { Surface } from '@texra/shared/session/surface';
 import { unseenRuns } from '@texra/shared/session/unseenRuns';
 import { SessionUiEvents } from '@texra/shared/session/uiEvents';
@@ -33,6 +29,7 @@ import { renderEmptyState } from '@ui/wa/emptyState';
 import { layoutStyles } from '../styles/logStyles';
 import { runTabsContainerStyles } from './RunTabsContainer.styles';
 import { getComposedPathElement } from '../utils';
+import type { SessionView, RunView } from '@texra-ai/harness';
 import type { RunId } from '@texra-ai/harness/schemas';
 import type { RunTab } from './RunTab';
 import './RunTab';

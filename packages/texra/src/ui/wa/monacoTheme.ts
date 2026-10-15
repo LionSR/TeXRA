@@ -1,8 +1,8 @@
-import type { Theme } from '@shared/schemas';
 import {
   monacoThemeForHostTheme,
   type MonacoModule,
 } from '@texra/shared/monaco/monacoLoader';
+import type { Theme } from '@texra/shared/ipc';
 
 /** Bridge the host palette to Monaco's editor, search, menus and suggestions. */
 export function applyMonacoTheme(

@@ -8,11 +8,7 @@
  */
 import { z } from 'zod';
 
-import {
-  ModelOptionDataSchema,
-  OnboardingFunnelStateSchema,
-  TeamOptionDataSchema,
-} from '@shared/schemas';
+import { ModelOptionDataSchema, TeamOptionDataSchema } from '@shared/schemas';
 import {
   TexraApprovalPolicySchema,
   TEXRA_APPROVAL_POLICY_DEFAULT,
@@ -98,6 +94,17 @@ export function projectDisplayOf(
     subtitle: root,
   };
 }
+
+/**
+ * Where the onboarding funnel stands (PRD: agent-native onboarding): the
+ * state hosts push to webviews. `onboardingFunnel.ts` derives it.
+ */
+export const OnboardingFunnelStateSchema = z.enum([
+  'needs-credential',
+  'setup',
+  'done',
+]);
+export type OnboardingFunnelState = z.infer<typeof OnboardingFunnelStateSchema>;
 
 export const HostSnapshotSchema = z.object({
   project: ProjectDisplaySchema,

@@ -1,8 +1,8 @@
 import { Effect } from 'effect';
 
 import { resolveMemoryStoragePath } from '@platform/defaults/workspaceStorage';
-import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import type { MemoryViewItem } from '@shared/tools/memoryView';
+import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 import type { PromptHost } from '@texra/hosts/uiHosts';
 import type { MemoryPreview } from '@texra/shared/settingsView/settingsViewMessages';
 import { MAX_PINNED_MEMORIES } from '@tools/memory/constants';

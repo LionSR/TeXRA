@@ -18,8 +18,8 @@ import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 
 // Local imports - shared styles
 import type { MemoryViewItem } from '@shared/tools/memoryView';
-import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import type { TeXRAIconName } from '@shared/iconNames';
+import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 import { postMessage } from '@texra/shared/hostBridge';
 import { DetailsOpenController } from '@texra/shared/litControllers/DetailsOpenController';
 import { getLightweightMd } from '@ui/markdown/lightweightMd';

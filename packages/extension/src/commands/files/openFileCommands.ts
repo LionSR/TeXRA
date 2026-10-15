@@ -3,10 +3,10 @@ import { Effect } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports
+import { withLogChannel } from '@texra-ai/harness';
+import { WorkspaceFs } from '@texra-ai/harness';
 import { openFileInEditor } from '@frontend/vscode/vscodeEditor';
 import { openFirstLabelMatch } from '@latex/labelSearch';
-import { withLogChannel } from '@logger/effectLog';
-import { WorkspaceFs } from '@platform/rootedFs';
 import { listWorkspaceFilesOfType } from '@texra/controllers/session/workspaceFileOptions';
 import { workspaceAbsolutePath } from '@utils/files/workspaceFS';
 import { ensureError } from '@utils/errors/errorMessage';

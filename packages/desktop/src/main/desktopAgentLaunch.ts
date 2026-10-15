@@ -1,12 +1,7 @@
 import { Effect } from 'effect';
 
-import type { RequestOpenFilePayload } from '@shared/schemas';
 import { selectAutoOpenFinalOutput } from '@texra/agent/output/selectAutoOpenFinalOutput';
-import {
-  createExternalLocation,
-  createRunStorageLocation,
-  createWorkspaceLocation,
-} from '@utils/files/fileLocation';
+import type { FileLocation } from '@texra-ai/harness/schemas';
 import type { RunEndResult } from '@texra-ai/harness';
 import type { AgentConfig } from '@texra-ai/harness/schemas';
 import type { DesktopProject } from './desktopProjects.js';
@@ -22,20 +17,19 @@ export const presentDesktopFinalOutput =
     Effect.gen(function* () {
       const output = yield* selectAutoOpenFinalOutput(roots, config, result);
       if (!output) return;
-      let location: RequestOpenFilePayload['location'];
+      const { absolutePath, relativePath } = output;
+      let location: FileLocation;
       if (output.location === 'workspace') {
-        location = createWorkspaceLocation(
-          output.absolutePath,
-          output.relativePath,
-        );
+        location = { kind: 'workspace', absolutePath, relativePath };
       } else if (output.location === 'runStorage') {
-        location = createRunStorageLocation(
-          output.absolutePath,
-          output.relativePath,
-          result.runId,
-        );
+        location = {
+          kind: 'runStorage',
+          absolutePath,
+          relativePath,
+          runId: result.runId,
+        };
       } else {
-        location = createExternalLocation(output.absolutePath);
+        location = { kind: 'external', absolutePath };
       }
       yield* present.emit(
         'requestOpenFile',

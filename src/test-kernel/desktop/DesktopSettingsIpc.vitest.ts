@@ -18,7 +18,6 @@ import {
 } from '@platform/interfaces';
 import { withProcessServices } from '@platform/processRuntime';
 import { DEFAULT_HELPER_MODEL } from '@shared/constants/defaultModels';
-import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import {
   BASH_APPROVAL_CONFIG_KEY,
   AGENT_SKILLS_CONFIG_KEY,
@@ -34,6 +33,7 @@ import {
   FakeStateStore,
 } from '@test/support/FakePlatform';
 import { createTestSession } from '@test/support/sessionTestUtils';
+import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 import { TexraStateKey } from '@texra/shared/settingsView/texraSettings';
 import { CodexStateKey } from '@texra/shared/settingsView/integrationSettings';
 import {

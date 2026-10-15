@@ -35,3 +35,52 @@ export type {
   RunId,
   RunOutcome,
 } from '@shared/schemas';
+// Who an agent is: its source, the key a catalog names it by, and whether
+// it ships with an installed package; and the actions an instruction offers.
+export {
+  AGENT_SOURCE,
+  agentKey,
+  INSTRUCTION_ACTION,
+  isPackagedAgentSource,
+} from '@shared/schemas';
+// A session's events as a renderer reads them: the listing each belongs to,
+// the aggregates it names, and a run's display name.
+export {
+  listingTypeOf,
+  qualifyAggregateId,
+  referencedAggregates,
+  runIdentityDisplayName,
+} from '@shared/schemas';
+export type { DisplaySessionEvent } from '@shared/schemas';
+// Reads of a `SessionView` (root) for a renderer: what needs a person, how
+// busy the session is, and where each run stands.
+export {
+  acceptsFollowUp,
+  attentionOf,
+  descendantRuns,
+  isLiveRun,
+  isWorkingRun,
+  requestAnswerability,
+  rollupOf,
+  sessionActivity,
+} from '@shared/session/sessionView';
+export type {
+  RequestAnswerability,
+  SessionTitleState,
+} from '@shared/session/sessionView';
+export { isInFlightPhase } from '@shared/runs/runStatus';
+// How a run's status, position and group read, in every renderer's words.
+export {
+  formatLoopPositionLabel,
+  formatRunStatusLabel,
+  RUN_GROUP_LABELS,
+  RUN_GROUP_ORDER,
+} from '@shared/runs/runStatusDisplay';
+// The goal plugin's row, as a renderer reads a run's goal from it.
+export { goalStateOf, type GoalState } from '@shared/plugins/goal';
+// An exported run (`assembleTrace`), as a static viewer parses it back.
+export {
+  readTraceFacts,
+  TraceDocumentSchema,
+  type TraceDocument,
+} from '@transcript/traceDocumentSchema';

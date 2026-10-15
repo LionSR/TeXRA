@@ -10,7 +10,7 @@ import { LitElement, html, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 
 // Local imports - shared webview
-import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
+import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 import { postMessage } from '@texra/shared/hostBridge';
 import { DocumentsStateKey } from '@texra/shared/settingsView/documentsSettings';
 import { TexraStateKey } from '@texra/shared/settingsView/texraSettings';

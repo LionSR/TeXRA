@@ -13,10 +13,10 @@ import * as vscode from 'vscode';
 
 import { Cause, Data, Effect, Fiber, Result } from 'effect';
 
+import { withLogChannel } from '@texra-ai/harness';
 import { promptExtensionInstall } from '@frontend/ui/instruction';
 import { openFileInEditor } from '@frontend/vscode/vscodeEditor';
 import { waitForDiagnosticsChange } from '@frontend/vscode/vscodeDiagnostics';
-import { withLogChannel } from '@logger/effectLog';
 import {
   LEAN4_EXTENSION_ID,
   type FetchDiagnosticsResult,

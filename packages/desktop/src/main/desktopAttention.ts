@@ -7,7 +7,7 @@
 import { app, Notification, type BrowserWindow } from 'electron';
 import { Context, Effect, Queue, Stream, SubscriptionRef } from 'effect';
 
-import { attentionOf } from '@shared/session/sessionView';
+import { attentionOf } from '@texra-ai/harness/schemas';
 
 import { DesktopProjects, type DesktopProject } from './desktopProjects.js';
 import { DESKTOP_HEADLESS } from './desktopPresentation.js';

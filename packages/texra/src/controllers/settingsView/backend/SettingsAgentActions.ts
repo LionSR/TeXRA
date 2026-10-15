@@ -7,8 +7,8 @@ import { Effect, FileSystem } from 'effect';
 // Local imports - controllers
 import { customCopyPath, writeStampedCopy } from '@agent/index/customAgentCopy';
 // Local imports - shared
-import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { isPackagedAgentSource, type AgentSource } from '@shared/schemas';
+import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 import type { MessageHost } from '@texra/hosts/uiHosts';
 import { type SettingsMessageFor } from '@texra/shared/settingsView/settingsViewMessages';
 // Local imports - utilities

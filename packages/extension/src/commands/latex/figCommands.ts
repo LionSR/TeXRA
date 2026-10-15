@@ -6,17 +6,17 @@ import { Effect } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports
+import { withLogChannel } from '@texra-ai/harness';
+import { pathToLocationIn } from '@texra-ai/harness';
 import { runGuardedLatexCommand } from '@frontend/editor/activeFileGuards';
 import { safeExecuteCommand } from '@frontend/system/commandUtils';
 import { quickPick } from '@frontend/ui/dialogs';
 import { showLoggedInfoMessage } from '@frontend/ui/errorHandlingUtils';
 import { withVSCodeProgress } from '@frontend/ui/progress';
 import { TikzPictureManager } from '@latex/TikzPictureManager';
-import { withLogChannel } from '@logger/effectLog';
-import type { StorageFs, WorkspaceFs } from '@platform/rootedFs';
 import { ensureError } from '@utils/errors/errorMessage';
-import { pathToLocationIn } from '@utils/files/fileLocation';
 import { pluralize, truncateWithEllipsis } from '@utils/text/stringUtils';
+import type { StorageFs, WorkspaceFs } from '@texra-ai/harness';
 import type { ProcessServices, WorkspaceRoots } from '@texra-ai/harness';
 
 const CHANNEL = 'FigCommands';

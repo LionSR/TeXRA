@@ -15,12 +15,12 @@ import { repeat } from 'lit/directives/repeat.js';
 import './TaskGroupList';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@ui/wa/spinner';
-import type { RunView, SessionView } from '@shared/session/sessionView';
 import type { Surface } from '@texra/shared/session/surface';
 import { SessionUiEvents } from '@texra/shared/session/uiEvents';
 import { designTokens } from '@ui/styles';
 import { getComposedPathElement } from '../utils';
 import { logStyles } from '../styles/logStyles';
+import type { RunView, SessionView } from '@texra-ai/harness';
 import type { RunId } from '@texra-ai/harness/schemas';
 import type { TaskGroupList } from './TaskGroupList';
 

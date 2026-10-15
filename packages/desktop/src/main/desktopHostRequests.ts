@@ -22,20 +22,21 @@ import {
   type ProcessRuntime,
   type ProcessServices,
 } from '@texra-ai/harness';
+import {
+  sessionFsLayer,
+  type GlobalStorageFs,
+  type StorageFs,
+  type WorkspaceFs,
+} from '@texra-ai/harness';
+import { type RunId } from '@texra-ai/harness/schemas';
+import { pathToLocationIn } from '@texra-ai/harness';
 import { fileOpResultMessage } from '@housekeeping/runDirOps';
 import {
   latexdiffPackMessage,
   runPackLatexdiffvc,
 } from '@housekeeping/packLatexdiffvc';
 import { LaTeXdiffService } from '@latex/latexdiff';
-import {
-  sessionFsLayer,
-  type GlobalStorageFs,
-  type StorageFs,
-  type WorkspaceFs,
-} from '@platform/rootedFs';
 import latexPreamble from '@resources/templates/chatExport.tex';
-import { type RunId } from '@shared/schemas';
 import type { HostRequest } from '@texra/shared/session/hostRequest';
 import type {
   HostOutcome,
@@ -70,10 +71,6 @@ import { listWorkspaceFilesOfType } from '@texra/controllers/session/workspaceFi
 import { serviceRecords } from '@texra/controllers/server/serviceSession';
 import { loadModelOptions } from '@texra/model/setupCredentialAccess';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import {
-  createExternalLocation,
-  pathToLocationIn,
-} from '@utils/files/fileLocation';
 
 import {
   DESKTOP_DOCS_URL,
@@ -375,7 +372,7 @@ export function createDesktopHostRequests(
           return yield* Effect.fail(new Rejected({ reason: result.message }));
         }
         yield* host
-          .openBuildDisplay(createExternalLocation(result.diffPath))
+          .openBuildDisplay({ kind: 'external', absolutePath: result.diffPath })
           .pipe(
             Effect.catch((cause) =>
               Effect.fail(hostFailure('host.openBuildDisplay', cause)),

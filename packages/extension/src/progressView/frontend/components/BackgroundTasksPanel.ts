@@ -30,12 +30,9 @@ import '@awesome.me/webawesome/dist/components/relative-time/relative-time.js';
 import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 
 // Local imports
+import { rollupOf } from '@texra-ai/harness/schemas';
 import type { InquiryThreadSummary, RunId } from '@shared/schemas';
-import {
-  rollupOf,
-  type SessionView,
-  type RunView,
-} from '@shared/session/sessionView';
+import type { SessionView, RunView } from '@shared/session/sessionView';
 import type { TeXRAIconName } from '@shared/iconNames';
 import { dispatchedChildren } from '@shared/transcript';
 import type { Surface } from '@texra/shared/session/surface';

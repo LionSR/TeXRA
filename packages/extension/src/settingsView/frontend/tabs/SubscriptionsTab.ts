@@ -15,12 +15,12 @@ import {
 import { customElement, property } from 'lit/decorators.js';
 
 // Local imports - shared styles, schemas, and templates
-import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import {
   CHATGPT_CODEX_CONTEXT_WINDOW_SETTING,
   type SubscriptionUsageSnapshots,
 } from '@shared/schemas';
 import type { SubscriptionAuthStatuses } from '@shared/model/subscriptionAuth';
+import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 import { postMessage } from '@texra/shared/hostBridge';
 import { type CopilotRouteInfo } from '@texra/shared/settingsView/settingsViewMessages';
 import { TickerController } from '@texra/shared/litControllers/TickerController';

@@ -9,8 +9,8 @@ vi.mock('@texra/shared/hostBridge', () => ({
 }));
 
 import type { SubscriptionSectionProvider } from '@settingsView/frontend/components/profile/SubscriptionSection';
-import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import type { SubscriptionAuthStatus } from '@shared/model/subscriptionAuth';
+import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 
 import {
   mountComponent,

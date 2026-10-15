@@ -6,7 +6,7 @@ import '@awesome.me/webawesome/dist/components/button/button.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 
 // Local imports - shared webview
-import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
+import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 import { postMessage } from '@texra/shared/hostBridge';
 import { isUnrecognizedCommand } from '@texra/shared/utils/dispatcher';
 import { SignalWatcher } from '@texra/shared/signals';

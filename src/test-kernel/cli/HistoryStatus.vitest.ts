@@ -9,18 +9,17 @@ import {
   AgentConfigSchema,
   type AgentConfig,
 } from '@agent/core/definition/AgentConfig';
-import { cliRunStanding } from '@cli/runtime/toolUseResumeData';
+import {
+  cliRunStanding,
+  HISTORY_RUN_STATUS,
+} from '@cli/runtime/toolUseResumeData';
 import {
   formatCliHistoryDetailsText,
   listResumableCliHistoryEntries,
   readCliHistoryDetails,
 } from '@cli/runtime/history';
 import { withProcessServices } from '@platform/processRuntime';
-import {
-  qualifyAggregateId,
-  CLI_RUN_STATUS,
-  HISTORY_RUN_STATUS,
-} from '@shared/schemas';
+import { qualifyAggregateId, CLI_RUN_STATUS } from '@shared/schemas';
 import type { RunId, RunOutcome } from '@shared/schemas';
 import { seedRows } from '@test/support/sessionTestUtils';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';

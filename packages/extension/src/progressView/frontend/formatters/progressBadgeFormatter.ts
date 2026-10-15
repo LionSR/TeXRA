@@ -1,10 +1,10 @@
-import type { RunView } from '@shared/session/sessionView';
 import {
   DOCUMENTS_OUTPUT_KEY,
   documentRoundsOf,
   isDocumentTaskRun,
 } from '@texra/shared/plugins/documents';
 import { passLabel } from '@ui/copy/taskDiagnostics';
+import type { RunView } from '@texra-ai/harness';
 
 /**
  * The run header's pass chip: "Pass 2 of 3" on a document task, naming the

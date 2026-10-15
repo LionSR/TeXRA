@@ -1,6 +1,5 @@
 import { Effect, type FileSystem, type Path } from 'effect';
 
-import type { ProjectDatabases } from '@shared/session/database';
 import type { SettingsTarget } from '@texra/shared/settingsView/settingsViewMessages';
 import {
   DESKTOP_SHELL_COMMANDS,
@@ -14,6 +13,7 @@ import {
   postDesktopSettingsView,
   type DesktopCommandActions,
 } from '../shared/desktopCommandSurface.js';
+import type { ProjectDatabases } from '@texra-ai/harness';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 import type {
   DesktopCommandRoutes,

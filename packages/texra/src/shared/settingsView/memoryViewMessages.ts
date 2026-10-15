@@ -6,8 +6,8 @@
  */
 import { z } from 'zod';
 
-import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { MemoryViewItemSchema } from '@shared/tools/memoryView';
+import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 import { commandOnly } from './messageFactories';
 
 // ============================================================

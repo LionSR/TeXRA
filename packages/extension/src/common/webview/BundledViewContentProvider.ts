@@ -2,7 +2,7 @@ import { Cause, Data, Effect, FileSystem } from 'effect';
 import * as vscode from 'vscode';
 import { nanoid } from 'nanoid';
 
-import { withLogChannel } from '@logger/effectLog';
+import { withLogChannel } from '@texra-ai/harness';
 import { escapeAttr } from '@shared/utils/xmlEscape';
 import { HOST_BRIDGE_API_KEY } from '@texra/shared/hostBridgeTypes';
 import { toErrorMessage } from '@utils/errors/errorMessage';

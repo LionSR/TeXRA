@@ -1,8 +1,24 @@
 /** Webview IPC command-name constants, grouped per view. */
+import { z } from 'zod';
 
 export const COMMON_COMMANDS = {
   WEBVIEW_READY: 'webviewReady',
 } as const;
+
+/** A host theme kind, as a host reports it to its webviews. */
+export type Theme = 'dark' | 'light' | 'high-contrast';
+
+/** Theme kinds as reported by the Electron desktop host. */
+export const DESKTOP_THEME_KIND = {
+  DARK: 'dark',
+  LIGHT: 'light',
+  HIGH_CONTRAST: 'high-contrast',
+} as const satisfies Record<string, Theme>;
+
+/** The message a webview posts once it can receive its first snapshot. */
+export const WebviewReadyMessageSchema = z.object({
+  command: z.literal(COMMON_COMMANDS.WEBVIEW_READY),
+});
 
 /** Settings-view command literals, both directions. */
 export const SETTINGS_VIEW_COMMANDS = {

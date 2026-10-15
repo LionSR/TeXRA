@@ -15,12 +15,9 @@ import type { CliNdjsonRecord } from '@cli/schemas/cliOutput';
 import {
   RunIdSchema,
   aggregateTarget,
-  HISTORY_RUN_STATUS,
-  HISTORY_RUN_STATUS_LABEL,
   isTaskConfig,
   RUN_SUBSTATE,
   type RunId,
-  type HistoryRunStatus,
 } from '@shared/schemas';
 import type { RunView } from '@shared/session/sessionView';
 import { runOutcomeToCliRunStatus } from '@shared/runs/runStatus';
@@ -37,7 +34,12 @@ import { absentReason } from '@utils/files/fsEntryExists';
 
 import { CliUsageError } from './cliContext';
 import { cliErrorMessage } from './logSinks';
-import { cliRunStanding } from './toolUseResumeData';
+import {
+  cliRunStanding,
+  HISTORY_RUN_STATUS,
+  HISTORY_RUN_STATUS_LABEL,
+  type HistoryRunStatus,
+} from './toolUseResumeData';
 import {
   formatCliHistoryAgentLabel,
   formatCliHistorySubject,

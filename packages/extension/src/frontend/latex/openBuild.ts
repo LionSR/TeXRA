@@ -4,11 +4,12 @@ import * as path from 'node:path';
 import * as vscode from 'vscode';
 import { Effect, FileSystem, type Path, type PlatformError } from 'effect';
 
+import { withLogChannel } from '@texra-ai/harness';
+import { withSessionFs } from '@texra-ai/harness';
+import { pathToLocationIn } from '@texra-ai/harness';
 import { showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
 import { openFileInEditor } from '@frontend/vscode/vscodeEditor';
 import { compileLatex2Pdf } from '@latex/texTools';
-import { withLogChannel } from '@logger/effectLog';
-import { withSessionFs } from '@platform/rootedFs';
 import type { FileLocation } from '@shared/schemas';
 import { isLatexFile } from '@texra/shared/latexFileTypes';
 import {
@@ -18,7 +19,6 @@ import {
 
 // Local imports - utilities
 import { getFileStem } from '@utils/core';
-import { pathToLocationIn } from '@utils/files/fileLocation';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import type { WorkspaceRoots } from '@texra-ai/harness';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';

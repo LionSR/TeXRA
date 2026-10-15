@@ -10,11 +10,12 @@ import './shell.css';
 import '@ui/wa';
 import 'katex/dist/katex.min.css';
 import '@progressView/frontend/ProgressApp';
+import {
+  formatLoopPositionLabel,
+  type TraceDocument,
+} from '@texra-ai/harness/schemas';
 import { mountProgressWebview } from '@progressView/frontend/progressWebview';
 import type { ProgressApp } from '@progressView/frontend/ProgressApp';
-import { formatLoopPositionLabel } from '@shared/runs/runStatusDisplay';
-import type { TraceDocument } from '@transcript';
-import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { setTraceCut, trace } from './traceHostBridge';
 import {
@@ -36,7 +37,7 @@ function renderLoadError(err: unknown): void {
   const heading = document.createElement('h1');
   heading.textContent = 'Unable to load trace';
   const detail = document.createElement('p');
-  detail.textContent = toErrorMessage(err);
+  detail.textContent = err instanceof Error ? err.message : String(err);
   errorRegion.append(heading, detail);
   document.querySelector('progress-app')?.replaceWith(errorRegion);
 }

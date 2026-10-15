@@ -1,6 +1,10 @@
 import { Data, Effect } from 'effect';
+import {
+  AGENT_SOURCE,
+  agentKey,
+  isPackagedAgentSource,
+} from '@texra-ai/harness/schemas';
 import { getAgent, getCatalogAgents } from '@agent/index';
-import { AGENT_SOURCE, agentKey, isPackagedAgentSource } from '@shared/schemas';
 import {
   agentDocumentIdentity,
   agentDocumentTarget,

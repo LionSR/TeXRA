@@ -9,8 +9,8 @@ import { classMap } from 'lit/directives/class-map.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 
 // Local imports - shared webview
-import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { AGENT_MODE_PRESETS, type AgentModePreset } from '@shared/schemas';
+import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 import { postMessage } from '@texra/shared/hostBridge';
 import { designTokens, commonViewStyles } from '@ui/styles';
 import {

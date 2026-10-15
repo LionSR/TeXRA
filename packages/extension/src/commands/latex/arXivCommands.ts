@@ -5,6 +5,7 @@ import { Cause, Effect, Option } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports
+import { withLogChannel } from '@texra-ai/harness';
 import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
 import { safeExecuteCommand } from '@frontend/system/commandUtils';
 import { inputBox, quickPick } from '@frontend/ui/dialogs';
@@ -15,7 +16,6 @@ import {
   type ArxivDownloadDestination,
 } from '@latex/arxivProcessor';
 import { resolveLatexFormatter } from '@latex/formatter/texFormatter';
-import { withLogChannel } from '@logger/effectLog';
 import type { ProcessServices, WorkspaceRoots } from '@texra-ai/harness';
 
 const CHANNEL = 'arXivCommands';

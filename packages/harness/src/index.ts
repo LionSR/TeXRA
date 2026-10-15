@@ -187,3 +187,47 @@ export { SESSION_CLOSE_DEADLINE_MS } from '@agent/runtime/SessionHandle';
 export { ownKeyCredential } from '@agent/runtime/modelAccess/credentials';
 // What a used-up plan falls back to, as the retry copy names it.
 export { quotaFallbackRouteFor } from '@shared/quotaFallbackRoutes';
+
+// The rooted file systems a plugin's code reads (the workspace, the
+// session's run storage, the global storage root), and the layers that
+// serve them over a session's roots outside a run.
+export {
+  GlobalStorageFs,
+  sessionFsLayer,
+  StorageFs,
+  withSessionFs,
+  WorkspaceFs,
+} from '@platform/rootedFs';
+// A path as a `FileLocation` against the workspace root a caller holds.
+export { pathToLocationIn } from '@utils/files/fileLocation';
+// Which external tools this machine has, as plugins' `availability` probes
+// answered; a host reads it and asks for a refresh.
+export { ToolAvailability } from '@tools/toolAvailabilityService';
+// The global root's application records: a host keeps its own values there
+// as a `ValueFamily`, beside the project stores a session borrows.
+export { GlobalDatabase } from '@shared/session/database';
+export type { ProjectDatabases } from '@shared/session/database';
+export type { ValueFamily } from '@shared/session/valueFamily';
+// Process-wide app-lifecycle signals (credentials, workspace-file writes):
+// a host reacts to what the harness announces, and announces its own.
+export { emitAppSignal, onAppSignal } from '@eventBus/AppSignals';
+export type { AppSignal, AppSignalPayloads } from '@eventBus/AppSignals';
+// The harness's log output: where its entries go, how an entry reads, and
+// the redaction a host applies before writing anything to disk.
+export {
+  entryChannel,
+  entryMessage,
+  LOG_CHANNEL,
+  setLogSink,
+  writeLogLine,
+  type LogEntry,
+  type LogSink,
+} from '@logger/logSink';
+export { withLogChannel } from '@logger/effectLog';
+export { formatFatalErrorDetail, redactSecrets } from '@logger/redaction';
+// A catalog setting, read from the stores a caller holds (a session's
+// roots) or from its config slot alone.
+export {
+  readConfigSettingFrom,
+  readSettingFrom,
+} from '@utils/config/platformSettings';

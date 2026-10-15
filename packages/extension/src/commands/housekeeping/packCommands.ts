@@ -3,6 +3,7 @@ import { Effect } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports
+import { WorkspaceFs } from '@texra-ai/harness';
 import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
 import { safeExecuteCommand } from '@frontend/system/commandUtils';
 import {
@@ -12,7 +13,6 @@ import {
 } from '@frontend/ui/errorHandlingUtils';
 import { fileOpResultMessage } from '@housekeeping/runDirOps';
 import { filesystemFor } from '@housekeeping/utils';
-import { WorkspaceFs } from '@platform/rootedFs';
 import type { FileOpResult } from '@texra/shared/session/hostRequest';
 import type { WorkflowFileOperationResult } from '@texra/controllers/session/hostRunActions';
 

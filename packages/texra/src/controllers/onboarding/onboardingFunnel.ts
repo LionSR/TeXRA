@@ -21,11 +21,11 @@
 
 import { Effect, Semaphore } from 'effect';
 
-import type { OnboardingFunnelState } from '@shared/schemas';
 import {
   readOnboardingFlags,
   setOnboardingDeclined,
 } from '@shared/state/onboardingState';
+import type { OnboardingFunnelState } from '@texra/shared/session/hostSnapshot';
 import type {
   StateStore,
   StateReadFailed,

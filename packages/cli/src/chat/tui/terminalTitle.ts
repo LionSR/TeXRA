@@ -5,12 +5,11 @@ import { computed } from '@lit-labs/signals';
 import { osc } from '@cli/runtime/ansiEscapes';
 import { loadingFrameAt } from '@cli/tui/ui/LoadingIndicator';
 import { subscribeToPolling } from '@cli/tui/usePollingInterval';
+import { isWorkingRun } from '@shared/session/sessionView';
 import {
   formatSessionTitle,
   TERMINAL_TAB_TITLE,
-  type SessionTitleState,
-} from '@shared/sessionTitle';
-import { isWorkingRun } from '@shared/session/sessionView';
+} from '@texra/shared/sessionTitle';
 import { subscribeToSignalChanges } from '@texra/shared/signals';
 import { stripControlCharacters } from '@utils/text/stringUtils';
 
@@ -19,6 +18,7 @@ import { attentionRequests } from './state/approvalQueue';
 import { sessionView } from './state/sessionView';
 import { writeOsc } from './notifications/terminalNotifier';
 import { chatTuiCanStopActiveRun, runStopFacts } from './state/sessionRunState';
+import type { SessionTitleState } from '@texra-ai/harness/schemas';
 
 // The TUI's ASCII spin cycle reads as stray punctuation once a frame stands
 // alone in a tab title (a `-` is indistinguishable from a separator), so the

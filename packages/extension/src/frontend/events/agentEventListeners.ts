@@ -19,6 +19,7 @@ import {
   type RuntimePresentationEvent,
   type RuntimePresentationEventPayloads,
 } from '@texra-ai/harness';
+import { withLogChannel } from '@texra-ai/harness';
 import type {
   HostInteractions,
   PresentationEventHandlers,
@@ -27,7 +28,6 @@ import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
 import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';
 import { safeExecuteCommand } from '@frontend/system/commandUtils';
 import { showInstructionWithSuppress } from '@frontend/ui/instruction';
-import { withLogChannel } from '@logger/effectLog';
 import type { ProgressViewProvider } from '@progressView/ProgressViewProvider';
 import {
   INSTRUCTION_ACTION,
