@@ -115,7 +115,7 @@ function runViewFields(over: RunViewOverrides): RunView {
   };
   return {
     ...common,
-    recipe: false,
+    recipe: null,
     plan: null,
     facts: {},
     ...over,

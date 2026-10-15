@@ -54,7 +54,7 @@ describe('collectResumeTargets', () => {
       child({
         id: 'flow' as RunId,
         label: 'builder',
-        recipe: true,
+        recipe: 'task',
       }),
     ]);
     expect(

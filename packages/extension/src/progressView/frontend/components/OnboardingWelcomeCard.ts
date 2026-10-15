@@ -3,8 +3,8 @@ import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import { LitElement, html, css, type TemplateResult } from 'lit';
 import { customElement } from 'lit/decorators.js';
 
-import { GETTING_STARTED_ACTION_PRESENTATION } from '@shared/schemas';
 import { SessionUiEvents } from '@texra/shared/session/uiEvents';
+import { GETTING_STARTED_ACTION_PRESENTATION } from '@ui/copy/onboarding';
 import { designTokens, commonViewStyles } from '@ui/styles';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import {

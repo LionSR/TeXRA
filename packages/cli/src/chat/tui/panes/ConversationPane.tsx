@@ -1,6 +1,9 @@
 import { Box } from 'ink';
 
-import { documentsOf } from '@texra/shared/plugins/documents';
+import {
+  documentsOf,
+  isDocumentTaskRun,
+} from '@texra/shared/plugins/documents';
 
 import { selectedRunId as selectedRunIdSignal } from '../state/cliState';
 import { sessionView, runPhaseOf, runViewOf } from '../state/sessionView';
@@ -60,7 +63,8 @@ export function ConversationPane(
       )
     : 0;
   const detailCapacity = Math.max(0, maxRows - pendingRowReserve);
-  const documents = stream?.recipe ? documentsOf(stream) : undefined;
+  const documents =
+    stream && isDocumentTaskRun(stream) ? documentsOf(stream) : undefined;
   const workflowFacts =
     stream && documents
       ? {

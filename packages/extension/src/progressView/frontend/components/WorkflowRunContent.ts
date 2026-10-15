@@ -10,7 +10,10 @@ import { html, nothing, type TemplateResult } from 'lit';
 import { customElement } from 'lit/decorators.js';
 
 import { isLiveRun } from '@shared/session/sessionView';
-import { documentsOf } from '@texra/shared/plugins/documents';
+import {
+  documentsOf,
+  isDocumentTaskRun,
+} from '@texra/shared/plugins/documents';
 
 // Local imports - progress view
 import { BaseRunContent } from './BaseRunContent';
@@ -26,7 +29,7 @@ export class WorkflowRunContent extends BaseRunContent {
 
   override render(): TemplateResult | typeof nothing {
     const { run, view, surface } = this;
-    if (!run || !view || !surface || !run.recipe) return nothing;
+    if (!run || !view || !surface || !isDocumentTaskRun(run)) return nothing;
     const documents = documentsOf(run);
     return html`
       <div class="conversation-content">

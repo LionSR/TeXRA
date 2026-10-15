@@ -42,7 +42,7 @@ import {
   RESTING_SUBSTATES,
   RUN_SUBSTATE,
   parkSubstate,
-  isTaskConfig,
+  recipeBlockOf,
   isPlainAgentIdentity,
   listingKeyOf,
   isTranscriptEvent,
@@ -356,7 +356,7 @@ function createRun(
     latestLine: null,
     transcript: emptyTranscript(),
   };
-  return { ...common, recipe: false, plan: null };
+  return { ...common, recipe: null, plan: null };
 }
 
 /**
@@ -777,7 +777,7 @@ function applyOwnArm(run: RunView, event: OwnEvent): RunView {
         modelLabel: model === null ? null : getModelLabel(model),
         command: run.identity.kind === 'process' ? config.instruction : null,
         inputFiles: 'inputFiles' in config ? config.inputFiles : [],
-        recipe: isTaskConfig(config),
+        recipe: recipeBlockOf(config),
       };
     }
     case 'run.model':

@@ -2,7 +2,7 @@
 import { Effect } from 'effect';
 
 // Local imports
-import type { MissingTool } from '@shared/schemas';
+import type { MissingTool } from '@texra/shared/session/hostSnapshot';
 import {
   CORE_DEPENDENCY_TOOLS,
   DEPENDENCY_USE,

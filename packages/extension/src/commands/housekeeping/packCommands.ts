@@ -13,7 +13,7 @@ import {
 import { fileOpResultMessage } from '@housekeeping/runDirOps';
 import { filesystemFor } from '@housekeeping/utils';
 import { WorkspaceFs } from '@platform/rootedFs';
-import { type FileOpResult } from '@shared/schemas';
+import type { FileOpResult } from '@texra/shared/session/hostRequest';
 import type { WorkflowFileOperationResult } from '@texra/controllers/session/hostRunActions';
 
 const CHANNEL = 'packCommands';

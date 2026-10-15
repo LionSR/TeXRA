@@ -117,7 +117,7 @@ function seedRunMeta(
   meta: {
     identity?: RunView['identity'];
     userFollowUpSupport?: RunView['followUpSupport'];
-    recipe?: boolean;
+    recipe?: string | null;
   },
 ): void {
   seedRun(runId, {
@@ -609,7 +609,7 @@ describe('App foreground Escape ownership', () => {
       name: 'document task',
       identity: { kind: 'agent' as const, agent: 'workflow-child' },
       userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
-      recipe: true,
+      recipe: 'task',
     },
     {
       name: 'background script',

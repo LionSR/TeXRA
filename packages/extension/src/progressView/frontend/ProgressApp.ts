@@ -37,6 +37,7 @@ import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 import '@ui/wa/spinner';
 import { agentName } from '@shared/schemas';
 import type { SessionView, RunView } from '@shared/session/sessionView';
+import { isDocumentTaskRun } from '@texra/shared/plugins/documents';
 import type { HostSnapshot } from '@texra/shared/session/hostSnapshot';
 import type { Surface } from '@texra/shared/session/surface';
 import { SessionUiEvents } from '@texra/shared/session/uiEvents';
@@ -60,7 +61,7 @@ import { getBasename } from '@utils/core';
  *  source-qualified key names one agent exactly, so a same-named agent from
  *  another source never lends it its count. */
 function plannedPassesOf(run: RunView, host: HostSnapshot): number | undefined {
-  if (!run.recipe || run.identity.kind !== 'agent') {
+  if (!isDocumentTaskRun(run) || run.identity.kind !== 'agent') {
     return undefined;
   }
   const id = run.identity.agent;

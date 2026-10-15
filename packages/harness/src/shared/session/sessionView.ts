@@ -201,9 +201,9 @@ const RunViewSchema = z.object({
    *  any other run's newest user instruction or settled model reply. */
   latestLine: z.string().nullable(),
   transcript: TranscriptViewSchema,
-  /** A task's run: opened on its plugin's recipe (`run.config`), it
-   *  works over files and takes no messages. */
-  recipe: z.boolean(),
+  /** A task's run: the key of the plugin block whose recipe it opened on
+   *  (`script.block`); null otherwise. A task takes no messages. */
+  recipe: z.string().nullable(),
   plan: PlanSchema.nullable(),
 });
 export type RunView = z.infer<typeof RunViewSchema>;

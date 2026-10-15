@@ -22,6 +22,7 @@ import { withLogChannel } from '@logger/effectLog';
 import type { FileListEntry, ToolResult } from '@shared/schemas';
 import {
   DOCUMENT_TASK_BLOCK,
+  type DocumentAgentOption,
   type DocumentTask,
 } from '@texra/shared/plugins/documents';
 import { errorResult } from '@tools/core/result';
@@ -42,7 +43,7 @@ export const documentTaskOf = (
  */
 export const agentOptionsData = (stores: WorkspaceAgentsStores) =>
   Effect.map(computeAgentOptionsData(stores), (options) =>
-    options.map((option) => {
+    options.map((option): DocumentAgentOption => {
       const entry = getCatalogAgent(option.value);
       const task = entry && documentTaskOf(entry);
       return task ? { ...option, rounds: task.requests.length } : option;

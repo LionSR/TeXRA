@@ -4,7 +4,7 @@ import { Effect } from 'effect';
 
 import { withLogChannel } from '@logger/effectLog';
 import { WorkspaceFs } from '@platform/rootedFs';
-import type { FileOpResult } from '@shared/schemas';
+import type { FileOpResult } from '@texra/shared/session/hostRequest';
 import { copyFileExclusive } from '@utils/files/fsDurability';
 
 import { CHANNEL, TEMP_EXTENSIONS } from './constants';

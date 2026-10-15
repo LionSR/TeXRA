@@ -13,8 +13,9 @@ import {
 } from '@cli/tui/selectWindow';
 import type { SelectItem } from '@cli/tui/ui/Select';
 import { loadTeamOptions } from '@common/teams/TeamPlan';
-import type { AgentOptionData, TeamOptionData } from '@shared/schemas';
+import type { TeamOptionData } from '@shared/schemas';
 import { agentName } from '@shared/schemas';
+import type { DocumentAgentOption } from '@texra/shared/plugins/documents';
 import { agentOptionsData } from '@texra/tools/documents/documentTask';
 import { createTeamCatalogPorts } from '@texra/controllers/mainView/teamCatalogPorts';
 
@@ -48,7 +49,7 @@ export type AgentPickerValue =
   | { readonly kind: 'team'; readonly teamId: string };
 
 interface AgentGroups {
-  readonly agents: readonly AgentOptionData[];
+  readonly agents: readonly DocumentAgentOption[];
   readonly teams: readonly TeamOptionData[];
 }
 
@@ -84,8 +85,8 @@ function agentPickerItems(
   ];
 }
 
-type AgentIdentity = Pick<AgentOptionData, 'label' | 'value'>;
-type AgentDelegationFlag = Pick<AgentOptionData, 'isOrchestrator'>;
+type AgentIdentity = Pick<DocumentAgentOption, 'label' | 'value'>;
+type AgentDelegationFlag = Pick<DocumentAgentOption, 'isOrchestrator'>;
 
 function agentPickerPrimarySectionTitle(
   agents: readonly AgentDelegationFlag[],

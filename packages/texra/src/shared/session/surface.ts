@@ -16,9 +16,7 @@ import { z } from 'zod';
 import { DEFAULT_AGENT_MODEL } from '@texra-ai/harness/schemas';
 import {
   InquiryDraftSchema,
-  LaunchTargetSchema,
-  SessionTypeSchema,
-  UIFileFieldsSchema,
+  NullableFileFieldsSchema,
   RunIdSchema,
   isModelOptionAvailable,
   type InquiryDraft,
@@ -35,6 +33,24 @@ import { markShownRunSeen } from './unseenRuns';
 import type { SessionView as ReadSessionView } from '@texra-ai/harness';
 import type { HostSnapshot } from './hostSnapshot';
 import type { RequestErrorWire } from './sessionFrames';
+
+/**
+ * What the main view launches: a task over the selected files, or
+ * a chat with the selected agent.
+ */
+const SessionTypeSchema = z.enum(['task', 'chat']);
+export type SessionType = z.infer<typeof SessionTypeSchema>;
+
+/** Who runs a main-view request: a single agent or a team. */
+const LaunchTargetSchema = z.enum(['agent', 'team']);
+
+/** The launcher's file lists; an absent or null `editedFile` reads ''. */
+const UIFileFieldsSchema = NullableFileFieldsSchema.extend({
+  editedFile: z
+    .string()
+    .nullish()
+    .transform((v) => v ?? ''),
+});
 
 /**
  * The new-task composer's selections, separate from host-derived state.

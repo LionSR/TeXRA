@@ -136,10 +136,8 @@ const RUN_ACTIONS = [
   /** Clear the model's view of a live conversation, or start it from a
    *  handoff's text (`run.reset`). */
   'reset',
-  /** A finished task's diff, archive, and output removal. */
-  'diff',
-  'pack',
-  'clean',
+  /** A settled run's files: read, copied, or removed (`run.files`). */
+  'files',
   /** Remove the run and its folder from history. */
   'delete',
   /** Give the run the user's own title. */

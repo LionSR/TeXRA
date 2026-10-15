@@ -12,7 +12,6 @@ import { ReasoningEffortSchema } from 'llm-zoo/schemas';
 
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import {
-  AgentMetadataBaseSchema,
   AgentModePresetSchema,
   AgentScanIssueSchema,
   AgentSourceSchema,
@@ -202,12 +201,21 @@ const UpdateSettingsSnapshotMessageSchema = z.discriminatedUnion('snapshot', [
 
 // ==================== Agent selection data schema ====================
 
-/**
- * Agent selection data for the settings view.
- * Extends AgentMetadataBaseSchema (name, hasTask, description) with
- * settings-specific fields for UI state.
- */
-const AgentSelectionItemSchema = AgentMetadataBaseSchema.extend({
+/** Agent selection data for the settings view: one catalog agent. */
+const AgentSelectionItemSchema = z.object({
+  /** Its catalog name: its own, or `<plugin>:<name>` for an installed
+   *  plugin's agent. */
+  name: z
+    .string()
+    .trim()
+    .min(1)
+    .regex(/^(?:[a-z0-9][a-z0-9-]*:)?[A-Za-z0-9][A-Za-z0-9_-]*$/u, {
+      message:
+        'Agent names must be identifiers (letters, numbers, underscores, or hyphens), optionally after a plugin name and a colon.',
+    }),
+  /** Its file has a `task:` block: it is also launchable as a document task. */
+  hasTask: z.boolean(),
+  description: z.string().optional(),
   source: AgentSourceSchema,
   filePath: z.string().optional(),
   tools: z.array(z.string()).optional(),

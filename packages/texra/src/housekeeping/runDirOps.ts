@@ -1,4 +1,4 @@
-import type { FileOpResult } from '@shared/schemas';
+import type { FileOpResult } from '@texra/shared/session/hostRequest';
 
 /** What a host tells the user after a pack or clean, at which severity.
  *  Both hosts read it from here, so the wording cannot drift between them

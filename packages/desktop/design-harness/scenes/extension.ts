@@ -9,7 +9,6 @@ import {
   emptyRunEndOutput,
   MESSAGE_TYPES,
   RunIdSchema,
-  type MissingTool,
 } from '@shared/schemas';
 import {
   emptySessionView,
@@ -35,6 +34,7 @@ import {
   withProposal,
   withWaitingGrandchild,
 } from '@test/shared/session/fanOutScenario';
+import type { MissingTool } from '@texra/shared/session/hostSnapshot';
 import { DOCUMENTS_OUTPUT_ARM } from '@texra/shared/plugins/documents';
 import {
   emptyHostSnapshot,

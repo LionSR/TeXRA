@@ -16,7 +16,6 @@
   "packages/harness/src/platform/interfaces.ts": 3,
   "packages/harness/src/plugins.ts": 1,
   "packages/harness/src/schemas.ts": 1,
-  "packages/harness/src/shared/schemas/fileTypes.ts": 1,
   "packages/harness/src/shared/schemas/index.ts": 1,
   "packages/harness/src/tools/goal/index.ts": 1,
   "packages/harness/src/tools/toolTable.ts": 1,

@@ -8,8 +8,9 @@ import '@awesome.me/webawesome/dist/components/dropdown/dropdown.js';
 import '@awesome.me/webawesome/dist/components/dropdown-item/dropdown-item.js';
 import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 
-import type { DocumentFileType, FileSelectConfig } from '@shared/schemas';
 import type { TeXRAIconName } from '@shared/iconNames';
+import type { FileSelectConfig } from '@texra/shared/launcher/fileSelectConfigs';
+import type { DocumentFileType } from '@texra/shared/launcher/fileTypes';
 import {
   DocumentTaskOptionsSchema,
   type DocumentTaskOptions,

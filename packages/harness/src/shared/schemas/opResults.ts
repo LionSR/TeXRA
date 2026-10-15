@@ -48,20 +48,3 @@ const SessionCloseReportSchema = z.strictObject({
 });
 
 export type SessionCloseReport = z.infer<typeof SessionCloseReportSchema>;
-
-const FileOpResultSchema = z.discriminatedUnion('status', [
-  z.strictObject({
-    status: z.literal('success'),
-    /** Output directory if files were packed */
-    outputFolder: z.string().optional(),
-  }),
-  z.strictObject({ status: z.literal('noFiles') }),
-  z.strictObject({ status: z.literal('missingParams') }),
-  z.strictObject({
-    status: z.literal('error'),
-    /** Error message describing the failed operation */
-    error: z.string(),
-  }),
-]);
-
-export type FileOpResult = z.infer<typeof FileOpResultSchema>;

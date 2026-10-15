@@ -14,6 +14,8 @@
  * setting cannot call the same choice two different things.
  */
 
+import type { TeXRAIconName } from '@shared/iconNames';
+import type { GettingStartedAction } from '@texra/shared/session/hostRequest';
 import { OWN_API_KEYS } from './modelAccess';
 
 /** The one credential prompt: the extension/desktop card and the CLI's
@@ -68,3 +70,23 @@ export const ONBOARDING_CHOICE_SKIP_LABEL = 'Skip for now';
  */
 export const ONBOARDING_SETUP_HANDOFF =
   "You're starting with the setup assistant: it checks your environment, applies the right agent team, and helps you run your first task.";
+
+/**
+ * Button label and leading icon for each getting-started action. The
+ * getting-started banner, the Progress view empty state, and the onboarding
+ * cards all render the same actions, so the words and glyph live here rather
+ * than being re-typed per surface.
+ */
+export const GETTING_STARTED_ACTION_PRESENTATION = {
+  runSetup: { label: 'Run setup assistant', icon: 'rocket' },
+  createSampleProject: {
+    label: 'Create sample project',
+    icon: 'file-circle-plus',
+  },
+  cloneOverleaf: { label: 'Import Overleaf', icon: 'cloud-arrow-down' },
+  downloadArxiv: { label: 'Import arXiv', icon: 'download' },
+  openWalkthrough: { label: 'Open walkthrough', icon: 'book' },
+} as const satisfies Record<
+  GettingStartedAction,
+  { readonly label: string; readonly icon: TeXRAIconName }
+>;
