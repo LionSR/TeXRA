@@ -1,4 +1,3 @@
-import type { InstructionAction } from '@shared/schemas';
 import type {
   DiffViewHost,
   MessageHost,
@@ -7,6 +6,7 @@ import type {
 import type { TranscriptExportFormat } from '@texra/controllers/progressView/exportTranscript';
 import type { TranscriptExportFailed } from '@texra/controllers/progressView/transcriptExportFailure';
 import type { BuildDisplayFn } from '@texra/tools/latex/latexPreview';
+import type { InstructionAction } from '@texra-ai/harness/schemas';
 import type { Effect } from 'effect';
 
 import type { PreviewUnavailable } from './desktopPreviewHost.js';

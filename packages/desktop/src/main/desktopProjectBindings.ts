@@ -22,6 +22,7 @@ import {
   type ProcessRuntime,
   type ProcessServices,
 } from '@texra-ai/harness';
+import { ToolAvailability } from '@texra-ai/harness';
 import { linkOutage } from '@texra/controllers/server/client';
 import type { HostDraftRequests } from '@texra/controllers/session/hostDraftRequests';
 import {
@@ -32,7 +33,6 @@ import {
   SessionBridge,
   type AttachedPort,
 } from '@texra/controllers/session/SessionBridge';
-import { ToolAvailability } from '@tools/toolAvailabilityService';
 import {
   DESKTOP_WORKSPACE_COMMANDS,
   DesktopWorkspaceInboundMessageSchema,

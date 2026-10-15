@@ -5,7 +5,7 @@
  */
 import { z } from 'zod';
 
-import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
+import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 
 // ============================================================
 // Data schemas

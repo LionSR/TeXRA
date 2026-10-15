@@ -8,8 +8,8 @@ vi.mock('@texra/shared/hostBridge', () => ({
   postMessage: mocks.postMessage,
 }));
 
-import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { AGENT_SOURCE } from '@shared/schemas';
+import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 import type { AgentSelectionItem } from '@texra/shared/settingsView/settingsViewMessages';
 import {
   mountComponent,

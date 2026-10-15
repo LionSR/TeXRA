@@ -27,10 +27,10 @@ import {
   HOST_BRIDGE_API_KEY,
   type HostBridgeApi,
 } from '@texra/shared/hostBridgeTypes';
-import type { TraceDocument } from '@transcript';
 
 import { parseTraceData } from './traceDataSchema';
 import { traceFrame } from './traceFrames';
+import type { TraceDocument } from '@texra-ai/harness/schemas';
 
 /** The session key the page's `<progress-app data-session>` names. */
 const TRACE_SESSION = 'trace';

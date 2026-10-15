@@ -3,9 +3,9 @@ import { Effect } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports
+import { withLogChannel } from '@texra-ai/harness';
 import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
 import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
-import { withLogChannel } from '@logger/effectLog';
 import { ensureError } from '@utils/errors/errorMessage';
 import type { ToolMissingHandler } from '@texra-ai/harness';
 

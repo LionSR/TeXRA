@@ -36,7 +36,6 @@ import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 // Local imports - shared webview
 import '@ui/wa/spinner';
 import { agentName } from '@shared/schemas';
-import type { SessionView, RunView } from '@shared/session/sessionView';
 import { isDocumentTaskRun } from '@texra/shared/plugins/documents';
 import type { HostSnapshot } from '@texra/shared/session/hostSnapshot';
 import type { Surface } from '@texra/shared/session/surface';
@@ -88,6 +87,7 @@ import './components/OnboardingWelcomeCard';
 import './components/RunHeader';
 import type { HeaderMenuItem } from './components/RunHeader';
 import type { WaSelectEvent } from '@awesome.me/webawesome/dist/events/events.js';
+import type { SessionView, RunView } from '@texra-ai/harness';
 
 registerTeXRAWebAwesomeIcons();
 

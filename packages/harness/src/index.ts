@@ -187,3 +187,35 @@ export { SESSION_CLOSE_DEADLINE_MS } from '@agent/runtime/SessionHandle';
 export { ownKeyCredential } from '@agent/runtime/modelAccess/credentials';
 // What a used-up plan falls back to, as the retry copy names it.
 export { quotaFallbackRouteFor } from '@shared/quotaFallbackRoutes';
+
+// The rooted file systems a plugin's code reads (the workspace, the
+// session's run storage, the global storage root), and the layers that
+// serve them over a session's roots outside a run.
+export {
+  GlobalStorageFs,
+  sessionFsLayer,
+  StorageFs,
+  withSessionFs,
+  WorkspaceFs,
+} from '@platform/rootedFs';
+// A path as a `FileLocation` against the workspace root a caller holds.
+export { pathToLocationIn } from '@utils/files/fileLocation';
+// Which external tools this machine has, as plugins' `availability` probes
+// answered; a host reads it and asks for a refresh.
+export { ToolAvailability } from '@tools/toolAvailabilityService';
+// The harness's log output: where its entries go and how an entry reads.
+export {
+  entryChannel,
+  entryMessage,
+  LOG_CHANNEL,
+  setLogSink,
+  type LogEntry,
+  type LogSink,
+} from '@logger/logSink';
+export { withLogChannel } from '@logger/effectLog';
+// A catalog setting, read from the stores a caller holds (a session's
+// roots) or from its config slot alone.
+export {
+  readConfigSettingFrom,
+  readSettingFrom,
+} from '@utils/config/platformSettings';

@@ -92,11 +92,11 @@ import {
 } from '@platform/languageModel';
 import { withProcessServices } from '@platform/processRuntime';
 import { SettingsViewMessageHandler } from '@settingsView/SettingsViewMessageHandler';
-import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { createDeferred } from '@test/support/asyncTestUtils';
 import { installedHost, installPlatform } from '@test/support/setupPlatform';
+import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 
 const GEMINI_PRO: LanguageModelInfo = {
   id: 'gemini-3.1-pro-preview',

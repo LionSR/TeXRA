@@ -7,12 +7,9 @@
 import { html, LitElement, nothing, type TemplateResult } from 'lit';
 import { property } from 'lit/decorators.js';
 
+import { isLiveRun } from '@texra-ai/harness/schemas';
 import type { PermissionPayload } from '@shared/schemas';
-import {
-  isLiveRun,
-  type SessionView,
-  type RunView,
-} from '@shared/session/sessionView';
+import type { SessionView, RunView } from '@shared/session/sessionView';
 import type { HostSnapshot } from '@texra/shared/session/hostSnapshot';
 import type { Surface } from '@texra/shared/session/surface';
 import { SessionUiEvents } from '@texra/shared/session/uiEvents';

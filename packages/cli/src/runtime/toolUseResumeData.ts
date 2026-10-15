@@ -1,10 +1,29 @@
-import {
-  HISTORY_RUN_STATUS,
-  RUN_OUTCOME,
-  type HistoryRunStatus,
-  type RunLifecycleStatus,
-} from '@shared/schemas';
+import { RUN_OUTCOME, type RunLifecycleStatus } from '@shared/schemas';
 import { isTerminalOutcomePhase } from '@shared/runs/runStatus';
+
+/** Status of a persisted run in the CLI history output. */
+export const HISTORY_RUN_STATUS = {
+  RESUMABLE: 'resumable',
+  /** A child a stop rested (`RunView.substate` paused): its parent's model
+   *  continues it by calling it again. */
+  PAUSED: 'paused',
+  COMPLETED: RUN_OUTCOME.COMPLETED,
+  CANCELLED: RUN_OUTCOME.CANCELLED,
+  FAILED: RUN_OUTCOME.FAILED,
+  UNKNOWN: 'unknown',
+} as const;
+
+export type HistoryRunStatus =
+  (typeof HISTORY_RUN_STATUS)[keyof typeof HISTORY_RUN_STATUS];
+
+export const HISTORY_RUN_STATUS_LABEL = {
+  [HISTORY_RUN_STATUS.RESUMABLE]: 'Resumable',
+  [HISTORY_RUN_STATUS.PAUSED]: 'Paused',
+  [HISTORY_RUN_STATUS.COMPLETED]: 'Completed',
+  [HISTORY_RUN_STATUS.CANCELLED]: 'Cancelled',
+  [HISTORY_RUN_STATUS.FAILED]: 'Failed',
+  [HISTORY_RUN_STATUS.UNKNOWN]: 'Unknown',
+} as const satisfies Record<HistoryRunStatus, string>;
 
 /** What a run's history standing is decided from: the view's folded facts
  *  and `deriveResumability`'s answer. */

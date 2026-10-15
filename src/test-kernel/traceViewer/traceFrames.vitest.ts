@@ -12,12 +12,12 @@ import {
 } from '@shared/schemas';
 import { fold } from '@shared/session/sessionFold';
 import { emptySessionView } from '@shared/session/sessionView';
-import type { TraceDocument } from '@transcript';
+import { traceFrame } from '../../../packages/trace-viewer/src/traceFrames';
+import type { TraceDocument } from '@texra-ai/harness/schemas';
 // Relative import: `packages/trace-viewer` is a separate workspace package
 // with no path alias into the root vitest config, but this suite exercises
 // the real replay pipeline (`@progressView/frontend`'s dispatcher + slices),
 // so a plain relative import is the simplest way to reach it.
-import { traceFrame } from '../../../packages/trace-viewer/src/traceFrames';
 
 const RUN_ID = 'abc123' as RunId;
 const AGGREGATE = qualifyAggregateId('run', RUN_ID);

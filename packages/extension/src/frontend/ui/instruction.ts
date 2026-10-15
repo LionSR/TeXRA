@@ -3,8 +3,8 @@ import { Cause, Effect } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports
+import { withLogChannel } from '@texra-ai/harness';
 import { safeExecuteCommand } from '@frontend/system/commandUtils';
-import { withLogChannel } from '@logger/effectLog';
 import { readState, StateFlagSchema } from '@shared/config/settingsAccess';
 import { INSTRUCTION_PREFIX } from '@shared/state/stateKeys';
 import { ensureError } from '@utils/errors/errorMessage';

@@ -1,12 +1,8 @@
 import { Clock, Context, Duration, Effect, Predicate } from 'effect';
 import { HttpClient, HttpClientResponse } from 'effect/http';
+import { z } from 'zod';
 
 import { withLogChannel } from '@logger/effectLog';
-import {
-  UpdateCheckRecordSchema,
-  type UpdateCheckHost,
-  type UpdateCheckRecord,
-} from '@shared/schemas';
 import type { ValueFamily } from '@shared/session/valueFamily';
 
 import {
@@ -15,6 +11,16 @@ import {
 } from './semverUpdateCheck';
 import type { Cause } from 'effect';
 import type { HttpClientError } from 'effect/http';
+
+/** The hosts that check for updates, each with its own record. */
+export type UpdateCheckHost = 'cli' | 'desktop';
+
+/** Persisted update notification state, isolated by host and configured storage root. */
+const UpdateCheckRecordSchema = z.object({
+  lastCheckedAt: z.int().nonnegative().nullable(),
+  lastNotifiedVersion: z.string().min(1).nullable(),
+});
+export type UpdateCheckRecord = z.infer<typeof UpdateCheckRecordSchema>;
 
 /** The global root's update-check record of each host, keyed by the host. */
 export const UPDATE_CHECKS: ValueFamily<UpdateCheckRecord> = {

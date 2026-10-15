@@ -10,6 +10,7 @@ import {
   LanguageModel,
   withProcessServices,
 } from '@texra-ai/harness';
+import { withLogChannel } from '@texra-ai/harness';
 import {
   SessionHostInteractions,
   type HostInteractions,
@@ -23,7 +24,6 @@ import { VscodeToolEditApprovalHost } from '@frontend/approval/VscodeToolEditApp
 import { createAgentPresentationHost } from '@frontend/events/agentEventListeners';
 import { pushManualCriticism } from '@frontend/latex/inlineCriticism';
 import { getLinterMessages } from '@frontend/latex/linter';
-import { withLogChannel } from '@logger/effectLog';
 import { agentKeyOf, type FileLocation, type RunId } from '@shared/schemas';
 import {
   getFirstRunDone,

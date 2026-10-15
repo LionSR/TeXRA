@@ -930,11 +930,9 @@ export default tseslint.config(
                 'Extension browser frontends must import runtime values from browser-safe shared modules.',
             },
             {
-              group: [
-                '@texra-ai/harness',
-                '@texra-ai/harness/node',
-                '@texra-ai/harness/plugins',
-              ],
+              // Exact entries: a `group` pattern for the bare package name
+              // would also match its browser-safe `/schemas` subpath.
+              regex: '^@texra-ai/harness(/node|/plugins)?$',
               allowTypeImports: true,
               message:
                 'A browser frontend imports only types from this harness entry; take runtime values from @texra-ai/harness/schemas.',

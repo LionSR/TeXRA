@@ -7,7 +7,7 @@ import { Effect, FileSystem } from 'effect';
 import { describe } from 'vitest';
 
 import { sessionFsLayer, type StorageFs } from '@platform/rootedFs';
-import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
+import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 import { SettingsMemoryController } from '@texra/controllers/settingsView/SettingsMemoryController';
 
 import { createFakeUIHosts } from '../support/FakeHosts';

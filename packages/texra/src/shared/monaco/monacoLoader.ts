@@ -11,7 +11,7 @@
 // lives in monacoLanguage.ts precisely so callers that only need a language id
 // do not import this module — see the comment there for what that costs.
 
-import { DESKTOP_THEME_KIND, type Theme } from '@shared/schemas';
+import { DESKTOP_THEME_KIND, type Theme } from '@texra/shared/ipc';
 
 export type MonacoModule = typeof import('monaco-editor/editor/editor.api.js');
 type MonacoWorkerModule = { default: new () => Worker };

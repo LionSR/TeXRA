@@ -35,6 +35,11 @@ import {
   resolveWorkspaceStoragePath,
   canonicalizeWorkspacePath,
 } from '@texra-ai/harness/node';
+import { withLogChannel } from '@texra-ai/harness';
+import { setLogSink } from '@texra-ai/harness';
+import { StorageFs, withSessionFs } from '@texra-ai/harness';
+import { ToolAvailability } from '@texra-ai/harness';
+import { readConfigSettingFrom } from '@texra-ai/harness';
 import { EXTENSION_COMMANDS } from '@commands/extensionCommandIds';
 import { setApiKey as apiSetApiKey } from '@commands/api/apiKeyCommands';
 import { openGettingStarted } from '@commands/system/walkthroughCommands';
@@ -72,10 +77,7 @@ import {
 } from '@frontend/comments/inlineComments';
 import { createVsCodeLogSink } from '@frontend/vscode/vscodeLogSink';
 import { effectDiagnosticsLayer } from '@logger/effectDiagnostics';
-import { withLogChannel } from '@logger/effectLog';
-import { setLogSink } from '@logger/logSink';
 import { nodeFileServices } from '@platform/defaults/jsonStore';
-import { StorageFs, withSessionFs } from '@platform/rootedFs';
 import { FileSecrets, secretsDirectory } from '@platform/defaults/fileSecrets';
 import { defaultNodeStorageRoot } from '@platform/defaults/nodeStorage';
 import { openTexraConfigStores } from '@platform/defaults/nodeStores';
@@ -104,10 +106,8 @@ import { texraPlugins } from '@texra/tools/registry';
 import { gitHubTokenRejectedMessage } from '@texra/tools/github/githubAuth';
 import { LeanLanguageServices } from '@texra/tools/lean/leanLanguageServices';
 import { USER_MCP_CONFIG_PATH } from '@tools/mcp/mcpConfig';
-import { ToolAvailability } from '@tools/toolAvailabilityService';
 import { sessionStoreMovedAsideMessage } from '@ui/copy/sessionStore';
 import { usageCostLabel } from '@ui/copy/modelAccess';
-import { readConfigSettingFrom } from '@utils/config/platformSettings';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { reachExtensionService } from './common/extensionService';
 

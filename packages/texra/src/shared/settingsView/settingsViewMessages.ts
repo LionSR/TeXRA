@@ -10,7 +10,6 @@
 import { z } from 'zod';
 import { ReasoningEffortSchema } from 'llm-zoo/schemas';
 
-import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import {
   AgentModePresetSchema,
   AgentScanIssueSchema,
@@ -20,7 +19,6 @@ import {
   SkillDisplayIssueSchema,
   SkillDisplayItemSchema,
   SubscriptionUsageSnapshotsSchema,
-  WebviewReadyMessageSchema,
 } from '@shared/schemas';
 import {
   settingSchemaWithoutPrefault,
@@ -30,6 +28,10 @@ import {
   SUBSCRIPTION_AUTH_PROVIDERS,
   SubscriptionAuthStatusSchema,
 } from '@shared/model/subscriptionAuth';
+import {
+  SETTINGS_VIEW_COMMANDS,
+  WebviewReadyMessageSchema,
+} from '@texra/shared/ipc';
 import {
   ToolCategorySchema,
   ToolDependencyStatusSchema,

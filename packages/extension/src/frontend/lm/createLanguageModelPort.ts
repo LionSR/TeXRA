@@ -9,7 +9,7 @@ import {
   type LanguageModelInfo,
   type LanguageModelPort,
 } from '@texra-ai/harness';
-import { withLogChannel } from '@logger/effectLog';
+import { withLogChannel } from '@texra-ai/harness';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { acquireVscodeLanguageModel } from './acquireVscodeLanguageModel';
 

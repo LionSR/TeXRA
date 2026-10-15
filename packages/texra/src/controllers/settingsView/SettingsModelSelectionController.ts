@@ -33,9 +33,9 @@ import {
   supportsReasoningLevel,
 } from '@model/reasoningLevel';
 import type { SettingsStores } from '@shared/config/settingsAccess';
-import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { type ModelOptionData } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
+import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 import {
   type CopilotRouteInfo,
   MODEL_SOURCE_ORDER,

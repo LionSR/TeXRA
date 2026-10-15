@@ -10,8 +10,8 @@ vi.mock('@texra/shared/hostBridge', () => ({
 
 import type { ApprovalTab } from '@settingsView/frontend/tabs/ApprovalTab';
 import type { PluginsTab } from '@settingsView/frontend/tabs/PluginsTab';
-import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
+import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 import type { PluginRow } from '@texra/shared/settingsView/settingsViewMessages';
 
 import {

@@ -1,7 +1,10 @@
 import { type BrowserWindow } from 'electron';
 import { Effect, type Scope, Stream } from 'effect';
-import { formatSessionTitle, NATIVE_WINDOW_TITLE } from '@shared/sessionTitle';
-import { sessionActivity } from '@shared/session/sessionView';
+import { sessionActivity } from '@texra-ai/harness/schemas';
+import {
+  formatSessionTitle,
+  NATIVE_WINDOW_TITLE,
+} from '@texra/shared/sessionTitle';
 import type { Session } from '@texra-ai/harness';
 
 type DesktopTitleSession = {

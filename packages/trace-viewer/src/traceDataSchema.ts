@@ -9,13 +9,12 @@
  */
 import { z } from 'zod';
 
-import { APP_PLUGIN_ARMS } from '@texra/shared/plugins/appArms';
 import {
   readTraceFacts,
   TraceDocumentSchema,
   type TraceDocument,
-} from '@transcript/traceDocumentSchema';
-import { toErrorMessage } from '@utils/errors/errorMessage';
+} from '@texra-ai/harness/schemas';
+import { APP_PLUGIN_ARMS } from '@texra/shared/plugins/appArms';
 
 const INCOMPATIBLE =
   'Trace data does not match the expected schema — this trace file may ' +
@@ -31,6 +30,7 @@ export function parseTraceData(raw: unknown): TraceDocument {
   try {
     return readTraceFacts(result.data, APP_ARMS);
   } catch (error) {
-    throw new Error(INCOMPATIBLE + toErrorMessage(error), { cause: error });
+    const reason = error instanceof Error ? error.message : String(error);
+    throw new Error(INCOMPATIBLE + reason, { cause: error });
   }
 }

@@ -7,7 +7,7 @@
 import { Effect, Stream, SubscriptionRef } from 'effect';
 
 import { withLogChannel } from '@logger/effectLog';
-import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
+import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 import {
   detectLatexSettingsStatus,
   isAllowedLatexInstallCommand,

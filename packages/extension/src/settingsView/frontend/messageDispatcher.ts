@@ -8,7 +8,7 @@
  * missing or unknown command is a compile error. Handlers mutate the
  * module-level signals in `settingsState.ts` directly.
  */
-import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
+import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 import {
   type SettingsSectionName,
   type SettingsTabPanelName,

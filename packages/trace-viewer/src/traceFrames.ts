@@ -13,7 +13,8 @@ import {
   referencedAggregates,
   runIdentityDisplayName,
   type DisplaySessionEvent,
-} from '@shared/schemas';
+  type TraceDocument,
+} from '@texra-ai/harness/schemas';
 import {
   emptyHostSnapshot,
   type HostSnapshot,
@@ -22,7 +23,6 @@ import type {
   EventsFrame,
   Subscribe,
 } from '@texra/shared/session/sessionFrames';
-import type { TraceDocument } from '@transcript';
 
 /** One position of the run's loop: the row the scrubber cuts the trace at. */
 export type TracePosition = Extract<

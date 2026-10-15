@@ -32,6 +32,9 @@ import {
   type ProcessServices,
   type Session,
 } from '@texra-ai/harness';
+import { withLogChannel } from '@texra-ai/harness';
+import { withSessionFs, WorkspaceFs, type StorageFs } from '@texra-ai/harness';
+import { pathToLocationIn } from '@texra-ai/harness';
 import {
   handleLatexdiff,
   handleLatexdiffCommitAction,
@@ -55,8 +58,6 @@ import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
 import { signInWithSubscription } from '@frontend/auth/subscriptionSignIn';
 import { openFinalOutputIfAvailable } from '@frontend/agents/finalOutputOpener';
 import { parseVersionControlDiffFilename } from '@latex/latexdiff/diffFileNameManager';
-import { withLogChannel } from '@logger/effectLog';
-import { withSessionFs, WorkspaceFs, type StorageFs } from '@platform/rootedFs';
 import latexPreamble from '@resources/templates/chatExport.tex';
 import { type RunId } from '@shared/schemas';
 import {
@@ -114,7 +115,6 @@ import {
   locateInWorkspace,
   workspaceRelativePath,
 } from '@utils/files/workspaceFS';
-import { pathToLocationIn } from '@utils/files/fileLocation';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { normalizeLineEndings } from '@utils/text/stringUtils';
 

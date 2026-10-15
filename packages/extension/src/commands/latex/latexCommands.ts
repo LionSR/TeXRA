@@ -3,6 +3,7 @@ import { Effect } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports
+import { withLogChannel } from '@texra-ai/harness';
 import { runGuardedLatexCommand } from '@frontend/editor/activeFileGuards';
 import {
   showLoggedInfoMessage,
@@ -19,7 +20,6 @@ import {
 import { LATEX_COMMANDS_CHANNEL as CHANNEL } from '@latex/latexLogging';
 import { resolveLatexFormatter } from '@latex/formatter/texFormatter';
 import { buildLatexdiffAwareFixInstruction } from '@latex/latexdiff/diffFileNameManager';
-import { withLogChannel } from '@logger/effectLog';
 import type { ProcessServices, WorkspaceRoots } from '@texra-ai/harness';
 
 export function handleFixCompilation(

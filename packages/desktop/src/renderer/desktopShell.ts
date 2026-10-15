@@ -12,7 +12,6 @@ import '@awesome.me/webawesome/dist/components/dropdown/dropdown.js';
 import '@awesome.me/webawesome/dist/components/dropdown-item/dropdown-item.js';
 import { html, nothing, type TemplateResult } from 'lit';
 
-import type { SessionView } from '@shared/session/sessionView';
 import type { TeXRAIconName } from '@shared/iconNames';
 import type { ProjectDisplay } from '@texra/shared/session/hostSnapshot';
 import type { Surface } from '@texra/shared/session/surface';
@@ -24,6 +23,7 @@ import {
 } from '@ui/wa/actionButtons';
 import { afterDropdownHides } from '@ui/wa/selectTemplates';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
+import type { SessionView } from '@texra-ai/harness';
 
 /** One open project as the rail lists it: how its host names it, its session,
  *  its surface. */

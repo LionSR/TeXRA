@@ -3,6 +3,8 @@ import { Cause, Effect } from 'effect';
 
 // Local imports
 import { AgentConfigSchema } from '@texra-ai/harness/schemas';
+import { withLogChannel } from '@texra-ai/harness';
+import { isLiveRun } from '@texra-ai/harness/schemas';
 import { EXTENSION_COMMANDS } from '@commands/extensionCommandIds';
 import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
 import { safeExecuteCommand } from '@frontend/system/commandUtils';
@@ -10,8 +12,6 @@ import {
   announce,
   showLoggedInfoMessage,
 } from '@frontend/ui/errorHandlingUtils';
-import { withLogChannel } from '@logger/effectLog';
-import { isLiveRun } from '@shared/session/sessionView';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import { agentName, type RunId } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';

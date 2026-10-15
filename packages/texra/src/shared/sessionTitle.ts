@@ -1,4 +1,4 @@
-export type SessionTitleState = 'idle' | 'running' | 'approval';
+import type { SessionTitleState } from '@texra-ai/harness/schemas';
 
 /**
  * Host-specific vocabulary and density for one title surface. A terminal tab

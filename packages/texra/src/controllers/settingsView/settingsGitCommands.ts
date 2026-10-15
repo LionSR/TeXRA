@@ -4,7 +4,7 @@
  */
 import { Effect } from 'effect';
 
-import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
+import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 import { storeCredential } from '@texra/common/secrets/storeCredential';
 import {
   listGitHubSubscriptionEntries,

@@ -1,12 +1,13 @@
 // The document resources of one project. Selection changes which owner is visible;
 // only tab closure, project closure, or document disposal releases its resources.
 
-import type { SessionSurfaces } from '@progressView/frontend/sessionSurfaces';
+import { isPackagedAgentSource } from '@texra-ai/harness/schemas';
 import type { ProgressApp } from '@progressView/frontend/ProgressApp';
-import { isPackagedAgentSource, type Theme } from '@shared/schemas';
+import type { SessionSurfaces } from '@progressView/frontend/sessionSurfaces';
 import type { HostRequest } from '@texra/shared/session/hostRequest';
 import type { HostOutcome } from '@texra/shared/session/sessionFrames';
 import { postMessage } from '@texra/shared/hostBridge';
+import type { Theme } from '@texra/shared/ipc';
 
 import {
   DesktopShellStateSchema,

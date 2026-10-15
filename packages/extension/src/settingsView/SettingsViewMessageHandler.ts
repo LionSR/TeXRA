@@ -10,8 +10,8 @@ import * as vscode from 'vscode';
 import { Cause, Effect, Exit, Fiber } from 'effect';
 import { ModelError, completedTurn } from '@texra-ai/llm';
 
+import { withLogChannel } from '@texra-ai/harness';
 import { emitAppSignal } from '@eventBus/AppSignals';
-import { signInWithSubscription } from '@frontend/auth/subscriptionSignIn';
 import { subscribeAppSignal } from '@frontend/events/appSignalSubscriptions';
 import { VscodeExternalOpener } from '@frontend/hosts/VscodeExternalOpener';
 import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
@@ -23,12 +23,11 @@ import {
   showLoggedErrorMessage,
   showLoggedInfoMessage,
 } from '@frontend/ui/errorHandlingUtils';
-import { withLogChannel } from '@logger/effectLog';
+import { signInWithSubscription } from '@frontend/auth/subscriptionSignIn';
 import {
   discoverCopilotRoutes,
   setCopilotRoutePreference,
 } from '@model/copilotRouting';
-import type { StorageFs } from '@platform/rootedFs';
 import type { ProgressViewProvider } from '@progressView/ProgressViewProvider';
 import { TEXRA_APPROVAL_POLICY_CONFIG_KEY } from '@shared/approvalPolicy';
 import { ACCOUNT_OUTCOME } from '@shared/model/accountAuth';
@@ -49,6 +48,7 @@ import {
   latexEditorStatus,
   vscodeLatexSettingsHandlers,
 } from './handlers/latexSettingsHandlers';
+import type { StorageFs } from '@texra-ai/harness';
 import type { ProcessRuntime, ProcessServices } from '@texra-ai/harness';
 import type { PlatformSecrets, StateStore } from '@texra-ai/harness';
 import type { WorkspaceRoots } from '@texra-ai/harness';

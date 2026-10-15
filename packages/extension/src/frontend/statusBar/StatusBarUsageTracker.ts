@@ -1,13 +1,13 @@
 // Local imports - run state
 
-import { sumUsageStats, type TokenUsageStats } from '@shared/schemas';
-import type { SessionTitleState } from '@shared/sessionTitle';
 import {
   descendantRuns,
   isLiveRun,
   isWorkingRun,
   sessionActivity,
-} from '@shared/session/sessionView';
+} from '@texra-ai/harness/schemas';
+import { sumUsageStats, type TokenUsageStats } from '@shared/schemas';
+import type { SessionTitleState } from '@texra-ai/harness/schemas';
 import type { Session } from '@texra-ai/harness';
 
 /**

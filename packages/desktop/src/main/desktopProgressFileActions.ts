@@ -8,6 +8,8 @@ import {
   type Session,
   withProcessServices,
 } from '@texra-ai/harness';
+import { readSettingFrom } from '@texra-ai/harness';
+import { pathToLocationIn } from '@texra-ai/harness';
 import { emitAppSignal } from '@eventBus/AppSignals';
 import { acceptEditedFileReplace } from '@latex/acceptedFileTarget';
 import { openFirstLabelMatch } from '@latex/labelSearch';
@@ -21,12 +23,7 @@ import type { NotificationFailed, PromptFailed } from '@texra/hosts/uiHosts';
 import type { LatexdiffMathMarkupValue } from '@texra/shared/constants/latexConfig';
 import { DocumentsStateKey } from '@texra/shared/settingsView/documentsSettings';
 import { runOutputFiles } from '@texra/tools/documents/runOutputs';
-import { readSettingFrom } from '@utils/config/platformSettings';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import {
-  createExternalLocation,
-  pathToLocationIn,
-} from '@utils/files/fileLocation';
 import type { Rejected } from '@texra-ai/harness';
 import type { RunId } from '@texra-ai/harness/schemas';
 import type { DesktopAgentRunHost } from './desktopAgentRunHost.js';
@@ -221,7 +218,10 @@ export class DesktopProgressFileActions {
   private openDiffOutput(diffFilePath: string): Effect.Effect<void, Error> {
     return withProcessServices(
       this.host.runtime,
-      this.ui.openBuildDisplay(createExternalLocation(diffFilePath)),
+      this.ui.openBuildDisplay({
+        kind: 'external',
+        absolutePath: diffFilePath,
+      }),
     );
   }
 }

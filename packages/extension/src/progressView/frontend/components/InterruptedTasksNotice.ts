@@ -13,7 +13,6 @@ import { css, html, LitElement, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 import { repeat } from 'lit/directives/repeat.js';
 
-import type { SessionView } from '@shared/session/sessionView';
 import type { Surface } from '@texra/shared/session/surface';
 import { SessionUiEvents } from '@texra/shared/session/uiEvents';
 import {
@@ -26,6 +25,7 @@ import {
 import { bannerStyles, commonViewStyles, designTokens } from '@ui/styles';
 import { renderBannerFrame } from '@ui/wa/bannerFrame';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
+import type { SessionView } from '@texra-ai/harness';
 
 @customElement('interrupted-tasks-notice')
 export class InterruptedTasksNotice extends LitElement {

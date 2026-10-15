@@ -2,8 +2,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({ postMessage: vi.fn() }));
 vi.mock('@texra/shared/hostBridge', () => ({ postMessage: mocks.postMessage }));
 import type { SkillsTab } from '@settingsView/frontend/tabs/SkillsTab';
-import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
+import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 import {
   mountComponent,
   useLitComponentTestDom,

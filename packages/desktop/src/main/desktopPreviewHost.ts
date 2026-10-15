@@ -10,12 +10,10 @@ import {
 } from 'effect';
 
 import { type ProcessRuntime, withProcessServices } from '@texra-ai/harness';
-import { withSessionFs } from '@platform/rootedFs';
-import type { FileLocation } from '@shared/schemas';
+import { withSessionFs } from '@texra-ai/harness';
 import { isLatexFile } from '@texra/shared/latexFileTypes';
 import { ExternalOpenFailed, type MessageHost } from '@texra/hosts/uiHosts';
 import type { BuildDisplayFn } from '@texra/tools/latex/latexPreview';
-import { createExternalLocation } from '@utils/files/fileLocation';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import {
@@ -26,6 +24,7 @@ import {
   tryShowInRenderer,
   type DesktopOverlayPostOptions,
 } from './desktopIpcTypes.js';
+import type { FileLocation } from '@texra-ai/harness/schemas';
 import type { WorkspaceRoots } from '@texra-ai/harness';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
@@ -230,9 +229,13 @@ export function createDesktopPreviewHost(
       );
       const built = yield* withSessionFs(
         roots,
-        compileLatex2Pdf(createExternalLocation(sourcePath), roots, {
-          outputDirectory,
-        }),
+        compileLatex2Pdf(
+          { kind: 'external', absolutePath: sourcePath },
+          roots,
+          {
+            outputDirectory,
+          },
+        ),
       );
       if (!built.ok) {
         // The full engine log (up to 200 lines) goes to console.error, not the

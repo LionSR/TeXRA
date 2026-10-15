@@ -12,7 +12,6 @@ export * from './proposalFields';
 export * from './errors';
 export * from './usage';
 export * from './contextManagement';
-export * from './onboarding';
 export * from './toolDefinition';
 
 // Layer 1b: Standalone schemas and shared settings
@@ -23,7 +22,6 @@ export * from './skillDisplay';
 export * from './codex';
 export * from './coreSettings';
 export * from './opResults';
-export * from './historyRunStatus';
 
 // Layer 2b: Depends on layer 1
 export * from './agentPresets';
@@ -65,7 +63,6 @@ export * from './pickerOptions';
 export * from './progressView/data';
 
 // Layer 6: Other view message schemas
-export * from './commonViewMessages';
 export * from './subscriptionUsage';
 
 // Layer 7: Composite schemas (depend on multiple layers)
@@ -81,5 +78,3 @@ export * from './sessionEvent';
 export * from './foldInput';
 export * from './rowVersions';
 export * from './traceEvent';
-
-export * from './updateCheck';

@@ -7,7 +7,7 @@ import { COLOR_HINT } from '@cli/tui/ui/colors';
 import { COLLAPSED, EXPANDED, TICK } from '@cli/tui/ui/glyphs';
 import { useLiveNowMsSince } from '@cli/tui/useLiveNowMs';
 import { truncateSummaryToWidth } from '@cli/runtime/terminalText';
-import { formatLoopPositionLabel } from '@shared/runs/runStatusDisplay';
+import { formatLoopPositionLabel } from '@ui/copy/runStatus';
 import { formatResultCount } from '@utils/text/stringUtils';
 
 import { activeStartedAt, childElapsed } from '../state/childControls';

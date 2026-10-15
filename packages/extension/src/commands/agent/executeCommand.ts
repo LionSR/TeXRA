@@ -4,7 +4,7 @@ import { z, ZodError } from 'zod';
 
 // Local imports
 import { AgentConfigSchema } from '@texra-ai/harness/schemas';
-import { withLogChannel } from '@logger/effectLog';
+import { withLogChannel } from '@texra-ai/harness';
 import type { HostRunActions } from '@texra/controllers/session/hostRunActions';
 import { ensureError } from '@utils/errors/errorMessage';
 

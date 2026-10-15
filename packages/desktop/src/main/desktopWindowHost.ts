@@ -6,7 +6,10 @@
 import { app, dialog, shell, type BrowserWindow } from 'electron';
 import { Cause, Effect } from 'effect';
 
-import { INSTRUCTION_ACTION, type InstructionAction } from '@shared/schemas';
+import {
+  INSTRUCTION_ACTION,
+  type InstructionAction,
+} from '@texra-ai/harness/schemas';
 import type { DownMessage } from '@texra/shared/session/sessionFrames';
 import {
   ExternalOpenFailed,

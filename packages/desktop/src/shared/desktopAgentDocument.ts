@@ -1,4 +1,4 @@
-import { AGENT_SOURCE, type AgentSource } from '@shared/schemas';
+import { AGENT_SOURCE, type AgentSource } from '@texra-ai/harness/schemas';
 
 /** Stable editor resource names resolve through the agent catalog, never an
  * arbitrary absolute path supplied by the renderer. */

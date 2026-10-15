@@ -11,14 +11,11 @@ import { customElement, property, state } from 'lit/decorators.js';
 import { classMap } from 'lit/directives/class-map.js';
 import { repeat } from 'lit/directives/repeat.js';
 
+import { goalStateOf, type GoalState } from '@texra-ai/harness/schemas';
+import { acceptsFollowUp } from '@texra-ai/harness/schemas';
 import { type ApprovalBypassKind } from '@shared/approvalBypassKind';
 import { resolveBypass } from '@shared/approvalBypassKind';
-import { goalStateOf, type GoalState } from '@shared/plugins/goal';
-import {
-  acceptsFollowUp,
-  type SessionView,
-  type RunView,
-} from '@shared/session/sessionView';
+import type { SessionView, RunView } from '@shared/session/sessionView';
 import type { TeXRAIconName } from '@shared/iconNames';
 import { SessionUiEvents } from '@texra/shared/session/uiEvents';
 import { CopyButtonController } from '@texra/shared/litControllers/CopyButtonController';

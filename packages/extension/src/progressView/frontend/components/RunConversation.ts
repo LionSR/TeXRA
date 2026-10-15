@@ -6,9 +6,9 @@
 import { LitElement, css, html, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 
-import type { SessionView, RunView } from '@shared/session/sessionView';
 import type { HostSnapshot } from '@texra/shared/session/hostSnapshot';
 import type { Surface } from '@texra/shared/session/surface';
+import type { SessionView, RunView } from '@texra-ai/harness';
 
 import './ToolUseRunContent';
 import './WorkflowRunContent';

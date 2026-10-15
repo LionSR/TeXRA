@@ -9,6 +9,8 @@ import { guard } from 'lit/directives/guard.js';
 import { repeat } from 'lit/directives/repeat.js';
 
 // Local imports - shared schemas
+import { isInFlightPhase } from '@texra-ai/harness/schemas';
+import { formatRunStatusLabel } from '@shared/runs/runStatusDisplay';
 import {
   type RunOutcome,
   type RunLifecycleStatus,
@@ -20,9 +22,7 @@ import type {
   SessionView,
   TranscriptView,
 } from '@shared/session/sessionView';
-import { isInFlightPhase } from '@shared/runs/runStatus';
 import { taskGroupDisplayStatus } from '@shared/runs/taskGroupProjection';
-import { formatRunStatusLabel } from '@shared/runs/runStatusDisplay';
 import { compareBySeqNo } from '@shared/runs/runOrdering';
 import {
   scriptStages,

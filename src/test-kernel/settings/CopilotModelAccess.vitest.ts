@@ -10,7 +10,7 @@ vi.mock('@texra/shared/hostBridge', () => ({
 }));
 
 // Local imports - shared schemas
-import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
+import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 import type { CopilotRouteInfo } from '@texra/shared/settingsView/settingsViewMessages';
 
 // Local imports - test utilities

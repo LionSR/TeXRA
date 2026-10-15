@@ -5,7 +5,10 @@
 import { type BrowserWindow, dialog } from 'electron';
 import { Effect } from 'effect';
 
-import { INSTRUCTION_ACTION, type InstructionAction } from '@shared/schemas';
+import {
+  INSTRUCTION_ACTION,
+  type InstructionAction,
+} from '@texra-ai/harness/schemas';
 import { NotificationFailed, PromptFailed } from '@texra/hosts/uiHosts';
 import { TranscriptExportFailed } from '@texra/controllers/progressView/transcriptExportFailure';
 import { toErrorMessage } from '@utils/errors/errorMessage';

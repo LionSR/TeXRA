@@ -22,7 +22,6 @@ import '@progressView/frontend/ProgressApp';
 import './TexraDiffView';
 import type { ProgressApp } from '@progressView/frontend/ProgressApp';
 import { createSessionSurfaces } from '@progressView/frontend/sessionSurfaces';
-import { DESKTOP_THEME_KIND } from '@shared/schemas';
 import { hostBridge, postMessage } from '@texra/shared/hostBridge';
 import { type Shell } from '@texra/shared/session/shell';
 import {
@@ -31,6 +30,7 @@ import {
 } from '@texra/shared/state/PersistedState';
 
 import { formatDesktopAccelerator } from '@texra/shared/commands/accelerators';
+import { DESKTOP_THEME_KIND } from '@texra/shared/ipc';
 
 import { applyHostBodyTheme } from '@ui/wa/hostTheme';
 import {

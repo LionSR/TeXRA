@@ -1,10 +1,10 @@
 /** The update-check row of the global root, on the process's one handle. */
 import { Effect, Layer, Result, type Context } from 'effect';
-import type { UpdateCheckRecord } from '@shared/schemas';
 import { GlobalDatabase } from '@shared/session/database';
 import {
   UPDATE_CHECKS,
   UpdateCheckRecords,
+  type UpdateCheckRecord,
 } from '@texra/utils/system/updateCheck';
 
 /** {@link UpdateCheckRecords} on the process's handle on the global root. */

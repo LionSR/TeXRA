@@ -1,8 +1,8 @@
 import { Cause, Effect } from 'effect';
 import * as vscode from 'vscode';
 
+import { withLogChannel } from '@texra-ai/harness';
 import { promptExtensionInstall } from '@frontend/ui/instruction';
-import { withLogChannel } from '@logger/effectLog';
 import { LATEX_WORKSHOP_EXT_ID } from '@texra/shared/constants/latexToolchain';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { extendEnvPath } from '@utils/system/platformPaths';

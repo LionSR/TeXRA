@@ -18,9 +18,9 @@ import {
   refresh,
 } from '@agent/index';
 import { readCustomAgentDir } from '@shared/config/settingsAccess';
-import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { agentKey } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
+import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 import { createSettingsAgentActions } from '@texra/controllers/settingsView/backend/SettingsAgentActions';
 import {
   templateAgentNamePrompt,

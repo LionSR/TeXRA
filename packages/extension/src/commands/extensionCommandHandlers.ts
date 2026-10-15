@@ -4,7 +4,6 @@ import { z } from 'zod';
 // Local imports
 import { API_KEY_PROVIDER_IDS, type ApiKeyProviderId } from '@texra-ai/llm';
 import { EXTENSION_COMMANDS } from '@commands/extensionCommandIds';
-import type { StorageFs, WorkspaceFs } from '@platform/rootedFs';
 import {
   SettingsTargetSchema,
   type SettingsTarget,
@@ -18,6 +17,7 @@ import {
   definedHandler,
   type CommandHandler,
 } from '@texra/shared/commands/registry';
+import type { StorageFs, WorkspaceFs } from '@texra-ai/harness';
 import type { ProcessServices, SessionOwner } from '@texra-ai/harness';
 import type { Effect } from 'effect';
 

@@ -1,4 +1,4 @@
-import type { Theme } from '@shared/schemas';
+import type { Theme } from '@texra/shared/ipc';
 /**
  * Apply Web Awesome's native color-scheme classes (wa-light / wa-dark) onto
  * the document root, mirroring the host theme.

@@ -11,14 +11,14 @@
 import * as vscode from 'vscode';
 
 // Local imports
-import { formatLogData } from '@logger/formatLogData';
 import {
   LOG_CHANNEL,
   entryChannel,
   entryMessage,
   type LogEntry,
   type LogSink,
-} from '@logger/logSink';
+} from '@texra-ai/harness';
+import { formatLogData } from '@logger/formatLogData';
 
 /** Everything the channel itself does not already render. The `data` payload
  * arrives already rendered and bounded by the write path, so this shows it on

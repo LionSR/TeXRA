@@ -6,8 +6,8 @@
  */
 import { Effect, Stream } from 'effect';
 
-import { withLogChannel } from '@logger/effectLog';
-import { attentionOf } from '@shared/session/sessionView';
+import { withLogChannel } from '@texra-ai/harness';
+import { attentionOf } from '@texra-ai/harness/schemas';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { formatResultCount } from '@utils/text/stringUtils';
 import type { Session, SessionView } from '@texra-ai/harness';

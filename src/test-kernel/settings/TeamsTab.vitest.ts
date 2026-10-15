@@ -11,9 +11,9 @@ vi.mock('@texra/shared/hostBridge', () => ({
 
 // Local imports
 import type { TeamsTab } from '@settingsView/frontend/tabs/TeamsTab';
-import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { AGENT_MODE_PRESETS } from '@shared/schemas';
 import type { AgentModePreset } from '@shared/schemas';
+import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 
 // Local file imports
 import {

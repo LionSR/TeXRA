@@ -21,7 +21,7 @@ import {
   type RunView,
 } from '@shared/session/sessionView';
 import { isTerminalOutcomePhase } from '@shared/runs/runStatus';
-import { formatLoopPositionLabel } from '@shared/runs/runStatusDisplay';
+import { formatLoopPositionLabel } from '@ui/copy/runStatus';
 import { formatCompactDuration, pluralize } from '@utils/text/stringUtils';
 
 import {

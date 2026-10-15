@@ -4,7 +4,7 @@
 import { Data, Effect, Scope } from 'effect';
 
 import { withProcessServices, type ProcessRuntime } from '@texra-ai/harness';
-import { withLogChannel } from '@logger/effectLog';
+import { withLogChannel } from '@texra-ai/harness';
 import { hasUsableSetupCredential } from '@texra/model/setupCredentialAccess';
 import { kickoffDesktopSetup } from '@texra/controllers/onboarding/setupLaunch';
 import type { HostRunActions } from '@texra/controllers/session/hostRunActions';

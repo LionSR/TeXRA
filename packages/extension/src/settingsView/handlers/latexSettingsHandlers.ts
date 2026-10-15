@@ -7,7 +7,7 @@ import { Effect } from 'effect';
 import * as vscode from 'vscode';
 
 import { showLoggedInfoMessage } from '@frontend/ui/errorHandlingUtils';
-import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
+import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 import type { LatexEditorStatus } from '@texra/controllers/settingsView/LatexToolingController';
 import type { SettingsViewInboundHandlerRegistry } from '@texra/controllers/settingsView/settingsViewDispatch';
 import type { createSettingsViewBody } from '@texra/controllers/settingsView/sharedSettingsCommands';

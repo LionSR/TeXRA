@@ -12,9 +12,7 @@ import 'katex/dist/katex.min.css';
 import '@progressView/frontend/ProgressApp';
 import { mountProgressWebview } from '@progressView/frontend/progressWebview';
 import type { ProgressApp } from '@progressView/frontend/ProgressApp';
-import { formatLoopPositionLabel } from '@shared/runs/runStatusDisplay';
-import type { TraceDocument } from '@transcript';
-import { toErrorMessage } from '@utils/errors/errorMessage';
+import { formatLoopPositionLabel } from '@ui/copy/runStatus';
 
 import { setTraceCut, trace } from './traceHostBridge';
 import {
@@ -22,6 +20,7 @@ import {
   tracePositions,
   type TracePosition,
 } from './traceFrames';
+import type { TraceDocument } from '@texra-ai/harness/schemas';
 
 /**
  * Last-resort error surface for a trace that fails to load or parse. A
@@ -36,7 +35,7 @@ function renderLoadError(err: unknown): void {
   const heading = document.createElement('h1');
   heading.textContent = 'Unable to load trace';
   const detail = document.createElement('p');
-  detail.textContent = toErrorMessage(err);
+  detail.textContent = err instanceof Error ? err.message : String(err);
   errorRegion.append(heading, detail);
   document.querySelector('progress-app')?.replaceWith(errorRegion);
 }

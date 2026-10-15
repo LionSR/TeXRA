@@ -9,11 +9,11 @@ import { Effect } from 'effect';
  * catalog row and are applied by `readSetting`, so a snapshot builder has
  * nothing left of its own to say.
  */
-import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import {
   readSetting,
   type SettingsStores,
 } from '@shared/config/settingsAccess';
+import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
 import type { DerivedSettingsSnapshot } from '@texra/shared/settingsView/settingsViewMessages';
 
