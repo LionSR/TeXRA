@@ -6,7 +6,10 @@ import * as vscode from 'vscode';
 import { runExecuteCommand as agentRunExecuteCommand } from '@commands/agent/executeCommand';
 import { downloadArXivSource as latexDownloadArXivSource } from '@commands/latex/arXivCommands';
 import { confirmCleanBuild } from '@commands/housekeeping/cleanCommands';
-import { launchSetupAssistant } from '@commands/setup/setupAssistantCommand';
+import {
+  launchSetupAssistant,
+  SETUP_ASSISTANT_CHANNEL,
+} from '@commands/setup/setupAssistantCommand';
 import { createSampleProject as sysCreateSampleProject } from '@commands/system/sampleProjectCommands';
 import {
   setApiKey as apiSetApiKey,
@@ -25,6 +28,7 @@ import { cloneOverleafProject as gitCloneOverleafProject } from '@commands/git/g
 import { openGettingStarted as sysOpenGettingStarted } from '@commands/system/walkthroughCommands';
 import { VscodeExternalOpener } from '@frontend/hosts/VscodeExternalOpener';
 import { showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
+import { withLogChannel } from '@logger/effectLog';
 import { withSessionFs } from '@platform/rootedFs';
 import type { ProgressViewProvider } from '@progressView/ProgressViewProvider';
 import type { SettingsViewProvider } from '@settingsView/SettingsViewProvider';
@@ -74,6 +78,7 @@ export function createExtensionCommandActions(
               log: 'Warn',
               message: 'Refreshing the onboarding state',
             }),
+            withLogChannel(SETUP_ASSISTANT_CHANNEL),
           ),
         ),
       ),

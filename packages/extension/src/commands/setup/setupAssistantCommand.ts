@@ -31,7 +31,9 @@ import type {
 } from '@texra-ai/harness';
 import type { WorkspaceRoots } from '@texra-ai/harness';
 
-const CHANNEL = 'SetupAssistant';
+/** The setup assistant's log channel, for its launch and what follows it. */
+export const SETUP_ASSISTANT_CHANNEL = 'SetupAssistant';
+const CHANNEL = SETUP_ASSISTANT_CHANNEL;
 /**
  * Temporarily flip `useOpenRouter` on for the OR-only launch path and always
  * restore it, including failures before `executeAgent` starts. The flip is the

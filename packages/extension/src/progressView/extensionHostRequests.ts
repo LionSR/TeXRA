@@ -256,6 +256,7 @@ export function createExtensionHostRequests(
                   log: 'Warn',
                   message: 'Refreshing the onboarding state',
                 }),
+                withLogChannel(CHANNEL),
               ),
               options.scope,
             ),
