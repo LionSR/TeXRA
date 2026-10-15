@@ -29,18 +29,22 @@ The packs are renamed to fixed `harness.tgz` and `llm.tgz` so this folder's
 versions. The harness pack names `@texra-ai/llm` at its exact version, which
 the llm tarball installed beside it satisfies.
 
-`npm install` rather than `pnpm` on purpose: it installs the tarballs and the two
-peer dependencies (`effect`, `zod`) into a plain `node_modules`, with no
-workspace link that could hide a missing export.
+`npm install` rather than `pnpm` on purpose: it installs the tarballs and the
+peer dependencies (`effect`, `@effect/platform-node`, `@effect/sql-sqlite-node`,
+`zod`) into a plain `node_modules`, with no workspace link that could hide a
+missing export, and no lockfile: the install resolves what a new consumer's
+would, so an incoherent Effect set fails here. CI runs it (the
+`packed example` job) on every change to either package or to the workspace's
+dependency files, and nightly.
 
 Expected output, with the temporary paths varying:
 
 ```text
-session root: /var/folders/.../texra-agent-example-XXXX/storage/workspace-storage/texra-agent-example-XXXX-<hash>
-first view level: 0 streams
+[...] INFO (#1): First install: plugins switched off by default:  { channel: 'toolAvailability' }
+[agentRegistry] Loaded 0 agents in 4ms
+session root: /var/folders/.../texra-harness-example-XXXX/storage/v1/workspace-storage/texra-harness-example-XXXX-<hash>
+first view level: 0 runs
 sessions the owner holds: 1
-[TeXRA] DEBUG [...] [agentRegistry] Scanned 0 agents from custom
-[TeXRA] INFO  [...] [agentRegistry] Loaded 0 agents in 6ms
 refusal: AgentNotFound - Agent "no-such-agent" was not found in the configured agent directory.
 done
 ```

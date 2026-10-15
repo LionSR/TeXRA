@@ -22,16 +22,27 @@ Not on the registry yet. Inside this workspace, depend on it by name:
 It depends on [`@texra-ai/llm`](../llm/README.md), the model package, which a
 pack resolves to the same-numbered release.
 
-`effect` and `zod` (v4) are peer dependencies of both packages: the bundle
-imports `effect` at runtime (`dist/index.js` opens with
-`import ... from 'effect'`). Install both alongside it, `effect` at any 4.x
-release (`^4.0.0`). Two copies of `effect` in one
-process do not work at all: Streams, Fibers and Context built by one copy do
-not interoperate with another's, and a peer dependency is how a consumer gets
-one copy rather than a second nested one.
+`effect` and `zod` (v4) are peer dependencies of both packages, and the
+harness also takes `@effect/platform-node` and `@effect/sql-sqlite-node` as
+peers: the bundles import all of them at runtime. Two copies of `effect` in
+one process do not work at all: Streams, Fibers and Context built by one copy
+do not interoperate with another's, and a peer dependency is how a consumer
+gets one copy rather than a second nested one. Effect's packages also release
+in patch lockstep: each `@effect/*` release peers `effect` at its own patch
+(`@effect/platform-node-shared@4.0.5` needs `effect ^4.0.5`), so the Effect
+set has to come from your one install, on caret ranges that let it resolve
+to one patch. Pinning `effect` exactly while an `@effect/*` package floats
+past it fails at startup.
 
 ```jsonc
-{ "dependencies": { "effect": "^4.0.0", "zod": "^4.4.3" } }
+{
+  "dependencies": {
+    "@effect/platform-node": "^4.0.5",
+    "@effect/sql-sqlite-node": "^4.0.5",
+    "effect": "^4.0.5",
+    "zod": "^4.4.3",
+  },
+}
 ```
 
 ## Usage
@@ -367,8 +378,7 @@ files.
 | `@texra-ai/harness/plugins` | `harnessBuiltins`: the built-in plugins                                                                                             |
 | `@texra-ai/harness/node`    | `nodePlatform(options)`, a ready-made Node `AgentPlatform` with its workspace roots                                                 |
 
-Every entry needs the `effect` and `zod` peers installed. See
-[Install](#install).
+Every entry needs the peers installed. See [Install](#install).
 
 ## Effect
 

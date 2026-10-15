@@ -36,6 +36,7 @@ jobs:
       code: ${{ steps.detect.outputs.code }}
       desktop: ${{ steps.detect.outputs.desktop }}
       vscode: ${{ steps.detect.outputs.vscode }}
+      packages: ${{ steps.detect.outputs.packages }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
@@ -54,6 +55,7 @@ jobs:
             echo "code=true" >> "$GITHUB_OUTPUT"
             echo "desktop=true" >> "$GITHUB_OUTPUT"
             echo "vscode=true" >> "$GITHUB_OUTPUT"
+            echo "packages=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
           base='${{ github.event.pull_request.base.sha }}'
@@ -86,6 +88,15 @@ jobs:
             echo "vscode=true" >> "$GITHUB_OUTPUT"
           else
             echo "vscode=false" >> "$GITHUB_OUTPUT"
+          fi
+          # Published packages = the two npm packages, what their bundles
+          # inline from scripts/, and every file that decides which versions a
+          # consumer's install resolves: a PR touching any of them installs the
+          # packed tarballs the way a consumer would.
+          if grep -qE '^packages/(harness|llm)/|^scripts/(code-sandbox-worker|stub-internal-validation-model)\.mjs$|^(package\.json|pnpm-lock\.yaml|pnpm-workspace\.yaml|tsconfig(\.build)?\.json)$|^\.github/workflows/ci\.yml$' <<<"$files"; then
+            echo "packages=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "packages=false" >> "$GITHUB_OUTPUT"
           fi
 
   # The static gate is `npm run gate` (package.json): invariants, then
@@ -445,6 +456,30 @@ jobs:
           if-no-files-found: ignore
           retention-days: 14
 
+  # Packs @texra-ai/llm and @texra-ai/harness, installs both tarballs into
+  # packages/harness/example with plain npm (no workspace links, no lockfile),
+  # and runs it. The workspace's lockfile cannot see what a consumer's fresh
+  # install resolves, so this is the check that a broken tarball, an
+  # undeclared dependency, or an incoherent Effect set fails before npm does.
+  # It runs nightly too: a new upstream patch changes a consumer's install
+  # with no commit here.
+  packed-example:
+    name: packed example (linux)
+    needs: changes
+    if: needs.changes.outputs.packages == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Setup workspace
+        uses: ./.github/actions/setup-workspace
+
+      - name: Install the packed tarballs and run the example
+        run: pnpm --filter @texra-ai/harness run example:packed
+
   runtime-validation:
     name: runtime validation (linux)
     # Runs on push to main, the nightly schedule (whose whole purpose is this
@@ -522,6 +557,7 @@ jobs:
       - desktop-e2e
       - vscode-host-e2e
       - runtime-validation
+      - packed-example
       - docs-check
     if: always()
 
@@ -559,6 +595,7 @@ jobs:
             'desktop-e2e:${{ needs.desktop-e2e.result }}' \
             'vscode-host-e2e:${{ needs.vscode-host-e2e.result }}' \
             'runtime-validation:${{ needs.runtime-validation.result }}' \
+            'packed-example:${{ needs.packed-example.result }}' \
             'docs-check:${{ needs.docs-check.result }}'; do
             name="${result%%:*}"
             value="${result#*:}"

@@ -86,8 +86,9 @@ Things the tree won't tell you:
   has the rules. The invariant to hold is "never widen a
   baseline"; the open work is the Tier-1 public manifest and shrinking the
   frozen lists, not
-  another lint rule. npm publication is deliberately held until a named external
-  consumer exists. Kernel architecture tests under
+  another lint rule. `@texra-ai/harness` and `@texra-ai/llm` publish to npm at
+  1.0, once owner decision #9's six preconditions hold (#13723), by hand with
+  pnpm (`releasing` skill, "npm packages"). Kernel architecture tests under
   `src/test-kernel/architecture/` (including
   `approvalPolicyAuthorityRatchet.vitest.ts`, and
   `sharedSchemasDeepImportRatchet.vitest.ts`, which forbids every

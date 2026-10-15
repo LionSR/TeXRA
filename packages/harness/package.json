@@ -48,8 +48,6 @@
   },
   "dependencies": {
     "@cantoo/pdf-lib": "catalog:",
-    "@effect/platform-node": "catalog:",
-    "@effect/sql-sqlite-node": "catalog:",
     "@jitl/quickjs-wasmfile-release-sync": "catalog:",
     "@texra-ai/llm": "workspace:*",
     "date-fns": "catalog:",
@@ -81,10 +79,14 @@
     "yaml": "catalog:"
   },
   "peerDependencies": {
-    "effect": "^4.0.0",
+    "@effect/platform-node": "catalog:peers",
+    "@effect/sql-sqlite-node": "catalog:peers",
+    "effect": "catalog:peers",
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@effect/platform-node": "catalog:",
+    "@effect/sql-sqlite-node": "catalog:",
     "@types/mime-types": "^3.0.1",
     "@types/nunjucks": "^3.2.6",
     "@types/turndown": "^5.0.6",

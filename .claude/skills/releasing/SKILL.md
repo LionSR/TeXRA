@@ -9,7 +9,9 @@ TeXRA ships three release tracks off the same commit, with identical
 user-facing notes. Publishing is CI-driven
 (`.github/workflows/release.yml`, fired by `release: published`) — the manual
 steps are only: update the changelog, cut two tags, and create two GitHub
-Releases. No local `vsce` / `ovsx` / `npm publish` invocation and no OTP.
+Releases. No local `vsce` / `ovsx` / `npm publish` invocation and no OTP. The
+SDK packages are the exception: they publish by hand, on their own versions
+(see "npm packages" below).
 Stable releases follow the steps below; a preview (`X.Y.Z-preview.N`) follows
 "Preview releases" further down and never touches the stable channel.
 
@@ -65,6 +67,58 @@ Stable releases follow the steps below; a preview (`X.Y.Z-preview.N`) follows
    pin in `supabase/functions/log-usage/deno.json` and `log-usage-v2/deno.json`, then refresh their adjacent
    `deno.lock` files. It is easy to miss, since it isn't part of the automated
    bump.
+
+## npm packages: `@texra-ai/llm` and `@texra-ai/harness`
+
+The SDK pair is published by hand, not by `release.yml`, and not with the app's
+tags. Owner decision #9 (#13723) publishes both at 1.0 once its six
+preconditions hold: API reports, resume and approvals in the SDK, inline
+persona, the llm build, the `effect` peer range, and independent versions.
+Until then nothing here runs.
+
+- **Versions are their own.** `bump-workspace-version.mjs` leaves both
+  manifests alone. Bump `version` in `packages/llm/package.json` and/or
+  `packages/harness/package.json` by hand when what they ship changed since
+  the last publish. The harness pack pins `@texra-ai/llm` at the exact
+  workspace version, so that llm version must be on npm before the harness
+  that names it.
+- **Effect peers.** `effect`, `@effect/platform-node` and
+  `@effect/sql-sqlite-node` are peers whose ranges come from the `peers`
+  catalog in `pnpm-workspace.yaml`; its floor must equal the `catalog`
+  versions the workspace builds against. Effect releases in patch lockstep,
+  so an Effect bump raises both.
+
+Steps, from a clean checkout of the commit on `main` whose CI is green:
+
+1. **Packed example.** `corepack pnpm --filter @texra-ai/harness run
+   example:packed` builds both, packs both, installs the tarballs into
+   `packages/harness/example` with plain npm (a fresh consumer resolution, no
+   lockfile) and runs it. It must end with `done`. CI's `packed example` job
+   runs the same on every change to either package and nightly; a red run
+   there blocks the publish.
+2. **Inspect and dry-run.** Step 1 leaves the packs in
+   `packages/harness/example` (`llm.tgz`, `harness.tgz`): `tar -tzf` shows
+   only `dist/`, `LICENSE.txt`, `NOTICE.txt`, `README.md` and
+   `package.json`, and `tar -xOzf <pack> package/package.json` shows no
+   `workspace:` or `catalog:` specifier. Then `corepack pnpm --filter
+   @texra-ai/llm publish --dry-run`, and the same for `@texra-ai/harness`,
+   names the version and registry each would publish.
+3. **Publish llm first, then harness**, with pnpm only (each package's
+   `prepack` refuses npm, since only pnpm applies `publishConfig.exports` and
+   resolves `workspace:`/`catalog:` versions):
+
+   ```bash
+   corepack pnpm --filter @texra-ai/llm publish --access public
+   corepack pnpm --filter @texra-ai/harness publish --access public
+   ```
+
+   Skip llm when its version is already on npm. npm asks for the OTP. A
+   version is permanent once published (`npm deprecate` is the only way
+   back), so a wrong publish costs a version number.
+4. **Verify from the registry.** In an empty directory, `npm install
+   @texra-ai/harness @effect/platform-node @effect/sql-sqlite-node effect
+   zod` and import `@texra-ai/harness`, `@texra-ai/harness/node` and
+   `@texra-ai/harness/plugins`.
 
 ## Preview releases
 

@@ -71,7 +71,7 @@
     "@effect/language-service": "^0.87.4",
     "@effect/platform-node": "catalog:",
     "@effect/sql-sqlite-node": "catalog:",
-    "@effect/vitest": "4.0.4",
+    "@effect/vitest": "catalog:",
     "@electron/asar": "^4.3.1",
     "@eslint/js": "^10.0.1",
     "@jitl/quickjs-wasmfile-release-sync": "catalog:",

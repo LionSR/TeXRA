@@ -50,14 +50,14 @@
     "ws": "8.22.0"
   },
   "peerDependencies": {
-    "effect": "^4.0.0",
+    "effect": "catalog:peers",
     "zod": "^4.4.3"
   },
   "devDependencies": {
-    "@effect/vitest": "4.0.4",
+    "@effect/vitest": "catalog:",
     "@types/ws": "8.18.2",
     "@typescript/native": "catalog:",
-    "effect": "4.0.4",
+    "effect": "catalog:",
     "esbuild": "catalog:",
     "vitest": "^5.0.3",
     "zod": "4.4.3"
