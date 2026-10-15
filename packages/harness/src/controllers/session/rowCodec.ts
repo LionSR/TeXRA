@@ -80,6 +80,9 @@ export const EVENT_JOINS = `JOIN event_sequence s ON s.id = e.aggregate`;
 /** An event with its aggregate's key and its blobs, each its digest then
  *  its value in hex. */
 export const EVENT_FROM = `event e ${EVENT_JOINS}`;
+/** One aggregate's surrogate, from its two columns. */
+export const AGGREGATE =
+  '(SELECT id FROM event_sequence WHERE kind = ? AND logical_id = ?)';
 /** The same tuple for a projected row, on its source row's envelope: this
  *  build's projector wrote it, so it is at the current version. */
 export const PROJECTED_COLUMNS = `p."commit" AS "commit", s.kind AS kind,
