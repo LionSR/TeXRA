@@ -12,7 +12,6 @@ import {
   completedTurn,
   FILE_UPLOAD_LIFETIME_SECONDS,
   ModelConfigurationSchema,
-  ObservationPolicySchema,
   type BackgroundEvent,
   type BackgroundSubmission,
   type Model,
@@ -29,8 +28,8 @@ import {
   fillModelError,
   type RemoteOperation,
 } from '../errors.js';
-import { originOf, sameModelOrigin } from '../protocol.js';
-import { ownedAbortSafeRequest } from './transport.js';
+import { originOf } from '../protocol.js';
+import { admitObservation, ownedAbortSafeRequest } from './transport.js';
 import { filesApiUploads } from './uploadCache.js';
 import { openaiFailure } from './openaiError.js';
 import { withResponsesContinuation } from './openaiResponsesLower.js';
@@ -301,38 +300,21 @@ export function openaiResponsesModel(
   });
 
   const observe: NonNullable<Model['background']>['observe'] = (
-    turn,
+    admitted,
     input,
     policy,
   ) =>
     Stream.unwrap(
       Effect.gen(function* () {
-        const operation = yield* boundOperation(input, origin);
-        if (
-          turn.protocol !== 'openai-responses' ||
-          turn.mode !== 'background' ||
-          !sameModelOrigin(turn, operation.origin)
-        )
-          return yield* new ModelError({
-            kind: 'unsupported',
-            message: 'The admitted turn belongs to another model binding.',
-          });
-        const parsedPolicy = ObservationPolicySchema.safeParse(policy);
-        if (!parsedPolicy.success)
-          return yield* new ModelError({
-            kind: 'invalid-request',
-            message: 'The observation deadline is invalid.',
-            cause: parsedPolicy.error,
-          });
-        const remaining =
-          parsedPolicy.data.deadlineAtMs - (yield* Clock.currentTimeMillis);
-        const deadline = new ModelError({
-          kind: 'observation-deadline',
-          message: 'The original observation deadline has expired.',
-          operation,
-          responseId: operation.providerResponseId,
-        });
-        if (remaining <= 0) return yield* deadline;
+        const { turn, operation, deadlineAtMs, deadline } =
+          yield* admitObservation(
+            'openai-responses',
+            origin,
+            admitted,
+            input,
+            policy,
+          );
+        const remaining = deadlineAtMs - (yield* Clock.currentTimeMillis);
         let returnedModel: string | undefined;
         let requestId: string | undefined;
         const enrich = (error: ModelError) =>
@@ -371,7 +353,7 @@ export function openaiResponsesModel(
             const events = yield* sdkEvents(opened.data, enrich);
             const readTimeRemaining = Math.max(
               0,
-              parsedPolicy.data.deadlineAtMs - (yield* Clock.currentTimeMillis),
+              deadlineAtMs - (yield* Clock.currentTimeMillis),
             );
             // The observation may join mid-item: what it missed, the
             // terminal snapshot supplies.

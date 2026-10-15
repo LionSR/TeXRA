@@ -1,44 +1,42 @@
 /**
- * PKCE (RFC 7636) + CSRF-state generation for subscription OAuth flows
- * (ChatGPT/Codex, Grok/xAI, …). Shared so providers do not re-roll crypto.
+ * The PKCE (RFC 7636) authorization-code request of a subscription OAuth flow
+ * (ChatGPT/Codex, Grok/xAI, …): a fresh verifier, its S256 challenge and a
+ * CSRF state, on the authorize URL the provider's policy describes.
  */
 import { hash, randomBytes } from 'node:crypto';
 
-export interface PkcePair {
-  /** The high-entropy secret carried through the loopback round-trip. */
-  verifier: string;
-  /** base64url(SHA-256(verifier)) sent in the authorize request. */
-  challenge: string;
-  /** Always S256. */
-  method: 'S256';
-}
+import type {
+  SubscriptionAuthorizeRequest,
+  SubscriptionOAuthPolicy,
+} from './SubscriptionOAuthCoordinator.js';
 
 /** 32 random bytes, base64url (no padding). */
-function generateCodeVerifier(): string {
-  return randomBytes(32).toString('base64url');
-}
+const randomToken = (): string => randomBytes(32).toString('base64url');
 
 /**
- * Random CSRF state or OIDC nonce (base64url). Deliberately a second
- * declaration rather than an alias of {@link generateCodeVerifier}: the two
- * roles are named separately so a call site reads as what it generates, and
- * an alias would read to knip as a duplicate export.
+ * The authorize request for a loopback bind on `port`. CSRF is covered by
+ * `state` on the loopback callback; no OIDC `nonce` is sent, since nothing
+ * verifies one against the `id_token`.
  */
-export function generateOAuthState(): string {
-  return randomBytes(32).toString('base64url');
-}
-
-/** base64url(SHA-256(verifier)), no padding. */
-function computeCodeChallenge(verifier: string): string {
-  return hash('sha256', verifier, 'base64url');
-}
-
-/** A fresh PKCE pair (verifier + S256 challenge). */
-export function generatePkcePair(): PkcePair {
-  const verifier = generateCodeVerifier();
-  return {
-    verifier,
-    challenge: computeCodeChallenge(verifier),
-    method: 'S256',
-  };
+export function authorizeRequest(
+  {
+    authorize,
+    tokenEndpoint,
+  }: Pick<SubscriptionOAuthPolicy<never>, 'authorize' | 'tokenEndpoint'>,
+  port: number,
+): SubscriptionAuthorizeRequest {
+  const verifier = randomToken();
+  const state = randomToken();
+  const redirectUri = authorize.redirectUri(port);
+  const query = new URLSearchParams({
+    response_type: 'code',
+    client_id: tokenEndpoint.clientId,
+    redirect_uri: redirectUri,
+    scope: authorize.scope,
+    code_challenge: hash('sha256', verifier, 'base64url'),
+    code_challenge_method: 'S256',
+    ...authorize.params,
+    state,
+  });
+  return { url: `${authorize.url}?${query}`, verifier, state, redirectUri };
 }

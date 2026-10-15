@@ -1,6 +1,7 @@
 // Third-party imports
 import { it } from '@effect/vitest';
-import { Effect } from 'effect';
+import { Deferred, Effect, Fiber } from 'effect';
+import { TestClock } from 'effect/testing';
 import { FetchHttpClient } from 'effect/http';
 import { afterEach, describe, expect, vi, type Mock } from 'vitest';
 import { z } from 'zod';
@@ -118,28 +119,32 @@ describe('form token endpoint (declarative)', () => {
 });
 
 describe('postOAuth', () => {
-  // Live clock: the 20ms `Effect.timeoutOrElse` deadline must really elapse so
-  // the stalled body read loses the race and the fetch signal is aborted.
-  it.live('times out a response whose body stalls after the headers', () =>
+  it.effect('times out a response whose body stalls after the headers', () =>
     Effect.gen(function* () {
       // The stream never closes, so only a deadline over the body read can end
       // the request; the fetch signal must be aborted so the stream is released.
-      const fetchMock = vi.fn<typeof fetch>(
-        async () => new Response(new ReadableStream(), { status: 200 }),
-      );
+      const fetched = Deferred.makeUnsafe<void>();
+      const fetchMock = vi.fn<typeof fetch>(async () => {
+        Deferred.doneUnsafe(fetched, Effect.void);
+        return new Response(new ReadableStream(), { status: 200 });
+      });
 
-      const error = yield* Effect.flip(
-        postOAuth({
-          url: 'https://example.test/token',
-          headers: {},
-          body: '',
-          timeoutMs: 20,
-          networkErrorMessage: 'Network error contacting token',
-        }).pipe(
-          Effect.provide(FetchHttpClient.layer),
-          Effect.provideService(FetchHttpClient.Fetch, fetchMock),
+      const request = yield* Effect.forkChild(
+        Effect.flip(
+          postOAuth({
+            url: 'https://example.test/token',
+            headers: {},
+            body: '',
+            networkErrorMessage: 'Network error contacting token',
+          }).pipe(
+            Effect.provide(FetchHttpClient.layer),
+            Effect.provideService(FetchHttpClient.Fetch, fetchMock),
+          ),
         ),
       );
+      yield* Deferred.await(fetched);
+      yield* TestClock.adjust('30 seconds');
+      const error = yield* Fiber.join(request);
       expect(error).toMatchObject({
         _tag: 'OAuthNetworkError',
         message:

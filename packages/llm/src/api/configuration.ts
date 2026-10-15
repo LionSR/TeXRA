@@ -8,7 +8,6 @@
 import { ModelProvider, ReasoningEffort, type ModelConfig } from 'llm-zoo';
 
 import { acceptedEfforts, wireEffort } from '../models/reasoningChoice.js';
-import { OPENAI_DEFAULT_ENDPOINT } from '../providers/providerPlugins.js';
 import { responsesConfiguration } from './responsesConfiguration.js';
 import type { ModelConfiguration } from '../turn.js';
 import type { BindSpec } from '../node.js';
@@ -29,7 +28,6 @@ export type ConfigurationOf<P extends HttpProtocol> = Extract<
 export interface Facts {
   readonly spec: BindSpec;
   readonly config: ModelConfig;
-  readonly capabilities: ModelConfig['capabilities'];
   /** Requested model and deployment; a route addressed under another name overrides the model. */
   readonly base: {
     readonly requestedModel: string;
@@ -82,7 +80,6 @@ const CONFIGURE: {
   'anthropic-messages': ({
     base,
     config,
-    capabilities,
     controls,
     spec,
     supportsTemperature,
@@ -93,7 +90,7 @@ const CONFIGURE: {
       protocol: 'anthropic-messages',
       supportsTemperature,
       supportsForcedToolChoice: true,
-      supportsSystemMessages: capabilities.supportsIntermDevMsgs,
+      supportsSystemMessages: config.capabilities.supportsIntermDevMsgs,
       defaults: {
         ...controls,
         parallelToolCalls: true,
@@ -104,7 +101,7 @@ const CONFIGURE: {
           choice.effort === ReasoningEffort.MINIMAL
             ? null
             : choice.effort,
-        cache: capabilities.supportsPromptCaching ? '5m' : 'disabled',
+        cache: config.capabilities.supportsPromptCaching ? '5m' : 'disabled',
         stopSequences: [],
       },
     };
@@ -138,7 +135,6 @@ const CONFIGURE: {
   'openrouter-chat': ({
     base,
     config,
-    capabilities,
     controls,
     spec,
     supportsTemperature,
@@ -149,8 +145,8 @@ const CONFIGURE: {
     protocol: 'openrouter-chat',
     supportsTemperature,
     supportsForcedToolChoice: true,
-    supportsImageInput: capabilities.supportsVision,
-    supportsAudioInput: capabilities.supportsNativeAudio,
+    supportsImageInput: config.capabilities.supportsVision,
+    supportsAudioInput: config.capabilities.supportsNativeAudio,
     supportedEfforts: acceptedEfforts(config),
     defaults: {
       maxOutputTokens: controls.maxOutputTokens,
@@ -175,7 +171,6 @@ export function configurationFor(spec: BindSpec): HttpModelConfiguration {
   return CONFIGURE[spec.protocol]({
     spec,
     config,
-    capabilities: config.capabilities,
     base: {
       requestedModel: config.id,
       deployment: {
@@ -232,9 +227,9 @@ export function forcedToolChoice(
 
 /**
  * Whether the binding serves Responses over its persistent WebSocket: the
- * caller's opt-in, on a route known to speak it (the ChatGPT subscription,
- * or OpenAI's own endpoint; a per-model or dashboard endpoint may not), and
- * never for turns that go out as background work.
+ * caller's opt-in, on OpenAI's own endpoint (the ChatGPT subscription or the
+ * API; a per-model or dashboard endpoint may not speak it), and never for
+ * turns that go out as background work.
  */
 export function servesWebSocket(
   spec: BindSpec,
@@ -244,7 +239,6 @@ export function servesWebSocket(
     configuration.protocol === 'openai-responses' &&
     spec.options.webSocket &&
     !(spec.options.background && backgroundCapable(configuration)) &&
-    (spec.credential.kind === 'codex' ||
-      spec.endpoint === OPENAI_DEFAULT_ENDPOINT)
+    configuration.openaiEndpoint
   );
 }

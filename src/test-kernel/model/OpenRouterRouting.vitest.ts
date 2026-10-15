@@ -1,10 +1,20 @@
 import { it } from '@effect/vitest';
 import { Cause, Effect, Exit, Layer } from 'effect';
-import { MODEL_CONFIGS } from 'llm-zoo';
+import {
+  MODEL_CONFIGS,
+  ModelProvider,
+  type ModelConfig,
+  type ReasoningMode,
+} from 'llm-zoo';
 
 import { assert, describe, expect } from 'vitest';
 
-import { apiKeySecretName, selectModel } from '@texra-ai/llm';
+import {
+  apiKeySecretName,
+  decideModelRoute,
+  OWN_KEY_ROUTE_FACTS,
+  selectModel,
+} from '@texra-ai/llm';
 import {
   ModelAccess,
   modelAccessLayer,
@@ -16,70 +26,68 @@ import {
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { hostStores, setupPlatform } from '@test/support/setupPlatform';
 import { testHttpClientLayer } from '@test/support/fetchTestUtils';
-import {
-  isOpenRouterRoutingUnsupported,
-  shouldRouteModelThroughOpenRouter,
-} from '../../../packages/llm/src/models/openRouterRouting.js';
 
 const GPT4O = 'openai/gpt-4o-2024-11-20';
 
-describe('shouldRouteModelThroughOpenRouter', () => {
+const routeKind = (
+  fields: Partial<ModelConfig>,
+  useOpenRouter: boolean,
+  mode?: ReasoningMode,
+) =>
+  decideModelRoute(
+    { ...MODEL_CONFIGS[GPT4O], ...fields },
+    { ...OWN_KEY_ROUTE_FACTS, useOpenRouter, mode },
+  ).kind;
+
+describe('the OpenRouter route', () => {
   it.each([
     {
       name: 'routes OpenRouter-only models through OpenRouter',
       config: { openRouterOnly: true, requiresResponsesAPI: false },
       useOpenRouter: false,
-      expected: true,
+      expected: 'openrouter',
     },
     {
       name: 'routes ordinary models through OpenRouter when the global mode is enabled',
       config: { openRouterOnly: false, requiresResponsesAPI: false },
       useOpenRouter: true,
-      expected: true,
+      expected: 'openrouter',
     },
     {
       name: 'does not route Responses API models through OpenRouter',
       config: { openRouterOnly: true, requiresResponsesAPI: true },
       useOpenRouter: true,
-      expected: false,
+      expected: 'api-key',
     },
     {
       name: 'does not override a managed direct route',
       config: {
         openRouterOnly: false,
-        provider: 'moonshot',
+        provider: ModelProvider.MOONSHOT,
         kimiSubscription: true,
         baseUrl: 'https://api.kimi.com/coding/v1',
       },
       useOpenRouter: true,
-      expected: false,
+      expected: 'api-key',
     },
   ])('$name', ({ config, useOpenRouter, expected }) => {
-    expect(shouldRouteModelThroughOpenRouter(config, useOpenRouter)).toBe(
-      expected,
-    );
+    expect(routeKind(config, useOpenRouter)).toBe(expected);
   });
-});
 
-describe('isOpenRouterRoutingUnsupported', () => {
   const config = { openRouterOnly: false, requiresResponsesAPI: false };
 
   it('rejects a route that would discard a requested reasoning mode', () => {
-    expect(isOpenRouterRoutingUnsupported(config, true, 'pro')).toBe(true);
+    expect(routeKind(config, true, 'pro')).toBe('openrouter-unsupported');
   });
 
   it('accepts the same model on OpenRouter when no mode is requested', () => {
-    expect(isOpenRouterRoutingUnsupported(config, true, undefined)).toBe(false);
+    expect(routeKind(config, true)).toBe('openrouter');
   });
 
   it('does not silently change access routes for a Responses API model', () => {
     expect(
-      isOpenRouterRoutingUnsupported(
-        { ...config, requiresResponsesAPI: true },
-        true,
-        'pro',
-      ),
-    ).toBe(true);
+      routeKind({ ...config, requiresResponsesAPI: true }, true, 'pro'),
+    ).toBe('openrouter-unsupported');
   });
 });
 

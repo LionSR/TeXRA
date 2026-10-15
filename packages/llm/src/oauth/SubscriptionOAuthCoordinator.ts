@@ -2,7 +2,7 @@
  * Host-neutral coordinator for a subscription OAuth session (ChatGPT, Grok, …).
  *
  * Pure state machine over injected secret storage + network client. Provider
- * differences (authorize URL, claim extraction, refresh buffer) live in the
+ * differences (authorize URL, claim extraction) live in the
  * {@link SubscriptionOAuthPolicy}; this class owns single-flight refresh,
  * generation supersede, and serialized storage writes.
  *
@@ -24,7 +24,7 @@ import {
   refreshOAuthTokens,
   type OAuthFormEndpoint,
 } from './formTokenClient.js';
-import { generateOAuthState, generatePkcePair } from './pkce.js';
+import { authorizeRequest } from './pkce.js';
 import { SubscriptionOAuthError } from './subscriptionOAuthError.js';
 import type { OAuthRequestError } from './oauthRequest.js';
 import type { SubscriptionSessionBase } from './subscriptionSessionSchema.js';
@@ -56,8 +56,10 @@ export type SubscriptionSession = SubscriptionSessionBase & {
   accountId?: string;
 };
 
+/** The authorize URL a loopback login opens, and what its callback checks. */
 export interface SubscriptionAuthorizeRequest {
   url: string;
+  /** The high-entropy secret carried through the loopback round-trip. */
   verifier: string;
   state: string;
   redirectUri: string;
@@ -98,16 +100,17 @@ export interface SubscriptionOAuthPolicy<S extends SubscriptionSession> {
   readonly sessionSchema: z.ZodType<S>;
   /** Form token endpoint the default client grants against. */
   readonly tokenEndpoint: OAuthFormEndpoint;
-  /** Proactive refresh window (ms before expiresAtMs). */
-  readonly refreshBufferMs: number;
   readonly notSignedInMessage: string;
   readonly sessionChangedMessage: string;
-  /** Build authorize URL for a loopback bind on `port` (ignore if fixed). */
-  buildAuthorizeRequest(
-    port: number,
-    pkce: { verifier: string; challenge: string; method: 'S256' },
-    state: string,
-  ): SubscriptionAuthorizeRequest;
+  /** The provider's authorize endpoint, for the PKCE code flow (`./pkce.ts`). */
+  readonly authorize: {
+    readonly url: string;
+    readonly scope: string;
+    /** The loopback redirect for a bind on `port` (a pinned one ignores it). */
+    redirectUri(port: number): string;
+    /** The provider's parameters beyond the code flow's own. */
+    readonly params: Readonly<Record<string, string>>;
+  };
   /** Token response to session. Must not throw: it runs in `Effect.succeed`. */
   buildSession(
     tokens: SubscriptionTokenResponse,
@@ -126,15 +129,17 @@ export interface SubscriptionOAuthCoordinatorInit<
   client?: SubscriptionOAuthClient;
   /**
    * Wall clock for the expiry decision. It is not `Clock` (PRD R8) because
-   * `isExpiringSoon` is a public synchronous method and the coordinator
-   * suites fix the time by injecting it here; a `TestClock` would have to
-   * reach the process runtime those suites run on. It converts when that
-   * runtime's clock is injectable from a test.
+   * the coordinator suites fix the time by injecting it here; a `TestClock`
+   * would have to reach the process runtime those suites run on. It converts
+   * when that runtime's clock is injectable from a test.
    */
   now?: () => number;
 }
 
 type MachineFailure = SubscriptionOAuthError | AuthPortError;
+
+/** Refresh this long before expiry (the Codex CLI's and Zed's buffer). */
+const REFRESH_BUFFER_MS = 5 * 60 * 1000;
 
 /**
  * A token-grant request failure as the machine's error: the same message,
@@ -233,9 +238,7 @@ export class SubscriptionOAuthCoordinator<S extends SubscriptionSession> {
   }
 
   buildAuthorizeRequest(port: number): SubscriptionAuthorizeRequest {
-    const pkce = generatePkcePair();
-    const state = generateOAuthState();
-    return this.policy.buildAuthorizeRequest(port, pkce, state);
+    return authorizeRequest(this.policy, port);
   }
 
   /**
@@ -256,16 +259,8 @@ export class SubscriptionOAuthCoordinator<S extends SubscriptionSession> {
     return Effect.mapError(this.adoptTokens(tokens), callerFailure);
   }
 
-  isExpiringSoon(session: S): boolean {
-    return this.now() + this.policy.refreshBufferMs >= session.expiresAtMs;
-  }
-
-  /** The access token of the stored session, refreshed when expiring soon. */
-  getFreshAccessToken(): Effect.Effect<string, Error, HttpClient.HttpClient> {
-    return Effect.mapError(
-      Effect.map(this.freshSession(), (session) => session.accessToken),
-      callerFailure,
-    );
+  private isExpiringSoon(session: S): boolean {
+    return this.now() + REFRESH_BUFFER_MS >= session.expiresAtMs;
   }
 
   /** The stored session, refreshed when expiring soon. */

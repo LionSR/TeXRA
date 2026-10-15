@@ -8,7 +8,7 @@ import { Effect } from 'effect';
 
 import {
   exposeApiKey,
-  getApiKey,
+  lookupApiKey,
   resolveRouteEndpoint,
   type ApiKeyProviderId,
   type HostRouteFacts,
@@ -136,10 +136,10 @@ const subscriptionCredential = (
           plan: fresh.planType,
           endpoint: CODEX_BACKEND_BASE_URL,
         }))
-      : Effect.map(xaiCoordinator(secrets).getFreshAccessToken(), (token) => ({
+      : Effect.map(xaiCoordinator(secrets).getFreshSession(), (fresh) => ({
           route,
           provider: 'xai',
-          bearer: token,
+          bearer: fresh.accessToken,
           endpoint: XAI_SUBSCRIPTION_ENDPOINT,
         }));
   const refresh =
@@ -164,30 +164,26 @@ const apiKeyCredential = Effect.fn('credentials.apiKey')(function* (
   secrets: PlatformSecrets,
 ): Effect.fn.Return<RouteCredential, RouteUnavailable> {
   const provider = route.kind === 'openrouter' ? 'openRouter' : route.provider;
-  const bearer = yield* getApiKey(secrets, provider).pipe(
-    Effect.map(exposeApiKey),
-    Effect.catchTags({
-      ApiKeyMissing: (cause) =>
-        Effect.fail(
-          new RouteUnavailable({
-            reason: 'missing-api-key',
-            message:
-              route.kind === 'openrouter'
-                ? 'Missing OpenRouter API key. Set an OpenRouter API key in settings.'
-                : `Missing API key for ${provider}. Set a provider API key in settings.`,
-            cause,
-          }),
-        ),
-      SecretsFailed: (cause) =>
-        Effect.fail(
-          new RouteUnavailable({
-            reason: 'unavailable',
-            message: `Could not read the ${provider} API key: ${cause.message}`,
-            cause,
-          }),
-        ),
-    }),
+  const key = yield* lookupApiKey(secrets, provider).pipe(
+    Effect.mapError(
+      (cause) =>
+        new RouteUnavailable({
+          reason: 'unavailable',
+          message: `Could not read the ${provider} API key: ${cause.message}`,
+          cause,
+        }),
+    ),
   );
+  if (key === undefined) {
+    return yield* new RouteUnavailable({
+      reason: 'missing-api-key',
+      message:
+        route.kind === 'openrouter'
+          ? 'Missing OpenRouter API key. Set an OpenRouter API key in settings.'
+          : `Missing API key for ${provider}. Set a provider API key in settings.`,
+    });
+  }
+  const bearer = exposeApiKey(key);
   const endpoint = resolveRouteEndpoint(config, route, facts);
   if (endpoint === undefined) {
     return yield* Effect.die(

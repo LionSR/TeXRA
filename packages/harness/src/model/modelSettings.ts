@@ -7,6 +7,7 @@ import { Effect } from 'effect';
 import { ModelProvider, type ReasoningEffort } from 'llm-zoo';
 
 import {
+  findModelProviderPlugin,
   hasUsableApiKey,
   MODEL_PROVIDER_PLUGINS,
   type HostRouteFacts,
@@ -123,7 +124,7 @@ export const readProviderEndpoint = Effect.fn('readProviderEndpoint')(
     stores: SettingsStores,
     provider: string,
   ): Effect.fn.Return<Readonly<Record<string, string>>, StateReadFailed> {
-    const plugin = MODEL_PROVIDER_PLUGINS.find(({ id }) => id === provider);
+    const plugin = findModelProviderPlugin(provider);
     if (plugin === undefined) return {};
     return Object.fromEntries(yield* readEndpointEntries(stores, plugin));
   },

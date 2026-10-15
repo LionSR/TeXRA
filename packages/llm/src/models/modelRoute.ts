@@ -30,15 +30,7 @@ import {
 } from 'llm-zoo';
 
 import { isApiProvider } from '../providers/apiProviders.js';
-import {
-  isKimiCodeExclusiveModel,
-  isKimiSubscriptionEligible,
-} from './kimiCodeRetryGate.js';
-import {
-  isOpenRouterRoutingUnsupported,
-  shouldRouteModelThroughOpenRouter,
-} from './openRouterRouting.js';
-import { zeroCostAccessOverrides } from './subscriptionAccessOverrides.js';
+import { KIMI_CODE_BASE_URL } from '../providers/providers.js';
 import type { ApiKeyProviderId } from '../providers/providerPlugins.js';
 
 /** The facts a route reads, and nothing else. */
@@ -176,6 +168,60 @@ export function codexBackendModelId(
   return (canonical ?? config.id).replace(CODEX_MODEL_DATE_PIN, '');
 }
 
+/** The registry facts Kimi Code eligibility reads. */
+type KimiFields = Pick<
+  ModelConfig,
+  'provider' | 'kimiSubscription' | 'baseUrl'
+>;
+
+/**
+ * Whether the Kimi Code coding endpoint serves `model`: the llm-zoo
+ * `kimiSubscription` flag on a Moonshot model. Serving status is a fact about
+ * the Kimi Code backend, not derivable from other model fields.
+ */
+export function isKimiSubscriptionEligible(model: KimiFields): boolean {
+  return (
+    model.provider === ModelProvider.MOONSHOT && model.kimiSubscription === true
+  );
+}
+
+/**
+ * Whether the coding endpoint ALONE serves `model`: llm-zoo pins its `baseUrl`
+ * there, so no open-platform or OpenRouter route exists.
+ */
+export function isKimiCodeExclusiveModel(model: KimiFields): boolean {
+  return (
+    isKimiSubscriptionEligible(model) && model.baseUrl === KIMI_CODE_BASE_URL
+  );
+}
+
+/** Product-facing model source; direct managed services own their own group. */
+export function resolveModelSource(config: KimiFields): string {
+  return isKimiCodeExclusiveModel(config) ? 'kimiCode' : config.provider;
+}
+
+/**
+ * The config fields of a route billed by subscription, not per token, over
+ * the context window the caller resolved for that route. A covered route
+ * bills no tier either: a long-prompt or fast-tier rate left on the config
+ * would price a request the subscription paid for.
+ */
+export function zeroCostAccessOverrides(contextWindow: number): {
+  readonly inputPrice: 0;
+  readonly outputPrice: 0;
+  readonly contextWindow: number;
+  readonly longContextPricing: undefined;
+  readonly tiers: undefined;
+} {
+  return {
+    inputPrice: 0,
+    outputPrice: 0,
+    contextWindow,
+    longContextPricing: undefined,
+    tiers: undefined,
+  };
+}
+
 /** Decide the route `config` takes under `facts`. Pure. */
 export function decideModelRoute<C>(
   config: ModelConfig,
@@ -193,7 +239,23 @@ export function decideModelRoute<C>(
   ) {
     return { kind: 'copilot', route: facts.copilotRoute };
   }
-  if (isOpenRouterRoutingUnsupported(config, facts.useOpenRouter, facts.mode)) {
+  // OpenRouter is asked for (the model is OpenRouter-only, or the toggle is
+  // on) unless Kimi Code alone serves the model. It serves the request unless
+  // the model needs the Responses API or, for GLM, a per-model base URL
+  // outranks it (`./routeEndpoint.ts`).
+  const openRouterAsked =
+    !isKimiCodeExclusiveModel(config) &&
+    (config.openRouterOnly || facts.useOpenRouter);
+  const viaOpenRouter =
+    openRouterAsked &&
+    !config.requiresResponsesAPI &&
+    !(config.provider === ModelProvider.GLM && config.baseUrl);
+  // OpenRouter has no provider reasoning modes (OpenAI `pro`): an asked-for
+  // OpenRouter route would discard the mode.
+  if (
+    facts.mode !== undefined &&
+    (config.provider === ModelProvider.GLM ? viaOpenRouter : openRouterAsked)
+  ) {
     return { kind: 'openrouter-unsupported' };
   }
   // The subscriptions are preferences: signed out, the model takes its key.
@@ -201,7 +263,7 @@ export function decideModelRoute<C>(
   if (
     facts.chatgptSubscription &&
     facts.mode === undefined &&
-    !shouldRouteModelThroughOpenRouter(config, facts.useOpenRouter) &&
+    !viaOpenRouter &&
     isCodexSubscriptionEligible(config)
   ) {
     return { kind: 'chatgpt-subscription' };
@@ -214,7 +276,7 @@ export function decideModelRoute<C>(
   ) {
     return { kind: 'xai-subscription' };
   }
-  if (shouldRouteModelThroughOpenRouter(config, facts.useOpenRouter)) {
+  if (viaOpenRouter) {
     return { kind: 'openrouter' };
   }
   if (

@@ -209,6 +209,7 @@ export const bindRoute = Effect.fn('bindRoute')(function* (
   );
   const codex = credential.route === 'chatgpt-subscription';
   const reasoning = yield* reasoningOf(plan, config, codex);
+  const turn = { protocol, modelName: config.id, textOnly: request.textOnly };
   const bound = yield* bindWireModel({
     protocol,
     model: config,
@@ -236,15 +237,10 @@ export const bindRoute = Effect.fn('bindRoute')(function* (
       ...settings.wire,
       // Background delivery, where the binding can carry it, wins over the
       // persistent WebSocket.
-      background: backgroundOn(settings.background, {
-        protocol,
-        modelName: config.id,
-        textOnly: request.textOnly,
-      }),
+      background: backgroundOn(settings.background, turn),
       fetch: yield* modelFetch,
     },
   });
-  const turn = { protocol, modelName: config.id, textOnly: request.textOnly };
   return {
     ...commonOf(plan),
     config,

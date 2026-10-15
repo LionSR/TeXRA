@@ -78,7 +78,6 @@ export {
   apiProviderOfSecretName,
   configuredApiKeyProviders,
   exposeApiKey,
-  getApiKey,
   hasUsableApiKey,
   isApiProvider,
   loadApiKeyStatusMap,
@@ -97,8 +96,12 @@ export type { SelectedModel } from './models/modelSelection.js';
 export {
   codexBackendModelId,
   decideModelRoute,
+  isKimiCodeExclusiveModel,
+  isKimiSubscriptionEligible,
   OWN_KEY_ROUTE_FACTS,
+  resolveModelSource,
   routeConfig,
+  zeroCostAccessOverrides,
 } from './models/modelRoute.js';
 export type {
   HostRouteFacts,
@@ -106,11 +109,6 @@ export type {
   RouteFacts,
 } from './models/modelRoute.js';
 export { resolveRouteEndpoint } from './models/routeEndpoint.js';
-export { resolveModelSource } from './models/openRouterRouting.js';
-export {
-  isKimiCodeExclusiveModel,
-  isKimiSubscriptionEligible,
-} from './models/kimiCodeRetryGate.js';
 export {
   acceptedEfforts,
   chooseReasoning,
@@ -123,5 +121,4 @@ export type {
   ReasoningChoice,
   ReasoningRequest,
 } from './models/reasoningChoice.js';
-export { zeroCostAccessOverrides } from './models/subscriptionAccessOverrides.js';
 export { turnCost } from './models/turnCost.js';

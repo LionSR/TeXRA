@@ -3,7 +3,7 @@
  * caller's {@link CredentialStore}: the stored key, then the provider's
  * conventional environment variable.
  */
-import { Data, Effect, Redacted } from 'effect';
+import { Effect, Redacted } from 'effect';
 
 import {
   type CredentialOrigin,
@@ -87,18 +87,10 @@ function resolveApiKey(
 }
 
 /**
- * API key lookup trio. All three share the same {@link resolveApiKey} pass
- * over secret storage then the env var:
- *
- * - {@link lookupApiKey} — value, or `undefined` if absent (most callers)
- * - {@link lookupApiKeyOrigin} — origin tag for UI status reporting
- * - {@link getApiKey} — value, or throws (call from code that requires a key)
- *
- * They are kept as distinct entry points so call sites read self-evidently
- * (no `{ throwIfMissing: true }` flag at every model handler).
- *
- * All three are programs: a caller yields one and matches
- * {@link SecretsFailed} instead of catching `unknown` from a rejected read.
+ * The key's value, or `undefined` if absent. It and {@link lookupApiKeyOrigin}
+ * share one {@link resolveApiKey} pass over secret storage then the env var.
+ * Both are programs: a caller yields one and matches {@link SecretsFailed}
+ * instead of catching `unknown` from a rejected read.
  */
 export function lookupApiKey(
   credentials: CredentialStore,
@@ -110,7 +102,7 @@ export function lookupApiKey(
   );
 }
 
-/** Origin of the resolved key (`secret` / `env` / `none`). See trio doc above. */
+/** Origin of the resolved key (`secret` / `env` / `none`). */
 export function lookupApiKeyOrigin(
   credentials: CredentialStore,
   provider: ApiKeyProviderId,
@@ -163,31 +155,6 @@ export function configuredApiKeyProviders(
     Effect.map((origins) =>
       API_KEY_PROVIDER_IDS.filter((_, index) => origins[index] !== 'none'),
     ),
-  );
-}
-
-/** No key is configured for the provider, in secret storage or the env. */
-class ApiKeyMissing extends Data.TaggedError('ApiKeyMissing')<{
-  readonly provider: ApiKeyProviderId;
-  readonly message: string;
-}> {}
-
-/** Get an API key, failing if none is configured. See trio doc above. */
-export function getApiKey(
-  credentials: CredentialStore,
-  provider: ApiKeyProviderId,
-): Effect.Effect<Redacted.Redacted<string>, SecretsFailed | ApiKeyMissing> {
-  return Effect.flatMap(
-    resolveApiKey(credentials, provider),
-    ({ value: key }) =>
-      key === undefined
-        ? Effect.fail(
-            new ApiKeyMissing({
-              provider,
-              message: `No API key found for ${provider}. Set the ${apiKeyEnvName(provider)} environment variable, or configure your ${provider} API key.`,
-            }),
-          )
-        : Effect.succeed(key),
   );
 }
 

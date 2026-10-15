@@ -77,9 +77,3 @@ export const CODEX_JWT_AUTH_CLAIM = 'https://api.openai.com/auth';
  * api key.
  */
 export const CODEX_SESSION_SECRET_KEY = 'auth.chatgpt-codex';
-
-/**
- * Refresh proactively when within this window of expiry (matches Codex CLI /
- * Zed's 5-minute buffer).
- */
-export const CODEX_TOKEN_REFRESH_BUFFER_MS = 5 * 60 * 1000;
