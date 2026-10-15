@@ -120,21 +120,16 @@ export function parseMcpServers(
 
 /**
  * What `JSON.parse` rejected, without the file's text. V8 quotes an excerpt
- * of the source into the messages that carry no position, and a server
- * config holds credentials; those messages are cut at the first quote.
+ * of the source in double quotes, and a server config holds credentials, so
+ * the message is cut at its first double quote before anything else reads
+ * it; one with no position is cut at its first single quote too, which
+ * quotes a source character.
  */
 export function jsonSyntaxError(error: unknown): string {
-  const message = toErrorMessage(error);
-  const position = /at position \d+(?: \(line \d+ column \d+\))?/.exec(
-    message,
-  )?.[0];
-  if (position === undefined)
-    return (
-      message.split(/['"]/, 1)[0].replace(/[,\s]+$/, '') || 'Unexpected content'
-    );
-  // Even a message with a position is cut at its first double quote, so a
-  // V8 that one day quotes source there still leaks nothing; the position
-  // itself is digits only.
-  const kind = message.split('"', 1)[0].replace(/[,\s]+$/, '');
-  return kind.includes(position) ? kind : `${kind} ${position}`;
+  const kind = toErrorMessage(error)
+    .split('"', 1)[0]
+    .replace(/[,\s]+$/, '');
+  return /at position \d+/.test(kind)
+    ? kind
+    : kind.split("'", 1)[0].replace(/[,\s]+$/, '') || 'Unexpected content';
 }
