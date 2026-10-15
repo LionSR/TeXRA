@@ -1,6 +1,7 @@
 import { Effect } from 'effect';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { apiKeySecretName } from '@texra-ai/llm';
 import {
   LanguageModel,
   UNAVAILABLE_LANGUAGE_MODEL_PORT,
@@ -8,6 +9,7 @@ import {
 import type { ModelOptionData, UsageRoute } from '@shared/schemas';
 import { FakeSecrets } from '@test/support/FakePlatform';
 import { makeFakeSettingsStores } from '@test/support/settingsStoresFake';
+import { withEnv } from '@test/support/testEnv';
 import { SETUP_MODEL_BY_PROVIDER } from '@texra/model/setupModelDefaults';
 
 /**
@@ -20,10 +22,6 @@ import { SETUP_MODEL_BY_PROVIDER } from '@texra/model/setupModelDefaults';
 const mocks = vi.hoisted(() => ({
   rows: new Map<string, Partial<ModelOptionData>>(),
   usageRoutes: new Map<string, UsageRoute>(),
-  hasUsableApiKey:
-    vi.fn<
-      (secrets: unknown, provider: string) => Effect.Effect<boolean, Error>
-    >(),
   getUseOpenRouter: vi.fn<() => Effect.Effect<boolean>>(),
 }));
 
@@ -43,11 +41,6 @@ vi.mock('@texra/model/modelOptions', () => ({
     })),
 }));
 
-vi.mock('@texra-ai/llm', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@texra-ai/llm')>();
-  return { ...actual, hasUsableApiKey: mocks.hasUsableApiKey };
-});
-
 vi.mock('@utils/config/providerConfig', () => ({
   getUseOpenRouter: mocks.getUseOpenRouter,
 }));
@@ -58,17 +51,20 @@ const { resolveSetupLaunchModel } =
 beforeEach(() => {
   mocks.rows.clear();
   mocks.usageRoutes.clear();
-  mocks.hasUsableApiKey.mockReset().mockReturnValue(Effect.succeed(false));
+  secrets = new FakeSecrets();
   mocks.getUseOpenRouter.mockReset().mockReturnValue(Effect.succeed(false));
 });
 
-const secrets = new FakeSecrets();
+/** The key store each case starts empty; keys resolve from it and an empty
+ *  environment, never the developer's shell. */
+let secrets = new FakeSecrets();
 const stores = makeFakeSettingsStores().stores;
 
 const runSetup = <A, E>(program: Effect.Effect<A, E, LanguageModel>) =>
   Effect.runPromise(
     program.pipe(
       Effect.provide(LanguageModel.layer(UNAVAILABLE_LANGUAGE_MODEL_PORT)),
+      withEnv({}),
     ),
   );
 
@@ -130,15 +126,13 @@ describe('resolveSetupLaunchModel', () => {
 
   it('refuses launch when nothing is available and the OpenRouter flag is on', async () => {
     mocks.getUseOpenRouter.mockReturnValue(Effect.succeed(true));
-    mocks.hasUsableApiKey.mockReturnValue(Effect.succeed(true));
+    secrets.values.set(apiKeySecretName('openRouter'), 'openrouter-key');
 
     await expect(launchModel(true)).resolves.toBeNull();
   });
 
   it('offers the OpenRouter last resort only when the caller opts in', async () => {
-    mocks.hasUsableApiKey.mockImplementation((_secrets, provider) =>
-      Effect.succeed(provider === 'openRouter'),
-    );
+    secrets.values.set(apiKeySecretName('openRouter'), 'openrouter-key');
 
     await expect(launchModel(true)).resolves.toEqual({
       model: SETUP_MODEL_BY_PROVIDER.openRouter,

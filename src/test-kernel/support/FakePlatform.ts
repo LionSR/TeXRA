@@ -324,7 +324,8 @@ export class FakeStateStore extends MemoryStateStore implements AppStateStore {
 }
 
 export class FakeSecrets implements PlatformSecrets {
-  private readonly values = new Map<string, string>();
+  /** The stored secrets, for a test to read without running an Effect. */
+  readonly values = new Map<string, string>();
 
   constructor(values: Record<string, string> = {}) {
     for (const [key, value] of Object.entries(values)) {

@@ -1,6 +1,6 @@
 import { mkdir, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 
 import { it } from '@effect/vitest';
 import { describe, expect, vi } from 'vitest';
@@ -22,18 +22,8 @@ import {
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { withEnv } from '@test/support/testEnv';
+import { USER_MCP_CONFIG_PATH } from '@tools/mcp/mcpConfig';
 import { canonicalizeWorkspacePath } from '@utils/system/nodeWorkspace';
-
-// The user mcp.json the CLI validates at startup, moved out of the real home
-// so no case reads a developer's own file.
-const mcpConfig = vi.hoisted(() => {
-  const dir = `${process.env.TMPDIR ?? '/tmp'}/texra-cli-mcp-${process.pid}`;
-  return { dir, file: `${dir}/mcp.json` };
-});
-vi.mock('@tools/mcp/mcpConfig', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@tools/mcp/mcpConfig')>()),
-  USER_MCP_CONFIG_PATH: mcpConfig.file,
-}));
 
 const ambient = {
   isCi: true,
@@ -215,8 +205,10 @@ describe('CLI context config defaults', () => {
   });
 
   it('warns on a malformed user mcp.json, the warning doctor reports', async () => {
-    await mkdir(mcpConfig.dir, { recursive: true });
-    await writeFile(mcpConfig.file, '{ "mcpServers": ');
+    // The user mcp.json lives in the worker's scratch HOME (isolateHome.ts
+    // fails the run before any test if it could reach the real one).
+    await mkdir(dirname(USER_MCP_CONFIG_PATH), { recursive: true });
+    await writeFile(USER_MCP_CONFIG_PATH, '{ "mcpServers": ');
     try {
       const context = await cliContext({
         ambient,
@@ -228,10 +220,10 @@ describe('CLI context config defaults', () => {
       });
 
       expect(context.configWarnings.join('\n')).toContain(
-        `${mcpConfig.file} is not valid JSON`,
+        `${USER_MCP_CONFIG_PATH} is not valid JSON`,
       );
     } finally {
-      await rm(mcpConfig.dir, { recursive: true, force: true });
+      await rm(USER_MCP_CONFIG_PATH, { force: true });
     }
   });
 

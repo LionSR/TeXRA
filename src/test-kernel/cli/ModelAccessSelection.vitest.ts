@@ -2,6 +2,8 @@ import { it } from '@effect/vitest';
 import { Effect, Layer } from 'effect';
 import { beforeEach, describe, expect, vi } from 'vitest';
 
+import { apiKeySecretName } from '@texra-ai/llm';
+
 import {
   readCliModelAccessStatus,
   updateCliModelAccess,
@@ -13,28 +15,44 @@ import { createTestCliContext } from '@test/cli/fixtures/cliContext';
 import { FakeSecrets } from '@test/support/FakePlatform';
 import { makeFakeSettingsStores } from '@test/support/settingsStoresFake';
 import { testHttpClientLayer } from '@test/support/fetchTestUtils';
+import { withEnv } from '@test/support/testEnv';
 
 import { scriptedSpawnerLayer } from '@test/support/childProcessTestLayer';
+import { CODEX_SESSION_SECRET_KEY } from '../../../packages/llm/src/oauth/codex/codexConstants.js';
 
 const mocks = vi.hoisted(() => ({
-  getCodexStatus: vi.fn(),
-  getXaiStatus: vi.fn(),
   isPreferCodexSubscription: vi.fn(),
   setPreferCodexSubscription: vi.fn(),
   isPreferXaiSubscription: vi.fn(),
   setPreferXaiSubscription: vi.fn(),
   shouldUseSubscriptionDeviceCode: vi.fn(),
   signInCliSubscription: vi.fn(),
-  hasUsableApiKey: vi.fn(),
-  lookupApiKeyOrigin: vi.fn(),
   getPreferKimiCode: vi.fn(),
   getGLMCodingPlan: vi.fn(),
   setGLMCodingPlan: vi.fn(),
   writeSettingTo: vi.fn(),
 }));
 
+/** The key and session store, emptied before each case. Keys resolve from
+ *  it and an empty environment, never the developer's shell. */
 const secrets = new FakeSecrets();
 const stores = makeFakeSettingsStores('cli').stores;
+
+/** Store the provider's own API key. */
+const storeKey = (provider: 'kimiCode' | 'glm') =>
+  secrets.set(apiKeySecretName(provider), `${provider}-key`);
+
+/** Store a ChatGPT session signed in as `user@example.com`. */
+const storeChatGptSession = secrets.set(
+  CODEX_SESSION_SECRET_KEY,
+  JSON.stringify({
+    accessToken: 'access-token',
+    refreshToken: 'refresh-token',
+    expiresAtMs: Date.now() + 3_600_000,
+    accountId: 'account-id',
+    email: 'user@example.com',
+  }),
+);
 
 /**
  * The process services these programs took from the process runtime before
@@ -49,11 +67,9 @@ const withServices = Effect.provide(
   ),
 );
 
-vi.mock('@texra-ai/llm/node', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@texra-ai/llm/node')>()),
-  getCodexStatus: mocks.getCodexStatus,
-  getXaiStatus: mocks.getXaiStatus,
-}));
+/** `withServices` over an empty environment, for every case. */
+const withHost = <A, E, R>(self: Effect.Effect<A, E, R>) =>
+  self.pipe(withEnv({}), withServices);
 
 vi.mock('@model/subscriptionAccess', () => ({
   isPreferSubscription: (provider: string, stores: unknown) =>
@@ -69,40 +85,6 @@ vi.mock('@model/subscriptionAccess', () => ({
       ? mocks.setPreferCodexSubscription(stores, enabled)
       : mocks.setPreferXaiSubscription(stores, enabled),
 }));
-
-vi.mock('@texra-ai/llm', async (importOriginal) => {
-  const providers = [
-    'openai',
-    'anthropic',
-    'openRouter',
-    'google',
-    'xai',
-    'deepseek',
-    'moonshot',
-    'kimiCode',
-    'dashscope',
-    'minimax',
-    'glm',
-    'meta',
-  ];
-  return {
-    ...(await importOriginal<typeof import('@texra-ai/llm')>()),
-    API_KEY_PROVIDER_IDS: providers,
-    hasUsableApiKey: mocks.hasUsableApiKey,
-    lookupApiKeyOrigin: mocks.lookupApiKeyOrigin,
-    configuredApiKeyProviders: () =>
-      Effect.map(
-        Effect.forEach(
-          providers,
-          (provider: string) =>
-            mocks.lookupApiKeyOrigin({}, provider) as Effect.Effect<string>,
-          { concurrency: 'unbounded' },
-        ),
-        (origins: readonly string[]) =>
-          providers.filter((_, index) => origins[index] !== 'none'),
-      ),
-  };
-});
 
 vi.mock('@utils/config/providerConfig', () => ({
   getPreferKimiCode: mocks.getPreferKimiCode,
@@ -136,6 +118,7 @@ function subscriptionPreference(
 function expectedAccessStatus(chatgpt: {
   readonly signedIn: boolean;
   readonly email?: string;
+  readonly accountId?: string;
   readonly preferSubscription: boolean;
 }) {
   return {
@@ -150,17 +133,15 @@ function expectedAccessStatus(chatgpt: {
   };
 }
 
-beforeEach(() => {
+beforeEach(async () => {
   vi.clearAllMocks();
-  mocks.getCodexStatus.mockReturnValue(Effect.succeed({ signedIn: false }));
-  mocks.getXaiStatus.mockReturnValue(Effect.succeed({ signedIn: false }));
+  for (const key of await Effect.runPromise(secrets.listStoredKeys()))
+    await Effect.runPromise(secrets.delete(key));
   mocks.isPreferCodexSubscription.mockReturnValue(false);
   mocks.isPreferXaiSubscription.mockReturnValue(false);
   mocks.setPreferCodexSubscription.mockReturnValue(Effect.void);
   mocks.setPreferXaiSubscription.mockReturnValue(Effect.void);
   mocks.shouldUseSubscriptionDeviceCode.mockReturnValue(false);
-  mocks.hasUsableApiKey.mockReturnValue(Effect.succeed(false));
-  mocks.lookupApiKeyOrigin.mockReturnValue(Effect.succeed('none'));
   mocks.getPreferKimiCode.mockReturnValue(Effect.succeed(false));
   mocks.writeSettingTo.mockReturnValue(Effect.void);
   mocks.getGLMCodingPlan.mockReturnValue(Effect.succeed(false));
@@ -170,34 +151,30 @@ beforeEach(() => {
 describe('CLI model access routes', () => {
   it.effect('reports the ChatGPT preference independently of sign-in', () =>
     Effect.gen(function* () {
-      mocks.getCodexStatus.mockReturnValue(
-        Effect.succeed({
-          signedIn: true,
-          email: 'user@example.com',
-        }),
-      );
+      yield* storeChatGptSession;
       mocks.isPreferCodexSubscription.mockReturnValue(true);
 
       expect(yield* readCliModelAccessStatus(stores, secrets)).toEqual(
         expectedAccessStatus({
           signedIn: true,
           email: 'user@example.com',
+          accountId: 'account-id',
           preferSubscription: true,
         }),
       );
 
-      mocks.getCodexStatus.mockReturnValue(Effect.succeed({ signedIn: false }));
+      yield* secrets.delete(CODEX_SESSION_SECRET_KEY);
       expect(yield* readCliModelAccessStatus(stores, secrets)).toEqual(
         expectedAccessStatus({ signedIn: false, preferSubscription: true }),
       );
-    }),
+    }).pipe(withHost),
   );
 
   it.effect(
     'enables Kimi Code routing on a personal fallback when a key exists',
     () =>
       Effect.gen(function* () {
-        mocks.hasUsableApiKey.mockReturnValue(Effect.succeed(true));
+        yield* storeKey('kimiCode');
 
         const result = yield* updateCliModelAccess(
           stores,
@@ -216,7 +193,7 @@ describe('CLI model access routes', () => {
           message:
             'Kimi Code subscription enabled for Kimi models · other models still use your own API keys.',
         });
-      }).pipe(withServices),
+      }).pipe(withHost),
   );
 
   it.effect(
@@ -233,14 +210,14 @@ describe('CLI model access routes', () => {
         expect(mocks.writeSettingTo).not.toHaveBeenCalled();
         expect(result.message).toContain('No Kimi Code API key configured');
         expect(result.message).toContain('https://www.kimi.com/code/console');
-      }).pipe(withServices),
+      }).pipe(withHost),
   );
 
   it.effect(
     'enables GLM Coding Plan routing on a personal fallback when a key exists',
     () =>
       Effect.gen(function* () {
-        mocks.hasUsableApiKey.mockReturnValue(Effect.succeed(true));
+        yield* storeKey('glm');
 
         const result = yield* updateCliModelAccess(
           stores,
@@ -257,7 +234,7 @@ describe('CLI model access routes', () => {
           message:
             'GLM Coding Plan enabled for GLM models · other models still use your own API keys.',
         });
-      }).pipe(withServices),
+      }).pipe(withHost),
   );
 
   it.effect('signs in when needed and enables ChatGPT without an API key', () =>
@@ -291,22 +268,18 @@ describe('CLI model access routes', () => {
       expect(result.message).toBe(
         'ChatGPT subscription enabled for Codex models (user@example.com).',
       );
-    }).pipe(withServices),
+    }).pipe(withHost),
   );
 
   it.effect(
     'represents preferences independently and toggles each without side effects',
     () =>
       Effect.gen(function* () {
-        mocks.getCodexStatus.mockReturnValue(
-          Effect.succeed({
-            signedIn: true,
-            email: 'user@example.com',
-          }),
-        );
+        yield* storeChatGptSession;
+        yield* storeKey('kimiCode');
+        yield* storeKey('glm');
         mocks.isPreferCodexSubscription.mockReturnValue(true);
         mocks.getPreferKimiCode.mockReturnValue(Effect.succeed(true));
-        mocks.hasUsableApiKey.mockReturnValue(Effect.succeed(true));
 
         const status = yield* readCliModelAccessStatus(stores, secrets);
         expect(status.subscriptions.chatgpt.preferSubscription).toBe(true);
@@ -343,12 +316,6 @@ describe('CLI model access routes', () => {
         expect(mocks.setPreferXaiSubscription).not.toHaveBeenCalled();
 
         vi.clearAllMocks();
-        mocks.getCodexStatus.mockReturnValue(
-          Effect.succeed({
-            signedIn: true,
-            email: 'user@example.com',
-          }),
-        );
         mocks.isPreferCodexSubscription.mockReturnValue(true);
         mocks.setPreferCodexSubscription.mockReturnValue(Effect.void);
         yield* updateCliModelAccess(
@@ -363,7 +330,7 @@ describe('CLI model access routes', () => {
         );
         expect(mocks.writeSettingTo).not.toHaveBeenCalled();
         expect(mocks.setPreferXaiSubscription).not.toHaveBeenCalled();
-      }).pipe(withServices),
+      }).pipe(withHost),
   );
 
   it.effect('turns off a stale signed-out preference without signing in', () =>
@@ -391,7 +358,7 @@ describe('CLI model access routes', () => {
         stores,
         false,
       );
-    }).pipe(withServices),
+    }).pipe(withHost),
   );
 
   it.effect('turns off a stale Kimi preference without requiring a key', () =>
@@ -410,15 +377,17 @@ describe('CLI model access routes', () => {
       if (!selection) throw new Error('Expected Kimi preference item');
 
       vi.clearAllMocks();
+      const reads = vi.spyOn(secrets, 'get');
+      yield* Effect.addFinalizer(() => Effect.sync(() => reads.mockRestore()));
       yield* updateCliModelAccess(stores, context, selection.value);
 
-      expect(mocks.hasUsableApiKey).not.toHaveBeenCalled();
+      expect(reads).not.toHaveBeenCalledWith(apiKeySecretName('kimiCode'));
       expect(mocks.writeSettingTo).toHaveBeenCalledWith(
         stores,
         GlobalStateKey.KIMI_CODE_PREFER,
         false,
       );
       expect(mocks.setPreferCodexSubscription).not.toHaveBeenCalled();
-    }).pipe(withServices),
+    }).pipe(withHost),
   );
 });

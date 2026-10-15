@@ -347,7 +347,8 @@ export const storedRows = (storage: string): StoredRow[] => {
 export const REAL_RUN_TIMEOUT = 30_000;
 
 const AGENTS = resolve(REPO_ROOT, 'src/test-kernel/fixtures/storage/agents');
-const BUNDLED_AGENTS = resolve(
+/** The personas the extension ships, the built-in agents of a real host. */
+export const BUNDLED_AGENTS = resolve(
   REPO_ROOT,
   'packages/extension/resources/agents',
 );
