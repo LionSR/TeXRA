@@ -116,7 +116,9 @@ describe(
           );
           const faults = yield* sessionStoreFaults(roots.storage);
           const end = yield* faults.holdNext('appendAll', 'run.end');
-          // The run's first read after it opened fails it.
+          // The run's first read after it opened fails it. That fault must
+          // come before the run's first model turn: the turn carries the
+          // GOLDEN-PARK instruction too, so the validation model would hold it.
           const launch = yield* withProcessServices(
             testRuntime(),
             session.runs.launch({
