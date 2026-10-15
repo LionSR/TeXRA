@@ -292,8 +292,8 @@ function walkLevel(
       ([name, type]) =>
         permits.withPermits(1)(
           describeEntry(
-            path.join(storagePath, name),
-            relativeRoot ? path.join(relativeRoot, name) : name,
+            path.posix.join(storagePath, name),
+            relativeRoot ? path.posix.join(relativeRoot, name) : name,
             type,
           ),
         ),
@@ -327,7 +327,7 @@ function walkLevel(
  * bounded prefix (`Stream.take`) interrupts the walk, so no further entries
  * are read. An unreadable directory or entry fails the stream with the
  * `PlatformError` the filesystem raised.
- * @param storagePath - Directory to start walking from
+ * @param storagePath - Directory to start walking from (paths join with '/')
  * @param relativeRoot - Path prefix used to build each entry's relativePath
  * @param options - `maxDepth` (levels below the root; unlimited if omitted)
  *   and `includeDirs` (whether directory entries themselves are yielded)
