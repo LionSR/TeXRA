@@ -57,15 +57,24 @@ export function createExtensionCommandActions(
     newTask: () => progressViewProvider.showLauncher(),
     cleanBuild: () => confirmCleanBuild,
     signInChatGpt: () => settingsViewProvider.signInSubscription('chatgpt'),
+    // The launch returns once the setup conversation ends, which may have
+    // completed a first task, so the onboarding funnel recomputes then.
     runSetupAssistant: () =>
-      Effect.asVoid(
-        launchSetupAssistant(
-          secrets,
-          roots,
-          runSession,
-          (runId) =>
-            Effect.sync(() => progressViewProvider.presentLaunchedRun(runId)),
-          progressViewProvider.showConnectModel(),
+      launchSetupAssistant(
+        secrets,
+        roots,
+        runSession,
+        (runId) =>
+          Effect.sync(() => progressViewProvider.presentLaunchedRun(runId)),
+        progressViewProvider.showConnectModel(),
+      ).pipe(
+        Effect.andThen(
+          progressViewProvider.refreshOnboardingFunnel().pipe(
+            Effect.ignore({
+              log: 'Warn',
+              message: 'Refreshing the onboarding state',
+            }),
+          ),
         ),
       ),
     openGettingStarted: () => sysOpenGettingStarted(context.extension.id),

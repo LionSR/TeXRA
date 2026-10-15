@@ -281,14 +281,8 @@ describe('tool-use tool resolution', () => {
   it.effect(
     'a failed MCP revision-key read is read again by the next run, not kept for the process',
     () => {
-      const dir = mkdtempSync(path.join(os.tmpdir(), 'texra-mcp-key-'));
-      writeFileSync(
-        path.join(dir, 'mcp.json'),
-        JSON.stringify({
-          mcpServers: { fixture: { command: path.join(dir, 'missing') } },
-        }),
-      );
       let faults = 1;
+      // File-local: the shared host fake has no way to fail one read once.
       const flaky: StateStore = {
         ...fakeHostAppState,
         get: (key) =>
@@ -303,30 +297,45 @@ describe('tool-use tool resolution', () => {
             : fakeHostAppState.get(key),
       };
       return Effect.gen(function* () {
-        const tools = yield* (yield* ToolCatalog).session;
-        const warnings = () =>
-          Effect.map(
-            tools.hold(['mcp__fixture__echo'], true),
-            (held) => held.warnings,
-          );
-        expect(yield* warnings()).toEqual([
-          expect.stringContaining('store busy'),
-        ]);
-        expect(yield* warnings()).toEqual([]);
-      }).pipe(
-        Effect.scoped,
-        Effect.provide(
-          pluginCatalogLayer([], path.join(dir, 'mcp.json')).pipe(
+        const dir = yield* Effect.acquireRelease(
+          Effect.sync(() =>
+            mkdtempSync(path.join(os.tmpdir(), 'texra-mcp-key-')),
+          ),
+          (created) =>
+            Effect.sync(() =>
+              rmSync(created, { recursive: true, force: true }),
+            ),
+        );
+        const file = path.join(dir, 'mcp.json');
+        writeFileSync(
+          file,
+          JSON.stringify({
+            mcpServers: { fixture: { command: path.join(dir, 'missing') } },
+          }),
+        );
+        // One catalog for both runs: the key's cache is the catalog's.
+        const catalog = yield* Layer.build(
+          pluginCatalogLayer([], file).pipe(
             Layer.provide(
               Layer.merge(nodePlatformLayer, AppState.layer(flaky)),
             ),
           ),
-        ),
-        Effect.provide(nodeSpawnerLayer),
-        Effect.ensuring(
-          Effect.sync(() => rmSync(dir, { recursive: true, force: true })),
-        ),
-      );
+        );
+        const tools = yield* Effect.provide(
+          Effect.gen(function* () {
+            return yield* (yield* ToolCatalog).session;
+          }),
+          catalog,
+        );
+        const warnings = Effect.map(
+          tools.hold(['mcp__fixture__echo'], true),
+          (held) => held.warnings,
+        );
+        expect(yield* warnings).toEqual([
+          expect.stringContaining('store busy'),
+        ]);
+        expect(yield* warnings).toEqual([]);
+      }).pipe(Effect.scoped, Effect.provide(nodeSpawnerLayer));
     },
   );
 });
