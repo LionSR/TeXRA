@@ -120,7 +120,9 @@ export const ROW_KINDS: Readonly<Record<SessionEventDraft['type'], RowKind>> = {
   'followup.closed': V1,
   // v2: dispatch facts record `lane`, not `parallelSafe` (no upcaster: an
   // earlier build's v1 row refuses its run as written by that build).
-  'model.message': { version: 2, upcast: [] },
+  // v3: dispatch facts carry no `ordinal` (a call's place is its index) and
+  // no `stageId` (no upcaster, as v2).
+  'model.message': { version: 3, upcast: [] },
   'context.edit': V1,
   'tool.intent': V1,
   'script.call': V1,

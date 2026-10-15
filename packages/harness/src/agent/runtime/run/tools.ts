@@ -84,18 +84,16 @@ export function dispatchFactsFor(
       `Deduplicated ${duplicates.size} parallel tool call(s) with identical name and arguments`,
     );
   }
-  return parsed.map((call, index) => {
+  return parsed.map((call) => {
     const primaryIndex = duplicates?.get(call.callId);
     return {
       callId: call.callId,
       toolName: call.name,
-      ordinal: index,
       lane: laneOf(call),
       replay: registry?.get(call.name)?.replay ?? 'unsafe',
       duplicateOf:
         primaryIndex === undefined ? null : parsed[primaryIndex].callId,
       logId: mintLogId(),
-      stageId: null,
     };
   });
 }
