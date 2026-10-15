@@ -29,8 +29,10 @@ export class WorkflowRunContent extends BaseRunContent {
 
   override render(): TemplateResult | typeof nothing {
     const { run, view, surface } = this;
-    if (!run || !view || !surface || !isDocumentTaskRun(run)) return nothing;
-    const documents = documentsOf(run);
+    if (!run || !view || !surface || !run.recipe) return nothing;
+    // Any plugin's recipe run shows its log here; the files panel is the
+    // documents plugin's, for its own tasks only.
+    const documents = isDocumentTaskRun(run) ? documentsOf(run) : null;
     return html`
       <div class="conversation-content">
         ${this.renderApprovalDock()}
@@ -47,16 +49,19 @@ export class WorkflowRunContent extends BaseRunContent {
         ${this.renderLog()}
 
         <div class="conversation-column conversation-epilogue">
-          <file-list
-            .runId=${run.id}
-            .surface=${surface}
-            .filesByRound=${documents.files}
-            .failuresByRound=${documents.compileFailures}
-            .missingByRound=${documents.missingOutputs}
-            .latexdiffsByRound=${documents.latexdiffs}
-            .repliesByRound=${documents.replies}
-          ></file-list>
-
+          ${
+            documents === null
+              ? nothing
+              : html`<file-list
+                  .runId=${run.id}
+                  .surface=${surface}
+                  .filesByRound=${documents.files}
+                  .failuresByRound=${documents.compileFailures}
+                  .missingByRound=${documents.missingOutputs}
+                  .latexdiffsByRound=${documents.latexdiffs}
+                  .repliesByRound=${documents.replies}
+                ></file-list>`
+          }
           ${this.renderUsagePanel(run)}
         </div>
       </div>
