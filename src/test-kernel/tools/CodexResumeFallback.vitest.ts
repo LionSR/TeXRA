@@ -49,16 +49,14 @@ vi.mock('@texra/tools/codexImport', async (importActual) => {
 
 import '@test/support/sessionGraphTestSetup';
 
-import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { setLogSink } from '@logger/logSink';
-import { withProcessServices } from '@platform/processRuntime';
 import type { RunId } from '@shared/schemas';
 import { captureLogEntries } from '@test/support/logSinkCapture';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { openTestDefaultSession } from '@test/support/sessionEnd';
 import {
-  parkedAfter,
+  parkedRoot,
   REAL_RUN_TIMEOUT,
   sessionStoreFaults,
   storedRows,
@@ -66,12 +64,10 @@ import {
   validationHost,
 } from '@test/support/storeFaults';
 import { noPluginHold } from '@test/support/testPluginServices';
-import { testRuntime } from '@test/support/testProcessRuntime';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { CodexThreads as CodexThreadsService } from '@texra/tools/agentCliSessionStores';
 import { AgentCliSessionRegistry } from '@texra/tools/agentCliSessionRegistry';
 import { CodexTool } from '@texra/tools/codex';
-import { generateRunId } from '@utils/core';
 
 /** The tool's call layer under `run`, serving `registry` as the step would. */
 const toolLayer = (
@@ -88,22 +84,7 @@ const toolLayer = (
 const parkedParent = Effect.gen(function* () {
   const roots = testWorkspaceRoots();
   const session = yield* openTestDefaultSession({ roots });
-  const runId = generateRunId();
-  yield* withProcessServices(
-    testRuntime(),
-    session.runs.launch({
-      request: {
-        config: AgentConfigSchema.parse({
-          agent: 'assistant',
-          model: 'gpt56',
-          instruction: 'Parent.',
-        }),
-        runId,
-      },
-      options: {},
-    }),
-  ).pipe(Effect.forkChild);
-  yield* untilStored(roots.storage, parkedAfter(runId, 1, roots.storage));
+  const runId = yield* parkedRoot(session, 'Parent.');
   return { session, runId, storage: roots.storage };
 });
 
@@ -302,6 +283,50 @@ describe(
           // active. A spin would still reach the same follow-up, so the
           // count is what distinguishes waiting from polling.
           expect(claim).toHaveBeenCalledTimes(2);
+        }),
+    );
+
+    it.live(
+      'leaves a stale thread_id to a fresh launch when the child stops while it parks',
+      () =>
+        Effect.gen(function* () {
+          const parent = yield* parkedParent;
+          const registry = new AgentCliSessionRegistry(noPluginHold);
+          const { thread } = answeringThread('stale-thread', 'Done.');
+          mocks.importCodexClass.mockReturnValue(
+            Effect.succeed(
+              class MockCodex {
+                resumeThread() {
+                  return thread;
+                }
+              },
+            ),
+          );
+          const faults = yield* sessionStoreFaults(parent.storage);
+          const parking = yield* faults.holdNext('appendAll', 'child.park');
+          const call = (prompt: string) =>
+            CodexTool.call({
+              prompt,
+              sandbox_mode: 'workspace-write',
+              thread_id: 'stale-thread',
+            }).pipe(Effect.provide(toolLayer(registry, parent)));
+
+          // The first call's child settles its turn, held at its park; the
+          // second waits on the id; the child is stopped mid-commit.
+          yield* call('continue the refactor');
+          yield* parking.reached;
+          const second = yield* Effect.forkChild(call('also update the tests'));
+          const [child] = childrenOf(parent.storage, parent.runId);
+          const stopping = yield* Effect.forkChild(
+            parent.session.runs.stop(child as RunId, { reason: 'user' })
+              .settlement,
+          );
+          yield* parking.release;
+          yield* Fiber.join(stopping);
+
+          // A stopped child never takes a follow-up: the waiter is not told
+          // its prompt was queued there; it launches the thread afresh.
+          expect((yield* Fiber.join(second)).summary).toMatch(/Launched Codex/);
         }),
     );
   },
