@@ -1,19 +1,11 @@
 /** Ordering helpers shared by stream tabs and transcript rows. */
 
-/** The two fields tab order depends on, so name-only sorts can reuse this rule. */
-type RunOrderingFields = {
-  readonly name: string;
-  readonly creationTimestamp: number;
-};
-
-/** Sort by newest creation time first, breaking ties alphabetically by name. */
+/** Sort runs newest first, breaking ties alphabetically by id. */
 export function compareByNewestCreationTime(
-  a: RunOrderingFields,
-  b: RunOrderingFields,
+  a: { readonly id: string; readonly createdAt: number },
+  b: { readonly id: string; readonly createdAt: number },
 ): number {
-  return (
-    b.creationTimestamp - a.creationTimestamp || a.name.localeCompare(b.name)
-  );
+  return b.createdAt - a.createdAt || a.id.localeCompare(b.id);
 }
 
 /**

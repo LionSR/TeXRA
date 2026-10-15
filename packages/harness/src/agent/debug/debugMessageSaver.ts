@@ -4,7 +4,7 @@ import { Effect, FileSystem } from 'effect';
 
 import type { AgentTrace } from '@agent/trace';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
-import type { RunId } from '@shared/schemas';
+import type { InvocationRef, RunId } from '@shared/schemas';
 import { readSettingFrom } from '@utils/config/platformSettings';
 import { runDirUnder } from '@utils/files/runStorageFs';
 import { sanitizePathSegment } from '@utils/text/sanitizePathSegment';
@@ -13,9 +13,8 @@ import { sanitizePathSegment } from '@utils/text/sanitizePathSegment';
 interface SaveDebugParams {
   readonly object: unknown;
   readonly objectType: 'messages' | 'response';
-  /** Base name for the file (e.g. 'messages', 'response'). */
-  readonly baseName: string;
-  readonly continuationCount: number;
+  /** The attempt the object belongs to: one file per attempt and type. */
+  readonly invocation: InvocationRef;
   readonly logger: AgentTrace;
   readonly modelName: string;
   readonly runId: RunId;
@@ -38,17 +37,21 @@ interface SaveDebugParams {
 export function maybeSaveDebugObject({
   object,
   objectType,
-  baseName,
-  continuationCount,
+  invocation,
   logger,
   modelName,
   runId,
   roots,
 }: SaveDebugParams): Effect.Effect<void, never, FileSystem.FileSystem> {
-  const cont = continuationCount ? `_cont${continuationCount}` : '';
-  const modelPart = `_${sanitizePathSegment(modelName, { invalidCharPattern: /[\\/]/g, replacement: '_' })}`;
+  const modelPart = sanitizePathSegment(modelName, {
+    invalidCharPattern: /[\\/]/g,
+    replacement: '_',
+  });
   const runDir = runDirUnder(roots.storage, runId);
-  const filePath = path.join(runDir, `${baseName}${modelPart}${cont}.json`);
+  const filePath = path.join(
+    runDir,
+    `${objectType}_${modelPart}_${invocation.invocationId}_a${invocation.attempt}.json`,
+  );
 
   // A typed failure (the filesystem) and a thrown defect (a non-serializable
   // `object`) are both reported here, and neither is left to kill the run.

@@ -71,7 +71,7 @@ import {
 } from '@shared/runs/runStatus';
 import {
   runHeldMessage,
-  runInterruptedMessage,
+  RUN_INTERRUPTED_MESSAGE,
   runResumeBlockedMessage,
   runStatusCopy,
 } from '@shared/runs/runStatusDisplay';
@@ -214,9 +214,6 @@ function reconcileExistence(
 interface SessionIndexes {
   /** The aggregates the listing named since the previous marker (7.2). */
   readonly listed: Set<AggregateId>;
-  /** Runs whose `run.end` row has folded: nothing in the owning
-   *  process can still write for them. */
-  readonly ended: Set<RunId>;
   /** Runs by their current claimant, so a local snapshot
    *  recomputes exactly the runs a changed owner holds. */
   readonly byOwner: Map<string, Set<RunId>>;
@@ -250,7 +247,6 @@ function sessionIndexesOf(view: SessionView): SessionIndexes {
   if (!indexes) {
     indexes = {
       listed: new Set(),
-      ended: new Set(),
       byOwner: new Map(),
       claims: new Map(),
       rows: new Map(),
@@ -381,7 +377,6 @@ function setRun(view: SessionView, run: RunView): void {
 function dropRun(view: SessionView, run: RunView): void {
   writableRuns(view).delete(run.id);
   reindexOwner(view, run.id, run.ownerId, null);
-  sessionIndexesOf(view).ended.delete(run.id);
   countGroups(view, run.group, undefined);
 }
 
@@ -427,13 +422,6 @@ function countGroups(
 // Ordering and topology
 // ---------------------------------------------------------------------------
 
-function orderingKey(run: RunView): {
-  name: string;
-  creationTimestamp: number;
-} {
-  return { name: run.id, creationTimestamp: run.createdAt };
-}
-
 /** `ids` with `id` placed by the `runOrdering` rule. */
 function insertOrdered(
   view: SessionView,
@@ -443,13 +431,9 @@ function insertOrdered(
   const next = withoutId(ids, id);
   const run = view.runs.get(id);
   if (!run) return next;
-  const key = orderingKey(run);
   const at = next.findIndex((otherId) => {
     const other = view.runs.get(otherId);
-    return (
-      other !== undefined &&
-      compareByNewestCreationTime(key, orderingKey(other)) < 0
-    );
+    return other !== undefined && compareByNewestCreationTime(run, other) < 0;
   });
   next.splice(at < 0 ? next.length : at, 0, id);
   return next;
@@ -488,8 +472,8 @@ function isDescendantOf(
   return false;
 }
 
-/** Recompute `ancestors` for a run and its descendants (a moved subtree,
- *  or a relabelled parent). O(subtree), once per such change. */
+/** Recompute `ancestors` for a run and its descendants (a moved subtree).
+ *  O(subtree), once per such change. */
 function refreshAncestors(view: SessionView, runId: RunId): void {
   const run = view.runs.get(runId);
   if (!run) return;
@@ -524,11 +508,7 @@ function withAggregates(view: SessionView, run: RunView): RunView {
   );
   const interrupted = !isTerminalOutcomePhase(run.status) && !held && !paused;
   const waiting = pendingOwn && held && !isTerminalOutcomePhase(run.status);
-  const durableOutcome =
-    isTerminalOutcomePhase(run.status) &&
-    (!own || sessionIndexesOf(view).ended.has(run.id))
-      ? run.status
-      : null;
+  const durableOutcome = isTerminalOutcomePhase(run.status) ? run.status : null;
   const unreadable = local.unreadable.find((u) => u.runId === run.id)?.detail;
   const children = run.childIds.flatMap((id) => view.runs.get(id) ?? []);
   const rollup = rollupOf(children);
@@ -560,7 +540,7 @@ function withAggregates(view: SessionView, run: RunView): RunView {
   if (statusDetail === null && blockedEntry !== undefined)
     statusDetail = runResumeBlockedMessage(blockedEntry);
   else if (statusDetail === null && interrupted)
-    statusDetail = runInterruptedMessage();
+    statusDetail = RUN_INTERRUPTED_MESSAGE;
   else if (statusDetail === null && heldBy !== null)
     statusDetail = runHeldMessage(ownerPid(heldBy));
   else if (statusDetail === null) statusDetail = run.lost;
@@ -1086,11 +1066,8 @@ function foldDurable(
   if (event.type === 'run.end') {
     // The run ended; a terminal phase ends every live row (5.2, "In-flight
     // text": a run can end with a row unfinalized).
-    sessionIndexesOf(view).ended.add(runId);
     clearLiveText(own.transcript);
   }
-  // A fresh incarnation can end again.
-  if (event.type === 'run.activate') sessionIndexesOf(view).ended.delete(runId);
   // Reads arrive in any order: older history never moves the clock back.
   const lastTimestamp = Math.max(own.lastTimestamp, event.at);
   let next: RunView = { ...own, lastTimestamp };
@@ -1100,8 +1077,6 @@ function foldDurable(
     relink(view, next, created ? null : before.parentId);
     if (!created) walkUp(view, before.parentId);
   }
-  if (next.label !== before.label)
-    for (const childId of next.childIds) refreshAncestors(view, childId);
   next = view.runs.get(next.id)!;
   const statusMoved = own.status !== before.status;
   const aggregated = statusMoved
@@ -1214,16 +1189,11 @@ function foldLocal(view: SessionView, local: LocalRuntimeState): void {
       touched.add(runId);
     }
   }
-  const details = (state: LocalRuntimeState) =>
-    new Map(state.unreadable.map((u) => [u.runId, u.detail]));
-  const [before, after] = [details(previous), details(local)];
-  for (const runId of new Set([...before.keys(), ...after.keys()]))
-    if (before.get(runId) !== after.get(runId)) touched.add(runId);
-  const blockers = (state: LocalRuntimeState) =>
-    new Map(state.resumeBlocked.map((b) => [b.runId, b]));
-  const [held, holding] = [blockers(previous), blockers(local)];
-  for (const runId of new Set([...held.keys(), ...holding.keys()]))
-    if (held.get(runId) !== holding.get(runId)) touched.add(runId);
+  // A run either snapshot names as unreadable or blocked is re-derived;
+  // `withDerived` keeps an unchanged one as it was.
+  for (const state of [previous, local])
+    for (const entry of [...state.unreadable, ...state.resumeBlocked])
+      touched.add(entry.runId);
   for (const runId of touched) walkUp(view, runId);
 }
 

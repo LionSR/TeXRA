@@ -45,31 +45,8 @@ function runStatusDisplayKey(
 }
 
 /**
- * The one status label table (PRD one-fold-three-renderers, G4): the fold
- * reads it into `RunView.statusLabel`, and every renderer prints that
- * word as is. `packages/cli/scripts/validate-run.mjs` pins the completed and
- * stopped words from here against the real headless run.
- */
-const RUN_STATUS_LABELS: Record<RunStatusCopyKey, string> = {
-  [RUN_SUBSTATE.STARTING]: 'Initializing',
-  [RUN_PHASE.RUNNING]: 'Running',
-  [RUN_PHASE.FAILED]: 'Error',
-  [RUN_PHASE.COMPLETED]: 'Completed',
-  [RUN_PHASE.CANCELLED]: 'Stopped',
-  ready: 'Ready',
-  [RUN_PHASE.WAITING]: 'Idle',
-  [RUN_SUBSTATE.RESUMING]: 'Resuming',
-  [RUN_SUBSTATE.PAUSED]: 'Paused',
-  [RUN_SUBSTATE.RESULT_WAITING]: 'Result waiting: parent is open elsewhere',
-  [RUN_DISPLAY_INTERRUPTED]: 'Interrupted',
-  [RUN_DISPLAY_WAITING_ON_USER]: 'Waiting on you',
-};
-
-/**
- * The one status-to-tone mapping (PRD one-fold-three-renderers, G4 and 15):
- * a fact-only word every host paints in its own colour vocabulary. Keyed by
- * the same display key as the labels above, so a status that gains a label
- * must gain a tone in the same edit.
+ * The tone (PRD one-fold-three-renderers, G4 and 15): a fact-only word
+ * every host paints in its own colour vocabulary.
  */
 export const RUN_STATUS_TONE = {
   RUNNING: 'running',
@@ -79,20 +56,36 @@ export const RUN_STATUS_TONE = {
   WARNING: 'warning',
 } as const;
 type RunStatusTone = (typeof RUN_STATUS_TONE)[keyof typeof RUN_STATUS_TONE];
+type RunStatusCopy = {
+  readonly statusLabel: string;
+  readonly tone: RunStatusTone;
+};
 
-const RUN_STATUS_TONES: Record<RunStatusCopyKey, RunStatusTone> = {
-  [RUN_SUBSTATE.STARTING]: RUN_STATUS_TONE.RUNNING,
-  [RUN_PHASE.RUNNING]: RUN_STATUS_TONE.RUNNING,
-  [RUN_PHASE.FAILED]: RUN_STATUS_TONE.DANGER,
-  [RUN_PHASE.COMPLETED]: RUN_STATUS_TONE.SUCCESS,
-  [RUN_PHASE.CANCELLED]: RUN_STATUS_TONE.NEUTRAL,
-  ready: RUN_STATUS_TONE.NEUTRAL,
-  [RUN_PHASE.WAITING]: RUN_STATUS_TONE.NEUTRAL,
-  [RUN_SUBSTATE.RESUMING]: RUN_STATUS_TONE.RUNNING,
-  [RUN_SUBSTATE.PAUSED]: RUN_STATUS_TONE.WARNING,
-  [RUN_SUBSTATE.RESULT_WAITING]: RUN_STATUS_TONE.WARNING,
-  [RUN_DISPLAY_INTERRUPTED]: RUN_STATUS_TONE.WARNING,
-  [RUN_DISPLAY_WAITING_ON_USER]: RUN_STATUS_TONE.WARNING,
+/**
+ * The one status copy table (G4): the fold reads it into
+ * `RunView.statusLabel` and `tone`, and every renderer prints that word as
+ * is. `packages/cli/scripts/validate-run.mjs` pins the completed and
+ * stopped words from here against the real headless run.
+ */
+const RUN_STATUS_COPY: Record<RunStatusCopyKey, RunStatusCopy> = {
+  [RUN_SUBSTATE.STARTING]: { statusLabel: 'Initializing', tone: 'running' },
+  [RUN_PHASE.RUNNING]: { statusLabel: 'Running', tone: 'running' },
+  [RUN_PHASE.FAILED]: { statusLabel: 'Error', tone: 'danger' },
+  [RUN_PHASE.COMPLETED]: { statusLabel: 'Completed', tone: 'success' },
+  [RUN_PHASE.CANCELLED]: { statusLabel: 'Stopped', tone: 'neutral' },
+  ready: { statusLabel: 'Ready', tone: 'neutral' },
+  [RUN_PHASE.WAITING]: { statusLabel: 'Idle', tone: 'neutral' },
+  [RUN_SUBSTATE.RESUMING]: { statusLabel: 'Resuming', tone: 'running' },
+  [RUN_SUBSTATE.PAUSED]: { statusLabel: 'Paused', tone: 'warning' },
+  [RUN_SUBSTATE.RESULT_WAITING]: {
+    statusLabel: 'Result waiting: parent is open elsewhere',
+    tone: 'warning',
+  },
+  [RUN_DISPLAY_INTERRUPTED]: { statusLabel: 'Interrupted', tone: 'warning' },
+  [RUN_DISPLAY_WAITING_ON_USER]: {
+    statusLabel: 'Waiting on you',
+    tone: 'warning',
+  },
 };
 
 /**
@@ -107,21 +100,17 @@ export function runStatusCopy(
     readonly interrupted?: boolean;
     readonly waiting?: boolean;
   } = {},
-): { readonly statusLabel: string; readonly tone: RunStatusTone } {
+): RunStatusCopy {
   let key: RunStatusCopyKey = runStatusDisplayKey(status, options.substate);
   if (options.interrupted) key = RUN_DISPLAY_INTERRUPTED;
   else if (options.waiting) key = RUN_DISPLAY_WAITING_ON_USER;
-  return {
-    statusLabel: RUN_STATUS_LABELS[key],
-    tone: RUN_STATUS_TONES[key],
-  };
+  return { ...RUN_STATUS_COPY[key] };
 }
 
 /** Banner copy for the fold's interrupted reading: the process running the
  *  run is gone; a pending approval stays listed, so a resume re-asks it. */
-export function runInterruptedMessage(): string {
-  return 'The process running this task stopped before it finished. Resume it to continue.';
-}
+export const RUN_INTERRUPTED_MESSAGE =
+  'The process running this task stopped before it finished. Resume it to continue.';
 
 /** Banner copy for a run a resume found blocked: what it waits for, and
  *  whether it continues by itself then (`retry`: a resume was asked for). */
@@ -159,26 +148,19 @@ export function runHeldMessage(pid: number): string {
   return `Held by another TeXRA process (pid ${pid}). Let it finish or close it; if it is gone, Delete removes the task.`;
 }
 
-/** The clause naming the process that holds a run: the pid and the machine
- *  recorded in its claim, the two parts of an identity a user can act on. One
- *  home, read by the refusal below and by the liveness ladder's unsettled
- *  reason, so the two wordings cannot drift apart. */
-function runHeldClause(ownerId: OwnerId): string {
-  const { pid, hostname } = ownerIdentity(ownerId);
-  return `held by another TeXRA process (pid ${pid} on ${hostname})`;
-}
-
 /** The refusal a host prints when another TeXRA process holds a run: the
- *  owner named by the pid and machine recorded in its claim. */
+ *  owner named by the pid and machine recorded in its claim, the two parts
+ *  of an identity a user can act on. */
 export function runHeldByProcessMessage(
   runId: RunId,
   ownerId: OwnerId,
 ): string {
-  return `Task ${runId} is ${runHeldClause(ownerId)}.`;
+  const { pid, hostname } = ownerIdentity(ownerId);
+  return `Task ${runId} is held by another TeXRA process (pid ${pid} on ${hostname}).`;
 }
 
 export function formatRunStatusLabel(status: RunLifecycleStatus): string {
-  return RUN_STATUS_LABELS[runStatusDisplayKey(status)];
+  return RUN_STATUS_COPY[runStatusDisplayKey(status)].statusLabel;
 }
 
 /** Compact position label: `t2` for a run's second turn. */

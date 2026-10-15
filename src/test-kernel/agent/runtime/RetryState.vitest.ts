@@ -263,8 +263,6 @@ const REQUEST: InvokeRequest = {
   system: undefined,
   tools: [],
   toolChoice: 'auto',
-  round: 0,
-  debugName: 'retry',
 };
 
 let retryRunCounter = 0;

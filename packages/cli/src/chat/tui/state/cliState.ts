@@ -173,12 +173,7 @@ export const sessionListRows = computed<readonly SessionListRow[]>(() => {
       included.has(run.id) &&
       !included.has(run.parentId),
   );
-  detached.sort((a, b) =>
-    compareByNewestCreationTime(
-      { name: a.id, creationTimestamp: a.createdAt },
-      { name: b.id, creationTimestamp: b.createdAt },
-    ),
-  );
+  detached.sort(compareByNewestCreationTime);
   for (const run of [...tops, ...detached]) {
     if (included.has(run.id)) groups[run.group].push(run);
   }

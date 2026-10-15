@@ -127,10 +127,6 @@ export interface InvokeRequest {
   /** The tools this turn advertises; a text-only persona advertises none. */
   readonly tools: TurnRequest['tools'];
   readonly toolChoice: TurnRequest['toolChoice'];
-  /** The turn's round ordinal, for debug file naming. */
-  readonly round: number;
-  /** The debug file base name of the family issuing the turn. */
-  readonly debugName: string;
 }
 
 interface InvocationResponse {
@@ -205,15 +201,13 @@ export const modelInvokerLayer = (): Layer.Layer<
       const saveDebug = (
         object: unknown,
         objectType: 'messages' | 'response',
-        round: number,
-        baseName: string,
+        invocation: InvocationRef,
         bound: BoundModel,
       ) =>
         maybeSaveDebugObject({
           object,
           objectType,
-          baseName,
-          continuationCount: round,
+          invocation,
           logger,
           modelName: bound.modelId,
           runId,
@@ -387,13 +381,7 @@ export const modelInvokerLayer = (): Layer.Layer<
         const reasoning = turnReasoning(turn);
         trace.thinking.finalize(reasoning === '' ? undefined : reasoning);
         trace.output.finalize(text);
-        yield* saveDebug(
-          turn,
-          'response',
-          request.round,
-          `${request.debugName}_response`,
-          bound,
-        );
+        yield* saveDebug(turn, 'response', invocation, bound);
         const usage = priceTurnUsage(bound, turn.usage, responseTimeMs);
         const responseId = randomUUID();
         const calls = dispatchFactsFor(
@@ -463,13 +451,7 @@ export const modelInvokerLayer = (): Layer.Layer<
           yield* bound.delivery,
         );
         let resolved = yield* prepareAttempt(bound, turnRequest);
-        yield* saveDebug(
-          state.messages,
-          'messages',
-          request.round,
-          request.debugName,
-          bound,
-        );
+        yield* saveDebug(state.messages, 'messages', invocation, bound);
         // R4: the run's context size (`contextTokens`: the last response's
         // provider-counted usage plus an estimate of what was added since).
         // An input that alone exceeds the window is refused before it is
@@ -509,7 +491,7 @@ export const modelInvokerLayer = (): Layer.Layer<
                 ),
                 originalMaxTokens: requested,
                 reducedMaxTokens: reduced,
-                details: request.debugName,
+                details: 'tooluse',
               },
             );
             // The clamp is part of the request, so it is prepared again:

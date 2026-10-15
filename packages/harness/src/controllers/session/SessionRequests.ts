@@ -59,7 +59,7 @@ type RequestServices = GlobalDatabase | RunFilesServices | Runs;
 /** The log's reads, and removal through the session's publisher. */
 type SessionRequestLog = Pick<
   Context.Service.Shape<typeof Database>,
-  'aggregateState' | 'claimOwner' | 'readAll'
+  'aggregateState' | 'claimOwner'
 > &
   Pick<SessionEventsShape, 'removeRun' | 'detach'>;
 
@@ -319,21 +319,10 @@ const deleteAdmittedRun = (
         }),
       );
     }
-    const [start] = yield* deps.log
-      .readAll(admitted.startCommit - 1, admitted.startCommit)
-      .pipe(Effect.orDie);
-    if (start?.type !== 'run.start' || start.aggregateId !== aggregateId) {
-      return yield* Effect.fail(
-        new Unavailable({
-          runId,
-          reason: `The ${runNoun(deps.session(), runId)}'s start could not be read.`,
-        }),
-      );
-    }
     yield* registryOf(deps.session().runs)
       .withInactiveRunStep(
         runId,
-        deps.log.removeRun(aggregateId, mode, start.commit),
+        deps.log.removeRun(aggregateId, mode, admitted.startCommit),
       )
       .pipe(
         Effect.mapError((error): RequestError => {

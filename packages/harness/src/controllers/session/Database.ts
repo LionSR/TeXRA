@@ -22,7 +22,6 @@ import { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 import {
   Clock,
   Context,
-  Duration,
   Scope,
   Effect,
   Exit,
@@ -67,7 +66,7 @@ import {
 } from '@shared/session/database';
 import { armsOf } from '@tools/plugins';
 import { ToolRegistry, toolTable } from '@tools/toolTable';
-import { currentValues } from './currentValues';
+import { currentValues, READ_RETRY } from './currentValues';
 import { localDatabasePath } from './localDatabasePath';
 import {
   CATCH_UP,
@@ -311,9 +310,7 @@ export const databaseLayer = (
       let version = (yield* execOne(dataVersion, []).pipe(
         mapDatabaseFailure(openFailed),
       ))?.data_version;
-      // A failed read is logged and backs off (250 ms doubling to 30 s);
-      // the version is checkpointed only once its commit is read.
-      let failures = 0;
+      // A failed read logs and retries; `version` moves once its commit is read.
       yield* Effect.forkScoped(
         Stream.tick('250 millis').pipe(
           Stream.runForEach(() =>
@@ -326,22 +323,17 @@ export const databaseLayer = (
                 yield* observe(commit);
                 yield* SubscriptionRef.update(level, (wake) => wake + 1);
               }
-              failures = 0;
             }).pipe(
-              Effect.catch((error) => {
-                failures += 1;
-                return Effect.logWarning(
+              Effect.tapError((error) =>
+                Effect.logWarning(
                   'The session database change poll failed; retrying.',
                 ).pipe(
                   Effect.annotateLogs({ data: error }),
                   withLogChannel(CHANNEL),
-                  Effect.andThen(
-                    Effect.sleep(
-                      Duration.millis(Math.min(250 * 2 ** failures, 30_000)),
-                    ),
-                  ),
-                );
-              }),
+                ),
+              ),
+              Effect.retry(READ_RETRY),
+              Effect.orDie,
             ),
           ),
         ),

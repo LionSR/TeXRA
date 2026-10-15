@@ -94,9 +94,6 @@ export class RunHistoryInconsistent extends Data.TaggedError(
  */
 export type RunState = RunPosition &
   RunFacts & {
-    /** Responses: a new turn invocation's `attempt` row counts one, a retry
-     *  none, and a script run's `handed-down` call one. */
-    readonly round: number;
     /** The last folded row. */
     readonly commit: CommitOrdinal;
     /** Run history rows folded: zero is an unopened run. */
@@ -212,7 +209,6 @@ const IGNORED = new Set<string>(Object.keys(IGNORED_ROW_TYPES));
  *  yet. The run program opens from this and stamps its family. */
 export const freshRunState = (commit: CommitOrdinal): RunState => ({
   ...freshRunPosition(),
-  round: 0,
   commit,
   runHistoryRows: 0,
   phase: null,

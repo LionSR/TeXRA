@@ -47,8 +47,9 @@ const SNAPSHOT = `SELECT key, value FROM current_value
   WHERE family = ? AND key IN (SELECT value FROM json_each(?))
   ORDER BY key`;
 
-/** A failed change-feed read's backoff: 250 ms doubling, at most 30 s. */
-const READ_RETRY = Schedule.exponential('250 millis').pipe(
+/** A failed change read's backoff (this feed's and the store's change
+ *  poll): 250 ms doubling, at most 30 s. */
+export const READ_RETRY = Schedule.exponential('250 millis').pipe(
   Schedule.modifyDelay(({ duration }) =>
     Effect.succeed(Duration.min(duration, Duration.seconds(30))),
   ),

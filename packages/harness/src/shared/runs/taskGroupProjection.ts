@@ -18,15 +18,9 @@ import {
  * A group is closed by the `GROUP_END` row its producer writes, and a session
  * close settling a run past its budget closes whatever is still open in the
  * same lease-fenced window that writes the run's outcome. A group left
- * `running` is a lie only once nothing can still close it, and a terminal
- * phase alone does not say that: a user stop publishes CANCELLED while the
- * flow is still unwinding in this process, with its stages' `GROUP_END` rows
- * yet to write. The fold's `runDurablyFinal` is the fact that does say
- * it, and it says it with a value rather than a bit — the run's own outcome,
- * whether that came from the durable facts alone or from a terminal phase
- * this process has nothing left to write behind (`finalizeRunTerminal`
- * untracks the run before storing the phase, so a run that left a group
- * open answers `live` forever).
+ * `running` is a lie only once nothing can still close it. The fold's
+ * `durableOutcome` says that, with a value rather than a bit: the outcome
+ * the run's `run.end` row wrote, the last row its run writes.
  *
  * That value, not a constant: the drain closes an open group with the outcome
  * the run's finalize left standing, so a run that COMPLETED with a group open

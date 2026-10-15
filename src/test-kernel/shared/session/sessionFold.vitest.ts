@@ -293,9 +293,8 @@ describe('sessionFold', () => {
     expect(view.key).toBe('paper');
     const expectedOrder = [...view.runs.values()]
       .filter((s) => s.parentId === null)
-      .map((s) => ({ name: s.id, creationTimestamp: s.createdAt }))
       .sort(compareByNewestCreationTime)
-      .map((s) => s.name);
+      .map((s) => s.id);
     expect(view.order).toStrictEqual(expectedOrder);
     expect(view.order).toStrictEqual([PROCESS, ROOT]);
 
@@ -422,9 +421,9 @@ describe('sessionFold', () => {
       interrupted: 0,
     });
 
-    // The durable outcome: for a run this process owns, the `run.end` row
-    // settles it. A user stop publishes no terminal status row of its own, so
-    // until `run.end` folds the run is still in flight.
+    // The durable outcome: only the `run.end` row writes a terminal status.
+    // A user stop publishes no terminal status row of its own, so until
+    // `run.end` folds the run is still in flight.
     expect(runView(pending, CHILD).status).toBe(RUN_PHASE.RUNNING);
     expect(runView(pending, CHILD).durableOutcome).toBeNull();
     const ended = fold(
