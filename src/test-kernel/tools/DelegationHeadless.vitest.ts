@@ -36,7 +36,10 @@ import type {
   RunId,
   SessionEventDraft,
 } from '@shared/schemas';
-import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
+import {
+  nativeToolTestLayer,
+  testModelCell,
+} from '@test/support/nativeToolTestLayer';
 import { openTestDefaultSession } from '@test/support/sessionEnd';
 import {
   publishTestRows,
@@ -63,8 +66,9 @@ import {
 import { generateRunId, generateShortId } from '@utils/core';
 
 /** The parent's model, which its children inherit: the validation model
- *  answers it, and the host's OpenAI key makes it available. */
-const MODEL = 'openai/gpt-6.1-sol';
+ *  answers it, and the host's OpenAI key makes it available. It is not the
+ *  first model that key makes available, the one a child falls back to. */
+const MODEL = 'openai/gpt-5.6-terra';
 
 interface Parent {
   readonly session: SessionHandle;
@@ -110,6 +114,7 @@ const delegateReview = (
               agent: 'assistant',
               model: MODEL,
             }),
+            model: testModelCell(MODEL),
             toolPolicy: { stopAfterCycle: options.stopAfterCycle ?? false },
           },
         }),
