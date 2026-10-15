@@ -427,14 +427,17 @@ export class ProposalRequestPanel extends BaseRequestPanel<'proposal'> {
   }
 
   /** The proposed agent's option value: catalog options are
-   *  source-qualified, the proposal names the agent and its source. */
+   *  source-qualified, the proposal names the agent and its source; a
+   *  team member the catalog hides has no source, so its name matches. */
   private get proposedAgent(): string {
     const { agent, agentSource } = this.permission.data;
     return (
       this.pickers.agents.find(
         (option) =>
           agentName(option.value) === agent &&
-          (agentSource == null || option.source === agentSource),
+          (agentSource == null ||
+            option.source === undefined ||
+            option.source === agentSource),
       )?.value ?? agent
     );
   }
