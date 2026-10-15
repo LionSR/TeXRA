@@ -19,7 +19,6 @@ import { modelRefOf } from '@texra-ai/llm';
 import {
   agentName,
   getProposalFileGroups,
-  type AgentOptionData,
   type AgentProposalPermission,
   type PermissionPayload,
 } from '@shared/schemas';
@@ -410,7 +409,7 @@ export class ProposalRequestPanel extends BaseRequestPanel<'proposal'> {
     const { script, task } = this.permission.data;
     if (host === null || script) return { agents: [], models: [] };
     const scope = this.run?.agentScope ?? null;
-    const offered = (option: AgentOptionData) =>
+    const offered = (option: HostSnapshot['agentOptions'][number]) =>
       !task || option.rounds !== undefined;
     const agents =
       scope === null
