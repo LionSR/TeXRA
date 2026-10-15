@@ -77,12 +77,10 @@ export const seedEditedFiles = (
           call: {
             callId,
             toolName: 'write_file',
-            ordinal: 0,
             lane: 'barrier',
             replay: 'unsafe',
             duplicateOf: null,
             logId: callId,
-            stageId: null,
           },
           argumentsText: '{}',
         },
