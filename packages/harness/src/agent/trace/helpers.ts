@@ -44,10 +44,9 @@ export function logSdkError(
   message: string,
   err: unknown,
   context?: ErrorContext,
-  stageId?: string,
 ): Effect.Effect<void> {
   return Effect.suspend(() => {
-    logErrorData(trace, message, buildErrorLogData(err, context), stageId);
+    logErrorData(trace, message, buildErrorLogData(err, context));
     return logProviderBody(message, normalizeProviderError(err).rawErrorBody);
   });
 }
@@ -83,13 +82,8 @@ function logErrorData(
   trace: AgentTrace,
   message: string,
   data: ErrorLogData & { readonly rawErrorBody?: never },
-  stageId?: string,
 ): void {
-  trace.error(message, {
-    messageType: MESSAGE_TYPES.ERROR,
-    data,
-    stageId,
-  });
+  trace.error(message, { messageType: MESSAGE_TYPES.ERROR, data });
 }
 
 /**
@@ -98,15 +92,8 @@ function logErrorData(
  * row's `data` verbatim into its detail, and an arbitrary payload (a request,
  * headers, config) could write a secret there.
  */
-export function logProgressStatus(
-  trace: AgentTrace,
-  message: string,
-  stageId?: string,
-): void {
-  trace.info(message, {
-    messageType: MESSAGE_TYPES.PROGRESS_STATUS,
-    stageId,
-  });
+export function logProgressStatus(trace: AgentTrace, message: string): void {
+  trace.info(message, { messageType: MESSAGE_TYPES.PROGRESS_STATUS });
 }
 
 const COMPACTION_ACTIVITY_LOG_TEXT: Record<
@@ -201,21 +188,12 @@ export function logContextManagementEvent(
   trace: AgentTrace,
   text: string,
   data?: ContextManagementData,
-  stageId?: string,
 ): void {
-  trace.info(text, {
-    messageType: MESSAGE_TYPES.CONTEXT_MANAGEMENT,
-    data,
-    stageId,
-  });
+  trace.info(text, { messageType: MESSAGE_TYPES.CONTEXT_MANAGEMENT, data });
 }
 
-export function logWebSearch(
-  trace: AgentTrace,
-  data: unknown,
-  stageId?: string,
-): void {
-  trace.info('', { messageType: MESSAGE_TYPES.WEB_SEARCH, data, stageId });
+export function logWebSearch(trace: AgentTrace, data: unknown): void {
+  trace.info('', { messageType: MESSAGE_TYPES.WEB_SEARCH, data });
 }
 
 /** Files-loaded card with full {@link FileListEntry} entries. */

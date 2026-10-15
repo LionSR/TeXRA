@@ -323,9 +323,6 @@ const UpdateCustomAgentDirMessageSchema = z.object({
   path: z.string(),
   isDefault: z.boolean(),
 });
-export type UpdateCustomAgentDirMessage = z.infer<
-  typeof UpdateCustomAgentDirMessageSchema
->;
 
 // ============================================================
 // Agent team data schema

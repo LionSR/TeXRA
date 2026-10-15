@@ -16,10 +16,8 @@ import { filesByPrefix } from '@latex/formatter/latexindentpt';
 import { LaTeXdiffService } from '@latex/latexdiff';
 import { generateDiffFileName } from '@latex/latexdiff/diffFileNameManager';
 import { withLogChannel } from '@logger/effectLog';
-import {
-  LATEXDIFF_TEMP_FILE_LOCATIONS,
-  type FileLocation,
-} from '@shared/schemas';
+import type { FileLocation } from '@shared/schemas';
+import { LATEXDIFF_TEMP_FILE_LOCATIONS } from '@texra/shared/settingsView/texraSettings';
 import { readSettingFrom } from '@utils/config/platformSettings';
 import { generateShortId } from '@utils/core';
 import {

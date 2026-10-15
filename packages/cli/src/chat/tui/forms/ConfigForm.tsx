@@ -9,14 +9,13 @@
 
 import { Text, useInput } from 'ink';
 import { useState } from 'react';
+import { z } from 'zod';
 
 import { isCtrlInput } from '@cli/tui/inputKeys';
 import type { SelectItem } from '@cli/tui/ui/Select';
 import {
   settingEnumOptions,
-  settingIsBoolean,
-  settingIsNumber,
-  settingIsString,
+  settingSchemaWithoutPrefault,
   type SurfacedSettingEntry,
 } from '@shared/state/stateSettings';
 import { stripPrefix } from '@shared/config/configKeys';
@@ -51,9 +50,10 @@ type SettingInputResult =
 function settingEditKind(entry: SurfacedSettingEntry): SettingEditKind {
   if (entry.openForm) return 'form';
   if (settingEnumOptions(entry)) return 'enum';
-  if (settingIsBoolean(entry)) return 'boolean';
-  if (settingIsNumber(entry)) return 'number';
-  if (settingIsString(entry)) return 'string';
+  const schema = settingSchemaWithoutPrefault(entry);
+  if (schema instanceof z.ZodBoolean) return 'boolean';
+  if (schema instanceof z.ZodNumber) return 'number';
+  if (schema instanceof z.ZodString) return 'string';
   return 'readonly';
 }
 

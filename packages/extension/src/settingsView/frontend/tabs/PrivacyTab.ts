@@ -5,7 +5,7 @@ import { LitElement, css, html, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 
 // Local imports - shared webview
-import { TELEMETRY_ENABLED_KEY } from '@shared/schemas';
+import { TELEMETRY_ENABLED_KEY } from '@texra/shared/settingsView/texraSettings';
 import { commonViewStyles, designTokens } from '@ui/styles';
 import { renderSettingsSectionHeading } from '@ui/wa/settingsSection';
 

@@ -26,7 +26,6 @@ const ACTION_PRESENTATION: Record<
   string,
   { icon: TeXRAIconName; color: string }
 > = {
-  compaction: { icon: 'compress', color: 'var(--wa-color-chart-blue)' },
   clear_tool_uses: { icon: 'trash', color: 'var(--wa-color-chart-green)' },
   clear_thinking: { icon: 'lightbulb', color: 'var(--wa-color-chart-green)' },
   truncation: { icon: 'ellipsis', color: 'var(--wa-color-chart-orange)' },

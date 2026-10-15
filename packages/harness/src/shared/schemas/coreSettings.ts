@@ -10,20 +10,12 @@ import { z } from 'zod';
  * schema without importing the catalog.
  */
 
-export const LATEXDIFF_TEMP_FILE_LOCATIONS = [
-  'sameDirectory',
-  'workspaceTemp',
-] as const;
-
 export const TOOL_EDIT_APPROVAL_CONFIG_KEY =
   'texra.toolUse.requireEditApproval';
 
 /** Canonical config key for the per-session child-run concurrency budget. */
 export const CHILD_RUN_CONCURRENCY_BUDGET_CONFIG_KEY =
   'texra.childRunConcurrencyBudget';
-
-/** Canonical config key for the usage-telemetry opt-in. */
-export const TELEMETRY_ENABLED_KEY = 'texra.telemetry.enabled';
 
 /**
  * Canonical config key for `texra.logger.debugMode`, whose one meaning is
@@ -35,17 +27,9 @@ export const TELEMETRY_ENABLED_KEY = 'texra.telemetry.enabled';
 export const DEBUG_MODE_KEY = 'texra.logger.debugMode';
 
 /**
- * Telemetry is on unless a scope opts out. Shared by the catalog row and by
- * `UsageLogService`, which resolves both scopes itself rather than through the
- * merged config read.
- */
-export const TELEMETRY_ENABLED_DEFAULT = true;
-
-/**
  * Bounds, default, and copy for `model.retry.maxAttempts`. The value is the
- * number of automatic retries after the initial model request. Shared by
- * {@link ModelRetryMaxAttemptsSchema} and the settings-view reliability row so
- * the schema and the UI cannot disagree about the range.
+ * number of automatic retries after the initial model request. Shared by the
+ * catalog row's schema and its copy so the two cannot disagree about the range.
  */
 export const MODEL_RETRY_MAX_ATTEMPTS_SETTING = Object.freeze({
   configKey: 'texra.model.retry.maxAttempts',
@@ -59,10 +43,8 @@ export const MODEL_RETRY_MAX_ATTEMPTS_SETTING = Object.freeze({
 /**
  * Bounds, default, and copy for `model.compactionThresholdPercent`. The value
  * is the share of the model's context window that triggers automatic
- * compaction, and `0` disables it. Shared by
- * {@link ModelCompactionThresholdPercentSchema}, the runtime reader, and the
- * settings-view reliability row so the schema, runtime, and UI cannot disagree
- * about the range.
+ * compaction, and `0` disables it. Shared by the catalog row and the runtime
+ * reader so the two cannot disagree about the range.
  */
 export const MODEL_COMPACTION_THRESHOLD_SETTING = Object.freeze({
   configKey: 'texra.model.compactionThresholdPercent',
@@ -98,8 +80,7 @@ export const CHATGPT_CODEX_CONTEXT_WINDOW_SETTING = Object.freeze({
 /**
  * Bounds, default, and copy for `childRunConcurrencyBudget`. The value caps the
  * number of live native child model conversations one session runs at once.
- * Shared by {@link ChildRunConcurrencyBudgetSchema}, the runtime reader, and the
- * settings-view Agents tab so the schema, runtime, and UI cannot disagree
+ * Shared by the catalog row and the runtime reader so the two cannot disagree
  * about the range.
  */
 export const CHILD_RUN_CONCURRENCY_BUDGET_SETTING = Object.freeze({
@@ -128,17 +109,14 @@ export const RESUME_ON_OPEN_SETTING = Object.freeze({
     'When TeXRA opens and finds tasks it stopped before they finished: list them so you can choose, or continue them all.',
 } as const);
 
-export const ResumeOnOpenSchema = z
-  .enum(RESUME_ON_OPEN_SETTING.values)
-  .prefault(RESUME_ON_OPEN_SETTING.defaultValue);
-export type ResumeOnOpen = z.infer<typeof ResumeOnOpenSchema>;
+export type ResumeOnOpen = (typeof RESUME_ON_OPEN_SETTING.values)[number];
 
 /**
  * Bounds, default, and copy for `goal.maxCostUsd`: the run tree's total spend
  * at which an active goal pauses instead of opening its next turn, and `0`
  * disables the cap. Read at each idle, so it needs no field on the goal's own
- * row. Shared by {@link GoalMaxCostSchema}, the goal continuation, and the
- * settings-view approval row so the three cannot disagree about the range.
+ * row. Shared by the catalog row and the goal continuation so the two cannot
+ * disagree about the range.
  */
 export const GOAL_MAX_COST_SETTING = Object.freeze({
   configKey: 'texra.goal.maxCostUsd',
@@ -148,36 +126,6 @@ export const GOAL_MAX_COST_SETTING = Object.freeze({
   description:
     'Spend in US dollars, across the run and its subagents, at which an autonomous goal pauses instead of starting another turn. Raise it to let the goal continue. Set to 0 to remove the cap (not recommended with auto-approve on your own API key).',
 } as const);
-
-export const ModelRetryMaxAttemptsSchema = z
-  .int()
-  .min(MODEL_RETRY_MAX_ATTEMPTS_SETTING.min)
-  .max(MODEL_RETRY_MAX_ATTEMPTS_SETTING.max)
-  .prefault(MODEL_RETRY_MAX_ATTEMPTS_SETTING.defaultValue);
-
-export const ModelCompactionThresholdPercentSchema = z
-  .number()
-  .min(MODEL_COMPACTION_THRESHOLD_SETTING.min)
-  .max(MODEL_COMPACTION_THRESHOLD_SETTING.max)
-  .prefault(MODEL_COMPACTION_THRESHOLD_SETTING.defaultValue);
-
-export const GoalMaxCostSchema = z
-  .number()
-  .min(GOAL_MAX_COST_SETTING.min)
-  .max(GOAL_MAX_COST_SETTING.max)
-  .prefault(GOAL_MAX_COST_SETTING.defaultValue);
-
-export const ChatgptCodexContextWindowSchema = z
-  .int()
-  .min(CHATGPT_CODEX_CONTEXT_WINDOW_SETTING.min)
-  .max(CHATGPT_CODEX_CONTEXT_WINDOW_SETTING.max)
-  .prefault(CHATGPT_CODEX_CONTEXT_WINDOW_SETTING.defaultValue);
-
-export const ChildRunConcurrencyBudgetSchema = z
-  .int()
-  .min(CHILD_RUN_CONCURRENCY_BUDGET_SETTING.min)
-  .max(CHILD_RUN_CONCURRENCY_BUDGET_SETTING.max)
-  .prefault(CHILD_RUN_CONCURRENCY_BUDGET_SETTING.defaultValue);
 
 /**
  * Output formats every `texra` command can emit: human text, one JSON result,

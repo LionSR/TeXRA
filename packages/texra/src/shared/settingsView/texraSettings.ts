@@ -15,11 +15,7 @@
 import { z } from 'zod';
 
 // Local imports
-import {
-  CliOutputFormatSchema,
-  LATEXDIFF_TEMP_FILE_LOCATIONS,
-  TELEMETRY_ENABLED_DEFAULT,
-} from '@shared/schemas';
+import { CliOutputFormatSchema } from '@shared/schemas';
 import {
   configTreeRows,
   settingsCatalog,
@@ -54,6 +50,14 @@ export enum TexraStateKey {
   /** Set once the first-run telemetry notice has been shown on this host. */
   TELEMETRY_NOTICE_SHOWN = 'texra.telemetry.noticeShown',
 }
+
+/** Canonical config key for the usage-telemetry opt-in. */
+export const TELEMETRY_ENABLED_KEY = 'texra.telemetry.enabled';
+
+export const LATEXDIFF_TEMP_FILE_LOCATIONS = [
+  'sameDirectory',
+  'workspaceTemp',
+] as const;
 
 /** Standalone preamble used when extracting a TikZ figure for compilation. */
 const DEFAULT_TIKZ_TEMPLATE =
@@ -91,31 +95,26 @@ const TEXRA_CONFIG_ROWS: Record<
 > = {
   agent: {
     schema: CliAgentSchema,
-    title: 'Default agent',
     description:
       'Agent `texra chat` and `texra run` start with when neither `--agent` nor a per-command default names one.',
   },
   model: {
     schema: CliModelSchema,
-    title: 'Default model',
     description:
       'Model every `texra` command starts with when neither `--model`, `TEXRA_MODEL`, nor a per-command default names one. A model this machine cannot run falls back to an available one with a notice.',
   },
   chat: {
     schema: CliCommandDefaultsSchema,
-    title: 'Chat defaults',
     description:
       'Agent and model `texra chat` starts with, overriding the top-level defaults.',
   },
   run: {
     schema: CliCommandDefaultsSchema,
-    title: 'Run defaults',
     description:
       'Agent and model `texra run` starts with, overriding the top-level defaults.',
   },
   outputFormat: {
     schema: CliOutputFormatSchema,
-    title: 'Output format',
     description:
       'How `texra` prints results: human text, one JSON object, or NDJSON records. `--output-format` and `TEXRA_OUTPUT_FORMAT` override it.',
   },
@@ -159,50 +158,36 @@ const TEXRA_CONFIG_ROWS: Record<
   },
   'latex.wrapCritiqueInAlign': {
     schema: z.boolean().prefault(true),
-    title: 'Wrap criticism in align environments',
     description:
       'Wrap bare criticism and comment commands inside align environments with intertext.',
-    category: 'latex',
   },
   'latex.enabledReplacements': {
     schema: z
       .array(z.enum(NON_REGEX_REPLACEMENT_CATEGORIES))
       .prefault(DEFAULT_ENABLED_REPLACEMENTS),
-    title: 'Literal replacement groups',
     description: 'Enabled groups of direct LaTeX cleanup replacements.',
-    category: 'latex',
   },
   'latex.enabledReplacementsRegex': {
     schema: z
       .array(z.enum(REGEX_REPLACEMENT_CATEGORIES))
       .prefault(DEFAULT_ENABLED_REGEX_REPLACEMENTS),
-    title: 'Pattern replacement groups',
     description: 'Enabled groups of pattern-based LaTeX cleanup replacements.',
-    category: 'latex',
   },
   'latex.customReplacementsRegex': {
     schema: z.record(z.string(), z.string()).prefault({}),
-    title: 'Custom pattern replacements',
     description: 'Custom regular-expression replacements.',
-    category: 'latex',
   },
   'latex.customReplacements': {
     schema: z.record(z.string(), z.string()).prefault({}),
-    title: 'Custom literal replacements',
     description: 'Custom direct text replacements.',
-    category: 'latex',
   },
   'latexdiff.tempFileLocation': {
     schema: z.enum(LATEXDIFF_TEMP_FILE_LOCATIONS).prefault('sameDirectory'),
     description:
       'Where to create temporary files for LaTeX preview and diff operations during tool edit approval.',
-    enumDescriptions: [
-      'Create temp files in the same directory as the original file. Best for resolving \\input{} and relative paths.',
-      'Create temp files in .texra-temp directory at workspace root. Keeps source directories clean but may break relative paths.',
-    ],
   },
   'telemetry.enabled': {
-    schema: z.boolean().prefault(TELEMETRY_ENABLED_DEFAULT),
+    schema: z.boolean().prefault(true),
     title: 'Share usage telemetry',
     description:
       'Send anonymous model, agent, token, timing, and host metadata with a random install ID (no account). TeXRA never sends prompt text, document content, or file names. Turning this off stops all reporting.',
@@ -251,9 +236,8 @@ const TEXRA_SETTING_ROWS: readonly StateSettingEntry[] = [
   }),
 
   // --- Plugins' rows ----------------------------------------------------------
-  ...[...DOCUMENTS_SETTINGS, ...CODEX_SETTINGS, ...CLAUDE_AGENT_SETTINGS].map(
-    ({ row }) => row,
-  ),
+  ...DOCUMENTS_SETTINGS,
+  ...[...CODEX_SETTINGS, ...CLAUDE_AGENT_SETTINGS].map(({ row }) => row),
 ];
 
 /** The whole catalog TeXRA's settings surfaces render: the harness's rows and TeXRA's. */

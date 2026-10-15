@@ -21,7 +21,6 @@ import {
   surfacedSetting,
   type PluginSettingRow,
   type SurfacedSettingEntry,
-  type SurfacedSettingInput,
 } from '@shared/state/stateSettings';
 
 /** The `codex` plugin's repository-scoped keys. */
@@ -41,7 +40,7 @@ export enum ClaudeAgentStateKey {
 
 /** An external coding agent's row: repo-scoped, on the approval tab and in `/config`. */
 function agentCliSetting(
-  entry: Omit<SurfacedSettingInput, 'category' | 'slot' | 'surfaces'>,
+  entry: Omit<SurfacedSettingEntry, 'category' | 'slot' | 'surfaces'>,
 ): SurfacedSettingEntry {
   return surfacedSetting({
     ...entry,

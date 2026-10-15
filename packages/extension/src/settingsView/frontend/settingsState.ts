@@ -21,7 +21,6 @@
  * replays. A signal declared any other way is silently left out of the reset.
  */
 
-import { DEFAULT_HELPER_MODEL } from '@shared/constants/defaultModels';
 import {
   TEXRA_APPROVAL_POLICY_CONFIG_KEY,
   type TexraApprovalPolicy,
@@ -35,7 +34,6 @@ import {
   RESUME_ON_OPEN_SETTING,
   MODEL_COMPACTION_THRESHOLD_SETTING,
   MODEL_RETRY_MAX_ATTEMPTS_SETTING,
-  TELEMETRY_ENABLED_KEY,
   TOOL_EDIT_APPROVAL_CONFIG_KEY,
   type AgentModePreset,
   type SkillDisplayIssue,
@@ -47,6 +45,7 @@ import type { MemoryViewItem } from '@shared/tools/memoryView';
 import type { SubscriptionAuthStatuses } from '@shared/model/subscriptionAuth';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 import {
+  TELEMETRY_ENABLED_KEY,
   TEXRA_SETTINGS,
   TexraStateKey,
 } from '@texra/shared/settingsView/texraSettings';
@@ -158,8 +157,10 @@ export const providerKeyStatuses = trackedSignal<ProviderKeyStatus[]>(() => []);
 export const modelSelectionItems = trackedSignal<ModelSelectionItem[]>(
   () => [],
 );
-export const helperModel = trackedSignal(() => DEFAULT_HELPER_MODEL);
-export const preferShortModelNames = trackedSignal(() => false);
+export const helperModel = settingSignal<string>(GlobalStateKey.HELPER_MODEL);
+export const preferShortModelNames = settingSignal<boolean>(
+  GlobalStateKey.PREFER_SHORT_MODEL_NAMES,
+);
 export const copilotRouteInfos = trackedSignal<CopilotRouteInfo[]>(() => []);
 
 // ---------------------------------------------------------------------------

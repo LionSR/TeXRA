@@ -65,15 +65,6 @@ export const listGitHubSubscriptionEntries = (
   ).pipe(Effect.withSpan('githubSubscriptions.listEntries'));
 
 /**
- * What both Git tabs say when {@link unsubscribeGitHubKey} matched nothing —
- * the key was already unbound, or never had this shape. The condition is
- * decided here, so the sentence is too.
- */
-export function noActiveGitHubSubscriptionMessage(key: string): string {
-  return `No active subscription for ${key}.`;
-}
-
-/**
  * Removes every binding for a GitHub URL-shaped subscription key.
  * Repo keys are exactly `owner/repo`; a malformed, legacy, or future key
  * shape must not silently default to the repo registry (a destructive unbind),
