@@ -21,9 +21,9 @@ import {
 
 import { ModelError, ModelErrorFieldsSchema, type Model } from '@texra-ai/llm';
 
-import { toJsonValue } from '@shared/schemas';
 import type { HostInteractions } from '@agent/runtime/HostInteractions';
 import { withLogChannel } from '@logger/effectLog';
+import { toJsonValue } from '@shared/schemas';
 import type { ToolEditApprovalController } from '@texra/controllers/approval/ToolEditApprovalController';
 import type { EditorCapabilities } from '@texra/tools/editorHost';
 import { toErrorMessage } from '@utils/errors/errorMessage';
