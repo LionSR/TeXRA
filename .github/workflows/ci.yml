@@ -117,12 +117,20 @@ jobs:
         env:
           TEXRA_RATCHET_BASE: origin/${{ github.base_ref || 'main' }}
         run: |
-          # Checkout is shallow. Comparing blobs needs only the base tip, and
-          # a push to main already has it; fetch only when the ref is missing.
+          # Checkout is shallow. The ratchet check judges this tree against its
+          # merge base with the target: fetch the target tip if it is missing,
+          # then deepen the target and HEAD until git finds the merge base. The
+          # check fails loudly if it still cannot.
           if ! git rev-parse --verify "$TEXRA_RATCHET_BASE^{commit}" >/dev/null 2>&1; then
             git fetch --no-tags --depth=1 origin \
               "+refs/heads/${TEXRA_RATCHET_BASE#origin/}:refs/remotes/$TEXRA_RATCHET_BASE"
           fi
+          for depth in 50 500 5000; do
+            git merge-base "$TEXRA_RATCHET_BASE" HEAD >/dev/null 2>&1 && break
+            git fetch --no-tags --deepen="$depth" origin \
+              "+refs/heads/${TEXRA_RATCHET_BASE#origin/}:refs/remotes/$TEXRA_RATCHET_BASE" \
+              "$(git rev-parse HEAD)"
+          done
           pnpm run gate:invariants
 
       # Every function that owns a deno.json is validated, so a new edge

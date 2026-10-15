@@ -1,8 +1,11 @@
 #!/usr/bin/env node
 /**
- * Reject widening of config/ratchets/** against TEXRA_RATCHET_BASE (default:
- * origin/main). The JSON files remain the authority; this only compares the
- * working tree with `git show <base>:<path>`, allowing new baseline files.
+ * Reject widening of config/ratchets/** against the point where this tree left
+ * TEXRA_RATCHET_BASE (default: origin/main), its merge base. A row the target
+ * shrank after the fork is not this tree's widening: git keeps the target's
+ * value for a row the branch did not touch. The JSON files remain the
+ * authority; this only compares the working tree with `git show <base>:<path>`,
+ * allowing new baseline files.
  *
  * Rows may move, because files and modules move (M8, `--move`): each added
  * row consumes one removed row of the same file, used once. A numeric donor
@@ -41,7 +44,7 @@ const rootDir = path.resolve(
   '..',
 );
 const baselineDir = 'config/ratchets';
-const base = process.env.TEXRA_RATCHET_BASE ?? 'origin/main';
+const target = process.env.TEXRA_RATCHET_BASE ?? 'origin/main';
 const REFUTED_CANDIDATES = `${baselineDir}/refuted-candidates.json`;
 const ROW_KINDS_EVER = 'config/storage/row-kinds-ever.json';
 const git = (...args) =>
@@ -50,6 +53,16 @@ const git = (...args) =>
     encoding: 'utf8',
     stdio: ['ignore', 'pipe', 'pipe'],
   });
+const base = (() => {
+  try {
+    return git('merge-base', target, 'HEAD').trim();
+  } catch (cause) {
+    throw new Error(
+      `no merge base between ${target} and HEAD (${String(cause.stderr ?? cause.message).trim()}); fetch ${target} and enough history, or set TEXRA_RATCHET_BASE`,
+      { cause },
+    );
+  }
+})();
 const isObject = (value) =>
   value != null && typeof value === 'object' && !Array.isArray(value);
 const isCount = (value) => Number.isFinite(value) && value >= 0;
@@ -269,15 +282,8 @@ function baselineFiles(dir) {
 }
 
 function main() {
-  // ls-tree failing is a missing base, not a new file. A later git-show failure
-  // also propagates; only a path absent from this tree is a new baseline.
-  try {
-    git('rev-parse', '--verify', `${base}^{commit}`);
-  } catch {
-    throw new Error(
-      `base ${base} is not available locally; run \`git fetch origin\` (or set TEXRA_RATCHET_BASE)`,
-    );
-  }
+  // A git-show failure propagates; only a path absent from the base's tree is
+  // a new baseline.
   const baseFiles = new Set(
     git('ls-tree', '-r', '--name-only', base, '--', baselineDir)
       .trim()
@@ -348,18 +354,18 @@ function main() {
       problems.push(`${file}: deleted (retiring a ratchet is an owner call)`);
   if (problems.length > 0) {
     console.error(
-      `ratchet-baselines: ${problems.length} widening(s) against ${base}\n${problems.join('\n')}`,
+      `ratchet-baselines: ${problems.length} widening(s) against ${target} (fork point ${base.slice(0, 10)})\n${problems.join('\n')}`,
     );
     process.exitCode = 1;
   } else
     console.log(
-      `ratchet-baselines: ${files.length} files do not widen ${base} (${newFiles} new)`,
+      `ratchet-baselines: ${files.length} files do not widen ${target} (fork point ${base.slice(0, 10)}, ${newFiles} new)`,
     );
 }
 
 try {
   main();
 } catch (error) {
-  console.error(`ratchet-baselines: ${error.message}`);
+  console.error(`ratchet-baselines: ${error.message}`, error.cause ?? '');
   process.exitCode = 1;
 }
