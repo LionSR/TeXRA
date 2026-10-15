@@ -5,10 +5,9 @@ import { Effect, FileSystem, Path } from 'effect';
 import { z } from 'zod';
 
 // Local imports
-import { defineTool, ToolContext } from '@texra-ai/harness';
+import { defineTool, ToolContext, WorkspaceFs } from '@texra-ai/harness';
 import { ArxivProcessor, type ArxivSourceError } from '@latex/arxivProcessor';
 import { resolveLatexFormatter } from '@latex/formatter/texFormatter';
-import { WorkspaceFs } from '@platform/rootedFs';
 import { ToolError } from '@shared/schemas';
 import { getGitignoreMatcher } from '@tools/gitignore';
 import { formatToolOutput } from '@tools/formatting';

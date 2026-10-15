@@ -22,9 +22,8 @@ import {
   Scope,
 } from 'effect';
 
-import { SESSION_CLOSE_DEADLINE_MS } from '@texra-ai/harness';
+import { SESSION_CLOSE_DEADLINE_MS, withLogChannel } from '@texra-ai/harness';
 import { emitAppSignal } from '@eventBus/AppSignals';
-import { withLogChannel } from '@logger/effectLog';
 
 import { unrefSleepClock } from '@texra/utils/system/unrefSleepClock';
 import { jitteredExponentialBackoffMs } from '@utils/core';

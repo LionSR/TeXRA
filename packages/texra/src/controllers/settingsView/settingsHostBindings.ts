@@ -5,7 +5,7 @@
  */
 import { Cause, Effect } from 'effect';
 
-import { withLogChannel } from '@logger/effectLog';
+import { withLogChannel } from '@texra-ai/harness';
 import type {
   ExternalOpener,
   MessageHost,

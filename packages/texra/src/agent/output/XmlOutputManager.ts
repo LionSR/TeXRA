@@ -19,6 +19,7 @@ import {
   OUTPUT_DOCUMENTS_TAG,
   type OutputFileInfo,
 } from '@texra/shared/plugins/documentOutputs';
+import { addCdataToTagsMultiple } from '@texra/utils/text/xmlCdata';
 import { createExternalLocation } from '@utils/files/fileLocation';
 import { RunFileService } from '@utils/files/runStorage';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -26,7 +27,6 @@ import {
   formatResultCount,
   normalizeLineEndings,
 } from '@utils/text/stringUtils';
-import { addCdataToTagsMultiple } from '@utils/text/xmlCdata';
 import { entryTypeIn } from '@utils/files/fsEntryExists';
 
 import {

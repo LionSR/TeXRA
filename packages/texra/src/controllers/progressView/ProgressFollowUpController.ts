@@ -2,7 +2,6 @@
 import { Data, Effect, PlatformError } from 'effect';
 
 // Local imports
-import type { RunRequest } from '@agent/core/state/runRequests';
 import { detectGeneratedLatexdiffArtifact } from '@latex/latexdiff/diffFileNameManager';
 import type { ModelHostFactUnreadable } from '@model/computeModelOptions';
 import { decideRunModel } from '@model/runModelDecision';
@@ -13,6 +12,7 @@ import {
   type ModelAvailabilityKind,
   type RunId,
 } from '@shared/schemas';
+import type { RunRequest } from '@texra/controllers/session/runRequests';
 import {
   type CompileFailure,
   type ReadonlyRoundIndexed,

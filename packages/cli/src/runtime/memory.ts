@@ -1,7 +1,7 @@
 import { Effect } from 'effect';
 
+import { withSessionFs, type StorageFs } from '@texra-ai/harness';
 import { resolveMemoryStoragePath } from '@platform/defaults/workspaceStorage';
-import { withSessionFs, type StorageFs } from '@platform/rootedFs';
 import type { MemoryViewItem } from '@shared/tools/memoryView';
 import { displayToStoragePath, toDisplayPath } from '@tools/memory/memoryUtils';
 import { MEMORY_DISPLAY_ROOT } from '@tools/memory/constants';

@@ -2,7 +2,7 @@ import * as path from 'node:path';
 
 import { Effect, FileSystem } from 'effect';
 
-import { withLogChannel } from '@logger/effectLog';
+import { withLogChannel } from '@texra-ai/harness';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import { runToolWithCheck } from '@texra/utils/system/toolChecks';
 import { entryTypeIn } from '@utils/files/fsEntryExists';

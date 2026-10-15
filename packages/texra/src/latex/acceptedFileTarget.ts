@@ -5,9 +5,8 @@ import path from 'node:path';
 import { Effect, FileSystem, type PlatformError } from 'effect';
 
 // Local imports
+import { withLogChannel, WorkspaceFs } from '@texra-ai/harness';
 import { generateDiffFileName } from '@latex/latexdiff/diffFileNameManager';
-import { withLogChannel } from '@logger/effectLog';
-import { WorkspaceFs } from '@platform/rootedFs';
 import type { FileLocation } from '@shared/schemas';
 import { normalizeFilePath } from '@utils/core';
 import {

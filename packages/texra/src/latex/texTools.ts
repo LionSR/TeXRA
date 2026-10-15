@@ -6,8 +6,7 @@ import { Data, Effect, FileSystem } from 'effect';
 import { z } from 'zod';
 
 // Local imports
-import { withLogChannel } from '@logger/effectLog';
-import { WorkspaceFs } from '@platform/rootedFs';
+import { withLogChannel, WorkspaceFs } from '@texra-ai/harness';
 import type { ExecResult, FileLocation } from '@shared/schemas';
 import { SUPPORTED_LATEX_COMPILERS } from '@texra/shared/constants/latexToolchain';
 import { runToolWithCheck } from '@texra/utils/system/toolChecks';

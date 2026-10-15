@@ -5,11 +5,11 @@ import {
   type PlatformSecrets,
   type LanguageModel,
 } from '@texra-ai/harness';
-import { validateRunRequest } from '@agent/core/state/runRequests';
 import type { SessionHostInteractions } from '@agent/runtime/HostInteractions';
 import { presentRunFailure } from '@agent/runtime/terminalResultToast';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import { SETUP_AGENT_NAME } from '@shared/constants/agents';
+import { validateRunRequest } from '@texra/controllers/session/runRequests';
 import type { HostRunActions } from '@texra/controllers/session/hostRunActions';
 import { resolveSetupLaunchModel } from '@texra/model/setupCredentialAccess';
 

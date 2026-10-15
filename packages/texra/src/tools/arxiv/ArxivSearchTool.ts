@@ -11,9 +11,8 @@ import { Clock, Duration, Effect, Semaphore } from 'effect';
 import { z } from 'zod';
 
 // Local imports
-import { defineTool } from '@texra-ai/harness';
+import { defineTool, withLogChannel } from '@texra-ai/harness';
 import { normaliseArxivIdentifier } from '@latex/arxivIdentifier';
-import { withLogChannel } from '@logger/effectLog';
 import { ToolError } from '@shared/schemas';
 import { requireNonEmptyString } from '@tools/utils';
 import { nullishWithDefault } from '@tools/core/inputSchema';

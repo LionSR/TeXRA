@@ -21,11 +21,11 @@ import * as path from 'node:path';
 
 import { Effect, FileSystem, type PlatformError } from 'effect';
 
+import { StorageFs, type WorkspaceFs } from '@texra-ai/harness';
 import type { ChatExportInput } from '@agent/export/schemas';
 
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { compileLatex2Pdf } from '@latex/texTools';
-import { StorageFs, type WorkspaceFs } from '@platform/rootedFs';
 import {
   formatChatAsMarkdown,
   formatChatAsLatex,

@@ -13,8 +13,8 @@
 
 import { Effect } from 'effect';
 
+import { withLogChannel } from '@texra-ai/harness';
 import { emitAppSignal } from '@eventBus/AppSignals';
-import { withLogChannel } from '@logger/effectLog';
 import { PrunedNestedMap } from '@texra/utils/core/prunedNestedMap';
 import type { Disposable } from '@texra-ai/harness';
 import type { RunInbox } from '@texra-ai/harness/plugins';

@@ -13,8 +13,8 @@ import {
   Secrets,
   type ToolAvailabilityChecks,
   type ToolProbeServices,
+  withLogChannel,
 } from '@texra-ai/harness';
-import { withLogChannel } from '@logger/effectLog';
 import {
   importCodexClass,
   findCodexBinaryPath,

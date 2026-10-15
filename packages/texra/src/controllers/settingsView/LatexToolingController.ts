@@ -1,7 +1,7 @@
 import { Cause, Effect } from 'effect';
 
 // Local imports - shared constants
-import { withLogChannel } from '@logger/effectLog';
+import { withLogChannel } from '@texra-ai/harness';
 import {
   DEFAULT_LATEX_SETTINGS_STATUS,
   type LatexSettingsStatus,

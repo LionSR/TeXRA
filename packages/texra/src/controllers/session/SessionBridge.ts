@@ -40,13 +40,13 @@ import {
 import { z } from 'zod';
 
 import {
+  type HostRequestFailure,
   Internal,
   isRequestRefusal,
-  type HostRequestFailure,
   type RequestError,
   type Session,
+  withLogChannel,
 } from '@texra-ai/harness';
-import { withLogChannel } from '@logger/effectLog';
 import type { HostRequest } from '@texra/shared/session/hostRequest';
 import type { HostSnapshot } from '@texra/shared/session/hostSnapshot';
 import {

@@ -1,9 +1,9 @@
 import { Effect } from 'effect';
 
+import { withLogChannel } from '@texra-ai/harness';
 import { POLISH_PROMPT_PREFIX } from '@agent/runtime/bundledPrompts';
 import { helperCall } from '@agent/runtime/helperModel';
 import { getSdkErrorMessage } from '@common/errors/sdkError/providerErrorFormat';
-import { withLogChannel } from '@logger/effectLog';
 import type { ModelOptionStores } from '@model/computeModelOptions';
 import { extractTextFromTag } from '@texra/utils/text/xmlExtraction';
 import { isNonEmptyString } from '@utils/text/stringUtils';

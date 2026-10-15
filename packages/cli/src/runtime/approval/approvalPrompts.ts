@@ -1,6 +1,6 @@
 import { Effect } from 'effect';
 
-import { withLogChannel } from '@logger/effectLog';
+import { withLogChannel } from '@texra-ai/harness';
 import type {
   ApprovalPolicyDenial,
   TexraApprovalPolicy,

@@ -34,7 +34,7 @@ import {
   type ShowAgentConfigBannerPayload,
 } from '@shared/schemas';
 import type { ManualCriticismEntry } from '@texra/tools/editorHost';
-import type { GenericDiagnostic } from '@utils/diagnostics/diagnosticFormatting';
+import type { GenericDiagnostic } from '@texra/utils/diagnostics/diagnosticFormatting';
 import type { LanguageModelInfo } from '@texra-ai/harness';
 
 /** What a window can do for a run. `notices` covers the runtime's notices

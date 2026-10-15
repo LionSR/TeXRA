@@ -6,7 +6,6 @@ import type { AgentTrace } from '@agent/trace';
 import { LaTeXdiffResult, LaTeXdiffService } from '@latex/latexdiff';
 import { buildBetweenRoundDiffSuffix } from '@latex/latexdiff/diffFileNameManager';
 import { compileLatex2Pdf } from '@latex/texTools';
-import type { WorkspaceFs } from '@platform/rootedFs';
 import {
   fileLocationDisplayPath,
   type RunId,
@@ -38,7 +37,7 @@ import {
   resolveWorkspaceSourceDir,
 } from './compileCheck';
 import { recoverOutputFailure } from './outputOperations';
-import type { WorkspaceRoots } from '@texra-ai/harness';
+import type { WorkspaceFs, WorkspaceRoots } from '@texra-ai/harness';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 import type { RoundFileEntry, RoundFileMapping } from './types';
 

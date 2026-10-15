@@ -5,7 +5,6 @@ import { Cause, Effect, FileSystem } from 'effect';
 import type { AgentTrace } from '@agent/trace';
 import { compileLatex2Pdf, type CompileLatex2PdfResult } from '@latex/texTools';
 import { hasLatexCompiler } from '@latex/latexToolchain';
-import type { WorkspaceFs } from '@platform/rootedFs';
 import {
   fileLocationDisplayPath,
   type RunId,
@@ -36,8 +35,8 @@ import {
   publishCompiledPdfArtifact,
   publishCompiledPdfArtifactBestEffort,
 } from './compiledPdfArtifacts';
+import type { WorkspaceFs, WorkspaceRoots } from '@texra-ai/harness';
 import type { OutputState } from './outputState';
-import type { WorkspaceRoots } from '@texra-ai/harness';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 interface CompileCheckContext {

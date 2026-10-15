@@ -4,8 +4,8 @@
  */
 import { Effect } from 'effect';
 
+import { StorageFs } from '@texra-ai/harness';
 import { resolveMemoryStoragePath } from '@platform/defaults/workspaceStorage';
-import { StorageFs } from '@platform/rootedFs';
 import type { SettingsViewInboundHandlerRegistry } from '@texra/controllers/settingsView/settingsViewDispatch';
 import { SettingsMemoryController } from '@texra/controllers/settingsView/SettingsMemoryController';
 import type { SettingsViewOutboundMessage } from '@texra/shared/settingsView/settingsViewMessages';

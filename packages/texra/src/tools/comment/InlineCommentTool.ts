@@ -1,10 +1,9 @@
 // Third-party imports
 import { Context, Effect, Option } from 'effect';
 import { z } from 'zod';
-import { defineTool, ToolContext } from '@texra-ai/harness';
+import { defineTool, ToolContext, withLogChannel } from '@texra-ai/harness';
 
 // Internal imports
-import { withLogChannel } from '@logger/effectLog';
 import { ToolError, type ToolResult } from '@shared/schemas';
 import { resolveToolPath } from '@tools/pathResolution';
 import { executed } from '@tools/core/result';

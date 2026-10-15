@@ -1,6 +1,6 @@
 import { Effect, type Fiber } from 'effect';
 
-import { withLogChannel } from '@logger/effectLog';
+import { withLogChannel } from '@texra-ai/harness';
 import type { ProcessRuntime } from '@texra-ai/harness';
 
 /** The in-flight clipboard image pastes of one input bar, as the fibers the

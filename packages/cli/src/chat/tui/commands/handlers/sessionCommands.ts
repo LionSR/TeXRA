@@ -1,5 +1,6 @@
 import { Effect, Result, Stream } from 'effect';
 
+import { goalStateOf } from '@texra-ai/harness/schemas';
 import type { SessionHandle } from '@agent/runtime';
 import { defaultShortcutModifierLabel } from '@cli/runtime/shortcutLabels';
 import {
@@ -27,7 +28,6 @@ import {
 } from '@cli/chat/tui/state/transcript';
 import { readProspectiveUsageRoute } from '@model/computeModelOptions';
 import { runBypasses } from '@shared/approvalBypassKind';
-import { goalStateOf } from '@shared/plugins/goal';
 import { isLiveRun } from '@shared/session/sessionView';
 import { interruptedTasks } from '@ui/copy/interruptedTasks';
 import { TASK_ACTIONS } from '@ui/copy/nestedRuns';

@@ -259,7 +259,7 @@ await runtime.runPromise(
 );
 ```
 
-`validateRunRequest` (`packages/harness/src/agent/core/state/runRequests.ts`)
+`validateRunRequest` (`packages/texra/src/controllers/session/runRequests.ts`)
 is the result-style validation helper: it returns either a
 `ValidatedExecutionRequest` or a validation message. A caller that prefers
 exceptions may instead run `AgentConfigSchema.parse` and construct the

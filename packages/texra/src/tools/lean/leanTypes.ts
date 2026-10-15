@@ -5,7 +5,7 @@
  */
 
 // Local imports - utils
-import type { GenericDiagnostic } from '@utils/diagnostics/diagnosticFormatting';
+import type { GenericDiagnostic } from '@texra/utils/diagnostics/diagnosticFormatting';
 
 // Constants and commands
 

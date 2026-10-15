@@ -6,14 +6,13 @@ import { MODEL_CONFIGS } from 'llm-zoo';
 
 import {
   AppState,
-  Secrets,
   Cancelled,
-  Rejected,
   ownKeyCredential,
+  Rejected,
+  Secrets,
+  withLogChannel,
   type WorkspaceRoots,
 } from '@texra-ai/harness';
-import { withLogChannel } from '@logger/effectLog';
-import type { StorageFs } from '@platform/rootedFs';
 import type { HostSnapshot } from '@texra/shared/session/hostSnapshot';
 import type { HostRequest } from '@texra/shared/session/hostRequest';
 import type { HostOutcome } from '@texra/shared/session/sessionFrames';
@@ -29,6 +28,7 @@ import {
   sweepStaleFiles,
   type PastedImageSaveFailed,
 } from '@texra/utils/files/pastedImageUtils';
+import type { StorageFs } from '@texra-ai/harness';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 const CHANNEL = 'HostDraftRequests';

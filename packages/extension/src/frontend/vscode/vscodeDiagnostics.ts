@@ -2,7 +2,7 @@
  * VS Code diagnostics utilities.
  *
  * Provides VS Code-specific helpers (waiting on diagnostic events).
- * For formatting, import directly from `@utils/diagnostics/diagnosticFormatting`.
+ * For formatting, import directly from `@texra/utils/diagnostics/diagnosticFormatting`.
  */
 
 import { Effect, Option } from 'effect';

@@ -16,8 +16,8 @@ import {
 } from 'effect';
 import * as ChildProcess from 'effect/process/ChildProcess';
 
+import { withLogChannel } from '@texra-ai/harness';
 import { getSdkErrorMessage } from '@common/errors/sdkError/providerErrorFormat';
-import { withLogChannel } from '@logger/effectLog';
 import {
   resolveOptionalCommand,
   type ResolvedBinaryCommand,

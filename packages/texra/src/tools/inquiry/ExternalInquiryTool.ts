@@ -17,14 +17,13 @@
 
 import { Cause, Effect } from 'effect';
 import { z } from 'zod';
-import { defineTool } from '@texra-ai/harness';
+import { defineTool, withLogChannel } from '@texra-ai/harness';
 import {
   callerRun,
   ChildRuns,
   requireRun,
   type PluginToolServices,
 } from '@texra-ai/harness/plugins';
-import { withLogChannel } from '@logger/effectLog';
 import {
   InquiryThreadIdSchema,
   ToolError,

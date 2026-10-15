@@ -7,10 +7,6 @@ import { Effect } from 'effect';
 
 // Local imports - shared types and errors
 import { Rejected, type StateReadFailed } from '@texra-ai/harness';
-import {
-  validateRunRequest,
-  type ValidatedRunRequest,
-} from '@agent/core/state/runRequests';
 import type { WorkspaceAgentsStores } from '@agent/index';
 import {
   formatTeamLaunchBlockedMessage,
@@ -19,6 +15,10 @@ import {
   TEAM_SELECTION_REQUIRED_MESSAGE,
 } from '@common/teams/TeamPlan';
 import { type AgentDelegationScope } from '@shared/schemas';
+import {
+  validateRunRequest,
+  type ValidatedRunRequest,
+} from '@texra/controllers/session/runRequests';
 import type { SessionType } from '@texra/shared/session/surface';
 import type { HostRequest } from '@texra/shared/session/hostRequest';
 import { createTeamCatalogPorts } from '@texra/controllers/mainView/teamCatalogPorts';

@@ -2,7 +2,7 @@
 
 import { Effect, Predicate } from 'effect';
 
-import { withLogChannel } from '@logger/effectLog';
+import { withLogChannel } from '@texra-ai/harness';
 import { writeLogLine } from '@logger/logSink';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import { isClaudeCodeModel } from '@shared/schemas';

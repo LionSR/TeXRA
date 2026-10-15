@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { addCdataToTagsMultiple, removeCDATA } from '@utils/text/xmlCdata';
+import {
+  addCdataToTagsMultiple,
+  removeCDATA,
+} from '@texra/utils/text/xmlCdata';
 
 describe('xmlCdata CDATA handling', () => {
   it.each([

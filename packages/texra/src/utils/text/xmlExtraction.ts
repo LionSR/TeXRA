@@ -11,7 +11,7 @@
 
 // Local imports
 import { OUTPUT_DOCUMENT_TAG } from '@texra/shared/plugins/documentOutputs';
-import { removeCDATA } from '@utils/text/xmlCdata';
+import { removeCDATA } from '@texra/utils/text/xmlCdata';
 
 /** A single extracted document: its LaTeX/text content and its `name` attribute. */
 export interface NamedDocument {

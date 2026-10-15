@@ -7,8 +7,7 @@
 import { Cause, Effect } from 'effect';
 import { z } from 'zod';
 
-import { defineTool } from '@texra-ai/harness';
-import { withLogChannel } from '@logger/effectLog';
+import { defineTool, withLogChannel } from '@texra-ai/harness';
 import { ToolResult } from '@shared/schemas';
 import { retryTransientFetch, scopedOkClient } from '@tools/timeouts';
 import { errorResult, executed } from '@tools/core/result';

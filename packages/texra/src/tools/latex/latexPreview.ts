@@ -11,11 +11,11 @@ import path from 'node:path';
 
 import { Cause, Deferred, Effect, FileSystem, type Path } from 'effect';
 
+import { withLogChannel } from '@texra-ai/harness';
 import { TEMP_EXTENSIONS } from '@housekeeping/constants';
 import { filesByPrefix } from '@latex/formatter/latexindentpt';
 import { LaTeXdiffService } from '@latex/latexdiff';
 import { generateDiffFileName } from '@latex/latexdiff/diffFileNameManager';
-import { withLogChannel } from '@logger/effectLog';
 import type { FileLocation } from '@shared/schemas';
 import { LATEXDIFF_TEMP_FILE_LOCATIONS } from '@texra/shared/settingsView/texraSettings';
 import { readSettingFrom } from '@utils/config/platformSettings';

@@ -20,10 +20,13 @@ import {
   loadApiKeyStatusMap,
 } from '@texra-ai/llm';
 
-import { withLogChannel } from '@logger/effectLog';
+import {
+  type StorageFs,
+  withLogChannel,
+  withSessionFs,
+} from '@texra-ai/harness';
 import { readModelAvailabilityInputs } from '@model/computeModelOptions';
 import { discoverCopilotRoutes } from '@model/copilotRouting';
-import { type StorageFs, withSessionFs } from '@platform/rootedFs';
 import { TEXRA_APPROVAL_POLICY_CONFIG_KEY } from '@shared/approvalPolicy';
 import type { SubscriptionUsageProvider } from '@shared/schemas';
 import { SUBSCRIPTION_AUTH_PROVIDERS } from '@shared/model/subscriptionAuth';
@@ -66,8 +69,11 @@ import { GITHUB_TOKEN_CREATE_URL } from '@texra/tools/github/githubAuth';
 import { allSettledVoid } from '@texra/utils/core/allSettledVoid';
 import { getProviderKeyUrl } from '@texra/model/providerPresentation';
 import { CODING_PLAN_BY_API_PROVIDER } from '@texra/shared/model/codingPlans';
-import type { ProcessServices } from '@texra-ai/harness';
-import type { PlatformSecrets, WorkspaceRoots } from '@texra-ai/harness';
+import type {
+  PlatformSecrets,
+  ProcessServices,
+  WorkspaceRoots,
+} from '@texra-ai/harness';
 
 type HostEffect<A = void> = Effect.Effect<A, Error, ProcessServices>;
 type SettingsArms = SettingsViewInboundHandlerRegistry<

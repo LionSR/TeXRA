@@ -3,18 +3,17 @@
 // Third-party imports
 import { Effect } from 'effect';
 import { z } from 'zod';
-import { defineTool, ToolContext } from '@texra-ai/harness';
+import { defineTool, ToolContext, withLogChannel } from '@texra-ai/harness';
 
 // Local imports
-import { withLogChannel } from '@logger/effectLog';
 import { type ToolResult, ToolError } from '@shared/schemas';
-import { resolveToolPath, type ToolPathCall } from '@tools/pathResolution';
-import { executed } from '@tools/core/result';
 import {
   countBySeverity,
   formatCounts,
   formatMessageList,
-} from '@utils/diagnostics/diagnosticFormatting';
+} from '@texra/utils/diagnostics/diagnosticFormatting';
+import { resolveToolPath, type ToolPathCall } from '@tools/pathResolution';
+import { executed } from '@tools/core/result';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local file imports

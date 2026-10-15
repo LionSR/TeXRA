@@ -6,6 +6,7 @@
 import { signal } from '@lit-labs/signals';
 import { Cause, Effect, Exit } from 'effect';
 
+import { withLogChannel } from '@texra-ai/harness';
 import { setCliHelperModel } from '@cli/runtime/initPlatform';
 import {
   formatCliNoAvailableModelsRecovery,
@@ -14,7 +15,6 @@ import {
 } from '@cli/runtime/modelAccess';
 import type { CliPlatformServices } from '@cli/runtime/initPlatform';
 import { SETUP_AGENT_HANDOFF_NOTICE } from '@cli/onboarding/setupContinuation';
-import { withLogChannel } from '@logger/effectLog';
 import type { RunModelDecisionReason } from '@model/runModelDecision';
 import { hasUsableSetupCredential } from '@texra/model/setupCredentialAccess';
 import { toErrorMessage } from '@utils/errors/errorMessage';
