@@ -1077,6 +1077,10 @@ show` print the same notice, and the new `texra agents customize`,
 
 ### Bug Fixes
 
+- **Memory previews show on Windows.** The Settings Memory page listed
+  nested memories with backslash paths, so their previews never matched a
+  listed item and stayed empty. Memory paths now use forward slashes on
+  every platform.
 - **A failed document task now says why in text output.** `texra run`
   and `texra resume` with `--output-format text` print the run's reply (for
   example, which documents did not compile and where their logs are)

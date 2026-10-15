@@ -113,10 +113,13 @@ describe('MemoryTool view with an omitted path', () => {
         vi.useFakeTimers({ toFake: ['Date'] });
         vi.setSystemTime(new Date('2026-01-02T00:00:00.000Z'));
 
-        const alphaPath = path.join(WORKSPACE_STORAGE_LAYOUT.memory, 'alpha');
-        const betaPath = path.join(alphaPath, 'beta');
-        const pinnedPath = path.join(alphaPath, 'pinned.md');
-        const rootFilePath = path.join(
+        const alphaPath = path.posix.join(
+          WORKSPACE_STORAGE_LAYOUT.memory,
+          'alpha',
+        );
+        const betaPath = path.posix.join(alphaPath, 'beta');
+        const pinnedPath = path.posix.join(alphaPath, 'pinned.md');
+        const rootFilePath = path.posix.join(
           WORKSPACE_STORAGE_LAYOUT.memory,
           'root.md',
         );
@@ -186,7 +189,10 @@ describe('MemoryTool view with an omitted path', () => {
 
   it.effect('skips a symlink cycle when listing memory directories', () =>
     Effect.gen(function* () {
-      const cyclePath = path.join(WORKSPACE_STORAGE_LAYOUT.memory, 'cycle');
+      const cyclePath = path.posix.join(
+        WORKSPACE_STORAGE_LAYOUT.memory,
+        'cycle',
+      );
 
       const storageFs = storageView({
         exists: () => Effect.succeed(true),
