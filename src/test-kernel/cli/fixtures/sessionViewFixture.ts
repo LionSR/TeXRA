@@ -78,6 +78,7 @@ function runViewFields(over: RunViewOverrides): RunView {
     modelLabel: null,
     command: null,
     inputFiles: [],
+    agentScope: null,
     worktree: null,
     status,
     substate: null,

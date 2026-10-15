@@ -125,6 +125,7 @@ export class RequestPanels extends LitElement {
         }
         .surface=${this.surface}
         .host=${this.host}
+        .run=${this.run}
       ></${CARD_TAG[permission.kind]}>`,
     )}`;
   }

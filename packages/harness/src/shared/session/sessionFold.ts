@@ -301,12 +301,10 @@ function createRun(
   event: RunStartEvent,
   id: RunId,
 ): RunView {
-  const status = RUN_LIFECYCLE_READY;
-  const identity = event.identity;
-  const label = runIdentityDisplayName(identity);
+  const label = runIdentityDisplayName(event.identity);
   const common = {
     id,
-    identity,
+    identity: event.identity,
     ownerId: sessionIndexesOf(view).claims.get(event.aggregateId) ?? null,
     label,
     description: null,
@@ -316,14 +314,15 @@ function createRun(
     modelLabel: null,
     command: null,
     inputFiles: [],
+    agentScope: null,
     facts: {},
     worktree: event.worktree ?? null,
-    status,
+    status: RUN_LIFECYCLE_READY,
     substate: null,
     durableOutcome: null,
     statusDetail: null,
     lost: null,
-    ...runStatusCopy(status),
+    ...runStatusCopy(RUN_LIFECYCLE_READY),
     createdAt: event.commit,
     launchedAt: event.at,
     runStartedAt: null,
@@ -511,7 +510,6 @@ function withAggregates(view: SessionView, run: RunView): RunView {
   const durableOutcome = isTerminalOutcomePhase(run.status) ? run.status : null;
   const unreadable = local.unreadable.find((u) => u.runId === run.id)?.detail;
   const children = run.childIds.flatMap((id) => view.runs.get(id) ?? []);
-  const rollup = rollupOf(children);
   const treeUsage = sumUsageStats([
     run.usage,
     ...children.map((child) => child.treeUsage),
@@ -552,7 +550,7 @@ function withAggregates(view: SessionView, run: RunView): RunView {
     ownedHere: own,
     forceExpanded,
     durableOutcome,
-    rollup,
+    rollup: rollupOf(children),
     treeUsage,
     ...copy,
     statusDetail,
@@ -777,6 +775,8 @@ function applyOwnArm(run: RunView, event: OwnEvent): RunView {
         modelLabel: model === null ? null : getModelLabel(model),
         command: run.identity.kind === 'process' ? config.instruction : null,
         inputFiles: 'inputFiles' in config ? config.inputFiles : [],
+        agentScope: { delegationAgentScope: null, ...config }
+          .delegationAgentScope,
         recipe: recipeBlockOf(config),
       };
     }

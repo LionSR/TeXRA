@@ -15,6 +15,7 @@ import '@awesome.me/webawesome/dist/components/option/option.js';
 import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 
 // Local imports - shared styles
+import { modelRefOf } from '@texra-ai/llm';
 import {
   agentName,
   getProposalFileGroups,
@@ -22,6 +23,7 @@ import {
   type PermissionPayload,
 } from '@shared/schemas';
 import { getModelLabel } from '@shared/model/modelLabel';
+import type { RunView } from '@shared/session/sessionView';
 import type { HostSnapshot } from '@texra/shared/session/hostSnapshot';
 import { APPROVE_ALL_DELEGATED_WORK_ACTION } from '@texra/shared/session/surfaceDecision';
 import { SessionUiEvents } from '@texra/shared/session/uiEvents';
@@ -74,6 +76,9 @@ export class ProposalRequestPanel extends BaseRequestPanel<'proposal'> {
 
   /** The host's catalogs, the lists the composer launches from. */
   @property({ attribute: false }) host: HostSnapshot | null = null;
+
+  /** The asking run: its `agentScope` bounds the agent picker. */
+  @property({ attribute: false }) run: RunView | null = null;
 
   @state() private selectedModel: string | null = null;
   @state() private selectedAgent: string | null = null;
@@ -161,7 +166,7 @@ export class ProposalRequestPanel extends BaseRequestPanel<'proposal'> {
               modelOptions.length > 0
                 ? html`<wa-select
                     class="proposal-model-dropdown"
-                    .value=${this.selectedModel ?? data.model}
+                    .value=${this.selectedModel ?? this.proposedModel}
                     ?disabled=${this.readOnly}
                     @change=${this.handleSelectChange}
                   >
@@ -389,10 +394,12 @@ export class ProposalRequestPanel extends BaseRequestPanel<'proposal'> {
   };
 
   /**
-   * What the pickers offer, from the host's catalogs: every agent for a
-   * chat delegation, the agents with a document task for a task. A
-   * script's request approves the script, not one call's agent or model
-   * (`decideDelegation` ignores both there), so it offers none.
+   * What the pickers offer, from the host's catalogs: the agents the run
+   * may delegate to (its team's, which may be hidden from the catalog,
+   * else every visible one), and of those only the ones with a document
+   * task for a task. A script's request approves the script, not one
+   * call's agent or model (`decideDelegation` ignores both there), so it
+   * offers none.
    */
   private get pickers(): {
     agents: HostSnapshot['agentOptions'];
@@ -401,10 +408,21 @@ export class ProposalRequestPanel extends BaseRequestPanel<'proposal'> {
     const { host } = this;
     const { script, task } = this.permission.data;
     if (host === null || script) return { agents: [], models: [] };
+    const scope = this.run?.agentScope ?? null;
+    const agents =
+      scope === null
+        ? host.agentOptions
+        : scope.map(
+            (key) =>
+              host.agentOptions.find((option) => option.value === key) ?? {
+                value: key,
+                label: agentName(key),
+              },
+          );
     return {
       agents: task
-        ? host.agentOptions.filter((option) => option.rounds !== undefined)
-        : host.agentOptions,
+        ? agents.filter((option) => option.rounds !== undefined)
+        : agents,
       models: host.modelOptions,
     };
   }
@@ -422,8 +440,19 @@ export class ProposalRequestPanel extends BaseRequestPanel<'proposal'> {
     );
   }
 
-  private get proposalOverrides(): { model?: string; agent?: string } {
+  /** The proposed model's option value: options name a model without
+   *  its effort or mode, which the proposal may carry (`ref@high`). An
+   *  unchanged pick sends no override, so the proposal's own form runs. */
+  private get proposedModel(): string {
     const { model } = this.permission.data;
+    const ref = modelRefOf(model) ?? model;
+    return this.pickers.models.some((option) => option.value === ref)
+      ? ref
+      : model;
+  }
+
+  private get proposalOverrides(): { model?: string; agent?: string } {
+    const model = this.proposedModel;
     const agent = this.proposedAgent;
     const { selectedModel, selectedAgent } = this;
     return {
