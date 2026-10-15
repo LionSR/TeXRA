@@ -43,8 +43,10 @@ async function resolveSource(specifier) {
   return undefined;
 }
 
+const sourceRoot = path.join(packageRoot, 'src');
+
 function emittedPath(sourcePath) {
-  const relative = path.relative(repositoryRoot, sourcePath);
+  const relative = path.relative(sourceRoot, sourcePath);
   return path
     .join(outputRoot, relative)
     .replace(/\.d\.ts$/u, '.d.ts')

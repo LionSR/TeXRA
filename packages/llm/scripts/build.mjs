@@ -5,20 +5,15 @@
 // loads on demand), every bare dependency left external except OpenAI's,
 // and the declarations the entries reach. A protocol module's own
 // declarations name its provider SDK, so they are not published, and the
-// bundled OpenAI is a devDependency. The harness's artifact validator checks
-// the result as it checks its own.
+// bundled OpenAI is a devDependency. The harness's artifact validator prunes
+// and checks the result as it does its own.
 import { spawnSync } from 'node:child_process';
-import { readFile, rm } from 'node:fs/promises';
+import { rm } from 'node:fs/promises';
 import { createRequire } from 'node:module';
-import { dirname, join, resolve } from 'node:path';
+import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { build } from 'esbuild';
-
-import {
-  reachableDeclarations,
-  walkFiles,
-} from '../../harness/scripts/fsWalk.mjs';
 
 const packageRoot = fileURLToPath(new URL('..', import.meta.url));
 
@@ -77,18 +72,4 @@ runNode([
   '--outDir',
   'dist/types',
 ]);
-const { publishConfig } = JSON.parse(
-  await readFile(join(packageRoot, 'package.json'), 'utf8'),
-);
-const published = new Set();
-for (const { types } of Object.values(publishConfig.exports)) {
-  for (const declaration of await reachableDeclarations(
-    resolve(packageRoot, types),
-  )) {
-    published.add(declaration);
-  }
-}
-for (const declaration of await walkFiles(join(packageRoot, 'dist/types'))) {
-  if (!published.has(declaration)) await rm(declaration);
-}
 runNode(['../harness/scripts/validate-artifacts.mjs', packageRoot]);

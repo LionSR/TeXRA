@@ -458,7 +458,8 @@ jobs:
           retention-days: 14
 
   # Packs @texra-ai/llm and @texra-ai/harness, installs both tarballs into
-  # packages/harness/example with plain npm (no workspace links, no lockfile),
+  # a temporary directory outside the repository with plain npm (no workspace
+  # links, no lockfile), type-checks packages/harness/example against them,
   # and runs it. The workspace's lockfile cannot see what a consumer's fresh
   # install resolves, so this is the check that a broken tarball, an
   # undeclared dependency, or an incoherent Effect set fails before npm does.

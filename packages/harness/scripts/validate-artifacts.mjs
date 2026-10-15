@@ -1,4 +1,4 @@
-import { readFile } from 'node:fs/promises';
+import { readFile, rm } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -23,6 +23,32 @@ const manifest = JSON.parse(
 const rootTsconfig = JSON.parse(
   await readFile(path.join(repositoryRoot, 'tsconfig.json'), 'utf8'),
 );
+
+// The code entries: `./package.json` exports the manifest itself.
+const publishedExports = Object.fromEntries(
+  Object.entries(manifest.publishConfig?.exports ?? manifest.exports).filter(
+    ([, target]) => typeof target !== 'string',
+  ),
+);
+// tsc emits a declaration for every source file in the program, the
+// implementation's imports included. The package ships the declarations its
+// published entries reach and no others: an unreachable one is dead weight,
+// and its imports (a devDependency's types, a bundled vendor's) would not
+// resolve for a consumer who type-checks the whole package.
+const entryGraphs = new Map();
+for (const [entry, target] of Object.entries(publishedExports)) {
+  entryGraphs.set(
+    entry,
+    await reachableDeclarations(path.resolve(packageRoot, target.types)),
+  );
+}
+const shipped = new Set(
+  [...entryGraphs.values()].flatMap((graph) => [...graph]),
+);
+const unreachable = (await walkFiles(distRoot)).filter(
+  (file) => /\.d\.m?ts$/u.test(file) && !shipped.has(file),
+);
+await Promise.all(unreachable.map((file) => rm(file)));
 
 const allFiles = await walkFiles(distRoot);
 const declarationFiles = allFiles.filter((file) => /\.d\.m?ts$/u.test(file));
@@ -65,7 +91,6 @@ const distType = (await isFile(distManifestPath))
 if (distType !== 'module') {
   throw new Error('The package must mark its built output as ESM.');
 }
-const publishedExports = manifest.publishConfig?.exports ?? manifest.exports;
 if (allFiles.some((file) => file.endsWith('.map'))) {
   throw new Error('Source or declaration maps must not be published.');
 }
@@ -80,6 +105,7 @@ const declaredPackages = new Set([
   ...Object.keys(manifest.dependencies ?? {}),
   ...Object.keys(manifest.peerDependencies ?? {}),
 ]);
+const importedPackages = new Set();
 
 for (const declaration of declarationFiles) {
   const source = await readFile(declaration, 'utf8');
@@ -100,6 +126,7 @@ for (const declaration of declarationFiles) {
     // break on arrival rather than here. The tsconfig alias check above cannot
     // see these: they are package names, not `paths` entries.
     if (specifier.startsWith('node:')) continue;
+    importedPackages.add(packageName(specifier));
     if (!declaredPackages.has(packageName(specifier))) {
       throw new Error(
         `Declaration imports an undeclared package: ${declaration}: ${specifier}`,
@@ -111,9 +138,7 @@ for (const declaration of declarationFiles) {
 // Every published entry, not only the root: an entry whose declaration
 // graph reaches a provider SDK puts that provider's types back on the
 // published surface however narrow the entry looks.
-for (const [entry, target] of Object.entries(publishedExports)) {
-  const entryTypes = path.resolve(packageRoot, target.types);
-  const entryGraph = await reachableDeclarations(entryTypes);
+for (const [entry, entryGraph] of entryGraphs) {
   const entryGraphText = (
     await Promise.all([...entryGraph].map((file) => readFile(file, 'utf8')))
   ).join('\n');
@@ -149,6 +174,7 @@ for (const javascript of allFiles.filter((file) => file.endsWith('.js'))) {
       continue;
     }
     externalPackages.add(packageName(specifier));
+    importedPackages.add(packageName(specifier));
   }
 }
 const missingPackages = [...externalPackages]
@@ -159,6 +185,17 @@ if (missingPackages.length > 0) {
     `Bundled entries import undeclared packages: ${missingPackages.join(', ')}`,
   );
 }
+// A dependency nothing shipped imports (one the bundle inlines, or a
+// build-time tool) is a devDependency: every consumer would install it for
+// nothing.
+const unusedPackages = Object.keys(manifest.dependencies ?? {})
+  .filter((dependency) => !importedPackages.has(dependency))
+  .toSorted();
+if (unusedPackages.length > 0) {
+  throw new Error(
+    `Dependencies nothing shipped imports: ${unusedPackages.join(', ')}`,
+  );
+}
 if (externalPackages.has('openai')) {
   throw new Error(
     'The bundle must carry the repository-patched OpenAI runtime.',
@@ -166,5 +203,5 @@ if (externalPackages.has('openai')) {
 }
 
 console.log(
-  `Validated ${declarationFiles.length} declarations and ${externalPackages.size} external packages.`,
+  `Validated ${declarationFiles.length} declarations (${unreachable.length} no entry reaches removed) and ${externalPackages.size} external packages.`,
 );

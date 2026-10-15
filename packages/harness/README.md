@@ -3,24 +3,24 @@
 The embeddable [TeXRA](https://texra.ai) agent runtime: run a TeXRA agent from a
 Node program and consume its trace as a stream.
 
-> **Not published to npm yet.** This package builds, packs and is consumed
-> inside the repository; publication is planned for TeXRA 1.0. It is versioned
-> on its own (`0.1.0`), not with the app. The surface below is real and typechecked, but it is **not
-> yet a stability promise** — treat it as `0.x` and expect the gaps in
-> [Current limits](#current-limits) to move.
+> **0.x: the API may change in any minor release.** The package is versioned
+> on its own, not with the TeXRA app. The surface below is real and
+> type-checked against the packed tarball, but it is not yet a stability
+> promise; expect the gaps in [Current limits](#current-limits) to move.
 
 ## Install
 
-Requires Node.js 22.19.0 or later in 22.x, or Node.js 24 or later.
+Requires Node.js 22.19.0 or later in 22.x, or Node.js 24 or later. The
+package is ESM only.
 
-Not on the registry yet. Inside this workspace, depend on it by name:
-
-```jsonc
-{ "dependencies": { "@texra-ai/harness": "workspace:*" } }
+```bash
+npm install @texra-ai/harness @texra-ai/llm effect @effect/platform-node @effect/sql-sqlite-node zod
 ```
 
-It depends on [`@texra-ai/llm`](../llm/README.md), the model package, which a
-pack resolves to the same-numbered release.
+[`@texra-ai/llm`](https://www.npmjs.com/package/@texra-ai/llm), the model
+package, is a peer too: the harness checks a model's failures with
+`instanceof ModelError`, so a model your program binds and the harness must
+share one copy of the package.
 
 `effect` and `zod` (v4) are peer dependencies of both packages, and the
 harness also takes `@effect/platform-node` and `@effect/sql-sqlite-node` as
@@ -39,11 +39,15 @@ past it fails at startup.
   "dependencies": {
     "@effect/platform-node": "^4.0.5",
     "@effect/sql-sqlite-node": "^4.0.5",
+    "@texra-ai/harness": "^0.1.0",
+    "@texra-ai/llm": "^0.1.0",
     "effect": "^4.0.5",
     "zod": "^4.4.3",
   },
 }
 ```
+
+Inside this repository, depend on it as `"@texra-ai/harness": "workspace:*"`.
 
 ## Usage
 
