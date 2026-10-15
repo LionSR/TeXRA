@@ -18,7 +18,6 @@ import * as path from 'node:path';
 import { Effect } from 'effect';
 
 import { Rejected, type HostRequestFailure } from '@texra-ai/harness';
-import type { StorageFs, WorkspaceFs } from '@platform/rootedFs';
 import { getIncludedExtensions } from '@texra/common/files/fileTypeUtils';
 import type { HostRequest } from '@texra/shared/session/hostRequest';
 import type {
@@ -41,7 +40,12 @@ import {
 } from '@texra/controllers/session/hostRunActions';
 import type { HostSnapshotSource } from '@texra/controllers/session/hostSnapshotSource';
 import { formatResultCount } from '@utils/text/stringUtils';
-import type { ProcessServices, WorkspaceRoots } from '@texra-ai/harness';
+import type {
+  ProcessServices,
+  StorageFs,
+  WorkspaceFs,
+  WorkspaceRoots,
+} from '@texra-ai/harness';
 import type { RunId } from '@texra-ai/harness/schemas';
 
 /** The kinds {@link handleSharedHostRequest} answers. */

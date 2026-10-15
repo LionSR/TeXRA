@@ -1,7 +1,7 @@
 /** Global, bounded CLI input history. Older entries are replaced, not archived. */
 import { Clock, Effect, Semaphore } from 'effect';
 
-import { withLogChannel } from '@logger/effectLog';
+import { withLogChannel } from '@texra-ai/harness';
 
 import {
   GlobalDatabase,

@@ -2,7 +2,7 @@ import { Clock, Context, Duration, Effect, Predicate } from 'effect';
 import { HttpClient, HttpClientResponse } from 'effect/http';
 import { z } from 'zod';
 
-import { withLogChannel } from '@logger/effectLog';
+import { withLogChannel } from '@texra-ai/harness';
 import type { ValueFamily } from '@shared/session/valueFamily';
 
 import {

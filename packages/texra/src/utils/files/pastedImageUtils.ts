@@ -5,8 +5,7 @@ import * as path from 'node:path';
 import { Clock, Data, Effect, FileSystem, Option } from 'effect';
 
 // Local imports
-import { withLogChannel } from '@logger/effectLog';
-import { StorageFs } from '@platform/rootedFs';
+import { StorageFs, withLogChannel } from '@texra-ai/harness';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local imports - filesystem

@@ -2,8 +2,7 @@ import * as path from 'node:path';
 
 import { Effect } from 'effect';
 
-import { withLogChannel } from '@logger/effectLog';
-import { WorkspaceFs } from '@platform/rootedFs';
+import { withLogChannel, WorkspaceFs } from '@texra-ai/harness';
 import type { FileOpResult } from '@texra/shared/session/hostRequest';
 import { copyFileExclusive } from '@utils/files/fsDurability';
 

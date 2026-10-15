@@ -12,9 +12,8 @@ import * as path from 'node:path';
 import { Effect, type FileSystem, type PlatformError } from 'effect';
 
 // Local imports
+import { withLogChannel } from '@texra-ai/harness';
 import type { ChatExportInput } from '@agent/export/schemas';
-import { withLogChannel } from '@logger/effectLog';
-import type { StorageFs, WorkspaceFs } from '@platform/rootedFs';
 import type {
   ExternalOpenFailed,
   MessageHost,
@@ -22,8 +21,8 @@ import type {
 } from '@texra/hosts/uiHosts';
 import type { ChatExportInputUnreadable } from '@texra/agent/export/loadChatExportInput';
 import type { TaskRecordsUnavailable } from '@texra/controllers/server/serviceSession';
+import type { Rejected, StorageFs, WorkspaceFs } from '@texra-ai/harness';
 import type { RunId } from '@texra-ai/harness/schemas';
-import type { Rejected } from '@texra-ai/harness';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 import type { TranscriptExportFailed } from './transcriptExportFailure';
 import type {

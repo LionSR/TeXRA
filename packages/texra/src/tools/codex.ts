@@ -25,6 +25,7 @@ import { z } from 'zod';
 import {
   defineTool,
   ToolContext,
+  withLogChannel,
   type WorkspaceRoots,
 } from '@texra-ai/harness';
 import {
@@ -41,7 +42,6 @@ import type {
   ProcessChildStrategy,
 } from '@agent/runtime/childRunLoop';
 import { formatDelivery } from '@agent/runtime/deliveryEnvelope';
-import { withLogChannel } from '@logger/effectLog';
 import type {
   CodexApprovalPolicy,
   RunId,

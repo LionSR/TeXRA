@@ -21,7 +21,7 @@ import { dirname, join } from 'node:path';
 import { Data, Effect, FileSystem, type Path, Stream } from 'effect';
 import * as ChildProcess from 'effect/process/ChildProcess';
 
-import { withSessionFs } from '@platform/rootedFs';
+import { withSessionFs } from '@texra-ai/harness';
 import {
   type PastedImageSaveFailed,
   savePastedImageBuffer,

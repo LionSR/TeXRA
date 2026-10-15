@@ -5,7 +5,6 @@ import { defineTool, ToolContext } from '@texra-ai/harness';
 
 // Local imports - tools
 import { TikzPictureManager } from '@latex/TikzPictureManager';
-import type { WorkspaceFs } from '@platform/rootedFs';
 import { type ToolFileAttachment, type ToolResult } from '@shared/schemas';
 import { formatToolOutput } from '@tools/formatting';
 import { pathToLocationIn } from '@utils/files/fileLocation';
@@ -16,6 +15,7 @@ import {
   resolveLatexFile,
   texPathField,
 } from './figureExtractionShared';
+import type { WorkspaceFs } from '@texra-ai/harness';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 const ExtractTikzInputSchema = z.strictObject({

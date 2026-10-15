@@ -13,7 +13,7 @@ import {
 } from 'effect';
 import { HttpClient, HttpClientError, HttpClientRequest } from 'effect/http';
 
-import { withLogChannel } from '@logger/effectLog';
+import { withLogChannel } from '@texra-ai/harness';
 import { writeLogLine } from '@logger/logSink';
 import { UsageLog, UsageLogResponseSchema } from '@shared/usageLog';
 import type {

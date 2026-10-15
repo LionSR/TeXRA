@@ -11,7 +11,7 @@
 import { Context, Data, Effect, type Scope } from 'effect';
 
 import type { FileLocation } from '@shared/schemas';
-import type { GenericDiagnostic } from '@utils/diagnostics/diagnosticFormatting';
+import type { GenericDiagnostic } from '@texra/utils/diagnostics/diagnosticFormatting';
 
 /**
  * Why the host could not read a file's diagnostics: the LaTeX build the read

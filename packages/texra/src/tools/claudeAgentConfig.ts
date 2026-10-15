@@ -7,8 +7,7 @@ import { Effect } from 'effect';
 
 // Local imports
 import { apiKeyEnvName, exposeApiKey, lookupApiKey } from '@texra-ai/llm';
-import { Secrets } from '@texra-ai/harness';
-import { withLogChannel } from '@logger/effectLog';
+import { Secrets, withLogChannel } from '@texra-ai/harness';
 import { sha256Hex } from '@utils/core/idHash';
 import { inheritedEnv } from '@utils/system/envFlags';
 import { executeCommand } from '@utils/system/execUtils';

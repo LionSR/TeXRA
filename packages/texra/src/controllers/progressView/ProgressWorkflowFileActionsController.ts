@@ -5,7 +5,7 @@ import path from 'node:path';
 import { Effect, FileSystem } from 'effect';
 
 // Local imports
-import { withLogChannel } from '@logger/effectLog';
+import { withLogChannel } from '@texra-ai/harness';
 import type { RunId } from '@shared/schemas';
 import type { HostRequest } from '@texra/shared/session/hostRequest';
 import { PrunedNestedMap } from '@texra/utils/core/prunedNestedMap';

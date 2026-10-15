@@ -5,7 +5,7 @@
 import { Effect, Result } from 'effect';
 import { LRUCache } from 'lru-cache';
 
-import { withLogChannel } from '@logger/effectLog';
+import { withLogChannel } from '@texra-ai/harness';
 import type {
   NonRegexReplacementCategory,
   RegexReplacementCategory,

@@ -1,5 +1,8 @@
-import type { AgentConfigInput } from '@shared/schemas';
-import { AgentConfigSchema, type AgentConfig } from '../definition/AgentConfig';
+import {
+  AgentConfigSchema,
+  type AgentConfig,
+  type AgentConfigInput,
+} from '@texra-ai/harness/schemas';
 import type { z } from 'zod';
 
 /** A fresh launch: a persisted run resumes through `resumeRun`. */

@@ -41,7 +41,6 @@ import {
   type WorkspaceRoots,
 } from '@texra-ai/harness';
 import { describeFollowUpFailure } from '@agent/followUp/ToolUseFollowUp';
-import type { RunEndResult } from '@agent/runtime/RunEndResult';
 import { markFailurePresented } from '@agent/runtime/terminalResultToast';
 import { agentErrorPresentation } from '@common/errors';
 import {
@@ -64,6 +63,7 @@ import {
   type ServiceClient,
   type ServiceLink,
 } from './client';
+import type { RunEndResult } from '@texra-ai/harness';
 import type { ProjectStateFailed, TaskRecordsFailed } from './protocol';
 
 /** What a call made while the link reconnects is told. */

@@ -2,7 +2,7 @@ import * as path from 'node:path';
 
 import { Effect, FileSystem, Path, PlatformError } from 'effect';
 
-import { withLogChannel } from '@logger/effectLog';
+import { withLogChannel } from '@texra-ai/harness';
 import { EXCLUDED_DIRS } from '@texra/shared/constants/latexTiming';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { readDirectoryTypedTolerant } from '@utils/files/fsDurability';

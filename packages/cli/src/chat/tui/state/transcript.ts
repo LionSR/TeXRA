@@ -10,8 +10,8 @@
 import { computed, signal } from '@lit-labs/signals';
 import { Cause, Effect } from 'effect';
 
+import { withLogChannel } from '@texra-ai/harness';
 import type { TranscriptRow } from '@cli/chat/tui/state/sessionView';
-import { withLogChannel } from '@logger/effectLog';
 import { transcriptText } from '@shared/transcript';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import {
@@ -24,8 +24,7 @@ import {
   sessionRunIds,
 } from './cliState';
 import { currentView, runViewOf } from './sessionView';
-import type { RunView } from '@texra-ai/harness';
-import type { RequestError } from '@texra-ai/harness';
+import type { RequestError, RunView } from '@texra-ai/harness';
 import type { RunId } from '@texra-ai/harness/schemas';
 
 /**

@@ -3,8 +3,12 @@ import { Effect } from 'effect';
 import { z } from 'zod';
 
 // Local imports
-import { defineTool, Secrets, ToolContext } from '@texra-ai/harness';
-import { withLogChannel } from '@logger/effectLog';
+import {
+  defineTool,
+  Secrets,
+  ToolContext,
+  withLogChannel,
+} from '@texra-ai/harness';
 import { ToolError } from '@shared/schemas';
 import { hasUsableSetupCredential } from '@texra/model/setupCredentialAccess';
 import { IMAGE_TOOL_LABEL } from '@texra/shared/constants/latexToolchain';

@@ -9,7 +9,7 @@ import {
   SubscriptionOAuthError,
 } from '@texra-ai/llm/node';
 import { exposeApiKey, lookupApiKey, type SecretsFailed } from '@texra-ai/llm';
-import { withLogChannel } from '@logger/effectLog';
+import { withLogChannel } from '@texra-ai/harness';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import type {
   SubscriptionUsageProvider,

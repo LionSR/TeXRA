@@ -7,7 +7,7 @@
 
 import { Effect, FileSystem, PlatformError } from 'effect';
 
-import { withLogChannel } from '@logger/effectLog';
+import { withLogChannel } from '@texra-ai/harness';
 import {
   fileLocationDisplayPath,
   type DiffStats,

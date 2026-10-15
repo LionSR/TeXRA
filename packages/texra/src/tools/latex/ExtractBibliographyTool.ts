@@ -4,7 +4,7 @@ import * as nodePath from 'node:path';
 // Third-party imports
 import { Effect, FileSystem } from 'effect';
 import { z } from 'zod';
-import { defineTool, ToolContext } from '@texra-ai/harness';
+import { defineTool, ToolContext, WorkspaceFs } from '@texra-ai/harness';
 import { relativeToRoot } from '@texra-ai/harness/node';
 
 // Local imports - tools
@@ -13,7 +13,6 @@ import {
   loadBibliographyEntries,
   summarizeBibliographyEntries,
 } from '@latex/extractBibliography';
-import { WorkspaceFs } from '@platform/rootedFs';
 import type { ToolResult } from '@shared/schemas';
 import { resolveToolPath, type ToolPathCall } from '@tools/pathResolution';
 import { formatToolOutput } from '@tools/formatting';

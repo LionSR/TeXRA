@@ -1,9 +1,8 @@
 import { Effect } from 'effect';
 import { z } from 'zod';
 
-import { defineTool } from '@texra-ai/harness';
+import { defineTool, withLogChannel } from '@texra-ai/harness';
 import { requireRun } from '@texra-ai/harness/plugins';
-import { withLogChannel } from '@logger/effectLog';
 import {
   UserQuestionAnswersSchema,
   UserQuestionPromptSchema,

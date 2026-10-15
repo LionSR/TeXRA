@@ -25,8 +25,8 @@ import * as path from 'node:path';
 import { Effect, FileSystem } from 'effect';
 import which from 'which';
 
+import { withLogChannel } from '@texra-ai/harness';
 import { isModuleNotFoundError } from '@common/errors';
-import { withLogChannel } from '@logger/effectLog';
 import { nodeHostEnvironment } from '@texra/platform/defaults/nodeHostEnvironment';
 import { ensureError } from '@utils/errors/errorMessage';
 import { executeCommand } from '@utils/system/execUtils';

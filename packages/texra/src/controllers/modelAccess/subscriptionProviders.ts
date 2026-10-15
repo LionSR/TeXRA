@@ -31,11 +31,11 @@ import {
   xaiLoginWithLoopback,
 } from '@texra-ai/llm/node';
 import {
-  Secrets,
-  type PlatformSecrets,
   ConfigWriteFailed,
+  type PlatformSecrets,
+  Secrets,
+  withLogChannel,
 } from '@texra-ai/harness';
-import { withLogChannel } from '@logger/effectLog';
 import {
   isPreferSubscription,
   setPreferSubscription,

@@ -21,7 +21,7 @@ Git repository.
 ## Engineering documentation
 
 - `architecture/` documents current system boundaries and invariants
-  (`YYYY-MM-DD-` prefix), including the agent state slices (`packages/harness/src/agent/core/state`).
+  (`YYYY-MM-DD-` prefix).
 - `dev/` contains development procedures, release operations, and
   skill-authoring conventions.
 - Dated PRDs, proposals, and design notes live under `.agents/docs/` as

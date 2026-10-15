@@ -18,7 +18,7 @@ import * as path from 'node:path';
 import { Effect, type FileSystem, type Path } from 'effect';
 
 // Local imports
-import { withLogChannel } from '@logger/effectLog';
+import { withLogChannel } from '@texra-ai/harness';
 import { type FileLocation, type RunId } from '@shared/schemas';
 import type { LatexdiffMathMarkupValue } from '@texra/shared/constants/latexConfig';
 import { DocumentsStateKey } from '@texra/shared/settingsView/documentsSettings';

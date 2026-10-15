@@ -2,7 +2,7 @@ import * as path from 'node:path';
 
 import { Effect, FileSystem } from 'effect';
 
-import type { AgentTrace } from '@agent/trace/AgentTrace';
+import type { AgentTrace } from '@agent/trace';
 import { fileLocationDisplayPath, type FileLocation } from '@shared/schemas';
 import { normalizeLatexPath, getPathSegments } from '@utils/core/pathCore';
 import { toErrorMessage } from '@utils/errors/errorMessage';

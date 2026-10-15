@@ -1,13 +1,12 @@
 # Agent core domain modules
 
 `agent/core` holds the host-agnostic domain model for the agent system (no
-`vscode`, no `packages/*` imports). Three modules remain, named after the
+`vscode`, no `packages/*` imports). Two modules remain, named after the
 concern they carry:
 
 | Module        | Concern                          | Contents                                                                                                                                                                                                            |
 | ------------- | -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `definition/` | What an agent **is** (configure) | `AgentConfig` (launch/run configuration + payload), `RunRecord`; the definition format itself (`AgentDefinition`, `Persona`) is a schema in `@shared/schemas` (`agent.ts`), a plugin's block its own (`AgentBlock`) |
-| `state/`      | Run-state snapshots              | `runRequests` (request validation)                                                                                                                                                                                  |
 | `tools/`      | Tool contracts and tool calls    | `ToolTypes` (`ITool`, `IToolRegistry`, `MapToolRegistry`, `ToolContext`), `toolAttachmentExtraction`, `toolCallParsing` (duplicate-call partitioning and tool-call error normalization, used by the run loop)       |
 
 What is **not** here, and where it lives instead:
@@ -27,9 +26,8 @@ What is **not** here, and where it lives instead:
 
 ## Dependency direction
 
-The only edge inside `core` is `state` → `definition` (`runRequests` validates
-an `AgentConfig`). `definition` and `tools` depend on nothing else in `core`;
-don't introduce an edge that points back outward.
+`definition` and `tools` depend on nothing else in `core`; don't introduce an
+edge between them.
 
 That covers dependencies _within_ `core`. Any module here may still call a
 canonical host-agnostic collaborator outside `core` directly rather than take a

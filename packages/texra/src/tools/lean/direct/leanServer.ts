@@ -39,7 +39,8 @@ import {
 } from 'effect';
 import { ChildProcess, type ChildProcessSpawner } from 'effect/process';
 
-import { withLogChannel } from '@logger/effectLog';
+import { withLogChannel } from '@texra-ai/harness';
+import type { DiagnosticSeverity } from '@texra/utils/diagnostics/diagnosticFormatting';
 import {
   makeJsonRpcConnection,
   type JsonRpcConnection,
@@ -47,7 +48,6 @@ import {
   type JsonRpcRequestError,
 } from '@tools/jsonRpc';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
-import type { DiagnosticSeverity } from '@utils/diagnostics/diagnosticFormatting';
 import type { LeanServerRoster } from '../leanServerRegistry';
 import type {
   LeanDiagnostic,

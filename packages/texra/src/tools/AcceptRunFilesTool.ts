@@ -18,10 +18,10 @@ import {
   defineTool,
   ToolContext,
   type ToolContextShape,
+  WorkspaceFs,
 } from '@texra-ai/harness';
 import { ChildRuns, requireRun } from '@texra-ai/harness/plugins';
 import { cleanupAcceptedWorkspaceDiffFiles } from '@latex/acceptedFileTarget';
-import { WorkspaceFs } from '@platform/rootedFs';
 import { stripCriticizeAnnotations } from '@replacement/advanced';
 import {
   RunIdSchema,

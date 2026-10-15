@@ -11,6 +11,7 @@ import * as path from 'node:path';
 
 import { Effect, FileSystem } from 'effect';
 import { agentBlockOf } from '@texra-ai/harness/plugins';
+import { withLogChannel } from '@texra-ai/harness';
 import {
   computeAgentOptionsData,
   getCatalogAgent,
@@ -18,7 +19,6 @@ import {
   type WorkspaceAgentsStores,
 } from '@agent/index';
 import { buildTemplatePassthrough } from '@agent/prompt/templateInputs';
-import { withLogChannel } from '@logger/effectLog';
 import type { FileListEntry, ToolResult } from '@shared/schemas';
 import {
   DOCUMENT_TASK_BLOCK,
