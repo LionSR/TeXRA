@@ -143,7 +143,10 @@ describe('memory filesystem listing', () => {
           return created;
         });
 
-        const cyclePath = path.join(WORKSPACE_STORAGE_LAYOUT.memory, 'cycle');
+        const cyclePath = path.posix.join(
+          WORKSPACE_STORAGE_LAYOUT.memory,
+          'cycle',
+        );
         let headReads = 0;
         const view = yield* storageViewOf(root);
         const storageFs: RootedFileSystem = {
