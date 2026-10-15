@@ -370,7 +370,7 @@ function buildCodexLaunch(params: {
     initialPrompt,
     registry: params.registry,
     releaseFallbackClaim,
-    runProviderTurn: (prompt, _ports, signal) =>
+    runProviderTurn: (prompt, signal) =>
       runStreamedTurn(thread, prompt, logger, signal),
     resolveSessionIds: () => [fallbackThreadId, thread.id],
     getUsage: codexTurnUsage,

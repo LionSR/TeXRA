@@ -89,23 +89,13 @@ export function createNativeSubagentStrategy(
   // (`runWithLifecycle` returns a terminal failed result rather than
   // rejecting); a thrown call reaches `formatError` as its `err`.
   let lastResult: RunEndResult | undefined;
-  // Formatting is cached per turn: if it throws, the result manifest is still
-  // built from the turn for persistence.
-  let cachedDelivery: string | undefined;
-
-  // Adopt `turn` as the latest result and drop the delivery derived from the
-  // prior one: the next delivery recomputes from this turn.
-  const recordTurn = (turn: RunEndResult | undefined): void => {
-    lastResult = turn;
-    cachedDelivery = undefined;
-  };
 
   const runNative = Effect.fn('nativeSubagent.runTurn')(function* (
     call: Effect.Effect<RunEndResult, Error, AgentRunServices>,
   ) {
-    recordTurn(undefined);
+    lastResult = undefined;
     return yield* call.pipe(
-      Effect.tap((result) => Effect.sync(() => recordTurn(result))),
+      Effect.tap((result) => Effect.sync(() => (lastResult = result))),
     );
   });
 
@@ -123,7 +113,7 @@ export function createNativeSubagentStrategy(
       deliveryMode: 'persistOnly' as const,
     }),
 
-    launch: (ports, turns) =>
+    launch: (notify, turns) =>
       runNative(
         Effect.gen(function* () {
           const { programs } = registryOf(yield* Runs);
@@ -132,18 +122,18 @@ export function createNativeSubagentStrategy(
             session: params.session,
             parentOffered: params.parentOffered,
             onAdmitted: params.onAdmitted,
-            onProgress: (update) => ports.notify(update),
+            onProgress: notify,
             ...(params.inBand === true && { stopAfterCycle: true }),
             turns: {
               turnPermit: turns.turnPermit,
               settleBoundary: (turn: RunEndResult) =>
                 Effect.suspend(() => {
-                  recordTurn(turn);
+                  lastResult = turn;
                   return turns.settleBoundary(turn);
                 }),
               settleEnd: (turn: RunEndResult) =>
                 Effect.suspend(() => {
-                  recordTurn(turn);
+                  lastResult = turn;
                   return turns.settleEnd(turn);
                 }),
             },
@@ -176,38 +166,33 @@ export function createNativeSubagentStrategy(
       /** The turn's wall time, measured by the loop. */
       wallTimeMs: number,
     ) {
-      if (cachedDelivery === undefined) {
-        // A completed recipe's value reads as its block says
-        // (`AgentBlock.result`); a failed one is delivered as its failure.
-        const recipe =
-          turn.outcome === RUN_OUTCOME.COMPLETED
-            ? yield* readRecipeResult(
-                config,
-                turn.output,
-                params.runId,
-                params.session.roots,
-              )
-            : undefined;
-        // The formatter is the one fallible step left here, and its throw is
-        // this turn's failure — not a defect — exactly as it was when the
-        // loop adopted this method's rejected promise.
-        cachedDelivery = yield* Effect.try({
-          try: () =>
-            formatSubagentDelivery(
-              config.agent,
-              { outcome: turn.outcome, output: turn.output },
-              {
-                runId: params.runId,
-                recipe,
-                memoryMisses: turn.memoryMisses,
-                wallTimeMs,
-                workingDirectory: params.workingDirectory,
-              },
-            ),
-          catch: ensureError,
-        });
-      }
-      return cachedDelivery;
+      // A completed recipe's value reads as its block says
+      // (`AgentBlock.result`); a failed one is delivered as its failure.
+      const recipe =
+        turn.outcome === RUN_OUTCOME.COMPLETED
+          ? yield* readRecipeResult(
+              config,
+              turn.output,
+              params.runId,
+              params.session.roots,
+            )
+          : undefined;
+      // A formatter throw is this turn's failure, not a defect.
+      return yield* Effect.try({
+        try: () =>
+          formatSubagentDelivery(
+            config.agent,
+            { outcome: turn.outcome, output: turn.output },
+            {
+              runId: params.runId,
+              recipe,
+              memoryMisses: turn.memoryMisses,
+              wallTimeMs,
+              workingDirectory: params.workingDirectory,
+            },
+          ),
+        catch: ensureError,
+      });
     }),
 
     formatError: (turn, err) => {

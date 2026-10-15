@@ -1,8 +1,9 @@
 /**
  * Shared detached-child launch choreography for delegation launch sites.
  *
- * Every detached child run (an `agent` subagent, a background script)
- * starts with the same lifecycle: hold the owned-run launch guard
+ * Every detached child run (an `agent` subagent, awaited in band or not, a
+ * background script, a background shell, an agent CLI) starts with the
+ * same lifecycle: hold the owned-run launch guard
  * from child-stream creation through child-run-loop handoff, and attach a
  * completion error trace so a late loop failure is diagnosed. Callers keep
  * their own run-id derivation, approval wiring, and result shaping; this

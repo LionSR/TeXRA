@@ -449,7 +449,7 @@ function buildClaudeAgentLaunch(params: {
     releaseFallbackClaim: params.releaseFallbackClaim,
     // The shared loop calls this inside its own `Effect.suspend`, so the
     // reads below happen per turn, as the awaited closure they replace did.
-    runProviderTurn: (prompt, _ports, signal) => {
+    runProviderTurn: (prompt, signal) => {
       const forkSession = isFirstTurn && params.forkSession;
       return runStreamedTurn({
         prompt,

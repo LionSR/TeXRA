@@ -103,7 +103,6 @@ function startBashChild(runId: RunId) {
 const neverRunStrategy: ProcessChildStrategy<void> = {
   stageLabel: 'unreachable',
   launch: () => Effect.void,
-  isTerminal: () => true,
   formatDelivery: () => Effect.succeed('unreachable'),
   formatError: () => 'unreachable',
 };

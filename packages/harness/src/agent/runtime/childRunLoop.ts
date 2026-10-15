@@ -63,15 +63,6 @@ import { aggregateError, onAbort } from '@utils/core';
 import { formatDuration } from '@utils/text/stringUtils';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
-/**
- * Capabilities the loop provides to a strategy for the duration of one child
- * run. `notify` is best-effort live progress. A child reports no spend:
- * its priced calls are rows on its own run, summed over the run tree.
- */
-export interface ChildRunPorts {
-  notify(update: SubagentProgressUpdate): void;
-}
-
 /** A stopped child's pause: the notice its parent reads, and the id a
  *  tool call names to continue it (a Codex thread, a Claude session), which
  *  the `child.park` row keeps so that call reactivates this same run. */
@@ -138,9 +129,6 @@ export interface ChildRunBoundary<TTurn> {
 interface ChildStrategyBase<TTurn, R> {
   /** Stage label opened on the child trace (e.g. "Codex session"). */
   readonly stageLabel: string;
-  /** Record the report without routing it to a parent: a headless caller
-   *  awaits and reads it itself. */
-  readonly deliveryMode?: 'persistOnly';
   /** A turn that did not throw but reports an error (an SDK error result). */
   isTurnError?(turn: TTurn): boolean;
   /** The error message to log for a non-throwing failure, if it has one. */
@@ -170,10 +158,15 @@ export interface NativeChildStrategy<
   TTurn,
   R = never,
 > extends ChildStrategyBase<TTurn, R> {
+  /** `notify` is best-effort live progress. A child reports no spend: its
+   *  priced calls are rows on its own run, summed over the run tree. */
   launch(
-    ports: ChildRunPorts,
+    notify: (update: SubagentProgressUpdate) => void,
     turns: ChildRunTurns<TTurn>,
   ): Effect.Effect<TTurn, Error, R>;
+  /** Record the report without routing it to a parent: a headless caller
+   *  awaits and reads it itself. */
+  readonly deliveryMode?: 'persistOnly';
   /** An interrupted interactive turn has no new result to settle. */
   isTurnInterrupted?(turn: TTurn): boolean;
   /** For a child a user stopped (directly or through its parent): what it
@@ -191,19 +184,13 @@ export interface ProcessChildStrategy<
   TTurn,
   R = never,
 > extends ChildStrategyBase<TTurn, R> {
-  launch(
-    ports: ChildRunPorts,
-    signal: AbortSignal,
-  ): Effect.Effect<TTurn, Error, R>;
+  launch(signal: AbortSignal): Effect.Effect<TTurn, Error, R>;
   /** The next turn, from the queued follow-ups. Absent: the first turn is
    *  the only one (a background shell). */
   runTurn?(
     followUps: readonly FollowUpContent[],
-    ports: ChildRunPorts,
     signal: AbortSignal,
   ): Effect.Effect<TTurn, Error, R>;
-  /** True when `turn` ends this child's run; no further turns follow. */
-  isTerminal(turn: TTurn): boolean;
   /** Deliver a settled turn even when the loop was interrupted: only a
    *  killed OS process, whose exit code and output are a complete result. */
   readonly deliverAfterInterrupt?: boolean;
@@ -414,12 +401,16 @@ const parkRow = (runId: RunId, phase: 'parked' | 'resumed') =>
     phase,
   }) as const;
 
-/** Progress reaches the parent as queued follow-ups, enqueued on the
- *  session's publisher where it is reported, so each commits ahead of the
- *  turn's result. */
-const progressPorts = <TTurn, R>(loop: ChildLoop<TTurn, R>): ChildRunPorts => ({
-  notify: (update) => {
-    const { notify, strategy, session, runId, agentName } = loop.params;
+/** A native child's progress reaches the parent as queued follow-ups,
+ *  enqueued on the session's publisher where it is reported, so each
+ *  commits ahead of the turn's result. */
+const progressNotify =
+  <TTurn, R>(
+    loop: ChildLoop<TTurn, R>,
+    strategy: NativeChildStrategy<TTurn, R>,
+  ) =>
+  (update: SubagentProgressUpdate): void => {
+    const { notify, session, runId, agentName } = loop.params;
     if (notify) return notify(update);
     const target = loop.runs.parentOf(runId);
     if (strategy.deliveryMode === 'persistOnly' || target === null) return;
@@ -430,8 +421,7 @@ const progressPorts = <TTurn, R>(loop: ChildLoop<TTurn, R>): ChildRunPorts => ({
       text: formatSubagentProgress(runId, agentName, update),
       from: { kind: 'run', runId },
     });
-  },
-});
+  };
 
 /**
  * Accept the next turn: its `child.turn accepted` row (#9531), the fact the
@@ -467,8 +457,13 @@ const deliveryTarget = <TTurn, R>(
   turn: TTurn | null,
   isError: boolean,
 ): RunId | null => {
-  const { strategy, session, parentRunId: target } = loop.params;
-  if (strategy.deliveryMode === 'persistOnly') return null;
+  const { params } = loop;
+  const { session, parentRunId: target } = params;
+  if (
+    params.childRun === undefined &&
+    params.strategy.deliveryMode === 'persistOnly'
+  )
+    return null;
   if (loop.isInterrupted()) {
     loop.releaseOwnership();
     return loop.process?.deliverAfterInterrupt === true ? target : null;
@@ -658,7 +653,9 @@ const driveNative = <TTurn, R>(
     loop.turnStart = yield* Clock.currentTimeMillis;
     const turned = yield* attemptTurn(
       loop,
-      Effect.suspend(() => strategy.launch(progressPorts(loop), turns)),
+      Effect.suspend(() =>
+        strategy.launch(progressNotify(loop, strategy), turns),
+      ),
     );
     if (turned === undefined) return undefined;
     const { turn, err } = turned;
@@ -696,8 +693,7 @@ const driveProcess = <TTurn, R>(
 ): Effect.Effect<TTurn | undefined, Error, R> =>
   Effect.gen(function* () {
     const { runId } = loop.params;
-    const ports = progressPorts(loop);
-    let next = () => strategy.launch(ports, loop.signal);
+    let next = () => strategy.launch(loop.signal);
     let result: TTurn | undefined;
     let resumed = false;
     while (!loop.isInterrupted()) {
@@ -708,12 +704,7 @@ const driveProcess = <TTurn, R>(
       if (turn !== null) result = turn;
       noteFailure(loop, turned);
       const runTurn = strategy.runTurn;
-      if (
-        loop.failure !== undefined ||
-        turn === null ||
-        strategy.isTerminal(turn) ||
-        !runTurn
-      ) {
+      if (loop.failure !== undefined || turn === null || !runTurn) {
         yield* endTurns(loop, turned);
         break;
       }
@@ -741,7 +732,7 @@ const driveProcess = <TTurn, R>(
         batch.kind === 'synthetic'
           ? [{ text: batch.text, from: { kind: 'user' } }]
           : loop.consumed.map((followUp) => followUp.content);
-      next = () => runTurn(prompts, ports, loop.signal);
+      next = () => runTurn(prompts, loop.signal);
     }
     return result;
   });
@@ -820,11 +811,7 @@ const writeEnd = <TTurn, R>(
     error: loop.failure?.cause,
     stopped: stoppedAtExit,
     stage: loop.stage,
-    // A persist-only child routes nothing to a parent, so nobody could
-    // continue it: its stop cancels it.
-    ...(params.strategy.deliveryMode !== 'persistOnly' && {
-      pauseNotice: params.strategy.pauseNotice,
-    }),
+    pauseNotice: params.strategy.pauseNotice,
   });
 };
 

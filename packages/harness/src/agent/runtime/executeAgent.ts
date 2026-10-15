@@ -379,7 +379,7 @@ export interface ResumeToolUseFromResumeDataOptions extends Omit<
 /**
  * Resume one run (a conversation, or a task's recipe) from its
  * durable cursor, in place: standalone through the session's door
- * (`Runs.launch`), owned for its life by the launch terminal
+ * (`Runs.resume`), owned for its life by the launch terminal
  * ({@link runWithLaunchGuard}, its claim held before the cursor read), or
  * inside a recovered child's continuous driver (`options.turns`). Lineage is
  * `run.start.parent`, minus a committed detach.

@@ -193,47 +193,7 @@ export function startFollowUpWake(
 }
 
 type Admission =
-  | SubmitFollowUpResult
-  | { readonly resume: Effect.Effect<boolean> }
-  | { status: 'no_session' };
-
-/**
- * Route and admit one submission. Synchronous from the registry snapshot to
- * the send: the row is durable before anything is acknowledged or woken. A
- * resumed model turn completes after this returns, so it cannot block later
- * input from joining the run's queue.
- */
-function admitFollowUp(
-  runId: RunId,
-  item: InboxItem,
-  options: SubmitFollowUpOptions,
-  ownerSession: SessionHandle,
-): Effect.Effect<Admission, Error> {
-  return Effect.suspend(() => {
-    const target = registryOf(ownerSession.runs).getToolUseFollowUpTarget(
-      runId,
-    );
-
-    if (target.kind === 'no_session') {
-      return Effect.logWarning(
-        `No active session for follow-up on run ${runId}. Status: ${target.runStatus}`,
-      ).pipe(
-        withLogChannel(CHANNEL),
-        Effect.as<Admission>({ status: 'no_session' }),
-      );
-    }
-    // A running loop reads it at its next park; a notification never
-    // revives a persisted run.
-    if (options.mode === 'live_notification')
-      return admitQueued(runId, item, 'quiet', options);
-    return admitQueued(
-      runId,
-      item,
-      target.kind === 'active' ? 'live' : 'wake',
-      options,
-    );
-  });
-}
+  SubmitFollowUpResult | { readonly resume: Effect.Effect<boolean> };
 
 /**
  * Queue a submission on the run. `live`: a running loop holds it, and one
@@ -245,7 +205,7 @@ function admitQueued(
   item: InboxItem,
   mode: 'live' | 'wake' | 'quiet',
   { session: ownerSession, fromParent }: SubmitFollowUpOptions,
-): Effect.Effect<Exclude<Admission, { status: 'no_session' }>, Error> {
+): Effect.Effect<Admission, Error> {
   const options: SendOptions = {
     // A user's message whose loop ended while it was admitted still wakes.
     wake: mode === 'wake' || (mode === 'live' && item.from.kind === 'user'),
@@ -281,9 +241,26 @@ export const submitFollowUp = Effect.fn('submitFollowUp')(function* (
   options: SubmitFollowUpOptions,
 ): Effect.fn.Return<SubmitFollowUpResult, Error> {
   const ownerSession = options.session;
-  const routed = yield* admitFollowUp(runId, item, options, ownerSession);
-  let dispatch: Exclude<Admission, { status: 'no_session' }>;
-  if ('status' in routed && routed.status === 'no_session') {
+  // Routed and admitted synchronously from the registry snapshot to the
+  // send: the row is durable before anything is acknowledged or woken. A
+  // resumed model turn completes after admission, so it cannot block later
+  // input from joining the run's queue.
+  const target = registryOf(ownerSession.runs).getToolUseFollowUpTarget(runId);
+  let dispatch: Admission;
+  if (target.kind !== 'no_session') {
+    // A running loop reads it at its next park; a notification never
+    // revives a persisted run.
+    const live = target.kind === 'active' ? 'live' : 'wake';
+    dispatch = yield* admitQueued(
+      runId,
+      item,
+      options.mode === 'live_notification' ? 'quiet' : live,
+      options,
+    );
+  } else {
+    yield* Effect.logWarning(
+      `No active session for follow-up on run ${runId}. Status: ${target.runStatus}`,
+    ).pipe(withLogChannel(CHANNEL));
     // No running loop here: the persisted facts decide. Only the user's own
     // message continues a run that stopped with a checkpoint, admitted the
     // way a waiting run's is: a run's message never restarts work the user
@@ -304,8 +281,6 @@ export const submitFollowUp = Effect.fn('submitFollowUp')(function* (
     if (options.mode !== undefined || item.from.kind !== 'user')
       return { status: 'failed', reason: 'not_resumable' };
     dispatch = yield* admitQueued(runId, item, 'wake', options);
-  } else {
-    dispatch = routed;
   }
   if ('resume' in dispatch) {
     return (yield* dispatch.resume)

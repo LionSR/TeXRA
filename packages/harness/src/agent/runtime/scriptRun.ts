@@ -252,8 +252,11 @@ export function createScriptRunStrategy(
 ): NativeChildStrategy<RunEndResult, AgentRunServices> {
   const { session, runId, title, startedAt } = params;
   const attributes = [{ name: 'title', value: title }];
+  const native = createNativeSubagentStrategy(params);
   return {
-    ...createNativeSubagentStrategy(params),
+    ...native,
+    // It reports once, at its end: no progress follow-ups.
+    launch: (_notify, turns) => native.launch(() => undefined, turns),
     stageLabel: `Script '${title}'`,
     deliveryId: `${runId}:script:delivery`,
     formatDelivery: () =>

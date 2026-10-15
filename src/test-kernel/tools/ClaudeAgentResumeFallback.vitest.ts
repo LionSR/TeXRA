@@ -10,10 +10,7 @@ import { Deferred, Effect, Fiber, Layer } from 'effect';
 
 import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 
-import type {
-  ChildRunPorts,
-  ProcessChildStrategy,
-} from '@agent/runtime/childRunLoop';
+import type { ProcessChildStrategy } from '@agent/runtime/childRunLoop';
 import type { RunHandle } from '@agent/runtime/RunHandle';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { RunId } from '@shared/schemas';
@@ -117,10 +114,6 @@ function stubRuns(): any {
   return {
     get: () => undefined,
   };
-}
-
-function fakePorts(): ChildRunPorts {
-  return { notify: () => {} };
 }
 
 function captureStrategy(): { strategy?: ProcessChildStrategy<unknown> } {
@@ -312,10 +305,7 @@ describe('claude_agent tool launch and resume fallback', () => {
         const [loopParams] = mocks.startChildRunLoop.mock.calls[0] as [
           { strategy: ProcessChildStrategy<unknown> },
         ];
-        yield* loopParams.strategy.launch(
-          fakePorts(),
-          new AbortController().signal,
-        );
+        yield* loopParams.strategy.launch(new AbortController().signal);
 
         expect(mocks.query).toHaveBeenCalledTimes(1);
         const [callArgs] = mocks.query.mock.calls[0] as [
@@ -357,10 +347,7 @@ describe('claude_agent tool launch and resume fallback', () => {
         const [loopParams] = mocks.startChildRunLoop.mock.calls[0] as [
           { strategy: ProcessChildStrategy<unknown> },
         ];
-        yield* loopParams.strategy.launch(
-          fakePorts(),
-          new AbortController().signal,
-        );
+        yield* loopParams.strategy.launch(new AbortController().signal);
         const [callArgs] = mocks.query.mock.calls[0] as [
           { options: { model?: string; effort?: string; thinking?: unknown } },
         ];
@@ -425,7 +412,6 @@ describe('claude_agent tool launch and resume fallback', () => {
       yield* ClaudeAgentTool.call({ prompt: 'start Claude' });
       assert.ok(captured.strategy);
       const turn = yield* captured.strategy.launch(
-        fakePorts(),
         new AbortController().signal,
       );
       if (!turn) throw new Error('Expected a Claude turn result');
@@ -666,10 +652,8 @@ describe('claude_agent tool launch and resume fallback', () => {
         expect(result.status).toBe('executed');
         expect(mocks.submitFollowUp).not.toHaveBeenCalled();
         expect(mocks.startChildRunLoop).toHaveBeenCalledOnce();
-        const ports = fakePorts();
         assert.ok(captured.strategy);
         const firstTurn = yield* captured.strategy.launch(
-          ports,
           new AbortController().signal,
         );
         if (!firstTurn) throw new Error('Expected a Claude fork turn');
@@ -684,7 +668,6 @@ describe('claude_agent tool launch and resume fallback', () => {
               from: { kind: 'user' as const },
             },
           ],
-          ports,
           new AbortController().signal,
         );
 
@@ -750,10 +733,8 @@ describe('claude_agent tool launch and resume fallback', () => {
       });
 
       expect(result.status).toBe('executed');
-      const ports = fakePorts();
       assert.ok(captured.strategy);
       const firstTurn = yield* captured.strategy.launch(
-        ports,
         new AbortController().signal,
       );
       expect(firstTurn).toMatchObject({
@@ -778,7 +759,6 @@ describe('claude_agent tool launch and resume fallback', () => {
             from: { kind: 'user' as const },
           },
         ],
-        ports,
         new AbortController().signal,
       );
       expect(mocks.query).toHaveBeenCalledTimes(2);

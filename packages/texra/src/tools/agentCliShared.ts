@@ -9,7 +9,6 @@ import { ToolContext, type ToolContextShape } from '@texra-ai/harness';
 import { ChildRuns, requireRun, type ToolRun } from '@texra-ai/harness/plugins';
 import type {
   ChildRunPort,
-  ChildRunPorts,
   ProcessChildStrategy,
 } from '@agent/runtime/childRunLoop';
 import {
@@ -351,7 +350,6 @@ interface AgentCliLoopParams<TTurn> {
    * child run's interrupt controller, which each provider hands to its SDK. */
   runProviderTurn: (
     prompt: string,
-    ports: ChildRunPorts,
     signal: AbortSignal,
   ) => Effect.Effect<TTurn, Error>;
   /**
@@ -383,7 +381,7 @@ interface AgentCliLoopParams<TTurn> {
  * the `ProcessChildStrategy` scaffolding common to every agent-CLI provider
  * (codex, claudeAgent): a dedup'd session/thread registration closure, the
  * `lastPrompt` capture feeding `formatDelivery`/`formatError`, and the
- * boilerplate-identical strategy fields (`isTerminal`, `onTurnSuccess`,
+ * boilerplate-identical strategy fields (`onTurnSuccess`,
  * `releaseSessionOwnership`), and each turn's usage on the child's trace.
  * Callers supply only their provider-specific turn run, usage/delivery
  * formatting, and registry entry construction.
@@ -434,10 +432,9 @@ export function buildAgentCliLaunch<TTurn>(
     // record of spend, one per turn, which is what each provider reports.
     const providerTurn = (
       prompt: string,
-      ports: ChildRunPorts,
       signal: AbortSignal,
     ): Effect.Effect<TTurn, Error> =>
-      runProviderTurn(prompt, ports, signal).pipe(
+      runProviderTurn(prompt, signal).pipe(
         Effect.tap((turn) =>
           Effect.sync(() => {
             const usage = getUsage(turn);
@@ -451,19 +448,17 @@ export function buildAgentCliLaunch<TTurn>(
       );
     const runTurn = (
       followUps: readonly FollowUpContent[],
-      ports: ChildRunPorts,
       signal: AbortSignal,
     ): Effect.Effect<TTurn, Error> =>
       Effect.suspend(() => {
         lastPrompt = followUps.map((f) => f.text).join('\n\n');
-        return providerTurn(lastPrompt, ports, signal);
+        return providerTurn(lastPrompt, signal);
       });
 
     return {
       stageLabel,
-      launch: (ports, signal) => providerTurn(initialPrompt, ports, signal),
+      launch: (signal) => providerTurn(initialPrompt, signal),
       runTurn,
-      isTerminal: () => false,
       isTurnError,
       turnErrorMessage,
       onTurnSuccess: (turn) => {

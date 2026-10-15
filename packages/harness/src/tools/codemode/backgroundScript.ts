@@ -93,8 +93,6 @@ export const launchBackgroundScript = Effect.fn('script.background')(function* (
         parentRunId,
         agentName: title,
         budgeted: true,
-        // It reports once, at its end: no progress follow-ups.
-        notify: () => undefined,
         buildLaunch: () =>
           restore(Effect.void).pipe(
             Effect.as(
