@@ -100,6 +100,8 @@ const RunViewSchema = z.object({
   command: z.string().nullable(),
   /** The run's input files, from `run.config`. */
   inputFiles: z.array(z.string()),
+  /** Its `delegationAgentScope` (a team's agents); null: any visible one. */
+  agentScope: z.array(z.string()).nullish(),
   /** Each plugin row kind's latest value, by `plugin/kind` (`plugin.fact`):
    *  undecoded here, read through its plugin's reader. */
   facts: z.record(z.string(), JsonValueSchema),
@@ -115,11 +117,9 @@ const RunViewSchema = z.object({
    *  activation is starting, a later one resuming, cleared by the first
    *  step. Only a run whose loop steps carries one. */
   substate: RunSubstateSchema.nullable(),
-  /**
-   * The terminal status, null before: only the `run.end` row writes one,
-   * so nothing can move it. What lets a host paint an open group as
-   * interrupted and the session release the run's sidecar record.
-   */
+  /** The terminal status, null before: only the `run.end` row writes one,
+   *  so nothing can move it. What lets a host paint an open group as
+   *  interrupted and the session release the run's sidecar record. */
   durableOutcome: RunOutcomeSchema.nullable(),
   /** Banner copy: unreadable, else interrupted or held, else `lost`. */
   statusDetail: z.string().nullable(),

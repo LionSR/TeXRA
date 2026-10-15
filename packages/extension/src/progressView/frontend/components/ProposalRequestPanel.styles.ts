@@ -25,7 +25,7 @@ export const proposalRequestPanelStyles: CSSResult = css`
 
   .proposal-model-dropdown {
     min-width: 6rem;
-    max-width: 9rem;
+    max-width: 14rem;
   }
 
   .proposal-agent-dropdown {
