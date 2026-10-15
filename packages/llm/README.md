@@ -12,6 +12,85 @@ passes configuration in (`RouteFacts`) and credentials through one port,
 `CredentialStore`. Its only dependencies are `llm-zoo`, the provider SDKs,
 `ws`, and `effect` and `zod` as peers.
 
+> **0.x: the API may change in any minor release.** The package is versioned
+> on its own, not with the TeXRA app.
+
+## Install
+
+Requires Node.js 22.19.0 or later in 22.x, or Node.js 24 or later. The
+package is ESM only. `effect` and `zod` (v4) are peer dependencies, so your
+install supplies the one copy of each:
+
+```bash
+npm install @texra-ai/llm effect zod
+```
+
+## Example
+
+Pick a catalog model, decide its route, bind it, and run one turn. The key is
+read from the environment here; the runnable version of this program,
+[`../harness/example/llm.ts`](../harness/example/llm.ts), passes a `fetch`
+that answers 401 instead so it needs no key.
+
+```ts
+import { Effect } from 'effect';
+import {
+  chooseReasoning,
+  completedTurn,
+  decideModelRoute,
+  OWN_KEY_ROUTE_FACTS,
+  resolveRouteEndpoint,
+  selectModel,
+} from '@texra-ai/llm';
+import { bindModel } from '@texra-ai/llm/node';
+
+const selected = selectModel('anthropic/claude-sonnet-5');
+if (selected === undefined) throw new Error('Unknown model.');
+const route = decideModelRoute(selected.config, OWN_KEY_ROUTE_FACTS);
+if (route.kind !== 'api-key') throw new Error(`Unexpected route ${route.kind}`);
+const endpoint = resolveRouteEndpoint(selected.config, route, {
+  endpoints: {},
+});
+if (endpoint === undefined) throw new Error('No endpoint for the provider.');
+
+const program = Effect.gen(function* () {
+  const { model } = yield* bindModel({
+    protocol: 'anthropic-messages',
+    model: selected.config,
+    endpoint,
+    credentialScope: 'anthropic:api-key',
+    credential: {
+      kind: 'api-key',
+      apiKey: process.env.ANTHROPIC_API_KEY ?? '',
+    },
+    billing: 'api-key',
+    options: {
+      maxOutputTokens: 1024,
+      temperature: 0,
+      reasoning: chooseReasoning(selected.config, selected.request),
+      parallelToolCalls: false,
+      reasoningSummary: false,
+      serverState: false,
+      fastTier: false,
+      webSocket: false,
+      background: false,
+    },
+  });
+  const turn = yield* model.prepareTurn({
+    messages: [{ role: 'user', content: [{ kind: 'text', text: 'Hello.' }] }],
+  });
+  if (turn.mode !== 'foreground')
+    throw new Error('Expected a foreground turn.');
+  return yield* completedTurn(model.streamTurn(turn));
+}).pipe(Effect.scoped);
+
+console.log(await Effect.runPromise(program));
+```
+
+Every failure is a `ModelError` whose `kind` classifies it (`authentication`,
+`rate-limited`, …). The package retries nothing: retry, pricing and persistence
+belong to the caller ([`@texra-ai/harness`](../harness/README.md) is one).
+
 ## The entries
 
 The package is split by where its code runs, not by topic.
@@ -32,8 +111,7 @@ Inside the workspace the entries are the TypeScript sources. `npm run build`
 writes what a pack publishes (`publishConfig.exports`): one ESM bundle per
 entry under `dist/`, each protocol a chunk, OpenAI's patched runtime carried
 inside, and the entries' declarations, checked by the harness's artifact
-validator. It is versioned on its own (`0.1.0`), not with the app, and not
-published yet: that waits for TeXRA 1.0.
+validator.
 
 ## The contract
 

@@ -1,13 +1,21 @@
 {
   "name": "@texra-ai/harness",
   "version": "0.1.0",
-  "description": "Embeddable TeXRA agent runtime",
+  "description": "Embeddable agent runtime from TeXRA, in Effect: sessions, durable runs, tools and plugins",
+  "keywords": [
+    "agent",
+    "llm",
+    "effect",
+    "harness",
+    "texra"
+  ],
   "license": "Apache-2.0",
   "author": "TeXRA.ai",
   "homepage": "https://texra.ai",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/LionSR/TeXRA.git"
+    "url": "git+https://github.com/LionSR/TeXRA.git",
+    "directory": "packages/harness"
   },
   "bugs": {
     "url": "https://github.com/LionSR/TeXRA/issues"
@@ -23,32 +31,33 @@
     "LICENSE.txt",
     "NOTICE.txt"
   ],
+  "types": "./dist/types/index.d.ts",
   "exports": {
     ".": {
-      "types": "./dist/types/packages/harness/src/index.d.ts",
+      "types": "./dist/types/index.d.ts",
       "import": "./dist/index.js"
     },
     "./schemas": {
-      "types": "./dist/types/packages/harness/src/schemas.d.ts",
+      "types": "./dist/types/schemas.d.ts",
       "import": "./dist/schemas.js"
     },
     "./plugins": {
-      "types": "./dist/types/packages/harness/src/plugins.d.ts",
+      "types": "./dist/types/plugins.d.ts",
       "import": "./dist/plugins.js"
     },
     "./node": {
-      "types": "./dist/types/packages/harness/src/node.d.ts",
+      "types": "./dist/types/node.d.ts",
       "import": "./dist/node.js"
-    }
+    },
+    "./package.json": "./package.json"
   },
   "scripts": {
     "build": "node scripts/build.mjs",
-    "example:packed": "npm run build && rm -rf example/node_modules example/package-lock.json example/*.tgz && corepack pnpm --filter @texra-ai/llm pack --pack-destination \"$PWD/example\" && corepack pnpm pack --pack-destination example && mv example/texra-ai-harness-*.tgz example/harness.tgz && mv example/texra-ai-llm-*.tgz example/llm.tgz && cd example && npm install ./llm.tgz ./harness.tgz && npm start",
+    "example:packed": "node scripts/example-packed.mjs",
     "prepack": "node -e \"if (!/^pnpm\\//.test(process.env.npm_config_user_agent ?? '')) { console.error('Pack and publish with pnpm: only it applies publishConfig.exports and resolves workspace: versions.'); process.exit(1); }\" && npm run build"
   },
   "dependencies": {
     "@cantoo/pdf-lib": "catalog:",
-    "@texra-ai/llm": "workspace:*",
     "date-fns": "catalog:",
     "diff": "catalog:",
     "escape-string-regexp": "catalog:",
@@ -79,6 +88,7 @@
   "peerDependencies": {
     "@effect/platform-node": "catalog:peers",
     "@effect/sql-sqlite-node": "catalog:peers",
+    "@texra-ai/llm": "workspace:^",
     "effect": "catalog:peers",
     "zod": "^4.4.3"
   },
@@ -86,6 +96,7 @@
     "@effect/platform-node": "catalog:",
     "@effect/sql-sqlite-node": "catalog:",
     "@jitl/quickjs-wasmfile-release-sync": "catalog:",
+    "@texra-ai/llm": "workspace:*",
     "@types/mime-types": "^3.0.1",
     "@types/nunjucks": "^3.2.6",
     "@types/turndown": "^5.0.6",

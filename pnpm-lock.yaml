@@ -538,9 +538,6 @@ importers:
       '@cantoo/pdf-lib':
         specifier: 'catalog:'
         version: 2.9.2(html-entities@2.6.0)
-      '@texra-ai/llm':
-        specifier: workspace:*
-        version: link:../llm
       date-fns:
         specifier: 'catalog:'
         version: 4.4.0
@@ -629,6 +626,9 @@ importers:
       '@jitl/quickjs-wasmfile-release-sync':
         specifier: 'catalog:'
         version: 0.32.0
+      '@texra-ai/llm':
+        specifier: workspace:*
+        version: link:../llm
       '@types/mime-types':
         specifier: ^3.0.1
         version: 3.0.1

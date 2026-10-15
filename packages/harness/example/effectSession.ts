@@ -4,8 +4,9 @@
  * specifiers below are package names, never this repository's path aliases.
  *
  * It needs no provider key. It composes the runtime, opens a session, reads
- * the session's current view level, lists what the owner holds, and asks for
- * an agent that does not exist so the typed refusal is visible. Leaving the
+ * the session's current view level, lists what the owner holds, checks an
+ * inline persona against the published schema, and asks for an agent that
+ * does not exist so the typed refusal is visible. Leaving the
  * scope closes the session and disposes the runtime that held it.
  */
 import { mkdir, mkdtemp } from 'node:fs/promises';
@@ -16,6 +17,7 @@ import { Effect, Stream } from 'effect';
 import { Sessions } from '@texra-ai/harness';
 import { nodePlatform } from '@texra-ai/harness/node';
 import { harnessBuiltins } from '@texra-ai/harness/plugins';
+import { InlinePersonaSchema } from '@texra-ai/harness/schemas';
 
 const workspace = await mkdtemp(join(tmpdir(), 'texra-harness-example-'));
 const agentsDir = join(workspace, 'agents');
@@ -39,6 +41,14 @@ const program = Effect.gen(function* () {
 
   const open = yield* sessions.list;
   console.log('sessions the owner holds:', open.length);
+
+  const persona = InlinePersonaSchema.safeParse({
+    name: 'abstract_editor',
+    description: 'Reviews abstracts.',
+    prompt: 'You review LaTeX abstracts for concision.',
+    tools: ['read_file'],
+  });
+  console.log('inline persona valid:', persona.success);
 
   // `start` fails with a tagged error rather than a thrown string: an
   // embedder branches on `_tag`.

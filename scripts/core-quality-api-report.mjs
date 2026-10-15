@@ -19,12 +19,15 @@ export function coreEntries(rootDir) {
     const manifest = JSON.parse(
       readFileSync(path.join(rootDir, dir, 'package.json'), 'utf8'),
     );
-    return Object.entries(manifest.exports).map(([subpath, target]) => {
+    const entries = Object.entries(manifest.exports).filter(
+      ([subpath]) => subpath !== './package.json',
+    );
+    return entries.map(([subpath, target]) => {
       const spelled = typeof target === 'string' ? target : target.types;
       // `./src/foo/bar.ts`, or its built declaration
-      // `./dist/types/packages/<pkg>/src/foo/bar.d.ts`: the path under `src/`.
+      // `./dist/types/foo/bar.d.ts`: the path under `src/`.
       const source = spelled
-        .slice(spelled.lastIndexOf('/src/') + '/src/'.length)
+        .replace(/^\.\/(?:src|dist\/types)\//, '')
         .replace(/\.d\.ts$|\.ts$/, '');
       return {
         name: manifest.name,

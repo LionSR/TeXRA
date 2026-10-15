@@ -125,7 +125,7 @@ each ratification decision below. It only ever shrinks; never widen it.
   must weigh. What they still reach _around_ the public surface by deep import
   (`@agent/*`, `@shared/*`, …) is the separate, frozen coupling in
   `harness-deep-import-baseline.json` (§3).
-- **Consumer-shaped example: one.** `packages/harness/example/effectSession.mjs`,
+- **Consumer-shaped example: one.** `packages/harness/example/effectSession.ts`,
   installed from a packed tarball (the only code that installs the package as an
   external consumer would), exercises the root entry (`Sessions`,
   `session.start`, the tagged refusal), `/node` (`nodePlatform`), and `/plugins`.

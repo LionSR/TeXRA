@@ -3,9 +3,9 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
-  "description": "Runs @texra-ai/harness from a packed tarball, as a consumer would",
+  "description": "Runs @texra-ai/llm and @texra-ai/harness from packed tarballs, as a consumer would",
   "scripts": {
-    "start": "node effectSession.mjs"
+    "start": "node llm.ts && node effectSession.ts"
   },
   "dependencies": {
     "@effect/platform-node": "^4.0.5",
@@ -14,5 +14,8 @@
     "@texra-ai/llm": "file:llm.tgz",
     "effect": "^4.0.5",
     "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/node": "^22.19.0"
   }
 }
