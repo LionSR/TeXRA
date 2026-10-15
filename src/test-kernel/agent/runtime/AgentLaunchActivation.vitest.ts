@@ -9,41 +9,22 @@
  * - a run that fails while its description is still being generated ends
  *   without it, or records it after its `run.end`.
  */
+import { writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+
 import { it } from '@effect/vitest';
-import { Deferred, Effect, Fiber } from 'effect';
-import { describe, expect, vi } from 'vitest';
-
-const helper = vi.hoisted(() => ({
-  started: undefined as (() => void) | undefined,
-  answer: undefined as Promise<string> | undefined,
-}));
-
-// The one seam left: the description's helper call is answered by the
-// validation model at once, so the race below needs it held; the session,
-// the store, the agent catalog and the lifecycle are real.
-vi.mock('@agent/runtime/helperModel', async (importActual) => {
-  const { Effect } = await import('effect');
-  const actual =
-    await importActual<typeof import('@agent/runtime/helperModel')>();
-  return {
-    ...actual,
-    helperCall: (...args: Parameters<typeof actual.helperCall>) =>
-      helper.answer === undefined
-        ? actual.helperCall(...args)
-        : Effect.promise(() => {
-            helper.started?.();
-            return helper.answer!;
-          }),
-  };
-});
+import { Effect, Fiber } from 'effect';
+import { describe, expect } from 'vitest';
 
 import '@test/support/sessionGraphTestSetup';
 
+import { apiKeySecretName } from '@texra-ai/llm';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { prepareAgentDefinition } from '@agent/runtime/AgentLaunchContext';
 import { executeAgent } from '@agent/runtime/executeAgent';
 import { withProcessServices } from '@platform/processRuntime';
 import { openTestDefaultSession } from '@test/support/sessionEnd';
+import { fakeHostSecrets } from '@test/support/setupPlatform';
 import {
   parkedAfter,
   sessionStoreFaults,
@@ -127,25 +108,23 @@ describe(
           const roots = testWorkspaceRoots();
           const session = yield* openTestDefaultSession({ roots });
           const runId = generateRunId();
-          const generating = yield* Deferred.make<void>();
-          let answer: (text: string) => void = () => undefined;
-          helper.answer = new Promise((resolve) => {
-            answer = resolve;
-          });
-          helper.started = () => Deferred.doneUnsafe(generating, Effect.void);
-          yield* Effect.addFinalizer(() =>
-            Effect.sync(() => {
-              helper.answer = undefined;
-              helper.started = undefined;
-            }),
+          // The default helper model's key, so the label is the validation
+          // model's to answer.
+          yield* fakeHostSecrets.set(
+            apiKeySecretName('deepseek'),
+            'validation-fake-key',
           );
           const faults = yield* sessionStoreFaults(roots.storage);
           const end = yield* faults.holdNext('appendAll', 'run.end');
-          // The run's first read after it opened fails it.
+          // The run's first read after it opened fails it. That fault must
+          // come before the run's first model turn: the turn carries the
+          // GOLDEN-PARK instruction too, so the validation model would hold it.
           const launch = yield* withProcessServices(
             testRuntime(),
             session.runs.launch({
-              request: { config: config('Fix grammar.'), runId },
+              // The validation model holds a call that names GOLDEN-PARK, its
+              // label's included, until released.
+              request: { config: config('GOLDEN-PARK Fix grammar.'), runId },
               options: {
                 onAdmitted: () =>
                   Effect.sync(() => {
@@ -162,7 +141,6 @@ describe(
               },
             }),
           ).pipe(Effect.flip, Effect.forkChild);
-          yield* Deferred.await(generating);
 
           // The run fails with its description still being generated: its
           // loop's stop is logged on the way to the description's settle.
@@ -184,7 +162,7 @@ describe(
             }),
           );
           expect(early).toBe(false);
-          answer('Fixing grammar in the introduction');
+          writeFileSync(join(roots.storage, 'golden-park.release'), '');
           yield* end.reached;
           yield* end.release;
           expect((yield* Fiber.join(launch)).message).toContain(
@@ -199,7 +177,7 @@ describe(
             'run.description',
             'run.end',
           ]);
-          expect(rows[0]!.data).toContain('Fixing grammar in the introduction');
+          expect(rows[0]!.data).toContain('Parked run released');
         }),
     );
   },

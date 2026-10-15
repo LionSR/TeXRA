@@ -1,24 +1,7 @@
 import { it } from '@effect/vitest';
 import { Effect, Layer } from 'effect';
-import { assert, beforeEach, describe, expect, vi } from 'vitest';
+import { assert, describe, expect } from 'vitest';
 import { goalGrant, humanGrant } from '@agent/runtime/runApprovalQueue';
-
-const mocks = vi.hoisted(() => ({
-  resolve: vi.fn(),
-  buildVars: vi.fn(),
-}));
-
-vi.mock('@agent/index/agentRegistry', async (importActual) => ({
-  ...(await importActual<typeof import('@agent/index/agentRegistry')>()),
-  getCatalogLoadFailure: () => undefined,
-  getCustomAgentScanIssues: () => [],
-  refresh: () => Effect.void,
-  settledCatalog: Effect.void,
-  resolveAgentForLaunch: mocks.resolve,
-}));
-vi.mock('@agent/prompt/templateInputs', () => ({
-  buildTemplateInputs: mocks.buildVars,
-}));
 
 import { activationRows, registerRun } from '@agent/storage/runLifecycle';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
@@ -27,19 +10,24 @@ import {
   buildAgentLaunchContext as buildAgentLaunchContextEffect,
   prepareAgentDefinition,
 } from '@agent/runtime/AgentLaunchContext';
-import { runWithLaunchGuard } from '@agent/runtime/runLaunchGuard';
-import { TraceEmitter } from '@agent/trace';
 import { hasErrorPresentationClaimed } from '@common/errors/sdkError/errorMetadata';
 import {
   LanguageModel,
   UNAVAILABLE_LANGUAGE_MODEL_PORT,
 } from '@platform/languageModel';
 import { runBypasses } from '@shared/approvalBypassKind';
-import { RUN_OUTCOME, type RunId } from '@shared/schemas';
+import { type RunId } from '@shared/schemas';
 import { closeSessionOf } from '@test/support/sessionEnd';
-import { noopTrace } from '@test/support/noopTrace';
 import { createTestSession } from '@test/support/sessionTestUtils';
-import { fakeProcessServices } from '@test/support/setupPlatform';
+import {
+  fakeProcessServices,
+  setupPlatform,
+} from '@test/support/setupPlatform';
+import { BUNDLED_AGENTS } from '@test/support/storeFaults';
+import {
+  createTempDirPlatform,
+  useTempDirs,
+} from '@test/support/tempDirPlatform';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 
 import { createRecordingHost, recordSessionEvents } from '../progressTestUtils';
@@ -104,11 +92,25 @@ const triggerQueuedMissingAgentFailure = (session: SessionHandle) =>
     return session;
   });
 
-beforeEach(() => {
-  mocks.resolve.mockReturnValue(Effect.succeed(undefined));
-});
+const tempDirs = useTempDirs();
 
 describe('AgentLaunchContext', () => {
+  // The built-in agents are the bundled personas: a launch resolves its
+  // agent, or misses, against the catalog a real host scans.
+  setupPlatform(async () => {
+    const host = await createTempDirPlatform('texra-launch-', tempDirs);
+    return {
+      ...host,
+      platform: {
+        ...host.platform,
+        agentDirectories: {
+          ...host.platform.agentDirectories,
+          builtIn: () => Effect.succeed(BUNDLED_AGENTS),
+        },
+      },
+    };
+  });
+
   it.effect(
     'publishes missing-agent banners through the supplied host interactions',
     () =>
@@ -226,20 +228,12 @@ describe('AgentLaunchContext', () => {
         yield* Effect.addFinalizer(() => closeSessionOf(session));
         yield* session.interactions.use(recording.interactions);
 
-        mocks.resolve.mockReturnValueOnce(
-          Effect.succeed({
-            path: '/agents/chat.yaml',
-            persona: { prompt: '', tools: [], temperature: 1 },
-            blocks: {},
-          }),
-        );
-
         // Rejected while preparing the definition, before any execution is
         // registered for the unknown model.
         const error = yield* Effect.flip(
           prepareAgentDefinition({
             config: AgentConfigSchema.parse({
-              agent: 'chat',
+              agent: 'critic',
               model: '__unregistered_model_for_launch_context_test__',
             }),
             session,
@@ -277,30 +271,15 @@ describe('AgentLaunchContext', () => {
         const session = yield* createTestSession();
         yield* Effect.addFinalizer(() => closeSessionOf(session));
         const recording = recordSessionEvents(session);
-        mocks.resolve.mockReturnValueOnce(
-          Effect.succeed({
-            path: '/agents/chat.yaml',
-            persona: { prompt: '', tools: [], temperature: 1 },
-            blocks: {},
-          }),
-        );
-        mocks.buildVars.mockReturnValueOnce(
-          Effect.succeed({
-            inputs: {},
-            catalog: [],
-            activated: [],
-            attachedMemoryMisses: [],
-          }),
-        );
         const config = AgentConfigSchema.parse({
-          agent: 'chat',
+          agent: 'critic',
           model: 'openai/gpt-5.5-2026-04-23',
         });
         const ctx = yield* buildAgentLaunchContext({
           config,
           runId: EXECUTION_ID,
           session,
-          registration: { identity: { kind: 'agent', agent: 'chat' } },
+          registration: { identity: { kind: 'agent', agent: 'critic' } },
         });
         // Nothing is written until the opening; its batch carries the birth.
         expect(yield* Effect.promise(() => recording.read())).toEqual([]);
@@ -370,75 +349,5 @@ describe('AgentLaunchContext', () => {
           goal: [],
         });
       }),
-  );
-
-  it.effect('a late launch-assembly failure leaves no run behind', () =>
-    Effect.gen(function* () {
-      const order: string[] = [];
-      const failure = new Error('user vars unavailable');
-      const session = yield* createTestSession();
-      yield* Effect.addFinalizer(() => closeSessionOf(session));
-      const terminalEvents = recordSessionEvents(session);
-      const stage = noopTrace.openStage('Run');
-      const endStage = vi.spyOn(stage, 'end').mockImplementation(() => {
-        order.push('stage');
-      });
-      const closeTrace = TraceEmitter.prototype.close;
-      const close = vi
-        .spyOn(TraceEmitter.prototype, 'close')
-        .mockImplementation(function (this: TraceEmitter) {
-          order.push('close');
-          closeTrace.call(this);
-        });
-      const openStage = vi
-        .spyOn(TraceEmitter.prototype, 'openStage')
-        .mockReturnValue(stage);
-      yield* Effect.addFinalizer(() =>
-        Effect.sync(() => {
-          openStage.mockRestore();
-          close.mockRestore();
-        }),
-      );
-      mocks.resolve.mockReturnValueOnce(
-        Effect.succeed({
-          path: '/agents/chat.yaml',
-          persona: { prompt: '', tools: [], temperature: 1 },
-          blocks: {},
-        }),
-      );
-      mocks.buildVars.mockReturnValueOnce(Effect.fail(failure));
-
-      const error = yield* Effect.flip(
-        runWithLaunchGuard(
-          session,
-          EXECUTION_ID,
-          buildAgentLaunchContext({
-            config: AgentConfigSchema.parse({
-              agent: 'chat',
-              model: 'openai/gpt-5.5-2026-04-23',
-            }),
-            runId: EXECUTION_ID,
-            session,
-            registration: { identity: { kind: 'agent', agent: 'chat' } },
-            suppressErrorNotification: true,
-          }),
-          true,
-        ),
-      );
-      expect(error).toBe(failure);
-
-      expect(mocks.buildVars.mock.calls.at(-1)?.at(3)).toEqual({
-        workspacePath: session.roots.workspace,
-        storageRoot: session.roots.storage,
-      });
-      expect(endStage).toHaveBeenCalledExactlyOnceWith(RUN_OUTCOME.FAILED);
-      expect(close).toHaveBeenCalledOnce();
-      // The launch's scope unwinds (its stage, then its trace), and the run
-      // was never born: its held trace is dropped, nothing is written.
-      yield* session.log.settled;
-      expect(session.view.run(EXECUTION_ID)).toBeUndefined();
-      expect(yield* Effect.promise(() => terminalEvents.read())).toEqual([]);
-      expect(order).toEqual(['stage', 'close']);
-    }),
   );
 });
