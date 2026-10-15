@@ -19,6 +19,7 @@ import { modelRefOf } from '@texra-ai/llm';
 import {
   agentName,
   getProposalFileGroups,
+  type AgentOptionData,
   type AgentProposalPermission,
   type PermissionPayload,
 } from '@shared/schemas';
@@ -396,8 +397,8 @@ export class ProposalRequestPanel extends BaseRequestPanel<'proposal'> {
   /**
    * What the pickers offer, from the host's catalogs: the agents the run
    * may delegate to (its team's, which may be hidden from the catalog,
-   * else every visible one), and of those only the ones with a document
-   * task for a task. A script's request approves the script, not one
+   * else every visible one), and for a task only the catalog's agents
+   * with a document task. A script's request approves the script, not one
    * call's agent or model (`decideDelegation` ignores both there), so it
    * offers none.
    */
@@ -409,22 +410,20 @@ export class ProposalRequestPanel extends BaseRequestPanel<'proposal'> {
     const { script, task } = this.permission.data;
     if (host === null || script) return { agents: [], models: [] };
     const scope = this.run?.agentScope ?? null;
+    const offered = (option: AgentOptionData) =>
+      !task || option.rounds !== undefined;
     const agents =
       scope === null
-        ? host.agentOptions
-        : scope.map(
-            (key) =>
-              host.agentOptions.find((option) => option.value === key) ?? {
-                value: key,
-                label: agentName(key),
-              },
-          );
-    return {
-      agents: task
-        ? agents.filter((option) => option.rounds !== undefined)
-        : agents,
-      models: host.modelOptions,
-    };
+        ? host.agentOptions.filter(offered)
+        : scope.flatMap((key) => {
+            const option = host.agentOptions.find(({ value }) => value === key);
+            // A member the catalog hides is offered as the team names it;
+            // its launch says so if it has no task.
+            if (option === undefined)
+              return [{ value: key, label: agentName(key) }];
+            return offered(option) ? [option] : [];
+          });
+    return { agents, models: host.modelOptions };
   }
 
   /** The proposed agent's option value: catalog options are
