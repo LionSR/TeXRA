@@ -1372,22 +1372,18 @@ const CALLS = [
   {
     callId: 'call-a',
     toolName: 'bash',
-    ordinal: 0,
     lane: 'barrier',
     replay: 'unsafe',
     duplicateOf: null,
     logId: 'card-0',
-    stageId: null,
   },
   {
     callId: 'call-b',
     toolName: 'bash',
-    ordinal: 1,
     lane: 'barrier',
     replay: 'unsafe',
     duplicateOf: 'call-a',
     logId: 'card-1',
-    stageId: null,
   },
 ];
 /** What the writer stamps beside `calls`: the runtime's priced usage. */

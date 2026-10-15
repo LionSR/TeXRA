@@ -3231,22 +3231,18 @@ describe('RunHistory', () => {
     {
       callId: 'call-a',
       toolName: 'bash',
-      ordinal: 0,
       lane: 'barrier',
       replay: 'unsafe',
       duplicateOf: null,
       logId: 'card-a',
-      stageId: null,
     },
     {
       callId: 'call-b',
       toolName: 'bash',
-      ordinal: 1,
       lane: 'barrier',
       replay: 'unsafe',
       duplicateOf: 'call-a',
       logId: 'card-b',
-      stageId: null,
     },
   ] as const;
   const snapshot = (): RunHistoryDraft => ({

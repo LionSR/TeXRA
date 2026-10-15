@@ -132,7 +132,7 @@ const SKIPPED_AFTER_END_TURN =
  *  a response's dispatch fact, or a script's `script.call`, which commits
  *  with the call's first row. */
 type CallFacts =
-  | Pick<DispatchFacts, 'callId' | 'toolName' | 'replay' | 'logId' | 'stageId'>
+  | Pick<DispatchFacts, 'callId' | 'toolName' | 'replay' | 'logId'>
   | ScriptCallPayload;
 
 /** The `script.call` a call carries, or null for a response's own. */
@@ -466,30 +466,30 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
     input: unknown,
     attempt: number,
   ): RunHistoryDraft => {
-    const phase = scriptOf(fact)?.phase;
+    const script = scriptOf(fact);
     return displayRow(runId, {
       type: 'tool.start',
       logId: fact.logId,
       toolName: fact.toolName,
       input: toJsonValue(input),
-      ...(phase != null ? { phase } : {}),
+      ...(script?.phase != null ? { phase: script.phase } : {}),
       ...(attempt > 1 ? { attempt } : {}),
-      ...(fact.stageId !== null ? { stageId: fact.stageId } : {}),
+      ...(script !== null ? { stageId: script.stageId } : {}),
     });
   };
   /** The card rows a settlement commits: a card its attempt's body opened
    *  only closes, any other opens and closes in the same batch. The card
    *  stores no output: a read projects it from the `tool.result` the batch
    *  commits (`rowCodec.ts`). */
-  const settledCards =
-    (
-      fact: CallFacts,
-      input: unknown,
-      status: ToolCallStatus,
-      attempt: number,
-      files: readonly FileListEntry[] = [],
-    ) =>
-    (state: RunState): RunHistoryDraft[] => [
+  const settledCards = (
+    fact: CallFacts,
+    input: unknown,
+    status: ToolCallStatus,
+    attempt: number,
+    files: readonly FileListEntry[] = [],
+  ) => {
+    const script = scriptOf(fact);
+    return (state: RunState): RunHistoryDraft[] => [
       ...(slow(fact) && startedAt(state, fact.callId, attempt)
         ? []
         : [cardStart(fact, input, attempt)]),
@@ -498,9 +498,10 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
         logId: fact.logId,
         status,
         ...(files.length > 0 ? { files: [...files] } : {}),
-        ...(fact.stageId !== null ? { stageId: fact.stageId } : {}),
+        ...(script !== null ? { stageId: script.stageId } : {}),
       }),
     ];
+  };
 
   /** The row that says `fact`'s body starts `attempt`. */
   const intentRow = (fact: CallFacts, attempt: number): RunHistoryDraft => {
@@ -544,7 +545,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
     | ScriptServices
   > {
     const tool: ITool | undefined = step.registry.get(fact.toolName);
-    const stageId = fact.stageId ?? undefined;
+    const stageId = scriptOf(fact)?.stageId;
     // A slow tool's card opens as its body starts. What the tool prints
     // while it runs streams to that card as transient text, the way a
     // response's chunks reach a streaming row (C3): never a row of its own,
@@ -823,7 +824,6 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
             id: stageId,
             label: title ?? 'Script',
             kind: 'script',
-            ...(script.stageId !== null ? { parentId: script.stageId } : {}),
           });
         });
         yield* Effect.addFinalizer((exit) =>
@@ -1006,9 +1006,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
   });
 
   const lanes = yield* makeScheduler;
-  const ordinalOf = new Map(
-    pending.calls.map((fact) => [fact.callId, fact.ordinal]),
-  );
+  const ordinalOf = new Map(pending.calls.map((f, i) => [f.callId, i]));
 
   /** One call of the response, in its place: a duplicate derives its
    *  primary, effects stripped, once the primary is done (and waits with
@@ -1017,6 +1015,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
    *  whether its settlement ended the turn. */
   const responseCall = Effect.fn('toolUse.responseCall')(function* (
     fact: DispatchFacts,
+    ordinal: number,
     endedBefore: boolean,
   ): Effect.fn.Return<
     boolean,
@@ -1024,7 +1023,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
     ProcessServices | Runs | WorkspaceFs | StorageFs | FileSystem.FileSystem
   > {
     const status = recordOf(yield* cell.current, fact.callId)?.status;
-    const call = calls[fact.ordinal];
+    const call = calls[ordinal];
     const primaryAt =
       fact.duplicateOf === null ? null : ordinalOf.get(fact.duplicateOf);
     if (status === undefined || call === undefined || primaryAt === undefined)
@@ -1059,9 +1058,9 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
 
   yield* Effect.forEach(
     pending.calls,
-    (fact) =>
-      lanes.run(fact.ordinal, responseLane(fact), (endedBefore) =>
-        responseCall(fact, endedBefore),
+    (fact, ordinal) =>
+      lanes.run(ordinal, responseLane(fact), (endedBefore) =>
+        responseCall(fact, ordinal, endedBefore),
       ),
     { concurrency: 'unbounded', discard: true },
   );
