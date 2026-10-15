@@ -47,8 +47,6 @@ past it fails at startup.
 }
 ```
 
-Inside this repository, depend on it as `"@texra-ai/harness": "workspace:*"`.
-
 ## Usage
 
 The package's surface is Effect: `Sessions.layer({ platform, plugins })`
