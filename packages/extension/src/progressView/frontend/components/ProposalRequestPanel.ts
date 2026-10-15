@@ -66,15 +66,16 @@ function proposedAgentKey({ agent, agentSource }: AgentProposalPermission) {
   return agentSource == null ? agent : agentKey(agentSource, agent);
 }
 
-/** Whether `option` is the proposal's agent: its exact key, or, for a
- *  proposal with no source, any option of that name. */
+/** Whether an agent option value (a key) is the proposal's agent: the
+ *  exact key, or, for a proposal with no source, any key of that name.
+ *  Every agent match on the card goes through this. */
 function isProposedAgent(
-  option: HostSnapshot['agentOptions'][number],
+  value: string,
   data: AgentProposalPermission,
 ): boolean {
   return (
-    option.value === proposedAgentKey(data) ||
-    (data.agentSource == null && agentName(option.value) === data.agent)
+    value === proposedAgentKey(data) ||
+    (data.agentSource == null && agentName(value) === data.agent)
   );
 }
 
@@ -449,7 +450,7 @@ export class ProposalRequestPanel extends BaseRequestPanel<'proposal'> {
             // but for a task only when proposed: whether it has a task is
             // not in the catalog.
             if (option === undefined)
-              return !task || agentName(key) === agent
+              return !task || isProposedAgent(key, data)
                 ? [{ value: key, label: agentName(key) }]
                 : [];
             return offered(option) ? [option] : [];
@@ -458,7 +459,8 @@ export class ProposalRequestPanel extends BaseRequestPanel<'proposal'> {
     const models = host.modelOptions;
     return {
       agents:
-        agents.length === 0 || agents.some((o) => isProposedAgent(o, data))
+        agents.length === 0 ||
+        agents.some((o) => isProposedAgent(o.value, data))
           ? agents
           : [{ value: proposedAgentKey(data), label: agent }, ...agents],
       models:
@@ -473,8 +475,8 @@ export class ProposalRequestPanel extends BaseRequestPanel<'proposal'> {
   private get proposedAgent(): string {
     const data = this.permission.data;
     return (
-      this.pickers.agents.find((option) => isProposedAgent(option, data))
-        ?.value ?? data.agent
+      this.pickers.agents.find((o) => isProposedAgent(o.value, data))?.value ??
+      data.agent
     );
   }
 
