@@ -11,7 +11,7 @@
  */
 import { Effect, Stream } from 'effect';
 
-import { ModelError, type PlanRoute } from '../errors.js';
+import { isRetryableStatus, ModelError, type PlanRoute } from '../errors.js';
 import {
   envelopes,
   firstNumber,
@@ -260,9 +260,6 @@ function networkFailed(error: ModelError): boolean {
       ),
   );
 }
-
-const isRetryableStatus = (status: number): boolean =>
-  status >= 500 || status === 408 || status === 409 || status === 429;
 
 /**
  * Whether repeating the request can succeed. Never for the package's own

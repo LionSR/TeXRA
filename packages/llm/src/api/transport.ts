@@ -1,12 +1,73 @@
 // Third-party imports
-import { Cause, Effect, Exit, type Scope, Stream } from 'effect';
+import { Cause, Clock, Effect, Exit, type Scope, Stream } from 'effect';
 import { z } from 'zod';
 
 // Local imports - canonical protocol binding
-import { JsonObjectSchema } from '../protocol.js';
+import {
+  JsonObjectSchema,
+  sameModelOrigin,
+  type ModelOrigin,
+} from '../protocol.js';
+import { ObservationPolicySchema, type ResolvedTurn } from '../turn.js';
 
 // Local imports - canonical model errors
-import { ModelError } from '../errors.js';
+import { boundOperation, ModelError, type RemoteOperation } from '../errors.js';
+
+/** A background turn on `protocol`. */
+type ObservedTurn<P> = Extract<
+  ResolvedTurn,
+  { protocol: P; mode: 'background' }
+>;
+
+const isObservedTurn = <P extends ResolvedTurn['protocol']>(
+  turn: ResolvedTurn,
+  protocol: P,
+): turn is ObservedTurn<P> =>
+  turn.protocol === protocol && turn.mode === 'background';
+
+/**
+ * Admit a background observation: `input` must be this binding's operation,
+ * `turn` its background turn on `protocol`, and the policy's original
+ * deadline still ahead. Yields the turn, the operation, that deadline, and
+ * the error the observation fails with once it passes.
+ */
+export const admitObservation = Effect.fn('llm.admitObservation')(function* <
+  P extends ResolvedTurn['protocol'],
+>(
+  protocol: P,
+  origin: ModelOrigin,
+  turn: ResolvedTurn,
+  input: RemoteOperation,
+  policy: z.infer<typeof ObservationPolicySchema>,
+) {
+  const operation = yield* boundOperation(input, origin);
+  if (
+    !isObservedTurn(turn, protocol) ||
+    !sameModelOrigin(turn, operation.origin)
+  )
+    return yield* new ModelError({
+      kind: 'unsupported',
+      message: 'The admitted turn belongs to another model binding.',
+      operation,
+    });
+  const parsed = ObservationPolicySchema.safeParse(policy);
+  if (!parsed.success)
+    return yield* new ModelError({
+      kind: 'invalid-request',
+      message: 'The observation deadline is invalid.',
+      cause: parsed.error,
+      operation,
+    });
+  const { deadlineAtMs } = parsed.data;
+  const deadline = new ModelError({
+    kind: 'observation-deadline',
+    message: 'The original observation deadline has expired.',
+    operation,
+    responseId: operation.providerResponseId,
+  });
+  if (deadlineAtMs <= (yield* Clock.currentTimeMillis)) return yield* deadline;
+  return { turn, operation, deadlineAtMs, deadline };
+});
 
 /**
  * The value a pull source yields while it is not done: the `value` of the

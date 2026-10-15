@@ -130,8 +130,7 @@ function vendorResponses(facts: Facts): ResponsesConfiguration | null {
 export function responsesConfiguration(facts: Facts): ResponsesConfiguration {
   const vendor = vendorResponses(facts);
   if (vendor !== null) return vendor;
-  const { base, config, capabilities, controls, spec, supportsTemperature } =
-    facts;
+  const { base, config, controls, spec, supportsTemperature } = facts;
   const { credential, options } = spec;
   const choice = options.reasoning;
   const effort = wireEffort(config, choice);
@@ -152,7 +151,7 @@ export function responsesConfiguration(facts: Facts): ResponsesConfiguration {
       supportsTemperature,
       supportsMaxOutputTokens: false,
       supportsStorage: false,
-      supportsDocumentInput: capabilities.supportsNativePdf,
+      supportsDocumentInput: config.capabilities.supportsNativePdf,
       webSocketStreamParameter: 'required',
       allowedReasoningEfforts: facts.acceptedEfforts.filter(
         (value) =>
@@ -183,7 +182,7 @@ export function responsesConfiguration(facts: Facts): ResponsesConfiguration {
     supportsTemperature,
     supportsMaxOutputTokens: true,
     supportsStorage: true,
-    supportsDocumentInput: capabilities.supportsNativePdf,
+    supportsDocumentInput: config.capabilities.supportsNativePdf,
     webSocketStreamParameter: 'implicit',
     allowedReasoningEfforts: facts.acceptedEfforts,
     instructions: { kind: 'optional' },

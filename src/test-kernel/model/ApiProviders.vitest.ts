@@ -8,9 +8,9 @@ import {
   apiKeyEnvName,
   apiKeySecretName,
   configuredApiKeyProviders,
-  getApiKey,
   hasUsableApiKey,
   loadApiKeyStatusMap,
+  lookupApiKey,
   lookupApiKeyOrigin,
   SecretsFailed,
 } from '@texra-ai/llm';
@@ -153,7 +153,7 @@ describe('API provider key resolution', () => {
           get: vi.fn(() => Effect.fail(readFailure)),
         };
 
-        expect(yield* Effect.flip(getApiKey(secrets, 'openai'))).toBe(
+        expect(yield* Effect.flip(lookupApiKey(secrets, 'openai'))).toBe(
           readFailure,
         );
       }).pipe(withEnv({})),

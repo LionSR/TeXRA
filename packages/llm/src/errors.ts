@@ -111,7 +111,7 @@ type ModelErrorFields = z.infer<typeof ModelErrorFieldsSchema> & {
 };
 
 /** A server failure, a timeout, a conflict or a rate limit: worth repeating. */
-const isRetryableStatus = (status: number): boolean =>
+export const isRetryableStatus = (status: number): boolean =>
   status >= 500 || status === 408 || status === 409 || status === 429;
 
 /** Whether a failure of `kind` can succeed when repeated, absent other evidence. */

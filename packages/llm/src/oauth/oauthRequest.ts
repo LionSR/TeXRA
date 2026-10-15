@@ -69,8 +69,6 @@ interface OAuthPostOptions {
   readonly url: string;
   readonly headers: Record<string, string>;
   readonly body: BodyInit;
-  /** Defaults to 30 seconds. */
-  readonly timeoutMs?: number;
   /** Prefix of the network-error message (e.g. `Network error contacting …`). */
   readonly networkErrorMessage: string;
 }
@@ -108,7 +106,7 @@ export const postOAuth = Effect.fn('oauthRequest.postOAuth')(function* (
       });
     }),
     Effect.timeoutOrElse({
-      duration: Duration.millis(options.timeoutMs ?? REQUEST_TIMEOUT_MS),
+      duration: Duration.millis(REQUEST_TIMEOUT_MS),
       orElse: () =>
         Effect.fail(
           new OAuthNetworkError({

@@ -9,7 +9,6 @@ import {
   CODEX_CLIENT_ID,
   CODEX_ORIGINATOR,
   CODEX_SCOPE,
-  CODEX_TOKEN_REFRESH_BUFFER_MS,
   CODEX_TOKEN_URL,
   codexRedirectUri,
 } from './codexConstants.js';
@@ -29,28 +28,17 @@ export const CODEX_POLICY: SubscriptionOAuthPolicy<CodexSession> = {
     clientId: CODEX_CLIENT_ID,
     tokenResponseSchema: CodexTokenResponseSchema,
   },
-  refreshBufferMs: CODEX_TOKEN_REFRESH_BUFFER_MS,
   notSignedInMessage: 'Not signed in with ChatGPT. Run sign-in first.',
   sessionChangedMessage: 'ChatGPT session changed while refreshing. Try again.',
-  buildAuthorizeRequest(port, pkce, state) {
-    const redirectUri = codexRedirectUri(port);
-    const url = new URL(CODEX_AUTHORIZE_URL);
-    url.searchParams.set('response_type', 'code');
-    url.searchParams.set('client_id', CODEX_CLIENT_ID);
-    url.searchParams.set('redirect_uri', redirectUri);
-    url.searchParams.set('scope', CODEX_SCOPE);
-    url.searchParams.set('code_challenge', pkce.challenge);
-    url.searchParams.set('code_challenge_method', pkce.method);
-    url.searchParams.set('id_token_add_organizations', 'true');
-    url.searchParams.set('codex_cli_simplified_flow', 'true');
-    url.searchParams.set('state', state);
-    url.searchParams.set('originator', CODEX_ORIGINATOR);
-    return {
-      url: url.toString(),
-      verifier: pkce.verifier,
-      state,
-      redirectUri,
-    };
+  authorize: {
+    url: CODEX_AUTHORIZE_URL,
+    scope: CODEX_SCOPE,
+    redirectUri: codexRedirectUri,
+    params: {
+      id_token_add_organizations: 'true',
+      codex_cli_simplified_flow: 'true',
+      originator: CODEX_ORIGINATOR,
+    },
   },
   buildSession(tokens, refreshToken, nowMs, previous) {
     const claims = extractCodexClaims(

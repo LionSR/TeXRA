@@ -195,6 +195,9 @@ function makeCoordinator(
   });
 }
 
+const freshToken = (coordinator: SubscriptionOAuthCoordinator<CodexSession>) =>
+  Effect.map(coordinator.getFreshSession(), (fresh) => fresh.accessToken);
+
 describe('CodexSessionCoordinator', () => {
   it.effect('does not refresh a token outside the 5-minute buffer', () =>
     Effect.gen(function* () {
@@ -203,9 +206,7 @@ describe('CodexSessionCoordinator', () => {
       );
       const refreshTokens = vi.fn();
       const coordinator = makeCoordinator(storage, { refreshTokens });
-      expect(yield* withHttp(coordinator.getFreshAccessToken())).toBe(
-        'access-0',
-      );
+      expect(yield* withHttp(freshToken(coordinator))).toBe('access-0');
       expect(refreshTokens).not.toHaveBeenCalled();
     }),
   );
@@ -215,9 +216,7 @@ describe('CodexSessionCoordinator', () => {
       const storage = memoryStorage(session({ expiresAtMs: NOW + 60_000 }));
       const refreshTokens = vi.fn(() => Effect.succeed(tokenResponse()));
       const coordinator = makeCoordinator(storage, { refreshTokens });
-      expect(yield* withHttp(coordinator.getFreshAccessToken())).toBe(
-        'access-1',
-      );
+      expect(yield* withHttp(freshToken(coordinator))).toBe('access-1');
       expect(refreshTokens).toHaveBeenCalledOnce();
       expect(storage.peek()?.accessToken).toBe('access-1');
     }),
@@ -229,8 +228,8 @@ describe('CodexSessionCoordinator', () => {
       const { pending, refreshTokens, refreshStarted } = parkedRefresh();
       const coordinator = makeCoordinator(storage, { refreshTokens });
 
-      const a = yield* forkNow(coordinator.getFreshAccessToken());
-      const b = yield* forkNow(coordinator.getFreshAccessToken());
+      const a = yield* forkNow(freshToken(coordinator));
+      const b = yield* forkNow(freshToken(coordinator));
       // Both callers reached the shared refresh synchronously when forked.
       yield* refreshStarted;
       expect(refreshTokens).toHaveBeenCalledOnce();
@@ -250,7 +249,7 @@ describe('CodexSessionCoordinator', () => {
       const { pending, refreshTokens, refreshStarted } = parkedRefresh();
       const coordinator = makeCoordinator(storage, { refreshTokens });
 
-      const token = yield* forkNow(coordinator.getFreshAccessToken());
+      const token = yield* forkNow(freshToken(coordinator));
       yield* refreshStarted;
       expect(refreshTokens).toHaveBeenCalledOnce();
 
@@ -274,7 +273,7 @@ describe('CodexSessionCoordinator', () => {
         const refreshTokens = vi.fn(() => Effect.succeed(tokenResponse()));
         const coordinator = makeCoordinator(storage, { refreshTokens });
 
-        const token = yield* forkNow(coordinator.getFreshAccessToken());
+        const token = yield* forkNow(freshToken(coordinator));
         yield* storage.gateReached;
         const signOut = yield* forkNow(coordinator.signOut());
         storage.release();
@@ -311,7 +310,7 @@ describe('CodexSessionCoordinator', () => {
           refreshTokens,
         });
 
-        const token = yield* forkNow(coordinator.getFreshAccessToken());
+        const token = yield* forkNow(freshToken(coordinator));
         // The fatal refresh has started its delete (blocked); a login lands now.
         yield* storage.gateReached;
         const login = yield* forkNow(loginWithCode(coordinator));
@@ -339,7 +338,7 @@ describe('CodexSessionCoordinator', () => {
         const signOut = yield* forkNow(coordinator.signOut());
         // The sign-out delete is blocked mid-write; a caller enters now.
         yield* storage.gateReached;
-        const token = yield* forkNow(coordinator.getFreshAccessToken());
+        const token = yield* forkNow(freshToken(coordinator));
         storage.release();
 
         const error = yield* joinFailure(token);
@@ -370,7 +369,7 @@ describe('CodexSessionCoordinator', () => {
         const login = yield* forkNow(loginWithCode(coordinator));
         // The login store is blocked mid-write; a caller enters now.
         yield* storage.gateReached;
-        const token = yield* forkNow(coordinator.getFreshAccessToken());
+        const token = yield* forkNow(freshToken(coordinator));
         storage.release();
 
         yield* Fiber.join(login);
@@ -446,7 +445,7 @@ describe('CodexSessionCoordinator', () => {
         exchangeAuthorizationCode,
       });
 
-      const token = yield* forkNow(coordinator.getFreshAccessToken());
+      const token = yield* forkNow(freshToken(coordinator));
       yield* storage.gateReached;
       yield* loginWithCode(coordinator);
       storage.release();
@@ -470,7 +469,7 @@ describe('CodexSessionCoordinator', () => {
           refreshTokens,
         });
 
-        const token = yield* forkNow(coordinator.getFreshAccessToken());
+        const token = yield* forkNow(freshToken(coordinator));
         yield* refreshStarted;
         expect(refreshTokens).toHaveBeenCalledOnce();
 
@@ -510,7 +509,7 @@ describe('CodexSessionCoordinator', () => {
           refreshTokens,
         });
 
-        const token = yield* forkNow(coordinator.getFreshAccessToken());
+        const token = yield* forkNow(freshToken(coordinator));
         yield* refreshStarted;
         expect(refreshTokens).toHaveBeenCalledOnce();
 
@@ -548,7 +547,7 @@ describe('CodexSessionCoordinator', () => {
           refreshTokens,
         });
 
-        const token = yield* forkNow(coordinator.getFreshAccessToken());
+        const token = yield* forkNow(freshToken(coordinator));
         yield* refreshStarted;
         expect(refreshTokens).toHaveBeenCalledOnce();
 
@@ -578,7 +577,7 @@ describe('CodexSessionCoordinator', () => {
           Effect.succeed(tokenResponse({ refresh_token: undefined })),
         );
         const coordinator = makeCoordinator(storage, { refreshTokens });
-        yield* withHttp(coordinator.getFreshAccessToken());
+        yield* withHttp(freshToken(coordinator));
         expect(storage.peek()?.refreshToken).toBe('refresh-0');
       }),
   );
@@ -597,9 +596,7 @@ describe('CodexSessionCoordinator', () => {
       );
       const coordinator = makeCoordinator(storage, { refreshTokens });
 
-      const error = yield* Effect.flip(
-        withHttp(coordinator.getFreshAccessToken()),
-      );
+      const error = yield* Effect.flip(withHttp(freshToken(coordinator)));
       expect(error).toMatchObject({
         kind: 'fatal',
         needsReauth: true,
@@ -622,9 +619,7 @@ describe('CodexSessionCoordinator', () => {
       );
       const coordinator = makeCoordinator(storage, { refreshTokens });
 
-      const error = yield* Effect.flip(
-        withHttp(coordinator.getFreshAccessToken()),
-      );
+      const error = yield* Effect.flip(withHttp(freshToken(coordinator)));
       expect(error).toMatchObject({
         kind: 'transient',
       });

@@ -65,12 +65,6 @@ export const XAI_DEVICE_CODE_GRANT_TYPE =
  */
 export const XAI_SESSION_SECRET_KEY = 'auth.xai-grok';
 
-/**
- * Refresh proactively when within this window of expiry (matches Codex /
- * ChatGPT's 5-minute buffer; OpenCode uses 2 minutes).
- */
-export const XAI_TOKEN_REFRESH_BUFFER_MS = 5 * 60 * 1000;
-
 /** Fallback access-token lifetime when the token response omits expires_in. */
 export const XAI_DEFAULT_EXPIRES_IN_SEC = 3600;
 

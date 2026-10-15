@@ -3,7 +3,7 @@
  *
  * Subscription rounds (ChatGPT/Codex, Kimi Code, Grok) reach the client's
  * pricing layer with zeroed rates (`zeroCostAccessOverrides` in
- * `packages/harness/src/model/subscriptionAccessOverrides.ts`), so their entries arrive here
+ * `packages/llm/src/models/modelRoute.ts`), so their entries arrive here
  * with `cost: 0` even though llm-zoo still carries the models' API list
  * prices. This module recovers the notional cost server-side so
  * `subscription_usage_logs.cost` answers "what would this usage have cost at

@@ -9,7 +9,6 @@ import {
   XAI_PLAN,
   XAI_REFERRER,
   XAI_SCOPE,
-  XAI_TOKEN_REFRESH_BUFFER_MS,
   XAI_TOKEN_URL,
   xaiRedirectUri,
 } from './xaiConstants.js';
@@ -28,31 +27,14 @@ export const XAI_POLICY: SubscriptionOAuthPolicy<XaiSession> = {
     clientId: XAI_CLIENT_ID,
     tokenResponseSchema: XaiTokenResponseSchema,
   },
-  refreshBufferMs: XAI_TOKEN_REFRESH_BUFFER_MS,
   notSignedInMessage: 'Not signed in with Grok. Run sign-in first.',
   sessionChangedMessage: 'Grok session changed while refreshing. Try again.',
-  // xAI pins one redirect port; the loopback bind uses that port and we ignore
-  // the parameter for the authorize URL construction.
-  // CSRF is covered by `state` on the loopback callback. We do not send an
-  // OIDC `nonce` unless we also verify it against `id_token` (we don't).
-  buildAuthorizeRequest(_port, pkce, state) {
-    const redirectUri = xaiRedirectUri();
-    const url = new URL(XAI_AUTHORIZE_URL);
-    url.searchParams.set('response_type', 'code');
-    url.searchParams.set('client_id', XAI_CLIENT_ID);
-    url.searchParams.set('redirect_uri', redirectUri);
-    url.searchParams.set('scope', XAI_SCOPE);
-    url.searchParams.set('code_challenge', pkce.challenge);
-    url.searchParams.set('code_challenge_method', pkce.method);
-    url.searchParams.set('state', state);
-    url.searchParams.set('plan', XAI_PLAN);
-    url.searchParams.set('referrer', XAI_REFERRER);
-    return {
-      url: url.toString(),
-      verifier: pkce.verifier,
-      state,
-      redirectUri,
-    };
+  // xAI pins one redirect port, so the bind's port is ignored.
+  authorize: {
+    url: XAI_AUTHORIZE_URL,
+    scope: XAI_SCOPE,
+    redirectUri: xaiRedirectUri,
+    params: { plan: XAI_PLAN, referrer: XAI_REFERRER },
   },
   buildSession(tokens, refreshToken, nowMs, previous) {
     // Refresh keys off the *access* token. Prefer access JWT exp over

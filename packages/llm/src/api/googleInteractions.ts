@@ -9,7 +9,6 @@ import {
   BackgroundEventSchema,
   BackgroundSubmissionSchema,
   completedTurn,
-  ObservationPolicySchema,
   ModelConfigurationSchema,
   ResolvedTurnSchema,
   TurnResultSchema,
@@ -32,6 +31,7 @@ import {
   type RemoteOperation,
 } from '../errors.js';
 import {
+  admitObservation,
   ownedAbortSafeRequest,
   parseOutboundToolArguments,
   pullStream,
@@ -918,41 +918,20 @@ export function googleInteractionsModel(
     );
   });
   const observe: NonNullable<Model['background']>['observe'] = (
-    turn,
+    admitted,
     input,
     policy,
   ) =>
     Stream.unwrap(
       Effect.gen(function* () {
-        const operation = yield* boundOperation(input, origin);
-        if (
-          turn.protocol !== 'google-interactions' ||
-          turn.mode !== 'background' ||
-          !sameModelOrigin(turn, operation.origin)
-        ) {
-          return yield* new ModelError({
-            kind: 'unsupported',
-            message: 'The admitted turn belongs to another model binding.',
-            operation,
-          });
-        }
-        const parsedPolicy = ObservationPolicySchema.safeParse(policy);
-        if (!parsedPolicy.success)
-          return yield* new ModelError({
-            kind: 'invalid-request',
-            message: 'The observation deadline is invalid.',
-            cause: parsedPolicy.error,
-            operation,
-          });
-        const { deadlineAtMs } = parsedPolicy.data;
-        const deadline = new ModelError({
-          kind: 'observation-deadline',
-          message: 'The original observation deadline has expired.',
-          operation,
-          responseId: operation.providerResponseId,
-        });
-        if (deadlineAtMs <= (yield* Clock.currentTimeMillis))
-          return yield* deadline;
+        const { turn, operation, deadlineAtMs, deadline } =
+          yield* admitObservation(
+            'google-interactions',
+            origin,
+            admitted,
+            input,
+            policy,
+          );
         let returnedModel: string | undefined;
         const completion = Effect.gen(function* () {
           while (true) {
