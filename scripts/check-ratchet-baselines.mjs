@@ -58,7 +58,7 @@ const base = (() => {
     return git('merge-base', target, 'HEAD').trim();
   } catch (cause) {
     throw new Error(
-      `base ${target} is not available locally; run \`git fetch origin\` (or set TEXRA_RATCHET_BASE)`,
+      `no merge base between ${target} and HEAD (${String(cause.stderr ?? cause.message).trim()}); fetch ${target} and enough history, or set TEXRA_RATCHET_BASE`,
       { cause },
     );
   }
@@ -366,6 +366,6 @@ function main() {
 try {
   main();
 } catch (error) {
-  console.error(`ratchet-baselines: ${error.message}`);
+  console.error(`ratchet-baselines: ${error.message}`, error.cause ?? '');
   process.exitCode = 1;
 }
