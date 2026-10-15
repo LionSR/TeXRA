@@ -17,6 +17,7 @@ import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 // Local imports - shared styles
 import { modelRefOf } from '@texra-ai/llm';
 import {
+  agentKey,
   agentName,
   getProposalFileGroups,
   type AgentProposalPermission,
@@ -59,18 +60,21 @@ import { buildStatusBadge } from '../formatters/htmlBuilders';
 import { processMarkdownContent } from '../formatters/markdownRenderer';
 import { getComposedPathElement } from '../utils';
 
-/** Whether `option` is the proposal's agent: catalog options are
- *  source-qualified, the proposal names the agent and its source; an
- *  option with no source (a hidden team member) matches by name. */
+/** The proposal's agent as an option value: options carry source-qualified
+ *  keys, and a proposal with no source names the agent bare. */
+function proposedAgentKey({ agent, agentSource }: AgentProposalPermission) {
+  return agentSource == null ? agent : agentKey(agentSource, agent);
+}
+
+/** Whether `option` is the proposal's agent: its exact key, or, for a
+ *  proposal with no source, any option of that name. */
 function isProposedAgent(
   option: HostSnapshot['agentOptions'][number],
-  { agent, agentSource }: AgentProposalPermission,
+  data: AgentProposalPermission,
 ): boolean {
   return (
-    agentName(option.value) === agent &&
-    (agentSource == null ||
-      option.source === undefined ||
-      option.source === agentSource)
+    option.value === proposedAgentKey(data) ||
+    (data.agentSource == null && agentName(option.value) === data.agent)
   );
 }
 
@@ -138,15 +142,22 @@ export class ProposalRequestPanel extends BaseRequestPanel<'proposal'> {
   // in-progress pick for the same proposal.
   protected override willUpdate(changed: PropertyValues): void {
     super.willUpdate(changed);
-    if (!changed.has('permission')) return;
     const previous = changed.get('permission') as
       PermissionPayload | null | undefined;
     if (
+      changed.has('permission') &&
       proposalRequestIdOf(previous) !== proposalRequestIdOf(this.permission)
     ) {
       this.selectedModel = null;
       this.selectedAgent = null;
     }
+    // A catalog refresh may drop a pick: the select then shows the
+    // proposal again, which the pickers always offer.
+    const { agents, models } = this.pickers;
+    if (!agents.some(({ value }) => value === this.selectedAgent))
+      this.selectedAgent = null;
+    if (!models.some(({ value }) => value === this.selectedModel))
+      this.selectedModel = null;
   }
 
   protected override handleExtraKey(key: string): boolean {
@@ -449,7 +460,7 @@ export class ProposalRequestPanel extends BaseRequestPanel<'proposal'> {
       agents:
         agents.length === 0 || agents.some((o) => isProposedAgent(o, data))
           ? agents
-          : [{ value: agent, label: agent }, ...agents],
+          : [{ value: proposedAgentKey(data), label: agent }, ...agents],
       models:
         models.length === 0 ||
         models.some((o) => [ref, model].includes(o.value))
