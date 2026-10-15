@@ -9,18 +9,26 @@ import { it } from '@effect/vitest';
 
 import { Effect, Fiber } from 'effect';
 
-import { beforeEach, describe, expect, vi } from 'vitest';
+import { beforeEach, describe, expect } from 'vitest';
 import { registryOf } from '@agent/runtime/runRegistry';
 import type { ToolServices } from '@agent/runtime/ToolServices';
 
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { type SessionHandle } from '@agent/runtime/SessionHandle';
-import { RUN_PHASE, qualifyAggregateId } from '@shared/schemas';
+import {
+  RUN_PHASE,
+  emptyRunEndOutput,
+  qualifyAggregateId,
+} from '@shared/schemas';
 import { RunIdSchema, type RunId, type RunPhase } from '@shared/schemas';
 import { closeSessionOf } from '@test/support/sessionEnd';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
-import { createFakeRunRecords } from '@test/support/FakeRunRecords';
+import {
+  seedEditedFiles,
+  seedReport,
+  seedRunRecord,
+} from '@test/support/runRecordSeeds';
 import { testRunHandle } from '@test/support/runHandleFixtures';
 import {
   createTempDirPlatform,
@@ -78,36 +86,6 @@ function withSession<A, E, R>(
 
 const tempDirs = useTempDirs();
 
-const mocks = vi.hoisted(() => ({
-  readConfig: vi.fn(),
-  readReport: vi.fn(),
-  readResultMeta: vi.fn(),
-  readRunEnd: vi.fn(),
-  readResult: vi.fn(),
-  readWorkspaceFiles: vi.fn(),
-}));
-
-vi.mock('@agent/storage/runRecords', async () => {
-  const actual = await vi.importActual<
-    typeof import('@agent/storage/runRecords')
-  >('@agent/storage/runRecords');
-  return {
-    ...actual,
-    getRunRecords: vi.fn(() =>
-      createFakeRunRecords({
-        readConfig: () => Effect.promise(() => mocks.readConfig()),
-        readRunRecord: () => Effect.promise(() => mocks.readConfig()),
-        readReport: () => Effect.promise(() => mocks.readReport()),
-        readResultMeta: () => Effect.promise(() => mocks.readResultMeta()),
-        readRunEnd: () => Effect.promise(() => mocks.readRunEnd()),
-        readResult: () => Effect.promise(() => mocks.readResult()),
-        readWorkspaceFiles: () =>
-          Effect.promise(() => mocks.readWorkspaceFiles()),
-      }),
-    ),
-  };
-});
-
 const config = {
   agent: 'chat',
   model: 'deepseek/deepseek-v4-flash',
@@ -119,6 +97,25 @@ const config = {
   editedFile: null,
   memories: [],
 } as AgentConfig;
+
+/** A stored run of `config` in the default session, run in `workspace`,
+ *  whose settled calls edited `edited`. */
+function seedEditingRun(
+  runId: RunId,
+  workspace: string,
+  edited: readonly string[],
+) {
+  return Effect.gen(function* () {
+    const session = testDefaultSession();
+    publishTestRunStart(session, runId);
+    yield* session.log.settled;
+    yield* seedRunRecord(session, runId, {
+      ...config,
+      workingDirectory: workspace,
+    });
+    yield* seedEditedFiles(session, runId, edited);
+  });
+}
 
 /** Installs a real filesystem-backed storage root for sidecar persistence tests. */
 function withTempStorage(
@@ -157,12 +154,6 @@ describe('ExecutionsTool', () => {
         transcriptMode: { kind: 'ephemeral', reason: 'executions tool test' },
       }),
     );
-    vi.clearAllMocks();
-    mocks.readReport.mockResolvedValue(null);
-    mocks.readResultMeta.mockResolvedValue(null);
-    mocks.readRunEnd.mockResolvedValue(null);
-    mocks.readResult.mockResolvedValue(null);
-    mocks.readWorkspaceFiles.mockResolvedValue([]);
   });
 
   it.live("rejects '..' path traversal in /executions/{id}/files/{path}", () =>
@@ -209,7 +200,10 @@ describe('ExecutionsTool', () => {
             'waiting',
             RUN_PHASE.WAITING,
           );
-          mocks.readReport.mockResolvedValue(
+          yield* session.log.settled;
+          yield* seedReport(
+            session,
+            childRunId,
             '<subagent-result>full report</subagent-result>',
           );
 
@@ -288,7 +282,10 @@ describe('ExecutionsTool', () => {
             'waiting',
             RUN_PHASE.WAITING,
           );
-          mocks.readReport.mockResolvedValue(
+          yield* session.log.settled;
+          yield* seedReport(
+            session,
+            childRunId,
             '<subagent-result>full report</subagent-result>',
           );
           const delivery = {
@@ -447,8 +444,10 @@ describe('ExecutionsTool', () => {
 
             publishTestRunStart(session, runId);
             yield* session.log.settled;
-            mocks.readConfig.mockResolvedValue(config);
-            mocks.readReport.mockResolvedValue(
+            yield* seedRunRecord(session, runId, config);
+            yield* seedReport(
+              session,
+              runId,
               '<subagent-result>full report</subagent-result>',
             );
 
@@ -492,24 +491,37 @@ describe('ExecutionsTool', () => {
 
   it.live("serves the run's joined result envelope", () =>
     Effect.gen(function* () {
-      // The join of the producer record and the terminal result is
-      // `getRunRecords().readResult`'s; the endpoint serves it verbatim.
-      const envelope = {
-        outcome: 'completed' as const,
-        usage: { totalCost: 0.2 },
-        output: {
-          category: 'toolUse' as const,
-          response: 'Checked the proof.',
-          files: ['notes.md'],
+      // The subagent's record holds its reply; the run's end holds the
+      // outcome. The endpoint serves the two joined.
+      const runId = 'abc123' as RunId;
+      const session = testDefaultSession();
+      publishTestRunStart(session, runId);
+      publishTestRows(session, [
+        {
+          type: 'run.result',
+          aggregateId: qualifyAggregateId('run', runId),
+          result: {
+            producer: 'subagent',
+            output: { response: 'Checked the proof.', files: ['notes.md'] },
+          },
         },
-      };
-      mocks.readResult.mockResolvedValue(envelope);
+        {
+          type: 'run.end',
+          aggregateId: qualifyAggregateId('run', runId),
+          outcome: 'completed',
+          output: emptyRunEndOutput(),
+        },
+      ]);
+      yield* session.log.settled;
 
       const result = yield* ExecutionsTool.call({
-        path: '/executions/abc123/result',
+        path: `/executions/${runId}/result`,
       });
 
-      expect(JSON.parse(result.output ?? '')).toEqual(envelope);
+      expect(JSON.parse(result.output ?? '')).toEqual({
+        outcome: 'completed',
+        output: { response: 'Checked the proof.', files: ['notes.md'] },
+      });
     }).pipe(
       Effect.provide(
         nativeToolTestLayer({
@@ -530,11 +542,7 @@ describe('ExecutionsTool', () => {
           yield* Effect.promise(() =>
             writeFile(path.join(workspace, 'secret.md'), 'secret'),
           );
-          mocks.readConfig.mockResolvedValue({
-            ...config,
-            workingDirectory: workspace,
-          });
-          mocks.readWorkspaceFiles.mockResolvedValue(['review.md']);
+          yield* seedEditingRun('abc123' as RunId, workspace, ['review.md']);
 
           const result = yield* ExecutionsTool.call({
             path: '/executions/abc123/workspace-files/secret.md',
@@ -568,11 +576,9 @@ describe('ExecutionsTool', () => {
           yield* Effect.promise(() =>
             writeFile(path.join(workspace, 'workspace', 'review.md'), 'nested'),
           );
-          mocks.readConfig.mockResolvedValue({
-            ...config,
-            workingDirectory: workspace,
-          });
-          mocks.readWorkspaceFiles.mockResolvedValue(['workspace/review.md']);
+          yield* seedEditingRun('abc123' as RunId, workspace, [
+            'workspace/review.md',
+          ]);
 
           const result = yield* ExecutionsTool.call({
             path: '/executions/abc123/workspace-files/workspace/review.md',

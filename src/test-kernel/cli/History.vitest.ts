@@ -36,34 +36,14 @@ import {
   type RunOutcome,
 } from '@shared/schemas';
 import { type SessionHandle } from '@agent/runtime/SessionHandle';
+import type { RunRecord } from '@agent/core/definition/RunRecord';
+import { seedEditedFiles, seedRunRecord } from '@test/support/runRecordSeeds';
 import type { CliProcessRuntime } from '@cli/runtime/cliProcessRuntime';
 
 const mocks = vi.hoisted(() => ({
-  readConfig: vi.fn(),
   readConversation: vi.fn(),
-  readWorkspaceFiles: vi.fn(),
-  readResult: vi.fn(),
-  readReport: vi.fn(),
-  exists: vi.fn(),
-  listRuns: vi.fn(),
   assembleTrace: vi.fn(),
 }));
-
-vi.mock('@agent/storage', async () => {
-  const actual =
-    await vi.importActual<typeof import('@agent/storage')>('@agent/storage');
-  return {
-    ...actual,
-    getRunRecords: vi.fn(() => ({
-      readConfig: () => Effect.tryPromise(() => mocks.readConfig()),
-      readWorkspaceFiles: () =>
-        Effect.tryPromise(() => mocks.readWorkspaceFiles()),
-      readResult: () => Effect.tryPromise(() => mocks.readResult()),
-      readReport: () => Effect.tryPromise(() => mocks.readReport()),
-    })),
-    listRuns: mocks.listRuns,
-  };
-});
 
 vi.mock('@transcript', async () => {
   const actual =
@@ -170,19 +150,16 @@ function toolUseAgentConfig(
   });
 }
 
-function mockToolUseWorkspace(workspace: string): void {
-  mocks.readConfig.mockResolvedValue({
-    ...config,
-    script: null,
-    workingDirectory: workspace,
+// A stored tool-use run in `workspace` whose settled calls edited `edited`.
+async function seedToolUseRun(
+  runId: RunId,
+  workspace: string,
+  edited: readonly string[],
+): Promise<void> {
+  await publishRunFacts(runId, {
+    record: toolUseAgentConfig({ workingDirectory: workspace }),
+    edited,
   });
-}
-
-// A fresh temp directory mocked as the run's tool-use working directory.
-async function useTempWorkspace(prefix = 'texra-history-'): Promise<string> {
-  const workspace = await makeTempDir(prefix, tempDirs);
-  mockToolUseWorkspace(workspace);
-  return workspace;
 }
 
 // Tool-call nodes. `args` is passed through verbatim so callers can cover
@@ -195,15 +172,6 @@ function mockToolCallConversation(
   );
 }
 
-// No persisted config, conversation, or flow state, and no run in the
-// session's view: the run id resolves to nothing unless the test re-mocks one
-// of these afterwards, or publishes the run's facts.
-function mockNothingPersisted(): void {
-  mocks.readConfig.mockResolvedValue(null);
-  mocks.readConversation.mockResolvedValue(null);
-  mocks.exists.mockResolvedValue(false);
-}
-
 /**
  * Publish the run's listing facts into the process session, which is where
  * `history` reads them from (the fold's `RunView`, one run model R3). Returns
@@ -214,6 +182,8 @@ async function publishRunFacts(
   runId: RunId,
   facts: {
     parent?: RunId;
+    record?: RunRecord;
+    edited?: readonly string[];
     description?: string;
     outcome?: RunOutcome;
   } = {},
@@ -221,6 +191,11 @@ async function publishRunFacts(
   const session = testDefaultSession();
   if (facts.parent) publishTestRunStart(session, facts.parent);
   publishTestRunStart(session, runId, { parent: facts.parent ?? null });
+  await Effect.runPromise(session.log.settled);
+  if (facts.record)
+    await Effect.runPromise(seedRunRecord(session, runId, facts.record));
+  if (facts.edited)
+    await Effect.runPromise(seedEditedFiles(session, runId, facts.edited));
   if (facts.description !== undefined) {
     publishTestRows(session, [
       {
@@ -244,25 +219,6 @@ async function publishRunFacts(
   await Effect.runPromise(session.log.settled);
   return session;
 }
-
-// A completed agent-run listing row for the default `config`, with overrides
-// for the fields a test cares about.
-function runListEntry(
-  id: string,
-  overrides: Record<string, unknown> = {},
-): Record<string, unknown> {
-  return {
-    identity: { kind: 'agent', agent: 'correct' },
-    id: id as RunId,
-    timestamp: '2026-05-18T08:00:00.000Z',
-    record: config,
-    status: 'completed',
-    resumable: false,
-    ...overrides,
-  };
-}
-
-const RESUMABLE_ROW_FACTS = { resumable: true };
 
 describe('CLI history runtime', () => {
   setupPlatform(async () => {
@@ -304,21 +260,19 @@ describe('CLI history runtime', () => {
         runtime: testRuntime() as CliProcessRuntime,
       }),
     );
-    mocks.readConfig.mockResolvedValue(config);
     mocks.readConversation.mockResolvedValue(null);
-    mocks.readWorkspaceFiles.mockResolvedValue([]);
-    mocks.readResult.mockResolvedValue(null);
-    mocks.readReport.mockResolvedValue(null);
-    mocks.exists.mockResolvedValue(false);
   });
 
   it('formats history list rows with the stable tab-separated text shape', async () => {
-    mocks.listRuns.mockReturnValue(Effect.succeed([runListEntry('a1a1a1')]));
+    await publishRunFacts('a1a1a1' as RunId, {
+      record: config,
+      outcome: RUN_OUTCOME.COMPLETED,
+    });
 
     const entries = await historyEntries();
 
     expect(formatCliHistoryText(entries)).toBe(
-      'a1a1a1\t2026-05-18T08:00:00.000Z\tcorrect\tcompleted\tintro.tex',
+      `a1a1a1\t${entries[0]?.timestamp}\tcorrect\tcompleted\tintro.tex`,
     );
     expect(
       cliHistoryNdjsonRecords(entries, '2026-05-18T09:00:00.000Z'),
@@ -334,38 +288,39 @@ describe('CLI history runtime', () => {
   it('projects NDJSON status onto the frozen pre-consolidation vocabulary', async () => {
     // Byte parity for the public stream (proposal gate G): terminal outcomes
     // emit as CliRunStatus ('interrupted'/'error'/'completed');
-    // 'resumable'/'unknown' pass through. Internal entries keep RunOutcome.
-    mocks.listRuns.mockReturnValue(
-      Effect.succeed(
-        (
-          [
-            ['b1', 'cancelled'],
-            ['b2', 'failed'],
-            ['b3', 'completed'],
-            ['b4', undefined],
-          ] as const
-        ).map(([id, outcome]) => ({
-          identity: { kind: 'agent', agent: 'correct' },
-          id: id as RunId,
-          timestamp: '2026-05-18T08:00:00.000Z',
-          record: config,
-          status: outcome ?? 'running',
-        })),
-      ),
-    );
+    // 'resumable' passes through. Internal entries keep RunOutcome. A
+    // document task that ended is settled; one that has not, resumes.
+    const outcomes = [
+      ['b1b1b1', RUN_OUTCOME.CANCELLED],
+      ['b2b2b2', RUN_OUTCOME.FAILED],
+      ['b3b3b3', RUN_OUTCOME.COMPLETED],
+      ['b4b4b4', undefined],
+    ] as const;
+    for (const [id, outcome] of outcomes)
+      await publishRunFacts(id as RunId, {
+        record: config,
+        ...(outcome && { outcome }),
+      });
 
     const entries = await historyEntries();
-    expect(entries.map((entry) => entry.status)).toEqual([
+    const byId = (id: string) => entries.find((entry) => entry.id === id);
+    expect(outcomes.map(([id]) => byId(id)?.status)).toEqual([
       'cancelled',
       'failed',
       'completed',
-      'unknown',
+      'resumable',
     ]);
     expect(
-      cliHistoryNdjsonRecords(entries, '2026-05-18T09:00:00.000Z').map(
-        (record) => (record as { entry: { status: string } }).entry.status,
+      outcomes.map(
+        ([id]) =>
+          (
+            cliHistoryNdjsonRecords(
+              [byId(id)!],
+              '2026-05-18T09:00:00.000Z',
+            )[0] as { entry: { status: string } }
+          ).entry.status,
       ),
-    ).toEqual(['interrupted', 'error', 'completed', 'unknown']);
+    ).toEqual(['interrupted', 'error', 'completed', 'resumable']);
   });
 
   it('projects the history-detail NDJSON status onto the frozen vocabulary', async () => {
@@ -386,30 +341,22 @@ describe('CLI history runtime', () => {
       agent: 'engineer',
       cli: { teamId: ' software-engineer ' },
     });
-    mocks.listRuns.mockReturnValue(
-      Effect.succeed([
-        runListEntry('bea111', {
-          identity: { kind: 'agent', agent: 'engineer' },
-          timestamp: '2026-05-18T10:00:00.000Z',
-          record: teamConfig,
-          status: 'cancelled',
-          ...RESUMABLE_ROW_FACTS,
-        }),
-      ]),
-    );
+    // A chat that was stopped resumes.
+    await publishRunFacts('bea111' as RunId, {
+      record: teamConfig,
+      outcome: RUN_OUTCOME.CANCELLED,
+    });
 
     const entries = await historyEntries();
 
     expect(entries[0]?.agent).toBe('engineer');
     expect(entries[0]?.teamId).toBe('software-engineer');
     expect(formatCliHistoryText(entries)).toBe(
-      'bea111\t2026-05-18T10:00:00.000Z\tteam:software-engineer\tresumable\t-',
+      `bea111\t${entries[0]?.timestamp}\tteam:software-engineer\tresumable\t-`,
     );
   });
 
   it('returns null for ids without a run view, config, or flow state', async () => {
-    mockNothingPersisted();
-
     await expect(historyDetails('deadbe' as RunId)).resolves.toBeNull();
   });
 
@@ -425,7 +372,6 @@ describe('CLI history runtime', () => {
         messageType: MESSAGE_TYPES.PROGRESS_STATUS,
       });
       yield* session.log.settled;
-      mockNothingPersisted();
       // The run's own `run.start` plus the diagnostic-only transcript row
       // prove the run exists even though it yields no conversation.
 
@@ -438,7 +384,6 @@ describe('CLI history runtime', () => {
   );
 
   it('treats full-only conversation data as a found run', async () => {
-    mockNothingPersisted();
     mocks.readConversation.mockResolvedValue([
       { kind: 'tool-call', name: 'bash', input: {} },
     ]);
@@ -636,9 +581,9 @@ describe('CLI history runtime', () => {
   });
 
   it('surfaces persisted workspace files without parsing provider messages', async () => {
-    const workspace = await useTempWorkspace();
+    const workspace = await makeTempDir('texra-history-', tempDirs);
     await writeFile(path.join(workspace, 'durable.md'), '# durable');
-    mocks.readWorkspaceFiles.mockResolvedValue(['durable.md']);
+    await seedToolUseRun('a1a1a1' as RunId, workspace, ['durable.md']);
     mockToolCallConversation({
       name: 'write_file',
       args: JSON.stringify({ path: 'legacy.md' }),
@@ -652,11 +597,11 @@ describe('CLI history runtime', () => {
   });
 
   it('preserves persisted paths inside a top-level workspace directory', async () => {
-    const workspace = await useTempWorkspace();
+    const workspace = await makeTempDir('texra-history-', tempDirs);
     await mkdir(path.join(workspace, 'workspace'));
     await writeFile(path.join(workspace, 'review.md'), 'wrong');
     await writeFile(path.join(workspace, 'workspace', 'review.md'), 'nested');
-    mocks.readWorkspaceFiles.mockResolvedValue(['workspace/review.md']);
+    await seedToolUseRun('a1a1a1' as RunId, workspace, ['workspace/review.md']);
 
     const details = await historyDetails('a1a1a1' as RunId);
 
@@ -671,8 +616,7 @@ describe('CLI history runtime', () => {
     const outsidePath = path.join(root, 'outside.md');
     await mkdir(workspace);
     await writeFile(outsidePath, 'outside');
-    mockToolUseWorkspace(workspace);
-    mocks.readWorkspaceFiles.mockResolvedValue([
+    await seedToolUseRun('a1a1a1' as RunId, workspace, [
       '../outside.md',
       outsidePath,
       'missing.md',
@@ -703,7 +647,6 @@ describe('CLI history runtime', () => {
             found: false,
             status: 'not-found',
           });
-          expect(mocks.listRuns).not.toHaveBeenCalled();
         }),
       (session) => closeSessionOf(session),
     ),
@@ -728,7 +671,10 @@ describe('CLI history runtime', () => {
             { kind: 'assistant-text', text: 'Done.' },
           ]);
           const session = yield* Effect.promise(() =>
-            publishRunFacts(runId, { description: 'Polish pass' }),
+            publishRunFacts(runId, {
+              record: config,
+              description: 'Polish pass',
+            }),
           );
           // The export stamps the run's own launch time, which the publisher
           // stamped on `run.start`.
@@ -771,8 +717,6 @@ describe('CLI history runtime', () => {
       'reports "not_found" only when there is no trace of the run at all',
       () =>
         Effect.gen(function* () {
-          mockNothingPersisted();
-
           expect(
             yield* readCliHistoryExportInput(
               Effect.succeed(testDefaultSession()),
@@ -788,8 +732,11 @@ describe('CLI history runtime', () => {
         Effect.gen(function* () {
           // history show would still display this run (it has a config) —
           // export just has nothing to render, which is a different failure than
-          // the id not resolving to anything at all. This is the beforeEach
-          // baseline: stored config, no conversation, no meta.
+          // the id not resolving to anything at all: a stored config, no
+          // conversation.
+          yield* Effect.promise(() =>
+            publishRunFacts('a1a1a1' as RunId, { record: config }),
+          );
           expect(
             yield* readCliHistoryExportInput(
               Effect.succeed(testDefaultSession()),
@@ -803,7 +750,6 @@ describe('CLI history runtime', () => {
       'reports "incomplete" (not "not_found") when conversation exists but config does not',
       () =>
         Effect.gen(function* () {
-          mocks.readConfig.mockResolvedValue(null);
           mocks.readConversation.mockResolvedValue([
             { kind: 'assistant-text', text: 'hi' },
           ]);
@@ -826,7 +772,6 @@ describe('CLI history runtime', () => {
           // report 'incomplete' here — while `history show` builds no preview
           // from an empty array and, with config/meta also absent, reports the
           // same id as not found. The two commands must agree.
-          mockNothingPersisted();
           mocks.readConversation.mockResolvedValue([]);
 
           expect(

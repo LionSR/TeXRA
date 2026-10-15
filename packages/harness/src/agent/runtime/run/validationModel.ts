@@ -114,8 +114,8 @@ function goldenTurn(
     said.includes('<agent>golden_parent</agent>')
   )
     return Effect.succeed(text('Working through the golden parent task'));
-  // A model call held until its release file appears (the service checks).
-  if (system.includes('GOLDEN-PARK'))
+  // A call naming GOLDEN-PARK (a label's too) waits for its release file.
+  if ((system + said).includes('GOLDEN-PARK'))
     return Effect.as(gate('golden-park.release'), text('Parked run released.'));
   // A call awaiting approval: the tool and command after the marker.
   const [marker, asked = 'bash', command = 'echo approved >> approved.txt'] =
