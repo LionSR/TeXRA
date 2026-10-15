@@ -48,7 +48,6 @@
   },
   "dependencies": {
     "@cantoo/pdf-lib": "catalog:",
-    "@jitl/quickjs-wasmfile-release-sync": "catalog:",
     "@texra-ai/llm": "workspace:*",
     "date-fns": "catalog:",
     "diff": "catalog:",
@@ -68,7 +67,6 @@
     "postal-mime": "catalog:",
     "pretty-bytes": "catalog:",
     "pretty-ms": "catalog:",
-    "quickjs-emscripten-core": "catalog:",
     "safe-stable-stringify": "catalog:",
     "shell-quote": "catalog:",
     "turndown": "catalog:",
@@ -87,6 +85,7 @@
   "devDependencies": {
     "@effect/platform-node": "catalog:",
     "@effect/sql-sqlite-node": "catalog:",
+    "@jitl/quickjs-wasmfile-release-sync": "catalog:",
     "@types/mime-types": "^3.0.1",
     "@types/nunjucks": "^3.2.6",
     "@types/turndown": "^5.0.6",
@@ -94,6 +93,7 @@
     "@typescript/native": "catalog:",
     "effect": "catalog:",
     "esbuild": "catalog:",
+    "quickjs-emscripten-core": "catalog:",
     "typescript": "catalog:",
     "zod": "catalog:"
   }
