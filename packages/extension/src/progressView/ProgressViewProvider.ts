@@ -340,32 +340,6 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       Effect.forkIn(this.attention.follow(runSession), this.scope),
     );
     this.runtime.runSync(Effect.forkIn(this.chimeOnDocuments(), this.scope));
-    // The funnel follows `firstRunDone` wherever it is written, not a run's
-    // end: a setup chat that parks after delegating has done its first run.
-    // The first element is the subscription itself, and it refreshes too: a
-    // write that lands between `initialize()`'s read and this subscription
-    // is seen only there.
-    this.runtime.runSync(
-      Effect.forkIn(
-        Stream.unwrap(
-          Effect.map(AppState, (appState) =>
-            appState.changes([GlobalStateKey.ONBOARDING_FIRST_RUN_DONE]),
-          ),
-        ).pipe(
-          Stream.runForEach(() =>
-            this.refreshOnboardingFunnel().pipe(
-              Effect.ignore({
-                log: 'Warn',
-                message: 'Refreshing the onboarding state',
-              }),
-            ),
-          ),
-          withLogChannel(CHANNEL),
-        ),
-        this.scope,
-      ),
-    );
-
     const presentation = createAgentPresentationHost(
       this,
       globalState,
@@ -587,6 +561,29 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       );
       yield* this.snapshot.refresh;
       yield* this.refreshOnboardingFunnel();
+      // The funnel then follows `firstRunDone` wherever it is written, not a
+      // run's end: a setup chat that parks after delegating has done its
+      // first run. Started after the refresh above, so that refresh owns the
+      // first transition and its setup-agent selection; the subscription's
+      // own first element still refreshes, for a write that landed between.
+      yield* Effect.forkIn(
+        Stream.unwrap(
+          Effect.map(AppState, (appState) =>
+            appState.changes([GlobalStateKey.ONBOARDING_FIRST_RUN_DONE]),
+          ),
+        ).pipe(
+          Stream.runForEach(() =>
+            this.refreshOnboardingFunnel().pipe(
+              Effect.ignore({
+                log: 'Warn',
+                message: 'Refreshing the onboarding state',
+              }),
+            ),
+          ),
+          withLogChannel(CHANNEL),
+        ),
+        this.scope,
+      );
       yield* Effect.logDebug('ProgressViewProvider initialized').pipe(
         withLogChannel(CHANNEL),
       );

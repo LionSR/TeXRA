@@ -2913,16 +2913,17 @@ describe('the C1 event table and the C6 publisher', () => {
    * Node process appends to its run while this one appends to its own and
    * reads. Failure modes: an append lost to `SQLITE_BUSY`; a seq or commit
    * skipped or reused; a commit this connection observed going backwards;
-   * and this process's thread held in SQLite's busy wait for a third of the
-   * hold or more instead of retrying on its fiber schedule. The child first
-   * holds the write lock for `HOLD_MS`, and a ticker fiber runs every 5 ms
-   * while the first append waits it out. With the 25 ms slice the retry
-   * sleeps (5 ms doubling to 250 ms) fill most of the hold: about 320 ticks.
-   * A busy wait of `HOLD_MS / 3` or more leaves room for at most three
-   * attempts, so two retry sleeps (about 5 and 10 ms) and a few ticks; a
-   * wait of `HOLD_MS` leaves none. The bound sits between the two. Counting
-   * ticks, not timing the event loop, keeps a shared runner's stalls (9 s
-   * seen on Windows CI) from reading as the regression.
+   * and this process's thread held in SQLite's busy wait past the 25 ms
+   * slice instead of retrying on its fiber schedule. That last mode is
+   * checked in two parts, neither a wall-clock bound (a shared runner
+   * stalls for seconds: 9 s seen on Windows CI). The slice itself is pinned
+   * as the store's opened connection reports it. And the child first holds
+   * the write lock for `HOLD_MS` while a ticker fiber runs every 5 ms: with
+   * the slice the retry sleeps (5 ms doubling to 250 ms) fill most of the
+   * hold, about 320 ticks, while a busy wait of `HOLD_MS / 3` or more leaves
+   * room for at most three attempts, so two retry sleeps (about 5 and 10 ms)
+   * and a few ticks. That catches a block the pragma does not show, such as
+   * a wait outside SQLite's busy handler.
    */
   it.live(
     'shares one store with another OS process',
@@ -2998,7 +2999,29 @@ describe('the C1 event table and the C6 publisher', () => {
           ).toEqual(Array.from({ length: ROWS + 1 }, (_, i) => i + 1));
         expect(observed).toEqual(observed.toSorted((a, b) => a - b));
         expect(observed.at(-1)).toBe(total);
-      }).pipe(Effect.provide(substrate(storage)), Effect.scoped);
+        const filename = join(realpathSync.native(storage), 'texra.db');
+        const opened = yield* openStore(
+          SqlDriver.make({ filename }),
+          SqlDriver.make({ filename, readonly: true, disableWAL: true }),
+          'persistent',
+          filename,
+          filename,
+        );
+        const [slice] = yield* opened.sql.unsafe<{ timeout: number }>(
+          'PRAGMA busy_timeout',
+          [],
+        );
+        expect(slice?.timeout).toBe(25);
+      }).pipe(
+        Effect.provide(
+          Layer.mergeAll(
+            substrate(storage),
+            nodePlatformLayer,
+            Reactivity.layer,
+          ),
+        ),
+        Effect.scoped,
+      );
     },
     30_000,
   );
