@@ -1,4 +1,3 @@
-
 import { CliUsageError, type CliGlobalArgs } from '@cli/runtime/cliContext';
 import { documentsNegatedBooleanForm } from '@cli/runtime/completionCommandTree';
 import { CLI_OUTPUT_FORMATS, type CliOutputFormat } from '@shared/schemas';
