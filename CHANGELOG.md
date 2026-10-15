@@ -1086,10 +1086,11 @@ show` print the same notice, and the new `texra agents customize`,
   nested memories with backslash paths, so their previews never matched a
   listed item and stayed empty. Memory paths now use forward slashes on
   every platform.
-- **The VS Code welcome card moves on after a first task ends.** The
-  extension now refreshes onboarding when a task it launched ends, as the
-  desktop app does, instead of showing the setup step until the next
-  refresh.
+- **The VS Code welcome card moves on once a first task completes.** The
+  extension refreshes onboarding as soon as any run's completion records
+  your first task, in this window or another, including a demo the setup
+  assistant delegated while its chat stays open, instead of showing the
+  setup step until the next refresh.
 - **A failed document task now says why in text output.** `texra run`
   and `texra resume` with `--output-format text` print the run's reply (for
   example, which documents did not compile and where their logs are)

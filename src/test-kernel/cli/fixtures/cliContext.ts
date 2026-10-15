@@ -14,7 +14,11 @@ import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
 export const testStorageRoot = mkdtempSync(
   join(tmpdir(), 'texra-test-storage-'),
 );
-afterAll(() => rmSync(testStorageRoot, { recursive: true, force: true }));
+// A store's last file can land while the walk removes the directory
+// (ENOTEMPTY on Windows CI); `maxRetries` reruns the walk for that race.
+afterAll(() =>
+  rmSync(testStorageRoot, { recursive: true, force: true, maxRetries: 5 }),
+);
 
 const BASE_CLI_CONTEXT = {
   storageRoot: testStorageRoot,
