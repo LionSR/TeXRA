@@ -16,6 +16,7 @@ import { z } from 'zod';
 // Local imports - shared contracts
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import { GlobalStateKey } from '@shared/state/stateKeys';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 /** One configured stdio server, as the MCP plugin spawns it. */
 export interface McpServerConfig {
@@ -115,4 +116,25 @@ export function parseMcpServers(
     });
   }
   return { servers: parsed, warnings };
+}
+
+/**
+ * What `JSON.parse` rejected, without the file's text. V8 quotes an excerpt
+ * of the source into the messages that carry no position, and a server
+ * config holds credentials; those messages are cut at the first quote.
+ */
+export function jsonSyntaxError(error: unknown): string {
+  const message = toErrorMessage(error);
+  const position = /at position \d+(?: \(line \d+ column \d+\))?/.exec(
+    message,
+  )?.[0];
+  if (position === undefined)
+    return (
+      message.split(/['"]/, 1)[0].replace(/[,\s]+$/, '') || 'Unexpected content'
+    );
+  // Even a message with a position is cut at its first double quote, so a
+  // V8 that one day quotes source there still leaks nothing; the position
+  // itself is digits only.
+  const kind = message.split('"', 1)[0].replace(/[,\s]+$/, '');
+  return kind.includes(position) ? kind : `${kind} ${position}`;
 }

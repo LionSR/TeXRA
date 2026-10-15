@@ -1081,6 +1081,26 @@ show` print the same notice, and the new `texra agents customize`,
   nested memories with backslash paths, so their previews never matched a
   listed item and stayed empty. Memory paths now use forward slashes on
   every platform.
+- **One failed read no longer stops MCP servers until restart.** When the
+  key MCP server settings are recorded under could not be read once, every
+  MCP server (configured or from an installed plugin) stayed off for the
+  rest of the process. The failure is now logged, and the next run reads it
+  again.
+- **Only a plugin with a switch can be switched off.** A stored switch for
+  a plugin the Plugins page and `/plugins` show no switch for (Wolfram,
+  Lean 4) withheld its tools with no way to turn them back on; it is now
+  ignored.
+- **A plugin's malformed `.mcp.json` no longer quotes the file in its
+  error.** The message names the syntax error and its position, as the
+  user's `mcp.json` already did, so a credential in the file never reaches
+  a warning.
+- **MCP tool calls render as MCP calls.** A tool from a server in
+  `mcp.json` or an installed plugin shows as `MCP <server>/<tool>` with its
+  arguments and result, as a Codex MCP call already did.
+- **The VS Code welcome card moves on after a first task ends.** The
+  extension now refreshes onboarding when a task it launched ends, as the
+  desktop app does, instead of showing the setup step until the next
+  refresh.
 - **A failed document task now says why in text output.** `texra run`
   and `texra resume` with `--output-format text` print the run's reply (for
   example, which documents did not compile and where their logs are)

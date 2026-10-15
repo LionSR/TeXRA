@@ -7,7 +7,9 @@
 // Third-party imports
 import {
   Cause,
+  Duration,
   Effect,
+  Exit,
   FileSystem,
   Layer,
   Result,
@@ -54,8 +56,19 @@ export const pluginCatalogLayer = (
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
       const appState = yield* AppState;
-      // Resolved once per process, on the first run that declares an MCP tool.
-      const envKey = yield* Effect.cached(revisionKey(appState));
+      // Resolved once per process, on the first run that declares an MCP
+      // tool. A failed read is not kept: the next run that needs it reads
+      // again, so one transient store fault does not stop every server.
+      const envKey = yield* revisionKey(appState).pipe(
+        Effect.tapError((error) =>
+          Effect.logWarning(
+            `The MCP revision key could not be read; no MCP server starts until it can: ${error.message}`,
+          ),
+        ),
+        Effect.cachedWithTTL((exit) =>
+          Exit.isSuccess(exit) ? Duration.infinity : Duration.zero,
+        ),
+      );
       // The installed plugins a step loads: the enabled, trusted ones, each
       // keyed by what it would start, and why each other enabled one loads
       // nothing. One that ships only skills loads with no servers.

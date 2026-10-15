@@ -97,12 +97,12 @@ export const toolCatalogLayer = (
     );
   const processLayerOf = layersOf((plugin) => plugin.processLayer?.layer);
   const drains = layersOf((plugin) => plugin.processLayer?.drain);
-  // Only a probed plugin has a switch: a stored id of any other switches
-  // nothing.
+  // Only a plugin with a switch (`toggle`, the one the dashboard and the
+  // CLI show) is switched: a stored id of any other switches nothing.
   const onOf = (off: ReadonlySet<string>): ReadonlySet<string> =>
     new Set(
       plugins
-        .filter(({ id, availability }) => !off.has(id) || !availability)
+        .filter(({ id, toggle }) => toggle === undefined || !off.has(id))
         .map(({ id }) => id),
     );
   const catalog = Layer.effect(

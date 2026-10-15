@@ -15,7 +15,6 @@ import { z } from 'zod';
 
 // Local imports - common
 import { SkillNameSchema } from '@shared/schemas';
-import { toErrorMessage } from '@utils/errors/errorMessage';
 import { pathExists } from '@utils/files/fsDurability';
 import { absentReason } from '@utils/files/fsEntryExists';
 import { isPathWithin } from '@utils/core/pathCore';
@@ -27,6 +26,7 @@ import {
   type ConfiguredHook,
 } from './hookConfig';
 import {
+  jsonSyntaxError,
   parseMcpServers,
   ServerNameSchema,
   type McpServerConfig,
@@ -124,7 +124,7 @@ export function readJsonFile<T>(file: string, schema: z.ZodType<T>) {
       try: (): unknown => JSON.parse(text),
       catch: (error) =>
         new PluginError({
-          message: `${file} is not valid JSON: ${toErrorMessage(error)}`,
+          message: `${file} is not valid JSON: ${jsonSyntaxError(error)}`,
         }),
     });
     const parsed = schema.safeParse(json);

@@ -1,3 +1,7 @@
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import * as os from 'node:os';
+import * as path from 'node:path';
+
 import { it } from '@effect/vitest';
 import { describe, expect } from 'vitest';
 import { Effect, Exit, Layer, Scope, Stream } from 'effect';
@@ -6,7 +10,11 @@ import {
   LanguageModel,
   UNAVAILABLE_LANGUAGE_MODEL_PORT,
 } from '@platform/languageModel';
-import { AppState } from '@platform/interfaces';
+import {
+  AppState,
+  StateReadFailed,
+  type StateStore,
+} from '@platform/interfaces';
 import type { OfferedTool, ToolDefinition } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import type { SettingHost } from '@shared/state/stateSettings';
@@ -19,7 +27,7 @@ import {
 import { nodeSpawnerLayer } from '@test/support/childProcessTestLayer';
 import { resolveTestStep } from '@test/support/stepToolsTestUtils';
 import { texraPlugins } from '@texra/tools/registry';
-import { toolCatalogLayer } from '@tools/liveTools';
+import { ToolCatalog, toolCatalogLayer } from '@tools/liveTools';
 import { USER_MCP_CONFIG_PATH } from '@tools/mcp/mcpConfig';
 import { pluginCatalogLayer } from '@tools/pluginCatalog';
 import { ALWAYS_AVAILABLE } from '@tools/toolProbes';
@@ -195,7 +203,7 @@ describe('tool-use tool resolution', () => {
     () => {
       const events: string[] = [];
       // One plugin whose layer records its lifetime.
-      // A switchable plugin: probed, so its stored switch counts.
+      // A switchable plugin (`toggle`), so its stored switch counts.
       const table = toolTable([
         {
           id: 'zotero',
@@ -266,6 +274,58 @@ describe('tool-use tool resolution', () => {
         ),
         Effect.provide(nodeSpawnerLayer),
         Effect.ensuring(Effect.promise(() => installPlatform())),
+      );
+    },
+  );
+
+  it.effect(
+    'a failed MCP revision-key read is read again by the next run, not kept for the process',
+    () => {
+      const dir = mkdtempSync(path.join(os.tmpdir(), 'texra-mcp-key-'));
+      writeFileSync(
+        path.join(dir, 'mcp.json'),
+        JSON.stringify({
+          mcpServers: { fixture: { command: path.join(dir, 'missing') } },
+        }),
+      );
+      let faults = 1;
+      const flaky: StateStore = {
+        ...fakeHostAppState,
+        get: (key) =>
+          key === GlobalStateKey.MCP_REVISION_KEY && faults-- > 0
+            ? Effect.fail(
+                new StateReadFailed({
+                  key,
+                  message: 'store busy',
+                  cause: null,
+                }),
+              )
+            : fakeHostAppState.get(key),
+      };
+      return Effect.gen(function* () {
+        const tools = yield* (yield* ToolCatalog).session;
+        const warnings = () =>
+          Effect.map(
+            tools.hold(['mcp__fixture__echo'], true),
+            (held) => held.warnings,
+          );
+        expect(yield* warnings()).toEqual([
+          expect.stringContaining('store busy'),
+        ]);
+        expect(yield* warnings()).toEqual([]);
+      }).pipe(
+        Effect.scoped,
+        Effect.provide(
+          pluginCatalogLayer([], path.join(dir, 'mcp.json')).pipe(
+            Layer.provide(
+              Layer.merge(nodePlatformLayer, AppState.layer(flaky)),
+            ),
+          ),
+        ),
+        Effect.provide(nodeSpawnerLayer),
+        Effect.ensuring(
+          Effect.sync(() => rmSync(dir, { recursive: true, force: true })),
+        ),
       );
     },
   );

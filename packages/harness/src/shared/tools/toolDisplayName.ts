@@ -7,7 +7,8 @@
  *
  * A tool name reaches a renderer in three shapes: the canonical registry name
  * (`bash`), a provider-namespaced name from a delegated sub-agent
- * (`claude:Edit`), and the MCP name TeXRA emits for a Codex MCP call
+ * (`claude:Edit`), and an MCP tool's name: the harness's own
+ * (`mcp__<server>__<tool>`) or the one TeXRA emits for a Codex MCP call
  * (`mcp:<server>/<tool>`, see `buildCodexMcpToolLog` in
  * `packages/texra/src/tools/codexShared.ts`). Normalization used to be host-local, so the
  * progress view showed a namespaced name verbatim and missed every
@@ -26,10 +27,22 @@ const TOOL_LABEL = new Map<string, string>([
 ]);
 
 const MCP_PREFIX = 'mcp:';
+const MCP_TOOL_PREFIX = 'mcp__';
 
-/** True for the `mcp:<server>/<tool>` names TeXRA emits for MCP tool calls. */
+/** The `<server>/<tool>` an MCP tool's name carries, in either shape, or
+ *  null for any other tool. */
+function mcpServerTool(toolName: string): string | null {
+  if (toolName.startsWith(MCP_PREFIX)) return toolName.slice(MCP_PREFIX.length);
+  if (!toolName.startsWith(MCP_TOOL_PREFIX)) return null;
+  const rest = toolName.slice(MCP_TOOL_PREFIX.length);
+  const cut = rest.indexOf('__');
+  return cut > 0 ? `${rest.slice(0, cut)}/${rest.slice(cut + 2)}` : null;
+}
+
+/** True for an MCP tool call: the harness's `mcp__<server>__<tool>` or a
+ *  Codex call's `mcp:<server>/<tool>`. */
 export function isMcpToolName(toolName: string): boolean {
-  return toolName.startsWith(MCP_PREFIX);
+  return mcpServerTool(toolName) !== null;
 }
 
 /** Build the `mcp:<server>/<tool>` wire name for an MCP tool call. Single
@@ -64,9 +77,8 @@ export function normalizeToolName(toolName: string): string {
  *  provenance; everything else shows its friendly label, or the namespace
  *  stripped name when it has none. */
 export function displayToolName(toolName: string): string {
-  if (isMcpToolName(toolName)) {
-    return `MCP ${toolName.slice(MCP_PREFIX.length)}`;
-  }
+  const mcp = mcpServerTool(toolName);
+  if (mcp !== null) return `MCP ${mcp}`;
   const segment = lastNameSegment(toolName);
   const label = TOOL_LABEL.get(segment.toLowerCase()) ?? segment;
   return label || 'tool';

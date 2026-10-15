@@ -238,8 +238,30 @@ export function createExtensionHostRequests(
       ...records,
       session: runSession,
       scope: options.scope,
+      // A run that ends may be the first (its lifecycle writes
+      // `firstRunDone`), so the onboarding funnel recomputes then.
       launched: (run) =>
-        Effect.sync(() => options.presentLaunchedRun(run.runId)),
+        Effect.sync(() => options.presentLaunchedRun(run.runId)).pipe(
+          Effect.andThen(
+            Effect.forkIn(
+              run.result.pipe(
+                Effect.ignore,
+                Effect.andThen(
+                  withProcessServices(
+                    runtime,
+                    Effect.suspend(() => options.refreshOnboardingFunnel()),
+                  ),
+                ),
+                Effect.ignore({
+                  log: 'Warn',
+                  message: 'Refreshing the onboarding state',
+                }),
+              ),
+              options.scope,
+            ),
+          ),
+          Effect.asVoid,
+        ),
       openFinalOutput: (config, result) =>
         withProcessServices(
           runtime,
