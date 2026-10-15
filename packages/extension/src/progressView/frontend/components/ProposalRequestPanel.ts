@@ -59,6 +59,21 @@ import { buildStatusBadge } from '../formatters/htmlBuilders';
 import { processMarkdownContent } from '../formatters/markdownRenderer';
 import { getComposedPathElement } from '../utils';
 
+/** Whether `option` is the proposal's agent: catalog options are
+ *  source-qualified, the proposal names the agent and its source; an
+ *  option with no source (a hidden team member) matches by name. */
+function isProposedAgent(
+  option: HostSnapshot['agentOptions'][number],
+  { agent, agentSource }: AgentProposalPermission,
+): boolean {
+  return (
+    agentName(option.value) === agent &&
+    (agentSource == null ||
+      option.source === undefined ||
+      option.source === agentSource)
+  );
+}
+
 function proposalRequestIdOf(
   p: PermissionPayload | null | undefined,
 ): string | undefined {
@@ -399,14 +414,17 @@ export class ProposalRequestPanel extends BaseRequestPanel<'proposal'> {
    * else every visible one), and for a task only the catalog's agents
    * with a document task, and the proposed one. A script's request
    * approves the script, not one call's agent or model (`decideDelegation`
-   * ignores both there), so it offers none.
+   * ignores both there), so it offers none. A proposed agent or model
+   * the catalog no longer lists stays offered as proposed, so the select
+   * always shows what an unchanged approval launches.
    */
   private get pickers(): {
     agents: HostSnapshot['agentOptions'];
     models: HostSnapshot['modelOptions'];
   } {
     const { host } = this;
-    const { script, task, agent } = this.permission.data;
+    const data = this.permission.data;
+    const { script, task, agent, model } = data;
     if (host === null || script) return { agents: [], models: [] };
     const scope = this.run?.agentScope ?? null;
     const offered = (option: HostSnapshot['agentOptions'][number]) =>
@@ -425,22 +443,27 @@ export class ProposalRequestPanel extends BaseRequestPanel<'proposal'> {
                 : [];
             return offered(option) ? [option] : [];
           });
-    return { agents, models: host.modelOptions };
+    const ref = modelRefOf(model) ?? model;
+    const models = host.modelOptions;
+    return {
+      agents:
+        agents.length === 0 || agents.some((o) => isProposedAgent(o, data))
+          ? agents
+          : [{ value: agent, label: agent }, ...agents],
+      models:
+        models.length === 0 ||
+        models.some((o) => [ref, model].includes(o.value))
+          ? models
+          : [{ value: model, label: getModelLabel(model) }, ...models],
+    };
   }
 
-  /** The proposed agent's option value: catalog options are
-   *  source-qualified, the proposal names the agent and its source; a
-   *  team member the catalog hides has no source, so its name matches. */
+  /** The proposed agent's option value (`isProposedAgent`). */
   private get proposedAgent(): string {
-    const { agent, agentSource } = this.permission.data;
+    const data = this.permission.data;
     return (
-      this.pickers.agents.find(
-        (option) =>
-          agentName(option.value) === agent &&
-          (agentSource == null ||
-            option.source === undefined ||
-            option.source === agentSource),
-      )?.value ?? agent
+      this.pickers.agents.find((option) => isProposedAgent(option, data))
+        ?.value ?? data.agent
     );
   }
 
