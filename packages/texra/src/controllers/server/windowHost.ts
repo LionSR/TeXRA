@@ -21,6 +21,7 @@ import {
 
 import { ModelError, ModelErrorFieldsSchema, type Model } from '@texra-ai/llm';
 
+import { toJsonValue } from '@shared/schemas';
 import type { HostInteractions } from '@agent/runtime/HostInteractions';
 import { withLogChannel } from '@logger/effectLog';
 import type { ToolEditApprovalController } from '@texra/controllers/approval/ToolEditApprovalController';
@@ -79,21 +80,13 @@ function capabilitiesOf(host: WindowHost): HostCapability[] {
   ];
 }
 
-/** A value as JSON carries it (no `undefined` fields), for an answer; a
- *  call with nothing to say says null. */
-const asJson = (value: unknown): unknown =>
-  value === undefined ? null : JSON.parse(JSON.stringify(value));
-const asJsonValue = (value: unknown) =>
-  // JSON round-tripped above, so it is a JSON value.
-  asJson(value) as Extract<HostAnswer, { ok: true }>['value'];
-
 /** A failure as the window answers it: a model's failure keeps its fields,
  *  which the service rebuilds into the same `ModelError`. */
 function failureAnswer(error: unknown): HostAnswer {
   const answer = { ok: false as const, message: toErrorMessage(error) };
   if (!(error instanceof ModelError)) return answer;
   const fields = ModelErrorFieldsSchema.safeParse(
-    asJson(
+    toJsonValue(
       Object.fromEntries(
         Object.keys(ModelErrorFieldsSchema.shape).map((name) => [
           name,
@@ -312,7 +305,7 @@ function attachTo(
           ? // Each item as it comes, then the end; the service's `cancel`
             // interrupts it (`answering`).
             Stream.runForEach(performStream(call, modelFor), (item) =>
-              send(id, { ok: true, value: asJsonValue(item), more: true }),
+              send(id, { ok: true, value: toJsonValue(item), more: true }),
             ).pipe(Effect.as(null))
           : perform(host, call, modelFor);
       return work.pipe(
@@ -320,7 +313,7 @@ function attachTo(
         // service never waits on a call that died here.
         Effect.matchCauseEffect({
           onSuccess: (value) =>
-            send(id, { ok: true, value: asJsonValue(value) }),
+            send(id, { ok: true, value: toJsonValue(value) }),
           onFailure: (cause) =>
             Cause.hasInterruptsOnly(cause)
               ? Effect.failCause(cause)
