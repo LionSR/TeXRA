@@ -78,24 +78,33 @@ const GROUP_PROBE_TIMEOUT_MS = 20_000;
 /**
  * Switch a tool plugin on or off in the global state store the caller
  * holds. Every process sharing it follows the write (`AppState.changes`);
- * runs read the switch at their next step. A record that does not validate
- * refuses the change, so it is never written over and lost.
+ * runs read the switch at their next step. Only a plugin with a switch
+ * (`toggle`) is written, so the stored set never names one that no surface
+ * can turn back on, and its tools, agents and skills follow one rule. A
+ * record that does not validate refuses the change, so it is never written
+ * over and lost.
  */
 export function setToolEnabled(
   toolId: string,
   enabled: boolean,
   store: StateStore,
 ) {
-  return store
-    .modify(GlobalStateKey.DISABLED_TOOLS, (stored) =>
-      Result.map(storedDisabledTools(stored), (current) => {
-        const disabled = new Set(current);
-        if (enabled) disabled.delete(toolId);
-        else disabled.add(toolId);
-        return [...disabled];
-      }),
-    )
-    .pipe(Effect.asVoid);
+  return Effect.flatMap(ToolRegistry, ({ entries }) =>
+    entries.get(toolId)?.toggle === undefined
+      ? Effect.logWarning(
+          `Plugin ${toolId} has no switch; nothing was written.`,
+        )
+      : store
+          .modify(GlobalStateKey.DISABLED_TOOLS, (stored) =>
+            Result.map(storedDisabledTools(stored), (current) => {
+              const disabled = new Set(current);
+              if (enabled) disabled.delete(toolId);
+              else disabled.add(toolId);
+              return [...disabled];
+            }),
+          )
+          .pipe(Effect.asVoid),
+  );
 }
 
 /**
