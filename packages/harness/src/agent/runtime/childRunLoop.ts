@@ -630,7 +630,7 @@ const settleInterim = <TTurn, R>(
       session,
       settleChildTurn(session, settlement, loop.trace, park),
     );
-    if (park && turned.turn !== null)
+    if (park && turned.turn !== null && !loop.isInterrupted())
       loop.process?.onTurnSuccess?.(turned.turn, session);
     yield* report;
     yield* wakeParent(session, settlement.delivery, loop.trace);
