@@ -626,10 +626,8 @@ export function createExtensionHostRequests(
         yield* commandVerb(GETTING_STARTED_COMMANDS.runSetup);
         yield* refreshOnboardingFunnel;
       }),
-      skipSetup: Effect.gen(function* () {
-        yield* setFirstRunDone(globalState, true);
-        yield* refreshOnboardingFunnel;
-      }),
+      // The provider's `firstRunDone` follower refreshes the funnel.
+      skipSetup: setFirstRunDone(globalState, true),
       openGettingStarted: commandVerb(GETTING_STARTED_COMMANDS.openWalkthrough),
     },
   };

@@ -342,7 +342,9 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     this.runtime.runSync(Effect.forkIn(this.chimeOnDocuments(), this.scope));
     // The funnel follows `firstRunDone` wherever it is written, not a run's
     // end: a setup chat that parks after delegating has done its first run.
-    // The first element is the subscription itself, not a change.
+    // The first element is the subscription itself, and it refreshes too: a
+    // write that lands between `initialize()`'s read and this subscription
+    // is seen only there.
     this.runtime.runSync(
       Effect.forkIn(
         Stream.unwrap(
@@ -350,7 +352,6 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
             appState.changes([GlobalStateKey.ONBOARDING_FIRST_RUN_DONE]),
           ),
         ).pipe(
-          Stream.drop(1),
           Stream.runForEach(() =>
             this.refreshOnboardingFunnel().pipe(
               Effect.ignore({
