@@ -34,13 +34,10 @@ import {
   type RunId,
   type ToolResult,
 } from '@shared/schemas';
-import { BASH_BACKGROUND_LOG_CAP_CHARS } from '@shared/toolUse';
-import { isTerminalOutcomePhase } from '@shared/runs/runStatus';
 import { isLiveRun, type SessionView } from '@shared/session/sessionView';
 import { assertNoParentTraversal } from '@tools/pathResolution';
 import { executed } from '@tools/core/result';
 import { readCompletedRunConversation } from '@transcript';
-import { assertNever } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { readNormalizedFile } from '@utils/files/fsDurability';
 import { findExistingRunStoragePathUnder } from '@utils/files/runStorageFs';
@@ -53,7 +50,6 @@ import {
   buildSummaryTailLines,
   childRunViews,
   formatChildLine,
-  formatRunStatus,
   runDisplayCategory,
 } from './executionFormatters';
 import { defineTool } from './core/definition';
@@ -61,13 +57,8 @@ import { formatFileView } from './formatting';
 import { serializeFilteredConfig } from './executions/configView';
 import { formatConversation } from './executions/conversationFormat';
 import { orchestratorKillDenial } from './executions/killPolicy';
-import { EXECUTION_PATH_LIST } from './executions/pathCatalog';
 import { queryHistory } from './executions/queryAction';
-import {
-  OUTPUT_MAX_LINES,
-  OUTPUT_TAIL_LINES,
-  projectProcessOutput,
-} from './executions/processOutput';
+import { showOutput } from './executions/processOutput';
 import { listRunGeneratedFiles } from './executions/runGeneratedFiles';
 import {
   ExecutionsToolInputSchema,
@@ -146,6 +137,158 @@ function formatSizedEntryLines(entries: readonly SizedEntry[]): string[] {
     return `${sizeStr.padStart(8)}  ${entry.path}`;
   });
 }
+type ExecutionsAction = ExecutionsToolInput['action'];
+interface RouteRequest<A extends ExecutionsAction> {
+  readonly context: RunToolContext;
+  readonly input: Extract<ExecutionsToolInput, { action: A }>;
+  /** The `{id}` segment's run (`/executions` names none and reads none). */
+  readonly runId: RunId;
+  /** The `{path}` segment, `/`-joined. */
+  readonly rest: string;
+}
+type RouteHandler<A extends ExecutionsAction> = (
+  request: RouteRequest<A>,
+) => Effect.Effect<ToolResult, Error, Runs | FileSystem.FileSystem | StorageFs>;
+type RouteActions = {
+  readonly [A in ExecutionsAction]?: RouteHandler<A>;
+};
+
+/**
+ * The one table of the paths the tool serves: the description and the
+ * "Unknown path" error render from `path` and `summary`, a path accepts the
+ * actions its row handles, and the "not valid here" error names the rows that
+ * do. A `{…}` segment matches any one segment, a trailing `{path}` the rest.
+ */
+const EXECUTION_ROUTES: ReadonlyArray<{
+  readonly path: string;
+  readonly summary: string;
+  readonly actions: RouteActions;
+}> = [
+  {
+    path: '/executions',
+    summary: 'List executions (paginated; use offset/limit for pages)',
+    actions: {
+      view: ({ context, input }) =>
+        listRuns(context.session, context.runId, input.offset, input.limit),
+      wait: ({ context, input }) =>
+        waitForRuns(context, input.timeout, input.ids).pipe(
+          Effect.andThen(
+            listRuns(context.session, context.runId, input.offset, input.limit),
+          ),
+        ),
+      query: ({ context, input }) =>
+        queryHistory(context.session, input.sql, input.params),
+    },
+  },
+  {
+    path: '/executions/{id}',
+    summary: 'Execution summary (agent, model, timestamp, status, children)',
+    actions: {
+      view: ({ context, runId }) =>
+        showSummary(context, runId, {
+          suppressAutoDeliveredSubagentReport: false,
+        }),
+      wait: ({ context, input, runId }) =>
+        Effect.gen(function* () {
+          yield* waitForRuns(context, input.timeout, [runId]);
+          // The child's deliveries still queued on the caller: this result
+          // answers them, and its settlement consumes them with it.
+          const queued = yield* context.session.followUps
+            .read(context.runId)
+            .pipe(Effect.orDie);
+          const answered = queued.followUps
+            .map(({ followUpId }) => followUpId)
+            .filter((followUpId) => followUpId.startsWith(`${runId}:`));
+          const summary = yield* showSummary(context, runId, {
+            suppressAutoDeliveredSubagentReport: answered.length === 0,
+          });
+          return { ...summary, consumedFollowUps: answered };
+        }),
+      kill: ({ context, runId }) => handleKill(context, runId),
+      send: ({ context, input, runId }) =>
+        sendToRun(context.session, context.runId, runId, input.message),
+    },
+  },
+  {
+    path: '/executions/{id}/config',
+    summary: 'Agent configuration JSON',
+    actions: { view: ({ context, runId }) => showConfig(context, runId) },
+  },
+  {
+    path: '/executions/{id}/conversation',
+    summary: 'Full message history (subagents)',
+    actions: {
+      view: ({ context, input, runId }) =>
+        input.view_range
+          ? Effect.fail(
+              new ToolError(
+                'Conversation pagination is message-based. Use offset and limit; view_range applies only to file and background-command output.',
+              ),
+            )
+          : showConversation(context, runId, input.offset, input.limit),
+    },
+  },
+  {
+    path: '/executions/{id}/report',
+    summary: 'Result report (persists after context compaction)',
+    actions: { view: ({ context, runId }) => showReport(context, runId) },
+  },
+  {
+    path: '/executions/{id}/result',
+    summary:
+      'Final result envelope (JSON) for chaining; process result for background commands',
+    actions: { view: ({ context, runId }) => showResultMeta(context, runId) },
+  },
+  {
+    path: '/executions/{id}/output',
+    summary:
+      'stdout/stderr of a background command, readable WHILE IT RUNS (report/result only exist once it finishes)',
+    actions: {
+      view: ({ context, input, runId }) =>
+        showOutput(context.session, runId, input.view_range ?? undefined),
+    },
+  },
+  {
+    path: '/executions/{id}/files',
+    summary: 'Generated files (workflows only)',
+    actions: { view: ({ context, runId }) => listFiles(context, runId) },
+  },
+  {
+    path: '/executions/{id}/files/{path}',
+    summary: 'Read specific generated file (workflows only)',
+    actions: {
+      view: ({ context, input, runId, rest }) =>
+        readFile(context, runId, rest, input.view_range ?? undefined),
+    },
+  },
+  {
+    path: '/executions/{id}/workspace-files',
+    summary: 'Workspace files edited by tool-use runs',
+    actions: {
+      view: ({ context, runId }) => listWorkspaceFiles(context, runId),
+    },
+  },
+  {
+    path: '/executions/{id}/workspace-files/{path}',
+    summary: 'Read a workspace file edited by a tool-use run',
+    actions: {
+      view: ({ context, input, runId, rest }) =>
+        readWorkspaceFile(context, runId, rest, input.view_range ?? undefined),
+    },
+  },
+];
+
+/** A row's handler for `action`, read by a key the checker keeps paired. */
+function handlerFor<A extends ExecutionsAction>(
+  actions: RouteActions,
+  action: A,
+): RouteHandler<A> | undefined {
+  return actions[action];
+}
+
+const EXECUTION_PATH_LIST = EXECUTION_ROUTES.map(
+  ({ path, summary }) => `- ${path} - ${summary}`,
+).join('\n');
 
 /**
  * Every line of logic below is one Effect program. A storage or filesystem
@@ -156,151 +299,42 @@ const executeExecutionsTool = Effect.fn('ExecutionsTool.call')(function* (
   input: ExecutionsToolInput,
 ) {
   const { run } = yield* requireToolRun('executions');
-  const context: RunToolContext = {
-    session: run.session,
-    runId: run.runId,
-  };
-  return yield* runExecutions(context, input);
-});
-
-const runExecutions = Effect.fn('ExecutionsTool.run')(function* (
-  context: RunToolContext,
-  input: ExecutionsToolInput,
-): Effect.fn.Return<
-  ToolResult,
-  Error,
-  Runs | FileSystem.FileSystem | StorageFs
-> {
+  const context = { session: run.session, runId: run.runId };
   const segments = getPathSegments(input.path);
-  const [namespace, id, resource, ...rest] = segments;
-
-  if (namespace !== 'executions') {
-    return yield* Effect.fail(
-      new ToolError(`Path must start with /executions. Got: ${input.path}`),
+  const route = EXECUTION_ROUTES.find(({ path }) => {
+    const parts = path.split('/').slice(1);
+    const greedy = parts.at(-1) === '{path}';
+    return (
+      (greedy
+        ? segments.length >= parts.length
+        : segments.length === parts.length) &&
+      parts.every((part, i) => part.startsWith('{') || part === segments[i])
     );
-  }
-
-  if (input.action === 'query') {
-    if (id) {
-      return yield* Effect.fail(
-        new ToolError(`action='query' runs on /executions, not on one run.`),
-      );
-    }
-    return yield* queryHistory(context.session, input.sql, input.params);
-  }
-
-  // /executions - list all runs
-  if (!id) {
-    if (input.action === 'kill' || input.action === 'send') {
-      return yield* Effect.fail(
-        new ToolError(
-          `action='${input.action}' requires a specific run: use /executions/{id}.`,
-        ),
-      );
-    }
-    if (input.action === 'wait') {
-      yield* waitForRuns(context, input.timeout, input.ids);
-    }
-    return yield* listRuns(
-      context.session,
-      context.runId,
-      input.offset,
-      input.limit,
-    );
-  }
-
-  const runId = yield* resolveRunId(context, id);
-
-  // /executions/{id} - run summary or actions
-  if (!resource) {
-    switch (input.action) {
-      case 'kill':
-        return yield* handleKill(context, runId);
-      case 'send':
-        return yield* sendToRun(
-          context.session,
-          context.runId,
-          runId,
-          input.message,
-        );
-      case 'wait': {
-        yield* waitForRuns(context, input.timeout, [runId]);
-        // The child's deliveries still queued on the caller: this result
-        // answers them, and its settlement consumes them with it.
-        const queued = yield* context.session.followUps
-          .read(context.runId)
-          .pipe(Effect.orDie);
-        const answered = queued.followUps
-          .map(({ followUpId }) => followUpId)
-          .filter((followUpId) => followUpId.startsWith(`${runId}:`));
-        const summary = yield* showSummary(context, runId, {
-          suppressAutoDeliveredSubagentReport: answered.length === 0,
-        });
-        return { ...summary, consumedFollowUps: answered };
-      }
-      case 'view':
-        return yield* showSummary(context, runId, {
-          suppressAutoDeliveredSubagentReport: false,
-        });
-      default:
-        return assertNever(input, 'Unrecognized executions action');
-    }
-  }
-
-  // Sub-resource paths (config, conversation, files, ...) only support
-  // reading — wait/kill/send operate on /executions or /executions/{id},
-  // never a deeper resource.
-  if (input.action !== 'view') {
+  });
+  if (!route) {
     return yield* Effect.fail(
       new ToolError(
-        `action='${input.action}' is only valid on /executions or /executions/{id}; use action='view' to read /executions/${id}/${resource}.`,
+        `Unknown path: ${input.path}.\nValid paths:\n${EXECUTION_PATH_LIST}`,
       ),
     );
   }
-
-  const viewRange = input.view_range ?? undefined;
-
-  switch (resource) {
-    case 'config':
-      return yield* showConfig(context, runId);
-    case 'conversation': {
-      if (viewRange) {
-        return yield* Effect.fail(
-          new ToolError(
-            'Conversation pagination is message-based. Use offset and limit; view_range applies only to file and background-command output.',
-          ),
-        );
-      }
-      return yield* showConversation(context, runId, input.offset, input.limit);
-    }
-    case 'report':
-      return yield* showReport(context, runId);
-    case 'result':
-      return yield* showResultMeta(context, runId);
-    case 'output':
-      return yield* showOutput(context, runId, viewRange);
-    case 'files':
-      if (rest.length === 0) {
-        return yield* listFiles(context, runId);
-      }
-      return yield* readFile(context, runId, rest.join('/'), viewRange);
-    case 'workspace-files':
-      if (rest.length === 0) {
-        return yield* listWorkspaceFiles(context, runId);
-      }
-      return yield* readWorkspaceFile(
-        context,
-        runId,
-        rest.join('/'),
-        viewRange,
-      );
+  const handle = handlerFor(route.actions, input.action);
+  if (!handle) {
+    const validOn = EXECUTION_ROUTES.filter(
+      ({ actions }) => actions[input.action],
+    );
+    return yield* Effect.fail(
+      new ToolError(
+        `action='${input.action}' runs on ${validOn.map(({ path }) => path).join(' or ')}, not on ${route.path}.`,
+      ),
+    );
   }
-
-  return yield* Effect.fail(
-    new ToolError(
-      `Unknown path: ${input.path}.\nValid paths:\n${EXECUTION_PATH_LIST}`,
-    ),
-  );
+  return yield* handle({
+    context,
+    input,
+    runId: yield* resolveRunId(context, segments[1] ?? 'current'),
+    rest: segments.slice(3).join('/'),
+  });
 });
 
 function resolveRunId(
@@ -570,99 +604,6 @@ const showConversation = Effect.fn('ExecutionsTool.showConversation')(
     return executed(output);
   },
 );
-
-/**
- * stdout/stderr of a background command, projected from the transcript log
- * its child run already writes (`createChildRun` in `tools/bash.ts`).
- *
- * This is the only route readable *while the command runs*: `/report` and
- * `/result` are written at completion, and the completion follow-up carries
- * only a 20-line preview, so without this the middle of a long build log is
- * unreachable even after the run ends. Restricted to process runs —
- * an agent run's rows are a model transcript, which `/conversation` already
- * renders properly.
- */
-const showOutput = Effect.fn('ExecutionsTool.showOutput')(function* (
-  context: RunToolContext,
-  runId: RunId,
-  viewRange?: [number, number],
-) {
-  const run = context.session.view.run(runId);
-  if (run === undefined) {
-    return yield* Effect.fail(new ToolError(`Run not found: ${runId}`));
-  }
-  if (run.identity.kind !== 'process') {
-    return executed(
-      `/executions/${runId}/output is only available for background commands (bash with run_in_background). ` +
-        `Use /executions/${runId}/conversation for an agent run's message history.`,
-    );
-  }
-
-  // The row above already proved the run is in the session's view; its
-  // output is read from the run's own committed rows.
-  const { lines, chars } = projectProcessOutput(
-    yield* context.session.log.display(runId).pipe(Effect.orDie),
-  );
-  // The row above was read before the transcript, and a command that
-  // finished during that read must not be judged against it: the view is
-  // in memory, so one read of one run can afford a fresh row. Only a
-  // tombstone takes a run out of the view, and then the row this call
-  // already holds is the last honest reading of it.
-  const current = context.session.view.run(runId) ?? run;
-  // The footer states the same reading as the header, and both come from
-  // the fold: "no handle in this process" alone never justifies calling a
-  // command finished, and a run whose owner is gone reads as interrupted
-  // rather than as one that recorded how it ended.
-  const lead = isTerminalOutcomePhase(current.status)
-    ? 'finished:'
-    : (current.statusDetail ??
-      `still running: re-read for more output, or use action='wait' on /executions/${runId} to block until it finishes;`);
-  const footer = `[${lead} this is the retained log; /executions/${runId}/report has the result summary]`;
-  const out: string[] = [
-    `Output for ${runId} (process, ${formatRunStatus(current)}): ${chars.toLocaleString()} retained transcript chars; command-output cap ${BASH_BACKGROUND_LOG_CAP_CHARS.toLocaleString()} chars, ${lines.length.toLocaleString()} lines.`,
-  ];
-
-  if (lines.length === 0) {
-    out.push('', footer);
-    return executed(out.join('\n'));
-  }
-  out.push('Lines are in arrival order; `err:` marks one written to stderr.');
-
-  // Default to the tail, where a live build's news is; a view_range window
-  // is clamped so a wide request still can't return an unbounded log.
-  const first =
-    viewRange?.[0] ?? Math.max(lines.length - OUTPUT_TAIL_LINES, 0) + 1;
-  const requestedLast = Math.min(viewRange?.[1] ?? lines.length, lines.length);
-  const last = Math.min(requestedLast, first + OUTPUT_MAX_LINES - 1);
-
-  if (first > last) {
-    out.push(
-      `No lines in the requested range; the log has ${lines.length} lines.`,
-      '',
-      footer,
-    );
-    return executed(out.join('\n'));
-  }
-
-  let hint = '';
-  if (last < requestedLast) {
-    hint = ` (capped at ${OUTPUT_MAX_LINES} lines per read; continue from view_range: [${last + 1}, …])`;
-  } else if (!viewRange && first > 1) {
-    hint = ` (the last ${OUTPUT_TAIL_LINES} by default; use view_range to page earlier ones)`;
-  }
-  out.push(
-    `Showing lines ${first}-${last} of ${lines.length}${hint}.`,
-    '',
-    lines.slice(first - 1, last).join('\n'),
-    '',
-    footer,
-  );
-
-  return executed(
-    out.join('\n'),
-    `Read lines ${first}-${last} of /executions/${runId}/output`,
-  );
-});
 
 const listFiles = Effect.fn('ExecutionsTool.listFiles')(function* (
   context: RunToolContext,

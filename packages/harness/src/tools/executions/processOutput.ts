@@ -1,21 +1,34 @@
 /**
- * Projection of a background command's durable `log` rows into the display
- * lines `/executions/{id}/output` serves, plus the window bounds that read
- * applies.
+ * `/executions/{id}/output`: a background command's durable `log` rows
+ * projected into display lines, and the windowed read that serves them.
  */
 
+// Third-party imports
+import { Effect } from 'effect';
+
 // Local imports
-import { LOG_LEVELS, MESSAGE_TYPES, type SessionEvent } from '@shared/schemas';
+import { type SessionHandle } from '@agent/runtime/SessionHandle';
 import {
+  LOG_LEVELS,
+  MESSAGE_TYPES,
+  ToolError,
+  type RunId,
+  type SessionEvent,
+} from '@shared/schemas';
+import { isTerminalOutcomePhase } from '@shared/runs/runStatus';
+import {
+  BASH_BACKGROUND_LOG_CAP_CHARS,
   type BackgroundBashOutputSource,
   getBackgroundBashOutputSource,
 } from '@shared/toolUse';
+import { executed } from '@tools/core/result';
+import { formatRunStatus } from '../executionFormatters';
 
 /** Lines returned by /executions/{id}/output when no view_range is given. */
-export const OUTPUT_TAIL_LINES = 200;
+const OUTPUT_TAIL_LINES = 200;
 
 /** Hard ceiling on lines a single /output read returns, view_range included. */
-export const OUTPUT_MAX_LINES = 1_000;
+const OUTPUT_MAX_LINES = 1_000;
 
 /** Marks a projected line that the command wrote to stderr. */
 const OUTPUT_STDERR_PREFIX = 'err: ';
@@ -43,7 +56,7 @@ interface ProcessOutputProjection {
  * lines are reconstructed without crossing a stream switch. Untagged lifecycle
  * rows flush any pending command fragment and render standalone.
  */
-export function projectProcessOutput(
+function projectProcessOutput(
   events: readonly SessionEvent[],
 ): ProcessOutputProjection {
   const lines: string[] = [];
@@ -93,3 +106,96 @@ export function projectProcessOutput(
 
   return { lines, chars };
 }
+
+/**
+ * stdout/stderr of a background command, projected from the transcript log
+ * its child run already writes (`createChildRun` in `tools/bash.ts`).
+ *
+ * This is the only route readable *while the command runs*: `/report` and
+ * `/result` are written at completion, and the completion follow-up carries
+ * only a 20-line preview, so without this the middle of a long build log is
+ * unreachable even after the run ends. Restricted to process runs —
+ * an agent run's rows are a model transcript, which `/conversation` already
+ * renders properly.
+ */
+export const showOutput = Effect.fn('ExecutionsTool.showOutput')(function* (
+  session: SessionHandle,
+  runId: RunId,
+  viewRange?: [number, number],
+) {
+  const run = session.view.run(runId);
+  if (run === undefined) {
+    return yield* Effect.fail(new ToolError(`Run not found: ${runId}`));
+  }
+  if (run.identity.kind !== 'process') {
+    return executed(
+      `/executions/${runId}/output is only available for background commands (bash with run_in_background). ` +
+        `Use /executions/${runId}/conversation for an agent run's message history.`,
+    );
+  }
+
+  // The row above already proved the run is in the session's view; its
+  // output is read from the run's own committed rows.
+  const { lines, chars } = projectProcessOutput(
+    yield* session.log.display(runId).pipe(Effect.orDie),
+  );
+  // The row above was read before the transcript, and a command that
+  // finished during that read must not be judged against it: the view is
+  // in memory, so one read of one run can afford a fresh row. Only a
+  // tombstone takes a run out of the view, and then the row this call
+  // already holds is the last honest reading of it.
+  const current = session.view.run(runId) ?? run;
+  // The footer states the same reading as the header, and both come from
+  // the fold: "no handle in this process" alone never justifies calling a
+  // command finished, and a run whose owner is gone reads as interrupted
+  // rather than as one that recorded how it ended.
+  const lead = isTerminalOutcomePhase(current.status)
+    ? 'finished:'
+    : (current.statusDetail ??
+      `still running: re-read for more output, or use action='wait' on /executions/${runId} to block until it finishes;`);
+  const footer = `[${lead} this is the retained log; /executions/${runId}/report has the result summary]`;
+  const out: string[] = [
+    `Output for ${runId} (process, ${formatRunStatus(current)}): ${chars.toLocaleString()} retained transcript chars; command-output cap ${BASH_BACKGROUND_LOG_CAP_CHARS.toLocaleString()} chars, ${lines.length.toLocaleString()} lines.`,
+  ];
+
+  if (lines.length === 0) {
+    out.push('', footer);
+    return executed(out.join('\n'));
+  }
+  out.push('Lines are in arrival order; `err:` marks one written to stderr.');
+
+  // Default to the tail, where a live build's news is; a view_range window
+  // is clamped so a wide request still can't return an unbounded log.
+  const first =
+    viewRange?.[0] ?? Math.max(lines.length - OUTPUT_TAIL_LINES, 0) + 1;
+  const requestedLast = Math.min(viewRange?.[1] ?? lines.length, lines.length);
+  const last = Math.min(requestedLast, first + OUTPUT_MAX_LINES - 1);
+
+  if (first > last) {
+    out.push(
+      `No lines in the requested range; the log has ${lines.length} lines.`,
+      '',
+      footer,
+    );
+    return executed(out.join('\n'));
+  }
+
+  let hint = '';
+  if (last < requestedLast) {
+    hint = ` (capped at ${OUTPUT_MAX_LINES} lines per read; continue from view_range: [${last + 1}, …])`;
+  } else if (!viewRange && first > 1) {
+    hint = ` (the last ${OUTPUT_TAIL_LINES} by default; use view_range to page earlier ones)`;
+  }
+  out.push(
+    `Showing lines ${first}-${last} of ${lines.length}${hint}.`,
+    '',
+    lines.slice(first - 1, last).join('\n'),
+    '',
+    footer,
+  );
+
+  return executed(
+    out.join('\n'),
+    `Read lines ${first}-${last} of /executions/${runId}/output`,
+  );
+});
