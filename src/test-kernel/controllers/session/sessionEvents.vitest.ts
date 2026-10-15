@@ -27,7 +27,6 @@ import {
 import * as os from 'node:os';
 import { tmpdir } from 'node:os';
 import { basename, join } from 'node:path';
-import { monitorEventLoopDelay } from 'node:perf_hooks';
 import { DatabaseSync } from 'node:sqlite';
 
 // Third-party imports
@@ -2916,10 +2915,11 @@ describe('the C1 event table and the C6 publisher', () => {
    * skipped or reused; a commit this connection observed going backwards;
    * and this process's thread held in SQLite's busy wait past the 25 ms
    * slice instead of retrying on its fiber schedule. The child first holds
-   * the write lock for `HOLD_MS`, so that last mode stalls this thread for
-   * about the whole hold, a signal far above a shared runner's scheduling
-   * noise (one 429 ms stall on CI), which an absolute bound over ordinary
-   * contention could not tell apart from it.
+   * the write lock for `HOLD_MS`, so in that last mode the first append
+   * returns only after the hold with no other fiber run in between. A ticker
+   * fiber shows the opposite: it runs while that append waits. Counting its
+   * ticks, not timing the event loop, keeps a shared runner's stalls (9 s
+   * seen on Windows CI) from reading as the regression.
    */
   it.live(
     'shares one store with another OS process',
@@ -2957,20 +2957,28 @@ describe('the C1 event table and the C6 publisher', () => {
         writeFileSync(join(storage, 'go'), '');
         while (!existsSync(join(storage, 'held')))
           yield* Effect.sleep('1 millis');
-        const delay = monitorEventLoopDelay({ resolution: 5 });
-        delay.enable();
-        // The histogram records a stall only after its first sample.
-        yield* Effect.sleep('20 millis');
+        let ticks = 0;
+        yield* Effect.forever(
+          Effect.sync(() => (ticks += 1)).pipe(
+            Effect.andThen(Effect.sleep('5 millis')),
+          ),
+        ).pipe(Effect.forkScoped);
         const blocked = performance.now();
         for (let i = 0; i < ROWS; i += 1) {
+          const before = ticks;
           yield* db.appendAll([waiting]);
-          // The first append waited out the hold: the stall bound is not vacuous.
-          if (i === 0)
+          if (i === 0) {
+            // The first append waited out the hold, so the check is not vacuous.
             expect(performance.now() - blocked).toBeGreaterThan(HOLD_MS / 2);
+            // The busy slice bounds one wait in SQLite; the retry sleeps on
+            // the fiber. A thread held in SQLite for the hold runs no tick.
+            expect(ticks, 'a fiber starved for the whole hold').toBeGreaterThan(
+              before,
+            );
+          }
           yield* db.readAggregate(own, i + 1);
         }
         const code = yield* Effect.promise(() => exited);
-        delay.disable();
         expect(code).toBe(0);
         const total = 2 * (ROWS + 1);
         while ((yield* SubscriptionRef.get(db.observedCommit)) < total)
@@ -2985,9 +2993,6 @@ describe('the C1 event table and the C6 publisher', () => {
           ).toEqual(Array.from({ length: ROWS + 1 }, (_, i) => i + 1));
         expect(observed).toEqual(observed.toSorted((a, b) => a - b));
         expect(observed.at(-1)).toBe(total);
-        // The busy slice bounds one wait in SQLite; the retry sleeps on the
-        // fiber. A thread held in SQLite for the hold stalls about HOLD_MS.
-        expect(delay.max / 1e6).toBeLessThan(HOLD_MS / 2);
       }).pipe(Effect.provide(substrate(storage)), Effect.scoped);
     },
     30_000,

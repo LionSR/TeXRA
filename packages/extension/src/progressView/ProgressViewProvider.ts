@@ -5,7 +5,11 @@ import * as path from 'node:path';
 import * as vscode from 'vscode';
 import { Data, Effect, Exit, FileSystem, Queue, Scope, Stream } from 'effect';
 
-import { LanguageModel, withProcessServices } from '@texra-ai/harness';
+import {
+  AppState,
+  LanguageModel,
+  withProcessServices,
+} from '@texra-ai/harness';
 import {
   SessionHostInteractions,
   type HostInteractions,
@@ -25,6 +29,7 @@ import {
   getFirstRunDone,
   setOnboardingDeclined,
 } from '@shared/state/onboardingState';
+import { GlobalStateKey } from '@shared/state/stateKeys';
 import {
   EXTENSION_CATEGORIES,
   getFilterExtensions,
@@ -335,6 +340,30 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       Effect.forkIn(this.attention.follow(runSession), this.scope),
     );
     this.runtime.runSync(Effect.forkIn(this.chimeOnDocuments(), this.scope));
+    // The funnel follows `firstRunDone` wherever it is written, not a run's
+    // end: a setup chat that parks after delegating has done its first run.
+    // The first element is the subscription itself, not a change.
+    this.runtime.runSync(
+      Effect.forkIn(
+        Stream.unwrap(
+          Effect.map(AppState, (appState) =>
+            appState.changes([GlobalStateKey.ONBOARDING_FIRST_RUN_DONE]),
+          ),
+        ).pipe(
+          Stream.drop(1),
+          Stream.runForEach(() =>
+            this.refreshOnboardingFunnel().pipe(
+              Effect.ignore({
+                log: 'Warn',
+                message: 'Refreshing the onboarding state',
+              }),
+            ),
+          ),
+          withLogChannel(CHANNEL),
+        ),
+        this.scope,
+      ),
+    );
 
     const presentation = createAgentPresentationHost(
       this,

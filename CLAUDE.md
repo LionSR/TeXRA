@@ -292,7 +292,9 @@ the run history.
   flow, and interprets results gets inlined; deleted wrappers leave no
   re-export shims. Factories need multiple callers, real logic, class
   construction, or captured context. Grep the caller count before adding a
-  shared helper: single-caller extractions are banned.
+  shared helper: single-caller extractions are banned. Narrowing a module's
+  export surface to one entry point (fewer exports, same callers) is not an
+  extraction.
 - **UI anti-patterns.** Never compensate for data-model problems at render time
   (no `Date.now()`, synthetic IDs, or dedup in renderers — fix the upstream
   data). One home per user action; secondary surfaces show read-only status.

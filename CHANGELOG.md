@@ -1077,6 +1077,9 @@ show` print the same notice, and the new `texra agents customize`,
 
 ### Bug Fixes
 
+- **VS Code: the getting-started card leaves when your first run completes.**
+  It used to stay until the run you launched ended, so a setup chat that
+  had delegated a finished demo kept showing it.
 - **The approval card for a proposed agent run offers its agent and model
   pickers again.** In the task panel (VS Code and desktop), approving a
   proposed delegation or document task lets you pick another agent or model

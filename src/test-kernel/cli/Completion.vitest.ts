@@ -99,32 +99,21 @@ describe('CLI shell completion', () => {
   });
 
   it('uses the right bash agent listing at each launch boundary', () => {
-    const root = mkdtempSync(path.join(tmpdir(), 'texra-completion-bin-'));
-    const bin = path.join(root, 'bin');
-
-    try {
-      mkdirSync(bin);
-      writeFileSync(
-        path.join(bin, 'texra'),
-        `#!/usr/bin/env bash
-if [[ "$*" == "agents list --quiet --all" ]]; then
-  printf 'task\\tpolish\\nchat\\treview\\nchat\\tlean\\n'
-elif [[ "$*" == "agents list --quiet" ]]; then
-  printf 'task\\tpolish\\nchat\\treview\\n'
-elif [[ "$*" == "models list --quiet" ]]; then
-  printf 'gpt54\\n'
-fi
-`,
-        { mode: 0o755 },
-      );
-      const completions = probeBashCompletion(
-        bash,
-        `
-if command -v cygpath >/dev/null; then
-  export PATH="$(cygpath -u ${bashQuote(bin)}):$PATH"
-else
-  export PATH=${bashQuote(bin)}:$PATH
-fi
+    // A shell function stands in for the binary: the script resolves
+    // texra by name either way, and a function spawns no process, which
+    // a PATH script costs per listing (several, slow on Windows bash).
+    const completions = probeBashCompletion(
+      bash,
+      `
+texra() {
+  if [[ "$*" == "agents list --quiet --all" ]]; then
+    printf 'task\\tpolish\\nchat\\treview\\nchat\\tlean\\n'
+  elif [[ "$*" == "agents list --quiet" ]]; then
+    printf 'task\\tpolish\\nchat\\treview\\n'
+  elif [[ "$*" == "models list --quiet" ]]; then
+    printf 'gpt54\\n'
+  fi
+}
 COMP_WORDS=(texra run p)
 COMP_CWORD=2
 _texra
@@ -142,17 +131,14 @@ COMP_CWORD=3
 _texra
 printf 'agents-show:%s\\n' "\${COMPREPLY[@]}"
 `,
-      );
+    );
 
-      expect(completions).toEqual([
-        'run:polish',
-        'run-chat:review',
-        'agent-flag:lean',
-        'agents-show:polish',
-      ]);
-    } finally {
-      rmSync(root, { recursive: true, force: true });
-    }
+    expect(completions).toEqual([
+      'run:polish',
+      'run-chat:review',
+      'agent-flag:lean',
+      'agents-show:polish',
+    ]);
   });
 
   it('keeps spaced bash file completions as one candidate', () => {

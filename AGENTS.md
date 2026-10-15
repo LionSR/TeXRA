@@ -357,7 +357,7 @@ Avoid factories that add indirection without value: a two-layer factory whose in
 
 A factory IS justified when it is called from multiple locations, contains meaningful logic (validation, defaults, transforms), creates class instances or complex objects, or captures closures with initialization context.
 
-At review time this extends into the abstraction-cost guardrails (code-review checklist § 13): grep the caller count before approving any new shared helper (single-caller extractions are banned), and hold new ports/facades/template-methods to build-implies-delete-in-the-same-PR with net-LOC accounting.
+At review time this extends into the abstraction-cost guardrails (code-review checklist § 13): grep the caller count before approving any new shared helper (single-caller extractions are banned; narrowing a module's export surface to one entry point, fewer exports with the same callers, is not an extraction), and hold new ports/facades/template-methods to build-implies-delete-in-the-same-PR with net-LOC accounting.
 
 ## Code quality rules
 
