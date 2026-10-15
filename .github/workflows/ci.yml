@@ -90,10 +90,11 @@ jobs:
             echo "vscode=false" >> "$GITHUB_OUTPUT"
           fi
           # Published packages = the two npm packages, what their bundles
-          # inline from scripts/, and every file that decides which versions a
-          # consumer's install resolves: a PR touching any of them installs the
-          # packed tarballs the way a consumer would.
-          if grep -qE '^packages/(harness|llm)/|^scripts/(code-sandbox-worker|stub-internal-validation-model)\.mjs$|^(package\.json|pnpm-lock\.yaml|pnpm-workspace\.yaml|tsconfig(\.build)?\.json)$|^\.github/workflows/ci\.yml$' <<<"$files"; then
+          # inline (two scripts/ files, and the patched OpenAI the llm build
+          # bundles), and every file that decides which versions a consumer's
+          # install resolves: a PR touching any of them installs the packed
+          # tarballs the way a consumer would.
+          if grep -qE '^packages/(harness|llm)/|^scripts/(code-sandbox-worker|stub-internal-validation-model)\.mjs$|^patches/openai@|^(package\.json|pnpm-lock\.yaml|pnpm-workspace\.yaml|tsconfig(\.build)?\.json)$|^\.github/workflows/ci\.yml$' <<<"$files"; then
             echo "packages=true" >> "$GITHUB_OUTPUT"
           else
             echo "packages=false" >> "$GITHUB_OUTPUT"
