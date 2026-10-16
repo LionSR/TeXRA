@@ -5,7 +5,7 @@ import { z } from 'zod';
 import { ContextStateDataSchema } from './contextManagement';
 import { JsonValueSchema } from './jsonValue';
 import { FileListEntrySchema, LogLevelSchema, MessageTypeSchema } from './log';
-import { ToolCallStatusSchema } from './progressView/data';
+import { ToolCallStatusSchema, ToolCardSchema } from './progressView/data';
 import { RunOutcomeSchema } from './run';
 import { StageKindSchema } from './taskGroup';
 import { ExtendedTokenUsageStatsSchema } from './usage';
@@ -42,6 +42,8 @@ export const TranscriptEventSchemas = {
     phase: z.string().optional(),
     /** The intent attempt the card opens for, from the second on. */
     attempt: z.int().min(2).optional(),
+    /** The card the tool states for this call (`ToolUseLog.card`). */
+    card: ToolCardSchema.optional(),
   }),
   /**
    * On a run with a run history the card stores no output: `result` is projected

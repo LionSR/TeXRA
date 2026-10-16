@@ -58,6 +58,63 @@ export const TOOL_CALL_STATUS = {
 export const ToolCallStatusSchema = z.enum(TOOL_CALL_STATUS);
 export type ToolCallStatus = z.infer<typeof ToolCallStatusSchema>;
 
+/**
+ * A card a tool states itself instead of one the fold derives from its tool
+ * name: what a plugin reporting an external agent's work (a patch, a thread,
+ * a turn) shows. Plain data in the generic section kinds every renderer
+ * already paints, so the fold stays plugin-agnostic.
+ */
+export const ToolCardSchema = z.object({
+  /** The row header, in place of the tool's display name. */
+  title: z.string(),
+  sections: z.array(
+    z.discriminatedUnion('kind', [
+      z.object({
+        kind: z.literal('text'),
+        label: z.string(),
+        text: z.string(),
+      }),
+      z.object({
+        kind: z.literal('status'),
+        label: z.string(),
+        status: z.string(),
+      }),
+      z.object({
+        kind: z.literal('identifier'),
+        label: z.string(),
+        value: z.string(),
+      }),
+      z.object({
+        kind: z.literal('badges'),
+        label: z.string(),
+        badges: z.array(z.string()),
+      }),
+      z.object({
+        kind: z.literal('fileList'),
+        label: z.string(),
+        files: z.array(
+          z.object({ path: z.string(), note: z.string().optional() }),
+        ),
+      }),
+    ]),
+  ),
+});
+/** A card a tool states itself (`ToolCardSchema`). */
+export type ToolCard = z.infer<typeof ToolCardSchema>;
+
+/**
+ * An MCP tool call's output: its status, its structured content, and its
+ * content blocks. A server need not emit this shape; the tool row shows
+ * output that does not parse as it came.
+ */
+export const McpToolOutputSchema = z.object({
+  status: z.string().nullish(),
+  structuredContent: z.unknown().nullish(),
+  contentBlocks: z.array(z.record(z.string(), z.unknown())).nullish(),
+});
+/** The output an MCP tool call reports (`McpToolOutputSchema`). */
+export type McpToolOutput = z.infer<typeof McpToolOutputSchema>;
+
 export const ToolUseLogSchema = z.object({
   toolName: z.string().optional(),
   input: z.unknown().optional(),
@@ -69,6 +126,7 @@ export const ToolUseLogSchema = z.object({
    *  code states it here, and renderers read it instead of scraping prose. */
   exitCode: z.int().optional(),
   status: ToolCallStatusSchema.optional(),
+  card: ToolCardSchema.optional(),
 });
 export type ToolUseLog = z.infer<typeof ToolUseLogSchema>;
 
@@ -88,6 +146,7 @@ export type NormalizedToolUse = {
   isUserFeedback: boolean;
   headerSummary: string;
   status?: ToolCallStatus;
+  card?: ToolCard;
 };
 
 export const WebSearchPayloadSchema = z.object({

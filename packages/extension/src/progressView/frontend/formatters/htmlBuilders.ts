@@ -161,7 +161,7 @@ export const SPINNER_ICON_NAME = '__spinner__';
  * one `kind: 'status'` tool section, which the codex-turn, codex-patch and MCP
  * rows all converge on. It therefore has to recognize both producer
  * vocabularies: `CodexTurnStateSchema`'s `'running'` and
- * `CodexMcpToolOutputSchema.status`'s `'in_progress'`.
+ * `McpToolOutputSchema.status`'s `'in_progress'`.
  */
 export function triStateStatusIcon(
   status: string,

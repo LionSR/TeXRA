@@ -98,6 +98,7 @@ export function normalizeToolUse(log: ToolUseLog): NormalizedToolUse {
     isUserFeedback,
     headerSummary,
     status: log.status,
+    ...(log.card ? { card: log.card } : {}),
   };
 }
 

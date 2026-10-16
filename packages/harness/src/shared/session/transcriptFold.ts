@@ -121,6 +121,7 @@ function record(d: Draft, event: TranscriptEvent): void {
       const log = {
         toolName: event.toolName,
         input: event.input,
+        ...(event.card ? { card: event.card } : {}),
         status: TOOL_CALL_STATUS.IN_PROGRESS,
       } satisfies ToolUseLog;
       const call = {
@@ -159,11 +160,12 @@ function record(d: Draft, event: TranscriptEvent): void {
       const inProgress = event.status === TOOL_CALL_STATUS.IN_PROGRESS;
       if (inProgress && !ix.activeTools.has(event.logId)) return;
       // On a run with a run history, the card's output is projected from its
-      // settlement and names no tool or input: those are the ones its
+      // settlement and names no tool, input or card: those are the ones its
       // `tool.start` opened.
       slot.log = decodeToolUseLog({
         toolName: slot.log.toolName,
         input: slot.log.input,
+        ...(slot.log.card ? { card: slot.log.card } : {}),
         ...(Predicate.isObject(event.result) ? event.result : {}),
         status: event.status,
       });

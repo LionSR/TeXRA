@@ -47,8 +47,8 @@ export interface ToolSectionFile {
   readonly path: string;
   /** Source path when the call maps a produced file onto a different one. */
   readonly from?: string;
-  /** Parenthetical qualifier for this file alone — a Codex patch's change
-   *  kind (`add`/`update`/`delete`), for instance. */
+  /** Parenthetical qualifier for this file alone — a patch's change kind
+   *  (`add`/`update`/`delete`), for instance. */
   readonly note?: string;
   readonly lineChanges?: { readonly added: number; readonly removed: number };
 }
@@ -287,14 +287,27 @@ export function toolRowModel(
   ctx: ToolRowModelContext = {},
 ): ToolRowModel {
   const headerPreview = toolHeaderPreview(normalized, ctx);
-  const { sections, carriesOutput, fileLinkKind } = dispatchSections({
-    toolName: normalized.toolName,
-    input: normalized.input,
-    filePath: inputFilePath(normalized.input),
-    parsedOutput: ctx.parsedOutput,
-    outputText: normalized.outputText,
-    failed: normalized.status === TOOL_CALL_STATUS.FAILED,
-  });
+  // A card the tool stated is painted as given; any other call's sections
+  // are derived from its name and input.
+  const { card } = normalized;
+  const { sections, carriesOutput, fileLinkKind } = card
+    ? {
+        sections: card.sections.map((section): ToolSection =>
+          section.kind === 'text'
+            ? { ...section, text: transcriptText(section.text) }
+            : section,
+        ),
+        carriesOutput: false,
+        fileLinkKind: undefined,
+      }
+    : dispatchSections({
+        toolName: normalized.toolName,
+        input: normalized.input,
+        filePath: inputFilePath(normalized.input),
+        parsedOutput: ctx.parsedOutput,
+        outputText: normalized.outputText,
+        failed: normalized.status === TOOL_CALL_STATUS.FAILED,
+      });
 
   // A bash call's output is its result even when it echoes the description,
   // so the duplicate check compares against the command, as before
@@ -326,7 +339,7 @@ export function toolRowModel(
     : undefined;
 
   return {
-    headerLabel: displayToolName(normalized.toolName),
+    headerLabel: card?.title ?? displayToolName(normalized.toolName),
     headerPreview,
     sections,
     ...(output ? { output } : {}),

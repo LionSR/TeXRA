@@ -5,7 +5,6 @@ import { strict as assert } from 'node:assert';
 import { describe, it } from 'vitest';
 
 // Local imports
-import { CODEX_FILE_CHANGE_TOOL } from '@shared/schemas';
 import {
   buildCodexCommandToolLog,
   buildCodexFileChangeToolLog,
@@ -38,11 +37,22 @@ describe('buildCodexFileChangeToolLog', () => {
     });
 
     assert.deepEqual(log, {
-      toolName: CODEX_FILE_CHANGE_TOOL,
+      toolName: 'codex_patch',
       summary: 'failed update App.ts',
       input: {
         changes: [{ kind: 'update', path: '/tmp/workspace/src/App.ts' }],
         patchStatus: 'failed',
+      },
+      card: {
+        title: 'Codex Files',
+        sections: [
+          { kind: 'status', label: 'Status:', status: 'failed' },
+          {
+            kind: 'fileList',
+            label: 'Files:',
+            files: [{ path: '/tmp/workspace/src/App.ts', note: 'update' }],
+          },
+        ],
       },
       error: 'Patch apply failed',
       status: 'failed',
