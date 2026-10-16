@@ -1,6 +1,7 @@
 import { Effect } from 'effect';
 
 // Local imports
+import { ToolRegistry } from '@texra-ai/harness/plugins';
 import {
   buildToolDashboardItems,
   visibleToolPlugins,
@@ -8,7 +9,6 @@ import {
 import type { ToolDashboardItem } from '@texra/shared/settingsView/settingsViewMessages';
 import type { ToolPluginSetup } from '@texra/tools/pluginCards';
 import { setToolEnabled } from '@tools/toolAvailability';
-import { ToolRegistry } from '@tools/toolTable';
 import type { ToolProbeInputs, StateStore } from '@texra-ai/harness';
 
 type CliToolGuideKind = 'install' | 'auth';

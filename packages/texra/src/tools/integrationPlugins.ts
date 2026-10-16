@@ -9,6 +9,10 @@
 import { Effect } from 'effect';
 
 // Local imports
+import {
+  definePlugin,
+  type ProcessPluginLayer,
+} from '@texra-ai/harness/plugins';
 import { APP_PLUGIN_ARMS } from '@texra/shared/plugins/appArms';
 import {
   ClaudeAgentSessions,
@@ -47,8 +51,7 @@ import { ZoteroCollectionsTool } from '@texra/tools/zotero/ZoteroCollectionsTool
 import { ZoteroExportTool } from '@texra/tools/zotero/ZoteroExportTool';
 import { ZoteroSearchTool } from '@texra/tools/zotero/ZoteroSearchTool';
 import { ALWAYS_AVAILABLE } from '@tools/toolProbes';
-import { definePlugin, type Plugin } from '@tools/plugins';
-import type { ProcessPluginLayer } from '@tools/toolTable';
+import type { Plugin } from '@texra-ai/harness';
 
 /** A probe without tools: agents run `wolframscript` through `bash`. */
 export const wolfram: Plugin = {
