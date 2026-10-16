@@ -89,7 +89,7 @@ export interface UserRow extends TranscriptRowBase {
   /** Collapsed presentation of a subagent/workflow delivery. Derived, never a
    *  truncation of `text`: hosts choose which of the two to paint. */
   readonly summary: TranscriptText;
-  readonly scriptSummary?: ScriptDeliverySummary;
+  readonly scriptSummary?: ReadonlyDeep<ScriptDeliverySummary>;
   /** Media that was sent to the model beside the text, by kind (no bytes). */
   readonly attachments?: readonly MediaAttachmentKind[];
   /** The files a follow-up attached, which "Fork from here" carries. */

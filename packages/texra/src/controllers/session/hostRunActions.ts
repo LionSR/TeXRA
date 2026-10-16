@@ -27,6 +27,7 @@ import {
   withLogChannel,
   type WorkspaceRoots,
 } from '@texra-ai/harness';
+import { toErrorMessage } from '@texra-ai/harness/schemas';
 import { GlobalStateKey } from '@texra-ai/harness/schemas';
 import {
   presentRunFailure,
@@ -60,7 +61,6 @@ import {
   locateInWorkspace,
   workspaceAbsolutePath,
 } from '@utils/files/workspaceFS';
-import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import {
   ApiKeyPromptFailed,

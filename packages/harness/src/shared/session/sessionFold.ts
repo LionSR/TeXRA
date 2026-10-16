@@ -73,9 +73,9 @@ import {
   runHeldMessage,
   RUN_INTERRUPTED_MESSAGE,
   runResumeBlockedMessage,
-  runStatusCopy,
+  runStatus,
 } from '@shared/runs/runStatusDisplay';
-import { isSettledRow, rowHeadline, type TranscriptRow } from '../transcript';
+import { isSettledRow, rowHeadline } from '../transcript/transcriptRow';
 import {
   applyRunRow,
   freshRunRows,
@@ -99,7 +99,7 @@ import {
 
 import { runActions } from './runActions';
 import { emptySessionView, rollupOf } from './sessionView';
-import type { SessionView, RunView } from './sessionView';
+import type { SessionView, RunView, TranscriptView } from './sessionView';
 
 type RunStartEvent = Extract<DisplaySessionEvent, { type: 'run.start' }>;
 
@@ -322,7 +322,7 @@ function createRun(
     durableOutcome: null,
     statusDetail: null,
     lost: null,
-    ...runStatusCopy(RUN_LIFECYCLE_READY),
+    ...runStatus(RUN_LIFECYCLE_READY),
     createdAt: event.commit,
     launchedAt: event.at,
     runStartedAt: null,
@@ -486,7 +486,7 @@ function refreshAncestors(view: SessionView, runId: RunId): void {
 // ---------------------------------------------------------------------------
 
 /**
- * A run's aggregates and status copy, from its facts, the local snapshot and
+ * A run's aggregates and status key, from its facts, the local snapshot and
  * its children (5.2). Interrupted is owner loss: a non-terminal run nobody
  * holds, pending approval or not. Waiting needs a held owner and a request
  * that parks its tool; unheld, it reads as interrupted, since nothing
@@ -523,7 +523,7 @@ function withAggregates(view: SessionView, run: RunView): RunView {
   let approval: RunView['approval'] = 'none';
   if (waiting) approval = 'own';
   else if (descendantWaiting) approval = 'descendant';
-  const copy = runStatusCopy(run.status, {
+  const status = runStatus(run.status, {
     substate: run.substate ?? undefined,
     interrupted,
     waiting,
@@ -552,7 +552,7 @@ function withAggregates(view: SessionView, run: RunView): RunView {
     durableOutcome,
     rollup: rollupOf(children),
     treeUsage,
-    ...copy,
+    ...status,
     statusDetail,
     resumeBlocked,
   });
@@ -607,7 +607,7 @@ function nonEmpty(text: string | undefined): string | undefined {
  *  script's run, a task's recipe): what its tool, card, error, or
  *  plain log row last said. */
 function operationalLatestLine(
-  rows: readonly TranscriptRow[],
+  rows: TranscriptView['rows'],
 ): string | undefined {
   for (let index = rows.length - 1; index >= 0; index -= 1) {
     const row = rows[index];
@@ -631,7 +631,7 @@ function operationalLatestLine(
 
 /** Any other run's newest user instruction or settled model reply. */
 function latestConversationLine(
-  rows: readonly TranscriptRow[],
+  rows: TranscriptView['rows'],
   settledRows: number,
 ): string | undefined {
   for (let index = rows.length - 1; index >= 0; index -= 1) {
@@ -660,7 +660,7 @@ function latestConversationLine(
  * kind whose state bridge cleanup can still replace (a compaction block).
  */
 function advanceSettledRows(
-  rows: readonly TranscriptRow[],
+  rows: TranscriptView['rows'],
   start: number,
   runFinal: boolean,
 ): number {

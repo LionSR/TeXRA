@@ -23,8 +23,8 @@ import {
   type RunId,
   type ToolFact,
 } from '@shared/schemas';
-import type { SessionView } from '@shared/session/sessionView';
 import type { ValueFamily } from '@shared/session/valueFamily';
+import type { SessionView } from '@texra-ai/harness/schemas';
 
 /** A thread's full record: its turns, explicit `status` and the asking run. */
 const InquiryThreadRecordSchema = z.object({

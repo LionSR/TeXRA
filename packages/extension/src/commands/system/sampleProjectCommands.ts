@@ -7,6 +7,7 @@ import * as vscode from 'vscode';
 
 // Local imports - fs
 import { WorkspaceFs } from '@texra-ai/harness';
+import { ensureError } from '@texra-ai/harness/schemas';
 import {
   showLoggedErrorMessage,
   showLoggedInfoMessage,
@@ -14,7 +15,6 @@ import {
 } from '@frontend/ui/errorHandlingUtils';
 import { selectFolder } from '@frontend/ui/dialogs';
 import { openFileInEditor } from '@frontend/vscode/vscodeEditor';
-import { ensureError } from '@utils/errors/errorMessage';
 import type { ProcessServices } from '@texra-ai/harness';
 
 const CHANNEL = 'SampleProjectCommands';

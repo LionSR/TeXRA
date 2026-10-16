@@ -17,12 +17,12 @@ import { Effect } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports
+import { toErrorMessage } from '@texra-ai/harness/schemas';
 import {
   SetupCommandFailed,
   SetupExtensionInstallFailed,
   type SetupPlatformShape,
 } from '@texra/tools/setup/platform';
-import { toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local file imports
 import { runTerminalCommand } from './setupTerminalRunner';

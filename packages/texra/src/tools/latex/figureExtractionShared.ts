@@ -1,6 +1,7 @@
 import { Effect, FileSystem } from 'effect';
 import { z } from 'zod';
 import { ToolContext } from '@texra-ai/harness';
+import { ensureError } from '@texra-ai/harness/schemas';
 import {
   resolveToolPath,
   type WorkspacePathResolution,
@@ -14,7 +15,6 @@ import {
 import { buildFileAttachment } from '@tools/attachments';
 import { formatToolOutput } from '@tools/formatting';
 import { entryExists } from '@utils/files/fsEntryExists';
-import { ensureError } from '@utils/errors/errorMessage';
 
 /** Shared `texPath` Zod field for LaTeX extraction tools, with a per-tool description. */
 export function texPathField(description: string): z.ZodString {

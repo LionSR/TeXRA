@@ -7,7 +7,8 @@ import { hasExtension } from '@texra-ai/harness';
 import { Effect, FileSystem, type PlatformError } from 'effect';
 
 // Local imports
-import { isFileNotFoundError } from '@common/errors';
+import { isFileNotFoundError } from '@texra-ai/harness';
+import { createRunStorageLocation } from '@texra-ai/harness';
 import {
   fileLocationDisplayPath,
   type RunId,
@@ -15,7 +16,6 @@ import {
   type RunStorageFileLocation,
 } from '@shared/schemas';
 import { stripWorkflowRoundDir } from '@texra/shared/constants/workflowOutput';
-import { createRunStorageLocation } from '@utils/files/fileLocation';
 
 interface PublishCompiledPdfOptions {
   runDirectory: string;

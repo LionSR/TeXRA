@@ -67,37 +67,39 @@ export type ToolCallStatus = z.infer<typeof ToolCallStatusSchema>;
 export const ToolCardSchema = z.object({
   /** The row header, in place of the tool's display name. */
   title: z.string(),
-  sections: z.array(
-    z.discriminatedUnion('kind', [
-      z.object({
-        kind: z.literal('text'),
-        label: z.string(),
-        text: z.string(),
-      }),
-      z.object({
-        kind: z.literal('status'),
-        label: z.string(),
-        status: z.string(),
-      }),
-      z.object({
-        kind: z.literal('identifier'),
-        label: z.string(),
-        value: z.string(),
-      }),
-      z.object({
-        kind: z.literal('badges'),
-        label: z.string(),
-        badges: z.array(z.string()),
-      }),
-      z.object({
-        kind: z.literal('fileList'),
-        label: z.string(),
-        files: z.array(
-          z.object({ path: z.string(), note: z.string().optional() }),
-        ),
-      }),
-    ]),
-  ),
+  sections: z
+    .array(
+      z.discriminatedUnion('kind', [
+        z.object({
+          kind: z.literal('text'),
+          label: z.string(),
+          text: z.string(),
+        }),
+        z.object({
+          kind: z.literal('status'),
+          label: z.string(),
+          status: z.string(),
+        }),
+        z.object({
+          kind: z.literal('identifier'),
+          label: z.string(),
+          value: z.string(),
+        }),
+        z.object({
+          kind: z.literal('badges'),
+          label: z.string(),
+          badges: z.array(z.string()).readonly(),
+        }),
+        z.object({
+          kind: z.literal('fileList'),
+          label: z.string(),
+          files: z
+            .array(z.object({ path: z.string(), note: z.string().optional() }))
+            .readonly(),
+        }),
+      ]),
+    )
+    .readonly(),
 });
 /** A card a tool states itself (`ToolCardSchema`). */
 export type ToolCard = z.infer<typeof ToolCardSchema>;

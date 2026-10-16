@@ -11,7 +11,7 @@
 
 import { Cause, Effect } from 'effect';
 
-import { ensureError } from '@utils/errors/errorMessage';
+import { ensureError } from '@texra-ai/harness/schemas';
 
 import {
   ghGet,

@@ -10,6 +10,7 @@
 import { Effect, FileSystem } from 'effect';
 
 // Local imports - types
+import { toErrorMessage } from '@texra-ai/harness/schemas';
 import { NotificationFailed, type DiffSource } from '@texra/hosts/uiHosts';
 import type {
   ToolEditApprovalHost,
@@ -21,7 +22,6 @@ import type { BuildDisplayFn } from '@texra/tools/latex/latexPreview';
 import { writeApprovalTempFiles } from '@texra/tools/approval/tempFileManager';
 import type { ToolEditApprovalRequest } from '@tools/approval/toolEditApproval';
 
-import { toErrorMessage } from '@utils/errors/errorMessage';
 import type { HostRequestFailure } from '@texra-ai/harness';
 
 import type { DesktopAgentRunHost } from './desktopAgentRunHost.js';

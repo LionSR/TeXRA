@@ -18,7 +18,7 @@ import type {
 import type { LanguageModelPort } from '@platform/languageModel';
 import type { PlatformSecrets } from '@platform/secrets';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
-import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
+import type { ApprovalPolicy } from '@shared/approvalPolicy';
 import type {
   CommitOrdinal,
   FoldInput,
@@ -27,14 +27,12 @@ import type {
   RunId,
   TranscriptSubscription,
 } from '@shared/schemas';
-import type { ReadonlyDeep } from '@shared/session/readonlyDeep';
 import type { RequestError } from '@shared/session/requestErrors';
 import type { Outcome, RuntimeRequest } from '@shared/session/runtimeRequest';
 import type {
-  SessionView as RuntimeSessionView,
-  RunView as RuntimeRunView,
-  TranscriptView as RuntimeTranscriptView,
-} from '@shared/session/sessionView';
+  PendingRequest,
+  SessionView,
+} from '@shared/session/readonlyViews';
 import type { Plugin } from '@tools/plugins';
 import type { Effect, Stream, Scope } from 'effect';
 
@@ -74,16 +72,13 @@ export interface Composition {
   readonly plugins: readonly Plugin[];
 }
 
-/** One published level of the session's fold: an immutable value. */
-export type SessionView = ReadonlyDeep<RuntimeSessionView>;
-/** One stream of the {@link SessionView}. */
-export type RunView = ReadonlyDeep<RuntimeRunView>;
-/** A stream's transcript slice: what hosts paint. */
-export type TranscriptView = ReadonlyDeep<RuntimeTranscriptView>;
-/** A request a run waits on a person for, as {@link SessionView} lists it:
- *  which run asks, the request's id, and its payload (`payload.kind` is
- *  what is asked: a command, an edit, a plan, a retry, a question). */
-export type PendingRequest = SessionView['requests'][number];
+// The views a host reads, read-only all the way down.
+export type {
+  PendingRequest,
+  RunView,
+  SessionView,
+  TranscriptView,
+} from '@shared/session/readonlyViews';
 
 /**
  * A host's answer to each request a run of the session waits on: an
@@ -142,7 +137,7 @@ export type StartInput = (
   /** The policy the launch asked for (it only ever narrows the project's),
    *  and whether delegated work starts approved (Auto-approve). */
   readonly approval?: {
-    readonly policy?: TexraApprovalPolicy;
+    readonly policy?: ApprovalPolicy;
     readonly delegated?: boolean;
   };
   /** A window's run, which parks for input after each cycle; absent, the

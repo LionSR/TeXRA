@@ -17,6 +17,7 @@ import { normalizeFilePath } from '@texra-ai/harness/schemas';
 import { Data, Effect, FileSystem, type PlatformError } from 'effect';
 
 import { Rejected, isPathWithin, OFFICE_EXTENSIONS } from '@texra-ai/harness';
+import { toErrorMessage } from '@texra-ai/harness/schemas';
 import { onAppSignal } from '@eventBus/AppSignals';
 import { FILE_HANDLING_RULES } from '@texra/common/files/fileHandlingRules';
 import { getIncludedExtensions } from '@texra/common/files/fileTypeUtils';
@@ -28,7 +29,6 @@ import {
   shouldVisitDirectory,
 } from '@texra/common/files/fileListingRules';
 import { locateInWorkspace } from '@utils/files/workspaceFS';
-import { toErrorMessage } from '@utils/errors/errorMessage';
 import { readDirectoryTypedTolerant } from '@utils/files/fsDurability';
 import { entryTypeIn } from '@utils/files/fsEntryExists';
 import { normalizeLineEndings } from '@utils/text/stringUtils';

@@ -402,7 +402,7 @@ describe('Tool edit approval gating', () => {
       assert.strictEqual(write.mock.calls.length, 0);
       assert.strictEqual(result.status, 'error');
       assert.strictEqual(result.userInstruction, undefined);
-      assert.match(result.error ?? '', /Denied by TeXRA approval policy\./);
+      assert.match(result.error ?? '', /Denied by the approval policy\./);
       assert.strictEqual(policyDenials, 1);
     }),
   );

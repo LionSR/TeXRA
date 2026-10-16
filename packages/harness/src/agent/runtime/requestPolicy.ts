@@ -34,13 +34,13 @@ import {
 import {
   decideHumanInputRequest,
   decideRetryApproval,
-  decideTexraApproval,
-  isTexraApprovalDenied,
-  texraApprovalDenialMessage,
-  texraHumanInputDenialMessage,
-  texraRetryDenialMessage,
+  decideApproval,
+  isApprovalDenied,
+  approvalPolicyDenialMessage,
+  humanInputDenialMessage,
+  retryDenialMessage,
   type ApprovalPolicyDenial,
-  type TexraApprovalPolicy,
+  type ApprovalPolicy,
 } from '@shared/approvalPolicy';
 import {
   qualifyAggregateId,
@@ -83,7 +83,7 @@ const executableDecision = (
   // asked nothing: every approval it would open is granted.
   scopedBypass = session.approvals.bypass(runId, 'superYolo') !== null,
 ) =>
-  decideTexraApproval({
+  decideApproval({
     policy,
     promptRequired: true,
     scopedBypass,
@@ -113,7 +113,7 @@ function answerFor(
       return {
         decision: {
           action: 'deny',
-          reason: texraApprovalDenialMessage(decision),
+          reason: approvalPolicyDenialMessage(decision),
         },
         denial: { kind: 'plan', policy },
       };
@@ -127,7 +127,7 @@ function answerFor(
       return {
         decision: {
           action: 'deny',
-          reason: texraHumanInputDenialMessage(decision.deny),
+          reason: humanInputDenialMessage(decision.deny),
         },
         denial: { kind: 'humanInput', deny: decision.deny, policy },
       };
@@ -144,7 +144,7 @@ function answerFor(
       return {
         decision: {
           action: 'deny',
-          reason: texraRetryDenialMessage(decision.deny),
+          reason: retryDenialMessage(decision.deny),
         },
         denial: { kind: 'retry', deny: decision.deny, policy },
       };
@@ -190,7 +190,7 @@ export function liveToolGates({
 }: Pick<AgentRunShape, 'session' | 'runId'> & {
   readonly entry: Pick<AgentRunShape['entry'], 'registration'>;
 }): Pick<StepToolInputs, 'approvalPromptsUnavailable'> & {
-  readonly policy: TexraApprovalPolicy;
+  readonly policy: ApprovalPolicy;
 } {
   const view = SubscriptionRef.getUnsafe(session.view.ref);
   const start = entry.registration?.[0];
@@ -201,7 +201,7 @@ export function liveToolGates({
   const policy = runPolicy(session.approvals.policy(), source, runId);
   const bypassed = resolveBypass(source, runId, 'superYolo') !== null;
   return {
-    approvalPromptsUnavailable: isTexraApprovalDenied(
+    approvalPromptsUnavailable: isApprovalDenied(
       executableDecision(session, runId, policy, bypassed),
     ),
     policy,

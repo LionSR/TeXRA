@@ -7,7 +7,7 @@ import { COLOR_HINT } from '@cli/tui/ui/colors';
 import { COLLAPSED, EXPANDED, TICK } from '@cli/tui/ui/glyphs';
 import { useLiveNowMsSince } from '@cli/tui/useLiveNowMs';
 import { truncateSummaryToWidth } from '@cli/runtime/terminalText';
-import { formatLoopPositionLabel } from '@ui/copy/runStatus';
+import { formatLoopPositionLabel, runStatusLabel } from '@ui/copy/runStatus';
 import { formatResultCount } from '@utils/text/stringUtils';
 
 import { activeStartedAt, childElapsed } from '../state/childControls';
@@ -98,7 +98,7 @@ function SessionRow({
   readonly run: RunView;
 }): React.JSX.Element {
   const status = runPhaseOf(run);
-  const statusLabel = run.statusLabel;
+  const statusLabel = runStatusLabel(run.statusKey);
   const elapsed = childElapsed(
     { status, startedAt: activeStartedAt(run) },
     nowMs,

@@ -4,9 +4,9 @@ import { z } from 'zod';
 import { defineTool, ToolContext, withLogChannel } from '@texra-ai/harness';
 
 // Internal imports
+import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';
 import { resolveToolPath, executed } from '@texra-ai/harness/plugins';
 import { ToolError, type ToolResult } from '@shared/schemas';
-import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { formatResultCount } from '@utils/text/stringUtils';
 
 // Local file imports

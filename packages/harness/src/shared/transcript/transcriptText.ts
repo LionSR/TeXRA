@@ -40,12 +40,13 @@ export function transcriptText(raw: string): TranscriptText {
 }
 
 /** Head/tail line budget a host chooses for one paint. */
-interface TextBudget {
+export interface TextBudget {
   readonly headLines: number;
   readonly tailLines: number;
 }
 
-interface ElidedText {
+/** What an elision keeps: the head and tail lines, and how many it hid. */
+export interface ElidedText {
   readonly head: readonly string[];
   readonly tail: readonly string[];
   /** Lines between `head` and `tail`; zero when nothing was hidden. */

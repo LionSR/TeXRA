@@ -11,7 +11,6 @@ import { customElement, property, state } from 'lit/decorators.js';
 import { repeat } from 'lit/directives/repeat.js';
 
 // Local imports - shared
-import type { MemoryViewItem } from '@shared/tools/memoryView';
 import { designTokens, commonViewStyles } from '@ui/styles';
 import { renderEmptyState } from '@ui/wa/emptyState';
 
@@ -24,6 +23,7 @@ import {
   DEFAULT_PAGE_SIZE,
   type PageChangeDetail,
 } from '../shared/Pagination';
+import type { MemoryViewItem } from '@texra-ai/harness/schemas';
 
 function hasSameMemoryOrder(
   previous: readonly MemoryViewItem[] | undefined,

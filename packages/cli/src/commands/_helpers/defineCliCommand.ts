@@ -2,6 +2,7 @@ import { defineCommand, type ArgsDef, type CommandDef } from 'citty';
 import { Cause, Effect, Exit, Result } from 'effect';
 
 import { setLogSink } from '@texra-ai/harness';
+import { ensureError } from '@texra-ai/harness/schemas';
 import {
   installCliProcessRuntime,
   NO_PLATFORM_INSTALL,
@@ -15,7 +16,6 @@ import {
 import type { RunChatInit } from '@cli/chat/tui/runChatTui';
 import type { CliContext } from '@cli/runtime/cliContext';
 import { CliExitCode } from '@cli/runtime/exitCodes';
-import { ensureError } from '@utils/errors/errorMessage';
 
 import { contextFromArgs } from './context';
 import { setExitCode } from './exitCode';

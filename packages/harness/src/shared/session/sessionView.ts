@@ -41,8 +41,11 @@ import {
   type RunId,
 } from '@shared/schemas';
 import { isActivePhase, isTerminalOutcomePhase } from '@shared/runs/runStatus';
-import { RUN_STATUS_TONE } from '@shared/runs/runStatusDisplay';
-import type { TranscriptRow } from '@shared/transcript';
+import {
+  RUN_STATUS_KEYS,
+  RUN_STATUS_TONE,
+} from '@shared/runs/runStatusDisplay';
+import type { TranscriptRow } from '@shared/transcript/transcriptRow';
 import type { ReadonlyDeep } from './readonlyDeep';
 
 /** Which session (paper) a view is of: the session's storage root. */
@@ -121,9 +124,9 @@ const RunViewSchema = z.object({
   statusDetail: z.string().nullable(),
   /** The result its end lost (a `result-lost` error), whatever its outcome. */
   lost: z.string().nullable(),
-  // G4: one table (`runStatusDisplay`) spells both, through the status
-  // and substate or the interrupted reading.
-  statusLabel: z.string(),
+  // G4: one table (`runStatusDisplay`) keys both, through the status and
+  // substate or the interrupted reading; `@ui/copy/runStatus` words the key.
+  statusKey: z.enum(RUN_STATUS_KEYS),
   tone: z.enum(RUN_STATUS_TONE),
   /** Immutable: the commit ordinal of this run's `run.start`; the
    *  ordering key. */
@@ -227,8 +230,8 @@ export function isLiveRun(
  * finished, not running.
  */
 export function rollupOf(
-  children: readonly RunView[],
-  below: (child: RunView) => RunView['rollup'] = (child) => child.rollup,
+  children: readonly ReadRunView[],
+  below: (child: ReadRunView) => RunView['rollup'] = (child) => child.rollup,
 ): RunView['rollup'] {
   const rollup = { total: 0, running: 0, finished: 0 };
   for (const child of children) {
@@ -429,19 +432,13 @@ export function emptySessionView(
   };
 }
 
-/** The read shape `descendantRuns` needs: `SessionView` itself or any
- *  deep-readonly projection of it (a `Map` satisfies `ReadonlyMap`). */
-type RunTopology = {
-  readonly runs: ReadonlyMap<RunId, { readonly childIds: readonly RunId[] }>;
-};
-
 /**
  * Every run under `rootRunId`, parents first: the topology `childIds`
  * (root to leaf) and `ancestors` (leaf to root) already state on every row,
  * so a host walks the fold's own facts instead of re-deriving them.
  */
 export function descendantRuns(
-  view: RunTopology,
+  view: Pick<ReadSessionView, 'runs'>,
   rootRunId: RunId | undefined,
   { includeRoot }: { includeRoot: boolean },
 ): readonly RunId[] {

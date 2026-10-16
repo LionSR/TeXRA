@@ -26,7 +26,11 @@
 // Third-party imports
 import { z } from 'zod';
 
-import { InstalledPluginSchema } from '@shared/schemas';
+import {
+  InstalledPluginSchema,
+  RUN_OUTCOME,
+  type RunOutcome,
+} from '@shared/schemas';
 
 /**
  * The two keys every line carries beyond the record a command builds: `ts`,
@@ -121,3 +125,33 @@ const CliNdjsonRecordSchema = z.discriminatedUnion('kind', [
 
 /** A single `--output-format ndjson` line record. */
 export type CliNdjsonRecord = z.infer<typeof CliNdjsonRecordSchema>;
+
+/** The run-status vocabulary the CLI prints and its history records. */
+const CLI_RUN_STATUS = {
+  COMPLETED: 'completed',
+  INTERRUPTED: 'interrupted',
+  ERROR: 'error',
+} as const;
+
+export type CliRunStatus = (typeof CLI_RUN_STATUS)[keyof typeof CLI_RUN_STATUS];
+
+/**
+ * Project the canonical outcome onto the frozen public run-status
+ * vocabulary (CLI NDJSON history status, CLI display prose).
+ * The only production mapping — flows and hosts must not hand-roll their
+ * own. An out-of-vocabulary value (stale fixture, unparsed legacy data)
+ * fails with a named error instead of an undefined-property crash
+ * downstream.
+ */
+export function runOutcomeToCliRunStatus(outcome: RunOutcome): CliRunStatus {
+  switch (outcome) {
+    case RUN_OUTCOME.COMPLETED:
+      return CLI_RUN_STATUS.COMPLETED;
+    case RUN_OUTCOME.CANCELLED:
+      return CLI_RUN_STATUS.INTERRUPTED;
+    case RUN_OUTCOME.FAILED:
+      return CLI_RUN_STATUS.ERROR;
+    default:
+      throw new Error(`Unhandled run outcome: ${String(outcome)}`);
+  }
+}

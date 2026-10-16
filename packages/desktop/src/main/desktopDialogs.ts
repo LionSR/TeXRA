@@ -9,9 +9,9 @@ import {
   INSTRUCTION_ACTION,
   type InstructionAction,
 } from '@texra-ai/harness/schemas';
+import { toErrorMessage } from '@texra-ai/harness/schemas';
 import { NotificationFailed, PromptFailed } from '@texra/hosts/uiHosts';
 import { TranscriptExportFailed } from '@texra/controllers/progressView/transcriptExportFailure';
-import { toErrorMessage } from '@utils/errors/errorMessage';
 
 // Button labels for the instruction dialog below. Desktop has one settings
 // home (Settings tab), so SET_API_KEY opens it directly rather than the

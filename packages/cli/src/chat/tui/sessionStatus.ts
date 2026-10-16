@@ -1,20 +1,18 @@
+import { summarizeSubagentFollowup } from '@texra-ai/harness/transcript';
+import { getModelLabel } from '@texra-ai/harness/schemas';
 import { formatCliModelAccessRoute } from '@cli/runtime/modelAccessRoute';
 import {
   isEmptyUsage,
   type TokenUsageStats,
   type UsageRoute,
 } from '@shared/schemas';
-import {
-  formatTexraApprovalPolicy,
-  type TexraApprovalPolicy,
-} from '@shared/approvalPolicy';
-import { summarizeSubagentFollowup } from '@shared/subagentFollowup';
-import { getModelLabel } from '@shared/model/modelLabel';
+import { formatApprovalPolicy } from '@ui/copy/approvalPolicy';
 import { RUN_GRANT_NOUN, RUN_GRANT_ORDER } from '@ui/copy/delegationApproval';
 import { usageCostLabel } from '@ui/copy/modelAccess';
 import { truncateSummary } from '@utils/text/stringUtils';
 
 import { formatResumeCommand } from './state/resumeHint';
+import type { ApprovalPolicy } from '@texra-ai/harness/schemas';
 import type { RunView, SessionView } from '@texra-ai/harness';
 import type { BypassState } from './panes/statusBarDisplay';
 
@@ -45,7 +43,7 @@ export interface CliSessionStatusInput {
   readonly commandName?: string;
   readonly cwd?: string;
   readonly processCwd?: string;
-  readonly approvalPolicy: TexraApprovalPolicy;
+  readonly approvalPolicy: ApprovalPolicy;
   /** The task's spend (`taskCostStatus`); undefined before anything is
    *  metered. */
   readonly cost?: CliSessionCostStatus;
@@ -129,7 +127,7 @@ export function formatCliSessionStatus(input: CliSessionStatusInput): string {
     `agent: ${input.agent}`,
     `model: ${getModelLabel(input.model)}`,
     `model access: ${formatCliModelAccessRoute(input.modelAccess)}`,
-    `approval: ${formatTexraApprovalPolicy(input.approvalPolicy)}`,
+    `approval: ${formatApprovalPolicy(input.approvalPolicy)}`,
     ...(bypassLabels.length > 0
       ? [`auto-approvals: ${bypassLabels.join(', ')}`]
       : []),

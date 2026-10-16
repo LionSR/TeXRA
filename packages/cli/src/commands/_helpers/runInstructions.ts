@@ -4,7 +4,7 @@
  * notices, and the tool-use/team instruction assemblers built on top
  * of them. Formerly one file per concern under `_helpers/`.
  */
-import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
+import type { ApprovalPolicy } from '@texra-ai/harness/schemas';
 
 const TERMINAL_RUN_GUIDANCE =
   'This CLI run exits after your final response. Do not end by asking the user whether to perform more work; either complete the requested work now or state the exact artifacts and next command/action for a future run.';
@@ -97,7 +97,7 @@ export function formatTeamRunInstruction(
     readonly instruction: string;
     readonly approvalContext: {
       readonly mode: 'headless' | 'interactive';
-      readonly approvalPolicy: TexraApprovalPolicy;
+      readonly approvalPolicy: ApprovalPolicy;
     };
     readonly workingDirectory: string;
   },

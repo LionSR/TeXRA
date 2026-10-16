@@ -9,13 +9,13 @@ import {
 import { Box, Text, useInput, useWindowSize, type Key } from 'ink';
 import { Cause, Effect } from 'effect';
 
+import { toErrorMessage } from '@texra-ai/harness/schemas';
 import { attachClipboardImage } from '@cli/runtime/clipboardImage';
 import { writeTextStderr } from '@cli/runtime/logSinks';
 import { wrapAnsiToWidth } from '@cli/tui/ansiWrap';
 import { isCtrlInput } from '@cli/tui/inputKeys';
 import { COLOR_BORDER, COLOR_HINT } from '@cli/tui/ui/colors';
 import { POINTER } from '@cli/tui/ui/glyphs';
-import { toErrorMessage } from '@utils/errors/errorMessage';
 import { BaseTextInput } from '../input/BaseTextInput';
 import { textInputCappedRowCount } from '../input/textInputDisplay';
 import {

@@ -14,8 +14,8 @@ import * as path from 'node:path';
 import { Effect, FileSystem, Predicate } from 'effect';
 
 // Local imports
+import { ensureError } from '@texra-ai/harness/schemas';
 import type { FileLocation } from '@shared/schemas';
-import { ensureError } from '@utils/errors/errorMessage';
 import { normalizeLineEndings } from '@utils/text/stringUtils';
 
 // Local file imports

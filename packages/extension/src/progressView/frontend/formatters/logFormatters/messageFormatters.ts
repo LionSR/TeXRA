@@ -23,18 +23,18 @@ import { when } from 'lit/directives/when.js';
 
 // Local imports - shared schemas and utilities
 import type { LogLevel } from '@shared/schemas';
-import type {
-  ErrorRow,
-  LogRow,
-  ProgressStatusRow,
-  UserRow,
-} from '@shared/transcript';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 
 // Local imports - formatter helpers
 import { formatDisplayTimestamp } from '../timestampUtils';
 import { ICON_BY_LEVEL } from '../constants';
 import { buildCopyButton } from '../htmlBuilders';
+import type {
+  ErrorRow,
+  LogRow,
+  ProgressStatusRow,
+  UserRow,
+} from '@texra-ai/harness/transcript';
 import type { FormatResult } from '../baseLogFormatter';
 
 /** Level-decorated icon shared by the progress-status and default formatters. */
@@ -77,7 +77,7 @@ export function formatProgressStatusTemplate(
 
 /**
  * Format error message as TemplateResult. The detail field set and its display
- * order are the row's — see `ERROR_DETAIL_FIELDS` in `@shared/transcript`.
+ * order are the row's — see `ERROR_DETAIL_FIELDS` in `@texra-ai/harness/transcript`.
  */
 export function formatErrorTemplate(row: ErrorRow): FormatResult {
   const { id, groupId, timestamp } = row;

@@ -1,6 +1,6 @@
 import { Cause, Effect } from 'effect';
 
-import { toErrorMessage } from '@utils/errors/errorMessage';
+import { toErrorMessage } from '@texra-ai/harness/schemas';
 
 import { setTransientNotice } from '../state/cliState';
 import { appendLocalErrorTranscript } from '../state/transcript';
