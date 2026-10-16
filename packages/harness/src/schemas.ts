@@ -83,3 +83,16 @@ export {
   TraceDocumentSchema,
   type TraceDocument,
 } from '@transcript/traceDocumentSchema';
+// The setting rows a `ConfigProvider` resolves against (its `catalog`) and
+// the harness's own state keys, as a settings UI (a webview included) builds
+// its catalog from them and names the rows it renders.
+export {
+  configTreeRows,
+  settingsCatalog,
+  type SettingsCatalog,
+  type SettingsViewSnapshot,
+  type SettingsViewStateSettingEntry,
+  type StateSettingEntry,
+  type SurfacedSettingEntry,
+} from '@shared/state/stateSettings';
+export { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';

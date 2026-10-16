@@ -7,6 +7,7 @@ import {
   UNAVAILABLE_LANGUAGE_MODEL_PORT,
 } from '@platform/languageModel';
 import type { ModelOptionData, UsageRoute } from '@shared/schemas';
+import { GlobalStateKey } from '@shared/state/stateKeys';
 import { FakeSecrets } from '@test/support/FakePlatform';
 import { makeFakeSettingsStores } from '@test/support/settingsStoresFake';
 import { withEnv } from '@test/support/testEnv';
@@ -22,7 +23,6 @@ import { SETUP_MODEL_BY_PROVIDER } from '@texra/model/setupModelDefaults';
 const mocks = vi.hoisted(() => ({
   rows: new Map<string, Partial<ModelOptionData>>(),
   usageRoutes: new Map<string, UsageRoute>(),
-  getUseOpenRouter: vi.fn<() => Effect.Effect<boolean>>(),
 }));
 
 vi.mock('@model/computeModelOptions', () => ({
@@ -46,10 +46,6 @@ vi.mock('@texra/model/modelOptions', () => ({
     })),
 }));
 
-vi.mock('@utils/config/providerConfig', () => ({
-  getUseOpenRouter: mocks.getUseOpenRouter,
-}));
-
 const { resolveSetupLaunchModel } =
   await import('@texra/model/setupCredentialAccess');
 
@@ -57,13 +53,18 @@ beforeEach(() => {
   mocks.rows.clear();
   mocks.usageRoutes.clear();
   secrets = new FakeSecrets();
-  mocks.getUseOpenRouter.mockReset().mockReturnValue(Effect.succeed(false));
+  fake = makeFakeSettingsStores();
 });
 
 /** The key store each case starts empty; keys resolve from it and an empty
  *  environment, never the developer's shell. */
 let secrets = new FakeSecrets();
-const stores = makeFakeSettingsStores().stores;
+let fake = makeFakeSettingsStores();
+
+/** Turn the user's "Use OpenRouter for all models" switch on. */
+function routeThroughOpenRouter(): void {
+  Effect.runSync(fake.globalState.update(GlobalStateKey.USE_OPENROUTER, true));
+}
 
 const runSetup = <A, E>(program: Effect.Effect<A, E, LanguageModel>) =>
   Effect.runPromise(
@@ -75,7 +76,7 @@ const runSetup = <A, E>(program: Effect.Effect<A, E, LanguageModel>) =>
 
 function launchModel(includeAccessListFallback: boolean) {
   return runSetup(
-    resolveSetupLaunchModel(stores, secrets, includeAccessListFallback),
+    resolveSetupLaunchModel(fake.stores, secrets, includeAccessListFallback),
   );
 }
 
@@ -115,7 +116,7 @@ describe('resolveSetupLaunchModel', () => {
   });
 
   it("counts only OpenRouter's own setup model on the OpenRouter route", async () => {
-    mocks.getUseOpenRouter.mockReturnValue(Effect.succeed(true));
+    routeThroughOpenRouter();
     mocks.rows.set(SETUP_MODEL_BY_PROVIDER.anthropic, {
       availability: 'openrouter-key',
     });
@@ -130,7 +131,7 @@ describe('resolveSetupLaunchModel', () => {
   });
 
   it('refuses launch when nothing is available and the OpenRouter flag is on', async () => {
-    mocks.getUseOpenRouter.mockReturnValue(Effect.succeed(true));
+    routeThroughOpenRouter();
     secrets.values.set(apiKeySecretName('openRouter'), 'openrouter-key');
 
     await expect(launchModel(true)).resolves.toBeNull();

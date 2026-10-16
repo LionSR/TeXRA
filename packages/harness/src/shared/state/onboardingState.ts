@@ -9,7 +9,7 @@ import { z } from 'zod';
  */
 
 import type { StateStore, StateWriteFailed } from '@platform/interfaces';
-import { readState, StateFlagSchema } from '@shared/config/settingsAccess';
+import { Settings, StateFlagSchema } from '@shared/config/settings';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { isNonEmptyString } from '@utils/text/stringUtils';
 
@@ -21,7 +21,7 @@ export function setOnboardingDeclined(
 }
 
 export function getFirstRunDone(state: StateStore) {
-  return readState(
+  return Settings.state(
     state,
     GlobalStateKey.ONBOARDING_FIRST_RUN_DONE,
     StateFlagSchema,
@@ -38,7 +38,7 @@ export function setFirstRunDone(
 /** User-level default team id, written by the setup agent's `apply_team`. */
 export function getDefaultTeamId(state: StateStore) {
   return Effect.gen(function* () {
-    const value = yield* readState(
+    const value = yield* Settings.state(
       state,
       GlobalStateKey.ONBOARDING_DEFAULT_TEAM_ID,
       z.string().optional(),
@@ -64,7 +64,7 @@ export function clearDefaultTeamId(
 export function readOnboardingFlags(state: StateStore) {
   return Effect.gen(function* () {
     return {
-      declined: yield* readState(
+      declined: yield* Settings.state(
         state,
         GlobalStateKey.ONBOARDING_DECLINED,
         StateFlagSchema,

@@ -1,4 +1,4 @@
-// Shared fakes for exercising the host-aware `settingsAccess` accessor. Builds
+// Shared fakes for exercising the host-aware `Settings` accessor. Builds
 // the `SettingsStores` shape from the canonical platform fakes so the store
 // contract lives in one place (`FakePlatform.ts`) rather than being re-rolled
 // per suite.
@@ -10,9 +10,9 @@ import type {
   StateReadFailed,
 } from '@platform/interfaces';
 
-import type { SettingsStores } from '@shared/config/settingsAccess';
 import type { SettingHost } from '@shared/state/stateSettings';
 
+import type { SettingsStores } from '@shared/config/settings';
 import { FakeConfigProvider, FakeStateStore } from './FakePlatform';
 
 export interface FakeSettingsStores {

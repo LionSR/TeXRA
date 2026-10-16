@@ -12,8 +12,8 @@ import {
   type ReasoningRequest,
 } from '@texra-ai/llm';
 import type { StateStore } from '@platform/interfaces';
-import { readState } from '@shared/config/settingsAccess';
 import { GlobalStateKey } from '@shared/state/stateKeys';
+import { Settings } from '@shared/config/settings';
 import { ensureError } from '@utils/errors/errorMessage';
 
 /**
@@ -28,7 +28,7 @@ import { ensureError } from '@utils/errors/errorMessage';
  */
 export function reasoningEffortOverrides(state: StateStore) {
   return Effect.gen(function* () {
-    const stored = yield* readState(
+    const stored = yield* Settings.state(
       state,
       GlobalStateKey.REASONING_LEVELS,
       z.record(z.string(), z.unknown()).prefault({}),

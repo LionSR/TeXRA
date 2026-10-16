@@ -246,9 +246,10 @@ export { withLogChannel } from '@logger/effectLog';
 // The redaction the write path applies, for a host surface that shows text
 // outside it (a crash dialog, a log file read back, a result message).
 export { formatFatalErrorDetail, redactSecrets } from '@logger/redaction';
-// A catalog setting, read from the stores a caller holds (a session's
-// roots) or from its config slot alone.
+// Every read and write of a catalog setting, against the stores a caller
+// holds (a session's roots), and the typed read of a non-catalog state key.
 export {
-  readConfigSettingFrom,
-  readSettingFrom,
-} from '@utils/config/platformSettings';
+  Settings,
+  type SettingsStores,
+  type StoredSetting,
+} from '@shared/config/settings';
