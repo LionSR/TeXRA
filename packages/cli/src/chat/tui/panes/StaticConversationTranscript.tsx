@@ -47,7 +47,13 @@ import type { SessionView } from '@texra-ai/harness';
 import type { RunId } from '@texra-ai/harness/schemas';
 
 function shortenCwd(cwd: string): string {
-  const home = os.homedir();
+  let home: string;
+  try {
+    home = os.homedir();
+  } catch {
+    // No resolvable home (UV_ENOENT): the `~` shortening is cosmetic, so show the full cwd.
+    return cwd;
+  }
   if (cwd === home) return '~';
   const sep = path.sep;
   if (cwd.startsWith(`${home}${sep}`)) {
