@@ -2,7 +2,7 @@
 import { describe, expect, it } from 'vitest';
 
 // Local imports
-import type { AgentEntry } from '@agent/index';
+import type { AgentEntry } from '@agent/index/agentEntry';
 import {
   cliTeamListRecord,
   formatCliTeamLaunchBlockMessage,

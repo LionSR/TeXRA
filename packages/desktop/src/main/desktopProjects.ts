@@ -17,6 +17,7 @@ import {
 } from 'effect';
 
 import {
+  SessionHostInteractions,
   SessionOwner,
   type Session,
   type Sessions,
@@ -29,7 +30,7 @@ import {
   canonicalizeWorkspacePath,
   resolveWorkspaceStoragePath,
 } from '@texra-ai/harness/node';
-import { SessionHostInteractions, type SessionHandle } from '@agent/runtime';
+import { type SessionHandle } from '@agent/runtime';
 import type { ConfigStore } from '@platform/defaults/jsonConfigProvider';
 import { openTexraWorkspaceConfigStores } from '@platform/defaults/nodeStores';
 import {

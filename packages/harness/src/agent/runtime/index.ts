@@ -21,17 +21,5 @@
 // still reads from it.
 export type { SessionHandle } from './SessionHandle';
 
-// A host's presentation surface on a handle, and the `SessionHostInteractions`
-// a host with no session of its own presents through.
-export type { HostInteractions } from './HostInteractions';
-export { SessionHostInteractions } from './HostInteractions';
-
 // Whether a run can be resumed here, naming the process holding it.
 export { runRefusal } from './runClassification';
-
-// Whether a launch failure was already presented, so a host's own
-// fallback does not print it twice.
-export { terminalFailurePresented } from './terminalResultToast';
-
-// A host's emit handlers, one per presentation event.
-export type { PresentationEventHandlers } from './runtimePresentationEvents';

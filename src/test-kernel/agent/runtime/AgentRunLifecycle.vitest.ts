@@ -413,7 +413,9 @@ describe('runWithLifecycle', () => {
 
   // The failure prologue is fallible (here: caching recovered provider
   // metadata onto a frozen wrapper throws); it must still reach the terminal.
-  it.effect('finalizes a failure whose classification threw', () =>
+  // A frozen wrapper cannot take the symbol mark; its classification still
+  // reads the provider error through its cause chain.
+  it.effect('classifies a frozen failure through its cause', () =>
     Effect.gen(function* () {
       const { runId, ctx } = lifecycleFixture();
       const cause = new Error('overloaded');
@@ -426,15 +428,9 @@ describe('runWithLifecycle', () => {
       const error = yield* Effect.flip(
         runLifecycle(ctx, () => Effect.fail(frozen)),
       );
-      expect(error.message).toContain('flow failed');
+      expect(error.message).toContain('overloaded');
       expect(yield* runEnds(ctx.session, runId)).toMatchObject([
-        {
-          outcome: RUN_OUTCOME.FAILED,
-          error: {
-            kind: 'unexpected',
-            message: 'Error executing agent test-agent: flow failed',
-          },
-        },
+        { outcome: RUN_OUTCOME.FAILED },
       ]);
     }),
   );

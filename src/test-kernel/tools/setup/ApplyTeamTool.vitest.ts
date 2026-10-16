@@ -3,29 +3,18 @@ import { resolve } from 'node:path';
 
 // Third-party imports
 import { it } from '@effect/vitest';
-import { Effect, Layer } from 'effect';
+import { Effect } from 'effect';
 import { afterEach, beforeAll, beforeEach, describe, expect, vi } from 'vitest';
 
 // Local imports
-import { refresh } from '@agent/index/agentRegistry';
-import { AgentDirectories, AppState } from '@platform/interfaces';
+import { AgentCatalog } from '@agent/index/agentCatalog';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 import { getDefaultTeamId } from '@shared/state/onboardingState';
-import { FakeStateStore } from '@test/support/FakePlatform';
+import { testRuntime } from '@test/support/testProcessRuntime';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
-import {
-  fakeHostAgentDirectories,
-  hostStores,
-  installPlatform,
-  storePluginsLayer,
-} from '@test/support/setupPlatform';
-import {
-  nodePlatformLayer,
-  unusedGlobalStorageFs,
-} from '@test/support/fsTestUtils';
+import { hostStores, installPlatform } from '@test/support/setupPlatform';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { REPO_ROOT } from '@test/support/repoScan';
-import { testHttpClientLayer } from '@test/support/fetchTestUtils';
 import { ApplyTeamTool } from '@texra/tools/setup/ApplyTeamTool';
 
 // Local file imports
@@ -76,18 +65,8 @@ beforeAll(async () => {
       },
     },
   );
-  await Effect.runPromise(
-    Effect.provide(
-      refresh(),
-      Layer.mergeAll(
-        unusedGlobalStorageFs(),
-        storePluginsLayer,
-        nodePlatformLayer,
-        testHttpClientLayer,
-        AgentDirectories.layer(fakeHostAgentDirectories),
-        AppState.layer(new FakeStateStore()),
-      ),
-    ),
+  await testRuntime().runPromise(
+    AgentCatalog.use((catalog) => catalog.refresh),
   );
 });
 

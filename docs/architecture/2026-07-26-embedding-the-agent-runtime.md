@@ -145,17 +145,13 @@ that need no session leave the store unopened.
   Launch on the handle (`session.runs.launch`); close it through the session owner when its
   lifetime ends.
 
-### Prerequisite B — `yield* loadAgents(...)`
+### Prerequisite B — the `AgentCatalog` service
 
-The registry is **not** lazily populated on the run path.
-`getAgentPath` → `resolveAgentForLaunch` is a synchronous read of already-loaded
-state (`packages/harness/src/agent/index/agentRegistry.ts`); when it misses,
-`AgentLaunchContext` emits `showAgentConfigBanner` and throws
-`Could not find agent: <name>` (`packages/harness/src/agent/runtime/AgentLaunchContext.ts:158-159`).
-
-`loadAgents` (`packages/harness/src/agent/index/agentRegistry.ts:113-128`) is what fills it.
-Neither the root launch, `executeAgent`, nor `AgentLaunchContext` populates the
-registry, so the caller must ensure that loading has happened before launch.
+Launch resolution reads the process's `AgentCatalog` service
+(`packages/harness/src/agent/index/agentCatalog.ts`, public from
+`@texra-ai/harness`). Its layer starts empty and the agent-catalog follower
+loads it; `forLaunch` finds an agent by name, and a miss reloads the catalog
+once before it fails with what the load said. `refresh` rescans every source.
 
 ### Per-session — attach host interactions when presentation is required
 
@@ -268,7 +264,7 @@ exceptions may instead run `AgentConfigSchema.parse` and construct the
 `agent`, `model`, and `instruction` all have `.prefault()` defaults
 (`packages/harness/src/agent/core/definition/AgentConfig.ts`). A launch names no agent
 category: every agent runs as a chat, and launch resolution
-(`resolveAgentForLaunch` in `packages/harness/src/agent/index/agentRegistry.ts`) finds the
+(`AgentCatalog.forLaunch` in `packages/harness/src/agent/index/agentCatalog.ts`) finds the
 agent by name across sources. Running an agent's document task instead
 means opening the run on the document recipe
 (`documentTaskConfig` in `packages/texra/src/agent/output/documentRecipe.ts`).
@@ -302,8 +298,8 @@ disk_; that is the entire capability.
 
 ### Why in-memory definitions cannot work: two filesystem planes in one function
 
-`loadAgents` calls `doLoad`, which resolves the three paths and hands each to
-`scanDirectory` (`packages/harness/src/agent/index/agentRegistry.ts:153,184-186`). Inside
+The catalog's load resolves the agent roots and hands each to
+`scanDirectory` (`packages/harness/src/agent/index/agentCatalog.ts`). Inside
 `scanDirectory`:
 
 - **Enumeration** uses the npm `glob` package with **no `fs` option**
@@ -611,8 +607,8 @@ host.
 2. **The process runtime is once-per-process.** The Lean layer is built with
    it and closed with it; a host passes it exactly where it calls
    `installProcessRuntime` (`packages/harness/src/controllers/session/sessionLayer.ts`).
-3. **The registry is process-global**, not session-scoped
-   (`packages/harness/src/agent/index/agentRegistry.ts:113-128`). There is no per-embedder agent
+3. **The agent catalog is process-wide**, not session-scoped (the process's
+   `AgentCatalog` service, `packages/harness/src/agent/index/agentCatalog.ts`). There is no per-embedder agent
    namespace.
 4. **One session per storage root.** `SessionOwner.open`
    (`packages/harness/src/platform/processRuntime.ts`) returns the session

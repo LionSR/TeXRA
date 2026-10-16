@@ -37,6 +37,7 @@ import { Context, Effect, Layer, ManagedRuntime, Stream } from 'effect';
 import {
   AgentDirectories,
   AppState,
+  AgentDirectoryService,
   processLayer,
   Sessions,
   StateWriteFailed,
@@ -46,7 +47,6 @@ import {
   UNAVAILABLE_LANGUAGE_MODEL_PORT,
   withForkFailureReporting,
 } from '@texra-ai/harness';
-import { AgentDirectoryService } from '@agent/index';
 import type { MinimumLogLevel } from '@logger/effectDiagnostics';
 import { GlobalDatabase } from '@shared/session/database';
 import { usageLogLayer } from '@telemetry/UsageLogService';

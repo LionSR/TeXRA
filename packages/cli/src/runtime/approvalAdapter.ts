@@ -12,7 +12,7 @@
 import { Effect, Exit, Fiber, Result, Stream } from 'effect';
 
 import { withLogChannel } from '@texra-ai/harness';
-import { type HostInteractions } from '@agent/runtime';
+import { type HostInteractions } from '@texra-ai/harness';
 import { texraApprovalDenialMessage } from '@shared/approvalPolicy';
 import { requestParksItsCaller } from '@shared/schemas';
 import type {

@@ -18,8 +18,8 @@ import { dirname } from 'node:path';
 import { Cause, Effect, Exit, FileSystem, SynchronizedRef } from 'effect';
 
 import { ChildRuns, type ToolRun } from '@texra-ai/harness/plugins';
+import { AgentCatalog, type AgentEntry } from '@texra-ai/harness';
 import { Settings } from '@texra-ai/harness';
-import { getCatalogAgent, type AgentEntry } from '@agent/index';
 import { LatexMediaManager } from '@latex/LatexMediaManager';
 import { getTeXCountStats } from '@latex/texcount';
 import {
@@ -152,7 +152,7 @@ export const openDocuments = Effect.fn('documents.open')(function* ({
   const { config, logger, fileService, runId } = run;
   // The block as the catalog holds it now: the run's exact entry, which its
   // launch stamped.
-  const entry = getCatalogAgent(documentTaskKey(config));
+  const entry = (yield* AgentCatalog).get(documentTaskKey(config));
   const task = entry && documentTaskOf(entry);
   if (!entry || !task)
     return yield* Effect.fail(

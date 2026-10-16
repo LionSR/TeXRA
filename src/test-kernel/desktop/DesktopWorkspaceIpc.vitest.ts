@@ -12,7 +12,7 @@ import { it } from '@effect/vitest';
 import { Deferred, Effect, Exit, Scope } from 'effect';
 import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 
-import { refresh } from '@agent/index';
+import { AgentCatalog } from '@agent/index/agentCatalog';
 import { DESKTOP_WORKSPACE_COMMANDS } from '@desktop/shared/desktopWorkspaceMessages';
 import { createDesktopWorkspaceIpc } from '@desktop/main/desktopWorkspaceIpc';
 import { agentDocumentForPath } from '@desktop/main/desktopAgentDocuments';
@@ -240,14 +240,22 @@ describe('desktop workspace IPC', () => {
           ),
         );
         const context = yield* testRuntime().contextEffect;
-        yield* refresh().pipe(Effect.provide(context));
+        yield* AgentCatalog.use((catalog) => catalog.refresh).pipe(
+          Effect.provide(context),
+        );
         const ipc = createIpc(vi.fn());
         const target = agentDocumentTarget('custom', 'assistant');
         const packagedTarget = agentDocumentTarget('builtIn', 'assistant');
-        expect(agentDocumentForPath(customPath)).toBe(target);
+        expect(
+          yield* agentDocumentForPath(customPath).pipe(Effect.provide(context)),
+        ).toBe(target);
         // The custom copy shadows this name in the visible catalog; the
         // original must remain independently addressable and read-only.
-        expect(agentDocumentForPath(packagedPath)).toBe(packagedTarget);
+        expect(
+          yield* agentDocumentForPath(packagedPath).pipe(
+            Effect.provide(context),
+          ),
+        ).toBe(packagedTarget);
         expect(
           yield* ipc
             .file({ kind: 'read', path: target })

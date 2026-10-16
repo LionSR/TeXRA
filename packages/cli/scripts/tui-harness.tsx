@@ -21,7 +21,7 @@ import { nanoid } from 'nanoid';
 import React from 'react';
 
 import { apiKeySecretName } from '@texra-ai/llm';
-import { refresh } from '@agent/index';
+import { AgentCatalog } from '@texra-ai/harness';
 import { tuiOutputStreamForColor } from '@cli/tui/noColorOutput';
 import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
 import { nodeFileServices } from '@platform/defaults/jsonStore';
@@ -389,7 +389,7 @@ if (process.env.HARNESS_VISIBLE_MODELS !== undefined) {
     }),
   );
 }
-await harnessRuntime.runPromise(refresh());
+await harnessRuntime.runPromise(AgentCatalog.use((catalog) => catalog.refresh));
 
 // =========================================================================
 // Fold seeding: every fixture is a session fact

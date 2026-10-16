@@ -4,8 +4,8 @@ import { z } from 'zod';
 import { ToolContext } from '@agent/core/tools/ToolTypes';
 
 // Local imports - tools
+import type { AgentCatalog } from '@agent/index/agentCatalog';
 import type { ConfigProvider } from '@platform/interfaces';
-import type { AgentCatalogServices } from '@platform/processRuntime';
 import { WorkspaceFs } from '@platform/rootedFs';
 import type { ToolResult } from '@shared/schemas';
 import {
@@ -43,7 +43,7 @@ const write = Effect.fn('WriteFileTool.execute')(function* (
 ): Effect.fn.Return<
   ToolResult,
   Error,
-  ToolContext | FileSystem.FileSystem | WorkspaceFs | AgentCatalogServices
+  ToolContext | FileSystem.FileSystem | WorkspaceFs | AgentCatalog
 > {
   const call = yield* ToolContext;
   const prepared = yield* resolveWritableTarget(input.path, {

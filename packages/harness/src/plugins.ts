@@ -31,6 +31,9 @@ export {
   multiAgent,
   web,
 } from '@tools/builtinPlugins';
+/** The name of the `multiAgent` plugin's tool, which runs a named agent as
+ *  a child of the calling run: an agent whose tools name it orchestrates. */
+export { AGENT_TOOL_NAME } from '@shared/constants/delegationTools';
 export {
   definePlugin,
   type PluginArm,
