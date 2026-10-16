@@ -46,7 +46,7 @@ export function desktopLogLineText(line: DesktopLogLine): string {
   const message = parts
     .map((part) => (typeof part === 'string' ? part : JSON.stringify(part)))
     .join(' ');
-  // `channel` is the annotation key `@logger/logSink` writes. The renderer
+  // `channel` is the annotation key the harness's log sink writes. The renderer
   // cannot import core, so it is named here, where the writer and the viewer
   // already share this line's schema.
   const channel = line.annotations['channel'];

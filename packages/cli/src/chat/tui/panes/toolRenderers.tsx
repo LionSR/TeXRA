@@ -21,7 +21,6 @@ import {
 import { COLOR_ERROR, COLOR_HINT, COLOR_SUCCESS } from '@cli/tui/ui/colors';
 import { STATUS_DOT, TOOL_OUTPUT_CORNER } from '@cli/tui/ui/glyphs';
 import type { ToolRow } from '@cli/chat/tui/state/sessionView';
-import { writeLogLine } from '@logger/logSink';
 import { TOOL_CALL_STATUS } from '@shared/schemas';
 import { AGENT_TOOL_NAME } from '@shared/constants/delegationTools';
 import { isMcpToolName } from '@shared/tools/toolDisplayName';
@@ -279,13 +278,15 @@ function patchGroupsFromSections(
     }
     if (section.kind !== 'diff') continue;
     const { hunks, timeout } = buildDiffHunks(section.oldText, section.newText);
-    // A render pass has no fiber, so the degraded diff goes to the sink here.
-    if (timeout !== undefined) {
-      writeLogLine('WARN', 'unifiedDiff', timeout);
-    }
     if (hunks.length > 0) {
+      const label = safeTerminalText(section.fileLabel ?? fileLabel);
       groups.push({
-        fileLabel: safeTerminalText(section.fileLabel ?? fileLabel),
+        // A diff that timed out shows as a whole replacement; the label says
+        // so, on the screen that shows it.
+        fileLabel:
+          timeout === undefined
+            ? label
+            : `${label} (diff timed out; shown as a whole replacement)`,
         hunks,
       });
     }

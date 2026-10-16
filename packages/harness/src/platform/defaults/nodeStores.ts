@@ -71,7 +71,7 @@ export const openTexraWorkspaceConfigStores = Effect.fn(
   workspaceStoragePath: string,
   workspaceRoot: string | undefined,
   warn: (message: string) => void,
-  follow?: (error: Error) => void,
+  follow?: boolean,
 ) {
   const openLocal = JsonStore.open(
     path.join(workspaceStoragePath, TEXRA_CONFIG_FILE_NAME),
@@ -119,7 +119,7 @@ export const openTexraConfigStores = Effect.fn(
   storageRoot: string,
   workspaceRoot: string | undefined,
   warn: (message: string) => void,
-  follow?: (error: Error) => void,
+  follow?: boolean,
 ) {
   const [{ workspace, local }, global] = yield* Effect.all(
     [

@@ -398,7 +398,7 @@ export async function activate(context: vscode.ExtensionContext) {
 const activateExtension = Effect.fn('activateExtension')(function* (
   context: vscode.ExtensionContext,
 ) {
-  installUnhandledRejectionSurface(context.subscriptions);
+  yield* installUnhandledRejectionSurface(context.subscriptions);
   if (vscode.workspace.workspaceFolders?.length !== 1) {
     registerWelcomeView(context);
     // Credential-only platform. Every sign-in path stores into the shared

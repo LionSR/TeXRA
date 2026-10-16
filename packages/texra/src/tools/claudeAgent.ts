@@ -352,6 +352,7 @@ function handleAssistantBlocks(
           toolName: block.name,
           input: block.input,
           status: 'in_progress',
+          trace: logger,
         });
         refs.set(block.id, { ...emitToolUseCard(logger, toolLog), toolLog });
         break;

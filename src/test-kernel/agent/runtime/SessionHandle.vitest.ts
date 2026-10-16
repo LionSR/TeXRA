@@ -65,7 +65,7 @@ describe('SessionHandle', () => {
           mkdtempSync(path.join(tmpdir(), 'policy-')),
           'c.json',
         );
-        const follow = () => {};
+        const follow = true;
         const service = yield* JsonStore.open(file, { follow });
         const windowB = yield* JsonStore.open(file);
         const config = new JsonConfigProvider({

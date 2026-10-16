@@ -1,8 +1,13 @@
 import { defineCommand } from 'citty';
 import { Deferred, Effect, Exit, Schedule, Scope } from 'effect';
 
-import { SessionOwner, Sessions } from '@texra-ai/harness';
-import { entryChannel, entryMessage, setLogSink } from '@logger/logSink';
+import {
+  entryChannel,
+  entryMessage,
+  SessionOwner,
+  Sessions,
+  setLogSink,
+} from '@texra-ai/harness';
 import { askServiceToStop } from '@texra/controllers/server/client';
 import { servicePaths } from '@texra/controllers/server/discovery';
 import { ServiceProjects } from '@texra/controllers/server/handlers';

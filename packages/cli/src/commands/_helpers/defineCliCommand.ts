@@ -1,6 +1,7 @@
 import { defineCommand, type ArgsDef, type CommandDef } from 'citty';
 import { Cause, Effect, Exit, Result } from 'effect';
 
+import { setLogSink } from '@texra-ai/harness';
 import {
   installCliProcessRuntime,
   NO_PLATFORM_INSTALL,
@@ -8,12 +9,12 @@ import {
 } from '@cli/runtime/cliProcessRuntime';
 import {
   prePlatformDiagnosticSink,
+  silentLogSink,
   writeErrorStderr,
 } from '@cli/runtime/logSinks';
 import type { RunChatInit } from '@cli/chat/tui/runChatTui';
 import type { CliContext } from '@cli/runtime/cliContext';
 import { CliExitCode } from '@cli/runtime/exitCodes';
-import { setLogSink, silentLogSink } from '@logger/logSink';
 import { ensureError } from '@utils/errors/errorMessage';
 
 import { contextFromArgs } from './context';

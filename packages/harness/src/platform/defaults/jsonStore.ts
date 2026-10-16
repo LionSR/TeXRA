@@ -16,6 +16,7 @@ import writeFileAtomic from 'write-file-atomic';
 
 // Local imports
 import { isFileNotFoundError } from '@common/errors';
+import { writeLogLine } from '@logger/logSink';
 import { ensureError } from '@utils/errors/errorMessage';
 import { type PerKeyLane, withPerKeyLane } from '@utils/core/perKeyQueue';
 
@@ -48,10 +49,10 @@ interface JsonStoreOptions {
    * inode, mtime and size with the version it holds (about a microsecond)
    * and re-reads the file when they differ. A long-lived process that other
    * processes configure (the TeXRA service) opens its stores this way. A
-   * changed file it cannot read keeps the last view and is reported here,
-   * once per version of the file.
+   * changed file it cannot read keeps the last view and is logged as a
+   * warning, once per version of the file.
    */
-  follow?: (error: Error) => void;
+  follow?: boolean;
 }
 
 /** The file's version as a read compares it: absent, or its identity. */
@@ -172,13 +173,13 @@ const flush = Effect.fn('JsonStore.flush')(function* (
 export class JsonStore {
   /** The file version `data` was read from, when the store follows it. */
   private version: string | undefined;
-  private readonly follow: ((error: Error) => void) | undefined;
+  private readonly follow: boolean;
 
   private constructor(
     /** The file this store reads and writes; warnings name it. */
     readonly filePath: string,
     private data: JsonRecord,
-    follow: ((error: Error) => void) | undefined,
+    follow: boolean,
   ) {
     this.follow = follow;
   }
@@ -191,8 +192,7 @@ export class JsonStore {
    * view and is reported once per failure.
    */
   private current(): JsonRecord {
-    const follow = this.follow;
-    if (follow === undefined) return this.data;
+    if (!this.follow) return this.data;
     try {
       const version = fileVersion(this.filePath);
       if (version === this.version) return this.data;
@@ -202,7 +202,15 @@ export class JsonStore {
         fileVersion(this.filePath) === version ? version : undefined;
     } catch (error) {
       const failed = `failed:${ensureError(error).message}`;
-      if (this.version !== failed) follow(ensureError(error));
+      // `get` is synchronous and reached from fibers and plain calls
+      // alike, so the report goes straight to the sink.
+      if (this.version !== failed) {
+        writeLogLine(
+          'WARN',
+          'jsonStore',
+          `${this.filePath} changed but could not be read; the settings read before stay in effect until it is fixed: ${ensureError(error).message}`,
+        );
+      }
       this.version = failed;
     }
     return this.data;
@@ -231,7 +239,7 @@ export class JsonStore {
           ),
         )
       : readJsonRecord(storePath);
-    return new JsonStore(storePath, data, options.follow);
+    return new JsonStore(storePath, data, options.follow === true);
   });
 
   get<T>(key: string): T | undefined {

@@ -9,7 +9,6 @@ import {
 
 // Local imports - platform
 import { modelConfig } from '@texra-ai/llm';
-import { writeLogLine } from '@logger/logSink';
 import {
   JsonConfigProvider,
   type ConfigStore,
@@ -286,12 +285,7 @@ export function loadCliStartupConfig(
         storageRoot,
         cwd,
         (message) => degradations.push(message),
-        (error) =>
-          writeLogLine(
-            'WARN',
-            'cliConfig',
-            `A TeXRA config file changed but could not be read; this run keeps its previous settings until it is fixed: ${error.message}`,
-          ),
+        true,
       );
       // The user's MCP server config, which only a run declaring MCP tools
       // otherwise reads: a broken file warns here, not first mid-run.

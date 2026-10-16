@@ -1,4 +1,4 @@
-import { Context, Layer } from 'effect';
+import { Context, Effect, Layer } from 'effect';
 import { z } from 'zod';
 
 import { TurnProtocolSchema } from '@texra-ai/llm';
@@ -74,8 +74,10 @@ export class UsageLog extends Context.Service<
        *  over the process's), whose opt-out variables also gate it;
        *  absent, the process's own. */
       env?: Readonly<Record<string, string | undefined>>,
-    ) => void;
+    ) => Effect.Effect<void>;
   }
 >()('@texra/UsageLog') {
-  static readonly disabled = Layer.succeed(UsageLog)({ log: () => {} });
+  static readonly disabled = Layer.succeed(UsageLog)({
+    log: () => Effect.void,
+  });
 }

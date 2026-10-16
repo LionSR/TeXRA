@@ -1,6 +1,6 @@
 import { app, dialog } from 'electron';
 
-import { formatFatalErrorDetail } from '@logger/redaction';
+import { formatFatalErrorDetail } from '@texra-ai/harness';
 import { DESKTOP_HEADLESS } from './desktopPresentation.js';
 
 let fatalStartupErrorReported = false;

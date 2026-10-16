@@ -8,8 +8,9 @@
  * Held by the entry that made it, never by this module: each composition
  * root keeps its `ManagedRuntime` in a local and threads it to the surfaces
  * that run on it (rulings ledger, #12720). This module owns the types that
- * describe it and the fork-failure reporting wrapper the roots build it
- * with; there is no ambient slot to read it back from.
+ * describe it, the fork-failure reporting wrapper the roots build it
+ * with, and the logger a view's runtime (a webview, the Electron renderer)
+ * builds with; there is no ambient slot to read it back from.
  */
 import {
   Cause,
@@ -17,12 +18,15 @@ import {
   Effect,
   Exit,
   type FileSystem,
+  type Layer,
+  Logger,
   type ManagedRuntime,
   Path,
   type Scope,
 } from 'effect';
 import type { RouteRetries } from '@agent/runtime/run/invocation';
 import type { SessionOwnerShape } from '@agent/runtime/SessionHandle';
+import { writeLogEntry } from '@logger/logSink';
 import type { ProcessIdentity } from '@shared/session/sessionEvents';
 import {
   DatabaseOpenFailed,
@@ -242,3 +246,25 @@ export function withForkFailureReporting<R, ER>(
     },
   };
 }
+
+/**
+ * The logger of a view's runtime, which builds no process diagnostics layer:
+ * each entry takes the log sink's write path, redacted unless a host marked
+ * the sink trusted, instead of Effect's default console logger.
+ *
+ * ERROR/FATAL are written as WARN: a view has no host log channel, and
+ * Electron's smoke harness treats `console.error` (the console sink's ERROR
+ * path) as a failed view. Fork-failure reports and fold defects still show
+ * in DevTools after redaction.
+ */
+export const viewDiagnosticsLayer: Layer.Layer<never> = Logger.layer([
+  Logger.make((options) => {
+    if (options.logLevel === 'None') return;
+    const entry = Logger.formatStructured.log(options);
+    writeLogEntry(
+      entry.level === 'ERROR' || entry.level === 'FATAL'
+        ? { ...entry, level: 'WARN' }
+        : entry,
+    );
+  }),
+]);
