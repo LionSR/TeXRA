@@ -659,7 +659,9 @@ describe('ModelInvoker retry', () => {
 
       expect(outcome.kind).toBe('failed');
       if (outcome.kind === 'failed') {
-        expect(outcome.error.message).toContain('Model response was empty');
+        expect(outcome.state.lastError?.message).toContain(
+          'Model response was empty',
+        );
       }
       denied.detach();
       yield* closeSessionOf(session);
@@ -924,7 +926,7 @@ describe('ModelInvoker retry', () => {
 
       expect(outcome.kind).toBe('failed');
       if (outcome.kind === 'failed') {
-        expect(outcome.error.message).toContain(
+        expect(outcome.state.lastError?.message).toContain(
           'stream dropped before first token',
         );
         expect(outcome.state.invocation?.current.failed?.next.kind).toBe('ask');

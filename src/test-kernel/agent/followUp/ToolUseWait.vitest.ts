@@ -44,7 +44,6 @@ import {
   queuedFollowUps,
   publishTestRows,
 } from '@test/support/sessionTestUtils';
-import { releaseRunResources } from '@tools/approval';
 import { clearGoal, goalOf, startGoal } from '@tools/goal';
 import { generateRunId } from '@utils/core';
 
@@ -962,7 +961,7 @@ describe('an active goal at the wait', () => {
           expect(policies.at(-1)?.snapshot).toEqual({ own: {}, goal: [] });
         } finally {
           yield* clearGoal(session, runId);
-          releaseRunResources(runId, session);
+          session.followUps.forget(runId);
         }
       }),
   );
@@ -1019,7 +1018,7 @@ describe('an active goal at the wait', () => {
           ).toEqual([]);
         } finally {
           yield* clearGoal(session, runId);
-          releaseRunResources(runId, session);
+          session.followUps.forget(runId);
         }
       }),
   );

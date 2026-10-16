@@ -158,7 +158,7 @@ describe('runWithLifecycle', () => {
   it.effect('carries a subagent abort on its terminal result', () =>
     Effect.gen(function* () {
       const { ctx } = lifecycleFixture();
-      ctx.attachedMemoryMisses.push({
+      ctx.opening?.attachedMemoryMisses.push({
         path: '/memories/missing.md',
         reason: 'not found',
       });
@@ -170,7 +170,7 @@ describe('runWithLifecycle', () => {
       );
 
       expect(result.outcome).toBe(RUN_OUTCOME.CANCELLED);
-      expect(result.memoryMisses).toEqual(ctx.attachedMemoryMisses);
+      expect(result.memoryMisses).toEqual(ctx.opening?.attachedMemoryMisses);
       expect(result.error).toMatchObject({
         message: expect.stringContaining('aborted'),
       });

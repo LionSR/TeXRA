@@ -263,11 +263,7 @@ function scriptedInvoker(
             return {
               kind: 'response' as const,
               state: next,
-              responseId,
-              turn,
               text: turnText(turn),
-              usage: null,
-              responseTimeMs: 1,
             };
           }),
       };

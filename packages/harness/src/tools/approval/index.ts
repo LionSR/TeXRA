@@ -5,12 +5,10 @@
  * grants are its `approval.policy` rows.
  */
 
-import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import {
   NO_APPROVAL_GRANTS,
   type ApprovalGrants,
 } from '@shared/approvalBypassKind';
-import type { RunId } from '@shared/schemas';
 
 /** How a delegation was approved, as the child's own grants record it:
  *  by the user's one-off answer (`inherit`), or by the run's proposal
@@ -38,17 +36,4 @@ export function delegatedChildGrants(
     case 'goal-approved':
       return { own: {}, goal: ['toolEdit'] };
   }
-}
-
-/**
- * Release what this process holds for a deleted run: its follow-up queue.
- * Its grants go with its rows, and its open requests with the fold's
- * tombstone. Host-specific teardown (webview state, backup files, goal
- * store, etc.) remains the caller's responsibility after this returns.
- */
-export function releaseRunResources(
-  runId: RunId,
-  session: SessionHandle,
-): void {
-  session.followUps.forget(runId);
 }

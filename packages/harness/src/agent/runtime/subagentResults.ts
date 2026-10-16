@@ -10,7 +10,6 @@
 
 import {
   type AttachedMemoryMiss,
-  type ResultMeta,
   type RetryErrorInfo,
   type RunEndOutput,
   type RunId,
@@ -21,8 +20,6 @@ import { escapeAttr, escapeText } from '@shared/utils/xmlEscape';
 import { formatDuration } from '@utils/text/stringUtils';
 import { formatDelivery } from './deliveryEnvelope';
 import type { RecipeResult } from './recipeResult';
-
-export type SubagentResultMeta = Extract<ResultMeta, { producer: 'subagent' }>;
 
 // ============================================================================
 // Formatting helpers
@@ -116,7 +113,7 @@ export function formatSubagentError(
   runId: string,
   agentName: string,
   formatted: Pick<RetryErrorInfo, 'message' | 'userRetryable'>,
-  options: DeliveryContext = {},
+  options: DeliveryContext & { readonly wallTimeMs: number },
 ): string {
   return formatDelivery({
     tag: DELIVERY_TAG.subagentError,
@@ -125,24 +122,8 @@ export function formatSubagentError(
       { name: 'agent', value: agentName },
       { name: 'retryable', value: formatted.userRetryable },
     ],
-    wallTime:
-      options.wallTimeMs !== undefined
-        ? formatDuration(options.wallTimeMs)
-        : undefined,
+    wallTime: formatDuration(options.wallTimeMs),
     lines: formatDeliveryPreamble(options),
     message: formatted.message,
   });
-}
-
-/**
- * Build the structured result manifest for a finished subagent — the
- * machine-readable counterpart of {@link formatSubagentDelivery}'s XML.
- * Persisted beside the run's `run.end` row so later stages (an orchestrator
- * or a script) can chain on its output as data instead of parsing prose;
- * how the run ended is the terminal fact's to say, not this record's.
- */
-export function buildSubagentResultMeta(
-  output: RunEndOutput,
-): SubagentResultMeta {
-  return { producer: 'subagent', output };
 }

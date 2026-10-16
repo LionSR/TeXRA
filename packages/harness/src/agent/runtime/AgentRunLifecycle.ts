@@ -347,7 +347,7 @@ export const runWithLifecycle = Effect.fn('runWithLifecycle')(function* <R>(
               buildTerminalRunEndResult(
                 outcome,
                 runId,
-                ctx.attachedMemoryMisses,
+                ctx.opening?.attachedMemoryMisses,
               )),
             error: info,
           }
@@ -369,7 +369,7 @@ export const runWithLifecycle = Effect.fn('runWithLifecycle')(function* <R>(
       return buildTerminalRunEndResult(
         resolvedOutcome,
         runId,
-        ctx.attachedMemoryMisses,
+        ctx.opening?.attachedMemoryMisses,
       );
     }
 

@@ -27,7 +27,6 @@
   "packages/harness/src/agent/runtime/RunEndResult.ts": 1,
   "packages/harness/src/agent/runtime/runtimePresentationEvents.ts": 2,
   "packages/harness/src/agent/runtime/scriptRun.ts": 1,
-  "packages/harness/src/agent/runtime/subagentResults.ts": 1,
   "packages/harness/src/agent/runtime/ToolServices.ts": 2,
   "packages/harness/src/agent/storage/conversationFormat.ts": 1,
   "packages/harness/src/agent/storage/runLifecycle.ts": 1,

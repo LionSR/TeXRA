@@ -35,14 +35,7 @@ import { logUserMessage } from '@agent/trace';
 import { ModelAccess } from '@agent/runtime/modelAccess/ModelAccess';
 import type { ProcessServices } from '@platform/processRuntime';
 import type { StorageFs, WorkspaceFs } from '@platform/rootedFs';
-import {
-  RUN_OUTCOME,
-  type AttachedMemoryMiss,
-  type JsonValue,
-  type RetryErrorInfo,
-  type RunOutcome,
-  type RunUsageTotals,
-} from '@shared/schemas';
+import { RUN_OUTCOME, type RunOutcome } from '@shared/schemas';
 import { RunHistory, type RunCell } from '@shared/session/runHistory';
 import type { RunState } from '@shared/session/runStateFold';
 import { toolDefinitionsFor } from '@tools/catalogEntries';
@@ -51,6 +44,7 @@ import { sha256 } from '@utils/core/idHash';
 import { AgentRun } from '../run/AgentRun';
 import { backgroundCompaction } from '../run/compaction';
 import { mediaInputParts, type InputPart } from '../run/mediaInput';
+import { turnText } from '../run/turnText';
 import { claimFollowUps, type ConsumedFollowUps } from '../FollowUps';
 import { ModelInvoker } from '../ModelInvoker';
 import { registryOf, Runs } from '../runRegistry';
@@ -75,43 +69,22 @@ import { stepFor } from './step';
 import { applyPendingModelSwitch, modelSwitchPort } from './modelSwitch';
 import type { RunControls } from '../RunHandle';
 import type { ChildRunBoundary } from '../childRunLoop';
+import type { RunEndResult } from '../RunEndResult';
 
 const BLANK_TOOL_RESULT_CONTINUATION =
   'The previous assistant turn after a tool result was blank. Continue now with the final answer or next required action.';
 const FINAL_TOOL_INSTRUCTION = 'Submit the final structured output now.';
 
-/** The text an assistant message answers with. */
-const answerOf = (
-  message: Extract<RunState['messages'][number], { role: 'assistant' }>,
-): string =>
-  message.content
-    .flatMap((part) =>
-      part.kind === 'message' ? part.content.map((piece) => piece.text) : [],
-    )
-    .join('');
-
 export interface ToolUseStart {
   /** The caller launched this as a resume; the run history decides what it is. */
   readonly resume: boolean;
   /** A native child's turn permit, and the settlement its boundary commits. */
-  readonly turns?: ChildRunBoundary<ToolUseResult>;
+  readonly turns?: ChildRunBoundary<RunEndResult>;
   /** Host wiring that is live while the loop can accept an interrupt. */
   readonly attachment?: {
     attach(controls: RunControls): void;
     detach(controls: RunControls): void;
   };
-}
-
-interface ToolUseResult {
-  readonly outcome: RunOutcome;
-  readonly response: string;
-  /** Workspace-relative paths of files edited by tool calls. */
-  readonly files: readonly string[];
-  readonly usage: RunUsageTotals;
-  readonly structured: JsonValue | undefined;
-  /** The attached memories the run's opening could not read. */
-  readonly memoryMisses: readonly AttachedMemoryMiss[];
-  readonly error?: RetryErrorInfo;
 }
 
 /** A user message the loop appends itself. */
@@ -133,7 +106,7 @@ type TurnServices =
 export const runToolUse = Effect.fn('toolUse.run')(function* (
   start: ToolUseStart,
 ): Effect.fn.Return<
-  ToolUseResult,
+  RunEndResult,
   Error,
   TurnServices | ModelInvoker | Scope.Scope
 > {
@@ -388,7 +361,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
             ? state.messages.at(-1)
             : undefined;
         if (last?.role === 'assistant') {
-          const text = answerOf(last);
+          const text = turnText(last);
           if (text) response = text;
           const processed = yield* afterTextResponse(state, text);
           state = processed.state;
@@ -460,7 +433,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
       (loaded.phase === 'waiting' || loaded.phase === 'halted') &&
       last?.role === 'assistant'
     )
-      response = answerOf(last);
+      response = turnText(last);
     logger.debug('Resuming tool-use run from the run history.');
     return cell;
   });
@@ -599,15 +572,24 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
   const finish = (state: RunState, outcome: RunOutcome): RunExit =>
     ({ state, outcome }) as const;
 
-  const result = (outcome: RunOutcome, at: RunState): ToolUseResult => ({
+  /** The run's report: what it answered and edited, its spend, its error. */
+  const result = (outcome: RunOutcome, at: RunState): RunEndResult => ({
     outcome,
-    response,
-    files: [...at.edited],
+    output: {
+      response,
+      files: [...at.edited],
+      // A recipe's return value, which its block reads (`AgentBlock.result`).
+      ...(at.structured?.value !== undefined && {
+        structured: at.structured.value,
+      }),
+    },
+    runId,
     usage: at.usage,
-    structured: at.structured?.value,
-    memoryMisses: at.input.memoryMisses ?? [],
     ...(outcome === RUN_OUTCOME.FAILED && at.lastError !== null
       ? { error: at.lastError }
+      : {}),
+    ...(at.input.memoryMisses?.length
+      ? { memoryMisses: [...at.input.memoryMisses] }
       : {}),
   });
 

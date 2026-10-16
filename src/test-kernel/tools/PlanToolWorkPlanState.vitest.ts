@@ -16,7 +16,6 @@ import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { installPlatform as installFakePlatform } from '@test/support/setupPlatform';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
 import { clearGoal, goalOf, startGoal } from '@tools/goal';
-import { releaseRunResources } from '@tools/approval';
 import { PlanTool } from '@tools/plan/PlanTool';
 import { generateRunId } from '@utils/core';
 
@@ -165,7 +164,7 @@ describe('PlanTool — update (plan approval)', () => {
           const { session, awaitPlanRequest } = yield* planSession(runId);
 
           yield* Effect.addFinalizer(() =>
-            Effect.sync(() => releaseRunResources(runId, session)),
+            Effect.sync(() => session.followUps.forget(runId)),
           );
 
           yield* session.approvals.change(
@@ -253,7 +252,7 @@ describe('PlanTool — update (plan approval)', () => {
           yield* Effect.addFinalizer(() =>
             Effect.gen(function* () {
               yield* clearGoal(session, runId);
-              releaseRunResources(runId, session);
+              session.followUps.forget(runId);
             }).pipe(Effect.orDie),
           );
 
@@ -290,7 +289,7 @@ describe('PlanTool — update (plan approval)', () => {
           yield* Effect.addFinalizer(() =>
             Effect.gen(function* () {
               yield* clearGoal(session, runId);
-              releaseRunResources(runId, session);
+              session.followUps.forget(runId);
             }).pipe(Effect.orDie),
           );
 
@@ -330,7 +329,7 @@ describe('PlanTool — update (plan approval)', () => {
           yield* Effect.addFinalizer(() =>
             Effect.gen(function* () {
               yield* clearGoal(session, runId);
-              releaseRunResources(runId, session);
+              session.followUps.forget(runId);
             }).pipe(Effect.orDie),
           );
 

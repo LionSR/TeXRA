@@ -26,11 +26,7 @@ import {
 } from '@shared/schemas';
 import { ensureError } from '@utils/errors/errorMessage';
 import { readRecipeResult } from './recipeResult';
-import {
-  buildSubagentResultMeta,
-  formatSubagentDelivery,
-  formatSubagentError,
-} from './subagentResults';
+import { formatSubagentDelivery, formatSubagentError } from './subagentResults';
 
 /**
  * The launch fields every native child run needs, shared between the two
@@ -216,7 +212,13 @@ export function createNativeSubagentStrategy(
         // earlier turn: the failed run's own output, or an empty one when
         // the turn produced none.
         const result = isError || turn === null ? (turn ?? lastResult) : turn;
-        return buildSubagentResultMeta(result?.output ?? emptyRunEndOutput());
+        // The machine-readable counterpart of the XML delivery, persisted
+        // beside the run's `run.end` row so later stages chain on its output
+        // as data; how the run ended is the terminal fact's to say.
+        return {
+          producer: 'subagent' as const,
+          output: result?.output ?? emptyRunEndOutput(),
+        };
       }),
   };
 }
