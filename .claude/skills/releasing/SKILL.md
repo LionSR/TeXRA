@@ -71,10 +71,8 @@ Stable releases follow the steps below; a preview (`X.Y.Z-preview.N`) follows
 ## npm packages: `@texra-ai/llm` and `@texra-ai/harness`
 
 The SDK pair is published by hand, not by `release.yml`, and not with the app's
-tags. Owner decision #9 (#13723) publishes both at 1.0 once its six
-preconditions hold: API reports, resume and approvals in the SDK, inline
-persona, the llm build, the `effect` peer range, and independent versions.
-Until then nothing here runs.
+tags. Both are releasable at 0.x. Publishing is the owner's manual step (npm
+asks for the OTP): llm first, then harness, by the steps below.
 
 - **Versions are their own.** `bump-workspace-version.mjs` leaves both
   manifests alone. Bump `version` in `packages/llm/package.json` and/or
