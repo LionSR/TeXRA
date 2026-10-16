@@ -19,11 +19,11 @@ import {
   withLogChannel,
   type UsageLogEntry,
 } from '@texra-ai/harness';
+import { envFlag } from '@texra-ai/harness/node';
 import { extractErrorMessage, toErrorMessage } from '@texra-ai/harness/schemas';
 import { readOrCreateInstallId } from '@telemetry/installId';
 import { TELEMETRY_ENABLED_KEY } from '@texra/shared/settingsView/texraSettings';
 import { unrefSleepClock } from '@texra/utils/system/unrefSleepClock';
-import { isEnvFlagEnabled } from '@utils/system/envFlags';
 import type { AppState, ConfigProvider } from '@texra-ai/harness';
 
 const CHANNEL = 'UsageLogService';
@@ -87,15 +87,21 @@ const TELEMETRY_OPT_OUT_ENV_VARS = [
 
 /** The variable that opts usage logging out, in the process's environment
  *  or in the recording run's (its project's `.env` over the process's):
- *  either one opting out suffices, so a project can never turn it back on. */
-const telemetryOptOutEnvVar = (
+ *  either one opting out suffices, so a project can never turn it back on.
+ *  The process's is read live from `process.env`, not through a
+ *  `ConfigProvider`, so the kill switch holds before any runtime is built. */
+const telemetryOptOutEnvVar = Effect.fnUntraced(function* (
   env?: Readonly<Record<string, string | undefined>>,
-): string | undefined =>
-  TELEMETRY_OPT_OUT_ENV_VARS.find(
-    (name) =>
-      isEnvFlagEnabled(name) ||
-      (env !== undefined && isEnvFlagEnabled(name, env)),
-  );
+) {
+  for (const name of TELEMETRY_OPT_OUT_ENV_VARS) {
+    if (
+      (yield* envFlag(name, process.env)) ||
+      (env !== undefined && (yield* envFlag(name, env)))
+    )
+      return name;
+  }
+  return undefined;
+});
 
 /**
  * The user's usage-logging opt-out, read live rather than snapshotted when
@@ -114,18 +120,18 @@ function isTelemetryEnabledBySetting(
   config: ConfigProvider,
   env?: Readonly<Record<string, string | undefined>>,
 ): Effect.Effect<boolean> {
-  return Effect.suspend(() => {
+  return Effect.gen(function* () {
     // Checked before the config read so the kill switch also holds on a host
     // that has not initialized its platform yet. `env` is the recording
     // run's, so a project's `.env` opt-out holds for its runs.
-    if (telemetryOptOutEnvVar(env)) return Effect.succeed(false);
+    if (yield* telemetryOptOutEnvVar(env)) return false;
 
     // Which scope answers is the config store's rule (`projectValueIgnored`):
     // a project file may opt out but never opt in. The config files are
     // hand-edited raw JSON, so a mistyped `"false"` must not read as consent.
     const value = config.get<unknown>(TELEMETRY_ENABLED_KEY);
-    if (typeof value === 'boolean') return Effect.succeed(value);
-    return Effect.logWarning(
+    if (typeof value === 'boolean') return value;
+    return yield* Effect.logWarning(
       `Ignoring non-boolean ${TELEMETRY_ENABLED_KEY} (got ${typeof value}); treating usage logging as disabled`,
     ).pipe(withLogChannel(CHANNEL), Effect.as(false));
   });
@@ -145,12 +151,12 @@ export type UsageLoggingOptOut =
 export function usageLoggingOptOut(
   config: ConfigProvider,
 ): Effect.Effect<UsageLoggingOptOut> {
-  const envVar = telemetryOptOutEnvVar();
-  if (envVar) return Effect.succeed({ source: 'environment', envVar });
-  return Effect.map(
-    isTelemetryEnabledBySetting(config),
-    (enabled): UsageLoggingOptOut => (enabled ? null : { source: 'setting' }),
-  );
+  return Effect.gen(function* () {
+    const envVar = yield* telemetryOptOutEnvVar();
+    if (envVar) return { source: 'environment', envVar };
+    const enabled = yield* isTelemetryEnabledBySetting(config);
+    return enabled ? null : { source: 'setting' };
+  });
 }
 
 /**
@@ -247,7 +253,7 @@ class UsageLogServiceImpl {
     // and app state come from.
     yield* Effect.addFinalizer(() => this.drainAndStop());
 
-    if (telemetryOptOutEnvVar()) {
+    if (yield* telemetryOptOutEnvVar()) {
       yield* Effect.logInfo(
         `Usage logging is disabled by the environment (${TELEMETRY_OPT_OUT_ENV_VARS.join(' / ')})`,
       ).pipe(withLogChannel(CHANNEL));

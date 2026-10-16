@@ -10,9 +10,8 @@ import { Effect } from 'effect';
 // Local imports
 import { apiKeyEnvName, exposeApiKey, lookupApiKey } from '@texra-ai/llm';
 import { Secrets, withLogChannel } from '@texra-ai/harness';
-import { executeCommand } from '@texra-ai/harness/node';
+import { executeCommand, inheritedEnv } from '@texra-ai/harness/node';
 import { ensureError } from '@texra-ai/harness/schemas';
-import { inheritedEnv } from '@utils/system/envFlags';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 const CHANNEL = 'claudeAgent';

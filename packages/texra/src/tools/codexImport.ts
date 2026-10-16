@@ -26,6 +26,7 @@ import { Settings } from '@texra-ai/harness';
 
 import { Effect, type FileSystem } from 'effect';
 
+import { inheritedEnv } from '@texra-ai/harness/node';
 import type { CodexSandboxMode } from '@texra/shared/agentCliSettings';
 import { CodexStateKey } from '@texra/shared/settingsView/integrationSettings';
 import {
@@ -34,7 +35,6 @@ import {
   importForeignSdk,
   resolvePackageDir,
 } from '@texra/tools/support/externalBinaryUtils';
-import { inheritedEnv } from '@utils/system/envFlags';
 import type { StateReadFailed } from '@texra-ai/harness';
 import type { SettingsStores } from '@texra-ai/harness';
 

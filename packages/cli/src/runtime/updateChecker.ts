@@ -6,6 +6,7 @@ import { Cause, Effect, Exit, Result } from 'effect';
 import {
   canonicalizeWorkspacePath,
   executeCommand,
+  envFlag,
 } from '@texra-ai/harness/node';
 import { parseJsonWith } from '@texra-ai/harness/schemas';
 import { updateCheckRecordsLayer } from '@texra/controllers/session/updateCheckRecords';
@@ -15,7 +16,6 @@ import {
   runDailyUpdateCheck,
   type UpdateCheckFetchResult,
 } from '@texra/utils/system/updateCheck';
-import { isEnvFlagEnabled } from '@utils/system/envFlags';
 
 import {
   readCliAmbientState,
@@ -267,7 +267,6 @@ export function notifyCliUpdate(
   updateNotifyStarted = true;
 
   const ambient = readCliAmbientState();
-  if (isEnvFlagEnabled(UPDATE_CHECK_SKIP_ENV)) return Effect.void;
   if (ambient.isCi) return Effect.void;
   // Require all three standard runs to be a TTY. stdout matters even though
   // the prompt uses stdin/stderr: a half-redirected invocation like
@@ -287,6 +286,7 @@ export function notifyCliUpdate(
   const updateCmd = [command, ...args].join(' ');
   const style = createCliStyle(context.stderrColorEnabled);
   return Effect.gen(function* () {
+    if (yield* envFlag(UPDATE_CHECK_SKIP_ENV)) return;
     let confirmed = false;
     // Best-effort by policy: any failure — typed, defect, or interruption —
     // leaves `latest` unset and the check exits silently.

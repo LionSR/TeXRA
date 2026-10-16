@@ -43,7 +43,7 @@ const DAILY_UPDATE_CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000;
 
 /**
  * Env var that disables both the CLI's and desktop's update checks. Read with
- * `isEnvFlagEnabled` (see `envFlags.ts`), so `=0` / `=false` leave the check on.
+ * `envFlag` (`@texra-ai/harness/node`), so `=0` / `=false` leave the check on.
  */
 export const UPDATE_CHECK_SKIP_ENV = 'TEXRA_NO_UPDATE_CHECK';
 

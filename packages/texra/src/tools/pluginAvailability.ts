@@ -5,7 +5,7 @@
  */
 
 // Third-party imports
-import { Effect, Option } from 'effect';
+import { Effect, Option, Config } from 'effect';
 
 // Local imports
 import { apiKeyEnvName, lookupApiKeyOrigin } from '@texra-ai/llm';
@@ -47,7 +47,6 @@ import {
   type SdkBinaryStatus,
 } from '@texra/tools/availabilityProbes';
 import { isGitRepository } from '@texra/utils/git/isGitRepository';
-import { envVar } from '@utils/system/envFlags';
 import { formatResultCount } from '@utils/text/stringUtils';
 
 const CHANNEL = 'pluginAvailability';
@@ -269,13 +268,23 @@ export const CLAUDE_CODE_AVAILABILITY = prerequisitesChecks<
           `Reading the Anthropic API key failed; reporting the environment instead: ${failure.message}`,
         ).pipe(
           withLogChannel(CHANNEL),
-          Effect.andThen(envVar(anthropicApiKeyEnv)),
-          Effect.map((value) => (value ? ('env' as const) : ('none' as const))),
+          Effect.andThen(
+            Config.String(anthropicApiKeyEnv).pipe(Config.option, Effect.orDie),
+          ),
+          Effect.map((value) =>
+            Option.isSome(value) && value.value
+              ? ('env' as const)
+              : ('none' as const),
+          ),
         ),
       ),
     );
-    const hasOauthToken =
-      (yield* envVar('CLAUDE_CODE_OAUTH_TOKEN')) !== undefined;
+    const hasOauthToken = Option.isSome(
+      yield* Config.String('CLAUDE_CODE_OAUTH_TOKEN').pipe(
+        Config.option,
+        Effect.orDie,
+      ),
+    );
     const authBits: string[] = [];
     if (keyOrigin === 'secret') {
       authBits.push(`${anthropicApiKeyEnv} (TeXRA Settings)`);
