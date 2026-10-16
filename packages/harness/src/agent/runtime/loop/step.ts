@@ -40,7 +40,6 @@ import { z } from 'zod';
 
 import { stepInstructions } from '@agent/prompt/PromptBuilder';
 import type { RuntimeToolRegistry } from '@agent/runtime/ToolServices';
-import { MapToolRegistry } from '@agent/core/tools/ToolTypes';
 import { isTrustedScript } from '@agent/core/definition/RunRecord';
 import type { LoadablePlugin } from '@common/plugins/pluginTrust';
 import { withLogChannel } from '@logger/effectLog';
@@ -148,13 +147,11 @@ function heldToRecord(
   return {
     tools: {
       definitions: kept.flatMap(({ name }) => byName.get(name) ?? []),
-      registry: new MapToolRegistry(
-        new Map(
-          kept.flatMap(({ name }) => {
-            const tool = resolved.registry.get(name);
-            return tool ? [[name, tool] as const] : [];
-          }),
-        ),
+      registry: new Map(
+        kept.flatMap(({ name }) => {
+          const tool = resolved.registry.get(name);
+          return tool ? [[name, tool] as const] : [];
+        }),
       ),
       offered: kept,
     },

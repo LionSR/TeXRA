@@ -18,11 +18,12 @@ import {
 } from 'effect';
 import { render, type Instance as InkInstance } from 'ink';
 
+import { type ConfigProvider, type RuntimeRequest } from '@texra-ai/harness';
 import {
   qualifyAggregateId,
-  type ConfigProvider,
-  type RuntimeRequest,
-} from '@texra-ai/harness';
+  type RunId,
+  type AgentConfig,
+} from '@texra-ai/harness/schemas';
 import { Settings } from '@texra-ai/harness';
 import { getVisibleAgents } from '@agent/index';
 import { getRunRecords } from '@agent/storage';
@@ -137,7 +138,6 @@ import {
   TuiSession,
 } from './state/sessionRunState';
 import { createSessionExitController } from './sessionExitController';
-import type { RunId, AgentConfig } from '@texra-ai/harness/schemas';
 
 interface ChatResult {
   exitCode: number;

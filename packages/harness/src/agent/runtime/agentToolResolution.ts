@@ -37,7 +37,6 @@
 import { Context, Effect, SubscriptionRef } from 'effect';
 
 import type { RuntimeTool as ITool } from '@agent/runtime/ToolServices';
-import { MapToolRegistry } from '@agent/core/tools/ToolTypes';
 import { isInstalledPluginId } from '@common/plugins/pluginTrust';
 import type { ModelOptionStores } from '@model/computeModelOptions';
 import type { Persona } from '@shared/schemas';
@@ -330,7 +329,7 @@ export const resolveStepTools = Effect.fn('resolveStepTools')(function* (
   }
   return {
     definitions,
-    registry: new MapToolRegistry(offeredTools),
+    registry: offeredTools,
     offered,
     warnings,
     withheldForApproval,
