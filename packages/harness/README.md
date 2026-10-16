@@ -373,12 +373,12 @@ files.
 
 ## Entry points
 
-| Entry                       | Contents                                                                                                                            |
-| --------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| `@texra-ai/harness`         | `Sessions`, `Session`, `Run`, the tagged errors, and the tool-definition helpers (`defineTool`, `MapToolRegistry`) with their types |
-| `@texra-ai/harness/schemas` | Zod schemas + inferred types for agent definitions, configs, and run results                                                        |
-| `@texra-ai/harness/plugins` | `harnessBuiltins`: the built-in plugins                                                                                             |
-| `@texra-ai/harness/node`    | `nodePlatform(options)`, a ready-made Node `AgentPlatform` with its workspace roots                                                 |
+| Entry                       | Contents                                                                                                      |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `@texra-ai/harness`         | `Sessions`, `Session`, `Run`, the tagged errors, and the tool-definition helper (`defineTool`) with its types |
+| `@texra-ai/harness/schemas` | Zod schemas + inferred types for agent definitions, configs, and run results                                  |
+| `@texra-ai/harness/plugins` | `harnessBuiltins`: the built-in plugins                                                                       |
+| `@texra-ai/harness/node`    | `nodePlatform(options)`, a ready-made Node `AgentPlatform` with its workspace roots                           |
 
 Every entry needs the peers installed. See [Install](#install).
 
