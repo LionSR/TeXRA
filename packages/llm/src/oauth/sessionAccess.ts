@@ -5,34 +5,24 @@
  * here (with the status probe) so a provider does not re-copy the platform
  * dance.
  */
-import { Effect } from 'effect';
-import { AuthPortError, settleFailure } from './authProgram.js';
+import { Cause, Effect } from 'effect';
 import { LOG_CHANNEL, toErrorMessage } from './support.js';
-import type {
-  CredentialStore,
-  SecretsFailed,
-} from '../providers/credentials.js';
+import type { CredentialStore } from '../providers/credentials.js';
 
 import type {
   SubscriptionSessionStatus,
   SubscriptionSessionStorage,
 } from './SubscriptionOAuthCoordinator.js';
 
-/**
- * Session storage over one key of a secret store. The store's
- * {@link SecretsFailed} travels as {@link AuthPortError} — the failure shape
- * the coordinators match on for any port rejection.
- */
+/** Session storage over one key of a secret store. */
 function secretBackedSessionStorage(
   secrets: CredentialStore,
   key: string,
 ): SubscriptionSessionStorage {
-  const toPortError = (cause: SecretsFailed) => new AuthPortError({ cause });
   return {
-    get: () => secrets.get(key).pipe(Effect.mapError(toPortError)),
-    store: (value) =>
-      secrets.set(key, value).pipe(Effect.mapError(toPortError)),
-    delete: () => secrets.delete(key).pipe(Effect.mapError(toPortError)),
+    get: () => secrets.get(key),
+    store: (value) => secrets.set(key, value),
+    delete: () => secrets.delete(key),
   };
 }
 
@@ -81,7 +71,7 @@ export function getSubscriptionSessionStatus(
   return Effect.suspend(() => getCoordinator().getStatus()).pipe(
     Effect.catchCause((cause) =>
       Effect.logWarning(
-        `Failed to read ${displayName} session status: ${toErrorMessage(settleFailure(cause))}`,
+        `Failed to read ${displayName} session status: ${toErrorMessage(Cause.squash(cause))}`,
       ).pipe(
         Effect.annotateLogs({ [LOG_CHANNEL]: channel }),
         Effect.as({ signedIn: false }),

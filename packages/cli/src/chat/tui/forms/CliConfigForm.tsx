@@ -1,6 +1,6 @@
 import { Effect } from 'effect';
 
-import { API_KEY_PROVIDER_IDS, loadApiKeyStatusMap } from '@texra-ai/llm';
+import { loadApiKeyStatusMap } from '@texra-ai/llm';
 import { commitCliProviderApiKey } from '@cli/chat/tui/hosts/cliProviderKeys';
 import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
 import { type SurfacedSettingEntry } from '@shared/state/stateSettings';
@@ -69,7 +69,7 @@ export function CliConfigForm(props: CliConfigFormProps): React.JSX.Element {
   // The status reads are programs like the save and remove rows below them,
   // so this surface settles all of them on the runtime it was handed.
   const apiKeys = useAsyncResource({
-    load: () => loadApiKeyStatusMap(secrets, API_KEY_PROVIDER_IDS),
+    load: () => loadApiKeyStatusMap(secrets),
     runtime,
     onError: props.onError,
   });

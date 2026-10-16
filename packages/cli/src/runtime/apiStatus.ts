@@ -1,6 +1,10 @@
 import { Effect } from 'effect';
 
-import { configuredApiKeyProviders, providerDisplayName } from '@texra-ai/llm';
+import {
+  API_KEY_PROVIDER_IDS,
+  loadApiKeyStatusMap,
+  providerDisplayName,
+} from '@texra-ai/llm';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import { SUBSCRIPTION_AUTH_PROVIDERS } from '@shared/model/subscriptionAuth';
 import { SUBSCRIPTION_AUTH_COPY } from '@shared/model/accountAuth';
@@ -97,10 +101,10 @@ export const loadCliDetailedAccountStatusLines = Effect.fn(
     readonly now?: number;
   } = {},
 ) {
-  const [access, providers] = yield* Effect.all(
+  const [access, keyStatuses] = yield* Effect.all(
     [
       readCliModelAccessStatus(stores, secrets),
-      configuredApiKeyProviders(secrets),
+      loadApiKeyStatusMap(secrets),
     ] as const,
     { concurrency: 'unbounded' },
   );
@@ -178,8 +182,9 @@ export const loadCliDetailedAccountStatusLines = Effect.fn(
   lines.push(`Otherwise: ${formatCliModelAccessRoute('api-key')}`);
 
   const otherPersonalKeys = formatPersonalApiKeysLine(
-    providers.filter(
+    API_KEY_PROVIDER_IDS.filter(
       (provider) =>
+        keyStatuses[provider] !== 'not-set' &&
         !CODING_PLAN_SUBSCRIPTIONS.some(
           (plan) => plan.exclusiveCredential && plan.apiProvider === provider,
         ),

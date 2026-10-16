@@ -119,13 +119,12 @@ const STATUS_BY_ORIGIN: Record<CredentialOrigin, ApiKeyStatus> = {
   none: 'not-set',
 };
 
-/** Resolve key statuses for providers from their resolved key origins. */
-export function loadApiKeyStatusMap<const Provider extends ApiKeyProviderId>(
+/** Every API-key provider's status, from its resolved key origin. */
+export function loadApiKeyStatusMap(
   credentials: CredentialStore,
-  providers: readonly Provider[],
-): Effect.Effect<Record<Provider, ApiKeyStatus>, SecretsFailed> {
+): Effect.Effect<Record<ApiKeyProviderId, ApiKeyStatus>, SecretsFailed> {
   return Effect.forEach(
-    providers,
+    API_KEY_PROVIDER_IDS,
     (provider) =>
       Effect.map(
         lookupApiKeyOrigin(credentials, provider),
@@ -135,25 +134,7 @@ export function loadApiKeyStatusMap<const Provider extends ApiKeyProviderId>(
   ).pipe(
     Effect.map(
       (entries) =>
-        Object.fromEntries(entries) as Record<Provider, ApiKeyStatus>,
-    ),
-  );
-}
-
-/**
- * Return provider IDs that have a configured API key (secret or env).
- * Shared by the CLI status surfaces so the provider-key scan lives in one place.
- */
-export function configuredApiKeyProviders(
-  credentials: CredentialStore,
-): Effect.Effect<ApiKeyProviderId[], SecretsFailed> {
-  return Effect.forEach(
-    API_KEY_PROVIDER_IDS,
-    (provider) => lookupApiKeyOrigin(credentials, provider),
-    { concurrency: 'unbounded' },
-  ).pipe(
-    Effect.map((origins) =>
-      API_KEY_PROVIDER_IDS.filter((_, index) => origins[index] !== 'none'),
+        Object.fromEntries(entries) as Record<ApiKeyProviderId, ApiKeyStatus>,
     ),
   );
 }

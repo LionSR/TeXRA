@@ -217,7 +217,6 @@ export const bindModel = Effect.fn('llm.bindModel')(function* (
 });
 
 export { SubscriptionOAuthError } from './oauth/subscriptionOAuthError.js';
-export { AuthPortError, settleFailure } from './oauth/authProgram.js';
 export { SharedAttempt } from './oauth/sharedAttempt.js';
 export type { SubscriptionDeviceCodePrompt } from './oauth/deviceAuthorization.js';
 export { LoopbackTransportUnavailableError } from './oauth/loopbackLogin.js';
