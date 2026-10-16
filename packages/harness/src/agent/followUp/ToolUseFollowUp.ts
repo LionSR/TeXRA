@@ -43,7 +43,7 @@ export type FollowUpFailureReason =
 /**
  * Three outcomes: the input reached a running loop, it waits in the run's
  * queue for the next turn, or it was not admitted for a worded reason. A
- * delivery the admission boundary had already accepted (#9531) is `sent`.
+ * delivery the admission boundary had already accepted is `sent`.
  * A queued input whose recovery resume did not reach the run is still
  * queued (`wake: 'failed'`): the input belongs to the run, and an
  * explicit Resume delivers it.

@@ -51,7 +51,7 @@ export const isSharedRunRow = <E extends Pick<SessionEvent, 'type'>>(
 
 type RequestState = {
   readonly payload: PermissionPayload;
-  /** The recorded decision (R5): the `request.decided` row's, null while
+  /** The recorded decision: the `request.decided` row's, null while
    *  the request is open. */
   readonly decision: RequestDecision | null;
 };
@@ -120,7 +120,7 @@ export type RunRows = RunPosition & {
   readonly followUps: readonly QueuedFollowUp[];
   /**
    * Every follow-up id a row named, queued or consumed: the unique key. A
-   * delivery its producer replays after a restart (#9531) is a second row
+   * delivery its producer replays after a restart is a second row
    * under an id already here, and it is queued once, never twice.
    */
   readonly followUpIds: ReadonlySet<string>;

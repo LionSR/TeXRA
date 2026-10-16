@@ -7,7 +7,7 @@
  *   (one with no switch always is); the switches reach the catalog as a
  *   stream. A plugin's `processLayer` is up, once per process, while it is
  *   on or a step uses it.
- * - **A session's catalog** (`session`, `@tools/sessionTools`: one per
+ * - **A session's catalog** (`session`, built by `sessionTools`: one per
  *   project, in that session's scope) owns the project's plugin layers and
  *   MCP servers, and pins each step's tools, the only place a run's tools
  *   change.

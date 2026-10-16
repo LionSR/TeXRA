@@ -146,7 +146,7 @@ export function startCompactionActivity(
  * `attachments` records each attached media file's kind (not bytes) so the
  * archived conversation can render `[image attachment]` / `[document
  * attachment]` markers for media that only ever reached the provider
- * message (#7508), and `mediaFiles` the files a follow-up attached, which
+ * message, and `mediaFiles` the files a follow-up attached, which
  * "Fork from here" carries into the fork's composer. `scriptSummary` carries
  * a workflow delivery's typed presentation facts beside the row text
  * (`UserMessagePayloadSchema`), so renderers never re-parse them out of the

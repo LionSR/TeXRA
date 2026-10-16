@@ -1,5 +1,5 @@
 /**
- * One project's side of the tool catalog (`@tools/liveTools`), in its
+ * One project's side of the tool catalog (`ToolCatalog`), in its
  * session's scope: each plugin's `sessionLayer` (up while the plugin is on,
  * a step uses it or `PluginHold` holds it) and the MCP servers its runs and
  * steps start with the project's `.env`, kept 30 minutes past their last
