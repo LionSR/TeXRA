@@ -606,12 +606,11 @@ const showConversation = Effect.fn('ExecutionsTool.showConversation')(
 );
 
 const listFiles = Effect.fn('ExecutionsTool.listFiles')(function* (
-  context: RunToolContext,
+  { session }: RunToolContext,
   runId: RunId,
 ) {
-  const files = yield* listRunGeneratedFiles(runId, context.session).pipe(
-    Effect.orDie,
-  );
+  const { storage } = session.roots;
+  const files = yield* listRunGeneratedFiles(runId, storage).pipe(Effect.orDie);
   if (files.length === 0) {
     return executed('No files generated for this run.');
   }

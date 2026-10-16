@@ -291,6 +291,12 @@ export {
 } from '@platform/rootedFs';
 // A path as a `FileLocation` against the workspace root a caller holds.
 export { pathToLocationIn } from '@utils/files/fileLocation';
+// The files a run left in its storage directory, under a session's storage
+// (the executions tool's listing, for a host that shows it outside a run).
+export {
+  listRunGeneratedFiles,
+  type RunGeneratedFile,
+} from '@tools/executions/runGeneratedFiles';
 // Path containment on the platform's own paths, a path's segments and its
 // POSIX form, and an extension check that ignores case. (The browser-safe
 // path basics are in `./schemas`.)

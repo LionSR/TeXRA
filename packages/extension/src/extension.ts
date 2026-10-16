@@ -39,14 +39,12 @@ import {
 } from '@texra-ai/harness/node';
 import { withLogChannel } from '@texra-ai/harness';
 import { setLogSink } from '@texra-ai/harness';
-import { StorageFs, withSessionFs } from '@texra-ai/harness';
 import { ToolAvailability } from '@texra-ai/harness';
 import { Settings } from '@texra-ai/harness';
 import { EXTENSION_COMMANDS } from '@commands/extensionCommandIds';
 import { setApiKey as apiSetApiKey } from '@commands/api/apiKeyCommands';
 import { openGettingStarted } from '@commands/system/walkthroughCommands';
 import { createSampleProjectWithoutWorkspace } from '@commands/system/sampleProjectCommands';
-import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
 import { emitAppSignal, onAppSignal } from '@eventBus/AppSignals';
 import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
 import {
@@ -540,16 +538,6 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
     yield* warn(reason);
     if (handle.log.movedAside)
       yield* warn(sessionStoreMovedAsideMessage(handle.log.movedAside));
-    // The run-storage directory of the session just opened, through that
-    // session's own storage view.
-    yield* withSessionFs(
-      roots,
-      Effect.flatMap(Effect.service(StorageFs), (storageFs) =>
-        storageFs.makeDirectory(WORKSPACE_STORAGE_LAYOUT.runs, {
-          recursive: true,
-        }),
-      ),
-    );
   }
   const { session } = windowSession;
 
