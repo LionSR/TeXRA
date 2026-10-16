@@ -67,12 +67,9 @@ Things the tree won't tell you:
   `packages/texra/src/**` and `packages/llm/src/**` from importing host layers, and the ratchets in
   `config/ratchets/` freeze the remaining edges — `harness-deep-import-baseline`
   (no NEW distinct harness-internal specifier, `@agent/*`, `@shared/*`,
-  `@platform/*` …, from the app or a host, type-only included; the one
-  host-internal door, `@agent/runtime`, is not SDK surface and its names are
-  frozen shrink-only by `config/api-reports/harness.agent-runtime.api.md`
-  (it serves the record reads, the presentation host class and the
-  desktop's `Runs.launch`); reach the
-  harness through `@texra-ai/harness` instead), `core-quality/core-module-mocks`,
+  `@platform/*` …, from the app or a host, type-only included; a host holds
+  the `LocalSession` that `Sessions.open` returns, whose reads are typed, and
+  reaches the harness through `@texra-ai/harness` instead), `core-quality/core-module-mocks`,
   `architecture-edges`, plus `refuted-candidates` (the costed-and-refused
   refactors, with their ruling anchors). ESLint's `no-restricted-syntax` fails
   an `Effect.run*` call outside `packages/{extension,desktop,cli}/src/` and the

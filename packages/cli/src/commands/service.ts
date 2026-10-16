@@ -4,7 +4,6 @@ import { Deferred, Effect, Exit, Schedule, Scope } from 'effect';
 import {
   entryChannel,
   entryMessage,
-  SessionOwner,
   Sessions,
   setLogSink,
 } from '@texra-ai/harness';
@@ -94,7 +93,7 @@ function runServe(context: CliContext, idleSeconds: number) {
     process.on('SIGINT', onSignal);
     process.on('SIGTERM', onSignal);
     const scope = yield* Scope.make();
-    const owner = yield* SessionOwner;
+    const sessions = yield* Sessions;
     const served = Effect.gen(function* () {
       // The registry the runtime's plugins read: windows attach their
       // editors to it.
@@ -102,18 +101,18 @@ function runServe(context: CliContext, idleSeconds: number) {
         context,
         scope,
         yield* CliEditors,
-        yield* Sessions,
+        sessions,
       );
       return yield* serve({
         idleAfter: `${idleSeconds} seconds`,
         shutdown,
-        settle: Effect.asVoid(owner.closeAll),
+        settle: Effect.asVoid(sessions.closeAll),
       }).pipe(Effect.provideService(ServiceProjects, projects));
     }).pipe(
       // The sessions close first, their runs stopped and settled; then the
       // stores their roots opened.
       Effect.ensuring(
-        owner.closeAll.pipe(Effect.andThen(Scope.close(scope, Exit.void))),
+        sessions.closeAll.pipe(Effect.andThen(Scope.close(scope, Exit.void))),
       ),
       Effect.ensuring(
         Effect.sync(() => {

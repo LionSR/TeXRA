@@ -5,7 +5,6 @@ import { Text } from 'ink';
 
 import { Effect } from 'effect';
 
-import type { SessionHandle } from '@agent/runtime';
 import {
   listCliHistoryEntries,
   listResumableCliHistoryEntries,
@@ -16,6 +15,7 @@ import {
   formatCliHistorySubject,
 } from '@cli/runtime/historyLabels';
 import { AsyncListForm } from './_shared/ListForm';
+import type { LocalSession } from '@texra-ai/harness';
 import type { ProcessRuntime } from '@texra-ai/harness';
 import type { RunId } from '@texra-ai/harness/schemas';
 
@@ -24,7 +24,7 @@ interface ResumeListFormProps {
    * The session the history listing reads. Ink components run no Effect, so
    * the process session arrives as a prop from the surface that opened the form.
    */
-  readonly session: SessionHandle;
+  readonly session: LocalSession;
   /** The process runtime the listing runs on, from the same surface. */
   readonly runtime: ProcessRuntime;
   readonly availableRows?: number;

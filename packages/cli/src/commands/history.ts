@@ -3,7 +3,7 @@ import { Cause, Effect, absurd } from 'effect';
 
 import { type RunId } from '@texra-ai/harness/schemas';
 import { formatChatAsMarkdown } from '@texra/agent/export';
-import { assembleTrace, injectStandaloneTrace } from '@transcript';
+import { injectStandaloneTrace } from '@transcript';
 import { formatCliHistoryDeletionSummary } from '@ui/copy/runHistory';
 import { formatResultCount } from '@utils/text/stringUtils';
 
@@ -123,7 +123,7 @@ export function runHistoryExport(
     }
 
     const session = yield* stores.session;
-    const traceResult = yield* assembleTrace(id, session);
+    const traceResult = yield* session.records(id).readTrace();
     if (traceResult.status !== 'ok') {
       switch (traceResult.status) {
         case 'config_missing':

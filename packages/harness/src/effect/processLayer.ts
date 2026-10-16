@@ -1,8 +1,8 @@
 /**
  * The process every TeXRA host and embedder runs on: {@link processLayer}
- * composes the process services, the `SessionOwner`, and the
- * {@link Sessions} service over that owner, so a host and an embedder open
- * a root's session the same way. `Sessions.layer` is an embedder's
+ * composes the process services and the {@link Sessions} service over the
+ * process's internal session owner, so a host and an embedder open a root's
+ * session the same way. `Sessions.layer` is an embedder's
  * composition of that process from its platform and plugins.
  */
 import { Context, Effect, Layer } from 'effect';
@@ -22,7 +22,7 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { PluginsRefused } from './errors.js';
 import { makeSessions } from './sessionPrograms.js';
-import type { Composition, OpenOptions, Session } from './sessions.js';
+import type { Composition, LocalSession, OpenOptions } from './sessions.js';
 
 /** The process's sessions: one per workspace storage root, through its one
  *  `SessionOwner`. */
@@ -34,7 +34,7 @@ export class Sessions extends Context.Service<
     readonly open: (
       roots: WorkspaceRoots,
       options?: OpenOptions,
-    ) => Effect.Effect<Session, SessionOpenError>;
+    ) => Effect.Effect<LocalSession, SessionOpenError>;
     /**
      * Refuse new runs, settle the ones it owns inside the runtime's
      * shutdown-phase budget, flush, release.
@@ -42,7 +42,11 @@ export class Sessions extends Context.Service<
     readonly close: (
       roots: WorkspaceRoots,
     ) => Effect.Effect<SessionCloseReport>;
-    readonly list: Effect.Effect<readonly Session[]>;
+    /** A process shutdown's close: drain what the plugins' pollers
+     *  admitted, then close every open session at once, under one
+     *  deadline. */
+    readonly closeAll: Effect.Effect<readonly SessionCloseReport[]>;
+    readonly list: Effect.Effect<readonly LocalSession[]>;
   }
 >()('@texra-ai/harness/Sessions') {
   /**
@@ -104,16 +108,15 @@ export class Sessions extends Context.Service<
 }
 
 /**
- * The process services a composition root runs on, the `SessionOwner`
- * opening, listing and closing its sessions (one per storage root), and
- * the {@link Sessions} over that owner, for a `ManagedRuntime` the host
- * disposes on shutdown. Disposal closes every open session, plugins drained
- * first; a host whose resources must outlive them runs
- * `SessionOwner.closeAll` first.
+ * The process services a composition root runs on and the {@link Sessions}
+ * opening, listing and closing its sessions (one per storage root), for a
+ * `ManagedRuntime` the host disposes on shutdown. Disposal closes every open
+ * session, plugins drained first; a host whose resources must outlive them
+ * runs `Sessions.closeAll` first.
  */
 export function processLayer(
   options: ProcessLayerOptions,
-): Layer.Layer<ProcessServices | SessionOwner | Sessions> {
+): Layer.Layer<ProcessServices | Sessions> {
   return Layer.effect(
     Sessions,
     Effect.gen(function* () {

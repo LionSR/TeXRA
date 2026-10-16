@@ -118,7 +118,7 @@ for (const dir of VSCODE_FREE_ZONE_DIRS) {
 }
 
 // The SDK's entry files: the package's public surface and its Effect
-// boundary (the host door below), as opposed to the harness modules under it.
+// boundary, as opposed to the harness modules under it.
 const HARNESS_ENTRY_FILES = [
   'packages/harness/src/index.ts',
   'packages/harness/src/node.ts',

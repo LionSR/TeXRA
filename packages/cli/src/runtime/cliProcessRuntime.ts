@@ -41,7 +41,6 @@ import {
   Sessions,
   StateWriteFailed,
   type ProcessServices,
-  type SessionOwner,
   type StateStore,
   UNAVAILABLE_LANGUAGE_MODEL_PORT,
   withForkFailureReporting,
@@ -168,8 +167,7 @@ export class CliEditors extends Context.Service<CliEditors, EditorRegistry>()(
 
 /** What a CLI command's program runs over: the process services, its
  *  sessions, and the editor registry its plugins read. */
-export type CliServices =
-  ProcessServices | SessionOwner | Sessions | CliEditors;
+export type CliServices = ProcessServices | Sessions | CliEditors;
 
 /** The process runtime the CLI installs: {@link CliServices}. */
 export type CliProcessRuntime = ManagedRuntime.ManagedRuntime<

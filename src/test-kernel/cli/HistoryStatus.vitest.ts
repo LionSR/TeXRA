@@ -23,7 +23,7 @@ import { qualifyAggregateId, CLI_RUN_STATUS } from '@shared/schemas';
 import type { RunId, RunOutcome } from '@shared/schemas';
 import { seedRows } from '@test/support/sessionTestUtils';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
-import { testRuntime } from '@test/support/testProcessRuntime';
+import { testRuntime, testSessionOf } from '@test/support/testProcessRuntime';
 import { setupPlatform } from '@test/support/setupPlatform';
 import {
   createTempDirPlatform,
@@ -136,7 +136,10 @@ describe('CLI history status formatting', () => {
 
         const details = yield* withProcessServices(
           testRuntime(),
-          readCliHistoryDetails(Effect.succeed(testDefaultSession()), id),
+          readCliHistoryDetails(
+            Effect.sync(() => testSessionOf(testDefaultSession())),
+            id,
+          ),
         );
 
         expect(details?.checkpointPresent).toBe(true);
@@ -155,7 +158,10 @@ describe('CLI history status formatting', () => {
 
       const details = yield* withProcessServices(
         testRuntime(),
-        readCliHistoryDetails(Effect.succeed(testDefaultSession()), id),
+        readCliHistoryDetails(
+          Effect.sync(() => testSessionOf(testDefaultSession())),
+          id,
+        ),
       );
 
       expect(details?.checkpointPresent).toBe(true);
@@ -191,7 +197,10 @@ describe('CLI history status formatting', () => {
 
       const details = yield* withProcessServices(
         testRuntime(),
-        readCliHistoryDetails(Effect.succeed(testDefaultSession()), id),
+        readCliHistoryDetails(
+          Effect.sync(() => testSessionOf(testDefaultSession())),
+          id,
+        ),
       );
 
       expect(details?.checkpointPresent).toBe(true);

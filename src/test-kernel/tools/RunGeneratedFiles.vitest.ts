@@ -53,7 +53,10 @@ const listWithFailedStat = (
 ) =>
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
-    return yield* listRunGeneratedFiles(EXECUTION_ID, session).pipe(
+    return yield* listRunGeneratedFiles(
+      EXECUTION_ID,
+      session.roots.storage,
+    ).pipe(
       Effect.provideService(
         FileSystem.FileSystem,
         withFailingStat(fs, target, failure),
@@ -130,7 +133,7 @@ describe('listRunGeneratedFiles', () => {
 
       expect(
         yield* Effect.flip(
-          listRunGeneratedFiles(EXECUTION_ID, session).pipe(
+          listRunGeneratedFiles(EXECUTION_ID, session.roots.storage).pipe(
             Effect.provideService(FileSystem.FileSystem, {
               ...fs,
               exists: () => Effect.fail(failure),

@@ -26,7 +26,7 @@ export const HISTORY_RUN_STATUS_LABEL = {
 } as const satisfies Record<HistoryRunStatus, string>;
 
 /** What a run's history standing is decided from: the view's folded facts
- *  and `deriveResumability`'s answer. */
+ *  and `records(id).readResumable()`'s answer. */
 export interface CliRunFacts {
   readonly resumable: boolean;
   /** The run's folded status; a terminal outcome phase is its durable

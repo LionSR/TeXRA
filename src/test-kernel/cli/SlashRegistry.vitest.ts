@@ -78,7 +78,7 @@ function registerBuiltins(
     secrets: new FakeSecrets(),
     stores: makeFakeSettingsStores('cli').stores,
     runtime: testRuntime(),
-    runtimeSession: testDefaultSession(),
+    runtimeSession: testSessionOf(testDefaultSession()),
     runSession: testSessionOf(testDefaultSession()),
     ...options,
   });

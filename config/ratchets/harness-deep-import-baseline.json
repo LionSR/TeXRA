@@ -3,8 +3,6 @@
   "hosts": {
     "cli": [
       "@agent/index",
-      "@agent/runtime",
-      "@agent/storage",
       "@common/errors",
       "@common/parsing/safeParseJson",
       "@common/plugins/installedPlugins",
@@ -61,7 +59,6 @@
     ],
     "desktop": [
       "@agent/index",
-      "@agent/runtime",
       "@common/parsing/safeParseJson",
       "@eventBus/AppSignals",
       "@platform/defaults/fileSecrets",
@@ -86,7 +83,6 @@
     ],
     "extension": [
       "@agent/index",
-      "@agent/runtime",
       "@common/storage/storageLayout",
       "@eventBus/AppSignals",
       "@logger/effectDiagnostics",
@@ -140,8 +136,6 @@
       "@agent/prompt/templateInputs",
       "@agent/runtime/childRunLoop",
       "@agent/runtime/deliveryEnvelope",
-      "@agent/runtime/SessionHandle",
-      "@agent/storage",
       "@agent/storage/leaseOwnerLiveness",
       "@agent/trace",
       "@agent/workspaceAgents/WorkspaceAgentsController",

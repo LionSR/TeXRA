@@ -21,12 +21,10 @@
 
 import { Data, DateTime, Effect } from 'effect';
 
-import { getRunRecords } from '@agent/storage';
-import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { ChatExportInput, ExportNode } from '@agent/export/schemas';
-import type { RunView } from '@shared/session/sessionView';
-import { readCompletedRunConversation } from '@transcript';
 import { toErrorMessage } from '@utils/errors/errorMessage';
+import type { LocalSession } from '@texra-ai/harness';
+import type { RunView } from '@texra-ai/harness';
 import type { RunId, AgentConfig } from '@texra-ai/harness/schemas';
 
 /**
@@ -73,16 +71,17 @@ function unreadable(
 
 export const loadChatExportInput = Effect.fn('loadChatExportInput')(function* (
   id: RunId,
-  session: SessionHandle,
+  session: LocalSession,
 ): Effect.fn.Return<ChatExportLoadResult, ChatExportInputUnreadable> {
+  const records = session.records(id);
   const [config, conversation, view] = yield* Effect.all(
     [
-      getRunRecords(session, id)
+      records
         .readConfig()
         .pipe(Effect.mapError((cause) => unreadable('config', cause))),
-      readCompletedRunConversation(id, session).pipe(
-        Effect.mapError((cause) => unreadable('conversation', cause)),
-      ),
+      records
+        .readConversation()
+        .pipe(Effect.mapError((cause) => unreadable('conversation', cause))),
       session.view.read([]),
     ],
     { concurrency: 3 },

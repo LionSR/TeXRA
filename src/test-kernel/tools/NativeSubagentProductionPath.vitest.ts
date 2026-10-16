@@ -53,7 +53,7 @@ vi.mock('@agent/runtime/modelAccess/ModelAccess', async (importActual) => {
 
 // Local imports - agent runtime
 import { refresh } from '@agent/index';
-import { getRunRecords } from '@agent/storage';
+import { getRunRecords } from '@agent/storage/runRecords';
 import { readChildTurnState } from '@agent/storage/runRecords';
 import { prepareAgentDefinition } from '@agent/runtime/AgentLaunchContext';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
@@ -1412,8 +1412,8 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
         const actions = yield* withProcessServices(
           runtime,
           createHostRunActions({
-            ...localRunActionPorts(session),
-            session: testSessionOf(session, { persistent: true }),
+            ...localRunActionPorts(testSessionOf(session)),
+            session: testSessionOf(session),
             scope: yield* Scope.make(),
             launched: () => Effect.void,
             openFinalOutput: (config, result) =>

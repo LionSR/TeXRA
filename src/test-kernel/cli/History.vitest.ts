@@ -17,6 +17,7 @@ import {
 
 import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 
+import type { ExportNode, LocalSession } from '@texra-ai/harness';
 import { testRuntime, testSessionOf } from '@test/support/testProcessRuntime';
 
 import {
@@ -45,28 +46,34 @@ const mocks = vi.hoisted(() => ({
   assembleTrace: vi.fn(),
 }));
 
-vi.mock('@transcript', async () => {
-  const actual =
-    await vi.importActual<typeof import('@transcript')>('@transcript');
+/**
+ * The default test session, its trace and conversation reads answered by
+ * the suite's mocks: `readConversation` resolves the conversation, or null
+ * for the session's own read.
+ */
+const historySession = (): LocalSession => {
+  const session = testSessionOf(testDefaultSession());
   return {
-    ...actual,
-    assembleTrace: mocks.assembleTrace,
-    readCompletedRunConversation: vi.fn((...args: unknown[]) =>
-      Effect.gen(function* () {
-        const conversation = yield* Effect.promise(() =>
-          mocks.readConversation(),
-        );
-        return conversation === null
-          ? yield* actual.readCompletedRunConversation(
-              ...(args as Parameters<
-                typeof actual.readCompletedRunConversation
-              >),
-            )
-          : conversation;
-      }),
-    ),
+    ...session,
+    records: (runId) => {
+      const records = session.records(runId);
+      return {
+        ...records,
+        readTrace: () => mocks.assembleTrace(runId, session),
+        readConversation: () =>
+          Effect.flatMap(
+            Effect.promise((): Promise<ExportNode[] | null> =>
+              mocks.readConversation(),
+            ),
+            (conversation) =>
+              conversation === null
+                ? records.readConversation()
+                : Effect.succeed(conversation),
+          ),
+      };
+    },
   };
-});
+};
 
 // `runHistoryExport` calls this unconditionally; the real implementation
 // bootstraps platform agent directories keyed by `resourcesPath`, which is
@@ -125,14 +132,14 @@ function historyDetails(
   options?: { includeFullConversation?: boolean },
 ) {
   return testRuntime().runPromise(
-    readCliHistoryDetails(Effect.succeed(testDefaultSession()), id, options),
+    readCliHistoryDetails(Effect.sync(historySession), id, options),
   );
 }
 
 // The same open, for the listing the CLI's `history list` run arm runs.
 function historyEntries() {
   return testRuntime().runPromise(
-    listCliHistoryEntries(Effect.succeed(testDefaultSession())),
+    listCliHistoryEntries(Effect.sync(historySession)),
   );
 }
 
@@ -251,10 +258,7 @@ describe('CLI history runtime', () => {
         repoState: host.roots.repoState,
         globalState: host.roots.globalState,
         secrets: host.secrets,
-        session: Effect.succeed(testDefaultSession()),
-        runSession: Effect.sync(() =>
-          testSessionOf(testDefaultSession(), { persistent: true }),
-        ),
+        session: Effect.sync(historySession),
         roots: host.roots,
         // The history command reads no `Sessions` or `CliEditors` from it.
         runtime: testRuntime() as CliProcessRuntime,
@@ -635,13 +639,17 @@ describe('CLI history runtime', () => {
           const id = 'aabbcc' as RunId;
           publishTestRunStart(session, id);
           yield* session.log.settled;
-          expect(yield* deleteCliHistory(session, { all: true })).toEqual({
+          expect(
+            yield* deleteCliHistory(testSessionOf(session), { all: true }),
+          ).toEqual({
             deleted: 'all',
             count: 1,
             active: [],
             failed: [],
           });
-          expect(yield* deleteCliHistory(session, { id })).toEqual({
+          expect(
+            yield* deleteCliHistory(testSessionOf(session), { id }),
+          ).toEqual({
             deleted: 'one',
             id,
             found: false,
@@ -683,7 +691,7 @@ describe('CLI history runtime', () => {
           )?.launchedAt;
 
           const result = yield* readCliHistoryExportInput(
-            Effect.succeed(testDefaultSession()),
+            Effect.sync(historySession),
             runId,
           );
 
@@ -719,7 +727,7 @@ describe('CLI history runtime', () => {
         Effect.gen(function* () {
           expect(
             yield* readCliHistoryExportInput(
-              Effect.succeed(testDefaultSession()),
+              Effect.sync(historySession),
               'facade' as RunId,
             ),
           ).toEqual({ status: 'not_found' });
@@ -739,7 +747,7 @@ describe('CLI history runtime', () => {
           );
           expect(
             yield* readCliHistoryExportInput(
-              Effect.succeed(testDefaultSession()),
+              Effect.sync(historySession),
               'a1a1a1' as RunId,
             ),
           ).toEqual({ status: 'incomplete' });
@@ -756,7 +764,7 @@ describe('CLI history runtime', () => {
 
           expect(
             yield* readCliHistoryExportInput(
-              Effect.succeed(testDefaultSession()),
+              Effect.sync(historySession),
               'a1a1a1' as RunId,
             ),
           ).toEqual({ status: 'incomplete' });
@@ -776,7 +784,7 @@ describe('CLI history runtime', () => {
 
           expect(
             yield* readCliHistoryExportInput(
-              Effect.succeed(testDefaultSession()),
+              Effect.sync(historySession),
               'facade' as RunId,
             ),
           ).toEqual({ status: 'not_found' });

@@ -2,7 +2,8 @@ import { it } from '@effect/vitest';
 import { Effect } from 'effect';
 import { beforeEach, describe, expect, vi } from 'vitest';
 
-import { getRunRecords, listRuns } from '@agent/storage';
+import { getRunRecords } from '@agent/storage/runRecords';
+import { listRuns } from '@agent/storage/runListing';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import {
   AgentConfigSchema,

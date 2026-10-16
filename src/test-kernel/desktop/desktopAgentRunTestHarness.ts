@@ -15,9 +15,8 @@ export function localTestProject(handle: SessionHandle): DesktopProject {
     root: undefined,
     display: projectDisplayOf(handle.roots.storage, undefined),
     roots: handle.roots,
-    handle,
     session: testSessionOf(handle),
-    present: handle.interactions,
+    present: testSessionOf(handle),
     dispose: () => Effect.void,
   };
 }

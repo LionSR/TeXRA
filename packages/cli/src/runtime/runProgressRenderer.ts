@@ -6,20 +6,10 @@
  */
 import path from 'node:path';
 
-import {
-  Effect,
-  type Fiber,
-  type Scope,
-  Stream,
-  SubscriptionRef,
-} from 'effect';
+import { Effect, type Fiber, type Scope, Stream } from 'effect';
 
 import { RUN_PHASE, type RunId, type RunPhase } from '@shared/schemas';
-import {
-  isLiveRun,
-  type SessionView,
-  type RunView,
-} from '@shared/session/sessionView';
+import { isLiveRun } from '@shared/session/sessionView';
 import { isTerminalOutcomePhase } from '@shared/runs/runStatus';
 import { formatLoopPositionLabel } from '@ui/copy/runStatus';
 import { formatCompactDuration, pluralize } from '@utils/text/stringUtils';
@@ -31,6 +21,7 @@ import {
 } from './terminalText';
 import { getStderrColumns, writeRawStderr } from './logSinks';
 import { claimRootRun, type RunProgressSession } from './sessionViewFollow';
+import type { RunView, SessionView } from '@texra-ai/harness';
 import type { CliContext } from './cliContext';
 
 const CLEAR_LINE = '\r\x1b[2K';
@@ -120,7 +111,7 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
   ): Effect.Effect<void, never, Scope.Scope> {
     return Effect.suspend(() => {
       this.wantedRunId = options.runId;
-      this.attachCursor = SubscriptionRef.getUnsafe(session.view.ref).cursor;
+      this.attachCursor = session.view.current().cursor;
       return Effect.addFinalizer(() =>
         Effect.sync(() => {
           this.view = undefined;

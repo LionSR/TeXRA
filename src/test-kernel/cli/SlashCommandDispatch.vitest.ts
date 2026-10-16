@@ -154,7 +154,7 @@ const services = {
   secrets: new FakeSecrets(),
   stores: makeFakeSettingsStores('cli').stores,
   runtime: testRuntime(),
-  runtimeSession: testDefaultSession(),
+  runtimeSession: testSessionOf(testDefaultSession()),
   // Read when a case asks: each case's fake host opens its own session.
   get runSession() {
     return testSessionOf(testDefaultSession());

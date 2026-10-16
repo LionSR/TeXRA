@@ -1,10 +1,9 @@
 // Third-party imports
-import { Cause, Context, Effect, Exit, Scope } from 'effect';
+import { Cause, Effect, Exit, Scope } from 'effect';
 
 // Local imports
 import {
   AppState,
-  SessionOwner,
   Sessions,
   setLogSink,
   type StateStore,
@@ -12,7 +11,7 @@ import {
   Secrets,
   type PlatformSecrets,
   type WorkspaceRoots,
-  type Session,
+  type LocalSession,
   type SessionOpenError,
   withProcessServices,
   StateStores,
@@ -23,7 +22,6 @@ import {
   resolveWorkspaceStoragePath,
 } from '@texra-ai/harness/node';
 import { GlobalStateKey } from '@texra-ai/harness/schemas';
-import type { SessionHandle } from '@agent/runtime';
 import { telemetryNoticeIfDue } from '@telemetry/telemetryNotice';
 import { DisposableStore } from '@texra/platform/disposable';
 import { bootstrapHost } from '@texra/controllers/hostBootstrap';
@@ -57,9 +55,7 @@ type CliShutdownSignal = 'SIGINT' | 'SIGTERM';
 let shutdownHandlers: DisposableStore | undefined;
 // The one memoized open of the process session (`CliPlatformServices.session`),
 // built by the first init beside the roots it installs.
-let sessionOpen: Effect.Effect<SessionHandle, SessionOpenError> | undefined;
-// The same session as every host drives it (`CliPlatformServices.runSession`).
-let runSessionOpen: Effect.Effect<Session, SessionOpenError> | undefined;
+let sessionOpen: Effect.Effect<LocalSession, SessionOpenError> | undefined;
 // The process's shutdown scope, made by the first init: its close is the
 // CLI's shutdown, run once whichever exit path asks first (`shutdown`).
 let shutdownScope: Scope.Closeable | undefined;
@@ -81,13 +77,13 @@ type CliPlatformInitOptions = Pick<
   | 'version'
 > & {
   readonly installSignalHandlers?: boolean;
-  /** The caller shows `SessionHandle.log.movedAside` itself: the chat TUI,
+  /** The caller shows `LocalSession.storeMovedAside` itself: the chat TUI,
    *  in its transcript (`createChatSessionController`), since stderr written before Ink mounts is left
    *  above its header. Otherwise this init prints it to stderr: the
    *  platform's log sink is always silent. */
   readonly presentsStoreMovedAside?: boolean;
   /** The chat TUI: how its session follows interrupted tasks
-   *  (`SessionHandleInit.interruptedTasks`). */
+   *  (`OpenOptions.host`). */
   readonly interruptedTasks?: 'offer' | 'retry';
 };
 
@@ -128,14 +124,11 @@ export type CliPlatformServices = SettingsStores & {
    * The process session over the process roots: one CLI process, one
    * project, one persistent session, opened by the first entry point that
    * runs this Effect (`chat`, `run`, `resume`, `history`) and
-   * handed to every later one as the same handle. `auth`, `doctor`,
+   * handed to every later one as the same session. `auth`, `doctor`,
    * `models`, `skills`, `tools` and `init` never run it, so a storage root
    * nothing can write to fails a command only when it asks for a transcript.
    */
-  readonly session: Effect.Effect<SessionHandle, SessionOpenError>;
-  /** The process session as every host drives it (`Session`): opened with
-   *  {@link session}, the one it is a view of. */
-  readonly runSession: Effect.Effect<Session, SessionOpenError>;
+  readonly session: Effect.Effect<LocalSession, SessionOpenError>;
 };
 
 /**
@@ -330,7 +323,7 @@ export function initCliPlatform(
         // The three setting slots this process answers a catalog row from:
         // the roots an earlier init built.
         if (installedRoots) return { globalState, roots: installedRoots };
-        const owner = yield* SessionOwner;
+        const sessions = yield* Sessions;
 
         const projectScope = yield* Scope.make();
         const closeProject = Scope.close(projectScope, Exit.void);
@@ -367,18 +360,20 @@ export function initCliPlatform(
           // opens one.
           const openSession = yield* Effect.cached(
             Effect.acquireRelease(
-              owner.open({
-                roots,
-                ...(context.interruptedTasks !== undefined && {
-                  interruptedTasks: context.interruptedTasks,
-                }),
+              sessions.open(roots, {
+                persistent: true,
+                host: {
+                  ...(context.interruptedTasks !== undefined && {
+                    interruptedTasks: context.interruptedTasks,
+                  }),
+                },
               }),
-              (session) => Effect.asVoid(owner.close(session.roots.storage)),
+              (session) => Effect.asVoid(sessions.close(session.roots)),
             ).pipe(
               Scope.provide(projectScope),
               Effect.tap((session) =>
                 Effect.sync(() => {
-                  const moved = session.log.movedAside;
+                  const moved = session.storeMovedAside;
                   if (moved && context.presentsStoreMovedAside !== true) {
                     writeTextStderr(sessionStoreMovedAsideMessage(moved));
                   }
@@ -422,20 +417,12 @@ export function initCliPlatform(
             scope,
             closeProject.pipe(Effect.ensuring(flushNdjsonStdout())),
           );
-          yield* Scope.addFinalizer(scope, Effect.asVoid(owner.closeAll));
+          yield* Scope.addFinalizer(scope, Effect.asVoid(sessions.closeAll));
           shutdownScope = scope;
           shutdown = yield* Effect.cached(Scope.close(scope, Exit.void));
 
           installedRoots = roots;
           sessionOpen = openSession;
-          runSessionOpen = yield* Effect.cached(
-            Effect.flatMap(openSession, (handle) =>
-              Effect.flatMap(
-                Effect.map(runtime.contextEffect, Context.get(Sessions)),
-                (sessions) => sessions.open(handle.roots, { persistent: true }),
-              ),
-            ),
-          );
           if (context.installSignalHandlers !== false) {
             installCliShutdownSignalHandlers(context.quietLogs);
           }
@@ -469,9 +456,6 @@ export function initCliPlatform(
       secrets,
       session:
         sessionOpen ??
-        Effect.die(new Error('The CLI process session was never opened.')),
-      runSession:
-        runSessionOpen ??
         Effect.die(new Error('The CLI process session was never opened.')),
       shutdownScope: shutdownScope ?? Scope.makeUnsafe(),
       roots,

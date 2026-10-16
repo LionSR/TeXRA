@@ -24,9 +24,8 @@ import {
   type RunId,
   type AgentConfig,
 } from '@texra-ai/harness/schemas';
-import { Settings } from '@texra-ai/harness';
+import { SESSION_CLOSE_DEADLINE_MS, Settings } from '@texra-ai/harness';
 import { getVisibleAgents } from '@agent/index';
-import { getRunRecords } from '@agent/storage';
 import {
   CliUsageError,
   effectiveApprovalPolicy,
@@ -226,7 +225,7 @@ export async function runChat(
             context.cwd,
             runtimeSession.roots,
           ).pipe(Scope.provide(chatScope))
-        : yield* services.runSession;
+        : runtimeSession;
       // Said once the view is bound, which the transcript rows need.
       const startupNotices: string[] = [];
       // This chat's requests are decided under the project's persisted
@@ -239,9 +238,9 @@ export async function runChat(
       if (refused !== undefined) startupNotices.push(refused);
       // A store this process moved aside at open is said in the transcript,
       // not on stderr before Ink mounts, where it would sit above the header.
-      if (runtimeSession.log.movedAside)
+      if (runtimeSession.storeMovedAside)
         startupNotices.push(
-          sessionStoreMovedAsideMessage(runtimeSession.log.movedAside),
+          sessionStoreMovedAsideMessage(runtimeSession.storeMovedAside),
         );
       if (Result.isFailure(service)) {
         startupNotices.push(
@@ -558,12 +557,12 @@ export async function runChat(
     // The run's loop answers in this process; the service checks the
     // switch against the run when it is asked.
     const { runId } = session;
-    const controls =
+    const held =
       runId === undefined || runsElsewhere
         ? undefined
-        : runtimeSession.runs.get(runId)?.controls;
+        : runtimeSession.held(runId);
     return (
-      controls?.modelSwitchDisabledReason(candidateModel) ??
+      held?.modelSwitchDisabledReason(candidateModel) ??
       Effect.succeed(undefined)
     );
   };
@@ -574,7 +573,7 @@ export async function runChat(
     session,
     runSession,
     served: runsElsewhere,
-    records: (runId) => getRunRecords(runtimeSession, runId),
+    records: runtimeSession.records,
     getSessionContext: currentSessionContext,
     disposables,
     shutdownScope: services.shutdownScope,
@@ -750,7 +749,17 @@ export async function runChat(
     runtime,
     followUpsIdle: followUpQueue.idle,
     getApprovalPolicy,
-    flushArtifacts: runtimeSession.log.settled,
+    // What the session's publisher still holds, drained before shutdown
+    // within the close budget; one that does not drain is said on stderr.
+    flushArtifacts: runtimeSession.settled.pipe(
+      Effect.timeout(SESSION_CLOSE_DEADLINE_MS),
+      Effect.mapError(
+        () =>
+          new Error(
+            `the session's rows did not settle within ${SESSION_CLOSE_DEADLINE_MS} ms`,
+          ),
+      ),
+    ),
     repaintAfterTerminalResume: viewportController.repaintAfterTerminalResume,
     interruptActive: (reason) => chatController.stop(reason),
     quiet: context.quietLogs,

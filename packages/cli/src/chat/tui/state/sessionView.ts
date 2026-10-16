@@ -1,6 +1,6 @@
 /**
  * The TUI's read of the one session state (PRD one-fold-three-renderers,
- * 10.1): `SessionHandle.view` bridged into a Lit signal, so every Ink
+ * 10.1): `Session.view` bridged into a Lit signal, so every Ink
  * component reads the fold with `useSignal(sessionView())` and derives
  * nothing the fold already states.
  *

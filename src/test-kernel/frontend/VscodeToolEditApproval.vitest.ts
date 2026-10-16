@@ -147,7 +147,7 @@ function createApprovalHarness(): ApprovalHarness {
       // invokes; no shared fake exists that builds without a platform host.
       {} as WorkspaceRoots,
     ),
-    session: { requests: { request: decide } },
+    session: { request: decide },
   });
   const harness = { controller, decide };
   harnesses.push(harness);

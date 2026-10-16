@@ -2,11 +2,7 @@ import { resolve as resolvePath } from 'node:path';
 import { Cause, Effect, Exit, Result, Scope } from 'effect';
 import { app, BrowserWindow, dialog, session } from 'electron';
 
-import {
-  GlobalValues,
-  SessionOwner,
-  withProcessServices,
-} from '@texra-ai/harness';
+import { GlobalValues, Sessions, withProcessServices } from '@texra-ai/harness';
 import { telemetryNoticeIfDue } from '@telemetry/telemetryNotice';
 import { NotificationFailed } from '@texra/hosts/uiHosts';
 import { HostDraftRequests } from '@texra/controllers/session/hostDraftRequests';
@@ -156,7 +152,7 @@ if (ownsSingleInstanceLock) {
         shutdownScope,
         withProcessServices(
           runtime,
-          Effect.flatMap(SessionOwner, (owner) => owner.closeAll),
+          Effect.flatMap(Sessions, (sessions) => sessions.closeAll),
         ).pipe(Effect.asVoid),
       );
       // Registered last, so it runs first: the sessions never close under a

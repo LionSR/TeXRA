@@ -134,12 +134,10 @@ function createTestHost() {
       reportError: vi.fn(),
     },
     session: {
-      requests: {
-        request: vi.fn(() => {
-          Deferred.doneUnsafe(decided, Effect.void);
-          return Effect.succeed({ kind: 'done' as const });
-        }),
-      },
+      request: vi.fn(() => {
+        Deferred.doneUnsafe(decided, Effect.void);
+        return Effect.succeed({ kind: 'done' as const });
+      }),
     },
   };
 }
@@ -278,7 +276,7 @@ describe('tool edit approval controller', () => {
 
     await run(controller.handleAction({ requestId, action: 'approve' }));
     await run(Deferred.await(testHost.decided));
-    expect(testHost.session.requests.request).toHaveBeenCalledWith({
+    expect(testHost.session.request).toHaveBeenCalledWith({
       kind: 'request.decide',
       runId: RUN,
       requestId,
@@ -295,7 +293,7 @@ describe('tool edit approval controller', () => {
     await Promise.resolve();
 
     expect(testHost.preview.showDiff).not.toHaveBeenCalled();
-    expect(testHost.session.requests.request).toHaveBeenCalledOnce();
+    expect(testHost.session.request).toHaveBeenCalledOnce();
   });
 
   it("approves a staged request with the user's edit for an approve-all, and reports an unstaged one as not held", async () => {
@@ -313,7 +311,7 @@ describe('tool edit approval controller', () => {
 
     expect(await run(controller.approveStaged(requestId))).toBe(true);
     await run(Deferred.await(testHost.decided));
-    expect(testHost.session.requests.request).toHaveBeenCalledWith({
+    expect(testHost.session.request).toHaveBeenCalledWith({
       kind: 'request.decide',
       runId: RUN,
       requestId,

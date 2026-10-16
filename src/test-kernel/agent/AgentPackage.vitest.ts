@@ -118,6 +118,7 @@ vi.mock('@controllers/session/sessionLayer', async () => {
       get approvalPromptsUnavailable(): boolean {
         return false;
       },
+      emit: () => Effect.void,
       use: (host: { readonly approvalPromptsUnavailable?: boolean }) =>
         Effect.sync(() => {
           this.hosts.push(host);
@@ -127,6 +128,8 @@ vi.mock('@controllers/session/sessionLayer', async () => {
         }),
     };
     readonly requests = { request: mocks.decide };
+    /** Its store moved nothing aside at open. */
+    readonly log = { movedAside: null };
     /** The run's trace port: the listeners a handoff installs. */
     readonly trace = {
       listen: (_runId: string, listener: (event: unknown) => void) => {

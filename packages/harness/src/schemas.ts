@@ -3,6 +3,8 @@ export type {
   AgentConfig,
   AgentConfigPayload,
 } from '@agent/core/definition/AgentConfig';
+// A run's saved record (`assembleTrace`'s): an agent's config or a task's.
+export type { RunRecord } from '@agent/core/definition/RunRecord';
 export { InlinePersonaSchema } from '@shared/schemas';
 export type { InlinePersona, Persona } from '@shared/schemas';
 // The payloads `RuntimePresentationEventPayloads` (root) names, one per

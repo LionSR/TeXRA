@@ -27,13 +27,10 @@ import {
   type Run,
   type RunEndResult,
   type Session,
-  type SessionOwner,
   type StartInput,
   SESSION_CLOSE_DEADLINE_MS,
 } from '@texra-ai/harness';
 import { Settings } from '@texra-ai/harness';
-import { type SessionHandle } from '@agent/runtime';
-import { deriveResumability, getRunRecords } from '@agent/storage';
 import { AgentError, isUserAbort } from '@common/errors';
 import { isLiveRun } from '@shared/session/sessionView';
 import {
@@ -71,10 +68,11 @@ import {
   launchApprovalNotice,
   type CliContext,
 } from './cliContext';
+import type { LocalSession } from '@texra-ai/harness';
 
-/** The process services a headless run requires: a root launch's, under
- *  the process's session owner. */
-export type CliRunServices = ProcessServices | SessionOwner;
+/** The process services a headless run requires: its session's runs are
+ *  the session's, so it asks for the process services alone. */
+export type CliRunServices = ProcessServices;
 
 /** What a headless run starts: a host's whole configuration (the
  *  `StartInput` arm a host launches with), under the id the CLI minted. */
@@ -84,15 +82,14 @@ type CliRunRequest = Required<
 
 export interface CliExecuteOptions {
   /** The `initCliPlatform` services the run uses, from the command that
-   *  holds them: `session`, whose records and rows the run's output reads;
-   *  `runSession`, the same session as every host drives it, where the run
-   *  starts, resumes, stops and asks its host; `runtime`, which the shutdown
+   *  holds them: `session`, where the run starts, resumes, stops and asks
+   *  its host, and whose records and rows its output reads; `runtime`,
+   *  which the shutdown
    *  step runs its programs on (it runs on the process's shutdown fiber);
    *  and `shutdownScope`, of which the run's shutdown-status step is a child
    *  scope's finalizer, so it runs before the sessions close. */
   readonly services: {
-    readonly session: Effect.Effect<SessionHandle, SessionOpenError>;
-    readonly runSession: Effect.Effect<Session, SessionOpenError>;
+    readonly session: Effect.Effect<LocalSession, SessionOpenError>;
     readonly runtime: ProcessRuntime;
     readonly shutdownScope: Scope.Scope;
   };
@@ -279,13 +276,12 @@ export function executeCliRequest(
 > {
   return Effect.gen(function* () {
     const session = yield* options.services.session;
-    const runSession = yield* options.services.runSession;
     // The run follows the project's setting, read at each decision, with
     // what this invocation asked for riding its launch (`launchApproval`).
     const refused = launchApprovalNotice(
       runContext.requestedApprovalPolicy,
       Settings.getConfig<TexraApprovalPolicy>(
-        runSession.roots.config,
+        session.roots.config,
         TEXRA_APPROVAL_POLICY_CONFIG_KEY,
       ),
     );
@@ -304,7 +300,7 @@ export function executeCliRequest(
       .attachRunProgressRenderer(session, { runId: request.runId })
       .pipe(Scope.provide(presentationScope));
     const host = createHeadlessCliHostInteractions(
-      runSession,
+      session,
       options.services.runtime,
       runContext,
       {
@@ -319,7 +315,7 @@ export function executeCliRequest(
       presentationScope,
       Effect.sync(() => host.dispose?.()),
     );
-    yield* runSession.attach(host).pipe(Scope.provide(presentationScope));
+    yield* session.attach(host).pipe(Scope.provide(presentationScope));
     if (runContext.outputFormat === 'ndjson') {
       yield* Scope.addFinalizer(
         presentationScope,
@@ -348,7 +344,7 @@ export function executeCliRequest(
     const settledHere = (runId: RunId): Effect.Effect<void> =>
       Effect.suspend(() => {
         let seen = false;
-        return runSession.view.changes.pipe(
+        return session.view.changes.pipe(
           Stream.filterEffect((view) => {
             const run = view.runs.get(runId);
             if (run !== undefined) {
@@ -357,7 +353,8 @@ export function executeCliRequest(
             }
             if (seen) return Effect.succeed(true);
             // Not folded yet, or deleted before it was: its rows decide.
-            return getRunRecords(session, runId)
+            return session
+              .records(runId)
               .exists()
               .pipe(
                 Effect.map((exists) => !exists),
@@ -377,7 +374,7 @@ export function executeCliRequest(
      *  that comes before admission interrupts. */
     const launched = yield* Effect.forkChild(
       Effect.suspend(() =>
-        launchOn(runSession, request, runContext, options),
+        launchOn(session, request, runContext, options),
       ).pipe(
         Effect.tap(() =>
           Effect.sync(() => {
@@ -415,7 +412,7 @@ export function executeCliRequest(
               );
               return;
             }
-            const stopped = yield* runSession
+            const stopped = yield* session
               .request({
                 kind: 'run.stop',
                 runId: launchRunId,
@@ -436,16 +433,15 @@ export function executeCliRequest(
             // A stop that reached no live run (it had ended) promises no
             // recovery: the run's own end is what the handler waits for.
             const inspection = stopped
-              ? yield* Effect.result(deriveResumability(launchRunId, session))
+              ? yield* session.records(launchRunId).readResumable()
               : undefined;
             // The ordinary bounded shutdown path below remains authoritative
             // when checkpoint inspection itself is unavailable.
             const advertisesCheckpoint =
               inspection !== undefined &&
-              Result.isSuccess(inspection) &&
               (yield* advertisesInterruptedRun(
                 launchRunId,
-                inspection.success,
+                inspection,
                 options.canAdvertiseInterruptedRun,
               ).pipe(Effect.orElseSucceed(() => false)));
             // Wait for the run's end and its recovery notice before the
@@ -571,7 +567,7 @@ export function executeCliRequest(
         // the run): its rows decide, once its end is committed.
         const born =
           shutdownLaunchAborted &&
-          (yield* getRunRecords(session, launchRunId).exists());
+          (yield* session.records(launchRunId).exists());
         if (born) yield* settledHere(launchRunId);
         const stopped =
           shutdownRequested &&
@@ -581,10 +577,9 @@ export function executeCliRequest(
                 runResult.result.outcome === RUN_OUTCOME.CANCELLED)));
         if (stopped) {
           const drain = Effect.gen(function* () {
-            const resumability = yield* deriveResumability(
-              launchRunId,
-              session,
-            );
+            const resumability = yield* session
+              .records(launchRunId)
+              .readResumable();
             const onFinalized = options.onInterruptedRunFinalized;
             if (
               onFinalized !== undefined &&
@@ -607,7 +602,9 @@ export function executeCliRequest(
             ),
           );
         }
-        yield* session.log.settled;
+        // A failed run's end reaches the presenter through the fold: the
+        // presentation host stays attached until it has.
+        yield* session.settled;
         if (!runResult.ok) return undefined;
         const state = yield* readCliRunOutcomeState(
           session,

@@ -12,7 +12,7 @@ import {
   type Outcome,
   type Run,
   type RuntimeRequest,
-  type Session,
+  type LocalSession,
   type StartInput,
 } from '@texra-ai/harness';
 import { liveToolGates } from '@agent/runtime/requestPolicy';
@@ -49,6 +49,7 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 
 const mocks = vi.hoisted(() => ({
   close: vi.fn(),
+  settled: vi.fn(),
   emit: vi.fn(),
   attachRunProgressRenderer: vi.fn(),
   detachSessionProgressProjection: vi.fn(),
@@ -98,10 +99,11 @@ type LaunchInput = Extract<StartInput, { readonly config: unknown }> & {
  * `admit` settles and the run's result is the suite's `rootLaunch`; its
  * stops are recorded in the mock bag (`stopRequest` may answer one).
  */
-function runSessionFake(): Session {
-  const session = testSessionOf(testDefaultSession(), { persistent: true });
+function runSessionFake(): LocalSession {
+  const session = testSessionOf(testDefaultSession());
   return {
     ...session,
+    settled: Effect.suspend(() => mocks.settled() ?? session.settled),
     start: (input) =>
       // A rejected admission is a defect, as an unexpected launch failure is.
       Effect.promise(() => mocks.admit(input)).pipe(
@@ -202,8 +204,7 @@ type WithoutSession<O> = Omit<O, 'services'>;
 
 /** The run's services over the default test session. */
 const testServices = () => ({
-  session: Effect.succeed(testDefaultSession()),
-  runSession: Effect.sync(runSessionFake),
+  session: Effect.sync(runSessionFake),
   runtime: testRuntime(),
   shutdownScope: installedHost().platform.shutdownScope,
 });
@@ -304,19 +305,6 @@ function stubHangingRun(
     resolve: (result: unknown) => resolveRun(result),
     reject: (error: unknown) => rejectRun(error),
   };
-}
-
-/** Observe the session's terminal artifact drain. */
-async function spyOnArtifactFlush() {
-  // `settled` is a plain value on the log: make it an accessor to spy on.
-  const { log } = testDefaultSession();
-  const settled = log.settled;
-  Object.defineProperty(log, 'settled', {
-    configurable: true,
-    get: () => settled,
-  });
-  const flushSpy = vi.spyOn(log, 'settled', 'get').mockReturnValue(Effect.void);
-  return { flushSpy };
 }
 
 async function stubExecuteCliDeps(): Promise<void> {
@@ -526,38 +514,18 @@ describe('executeCliRequest', () => {
       }),
   );
 
-  it.effect('drains the session artifacts after the run', () =>
+  it.effect('presents a classified run failure as its exit code', () =>
     Effect.gen(function* () {
       const { executeCliRequest } = yield* Effect.promise(loadExecuteCli);
       const request = baseRequest();
-      const { flushSpy } = yield* Effect.promise(spyOnArtifactFlush);
-      const callOrder: string[] = [];
-      flushSpy.mockImplementation(() =>
-        Effect.sync(() => {
-          callOrder.push('flush');
-        }),
-      );
-      mocks.rootLaunch.mockImplementationOnce(async () => {
-        callOrder.push('rootLaunch');
-        return {
-          outcome: 'completed',
-          output: { response: '', files: [] },
-          runId: 'ec0000000001',
-        };
-      });
-
-      yield* executeCliRequest(request, cliContext());
-
-      expect(callOrder).toEqual(['rootLaunch', 'flush']);
-    }),
-  );
-
-  it.effect('drains session artifacts even when the run throws', () =>
-    Effect.gen(function* () {
-      const { executeCliRequest } = yield* Effect.promise(loadExecuteCli);
-      const request = baseRequest();
-      const { flushSpy } = yield* Effect.promise(spyOnArtifactFlush);
       mocks.rootLaunch.mockRejectedValueOnce(new AgentError('boom'));
+      const order: string[] = [];
+      mocks.settled.mockImplementationOnce(() =>
+        Effect.sync(() => order.push('settled')),
+      );
+      mocks.close.mockImplementationOnce(() =>
+        Effect.sync(() => order.push('detached')),
+      );
 
       // #7645: a classified run failure resolves to a non-zero exit code
       // instead of rethrowing — otherwise it reaches bin/texra.ts's crash
@@ -569,7 +537,9 @@ describe('executeCliRequest', () => {
       expect(mocks.emit).toHaveBeenCalledWith('requestShowError', {
         message: 'boom',
       });
-      expect(flushSpy).toHaveBeenCalledTimes(1);
+      // A failed run's end reaches its presenter through the fold: the
+      // presentation host detaches only once the session settled.
+      expect(order).toEqual(['settled', 'detached']);
     }),
   );
 
@@ -579,7 +549,6 @@ describe('executeCliRequest', () => {
       Effect.gen(function* () {
         const { executeCliRequest } = yield* Effect.promise(loadExecuteCli);
         const request = baseRequest();
-        const { flushSpy } = yield* Effect.promise(spyOnArtifactFlush);
         // An unclassified failure (e.g. registerRun disk I/O,
         // workspaceState.update) is genuinely unexpected — it must keep
         // propagating so bin/texra.ts's crash handler reports it, instead of
@@ -595,7 +564,6 @@ describe('executeCliRequest', () => {
         expect(error.message).toContain('disk full');
 
         // Cleanup still runs via `finally` even though the error propagates.
-        expect(flushSpy).toHaveBeenCalledTimes(1);
         expect(mocks.close).toHaveBeenCalledTimes(1);
       }),
   );
@@ -630,7 +598,6 @@ describe('executeCliRequest', () => {
       const { platform, executeCliRequest } = yield* Effect.promise(
         loadExecuteCliOnInstalledHost,
       );
-      const { flushSpy } = yield* Effect.promise(spyOnArtifactFlush);
       let settleRecoveryWrite!: () => void;
       const recoveryWrite = new Promise<void>((resolve) => {
         settleRecoveryWrite = resolve;
@@ -677,7 +644,6 @@ describe('executeCliRequest', () => {
       expect(shutdownResolved).toBe(false);
       settleRecoveryWrite();
       yield* Fiber.join(shutdown);
-      expect(flushSpy).toHaveBeenCalled();
       expect(onInterruptedRunFinalized).toHaveBeenCalledExactlyOnceWith(
         'ec0000000001',
       );

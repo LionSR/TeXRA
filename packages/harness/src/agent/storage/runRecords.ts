@@ -307,6 +307,19 @@ export function getRunRecords(session: SessionHandle, runId: RunId) {
     select: (rows: readonly SessionEvent[]) => A,
   ): Effect.Effect<A, DatabaseReadFailed> =>
     session.log.records(runId).pipe(Effect.map(select));
+  /** The run's folded state, or null with no run history. A run whose rows
+   *  this build cannot fold is a failed read of that run, never a refusal
+   *  of the caller's own writes. */
+  const folded = session.runHistory.load(runId).pipe(
+    Effect.catchTag('RunHistoryRefused', (refused) =>
+      Effect.fail(
+        new DatabaseReadFailed({
+          path: session.roots.storage ?? '',
+          cause: refused,
+        }),
+      ),
+    ),
+  );
   /** The latest `run.config` row; the database reads a closed run as absent. */
   const readRecord = (): Effect.Effect<RunRecord | null, DatabaseReadFailed> =>
     read((rows) => latestOfType(rows, id, 'run.config')?.config ?? null);
@@ -326,26 +339,18 @@ export function getRunRecords(session: SessionHandle, runId: RunId) {
       ),
     readReport: (): Effect.Effect<string | null, DatabaseReadFailed> =>
       read((rows) => latestOfType(rows, id, 'run.report')?.report ?? null),
-    /**
-     * The workspace files the run edited, folded from its settled calls
-     * (`RunState.edited`). A run with no run history edited nothing here.
-     * A run whose rows this build cannot fold is a failed read of that run,
-     * never a refusal of the caller's own writes.
-     */
+    /** The workspace files the run edited, folded from its settled calls
+     *  (`RunState.edited`). A run with no run history edited nothing here. */
     readWorkspaceFiles: (): Effect.Effect<string[], DatabaseReadFailed> =>
-      session.runHistory.load(runId).pipe(
-        Effect.map((state) =>
-          RunWorkspaceFilesSchema.parse(state?.edited ?? []),
-        ),
-        Effect.catchTag('RunHistoryRefused', (refused) =>
-          Effect.fail(
-            new DatabaseReadFailed({
-              path: session.roots.storage ?? '',
-              cause: refused,
-            }),
-          ),
-        ),
+      Effect.map(folded, (state) =>
+        RunWorkspaceFilesSchema.parse(state?.edited ?? []),
       ),
+    /** The skills the run's latest `tools.offered` row listed. */
+    readSkills: (): Effect.Effect<readonly string[], DatabaseReadFailed> =>
+      Effect.map(folded, (state) => state?.offeredSkills ?? []),
+    /** A model failure stopped the run's turn (its folded `lastError`). */
+    readModelFailed: (): Effect.Effect<boolean, DatabaseReadFailed> =>
+      Effect.map(folded, (state) => state?.lastError != null),
     readResultMeta: (): Effect.Effect<ResultMeta | null, DatabaseReadFailed> =>
       read((rows) => latestOfType(rows, id, 'run.result')?.result ?? null),
     /** The run's terminal result ({@link runEndOf}), or null while the

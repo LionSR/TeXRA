@@ -15,12 +15,11 @@
 import { Duration, Effect, FileSystem, Stream, SubscriptionRef } from 'effect';
 
 // Local imports
+import { getRunRecords, persistedParentRunId } from '@agent/storage/runRecords';
 import {
-  getRunRecords,
   listRunWorkspaceFiles,
   resolveRunWorkspaceFilePath,
-} from '@agent/storage';
-import { persistedParentRunId } from '@agent/storage/runRecords';
+} from '@agent/storage/runWorkspaceFiles';
 import { type SessionHandle } from '@agent/runtime/SessionHandle';
 import { requireToolRun } from '@agent/runtime/RunCall';
 import { Runs } from '@agent/runtime/runRegistry';
@@ -606,12 +605,11 @@ const showConversation = Effect.fn('ExecutionsTool.showConversation')(
 );
 
 const listFiles = Effect.fn('ExecutionsTool.listFiles')(function* (
-  context: RunToolContext,
+  { session }: RunToolContext,
   runId: RunId,
 ) {
-  const files = yield* listRunGeneratedFiles(runId, context.session).pipe(
-    Effect.orDie,
-  );
+  const { storage } = session.roots;
+  const files = yield* listRunGeneratedFiles(runId, storage).pipe(Effect.orDie);
   if (files.length === 0) {
     return executed('No files generated for this run.');
   }

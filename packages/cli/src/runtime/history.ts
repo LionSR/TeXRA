@@ -1,20 +1,10 @@
 import * as path from 'node:path';
 
-import { Effect, FileSystem, PlatformError, Result, Stream } from 'effect';
+import { Effect, FileSystem, PlatformError } from 'effect';
 
-import {
-  deriveResumability,
-  getRunRecords,
-  listRuns,
-  listRunWorkspaceFiles,
-  type AgentRunListingEntry,
-  type RunResult,
-} from '@agent/storage';
-import type { SessionHandle } from '@agent/runtime';
 import type { CliNdjsonRecord } from '@cli/schemas/cliOutput';
 import {
   RunIdSchema,
-  aggregateTarget,
   isTaskConfig,
   RUN_SUBSTATE,
   type RunId,
@@ -27,7 +17,6 @@ import {
   type RunGeneratedFile,
 } from '@tools/executions/runGeneratedFiles';
 import { serializeFilteredConfig } from '@tools/executions/configView';
-import { readCompletedRunConversation } from '@transcript';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { absentReason } from '@utils/files/fsEntryExists';
 
@@ -49,6 +38,11 @@ import {
   formatConversationPreview,
   formatConversationTranscript,
 } from './history/conversationFormat';
+import type {
+  AgentRunListingEntry,
+  LocalSession,
+  RunResult,
+} from '@texra-ai/harness';
 import type { AgentConfig } from '@texra-ai/harness/schemas';
 import type { SessionOpenError } from '@texra-ai/harness';
 
@@ -72,7 +66,7 @@ export interface CliHistoryEntry {
   readonly agent: string;
   readonly model: string;
   readonly status: HistoryRunStatus;
-  /** `deriveResumability`'s answer, the one `texra resume` acts on.
+  /** `records(id).readResumable()`'s answer, the one `texra resume` acts on.
    *  Ownership and loadability are settled when the run is opened.
    *  Independent of the frozen `status`: a failed run can be resumable. */
   readonly resumable: boolean;
@@ -151,39 +145,39 @@ export function parseCliHistoryId(raw: string): RunId | undefined {
  * program, on the runtime the calling surface holds.
  */
 export const listCliHistoryEntries = Effect.fn('cli.listCliHistoryEntries')(
-  function* (session: Effect.Effect<SessionHandle, SessionOpenError>) {
+  function* (session: Effect.Effect<LocalSession, SessionOpenError>) {
     const opened = yield* session;
-    return (yield* listRuns(opened)).map(toCliHistoryEntry);
+    return (yield* opened.listRuns()).map(toCliHistoryEntry);
   },
 );
 
 export const readCliHistoryDetails = Effect.fn('cli.readCliHistoryDetails')(
   function* (
-    sessionOpen: Effect.Effect<SessionHandle, SessionOpenError>,
+    sessionOpen: Effect.Effect<LocalSession, SessionOpenError>,
     id: RunId,
     options: { includeFullConversation?: boolean } = {},
   ) {
     const session = yield* sessionOpen;
-    const store = getRunRecords(session, id);
+    const store = session.records(id);
     const [
       run,
       config,
       result,
       report,
       conversation,
-      persistedWorkspaceFilePaths,
+      workspaceFiles,
       generatedFiles,
-      resumeFrom,
+      checkpointPresent,
     ] = yield* Effect.all(
       [
         session.view.read([]).pipe(Effect.map((view) => view.runs.get(id))),
         store.readConfig(),
         store.readResult(),
         store.readReport(),
-        readCompletedRunConversation(id, session),
+        store.readConversation(),
         store.readWorkspaceFiles(),
-        listRunGeneratedFiles(id, session),
-        deriveResumability(id, session),
+        listRunGeneratedFiles(id, session.roots.storage),
+        store.readResumable(),
       ],
       { concurrency: 8 },
     );
@@ -192,17 +186,12 @@ export const readCliHistoryDetails = Effect.fn('cli.readCliHistoryDetails')(
     // The same rule the listing applies, from the same facts: `status` is a
     // frozen contract, so `history show` must not answer it differently from
     // `history list` for the run in the row the caller just read.
-    const checkpointPresent = resumeFrom.kind === 'checkpoint';
     // A run with no config is corrupt: there is nothing to resume it under.
     const standing = cliRunStanding({
       resumable: config !== null && checkpointPresent,
       phase: run?.status,
       paused: run?.substate === RUN_SUBSTATE.PAUSED,
     });
-    const workspaceFiles = yield* listRunWorkspaceFiles(
-      config,
-      persistedWorkspaceFilePaths,
-    );
     const conversationPreview = createConversationPreview(conversation);
     const fullConversation = options.includeFullConversation
       ? createConversationTranscript(conversation)
@@ -271,7 +260,7 @@ type CliHistoryExportInputResult =
 export const readCliHistoryExportInput = Effect.fn(
   'cli.readCliHistoryExportInput',
 )(function* (
-  session: Effect.Effect<SessionHandle, SessionOpenError>,
+  session: Effect.Effect<LocalSession, SessionOpenError>,
   id: RunId,
 ) {
   const { run, config, conversation, exportInput } = yield* Effect.flatMap(
@@ -324,70 +313,34 @@ export function readCliHistoryStandaloneTemplate(
 
 /** Delete indexed run lifetimes through the session's claim transaction. */
 export const deleteCliHistory = Effect.fn('deleteCliHistory')(function* (
-  session: SessionHandle,
+  session: LocalSession,
   options: { id?: RunId; all?: boolean },
 ) {
   if (!options.all && !options.id) {
     return yield* Effect.fail(new Error('Expected a run id, or --all.'));
   }
-  const rows = yield* Stream.runCollect(session.log.listing());
-  const removed = new Set(
-    rows
-      .filter((row) => row.type === 'run.removed')
-      .map((row) => row.aggregateId),
+  const { listed, deleted, active, failed } = yield* session.deleteRuns(
+    options.all ? 'all' : options.id!,
   );
-  // A `run.start` row opens a run aggregate, so its aggregate id is the run id.
-  const starts = rows.flatMap((row) => {
-    if (row.type !== 'run.start' || removed.has(row.aggregateId)) return [];
-    const target = aggregateTarget(row.aggregateId);
-    if (target.kind !== 'run') {
-      throw new Error(
-        `run.start on a ${target.kind} aggregate: ${row.aggregateId}`,
-      );
-    }
-    return [{ runId: target.id, commit: row.commit }];
-  });
-  const selected = options.all
-    ? starts
-    : starts.filter((start) => start.runId === options.id);
-  const deleted: RunId[] = [];
-  const active: RunId[] = [];
-  const failed: { runId: RunId; message: string }[] = [];
-  for (const start of selected) {
-    const result = yield* Effect.result(
-      session.requests.removeRun(
-        start.runId,
-        options.all ? 'bulk' : 'single',
-        start.commit,
-      ),
-    );
-    if (Result.isSuccess(result)) {
-      deleted.push(start.runId);
-    } else if (result.failure._tag === 'NotOwner') {
-      active.push(start.runId);
-    } else {
-      if (!options.all) return yield* Effect.fail(result.failure);
-      failed.push({
-        runId: start.runId,
-        message: toErrorMessage(result.failure),
-      });
-    }
-  }
   if (options.all)
     return {
       deleted: 'all',
       count: deleted.length,
       active,
-      failed,
+      failed: failed.map(({ runId, error }) => ({
+        runId,
+        message: toErrorMessage(error),
+      })),
     } satisfies CliHistoryDeleteResult;
-  const id = options.id!;
+  const [refused] = failed;
+  if (refused) return yield* Effect.fail(refused.error);
   let status: 'deleted' | 'active' | 'not-found' = 'not-found';
   if (deleted.length > 0) status = 'deleted';
   else if (active.length > 0) status = 'active';
   return {
     deleted: 'one',
-    id,
-    found: selected.length > 0,
+    id: options.id!,
+    found: listed > 0,
     status,
   } satisfies CliHistoryDeleteResult;
 });
