@@ -79,14 +79,15 @@ import {
 
 const FAKE_LAKE = `#!/usr/bin/env node
 const fs = require('node:fs');
+const countPath = process.env.TEXRA_FAKE_LEAN_COUNT;
 
 if (!process.argv.includes('--server')) {
+  if (countPath) fs.appendFileSync(countPath, 'command\\n');
   const delayMs = Number(process.env.TEXRA_FAKE_LEAN_LAKE_DELAY || 0);
   setTimeout(() => process.exit(0), delayMs);
   return;
 }
 
-const countPath = process.env.TEXRA_FAKE_LEAN_COUNT;
 if (countPath) fs.appendFileSync(countPath, 'start\\n');
 
 let buffer = Buffer.alloc(0);
@@ -131,6 +132,7 @@ function handle(message) {
         ]
       }
     });
+    if (countPath) fs.appendFileSync(countPath, 'diagnostics\\n');
   }
 }
 
@@ -180,7 +182,7 @@ beforeEach(() => {
   fakeLakePath = path.join(tempRoot, 'fake-lake.js');
   writeFileSync(fakeLakePath, FAKE_LAKE);
   chmodSync(fakeLakePath, 0o755);
-  countPath = path.join(tempRoot, 'starts.txt');
+  countPath = path.join(tempRoot, 'events.txt');
   vi.stubEnv('TEXRA_FAKE_LEAN_COUNT', countPath);
   vi.stubEnv('TEXRA_FAKE_LEAN_SUPPRESS_DIAGNOSTICS', undefined);
 });
@@ -191,12 +193,16 @@ afterEach(() => {
   rmSync(tempRoot, { recursive: true, force: true });
 });
 
-async function countStarts(): Promise<number> {
+/** How many times the fake lake wrote `event`: 'start' (a server),
+ *  'command' (a project command) or 'diagnostics' (sent to the client). */
+async function countLogged(event: string): Promise<number> {
   const text = await readFile(countPath, 'utf8').catch(() => '');
-  return text.split(/\r?\n/).filter(Boolean).length;
+  return text.split(/\r?\n/).filter((line) => line === event).length;
 }
 
-const starts = Effect.promise(countStarts);
+const logged = (event: string) => Effect.promise(() => countLogged(event));
+
+const starts = logged('start');
 
 /** A pool over the fake lake, disposed by the test scope unless disposed first. */
 const openPool = (options: Partial<LeanServerPoolOptions> = {}) =>
@@ -217,29 +223,35 @@ const openPool = (options: Partial<LeanServerPoolOptions> = {}) =>
   });
 
 /**
- * Run `effect` while stepping the test clock until it settles. The server's
- * replies arrive on real I/O; only the diagnostics quiet window is on the
- * clock, so each step is a fraction of it and the overshoot stays far below
- * the hour-long idle times the tests use.
+ * Run `effect` to its end, stepping the test clock only once the fake server
+ * has sent this request's diagnostics. Until then the wait is real I/O (a
+ * child process starting, which takes seconds under load) and the clock
+ * stands still, so the handshake and diagnostics timeouts on it cannot fire;
+ * after it, only the diagnostics quiet window is left to pass. A request on
+ * an already-open file sends nothing and ends on its own. The clock leaves
+ * its epoch first: the server reads a zero diagnostics stamp as none yet.
  */
 const settle = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
   Effect.gen(function* () {
+    yield* TestClock.adjust('1 millis');
+    const before = yield* logged('diagnostics');
     const done = yield* Deferred.make<void>();
     const fiber = yield* Effect.forkChild(
       effect.pipe(Effect.ensuring(Deferred.succeed(done, undefined))),
     );
     while (!(yield* Deferred.isDone(done))) {
-      yield* Effect.promise(() => delay(5));
-      yield* TestClock.adjust('100 millis');
+      yield* Effect.promise(() => delay(10));
+      if ((yield* logged('diagnostics')) > before)
+        yield* TestClock.adjust('100 millis');
     }
     return yield* Fiber.join(fiber);
   });
 
-// The roster flips on the real child's handshake and exit (one survivor waits
-// for the server to come up, the others for it to close); no Effect-side
-// settle covers that.
-const eventually = (assertion: () => void) =>
-  Effect.promise(() => vi.waitFor(assertion, { timeout: 3000, interval: 10 }));
+// Waits on what a child does on its own (a handshake, an exit, a kill, a
+// request received, a line the fake lake wrote): no Effect-side settle covers
+// that.
+const eventually = (assertion: () => void | Promise<void>) =>
+  Effect.promise(() => vi.waitFor(assertion, { timeout: 5000, interval: 10 }));
 
 const fakeLakeIt = {
   effect: it.effect.skipIf(process.platform === 'win32'),
@@ -366,8 +378,16 @@ describe('LeanServerPool', () => {
     'waits for the child to close before a failed start finishes releasing',
     () =>
       Effect.gen(function* () {
-        const child = createFakeLeanChild({ closeDelayMs: 80, silent: true });
-        spawnOverride.current = () => child;
+        // Killed, it closes only on `closeSoon`.
+        const child = createFakeLeanChild({
+          closeGate: new Promise<void>(() => {}),
+          silent: true,
+        });
+        const spawned = yield* Deferred.make<void>();
+        spawnOverride.current = () => {
+          Deferred.doneUnsafe(spawned, Effect.void);
+          return child;
+        };
         const scope = yield* Scope.make();
         const build = yield* Effect.forkChild(
           Layer.build(
@@ -378,7 +398,7 @@ describe('LeanServerPool', () => {
             }).pipe(Layer.provide(spawnerLayer)),
           ).pipe(Scope.provide(scope)),
         );
-        yield* Effect.promise(() => delay(20));
+        yield* Deferred.await(spawned);
         const closing = yield* Effect.forkChild(Scope.close(scope, Exit.void));
         const finished = yield* Deferred.make<void>();
         yield* Effect.forkChild(
@@ -403,6 +423,7 @@ describe('LeanServerPool', () => {
         const third = makeLakeProject(tempRoot, 'project-c');
         let spawnCount = 0;
         let failNextSpawn = false;
+        let first: FakeLeanChild | undefined;
         spawnOverride.current = () => {
           spawnCount += 1;
           if (failNextSpawn) {
@@ -410,7 +431,9 @@ describe('LeanServerPool', () => {
             // Node reports EMFILE through the child's `error` event, not a throw.
             return createFailedSpawnChild('EMFILE');
           }
-          return createFakeLeanChild();
+          const child = createFakeLeanChild();
+          first ??= child;
+          return child;
         };
 
         const { pool, dispose } = yield* openPool();
@@ -421,14 +444,17 @@ describe('LeanServerPool', () => {
         const pendingBusy = yield* Effect.forkChild(
           pool.positionRequest(filePath, 0, 0, 'textDocument/hover', NO_RUN),
         );
-        yield* Effect.promise(() => delay(50));
+        yield* eventually(() =>
+          expect(first?.received).toContain('textDocument/hover'),
+        );
 
         failNextSpawn = true;
         const started = yield* pool
           .fetchDiagnosticsForFile(third.filePath, NO_RUN)
           .pipe(
+            // The hover is never answered: waiting for it would hang.
             Effect.timeoutOrElse({
-              duration: '1 second',
+              duration: '5 seconds',
               orElse: () =>
                 Effect.die(
                   new Error('EMFILE recovery waited for the busy session'),
@@ -454,32 +480,34 @@ describe('LeanServerPool', () => {
       const second = makeLakeProject(tempRoot, 'project-b');
       let spawnCount = 0;
       let firstClosed = false;
+      // The idle first server closes once the next spawn has failed, so the
+      // retry finds it closing, not closed.
+      const firstClose = Promise.withResolvers<void>();
+      const first = createFakeLeanChild({ closeGate: firstClose.promise });
+      first.on('close', () => {
+        firstClosed = true;
+      });
       spawnOverride.current = () => {
         spawnCount += 1;
-        if (spawnCount > 1 && !firstClosed) {
+        if (spawnCount === 1) return first;
+        if (!firstClosed) {
+          firstClose.resolve();
           return createFailedSpawnChild('EMFILE');
         }
-        const child = createFakeLeanChild({
-          closeDelayMs: spawnCount === 1 ? 200 : 0,
-        });
-        if (spawnCount === 1) {
-          child.on('close', () => {
-            firstClosed = true;
-          });
-        }
-        return child;
+        return createFakeLeanChild();
       };
 
       const { pool } = yield* openPool({
         idleTimeToLive: Duration.millis(30),
       });
       yield* pool.fetchDiagnosticsForFile(filePath, NO_RUN);
-      yield* Effect.promise(() => delay(80));
+      yield* eventually(() => expect(first.killed).toBe(true));
       const started = yield* pool
         .fetchDiagnosticsForFile(second.filePath, NO_RUN)
         .pipe(
+          // A retry that never awaits the close would hang.
           Effect.timeoutOrElse({
-            duration: '1 second',
+            duration: '5 seconds',
             orElse: () =>
               Effect.die(
                 new Error(
@@ -499,24 +527,26 @@ describe('LeanServerPool', () => {
 
   it.live('keeps a closing server reserved until the child closes', () =>
     Effect.gen(function* () {
-      let spawnCount = 0;
+      const close = Promise.withResolvers<void>();
+      const children: FakeLeanChild[] = [];
       spawnOverride.current = () => {
-        spawnCount += 1;
-        return createFakeLeanChild({ closeDelayMs: 200 });
+        children.push(createFakeLeanChild({ closeGate: close.promise }));
+        return children.at(-1);
       };
       const { pool } = yield* openPool({
         idleTimeToLive: Duration.millis(30),
       });
       yield* pool.fetchDiagnosticsForFile(filePath, NO_RUN);
-      expect(spawnCount).toBe(1);
-      yield* Effect.promise(() => delay(60));
+      expect(children).toHaveLength(1);
+      yield* eventually(() => expect(children[0]?.killed).toBe(true));
       const pending = yield* Effect.forkChild(
         pool.fetchDiagnosticsForFile(filePath, NO_RUN),
       );
       yield* Effect.promise(() => delay(40));
-      expect(spawnCount).toBe(1);
+      expect(children).toHaveLength(1);
+      close.resolve();
       yield* Fiber.join(pending);
-      expect(spawnCount).toBe(2);
+      expect(children).toHaveLength(2);
     }),
   );
 
@@ -600,7 +630,10 @@ describe('LeanServerPool', () => {
         const build = yield* Effect.forkChild(
           pool.executeProjectCommand('build', run('e00001')),
         );
-        yield* Effect.promise(() => delay(50));
+        // Running, so its lease is held.
+        yield* eventually(async () =>
+          expect(await countLogged('command')).toBe(1),
+        );
         yield* settle(pool.fetchDiagnosticsForFile(filePath, run('e00002')));
 
         // The reuser joins the original owner. Ending only e00002 keeps the
@@ -626,7 +659,10 @@ describe('LeanServerPool', () => {
         const build = yield* Effect.forkChild(
           pool.executeProjectCommand('build', run('e00001')),
         );
-        yield* Effect.promise(() => delay(50));
+        // Running, so its lease is held.
+        yield* eventually(async () =>
+          expect(await countLogged('command')).toBe(1),
+        );
         yield* settle(pool.fetchDiagnosticsForFile(filePath, run('e00002')));
         yield* pool.stopSessionsForRun(run('e00001'));
         yield* pool.stopSessionsForRun(run('e00002'));
@@ -926,6 +962,8 @@ interface FakeLeanChild extends EventEmitter {
   signalCode: NodeJS.Signals | null;
   kill: (signal?: NodeJS.Signals) => boolean;
   closeSoon: () => void;
+  /** The methods the client sent, in order. */
+  received: readonly string[];
 }
 
 /**
@@ -953,7 +991,8 @@ function createFailedSpawnChild(code: 'EMFILE' | 'ENFILE'): EventEmitter {
 }
 
 function createFakeLeanChild(options?: {
-  closeDelayMs?: number;
+  /** Once killed, close only when this settles (else at once). */
+  closeGate?: Promise<void>;
   silent?: boolean;
   /** Answer `initialize` only once this settles. */
   initializeGate?: Promise<void>;
@@ -962,7 +1001,7 @@ function createFakeLeanChild(options?: {
   const stdout = new PassThrough();
   const stderr = new PassThrough();
   let buffer = Buffer.alloc(0);
-  const closeDelayMs = options?.closeDelayMs ?? 0;
+  const received: string[] = [];
 
   function send(message: unknown): void {
     const body = Buffer.from(JSON.stringify(message), 'utf8');
@@ -975,6 +1014,7 @@ function createFakeLeanChild(options?: {
     method?: string;
     params?: { textDocument?: { uri?: string } };
   }): void {
+    if (message.method) received.push(message.method);
     if (message.method === 'initialize') {
       if (options?.silent) return;
       const reply = () =>
@@ -1040,10 +1080,11 @@ function createFakeLeanChild(options?: {
     signalCode: null as NodeJS.Signals | null,
     emit: events.emit.bind(events),
     kill(signal?: NodeJS.Signals) {
-      if (this.exitCode != null || this.signalCode != null) return true;
+      if (this.killed || this.exitCode != null || this.signalCode != null)
+        return true;
       this.killed = true;
       // A signalled child keeps running until it dies: `exit` and the stdio
-      // `close` that follows it both land after the delay, as Node's do.
+      // `close` that follows it both land after the gate, as Node's do.
       const finish = () => {
         this.exitCode = 0;
         this.emit('exit', 0, signal ?? null);
@@ -1052,7 +1093,7 @@ function createFakeLeanChild(options?: {
         if (!stderr.destroyed) stderr.end();
         this.emit('close', 0, null);
       };
-      if (closeDelayMs > 0) setTimeout(finish, closeDelayMs);
+      if (options?.closeGate) void options.closeGate.then(finish);
       else finish();
       return true;
     },
@@ -1061,6 +1102,7 @@ function createFakeLeanChild(options?: {
       this.emit('exit', 1, null);
       this.emit('close', 1, null);
     },
+    received,
     unref() {},
     ref() {},
   });
