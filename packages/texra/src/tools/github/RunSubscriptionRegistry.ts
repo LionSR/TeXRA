@@ -15,7 +15,7 @@ import { Effect } from 'effect';
 
 import { withLogChannel } from '@texra-ai/harness';
 import { emitAppSignal } from '@eventBus/AppSignals';
-import { PrunedNestedMap } from '@texra/utils/core/prunedNestedMap';
+import { PrunedNestedMap } from '@utils/core/prunedNestedMap';
 import type { Disposable } from '@texra-ai/harness';
 import type { RunInbox } from '@texra-ai/harness/plugins';
 import type { RunId } from '@texra-ai/harness/schemas';

@@ -36,7 +36,7 @@ import {
   type EditorCapabilities,
   type EditorHostShape,
 } from '@texra/tools/editorHost';
-import { PrunedNestedMap } from '@texra/utils/core/prunedNestedMap';
+import { PrunedNestedMap } from '@utils/core/prunedNestedMap';
 import { isPathWithin } from '@utils/core/pathCore';
 
 import {

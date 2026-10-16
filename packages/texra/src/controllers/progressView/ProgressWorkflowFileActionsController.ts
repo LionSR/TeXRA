@@ -8,7 +8,7 @@ import { Effect, FileSystem } from 'effect';
 import { withLogChannel } from '@texra-ai/harness';
 import type { RunId } from '@shared/schemas';
 import type { HostRequest } from '@texra/shared/session/hostRequest';
-import { PrunedNestedMap } from '@texra/utils/core/prunedNestedMap';
+import { PrunedNestedMap } from '@utils/core/prunedNestedMap';
 import { type AcceptCopyMeta } from '@texra/shared/plugins/documentOutputs';
 import {
   ensureRunDirUnder,

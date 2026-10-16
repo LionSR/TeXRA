@@ -46,16 +46,9 @@ import {
   type OpenWork,
   type SessionEventsShape,
 } from '@shared/session/sessionEvents';
+import { PrunedNestedMap } from '@utils/core/prunedNestedMap';
 
 const CHANNEL = 'sessionEvents';
-
-/** What the publisher keeps per aggregate: its open work, so closing it at
- *  a park, an end or a host exit reads no rows. Streams close at a phase
- *  move that rests or ends the run, stages only on their own rows. An
- *  earlier process's work is not here: its streams close at that same move,
- *  and a stage it left open reads as settled once the run is durably final
- *  (`taskGroupDisplayStatus`). */
-type OpenWorkByAggregate = Map<AggregateId, Map<string, OpenWork>>;
 
 /** One unit of the publisher's work, bound to its append and built when
  *  the publisher runs it: an awaited one settles the deferred its enqueuer
@@ -81,38 +74,28 @@ function openWorkTracker(): {
   readonly track: (rows: readonly SessionEvent[]) => void;
   readonly openWork: SessionEventsShape['openWork'];
 } {
-  const aggregates: OpenWorkByAggregate = new Map();
+  const open = new PrunedNestedMap<AggregateId, string, OpenWork>();
   const track = (rows: readonly SessionEvent[]) => {
     for (const row of rows) {
       if (row.type === 'run.removed') {
-        aggregates.delete(row.aggregateId);
-        continue;
-      }
-      const work = aggregates.get(row.aggregateId) ?? new Map();
-      const close = (kind: OpenWork['kind'], id: string) => {
-        if (work.get(id)?.kind === kind) work.delete(id);
-      };
-      if (closesRunWindow(row)) {
-        for (const [id, { kind }] of work) {
-          if (kind === 'stream') work.delete(id);
+        open.deleteGroup(row.aggregateId);
+      } else if (closesRunWindow(row)) {
+        for (const [id, { kind }] of open.group(row.aggregateId)) {
+          if (kind === 'stream') open.delete(row.aggregateId, id);
         }
       } else if (row.type === 'stream.start' || row.type === 'stage.start') {
         const kind = row.type === 'stream.start' ? 'stream' : 'stage';
-        work.set(row.id, { kind, id: row.id });
-      } else if (row.type === 'stream.end') {
-        close('stream', row.id);
-      } else if (row.type === 'stage.end') {
-        close('stage', row.id);
-      } else {
-        continue;
+        open.set(row.aggregateId, row.id, { kind, id: row.id });
+      } else if (row.type === 'stream.end' || row.type === 'stage.end') {
+        const kind = row.type === 'stream.end' ? 'stream' : 'stage';
+        if (open.get(row.aggregateId, row.id)?.kind === kind)
+          open.delete(row.aggregateId, row.id);
       }
-      if (work.size > 0) aggregates.set(row.aggregateId, work);
-      else aggregates.delete(row.aggregateId);
     }
   };
   return {
     track,
-    openWork: (id) => [...(aggregates.get(id)?.values() ?? [])],
+    openWork: (id) => [...open.group(id).values()],
   };
 }
 
