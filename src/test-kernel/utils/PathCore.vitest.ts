@@ -7,7 +7,6 @@ import {
   getPathSegments,
   isPathWithin,
   isStrictlyWithin,
-  normalizeLatexPath,
   toPosixPath,
 } from '@utils/core/pathCore';
 
@@ -28,20 +27,6 @@ describe('toPosixPath', () => {
     ['../shared/macros', '../shared/macros'],
   ])('converts %j → %j', (input, expected) => {
     expect(toPosixPath(input)).toBe(expected);
-  });
-});
-
-describe('normalizeLatexPath', () => {
-  it.each([
-    ['', ''],
-    ['./', '.'],
-    ['foo/bar.tex', 'foo/bar.tex'],
-    ['./foo/bar.tex', 'foo/bar.tex'],
-    ['.//sections//intro', 'sections/intro'],
-    ['sections//intro', 'sections/intro'],
-    ['sections/../main.tex', 'main.tex'],
-  ])('normalizes %j → %j', (input, expected) => {
-    expect(normalizeLatexPath(input)).toBe(expected);
   });
 });
 

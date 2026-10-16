@@ -1,7 +1,6 @@
-import { Data, Effect } from 'effect';
+import { Data, Effect, absurd } from 'effect';
 import { formatUnknownTeamMessage } from '@common/teams/TeamPlan';
 import type { MessageHost } from '@texra/hosts/uiHosts';
-import { assertNever } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { formatResultCount } from '@utils/text/stringUtils';
 import type { WorkspaceAgentsController } from '@texra-ai/harness';
@@ -76,10 +75,7 @@ export function applySettingsTeam<R = never>(
         return;
       }
       default:
-        return assertNever(
-          result,
-          'Unhandled settings team workspaceAgents outcome',
-        );
+        return absurd(result);
     }
   });
 }

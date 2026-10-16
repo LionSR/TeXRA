@@ -1,4 +1,5 @@
 import { resolve } from 'node:path';
+import { normalizeFilePath } from '@texra-ai/harness/schemas';
 
 import { Effect, FileSystem, type PlatformError } from 'effect';
 
@@ -9,7 +10,6 @@ import {
   type ListableFileType,
 } from '@texra/common/files/fileListingRules';
 import { workspaceFileOptions } from '@texra/controllers/session/workspaceFileOptions';
-import { normalizeFilePath } from '@utils/core';
 
 interface DesktopFileSelectionDialogOptions {
   title: string;

@@ -20,6 +20,8 @@ import {
   SessionOwner,
   type Session,
   type Sessions,
+  withPerKeyLane,
+  type PerKeyLane,
   StateStores,
 } from '@texra-ai/harness';
 import {
@@ -43,7 +45,6 @@ import {
 import type { ServiceLink } from '@texra/controllers/server/client';
 import { sessionStoreMovedAsideMessage } from '@ui/copy/sessionStore';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
-import { withPerKeyLane, type PerKeyLane } from '@utils/core/perKeyQueue';
 import { absentReason } from '@utils/files/fsEntryExists';
 import { DesktopProjectRecords } from './desktopProjectRecords.js';
 import { showDesktopWarningDialog } from './platform/warningDialog.js';

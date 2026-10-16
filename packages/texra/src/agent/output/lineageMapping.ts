@@ -6,9 +6,9 @@
  */
 
 import * as path from 'node:path';
+import { normalizeFilePath } from '@texra-ai/harness/schemas';
 
 import { fileLocationDisplayPath, type FileLocation } from '@shared/schemas';
-import { normalizeFilePath } from '@utils/core';
 import { createFileMapping } from './fileMapping';
 
 import type { OutputState } from './outputState';

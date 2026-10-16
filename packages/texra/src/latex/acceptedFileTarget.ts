@@ -1,5 +1,6 @@
 // Node imports
 import path from 'node:path';
+import { normalizeFilePath } from '@texra-ai/harness/schemas';
 
 // Third-party imports
 import { Effect, FileSystem, type PlatformError } from 'effect';
@@ -8,14 +9,12 @@ import { Effect, FileSystem, type PlatformError } from 'effect';
 import { withLogChannel, WorkspaceFs } from '@texra-ai/harness';
 import { generateDiffFileName } from '@latex/latexdiff/diffFileNameManager';
 import type { FileLocation } from '@shared/schemas';
-import { normalizeFilePath } from '@utils/core';
 import {
   createExternalLocation,
   createRunStorageLocation,
   createWorkspaceLocation,
 } from '@utils/files/fileLocation';
 import { locateInWorkspace } from '@utils/files/workspaceFS';
-import { getExtensionLowercase } from '@utils/core/pathCore';
 import { normalizeLineEndings } from '@utils/text/stringUtils';
 
 const CHANNEL = 'AcceptedFileTarget';
@@ -78,7 +77,7 @@ function buildAcceptConfirmMessage(
 ): string {
   const action = getAcceptAction(target.isNewFile, targetExists);
   const extensionNote = target.isNewFile
-    ? `Extensions differ (${getExtensionLowercase(basePath)} vs ${getExtensionLowercase(editedPath)}). `
+    ? `Extensions differ (${path.extname(basePath).toLowerCase()} vs ${path.extname(editedPath).toLowerCase()}). `
     : '';
   return `${extensionNote}This will ${action} '${target.targetFileName}' with content from '${path.basename(editedPath)}'. Are you sure?`;
 }
@@ -307,9 +306,9 @@ export function getAcceptedFileTarget(
   editedPath: string,
 ): AcceptedFileTarget {
   const basePath = baseLocation.absolutePath;
-  const baseExt = getExtensionLowercase(basePath);
+  const baseExt = path.extname(basePath).toLowerCase();
 
-  if (baseExt === getExtensionLowercase(editedPath)) {
+  if (baseExt === path.extname(editedPath).toLowerCase()) {
     return {
       targetLocation: baseLocation,
       targetFileName: path.basename(basePath),

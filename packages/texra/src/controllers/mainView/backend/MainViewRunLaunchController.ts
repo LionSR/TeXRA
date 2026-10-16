@@ -1,5 +1,5 @@
 // Local imports - run requests
-import { Effect } from 'effect';
+import { Effect, absurd } from 'effect';
 
 // Local imports - team launch
 
@@ -14,6 +14,7 @@ import {
   TEAM_SELECTION_REQUIRED_MESSAGE,
 } from '@common/teams/TeamPlan';
 import { type AgentDelegationScope } from '@shared/schemas';
+import { isPastedImage } from '@texra/utils/files/pastedImageName';
 import {
   validateRunRequest,
   type ValidatedRunRequest,
@@ -24,8 +25,6 @@ import { createTeamCatalogPorts } from '@texra/controllers/mainView/teamCatalogP
 import { documentTaskConfig } from '@texra/agent/output/documentRecipe';
 import { DocumentTaskOptionsSchema } from '@texra/shared/plugins/documents';
 import { pastedImageFullPath } from '@texra/utils/files/pastedImageUtils';
-import { assertNever } from '@utils/core';
-import { isPastedImage } from '@utils/files/pastedImageName';
 import type {
   AgentCatalog,
   StartInput,
@@ -192,10 +191,7 @@ export function prepareSurfaceLaunch(
               );
           break;
         default:
-          return assertNever(
-            resolution,
-            'Unhandled main-view team launch resolution',
-          );
+          return absurd(resolution);
       }
     }
     if (!preparation.valid) {

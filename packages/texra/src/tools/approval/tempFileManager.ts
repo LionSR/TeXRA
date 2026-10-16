@@ -16,12 +16,12 @@
  * controller runs the resulting Effect on its fiber.
  */
 
+import { randomUUID } from 'node:crypto';
 import * as path from 'node:path';
 
 import { Data, Effect, FileSystem, type PlatformError } from 'effect';
 
 import { withLogChannel } from '@texra-ai/harness';
-import { generateShortId } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 const CHANNEL = 'approval.tempFiles';
@@ -103,14 +103,8 @@ export const writeApprovalTempFiles = Effect.fn('writeApprovalTempFiles')(
     const fs = yield* FileSystem.FileSystem;
     const { directory, targetPath, originalContent, proposedContent } = input;
     const ext = path.extname(targetPath) || '.txt';
-    const originalPath = path.join(
-      directory,
-      `${generateShortId()}-original${ext}`,
-    );
-    const proposedPath = path.join(
-      directory,
-      `${generateShortId()}-proposed${ext}`,
-    );
+    const originalPath = path.join(directory, `${randomUUID()}-original${ext}`);
+    const proposedPath = path.join(directory, `${randomUUID()}-proposed${ext}`);
 
     const cleanup = Effect.all(
       [removeTempFile(fs, originalPath), removeTempFile(fs, proposedPath)],

@@ -1,9 +1,12 @@
 import { defineCommand } from 'citty';
 import { Effect, FileSystem } from 'effect';
 
-import { AgentCatalog, AgentDirectories } from '@texra-ai/harness';
+import {
+  AgentCatalog,
+  AgentDirectories,
+  isStrictlyWithin,
+} from '@texra-ai/harness';
 import { AGENT_SOURCE, agentKey, agentName } from '@shared/schemas';
-import { isStrictlyWithin } from '@utils/core/pathCore';
 
 import {
   AGENT_NAME_DESCRIPTION,

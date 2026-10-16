@@ -1,8 +1,7 @@
-import { Effect, PlatformError } from 'effect';
+import { Effect, PlatformError, Predicate } from 'effect';
 
 import { withSessionFs, type StorageFs } from '@texra-ai/harness';
 import { MemoryStore, type MemoryViewItem } from '@texra-ai/harness/plugins';
-import { filterNotNullish } from '@utils/core';
 import {
   formatBytes,
   formatLocaleTimestamp,
@@ -25,7 +24,7 @@ export function cliMemoryItemDescription(item: MemoryViewItem): string {
     formatBytes(item.size),
     formatModifiedDate(item.mtime),
     item.modifiedBy ? `by ${item.modifiedBy}` : undefined,
-  ].filter(filterNotNullish);
+  ].filter(Predicate.isNotNullish);
   return truncateSummary(parts.join('; '), MEMORY_DESCRIPTION_MAX);
 }
 

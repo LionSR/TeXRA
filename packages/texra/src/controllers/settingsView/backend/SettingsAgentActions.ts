@@ -6,13 +6,16 @@ import { Effect, FileSystem } from 'effect';
 
 // Local imports - controllers
 // Local imports - shared
-import { AgentCatalog, type ProcessServices } from '@texra-ai/harness';
+import {
+  AgentCatalog,
+  isStrictlyWithin,
+  type ProcessServices,
+} from '@texra-ai/harness';
 import { agentKey, isPackagedAgentSource } from '@shared/schemas';
 import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 import type { MessageHost } from '@texra/hosts/uiHosts';
 import { type SettingsMessageFor } from '@texra/shared/settingsView/settingsViewMessages';
 // Local imports - utilities
-import { isStrictlyWithin } from '@utils/core/pathCore';
 
 /**
  * One step of a settings agent action: the host's own failure, on the process

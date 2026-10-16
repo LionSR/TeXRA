@@ -1,6 +1,7 @@
 /** Agent proposal card: "Delegate a task to reviewer" / "Start a team run: …". */
 
 // Third-party imports
+import { getBasename } from '@texra-ai/harness/schemas';
 import { html, nothing, type PropertyValues, type TemplateResult } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import { ifDefined } from 'lit/directives/if-defined.js';
@@ -50,7 +51,6 @@ import {
 // Local imports - shared utilities
 import { renderLabeledActionButton } from '@ui/wa/actionButtons';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
-import { getBasename } from '@utils/core';
 
 // Local imports - base class
 import { BaseRequestPanel, type RunGrant } from './BaseRequestPanel';

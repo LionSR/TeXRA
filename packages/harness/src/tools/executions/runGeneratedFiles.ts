@@ -19,7 +19,6 @@ import { Effect, FileSystem, type PlatformError } from 'effect';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { withLogChannel } from '@logger/effectLog';
 import type { RunId } from '@shared/schemas';
-import { byStringProp } from '@utils/core';
 // toPosixPath also trims and resolves `.`/`..` segments beyond a bare slash
 // swap; safe here since the input is a storage-relative path produced by the
 // walk below, not raw user input.
@@ -60,7 +59,7 @@ export const listRunGeneratedFiles = Effect.fn('listRunGeneratedFiles')(
     const runDir = runDirUnder(session.roots.storage, runId);
     if (!(yield* fs.exists(runDir))) return [];
     const files = yield* walkRunStorage(runDir, '', RUN_FILE_SCAN_DEPTH);
-    return files.sort(byStringProp((file) => file.path));
+    return files.sort((a, b) => a.path.localeCompare(b.path));
   },
 );
 

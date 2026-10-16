@@ -2,8 +2,8 @@
 // approval queue and the attached-task view (`/tasks`) both use it, each
 // with its own way of landing the decision.
 
+import { absurd } from 'effect';
 import type { SurfaceDecision } from '@texra/shared/session/surfaceDecision';
-import { assertNever } from '@utils/core';
 import { AgentProposal } from './AgentProposal';
 import { BashApproval } from './BashApproval';
 import { EditApproval } from './EditApproval';
@@ -71,5 +71,5 @@ export function ApprovalModal(props: ApprovalModalProps): React.JSX.Element {
         />
       );
   }
-  return assertNever(payload, 'Unhandled approval payload');
+  return absurd(payload);
 }

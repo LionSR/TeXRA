@@ -16,7 +16,6 @@ import {
 import { BUILTIN_TEAM_ROOT_AGENT_NAMES } from '@shared/constants/agents';
 import { type AgentSelectionItem } from '@texra/shared/settingsView/settingsViewMessages';
 import { documentTaskOf } from '@texra/tools/documents/documentTask';
-import { byName } from '@utils/core';
 import type { WorkspaceAgentsController } from '@texra-ai/harness';
 import type { StateStore } from '@texra-ai/harness';
 
@@ -48,7 +47,7 @@ export class SettingsAgentCatalogController {
       return this.deps
         .getAgents()
         .map((entry) => this.toSelectionItem(entry, enabledKeys))
-        .sort(byName);
+        .sort((a, b) => a.name.localeCompare(b.name));
     });
   }
 

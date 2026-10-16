@@ -11,7 +11,7 @@ import * as path from 'node:path';
 
 import { Effect, FileSystem } from 'effect';
 import { agentBlockOf, errorResult } from '@texra-ai/harness/plugins';
-import { withLogChannel } from '@texra-ai/harness';
+import { withLogChannel, hasExtension } from '@texra-ai/harness';
 import {
   AgentCatalog,
   type AgentEntry,
@@ -32,8 +32,6 @@ import {
   type DocumentAgentOption,
   type DocumentTask,
 } from '@texra/shared/plugins/documents';
-import { byName } from '@utils/core';
-import { hasExtension } from '@utils/core/pathCore';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { readNormalizedFile } from '@utils/files/fsDurability';
 import { workspaceAbsolutePath } from '@utils/files/workspaceFS';
@@ -65,7 +63,10 @@ export const agentOptionsData = (stores: WorkspaceAgentsStores) =>
     Effect.flatMap(AgentCatalog, (catalog) => catalog.visible(stores)),
     (entries) =>
       entries
-        .toSorted((a, b) => preferredRank(a) - preferredRank(b) || byName(a, b))
+        .toSorted(
+          (a, b) =>
+            preferredRank(a) - preferredRank(b) || a.name.localeCompare(b.name),
+        )
         .map((entry): DocumentAgentOption => {
           const option: AgentOptionData = {
             value: agentKeyOf(entry),

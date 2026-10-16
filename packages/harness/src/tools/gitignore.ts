@@ -2,11 +2,10 @@
 import * as path from 'node:path';
 
 // Third-party imports
-import { Effect, FileSystem } from 'effect';
+import { Effect, FileSystem, Predicate } from 'effect';
 import ignore from 'ignore';
 
 // Local imports - utils
-import { filterNotNull } from '@utils/core';
 import { toPosixPath } from '@utils/core/pathCore';
 import { normalizeLineEndings } from '@utils/text/stringUtils';
 import { safeHomedir } from '@utils/system/platformPaths';
@@ -75,7 +74,7 @@ export const getGitignoreMatcher = Effect.fn('getGitignoreMatcher')(function* (
     ],
     // The three policies were read together and fail fast, as Promise.all did.
     { concurrency: 'unbounded' },
-  )).filter(filterNotNull);
+  )).filter(Predicate.isNotNull);
 
   if (sources.length === 0) {
     return EMPTY_GITIGNORE_MATCHER;

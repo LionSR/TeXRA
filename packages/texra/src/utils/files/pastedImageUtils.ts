@@ -6,10 +6,10 @@ import { Clock, Data, Effect, FileSystem, Option } from 'effect';
 
 // Local imports
 import { StorageFs, withLogChannel } from '@texra-ai/harness';
+import { PASTED_DIR, isPastedImage } from '@texra/utils/files/pastedImageName';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local imports - filesystem
-import { PASTED_DIR, isPastedImage } from '@utils/files/pastedImageName';
 
 const CHANNEL = 'pastedImage';
 
