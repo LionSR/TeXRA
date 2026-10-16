@@ -18,6 +18,7 @@ import { dirname } from 'node:path';
 import { Cause, Effect, Exit, FileSystem, SynchronizedRef } from 'effect';
 
 import { ChildRuns, type ToolRun } from '@texra-ai/harness/plugins';
+import { Settings } from '@texra-ai/harness';
 import { getCatalogAgent, type AgentEntry } from '@agent/index';
 import { LatexMediaManager } from '@latex/LatexMediaManager';
 import { getTeXCountStats } from '@latex/texcount';
@@ -60,7 +61,6 @@ import {
   documentTaskOf,
   taskFileVars,
 } from '@texra/tools/documents/documentTask';
-import { readSettingFrom } from '@utils/config/platformSettings';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { pathToLocationIn } from '@utils/files/fileLocation';
 import { renderPrompt } from '@utils/prompt';
@@ -134,8 +134,8 @@ const replyLocation = (docs: Documents, revision: number) =>
 /** The rejection setting: a failed compile fails the task. */
 export const rejectsOnCompileFailure = (
   docs: Documents,
-): ReturnType<typeof readSettingFrom<boolean>> =>
-  readSettingFrom<boolean>(
+): ReturnType<typeof Settings.get<boolean>> =>
+  Settings.get<boolean>(
     docs.deps.roots,
     DocumentsStateKey.WORKFLOW_REJECT_ON_COMPILE_FAILURE,
   );

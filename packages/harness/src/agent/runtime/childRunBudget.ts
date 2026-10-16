@@ -14,12 +14,12 @@ import { Effect } from 'effect';
  * its slot never starts fresh model work.
  */
 
-import type { SettingsStores } from '@shared/config/settingsAccess';
 import {
   CHILD_RUN_CONCURRENCY_BUDGET_CONFIG_KEY,
   CHILD_RUN_CONCURRENCY_BUDGET_SETTING,
 } from '@shared/schemas';
-import { readSettingFrom } from '@utils/config/platformSettings';
+import { Settings } from '@shared/config/settings';
+import type { SettingsStores } from '@shared/config/settings';
 
 /**
  * The configured budget with the `auto` sentinel resolved to this machine's
@@ -34,7 +34,7 @@ import { readSettingFrom } from '@utils/config/platformSettings';
 export const resolveChildRunConcurrencyBudget = Effect.fn(
   'resolveChildRunConcurrencyBudget',
 )(function* (stores: SettingsStores) {
-  const configured = yield* readSettingFrom<number>(
+  const configured = yield* Settings.get<number>(
     stores,
     CHILD_RUN_CONCURRENCY_BUDGET_CONFIG_KEY,
   );

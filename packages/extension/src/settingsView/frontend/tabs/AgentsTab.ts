@@ -14,6 +14,7 @@ import { customElement, property } from 'lit/decorators.js';
 // Local imports - shared styles
 
 // Local imports - shared schemas
+import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 import {
   CHILD_RUN_CONCURRENCY_BUDGET_CONFIG_KEY,
   CHILD_RUN_CONCURRENCY_BUDGET_SETTING,
@@ -21,7 +22,6 @@ import {
   MODEL_RETRY_MAX_ATTEMPTS_SETTING,
 } from '@shared/schemas';
 import type { AgentScanIssue } from '@shared/schemas';
-import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 import { postMessage } from '@texra/shared/hostBridge';
 import {

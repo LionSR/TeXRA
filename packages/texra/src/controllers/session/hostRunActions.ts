@@ -1,4 +1,5 @@
 /** Host-neutral relaunch and retry actions shared by extension and desktop. */
+import { Settings } from '@texra-ai/harness';
 import { Cause, Data, Effect, FileSystem, type Scope } from 'effect';
 
 import {
@@ -32,6 +33,7 @@ import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { getRunRecords } from '@agent/storage';
 import { FOLLOW_UP_WAKE_FAILED_MESSAGE } from '@agent/followUp/ToolUseFollowUp';
 import { getRuntimeModelDirectFallback } from '@model/copilotRouting';
+import { GlobalStateKey } from '@shared/state/stateKeys';
 import { isTaskConfig, recipeBlockOf, type RunId } from '@shared/schemas';
 import {
   validateRunRequest,
@@ -51,7 +53,6 @@ import {
 import type { MessageHost, NotificationFailed } from '@texra/hosts/uiHosts';
 import { runActionGuard } from '@texra/controllers/session/runActionGuard';
 import type { TaskRecordsUnavailable } from '@texra/controllers/server/serviceSession';
-import { getUseOpenRouter } from '@utils/config/providerConfig';
 import { entryExists } from '@utils/files/fsEntryExists';
 import {
   locateInWorkspace,
@@ -484,7 +485,7 @@ export const createHostRunActions = (
         }
         let fallback = getRuntimeModelDirectFallback(
           request.model,
-          yield* getUseOpenRouter(roots),
+          yield* Settings.get<boolean>(roots, GlobalStateKey.USE_OPENROUTER),
         );
         if (!fallback) {
           yield* ports.showInfo(
@@ -503,7 +504,7 @@ export const createHostRunActions = (
         if (!prepared || !isRetryPending(runId, requestId)) return;
         const currentFallback = getRuntimeModelDirectFallback(
           request.model,
-          yield* getUseOpenRouter(roots),
+          yield* Settings.get<boolean>(roots, GlobalStateKey.USE_OPENROUTER),
         );
         if (!currentFallback) {
           yield* ports.showInfo(modelsChanged);
@@ -518,7 +519,7 @@ export const createHostRunActions = (
           if (!prepared || !isRetryPending(runId, requestId)) return;
           const finalFallback = getRuntimeModelDirectFallback(
             request.model,
-            yield* getUseOpenRouter(roots),
+            yield* Settings.get<boolean>(roots, GlobalStateKey.USE_OPENROUTER),
           );
           if (!finalFallback || finalFallback.provider !== fallback.provider) {
             yield* ports.showInfo(modelsChanged);

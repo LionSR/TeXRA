@@ -18,10 +18,10 @@ import * as path from 'node:path';
 import { Effect, FileSystem, Result } from 'effect';
 
 // Local imports - shared contracts
-import type { SettingsStores } from '@shared/config/settingsAccess';
 import type { InstalledPlugin, PluginTrust } from '@shared/schemas';
 
 // Local imports - plugin record, reading and digest
+import type { SettingsStores } from '@shared/config/settings';
 import {
   findInstalled,
   readInstalled,

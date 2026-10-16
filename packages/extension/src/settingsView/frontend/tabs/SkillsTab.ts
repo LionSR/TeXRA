@@ -4,6 +4,7 @@ import '@awesome.me/webawesome/dist/components/tag/tag.js';
 import { LitElement, css, html, nothing, type TemplateResult } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import { live } from 'lit/directives/live.js';
+import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import {
   AGENT_SKILLS_CONFIG_KEY,
   ActiveSkillSourceScopeSchema,
@@ -11,7 +12,6 @@ import {
   type SkillDisplayIssue,
   type SkillDisplayItem,
 } from '@shared/schemas';
-import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { commonViewStyles, designTokens } from '@ui/styles';
 import { renderIconActionButton } from '@ui/wa/actionButtons';
 import { renderSettingsToggleRow } from '@ui/wa/settingsSection';

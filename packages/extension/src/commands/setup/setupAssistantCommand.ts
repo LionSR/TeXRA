@@ -1,4 +1,5 @@
 // Third-party imports
+import { Settings } from '@texra-ai/harness';
 import { Cause, Effect } from 'effect';
 
 // Local imports
@@ -12,16 +13,14 @@ import {
   announce,
   showLoggedInfoMessage,
 } from '@frontend/ui/errorHandlingUtils';
-import type { SettingsStores } from '@shared/config/settingsAccess';
-import { agentName, type RunId } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
+import { agentName, type RunId } from '@shared/schemas';
 import { SETUP_AGENT_NAME } from '@shared/constants/agents';
 import { SETUP_INSTRUCTION } from '@texra/controllers/onboarding/setupLaunch';
 import {
   hasUsableSetupCredential,
   resolveSetupLaunchModel,
 } from '@texra/model/setupCredentialAccess';
-import { getUseOpenRouter } from '@utils/config/providerConfig';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import type { ProcessServices, Session } from '@texra-ai/harness';
 import type {
@@ -30,6 +29,7 @@ import type {
   StateWriteFailed,
 } from '@texra-ai/harness';
 import type { WorkspaceRoots } from '@texra-ai/harness';
+import type { SettingsStores } from '@texra-ai/harness';
 
 /** The setup assistant's log channel, for its launch and what follows it. */
 export const SETUP_ASSISTANT_CHANNEL = 'SetupAssistant';
@@ -49,7 +49,8 @@ function withOpenRouterFlagOn<A, E, R>(
 ): Effect.Effect<A, E | StateReadFailed, R> {
   const { globalState } = stores;
   return Effect.gen(function* () {
-    if (yield* getUseOpenRouter(stores)) return yield* program;
+    if (yield* Settings.get<boolean>(stores, GlobalStateKey.USE_OPENROUTER))
+      return yield* program;
 
     return yield* Effect.acquireUseRelease(
       // The acquisition's failure is the launch's own, and it is uninterruptible
@@ -83,7 +84,8 @@ function withOpenRouterFlagOn<A, E, R>(
 // enabled without an OpenRouter key.
 function isRoutingConfigured(stores: SettingsStores, secrets: PlatformSecrets) {
   return Effect.gen(function* () {
-    if (!(yield* getUseOpenRouter(stores))) return true;
+    if (!(yield* Settings.get<boolean>(stores, GlobalStateKey.USE_OPENROUTER)))
+      return true;
     return (yield* resolveSetupLaunchModel(stores, secrets, false)) !== null;
   });
 }

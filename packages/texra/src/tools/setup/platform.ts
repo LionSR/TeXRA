@@ -18,7 +18,6 @@ import {
   Secrets,
   type LanguageModel,
 } from '@texra-ai/harness';
-import type { SettingsStores } from '@shared/config/settingsAccess';
 import { ToolError } from '@shared/schemas';
 import type {
   TerminalRunFailed,
@@ -26,6 +25,7 @@ import type {
   TerminalRunResult,
 } from '@texra/hosts/uiHosts';
 import { CHATGPT_SETUP_MODEL } from '@texra/model/setupModelDefaults';
+import type { SettingsStores } from '@texra-ai/harness';
 
 /**
  * A host command that was dispatched and rejected (the VS Code host's own

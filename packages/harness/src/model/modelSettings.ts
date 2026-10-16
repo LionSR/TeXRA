@@ -4,13 +4,14 @@
  * take a {@link ModelSettings}; nothing beneath them reads a store.
  */
 import { Effect } from 'effect';
-import { ModelProvider, type ReasoningEffort } from 'llm-zoo';
 
 import {
   findModelProviderPlugin,
   hasUsableApiKey,
   MODEL_PROVIDER_PLUGINS,
+  type EndpointProviderId,
   type HostRouteFacts,
+  type RegionalProviderId,
 } from '@texra-ai/llm';
 import { getCodexStatus, getXaiStatus } from '@texra-ai/llm/node';
 
@@ -20,21 +21,50 @@ import {
   MODEL_RETRY_MAX_ATTEMPTS_SETTING,
   type DeclinableUsageRoute,
 } from '@shared/schemas';
-import type { SettingsStores } from '@shared/config/settingsAccess';
 import { GlobalStateKey } from '@shared/state/stateKeys';
-import { readSettingFrom } from '@utils/config/platformSettings';
 import {
-  getGLMCodingPlan,
-  getPreferKimiCode,
-  getProviderEndpoint,
-  getUseOpenRouter,
-  useChinaRegion,
-} from '@utils/config/providerConfig';
+  PROVIDER_ENDPOINT_STATE_ENTRIES,
+  PROVIDER_REGION_SETTINGS,
+  providerEndpointKey,
+  providerRegionSetting,
+} from '@shared/state/providerSettings';
 
+import { Settings } from '@shared/config/settings';
+import type { SettingsStores } from '@shared/config/settings';
 import { preferredCopilotRouteModels } from './copilotRouting';
 import { reasoningEffortOverrides } from './reasoningLevel';
 import { isPreferSubscription } from './subscriptionAccess';
 import type { ModelOptionStores } from './computeModelOptions';
+import type { ReasoningEffort } from 'llm-zoo';
+
+type AssertNever<T extends never> = T;
+
+/**
+ * The provider settings rows cover the catalog exactly: every provider with
+ * an HTTP endpoint of its own has a custom-endpoint row and every regional
+ * provider a region toggle, and no row names another provider. The error
+ * names the provider ids on either side that lack their counterpart.
+ */
+type _EndpointRowsCoverTheCatalog = AssertNever<
+  | Exclude<
+      EndpointProviderId,
+      (typeof PROVIDER_ENDPOINT_STATE_ENTRIES)[number]['id']
+    >
+  | Exclude<
+      (typeof PROVIDER_ENDPOINT_STATE_ENTRIES)[number]['id'],
+      EndpointProviderId
+    >
+>;
+type _RegionRowsCoverTheCatalog = AssertNever<
+  | Exclude<
+      RegionalProviderId,
+      (typeof PROVIDER_REGION_SETTINGS)[number]['provider']
+    >
+  | Exclude<
+      (typeof PROVIDER_REGION_SETTINGS)[number]['provider'],
+      RegionalProviderId
+    >
+>;
 
 /** The model-access settings, as one read found them. */
 export interface ModelSettings {
@@ -74,11 +104,11 @@ export function readBackgroundToggles(
   stores: SettingsStores,
 ): Effect.Effect<BackgroundToggles, StateReadFailed> {
   return Effect.all({
-    responses: readSettingFrom<boolean>(
+    responses: Settings.get<boolean>(
       stores,
       'texra.model.useBackgroundResponses',
     ),
-    googleInteractions: readSettingFrom<boolean>(
+    googleInteractions: Settings.get<boolean>(
       stores,
       'texra.model.useGoogleBackgroundResponses',
     ),
@@ -106,12 +136,17 @@ const readEndpointEntries = Effect.fn('modelSettings.endpoint')(function* (
   stores: SettingsStores,
   { id, baseUrl }: (typeof MODEL_PROVIDER_PLUGINS)[number],
 ) {
-  const custom = yield* getProviderEndpoint(stores, id);
+  const endpointKey = providerEndpointKey(id);
+  const custom = endpointKey
+    ? yield* Settings.get<string>(stores, endpointKey)
+    : '';
   if (custom) return [[id, `https://${hostPath(custom)}`] as const];
   if (baseUrl == null || typeof baseUrl === 'string') return [];
-  const region = (yield* useChinaRegion(stores, id))
-    ? 'china'
-    : 'international';
+  const regionKey = providerRegionSetting(id)?.key;
+  const region =
+    regionKey && (yield* Settings.get<boolean>(stores, regionKey))
+      ? 'china'
+      : 'international';
   return [[id, baseUrl[region]] as const];
 });
 
@@ -171,16 +206,16 @@ const subscriptionOn = (
 export const readModelSettings = Effect.fn('readModelSettings')(function* (
   stores: ModelOptionStores,
 ): Effect.fn.Return<ModelSettings, StateReadFailed> {
-  const flag = (key: string) => readSettingFrom<boolean>(stores, key);
+  const flag = (key: string) => Settings.get<boolean>(stores, key);
   const [route, rest, wire] = yield* Effect.all(
     [
       Effect.all(
         {
-          useOpenRouter: getUseOpenRouter(stores),
-          preferKimiCode: getPreferKimiCode(stores),
-          glmCodingPlan: getGLMCodingPlan(stores),
+          useOpenRouter: flag(GlobalStateKey.USE_OPENROUTER),
+          preferKimiCode: flag(GlobalStateKey.KIMI_CODE_PREFER),
+          glmCodingPlan: flag(GlobalStateKey.GLM_CODING_PLAN),
           glmEndpoint: Effect.map(
-            getProviderEndpoint(stores, ModelProvider.GLM),
+            Settings.get<string>(stores, GlobalStateKey.ENDPOINT_GLM),
             Boolean,
           ),
           chatgptSubscription: subscriptionOn(stores, 'chatgpt'),
@@ -197,7 +232,7 @@ export const readModelSettings = Effect.fn('readModelSettings')(function* (
           ),
           // Stored in thousands of tokens; this is its only reader.
           chatgptContextWindow: Effect.map(
-            readSettingFrom<number>(
+            Settings.get<number>(
               stores,
               CHATGPT_CODEX_CONTEXT_WINDOW_SETTING.configKey,
             ),
@@ -213,7 +248,7 @@ export const readModelSettings = Effect.fn('readModelSettings')(function* (
         reasoningLevels: reasoningEffortOverrides(stores.globalState),
         preferShortModelNames: flag(GlobalStateKey.PREFER_SHORT_MODEL_NAMES),
         background: readBackgroundToggles(stores),
-        automaticRetries: readSettingFrom<number>(
+        automaticRetries: Settings.get<number>(
           stores,
           MODEL_RETRY_MAX_ATTEMPTS_SETTING.configKey,
         ),

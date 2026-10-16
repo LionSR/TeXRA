@@ -16,13 +16,13 @@ import { z } from 'zod';
 
 // Local imports
 import {
-  configTreeRows,
   settingsCatalog,
-  surfacedSetting,
   type SettingsCatalog,
   type StateSettingEntry,
 } from '@shared/state/stateSettings';
 import { CliOutputFormatSchema } from '@texra/shared/cliOutputFormat';
+import type { SurfacedSettingEntry } from '@shared/state/stateSettings';
+import { configTreeRows } from '@texra/shared/settingsView/settingRows';
 import {
   LATEX_CONFIG_DEFAULTS,
   LATEX_FORMATTER_VALUES,
@@ -202,7 +202,7 @@ const TEXRA_CONFIG_ROWS: Record<
 const TEXRA_SETTING_ROWS: readonly StateSettingEntry[] = [
   ...configTreeRows(TEXRA_CONFIG_ROWS),
   // --- LaTeX formatter -------------------------------------------------------
-  surfacedSetting({
+  {
     key: TexraStateKey.LATEX_FORMATTER,
     schema: z
       .enum(LATEX_FORMATTER_VALUES)
@@ -218,13 +218,13 @@ const TEXRA_SETTING_ROWS: readonly StateSettingEntry[] = [
       'leave formatting unchanged',
     ],
     surfaces: { settingsView: 'latex' },
-  }),
+  } satisfies SurfacedSettingEntry,
 
   // --- Inline criticism -------------------------------------------------------
   // Editor squiggles and Problems-panel entries exist only in VS Code. The
   // shared LaTeX snapshot reads the row on every host; the desktop LaTeX page
   // hides it.
-  surfacedSetting({
+  {
     key: TexraStateKey.INLINE_CRITICISM_ENABLED,
     schema: z.boolean().prefault(false),
     title: 'Show criticism as editor diagnostics',
@@ -233,7 +233,7 @@ const TEXRA_SETTING_ROWS: readonly StateSettingEntry[] = [
     category: 'latex',
     slot: 'globalState',
     surfaces: { settingsView: 'latex' },
-  }),
+  } satisfies SurfacedSettingEntry,
 
   // --- Plugins' rows ----------------------------------------------------------
   ...DOCUMENTS_SETTINGS,

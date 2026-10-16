@@ -5,13 +5,10 @@ import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 
 // Local imports - shared styles
-import {
-  DEFAULT_GIT_AUTHOR_EMAIL,
-  DEFAULT_GIT_AUTHOR_NAME,
-} from '@shared/state/stateSettings';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 import { postMessage } from '@texra/shared/hostBridge';
+import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
 import { type PRSubscriptionEntry } from '@texra/shared/settingsView/settingsViewMessages';
 import { renderSetStatusIcon, statusCheckIconStyles } from '@ui/wa/statusIcons';
 import { renderLabeledActionButton } from '@ui/wa/actionButtons';
@@ -32,6 +29,22 @@ import {
   renderStateSettingToggleRow,
 } from '../components/shared/stateSettingRows';
 import type WaInput from '@awesome.me/webawesome/dist/components/input/input.js';
+
+/** The identity agent commits use while a field is blank: its row's default. */
+function defaultIdentity(key: WorkspaceStateKey): string {
+  const entry = TEXRA_SETTINGS.settingsViewByKey(key);
+  if (!entry) {
+    throw new Error(`No settings-view catalog row for setting "${key}"`);
+  }
+  return String(entry.schema.parse(undefined));
+}
+
+const DEFAULT_GIT_AUTHOR_NAME = defaultIdentity(
+  WorkspaceStateKey.GIT_AUTHOR_NAME,
+);
+const DEFAULT_GIT_AUTHOR_EMAIL = defaultIdentity(
+  WorkspaceStateKey.GIT_AUTHOR_EMAIL,
+);
 
 @customElement('git-tab')
 export class GitTab extends LitElement {

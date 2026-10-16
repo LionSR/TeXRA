@@ -2,7 +2,7 @@
 // the one write path every settings surface goes through — the extension and
 // desktop settings views plus the CLI `/config` panel.
 //
-// The hosts share persistence through settingsAccess and own only the
+// The hosts share persistence through `Settings` and own only the
 // post-write side effects for each outbound snapshot.
 // `applyStateSettingUpdate` owns the subtle boundary rules once:
 //   - a value-less message is a no-op (the catalog schemas `.prefault()`, so
@@ -11,25 +11,21 @@
 //   - a settings view writes only rows tagged for a settings-view snapshot;
 //     the CLI writes only the rows its `/config` panel lists.
 
+import { Settings } from '@texra-ai/harness';
 import { Data, Effect } from 'effect';
 
+import { type SettingHost } from '@texra-ai/harness';
 import {
-  TEXRA_APPROVAL_POLICY_CONFIG_KEY,
-  type TexraApprovalPolicy,
-} from '@shared/approvalPolicy';
-import {
-  type SettingHost,
   type SettingsViewStateSettingEntry,
   type SurfacedSettingEntry,
 } from '@shared/state/stateSettings';
 import {
-  readSetting,
-  resetSetting,
-  writeSetting,
-  type SettingsStores,
-} from '@shared/config/settingsAccess';
+  TEXRA_APPROVAL_POLICY_CONFIG_KEY,
+  type TexraApprovalPolicy,
+} from '@shared/approvalPolicy';
 import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
 import { ensureError } from '@utils/errors/errorMessage';
+import type { SettingsStores } from '@texra-ai/harness';
 
 /**
  * The rows a host may write: the settings views (extension, desktop) write
@@ -112,8 +108,8 @@ export function applyStateSettingUpdate<H extends SettingHost>(
   }
   const persist =
     parsed === null
-      ? resetSetting(entry, ports.stores)
-      : writeSetting(entry, parsed.data, ports.stores);
+      ? Settings.reset(ports.stores, entry.key)
+      : Settings.set(ports.stores, entry.key, parsed.data);
   return persist.pipe(
     Effect.mapError((cause) => new StateSettingWriteFailed({ cause })),
     Effect.andThen(
@@ -121,7 +117,7 @@ export function applyStateSettingUpdate<H extends SettingHost>(
         if (entry.key !== TEXRA_APPROVAL_POLICY_CONFIG_KEY) return;
         const policy = (
           parsed === null
-            ? yield* readSetting(entry, ports.stores)
+            ? yield* Settings.get(ports.stores, entry.key)
             : parsed.data
         ) as TexraApprovalPolicy;
         yield* Effect.try({

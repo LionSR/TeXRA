@@ -9,10 +9,7 @@
 import { z } from 'zod';
 
 // Local imports
-import {
-  surfacedSetting,
-  type SurfacedSettingEntry,
-} from '@shared/state/stateSettings';
+import { type SurfacedSettingEntry } from '@shared/state/stateSettings';
 import {
   LATEX_CONFIG_DEFAULTS,
   LATEX_CONFIG_RANGES,
@@ -33,7 +30,7 @@ export enum DocumentsStateKey {
 
 /** The documents plugin's rows, in catalog order. */
 export const DOCUMENTS_SETTINGS: readonly SurfacedSettingEntry[] = [
-  surfacedSetting({
+  {
     key: DocumentsStateKey.WORKFLOW_AUTO_COMPILE,
     schema: z.boolean().prefault(LATEX_CONFIG_DEFAULTS.workflowAutoCompile),
     title: 'Auto-compile outputs',
@@ -42,8 +39,8 @@ export const DOCUMENTS_SETTINGS: readonly SurfacedSettingEntry[] = [
     category: 'workflow',
     slot: 'workspaceState',
     surfaces: { settingsView: 'latex', cliConfig: true },
-  }),
-  surfacedSetting({
+  } satisfies SurfacedSettingEntry,
+  {
     key: DocumentsStateKey.WORKFLOW_AUTO_COMPILE_TIMEOUT_MS,
     schema: z
       .int()
@@ -55,8 +52,8 @@ export const DOCUMENTS_SETTINGS: readonly SurfacedSettingEntry[] = [
     category: 'workflow',
     slot: 'workspaceState',
     surfaces: { cliConfig: true },
-  }),
-  surfacedSetting({
+  } satisfies SurfacedSettingEntry,
+  {
     key: DocumentsStateKey.WORKFLOW_AUTO_OPEN_PDF,
     schema: z.boolean().prefault(LATEX_CONFIG_DEFAULTS.workflowAutoOpenPdf),
     title: 'Open the compiled PDF',
@@ -67,8 +64,8 @@ export const DOCUMENTS_SETTINGS: readonly SurfacedSettingEntry[] = [
     // Read by the documents plugin, but the emitted `requestOpenFile` has no
     // CLI handler (headless), so the CLI ignores it.
     surfaces: { settingsView: 'latex' },
-  }),
-  surfacedSetting({
+  } satisfies SurfacedSettingEntry,
+  {
     key: DocumentsStateKey.WORKFLOW_REJECT_ON_COMPILE_FAILURE,
     schema: z
       .boolean()
@@ -79,11 +76,11 @@ export const DOCUMENTS_SETTINGS: readonly SurfacedSettingEntry[] = [
     category: 'workflow',
     slot: 'workspaceState',
     surfaces: { settingsView: 'latex', cliConfig: true },
-  }),
+  } satisfies SurfacedSettingEntry,
   // Run by the documents plugin, so every host honors them. The timeout is
   // kept out of the settings view (an insider knob) and edited from CLI
   // `/config`; the rest are deferred from `/config` by product decision.
-  surfacedSetting({
+  {
     key: DocumentsStateKey.LATEXDIFF_BETWEEN_ROUNDS,
     schema: z.boolean().prefault(LATEX_CONFIG_DEFAULTS.latexdiffBetweenRounds),
     title: 'Diff consecutive revisions',
@@ -92,8 +89,8 @@ export const DOCUMENTS_SETTINGS: readonly SurfacedSettingEntry[] = [
     category: 'latexdiff',
     slot: 'workspaceState',
     surfaces: { settingsView: 'latex' },
-  }),
-  surfacedSetting({
+  } satisfies SurfacedSettingEntry,
+  {
     key: DocumentsStateKey.LATEXDIFF_TIMEOUT_MS,
     schema: z
       .int()
@@ -106,8 +103,8 @@ export const DOCUMENTS_SETTINGS: readonly SurfacedSettingEntry[] = [
     category: 'latexdiff',
     slot: 'workspaceState',
     surfaces: { cliConfig: true },
-  }),
-  surfacedSetting({
+  } satisfies SurfacedSettingEntry,
+  {
     key: DocumentsStateKey.LATEXDIFF_MATH_MARKUP,
     schema: z
       .enum(LATEXDIFF_MATH_MARKUP_VALUES)
@@ -123,8 +120,8 @@ export const DOCUMENTS_SETTINGS: readonly SurfacedSettingEntry[] = [
       'small changes inside equations',
     ],
     surfaces: { settingsView: 'latex' },
-  }),
-  surfacedSetting({
+  } satisfies SurfacedSettingEntry,
+  {
     key: DocumentsStateKey.LATEXDIFF_CHANGES_ONLY,
     schema: z.boolean().prefault(LATEX_CONFIG_DEFAULTS.latexdiffChangesOnly),
     title: 'Only changed pages in diff PDFs',
@@ -133,5 +130,5 @@ export const DOCUMENTS_SETTINGS: readonly SurfacedSettingEntry[] = [
     category: 'latexdiff',
     slot: 'workspaceState',
     surfaces: { settingsView: 'latex' },
-  }),
+  } satisfies SurfacedSettingEntry,
 ];

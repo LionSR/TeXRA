@@ -1,3 +1,4 @@
+import { Settings } from '@texra-ai/harness';
 import { Effect } from 'effect';
 
 import { hasUsableApiKey } from '@texra-ai/llm';
@@ -7,11 +8,11 @@ import {
   type ModelOptionStores,
   type PlatformSecrets,
 } from '@texra-ai/harness';
-import type { SettingsStores } from '@shared/config/settingsAccess';
 import { isModelOptionAvailable } from '@shared/schemas';
 import { modelOptionsFrom } from '@texra/model/modelOptions';
 import { SETUP_MODEL_BY_PROVIDER } from '@texra/model/setupModelDefaults';
-import { getUseOpenRouter } from '@utils/config/providerConfig';
+import { GlobalStateKey } from '@shared/state/stateKeys';
+import type { SettingsStores } from '@texra-ai/harness';
 
 /**
  * The setup assistant's launch model: the first provider setup model the
@@ -56,7 +57,10 @@ export const resolveSetupLaunchModel = Effect.fn('resolveSetupLaunchModel')(
         requiresOpenRouter: pick.availability === 'openrouter-key',
       };
     }
-    if (!includeAccessListFallback || (yield* getUseOpenRouter(stores))) {
+    if (
+      !includeAccessListFallback ||
+      (yield* Settings.get<boolean>(stores, GlobalStateKey.USE_OPENROUTER))
+    ) {
       return null;
     }
     return (yield* hasUsableApiKey(secrets, 'openRouter'))

@@ -24,12 +24,12 @@ import { VscodeToolEditApprovalHost } from '@frontend/approval/VscodeToolEditApp
 import { createAgentPresentationHost } from '@frontend/events/agentEventListeners';
 import { pushManualCriticism } from '@frontend/latex/inlineCriticism';
 import { getLinterMessages } from '@frontend/latex/linter';
+import { GlobalStateKey } from '@shared/state/stateKeys';
 import { agentKeyOf, type FileLocation, type RunId } from '@shared/schemas';
 import {
   getFirstRunDone,
   setOnboardingDeclined,
 } from '@shared/state/onboardingState';
-import { GlobalStateKey } from '@shared/state/stateKeys';
 import {
   EXTENSION_CATEGORIES,
   getFilterExtensions,

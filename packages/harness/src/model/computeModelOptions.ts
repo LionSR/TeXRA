@@ -18,7 +18,6 @@ import { StateWriteFailed } from '@platform/interfaces';
 import type { StateStore } from '@platform/interfaces';
 import type { PlatformSecrets } from '@platform/secrets';
 import { DEFAULT_MODELS } from '@shared/constants/defaultModels';
-import type { SettingsStores } from '@shared/config/settingsAccess';
 import {
   MODEL_AVAILABILITY_STATUS,
   type ModelAvailabilityKind,
@@ -26,6 +25,7 @@ import {
 } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 
+import type { SettingsStores } from '@shared/config/settings';
 import { readModelSettings, routeFactsFor } from './modelSettings';
 import {
   copilotRouteUnavailableReason,

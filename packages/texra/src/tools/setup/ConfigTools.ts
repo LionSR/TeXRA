@@ -13,11 +13,9 @@ import { Effect } from 'effect';
 import { z } from 'zod';
 
 import { defineTool, ToolContext } from '@texra-ai/harness';
+import { type StateSettingEntry } from '@shared/state/stateSettings';
 import { ToolError } from '@shared/schemas';
-import {
-  settingSchemaWithoutPrefault,
-  type StateSettingEntry,
-} from '@shared/state/stateSettings';
+import { settingSchemaWithoutPrefault } from '@texra/shared/settingsView/settingRows';
 import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
 
 import { executed } from '@tools/core/result';

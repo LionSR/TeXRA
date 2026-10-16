@@ -4,22 +4,20 @@
 // drill-in: the outer list shows every catalog entry the CLI consumes with its
 // current value and store; selecting a boolean toggles it inline, an enum opens
 // an inner value picker, and a string/number opens an inline text editor.
-// Reads/writes go through the host-aware `settingsAccess` accessor so the same
+// Reads/writes go through the host-aware `Settings` accessor so the same
 // catalog drives the extension settings view and this panel without drift.
 
 import { Text, useInput } from 'ink';
 import { useState } from 'react';
 import { z } from 'zod';
 
+import { type SurfacedSettingEntry } from '@texra-ai/harness';
 import { isCtrlInput } from '@cli/tui/inputKeys';
 import type { SelectItem } from '@cli/tui/ui/Select';
 import {
   settingEnumOptions,
   settingSchemaWithoutPrefault,
-  type SurfacedSettingEntry,
-} from '@shared/state/stateSettings';
-import { stripPrefix } from '@shared/config/configKeys';
-import { settingDefault } from '@shared/config/settingsAccess';
+} from '@texra/shared/settingsView/settingRows';
 
 import {
   buildConfigCategoryItems,
@@ -102,7 +100,7 @@ function formatSettingValue(value: unknown): string {
 }
 
 function settingDisplayName(entry: SurfacedSettingEntry): string {
-  return entry.title ?? stripPrefix(entry.key);
+  return entry.title ?? entry.key.replace(/^texra\./, '');
 }
 
 function buildConfigListItems(
@@ -219,7 +217,9 @@ export function ConfigForm(props: ConfigFormProps): React.JSX.Element {
   // a consumer that coalesces empty→default (e.g. the git-author reader) quietly
   // uses the default, leaving the panel and the effect out of sync.
   const resetEntry = (entry: SurfacedSettingEntry): void => {
-    runWrite(entry, settingDefault(entry), () => props.resetValue(entry));
+    runWrite(entry, entry.schema.parse(undefined), () =>
+      props.resetValue(entry),
+    );
   };
 
   // Ctrl-R resets the setting open in the enum picker or the text editor.

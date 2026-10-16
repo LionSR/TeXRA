@@ -47,6 +47,7 @@ import {
   type OfferedTool,
   type ToolDefinition,
 } from '@shared/schemas';
+import { Settings } from '@shared/config/settings';
 import {
   toolDigests,
   type HeldPlugins,
@@ -55,7 +56,6 @@ import {
 import { mcpPluginId, mcpServerOfToolName } from '@tools/mcp/mcpServer';
 import { ToolAvailability } from '@tools/toolAvailabilityService';
 import { ToolRegistry } from '@tools/toolTable';
-import { readSettingFrom } from '@utils/config/platformSettings';
 
 /**
  * The host capabilities a session's host serves now (`ITool.hostCapability`
@@ -146,7 +146,7 @@ export const resolveStepTools = Effect.fn('resolveStepTools')(function* (
       for (const [name, setting] of Object.entries(injectedWhen ?? {})) {
         if (
           setting === true ||
-          (yield* readSettingFrom<boolean>(input.stores, setting))
+          (yield* Settings.get<boolean>(input.stores, setting))
         ) {
           injected.push(name);
         }
