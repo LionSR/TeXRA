@@ -2,8 +2,8 @@
  * The process's agent catalog: every agent the custom directory, the
  * bundled directories and the loaded plugins define, scanned into one
  * published list, and the reads, launch resolution and custom copies over it.
- * `processLayer` builds it once and its follower (`@tools/agentCatalogFollower`)
- * loads it and keeps it current; every host reads it through this service.
+ * `processLayer` builds it once and a follower loads it and keeps it
+ * current; every host reads it through this service.
  */
 import {
   Clock,

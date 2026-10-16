@@ -4,9 +4,7 @@
  * it asks a person, the run it works for, where its transient output goes).
  * The run's window (`ToolRun`) is declared here with its id; the runtime
  * adds the rest of it, and the helpers over it (`requireRun`, `callerRun`),
- * in `@agent/runtime/RunCall`, published to plugin authors on
- * `@texra-ai/harness/plugins`. The rest of that module (the call's place in
- * its run, the script plumbing) is the harness's built-ins' alone.
+ * published to plugin authors on `@texra-ai/harness/plugins`.
  */
 
 import { Context, type Effect } from 'effect';
@@ -164,7 +162,7 @@ export interface CallRequests {
  * Where a call works: the session's roots (its workspace folder, the
  * setting slots and its storage), the run's working directory, and the
  * read-only roots the call's step admits (the skills it lists or its user
- * activated). A tool path resolves against it (`@tools/pathResolution`).
+ * activated). A tool's paths resolve against it.
  * `workingDirectory` is already absolute or absent: the run decides it once
  * where it is launched (`assembleAgentLaunchContext`).
  */
@@ -178,8 +176,8 @@ export interface ToolEnv {
 
 /**
  * What a tool reads of the run its call works for, read from the run rather
- * than copied onto the call. The core names its id; the runtime declares the
- * rest (`@agent/runtime/RunCall`), so the core imports nothing of it.
+ * than copied onto the call. It names the run's id; the runtime adds the
+ * rest.
  */
 export interface ToolRun {
   readonly runId: RunId;

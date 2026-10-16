@@ -5,7 +5,7 @@
  *
  * Each model request opens a step, and so does a conversation's park. It
  * applies the user's plugin switches, and the installed plugins enabled and
- * trusted from any host, to the live catalog (`@tools/liveTools`), pins its
+ * trusted from any host, to the live catalog (`ToolCatalog`), pins its
  * current generations, and resolves from them
  * the tools the run is offered (`resolveStepTools`), the continuation of a
  * parked run, if any plugin on contributes one, and the prompt
