@@ -22,11 +22,15 @@ export {
 } from './turn.js';
 export type {
   BackgroundEvent,
+  BackgroundSubmission,
+  FileUpload,
   Model,
   ResolvedTurn,
   TurnEvent,
   TurnRequest,
   TurnResult,
+  TurnUsage,
+  UnreleasedUpload,
   VscodeLanguageModelConfiguration,
 } from './turn.js';
 export {
@@ -42,13 +46,18 @@ export {
   PreparedHistorySchema,
   systemUpdateText,
 } from './message.js';
-export type { Continuation } from './message.js';
+export type { AssistantMessage, Continuation } from './message.js';
 export {
   ModelError,
   ModelErrorFieldsSchema,
   RemoteOperationSchema,
 } from './errors.js';
-export type { RemoteOperation } from './errors.js';
+export type {
+  BillingRoute,
+  ModelErrorFields,
+  PlanRoute,
+  RemoteOperation,
+} from './errors.js';
 
 // Credentials and the provider manifest over llm-zoo.
 export { resolveCredential, SecretsFailed } from './providers/credentials.js';
@@ -66,6 +75,8 @@ export type {
   ApiKeyProviderId,
   BackendProviderId,
   EndpointProviderId,
+  ModelProviderPlugin,
+  RegionalBaseUrl,
   RegionalProviderId,
 } from './providers/providerPlugins.js';
 export {
@@ -104,8 +115,10 @@ export {
   zeroCostAccessOverrides,
 } from './models/modelRoute.js';
 export type {
+  ApiKeyUsageRoute,
   HostRouteFacts,
   ModelRoute,
+  RouteDecisionFacts,
   RouteFacts,
 } from './models/modelRoute.js';
 export { resolveRouteEndpoint } from './models/routeEndpoint.js';

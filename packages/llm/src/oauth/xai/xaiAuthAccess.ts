@@ -8,10 +8,7 @@ import {
   createSecretBackedCoordinator,
   getSubscriptionSessionStatus,
 } from '../sessionAccess.js';
-import {
-  SubscriptionOAuthCoordinator,
-  type SubscriptionSessionStatus,
-} from '../SubscriptionOAuthCoordinator.js';
+import { SubscriptionOAuthCoordinator } from '../SubscriptionOAuthCoordinator.js';
 import { defineLoopbackLogin } from '../loopbackLogin.js';
 import {
   XAI_CALLBACK_PATH,
@@ -19,6 +16,10 @@ import {
   XAI_SESSION_SECRET_KEY,
 } from './xaiConstants.js';
 import { XAI_POLICY } from './xaiSessionPolicy.js';
+import type {
+  SubscriptionCoordinator,
+  SubscriptionSessionStatus,
+} from '../subscriptionCoordinator.js';
 import type { CredentialStore } from '../../providers/credentials.js';
 import type { XaiSession } from './xaiSessionTypes.js';
 import type { Effect } from 'effect';
@@ -28,7 +29,7 @@ const CHANNEL = 'xaiAuth';
 /** The coordinator for the caller's secret store. */
 export const xaiCoordinator: (
   secrets: CredentialStore,
-) => SubscriptionOAuthCoordinator<XaiSession> = createSecretBackedCoordinator({
+) => SubscriptionCoordinator<XaiSession> = createSecretBackedCoordinator({
   secretKey: XAI_SESSION_SECRET_KEY,
   makeCoordinator: (storage) =>
     new SubscriptionOAuthCoordinator({ storage, policy: XAI_POLICY }),

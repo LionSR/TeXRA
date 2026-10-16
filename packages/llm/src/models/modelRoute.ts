@@ -74,7 +74,7 @@ export interface RouteFacts<C = unknown> {
 }
 
 /** The facts {@link decideModelRoute} reads. */
-type RouteDecisionFacts<C = unknown> = Omit<
+export type RouteDecisionFacts<C = unknown> = Omit<
   RouteFacts<C>,
   'chatgptContextWindow' | 'endpoints'
 >;
@@ -99,7 +99,7 @@ export type HostRouteFacts = Omit<
 >;
 
 /** What a direct provider key pays through. */
-type ApiKeyUsageRoute =
+export type ApiKeyUsageRoute =
   'api-key' | 'kimi-code-subscription' | 'glm-coding-plan-subscription';
 
 /** The route a model's next request takes, decided by {@link decideModelRoute}. */
@@ -168,18 +168,14 @@ export function codexBackendModelId(
   return (canonical ?? config.id).replace(CODEX_MODEL_DATE_PIN, '');
 }
 
-/** The registry facts Kimi Code eligibility reads. */
-type KimiFields = Pick<
-  ModelConfig,
-  'provider' | 'kimiSubscription' | 'baseUrl'
->;
-
 /**
  * Whether the Kimi Code coding endpoint serves `model`: the llm-zoo
  * `kimiSubscription` flag on a Moonshot model. Serving status is a fact about
  * the Kimi Code backend, not derivable from other model fields.
  */
-export function isKimiSubscriptionEligible(model: KimiFields): boolean {
+export function isKimiSubscriptionEligible(
+  model: Pick<ModelConfig, 'provider' | 'kimiSubscription' | 'baseUrl'>,
+): boolean {
   return (
     model.provider === ModelProvider.MOONSHOT && model.kimiSubscription === true
   );
@@ -189,14 +185,18 @@ export function isKimiSubscriptionEligible(model: KimiFields): boolean {
  * Whether the coding endpoint ALONE serves `model`: llm-zoo pins its `baseUrl`
  * there, so no open-platform or OpenRouter route exists.
  */
-export function isKimiCodeExclusiveModel(model: KimiFields): boolean {
+export function isKimiCodeExclusiveModel(
+  model: Pick<ModelConfig, 'provider' | 'kimiSubscription' | 'baseUrl'>,
+): boolean {
   return (
     isKimiSubscriptionEligible(model) && model.baseUrl === KIMI_CODE_BASE_URL
   );
 }
 
 /** Product-facing model source; direct managed services own their own group. */
-export function resolveModelSource(config: KimiFields): string {
+export function resolveModelSource(
+  config: Pick<ModelConfig, 'provider' | 'kimiSubscription' | 'baseUrl'>,
+): string {
   return isKimiCodeExclusiveModel(config) ? 'kimiCode' : config.provider;
 }
 
