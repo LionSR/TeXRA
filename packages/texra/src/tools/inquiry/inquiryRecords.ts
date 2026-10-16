@@ -1,4 +1,5 @@
 /** Canonical global inquiry content; project events carry display notifications only. */
+import { randomBytes } from 'node:crypto';
 import { Context, DateTime, Effect, Layer, Result } from 'effect';
 
 import { ensureError } from '@texra-ai/harness/schemas';
@@ -16,7 +17,6 @@ import {
   InquiryRecords,
   type InquiryThreadRecord,
 } from '@texra/shared/plugins/externalInquiry';
-import { toNewestFirstByTimestamp, hexId12 } from '@utils/core';
 
 const QUESTION_PREVIEW_CHARS = 200;
 
@@ -82,7 +82,9 @@ function inquiryOperations(
       Context.Service.Shape<typeof InquiryRecords>['recordOpenQuestion']
     >[0],
   ) {
-    const threadId = params.threadId ?? (`ei_${hexId12()}` as InquiryThreadId);
+    const threadId =
+      params.threadId ??
+      (`ei_${randomBytes(6).toString('hex')}` as InquiryThreadId);
 
     return changeThread(threadId, (existing, timestamp) => {
       if (params.threadId && !existing) {
@@ -273,9 +275,8 @@ function inquiryOperations(
         return true;
       });
 
-      const sorted = toNewestFirstByTimestamp(
-        filtered,
-        (manifest) => manifest.updatedAt,
+      const sorted = filtered.toSorted(
+        (a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt),
       );
 
       const trimmed =

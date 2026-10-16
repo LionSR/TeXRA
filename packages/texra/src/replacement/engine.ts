@@ -2,7 +2,7 @@
  * Utilities for managing text replacements in the codebase.
  */
 
-import { Effect, Result } from 'effect';
+import { Effect, Result, absurd, Array as Arr } from 'effect';
 import { LRUCache } from 'lru-cache';
 
 import { withLogChannel } from '@texra-ai/harness';
@@ -11,7 +11,6 @@ import type {
   NonRegexReplacementCategory,
   RegexReplacementCategory,
 } from '@texra/shared/constants/replacementCategories';
-import { assertNever, ensureArray } from '@utils/core';
 
 import {
   ReplacementRuleSet,
@@ -180,7 +179,7 @@ const replacementEngine = {
         return { ...all, text: restoreLatexSectionSign(all.text) };
       }
       default:
-        return assertNever(purpose, 'Unknown replacement purpose');
+        return absurd(purpose);
     }
   },
 };
@@ -324,7 +323,7 @@ export function applyReplacements(
   // Apply Unicode replacements in math environments first.
   let result = replaceMathUnicode(text);
 
-  for (const category of ensureArray(replacements)) {
+  for (const category of Arr.ensure(replacements)) {
     if (category.isRegex) {
       for (const [pattern, repl] of Object.entries(category.patterns)) {
         const current = result;

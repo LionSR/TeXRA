@@ -28,7 +28,6 @@ import {
   createMarkdownRenderer,
   type MarkdownItInstance,
 } from '@ui/markdown/createMarkdownRenderer';
-import { clamp } from '@utils/core';
 
 /** SGR open/close codes wrapped through String.fromCharCode so the ESC byte
  *  is never a literal in source (pre-commit hooks have been known to mangle
@@ -347,7 +346,7 @@ function configureAnsi(
 
   r.hr = (tokens, idx) =>
     `${quoteBlockStart(tokens, idx)}${style.dim(
-      '─'.repeat(clamp(width ?? 40, 1, 40)),
+      '─'.repeat(Math.max(1, Math.min(40, width ?? 40))),
     )}\n`;
 
   // Emit raw SGR codes so the styling stays open across the link body. The

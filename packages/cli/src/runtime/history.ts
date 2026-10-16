@@ -28,7 +28,6 @@ import {
 } from '@tools/executions/runGeneratedFiles';
 import { serializeFilteredConfig } from '@tools/executions/configView';
 import { readCompletedRunConversation } from '@transcript';
-import { byStringProp } from '@utils/core';
 import { absentReason } from '@utils/files/fsEntryExists';
 
 import { CliUsageError } from './cliContext';
@@ -64,7 +63,7 @@ function mergeHistoryFiles(
       if (!files.has(file.path)) files.set(file.path, file);
     }
   }
-  return [...files.values()].toSorted(byStringProp((f) => f.path));
+  return [...files.values()].toSorted((a, b) => a.path.localeCompare(b.path));
 }
 
 export interface CliHistoryEntry {

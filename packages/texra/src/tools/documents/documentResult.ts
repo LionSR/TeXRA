@@ -10,7 +10,7 @@ import path from 'node:path';
 
 import { Effect, FileSystem } from 'effect';
 
-import { withLogChannel } from '@texra-ai/harness';
+import { withLogChannel, isPathWithin } from '@texra-ai/harness';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
 import { runStorageFilePath, type RunId } from '@shared/schemas';
 import { escapeAttr } from '@shared/utils/xmlEscape';
@@ -22,11 +22,9 @@ import {
   type OutputFileSummary,
   type ResultDiffSummary,
 } from '@texra/shared/plugins/documentOutputs';
-import { isPathWithin } from '@utils/core/pathCore';
 import { readNormalizedFile } from '@utils/files/fsDurability';
 import { runDirUnder } from '@utils/files/runStorageFs';
 import { workspaceRelativePath } from '@utils/files/workspaceFS';
-import { sanitizePathSegment } from '@utils/text/sanitizePathSegment';
 import { countLines } from '@utils/text/stringUtils';
 import { reportDiffTimeout, unifiedDiffText } from '@utils/text/unifiedDiff';
 import type { WorkspaceRoots } from '@texra-ai/harness';
@@ -229,10 +227,7 @@ const computeAndWriteWorkflowDiffs = Effect.fn('documents.computeDiffs')(
           const limit = largeChange ? LARGE_CHANGE_DIFF_LINES : MAX_DIFF_LINES;
           // Use full relativePath (with separators replaced) to avoid collisions
           // when multiple files share the same basename in different directories.
-          const safeName = sanitizePathSegment(o.relativePath, {
-            invalidCharPattern: /[\\/]/g,
-            replacement: '_',
-          });
+          const safeName = o.relativePath.replaceAll(/[\\/]/g, '_');
           const summary: ResultDiffSummary = {
             path: o.absolutePath,
             diffRelPath: `diffs/${safeName}.diff`,

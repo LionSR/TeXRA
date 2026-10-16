@@ -42,7 +42,6 @@ import {
   isExpensiveModel,
   isFastFirstResponseModel,
 } from '@texra/shared/model/modelPicker';
-import { byName } from '@utils/core';
 import type { SettingsStores } from '@texra-ai/harness';
 
 interface SettingsModelSelectionControllerDeps<R> {
@@ -254,7 +253,7 @@ export class SettingsModelSelectionController<R = never> {
         items.push(item);
       }
 
-      return items.sort(byName);
+      return items.sort((a, b) => a.name.localeCompare(b.name));
     });
   }
 

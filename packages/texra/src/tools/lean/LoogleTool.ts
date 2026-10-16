@@ -4,7 +4,7 @@
  * Uses the Loogle API at https://loogle.lean-lang.org/
  */
 
-import { Cause, Effect } from 'effect';
+import { Cause, Effect, Array as Arr } from 'effect';
 import { z } from 'zod';
 
 import { defineTool, withLogChannel } from '@texra-ai/harness';
@@ -15,7 +15,6 @@ import {
 } from '@texra-ai/harness/plugins';
 import { ToolResult } from '@shared/schemas';
 import { retryTransientFetch, scopedOkClient } from '@tools/timeouts';
-import { ensureArray } from '@utils/core';
 import {
   formatResultCount,
   truncateWithEllipsis,
@@ -220,7 +219,7 @@ const searchLoogle = Effect.fn('LoogleTool.execute')(function* ({
   query,
   limit,
 }: LeanLoogleInput) {
-  const queries = ensureArray(query);
+  const queries = Arr.ensure(query);
 
   // Single query: return directly (backward-compatible format)
   if (queries.length === 1) {

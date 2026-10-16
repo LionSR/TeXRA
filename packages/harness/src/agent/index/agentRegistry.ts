@@ -22,7 +22,6 @@ import {
 import { PREFERRED_TOOL_USE_AGENTS } from '@shared/constants/agents';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { hasDelegationTool } from '@shared/constants/delegationTools';
-import { byName } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { withPerKeyLane, type PerKeyLane } from '@utils/core/perKeyQueue';
 import { scanDirectory } from './agentYamlScanner';
@@ -396,7 +395,7 @@ function sortAgentEntries(
     if (aIdx != null && bIdx != null) return aIdx - bIdx;
     if (aIdx != null) return -1;
     if (bIdx != null) return 1;
-    return byName(a, b);
+    return a.name.localeCompare(b.name);
   });
 }
 

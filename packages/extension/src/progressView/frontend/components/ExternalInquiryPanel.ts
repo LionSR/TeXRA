@@ -30,11 +30,11 @@ import type { SurfaceDecision } from '@texra/shared/session/surfaceDecision';
 import type { Surface } from '@texra/shared/session/surface';
 import { SessionUiEvents } from '@texra/shared/session/uiEvents';
 import { CopyButtonController } from '@texra/shared/litControllers/CopyButtonController';
+import { createFlushableDebounce } from '@texra/utils/core/flushableDebounce';
 import { renderLabeledActionButton } from '@ui/wa/actionButtons';
 import { renderDotMeta } from '@ui/wa/metaStrip';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 
-import { createFlushableDebounce } from '@utils/core';
 import { BaseRequestPanel } from './BaseRequestPanel';
 import { externalInquiryPanelStyles } from './ExternalInquiryPanel.styles';
 

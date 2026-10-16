@@ -4,7 +4,12 @@ import * as nodePath from 'node:path';
 // Third-party imports
 import { Effect, FileSystem } from 'effect';
 import { z } from 'zod';
-import { defineTool, ToolContext, WorkspaceFs } from '@texra-ai/harness';
+import {
+  defineTool,
+  ToolContext,
+  WorkspaceFs,
+  toPosixPath,
+} from '@texra-ai/harness';
 import { relativeToRoot } from '@texra-ai/harness/node';
 
 // Local imports - tools
@@ -21,7 +26,6 @@ import {
 } from '@latex/extractBibliography';
 import type { ToolResult } from '@shared/schemas';
 import { formatToolOutput } from '@tools/formatting';
-import { toPosixPath } from '@utils/core/pathCore';
 import { pathExists } from '@utils/files/fsDurability';
 import { formatResultCount } from '@utils/text/stringUtils';
 import {

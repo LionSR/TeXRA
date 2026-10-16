@@ -1,17 +1,16 @@
 // Node imports
 import * as path from 'node:path';
+import { hasExtension } from '@texra-ai/harness';
 
 // Third-party imports
-import { Effect, FileSystem } from 'effect';
+import { Effect, FileSystem, Predicate } from 'effect';
 
 // Local imports
 import { pathToLocationIn } from '@texra-ai/harness';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
 import type { FileLocation } from '@shared/schemas';
 import type { DocumentTaskOptions } from '@texra/shared/plugins/documents';
-import { filterNotNullish } from '@utils/core';
 import { RunFileService } from '@utils/files/runStorage';
-import { getExtensionLowercase, hasExtension } from '@utils/core/pathCore';
 
 // Local file imports
 import { extractLatexFileDependencies } from './extractFileDependencies';
@@ -245,7 +244,7 @@ export class LatexMediaManager {
         { concurrency: LATEX_CONCURRENCY },
       );
 
-      return compileResults.filter(filterNotNullish);
+      return compileResults.filter(Predicate.isNotNullish);
     });
   }
 
@@ -354,7 +353,7 @@ export class LatexMediaManager {
       const candidates = entries
         .filter(
           (name) =>
-            PROJECT_SIBLING_EXTENSIONS.has(getExtensionLowercase(name)) ||
+            PROJECT_SIBLING_EXTENSIONS.has(path.extname(name).toLowerCase()) ||
             PROJECT_SIBLING_NAMES.has(name),
         )
         .map((name) => path.join(projectDir, name));

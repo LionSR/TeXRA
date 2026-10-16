@@ -13,6 +13,8 @@ import { Effect } from 'effect';
 // Local imports
 import {
   AppState,
+  ToolAvailability,
+  type ExternalToolCheckResult,
   type ToolProbeInputs,
   type SettingHost,
   type Plugin,
@@ -28,10 +30,6 @@ import {
   type ToolPluginSetup,
 } from '@texra/tools/pluginCards';
 import { readDisabledTools } from '@tools/plugins';
-import {
-  ToolAvailability,
-  type ExternalToolCheckResult,
-} from '@tools/toolAvailabilityService';
 
 // ============================================================
 // Tool terminal actions

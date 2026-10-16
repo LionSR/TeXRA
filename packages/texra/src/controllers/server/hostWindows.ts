@@ -14,6 +14,7 @@
  * reaches the run's history only through the tool result that used it.
  */
 import { randomUUID } from 'node:crypto';
+import { isPathWithin } from '@texra-ai/harness';
 
 import { ModelError, type ModelErrorFieldsSchema } from '@texra-ai/llm';
 import {
@@ -36,7 +37,6 @@ import {
   type EditorHostShape,
 } from '@texra/tools/editorHost';
 import { PrunedNestedMap } from '@texra/utils/core/prunedNestedMap';
-import { isPathWithin } from '@utils/core/pathCore';
 
 import {
   CALL_CAPABILITY,

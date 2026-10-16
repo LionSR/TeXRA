@@ -12,10 +12,11 @@
 // not a root-confined view that would refuse them.
 
 import { basename, dirname, join } from 'node:path';
+import { normalizeFilePath } from '@texra-ai/harness/schemas';
 
 import { Data, Effect, FileSystem, type PlatformError } from 'effect';
 
-import { Rejected } from '@texra-ai/harness';
+import { Rejected, isPathWithin, OFFICE_EXTENSIONS } from '@texra-ai/harness';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
 import { onAppSignal } from '@eventBus/AppSignals';
 import { FILE_HANDLING_RULES } from '@texra/common/files/fileHandlingRules';
@@ -27,12 +28,9 @@ import {
   prepareFileFilters,
   shouldVisitDirectory,
 } from '@texra/common/files/fileListingRules';
-import { normalizeFilePath } from '@utils/core';
 import { locateInWorkspace } from '@utils/files/workspaceFS';
-import { isPathWithin } from '@utils/core/pathCore';
 import { readDirectoryTypedTolerant } from '@utils/files/fsDurability';
 import { entryTypeIn } from '@utils/files/fsEntryExists';
-import { OFFICE_EXTENSIONS } from '@utils/files/mimeUtils';
 import { normalizeLineEndings } from '@utils/text/stringUtils';
 
 import {

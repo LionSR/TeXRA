@@ -12,6 +12,7 @@
  * single-line templates with `// prettier-ignore` to prevent whitespace issues.
  */
 
+import { absurd } from 'effect';
 import { html, nothing, type TemplateResult } from 'lit';
 
 import {
@@ -30,7 +31,6 @@ import {
   getLanguageFromPath,
 } from '@progressView/frontend/formatters/constants';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
-import { assertNever } from '@utils/core';
 import { pluralize } from '@utils/text/stringUtils';
 
 import { buildToolSection } from './helpers';
@@ -95,7 +95,7 @@ function renderFileSection(section: ToolFileSection): TemplateResult {
         }),
       );
     default:
-      return assertNever(section.namespace, 'Unhandled tool file namespace');
+      return absurd(section.namespace);
   }
 }
 
@@ -174,7 +174,7 @@ function renderToolSection(
         buildStatusBadge(triStateStatusIcon(section.status), section.status),
       );
     default:
-      return assertNever(section, 'Unhandled tool section kind');
+      return absurd(section);
   }
 }
 

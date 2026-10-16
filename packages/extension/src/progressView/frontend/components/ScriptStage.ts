@@ -9,6 +9,7 @@
  */
 
 // Third-party imports
+import { absurd } from 'effect';
 import { css, html, LitElement, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 import { classMap } from 'lit/directives/class-map.js';
@@ -26,7 +27,6 @@ import { TALK_TO_AGENT } from '@ui/copy/nestedRuns';
 import { designTokens } from '@ui/styles';
 import { terminalStatusIcon } from '@ui/wa/statusIcons';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
-import { assertNever } from '@utils/core';
 import type { SessionView } from '@texra-ai/harness/schemas';
 import type { RunId } from '@texra-ai/harness/schemas';
 import type WaDropdownItem from '@awesome.me/webawesome/dist/components/dropdown-item/dropdown-item.js';
@@ -64,7 +64,7 @@ function statusIcon(
     case 'failed':
       return terminalStatusIcon('failed');
     default:
-      return assertNever(status, 'Unhandled script call status');
+      return absurd(status);
   }
 }
 

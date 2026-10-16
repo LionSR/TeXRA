@@ -58,7 +58,6 @@ const COMPOSITION_ROOT_FILES = new Set([
 const BROWSER_SAFE_UTILS = [
   '@utils/core',
   '@utils/errors/errorMessage',
-  '@utils/files/pastedImageName',
   '@utils/text/stringUtils',
 ];
 const BROWSER_SAFE_UTILS_MESSAGE = `Browser-reachable code may import at runtime only the browser-safe utils (${BROWSER_SAFE_UTILS.join(', ')}); adding one means holding it to the browser too.`;
@@ -982,7 +981,7 @@ export default tseslint.config(
 
   // The browser-safe utils: no Node built-ins, and runtime imports of other
   // repo modules only from the set itself, by alias, so the allowlist sees
-  // every edge and the frontends' reachable closure stays these five files.
+  // every edge and the frontends' reachable closure stays these files.
   {
     files: BROWSER_SAFE_UTILS.map(
       (mod) =>

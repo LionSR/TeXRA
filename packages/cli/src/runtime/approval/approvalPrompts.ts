@@ -1,9 +1,12 @@
 import { Effect } from 'effect';
 
-import { withLogChannel } from '@texra-ai/harness';
+import {
+  withLogChannel,
+  type PerKeyLane,
+  withPerKeyLane,
+} from '@texra-ai/harness';
 import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';
 import type { RequestDecision, RunId } from '@shared/schemas';
-import { type PerKeyLane, withPerKeyLane } from '@utils/core/perKeyQueue';
 
 import { type CliContext, type CliPromptRequest } from '../cliContext';
 import { askCliQuestion, writeTextStderr } from '../logSinks';

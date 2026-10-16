@@ -1,11 +1,11 @@
 import { buildMcpToolName } from '@texra-ai/harness/transcript';
+import { getBasename } from '@texra-ai/harness/schemas';
 import type {
   McpToolOutput,
   ToolCallStatus,
   ToolCard,
   ToolUseLog,
 } from '@shared/schemas';
-import { getBasename } from '@utils/core';
 import { formatDuration, truncateSummary } from '@utils/text/stringUtils';
 import type {
   CommandExecutionItem,

@@ -15,7 +15,6 @@ import {
   type NormalizedToolUse,
   type ToolUseLog,
 } from '@shared/schemas';
-import { clamp } from '@utils/core';
 import { truncateSummary } from '@utils/text/stringUtils';
 import type { z } from 'zod';
 
@@ -209,10 +208,9 @@ export const EXECUTIONS_WAIT_MAX_TIMEOUT_SECONDS = 1800;
  */
 export function executionsWaitTimeoutSeconds(timeout: unknown): number {
   return typeof timeout === 'number' && Number.isFinite(timeout)
-    ? clamp(
-        timeout,
+    ? Math.max(
         EXECUTIONS_WAIT_MIN_TIMEOUT_SECONDS,
-        EXECUTIONS_WAIT_MAX_TIMEOUT_SECONDS,
+        Math.min(EXECUTIONS_WAIT_MAX_TIMEOUT_SECONDS, timeout),
       )
     : EXECUTIONS_WAIT_DEFAULT_TIMEOUT_SECONDS;
 }

@@ -1,4 +1,5 @@
 import * as path from 'node:path';
+import { isPathWithin, isStrictlyWithin, toPosixPath } from '@texra-ai/harness';
 
 import { glob, hasMagic } from 'glob';
 import { Effect, FileSystem, Scope } from 'effect';
@@ -10,11 +11,6 @@ import { absentReason } from '@utils/files/fsEntryExists';
 // toPosixPath also trims and resolves `.`/`..` segments beyond a bare slash
 // swap; safe at the call site below since the input is always a relative
 // path from path.relative behind an isStrictlyWithin check.
-import {
-  isPathWithin,
-  isStrictlyWithin,
-  toPosixPath,
-} from '@utils/core/pathCore';
 
 const STDIN_INPUT_TOKEN = '-';
 // LaTeX derives auxiliary filenames from the input basename; leading-dot

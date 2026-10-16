@@ -2,7 +2,7 @@
 import * as nodePath from 'node:path';
 
 // Third-party imports
-import { Effect, FileSystem, Option } from 'effect';
+import { Effect, FileSystem, Option, Predicate } from 'effect';
 import { Glob } from 'glob';
 import { z } from 'zod';
 import { ToolContext } from '@agent/core/tools/ToolTypes';
@@ -13,7 +13,6 @@ import { resolveToolPath, type ToolPathCall } from '@tools/pathResolution';
 import { getGitignoreMatcher } from '@tools/gitignore';
 import { formatToolOutput } from '@tools/formatting';
 import { executed } from '@tools/core/result';
-import { filterNotNull } from '@utils/core';
 import { toPosixPath } from '@utils/core/pathCore';
 import { globEscape } from '@utils/files/rootedFileSystem';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -157,7 +156,7 @@ const runGlob = Effect.fn('GlobTool.execute')(function* (
     concurrency: 'unbounded',
   });
   const lines = results
-    .filter(filterNotNull)
+    .filter(Predicate.isNotNull)
     .toSorted((a, b) => {
       if (b.mtime !== a.mtime) {
         return b.mtime - a.mtime;

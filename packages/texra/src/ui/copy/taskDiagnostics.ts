@@ -1,8 +1,8 @@
+import { Predicate } from 'effect';
 import { fileLocationAddressPath } from '@shared/schemas';
 import { documentsOf } from '@texra/shared/plugins/documents';
 import { roundIndexedEntries } from '@texra/shared/plugins/documentOutputs';
 import { runStatusLabel } from '@ui/copy/runStatus';
-import { filterNotNullish } from '@utils/core';
 import type { RunView } from '@texra-ai/harness/schemas';
 
 /**
@@ -55,7 +55,7 @@ export function formatTaskDiagnostics(run: RunView): string {
     }
   }
 
-  return lines.filter(filterNotNullish).join('\n');
+  return lines.filter(Predicate.isNotNullish).join('\n');
 }
 
 /** A workflow task's pass, one-based from a zero-based round: "Pass 2", or

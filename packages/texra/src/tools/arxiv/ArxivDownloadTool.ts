@@ -5,7 +5,12 @@ import { Effect, FileSystem, Path } from 'effect';
 import { z } from 'zod';
 
 // Local imports
-import { defineTool, ToolContext, WorkspaceFs } from '@texra-ai/harness';
+import {
+  defineTool,
+  ToolContext,
+  WorkspaceFs,
+  toPosixPath,
+} from '@texra-ai/harness';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
 import { nullishWithDefault, executed } from '@texra-ai/harness/plugins';
 import { ArxivProcessor, type ArxivSourceError } from '@latex/arxivProcessor';
@@ -14,7 +19,6 @@ import { ToolError } from '@shared/schemas';
 import { getGitignoreMatcher } from '@tools/gitignore';
 import { formatToolOutput } from '@tools/formatting';
 import { readDirectoryTyped } from '@utils/files/fsDurability';
-import { toPosixPath } from '@utils/core/pathCore';
 
 const NO_ENTRIES_MESSAGE = '(no entries)';
 const DEFAULT_HIDDEN_NAMES = new Set(['.git', '.gitignore']);

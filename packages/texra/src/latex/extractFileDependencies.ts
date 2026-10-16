@@ -11,20 +11,20 @@
 import * as path from 'node:path';
 
 // Third-party imports
-import { Effect, FileSystem } from 'effect';
+import { Effect, FileSystem, Predicate } from 'effect';
 
 // Local imports
 import { ensureError } from '@texra-ai/harness/schemas';
 import type { FileLocation } from '@shared/schemas';
-import { filterNotNull } from '@utils/core';
 import { normalizeLineEndings } from '@utils/text/stringUtils';
-import { ensureExtension, joinLatexPath } from '@utils/core/pathCore';
 
 // Local file imports
 import {
   collectBibliographyPaths,
   collectCommaSeparatedMatches,
+  ensureExtension,
   existingExternalPath,
+  joinLatexPath,
   resolveLatexDir,
   stripLatexComments,
 } from './latexParsingUtils';
@@ -119,7 +119,9 @@ export const extractLatexFileDependencies = Effect.fn(
 
   return [
     ...new Set(
-      [...texResolved, ...bibResolved, ...styResolved].filter(filterNotNull),
+      [...texResolved, ...bibResolved, ...styResolved].filter(
+        Predicate.isNotNull,
+      ),
     ),
   ];
 });

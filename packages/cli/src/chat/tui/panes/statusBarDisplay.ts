@@ -1,3 +1,4 @@
+import { absurd, Predicate } from 'effect';
 import { runBypasses } from '@texra-ai/harness/schemas';
 import { isActivePhase } from '@texra-ai/harness/schemas';
 import { KEY_HINT_SEPARATOR, keyHintText } from '@cli/tui/ui/KeyHints';
@@ -28,7 +29,6 @@ import { runStatusLabel } from '@ui/copy/runStatus';
 import { approvalPolicyLabel } from '@ui/copy/approvalPolicy';
 import { AGENT_LIST, NESTED_AGENT, TASK_ACTIONS } from '@ui/copy/nestedRuns';
 import { APPROVAL_BYPASS_BADGE } from '@ui/copy/approvalBypass';
-import { assertNever, filterNotNullish } from '@utils/core';
 import {
   formatCompactDuration,
   formatCompactTokenCount,
@@ -62,7 +62,7 @@ function statusKindForApproval(
     case 'retry':
       return 'approval';
     default:
-      return assertNever(kind, 'Unknown approval payload kind');
+      return absurd(kind);
   }
 }
 
@@ -494,7 +494,7 @@ function fitStatusBarLeftSegments(
     ...new Set(
       compacted
         .map((segment) => segment.compactPriority)
-        .filter(filterNotNullish),
+        .filter(Predicate.isNotNullish),
     ),
   ].sort((a, b) => a - b);
 
@@ -920,7 +920,7 @@ export function buildStatusBarDisplay(
             }
           : undefined,
       ] satisfies (StatusBarSegment | undefined)[]
-    ).filter(filterNotNullish),
+    ).filter(Predicate.isNotNullish),
   );
   const bypasses = run === undefined ? undefined : runBypasses(view, run.id);
   for (const badge of BYPASS_BADGES) {

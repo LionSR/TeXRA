@@ -62,7 +62,6 @@ import {
 import type { ClaudeAgentPermissionMode } from '@texra/shared/agentCliSettings';
 import { buildSyntheticToolUseConfig } from '@texra/tools/core/syntheticAgentConfig';
 import { buildAgentWorkspaceOptions } from '@texra/tools/agentWorkspaceOptions';
-import { onAbort } from '@utils/core';
 import {
   formatWallTimeSeconds,
   isNonEmptyString,
@@ -204,9 +203,9 @@ export function runStreamedTurn(params: {
     // The SDK takes a controller, not a signal: this one exists only at that
     // boundary and follows the turn's signal until the stream is drained.
     const abortController = new AbortController();
-    const detachAbort = onAbort(params.signal, () =>
-      abortController.abort(params.signal.reason),
-    );
+    const forwardAbort = () => abortController.abort(params.signal.reason);
+    if (params.signal.aborted) forwardAbort();
+    else params.signal.addEventListener('abort', forwardAbort, { once: true });
     const sdkOptions: ClaudeAgentSdkOptions = {
       abortController,
       model: params.model,
@@ -293,7 +292,7 @@ export function runStreamedTurn(params: {
       ),
       Effect.ensuring(
         Effect.sync(() => {
-          detachAbort();
+          params.signal.removeEventListener('abort', forwardAbort);
           backgroundTasks.finish();
           endOpenToolUseCards(logger, toolLogRefs);
         }),

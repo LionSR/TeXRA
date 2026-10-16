@@ -13,6 +13,7 @@
  * polish, dictation, pickers, and pasted images, a `RuntimeRequest` for a
  * follow-up. It holds no draft of its own.
  */
+import { Predicate } from 'effect';
 import { LitElement, css, html, nothing, type TemplateResult } from 'lit';
 import { customElement, property, query, state } from 'lit/decorators.js';
 import { classMap } from 'lit/directives/class-map.js';
@@ -39,12 +40,11 @@ import {
   readFileAsBase64,
   type ExtractedClipboardImage,
 } from '@texra/shared/utils/clipboardImages';
+import { generatePastedImageName } from '@texra/utils/files/pastedImageName';
 import { designTokens, commonViewStyles } from '@ui/styles';
 import { renderIconActionButton } from '@ui/wa/actionButtons';
 import { selectedItemValue } from '@ui/wa/selectTemplates';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
-import { filterNotNullish } from '@utils/core';
-import { generatePastedImageName } from '@utils/files/pastedImageName';
 import './QueuedFollowUps';
 import { launcherChipMenus, type ChipMenu } from './composerChipMenus';
 import type { SessionView, RunView } from '@texra-ai/harness/schemas';
@@ -378,7 +378,7 @@ export class SessionComposer extends LitElement {
         },
       ),
     );
-    const added = images.filter(filterNotNullish);
+    const added = images.filter(Predicate.isNotNullish);
     if (added.length === 0) return;
     for (const image of added) {
       this.dispatchEvent(

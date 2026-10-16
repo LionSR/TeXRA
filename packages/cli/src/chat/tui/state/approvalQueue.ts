@@ -10,7 +10,7 @@
 // capability a retry on the user's own key needs.
 
 import { computed, signal } from '@lit-labs/signals';
-import { Cause, Effect } from 'effect';
+import { Cause, Effect, absurd } from 'effect';
 
 import { withLogChannel } from '@texra-ai/harness';
 import { attentionOf } from '@texra-ai/harness/schemas';
@@ -25,7 +25,6 @@ import {
   type SurfaceDecision,
 } from '@texra/shared/session/surfaceDecision';
 import type { HostRequest } from '@texra/shared/session/hostRequest';
-import { assertNever } from '@utils/core';
 
 import { registerCliStateResetHook, sessionRunIds } from './cliState';
 import { sessionView } from './sessionView';
@@ -221,7 +220,7 @@ function presentedPayload(
       // preview, a retry once the CLI policy has not settled it.
       return undefined;
   }
-  assertNever(payload, 'Unhandled approval payload kind');
+  absurd(payload);
 }
 
 /** The order requests became presentable: a request that only became

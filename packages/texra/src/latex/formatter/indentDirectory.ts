@@ -2,12 +2,11 @@ import * as path from 'node:path';
 
 import { Effect, FileSystem, Path, PlatformError } from 'effect';
 
-import { withLogChannel } from '@texra-ai/harness';
+import { withLogChannel, hasExtension } from '@texra-ai/harness';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
 import { EXCLUDED_DIRS } from '@texra/shared/constants/latexTiming';
 import { readDirectoryTypedTolerant } from '@utils/files/fsDurability';
 import { entryExists } from '@utils/files/fsEntryExists';
-import { hasExtension } from '@utils/core/pathCore';
 
 import { LATEX_COMMANDS_CHANNEL as CHANNEL } from '../latexLogging';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';

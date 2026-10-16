@@ -34,6 +34,7 @@ import {
   AgentConfigSchema,
   type AgentConfig,
   type AgentConfigPayload,
+  generateRunId,
 } from '@texra-ai/harness/schemas';
 import { acceptsFollowUp, isLiveRun } from '@texra-ai/harness/schemas';
 import { isTerminalOutcomePhase } from '@texra-ai/harness/schemas';
@@ -53,7 +54,6 @@ import { heldElsewhereBy } from '@shared/session/database';
 import { isTaskConfig, type RunId } from '@shared/schemas';
 import type { DisposableStore } from '@texra/platform/disposable';
 import { FOCUSED_AGENT } from '@ui/copy/nestedRuns';
-import { generateRunId } from '@utils/core';
 import { handleTuiSlashCommand } from './tui/commands/handleSlashCommand';
 import {
   CHAT_API_MODE_MODEL_RECOVERY,

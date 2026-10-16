@@ -12,6 +12,7 @@ import {
   type RunId,
   AgentConfigSchema,
   type AgentConfigPayload,
+  generateRunId,
 } from '@texra-ai/harness/schemas';
 import { Settings } from '@texra-ai/harness';
 import {
@@ -23,7 +24,6 @@ import type { RequestErrorWire } from '@texra/shared/session/sessionFrames';
 import type { TaskSummary } from '@texra/controllers/server/protocol';
 import type { ServiceClient } from '@texra/controllers/server/client';
 import { runStatusLabel } from '@ui/copy/runStatus';
-import { generateRunId } from '@utils/core';
 
 import { resolveCliRunAgent } from '../runtime/agents';
 import {

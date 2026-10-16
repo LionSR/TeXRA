@@ -22,7 +22,7 @@ import { Cause, Effect, Fiber, FileSystem, Stream } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports
-import { withLogChannel } from '@texra-ai/harness';
+import { withLogChannel, hasExtension } from '@texra-ai/harness';
 import { Settings } from '@texra-ai/harness';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
 import { outputFilesProduced } from '@frontend/events/runFactSubscriptions';
@@ -31,7 +31,6 @@ import { parseCriticismAnnotations } from '@latex/criticismParser';
 import type { OutputFileInfo } from '@texra/shared/plugins/documentOutputs';
 import type { ManualCriticismEntry } from '@texra/tools/editorHost';
 import { TexraStateKey } from '@texra/shared/settingsView/texraSettings';
-import { hasExtension } from '@utils/core/pathCore';
 import { normalizeLineEndings } from '@utils/text/stringUtils';
 import type { Session } from '@texra-ai/harness';
 import type { ProcessRuntime } from '@texra-ai/harness';
