@@ -40,7 +40,6 @@ import {
   INSTRUCTION_ACTION,
   isTaskConfig,
   RUN_OUTCOME,
-  type AttachedMemoryMiss,
   type RunId,
 } from '@shared/schemas';
 import type { CoWrite } from '@shared/session/sessionEvents';
@@ -87,7 +86,6 @@ export interface AgentLaunchContext extends LaunchResolvedRunFacts {
   readonly ownApiKeyFallback: boolean;
   /** Description from the exact registry entry selected for this launch. */
   readonly resolvedAgentDescription?: string;
-  readonly attachedMemoryMisses: AttachedMemoryMiss[];
 }
 
 interface AgentLaunchInput {
@@ -438,9 +436,6 @@ export const buildAgentLaunchContext = Effect.fn('buildAgentLaunchContext')(
           ? initialInstruction
           : undefined,
       },
-      // A resumed run's are on its opening's `append`, which its loop
-      // reports with its result.
-      attachedMemoryMisses: opening?.attachedMemoryMisses ?? [],
     };
     // Frozen at the run's one real construction site: a run's identity, its
     // owning session, and the rest of what the launch resolved must not change

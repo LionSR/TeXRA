@@ -58,7 +58,6 @@ import {
   MESSAGE_TYPES,
   type FailedNext,
   type InvocationRef,
-  type NormalizedUsage,
   type RetryErrorInfo,
 } from '@shared/schemas';
 import type { Attempt, RetryCredentials } from '@shared/session/inFlight';
@@ -132,21 +131,14 @@ export interface InvokeRequest {
 interface InvocationResponse {
   readonly kind: 'response';
   readonly state: RunState;
-  readonly responseId: string;
-  readonly turn: TurnResult;
   /** The assistant text of the turn, joined; empty when it produced none. */
   readonly text: string;
-  readonly usage: NormalizedUsage | null;
-  readonly responseTimeMs: number;
 }
 
+/** A failure's error is the run state's `lastError`. */
 type InvocationOutcome =
   | InvocationResponse
-  | {
-      readonly kind: 'failed';
-      readonly state: RunState;
-      readonly error: RetryErrorInfo;
-    }
+  | { readonly kind: 'failed'; readonly state: RunState }
   | { readonly kind: 'cancelled'; readonly state: RunState };
 
 /**
@@ -416,15 +408,7 @@ export const modelInvokerLayer = (): Layer.Layer<
           });
         }
         yield* reportUsage(usageLog, bound, usage, attribution, session.roots);
-        return {
-          kind: 'response',
-          state: next,
-          responseId,
-          turn,
-          text,
-          usage,
-          responseTimeMs,
-        };
+        return { kind: 'response', state: next, text };
       });
 
       /**
@@ -785,8 +769,7 @@ export const modelInvokerLayer = (): Layer.Layer<
         });
         if (ended.kind === 'response') return ended;
         const state = yield* cell.current;
-        if (ended.kind === 'failed')
-          return { kind: 'failed', state, error: ended.error };
+        if (ended.kind === 'failed') return { kind: 'failed', state };
         logProgressStatus(logger, 'Retry cancelled by user');
         return { kind: 'cancelled', state };
       });

@@ -121,26 +121,6 @@ function launchRun(
   variant: LaunchVariant,
 ): Effect.Effect<RunEndResult, Error, AgentRunServices> {
   const task = isTaskConfig(ctx.config);
-  const toResult = (
-    result: Effect.Success<ReturnType<typeof runToolUse>>,
-  ): RunEndResult => ({
-    outcome: result.outcome,
-    output: {
-      response: result.response,
-      files: [...result.files],
-      // A recipe's return value, which its block reads (`AgentBlock.result`).
-      ...(result.structured !== undefined && {
-        structured: result.structured,
-      }),
-    },
-    runId: ctx.runId,
-    usage: result.usage,
-    ...(result.error ? { error: result.error } : {}),
-    ...(result.memoryMisses.length > 0 && {
-      memoryMisses: [...result.memoryMisses],
-    }),
-  });
-  const { turns } = shared;
   /** A task's result, with its children's spend. */
   const withChildrenSpend = (ended: RunEndResult) =>
     task ? withChildSpend(ctx.session, ended) : Effect.succeed(ended);
@@ -150,14 +130,7 @@ function launchRun(
     variant.kind === 'resume' && variant.isCancellationRequested?.()
       ? Effect.interrupt
       : runToolUse({
-          ...(turns
-            ? {
-                turns: {
-                  turnPermit: turns.turnPermit,
-                  settleBoundary: (r) => turns.settleBoundary(toResult(r)),
-                },
-              }
-            : {}),
+          turns: shared.turns,
           resume: variant.kind === 'resume',
           attachment: {
             attach: (controls) => handle.attachControls(controls),
@@ -165,7 +138,6 @@ function launchRun(
           },
         }),
   ).pipe(
-    Effect.map(toResult),
     Effect.flatMap(withChildrenSpend),
     Effect.provide(
       runLayerFor(

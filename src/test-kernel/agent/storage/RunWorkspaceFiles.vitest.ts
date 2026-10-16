@@ -32,15 +32,11 @@ describe('listRunWorkspaceFiles', () => {
     ).resolves.toEqual([
       {
         path: 'a-file.tex',
-        displayPath: 'workspace/a-file.tex',
-        absolutePath: path.join(WORKSPACE_PATH, 'a-file.tex'),
         size: 7,
         isDirectory: false,
       },
       {
         path: 'z-dir',
-        displayPath: 'workspace/z-dir',
-        absolutePath: path.join(WORKSPACE_PATH, 'z-dir'),
         // A real directory's size is the filesystem's own bookkeeping.
         size: expect.any(Number),
         isDirectory: true,

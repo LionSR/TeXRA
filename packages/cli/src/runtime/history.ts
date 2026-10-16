@@ -211,7 +211,7 @@ export const readCliHistoryDetails = Effect.fn('cli.readCliHistoryDetails')(
     const files = mergeHistoryFiles(
       generatedFiles,
       workspaceFiles.map((file) => ({
-        path: file.displayPath,
+        path: `workspace/${file.path}`,
         size: file.size,
         isDirectory: file.isDirectory,
       })),

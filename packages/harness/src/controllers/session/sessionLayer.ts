@@ -93,7 +93,6 @@ import {
   type SessionOpenError,
 } from '@shared/session/database';
 import { UsageLog } from '@shared/usageLog';
-import { releaseRunResources } from '@tools/approval';
 import { ToolCatalog } from '@tools/liveTools';
 import { pluginCatalogLayer } from '@tools/pluginCatalog';
 import type { Plugin } from '@tools/plugins';
@@ -252,7 +251,7 @@ const sessionHandleLayer = (key: SessionKey) =>
         yield* session.interactions.use(key.open.interactions);
       // The local half of a committed removal; its plugin rows go with it.
       yield* store
-        .deliver((runId) => releaseRunResources(runId, session))
+        .deliver((runId) => session.followUps.forget(runId))
         .pipe(Scope.provide(consumerScope));
       // The registry's phase notification rides the fold-gated tail: its
       // waiters read `RunView.status` synchronously, so a row reaches them

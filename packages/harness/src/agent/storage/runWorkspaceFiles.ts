@@ -10,8 +10,6 @@ import { absentReason } from '@utils/files/fsEntryExists';
 
 interface RunWorkspaceFile {
   readonly path: string;
-  readonly displayPath: string;
-  readonly absolutePath: string;
   readonly size: number;
   readonly isDirectory: boolean;
 }
@@ -59,8 +57,6 @@ export const listRunWorkspaceFiles = Effect.fn('storage.listRunWorkspaceFiles')(
 
       files.set(resolved.path, {
         path: resolved.path,
-        displayPath: `workspace/${resolved.path}`,
-        absolutePath: resolved.absolutePath,
         size: entry.size,
         isDirectory: entry.type === 'Directory',
       });

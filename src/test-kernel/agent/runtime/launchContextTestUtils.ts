@@ -61,7 +61,6 @@ export function createTestLaunchContext({
       initialUserMessage: undefined,
     },
     toolPolicy: {},
-    attachedMemoryMisses: [],
     modelConfig: buildTestModelConfig(),
   };
 }

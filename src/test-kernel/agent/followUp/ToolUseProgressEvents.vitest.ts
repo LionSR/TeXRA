@@ -207,8 +207,10 @@ describe('the tool-use turn', () => {
 
       expect(result).toMatchObject({
         outcome: RUN_OUTCOME.COMPLETED,
-        response: 'Here is the structured result.',
-        structured: { answer: 'done' },
+        output: {
+          response: 'Here is the structured result.',
+          structured: { answer: 'done' },
+        },
       });
     }),
   );
@@ -241,7 +243,7 @@ describe('the tool-use turn', () => {
 
         expect(result).toMatchObject({
           outcome: RUN_OUTCOME.FAILED,
-          response: 'I checked the tool.',
+          output: { response: 'I checked the tool.' },
           error: { message: 'Later provider failure' },
         });
       }),
@@ -269,7 +271,7 @@ describe('the tool-use turn', () => {
           ],
         });
 
-        expect(result.response).toBe('B');
+        expect(result.output.response).toBe('B');
         // The replacement is the history now: the paid response lands on it,
         // not on the conversation it discarded.
         expect(state?.messages).toMatchObject([

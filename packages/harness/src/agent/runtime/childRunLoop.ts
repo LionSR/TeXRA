@@ -142,13 +142,12 @@ interface ChildStrategyBase<TTurn, R> {
   /** The error delivery XML (turn is null when the call threw). */
   formatError(turn: TTurn | null, err: unknown): string;
   /** The result manifest persisted beside each turn's report, success or
-   *  failure (`turn` null and `error` the throw when the call threw), so a
-   *  failure overwrites a stale interim one. */
+   *  failure (`turn` null when the call threw), so a failure overwrites a
+   *  stale interim one. */
   buildResultMeta?(
     turn: TTurn | null,
     isError: boolean,
     wallTimeMs: number,
-    error?: unknown,
   ): Effect.Effect<ResultMeta | undefined, Error, R>;
 }
 
@@ -496,12 +495,7 @@ const settleTurn = <TTurn, R>(
             catch: ensureError,
           });
     const resultMeta = strategy.buildResultMeta
-      ? yield* strategy.buildResultMeta(
-          turn,
-          isError,
-          wallTimeMs,
-          err ?? undefined,
-        )
+      ? yield* strategy.buildResultMeta(turn, isError, wallTimeMs)
       : undefined;
     const settlement = childSettlementOf({
       runId,

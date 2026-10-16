@@ -1,7 +1,10 @@
 import type { TurnResult } from '@texra-ai/llm';
 
-/** The assistant text of a completed turn: message parts, in order. */
-export function turnText(turn: TurnResult): string {
+/** The assistant text of a completed turn or an assistant message: message
+ *  parts, in order. */
+export function turnText(turn: {
+  readonly content: TurnResult['content'];
+}): string {
   return turn.content
     .flatMap((part) =>
       part.kind === 'message' ? part.content.map((piece) => piece.text) : [],
