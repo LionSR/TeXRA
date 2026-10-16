@@ -405,10 +405,14 @@ Failures are `Data.TaggedError`s. Six come from the package itself —
 launch path threw — and three, `DatabaseOpenFailed`, `DatabaseReadFailed` and
 `SessionOptionsConflict` (the `SessionOpenError` union), reach the surface
 from the session store when it cannot open or read, or is open over the
-other store, for nine in all. A
-`session.request` answers with the runtime's own `Outcome` or its
+other store, for nine in the lifecycle-and-store family. That nine is the
+family count, not the whole tagged-error surface: the root entry also
+re-exports the request vocabulary (the `RequestError` union) and the
+platform-port write failures (`ConfigWriteFailed`, `StateWriteFailed`,
+`ToolProbeError`); `config/api-reports/harness.api.md` enumerates the whole
+surface. A `session.request` answers with the runtime's own `Outcome` or its
 `RequestError` union, the same values every TeXRA host reads. Beyond these,
-nothing else is exported: no fold internals, no host widgets.
+no fold internals and no host widgets are exported.
 
 A runnable version of this program against a packed tarball is in
 [`example/`](./example).
