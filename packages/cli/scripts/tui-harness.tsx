@@ -82,6 +82,7 @@ import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
 import { subscribeToSignalChanges } from '@texra/shared/signals';
 import { clearGoal, startGoal } from '@tools/goal';
 import { prepareToolEditApprovalPrompt } from '@tools/approval/toolEditApproval';
+import { runStatusLabel } from '@ui/copy/runStatus';
 import { formatApprovalPolicy } from '@ui/copy/approvalPolicy';
 import { FOCUSED_AGENT } from '@ui/copy/nestedRuns';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -1579,7 +1580,7 @@ function appendHarnessStatus(): void {
       modelAccess: run?.usage.usageRoute,
       approvalPolicy: harnessApprovalPolicy(),
       approvalBypasses: runBypasses(view, runId),
-      statusLabel: run?.statusLabel,
+      statusLabel: run && runStatusLabel(run.statusKey),
       activeChildSessions: runningChildCount(view, run),
       goal: ((goal) => (goal?.active ? goal : undefined))(
         run && goalStateOf(run),

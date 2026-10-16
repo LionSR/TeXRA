@@ -245,7 +245,11 @@ export {
 // user's abort, and a provider error's message. Error messages themselves
 // (`toErrorMessage`, `ensureError`) are in `./schemas`.
 export { AgentError } from '@common/errors/agentErrors';
-export { agentErrorPresentation } from '@common/errors/agentErrorClassification';
+export {
+  agentErrorPresentation,
+  type AgentErrorKind,
+  type AgentErrorPresentation,
+} from '@common/errors/agentErrorClassification';
 export {
   causeChain,
   isFileNotFoundError,

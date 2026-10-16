@@ -17,6 +17,7 @@ import { resolveBypass } from '@texra-ai/harness/schemas';
 import type { TeXRAIconName } from '@shared/iconNames';
 import { SessionUiEvents } from '@texra/shared/session/uiEvents';
 import { CopyButtonController } from '@texra/shared/litControllers/CopyButtonController';
+import { runStatusLabel } from '@ui/copy/runStatus';
 import { TASK_ACTIONS } from '@ui/copy/nestedRuns';
 import { formatTaskDiagnostics } from '@ui/copy/taskDiagnostics';
 import { designTokens, commonViewStyles } from '@ui/styles';
@@ -438,7 +439,7 @@ export class RunHeader extends LitElement {
       run.group !== 'running' &&
       run.group !== 'waiting' &&
       acceptsFollowUp(run, { terminalBacked: false });
-    const statusLabel = canContinue ? 'Ready' : run.statusLabel;
+    const statusLabel = canContinue ? 'Ready' : runStatusLabel(run.statusKey);
     const goal = goalStateOf(run);
     // The header offers exactly what the fold's `actions` licenses.
     const canStop = run.actions.includes('stop');
@@ -466,7 +467,7 @@ export class RunHeader extends LitElement {
         <wa-tooltip for=${ELEMENT_IDS.STATUS_INDICATOR}>
           ${
             canContinue
-              ? `${run.statusLabel}. Send a message to continue.`
+              ? `${runStatusLabel(run.statusKey)}. Send a message to continue.`
               : (run.statusDetail ?? statusLabel)
           }
         </wa-tooltip>

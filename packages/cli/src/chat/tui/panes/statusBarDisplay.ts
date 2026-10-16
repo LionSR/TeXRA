@@ -24,6 +24,7 @@ import {
   roundedContextPercent,
 } from '@texra/shared/contextGauge';
 import { codingPlanForUsageRoute } from '@texra/shared/model/codingPlans';
+import { runStatusLabel } from '@ui/copy/runStatus';
 import { approvalPolicyLabel } from '@ui/copy/approvalPolicy';
 import { AGENT_LIST, NESTED_AGENT, TASK_ACTIONS } from '@ui/copy/nestedRuns';
 import { APPROVAL_BYPASS_BADGE } from '@ui/copy/approvalBypass';
@@ -785,7 +786,7 @@ export function buildStatusBarDisplay(
     run === undefined ? 0 : (view.queuedFollowUps.get(run.id)?.length ?? 0);
 
   // No run yet: the root keeps its status slot.
-  const statusLabel = run?.statusLabel ?? '-';
+  const statusLabel = run ? runStatusLabel(run.statusKey) : '-';
   const spinPrefix =
     active && turn?.runningFrame ? `${turn.runningFrame} ` : '';
 

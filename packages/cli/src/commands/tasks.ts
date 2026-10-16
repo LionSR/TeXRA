@@ -21,6 +21,7 @@ import { ensureError } from '@texra-ai/harness/schemas';
 import type { RequestErrorWire } from '@texra/shared/session/sessionFrames';
 import type { TaskSummary } from '@texra/controllers/server/protocol';
 import type { ServiceClient } from '@texra/controllers/server/client';
+import { runStatusLabel } from '@ui/copy/runStatus';
 import { readConfigSettingFrom } from '@utils/config/platformSettings';
 import { generateRunId } from '@utils/core';
 
@@ -99,7 +100,7 @@ function requestTask(
 
 function taskLine(task: TaskSummary): string {
   const live = task.live ? '*' : ' ';
-  return `${live} ${task.runId}  ${task.statusLabel.padEnd(12)} ${task.label}  (${task.workspace})`;
+  return `${live} ${task.runId}  ${runStatusLabel(task.statusKey).padEnd(12)} ${task.label}  (${task.workspace})`;
 }
 
 const listCommand = defineCliCommand({

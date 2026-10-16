@@ -12,7 +12,7 @@ import {
   type ApiKeyProviderId,
   type RegionalProviderId,
 } from '@texra-ai/llm';
-import { providerRegionSetting } from '@texra-ai/harness/schemas';
+import { providerRegionSetting } from '@shared/state/providerSettings';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import { useChinaRegion } from '@utils/config/providerConfig';
 import type { StateReadFailed } from '@texra-ai/harness';

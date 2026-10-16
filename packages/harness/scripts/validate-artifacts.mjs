@@ -2,9 +2,9 @@ import { readFile, rm } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { checkForgottenExports } from './forgotten-exports.mjs';
 import { build } from 'esbuild';
 
+import { checkForgottenExports } from './forgotten-exports.mjs';
 import {
   isFile,
   moduleSpecifier,

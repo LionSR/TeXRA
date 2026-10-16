@@ -15,6 +15,7 @@ import { classMap } from 'lit/directives/class-map.js';
 // Local imports
 import { type TeXRAIconName } from '@shared/iconNames';
 import { SessionUiEvents } from '@texra/shared/session/uiEvents';
+import { runStatusLabel } from '@ui/copy/runStatus';
 import { designTokens } from '@ui/styles';
 import {
   buttonStyles,
@@ -60,7 +61,7 @@ function buildTooltip(run: RunView): string {
     : undefined;
   const mainLine = [
     run.label,
-    `Status: ${run.approval === 'none' ? run.statusLabel : 'Needs approval'}`,
+    `Status: ${run.approval === 'none' ? runStatusLabel(run.statusKey) : 'Needs approval'}`,
     run.rollup.total > 0 && rollupLabel(run),
     modelDisplay && `Model: ${modelDisplay}`,
     worktreeDisplay,
@@ -175,7 +176,7 @@ export class RunTab extends LitElement {
       : TONE_ICONS[run.tone];
     const accessibleStatusLabel = pendingApproval
       ? 'Needs approval'
-      : run.statusLabel;
+      : runStatusLabel(run.statusKey);
     const runTitle = run.title;
     const tooltip = buildTooltip(run);
     const deleteLabel =

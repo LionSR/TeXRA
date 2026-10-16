@@ -1,6 +1,7 @@
 import { fileLocationAddressPath } from '@shared/schemas';
 import { documentsOf } from '@texra/shared/plugins/documents';
 import { roundIndexedEntries } from '@texra/shared/plugins/documentOutputs';
+import { runStatusLabel } from '@ui/copy/runStatus';
 import { filterNotNullish } from '@utils/core';
 import type { RunView } from '@texra-ai/harness/schemas';
 
@@ -25,7 +26,7 @@ export function formatTaskDiagnostics(run: RunView): string {
   const lines: (string | undefined)[] = [
     `Task: ${run.title}`,
     `Agent: ${model ? `${run.label} (${model})` : run.label}`,
-    `Status: ${run.statusLabel}`,
+    `Status: ${runStatusLabel(run.statusKey)}`,
     run.statusDetail ?? undefined,
     `Id: ${run.id}`,
     run.parentId === null ? undefined : `Started by: ${run.parentId}`,

@@ -73,7 +73,7 @@ import {
   runHeldMessage,
   RUN_INTERRUPTED_MESSAGE,
   runResumeBlockedMessage,
-  runStatusCopy,
+  runStatus,
 } from '@shared/runs/runStatusDisplay';
 import { isSettledRow, rowHeadline } from '../transcript/transcriptRow';
 import {
@@ -322,7 +322,7 @@ function createRun(
     durableOutcome: null,
     statusDetail: null,
     lost: null,
-    ...runStatusCopy(RUN_LIFECYCLE_READY),
+    ...runStatus(RUN_LIFECYCLE_READY),
     createdAt: event.commit,
     launchedAt: event.at,
     runStartedAt: null,
@@ -486,7 +486,7 @@ function refreshAncestors(view: SessionView, runId: RunId): void {
 // ---------------------------------------------------------------------------
 
 /**
- * A run's aggregates and status copy, from its facts, the local snapshot and
+ * A run's aggregates and status key, from its facts, the local snapshot and
  * its children (5.2). Interrupted is owner loss: a non-terminal run nobody
  * holds, pending approval or not. Waiting needs a held owner and a request
  * that parks its tool; unheld, it reads as interrupted, since nothing
@@ -523,7 +523,7 @@ function withAggregates(view: SessionView, run: RunView): RunView {
   let approval: RunView['approval'] = 'none';
   if (waiting) approval = 'own';
   else if (descendantWaiting) approval = 'descendant';
-  const copy = runStatusCopy(run.status, {
+  const status = runStatus(run.status, {
     substate: run.substate ?? undefined,
     interrupted,
     waiting,
@@ -552,7 +552,7 @@ function withAggregates(view: SessionView, run: RunView): RunView {
     durableOutcome,
     rollup: rollupOf(children),
     treeUsage,
-    ...copy,
+    ...status,
     statusDetail,
     resumeBlocked,
   });

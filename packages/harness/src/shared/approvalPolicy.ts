@@ -29,7 +29,7 @@ export const APPROVAL_POLICY_DEFAULT: ApprovalPolicy = 'ask';
 export const APPROVAL_POLICY_NO_INPUT_DEFAULT: ApprovalPolicy = 'never';
 /** Canonical persisted spelling in `.texra/config.json` for every host. */
 export const APPROVAL_POLICY_CONFIG_KEY = 'texra.approvalPolicy';
-const APPROVAL_POLICY_DENIED_MESSAGE = 'Denied by TeXRA approval policy.';
+const APPROVAL_POLICY_DENIED_MESSAGE = 'Denied by the approval policy.';
 const APPROVAL_UNPRESENTABLE_MESSAGE =
   'Interactive approval requires a prompt; this run cannot present one.';
 

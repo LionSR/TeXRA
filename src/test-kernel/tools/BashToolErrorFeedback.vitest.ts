@@ -147,18 +147,18 @@ describe('BashTool error feedback', () => {
   it('does not present an approval-policy denial as user feedback', () => {
     const rejected = buildBashApprovalRejectedResult('echo rejected', {
       action: 'deny',
-      reason: 'Denied by TeXRA approval policy.',
+      reason: 'Denied by the approval policy.',
     });
 
     expect(rejected.status).toBe('error');
     expect(rejected.error).toContain('Command denied');
-    expect(rejected.error).toContain('Denied by TeXRA approval policy.');
+    expect(rejected.error).toContain('Denied by the approval policy.');
     expect(rejected.error).not.toContain('User rejected command');
     expect(rejected.userInstruction).toBeUndefined();
 
     const output = toolUseOutput(rejected);
 
-    expect(output).toContain('Denied by TeXRA approval policy.');
+    expect(output).toContain('Denied by the approval policy.');
     expect(output).not.toContain('User feedback:');
   });
 

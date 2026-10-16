@@ -1,4 +1,4 @@
-import { providerRegionSetting } from '@texra-ai/harness/schemas';
+import { providerRegionSetting } from '@shared/state/providerSettings';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import {

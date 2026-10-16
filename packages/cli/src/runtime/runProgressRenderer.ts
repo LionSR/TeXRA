@@ -21,7 +21,7 @@ import {
 } from '@texra-ai/harness/schemas';
 import { isTerminalOutcomePhase } from '@texra-ai/harness/schemas';
 import { RUN_PHASE, type RunId, type RunPhase } from '@shared/schemas';
-import { formatLoopPositionLabel } from '@ui/copy/runStatus';
+import { formatLoopPositionLabel, runStatusLabel } from '@ui/copy/runStatus';
 import { formatCompactDuration, pluralize } from '@utils/text/stringUtils';
 
 import {
@@ -303,9 +303,9 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
 function livePhaseText(root: RunView): string | undefined {
   if (root.status === 'ready') return undefined;
   if (root.status === RUN_PHASE.RUNNING) {
-    return root.description || root.statusLabel;
+    return root.description || runStatusLabel(root.statusKey);
   }
-  return root.statusLabel;
+  return runStatusLabel(root.statusKey);
 }
 
 function formatInputLabel(files: readonly string[]): string | undefined {

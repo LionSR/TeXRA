@@ -24,6 +24,7 @@ import {
 } from '@texra/shared/session/surfaceDecision';
 import type { ServiceConnection } from '@texra/controllers/server/client';
 import type { TaskSummary } from '@texra/controllers/server/protocol';
+import { runStatusLabel } from '@ui/copy/runStatus';
 
 import { BaseTextInput } from '../input/BaseTextInput';
 import { ApprovalModal } from '../modals/ApprovalModal';
@@ -87,7 +88,7 @@ export function TasksForm(props: TasksFormProps): React.JSX.Element {
         tasks.map((entry) => ({
           value: entry.runId,
           label: `${entry.live ? '* ' : ''}${entry.label}`,
-          description: `${entry.statusLabel} · ${entry.workspace}`,
+          description: `${runStatusLabel(entry.statusKey)} · ${entry.workspace}`,
         }))
       }
       availableRows={props.availableRows}
@@ -313,9 +314,10 @@ function AttachedTask(props: AttachedTaskProps): React.JSX.Element {
     3,
     (props.availableRows ?? 24) - ATTACHED_CHROME_ROWS - (presentable ? 10 : 0),
   );
+  const runStatus = level.run && runStatusLabel(level.run.statusKey);
   const status = level.ended
     ? `detached: ${level.ended}`
-    : (level.run?.statusLabel ?? 'connecting…');
+    : (runStatus ?? 'connecting…');
 
   return (
     <Box flexDirection="column">

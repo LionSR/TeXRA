@@ -651,7 +651,7 @@ describe('ModelInvoker retry', () => {
       const session = yield* sessionWithInteractions(undefined);
       const denied = autoDecideRequests(session, () => ({
         action: 'deny',
-        reason: 'Denied by TeXRA approval policy.',
+        reason: 'Denied by the approval policy.',
       }));
       const stub = stubModel([{ silent: true }]);
 
@@ -844,7 +844,7 @@ describe('ModelInvoker retry', () => {
         const session = yield* sessionWithInteractions(undefined);
         const denied = autoDecideRequests(session, () => ({
           action: 'deny',
-          reason: 'Denied by TeXRA approval policy.',
+          reason: 'Denied by the approval policy.',
         }));
         const stub = stubModel([
           {
@@ -981,7 +981,7 @@ describe('ModelInvoker retry', () => {
       const pump = yield* pumpClock;
       const requests = autoDecideRequests(session, () => ({
         action: 'deny',
-        reason: 'Denied by TeXRA approval policy.',
+        reason: 'Denied by the approval policy.',
       }));
       const stub = stubModel([{ fail: httpError('busy', 503) }]);
 

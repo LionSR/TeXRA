@@ -24,6 +24,9 @@ export type {
 export {
   elideText,
   transcriptText,
+  type ElidedText,
+  type PayloadLanguage,
+  type TextBudget,
   type TranscriptText,
 } from '@shared/transcript/transcriptText';
 // A tool row's sections, and how a tool's name reads: its kind, its
@@ -35,7 +38,7 @@ export type {
   ToolSection,
   ToolSectionFile,
 } from '@shared/transcript/toolRowModel';
-export { toolDisplayKind } from '@shared/tools/toolKind';
+export { toolDisplayKind, type ToolDisplayKind } from '@shared/tools/toolKind';
 export {
   buildMcpToolName,
   isMcpToolName,
@@ -53,7 +56,9 @@ export {
   dispatchedChildren,
   SCRIPT_CALL_STATUS_LABEL,
   scriptStages,
+  type ScriptCallStatus,
   type ScriptCallView,
+  type ScriptPhaseView,
   type ScriptStageView,
 } from '@shared/transcript/scriptStage';
 // A delivered follow-up as a renderer shows it: its tag, its summary, and
@@ -65,12 +70,12 @@ export {
   summarizeEmbeddedSubagentFollowups,
   summarizeSubagentFollowup,
 } from '@shared/subagentFollowup';
-// Run lists and task groups: their order, a group's status and its label,
-// and a compaction's status.
+export type { DeliveryTagName } from '@shared/deliveryTags';
+// Run lists and task groups: their order, a group's status, and a
+// compaction's status.
 export {
   compareByNewestCreationTime,
   compareBySeqNo,
 } from '@shared/runs/runOrdering';
 export { taskGroupDisplayStatus } from '@shared/runs/taskGroupProjection';
-export { formatRunStatusLabel } from '@shared/runs/runStatusDisplay';
 export type { CompactionActivityStatus } from '@shared/runs/compactionActivityProjection';

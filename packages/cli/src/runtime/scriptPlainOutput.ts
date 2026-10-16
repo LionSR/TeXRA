@@ -16,6 +16,7 @@ import {
 import { scriptStages } from '@texra-ai/harness/transcript';
 import type { SessionHandle } from '@agent/runtime';
 import { qualifyAggregateId, RUN_PHASE, type RunId } from '@shared/schemas';
+import { runStatusLabel } from '@ui/copy/runStatus';
 import { formatCostUsd } from '@utils/text/stringUtils';
 
 import { claimRootRun } from './sessionViewFollow';
@@ -55,7 +56,10 @@ function scriptPlainLines(
       );
   }
   if (isTerminalOutcomePhase(run.status) && run.identity.kind === 'script')
-    lines.set('outcome', `${run.statusLabel}: ${run.identity.title}`);
+    lines.set(
+      'outcome',
+      `${runStatusLabel(run.statusKey)}: ${run.identity.title}`,
+    );
   return lines;
 }
 

@@ -55,7 +55,8 @@ export function classifyAgentError(err: unknown): AgentErrorKind {
   return 'unexpected';
 }
 
-type AgentErrorPresentation =
+/** How a host presents an agent error: an instruction, or a plain error. */
+export type AgentErrorPresentation =
   | {
       readonly type: 'instruction';
       readonly payload: RequestShowInstructionPayload;

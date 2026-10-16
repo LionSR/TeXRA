@@ -11,6 +11,7 @@ import { isLiveRun } from '@texra-ai/harness/schemas';
 import type { HostSnapshot } from '@texra/shared/session/hostSnapshot';
 import type { Surface } from '@texra/shared/session/surface';
 import { SessionUiEvents } from '@texra/shared/session/uiEvents';
+import { runStatusLabel } from '@ui/copy/runStatus';
 import { interruptedTasks, resumeBlockerFix } from '@ui/copy/interruptedTasks';
 import { TASK_ACTIONS } from '@ui/copy/nestedRuns';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
@@ -100,7 +101,7 @@ export abstract class BaseRunContent extends LitElement {
     const fix = run.resumeBlocked && resumeBlockerFix(run.resumeBlocked);
     const request = (kind: 'resume') => () =>
       this.dispatchEvent(SessionUiEvents.host({ kind, runId: run.id }));
-    let explanation = `${run.statusLabel}.`;
+    let explanation = `${runStatusLabel(run.statusKey)}.`;
     if (live)
       explanation = `This ${run.parentId === null ? 'task' : 'agent'} takes no messages.`;
     else if (run.actions.includes('resume'))

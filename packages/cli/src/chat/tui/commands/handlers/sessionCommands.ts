@@ -29,6 +29,7 @@ import {
   appendLocalNotice,
   appendLocalRequestRefusal,
 } from '@cli/chat/tui/state/transcript';
+import { runStatusLabel } from '@ui/copy/runStatus';
 import { interruptedTasks } from '@ui/copy/interruptedTasks';
 import { TASK_ACTIONS } from '@ui/copy/nestedRuns';
 import { formatResultCount } from '@utils/text/stringUtils';
@@ -116,7 +117,7 @@ export const showCliSessionStatus = Effect.fn('showCliSessionStatus')(
           activeRunId === undefined
             ? undefined
             : runBypasses(view, activeRunId),
-        statusLabel: run?.statusLabel,
+        statusLabel: run && runStatusLabel(run.statusKey),
         activeChildSessions,
         goal: goal?.active ? goal : undefined,
         activeSkills,

@@ -10,7 +10,6 @@ import { repeat } from 'lit/directives/repeat.js';
 
 // Local imports - shared schemas
 import { isInFlightPhase } from '@texra-ai/harness/schemas';
-import { formatRunStatusLabel } from '@texra-ai/harness/transcript';
 import { taskGroupDisplayStatus } from '@texra-ai/harness/transcript';
 import { compareBySeqNo } from '@texra-ai/harness/transcript';
 import {
@@ -25,6 +24,7 @@ import {
   type TaskGroup,
 } from '@shared/schemas';
 import type { Surface } from '@texra/shared/session/surface';
+import { runStatusLabel } from '@ui/copy/runStatus';
 import { designTokens } from '@ui/styles';
 
 // Side-effect imports - register Web Awesome components
@@ -434,7 +434,7 @@ export class TaskGroupList extends LitElement {
     return html`
       <span class="group-status-icon">
         ${waIcon(statusIcon, {
-          label: formatRunStatusLabel(status),
+          label: runStatusLabel(status),
         })}
       </span>
       <bdi class="group-title">${group.name}</bdi>

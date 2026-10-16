@@ -25,7 +25,7 @@ import {
   isInFlightPhase,
   isTerminalOutcomePhase,
 } from '@shared/runs/runStatus';
-import { runStatusCopy } from '@shared/runs/runStatusDisplay';
+import { runStatus } from '@shared/runs/runStatusDisplay';
 import { testRuntime } from '@test/support/testProcessRuntime';
 
 let unbind: (() => void) | undefined;
@@ -49,7 +49,7 @@ export function seedView(view: SessionView): void {
 
 type RunViewOverrides = Partial<RunView> & { readonly id: string };
 
-/** One stream as the fold would state it; every field explicit. The label,
+/** One stream as the fold would state it; every field explicit. The key,
  *  tone, and group follow the status the way the fold derives them, and the
  *  actions follow the final fields through the fold's own rule. */
 export function makeRunView(over: RunViewOverrides): RunView {
@@ -63,7 +63,7 @@ export function makeRunView(over: RunViewOverrides): RunView {
 function runViewFields(over: RunViewOverrides): RunView {
   const id = over.id as RunId;
   const status = over.status ?? RUN_PHASE.RUNNING;
-  const copy = runStatusCopy(status, {
+  const copy = runStatus(status, {
     substate: over.substate ?? undefined,
   });
   const common = {
@@ -84,7 +84,7 @@ function runViewFields(over: RunViewOverrides): RunView {
     substate: null,
     durableOutcome: null,
     statusDetail: null,
-    statusLabel: copy.statusLabel,
+    statusKey: copy.statusKey,
     tone: copy.tone,
     createdAt: 1,
     launchedAt: 1,
@@ -185,7 +185,7 @@ export function viewWith(
   };
   // A held run with a request that parks its caller is waiting on it, as the
   // fold's aggregates derive it, label and tone included (the same
-  // `runStatusCopy` reading `withAggregates` makes). Fixture runs model runs
+  // `runStatus` reading `withAggregates` makes). Fixture runs model runs
   // this process holds; one built interrupted (unheld) or with its own
   // approval keeps it.
   for (const request of over.requests ?? []) {
@@ -199,7 +199,7 @@ export function viewWith(
       continue;
     byId.set(run.id, {
       ...run,
-      ...runStatusCopy(run.status, {
+      ...runStatus(run.status, {
         substate: run.substate ?? undefined,
         waiting: true,
       }),

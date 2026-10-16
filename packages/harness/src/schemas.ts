@@ -78,20 +78,31 @@ export type {
   SessionTitleState,
 } from '@shared/session/sessionView';
 // The views themselves, read-only all the way down (the root re-exports
-// them), the request a run waits on, what a host brings to
-// `acceptsFollowUp`, and the empty view a fold starts from.
+// them), the request a run waits on, and what a host brings to
+// `acceptsFollowUp`.
 export type {
   PendingRequest,
   RunView,
   SessionView,
   TranscriptView,
 } from '@shared/session/readonlyViews';
-export {
-  emptySessionView,
-  type FollowUpHost,
-} from '@shared/session/sessionView';
+export type { FollowUpHost } from '@shared/session/sessionView';
 // Where a run's lifecycle status stands: in flight (running, or waiting for
 // its next input), active, ended, or settled enough for its transcript.
+export {
+  RUN_STATUS_KEYS,
+  type RunStatusKey,
+} from '@shared/runs/runStatusDisplay';
+export type {
+  ExternalFileLocation,
+  RunLifecycleStatus,
+  RunPhase,
+  RunStorageFileLocation,
+  TaskGroup,
+  TaskGroupStatus,
+  UserFollowUpSupport,
+  WorkspaceFileLocation,
+} from '@shared/schemas';
 export {
   isActivePhase,
   isInFlightPhase,
@@ -135,11 +146,6 @@ export {
 } from '@shared/tools/memoryView';
 // A model's display name.
 export { getModelLabel } from '@shared/model/modelLabel';
-// A provider's endpoint and region setting keys.
-export {
-  providerEndpointKey,
-  providerRegionSetting,
-} from '@shared/state/providerSettings';
 // Error messages, and JSON parsed without a throw.
 export {
   ensureError,
