@@ -40,6 +40,7 @@ import { setLogSink } from '@texra-ai/harness';
 import { StorageFs, withSessionFs } from '@texra-ai/harness';
 import { ToolAvailability } from '@texra-ai/harness';
 import { readConfigSettingFrom } from '@texra-ai/harness';
+import { JsonConfigProvider } from '@texra-ai/harness/node';
 import { EXTENSION_COMMANDS } from '@commands/extensionCommandIds';
 import { setApiKey as apiSetApiKey } from '@commands/api/apiKeyCommands';
 import { openGettingStarted } from '@commands/system/walkthroughCommands';
@@ -79,9 +80,6 @@ import { createVsCodeLogSink } from '@frontend/vscode/vscodeLogSink';
 import { effectDiagnosticsLayer } from '@logger/effectDiagnostics';
 import { nodeFileServices } from '@platform/defaults/jsonStore';
 import { FileSecrets, secretsDirectory } from '@platform/defaults/fileSecrets';
-import { defaultNodeStorageRoot } from '@platform/defaults/nodeStorage';
-import { openTexraConfigStores } from '@platform/defaults/nodeStores';
-import { JsonConfigProvider } from '@platform/defaults/jsonConfigProvider';
 import { GlobalDatabase } from '@shared/session/database';
 import {
   formatTexraApprovalPolicy,
@@ -92,6 +90,8 @@ import {
 import { readState, StateFlagSchema } from '@shared/config/settingsAccess';
 import { telemetryNoticeIfDue } from '@telemetry/telemetryNotice';
 import { usageLogLayer } from '@telemetry/UsageLogService';
+import { openTexraConfigStores } from '@texra/platform/defaults/nodeStores';
+import { defaultNodeStorageRoot } from '@texra/platform/defaults/nodeStorage';
 import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
 import type { CommandId } from '@texra/shared/commands/catalog';
 import {

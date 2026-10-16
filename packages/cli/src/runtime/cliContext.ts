@@ -8,7 +8,6 @@ import { DatabaseOpenFailed, type ConfigProvider } from '@texra-ai/harness';
 import { canonicalizeWorkspacePath } from '@texra-ai/harness/node';
 import { safeParseJson } from '@common/parsing/safeParseJson';
 import type { MinimumLogLevel } from '@logger/effectDiagnostics';
-import { defaultNodeStorageRoot } from '@platform/defaults/nodeStorage';
 import {
   TEXRA_APPROVAL_POLICY_CONFIG_KEY,
   TEXRA_APPROVAL_POLICY_NO_INPUT_DEFAULT,
@@ -18,6 +17,7 @@ import {
 } from '@shared/approvalPolicy';
 import { stricterPolicy } from '@shared/approvalBypassKind';
 import type { SkillSourceOptions } from '@skills/skillSources';
+import { defaultNodeStorageRoot } from '@texra/platform/defaults/nodeStorage';
 import {
   CLI_OUTPUT_FORMATS,
   CLI_OUTPUT_FORMAT_CONFIG_KEY,

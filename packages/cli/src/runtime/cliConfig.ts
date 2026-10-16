@@ -14,16 +14,13 @@ import {
   readMcpConfig,
   type ConfigProvider,
 } from '@texra-ai/harness';
-import {
-  JsonConfigProvider,
-  type ConfigStore,
-} from '@platform/defaults/jsonConfigProvider';
+import { JsonConfigProvider, type ConfigStore } from '@texra-ai/harness/node';
 import { nodeFileServices, type JsonStore } from '@platform/defaults/jsonStore';
-import { openTexraConfigStores } from '@platform/defaults/nodeStores';
 
 // Local imports - shared
 import { canonicalConfigKey } from '@shared/config/configKeys';
 import type { SettingsStores } from '@shared/config/settingsAccess';
+import { openTexraConfigStores } from '@texra/platform/defaults/nodeStores';
 import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
 
 // Local imports - tools

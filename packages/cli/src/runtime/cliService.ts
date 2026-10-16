@@ -39,13 +39,13 @@ import {
 } from '@controllers/session/appStateStore';
 import { onAppSignal } from '@eventBus/AppSignals';
 import { JsonStore } from '@platform/defaults/jsonStore';
-import { TEXRA_CONFIG_FILE_NAME } from '@platform/defaults/nodeStorage';
-import { openTexraWorkspaceConfigStores } from '@platform/defaults/nodeStores';
 import type {
   GlobalDatabase,
   ProjectDatabases,
 } from '@shared/session/database';
 import { ownerIdentity, type OwnerId } from '@shared/schemas';
+import { TEXRA_CONFIG_FILE_NAME } from '@texra/platform/defaults/nodeStorage';
+import { openTexraWorkspaceConfigStores } from '@texra/platform/defaults/nodeStores';
 import type { EditorHostShape } from '@texra/tools/editorHost';
 import type { ServiceInfo } from '@texra/controllers/server/protocol';
 import type {

@@ -28,10 +28,9 @@ import {
 import { emitAppSignal } from '@eventBus/AppSignals';
 import { FileSecrets, secretsDirectory } from '@platform/defaults/fileSecrets';
 import { nodeFileServices } from '@platform/defaults/jsonStore';
-import type { ConfigStore } from '@platform/defaults/jsonConfigProvider';
-import { openTexraConfigStores } from '@platform/defaults/nodeStores';
 import { GlobalDatabase } from '@shared/session/database';
 import { usageLogLayer } from '@telemetry/UsageLogService';
+import { openTexraConfigStores } from '@texra/platform/defaults/nodeStores';
 import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
 import { bootstrapHost } from '@texra/controllers/hostBootstrap';
 import { texraPlugins } from '@texra/tools/registry';
@@ -44,6 +43,7 @@ import {
   resolveDesktopMainDir,
   resolveResourcesPath,
 } from './paths.js';
+import type { ConfigStore } from '@texra-ai/harness/node';
 interface ElectronPlatformInitResult {
   /**
    * The no-workspace roots: what the window shows before a folder is open,
