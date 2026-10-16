@@ -6,10 +6,9 @@ import {
   type AgentModePreset,
 } from '@shared/schemas';
 
-type TeamPresetSource = 'built-in' | 'custom';
-
+/** A team preset as the catalog lists it, with where it came from. */
 export interface TeamPreset extends AgentModePreset {
-  readonly source: TeamPresetSource;
+  readonly source: 'built-in' | 'custom';
   /** The setup starter: an agent list a workspace can select, never a launch. */
   readonly setupOnly?: true;
 }

@@ -7,22 +7,39 @@ import { causeChain } from '../errorPredicates';
 const PRESENTATION_CLAIMED = Symbol.for('texra.errorPresentationClaimed');
 const PROVIDER_ERROR = Symbol.for('texra.providerError');
 
+/** The marks of the objects that cannot take a property (frozen, sealed or
+ *  otherwise non-extensible errors): assigning the symbol would throw. Unlike
+ *  the symbol, this map is one per bundle that carries this module. */
+const sideMarks = new WeakMap<object, Map<symbol, unknown>>();
+
 const attach = (err: unknown, key: symbol, value: unknown): void => {
-  if (Predicate.isObject(err)) (err as Record<symbol, unknown>)[key] = value;
+  if (!Predicate.isObject(err)) return;
+  if (Object.isExtensible(err)) {
+    // cast: a symbol-keyed slot on an extensible object.
+    (err as Record<symbol, unknown>)[key] = value;
+    return;
+  }
+  const marks = sideMarks.get(err) ?? new Map<symbol, unknown>();
+  marks.set(key, value);
+  sideMarks.set(err, marks);
 };
 
-const read = (err: unknown, key: symbol): unknown =>
-  Predicate.isObject(err) ? (err as Record<symbol, unknown>)[key] : undefined;
+const read = (err: unknown, key: symbol): unknown => {
+  if (!Predicate.isObject(err)) return undefined;
+  // cast: a symbol-keyed slot read; absent reads as undefined.
+  const own = (err as Record<symbol, unknown>)[key];
+  return own === undefined ? sideMarks.get(err)?.get(key) : own;
+};
 
-/** Marks that a targeted, actionable notification owns this error's
- *  presentation, so a later generic handler on the same call stack does not
- *  show a second, redundant notification for the same failure. Attached in
- *  exactly two cases: the targeted emit reported confirmed delivery, or no
- *  host was attached at the throw site and the notification was retained for
- *  replay (the queued replay then either renders it or calls the
- *  caller-supplied not-delivered fallback). It is never attached for a
- *  fire-and-forget or declined emit, so a host that could not render the
- *  targeted notification still leaves the generic surface free to fire. */
+/** Marks that this failure was presented, so no later presenter (a generic
+ *  handler on the same call stack, a host's own fallback) shows it again.
+ *  Attached when a targeted notification owns its presentation (its emit
+ *  confirmed delivery, or no host was attached and it was retained for
+ *  replay), when the session's presenter showed a run's failure from its
+ *  `run.end` row (`presentRunFailure`, `receiveTerminalFailure`), and when
+ *  another process (a service) showed it to this window. Never for a
+ *  fire-and-forget or declined emit, so a host that could not render a
+ *  targeted notification leaves the generic surface free to fire. */
 export const attachErrorPresentationClaimed = (err: unknown): void =>
   attach(err, PRESENTATION_CLAIMED, true);
 

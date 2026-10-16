@@ -94,7 +94,7 @@ import {
   type SessionOpenError,
 } from '@shared/session/database';
 import { UsageLog } from '@shared/usageLog';
-import { ToolCatalog } from '@tools/liveTools';
+import { ToolCatalogOwner } from '@tools/liveTools';
 import { mcpConfigPathOf } from '@tools/mcp/mcpConfig';
 import { pluginCatalogLayer } from '@tools/pluginCatalog';
 import type { Plugin } from '@tools/plugins';
@@ -104,8 +104,9 @@ import { ToolRegistry } from '@tools/toolTable';
 import { agentCatalogFollower } from '@tools/agentCatalogFollower';
 import { followInterruptedTasks } from '@tools/interruptedTasks';
 import { databaseLayer, globalDatabaseLayer } from './Database';
+import { globalAppStateLayer, processStoresLayer } from './appStateStore';
 import { projectDatabaseLayer } from './projectDatabase';
-import { deletionCollector, type RunFilesServices } from './deletionCleanup';
+import { deletionCollector } from './deletionCleanup';
 import { ownerLiveness } from './ownerLiveness';
 import { sessionRequests } from './SessionRequests';
 import { makeSessionStore } from './sessionStore';
@@ -183,7 +184,7 @@ const sessionHandleLayer = (key: SessionKey) =>
       yield* Effect.addFinalizer(() => store.close);
       // The runs' fork and the project's tools end with this scope.
       const fork = yield* FiberSet.makeRuntime<ProcessServices>();
-      const tools = yield* (yield* ToolCatalog).session;
+      const tools = yield* (yield* ToolCatalogOwner).session;
       const interactions = new SessionHostInteractions();
       // Each run's `.env`, read as it launches, and its window's models.
       const env = Layer.merge(
@@ -222,7 +223,7 @@ const sessionHandleLayer = (key: SessionKey) =>
           },
           local: local.ref,
           plugins,
-          services: yield* Effect.context<GlobalDatabase | RunFilesServices>(),
+          services: yield* Effect.context<ProcessServices>(),
           closed: store.closed,
         }),
         approvals: createSessionApprovals(() => session),
@@ -581,11 +582,10 @@ export interface ProcessLayerOptions {
   readonly toolMissingReporter?: ToolMissingHandler;
   /**
    * The host's global application-state layer, acquired in this runtime's
-   * scope: the TeXRA hosts' store over the global root's database values,
-   * the SDK's embedder store, or a platform-less CLI entry's refusing one,
-   * which creates no storage on a possibly read-only root.
+   * scope. Absent, the global root's values (`globalAppStateLayer`); the
+   * SDK's embedder store, or a platform-less CLI entry's refusing one.
    */
-  readonly appState: Layer.Layer<
+  readonly appState?: Layer.Layer<
     AppState,
     DatabaseOpenFailed,
     GlobalDatabase | ProcessIdentity | ProcessProbe
@@ -639,7 +639,7 @@ export function ownerProcessLayer({
   storageRoot,
   plugins,
   secrets,
-  appState,
+  appState = globalAppStateLayer(resolveGlobalStoragePath(storageRoot)),
   languageModel,
   agentDirectories,
   toolMissingReporter,
@@ -672,8 +672,7 @@ export function ownerProcessLayer({
       ? Layer.empty
       : ToolMissingReporter.layer(toolMissingReporter),
     catalog,
-    // One retry gate for the process: a 429 cools a credential for every
-    // project's runs.
+    // One retry gate per process: a 429 cools a credential for every project.
     Layer.effect(RouteRetries, ModelRetryGate.make),
   ).pipe(
     Layer.provideMerge(appState.pipe(Layer.orDie)),
@@ -681,6 +680,7 @@ export function ownerProcessLayer({
   );
   return sessionOwnerLayer.pipe(
     Layer.provideMerge(SessionMap.layer),
+    Layer.provideMerge(processStoresLayer),
     Layer.provideMerge(projectDatabaseLayer),
     // The usage log's own lifetime: its sender and ticker run with this
     // runtime, its finalizer drains the queue while HTTP is up, and it is
@@ -716,7 +716,7 @@ const sessionOwnerLayer = Layer.effect(
   SessionOwner,
   Effect.gen(function* () {
     const map = yield* SessionMap;
-    const catalog = yield* ToolCatalog;
+    const catalog = yield* ToolCatalogOwner;
     const withMap = <A, E>(
       effect: Effect.Effect<A, E, SessionMap>,
     ): Effect.Effect<A, E> => Effect.provideService(effect, SessionMap, map);

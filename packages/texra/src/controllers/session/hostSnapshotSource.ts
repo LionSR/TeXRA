@@ -17,8 +17,8 @@ import {
   type LanguageModel,
   type PlatformSecrets,
 } from '@texra-ai/harness';
+import { Settings } from '@texra-ai/harness';
 import { loadTeamOptions } from '@common/teams/TeamPlan';
-import type { SettingsStores } from '@shared/config/settingsAccess';
 import {
   TEXRA_APPROVAL_POLICY_CONFIG_KEY,
   type TexraApprovalPolicy,
@@ -32,12 +32,9 @@ import type {
 import { modelOptionsFrom } from '@texra/model/modelOptions';
 import { createTeamCatalogPorts } from '@texra/controllers/mainView/teamCatalogPorts';
 import { readRecentCommits } from '@texra/utils/git/repositoryOverview';
-import {
-  readSettingFrom,
-  readConfigSettingFrom,
-} from '@utils/config/platformSettings';
-import type { AgentCatalogServices } from '@texra-ai/harness';
+import type { AgentCatalog } from '@texra-ai/harness';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
+import type { SettingsStores } from '@texra-ai/harness';
 
 type Banners = HostSnapshot['banners'];
 
@@ -106,14 +103,14 @@ export interface HostSnapshotSource {
   readonly refresh: Effect.Effect<
     void,
     never,
-    AgentCatalogServices | LanguageModel | ChildProcessSpawner
+    AgentCatalog | FileSystem.FileSystem | LanguageModel | ChildProcessSpawner
   >;
   /** The agent, team, and model catalogs changed (an agent list edit, a
    *  credential, a sign-in). */
   readonly refreshCatalogs: Effect.Effect<
     void,
     never,
-    AgentCatalogServices | LanguageModel
+    AgentCatalog | LanguageModel
   >;
   /** The project's files changed on disk, or the surface asked for a relist. */
   readonly refreshFiles: Effect.Effect<void, never, FileSystem.FileSystem>;
@@ -179,7 +176,7 @@ export function createHostSnapshotSource(
   const publish = Effect.suspend(() =>
     options.publish({
       project: options.project,
-      approvalPolicy: readConfigSettingFrom<TexraApprovalPolicy>(
+      approvalPolicy: Settings.getConfig<TexraApprovalPolicy>(
         options.stores.config,
         TEXRA_APPROVAL_POLICY_CONFIG_KEY,
       ),
@@ -235,7 +232,7 @@ export function createHostSnapshotSource(
     if (options.root === undefined) return;
     commits = yield* readRecentCommits(
       options.root,
-      yield* readSettingFrom<number>(
+      yield* Settings.get<number>(
         options.stores,
         'texra.git.numberOfCommitsToShow',
       ),
@@ -283,11 +280,9 @@ export function createHostSnapshotSource(
 
   return {
     refresh: guarded<
-      AgentCatalogServices | LanguageModel | ChildProcessSpawner
+      AgentCatalog | FileSystem.FileSystem | LanguageModel | ChildProcessSpawner
     >(...catalogLoads, loadFiles, loadCommits, loadHostBanners),
-    refreshCatalogs: guarded<AgentCatalogServices | LanguageModel>(
-      ...catalogLoads,
-    ),
+    refreshCatalogs: guarded<AgentCatalog | LanguageModel>(...catalogLoads),
     refreshFiles: guarded(loadFiles),
     refreshCommits: guarded(loadCommits),
     refreshHostBanners: guarded(loadHostBanners),

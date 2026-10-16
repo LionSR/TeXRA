@@ -8,9 +8,9 @@ import {
   type ModelOptionStores,
 } from '@model/computeModelOptions';
 import { DEFAULT_HELPER_MODEL } from '@shared/constants/defaultModels';
-import type { SettingsStores } from '@shared/config/settingsAccess';
 import { GlobalStateKey } from '@shared/state/stateKeys';
-import { readSettingFrom } from '@utils/config/platformSettings';
+import { Settings } from '@shared/config/settings';
+import type { SettingsStores } from '@shared/config/settings';
 
 const CHANNEL = 'helperModel';
 
@@ -26,7 +26,7 @@ const CHANNEL = 'helperModel';
  */
 export function getHelperModelName(stores: SettingsStores) {
   return Effect.gen(function* () {
-    const configured = (yield* readSettingFrom<string>(
+    const configured = (yield* Settings.get<string>(
       stores,
       GlobalStateKey.HELPER_MODEL,
     )).trim();

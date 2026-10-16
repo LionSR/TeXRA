@@ -4,7 +4,7 @@ import {
   agentKey,
   isPackagedAgentSource,
 } from '@texra-ai/harness/schemas';
-import { getAgent, getCatalogAgents } from '@agent/index';
+import { AgentCatalog } from '@texra-ai/harness';
 import {
   agentDocumentIdentity,
   agentDocumentTarget,
@@ -22,7 +22,8 @@ export function resolveAgentDocument(target: string, write: boolean) {
   return Effect.gen(function* () {
     const identity = agentDocumentIdentity(target);
     const entry =
-      identity && getAgent(agentKey(identity.source, identity.name));
+      identity &&
+      (yield* AgentCatalog).get(agentKey(identity.source, identity.name));
     if (!entry?.path) {
       return yield* Effect.fail(
         new AgentDocumentUnavailable({
@@ -45,14 +46,15 @@ export function resolveAgentDocument(target: string, write: boolean) {
 
 /** The settings controller already resolved this file. Include shadowed
  * packaged definitions so “View built-in” still opens the original. */
-export function agentDocumentForPath(filePath: string) {
-  for (const item of getCatalogAgents()) {
-    for (const source of Object.values(AGENT_SOURCE)) {
-      const entry = getAgent(agentKey(source, item.name));
-      if (entry?.path === filePath) {
-        return agentDocumentTarget(source, entry.name);
+export const agentDocumentForPath = (filePath: string) =>
+  Effect.map(AgentCatalog, (catalog) => {
+    for (const item of catalog.list()) {
+      for (const source of Object.values(AGENT_SOURCE)) {
+        const entry = catalog.get(agentKey(source, item.name));
+        if (entry?.path === filePath) {
+          return agentDocumentTarget(source, entry.name);
+        }
       }
     }
-  }
-  return undefined;
-}
+    return undefined;
+  });

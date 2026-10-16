@@ -2,8 +2,8 @@
 import { type Context, Effect, Option } from 'effect';
 
 // Local imports - GitHub subscriptions
+import { ToolCatalog } from '@texra-ai/harness';
 import { GitHubSubscriptions } from '@texra/tools/github/subscriptionBindings';
-import { ToolCatalog } from '@tools/liveTools';
 import type { RunId } from '@texra-ai/harness/schemas';
 
 interface GitHubSubscriptionOwner {

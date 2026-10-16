@@ -7,9 +7,9 @@ import { Effect } from 'effect';
 
 // Local imports
 import { withLogChannel } from '@logger/effectLog';
-import type { SettingsStores } from '@shared/config/settingsAccess';
 import { GlobalStateKey } from '@shared/state/stateKeys';
-import { inspectSettingFrom } from '@utils/config/platformSettings';
+import { Settings } from '@shared/config/settings';
+import type { SettingsStores } from '@shared/config/settings';
 
 const CHANNEL = 'ExecutionsTool';
 
@@ -25,7 +25,7 @@ const CHANNEL = 'ExecutionsTool';
  */
 export const orchestratorKillDenial = Effect.fn('orchestratorKillDenial')(
   function* (settings: SettingsStores) {
-    const policy = yield* inspectSettingFrom<boolean>(
+    const policy = yield* Settings.inspect<boolean>(
       settings,
       GlobalStateKey.ALLOW_ORCHESTRATOR_KILL,
     );

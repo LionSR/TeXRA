@@ -7,7 +7,7 @@ import { expect } from 'vitest';
 import { AppState } from '@platform/interfaces';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { fakeHostAppState } from '@test/support/setupPlatform';
-import { ToolCatalog, toolCatalogLayer } from '@tools/liveTools';
+import { ToolCatalogOwner, toolCatalogLayer } from '@tools/liveTools';
 import { ALWAYS_AVAILABLE } from '@tools/toolProbes';
 import { toolTable } from '@tools/toolTable';
 
@@ -40,7 +40,7 @@ it.effect(
       },
     ]);
     return Effect.gen(function* () {
-      const catalog = yield* ToolCatalog;
+      const catalog = yield* ToolCatalogOwner;
       const tools = yield* catalog.session;
       const services = Effect.scoped(
         Effect.flatMap(tools.pin(Effect.succeed(new Set())), (step) =>

@@ -4,8 +4,8 @@ import { Effect, Layer } from 'effect';
 import { beforeEach, describe, expect, vi } from 'vitest';
 
 // Local imports
+import { AgentCatalog } from '@agent/index/agentCatalog';
 import { AgentDirectories, AppState } from '@platform/interfaces';
-import type { AgentCatalogServices } from '@platform/processRuntime';
 import {
   nodePlatformLayer,
   unusedGlobalStorageFs,
@@ -25,17 +25,21 @@ import type { HostRequest } from '@texra/shared/session/hostRequest';
  * only satisfies the requirement the catalog readers name.
  */
 function onGlobalStorage<A, E>(
-  program: Effect.Effect<A, E, AgentCatalogServices>,
+  program: Effect.Effect<A, E, AgentCatalog>,
 ): Effect.Effect<A, E> {
   return Effect.provide(
     program,
-    Layer.mergeAll(
-      unusedGlobalStorageFs(),
-      storePluginsLayer,
-      nodePlatformLayer,
-      testHttpClientLayer,
-      AgentDirectories.layer(fakeHostAgentDirectories),
-      AppState.layer(new FakeStateStore()),
+    AgentCatalog.layer.pipe(
+      Layer.provide(
+        Layer.mergeAll(
+          unusedGlobalStorageFs(),
+          storePluginsLayer,
+          nodePlatformLayer,
+          testHttpClientLayer,
+          AgentDirectories.layer(fakeHostAgentDirectories),
+          AppState.layer(new FakeStateStore()),
+        ),
+      ),
     ),
   );
 }

@@ -12,6 +12,7 @@
 // beyond its plain-text projection.
 
 // Local imports - shared schemas and utilities
+import { AGENT_TOOL_NAME } from '@texra-ai/harness/plugins';
 import { formatAgentProposalFileGroup } from '@cli/runtime/approval/approvalSummaries';
 import {
   safeTerminalText,
@@ -22,7 +23,6 @@ import { COLOR_ERROR, COLOR_HINT, COLOR_SUCCESS } from '@cli/tui/ui/colors';
 import { STATUS_DOT, TOOL_OUTPUT_CORNER } from '@cli/tui/ui/glyphs';
 import type { ToolRow } from '@cli/chat/tui/state/sessionView';
 import { TOOL_CALL_STATUS } from '@shared/schemas';
-import { AGENT_TOOL_NAME } from '@shared/constants/delegationTools';
 import { isMcpToolName } from '@shared/tools/toolDisplayName';
 import { toolDisplayKind } from '@shared/tools/toolKind';
 import {

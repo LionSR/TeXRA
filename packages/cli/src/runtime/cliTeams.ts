@@ -2,7 +2,8 @@
 import { Effect } from 'effect';
 
 // Local imports
-import type { AgentEntry } from '@agent/index';
+import { AGENT_TOOL_NAME } from '@texra-ai/harness/plugins';
+import { WorkspaceStateKey } from '@texra-ai/harness/schemas';
 import type { CliNdjsonRecord } from '@cli/schemas/cliOutput';
 import {
   availableTeamMemberCount,
@@ -17,9 +18,8 @@ import {
   launchableTeamPresets,
   type TeamPreset,
 } from '@common/teams/TeamPresets';
-import { hasDelegationTool } from '@shared/constants/delegationTools';
-import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { formatResultCount } from '@utils/text/stringUtils';
+import type { AgentEntry } from '@texra-ai/harness';
 import type { StateStore } from '@texra-ai/harness';
 
 export type CliTeamRunPlan = TeamRunPlan<AgentEntry>;
@@ -153,7 +153,7 @@ export function formatCliTeamRunWarnings(
     `WARN team ${plan.preset.id} references unavailable agents: ${plan.missingAgents.join(', ')}`,
   ];
 
-  if (!plan.rootAgent || !hasDelegationTool(plan.rootAgent.tools)) {
+  if (!plan.rootAgent || !plan.rootAgent.tools?.includes(AGENT_TOOL_NAME)) {
     return warnings;
   }
 

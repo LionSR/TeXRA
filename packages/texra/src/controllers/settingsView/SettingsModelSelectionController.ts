@@ -24,13 +24,13 @@ import {
   type ModelOptionStores,
   type PlatformSecrets,
 } from '@texra-ai/harness';
+import { Settings } from '@texra-ai/harness';
+import { GlobalStateKey } from '@texra-ai/harness/schemas';
 import {
   preferredCopilotRouteModels,
   type CopilotModelRoute,
 } from '@model/copilotRouting';
-import type { SettingsStores } from '@shared/config/settingsAccess';
 import { type ModelOptionData } from '@shared/schemas';
-import { GlobalStateKey } from '@shared/state/stateKeys';
 import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 import {
   type CopilotRouteInfo,
@@ -42,8 +42,7 @@ import {
   isExpensiveModel,
   isFastFirstResponseModel,
 } from '@texra/shared/model/modelPicker';
-import { byName } from '@utils/core';
-import { readSettingFrom } from '@utils/config/platformSettings';
+import type { SettingsStores } from '@texra-ai/harness';
 
 interface SettingsModelSelectionControllerDeps<R> {
   /**
@@ -106,7 +105,7 @@ export class SettingsModelSelectionController<R = never> {
       return {
         models,
         helperModel: yield* getHelperModelName(this.deps.stores),
-        preferShortModelNames: yield* readSettingFrom<boolean>(
+        preferShortModelNames: yield* Settings.get<boolean>(
           this.deps.stores,
           GlobalStateKey.PREFER_SHORT_MODEL_NAMES,
         ),
@@ -254,7 +253,7 @@ export class SettingsModelSelectionController<R = never> {
         items.push(item);
       }
 
-      return items.sort(byName);
+      return items.sort((a, b) => a.name.localeCompare(b.name));
     });
   }
 

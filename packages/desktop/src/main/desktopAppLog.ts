@@ -9,6 +9,7 @@ import {
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { format } from 'node:util';
+import { normalizeFilePath } from '@texra-ai/harness/schemas';
 
 import escapeRegExp from 'escape-string-regexp';
 import {
@@ -18,7 +19,6 @@ import {
 } from 'electron';
 
 import { redactSecrets, setLogSink, type LogEntry } from '@texra-ai/harness';
-import { normalizeFilePath } from '@utils/core';
 
 import type { DesktopLogSnapshot } from '../shared/desktopLogMessages.js';
 

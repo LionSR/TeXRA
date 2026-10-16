@@ -1,4 +1,5 @@
 // Node imports
+import { hash } from 'node:crypto';
 import path from 'node:path';
 
 // Third-party imports
@@ -15,7 +16,6 @@ import {
   findRunDirUnder,
   runDirUnder,
 } from '@utils/files/runStorageFs';
-import { truncatedHexId } from '@utils/core/idHash';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import type { HostRequestFailure } from '@texra-ai/harness';
 import type { AgentConfig } from '@texra-ai/harness/schemas';
@@ -305,5 +305,5 @@ export class ProgressWorkflowFileActionsController {
 
 /** A full sha256 digest of a file's text: what a compare-time backup keeps. */
 function contentDigest(content: string): string {
-  return truncatedHexId(content, 64);
+  return hash('sha256', content, 'hex');
 }

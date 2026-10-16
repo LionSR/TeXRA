@@ -23,6 +23,7 @@ import type { AgentEntry } from '@agent/index/agentEntry';
 import type { LoadablePlugin } from '@common/plugins/pluginTrust';
 import type { AppState, ConfigProvider } from '@platform/interfaces';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
+import type { GlobalValues } from '@platform/processRuntime';
 import {
   AgentDefinitionSchema,
   type PermissionPayload,
@@ -30,7 +31,6 @@ import {
   type RunId,
   type ToolFact,
 } from '@shared/schemas';
-import type { GlobalDatabase } from '@shared/session/database';
 import type { RunState } from '@shared/session/runStateFold';
 import type { ToolCatalog } from '@tools/liveTools';
 import type { McpServerPlugin } from '@tools/mcp/mcpConfig';
@@ -162,7 +162,7 @@ export interface RequestDecisionHook {
     readonly commit: (
       facts: readonly (ToolFact & { readonly aggregate: string })[],
     ) => Effect.Effect<void, LogWriteError>;
-  }) => Effect.Effect<void, Error, GlobalDatabase>;
+  }) => Effect.Effect<void, Error, GlobalValues>;
 }
 
 /**

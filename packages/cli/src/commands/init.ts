@@ -1,6 +1,6 @@
 import { Effect, FileSystem } from 'effect';
 
-import { getVisibleAgents } from '@agent/index';
+import { AgentCatalog } from '@texra-ai/harness';
 import { implicitDefaultToolUseAgents } from '@shared/constants/agents';
 import { workspaceTexraConfigPath } from '@texra/platform/defaults/nodeStorage';
 import { documentTaskOf } from '@texra/tools/documents/documentTask';
@@ -158,7 +158,7 @@ const runInit = Effect.fn('runInit')(function* (
 
   // The chat default is a persona with no document task.
   const agents = implicitDefaultToolUseAgents(
-    (yield* getVisibleAgents(services)).filter(
+    (yield* (yield* AgentCatalog).visible(services)).filter(
       (agent) => documentTaskOf(agent) === null,
     ),
   );

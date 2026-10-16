@@ -9,7 +9,6 @@ import { escapeText, type ProcessRuntime } from '@texra-ai/harness';
 import type { SelectItem } from '@cli/tui/ui/Select';
 import { readCliSkillsOffNotice } from '@cli/runtime/skills';
 import { readInstalledPluginLoad } from '@common/plugins/pluginTrust';
-import type { SettingsStores } from '@shared/config/settingsAccess';
 import {
   formatRuntimeSkillActivation,
   loadEnabledRuntimeSkills,
@@ -23,6 +22,7 @@ import type {
 import { formatResultCount } from '@utils/text/stringUtils';
 
 import { AsyncListForm } from './_shared/ListForm';
+import type { SettingsStores } from '@texra-ai/harness';
 
 interface SkillsListFormProps {
   readonly availableRows?: number;

@@ -8,7 +8,7 @@ import { ToolContext } from '@agent/core/tools/ToolTypes';
 
 // Local imports - shared schemas
 import { requireFileReadForEdit } from '@agent/runtime/RunCall';
-import type { AgentCatalogServices } from '@platform/processRuntime';
+import type { AgentCatalog } from '@agent/index/agentCatalog';
 import { WorkspaceFs } from '@platform/rootedFs';
 import { ToolError, type ToolResult } from '@shared/schemas';
 import { resolveToolPath } from '@tools/pathResolution';
@@ -228,7 +228,7 @@ export const applyApprovedFileEdit = Effect.fn('applyApprovedFileEdit')(
   }: ApprovedFileEditRequest): Effect.fn.Return<
     ToolResult,
     Error,
-    ToolContext | FileSystem.FileSystem | WorkspaceFs | AgentCatalogServices
+    ToolContext | FileSystem.FileSystem | WorkspaceFs | AgentCatalog
   > {
     const approval = yield* requestToolEditApproval({
       path,

@@ -64,9 +64,57 @@ export {
   type ProcessServices,
 } from '@platform/processRuntime';
 
+// The process's agent catalog: its reads, launch resolution and custom
+// copies, the workspace's agent selection over it, and the agent
+// directories a host serves it (bundled agents under its packaged
+// resources' `BUNDLED_AGENTS_DIRECTORY`).
+export {
+  AgentCatalog,
+  AgentCatalogLoadError,
+  AgentNotFound,
+  type AgentCatalogShape,
+  type WorkspaceAgentsStores,
+} from '@agent/index/agentCatalog';
+export type { AgentEntry } from '@agent/index/agentEntry';
+export {
+  InvalidAgentTeamError,
+  type WorkspaceAgentsController,
+  type WorkspaceAgentsControllerDeps,
+  type WorkspaceAgentsEntry,
+} from '@agent/workspaceAgents/WorkspaceAgentsController';
+export type { TeamPreset } from '@common/teams/TeamPresets';
+export type { TeamCatalogAgent, TeamRunPlan } from '@common/teams/TeamPlan';
+export type {
+  AgentDelegationScope,
+  AgentModePreset,
+  AgentScanIssue,
+} from '@shared/schemas';
+export {
+  AgentCustomizeRefused,
+  AgentDirectoryService,
+  readCustomAgentDir,
+  type AgentCustomization,
+  type AgentDirectoryServiceOptions,
+} from '@agent/index/AgentDirectoryService';
+export { BUNDLED_AGENTS_DIRECTORY } from '@agent/index/BundledAgentDirectories';
+// The process's stores: the global root's current values, each family a
+// host or plugin declares (`ValueFamily`), the per-project settings stores,
+// and storage maintenance under a storage root.
+export { GlobalValues, StateStores } from '@platform/processRuntime';
+export type { ValueFamily } from '@shared/session/valueFamily';
+export {
+  DatabaseWriteFailed,
+  type CurrentValues,
+} from '@shared/session/database';
+export type { AppStateStore } from '@platform/interfaces';
+export {
+  deleteStorageInventory,
+  readStorageInventory,
+  type StorageInventory,
+} from '@controllers/session/projectDatabase';
+
 // The failures the surface names.
 export {
-  AgentNotFound,
   PluginsRefused,
   ResumeRefused,
   RunFailure,
@@ -86,7 +134,20 @@ export {
   describeFollowUpFailure,
   presentFollowUpResult,
 } from '@agent/followUp/ToolUseFollowUp';
-export { hasErrorPresentationClaimed } from '@common/errors/sdkError/errorMetadata';
+export {
+  attachErrorPresentationClaimed,
+  hasErrorPresentationClaimed,
+} from '@common/errors/sdkError/errorMetadata';
+// A host's presentation surface: what a session presents through, the
+// `SessionHostInteractions` a host with no session of its own presents
+// through, a host's emit handlers (one per presentation event), and a failed
+// run's presentation, which marks it presented.
+export {
+  SessionHostInteractions,
+  type HostInteractions,
+} from '@agent/runtime/HostInteractions';
+export type { PresentationEventHandlers } from '@agent/runtime/runtimePresentationEvents';
+export { presentRunFailure } from '@agent/runtime/terminalResultToast';
 export { escapeText } from '@shared/utils/xmlEscape';
 
 // The payloads, as the runtime defines them.
@@ -236,9 +297,47 @@ export { pathToLocationIn } from '@utils/files/fileLocation';
 export { mcpConfigPathOf, readMcpConfig } from '@tools/mcp/mcpConfig';
 export type { McpServerConfig } from '@common/plugins/mcpServers';
 export { mcpServerOfToolName } from '@tools/mcp/mcpServer';
+// The files a run left in its storage directory, under a session's storage
+// (the executions tool's listing, for a host that shows it outside a run).
+export {
+  listRunGeneratedFiles,
+  type RunGeneratedFile,
+} from '@tools/executions/runGeneratedFiles';
+// Path containment on the platform's own paths, a path's segments and its
+// POSIX form, and an extension check that ignores case. (The browser-safe
+// path basics are in `./schemas`.)
+export {
+  getPathSegments,
+  hasExtension,
+  isPathWithin,
+  isStrictlyWithin,
+  toPosixPath,
+} from '@utils/core/pathCore';
+// The office formats the Read tool converts to text.
+export { OFFICE_EXTENSIONS } from '@utils/files/mimeUtils';
+// One exclusive FIFO lane per key, for work that must run one at a time per
+// key (a file, a project, a prompt queue).
+export {
+  withPerKeyLane,
+  type PerKeyLane,
+  type PerKeyLanes,
+} from '@utils/core/perKeyQueue';
 // Which external tools this machine has, as plugins' `availability` probes
 // answered; a host reads it and asks for a refresh.
-export { ToolAvailability } from '@tools/toolAvailabilityService';
+export {
+  ToolAvailability,
+  type AvailabilityResults,
+  type ExternalToolCheckResult,
+} from '@tools/toolAvailabilityService';
+// The process's tool catalog: the built-in tools the switches leave on, a
+// plugin's process services, and the switches themselves; and the switches'
+// first-install seed.
+export {
+  ToolCatalog,
+  type ToolCatalogOwner,
+  type ToolCatalogShape,
+} from '@tools/liveTools';
+export { seedDisabledToolDefaults } from '@tools/toolAvailability';
 // The harness's log output: where its entries go and how an entry reads.
 export {
   entryChannel,
@@ -252,9 +351,10 @@ export { withLogChannel } from '@logger/effectLog';
 // The redaction the write path applies, for a host surface that shows text
 // outside it (a crash dialog, a log file read back, a result message).
 export { formatFatalErrorDetail, redactSecrets } from '@logger/redaction';
-// A catalog setting, read from the stores a caller holds (a session's
-// roots) or from its config slot alone.
+// Every read and write of a catalog setting, against the stores a caller
+// holds (a session's roots), and the typed read of a non-catalog state key.
 export {
-  readConfigSettingFrom,
-  readSettingFrom,
-} from '@utils/config/platformSettings';
+  Settings,
+  type SettingsStores,
+  type StoredSetting,
+} from '@shared/config/settings';

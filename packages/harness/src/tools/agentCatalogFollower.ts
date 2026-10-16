@@ -1,14 +1,14 @@
 /**
- * The process's agent catalog: this layer loads it when the process runtime
- * is built, so no program ever runs against an unloaded catalog, and keeps it
- * current. A plugin's bundled agents follow its tool switch, an installed
+ * The process's agent catalog: this layer serves it (`AgentCatalog`),
+ * loads it when the process runtime is built, so no program ever runs
+ * against an unloaded catalog, and keeps it current. A plugin's bundled agents follow its tool switch, an installed
  * plugin's agents the install record, and a custom agent's file its own
  * edits: after a change to any of them, written by this process or another
  * sharing the global state (`AppState.changes`) or made in the custom
  * directory (`FileSystem.watch`, on every host), the catalog reloads and
  * every agent list view repaints (`workspaceAgentsChanged`). No plugin writer
  * refreshes it itself. A saved edit loads after a 300 ms debounce, and a
- * launch inside that window loads it first (`settledCatalog`). The one other
+ * launch inside that window loads it first (`AgentCatalog.forLaunch`). The one other
  * reload is a file tool's approved write into the custom agents directory
  * (`applyApprovedFileEdit` in `@tools/fileEditFlow`): the `creator` agent
  * tests the agent it just wrote in its next call, so that reload is part of
@@ -45,10 +45,7 @@ import {
 } from 'effect';
 
 import { installPluginAgentDirectories } from '@agent/index/BundledAgentDirectories';
-import {
-  markCatalogStale,
-  refresh as refreshAgentCatalog,
-} from '@agent/index/agentRegistry';
+import { AgentCatalog } from '@agent/index/agentCatalog';
 import { emitAppSignal } from '@eventBus/AppSignals';
 import { AgentDirectories, AppState } from '@platform/interfaces';
 import { GlobalStateKey } from '@shared/state/stateKeys';
@@ -91,8 +88,9 @@ export const registerCustomAgentRoot = Effect.flatMap(
 );
 
 /** Rescan the agent catalog and repaint every agent list view. */
-export const reloadAgentCatalog = Effect.suspend(() =>
-  refreshAgentCatalog(),
+export const reloadAgentCatalog = Effect.flatMap(
+  AgentCatalog,
+  (catalog) => catalog.refresh,
 ).pipe(
   Effect.andThen(
     Effect.sync(() => emitAppSignal('workspaceAgentsChanged', undefined)),
@@ -170,6 +168,7 @@ const namedCustomDirectory = Effect.flatMap(AgentDirectories, (directories) =>
 export const agentCatalogFollower = Layer.effectDiscard(
   Effect.gen(function* () {
     const appState = yield* AppState;
+    const catalog = yield* AgentCatalog;
     const directories = yield* AgentDirectories;
     const { resourcesRoot } = directories;
     const packaged = resourcesRoot !== undefined && resourcesRoot !== '';
@@ -227,7 +226,7 @@ export const agentCatalogFollower = Layer.effectDiscard(
             packaged ? registerCustomAgentRoot : Effect.void,
             watchCustomDirectory.pipe(
               // A launch inside the debounce loads the change itself.
-              Stream.tap(() => Effect.sync(markCatalogStale)),
+              Stream.tap(() => catalog.invalidate),
               Stream.debounce('300 millis'),
               Stream.mapEffect(() => reload),
             ),
@@ -268,4 +267,4 @@ export const agentCatalogFollower = Layer.effectDiscard(
       );
     yield* Deferred.await(loaded);
   }),
-);
+).pipe(Layer.provideMerge(AgentCatalog.layer));

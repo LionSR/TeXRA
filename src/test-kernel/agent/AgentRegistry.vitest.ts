@@ -7,7 +7,7 @@ import { Effect, Fiber, Layer } from 'effect';
 import { beforeAll, beforeEach, describe, expect, vi } from 'vitest';
 
 // Local imports
-import { getAgent, refresh } from '@agent/index/agentRegistry';
+import { AgentCatalog } from '@agent/index/agentCatalog';
 import { installPluginAgentDirectories } from '@agent/index/BundledAgentDirectories';
 import {
   AgentDirectories,
@@ -15,7 +15,6 @@ import {
   AppState,
   type AgentDirectoriesPort,
 } from '@platform/interfaces';
-import type { AgentCatalogServices } from '@platform/processRuntime';
 import { testHttpClientLayer } from '@test/support/fetchTestUtils';
 import { FakeStateStore } from '@test/support/FakePlatform';
 import { createDeferred } from '@test/support/asyncTestUtils';
@@ -31,27 +30,6 @@ import {
 import { texraPlugins } from '@texra/tools/registry';
 import { agentCatalogFollower } from '@tools/agentCatalogFollower';
 import { ToolRegistry, toolTable } from '@tools/toolTable';
-
-/**
- * A catalog program over the process's global storage view. This suite's fake
- * agent directories answer `custom()` from the packaged path, so nothing here
- * reads the view the readers name in their requirements.
- */
-function onGlobalStorage<A, E>(
-  program: Effect.Effect<A, E, AgentCatalogServices>,
-): Effect.Effect<A, E> {
-  return Effect.provide(
-    program,
-    Layer.mergeAll(
-      unusedGlobalStorageFs(),
-      storePluginsLayer,
-      nodePlatformLayer,
-      testHttpClientLayer,
-      AgentDirectories.layer(mutableAgentDirectories),
-      AppState.layer(new FakeStateStore()),
-    ),
-  );
-}
 
 const registerExternalRoot = vi.hoisted(() => vi.fn());
 
@@ -83,6 +61,31 @@ const mutableAgentDirectories: AgentDirectoriesPort = {
   builtIn: () => activeAgentDirectories.builtIn(),
 };
 
+/**
+ * The suite's one catalog, over the process's global storage view. This
+ * suite's fake agent directories answer `custom()` from the packaged path, so
+ * nothing here reads the view the catalog names in its requirements.
+ */
+const catalog = Effect.runSync(
+  Effect.provide(
+    Effect.gen(function* () {
+      return yield* AgentCatalog;
+    }),
+    AgentCatalog.layer.pipe(
+      Layer.provide(
+        Layer.mergeAll(
+          unusedGlobalStorageFs(),
+          storePluginsLayer,
+          nodePlatformLayer,
+          testHttpClientLayer,
+          AgentDirectories.layer(mutableAgentDirectories),
+          AppState.layer(new FakeStateStore()),
+        ),
+      ),
+    ),
+  ),
+);
+
 /** Point the platform at the real bundled agent YAMLs, overriding any dir. */
 function useAgentDirectories(
   overrides: Partial<AgentDirectoriesPort> = {},
@@ -112,7 +115,7 @@ describe('agent registry', () => {
     // Use the real bundled agent YAMLs rather than synthetic fixtures.
     await initPlatformWithState({});
     useAgentDirectories();
-    await Effect.runPromise(onGlobalStorage(refresh()));
+    await Effect.runPromise(catalog.refresh);
   });
 
   it.effect(
@@ -159,15 +162,15 @@ describe('agent registry', () => {
   it.effect('pools tool plugin agent directories into the builtIn source', () =>
     Effect.gen(function* () {
       installPluginAgentDirectories(resourcesPath, ['lean4']);
-      yield* onGlobalStorage(refresh());
-      const lean = getAgent('lean');
+      yield* catalog.refresh;
+      const lean = catalog.get('lean');
       expect(lean?.source).toBe('builtIn');
       expect(lean?.path).toBe(
         resolve(resourcesPath, 'plugins/lean4/agents/lean.yaml'),
       );
       installPluginAgentDirectories(resourcesPath, []);
-      yield* onGlobalStorage(refresh());
-      expect(getAgent('lean')).toBeUndefined();
+      yield* catalog.refresh;
+      expect(catalog.get('lean')).toBeUndefined();
     }).pipe(
       // The install is module state: a failed assertion must not leave the
       // plugin directory installed for the rest of the file.
@@ -182,7 +185,7 @@ describe('agent registry', () => {
     () => {
       const builtInDir = createDeferred<void>();
       return Effect.gen(function* () {
-        expect(getAgent('assistant')?.name).toBe('assistant');
+        expect(catalog.get('assistant')?.name).toBe('assistant');
 
         useAgentDirectories({
           builtIn: () =>
@@ -193,12 +196,11 @@ describe('agent registry', () => {
 
         // startImmediately: the refresh claims the load lane and parks on the
         // gated directory read before the next assertion runs.
-        const pendingRefresh = yield* Effect.forkChild(
-          onGlobalStorage(refresh()),
-          { startImmediately: true },
-        );
+        const pendingRefresh = yield* Effect.forkChild(catalog.refresh, {
+          startImmediately: true,
+        });
 
-        expect(getAgent('assistant')?.name).toBe('assistant');
+        expect(catalog.get('assistant')?.name).toBe('assistant');
 
         builtInDir.resolve();
         yield* Fiber.join(pendingRefresh);
@@ -215,7 +217,7 @@ describe('agent registry', () => {
 
   it.effect('keeps the registry serving when a later refresh fails', () =>
     Effect.gen(function* () {
-      expect(getAgent('assistant')?.name).toBe('assistant');
+      expect(catalog.get('assistant')?.name).toBe('assistant');
 
       useAgentDirectories({
         builtIn: () =>
@@ -232,10 +234,10 @@ describe('agent registry', () => {
         Effect.sync(() => useAgentDirectories()),
       );
 
-      const failure = yield* Effect.flip(onGlobalStorage(refresh()));
+      const failure = yield* Effect.flip(catalog.refresh);
       expect(String(failure)).toContain('refresh failed');
 
-      expect(getAgent('assistant')?.name).toBe('assistant');
+      expect(catalog.get('assistant')?.name).toBe('assistant');
     }),
   );
 });

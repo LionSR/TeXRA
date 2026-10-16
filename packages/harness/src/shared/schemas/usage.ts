@@ -60,17 +60,15 @@ export function emptyUsageStats(): EmptyUsageStats {
   };
 }
 
+/** The numeric counters of a usage row; the route and plan are not counted. */
+const USAGE_COUNTER_KEYS = TokenUsageStatsSchema.keyof().options.filter(
+  (key): key is Exclude<typeof key, 'usageRoute' | 'usagePlan'> =>
+    key !== 'usageRoute' && key !== 'usagePlan',
+);
+
 /** Whether usage stats are all zeros (effectively empty). */
 export function isEmptyUsage(usage: TokenUsageStats): boolean {
-  return (
-    usage.inputTokens === 0 &&
-    usage.outputTokens === 0 &&
-    usage.cost === 0 &&
-    (usage.cacheReadInputTokens ?? 0) === 0 &&
-    (usage.cacheMissInputTokens ?? 0) === 0 &&
-    (usage.cacheCreationInputTokens ?? 0) === 0 &&
-    (usage.reasoningTokens ?? 0) === 0
-  );
+  return USAGE_COUNTER_KEYS.every((key) => (usage[key] ?? 0) === 0);
 }
 
 /** Accumulates usage stats from an iterable into a single total. The route
@@ -82,13 +80,7 @@ export function sumUsageStats(
   const routes = new Set<UsageRoute | undefined>();
   const plans = new Set<string | undefined>();
   for (const usage of items) {
-    total.inputTokens += usage.inputTokens;
-    total.outputTokens += usage.outputTokens;
-    total.cost += usage.cost;
-    total.cacheReadInputTokens += usage.cacheReadInputTokens ?? 0;
-    total.cacheMissInputTokens += usage.cacheMissInputTokens ?? 0;
-    total.cacheCreationInputTokens += usage.cacheCreationInputTokens ?? 0;
-    total.reasoningTokens += usage.reasoningTokens ?? 0;
+    for (const key of USAGE_COUNTER_KEYS) total[key] += usage[key] ?? 0;
     if (isEmptyUsage(usage)) continue;
     routes.add(usage.usageRoute);
     plans.add(usage.usagePlan);

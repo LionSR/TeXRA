@@ -18,7 +18,8 @@ import { dirname } from 'node:path';
 import { Cause, Effect, Exit, FileSystem, SynchronizedRef } from 'effect';
 
 import { ChildRuns, type ToolRun } from '@texra-ai/harness/plugins';
-import { getCatalogAgent, type AgentEntry } from '@agent/index';
+import { AgentCatalog, type AgentEntry } from '@texra-ai/harness';
+import { Settings } from '@texra-ai/harness';
 import { LatexMediaManager } from '@latex/LatexMediaManager';
 import { getTeXCountStats } from '@latex/texcount';
 import {
@@ -60,7 +61,6 @@ import {
   documentTaskOf,
   taskFileVars,
 } from '@texra/tools/documents/documentTask';
-import { readSettingFrom } from '@utils/config/platformSettings';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { pathToLocationIn } from '@utils/files/fileLocation';
 import { renderPrompt } from '@utils/prompt';
@@ -134,8 +134,8 @@ const replyLocation = (docs: Documents, revision: number) =>
 /** The rejection setting: a failed compile fails the task. */
 export const rejectsOnCompileFailure = (
   docs: Documents,
-): ReturnType<typeof readSettingFrom<boolean>> =>
-  readSettingFrom<boolean>(
+): ReturnType<typeof Settings.get<boolean>> =>
+  Settings.get<boolean>(
     docs.deps.roots,
     DocumentsStateKey.WORKFLOW_REJECT_ON_COMPILE_FAILURE,
   );
@@ -152,7 +152,7 @@ export const openDocuments = Effect.fn('documents.open')(function* ({
   const { config, logger, fileService, runId } = run;
   // The block as the catalog holds it now: the run's exact entry, which its
   // launch stamped.
-  const entry = getCatalogAgent(documentTaskKey(config));
+  const entry = (yield* AgentCatalog).get(documentTaskKey(config));
   const task = entry && documentTaskOf(entry);
   if (!entry || !task)
     return yield* Effect.fail(

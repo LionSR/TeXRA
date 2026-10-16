@@ -3,7 +3,6 @@ import { Effect } from 'effect';
 import { getRunRecords } from '@agent/storage';
 import type { SessionHandle } from '@agent/runtime';
 import { readInstalledPluginLoad } from '@common/plugins/pluginTrust';
-import type { SettingsStores } from '@shared/config/settingsAccess';
 import { RUN_OUTCOME, type RunOutcome } from '@shared/schemas';
 import { runOutcomeToCliRunStatus } from '@shared/runs/runStatus';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -11,6 +10,7 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 import { CliExitCode } from './exitCodes';
 import type { DatabaseReadFailed, RunEndResult } from '@texra-ai/harness';
 import type { CliPluginPin } from '../schemas/cliOutput';
+import type { SettingsStores } from '@texra-ai/harness';
 
 // A type alias, not an interface: the result line types its payload as a
 // loose object, which an interface (no implicit index signature) cannot meet.

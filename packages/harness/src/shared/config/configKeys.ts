@@ -6,7 +6,7 @@
  */
 const TEXRA_PREFIX = 'texra.';
 
-export function stripPrefix(key: string): string {
+function stripPrefix(key: string): string {
   return key.startsWith(TEXRA_PREFIX) ? key.slice(TEXRA_PREFIX.length) : key;
 }
 

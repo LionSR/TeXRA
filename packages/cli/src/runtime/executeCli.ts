@@ -15,6 +15,7 @@ import {
   RUN_OUTCOME,
   type RunId,
   type AgentConfigPayload,
+  generateRunId,
 } from '@texra-ai/harness/schemas';
 import {
   describeFollowUpFailure,
@@ -30,7 +31,8 @@ import {
   type StartInput,
   SESSION_CLOSE_DEADLINE_MS,
 } from '@texra-ai/harness';
-import { type SessionHandle, terminalFailurePresented } from '@agent/runtime';
+import { Settings } from '@texra-ai/harness';
+import { type SessionHandle } from '@agent/runtime';
 import { deriveResumability, getRunRecords } from '@agent/storage';
 import { AgentError, isUserAbort } from '@common/errors';
 import { isLiveRun } from '@shared/session/sessionView';
@@ -42,8 +44,6 @@ import {
   TEXRA_APPROVAL_POLICY_CONFIG_KEY,
   type TexraApprovalPolicy,
 } from '@shared/approvalPolicy';
-import { readConfigSettingFrom } from '@utils/config/platformSettings';
-import { aggregateError, generateRunId } from '@utils/core';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 import { createHeadlessCliHostInteractions } from './approvalAdapter';
@@ -284,7 +284,7 @@ export function executeCliRequest(
     // what this invocation asked for riding its launch (`launchApproval`).
     const refused = launchApprovalNotice(
       runContext.requestedApprovalPolicy,
-      readConfigSettingFrom<TexraApprovalPolicy>(
+      Settings.getConfig<TexraApprovalPolicy>(
         runSession.roots.config,
         TEXRA_APPROVAL_POLICY_CONFIG_KEY,
       ),
@@ -552,11 +552,7 @@ export function executeCliRequest(
         // presenter's receipt, and one that presented itself through a
         // targeted notification is marked claimed at its throw site.
         if (!(err instanceof AgentError)) primaryRunFailure = { error: err };
-        else if (
-          !failurePresented &&
-          !hasErrorPresentationClaimed(err) &&
-          !terminalFailurePresented(err)
-        )
+        else if (!failurePresented && !hasErrorPresentationClaimed(err))
           presentationHost.emit('requestShowError', {
             message: toErrorMessage(err),
           });
@@ -636,7 +632,7 @@ export function executeCliRequest(
     if (Result.isFailure(finalization)) {
       return yield* Effect.die(
         primaryRunFailure
-          ? aggregateError(
+          ? new AggregateError(
               [primaryRunFailure.error, finalization.failure],
               'CLI run failed and its final artifacts could not be persisted',
             )

@@ -7,7 +7,6 @@ import { Box, Text } from 'ink';
 import { fillRows, safeTerminalText } from '@cli/runtime/terminalText';
 import { wrapAnsiToWidth } from '@cli/tui/ansiWrap';
 import { clampModalWidth } from '@cli/tui/ui/theme';
-import { clamp } from '@utils/core';
 import { formatHunkHeader } from '@utils/text/unifiedDiff';
 
 import {
@@ -87,7 +86,7 @@ export function initialDiffScrollOffset(
     maxDisplayLines,
     totalLines: lines.length,
   });
-  const defaultOffset = clamp(changedIndex - 1, 0, maxOffset);
+  const defaultOffset = Math.max(0, Math.min(maxOffset, changedIndex - 1));
   const fallbackOffset = (): number =>
     changedIndex < initiallyVisibleContentRows ? 0 : defaultOffset;
   if (firstChange?.kind !== 'removed') {
@@ -121,11 +120,11 @@ export function initialDiffScrollOffset(
     }
     const edited = addedIndex + differs;
     if (edited < initiallyVisibleContentRows) return 0;
-    return clamp(edited - 1, 0, maxOffset);
+    return Math.max(0, Math.min(maxOffset, edited - 1));
   }
 
   if (addedIndex < initiallyVisibleContentRows) return 0;
-  return clamp(addedIndex - windowRows + 1, 0, maxOffset);
+  return Math.max(0, Math.min(maxOffset, addedIndex - windowRows + 1));
 }
 
 // Compact windows cannot scroll far enough to find the edit, so they anchor on

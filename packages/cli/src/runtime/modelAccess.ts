@@ -1,5 +1,5 @@
 // Third-party imports
-import { Effect, Result } from 'effect';
+import { Effect, Result, absurd } from 'effect';
 
 // Local imports
 import {
@@ -17,7 +17,6 @@ import {
   MODEL_AVAILABILITY_STATUS,
 } from '@shared/schemas';
 import { modelOptionsFrom } from '@texra/model/modelOptions';
-import { assertNever } from '@utils/core';
 
 // Local file imports
 import { resolveKnownCliModelId } from './cliConfig';
@@ -286,7 +285,7 @@ function formatCliModelRecovery(entry: CliModelAccess): string | undefined {
     case 'unknown-model':
       return 'Choose a model that is available in the current registry.';
     default:
-      return assertNever(availability, 'Unhandled model availability');
+      return absurd(availability);
   }
 }
 

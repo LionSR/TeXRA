@@ -5,8 +5,9 @@ import { describe, expect, vi } from 'vitest';
 import { globalDatabaseLayer } from '@controllers/session/Database';
 import { checkForDesktopUpdate } from '@desktop/main/desktopUpdateChecker';
 import { processOwnerId } from '@platform/defaults/nodeProcesses';
-import type { GlobalDatabase } from '@shared/session/database';
+import type { GlobalValues } from '@platform/processRuntime';
 import { ProcessIdentity } from '@shared/session/sessionEvents';
+import { globalValuesOver } from '@test/support/setupPlatform';
 import { testHttpClientLayer } from '@test/support/fetchTestUtils';
 import { withEnv } from '@test/support/testEnv';
 import { nodeSpawnerLayer } from '@test/support/childProcessTestLayer';
@@ -32,7 +33,7 @@ const withRecords = <A, E>(
   program: Effect.Effect<
     A,
     E,
-    UpdateCheckRecords | GlobalDatabase | HttpClient.HttpClient
+    UpdateCheckRecords | GlobalValues | HttpClient.HttpClient
   >,
 ) =>
   Effect.scoped(
@@ -45,10 +46,14 @@ const withRecords = <A, E>(
         Effect.provide(
           updateCheckRecordsLayer.pipe(
             Layer.provideMerge(
-              globalDatabaseLayer(storage).pipe(
-                Layer.provide(ProcessIdentity.layer(processOwnerId(undefined))),
-                Layer.provide(nodeSpawnerLayer),
-                Layer.orDie,
+              globalValuesOver(
+                globalDatabaseLayer(storage).pipe(
+                  Layer.provide(
+                    ProcessIdentity.layer(processOwnerId(undefined)),
+                  ),
+                  Layer.provide(nodeSpawnerLayer),
+                  Layer.orDie,
+                ),
               ),
             ),
           ),

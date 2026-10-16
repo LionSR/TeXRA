@@ -3,6 +3,7 @@ import * as path from 'node:path';
 
 // Third-party imports
 import * as vscode from 'vscode';
+import { z } from 'zod';
 import {
   Cause,
   Context,
@@ -28,29 +29,22 @@ import {
   ToolMissingHandler,
   withForkFailureReporting,
   withProcessServices,
+  StateStores,
 } from '@texra-ai/harness';
 import {
   createNodeWorkspaceRoots,
-  resolveGlobalStoragePath,
   resolveWorkspaceStoragePath,
   canonicalizeWorkspacePath,
 } from '@texra-ai/harness/node';
 import { withLogChannel } from '@texra-ai/harness';
 import { setLogSink } from '@texra-ai/harness';
-import { StorageFs, withSessionFs } from '@texra-ai/harness';
 import { ToolAvailability } from '@texra-ai/harness';
-import { readConfigSettingFrom } from '@texra-ai/harness';
+import { Settings } from '@texra-ai/harness';
 import { JsonConfigProvider } from '@texra-ai/harness/node';
 import { EXTENSION_COMMANDS } from '@commands/extensionCommandIds';
 import { setApiKey as apiSetApiKey } from '@commands/api/apiKeyCommands';
 import { openGettingStarted } from '@commands/system/walkthroughCommands';
 import { createSampleProjectWithoutWorkspace } from '@commands/system/sampleProjectCommands';
-import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
-import {
-  appStateStoreFromDatabase,
-  openProjectStateStore,
-  openRepoStateStore,
-} from '@controllers/session/appStateStore';
 import { emitAppSignal, onAppSignal } from '@eventBus/AppSignals';
 import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
 import {
@@ -80,14 +74,12 @@ import { createVsCodeLogSink } from '@frontend/vscode/vscodeLogSink';
 import { effectDiagnosticsLayer } from '@logger/effectDiagnostics';
 import { nodeFileServices } from '@platform/defaults/jsonStore';
 import { FileSecrets, secretsDirectory } from '@platform/defaults/fileSecrets';
-import { GlobalDatabase } from '@shared/session/database';
 import {
   formatTexraApprovalPolicy,
   TEXRA_APPROVAL_POLICY_CONFIG_KEY,
   texraApprovalPolicyLabel,
   type TexraApprovalPolicy,
 } from '@shared/approvalPolicy';
-import { readState, StateFlagSchema } from '@shared/config/settingsAccess';
 import { telemetryNoticeIfDue } from '@telemetry/telemetryNotice';
 import { usageLogLayer } from '@telemetry/UsageLogService';
 import { openTexraConfigStores } from '@texra/platform/defaults/nodeStores';
@@ -150,7 +142,6 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
     defaultNodeStorageRoot(),
     workspaceRoot,
   );
-  const globalStorage = resolveGlobalStoragePath(defaultNodeStorageRoot());
   // The one credential store every host shares (`~/.texra/secrets/`):
   // the background service reads the keys this window saves.
   const secrets = new FileSecrets(
@@ -195,12 +186,6 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
           setup: vscodeSetupPlatform,
         }),
         secrets,
-        appState: Layer.effect(
-          AppState,
-          Effect.map(GlobalDatabase, (database) =>
-            appStateStoreFromDatabase(globalStorage, database.values),
-          ),
-        ),
         // The editor's LM API on the workspace path, unavailable on the
         // credential-only one. The one defaulting site for this host.
         languageModel: extras.languageModel ?? UNAVAILABLE_LANGUAGE_MODEL_PORT,
@@ -252,9 +237,9 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
       const globalState = yield* AppState;
       const projectState =
         extras.projectState ??
-        (yield* openProjectStateStore(storage, workspaceRoot).pipe(
-          Scope.provide(projectScope),
-        ));
+        (yield* (yield* StateStores)
+          .project(storage, workspaceRoot)
+          .pipe(Scope.provide(projectScope)));
       // VS Code restarts the extension host when the first workspace folder
       // changes, so the configuration stores stay pinned for this process.
       const config = new JsonConfigProvider(
@@ -285,7 +270,7 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
         storage,
         config,
         workspaceState: projectState,
-        repoState: yield* openRepoStateStore(workspaceRoot, storage),
+        repoState: yield* (yield* StateStores).repo(storage, workspaceRoot),
         globalState,
       });
       windowRoots = roots;
@@ -549,16 +534,6 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
     yield* warn(reason);
     if (handle.log.movedAside)
       yield* warn(sessionStoreMovedAsideMessage(handle.log.movedAside));
-    // The run-storage directory of the session just opened, through that
-    // session's own storage view.
-    yield* withSessionFs(
-      roots,
-      Effect.flatMap(Effect.service(StorageFs), (storageFs) =>
-        storageFs.makeDirectory(WORKSPACE_STORAGE_LAYOUT.runs, {
-          recursive: true,
-        }),
-      ),
-    );
   }
   const { session } = windowSession;
 
@@ -671,7 +646,7 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
   const updateStatusBarTooltip = () => {
     // The project's persisted policy: what a run here, or the service's
     // for this project, decides under.
-    const policy = readConfigSettingFrom<TexraApprovalPolicy>(
+    const policy = Settings.getConfig<TexraApprovalPolicy>(
       roots.config,
       TEXRA_APPROVAL_POLICY_CONFIG_KEY,
     );
@@ -761,7 +736,13 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
     catch: ensureError,
   });
   const welcomeKey = 'texra.welcomeShown';
-  if (!(yield* readState(globalState, welcomeKey, StateFlagSchema))) {
+  if (
+    !(yield* Settings.state(
+      globalState,
+      welcomeKey,
+      z.boolean().prefault(false),
+    ))
+  ) {
     // First-run welcome card; a failure leaves the flag unset, so it repeats.
     yield* Effect.forkScoped(
       fromHost('texra.showMainView', () =>

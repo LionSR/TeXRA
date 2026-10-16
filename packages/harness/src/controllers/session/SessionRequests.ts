@@ -21,6 +21,7 @@ import type {
   SessionHandle,
   SessionRequests,
 } from '@agent/runtime/SessionHandle';
+import type { GlobalValues } from '@platform/processRuntime';
 import {
   qualifyAggregateId,
   requestParksItsCaller,
@@ -31,7 +32,6 @@ import {
 } from '@shared/schemas';
 import {
   DatabaseClaimRefused,
-  GlobalDatabase,
   type AggregateState,
   type Database,
   type DeletionMode,
@@ -54,7 +54,7 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 import { runFiles, type RunFilesServices } from './deletionCleanup';
 
 const done: Outcome = Object.freeze({ kind: 'done' } as const);
-type RequestServices = GlobalDatabase | RunFilesServices | Runs;
+type RequestServices = GlobalValues | RunFilesServices | Runs;
 
 /** The log's reads, and removal through the session's publisher. */
 type SessionRequestLog = Pick<
@@ -73,7 +73,7 @@ export interface SessionRequestsInit {
   /** This process's liveness snapshot (`self`, `dead`). */
   readonly local: SubscriptionRef.SubscriptionRef<LocalRuntimeState>;
   readonly plugins: ToolTable;
-  readonly services: Context.Context<GlobalDatabase | RunFilesServices>;
+  readonly services: Context.Context<GlobalValues | RunFilesServices>;
   /** Whether the session's doors are shut (a cancellation writes nothing). */
   readonly closed: () => boolean;
 }
@@ -228,7 +228,7 @@ const decideRequest = (
   deps: RequestDeps,
   req: Extract<RuntimeRequest, { kind: 'request.decide' }>,
   heldHere: boolean,
-): Effect.Effect<Outcome, RequestError, GlobalDatabase> => {
+): Effect.Effect<Outcome, RequestError, GlobalValues> => {
   const answer = Effect.gen(function* () {
     const pending = pendingOf(deps, req.runId, req.requestId);
     if (pending === undefined) return yield* Effect.fail(settled(req.runId));

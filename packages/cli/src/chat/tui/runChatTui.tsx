@@ -24,7 +24,8 @@ import {
   type RunId,
   type AgentConfig,
 } from '@texra-ai/harness/schemas';
-import { getVisibleAgents } from '@agent/index';
+import { AgentCatalog } from '@texra-ai/harness';
+import { Settings } from '@texra-ai/harness';
 import { getRunRecords } from '@agent/storage';
 import {
   CliUsageError,
@@ -74,7 +75,6 @@ import { subscribeToSignalChanges } from '@texra/shared/signals';
 import { serviceSession } from '@texra/controllers/server/serviceSession';
 import { documentTaskOf } from '@texra/tools/documents/documentTask';
 import { sessionStoreMovedAsideMessage } from '@ui/copy/sessionStore';
-import { readConfigSettingFrom } from '@utils/config/platformSettings';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import {
@@ -150,7 +150,7 @@ type PolicyChange = Extract<RuntimeRequest, { kind: 'policy.set' }>['change'];
 const projectApprovalPolicy = (roots: {
   readonly config: ConfigProvider;
 }): TexraApprovalPolicy =>
-  readConfigSettingFrom<TexraApprovalPolicy>(
+  Settings.getConfig<TexraApprovalPolicy>(
     roots.config,
     TEXRA_APPROVAL_POLICY_CONFIG_KEY,
   );
@@ -267,9 +267,9 @@ export async function runChat(
         envAgent: context.envAgent,
         envModel: context.envModel,
         // The implicit chat default is a persona with no document task.
-        visibleToolUseAgents: (yield* getVisibleAgents(services)).filter(
-          (agent) => documentTaskOf(agent) === null,
-        ),
+        visibleToolUseAgents: (yield* (yield* AgentCatalog).visible(
+          services,
+        )).filter((agent) => documentTaskOf(agent) === null),
       });
       const agentEntry = yield* resolveChatToolUseAgent(
         services,

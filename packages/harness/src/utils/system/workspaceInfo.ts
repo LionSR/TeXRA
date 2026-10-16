@@ -7,7 +7,7 @@ import { Effect } from 'effect';
 
 // Local imports
 import { escapeTextStrict } from '@shared/utils/xmlEscape';
-import type { SettingsStores } from '@shared/config/settingsAccess';
+import type { SettingsStores } from '@shared/config/settings';
 import { listExternalRoots } from '@utils/files/externalRoots';
 import { isoDateOnly } from '@utils/text/stringUtils';
 import { executeCommand } from '@utils/system/execUtils';

@@ -27,7 +27,6 @@ const mocks = vi.hoisted(() => ({
   notify: vi.fn(),
   setCliSubscriptionPreference: vi.fn(),
   setCliCodingPlanSubscription: vi.fn(),
-  setGLMCodingPlan: vi.fn((_enabled: boolean) => Effect.void),
 }));
 
 vi.mock('@model/subscriptionAccess', async (importActual) => {
@@ -59,15 +58,6 @@ vi.mock('@cli/chat/tui/state/subscriptionPreference', () => ({
   setCliSubscriptionPreference: mocks.setCliSubscriptionPreference,
 }));
 
-vi.mock('@utils/config/providerConfig', async (importActual) => {
-  const actual =
-    await importActual<typeof import('@utils/config/providerConfig')>();
-  return {
-    ...actual,
-    setGLMCodingPlan: mocks.setGLMCodingPlan,
-  };
-});
-
 import { currentApproval } from '@cli/chat/tui/state/approvalQueue';
 import { bindSessionView } from '@cli/chat/tui/state/sessionView';
 import { resetCliState, rootRunId } from '@cli/chat/tui/state/cliState';
@@ -81,12 +71,17 @@ import {
   type RetryPermission,
   type RunId,
 } from '@shared/schemas';
+import { GlobalStateKey } from '@shared/state/stateKeys';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { createTuiCliContext } from '@test/cli/fixtures/cliContext';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { installedHost } from '@test/support/setupPlatform';
-import { makeFakeSettingsStores } from '@test/support/settingsStoresFake';
+import {
+  isStored,
+  makeFakeSettingsStores,
+} from '@test/support/settingsStoresFake';
+
 import {
   publishTestRunStart,
   setTestApprovalPolicy,
@@ -100,6 +95,8 @@ import { requestToolEditApproval } from '@tools/approval/toolEditApproval';
 import { bashApprovalRequest } from '../agent/progressTestUtils';
 import type { PlatformSecrets } from '@texra-ai/harness';
 
+/** The settings the TUI's retry decisions write through, if any. */
+const settingsStores = makeFakeSettingsStores('cli');
 let detachHost = (): void => {};
 
 function host(): CliRuntimeHost {
@@ -129,7 +126,7 @@ function tui(
       createTuiHostInteractions(presentationHost, cliContext, {
         requests: testDefaultSession().requests,
         secrets,
-        settings: makeFakeSettingsStores('cli').stores,
+        settings: settingsStores.stores,
         runtime: testRuntime(),
       }),
     ),
@@ -285,7 +282,11 @@ function expectChatGptSubscriptionRoute(): void {
 function expectNoPreferenceWrites(): void {
   expect(mocks.setCliSubscriptionPreference).not.toHaveBeenCalled();
   expect(mocks.setCliCodingPlanSubscription).not.toHaveBeenCalled();
-  expect(mocks.setGLMCodingPlan).not.toHaveBeenCalled();
+  expect(
+    Effect.runSync(
+      isStored(settingsStores.globalState, GlobalStateKey.GLM_CODING_PLAN),
+    ),
+  ).toBe(false);
 }
 
 function waitFor(assertion: () => void): Effect.Effect<void> {
@@ -377,7 +378,6 @@ afterEach(async () => {
   mocks.notify.mockReset();
   mocks.setCliSubscriptionPreference.mockReset();
   mocks.setCliCodingPlanSubscription.mockReset();
-  mocks.setGLMCodingPlan.mockReset();
 });
 
 describe('TUI request decisions', () => {

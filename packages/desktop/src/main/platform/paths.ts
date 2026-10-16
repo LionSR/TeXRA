@@ -3,7 +3,7 @@ import { dirname, join } from 'node:path';
 import { app } from 'electron';
 import { Data, Effect, FileSystem } from 'effect';
 
-import { BUNDLED_AGENTS_DIRECTORY } from '@agent/index';
+import { BUNDLED_AGENTS_DIRECTORY } from '@texra-ai/harness';
 import { defaultNodeStorageRoot } from '@texra/platform/defaults/nodeStorage';
 import { absentReason } from '@utils/files/fsEntryExists';
 import { envVar } from '@utils/system/envFlags';

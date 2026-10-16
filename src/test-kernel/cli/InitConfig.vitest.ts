@@ -15,13 +15,13 @@ import {
   type InitAnswers,
 } from '@cli/runtime/initConfig';
 import { setWorkspaceCliChatAgent } from '@cli/runtime/cliConfig';
+import { Settings } from '@shared/config/settings';
 import { errnoError, nodePlatformLayer } from '@test/support/fsTestUtils';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { FakeConfigProvider } from '@test/support/FakePlatform';
 import { installPlatform } from '@test/support/setupPlatform';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 import { workspaceTexraConfigPath } from '@texra/platform/defaults/nodeStorage';
-import { readSettingFrom } from '@utils/config/platformSettings';
 
 const tempDirs = useTempDirs();
 
@@ -73,16 +73,16 @@ describe('setWorkspaceCliChatAgent', () => {
           ),
         );
         const chatSection = () =>
-          readSettingFrom(testWorkspaceRoots(), 'texra.chat');
+          Settings.get(testWorkspaceRoots(), 'texra.chat');
 
         yield* setWorkspaceCliChatAgent(testWorkspaceRoots(), 'builtIn:review');
         expect(yield* chatSection()).toEqual({
           agent: 'builtIn:review',
           model: 'deepseek/deepseek-v4-flash',
         });
-        expect(
-          yield* readSettingFrom(testWorkspaceRoots(), 'texra.model'),
-        ).toBe('deepseek/deepseek-v4-flash');
+        expect(yield* Settings.get(testWorkspaceRoots(), 'texra.model')).toBe(
+          'deepseek/deepseek-v4-flash',
+        );
 
         yield* setWorkspaceCliChatAgent(testWorkspaceRoots(), undefined);
         expect(yield* chatSection()).toEqual({

@@ -2,8 +2,8 @@
 import { Effect } from 'effect';
 
 // Local imports - skills
+import { Settings } from '@texra-ai/harness';
 import { readInstalledPluginLoad } from '@common/plugins/pluginTrust';
-import type { SettingsStores } from '@shared/config/settingsAccess';
 import { AGENT_SKILLS_CONFIG_KEY } from '@shared/schemas';
 import type { SkillLoadIssue, SourcedSkill } from '@skills/loadSkills';
 import type { SkillSourceOptions } from '@skills/skillSources';
@@ -12,7 +12,7 @@ import {
   filterDiscoveredSkills,
   readDisabledSkills,
 } from '@skills/runtimeSkills';
-import { readSettingFrom } from '@utils/config/platformSettings';
+import type { SettingsStores } from '@texra-ai/harness';
 
 /**
  * Fold the contributions the command's platform init installed for `cwd`,
@@ -47,7 +47,7 @@ export function readCliSkillsOffNotice(
   enableWith: string,
 ) {
   return Effect.map(
-    readSettingFrom<boolean>(stores, AGENT_SKILLS_CONFIG_KEY),
+    Settings.get<boolean>(stores, AGENT_SKILLS_CONFIG_KEY),
     (enabled) =>
       enabled
         ? undefined

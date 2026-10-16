@@ -18,7 +18,6 @@
 
 import { Effect } from 'effect';
 
-import type { SettingsStores } from '@shared/config/settingsAccess';
 import { isGitRepository } from '@texra/utils/git/isGitRepository';
 
 import {
@@ -27,6 +26,7 @@ import {
 } from '@texra/utils/git/commitLogFormat';
 import { executeCommand } from '@utils/system/execUtils';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
+import type { SettingsStores } from '@texra-ai/harness';
 
 /**
  * Hard upper bound on git output bytes (8 MiB). Commit subjects and numstat

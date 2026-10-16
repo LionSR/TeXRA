@@ -10,7 +10,6 @@ import { describe, expect } from 'vitest';
 // Local imports - platform
 import {
   resolveGlobalStoragePath,
-  resolveMemoryStoragePath,
   resolveWorkspaceStoragePath,
 } from '@platform/defaults/workspaceStorage';
 import { nodePlatformLayer, pathExists } from '@test/support/fsTestUtils';
@@ -47,43 +46,18 @@ describe('workspace storage defaults', () => {
     expect(storageIdOf(root, undefined)).toMatch(/^no-workspace-[0-9a-f]{8}$/);
   });
 
-  it('snapshots global, workspace and memory storage layout paths', async () => {
+  it('snapshots global and workspace storage layout paths', async () => {
     const root = await makeStorageRoot();
     const workspacePath = '/workspace/a';
 
     expect([
       resolveGlobalStoragePath(root),
       resolveWorkspaceStoragePath(root, workspacePath),
-      resolveMemoryStoragePath(),
-      resolveMemoryStoragePath('memories/project.md'),
     ]).toEqual([
       join(root, 'v1', 'global-storage'),
       join(root, 'v1', 'workspace-storage', storageIdOf(root, workspacePath)),
-      'memories',
-      'memories/project.md',
     ]);
-    expect(() => resolveMemoryStoragePath('not-memories/project.md')).toThrow(
-      'Invalid memory path',
-    );
   });
-
-  it('normalizes logical memory paths independently of the host separator', () => {
-    expect(resolveMemoryStoragePath('memories/./project.md')).toBe(
-      'memories/project.md',
-    );
-    expect(resolveMemoryStoragePath(String.raw`memories\project.md`)).toBe(
-      'memories/project.md',
-    );
-  });
-
-  it.each(['memories/../outside', String.raw`memories\..\outside`])(
-    'rejects memory path traversal: %s',
-    (storagePath) => {
-      expect(() => resolveMemoryStoragePath(storagePath)).toThrow(
-        'Invalid memory path',
-      );
-    },
-  );
 
   it.live(
     'opens fresh state without changing old project or global storage',
