@@ -116,7 +116,6 @@ import {
   locateInWorkspace,
   workspaceRelativePath,
 } from '@utils/files/workspaceFS';
-import { normalizeLineEndings } from '@utils/text/stringUtils';
 
 const CHANNEL = 'ExtensionHostRequests';
 
@@ -304,7 +303,9 @@ export function createExtensionHostRequests(
       // user picked outside the workspace.
       readFile: (file) =>
         Effect.flatMap(Effect.service(FileSystem.FileSystem), (fs) =>
-          Effect.map(fs.readFileString(file), normalizeLineEndings),
+          Effect.map(fs.readFileString(file), (text: string) =>
+            text.replaceAll('\r\n', '\n'),
+          ),
         ),
       showInfo: (message) => vscodeUi.showInfoMessage(message),
       showError: (message) => vscodeUi.showErrorMessage(message),

@@ -6,7 +6,6 @@ import { Effect, FileSystem, Predicate } from 'effect';
 
 import { ensureError } from '@texra-ai/harness/schemas';
 import type { FileLocation } from '@shared/schemas';
-import { normalizeLineEndings } from '@utils/text/stringUtils';
 
 import {
   findExistingLatexPath,
@@ -79,7 +78,7 @@ export const extractFigurePathsFromLatex = Effect.fn(
   const bytes = yield* fs
     .readFile(latexFileLocation.absolutePath)
     .pipe(Effect.mapError(ensureError));
-  const content = normalizeLineEndings(Buffer.from(bytes).toString('utf-8'));
+  const content = Buffer.from(bytes).toString('utf-8').replaceAll('\r\n', '\n');
 
   // Pre-process content to remove commented-out text (including inline
   // comments and escaped `\%`, unlike a naive whole-line strip).

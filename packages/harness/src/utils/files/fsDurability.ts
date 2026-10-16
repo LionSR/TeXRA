@@ -23,7 +23,6 @@ import { Effect, FileSystem, Path, PlatformError } from 'effect';
 import writeFileAtomicLib from 'write-file-atomic';
 
 import { withLogChannel } from '@logger/effectLog';
-import { normalizeLineEndings } from '@utils/text/stringUtils';
 
 import { absentReason } from './fsEntryExists';
 
@@ -294,6 +293,6 @@ export const readNormalizedFile = (
     .readFile(target)
     .pipe(
       Effect.map((bytes) =>
-        normalizeLineEndings(Buffer.from(bytes).toString('utf-8')),
+        Buffer.from(bytes).toString('utf-8').replaceAll('\r\n', '\n'),
       ),
     );

@@ -5,6 +5,7 @@
  */
 
 // Third-party imports
+import { formatResultCount } from '@texra-ai/harness/transcript';
 import { Effect, Option } from 'effect';
 
 // Local imports
@@ -48,7 +49,6 @@ import {
 import { isGitRepository } from '@texra/utils/git/isGitRepository';
 import { envVar } from '@utils/system/envFlags';
 import { findToolInCommonPaths } from '@utils/system/binaryResolver';
-import { formatResultCount } from '@utils/text/stringUtils';
 
 const CHANNEL = 'pluginAvailability';
 

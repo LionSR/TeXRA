@@ -9,7 +9,6 @@ import { Effect } from 'effect';
 import { escapeTextStrict } from '@shared/utils/xmlEscape';
 import type { SettingsStores } from '@shared/config/settings';
 import { listExternalRoots } from '@utils/files/externalRoots';
-import { isoDateOnly } from '@utils/text/stringUtils';
 import { executeCommand } from '@utils/system/execUtils';
 import { envVar } from './envFlags';
 import { IS_WINDOWS } from './platformPaths';
@@ -115,7 +114,7 @@ export const buildWorkspaceInfoBlock = Effect.fn(function* (
 ) {
   const platform = getPlatformLabel();
   const shell = yield* detectShell;
-  const date = isoDateOnly();
+  const date = new Date().toISOString().slice(0, 10);
   const git = wsPath ? yield* getGitInfo(wsPath, settings) : null;
 
   const lines: string[] = [];

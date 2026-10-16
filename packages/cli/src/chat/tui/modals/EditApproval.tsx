@@ -1,3 +1,4 @@
+import { formatResultCount } from '@texra-ai/harness/transcript';
 import { useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { Box, Text, useWindowSize } from 'ink';
 
@@ -5,7 +6,6 @@ import { COLOR_HINT } from '@cli/tui/ui/colors';
 import { clampModalWidth, isCompactRows } from '@cli/tui/ui/theme';
 import type { SurfaceDecision } from '@texra/shared/session/surfaceDecision';
 import { buildDiffHunks } from '@utils/text/unifiedDiff';
-import { formatResultCount } from '@utils/text/stringUtils';
 
 import { ConfirmCard, ConfirmCardFeedback } from './ConfirmCard';
 import { confirmCardContentRowsBudget } from './confirmCardRowsBudget';

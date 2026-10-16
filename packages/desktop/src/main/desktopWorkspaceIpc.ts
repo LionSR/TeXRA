@@ -31,7 +31,6 @@ import {
 import { locateInWorkspace } from '@utils/files/workspaceFS';
 import { readDirectoryTypedTolerant } from '@utils/files/fsDurability';
 import { entryTypeIn } from '@utils/files/fsEntryExists';
-import { normalizeLineEndings } from '@utils/text/stringUtils';
 
 import {
   DESKTOP_WORKSPACE_COMMANDS,
@@ -364,9 +363,9 @@ export function createDesktopWorkspaceIpc(
       // through the shared facade this replaces already was. Decoding the
       // bytes ourselves keeps a UTF-8 BOM, which `readFileString`'s decoder
       // strips and the editor's verbatim save would otherwise delete.
-      const contents = normalizeLineEndings(
-        Buffer.from(yield* fs.readFile(absolutePath)).toString('utf8'),
-      );
+      const contents = Buffer.from(yield* fs.readFile(absolutePath))
+        .toString('utf8')
+        .replaceAll('\r\n', '\n');
       return { kind: 'contents', contents } satisfies HostOutcome;
     });
 

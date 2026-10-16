@@ -1,12 +1,8 @@
+import { stripControlCharacters } from '@texra-ai/harness/schemas';
 import cliTruncate from 'cli-truncate';
 import sliceAnsi from 'slice-ansi';
 import stringWidth from 'string-width';
 import stripAnsi from 'strip-ansi';
-
-import {
-  collapseWhitespace,
-  stripControlCharacters,
-} from '@utils/text/stringUtils';
 
 /** Remove terminal control sequences while preserving printable text and line breaks. */
 export function safeTerminalText(text: string): string {
@@ -45,7 +41,7 @@ export function truncateSummaryToWidth(
   text: string,
   maxColumns: number,
 ): string {
-  return truncateToWidth(collapseWhitespace(text), maxColumns);
+  return truncateToWidth(text.replaceAll(/\s+/g, ' ').trim(), maxColumns);
 }
 
 /**

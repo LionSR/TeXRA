@@ -1,5 +1,5 @@
 import { summarizeSubagentFollowup } from '@texra-ai/harness/transcript';
-import { getModelLabel } from '@texra-ai/harness/schemas';
+import { getModelLabel, truncateSummary } from '@texra-ai/harness/schemas';
 import { formatCliModelAccessRoute } from '@cli/runtime/modelAccessRoute';
 import {
   isEmptyUsage,
@@ -9,7 +9,6 @@ import {
 import { formatApprovalPolicy } from '@ui/copy/approvalPolicy';
 import { RUN_GRANT_NOUN, RUN_GRANT_ORDER } from '@ui/copy/delegationApproval';
 import { usageCostLabel } from '@ui/copy/modelAccess';
-import { truncateSummary } from '@utils/text/stringUtils';
 
 import { formatResumeCommand } from './state/resumeHint';
 import type { ApprovalPolicy } from '@texra-ai/harness/schemas';

@@ -4,12 +4,12 @@
  * one brings its run on screen without taking focus. The card stays the one
  * place to answer; nothing here decides a request.
  */
+import { formatResultCount } from '@texra-ai/harness/transcript';
 import { Effect, Stream } from 'effect';
 
 import { withLogChannel } from '@texra-ai/harness';
 import { attentionOf } from '@texra-ai/harness/schemas';
 import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';
-import { formatResultCount } from '@utils/text/stringUtils';
 import type { Session, SessionView } from '@texra-ai/harness';
 import type { RunId } from '@texra-ai/harness/schemas';
 import type * as vscode from 'vscode';

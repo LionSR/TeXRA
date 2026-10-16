@@ -4,6 +4,8 @@
  * Uses the Loogle API at https://loogle.lean-lang.org/
  */
 
+import { formatResultCount } from '@texra-ai/harness/transcript';
+import { truncateWithEllipsis } from '@texra-ai/harness/schemas';
 import { Cause, Effect, Array as Arr } from 'effect';
 import { z } from 'zod';
 
@@ -15,10 +17,6 @@ import {
 } from '@texra-ai/harness/plugins';
 import { ToolResult } from '@shared/schemas';
 import { retryTransientFetch, scopedOkClient } from '@tools/timeouts';
-import {
-  formatResultCount,
-  truncateWithEllipsis,
-} from '@utils/text/stringUtils';
 
 const LOOGLE_TIMEOUT_MS = 10_000; // 10 s
 const LOOGLE_CHANNEL = 'lean_loogle';

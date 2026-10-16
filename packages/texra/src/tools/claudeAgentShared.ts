@@ -1,5 +1,6 @@
 // Shared constants and helpers for the Claude Code CLI tool.
 
+import { truncateSummary } from '@texra-ai/harness/schemas';
 import { Effect, Predicate } from 'effect';
 
 import { withLogChannel } from '@texra-ai/harness';
@@ -14,7 +15,6 @@ import type {
 import { isClaudeCodeModel } from '@texra/shared/agentCliSettings';
 import type { AgentCliEffort } from '@texra/shared/agentCliSettings';
 import { ClaudeAgentStateKey } from '@texra/shared/settingsView/integrationSettings';
-import { truncateSummary } from '@utils/text/stringUtils';
 
 import {
   agentCliReasoning,

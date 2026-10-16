@@ -5,6 +5,7 @@
  * The plain-text workflow lines are `scriptPlainOutput.ts`.
  */
 import path from 'node:path';
+import { formatCompactDuration } from '@texra-ai/harness/transcript';
 
 import {
   Effect,
@@ -22,7 +23,7 @@ import {
 import { isTerminalOutcomePhase } from '@texra-ai/harness/schemas';
 import { RUN_PHASE, type RunId, type RunPhase } from '@shared/schemas';
 import { formatLoopPositionLabel, runStatusLabel } from '@ui/copy/runStatus';
-import { formatCompactDuration, pluralize } from '@utils/text/stringUtils';
+import { pluralize } from '@utils/text/stringUtils';
 
 import {
   safeTerminalText,

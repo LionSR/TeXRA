@@ -9,7 +9,6 @@ import { withLogChannel } from '@texra-ai/harness';
 import { pathToLocationIn } from '@texra-ai/harness';
 import type { FileLocation } from '@shared/schemas';
 import { renderPrompt } from '@utils/prompt';
-import { normalizeLineEndings } from '@utils/text/stringUtils';
 
 // Local imports - latex utils
 import { compileLatex2Pdf } from './texTools';
@@ -64,8 +63,9 @@ const extract = Effect.fn('TikzPictureManager.extract')(function* (
   latexFile: FileLocation,
 ) {
   const fs = yield* FileSystem.FileSystem;
-  const content = normalizeLineEndings(
-    yield* fs.readFileString(latexFile.absolutePath),
+  const content = (yield* fs.readFileString(latexFile.absolutePath)).replaceAll(
+    '\r\n',
+    '\n',
   );
 
   // Match each figure block first, then inspect labels inside the block. This

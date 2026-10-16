@@ -31,7 +31,11 @@ import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 
 // Local imports
 import { rollupOf } from '@texra-ai/harness/schemas';
-import { dispatchedChildren } from '@texra-ai/harness/transcript';
+import {
+  dispatchedChildren,
+  formatCompactDuration,
+  formatResultCount,
+} from '@texra-ai/harness/transcript';
 import type { TeXRAIconName } from '@shared/iconNames';
 import type { InquiryThreadSummary, RunId } from '@shared/schemas';
 import type { Surface } from '@texra/shared/session/surface';
@@ -42,10 +46,6 @@ import { runStatusLabel } from '@ui/copy/runStatus';
 import { designTokens, commonViewStyles } from '@ui/styles';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import { NESTED_AGENT } from '@ui/copy/nestedRuns';
-import {
-  formatCompactDuration,
-  formatResultCount,
-} from '@utils/text/stringUtils';
 import { getTimeFormatter } from '../formatters/timestampUtils';
 import { dispatchGroupToggle } from '../utils';
 import type { SessionView, RunView } from '@texra-ai/harness/schemas';

@@ -5,9 +5,9 @@
  * and which agents use it. A renderer lays these out; it spells none of
  * them itself.
  */
+import { formatResultCount } from '@texra-ai/harness/transcript';
 import { toolDependencyStatusLabel } from '@texra/shared/tools/toolDependencyStatusLabels';
 import type { PluginRow } from '@texra/shared/settingsView/settingsViewMessages';
-import { formatResultCount } from '@utils/text/stringUtils';
 
 /** The page's own copy. */
 export const PLUGINS_PAGE = Object.freeze({

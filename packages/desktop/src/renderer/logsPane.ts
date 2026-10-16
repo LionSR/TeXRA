@@ -2,14 +2,13 @@ import '@awesome.me/webawesome/dist/components/details/details.js';
 import { html, nothing, render, type TemplateResult } from 'lit';
 import { repeat } from 'lit/directives/repeat.js';
 import { Hash, Result } from 'effect';
-import { parseJsonWith } from '@texra-ai/harness/schemas';
+import { parseJsonWith, truncateSummary } from '@texra-ai/harness/schemas';
 import type { TeXRAIconName } from '@shared/iconNames';
 import { postMessage } from '@texra/shared/hostBridge';
 import { renderLabeledActionButton } from '@ui/wa/actionButtons';
 import { renderEmptyState } from '@ui/wa/emptyState';
 import { renderLoadingState } from '@ui/wa/loadingState';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
-import { formatTimestamp, truncateSummary } from '@utils/text/stringUtils';
 import { DESKTOP_LOCAL_COMMANDS } from '../shared/desktopCommandSurface';
 import {
   DESKTOP_LOG_COMMANDS,
@@ -17,6 +16,13 @@ import {
   desktopLogLineText,
   type DesktopSetLogMessage,
 } from '../shared/desktopLogMessages';
+
+/** An ISO timestamp as `YYYY-MM-DD HH:MM:SS` in UTC; an unparsable one as is. */
+function formatTimestamp(isoTimestamp: string): string {
+  const parsed = new Date(isoTimestamp);
+  if (!Number.isFinite(parsed.getTime())) return isoTimestamp;
+  return parsed.toISOString().replace('T', ' ').slice(0, 19);
+}
 
 type DesktopLogLevel = 'debug' | 'error' | 'info' | 'warn' | 'unknown';
 

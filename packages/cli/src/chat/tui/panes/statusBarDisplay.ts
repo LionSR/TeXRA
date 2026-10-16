@@ -1,3 +1,9 @@
+import {
+  formatCompactDuration,
+  formatCompactTokenCount,
+  formatCostUsd,
+  formatResultCount,
+} from '@texra-ai/harness/transcript';
 import { absurd, Predicate } from 'effect';
 import { runBypasses } from '@texra-ai/harness/schemas';
 import { isActivePhase } from '@texra-ai/harness/schemas';
@@ -29,12 +35,6 @@ import { runStatusLabel } from '@ui/copy/runStatus';
 import { approvalPolicyLabel } from '@ui/copy/approvalPolicy';
 import { AGENT_LIST, NESTED_AGENT, TASK_ACTIONS } from '@ui/copy/nestedRuns';
 import { APPROVAL_BYPASS_BADGE } from '@ui/copy/approvalBypass';
-import {
-  formatCompactDuration,
-  formatCompactTokenCount,
-  formatCostUsd,
-  formatResultCount,
-} from '@utils/text/stringUtils';
 
 import { formatResumeCommand } from '../state/resumeHint';
 import { type TransientNotice } from '../state/cliState';

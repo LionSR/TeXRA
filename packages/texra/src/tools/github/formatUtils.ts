@@ -7,11 +7,9 @@
  * paths and polling URL/cursor helpers live in `./githubPaths`.
  */
 
+import { truncateWithEllipsis } from '@texra-ai/harness/schemas';
 import { DELIVERY_TAG } from '@shared/deliveryTags';
-import {
-  isNonEmptyString,
-  truncateWithEllipsis,
-} from '@utils/text/stringUtils';
+import { isNonEmptyString } from '@utils/text/stringUtils';
 import type { GhIssueComment } from './prTypes';
 
 const WEBHOOK_TAG = DELIVERY_TAG.githubWebhookActivity;
