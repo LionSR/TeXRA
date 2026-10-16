@@ -10,9 +10,9 @@
 import { Data, Duration, Effect } from 'effect';
 import { StatusCodes } from 'http-status-codes';
 import { Secrets } from '@texra-ai/harness';
+import { toErrorMessage } from '@texra-ai/harness/schemas';
 import { scopedClient } from '@tools/timeouts';
 import { isNonEmptyString } from '@utils/text/stringUtils';
-import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { getGitHubToken } from './githubAuth';
 import type { Headers, HttpClient } from 'effect/http';

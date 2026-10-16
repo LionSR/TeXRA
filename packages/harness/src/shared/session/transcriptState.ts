@@ -19,19 +19,23 @@ import {
 import { compareBySeqNo } from '@shared/runs/runOrdering';
 import type { RunLabels } from '@shared/tools/executionsDisplay';
 import {
+  transcriptText,
+  type TranscriptText,
+} from '@shared/transcript/transcriptText';
+import {
   compactionActivityRow,
+  type StreamingTextRow,
+  type ToolCallFacts,
+  type TranscriptRow,
+  type TranscriptRowBase,
+} from '@shared/transcript/transcriptRow';
+import {
   logPayloadRow,
   plainLogRow,
   streamingTextRow,
   toolRow,
   type LogRowPayload,
-  type StreamingTextRow,
-  type ToolCallFacts,
-  type TranscriptRow,
-  type TranscriptRowBase,
-  transcriptText,
-  type TranscriptText,
-} from '@shared/transcript';
+} from '@shared/transcript/projectTranscriptRow';
 
 import type { TranscriptView } from './sessionView';
 

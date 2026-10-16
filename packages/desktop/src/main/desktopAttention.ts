@@ -8,6 +8,7 @@ import { app, Notification, type BrowserWindow } from 'electron';
 import { Context, Effect, Queue, Stream, SubscriptionRef } from 'effect';
 
 import { attentionOf } from '@texra-ai/harness/schemas';
+import { runStatusLabel } from '@ui/copy/runStatus';
 
 import { DesktopProjects, type DesktopProject } from './desktopProjects.js';
 import { DESKTOP_HEADLESS } from './desktopPresentation.js';
@@ -108,7 +109,7 @@ function finishedLine(
   if (previous === undefined || run.parentId !== null) return undefined;
   if (run.durableOutcome === null || previous.durableOutcome !== null)
     return undefined;
-  return `${run.title}: ${run.statusLabel}.`;
+  return `${run.title}: ${runStatusLabel(run.statusKey)}.`;
 }
 
 /**

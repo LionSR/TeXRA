@@ -17,7 +17,7 @@ import {
 const VOCABULARY_OWNER = 'packages/harness/src/shared/approvalPolicy.ts';
 
 /**
- * Sites allowed to call `decideTexraApproval` / `decideRetryApproval` /
+ * Sites allowed to call `decideApproval` / `decideRetryApproval` /
  * `decideHumanInputRequest` / `decideProposalApproval`. Core is the one
  * authority: `requestPolicy.ts` decides what the policy settles when a request
  * opens, the command and edit tools decide what only they know. A host must not grow a second evaluator — extend
@@ -65,12 +65,12 @@ const BYPASS_WRITE_ALLOWLIST = new Set([
 ]);
 
 const EVALUATOR_CALL =
-  /\b(?:decideTexraApproval|decideRetryApproval|decideHumanInputRequest|decideProposalApproval)\s*\(/;
+  /\b(?:decideApproval|decideRetryApproval|decideHumanInputRequest|decideProposalApproval)\s*\(/;
 const BYPASS_WRITE_CALL =
   /\b(?:humanGrant|goalGrant|delegatedChildGrants)\s*\(|\.approvals\.change\s*\(/;
 const POLICY_OVERRIDE_CALL = /\.approvals\.override\s*\(/;
 const POLICY_VOCABULARY_DEFINITION =
-  /\b(?:const|type)\s+(?:TEXRA_APPROVAL_POLICIES|TexraApprovalPolicySchema)\b/;
+  /\b(?:const|type)\s+(?:APPROVAL_POLICIES|ApprovalPolicySchema)\b/;
 
 function readProductionSource(file: string): string {
   return stripComments(readFileSync(resolve(REPO_ROOT, file), 'utf8'));

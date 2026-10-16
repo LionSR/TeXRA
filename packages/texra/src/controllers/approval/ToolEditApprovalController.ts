@@ -44,6 +44,7 @@ import {
   Rejected,
   withLogChannel,
 } from '@texra-ai/harness';
+import { toErrorMessage } from '@texra-ai/harness/schemas';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { RequestDecision, SessionEvent } from '@shared/schemas';
 import { isLatexFile } from '@texra/shared/latexFileTypes';
@@ -55,7 +56,6 @@ import {
   type LatexPreviewEntry,
 } from '@texra/tools/latex/latexPreview';
 import type { ToolEditApprovalRequest } from '@tools/approval/toolEditApproval';
-import { toErrorMessage } from '@utils/errors/errorMessage';
 import { normalizeLineEndings } from '@utils/text/stringUtils';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 

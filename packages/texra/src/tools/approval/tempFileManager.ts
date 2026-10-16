@@ -22,7 +22,7 @@ import * as path from 'node:path';
 import { Data, Effect, FileSystem, type PlatformError } from 'effect';
 
 import { withLogChannel } from '@texra-ai/harness';
-import { toErrorMessage } from '@utils/errors/errorMessage';
+import { toErrorMessage } from '@texra-ai/harness/schemas';
 
 const CHANNEL = 'approval.tempFiles';
 

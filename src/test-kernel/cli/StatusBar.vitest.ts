@@ -33,7 +33,6 @@ function leftTexts(display: StatusBarDisplay): string[] {
 type StatusBarCase = Omit<StatusBarChrome, 'turn'> & {
   readonly status: RunPhase;
   /** The fold's label, when a test pins one the status alone would not give. */
-  readonly statusLabel?: string;
   readonly isChildRun?: boolean;
   readonly bypass?: BypassState;
   readonly queuedFollowUpMessages: readonly string[];
@@ -50,7 +49,6 @@ type StatusBarCase = Omit<StatusBarChrome, 'turn'> & {
 function renderBar(input: StatusBarCase): StatusBarDisplay {
   const {
     status,
-    statusLabel,
     isChildRun,
     bypass,
     queuedFollowUpMessages,
@@ -65,7 +63,6 @@ function renderBar(input: StatusBarCase): StatusBarDisplay {
   const run = makeRunView({
     id: 'shown' as RunId,
     status,
-    ...(statusLabel === undefined ? {} : { statusLabel }),
     parentId: isChildRun ? ('root' as RunId) : null,
     usage: usage ?? { inputTokens: 0, outputTokens: 0, cost: 0 },
     context: contextState ?? null,

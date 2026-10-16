@@ -17,7 +17,6 @@ import '@awesome.me/webawesome/dist/components/button-group/button-group.js';
 import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 
 // Local imports - shared styles
-import type { MemoryViewItem } from '@shared/tools/memoryView';
 import type { TeXRAIconName } from '@shared/iconNames';
 import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 import { postMessage } from '@texra/shared/hostBridge';
@@ -29,6 +28,7 @@ import { renderIconActionButtonParts } from '@ui/wa/actionButtons';
 import { metaStripStyles, renderDotMeta } from '@ui/wa/metaStrip';
 import { cachedDateTimeFormat } from '@ui/formatting/dateTimeFormat';
 import { formatBytes, formatResultCount } from '@utils/text/stringUtils';
+import type { MemoryViewItem } from '@texra-ai/harness/schemas';
 
 const SHORT_DATE_TIME_OPTIONS: Intl.DateTimeFormatOptions = {
   year: 'numeric',

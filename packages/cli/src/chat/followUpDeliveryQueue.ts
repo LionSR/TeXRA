@@ -1,6 +1,6 @@
 import { Cause, Effect, Latch, Queue, type Scope } from 'effect';
 import { withLogChannel } from '@texra-ai/harness';
-import { toErrorMessage } from '@utils/errors/errorMessage';
+import { toErrorMessage } from '@texra-ai/harness/schemas';
 
 const CHANNEL = 'cli.chat';
 

@@ -75,9 +75,83 @@ export type {
   RequestAnswerability,
   SessionTitleState,
 } from '@shared/session/sessionView';
-// Whether a run's lifecycle status is in flight: running, or waiting for its
-// next input; a ready, completed, failed or stopped run is not.
-export { isInFlightPhase } from '@shared/runs/runStatus';
+// The views themselves, read-only all the way down (the root re-exports
+// them), the request a run waits on, and what a host brings to
+// `acceptsFollowUp`.
+export type {
+  PendingRequest,
+  RunView,
+  SessionView,
+  TranscriptView,
+} from '@shared/session/readonlyViews';
+export type { FollowUpHost } from '@shared/session/sessionView';
+// Where a run's lifecycle status stands: in flight (running, or waiting for
+// its next input), active, ended, or settled enough for its transcript.
+export {
+  RUN_STATUS_KEYS,
+  type RunStatusKey,
+} from '@shared/runs/runStatusDisplay';
+export type {
+  ExternalFileLocation,
+  RunLifecycleStatus,
+  RunPhase,
+  RunStorageFileLocation,
+  TaskGroup,
+  TaskGroupStatus,
+  UserFollowUpSupport,
+  WorkspaceFileLocation,
+} from '@shared/schemas';
+export {
+  isActivePhase,
+  isInFlightPhase,
+  isTerminalOutcomePhase,
+  isTranscriptSettlementPhase,
+} from '@shared/runs/runStatus';
+// The approval policy: its values, default, persisted key and tolerant
+// parse, and the denial a run that may not ask reports.
+export {
+  APPROVAL_POLICIES,
+  APPROVAL_POLICY_CONFIG_KEY,
+  APPROVAL_POLICY_DEFAULT,
+  APPROVAL_POLICY_NO_INPUT_DEFAULT,
+  approvalPolicyDenialMessage,
+  ApprovalPolicySchema,
+  parseApprovalPolicy,
+  type ApprovalPolicy,
+  type ApprovalPolicyDenial,
+} from '@shared/approvalPolicy';
+// The approvals a run may skip, and how a run's own and inherited grants
+// resolve against the policy.
+export {
+  resolveBypass,
+  runBypasses,
+  stricterPolicy,
+  type ApprovalBypassKind,
+} from '@shared/approvalBypassKind';
+// A request a host sends a session and the outcome it answers with.
+export {
+  OutcomeSchema,
+  RuntimeRequestSchema,
+} from '@shared/session/runtimeRequest';
+export type {
+  RuntimeRequest,
+  ToolEditContent,
+} from '@shared/session/runtimeRequest';
+// A memory as a memory list shows it.
+export {
+  MemoryViewItemSchema,
+  type MemoryViewItem,
+} from '@shared/tools/memoryView';
+// A model's display name.
+export { getModelLabel } from '@shared/model/modelLabel';
+// Error messages, and JSON parsed without a throw.
+export {
+  ensureError,
+  extractErrorMessage,
+  formatError,
+  toErrorMessage,
+} from '@utils/errors/errorMessage';
+export { parseJsonWith, safeParseJson } from '@common/parsing/safeParseJson';
 // The goal plugin's row, as a renderer reads a run's goal from it.
 export { goalStateOf, type GoalState } from '@shared/plugins/goal';
 // An exported run (`assembleTrace`), as a static viewer parses it back.

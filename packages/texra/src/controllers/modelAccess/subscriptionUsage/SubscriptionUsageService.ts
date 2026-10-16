@@ -10,6 +10,7 @@ import {
 } from '@texra-ai/llm/node';
 import { exposeApiKey, lookupApiKey, type SecretsFailed } from '@texra-ai/llm';
 import { withLogChannel } from '@texra-ai/harness';
+import { toErrorMessage } from '@texra-ai/harness/schemas';
 import { GlobalStateKey } from '@texra-ai/harness/schemas';
 import type {
   SubscriptionUsageProvider,
@@ -18,7 +19,6 @@ import type {
 } from '@texra/shared/model/subscriptionUsage';
 import { SUBSCRIPTION_USAGE_PROVIDERS } from '@texra/shared/model/subscriptionUsage';
 import { CODING_PLAN_SUBSCRIPTIONS } from '@texra/shared/model/codingPlans';
-import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { fetchChatGptUsage } from './codexUsageAdapter';
 import {

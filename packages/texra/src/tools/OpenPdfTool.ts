@@ -13,13 +13,13 @@ import {
 } from '@texra-ai/harness/plugins';
 
 // Local imports
+import { pathToLocationIn } from '@texra-ai/harness';
 import {
   fileLocationDisplayPath,
   ToolError,
   type FileLocation,
   type RunStorageFileLocation,
 } from '@shared/schemas';
-import { pathToLocationIn } from '@utils/files/fileLocation';
 import { runStorageLocationInRunUnder } from '@utils/files/runStorageFs';
 
 // Local file imports

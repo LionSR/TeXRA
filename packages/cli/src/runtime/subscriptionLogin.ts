@@ -8,13 +8,13 @@ import { Effect } from 'effect';
 import { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 import { Secrets } from '@texra-ai/harness';
+import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';
 import { ACCOUNT_OUTCOME } from '@shared/model/accountAuth';
 import {
   subscriptionProvider,
   type SubscriptionProviderId,
   type SubscriptionSignInPresenter,
 } from '@texra/controllers/modelAccess/subscriptionProviders';
-import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 import { presentCliSignInUrl, type CliSignInProgress } from './signInUrl';
 import { interactiveTerminalFailure } from './terminalRequirements';

@@ -21,6 +21,7 @@ import {
   providerDisplayName,
 } from '@texra-ai/llm';
 import { withLogChannel } from '@texra-ai/harness';
+import { toErrorMessage } from '@texra-ai/harness/schemas';
 import { type HostInteractions } from '@texra-ai/harness';
 import { warnApprovalDenied } from '@cli/runtime/approval/approvalPrompts';
 import { promptForCliProviderApiKey } from '@cli/chat/tui/hosts/cliProviderKeys';
@@ -33,7 +34,6 @@ import {
   ProgressApiKeyRetryController,
 } from '@texra/controllers/progressView/ProgressApiKeyRetryController';
 import { subscribeToSignalChanges } from '@texra/shared/signals';
-import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { notify } from '../notifications/terminalNotifier';
 import {

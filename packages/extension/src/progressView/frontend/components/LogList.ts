@@ -20,7 +20,7 @@ import { SessionUiEvents } from '@texra/shared/session/uiEvents';
 import { designTokens } from '@ui/styles';
 import { getComposedPathElement } from '../utils';
 import { logStyles } from '../styles/logStyles';
-import type { RunView, SessionView } from '@texra-ai/harness';
+import type { RunView, SessionView } from '@texra-ai/harness/schemas';
 import type { RunId } from '@texra-ai/harness/schemas';
 import type { TaskGroupList } from './TaskGroupList';
 

@@ -1,5 +1,5 @@
 // The script popup: the calls a run's `script` call issued, painted from the
-// shared script-stage model (`scriptStages` in `@shared/transcript`), the one the
+// shared script-stage model (`scriptStages` in `@texra-ai/harness/transcript`), the one the
 // progress view paints. A foreground surface like the Ctrl-T reader:
 // row-budgeted, and Esc restores the conversation untouched. Its title is
 // the card's summary line; each phase lists its calls in issue order. Enter
@@ -10,6 +10,11 @@
 import { Box, Text, useInput, useWindowSize } from 'ink';
 
 // Local imports - TUI primitives
+import {
+  SCRIPT_CALL_STATUS_LABEL,
+  scriptStages,
+  type ScriptCallView,
+} from '@texra-ai/harness/transcript';
 import { isCtrlInput, isEscapeInput } from '@cli/tui/inputKeys';
 import { ReaderPanel, readerLayout } from '@cli/tui/ui/BorderedPanel';
 import { KeyHints, type KeyHint } from '@cli/tui/ui/KeyHints';
@@ -25,12 +30,7 @@ import {
 import { fillRows, safeTerminalText } from '@cli/runtime/terminalText';
 
 // Local imports - shared schemas and model
-import {
-  SCRIPT_CALL_STATUS_LABEL,
-  scriptStages,
-  TALK_TO_AGENT,
-  type ScriptCallView,
-} from '@shared/transcript';
+import { TALK_TO_AGENT } from '@ui/copy/nestedRuns';
 
 // Local imports - TUI state
 import { type ScriptPopupView } from '../state/cliState';

@@ -6,11 +6,11 @@ import { Effect, Result, absurd, Array as Arr } from 'effect';
 import { LRUCache } from 'lru-cache';
 
 import { withLogChannel } from '@texra-ai/harness';
+import { toErrorMessage } from '@texra-ai/harness/schemas';
 import type {
   NonRegexReplacementCategory,
   RegexReplacementCategory,
 } from '@texra/shared/constants/replacementCategories';
-import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import {
   ReplacementRuleSet,

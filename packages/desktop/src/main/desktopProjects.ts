@@ -30,6 +30,7 @@ import {
   canonicalizeWorkspacePath,
   resolveWorkspaceStoragePath,
 } from '@texra-ai/harness/node';
+import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';
 import { type SessionHandle } from '@agent/runtime';
 import { openTexraWorkspaceConfigStores } from '@texra/platform/defaults/nodeStores';
 import {
@@ -43,7 +44,6 @@ import {
 } from '@texra/controllers/server/serviceSession';
 import type { ServiceLink } from '@texra/controllers/server/client';
 import { sessionStoreMovedAsideMessage } from '@ui/copy/sessionStore';
-import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { absentReason } from '@utils/files/fsEntryExists';
 import { DesktopProjectRecords } from './desktopProjectRecords.js';
 import { showDesktopWarningDialog } from './platform/warningDialog.js';

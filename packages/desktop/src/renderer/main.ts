@@ -20,6 +20,7 @@ import { repeat } from 'lit/directives/repeat.js';
 import { z } from 'zod';
 import '@progressView/frontend/ProgressApp';
 import './TexraDiffView';
+import { extractErrorMessage } from '@texra-ai/harness/schemas';
 import type { ProgressApp } from '@progressView/frontend/ProgressApp';
 import { createSessionSurfaces } from '@progressView/frontend/sessionSurfaces';
 import { hostBridge, postMessage } from '@texra/shared/hostBridge';
@@ -39,7 +40,6 @@ import {
 } from '@ui/wa/actionButtons';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import { TEXRA_TAGLINE } from '@ui/copy/onboarding';
-import { extractErrorMessage } from '@utils/errors/errorMessage';
 
 import { type DesktopLayoutPanel } from '../shared/desktopShellMessages';
 import {

@@ -10,6 +10,11 @@ import { Predicate } from 'effect';
 import { html, nothing, type TemplateResult } from 'lit';
 import { classMap, type ClassInfo } from 'lit/directives/class-map.js';
 import { ifDefined } from 'lit/directives/if-defined.js';
+import {
+  BASH_TOOL_DEFAULT_TIMEOUT_MS,
+  EXECUTIONS_WAIT_DEFAULT_TIMEOUT_SECONDS,
+  executionsWaitTimeoutSeconds,
+} from '@texra-ai/harness/transcript';
 import { TOOL_OUTPUT_LANGUAGES } from '@progressView/frontend/formatters/constants';
 import {
   buildToolUseSection,
@@ -18,13 +23,8 @@ import {
   buildCodeBlock,
   SPINNER_ICON_NAME,
 } from '@progressView/frontend/formatters/htmlBuilders';
-import {
-  BASH_TOOL_DEFAULT_TIMEOUT_MS,
-  EXECUTIONS_WAIT_DEFAULT_TIMEOUT_SECONDS,
-  executionsWaitTimeoutSeconds,
-} from '@shared/toolUse';
 import type { TeXRAIconName } from '@shared/iconNames';
-import type { TranscriptRowBase } from '@shared/transcript';
+import type { TranscriptRowBase } from '@texra-ai/harness/transcript';
 
 // Side-effect import to register <terminal-output> custom element
 import '@progressView/frontend/components/TerminalOutput';

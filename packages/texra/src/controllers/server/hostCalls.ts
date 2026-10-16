@@ -19,9 +19,9 @@ import {
 } from '@texra-ai/llm';
 
 import {
-  TexraApprovalPolicySchema,
+  ApprovalPolicySchema,
   type ApprovalPolicyDenial,
-} from '@shared/approvalPolicy';
+} from '@texra-ai/harness/schemas';
 import {
   FileLocationSchema,
   INSTRUCTION_ACTION,
@@ -66,7 +66,7 @@ const ManualCriticismEntrySchema = z.object({
 }) satisfies z.ZodType<ManualCriticismEntry>;
 
 /** The policy that closed a gate, as the window names it. */
-const policy = TexraApprovalPolicySchema;
+const policy = ApprovalPolicySchema;
 const ApprovalPolicyDenialSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('executable'), policy }),
   z.object({ kind: z.literal('plan'), policy }),

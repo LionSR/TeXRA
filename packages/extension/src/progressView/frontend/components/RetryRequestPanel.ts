@@ -10,8 +10,8 @@ import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/details/details.js';
 
 // Local imports - shared schemas
+import { getModelLabel } from '@texra-ai/harness/schemas';
 import type { RetryPermission } from '@shared/schemas';
-import { getModelLabel } from '@shared/model/modelLabel';
 import type { TeXRAIconName } from '@shared/iconNames';
 import { renderLabeledActionButton } from '@ui/wa/actionButtons';
 

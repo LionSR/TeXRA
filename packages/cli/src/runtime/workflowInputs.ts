@@ -4,9 +4,9 @@ import { isPathWithin, isStrictlyWithin, toPosixPath } from '@texra-ai/harness';
 import { glob, hasMagic } from 'glob';
 import { Effect, FileSystem, Scope } from 'effect';
 
+import { ensureError } from '@texra-ai/harness/schemas';
 import { CliUsageError } from '@cli/runtime/cliContext';
 
-import { ensureError } from '@utils/errors/errorMessage';
 import { absentReason } from '@utils/files/fsEntryExists';
 // toPosixPath also trims and resolves `.`/`..` segments beyond a bare slash
 // swap; safe at the call site below since the input is always a relative

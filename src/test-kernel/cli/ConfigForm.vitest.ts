@@ -19,8 +19,8 @@ import { openCliSlashCommandForm } from '@cli/chat/tui/commands/slashForms';
 import { resetCliState } from '@cli/chat/tui/state/cliState';
 import { activeForm } from '@cli/chat/tui/state/formSlot';
 import {
-  TEXRA_APPROVAL_POLICY_CONFIG_KEY,
-  type TexraApprovalPolicy,
+  APPROVAL_POLICY_CONFIG_KEY,
+  type ApprovalPolicy,
 } from '@shared/approvalPolicy';
 import type { SurfacedSettingEntry } from '@shared/state/stateSettings';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
@@ -428,7 +428,7 @@ describe('/config slash command wiring', () => {
     () =>
       Effect.gen(function* () {
         const { stores, config } = makeFakeSettingsStores('cli');
-        const applied: TexraApprovalPolicy[] = [];
+        const applied: ApprovalPolicy[] = [];
         registerBuiltinSlashCommands({
           secrets: new FakeSecrets(),
           stores,
@@ -443,14 +443,9 @@ describe('/config slash command wiring', () => {
         openCliSlashCommandForm('config', '');
         const props = yield* Effect.promise(() => renderConfigFormProps());
 
-        yield* props.writeValue(
-          entryByKey(TEXRA_APPROVAL_POLICY_CONFIG_KEY),
-          'yolo',
-        );
+        yield* props.writeValue(entryByKey(APPROVAL_POLICY_CONFIG_KEY), 'yolo');
 
-        expect(config.get(TEXRA_APPROVAL_POLICY_CONFIG_KEY, 'ask')).toBe(
-          'yolo',
-        );
+        expect(config.get(APPROVAL_POLICY_CONFIG_KEY, 'ask')).toBe('yolo');
         expect(applied).toEqual(['yolo']);
       }),
   );

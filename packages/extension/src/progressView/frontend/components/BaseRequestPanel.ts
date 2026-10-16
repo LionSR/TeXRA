@@ -49,7 +49,7 @@ import {
   splitButtonTriggerStyles,
 } from '@ui/wa/splitButton';
 import type { RequestAnswerability } from '@texra-ai/harness/schemas';
-import type { RuntimeRequest } from '@texra-ai/harness';
+import type { RuntimeRequest } from '@texra-ai/harness/schemas';
 
 /** The three ways a card declines, each with its one word. */
 const DECLINE_LABEL = {

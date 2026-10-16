@@ -1,12 +1,11 @@
 import { Effect, Result } from 'effect';
 
 import { AppState, type ConfigProvider } from '@texra-ai/harness';
+import { toErrorMessage } from '@texra-ai/harness/schemas';
 import {
   TELEMETRY_ENABLED_KEY,
   TexraStateKey,
 } from '@texra/shared/settingsView/texraSettings';
-
-import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { usageLoggingOptOut } from './UsageLogService';
 

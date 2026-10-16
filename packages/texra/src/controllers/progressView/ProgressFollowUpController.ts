@@ -7,6 +7,7 @@ import {
   type ModelHostFactUnreadable,
   type StateReadFailed,
 } from '@texra-ai/harness';
+import { toErrorMessage } from '@texra-ai/harness/schemas';
 import { detectGeneratedLatexdiffArtifact } from '@latex/latexdiff/diffFileNameManager';
 import {
   isTaskConfig,
@@ -22,7 +23,6 @@ import {
   formatRoundLabel,
   type OutputFileInfo,
 } from '@texra/shared/plugins/documentOutputs';
-import { toErrorMessage } from '@utils/errors/errorMessage';
 import { pluralize } from '@utils/text/stringUtils';
 import type { AgentConfig } from '@texra-ai/harness/schemas';
 import type { RunOutputsSource } from './runOutputs';

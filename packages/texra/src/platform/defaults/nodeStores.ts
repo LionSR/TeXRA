@@ -24,8 +24,8 @@ import {
   type JsonConfigProviderOptions,
   type SettingsCatalog,
 } from '@texra-ai/harness/node';
+import { toErrorMessage } from '@texra-ai/harness/schemas';
 import { JsonStore } from '@platform/defaults/jsonStore';
-import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import {
   TEXRA_CONFIG_FILE_NAME,

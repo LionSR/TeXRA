@@ -9,7 +9,7 @@ import { textDisplayWidth } from '@cli/runtime/terminalText';
 import type { NormalizedToolUse } from '@shared/schemas';
 
 // Local imports - test support
-import type { ToolRow } from '@shared/transcript';
+import type { ToolRow } from '@shared/transcript/transcriptRow';
 import { loadInk } from '@test/support/inkTestHarness.ts';
 import { toolRowFixture } from '@test/support/transcriptRowFixtures';
 

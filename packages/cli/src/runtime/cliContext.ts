@@ -7,16 +7,16 @@ import { Effect, FileSystem, Result } from 'effect';
 import { DatabaseOpenFailed, type ConfigProvider } from '@texra-ai/harness';
 import { canonicalizeWorkspacePath } from '@texra-ai/harness/node';
 import { Settings } from '@texra-ai/harness';
-import { safeParseJson } from '@common/parsing/safeParseJson';
-import type { MinimumLogLevel } from '@logger/effectDiagnostics';
+import { safeParseJson } from '@texra-ai/harness/schemas';
 import {
-  TEXRA_APPROVAL_POLICY_CONFIG_KEY,
-  TEXRA_APPROVAL_POLICY_NO_INPUT_DEFAULT,
-  parseTexraApprovalPolicy,
-  texraApprovalPolicyLabel,
-  type TexraApprovalPolicy,
-} from '@shared/approvalPolicy';
-import { stricterPolicy } from '@shared/approvalBypassKind';
+  APPROVAL_POLICY_CONFIG_KEY,
+  APPROVAL_POLICY_NO_INPUT_DEFAULT,
+  parseApprovalPolicy,
+  type ApprovalPolicy,
+} from '@texra-ai/harness/schemas';
+import { stricterPolicy } from '@texra-ai/harness/schemas';
+import { toErrorMessage } from '@texra-ai/harness/schemas';
+import type { MinimumLogLevel } from '@logger/effectDiagnostics';
 import type { SkillSourceOptions } from '@skills/skillSources';
 import { defaultNodeStorageRoot } from '@texra/platform/defaults/nodeStorage';
 import {
@@ -24,8 +24,8 @@ import {
   CLI_OUTPUT_FORMAT_CONFIG_KEY,
   type CliOutputFormat,
 } from '@texra/shared/cliOutputFormat';
+import { approvalPolicyLabel } from '@ui/copy/approvalPolicy';
 import { absentReason } from '@utils/files/fsEntryExists';
-import { toErrorMessage } from '@utils/errors/errorMessage';
 import { envVar } from '@utils/system/envFlags';
 import { isNonEmptyString } from '@utils/text/stringUtils';
 
@@ -48,11 +48,11 @@ export interface CliContext {
   readonly cwd: string;
   readonly mode: CliMode;
   readonly outputFormat: CliOutputFormat;
-  readonly approvalPolicy: TexraApprovalPolicy;
+  readonly approvalPolicy: ApprovalPolicy;
   /** The policy this invocation asked for itself (`--approval-policy`,
    *  `TEXRA_APPROVAL_POLICY`, `--no-input`), absent when it follows the
    *  config: what a service launch sends to narrow its own task. */
-  readonly requestedApprovalPolicy?: TexraApprovalPolicy;
+  readonly requestedApprovalPolicy?: ApprovalPolicy;
   readonly quietLogs: boolean;
   /**
    * The diagnostics emission threshold this process's runtime builds with,
@@ -287,7 +287,7 @@ export interface CliGlobalArgs {
   readonly verbose?: boolean;
   readonly cwd?: string;
   readonly outputFormat?: CliOutputFormat;
-  readonly approvalPolicy?: TexraApprovalPolicy;
+  readonly approvalPolicy?: ApprovalPolicy;
   /** `--no-color`: force-disable ANSI color on every stream. */
   readonly noColor?: boolean;
   /**
@@ -417,21 +417,18 @@ export const buildCliContext = Effect.fn('cliContext.buildCliContext')(
     // set one — the environment is the only tier that can still carry an
     // unvalidated string. `--no-input` skips the env and config tiers
     // entirely, so it also skips their warnings.
-    const requestedApprovalPolicy: TexraApprovalPolicy | undefined =
+    const requestedApprovalPolicy: ApprovalPolicy | undefined =
       init.globalArgs.approvalPolicy ??
       (noInput
-        ? TEXRA_APPROVAL_POLICY_NO_INPUT_DEFAULT
+        ? APPROVAL_POLICY_NO_INPUT_DEFAULT
         : yield* pickEnv(
             'TEXRA_APPROVAL_POLICY',
-            parseTexraApprovalPolicy,
+            parseApprovalPolicy,
             configWarnings,
           ));
-    const approvalPolicy: TexraApprovalPolicy =
+    const approvalPolicy: ApprovalPolicy =
       requestedApprovalPolicy ??
-      Settings.getConfig<TexraApprovalPolicy>(
-        config,
-        TEXRA_APPROVAL_POLICY_CONFIG_KEY,
-      );
+      Settings.getConfig<ApprovalPolicy>(config, APPROVAL_POLICY_CONFIG_KEY);
     const outputFormat: CliOutputFormat =
       init.globalArgs.outputFormat ??
       (yield* pickEnv(
@@ -484,8 +481,8 @@ export const buildCliContext = Effect.fn('cliContext.buildCliContext')(
  * also grants the run every bypass (an Auto-approve launch), recorded on
  * the run, never on the project. Local and service launches alike.
  */
-export function launchApproval(requested: TexraApprovalPolicy | undefined): {
-  readonly approvalPolicy?: TexraApprovalPolicy;
+export function launchApproval(requested: ApprovalPolicy | undefined): {
+  readonly approvalPolicy?: ApprovalPolicy;
   readonly approveDelegatedWork: boolean;
 } {
   return {
@@ -498,9 +495,9 @@ export function launchApproval(requested: TexraApprovalPolicy | undefined): {
  *  invocation asked for, or Auto-approve when it asked for that, which a
  *  Block project still denies first. */
 export function effectiveApprovalPolicy(
-  requested: TexraApprovalPolicy | undefined,
-  configured: TexraApprovalPolicy,
-): TexraApprovalPolicy {
+  requested: ApprovalPolicy | undefined,
+  configured: ApprovalPolicy,
+): ApprovalPolicy {
   if (requested === undefined) return configured;
   return requested === 'yolo' && configured !== 'never'
     ? 'yolo'
@@ -511,8 +508,8 @@ export function effectiveApprovalPolicy(
  *  the project's policy cannot widen it, and Auto-approve, which widens its
  *  own task, cannot override Block. */
 export function launchApprovalNotice(
-  requested: TexraApprovalPolicy | undefined,
-  configured: TexraApprovalPolicy,
+  requested: ApprovalPolicy | undefined,
+  configured: ApprovalPolicy,
 ): string | undefined {
   if (
     requested === undefined ||
@@ -523,7 +520,7 @@ export function launchApprovalNotice(
   const change = `Change the project's policy with /config in \`texra chat\` or in the settings view.`;
   return requested === 'yolo'
     ? `Auto-approve can't override Block: tasks run under the project's Block policy. ${change}`
-    : `Tasks run under the project's approval policy, ${texraApprovalPolicyLabel(configured)}, not ${texraApprovalPolicyLabel(requested)}: a launch can only narrow it, or auto-approve its own task. ${change}`;
+    : `Tasks run under the project's approval policy, ${approvalPolicyLabel(configured)}, not ${approvalPolicyLabel(requested)}: a launch can only narrow it, or auto-approve its own task. ${change}`;
 }
 
 /**

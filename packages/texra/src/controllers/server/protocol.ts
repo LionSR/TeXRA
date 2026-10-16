@@ -35,8 +35,12 @@ import * as SchemaIssue from 'effect/SchemaIssue';
 import { z } from 'zod';
 
 import { AgentConfigSchema } from '@texra-ai/harness/schemas';
+import {
+  ApprovalPolicySchema,
+  RUN_STATUS_KEYS,
+} from '@texra-ai/harness/schemas';
+import { OutcomeSchema, RuntimeRequestSchema } from '@texra-ai/harness/schemas';
 import { ChatExportInputSchema } from '@agent/export/schemas';
-import { TexraApprovalPolicySchema } from '@shared/approvalPolicy';
 import {
   CommitOrdinalSchema,
   DisplaySessionEventSchema,
@@ -46,10 +50,6 @@ import {
   RunRecordFieldsSchema,
 } from '@shared/schemas';
 
-import {
-  OutcomeSchema,
-  RuntimeRequestSchema,
-} from '@shared/session/runtimeRequest';
 import {
   EventsFrameSchema,
   RequestErrorWireSchema,
@@ -75,7 +75,7 @@ export const BUILD_VERSION: string =
 
 /** Bumped whenever a procedure or a payload changes shape. A client newer
  *  than the running service retires it; an older one stays in process. */
-export const PROTOCOL_VERSION = 31;
+export const PROTOCOL_VERSION = 32;
 
 /** `value` as JSON carries it: an absent field (`undefined`) is left out,
  *  which the wire's JSON check otherwise refuses. */
@@ -143,7 +143,7 @@ const TaskSummarySchema = z.object({
   runId: RunIdSchema,
   label: z.string(),
   description: z.string().nullable(),
-  statusLabel: z.string(),
+  statusKey: z.enum(RUN_STATUS_KEYS),
   /** Launch time, ms since the epoch: the list's order. */
   launchedAt: z.int().positive(),
   /** This service runs it now, so it answers approvals and streams text. */
@@ -223,7 +223,7 @@ export const TexraRpcs = RpcGroup.make(
       approveDelegatedWork: Schema.Boolean,
       /** The policy the launch asked for: one stricter than the project's
        *  narrows this task only; a more permissive one is ignored. */
-      approvalPolicy: zodWire(TexraApprovalPolicySchema.nullable()),
+      approvalPolicy: zodWire(ApprovalPolicySchema.nullable()),
     },
     /** The run that started: the asked id, or the one the launch resolved. */
     success: zodWire(RunIdSchema),
