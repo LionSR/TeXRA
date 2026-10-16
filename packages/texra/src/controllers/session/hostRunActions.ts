@@ -9,7 +9,7 @@ import {
   type SecretsFailed,
 } from '@texra-ai/llm';
 import {
-  type AgentCatalogServices,
+  type AgentCatalog,
   AppState,
   DatabaseReadFailed,
   getHelperModelName,
@@ -266,12 +266,12 @@ export const createHostRunActions = (
 ): Effect.Effect<
   HostRunActions,
   never,
-  FileSystem.FileSystem | Secrets | AgentCatalogServices
+  FileSystem.FileSystem | Secrets | AgentCatalog
 > =>
   Effect.gen(function* () {
     const secrets = yield* Secrets;
     // The catalog the merge's task resolves its agent against.
-    const catalog = yield* Effect.context<AgentCatalogServices>();
+    const catalog = yield* Effect.context<AgentCatalog>();
     // Resolved once here and carried: the planner's workspace probes below
     // read through this filesystem rather than taking one from whatever
     // context each of its callers happens to run on.

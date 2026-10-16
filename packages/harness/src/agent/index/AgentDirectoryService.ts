@@ -2,13 +2,14 @@
 import * as path from 'node:path';
 
 // Third-party imports
-import { Effect, FileSystem } from 'effect';
+import { Data, Effect, FileSystem } from 'effect';
 import { z } from 'zod';
 
 // Local imports
 import { CUSTOM_AGENTS_STORAGE_DIR } from '@common/storage/storageLayout';
 import { withLogChannel } from '@logger/effectLog';
 import {
+  AgentDirectories,
   AgentDirectoriesFailed,
   type AgentDirectoriesPort,
   type AppState,
@@ -19,14 +20,14 @@ import { GlobalStorageFs } from '@platform/rootedFs';
 import { Settings } from '@shared/config/settings';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import type { AgentSource } from '@shared/schemas';
+import { isStrictlyWithin } from '@utils/core/pathCore';
 import { entryExists } from '@utils/files/fsEntryExists';
 
 import {
   BUNDLED_AGENTS_DIRECTORY,
   enabledBuiltInRoots,
 } from './BundledAgentDirectories';
-
-type AgentDirectoryDocsId = 'custom-agents';
+import type { AgentEntry } from './agentEntry';
 
 /**
  * The custom agent directory the user configured, trimmed; empty when none is
@@ -41,10 +42,7 @@ export const readCustomAgentDir = (
     z.string().trim().prefault(''),
   );
 
-interface AgentDirectoryIssueReporter {
-  report(message: string, docsId: AgentDirectoryDocsId): Effect.Effect<void>;
-}
-
+/** What a host's agent directories are built from. */
 export interface AgentDirectoryServiceOptions {
   channel: string;
   /**
@@ -57,7 +55,9 @@ export interface AgentDirectoryServiceOptions {
   state: Pick<StateStore, 'get'>;
   /** Defaults to logging the issue at `warn`; hosts with an interactive
    * notification surface (e.g. the VS Code extension) can override it. */
-  issueReporter?: AgentDirectoryIssueReporter;
+  issueReporter?: {
+    report(message: string, docsId: 'custom-agents'): Effect.Effect<void>;
+  };
 }
 
 export class AgentDirectoryService {
@@ -238,7 +238,7 @@ export class AgentDirectoryService {
    *  reporting an issue cannot fail the resolution that raised it. */
   private reportIssue(
     message: string,
-    docsId: AgentDirectoryDocsId,
+    docsId: 'custom-agents',
   ): Effect.Effect<void> {
     if (this.options.issueReporter) {
       return this.options.issueReporter.report(message, docsId);
@@ -281,3 +281,107 @@ export function agentSourceRoots(
       return Effect.succeed([]);
   }
 }
+
+// Customized copies of bundled agents. A copy lands in the custom agents
+// directory stamped with `basedOn`, the digest of the bundled file it was
+// taken from, so the catalog can tell when an app update ships a newer
+// bundled version (`AgentCatalog.newerBuiltIn`). Every host's "customize"
+// and "keep mine" write through `AgentCatalog.customize`.
+
+/**
+ * `customize` refused the change: the entry has no file of its own to copy
+ * (`noFile`), its copy would land outside the custom directory (`escapes`),
+ * a copy is already there (`exists`, at `path`), or a copy has no newer
+ * bundled version to keep (`current`).
+ */
+export class AgentCustomizeRefused extends Data.TaggedError(
+  'AgentCustomizeRefused',
+)<{
+  readonly reason: 'noFile' | 'escapes' | 'exists' | 'current';
+  readonly path?: string;
+  readonly message: string;
+}> {}
+
+/**
+ * A change to a custom copy of a bundled agent: `copy` writes a new one
+ * into the custom directory, stamped with the bundled file's digest
+ * (`basedOn`), and is refused when one is there; `overwrite` replaces it;
+ * `keep` re-stamps the user's copy with the changed bundled version, which
+ * dismisses its newer-version notice and touches nothing else.
+ */
+export type AgentCustomization = 'copy' | 'overwrite' | 'keep';
+
+/**
+ * Write the definition at `from` to `to`, recording `digest` as the bundled
+ * version it is based on. `basedOn` is a top-level key, so any earlier stamp
+ * line is replaced rather than repeated.
+ */
+const writeStampedCopy = Effect.fn('writeStampedCopy')(function* (
+  from: string,
+  to: string,
+  digest: string,
+) {
+  const fs = yield* FileSystem.FileSystem;
+  const text = (yield* fs.readFileString(from)).replace(/^basedOn:.*\n?/m, '');
+  yield* fs.makeDirectory(path.dirname(to), { recursive: true });
+  yield* fs.writeFileString(
+    to,
+    `${text.endsWith('\n') ? text : `${text}\n`}basedOn: ${digest} # the bundled version this copy started from\n`,
+  );
+});
+
+/** Where a copy of `entry` lands: its path relative to the source root
+ *  that holds it, under the custom directory; undefined when that escapes. */
+const copyTarget = (entry: AgentEntry) =>
+  Effect.gen(function* () {
+    const directories = yield* AgentDirectories;
+    const [customDir, sourceRoots] = yield* Effect.all(
+      [directories.custom(), agentSourceRoots(directories, entry.source)],
+      { concurrency: 'unbounded' },
+    );
+    const sourceRoot = sourceRoots.find((root) =>
+      isStrictlyWithin(root, entry.path),
+    );
+    const target = path.join(
+      customDir,
+      sourceRoot
+        ? path.relative(sourceRoot, entry.path)
+        : path.basename(entry.path),
+    );
+    return isStrictlyWithin(customDir, target) ? target : undefined;
+  });
+
+/** Apply `change` to the custom copy of `entry`; `newerBuiltIn` is the
+ *  changed bundled version a `keep` re-stamps with. The copy's path. */
+export const customizeCopy = Effect.fn('customizeCopy')(function* (
+  entry: AgentEntry,
+  change: AgentCustomization,
+  newerBuiltIn: AgentEntry | undefined,
+) {
+  // The bundled version the copy is stamped with.
+  const base = change === 'keep' ? newerBuiltIn : entry;
+  if (base?.digest == null || entry.path === '')
+    return yield* new AgentCustomizeRefused(
+      change === 'keep'
+        ? {
+            reason: 'current',
+            message: `${entry.name} has no newer built-in version to dismiss.`,
+          }
+        : { reason: 'noFile', message: `${entry.name} has no file to copy.` },
+    );
+  const target = change === 'keep' ? entry.path : yield* copyTarget(entry);
+  if (target === undefined)
+    return yield* new AgentCustomizeRefused({
+      reason: 'escapes',
+      message: 'Refusing to copy: target escapes the custom agents directory.',
+    });
+  const fs = yield* FileSystem.FileSystem;
+  if (change === 'copy' && (yield* fs.exists(target)))
+    return yield* new AgentCustomizeRefused({
+      reason: 'exists',
+      path: target,
+      message: `A custom copy already exists: ${target}`,
+    });
+  yield* writeStampedCopy(entry.path, target, base.digest);
+  return target;
+});

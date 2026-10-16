@@ -13,13 +13,10 @@
 import { Data, Effect } from 'effect';
 
 import {
-  getCatalogLoadFailure,
-  refresh,
-  resolveAgentForLaunch,
-  settledCatalog,
+  AgentCatalog,
+  type AgentEntry,
   type WorkspaceAgentsStores,
-} from '@agent/index/agentRegistry';
-import type { AgentEntry } from '@agent/index';
+} from '@texra-ai/harness';
 import { agentKey, agentName } from '@shared/schemas';
 import {
   DOCUMENT_TASK_BLOCK,
@@ -136,7 +133,7 @@ class DocumentTaskRefused extends Data.TaggedError('DocumentTaskRefused')<{
 /**
  * `config` launched as its agent's document task. The agent resolves over a
  * settled catalog by the rule a launch's preparation uses
- * (`resolveAgentForLaunch`; a miss rescans once), and its source is stamped
+ * (`AgentCatalog.forLaunch`; a miss rescans once), and its source is stamped
  * so the preparation pins the same entry. A catalog that never loaded, an
  * unknown agent and a chat agent each fail loudly; no outputs are guessed.
  */
@@ -147,20 +144,13 @@ export const documentTaskConfig = Effect.fn('documentTaskConfig')(function* <
   stores: WorkspaceAgentsStores,
   options: Partial<DocumentTaskOptions> = {},
 ) {
-  const resolve = resolveAgentForLaunch(
-    stores,
-    config.agent,
-    config.agentSource,
-  );
-  const entry =
-    (yield* Effect.andThen(settledCatalog, resolve)) ??
-    (yield* Effect.andThen(refresh(), resolve));
-  if (entry === undefined) {
-    const failure = getCatalogLoadFailure();
-    return yield* new DocumentTaskRefused({
-      message: `Could not find agent: ${config.agent}${failure === undefined ? '' : `. The agent catalog did not load: ${failure}`}`,
-    });
-  }
+  const entry = yield* (yield* AgentCatalog)
+    .forLaunch(stores, config.agent, config.agentSource)
+    .pipe(
+      Effect.catchTag('AgentNotFound', (missed) =>
+        Effect.fail(new DocumentTaskRefused({ message: missed.message })),
+      ),
+    );
   const patch = documentTaskPatch(
     {
       agent: config.agent,

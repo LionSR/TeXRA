@@ -74,14 +74,6 @@ vi.mock('@utils/core', async (importActual) => ({
   generateRunId: () => mocks.runId,
 }));
 
-vi.mock('@agent/index/agentRegistry', async (importActual) => ({
-  ...(await importActual<typeof import('@agent/index/agentRegistry')>()),
-  getAgent: () => ({
-    source: 'custom',
-    name: 'assistant',
-  }),
-}));
-
 // The package composes its process over `ownerProcessLayer`. The owner it serves
 // is stood in for by a map keyed by storage root, as the runtime's session
 // map keys its entries: the package must resolve every run through it and
@@ -310,7 +302,20 @@ async function runOnRun(options: RootLaunchOptions): Promise<void> {
 }
 
 describe('agent package sessions', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
+    // Every named agent resolves to a custom `assistant` in the kernel
+    // runtime's catalog, which this suite never loads.
+    const { AgentCatalog } = await import('@agent/index/agentCatalog');
+    const { testRuntime } = await import('@test/support/testProcessRuntime');
+    const catalog = testRuntime().runSync(
+      Effect.gen(function* () {
+        return yield* AgentCatalog;
+      }),
+    );
+    vi.spyOn(catalog, 'get').mockReturnValue({
+      source: 'custom',
+      name: 'assistant',
+    } as ReturnType<typeof catalog.get>);
     mocks.sessionInits.splice(0);
     vi.clearAllMocks();
     mocks.traceListeners.clear();

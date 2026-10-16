@@ -5,14 +5,13 @@ import { it } from '@effect/vitest';
 import { Effect, Layer } from 'effect';
 import { afterAll, beforeAll, describe } from 'vitest';
 
-import { getAgent, refresh } from '@agent/index';
+import { AgentCatalog } from '@agent/index/agentCatalog';
 import {
   AgentDirectories,
   AgentDirectoriesFailed,
   AppState,
   type AgentDirectoriesPort,
 } from '@platform/interfaces';
-import type { AgentCatalogServices } from '@platform/processRuntime';
 import { FakeStateStore } from '@test/support/FakePlatform';
 import {
   fakeHostAgentDirectories,
@@ -27,25 +26,27 @@ import { testHttpClientLayer } from '@test/support/fetchTestUtils';
 import { cleanupTempDirs, makeTempDir } from '@test/support/tempDirPlatform';
 
 /**
- * A program over the process's global storage view. Nothing under test here
+ * A catalog over the process's global storage view. Nothing under test here
  * reads it: the fake agent directories answer `custom()` themselves, so this
- * only satisfies the requirement the catalog readers name.
+ * only satisfies the requirement the catalog names.
  */
-function onGlobalStorage<A, E>(
-  program: Effect.Effect<A, E, AgentCatalogServices>,
-): Effect.Effect<A, E> {
-  return Effect.provide(
-    program,
-    Layer.mergeAll(
-      unusedGlobalStorageFs(),
-      storePluginsLayer,
-      nodePlatformLayer,
-      testHttpClientLayer,
-      AgentDirectories.layer(fakeHostAgentDirectories),
-      AppState.layer(new FakeStateStore()),
+const newCatalog = Effect.provide(
+  Effect.gen(function* () {
+    return yield* AgentCatalog;
+  }),
+  AgentCatalog.layer.pipe(
+    Layer.provide(
+      Layer.mergeAll(
+        unusedGlobalStorageFs(),
+        storePluginsLayer,
+        nodePlatformLayer,
+        testHttpClientLayer,
+        AgentDirectories.layer(fakeHostAgentDirectories),
+        AppState.layer(new FakeStateStore()),
+      ),
     ),
-  );
-}
+  ),
+);
 
 const tempDirs: string[] = [];
 
@@ -91,12 +92,13 @@ describe('agent registry load state', () => {
 
   it.effect('keeps serving the published catalog when a refresh fails', () =>
     Effect.gen(function* () {
+      const catalog = yield* newCatalog;
       const counter = { scans: 0 };
       yield* Effect.promise(() =>
         installDirectories(countingDirectories(counter)),
       );
-      yield* onGlobalStorage(refresh());
-      assert.strictEqual(getAgent('custom:stateProbe')?.name, 'stateProbe');
+      yield* catalog.refresh;
+      assert.strictEqual(catalog.get('custom:stateProbe')?.name, 'stateProbe');
 
       const scanFailure = new Error('agent directory unavailable');
       yield* Effect.promise(() =>
@@ -114,12 +116,12 @@ describe('agent registry load state', () => {
         }),
       );
 
-      const error = yield* Effect.flip(onGlobalStorage(refresh()));
+      const error = yield* Effect.flip(catalog.refresh);
       assert.ok(error instanceof Error);
       assert.strictEqual(error.message, scanFailure.message);
 
       // A failed rebuild leaves the previously published catalog in place.
-      assert.strictEqual(getAgent('custom:stateProbe')?.name, 'stateProbe');
+      assert.strictEqual(catalog.get('custom:stateProbe')?.name, 'stateProbe');
     }),
   );
 });
