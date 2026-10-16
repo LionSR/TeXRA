@@ -565,8 +565,8 @@ export interface ProcessLayerOptions {
   /**
    * The app's plugins, in order, the harness's built-ins among them: the
    * process serves them as `ToolRegistry` and the tool catalog over it
-   * (`ToolCatalog`). The harness names no plugin of its own; TeXRA's entries
-   * pass `texraPlugins` (`@tools/registry`).
+   * (`ToolCatalog`). The harness names no plugin of its own: an app passes
+   * its list, `harnessBuiltins` among it.
    */
   readonly plugins: readonly Plugin[];
   /** The MCP config file (`.mcp.json` shape) the catalog reads. */

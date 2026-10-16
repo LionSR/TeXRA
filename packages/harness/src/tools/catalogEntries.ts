@@ -1,5 +1,5 @@
 /**
- * The entries of the tool catalog (`@tools/liveTools`): each tool with
+ * The entries of the tool catalog (`ToolCatalog`): each tool with
  * the identity a step records and a call is checked against, and the digests
  * that identity is made of.
  */

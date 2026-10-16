@@ -14,6 +14,7 @@ import {
   type AgentConfigPayload,
   generateRunId,
 } from '@texra-ai/harness/schemas';
+import { Settings } from '@texra-ai/harness';
 import {
   TEXRA_APPROVAL_POLICY_CONFIG_KEY,
   type TexraApprovalPolicy,
@@ -21,7 +22,6 @@ import {
 import type { RequestErrorWire } from '@texra/shared/session/sessionFrames';
 import type { TaskSummary } from '@texra/controllers/server/protocol';
 import type { ServiceClient } from '@texra/controllers/server/client';
-import { readConfigSettingFrom } from '@utils/config/platformSettings';
 import { ensureError } from '@utils/errors/errorMessage';
 
 import { resolveCliRunAgent } from '../runtime/agents';
@@ -192,7 +192,7 @@ const startCommand = defineCliCommand({
       const approval = launchApproval(requested);
       const refused = launchApprovalNotice(
         requested,
-        readConfigSettingFrom<TexraApprovalPolicy>(
+        Settings.getConfig<TexraApprovalPolicy>(
           services.config,
           TEXRA_APPROVAL_POLICY_CONFIG_KEY,
         ),

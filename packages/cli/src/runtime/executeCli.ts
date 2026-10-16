@@ -31,6 +31,7 @@ import {
   type StartInput,
   SESSION_CLOSE_DEADLINE_MS,
 } from '@texra-ai/harness';
+import { Settings } from '@texra-ai/harness';
 import { type SessionHandle, terminalFailurePresented } from '@agent/runtime';
 import { deriveResumability, getRunRecords } from '@agent/storage';
 import { AgentError, isUserAbort } from '@common/errors';
@@ -43,7 +44,6 @@ import {
   TEXRA_APPROVAL_POLICY_CONFIG_KEY,
   type TexraApprovalPolicy,
 } from '@shared/approvalPolicy';
-import { readConfigSettingFrom } from '@utils/config/platformSettings';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 import { createHeadlessCliHostInteractions } from './approvalAdapter';
@@ -284,7 +284,7 @@ export function executeCliRequest(
     // what this invocation asked for riding its launch (`launchApproval`).
     const refused = launchApprovalNotice(
       runContext.requestedApprovalPolicy,
-      readConfigSettingFrom<TexraApprovalPolicy>(
+      Settings.getConfig<TexraApprovalPolicy>(
         runSession.roots.config,
         TEXRA_APPROVAL_POLICY_CONFIG_KEY,
       ),

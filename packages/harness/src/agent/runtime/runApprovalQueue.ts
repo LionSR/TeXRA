@@ -9,7 +9,7 @@
  * first and then its ancestry's while the parent edge stands, so a toggle on
  * a parent reaches every descendant without a row of theirs.
  *
- * One value per session (#8144): two sessions queue and answer their
+ * One value per session: two sessions queue and answer their
  * approvals independently. It is reached through the session itself
  * (`SessionHandle.approvals`), never from context.
  */
@@ -46,7 +46,7 @@ import { writeRefused, type RequestError } from '@shared/session/requestErrors';
 import type { Outcome, RuntimeRequest } from '@shared/session/runtimeRequest';
 import { parentEdgeOf } from '@shared/session/runRelation';
 import type { UnfoldedDraft } from '@shared/session/sessionEvents';
-import { readConfigSettingFrom } from '@utils/config/platformSettings';
+import { Settings } from '@shared/config/settings';
 import { type PerKeyLane, withPerKeyLane } from '@utils/core/perKeyQueue';
 
 import type { SessionHandle } from './SessionHandle';
@@ -181,7 +181,7 @@ export function createSessionApprovals(
     bypass,
     policy: (runId) =>
       runPolicy(
-        readConfigSettingFrom<TexraApprovalPolicy>(
+        Settings.getConfig<TexraApprovalPolicy>(
           session().roots.config,
           TEXRA_APPROVAL_POLICY_CONFIG_KEY,
         ),

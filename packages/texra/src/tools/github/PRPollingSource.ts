@@ -14,6 +14,7 @@
 import { Cause, Clock, Effect } from 'effect';
 import { RateLimiterError } from 'effect/persistence/RateLimiter';
 
+import type { Disposable } from '@texra/platform/disposable';
 import { shouldDropBotEvent } from './botFilter';
 import {
   DEFAULT_CHECK_ANNOTATION_LEVEL,
@@ -80,7 +81,6 @@ import {
   type GhReview,
   type GhReviewComment,
 } from './prTypes';
-import type { Disposable } from '@texra-ai/harness';
 
 function initialState(pr: PRKey, now: number): PRSubscriptionState {
   return {

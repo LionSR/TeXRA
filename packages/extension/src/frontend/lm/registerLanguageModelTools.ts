@@ -23,7 +23,6 @@ import { Context, Data, Effect, Fiber, Layer, Option, Stream } from 'effect';
 
 import {
   ToolContext,
-  type PluginContext,
   type ProcessRuntime,
   type WorkspaceRoots,
 } from '@texra-ai/harness';
@@ -165,10 +164,7 @@ const copilotTools = Effect.fnUntraced(function* (
               const services = yield* catalog.processServices(plugin);
               return yield* tool.call(options.input).pipe(
                 Effect.provide(
-                  Option.getOrElse(
-                    services,
-                    () => Context.empty() as PluginContext,
-                  ),
+                  Option.getOrElse(services, () => Context.empty()),
                 ),
                 Effect.provideService(ToolContext, {
                   // Copilot's invocation names no call id of its own.

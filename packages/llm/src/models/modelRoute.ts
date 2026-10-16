@@ -229,7 +229,7 @@ export function decideModelRoute<C>(
 ): ModelRoute<C> {
   if (facts.validation) return { kind: 'validation' };
   // Editor-supplied models cannot be proxied through OpenRouter, and a
-  // preference is a hard route choice (#9635) for every request the editor
+  // preference is a hard route choice for every request the editor
   // can serve. The editor sends its own reasoning controls, so a provider
   // mode (OpenAI `pro`) takes the model's own route, as the Codex
   // subscription preference below does.

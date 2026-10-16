@@ -5,6 +5,7 @@ import { hasExtension } from '@texra-ai/harness';
 
 import { Cause, Effect, FileSystem } from 'effect';
 
+import { Settings } from '@texra-ai/harness';
 import type { AgentTrace } from '@agent/trace';
 import { compileLatex2Pdf, type CompileLatex2PdfResult } from '@latex/texTools';
 import { hasLatexCompiler } from '@latex/latexToolchain';
@@ -28,7 +29,6 @@ import { runDirUnder } from '@utils/files/runStorageFs';
 import { type RunFileService } from '@utils/files/runStorage';
 import { locateInWorkspace } from '@utils/files/workspaceFS';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import { readSettingFrom } from '@utils/config/platformSettings';
 
 import {
   publishCompiledPdfArtifact,
@@ -61,7 +61,7 @@ export const getWorkflowAutoCompileTimeoutMs = Effect.fn(
 )(function* (roots: WorkspaceRoots) {
   return Math.max(
     MIN_TIMEOUT_MS,
-    yield* readSettingFrom<number>(
+    yield* Settings.get<number>(
       roots,
       DocumentsStateKey.WORKFLOW_AUTO_COMPILE_TIMEOUT_MS,
     ),
@@ -119,7 +119,7 @@ export const runCompileCheck = Effect.fn('documents.runCompileCheck')(
   function* (ctx: CompileCheckContext, currentRound: number) {
     const empty: CompileCheckResult = { artifacts: [] };
     if (
-      !(yield* readSettingFrom<boolean>(
+      !(yield* Settings.get<boolean>(
         ctx.roots,
         DocumentsStateKey.WORKFLOW_AUTO_COMPILE,
       ))

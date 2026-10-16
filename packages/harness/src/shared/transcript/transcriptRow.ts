@@ -3,7 +3,7 @@
  *
  * One row kind per thing a run says, carrying the typed payload and the
  * complete text. Rows are a fold output built from already-decoded values
- * (`@shared/session/transcriptFold`), so this is a plain type, not a schema:
+ * by the transcript fold, so this is a plain type, not a schema:
  * nothing parses it, and a schema would own no boundary.
  *
  * Text is untruncated. Elision is measurement ({@link TranscriptText}),

@@ -2,7 +2,7 @@
  * How a plugin answers "is my dependency available": the checks a plugin
  * value carries (`Plugin.availability`), the services and inputs they read,
  * and the one failure they raise. The probes an app builds them from are its
- * own (TeXRA's: `@texra/tools/availabilityProbes`).
+ * own.
  */
 
 // Third-party imports
@@ -75,7 +75,7 @@ export interface ToolAvailabilityChecks<R = ToolProbeServices> {
   /**
    * Optional shared probe result passed to check/status/detail callbacks.
    * Takes the asking workspace as data — the GitHub plugin's probe asks whether
-   * that folder is a git repository (#12421), the Zotero plugin's reads its port
+   * that folder is a git repository, the Zotero plugin's reads its port
    * out of that workspace's configuration.
    */
   readonly probe?: (

@@ -237,7 +237,7 @@ export const freshRunState = (commit: CommitOrdinal): RunState => ({
 });
 
 /**
- * The undecided requests nothing can recover (R5): any but the turn's retry
+ * The undecided requests nothing can recover: any but the turn's retry
  * ask and, per pending call, the request its `resumedAttempt` re-enters and
  * the one its script's calls share (attempt 0). The rest park a body past
  * its own answer, so a resume retires them as cancelled before it continues

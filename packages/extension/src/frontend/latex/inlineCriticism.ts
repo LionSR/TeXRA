@@ -23,11 +23,10 @@ import * as vscode from 'vscode';
 
 // Local imports
 import { withLogChannel, hasExtension } from '@texra-ai/harness';
-import { readSettingFrom } from '@texra-ai/harness';
+import { Settings } from '@texra-ai/harness';
 import { outputFilesProduced } from '@frontend/events/runFactSubscriptions';
 import { lineToRange } from '@frontend/vscode/vscodeEditor';
 import { parseCriticismAnnotations } from '@latex/criticismParser';
-import type { SettingsStores } from '@shared/config/settingsAccess';
 import type { OutputFileInfo } from '@texra/shared/plugins/documentOutputs';
 import type { ManualCriticismEntry } from '@texra/tools/editorHost';
 import { TexraStateKey } from '@texra/shared/settingsView/texraSettings';
@@ -36,6 +35,7 @@ import { normalizeLineEndings } from '@utils/text/stringUtils';
 import type { Session } from '@texra-ai/harness';
 import type { ProcessRuntime } from '@texra-ai/harness';
 import type { StateReadFailed } from '@texra-ai/harness';
+import type { SettingsStores } from '@texra-ai/harness';
 
 const CHANNEL = 'InlineCriticism';
 const COLLECTION_NAME = 'texra-criticism';
@@ -183,7 +183,7 @@ function disable(): boolean {
 
 /** Turn the diagnostics on or off to match the stored setting. */
 const reconcile = Effect.fnUntraced(function* (current: CriticismRegistration) {
-  const enabled = yield* readSettingFrom<boolean>(
+  const enabled = yield* Settings.get<boolean>(
     current.stores,
     TexraStateKey.INLINE_CRITICISM_ENABLED,
   );

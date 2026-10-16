@@ -21,7 +21,6 @@ import {
 } from '@agent/runtime/modelAccess/failureInfo';
 import type { BoundModel } from '@agent/runtime/modelAccess/ModelAccess';
 import { attachProviderError } from '@common/errors/sdkError/errorMetadata';
-import type { SettingsStores } from '@shared/config/settingsAccess';
 import type {
   FailedNext,
   InvocationRef,
@@ -30,6 +29,7 @@ import type {
 } from '@shared/schemas';
 import { invocationAfter, type Invocation } from '@shared/session/inFlight';
 import { UsageLog } from '@shared/usageLog';
+import type { SettingsStores } from '@shared/config/settings';
 import { sha256 } from '@utils/core/idHash';
 
 import { runInvocation, type RouteRetries } from './invocation';

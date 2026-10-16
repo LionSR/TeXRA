@@ -34,7 +34,7 @@ interface SkillRootScan {
 }
 
 /** Scope vocabulary comes from the shared wire-contract enum
- *  (`@shared/schemas/activeSkills`) so the loader and the persisted
+ *  (`ActiveSkillSourceScope`) so the loader and the persisted
  *  disabled-source setting can't drift. */
 export interface SkillSource {
   readonly scope: ActiveSkillSourceScope;

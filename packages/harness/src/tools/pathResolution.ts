@@ -3,9 +3,10 @@ import * as path from 'node:path';
 import { Effect } from 'effect';
 
 // Local imports
-import type { SettingsStores } from '@shared/config/settingsAccess';
 import { ToolError } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
+import { Settings } from '@shared/config/settings';
+import type { SettingsStores } from '@shared/config/settings';
 import { ensureError } from '@utils/errors/errorMessage';
 import { normalizeFilePath } from '@utils/core';
 import { locateInWorkspace } from '@utils/files/workspaceFS';
@@ -15,7 +16,6 @@ import {
   type MatchedExternalRoot,
   type StepRoot,
 } from '@utils/files/externalRoots';
-import { readSettingFrom } from '@utils/config/platformSettings';
 import {
   getPathSegments,
   isPathWithin,
@@ -171,7 +171,7 @@ export function resolveToolPath(call: ToolPathCall, targetPath?: string) {
     // containment override, so keep their resolution independent of the store.
     if (
       !resolution.match &&
-      (yield* readSettingFrom<boolean>(
+      (yield* Settings.get<boolean>(
         settings,
         WorkspaceStateKey.TOOL_PATH_PROTECTION_ENABLED,
       ))

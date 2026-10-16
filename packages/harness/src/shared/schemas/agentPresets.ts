@@ -57,7 +57,7 @@ export function parseAgentModePresets(raw: unknown): AgentModePreset[] {
 
 /**
  * Generic default team applied when the user skips the setup agent's
- * discipline question (PRD: agent-native onboarding). Deliberately NOT part
+ * discipline question. Deliberately NOT part
  * of {@link AGENT_MODE_PRESETS}: it is not a discipline and must not appear
  * as a team card in the settings UI — only `apply_team` and default-team
  * seeding resolve it.

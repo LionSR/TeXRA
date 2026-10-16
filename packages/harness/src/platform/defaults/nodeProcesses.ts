@@ -16,7 +16,7 @@ import { withLogChannel } from '@logger/effectLog';
 import type { OwnerId } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
-/** This process's complete owner identity (contract C5). */
+/** This process's complete owner identity: hostname, pid and process start. */
 export function processOwnerId(processStart: string | undefined): OwnerId {
   return JSON.stringify([
     hostname().toLowerCase(),

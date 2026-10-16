@@ -3,7 +3,7 @@
  *
  * Hosts install a sink here (VS Code output channels, the desktop log file,
  * the CLI's console). Producers write the same entry through it: `Effect.log*`
- * via the logger layer in `@logger/effectDiagnostics`, and a few synchronous
+ * via the logger layer (`effectDiagnosticsLayer`), and a few synchronous
  * publication points (the trace emitter, pre-runtime and shutdown paths) that
  * call `writeLogEntry` directly. No producer decides presentation: severity, timestamp,
  * identity, and payload stay separate fields the whole way, and the write

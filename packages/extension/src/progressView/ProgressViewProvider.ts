@@ -11,6 +11,7 @@ import {
   withProcessServices,
 } from '@texra-ai/harness';
 import { withLogChannel } from '@texra-ai/harness';
+import { GlobalStateKey } from '@texra-ai/harness/schemas';
 import {
   SessionHostInteractions,
   type HostInteractions,
@@ -29,7 +30,6 @@ import {
   getFirstRunDone,
   setOnboardingDeclined,
 } from '@shared/state/onboardingState';
-import { GlobalStateKey } from '@shared/state/stateKeys';
 import { createFlushableDebounce } from '@texra/utils/core/flushableDebounce';
 import {
   EXTENSION_CATEGORIES,

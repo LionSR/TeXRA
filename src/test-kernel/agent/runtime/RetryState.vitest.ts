@@ -78,6 +78,7 @@ import {
 } from '@shared/session/runHistory';
 import { UsageLog } from '@shared/usageLog';
 import { freshRunState, type RunState } from '@shared/session/runStateFold';
+import { Settings } from '@shared/config/settings';
 import { setTestApprovalPolicy } from '@test/support/sessionTestUtils';
 import { testAgentRun } from '@test/support/scriptedRunLayers';
 import { closeSessionOf } from '@test/support/sessionEnd';
@@ -86,7 +87,6 @@ import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { testHttpClientLayer } from '@test/support/fetchTestUtils';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
 import { hostStores, installPlatform } from '@test/support/setupPlatform';
-import { readSettingFrom } from '@utils/config/platformSettings';
 import { judgeFailure } from '../../../../packages/llm/src/api/verdict.js';
 import {
   BackgroundEventSchema,
@@ -349,7 +349,7 @@ const openRun = Effect.fn('openRun')(function* (
   ]);
   // The retries the binding carries, read from the session as `bindModel`
   // reads them.
-  const automaticRetries = yield* readSettingFrom<number>(
+  const automaticRetries = yield* Settings.get<number>(
     session.roots,
     MODEL_RETRY_MAX_ATTEMPTS_SETTING.configKey,
   ).pipe(Effect.orDie);

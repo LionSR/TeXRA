@@ -11,8 +11,8 @@
 // Local imports - shared webview
 import { html, type TemplateResult } from 'lit';
 
-import type { SettingEnumChoice } from '@shared/state/stateSettings';
-import { settingEnumChoices } from '@shared/state/stateSettings';
+import type { SettingEnumChoice } from '@texra/shared/settingsView/settingRows';
+import { settingEnumChoices } from '@texra/shared/settingsView/settingRows';
 import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 import { postMessage } from '@texra/shared/hostBridge';
 import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';

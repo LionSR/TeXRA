@@ -1,7 +1,7 @@
 // Local imports
 import { Effect } from 'effect';
+import { WorkspaceStateKey } from '@texra-ai/harness/schemas';
 import { getCatalogAgent } from '@agent/index';
-import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import type { StateStore } from '@texra-ai/harness';
 
 /**

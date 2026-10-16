@@ -1,7 +1,6 @@
 /**
  * The transcript row builders: what each thing a run says looks like as the
- * row every host paints. The transcript fold (`@shared/session/transcriptFold`)
- * decides which builder an event reaches and supplies the row envelope; these
+ * row every host paints. The transcript fold decides which builder an event reaches and supplies the row envelope; these
  * turn typed, already-decoded values into rows and never parse.
  *
  * Membership for a decoded `log` payload is a single allowlist: every message

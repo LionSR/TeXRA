@@ -17,20 +17,6 @@ import type { SettingsCatalog } from '@shared/state/stateSettings';
 import type { GlobalStorageFs } from './rootedFs';
 
 // ---------------------------------------------------------------------------
-// Disposable
-// ---------------------------------------------------------------------------
-
-/**
- * Host-neutral disposable resource.
- *
- * Structurally compatible with VS Code's Disposable and the unsubscribe
- * callbacks used by Electron-side adapters.
- */
-export interface Disposable {
-  dispose(): void;
-}
-
-// ---------------------------------------------------------------------------
 // Config
 // ---------------------------------------------------------------------------
 
@@ -77,7 +63,7 @@ export interface ConfigProvider {
    *
    * It stays synchronous by ruling, and it casts: the value it returns is
    * whatever the store holds. A reader that needs the value checked reads
-   * through `readSettingFrom` (`@utils/config/platformSettings`), which
+   * through `Settings.get` (`@shared/config/settings`), which
    * resolves the key's catalog row and safe-parses the stored value against
    * the row's schema; a hand-edited `"false"` in a boolean row is a truthy
    * string here and silently means the opposite. Nothing may cache what
