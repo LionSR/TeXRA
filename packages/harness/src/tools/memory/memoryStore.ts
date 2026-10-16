@@ -1,12 +1,14 @@
 /**
- * The memory tree as a host reads and edits it outside a run: the settings
- * view's Memory page, the CLI's `memory` command and the TUI's `/memory`.
+ * `MemoryStore`: the memory tree as a host reads and edits it outside a run,
+ * for the settings view's Memory page, the CLI's `memory` command and the
+ * TUI's `/memory`.
  *
- * Every member runs over the {@link StorageFs} the caller provides (its
+ * Every member runs over the `StorageFs` the caller provides (its
  * session's storage view), so the tree is the one under the storage root the
  * caller chose. A memory is named the way a person names it: `/memories/<p>`
  * as the memory tool shows it, `memories/<p>` as the store holds it, or a
- * bare `<p>` under the memory root; the mutations take the memory tree's
+ * bare `<p>` under the memory root, taken exactly as given (a caller that
+ * reads a typed argument trims it); the mutations take the memory tree's
  * lane, as every memory tool command does, so an edit from a host never races
  * an agent's edit beneath it.
  */
@@ -14,7 +16,6 @@ import { Effect, type PlatformError } from 'effect';
 
 import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
 import type { StorageFs } from '@platform/rootedFs';
-import type { MemoryViewItem } from '@shared/tools/memoryView';
 import { normalizeFilePath } from '@utils/core';
 import { ensureError } from '@utils/errors/errorMessage';
 
@@ -35,7 +36,7 @@ import {
 /** The storage path of a memory named in any of the three forms; throws on
  *  a path outside the memory root. */
 function storagePathOf(input: string): string {
-  const named = normalizeFilePath(input.trim());
+  const named = normalizeFilePath(input);
   if (
     !named ||
     named === MEMORY_DISPLAY_ROOT ||
@@ -80,53 +81,47 @@ export type MemoryPinResult =
   | { readonly status: 'cap-reached'; readonly max: number };
 
 /** The memory tree's host-facing reads and edits, over the caller's
- *  {@link StorageFs}. */
-export const MemoryStore: {
+ *  `StorageFs`. */
+export const MemoryStore = {
   /** The memory folder, relative to the storage root. */
-  readonly folder: string;
+  folder: WORKSPACE_STORAGE_LAYOUT.memory,
   /** The storage path of a memory named in any of the three forms. */
-  readonly storagePath: (input: string) => Effect.Effect<string, Error>;
+  storagePath,
+  /** The path the memory tool shows for a storage path. */
+  displayPath: toDisplayPath,
   /** Every memory, pinned first, then newest first; empty with no folder. */
-  readonly list: Effect.Effect<
-    MemoryViewItem[],
-    PlatformError.PlatformError,
-    StorageFs
-  >;
-  readonly preview: (
+  list: Effect.suspend(() => loadMemoryItems()),
+  /** One memory's bounded preview. */
+  preview: (
     input: string,
-  ) => Effect.Effect<
+  ): Effect.Effect<
     MemoryPreview,
     Error | PlatformError.PlatformError,
     StorageFs
-  >;
-  readonly delete: (
-    input: string,
-  ) => Effect.Effect<void, Error | PlatformError.PlatformError, StorageFs>;
-  readonly pin: (
-    input: string,
-    pinned: boolean,
-  ) => Effect.Effect<
-    MemoryPinResult,
-    Error | PlatformError.PlatformError,
-    StorageFs
-  >;
-} = {
-  folder: WORKSPACE_STORAGE_LAYOUT.memory,
-  storagePath,
-  list: Effect.suspend(() => loadMemoryItems()),
-  preview: (input) =>
+  > =>
     storagePath(input).pipe(
       Effect.flatMap(loadMemoryPreview),
-      Effect.map((loaded) => ({
+      Effect.map((loaded): MemoryPreview => ({
         ...loaded,
         displayPath: toDisplayPath(loaded.storagePath),
       })),
     ),
-  delete: (input) =>
+  /** Delete a memory, on the memory tree's lane. */
+  delete: (
+    input: string,
+  ): Effect.Effect<void, Error | PlatformError.PlatformError, StorageFs> =>
     storagePath(input).pipe(
       Effect.flatMap((path) => deleteMemoryPath(path).pipe(onMemoryTreeLane)),
     ),
-  pin: (input, pinned) =>
+  /** Pin or unpin a memory, on the memory tree's lane. */
+  pin: (
+    input: string,
+    pinned: boolean,
+  ): Effect.Effect<
+    MemoryPinResult,
+    Error | PlatformError.PlatformError,
+    StorageFs
+  > =>
     storagePath(input).pipe(
       Effect.flatMap((path) =>
         setMemoryPinned(path, pinned).pipe(onMemoryTreeLane),

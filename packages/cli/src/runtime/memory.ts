@@ -1,4 +1,4 @@
-import { Effect } from 'effect';
+import { Effect, PlatformError } from 'effect';
 
 import { withSessionFs, type StorageFs } from '@texra-ai/harness';
 import { MemoryStore, type MemoryViewItem } from '@texra-ai/harness/plugins';
@@ -56,13 +56,17 @@ export interface CliMemoryDetail {
 /** Resolve a CLI memory path argument and load its preview exactly once. */
 export const loadCliMemoryDetail = Effect.fn('cli.loadCliMemoryDetail')(
   function* (inputPath: string) {
-    const preview = yield* MemoryStore.preview(inputPath).pipe(
+    // A typed argument: its surrounding whitespace is not part of the name.
+    const storagePath = yield* MemoryStore.storagePath(inputPath.trim());
+    const preview = yield* MemoryStore.preview(storagePath).pipe(
       Effect.catchIf(
-        (error) => '_tag' in error && error.reason._tag === 'NotFound',
+        (error) =>
+          PlatformError.isPlatformError(error) &&
+          error.reason._tag === 'NotFound',
         () =>
           Effect.fail(
             new Error(
-              `No stored memory at ${inputPath.trim()}; \`memory list\` shows the stored ones.`,
+              `No stored memory at ${MemoryStore.displayPath(storagePath)}; \`memory list\` shows the stored ones.`,
             ),
           ),
       ),
