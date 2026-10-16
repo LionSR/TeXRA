@@ -92,6 +92,7 @@ export type {
 export {
   AgentCustomizeRefused,
   AgentDirectoryService,
+  readCustomAgentDir,
   type AgentCustomization,
   type AgentDirectoryServiceOptions,
 } from '@agent/index/AgentDirectoryService';

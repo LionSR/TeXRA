@@ -29,6 +29,19 @@ import {
 } from './BundledAgentDirectories';
 import type { AgentEntry } from './agentEntry';
 
+/**
+ * The custom agent directory the user configured, trimmed; empty when none is
+ * (the host then uses its default directory).
+ */
+export const readCustomAgentDir = (
+  state: Pick<StateStore, 'get'>,
+): Effect.Effect<string, StateReadFailed> =>
+  Settings.state(
+    state,
+    GlobalStateKey.CUSTOM_AGENT_DIR,
+    z.string().trim().prefault(''),
+  );
+
 /** What a host's agent directories are built from. */
 export interface AgentDirectoryServiceOptions {
   channel: string;
@@ -94,11 +107,7 @@ export class AgentDirectoryService {
     string,
     AgentDirectoriesFailed
   > {
-    return Settings.state(
-      this.options.state,
-      GlobalStateKey.CUSTOM_AGENT_DIR,
-      z.string().trim().prefault(''),
-    ).pipe(
+    return readCustomAgentDir(this.options.state).pipe(
       Effect.mapError(
         (cause) =>
           new AgentDirectoriesFailed({

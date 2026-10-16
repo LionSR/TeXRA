@@ -6,12 +6,10 @@
  */
 import { Effect, FileSystem } from 'effect';
 
-import { z } from 'zod';
-
 import {
   AgentCatalog,
   AgentDirectories,
-  Settings,
+  readCustomAgentDir,
   type WorkspaceRoots,
 } from '@texra-ai/harness';
 import { GlobalStateKey } from '@texra-ai/harness/schemas';
@@ -79,11 +77,7 @@ export function settingsAgentCommands(ports: SettingsAgentCommandsPorts) {
   );
   const postCustomDir = present.post(
     Effect.gen(function* () {
-      const configuredPath = yield* Settings.state(
-        globalState,
-        GlobalStateKey.CUSTOM_AGENT_DIR,
-        z.string().trim().prefault(''),
-      );
+      const configuredPath = yield* readCustomAgentDir(globalState);
       return {
         command: SETTINGS_VIEW_COMMANDS.UPDATE_CUSTOM_AGENT_DIR,
         path: yield* customDirectory,
