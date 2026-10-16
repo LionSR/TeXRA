@@ -7,18 +7,11 @@
  * calls `Effect.runPromise`, `runSync`, or `runFork`: a Promise-land
  * embedder runs `Effect.runPromise(program)` at its own entry point.
  *
- * This module is the package's public surface and is documented as one
- * (packages/harness/README.md); it is the one barrel the "no convenience
- * barrels" rule does not apply to.
- *
- * The root entry used to render these services as Promises and
- * AsyncIterables, the boundary the Effect migration's rule R1 names
- * (`2026-08-26-effect-4-runtime-migration.md`,
- * §7 R1, boundary kind 3: the published SDK speaks Promises). That ruling is
- * superseded (2026-09-21): `effect` is a mandatory exact-pin peer dependency
- * of the whole package, the package has no external consumers, and TeXRA 1.0
- * keeps no parallel surfaces.
+ * This module is the package's public surface, documented in the package
+ * README. `effect` is a peer dependency: the surface is Effect services, not
+ * Promises.
  */
+// The one barrel the "no convenience barrels" rule does not apply to.
 
 // The services and their layer. `Sessions.layer({ platform, plugins })` is
 // an embedder's way in: the process and its sessions live for that layer's
