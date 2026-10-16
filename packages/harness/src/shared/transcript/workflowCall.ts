@@ -1,5 +1,5 @@
+import { Predicate } from 'effect';
 import { type ScriptTally } from '@shared/schemas';
-import { filterNotNullish } from '@utils/core';
 
 const CALL_FILE_PREVIEW_LIMIT = 3;
 
@@ -20,7 +20,7 @@ export function formatWorkflowCallFiles(files: {
     visible.length > 0 ? `${visible.join(', ')}${hiddenSuffix}` : undefined,
     files.context.length > 0 ? `${files.context.length} context` : undefined,
     files.media.length > 0 ? `${files.media.length} media` : undefined,
-  ].filter(filterNotNullish);
+  ].filter(Predicate.isNotNullish);
   return parts.length > 0 ? parts.join(' · ') : undefined;
 }
 

@@ -7,7 +7,7 @@ import {
   resolveStepTools,
   type StepToolInputs,
 } from '@agent/runtime/agentToolResolution';
-import { ToolCatalog } from '@tools/liveTools';
+import { ToolCatalogOwner } from '@tools/liveTools';
 import { readDisabledTools } from '@tools/plugins';
 
 import { unprobedToolAvailability } from './toolAvailabilityTestLayer';
@@ -37,7 +37,7 @@ export const resolveTestStep = Effect.fn('resolveTestStep')(function* (
       >
     >,
 ) {
-  const tools = yield* (yield* ToolCatalog).session;
+  const tools = yield* (yield* ToolCatalogOwner).session;
   const held = yield* tools.hold(declaredToolNames(input.tools), true);
   const pinned = yield* tools.pin(readDisabledTools(input.stores.globalState), {
     held,

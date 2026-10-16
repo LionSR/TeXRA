@@ -22,7 +22,6 @@ import {
   hasIncompleteEmbeddedSubagentFollowup,
   summarizeSubagentFollowup,
 } from '@shared/subagentFollowup';
-import { assertNever } from '@utils/core';
 import { formatCompactTokenCount } from '@utils/text/stringUtils';
 
 import { toolRowModel, type ToolRowModelContext } from './toolRowModel';
@@ -349,9 +348,9 @@ export function logPayloadRow(
       return undefined;
 
     default:
-      return assertNever(
-        payload,
-        `Unprojected log messageType: ${String((payload as LogPayload).messageType)}`,
-      );
+      // A persisted payload can carry a messageType this build does not
+      // know, so the failure names it.
+      payload satisfies never;
+      throw new Error(`Unprojected log payload: ${JSON.stringify(payload)}`);
   }
 }

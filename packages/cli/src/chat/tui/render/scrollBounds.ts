@@ -5,7 +5,6 @@ import {
   previousRowsText,
   scrollStatusText,
 } from '@cli/tui/overflowText';
-import { clamp } from '@utils/core';
 
 /**
  * Below this many content rows, a scrollable region degrades to a single
@@ -69,13 +68,15 @@ function scrollBoundedRows<T>({
     };
   }
 
-  const offset = clamp(
-    scrollOffset,
+  const offset = Math.max(
     0,
-    maxScrollableRowOffset({
-      maxDisplayLines,
-      totalLines: rows.length,
-    }),
+    Math.min(
+      maxScrollableRowOffset({
+        maxDisplayLines,
+        totalLines: rows.length,
+      }),
+      scrollOffset,
+    ),
   );
   const hiddenBefore = offset;
   const reserveBefore = hiddenBefore > 0 ? 1 : 0;
@@ -182,7 +183,7 @@ export function boundedScrollableLines<K extends string>({
 
   if (maxDisplayLines <= COMPACT_SCROLLABLE_CONTENT_ROWS) {
     const contentRows = Math.max(1, maxDisplayLines - 1);
-    const offset = clamp(scrollOffset, 0, maxOffset);
+    const offset = Math.max(0, Math.min(maxOffset, scrollOffset));
 
     if (maxDisplayLines === 1) {
       return [

@@ -3,7 +3,6 @@ import {
   CONFIRM_CARD_HORIZONTAL_DECORATION,
 } from '@cli/tui/ui/theme';
 import { wrappedRowCount } from '@cli/tui/ansiWrap';
-import { clamp } from '@utils/core';
 import { confirmCardPulsedTitle } from './ConfirmCardState';
 
 const FEEDBACK_MARGIN_ROWS = 1;
@@ -79,5 +78,8 @@ export function confirmCardContentRowsBudget({
     return spaciousRows;
   }
 
-  return clamp(availableRows - compactFixedRows - fixedRows, 1, compactMaxRows);
+  return Math.max(
+    1,
+    Math.min(compactMaxRows, availableRows - compactFixedRows - fixedRows),
+  );
 }

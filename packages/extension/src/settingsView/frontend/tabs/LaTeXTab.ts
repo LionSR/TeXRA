@@ -1,6 +1,7 @@
 /** LaTeX settings page, one section at a time: dependencies, compile and
  *  diff, formatting and review, and recommended VS Code settings. */
 
+import { Predicate } from 'effect';
 import '@awesome.me/webawesome/dist/components/tag/tag.js';
 import '@awesome.me/webawesome/dist/components/copy-button/copy-button.js';
 import '@awesome.me/webawesome/dist/components/details/details.js';
@@ -49,7 +50,6 @@ import { renderSetStatusIcon, statusCheckIconStyles } from '@ui/wa/statusIcons';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 
 // Local imports - shared utilities
-import { filterNotNullish } from '@utils/core';
 
 // Local imports - catalog-driven settings rows
 import {
@@ -232,7 +232,9 @@ export class LaTeXTab extends LitElement {
   /** Collect detected tool paths for a dependency. */
   private getDetectedPaths(dep: DependencyInfo): string[] {
     if (!dep.pathKeys) return [];
-    return dep.pathKeys.map((k) => this.settings[k]).filter(filterNotNullish);
+    return dep.pathKeys
+      .map((k) => this.settings[k])
+      .filter(Predicate.isNotNullish);
   }
 
   private renderDependencyCard(dep: DependencyInfo): TemplateResult {

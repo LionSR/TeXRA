@@ -6,7 +6,11 @@
  */
 import { Effect, Stream, SubscriptionRef } from 'effect';
 
-import { withLogChannel } from '@texra-ai/harness';
+import {
+  ToolAvailability,
+  ToolCatalog,
+  withLogChannel,
+} from '@texra-ai/harness';
 import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 import {
   detectLatexSettingsStatus,
@@ -16,8 +20,6 @@ import { buildPluginRows } from '@texra/controllers/settingsView/pluginRows';
 import { planToolTerminalAction } from '@texra/controllers/settingsView/ToolDashboardData';
 import type { SettingsViewInboundHandlerRegistry } from '@texra/controllers/settingsView/settingsViewDispatch';
 import { USER_MCP_CONFIG_PATH } from '@tools/mcp/mcpConfig';
-import { setToolEnabled } from '@tools/toolAvailability';
-import { ToolAvailability } from '@tools/toolAvailabilityService';
 
 import {
   SETTINGS_LOG_CHANNEL,
@@ -126,7 +128,9 @@ export function settingsToolCommands(ports: {
 
   const handlers = {
     toggleTool: ({ toolId, enabled }) =>
-      setToolEnabled(toolId, enabled, roots.globalState).pipe(
+      Effect.flatMap(ToolCatalog, (catalog) =>
+        catalog.setEnabled(toolId, enabled),
+      ).pipe(
         // A plugin's bundled agents follow its switch (`pluginCatalogLayer`):
         // reload them before the rows read who uses what.
         Effect.andThen(bindings.refreshCatalogs()),

@@ -1,5 +1,6 @@
 import { Effect, type FileSystem, type Path } from 'effect';
 
+import { MemoryStore } from '@texra-ai/harness/plugins';
 import {
   formatCliMemoryList,
   formatCliMemoryPreview,
@@ -7,7 +8,6 @@ import {
   runCliMemory,
 } from '@cli/runtime/memory';
 import { openInfoPane } from '@cli/chat/tui/state/cliState';
-import { loadMemoryItems } from '@tools/memory/memoryFileSystem';
 import type { WorkspaceRoots } from '@texra-ai/harness';
 
 /** The roots the chat surface holds, which its memory reads run over. */
@@ -19,7 +19,7 @@ type MemoryRoots = Pick<
 export const showCliMemoryList = (
   roots: MemoryRoots,
 ): Effect.Effect<void, never, FileSystem.FileSystem | Path.Path> =>
-  runCliMemory(roots, loadMemoryItems()).pipe(
+  runCliMemory(roots, MemoryStore.list).pipe(
     Effect.map((items) => {
       openInfoPane('/memory list', formatCliMemoryList(items));
     }),

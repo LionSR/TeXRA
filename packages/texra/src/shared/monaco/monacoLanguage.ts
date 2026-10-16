@@ -15,7 +15,7 @@
 // own, and is already on the browser-safe allowlist this module's webview
 // consumers are held to, so it carries none of the risk above.
 
-import { getBasename } from '@utils/core';
+import { getBasename } from '@texra-ai/harness/schemas';
 
 /**
  * Monaco language id for a file path, covering the extensions TeXRA users

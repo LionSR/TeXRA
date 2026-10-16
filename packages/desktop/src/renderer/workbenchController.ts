@@ -10,7 +10,6 @@ import { html, nothing, render } from 'lit';
 
 import { renderEmptyState } from '@ui/wa/emptyState';
 import { renderLabeledActionButton } from '@ui/wa/actionButtons';
-import { clamp } from '@utils/core';
 
 import {
   WORKBENCH_KIND_META,
@@ -165,7 +164,7 @@ export function createWorkbenchController(deps: WorkbenchControllerDeps) {
           ].reduce((width, control) => width + control.offsetWidth, 0);
           // Measure the available header, not the current tab's shrink-wrapped
           // strip, or repeated layouts gradually truncate even short titles.
-          tabElement.style.maxWidth = `${clamp(header.clientWidth - controlsWidth, 56, 260)}px`;
+          tabElement.style.maxWidth = `${Math.max(56, Math.min(260, header.clientWidth - controlsWidth))}px`;
           const left = tabElement.offsetLeft;
           const right = left + tabElement.offsetWidth;
           if (right > strip.scrollLeft + strip.clientWidth)

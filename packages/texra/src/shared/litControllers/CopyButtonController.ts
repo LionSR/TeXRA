@@ -1,8 +1,11 @@
 import {
+  createFlushableDebounce,
+  type FlushableDebounce,
+} from '@texra/utils/core/flushableDebounce';
+import {
   copyTextToClipboard,
   COPY_RESET_DELAY_MS,
 } from '@texra/shared/utils/clipboard';
-import { createFlushableDebounce, type FlushableDebounce } from '@utils/core';
 import type { ReactiveController, ReactiveControllerHost } from 'lit';
 
 interface CopyButtonConfig {

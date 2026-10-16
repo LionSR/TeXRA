@@ -21,7 +21,6 @@ import {
 import { refusalCopy, refusalOf } from '@shared/session/approvalDecision';
 import { Settings } from '@shared/config/settings';
 import { errorResult } from '@tools/core/result';
-import { clamp } from '@utils/core';
 import { workspaceRelativePath } from '@utils/files/workspaceFS';
 import {
   buildDiffHunks,
@@ -181,11 +180,11 @@ function firstChangedLineIn(
     // A deletion has no line of its own in the proposed text; reveal the
     // position it was removed from.
     if (marker === '-') {
-      return clamp(line - 1, 0, lastProposedLine);
+      return Math.max(0, Math.min(lastProposedLine, line - 1));
     }
     line += 1;
   }
-  return clamp(hunk.newStart - 1, 0, lastProposedLine);
+  return Math.max(0, Math.min(lastProposedLine, hunk.newStart - 1));
 }
 
 // ============================================================================

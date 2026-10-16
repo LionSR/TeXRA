@@ -26,13 +26,12 @@ import {
   inquiryThreadFact,
   type InquiryThreadRecord,
 } from '@texra/shared/plugins/externalInquiry';
-import type { RequestDecisionHook } from '@tools/toolTable';
 import {
   formatRelativeTime,
   previewLabel,
   truncateSummary,
 } from '@utils/text/stringUtils';
-import type { RunInbox } from '@texra-ai/harness/plugins';
+import type { RunInbox, RequestDecisionHook } from '@texra-ai/harness/plugins';
 
 const CHANNEL = 'InquiryTool';
 

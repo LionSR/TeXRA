@@ -6,6 +6,7 @@
  * listing folded here, and a watch is the service's feed, read back as the
  * fold inputs it carries.
  */
+import { generateRunId } from '@texra-ai/harness/schemas';
 import {
   Cause,
   Data,
@@ -55,7 +56,6 @@ import type {
   RequestErrorWire,
 } from '@texra/shared/session/sessionFrames';
 import { WebviewSessions } from '@texra/controllers/session/webviewSessionLayer';
-import { generateRunId } from '@utils/core';
 
 import { attachWindowHost } from './windowHost';
 import {
