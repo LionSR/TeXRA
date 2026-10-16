@@ -23,7 +23,6 @@ import {
 import { isSqlError } from 'effect/sql/SqlError';
 import { z } from 'zod';
 import { AggregateIdSchema, OwnerIdSchema } from '@shared/schemas';
-import type { SessionStoreMovedAside } from './sessionView';
 import type {
   AggregateId,
   CommitOrdinal,
@@ -36,6 +35,7 @@ import type {
   LocalRuntimeState,
 } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
+import type { SessionStoreMovedAside } from './sessionView';
 import type { ValueFamily } from './valueFamily';
 
 /** Current CLI history rows, ordered oldest first. */
