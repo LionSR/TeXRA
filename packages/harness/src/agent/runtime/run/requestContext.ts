@@ -271,15 +271,6 @@ export function admittedTurn(
   return admitted;
 }
 
-/** The fields every `ResolvedTurn` variant carries; `continuation` exists on some only. */
-const TURN_FIELDS = [
-  'mode',
-  'system',
-  'messages',
-  'tools',
-  'controls',
-] as const satisfies readonly (keyof ResolvedTurn)[];
-
 /** Why the rows at `state` do not rebuild `sent`, or null when they do. */
 function mismatch(state: RunState, sent: ResolvedTurn): string | null {
   const { recorded, turn } = recordedTurn(state);
@@ -291,11 +282,13 @@ function mismatch(state: RunState, sent: ResolvedTurn): string | null {
       stableStringify(state.offeredTools.map(({ shown }) => shown))
   )
     return "the request does not send the tools its step's tools.offered row records";
+  // Indexing `sent` rejects a key some `ResolvedTurn` variant lacks at compile
+  // time; `continuation` exists on the Responses and Google variants only.
   const continuationOf = (t: object) =>
     'continuation' in t ? t.continuation : undefined;
-  const differ: string[] = TURN_FIELDS.filter(
-    (key) => stableStringify(turn[key]) !== stableStringify(sent[key]),
-  );
+  const differ: string[] = (
+    ['mode', 'system', 'messages', 'tools', 'controls'] as const
+  ).filter((key) => stableStringify(turn[key]) !== stableStringify(sent[key]));
   if (
     stableStringify(continuationOf(turn)) !==
     stableStringify(continuationOf(sent))
