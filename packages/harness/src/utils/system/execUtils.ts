@@ -104,7 +104,7 @@ export interface ExecuteCommandBaseOptions {
    * run's session roots, a tool call's `call.roots`, the host's roots at
    * command entry) instead of the command reaching for an ambient one.
    * `undefined` is the honest answer only where the caller itself has no
-   * workspace, and it then carries no TeXRA git identity exactly as an
+   * workspace, and it then carries no machine git identity exactly as an
    * uninitialised ambient read did.
    */
   readonly settings: SettingsStores | undefined;

@@ -7,10 +7,7 @@
  * (`claude:Edit`), and an MCP tool's name: the harness's own
  * (`mcp__<server>__<tool>`) or the one a plugin reports for an external
  * agent's MCP call (`mcp:<server>/<tool>`, built by `buildMcpToolName`).
- * Normalization used to be host-local, so the
- * progress view showed a namespaced name verbatim and missed every
- * name-keyed display rule the CLI applied. This browser-safe module is the
- * single source of truth for both halves: the canonical lookup key and the
+ * This browser-safe module is the single source of truth for both halves: the canonical lookup key and the
  * label a user sees.
  */
 

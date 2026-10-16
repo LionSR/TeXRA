@@ -6,12 +6,11 @@
  * process lives exactly as long as some open run or step of that project
  * holds it.
  *
- * JSON-RPC runs over the same Effect connection the Lean language server
- * uses, in newline framing. Each listed tool becomes a
- * runtime tool named `mcp__<server>__<tool>` whose JSON Schema passes through
- * as its parameters. Every call is approval-gated through the loop's one
- * guard (the session's bash approval), is
- * never parallel-safe, is replay-safe only when its server marks it
+ * JSON-RPC runs over the harness's Effect connection, in newline framing.
+ * Each listed tool becomes a runtime tool named `mcp__<server>__<tool>`
+ * whose JSON Schema passes through as its parameters. Every call is
+ * approval-gated through the loop's one guard (the session's bash approval),
+ * is never parallel-safe, is replay-safe only when its server marks it
  * read-only or idempotent (any other interrupted call settles as outcome
  * unknown on resume, and the model decides), and is bounded by a timeout and
  * an output cap.
@@ -45,7 +44,8 @@ const CHANNEL = 'mcp';
 
 /** Every MCP tool's name starts with this, then `<server>__<tool>`. */
 const MCP_TOOL_PREFIX = 'mcp__';
-/** The protocol revision TeXRA speaks; a server answers the one it speaks. */
+/** The protocol revision the harness speaks; a server answers the one it
+ *  speaks. */
 const PROTOCOL_VERSION = '2025-06-18';
 const START_TIMEOUT = Duration.seconds(30);
 const CALL_TIMEOUT = Duration.seconds(60);
@@ -58,8 +58,8 @@ const NAME_HASH_LENGTH = 12;
 
 /**
  * Credential-shaped variables stay out of a server's environment unless its
- * config entry names them in `env`: TeXRA's provider keys must never reach a
- * third-party process implicitly.
+ * config entry names them in `env`: the host app's provider keys must never
+ * reach a third-party process implicitly.
  */
 const SENSITIVE_ENV_NAME = /KEY|PASSWORD|SECRET|TOKEN|CREDENTIAL/i;
 

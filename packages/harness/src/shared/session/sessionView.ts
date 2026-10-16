@@ -1,7 +1,6 @@
 /**
- * The one session state every renderer reads. Fold output, never persisted, never parsed: the schema is the
- * type's single source of truth, so a field lands here first and every host
- * reads the same name.
+ * The one session state every renderer reads. Fold output, never persisted,
+ * never parsed: a field lands here first and every host reads its name.
  *
  * `SessionView` holds `Map`s because it never crosses a bridge; only events,
  * chunks, and `local` do, and those are arrays and records.
@@ -9,6 +8,7 @@
  * Interaction state (selection, drafts, recording, expansion, focus, scroll)
  * is never here.
  */
+// `sessionPresentationBoundary.vitest.ts` pins the interaction-state names.
 import { z } from 'zod';
 
 import { ApprovalPolicySnapshotSchema } from '@shared/approvalBypassKind';

@@ -105,7 +105,7 @@ export const RUN_DAMAGED_MESSAGE =
 export const RUN_EARLIER_BUILD_MESSAGE =
   "This task was written by an earlier build of TeXRA; it can't be opened by this one.";
 
-/** Banner and tooltip copy for a run another TeXRA process holds, named by
+/** Banner and tooltip copy for a run another host process holds, named by
  *  its pid: the one part of a process identity a user can act on. */
 export function runHeldMessage(pid: number): string {
   return `Held by another TeXRA process (pid ${pid}). Let it finish or close it; if it is gone, Delete removes the task.`;

@@ -235,12 +235,12 @@ export interface SessionHandleInit {
   /** A presentation host the session is born with, attached for its life. */
   readonly interactions?: HostInteractions;
   /**
-   * The opener is a window (the TUI, desktop, the extension), which follows
-   * its interrupted tasks (`followInterruptedTasks`): it resumes a task
-   * whose resume was blocked once what it needs is back, and with `offer`
-   * also lists at open, or under `texra.resumeOnOpen: auto` continues, the
-   * tasks a closed or crashed TeXRA left interrupted. Headless runs and the
-   * SDK leave it unset: their policy is off.
+   * The opener is a host window, which follows its interrupted tasks
+   * (`followInterruptedTasks`): it resumes a task whose resume was blocked
+   * once what it needs is back, and with `offer` also lists at open, or
+   * under `texra.resumeOnOpen: auto` continues, the tasks a closed or
+   * crashed host app left interrupted. Headless runs and the SDK leave it
+   * unset: their policy is off.
    */
   readonly interruptedTasks?: 'offer' | 'retry';
   /** Absent, the project's database; ephemeral, a throwaway one. */

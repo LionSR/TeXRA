@@ -2,14 +2,8 @@
  * Derives a one-line preview of a tool call's `input`, for use as a
  * header/summary fallback before the tool's own `summary` output exists
  * (e.g. while it is still in progress), shared by every host that renders
- * tool calls.
- *
- * Both hosts used to hand-maintain their own tool-name-to-preview-field
- * mapping and had quietly drifted: the CLI's generic fallback list had no
- * `prompt` entry, so an in-flight call that takes a prompt rendered raw
- * `JSON.stringify(input)` in the TUI while the progress view already showed
- * a clean truncated prompt. This module is the single source of truth for
- * that mapping.
+ * tool calls. It is the one tool-name-to-preview-field mapping, so every
+ * host previews the same field of an in-flight call.
  */
 
 import { Predicate } from 'effect';

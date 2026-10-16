@@ -16,6 +16,8 @@
  * (`DatabaseRowEarlier`, its whole run listed as written by an earlier
  * build), never as damaged or silently stripped.
  */
+// The frozen schemas live in `config/storage/frozen/`, written by
+// `npm run storage:freeze` at a release and checked by `rowVersions.vitest.ts`.
 import type { JsonValue } from './jsonValue';
 import type { SessionEventDraft } from './sessionEvent';
 
