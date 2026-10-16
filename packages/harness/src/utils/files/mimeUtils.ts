@@ -59,7 +59,7 @@ export function isImageMimeType(mimeType: string | null | undefined): boolean {
 }
 
 /** File extensions for binary office document formats (case-insensitive, with leading dot). */
-export const OFFICE_EXTENSIONS: ReadonlySet<string> = new Set([
+export const OFFICE_EXTENSIONS: readonly string[] = Object.freeze([
   // Word processing
   '.doc',
   '.docx',

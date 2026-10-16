@@ -11,7 +11,6 @@
  * density (one-liner or expanded card) is a paint-time choice; it is never
  * expressed by withholding a row.
  */
-import { absurd } from 'effect';
 import {
   MESSAGE_TYPES,
   type ErrorLogData,
@@ -350,6 +349,9 @@ export function logPayloadRow(
       return undefined;
 
     default:
-      return absurd(payload);
+      // A persisted payload can carry a messageType this build does not
+      // know, so the failure names it.
+      payload satisfies never;
+      throw new Error(`Unprojected log payload: ${JSON.stringify(payload)}`);
   }
 }
