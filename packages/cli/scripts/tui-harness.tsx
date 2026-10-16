@@ -334,11 +334,7 @@ const HARNESS_PLATFORM_SERVICES = await installCliProcessRuntime(
 );
 if (RESET_MULTI_AGENT_DISABLED) {
   await HARNESS_PLATFORM_SERVICES.runtime.runPromise(
-    setCliToolEnabled(
-      HARNESS_PLATFORM_SERVICES.globalState,
-      'multi-agent',
-      false,
-    ),
+    setCliToolEnabled('multi-agent', false),
   );
 }
 // The one process runtime this harness runs on, as its composition root

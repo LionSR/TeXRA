@@ -23,7 +23,6 @@
   "packages/harness/src/tools/delegation/AgentTool.ts": 1,
   "packages/harness/src/tools/pluginCatalog.ts": 1,
   "packages/harness/src/tools/plugins.ts": 1,
-  "packages/harness/src/tools/toolAvailability.ts": 1,
   "packages/harness/src/tools/WriteTool.ts": 1,
   "packages/llm/src/api/openaiResponsesCodec.ts": 1,
   "packages/llm/src/api/openaiResponsesRequest.ts": 2,

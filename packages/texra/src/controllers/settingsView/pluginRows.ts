@@ -20,7 +20,7 @@ import type { PluginEnv } from '@common/plugins/installRecord';
 import { listPlugins } from '@common/plugins/pluginTrust';
 import { buildToolDashboardItems } from '@texra/controllers/settingsView/ToolDashboardData';
 import type { PluginRow } from '@texra/shared/settingsView/settingsViewMessages';
-import type { ExternalToolCheckResult } from '@tools/toolAvailabilityService';
+import type { ExternalToolCheckResult } from '@texra-ai/harness';
 
 /**
  * Build the rows, the MCP config file they read, and what that file's
