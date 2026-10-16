@@ -1194,7 +1194,12 @@ function normalize(file, root) {
   const scrub = (value, key = '') => {
     if (typeof value === 'string') return scrubText(value);
     if (typeof value === 'number') return TIMING_KEYS.has(key) ? 0 : value;
-    if (Array.isArray(value)) return value.map((item) => scrub(item, key));
+    // A card's duration line is wall time as text. With its wall time zeroed
+    // the card has no such line (a sub-second turn shows none), so it goes.
+    if (Array.isArray(value))
+      return value
+        .filter((item) => item?.kind !== 'text' || item.label !== 'Duration:')
+        .map((item) => scrub(item, key));
     if (value === null || typeof value !== 'object') return value;
     return Object.fromEntries(
       Object.entries(value).map(([k, v]) => [scrubText(k), scrub(v, k)]),
