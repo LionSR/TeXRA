@@ -1,13 +1,10 @@
 import { Effect } from 'effect';
 
 import {
-  getAgent,
-  getCatalogAgents,
-  getVisibleAgents,
-  resolveAgentForLaunch,
+  AgentCatalog,
   type AgentEntry,
   type WorkspaceAgentsStores,
-} from '@agent/index';
+} from '@texra-ai/harness';
 import { agentKeyOf } from '@shared/schemas';
 import { documentTaskOf } from '@texra/tools/documents/documentTask';
 import { formatResultCount } from '@utils/text/stringUtils';
@@ -53,16 +50,20 @@ export function resolveCliRunAgent(
   stores: WorkspaceAgentsStores,
   name: string,
 ) {
-  return Effect.flatMap(resolveAgentForLaunch(stores, name), (agent) =>
-    agent === undefined
-      ? Effect.fail(new CliUsageError(missingAgentMessage(name)))
-      : Effect.succeed(agent),
+  return Effect.flatMap(AgentCatalog, (catalog) =>
+    catalog
+      .forLaunch(stores, name)
+      .pipe(
+        Effect.catchTag('AgentNotFound', () =>
+          Effect.fail(new CliUsageError(missingAgentMessage(name))),
+        ),
+      ),
   );
 }
 
 /** Resolve the agent a display command names, by the catalog's rule. */
-export function resolveCliAgent(identifier: string): AgentEntry | undefined {
-  return getAgent(identifier);
+export function resolveCliAgent(identifier: string) {
+  return Effect.map(AgentCatalog, (catalog) => catalog.get(identifier));
 }
 
 export function loadCliAgentList(
@@ -183,9 +184,11 @@ function collectCliAgents(
   tasks: boolean,
 ) {
   return Effect.map(
-    source === 'visible'
-      ? getVisibleAgents(stores)
-      : Effect.succeed(getCatalogAgents()),
+    Effect.flatMap(AgentCatalog, (catalog) =>
+      source === 'visible'
+        ? catalog.visible(stores)
+        : Effect.succeed(catalog.list()),
+    ),
     (agents) =>
       tasks ? agents.filter((agent) => documentTaskOf(agent) !== null) : agents,
   );

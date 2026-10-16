@@ -1,9 +1,9 @@
 import { Data, Effect, absurd } from 'effect';
-import type { WorkspaceAgentsController } from '@agent/workspaceAgents/WorkspaceAgentsController';
 import { formatUnknownTeamMessage } from '@common/teams/TeamPlan';
 import type { MessageHost } from '@texra/hosts/uiHosts';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { formatResultCount } from '@utils/text/stringUtils';
+import type { WorkspaceAgentsController } from '@texra-ai/harness';
 import type { StateReadFailed } from '@texra-ai/harness';
 
 interface SettingsTeamCatalog {

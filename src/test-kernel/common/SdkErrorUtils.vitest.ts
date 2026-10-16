@@ -7,7 +7,11 @@ import { describe, expect, it } from 'vitest';
 
 // Local imports
 import { failureInfo } from '@agent/runtime/modelAccess/failureInfo';
-import { attachProviderError } from '@common/errors/sdkError/errorMetadata';
+import {
+  attachErrorPresentationClaimed,
+  attachProviderError,
+  hasErrorPresentationClaimed,
+} from '@common/errors/sdkError/errorMetadata';
 import {
   buildErrorLogData,
   getSdkErrorMessage,
@@ -81,6 +85,20 @@ describe('context-window overflow', () => {
 });
 
 describe('attachProviderError end-to-end', () => {
+  // A frozen error cannot take a symbol property: marking it must neither
+  // throw nor lose the mark, at the error itself or behind a wrapper.
+  it('marks a frozen error without throwing', () => {
+    const frozen = Object.freeze(new Error('overloaded'));
+    attachErrorPresentationClaimed(frozen);
+    attachProviderError(frozen, { message: 'overloaded', userRetryable: true });
+
+    expect(hasErrorPresentationClaimed(frozen)).toBe(true);
+    expect(
+      hasErrorPresentationClaimed(new Error('wrapped', { cause: frozen })),
+    ).toBe(true);
+    expect(normalizeProviderError(frozen).userRetryable).toBe(true);
+  });
+
   it('surfaces a cached ProviderError with statusCode and provider via normalizeProviderError', () => {
     // Simulates what happens at the flow rethrow: the RetryErrorInfo is
     // attached as-is, attachProviderError caches it, then

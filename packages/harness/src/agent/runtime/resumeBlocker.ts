@@ -15,11 +15,9 @@
 import { Effect, type FileSystem } from 'effect';
 
 import {
-  refresh,
-  resolveAgentForLaunch,
-  settledCatalog,
-} from '@agent/index/agentRegistry';
-import type { AgentCatalogLoadError } from '@agent/index/agentRegistry';
+  AgentCatalog,
+  type AgentCatalogLoadError,
+} from '@agent/index/agentCatalog';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { readInstalledPluginLoad } from '@common/plugins/pluginTrust';
 import type { StateReadFailed } from '@platform/interfaces';
@@ -35,18 +33,14 @@ export const resumeBlocker = Effect.fn('resumeBlocker')(function* (
 ): Effect.fn.Return<
   ResumeBlocker | null,
   AgentCatalogLoadError | StateReadFailed,
-  AgentCatalogServices | FileSystem.FileSystem
+  AgentCatalog | AgentCatalogServices | FileSystem.FileSystem
 > {
   if (config.agentSource === 'inline') return null;
   // The launch's own resolution: the settled catalog, rescanned once on a
   // miss, so an agent saved a moment ago is found.
-  const resolve = resolveAgentForLaunch(
-    session.roots,
-    config.agent,
-    config.agentSource,
-  );
-  yield* settledCatalog;
-  const entry = (yield* resolve) ?? (yield* Effect.andThen(refresh(), resolve));
+  const entry = yield* (yield* AgentCatalog)
+    .forLaunch(session.roots, config.agent, config.agentSource)
+    .pipe(Effect.catchTag('AgentNotFound', () => Effect.succeed(undefined)));
   // The catalog lists a plugin's agents only while the plugin loads, so a
   // plugin agent it misses is answered by the plugin's install record.
   // A launch may record the source-qualified spelling (`plugin:acme:x`).

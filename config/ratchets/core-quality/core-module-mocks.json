@@ -1,5 +1,5 @@
 {
-  "src/test-kernel/agent/AgentPackage.vitest.ts": 3,
+  "src/test-kernel/agent/AgentPackage.vitest.ts": 2,
   "src/test-kernel/agent/runtime/ChildRunLoop.vitest.ts": 1,
   "src/test-kernel/cli/ChatgptLoginBrowser.vitest.ts": 1,
   "src/test-kernel/cli/CliInitPlatform.vitest.ts": 2,
