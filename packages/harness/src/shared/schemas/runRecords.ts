@@ -1,7 +1,7 @@
 /** Canonical run metadata records, independent of runtime machinery. */
 import { z } from 'zod';
 
-import { byString, normalizeFilePath } from '@utils/core';
+import { normalizeFilePath } from '@utils/core';
 
 import { AgentConfigFieldsSchema } from './agentConfig';
 import { JsonValueSchema } from './jsonValue';
@@ -131,5 +131,5 @@ export const RunWorkspaceFilesSchema = z
       ...new Set(
         paths.map((value) => normalizeFilePath(value.trim())).filter(Boolean),
       ),
-    ].sort(byString),
+    ].sort((a, b) => a.localeCompare(b)),
   );

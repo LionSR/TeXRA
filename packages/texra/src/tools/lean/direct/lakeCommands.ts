@@ -8,10 +8,10 @@
  */
 
 import * as path from 'node:path';
+import { type PerKeyLane, withPerKeyLane } from '@texra-ai/harness';
 
 import { Effect } from 'effect';
 
-import { type PerKeyLane, withPerKeyLane } from '@utils/core/perKeyQueue';
 import { executeCommand } from '@utils/system/execUtils';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 

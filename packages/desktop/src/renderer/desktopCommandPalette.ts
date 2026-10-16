@@ -14,7 +14,6 @@ import {
 } from '@texra/shared/commands/accelerators';
 import type { DesktopShortcutEntry } from '@texra/shared/commands/shortcutPreferences';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
-import { sanitizePathSegment } from '@utils/text/sanitizePathSegment';
 import {
   dispatchDesktopCommand,
   getDesktopCommandMenuEntries,
@@ -368,9 +367,5 @@ function toPaletteEntry(
 }
 
 function slugify(value: string): string {
-  return sanitizePathSegment(value, {
-    invalidCharPattern: /[^a-z0-9]+/g,
-    replacement: '-',
-    lowercase: true,
-  });
+  return value.toLowerCase().replaceAll(/[^a-z0-9]+/g, '-');
 }

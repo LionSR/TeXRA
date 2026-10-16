@@ -1,5 +1,3 @@
-import { throwAggregated } from '@utils/core';
-
 /**
  * A synchronous resource with one owner. Structurally compatible with VS
  * Code's Disposable and the unsubscribe callbacks Electron-side adapters use.
@@ -40,6 +38,12 @@ export class DisposableStore implements Disposable {
     }
     this.disposables.length = 0;
 
-    throwAggregated(failures, 'Multiple resources failed to dispose');
+    if (failures.length === 1) throw failures[0];
+    if (failures.length > 1) {
+      throw new AggregateError(
+        failures,
+        'Multiple resources failed to dispose',
+      );
+    }
   }
 }

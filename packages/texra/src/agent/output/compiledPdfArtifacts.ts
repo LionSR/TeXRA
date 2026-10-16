@@ -1,5 +1,7 @@
 // Node imports
 import * as path from 'node:path';
+import { normalizeFilePath } from '@texra-ai/harness/schemas';
+import { hasExtension } from '@texra-ai/harness';
 
 // Third-party imports
 import { Effect, FileSystem, type PlatformError } from 'effect';
@@ -14,8 +16,6 @@ import {
 } from '@shared/schemas';
 import { stripWorkflowRoundDir } from '@texra/shared/constants/workflowOutput';
 import { createRunStorageLocation } from '@utils/files/fileLocation';
-import { normalizeFilePath } from '@utils/core';
-import { hasExtension } from '@utils/core/pathCore';
 
 interface PublishCompiledPdfOptions {
   runDirectory: string;

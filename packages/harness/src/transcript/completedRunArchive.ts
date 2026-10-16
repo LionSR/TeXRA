@@ -1,5 +1,5 @@
 /** Completed-run display reads, keyed by run id. */
-import { Effect, Predicate } from 'effect';
+import { Effect, Predicate, absurd } from 'effect';
 import type { ExportNode } from '@agent/export/schemas';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { formatToolResultAsText } from '@agent/runtime/run/toolResultText';
@@ -12,7 +12,6 @@ import {
   type ToolUseLog,
 } from '@shared/schemas';
 import type { TranscriptView } from '@shared/session/sessionView';
-import { assertNever } from '@utils/core';
 import { readRunTranscript } from './runTranscript';
 
 // ============================================================================
@@ -43,7 +42,7 @@ function toolResultText(tool: ToolUseLog): string | undefined {
  * Map one transcript row to conversation nodes. Exhaustive over the row
  * kinds: the transcript is the single completed-run record, so every kind
  * must carry an explicit map-or-skip decision here; adding a new kind without
- * deciding fails to compile (`assertNever`), instead of silently dropping
+ * deciding fails to compile (`absurd`), instead of silently dropping
  * conversation content.
  */
 function conversationNodesForRow(
@@ -99,7 +98,7 @@ function conversationNodesForRow(
     case 'log':
       return [];
     default:
-      return assertNever(row, 'Unmapped transcript row kind');
+      return absurd(row);
   }
 }
 

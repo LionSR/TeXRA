@@ -3,7 +3,6 @@ import { realpathSync } from 'node:fs';
 import { basename, join } from 'node:path';
 
 import { truncatedHexId } from '@utils/core/idHash';
-import { sanitizePathSegment } from '@utils/text/sanitizePathSegment';
 
 const STORAGE_LAYOUT = {
   global: 'global-storage',
@@ -11,13 +10,11 @@ const STORAGE_LAYOUT = {
 } as const;
 
 function sanitizeWorkspaceBasename(workspacePath: string): string {
-  return sanitizePathSegment(basename(workspacePath), {
-    invalidCharPattern: /[^A-Za-z0-9._-]/g,
-    replacement: '-',
-    collapseRepeats: true,
-    trimReplacement: true,
-    fallback: 'workspace',
-  });
+  const slug = basename(workspacePath)
+    .replaceAll(/[^A-Za-z0-9._-]/g, '-')
+    .replaceAll(/-+/g, '-')
+    .replaceAll(/^-|-$/g, '');
+  return slug || 'workspace';
 }
 
 /**
