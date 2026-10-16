@@ -36,13 +36,18 @@ export const resolveSetupLaunchModel = Effect.fn('resolveSetupLaunchModel')(
       { ...stores, secrets },
       candidates.map(([, model]) => model),
     );
-    const runnable = modelOptionsFrom(options).flatMap((row, index) =>
-      isModelOptionAvailable(row) &&
-      (row.availability === 'openrouter-key') ===
-        (candidates[index]?.[0] === 'openRouter')
-        ? [{ row, paidByPlan: options[index]?.usageRoute !== undefined }]
-        : [],
+    const byModel = new Map(options.map((option) => [option.model, option]));
+    const rows = new Map(
+      modelOptionsFrom(options).map((row) => [row.value, row]),
     );
+    const runnable = candidates.flatMap(([provider, model]) => {
+      const row = rows.get(model);
+      return row !== undefined &&
+        isModelOptionAvailable(row) &&
+        (row.availability === 'openrouter-key') === (provider === 'openRouter')
+        ? [{ row, paidByPlan: byModel.get(model)?.usageRoute !== undefined }]
+        : [];
+    });
     const pick = (runnable.find(({ paidByPlan }) => paidByPlan) ?? runnable[0])
       ?.row;
     if (pick) {

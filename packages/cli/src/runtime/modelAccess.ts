@@ -186,11 +186,12 @@ export function modelSelectItemsForCli(
 
 /** Each option's picker row, with the plan its route pays through. */
 function cliModelAccessFrom(options: readonly ModelOption[]): CliModelAccess[] {
-  return modelOptionsFrom(options).map((model, index) => ({
+  const routes = new Map(options.map((option) => [option.model, option]));
+  return modelOptionsFrom(options).map((model) => ({
     model,
     available: isModelOptionAvailable(model),
     status: formatModelAccessStatus(model),
-    usageRoute: options[index]?.usageRoute,
+    usageRoute: routes.get(model.value)?.usageRoute,
   }));
 }
 

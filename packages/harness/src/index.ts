@@ -206,16 +206,14 @@ export {
   reasoningEffortOverrides,
   supportsReasoningLevel,
 } from '@model/reasoningLevel';
-export { helperCall } from '@agent/runtime/helperModel';
+export { helperCall, type HelperPrompt } from '@agent/runtime/helperModel';
+// Who a helper call's usage is billed to, and why a model call can fail.
+export type { UsageAttribution } from '@agent/runtime/run/pricing';
+export type { CallFailure } from '@agent/runtime/modelAccess/failureInfo';
+export { RouteUnavailable } from '@common/errors/agentErrors';
 export { getHelperModelName } from '@agent/runtime/helperModelName';
-// Where every model call's usage goes, and the wire a sender speaks.
-export {
-  UsageLog,
-  UsageLogResponseSchema,
-  type UsageLogBatch,
-  type UsageLogEntry,
-  type UsageLogResponse,
-} from '@shared/usageLog';
+// Where every model call's usage goes, and the entry a sender ships.
+export { UsageLog, type UsageLogEntry } from '@shared/usageLog';
 // What a used-up plan falls back to, as the retry copy names it.
 export { quotaFallbackRouteFor } from '@shared/quotaFallbackRoutes';
 
