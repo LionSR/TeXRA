@@ -35,7 +35,7 @@ export interface TeamRunPlan<T extends TeamCatalogAgent = TeamCatalogAgent> {
 }
 
 /**
- * The workspace agents' member identity rule (`getCatalogAgent` in
+ * The workspace agents' member identity rule (`AgentCatalog.get` in
  * production): a bare name matches by name, a `source:name` key exactly.
  */
 type TeamAgentResolver<T> = (identifier: string) => T | undefined;

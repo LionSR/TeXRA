@@ -181,11 +181,10 @@ import { Effect } from 'effect';
 import { AgentDirectories } from '@platform/interfaces';
 import { createNodeWorkspaceRoots } from '@platform/defaults/nodeHost';
 import { directLeanLanguageServices } from '@tools/lean/direct/directLspAdapter';
-import { AgentDirectoryService } from '@agent/index';
+import { AgentCatalog, AgentDirectoryService } from '@texra-ai/harness';
 import { installProcessRuntime } from '@controllers/session/sessionLayer';
 import { nodeProcesses } from '@platform/defaults/nodeProcesses';
 import { bootstrapHost } from '@controllers/hostBootstrap';
-import { loadAgents } from '@agent/index/agentRegistry';
 import { initializeDefaultSession } from '@agent/runtime/sessionGraph';
 import { validateRunRequest } from '@texra/controllers/session/runRequests';
 
@@ -236,7 +235,9 @@ await runtime.runPromise(
         console.error(`[texra] ${event}`, payload);
       },
     });
-    yield* loadAgents();
+    // The process's agent catalog: scan every agent source once before the
+    // first launch (`forLaunch` also reloads a source that changed).
+    yield* (yield* AgentCatalog).refresh;
 
     const validated = validateRunRequest({
       config: {
@@ -525,8 +526,8 @@ when it opens.
 The installed `AgentDirectoriesPort` is the whole of the core agent bundle:
 `AgentDirectoryService` resolves `builtIn()` inside the
 `resourcesPath` it was given and the files are read where they sit, so a port
-pointed at a tree that does not hold them leaves `loadAgents` with no packaged
-agents (§2). Tool plugins that ship agents (today `lean4`) keep them at
+pointed at a tree that does not hold them leaves the `AgentCatalog` with no
+packaged agents (§2). Tool plugins that ship agents (today `lean4`) keep them at
 `<resourcesPath>/plugins/<id>/agents`, and the `builtIn` scan adds
 those directories only once
 `installPluginAgentDirectories(resourcesPath, pluginIds)`
@@ -616,7 +617,7 @@ host.
    supplied. Embedding inside a process that already hosts TeXRA shares that
    session.
 5. **Some failure modes cluster at run time, not startup.** A missing
-   `loadAgents` throws at agent resolution, and a request nobody decides
+   catalog scan (`AgentCatalog.refresh`) fails at agent resolution, and a request nobody decides
    parks the run mid-way (§3). Neither fails fast at bootstrap.
 
 ## 7. Related documents
