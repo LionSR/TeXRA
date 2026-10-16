@@ -6,10 +6,8 @@
  *
  * Resolution is by hand, not by ambient scope: a caller answers for the
  * workspace whose roots it was given — a tool call's `call.roots`, a run's
- * `session.roots`, a host command's `session.roots`. The `AsyncLocalStorage`
- * frame this module used to carry is gone (#12421), and the process-wide
- * holder that survived it is gone too: `SessionHandleInit.roots` is required,
- * so every session is opened over roots its composition root named, and this
+ * `session.roots`, a host command's `session.roots`. There is no ambient
+ * holder: `SessionHandleInit.roots` is required, so every session is opened over roots its composition root named, and this
  * module declares the record without holding one.
  */
 import type { SettingHost } from '@shared/state/stateSettings';

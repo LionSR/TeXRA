@@ -35,13 +35,13 @@ import type { TurnProtocolSchema } from '../protocol.js';
 export const OPENAI_DEFAULT_ENDPOINT = 'https://api.openai.com/v1';
 
 /** A default endpoint that depends on the provider's region toggle. */
-interface RegionalBaseUrl {
+export interface RegionalBaseUrl {
   readonly china: string;
   readonly international: string;
 }
 
 /** One model provider plugin. */
-interface ModelProviderPlugin {
+export interface ModelProviderPlugin {
   /** Stable, persisted identifier: the llm-zoo provider or API-key id. */
   readonly id: string;
   /** The provider's own name. */
@@ -163,23 +163,21 @@ const MANIFEST = [
 /** Every model provider plugin, in display order. */
 export const MODEL_PROVIDER_PLUGINS: readonly ModelProviderPlugin[] = MANIFEST;
 
-type ModelProviderPluginEntry = (typeof MANIFEST)[number];
-
 /** Ids of the providers users can configure a direct API key for. */
 export type ApiKeyProviderId = Extract<
-  ModelProviderPluginEntry,
+  (typeof MANIFEST)[number],
   { readonly apiKey: true }
 >['id'];
 
 /** Providers with an HTTP endpoint of their own, which a host may override. */
 export type EndpointProviderId = Extract<
-  ModelProviderPluginEntry,
+  (typeof MANIFEST)[number],
   { readonly baseUrl: string | RegionalBaseUrl }
 >['id'];
 
 /** Providers with a China and an international platform. */
 export type RegionalProviderId = Extract<
-  ModelProviderPluginEntry,
+  (typeof MANIFEST)[number],
   { readonly baseUrl: RegionalBaseUrl }
 >['id'];
 
@@ -201,7 +199,7 @@ export const BACKEND_PROTOCOLS = Object.freeze({
   openRouter: 'openrouter-chat',
   copilot: 'vscode-lm',
 } satisfies Partial<
-  Record<ModelProviderPluginEntry['id'], z.infer<typeof TurnProtocolSchema>>
+  Record<(typeof MANIFEST)[number]['id'], z.infer<typeof TurnProtocolSchema>>
 >);
 
 /** A provider a run's conversation can be bound to: its backend. */
@@ -224,7 +222,7 @@ type _EveryEndpointProviderNamesAProtocol = AssertNever<
   Exclude<
     `${ModelProvider}`,
     | BackendProviderId
-    | Extract<ModelProviderPluginEntry, { readonly baseUrl: null }>['id']
+    | Extract<(typeof MANIFEST)[number], { readonly baseUrl: null }>['id']
   >
 >;
 
@@ -235,6 +233,6 @@ type _EveryEndpointProviderNamesAProtocol = AssertNever<
 type _EveryModelProviderStatesABaseUrl = AssertNever<
   Exclude<
     `${ModelProvider}`,
-    Extract<ModelProviderPluginEntry, { readonly baseUrl: unknown }>['id']
+    Extract<(typeof MANIFEST)[number], { readonly baseUrl: unknown }>['id']
   >
 >;

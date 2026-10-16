@@ -27,6 +27,7 @@ import {
   XAI_DEVICE_SLOW_DOWN_INCREMENT_SEC,
 } from './xaiConstants.js';
 import { pollDeviceToken, requestDeviceCode } from './xaiOAuthClient.js';
+import type { HttpClient } from 'effect/http';
 import type { XaiSession } from './xaiSessionTypes.js';
 
 /**
@@ -36,7 +37,9 @@ import type { XaiSession } from './xaiSessionTypes.js';
  */
 export const xaiLoginWithDeviceCode = Effect.fn(
   'xaiDeviceLogin.loginWithDeviceCode',
-)(function* (options: DeviceLoginOptions<XaiSession>) {
+)(function* (
+  options: DeviceLoginOptions<XaiSession>,
+): Effect.fn.Return<XaiSession, Error, HttpClient.HttpClient> {
   const device = yield* requestDeviceCode();
   // Floor to 1s so a misbehaving endpoint cannot busy-loop us.
   const intervalMs = Math.max(

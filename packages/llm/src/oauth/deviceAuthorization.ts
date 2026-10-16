@@ -17,9 +17,9 @@ import { Clock, Data, Duration, Effect, Ref, Schedule } from 'effect';
 
 import { toErrorMessage } from './support.js';
 import type {
-  SubscriptionOAuthCoordinator,
+  SubscriptionCoordinator,
   SubscriptionSession,
-} from './SubscriptionOAuthCoordinator.js';
+} from './subscriptionCoordinator.js';
 
 /** The device-code prompt a host renders while polling for approval. */
 export interface SubscriptionDeviceCodePrompt {
@@ -33,7 +33,11 @@ export interface SubscriptionDeviceCodePrompt {
 
 /** What a provider's device-code sign-in takes from its host. */
 export interface DeviceLoginOptions<S extends SubscriptionSession> {
-  readonly coordinator: SubscriptionOAuthCoordinator<S>;
+  /** The coordinator that stores the session the sign-in grants. */
+  readonly coordinator: Pick<
+    SubscriptionCoordinator<S>,
+    'loginWithCode' | 'storeTokens'
+  >;
   /** Show the user the verification URL + one-time code. */
   readonly onPrompt: (
     prompt: SubscriptionDeviceCodePrompt,

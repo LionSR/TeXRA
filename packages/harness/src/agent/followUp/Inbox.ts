@@ -61,8 +61,8 @@ export interface InboxItem {
   /** Media file paths (e.g. pasted images) attached to a user's message. */
   readonly mediaFiles?: readonly string[];
   readonly from: FollowUpSenderInput;
-  /** Identity of a delivery its producer may repeat (a child's result,
-   *  #9531): the row's `followUpId`, so a replay writes nothing. */
+  /** Identity of a delivery its producer may repeat (a child's result):
+   *  the row's `followUpId`, so a replay writes nothing. */
   readonly deliveryId?: string;
   /** A request of the run's own (`/compact`, a model switch), not a message. */
   readonly control?: QueuedFollowUp['control'];

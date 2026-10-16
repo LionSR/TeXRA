@@ -114,6 +114,7 @@ export const TurnRequestSchema = z
     cacheKey: z.string().min(1).optional(),
   })
   .readonly();
+/** A turn as the caller asks for it, before the binding's defaults apply. */
 export type TurnRequest = z.infer<typeof TurnRequestSchema>;
 
 const GoogleControlsSchema = z.strictObject({
@@ -273,17 +274,7 @@ export const ModelConfigurationSchema = z.discriminatedUnion('protocol', [
     }).readonly(),
   })
     .superRefine((configuration, ctx) => {
-      if (
-        !configuration.supportsTemperature &&
-        configuration.defaults.temperature !== null
-      ) {
-        ctx.addIssue({
-          code: 'custom',
-          path: ['defaults', 'temperature'],
-          message:
-            'A protocol without temperature support requires a null default.',
-        });
-      }
+      validateTemperatureDefault(configuration, ctx);
       if (
         !configuration.supportsMaxOutputTokens &&
         configuration.defaults.maxOutputTokens !== null
@@ -346,9 +337,9 @@ export type OpenRouterConfiguration = Extract<
   ModelConfiguration,
   { protocol: 'openrouter-chat' }
 >;
-export type VscodeLanguageModelConfiguration = Extract<
-  ModelConfiguration,
-  { protocol: 'vscode-lm' }
+/** The editor's model configuration, as the editor host serves it. */
+export type VscodeLanguageModelConfiguration = z.infer<
+  typeof VscodeLanguageModelConfigurationSchema
 >;
 
 const PreparedInputSchema = OriginSchema.extend({
@@ -413,6 +404,7 @@ export const ResolvedTurnSchema = z.discriminatedUnion('mode', [
     GooglePreparedSchema.extend({ mode: z.literal('background') }).readonly(),
   ]),
 ]);
+/** A prepared turn: the request with the binding's controls fixed. */
 export type ResolvedTurn = z.infer<typeof ResolvedTurnSchema>;
 
 const UsageSchema = z
@@ -464,6 +456,8 @@ const UsageSchema = z
       .optional(),
   })
   .readonly();
+/** A turn's token counts as the provider reported them; unknown stays null. */
+export type TurnUsage = z.infer<typeof UsageSchema>;
 
 const IdentitySchema = z.strictObject({
   providerResponseId: z.string().min(1),
@@ -621,6 +615,7 @@ export const TurnResultSchema = z.discriminatedUnion('kind', [
   HttpTurnResultSchema,
   EditorTurnResultSchema,
 ]);
+/** A completed provider turn: its content, finish reason and usage. */
 export type TurnResult = z.infer<typeof TurnResultSchema>;
 
 /** The assistant message a completed turn contributes to canonical history. */
@@ -656,8 +651,10 @@ export const TurnEventSchema = z.discriminatedUnion('kind', [
   DeltaEventSchema.readonly(),
   CompletedEventSchema.readonly(),
 ]);
+/** A streamed turn's event: its identity, a text delta, or the result. */
 export type TurnEvent = z.infer<typeof TurnEventSchema>;
 
+/** A submission's answer: the accepted operation, or the finished turn. */
 export const BackgroundSubmissionSchema = z.discriminatedUnion('kind', [
   z
     .strictObject({
@@ -668,6 +665,7 @@ export const BackgroundSubmissionSchema = z.discriminatedUnion('kind', [
     .readonly(),
   HttpCompletedEventSchema.readonly(),
 ]);
+/** {@link BackgroundSubmissionSchema}'s value. */
 export type BackgroundSubmission = z.infer<typeof BackgroundSubmissionSchema>;
 const SequenceSchema = z.strictObject({ afterSequence: z.int().nonnegative() });
 /** A delivered sequence is not a durable acknowledgement by its consumer. */
@@ -703,6 +701,7 @@ export const BackgroundEventSchema = z.union([
     ),
   }).readonly(),
 ]);
+/** An event of observed background work; polling reports no sequence. */
 export type BackgroundEvent = z.infer<typeof BackgroundEventSchema>;
 /** Absolute original deadline; reconnecting does not replenish it. */
 export const ObservationPolicySchema = z
@@ -719,6 +718,7 @@ export const FileUploadSchema = z
     base64: z.base64(),
   })
   .readonly();
+/** {@link FileUploadSchema}'s value. */
 export type FileUpload = z.infer<typeof FileUploadSchema>;
 
 /**

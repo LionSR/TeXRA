@@ -5,10 +5,8 @@
  */
 import { hash, randomBytes } from 'node:crypto';
 
-import type {
-  SubscriptionAuthorizeRequest,
-  SubscriptionOAuthPolicy,
-} from './SubscriptionOAuthCoordinator.js';
+import type { SubscriptionOAuthPolicy } from './SubscriptionOAuthCoordinator.js';
+import type { SubscriptionAuthorizeRequest } from './subscriptionCoordinator.js';
 
 /** 32 random bytes, base64url (no padding). */
 const randomToken = (): string => randomBytes(32).toString('base64url');

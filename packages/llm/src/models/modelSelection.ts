@@ -1,6 +1,6 @@
 /**
- * The model a run, a setting or a delegation names. TeXRA stores one string
- * per choice: llm-zoo's selection form `provider/id[@effort][+pro]` (e.g.
+ * The model a caller names, stored as one string per choice: llm-zoo's
+ * selection form `provider/id[@effort][+pro]` (e.g.
  * `anthropic/claude-opus-5@high`), which names the model by its provider's
  * own API ID and says how to run it.
  */
@@ -11,8 +11,9 @@ import {
   type ModelSelection,
 } from 'llm-zoo';
 
+/** A stored model string resolved against the catalog. */
 export interface SelectedModel {
-  /** The string as stored; the run's `modelId`. */
+  /** The string as stored. */
   readonly id: string;
   readonly config: ModelConfig;
   /** The effort, thinking and mode the string asks for, if any. */

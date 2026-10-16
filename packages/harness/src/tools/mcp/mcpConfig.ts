@@ -127,7 +127,7 @@ export interface LoadedPluginTools {
 /**
  * One MCP server as a plugin: its tools are known only once it is up, so a
  * run that names it holds its `spec` and revision in its project's catalog,
- * whose steps offer its tools while the run holds them (`@tools/liveTools`).
+ * whose steps offer its tools while the run holds them.
  */
 export interface McpServerPlugin {
   /** `mcp:<server>`, or the installed plugin's id. */
@@ -176,7 +176,7 @@ export function mcpPlugin(
 }
 
 /** The loader over the MCP config file at `file`, read through `fs`, with
- *  env values digested under the key `revisionKey` reads (`@common/plugins/mcpServers`),
+ *  env values digested under the key `revisionKey` reads,
  *  read only when a run declares an MCP tool. */
 export const mcpPluginLoader =
   (

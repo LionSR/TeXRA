@@ -66,7 +66,6 @@ runNode([
   'false',
   '--declaration',
   '--emitDeclarationOnly',
-  '--removeComments',
   '--rootDir',
   'src',
   '--outDir',

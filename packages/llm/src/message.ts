@@ -269,8 +269,10 @@ const AssistantMessageSchema = z
     validateAssistantContent(message.origin, message.content, ctx);
   })
   .readonly();
+/** The content one turn produced, stamped with the turn's origin. */
 export type AssistantMessage = z.infer<typeof AssistantMessageSchema>;
 
+/** One message of the history a turn sends (user, assistant, tool, system). */
 export const MessageSchema = z.discriminatedUnion('role', [
   z
     .strictObject({
@@ -308,7 +310,8 @@ export const MessageSchema = z.discriminatedUnion('role', [
 export const systemUpdateText = (text: string): string =>
   `<system-update>\n${text}\n</system-update>`;
 
-// A completed assistant can precede settlement; only the next request requires it.
+/** The history a turn sends: each assistant's local calls answered by the
+ *  next message, in call order. Only the next request needs them settled. */
 export const PreparedHistorySchema = z
   .array(MessageSchema)
   .min(1)
@@ -351,7 +354,6 @@ export const PreparedHistorySchema = z
     }
   })
   .readonly();
-
 type HistoryMessage = z.infer<typeof MessageSchema>;
 
 /**
@@ -410,7 +412,6 @@ export function replayableHistory(
   }
   return out;
 }
-
 const PrefixSchema = z.strictObject({
   coveredMessages: z.int().positive(),
   prefixFingerprint: z.string().regex(/^[a-f0-9]{64}$/),
@@ -434,10 +435,8 @@ export const ResponsesContinuationSchema = PrefixSchema.extend({
   origin: OriginSchema.extend({
     protocol: z.literal('openai-responses'),
   }).readonly(),
-  // Only a stored anchor is durable. A connection-scoped anchor named a single
-  // websocket, so it was dead the moment the process exited, and reusing a dead
-  // one failed the whole turn rather than dropping the acceleration. Keeping it
-  // representable here would let a persisted value carry it.
+  // Only a stored anchor is durable: a connection-scoped one dies with its
+  // socket, so a persisted value must not be able to carry one.
   anchor: ResponsesAnchorSchema.extend({
     kind: z.literal('stored'),
   }).readonly(),
@@ -447,4 +446,5 @@ export const ContinuationSchema = z.union([
   GoogleContinuationSchema,
   ResponsesContinuationSchema,
 ]);
+/** {@link ContinuationSchema}'s value. */
 export type Continuation = z.infer<typeof ContinuationSchema>;

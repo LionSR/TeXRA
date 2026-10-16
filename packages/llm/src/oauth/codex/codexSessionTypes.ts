@@ -26,6 +26,7 @@ export const CodexSessionSchema = SubscriptionSessionBaseSchema.extend({
   /** The ChatGPT plan the token was issued for (`plus`, `pro`, `team`, ...). */
   planType: z.string().min(1).optional(),
 });
+/** A stored ChatGPT (Codex) session. */
 export type CodexSession = z.infer<typeof CodexSessionSchema>;
 
 /** Device-code "usercode" response. Field name varies (`user_code`/`usercode`). */

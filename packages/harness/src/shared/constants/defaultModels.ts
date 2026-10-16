@@ -16,7 +16,7 @@ export const DEFAULT_HELPER_MODEL = 'deepseek/deepseek-flash@none';
 
 /**
  * Default model used when a new agent run / proposal omits one. Single source of
- * truth shared by the agent config schema (`@agent/core/definition/AgentConfig`),
+ * truth shared by the agent config schema,
  * the main-view persisted state, and the progress-view proposal reconstruction —
  * so a change here propagates to all three instead of drifting per call site.
  * `DEFAULT_MODELS` leads with this model, so it must not be a Gemini id.

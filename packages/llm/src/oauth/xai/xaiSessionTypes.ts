@@ -27,6 +27,7 @@ export const XaiTokenResponseSchema = z.object({
 export const XaiSessionSchema = SubscriptionSessionBaseSchema.extend({
   email: z.string().min(1).optional(),
 });
+/** A stored xAI (Grok) session. */
 export type XaiSession = z.infer<typeof XaiSessionSchema>;
 
 /** RFC 8628 device-code authorization response. */

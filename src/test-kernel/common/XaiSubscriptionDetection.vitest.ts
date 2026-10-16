@@ -3,10 +3,8 @@ import { describe, expect, it } from 'vitest';
 import { ModelError } from '@texra-ai/llm';
 
 import { failureInfo } from '@agent/runtime/modelAccess/failureInfo';
-import {
-  judgeFailure,
-  type BillingRoute,
-} from '../../../packages/llm/src/api/verdict.js';
+import { judgeFailure } from '../../../packages/llm/src/api/verdict.js';
+import type { BillingRoute } from '@texra-ai/llm';
 
 const USAGE_LIMIT_BODY = {
   message: "You've reached your weekly usage limit.",

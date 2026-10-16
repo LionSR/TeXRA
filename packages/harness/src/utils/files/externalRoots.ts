@@ -13,7 +13,7 @@ import { isPathWithin } from '@utils/core/pathCore';
  * registry keep their current "stay within the workspace" rejection.
  *
  * The agent-catalog follower every host's process runtime builds
- * (`@tools/agentCatalogFollower`) registers the agent directories. The
+ * registers the agent directories. The
  * registry itself is platform-agnostic. A run's step adds its own read-only
  * roots to its calls' lookups (`StepRoot`), which nothing registers.
  *

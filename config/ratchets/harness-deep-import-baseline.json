@@ -6,7 +6,6 @@
       "@agent/runtime",
       "@agent/storage",
       "@common/errors",
-      "@common/errors/sdkError/errorPatterns",
       "@common/parsing/safeParseJson",
       "@common/plugins/installedPlugins",
       "@common/plugins/installRecord",

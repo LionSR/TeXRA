@@ -1,25 +1,13 @@
 /**
  * The one port the package takes credentials through: a named-secret store.
  * API keys (`apiKey.<provider>`) and the subscription sessions are entries of
- * it. The host serves it from its own store (TeXRA's hosts share one
- * owner-only directory); the package never opens one.
+ * it. The host serves it from its own store; the package never opens one.
  *
  * A credential that may also come from the environment is read through
  * {@link resolveCredential}, the one secret-then-env ladder. The environment
  * is Effect's ambient `ConfigProvider`, which the host installs.
  */
 import { Config, Data, Effect, Option } from 'effect';
-
-/**
- * Why a secret operation failed, as the host stores can actually fail:
- *
- * - `store-unavailable` — the host has no store to write to at all (an
- *   embedder that persists nothing). Only {@link CredentialStore.set} raises
- *   it.
- * - `io` — the backing file or host API failed: a Node errno, a rejected
- *   host call.
- */
-type SecretsFailureReason = 'store-unavailable' | 'io';
 
 /** Which member of a store failed. */
 export type SecretsOperation = 'get' | 'set' | 'delete' | 'listStoredKeys';
@@ -31,7 +19,13 @@ export type SecretsOperation = 'get' | 'set' | 'delete' | 'listStoredKeys';
  * wants neither still sees a typed error instead of `unknown`.
  */
 export class SecretsFailed extends Data.TaggedError('SecretsFailed')<{
-  readonly reason: SecretsFailureReason;
+  /**
+   * Why it failed, as the host stores can actually fail:
+   * `store-unavailable` — the host has no store to write to at all (an
+   * embedder that persists nothing; only {@link CredentialStore.set} raises
+   * it); `io` — the backing file or host API failed.
+   */
+  readonly reason: 'store-unavailable' | 'io';
   readonly operation: SecretsOperation;
   readonly message: string;
   readonly key?: string;

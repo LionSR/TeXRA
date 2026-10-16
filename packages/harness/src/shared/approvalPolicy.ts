@@ -225,11 +225,10 @@ export function decideHumanInputRequest(input: {
 
 export function texraHumanInputDenialMessage(
   deny: Exclude<TexraHumanInputDecision, 'present'>['deny'],
-  yoloMessage: string = TEXRA_APPROVAL_YOLO_NO_HUMAN_MESSAGE,
 ): string {
   switch (deny) {
     case 'yolo-no-human':
-      return yoloMessage;
+      return TEXRA_APPROVAL_YOLO_NO_HUMAN_MESSAGE;
     case 'policy':
       return TEXRA_APPROVAL_POLICY_DENIED_MESSAGE;
     case 'unpresentable':

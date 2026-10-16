@@ -274,6 +274,15 @@ const settle = (
 ) =>
   SubscriptionRef.changes(view).pipe(Stream.takeUntil(ready), Stream.runDrain);
 
+/** Every row of the aggregates `ids`, in commit order. */
+const rowsOf = (
+  db: Database['Service'],
+  ...ids: readonly SessionEvent['aggregateId'][]
+) =>
+  Effect.forEach(ids, (id) => db.readAggregate(id, 0)).pipe(
+    Effect.map((rows) => rows.flat().toSorted((x, y) => x.commit - y.commit)),
+  );
+
 const runStart: SessionEventDraft = {
   type: 'run.start',
   aggregateId: qualifyAggregateId('run', RUN),
@@ -530,7 +539,7 @@ describe('session events and view', () => {
           { type: 'run.removed', aggregateId: run },
         ]),
       );
-      expect(yield* log.readAll(0)).toEqual(committed);
+      expect(yield* rowsOf(log, run, inquiry)).toEqual(committed);
       expect((yield* log.aggregateState([run]))[0]?.closed).toBe(true);
       expect((yield* log.aggregateState([inquiry]))[0]?.closed).toBe(false);
       const rows = yield* log.readDisplayAggregate(inquiry, 0);
@@ -1736,7 +1745,7 @@ describe('the C1 event table and the C6 publisher', () => {
           const database = yield* Database;
           return {
             movedAside: database.movedAside,
-            rows: yield* database.readAll(0),
+            commit: yield* database.currentCommit,
           };
         }).pipe(Effect.provide(substrate(storage)));
         expect(opened, `cut at ${length} bytes`).toEqual({
@@ -1745,7 +1754,7 @@ describe('the C1 event table and the C6 publisher', () => {
             aside: expect.stringMatching(/texra\.db\.corrupt-\d+$/),
             reason: 'corrupt',
           },
-          rows: [],
+          commit: 0,
         });
         expect(readFileSync(opened.movedAside!.aside)).toEqual(truncated);
       });
@@ -1774,7 +1783,9 @@ describe('the C1 event table and the C6 publisher', () => {
           _tag: 'DatabaseWriteFailed',
           cause: { _tag: 'DatabaseStoreNewer', type: 'run.start', version: 2 },
         });
-        expect(yield* Effect.flip(db.readAll(0))).toMatchObject({
+        expect(
+          yield* Effect.flip(db.readAggregate(runStart.aggregateId, 0)),
+        ).toMatchObject({
           _tag: 'DatabaseReadFailed',
           cause: { _tag: 'DatabaseStoreNewer', type: 'run.start' },
         });
@@ -2018,7 +2029,9 @@ describe('the C1 event table and the C6 publisher', () => {
       const committed = yield* database.appendAll([olderStart]);
       expect(committed).toHaveLength(1);
       expect(committed[0]?.commit).toBe(1);
-      expect(yield* database.readAll(0)).toEqual(committed);
+      expect(yield* database.readAggregate(olderStart.aggregateId, 0)).toEqual(
+        committed,
+      );
       expect(connection.prepare('SELECT id FROM committed_run').all()).toEqual([
         { id: OLDER },
       ]);
@@ -2068,7 +2081,7 @@ describe('the C1 event table and the C6 publisher', () => {
         expect(Exit.isFailure(exit)).toBe(true);
         expect(yield* SubscriptionRef.get(database.level)).toBe(1);
         expect(yield* SubscriptionRef.get(database.observedCommit)).toBe(1);
-        expect(yield* database.readAll(0)).toHaveLength(1);
+        expect(yield* database.currentCommit).toBe(1);
       }).pipe(
         Effect.provide(substrate(workspace())),
         Effect.ensuring(Effect.sync(() => construct.mockRestore())),
@@ -2103,8 +2116,7 @@ describe('the C1 event table and the C6 publisher', () => {
         yield* Effect.yieldNow;
         yield* Scope.close(held, Exit.succeed(undefined));
         yield* Fiber.await(waiting);
-        const rows = yield* database.readAll(0);
-        expect(rows).toEqual([]);
+        expect(yield* database.currentCommit).toBe(0);
       }).pipe(
         Effect.provide(substrate(workspace())),
         Effect.ensuring(Effect.sync(() => construct.mockRestore())),
@@ -2223,7 +2235,7 @@ describe('the C1 event table and the C6 publisher', () => {
           ]),
         );
         expect(rejected._tag).toBe('DatabaseWriteFailed');
-        expect(yield* db.readAll(0)).toEqual([]);
+        expect(yield* db.currentCommit).toBe(0);
         expect(yield* SubscriptionRef.get(db.level)).toBe(0);
 
         // The parent can be created earlier in this same transaction. The
@@ -2236,7 +2248,9 @@ describe('the C1 event table and the C6 publisher', () => {
         expect(created[1]).toMatchObject({
           parent: { id: RUN, uid: parentState?.uid },
         });
-        expect(yield* db.readAll(0)).toEqual(created);
+        expect(
+          yield* rowsOf(db, runStart.aggregateId, child.aggregateId),
+        ).toEqual(created);
         expect(created[0]).toMatchObject({ parent: null });
 
         yield* db.appendAll([
@@ -2399,11 +2413,13 @@ describe('the C1 event table and the C6 publisher', () => {
         } as unknown as SessionEventDraft;
         const failure = yield* Effect.flip(db.appendAll([runStart, malformed]));
         expect(failure._tag).toBe('DatabaseWriteFailed');
-        expect(yield* db.readAll(0)).toEqual([]);
+        expect(yield* db.currentCommit).toBe(0);
         expect(yield* SubscriptionRef.get(db.level)).toBe(0);
 
         const committed = yield* db.appendAll([runStart, configured]);
-        expect(yield* db.readAll(0)).toEqual(committed);
+        expect(yield* db.readAggregate(runStart.aggregateId, 0)).toEqual(
+          committed,
+        );
         expect(committed[1]).toMatchObject({ config });
       }).pipe(Effect.provide(substrate(storage)));
     },
@@ -2562,9 +2578,11 @@ describe('the C1 event table and the C6 publisher', () => {
       return Effect.gen(function* () {
         const db = yield* Database;
         yield* db.appendAll(drafts);
-        const cards = (yield* db.readAll(0)).filter(
-          (event) => event.type === 'tool.start',
-        );
+        const cards = (yield* rowsOf(
+          db,
+          runStart.aggregateId,
+          olderStart.aggregateId,
+        )).filter((event) => event.type === 'tool.start');
         expect(cards.map(({ input }) => JSON.stringify(input))).toEqual(
           drafts
             .slice(2)
@@ -2658,7 +2676,6 @@ describe('the C1 event table and the C6 publisher', () => {
           rows.filter((row) => row.commit !== 8),
         );
         expect((yield* db.readInputBatch([id], 0)).events).toEqual(rows);
-        expect(yield* db.readAll(2, 5)).toEqual(rows.slice(2, 5));
         expect(yield* db.readAggregate(id, 3)).toEqual(
           rows.filter((row) => row.aggregateId === id && row.seq >= 3),
         );
@@ -2716,6 +2733,14 @@ describe('the C1 event table and the C6 publisher', () => {
         } as const;
         const thread = (patch: Partial<InquiryThreadSummary> = {}) =>
           inquiryThreadRow({ ...base, ...patch });
+        // Every aggregate this case writes, the unrelated run's among them.
+        const stored = rowsOf(
+          first,
+          root,
+          olderStart.aggregateId,
+          inquiry,
+          qualifyAggregateId('run', NEWER),
+        );
         const initial = yield* first.appendAll([
           runStart,
           olderStart,
@@ -2749,7 +2774,7 @@ describe('the C1 event table and the C6 publisher', () => {
             'DatabaseWriteFailed',
           );
         }
-        expect(yield* first.readAll(0)).toEqual(initial);
+        expect(yield* stored).toEqual(initial);
         expect((yield* first.aggregateState([inquiry]))[0]?.parentId).toBe(
           root,
         );
@@ -2763,7 +2788,7 @@ describe('the C1 event table and the C6 publisher', () => {
           expect(
             (yield* Effect.flip(first.appendAll([waiting, removal])))._tag,
           ).toBe('DatabaseWriteFailed');
-          expect(yield* first.readAll(0)).toEqual(initial);
+          expect(yield* stored).toEqual(initial);
           expect(
             (yield* first.aggregateState([root, inquiry])).every(
               (row) => !row.closed,
@@ -2784,7 +2809,7 @@ describe('the C1 event table and the C6 publisher', () => {
               ),
             ),
           ).toMatchObject({ _tag: 'DatabaseClaimRefused' });
-          expect(yield* first.readAll(0)).toEqual(initial);
+          expect(yield* stored).toEqual(initial);
           yield* second.releaseClaims([inquiry]);
         }).pipe(Effect.provide(substrate(storage, OTHER)));
         const committed = [
@@ -2850,9 +2875,10 @@ describe('the C1 event table and the C6 publisher', () => {
         const again = vi.fn(() => Effect.void);
         yield* first.collectDeletion(tombstone, again);
         expect(again).not.toHaveBeenCalled();
-        expect(
-          (yield* first.readAll(0)).map((event) => event.aggregateId),
-        ).toEqual([olderStart.aggregateId, unrelated.aggregateId]);
+        expect((yield* stored).map((event) => event.aggregateId)).toEqual([
+          olderStart.aggregateId,
+          unrelated.aggregateId,
+        ]);
         const replacement = yield* first.appendAll([runStart]);
         expect(
           (yield* Effect.flip(
@@ -2989,7 +3015,7 @@ describe('the C1 event table and the C6 publisher', () => {
         const total = 2 * (ROWS + 1);
         while ((yield* SubscriptionRef.get(db.observedCommit)) < total)
           yield* Effect.sleep('50 millis');
-        const rows = yield* db.readAll(0);
+        const rows = yield* rowsOf(db, own, theirs);
         expect(rows.map((row) => row.commit)).toEqual(
           Array.from({ length: total }, (_, i) => i + 1),
         );

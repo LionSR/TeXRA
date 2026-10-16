@@ -16,7 +16,9 @@ const RUN_MODEL_PRECEDENCE = {
 } as const;
 
 export type RunModelDecisionReason = keyof typeof RUN_MODEL_PRECEDENCE;
-type RunModelFallbackMode = 'reject' | 'notice' | 'silent';
+/** What happens when a candidate's model cannot run: refuse, run the next
+ *  one with a notice, or run it silently. */
+export type RunModelFallbackMode = 'reject' | 'notice' | 'silent';
 
 export interface RunModelCandidate {
   readonly model?: string | null;
@@ -28,7 +30,8 @@ type NormalizedRunModelCandidate = RunModelCandidate & {
   readonly model: string;
 };
 
-interface RunModelDecision {
+/** The model a run takes, why, and the candidate it fell back from. */
+export interface RunModelDecision {
   readonly model: string;
   readonly reason: RunModelDecisionReason;
   readonly unavailable?: true;

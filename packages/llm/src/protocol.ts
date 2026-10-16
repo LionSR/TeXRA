@@ -56,6 +56,7 @@ export const ModelOriginSchema = z.discriminatedUnion('protocol', [
   OriginSchema.readonly(),
   EditorOriginSchema.readonly(),
 ]);
+/** The binding a turn was requested on: model, deployment and protocol. */
 export type ModelOrigin = z.infer<typeof ModelOriginSchema>;
 
 /** The origin a wire model stamps on its turns: the one place `codecVersion` is written. */

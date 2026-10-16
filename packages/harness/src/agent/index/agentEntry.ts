@@ -1,4 +1,4 @@
-/** Agent registry value objects (canonical AgentSource: @shared/schemas/agent). */
+/** Agent registry value objects. */
 
 import type { Persona } from '@shared/schemas';
 import type { AgentSource } from '@shared/schemas';

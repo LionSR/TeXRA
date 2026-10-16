@@ -169,7 +169,7 @@ function tempNameEscape(options: {
 
 /**
  * A view of `fs` rooted at `root`. One implementation for every rooted
- * service: the tags in `@platform/rootedFs` differ only in which root they
+ * service: `WorkspaceFs`, `StorageFs` and `GlobalStorageFs` differ only in which root they
  * capture.
  */
 export function rootedFileSystem(

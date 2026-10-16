@@ -74,7 +74,6 @@ const WRITES = ['appendAll', 'job', 'acquireClaims', 'releaseClaims'] as const;
 const READS = [
   'readRunRecords',
   'readAggregate',
-  'readAll',
   'claimOwner',
   'aggregateState',
 ] as const;

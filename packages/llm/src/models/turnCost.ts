@@ -6,9 +6,7 @@
  */
 import { requestRates, type ModelConfig } from 'llm-zoo';
 
-import type { TurnResult } from '../turn.js';
-
-type TurnUsage = NonNullable<TurnResult['usage']>;
+import type { TurnUsage } from '../turn.js';
 
 /** The per-million rates one turn bills at, and its cache-read rebate. */
 interface TurnRates {
