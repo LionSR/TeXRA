@@ -8,6 +8,7 @@ import {
   providerDisplayName,
 } from '@texra-ai/llm';
 import { providerKeyUrl } from '@texra/model/providerPresentation';
+import { ANTHROPIC_PLAN_CREDITS } from '@ui/copy/modelAccess';
 
 import { TextEntryForm } from './_shared/TextEntryForm';
 
@@ -34,6 +35,11 @@ export function ApiKeyEntryForm(
         <>
           <Text dimColor>Provider: {label}</Text>
           {keyUrl ? <Text dimColor>Get a key: {keyUrl}</Text> : null}
+          {props.provider === 'anthropic' ? (
+            <Text dimColor>
+              {ANTHROPIC_PLAN_CREDITS.hint} {ANTHROPIC_PLAN_CREDITS.docUrl}
+            </Text>
+          ) : null}
         </>
       }
       placeholder="enter your API key (hidden)"

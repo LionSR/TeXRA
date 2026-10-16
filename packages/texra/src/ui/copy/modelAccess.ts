@@ -29,6 +29,19 @@ export const OWN_API_KEYS = {
 } as const;
 
 /**
+ * The reminder beside an Anthropic key: Claude Max and Team plans include
+ * monthly Claude API credits, spent through an ordinary Console API key once
+ * a Console organization is linked to the plan. Amounts stay on the linked
+ * page because they change.
+ */
+export const ANTHROPIC_PLAN_CREDITS = {
+  hint: "Claude Max or Team? Your plan includes monthly API credits. Link a Console organization in claude.ai's Billing settings, then add a Console API key here.",
+  docLabel: 'About plan API credits',
+  docUrl:
+    'https://platform.claude.com/docs/en/about-claude/api-credits-for-subscribers',
+} as const;
+
+/**
  * Display names for the ChatGPT plans the Codex token can name, keyed by the
  * `chatgpt_plan_type` claim. An unlisted plan renders as no plan at all
  * rather than as a raw wire word, so a backend that invents a tier degrades

@@ -19,6 +19,7 @@ import type {
   ProviderSetting,
 } from '@texra/shared/settingsView/settingsViewMessages';
 import { CODING_PLAN_BY_API_PROVIDER } from '@texra/shared/model/codingPlans';
+import { ANTHROPIC_PLAN_CREDITS } from '@ui/copy/modelAccess';
 import { commonViewStyles, designTokens } from '@ui/styles';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import { renderIconActionButton } from '@ui/wa/actionButtons';
@@ -218,6 +219,12 @@ export class ProviderKeyList extends LitElement {
             ${this.renderActions(entry)}
           </div>
         </div>
+        ${
+          entry.provider === 'anthropic' &&
+          (isExpanded || entry.status !== 'set')
+            ? renderPlanCreditsHint()
+            : nothing
+        }
         ${isExpanded ? this.renderDetails(entry) : nothing}
       </section>
     `;
@@ -246,6 +253,25 @@ export class ProviderKeyList extends LitElement {
       </div>
     `;
   }
+}
+
+/** Under the Anthropic row while it has no key or is expanded: a Max or Team
+ *  plan's monthly API credits are spent through the key this row sets. */
+function renderPlanCreditsHint(): TemplateResult {
+  return html`<p class="provider-row-hint">
+    ${ANTHROPIC_PLAN_CREDITS.hint}
+    <wa-button
+      class="provider-setting-link btn-ghost is-link"
+      appearance="plain"
+      size="s"
+      @click=${() =>
+        postMessage(SETTINGS_VIEW_COMMANDS.OPEN_EXTERNAL_URL, {
+          url: ANTHROPIC_PLAN_CREDITS.docUrl,
+        })}
+    >
+      ${ANTHROPIC_PLAN_CREDITS.docLabel}
+    </wa-button>
+  </p>`;
 }
 
 declare global {
