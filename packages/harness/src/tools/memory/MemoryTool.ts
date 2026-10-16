@@ -1,7 +1,5 @@
-// Node imports
+// Node and third-party imports
 import * as path from 'node:path';
-
-// Third-party imports
 import { DateTime, Effect, type FileSystem, Option, Stream } from 'effect';
 import { z } from 'zod';
 
@@ -18,11 +16,12 @@ import { withLogChannel } from '@logger/effectLog';
 import { StorageFs } from '@platform/rootedFs';
 import { ToolError, type RunId, type ToolResult } from '@shared/schemas';
 import {
-  MAX_PINNED_MEMORIES,
   DIRECTORY_LISTING_DEPTH,
+  displayToStoragePath,
+  MAX_PINNED_MEMORIES,
   MEMORY_DISPLAY_ROOT,
-} from '@tools/memory/constants';
-import { displayToStoragePath, toDisplayPath } from '@tools/memory/memoryUtils';
+  toDisplayPath,
+} from '@tools/memory/memoryUtils';
 import {
   createMeta,
   formatAttribution,

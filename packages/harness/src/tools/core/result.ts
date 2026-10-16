@@ -9,12 +9,12 @@
 
 import type { ToolResult } from '@shared/schemas';
 
-type ExecutedToolResult = Extract<ToolResult, { status: 'executed' }>;
-type ErrorToolResult = Extract<ToolResult, { status: 'error' }>;
-
 /** Build a `status: 'executed'` result. `summary` is omitted when not given,
  * matching the many call sites that only ever set `output`. */
-export function executed(output: string, summary?: string): ExecutedToolResult {
+export function executed(
+  output: string,
+  summary?: string,
+): Extract<ToolResult, { status: 'executed' }> {
   return {
     status: 'executed',
     output,
@@ -32,7 +32,7 @@ export function executed(output: string, summary?: string): ExecutedToolResult {
  */
 export function errorResult(
   error: string,
-  extra?: Omit<ErrorToolResult, 'status' | 'error'>,
-): ErrorToolResult {
+  extra?: Omit<Extract<ToolResult, { status: 'error' }>, 'status' | 'error'>,
+): Extract<ToolResult, { status: 'error' }> {
   return { status: 'error', error, ...extra };
 }

@@ -7,16 +7,20 @@ import {
   type ToolContextShape,
   withLogChannel,
 } from '@texra-ai/harness';
-import { callerRun, type ToolRun } from '@texra-ai/harness/plugins';
+import {
+  callerRun,
+  type ToolRun,
+  resolveToolPath,
+  errorResult,
+  executed,
+  nullishWithDefault,
+} from '@texra-ai/harness/plugins';
 import { ToolError, type RunId, type ToolResult } from '@shared/schemas';
 import {
   countBySeverity,
   formatCounts,
   formatGroupedSections,
 } from '@texra/utils/diagnostics/diagnosticFormatting';
-import { resolveToolPath } from '@tools/pathResolution';
-import { errorResult, executed } from '@tools/core/result';
-import { nullishWithDefault } from '@tools/core/inputSchema';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { formatResultCount } from '@utils/text/stringUtils';
 import {
