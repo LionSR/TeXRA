@@ -90,7 +90,7 @@
     "esbuild": "catalog:",
     "eslint": "^10.12.0",
     "eslint-plugin-import-x": "^4.17.1",
-    "eslint-plugin-unicorn": "^77.0.0",
+    "eslint-plugin-unicorn": "^78.0.0",
     "glob": "catalog:",
     "globals": "^17.13.0",
     "ignore": "catalog:",
