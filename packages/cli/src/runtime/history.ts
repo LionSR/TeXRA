@@ -5,7 +5,8 @@ import { Effect, FileSystem, PlatformError, Result, Stream } from 'effect';
 import {
   listRunGeneratedFiles,
   type RunGeneratedFile,
-} from '@texra-ai/harness/plugins';
+  type SessionOpenError,
+} from '@texra-ai/harness';
 import {
   deriveResumability,
   getRunRecords,
@@ -51,7 +52,6 @@ import {
   formatConversationTranscript,
 } from './history/conversationFormat';
 import type { AgentConfig } from '@texra-ai/harness/schemas';
-import type { SessionOpenError } from '@texra-ai/harness';
 
 /** A run's generated files and its edited workspace files render alike.
  *  First group wins on a path collision; generated output precedes workspace. */

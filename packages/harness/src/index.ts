@@ -230,6 +230,12 @@ export {
 } from '@platform/rootedFs';
 // A path as a `FileLocation` against the workspace root a caller holds.
 export { pathToLocationIn } from '@utils/files/fileLocation';
+// The files a run left in its storage directory, under a session's storage
+// (the executions tool's listing, for a host that shows it outside a run).
+export {
+  listRunGeneratedFiles,
+  type RunGeneratedFile,
+} from '@tools/executions/runGeneratedFiles';
 // Which external tools this machine has, as plugins' `availability` probes
 // answered; a host reads it and asks for a refresh.
 export { ToolAvailability } from '@tools/toolAvailabilityService';
