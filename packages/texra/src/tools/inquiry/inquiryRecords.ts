@@ -2,6 +2,7 @@
 import { randomBytes } from 'node:crypto';
 import { Context, DateTime, Effect, Layer, Result } from 'effect';
 
+import { GlobalValues } from '@texra-ai/harness';
 import {
   InquiryThreadIdSchema,
   ToolError,
@@ -10,7 +11,6 @@ import {
   type OpenInquiryTurn,
   type AnsweredInquiryTurn,
 } from '@shared/schemas';
-import { GlobalDatabase } from '@shared/session/database';
 import {
   INQUIRY_THREADS,
   InquiryRecords,
@@ -21,11 +21,9 @@ import { ensureError } from '@utils/errors/errorMessage';
 const QUESTION_PREVIEW_CHARS = 200;
 
 /** Every operation runs on the process's one handle on the global root. */
-function inquiryOperations({
-  values,
-}: Context.Service.Shape<typeof GlobalDatabase>): Context.Service.Shape<
-  typeof InquiryRecords
-> {
+function inquiryOperations(
+  values: Context.Service.Shape<typeof GlobalValues>,
+): Context.Service.Shape<typeof InquiryRecords> {
   /** One thread's transition under the write lock; `null` writes nothing. */
   const changeThread = <A extends InquiryThreadRecord | null>(
     id: InquiryThreadId,
@@ -300,5 +298,5 @@ function inquiryOperations({
 /** The inquiry records of the global root, over the process's one handle. */
 export const inquiryRecordsLayer = Layer.effect(
   InquiryRecords,
-  Effect.map(GlobalDatabase, inquiryOperations),
+  Effect.map(GlobalValues, inquiryOperations),
 );

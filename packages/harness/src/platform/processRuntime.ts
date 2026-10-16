@@ -30,6 +30,7 @@ import { writeLogEntry } from '@logger/logSink';
 import type { ProcessIdentity } from '@shared/session/sessionEvents';
 import {
   DatabaseOpenFailed,
+  type CurrentValues,
   type GlobalDatabase,
   type ProjectDatabases,
 } from '@shared/session/database';
@@ -40,10 +41,38 @@ import type { ToolRegistry } from '@tools/toolTable';
 import type { HttpClient } from 'effect/http';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
-import type { AgentDirectories, AppState } from './interfaces';
+import type { AgentDirectories, AppState, AppStateStore } from './interfaces';
 import type { LanguageModel } from './languageModel';
 import type { GlobalStorageFs } from './rootedFs';
 import type { Secrets } from './secrets';
+
+/**
+ * The global root's current values: one row per family and key, replaced in
+ * place by each write. A host or plugin keeps its own application state here
+ * under a family it declares (`ValueFamily`).
+ */
+export class GlobalValues extends Context.Service<
+  GlobalValues,
+  CurrentValues
+>()('@texra-ai/harness/GlobalValues') {}
+
+/** The settings stores a host opens for each project it shows. */
+export class StateStores extends Context.Service<
+  StateStores,
+  {
+    /** The project's own settings, in its store at `storage`, held for the
+     *  caller's scope; it records which root the store serves. */
+    readonly project: (
+      storage: string,
+      workspaceRoot: string | undefined,
+    ) => Effect.Effect<AppStateStore, DatabaseOpenFailed, Scope.Scope>;
+    /** The settings every checkout of `workspaceRoot`'s repository shares. */
+    readonly repo: (
+      storage: string,
+      workspaceRoot: string | undefined,
+    ) => Effect.Effect<AppStateStore>;
+  }
+>()('@texra-ai/harness/StateStores') {}
 
 /**
  * The runtime over the process-lifetime services every entry provides: the
@@ -77,6 +106,8 @@ export type ProcessServices =
   | AppState
   | LanguageModel
   | AgentDirectories
+  | GlobalValues
+  | StateStores
   | UsageLog
   | ToolRegistry
   | ToolCatalog

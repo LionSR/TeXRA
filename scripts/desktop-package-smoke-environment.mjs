@@ -83,7 +83,7 @@ export async function loadDatabaseFixture(userDataPath) {
       contents: `
         export { databaseLayer, globalDatabaseLayer } from '@controllers/session/Database';
         export { WorkspaceRoots } from '@controllers/session/WorkspaceRoots';
-        export { Database } from '@shared/session/database';
+        export { Database, GlobalDatabase } from '@shared/session/database';
         export { ProcessIdentity } from '@shared/session/sessionEvents';
         export { qualifyAggregateId } from '@shared/schemas';
         export { resolveGlobalStoragePath, resolveWorkspaceStoragePath } from '@platform/defaults/workspaceStorage';
@@ -123,7 +123,8 @@ export async function rememberOpenProject(userDataPath, workspacePath) {
         yield* fixture.nodeProcesses.selfIdentity(),
       );
       yield* Effect.gen(function* () {
-        const records = yield* fixture.openDesktopProjectRecords;
+        const { values } = yield* fixture.GlobalDatabase;
+        const records = fixture.openDesktopProjectRecords(values);
         yield* records.activate(workspacePath);
       }).pipe(
         Effect.provide(

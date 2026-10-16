@@ -22,6 +22,7 @@ import {
   type Sessions,
   withPerKeyLane,
   type PerKeyLane,
+  StateStores,
 } from '@texra-ai/harness';
 import {
   createNodeWorkspaceRoots,
@@ -30,16 +31,8 @@ import {
   resolveWorkspaceStoragePath,
 } from '@texra-ai/harness/node';
 import { SessionHostInteractions, type SessionHandle } from '@agent/runtime';
-import {
-  openProjectStateStore,
-  openRepoStateStore,
-} from '@controllers/session/appStateStore';
 import type { ConfigStore } from '@platform/defaults/jsonConfigProvider';
 import { openTexraWorkspaceConfigStores } from '@platform/defaults/nodeStores';
-import {
-  GlobalDatabase,
-  type ProjectDatabases,
-} from '@shared/session/database';
 import {
   projectDisplayOf,
   type ProjectDisplay,
@@ -137,7 +130,7 @@ export interface DesktopProjectRegistry {
   ): Effect.Effect<
     DesktopProject,
     Error,
-    FileSystem.FileSystem | Path.Path | ProjectDatabases | ChildProcessSpawner
+    FileSystem.FileSystem | Path.Path | ChildProcessSpawner
   >;
   /** The open projects, the shown one and the recent list; every surface
    *  that follows a project switch reads its `changes`. */
@@ -303,13 +296,13 @@ export function openDesktopProjectRegistry(
 ): Effect.Effect<
   DesktopProjectRegistry,
   Error,
-  DesktopProjectRecords | GlobalDatabase | SessionOwner
+  DesktopProjectRecords | StateStores | SessionOwner
 > {
   return Effect.gen(function* () {
     const owner = yield* SessionOwner;
     const { sessions } = options;
     const records = yield* DesktopProjectRecords;
-    const globalDatabase = yield* GlobalDatabase;
+    const stateStores = yield* StateStores;
     const lanes = new Map<string | symbol, PerKeyLane>();
     const selection = Symbol();
     const fallback = yield* Effect.uninterruptible(
@@ -367,12 +360,8 @@ export function openDesktopProjectRegistry(
                   // process opens no store of that project.
                   options.service !== undefined
                     ? Effect.succeed(serviceProjectState(options.service, root))
-                    : openProjectStateStore(storage, root).pipe(
-                        Effect.provideService(GlobalDatabase, globalDatabase),
-                      ),
-                  openRepoStateStore(root, storage).pipe(
-                    Effect.provideService(GlobalDatabase, globalDatabase),
-                  ),
+                    : stateStores.project(storage, root),
+                  stateStores.repo(storage, root),
                   openTexraWorkspaceConfigStores(
                     TEXRA_SETTINGS,
                     storage,
