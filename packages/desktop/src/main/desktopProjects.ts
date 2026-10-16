@@ -360,7 +360,7 @@ export function openDesktopProjectRegistry(
                   options.service !== undefined
                     ? Effect.succeed(serviceProjectState(options.service, root))
                     : stateStores.project(storage, root),
-                  stateStores.repo(root, storage),
+                  stateStores.repo(storage, root),
                   openTexraWorkspaceConfigStores(
                     TEXRA_SETTINGS,
                     storage,

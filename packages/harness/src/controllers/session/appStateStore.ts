@@ -149,8 +149,8 @@ const openProjectStateStore = Effect.fn('appStateStore.openProjectStateStore')(
 const openRepoStateStore = Effect.fn('appStateStore.openRepoStateStore')(
   function* (
     values: CurrentValues,
-    workspaceRoot: string | undefined,
     storage: string,
+    workspaceRoot: string | undefined,
   ) {
     const store = (repoRoot: string) =>
       appStateStoreFromDatabase(storage, values, {
@@ -211,8 +211,8 @@ export const processStoresLayer = Layer.mergeAll(
       return {
         project: (storage, workspaceRoot) =>
           openProjectStateStore(projects, values, storage, workspaceRoot),
-        repo: (workspaceRoot, storage) =>
-          openRepoStateStore(values, workspaceRoot, storage).pipe(
+        repo: (storage, workspaceRoot) =>
+          openRepoStateStore(values, storage, workspaceRoot).pipe(
             Effect.provideService(ChildProcessSpawner, spawner),
           ),
       };

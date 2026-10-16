@@ -343,8 +343,8 @@ export function initCliPlatform(
             .project(storage, context.cwd)
             .pipe(Scope.provide(projectScope));
           const repoState = yield* (yield* StateStores).repo(
-            context.cwd,
             storage,
+            context.cwd,
           );
           // One process, one project: the process roots are the `--cwd` workspace,
           // over the config provider the startup read already opened — the project

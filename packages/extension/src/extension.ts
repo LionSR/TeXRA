@@ -276,7 +276,7 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
         globalStorage,
         config,
         workspaceState: projectState,
-        repoState: yield* (yield* StateStores).repo(workspaceRoot, storage),
+        repoState: yield* (yield* StateStores).repo(storage, workspaceRoot),
         globalState,
       });
       windowRoots = roots;

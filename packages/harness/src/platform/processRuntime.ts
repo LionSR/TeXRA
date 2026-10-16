@@ -68,8 +68,8 @@ export class StateStores extends Context.Service<
     ) => Effect.Effect<AppStateStore, DatabaseOpenFailed, Scope.Scope>;
     /** The settings every checkout of `workspaceRoot`'s repository shares. */
     readonly repo: (
-      workspaceRoot: string | undefined,
       storage: string,
+      workspaceRoot: string | undefined,
     ) => Effect.Effect<AppStateStore>;
   }
 >()('@texra-ai/harness/StateStores') {}

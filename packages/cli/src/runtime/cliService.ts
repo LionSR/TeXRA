@@ -109,7 +109,7 @@ export const cliServiceProjects = Effect.fn('cliServiceProjects')(function* (
     const [workspaceState, repoState, configs] = yield* Effect.all(
       [
         (yield* StateStores).project(storage, workspace),
-        (yield* StateStores).repo(workspace, storage),
+        (yield* StateStores).repo(storage, workspace),
         openTexraWorkspaceConfigStores(
           TEXRA_SETTINGS,
           storage,

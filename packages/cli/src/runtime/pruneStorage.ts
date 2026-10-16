@@ -70,7 +70,10 @@ export const pruneStorage = Effect.fn('pruneStorage')(function* (
     writeTextStderr('Nothing was deleted. Re-run with --yes to delete them.');
     return CliExitCode.Success;
   }
-  for (const result of yield* deleteStorageInventory(inventory)) {
+  for (const result of yield* deleteStorageInventory(
+    context.storageRoot,
+    inventory,
+  )) {
     if (result.outcome === 'deleted') writeTextStdout(`Deleted ${result.path}`);
     else if (result.outcome === 'kept')
       writeTextStderr(`Kept ${result.path}: it is open in another process.`);

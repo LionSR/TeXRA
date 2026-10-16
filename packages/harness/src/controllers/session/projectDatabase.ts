@@ -116,15 +116,33 @@ export const readStorageInventory = Effect.fn('readStorageInventory')(
 );
 
 /**
- * Delete what an inventory listed, each item on its own: an orphan store
- * another process has open is kept, and a failed deletion is reported while
- * the rest still go. Each item's outcome, in listing order.
+ * Delete what an inventory of `storageRoot` listed, each item on its own.
+ * Only an item a fresh read of the inventory still lists is touched: a path
+ * that is no longer an orphan or an aside copy under `storageRoot` (its root
+ * came back, a drive was remounted, or it was never listed there) is
+ * reported and left in place. An orphan store another process has open is
+ * kept, and a failed deletion is reported while the rest still go. Each
+ * item's outcome, in listing order.
  */
 export const deleteStorageInventory = Effect.fn('deleteStorageInventory')(
-  function* (inventory: Pick<StorageInventory, 'orphans' | 'asides'>) {
+  function* (
+    storageRoot: string,
+    inventory: Pick<StorageInventory, 'orphans' | 'asides'>,
+  ) {
     const fs = yield* FileSystem.FileSystem;
+    const fresh = yield* readStorageInventory(storageRoot);
+    const listed = new Set([
+      ...fresh.orphans.map(({ directory }) => directory),
+      ...fresh.asides.map(({ path: aside }) => aside),
+    ]);
     const remove = (target: string, store: boolean) =>
       Effect.gen(function* () {
+        if (!listed.has(target))
+          return {
+            path: target,
+            outcome: 'failed' as const,
+            message: `no longer listed in the inventory of ${storageRoot}; left in place`,
+          };
         const database = path.join(target, 'texra.db');
         if (
           store &&

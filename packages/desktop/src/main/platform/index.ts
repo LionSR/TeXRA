@@ -179,7 +179,7 @@ export const initializeElectronPlatform = Effect.fn(
       globalStorage,
       config: configStores,
       workspaceState: workspaceStateStore,
-      repoState: yield* (yield* StateStores).repo(undefined, storage),
+      repoState: yield* (yield* StateStores).repo(storage, undefined),
       globalState: globalStateStore,
     });
     yield* bootstrapHost({
