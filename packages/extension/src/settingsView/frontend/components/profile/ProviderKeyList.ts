@@ -10,7 +10,7 @@ import {
 import { customElement, property, state } from 'lit/decorators.js';
 // Local imports - shared styles
 import { providerEndpointKey } from '@shared/state/providerSettings';
-import type { SubscriptionUsageSnapshots } from '@shared/schemas';
+import type { SubscriptionUsageSnapshots } from '@texra/shared/model/subscriptionUsage';
 import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 import { postMessage } from '@texra/shared/hostBridge';
 import { TickerController } from '@texra/shared/litControllers/TickerController';

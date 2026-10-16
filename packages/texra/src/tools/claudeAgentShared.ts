@@ -5,14 +5,14 @@ import { Effect, Predicate } from 'effect';
 import { withLogChannel } from '@texra-ai/harness';
 import { writeLogLine } from '@logger/logSink';
 import type { SettingsStores } from '@shared/config/settingsAccess';
-import { isClaudeCodeModel } from '@shared/schemas';
 import type {
-  AgentCliEffort,
   TokenUsageStats,
   ToolError,
   ToolUseLog,
   ToolCallStatus,
 } from '@shared/schemas';
+import { isClaudeCodeModel } from '@texra/shared/agentCliSettings';
+import type { AgentCliEffort } from '@texra/shared/agentCliSettings';
 import { ClaudeAgentStateKey } from '@texra/shared/settingsView/integrationSettings';
 import { readSettingFrom } from '@utils/config/platformSettings';
 import { truncateSummary } from '@utils/text/stringUtils';

@@ -6,7 +6,7 @@ vi.mock('@texra/shared/hostBridge', () => ({ postMessage: mocks.postMessage }));
 import type {
   SubscriptionUsageSnapshot,
   SubscriptionUsageSnapshots,
-} from '@shared/schemas';
+} from '@texra/shared/model/subscriptionUsage';
 
 import {
   mountComponent,

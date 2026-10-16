@@ -43,19 +43,16 @@ import type {
 } from '@agent/runtime/childRunLoop';
 import { formatDelivery } from '@agent/runtime/deliveryEnvelope';
 import type {
-  CodexApprovalPolicy,
   RunId,
   TokenUsageStats,
   ToolResult,
   ToolUseLog,
   ToolCallStatus,
 } from '@shared/schemas';
-import {
-  CodexSandboxModeSchema,
-  MESSAGE_TYPES,
-  ToolError,
-} from '@shared/schemas';
+import { MESSAGE_TYPES, ToolError } from '@shared/schemas';
 import { DELIVERY_TAG } from '@shared/deliveryTags';
+import type { CodexApprovalPolicy } from '@texra/shared/agentCliSettings';
+import { CodexSandboxModeSchema } from '@texra/shared/agentCliSettings';
 import { CodexStateKey } from '@texra/shared/settingsView/integrationSettings';
 import { buildSyntheticToolUseConfig } from '@texra/tools/core/syntheticAgentConfig';
 import { buildAgentWorkspaceOptions } from '@texra/tools/agentWorkspaceOptions';

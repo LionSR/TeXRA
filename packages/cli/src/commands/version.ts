@@ -1,6 +1,9 @@
 import { defineCommand } from 'citty';
 
-import { CLI_OUTPUT_FORMATS, type CliOutputFormat } from '@shared/schemas';
+import {
+  CLI_OUTPUT_FORMATS,
+  type CliOutputFormat,
+} from '@texra/shared/cliOutputFormat';
 import { cliEnvValue, readCliVersion } from '../runtime/cliContext';
 import { CliExitCode } from '../runtime/exitCodes';
 

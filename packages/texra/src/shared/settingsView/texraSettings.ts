@@ -15,7 +15,6 @@
 import { z } from 'zod';
 
 // Local imports
-import { CliOutputFormatSchema } from '@shared/schemas';
 import {
   configTreeRows,
   settingsCatalog,
@@ -23,6 +22,7 @@ import {
   type SettingsCatalog,
   type StateSettingEntry,
 } from '@shared/state/stateSettings';
+import { CliOutputFormatSchema } from '@texra/shared/cliOutputFormat';
 import {
   LATEX_CONFIG_DEFAULTS,
   LATEX_FORMATTER_VALUES,

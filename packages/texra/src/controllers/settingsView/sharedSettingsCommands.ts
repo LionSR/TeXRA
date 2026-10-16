@@ -28,9 +28,9 @@ import {
 import { readModelAvailabilityInputs } from '@model/computeModelOptions';
 import { discoverCopilotRoutes } from '@model/copilotRouting';
 import { TEXRA_APPROVAL_POLICY_CONFIG_KEY } from '@shared/approvalPolicy';
-import type { SubscriptionUsageProvider } from '@shared/schemas';
 import { SUBSCRIPTION_AUTH_PROVIDERS } from '@shared/model/subscriptionAuth';
 import type { SettingsViewSnapshot } from '@shared/state/stateSettings';
+import type { SubscriptionUsageProvider } from '@texra/shared/model/subscriptionUsage';
 import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 import { modelOptionsFrom } from '@texra/model/modelOptions';
 import { codingPlanForUsageSetting } from '@texra/model/codingPlanSubscriptions';

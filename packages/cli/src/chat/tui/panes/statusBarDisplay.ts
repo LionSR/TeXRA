@@ -15,12 +15,14 @@ import {
 import {
   type ContextStateData,
   type RunId,
-  type SubscriptionUsageProvider,
-  type SubscriptionUsageSnapshot,
   type TokenUsageStats,
   type UsageRoute,
 } from '@shared/schemas';
 import { isActivePhase } from '@shared/runs/runStatus';
+import type {
+  SubscriptionUsageProvider,
+  SubscriptionUsageSnapshot,
+} from '@texra/shared/model/subscriptionUsage';
 import {
   contextGaugeBand,
   roundedContextPercent,

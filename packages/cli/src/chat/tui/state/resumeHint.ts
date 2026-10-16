@@ -4,11 +4,11 @@ import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
 import {
   isEmptyUsage,
   isLoopDriven,
-  type CliOutputFormat,
   type RunId,
   type TokenUsageStats,
 } from '@shared/schemas';
 import { descendantRuns } from '@shared/session/sessionView';
+import type { CliOutputFormat } from '@texra/shared/cliOutputFormat';
 import { usageCostLabel } from '@ui/copy/modelAccess';
 import { TASK_ACTIONS } from '@ui/copy/nestedRuns';
 

@@ -1,6 +1,3 @@
-// Third-party imports
-import { z } from 'zod';
-
 /**
  * Config keys, bounded schemas, and defaults shared by more than one reader.
  *
@@ -12,6 +9,8 @@ import { z } from 'zod';
 
 export const TOOL_EDIT_APPROVAL_CONFIG_KEY =
   'texra.toolUse.requireEditApproval';
+
+export const BASH_APPROVAL_CONFIG_KEY = 'texra.toolUse.requireBashApproval';
 
 /** Canonical config key for the per-session child-run concurrency budget. */
 export const CHILD_RUN_CONCURRENCY_BUDGET_CONFIG_KEY =
@@ -126,20 +125,3 @@ export const GOAL_MAX_COST_SETTING = Object.freeze({
   description:
     'Spend in US dollars, across the run and its subagents, at which an autonomous goal pauses instead of starting another turn. Raise it to let the goal continue. Set to 0 to remove the cap (not recommended with auto-approve on your own API key).',
 } as const);
-
-/**
- * Output formats every `texra` command can emit: human text, one JSON result,
- * or a stream of NDJSON records. Lives here beside the other config-key
- * constants because the `texra.outputFormat` catalog row, the `--output-format`
- * flag, and the `TEXRA_OUTPUT_FORMAT` environment read all parse the same list.
- */
-export const CLI_OUTPUT_FORMATS = ['text', 'json', 'ndjson'] as const;
-
-/** Canonical config key for the CLI's output format. */
-export const CLI_OUTPUT_FORMAT_CONFIG_KEY = 'texra.outputFormat';
-
-export const CliOutputFormatSchema = z
-  .enum(CLI_OUTPUT_FORMATS)
-  .prefault('text');
-
-export type CliOutputFormat = z.infer<typeof CliOutputFormatSchema>;

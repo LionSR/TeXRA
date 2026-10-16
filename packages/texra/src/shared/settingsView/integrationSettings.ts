@@ -7,6 +7,11 @@
 
 // Local imports
 import {
+  surfacedSetting,
+  type PluginSettingRow,
+  type SurfacedSettingEntry,
+} from '@shared/state/stateSettings';
+import {
   AGENT_CLI_EFFORT_SETTING,
   CLAUDE_AGENT_DEFAULT_PERMISSION_MODE,
   CLAUDE_AGENT_MODEL_SETTING,
@@ -16,12 +21,7 @@ import {
   CODEX_SANDBOX_MODE_DEFAULT,
   CodexApprovalPolicySchema,
   CodexSandboxModeSchema,
-} from '@shared/schemas';
-import {
-  surfacedSetting,
-  type PluginSettingRow,
-  type SurfacedSettingEntry,
-} from '@shared/state/stateSettings';
+} from '@texra/shared/agentCliSettings';
 
 /** The `codex` plugin's repository-scoped keys. */
 export enum CodexStateKey {

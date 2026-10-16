@@ -38,12 +38,12 @@ import {
   type AgentModePreset,
   type SkillDisplayIssue,
   type SkillDisplayItem,
-  type SubscriptionUsageSnapshots,
 } from '@shared/schemas';
 import type { AgentScanIssue } from '@shared/schemas';
 import type { MemoryViewItem } from '@shared/tools/memoryView';
 import type { SubscriptionAuthStatuses } from '@shared/model/subscriptionAuth';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
+import type { SubscriptionUsageSnapshots } from '@texra/shared/model/subscriptionUsage';
 import {
   TELEMETRY_ENABLED_KEY,
   TEXRA_SETTINGS,

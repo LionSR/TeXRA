@@ -34,7 +34,6 @@ import {
 import { onAppSignal } from '@eventBus/AppSignals';
 import { setLogSink, silentLogSink, writeLogLine } from '@logger/logSink';
 import { JsonStore } from '@platform/defaults/jsonStore';
-import { loginShellEnvironment } from '@platform/defaults/loginShellEnv';
 import { TEXRA_CONFIG_FILE_NAME } from '@platform/defaults/nodeStorage';
 import { openTexraWorkspaceConfigStores } from '@platform/defaults/nodeStores';
 import type {
@@ -63,6 +62,7 @@ import { sessionStoreMovedAsideMessage } from '@ui/copy/sessionStore';
 import { envFlag } from '@utils/system/envFlags';
 import { withPerKeyLane, type PerKeyLane } from '@utils/core/perKeyQueue';
 import { ensureError } from '@utils/errors/errorMessage';
+import { loginShellEnvironment } from './loginShellEnv';
 
 import { cliEnvValue, readCliEntrypointPath } from './cliContext';
 import type { CliContext } from './cliContext';

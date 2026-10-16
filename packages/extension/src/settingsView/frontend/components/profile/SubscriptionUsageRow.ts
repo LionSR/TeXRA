@@ -4,7 +4,7 @@ import { customElement, property } from 'lit/decorators.js';
 import '@awesome.me/webawesome/dist/components/details/details.js';
 import '@awesome.me/webawesome/dist/components/progress-bar/progress-bar.js';
 
-import type { SubscriptionUsageSnapshot } from '@shared/schemas';
+import type { SubscriptionUsageSnapshot } from '@texra/shared/model/subscriptionUsage';
 import {
   formatSubscriptionUsagePercent,
   formatSubscriptionUsageReset,

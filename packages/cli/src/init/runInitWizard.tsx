@@ -11,7 +11,10 @@ import { Select, type SelectItem } from '@cli/tui/ui/Select';
 import { COLOR_HINT } from '@cli/tui/ui/colors';
 import { WizardStepShell } from '@cli/tui/ui/WizardStepShell';
 import { renderCliPrompt } from '@cli/tui/renderCliPrompt';
-import { CLI_OUTPUT_FORMATS, type CliOutputFormat } from '@shared/schemas';
+import {
+  CLI_OUTPUT_FORMATS,
+  type CliOutputFormat,
+} from '@texra/shared/cliOutputFormat';
 import { pickDefaultToolUseAgent } from '../runtime/defaultAgents';
 import type { InitAnswers } from '../runtime/initConfig';
 import type { CliModelAccess } from '../runtime/modelAccess';

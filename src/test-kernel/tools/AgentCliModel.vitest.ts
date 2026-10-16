@@ -7,15 +7,15 @@ import { ReasoningEffort } from 'llm-zoo';
 
 import { modelConfig } from '@texra-ai/llm';
 import { settingDefault } from '@shared/config/settingsAccess';
+import { ToolError } from '@shared/schemas';
 import {
   CLAUDE_AGENT_MODEL_SETTING,
   CODEX_MODEL_SETTING,
   ClaudeAgentModelSchema,
-  ToolError,
   type AgentCliEffort,
   isClaudeCodeModel,
   isCodexModel,
-} from '@shared/schemas';
+} from '@texra/shared/agentCliSettings';
 import {
   ClaudeAgentStateKey,
   CodexStateKey,

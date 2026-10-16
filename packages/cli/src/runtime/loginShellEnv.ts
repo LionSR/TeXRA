@@ -7,7 +7,7 @@
  * instead, so every window gets the same environment.
  */
 import { spawn } from 'node:child_process';
-import { homedir, userInfo } from 'node:os';
+import { userInfo } from 'node:os';
 
 import { Effect } from 'effect';
 
@@ -109,24 +109,4 @@ export function loginShellEnvironment(
           ),
       ),
     );
-}
-
-/**
- * Add the login shell's variables to this process's environment, keeping
- * every variable the process already has (the home directory and the
- * `TEXRA_*` settings its starter passed). Children this process spawns
- * inherit the result. Says once which PATH it runs with.
- */
-export function adoptLoginShellEnvironment(): Effect.Effect<void, Error> {
-  return loginShellEnvironment(process.env.HOME ?? homedir()).pipe(
-    Effect.flatMap((login) =>
-      Effect.suspend(() => {
-        for (const [name, value] of Object.entries(login))
-          if (process.env[name] === undefined) process.env[name] = value;
-        return Effect.logInfo(
-          `Using the login shell's environment (PATH=${process.env.PATH ?? ''})`,
-        );
-      }),
-    ),
-  );
 }

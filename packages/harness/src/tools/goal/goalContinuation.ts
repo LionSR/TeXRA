@@ -8,7 +8,6 @@
  */
 import { Clock, Effect, SubscriptionRef } from 'effect';
 
-import { GOAL_CONTINUATION_TEMPLATE } from '@agent/runtime/bundledPrompts';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { goalElapsedMs } from '@shared/plugins/goal';
 import { GOAL_MAX_COST_SETTING, type RunId } from '@shared/schemas';
@@ -18,6 +17,37 @@ import { renderPrompt } from '@utils/prompt';
 import { formatCompactDuration, formatCostUsd } from '@utils/text/stringUtils';
 
 import { goalOf, pauseGoal } from './goalRows';
+
+/**
+ * The goal continuation injected at the end of an idle turn while a goal is
+ * active.
+ */
+const GOAL_CONTINUATION_TEMPLATE =
+  [
+    '<goal_context>',
+    'Autonomous objective active. Keep working until it is verifiably done.',
+    'Do not end your turn to summarize progress or hand back control; only',
+    "stop when the objective's end state is true and you have inspected real",
+    'evidence for it. Persist even when a tool call or command fails:',
+    'diagnose, adjust, and retry rather than yielding.',
+    '',
+    '<objective>',
+    '{{objective}}',
+    '</objective>',
+    '',
+    'Time elapsed: {{timeUsed}}',
+    '',
+    '- Do not redefine success around a smaller or easier task, and do not',
+    '  substitute a narrower, safer, or merely test-passing solution for the',
+    '  behavior the objective requests.',
+    '- If you cannot finish this turn, make concrete progress and keep going.',
+    '- Treat completion as unproven until you have inspected authoritative',
+    '  evidence (file contents, command output, test results, runtime',
+    "  behavior) for every requirement. Match the check's scope to the",
+    "  requirement's scope, and gather stronger evidence when it is weak or",
+    '  indirect.',
+    '</goal_context>',
+  ].join('\n') + '\n';
 
 const pauseActive = Effect.fn('goal.pause')(function* ({
   session,
