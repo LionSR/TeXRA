@@ -31,7 +31,12 @@ export {
   multiAgent,
   web,
 } from '@tools/builtinPlugins';
-export { definePlugin } from '@tools/plugins';
+export {
+  definePlugin,
+  type PluginArm,
+  type PluginDefinition,
+  type PluginRow,
+} from '@tools/plugins';
 export type { WriteFilter } from '@tools/WriteTool';
 export {
   agentBlockOf,
