@@ -150,10 +150,7 @@ type PolicyChange = Extract<RuntimeRequest, { kind: 'policy.set' }>['change'];
 const projectApprovalPolicy = (roots: {
   readonly config: ConfigProvider;
 }): ApprovalPolicy =>
-  Settings.getConfig<ApprovalPolicy>(
-    roots.config,
-    APPROVAL_POLICY_CONFIG_KEY,
-  );
+  Settings.getConfig<ApprovalPolicy>(roots.config, APPROVAL_POLICY_CONFIG_KEY);
 
 export interface RunChatInit {
   /** `--agent` override from the CLI; falls through `resolveChatDefaults`. */
