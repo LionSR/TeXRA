@@ -65,6 +65,20 @@ function storagePathOf(input: string): string {
 const storagePath = (input: string): Effect.Effect<string, Error> =>
   Effect.try({ try: () => storagePathOf(input), catch: ensureError });
 
+/** The storage path of one memory file a mutation acts on: the memory root
+ *  itself is no memory, so a delete or pin of it is refused rather than
+ *  acting on the whole tree. */
+const memoryFilePath = (input: string): Effect.Effect<string, Error> =>
+  Effect.flatMap(storagePath(input), (path) =>
+    path === WORKSPACE_STORAGE_LAYOUT.memory
+      ? Effect.fail(
+          new Error(
+            `"${input}" names the memory folder, not a memory; name one file under ${MEMORY_DISPLAY_ROOT}.`,
+          ),
+        )
+      : Effect.succeed(path),
+  );
+
 /** One memory's bounded preview, with the path the memory tool shows. */
 export interface MemoryPreview {
   readonly storagePath: string;
@@ -110,7 +124,7 @@ export const MemoryStore = {
   delete: (
     input: string,
   ): Effect.Effect<void, Error | PlatformError.PlatformError, StorageFs> =>
-    storagePath(input).pipe(
+    memoryFilePath(input).pipe(
       Effect.flatMap((path) => deleteMemoryPath(path).pipe(onMemoryTreeLane)),
     ),
   /** Pin or unpin a memory, on the memory tree's lane. */
@@ -122,7 +136,7 @@ export const MemoryStore = {
     Error | PlatformError.PlatformError,
     StorageFs
   > =>
-    storagePath(input).pipe(
+    memoryFilePath(input).pipe(
       Effect.flatMap((path) =>
         setMemoryPinned(path, pinned).pipe(onMemoryTreeLane),
       ),
