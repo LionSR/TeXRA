@@ -66,7 +66,7 @@ export class ToolCatalog extends Context.Service<
     /** A session's catalog, in the caller's scope (the session's). */
     readonly session: Effect.Effect<SessionTools, never, Scope.Scope>;
   }
->()('@texra/tools/ToolCatalog') {}
+>()('@texra-ai/harness/tools/ToolCatalog') {}
 
 /**
  * The catalog over `table`, served with it as the `ToolRegistry`: the

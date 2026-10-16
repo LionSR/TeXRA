@@ -39,9 +39,12 @@ const RACY_MS = 2_000;
  * once. An entry holds only a hash of the bytes its key names; past the
  * bound the least recently used go, so edits leave no unbounded trail.
  */
-const ContentHashes = Context.Reference('@texra/PluginContentHashes', {
-  defaultValue: () => new LRUCache<string, string>({ max: 10_000 }),
-});
+const ContentHashes = Context.Reference(
+  '@texra-ai/harness/PluginContentHashes',
+  {
+    defaultValue: () => new LRUCache<string, string>({ max: 10_000 }),
+  },
+);
 
 /**
  * Every file under the plugin root, as sorted `[path, sha256]` pairs; `.git`

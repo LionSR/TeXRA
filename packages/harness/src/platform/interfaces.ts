@@ -166,7 +166,7 @@ export interface AppStateStore extends StateStore {
  * change at its next read.
  */
 export class AppState extends Context.Service<AppState, AppStateStore>()(
-  '@texra/platform/AppState',
+  '@texra-ai/harness/platform/AppState',
 ) {
   static layer(store: StateStore): Layer.Layer<AppState> {
     return Layer.succeed(AppState)({
@@ -250,7 +250,7 @@ export interface AgentDirectoriesPort {
 export class AgentDirectories extends Context.Service<
   AgentDirectories,
   AgentDirectoriesPort
->()('@texra/platform/AgentDirectories') {
+>()('@texra-ai/harness/platform/AgentDirectories') {
   static layer(
     directories: AgentDirectoriesPort,
   ): Layer.Layer<AgentDirectories> {
@@ -287,7 +287,7 @@ export type ToolMissingHandler = (
 export class ToolMissingReporter extends Context.Service<
   ToolMissingReporter,
   ToolMissingHandler
->()('@texra/platform/ToolMissingReporter') {
+>()('@texra-ai/harness/platform/ToolMissingReporter') {
   static layer(report: ToolMissingHandler): Layer.Layer<ToolMissingReporter> {
     return Layer.succeed(ToolMissingReporter)(report);
   }

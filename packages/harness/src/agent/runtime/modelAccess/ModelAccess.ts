@@ -130,7 +130,7 @@ export class ModelAccess extends Context.Service<
       declinedRoutes: readonly DeclinableUsageRoute[],
     ) => Effect.Effect<CredentialSwitch | null>;
   }
->()('@texra/ModelAccess') {}
+>()('@texra-ai/harness/ModelAccess') {}
 
 /** The settings one binding reads. */
 const settingsOf = (stores: ModelOptionStores) =>

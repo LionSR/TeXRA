@@ -32,7 +32,7 @@ export class LocalRuntimeSource extends Context.Service<
   {
     readonly ref: SubscriptionRef.SubscriptionRef<LocalRuntimeState>;
   }
->()('@texra/session/LocalRuntimeSource') {
+>()('@texra-ai/harness/session/LocalRuntimeSource') {
   static readonly layer = Layer.effect(
     LocalRuntimeSource,
     Effect.gen(function* () {
@@ -63,7 +63,7 @@ export class TextChunkSource extends Context.Service<
   {
     readonly ref: SubscriptionRef.SubscriptionRef<InflightText>;
   }
->()('@texra/session/TextChunkSource') {
+>()('@texra-ai/harness/session/TextChunkSource') {
   static readonly layer = Layer.effect(
     TextChunkSource,
     Effect.map(SubscriptionRef.make<InflightText>(new Map()), (ref) => ({
@@ -85,7 +85,7 @@ export class TranscriptSubscriptions extends Context.Service<
       set: readonly TranscriptSubscription[],
     ) => Effect.Effect<void>;
   }
->()('@texra/session/TranscriptSubscriptions') {
+>()('@texra-ai/harness/session/TranscriptSubscriptions') {
   static readonly layer = Layer.effect(
     TranscriptSubscriptions,
     Effect.gen(function* () {

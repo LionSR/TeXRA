@@ -224,4 +224,4 @@ export class RunHistory extends Context.Service<
       RunHistoryRefused | DatabaseReadFailed | DatabaseWriteFailed | E
     >;
   }
->()('@texra/session/RunHistory') {}
+>()('@texra-ai/harness/session/RunHistory') {}

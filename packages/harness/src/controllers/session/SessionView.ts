@@ -55,7 +55,7 @@ export class SessionViewService extends Context.Service<
      */
     readonly changes: Stream.Stream<SessionView>;
   }
->()('@texra/session/SessionView') {
+>()('@texra-ai/harness/session/SessionView') {
   static readonly layer = Layer.effect(
     SessionViewService,
     Effect.gen(function* () {

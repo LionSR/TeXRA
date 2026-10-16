@@ -81,7 +81,7 @@ export const UNAVAILABLE_LANGUAGE_MODEL_PORT: LanguageModelPort = Object.freeze(
 export class LanguageModel extends Context.Service<
   LanguageModel,
   LanguageModelPort
->()('@texra/platform/LanguageModel') {
+>()('@texra-ai/harness/platform/LanguageModel') {
   static layer(
     port: LanguageModelPort,
     /** The editor attached to a session, read at each call: its models

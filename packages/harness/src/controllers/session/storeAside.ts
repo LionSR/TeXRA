@@ -50,7 +50,7 @@ export const retryBusy = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
  *  transaction runs with, each proven off the write lock before it. */
 export const ProvenOwners = Context.Reference<
   ReadonlyMap<OwnerId, OwnerLiveness>
->('@texra/session/ProvenOwners', { defaultValue: () => new Map() });
+>('@texra-ai/harness/session/ProvenOwners', { defaultValue: () => new Map() });
 
 /** A claim met owners its attempt has no verdict for. Raised as a defect,
  *  so no body's error handling swallows it: the outermost transaction rolls

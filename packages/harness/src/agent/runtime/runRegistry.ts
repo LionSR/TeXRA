@@ -918,7 +918,7 @@ export class RunRegistry implements RunsShape {
  * context.
  */
 export class Runs extends Context.Service<Runs, RunsShape>()(
-  '@texra/session/Runs',
+  '@texra-ai/harness/session/Runs',
 ) {}
 
 /** The registry behind a session's runs: harness internals only, the files

@@ -27,11 +27,11 @@ import type { WorkspaceRoots } from './workspaceRoots';
 export class WorkspaceFs extends Context.Service<
   WorkspaceFs,
   RootedFileSystem
->()('@texra/platform/WorkspaceFs') {}
+>()('@texra-ai/harness/platform/WorkspaceFs') {}
 
 /** The session's own storage root (`~/.texra/...` by default). */
 export class StorageFs extends Context.Service<StorageFs, RootedFileSystem>()(
-  '@texra/platform/StorageFs',
+  '@texra-ai/harness/platform/StorageFs',
 ) {}
 
 /**
@@ -43,7 +43,7 @@ export class StorageFs extends Context.Service<StorageFs, RootedFileSystem>()(
 export class GlobalStorageFs extends Context.Service<
   GlobalStorageFs,
   RootedFileSystem
->()('@texra/platform/GlobalStorageFs') {}
+>()('@texra-ai/harness/platform/GlobalStorageFs') {}
 
 /** A rooted view built from the `FileSystem` and `Path` the process provides. */
 function rootedLayer<I>(

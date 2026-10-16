@@ -397,7 +397,7 @@ export class Database extends Context.Service<
       ids: readonly AggregateId[],
     ) => Effect.Effect<readonly AggregateState[], DatabaseReadFailed>;
   }
->()('@texra/session/Database') {}
+>()('@texra-ai/harness/session/Database') {}
 
 /**
  * The process's one handle on the global storage root, held for the process
@@ -409,11 +409,11 @@ export class Database extends Context.Service<
 export class GlobalDatabase extends Context.Service<
   GlobalDatabase,
   Pick<Context.Service.Shape<typeof Database>, 'values' | 'inputHistory'>
->()('@texra/session/GlobalDatabase') {}
+>()('@texra-ai/harness/session/GlobalDatabase') {}
 
 /** Persistent project connections, retained by project and session scopes
  *  until the last borrower releases one (never an ephemeral in-memory one). */
 export class ProjectDatabases extends Context.Service<
   ProjectDatabases,
   RcMap.RcMap<string, Database['Service'], DatabaseOpenFailed>
->()('@texra/session/ProjectDatabases') {}
+>()('@texra-ai/harness/session/ProjectDatabases') {}

@@ -51,7 +51,7 @@ export interface PlatformSecrets extends CredentialStore {
  * member call.
  */
 export class Secrets extends Context.Service<Secrets, PlatformSecrets>()(
-  '@texra/platform/Secrets',
+  '@texra-ai/harness/platform/Secrets',
 ) {
   static layer(secrets: PlatformSecrets): Layer.Layer<Secrets> {
     return Layer.succeed(Secrets)(secrets);

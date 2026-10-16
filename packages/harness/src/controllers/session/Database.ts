@@ -108,7 +108,7 @@ const invariant = (message: string) => Effect.die(new Error(message));
 /** The open transaction's mode, null outside one; `derive` (projection
  *  catch-up) takes the write lock and wakes no reader. */
 const TxMode = Context.Reference<'read' | 'write' | 'derive' | null>(
-  '@texra/session/TxMode',
+  '@texra-ai/harness/session/TxMode',
   { defaultValue: () => null },
 );
 /** First append claims the aggregate and mints its uid; later need the claim. */

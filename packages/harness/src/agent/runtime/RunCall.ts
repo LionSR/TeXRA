@@ -188,7 +188,7 @@ export interface RunCallShape {
 /** The current call's place in its run; null for a standalone host
  *  invocation outside an agent run. */
 export class RunCall extends Context.Service<RunCall, RunCallShape | null>()(
-  '@texra/agent/RunCall',
+  '@texra-ai/harness/agent/RunCall',
 ) {}
 
 /** The script that issued the current call; null for a call a response
@@ -196,14 +196,14 @@ export class RunCall extends Context.Service<RunCall, RunCallShape | null>()(
 export class IssuingScript extends Context.Service<
   IssuingScript,
   ScriptScope | null
->()('@texra/agent/IssuingScript') {}
+>()('@texra-ai/harness/agent/IssuingScript') {}
 
 /** The calls a `script` call's guest may issue, built on the first
  *  `yield*`; null for a call a script (or a host) issued. */
 export class ScriptCalls extends Context.Service<
   ScriptCalls,
   Effect.Effect<ScriptDoor> | null
->()('@texra/agent/ScriptCalls') {}
+>()('@texra-ai/harness/agent/ScriptCalls') {}
 
 /** The session of a call's run, for the harness's own helpers a plugin's
  *  tool may call (an edit's approval, which `accept_run_files` asks for);
