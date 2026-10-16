@@ -5,7 +5,7 @@
 import { Effect } from 'effect';
 
 import { StorageFs } from '@texra-ai/harness';
-import { resolveMemoryStoragePath } from '@platform/defaults/workspaceStorage';
+import { MemoryStore } from '@texra-ai/harness/plugins';
 import type { SettingsViewInboundHandlerRegistry } from '@texra/controllers/settingsView/settingsViewDispatch';
 import { SettingsMemoryController } from '@texra/controllers/settingsView/SettingsMemoryController';
 import type { SettingsViewOutboundMessage } from '@texra/shared/settingsView/settingsViewMessages';
@@ -58,14 +58,14 @@ export function settingsMemoryCommands(ports: {
       reported(
         'Failed to open memory file',
         Effect.flatMap(
-          StorageFs.use((storage) =>
-            storage.resolve(resolveMemoryStoragePath(storagePath)),
+          Effect.flatMap(MemoryStore.storagePath(storagePath), (path) =>
+            StorageFs.use((storage) => storage.resolve(path)),
           ),
           bindings.openPath,
         ),
       ),
     openMemoryFolder: () => {
-      const folder = resolveMemoryStoragePath();
+      const folder = MemoryStore.folder;
       return reported(
         'Failed to open memory folder',
         Effect.flatMap(
