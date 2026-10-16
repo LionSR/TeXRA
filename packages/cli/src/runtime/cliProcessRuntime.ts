@@ -46,7 +46,6 @@ import {
   UNAVAILABLE_LANGUAGE_MODEL_PORT,
   withForkFailureReporting,
 } from '@texra-ai/harness';
-import { resolveGlobalStoragePath } from '@texra-ai/harness/node';
 import { AgentDirectoryService } from '@agent/index';
 import type { MinimumLogLevel } from '@logger/effectDiagnostics';
 import { GlobalDatabase } from '@shared/session/database';
@@ -212,7 +211,6 @@ export function installCliProcessRuntime(
   // The editor registry this install's plugins read, served beside the
   // process services: `texra serve` attaches its windows' editors to it.
   const editors = makeEditorHost();
-  const globalStoragePath = resolveGlobalStoragePath(storageRoot);
   const version = readCliVersion();
   const secrets = cliSecrets(storageRoot);
   // The agent directories are a process service the runtime serves, so

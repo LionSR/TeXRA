@@ -639,7 +639,7 @@ export function ownerProcessLayer({
   storageRoot,
   plugins,
   secrets,
-  appState: appStateOption,
+  appState = globalAppStateLayer(resolveGlobalStoragePath(storageRoot)),
   languageModel,
   agentDirectories,
   toolMissingReporter,
@@ -650,7 +650,6 @@ export function ownerProcessLayer({
   workspace,
 }: ProcessLayerOptions): Layer.Layer<ProcessServices | SessionOwner> {
   const globalStorage = resolveGlobalStoragePath(storageRoot);
-  const appState = appStateOption ?? globalAppStateLayer(globalStorage);
   const catalog = pluginCatalogLayer(plugins, mcpConfigPathOf(storageRoot));
   // Non-failing: `selfIdentity()` reads an unreadable identity as undefined.
   const identity = Layer.effect(

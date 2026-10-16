@@ -33,7 +33,6 @@ import {
 } from '@texra-ai/harness';
 import {
   createNodeWorkspaceRoots,
-  resolveGlobalStoragePath,
   resolveWorkspaceStoragePath,
   canonicalizeWorkspacePath,
 } from '@texra-ai/harness/node';
@@ -145,7 +144,6 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
     defaultNodeStorageRoot(),
     workspaceRoot,
   );
-  const globalStorage = resolveGlobalStoragePath(defaultNodeStorageRoot());
   // The one credential store every host shares (`~/.texra/secrets/`):
   // the background service reads the keys this window saves.
   const secrets = new FileSecrets(

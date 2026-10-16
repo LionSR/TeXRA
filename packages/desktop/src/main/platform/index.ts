@@ -17,7 +17,6 @@ import {
 } from '@texra-ai/harness';
 import {
   createNodeWorkspaceRoots,
-  resolveGlobalStoragePath,
   resolveWorkspaceStoragePath,
 } from '@texra-ai/harness/node';
 import { AgentDirectoryService } from '@agent/index';
@@ -91,7 +90,6 @@ export const initializeElectronPlatform = Effect.fn(
   // own roots (desktopProjects.ts); this pair only backs the window before a
   // folder is open.
   const storage = resolveWorkspaceStoragePath(dataRoot, undefined);
-  const globalStorage = resolveGlobalStoragePath(dataRoot);
   // Secrets precede the runtime; the process identity and application state
   // are acquired by its own layers, over the spawner and database it serves.
   const { mainDir, resourcesPath, configStores, secrets } = yield* Effect.gen(
