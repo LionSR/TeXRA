@@ -10,7 +10,7 @@ import { z } from 'zod';
 import type {
   StateSettingEntry,
   SurfacedSettingEntry,
-} from '@shared/state/stateSettings';
+} from '@texra-ai/harness/schemas';
 
 /** A row a plugin declares, with the short label its Plugins-page card shows
  *  (the card already names the plugin, so 'Model' rather than 'Codex model'). */

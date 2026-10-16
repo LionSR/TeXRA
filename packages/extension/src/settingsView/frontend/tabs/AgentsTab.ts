@@ -14,7 +14,7 @@ import { customElement, property } from 'lit/decorators.js';
 // Local imports - shared styles
 
 // Local imports - shared schemas
-import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
+import { GlobalStateKey, WorkspaceStateKey } from '@texra-ai/harness/schemas';
 import {
   CHILD_RUN_CONCURRENCY_BUDGET_CONFIG_KEY,
   CHILD_RUN_CONCURRENCY_BUDGET_SETTING,

@@ -10,7 +10,7 @@ import {
 } from '@texra-ai/llm/node';
 import { exposeApiKey, lookupApiKey, type SecretsFailed } from '@texra-ai/llm';
 import { withLogChannel } from '@texra-ai/harness';
-import { GlobalStateKey } from '@shared/state/stateKeys';
+import { GlobalStateKey } from '@texra-ai/harness/schemas';
 import type {
   SubscriptionUsageProvider,
   SubscriptionUsageSnapshot,

@@ -10,7 +10,7 @@
 import { z } from 'zod';
 import { ReasoningEffortSchema } from 'llm-zoo/schemas';
 
-import { type SettingsViewSnapshot } from '@shared/state/stateSettings';
+import { type SettingsViewSnapshot } from '@texra-ai/harness/schemas';
 import {
   AgentModePresetSchema,
   AgentScanIssueSchema,

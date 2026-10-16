@@ -5,8 +5,8 @@ import { z } from 'zod';
 // Local imports - agent config
 import { codexBackendModelId } from '@texra-ai/llm';
 import { withLogChannel } from '@texra-ai/harness';
-import { type ToolError } from '@shared/schemas';
 import { Settings } from '@texra-ai/harness';
+import { type ToolError } from '@shared/schemas';
 import {
   isCodexModel,
   type AgentCliEffort,

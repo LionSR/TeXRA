@@ -1,5 +1,5 @@
 import { Settings } from '@texra-ai/harness';
-import { GlobalStateKey } from '@shared/state/stateKeys';
+import { GlobalStateKey } from '@texra-ai/harness/schemas';
 import { providerRegionSetting } from '@shared/state/providerSettings';
 import {
   CODING_PLAN_SUBSCRIPTIONS,

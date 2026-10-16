@@ -9,7 +9,7 @@
 import { z } from 'zod';
 
 // Local imports
-import { type SurfacedSettingEntry } from '@shared/state/stateSettings';
+import { type SurfacedSettingEntry } from '@texra-ai/harness/schemas';
 import {
   LATEX_CONFIG_DEFAULTS,
   LATEX_CONFIG_RANGES,

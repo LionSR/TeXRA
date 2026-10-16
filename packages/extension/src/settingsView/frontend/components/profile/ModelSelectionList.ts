@@ -5,7 +5,7 @@ import { customElement, property, state } from 'lit/decorators.js';
 
 // Local imports - shared styles
 import { providerDisplayName } from '@texra-ai/llm';
-import { GlobalStateKey } from '@shared/state/stateKeys';
+import { GlobalStateKey } from '@texra-ai/harness/schemas';
 import { MODEL_AVAILABILITY_STATUS } from '@shared/schemas';
 import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 import { postMessage } from '@texra/shared/hostBridge';

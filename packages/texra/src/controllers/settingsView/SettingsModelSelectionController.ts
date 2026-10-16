@@ -25,12 +25,12 @@ import {
   type PlatformSecrets,
 } from '@texra-ai/harness';
 import { Settings } from '@texra-ai/harness';
+import { GlobalStateKey } from '@texra-ai/harness/schemas';
 import {
   preferredCopilotRouteModels,
   type CopilotModelRoute,
 } from '@model/copilotRouting';
 import { type ModelOptionData } from '@shared/schemas';
-import { GlobalStateKey } from '@shared/state/stateKeys';
 import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 import {
   type CopilotRouteInfo,

@@ -18,7 +18,7 @@ import { type SettingHost } from '@texra-ai/harness';
 import {
   type SettingsViewStateSettingEntry,
   type SurfacedSettingEntry,
-} from '@shared/state/stateSettings';
+} from '@texra-ai/harness/schemas';
 import {
   TEXRA_APPROVAL_POLICY_CONFIG_KEY,
   type TexraApprovalPolicy,

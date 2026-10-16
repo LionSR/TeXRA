@@ -19,9 +19,8 @@ import {
   settingsCatalog,
   type SettingsCatalog,
   type StateSettingEntry,
-} from '@shared/state/stateSettings';
+} from '@texra-ai/harness/schemas';
 import { CliOutputFormatSchema } from '@texra/shared/cliOutputFormat';
-import type { SurfacedSettingEntry } from '@shared/state/stateSettings';
 import { configTreeRows } from '@texra/shared/settingsView/settingRows';
 import {
   LATEX_CONFIG_DEFAULTS,
@@ -38,6 +37,7 @@ import {
   CLAUDE_AGENT_SETTINGS,
   CODEX_SETTINGS,
 } from '@texra/shared/settingsView/integrationSettings';
+import type { SurfacedSettingEntry } from '@texra-ai/harness/schemas';
 
 /** TeXRA's state keys: LaTeX's, inline criticism and telemetry. */
 export enum TexraStateKey {

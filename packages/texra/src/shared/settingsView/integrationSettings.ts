@@ -6,12 +6,7 @@
  */
 
 // Local imports
-import { type SurfacedSettingEntry } from '@shared/state/stateSettings';
-import {
-  surfacedSetting,
-  type PluginSettingRow,
-  type SurfacedSettingEntry,
-} from '@shared/state/stateSettings';
+import { type SurfacedSettingEntry } from '@texra-ai/harness/schemas';
 import {
   AGENT_CLI_EFFORT_SETTING,
   CLAUDE_AGENT_DEFAULT_PERMISSION_MODE,

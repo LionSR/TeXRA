@@ -2,6 +2,7 @@ import { Settings } from '@texra-ai/harness';
 import { Effect } from 'effect';
 
 import { hasUsableApiKey } from '@texra-ai/llm';
+import { GlobalStateKey } from '@texra-ai/harness/schemas';
 import {
   readModelOptions,
   type LanguageModel,
@@ -11,7 +12,6 @@ import {
 import { isModelOptionAvailable } from '@shared/schemas';
 import { modelOptionsFrom } from '@texra/model/modelOptions';
 import { SETUP_MODEL_BY_PROVIDER } from '@texra/model/setupModelDefaults';
-import { GlobalStateKey } from '@shared/state/stateKeys';
 import type { SettingsStores } from '@texra-ai/harness';
 
 /**
