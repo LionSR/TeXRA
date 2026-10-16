@@ -7,7 +7,7 @@
  *   `DatabaseRowCorrupt` or `DatabaseRowEarlier` is unreadable, never resumed.
  * - `DatabaseWriteFailed`: nothing written; a run ends (`findStorageRefusal`).
  * - `DatabaseStoreNewer`, the cause of any of these: the store is refused whole.
- * - `DatabaseNotOwner` and `DatabaseClaimRefused`, never wrapped (D6 b):
+ * - `DatabaseNotOwner` and `DatabaseClaimRefused`, never wrapped:
  *   nothing written; a run that lost its own claim stops, and one another
  *   process holds is refused as held elsewhere ({@link heldElsewhereBy}).
  */
@@ -118,7 +118,7 @@ export class DatabaseWriteFailed extends Data.TaggedError(
 
 /** A batch member targets an aggregate this process does not hold open;
  *  nothing was written. Ownership, not the disk, so it is never wrapped in
- *  `DatabaseWriteFailed` (D6 b). */
+ *  `DatabaseWriteFailed`. */
 export class DatabaseNotOwner extends Data.TaggedError('DatabaseNotOwner')<{
   readonly aggregateId: AggregateId;
   /** The holder and closure at refusal time, read in the refusing transaction. */

@@ -60,7 +60,7 @@ import type { HistoryQuery } from './historyQuery/HistoryQuery';
 import type { SessionApprovals } from './runApprovalQueue';
 import type { RunsShape } from './runs';
 
-/** A write the store refused: nothing was written (D6 b). */
+/** A write the store refused: nothing was written. */
 export type LogWriteError = DatabaseNotOwner | DatabaseWriteFailed;
 
 /** A claim the store would not give this process. */

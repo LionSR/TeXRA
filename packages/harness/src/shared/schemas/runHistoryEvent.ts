@@ -163,7 +163,7 @@ export const ModelMessagePayloadSchema = z
     /** The commit barrier: the accepted remote operation, committed before
      *  `observe` is called. `deadlineAtMs` is the limit admitted with the
      *  submission, never one recomputed from current settings; the package
-     *  produces neither it nor an attempt, so both ride the envelope (D2). */
+     *  produces neither it nor an attempt, so both ride the envelope. */
     z.strictObject({
       kind: z.literal('accepted'),
       invocation: InvocationRefSchema,
@@ -198,7 +198,7 @@ export const ModelMessagePayloadSchema = z
        * none of the runtime's own accounting metrics. The run's cost is a
        * runtime fact, so the row carries the `NormalizedUsage` the handler
        * produced for this invocation and the fold sums it into
-       * `RunState.usage` (D12). `null` only when the invocation produced no
+       * `RunState.usage`. `null` only when the invocation produced no
        * usage at all: an editor turn, or a provider that reported none.
        * The rows are the only carrier.
        */
