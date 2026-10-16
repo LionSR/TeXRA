@@ -134,9 +134,7 @@ const sortedTypes = (context) => {
 };
 
 function printNode(node) {
-  return printer
-    .printNode(ts.EmitHint.Unspecified, node, scratch)
-    .replaceAll(/\s+/g, ' ');
+  return printer.printNode(ts.EmitHint.Unspecified, node, scratch);
 }
 
 /** A synthesized type or signature node, printed in a stable order. */
