@@ -302,3 +302,47 @@ two parallel scheduled sessions running this one charter should be consolidated
 to one** so future passes do not race to re-pin the same note. Re-running this
 audit as a routine will again add no refactor signal until the harness program
 moves further.
+
+## Re-verified 2026-10-16 (a fourth pass, folded in not forked)
+
+A third scheduled session (`claude/eager-noether-5w0pul`) fired this same
+charter on 2026-10-16. Rather than write a fifth near-duplicate note, it folds
+its re-verification into this one — the fold-forward pattern this note already
+used for the 2026-10-10 pass.
+
+Re-verified at `main`/HEAD `8251632` — **50 commits past the 2026-10-12 pin
+`d8d4a6b`** (`git rev-list --count d8d4a6b..8251632` = 50). The verdict is
+unchanged and was re-confirmed, not assumed:
+
+- **The four core invariants still hold.** `AgentEngine`/`runAgent` grep over
+  `packages/harness/src` is still empty; `modelAccess/` is still the one binding
+  service (same five files); `makeRunHistory` (`runtime/RunHistory.ts`) is still
+  the sole run-history implementation; the logger is still the same five-file
+  set.
+- **The 50-commit delta is entirely in the charter's direction, all landed
+  through human PR review** — e.g. the `@agent/runtime` door shrank 8→7→6 names
+  (#14055, #14056), cli/texra and the GUI hosts dropped harness deep imports and
+  now reach the harness through its entries (#14088, #14082), one public
+  `readModelOptions` replaced the four picker reads (#14104), and TeXRA-owned
+  schemas and prompts left the harness (#14094). No new wrapper that only
+  forwards, no re-export shim, no `@adapter-until` marker, no services-bag, and
+  no stray `Effect.run*` at the SDK center were introduced by the delta.
+- **Every Carried / Observation item is unchanged**, re-checked at HEAD:
+  Carried.1 the logger module-global sink is still present
+  (`logSink.ts` `let sink = consoleLogSink` :165, `let sinkTrusted = false` :166,
+  `setLogSink` :173); Carried.3 the Tier-1 manifest is still `Status: proposed`
+  and `SettingHost`/`MapToolRegistry`/`IToolRegistry` are still on the public
+  `index.ts`; Carried.4 `2026-10-02-durable-harness.md` still records Q5 open and
+  still proposes `packages/theorist`; the Observation `errors.ts`/README
+  "… in all" headline (README: "nine in all") still stands.
+
+**Process finding, now stronger.** This is the fourth pass (2026-10-04 →
+10-10 → 10-12 → 10-16) and at least the **third distinct scheduled branch**
+(`5nwuta`, `3a6qh4`, now `5w0pul`) running this one charter, each confirming the
+same no-signal verdict. The 10-12 recommendation to **consolidate the parallel
+scheduled sessions to one** stands and is reinforced: the routine should be
+retired or gated to re-fire only when the durable-harness program
+(`2026-10-02-durable-harness.md` H1–H6) advances — autonomous re-runs against a
+static harness add doc churn, not refactor signal. The open items remain
+owner-level and doc-only (Tier-1 manifest ratification §Carried.3; durable-harness
+Q5 reconcile §Carried.4; the one-line `errors.ts` scope clarification).
