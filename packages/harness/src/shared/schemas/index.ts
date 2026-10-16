@@ -18,7 +18,6 @@ export * from './agentSkills';
 export * from './activeSkills';
 export * from './skillName';
 export * from './skillDisplay';
-export * from './codex';
 export * from './coreSettings';
 export * from './opResults';
 

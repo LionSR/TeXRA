@@ -71,7 +71,8 @@ export function endToolUseCard(
 /**
  * Fast-tool variant: open AND close a card in one shot when the call is
  * already complete. `payload.status` may already be terminal, and `toolName`
- * may be missing (it falls back to `'unknown'`).
+ * may be missing (it falls back to `'unknown'`). A card the payload states
+ * (`card`) is published with the open, so a running card shows it too.
  */
 export function emitToolUseCard(
   trace: AgentTrace,
@@ -84,8 +85,9 @@ export function emitToolUseCard(
     payload.input,
     stageId,
   );
-  if (payload.status && payload.status !== 'in_progress') {
-    endToolUseCard(trace, ref, payload, payload.status);
+  const { status = 'in_progress' } = payload;
+  if (status !== 'in_progress' || payload.card) {
+    endToolUseCard(trace, ref, payload, status);
   }
   return ref;
 }

@@ -5,7 +5,6 @@ import { describe, expect } from 'vitest';
 
 // Local imports
 import type { AgentTrace } from '@agent/trace';
-import { CODEX_TURN_TOOL } from '@shared/schemas';
 import type { RunId } from '@shared/schemas';
 import { createTestRunTrace } from '@test/support/sessionTestUtils';
 import { runStreamedTurn } from '@texra/tools/codex';
@@ -129,7 +128,7 @@ describe('codex progress events', () => {
 
       const turnEntry = findTurnEntry(store);
       expect(turnEntry).toMatchObject({
-        toolName: CODEX_TURN_TOOL,
+        toolName: 'codex_turn',
         input: { state: 'failed' },
         error: 'boom',
         status: 'failed',
@@ -151,7 +150,7 @@ describe('codex progress events', () => {
         // Even without an error message the card is failed so the progress view
         // renders failure chrome instead of a success check.
         expect(turnEntry).toMatchObject({
-          toolName: CODEX_TURN_TOOL,
+          toolName: 'codex_turn',
           input: { state: 'failed' },
           status: 'failed',
         });
@@ -161,5 +160,5 @@ describe('codex progress events', () => {
 });
 
 function findTurnEntry(store: TestTrace): Record<string, unknown> | undefined {
-  return toolLogs(store).find((data) => data.toolName === CODEX_TURN_TOOL);
+  return toolLogs(store).find((data) => data.toolName === 'codex_turn');
 }

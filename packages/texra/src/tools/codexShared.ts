@@ -1,21 +1,11 @@
-// Local imports - shared schemas
 import type {
-  CodexFileChangeToolInput,
-  CodexMcpToolOutput,
-  CodexThreadToolInput,
-  CodexTurnState,
-  CodexTurnToolInput,
-  ToolUseLog,
+  McpToolOutput,
   ToolCallStatus,
-} from '@shared/schemas';
-import {
-  CODEX_FILE_CHANGE_TOOL,
-  CODEX_THREAD_TOOL,
-  CODEX_TURN_TOOL,
+  ToolUseLog,
 } from '@shared/schemas';
 import { buildMcpToolName } from '@shared/tools/toolDisplayName';
 import { getBasename } from '@utils/core';
-import { truncateSummary } from '@utils/text/stringUtils';
+import { formatDuration, truncateSummary } from '@utils/text/stringUtils';
 import type {
   CommandExecutionItem,
   FileChangeItem,
@@ -24,6 +14,11 @@ import type {
 } from '@openai/codex-sdk';
 
 export const CODEX_AGENT_NAME = 'codex';
+/** The tool names of the cards a Codex turn reports beside its commands and
+ *  MCP calls: its file changes, its thread, and the turn itself. */
+const CODEX_FILE_CHANGE_TOOL = 'codex_patch';
+const CODEX_THREAD_TOOL = 'codex_thread';
+const CODEX_TURN_TOOL = 'codex_turn';
 const CODEX_COMMAND_SUMMARY_MAX_LENGTH = 60;
 
 type CodexFileChange = FileChangeItem['changes'][number];
@@ -99,10 +94,20 @@ export function buildCodexFileChangeToolLog(
   return {
     toolName: CODEX_FILE_CHANGE_TOOL,
     summary,
-    input: {
-      changes: dedupedChanges,
-      patchStatus: item.status,
-    } satisfies CodexFileChangeToolInput,
+    input: { changes: dedupedChanges, patchStatus: item.status },
+    card: {
+      title: 'Codex Files',
+      sections: [
+        ...(item.status
+          ? [{ kind: 'status' as const, label: 'Status:', status: item.status }]
+          : []),
+        {
+          kind: 'fileList',
+          label: 'Files:',
+          files: dedupedChanges.map(({ path, kind }) => ({ path, note: kind })),
+        },
+      ],
+    },
     ...(patchFailed && { error: 'Patch apply failed' }),
     status: patchFailed ? 'failed' : 'completed',
   };
@@ -110,7 +115,7 @@ export function buildCodexFileChangeToolLog(
 
 export function buildCodexMcpToolLog(item: McpToolCallItem): ToolUseLog {
   const contentBlocks = item.result?.content ?? [];
-  const output: CodexMcpToolOutput = {
+  const output: McpToolOutput = {
     status: item.status,
     ...(item.result?.structured_content !== undefined && {
       structuredContent: item.result.structured_content,
@@ -133,12 +138,18 @@ export function buildCodexThreadToolLog(event: ThreadStartedEvent): ToolUseLog {
   return {
     toolName: CODEX_THREAD_TOOL,
     summary: 'Created',
-    input: {
-      threadId: event.thread_id,
-    } satisfies CodexThreadToolInput,
+    input: { threadId: event.thread_id },
+    card: {
+      title: 'Codex Thread',
+      sections: [
+        { kind: 'identifier', label: 'Thread ID:', value: event.thread_id },
+      ],
+    },
     status: 'completed',
   };
 }
+
+type CodexTurnState = 'running' | 'completed' | 'failed';
 
 /** Human-readable label for a Codex turn state. */
 function codexTurnSummary(state: CodexTurnState): string {
@@ -163,17 +174,25 @@ export function buildCodexTurnToolLog({
 }): ToolUseLog {
   const roundedMs =
     wallTimeMs == null ? undefined : Math.max(0, Math.round(wallTimeMs));
-  const input: CodexTurnToolInput = {
-    state,
-    ...(roundedMs != null && {
-      wallTimeMs: roundedMs,
-    }),
-  };
-
   return {
     toolName: CODEX_TURN_TOOL,
     summary: codexTurnSummary(state),
-    input,
+    input: { state, ...(roundedMs != null && { wallTimeMs: roundedMs }) },
+    card: {
+      title: 'Codex Turn',
+      sections: [
+        { kind: 'status', label: 'State:', status: state },
+        ...(roundedMs
+          ? [
+              {
+                kind: 'text' as const,
+                label: 'Duration:',
+                text: formatDuration(roundedMs),
+              },
+            ]
+          : []),
+      ],
+    },
     // A failed turn is a failed card so the progress view shows failure
     // chrome; the error message is attached when the caller has one (turn.failed
     // / stream error) but omitted for abort or an early stream end.

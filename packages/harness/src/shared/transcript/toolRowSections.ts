@@ -7,13 +7,7 @@
  */
 import { Predicate } from 'effect';
 import {
-  CODEX_FILE_CHANGE_TOOL,
-  CODEX_THREAD_TOOL,
-  CODEX_TURN_TOOL,
-  CodexFileChangeToolInputSchema,
-  CodexMcpToolOutputSchema,
-  CodexThreadToolInputSchema,
-  CodexTurnToolInputSchema,
+  McpToolOutputSchema,
   getProposalFileGroups,
   type ProposalFileGroup,
 } from '@shared/schemas';
@@ -30,7 +24,6 @@ import {
 } from '@shared/tools/toolDisplayName';
 import { isEditLikeToolName, toolDisplayKind } from '@shared/tools/toolKind';
 import { filterNotNullish } from '@utils/core';
-import { formatDuration } from '@utils/text/stringUtils';
 
 import { stringifyPayload, transcriptText } from './transcriptText';
 import type {
@@ -400,12 +393,12 @@ function isMcpTextBlock(block: unknown): block is { text: string } {
 
 /** The output fields the structured MCP sections render. */
 const MCP_STRUCTURED_FIELDS: ReadonlySet<string> = new Set(
-  Object.keys(CodexMcpToolOutputSchema.shape),
+  Object.keys(McpToolOutputSchema.shape),
 );
 
 /**
  * MCP output is shown, structured when it can be and raw when it cannot.
- * Ad-hoc MCP servers are not obliged to emit Codex-shaped output, so a schema
+ * MCP servers are not obliged to emit this output shape, so a schema
  * mismatch here is the intended "not structured output" path, not a producer
  * bug: it falls through to the raw `Result:` section below. A structured
  * output's fields outside the schema, which the parse strips, are shown as
@@ -424,7 +417,7 @@ function buildMcpSections(ctx: SectionContext): ToolSection[] {
     });
   }
 
-  const parsed = CodexMcpToolOutputSchema.nullable()
+  const parsed = McpToolOutputSchema.nullable()
     .catch(null)
     .parse(ctx.parsedOutput);
   const blocks = Array.isArray(parsed?.contentBlocks)
@@ -487,69 +480,6 @@ function buildMcpSections(ctx: SectionContext): ToolSection[] {
       text: payload.text,
       language: payload.language,
     });
-  }
-  return sections;
-}
-
-/**
- * The four native Codex cards (`codex`, `codex_patch`, `codex_thread`,
- * `codex_turn`). They used to be a webview-only Lit override;
- * expressed as sections they reach the terminal too, and the check marks,
- * change kinds and badges are one derivation instead of two.
- */
-function buildCodexSections(ctx: SectionContext): ToolSection[] {
-  const { input } = ctx;
-  if (!Predicate.isObject(input)) return [];
-  const sections: ToolSection[] = [];
-  const prompt = asString(input.prompt);
-  if (prompt) sections.push(textSection('Prompt:', prompt));
-  const badges: string[] = [];
-  const sandboxMode = asString(input.sandbox_mode);
-  if (sandboxMode) badges.push(sandboxMode);
-  // A thread id means the call continues an existing Codex conversation.
-  if (asString(input.thread_id)) badges.push('follow-up');
-  if (badges.length > 0) {
-    sections.push({ kind: 'badges', label: 'Mode:', badges });
-  }
-  return sections;
-}
-
-function buildCodexPatchSections(ctx: SectionContext): ToolSection[] {
-  const parsed = CodexFileChangeToolInputSchema.safeParse(ctx.input);
-  if (!parsed.success) return [];
-  const sections: ToolSection[] = [];
-  const status = parsed.data.patchStatus;
-  if (status) sections.push({ kind: 'status', label: 'Status:', status });
-  if (parsed.data.changes.length > 0) {
-    sections.push({
-      kind: 'fileList',
-      label: 'Files:',
-      files: parsed.data.changes.map((change) => ({
-        path: change.path,
-        note: change.kind,
-      })),
-    });
-  }
-  return sections;
-}
-
-function buildCodexThreadSections(ctx: SectionContext): ToolSection[] {
-  const parsed = CodexThreadToolInputSchema.safeParse(ctx.input);
-  if (!parsed.success || !parsed.data.threadId) return [];
-  return [
-    { kind: 'identifier', label: 'Thread ID:', value: parsed.data.threadId },
-  ];
-}
-
-function buildCodexTurnSections(ctx: SectionContext): ToolSection[] {
-  const parsed = CodexTurnToolInputSchema.safeParse(ctx.input);
-  if (!parsed.success) return [];
-  const sections: ToolSection[] = [
-    { kind: 'status', label: 'State:', status: parsed.data.state },
-  ];
-  const wallTimeMs = parsed.data.wallTimeMs ?? 0;
-  if (wallTimeMs > 0) {
-    sections.push(textSection('Duration:', formatDuration(wallTimeMs)));
   }
   return sections;
 }
@@ -632,22 +562,6 @@ const SECTION_BUILDERS: readonly {
     build: buildDelegationSections,
   },
   { match: (ctx) => isMcpToolName(ctx.toolName), build: buildMcpSections },
-  {
-    match: (ctx) => normalizeToolName(ctx.toolName) === 'codex',
-    build: buildCodexSections,
-  },
-  {
-    match: (ctx) => ctx.toolName === CODEX_FILE_CHANGE_TOOL,
-    build: buildCodexPatchSections,
-  },
-  {
-    match: (ctx) => ctx.toolName === CODEX_THREAD_TOOL,
-    build: buildCodexThreadSections,
-  },
-  {
-    match: (ctx) => ctx.toolName === CODEX_TURN_TOOL,
-    build: buildCodexTurnSections,
-  },
 ];
 
 export function dispatchSections(ctx: SectionContext): {

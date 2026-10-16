@@ -8,10 +8,10 @@
  *
  * Both hosts used to hand-maintain their own tool-name-to-preview-field
  * mapping and had quietly drifted: the CLI's generic fallback list had no
- * entry for `codex`'s `prompt` field, so an in-flight `codex` call rendered
- * raw `JSON.stringify(input)` in the TUI while the progress view already
- * showed a clean truncated prompt. This module is the single source of
- * truth for the tool-name-specific half of that mapping.
+ * `prompt` entry, so an in-flight call that takes a prompt rendered raw
+ * `JSON.stringify(input)` in the TUI while the progress view already showed
+ * a clean truncated prompt. This module is the single source of truth for
+ * that mapping.
  */
 
 import { Predicate } from 'effect';
@@ -32,7 +32,6 @@ function executionsInputPreview(input: Record<string, unknown>): string {
  *  lives under one specific input key. */
 const TOOL_PREVIEW_INPUT_KEY: Readonly<Record<string, string>> = {
   bash: 'command',
-  codex: 'prompt',
   agent: 'agentName',
 };
 
@@ -46,6 +45,7 @@ const GENERIC_PREVIEW_INPUT_KEYS: readonly string[] = [
   'file_path',
   'query',
   'url',
+  'prompt',
 ];
 
 /** Derive a one-line preview of `input` for the named tool. The name is
