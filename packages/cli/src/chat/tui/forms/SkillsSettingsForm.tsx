@@ -1,7 +1,9 @@
 import { Text } from 'ink';
 import { Effect } from 'effect';
 
+import { WorkspaceStateKey } from '@texra-ai/harness/schemas';
 import {
+  Settings,
   Skills,
   type ProcessRuntime,
   type WorkspaceRoots,
@@ -11,9 +13,7 @@ import {
   type ActiveSkillSourceScope,
   type SkillDisplayItem,
 } from '@shared/schemas';
-import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { applyStateSettingUpdate } from '@texra/shared/settingsView/handlers/stateSettingWrite';
-import { readSettingFrom } from '@utils/config/platformSettings';
 
 import { AsyncListForm } from './_shared/ListForm';
 
@@ -64,11 +64,11 @@ export function SkillsSettingsForm(
           const result = yield* Skills.display(roots);
           return {
             skills: result.skills,
-            disabledNames: yield* readSettingFrom<string[]>(
+            disabledNames: yield* Settings.get<string[]>(
               roots,
               WorkspaceStateKey.DISABLED_SKILLS,
             ),
-            disabledScopes: yield* readSettingFrom<ActiveSkillSourceScope[]>(
+            disabledScopes: yield* Settings.get<ActiveSkillSourceScope[]>(
               roots,
               WorkspaceStateKey.DISABLED_SKILL_SOURCES,
             ),

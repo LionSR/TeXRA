@@ -6,7 +6,6 @@ import { Effect } from 'effect';
 import { ReasoningEffort } from 'llm-zoo';
 
 import { modelConfig } from '@texra-ai/llm';
-import { settingDefault } from '@shared/config/settingsAccess';
 import { ToolError } from '@shared/schemas';
 import {
   CLAUDE_AGENT_MODEL_SETTING,
@@ -38,7 +37,7 @@ describe('agent CLI model settings', () => {
     const row = (key: string) => {
       const entry = TEXRA_SETTINGS.byKey(key);
       if (!entry) throw new Error(`no row ${key}`);
-      return settingDefault(entry);
+      return entry.schema.parse(undefined);
     };
     expect(row(ClaudeAgentStateKey.EFFORT)).toBe(MEDIUM);
     expect(row(CodexStateKey.REASONING_EFFORT)).toBe(MEDIUM);

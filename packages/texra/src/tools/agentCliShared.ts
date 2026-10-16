@@ -16,7 +16,6 @@ import {
   FOLLOW_UP_WAKE_FAILED_MESSAGE,
 } from '@agent/followUp/ToolUseFollowUp';
 import { senderOf } from '@agent/followUp/followUpSender';
-import type { SettingsStores } from '@shared/config/settingsAccess';
 import {
   ToolError,
   type FollowUpContent,
@@ -33,6 +32,7 @@ import type {
   AgentCliSessionEntry,
   AgentCliSessionRegistry,
 } from './agentCliSessionRegistry';
+import type { SettingsStores } from '@texra-ai/harness';
 
 interface AgentCliResumeLabels {
   notActiveLabel: string;

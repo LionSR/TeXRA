@@ -16,8 +16,8 @@ import {
 } from '@shared/schemas';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 import { escapeAttr, escapeText } from '@shared/utils/xmlEscape';
-import type { SettingsStores } from '@shared/config/settingsAccess';
-import { readSettingFrom } from '@utils/config/platformSettings';
+import { Settings } from '@shared/config/settings';
+import type { SettingsStores } from '@shared/config/settings';
 import { isPathWithin } from '@utils/core/pathCore';
 import { canonicalizePath } from '@utils/files/externalRoots';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
@@ -149,15 +149,15 @@ function isSkillDisabled(
 function readDisabledSkills(stores: SettingsStores) {
   return Effect.gen(function* () {
     return {
-      names: yield* readSettingFrom<string[]>(
+      names: yield* Settings.get<string[]>(
         stores,
         WorkspaceStateKey.DISABLED_SKILLS,
       ),
-      scopes: yield* readSettingFrom<ActiveSkillSourceScope[]>(
+      scopes: yield* Settings.get<ActiveSkillSourceScope[]>(
         stores,
         WorkspaceStateKey.DISABLED_SKILL_SOURCES,
       ),
-      plugins: yield* readSettingFrom<string[]>(
+      plugins: yield* Settings.get<string[]>(
         stores,
         GlobalStateKey.DISABLED_TOOLS,
       ),

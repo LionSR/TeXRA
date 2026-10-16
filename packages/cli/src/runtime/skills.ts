@@ -2,10 +2,13 @@
 import { Effect } from 'effect';
 
 // Local imports - skills
-import type { SettingsStores } from '@shared/config/settingsAccess';
+import {
+  Settings,
+  type EnabledSkill,
+  type SettingsStores,
+  type SkillLoadIssue,
+} from '@texra-ai/harness';
 import { AGENT_SKILLS_CONFIG_KEY } from '@shared/schemas';
-import { readSettingFrom } from '@utils/config/platformSettings';
-import type { EnabledSkill, SkillLoadIssue } from '@texra-ai/harness';
 
 /**
  * The notice a skill listing leads with while `texra.skills.enabled` is off:
@@ -18,7 +21,7 @@ export function readCliSkillsOffNotice(
   enableWith: string,
 ) {
   return Effect.map(
-    readSettingFrom<boolean>(stores, AGENT_SKILLS_CONFIG_KEY),
+    Settings.get<boolean>(stores, AGENT_SKILLS_CONFIG_KEY),
     (enabled) =>
       enabled
         ? undefined

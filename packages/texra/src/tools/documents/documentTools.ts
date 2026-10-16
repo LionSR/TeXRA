@@ -12,6 +12,7 @@ import { z } from 'zod';
 
 import { defineTool } from '@texra-ai/harness';
 import { ChildRuns, requireRun } from '@texra-ai/harness/plugins';
+import { Settings } from '@texra-ai/harness';
 import { logFileCategory, logFilesLoaded } from '@agent/trace';
 import { postProcessResponse } from '@latex/texraResponseTextProcessing';
 import {
@@ -51,7 +52,6 @@ import {
   OUTPUT_END_TAG,
 } from '@texra/shared/plugins/documentOutputs';
 import { executed } from '@tools/core/result';
-import { readSettingFrom } from '@utils/config/platformSettings';
 
 /** A revision of a document task, by its zero-based index. */
 export const RevisionSchema = z
@@ -79,7 +79,7 @@ const present = (docs: Documents, locations: readonly FileLocation[]) =>
   );
 
 const autoOpensPdf = (docs: Documents) =>
-  readSettingFrom<boolean>(
+  Settings.get<boolean>(
     docs.deps.roots,
     DocumentsStateKey.WORKFLOW_AUTO_OPEN_PDF,
   );

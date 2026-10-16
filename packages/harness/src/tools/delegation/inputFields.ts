@@ -13,8 +13,9 @@ import { z } from 'zod';
 import { resolveChildRunOutput } from '@agent/storage/childRunOutput';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { RunId } from '@shared/schemas';
-import type { SettingsStores } from '@shared/config/settingsAccess';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
+import { Settings } from '@shared/config/settings';
+import type { SettingsStores } from '@shared/config/settings';
 import { displayToStoragePath } from '@tools/memory/memoryUtils';
 import { parseWorkingDirectory } from '@tools/pathResolution';
 import { errorResult } from '@tools/core/result';
@@ -23,7 +24,6 @@ import { nullishWithDefault } from '@tools/core/inputSchema';
 import { runStorageLocationUnder } from '@utils/files/runStorageFs';
 import { workspaceAbsolutePath } from '@utils/files/workspaceFS';
 import { entryExists } from '@utils/files/fsEntryExists';
-import { readSettingFrom } from '@utils/config/platformSettings';
 import {
   ensureError,
   extractErrorMessage,
@@ -74,7 +74,7 @@ export const rejectUnusableWorkingDirectory = Effect.fn(function* (
   workingDirectory: string | undefined,
 ) {
   if (!workingDirectory) return null;
-  const worktrees = yield* readSettingFrom<boolean>(
+  const worktrees = yield* Settings.get<boolean>(
     stores,
     WorkspaceStateKey.GIT_WORKTREE_SUPPORT,
   );

@@ -28,7 +28,7 @@ import {
   type DatabaseReadFailed,
 } from '@shared/session/database';
 import { SessionInputs } from '@shared/session/sessionInputs';
-import { readConfigSettingFrom } from '@utils/config/platformSettings';
+import { Settings } from '@shared/config/settings';
 import {
   LocalRuntimeSource,
   TextChunkSource,
@@ -72,7 +72,7 @@ export const sessionInputsLayer = Layer.effect(
         Stream.unwrap(
           Effect.gen(function* () {
             const debug = roots.config
-              ? readConfigSettingFrom<boolean>(roots.config, DEBUG_MODE_KEY)
+              ? Settings.getConfig<boolean>(roots.config, DEBUG_MODE_KEY)
               : false;
             const reset = debug !== previousDebug;
             const effectiveAggregates = reset

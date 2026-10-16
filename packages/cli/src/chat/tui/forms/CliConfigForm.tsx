@@ -1,10 +1,10 @@
+import { Settings } from '@texra-ai/harness';
 import { Effect } from 'effect';
 
 import { loadApiKeyStatusMap } from '@texra-ai/llm';
+import { type SurfacedSettingEntry } from '@texra-ai/harness/schemas';
 import { commitCliProviderApiKey } from '@cli/chat/tui/hosts/cliProviderKeys';
 import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
-import { type SurfacedSettingEntry } from '@shared/state/stateSettings';
-import { readSetting } from '@shared/config/settingsAccess';
 import { storeCredential } from '@texra/common/secrets/storeCredential';
 import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
 import { applyStateSettingUpdate } from '@texra/shared/settingsView/handlers/stateSettingWrite';
@@ -91,7 +91,7 @@ export function CliConfigForm(props: CliConfigFormProps): React.JSX.Element {
       Effect.map(
         Effect.forEach(TEXRA_SETTINGS.cliRows, (entry) =>
           Effect.map(
-            readSetting(entry, roots),
+            Settings.get(roots, entry.key),
             (value) => [entry.key, value] as const,
           ),
         ),

@@ -11,8 +11,8 @@ import { Clock, Effect, SubscriptionRef } from 'effect';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { goalElapsedMs } from '@shared/plugins/goal';
 import { GOAL_MAX_COST_SETTING, type RunId } from '@shared/schemas';
+import { Settings } from '@shared/config/settings';
 import type { Continuation } from '@tools/toolTable';
-import { readSettingFrom } from '@utils/config/platformSettings';
 import { renderPrompt } from '@utils/prompt';
 import { formatCompactDuration, formatCostUsd } from '@utils/text/stringUtils';
 
@@ -74,7 +74,7 @@ export const goalContinuation: Continuation = {
       return null;
     }
     if (!canContinue) return null;
-    const cap = yield* readSettingFrom<number>(
+    const cap = yield* Settings.get<number>(
       session.roots,
       GOAL_MAX_COST_SETTING.configKey,
     );

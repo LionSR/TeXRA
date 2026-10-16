@@ -5,7 +5,7 @@ import { Effect, FileSystem } from 'effect';
 import type { AgentTrace } from '@agent/trace';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import type { InvocationRef, RunId } from '@shared/schemas';
-import { readSettingFrom } from '@utils/config/platformSettings';
+import { Settings } from '@shared/config/settings';
 import { runDirUnder } from '@utils/files/runStorageFs';
 import { sanitizePathSegment } from '@utils/text/sanitizePathSegment';
 
@@ -61,7 +61,7 @@ export function maybeSaveDebugObject({
     });
 
   return Effect.gen(function* () {
-    if (!(yield* readSettingFrom<boolean>(roots, 'texra.debug.saveModelIO')))
+    if (!(yield* Settings.get<boolean>(roots, 'texra.debug.saveModelIO')))
       return;
     const fs = yield* FileSystem.FileSystem;
     yield* fs.makeDirectory(runDir, { recursive: true });

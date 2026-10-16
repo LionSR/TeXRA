@@ -14,8 +14,8 @@ import stableStringify from 'safe-stable-stringify';
 import { z } from 'zod';
 
 // Local imports - shared contracts
-import type { SettingsStores } from '@shared/config/settingsAccess';
 import { GlobalStateKey } from '@shared/state/stateKeys';
+import type { SettingsStores } from '@shared/config/settings';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 /** One configured stdio server, as the MCP plugin spawns it. */

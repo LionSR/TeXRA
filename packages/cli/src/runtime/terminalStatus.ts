@@ -4,10 +4,10 @@ import {
   InstalledPlugins,
   type DatabaseReadFailed,
   type RunEndResult,
+  type SettingsStores,
 } from '@texra-ai/harness';
 import { getRunRecords } from '@agent/storage';
 import type { SessionHandle } from '@agent/runtime';
-import type { SettingsStores } from '@shared/config/settingsAccess';
 import { RUN_OUTCOME, type RunOutcome } from '@shared/schemas';
 import { runOutcomeToCliRunStatus } from '@shared/runs/runStatus';
 import { toErrorMessage } from '@utils/errors/errorMessage';

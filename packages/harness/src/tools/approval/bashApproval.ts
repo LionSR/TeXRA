@@ -17,8 +17,8 @@ import {
   texraApprovalDenialMessage,
 } from '@shared/approvalPolicy';
 import { refusalCopy, refusalOf } from '@shared/session/approvalDecision';
+import { Settings } from '@shared/config/settings';
 import { errorResult } from '@tools/core/result';
-import { readSettingFrom } from '@utils/config/platformSettings';
 import { previewLabel } from '@utils/text/stringUtils';
 
 const DEFAULT_BASH_REJECTION_GUIDANCE =
@@ -80,7 +80,7 @@ export const requestBashApproval = Effect.fn('requestBashApproval')(function* (
   request: BashApprovalRequest,
 ): Effect.fn.Return<BashDecision, Error, ToolContext> {
   const { env, run, requests } = yield* requireRun('A bash approval');
-  const approvalsEnabled = yield* readSettingFrom<boolean>(
+  const approvalsEnabled = yield* Settings.get<boolean>(
     env.roots,
     BASH_APPROVAL_CONFIG_KEY,
   );
