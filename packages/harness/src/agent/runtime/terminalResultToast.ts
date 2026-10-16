@@ -11,8 +11,10 @@ import {
   classifyAgentError,
   primaryAgentError,
 } from '@common/errors/agentErrorClassification';
-import { causeChain } from '@common/errors/errorPredicates';
-import { hasErrorPresentationClaimed } from '@common/errors/sdkError/errorMetadata';
+import {
+  attachErrorPresentationClaimed,
+  hasErrorPresentationClaimed,
+} from '@common/errors/sdkError/errorMetadata';
 import { Rejected } from '@shared/session/requestErrors';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -50,10 +52,6 @@ function presentAgentFailure(
   return Effect.void;
 }
 
-/** The failures {@link presentTerminalResult} took: its receipts, held by
- *  the error a run throws, so they go when that error does. */
-const presentedFailures = new WeakSet<object>();
-
 /**
  * Receipt for a root run's failure once its `run.end` row committed: the
  * session's presenter shows that row's guidance, so `failure`, what the run
@@ -69,7 +67,8 @@ export function receiveTerminalFailure(
 ): void {
   const { error } = terminal.event;
   if (!terminal.recorded || !error) return;
-  if (agentErrorPresentation(error) !== null) presentedFailures.add(failure);
+  if (agentErrorPresentation(error) !== null)
+    attachErrorPresentationClaimed(failure);
 }
 
 /**
@@ -86,20 +85,6 @@ export function presentTerminalResult(
     : presentAgentFailure(session.interactions, event.error);
 }
 
-/** Whether the terminal-result presenter took this failure (or one it
- *  wraps): the receipt a caller's own fallback reads. */
-export function terminalFailurePresented(error: unknown): boolean {
-  return causeChain(error).some((current) =>
-    presentedFailures.has(current as object),
-  );
-}
-
-/** Record that `error` was presented (by another process too: a service
- *  that showed it to this window), so no presenter here shows it again. */
-export function markFailurePresented(error: unknown): void {
-  if (typeof error === 'object' && error !== null) presentedFailures.add(error);
-}
-
 /**
  * Present a failed run from its raw error: the primary failure, classified,
  * worded as `prefix` plus its text (a `Rejected` request's reason), and
@@ -113,10 +98,8 @@ export function presentRunFailure(
   error: unknown,
   prefix = '',
 ): Effect.Effect<void> {
-  if (terminalFailurePresented(error)) return Effect.void;
-  const claimed = hasErrorPresentationClaimed(error);
-  markFailurePresented(error);
-  if (claimed) return Effect.void;
+  if (hasErrorPresentationClaimed(error)) return Effect.void;
+  attachErrorPresentationClaimed(error);
   const primary = primaryAgentError(
     Predicate.isTagged(error, 'RunFailure') && 'cause' in error
       ? error.cause

@@ -92,16 +92,6 @@ const bundledAgentDirectories = () => ({
 
 beforeAll(async () => {
   customAgentsDir = await makeTempDir('texra-init-agents-', tempDirs);
-  // Load the catalog (module-level) up front, as the process runtime does at
-  // build: the one real scan logs an info line that the output-shape tests
-  // would otherwise read as stderr noise.
-  const { refresh } = await import('@agent/index/agentRegistry');
-  const { AgentDirectories } = await import('@platform/interfaces');
-  await testRuntime().runPromise(
-    refresh().pipe(
-      Effect.provideService(AgentDirectories, bundledAgentDirectories()),
-    ),
-  );
 });
 
 setupPlatform(
@@ -110,6 +100,16 @@ setupPlatform(
     agentDirectories: bundledAgentDirectories(),
   },
 );
+
+// The catalog is loaded over the installed host's agent directories before
+// each command runs, as the process runtime does at build, so the one real
+// scan's info line lands before the output spies.
+beforeEach(async () => {
+  const { AgentCatalog } = await import('@agent/index/agentCatalog');
+  await testRuntime().runPromise(
+    AgentCatalog.use((catalog) => catalog.refresh),
+  );
+});
 
 describe('CLI init command', () => {
   let stdout = '';

@@ -4,7 +4,7 @@ import * as path from 'node:path';
 // Third-party imports
 import mime from 'mime-types';
 
-import { normalizeFilePath, safeLookup } from '@utils/core';
+import { normalizeFilePath } from '@utils/core';
 
 const AUDIO_MIME_TYPE_OVERRIDES: Readonly<Record<string, string>> = {
   // mime-types does not expose every audio subtype accepted by current model SDKs.
@@ -44,9 +44,10 @@ function getExtension(pathOrExtension: string): string {
  */
 export function getMimeType(filePath: string): string | null {
   const extension = getExtension(filePath);
-  const override = extension
-    ? safeLookup(AUDIO_MIME_TYPE_OVERRIDES, extension)
-    : undefined;
+  const override =
+    extension && Object.hasOwn(AUDIO_MIME_TYPE_OVERRIDES, extension)
+      ? AUDIO_MIME_TYPE_OVERRIDES[extension]
+      : undefined;
   if (override) return override;
 
   return mime.lookup(filePath) || null;
@@ -58,7 +59,7 @@ export function isImageMimeType(mimeType: string | null | undefined): boolean {
 }
 
 /** File extensions for binary office document formats (case-insensitive, with leading dot). */
-export const OFFICE_EXTENSIONS: ReadonlySet<string> = new Set([
+export const OFFICE_EXTENSIONS: readonly string[] = Object.freeze([
   // Word processing
   '.doc',
   '.docx',

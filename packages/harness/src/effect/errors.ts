@@ -1,19 +1,23 @@
 /**
- * The failures the Effect surface names (`@texra-ai/harness`). Six are defined
- * here — the plugin list the package refuses, the two launch refusals an
- * embedder branches on, the resume refusal, a trace no reader can take, and
- * the run's own failure — and three more reach the surface from the session
- * store (`DatabaseOpenFailed`, `DatabaseReadFailed`, `SessionOptionsConflict`:
- * the `SessionOpenError` union in `@shared/session/database`), for nine
- * tagged errors on the surface in all.
+ * The failures the Effect surface names (`@texra-ai/harness`). Five are
+ * defined here — the plugin list the package refuses, the tools a launch
+ * refuses, the resume refusal, a trace no reader can take, and the run's own
+ * failure. The other launch refusal, an unknown agent, is the agent
+ * catalog's (`AgentNotFound`), and three more reach the surface from the
+ * session store (`DatabaseOpenFailed`, `DatabaseReadFailed`,
+ * `SessionOptionsConflict`: the `SessionOpenError` union in
+ * `@shared/session/database`), for nine in the session lifecycle. The entry
+ * exports other tagged errors too; `config/api-reports/harness.api.md` lists
+ * the whole surface.
  *
- * Request failures are not here. A `session.request` answers with the
+ * Request failures are not defined here. A `session.request` answers with the
  * runtime's own `RequestError` union (`@shared/session/requestErrors`), the
  * same values every TeXRA host reads, so the package adds no second
  * vocabulary for them.
  */
 import { Data } from 'effect';
 
+import type { AgentNotFound } from '@agent/index/agentCatalog';
 import type { FollowUpFailureReason } from '@agent/followUp/ToolUseFollowUp';
 
 /**
@@ -24,12 +28,6 @@ import type { FollowUpFailureReason } from '@agent/followUp/ToolUseFollowUp';
  * probe.
  */
 export class PluginsRefused extends Data.TaggedError('PluginsRefused')<{
-  readonly message: string;
-}> {}
-
-/** No agent of that name in the configured agent directory. */
-export class AgentNotFound extends Data.TaggedError('AgentNotFound')<{
-  readonly agent: string;
   readonly message: string;
 }> {}
 

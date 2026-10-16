@@ -1,12 +1,7 @@
-import { Effect } from 'effect';
+import { Effect, PlatformError, Predicate } from 'effect';
 
 import { withSessionFs, type StorageFs } from '@texra-ai/harness';
-import { resolveMemoryStoragePath } from '@platform/defaults/workspaceStorage';
-import type { MemoryViewItem } from '@shared/tools/memoryView';
-import { displayToStoragePath, toDisplayPath } from '@tools/memory/memoryUtils';
-import { MEMORY_DISPLAY_ROOT } from '@tools/memory/constants';
-import { loadMemoryPreview } from '@tools/memory/memoryFileSystem';
-import { filterNotNullish, normalizeFilePath } from '@utils/core';
+import { MemoryStore, type MemoryViewItem } from '@texra-ai/harness/plugins';
 import {
   formatBytes,
   formatLocaleTimestamp,
@@ -29,7 +24,7 @@ export function cliMemoryItemDescription(item: MemoryViewItem): string {
     formatBytes(item.size),
     formatModifiedDate(item.mtime),
     item.modifiedBy ? `by ${item.modifiedBy}` : undefined,
-  ].filter(filterNotNullish);
+  ].filter(Predicate.isNotNullish);
   return truncateSummary(parts.join('; '), MEMORY_DESCRIPTION_MAX);
 }
 
@@ -51,33 +46,6 @@ export function formatCliMemoryList(items: readonly MemoryViewItem[]): string {
   return lines.join('\n');
 }
 
-function cliMemoryStoragePathFromInput(inputPath: string): string {
-  const trimmed = normalizeFilePath(inputPath.trim());
-  if (!trimmed) {
-    return displayToStoragePath(MEMORY_DISPLAY_ROOT);
-  }
-  if (
-    trimmed === MEMORY_DISPLAY_ROOT ||
-    trimmed.startsWith(`${MEMORY_DISPLAY_ROOT}/`)
-  ) {
-    return displayToStoragePath(trimmed);
-  }
-  if (trimmed.startsWith('/')) {
-    throw new Error(
-      `Invalid memory path "${trimmed}". Use /memories, /memories/<file>, memories/<file>, or a relative memory filename.`,
-    );
-  }
-  if (/^[A-Za-z]:\//.test(trimmed)) {
-    throw new Error(
-      `Invalid memory path "${trimmed}". Memory paths must be relative to ${MEMORY_DISPLAY_ROOT}.`,
-    );
-  }
-  if (trimmed.startsWith(`${resolveMemoryStoragePath()}/`)) {
-    return resolveMemoryStoragePath(trimmed);
-  }
-  return displayToStoragePath(`${MEMORY_DISPLAY_ROOT}/${trimmed}`);
-}
-
 export interface CliMemoryDetail {
   readonly path: string;
   readonly lineCount?: number;
@@ -87,20 +55,23 @@ export interface CliMemoryDetail {
 /** Resolve a CLI memory path argument and load its preview exactly once. */
 export const loadCliMemoryDetail = Effect.fn('cli.loadCliMemoryDetail')(
   function* (inputPath: string) {
-    const storagePath = cliMemoryStoragePathFromInput(inputPath);
-    const preview = yield* loadMemoryPreview(storagePath).pipe(
+    // A typed argument: its surrounding whitespace is not part of the name.
+    const storagePath = yield* MemoryStore.storagePath(inputPath.trim());
+    const preview = yield* MemoryStore.preview(storagePath).pipe(
       Effect.catchIf(
-        (error) => error.reason._tag === 'NotFound',
+        (error) =>
+          PlatformError.isPlatformError(error) &&
+          error.reason._tag === 'NotFound',
         () =>
           Effect.fail(
             new Error(
-              `No stored memory at ${toDisplayPath(storagePath)}; \`memory list\` shows the stored ones.`,
+              `No stored memory at ${MemoryStore.displayPath(storagePath)}; \`memory list\` shows the stored ones.`,
             ),
           ),
       ),
     );
     return {
-      path: toDisplayPath(storagePath),
+      path: preview.displayPath,
       lineCount: preview.lineCount,
       preview: preview.preview,
     } satisfies CliMemoryDetail;

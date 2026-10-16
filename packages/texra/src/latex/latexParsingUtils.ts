@@ -8,12 +8,36 @@ import * as path from 'node:path';
 
 import { Effect, FileSystem } from 'effect';
 
-import { withLogChannel } from '@texra-ai/harness';
+import { hasExtension, withLogChannel } from '@texra-ai/harness';
 import { ensureError } from '@utils/errors/errorMessage';
 import { pathExists } from '@utils/files/fsDurability';
-import { ensureExtension, joinLatexPath } from '@utils/core/pathCore';
 
 const CHANNEL = 'LatexParsing';
+
+/**
+ * Join a base directory with a path from a LaTeX command, stripping its
+ * leading and trailing slashes. An absolute path is kept, only normalized.
+ *
+ * @example
+ * joinLatexPath('/project', 'figures/image.pdf') // '/project/figures/image.pdf'
+ * joinLatexPath('/project', '/abs/refs') // '/abs/refs'
+ */
+export function joinLatexPath(baseDir: string, relativePath: string): string {
+  if (path.isAbsolute(relativePath)) return path.normalize(relativePath);
+  const stripped = relativePath.replaceAll(/^\/+|\/+$/g, '');
+  return path.normalize(path.join(baseDir, stripped));
+}
+
+/**
+ * `filePath` with `extension` appended unless it already has it, compared
+ * case-insensitively (`refs` and `refs.BIB` both stay one `.bib` file).
+ */
+export function ensureExtension(filePath: string, extension: string): string {
+  if (!filePath) return '';
+  return hasExtension(filePath, extension)
+    ? filePath
+    : `${filePath}${extension}`;
+}
 
 /**
  * Every citation macro TeXRA recognizes, natbib and biblatex alike, in both

@@ -1,27 +1,15 @@
 /**
  * `texra doctor --prune-storage` (the storage design's §7): list the
  * workspace stores whose project is gone and the old aside copies beside the
- * stores that remain, and delete them once the user confirms. Owner ruling
- * Q4: whole stores and history copies go only by this command, never
- * automatically, since an unmounted drive looks exactly like a deleted root.
- *
- * A store is an orphan when the root its `workspace-store` record names no
- * longer exists. The store of no workspace has no root and is never one. An
- * aside copy (`asideCopies`) is a `.pre1` or `.corrupt-` copy a store open
- * moved beside a store that remains.
+ * stores that remain (`readStorageInventory`), and delete them once the user
+ * confirms.
  */
-import { basename, dirname, join } from 'node:path';
-
-import { Effect, FileSystem } from 'effect';
+import { Effect } from 'effect';
 
 import {
-  resolveGlobalStoragePath,
-  resolveWorkspaceStoragePath,
-} from '@texra-ai/harness/node';
-import { storeOpenElsewhere } from '@controllers/session/Database';
-import { asideCopies } from '@controllers/session/storeAside';
-import { GlobalDatabase } from '@shared/session/database';
-import { WORKSPACE_STORES } from '@shared/session/valueFamily';
+  deleteStorageInventory,
+  readStorageInventory,
+} from '@texra-ai/harness';
 import { formatBytes, formatResultCount } from '@utils/text/stringUtils';
 
 import { CliExitCode } from './exitCodes';
@@ -32,59 +20,10 @@ export const pruneStorage = Effect.fn('pruneStorage')(function* (
   context: CliContext,
   yes: boolean,
 ) {
-  const fs = yield* FileSystem.FileSystem;
-  const { values } = yield* GlobalDatabase;
-  const none = resolveWorkspaceStoragePath(context.storageRoot, undefined);
-  const parent = dirname(none);
-  const records = new Map(
-    (yield* values.list(WORKSPACE_STORES)).map((row) => [row.key, row.value]),
-  );
-  /** Why a store directory is an orphan, with its size, or null while its
-   *  root stands. A store whose database is not SQLite is still an orphan. */
-  const inspect = Effect.fnUntraced(function* (directory: string, id: string) {
-    const record = records.get(id);
-    if (record === undefined || (yield* fs.exists(record.root))) return null;
-    let why = `${record.root} no longer exists`;
-    let bytes = 0;
-    for (const name of yield* fs.readDirectory(directory, {
-      recursive: true,
-    })) {
-      const info = yield* fs.stat(join(directory, name));
-      if (info.type === 'File') bytes += Number(info.size);
-    }
-    const database = join(directory, 'texra.db');
-    if (
-      (yield* fs.exists(database)) &&
-      (yield* storeOpenElsewhere(database)) === 'unreadable'
-    )
-      why += '; unreadable (not a SQLite store)';
-    return { directory, bytes, why };
-  });
-  /** One store's failure is reported and the run goes on to the next. */
-  const skipped = (directory: string) => (error: Error) =>
-    Effect.sync(() => {
-      writeTextStderr(`Skipped ${directory}: ${error.message}`);
-    });
-  const orphans: { directory: string; bytes: number; why: string }[] = [];
-  const asides: { path: string; bytes: number }[] = [];
-  const ids = (yield* fs.exists(parent)) ? yield* fs.readDirectory(parent) : [];
-  const global = resolveGlobalStoragePath(context.storageRoot);
-  const directories = [
-    ...((yield* fs.exists(global)) ? [global] : []),
-    ...ids.toSorted().map((id) => join(parent, id)),
-  ];
-  for (const directory of directories) {
-    yield* Effect.gen(function* () {
-      if ((yield* fs.stat(directory)).type !== 'Directory') return;
-      const id = basename(directory);
-      const orphan =
-        directory === global || id === basename(none)
-          ? null
-          : yield* inspect(directory, id);
-      if (orphan !== null) orphans.push(orphan);
-      else asides.push(...(yield* asideCopies(join(directory, 'texra.db'))));
-    }).pipe(Effect.catch(skipped(directory)));
-  }
+  const inventory = yield* readStorageInventory(context.storageRoot);
+  for (const { path, message } of inventory.skipped)
+    writeTextStderr(`Skipped ${path}: ${message}`);
+  const { orphans, asides } = inventory;
   if (orphans.length === 0 && asides.length === 0) {
     writeTextStdout('No orphaned workspace stores and no aside copies.');
     return CliExitCode.Success;
@@ -131,27 +70,14 @@ export const pruneStorage = Effect.fn('pruneStorage')(function* (
     writeTextStderr('Nothing was deleted. Re-run with --yes to delete them.');
     return CliExitCode.Success;
   }
-  for (const { directory } of orphans) {
-    yield* Effect.gen(function* () {
-      const database = join(directory, 'texra.db');
-      if (
-        (yield* fs.exists(database)) &&
-        (yield* storeOpenElsewhere(database)) === 'open'
-      ) {
-        writeTextStderr(`Kept ${directory}: it is open in another process.`);
-        return;
-      }
-      yield* fs.remove(directory, { recursive: true });
-      writeTextStdout(`Deleted ${directory}`);
-    }).pipe(Effect.catch(skipped(directory)));
-  }
-  for (const { path } of asides) {
-    yield* fs
-      .remove(path, { force: true })
-      .pipe(
-        Effect.andThen(Effect.sync(() => writeTextStdout(`Deleted ${path}`))),
-        Effect.catch(skipped(path)),
-      );
+  for (const result of yield* deleteStorageInventory(
+    context.storageRoot,
+    inventory,
+  )) {
+    if (result.outcome === 'deleted') writeTextStdout(`Deleted ${result.path}`);
+    else if (result.outcome === 'kept')
+      writeTextStderr(`Kept ${result.path}: it is open in another process.`);
+    else writeTextStderr(`Skipped ${result.path}: ${result.message}`);
   }
   return CliExitCode.Success;
 });

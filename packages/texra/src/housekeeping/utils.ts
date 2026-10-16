@@ -1,5 +1,6 @@
 // Standard library imports
 import * as path from 'node:path';
+import { normalizeFilePath } from '@texra-ai/harness/schemas';
 
 // Third-party imports
 import { Data, Effect, FileSystem, type PlatformError } from 'effect';
@@ -8,7 +9,6 @@ import { Data, Effect, FileSystem, type PlatformError } from 'effect';
 import { relativeToRoot } from '@texra-ai/harness/node';
 import { withLogChannel } from '@texra-ai/harness';
 import { type RootedFileSystem } from '@utils/files/rootedFileSystem';
-import { normalizeFilePath } from '@utils/core';
 
 import { CHANNEL } from './constants';
 

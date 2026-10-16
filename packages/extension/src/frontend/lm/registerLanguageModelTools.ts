@@ -22,6 +22,7 @@ import * as vscode from 'vscode';
 import { Context, Data, Effect, Fiber, Layer, Option, Stream } from 'effect';
 
 import {
+  ToolCatalog,
   ToolContext,
   type ProcessRuntime,
   type WorkspaceRoots,
@@ -30,14 +31,12 @@ import {
   ChildRuns,
   WebFetchTool,
   type PluginToolServices,
+  type ProcessPluginLayer,
 } from '@texra-ai/harness/plugins';
 import { sessionFsLayer } from '@texra-ai/harness';
 
 import type { ToolResult } from '@shared/schemas';
 import { ArxivSearchTool } from '@texra/tools/arxiv/ArxivSearchTool';
-import { ToolCatalog } from '@tools/liveTools';
-import type { ProcessPluginLayer } from '@tools/toolTable';
-import { generateShortId } from '@utils/core';
 
 // Local imports - language model tools
 import {
@@ -169,7 +168,7 @@ const copilotTools = Effect.fnUntraced(function* (
                 ),
                 Effect.provideService(ToolContext, {
                   // Copilot's invocation names no call id of its own.
-                  callId: `${lmName}-${generateShortId()}`,
+                  callId: `${lmName}-${crypto.randomUUID()}`,
                   env: { roots },
                   emit: () => undefined,
                 }),
@@ -192,11 +191,11 @@ const copilotTools = Effect.fnUntraced(function* (
     Stream.runForEach((entries) =>
       Effect.sync(() => {
         for (const [lmName, { name, tool }] of Object.entries(LM_TOOLS)) {
-          const entry = entries.get(name);
+          const plugin = entries.get(name);
           const held = registered.get(lmName);
-          if (entry !== undefined && held === undefined) {
-            registered.set(lmName, register(lmName, name, tool, entry.plugin));
-          } else if (entry === undefined && held !== undefined) {
+          if (plugin !== undefined && held === undefined) {
+            registered.set(lmName, register(lmName, name, tool, plugin));
+          } else if (plugin === undefined && held !== undefined) {
             held.dispose();
             registered.delete(lmName);
           }

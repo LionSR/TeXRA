@@ -1,6 +1,6 @@
 import { Context, Effect, Layer } from 'effect';
 
-import { PluginHold } from '@tools/toolTable';
+import { PluginHold } from '@texra-ai/harness/plugins';
 
 import { AgentCliSessionRegistry } from './agentCliSessionRegistry';
 

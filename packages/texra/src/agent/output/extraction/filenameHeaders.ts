@@ -8,6 +8,7 @@
  */
 
 import * as path from 'node:path';
+import { getBasename, normalizeFilePath } from '@texra-ai/harness/schemas';
 
 import {
   getExtractedDocOutputFileName,
@@ -15,7 +16,6 @@ import {
 } from '@texra/utils/files/outputFileUtils';
 import type { NamedDocument } from '@texra/utils/text/xmlExtraction';
 import { OUTPUT_DOCUMENTS_TAG } from '@texra/shared/plugins/documentOutputs';
-import { getBasename, normalizeFilePath } from '@utils/core';
 
 import {
   isClosingMarkdownFence,

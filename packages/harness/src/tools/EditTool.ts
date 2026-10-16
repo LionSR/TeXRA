@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { ToolContext } from '@agent/core/tools/ToolTypes';
 
 // Local imports - tools
-import type { AgentCatalogServices } from '@platform/processRuntime';
+import type { AgentCatalog } from '@agent/index/agentCatalog';
 import { WorkspaceFs } from '@platform/rootedFs';
 import { ToolError, type ToolResult } from '@shared/schemas';
 import {
@@ -43,7 +43,7 @@ const edit = Effect.fn('EditFileTool.execute')(function* (
 ): Effect.fn.Return<
   ToolResult,
   Error,
-  ToolContext | FileSystem.FileSystem | WorkspaceFs | AgentCatalogServices
+  ToolContext | FileSystem.FileSystem | WorkspaceFs | AgentCatalog
 > {
   const { old_str, new_str, replace_all } = input;
   const prepared = yield* resolveWritableTarget(input.path, {

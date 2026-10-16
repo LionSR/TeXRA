@@ -8,8 +8,10 @@ import { it as effectIt } from '@effect/vitest';
 import { afterAll, beforeAll, describe, expect, vi } from 'vitest';
 
 // Local imports
-import { resolveAgentForLaunch } from '@agent/index';
-import { refresh } from '@agent/index/agentRegistry';
+import {
+  AgentCatalog,
+  type AgentCatalogShape,
+} from '@agent/index/agentCatalog';
 import {
   applyInitialCliAgentSelection,
   resolveChatToolUseAgent,
@@ -48,6 +50,12 @@ vi.mock('@cli/chat/tui/state/transcript', () => ({
 
 describe('CLI agent validation with a shadowed name', () => {
   const tempDirs: string[] = [];
+  /** The suite's catalog, loaded once the fake host is installed. */
+  let catalog: AgentCatalogShape;
+  const withCatalog = <A, E>(
+    program: Effect.Effect<A, E, AgentCatalog>,
+  ): Effect.Effect<A, E> =>
+    Effect.provideService(program, AgentCatalog, catalog);
 
   beforeAll(async () => {
     const customDir = await makeTempDir('texra-cli-shadow-', tempDirs);
@@ -79,20 +87,24 @@ describe('CLI agent validation with a shadowed name', () => {
 
     // The fake host answers `custom()` from a temp directory of its own, so
     // nothing in this load reaches the global storage view.
-    await Effect.runPromise(
+    catalog = await Effect.runPromise(
       Effect.provide(
-        Effect.provideService(
-          refresh(),
-          GlobalStorageFs,
-          {} as RootedFileSystem,
-        ).pipe(
-          Effect.provideService(AgentDirectories, fakeHostAgentDirectories),
-          Effect.provideService(AppState, new FakeStateStore()),
-        ),
-        Layer.mergeAll(
-          nodePlatformLayer,
-          testHttpClientLayer,
-          storePluginsLayer,
+        Effect.gen(function* () {
+          const loaded = yield* AgentCatalog;
+          yield* loaded.refresh;
+          return loaded;
+        }),
+        AgentCatalog.layer.pipe(
+          Layer.provide(
+            Layer.mergeAll(
+              Layer.succeed(GlobalStorageFs)({} as RootedFileSystem),
+              AgentDirectories.layer(fakeHostAgentDirectories),
+              AppState.layer(new FakeStateStore()),
+              nodePlatformLayer,
+              testHttpClientLayer,
+              storePluginsLayer,
+            ),
+          ),
         ),
       ),
     );
@@ -105,30 +117,34 @@ describe('CLI agent validation with a shadowed name', () => {
   effectIt.effect(
     'validates the shadowed name against the entry launch will run',
     () =>
-      Effect.gen(function* () {
-        const entry = yield* resolveAgentForLaunch(hostStores(), 'assistant');
+      withCatalog(
+        Effect.gen(function* () {
+          const entry = yield* catalog.forLaunch(hostStores(), 'assistant');
 
-        expect(entry?.source).toBe('custom');
-        expect(entry && documentTaskOf(entry)).not.toBeNull();
-        expect(yield* resolveChatToolUseAgent(hostStores(), 'assistant')).toBe(
-          entry,
-        );
-      }),
+          expect(entry?.source).toBe('custom');
+          expect(entry && documentTaskOf(entry)).not.toBeNull();
+          expect(
+            yield* resolveChatToolUseAgent(hostStores(), 'assistant'),
+          ).toBe(entry);
+        }),
+      ),
   );
 
   effectIt.effect(
     'resolves a source-qualified identifier to that exact source',
     () =>
-      Effect.gen(function* () {
-        expect(
-          (yield* resolveAgentForLaunch(hostStores(), 'builtIn:assistant'))
-            ?.source,
-        ).toBe('builtIn');
-        expect(
-          (yield* resolveAgentForLaunch(hostStores(), 'custom:assistant'))
-            ?.source,
-        ).toBe('custom');
-      }),
+      withCatalog(
+        Effect.gen(function* () {
+          expect(
+            (yield* catalog.forLaunch(hostStores(), 'builtIn:assistant'))
+              ?.source,
+          ).toBe('builtIn');
+          expect(
+            (yield* catalog.forLaunch(hostStores(), 'custom:assistant'))
+              ?.source,
+          ).toBe('custom');
+        }),
+      ),
   );
 
   // Changing the root agent explicitly is a departure from a team preset, so
@@ -137,66 +153,70 @@ describe('CLI agent validation with a shadowed name', () => {
   effectIt.effect(
     'leaves team mode when the root agent is changed explicitly',
     () =>
-      Effect.gen(function* () {
-        patchSessionMeta({
-          teamName: 'Physicist',
-          cliTeamId: 'physicist',
-          delegationAgentScope: ['builtIn:polish', 'builtIn:assistant'],
-        });
-        const context = {
-          // The workspace agents slots only gate visibility, which this registry leaves
-          // unconfigured, so empty chat slots resolve the same names as the host.
-          stores: makeFakeSettingsStores('cli').stores,
-          session: {
-            runSettled: undefined,
-            runCompleted: false,
-            stopRequested: false,
-          },
-        } as Parameters<typeof applyInitialCliAgentSelection>[1];
+      withCatalog(
+        Effect.gen(function* () {
+          patchSessionMeta({
+            teamName: 'Physicist',
+            cliTeamId: 'physicist',
+            delegationAgentScope: ['builtIn:polish', 'builtIn:assistant'],
+          });
+          const context = {
+            // The workspace agents slots only gate visibility, which this registry leaves
+            // unconfigured, so empty chat slots resolve the same names as the host.
+            stores: makeFakeSettingsStores('cli').stores,
+            session: {
+              runSettled: undefined,
+              runCompleted: false,
+              stopRequested: false,
+            },
+          } as Parameters<typeof applyInitialCliAgentSelection>[1];
 
-        yield* applyInitialCliAgentSelection('assistant', context);
+          yield* applyInitialCliAgentSelection('assistant', context);
 
-        expect(sessionMeta.get()).toMatchObject({ agent: 'assistant' });
-        expect(sessionMeta.get().teamName).toBeUndefined();
-        expect(sessionMeta.get().cliTeamId).toBeUndefined();
-        expect(sessionMeta.get().delegationAgentScope).toBeUndefined();
-      }),
+          expect(sessionMeta.get()).toMatchObject({ agent: 'assistant' });
+          expect(sessionMeta.get().teamName).toBeUndefined();
+          expect(sessionMeta.get().cliTeamId).toBeUndefined();
+          expect(sessionMeta.get().delegationAgentScope).toBeUndefined();
+        }),
+      ),
   );
   effectIt.effect(
     'preserves the launched agent when selection validation is pending',
     () =>
-      Effect.gen(function* () {
-        const entered = yield* Deferred.make<void>();
-        const release = yield* Deferred.make<void>();
-        const { stores } = makeFakeSettingsStores('cli');
-        const delayedState = {
-          ...stores.globalState,
-          get: (key: string) =>
-            Effect.gen(function* () {
-              yield* Deferred.succeed(entered, undefined);
-              yield* Deferred.await(release);
-              return yield* stores.globalState.get(key);
-            }),
-          update: stores.globalState.update.bind(stores.globalState),
-        };
-        const session = new TuiSession();
-        patchSessionMeta({ agent: 'launched-agent', teamName: 'Physicist' });
-        const context = {
-          stores: { ...stores, globalState: delayedState },
-          session,
-        } as Parameters<typeof applyInitialCliAgentSelection>[1];
-        const selection = yield* Effect.forkChild(
-          applyInitialCliAgentSelection('assistant', context),
-        );
-        yield* Deferred.await(entered);
-        session.markRunPending(Effect.never);
-        yield* Deferred.succeed(release, undefined);
-        yield* Fiber.join(selection);
-        expect(sessionMeta.get()).toMatchObject({
-          agent: 'launched-agent',
-          teamName: 'Physicist',
-        });
-        session.clearRunState();
-      }),
+      withCatalog(
+        Effect.gen(function* () {
+          const entered = yield* Deferred.make<void>();
+          const release = yield* Deferred.make<void>();
+          const { stores } = makeFakeSettingsStores('cli');
+          const delayedState = {
+            ...stores.globalState,
+            get: (key: string) =>
+              Effect.gen(function* () {
+                yield* Deferred.succeed(entered, undefined);
+                yield* Deferred.await(release);
+                return yield* stores.globalState.get(key);
+              }),
+            update: stores.globalState.update.bind(stores.globalState),
+          };
+          const session = new TuiSession();
+          patchSessionMeta({ agent: 'launched-agent', teamName: 'Physicist' });
+          const context = {
+            stores: { ...stores, globalState: delayedState },
+            session,
+          } as Parameters<typeof applyInitialCliAgentSelection>[1];
+          const selection = yield* Effect.forkChild(
+            applyInitialCliAgentSelection('assistant', context),
+          );
+          yield* Deferred.await(entered);
+          session.markRunPending(Effect.never);
+          yield* Deferred.succeed(release, undefined);
+          yield* Fiber.join(selection);
+          expect(sessionMeta.get()).toMatchObject({
+            agent: 'launched-agent',
+            teamName: 'Physicist',
+          });
+          session.clearRunState();
+        }),
+      ),
   );
 });

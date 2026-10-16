@@ -37,6 +37,7 @@ import { Context, Effect, Layer, ManagedRuntime, Stream } from 'effect';
 import {
   AgentDirectories,
   AppState,
+  AgentDirectoryService,
   processLayer,
   Sessions,
   StateWriteFailed,
@@ -46,9 +47,6 @@ import {
   UNAVAILABLE_LANGUAGE_MODEL_PORT,
   withForkFailureReporting,
 } from '@texra-ai/harness';
-import { resolveGlobalStoragePath } from '@texra-ai/harness/node';
-import { AgentDirectoryService } from '@agent/index';
-import { appStateStoreFromDatabase } from '@controllers/session/appStateStore';
 import type { MinimumLogLevel } from '@logger/effectDiagnostics';
 import { GlobalDatabase } from '@shared/session/database';
 import { usageLogLayer } from '@telemetry/UsageLogService';
@@ -213,7 +211,6 @@ export function installCliProcessRuntime(
   // The editor registry this install's plugins read, served beside the
   // process services: `texra serve` attaches its windows' editors to it.
   const editors = makeEditorHost();
-  const globalStoragePath = resolveGlobalStoragePath(storageRoot);
   const version = readCliVersion();
   const secrets = cliSecrets(storageRoot);
   // The agent directories are a process service the runtime serves, so
@@ -243,14 +240,9 @@ export function installCliProcessRuntime(
           storageRoot,
           plugins: texraPlugins({ editors }),
           secrets,
-          appState: options?.appState
-            ? AppState.layer(options.appState)
-            : Layer.effect(
-                AppState,
-                Effect.map(GlobalDatabase, (database) =>
-                  appStateStoreFromDatabase(globalStoragePath, database.values),
-                ),
-              ),
+          ...(options?.appState && {
+            appState: AppState.layer(options.appState),
+          }),
           // A terminal has no editor language models; the CLI's platform installs
           // the same port.
           languageModel: UNAVAILABLE_LANGUAGE_MODEL_PORT,

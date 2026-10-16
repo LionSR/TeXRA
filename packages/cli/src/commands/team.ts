@@ -1,8 +1,8 @@
-import { Effect } from 'effect';
+import { Effect, Predicate } from 'effect';
 import { defineCommand } from 'citty';
 
+import { AgentCatalog } from '@texra-ai/harness';
 import { Settings } from '@texra-ai/harness';
-import { getCatalogAgent } from '@agent/index';
 import {
   canLaunchTeam,
   planTeamRun,
@@ -13,7 +13,6 @@ import {
   TEXRA_APPROVAL_POLICY_CONFIG_KEY,
   type TexraApprovalPolicy,
 } from '@shared/approvalPolicy';
-import { filterNotNullish } from '@utils/core';
 
 import { missingAgentMessage, missingTeamMessage } from '../runtime/agents';
 import {
@@ -81,7 +80,7 @@ const loadTeamRunPlan = Effect.fn('loadTeamRunPlan')(function* (
   );
   if (!team) return yield* failUsage(missingTeamMessage(init.team));
   return planTeamRun(team, {
-    resolveAgent: getCatalogAgent,
+    resolveAgent: (yield* AgentCatalog).get,
     agentOverride: init.agent,
   });
 });
@@ -108,7 +107,7 @@ const runTeamList = Effect.fn('runTeamList')(function* (
   services: CliPlatformServices,
 ) {
   const plans = planTeamRuns(yield* readCliTeams(services.repoState), {
-    resolveAgent: getCatalogAgent,
+    resolveAgent: (yield* AgentCatalog).get,
   });
 
   emitCliResult(context, {
@@ -215,7 +214,7 @@ export const runTeam = Effect.fn('runTeam')(function* (
               init.contextFiles,
             ),
           ]
-            .filter(filterNotNullish)
+            .filter(Predicate.isNotNullish)
             .join('\n\n');
         const config: AgentConfigPayload = {
           agent: rootAgent.name,

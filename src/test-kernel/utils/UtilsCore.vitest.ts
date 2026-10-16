@@ -3,10 +3,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   createFlushableDebounce,
-  getBasename,
-  getFileStem,
   type FlushableDebounce,
-} from '@utils/core';
+} from '@texra/utils/core/flushableDebounce';
+import { getBasename, getFileStem } from '@utils/core';
 import { deriveRunId } from '@utils/core/idHash';
 
 describe('getBasename', () => {

@@ -9,6 +9,7 @@ import { globalDatabaseLayer } from '@controllers/session/Database';
 import { processOwnerId } from '@platform/defaults/nodeProcesses';
 import { RunIdSchema, ToolError } from '@shared/schemas';
 import { ProcessIdentity } from '@shared/session/sessionEvents';
+import { globalValuesOver } from '@test/support/setupPlatform';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { InquiryRecords } from '@texra/shared/plugins/externalInquiry';
 import { inquiryRecordsLayer } from '@texra/tools/inquiry/inquiryRecords';
@@ -26,10 +27,12 @@ describe('InquiryStorage', () => {
     Effect.sync(() =>
       inquiryRecordsLayer.pipe(
         Layer.provide(
-          globalDatabaseLayer(storage).pipe(
-            Layer.provide(ProcessIdentity.layer(processOwnerId(undefined))),
-            Layer.provide(nodePlatformLayer),
-            Layer.orDie,
+          globalValuesOver(
+            globalDatabaseLayer(storage).pipe(
+              Layer.provide(ProcessIdentity.layer(processOwnerId(undefined))),
+              Layer.provide(nodePlatformLayer),
+              Layer.orDie,
+            ),
           ),
         ),
       ),

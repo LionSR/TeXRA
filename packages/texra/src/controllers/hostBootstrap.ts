@@ -31,14 +31,16 @@
 import { Effect } from 'effect';
 
 // Local imports
+import { ToolRegistry } from '@texra-ai/harness/plugins';
+import {
+  seedDisabledToolDefaults,
+  type WorkspaceRoots,
+} from '@texra-ai/harness';
 import {
   initializeNodeRuntimeSkills,
   type NodeRuntimeSkillOptions,
 } from '@platform/defaults/nodeHost';
 import { installProcessHttpDispatcher } from '@platform/defaults/longRunningModelTransport';
-import { seedDisabledToolDefaults } from '@tools/toolAvailability';
-import { ToolRegistry } from '@tools/toolTable';
-import type { WorkspaceRoots } from '@texra-ai/harness';
 
 export interface HostBootstrapInit {
   /**

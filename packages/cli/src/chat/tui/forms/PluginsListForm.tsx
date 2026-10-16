@@ -93,11 +93,9 @@ export function PluginsListForm(
 
   const toggle = (row: PluginRow) => {
     if (row.kind === 'texra')
-      return setCliToolEnabled(
-        roots.globalState,
-        row.item.id,
-        row.item.enabled === false,
-      ).pipe(Effect.asVoid);
+      return setCliToolEnabled(row.item.id, row.item.enabled === false).pipe(
+        Effect.asVoid,
+      );
     if (row.kind === 'installed')
       // On and trusted switches off; on but changed since it was trusted
       // opens the review, as switching on does.

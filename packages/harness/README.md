@@ -373,12 +373,12 @@ files.
 
 ## Entry points
 
-| Entry                       | Contents                                                                                                      |
-| --------------------------- | ------------------------------------------------------------------------------------------------------------- |
-| `@texra-ai/harness`         | `Sessions`, `Session`, `Run`, the tagged errors, and the tool-definition helper (`defineTool`) with its types |
-| `@texra-ai/harness/schemas` | Zod schemas + inferred types for agent definitions, configs, and run results                                  |
-| `@texra-ai/harness/plugins` | `harnessBuiltins`: the built-in plugins                                                                       |
-| `@texra-ai/harness/node`    | `nodePlatform(options)`, a ready-made Node `AgentPlatform` with its workspace roots                           |
+| Entry                       | Contents                                                                                                                                                                                      |
+| --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@texra-ai/harness`         | `Sessions`, `Session`, `Run`, the tagged errors, and the tool-definition helper (`defineTool`) with its types                                                                                 |
+| `@texra-ai/harness/schemas` | Zod schemas + inferred types for agent definitions, configs, and run results                                                                                                                  |
+| `@texra-ai/harness/plugins` | The built-in plugins (`harnessBuiltins`, or one by one), and what a plugin is written with: `definePlugin`, `executed`/`errorResult`, `nullishWithDefault`, `resolveToolPath`, `ToolRegistry` |
+| `@texra-ai/harness/node`    | `nodePlatform(options)`, a ready-made Node `AgentPlatform` with its workspace roots                                                                                                           |
 
 Every entry needs the peers installed. See [Install](#install).
 
@@ -405,10 +405,12 @@ Failures are `Data.TaggedError`s. Six come from the package itself —
 launch path threw — and three, `DatabaseOpenFailed`, `DatabaseReadFailed` and
 `SessionOptionsConflict` (the `SessionOpenError` union), reach the surface
 from the session store when it cannot open or read, or is open over the
-other store, for nine in all. A
+other store, for nine in the session lifecycle. The entry exports other
+tagged errors too; `config/api-reports/harness.api.md` lists the whole
+surface. A
 `session.request` answers with the runtime's own `Outcome` or its
 `RequestError` union, the same values every TeXRA host reads. Beyond these,
-nothing else is exported: no fold internals, no host widgets.
+no fold internals and no host widgets are exported.
 
 A runnable version of this program against a packed tarball is in
 [`example/`](./example).

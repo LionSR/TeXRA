@@ -1,7 +1,7 @@
 import { defineCommand } from 'citty';
 import { Effect } from 'effect';
 
-import { loadMemoryItems } from '@tools/memory/memoryFileSystem';
+import { MemoryStore } from '@texra-ai/harness/plugins';
 
 import { CliExitCode } from '../runtime/exitCodes';
 import { initCliPlatform } from '../runtime/initPlatform';
@@ -25,7 +25,7 @@ function runMemoryList(context: CliContext) {
     // Pass the full list to `formatCliMemoryList`; it owns truncation (the
     // `Memories (N):` total and `... N more` overflow line) and JSON/NDJSON
     // consumers should see every memory, not a capped slice.
-    const items = yield* runCliMemory(services.roots, loadMemoryItems());
+    const items = yield* runCliMemory(services.roots, MemoryStore.list);
 
     emitCliResult(context, {
       json: items,

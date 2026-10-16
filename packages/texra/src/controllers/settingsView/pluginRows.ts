@@ -9,18 +9,18 @@
 import { Effect, FileSystem } from 'effect';
 
 import {
+  AgentCatalog,
   InstalledPlugins,
   mcpServerOfToolName,
   mcpConfigPathOf,
   readMcpConfig,
+  type ExternalToolCheckResult,
   type PluginEnv,
   type ToolProbeInputs,
   type WorkspaceRoots,
 } from '@texra-ai/harness';
-import { getCatalogAgents } from '@agent/index';
 import { buildToolDashboardItems } from '@texra/controllers/settingsView/ToolDashboardData';
 import type { PluginRow } from '@texra/shared/settingsView/settingsViewMessages';
-import type { ExternalToolCheckResult } from '@tools/toolAvailabilityService';
 
 /**
  * Build the rows, the MCP config file they read, and what that file's
@@ -32,7 +32,7 @@ export const buildPluginRows = Effect.fn('buildPluginRows')(function* (
   inputs: ToolProbeInputs & PluginEnv & Pick<WorkspaceRoots, 'storageRoot'>,
   cachedResults?: readonly ExternalToolCheckResult[],
 ) {
-  const agents = getCatalogAgents().map((agent) => ({
+  const agents = (yield* AgentCatalog).list().map((agent) => ({
     name: agent.name,
     tools: agent.tools ?? [],
   }));

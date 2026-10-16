@@ -1,19 +1,12 @@
 import { defineCommand } from 'citty';
 import { Effect, FileSystem } from 'effect';
 
-import { AgentDirectories } from '@texra-ai/harness';
 import {
-  agentSourceRoots,
-  changedBuiltInOf,
-  createWorkspaceAgentsController,
-  customCopyPath,
-  getAgent,
-  getCustomAgentScanIssues,
-  keepCustomAgent,
-  writeStampedCopy,
-} from '@agent/index';
+  AgentCatalog,
+  AgentDirectories,
+  isStrictlyWithin,
+} from '@texra-ai/harness';
 import { AGENT_SOURCE, agentKey, agentName } from '@shared/schemas';
-import { isStrictlyWithin } from '@utils/core/pathCore';
 
 import {
   AGENT_NAME_DESCRIPTION,
@@ -43,16 +36,17 @@ function listAgents(context: CliContext, options: CliAgentListOptions = {}) {
     const result = yield* loadCliAgentList(services, options);
 
     if (!context.quietLogs) {
+      const catalog = yield* AgentCatalog;
       const hiddenNotice = formatCliHiddenAgentsNotice(
         result.hiddenCount,
         options.tasks === true,
       );
       if (hiddenNotice) writeTextStderr(hiddenNotice);
-      for (const issue of getCustomAgentScanIssues()) {
+      for (const issue of catalog.scanIssues()) {
         writeTextStderr(`Skipped custom agent ${issue.path}: ${issue.message}`);
       }
       for (const agent of result.agents) {
-        if (changedBuiltInOf(agent)) {
+        if (catalog.newerBuiltIn(agent)) {
           writeTextStderr(formatCliNewerBuiltInNotice(agent.name));
         }
       }
@@ -76,12 +70,12 @@ function listAgents(context: CliContext, options: CliAgentListOptions = {}) {
 function showAgent(context: CliContext, name: string) {
   return Effect.gen(function* () {
     yield* initCliPlatform(context);
-    const entry = resolveCliAgent(name);
+    const entry = yield* resolveCliAgent(name);
     if (!entry) {
       writeTextStderr(missingAgentMessage(name));
       return CliExitCode.Usage;
     }
-    if (!context.quietLogs && changedBuiltInOf(entry)) {
+    if (!context.quietLogs && (yield* AgentCatalog).newerBuiltIn(entry)) {
       writeTextStderr(formatCliNewerBuiltInNotice(entry.name));
     }
 
@@ -95,9 +89,10 @@ function showAgent(context: CliContext, name: string) {
 }
 
 /** The bundled agent a bare name or a bundled `source:name` key names. */
-function bundledAgentNamed(name: string) {
-  return getAgent(agentKey(AGENT_SOURCE.BUILT_IN, agentName(name)));
-}
+const bundledAgentNamed = (name: string) =>
+  Effect.map(AgentCatalog, (catalog) =>
+    catalog.get(agentKey(AGENT_SOURCE.BUILT_IN, agentName(name))),
+  );
 
 /** One result shape for customize, reset and keep. */
 function emitCopyResult(
@@ -126,32 +121,22 @@ function refuse(message: string) {
 function customizeAgent(context: CliContext, name: string) {
   return Effect.gen(function* () {
     yield* initCliPlatform(context);
-    const builtIn = bundledAgentNamed(name);
-    if (builtIn?.digest == null) {
-      return refuse(`No built-in agent named ${name}.`);
-    }
-    const directories = yield* AgentDirectories;
-    const target = customCopyPath({
-      entryPath: builtIn.path,
-      sourceRoots: yield* agentSourceRoots(directories, builtIn.source),
-      customDir: yield* directories.custom(),
-    });
-    if (!target) {
-      return refuse(
-        'Refusing to copy: target escapes the custom agents directory.',
-      );
-    }
-    if (yield* FileSystem.FileSystem.use((fs) => fs.exists(target))) {
-      return refuse(`A custom copy already exists: ${target}`);
-    }
-    yield* writeStampedCopy(builtIn.path, target, builtIn.digest);
-    emitCopyResult(context, {
-      action: 'customized',
-      name: builtIn.name,
-      path: target,
-      text: `Created custom copy of ${builtIn.name}: ${target}`,
-    });
-    return CliExitCode.Success;
+    const builtIn = yield* bundledAgentNamed(name);
+    if (!builtIn) return refuse(`No built-in agent named ${name}.`);
+    return yield* (yield* AgentCatalog).customize(builtIn, 'copy').pipe(
+      Effect.map((target) => {
+        emitCopyResult(context, {
+          action: 'customized',
+          name: builtIn.name,
+          path: target,
+          text: `Created custom copy of ${builtIn.name}: ${target}`,
+        });
+        return CliExitCode.Success;
+      }),
+      Effect.catchTag('AgentCustomizeRefused', (refused) =>
+        Effect.succeed(refuse(refused.message)),
+      ),
+    );
   });
 }
 
@@ -159,8 +144,9 @@ function customizeAgent(context: CliContext, name: string) {
 function resetAgent(context: CliContext, name: string) {
   return Effect.gen(function* () {
     const services = yield* initCliPlatform(context);
-    const custom = getAgent(agentKey('custom', name));
-    if (!custom || !bundledAgentNamed(name)) {
+    const catalog = yield* AgentCatalog;
+    const custom = catalog.get(agentKey('custom', name));
+    if (!custom || !(yield* bundledAgentNamed(name))) {
       return refuse(`${name} is not a custom copy of a built-in agent.`);
     }
     const customDir = yield* (yield* AgentDirectories).custom();
@@ -172,7 +158,7 @@ function resetAgent(context: CliContext, name: string) {
     yield* FileSystem.FileSystem.use((fs) =>
       fs.remove(custom.path, { force: true }),
     );
-    yield* createWorkspaceAgentsController(services).forgetDeletedAgent(name);
+    yield* catalog.workspaceAgents(services).forgetDeletedAgent(name);
     emitCopyResult(context, {
       action: 'reset',
       name,
@@ -187,8 +173,18 @@ function resetAgent(context: CliContext, name: string) {
 function keepAgent(context: CliContext, name: string) {
   return Effect.gen(function* () {
     yield* initCliPlatform(context);
-    const custom = getAgent(agentKey('custom', name));
-    if (!custom || !(yield* keepCustomAgent(name))) {
+    const catalog = yield* AgentCatalog;
+    const custom = catalog.get(agentKey('custom', name));
+    const kept =
+      custom &&
+      (yield* catalog
+        .customize(custom, 'keep')
+        .pipe(
+          Effect.catchTag('AgentCustomizeRefused', () =>
+            Effect.succeed(undefined),
+          ),
+        ));
+    if (!custom || kept === undefined) {
       return refuse(`${name} has no newer built-in version to dismiss.`);
     }
     emitCopyResult(context, {

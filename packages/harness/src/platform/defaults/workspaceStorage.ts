@@ -1,11 +1,8 @@
 // Node imports
 import { realpathSync } from 'node:fs';
-import { basename, join, posix } from 'node:path';
+import { basename, join } from 'node:path';
 
-import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
-import { normalizeFilePath } from '@utils/core';
 import { truncatedHexId } from '@utils/core/idHash';
-import { sanitizePathSegment } from '@utils/text/sanitizePathSegment';
 
 const STORAGE_LAYOUT = {
   global: 'global-storage',
@@ -13,13 +10,11 @@ const STORAGE_LAYOUT = {
 } as const;
 
 function sanitizeWorkspaceBasename(workspacePath: string): string {
-  return sanitizePathSegment(basename(workspacePath), {
-    invalidCharPattern: /[^A-Za-z0-9._-]/g,
-    replacement: '-',
-    collapseRepeats: true,
-    trimReplacement: true,
-    fallback: 'workspace',
-  });
+  const slug = basename(workspacePath)
+    .replaceAll(/[^A-Za-z0-9._-]/g, '-')
+    .replaceAll(/-+/g, '-')
+    .replaceAll(/^-|-$/g, '');
+  return slug || 'workspace';
 }
 
 /**
@@ -82,17 +77,4 @@ export function resolveWorkspaceStoragePath(
     STORAGE_LAYOUT.workspace,
     workspaceStorageId(workspacePath),
   );
-}
-
-export function resolveMemoryStoragePath(
-  storagePath: string = WORKSPACE_STORAGE_LAYOUT.memory,
-): string {
-  const normalized = posix.normalize(normalizeFilePath(storagePath));
-  if (
-    normalized !== WORKSPACE_STORAGE_LAYOUT.memory &&
-    !normalized.startsWith(`${WORKSPACE_STORAGE_LAYOUT.memory}/`)
-  ) {
-    throw new Error(`Invalid memory path: ${storagePath}`);
-  }
-  return normalized;
 }

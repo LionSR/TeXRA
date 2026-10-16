@@ -22,11 +22,11 @@ import { Data, Effect, FileSystem, type Path, Stream } from 'effect';
 import * as ChildProcess from 'effect/process/ChildProcess';
 
 import { withSessionFs } from '@texra-ai/harness';
+import { generatePastedImageName } from '@texra/utils/files/pastedImageName';
 import {
   type PastedImageSaveFailed,
   savePastedImageBuffer,
 } from '@texra/utils/files/pastedImageUtils';
-import { generatePastedImageName } from '@utils/files/pastedImageName';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { executeCommand } from '@utils/system/execUtils';
 import type { WorkspaceRoots } from '@texra-ai/harness';

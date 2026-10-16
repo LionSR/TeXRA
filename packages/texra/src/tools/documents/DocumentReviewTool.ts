@@ -8,6 +8,7 @@ import { Effect, FileSystem } from 'effect';
 import { z } from 'zod';
 
 import { defineTool } from '@texra-ai/harness';
+import { executed } from '@texra-ai/harness/plugins';
 import { fileLocationDisplayPath } from '@shared/schemas';
 import { failureContextFromLogs } from '@texra/agent/output/compileFailureRoundContext';
 import { traceFileLineage } from '@texra/agent/output/lineageMapping';
@@ -20,7 +21,6 @@ import {
   RevisionSchema,
 } from '@texra/tools/documents/documentTools';
 import { type RoundOutput } from '@texra/shared/plugins/documentOutputs';
-import { executed } from '@tools/core/result';
 import { renderPrompt } from '@utils/prompt';
 import { reportDiffTimeout, unifiedDiffText } from '@utils/text/unifiedDiff';
 

@@ -2,16 +2,15 @@
 import * as path from 'node:path';
 
 // Third-party imports
-import { Effect, FileSystem } from 'effect';
+import { Effect, FileSystem, Predicate } from 'effect';
 
 import type { FileLocation } from '@shared/schemas';
-import { filterNotNull } from '@utils/core';
 import { ensureError } from '@utils/errors/errorMessage';
 import { normalizeLineEndings } from '@utils/text/stringUtils';
-import { joinLatexPath } from '@utils/core/pathCore';
 
 import {
   findExistingLatexPath,
+  joinLatexPath,
   resolveLatexDir,
   stripLatexComments,
 } from './latexParsingUtils';
@@ -104,5 +103,5 @@ export const extractFigurePathsFromLatex = Effect.fn(
     { concurrency: RESOLVE_CONCURRENCY },
   );
 
-  return [...new Set(resolved.filter(filterNotNull))];
+  return [...new Set(resolved.filter(Predicate.isNotNull))];
 });

@@ -21,8 +21,8 @@ import { z } from 'zod';
 
 // Local imports
 import { defineTool } from '@texra-ai/harness';
+import { executed } from '@texra-ai/harness/plugins';
 import { ToolError } from '@shared/schemas';
-import { executed } from '@tools/core/result';
 import { pluralize } from '@utils/text/stringUtils';
 
 // Local file imports

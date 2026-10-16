@@ -34,8 +34,8 @@ import {
   AgentConfigSchema,
   type AgentConfig,
   type AgentConfigPayload,
+  generateRunId,
 } from '@texra-ai/harness/schemas';
-import { terminalFailurePresented } from '@agent/runtime';
 import { launchApproval, type CliContext } from '@cli/runtime/cliContext';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import { readCliTeamName } from '@cli/runtime/cliTeams';
@@ -53,7 +53,6 @@ import { isTaskConfig, type RunId } from '@shared/schemas';
 import { heldElsewhereBy } from '@shared/session/database';
 import type { DisposableStore } from '@texra/platform/disposable';
 import { FOCUSED_AGENT } from '@ui/copy/nestedRuns';
-import { generateRunId } from '@utils/core';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { handleTuiSlashCommand } from './tui/commands/handleSlashCommand';
 import {
@@ -432,10 +431,7 @@ export function createChatSessionController(
     // (e.g. the model-not-recognized instruction), or presented already (by
     // the service, to this chat) is marked -- skip the generic transcript
     // line so the TUI doesn't show the same failure twice.
-    if (
-      !hasErrorPresentationClaimed(error) &&
-      !terminalFailurePresented(error)
-    ) {
+    if (!hasErrorPresentationClaimed(error)) {
       appendLocalErrorTranscript(toErrorMessage(error));
     }
     // Another live process holds the run: it refused the claim, or took it
