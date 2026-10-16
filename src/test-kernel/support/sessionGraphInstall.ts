@@ -1,3 +1,5 @@
+import * as path from 'node:path';
+
 import { Context, Effect, ManagedRuntime } from 'effect';
 
 import {
@@ -5,10 +7,10 @@ import {
   Sessions,
   type ProcessLayerOptions,
 } from '@texra-ai/harness';
+import { MCP_CONFIG_FILE_NAME } from '@common/storage/storageLayout';
 import { AppState, AgentDirectories } from '@platform/interfaces';
 import { withForkFailureReporting } from '@platform/processRuntime';
 import { UsageLog } from '@shared/usageLog';
-import { mcpConfigPathOf } from '@tools/mcp/mcpConfig';
 import type { Plugin } from '@tools/plugins';
 import { initTestProcessRuntime } from './testProcessRuntime';
 import { unprobedToolAvailability } from './toolAvailabilityTestLayer';
@@ -65,7 +67,7 @@ const testProcessOptions = (
   globalStorage: root,
   // Under the fake global root, never the developer's `~/.texra/mcp.json`.
   plugins,
-  mcpConfigPath: mcpConfigPathOf(root),
+  mcpConfigPath: path.join(root, MCP_CONFIG_FILE_NAME),
   secrets: fakeHostSecrets,
   appState: AppState.layer(fakeHostAppState),
   languageModel: fakeHostLanguageModel,

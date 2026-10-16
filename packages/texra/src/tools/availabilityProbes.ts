@@ -21,7 +21,6 @@ import {
 import { scopedClient } from '@tools/timeouts';
 import { ToolProbeFailed } from '@tools/toolProbes';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import { IS_WINDOWS } from '@utils/system/platformPaths';
 import { isWSL } from '@utils/system/wslDetect';
 import type {
   ToolAvailabilityChecks,
@@ -242,7 +241,8 @@ export function preferredInstallCommand(
     default: string;
   },
 ): string {
-  if (commands.win32 != null && IS_WINDOWS) return commands.win32;
+  if (commands.win32 != null && process.platform === 'win32')
+    return commands.win32;
   for (const manager of SYSTEM_PACKAGE_MANAGERS) {
     const command = commands[manager];
     if (command != null && hasPackageManager(manager)) return command;

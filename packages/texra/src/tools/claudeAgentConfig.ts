@@ -3,15 +3,15 @@ import { access } from 'node:fs/promises';
 import * as path from 'node:path';
 
 // Third-party imports
+import * as os from 'node:os';
 import { Effect } from 'effect';
 
 // Local imports
 import { apiKeyEnvName, exposeApiKey, lookupApiKey } from '@texra-ai/llm';
 import { Secrets, withLogChannel } from '@texra-ai/harness';
+import { executeCommand } from '@texra-ai/harness/node';
 import { sha256Hex } from '@utils/core/idHash';
 import { inheritedEnv } from '@utils/system/envFlags';
-import { executeCommand } from '@utils/system/execUtils';
-import { safeHomedir } from '@utils/system/platformPaths';
 import { ensureError } from '@utils/errors/errorMessage';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
@@ -34,8 +34,7 @@ const CHANNEL = 'claudeAgent';
  *
  * `env` is the environment the subprocess will get, so the answer matches
  * what Claude Code sees; `currentPlatform` is injectable for testability;
- * home-directory resolution goes through `safeHomedir()` (mockable via
- * `node:os`).
+ * home-directory resolution goes through `os.homedir()`.
  */
 const hasClaudeOauthCredential = Effect.fn('hasClaudeOauthCredential')(
   function* (
@@ -85,7 +84,7 @@ const hasClaudeOauthCredential = Effect.fn('hasClaudeOauthCredential')(
 );
 
 function resolveClaudeConfigDir(configDirInput: string | undefined): string {
-  const homeDir = safeHomedir() ?? '/nonexistent';
+  const homeDir = os.homedir();
   const configDir = configDirInput?.trim();
   if (!configDir) return path.join(homeDir, '.claude');
   if (configDir === '~') return homeDir;

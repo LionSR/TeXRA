@@ -1,9 +1,11 @@
+import path from 'node:path';
 import process from 'node:process';
 
 import { Effect } from 'effect';
 
 // Local imports - types
 import { SecretsFailed } from '@texra-ai/llm';
+import { MCP_CONFIG_FILE_NAME } from '@common/storage/storageLayout';
 import type { PlatformSecrets } from '@platform/secrets';
 
 // Local imports - platform defaults
@@ -19,7 +21,6 @@ import {
   settingsCatalog,
   type StateSettingEntry,
 } from '@shared/state/stateSettings';
-import { mcpConfigPathOf } from '@tools/mcp/mcpConfig';
 import { canonicalizeWorkspacePath } from '@utils/system/nodeWorkspace';
 
 import type { AgentPlatform } from './index.js';
@@ -36,6 +37,16 @@ export {
   resolveGlobalStoragePath,
   resolveWorkspaceStoragePath,
 } from '@platform/defaults/workspaceStorage';
+// Running a program on this machine: find it, run it, and give any other
+// child the PATH the harness resolves tools on.
+export {
+  executeCommand,
+  type ExecuteCommandBaseOptions,
+} from '@utils/system/execUtils';
+export { findCommand, type FoundCommand } from '@utils/system/binaryResolver';
+export { withExtendedPath } from '@utils/system/platformPaths';
+// Crash-safe replace of a file.
+export { writeFileAtomic } from '@utils/files/fsDurability';
 // The setting rows a `ConfigProvider` resolves against (its `catalog`): an
 // embedder with its own provider builds one from its rows, which
 // `settingsCatalog` puts after the harness's own.
@@ -100,7 +111,7 @@ export function nodePlatform(options: NodePlatformOptions): AgentPlatform {
     secrets: unpersistedSecrets,
     // No editor behind this platform.
     languageModel: UNAVAILABLE_LANGUAGE_MODEL_PORT,
-    mcpConfigPath: mcpConfigPathOf(options.storageDir),
+    mcpConfigPath: path.join(options.storageDir, MCP_CONFIG_FILE_NAME),
     agentDirectories: {
       custom: () => Effect.succeed(options.agentsDir),
       customConfigured: () => Effect.succeed(true),

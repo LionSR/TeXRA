@@ -231,6 +231,7 @@ export {
   withSessionFs,
   WorkspaceFs,
 } from '@platform/rootedFs';
+export type { RootedFileSystem } from '@utils/files/rootedFileSystem';
 // A path as a `FileLocation` against the workspace root a caller holds.
 export { pathToLocationIn } from '@utils/files/fileLocation';
 // Which external tools this machine has, as plugins' `availability` probes

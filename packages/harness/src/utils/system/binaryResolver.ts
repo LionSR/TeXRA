@@ -34,17 +34,14 @@ const TEXMF_SCRIPTS = new Set([
 /** A `kpsewhich` lookup over the ls-R database answers in milliseconds. */
 const KPSEWHICH_TIMEOUT_MS = 3_000;
 
-export interface ResolvedBinaryCommand {
-  command: string;
-  args: string[];
-  resolvedPath: string;
-}
-
-interface ResolveCommandOptions {
-  /** Build the command for this path instead of searching for the tool. */
-  resolvedPath?: string;
-  /** Windows launcher rules; defaults to the running platform. */
-  isWindows?: boolean;
+/** A command found on this machine, and how to launch it. */
+export interface FoundCommand {
+  /** The program to spawn: the tool itself, or `perl` for a Perl script. */
+  readonly command: string;
+  /** The arguments that come before the caller's own (the script's path). */
+  readonly args: readonly string[];
+  /** The absolute path the lookup found. */
+  readonly resolvedPath: string;
 }
 
 /** How long a miss is remembered before the tool is looked up again. */
@@ -128,21 +125,21 @@ const findToolUncached = Effect.fnUntraced(function* (tool: string) {
  * cached for the session; a miss is remembered for a minute, so a tool
  * installed mid-session is picked up after that without a reload.
  */
-export const findToolInCommonPaths = Effect.fn('findToolInCommonPaths')(
-  function* (
-    tool: string,
-  ): Effect.fn.Return<string | null, never, ChildProcessSpawner> {
-    const cached = findToolCache.get(tool);
-    if (cached !== undefined) return cached.path;
-    const result = yield* findToolUncached(tool);
-    findToolCache.set(
-      tool,
-      { path: result },
-      result === null ? { ttl: MISS_TTL_MS } : undefined,
-    );
-    return result;
-  },
-);
+const findTool = Effect.fn('findTool')(function* (
+  tool: string,
+  fresh: boolean,
+): Effect.fn.Return<string | null, never, ChildProcessSpawner> {
+  const cached = findToolCache.get(tool);
+  if (cached !== undefined && !(fresh && cached.path === null))
+    return cached.path;
+  const result = yield* findToolUncached(tool);
+  findToolCache.set(
+    tool,
+    { path: result },
+    result === null ? { ttl: MISS_TTL_MS } : undefined,
+  );
+  return result;
+});
 
 /**
  * TeX Live scripts can be `.pl` files, or extensionless scripts on Windows, so
@@ -162,28 +159,25 @@ function needsPerlLauncher(
 }
 
 /**
- * Build an executable command for a tool, resolved through TeXRA's
- * platform-specific search locations unless the caller already knows the path.
- * Returns null when the tool is not currently discoverable.
+ * Find `name` on this machine (the common tool directories, the TeX
+ * database for TeX Live scripts, then the extended PATH) and say how to
+ * launch it: a Perl script runs through `perl`. Null when the tool is not
+ * there now. A miss is remembered for a minute unless `fresh` asks again.
  */
-export const resolveOptionalCommand = Effect.fn('resolveOptionalCommand')(
-  function* (
-    toolName: string,
-    args: string[] = [],
-    options: ResolveCommandOptions = {},
-  ): Effect.fn.Return<
-    ResolvedBinaryCommand | null,
-    never,
-    ChildProcessSpawner
-  > {
-    const resolvedPath =
-      options.resolvedPath ?? (yield* findToolInCommonPaths(toolName));
-    if (!resolvedPath) return null;
-    if (
-      needsPerlLauncher(toolName, resolvedPath, options.isWindows ?? IS_WINDOWS)
-    ) {
-      return { command: 'perl', args: [resolvedPath, ...args], resolvedPath };
-    }
-    return { command: resolvedPath, args, resolvedPath };
-  },
-);
+export const findCommand = Effect.fn('findCommand')(function* (
+  name: string,
+  options: {
+    /** Launch this path instead of searching for the tool. */
+    readonly path?: string;
+    /** Search again even when the tool was missed a moment ago: the caller
+     *  follows an install. A found path is never searched again. */
+    readonly fresh?: boolean;
+  } = {},
+): Effect.fn.Return<FoundCommand | null, never, ChildProcessSpawner> {
+  const resolvedPath =
+    options.path ?? (yield* findTool(name, options.fresh ?? false));
+  if (!resolvedPath) return null;
+  return needsPerlLauncher(name, resolvedPath, IS_WINDOWS)
+    ? { command: 'perl', args: [resolvedPath], resolvedPath }
+    : { command: resolvedPath, args: [], resolvedPath };
+});

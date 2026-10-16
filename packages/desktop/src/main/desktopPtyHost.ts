@@ -15,8 +15,7 @@ import { chmodSync, statSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { platform as osPlatform } from 'node:os';
 import { dirname, join } from 'node:path';
-
-import { withExtendedPath } from '@utils/system/platformPaths';
+import { withExtendedPath } from '@texra-ai/harness/node';
 
 /**
  * The subset of node-pty this host depends on: node-pty's own module type

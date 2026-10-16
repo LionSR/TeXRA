@@ -26,13 +26,13 @@ import {
   requireRun,
   type RunInbox,
 } from '@texra-ai/harness/plugins';
+import { executeCommand } from '@texra-ai/harness/node';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import { ToolError, type RunId, type ToolResult } from '@shared/schemas';
 import { parseWorkingDirectory } from '@tools/pathResolution';
 import { nullishWithDefault } from '@tools/core/inputSchema';
 import { executed } from '@tools/core/result';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import { executeCommand } from '@utils/system/execUtils';
 
 import {
   DEFAULT_CHECK_ANNOTATION_LEVEL,

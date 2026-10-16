@@ -321,7 +321,7 @@ const cachedExtendedPaths = new LRUCache<string, ExtendedPathEntry>({
  * candidates keeps the steady state to a handful of `stat`s, the same
  * "cache hits, re-check misses" policy the binaryResolver tool cache states.
  */
-export function extendEnvPath(
+function extendEnvPath(
   basePath: string = process.env.PATH || '',
 ): string {
   const cached = cachedExtendedPaths.get(basePath);

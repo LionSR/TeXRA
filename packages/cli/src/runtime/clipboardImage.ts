@@ -22,13 +22,13 @@ import { Data, Effect, FileSystem, type Path, Stream } from 'effect';
 import * as ChildProcess from 'effect/process/ChildProcess';
 
 import { withSessionFs } from '@texra-ai/harness';
+import { executeCommand } from '@texra-ai/harness/node';
 import {
   type PastedImageSaveFailed,
   savePastedImageBuffer,
 } from '@texra/utils/files/pastedImageUtils';
 import { generatePastedImageName } from '@utils/files/pastedImageName';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import { executeCommand } from '@utils/system/execUtils';
 import type { WorkspaceRoots } from '@texra-ai/harness';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 import type { PlatformError } from 'effect/PlatformError';

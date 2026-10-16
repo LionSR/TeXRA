@@ -3,12 +3,12 @@ import * as path from 'node:path';
 import { Effect, FileSystem, PlatformError } from 'effect';
 
 import { redactSecrets, withLogChannel } from '@texra-ai/harness';
+import { executeCommand } from '@texra-ai/harness/node';
 import type { FileLocation } from '@shared/schemas';
 import type { LatexdiffMathMarkupValue } from '@texra/shared/constants/latexConfig';
 import { formatError } from '@utils/errors/errorMessage';
 import { readNormalizedFile } from '@utils/files/fsDurability';
 import { pathToLocationIn } from '@utils/files/fileLocation';
-import { executeCommand } from '@utils/system/execUtils';
 import { generateDiffFileName } from './latexdiff/diffFileNameManager';
 import { DiffFileProcessor } from './latexdiff/diffFileProcessor';
 import { DiffCommandExecutor } from './latexdiff/diffCommandExecutor';

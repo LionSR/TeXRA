@@ -7,10 +7,10 @@ import { Data, Effect, FileSystem, type PlatformError } from 'effect';
 // Local imports
 import { relativeToRoot } from '@texra-ai/harness/node';
 import { withLogChannel } from '@texra-ai/harness';
-import { type RootedFileSystem } from '@utils/files/rootedFileSystem';
 import { normalizeFilePath } from '@utils/core';
 
 import { CHANNEL } from './constants';
+import type { RootedFileSystem } from '@texra-ai/harness';
 
 /**
  * A workspace listing that did not complete. The `glob` package rejects, and

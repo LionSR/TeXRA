@@ -7,13 +7,12 @@
 
 import path from 'node:path';
 
+import * as os from 'node:os';
 import { useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Box, Static, Text } from 'ink';
 import type { TranscriptRow } from '@cli/chat/tui/state/sessionView';
 
 import { COLOR_HINT } from '@cli/tui/ui/colors';
-
-import { safeHomedir } from '@utils/system/platformPaths';
 
 import {
   rootRunId as rootRunIdSignal,
@@ -48,8 +47,7 @@ import type { SessionView } from '@texra-ai/harness';
 import type { RunId } from '@texra-ai/harness/schemas';
 
 function shortenCwd(cwd: string): string {
-  const home = safeHomedir();
-  if (!home) return cwd;
+  const home = os.homedir();
   if (cwd === home) return '~';
   const sep = path.sep;
   if (cwd.startsWith(`${home}${sep}`)) {

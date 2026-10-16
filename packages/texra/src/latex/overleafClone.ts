@@ -17,6 +17,7 @@ import * as ChildProcess from 'effect/process/ChildProcess';
 import { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 import { withLogChannel } from '@texra-ai/harness';
+import { executeCommand } from '@texra-ai/harness/node';
 import {
   overleafGitClone,
   overleafTokenSpec,
@@ -24,7 +25,6 @@ import {
   type OverleafRemote,
   type OverleafTokenSpec,
 } from '@latex/overleafProject';
-import { executeCommand } from '@utils/system/execUtils';
 import { makeMachineGitEnv } from '@utils/system/gitEnv';
 import type { PlatformError } from 'effect/PlatformError';
 
