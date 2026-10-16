@@ -24,7 +24,11 @@ import { afterEach, beforeEach } from 'vitest';
 import { ModelRetryGate } from '@agent/runtime/ModelRetryGate';
 import { RouteRetries } from '@agent/runtime/run/invocation';
 import type { ModelOptionStores } from '@model/computeModelOptions';
-import type { ProcessServices, SessionOwner } from '@platform/processRuntime';
+import {
+  GlobalValues,
+  type ProcessServices,
+  type SessionOwner,
+} from '@platform/processRuntime';
 import type { AgentDirectoriesPort, StateStore } from '@platform/interfaces';
 import {
   UNAVAILABLE_LANGUAGE_MODEL_PORT,
@@ -80,6 +84,19 @@ const ARMED_PLUGINS: readonly Plugin[] = [
   },
   { id: 'external-inquiry', arms: [EXTERNAL_INQUIRY_THREAD_ARM] },
 ];
+
+/** The process's `GlobalValues` over a global database layer, as
+ *  `processLayer` serves them, for a suite that opens a real global root. */
+export const globalValuesOver = <E, R>(
+  database: Layer.Layer<GlobalDatabase, E, R>,
+): Layer.Layer<GlobalValues | GlobalDatabase, E, R> =>
+  Layer.provideMerge(
+    Layer.effect(
+      GlobalValues,
+      Effect.map(GlobalDatabase, (opened) => opened.values),
+    ),
+    database,
+  );
 
 /** The plugin table a store or catalog suite runs over: every row kind and
  *  agent-file block TeXRA's plugins own, and no tool. */
@@ -310,6 +327,7 @@ export async function installFakeHost(host: FakeHost): Promise<void> {
     { LanguageModel },
     { unprobedToolAvailability },
     { SessionOwner: SessionOwnerTag },
+    { processStoresLayer },
   ] = await Promise.all([
     import('@test/support/testWorkspaceRoots'),
     import('./testProcessRuntime'),
@@ -320,6 +338,7 @@ export async function installFakeHost(host: FakeHost): Promise<void> {
     import('@platform/languageModel'),
     import('./toolAvailabilityTestLayer'),
     import('@platform/processRuntime'),
+    import('@controllers/session/appStateStore'),
   ]);
   current = host;
   for (const key of Object.keys(harnessEnv)) delete harnessEnv[key];
@@ -416,7 +435,11 @@ export async function installFakeHost(host: FakeHost): Promise<void> {
       globalStorageFsLayer(current?.roots.globalStorage ?? ''),
       Layer.mergeAll(NodeFileSystem.layer, NodePath.layer),
     ),
-  ).pipe(Layer.provideMerge(nodeSpawnerLayer));
+  ).pipe(
+    Layer.provideMerge(nodeSpawnerLayer),
+    // The process's stores, over the mocked global and project handles.
+    (services) => Layer.provideMerge(processStoresLayer, services),
+  );
   initTestWorkspaceRoots(host.roots);
   // A bare process runtime for the Promise-facing boundaries that run
   // fibers (the loopback sign-in). The session graph family is not installed

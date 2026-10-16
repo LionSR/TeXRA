@@ -29,6 +29,7 @@ import {
   ToolMissingHandler,
   withForkFailureReporting,
   withProcessServices,
+  StateStores,
 } from '@texra-ai/harness';
 import {
   createNodeWorkspaceRoots,
@@ -51,11 +52,6 @@ import { setApiKey as apiSetApiKey } from '@commands/api/apiKeyCommands';
 import { openGettingStarted } from '@commands/system/walkthroughCommands';
 import { createSampleProjectWithoutWorkspace } from '@commands/system/sampleProjectCommands';
 import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
-import {
-  appStateStoreFromDatabase,
-  openProjectStateStore,
-  openRepoStateStore,
-} from '@controllers/session/appStateStore';
 import { emitAppSignal, onAppSignal } from '@eventBus/AppSignals';
 import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
 import {
@@ -88,7 +84,6 @@ import { FileSecrets, secretsDirectory } from '@platform/defaults/fileSecrets';
 import { defaultNodeStorageRoot } from '@platform/defaults/nodeStorage';
 import { openTexraConfigStores } from '@platform/defaults/nodeStores';
 import { JsonConfigProvider } from '@platform/defaults/jsonConfigProvider';
-import { GlobalDatabase } from '@shared/session/database';
 import { telemetryNoticeIfDue } from '@telemetry/telemetryNotice';
 import { usageLogLayer } from '@telemetry/UsageLogService';
 import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
@@ -199,12 +194,6 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
         }),
         mcpConfigPath: USER_MCP_CONFIG_PATH,
         secrets,
-        appState: Layer.effect(
-          AppState,
-          Effect.map(GlobalDatabase, (database) =>
-            appStateStoreFromDatabase(globalStorage, database.values),
-          ),
-        ),
         // The editor's LM API on the workspace path, unavailable on the
         // credential-only one. The one defaulting site for this host.
         languageModel: extras.languageModel ?? UNAVAILABLE_LANGUAGE_MODEL_PORT,
@@ -256,9 +245,9 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
       const globalState = yield* AppState;
       const projectState =
         extras.projectState ??
-        (yield* openProjectStateStore(storage, workspaceRoot).pipe(
-          Scope.provide(projectScope),
-        ));
+        (yield* (yield* StateStores)
+          .project(storage, workspaceRoot)
+          .pipe(Scope.provide(projectScope)));
       // VS Code restarts the extension host when the first workspace folder
       // changes, so the configuration stores stay pinned for this process.
       const config = new JsonConfigProvider(
@@ -289,7 +278,7 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
         globalStorage,
         config,
         workspaceState: projectState,
-        repoState: yield* openRepoStateStore(workspaceRoot, storage),
+        repoState: yield* (yield* StateStores).repo(storage, workspaceRoot),
         globalState,
       });
       windowRoots = roots;

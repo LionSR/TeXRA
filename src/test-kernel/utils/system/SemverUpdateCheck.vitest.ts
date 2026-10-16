@@ -7,6 +7,7 @@ import { TestClock } from 'effect/testing';
 import { globalDatabaseLayer } from '@controllers/session/Database';
 import { processOwnerId } from '@platform/defaults/nodeProcesses';
 import { ProcessIdentity } from '@shared/session/sessionEvents';
+import { globalValuesOver } from '@test/support/setupPlatform';
 import { nodeSpawnerLayer } from '@test/support/childProcessTestLayer';
 import { updateCheckRecordsLayer } from '@texra/controllers/session/updateCheckRecords';
 import {
@@ -46,12 +47,14 @@ describe('runDailyUpdateCheck', () => {
           Effect.provide(
             updateCheckRecordsLayer.pipe(
               Layer.provide(
-                globalDatabaseLayer(storage).pipe(
-                  Layer.provide(
-                    ProcessIdentity.layer(processOwnerId(undefined)),
+                globalValuesOver(
+                  globalDatabaseLayer(storage).pipe(
+                    Layer.provide(
+                      ProcessIdentity.layer(processOwnerId(undefined)),
+                    ),
+                    Layer.provide(nodeSpawnerLayer),
+                    Layer.orDie,
                   ),
-                  Layer.provide(nodeSpawnerLayer),
-                  Layer.orDie,
                 ),
               ),
             ),

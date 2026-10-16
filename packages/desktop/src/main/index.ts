@@ -2,7 +2,11 @@ import { resolve as resolvePath } from 'node:path';
 import { Cause, Effect, Exit, Result, Scope } from 'effect';
 import { app, BrowserWindow, dialog, session } from 'electron';
 
-import { SessionOwner, withProcessServices } from '@texra-ai/harness';
+import {
+  GlobalValues,
+  SessionOwner,
+  withProcessServices,
+} from '@texra-ai/harness';
 import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';
 import { telemetryNoticeIfDue } from '@telemetry/telemetryNotice';
 import { NotificationFailed } from '@texra/hosts/uiHosts';
@@ -171,7 +175,7 @@ if (ownsSingleInstanceLock) {
         runtime,
         Effect.gen(function* () {
           const platformInit = yield* initialize;
-          const projectRecords = yield* openDesktopProjectRecords;
+          const projectRecords = openDesktopProjectRecords(yield* GlobalValues);
           // Reopen every folder left open last time and show the one shown
           // last. A folder that is gone or no longer opens is reported once the
           // window exists; the others open regardless. Read before the
