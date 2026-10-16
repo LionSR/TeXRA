@@ -6,6 +6,7 @@ import { it as effectIt } from '@effect/vitest';
 
 import { describe, expect, it, vi } from 'vitest';
 import { globalDatabaseLayer } from '@controllers/session/Database';
+import { GlobalValues } from '@platform/processRuntime';
 import { processStoresLayer } from '@controllers/session/appStateStore';
 import { projectDatabaseLayer } from '@controllers/session/projectDatabase';
 import { openDesktopProjectRegistry } from '@desktop/main/desktopProjects.js';
@@ -65,7 +66,10 @@ const processStoresOf = (profile: string) =>
 const projectRecordsOf = (profile: string) =>
   Effect.flatMap(globalDatabaseOf(profile), (database) =>
     Effect.flatMap(Layer.build(globalValuesOver(database)), (values) =>
-      Effect.provide(openDesktopProjectRecords, values),
+      Effect.provide(
+        Effect.map(GlobalValues, openDesktopProjectRecords),
+        values,
+      ),
     ),
   );
 
