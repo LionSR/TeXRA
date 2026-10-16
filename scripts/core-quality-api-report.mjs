@@ -76,9 +76,76 @@ function kindOf(declaration) {
 }
 
 const printer = ts.createPrinter({ removeComments: true });
+const scratch = ts.createSourceFile('report.ts', '', ts.ScriptTarget.Latest);
 
-/** Types print in full: an elided `... 17 more ...` would hide a change. */
-const FULL = ts.TypeFormatFlags.NoTruncation;
+/**
+ * `typeToString`'s flags, untruncated: an elided `... 17 more ...` would hide
+ * a change.
+ */
+const FULL =
+  ts.NodeBuilderFlags.NoTruncation |
+  ts.NodeBuilderFlags.UseAliasDefinedOutsideCurrentScope |
+  ts.NodeBuilderFlags.AllowUniqueESSymbolType |
+  ts.NodeBuilderFlags.IgnoreErrors;
+
+/** Text order, independent of the locale. */
+const byText = (left, right) =>
+  left.text < right.text ? -1 : left.text > right.text ? 1 : 0;
+
+/**
+ * The checker orders a union's members, and a mapped type's properties (a
+ * `ZodEnum<{ a: "a"; b: "b" }>`), by type id, which follows the order the
+ * program happened to create them, so an edit anywhere in the program can
+ * reorder a printed type. Each union prints with its members sorted by their
+ * own text, and each object literal with its properties sorted by name;
+ * call, construct and index signatures keep their places.
+ */
+const sortedTypes = (context) => {
+  const { factory } = context;
+  const visit = (node) => {
+    const visited = ts.visitEachChild(node, visit, context);
+    if (ts.isUnionTypeNode(visited)) {
+      const members = visited.types
+        .map((member) => ({ member, text: printNode(member) }))
+        .toSorted(byText)
+        .map(({ member }) => member);
+      return factory.updateUnionTypeNode(
+        visited,
+        factory.createNodeArray(members),
+      );
+    }
+    if (ts.isTypeLiteralNode(visited)) {
+      const properties = visited.members
+        .filter(ts.isPropertySignature)
+        .map((member) => ({ member, text: printNode(member.name) }))
+        .toSorted(byText)
+        .map(({ member }) => member);
+      const members = visited.members.map((member) =>
+        ts.isPropertySignature(member) ? properties.shift() : member,
+      );
+      return factory.updateTypeLiteralNode(
+        visited,
+        factory.createNodeArray(members),
+      );
+    }
+    return visited;
+  };
+  return visit;
+};
+
+function printNode(node) {
+  return printer.printNode(ts.EmitHint.Unspecified, node, scratch);
+}
+
+/** A synthesized type or signature node, printed in a stable order. */
+function printSorted(node) {
+  if (node == null) throw new Error('The checker could not print a type.');
+  const [sorted] = ts.transform(node, [sortedTypes]).transformed;
+  return printNode(sorted);
+}
+
+const typeText = (checker, type) =>
+  printSorted(checker.typeToTypeNode(type, undefined, FULL));
 
 function describe(checker, symbol) {
   const target =
@@ -100,11 +167,7 @@ function describe(checker, symbol) {
     if (kind !== 'type') return text;
     // An alias to a type the package does not export changes with that
     // type, so the report carries the resolved shape too.
-    const resolved = checker.typeToString(
-      checker.getDeclaredTypeOfSymbol(target),
-      undefined,
-      FULL,
-    );
+    const resolved = typeText(checker, checker.getDeclaredTypeOfSymbol(target));
     return `${text} ≡ ${resolved}`;
   }
   if (kind === 'class') {
@@ -127,18 +190,20 @@ function describe(checker, symbol) {
           (member) =>
             // A symbol-keyed member's name carries the compilation's symbol
             // id (`__@iterator@127`), which shifts with any dependency.
-            `${member.name.replace(/^__@(.+)@\d+$/, '[$1]')}: ${checker.typeToString(checker.getTypeOfSymbolAtLocation(member, declaration), undefined, FULL)}`,
+            `${member.name.replace(/^__@(.+)@\d+$/, '[$1]')}: ${typeText(checker, checker.getTypeOfSymbolAtLocation(member, declaration))}`,
         )
         .toSorted();
     const staticType = checker.getTypeOfSymbol(target);
     const constructors = staticType
       .getConstructSignatures()
       .map((signature) =>
-        checker.signatureToString(
-          signature,
-          undefined,
-          FULL,
-          ts.SignatureKind.Construct,
+        printSorted(
+          checker.signatureToSignatureDeclaration(
+            signature,
+            ts.SyntaxKind.ConstructorType,
+            undefined,
+            FULL,
+          ),
         ),
       );
     const statics = signatures(staticType);
@@ -146,7 +211,7 @@ function describe(checker, symbol) {
     return `class ${symbol.name} { constructor: ${constructors.join(' | ')}; static: ${statics.join('; ')}; instance: ${instance.join('; ')} }`;
   }
   const type = checker.getTypeOfSymbolAtLocation(target, declaration);
-  return `${kind} ${symbol.name}: ${checker.typeToString(type, undefined, FULL)}`;
+  return `${kind} ${symbol.name}: ${typeText(checker, type)}`;
 }
 
 /** Report file name → `{ text, names }` (the report and the export names
