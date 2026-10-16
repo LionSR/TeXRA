@@ -1,6 +1,7 @@
 import type {
   McpToolOutput,
   ToolCallStatus,
+  ToolCard,
   ToolUseLog,
 } from '@shared/schemas';
 import { buildMcpToolName } from '@shared/tools/toolDisplayName';
@@ -20,6 +21,32 @@ const CODEX_FILE_CHANGE_TOOL = 'codex_patch';
 const CODEX_THREAD_TOOL = 'codex_thread';
 const CODEX_TURN_TOOL = 'codex_turn';
 const CODEX_COMMAND_SUMMARY_MAX_LENGTH = 60;
+
+/**
+ * The card of a `codex` call: its prompt, and as badges its sandbox mode and
+ * whether it continues an existing thread.
+ */
+export function codexCallCard(input: {
+  readonly prompt: string;
+  readonly sandbox_mode?: string | null;
+  readonly thread_id?: string | null;
+}): ToolCard {
+  const badges = [
+    ...(input.sandbox_mode ? [input.sandbox_mode] : []),
+    ...(input.thread_id ? ['follow-up'] : []),
+  ];
+  return {
+    title: CODEX_AGENT_NAME,
+    sections: [
+      ...(input.prompt
+        ? [{ kind: 'text' as const, label: 'Prompt:', text: input.prompt }]
+        : []),
+      ...(badges.length > 0
+        ? [{ kind: 'badges' as const, label: 'Mode:', badges }]
+        : []),
+    ],
+  };
+}
 
 type CodexFileChange = FileChangeItem['changes'][number];
 type CodexCommandToolLogOptions = Pick<

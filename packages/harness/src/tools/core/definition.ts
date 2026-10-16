@@ -40,7 +40,7 @@ export type DefinedTool<T, R = never> = Omit<ITool<Error, R>, 'call'> & {
 export type DefineToolOptions<T, R = never> = Required<
   Pick<ToolDefinition, 'name' | 'description'>
 > &
-  Pick<ToolDefinition, 'scriptReturns'> &
+  Pick<ToolDefinition, 'scriptReturns' | 'card'> &
   Pick<
     ITool,
     | 'unavailableHosts'
@@ -98,6 +98,7 @@ export function defineTool<T, R = never>(
       ...(def.scriptReturns !== undefined && {
         scriptReturns: def.scriptReturns,
       }),
+      ...(def.card !== undefined && { card: def.card }),
     },
     lane: def.lane,
     ...(def.scriptGlobal !== undefined && { scriptGlobal: def.scriptGlobal }),

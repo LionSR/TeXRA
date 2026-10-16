@@ -13,6 +13,7 @@
 import {
   toJsonValue,
   type ToolCallStatus,
+  type ToolCard,
   type ToolUseLog,
 } from '@shared/schemas';
 import { generateShortId } from '@utils/core';
@@ -34,6 +35,7 @@ export function startToolUseCard(
   toolName: string,
   input: unknown,
   stageId?: string,
+  card?: ToolCard,
 ): ToolUseCardRef {
   const logId = generateShortId();
   trace.emit({
@@ -42,6 +44,7 @@ export function startToolUseCard(
     toolName,
     input: toJsonValue(input),
     stageId,
+    ...(card ? { card } : {}),
   });
   return { logId, groupId: stageId };
 }
@@ -72,7 +75,7 @@ export function endToolUseCard(
  * Fast-tool variant: open AND close a card in one shot when the call is
  * already complete. `payload.status` may already be terminal, and `toolName`
  * may be missing (it falls back to `'unknown'`). A card the payload states
- * (`card`) is published with the open, so a running card shows it too.
+ * (`card`) opens with it, so a running card shows it too.
  */
 export function emitToolUseCard(
   trace: AgentTrace,
@@ -84,10 +87,10 @@ export function emitToolUseCard(
     payload.toolName ?? 'unknown',
     payload.input,
     stageId,
+    payload.card,
   );
-  const { status = 'in_progress' } = payload;
-  if (status !== 'in_progress' || payload.card) {
-    endToolUseCard(trace, ref, payload, status);
+  if (payload.status && payload.status !== 'in_progress') {
+    endToolUseCard(trace, ref, payload, payload.status);
   }
   return ref;
 }

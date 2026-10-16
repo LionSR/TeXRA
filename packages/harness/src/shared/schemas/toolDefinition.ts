@@ -1,5 +1,7 @@
 import { z, type ZodType } from 'zod';
 
+import type { ToolCard } from './progressView/data';
+
 /**
  * Zod schema for validating tool definition structure.
  * Single source of truth - type is derived via z.infer<>.
@@ -26,6 +28,13 @@ export const ToolDefinitionSchema = z.looseObject({
    * carries a `value` declares that value's type here.
    */
   scriptReturns: z.string().optional(),
+  /**
+   * Runtime-only, like `zodSchema`: the card a call states from its input
+   * (`ToolUseLog.card`), in place of the sections the transcript derives
+   * from the tool's name. What a plugin's tool shows that the harness
+   * knows nothing of.
+   */
+  card: z.custom<(input: unknown) => ToolCard | undefined>().optional(),
 });
 
 /** Tool definition type - derived from schema */

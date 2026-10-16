@@ -81,6 +81,7 @@ import {
   buildCodexMcpToolLog,
   buildCodexThreadToolLog,
   buildCodexTurnToolLog,
+  codexCallCard,
 } from './codexShared';
 import type { ChildRuns } from '@texra-ai/harness/plugins';
 import type { AgentCliSessionRegistry } from './agentCliSessionRegistry';
@@ -483,6 +484,10 @@ export const CodexTool = defineTool({
     'When multiple codex agents must edit the same files, or to isolate experimental changes, use a git worktree (`git worktree add ../worktree-name branch-name`); codex runs in the working directory of the calling agent and takes no directory argument. ' +
     'codex and claude_code are both independent sandboxed coders distinct from the in-process `agent` specialists. Prefer whichever vendor fits the task, and for parallel or isolated edits run them against a git worktree.',
   schema: CodexInputSchema,
+  card: (raw) => {
+    const input = CodexInputSchema.safeParse(raw);
+    return input.success ? codexCallCard(input.data) : undefined;
+  },
   guard: {
     bash: (input: CodexInput) =>
       agentCliApprovalCommand(CODEX_AGENT_NAME, input.prompt, (stores) =>

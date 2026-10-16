@@ -64,7 +64,7 @@ export type ToolCallStatus = z.infer<typeof ToolCallStatusSchema>;
  * a turn) shows. Plain data in the generic section kinds every renderer
  * already paints, so the fold stays plugin-agnostic.
  */
-const ToolCardSchema = z.object({
+export const ToolCardSchema = z.object({
   /** The row header, in place of the tool's display name. */
   title: z.string(),
   sections: z.array(
@@ -99,7 +99,8 @@ const ToolCardSchema = z.object({
     ]),
   ),
 });
-type ToolCard = z.infer<typeof ToolCardSchema>;
+/** A card a tool states itself (`ToolCardSchema`). */
+export type ToolCard = z.infer<typeof ToolCardSchema>;
 
 /**
  * An MCP tool call's output: its status, its structured content, and its

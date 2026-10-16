@@ -456,8 +456,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
       alongside,
     );
 
-  const slow = (fact: CallFacts) =>
-    step.registry.get(fact.toolName)?.slow === true;
+  const toolOf = (fact: CallFacts) => step.registry.get(fact.toolName);
   /** The row that opens a call's card: a slow tool's commits with the
    *  intent its body starts with, so a resume finds the card its
    *  settlement closes; a fast tool's rides the settlement batch itself. */
@@ -472,6 +471,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
       logId: fact.logId,
       toolName: fact.toolName,
       input: toJsonValue(input),
+      card: toolOf(fact)?.definition.card?.(input),
       ...(script?.phase != null ? { phase: script.phase } : {}),
       ...(attempt > 1 ? { attempt } : {}),
       ...(script !== null ? { stageId: script.stageId } : {}),
@@ -490,7 +490,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
   ) => {
     const script = scriptOf(fact);
     return (state: RunState): RunHistoryDraft[] => [
-      ...(slow(fact) && startedAt(state, fact.callId, attempt)
+      ...(toolOf(fact)?.slow && startedAt(state, fact.callId, attempt)
         ? []
         : [cardStart(fact, input, attempt)]),
       displayRow(runId, {
