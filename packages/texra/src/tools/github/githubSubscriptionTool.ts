@@ -25,12 +25,12 @@ import {
   ChildRuns,
   requireRun,
   type RunInbox,
+  parseWorkingDirectory,
+  nullishWithDefault,
+  executed,
 } from '@texra-ai/harness/plugins';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import { ToolError, type RunId, type ToolResult } from '@shared/schemas';
-import { parseWorkingDirectory } from '@tools/pathResolution';
-import { nullishWithDefault } from '@tools/core/inputSchema';
-import { executed } from '@tools/core/result';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { executeCommand } from '@utils/system/execUtils';
 

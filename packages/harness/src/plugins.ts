@@ -11,8 +11,46 @@
  * only through `ChildRuns`: it launches a child, and sends a run its input
  * (`RunInbox`). A plugin that owns a block of an agent file (`AgentBlock`)
  * reads an agent's block with `agentBlockOf`.
+ *
+ * An app defines a plugin with `definePlugin`; its tools return `executed` or
+ * `errorResult`, give an omitted input field its default with
+ * `nullishWithDefault`, and resolve a path the model names against the
+ * call's roots with `resolveToolPath`. A plugin's process services are its
+ * `ProcessPluginLayer`; work that outlives its step holds the session layer
+ * with `PluginHold`; a plugin that records the decisions on a request kind
+ * is that kind's `RequestDecisionHook`. The process's plugin table is the
+ * `ToolRegistry` service, and `readDisabledTools` reads which plugins the
+ * user switched off.
  */
-export { harnessBuiltins } from '@tools/builtinPlugins';
+export {
+  codemode,
+  fileOps,
+  goal,
+  harnessBuiltins,
+  memoryWorkflow,
+  multiAgent,
+  web,
+} from '@tools/builtinPlugins';
+export { definePlugin, readDisabledTools } from '@tools/plugins';
+export {
+  agentBlockOf,
+  PluginHold,
+  ToolRegistry,
+  type AgentBlock,
+  type AgentBlockResult,
+  type ProcessPluginLayer,
+  type RecipeChange,
+  type RequestDecisionHook,
+} from '@tools/toolTable';
+export { errorResult, executed } from '@tools/core/result';
+export { nullishWithDefault } from '@tools/core/inputSchema';
+export {
+  assertNoParentTraversal,
+  parseWorkingDirectory,
+  resolveToolPath,
+  type ToolPathCall,
+  type WorkspacePathResolution,
+} from '@tools/pathResolution';
 /** The `web` plugin's fetch tool, typed with what its call requires, for a
  *  host that calls it outside a run (the editor's Copilot tools). */
 export { WebFetchTool } from '@tools/web/WebFetchTool';
@@ -24,9 +62,3 @@ export {
 export type { RunInbox } from '@agent/followUp/ToolUseFollowUp';
 export type { ToolRun } from '@agent/core/tools/ToolTypes';
 export { HostCapabilities } from '@agent/runtime/agentToolResolution';
-export {
-  agentBlockOf,
-  type AgentBlock,
-  type AgentBlockResult,
-  type RecipeChange,
-} from '@tools/toolTable';

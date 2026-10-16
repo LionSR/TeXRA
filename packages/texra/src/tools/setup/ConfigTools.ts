@@ -13,14 +13,13 @@ import { Effect } from 'effect';
 import { z } from 'zod';
 
 import { defineTool, ToolContext } from '@texra-ai/harness';
+import { executed } from '@texra-ai/harness/plugins';
 import { ToolError } from '@shared/schemas';
 import {
   settingSchemaWithoutPrefault,
   type StateSettingEntry,
 } from '@shared/state/stateSettings';
 import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
-
-import { executed } from '@tools/core/result';
 
 /**
  * Keys `update_config` may write. Read access (`read_config`) is open across

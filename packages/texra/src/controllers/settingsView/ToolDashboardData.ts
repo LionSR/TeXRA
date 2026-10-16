@@ -15,7 +15,9 @@ import {
   AppState,
   type ToolProbeInputs,
   type SettingHost,
+  type Plugin,
 } from '@texra-ai/harness';
+import { readDisabledTools, ToolRegistry } from '@texra-ai/harness/plugins';
 import type {
   ToolCommandKind,
   ToolDashboardItem,
@@ -25,8 +27,6 @@ import {
   type PluginCard,
   type ToolPluginSetup,
 } from '@texra/tools/pluginCards';
-import { readDisabledTools, type Plugin } from '@tools/plugins';
-import { ToolRegistry } from '@tools/toolTable';
 import {
   ToolAvailability,
   type ExternalToolCheckResult,
