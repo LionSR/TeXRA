@@ -165,6 +165,7 @@ export type { SettingHost } from '@shared/state/stateSettings';
 export { ToolContext } from '@agent/core/tools/ToolTypes';
 export { defineTool } from '@tools/core/definition';
 export type { DefinedTool } from '@tools/core/definition';
+export type { ToolResult } from '@shared/schemas';
 export type {
   AggregateId,
   RequestDecision,
