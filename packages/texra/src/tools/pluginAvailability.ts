@@ -15,6 +15,7 @@ import {
   type ToolProbeServices,
   withLogChannel,
 } from '@texra-ai/harness';
+import { findCommand } from '@texra-ai/harness/node';
 import {
   importCodexClass,
   findCodexBinaryPath,
@@ -47,7 +48,6 @@ import {
 } from '@texra/tools/availabilityProbes';
 import { isGitRepository } from '@texra/utils/git/isGitRepository';
 import { envVar } from '@utils/system/envFlags';
-import { findToolInCommonPaths } from '@utils/system/binaryResolver';
 import { formatResultCount } from '@utils/text/stringUtils';
 
 const CHANNEL = 'pluginAvailability';
@@ -112,7 +112,7 @@ export const lean4Availability = (setup: SetupPlatformShape) =>
         const servers = yield* leanServers;
         const extensionAvailable =
           setup.extensions?.isInstalled(LEAN4_EXTENSION_ID) ?? false;
-        const lakeAvailable = (yield* findToolInCommonPaths('lake')) !== null;
+        const lakeAvailable = (yield* findCommand('lake')) !== null;
         // Only the VS Code build drives Lean through the extension.
         const requiresExtension = inputs.host === 'vscode';
         return {

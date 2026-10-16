@@ -91,6 +91,5 @@
   "packages/harness/src/tools/toolTable.ts": 5,
   "packages/harness/src/transcript/traceDocumentSchema.ts": 1,
   "packages/harness/src/utils/files/externalRoots.ts": 1,
-  "packages/harness/src/utils/files/rootedFileSystem.ts": 1,
   "packages/harness/src/utils/files/runStorage.ts": 1
 }

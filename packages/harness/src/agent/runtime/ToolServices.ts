@@ -69,7 +69,7 @@ export class ChildRuns extends Context.Service<
       types?: readonly SessionEvent['type'][],
     ) => Effect.Effect<readonly SessionEvent[], Error>;
   }
->()('@texra/agent/ChildRuns') {}
+>()('@texra-ai/harness/agent/ChildRuns') {}
 
 /** The harness's `ChildRuns`, over the session's runs, the call's place in
  *  its run and the script that issued it, which a built-in call provides:

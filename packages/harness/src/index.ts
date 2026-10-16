@@ -283,6 +283,7 @@ export {
   withSessionFs,
   WorkspaceFs,
 } from '@platform/rootedFs';
+export type { RootedFileSystem } from '@utils/files/rootedFileSystem';
 // A `FileLocation` by its root: a workspace file, a file under a run's
 // storage, a file outside both, or a path against the workspace root a
 // caller holds.

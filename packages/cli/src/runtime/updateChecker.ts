@@ -3,7 +3,10 @@ import { fileURLToPath } from 'node:url';
 import { z } from 'zod';
 
 import { Cause, Effect, Exit, Result } from 'effect';
-import { canonicalizeWorkspacePath } from '@texra-ai/harness/node';
+import {
+  canonicalizeWorkspacePath,
+  executeCommand,
+} from '@texra-ai/harness/node';
 import { parseJsonWith } from '@texra-ai/harness/schemas';
 import { updateCheckRecordsLayer } from '@texra/controllers/session/updateCheckRecords';
 import {
@@ -12,7 +15,6 @@ import {
   runDailyUpdateCheck,
   type UpdateCheckFetchResult,
 } from '@texra/utils/system/updateCheck';
-import { executeCommand } from '@utils/system/execUtils';
 import { isEnvFlagEnabled } from '@utils/system/envFlags';
 
 import {

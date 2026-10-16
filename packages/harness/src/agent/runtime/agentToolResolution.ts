@@ -66,7 +66,7 @@ import { ToolRegistry } from '@tools/toolTable';
 export class HostCapabilities extends Context.Service<
   HostCapabilities,
   { readonly of: (storage: string) => ReadonlySet<string> }
->()('@texra/agent/HostCapabilities') {}
+>()('@texra-ai/harness/agent/HostCapabilities') {}
 
 /** What a step resolves its tools from: fixed at the run's open, but the
  *  approval flag the step reads live. */

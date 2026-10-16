@@ -26,4 +26,4 @@ export class WorkspaceRoots extends Context.Service<
     readonly storage: string;
     readonly config?: ConfigProvider;
   }
->()('@texra/session/WorkspaceRoots') {}
+>()('@texra-ai/harness/session/WorkspaceRoots') {}
