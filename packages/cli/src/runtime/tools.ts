@@ -1,15 +1,14 @@
 import { Effect } from 'effect';
 
 // Local imports
+import { ToolCatalog, type ToolProbeInputs } from '@texra-ai/harness';
 import {
   buildToolDashboardItems,
   visibleToolPlugins,
 } from '@texra/controllers/settingsView/ToolDashboardData';
 import type { ToolDashboardItem } from '@texra/shared/settingsView/settingsViewMessages';
 import type { ToolPluginSetup } from '@texra/tools/pluginCards';
-import { setToolEnabled } from '@tools/toolAvailability';
 import { ToolRegistry } from '@tools/toolTable';
-import type { ToolProbeInputs, StateStore } from '@texra-ai/harness';
 
 type CliToolGuideKind = 'install' | 'auth';
 
@@ -78,15 +77,13 @@ function cliToolGuide(
   return { text: lines.join('\n'), command: setup.authCommand };
 }
 
-export function setCliToolEnabled(
-  state: StateStore,
-  id: string,
-  enabled: boolean,
-) {
+export function setCliToolEnabled(id: string, enabled: boolean) {
   return Effect.flatMap(findCliToolDef(id), (def) =>
     def?.plugin.toggle !== undefined
       ? // A plugin's bundled agents follow its switch (`pluginCatalogLayer`).
-        setToolEnabled(id, enabled, state).pipe(Effect.as(true))
+        Effect.flatMap(ToolCatalog, (catalog) =>
+          catalog.setEnabled(id, enabled),
+        ).pipe(Effect.as(true))
       : Effect.succeed(false),
   );
 }

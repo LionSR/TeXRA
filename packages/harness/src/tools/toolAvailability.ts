@@ -30,7 +30,6 @@ import {
   Layer,
   Option,
   Queue,
-  Result,
   Scope,
   Semaphore,
   SubscriptionRef,
@@ -73,29 +72,6 @@ const GROUP_PROBE_TIMEOUT_MS = 20_000;
 // ============================================================
 // Switches
 // ============================================================
-
-/** Switch a plugin that has a switch (`toggle`) on or off in the caller's
- *  global state store, which every process follows (`AppState.changes`);
- *  any other id is refused loudly, and an invalid record refuses the write. */
-export function setToolEnabled(
-  toolId: string,
-  enabled: boolean,
-  store: StateStore,
-) {
-  const write = store.modify(GlobalStateKey.DISABLED_TOOLS, (stored) =>
-    Result.map(storedDisabledTools(stored), (current) => {
-      const disabled = new Set(current);
-      if (enabled) disabled.delete(toolId);
-      else disabled.add(toolId);
-      return [...disabled];
-    }),
-  );
-  return Effect.flatMap(ToolRegistry, ({ entries }) =>
-    entries.get(toolId)?.toggle === undefined
-      ? Effect.logWarning(`Plugin ${toolId} has no switch; nothing written.`)
-      : Effect.asVoid(write),
-  ).pipe(withLogChannel(CHANNEL));
-}
 
 /**
  * Seed the disabled-tool list for first-time users only, on every host and

@@ -22,16 +22,23 @@ import {
   Option,
   Path,
   RcMap,
+  Result,
   type Scope,
   Stream,
   SubscriptionRef,
 } from 'effect';
 import { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
-import { AppState } from '@platform/interfaces';
+import { withLogChannel } from '@logger/effectLog';
+import {
+  AppState,
+  type StateReadFailed,
+  type StateWriteFailed,
+} from '@platform/interfaces';
 import type { PluginContext } from '@platform/processRuntime';
-import { entriesOf, type ToolEntry } from '@tools/catalogEntries';
-import type { Plugin } from '@tools/plugins';
+import { GlobalStateKey } from '@shared/state/stateKeys';
+import { entriesOf } from '@tools/catalogEntries';
+import { storedDisabledTools, type Plugin } from '@tools/plugins';
 import {
   buildPluginLayer,
   follow,
@@ -48,25 +55,54 @@ import {
 } from '@tools/toolTable';
 import type { PluginLoader } from '@tools/mcp/mcpConfig';
 
-/** The process's tool catalog. */
-export class ToolCatalog extends Context.Service<
+/** The process's tool catalog's identifier: what a program that reads the
+ *  catalog requires. */
+export interface ToolCatalog {
+  readonly _: unique symbol;
+}
+
+/** The process's tool catalog as a host, or a plugin's process layer,
+ *  reads it. */
+export interface ToolCatalogShape {
+  /** The built-in plugins' tools as the switches stand, each tool's name to
+   *  its plugin's id: now, then on each change (what a host mirrors outside
+   *  any run: Copilot's tools). */
+  readonly current: Stream.Stream<ReadonlyMap<string, string>>;
+  /** Borrow a plugin's process services for the caller's scope without
+   *  starting them; none while its layer is down. */
+  readonly processServices: (
+    plugin: string,
+  ) => Effect.Effect<Option.Option<PluginContext>, never, Scope.Scope>;
+  /** Switch a plugin that has a switch (`toggle`) on or off in the global
+   *  state store, which every process follows (`AppState.changes`); any
+   *  other id is refused loudly, and an invalid record refuses the write. */
+  readonly setEnabled: (
+    plugin: string,
+    enabled: boolean,
+  ) => Effect.Effect<void, StateReadFailed | StateWriteFailed>;
+}
+
+// The catalog's one service slot: a `Context` keys a service by this string,
+// so both keys below read the same service.
+const CATALOG_KEY = '@texra/tools/ToolCatalog';
+
+/** The catalog the process's owner runs on: the host's reads, with the
+ *  shutdown protocol's plugin step and each session's catalog. */
+export const ToolCatalogOwner = Context.Service<
   ToolCatalog,
-  {
-    /** The built-in plugins' tools as the switches stand: now, then on each
-     *  change (what a host mirrors outside any run: Copilot's tools). */
-    readonly current: Stream.Stream<ReadonlyMap<string, ToolEntry>>;
-    /** Borrow a plugin's process services for the caller's scope without
-     *  starting them; none while its layer is down. */
-    readonly processServices: (
-      plugin: string,
-    ) => Effect.Effect<Option.Option<PluginContext>, never, Scope.Scope>;
+  ToolCatalogShape & {
     /** The shutdown protocol's plugin step: every up process layer's
      *  `drain`, while its services are still up. */
     readonly drain: Effect.Effect<void>;
     /** A session's catalog, in the caller's scope (the session's). */
     readonly session: Effect.Effect<SessionTools, never, Scope.Scope>;
   }
->()('@texra/tools/ToolCatalog') {}
+>(CATALOG_KEY);
+
+/** The process's tool catalog, as a host or a plugin's process layer reads
+ *  it: the owner's service, read-only (only `toolCatalogLayer` serves it). */
+export const ToolCatalog: Context.Key<ToolCatalog, ToolCatalogShape> =
+  Context.Service<ToolCatalog, ToolCatalogShape>(CATALOG_KEY);
 
 /**
  * The catalog over `table`, served with it as the `ToolRegistry`: the
@@ -106,7 +142,7 @@ export const toolCatalogLayer = (
         .map(({ id }) => id),
     );
   const catalog = Layer.effect(
-    ToolCatalog,
+    ToolCatalogOwner,
     Effect.gen(function* () {
       // What a process layer is built over, beside this catalog: exactly
       // these services, never the build's scope with them.
@@ -128,7 +164,7 @@ export const toolCatalogLayer = (
         yield* RcMap.make({
           lookup: (id: string) =>
             buildPluginLayer(id, processLayerOf).pipe(
-              Effect.provideService(ToolCatalog, service),
+              Effect.provideService(ToolCatalogOwner, service),
               Effect.provide(process),
             ),
         });
@@ -155,18 +191,35 @@ export const toolCatalogLayer = (
       };
       const processServices = (id: string) =>
         RcMap.getOption(processLayers, id);
-      const service: ToolCatalog['Service'] = {
+      const state = Context.get(process, AppState);
+      const service: typeof ToolCatalogOwner.Service = {
         current: SubscriptionRef.changes(on).pipe(
           Stream.map(
-            (switchedOn): ReadonlyMap<string, ToolEntry> =>
+            (switchedOn): ReadonlyMap<string, string> =>
               new Map(
                 shared.builtIn.flatMap(({ plugin, entries }) =>
-                  switchedOn.has(plugin.id) ? [...entries] : [],
+                  switchedOn.has(plugin.id)
+                    ? [...entries.keys()].map((name) => [name, plugin.id])
+                    : [],
                 ),
               ),
           ),
         ),
         processServices,
+        setEnabled: (id, enabled) =>
+          (table.entries.get(id)?.toggle === undefined
+            ? Effect.logWarning(`Plugin ${id} has no switch; nothing written.`)
+            : Effect.asVoid(
+                state.modify(GlobalStateKey.DISABLED_TOOLS, (stored) =>
+                  Result.map(storedDisabledTools(stored), (current) => {
+                    const disabled = new Set(current);
+                    if (enabled) disabled.delete(id);
+                    else disabled.add(id);
+                    return [...disabled];
+                  }),
+                ),
+              )
+          ).pipe(withLogChannel('toolAvailability')),
         drain: Effect.forEach(
           drains,
           ([id, drain]) =>

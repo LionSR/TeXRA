@@ -93,7 +93,7 @@ import {
   type SessionOpenError,
 } from '@shared/session/database';
 import { UsageLog } from '@shared/usageLog';
-import { ToolCatalog } from '@tools/liveTools';
+import { ToolCatalogOwner } from '@tools/liveTools';
 import { pluginCatalogLayer } from '@tools/pluginCatalog';
 import type { Plugin } from '@tools/plugins';
 import { toolAvailabilityLayer } from '@tools/toolAvailability';
@@ -181,7 +181,7 @@ const sessionHandleLayer = (key: SessionKey) =>
       yield* Effect.addFinalizer(() => store.close);
       // The runs' fork and the project's tools end with this scope.
       const fork = yield* FiberSet.makeRuntime<ProcessServices>();
-      const tools = yield* (yield* ToolCatalog).session;
+      const tools = yield* (yield* ToolCatalogOwner).session;
       const interactions = new SessionHostInteractions();
       // Each run's `.env`, read as it launches, and its window's models.
       const env = Layer.merge(
@@ -716,7 +716,7 @@ const sessionOwnerLayer = Layer.effect(
   SessionOwner,
   Effect.gen(function* () {
     const map = yield* SessionMap;
-    const catalog = yield* ToolCatalog;
+    const catalog = yield* ToolCatalogOwner;
     const withMap = <A, E>(
       effect: Effect.Effect<A, E, SessionMap>,
     ): Effect.Effect<A, E> => Effect.provideService(effect, SessionMap, map);

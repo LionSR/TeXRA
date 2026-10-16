@@ -35,7 +35,7 @@
   "packages/harness/src/tools/ExecutionsTool.ts": 800,
   "packages/harness/src/tools/memory/memoryFileSystem.ts": 443,
   "packages/harness/src/tools/memory/MemoryTool.ts": 629,
-  "packages/harness/src/tools/toolAvailability.ts": 436,
+  "packages/harness/src/tools/toolAvailability.ts": 412,
   "packages/llm/src/api/anthropicMessages.ts": 826,
   "packages/llm/src/api/googleInteractions.ts": 1041,
   "packages/llm/src/api/openaiResponses.ts": 500,

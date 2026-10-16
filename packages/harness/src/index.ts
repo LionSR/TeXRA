@@ -232,7 +232,16 @@ export {
 export { pathToLocationIn } from '@utils/files/fileLocation';
 // Which external tools this machine has, as plugins' `availability` probes
 // answered; a host reads it and asks for a refresh.
-export { ToolAvailability } from '@tools/toolAvailabilityService';
+export {
+  ToolAvailability,
+  type AvailabilityResults,
+  type ExternalToolCheckResult,
+} from '@tools/toolAvailabilityService';
+// The process's tool catalog: the built-in tools the switches leave on, a
+// plugin's process services, and the switches themselves; and the switches'
+// first-install seed.
+export { ToolCatalog, type ToolCatalogShape } from '@tools/liveTools';
+export { seedDisabledToolDefaults } from '@tools/toolAvailability';
 // The harness's log output: where its entries go and how an entry reads.
 export {
   entryChannel,
