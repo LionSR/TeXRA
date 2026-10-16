@@ -14,7 +14,6 @@ import {
   readMcpConfig,
   type ConfigProvider,
 } from '@texra-ai/harness';
-import { resolveGlobalStoragePath } from '@texra-ai/harness/node';
 import {
   JsonConfigProvider,
   type ConfigStore,
@@ -295,7 +294,7 @@ export function loadCliStartupConfig(
       // otherwise reads: a broken file warns here, not first mid-run.
       const mcpConfig = yield* readMcpConfig(
         yield* FileSystem.FileSystem,
-        mcpConfigPathOf(resolveGlobalStoragePath(storageRoot)),
+        mcpConfigPathOf(storageRoot),
       );
       // A value its catalog row rejects is reported once, in `warnings`
       // below, and then reads as absent: every read passes over it to the

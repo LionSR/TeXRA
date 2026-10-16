@@ -13,6 +13,7 @@ import {
   mcpConfigPathOf,
   readMcpConfig,
   type ToolProbeInputs,
+  type WorkspaceRoots,
 } from '@texra-ai/harness';
 import { getCatalogAgents } from '@agent/index';
 import type { PluginEnv } from '@common/plugins/installRecord';
@@ -28,7 +29,7 @@ import type { ExternalToolCheckResult } from '@tools/toolAvailabilityService';
  * or invalid `mcp.json` lists no servers and says why in `mcpWarnings`.
  */
 export const buildPluginRows = Effect.fn('buildPluginRows')(function* (
-  inputs: ToolProbeInputs & PluginEnv,
+  inputs: ToolProbeInputs & PluginEnv & Pick<WorkspaceRoots, 'storageRoot'>,
   cachedResults?: readonly ExternalToolCheckResult[],
 ) {
   const agents = getCatalogAgents().map((agent) => ({
@@ -49,7 +50,7 @@ export const buildPluginRows = Effect.fn('buildPluginRows')(function* (
 
   const items = yield* buildToolDashboardItems(inputs, cachedResults);
   const installed = yield* listPlugins(inputs);
-  const mcpConfigPath = mcpConfigPathOf(inputs.globalStorage);
+  const mcpConfigPath = mcpConfigPathOf(inputs.storageRoot);
   const mcp = yield* readMcpConfig(yield* FileSystem.FileSystem, mcpConfigPath);
 
   const rows: PluginRow[] = [

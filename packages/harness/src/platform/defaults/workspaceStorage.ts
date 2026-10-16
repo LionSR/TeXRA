@@ -1,6 +1,6 @@
 // Node imports
 import { realpathSync } from 'node:fs';
-import { basename, dirname, join, posix } from 'node:path';
+import { basename, join, posix } from 'node:path';
 
 import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
 import { normalizeFilePath } from '@utils/core';
@@ -68,13 +68,6 @@ function workspaceStorageId(workspacePath: string | undefined): string {
 /** The process-wide storage directory under a storage root. */
 export function resolveGlobalStoragePath(storageRoot: string): string {
   return join(storageRoot, 'v1', STORAGE_LAYOUT.global);
-}
-
-/** The storage root a global storage directory lies under: the inverse of
- *  {@link resolveGlobalStoragePath}, for the files a person keeps at the
- *  root (the MCP config) beside the process state. */
-export function storageRootOf(globalStorage: string): string {
-  return dirname(dirname(globalStorage));
 }
 
 /** One workspace's storage directory under a storage root, keyed by the

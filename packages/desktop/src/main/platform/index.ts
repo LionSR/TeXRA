@@ -136,7 +136,7 @@ export const initializeElectronPlatform = Effect.fn(
   const runtime = withForkFailureReporting(
     ManagedRuntime.make(
       processLayer({
-        globalStorage,
+        storageRoot: dataRoot,
         plugins: texraPlugins(),
         secrets,
         // Application state is the one the CLI and the extension keep, in the
@@ -188,8 +188,8 @@ export const initializeElectronPlatform = Effect.fn(
     const processRoots = createNodeWorkspaceRoots({
       host: 'desktop',
       workspacePath: undefined,
+      storageRoot: dataRoot,
       storage,
-      globalStorage,
       config: configStores,
       workspaceState: workspaceStateStore,
       repoState: yield* openRepoStateStore(undefined, storage),

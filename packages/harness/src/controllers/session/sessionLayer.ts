@@ -76,6 +76,7 @@ import {
   nodePlatformServices,
   workspaceEnvironmentLayer,
 } from '@platform/defaults/nodePlatform';
+import { resolveGlobalStoragePath } from '@platform/defaults/workspaceStorage';
 import {
   aggregateTarget,
   RUN_OUTCOME,
@@ -388,6 +389,7 @@ const openSession = (open: SessionHandleInit) =>
       roots: {
         host: roots.host,
         workspace: roots.workspace,
+        storageRoot: roots.storageRoot,
         storage: roots.storage,
         globalStorage: roots.globalStorage,
         config: roots.config,
@@ -561,8 +563,8 @@ export interface ProcessLayerOptions {
     never,
     ProcessProbe
   >;
-  /** The global storage root every session of the process shares. */
-  readonly globalStorage: string;
+  /** The storage root this process opened (`WorkspaceRoots.storageRoot`). */
+  readonly storageRoot: string;
   /**
    * The app's plugins, in order, the harness's built-ins among them: the
    * process serves them as `ToolRegistry` and the tool catalog over it
@@ -634,7 +636,7 @@ export interface ProcessLayerOptions {
  *  its `Sessions` over. */
 export function ownerProcessLayer({
   processStart = nodeProcesses.selfIdentity(),
-  globalStorage,
+  storageRoot,
   plugins,
   secrets,
   appState,
@@ -643,23 +645,21 @@ export function ownerProcessLayer({
   toolMissingReporter,
   toolAvailability = toolAvailabilityLayer,
   usageLog = UsageLog.disabled,
-  globalDatabase: globalDatabaseOption = globalDatabaseLayer(globalStorage),
+  globalDatabase: globalDatabaseOption,
   minimumLogLevel,
   workspace,
 }: ProcessLayerOptions): Layer.Layer<ProcessServices | SessionOwner> {
-  // The user's MCP servers: the config file at the storage root this
-  // process's global storage lies under.
-  const catalog = pluginCatalogLayer(plugins, mcpConfigPathOf(globalStorage));
+  const globalStorage = resolveGlobalStoragePath(storageRoot);
+  const catalog = pluginCatalogLayer(plugins, mcpConfigPathOf(storageRoot));
   // Non-failing: `selfIdentity()` reads an unreadable identity as undefined.
   const identity = Layer.effect(
     ProcessIdentity,
     Effect.map(processStart, (start) => ({ ownerId: processOwnerId(start) })),
   );
   // Keep the global handle outside session `Layer.fresh`; open failure is fatal.
-  const globalDatabase = globalDatabaseOption.pipe(
-    Layer.provide(identity),
-    Layer.orDie,
-  );
+  const globalDatabase = (
+    globalDatabaseOption ?? globalDatabaseLayer(globalStorage)
+  ).pipe(Layer.provide(identity), Layer.orDie);
   const services = Layer.mergeAll(
     Secrets.layer(secrets),
     LanguageModel.layer(languageModel),

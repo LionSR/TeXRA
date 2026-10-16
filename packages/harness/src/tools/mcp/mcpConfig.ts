@@ -47,7 +47,6 @@ import {
   parseMcpServers,
   type McpServerConfig,
 } from '@common/plugins/mcpServers';
-import { storageRootOf } from '@platform/defaults/workspaceStorage';
 import { ProjectEnvironment } from '@utils/system/nodeWorkspace';
 import { sha256 } from '@utils/core/idHash';
 
@@ -60,10 +59,9 @@ import {
 /** The config file's name inside the user's `~/.texra` directory. */
 const MCP_CONFIG_FILE_NAME = 'mcp.json';
 
-/** The user's MCP config file: `mcp.json` at the storage root that holds
- *  `globalStorage` (`~/.texra/mcp.json` for the hosts' default root). */
-export function mcpConfigPathOf(globalStorage: string): string {
-  return path.join(storageRootOf(globalStorage), MCP_CONFIG_FILE_NAME);
+/** The user's MCP config file: `mcp.json` at a storage root. */
+export function mcpConfigPathOf(storageRoot: string): string {
+  return path.join(storageRoot, MCP_CONFIG_FILE_NAME);
 }
 
 const McpConfigFileSchema = z.object({

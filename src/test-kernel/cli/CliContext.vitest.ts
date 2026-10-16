@@ -207,9 +207,7 @@ describe('CLI context config defaults', () => {
   it('warns on a malformed user mcp.json, the warning doctor reports', async () => {
     // The mcp.json of the storage root the CLI was started on.
     const storageRoot = await makeTempDir('texra-cli-storage-', tempDirs);
-    const mcpConfigPath = mcpConfigPathOf(
-      resolveGlobalStoragePath(storageRoot),
-    );
+    const mcpConfigPath = mcpConfigPathOf(storageRoot);
     await writeFile(mcpConfigPath, '{ "mcpServers": ');
     const context = await cliContext({
       ambient,

@@ -355,8 +355,8 @@ export function initCliPlatform(
           const roots = createNodeWorkspaceRoots({
             host: 'cli',
             workspacePath: context.cwd,
+            storageRoot,
             storage,
-            globalStorage: resolveGlobalStoragePath(storageRoot),
             config: context.config,
             workspaceState,
             repoState,

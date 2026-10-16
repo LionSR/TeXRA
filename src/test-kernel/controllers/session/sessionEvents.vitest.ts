@@ -1340,7 +1340,7 @@ describe('Sessions owner', () => {
             );
           const held = yield* temp('held');
           const other = yield* temp('other');
-          const globalStorage = yield* temp('global');
+          const storageRoot = yield* temp('root');
           const roots = (storage: string) =>
             createFakeWorkspaceRoots({ storagePath: storage });
           // Its own memo map, as a second ManagedRuntime has: built in this
@@ -1348,7 +1348,7 @@ describe('Sessions owner', () => {
           // Its scope closes it, and its sessions, whatever fails.
           const second = Context.get(
             yield* Layer.buildWithMemoMap(
-              testProcessLayer([], globalStorage),
+              testProcessLayer([], storageRoot),
               Layer.makeMemoMapUnsafe(),
               yield* Effect.scope,
             ),

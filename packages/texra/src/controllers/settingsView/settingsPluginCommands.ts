@@ -37,7 +37,10 @@ import type {
 
 /** The installed-plugin arm of the settings body. */
 export function settingsPluginCommands(ports: {
-  readonly roots: PluginEnv & { readonly workspace: string | undefined };
+  readonly roots: PluginEnv & {
+    readonly workspace: string | undefined;
+    readonly storageRoot: string;
+  };
   readonly bindings: SettingsHostBindings;
   readonly present: SettingsPresentation;
   /** Repaint the Plugins page, whose rows this arm's changes feed. */
@@ -78,7 +81,7 @@ export function settingsPluginCommands(ports: {
    *  never created, so the page is no second writer of it. */
   const openMcpConfig = Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
-    const mcpConfigPath = mcpConfigPathOf(roots.globalStorage);
+    const mcpConfigPath = mcpConfigPathOf(roots.storageRoot);
     if (yield* fs.exists(mcpConfigPath))
       return yield* bindings.openPath(mcpConfigPath);
     yield* present.notice(

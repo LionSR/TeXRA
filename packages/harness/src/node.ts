@@ -10,10 +10,7 @@ import type { PlatformSecrets } from '@platform/secrets';
 import { MemoryConfigProvider } from '@platform/defaults/memoryConfigProvider';
 import { MemoryStateStore } from '@platform/defaults/memoryState';
 import { createNodeWorkspaceRoots } from '@platform/defaults/nodeHost';
-import {
-  resolveGlobalStoragePath,
-  resolveWorkspaceStoragePath,
-} from '@platform/defaults/workspaceStorage';
+import { resolveWorkspaceStoragePath } from '@platform/defaults/workspaceStorage';
 import { UNAVAILABLE_LANGUAGE_MODEL_PORT } from '@platform/languageModel';
 import {
   settingsCatalog,
@@ -108,7 +105,7 @@ export function nodePlatform(options: NodePlatformOptions): AgentPlatform {
       host: 'sdk',
       workspacePath: workspaceDir,
       storage: resolveWorkspaceStoragePath(options.storageDir, workspaceDir),
-      globalStorage: resolveGlobalStoragePath(options.storageDir),
+      storageRoot: options.storageDir,
       // Process-local configuration: an embedder's settings must not be read
       // from, or written to, the user's `.texra/config.json`.
       config: new MemoryConfigProvider(settingsCatalog(options.settings ?? [])),

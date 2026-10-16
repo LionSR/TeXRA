@@ -20,7 +20,6 @@ import { SessionOwner, type Session, type Sessions } from '@texra-ai/harness';
 import {
   createNodeWorkspaceRoots,
   canonicalizeWorkspacePath,
-  resolveGlobalStoragePath,
   resolveWorkspaceStoragePath,
 } from '@texra-ai/harness/node';
 import { SessionHostInteractions, type SessionHandle } from '@agent/runtime';
@@ -383,8 +382,8 @@ export function openDesktopProjectRegistry(
             const roots = createNodeWorkspaceRoots({
               host: 'desktop',
               workspacePath: root,
+              storageRoot: options.dataRoot,
               storage,
-              globalStorage: resolveGlobalStoragePath(options.dataRoot),
               config: {
                 ...workspaceConfigs,
                 global: options.globalConfigStore,

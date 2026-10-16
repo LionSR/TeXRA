@@ -85,7 +85,7 @@ export class Sessions extends Context.Service<
         ),
         Effect.map(() =>
           processLayer({
-            globalStorage: platform.roots.globalStorage,
+            storageRoot: platform.roots.storageRoot,
             plugins,
             secrets: platform.secrets,
             appState: AppState.layer(platform.roots.globalState),

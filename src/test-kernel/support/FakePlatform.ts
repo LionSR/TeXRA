@@ -23,6 +23,7 @@ import {
   type AppStateStore,
 } from '@platform/interfaces';
 import { MemoryStateStore } from '@platform/defaults/memoryState';
+import { resolveGlobalStoragePath } from '@platform/defaults/workspaceStorage';
 import type { LanguageModelPort } from '@platform/languageModel';
 import type { PlatformSecrets } from '@platform/secrets';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
@@ -61,7 +62,7 @@ function workerTempHome(): string {
  * `mkdir`. Nothing here runs at module load: importing this module must stay
  * free of process-wide side effects, so the pure test tier can reach it.
  */
-function workerDir(name: 'root' | 'global-storage'): string {
+function workerDir(name: string): string {
   const globals = globalThis as { __texraFakeDirs__?: Set<string> };
   const dir = path.join(workerTempHome(), name);
   const created = (globals.__texraFakeDirs__ ??= new Set<string>());
@@ -95,8 +96,19 @@ export function fakePath(...segments: string[]): string {
  * under the global storage root even when everything else is faked.
  * Worker-shared so the hosts that never touch presence share the one directory.
  */
+/** The worker's storage root: the fake host's global storage, and the MCP
+ *  config a process reads, lie under it as a host's do under `~/.texra`. */
+function fakeStorageRoot(): string {
+  return workerDir('storage-root');
+}
+
 function fakeGlobalStorage(): string {
-  return workerDir('global-storage');
+  return workerDir(
+    path.relative(
+      workerTempHome(),
+      resolveGlobalStoragePath(fakeStorageRoot()),
+    ),
+  );
 }
 
 /**
@@ -440,6 +452,7 @@ export function createFakeWorkspaceRoots(
     workspace: Object.hasOwn(options, 'workspacePath')
       ? options.workspacePath
       : fakePath('workspace'),
+    storageRoot: fakeStorageRoot(),
     storage: options.storagePath ?? fakePath('workspace/.texra/storage'),
     globalStorage: options.globalStoragePath ?? fakeGlobalStorage(),
     config: overrides.config ?? new FakeConfigProvider(options.config),

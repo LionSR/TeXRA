@@ -26,6 +26,7 @@ import {
 } from '@test/support/setupPlatform';
 import { nodeSpawnerLayer } from '@test/support/childProcessTestLayer';
 import { resolveTestStep } from '@test/support/stepToolsTestUtils';
+import { createFakeWorkspaceRoots } from '@test/support/FakePlatform';
 import { texraPlugins } from '@texra/tools/registry';
 import { ToolCatalog, toolCatalogLayer } from '@tools/liveTools';
 import { mcpConfigPathOf } from '@tools/mcp/mcpConfig';
@@ -63,7 +64,7 @@ describe('tool-use tool resolution', () => {
       Effect.provide(
         pluginCatalogLayer(
           texraPlugins(),
-          mcpConfigPathOf('/nonexistent'),
+          mcpConfigPathOf(createFakeWorkspaceRoots().storageRoot),
         ).pipe(
           Layer.provide(
             Layer.merge(nodePlatformLayer, AppState.layer(fakeHostAppState)),
@@ -193,7 +194,7 @@ describe('tool-use tool resolution', () => {
         Effect.provide(
           pluginCatalogLayer(
             texraPlugins(),
-            mcpConfigPathOf('/nonexistent'),
+            mcpConfigPathOf(createFakeWorkspaceRoots().storageRoot),
           ).pipe(
             Layer.provide(
               Layer.merge(nodePlatformLayer, AppState.layer(fakeHostAppState)),

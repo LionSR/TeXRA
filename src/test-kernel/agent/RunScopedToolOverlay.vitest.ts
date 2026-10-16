@@ -38,6 +38,7 @@ import { publishTestRunStart } from '@test/support/sessionTestUtils';
 import { resolveTestStep } from '@test/support/stepToolsTestUtils';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { nodeSpawnerLayer } from '@test/support/childProcessTestLayer';
+import { createFakeWorkspaceRoots } from '@test/support/FakePlatform';
 import { texraPlugins } from '@texra/tools/registry';
 import { mcpConfigPathOf } from '@tools/mcp/mcpConfig';
 import { pluginCatalogLayer } from '@tools/pluginCatalog';
@@ -100,7 +101,10 @@ function runLayer(
     Layer.provideMerge(LanguageModel.layer(UNAVAILABLE_LANGUAGE_MODEL_PORT)),
     Layer.provideMerge(testHttpClientLayer),
     Layer.provideMerge(
-      pluginCatalogLayer(texraPlugins(), mcpConfigPathOf('/nonexistent')).pipe(
+      pluginCatalogLayer(
+        texraPlugins(),
+        mcpConfigPathOf(createFakeWorkspaceRoots().storageRoot),
+      ).pipe(
         Layer.provide(
           Layer.merge(nodePlatformLayer, AppState.layer(fakeHostAppState)),
         ),

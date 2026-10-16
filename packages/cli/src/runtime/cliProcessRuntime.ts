@@ -240,7 +240,7 @@ export function installCliProcessRuntime(
       Layer.merge(
         Layer.succeed(CliEditors)(editors),
         processLayer({
-          globalStorage: globalStoragePath,
+          storageRoot,
           plugins: texraPlugins({ editors }),
           secrets,
           appState: options?.appState

@@ -37,6 +37,9 @@ const VIEW: WorkspaceRoots = Object.freeze({
   get workspace() {
     return requireInstalled().workspace;
   },
+  get storageRoot() {
+    return requireInstalled().storageRoot;
+  },
   get storage() {
     return requireInstalled().storage;
   },

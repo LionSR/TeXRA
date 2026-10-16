@@ -171,7 +171,7 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
   const managed = withForkFailureReporting(
     ManagedRuntime.make(
       processLayer({
-        globalStorage,
+        storageRoot: defaultNodeStorageRoot(),
         // TeXRA's plugins, with Copilot's TeXRA tools over the window's roots.
         plugins: texraPlugins({
           editors,
@@ -281,8 +281,8 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
       const roots = createNodeWorkspaceRoots({
         host: 'vscode',
         workspacePath: workspaceRoot,
+        storageRoot: defaultNodeStorageRoot(),
         storage,
-        globalStorage,
         config,
         workspaceState: projectState,
         repoState: yield* openRepoStateStore(workspaceRoot, storage),

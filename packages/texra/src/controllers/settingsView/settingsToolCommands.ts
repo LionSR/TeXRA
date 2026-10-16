@@ -28,7 +28,12 @@ import type { WorkspaceRoots } from '@texra-ai/harness';
 export function settingsToolCommands(ports: {
   readonly roots: Pick<
     WorkspaceRoots,
-    'host' | 'workspace' | 'config' | 'globalState' | 'globalStorage'
+    | 'host'
+    | 'workspace'
+    | 'config'
+    | 'globalState'
+    | 'globalStorage'
+    | 'storageRoot'
   >;
   readonly bindings: SettingsHostBindings;
 }) {
@@ -85,7 +90,7 @@ export function settingsToolCommands(ports: {
                 Effect.succeed({
                   command: SETTINGS_VIEW_COMMANDS.UPDATE_PLUGINS,
                   rows: [],
-                  mcpConfigPath: mcpConfigPathOf(roots.globalStorage),
+                  mcpConfigPath: mcpConfigPathOf(roots.storageRoot),
                   mcpWarnings: [
                     `The plugin list could not be read: ${error.message}`,
                   ],
