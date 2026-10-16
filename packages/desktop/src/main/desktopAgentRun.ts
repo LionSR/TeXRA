@@ -19,7 +19,7 @@ import {
   type RuntimePresentationEvent,
   type RuntimePresentationEventPayloads,
 } from '@texra-ai/harness';
-import type { PresentationEventHandlers } from '@agent/runtime';
+import { type PresentationEventHandlers } from '@texra-ai/harness';
 import { emitAppSignal } from '@eventBus/AppSignals';
 import { ToolEditApprovalController } from '@texra/controllers/approval/ToolEditApprovalController';
 import { attachSessionHost } from '@texra/controllers/session/attachSessionHost';
