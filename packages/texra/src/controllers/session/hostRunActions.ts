@@ -28,8 +28,10 @@ import {
   type WorkspaceRoots,
 } from '@texra-ai/harness';
 import { GlobalStateKey } from '@texra-ai/harness/schemas';
-import { presentRunFailure } from '@agent/runtime/terminalResultToast';
-import type { SessionHostInteractions } from '@agent/runtime/HostInteractions';
+import {
+  presentRunFailure,
+  type SessionHostInteractions,
+} from '@texra-ai/harness';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { getRunRecords } from '@agent/storage';
 import { FOLLOW_UP_WAKE_FAILED_MESSAGE } from '@agent/followUp/ToolUseFollowUp';

@@ -86,7 +86,20 @@ export {
   describeFollowUpFailure,
   presentFollowUpResult,
 } from '@agent/followUp/ToolUseFollowUp';
-export { hasErrorPresentationClaimed } from '@common/errors/sdkError/errorMetadata';
+export {
+  attachErrorPresentationClaimed,
+  hasErrorPresentationClaimed,
+} from '@common/errors/sdkError/errorMetadata';
+// A host's presentation surface: what a session presents through, the
+// `SessionHostInteractions` a host with no session of its own presents
+// through, a host's emit handlers (one per presentation event), and a failed
+// run's presentation, which marks it presented.
+export {
+  SessionHostInteractions,
+  type HostInteractions,
+} from '@agent/runtime/HostInteractions';
+export type { PresentationEventHandlers } from '@agent/runtime/runtimePresentationEvents';
+export { presentRunFailure } from '@agent/runtime/terminalResultToast';
 export { escapeText } from '@shared/utils/xmlEscape';
 
 // The payloads, as the runtime defines them.

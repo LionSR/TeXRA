@@ -14,15 +14,15 @@ const attach = (err: unknown, key: symbol, value: unknown): void => {
 const read = (err: unknown, key: symbol): unknown =>
   Predicate.isObject(err) ? (err as Record<symbol, unknown>)[key] : undefined;
 
-/** Marks that a targeted, actionable notification owns this error's
- *  presentation, so a later generic handler on the same call stack does not
- *  show a second, redundant notification for the same failure. Attached in
- *  exactly two cases: the targeted emit reported confirmed delivery, or no
- *  host was attached at the throw site and the notification was retained for
- *  replay (the queued replay then either renders it or calls the
- *  caller-supplied not-delivered fallback). It is never attached for a
- *  fire-and-forget or declined emit, so a host that could not render the
- *  targeted notification still leaves the generic surface free to fire. */
+/** Marks that this failure was presented, so no later presenter (a generic
+ *  handler on the same call stack, a host's own fallback) shows it again.
+ *  Attached when a targeted notification owns its presentation (its emit
+ *  confirmed delivery, or no host was attached and it was retained for
+ *  replay), when the session's presenter showed a run's failure from its
+ *  `run.end` row (`presentRunFailure`, `receiveTerminalFailure`), and when
+ *  another process (a service) showed it to this window. Never for a
+ *  fire-and-forget or declined emit, so a host that could not render a
+ *  targeted notification leaves the generic surface free to fire. */
 export const attachErrorPresentationClaimed = (err: unknown): void =>
   attach(err, PRESENTATION_CLAIMED, true);
 

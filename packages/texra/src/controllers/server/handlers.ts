@@ -31,7 +31,7 @@ import {
   type Session,
   type SessionView,
 } from '@texra-ai/harness';
-import { presentRunFailure } from '@agent/runtime/terminalResultToast';
+import { presentRunFailure } from '@texra-ai/harness';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { getRunRecords } from '@agent/storage';
 import {

@@ -40,8 +40,8 @@ import {
   type StateStore,
   type WorkspaceRoots,
 } from '@texra-ai/harness';
+import { attachErrorPresentationClaimed } from '@texra-ai/harness';
 import { describeFollowUpFailure } from '@agent/followUp/ToolUseFollowUp';
-import { markFailurePresented } from '@agent/runtime/terminalResultToast';
 import { agentErrorPresentation } from '@common/errors';
 import {
   JsonValueSchema,
@@ -433,7 +433,7 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
             error?.message ?? `The task failed (run ${runId}).`,
           );
           if (error !== undefined && agentErrorPresentation(error) !== null)
-            markFailurePresented(cause);
+            attachErrorPresentationClaimed(cause);
           return Effect.fail(runFailure(cause.message, cause));
         }
         // The answer and the fold's `task.watch` stream arrive apart: a
@@ -599,7 +599,7 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
             );
             // The service presented it to this window already.
             if ('presented' in error && error.presented === true)
-              markFailurePresented(cause);
+              attachErrorPresentationClaimed(cause);
             return runFailure(cause.message, cause);
           }),
         ),

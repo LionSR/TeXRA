@@ -31,7 +31,7 @@ import {
   SESSION_CLOSE_DEADLINE_MS,
 } from '@texra-ai/harness';
 import { Settings } from '@texra-ai/harness';
-import { type SessionHandle, terminalFailurePresented } from '@agent/runtime';
+import { type SessionHandle } from '@agent/runtime';
 import { deriveResumability, getRunRecords } from '@agent/storage';
 import { AgentError, isUserAbort } from '@common/errors';
 import { isLiveRun } from '@shared/session/sessionView';
@@ -552,11 +552,7 @@ export function executeCliRequest(
         // presenter's receipt, and one that presented itself through a
         // targeted notification is marked claimed at its throw site.
         if (!(err instanceof AgentError)) primaryRunFailure = { error: err };
-        else if (
-          !failurePresented &&
-          !hasErrorPresentationClaimed(err) &&
-          !terminalFailurePresented(err)
-        )
+        else if (!failurePresented && !hasErrorPresentationClaimed(err))
           presentationHost.emit('requestShowError', {
             message: toErrorMessage(err),
           });

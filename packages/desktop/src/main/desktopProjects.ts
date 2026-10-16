@@ -17,13 +17,14 @@ import {
 } from 'effect';
 
 import { SessionOwner, type Session, type Sessions } from '@texra-ai/harness';
+import { SessionHostInteractions } from '@texra-ai/harness';
 import {
   createNodeWorkspaceRoots,
   canonicalizeWorkspacePath,
   resolveGlobalStoragePath,
   resolveWorkspaceStoragePath,
 } from '@texra-ai/harness/node';
-import { SessionHostInteractions, type SessionHandle } from '@agent/runtime';
+import { type SessionHandle } from '@agent/runtime';
 import {
   openProjectStateStore,
   openRepoStateStore,
