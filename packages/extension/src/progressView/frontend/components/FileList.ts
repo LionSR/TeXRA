@@ -1,4 +1,5 @@
 // Third-party imports
+import { getBasename, normalizeFilePath } from '@texra-ai/harness/schemas';
 import {
   LitElement,
   html,
@@ -38,7 +39,6 @@ import { SessionUiEvents } from '@texra/shared/session/uiEvents';
 import { designTokens, commonViewStyles } from '@ui/styles';
 import { renderIconActionButton } from '@ui/wa/actionButtons';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
-import { getBasename, normalizeFilePath } from '@utils/core';
 import { pluralize } from '@utils/text/stringUtils';
 import { getComposedPathElement } from '../utils';
 

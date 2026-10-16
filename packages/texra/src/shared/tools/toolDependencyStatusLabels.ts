@@ -1,7 +1,5 @@
 import type { ToolDependencyStatus } from '@texra/shared/tools/toolPlugin';
 
-import { safeLookup } from '@utils/core';
-
 const TOOL_DEPENDENCY_STATUS_FALLBACK_LABELS = {
   available: 'Ready',
   'not-found': 'Needs setup',
@@ -13,5 +11,7 @@ export function toolDependencyStatusLabel(
   statusLabel: string | undefined,
 ): string {
   if (statusLabel != null) return statusLabel;
-  return safeLookup(TOOL_DEPENDENCY_STATUS_FALLBACK_LABELS, status, status);
+  const labels: Readonly<Record<string, string>> =
+    TOOL_DEPENDENCY_STATUS_FALLBACK_LABELS;
+  return Object.hasOwn(labels, status) ? labels[status] : status;
 }

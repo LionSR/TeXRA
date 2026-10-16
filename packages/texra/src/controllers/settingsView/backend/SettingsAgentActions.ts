@@ -1,5 +1,6 @@
 // Standard library imports
 import * as path from 'node:path';
+import { isStrictlyWithin } from '@texra-ai/harness';
 
 // Third-party imports
 import { Effect, FileSystem } from 'effect';
@@ -13,7 +14,6 @@ import type { MessageHost } from '@texra/hosts/uiHosts';
 import { type SettingsMessageFor } from '@texra/shared/settingsView/settingsViewMessages';
 // Local imports - utilities
 import { entryExists } from '@utils/files/fsEntryExists';
-import { isStrictlyWithin } from '@utils/core/pathCore';
 import type { ProcessServices } from '@texra-ai/harness';
 
 /**

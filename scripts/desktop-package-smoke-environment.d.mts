@@ -13,7 +13,10 @@ export type DatabaseFixture = Pick<
   'databaseLayer' | 'globalDatabaseLayer'
 > &
   Pick<typeof import('@controllers/session/WorkspaceRoots'), 'WorkspaceRoots'> &
-  Pick<typeof import('@shared/session/database'), 'Database'> &
+  Pick<
+    typeof import('@shared/session/database'),
+    'Database' | 'GlobalDatabase'
+  > &
   Pick<typeof import('@shared/session/sessionEvents'), 'ProcessIdentity'> &
   Pick<typeof import('@shared/schemas'), 'qualifyAggregateId'> &
   Pick<

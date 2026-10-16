@@ -1,5 +1,6 @@
 /** Master-detail panel of the agent library, grouped by source. */
 
+import { getBasename } from '@texra-ai/harness/schemas';
 import '@awesome.me/webawesome/dist/components/tag/tag.js';
 import '@awesome.me/webawesome/dist/components/dropdown/dropdown.js';
 import '@awesome.me/webawesome/dist/components/dropdown-item/dropdown-item.js';
@@ -29,7 +30,6 @@ import {
 } from '@ui/wa/actionButtons';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import { AGENT_DECORATORS } from '@ui/wa/icons';
-import { getBasename } from '@utils/core';
 
 // Local imports - shared schemas and events
 import { catalogDetailStyles } from '../shared/catalogDetailStyles';

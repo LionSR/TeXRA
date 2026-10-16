@@ -7,7 +7,6 @@ import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import type { InvocationRef, RunId } from '@shared/schemas';
 import { Settings } from '@shared/config/settings';
 import { runDirUnder } from '@utils/files/runStorageFs';
-import { sanitizePathSegment } from '@utils/text/sanitizePathSegment';
 
 /** One model request or response to save under its run's directory. */
 interface SaveDebugParams {
@@ -43,10 +42,7 @@ export function maybeSaveDebugObject({
   runId,
   roots,
 }: SaveDebugParams): Effect.Effect<void, never, FileSystem.FileSystem> {
-  const modelPart = sanitizePathSegment(modelName, {
-    invalidCharPattern: /[\\/]/g,
-    replacement: '_',
-  });
+  const modelPart = modelName.replaceAll(/[\\/]/g, '_');
   const runDir = runDirUnder(roots.storage, runId);
   const filePath = path.join(
     runDir,

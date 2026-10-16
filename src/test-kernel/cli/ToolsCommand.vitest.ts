@@ -4,7 +4,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { LOG_CHANNEL, setLogSink, writeLogEntry } from '@logger/logSink';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { spyOnStreamWrite } from '@test/cli/fixtures/streamWriteSpy';
-import { FakeStateStore } from '@test/support/FakePlatform';
 
 const mocks = vi.hoisted(() => ({
   initCliPlatform: vi.fn(),
@@ -47,18 +46,15 @@ function runToolsCli(args: readonly string[]): ReturnType<typeof runCli> {
 describe('CLI tools command', () => {
   let stdout = '';
   let stderr = '';
-  /** The state store the mocked init hands the command to toggle through. */
-  let globalState: FakeStateStore;
   let stdoutSpy: ReturnType<typeof vi.spyOn>;
   let stderrSpy: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
     stdout = '';
     stderr = '';
-    globalState = new FakeStateStore();
     mocks.initCliPlatform
       .mockReset()
-      .mockReturnValue(Effect.succeed({ globalState, runtime: testRuntime() }));
+      .mockReturnValue(Effect.succeed({ runtime: testRuntime() }));
     mocks.installCliProcessRuntime
       .mockReset()
       .mockImplementation(() => testRuntime());
@@ -96,13 +92,9 @@ describe('CLI tools command', () => {
 
     expect(result.exitCode).toBe(0);
     expect(stderr).toBe('');
-    // The toggle is a program over the store the init handed back; the run arm
-    // settles it on the runtime it holds.
-    expect(mocks.setCliToolEnabled).toHaveBeenCalledWith(
-      globalState,
-      'codex',
-      false,
-    );
+    // The toggle is a program over the process's catalog; the run arm settles
+    // it on the runtime the init handed back.
+    expect(mocks.setCliToolEnabled).toHaveBeenCalledWith('codex', false);
     expect(JSON.parse(stdout)).toEqual({
       id: 'codex',
       enabled: false,

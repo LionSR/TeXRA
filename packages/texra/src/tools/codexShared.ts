@@ -1,3 +1,4 @@
+import { getBasename } from '@texra-ai/harness/schemas';
 import type {
   McpToolOutput,
   ToolCallStatus,
@@ -5,7 +6,6 @@ import type {
   ToolUseLog,
 } from '@shared/schemas';
 import { buildMcpToolName } from '@shared/tools/toolDisplayName';
-import { getBasename } from '@utils/core';
 import { formatDuration, truncateSummary } from '@utils/text/stringUtils';
 import type {
   CommandExecutionItem,

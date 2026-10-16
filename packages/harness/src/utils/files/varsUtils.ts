@@ -1,6 +1,5 @@
-import { Effect, FileSystem } from 'effect';
+import { Effect, FileSystem, Predicate } from 'effect';
 
-import { filterNotNull } from '@utils/core';
 import { ensureError } from '@utils/errors/errorMessage';
 import { getPromptFileName } from '@utils/prompt';
 
@@ -79,7 +78,9 @@ export const getXmlFormatFromReadableFiles = Effect.fn(
     { concurrency: 'unbounded' },
   );
 
-  const readable = reads.map((read) => read.document).filter(filterNotNull);
+  const readable = reads
+    .map((read) => read.document)
+    .filter(Predicate.isNotNull);
   return {
     xml:
       readable.length > 0
@@ -91,6 +92,6 @@ export const getXmlFormatFromReadableFiles = Effect.fn(
             .join('\n')
         : null,
     readable,
-    skipped: reads.map((read) => read.skipped).filter(filterNotNull),
+    skipped: reads.map((read) => read.skipped).filter(Predicate.isNotNull),
   };
 });

@@ -11,7 +11,7 @@ import * as path from 'node:path';
 
 import { Effect, FileSystem } from 'effect';
 import { agentBlockOf, errorResult } from '@texra-ai/harness/plugins';
-import { withLogChannel } from '@texra-ai/harness';
+import { withLogChannel, hasExtension } from '@texra-ai/harness';
 import {
   computeAgentOptionsData,
   getCatalogAgent,
@@ -25,7 +25,6 @@ import {
   type DocumentAgentOption,
   type DocumentTask,
 } from '@texra/shared/plugins/documents';
-import { hasExtension } from '@utils/core/pathCore';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { readNormalizedFile } from '@utils/files/fsDurability';
 import { workspaceAbsolutePath } from '@utils/files/workspaceFS';

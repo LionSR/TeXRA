@@ -29,7 +29,6 @@ import { runOutcomeToCliRunStatus } from '@shared/runs/runStatus';
 import { loadChatExportInput, type ChatExportInput } from '@texra/agent/export';
 import { serializeFilteredConfig } from '@tools/executions/configView';
 import { readCompletedRunConversation } from '@transcript';
-import { byStringProp } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { absentReason } from '@utils/files/fsEntryExists';
 
@@ -64,7 +63,7 @@ function mergeHistoryFiles(
       if (!files.has(file.path)) files.set(file.path, file);
     }
   }
-  return [...files.values()].toSorted(byStringProp((f) => f.path));
+  return [...files.values()].toSorted((a, b) => a.path.localeCompare(b.path));
 }
 
 export interface CliHistoryEntry {

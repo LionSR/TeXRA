@@ -229,7 +229,7 @@ function getAttachmentConfig(filePath: string): AttachmentKind | null {
   // Office documents are binary formats that cannot be read as text.
   // Return them as attachments so models with file input support can process them.
   if (
-    OFFICE_EXTENSIONS.has(extension) ||
+    OFFICE_EXTENSIONS.includes(extension) ||
     OFFICE_MIME_TYPES.has(mimeType ?? '')
   ) {
     return 'document';

@@ -1,11 +1,10 @@
 import { defineCommand } from 'citty';
-import { Cause, Effect } from 'effect';
+import { Cause, Effect, absurd } from 'effect';
 
 import { type RunId } from '@texra-ai/harness/schemas';
 import { formatChatAsMarkdown } from '@texra/agent/export';
 import { assembleTrace, injectStandaloneTrace } from '@transcript';
 import { formatCliHistoryDeletionSummary } from '@ui/copy/runHistory';
-import { assertNever } from '@utils/core';
 import { formatResultCount } from '@utils/text/stringUtils';
 
 import { CliExitCode } from '../runtime/exitCodes';
@@ -137,7 +136,7 @@ export function runHistoryExport(
           );
           break;
         default:
-          assertNever(traceResult, 'Unhandled trace assembly result');
+          absurd(traceResult);
       }
       return CliExitCode.Usage;
     }

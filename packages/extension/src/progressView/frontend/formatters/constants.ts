@@ -3,9 +3,9 @@
  */
 
 // Local imports
+import { getBasename } from '@texra-ai/harness/schemas';
 import type { LogLevel } from '@shared/schemas';
 import type { TeXRAIconName } from '@shared/iconNames';
-import { getBasename } from '@utils/core';
 
 /**
  * Font Awesome icon name per log level, rendered via `waIcon`. Replaces

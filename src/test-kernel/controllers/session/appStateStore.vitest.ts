@@ -8,16 +8,14 @@ import { it } from '@effect/vitest';
 import { Context, Effect, Exit, Layer, Result, Scope } from 'effect';
 import { describe, expect } from 'vitest';
 
-import { appStateStoreFromDatabase } from '@controllers/session/appStateStore';
-import { databaseLayer } from '@controllers/session/Database';
-import { WorkspaceRoots } from '@controllers/session/WorkspaceRoots';
+import { globalAppStateLayer } from '@controllers/session/appStateStore';
+import { globalDatabaseLayer } from '@controllers/session/Database';
 import { processOwnerId } from '@platform/defaults/nodeProcesses';
-import { Database } from '@shared/session/database';
+import { AppState } from '@platform/interfaces';
 import { ProcessIdentity } from '@shared/session/sessionEvents';
 
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
-import { storePluginsLayer } from '@test/support/setupPlatform';
 
 describe('application state on SQLite', () => {
   const tempDirs = useTempDirs();
@@ -25,16 +23,11 @@ describe('application state on SQLite', () => {
   const openAppStateStore = (storage: string) =>
     Effect.map(
       Layer.build(
-        databaseLayer('persistent').pipe(
-          Layer.provide(Layer.succeed(WorkspaceRoots)({ storage })),
-          Layer.provide(storePluginsLayer),
+        globalAppStateLayer(storage).pipe(
+          Layer.provide(globalDatabaseLayer(storage)),
         ),
       ),
-      (context) =>
-        appStateStoreFromDatabase(
-          storage,
-          Context.get(context, Database).values,
-        ),
+      (context) => Context.get(context, AppState),
     );
   const openStore = (storage: string) =>
     openAppStateStore(storage).pipe(
