@@ -618,6 +618,15 @@ history`, a resume and a follow-up say it was "written by an earlier
 
 ### Features
 
+- **Claude Max and Team plans' API credits are pointed out where you add an
+  Anthropic key.** The welcome card, the Anthropic row in Settings → API
+  keys, and the terminal's key entry note that these plans include monthly
+  Claude API credits, spent through a Console API key once a Console
+  organization is linked to the plan in claude.ai's Billing settings. The
+  Anthropic "Get API key" link opens the Console's API keys page, and the
+  Claude Code model setting says a `claude login` session is used before the
+  API key.
+
 - **A dockable desktop workspace.** Arrange Agent, Files, editors, terminals,
   and Browser in movable tab groups. Drag previews show the destination,
   including columns beside the whole workspace, and layouts survive restarts

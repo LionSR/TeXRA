@@ -48,6 +48,14 @@ export const providerKeyListStyles: CSSResult = css`
     padding-inline-start: var(--wa-space-l);
   }
 
+  .provider-row-hint {
+    margin: 0;
+    padding: 0 var(--wa-space-s) var(--wa-space-xs) var(--wa-space-l);
+    font-size: var(--font-size-sm);
+    line-height: var(--line-height-normal);
+    color: var(--color-text-secondary);
+  }
+
   .provider-setting-description {
     color: var(--color-text-secondary);
   }

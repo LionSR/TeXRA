@@ -4,6 +4,7 @@ import { LitElement, html, css, type TemplateResult } from 'lit';
 import { customElement } from 'lit/decorators.js';
 
 import { SessionUiEvents } from '@texra/shared/session/uiEvents';
+import { ANTHROPIC_PLAN_CREDITS } from '@ui/copy/modelAccess';
 import { GETTING_STARTED_ACTION_PRESENTATION } from '@ui/copy/onboarding';
 import { designTokens, commonViewStyles } from '@ui/styles';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
@@ -250,6 +251,9 @@ export class OnboardingWelcomeCard extends LitElement {
               </wa-button>
               <span class="choice-description" aria-hidden="true">
                 ${ONBOARDING_CHOICE_API_KEY.description}
+              </span>
+              <span class="choice-description">
+                ${ANTHROPIC_PLAN_CREDITS.hint}
               </span>
             </div>
           </div>

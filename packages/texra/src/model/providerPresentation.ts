@@ -30,7 +30,7 @@ const KEY_PAGES: {
     : string;
 } = {
   openai: 'https://platform.openai.com/api-keys',
-  anthropic: 'https://console.anthropic.com/',
+  anthropic: 'https://platform.claude.com/settings/keys',
   google: 'https://aistudio.google.com/app/apikey',
   xai: 'https://console.x.ai/',
   deepseek: 'https://platform.deepseek.com/api_keys',
