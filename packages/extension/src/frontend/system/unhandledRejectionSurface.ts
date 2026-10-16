@@ -4,23 +4,45 @@
  * fatal path.
  */
 // Third-party imports
+import { Effect, Queue } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports
-import { writeLogLine } from '@logger/logSink';
-import { formatFatalErrorDetail } from '@logger/redaction';
+import { formatFatalErrorDetail, withLogChannel } from '@texra-ai/harness';
+import { effectDiagnosticsLayer } from '@logger/effectDiagnostics';
 import { ensureError } from '@utils/errors/errorMessage';
 
 /** The extension entry's own channel. */
 const CHANNEL = 'extension';
 
-export function installUnhandledRejectionSurface(
-  subscriptions: vscode.Disposable[],
-): void {
-  // A process listener that may fire before the runtime exists or after it is
-  // disposed, so it writes to the host sink directly rather than via a fiber.
+/**
+ * Install the listener for the activation's scope. A process listener fires
+ * outside any fiber, so it hands each entry to a fiber of that scope, which
+ * logs it with the diagnostics the runtime would serve (the runtime may not
+ * exist yet). The listener is acquired after the fork, so it is removed
+ * before the fiber is interrupted.
+ */
+export const installUnhandledRejectionSurface = Effect.fn(
+  'installUnhandledRejectionSurface',
+)(function* () {
+  const entries = yield* Queue.unbounded<{
+    readonly message: string;
+    readonly data: unknown;
+  }>();
+  yield* Effect.forkScoped(
+    Effect.forever(
+      Queue.take(entries).pipe(
+        Effect.flatMap(({ message, data }) =>
+          Effect.logError(message).pipe(Effect.annotateLogs({ data })),
+        ),
+      ),
+    ).pipe(
+      withLogChannel(CHANNEL),
+      Effect.provide(effectDiagnosticsLayer('Trace')),
+    ),
+  );
   const logError = (message: string, data: unknown) =>
-    writeLogLine('ERROR', CHANNEL, message, data);
+    Queue.offerUnsafe(entries, { message, data });
   const report = (error: unknown) => {
     logError('Unhandled extension-host rejection', error);
     void vscode.window
@@ -39,8 +61,8 @@ export function installUnhandledRejectionSurface(
       throw ensureError(error);
     });
   };
-  process.on('unhandledRejection', report);
-  subscriptions.push({
-    dispose: () => process.off('unhandledRejection', report),
-  });
-}
+  yield* Effect.acquireRelease(
+    Effect.sync(() => process.on('unhandledRejection', report)),
+    () => Effect.sync(() => process.off('unhandledRejection', report)),
+  );
+});

@@ -15,7 +15,6 @@ import type { NormalizedUsage, RunId } from '@shared/schemas';
 import type { UsageLog } from '@shared/usageLog';
 import { environment } from '@utils/system/nodeWorkspace';
 import { roundTo } from '@utils/core';
-import { ensureError } from '@utils/errors/errorMessage';
 
 /**
  * The priced usage of one turn, or `null` when the provider reported none.
@@ -97,41 +96,39 @@ export const reportUsage = (
     if (usage === null) return;
     const env = yield* environment;
     const cachedInputTokens = usage.cachedInputTokens ?? 0;
-    yield* Effect.try({
-      try: () =>
-        usageLog.log(
-          {
-            model: bound.config.id,
-            provider: usage.provider,
-            agentName: attribution.agentName,
-            // Billing needs a real number, so a provider that reported no
-            // cache-miss count is billed the derived estimate (input minus
-            // cache-read). Display never guesses.
-            inputTokens:
-              usage.cacheMissInputTokens ??
-              Math.max(0, usage.inputTokens - cachedInputTokens),
-            outputTokens: usage.outputTokens,
-            cost: roundTo(usage.cost, 6),
-            responseTimeMs: Math.round(usage.responseTimeMs ?? 0),
-            cachedInputTokens,
-            reasoningTokens: usage.reasoningTokens ?? 0,
-            usageRoute: usage.usageRoute ?? 'api-key',
-            // The usage-log edge function's wire key, which stores the run id
-            // in its `stream_id` column; a server-side rename, not ours.
-            ...(attribution.runId === null
-              ? {}
-              : { streamId: attribution.runId }),
-          },
-          config,
-          env,
+    yield* usageLog
+      .log(
+        {
+          model: bound.config.id,
+          provider: usage.provider,
+          agentName: attribution.agentName,
+          // Billing needs a real number, so a provider that reported no
+          // cache-miss count is billed the derived estimate (input minus
+          // cache-read). Display never guesses.
+          inputTokens:
+            usage.cacheMissInputTokens ??
+            Math.max(0, usage.inputTokens - cachedInputTokens),
+          outputTokens: usage.outputTokens,
+          cost: roundTo(usage.cost, 6),
+          responseTimeMs: Math.round(usage.responseTimeMs ?? 0),
+          cachedInputTokens,
+          reasoningTokens: usage.reasoningTokens ?? 0,
+          usageRoute: usage.usageRoute ?? 'api-key',
+          // The usage-log edge function's wire key, which stores the run id
+          // in its `stream_id` column; a server-side rename, not ours.
+          ...(attribution.runId === null
+            ? {}
+            : { streamId: attribution.runId }),
+        },
+        config,
+        env,
+      )
+      .pipe(
+        // Best-effort billing edge: a failed log never fails the call.
+        Effect.catchDefect((error) =>
+          Effect.logWarning('Backend usage logging failed').pipe(
+            Effect.annotateLogs({ error }),
+          ),
         ),
-      catch: ensureError,
-    }).pipe(
-      // Best-effort billing edge: a failed log never fails the call.
-      Effect.catch((error) =>
-        Effect.logWarning('Backend usage logging failed').pipe(
-          Effect.annotateLogs({ error }),
-        ),
-      ),
-    );
+      );
   });

@@ -7,18 +7,18 @@ import { Effect, PlatformError } from 'effect';
 
 // Local imports
 import {
-  CLI_NDJSON_CONTRACT,
-  type CliNdjsonRecord,
-} from '@cli/schemas/cliOutput';
-import {
   entryChannel,
   entryMessage,
   type LogEntry,
   type LogSink as HostLogSink,
-} from '@logger/logSink';
+  type ProcessRuntime,
+} from '@texra-ai/harness';
+import {
+  CLI_NDJSON_CONTRACT,
+  type CliNdjsonRecord,
+} from '@cli/schemas/cliOutput';
 import { type PerKeyLane, withPerKeyLane } from '@utils/core/perKeyQueue';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
-import type { ProcessRuntime } from '@texra-ai/harness';
 
 const closed = { stdout: false, stderr: false };
 
@@ -221,7 +221,7 @@ export function askCliQuestion(
 
 /**
  * The host diagnostic sink of this process until a platform installs its own.
- * `@logger/logSink`'s console fallback sends DEBUG and INFO to stdout, and
+ * The harness's console fallback sends DEBUG and INFO to stdout, and
  * the process runtime logs while its layers build (`UsageLogService started
  * …`) — before `initCliPlatform` runs its own `setLogSink`, and for `clone`
  * and `install-github-action` before a platform that never comes up. Under
@@ -236,6 +236,16 @@ export const prePlatformDiagnosticSink: HostLogSink = Object.freeze({
     const channel = entryChannel(entry);
     writeTextStderr(`${channel ? `[${channel}] ` : ''}${entryMessage(entry)}`);
   },
+});
+
+/**
+ * The sink of a process that wants no diagnostics at all: `defineCliCommand`
+ * installs it for a command run with `--quiet` before it builds the process
+ * runtime, and the CLI platform init installs it for every command that
+ * reaches one, since each command renders its own output.
+ */
+export const silentLogSink: HostLogSink = Object.freeze({
+  write: () => undefined,
 });
 
 interface NdjsonWritable {

@@ -112,7 +112,7 @@ function buildReport(
       nodeVersion: '24.15.0',
       modelAccessList: Effect.succeed([]),
       latexToolchain: Effect.succeed(latexProbe),
-      usageLoggingOptOut: () => null,
+      usageLoggingOptOut: Effect.succeed(null),
       ...probes,
     }).pipe(
       Effect.provide([

@@ -6,6 +6,7 @@ import {
   AppState,
   SessionOwner,
   Sessions,
+  setLogSink,
   type StateStore,
   type StateWriteFailed,
   Secrets,
@@ -25,7 +26,6 @@ import {
   openProjectStateStore,
   openRepoStateStore,
 } from '@controllers/session/appStateStore';
-import { setLogSink, silentLogSink } from '@logger/logSink';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { telemetryNoticeIfDue } from '@telemetry/telemetryNotice';
@@ -43,6 +43,7 @@ import {
 import {
   flushNdjsonStdout,
   flushTextStderr,
+  silentLogSink,
   writeTextStderr,
   writeTextStderrAndWait,
 } from './logSinks';

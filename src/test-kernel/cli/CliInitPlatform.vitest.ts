@@ -77,8 +77,6 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@logger/logSink', () => ({
   LOG_CHANNEL: 'channel',
   LOG_DATA: 'data',
-  // The double only has to be a value, since `setLogSink` is a spy here.
-  silentLogSink: { write: () => undefined },
   setLogSink: vi.fn(),
   writeLogEntry: vi.fn(),
 }));

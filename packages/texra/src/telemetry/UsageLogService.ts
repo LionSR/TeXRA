@@ -19,7 +19,6 @@ import {
   withLogChannel,
   type UsageLogEntry,
 } from '@texra-ai/harness';
-import { writeLogLine } from '@logger/logSink';
 import { readOrCreateInstallId } from '@telemetry/installId';
 import { TELEMETRY_ENABLED_KEY } from '@texra/shared/settingsView/texraSettings';
 import { unrefSleepClock } from '@texra/utils/system/unrefSleepClock';
@@ -117,26 +116,22 @@ const telemetryOptOutEnvVar = (
 function isTelemetryEnabledBySetting(
   config: ConfigProvider,
   env?: Readonly<Record<string, string | undefined>>,
-): boolean {
-  // Checked before the config read so the kill switch also holds on a host that
-  // has not initialized its platform yet. `env` is the recording run's,
-  // so a project's `.env` opt-out holds for its runs.
-  if (telemetryOptOutEnvVar(env)) return false;
+): Effect.Effect<boolean> {
+  return Effect.suspend(() => {
+    // Checked before the config read so the kill switch also holds on a host
+    // that has not initialized its platform yet. `env` is the recording
+    // run's, so a project's `.env` opt-out holds for its runs.
+    if (telemetryOptOutEnvVar(env)) return Effect.succeed(false);
 
-  // Which scope answers is the config store's rule (`projectValueIgnored`):
-  // a project file may opt out but never opt in. The config files are
-  // hand-edited raw JSON, so a mistyped `"false"` must not read as consent.
-  const value = config.get<unknown>(TELEMETRY_ENABLED_KEY);
-  if (typeof value !== 'boolean') {
-    // A sync read (`log`, `texra doctor`) has no fiber: it writes the sink.
-    writeLogLine(
-      'WARN',
-      CHANNEL,
+    // Which scope answers is the config store's rule (`projectValueIgnored`):
+    // a project file may opt out but never opt in. The config files are
+    // hand-edited raw JSON, so a mistyped `"false"` must not read as consent.
+    const value = config.get<unknown>(TELEMETRY_ENABLED_KEY);
+    if (typeof value === 'boolean') return Effect.succeed(value);
+    return Effect.logWarning(
       `Ignoring non-boolean ${TELEMETRY_ENABLED_KEY} (got ${typeof value}); treating usage logging as disabled`,
-    );
-    return false;
-  }
-  return value;
+    ).pipe(withLogChannel(CHANNEL), Effect.as(false));
+  });
 }
 
 /** Why usage logging is off, or `null` when it is on. */
@@ -150,10 +145,15 @@ export type UsageLoggingOptOut =
  * doing (`texra doctor`). Derived from the same gate the send path uses, so a
  * report of "off" cannot drift from the behaviour.
  */
-export function usageLoggingOptOut(config: ConfigProvider): UsageLoggingOptOut {
+export function usageLoggingOptOut(
+  config: ConfigProvider,
+): Effect.Effect<UsageLoggingOptOut> {
   const envVar = telemetryOptOutEnvVar();
-  if (envVar) return { source: 'environment', envVar };
-  return isTelemetryEnabledBySetting(config) ? null : { source: 'setting' };
+  if (envVar) return Effect.succeed({ source: 'environment', envVar });
+  return Effect.map(
+    isTelemetryEnabledBySetting(config),
+    (enabled): UsageLoggingOptOut => (enabled ? null : { source: 'setting' }),
+  );
 }
 
 /**
@@ -208,10 +208,10 @@ class UsageLogServiceImpl {
   private allowed(
     config: ConfigProvider,
     env?: Readonly<Record<string, string | undefined>>,
-  ): boolean {
-    return (
-      this.hostTelemetryEnabled() && isTelemetryEnabledBySetting(config, env)
-    );
+  ): Effect.Effect<boolean> {
+    return this.hostTelemetryEnabled()
+      ? isTelemetryEnabledBySetting(config, env)
+      : Effect.succeed(false);
   }
 
   /** Start this instance's sender and ticker, then register its final drain. */
@@ -264,17 +264,17 @@ class UsageLogServiceImpl {
   /** Queue one entry; `config` is the configuration of the workspace that
    *  recorded it (the run's session roots), read for consent now and again
    *  at flush. */
-  log(
+  readonly log = Effect.fn('UsageLogService.log')(function* (
+    this: UsageLogServiceImpl,
     entry: Omit<UsageLogEntry, 'timestamp' | 'extensionVersion' | 'editorType'>,
     config: ConfigProvider,
     env?: Readonly<Record<string, string | undefined>>,
-  ): void {
+  ) {
     if (!this.config.enabled) return;
-    if (!this.allowed(config, env)) return;
+    if (!(yield* this.allowed(config, env))) return;
 
     if (this.queue.length >= MAX_QUEUE_SIZE) {
-      // `log` is synchronous (the invoker's usage report): its lines go straight to the sink.
-      writeLogLine('WARN', CHANNEL, 'Queue full, dropping oldest entry');
+      yield* Effect.logWarning('Queue full, dropping oldest entry');
       this.queue.shift();
     }
 
@@ -288,13 +288,14 @@ class UsageLogServiceImpl {
       config,
       ...(env !== undefined && { env }),
     });
-    const queued = `Queued usage entry (queue size: ${this.queue.length})`;
-    writeLogLine('DEBUG', CHANNEL, queued);
+    yield* Effect.logDebug(
+      `Queued usage entry (queue size: ${this.queue.length})`,
+    );
 
     if (this.queue.length >= this.config.batchSize) {
       this.requestFlush();
     }
-  }
+  }, withLogChannel(CHANNEL));
 
   /** Synchronous producer admission; the process-owned sender does the I/O. */
   private requestFlush(): void {
@@ -398,7 +399,7 @@ class UsageLogServiceImpl {
       // queued before the opt-out instead of leaving the timer to send them,
       // and read from the workspace each entry was recorded in, since this
       // flush runs outside any run.
-      const kept = batch.entries.filter(({ config, env }) =>
+      const kept = yield* Effect.filter(batch.entries, ({ config, env }) =>
         this.allowed(config, env),
       );
       const dropped = batch.entries.length - kept.length;

@@ -7,8 +7,9 @@
  * publication points (the trace emitter, pre-runtime and shutdown paths) that
  * call `writeLogEntry` directly. No producer decides presentation: severity, timestamp,
  * identity, and payload stay separate fields the whole way, and the write
- * path below renders the one field that is not already a string — the `data`
- * payload — once, before redaction, then bounds the redacted value, so a host renders its entries
+ * path below renders every annotation that is not already a string (the
+ * `data` payload, an `{ error }` a producer attached) once, before
+ * redaction, then bounds the redacted value, so a host renders its entries
  * with its own facilities instead of parsing them back out of a line of text.
  *
  * Entries are secret-redacted here, once, before any host sees them. A host
@@ -41,9 +42,9 @@ export const LOG_CHANNEL = 'channel';
  */
 const LOG_DATA = 'data';
 
-/** The rendered payload bound: one bound, at the one owner of rendering, so
- * an always-attached payload cannot flood a host surface. */
-const MAX_LOG_DATA_LENGTH = 2_000;
+/** The rendered annotation bound: one bound, at the one owner of rendering,
+ * so an always-attached payload cannot flood a host surface. */
+const MAX_ANNOTATION_LENGTH = 2_000;
 
 export interface LogSink {
   write(entry: LogEntry): void;
@@ -85,44 +86,35 @@ function redactEntry(entry: LogEntry): LogEntry {
 }
 
 /**
- * Render the `data` payload before redaction, once, on the write path: the
+ * Render every annotation before redaction, once, on the write path: the
  * order is load-bearing, because `redactDisplayValue` walks objects
  * recursively while `formatLogData` renders a cycle as `"[Circular]"`, so
  * the string the redactor sees is both finite and secret-redactable. A
  * producer that attached `null`/`undefined` (the raw combinator skips
  * nothing) leaves the annotation here rather than rendering "null"; a
- * present payload is left complete for the redactor to inspect.
+ * present value is left complete for the redactor to inspect. A sink
+ * therefore reads string annotations only.
  */
-function renderLogData(entry: LogEntry): LogEntry {
-  const data = entry.annotations[LOG_DATA];
-  if (data == null) {
-    if (!(LOG_DATA in entry.annotations)) return entry;
-    const { [LOG_DATA]: _dropped, ...annotations } = entry.annotations;
-    return { ...entry, annotations };
+function renderAnnotations(entry: LogEntry): LogEntry {
+  const annotations: Record<string, string> = {};
+  for (const [key, value] of Object.entries(entry.annotations)) {
+    if (value == null) continue;
+    annotations[key] = typeof value === 'string' ? value : formatLogData(value);
   }
-  const rendered = formatLogData(data);
-  return {
-    ...entry,
-    annotations: {
-      ...entry.annotations,
-      [LOG_DATA]: rendered,
-    },
-  };
+  return { ...entry, annotations };
 }
 
-/** Bound the already-redacted payload so truncation cannot split a secret
- * field before the redactor has seen its closing quote. */
-function truncateLogData(entry: LogEntry): LogEntry {
-  const data = entry.annotations[LOG_DATA];
-  if (typeof data !== 'string' || data.length <= MAX_LOG_DATA_LENGTH)
-    return entry;
-  return {
-    ...entry,
-    annotations: {
-      ...entry.annotations,
-      [LOG_DATA]: `${data.slice(0, MAX_LOG_DATA_LENGTH)}… [truncated]`,
-    },
-  };
+/** Bound the already-redacted annotations so truncation cannot split a
+ * secret field before the redactor has seen its closing quote. */
+function truncateAnnotations(entry: LogEntry): LogEntry {
+  const annotations: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(entry.annotations)) {
+    annotations[key] =
+      typeof value === 'string' && value.length > MAX_ANNOTATION_LENGTH
+        ? `${value.slice(0, MAX_ANNOTATION_LENGTH)}… [truncated]`
+        : value;
+  }
+  return { ...entry, annotations };
 }
 
 /**
@@ -152,16 +144,6 @@ const consoleLogSink: LogSink = {
   },
 };
 
-/**
- * The sink of a host that wants no diagnostics at all: `defineCliCommand`
- * installs it for a command run with `--quiet` before it builds the process
- * runtime, and the CLI platform init installs it for every command that
- * reaches one, since each command renders its own output.
- */
-export const silentLogSink: LogSink = Object.freeze({
-  write: () => undefined,
-});
-
 let sink: LogSink = consoleLogSink;
 let sinkTrusted = false;
 
@@ -181,8 +163,10 @@ export function setLogSink(
 
 /** Write one entry to the installed sink. */
 export function writeLogEntry(entry: LogEntry): void {
-  const rendered = renderLogData(entry);
-  sink.write(truncateLogData(sinkTrusted ? rendered : redactEntry(rendered)));
+  const rendered = renderAnnotations(entry);
+  sink.write(
+    truncateAnnotations(sinkTrusted ? rendered : redactEntry(rendered)),
+  );
 }
 
 /**

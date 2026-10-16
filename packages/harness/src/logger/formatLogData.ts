@@ -1,6 +1,6 @@
 /**
  * Render a debug payload for display. The write path in `@logger/logSink`
- * applies this once to each entry's raw `data` annotation, before redaction,
+ * applies this once to each entry's raw annotations, before redaction,
  * so every host surface shows the same bounded rendering and no producer
  * decides how much detail a surface shows. The redaction pass shares the
  * `Error` flattener for the raw values its other callers hand it.

@@ -18,18 +18,14 @@ import {
   type LogEntry,
   type LogSink,
 } from '@texra-ai/harness';
-import { formatLogData } from '@logger/formatLogData';
 
-/** Everything the channel itself does not already render. The `data` payload
- * arrives already rendered and bounded by the write path, so this shows it on
- * the entries the user's own channel-level filter let through. */
+/** Everything the channel itself does not already render. Every annotation
+ * arrives already rendered and bounded by the write path, so this shows them
+ * on the entries the user's own channel-level filter let through. */
 function detail(entry: LogEntry): string {
-  const extra = Object.entries(entry.annotations)
-    .filter(([key]) => key !== LOG_CHANNEL)
-    .map(([key, value]): [string, string] => [
-      key,
-      typeof value === 'string' ? value : formatLogData(value),
-    ]);
+  const extra = Object.entries(entry.annotations).filter(
+    ([key]) => key !== LOG_CHANNEL,
+  );
   const parts = [
     entry.cause,
     extra.length === 0 ? undefined : JSON.stringify(Object.fromEntries(extra)),

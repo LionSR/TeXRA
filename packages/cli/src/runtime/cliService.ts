@@ -20,7 +20,13 @@ import {
 } from 'effect';
 
 import { API_KEY_ENV_NAMES } from '@texra-ai/llm';
-import { AppState, SessionOwner, type Sessions } from '@texra-ai/harness';
+import {
+  AppState,
+  SessionOwner,
+  setLogSink,
+  withLogChannel,
+  type Sessions,
+} from '@texra-ai/harness';
 import {
   createNodeWorkspaceRoots,
   canonicalizeWorkspacePath,
@@ -32,7 +38,6 @@ import {
   openRepoStateStore,
 } from '@controllers/session/appStateStore';
 import { onAppSignal } from '@eventBus/AppSignals';
-import { setLogSink, silentLogSink, writeLogLine } from '@logger/logSink';
 import { JsonStore } from '@platform/defaults/jsonStore';
 import { TEXRA_CONFIG_FILE_NAME } from '@platform/defaults/nodeStorage';
 import { openTexraWorkspaceConfigStores } from '@platform/defaults/nodeStores';
@@ -65,8 +70,12 @@ import { ensureError } from '@utils/errors/errorMessage';
 import { loginShellEnvironment } from './loginShellEnv';
 
 import { cliEnvValue, readCliEntrypointPath } from './cliContext';
+import { silentLogSink } from './logSinks';
 import type { CliContext } from './cliContext';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
+
+/** The service's own log channel. */
+const CHANNEL = 'cliService';
 
 /**
  * The service's projects over the CLI's node roots, opened in `scope` and
@@ -89,23 +98,21 @@ export const cliServiceProjects = Effect.fn('cliServiceProjects')(function* (
   const { storageRoot } = context;
   const globalStorage = resolveGlobalStoragePath(storageRoot);
   const globalState = yield* AppState;
-  const warn = (message: string) => writeLogLine('WARN', 'cliService', message);
   // The windows and the CLI write these files while the service runs: each
   // read serves what they hold now, so a setting changed in any client
   // reaches the next task and the next turn.
-  const follow = (error: Error) =>
-    warn(
-      `A TeXRA config file changed but could not be read; the service keeps its previous settings until it is fixed: ${error.message}`,
-    );
   const globalConfig = yield* JsonStore.open(
     path.join(globalStorage, TEXRA_CONFIG_FILE_NAME),
-    { follow },
+    { follow: true },
   );
   const openRoots = Effect.fn('cliServiceProjects.openRoots')(function* (
     workspace: string | undefined,
     within: Scope.Scope,
   ) {
     const storage = resolveWorkspaceStoragePath(storageRoot, workspace);
+    // The config open reports through a plain callback while it runs; its
+    // warnings are logged once it has.
+    const warnings: string[] = [];
     const [workspaceState, repoState, configs] = yield* Effect.all(
       [
         openProjectStateStore(storage, workspace),
@@ -114,12 +121,15 @@ export const cliServiceProjects = Effect.fn('cliServiceProjects')(function* (
           TEXRA_SETTINGS,
           storage,
           workspace,
-          warn,
-          follow,
+          (message) => warnings.push(message),
+          true,
         ),
       ],
       { concurrency: 'unbounded' },
     ).pipe(Scope.provide(within));
+    yield* Effect.forEach(warnings, (message) =>
+      Effect.logWarning(message).pipe(withLogChannel(CHANNEL)),
+    );
     return createNodeWorkspaceRoots({
       host: 'cli',
       workspacePath: workspace,
@@ -182,7 +192,7 @@ export const cliServiceProjects = Effect.fn('cliServiceProjects')(function* (
           const moved = handle.log.movedAside;
           if (moved) {
             const message = sessionStoreMovedAsideMessage(moved);
-            warn(message);
+            yield* Effect.logWarning(message).pipe(withLogChannel(CHANNEL));
             yield* handle.interactions.emit(
               'requestShowInstruction',
               { key: `store-moved-aside-${moved.aside}`, message },

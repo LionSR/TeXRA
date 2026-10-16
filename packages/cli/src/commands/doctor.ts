@@ -61,7 +61,10 @@ function doctorReport(context: CliContext): Effect.Effect<DoctorReport> {
         ),
         // Consent is read from the workspace configuration the init
         // installed.
-        usageLoggingOptOut: () => usageLoggingOptOut(services.roots.config),
+        usageLoggingOptOut: withProcessServices(
+          services.runtime,
+          usageLoggingOptOut(services.roots.config),
+        ),
       }),
     );
   });

@@ -81,7 +81,7 @@ type DoctorInput = DoctorEnvironment &
           readonly CliModelAccess[],
           Error
         >;
-        readonly usageLoggingOptOut: () => UsageLoggingOptOut;
+        readonly usageLoggingOptOut: Effect.Effect<UsageLoggingOptOut>;
       }
   );
 
@@ -347,10 +347,9 @@ function checkConfig(
  */
 
 function checkTelemetry(deps: ReadyDoctorInput): Effect.Effect<DoctorCheck> {
-  return Effect.try({
-    try: (): UsageLoggingOptOut => deps.usageLoggingOptOut(),
-    catch: probeFailure,
-  }).pipe(
+  return deps.usageLoggingOptOut.pipe(
+    // A config store that throws reports as this check's failure.
+    Effect.catchDefect((cause) => Effect.fail(probeFailure(cause))),
     Effect.map((optOut) => {
       if (optOut?.source === 'environment') {
         return skip(

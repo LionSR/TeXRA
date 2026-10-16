@@ -5,7 +5,7 @@
 import { runCommand } from 'citty';
 import { Effect } from 'effect';
 
-import { setLogSink } from '@logger/logSink';
+import { setLogSink } from '@texra-ai/harness';
 import { ensureError } from '@utils/errors/errorMessage';
 
 import { getExitCode, setExitCode } from '../commands/_helpers/exitCode';

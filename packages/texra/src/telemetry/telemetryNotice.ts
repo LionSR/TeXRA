@@ -20,7 +20,7 @@ const TELEMETRY_NOTICE = `TeXRA sends anonymous usage metadata (agent, model, to
  */
 export const telemetryNoticeIfDue = Effect.fn('telemetryNoticeIfDue')(
   function* (config: ConfigProvider) {
-    if (usageLoggingOptOut(config) !== null) return null;
+    if ((yield* usageLoggingOptOut(config)) !== null) return null;
     const state = yield* AppState;
     if ((yield* state.get(TexraStateKey.TELEMETRY_NOTICE_SHOWN)) === true)
       return null;
