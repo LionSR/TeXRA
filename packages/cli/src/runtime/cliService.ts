@@ -72,10 +72,10 @@ import { loginShellEnvironment } from './loginShellEnv';
 import { cliEnvValue, readCliEntrypointPath } from './cliContext';
 import { silentLogSink } from './logSinks';
 import type { CliContext } from './cliContext';
+import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 /** The service's own log channel. */
 const CHANNEL = 'cliService';
-import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 /**
  * The service's projects over the CLI's node roots, opened in `scope` and
