@@ -189,7 +189,7 @@ export interface SessionViewAccess {
     port: string,
     set: readonly TranscriptSubscription[],
   ): Effect.Effect<void>;
-  /** Record what a resume of a run waits for (durable harness D5), or null
+  /** Record what a resume of a run waits for, or null
    *  when nothing blocks it any more: local truth, never a row. */
   markResumeBlocked(
     runId: RunId,

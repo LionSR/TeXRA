@@ -106,7 +106,7 @@ export class DatabaseOpenFailed extends Data.TaggedError('DatabaseOpenFailed')<{
   override readonly message = storeFailureMessage(this.cause);
 }
 
-/** A batch was rejected whole (C6): no member, sequence or wake level moved. */
+/** A batch was rejected whole: no member, sequence or wake level moved. */
 export class DatabaseWriteFailed extends Data.TaggedError(
   'DatabaseWriteFailed',
 )<{
@@ -264,7 +264,7 @@ export class Database extends Context.Service<
     /**
      * C6: append an ordered batch across aggregates, whole or not at all, in
      * the caller's {@link job} or its own transaction; `seq` and `commit`
-     * follow batch order and the writer is this process (C5). A target this
+     * follow batch order and the writer is this process. A target this
      * process does not hold open refuses the batch as `DatabaseNotOwner`;
      * any other rollback is `DatabaseWriteFailed`.
      */

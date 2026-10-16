@@ -44,7 +44,7 @@ const ResponseIdSchema = z.uuid();
 /**
  * One model invocation and its billed attempt. `attempt` increases only for a
  * retry of the same invocation. The package carries no attempt correlation
- * and retries belong to the runtime, so it lives on the row envelope (D2).
+ * and retries belong to the runtime, so it lives on the row envelope.
  */
 const InvocationRefSchema = z.strictObject({
   invocationId: z.uuid(),
@@ -310,7 +310,7 @@ export const ModelMessagePayloadSchema = z
  * response's (`null` when no model was called). Compaction (`run/compaction.ts`),
  * reset and handoff (`FollowUps.ts`) and the fork
  * seed (`forkRun.ts`) write it. Whether the result is preparable is the run
- * history's check (D11), at write and cold load: a payload cannot see the
+ * history's check, at write and cold load: a payload cannot see the
  * history it edits.
  */
 export const ContextEditPayloadSchema = z

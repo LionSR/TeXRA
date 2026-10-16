@@ -42,8 +42,8 @@ export const TextChunkSchema = z.object({
 export type TextChunk = z.infer<typeof TextChunkSchema>;
 
 /**
- * Why this process cannot resume a run until something it needs is back
- * (durable harness, gap 2 and D5): its agent is missing, or its agent's
+ * Why this process cannot resume a run until something it needs is back:
+ * its agent is missing, or its agent's
  * plugin is off or not trusted. A fact about this build and its catalog,
  * so it lives in the projection, never in a row.
  */

@@ -26,9 +26,10 @@ export const DEFAULT_AGENT_MODEL = 'openai/gpt-6.1-sol';
 /**
  * Curated models every user starts with enabled; the persisted selection is a
  * delta over this list. `llm-zoo` has no "featured" flag to derive it from, so
- * it is literal data — `ModelOptionsBasic.vitest.ts` fails an llm-zoo bump that
- * retires or deprecates an entry, and the entry is replaced here.
+ * it is literal data, replaced here when an llm-zoo bump retires or
+ * deprecates an entry.
  */
+// `ModelOptionsBasic.vitest.ts` fails such a bump.
 export const DEFAULT_MODELS: readonly string[] = [
   // The picker / new-chat default leads. Do not lead with Gemini — GPT is the
   // quality default.

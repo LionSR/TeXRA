@@ -91,8 +91,8 @@ export interface ExecuteCommandBaseOptions {
    *
    * Required — not optional — so every caller names the root it holds (a run's
    * session roots, a tool call's `roots.workspace`, the host's roots at
-   * command entry) instead of the command reaching for an ambient one
-   * (#12421). `undefined` is the honest answer only where the caller itself
+   * command entry) instead of the command reaching for an ambient one.
+   * `undefined` is the honest answer only where the caller itself
    * has no folder, and it fails the run the same way the ambient miss did.
    */
   readonly cwd: string | undefined;

@@ -1,9 +1,6 @@
 /**
  * Tool-name normalization and display labels, shared by every host that
- * renders individual tool calls: the CLI chat TUI
- * (`packages/cli/src/chat/tui/panes/toolRenderers.tsx`) and the VS Code
- * progress view
- * (`packages/extension/src/progressView/frontend/formatters/`).
+ * renders individual tool calls.
  *
  * A tool name reaches a renderer in three shapes: the canonical registry name
  * (`bash`), a provider-namespaced name from a delegated sub-agent

@@ -1,19 +1,12 @@
 /**
- * State storage key enums — vscode-free.
- *
- * Lives in `@shared` so that vscode-free zones (`packages/harness/src/agent/`, `packages/texra/src/latex/`,
- * `packages/harness/src/model/`, `packages/harness/src/tools/`) can name workspace and global state slots via the
- * natural `@shared/state/stateKeys` import path, without any risk of pulling in
- * the VS Code module.
- *
- * These are the harness's keys. An app's keys live beside its rows
- * (`@shared/settingsView/texraSettings`), and a plugin's beside the rows its
- * `Plugin` value declares.
+ * The harness's workspace and global state keys. An app's keys live beside
+ * its setting rows, and a plugin's beside the rows its `Plugin` value
+ * declares.
  *
  * The stores these keys address are the session's `roots.workspaceState`,
  * taken as data from the session, tool call or host command that holds it,
- * and the process's `AppState` service (`@platform/interfaces`). Each host
- * wires its own implementation at startup.
+ * and the process's `AppState` service. Each host wires its own
+ * implementation at startup.
  */
 
 export enum WorkspaceStateKey {

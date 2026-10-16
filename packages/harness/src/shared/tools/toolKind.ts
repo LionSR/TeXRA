@@ -1,9 +1,6 @@
 /**
  * Structural "kind" of a tool's UI treatment, shared by every host that
- * renders individual tool calls: the CLI chat TUI
- * (`packages/cli/src/chat/tui/panes/toolRenderers.tsx`) and the VS Code
- * progress view
- * (`packages/extension/src/progressView/frontend/formatters/`).
+ * renders individual tool calls.
  *
  * Both hosts used to hardcode their own tool-name lists for this and had
  * quietly drifted apart. This browser-safe module is the single source of

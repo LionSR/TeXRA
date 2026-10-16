@@ -2,8 +2,7 @@
  * Inquiry schemas.
  *
  * The model-facing tool is named `inquiry`; these schemas share its plain
- * `Inquiry…` vocabulary. The canonical storage implementation lives in
- * `packages/texra/src/tools/inquiry/inquiryRecords.ts`.
+ * `Inquiry…` vocabulary. The app that ships the tool stores them.
  */
 import { z } from 'zod';
 

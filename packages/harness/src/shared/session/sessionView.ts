@@ -7,7 +7,7 @@
  * chunks, and `local` do, and those are arrays and records.
  *
  * Interaction state (selection, drafts, recording, expansion, focus, scroll)
- * is never here (G3); `sessionPresentationBoundary.vitest.ts` pins the names.
+ * is never here.
  */
 import { z } from 'zod';
 
@@ -57,7 +57,7 @@ const SessionKeySchema = z.string().min(1);
  * projection's working state, the live text per streaming row) in a
  * module-private map beside it, so a host can neither depend on nor mutate
  * them. The slice is replaced on every change and never written after the
- * fold that produced it returns (D5). Row and block elements are the shared
+ * fold that produced it returns. Row and block elements are the shared
  * renderers' own TypeScript shapes, stated here rather than re-declared.
  */
 const TranscriptViewSchema = z.object({

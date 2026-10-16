@@ -9,7 +9,7 @@
  * `tools -> latex` edge.
  *
  * This is the general-purpose HTTP policy (arXiv fetches, tool timeouts,
- * device-code polling). `isRetryableStatus` (`packages/llm/src/errors.ts`)
+ * device-code polling). `@texra-ai/llm`'s `isRetryableStatus`
  * is a separate, deliberately different policy for LLM provider SDK errors: it also treats 409 Conflict
  * as retryable, because a provider API's 409 usually signals a transient
  * session/resource race, unlike a generic HTTP 409. Don't merge the two

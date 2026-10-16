@@ -9,8 +9,7 @@
  * higher one, or a kind this registry lacks and never retired, refuses the
  * whole store (`storeGate`) and is never rewritten.
  *
- * The release watermark is the frozen schemas, `config/storage/frozen/`
- * (`npm run storage:freeze` at a release; `rowVersions.vitest.ts`): a
+ * The release watermark is the schemas frozen at a release: a
  * version frozen there never changes in place. Before 1.0 a kind changes with
  * no upcaster; its version is bumped when an older build's row would read
  * wrong (or fail): such a row then reads as an earlier build's

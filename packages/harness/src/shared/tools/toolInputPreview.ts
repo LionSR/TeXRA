@@ -1,10 +1,8 @@
 /**
  * Derives a one-line preview of a tool call's `input`, for use as a
  * header/summary fallback before the tool's own `summary` output exists
- * (e.g. while it is still in progress) — shared by the CLI chat TUI
- * (`packages/cli/src/chat/tui/panes/toolRenderers.tsx`) and the VS Code
- * progress view
- * (`packages/extension/src/progressView/frontend/formatters/logFormatters/toolFormatters.ts`).
+ * (e.g. while it is still in progress), shared by every host that renders
+ * tool calls.
  *
  * Both hosts used to hand-maintain their own tool-name-to-preview-field
  * mapping and had quietly drifted: the CLI's generic fallback list had no

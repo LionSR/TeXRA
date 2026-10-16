@@ -2,15 +2,15 @@
  * One stdio MCP server, brought up in a scope: spawned with a scrubbed
  * environment, initialized, its tools listed, and stopped (SIGTERM, then
  * SIGKILL) when the scope closes. The scope is its project's catalog entry
- * for its spec, revision and project variables (`@tools/liveTools`), so the
+ * for its spec, revision and project variables (`ToolCatalog`), so the
  * process lives exactly as long as some open run or step of that project
  * holds it.
  *
  * JSON-RPC runs over the same Effect connection the Lean language server
- * uses (`@tools/jsonRpc`), in newline framing. Each listed tool becomes a
+ * uses, in newline framing. Each listed tool becomes a
  * runtime tool named `mcp__<server>__<tool>` whose JSON Schema passes through
  * as its parameters. Every call is approval-gated through the loop's one
- * guard (`agent/runtime/loop/toolGuard.ts`, the session's bash approval), is
+ * guard (the session's bash approval), is
  * never parallel-safe, is replay-safe only when its server marks it
  * read-only or idempotent (any other interrupted call settles as outcome
  * unknown on resume, and the model decides), and is bounded by a timeout and
