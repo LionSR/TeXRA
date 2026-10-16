@@ -271,6 +271,7 @@ export function admittedTurn(
   return admitted;
 }
 
+/** The fields every `ResolvedTurn` variant carries; `continuation` exists on some only. */
 const TURN_FIELDS = [
   'mode',
   'system',
@@ -290,9 +291,16 @@ function mismatch(state: RunState, sent: ResolvedTurn): string | null {
       stableStringify(state.offeredTools.map(({ shown }) => shown))
   )
     return "the request does not send the tools its step's tools.offered row records";
-  const differ = TURN_FIELDS.filter(
+  const continuationOf = (t: object) =>
+    'continuation' in t ? t.continuation : undefined;
+  const differ: string[] = TURN_FIELDS.filter(
     (key) => stableStringify(turn[key]) !== stableStringify(sent[key]),
   );
+  if (
+    stableStringify(continuationOf(turn)) !==
+    stableStringify(continuationOf(sent))
+  )
+    differ.push('continuation');
   return differ.length === 0
     ? null
     : `the rebuilt request differs in ${differ.join(', ')}`;
