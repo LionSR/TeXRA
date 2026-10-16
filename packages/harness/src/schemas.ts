@@ -24,6 +24,9 @@ export {
   RUN_OUTCOME,
   RunOutcomeSchema,
 } from '@shared/schemas';
+// A fresh run id, for a caller that names a run before a session launches
+// it (a service's task start).
+export { generateRunId } from '@utils/core';
 export type {
   AgentConfigInput,
   AgentSource,
@@ -83,6 +86,9 @@ export {
   TraceDocumentSchema,
   type TraceDocument,
 } from '@transcript/traceDocumentSchema';
+// Path basics that hold in a browser: forward slashes, a path's base name,
+// and its base name without the extension.
+export { getBasename, getFileStem, normalizeFilePath } from '@utils/core';
 // The setting rows a `ConfigProvider` resolves against (its `catalog`) and
 // the harness's own state keys, as a settings UI (a webview included) builds
 // its catalog from them and names the rows it renders.

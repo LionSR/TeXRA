@@ -1,7 +1,7 @@
 import { defineCommand } from 'citty';
 import { Effect, FileSystem } from 'effect';
 
-import { AgentDirectories } from '@texra-ai/harness';
+import { AgentDirectories, isStrictlyWithin } from '@texra-ai/harness';
 import {
   agentSourceRoots,
   changedBuiltInOf,
@@ -13,7 +13,6 @@ import {
   writeStampedCopy,
 } from '@agent/index';
 import { AGENT_SOURCE, agentKey, agentName } from '@shared/schemas';
-import { isStrictlyWithin } from '@utils/core/pathCore';
 
 import {
   AGENT_NAME_DESCRIPTION,

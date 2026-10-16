@@ -104,8 +104,9 @@ import { ToolRegistry } from '@tools/toolTable';
 import { agentCatalogFollower } from '@tools/agentCatalogFollower';
 import { followInterruptedTasks } from '@tools/interruptedTasks';
 import { databaseLayer, globalDatabaseLayer } from './Database';
+import { globalAppStateLayer, processStoresLayer } from './appStateStore';
 import { projectDatabaseLayer } from './projectDatabase';
-import { deletionCollector, type RunFilesServices } from './deletionCleanup';
+import { deletionCollector } from './deletionCleanup';
 import { ownerLiveness } from './ownerLiveness';
 import { sessionRequests } from './SessionRequests';
 import { makeSessionStore } from './sessionStore';
@@ -222,7 +223,7 @@ const sessionHandleLayer = (key: SessionKey) =>
           },
           local: local.ref,
           plugins,
-          services: yield* Effect.context<GlobalDatabase | RunFilesServices>(),
+          services: yield* Effect.context<ProcessServices>(),
           closed: store.closed,
         }),
         approvals: createSessionApprovals(() => session),
@@ -581,11 +582,10 @@ export interface ProcessLayerOptions {
   readonly toolMissingReporter?: ToolMissingHandler;
   /**
    * The host's global application-state layer, acquired in this runtime's
-   * scope: the TeXRA hosts' store over the global root's database values,
-   * the SDK's embedder store, or a platform-less CLI entry's refusing one,
-   * which creates no storage on a possibly read-only root.
+   * scope. Absent, the global root's values (`globalAppStateLayer`); the
+   * SDK's embedder store, or a platform-less CLI entry's refusing one.
    */
-  readonly appState: Layer.Layer<
+  readonly appState?: Layer.Layer<
     AppState,
     DatabaseOpenFailed,
     GlobalDatabase | ProcessIdentity | ProcessProbe
@@ -639,7 +639,7 @@ export function ownerProcessLayer({
   storageRoot,
   plugins,
   secrets,
-  appState,
+  appState: appStateOption,
   languageModel,
   agentDirectories,
   toolMissingReporter,
@@ -650,6 +650,7 @@ export function ownerProcessLayer({
   workspace,
 }: ProcessLayerOptions): Layer.Layer<ProcessServices | SessionOwner> {
   const globalStorage = resolveGlobalStoragePath(storageRoot);
+  const appState = appStateOption ?? globalAppStateLayer(globalStorage);
   const catalog = pluginCatalogLayer(plugins, mcpConfigPathOf(storageRoot));
   // Non-failing: `selfIdentity()` reads an unreadable identity as undefined.
   const identity = Layer.effect(
@@ -672,8 +673,7 @@ export function ownerProcessLayer({
       ? Layer.empty
       : ToolMissingReporter.layer(toolMissingReporter),
     catalog,
-    // One retry gate for the process: a 429 cools a credential for every
-    // project's runs.
+    // One retry gate per process: a 429 cools a credential for every project.
     Layer.effect(RouteRetries, ModelRetryGate.make),
   ).pipe(
     Layer.provideMerge(appState.pipe(Layer.orDie)),
@@ -681,6 +681,7 @@ export function ownerProcessLayer({
   );
   return sessionOwnerLayer.pipe(
     Layer.provideMerge(SessionMap.layer),
+    Layer.provideMerge(processStoresLayer),
     Layer.provideMerge(projectDatabaseLayer),
     // The usage log's own lifetime: its sender and ticker run with this
     // runtime, its finalizer drains the queue while HTTP is up, and it is

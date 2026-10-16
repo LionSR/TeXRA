@@ -3,7 +3,7 @@ import * as path from 'node:path';
 import { Effect } from 'effect';
 
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
-import { byStringProp, normalizeFilePath } from '@utils/core';
+import { normalizeFilePath } from '@utils/core';
 import { isStrictlyWithin } from '@utils/core/pathCore';
 import { entryMetadataAt } from '@utils/files/fsDurability';
 import { absentReason } from '@utils/files/fsEntryExists';
@@ -61,6 +61,6 @@ export const listRunWorkspaceFiles = Effect.fn('storage.listRunWorkspaceFiles')(
         isDirectory: entry.type === 'Directory',
       });
     }
-    return [...files.values()].sort(byStringProp((f) => f.path));
+    return [...files.values()].sort((a, b) => a.path.localeCompare(b.path));
   },
 );

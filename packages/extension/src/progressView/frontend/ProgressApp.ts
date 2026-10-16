@@ -17,6 +17,7 @@
  */
 
 // Third-party imports
+import { getBasename } from '@texra-ai/harness/schemas';
 import { html, LitElement, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 import { classMap } from 'lit/directives/class-map.js';
@@ -53,7 +54,6 @@ import {
 import { selectedItemValue } from '@ui/wa/selectTemplates';
 import { registerTeXRAWebAwesomeIcons, waIcon } from '@ui/wa/webAwesomeIcons';
 import { ONBOARDING_SETUP_HANDOFF } from '@ui/copy/onboarding';
-import { getBasename } from '@utils/core';
 
 /** A document task's planned pass count: its agent's catalog entry, by the
  *  key the launch recorded or, for a plain name only, the agent name. A

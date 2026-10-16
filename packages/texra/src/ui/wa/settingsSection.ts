@@ -8,7 +8,6 @@ import '@awesome.me/webawesome/dist/components/input/input.js';
 
 // Local imports - utils
 import type { TeXRAIconName } from '@shared/iconNames';
-import { clamp } from '@utils/core';
 
 // Local imports - Web Awesome
 import { waIcon } from './webAwesomeIcons';
@@ -161,10 +160,9 @@ export function renderSettingsNumberRow(
         ? parsed
         : stepOrigin +
           Math.round((parsed - stepOrigin) / options.step) * options.step;
-    const value = clamp(
-      stepped,
+    const value = Math.max(
       options.min ?? -Infinity,
-      options.max ?? Infinity,
+      Math.min(options.max ?? Infinity, stepped),
     );
     if (value !== parsed) input.value = String(value);
     options.onChange(value);

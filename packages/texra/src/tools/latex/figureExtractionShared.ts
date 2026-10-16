@@ -2,17 +2,17 @@ import { Effect, FileSystem } from 'effect';
 import { z } from 'zod';
 import { ToolContext } from '@texra-ai/harness';
 import {
+  resolveToolPath,
+  type WorkspacePathResolution,
+  executed,
+} from '@texra-ai/harness/plugins';
+import {
   ToolError,
   type ToolFileAttachment,
   type ToolResult,
 } from '@shared/schemas';
-import {
-  resolveToolPath,
-  type WorkspacePathResolution,
-} from '@tools/pathResolution';
 import { buildFileAttachment } from '@tools/attachments';
 import { formatToolOutput } from '@tools/formatting';
-import { executed } from '@tools/core/result';
 import { entryExists } from '@utils/files/fsEntryExists';
 import { ensureError } from '@utils/errors/errorMessage';
 

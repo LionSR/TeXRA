@@ -12,8 +12,8 @@
  * the tools endpoint; a structured preview/transcript shape plus whole-message
  * truncation for the CLI). Node rendering and truncation are shared here.
  */
+import { absurd } from 'effect';
 import type { ExportNode } from '@agent/export/schemas';
-import { assertNever } from '@utils/core';
 
 const HIDDEN_PROVIDER_REASONING_MARKER = '[provider reasoning hidden]';
 
@@ -95,7 +95,7 @@ function formatNodeContent(
     case 'web-search':
       return toolUseMarker('web_search', { query: node.query }, options);
     default:
-      return assertNever(node, 'Unhandled export node kind');
+      return absurd(node);
   }
 }
 

@@ -1,8 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useInput } from 'ink';
 
-import { clamp } from '@utils/core';
-
 /**
  * Scroll offset for a bounded modal region (approval diffs, command previews,
  * delegation prompts). Keeps the offset within [0, maxScrollOffset] — also
@@ -31,21 +29,28 @@ export function useScrollableOffset({
   initialOffsetRef.current = initialOffset;
   maxScrollOffsetRef.current = maxScrollOffset;
   const [scrollOffset, setScrollOffset] = useState(() =>
-    clamp(initialOffset, 0, maxScrollOffset),
+    Math.max(0, Math.min(maxScrollOffset, initialOffset)),
   );
   const scrollable = maxScrollOffset > 0;
 
   function scrollBy(delta: number): void {
-    setScrollOffset((current) => clamp(current + delta, 0, maxScrollOffset));
+    setScrollOffset((current) =>
+      Math.max(0, Math.min(maxScrollOffset, current + delta)),
+    );
   }
 
   useEffect(() => {
-    setScrollOffset((current) => clamp(current, 0, maxScrollOffset));
+    setScrollOffset((current) =>
+      Math.max(0, Math.min(maxScrollOffset, current)),
+    );
   }, [maxScrollOffset]);
 
   useEffect(() => {
     setScrollOffset(
-      clamp(initialOffsetRef.current, 0, maxScrollOffsetRef.current),
+      Math.max(
+        0,
+        Math.min(maxScrollOffsetRef.current, initialOffsetRef.current),
+      ),
     );
   }, [resetKey]);
 

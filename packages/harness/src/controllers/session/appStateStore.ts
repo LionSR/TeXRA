@@ -1,10 +1,14 @@
-/** Settings stores over a root's current values, read from SQLite on every operation. */
+/** The process's stores over its databases (`GlobalValues`, `StateStores`,
+ *  the global `AppState`), read from SQLite on every operation. */
 import * as path from 'node:path';
 
-import { Effect, RcMap, Result } from 'effect';
+import { Effect, Layer, RcMap, Result } from 'effect';
 
+import { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 import { withLogChannel } from '@logger/effectLog';
+import { GlobalValues, StateStores } from '@platform/processRuntime';
 import {
+  AppState,
   StateReadFailed,
   StateWriteFailed,
   type AppStateStore,
@@ -24,7 +28,6 @@ import {
 import { normalizeFilePath } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { executeCommand } from '@utils/system/execUtils';
-import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 /**
  * A settings store over one family of a root's current values, captured from
@@ -32,7 +35,7 @@ import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
  * keyed by the setting key; `repo-state` by the repository root and the key,
  * so every checkout of one repository reads one value.
  */
-export function appStateStoreFromDatabase(
+function appStateStoreFromDatabase(
   storage: string,
   values: CurrentValues,
   scope?: { readonly repoRoot: string },
@@ -105,55 +108,50 @@ export function appStateStoreFromDatabase(
  * that cannot be read or written is logged at warn and the project still
  * opens: the prune then never lists the store as an orphan.
  */
-export const openProjectStateStore = Effect.fn(
-  'appStateStore.openProjectStateStore',
-)(function* (storage: string, workspaceRoot: string | undefined) {
-  const database = yield* RcMap.get(yield* ProjectDatabases, storage);
-  if (workspaceRoot !== undefined) {
-    yield* (yield* GlobalDatabase).values
-      .modify(WORKSPACE_STORES, path.basename(storage), () =>
-        Result.succeed([undefined, { root: workspaceRoot }] as const),
-      )
-      .pipe(
-        Effect.catch((error) =>
-          Effect.logWarning(
-            `Could not record that ${storage} serves ${workspaceRoot}; \`texra doctor --prune-storage\` will not list it as an orphan.`,
-          ).pipe(
-            Effect.annotateLogs({ data: error }),
-            withLogChannel('sessionDatabase'),
+const openProjectStateStore = Effect.fn('appStateStore.openProjectStateStore')(
+  function* (
+    projects: ProjectDatabases['Service'],
+    values: CurrentValues,
+    storage: string,
+    workspaceRoot: string | undefined,
+  ) {
+    const database = yield* RcMap.get(projects, storage);
+    if (workspaceRoot !== undefined) {
+      yield* values
+        .modify(WORKSPACE_STORES, path.basename(storage), () =>
+          Result.succeed([undefined, { root: workspaceRoot }] as const),
+        )
+        .pipe(
+          Effect.catch((error) =>
+            Effect.logWarning(
+              `Could not record that ${storage} serves ${workspaceRoot}; \`texra doctor --prune-storage\` will not list it as an orphan.`,
+            ).pipe(
+              Effect.annotateLogs({ data: error }),
+              withLogChannel('sessionDatabase'),
+            ),
           ),
-        ),
-      );
-  }
-  return appStateStoreFromDatabase(storage, database.values);
-});
+        );
+    }
+    return appStateStoreFromDatabase(storage, database.values);
+  },
+);
 
 /**
- * The repository settings of `workspaceRoot` (the catalog's `repoState`
- * slot), in the global root's current values, keyed by the repository every
- * checkout of it shares.
- *
- * A linked worktree, whose git dir is `<dir>/worktrees/<name>`, keys by the
- * checkout holding `<dir>` when `<dir>` is `.git` (a plain repository's main
- * worktree) and by `<dir>` itself otherwise (a bare repository, or a
- * submodule's `.git/modules/…`). Every other checkout (a main worktree, a
- * submodule) keys by its own top level, so two submodules never share one
- * key. A folder outside any repository keys by itself, and no folder at all
- * by the project's storage root. "Not a git repository" and "must be run in
- * a work tree" are expected answers; any other failure (git missing, a
- * timeout) is logged at warn and the folder keys by itself, so host startup
- * is never aborted by it.
+ * The repository settings of `workspaceRoot` (the `repoState` slot), keyed by
+ * the repository every checkout shares: a linked worktree (git dir
+ * `<dir>/worktrees/<name>`) by the checkout holding `<dir>` when that is
+ * `.git`, else by `<dir>` (a bare repository, a submodule's `.git/modules/…`);
+ * any other checkout by its own top level, so two submodules never share a
+ * key; a folder outside a repository by itself; no folder by the storage
+ * root. A git failure other than "not a repository" is logged at warn and the
+ * folder keys by itself, so host startup never aborts on it.
  */
-export const openRepoStateStore = Effect.fn('appStateStore.openRepoStateStore')(
+const openRepoStateStore = Effect.fn('appStateStore.openRepoStateStore')(
   function* (
-    workspaceRoot: string | undefined,
+    values: CurrentValues,
     storage: string,
-  ): Effect.fn.Return<
-    AppStateStore,
-    never,
-    GlobalDatabase | ChildProcessSpawner
-  > {
-    const { values } = yield* GlobalDatabase;
+    workspaceRoot: string | undefined,
+  ) {
     const store = (repoRoot: string) =>
       appStateStoreFromDatabase(storage, values, {
         repoRoot: normalizeFilePath(repoRoot),
@@ -194,3 +192,42 @@ export const openRepoStateStore = Effect.fn('appStateStore.openRepoStateStore')(
     );
   },
 );
+
+/** `GlobalValues` over the process's global database. */
+const globalValuesLayer = Layer.effect(
+  GlobalValues,
+  Effect.map(GlobalDatabase, (database) => database.values),
+);
+
+/** `GlobalValues` and `StateStores`, over the process's databases. */
+export const processStoresLayer = Layer.mergeAll(
+  globalValuesLayer,
+  Layer.effect(
+    StateStores,
+    Effect.gen(function* () {
+      const projects = yield* ProjectDatabases;
+      const { values } = yield* GlobalDatabase;
+      const spawner = yield* ChildProcessSpawner;
+      return {
+        project: (storage, workspaceRoot) =>
+          openProjectStateStore(projects, values, storage, workspaceRoot),
+        repo: (storage, workspaceRoot) =>
+          openRepoStateStore(values, storage, workspaceRoot).pipe(
+            Effect.provideService(ChildProcessSpawner, spawner),
+          ),
+      };
+    }),
+  ),
+);
+
+/** The process's application state, in the global root's current values at
+ *  `globalStorage`: what every TeXRA host keeps. */
+export const globalAppStateLayer = (
+  globalStorage: string,
+): Layer.Layer<AppState, never, GlobalDatabase> =>
+  Layer.effect(
+    AppState,
+    Effect.map(GlobalDatabase, (database) =>
+      appStateStoreFromDatabase(globalStorage, database.values),
+    ),
+  );
