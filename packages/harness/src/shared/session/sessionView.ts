@@ -461,3 +461,13 @@ export function descendantRuns(
   }
   return out;
 }
+
+/**
+ * What opening a store moved aside, whole (never read again): a store written
+ * before 1.0, or a file SQLite reports damaged or not a database. Null when
+ * nothing was moved. The one fact a host presents about it. */
+export interface SessionStoreMovedAside {
+  readonly path: string;
+  readonly aside: string;
+  readonly reason: 'pre-1.0' | 'corrupt';
+}

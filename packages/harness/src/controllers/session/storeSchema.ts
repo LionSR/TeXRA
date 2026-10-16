@@ -15,7 +15,7 @@
  */
 import { Clock, Effect, Exit, FileSystem, Scope } from 'effect';
 import { withLogChannel } from '@logger/effectLog';
-import type { SessionStoreMovedAside } from '@shared/session/database';
+import type { SessionStoreMovedAside } from '@shared/session/sessionView';
 import {
   cannotOpen,
   freeName,

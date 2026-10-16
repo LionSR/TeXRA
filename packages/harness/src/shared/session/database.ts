@@ -23,6 +23,7 @@ import {
 import { isSqlError } from 'effect/sql/SqlError';
 import { z } from 'zod';
 import { AggregateIdSchema, OwnerIdSchema } from '@shared/schemas';
+import type { SessionStoreMovedAside } from './sessionView';
 import type {
   AggregateId,
   CommitOrdinal,
@@ -157,16 +158,6 @@ export class DatabaseReadFailed extends Data.TaggedError('DatabaseReadFailed')<{
   readonly cause: unknown;
 }> {
   override readonly message = storeFailureMessage(this.cause);
-}
-
-/**
- * What opening a store moved aside, whole (never read again): a store written
- * before 1.0, or a file SQLite reports damaged or not a database. Null when
- * nothing was moved. The one fact a host presents about it. */
-export interface SessionStoreMovedAside {
-  readonly path: string;
-  readonly aside: string;
-  readonly reason: 'pre-1.0' | 'corrupt';
 }
 
 /** The store gate's refusal (`storeGate`): the store holds a kind or version

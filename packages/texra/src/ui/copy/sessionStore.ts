@@ -1,4 +1,4 @@
-import type { SessionStoreMovedAside } from '@shared/session/database';
+import type { SessionStoreMovedAside } from '@shared/session/sessionView';
 
 /**
  * What a host tells the user when opening a session store moved it aside

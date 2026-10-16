@@ -42,8 +42,8 @@ import type {
   DatabaseWriteFailed,
   DeletionMode,
   SessionOpenError,
-  SessionStoreMovedAside,
 } from '@shared/session/database';
+import type { SessionStoreMovedAside } from '@shared/session/sessionView';
 import type { RequestError } from '@shared/session/requestErrors';
 import type { RunHistory } from '@shared/session/runHistory';
 import type { Outcome, RuntimeRequest } from '@shared/session/runtimeRequest';
