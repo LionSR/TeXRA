@@ -29,5 +29,3 @@ describe('Unicode-safe ellipsis helpers', () => {
     expect(truncateWithEllipsis('abcdef', 0)).toBe('…');
   });
 });
-
-// Shared "last touched" timestamp formatter for History and Memory list items.
