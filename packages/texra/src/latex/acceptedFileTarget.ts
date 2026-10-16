@@ -15,7 +15,6 @@ import {
 import { generateDiffFileName } from '@latex/latexdiff/diffFileNameManager';
 import type { FileLocation } from '@shared/schemas';
 import { locateInWorkspace } from '@utils/files/workspaceFS';
-import { normalizeLineEndings } from '@utils/text/stringUtils';
 
 const CHANNEL = 'AcceptedFileTarget';
 
@@ -147,8 +146,9 @@ export function commitAcceptedFile<E>(
     const { targetLocation, targetFileName } = target;
     const editedPath = editedLocation.absolutePath;
 
-    const editedContent = normalizeLineEndings(
-      yield* fs.readFileString(editedPath),
+    const editedContent = (yield* fs.readFileString(editedPath)).replaceAll(
+      '\r\n',
+      '\n',
     );
     yield* fs.writeFileString(targetLocation.absolutePath, editedContent);
     if (targetLocation.kind === 'workspace') {

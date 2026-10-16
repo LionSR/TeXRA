@@ -10,7 +10,6 @@ import { openFileInEditor } from '@frontend/vscode/vscodeEditor';
 import { openFirstLabelMatch } from '@latex/labelSearch';
 import { listWorkspaceFilesOfType } from '@texra/controllers/session/workspaceFileOptions';
 import { workspaceAbsolutePath } from '@utils/files/workspaceFS';
-import { normalizeLineEndings } from '@utils/text/stringUtils';
 import type { WorkspaceRoots } from '@texra-ai/harness';
 
 const CHANNEL = 'openFileCommands';
@@ -81,7 +80,7 @@ export const openLabel = Effect.fn('openFileCommands.openLabel')(function* (
     new Set([...inputs, ...contexts]),
     (file) =>
       workspaceFs.readFileString(file).pipe(
-        Effect.map(normalizeLineEndings),
+        Effect.map((text: string) => text.replaceAll('\r\n', '\n')),
         Effect.tapError((error) =>
           Effect.logDebug(`Could not read file ${file}: ${error.message}`).pipe(
             withLogChannel(CHANNEL),

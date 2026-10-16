@@ -2,6 +2,7 @@
 // registry that feeds prompt injection and builds activation payloads from the
 // shared runtime formatter instead of duplicating skill wiring in the UI layer.
 
+import { formatResultCount } from '@texra-ai/harness/transcript';
 import { Text } from 'ink';
 import { Effect } from 'effect';
 
@@ -19,7 +20,6 @@ import type {
   DiscoverSkillSourcesResult,
   SourcedSkill,
 } from '@skills/loadSkills';
-import { formatResultCount } from '@utils/text/stringUtils';
 
 import { AsyncListForm } from './_shared/ListForm';
 import type { SettingsStores } from '@texra-ai/harness';

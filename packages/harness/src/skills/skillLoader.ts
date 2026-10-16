@@ -12,7 +12,6 @@ import { SkillNameSchema } from '@shared/schemas';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local imports - skill parsing
-import { collapseWhitespace } from '@utils/text/stringUtils';
 import {
   SKILL_DESCRIPTION_MAX_LENGTH,
   SkillSchema,
@@ -133,7 +132,7 @@ function normalizeSkillDescription(
   const rawDescription = frontmatter.description;
   const description =
     typeof rawDescription === 'string'
-      ? collapseWhitespace(rawDescription)
+      ? rawDescription.replaceAll(/\s+/g, ' ').trim()
       : '';
 
   if (!description) {

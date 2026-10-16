@@ -6,7 +6,6 @@ import { withLogChannel } from '@texra-ai/harness';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
 import { escapeAttr } from '@shared/utils/xmlEscape';
 import { HOST_BRIDGE_API_KEY } from '@texra/shared/hostBridgeTypes';
-import { normalizeLineEndings } from '@utils/text/stringUtils';
 
 /** A view's HTML template has no `<body>` to install the host bridge into. */
 class WebviewTemplateMissingBody extends Data.TaggedError(
@@ -35,8 +34,9 @@ const buildWebviewHtml = Effect.fnUntraced(function* (
   attributes: Record<string, string>,
 ) {
   const fs = yield* FileSystem.FileSystem;
-  const htmlContent = normalizeLineEndings(
-    yield* fs.readFileString(htmlPath.fsPath),
+  const htmlContent = (yield* fs.readFileString(htmlPath.fsPath)).replaceAll(
+    '\r\n',
+    '\n',
   );
   const nonce = nanoid(32);
 

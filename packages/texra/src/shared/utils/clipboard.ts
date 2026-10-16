@@ -1,5 +1,3 @@
-import { normalizeLineEndings } from '@utils/text/stringUtils';
-
 export const COPY_RESET_DELAY_MS = 2000;
 
 export function appendClipboardImageChips(
@@ -20,7 +18,7 @@ export async function copyTextToClipboard(text: string): Promise<boolean> {
     return false;
   }
 
-  const normalizedText = normalizeLineEndings(text);
+  const normalizedText = text.replaceAll('\r\n', '\n');
   try {
     await navigator.clipboard.writeText(normalizedText);
     return true;

@@ -32,7 +32,11 @@ import {
 } from '@texra-ai/harness';
 
 // Local imports
-import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';
+import {
+  ensureError,
+  toErrorMessage,
+  previewLabel,
+} from '@texra-ai/harness/schemas';
 import {
   emitToolUseCard,
   endOpenToolUseCards,
@@ -62,11 +66,7 @@ import {
 import type { ClaudeAgentPermissionMode } from '@texra/shared/agentCliSettings';
 import { buildSyntheticToolUseConfig } from '@texra/tools/core/syntheticAgentConfig';
 import { buildAgentWorkspaceOptions } from '@texra/tools/agentWorkspaceOptions';
-import {
-  formatWallTimeSeconds,
-  isNonEmptyString,
-  previewLabel,
-} from '@utils/text/stringUtils';
+import { isNonEmptyString } from '@utils/text/stringUtils';
 
 // Local file imports
 import { ClaudeBackgroundTaskTracker } from './claudeAgentBackgroundTasks';
@@ -489,7 +489,7 @@ function buildClaudeAgentLaunch(params: {
         runId,
         prompt: lastPrompt,
         attributes: [{ name: 'session-id', value: turn.sessionId || null }],
-        wallTime: formatWallTimeSeconds(wallTimeMs),
+        wallTime: `${(wallTimeMs / 1000).toFixed(1)}s`,
         response: turn.finalResponse,
         usage: turn.usage,
         lines: claudeCostLines(turn),

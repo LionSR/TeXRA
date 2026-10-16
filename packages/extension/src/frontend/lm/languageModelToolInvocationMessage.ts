@@ -1,6 +1,7 @@
 // Local imports - core
+import { truncateSummary } from '@texra-ai/harness/schemas';
 import { Predicate } from 'effect';
-import { isNonEmptyString, truncateSummary } from '@utils/text/stringUtils';
+import { isNonEmptyString } from '@utils/text/stringUtils';
 
 export type LanguageModelResearchToolName = 'arxiv_search' | 'web_fetch';
 

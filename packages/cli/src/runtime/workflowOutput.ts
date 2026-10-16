@@ -1,4 +1,5 @@
 import * as path from 'node:path';
+import { formatResultCount } from '@texra-ai/harness/transcript';
 import { toPosixPath } from '@texra-ai/harness';
 
 import { Effect, FileSystem, Path, PlatformError } from 'effect';
@@ -19,11 +20,7 @@ import { runDirUnder } from '@utils/files/runStorageFs';
 // toPosixPath also trims and resolves `.`/`..` segments beyond a bare slash
 // swap; safe here since these paths come from getSafeDocumentRelativePath /
 // path.relative on the workflow's own generated outputs, never user input.
-import {
-  formatResultCount,
-  isNonEmptyString,
-  pluralize,
-} from '@utils/text/stringUtils';
+import { isNonEmptyString, pluralize } from '@utils/text/stringUtils';
 
 import { CliUsageError, type CliContext } from './cliContext';
 import { type CliRunResult } from './terminalStatus';

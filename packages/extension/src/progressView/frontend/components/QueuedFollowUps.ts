@@ -1,4 +1,5 @@
 // Third-party imports
+import { truncateWithEllipsis } from '@texra-ai/harness/schemas';
 import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 import { repeat } from 'lit/directives/repeat.js';
@@ -10,7 +11,7 @@ import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 // Local imports - shared styles
 import { designTokens, commonViewStyles } from '@ui/styles';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
-import { pluralize, truncateWithEllipsis } from '@utils/text/stringUtils';
+import { pluralize } from '@utils/text/stringUtils';
 
 // Web Awesome native components
 import '@awesome.me/webawesome/dist/components/details/details.js';

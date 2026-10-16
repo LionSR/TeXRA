@@ -28,11 +28,7 @@ import {
   unifiedDiffText,
   type DiffHunks,
 } from '@utils/text/unifiedDiff';
-import {
-  countLines,
-  isNonEmptyString,
-  normalizeLineEndings,
-} from '@utils/text/stringUtils';
+import { countLines, isNonEmptyString } from '@utils/text/stringUtils';
 
 const CHANNEL = 'ToolEditApproval';
 
@@ -304,9 +300,9 @@ export const requestToolEditApproval = Effect.fn('requestToolEditApproval')(
                 return finalizeApprovalResult(
                   {
                     action: 'apply',
-                    appliedContent: normalizeLineEndings(
-                      decided.content ?? preparedRequest.proposedContent,
-                    ),
+                    appliedContent: (
+                      decided.content ?? preparedRequest.proposedContent
+                    ).replaceAll('\r\n', '\n'),
                   },
                   preparedRequest,
                 );

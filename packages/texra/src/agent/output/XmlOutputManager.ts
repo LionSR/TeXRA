@@ -1,4 +1,5 @@
 import * as path from 'node:path';
+import { formatResultCount } from '@texra-ai/harness/transcript';
 
 import { Effect, FileSystem } from 'effect';
 
@@ -23,10 +24,6 @@ import {
 } from '@texra/shared/plugins/documentOutputs';
 import { addCdataToTagsMultiple } from '@texra/utils/text/xmlCdata';
 import { RunFileService } from '@utils/files/runStorage';
-import {
-  formatResultCount,
-  normalizeLineEndings,
-} from '@utils/text/stringUtils';
 import { entryTypeIn } from '@utils/files/fsEntryExists';
 
 import {
@@ -163,7 +160,7 @@ export class XmlOutputManager {
         (loc, idx) =>
           fs
             .readFileString(loc.absolutePath)
-            .pipe(Effect.map(normalizeLineEndings))
+            .pipe(Effect.map((text: string) => text.replaceAll('\r\n', '\n')))
             .pipe(
               // An unreadable base file becomes '': it will score near-zero
               // similarity against any real fenced block rather than aborting
@@ -218,9 +215,9 @@ export class XmlOutputManager {
   ): Effect.Effect<OutputFileInfo[], Error, FileSystem.FileSystem> {
     return Effect.gen({ self: this }, function* () {
       const fs = yield* FileSystem.FileSystem;
-      const rawOutputContent = normalizeLineEndings(
-        yield* fs.readFileString(outputLocation.absolutePath),
-      );
+      const rawOutputContent = (yield* fs.readFileString(
+        outputLocation.absolutePath,
+      )).replaceAll('\r\n', '\n');
       // The scratchpad is reasoning, not output: a tag it mentions must be
       // neither counted nor extracted as a document.
       const response = stripScratchpad(rawOutputContent);
@@ -420,9 +417,9 @@ export class XmlOutputManager {
       this.logger.debug(
         `Ensuring correct XML structure: ${fileLocation.absolutePath}`,
       );
-      const originalContent = normalizeLineEndings(
-        yield* fs.readFileString(fileLocation.absolutePath),
-      );
+      const originalContent = (yield* fs.readFileString(
+        fileLocation.absolutePath,
+      )).replaceAll('\r\n', '\n');
       const replaced = replacementEngine.applyFor(
         originalContent,
         'xml-content',

@@ -1,3 +1,4 @@
+import { formatResultCount } from '@texra-ai/harness/transcript';
 import { Effect } from 'effect';
 
 import {
@@ -7,7 +8,6 @@ import {
 } from '@texra-ai/harness';
 import { agentKeyOf } from '@shared/schemas';
 import { documentTaskOf } from '@texra/tools/documents/documentTask';
-import { formatResultCount } from '@utils/text/stringUtils';
 
 import { CliUsageError } from './cliContext';
 

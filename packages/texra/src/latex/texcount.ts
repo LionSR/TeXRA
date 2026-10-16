@@ -5,7 +5,6 @@ import { pathToLocationIn } from '@texra-ai/harness';
 import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';
 import { runToolWithCheck } from '@texra/utils/system/toolChecks';
 import { pathExists } from '@utils/files/fsDurability';
-import { normalizeLineEndings } from '@utils/text/stringUtils';
 import { LATEX_COMMANDS_CHANNEL as CHANNEL } from './latexLogging';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 import type { SettingsStores } from '@texra-ai/harness';
@@ -31,7 +30,7 @@ const hasChinesePackages = Effect.fn('texcount.hasChinesePackages')(function* (
     // Decoded from bytes rather than `readFileString`, whose `TextDecoder`
     // would strip a leading UTF-8 BOM the file carries.
     Effect.map((bytes) =>
-      normalizeLineEndings(Buffer.from(bytes).toString('utf-8')),
+      Buffer.from(bytes).toString('utf-8').replaceAll('\r\n', '\n'),
     ),
     Effect.map((content) =>
       CHINESE_PACKAGES.some(

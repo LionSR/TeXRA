@@ -57,7 +57,6 @@
       "@utils/files/workspaceFS",
       "@utils/system/envFlags",
       "@utils/system/platformPaths",
-      "@utils/text/stringUtils",
       "@utils/text/unifiedDiff"
     ],
     "extension": [

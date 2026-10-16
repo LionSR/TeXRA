@@ -176,3 +176,16 @@ export {
   type SurfacedSettingEntry,
 } from '@shared/state/stateSettings';
 export { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
+
+// Text primitives: grapheme-safe truncation (plain, whitespace-collapsed, or
+// at the preview width), a text's content lines and their count, and
+// control characters stripped so untrusted text cannot inject terminal
+// escapes.
+export {
+  countLines,
+  previewLabel,
+  splitContentLines,
+  stripControlCharacters,
+  truncateSummary,
+  truncateWithEllipsis,
+} from '@utils/text/stringUtils';

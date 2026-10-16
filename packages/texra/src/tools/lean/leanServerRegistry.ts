@@ -18,7 +18,7 @@
 import {
   formatCompactDuration,
   formatResultCount,
-} from '@utils/text/stringUtils';
+} from '@texra-ai/harness/transcript';
 
 import { LEAN_SERVER_MODE_LABELS } from './leanTypes';
 

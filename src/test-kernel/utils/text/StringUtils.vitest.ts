@@ -2,7 +2,7 @@
 import { describe, expect, it } from 'vitest';
 
 // Local imports
-import { formatTimestamp, truncateWithEllipsis } from '@utils/text/stringUtils';
+import { truncateWithEllipsis } from '@utils/text/stringUtils';
 
 describe('Unicode-safe ellipsis helpers', () => {
   // Family emoji: U+1F468 ZWJ U+1F469 ZWJ U+1F467 — five code points, but one
@@ -29,13 +29,3 @@ describe('Unicode-safe ellipsis helpers', () => {
     expect(truncateWithEllipsis('abcdef', 0)).toBe('…');
   });
 });
-
-describe('formatTimestamp', () => {
-  it('normalizes offset timestamps to compact UTC', () => {
-    expect(formatTimestamp('2026-06-02T16:30:45.123+02:00')).toBe(
-      '2026-06-02 14:30:45',
-    );
-  });
-});
-
-// Shared "last touched" timestamp formatter for History and Memory list items.
