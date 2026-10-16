@@ -17,13 +17,13 @@ import {
 import * as ChildProcess from 'effect/process/ChildProcess';
 
 import { withLogChannel } from '@texra-ai/harness';
+import {
+  withExtendedPath,
+  findCommand,
+  type FoundCommand,
+} from '@texra-ai/harness/node';
 import { getSdkErrorMessage } from '@texra-ai/harness';
 import { ensureError } from '@texra-ai/harness/schemas';
-import {
-  resolveOptionalCommand,
-  type ResolvedBinaryCommand,
-} from '@utils/system/binaryResolver';
-import { withExtendedPath } from '@utils/system/platformPaths';
 import { absentReason } from '@utils/files/fsEntryExists';
 import type { WorkspaceRoots } from '@texra-ai/harness';
 import type {
@@ -86,7 +86,7 @@ const SOX_SHUTDOWN_TIMEOUT_MS = 5000;
 const resolveSoxCommand = Effect.fnUntraced(function* (
   roots: WorkspaceRoots,
 ): Effect.fn.Return<
-  ResolvedBinaryCommand | null,
+  FoundCommand | null,
   AudioRecorderError,
   FileSystem.FileSystem | ChildProcessSpawner
 > {
@@ -114,11 +114,9 @@ const resolveSoxCommand = Effect.fnUntraced(function* (
         message: `Configured sox path does not exist: ${configuredPath}`,
       });
     }
-    return yield* resolveOptionalCommand('sox', [], {
-      resolvedPath: configuredPath,
-    });
+    return yield* findCommand('sox', { path: configuredPath });
   }
-  return yield* resolveOptionalCommand('sox');
+  return yield* findCommand('sox');
 });
 
 /**

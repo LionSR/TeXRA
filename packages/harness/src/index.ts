@@ -258,7 +258,6 @@ export { helperCall, type HelperPrompt } from '@agent/runtime/helperModel';
 // Who a helper call's usage is billed to, and why a model call can fail.
 export type { UsageAttribution } from '@agent/runtime/run/pricing';
 export type { CallFailure } from '@agent/runtime/modelAccess/failureInfo';
-export { RouteUnavailable } from '@common/errors/agentErrors';
 export { getHelperModelName } from '@agent/runtime/helperModelName';
 // Where every model call's usage goes, and the entry a sender ships.
 export { UsageLog, type UsageLogEntry } from '@shared/usageLog';
@@ -275,6 +274,7 @@ export {
   withSessionFs,
   WorkspaceFs,
 } from '@platform/rootedFs';
+export type { RootedFileSystem } from '@utils/files/rootedFileSystem';
 // A `FileLocation` by its root: a workspace file, a file under a run's
 // storage, a file outside both, or a path against the workspace root a
 // caller holds.
@@ -329,7 +329,7 @@ export {
 // presented, the filesystem and module predicates, the cause chain, a
 // user's abort, and a provider error's message. Error messages themselves
 // (`toErrorMessage`, `ensureError`) are in `./schemas`.
-export { AgentError } from '@common/errors/agentErrors';
+export { AgentError, RouteUnavailable } from '@common/errors/agentErrors';
 export {
   agentErrorPresentation,
   type AgentErrorKind,

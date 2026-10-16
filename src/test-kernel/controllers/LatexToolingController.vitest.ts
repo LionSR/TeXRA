@@ -27,7 +27,7 @@ vi.mock('@texra/utils/system/toolChecks', async (importOriginal) => ({
 }));
 vi.mock('@utils/system/binaryResolver', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@utils/system/binaryResolver')>()),
-  findToolInCommonPaths: () => Effect.succeed(null),
+  findCommand: () => Effect.succeed(null),
 }));
 
 describe('LatexToolingController', () => {

@@ -9,6 +9,7 @@
  * next step.
  */
 // Third-party imports
+import * as os from 'node:os';
 import { Effect, FileSystem, Result } from 'effect';
 
 // Local imports - agent runtime
@@ -21,7 +22,6 @@ import {
   type ProcessServices,
 } from '@texra-ai/harness';
 import type { PluginActionMessage } from '@texra/shared/settingsView/pluginMessages';
-import { safeHomedir } from '@utils/system/platformPaths';
 
 // Local imports - this module's neighbours
 import type {
@@ -61,7 +61,7 @@ export function settingsPluginCommands(ports: {
     if (!source) return;
     const origin = InstalledPlugins.origin(
       source,
-      roots.workspace ?? safeHomedir() ?? '/',
+      roots.workspace ?? os.homedir(),
       undefined,
     );
     if (Result.isFailure(origin)) return yield* Effect.fail(origin.failure);

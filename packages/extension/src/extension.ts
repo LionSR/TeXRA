@@ -469,7 +469,7 @@ const activateExtension = Effect.fn('activateExtension')(function* (
       reached,
     ).pipe(Effect.provideService(Scope.Scope, activationScope)),
   );
-  // Off the activation tick: extendEnvPath() runs synchronous glob probes.
+  // Off the activation tick: withExtendedPath() runs synchronous glob probes.
   yield* withProcessServices(
     runtime,
     initializeLatexSupport(roots.globalState),

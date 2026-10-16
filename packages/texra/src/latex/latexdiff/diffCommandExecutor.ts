@@ -4,10 +4,10 @@ import { Effect } from 'effect';
 // Internal imports
 import { withLogChannel } from '@texra-ai/harness';
 import { Settings } from '@texra-ai/harness';
+import { executeCommand } from '@texra-ai/harness/node';
 import type { ExecResult } from '@shared/schemas';
 import type { LatexdiffMathMarkupValue } from '@texra/shared/constants/latexConfig';
 import { DocumentsStateKey } from '@texra/shared/settingsView/documentsSettings';
-import { executeCommand } from '@utils/system/execUtils';
 
 // Local file imports
 import { LATEX_CITATION_COMMANDS } from '../latexParsingUtils';

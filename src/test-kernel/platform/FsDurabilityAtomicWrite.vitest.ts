@@ -5,8 +5,8 @@ import { it } from '@effect/vitest';
 import { Effect } from 'effect';
 import { describe, expect } from 'vitest';
 
+import { writeFileAtomic } from '@texra-ai/harness/node';
 import { withTempDirEffect } from '@test/support/tempDirPlatform';
-import { writeFileAtomic } from '@utils/files/fsDurability';
 
 describe('fsDurability.writeFileAtomic', () => {
   it.live(

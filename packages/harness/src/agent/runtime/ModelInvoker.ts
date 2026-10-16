@@ -165,7 +165,7 @@ export class ModelInvoker extends Context.Service<
       request: TurnRequest,
     ) => Effect.Effect<CallResult, Error>;
   }
->()('@texra/agent/ModelInvoker') {}
+>()('@texra-ai/harness/agent/ModelInvoker') {}
 
 /**
  * Build a request service for one run; its model is run-owned, and every row

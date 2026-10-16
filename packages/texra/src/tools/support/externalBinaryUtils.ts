@@ -26,11 +26,10 @@ import { Effect, FileSystem } from 'effect';
 import which from 'which';
 
 import { withLogChannel } from '@texra-ai/harness';
+import { executeCommand, withExtendedPath } from '@texra-ai/harness/node';
 import { isModuleNotFoundError } from '@texra-ai/harness';
 import { ensureError } from '@texra-ai/harness/schemas';
 import { nodeHostEnvironment } from '@texra/platform/defaults/nodeHostEnvironment';
-import { executeCommand } from '@utils/system/execUtils';
-import { IS_WINDOWS, extendEnvPath } from '@utils/system/platformPaths';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 const CHANNEL = 'ExternalBinaryUtils';
@@ -238,8 +237,8 @@ const resolveBinary = Effect.fn('externalBinaryUtils.resolveBinary')(function* (
   return (
     which.sync(config.pathCommand, {
       nothrow: true,
-      path: extendEnvPath(),
-      ...(IS_WINDOWS ? { pathExt: '.EXE' } : {}),
+      path: withExtendedPath({ PATH: process.env.PATH }).PATH,
+      ...(process.platform === 'win32' ? { pathExt: '.EXE' } : {}),
     }) ?? undefined
   );
 });

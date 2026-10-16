@@ -1,10 +1,12 @@
 // Third-party imports
 import { Effect } from 'effect';
+import { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 import * as vscode from 'vscode';
 
 // Local imports - utilities
-import { withLogChannel } from '@texra-ai/harness';
+import { withLogChannel, type RootedFileSystem } from '@texra-ai/harness';
 import { WorkspaceFs } from '@texra-ai/harness';
+import { executeCommand, findCommand } from '@texra-ai/harness/node';
 import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';
 import { VscodeExternalOpener } from '@frontend/hosts/VscodeExternalOpener';
 import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
@@ -24,9 +26,6 @@ import {
 } from '@latex/overleafProject';
 import { COMMIT_HASH_PATTERN } from '@texra/utils/git/commitHashPattern';
 import { COMMIT_LABEL_FORMAT } from '@texra/utils/git/commitLogFormat';
-import type { RootedFileSystem } from '@utils/files/rootedFileSystem';
-import { executeCommand } from '@utils/system/execUtils';
-import { whichOnExtendedPath } from '@utils/system/platformPaths';
 import type { PlatformSecrets, WorkspaceRoots } from '@texra-ai/harness';
 
 const CHANNEL = 'gitCommands';
@@ -141,7 +140,9 @@ const promptGitMissing = Effect.fnUntraced(function* () {
   // A PATH lookup, not a spawn: the manager only has to be installed for
   // its install command to be worth offering.
   const command =
-    option && whichOnExtendedPath(option.tool) !== null ? option.command : null;
+    option && (yield* findCommand(option.tool)) !== null
+      ? option.command
+      : null;
 
   let message: string;
   if (command) {
@@ -190,6 +191,7 @@ function buildOverleafClonePorts(
   secrets: PlatformSecrets,
   remote: OverleafRemote,
   workspaceFs: RootedFileSystem,
+  spawner: ChildProcessSpawner['Service'],
 ): OverleafCloneWorkflowPorts {
   return {
     // A credential store this host cannot reach fails the clone with its
@@ -223,7 +225,8 @@ function buildOverleafClonePorts(
         ),
       ),
 
-    showGitMissing: () => promptGitMissing(),
+    showGitMissing: () =>
+      Effect.provideService(promptGitMissing(), ChildProcessSpawner, spawner),
     listWorkspaceEntries: (workspacePath) =>
       workspaceFs.readDirectory(workspacePath),
     showWorkspaceUnreadable: (e) =>
@@ -319,7 +322,12 @@ export function cloneOverleafProject(secrets: PlatformSecrets) {
     yield* runOverleafClone(
       remote,
       workspacePath,
-      buildOverleafClonePorts(secrets, remote, workspaceFs),
+      buildOverleafClonePorts(
+        secrets,
+        remote,
+        workspaceFs,
+        yield* ChildProcessSpawner,
+      ),
     );
   });
 }

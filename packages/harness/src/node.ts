@@ -32,6 +32,16 @@ export {
   resolveGlobalStoragePath,
   resolveWorkspaceStoragePath,
 } from '@platform/defaults/workspaceStorage';
+// Running a program on this machine: find it, run it, and give any other
+// child the PATH the harness resolves tools on.
+export {
+  executeCommand,
+  type ExecuteCommandBaseOptions,
+} from '@utils/system/execUtils';
+export { findCommand, type FoundCommand } from '@utils/system/binaryResolver';
+export { withExtendedPath } from '@utils/system/platformPaths';
+// Crash-safe replace of a file.
+export { writeFileAtomic } from '@utils/files/fsDurability';
 // The setting rows a `ConfigProvider` resolves against (its `catalog`): an
 // embedder with its own provider builds one from its rows, which
 // `settingsCatalog` puts after the harness's own.
