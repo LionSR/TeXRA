@@ -25,7 +25,6 @@ import {
 import { discoverCopilotRoutes } from '@model/copilotRouting';
 import { TEXRA_APPROVAL_POLICY_CONFIG_KEY } from '@shared/approvalPolicy';
 import { SUBSCRIPTION_AUTH_PROVIDERS } from '@shared/model/subscriptionAuth';
-import type { SettingsViewSnapshot } from '@shared/state/stateSettings';
 import type { SubscriptionUsageProvider } from '@texra/shared/model/subscriptionUsage';
 import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 import { modelOptionsFrom } from '@texra/model/modelOptions';
@@ -65,6 +64,7 @@ import { GITHUB_TOKEN_CREATE_URL } from '@texra/tools/github/githubAuth';
 import { allSettledVoid } from '@texra/utils/core/allSettledVoid';
 import { getProviderKeyUrl } from '@texra/model/providerPresentation';
 import { CODING_PLAN_BY_API_PROVIDER } from '@texra/shared/model/codingPlans';
+import type { SettingsViewSnapshot } from '@texra-ai/harness/schemas';
 import type {
   PlatformSecrets,
   ProcessServices,

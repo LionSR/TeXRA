@@ -1,7 +1,7 @@
 import { String as Str } from 'effect';
 import type { SelectItem } from '@cli/tui/ui/Select';
-import type { SurfacedSettingEntry } from '@shared/state/stateSettings';
 import { formatResultCount } from '@utils/text/stringUtils';
+import type { SurfacedSettingEntry } from '@texra-ai/harness/schemas';
 
 const CONFIG_CATEGORY_LABELS: Readonly<Record<string, string>> = {
   git: 'Git and worktrees',

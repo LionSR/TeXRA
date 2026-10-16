@@ -1,7 +1,7 @@
 import { Effect } from 'effect';
-import type { SettingsStores } from '@shared/config/settingsAccess';
 import { GlobalStateKey } from '@shared/state/stateKeys';
-import { readSettingFrom } from '@utils/config/platformSettings';
+import { Settings } from '@shared/config/settings';
+import type { SettingsStores } from '@shared/config/settings';
 
 /**
  * Whether stopping or killing an agent stream should detach its active child
@@ -39,7 +39,7 @@ import { readSettingFrom } from '@utils/config/platformSettings';
  */
 export const detachSubagentsOnStop = Effect.fn('detachSubagentsOnStop')(
   function* (settings: SettingsStores) {
-    return yield* readSettingFrom<boolean>(
+    return yield* Settings.get<boolean>(
       settings,
       GlobalStateKey.DETACH_SUBAGENTS_ON_STOP,
     );

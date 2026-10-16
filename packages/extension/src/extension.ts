@@ -3,6 +3,7 @@ import * as path from 'node:path';
 
 // Third-party imports
 import * as vscode from 'vscode';
+import { z } from 'zod';
 import {
   Cause,
   Context,
@@ -40,7 +41,7 @@ import { withLogChannel } from '@texra-ai/harness';
 import { setLogSink } from '@texra-ai/harness';
 import { StorageFs, withSessionFs } from '@texra-ai/harness';
 import { ToolAvailability } from '@texra-ai/harness';
-import { readConfigSettingFrom } from '@texra-ai/harness';
+import { Settings } from '@texra-ai/harness';
 import { EXTENSION_COMMANDS } from '@commands/extensionCommandIds';
 import { setApiKey as apiSetApiKey } from '@commands/api/apiKeyCommands';
 import { openGettingStarted } from '@commands/system/walkthroughCommands';
@@ -84,7 +85,6 @@ import {
   texraApprovalPolicyLabel,
   type TexraApprovalPolicy,
 } from '@shared/approvalPolicy';
-import { readState, StateFlagSchema } from '@shared/config/settingsAccess';
 import { telemetryNoticeIfDue } from '@telemetry/telemetryNotice';
 import { usageLogLayer } from '@telemetry/UsageLogService';
 import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
@@ -662,7 +662,7 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
   const updateStatusBarTooltip = () => {
     // The project's persisted policy: what a run here, or the service's
     // for this project, decides under.
-    const policy = readConfigSettingFrom<TexraApprovalPolicy>(
+    const policy = Settings.getConfig<TexraApprovalPolicy>(
       roots.config,
       TEXRA_APPROVAL_POLICY_CONFIG_KEY,
     );
@@ -752,7 +752,13 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
     catch: ensureError,
   });
   const welcomeKey = 'texra.welcomeShown';
-  if (!(yield* readState(globalState, welcomeKey, StateFlagSchema))) {
+  if (
+    !(yield* Settings.state(
+      globalState,
+      welcomeKey,
+      z.boolean().prefault(false),
+    ))
+  ) {
     // First-run welcome card; a failure leaves the flag unset, so it repeats.
     yield* Effect.forkScoped(
       fromHost('texra.showMainView', () =>

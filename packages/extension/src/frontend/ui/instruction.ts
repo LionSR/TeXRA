@@ -4,9 +4,9 @@ import * as vscode from 'vscode';
 
 // Local imports
 import { withLogChannel } from '@texra-ai/harness';
+import { z } from 'zod';
+import { Settings } from '@texra-ai/harness';
 import { safeExecuteCommand } from '@frontend/system/commandUtils';
-import { readState, StateFlagSchema } from '@shared/config/settingsAccess';
-import { INSTRUCTION_PREFIX } from '@shared/state/stateKeys';
 import { ensureError } from '@utils/errors/errorMessage';
 import type {
   StateStore,
@@ -16,6 +16,12 @@ import type {
 
 const NEVER_REMIND = 'Never remind again';
 const CHANNEL = 'instruction';
+
+/** Prefix of each instruction's suppression flag in global state. */
+const INSTRUCTION_PREFIX = 'instruction.';
+
+/** A suppression flag is off until the user dismisses its instruction. */
+const SuppressedSchema = z.boolean().prefault(false);
 
 /** Show an instruction message that can be permanently dismissed. */
 export function showInstructionWithSuppress(
@@ -29,7 +35,10 @@ export function showInstructionWithSuppress(
   return Effect.gen(function* () {
     const stateKey = `${INSTRUCTION_PREFIX}${key}`;
 
-    if (showSuppress && (yield* readState(store, stateKey, StateFlagSchema))) {
+    if (
+      showSuppress &&
+      (yield* Settings.state(store, stateKey, SuppressedSchema))
+    ) {
       return;
     }
 

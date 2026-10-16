@@ -7,12 +7,9 @@
  * sign-in from the session store (`@texra-ai/llm/node`).
  */
 import type { ConfigTarget, ConfigWriteFailed } from '@platform/interfaces';
-import {
-  readConfigSetting,
-  type SettingsStores,
-} from '@shared/config/settingsAccess';
 import type { SubscriptionAuthStatus } from '@shared/model/subscriptionAuth';
-import { writeSettingTo } from '@utils/config/platformSettings';
+import { Settings } from '@shared/config/settings';
+import type { SettingsStores } from '@shared/config/settings';
 import type { Effect } from 'effect';
 
 type SubscriptionAuthProvider = SubscriptionAuthStatus['provider'];
@@ -30,10 +27,10 @@ export function isPreferSubscription(
   provider: SubscriptionAuthProvider,
   stores: SettingsStores,
 ): boolean {
-  const configKey = PREFER_SUBSCRIPTION_KEYS[provider];
-  const entry = stores.config.catalog.byKey(configKey);
-  if (!entry) throw new Error(`No setting catalog entry for key: ${configKey}`);
-  return readConfigSetting(entry, stores.config) as boolean;
+  return Settings.getConfig<boolean>(
+    stores.config,
+    PREFER_SUBSCRIPTION_KEYS[provider],
+  );
 }
 
 /**
@@ -56,5 +53,5 @@ export function setPreferSubscription(
   const inspection = stores.config.inspect<boolean>(configKey);
   const target: ConfigTarget =
     inspection.workspaceValue !== undefined ? 'workspace' : 'global';
-  return writeSettingTo(stores, configKey, enabled, target);
+  return Settings.set(stores, configKey, enabled, target);
 }

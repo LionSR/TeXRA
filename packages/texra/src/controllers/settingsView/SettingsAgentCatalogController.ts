@@ -2,10 +2,10 @@
 import { Clock, Effect, Predicate, Result } from 'effect';
 
 // Local imports
+import { WorkspaceStateKey } from '@texra-ai/harness/schemas';
 import type { WorkspaceAgentsController } from '@agent/workspaceAgents/WorkspaceAgentsController';
 import { planTeamRun } from '@common/teams/TeamPlan';
 import { findTeamPreset, type TeamPreset } from '@common/teams/TeamPresets';
-import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import {
   agentKeyOf,
   agentMatchesIdentifier,
