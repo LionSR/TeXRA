@@ -18,6 +18,7 @@ import {
 } from '@texra/utils/system/updateCheck';
 
 import {
+  cliEnvValue,
   readCliAmbientState,
   readCliCwd,
   readCliEntrypointPath,
@@ -286,7 +287,11 @@ export function notifyCliUpdate(
   const updateCmd = [command, ...args].join(' ');
   const style = createCliStyle(context.stderrColorEnabled);
   return Effect.gen(function* () {
-    if (yield* envFlag(UPDATE_CHECK_SKIP_ENV)) return;
+    // The opt-out is the user's, so a project's `.env` must not shadow it.
+    const skip = {
+      [UPDATE_CHECK_SKIP_ENV]: cliEnvValue(UPDATE_CHECK_SKIP_ENV),
+    };
+    if (yield* envFlag(UPDATE_CHECK_SKIP_ENV, skip)) return;
     let confirmed = false;
     // Best-effort by policy: any failure — typed, defect, or interruption —
     // leaves `latest` unset and the check exits silently.
