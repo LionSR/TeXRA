@@ -17,7 +17,6 @@
 import { Effect } from 'effect';
 
 import {
-  type AuthPortError,
   codexCoordinator,
   codexLoginWithDeviceCode,
   codexLoginWithLoopback,
@@ -48,6 +47,7 @@ import {
   xaiAccountLabel,
 } from '@shared/model/subscriptionAuth';
 import { toErrorMessage } from '@utils/errors/errorMessage';
+import type { SecretsFailed } from '@texra-ai/llm';
 import type { HttpClient } from 'effect/http';
 
 const CHANNEL = 'subscriptionProviders';
@@ -123,7 +123,7 @@ export interface SubscriptionProvider {
    * The sign-out program. A host runs it at its own edge; a failure is the
    * provider's own auth error or the secret store's rejection.
    */
-  signOut(secrets: PlatformSecrets): Effect.Effect<void, AuthPortError>;
+  signOut(secrets: PlatformSecrets): Effect.Effect<void, SecretsFailed>;
   /**
    * The signed-in status. Infallible: an unreadable store reports
    * signed-out, with the cause logged by the probe.
@@ -154,7 +154,7 @@ interface SubscriptionProviderBindings<Coordinator, Session> extends Pick<
   'id' | 'displayName' | 'sessionName' | 'copyTarget' | 'modelFamily'
 > {
   readonly coordinator: (secrets: PlatformSecrets) => Coordinator & {
-    signOut(): Effect.Effect<void, AuthPortError>;
+    signOut(): Effect.Effect<void, SecretsFailed>;
   };
   readonly getStatus: (
     secrets: PlatformSecrets,

@@ -14,11 +14,7 @@
  * table is `settingsHostBindings.ts`.
  */
 import { Cause, Effect } from 'effect';
-import {
-  API_KEY_PROVIDER_IDS,
-  apiProviderOfSecretName,
-  loadApiKeyStatusMap,
-} from '@texra-ai/llm';
+import { apiProviderOfSecretName, loadApiKeyStatusMap } from '@texra-ai/llm';
 
 import {
   type StorageFs,
@@ -123,7 +119,7 @@ export function createSettingsViewBody(ports: SettingsViewBodyPorts) {
 
   const profile = new SettingsProfileController({
     stores: roots,
-    loadProviderKeyStatuses: loadApiKeyStatusMap(secrets, API_KEY_PROVIDER_IDS),
+    loadProviderKeyStatuses: loadApiKeyStatusMap(secrets),
   });
   const modelSelection = new SettingsModelSelectionController({
     stores: roots,

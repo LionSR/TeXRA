@@ -83,7 +83,7 @@ function pickApiProvider(
   return Effect.gen(function* () {
     // One batched read of the key statuses: the pick shows each provider's
     // stored/environment state.
-    const statuses = yield* loadApiKeyStatusMap(secrets, API_KEY_PROVIDER_IDS);
+    const statuses = yield* loadApiKeyStatusMap(secrets);
     const providerItems = API_KEY_PROVIDER_IDS.map((provider) => ({
       label: provider,
       description: statuses[provider] === 'not-set' ? 'not set' : 'key set',

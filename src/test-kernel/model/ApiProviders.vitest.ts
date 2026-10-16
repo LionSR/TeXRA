@@ -7,7 +7,6 @@ import { afterEach, describe, expect, vi } from 'vitest';
 import {
   apiKeyEnvName,
   apiKeySecretName,
-  configuredApiKeyProviders,
   hasUsableApiKey,
   loadApiKeyStatusMap,
   lookupApiKey,
@@ -85,33 +84,16 @@ describe('API provider key resolution', () => {
         [apiKeySecretName('openai')]: 'sk-test',
       });
 
-      expect(yield* loadApiKeyStatusMap(secrets, ['openai'])).toEqual({
-        openai: 'set',
-      });
+      expect((yield* loadApiKeyStatusMap(secrets)).openai).toBe('set');
 
       const empty = createSecrets({});
 
       expect(
-        yield* loadApiKeyStatusMap(empty.secrets, ['openai']).pipe(
+        (yield* loadApiKeyStatusMap(empty.secrets).pipe(
           withEnv({ OPENAI_API_KEY: 'from-env' }),
-        ),
-      ).toEqual({
-        openai: 'env',
-      });
+        )).openai,
+      ).toBe('env');
     }).pipe(withEnv({})),
-  );
-
-  it.effect('lists only providers with a configured key (secret or env)', () =>
-    Effect.gen(function* () {
-      const { secrets } = createSecrets({
-        [apiKeySecretName('openai')]: 'sk-test',
-      });
-
-      expect(yield* configuredApiKeyProviders(secrets)).toEqual([
-        'openai',
-        'moonshot',
-      ]);
-    }).pipe(withEnv({ MOONSHOT_API_KEY: 'from-env' })),
   );
 
   it.effect(

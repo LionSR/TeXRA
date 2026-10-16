@@ -1,10 +1,9 @@
-import { Effect, Exit } from 'effect';
+import { Cause, Effect, Exit } from 'effect';
 import { HttpClientError } from 'effect/http';
 import { LRUCache } from 'lru-cache';
 
 import {
   codexCoordinator,
-  settleFailure,
   SharedAttempt,
   SubscriptionOAuthError,
 } from '@texra-ai/llm/node';
@@ -236,7 +235,7 @@ export class SubscriptionUsageService {
       {
         onFailure: (cause) =>
           Effect.gen({ self: this }, function* () {
-            const error = settleFailure(cause);
+            const error = Cause.squash(cause);
             yield* Effect.logWarning(
               `Subscription usage variant probe failed for ${provider}: ${toErrorMessage(error)}`,
             ).pipe(
@@ -362,7 +361,7 @@ export class SubscriptionUsageService {
           // failure classes are disjoint, so at most one of these checks
           // holds. The reason alone cannot tell a routine refusal from an
           // unexpected fault, so the cause is named once here.
-          const error = settleFailure(cause);
+          const error = Cause.squash(cause);
           // An HttpClientError carries its request, headers included (the
           // ChatGPT account id unredacted), so only its reason is logged.
           const httpError = HttpClientError.isHttpClientError(error)

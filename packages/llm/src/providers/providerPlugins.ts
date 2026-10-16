@@ -6,9 +6,9 @@
  * its regional pair. Beside it, `BACKEND_PROTOCOLS` names the protocol each
  * provider a run can be bound to speaks.
  *
- * Derived from this list: the provider display name and the API-key provider
- * order (`./providers.ts`), API-key env names (`./apiProviders.ts`), default
- * endpoints (`../models/routeEndpoint.ts`). The app owns everything a user
+ * Derived from this list: the provider display name, the API-key provider
+ * order and API-key env names (`./providers.ts`), default endpoints
+ * (`../models/routeEndpoint.ts`). The app owns everything a user
  * sees about a provider beyond its name: key pages, picker grouping and the
  * setup assistant's probe models, as well as the settings over this list —
  * the custom-endpoint and region toggles, their keys and their control copy,

@@ -2,8 +2,9 @@
  * `@texra-ai/llm` — the browser-safe entry: everything a caller reads to
  * choose a model and run a turn, with no Node module and no vendor SDK behind
  * it, so the webviews and the desktop renderer import it as freely as the
- * hosts do. Each name below has a consumer outside the package; a file's
- * other exports stay package-internal.
+ * hosts do. Each name below has a consumer outside the package or is a type
+ * a public signature names (`RouteFacts`); a file's other exports stay
+ * package-internal.
  *
  * Binding a model to its wire protocol, and the subscription sign-in flows,
  * run in Node and live at `@texra-ai/llm/node`.
@@ -76,7 +77,6 @@ export {
 export {
   apiKeySecretName,
   apiProviderOfSecretName,
-  configuredApiKeyProviders,
   exposeApiKey,
   hasUsableApiKey,
   isApiProvider,

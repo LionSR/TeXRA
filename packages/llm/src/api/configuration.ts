@@ -133,6 +133,7 @@ const CONFIGURE: {
     };
   },
   'openrouter-chat': ({
+    acceptedEfforts: supportedEfforts,
     base,
     config,
     controls,
@@ -147,7 +148,7 @@ const CONFIGURE: {
     supportsForcedToolChoice: true,
     supportsImageInput: config.capabilities.supportsVision,
     supportsAudioInput: config.capabilities.supportsNativeAudio,
-    supportedEfforts: acceptedEfforts(config),
+    supportedEfforts,
     defaults: {
       maxOutputTokens: controls.maxOutputTokens,
       temperature: controls.temperature,
