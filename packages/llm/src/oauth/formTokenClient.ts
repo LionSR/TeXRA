@@ -16,7 +16,7 @@ import {
   postOAuthForm,
 } from './oauthRequest.js';
 import type { z } from 'zod';
-import type { SubscriptionTokenResponse } from './SubscriptionOAuthCoordinator.js';
+import type { SubscriptionTokenResponse } from './subscriptionCoordinator.js';
 
 /**
  * Provider-declared form OAuth endpoint. Data only — no methods.

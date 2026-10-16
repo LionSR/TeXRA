@@ -16,7 +16,10 @@ import http from 'node:http';
 import { Data, Deferred, Duration, Effect, Fiber, Result } from 'effect';
 import type { HttpClient } from 'effect/http';
 
-import type { SubscriptionAuthorizeRequest } from './SubscriptionOAuthCoordinator.js';
+import type {
+  SubscriptionCoordinator,
+  SubscriptionSession,
+} from './subscriptionCoordinator.js';
 
 /**
  * How long an interactive browser sign-in may take before the host stops
@@ -43,29 +46,30 @@ export class LoopbackTransportUnavailableError extends Data.TaggedError(
   readonly cause?: unknown;
 }> {}
 
-/**
- * Minimal coordinator surface the loopback flow needs. The code exchange is a
- * program, not a Promise, so it runs on this flow's own fiber: interrupting
- * the login reaches the token exchange and the session store.
- */
-interface LoopbackOAuthCoordinator<S> {
-  buildAuthorizeRequest(port: number): SubscriptionAuthorizeRequest;
-  loginWithCode(params: {
-    code: string;
-    verifier: string;
-    redirectUri: string;
-  }): Effect.Effect<S, Error, HttpClient.HttpClient>;
-}
-
-export interface OAuthLoopbackLoginOptions<S> {
-  coordinator: LoopbackOAuthCoordinator<S>;
+/** What a provider's loopback sign-in takes from its host. */
+export interface LoopbackLoginOptions<S extends SubscriptionSession> {
+  /**
+   * The coordinator that builds the authorize URL and exchanges the code.
+   * The exchange is a program, so it runs on this flow's own fiber:
+   * interrupting the login reaches the token exchange and the session store.
+   */
+  readonly coordinator: Pick<
+    SubscriptionCoordinator<S>,
+    'buildAuthorizeRequest' | 'loginWithCode'
+  >;
   /**
    * Show (and normally open) the consent URL. A program, so the host's own
    * presentation runs on this flow's fibers and its failure — typically a
    * {@link LoopbackTransportUnavailableError} — reaches the caller through
    * the error channel instead of a rejection this flow has to re-wrap.
    */
-  openBrowser: (url: string) => Effect.Effect<void, Error>;
+  readonly openBrowser: (url: string) => Effect.Effect<void, Error>;
+}
+
+/** The flow's options: the host's, and the provider's registered callback. */
+interface OAuthLoopbackLoginOptions<
+  S extends SubscriptionSession,
+> extends LoopbackLoginOptions<S> {
   /** Registered callback ports, tried in order. */
   ports: readonly number[];
   /** Path segment of the registered redirect URI (e.g. `/auth/callback`). */
@@ -191,7 +195,7 @@ function decideCallback(
  * The loopback sign-in flow end to end: bind, open the browser, wait for the
  * callback, and persist the session via the coordinator.
  */
-function loginWithOAuthLoopback<S>(
+function loginWithOAuthLoopback<S extends SubscriptionSession>(
   options: OAuthLoopbackLoginOptions<S>,
 ): Effect.Effect<S, Error, HttpClient.HttpClient> {
   const { coordinator, openBrowser, ports, callbackPath, displayName } =
@@ -309,13 +313,13 @@ function loginWithOAuthLoopback<S>(
  * registered callback constants, so each provider module is the constants
  * rather than a wrapper function.
  */
-export function defineLoopbackLogin<S>(constants: {
+export function defineLoopbackLogin<S extends SubscriptionSession>(constants: {
   readonly ports: readonly number[];
   readonly callbackPath: string;
   readonly displayName: string;
 }) {
   return (
-    options: Pick<OAuthLoopbackLoginOptions<S>, 'coordinator' | 'openBrowser'>,
+    options: LoopbackLoginOptions<S>,
   ): Effect.Effect<S, Error, HttpClient.HttpClient> =>
     loginWithOAuthLoopback({ ...options, ...constants });
 }

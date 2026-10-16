@@ -26,6 +26,7 @@ import {
   CODEX_DEVICE_VERIFICATION_URL,
 } from './codexConstants.js';
 import { pollDeviceToken, requestDeviceUserCode } from './codexOAuthClient.js';
+import type { HttpClient } from 'effect/http';
 import type { CodexSession } from './codexSessionTypes.js';
 
 /**
@@ -46,7 +47,9 @@ class DeviceCodeMissing extends Data.TaggedError('DeviceCodeMissing')<{
  */
 export const codexLoginWithDeviceCode = Effect.fn(
   'codexDeviceLogin.loginWithDeviceCode',
-)(function* (options: DeviceLoginOptions<CodexSession>) {
+)(function* (
+  options: DeviceLoginOptions<CodexSession>,
+): Effect.fn.Return<CodexSession, Error, HttpClient.HttpClient> {
   const userCodeResponse = yield* requestDeviceUserCode();
   const userCode = userCodeResponse.user_code ?? userCodeResponse.usercode;
   if (!userCode) {

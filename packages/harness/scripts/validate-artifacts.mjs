@@ -2,10 +2,12 @@ import { readFile, rm } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { checkForgottenExports } from './forgotten-exports.mjs';
 import {
   isFile,
   moduleSpecifier,
   reachableDeclarations,
+  readDeclaration,
   walkFiles,
 } from './fsWalk.mjs';
 
@@ -53,7 +55,7 @@ await Promise.all(unreachable.map((file) => rm(file)));
 const allFiles = await walkFiles(distRoot);
 const declarationFiles = allFiles.filter((file) => /\.d\.m?ts$/u.test(file));
 const declarationText = (
-  await Promise.all(declarationFiles.map((file) => readFile(file, 'utf8')))
+  await Promise.all(declarationFiles.map(readDeclaration))
 ).join('\n');
 const internalAliases = Object.entries(rootTsconfig.compilerOptions.paths)
   .filter(([, targets]) =>
@@ -108,7 +110,7 @@ const declaredPackages = new Set([
 const importedPackages = new Set();
 
 for (const declaration of declarationFiles) {
-  const source = await readFile(declaration, 'utf8');
+  const source = await readDeclaration(declaration);
   for (const match of source.matchAll(moduleSpecifier)) {
     const specifier = match.groups?.specifier;
     if (!specifier) continue;
@@ -140,7 +142,7 @@ for (const declaration of declarationFiles) {
 // published surface however narrow the entry looks.
 for (const [entry, entryGraph] of entryGraphs) {
   const entryGraphText = (
-    await Promise.all([...entryGraph].map((file) => readFile(file, 'utf8')))
+    await Promise.all([...entryGraph].map(readDeclaration))
   ).join('\n');
   for (const provider of [
     '@anthropic-ai/sdk',
@@ -201,6 +203,15 @@ if (externalPackages.has('openai')) {
     'The bundle must carry the repository-patched OpenAI runtime.',
   );
 }
+
+await checkForgottenExports({
+  repositoryRoot,
+  packageRoot,
+  distRoot,
+  entries: Object.values(publishedExports).map((target) =>
+    path.resolve(packageRoot, target.types),
+  ),
+});
 
 console.log(
   `Validated ${declarationFiles.length} declarations (${unreachable.length} no entry reaches removed) and ${externalPackages.size} external packages.`,

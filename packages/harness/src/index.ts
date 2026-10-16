@@ -165,6 +165,7 @@ export type {
   LanguageModelAccessState,
   LanguageModelInfo,
   LanguageModelPort,
+  LanguageModelReference,
 } from '@platform/languageModel';
 export {
   LanguageModel,
@@ -200,8 +201,11 @@ export {
 export {
   decideRunModel,
   type RunModelCandidate,
+  type RunModelDecision,
   type RunModelDecisionReason,
+  type RunModelFallbackMode,
 } from '@model/runModelDecision';
+export type { CopilotModelRoute } from '@model/copilotRouting';
 export {
   reasoningEffortOverrides,
   supportsReasoningLevel,

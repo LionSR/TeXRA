@@ -10,13 +10,12 @@
  * the declarations of this entry reach no vendor SDK.
  */
 import { Effect, type Scope } from 'effect';
-import { ModelError } from './errors.js';
+import { ModelError, type BillingRoute } from './errors.js';
 import { toErrorMessage } from './oauth/support.js';
 import { originOf, type ModelOrigin } from './protocol.js';
 import type { ModelConfig } from 'llm-zoo';
 
 import type { HttpModelConfiguration } from './api/configuration.js';
-import type { BillingRoute } from './api/verdict.js';
 import type { ReasoningChoice } from './models/reasoningChoice.js';
 import type { Model } from './turn.js';
 
@@ -35,7 +34,7 @@ export type ModelCredential =
 
 /** One model on one route, and what the caller asks of it. */
 export interface BindSpec {
-  readonly protocol: HttpModelConfiguration['protocol'];
+  readonly protocol: Exclude<ModelOrigin['protocol'], 'vscode-lm'>;
   /** The llm-zoo entry after `routeConfig`. */
   readonly model: ModelConfig;
   readonly endpoint: string;
@@ -217,10 +216,23 @@ export const bindModel = Effect.fn('llm.bindModel')(function* (
 });
 
 export { SubscriptionOAuthError } from './oauth/subscriptionOAuthError.js';
+export type { SubscriptionOAuthErrorKind } from './oauth/subscriptionOAuthError.js';
 export { SharedAttempt } from './oauth/sharedAttempt.js';
-export type { SubscriptionDeviceCodePrompt } from './oauth/deviceAuthorization.js';
+export type {
+  DeviceLoginOptions,
+  SubscriptionDeviceCodePrompt,
+} from './oauth/deviceAuthorization.js';
 export { LoopbackTransportUnavailableError } from './oauth/loopbackLogin.js';
-export type { SubscriptionSessionStatus } from './oauth/SubscriptionOAuthCoordinator.js';
+export type { LoopbackLoginOptions } from './oauth/loopbackLogin.js';
+export type {
+  SubscriptionAuthorizeRequest,
+  SubscriptionCoordinator,
+  SubscriptionSession,
+  SubscriptionSessionStatus,
+  SubscriptionTokenResponse,
+} from './oauth/subscriptionCoordinator.js';
+export type { CodexSession } from './oauth/codex/codexSessionTypes.js';
+export type { XaiSession } from './oauth/xai/xaiSessionTypes.js';
 export { CODEX_BACKEND_BASE_URL } from './oauth/codex/codexConstants.js';
 export {
   codexCoordinator,

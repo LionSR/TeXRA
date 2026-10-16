@@ -9,10 +9,8 @@ import { Cause, Effect } from 'effect';
 import { LOG_CHANNEL, toErrorMessage } from './support.js';
 import type { CredentialStore } from '../providers/credentials.js';
 
-import type {
-  SubscriptionSessionStatus,
-  SubscriptionSessionStorage,
-} from './SubscriptionOAuthCoordinator.js';
+import type { SubscriptionSessionStorage } from './SubscriptionOAuthCoordinator.js';
+import type { SubscriptionSessionStatus } from './subscriptionCoordinator.js';
 
 /** Session storage over one key of a secret store. */
 function secretBackedSessionStorage(

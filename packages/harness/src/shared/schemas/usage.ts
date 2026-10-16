@@ -10,6 +10,7 @@ export const UsageRouteSchema = z.enum([
   'api-key',
 ]);
 
+/** The route a request's usage is billed through. */
 export type UsageRoute = z.infer<typeof UsageRouteSchema>;
 
 /**

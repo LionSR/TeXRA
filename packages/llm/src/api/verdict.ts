@@ -11,7 +11,7 @@
  */
 import { Effect, Stream } from 'effect';
 
-import { isRetryableStatus, ModelError, type PlanRoute } from '../errors.js';
+import { isRetryableStatus, ModelError, type BillingRoute } from '../errors.js';
 import {
   envelopes,
   firstNumber,
@@ -24,9 +24,6 @@ import {
   type Reply,
 } from './failureReply.js';
 import type { Model } from '../turn.js';
-
-/** The route a binding bills through, which a few quota replies need. */
-export type BillingRoute = PlanRoute | 'api-key';
 
 type Quota = NonNullable<ModelError['quota']>;
 

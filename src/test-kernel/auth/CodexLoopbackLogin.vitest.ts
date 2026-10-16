@@ -8,10 +8,8 @@ import { describe, expect, vi } from 'vitest';
 import { codexLoginWithLoopback as loginWithLoopback } from '@texra-ai/llm/node';
 import { CODEX_CALLBACK_PATH } from '../../../packages/llm/src/oauth/codex/codexConstants.js';
 import type { CodexSession } from '../../../packages/llm/src/oauth/codex/codexSessionTypes.js';
-import type {
-  SubscriptionAuthorizeRequest,
-  SubscriptionOAuthCoordinator,
-} from '../../../packages/llm/src/oauth/SubscriptionOAuthCoordinator.js';
+import type { SubscriptionOAuthCoordinator } from '../../../packages/llm/src/oauth/SubscriptionOAuthCoordinator.js';
+import type { SubscriptionAuthorizeRequest } from '../../../packages/llm/src/oauth/subscriptionCoordinator.js';
 
 function testSession(): CodexSession {
   return {
