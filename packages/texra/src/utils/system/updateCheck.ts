@@ -31,7 +31,7 @@ export type UpdateCheckRecord = z.infer<typeof UpdateCheckRecordSchema>;
  * update checks, which otherwise poll different sources on the same daily
  * cadence and notify through the same env-var kill switch.
  */
-export function isNewerSemverVersion(latest: string, current: string): boolean {
+function isNewerSemverVersion(latest: string, current: string): boolean {
   const a = semverValid(latest.trim(), { loose: true });
   const b = semverValid(current.trim(), { loose: true });
   if (!a || !b) return false;
@@ -39,7 +39,7 @@ export function isNewerSemverVersion(latest: string, current: string): boolean {
 }
 
 /** Poll for updates at most once per day. */
-export const DAILY_UPDATE_CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000;
+const DAILY_UPDATE_CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000;
 
 /**
  * Env var that disables both the CLI's and desktop's update checks. Read with
