@@ -6,13 +6,13 @@ import { useInput } from 'ink';
 import { Cause, Effect } from 'effect';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
+import { toErrorMessage } from '@texra-ai/harness/schemas';
 import {
   isEscapeInput,
   isPlainReturnInput,
   type ReturnKeyInput,
 } from '@cli/tui/inputKeys';
 import { setTransientNotice } from '@cli/chat/tui/state/cliState';
-import { toErrorMessage } from '@utils/errors/errorMessage';
 import type { ProcessRuntime, ProcessServices } from '@texra-ai/harness';
 
 interface AsyncResource<T, R = ProcessServices> {

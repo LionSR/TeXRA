@@ -18,6 +18,8 @@ import { dirname } from 'node:path';
 import { Cause, Effect, Exit, FileSystem, SynchronizedRef } from 'effect';
 
 import { ChildRuns, type ToolRun } from '@texra-ai/harness/plugins';
+import { toErrorMessage } from '@texra-ai/harness/schemas';
+import { pathToLocationIn } from '@texra-ai/harness';
 import { getCatalogAgent, type AgentEntry } from '@agent/index';
 import { LatexMediaManager } from '@latex/LatexMediaManager';
 import { getTeXCountStats } from '@latex/texcount';
@@ -61,8 +63,6 @@ import {
   taskFileVars,
 } from '@texra/tools/documents/documentTask';
 import { readSettingFrom } from '@utils/config/platformSettings';
-import { toErrorMessage } from '@utils/errors/errorMessage';
-import { pathToLocationIn } from '@utils/files/fileLocation';
 import { renderPrompt } from '@utils/prompt';
 import type { CallRequests, ToolEnv } from '@texra-ai/harness';
 import type { AgentConfig } from '@texra-ai/harness/schemas';

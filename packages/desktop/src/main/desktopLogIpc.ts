@@ -1,6 +1,6 @@
 import { Data, Effect, FileSystem } from 'effect';
 
-import { toErrorMessage } from '@utils/errors/errorMessage';
+import { toErrorMessage } from '@texra-ai/harness/schemas';
 
 import {
   DESKTOP_LOG_COMMANDS,

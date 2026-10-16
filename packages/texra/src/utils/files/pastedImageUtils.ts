@@ -6,7 +6,7 @@ import { Clock, Data, Effect, FileSystem, Option } from 'effect';
 
 // Local imports
 import { StorageFs, withLogChannel } from '@texra-ai/harness';
-import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
+import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';
 
 // Local imports - filesystem
 import { PASTED_DIR, isPastedImage } from '@utils/files/pastedImageName';

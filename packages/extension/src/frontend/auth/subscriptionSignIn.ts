@@ -4,6 +4,7 @@ import * as vscode from 'vscode';
 
 // Local imports
 import { withLogChannel } from '@texra-ai/harness';
+import { ensureError } from '@texra-ai/harness/schemas';
 import { VscodeExternalOpener } from '@frontend/hosts/VscodeExternalOpener';
 import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
 import {
@@ -20,7 +21,6 @@ import {
   type SubscriptionProviderId,
   type SubscriptionSignInPresenter,
 } from '@texra/controllers/modelAccess/subscriptionProviders';
-import { ensureError } from '@utils/errors/errorMessage';
 import type { Secrets } from '@texra-ai/harness';
 import type { HttpClient } from 'effect/http';
 

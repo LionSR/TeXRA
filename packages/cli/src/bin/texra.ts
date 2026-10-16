@@ -1,6 +1,6 @@
 import { Effect } from 'effect';
 import { setLogSink } from '@texra-ai/harness';
-import { ensureError } from '@utils/errors/errorMessage';
+import { ensureError } from '@texra-ai/harness/schemas';
 
 import { runCli } from '../commands/root';
 import { formatCrashReportLine, readCliBugsUrl } from '../runtime/cliContext';

@@ -29,7 +29,6 @@ import {
 
 import { z } from 'zod';
 
-import type { ToolEditContent } from '@shared/session/runtimeRequest';
 import {
   DiagnosticsReadFailed,
   PdfOpenFailed,
@@ -48,6 +47,7 @@ import {
   type HostFrame,
   type Notice,
 } from './hostCalls';
+import type { ToolEditContent } from '@texra-ai/harness/schemas';
 import type { Session, SessionHost } from '@texra-ai/harness';
 
 /** Why a call a run waited on got no answer from a window. */

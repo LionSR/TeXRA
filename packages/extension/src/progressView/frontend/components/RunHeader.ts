@@ -13,9 +13,7 @@ import { repeat } from 'lit/directives/repeat.js';
 
 import { goalStateOf, type GoalState } from '@texra-ai/harness/schemas';
 import { acceptsFollowUp } from '@texra-ai/harness/schemas';
-import { type ApprovalBypassKind } from '@shared/approvalBypassKind';
-import { resolveBypass } from '@shared/approvalBypassKind';
-import type { SessionView, RunView } from '@shared/session/sessionView';
+import { resolveBypass } from '@texra-ai/harness/schemas';
 import type { TeXRAIconName } from '@shared/iconNames';
 import { SessionUiEvents } from '@texra/shared/session/uiEvents';
 import { CopyButtonController } from '@texra/shared/litControllers/CopyButtonController';
@@ -44,6 +42,8 @@ import {
 } from '../constants';
 import { progressBadgeLabel } from '../formatters/progressBadgeFormatter';
 import { renderRunGrantChips, runGrantStyles } from './runGrantChips';
+import type { SessionView, RunView } from '@texra-ai/harness/schemas';
+import type { ApprovalBypassKind } from '@texra-ai/harness/schemas';
 import type { RunId } from '@texra-ai/harness/schemas';
 import type { WaSelectEvent } from '@awesome.me/webawesome/dist/events/events.js';
 

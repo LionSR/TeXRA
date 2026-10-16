@@ -7,6 +7,7 @@ import { defineTool, ToolContext } from '@texra-ai/harness';
 import { callerRun } from '@texra-ai/harness/plugins';
 
 // Local imports
+import { pathToLocationIn } from '@texra-ai/harness';
 import {
   fileLocationDisplayPath,
   ToolError,
@@ -16,7 +17,6 @@ import {
 import { resolveToolPath, type ToolPathCall } from '@tools/pathResolution';
 import { nullishWithDefault } from '@tools/core/inputSchema';
 import { executed } from '@tools/core/result';
-import { pathToLocationIn } from '@utils/files/fileLocation';
 import { runStorageLocationInRunUnder } from '@utils/files/runStorageFs';
 import { hasExtension } from '@utils/core/pathCore';
 

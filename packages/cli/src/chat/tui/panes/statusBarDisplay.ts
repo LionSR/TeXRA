@@ -1,24 +1,20 @@
-import { isSubscriptionRoute } from '@cli/runtime/modelAccessRoute';
+import { runBypasses } from '@texra-ai/harness/schemas';
+import { isActivePhase } from '@texra-ai/harness/schemas';
+import { KEY_HINT_SEPARATOR, keyHintText } from '@cli/tui/ui/KeyHints';
+import { STATUS_DIAMOND } from '@cli/tui/ui/glyphs';
+import { COLOR_ERROR, COLOR_HINT, COLOR_WARNING } from '@cli/tui/ui/colors';
 import {
   firstFittingCandidate,
   textDisplayWidth,
   truncateSummaryToWidth,
 } from '@cli/runtime/terminalText';
-import { COLOR_ERROR, COLOR_HINT, COLOR_WARNING } from '@cli/tui/ui/colors';
-import { STATUS_DIAMOND } from '@cli/tui/ui/glyphs';
-import { KEY_HINT_SEPARATOR, keyHintText } from '@cli/tui/ui/KeyHints';
-import { runBypasses } from '@shared/approvalBypassKind';
-import {
-  texraApprovalPolicyLabel,
-  type TexraApprovalPolicy,
-} from '@shared/approvalPolicy';
+import { isSubscriptionRoute } from '@cli/runtime/modelAccessRoute';
 import {
   type ContextStateData,
   type RunId,
   type TokenUsageStats,
   type UsageRoute,
 } from '@shared/schemas';
-import { isActivePhase } from '@shared/runs/runStatus';
 import type {
   SubscriptionUsageProvider,
   SubscriptionUsageSnapshot,
@@ -28,6 +24,7 @@ import {
   roundedContextPercent,
 } from '@texra/shared/contextGauge';
 import { codingPlanForUsageRoute } from '@texra/shared/model/codingPlans';
+import { approvalPolicyLabel } from '@ui/copy/approvalPolicy';
 import { AGENT_LIST, NESTED_AGENT, TASK_ACTIONS } from '@ui/copy/nestedRuns';
 import { APPROVAL_BYPASS_BADGE } from '@ui/copy/approvalBypass';
 import { assertNever, filterNotNullish } from '@utils/core';
@@ -41,6 +38,7 @@ import {
 import { formatResumeCommand } from '../state/resumeHint';
 import { type TransientNotice } from '../state/cliState';
 import { runPhaseOf, runViewOf } from '../state/sessionView';
+import type { ApprovalPolicy } from '@texra-ai/harness/schemas';
 import type { RunView, SessionView } from '@texra-ai/harness';
 import type { PendingApprovalKind } from '../state/approvalQueue';
 
@@ -136,7 +134,7 @@ export interface StatusBarChrome {
   /** Latest quota snapshot for the subscription serving this model. */
   readonly subscriptionQuota?: SubscriptionUsageSnapshot;
   /** Session approval policy; a non-default policy earns a segment. */
-  readonly approvalPolicy?: TexraApprovalPolicy;
+  readonly approvalPolicy?: ApprovalPolicy;
   /** Terminal width in columns. */
   readonly width?: number;
   readonly ctrlCAction?: CtrlCAction;
@@ -648,7 +646,7 @@ function childListBindingsText(
 }
 
 function approvalPolicySegment(
-  policy: TexraApprovalPolicy | undefined,
+  policy: ApprovalPolicy | undefined,
 ): StatusBarSegment | undefined {
   let color: StatusBarColor;
   switch (policy) {
@@ -667,7 +665,7 @@ function approvalPolicySegment(
   // The label the /approval picker and every other surface uses for this
   // policy — the bar is how users confirm their selection took effect.
   return {
-    text: texraApprovalPolicyLabel(policy),
+    text: approvalPolicyLabel(policy),
     color,
     compactPriority: STATUS_BAR_COMPACT_PRIORITY.approvalPolicy,
   };

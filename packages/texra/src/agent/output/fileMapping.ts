@@ -2,10 +2,10 @@ import * as path from 'node:path';
 
 import { Effect, FileSystem } from 'effect';
 
+import { toErrorMessage } from '@texra-ai/harness/schemas';
 import type { AgentTrace } from '@agent/trace';
 import { fileLocationDisplayPath, type FileLocation } from '@shared/schemas';
 import { normalizeLatexPath, getPathSegments } from '@utils/core/pathCore';
-import { toErrorMessage } from '@utils/errors/errorMessage';
 import { normalizeLineEndings } from '@utils/text/stringUtils';
 /**
  * Create a mapping between two file lists based on name similarity.

@@ -35,6 +35,7 @@ import {
 import { withLogChannel } from '@texra-ai/harness';
 import { withSessionFs, WorkspaceFs, type StorageFs } from '@texra-ai/harness';
 import { pathToLocationIn } from '@texra-ai/harness';
+import { toErrorMessage } from '@texra-ai/harness/schemas';
 import {
   handleLatexdiff,
   handleLatexdiffCommitAction,
@@ -115,7 +116,6 @@ import {
   locateInWorkspace,
   workspaceRelativePath,
 } from '@utils/files/workspaceFS';
-import { toErrorMessage } from '@utils/errors/errorMessage';
 import { normalizeLineEndings } from '@utils/text/stringUtils';
 
 const CHANNEL = 'ExtensionHostRequests';

@@ -2,6 +2,8 @@ import * as path from 'node:path';
 
 import { Cause, Effect, FileSystem } from 'effect';
 
+import { createRunStorageLocation } from '@texra-ai/harness';
+import { toErrorMessage } from '@texra-ai/harness/schemas';
 import type { AgentTrace } from '@agent/trace';
 import { compileLatex2Pdf, type CompileLatex2PdfResult } from '@latex/texTools';
 import { hasLatexCompiler } from '@latex/latexToolchain';
@@ -19,12 +21,10 @@ import {
   isGenericOutputStem,
   type OutputFileInfo,
 } from '@texra/shared/plugins/documentOutputs';
-import { createRunStorageLocation } from '@utils/files/fileLocation';
 import { readNormalizedFile } from '@utils/files/fsDurability';
 import { runDirUnder } from '@utils/files/runStorageFs';
 import { type RunFileService } from '@utils/files/runStorage';
 import { locateInWorkspace } from '@utils/files/workspaceFS';
-import { toErrorMessage } from '@utils/errors/errorMessage';
 import { normalizeFilePath } from '@utils/core';
 import { truncatedHexId } from '@utils/core/idHash';
 import { hasExtension } from '@utils/core/pathCore';

@@ -21,12 +21,12 @@
 
 import { Data, DateTime, Effect } from 'effect';
 
+import { toErrorMessage } from '@texra-ai/harness/schemas';
 import { getRunRecords } from '@agent/storage';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { ChatExportInput, ExportNode } from '@agent/export/schemas';
-import type { RunView } from '@shared/session/sessionView';
 import { readCompletedRunConversation } from '@transcript';
-import { toErrorMessage } from '@utils/errors/errorMessage';
+import type { RunView } from '@texra-ai/harness/schemas';
 import type { RunId, AgentConfig } from '@texra-ai/harness/schemas';
 
 /**

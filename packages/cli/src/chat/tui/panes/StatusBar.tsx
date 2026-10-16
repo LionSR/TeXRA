@@ -3,15 +3,15 @@ import { Cause, Effect, Exit } from 'effect';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { readModelOptions, type PlatformSecrets } from '@texra-ai/harness';
+import { isActivePhase } from '@texra-ai/harness/schemas';
+import { toErrorMessage } from '@texra-ai/harness/schemas';
 import { loadingFrameAt } from '@cli/tui/ui/LoadingIndicator';
 import { COLOR_ERROR } from '@cli/tui/ui/colors';
 import { useLiveNowMsSince } from '@cli/tui/useLiveNowMs';
 import { usePollingInterval } from '@cli/tui/usePollingInterval';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import { isEmptyUsage } from '@shared/schemas';
-import { isActivePhase } from '@shared/runs/runStatus';
 import { SubscriptionUsageService } from '@texra/controllers/modelAccess/subscriptionUsage/SubscriptionUsageService';
-import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import {
   codexPreferenceVersion as codexPreferenceVersionSignal,

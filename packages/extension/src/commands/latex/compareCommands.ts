@@ -7,6 +7,7 @@ import * as vscode from 'vscode';
 
 // Local imports
 import { withLogChannel } from '@texra-ai/harness';
+import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';
 import { emitAppSignal } from '@eventBus/AppSignals';
 import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
 import { registerDiffRefresh } from '@frontend/ui/diffView';
@@ -25,7 +26,6 @@ import type { FileLocation } from '@shared/schemas';
 import { DIFF_REGISTRATION_DELAY_MS } from '@texra/shared/constants/latexTiming';
 import { workflowOutputCopyStem } from '@texra/utils/files/outputFileUtils';
 import { type AcceptCopyMeta } from '@texra/shared/plugins/documentOutputs';
-import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 const CHANNEL = 'CompareCommands';
 

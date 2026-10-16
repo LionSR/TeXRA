@@ -2,6 +2,8 @@ import * as path from 'node:path';
 
 import { Effect, FileSystem } from 'effect';
 
+import { createRunStorageLocation } from '@texra-ai/harness';
+import { toErrorMessage } from '@texra-ai/harness/schemas';
 import type { AgentTrace } from '@agent/trace';
 import { LaTeXdiffResult, LaTeXdiffService } from '@latex/latexdiff';
 import { buildBetweenRoundDiffSuffix } from '@latex/latexdiff/diffFileNameManager';
@@ -22,11 +24,9 @@ import {
 } from '@texra/shared/constants/workflowOutput';
 import { DocumentsStateKey } from '@texra/shared/settingsView/documentsSettings';
 import { checkToolInstalled } from '@texra/utils/system/toolChecks';
-import { createRunStorageLocation } from '@utils/files/fileLocation';
 import { entryExists } from '@utils/files/fsEntryExists';
 import { RunFileService } from '@utils/files/runStorage';
 import { readSettingFrom } from '@utils/config/platformSettings';
-import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import {
   publishCompiledPdfArtifact,

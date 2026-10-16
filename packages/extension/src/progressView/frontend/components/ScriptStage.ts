@@ -1,6 +1,6 @@
 /**
  * `<script-stage>`: the calls one `script` call issued, painted from the
- * shared script-stage model (`scriptStages` in `@shared/transcript`): the card's
+ * shared script-stage model (`scriptStages` in `@texra-ai/harness/transcript`): the card's
  * summary line, then each phase's calls as plain rows in issue order. An
  * `agent` row opens its child run; Review opens the run that is asking;
  * "Stop this agent", in a running row's menu, stops the call's child, which
@@ -17,17 +17,17 @@ import { repeat } from 'lit/directives/repeat.js';
 // Local imports - shared contracts
 import {
   SCRIPT_CALL_STATUS_LABEL,
-  TALK_TO_AGENT,
   type ScriptCallView,
   type ScriptStageView,
-} from '@shared/transcript';
+} from '@texra-ai/harness/transcript';
 import type { Surface, SurfaceRefusal } from '@texra/shared/session/surface';
 import { SessionUiEvents } from '@texra/shared/session/uiEvents';
+import { TALK_TO_AGENT } from '@ui/copy/nestedRuns';
 import { designTokens } from '@ui/styles';
 import { terminalStatusIcon } from '@ui/wa/statusIcons';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import { assertNever } from '@utils/core';
-import type { SessionView } from '@texra-ai/harness';
+import type { SessionView } from '@texra-ai/harness/schemas';
 import type { RunId } from '@texra-ai/harness/schemas';
 import type WaDropdownItem from '@awesome.me/webawesome/dist/components/dropdown-item/dropdown-item.js';
 import type { WaSelectEvent } from '@awesome.me/webawesome/dist/events/events.js';

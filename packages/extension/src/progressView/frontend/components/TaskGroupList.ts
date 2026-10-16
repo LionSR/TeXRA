@@ -10,25 +10,20 @@ import { repeat } from 'lit/directives/repeat.js';
 
 // Local imports - shared schemas
 import { isInFlightPhase } from '@texra-ai/harness/schemas';
-import { formatRunStatusLabel } from '@shared/runs/runStatusDisplay';
+import { formatRunStatusLabel } from '@texra-ai/harness/transcript';
+import { taskGroupDisplayStatus } from '@texra-ai/harness/transcript';
+import { compareBySeqNo } from '@texra-ai/harness/transcript';
+import {
+  scriptStages,
+  type ScriptStageView,
+  type TranscriptRow,
+} from '@texra-ai/harness/transcript';
 import {
   type RunOutcome,
   type RunLifecycleStatus,
   type RunId,
   type TaskGroup,
 } from '@shared/schemas';
-import type {
-  RunView,
-  SessionView,
-  TranscriptView,
-} from '@shared/session/sessionView';
-import { taskGroupDisplayStatus } from '@shared/runs/taskGroupProjection';
-import { compareBySeqNo } from '@shared/runs/runOrdering';
-import {
-  scriptStages,
-  type ScriptStageView,
-  type TranscriptRow,
-} from '@shared/transcript';
 import type { Surface } from '@texra/shared/session/surface';
 import { designTokens } from '@ui/styles';
 
@@ -51,6 +46,11 @@ import { logStyles } from '../styles/logStyles';
 import { formatLogEntry } from '../formatters';
 import { getTimeFormatter } from '../formatters/timestampUtils';
 import { dispatchGroupToggle } from '../utils';
+import type {
+  RunView,
+  SessionView,
+  TranscriptView,
+} from '@texra-ai/harness/schemas';
 
 // Local imports - sibling helpers
 // Side-effect import: registers <terminal-output>, which the terminal-stream
@@ -161,11 +161,11 @@ export class TaskGroupList extends LitElement {
    */
   @property({ attribute: false }) transcript: TranscriptView | null = null;
 
-  private get groups(): TaskGroup[] {
+  private get groups(): TranscriptView['taskGroups'] {
     return this.transcript?.taskGroups ?? [];
   }
 
-  private get rows(): TranscriptRow[] {
+  private get rows(): TranscriptView['rows'] {
     return this.transcript?.rows ?? [];
   }
 

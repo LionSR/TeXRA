@@ -31,10 +31,9 @@ import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 
 // Local imports
 import { rollupOf } from '@texra-ai/harness/schemas';
-import type { InquiryThreadSummary, RunId } from '@shared/schemas';
-import type { SessionView, RunView } from '@shared/session/sessionView';
+import { dispatchedChildren } from '@texra-ai/harness/transcript';
 import type { TeXRAIconName } from '@shared/iconNames';
-import { dispatchedChildren } from '@shared/transcript';
+import type { InquiryThreadSummary, RunId } from '@shared/schemas';
 import type { Surface } from '@texra/shared/session/surface';
 import { inquiryThreadsUnder } from '@texra/shared/plugins/externalInquiry';
 import { SessionUiEvents } from '@texra/shared/session/uiEvents';
@@ -48,6 +47,7 @@ import {
 } from '@utils/text/stringUtils';
 import { getTimeFormatter } from '../formatters/timestampUtils';
 import { dispatchGroupToggle } from '../utils';
+import type { SessionView, RunView } from '@texra-ai/harness/schemas';
 
 /** The card's key in `Surface.groups` for its run. */
 const DISPATCH_GROUP_KEY = 'dispatch';

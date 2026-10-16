@@ -3,8 +3,8 @@ import * as path from 'node:path';
 import { Effect, FileSystem, Path, PlatformError } from 'effect';
 
 import { withLogChannel } from '@texra-ai/harness';
+import { toErrorMessage } from '@texra-ai/harness/schemas';
 import { EXCLUDED_DIRS } from '@texra/shared/constants/latexTiming';
-import { toErrorMessage } from '@utils/errors/errorMessage';
 import { readDirectoryTypedTolerant } from '@utils/files/fsDurability';
 import { entryExists } from '@utils/files/fsEntryExists';
 import { hasExtension } from '@utils/core/pathCore';

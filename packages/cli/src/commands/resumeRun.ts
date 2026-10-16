@@ -3,12 +3,17 @@ import * as path from 'node:path';
 import { Effect, FileSystem, PlatformError, Result } from 'effect';
 
 import { describeFollowUpFailure } from '@texra-ai/harness';
+import { ensureError } from '@texra-ai/harness/schemas';
 import { runRefusal } from '@agent/runtime';
 import { getRunRecords } from '@agent/storage';
-import { agentKey, agentName, isTaskConfig, type RunId } from '@shared/schemas';
-import { texraApprovalPolicyLabel } from '@shared/approvalPolicy';
-import { runHeldByProcessMessage } from '@shared/runs/runStatusDisplay';
-import { ensureError } from '@utils/errors/errorMessage';
+import {
+  agentKey,
+  agentName,
+  isTaskConfig,
+  ownerIdentity,
+  type RunId,
+} from '@shared/schemas';
+import { approvalPolicyLabel } from '@ui/copy/approvalPolicy';
 import { pathExists } from '@utils/files/fsDurability';
 
 import { executeCliWorkflowConfig } from './workflow';
@@ -165,7 +170,12 @@ export function runResumeCommand(
       (documentTask ||
         !(yield* heldByService(context.storageRoot, refusal.owner)))
     ) {
-      writeTextStderr(runHeldByProcessMessage(id, refusal.owner));
+      // The owner named by the pid and machine its claim recorded: the two
+      // parts of an identity a user can act on.
+      const { pid, hostname } = ownerIdentity(refusal.owner);
+      writeTextStderr(
+        `Task ${id} is held by another TeXRA process (pid ${pid} on ${hostname}).`,
+      );
       return CliExitCode.Usage;
     }
 
@@ -174,7 +184,7 @@ export function runResumeCommand(
     // chat's new rounds take it.
     if (context.requestedApprovalPolicy !== undefined)
       writeTextStderr(
-        `The requested approval policy (${texraApprovalPolicyLabel(context.requestedApprovalPolicy)}) does not change task ${id}: it resumes under the approval it was launched with${documentTask ? '' : "; the chat's new messages take it"}.`,
+        `The requested approval policy (${approvalPolicyLabel(context.requestedApprovalPolicy)}) does not change task ${id}: it resumes under the approval it was launched with${documentTask ? '' : "; the chat's new messages take it"}.`,
       );
 
     // A chat resume reopens the interactive TUI, so headless callers are

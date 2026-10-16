@@ -6,6 +6,7 @@ import { Effect, FileSystem } from 'effect';
 
 // Local imports
 import { withLogChannel } from '@texra-ai/harness';
+import { toErrorMessage } from '@texra-ai/harness/schemas';
 import type { RunId } from '@shared/schemas';
 import type { HostRequest } from '@texra/shared/session/hostRequest';
 import { PrunedNestedMap } from '@texra/utils/core/prunedNestedMap';
@@ -16,7 +17,6 @@ import {
   runDirUnder,
 } from '@utils/files/runStorageFs';
 import { truncatedHexId } from '@utils/core/idHash';
-import { toErrorMessage } from '@utils/errors/errorMessage';
 import type { HostRequestFailure } from '@texra-ai/harness';
 import type { AgentConfig } from '@texra-ai/harness/schemas';
 import type { HostRunActions } from '../session/hostRunActions';

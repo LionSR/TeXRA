@@ -1,6 +1,10 @@
 import { Effect } from 'effect';
 import { defineCommand } from 'citty';
 
+import {
+  APPROVAL_POLICY_CONFIG_KEY,
+  type ApprovalPolicy,
+} from '@texra-ai/harness/schemas';
 import { getCatalogAgent } from '@agent/index';
 import {
   canLaunchTeam,
@@ -8,10 +12,6 @@ import {
   planTeamRuns,
 } from '@common/teams/TeamPlan';
 import { findTeamPreset } from '@common/teams/TeamPresets';
-import {
-  TEXRA_APPROVAL_POLICY_CONFIG_KEY,
-  type TexraApprovalPolicy,
-} from '@shared/approvalPolicy';
 import { readConfigSettingFrom } from '@utils/config/platformSettings';
 import { filterNotNullish } from '@utils/core';
 
@@ -151,9 +151,9 @@ export const runTeam = Effect.fn('runTeam')(function* (
     context.mode === 'headless' &&
     effectiveApprovalPolicy(
       context.requestedApprovalPolicy ?? context.approvalPolicy,
-      readConfigSettingFrom<TexraApprovalPolicy>(
+      readConfigSettingFrom<ApprovalPolicy>(
         services.config,
-        TEXRA_APPROVAL_POLICY_CONFIG_KEY,
+        APPROVAL_POLICY_CONFIG_KEY,
       ),
     ) === 'ask';
   const plan = yield* loadTeamRunPlan(init, services);

@@ -12,9 +12,9 @@ import {
   type ToolResult,
 } from '@shared/schemas';
 import {
-  decideTexraApproval,
-  isTexraApprovalDenied,
-  texraApprovalDenialMessage,
+  decideApproval,
+  isApprovalDenied,
+  approvalPolicyDenialMessage,
 } from '@shared/approvalPolicy';
 import { refusalCopy, refusalOf } from '@shared/session/approvalDecision';
 import { errorResult } from '@tools/core/result';
@@ -92,7 +92,7 @@ export const requestBashApproval = Effect.fn('requestBashApproval')(function* (
       request.grant === 'shell' ? 'bash' : 'superYolo',
     ) !== null;
   const policy = session.approvals.policy(runId);
-  const decision = decideTexraApproval({
+  const decision = decideApproval({
     policy,
     promptRequired: approvalsEnabled,
     scopedBypass: granted(),
@@ -100,9 +100,9 @@ export const requestBashApproval = Effect.fn('requestBashApproval')(function* (
   });
 
   if (decision === 'allow') return { action: 'approve' };
-  if (isTexraApprovalDenied(decision)) {
+  if (isApprovalDenied(decision)) {
     session.interactions.approvalDenied({ kind: 'executable', policy }, runId);
-    return { action: 'deny', reason: texraApprovalDenialMessage(decision) };
+    return { action: 'deny', reason: approvalPolicyDenialMessage(decision) };
   }
 
   const permission = prepareBashApprovalPrompt(

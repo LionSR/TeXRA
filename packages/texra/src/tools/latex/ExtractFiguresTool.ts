@@ -4,12 +4,12 @@ import { z } from 'zod';
 import { defineTool, ToolContext } from '@texra-ai/harness';
 
 // Local imports - tools
+import { pathToLocationIn } from '@texra-ai/harness';
 import { extractFigurePathsFromLatex } from '@latex/extractFigure';
 import type { ToolResult } from '@shared/schemas';
 import { resolveToolPath } from '@tools/pathResolution';
 import { formatToolOutput } from '@tools/formatting';
 
-import { pathToLocationIn } from '@utils/files/fileLocation';
 import { formatResultCount } from '@utils/text/stringUtils';
 import {
   buildLimitedAttachments,

@@ -8,7 +8,7 @@
  */
 import { z } from 'zod';
 
-import type { TexraApprovalPolicy } from './approvalPolicy';
+import type { ApprovalPolicy } from './approvalPolicy';
 import type { RunId, SessionEvent } from './schemas';
 
 export const APPROVAL_BYPASS_KINDS = ['bash', 'toolEdit', 'superYolo'] as const;
@@ -49,7 +49,7 @@ export const ApprovalPolicySnapshotSchema = z.object({
 });
 export type ApprovalGrants = z.infer<typeof ApprovalPolicySnapshotSchema>;
 
-const STRICTNESS: Readonly<Record<TexraApprovalPolicy, number>> = {
+const STRICTNESS: Readonly<Record<ApprovalPolicy, number>> = {
   never: 0,
   ask: 1,
   yolo: 2,
@@ -57,19 +57,19 @@ const STRICTNESS: Readonly<Record<TexraApprovalPolicy, number>> = {
 
 /** The stricter of two policies (`never` < `ask` < `yolo`). */
 export function stricterPolicy(
-  a: TexraApprovalPolicy,
-  b: TexraApprovalPolicy,
-): TexraApprovalPolicy {
+  a: ApprovalPolicy,
+  b: ApprovalPolicy,
+): ApprovalPolicy {
   return STRICTNESS[a] <= STRICTNESS[b] ? a : b;
 }
 
 /** A run's policy: the project's (`project`), narrowed by the strictest
  *  launch limit on its ancestry; without a run, the project's. */
 export function runPolicy<Id>(
-  project: TexraApprovalPolicy,
+  project: ApprovalPolicy,
   source: ApprovalGrantSource<Id>,
   runId: Id | undefined,
-): TexraApprovalPolicy {
+): ApprovalPolicy {
   const limit = runId === undefined ? undefined : policyLimit(source, runId);
   return limit === undefined ? project : stricterPolicy(project, limit);
 }

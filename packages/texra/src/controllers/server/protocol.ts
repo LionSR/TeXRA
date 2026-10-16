@@ -35,8 +35,9 @@ import * as SchemaIssue from 'effect/SchemaIssue';
 import { z } from 'zod';
 
 import { AgentConfigSchema } from '@texra-ai/harness/schemas';
+import { ApprovalPolicySchema } from '@texra-ai/harness/schemas';
+import { OutcomeSchema, RuntimeRequestSchema } from '@texra-ai/harness/schemas';
 import { ChatExportInputSchema } from '@agent/export/schemas';
-import { TexraApprovalPolicySchema } from '@shared/approvalPolicy';
 import {
   CommitOrdinalSchema,
   DisplaySessionEventSchema,
@@ -46,10 +47,6 @@ import {
   RunRecordFieldsSchema,
 } from '@shared/schemas';
 
-import {
-  OutcomeSchema,
-  RuntimeRequestSchema,
-} from '@shared/session/runtimeRequest';
 import {
   EventsFrameSchema,
   RequestErrorWireSchema,
@@ -223,7 +220,7 @@ export const TexraRpcs = RpcGroup.make(
       approveDelegatedWork: Schema.Boolean,
       /** The policy the launch asked for: one stricter than the project's
        *  narrows this task only; a more permissive one is ignored. */
-      approvalPolicy: zodWire(TexraApprovalPolicySchema.nullable()),
+      approvalPolicy: zodWire(ApprovalPolicySchema.nullable()),
     },
     /** The run that started: the asked id, or the one the launch resolved. */
     success: zodWire(RunIdSchema),

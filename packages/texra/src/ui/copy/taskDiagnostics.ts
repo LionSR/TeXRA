@@ -1,8 +1,8 @@
 import { fileLocationAddressPath } from '@shared/schemas';
-import type { RunView } from '@shared/session/sessionView';
 import { documentsOf } from '@texra/shared/plugins/documents';
 import { roundIndexedEntries } from '@texra/shared/plugins/documentOutputs';
 import { filterNotNullish } from '@utils/core';
+import type { RunView } from '@texra-ai/harness/schemas';
 
 /**
  * The plain-text facts of a task for a bug report or a new chat: the header

@@ -14,13 +14,13 @@ import {
   SubscriptionRef,
 } from 'effect';
 
-import { RUN_PHASE, type RunId, type RunPhase } from '@shared/schemas';
 import {
   isLiveRun,
   type SessionView,
   type RunView,
-} from '@shared/session/sessionView';
-import { isTerminalOutcomePhase } from '@shared/runs/runStatus';
+} from '@texra-ai/harness/schemas';
+import { isTerminalOutcomePhase } from '@texra-ai/harness/schemas';
+import { RUN_PHASE, type RunId, type RunPhase } from '@shared/schemas';
 import { formatLoopPositionLabel } from '@ui/copy/runStatus';
 import { formatCompactDuration, pluralize } from '@utils/text/stringUtils';
 

@@ -33,6 +33,7 @@ import {
   resolveGlobalStoragePath,
   resolveWorkspaceStoragePath,
 } from '@texra-ai/harness/node';
+import { ensureError } from '@texra-ai/harness/schemas';
 import {
   openProjectStateStore,
   openRepoStateStore,
@@ -66,7 +67,6 @@ import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
 import { sessionStoreMovedAsideMessage } from '@ui/copy/sessionStore';
 import { envFlag } from '@utils/system/envFlags';
 import { withPerKeyLane, type PerKeyLane } from '@utils/core/perKeyQueue';
-import { ensureError } from '@utils/errors/errorMessage';
 import { loginShellEnvironment } from './loginShellEnv';
 
 import { cliEnvValue, readCliEntrypointPath } from './cliContext';

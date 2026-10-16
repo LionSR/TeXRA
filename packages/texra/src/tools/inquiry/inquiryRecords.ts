@@ -1,6 +1,7 @@
 /** Canonical global inquiry content; project events carry display notifications only. */
 import { Context, DateTime, Effect, Layer, Result } from 'effect';
 
+import { ensureError } from '@texra-ai/harness/schemas';
 import {
   InquiryThreadIdSchema,
   ToolError,
@@ -16,7 +17,6 @@ import {
   type InquiryThreadRecord,
 } from '@texra/shared/plugins/externalInquiry';
 import { toNewestFirstByTimestamp, hexId12 } from '@utils/core';
-import { ensureError } from '@utils/errors/errorMessage';
 
 const QUESTION_PREVIEW_CHARS = 200;
 

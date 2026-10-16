@@ -8,6 +8,8 @@
 import { Effect, FileSystem, PlatformError } from 'effect';
 
 import { withLogChannel } from '@texra-ai/harness';
+import { createWorkspaceLocation } from '@texra-ai/harness';
+import { toErrorMessage } from '@texra-ai/harness/schemas';
 import {
   fileLocationDisplayPath,
   type DiffStats,
@@ -15,9 +17,7 @@ import {
 } from '@shared/schemas';
 import type { OutputFileInfo } from '@texra/shared/plugins/documentOutputs';
 import { diffLineChanges } from '@texra/utils/text/diff';
-import { createWorkspaceLocation } from '@utils/files/fileLocation';
 import { locateInWorkspace } from '@utils/files/workspaceFS';
-import { toErrorMessage } from '@utils/errors/errorMessage';
 import { countLines, normalizeLineEndings } from '@utils/text/stringUtils';
 import { absentReason } from '@utils/files/fsEntryExists';
 

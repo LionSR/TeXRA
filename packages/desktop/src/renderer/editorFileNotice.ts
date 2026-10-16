@@ -7,9 +7,9 @@ import '@awesome.me/webawesome/dist/components/button/button.js';
 import '@awesome.me/webawesome/dist/components/callout/callout.js';
 import { html, nothing, render } from 'lit';
 
+import { extractErrorMessage } from '@texra-ai/harness/schemas';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import { getBasename } from '@utils/core';
-import { extractErrorMessage } from '@utils/errors/errorMessage';
 
 interface Notice {
   /** The file it is about; none for the editor itself failing to load. */

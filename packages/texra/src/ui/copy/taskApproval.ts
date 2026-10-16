@@ -5,9 +5,9 @@
  * and the run header keeps the switch in view so the user can take the
  * choice back mid-run.
  */
-import { texraApprovalPolicyLabel } from '@shared/approvalPolicy';
+import { approvalPolicyLabel } from '@ui/copy/approvalPolicy';
 
-const AUTO_APPROVE_LABEL = texraApprovalPolicyLabel('yolo');
+const AUTO_APPROVE_LABEL = approvalPolicyLabel('yolo');
 
 export const TASK_APPROVAL = {
   title: 'Approval',

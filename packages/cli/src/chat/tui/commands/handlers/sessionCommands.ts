@@ -2,6 +2,8 @@ import { Effect, Result, Stream } from 'effect';
 
 import { goalStateOf } from '@texra-ai/harness/schemas';
 import { readModelOptions, type Session } from '@texra-ai/harness';
+import { runBypasses } from '@texra-ai/harness/schemas';
+import { isLiveRun } from '@texra-ai/harness/schemas';
 import type { SessionHandle } from '@agent/runtime';
 import { defaultShortcutModifierLabel } from '@cli/runtime/shortcutLabels';
 import {
@@ -27,8 +29,6 @@ import {
   appendLocalNotice,
   appendLocalRequestRefusal,
 } from '@cli/chat/tui/state/transcript';
-import { runBypasses } from '@shared/approvalBypassKind';
-import { isLiveRun } from '@shared/session/sessionView';
 import { interruptedTasks } from '@ui/copy/interruptedTasks';
 import { TASK_ACTIONS } from '@ui/copy/nestedRuns';
 import { formatResultCount } from '@utils/text/stringUtils';

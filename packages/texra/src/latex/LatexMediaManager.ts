@@ -5,12 +5,12 @@ import * as path from 'node:path';
 import { Effect, FileSystem } from 'effect';
 
 // Local imports
+import { pathToLocationIn } from '@texra-ai/harness';
+import { toErrorMessage } from '@texra-ai/harness/schemas';
 import type { FileLocation } from '@shared/schemas';
 import type { DocumentTaskOptions } from '@texra/shared/plugins/documents';
 import { filterNotNullish } from '@utils/core';
-import { pathToLocationIn } from '@utils/files/fileLocation';
 import { RunFileService } from '@utils/files/runStorage';
-import { toErrorMessage } from '@utils/errors/errorMessage';
 import { getExtensionLowercase, hasExtension } from '@utils/core/pathCore';
 
 // Local file imports

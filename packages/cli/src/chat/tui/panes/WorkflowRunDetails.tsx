@@ -6,6 +6,8 @@
 
 import { Box, Text } from 'ink';
 
+import { formatRunStatusLabel } from '@texra-ai/harness/transcript';
+import { taskGroupDisplayStatus } from '@texra-ai/harness/transcript';
 import { safeTerminalText } from '@cli/runtime/terminalText';
 import { COLOR_BORDER, COLOR_ERROR, COLOR_WARNING } from '@cli/tui/ui/colors';
 import { CROSS, PENDING_BOX, TICK, WARNING } from '@cli/tui/ui/glyphs';
@@ -17,8 +19,6 @@ import {
   type TaskGroup,
   type TaskGroupStatus,
 } from '@shared/schemas';
-import { formatRunStatusLabel } from '@shared/runs/runStatusDisplay';
-import { taskGroupDisplayStatus } from '@shared/runs/taskGroupProjection';
 import {
   formatRoundLabel,
   latexdiffDisplayName,

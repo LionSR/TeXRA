@@ -30,7 +30,7 @@ import type {
 import type { RunHistoryRefused } from '@shared/session/runHistory';
 import {
   decideProposalApproval,
-  texraApprovalDenialMessage,
+  approvalPolicyDenialMessage,
 } from '@shared/approvalPolicy';
 import { refusalOf } from '@shared/session/approvalDecision';
 import type { DelegatedChildApproval } from '@tools/approval';
@@ -176,7 +176,7 @@ const requestDelegationProposal = Effect.fn('requestDelegationProposal')(
         return {
           result: {
             action: 'deny',
-            reason: texraApprovalDenialMessage(decision),
+            reason: approvalPolicyDenialMessage(decision),
           },
           childApproval: 'inherit',
         };

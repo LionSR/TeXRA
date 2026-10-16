@@ -31,6 +31,8 @@ import {
   type Session,
   type SessionView,
 } from '@texra-ai/harness';
+import { isLiveRun } from '@texra-ai/harness/schemas';
+import { toErrorMessage } from '@texra-ai/harness/schemas';
 import { presentRunFailure } from '@agent/runtime/terminalResultToast';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { getRunRecords } from '@agent/storage';
@@ -43,7 +45,6 @@ import {
   type RunEnd,
   type RunId,
 } from '@shared/schemas';
-import { isLiveRun } from '@shared/session/sessionView';
 import { loadChatExportInput } from '@texra/agent/export/loadChatExportInput';
 import type { HostSnapshot } from '@texra/shared/session/hostSnapshot';
 import {
@@ -53,7 +54,6 @@ import {
 import { frameSubscription } from '@texra/controllers/session/SessionFramer';
 import type { EditorHostShape } from '@texra/tools/editorHost';
 import { assembleTrace } from '@transcript';
-import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import {
   PROTOCOL_VERSION,

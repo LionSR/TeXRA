@@ -1,11 +1,8 @@
 import {
-  ownerIdentity,
   RUN_PHASE,
   RUN_LIFECYCLE_READY,
   RUN_SUBSTATE,
-  type OwnerId,
   type ResumeBlocker,
-  type RunId,
   type RunLifecycleStatus,
   type RunSubstate,
 } from '@shared/schemas';
@@ -145,17 +142,6 @@ export const RUN_EARLIER_BUILD_MESSAGE =
  *  its pid: the one part of a process identity a user can act on. */
 export function runHeldMessage(pid: number): string {
   return `Held by another TeXRA process (pid ${pid}). Let it finish or close it; if it is gone, Delete removes the task.`;
-}
-
-/** The refusal a host prints when another TeXRA process holds a run: the
- *  owner named by the pid and machine recorded in its claim, the two parts
- *  of an identity a user can act on. */
-export function runHeldByProcessMessage(
-  runId: RunId,
-  ownerId: OwnerId,
-): string {
-  const { pid, hostname } = ownerIdentity(ownerId);
-  return `Task ${runId} is held by another TeXRA process (pid ${pid} on ${hostname}).`;
 }
 
 export function formatRunStatusLabel(status: RunLifecycleStatus): string {

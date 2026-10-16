@@ -29,10 +29,9 @@ import { MemoryConfigProvider } from '@platform/defaults/memoryConfigProvider';
 import { runBypasses } from '@shared/approvalBypassKind';
 import { DEFAULT_MODELS } from '@shared/constants/defaultModels';
 import {
-  formatTexraApprovalPolicy,
-  parseTexraApprovalPolicy,
-  TEXRA_APPROVAL_POLICY_DEFAULT,
-  type TexraApprovalPolicy,
+  parseApprovalPolicy,
+  APPROVAL_POLICY_DEFAULT,
+  type ApprovalPolicy,
 } from '@shared/approvalPolicy';
 import {
   qualifyAggregateId,
@@ -83,6 +82,7 @@ import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
 import { subscribeToSignalChanges } from '@texra/shared/signals';
 import { clearGoal, startGoal } from '@tools/goal';
 import { prepareToolEditApprovalPrompt } from '@tools/approval/toolEditApproval';
+import { formatApprovalPolicy } from '@ui/copy/approvalPolicy';
 import { FOCUSED_AGENT } from '@ui/copy/nestedRuns';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -249,7 +249,7 @@ const HARNESS_RESOURCES_PATH = await Effect.runPromise(
 );
 const HARNESS_CLI_CONTEXT: CliContext = {
   storageRoot: HARNESS_STORAGE_ROOT,
-  approvalPolicy: TEXRA_APPROVAL_POLICY_DEFAULT,
+  approvalPolicy: APPROVAL_POLICY_DEFAULT,
   config: new MemoryConfigProvider(TEXRA_SETTINGS),
   commandName: 'texra',
   configWarnings: [],
@@ -1190,7 +1190,7 @@ sessionMeta.set({
   model: HARNESS_MODEL,
   modelSource: 'builtin-default',
   cwd: HARNESS_CWD,
-  approvalPolicy: TEXRA_APPROVAL_POLICY_DEFAULT,
+  approvalPolicy: APPROVAL_POLICY_DEFAULT,
   teamName: TEAM_NAME,
   version: '0.0.0-harness',
 });
@@ -1516,17 +1516,17 @@ function appendHarnessTranscript(
 
 /** The harness chat's launch policy, which `/approval` sets, as the chat's
  *  does; it never writes the project's. */
-let harnessPolicy: TexraApprovalPolicy = TEXRA_APPROVAL_POLICY_DEFAULT;
-const harnessApprovalPolicy = (): TexraApprovalPolicy => harnessPolicy;
+let harnessPolicy: ApprovalPolicy = APPROVAL_POLICY_DEFAULT;
+const harnessApprovalPolicy = (): ApprovalPolicy => harnessPolicy;
 
-function setHarnessApprovalPolicy(policy: TexraApprovalPolicy): void {
+function setHarnessApprovalPolicy(policy: ApprovalPolicy): void {
   harnessPolicy = policy;
   sessionMeta.set({
     ...sessionMeta.get(),
     approvalPolicy: policy,
   });
   appendHarnessAssistantTranscript(
-    `Approval mode: ${formatTexraApprovalPolicy(policy)}`,
+    `Approval mode: ${formatApprovalPolicy(policy)}`,
   );
 }
 
@@ -1539,7 +1539,7 @@ function applyHarnessApprovalPolicySelection(
     if (openCliSlashCommandForm('approval', input)) return;
   }
 
-  const policy = parseTexraApprovalPolicy(normalized);
+  const policy = parseApprovalPolicy(normalized);
   if (!policy) {
     appendHarnessAssistantTranscript(usage);
     return;
@@ -1687,7 +1687,7 @@ registerBuiltinSlashCommands({
     Effect.sync(() => setHarnessApprovalPolicy(policy)),
   onProjectApprovalPolicyChanged: (policy) =>
     appendHarnessAssistantTranscript(
-      `Project approval policy: ${formatTexraApprovalPolicy(policy)}`,
+      `Project approval policy: ${formatApprovalPolicy(policy)}`,
     ),
   onModelSelect: (model) =>
     Effect.sync(() => {

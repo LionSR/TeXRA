@@ -2,10 +2,10 @@ import * as path from 'node:path';
 
 import { Effect, FileSystem, Path, PlatformError } from 'effect';
 
-import { isNotADirectoryError } from '@common/errors';
+import { isNotADirectoryError } from '@texra-ai/harness';
+import { runOutcomeToCliRunStatus } from '@cli/schemas/cliOutput';
 import type { RunEndOutput } from '@shared/schemas';
 import { isTaskConfig, RUN_OUTCOME } from '@shared/schemas';
-import { runOutcomeToCliRunStatus } from '@shared/runs/runStatus';
 import { stripWorkflowRoundDir } from '@texra/shared/constants/workflowOutput';
 import { getSafeDocumentRelativePath } from '@texra/utils/files/outputFileUtils';
 import {

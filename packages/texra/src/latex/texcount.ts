@@ -1,12 +1,12 @@
 import { Effect, FileSystem } from 'effect';
 
 import { withLogChannel } from '@texra-ai/harness';
+import { pathToLocationIn } from '@texra-ai/harness';
+import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import { runToolWithCheck } from '@texra/utils/system/toolChecks';
 import { filterNotNull, filterNotNullish, ensureArray } from '@utils/core';
-import { pathToLocationIn } from '@utils/files/fileLocation';
 import { pathExists } from '@utils/files/fsDurability';
-import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { normalizeLineEndings } from '@utils/text/stringUtils';
 import { hasExtension } from '@utils/core/pathCore';
 import { LATEX_COMMANDS_CHANNEL as CHANNEL } from './latexLogging';

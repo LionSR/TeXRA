@@ -1,17 +1,17 @@
 import { Effect } from 'effect';
 
 import { withLogChannel } from '@texra-ai/harness';
-import type {
-  ApprovalPolicyDenial,
-  TexraApprovalPolicy,
-} from '@shared/approvalPolicy';
+import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';
 import type { RequestDecision, RunId } from '@shared/schemas';
-import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { type PerKeyLane, withPerKeyLane } from '@utils/core/perKeyQueue';
 
 import { type CliContext, type CliPromptRequest } from '../cliContext';
 import { askCliQuestion, writeTextStderr } from '../logSinks';
 import { safeTerminalText } from '../terminalText';
+import type {
+  ApprovalPolicyDenial,
+  ApprovalPolicy,
+} from '@texra-ai/harness/schemas';
 
 const CHANNEL = 'cli.approval';
 
@@ -40,7 +40,7 @@ function onCliPromptLane(context: CliContext) {
 
 /** Why no prompt could answer, from the live policy and this run's mode. */
 function promptUnavailableReason(
-  policy: TexraApprovalPolicy,
+  policy: ApprovalPolicy,
   context: CliContext,
 ): string {
   if (policy === 'never') return 'the approval policy is "never"';

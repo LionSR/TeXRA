@@ -2,7 +2,7 @@ import { defineCommand } from 'citty';
 import { Effect } from 'effect';
 import { parse as shellParse } from 'shell-quote';
 
-import { toErrorMessage } from '@utils/errors/errorMessage';
+import { toErrorMessage } from '@texra-ai/harness/schemas';
 
 import { CliExitCode } from '../runtime/exitCodes';
 import { runForegroundCommand } from '../runtime/foregroundCommand';

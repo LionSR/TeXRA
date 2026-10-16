@@ -35,6 +35,7 @@ import {
   Secrets,
   withLogChannel,
 } from '@texra-ai/harness';
+import { toErrorMessage } from '@texra-ai/harness/schemas';
 import {
   isPreferSubscription,
   setPreferSubscription,
@@ -46,7 +47,6 @@ import {
   type SubscriptionAuthStatus,
   xaiAccountLabel,
 } from '@shared/model/subscriptionAuth';
-import { toErrorMessage } from '@utils/errors/errorMessage';
 import type { SecretsFailed } from '@texra-ai/llm';
 import type { HttpClient } from 'effect/http';
 

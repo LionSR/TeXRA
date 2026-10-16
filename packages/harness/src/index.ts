@@ -231,8 +231,29 @@ export {
   withSessionFs,
   WorkspaceFs,
 } from '@platform/rootedFs';
-// A path as a `FileLocation` against the workspace root a caller holds.
-export { pathToLocationIn } from '@utils/files/fileLocation';
+// A `FileLocation` by its root: a workspace file, a file under a run's
+// storage, a file outside both, or a path against the workspace root a
+// caller holds.
+export {
+  createExternalLocation,
+  createRunStorageLocation,
+  createWorkspaceLocation,
+  pathToLocationIn,
+} from '@utils/files/fileLocation';
+// Failures as a host or plugin reads them: the agent error and how it is
+// presented, the filesystem and module predicates, the cause chain, a
+// user's abort, and a provider error's message. Error messages themselves
+// (`toErrorMessage`, `ensureError`) are in `./schemas`.
+export { AgentError } from '@common/errors/agentErrors';
+export { agentErrorPresentation } from '@common/errors/agentErrorClassification';
+export {
+  causeChain,
+  isFileNotFoundError,
+  isModuleNotFoundError,
+  isNotADirectoryError,
+} from '@common/errors/errorPredicates';
+export { isUserAbort } from '@common/errors/sdkError/errorPatterns';
+export { getSdkErrorMessage } from '@common/errors/sdkError/providerErrorFormat';
 // Which external tools this machine has, as plugins' `availability` probes
 // answered; a host reads it and asks for a refresh.
 export { ToolAvailability } from '@tools/toolAvailabilityService';

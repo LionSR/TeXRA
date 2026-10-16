@@ -8,6 +8,7 @@ import {
   withLogChannel,
 } from '@texra-ai/harness';
 import { callerRun, type ToolRun } from '@texra-ai/harness/plugins';
+import { toErrorMessage } from '@texra-ai/harness/schemas';
 import { ToolError, type RunId, type ToolResult } from '@shared/schemas';
 import {
   countBySeverity,
@@ -17,7 +18,6 @@ import {
 import { resolveToolPath } from '@tools/pathResolution';
 import { errorResult, executed } from '@tools/core/result';
 import { nullishWithDefault } from '@tools/core/inputSchema';
-import { toErrorMessage } from '@utils/errors/errorMessage';
 import { formatResultCount } from '@utils/text/stringUtils';
 import {
   LEAN_FILE_COMMANDS,

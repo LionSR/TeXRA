@@ -1,7 +1,6 @@
 import { Effect } from 'effect';
 
 import { resolveMemoryStoragePath } from '@platform/defaults/workspaceStorage';
-import type { MemoryViewItem } from '@shared/tools/memoryView';
 import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 import type { PromptHost } from '@texra/hosts/uiHosts';
 import type { MemoryPreview } from '@texra/shared/settingsView/settingsViewMessages';
@@ -13,6 +12,7 @@ import {
   onMemoryTreeLane,
   setMemoryPinned,
 } from '@tools/memory/memoryFileSystem';
+import type { MemoryViewItem } from '@texra-ai/harness/schemas';
 
 interface SettingsMemoryControllerDeps {
   prompt: Pick<PromptHost, 'confirm' | 'warning'>;

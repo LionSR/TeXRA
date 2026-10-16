@@ -1,116 +1,67 @@
 import { z } from 'zod';
 
-export const TEXRA_APPROVAL_POLICIES = ['never', 'ask', 'yolo'] as const;
-export const TexraApprovalPolicySchema = z.enum(TEXRA_APPROVAL_POLICIES);
-export type TexraApprovalPolicy = z.infer<typeof TexraApprovalPolicySchema>;
+export const APPROVAL_POLICIES = ['never', 'ask', 'yolo'] as const;
+export const ApprovalPolicySchema = z.enum(APPROVAL_POLICIES);
+export type ApprovalPolicy = z.infer<typeof ApprovalPolicySchema>;
 /**
- * The tolerant input form of {@link TexraApprovalPolicySchema}: the one place
+ * The tolerant input form of {@link ApprovalPolicySchema}: the one place
  * a hand-written spelling (` Yolo `) is trimmed and lowercased before the
- * enum. Reached only through {@link parseTexraApprovalPolicy}, which every
+ * enum. Reached only through {@link parseApprovalPolicy}, which every
  * reader of typed-in text — `TEXRA_APPROVAL_POLICY`, `--approval-policy`,
  * `/approval`, the settings dropdown — calls. Persisted config values keep the
  * strict enum: the `texra.approvalPolicy` catalog row validates the stored
  * value for all three hosts and warns when it no longer parses, and the
  * dropdown's options are derived from that same `ZodEnum`.
  */
-const TexraApprovalPolicyInputSchema = z.preprocess(
+const ApprovalPolicyInputSchema = z.preprocess(
   (raw) => (typeof raw === 'string' ? raw.trim().toLowerCase() : raw),
-  TexraApprovalPolicySchema,
+  ApprovalPolicySchema,
 );
-export const TEXRA_APPROVAL_POLICY_DEFAULT: TexraApprovalPolicy = 'ask';
+export const APPROVAL_POLICY_DEFAULT: ApprovalPolicy = 'ask';
 /**
  * The policy a `--no-input` run falls back to. Deliberately divergent from
- * {@link TEXRA_APPROVAL_POLICY_DEFAULT}: a run that cannot present a prompt
+ * {@link APPROVAL_POLICY_DEFAULT}: a run that cannot present a prompt
  * denies instead of hanging, and `buildCliContext` narrows the candidate list
  * to the explicit `--approval-policy` flag alone — a persisted or env-provided
  * `yolo` must not silently auto-approve a headless run that nobody is watching.
  * Changing that requires changing headless discipline, not just this constant.
  */
-export const TEXRA_APPROVAL_POLICY_NO_INPUT_DEFAULT: TexraApprovalPolicy =
-  'never';
+export const APPROVAL_POLICY_NO_INPUT_DEFAULT: ApprovalPolicy = 'never';
 /** Canonical persisted spelling in `.texra/config.json` for every host. */
-export const TEXRA_APPROVAL_POLICY_CONFIG_KEY = 'texra.approvalPolicy';
-const TEXRA_APPROVAL_POLICY_DENIED_MESSAGE = 'Denied by TeXRA approval policy.';
-const TEXRA_APPROVAL_UNPRESENTABLE_MESSAGE =
+export const APPROVAL_POLICY_CONFIG_KEY = 'texra.approvalPolicy';
+const APPROVAL_POLICY_DENIED_MESSAGE = 'Denied by TeXRA approval policy.';
+const APPROVAL_UNPRESENTABLE_MESSAGE =
   'Interactive approval requires a prompt; this run cannot present one.';
 
-const TEXRA_APPROVAL_POLICY_COPY = {
-  ask: {
-    label: 'Ask',
-    description: 'Ask before shell commands and file edits.',
-  },
-  never: {
-    label: 'Block',
-    description: 'Block shell commands and file edits.',
-  },
-  yolo: {
-    label: 'Auto-approve',
-    description: 'Allow shell commands and file edits without asking.',
-  },
-} as const satisfies Record<
-  TexraApprovalPolicy,
-  {
-    label: string;
-    description: string;
-  }
->;
-
-/** Display order for selectors; must stay a permutation of `TEXRA_APPROVAL_POLICIES`. */
-const TEXRA_APPROVAL_POLICY_DISPLAY_ORDER = [
-  'ask',
-  'never',
-  'yolo',
-] as const satisfies ReadonlyArray<TexraApprovalPolicy>;
-
-export const TEXRA_APPROVAL_POLICY_OPTIONS = Object.freeze(
-  TEXRA_APPROVAL_POLICY_DISPLAY_ORDER.map((value) =>
-    Object.freeze({
-      value,
-      ...TEXRA_APPROVAL_POLICY_COPY[value],
-    }),
-  ),
-);
-
-/** The policy's user-facing name: `never` reads "Block" on every surface. */
-export function texraApprovalPolicyLabel(policy: TexraApprovalPolicy): string {
-  return TEXRA_APPROVAL_POLICY_COPY[policy].label;
-}
-
-export function formatTexraApprovalPolicy(policy: TexraApprovalPolicy): string {
-  return TEXRA_APPROVAL_POLICY_COPY[policy].description;
-}
-
-export function parseTexraApprovalPolicy(
-  input: string,
-): TexraApprovalPolicy | undefined {
-  const parsed = TexraApprovalPolicyInputSchema.safeParse(input);
+export function parseApprovalPolicy(input: string): ApprovalPolicy | undefined {
+  const parsed = ApprovalPolicyInputSchema.safeParse(input);
   return parsed.success ? parsed.data : undefined;
 }
 
-export type TexraApprovalPolicyDecision =
+export type ApprovalPolicyDecision =
   'allow' | 'present' | 'deny-policy' | 'deny-unpresentable';
 
-export function isTexraApprovalDenied(
-  decision: TexraApprovalPolicyDecision,
+export function isApprovalDenied(
+  decision: ApprovalPolicyDecision,
 ): decision is 'deny-policy' | 'deny-unpresentable' {
   return decision === 'deny-policy' || decision === 'deny-unpresentable';
 }
 
-export function texraApprovalDenialMessage(
+export function approvalPolicyDenialMessage(
   decision: 'deny-policy' | 'deny-unpresentable',
 ): string {
   return decision === 'deny-policy'
-    ? TEXRA_APPROVAL_POLICY_DENIED_MESSAGE
-    : TEXRA_APPROVAL_UNPRESENTABLE_MESSAGE;
+    ? APPROVAL_POLICY_DENIED_MESSAGE
+    : APPROVAL_UNPRESENTABLE_MESSAGE;
 }
 
 /** Decide one Bash or tool-edit permission from request-time policy facts. */
-export function decideTexraApproval(input: {
-  readonly policy: TexraApprovalPolicy;
+export function decideApproval(input: {
+  readonly policy: ApprovalPolicy;
   readonly promptRequired: boolean;
   readonly scopedBypass: boolean;
   readonly canPresent: boolean;
-}): TexraApprovalPolicyDecision {
+}): ApprovalPolicyDecision {
   if (input.policy === 'never') return 'deny-policy';
   if (input.policy === 'yolo' || input.scopedBypass || !input.promptRequired) {
     return 'allow';
@@ -126,7 +77,7 @@ export function decideTexraApproval(input: {
  * and the policy that closed it, which a host names in what it says.
  */
 export type ApprovalPolicyDenial = {
-  readonly policy: TexraApprovalPolicy;
+  readonly policy: ApprovalPolicy;
 } & (
   | { readonly kind: 'executable' }
   | { readonly kind: 'plan' }
@@ -134,11 +85,11 @@ export type ApprovalPolicyDenial = {
   | { readonly kind: 'withheldTools'; readonly tools: readonly string[] }
   | {
       readonly kind: 'retry';
-      readonly deny: Exclude<TexraRetryApprovalDecision, 'present'>['deny'];
+      readonly deny: Exclude<RetryApprovalDecision, 'present'>['deny'];
     }
   | {
       readonly kind: 'humanInput';
-      readonly deny: Exclude<TexraHumanInputDecision, 'present'>['deny'];
+      readonly deny: Exclude<HumanInputDecision, 'present'>['deny'];
     }
 );
 
@@ -151,7 +102,7 @@ export type ApprovalPolicyDenial = {
  * than the security gate (the child's bash and edits still gate).
  */
 export function decideProposalApproval(input: {
-  readonly policy: TexraApprovalPolicy;
+  readonly policy: ApprovalPolicy;
   readonly scopedBypass: boolean;
   readonly canPresent: boolean;
 }): 'bypass' | 'unattended' | 'present' | 'deny-policy' {
@@ -162,14 +113,14 @@ export function decideProposalApproval(input: {
     : 'present';
 }
 
-const TEXRA_APPROVAL_YOLO_RETRY_MESSAGE =
+const APPROVAL_YOLO_RETRY_MESSAGE =
   'Retry skipped: explicit interactive approval is required after automatic attempts are exhausted.';
-const TEXRA_APPROVAL_CREDENTIAL_RETRY_MESSAGE =
+const APPROVAL_CREDENTIAL_RETRY_MESSAGE =
   'Retry skipped: credential exhausted or unauthorized.';
-const TEXRA_APPROVAL_YOLO_NO_HUMAN_MESSAGE =
+const APPROVAL_YOLO_NO_HUMAN_MESSAGE =
   'User question requires human input; yolo mode cannot synthesize an answer.';
 
-export type TexraRetryApprovalDecision =
+export type RetryApprovalDecision =
   | 'present'
   | {
       readonly deny: 'yolo-retry' | 'credential' | 'policy' | 'unpresentable';
@@ -177,10 +128,10 @@ export type TexraRetryApprovalDecision =
 
 /** Decide whether a retry request may prompt or must settle as denied. */
 export function decideRetryApproval(input: {
-  readonly policy: TexraApprovalPolicy;
+  readonly policy: ApprovalPolicy;
   readonly canPresent: boolean;
   readonly isCredentialFailure: boolean;
-}): TexraRetryApprovalDecision {
+}): RetryApprovalDecision {
   if (input.isCredentialFailure) {
     // Ask + interactive can still surface the retry panel; every other case
     // settles with the credential message (including `never` and `yolo`).
@@ -192,22 +143,22 @@ export function decideRetryApproval(input: {
   return input.canPresent ? 'present' : { deny: 'unpresentable' };
 }
 
-export function texraRetryDenialMessage(
-  deny: Exclude<TexraRetryApprovalDecision, 'present'>['deny'],
+export function retryDenialMessage(
+  deny: Exclude<RetryApprovalDecision, 'present'>['deny'],
 ): string {
   switch (deny) {
     case 'yolo-retry':
-      return TEXRA_APPROVAL_YOLO_RETRY_MESSAGE;
+      return APPROVAL_YOLO_RETRY_MESSAGE;
     case 'credential':
-      return TEXRA_APPROVAL_CREDENTIAL_RETRY_MESSAGE;
+      return APPROVAL_CREDENTIAL_RETRY_MESSAGE;
     case 'policy':
-      return TEXRA_APPROVAL_POLICY_DENIED_MESSAGE;
+      return APPROVAL_POLICY_DENIED_MESSAGE;
     case 'unpresentable':
-      return TEXRA_APPROVAL_UNPRESENTABLE_MESSAGE;
+      return APPROVAL_UNPRESENTABLE_MESSAGE;
   }
 }
 
-type TexraHumanInputDecision =
+type HumanInputDecision =
   | 'present'
   | {
       readonly deny: 'yolo-no-human' | 'policy' | 'unpresentable';
@@ -215,24 +166,24 @@ type TexraHumanInputDecision =
 
 /** Decide whether a human-input request may prompt or must settle as denied. */
 export function decideHumanInputRequest(input: {
-  readonly policy: TexraApprovalPolicy;
+  readonly policy: ApprovalPolicy;
   readonly canPresent: boolean;
-}): TexraHumanInputDecision {
+}): HumanInputDecision {
   if (input.policy === 'yolo') return { deny: 'yolo-no-human' };
   if (input.policy === 'never') return { deny: 'policy' };
   return input.canPresent ? 'present' : { deny: 'unpresentable' };
 }
 
-export function texraHumanInputDenialMessage(
-  deny: Exclude<TexraHumanInputDecision, 'present'>['deny'],
-  yoloMessage: string = TEXRA_APPROVAL_YOLO_NO_HUMAN_MESSAGE,
+export function humanInputDenialMessage(
+  deny: Exclude<HumanInputDecision, 'present'>['deny'],
+  yoloMessage: string = APPROVAL_YOLO_NO_HUMAN_MESSAGE,
 ): string {
   switch (deny) {
     case 'yolo-no-human':
       return yoloMessage;
     case 'policy':
-      return TEXRA_APPROVAL_POLICY_DENIED_MESSAGE;
+      return APPROVAL_POLICY_DENIED_MESSAGE;
     case 'unpresentable':
-      return TEXRA_APPROVAL_UNPRESENTABLE_MESSAGE;
+      return APPROVAL_UNPRESENTABLE_MESSAGE;
   }
 }

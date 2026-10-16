@@ -75,7 +75,7 @@ import {
   runResumeBlockedMessage,
   runStatusCopy,
 } from '@shared/runs/runStatusDisplay';
-import { isSettledRow, rowHeadline, type TranscriptRow } from '../transcript';
+import { isSettledRow, rowHeadline } from '../transcript/transcriptRow';
 import {
   applyRunRow,
   freshRunRows,
@@ -99,7 +99,7 @@ import {
 
 import { runActions } from './runActions';
 import { emptySessionView, rollupOf } from './sessionView';
-import type { SessionView, RunView } from './sessionView';
+import type { SessionView, RunView, TranscriptView } from './sessionView';
 
 type RunStartEvent = Extract<DisplaySessionEvent, { type: 'run.start' }>;
 
@@ -607,7 +607,7 @@ function nonEmpty(text: string | undefined): string | undefined {
  *  script's run, a task's recipe): what its tool, card, error, or
  *  plain log row last said. */
 function operationalLatestLine(
-  rows: readonly TranscriptRow[],
+  rows: TranscriptView['rows'],
 ): string | undefined {
   for (let index = rows.length - 1; index >= 0; index -= 1) {
     const row = rows[index];
@@ -631,7 +631,7 @@ function operationalLatestLine(
 
 /** Any other run's newest user instruction or settled model reply. */
 function latestConversationLine(
-  rows: readonly TranscriptRow[],
+  rows: TranscriptView['rows'],
   settledRows: number,
 ): string | undefined {
   for (let index = rows.length - 1; index >= 0; index -= 1) {
@@ -660,7 +660,7 @@ function latestConversationLine(
  * kind whose state bridge cleanup can still replace (a compaction block).
  */
 function advanceSettledRows(
-  rows: readonly TranscriptRow[],
+  rows: TranscriptView['rows'],
   start: number,
   runFinal: boolean,
 ): number {

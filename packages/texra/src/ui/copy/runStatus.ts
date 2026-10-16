@@ -4,7 +4,7 @@
  * (`RunView.turn`, `RunView.group`), so the dock, the TUI and the trace
  * viewer cannot word one thing two ways.
  */
-import type { RunView } from '@texra-ai/harness';
+import type { RunView } from '@texra-ai/harness/schemas';
 
 type RunGroup = RunView['group'];
 

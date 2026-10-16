@@ -11,6 +11,7 @@ import {
   withProcessServices,
 } from '@texra-ai/harness';
 import { withLogChannel } from '@texra-ai/harness';
+import { toErrorMessage } from '@texra-ai/harness/schemas';
 import {
   SessionHostInteractions,
   type HostInteractions,
@@ -77,7 +78,6 @@ import { workspaceFileOptions } from '@texra/controllers/session/workspaceFileOp
 import { hasUsableSetupCredential } from '@texra/model/setupCredentialAccess';
 import { checkCoreDependencies } from '@texra/utils/system/checkCoreDependencies';
 import { createFlushableDebounce } from '@utils/core';
-import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { createExtensionHostRequests } from './extensionHostRequests';
 import { RequestAttention } from './requestAttention';

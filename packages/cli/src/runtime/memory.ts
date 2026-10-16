@@ -2,7 +2,6 @@ import { Effect } from 'effect';
 
 import { withSessionFs, type StorageFs } from '@texra-ai/harness';
 import { resolveMemoryStoragePath } from '@platform/defaults/workspaceStorage';
-import type { MemoryViewItem } from '@shared/tools/memoryView';
 import { displayToStoragePath, toDisplayPath } from '@tools/memory/memoryUtils';
 import { MEMORY_DISPLAY_ROOT } from '@tools/memory/constants';
 import { loadMemoryPreview } from '@tools/memory/memoryFileSystem';
@@ -12,6 +11,7 @@ import {
   formatLocaleTimestamp,
   truncateSummary,
 } from '@utils/text/stringUtils';
+import type { MemoryViewItem } from '@texra-ai/harness/schemas';
 import type { WorkspaceRoots } from '@texra-ai/harness';
 
 export const CLI_MEMORY_LIST_LIMIT = 50;

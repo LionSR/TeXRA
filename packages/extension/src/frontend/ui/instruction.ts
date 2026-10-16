@@ -4,10 +4,10 @@ import * as vscode from 'vscode';
 
 // Local imports
 import { withLogChannel } from '@texra-ai/harness';
+import { ensureError } from '@texra-ai/harness/schemas';
 import { safeExecuteCommand } from '@frontend/system/commandUtils';
 import { readState, StateFlagSchema } from '@shared/config/settingsAccess';
 import { INSTRUCTION_PREFIX } from '@shared/state/stateKeys';
-import { ensureError } from '@utils/errors/errorMessage';
 import type {
   StateStore,
   StateReadFailed,

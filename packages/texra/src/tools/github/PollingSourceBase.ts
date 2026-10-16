@@ -23,11 +23,11 @@ import {
 } from 'effect';
 
 import { SESSION_CLOSE_DEADLINE_MS, withLogChannel } from '@texra-ai/harness';
+import { ensureError } from '@texra-ai/harness/schemas';
 import { emitAppSignal } from '@eventBus/AppSignals';
 
 import { unrefSleepClock } from '@texra/utils/system/unrefSleepClock';
 import { jitteredExponentialBackoffMs } from '@utils/core';
-import { ensureError } from '@utils/errors/errorMessage';
 import {
   type ConditionalResponse,
   GitHubAuthError,

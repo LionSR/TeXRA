@@ -15,6 +15,7 @@ import { LRUCache } from 'lru-cache';
 import MarkdownIt, { type RendererRule, type Token } from 'markdown-it';
 import pico from 'picocolors';
 
+import { toErrorMessage } from '@texra-ai/harness/schemas';
 import { textDisplayWidth } from '@cli/runtime/terminalText';
 import { wrapAnsiToWidth } from '@cli/tui/ansiWrap';
 import { isTuiColorEnabled } from '@cli/tui/noColorOutput';
@@ -28,7 +29,6 @@ import {
   type MarkdownItInstance,
 } from '@ui/markdown/createMarkdownRenderer';
 import { clamp } from '@utils/core';
-import { toErrorMessage } from '@utils/errors/errorMessage';
 
 /** SGR open/close codes wrapped through String.fromCharCode so the ESC byte
  *  is never a literal in source (pre-commit hooks have been known to mangle

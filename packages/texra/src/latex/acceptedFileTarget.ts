@@ -6,14 +6,14 @@ import { Effect, FileSystem, type PlatformError } from 'effect';
 
 // Local imports
 import { withLogChannel, WorkspaceFs } from '@texra-ai/harness';
-import { generateDiffFileName } from '@latex/latexdiff/diffFileNameManager';
-import type { FileLocation } from '@shared/schemas';
-import { normalizeFilePath } from '@utils/core';
 import {
   createExternalLocation,
   createRunStorageLocation,
   createWorkspaceLocation,
-} from '@utils/files/fileLocation';
+} from '@texra-ai/harness';
+import { generateDiffFileName } from '@latex/latexdiff/diffFileNameManager';
+import type { FileLocation } from '@shared/schemas';
+import { normalizeFilePath } from '@utils/core';
 import { locateInWorkspace } from '@utils/files/workspaceFS';
 import { getExtensionLowercase } from '@utils/core/pathCore';
 import { normalizeLineEndings } from '@utils/text/stringUtils';

@@ -1,11 +1,14 @@
 import stripAnsi from 'strip-ansi';
 
+import { isActivePhase } from '@texra-ai/harness/schemas';
+import {
+  rowHeadline,
+  type TranscriptRowKind,
+} from '@texra-ai/harness/transcript';
 import { ANSI_ESCAPE_START, ansiEscapeEnd } from '@cli/runtime/ansiEscapes';
 import { safeTerminalText } from '@cli/runtime/terminalText';
 import type { TranscriptRow } from '@cli/chat/tui/state/sessionView';
 import { type RunPhase } from '@shared/schemas';
-import { isActivePhase } from '@shared/runs/runStatus';
-import { rowHeadline, type TranscriptRowKind } from '@shared/transcript';
 
 import { normalizeKnownHtmlForCliMarkdown } from '../render/htmlMarkdownNormalize';
 

@@ -118,6 +118,17 @@ for (const dir of VSCODE_FREE_ZONE_DIRS) {
   }
 }
 
+// A browser bundle (the extension's webview frontends, the desktop renderer,
+// the UI toolkit) imports nothing from the Node entries, not even a type: the
+// root's declarations pull Node types into a browser typecheck. Exact
+// entries, since a `group` pattern for the bare package name would also
+// match its browser-safe subpaths.
+const BROWSER_HARNESS_ENTRY_PATTERN = {
+  regex: '^@texra-ai/harness(/node|/plugins)?$',
+  message:
+    'A browser bundle takes nothing from this harness entry, types included: use @texra-ai/harness/schemas or @texra-ai/harness/transcript.',
+};
+
 // The SDK's entry files: the package's public surface and its Effect
 // boundary (the host door below), as opposed to the harness modules under it.
 const HARNESS_ENTRY_FILES = [
@@ -125,6 +136,7 @@ const HARNESS_ENTRY_FILES = [
   'packages/harness/src/node.ts',
   'packages/harness/src/plugins.ts',
   'packages/harness/src/schemas.ts',
+  'packages/harness/src/transcriptEntry.ts',
 ];
 const HARNESS_ENTRY_GLOBS = [
   ...HARNESS_ENTRY_FILES,
@@ -929,19 +941,39 @@ export default tseslint.config(
               message:
                 'Extension browser frontends must import runtime values from browser-safe shared modules.',
             },
-            {
-              // Exact entries: a `group` pattern for the bare package name
-              // would also match its browser-safe `/schemas` subpath.
-              regex: '^@texra-ai/harness(/node|/plugins)?$',
-              allowTypeImports: true,
-              message:
-                'A browser frontend imports only types from this harness entry; take runtime values from @texra-ai/harness/schemas.',
-            },
+            BROWSER_HARNESS_ENTRY_PATTERN,
             {
               regex: BROWSER_SAFE_UTILS_REGEX,
               allowTypeImports: true,
               message: BROWSER_SAFE_UTILS_MESSAGE,
             },
+          ],
+        },
+      ],
+    },
+  },
+
+  // The other browser bundles, the desktop renderer and the UI toolkit,
+  // reach the harness only through its browser-safe entries too.
+  {
+    files: ['packages/desktop/src/renderer/**/*.{ts,tsx,mts}'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        { patterns: [BROWSER_HARNESS_ENTRY_PATTERN] },
+      ],
+    },
+  },
+  {
+    files: ['packages/texra/src/ui/**/*.{ts,tsx,mts}'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          paths: HOST_LAYER_RESTRICTED_IMPORT_PATHS,
+          patterns: [
+            ...HOST_LAYER_RESTRICTED_IMPORT_PATTERNS,
+            BROWSER_HARNESS_ENTRY_PATTERN,
           ],
         },
       ],

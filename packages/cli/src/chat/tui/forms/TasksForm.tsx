@@ -7,6 +7,8 @@ import { Box, Text, useInput, useWindowSize } from 'ink';
 import { Effect, Fiber, type Scope } from 'effect';
 import { useEffect, useRef, useState } from 'react';
 
+import { acceptsFollowUp } from '@texra-ai/harness/schemas';
+import { toErrorMessage } from '@texra-ai/harness/schemas';
 import { isEscapeInput } from '@cli/tui/inputKeys';
 import {
   BORDERED_PANEL_CHROME_COLUMNS,
@@ -16,14 +18,12 @@ import { COLOR_ERROR, COLOR_HINT, COLOR_WARNING } from '@cli/tui/ui/colors';
 import { POINTER } from '@cli/tui/ui/glyphs';
 import { KeyHints } from '@cli/tui/ui/KeyHints';
 import type { RunId, ToolEditPermission } from '@shared/schemas';
-import { acceptsFollowUp } from '@shared/session/sessionView';
 import {
   approvalDecisionArms,
   type SurfaceDecision,
 } from '@texra/shared/session/surfaceDecision';
 import type { ServiceConnection } from '@texra/controllers/server/client';
 import type { TaskSummary } from '@texra/controllers/server/protocol';
-import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { BaseTextInput } from '../input/BaseTextInput';
 import { ApprovalModal } from '../modals/ApprovalModal';
@@ -36,7 +36,10 @@ import {
 import { transcriptToLines } from '../state/transcriptLines';
 import { AsyncListForm } from './_shared/ListForm';
 import type { ProcessRuntime, ToolEditContent } from '@texra-ai/harness';
-import type { ApprovalPayload } from '../state/approvalQueue';
+import type {
+  ApprovalPayload,
+  PendingApprovalFact,
+} from '../state/approvalQueue';
 
 /** Opens (and, when none runs, starts) the service connection. */
 type ConnectService = () => Effect.Effect<
@@ -192,7 +195,7 @@ function AttachedTask(props: AttachedTaskProps): React.JSX.Element {
   // run, so it is named apart and never stands in front of a request
   // this view can answer.
   const pending = level.requests.find(
-    (request) =>
+    (request): request is PendingApprovalFact =>
       request.payload.kind !== 'externalInquiry' &&
       !decided.has(request.requestId),
   );
@@ -236,8 +239,6 @@ function AttachedTask(props: AttachedTaskProps): React.JSX.Element {
     if (!pending) return undefined;
     const { payload } = pending;
     switch (payload.kind) {
-      case 'externalInquiry':
-        return undefined;
       case 'toolEdit': {
         const preview = previews.get(pending.requestId);
         if (preview === undefined) return undefined;

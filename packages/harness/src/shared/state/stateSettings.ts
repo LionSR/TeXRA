@@ -3,9 +3,9 @@ import { z } from 'zod';
 
 // Local imports - shared constants & state keys
 import {
-  TEXRA_APPROVAL_POLICY_CONFIG_KEY,
-  TEXRA_APPROVAL_POLICY_DEFAULT,
-  TexraApprovalPolicySchema,
+  APPROVAL_POLICY_CONFIG_KEY,
+  APPROVAL_POLICY_DEFAULT,
+  ApprovalPolicySchema,
 } from '@shared/approvalPolicy';
 import {
   ActiveSkillSourceScopeSchema,
@@ -477,13 +477,13 @@ export function configTreeRows(
  * normalization.
  */
 const APPROVAL_POLICY_SETTING = surfacedSetting({
-  key: TEXRA_APPROVAL_POLICY_CONFIG_KEY,
+  key: APPROVAL_POLICY_CONFIG_KEY,
   // Strict on purpose: `settingEnumOptions` derives the dropdown from a
   // `ZodEnum` row, and the tolerant spelling belongs to
-  // `parseTexraApprovalPolicy`, which every reader of typed-in text (the
+  // `parseApprovalPolicy`, which every reader of typed-in text (the
   // env var, `--approval-policy`, `/approval`, the dropdown) calls before
   // a value ever reaches this row.
-  schema: TexraApprovalPolicySchema.prefault(TEXRA_APPROVAL_POLICY_DEFAULT),
+  schema: ApprovalPolicySchema.prefault(APPROVAL_POLICY_DEFAULT),
   title: 'Approval policy',
   description:
     'Whether agents ask before running shell commands and editing files. Under Ask, the toggles below choose which of the two need your approval.',

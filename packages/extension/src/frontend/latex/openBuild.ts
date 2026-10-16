@@ -7,6 +7,7 @@ import { Effect, FileSystem, type Path, type PlatformError } from 'effect';
 import { withLogChannel } from '@texra-ai/harness';
 import { withSessionFs } from '@texra-ai/harness';
 import { pathToLocationIn } from '@texra-ai/harness';
+import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';
 import { showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
 import { openFileInEditor } from '@frontend/vscode/vscodeEditor';
 import { compileLatex2Pdf } from '@latex/texTools';
@@ -19,7 +20,6 @@ import {
 
 // Local imports - utilities
 import { getFileStem } from '@utils/core';
-import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import type { WorkspaceRoots } from '@texra-ai/harness';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 

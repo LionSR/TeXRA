@@ -17,12 +17,12 @@ import {
   type LanguageModel,
   type PlatformSecrets,
 } from '@texra-ai/harness';
+import {
+  APPROVAL_POLICY_CONFIG_KEY,
+  type ApprovalPolicy,
+} from '@texra-ai/harness/schemas';
 import { loadTeamOptions } from '@common/teams/TeamPlan';
 import type { SettingsStores } from '@shared/config/settingsAccess';
-import {
-  TEXRA_APPROVAL_POLICY_CONFIG_KEY,
-  type TexraApprovalPolicy,
-} from '@shared/approvalPolicy';
 import type { FileOptions } from '@texra/shared/session/hostSnapshot';
 import { agentOptionsData } from '@texra/tools/documents/documentTask';
 import type {
@@ -179,9 +179,9 @@ export function createHostSnapshotSource(
   const publish = Effect.suspend(() =>
     options.publish({
       project: options.project,
-      approvalPolicy: readConfigSettingFrom<TexraApprovalPolicy>(
+      approvalPolicy: readConfigSettingFrom<ApprovalPolicy>(
         options.stores.config,
-        TEXRA_APPROVAL_POLICY_CONFIG_KEY,
+        APPROVAL_POLICY_CONFIG_KEY,
       ),
       ...catalogs,
       workspaceRoots: options.workspaceRoots?.() ?? [],

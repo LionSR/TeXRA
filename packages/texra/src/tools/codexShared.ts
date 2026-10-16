@@ -1,10 +1,10 @@
+import { buildMcpToolName } from '@texra-ai/harness/transcript';
 import type {
   McpToolOutput,
   ToolCallStatus,
   ToolCard,
   ToolUseLog,
 } from '@shared/schemas';
-import { buildMcpToolName } from '@shared/tools/toolDisplayName';
 import { getBasename } from '@utils/core';
 import { formatDuration, truncateSummary } from '@utils/text/stringUtils';
 import type {

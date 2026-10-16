@@ -38,7 +38,7 @@ import { NESTED_AGENT, TASK_ACTIONS } from '@ui/copy/nestedRuns';
 import { getBasename } from '@utils/core';
 import { formatRelativeTime, formatResultCount } from '@utils/text/stringUtils';
 import { runTabStyles } from './RunTab.styles';
-import type { RunView } from '@texra-ai/harness';
+import type { RunView } from '@texra-ai/harness/schemas';
 
 /** Shape cue per tone (G4: the fold spells the tone, the host the glyph). */
 const TONE_ICONS: Record<RunView['tone'], TeXRAIconName> = {

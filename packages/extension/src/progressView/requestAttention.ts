@@ -8,7 +8,7 @@ import { Effect, Stream } from 'effect';
 
 import { withLogChannel } from '@texra-ai/harness';
 import { attentionOf } from '@texra-ai/harness/schemas';
-import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
+import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';
 import { formatResultCount } from '@utils/text/stringUtils';
 import type { Session, SessionView } from '@texra-ai/harness';
 import type { RunId } from '@texra-ai/harness/schemas';

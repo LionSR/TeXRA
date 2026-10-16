@@ -20,6 +20,7 @@ import {
   type RuntimePresentationEventPayloads,
 } from '@texra-ai/harness';
 import { withLogChannel } from '@texra-ai/harness';
+import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';
 import type {
   HostInteractions,
   PresentationEventHandlers,
@@ -36,7 +37,6 @@ import {
   type RequestShowErrorPayload,
   type RequestShowInstructionPayload,
 } from '@shared/schemas';
-import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import type { StateStore, WorkspaceRoots } from '@texra-ai/harness';
 
 const CHANNEL = 'agentEventListeners';

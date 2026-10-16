@@ -6,9 +6,9 @@ import { ToolContext } from '@agent/core/tools/ToolTypes';
 import { withLogChannel } from '@logger/effectLog';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import {
-  decideTexraApproval,
-  isTexraApprovalDenied,
-  texraApprovalDenialMessage,
+  decideApproval,
+  isApprovalDenied,
+  approvalPolicyDenialMessage,
 } from '@shared/approvalPolicy';
 import {
   TOOL_EDIT_APPROVAL_CONFIG_KEY,
@@ -232,19 +232,19 @@ export const requestToolEditApproval = Effect.fn('requestToolEditApproval')(
         preparedRequest,
       );
     const policy = session.approvals.policy(runId ?? undefined);
-    const decision = decideTexraApproval({
+    const decision = decideApproval({
       policy,
       promptRequired: approvalsEnabled,
       scopedBypass: isRunBypassed,
       canPresent: !session.interactions.approvalPromptsUnavailable,
     });
     if (decision === 'allow') return yield* acceptProposedAsIs();
-    if (isTexraApprovalDenied(decision)) {
+    if (isApprovalDenied(decision)) {
       session.interactions.approvalDenied(
         { kind: 'executable', policy },
         run.runId,
       );
-      return { action: 'deny', reason: texraApprovalDenialMessage(decision) };
+      return { action: 'deny', reason: approvalPolicyDenialMessage(decision) };
     }
     if (!runId) {
       return yield* Effect.fail(

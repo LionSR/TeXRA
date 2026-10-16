@@ -9,6 +9,7 @@
 
 import { Cause, Effect } from 'effect';
 import { withProcessServices, type ProcessRuntime } from '@texra-ai/harness';
+import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';
 import { readCliCwd } from '@cli/runtime/cliContext';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import {
@@ -21,9 +22,7 @@ import {
   supportsTerminalJobControl,
   type TuiTerminal,
 } from '@cli/tui/terminalCleanup';
-import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
 import { DisposableStore } from '@texra/platform/disposable';
-import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 import {
   resetCliState,
@@ -43,6 +42,7 @@ import {
   formatResumeHint,
 } from './state/resumeHint';
 import { chatTuiRunPending, type TuiSession } from './state/sessionRunState';
+import type { ApprovalPolicy } from '@texra-ai/harness/schemas';
 import type { SessionView } from '@texra-ai/harness';
 import type { RunStopReason } from '@texra-ai/harness';
 import type { RunId } from '@texra-ai/harness/schemas';
@@ -75,7 +75,7 @@ interface SessionExitControllerContext {
    *  waits on it before it returns. */
   readonly followUpsIdle: Effect.Effect<void>;
   /** Reads the live approval policy for the resume hint. */
-  readonly getApprovalPolicy: () => TexraApprovalPolicy;
+  readonly getApprovalPolicy: () => ApprovalPolicy;
   /** Materialize buffered trace chunks and drain queued publications. */
   readonly flushArtifacts: Effect.Effect<void, Error>;
   /** Repaint the TUI from a known origin after a `fg`/SIGCONT resume. */

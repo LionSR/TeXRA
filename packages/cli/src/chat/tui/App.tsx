@@ -15,6 +15,7 @@ import {
 
 // Local imports - shared runtime
 import { type RunId } from '@texra-ai/harness/schemas';
+import { acceptsFollowUp } from '@texra-ai/harness/schemas';
 import {
   isCtrlInput,
   isEscapeInput,
@@ -22,7 +23,6 @@ import {
   rewriteKittyEnterInput,
 } from '@cli/tui/inputKeys';
 import { defaultShortcutModifierLabel } from '@cli/runtime/shortcutLabels';
-import { acceptsFollowUp } from '@shared/session/sessionView';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import { AGENT_LIST } from '@ui/copy/nestedRuns';
 import {

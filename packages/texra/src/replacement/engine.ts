@@ -6,12 +6,12 @@ import { Effect, Result } from 'effect';
 import { LRUCache } from 'lru-cache';
 
 import { withLogChannel } from '@texra-ai/harness';
+import { toErrorMessage } from '@texra-ai/harness/schemas';
 import type {
   NonRegexReplacementCategory,
   RegexReplacementCategory,
 } from '@texra/shared/constants/replacementCategories';
 import { assertNever, ensureArray } from '@utils/core';
-import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import {
   ReplacementRuleSet,

@@ -1,9 +1,9 @@
 import { Data, Effect } from 'effect';
+import { toErrorMessage } from '@texra-ai/harness/schemas';
 import type { WorkspaceAgentsController } from '@agent/workspaceAgents/WorkspaceAgentsController';
 import { formatUnknownTeamMessage } from '@common/teams/TeamPlan';
 import type { MessageHost } from '@texra/hosts/uiHosts';
 import { assertNever } from '@utils/core';
-import { toErrorMessage } from '@utils/errors/errorMessage';
 import { formatResultCount } from '@utils/text/stringUtils';
 import type { StateReadFailed } from '@texra-ai/harness';
 

@@ -30,6 +30,7 @@ import {
 } from '@texra-ai/harness';
 import { type RunId } from '@texra-ai/harness/schemas';
 import { pathToLocationIn } from '@texra-ai/harness';
+import { toErrorMessage } from '@texra-ai/harness/schemas';
 import { fileOpResultMessage } from '@housekeeping/runDirOps';
 import {
   latexdiffPackMessage,
@@ -70,7 +71,6 @@ import {
 import { listWorkspaceFilesOfType } from '@texra/controllers/session/workspaceFileOptions';
 import { serviceRecords } from '@texra/controllers/server/serviceSession';
 import { loadModelOptions } from '@texra/model/setupCredentialAccess';
-import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import {
   DESKTOP_DOCS_URL,

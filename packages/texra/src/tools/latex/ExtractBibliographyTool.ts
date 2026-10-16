@@ -8,6 +8,7 @@ import { defineTool, ToolContext, WorkspaceFs } from '@texra-ai/harness';
 import { relativeToRoot } from '@texra-ai/harness/node';
 
 // Local imports - tools
+import { ensureError } from '@texra-ai/harness/schemas';
 import {
   extractBibliographyContext,
   loadBibliographyEntries,
@@ -18,7 +19,6 @@ import { resolveToolPath, type ToolPathCall } from '@tools/pathResolution';
 import { formatToolOutput } from '@tools/formatting';
 import { executed } from '@tools/core/result';
 import { toPosixPath } from '@utils/core/pathCore';
-import { ensureError } from '@utils/errors/errorMessage';
 import { pathExists } from '@utils/files/fsDurability';
 import { formatResultCount } from '@utils/text/stringUtils';
 import {

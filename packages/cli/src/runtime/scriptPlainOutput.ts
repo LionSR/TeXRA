@@ -7,15 +7,15 @@
  */
 import { Effect, type Scope, Stream, SubscriptionRef } from 'effect';
 
-import type { SessionHandle } from '@agent/runtime';
-import { qualifyAggregateId, RUN_PHASE, type RunId } from '@shared/schemas';
-import { isTerminalOutcomePhase } from '@shared/runs/runStatus';
+import { isTerminalOutcomePhase } from '@texra-ai/harness/schemas';
 import {
   descendantRuns,
   type RunView,
   type SessionView,
-} from '@shared/session/sessionView';
-import { scriptStages } from '@shared/transcript';
+} from '@texra-ai/harness/schemas';
+import { scriptStages } from '@texra-ai/harness/transcript';
+import type { SessionHandle } from '@agent/runtime';
+import { qualifyAggregateId, RUN_PHASE, type RunId } from '@shared/schemas';
 import { formatCostUsd } from '@utils/text/stringUtils';
 
 import { claimRootRun } from './sessionViewFollow';

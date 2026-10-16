@@ -43,7 +43,7 @@ import {
 } from '@shared/schemas';
 import { isActivePhase, isTerminalOutcomePhase } from '@shared/runs/runStatus';
 import { RUN_STATUS_TONE } from '@shared/runs/runStatusDisplay';
-import type { TranscriptRow } from '@shared/transcript';
+import type { TranscriptRow } from '@shared/transcript/transcriptRow';
 import type { ReadonlyDeep } from './readonlyDeep';
 
 /** Which session (paper) a view is of: the session's storage root. */
@@ -228,8 +228,8 @@ export function isLiveRun(
  * finished, not running.
  */
 export function rollupOf(
-  children: readonly RunView[],
-  below: (child: RunView) => RunView['rollup'] = (child) => child.rollup,
+  children: readonly ReadRunView[],
+  below: (child: ReadRunView) => RunView['rollup'] = (child) => child.rollup,
 ): RunView['rollup'] {
   const rollup = { total: 0, running: 0, finished: 0 };
   for (const child of children) {

@@ -14,15 +14,15 @@ import {
   type AgentConfigPayload,
 } from '@texra-ai/harness/schemas';
 import {
-  TEXRA_APPROVAL_POLICY_CONFIG_KEY,
-  type TexraApprovalPolicy,
-} from '@shared/approvalPolicy';
+  APPROVAL_POLICY_CONFIG_KEY,
+  type ApprovalPolicy,
+} from '@texra-ai/harness/schemas';
+import { ensureError } from '@texra-ai/harness/schemas';
 import type { RequestErrorWire } from '@texra/shared/session/sessionFrames';
 import type { TaskSummary } from '@texra/controllers/server/protocol';
 import type { ServiceClient } from '@texra/controllers/server/client';
 import { readConfigSettingFrom } from '@utils/config/platformSettings';
 import { generateRunId } from '@utils/core';
-import { ensureError } from '@utils/errors/errorMessage';
 
 import { resolveCliRunAgent } from '../runtime/agents';
 import {
@@ -192,9 +192,9 @@ const startCommand = defineCliCommand({
       const approval = launchApproval(requested);
       const refused = launchApprovalNotice(
         requested,
-        readConfigSettingFrom<TexraApprovalPolicy>(
+        readConfigSettingFrom<ApprovalPolicy>(
           services.config,
-          TEXRA_APPROVAL_POLICY_CONFIG_KEY,
+          APPROVAL_POLICY_CONFIG_KEY,
         ),
       );
       if (refused !== undefined) writeTextStderr(refused);

@@ -16,6 +16,7 @@ import { basename, dirname, join } from 'node:path';
 import { Data, Effect, FileSystem, type PlatformError } from 'effect';
 
 import { Rejected } from '@texra-ai/harness';
+import { toErrorMessage } from '@texra-ai/harness/schemas';
 import { onAppSignal } from '@eventBus/AppSignals';
 import { FILE_HANDLING_RULES } from '@texra/common/files/fileHandlingRules';
 import { getIncludedExtensions } from '@texra/common/files/fileTypeUtils';
@@ -29,7 +30,6 @@ import {
 import { normalizeFilePath } from '@utils/core';
 import { locateInWorkspace } from '@utils/files/workspaceFS';
 import { isPathWithin } from '@utils/core/pathCore';
-import { toErrorMessage } from '@utils/errors/errorMessage';
 import { readDirectoryTypedTolerant } from '@utils/files/fsDurability';
 import { entryTypeIn } from '@utils/files/fsEntryExists';
 import { OFFICE_EXTENSIONS } from '@utils/files/mimeUtils';

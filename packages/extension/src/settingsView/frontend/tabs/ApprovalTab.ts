@@ -11,11 +11,10 @@ import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 
 import {
-  parseTexraApprovalPolicy,
-  TEXRA_APPROVAL_POLICY_CONFIG_KEY,
-  TEXRA_APPROVAL_POLICY_OPTIONS,
-  type TexraApprovalPolicy,
-} from '@shared/approvalPolicy';
+  parseApprovalPolicy,
+  APPROVAL_POLICY_CONFIG_KEY,
+  type ApprovalPolicy,
+} from '@texra-ai/harness/schemas';
 import {
   BASH_APPROVAL_CONFIG_KEY,
   GOAL_MAX_COST_SETTING,
@@ -23,6 +22,7 @@ import {
   TOOL_EDIT_APPROVAL_CONFIG_KEY,
 } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
+import { APPROVAL_POLICY_OPTIONS } from '@ui/copy/approvalPolicy';
 import { commonViewStyles, designTokens } from '@ui/styles';
 import {
   renderSettingsNumberRow,
@@ -52,7 +52,7 @@ export class ApprovalTab extends LitElement {
     `,
   ];
 
-  @property({ type: String }) approvalPolicy: TexraApprovalPolicy = 'ask';
+  @property({ type: String }) approvalPolicy: ApprovalPolicy = 'ask';
   @property({ type: Boolean }) bashApprovalEnabled = true;
   @property({ type: Boolean }) editApprovalEnabled = true;
   @property({ type: Boolean }) toolPathProtectionEnabled = true;
@@ -62,8 +62,8 @@ export class ApprovalTab extends LitElement {
     RESUME_ON_OPEN_SETTING.defaultValue;
 
   private handleApprovalPolicyChange = (e: Event): void => {
-    const policy = parseTexraApprovalPolicy(readSelectValue(e));
-    if (policy) postStateSetting(TEXRA_APPROVAL_POLICY_CONFIG_KEY, policy);
+    const policy = parseApprovalPolicy(readSelectValue(e));
+    if (policy) postStateSetting(APPROVAL_POLICY_CONFIG_KEY, policy);
   };
 
   override render(): TemplateResult {
@@ -86,7 +86,7 @@ export class ApprovalTab extends LitElement {
                 value=${this.approvalPolicy}
                 @change=${this.handleApprovalPolicyChange}
               >
-                ${TEXRA_APPROVAL_POLICY_OPTIONS.map(
+                ${APPROVAL_POLICY_OPTIONS.map(
                   (option) => html`
                     <wa-radio appearance="button" value=${option.value}
                       >${option.label}</wa-radio
@@ -96,14 +96,14 @@ export class ApprovalTab extends LitElement {
               </wa-radio-group>
               <p class="settings-row-help">
                 ${
-                  TEXRA_APPROVAL_POLICY_OPTIONS.find(
+                  APPROVAL_POLICY_OPTIONS.find(
                     (option) => option.value === this.approvalPolicy,
                   )?.description
                 }
               </p>
             </div>
             ${
-              // The two switches refine Ask only (decideTexraApproval ignores
+              // The two switches refine Ask only (decideApproval ignores
               // them under Never and Auto-approve), so they show only then.
               this.approvalPolicy === 'ask'
                 ? html`

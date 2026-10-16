@@ -3,7 +3,7 @@
  * kind.
  *
  * Membership (which rows exist at all) is decided once by the transcript
- * fold's row builders (`@shared/transcript`). This map is exhaustive over
+ * fold's row builders (`@texra-ai/harness/transcript`). This map is exhaustive over
  * `TranscriptRowKind`, so a new row kind is a compile error here rather than a
  * row that silently never paints.
  */
@@ -12,9 +12,8 @@
 import { html, nothing, type TemplateResult } from 'lit';
 
 // Local imports - shared transcript model
-import type { TranscriptRow, TranscriptRowKind } from '@shared/transcript';
+import { toErrorMessage } from '@texra-ai/harness/schemas';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
-import { toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local imports - formatter helpers
 import { formatBannerContentTemplate } from './logFormatters/bannerFormatters';
@@ -29,6 +28,10 @@ import {
 } from './logFormatters/messageFormatters';
 import { formatToolUseTemplate } from './logFormatters/toolFormatters';
 import { formatWebSearchTemplate } from './logFormatters/toolFormatters/webFormatters';
+import type {
+  TranscriptRow,
+  TranscriptRowKind,
+} from '@texra-ai/harness/transcript';
 import type { FormatResult } from './baseLogFormatter';
 
 type RowOf<K extends TranscriptRowKind> = Extract<TranscriptRow, { kind: K }>;

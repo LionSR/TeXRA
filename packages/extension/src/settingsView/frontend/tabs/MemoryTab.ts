@@ -3,7 +3,6 @@
 import { LitElement, html, css, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 
-import type { MemoryViewItem } from '@shared/tools/memoryView';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 import { postMessage } from '@texra/shared/hostBridge';
@@ -11,6 +10,7 @@ import { commonViewStyles, designTokens } from '@ui/styles';
 import { renderLabeledActionButton } from '@ui/wa/actionButtons';
 
 import { renderStateSettingToggleRow } from '../components/shared/stateSettingRows';
+import type { MemoryViewItem } from '@texra-ai/harness/schemas';
 
 // Side-effect: register child components.
 import '../components/memory/MemoryList';

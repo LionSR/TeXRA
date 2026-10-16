@@ -40,9 +40,9 @@ import {
   type StateStore,
   type WorkspaceRoots,
 } from '@texra-ai/harness';
+import { agentErrorPresentation } from '@texra-ai/harness';
 import { describeFollowUpFailure } from '@agent/followUp/ToolUseFollowUp';
 import { markFailurePresented } from '@agent/runtime/terminalResultToast';
-import { agentErrorPresentation } from '@common/errors';
 import {
   JsonValueSchema,
   RUN_OUTCOME,

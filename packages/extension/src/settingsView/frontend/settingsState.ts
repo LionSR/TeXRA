@@ -22,9 +22,9 @@
  */
 
 import {
-  TEXRA_APPROVAL_POLICY_CONFIG_KEY,
-  type TexraApprovalPolicy,
-} from '@shared/approvalPolicy';
+  APPROVAL_POLICY_CONFIG_KEY,
+  type ApprovalPolicy,
+} from '@texra-ai/harness/schemas';
 import {
   AGENT_SKILLS_CONFIG_KEY,
   BASH_APPROVAL_CONFIG_KEY,
@@ -40,7 +40,6 @@ import {
   type SkillDisplayItem,
 } from '@shared/schemas';
 import type { AgentScanIssue } from '@shared/schemas';
-import type { MemoryViewItem } from '@shared/tools/memoryView';
 import type { SubscriptionAuthStatuses } from '@shared/model/subscriptionAuth';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 import type { SubscriptionUsageSnapshots } from '@texra/shared/model/subscriptionUsage';
@@ -62,6 +61,7 @@ import {
 } from '@texra/shared/settingsView/settingsViewMessages';
 import { createTrackedSignalRegistry, Signal } from '@texra/shared/signals';
 import { DocumentsStateKey } from '@texra/shared/settingsView/documentsSettings';
+import type { MemoryViewItem } from '@texra-ai/harness/schemas';
 
 // ---------------------------------------------------------------------------
 // Reset registry — populated by `trackedSignal` as each signal below is
@@ -223,8 +223,8 @@ export const bashApprovalEnabled = settingSignal<boolean>(
 export const editApprovalEnabled = settingSignal<boolean>(
   TOOL_EDIT_APPROVAL_CONFIG_KEY,
 );
-export const approvalPolicy = settingSignal<TexraApprovalPolicy>(
-  TEXRA_APPROVAL_POLICY_CONFIG_KEY,
+export const approvalPolicy = settingSignal<ApprovalPolicy>(
+  APPROVAL_POLICY_CONFIG_KEY,
 );
 export const goalMaxCostUsd = settingSignal<number>(
   GOAL_MAX_COST_SETTING.configKey,

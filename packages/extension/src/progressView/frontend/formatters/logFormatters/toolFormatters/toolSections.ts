@@ -3,7 +3,7 @@
  *
  * Which sections a call produces — its file links, diffs, agent identifiers,
  * MCP structured content, and the generic input fallback — is decided once in
- * `@shared/transcript` (`toolRowModel`). This module only turns those data
+ * `@texra-ai/harness/transcript` (`toolRowModel`). This module only turns those data
  * sections into Lit templates, and picks the two presentation details the
  * model deliberately leaves to a host: the highlight language behind the
  * `file`/`shell` hints, and the glyph on a badge.
@@ -29,17 +29,17 @@ import {
   TOOL_CODE_LANGUAGES,
   getLanguageFromPath,
 } from '@progressView/frontend/formatters/constants';
-import type {
-  ToolFileGroupsSection,
-  ToolFileListSection,
-  ToolFileSection,
-  ToolSection,
-} from '@shared/transcript';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import { assertNever } from '@utils/core';
 import { pluralize } from '@utils/text/stringUtils';
 
 import { buildToolSection } from './helpers';
+import type {
+  ToolFileGroupsSection,
+  ToolFileListSection,
+  ToolFileSection,
+  ToolSection,
+} from '@texra-ai/harness/transcript';
 
 /** Line count past which a text section becomes a fixed-height scroll box. */
 const TEXT_SECTION_SCROLL_LINES = 20;

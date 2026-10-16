@@ -8,11 +8,11 @@
  */
 import { z } from 'zod';
 
-import { ModelOptionDataSchema, TeamOptionDataSchema } from '@shared/schemas';
 import {
-  TexraApprovalPolicySchema,
-  TEXRA_APPROVAL_POLICY_DEFAULT,
-} from '@shared/approvalPolicy';
+  ApprovalPolicySchema,
+  APPROVAL_POLICY_DEFAULT,
+} from '@texra-ai/harness/schemas';
+import { ModelOptionDataSchema, TeamOptionDataSchema } from '@shared/schemas';
 import { DocumentAgentOptionSchema } from '@texra/shared/plugins/documents';
 import { getBasename } from '@utils/core';
 
@@ -114,7 +114,7 @@ export const HostSnapshotSchema = z.object({
   teamOptions: z.array(TeamOptionDataSchema),
   workspaceRoots: z.array(WorkspaceRootOptionDataSchema),
   /** The project's configured policy, shown before a task is launched. */
-  approvalPolicy: TexraApprovalPolicySchema,
+  approvalPolicy: ApprovalPolicySchema,
   fileOptions: FileOptionsSchema,
   isGitRepo: z.boolean(),
   /** The one recorder per process and where its take is going. */
@@ -143,7 +143,7 @@ export function emptyHostSnapshot(project: ProjectDisplay): HostSnapshot {
     modelOptions: [],
     teamOptions: [],
     workspaceRoots: [],
-    approvalPolicy: TEXRA_APPROVAL_POLICY_DEFAULT,
+    approvalPolicy: APPROVAL_POLICY_DEFAULT,
     fileOptions: { baseFile: [], editedFile: [], commit: ['HEAD'] },
     isGitRepo: false,
     recording: null,

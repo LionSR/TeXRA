@@ -13,6 +13,7 @@ await build({
   entryPoints: {
     index: 'src/index.ts',
     schemas: 'src/schemas.ts',
+    transcript: 'src/transcriptEntry.ts',
     plugins: 'src/plugins.ts',
     node: 'src/node.ts',
   },

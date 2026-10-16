@@ -14,9 +14,10 @@
 import { Data, Effect } from 'effect';
 
 import {
-  TEXRA_APPROVAL_POLICY_CONFIG_KEY,
-  type TexraApprovalPolicy,
-} from '@shared/approvalPolicy';
+  APPROVAL_POLICY_CONFIG_KEY,
+  type ApprovalPolicy,
+} from '@texra-ai/harness/schemas';
+import { ensureError } from '@texra-ai/harness/schemas';
 import {
   type SettingHost,
   type SettingsViewStateSettingEntry,
@@ -29,7 +30,6 @@ import {
   type SettingsStores,
 } from '@shared/config/settingsAccess';
 import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
-import { ensureError } from '@utils/errors/errorMessage';
 
 /**
  * The rows a host may write: the settings views (extension, desktop) write
@@ -72,7 +72,7 @@ export interface StateSettingUpdatePorts<H extends SettingHost = SettingHost> {
    */
   readonly requiresOpenWorkspace?: () => boolean;
   /** Applies the approval-policy side effect when that setting changes. */
-  readonly onApprovalPolicyChanged?: (policy: TexraApprovalPolicy) => void;
+  readonly onApprovalPolicyChanged?: (policy: ApprovalPolicy) => void;
 }
 
 /**
@@ -118,12 +118,12 @@ export function applyStateSettingUpdate<H extends SettingHost>(
     Effect.mapError((cause) => new StateSettingWriteFailed({ cause })),
     Effect.andThen(
       Effect.gen(function* () {
-        if (entry.key !== TEXRA_APPROVAL_POLICY_CONFIG_KEY) return;
+        if (entry.key !== APPROVAL_POLICY_CONFIG_KEY) return;
         const policy = (
           parsed === null
             ? yield* readSetting(entry, ports.stores)
             : parsed.data
-        ) as TexraApprovalPolicy;
+        ) as ApprovalPolicy;
         yield* Effect.try({
           try: () => ports.onApprovalPolicyChanged?.(policy),
           catch: ensureError,

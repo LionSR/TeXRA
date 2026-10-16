@@ -1,8 +1,8 @@
 import { Effect } from 'effect';
 
 import { loadApiKeyStatusMap } from '@texra-ai/llm';
+import { toErrorMessage } from '@texra-ai/harness/schemas';
 import { commitCliProviderApiKey } from '@cli/chat/tui/hosts/cliProviderKeys';
-import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
 import { type SurfacedSettingEntry } from '@shared/state/stateSettings';
 import {
   readSetting,
@@ -15,7 +15,6 @@ import {
   GITHUB_TOKEN_STORAGE_KEY,
   resolveGitHubTokenSource,
 } from '@texra/tools/github/githubAuth';
-import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { bumpCodexPreferenceVersion } from '../state/cliState';
 import { WorkspaceAgentsForm } from './WorkspaceAgentsForm';
@@ -33,6 +32,7 @@ import {
   type ProviderApiKeyStatusView,
 } from './ProviderApiKeyForm';
 import { SkillsSettingsForm } from './SkillsSettingsForm';
+import type { ApprovalPolicy } from '@texra-ai/harness/schemas';
 import type { ProcessRuntime } from '@texra-ai/harness';
 import type { PlatformSecrets } from '@texra-ai/harness';
 
@@ -57,7 +57,7 @@ export interface CliConfigFormProps {
    * chat TUI's live-session hook, identical to the one `/approval` drives.
    * Omitted by `texra config edit`, whose process holds no session to update.
    */
-  readonly onApprovalPolicyChanged?: (policy: TexraApprovalPolicy) => void;
+  readonly onApprovalPolicyChanged?: (policy: ApprovalPolicy) => void;
 }
 
 /**

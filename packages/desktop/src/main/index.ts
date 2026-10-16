@@ -3,10 +3,10 @@ import { Cause, Effect, Exit, Result, Scope } from 'effect';
 import { app, BrowserWindow, dialog, session } from 'electron';
 
 import { SessionOwner, withProcessServices } from '@texra-ai/harness';
+import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';
 import { telemetryNoticeIfDue } from '@telemetry/telemetryNotice';
 import { NotificationFailed } from '@texra/hosts/uiHosts';
 import { HostDraftRequests } from '@texra/controllers/session/hostDraftRequests';
-import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import {
   DesktopProjectRecords,
   openDesktopProjectRecords,

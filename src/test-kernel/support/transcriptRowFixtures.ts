@@ -20,12 +20,12 @@ import {
 import type { CompactionActivityStatus } from '@shared/runs/compactionActivityProjection';
 import { COMPACTION_ACTIVITY_LABEL } from '@shared/runs/compactionActivityProjection';
 import { toolRowModel } from '@shared/transcript/toolRowModel';
-import {
-  transcriptText,
-  type ToolRow,
-  type TranscriptRow,
-  type CompactionActivityRow,
-} from '@shared/transcript';
+import { transcriptText } from '@shared/transcript/transcriptText';
+import type {
+  ToolRow,
+  TranscriptRow,
+  CompactionActivityRow,
+} from '@shared/transcript/transcriptRow';
 
 /** A normalized tool-use payload with every field a caller did not name
  *  defaulted to its empty/successful value. */

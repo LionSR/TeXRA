@@ -4,20 +4,19 @@
 import { Effect, Result, type Scope } from 'effect';
 
 import { type RunId } from '@texra-ai/harness/schemas';
+import { runBypasses } from '@texra-ai/harness/schemas';
 import type { SessionHandle } from '@agent/runtime';
+import type { GetModelSwitchDisabledReason } from '@cli/runtime/modelAccess';
+import { parseCliHistoryId } from '@cli/runtime/history';
+import type { CliModelAccessSelection } from '@cli/runtime/modelAccessRoute';
 import type {
   CliLogoutTarget,
   LoginFormValue,
 } from '@cli/runtime/loginOptions';
-import type { CliModelAccessSelection } from '@cli/runtime/modelAccessRoute';
-import { parseCliHistoryId } from '@cli/runtime/history';
-import type { GetModelSwitchDisabledReason } from '@cli/runtime/modelAccess';
 import {
   installPlugins,
   parsePluginOrigin,
 } from '@common/plugins/installedPlugins';
-import { runBypasses } from '@shared/approvalBypassKind';
-import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import type { ServiceConnection } from '@texra/controllers/server/client';
 import { RUN_GRANT_ORDER } from '@ui/copy/delegationApproval';
@@ -81,6 +80,7 @@ import {
   type FormActionHandler,
   modelAccessContribution,
 } from './modelAccessContribution';
+import type { ApprovalPolicy } from '@texra-ai/harness/schemas';
 import type {
   ProcessRuntime,
   ProcessServices,
@@ -118,13 +118,13 @@ export function registerBuiltinSlashCommands(options: {
    *  re-checks whether a model can answer now. */
   onAccountChanged?: () => Effect.Effect<void, never, ProcessServices>;
   canSelectAgent?: () => boolean;
-  getApprovalPolicy?: () => TexraApprovalPolicy;
+  getApprovalPolicy?: () => ApprovalPolicy;
   /** `/approval`'s choice: the chat's own launch policy, settled once the
    *  chat's run has recorded it. */
-  onApprovalPolicySelect?: (policy: TexraApprovalPolicy) => Effect.Effect<void>;
+  onApprovalPolicySelect?: (policy: ApprovalPolicy) => Effect.Effect<void>;
   /** The project's policy `/config` wrote. Stays a plain callback: the
    *  shared write path takes it as a void-returning port. */
-  onProjectApprovalPolicyChanged?: (policy: TexraApprovalPolicy) => void;
+  onProjectApprovalPolicyChanged?: (policy: ApprovalPolicy) => void;
   onModelSelect?: SelectHandler<string>;
   canSelectModel?: () => boolean;
   getModelSwitchDisabledReason?: GetModelSwitchDisabledReason;

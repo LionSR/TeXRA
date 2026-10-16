@@ -12,6 +12,7 @@ import * as path from 'node:path';
 import { Effect, FileSystem } from 'effect';
 import { agentBlockOf } from '@texra-ai/harness/plugins';
 import { withLogChannel } from '@texra-ai/harness';
+import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';
 import {
   computeAgentOptionsData,
   getCatalogAgent,
@@ -27,7 +28,6 @@ import {
 } from '@texra/shared/plugins/documents';
 import { errorResult } from '@tools/core/result';
 import { hasExtension } from '@utils/core/pathCore';
-import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { readNormalizedFile } from '@utils/files/fsDurability';
 import { workspaceAbsolutePath } from '@utils/files/workspaceFS';
 import { formatBytes, isNonEmptyString } from '@utils/text/stringUtils';

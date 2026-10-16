@@ -7,6 +7,7 @@ import { withLogChannel } from '@texra-ai/harness';
 import { withSessionFs } from '@texra-ai/harness';
 import { readSettingFrom } from '@texra-ai/harness';
 import { pathToLocationIn } from '@texra-ai/harness';
+import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';
 import {
   prepareBuildDisplay,
   scheduleViewerDisplay,
@@ -39,7 +40,6 @@ import type { WorkflowDiffRequest } from '@texra/controllers/session/hostRunActi
 import type { LatexdiffMathMarkupValue } from '@texra/shared/constants/latexConfig';
 import { runOutputFiles } from '@texra/tools/documents/runOutputs';
 import { checkToolInstalled } from '@texra/utils/system/toolChecks';
-import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { entryExists } from '@utils/files/fsEntryExists';
 import type { Session, WorkspaceRoots } from '@texra-ai/harness';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';

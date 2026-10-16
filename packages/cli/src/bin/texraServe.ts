@@ -6,7 +6,7 @@ import { runCommand } from 'citty';
 import { Effect } from 'effect';
 
 import { setLogSink } from '@texra-ai/harness';
-import { ensureError } from '@utils/errors/errorMessage';
+import { ensureError } from '@texra-ai/harness/schemas';
 
 import { getExitCode, setExitCode } from '../commands/_helpers/exitCode';
 import { serveCommand } from '../commands/service';

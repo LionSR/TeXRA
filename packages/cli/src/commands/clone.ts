@@ -4,6 +4,7 @@ import { resolve } from 'node:path';
 import { Effect, FileSystem } from 'effect';
 
 // Internal imports
+import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';
 import {
   cloneOverleafProject,
   gitClone,
@@ -15,7 +16,6 @@ import {
   parseLatexGitUrl,
   type OverleafRemote,
 } from '@latex/overleafProject';
-import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local imports - runtime
 import { CliUsageError, type CliContext } from '../runtime/cliContext';

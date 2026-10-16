@@ -14,9 +14,9 @@ import * as path from 'node:path';
 import { Effect, FileSystem } from 'effect';
 
 // Local imports
+import { ensureError } from '@texra-ai/harness/schemas';
 import type { FileLocation } from '@shared/schemas';
 import { filterNotNull } from '@utils/core';
-import { ensureError } from '@utils/errors/errorMessage';
 import { normalizeLineEndings } from '@utils/text/stringUtils';
 import { ensureExtension, joinLatexPath } from '@utils/core/pathCore';
 

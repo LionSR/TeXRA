@@ -10,7 +10,7 @@ import { Effect, FileSystem } from 'effect';
 import { parseBibFile } from 'bibtex';
 
 // Local imports - utils
-import { ensureError } from '@utils/errors/errorMessage';
+import { ensureError } from '@texra-ai/harness/schemas';
 import { pathExists } from '@utils/files/fsDurability';
 import { normalizeLineEndings } from '@utils/text/stringUtils';
 

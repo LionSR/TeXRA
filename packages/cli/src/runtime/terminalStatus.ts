@@ -1,12 +1,12 @@
 import { Effect } from 'effect';
 
+import { toErrorMessage } from '@texra-ai/harness/schemas';
 import { getRunRecords } from '@agent/storage';
 import type { SessionHandle } from '@agent/runtime';
+import { runOutcomeToCliRunStatus } from '@cli/schemas/cliOutput';
 import { readInstalledPluginLoad } from '@common/plugins/pluginTrust';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import { RUN_OUTCOME, type RunOutcome } from '@shared/schemas';
-import { runOutcomeToCliRunStatus } from '@shared/runs/runStatus';
-import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { CliExitCode } from './exitCodes';
 import type { DatabaseReadFailed, RunEndResult } from '@texra-ai/harness';

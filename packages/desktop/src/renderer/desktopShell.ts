@@ -23,7 +23,7 @@ import {
 } from '@ui/wa/actionButtons';
 import { afterDropdownHides } from '@ui/wa/selectTemplates';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
-import type { SessionView } from '@texra-ai/harness';
+import type { SessionView } from '@texra-ai/harness/schemas';
 
 /** One open project as the rail lists it: how its host names it, its session,
  *  its surface. */

@@ -17,8 +17,8 @@
 import { Effect, SubscriptionRef } from 'effect';
 
 import {
-  TEXRA_APPROVAL_POLICY_CONFIG_KEY,
-  type TexraApprovalPolicy,
+  APPROVAL_POLICY_CONFIG_KEY,
+  type ApprovalPolicy,
 } from '@shared/approvalPolicy';
 
 import {
@@ -159,7 +159,7 @@ export interface SessionApprovals {
    * launch widens it only for its own run, by its grants (an Auto-approve
    * launch). Without a run, the project's policy.
    */
-  policy(runId?: RunId): TexraApprovalPolicy;
+  policy(runId?: RunId): ApprovalPolicy;
 }
 
 /** Build the session's approvals over its view, its record door and its
@@ -181,9 +181,9 @@ export function createSessionApprovals(
     bypass,
     policy: (runId) =>
       runPolicy(
-        readConfigSettingFrom<TexraApprovalPolicy>(
+        readConfigSettingFrom<ApprovalPolicy>(
           session().roots.config,
-          TEXRA_APPROVAL_POLICY_CONFIG_KEY,
+          APPROVAL_POLICY_CONFIG_KEY,
         ),
         view(),
         runId,
