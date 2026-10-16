@@ -88,26 +88,47 @@ const FULL =
   ts.NodeBuilderFlags.AllowUniqueESSymbolType |
   ts.NodeBuilderFlags.IgnoreErrors;
 
+/** Text order, independent of the locale. */
+const byText = (left, right) =>
+  left.text < right.text ? -1 : left.text > right.text ? 1 : 0;
+
 /**
- * The checker orders a union's members by type id, which follows the order
- * the program happened to create them, so an edit anywhere in the program
- * can reorder a printed union. Each union prints with its members sorted by
- * their own text instead.
+ * The checker orders a union's members, and a mapped type's properties (a
+ * `ZodEnum<{ a: "a"; b: "b" }>`), by type id, which follows the order the
+ * program happened to create them, so an edit anywhere in the program can
+ * reorder a printed type. Each union prints with its members sorted by their
+ * own text, and each object literal with its properties sorted by name;
+ * call, construct and index signatures keep their places.
  */
-const sortUnions = (context) => {
+const sortedTypes = (context) => {
+  const { factory } = context;
   const visit = (node) => {
     const visited = ts.visitEachChild(node, visit, context);
-    if (!ts.isUnionTypeNode(visited)) return visited;
-    const members = visited.types
-      .map((member) => ({ member, text: printNode(member) }))
-      .toSorted((left, right) =>
-        left.text < right.text ? -1 : left.text > right.text ? 1 : 0,
-      )
-      .map(({ member }) => member);
-    return context.factory.updateUnionTypeNode(
-      visited,
-      context.factory.createNodeArray(members),
-    );
+    if (ts.isUnionTypeNode(visited)) {
+      const members = visited.types
+        .map((member) => ({ member, text: printNode(member) }))
+        .toSorted(byText)
+        .map(({ member }) => member);
+      return factory.updateUnionTypeNode(
+        visited,
+        factory.createNodeArray(members),
+      );
+    }
+    if (ts.isTypeLiteralNode(visited)) {
+      const properties = visited.members
+        .filter(ts.isPropertySignature)
+        .map((member) => ({ member, text: printNode(member.name) }))
+        .toSorted(byText)
+        .map(({ member }) => member);
+      const members = visited.members.map((member) =>
+        ts.isPropertySignature(member) ? properties.shift() : member,
+      );
+      return factory.updateTypeLiteralNode(
+        visited,
+        factory.createNodeArray(members),
+      );
+    }
+    return visited;
   };
   return visit;
 };
@@ -118,10 +139,10 @@ function printNode(node) {
     .replaceAll(/\s+/g, ' ');
 }
 
-/** A synthesized type or signature node, printed with its unions sorted. */
+/** A synthesized type or signature node, printed in a stable order. */
 function printSorted(node) {
   if (node == null) throw new Error('The checker could not print a type.');
-  const [sorted] = ts.transform(node, [sortUnions]).transformed;
+  const [sorted] = ts.transform(node, [sortedTypes]).transformed;
   return printNode(sorted);
 }
 
