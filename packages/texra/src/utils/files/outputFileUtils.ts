@@ -4,6 +4,7 @@ import { modelConfig } from '@texra-ai/llm';
 import { agentFileName } from '@shared/schemas';
 import { WORKFLOW_OUTPUT_BASENAME } from '@texra/shared/constants/workflowOutput';
 import { normalizeFilePath } from '@utils/core';
+import { getPathSegments } from '@utils/core/pathCore';
 
 function getSafeDocumentPathParts(source: string): {
   dir: string;
@@ -16,11 +17,9 @@ function getSafeDocumentPathParts(source: string): {
     path.posix.isAbsolute(sourcePath) || /^[A-Za-z]:\//.test(sourcePath);
   const dir = isAbsoluteSource
     ? ''
-    : parsed.dir
-        .split('/')
+    : getPathSegments(parsed.dir)
         .filter(
-          (seg) =>
-            seg && seg !== '..' && seg !== '.' && !/^[A-Za-z]:$/.test(seg),
+          (seg) => seg !== '..' && seg !== '.' && !/^[A-Za-z]:$/.test(seg),
         )
         .join('/');
 

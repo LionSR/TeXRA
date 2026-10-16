@@ -4,6 +4,7 @@ import {
   type ExtensionCategory,
 } from '@texra/common/files/fileTypeUtils';
 import { getBasename, normalizeFilePath } from '@utils/core';
+import { getPathSegments } from '@utils/core/pathCore';
 
 // Edited files have their own entry point (getEditedFileListConfig), so they
 // are not listable through getFileListConfig. The surviving vocabulary matches
@@ -78,9 +79,9 @@ export function prepareFileFilters(config: FileFilterConfig): FileFilterConfig {
 }
 
 function containsHiddenSegment(relativePath: string): boolean {
-  return normalizeFilePath(relativePath)
-    .split('/')
-    .some((segment) => segment.startsWith('.') && segment.length > 1);
+  return getPathSegments(relativePath).some(
+    (segment) => segment.startsWith('.') && segment.length > 1,
+  );
 }
 
 function containsExcludedDirectory(

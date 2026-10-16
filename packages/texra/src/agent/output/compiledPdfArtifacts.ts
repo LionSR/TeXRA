@@ -15,7 +15,7 @@ import {
 import { stripWorkflowRoundDir } from '@texra/shared/constants/workflowOutput';
 import { createRunStorageLocation } from '@utils/files/fileLocation';
 import { normalizeFilePath } from '@utils/core';
-import { hasExtension } from '@utils/core/pathCore';
+import { getPathSegments, hasExtension } from '@utils/core/pathCore';
 
 interface PublishCompiledPdfOptions {
   runDirectory: string;
@@ -28,9 +28,9 @@ interface PublishCompiledPdfOptions {
 }
 
 function normalizePdfRelativePath(pdfPath: string): string {
-  const parts = normalizeFilePath(pdfPath)
-    .split('/')
-    .filter((part) => part && part !== '.' && part !== '..');
+  const parts = getPathSegments(pdfPath).filter(
+    (part) => part !== '.' && part !== '..',
+  );
   const normalized = parts.length > 0 ? parts.join('/') : 'output.pdf';
   return hasExtension(normalized, '.pdf') ? normalized : `${normalized}.pdf`;
 }
