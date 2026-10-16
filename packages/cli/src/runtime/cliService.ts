@@ -26,6 +26,7 @@ import {
   setLogSink,
   withLogChannel,
   type Sessions,
+  StateStores,
 } from '@texra-ai/harness';
 import {
   createNodeWorkspaceRoots,
@@ -33,18 +34,10 @@ import {
   resolveGlobalStoragePath,
   resolveWorkspaceStoragePath,
 } from '@texra-ai/harness/node';
-import {
-  openProjectStateStore,
-  openRepoStateStore,
-} from '@controllers/session/appStateStore';
 import { onAppSignal } from '@eventBus/AppSignals';
 import { JsonStore } from '@platform/defaults/jsonStore';
 import { TEXRA_CONFIG_FILE_NAME } from '@platform/defaults/nodeStorage';
 import { openTexraWorkspaceConfigStores } from '@platform/defaults/nodeStores';
-import type {
-  GlobalDatabase,
-  ProjectDatabases,
-} from '@shared/session/database';
 import { ownerIdentity, type OwnerId } from '@shared/schemas';
 import type { EditorHostShape } from '@texra/tools/editorHost';
 import type { ServiceInfo } from '@texra/controllers/server/protocol';
@@ -115,8 +108,8 @@ export const cliServiceProjects = Effect.fn('cliServiceProjects')(function* (
     const warnings: string[] = [];
     const [workspaceState, repoState, configs] = yield* Effect.all(
       [
-        openProjectStateStore(storage, workspace),
-        openRepoStateStore(workspace, storage),
+        (yield* StateStores).project(storage, workspace),
+        (yield* StateStores).repo(workspace, storage),
         openTexraWorkspaceConfigStores(
           TEXRA_SETTINGS,
           storage,
@@ -154,10 +147,9 @@ export const cliServiceProjects = Effect.fn('cliServiceProjects')(function* (
   const services = yield* Effect.context<
     | ChildProcessSpawner
     | FileSystem.FileSystem
-    | GlobalDatabase
     | Path.Path
-    | ProjectDatabases
     | SessionOwner
+    | StateStores
   >();
   // Each project's approval policy is its persisted setting, which the
   // session reads at every decision through these following config stores:

@@ -64,6 +64,22 @@ export {
   type ProcessServices,
 } from '@platform/processRuntime';
 
+// The process's stores: the global root's current values, each family a
+// host or plugin declares (`ValueFamily`), the per-project settings stores,
+// and storage maintenance under a storage root.
+export { GlobalValues, StateStores } from '@platform/processRuntime';
+export type { ValueFamily } from '@shared/session/valueFamily';
+export {
+  DatabaseWriteFailed,
+  type CurrentValues,
+} from '@shared/session/database';
+export type { AppStateStore } from '@platform/interfaces';
+export {
+  deleteStorageInventory,
+  readStorageInventory,
+  type StorageInventory,
+} from '@controllers/session/projectDatabase';
+
 // The failures the surface names.
 export {
   AgentNotFound,

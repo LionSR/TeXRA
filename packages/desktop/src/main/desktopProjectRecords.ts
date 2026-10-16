@@ -2,8 +2,7 @@
 import { Context, Effect, Result } from 'effect';
 import { z } from 'zod';
 
-import { GlobalDatabase } from '@shared/session/database';
-import type { ValueFamily } from '@shared/session/valueFamily';
+import { GlobalValues, type ValueFamily } from '@texra-ai/harness';
 
 /** How many closed projects File > Open Recent offers. */
 const RECENT_PROJECT_LIMIT = 10;
@@ -49,7 +48,7 @@ export const DESKTOP_PROJECTS: ValueFamily<ProjectLists> = {
  * offers, the most recently closed first.
  */
 export const openDesktopProjectRecords = Effect.gen(function* () {
-  const { values } = yield* GlobalDatabase;
+  const values = yield* GlobalValues;
   const lists = Effect.map(
     values.get(DESKTOP_PROJECTS, PROFILE),
     (stored) => stored ?? EMPTY,

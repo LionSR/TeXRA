@@ -1,9 +1,20 @@
-/** One persistent connection per project root, shared by its scoped borrowers. */
-import { Context, Effect, Layer, RcMap } from 'effect';
+/** One persistent connection per project root, shared by its scoped
+ *  borrowers, and storage maintenance over the project stores under a
+ *  storage root. */
+import * as path from 'node:path';
 
+import { Context, Effect, FileSystem, Layer, RcMap } from 'effect';
+
+import {
+  resolveGlobalStoragePath,
+  resolveWorkspaceStoragePath,
+} from '@platform/defaults/workspaceStorage';
+import { GlobalValues } from '@platform/processRuntime';
 import { Database, ProjectDatabases } from '@shared/session/database';
+import { WORKSPACE_STORES } from '@shared/session/valueFamily';
 
-import { databaseLayer } from './Database';
+import { databaseLayer, storeOpenElsewhere } from './Database';
+import { asideCopies } from './storeAside';
 import { WorkspaceRoots } from './WorkspaceRoots';
 
 /** No idle retention or explicit invalidation: the project owns its state
@@ -18,4 +29,126 @@ export const projectDatabaseLayer = Layer.effect(
         ),
       ).pipe(Effect.map((context) => Context.get(context, Database))),
   }),
+);
+
+/**
+ * What storage maintenance found under a storage root (the storage design's
+ * §7): the workspace stores whose `workspace-store` record names a root that
+ * is gone, and the `.pre1`/`.corrupt-` aside copies beside the stores that
+ * remain. The store of no workspace has no root and is never an orphan.
+ * Nothing goes without the caller's word (owner ruling Q4): an unmounted
+ * drive looks exactly like a deleted root.
+ */
+export interface StorageInventory {
+  readonly orphans: readonly {
+    readonly directory: string;
+    readonly bytes: number;
+    readonly why: string;
+  }[];
+  readonly asides: readonly { readonly path: string; readonly bytes: number }[];
+  /** The directories that could not be read, and why. */
+  readonly skipped: readonly {
+    readonly path: string;
+    readonly message: string;
+  }[];
+}
+
+/** The orphaned stores and aside copies under `storageRoot`. */
+export const readStorageInventory = Effect.fn('readStorageInventory')(
+  function* (storageRoot: string) {
+    const fs = yield* FileSystem.FileSystem;
+    const records = new Map(
+      (yield* (yield* GlobalValues).list(WORKSPACE_STORES)).map(
+        (row) => [row.key, row.value] as const,
+      ),
+    );
+    const none = resolveWorkspaceStoragePath(storageRoot, undefined);
+    const global = resolveGlobalStoragePath(storageRoot);
+    const ids = (yield* fs.exists(path.dirname(none)))
+      ? yield* fs.readDirectory(path.dirname(none))
+      : [];
+    const orphans: StorageInventory['orphans'][number][] = [];
+    const asides: StorageInventory['asides'][number][] = [];
+    const skipped: StorageInventory['skipped'][number][] = [];
+    for (const directory of [
+      ...((yield* fs.exists(global)) ? [global] : []),
+      ...ids.toSorted().map((id) => path.join(path.dirname(none), id)),
+    ]) {
+      yield* Effect.gen(function* () {
+        if ((yield* fs.stat(directory)).type !== 'Directory') return;
+        const id = path.basename(directory);
+        const record =
+          directory === global || id === path.basename(none)
+            ? undefined
+            : records.get(id);
+        const database = path.join(directory, 'texra.db');
+        if (record === undefined || (yield* fs.exists(record.root))) {
+          asides.push(...(yield* asideCopies(database)));
+          return;
+        }
+        let bytes = 0;
+        for (const name of yield* fs.readDirectory(directory, {
+          recursive: true,
+        })) {
+          const info = yield* fs.stat(path.join(directory, name));
+          if (info.type === 'File') bytes += Number(info.size);
+        }
+        // A store whose database is not SQLite is still an orphan.
+        const unreadable =
+          (yield* fs.exists(database)) &&
+          (yield* storeOpenElsewhere(database)) === 'unreadable';
+        const why = `${record.root} no longer exists`;
+        orphans.push({
+          directory,
+          bytes,
+          why: unreadable ? `${why}; unreadable (not a SQLite store)` : why,
+        });
+      }).pipe(
+        Effect.catch((error: Error) =>
+          Effect.sync(() => {
+            skipped.push({ path: directory, message: error.message });
+          }),
+        ),
+      );
+    }
+    return { orphans, asides, skipped } satisfies StorageInventory;
+  },
+);
+
+/**
+ * Delete what an inventory listed, each item on its own: an orphan store
+ * another process has open is kept, and a failed deletion is reported while
+ * the rest still go. Each item's outcome, in listing order.
+ */
+export const deleteStorageInventory = Effect.fn('deleteStorageInventory')(
+  function* (inventory: Pick<StorageInventory, 'orphans' | 'asides'>) {
+    const fs = yield* FileSystem.FileSystem;
+    const remove = (target: string, store: boolean) =>
+      Effect.gen(function* () {
+        const database = path.join(target, 'texra.db');
+        if (
+          store &&
+          (yield* fs.exists(database)) &&
+          (yield* storeOpenElsewhere(database)) === 'open'
+        )
+          return { path: target, outcome: 'kept' as const };
+        yield* fs.remove(target, { recursive: store, force: !store });
+        return { path: target, outcome: 'deleted' as const };
+      }).pipe(
+        Effect.catch((error: Error) =>
+          Effect.succeed({
+            path: target,
+            outcome: 'failed' as const,
+            message: error.message,
+          }),
+        ),
+      );
+    return yield* Effect.forEach(
+      [
+        ...inventory.orphans.map(({ directory }) => remove(directory, true)),
+        ...inventory.asides.map(({ path: aside }) => remove(aside, false)),
+      ],
+      (removal) => removal,
+    );
+  },
 );

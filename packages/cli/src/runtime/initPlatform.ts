@@ -15,6 +15,7 @@ import {
   type Session,
   type SessionOpenError,
   withProcessServices,
+  StateStores,
 } from '@texra-ai/harness';
 import {
   createNodeWorkspaceRoots,
@@ -22,10 +23,6 @@ import {
   resolveWorkspaceStoragePath,
 } from '@texra-ai/harness/node';
 import type { SessionHandle } from '@agent/runtime';
-import {
-  openProjectStateStore,
-  openRepoStateStore,
-} from '@controllers/session/appStateStore';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { telemetryNoticeIfDue } from '@telemetry/telemetryNotice';
@@ -342,11 +339,13 @@ export function initCliPlatform(
           // owned by the project scope; AppState (global) is the runtime's.
           const { storageRoot } = context;
           const storage = resolveWorkspaceStoragePath(storageRoot, context.cwd);
-          const workspaceState = yield* openProjectStateStore(
-            storage,
+          const workspaceState = yield* (yield* StateStores)
+            .project(storage, context.cwd)
+            .pipe(Scope.provide(projectScope));
+          const repoState = yield* (yield* StateStores).repo(
             context.cwd,
-          ).pipe(Scope.provide(projectScope));
-          const repoState = yield* openRepoStateStore(context.cwd, storage);
+            storage,
+          );
           // One process, one project: the process roots are the `--cwd` workspace,
           // over the config provider the startup read already opened — the project
           // `.texra/config.json` layered over the user-level
