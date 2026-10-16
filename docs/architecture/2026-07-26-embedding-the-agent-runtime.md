@@ -619,8 +619,9 @@ host.
    session.
 5. **Some failure modes cluster at run time, not startup.** Skipping
    `AgentCatalog.refresh` is harmless: the catalog loads on the first miss.
-   Resolution fails only for an agent no source holds (`AgentNotFound`) or a
-   load that fails (`AgentCatalogLoadError`). A request nobody decides parks
+   Resolution fails for an agent no source holds (`AgentNotFound`), a load
+   that fails (`AgentCatalogLoadError`), or a failed workspace-state read
+   (`StateReadFailed`). A request nobody decides parks
    the run mid-way (§3). None of these fails fast at bootstrap.
 
 ## 7. Related documents
