@@ -1,6 +1,5 @@
 import { Effect, type FileSystem, type Path } from 'effect';
 
-import type { ProjectDatabases } from '@shared/session/database';
 import type { SettingsTarget } from '@texra/shared/settingsView/settingsViewMessages';
 import {
   DESKTOP_SHELL_COMMANDS,
@@ -28,7 +27,7 @@ interface DesktopShellActionFactoryOptions {
   openWorkspaceFolder(): Effect.Effect<
     void,
     Error,
-    FileSystem.FileSystem | Path.Path | ProjectDatabases | ChildProcessSpawner
+    FileSystem.FileSystem | Path.Path | ChildProcessSpawner
   >;
   /** The shown project's surfaces take the New-task state. */
   showLauncher(): void;
@@ -55,7 +54,7 @@ export function createDesktopShellActions(
     program: Effect.Effect<
       void,
       Error,
-      FileSystem.FileSystem | Path.Path | ProjectDatabases | ChildProcessSpawner
+      FileSystem.FileSystem | Path.Path | ChildProcessSpawner
     >,
   ): void {
     options.spawn(
