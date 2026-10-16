@@ -286,16 +286,19 @@ function catalogReads(state: CatalogState) {
     stores: WorkspaceAgentsStores,
     identifier: string,
     source: AgentSource | null | undefined,
-  ) =>
-    Effect.map(
+  ): Effect.Effect<AgentEntry | undefined, StateReadFailed> => {
+    // A pinned source needs no selection read, so a failing store cannot
+    // reject an entry the catalog holds.
+    const pinned = source
+      ? state.entries.get(agentKey(source, agentName(identifier)))
+      : undefined;
+    if (pinned) return Effect.succeed(pinned);
+    return Effect.map(
       visible(stores),
       (visibleAgents) =>
-        (source
-          ? state.entries.get(agentKey(source, agentName(identifier)))
-          : undefined) ??
-        findAgentByIdentifier(visibleAgents, identifier) ??
-        get(identifier),
+        findAgentByIdentifier(visibleAgents, identifier) ?? get(identifier),
     );
+  };
   return { list, get, newerBuiltIn, workspaceAgents, visible, resolve };
 }
 
