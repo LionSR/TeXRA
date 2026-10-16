@@ -5,7 +5,6 @@
     "emitDeclarationOnly": true,
     "outDir": "packages/harness/dist/types",
     "rootDir": "packages/harness/src",
-    "removeComments": true,
     "types": ["node"]
   },
   "include": [
