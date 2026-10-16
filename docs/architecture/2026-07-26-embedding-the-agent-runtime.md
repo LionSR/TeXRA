@@ -235,8 +235,9 @@ await runtime.runPromise(
         console.error(`[texra] ${event}`, payload);
       },
     });
-    // The process's agent catalog: scan every agent source once before the
-    // first launch (`forLaunch` also reloads a source that changed).
+    // Optional: the catalog loads on its first miss anyway (`forLaunch`
+    // reloads once when an agent is not found); an explicit refresh only
+    // front-loads the scan.
     yield* (yield* AgentCatalog).refresh;
 
     const validated = validateRunRequest({
@@ -616,9 +617,11 @@ host.
    already open over the same root, built from what its first opener
    supplied. Embedding inside a process that already hosts TeXRA shares that
    session.
-5. **Some failure modes cluster at run time, not startup.** A missing
-   catalog scan (`AgentCatalog.refresh`) fails at agent resolution, and a request nobody decides
-   parks the run mid-way (§3). Neither fails fast at bootstrap.
+5. **Some failure modes cluster at run time, not startup.** Skipping
+   `AgentCatalog.refresh` is harmless: the catalog loads on the first miss.
+   Resolution fails only for an agent no source holds (`AgentNotFound`) or a
+   load that fails (`AgentCatalogLoadError`). A request nobody decides parks
+   the run mid-way (§3). None of these fails fast at bootstrap.
 
 ## 7. Related documents
 

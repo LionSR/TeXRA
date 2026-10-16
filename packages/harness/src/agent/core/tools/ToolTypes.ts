@@ -4,8 +4,7 @@
  * it asks a person, the run it works for, where its transient output goes).
  * The run's window (`ToolRun`) is declared here with its id; the runtime
  * adds the rest of it, and the helpers over it (`requireRun`, `callerRun`),
- * published to plugin authors on `@texra-ai/harness/plugins`. The rest of that module (the call's place in
- * its run, the script plumbing) is the harness's built-ins' alone.
+ * published to plugin authors on `@texra-ai/harness/plugins`.
  */
 
 import { Context, type Effect } from 'effect';
