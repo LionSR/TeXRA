@@ -46,13 +46,11 @@ import {
   UNAVAILABLE_LANGUAGE_MODEL_PORT,
   withForkFailureReporting,
 } from '@texra-ai/harness';
-import { resolveGlobalStoragePath } from '@texra-ai/harness/node';
 import type { MinimumLogLevel } from '@logger/effectDiagnostics';
 import { GlobalDatabase } from '@shared/session/database';
 import { usageLogLayer } from '@telemetry/UsageLogService';
 import { makeEditorHost, type EditorRegistry } from '@texra/tools/editorHost';
 import { texraPlugins } from '@texra/tools/registry';
-import { USER_MCP_CONFIG_PATH } from '@tools/mcp/mcpConfig';
 
 import { readCliVersion } from './cliContext';
 import { cliSecrets } from './cliSecrets';
@@ -211,7 +209,6 @@ export function installCliProcessRuntime(
   // The editor registry this install's plugins read, served beside the
   // process services: `texra serve` attaches its windows' editors to it.
   const editors = makeEditorHost();
-  const globalStoragePath = resolveGlobalStoragePath(storageRoot);
   const version = readCliVersion();
   const secrets = cliSecrets(storageRoot);
   // The agent directories are a process service the runtime serves, so
@@ -238,9 +235,8 @@ export function installCliProcessRuntime(
       Layer.merge(
         Layer.succeed(CliEditors)(editors),
         processLayer({
-          globalStorage: globalStoragePath,
+          storageRoot,
           plugins: texraPlugins({ editors }),
-          mcpConfigPath: USER_MCP_CONFIG_PATH,
           secrets,
           ...(options?.appState && {
             appState: AppState.layer(options.appState),

@@ -7,6 +7,7 @@
 import { Effect, Stream, SubscriptionRef } from 'effect';
 
 import {
+  mcpConfigPathOf,
   ToolAvailability,
   ToolCatalog,
   withLogChannel,
@@ -19,7 +20,6 @@ import {
 import { buildPluginRows } from '@texra/controllers/settingsView/pluginRows';
 import { planToolTerminalAction } from '@texra/controllers/settingsView/ToolDashboardData';
 import type { SettingsViewInboundHandlerRegistry } from '@texra/controllers/settingsView/settingsViewDispatch';
-import { USER_MCP_CONFIG_PATH } from '@tools/mcp/mcpConfig';
 
 import {
   SETTINGS_LOG_CHANNEL,
@@ -31,7 +31,12 @@ import type { WorkspaceRoots } from '@texra-ai/harness';
 export function settingsToolCommands(ports: {
   readonly roots: Pick<
     WorkspaceRoots,
-    'host' | 'workspace' | 'config' | 'globalState' | 'globalStorage'
+    | 'host'
+    | 'workspace'
+    | 'config'
+    | 'globalState'
+    | 'globalStorage'
+    | 'storageRoot'
   >;
   readonly bindings: SettingsHostBindings;
 }) {
@@ -88,7 +93,7 @@ export function settingsToolCommands(ports: {
                 Effect.succeed({
                   command: SETTINGS_VIEW_COMMANDS.UPDATE_PLUGINS,
                   rows: [],
-                  mcpConfigPath: USER_MCP_CONFIG_PATH,
+                  mcpConfigPath: mcpConfigPathOf(roots.storageRoot),
                   mcpWarnings: [
                     `The plugin list could not be read: ${error.message}`,
                   ],

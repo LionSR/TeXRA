@@ -32,20 +32,17 @@ import {
 } from '@texra-ai/harness';
 import {
   createNodeWorkspaceRoots,
-  resolveGlobalStoragePath,
   resolveWorkspaceStoragePath,
   canonicalizeWorkspacePath,
 } from '@texra-ai/harness/node';
 import { withLogChannel } from '@texra-ai/harness';
 import { setLogSink } from '@texra-ai/harness';
-import { StorageFs, withSessionFs } from '@texra-ai/harness';
 import { ToolAvailability } from '@texra-ai/harness';
 import { Settings } from '@texra-ai/harness';
 import { EXTENSION_COMMANDS } from '@commands/extensionCommandIds';
 import { setApiKey as apiSetApiKey } from '@commands/api/apiKeyCommands';
 import { openGettingStarted } from '@commands/system/walkthroughCommands';
 import { createSampleProjectWithoutWorkspace } from '@commands/system/sampleProjectCommands';
-import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
 import { emitAppSignal, onAppSignal } from '@eventBus/AppSignals';
 import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
 import {
@@ -99,7 +96,6 @@ import { makeEditorHost, type EditorRegistry } from '@texra/tools/editorHost';
 import { texraPlugins } from '@texra/tools/registry';
 import { gitHubTokenRejectedMessage } from '@texra/tools/github/githubAuth';
 import { LeanLanguageServices } from '@texra/tools/lean/leanLanguageServices';
-import { USER_MCP_CONFIG_PATH } from '@tools/mcp/mcpConfig';
 import { sessionStoreMovedAsideMessage } from '@ui/copy/sessionStore';
 import { usageCostLabel } from '@ui/copy/modelAccess';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
@@ -145,7 +141,6 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
     defaultNodeStorageRoot(),
     workspaceRoot,
   );
-  const globalStorage = resolveGlobalStoragePath(defaultNodeStorageRoot());
   // The one credential store every host shares (`~/.texra/secrets/`):
   // the background service reads the keys this window saves.
   const secrets = new FileSecrets(
@@ -166,7 +161,7 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
   const managed = withForkFailureReporting(
     ManagedRuntime.make(
       processLayer({
-        globalStorage,
+        storageRoot: defaultNodeStorageRoot(),
         // TeXRA's plugins, with Copilot's TeXRA tools over the window's roots.
         plugins: texraPlugins({
           editors,
@@ -189,7 +184,6 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
           // and the Lean 4 probe.
           setup: vscodeSetupPlatform,
         }),
-        mcpConfigPath: USER_MCP_CONFIG_PATH,
         secrets,
         // The editor's LM API on the workspace path, unavailable on the
         // credential-only one. The one defaulting site for this host.
@@ -271,8 +265,8 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
       const roots = createNodeWorkspaceRoots({
         host: 'vscode',
         workspacePath: workspaceRoot,
+        storageRoot: defaultNodeStorageRoot(),
         storage,
-        globalStorage,
         config,
         workspaceState: projectState,
         repoState: yield* (yield* StateStores).repo(storage, workspaceRoot),
@@ -536,16 +530,6 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
     yield* warn(reason);
     if (session.storeMovedAside)
       yield* warn(sessionStoreMovedAsideMessage(session.storeMovedAside));
-    // The run-storage directory of the session just opened, through that
-    // session's own storage view.
-    yield* withSessionFs(
-      roots,
-      Effect.flatMap(Effect.service(StorageFs), (storageFs) =>
-        storageFs.makeDirectory(WORKSPACE_STORAGE_LAYOUT.runs, {
-          recursive: true,
-        }),
-      ),
-    );
   }
   const { session } = windowSession;
 

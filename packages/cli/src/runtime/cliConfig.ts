@@ -11,6 +11,11 @@ import {
 import { modelConfig } from '@texra-ai/llm';
 import { Settings } from '@texra-ai/harness';
 import {
+  mcpConfigPathOf,
+  readMcpConfig,
+  type ConfigProvider,
+} from '@texra-ai/harness';
+import {
   JsonConfigProvider,
   type ConfigStore,
 } from '@platform/defaults/jsonConfigProvider';
@@ -21,10 +26,8 @@ import { openTexraConfigStores } from '@platform/defaults/nodeStores';
 import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
 
 // Local imports - tools
-import { readMcpConfig, USER_MCP_CONFIG_PATH } from '@tools/mcp/mcpConfig';
 
 // Local imports - utilities
-import type { ConfigProvider } from '@texra-ai/harness';
 import type { SettingsStores } from '@texra-ai/harness';
 
 /**
@@ -284,7 +287,7 @@ export function loadCliStartupConfig(
       // otherwise reads: a broken file warns here, not first mid-run.
       const mcpConfig = yield* readMcpConfig(
         yield* FileSystem.FileSystem,
-        USER_MCP_CONFIG_PATH,
+        mcpConfigPathOf(storageRoot),
       );
       // A value its catalog row rejects is reported once, in `warnings`
       // below, and then reads as absent: every read passes over it to the
