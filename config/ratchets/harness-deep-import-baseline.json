@@ -44,7 +44,6 @@
       "@skills/skillSources",
       "@tools/approval/toolEditApproval",
       "@tools/executions/configView",
-      "@tools/executions/runGeneratedFiles",
       "@transcript",
       "@utils/errors/errorMessage",
       "@utils/files/fsDurability",
@@ -81,7 +80,6 @@
     ],
     "extension": [
       "@agent/runtime",
-      "@common/storage/storageLayout",
       "@eventBus/AppSignals",
       "@logger/effectDiagnostics",
       "@model/copilotRouting",

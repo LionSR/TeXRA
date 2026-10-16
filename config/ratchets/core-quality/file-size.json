@@ -31,7 +31,7 @@
   "packages/harness/src/tools/bash.ts": 551,
   "packages/harness/src/tools/delegation/AgentTool.ts": 729,
   "packages/harness/src/tools/delegation/inBandSubagentRun.ts": 426,
-  "packages/harness/src/tools/ExecutionsTool.ts": 800,
+  "packages/harness/src/tools/ExecutionsTool.ts": 799,
   "packages/harness/src/tools/memory/memoryFileSystem.ts": 443,
   "packages/harness/src/tools/memory/MemoryTool.ts": 628,
   "packages/harness/src/tools/toolAvailability.ts": 412,
