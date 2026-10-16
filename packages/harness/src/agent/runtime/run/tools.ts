@@ -7,7 +7,7 @@
  * window is a duplicate that never executes.
  */
 import { Effect, Predicate, Result } from 'effect';
-import type { RuntimeToolRegistry as IToolRegistry } from '@agent/runtime/ToolServices';
+import type { RuntimeToolRegistry } from '@agent/runtime/ToolServices';
 import { partitionDuplicateCalls } from '@agent/core/tools/toolCallParsing';
 import type { AgentTrace } from '@agent/trace';
 import { safeParseJson } from '@common/parsing/safeParseJson';
@@ -64,7 +64,7 @@ export function parseCallArguments(
 export function dispatchFactsFor(
   calls: readonly LocalCall[],
   /** The request's step's tools; undefined while no step is open. */
-  registry: IToolRegistry | undefined,
+  registry: RuntimeToolRegistry | undefined,
   logger: AgentTrace,
   mintLogId: () => string,
 ): readonly DispatchFacts[] {
@@ -113,7 +113,7 @@ export const SKIPPED_NOT_STARTED =
  */
 export const replayable = Effect.fn('toolUse.replayable')(function* (
   fact: Pick<DispatchFacts, 'toolName' | 'replay'>,
-  registry: IToolRegistry,
+  registry: RuntimeToolRegistry,
   input: unknown,
   logger: Pick<AgentTrace, 'warn'>,
 ) {

@@ -37,6 +37,7 @@
 import { Effect, Exit } from 'effect';
 import { LRUCache } from 'lru-cache';
 
+import type { Disposable } from '@texra/platform/disposable';
 import { shouldDropBotEvent } from './botFilter';
 import {
   formatRepoIssueComment,
@@ -72,7 +73,6 @@ import {
   type GhPullsListEntry,
   type GhReviewComment,
 } from './prTypes';
-import type { Disposable } from '@texra-ai/harness';
 
 // We pull all "updated since" data; a sufficiently large window guarantees we
 // catch transitions even after a brief network outage. GitHub caps these
