@@ -1,15 +1,15 @@
 // Third-party imports
 import { it } from '@effect/vitest';
-import { Effect, Scope, Stream } from 'effect';
+import { Context, Effect, Scope, Stream } from 'effect';
 import { beforeEach, describe, expect, vi } from 'vitest';
 
 // Local imports
-import { SessionOwner, withProcessServices } from '@texra-ai/harness';
 import { registryOf } from '@agent/runtime/runRegistry';
 import {
   cliPlatformShutdown,
   initCliPlatform,
 } from '@cli/runtime/initPlatform';
+import { SessionOwner } from '@platform/processRuntime';
 import { MemoryConfigProvider } from '@platform/defaults/memoryConfigProvider';
 import { StateWriteFailed } from '@platform/interfaces';
 import { GlobalStateKey } from '@shared/state/stateKeys';
@@ -253,18 +253,13 @@ describe('CLI platform init', () => {
       const services = yield* initCliPlatform(
         cliContext({ installSignalHandlers: false }),
       );
-      const session = yield* withProcessServices(
-        services.runtime,
-        Effect.flatMap(SessionOwner, (owner) =>
-          owner.open({
-            roots: services.roots,
-            transcriptMode: {
-              kind: 'ephemeral',
-              reason: 'shutdown drain test',
-            },
-          }),
-        ),
-      );
+      const session = yield* Context.getUnsafe(
+        yield* services.runtime.contextEffect,
+        SessionOwner,
+      ).open({
+        roots: services.roots,
+        transcriptMode: { kind: 'ephemeral', reason: 'shutdown drain test' },
+      });
       const drain = vi
         .spyOn(registryOf(session.runs), 'stopAll')
         .mockImplementation(() => Effect.succeed([]));

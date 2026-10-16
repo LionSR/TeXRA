@@ -42,10 +42,10 @@ import {
 import {
   type HostRequestFailure,
   Rejected,
+  type Session,
   withLogChannel,
 } from '@texra-ai/harness';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
-import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { RequestDecision, SessionEvent } from '@shared/schemas';
 import { isLatexFile } from '@texra/shared/latexFileTypes';
 import type { HostRequest } from '@texra/shared/session/hostRequest';
@@ -116,7 +116,7 @@ interface ToolEditApprovalControllerOptions {
   host: ToolEditApprovalHost;
   /** Where a staged request's decision goes: its `request.decide`. A refusal
    *  (the request already decided, the run gone) comes back typed. */
-  session: { readonly requests: Pick<SessionHandle['requests'], 'request'> };
+  session: Pick<Session, 'request'>;
 }
 
 /** What both phases of one request name, whichever phase a release finds. */
@@ -452,7 +452,7 @@ export class ToolEditApprovalController {
           ),
         );
       }
-      return this.options.session.requests
+      return this.options.session
         .request({
           kind: 'request.decide',
           runId,

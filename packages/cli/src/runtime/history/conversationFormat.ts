@@ -1,4 +1,4 @@
-import { formatConversationMessage } from '@agent/storage';
+import { formatConversationMessage } from '@texra-ai/harness';
 import type { ExportNode } from '@texra/agent/export';
 
 import type {

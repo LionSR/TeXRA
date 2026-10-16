@@ -1,4 +1,4 @@
-import { Context, Effect, ManagedRuntime } from 'effect';
+import { Context, Effect, type Layer, ManagedRuntime } from 'effect';
 
 import {
   processLayer,
@@ -6,7 +6,11 @@ import {
   type ProcessLayerOptions,
 } from '@texra-ai/harness';
 import { AppState, AgentDirectories } from '@platform/interfaces';
-import { withForkFailureReporting } from '@platform/processRuntime';
+import {
+  type ProcessServices,
+  type SessionOwner,
+  withForkFailureReporting,
+} from '@platform/processRuntime';
 import { UsageLog } from '@shared/usageLog';
 import type { Plugin } from '@tools/plugins';
 import { initTestProcessRuntime } from './testProcessRuntime';
@@ -97,13 +101,15 @@ export async function installTestSessionGraph(
 ): Promise<void> {
   const runtime = withForkFailureReporting(
     ManagedRuntime.make(
+      // cast: `processLayer` serves the internal `SessionOwner` beside
+      // `Sessions` (provideMerge); the suites' root launches ask it.
       processLayer({
         ...testProcessOptions(plugins),
         processStart: Effect.sync(() => {
           identityReads.count += 1;
           return 'vitest';
         }),
-      }),
+      }) as Layer.Layer<ProcessServices | Sessions | SessionOwner>,
     ),
   );
   initTestProcessRuntime(

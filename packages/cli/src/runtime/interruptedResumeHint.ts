@@ -1,6 +1,5 @@
 import { Effect } from 'effect';
 
-import type { ResumabilityDecision } from '@agent/storage';
 import { TASK_ACTIONS } from '@ui/copy/nestedRuns';
 
 import { formatResumeCommand } from '../chat/tui/state/resumeHint';
@@ -8,15 +7,8 @@ import { readCliCwd, type CliContext } from './cliContext';
 import { writeTextStderr, writeTextStderrAndWait } from './logSinks';
 import type { RunId } from '@texra-ai/harness/schemas';
 
-/** The one resumability answer a hint can be advertised from. */
-type ResumableCheckpoint = Extract<
-  ResumabilityDecision,
-  { kind: 'checkpoint' }
->;
-
 /** A command's refinement of a checkpoint, read from the run's rows. */
 export type CheckpointRefinement = (
-  checkpoint: ResumableCheckpoint,
   runId: RunId,
 ) => Effect.Effect<boolean, Error>;
 
@@ -28,11 +20,11 @@ export type CheckpointRefinement = (
  */
 export function advertisesInterruptedRun(
   runId: RunId,
-  resumability: ResumabilityDecision | undefined,
+  resumable: boolean | undefined,
   refine: CheckpointRefinement | undefined,
 ): Effect.Effect<boolean, Error> {
-  if (resumability?.kind !== 'checkpoint') return Effect.succeed(false);
-  return refine?.(resumability, runId) ?? Effect.succeed(true);
+  if (resumable !== true) return Effect.succeed(false);
+  return refine?.(runId) ?? Effect.succeed(true);
 }
 
 /** Read the launch directory without making recovery depend on its lifetime. */

@@ -26,6 +26,7 @@ import {
 
 import {
   Internal,
+  type LocalSession,
   type RequestError,
   type Run,
   type Session,
@@ -34,8 +35,6 @@ import {
 import { isLiveRun } from '@texra-ai/harness/schemas';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
 import { presentRunFailure } from '@texra-ai/harness';
-import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import { getRunRecords } from '@agent/storage';
 import {
   emptyRunEndOutput,
   RUN_OUTCOME,
@@ -53,7 +52,6 @@ import {
 } from '@texra/shared/session/sessionFrames';
 import { frameSubscription } from '@texra/controllers/session/SessionFramer';
 import type { EditorHostShape } from '@texra/tools/editorHost';
-import { assembleTrace } from '@transcript';
 
 import {
   PROTOCOL_VERSION,
@@ -67,15 +65,9 @@ import {
 import { makeHostWindows } from './hostWindows';
 import { listTasks } from './taskList';
 
-/** A project the service serves: its session, as every host drives it;
- *  `handle` is the owner's, read only for what the session does not carry:
- *  a run's records (its config, end, export and trace) and the log's
- *  position, which runs this process runs now (the view's `ownedHere` is
- *  the claim, which a fork's rows also take), and the presentation of a
- *  start that failed before its run opened. */
+/** A project the service serves: its session, as every host drives it. */
 export interface ServiceProject {
-  readonly handle: SessionHandle;
-  readonly session: Session;
+  readonly session: LocalSession;
 }
 
 /** The projects the service serves: one session per folder, opened on
@@ -149,13 +141,11 @@ export const runningTasks = Effect.fn('server.runningTasks')(function* (
 
 /** The live run `runId` continues in: itself, or the live run its parent
  *  chain reaches; null when `runId` is not live here. Live is what this
- *  process runs (its registry), not the claim the view shows. */
-function liveRoot(
-  view: SessionView,
-  handle: SessionHandle,
-  runId: RunId,
-): RunId | null {
-  const live = (id: RunId) => handle.runs.get(id)?.live === true;
+ *  process runs (`held`), not the claim the view shows (the view's
+ *  `ownedHere`, which a fork's rows also take). */
+function liveRoot(session: LocalSession, runId: RunId): RunId | null {
+  const view: SessionView = session.view.current();
+  const live = (id: RunId) => session.held(id)?.live === true;
   if (!live(runId)) return null;
   let root = runId;
   for (
@@ -198,28 +188,33 @@ const internal = (cause: Cause.Cause<unknown>) =>
 
 /**
  * What `runId` ends with in `session`: once every owner of the run here has
- * left, its `run.end` as the run's records hold it, and `at`, the log's
- * commit ordinal then, past the run's end and past its removal if it was
- * removed, whatever the live fold has drained. A run that ended with no
+ * left, its `run.end` as the run's records hold it, and `at`, the cursor of
+ * the first level that shows the run no longer live, or gone: a fold at or
+ * past it holds the run's end, or its removal. A run that ended with no
  * `run.end` it could read (deleted, or its store unreadable) ends with the
  * outcome its view shows, without output.
  */
 function runEnded(
-  { session, handle }: ServiceProject,
+  { session }: ServiceProject,
   runId: RunId,
 ): Effect.Effect<
   Pick<RunEnd, 'outcome' | 'output' | 'error'> & { at: CommitOrdinal }
 > {
   return Effect.gen(function* () {
-    yield* handle.runs.get(runId)?.drained ?? Effect.void;
-    const head = yield* session.view.changes.pipe(
-      Stream.map((view) => view.runs.get(runId)),
-      Stream.filter((run) => run === undefined || !isLiveRun(run)),
-      Stream.runHead,
+    yield* session.held(runId)?.drained ?? Effect.void;
+    const ended = Option.getOrUndefined(
+      yield* session.view.changes.pipe(
+        Stream.filter((view) => {
+          const run = view.runs.get(runId);
+          return run === undefined || !isLiveRun(run);
+        }),
+        Stream.runHead,
+      ),
     );
-    const run = Option.getOrUndefined(head);
-    const at = handle.log.now();
-    const end = yield* getRunRecords(handle, runId)
+    const run = ended?.runs.get(runId);
+    const at = ended?.cursor ?? session.view.current().cursor;
+    const end = yield* session
+      .records(runId)
       .readRunEnd()
       .pipe(
         Effect.catch((error) =>
@@ -344,7 +339,7 @@ export const serviceHandlers = TexraRpcs.toLayer(
     const records = <A>(
       workspace: string,
       runId: RunId,
-      read: (handle: SessionHandle) => Effect.Effect<A, Error>,
+      read: (session: LocalSession) => Effect.Effect<A, Error>,
     ): Effect.Effect<A, TaskRecordsFailed> =>
       Effect.scoped(
         openSession(workspace).pipe(
@@ -353,10 +348,10 @@ export const serviceHandlers = TexraRpcs.toLayer(
           ),
           // Whether the run exists, from the log rather than the live
           // fold: a session the open just (re)built has folded nothing yet.
-          Effect.flatMap(({ handle }) =>
-            Effect.flatMap(handle.view.read([runId]), (level) =>
+          Effect.flatMap(({ session }) =>
+            Effect.flatMap(session.view.read([runId]), (level) =>
               level.runs.has(runId)
-                ? read(handle).pipe(
+                ? read(session).pipe(
                     Effect.mapError((error) =>
                       recordsFailed('unreadable', error.message),
                     ),
@@ -414,18 +409,20 @@ export const serviceHandlers = TexraRpcs.toLayer(
           ),
         ),
       'task.config': ({ workspace, runId }) =>
-        records(workspace, runId, (handle) =>
-          getRunRecords(handle, runId).readConfig(),
+        records(workspace, runId, (session) =>
+          session.records(runId).readConfig(),
         ),
       'task.exportInput': ({ workspace, runId }) =>
-        records(workspace, runId, (handle) =>
+        records(workspace, runId, (session) =>
           Effect.map(
-            loadChatExportInput(runId, handle),
+            loadChatExportInput(runId, session),
             ({ config, exportInput }) => ({ config, exportInput }),
           ),
         ),
       'task.exportTrace': ({ workspace, runId }) =>
-        records(workspace, runId, (handle) => assembleTrace(runId, handle)),
+        records(workspace, runId, (session) =>
+          session.records(runId).readTrace(),
+        ),
       'task.request': ({ workspace, request }) =>
         Effect.scoped(
           openSession(workspace).pipe(
@@ -454,7 +451,7 @@ export const serviceHandlers = TexraRpcs.toLayer(
         Effect.scoped(
           Effect.gen(function* () {
             yield* refuseWhileDraining;
-            const { handle, session } = yield* open(workspace);
+            const { session } = yield* open(workspace);
             const run: Run = yield* admit(
               runs,
               session.start({
@@ -473,7 +470,7 @@ export const serviceHandlers = TexraRpcs.toLayer(
               // it: the project's windows are told here, once, and the
               // client hears that they were.
               (error) =>
-                presentRunFailure(handle.interactions, error).pipe(
+                presentRunFailure(session, error).pipe(
                   Effect.andThen(Effect.fail(failed(error.message, true))),
                 ),
             );
@@ -540,11 +537,11 @@ export const serviceHandlers = TexraRpcs.toLayer(
         Effect.scoped(
           Effect.gen(function* () {
             yield* refuseWhileDraining;
-            const { handle, session } = yield* open(workspace);
+            const { session } = yield* open(workspace);
             // A run this service is running needs no resume: the client that
             // asks takes up the conversation it belongs to, where it is (a
             // chat left it waiting here).
-            const live = liveRoot(session.view.current(), handle, runId);
+            const live = liveRoot(session, runId);
             if (live !== null) return live;
             return yield* admit(
               runs,

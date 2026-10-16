@@ -19,7 +19,6 @@ import {
 import {
   AppState,
   processLayer,
-  SessionOwner,
   Sessions,
   UNAVAILABLE_LANGUAGE_MODEL_PORT,
   type LanguageModelPort,
@@ -222,7 +221,7 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
   yield* Effect.addFinalizer(() =>
     withProcessServices(
       runtime,
-      Effect.flatMap(SessionOwner, (owner) => owner.closeAll),
+      Effect.flatMap(Sessions, (sessions) => sessions.closeAll),
     ).pipe(
       Effect.ensuring(
         Effect.sync(() => {
@@ -498,8 +497,8 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
       context.languageModelAccessInformation.onDidChange(changed),
     );
   }
-  // A window of the service opens no session of its own: no handle, run
-  // log or claims. Only a window that cannot reach the service runs its
+  // A window of the service opens no session of its own: no store, run
+  // or claims. Only a window that cannot reach the service runs its
   // tasks here, and says so once. While the link is down, the service's
   // session answers with the offline refusal.
   const warn = (message: string) =>
@@ -523,19 +522,16 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
       ),
     };
   } else {
-    const handle = yield* (yield* SessionOwner).open({
-      roots,
-      interruptedTasks: 'offer',
+    const session = yield* sessions.open(roots, {
+      persistent: true,
+      host: { interruptedTasks: 'offer' },
     });
-    windowSession = {
-      handle,
-      session: yield* sessions.open(roots, { persistent: true }),
-    };
+    windowSession = { session };
     const reason = `TeXRA runs this window's tasks here only, so other windows and terminals will not see them: ${reached.failure.message}`;
     yield* Effect.logWarning(reason).pipe(withLogChannel(EXTENSION_CHANNEL));
     yield* warn(reason);
-    if (handle.log.movedAside)
-      yield* warn(sessionStoreMovedAsideMessage(handle.log.movedAside));
+    if (session.storeMovedAside)
+      yield* warn(sessionStoreMovedAsideMessage(session.storeMovedAside));
   }
   const { session } = windowSession;
 
@@ -572,7 +568,7 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
   // every session stops and settles its runs before the view and the host
   // resources registered above tear down around them.
   yield* Effect.addFinalizer(() =>
-    Effect.asVoid(Effect.flatMap(SessionOwner, (owner) => owner.closeAll)),
+    Effect.asVoid(Effect.flatMap(Sessions, (sessions) => sessions.closeAll)),
   );
 
   registerCommands(

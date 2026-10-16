@@ -16,7 +16,7 @@ import { CliExitCode } from '@cli/runtime/exitCodes';
 import { qualifyAggregateId } from '@shared/schemas';
 import type { RunId } from '@shared/schemas';
 import { DatabaseReadFailed } from '@shared/session/database';
-import { testRuntime } from '@test/support/testProcessRuntime';
+import { testRuntime, testSessionOf } from '@test/support/testProcessRuntime';
 import { createProcessSession } from '@test/support/sessionTestUtils';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
 import { seedRunRecord as commitRunRecord } from '@test/support/runRecordSeeds';
@@ -89,7 +89,7 @@ async function seedRunRecord(seed: {
   mocks.initCliPlatform.mockReturnValue(
     Effect.succeed({
       runtime: testRuntime(),
-      session: Effect.succeed(session),
+      session: Effect.sync(() => testSessionOf(session)),
     }),
   );
   await Effect.runPromise(

@@ -19,35 +19,45 @@
  * fresh module instances, and the install has to land in the instance the
  * code under test will import next.
  */
-import { Context, Effect, References } from 'effect';
+import { Context, Effect, type ManagedRuntime, References } from 'effect';
 
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import { SessionOwner } from '@platform/processRuntime';
-import type { ProcessRuntime } from '@platform/processRuntime';
-import type { OpenOptions, Session, Sessions } from '@texra-ai/harness';
+import { SessionOwner, type ProcessServices } from '@platform/processRuntime';
+import type { LocalSession, Sessions } from '@texra-ai/harness';
 
-let runtime: ProcessRuntime | undefined;
+/** The harness's runtime: a host's, with the internal session owner a root
+ *  launch the suites drive directly asks for. */
+export type TestProcessRuntime = ManagedRuntime.ManagedRuntime<
+  ProcessServices | Sessions | SessionOwner,
+  never
+>;
+
+let runtime: TestProcessRuntime | undefined;
 let graphSessions: Effect.Effect<Sessions['Service']> | undefined;
 
 /** Install the harness's runtime, and the sessions it serves when it holds
  *  the session graph (`installTestSessionGraph`). */
 export function initTestProcessRuntime(
-  instance: ProcessRuntime,
+  instance:
+    | TestProcessRuntime
+    | ManagedRuntime.ManagedRuntime<ProcessServices | SessionOwner, never>,
   sessions?: Effect.Effect<Sessions['Service']>,
 ): void {
-  runtime = instance;
+  // cast: the bare runtime serves no `Sessions`, as before it had none; a
+  // suite that opens sessions installs the session graph, whose runtime does.
+  runtime = instance as TestProcessRuntime;
   graphSessions = sessions;
 }
 
 /** The harness's runtime, or `undefined` — the non-throwing read, which
  *  `installFakeHost` uses to keep the first install of a module instance. */
-export function tryTestProcessRuntime(): ProcessRuntime | undefined {
+export function tryTestProcessRuntime(): TestProcessRuntime | undefined {
   return runtime;
 }
 
 /** The harness's runtime, for a suite that runs a program on the fake host's
  *  process services. */
-export function testRuntime(): ProcessRuntime {
+export function testRuntime(): TestProcessRuntime {
   if (!runtime) {
     throw new Error(
       'No test process runtime is installed: the harness builds one with the first fake host.',
@@ -70,15 +80,16 @@ export const testSessions: Effect.Effect<Sessions['Service']> = Effect.suspend(
     Effect.die(new Error('No test session graph is installed.')),
 );
 
-/** `handle`'s session as every host drives it (`Session`), over the store
- *  `handle` holds; the root is open, so the open answers at once. */
-export function testSessionOf(
-  handle: SessionHandle,
-  options: OpenOptions = {},
-): Session {
-  return Effect.runSync(
-    Effect.flatMap(testSessions, (installed) =>
-      installed.open(handle.roots, options),
-    ).pipe(Effect.provideService(References.PreventSchedulerYield, true)),
-  );
+/** `handle`'s session as a host holds it (`LocalSession`): the one the
+ *  installed sessions list for its root, which is open. */
+export function testSessionOf(handle: SessionHandle): LocalSession {
+  const session = Effect.runSync(
+    Effect.map(testSessions, (installed) => installed.list).pipe(
+      Effect.flatten,
+      Effect.provideService(References.PreventSchedulerYield, true),
+    ),
+  ).find((open) => open.roots.storage === handle.roots.storage);
+  if (session === undefined)
+    throw new Error(`No session is open at ${handle.roots.storage}.`);
+  return session;
 }

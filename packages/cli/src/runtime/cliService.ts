@@ -22,7 +22,6 @@ import {
 import { API_KEY_ENV_NAMES } from '@texra-ai/llm';
 import {
   AppState,
-  SessionOwner,
   setLogSink,
   withLogChannel,
   type Sessions,
@@ -146,11 +145,7 @@ export const cliServiceProjects = Effect.fn('cliServiceProjects')(function* (
   // What opening a project reads, captured once: `open` is the port's,
   // called from handlers that hold no process context of their own.
   const services = yield* Effect.context<
-    | ChildProcessSpawner
-    | FileSystem.FileSystem
-    | Path.Path
-    | SessionOwner
-    | StateStores
+    ChildProcessSpawner | FileSystem.FileSystem | Path.Path | StateStores
   >();
   // Each project's approval policy is its persisted setting, which the
   // session reads at every decision through these following config stores:
@@ -175,26 +170,24 @@ export const cliServiceProjects = Effect.fn('cliServiceProjects')(function* (
         const projectScope = yield* Scope.fork(scope);
         const opened = yield* Effect.gen(function* () {
           const roots = yield* openRoots(root, projectScope);
-          const handle = yield* (yield* SessionOwner).open({
-            roots,
-            interruptedTasks: 'offer',
+          const session = yield* sessions.open(roots, {
+            persistent: true,
+            host: { interruptedTasks: 'offer' },
           });
           // A store moved aside at open (pre-1.0 or corrupt) is said once,
           // in the service's log and to the project's first window: the
           // windows open no store of their own to notice it.
-          const moved = handle.log.movedAside;
+          const moved = session.storeMovedAside;
           if (moved) {
             const message = sessionStoreMovedAsideMessage(moved);
             yield* Effect.logWarning(message).pipe(withLogChannel(CHANNEL));
-            yield* handle.interactions.emit(
+            yield* session.emit(
               'requestShowInstruction',
               { key: `store-moved-aside-${moved.aside}`, message },
               { replayWhenAttached: true },
             );
           }
-          // The same session, as every host drives it.
-          const session = yield* sessions.open(roots, { persistent: true });
-          return { handle, session };
+          return { session };
         }).pipe(Effect.onError(() => Scope.close(projectScope, Exit.void)));
         project = { ...opened, scope: projectScope, leases: 0, idleSince: 0 };
         projects.set(root, project);
@@ -210,10 +203,7 @@ export const cliServiceProjects = Effect.fn('cliServiceProjects')(function* (
         if (project.leases === 0) project.idleSince = Date.now();
       }),
     ).pipe(
-      Effect.map(({ handle, session }): ServiceProject => ({
-        handle,
-        session,
-      })),
+      Effect.map(({ session }): ServiceProject => ({ session })),
       Effect.mapError(ensureError),
       Effect.provideContext(services),
     );
@@ -225,10 +215,10 @@ export const cliServiceProjects = Effect.fn('cliServiceProjects')(function* (
       const project = projects.get(root);
       if (project === undefined || project.leases > 0) return undefined;
       const now = Date.now();
-      const { handle, session } = project;
+      const { session } = project;
       // What this process runs now (its registry), not the claims the view
       // shows: a run held here keeps the project open.
-      if (handle.runs.get().length > 0) {
+      if (session.held().length > 0) {
         project.idleSince = now;
         return undefined;
       }

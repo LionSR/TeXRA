@@ -1,13 +1,12 @@
 import { Effect } from 'effect';
 
 import { toErrorMessage } from '@texra-ai/harness/schemas';
-import { getRunRecords } from '@agent/storage';
-import type { SessionHandle } from '@agent/runtime';
 import { runOutcomeToCliRunStatus } from '@cli/schemas/cliOutput';
 import { readInstalledPluginLoad } from '@common/plugins/pluginTrust';
 import { RUN_OUTCOME, type RunOutcome } from '@shared/schemas';
 
 import { CliExitCode } from './exitCodes';
+import type { LocalSession } from '@texra-ai/harness';
 import type { DatabaseReadFailed, RunEndResult } from '@texra-ai/harness';
 import type { CliPluginPin } from '../schemas/cliOutput';
 import type { SettingsStores } from '@texra-ai/harness';
@@ -78,11 +77,12 @@ export function runOutcomeExitCode(outcome: RunOutcome): CliExitCode {
  *  advertising persisted-run recovery. */
 export const readCliRunOutcomeState = Effect.fn('readCliRunOutcomeState')(
   function* (
-    session: SessionHandle,
+    session: LocalSession,
     result: RunEndResult,
     reportReadFailure: (error: Error) => void,
   ): Effect.fn.Return<{ outcome: RunOutcome; outcomePersisted: boolean }> {
-    return yield* getRunRecords(session, result.runId)
+    return yield* session
+      .records(result.runId)
       .readRunEnd()
       .pipe(
         Effect.map((end) => ({

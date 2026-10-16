@@ -22,12 +22,10 @@ import {
   Effect,
   Exit,
   type Scope,
-  Stream,
   SubscriptionRef,
 } from 'effect';
 
-// Each runtime value comes from the module that defines it: the
-// `@agent/runtime` barrel would evaluate runtime files no session here runs.
+// Each runtime value comes from the module that defines it.
 import { AgentCatalog, AgentNotFound } from '@agent/index/agentCatalog';
 import { describeFollowUpFailure } from '@agent/followUp/ToolUseFollowUp';
 import { resumeOwnRun } from '@agent/runtime/resumeRun';
@@ -51,11 +49,13 @@ import {
 } from './errors.js';
 import { attachHost, type Approver } from './requestAnswerer.js';
 import { handOver } from './runHandle.js';
+import { sessionReads } from './sessionReads.js';
 import type { Sessions } from './processLayer.js';
 import type {
   OpenOptions,
   ResumeInput,
   Run,
+  LocalSession,
   Session,
   StartInput,
 } from './sessions.js';
@@ -276,9 +276,6 @@ interface SessionState {
   readonly starting: Set<RunId>;
 }
 
-/** One reader port per `watch`, so no reader disturbs another's set. */
-let readerPorts = 0;
-
 /** The session as this package works on it: a pure function of the owner's
  *  handle, holding nothing the owner already holds. */
 function sessionOf(
@@ -287,26 +284,13 @@ function sessionOf(
   owner: Context.Service.Shape<typeof SessionOwner>,
   resumeJoined: Session['resume'],
   { approvers, starting }: SessionState,
-): Session {
+): LocalSession {
   return {
     roots: handle.roots,
+    ...sessionReads(handle),
     start: (input) => start(handle, services, owner, starting, input),
     resume: resumeJoined,
     request: (request) => handle.requests.request(request),
-    view: {
-      current: () => SubscriptionRef.getUnsafe(handle.view.ref),
-      changes: handle.view.changes,
-      watch: (set, from) =>
-        Stream.unwrap(
-          Effect.acquireRelease(
-            Effect.suspend(() => {
-              const port = `sdk/reader/${(readerPorts += 1)}`;
-              return Effect.as(handle.view.subscribe(port, set), port);
-            }),
-            (port) => handle.view.subscribe(port, []),
-          ).pipe(Effect.as(handle.view.inputs(set, from.cursor, from.debug))),
-        ),
-    },
     attach: (host) => attachHost(handle, host, approvers),
   };
 }
@@ -366,7 +350,7 @@ export function makeSessions(
         });
     // Each session's own state beside its handle (`SessionState`).
     const states = new WeakMap<RuntimeSessionHandle, SessionState>();
-    const sessionFor = (handle: RuntimeSessionHandle): Session => {
+    const sessionFor = (handle: RuntimeSessionHandle): LocalSession => {
       const state = states.get(handle) ?? {
         approvers: [],
         starting: new Set(),
@@ -379,12 +363,16 @@ export function makeSessions(
       // owner's refusal. Until a host that can prompt attaches, nobody here
       // can answer: the session's policy denies every request its runs
       // raise and offers them no approval-gated tool.
-      open: (roots: WorkspaceRoots, options: OpenOptions = {}) =>
+      open: (roots: WorkspaceRoots, { persistent, host }: OpenOptions = {}) =>
         Effect.map(
           owner.open({
             roots,
-            interactions: { approvalPromptsUnavailable: true },
-            ...(!options.persistent && {
+            ...(host === undefined
+              ? { interactions: { approvalPromptsUnavailable: true } }
+              : host.interruptedTasks && {
+                  interruptedTasks: host.interruptedTasks,
+                }),
+            ...(!persistent && {
               transcriptMode: {
                 kind: 'ephemeral',
                 reason: 'npm package consumer',
@@ -394,6 +382,7 @@ export function makeSessions(
           sessionFor,
         ),
       close: (roots: WorkspaceRoots) => owner.close(roots.storage),
+      closeAll: owner.closeAll,
       list: Effect.map(owner.list, (handles) => handles.map(sessionFor)),
     };
   });

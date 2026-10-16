@@ -32,6 +32,7 @@ export type {
   PendingRequest,
   ResumeInput,
   Run,
+  LocalSession,
   Session,
   SessionHost,
   SessionView,
@@ -39,6 +40,24 @@ export type {
   RunView,
   TranscriptView,
 } from './effect/sessions.js';
+// What a session reads: a run's records, held runs, a deletion's report.
+export type {
+  HeldRun,
+  RunDeletion,
+  RunRecords,
+} from './effect/sessionReads.js';
+export type { SessionStoreMovedAside } from '@shared/session/database';
+export type { RunEnd } from '@shared/schemas';
+export type { RunResult } from '@agent/storage/resultMeta';
+export type { RunRefusal } from '@agent/runtime/runClassification';
+export type { AgentRunListingEntry } from '@agent/storage/runListing';
+export type { ExportNode } from '@agent/export/schemas';
+export {
+  formatConversationMessage,
+  type ConversationFormatOptions,
+} from '@agent/storage/conversationFormat';
+export type { RunWorkspaceFile } from '@agent/storage/runWorkspaceFiles';
+export type { AssembleTraceResult } from '@transcript/traceAssembler';
 export type { InlinePersona } from '@shared/schemas';
 // What `SessionHost.emit` takes and answers: the notices a session's runs
 // ask a host to present.
@@ -48,9 +67,8 @@ export type {
   RuntimePresentationEventPayloads,
 } from '@agent/runtime/runtimePresentationEvents';
 
-// The process the hosts compose and the session owner it serves: one
-// `processLayer` for every TeXRA host and for `Sessions.layer` above.
-export { SessionOwner } from '@platform/processRuntime';
+// The process the hosts compose: one `processLayer` for every TeXRA host
+// and for `Sessions.layer` above.
 export type { ProcessLayerOptions } from '@controllers/session/sessionLayer';
 // A project's `.env` over the process environment, for a host surface that
 // serves one project (the desktop's), as each run reads it.
@@ -153,13 +171,10 @@ export { escapeText } from '@shared/utils/xmlEscape';
 // The payloads, as the runtime defines them.
 export type { AgentEvent } from '@agent/trace';
 
-// `RunEndResult` is deliberately sourced from its own module rather than
-// from the `@agent/runtime` barrel. It appears in this package's PUBLIC
-// declarations, and declaration emit follows whichever module a public type
-// comes from: taking it from the barrel pulls the barrel's whole `.d.ts`
-// graph — model handlers included — into the published type surface, which
-// trips the provider-type leak check in `scripts/validate-artifacts.mjs`
-// (`@anthropic-ai/sdk`).
+// `RunEndResult` comes from its own module: declaration emit follows the
+// module a public type comes from, and one that pulls the model handlers'
+// `.d.ts` graph in trips the provider-type leak check in
+// `scripts/validate-artifacts.mjs` (`@anthropic-ai/sdk`).
 export type { RunEndResult } from '@agent/runtime/RunEndResult';
 export type {
   CallRequests,

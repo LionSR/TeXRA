@@ -8,10 +8,10 @@ import {
 } from 'effect';
 
 import { isLiveRun, type RunView } from '@texra-ai/harness/schemas';
-import type { SessionHandle } from '@agent/runtime';
 import type { CliNdjsonRecord } from '@cli/schemas/cliOutput';
 import { runIdentityName, type RunId } from '@shared/schemas';
 import { writeNdjsonStdout } from './logSinks';
+import type { LocalSession } from '@texra-ai/harness';
 
 export type CliNdjsonProgressRecordWriter = (record: CliNdjsonRecord) => void;
 
@@ -36,8 +36,8 @@ function childRow(child: RunView) {
  * contract is a versioned projection of `SessionEvent`, not a second
  * vocabulary (`contract: 2`, stamped by the NDJSON sink).
  *
- * It reads `log.tail(session.log.now())` directly (PRD 10.3): every event
- * above the current ordinal in commit order, never the view, so a
+ * It reads `view.events(view.head())` directly (PRD 10.3): every event
+ * above the store's head in commit order, never the view, so a
  * `stage.start` no surface subscribed to still becomes its line and two
  * same-type updates never collapse.
  *
@@ -52,11 +52,11 @@ function childRow(child: RunView) {
  * comparison without being written, so a resumed session does not replay
  * its earlier parents.
  *
- * Detaching drains: the tail runs to the ordinal captured at detach, so the
+ * Detaching drains: the tail runs to the head captured at detach, so the
  * last line published before the run settled is on the wire before the
- * caller writes its result record, and the child list is derived once more from
- * the drained fold. The drain waits on the tail's own coordinate
- * (`SessionEvents.all`'s `drained`), not on the events: a transcript row the
+ * caller writes its result record, and the child list is derived once more
+ * from the drained fold. The drain waits on the tail's own coordinate
+ * (`view.events`'s `drained`), not on the events: a transcript row the
  * store no longer holds emits nothing, and the ordinal captured at detach may
  * be exactly that row's.
  *
@@ -69,7 +69,7 @@ function childRow(child: RunView) {
 export const attachCliSessionProgressProjection = Effect.fn(
   'attachCliSessionProgressProjection',
 )(function* (
-  session: Pick<SessionHandle, 'log' | 'view'>,
+  session: Pick<LocalSession, 'view'>,
   writeRecord: CliNdjsonProgressRecordWriter = writeNdjsonStdout,
 ) {
   // A `debug`-level `log` row is a diagnostic, not progress: it reaches the
@@ -86,7 +86,7 @@ export const attachCliSessionProgressProjection = Effect.fn(
   }
 
   /** The last commit the tail passed. */
-  let delivered = session.log.now();
+  let delivered = session.view.head();
   /** The ordinal detach cut at; nothing above it is written. */
   let stopAt: number | undefined;
   const drained = Deferred.makeUnsafe<void>();
@@ -102,7 +102,7 @@ export const attachCliSessionProgressProjection = Effect.fn(
    *  it, so a child list never precedes the row it reports. */
   let childrenPending = false;
   const emitChildren = (): void => {
-    const view = SubscriptionRef.getUnsafe(session.view.ref);
+    const view = session.view.current();
     childrenPending = view.cursor > delivered;
     if (childrenPending) return;
     for (const [parentRunId, run] of view.runs) {
@@ -124,12 +124,12 @@ export const attachCliSessionProgressProjection = Effect.fn(
     }
   };
   // Seed from the fold as it stands at attach, before any fiber can see a
-  // later level: the plane's ordinal bounds the fold, so this writes nothing.
+  // later level: the store's head bounds the fold, so this writes nothing.
   emitChildren();
 
   const settleIfDrained = (): void => {
     if (stopAt === undefined || delivered < stopAt) return;
-    // `stopAt` is the plane's ordinal, which no fold can be past, so the
+    // `stopAt` is the store's head, which no fold can be past, so the
     // child list gate is open here and the last one goes out with the drain.
     emitChildren();
     Deferred.doneUnsafe(drained, Effect.void);
@@ -147,7 +147,7 @@ export const attachCliSessionProgressProjection = Effect.fn(
   const fork = Effect.forkChild({ startImmediately: true });
   const fibers = [
     yield* fork(
-      Stream.runForEach(session.log.tail(delivered, drainedTo), (event) =>
+      Stream.runForEach(session.view.events(delivered, drainedTo), (event) =>
         Effect.sync(() => {
           if (stopAt !== undefined && event.commit > stopAt) return;
           const { type, ...payload } = event;
@@ -172,7 +172,7 @@ export const attachCliSessionProgressProjection = Effect.fn(
   return Effect.gen(function* () {
     const first = stopAt === undefined;
     if (first) {
-      stopAt = session.log.now();
+      stopAt = session.view.head();
       settleIfDrained();
     }
     yield* Deferred.await(drained);

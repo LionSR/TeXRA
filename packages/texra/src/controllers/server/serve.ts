@@ -56,7 +56,7 @@ import {
   TexraRpcs,
   type ServiceInfo,
 } from './protocol';
-import type { ProcessServices, SessionOwner } from '@texra-ai/harness';
+import type { ProcessServices, Sessions } from '@texra-ai/harness';
 
 /** A live service already answers on this storage root's socket. */
 export class ServiceAlreadyRunning extends Data.TaggedError(
@@ -106,7 +106,7 @@ export const serve = Effect.fn('server.serve')(function* (
 ): Effect.fn.Return<
   ServeExit,
   ServiceAlreadyRunning | ServiceListenFailed | ServiceUnavailable,
-  ProcessServices | SessionOwner | ServiceProjects | Scope.Scope
+  ProcessServices | Sessions | ServiceProjects | Scope.Scope
 > {
   if (process.platform === 'win32')
     return yield* Effect.fail(

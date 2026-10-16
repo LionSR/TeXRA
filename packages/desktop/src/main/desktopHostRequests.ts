@@ -143,8 +143,8 @@ export function createDesktopHostRequests(
   /** Where the window reads its runs' records: its own session, or the
    *  service's, bound once. */
   const records =
-    project.handle !== undefined
-      ? { handle: project.handle, remote: undefined }
+    project.service === undefined
+      ? { local: project.session, remote: undefined }
       : { remote: serviceRecords(project.service, project.root) };
   /** The rooted filesystems of this window's paper, built once from the
    *  roots its session holds for its lifetime, never from an ambient store. */
@@ -164,7 +164,7 @@ export function createDesktopHostRequests(
     createHostRunActions({
       ...run, // this window's launch follow-up and output opener
       ...(records.remote === undefined
-        ? localRunActionPorts(records.handle)
+        ? localRunActionPorts(records.local)
         : {
             roots,
             readConfig: records.remote.readConfig,
@@ -294,7 +294,7 @@ export function createDesktopHostRequests(
             roots,
             records:
               records.remote === undefined
-                ? localExportRecords(records.handle)
+                ? localExportRecords(records.local)
                 : {
                     input: records.remote.exportInput,
                     trace: records.remote.exportTrace,

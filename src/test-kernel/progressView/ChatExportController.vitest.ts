@@ -14,6 +14,7 @@ import {
 } from '@platform/defaults/workspaceStorage';
 import { qualifyAggregateId, LOG_LEVELS, MESSAGE_TYPES } from '@shared/schemas';
 import type { RunId } from '@shared/schemas';
+import { testSessionOf } from '@test/support/testProcessRuntime';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import {
   createTestSession,
@@ -101,7 +102,7 @@ describe('ChatExportController.exportAsHtml', () => {
     controller = new ChatExportController({
       latexPreamble: '',
       roots: session.roots,
-      records: localExportRecords(session),
+      records: localExportRecords(testSessionOf(session)),
     });
   });
 
@@ -164,7 +165,7 @@ describe('ChatExportController.buildExportInput', () => {
     controller = new ChatExportController({
       latexPreamble: '',
       roots: session.roots,
-      records: localExportRecords(session),
+      records: localExportRecords(testSessionOf(session)),
     });
   });
 

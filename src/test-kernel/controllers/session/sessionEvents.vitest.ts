@@ -52,6 +52,7 @@ import { TestClock } from 'effect/testing';
 import * as Reactivity from 'effect/reactivity/Reactivity';
 
 import { afterAll, beforeAll, describe, expect, vi } from 'vitest';
+import { Sessions } from '@texra-ai/harness';
 import { registryOf } from '@agent/runtime/runRegistry';
 
 vi.mock('@effect/sql-sqlite-node/SqliteClient', async (importOriginal) => ({
@@ -1369,15 +1370,13 @@ describe('Sessions owner', () => {
               Layer.makeMemoMapUnsafe(),
               yield* Effect.scope,
             ),
-            SessionOwner,
+            Sessions,
           );
           const first = yield* Effect.acquireRelease(
             openTestSession({ roots: roots(held) }),
             (session) => Effect.asVoid(closeSessionOf(session)),
           );
-          const refused = yield* Effect.flip(
-            second.open({ roots: roots(held) }),
-          );
+          const refused = yield* Effect.flip(second.open(roots(held)));
           expect(refused.message).toContain('already open in this process');
           // A second copy of the harness module (an app bundle beside an SDK
           // consumer) refuses it too, by an alias: the registry is per process.
@@ -1392,9 +1391,9 @@ describe('Sessions owner', () => {
           expect(refusedByCopy.message).toContain(
             'already open in this process',
           );
-          yield* second.open({ roots: roots(other) });
+          yield* second.open(roots(other));
           yield* closeSessionOf(first);
-          const taken = yield* second.open({ roots: roots(held) });
+          const taken = yield* second.open(roots(held));
           expect(taken.roots.storage).toBe(held);
         }).pipe(Effect.scoped),
       ),

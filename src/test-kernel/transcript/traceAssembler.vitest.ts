@@ -29,7 +29,7 @@ import {
 } from '@test/support/tempDirPlatform';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { seedRunRecord } from '@test/support/runRecordSeeds';
-import { assembleTrace } from '@transcript';
+import { assembleTrace } from '@transcript/traceAssembler';
 
 const tempDirs = useTempDirs();
 let session: SessionHandle;

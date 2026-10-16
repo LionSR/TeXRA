@@ -87,3 +87,7 @@ export { HostCapabilities } from '@agent/runtime/agentToolResolution';
 export { jitteredExponentialBackoffMs } from '@utils/core';
 export { randomizedExponentialBackoff } from '@utils/core/backoffSchedule';
 export { isTransientHttpStatus } from '@utils/core/httpStatus';
+// The capability a root launch requires (`ToolRun`'s session names it): a
+// composition root's alone, so no plugin's tool is given it. Hosts open
+// sessions through `Sessions` (root).
+export type { SessionOwner } from '@platform/processRuntime';

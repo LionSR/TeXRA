@@ -8,7 +8,8 @@ import { isStrictlyWithin } from '@utils/core/pathCore';
 import { entryMetadataAt } from '@utils/files/fsDurability';
 import { absentReason } from '@utils/files/fsEntryExists';
 
-interface RunWorkspaceFile {
+/** A workspace file a run edited, as it stands now. */
+export interface RunWorkspaceFile {
   readonly path: string;
   readonly size: number;
   readonly isDirectory: boolean;

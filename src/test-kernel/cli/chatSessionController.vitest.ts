@@ -447,7 +447,7 @@ describe('CLI terminal outcome resolution', () => {
 
       expect(
         yield* readCliRunOutcomeState(
-          session,
+          testSessionOf(session),
           {
             outcome: RUN_OUTCOME.COMPLETED,
             output: { response: '', files: [] },
@@ -492,7 +492,7 @@ describe('CLI terminal outcome resolution', () => {
 
         expect(
           yield* readCliRunOutcomeState(
-            session,
+            testSessionOf(session),
             {
               outcome: RUN_OUTCOME.COMPLETED,
               output: { response: '', files: [] },

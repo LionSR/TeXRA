@@ -6,13 +6,7 @@
  */
 import path from 'node:path';
 
-import {
-  Effect,
-  type Fiber,
-  type Scope,
-  Stream,
-  SubscriptionRef,
-} from 'effect';
+import { Effect, type Fiber, type Scope, Stream } from 'effect';
 
 import {
   isLiveRun,
@@ -120,7 +114,7 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
   ): Effect.Effect<void, never, Scope.Scope> {
     return Effect.suspend(() => {
       this.wantedRunId = options.runId;
-      this.attachCursor = SubscriptionRef.getUnsafe(session.view.ref).cursor;
+      this.attachCursor = session.view.current().cursor;
       return Effect.addFinalizer(() =>
         Effect.sync(() => {
           this.view = undefined;

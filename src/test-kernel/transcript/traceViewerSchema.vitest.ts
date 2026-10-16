@@ -26,7 +26,7 @@ import {
 } from '@test/support/tempDirPlatform';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { seedRunRecord } from '@test/support/runRecordSeeds';
-import { assembleTrace } from '@transcript';
+import { assembleTrace } from '@transcript/traceAssembler';
 import { TraceDocumentSchema } from '@transcript/traceDocumentSchema';
 import { parseTraceData } from '../../../packages/trace-viewer/src/traceDataSchema';
 

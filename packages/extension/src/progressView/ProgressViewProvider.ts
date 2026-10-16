@@ -26,7 +26,6 @@ import {
   type HostInteractions,
 } from '@texra-ai/harness';
 import { AgentCatalog, withLogChannel } from '@texra-ai/harness';
-import { type SessionHandle } from '@agent/runtime';
 import { BundledViewContentProvider } from '@common/webview';
 import { emitAppSignal } from '@eventBus/AppSignals';
 import { subscribeAppSignal } from '@frontend/events/appSignalSubscriptions';
@@ -90,6 +89,7 @@ import { checkCoreDependencies } from '@texra/utils/system/checkCoreDependencies
 import { createExtensionHostRequests } from './extensionHostRequests';
 import { RequestAttention } from './requestAttention';
 import type {
+  LocalSession,
   ProcessRuntime,
   ProcessServices,
   Session,
@@ -128,18 +128,10 @@ interface Port {
 }
 
 /** The window's session: the service's, or, when the service could not be
- *  reached, this process's own with the handle that owns it. */
+ *  reached, this process's own. */
 export type WindowSession =
-  | {
-      readonly session: Session;
-      readonly service: ServiceLink;
-      readonly handle?: undefined;
-    }
-  | {
-      readonly session: Session;
-      readonly handle: SessionHandle;
-      readonly service?: undefined;
-    };
+  | { readonly session: Session; readonly service: ServiceLink }
+  | { readonly session: LocalSession; readonly service?: undefined };
 
 export class ProgressViewProvider implements vscode.WebviewViewProvider {
   public static readonly viewType = 'texra.mainView';
@@ -346,7 +338,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
         roots,
       ),
       // A decision goes where the run runs.
-      session: { requests: runSession },
+      session: runSession,
     });
     this.runtime.runSync(
       Effect.forkIn(this.attention.follow(runSession), this.scope),
@@ -424,19 +416,21 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     // window of the service is its project's window there: the service's
     // runs ask it for the same, stage their tool edits here, and bind the
     // editor's language models (Copilot) through it.
-    const { handle, service } = windowSession;
-    if (handle !== undefined) {
+    if (windowSession.service === undefined) {
       this.runtime.runSync(
         this.editors
           .attach(roots.storage, editor)
           .pipe(Scope.provide(this.scope)),
       );
       this.runtime.runSync(
-        attachSessionHost(handle, this.toolEditApprovals, presentation).pipe(
-          Scope.provide(this.scope),
-        ),
+        attachSessionHost(
+          windowSession.session,
+          this.toolEditApprovals,
+          presentation,
+        ).pipe(Scope.provide(this.scope)),
       );
     }
+    const { service } = windowSession;
     if (service !== undefined)
       this.runtime.runFork(
         Effect.flatMap(Effect.service(LanguageModel), (languageModel) =>
@@ -459,7 +453,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
 
   /**
    * What the run actions and the transcript export read, from the one
-   * place the window's runs are held: its own session handle, or the
+   * place the window's runs are held: its own session, or the
    * service. In service mode a failure before a run opens is presented on
    * this window's presentation host, held for the provider's life.
    */
@@ -470,10 +464,10 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     readonly records: RunActionRecordPorts;
     readonly exportRecords: ChatExportRecords;
   } {
-    if (windowSession.handle !== undefined)
+    if (windowSession.service === undefined)
       return {
-        records: localRunActionPorts(windowSession.handle),
-        exportRecords: localExportRecords(windowSession.handle),
+        records: localRunActionPorts(windowSession.session),
+        exportRecords: localExportRecords(windowSession.session),
       };
     const present = new SessionHostInteractions();
     this.runtime.runSync(
