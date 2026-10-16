@@ -60,8 +60,8 @@ file.
 
 Things the tree won't tell you:
 
-- **The SDK surface is `packages/harness` (`@texra-ai/harness`) — built, fenced, not
-  published.** There is no `@texra/core` package (deleted by #7099). Hosts still
+- **The SDK surface is `packages/harness` (`@texra-ai/harness`) — built, fenced,
+  releasable at 0.x.** There is no `@texra/core` package (deleted by #7099). Hosts still
   reach the harness through the path aliases, but that surface is
   **frozen, not open**: `eslint.config.mjs` forbids `packages/harness/src/**`,
   `packages/texra/src/**` and `packages/llm/src/**` from importing host layers, and the ratchets in
@@ -86,9 +86,10 @@ Things the tree won't tell you:
   has the rules. The invariant to hold is "never widen a
   baseline"; the open work is the Tier-1 public manifest and shrinking the
   frozen lists, not
-  another lint rule. `@texra-ai/harness` and `@texra-ai/llm` publish to npm at
-  1.0, once owner decision #9's six preconditions hold (#13723), by hand with
-  pnpm (`releasing` skill, "npm packages"). Kernel architecture tests under
+  another lint rule. Publishing `@texra-ai/harness` and `@texra-ai/llm` is the
+  owner's manual step (npm OTP, `releasing` skill, "npm packages"); CI's
+  `packed example` job installs both tarballs outside the repo, type-checks
+  them strictly and runs them. Kernel architecture tests under
   `src/test-kernel/architecture/` (including
   `approvalPolicyAuthorityRatchet.vitest.ts`, and
   `sharedSchemasDeepImportRatchet.vitest.ts`, which forbids every

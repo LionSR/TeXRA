@@ -79,13 +79,18 @@ const testProcessOptions = (
 });
 
 /** A second composition in this process, for a suite that needs one: the
- *  kernel's, under the global root `root`, reading its own process start
- *  (only the install's reads count in `identityReads`). */
+ *  kernel's, under the global root `root`, with a process start of its own.
+ *  Fixed, as the install's is: reading the real one spawns PowerShell on
+ *  Windows, seconds under CI load, and only the install's reads count in
+ *  `identityReads`. */
 export const testProcessLayer = (
   plugins: readonly Plugin[],
   root: string,
 ): ReturnType<typeof processLayer> =>
-  processLayer(testProcessOptions(plugins, root));
+  processLayer({
+    ...testProcessOptions(plugins, root),
+    processStart: Effect.succeed('vitest-second'),
+  });
 
 /** Install the harness's process runtime over `plugins` and build it. */
 export async function installTestSessionGraph(
