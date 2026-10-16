@@ -87,7 +87,6 @@ export class Sessions extends Context.Service<
           processLayer({
             globalStorage: platform.roots.globalStorage,
             plugins,
-            mcpConfigPath: platform.mcpConfigPath,
             secrets: platform.secrets,
             appState: AppState.layer(platform.roots.globalState),
             languageModel: platform.languageModel,

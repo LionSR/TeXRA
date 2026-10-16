@@ -19,7 +19,6 @@ import {
   settingsCatalog,
   type StateSettingEntry,
 } from '@shared/state/stateSettings';
-import { mcpConfigPathOf } from '@tools/mcp/mcpConfig';
 import { canonicalizeWorkspacePath } from '@utils/system/nodeWorkspace';
 
 import type { AgentPlatform } from './index.js';
@@ -100,7 +99,6 @@ export function nodePlatform(options: NodePlatformOptions): AgentPlatform {
     secrets: unpersistedSecrets,
     // No editor behind this platform.
     languageModel: UNAVAILABLE_LANGUAGE_MODEL_PORT,
-    mcpConfigPath: mcpConfigPathOf(options.storageDir),
     agentDirectories: {
       custom: () => Effect.succeed(options.agentsDir),
       customConfigured: () => Effect.succeed(true),

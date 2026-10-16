@@ -8,7 +8,6 @@ import {
 import { AppState, AgentDirectories } from '@platform/interfaces';
 import { withForkFailureReporting } from '@platform/processRuntime';
 import { UsageLog } from '@shared/usageLog';
-import { mcpConfigPathOf } from '@tools/mcp/mcpConfig';
 import type { Plugin } from '@tools/plugins';
 import { initTestProcessRuntime } from './testProcessRuntime';
 import { unprobedToolAvailability } from './toolAvailabilityTestLayer';
@@ -65,7 +64,6 @@ const testProcessOptions = (
   globalStorage: root,
   // Under the fake global root, never the developer's `~/.texra/mcp.json`.
   plugins,
-  mcpConfigPath: mcpConfigPathOf(root),
   secrets: fakeHostSecrets,
   appState: AppState.layer(fakeHostAppState),
   languageModel: fakeHostLanguageModel,

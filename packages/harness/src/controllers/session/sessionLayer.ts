@@ -94,6 +94,7 @@ import {
 } from '@shared/session/database';
 import { UsageLog } from '@shared/usageLog';
 import { ToolCatalog } from '@tools/liveTools';
+import { mcpConfigPathOf } from '@tools/mcp/mcpConfig';
 import { pluginCatalogLayer } from '@tools/pluginCatalog';
 import type { Plugin } from '@tools/plugins';
 import { toolAvailabilityLayer } from '@tools/toolAvailability';
@@ -569,8 +570,6 @@ export interface ProcessLayerOptions {
    * pass `texraPlugins` (`@tools/registry`).
    */
   readonly plugins: readonly Plugin[];
-  /** The MCP config file (`.mcp.json` shape) the catalog reads. */
-  readonly mcpConfigPath: string;
   readonly secrets: PlatformSecrets;
   /** The host's agent-directory layer: it may capture AppState as it is
    *  built, which its readers never see. */
@@ -637,7 +636,6 @@ export function ownerProcessLayer({
   processStart = nodeProcesses.selfIdentity(),
   globalStorage,
   plugins,
-  mcpConfigPath,
   secrets,
   appState,
   languageModel,
@@ -649,7 +647,9 @@ export function ownerProcessLayer({
   minimumLogLevel,
   workspace,
 }: ProcessLayerOptions): Layer.Layer<ProcessServices | SessionOwner> {
-  const catalog = pluginCatalogLayer(plugins, mcpConfigPath);
+  // The user's MCP servers: the config file at the storage root this
+  // process's global storage lies under.
+  const catalog = pluginCatalogLayer(plugins, mcpConfigPathOf(globalStorage));
   // Non-failing: `selfIdentity()` reads an unreadable identity as undefined.
   const identity = Layer.effect(
     ProcessIdentity,

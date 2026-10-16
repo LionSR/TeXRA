@@ -28,7 +28,7 @@ import { nodeSpawnerLayer } from '@test/support/childProcessTestLayer';
 import { resolveTestStep } from '@test/support/stepToolsTestUtils';
 import { texraPlugins } from '@texra/tools/registry';
 import { ToolCatalog, toolCatalogLayer } from '@tools/liveTools';
-import { USER_MCP_CONFIG_PATH } from '@tools/mcp/mcpConfig';
+import { mcpConfigPathOf } from '@tools/mcp/mcpConfig';
 import { pluginCatalogLayer } from '@tools/pluginCatalog';
 import { ALWAYS_AVAILABLE } from '@tools/toolProbes';
 import { toolTable } from '@tools/toolTable';
@@ -61,7 +61,10 @@ describe('tool-use tool resolution', () => {
       // this host has no editor models.
       Effect.provide(LanguageModel.layer(UNAVAILABLE_LANGUAGE_MODEL_PORT)),
       Effect.provide(
-        pluginCatalogLayer(texraPlugins(), USER_MCP_CONFIG_PATH).pipe(
+        pluginCatalogLayer(
+          texraPlugins(),
+          mcpConfigPathOf('/nonexistent'),
+        ).pipe(
           Layer.provide(
             Layer.merge(nodePlatformLayer, AppState.layer(fakeHostAppState)),
           ),
@@ -188,7 +191,10 @@ describe('tool-use tool resolution', () => {
         Effect.scoped,
         Effect.provide(LanguageModel.layer(UNAVAILABLE_LANGUAGE_MODEL_PORT)),
         Effect.provide(
-          pluginCatalogLayer(texraPlugins(), USER_MCP_CONFIG_PATH).pipe(
+          pluginCatalogLayer(
+            texraPlugins(),
+            mcpConfigPathOf('/nonexistent'),
+          ).pipe(
             Layer.provide(
               Layer.merge(nodePlatformLayer, AppState.layer(fakeHostAppState)),
             ),

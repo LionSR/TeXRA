@@ -6,7 +6,7 @@
  */
 import { Effect, Stream, SubscriptionRef } from 'effect';
 
-import { withLogChannel } from '@texra-ai/harness';
+import { mcpConfigPathOf, withLogChannel } from '@texra-ai/harness';
 import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 import {
   detectLatexSettingsStatus,
@@ -15,7 +15,6 @@ import {
 import { buildPluginRows } from '@texra/controllers/settingsView/pluginRows';
 import { planToolTerminalAction } from '@texra/controllers/settingsView/ToolDashboardData';
 import type { SettingsViewInboundHandlerRegistry } from '@texra/controllers/settingsView/settingsViewDispatch';
-import { USER_MCP_CONFIG_PATH } from '@tools/mcp/mcpConfig';
 import { setToolEnabled } from '@tools/toolAvailability';
 import { ToolAvailability } from '@tools/toolAvailabilityService';
 
@@ -86,7 +85,7 @@ export function settingsToolCommands(ports: {
                 Effect.succeed({
                   command: SETTINGS_VIEW_COMMANDS.UPDATE_PLUGINS,
                   rows: [],
-                  mcpConfigPath: USER_MCP_CONFIG_PATH,
+                  mcpConfigPath: mcpConfigPathOf(roots.globalStorage),
                   mcpWarnings: [
                     `The plugin list could not be read: ${error.message}`,
                   ],

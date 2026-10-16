@@ -105,7 +105,6 @@ import { makeEditorHost, type EditorRegistry } from '@texra/tools/editorHost';
 import { texraPlugins } from '@texra/tools/registry';
 import { gitHubTokenRejectedMessage } from '@texra/tools/github/githubAuth';
 import { LeanLanguageServices } from '@texra/tools/lean/leanLanguageServices';
-import { USER_MCP_CONFIG_PATH } from '@tools/mcp/mcpConfig';
 import { sessionStoreMovedAsideMessage } from '@ui/copy/sessionStore';
 import { usageCostLabel } from '@ui/copy/modelAccess';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
@@ -195,7 +194,6 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
           // and the Lean 4 probe.
           setup: vscodeSetupPlatform,
         }),
-        mcpConfigPath: USER_MCP_CONFIG_PATH,
         secrets,
         appState: Layer.effect(
           AppState,

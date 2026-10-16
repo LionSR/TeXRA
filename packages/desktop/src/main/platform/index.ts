@@ -35,7 +35,6 @@ import { usageLogLayer } from '@telemetry/UsageLogService';
 import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
 import { bootstrapHost } from '@texra/controllers/hostBootstrap';
 import { texraPlugins } from '@texra/tools/registry';
-import { USER_MCP_CONFIG_PATH } from '@tools/mcp/mcpConfig';
 import { processEnvConfigLayer } from '@utils/system/envFlags';
 
 // Local file imports
@@ -139,7 +138,6 @@ export const initializeElectronPlatform = Effect.fn(
       processLayer({
         globalStorage,
         plugins: texraPlugins(),
-        mcpConfigPath: USER_MCP_CONFIG_PATH,
         secrets,
         // Application state is the one the CLI and the extension keep, in the
         // shared global database: one install record for plugins and the trust

@@ -420,7 +420,8 @@ composes (the agent directories, secrets, the resume
 and language-model ports, and an optional `toolMissingHandler` that surfaces
 a missing external tool) plus the `WorkspaceRoots` of the folder the runs
 work in (workspace path, its storage path, config, workspace state, and the
-process-wide global state), and the `mcpConfigPath` its tool registry reads.
+process-wide global state). The tool registry reads the MCP servers of the
+`mcp.json` at the storage root that global storage lies under.
 `nodePlatform()` supplies all of them: process-local config and state,
 TeXRA's ordinary storage layout under the `storageDir` you name (required; the
 package never writes to the user's `~/.texra`), that directory's `mcp.json`,

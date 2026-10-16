@@ -54,7 +54,6 @@ import { GlobalDatabase } from '@shared/session/database';
 import { usageLogLayer } from '@telemetry/UsageLogService';
 import { makeEditorHost, type EditorRegistry } from '@texra/tools/editorHost';
 import { texraPlugins } from '@texra/tools/registry';
-import { USER_MCP_CONFIG_PATH } from '@tools/mcp/mcpConfig';
 
 import { readCliVersion } from './cliContext';
 import { cliSecrets } from './cliSecrets';
@@ -243,7 +242,6 @@ export function installCliProcessRuntime(
         processLayer({
           globalStorage: globalStoragePath,
           plugins: texraPlugins({ editors }),
-          mcpConfigPath: USER_MCP_CONFIG_PATH,
           secrets,
           appState: options?.appState
             ? AppState.layer(options.appState)
