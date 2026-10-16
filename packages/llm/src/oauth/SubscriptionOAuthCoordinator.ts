@@ -127,12 +127,11 @@ export interface SubscriptionOAuthCoordinatorInit<
   policy: SubscriptionOAuthPolicy<S>;
   /** Token grants; defaults to the policy's form endpoint. */
   client?: SubscriptionOAuthClient;
-  /**
-   * Wall clock for the expiry decision. It is not `Clock` (PRD R8) because
-   * the coordinator suites fix the time by injecting it here; a `TestClock`
-   * would have to reach the process runtime those suites run on. It converts
-   * when that runtime's clock is injectable from a test.
-   */
+  /** Wall clock, in epoch milliseconds, for the expiry decision; defaults to
+   *  `Date.now`. */
+  // Not Effect's `Clock`: the coordinator suites fix the time by injecting
+  // it here, and a `TestClock` would have to reach the process runtime those
+  // suites run on.
   now?: () => number;
 }
 
