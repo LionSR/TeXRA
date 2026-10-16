@@ -10,7 +10,7 @@ import * as vscode from 'vscode';
 import { Cause, Effect, Exit, Fiber } from 'effect';
 import { ModelError, completedTurn } from '@texra-ai/llm';
 
-import { withLogChannel } from '@texra-ai/harness';
+import { withLogChannel, hasExtension } from '@texra-ai/harness';
 import { emitAppSignal } from '@eventBus/AppSignals';
 import { subscribeAppSignal } from '@frontend/events/appSignalSubscriptions';
 import { VscodeExternalOpener } from '@frontend/hosts/VscodeExternalOpener';
@@ -41,7 +41,6 @@ import { createSettingsViewBody } from '@texra/controllers/settingsView/sharedSe
 import type { SettingsViewInboundHandlerRegistry } from '@texra/controllers/settingsView/settingsViewDispatch';
 import type { SubscriptionProviderId } from '@texra/controllers/modelAccess/subscriptionProviders';
 import { allSettledVoid } from '@texra/utils/core/allSettledVoid';
-import { hasExtension } from '@utils/core/pathCore';
 import { ensureError } from '@utils/errors/errorMessage';
 import { normalizeLineEndings } from '@utils/text/stringUtils';
 import {

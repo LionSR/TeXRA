@@ -23,7 +23,6 @@ import {
   normalizeToolName,
 } from '@shared/tools/toolDisplayName';
 import { isEditLikeToolName, toolDisplayKind } from '@shared/tools/toolKind';
-import { filterNotNullish } from '@utils/core';
 
 import { stringifyPayload, transcriptText } from './transcriptText';
 import type {
@@ -109,7 +108,7 @@ function editCandidates(
       const path = inputFilePath(raw);
       return { oldText, newText, ...(path ? { path } : {}) };
     })
-    .filter(filterNotNullish);
+    .filter(Predicate.isNotNullish);
 }
 
 function buildEditSections(ctx: SectionContext): ToolSection[] {
@@ -360,7 +359,7 @@ function buildDelegationSections(ctx: SectionContext): ToolSection[] {
     input.extractFigures ? 'Extract figures' : undefined,
     input.extractTikz ? 'Extract TikZ' : undefined,
     input.reflect ? 'Critic review' : undefined,
-  ].filter(filterNotNullish);
+  ].filter(Predicate.isNotNullish);
   if (badges.length > 0) {
     sections.push({ kind: 'badges', label: 'Extraction:', badges });
   }

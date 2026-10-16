@@ -15,6 +15,7 @@ import {
   RUN_OUTCOME,
   type RunId,
   type AgentConfigPayload,
+  generateRunId,
 } from '@texra-ai/harness/schemas';
 import {
   describeFollowUpFailure,
@@ -43,7 +44,6 @@ import {
   type TexraApprovalPolicy,
 } from '@shared/approvalPolicy';
 import { readConfigSettingFrom } from '@utils/config/platformSettings';
-import { aggregateError, generateRunId } from '@utils/core';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 import { createHeadlessCliHostInteractions } from './approvalAdapter';
@@ -636,7 +636,7 @@ export function executeCliRequest(
     if (Result.isFailure(finalization)) {
       return yield* Effect.die(
         primaryRunFailure
-          ? aggregateError(
+          ? new AggregateError(
               [primaryRunFailure.error, finalization.failure],
               'CLI run failed and its final artifacts could not be persisted',
             )

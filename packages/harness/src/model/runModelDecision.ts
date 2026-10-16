@@ -1,4 +1,4 @@
-import { filterNotNullish } from '@utils/core';
+import { Predicate } from 'effect';
 
 const RUN_MODEL_PRECEDENCE = {
   'explicit-override': 0,
@@ -55,7 +55,7 @@ export function decideRunModel(
 ): RunModelDecision | null {
   const ordered = candidates
     .map(normalizeCandidate)
-    .filter(filterNotNullish)
+    .filter(Predicate.isNotNullish)
     .toSorted(
       (left, right) =>
         RUN_MODEL_PRECEDENCE[left.reason] - RUN_MODEL_PRECEDENCE[right.reason],

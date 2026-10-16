@@ -1,5 +1,9 @@
 import * as path from 'node:path';
 import { createGunzip } from 'node:zlib';
+import {
+  randomizedExponentialBackoff,
+  isTransientHttpStatus,
+} from '@texra-ai/harness/plugins';
 
 import * as NodeStream from '@effect/platform-node/NodeStream';
 import { parse as parseContentDisposition } from 'content-disposition';
@@ -20,13 +24,10 @@ import { Headers, HttpClient } from 'effect/http';
 import { StatusCodes } from 'http-status-codes';
 import * as tar from 'tar';
 
-import { withLogChannel } from '@texra-ai/harness';
-import { randomizedExponentialBackoff } from '@utils/core/backoffSchedule';
-import { isTransientHttpStatus } from '@utils/core/httpStatus';
+import { withLogChannel, hasExtension } from '@texra-ai/harness';
 import { readDirectoryTypedTolerant } from '@utils/files/fsDurability';
 import { entryExists } from '@utils/files/fsEntryExists';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
-import { hasExtension } from '@utils/core/pathCore';
 import { normaliseArxivIdentifier } from './arxivIdentifier';
 import { indentLatexFilesInDirectory } from './formatter/indentDirectory';
 import type { LatexFormatter } from './formatter/texFormatter';

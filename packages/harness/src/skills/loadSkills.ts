@@ -7,7 +7,6 @@ import { Effect, FileSystem } from 'effect';
 // Local imports - common
 import { isNotADirectoryError } from '@common/errors';
 import type { ActiveSkillSourceScope } from '@shared/schemas';
-import { byString } from '@utils/core';
 import { absentReason } from '@utils/files/fsEntryExists';
 
 // Local imports - skill parsing
@@ -124,7 +123,7 @@ const scanSkillRoot = Effect.fn('skills.scanSkillRoot')(function* (
   );
   if (names === undefined) return { skills, errors };
 
-  for (const name of names.toSorted(byString)) {
+  for (const name of names.toSorted((a, b) => a.localeCompare(b))) {
     const skillDir = path.join(root, name);
     const skillPath = path.join(skillDir, 'SKILL.md');
     const realSkillPath: string | undefined = yield* fs

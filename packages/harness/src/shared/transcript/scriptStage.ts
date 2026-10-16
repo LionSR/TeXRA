@@ -11,7 +11,7 @@
  * its answer is its card's delivery (`deliveredResponse`); its duration and
  * cost are its child's rows.
  */
-import { Predicate } from 'effect';
+import { Predicate, absurd } from 'effect';
 import {
   agentName,
   TOOL_CALL_STATUS,
@@ -29,7 +29,7 @@ import {
 import type { ReadonlyDeep } from '@shared/session/readonlyDeep';
 import { deliveredResponse } from '@shared/subagentFollowup';
 import { formatWorkflowCallFiles } from '@shared/transcript/workflowCall';
-import { assertNever, getBasename } from '@utils/core';
+import { getBasename } from '@utils/core';
 import {
   formatCompactDuration,
   formatCostUsd,
@@ -149,7 +149,7 @@ function pendingRequestLine(payload: ReadonlyDeep<PermissionPayload>): string {
     case 'userQuestion':
       return 'Wants an answer to a question';
     default:
-      return assertNever(payload, 'Unhandled request kind');
+      return absurd(payload);
   }
 }
 

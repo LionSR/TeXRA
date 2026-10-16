@@ -30,3 +30,9 @@ export {
   type AgentBlockResult,
   type RecipeChange,
 } from '@tools/toolTable';
+// The harness's retry policy: which HTTP statuses are worth retrying, the
+// randomized exponential backoff `Schedule` its fetches retry on, and the
+// capped, jittered delay a caller that sleeps for itself waits.
+export { jitteredExponentialBackoffMs } from '@utils/core';
+export { randomizedExponentialBackoff } from '@utils/core/backoffSchedule';
+export { isTransientHttpStatus } from '@utils/core/httpStatus';

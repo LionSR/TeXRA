@@ -38,7 +38,6 @@ import type { ToolResult } from '@shared/schemas';
 import { ArxivSearchTool } from '@texra/tools/arxiv/ArxivSearchTool';
 import { ToolCatalog } from '@tools/liveTools';
 import type { ProcessPluginLayer } from '@tools/toolTable';
-import { generateShortId } from '@utils/core';
 
 // Local imports - language model tools
 import {
@@ -173,7 +172,7 @@ const copilotTools = Effect.fnUntraced(function* (
                 ),
                 Effect.provideService(ToolContext, {
                   // Copilot's invocation names no call id of its own.
-                  callId: `${lmName}-${generateShortId()}`,
+                  callId: `${lmName}-${crypto.randomUUID()}`,
                   env: { roots },
                   emit: () => undefined,
                 }),

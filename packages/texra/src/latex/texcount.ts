@@ -1,14 +1,12 @@
-import { Effect, FileSystem } from 'effect';
+import { Effect, FileSystem, Predicate, Array as Arr } from 'effect';
 
-import { withLogChannel } from '@texra-ai/harness';
+import { withLogChannel, hasExtension } from '@texra-ai/harness';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import { runToolWithCheck } from '@texra/utils/system/toolChecks';
-import { filterNotNull, filterNotNullish, ensureArray } from '@utils/core';
 import { pathToLocationIn } from '@utils/files/fileLocation';
 import { pathExists } from '@utils/files/fsDurability';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { normalizeLineEndings } from '@utils/text/stringUtils';
-import { hasExtension } from '@utils/core/pathCore';
 import { LATEX_COMMANDS_CHANNEL as CHANNEL } from './latexLogging';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
@@ -188,8 +186,12 @@ const getIndividualCounts = Effect.fn('texcount.getIndividualCounts')(
     );
 
     return {
-      outputs: results.map((result) => result.output).filter(filterNotNull),
-      errors: results.map((result) => result.error).filter(filterNotNullish),
+      outputs: results
+        .map((result) => result.output)
+        .filter(Predicate.isNotNull),
+      errors: results
+        .map((result) => result.error)
+        .filter(Predicate.isNotNullish),
     };
   },
 );
@@ -283,7 +285,7 @@ export const getTeXCount = Effect.fn('texcount.getTeXCount')(function* (
   FileSystem.FileSystem | ChildProcessSpawner
 > {
   const counted = Effect.gen(function* () {
-    const trimmedPaths = ensureArray(filePaths)
+    const trimmedPaths = Arr.ensure(filePaths)
       .map((filePath) => filePath.trim())
       .filter((filePath) => filePath.length > 0);
 
@@ -359,7 +361,7 @@ export function parseTeXCountStats(output: string): TeXCountStat[] {
   return TEXCOUNT_STAT_PATTERNS.map(([pattern, template]) => {
     const match = output.match(pattern);
     return match ? { label: template.replace('$1', match[1]) } : null;
-  }).filter(filterNotNull);
+  }).filter(Predicate.isNotNull);
 }
 
 export const getTeXCountStats = Effect.fn('texcount.getTeXCountStats')(

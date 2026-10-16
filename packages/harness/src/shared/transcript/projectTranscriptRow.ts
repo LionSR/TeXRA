@@ -11,6 +11,7 @@
  * density (one-liner or expanded card) is a paint-time choice; it is never
  * expressed by withholding a row.
  */
+import { absurd } from 'effect';
 import {
   MESSAGE_TYPES,
   type ErrorLogData,
@@ -23,7 +24,6 @@ import {
   hasIncompleteEmbeddedSubagentFollowup,
   summarizeSubagentFollowup,
 } from '@shared/subagentFollowup';
-import { assertNever } from '@utils/core';
 import { formatCompactTokenCount } from '@utils/text/stringUtils';
 
 import { toolRowModel, type ToolRowModelContext } from './toolRowModel';
@@ -350,9 +350,6 @@ export function logPayloadRow(
       return undefined;
 
     default:
-      return assertNever(
-        payload,
-        `Unprojected log messageType: ${String((payload as LogPayload).messageType)}`,
-      );
+      return absurd(payload);
   }
 }

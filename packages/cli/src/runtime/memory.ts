@@ -1,4 +1,5 @@
-import { Effect } from 'effect';
+import { normalizeFilePath } from '@texra-ai/harness/schemas';
+import { Effect, Predicate } from 'effect';
 
 import { withSessionFs, type StorageFs } from '@texra-ai/harness';
 import { resolveMemoryStoragePath } from '@platform/defaults/workspaceStorage';
@@ -6,7 +7,6 @@ import type { MemoryViewItem } from '@shared/tools/memoryView';
 import { displayToStoragePath, toDisplayPath } from '@tools/memory/memoryUtils';
 import { MEMORY_DISPLAY_ROOT } from '@tools/memory/constants';
 import { loadMemoryPreview } from '@tools/memory/memoryFileSystem';
-import { filterNotNullish, normalizeFilePath } from '@utils/core';
 import {
   formatBytes,
   formatLocaleTimestamp,
@@ -29,7 +29,7 @@ export function cliMemoryItemDescription(item: MemoryViewItem): string {
     formatBytes(item.size),
     formatModifiedDate(item.mtime),
     item.modifiedBy ? `by ${item.modifiedBy}` : undefined,
-  ].filter(filterNotNullish);
+  ].filter(Predicate.isNotNullish);
   return truncateSummary(parts.join('; '), MEMORY_DESCRIPTION_MAX);
 }
 

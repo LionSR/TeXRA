@@ -8,6 +8,7 @@
  */
 
 // Third-party imports
+import { getBasename } from '@texra-ai/harness/schemas';
 import { html, nothing, type TemplateResult } from 'lit';
 import { classMap } from 'lit/directives/class-map.js';
 import { ifDefined } from 'lit/directives/if-defined.js';
@@ -24,7 +25,6 @@ import { highlightSpans } from '@texra/shared/highlighting/highlightCode';
 import { stopSpinnerMotion } from '@ui/wa/spinner';
 import { renderStatusBadge } from '@ui/wa/statusIcons';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
-import { getBasename } from '@utils/core';
 import { formatBytes } from '@utils/text/stringUtils';
 
 // Local imports - formatter helpers

@@ -12,6 +12,7 @@ import {
   type RunId,
   AgentConfigSchema,
   type AgentConfigPayload,
+  generateRunId,
 } from '@texra-ai/harness/schemas';
 import {
   TEXRA_APPROVAL_POLICY_CONFIG_KEY,
@@ -21,7 +22,6 @@ import type { RequestErrorWire } from '@texra/shared/session/sessionFrames';
 import type { TaskSummary } from '@texra/controllers/server/protocol';
 import type { ServiceClient } from '@texra/controllers/server/client';
 import { readConfigSettingFrom } from '@utils/config/platformSettings';
-import { generateRunId } from '@utils/core';
 import { ensureError } from '@utils/errors/errorMessage';
 
 import { resolveCliRunAgent } from '../runtime/agents';

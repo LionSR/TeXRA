@@ -14,7 +14,6 @@ import type { SettingsStores } from '@shared/config/settingsAccess';
 import type { NormalizedUsage, RunId } from '@shared/schemas';
 import type { UsageLog } from '@shared/usageLog';
 import { environment } from '@utils/system/nodeWorkspace';
-import { roundTo } from '@utils/core';
 
 /**
  * The priced usage of one turn, or `null` when the provider reported none.
@@ -109,7 +108,7 @@ export const reportUsage = (
             usage.cacheMissInputTokens ??
             Math.max(0, usage.inputTokens - cachedInputTokens),
           outputTokens: usage.outputTokens,
-          cost: roundTo(usage.cost, 6),
+          cost: Number(usage.cost.toFixed(6)),
           responseTimeMs: Math.round(usage.responseTimeMs ?? 0),
           cachedInputTokens,
           reasoningTokens: usage.reasoningTokens ?? 0,

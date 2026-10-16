@@ -1,8 +1,8 @@
 // Per-project document metadata. Dockview owns group positions, sizes and tabs.
+import { getBasename } from '@texra-ai/harness/schemas';
 import { z } from 'zod';
 
 import type { TeXRAIconName } from '@shared/iconNames';
-import { clamp, getBasename } from '@utils/core';
 import type { SerializedDockview } from 'dockview';
 
 export const WORKBENCH_KIND_META = {
@@ -144,6 +144,6 @@ export function setSidebarWidth(
   state: DesktopShellState,
   width: number,
 ): DesktopShellState {
-  const next = clamp(Math.round(width), 220, 480);
+  const next = Math.max(220, Math.min(480, Math.round(width)));
   return next === state.sidebarWidth ? state : { ...state, sidebarWidth: next };
 }

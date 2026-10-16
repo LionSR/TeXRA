@@ -1,4 +1,4 @@
-import { Effect } from 'effect';
+import { Effect, Predicate } from 'effect';
 import { defineCommand } from 'citty';
 
 import { getCatalogAgent } from '@agent/index';
@@ -13,7 +13,6 @@ import {
   type TexraApprovalPolicy,
 } from '@shared/approvalPolicy';
 import { readConfigSettingFrom } from '@utils/config/platformSettings';
-import { filterNotNullish } from '@utils/core';
 
 import { missingAgentMessage, missingTeamMessage } from '../runtime/agents';
 import {
@@ -215,7 +214,7 @@ export const runTeam = Effect.fn('runTeam')(function* (
               init.contextFiles,
             ),
           ]
-            .filter(filterNotNullish)
+            .filter(Predicate.isNotNullish)
             .join('\n\n');
         const config: AgentConfigPayload = {
           agent: rootAgent.name,
