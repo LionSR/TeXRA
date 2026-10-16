@@ -6,7 +6,6 @@ import { it as effectIt } from '@effect/vitest';
 
 import { describe, expect, it, vi } from 'vitest';
 import { globalDatabaseLayer } from '@controllers/session/Database';
-import { GlobalValues } from '@platform/processRuntime';
 import { processStoresLayer } from '@controllers/session/appStateStore';
 import { projectDatabaseLayer } from '@controllers/session/projectDatabase';
 import { openDesktopProjectRegistry } from '@desktop/main/desktopProjects.js';
@@ -14,6 +13,7 @@ import {
   DesktopProjectRecords,
   openDesktopProjectRecords,
 } from '@desktop/main/desktopProjectRecords.js';
+import { GlobalValues } from '@platform/processRuntime';
 import { SessionOwner } from '@platform/processRuntime';
 import { JsonStore } from '@platform/defaults/jsonStore';
 import {
