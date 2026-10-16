@@ -59,17 +59,6 @@ type _RegionRowsCoverTheCatalog = AssertNever<
     >
 >;
 
-function regionSet(stores: SettingsStores, provider: string) {
-  return Effect.gen(function* () {
-    const region = providerRegionSetting(provider);
-    // Region keys are catalog-modeled, so the default comes from the entry's
-    // schema, which the catalog builds from the region's China default.
-    return region
-      ? yield* readSettingFrom<boolean>(stores, region.key)
-      : undefined;
-  });
-}
-
 // ---------------------------------------------------------------------------
 // Endpoint
 // ---------------------------------------------------------------------------
@@ -92,7 +81,12 @@ export function supportsCustomEndpoint(provider: string): boolean {
 
 /** Whether a provider routes through its China-region endpoint. */
 export function useChinaRegion(stores: SettingsStores, provider: string) {
-  return regionSet(stores, provider).pipe(Effect.map((set) => set ?? false));
+  return Effect.gen(function* () {
+    const region = providerRegionSetting(provider);
+    // Region keys are catalog-modeled, so the default comes from the entry's
+    // schema, which the catalog builds from the region's China default.
+    return region ? yield* readSettingFrom<boolean>(stores, region.key) : false;
+  });
 }
 
 // ---------------------------------------------------------------------------
