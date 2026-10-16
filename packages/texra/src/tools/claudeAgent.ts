@@ -44,14 +44,8 @@ import type {
   ProcessChildStrategy,
 } from '@agent/runtime/childRunLoop';
 import { formatDelivery } from '@agent/runtime/deliveryEnvelope';
-import {
-  AgentCliEffortSchema,
-  ClaudeAgentModelSchema,
-  ClaudeAgentPermissionModeSchema,
-  MESSAGE_TYPES,
-} from '@shared/schemas';
+import { MESSAGE_TYPES } from '@shared/schemas';
 import type {
-  ClaudeAgentPermissionMode,
   RunId,
   TokenUsageStats,
   ToolError,
@@ -59,6 +53,12 @@ import type {
   ToolUseLog,
 } from '@shared/schemas';
 import { DELIVERY_TAG } from '@shared/deliveryTags';
+import {
+  AgentCliEffortSchema,
+  ClaudeAgentModelSchema,
+  ClaudeAgentPermissionModeSchema,
+} from '@texra/shared/agentCliSettings';
+import type { ClaudeAgentPermissionMode } from '@texra/shared/agentCliSettings';
 import { buildSyntheticToolUseConfig } from '@texra/tools/core/syntheticAgentConfig';
 import { buildAgentWorkspaceOptions } from '@texra/tools/agentWorkspaceOptions';
 import { onAbort } from '@utils/core';

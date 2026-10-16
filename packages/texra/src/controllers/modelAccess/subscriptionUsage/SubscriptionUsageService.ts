@@ -15,8 +15,8 @@ import type {
   SubscriptionUsageProvider,
   SubscriptionUsageSnapshot,
   SubscriptionUsageSnapshots,
-} from '@shared/schemas';
-import { SUBSCRIPTION_USAGE_PROVIDERS } from '@shared/schemas';
+} from '@texra/shared/model/subscriptionUsage';
+import { SUBSCRIPTION_USAGE_PROVIDERS } from '@texra/shared/model/subscriptionUsage';
 import { CODING_PLAN_SUBSCRIPTIONS } from '@texra/shared/model/codingPlans';
 import { useChinaRegion } from '@utils/config/providerConfig';
 import { toErrorMessage } from '@utils/errors/errorMessage';

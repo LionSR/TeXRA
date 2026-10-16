@@ -6,11 +6,11 @@ import { z } from 'zod';
 import { codexBackendModelId } from '@texra-ai/llm';
 import { withLogChannel } from '@texra-ai/harness';
 import type { SettingsStores } from '@shared/config/settingsAccess';
+import { type ToolError } from '@shared/schemas';
 import {
   isCodexModel,
   type AgentCliEffort,
-  type ToolError,
-} from '@shared/schemas';
+} from '@texra/shared/agentCliSettings';
 import { CodexStateKey } from '@texra/shared/settingsView/integrationSettings';
 import { readSettingFrom } from '@utils/config/platformSettings';
 import { withPerKeyLane, type PerKeyLane } from '@utils/core/perKeyQueue';

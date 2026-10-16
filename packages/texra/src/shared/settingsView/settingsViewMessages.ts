@@ -18,7 +18,6 @@ import {
   RunIdSchema,
   SkillDisplayIssueSchema,
   SkillDisplayItemSchema,
-  SubscriptionUsageSnapshotsSchema,
 } from '@shared/schemas';
 import {
   settingSchemaWithoutPrefault,
@@ -28,6 +27,7 @@ import {
   SUBSCRIPTION_AUTH_PROVIDERS,
   SubscriptionAuthStatusSchema,
 } from '@shared/model/subscriptionAuth';
+import { SubscriptionUsageSnapshotsSchema } from '@texra/shared/model/subscriptionUsage';
 import {
   SETTINGS_VIEW_COMMANDS,
   WebviewReadyMessageSchema,

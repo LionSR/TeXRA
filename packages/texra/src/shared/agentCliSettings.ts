@@ -130,5 +130,3 @@ export type ClaudeAgentPermissionMode = z.infer<
 
 export const CLAUDE_AGENT_DEFAULT_PERMISSION_MODE: ClaudeAgentPermissionMode =
   'acceptEdits';
-
-export const BASH_APPROVAL_CONFIG_KEY = 'texra.toolUse.requireBashApproval';

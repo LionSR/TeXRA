@@ -6,15 +6,15 @@ import * as codexAuth from '@texra-ai/llm/node';
 import { SubscriptionOAuthError } from '@texra-ai/llm/node';
 import type { PlatformSecrets } from '@platform/secrets';
 import type { SettingsStores } from '@shared/config/settingsAccess';
-import {
-  SubscriptionUsageSnapshotsSchema,
-  type SubscriptionUsageSnapshot,
-} from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { createDeferred } from '@test/support/asyncTestUtils';
 import { FakeSecrets, FakeStateStore } from '@test/support/FakePlatform';
 import { makeFakeSettingsStores } from '@test/support/settingsStoresFake';
+import {
+  SubscriptionUsageSnapshotsSchema,
+  type SubscriptionUsageSnapshot,
+} from '@texra/shared/model/subscriptionUsage';
 import { SubscriptionUsageService } from '@texra/controllers/modelAccess/subscriptionUsage/SubscriptionUsageService';
 import { parseKimiCodeUsage } from '@texra/controllers/modelAccess/subscriptionUsage/kimiCodeUsageAdapter';
 import {

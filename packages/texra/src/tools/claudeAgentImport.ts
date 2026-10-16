@@ -24,7 +24,7 @@ import * as path from 'node:path';
 import { Effect } from 'effect';
 
 import type { SettingsStores } from '@shared/config/settingsAccess';
-import type { ClaudeAgentPermissionMode } from '@shared/schemas';
+import type { ClaudeAgentPermissionMode } from '@texra/shared/agentCliSettings';
 import { ClaudeAgentStateKey } from '@texra/shared/settingsView/integrationSettings';
 import {
   binaryIfPresent,

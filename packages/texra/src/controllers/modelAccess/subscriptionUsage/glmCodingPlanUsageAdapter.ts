@@ -1,6 +1,6 @@
 import { Effect } from 'effect';
 
-import type { SubscriptionUsageWindow } from '@shared/schemas';
+import type { SubscriptionUsageWindow } from '@texra/shared/model/subscriptionUsage';
 import {
   asObject,
   fetchSubscriptionUsage,

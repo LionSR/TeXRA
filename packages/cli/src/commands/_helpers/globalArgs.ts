@@ -1,11 +1,14 @@
 import { CliUsageError, type CliGlobalArgs } from '@cli/runtime/cliContext';
 import { documentsNegatedBooleanForm } from '@cli/runtime/completionCommandTree';
-import { CLI_OUTPUT_FORMATS, type CliOutputFormat } from '@shared/schemas';
 import {
   TEXRA_APPROVAL_POLICIES,
   type TexraApprovalPolicy,
 } from '@shared/approvalPolicy';
 import { INTEROP_SKILL_DIRS } from '@skills/skillSources';
+import {
+  CLI_OUTPUT_FORMATS,
+  type CliOutputFormat,
+} from '@texra/shared/cliOutputFormat';
 import { isNonEmptyString } from '@utils/text/stringUtils';
 import type { ParsedArgs } from 'citty';
 

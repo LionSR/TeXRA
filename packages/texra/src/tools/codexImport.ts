@@ -26,7 +26,7 @@ import * as path from 'node:path';
 import { Effect, type FileSystem } from 'effect';
 
 import type { SettingsStores } from '@shared/config/settingsAccess';
-import type { CodexSandboxMode } from '@shared/schemas';
+import type { CodexSandboxMode } from '@texra/shared/agentCliSettings';
 import { CodexStateKey } from '@texra/shared/settingsView/integrationSettings';
 import {
   binaryIfPresent,

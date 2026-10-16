@@ -5,7 +5,6 @@ export * from './agent';
 export * from './agentConfig';
 export * from './runIdentity';
 export * from './workspaceAgents';
-export * from './agentCliSettings';
 export * from './fileFields';
 export * from './lineChanges';
 export * from './proposalFields';
@@ -61,9 +60,6 @@ export * from './pickerOptions';
 
 // Layer 5: ProgressView schemas
 export * from './progressView/data';
-
-// Layer 6: Other view message schemas
-export * from './subscriptionUsage';
 
 // Layer 7: Composite schemas (depend on multiple layers)
 export * from './runState';

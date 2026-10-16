@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs';
+import { homedir } from 'node:os';
 import path from 'node:path';
 
 import { Effect, FileSystem, Result } from 'effect';
@@ -9,11 +10,6 @@ import { safeParseJson } from '@common/parsing/safeParseJson';
 import type { MinimumLogLevel } from '@logger/effectDiagnostics';
 import { defaultNodeStorageRoot } from '@platform/defaults/nodeStorage';
 import {
-  CLI_OUTPUT_FORMATS,
-  CLI_OUTPUT_FORMAT_CONFIG_KEY,
-  type CliOutputFormat,
-} from '@shared/schemas';
-import {
   TEXRA_APPROVAL_POLICY_CONFIG_KEY,
   TEXRA_APPROVAL_POLICY_NO_INPUT_DEFAULT,
   parseTexraApprovalPolicy,
@@ -22,6 +18,11 @@ import {
 } from '@shared/approvalPolicy';
 import { stricterPolicy } from '@shared/approvalBypassKind';
 import type { SkillSourceOptions } from '@skills/skillSources';
+import {
+  CLI_OUTPUT_FORMATS,
+  CLI_OUTPUT_FORMAT_CONFIG_KEY,
+  type CliOutputFormat,
+} from '@texra/shared/cliOutputFormat';
 import { readConfigSettingFrom } from '@utils/config/platformSettings';
 import { absentReason } from '@utils/files/fsEntryExists';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -29,6 +30,7 @@ import { envVar } from '@utils/system/envFlags';
 import { isNonEmptyString } from '@utils/text/stringUtils';
 
 import { isCliSupportedModelId, loadCliStartupConfig } from './cliConfig';
+import { loginShellEnvironment } from './loginShellEnv';
 import { resolveCliResourcesPath } from './resourcesPath';
 
 type CliMode = 'headless' | 'interactive';
@@ -525,4 +527,24 @@ export function launchApprovalNotice(
   return requested === 'yolo'
     ? `Auto-approve can't override Block: tasks run under the project's Block policy. ${change}`
     : `Tasks run under the project's approval policy, ${texraApprovalPolicyLabel(configured)}, not ${texraApprovalPolicyLabel(requested)}: a launch can only narrow it, or auto-approve its own task. ${change}`;
+}
+
+/**
+ * Add the login shell's variables to this process's environment, keeping
+ * every variable the process already has (the home directory and the
+ * `TEXRA_*` settings its starter passed). Children this process spawns
+ * inherit the result. Says once which PATH it runs with.
+ */
+export function adoptLoginShellEnvironment(): Effect.Effect<void, Error> {
+  return loginShellEnvironment(process.env.HOME ?? homedir()).pipe(
+    Effect.flatMap((login) =>
+      Effect.suspend(() => {
+        for (const [name, value] of Object.entries(login))
+          if (process.env[name] === undefined) process.env[name] = value;
+        return Effect.logInfo(
+          `Using the login shell's environment (PATH=${process.env.PATH ?? ''})`,
+        );
+      }),
+    ),
+  );
 }

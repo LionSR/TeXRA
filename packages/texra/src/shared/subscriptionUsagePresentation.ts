@@ -1,7 +1,7 @@
 import type {
   SubscriptionUsageSnapshot,
   SubscriptionUsageWindow,
-} from '@shared/schemas';
+} from '@texra/shared/model/subscriptionUsage';
 
 const STALE_AFTER_MS = 2 * 60_000;
 

@@ -2,7 +2,7 @@ import { Duration, Effect, Predicate } from 'effect';
 import { HttpClient, HttpClientResponse } from 'effect/http';
 import { z } from 'zod';
 
-import type { SubscriptionUsageWindow } from '@shared/schemas';
+import type { SubscriptionUsageWindow } from '@texra/shared/model/subscriptionUsage';
 import { clamp } from '@utils/core';
 
 import type { Cause } from 'effect';

@@ -17,11 +17,11 @@ import {
   type SelectedModel,
   selectModel,
 } from '@texra-ai/llm';
+import { ToolError } from '@shared/schemas';
 import {
   AgentCliEffortSchema,
-  ToolError,
   type AgentCliEffort,
-} from '@shared/schemas';
+} from '@texra/shared/agentCliSettings';
 import type { ModelConfig } from 'llm-zoo';
 
 /** Which models an agent CLI accepts, for validation and its error message. */

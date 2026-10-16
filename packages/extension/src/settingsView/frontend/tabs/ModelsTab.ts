@@ -8,7 +8,7 @@ import { LitElement, html, css, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 
 // Local imports - shared styles
-import type { SubscriptionUsageSnapshots } from '@shared/schemas';
+import type { SubscriptionUsageSnapshots } from '@texra/shared/model/subscriptionUsage';
 import type {
   ModelSelectionItem,
   ProviderKeyStatus,

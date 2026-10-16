@@ -3,14 +3,17 @@ import { Deferred, Effect, Exit, Schedule, Scope } from 'effect';
 
 import { SessionOwner, Sessions } from '@texra-ai/harness';
 import { entryChannel, entryMessage, setLogSink } from '@logger/logSink';
-import { adoptLoginShellEnvironment } from '@platform/defaults/loginShellEnv';
 import { askServiceToStop } from '@texra/controllers/server/client';
 import { servicePaths } from '@texra/controllers/server/discovery';
 import { ServiceProjects } from '@texra/controllers/server/handlers';
 import { serve } from '@texra/controllers/server/serve';
 import type { ServiceInfo } from '@texra/controllers/server/protocol';
 
-import { CliUsageError, type CliContext } from '../runtime/cliContext';
+import {
+  adoptLoginShellEnvironment,
+  CliUsageError,
+  type CliContext,
+} from '../runtime/cliContext';
 import {
   cliServiceProjects,
   connectCliService,
