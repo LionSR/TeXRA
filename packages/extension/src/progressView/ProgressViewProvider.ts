@@ -30,6 +30,7 @@ import {
   getFirstRunDone,
   setOnboardingDeclined,
 } from '@shared/state/onboardingState';
+import { createFlushableDebounce } from '@texra/utils/core/flushableDebounce';
 import {
   EXTENSION_CATEGORIES,
   getFilterExtensions,
@@ -76,7 +77,6 @@ import {
 import { workspaceFileOptions } from '@texra/controllers/session/workspaceFileOptions';
 import { hasUsableSetupCredential } from '@texra/model/setupCredentialAccess';
 import { checkCoreDependencies } from '@texra/utils/system/checkCoreDependencies';
-import { createFlushableDebounce } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { createExtensionHostRequests } from './extensionHostRequests';

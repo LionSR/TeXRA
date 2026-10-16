@@ -4,7 +4,7 @@
  * surface's base with this rule, so a base change never leaves a file of
  * another base selected. Shared because the sheet is a browser renderer.
  */
-import { getFileStem } from '@utils/core';
+import { getFileStem } from '@texra-ai/harness/schemas';
 
 /**
  * Trailing/embedded `_r{N}` round token (`<base>_r{round}`), owned here for

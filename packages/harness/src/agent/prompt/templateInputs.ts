@@ -1,6 +1,6 @@
 import * as path from 'node:path';
 
-import { Effect, FileSystem } from 'effect';
+import { Effect, FileSystem, Predicate } from 'effect';
 import { z } from 'zod';
 
 import type { AgentTrace } from '@agent/trace';
@@ -10,7 +10,6 @@ import type { AttachedMemoryMiss } from '@shared/schemas';
 import { activatedSkillNames } from '@skills/runtimeSkills';
 import { parseFrontmatter } from '@tools/memory/memoryMeta';
 import { displayToStoragePath } from '@tools/memory/memoryUtils';
-import { filterNotNull } from '@utils/core';
 import { isNonEmptyString } from '@utils/text/stringUtils';
 import { getListOfFiles, getPromptFileName } from '@utils/prompt';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
@@ -377,8 +376,12 @@ const getAttachedMemories = Effect.fn('userVars.getAttachedMemories')(
       { concurrency: 'unbounded' },
     );
 
-    const parts = results.map((result) => result.xml).filter(filterNotNull);
-    const misses = results.map((result) => result.miss).filter(filterNotNull);
+    const parts = results
+      .map((result) => result.xml)
+      .filter(Predicate.isNotNull);
+    const misses = results
+      .map((result) => result.miss)
+      .filter(Predicate.isNotNull);
     return {
       xml:
         parts.length > 0

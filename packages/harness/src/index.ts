@@ -64,6 +64,22 @@ export {
   type ProcessServices,
 } from '@platform/processRuntime';
 
+// The process's stores: the global root's current values, each family a
+// host or plugin declares (`ValueFamily`), the per-project settings stores,
+// and storage maintenance under a storage root.
+export { GlobalValues, StateStores } from '@platform/processRuntime';
+export type { ValueFamily } from '@shared/session/valueFamily';
+export {
+  DatabaseWriteFailed,
+  type CurrentValues,
+} from '@shared/session/database';
+export type { AppStateStore } from '@platform/interfaces';
+export {
+  deleteStorageInventory,
+  readStorageInventory,
+  type StorageInventory,
+} from '@controllers/session/projectDatabase';
+
 // The failures the surface names.
 export {
   AgentNotFound,
@@ -230,6 +246,25 @@ export {
 } from '@platform/rootedFs';
 // A path as a `FileLocation` against the workspace root a caller holds.
 export { pathToLocationIn } from '@utils/files/fileLocation';
+// Path containment on the platform's own paths, a path's segments and its
+// POSIX form, and an extension check that ignores case. (The browser-safe
+// path basics are in `./schemas`.)
+export {
+  getPathSegments,
+  hasExtension,
+  isPathWithin,
+  isStrictlyWithin,
+  toPosixPath,
+} from '@utils/core/pathCore';
+// The office formats the Read tool converts to text.
+export { OFFICE_EXTENSIONS } from '@utils/files/mimeUtils';
+// One exclusive FIFO lane per key, for work that must run one at a time per
+// key (a file, a project, a prompt queue).
+export {
+  withPerKeyLane,
+  type PerKeyLane,
+  type PerKeyLanes,
+} from '@utils/core/perKeyQueue';
 // Which external tools this machine has, as plugins' `availability` probes
 // answered; a host reads it and asks for a refresh.
 export {

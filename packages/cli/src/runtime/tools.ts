@@ -2,13 +2,13 @@ import { Effect } from 'effect';
 
 // Local imports
 import { ToolCatalog, type ToolProbeInputs } from '@texra-ai/harness';
+import { ToolRegistry } from '@texra-ai/harness/plugins';
 import {
   buildToolDashboardItems,
   visibleToolPlugins,
 } from '@texra/controllers/settingsView/ToolDashboardData';
 import type { ToolDashboardItem } from '@texra/shared/settingsView/settingsViewMessages';
 import type { ToolPluginSetup } from '@texra/tools/pluginCards';
-import { ToolRegistry } from '@tools/toolTable';
 
 type CliToolGuideKind = 'install' | 'auth';
 

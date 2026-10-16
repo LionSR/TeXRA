@@ -1,6 +1,6 @@
 /** Run history derived from committed session events. */
 
-import { Effect, Stream } from 'effect';
+import { Effect, Stream, Predicate } from 'effect';
 
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 
@@ -15,7 +15,6 @@ import {
   RUN_SUBSTATE,
   type RunLifecycleStatus,
 } from '@shared/schemas';
-import { filterNotNull, toNewestFirstByTimestamp } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { deriveResumability } from './resumability';
@@ -114,8 +113,7 @@ export const listRuns = Effect.fn('listRuns')(function* (
     { concurrency: RUN_STORAGE_CONCURRENCY },
   );
 
-  return toNewestFirstByTimestamp(
-    results.filter(filterNotNull),
-    (item) => item.timestamp,
-  );
+  return results
+    .filter(Predicate.isNotNull)
+    .toSorted((a, b) => Date.parse(b.timestamp) - Date.parse(a.timestamp));
 });

@@ -9,7 +9,6 @@ import { useLayoutEffect, type ReactNode } from 'react';
 // Local imports - shared constants and schemas
 import { clampModalWidth } from '@cli/tui/ui/theme';
 import { interruptedTasks } from '@ui/copy/interruptedTasks';
-import { clamp } from '@utils/core';
 
 // Local imports - conversation panes and layout
 import {
@@ -124,7 +123,7 @@ export function ConversationRegion({
     ? queuedFollowUpPanelRowCount(queuedFollowUpMessages)
     : 0;
   const queuedFollowUpPanelRows = queuedFollowUpPanelWanted
-    ? clamp(rows - footerRows, 0, requestedQueuedFollowUpPanelRows)
+    ? Math.max(0, Math.min(requestedQueuedFollowUpPanelRows, rows - footerRows))
     : 0;
   const queuedFollowUpPanelVisible = queuedFollowUpPanelRows > 0;
   // The open-time notice shares the queued panel's place above the footer
@@ -132,10 +131,12 @@ export function ConversationRegion({
   const noticeHidden = useSignal(interruptedNoticeHiddenSignal);
   const noticeTasks =
     noticeHidden || foregroundOpen ? [] : interruptedTasks(view);
-  const noticeBudget = clamp(
-    rows - footerRows - queuedFollowUpPanelRows,
+  const noticeBudget = Math.max(
     0,
-    interruptedNoticeRowCount(noticeTasks),
+    Math.min(
+      interruptedNoticeRowCount(noticeTasks),
+      rows - footerRows - queuedFollowUpPanelRows,
+    ),
   );
   const noticeRows = noticeBudget < NOTICE_MIN_ROWS ? 0 : noticeBudget;
   const aboveFooterRows = queuedFollowUpPanelRows + noticeRows;

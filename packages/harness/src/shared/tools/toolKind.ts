@@ -11,7 +11,6 @@
  * so a renamed or removed registered tool is caught without introducing a
  * shared-to-tools dependency.
  */
-import { safeLookup } from '@utils/core';
 
 import { normalizeToolName } from './toolDisplayName';
 
@@ -50,7 +49,8 @@ export type CanonicalToolDisplayName = keyof typeof TOOL_DISPLAY_KIND;
  *  `Object.prototype` member. */
 export function toolDisplayKind(toolName: string): ToolDisplayKind | undefined {
   const key = normalizeToolName(toolName);
-  return safeLookup(TOOL_DISPLAY_KIND, key);
+  const kinds: Readonly<Record<string, ToolDisplayKind>> = TOOL_DISPLAY_KIND;
+  return Object.hasOwn(kinds, key) ? kinds[key] : undefined;
 }
 
 /** True for tools whose input renders as an old/new diff. Beyond the exact

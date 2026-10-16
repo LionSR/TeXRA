@@ -11,10 +11,10 @@ import {
   isApiProvider,
 } from '@texra-ai/llm';
 import { defineTool, Secrets } from '@texra-ai/harness';
+import { executed } from '@texra-ai/harness/plugins';
 import { ToolError } from '@shared/schemas';
 
 // Local file imports
-import { executed } from '@tools/core/result';
 
 const UnsetApiKeyInputSchema = z.strictObject({
   provider: z

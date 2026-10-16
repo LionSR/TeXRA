@@ -1,69 +1,19 @@
 /**
- * Core utilities - consolidated type, async, comparator, math, url, id,
- * path-basics, and semaphore helpers. Formerly one file per concern in this
- * folder.
+ * Core utilities: browser-safe path basics, abort and failure helpers, and
+ * id minting.
  *
  * NOTE: pathCore stays a separate module because it depends on Node.js
- * 'path' while this file is used by webview frontend code (browser context).
- * The path helpers here (normalizeFilePath, getBasename, getFileStem) build
- * on 'pathe' — a dependency-free, browser-safe reimplementation of
- * node:path — so they're safe for both browser and backend callers.
- * Anything needing real filesystem-path semantics (segment traversal,
- * `.`/`..` resolution) should import from '@utils/core/pathCore' instead.
- *
- * String validation/formatting primitives live in @utils/text/stringUtils;
- * per-key async serialization lives in @utils/core/perKeyQueue.
+ * 'path' while this file is reached from browser code through
+ * `@texra-ai/harness/schemas`. The path helpers here (normalizeFilePath,
+ * getBasename, getFileStem) build on 'pathe' — a dependency-free,
+ * browser-safe reimplementation of node:path. Anything needing real
+ * filesystem-path semantics (containment, `.`/`..` resolution) should
+ * import from '@utils/core/pathCore' instead.
  */
 import { customAlphabet, nanoid } from 'nanoid';
 import { basename as pathBasename, extname as pathExtname } from 'pathe';
 
 import type { RunId } from '@shared/schemas';
-
-// ---------------------------------------------------------------------------
-// typeGuards
-// ---------------------------------------------------------------------------
-
-/**
- * Type guards for common value structures.
- */
-
-/** Predicate for filtering null values from arrays while narrowing the element type. */
-export function filterNotNull<T>(item: T | null): item is T {
-  return item !== null;
-}
-
-/** Predicate for filtering null and undefined values from arrays while narrowing the element type. */
-export function filterNotNullish<T>(item: T | null | undefined): item is T {
-  return item != null;
-}
-
-/** Wrap a single value in an array, or return the array unchanged. */
-export function ensureArray<T>(value: T | T[]): T[] {
-  return Array.isArray(value) ? value : [value];
-}
-
-/**
- * Look up `key` in a string-keyed `Record`, guarded with `Object.hasOwn` so
- * an arbitrary/untrusted key (`toString`, `__proto__`, `constructor`, …)
- * cannot resolve to an inherited `Object.prototype` member. Returns
- * `fallback` (or `undefined`, if omitted) when `key` is not an own property.
- */
-export function safeLookup<T>(
-  record: Readonly<Record<string, T>>,
-  key: string,
-): T | undefined;
-export function safeLookup<T>(
-  record: Readonly<Record<string, T>>,
-  key: string,
-  fallback: T,
-): T;
-export function safeLookup<T>(
-  record: Readonly<Record<string, T>>,
-  key: string,
-  fallback?: T,
-): T | undefined {
-  return Object.hasOwn(record, key) ? record[key] : fallback;
-}
 
 // ---------------------------------------------------------------------------
 // pathBasics (browser-safe; Node-dependent path helpers live in pathCore.ts)
@@ -104,13 +54,6 @@ export function getFileStem(filePath: string | undefined | null): string {
   return pathBasename(base, pathExtname(base));
 }
 
-/** Exhaustiveness helper for discriminated unions. Call in the `default` branch of a switch. */
-export function assertNever(value: never, message: string): never {
-  const detail =
-    typeof value === 'string' ? value : JSON.stringify(value, undefined, 2);
-  throw new Error(`${message}: ${detail}`);
-}
-
 // ---------------------------------------------------------------------------
 // async
 // ---------------------------------------------------------------------------
@@ -135,85 +78,10 @@ export function onAbort(
 }
 
 /**
- * A trailing-edge timer batcher with a synchronous flush escape hatch. The
- * library debounce this replaced exposed only `cancel()` (discard the pending
- * call), with no way to force the trailing call to run early.
- * Several call sites need exactly that: run the pending work synchronously
- * right now (typically just before teardown/dispose), instead of either
- * waiting out the timer or dropping the work.
- *
- * `schedule()` always (re)starts the timer, matching a classic trailing
- * debounce. A call site that instead wants "start once, coalesce further
- * calls until it fires" (a throttle-style batching window) can guard with
- * `pending`: `if (!batcher.pending) batcher.schedule();`.
- *
- * The timer handle is cleared *before* the callback runs, so a `schedule()`
- * made from inside the callback opens a fresh window that this invocation's
- * own cleanup cannot cancel. Re-entrancy is not hypothetical: the CLI's
- * transcript sync flushes buffered trace chunks into the store from inside
- * its own callback, which synchronously re-schedules. A library debounce
- * that invokes and then cancels (es-toolkit's does) silently drops that
- * reschedule and leaves `pending` stuck true, freezing every later update.
- *
- * The callback is fixed at creation and takes no arguments — call sites that
- * need per-invocation data close over their own mutable state (as the
- * original hand-rolled versions already did) and read it when the callback
- * fires, rather than threading arguments through the timer.
- */
-export interface FlushableDebounce {
-  /** (Re)start the timer; invokes the callback after `waitMs` of inactivity. */
-  schedule(): void;
-  /**
-   * If a call is pending, invoke the callback synchronously right now and
-   * clear the timer. No-op when nothing is pending.
-   */
-  flush(): void;
-  /** Clear the pending timer without invoking the callback. No-op when nothing is pending. */
-  cancel(): void;
-  /** True while a call is scheduled and hasn't fired, flushed, or been cancelled yet. */
-  readonly pending: boolean;
-}
-
-export function createFlushableDebounce(
-  callback: () => void,
-  waitMs: number,
-): FlushableDebounce {
-  let timer: ReturnType<typeof setTimeout> | undefined;
-
-  function cancel(): void {
-    if (timer === undefined) return;
-    clearTimeout(timer);
-    timer = undefined;
-  }
-
-  function invoke(): void {
-    timer = undefined;
-    callback();
-  }
-
-  return {
-    schedule() {
-      cancel();
-      timer = setTimeout(invoke, waitMs);
-    },
-    flush() {
-      if (timer === undefined) return;
-      cancel();
-      invoke();
-    },
-    cancel,
-    get pending() {
-      return timer !== undefined;
-    },
-  };
-}
-
-/**
  * Reduce a NON-EMPTY failure list to the value to throw: the lone failure
  * unwrapped when there is exactly one, or an {@link AggregateError} carrying
  * `message` when there are several. Use as `throw aggregateError(...)` where a
- * failure is guaranteed, or to build an error for a `cause`. Callers that may
- * have collected nothing want {@link throwAggregated} instead.
+ * failure is guaranteed, or to build an error for a `cause`.
  */
 export function aggregateError(
   failures: readonly unknown[],
@@ -224,88 +92,9 @@ export function aggregateError(
     : new AggregateError(failures, message);
 }
 
-/**
- * Rethrow a collected set of independent failures with the conventional
- * shape: a no-op when empty, the single error unwrapped when there is exactly
- * one, and an {@link AggregateError} carrying `message` when there are
- * several. Centralizes the "run each teardown step, collect what threw, then
- * surface them together" tail that session and run shutdown paths repeat.
- */
-export function throwAggregated(
-  failures: readonly unknown[],
-  message: string,
-): void {
-  if (failures.length > 0) throw aggregateError(failures, message);
-}
-
 // ---------------------------------------------------------------------------
-// comparators
+// backoff
 // ---------------------------------------------------------------------------
-
-/**
- * Reusable sort comparator functions for use with Array.sort / Array.toSorted.
- */
-
-/** Alphabetically compare two objects by their `name` property. */
-export function byName<T extends { name: string }>(a: T, b: T): number {
-  return a.name.localeCompare(b.name);
-}
-
-/** Alphabetically compare two strings directly — pass as `.sort(byString)`. */
-export function byString(a: string, b: string): number {
-  return a.localeCompare(b);
-}
-
-/**
- * Build a comparator that alphabetically sorts objects by a derived string.
- * @example `.sort(byStringProp(t => t.path))`
- */
-export function byStringProp<T>(fn: (t: T) => string): (a: T, b: T) => number {
-  return (a, b) => fn(a).localeCompare(fn(b));
-}
-
-/**
- * Return a new array ordered by newest timestamp first.
- * Each timestamp is parsed once before sorting.
- */
-export function toNewestFirstByTimestamp<T>(
-  items: readonly T[],
-  timestampOf: (item: T) => string,
-): T[] {
-  return items
-    .map((item) => ({ item, key: Date.parse(timestampOf(item)) }))
-    .sort((a, b) => b.key - a.key)
-    .map(({ item }) => item);
-}
-
-// ---------------------------------------------------------------------------
-// math
-// ---------------------------------------------------------------------------
-
-/**
- * Clamp `value` to the inclusive range [`min`, `max`].
- * When `min > max` the lower bound wins and the result equals `min`.
- */
-export function clamp(value: number, min: number, max: number): number {
-  return Math.max(min, Math.min(max, value));
-}
-
-/**
- * Clamp `index` into `[0, length - 1]`.
- * Returns 0 when `length <= 0` so the result is always a valid array index.
- */
-export function clampIndex(index: number, length: number): number {
-  if (length <= 0) return 0;
-  return clamp(index, 0, length - 1);
-}
-
-/**
- * Round `value` to `decimals` decimal places, returning a number.
- * Equivalent to `Number(value.toFixed(decimals))` but expresses intent clearly.
- */
-export function roundTo(value: number, decimals: number): number {
-  return Number(value.toFixed(decimals));
-}
 
 /**
  * Compute a jittered exponential backoff delay: `baseMs * 2^(failures-1)`,

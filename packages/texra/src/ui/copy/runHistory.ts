@@ -1,4 +1,4 @@
-import { filterNotNullish } from '@utils/core';
+import { Predicate } from 'effect';
 import { formatResultCount } from '@utils/text/stringUtils';
 
 export function formatCliHistoryDeletionSummary(counts: {
@@ -15,6 +15,6 @@ export function formatCliHistoryDeletionSummary(counts: {
       ? `Failed to delete ${formatResultCount(counts.failed, 'task')}.`
       : undefined,
   ]
-    .filter(filterNotNullish)
+    .filter(Predicate.isNotNullish)
     .join(' ');
 }
