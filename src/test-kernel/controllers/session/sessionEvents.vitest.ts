@@ -70,7 +70,6 @@ import {
   globalDatabaseLayer,
   storeOpenElsewhere,
 } from '@controllers/session/Database';
-import { openProjectStateStore } from '@controllers/session/appStateStore';
 import { deletionCollector } from '@controllers/session/deletionCleanup';
 import { openStore } from '@controllers/session/storeSchema';
 import { sessionRequests } from '@controllers/session/SessionRequests';
@@ -84,6 +83,7 @@ import { SessionViewService } from '@controllers/session/SessionView';
 import { sessionInputsLayer } from '@controllers/session/sessionInputs';
 import { WorkspaceRoots } from '@controllers/session/WorkspaceRoots';
 import { onAppSignal } from '@eventBus/AppSignals';
+import { StateStores, type GlobalValues } from '@platform/processRuntime';
 import { SessionOwner, withProcessServices } from '@platform/processRuntime';
 import { AppState, type StateStore } from '@platform/interfaces';
 import type { ProcessProbe } from '@platform/defaults/nodeProcesses';
@@ -105,7 +105,7 @@ import {
   RUN_EARLIER_BUILD_MESSAGE,
 } from '@shared/runs/runStatusDisplay';
 import { runStateAppend } from '@shared/session/runHistory';
-import { Database, GlobalDatabase } from '@shared/session/database';
+import { Database } from '@shared/session/database';
 import { runActions } from '@shared/session/runActions';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import {
@@ -138,7 +138,10 @@ import {
   testProcessLayer,
 } from '@test/support/sessionGraphInstall';
 import { REPO_ROOT } from '@test/support/repoScan';
-import { storePluginsLayer } from '@test/support/setupPlatform';
+import {
+  storePluginsLayer,
+  globalValuesOver,
+} from '@test/support/setupPlatform';
 import { inquiryThreadRow } from '@test/support/inquiryThreadRow';
 import {
   DOCUMENTS_ACCEPTED_ARM,
@@ -868,7 +871,7 @@ describe('Sessions owner', () => {
           local,
           plugins: toolTable([]),
           services: yield* Effect.context<
-            GlobalDatabase | FileSystem.FileSystem | Path.Path
+            GlobalValues | FileSystem.FileSystem | Path.Path
           >(),
           closed: () => false,
         });
@@ -905,10 +908,12 @@ describe('Sessions owner', () => {
       }).pipe(
         Effect.provide(graph([runStart])),
         Effect.provide(
-          globalDatabaseLayer(createFakeWorkspaceRoots().globalStorage).pipe(
-            Layer.provide(ProcessIdentity.layer(SELF)),
-            Layer.provide(nodePlatformLayer),
-            Layer.orDie,
+          globalValuesOver(
+            globalDatabaseLayer(createFakeWorkspaceRoots().globalStorage).pipe(
+              Layer.provide(ProcessIdentity.layer(SELF)),
+              Layer.provide(nodePlatformLayer),
+              Layer.orDie,
+            ),
           ),
         ),
         Effect.provide(nodePlatformLayer),
@@ -939,7 +944,7 @@ describe('Sessions owner', () => {
           ),
           plugins: toolTable([]),
           services: yield* Effect.context<
-            GlobalDatabase | FileSystem.FileSystem | Path.Path
+            GlobalValues | FileSystem.FileSystem | Path.Path
           >(),
           closed: () => false,
         });
@@ -987,10 +992,12 @@ describe('Sessions owner', () => {
       }).pipe(
         Effect.provide(graph([runStart])),
         Effect.provide(
-          globalDatabaseLayer(createFakeWorkspaceRoots().globalStorage).pipe(
-            Layer.provide(ProcessIdentity.layer(SELF)),
-            Layer.provide(nodePlatformLayer),
-            Layer.orDie,
+          globalValuesOver(
+            globalDatabaseLayer(createFakeWorkspaceRoots().globalStorage).pipe(
+              Layer.provide(ProcessIdentity.layer(SELF)),
+              Layer.provide(nodePlatformLayer),
+              Layer.orDie,
+            ),
           ),
         ),
         Effect.provide(nodePlatformLayer),
@@ -1031,9 +1038,10 @@ describe('Sessions owner', () => {
             yield* Effect.addFinalizer(() =>
               Scope.close(projectScope, Exit.void),
             );
-            const state = yield* openProjectStateStore(storage, undefined).pipe(
-              Scope.provide(projectScope),
-            );
+            const stores = yield* StateStores;
+            const state = yield* stores
+              .project(storage, undefined)
+              .pipe(Scope.provide(projectScope));
             yield* state.update('shared', 'before session');
             const session = yield* Effect.acquireRelease(
               openTestSession({
@@ -1060,7 +1068,7 @@ describe('Sessions owner', () => {
             expect((yield* Effect.flip(state.get('shared')))._tag).toBe(
               'StateReadFailed',
             );
-            const reopened = yield* openProjectStateStore(storage, undefined);
+            const reopened = yield* stores.project(storage, undefined);
             expect(yield* reopened.get('shared')).toBe('after session');
           }),
         ),

@@ -25,7 +25,11 @@ import type { AgentCatalogShape } from '@agent/index/agentCatalog';
 import { ModelRetryGate } from '@agent/runtime/ModelRetryGate';
 import { RouteRetries } from '@agent/runtime/run/invocation';
 import type { ModelOptionStores } from '@model/computeModelOptions';
-import type { ProcessServices, SessionOwner } from '@platform/processRuntime';
+import {
+  GlobalValues,
+  type ProcessServices,
+  type SessionOwner,
+} from '@platform/processRuntime';
 import type { AgentDirectoriesPort, StateStore } from '@platform/interfaces';
 import {
   UNAVAILABLE_LANGUAGE_MODEL_PORT,
@@ -81,6 +85,19 @@ const ARMED_PLUGINS: readonly Plugin[] = [
   },
   { id: 'external-inquiry', arms: [EXTERNAL_INQUIRY_THREAD_ARM] },
 ];
+
+/** The process's `GlobalValues` over a global database layer, as
+ *  `processLayer` serves them, for a suite that opens a real global root. */
+export const globalValuesOver = <E, R>(
+  database: Layer.Layer<GlobalDatabase, E, R>,
+): Layer.Layer<GlobalValues | GlobalDatabase, E, R> =>
+  Layer.provideMerge(
+    Layer.effect(
+      GlobalValues,
+      Effect.map(GlobalDatabase, (opened) => opened.values),
+    ),
+    database,
+  );
 
 /** The plugin table a store or catalog suite runs over: every row kind and
  *  agent-file block TeXRA's plugins own, and no tool. */
@@ -315,6 +332,7 @@ export async function installFakeHost(host: FakeHost): Promise<void> {
     { unprobedToolAvailability },
     { SessionOwner: SessionOwnerTag },
     { AgentCatalog },
+    { processStoresLayer },
   ] = await Promise.all([
     import('@test/support/testWorkspaceRoots'),
     import('./testProcessRuntime'),
@@ -326,6 +344,7 @@ export async function installFakeHost(host: FakeHost): Promise<void> {
     import('./toolAvailabilityTestLayer'),
     import('@platform/processRuntime'),
     import('@agent/index/agentCatalog'),
+    import('@controllers/session/appStateStore'),
   ]);
   current = host;
   for (const key of Object.keys(harnessEnv)) delete harnessEnv[key];
@@ -424,6 +443,8 @@ export async function installFakeHost(host: FakeHost): Promise<void> {
     ),
   ).pipe(
     Layer.provideMerge(nodeSpawnerLayer),
+    // The process's stores, over the mocked global and project handles.
+    (services) => Layer.provideMerge(processStoresLayer, services),
     // The process's agent catalog, over the services above: one for every
     // runtime these services build, as a process has one. A suite loads it
     // (`refresh`) when it reads agents.

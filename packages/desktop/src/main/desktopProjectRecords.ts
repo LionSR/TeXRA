@@ -2,8 +2,7 @@
 import { Context, Effect, Result } from 'effect';
 import { z } from 'zod';
 
-import { GlobalDatabase } from '@shared/session/database';
-import type { ValueFamily } from '@shared/session/valueFamily';
+import type { CurrentValues, ValueFamily } from '@texra-ai/harness';
 
 /** How many closed projects File > Open Recent offers. */
 const RECENT_PROJECT_LIMIT = 10;
@@ -47,9 +46,12 @@ export const DESKTOP_PROJECTS: ValueFamily<ProjectLists> = {
  * Two lists in one current value: `remembered` is what reopens at launch,
  * the one shown last; `recent` is the closed projects File > Open Recent
  * offers, the most recently closed first.
+ *
+ * A function of the global values the caller holds (`GlobalValues`), not a
+ * read of the service: this module takes only types from the harness, so the
+ * e2e seed can bundle it without the harness runtime.
  */
-export const openDesktopProjectRecords = Effect.gen(function* () {
-  const { values } = yield* GlobalDatabase;
+export const openDesktopProjectRecords = (values: CurrentValues) => {
   const lists = Effect.map(
     values.get(DESKTOP_PROJECTS, PROFILE),
     (stored) => stored ?? EMPTY,
@@ -104,11 +106,9 @@ export const openDesktopProjectRecords = Effect.gen(function* () {
     replaceRecent: (roots: readonly string[]) =>
       update(({ remembered }) => ({ remembered, recent: roots })),
   };
-});
+};
 
-type DesktopProjectRecordsShape = Effect.Success<
-  typeof openDesktopProjectRecords
->;
+type DesktopProjectRecordsShape = ReturnType<typeof openDesktopProjectRecords>;
 
 /** The remembered and recent project lists, served to the registry and the
  *  launch read by the startup program that opened them. */

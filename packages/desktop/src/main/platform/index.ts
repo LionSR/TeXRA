@@ -14,23 +14,18 @@ import {
   type StateStore,
   type WorkspaceRoots,
   Sessions,
+  StateStores,
 } from '@texra-ai/harness';
 import {
   createNodeWorkspaceRoots,
   resolveGlobalStoragePath,
   resolveWorkspaceStoragePath,
 } from '@texra-ai/harness/node';
-import {
-  appStateStoreFromDatabase,
-  openProjectStateStore,
-  openRepoStateStore,
-} from '@controllers/session/appStateStore';
 import { emitAppSignal } from '@eventBus/AppSignals';
 import { FileSecrets, secretsDirectory } from '@platform/defaults/fileSecrets';
 import { nodeFileServices } from '@platform/defaults/jsonStore';
 import type { ConfigStore } from '@platform/defaults/jsonConfigProvider';
 import { openTexraConfigStores } from '@platform/defaults/nodeStores';
-import { GlobalDatabase } from '@shared/session/database';
 import { usageLogLayer } from '@telemetry/UsageLogService';
 import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
 import { bootstrapHost } from '@texra/controllers/hostBootstrap';
@@ -141,15 +136,6 @@ export const initializeElectronPlatform = Effect.fn(
         plugins: texraPlugins(),
         mcpConfigPath: USER_MCP_CONFIG_PATH,
         secrets,
-        // Application state is the one the CLI and the extension keep, in the
-        // shared global database: one install record for plugins and the trust
-        // given to them, and one set of tool switches, across the three hosts.
-        appState: Layer.effect(
-          AppState,
-          Effect.map(GlobalDatabase, (database) =>
-            appStateStoreFromDatabase(globalStorage, database.values),
-          ),
-        ),
         // No editor in this process.
         languageModel: UNAVAILABLE_LANGUAGE_MODEL_PORT,
         agentDirectories: agentDirectoriesLayer,
@@ -180,10 +166,9 @@ export const initializeElectronPlatform = Effect.fn(
   > = Effect.gen(function* () {
     const globalStateStore = yield* AppState;
     const agentDirectories = yield* AgentDirectories;
-    const workspaceStateStore = yield* openProjectStateStore(
-      storage,
-      undefined,
-    ).pipe(Scope.provide(processScope));
+    const workspaceStateStore = yield* (yield* StateStores)
+      .project(storage, undefined)
+      .pipe(Scope.provide(processScope));
     // Keys another window or the service writes reach this one's surfaces.
     yield* Effect.forkIn(secrets.watch(), processScope);
     repairLaunchPath();
@@ -194,7 +179,7 @@ export const initializeElectronPlatform = Effect.fn(
       globalStorage,
       config: configStores,
       workspaceState: workspaceStateStore,
-      repoState: yield* openRepoStateStore(undefined, storage),
+      repoState: yield* (yield* StateStores).repo(storage, undefined),
       globalState: globalStateStore,
     });
     yield* bootstrapHost({
