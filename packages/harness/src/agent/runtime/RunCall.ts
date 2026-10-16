@@ -4,7 +4,7 @@
  * response and attempt it belongs to), the script that issued it
  * (`IssuingScript`), and a `script` call's door to the run's tools
  * (`ScriptCalls`). The public contract every tool reads, the run
- * included, is `ToolContext` (`@agent/core/tools/ToolTypes`); an app's
+ * included, is `ToolContext`; an app's
  * tool reads none of those. The read-before-edit helpers here
  * (`recordToolFileRead`, `requireFileReadForEdit`) read the run's
  * `fileService.readFiles` through `ToolContext`, so any tool may use them.

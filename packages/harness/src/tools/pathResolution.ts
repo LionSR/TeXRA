@@ -3,9 +3,10 @@ import * as path from 'node:path';
 import { Effect } from 'effect';
 
 // Local imports
-import type { SettingsStores } from '@shared/config/settingsAccess';
 import { ToolError } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
+import { Settings } from '@shared/config/settings';
+import type { SettingsStores } from '@shared/config/settings';
 import { ensureError } from '@utils/errors/errorMessage';
 import { normalizeFilePath } from '@utils/core';
 import { locateInWorkspace } from '@utils/files/workspaceFS';
@@ -15,28 +16,34 @@ import {
   type MatchedExternalRoot,
   type StepRoot,
 } from '@utils/files/externalRoots';
-import { readSettingFrom } from '@utils/config/platformSettings';
 import {
   getPathSegments,
   isPathWithin,
   toPosixPath,
 } from '@utils/core/pathCore';
 
+/** A tool path resolved against the call's roots: its root-relative and
+ *  absolute spellings, the path filesystem calls take, and the external root
+ *  it falls in, if any. */
 export interface WorkspacePathResolution {
-  relative: string;
-  absolute: string;
+  readonly relative: string;
+  readonly absolute: string;
   /**
    * The path to pass to filesystem operations.
    * Absolute when operating outside the workspace (e.g. a worktree),
    * workspace-relative otherwise.
    */
-  fsPath: string;
+  readonly fsPath: string;
   /**
    * When the resolved path falls inside a registered external root, this
    * describes that root (label, writable flag). Undefined for workspace paths
    * and for any external path outside the allowlist.
    */
-  external?: { root: string; writable: boolean; label: string };
+  readonly external?: {
+    readonly root: string;
+    readonly writable: boolean;
+    readonly label: string;
+  };
 }
 
 interface OutsideRootCandidate {
@@ -101,7 +108,10 @@ export const assertNoParentTraversal = (
  * `WorkspaceFs` view answers it, and absolute for a working-directory or
  * outside path.
  */
-export function resolveToolPath(call: ToolPathCall, targetPath?: string) {
+export function resolveToolPath(
+  call: ToolPathCall,
+  targetPath?: string,
+): Effect.Effect<ToolPathResolution, Error> {
   return Effect.gen(function* () {
     const settings = call.roots;
     const root = call.workingDirectory ?? call.roots.workspace;
@@ -171,7 +181,7 @@ export function resolveToolPath(call: ToolPathCall, targetPath?: string) {
     // containment override, so keep their resolution independent of the store.
     if (
       !resolution.match &&
-      (yield* readSettingFrom<boolean>(
+      (yield* Settings.get<boolean>(
         settings,
         WorkspaceStateKey.TOOL_PATH_PROTECTION_ENABLED,
       ))

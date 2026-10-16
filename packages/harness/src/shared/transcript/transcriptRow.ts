@@ -3,12 +3,13 @@
  *
  * One row kind per thing a run says, carrying the typed payload and the
  * complete text. Rows are a fold output built from already-decoded values
- * (`@shared/session/transcriptFold`), so this is a plain type, not a schema:
+ * by the transcript fold, so this is a plain type, not a schema:
  * nothing parses it, and a schema would own no boundary.
  *
  * Text is untruncated. Elision is measurement ({@link TranscriptText}),
  * applied by the painter at its own width.
  */
+import { absurd } from 'effect';
 import {
   TOOL_CALL_STATUS,
   type ContextManagementData,
@@ -27,7 +28,6 @@ import {
   type CompactionActivityBlock,
 } from '@shared/runs/compactionActivityProjection';
 import type { ReadonlyDeep } from '@shared/session/readonlyDeep';
-import { assertNever } from '@utils/core';
 import { formatCompactTokenCount } from '@utils/text/stringUtils';
 
 import type { ToolRowModel } from './toolRowModel';
@@ -287,7 +287,7 @@ export function isSettledRow(
     case 'log':
       return true;
     default:
-      return assertNever(row, 'Unhandled transcript row kind');
+      return absurd(row);
   }
 }
 

@@ -1,13 +1,16 @@
 import { Effect } from 'effect';
 
-import { createWorkspaceAgentsController } from '@agent/index';
-import type { SettingsStores } from '@shared/config/settingsAccess';
+import {
+  AgentCatalog,
+  type WorkspaceAgentsController,
+} from '@texra-ai/harness';
 import type { WorkspaceAgentsSelection } from '@shared/schemas';
 import { cliCommandDefaults } from './cliConfig';
+import type { SettingsStores } from '@texra-ai/harness';
 
 /** The workspace agents controller's own snapshot shape — derived, never restated. */
 type WorkspaceAgentsSnapshot = Effect.Success<
-  ReturnType<ReturnType<typeof createWorkspaceAgentsController>['snapshot']>
+  ReturnType<WorkspaceAgentsController['snapshot']>
 >;
 
 /** The agent list snapshot plus the two facts only the CLI resolves. The
@@ -23,7 +26,7 @@ export type CliWorkspaceAgentsRecord = WorkspaceAgentsSnapshot & {
  */
 export const readCliWorkspaceAgents = Effect.fn('readCliWorkspaceAgents')(
   function* (roots: SettingsStores) {
-    const workspaceAgents = createWorkspaceAgentsController(roots);
+    const workspaceAgents = (yield* AgentCatalog).workspaceAgents(roots);
     return {
       ...(yield* workspaceAgents.snapshot()),
       defaultChatAgent: cliCommandDefaults(roots, 'chat').agent,

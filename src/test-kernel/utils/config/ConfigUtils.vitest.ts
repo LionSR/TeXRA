@@ -1,25 +1,23 @@
 import { Effect } from 'effect';
 import { it } from '@effect/vitest';
-// Suites for packages/harness/src/utils/config (platformSettings + providerConfig).
+// Suites for the catalog reader (packages/harness/src/shared/config/settings.ts).
 
 import { afterEach, describe, expect, vi } from 'vitest';
-import { GlobalStateKey } from '@shared/state/stateKeys';
+import { Settings } from '@shared/config/settings';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { installPlatform } from '@test/support/setupPlatform';
 import { TexraStateKey } from '@texra/shared/settingsView/texraSettings';
 import { LATEX_CONFIG_DEFAULTS } from '@texra/shared/constants/latexConfig';
-import { getProviderEndpoint } from '@utils/config/providerConfig';
-import { readSettingFrom } from '@utils/config/platformSettings';
 
 afterEach(() => {
   vi.restoreAllMocks();
 });
 
 // ---------------------------------------------------------------------------
-// PlatformSettings
+// Settings
 // ---------------------------------------------------------------------------
 
-describe('readSettingFrom', () => {
+describe('Settings.get', () => {
   it.effect(
     'snaps a stored value that fails the schema back to the catalog default',
     () =>
@@ -32,36 +30,11 @@ describe('readSettingFrom', () => {
           }),
         );
         expect(
-          yield* readSettingFrom(
+          yield* Settings.get(
             testWorkspaceRoots(),
             TexraStateKey.LATEX_FORMATTER,
           ),
         ).toBe(LATEX_CONFIG_DEFAULTS.latexFormatter);
-      }),
-  );
-});
-
-// ---------------------------------------------------------------------------
-// ProviderConfig (#7873 — converge on readSettingFrom for catalog keys)
-// ---------------------------------------------------------------------------
-
-describe('getProviderEndpoint', () => {
-  it.effect(
-    'snaps an invalid stored value back to the catalog default instead of leaking it through',
-    () =>
-      Effect.gen(function* () {
-        // Regression for #7873: the pre-fix local `read()` helper cast the raw
-        // stored value to `string` without validating it, so a corrupted
-        // non-string value flowed straight through. `readSettingFrom(testWorkspaceRoots(), )`
-        // validates against the entry's schema first.
-        yield* Effect.promise(() =>
-          installPlatform({
-            globalState: { [GlobalStateKey.ENDPOINT_OPENAI]: 42 },
-          }),
-        );
-        expect(yield* getProviderEndpoint(testWorkspaceRoots(), 'openai')).toBe(
-          '',
-        );
       }),
   );
 });

@@ -47,11 +47,8 @@ import {
   parseMcpServers,
   type McpServerConfig,
 } from '@common/plugins/mcpServers';
-import { MCP_CONFIG_FILE_NAME } from '@common/storage/storageLayout';
-import { TEXRA_STORAGE_DIR_NAME } from '@platform/defaults/nodeStorage';
 import { ProjectEnvironment } from '@utils/system/nodeWorkspace';
 import { sha256 } from '@utils/core/idHash';
-import { safeHomedir } from '@utils/system/platformPaths';
 
 import {
   acquireMcpServer,
@@ -59,12 +56,13 @@ import {
   mcpServerOfToolName,
 } from './mcpServer';
 
-/** The user-level config file the hosts read: `~/.texra/mcp.json`. */
-export const USER_MCP_CONFIG_PATH = path.join(
-  safeHomedir() ?? '/nonexistent',
-  TEXRA_STORAGE_DIR_NAME,
-  MCP_CONFIG_FILE_NAME,
-);
+/** The config file's name inside the user's `~/.texra` directory. */
+const MCP_CONFIG_FILE_NAME = 'mcp.json';
+
+/** The user's MCP config file: `mcp.json` at a storage root. */
+export function mcpConfigPathOf(storageRoot: string): string {
+  return path.join(storageRoot, MCP_CONFIG_FILE_NAME);
+}
 
 const McpConfigFileSchema = z.object({
   mcpServers: z.record(z.string(), z.unknown()),
@@ -129,7 +127,7 @@ export interface LoadedPluginTools {
 /**
  * One MCP server as a plugin: its tools are known only once it is up, so a
  * run that names it holds its `spec` and revision in its project's catalog,
- * whose steps offer its tools while the run holds them (`@tools/liveTools`).
+ * whose steps offer its tools while the run holds them.
  */
 export interface McpServerPlugin {
   /** `mcp:<server>`, or the installed plugin's id. */
@@ -178,7 +176,7 @@ export function mcpPlugin(
 }
 
 /** The loader over the MCP config file at `file`, read through `fs`, with
- *  env values digested under the key `revisionKey` reads (`@common/plugins/mcpServers`),
+ *  env values digested under the key `revisionKey` reads,
  *  read only when a run declares an MCP tool. */
 export const mcpPluginLoader =
   (

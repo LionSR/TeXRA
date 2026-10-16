@@ -20,6 +20,6 @@ import type { z } from 'zod';
 export function nullishWithDefault<Schema extends z.ZodType>(
   schema: Schema,
   fallback: z.output<Schema>,
-) {
+): z.ZodType<z.output<Schema>, z.input<Schema> | null | undefined> {
   return schema.nullish().transform((value) => value ?? fallback);
 }

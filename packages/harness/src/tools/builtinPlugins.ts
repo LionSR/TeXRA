@@ -1,7 +1,7 @@
 /**
  * The harness's built-in plugins: files and the shell, the web, memory and
  * tasks, goal mode, child agents and code mode. An app lists them beside its
- * own (`@tools/registry` for TeXRA); `harnessBuiltins` is every one with
+ * own; `harnessBuiltins` is every one with
  * no app options.
  */
 
@@ -70,11 +70,14 @@ export const fileOps = (
     tools: fileTools(options.writeFilter),
   });
 
+/** The web: `web_search` and `web_fetch`. */
 export const web: Plugin = builtin({
   id: 'web',
   tools: { web_search: WebSearchTool, web_fetch: WebFetchTool },
 });
 
+/** Memory and past runs: the `memory` tool, offered while memory is on,
+ *  and `executions`. */
 export const memoryWorkflow: Plugin = builtin({
   id: 'memory-workflow',
   tools: {
@@ -88,8 +91,7 @@ export const memoryWorkflow: Plugin = builtin({
 /**
  * The `plan` tool owns planning and the goal lifecycle (update, pause,
  * complete), so any agent with tools can drive the goal loop while the plugin
- * is on; the synthetic turns are its continuation
- * (`@tools/goal/goalContinuation`). Its rows are the `goal/state` arm.
+ * is on; the synthetic turns are its continuation. Its rows are the `goal/state` arm.
  */
 export const goal: Plugin = builtin({
   id: 'goal',

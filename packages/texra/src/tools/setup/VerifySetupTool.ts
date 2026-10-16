@@ -9,12 +9,12 @@ import {
   ToolContext,
   withLogChannel,
 } from '@texra-ai/harness';
+import { executed } from '@texra-ai/harness/plugins';
 import { ToolError } from '@shared/schemas';
 import { hasUsableSetupCredential } from '@texra/model/setupCredentialAccess';
 import { IMAGE_TOOL_LABEL } from '@texra/shared/constants/latexToolchain';
 
 // Local file imports
-import { executed } from '@tools/core/result';
 import { SetupPlatform } from './platform';
 import { collectCoreSetupStatus, locateTool } from './toolProbing';
 

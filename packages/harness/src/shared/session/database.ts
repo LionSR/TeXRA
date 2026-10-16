@@ -288,16 +288,11 @@ export class Database extends Context.Service<
     readonly currentCommit: Effect.Effect<CommitOrdinal, DatabaseReadFailed>;
     /** Last committed ordinal observed by this connection, for synchronous drain anchors. */
     readonly observedCommit: SubscriptionRef.SubscriptionRef<CommitOrdinal>;
-    /** Finite event prefix, inclusive at its captured upper bound. */
-    readonly readAll: (
-      fromCommit: CommitOrdinal,
-      throughCommit?: CommitOrdinal,
-    ) => Effect.Effect<readonly SessionEvent[], DatabaseReadFailed>;
-    /** {@link readAll} filtered to display types in SQL: a tail never decodes
-     *  a run's private records only to drop them. Read a page at a time, so
-     *  a long history is never held whole; each page is its own snapshot,
-     *  so a tombstone one page saw is still delivered when its run is
-     *  collected before the page that holds it. */
+    /** The display rows from `fromCommit`, filtered in SQL: a tail never
+     *  decodes a run's private records only to drop them. Read a page at a
+     *  time, so a long history is never held whole; each page is its own
+     *  snapshot, so a tombstone one page saw is still delivered when its run
+     *  is collected before the page that holds it. */
     readonly readDisplay: (
       fromCommit: CommitOrdinal,
     ) => Stream.Stream<DisplaySessionEvent, DatabaseReadFailed>;

@@ -1,6 +1,6 @@
 /** The update-check row of the global root, on the process's one handle. */
 import { Effect, Layer, Result, type Context } from 'effect';
-import { GlobalDatabase } from '@shared/session/database';
+import { GlobalValues } from '@texra-ai/harness';
 import {
   UPDATE_CHECKS,
   UpdateCheckRecords,
@@ -11,8 +11,8 @@ import {
 export const updateCheckRecordsLayer = Layer.effect(
   UpdateCheckRecords,
   Effect.map(
-    GlobalDatabase,
-    ({ values }): Context.Service.Shape<typeof UpdateCheckRecords> => {
+    GlobalValues,
+    (values): Context.Service.Shape<typeof UpdateCheckRecords> => {
       const record = (
         host: string,
         change: (current: UpdateCheckRecord) => UpdateCheckRecord,

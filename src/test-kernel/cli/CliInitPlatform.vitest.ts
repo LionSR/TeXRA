@@ -100,11 +100,34 @@ vi.mock('@utils/system/nodeWorkspace', async (importOriginal) => ({
 // The global state store the CLI's process-runtime install opens before it
 // installs the runtime that serves it, and the project store the first init
 // opens: this suite runs that real install, so the opens are what it stubs.
-vi.mock('@controllers/session/appStateStore', () => ({
-  appStateStoreFromDatabase: vi.fn(() => mocks.cliGlobalState),
-  openProjectStateStore: vi.fn(() => Effect.succeed({})),
-  openRepoStateStore: vi.fn(() => Effect.succeed({})),
-}));
+vi.mock('@controllers/session/appStateStore', async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import('@controllers/session/appStateStore')>();
+  const { Layer } = await import('effect');
+  const { AppState } = await import('@platform/interfaces');
+  const { GlobalValues, StateStores } =
+    await import('@platform/processRuntime');
+  // cast: the suite stubs only what the CLI install reads.
+  const store = {} as import('@platform/interfaces').AppStateStore;
+  return {
+    ...actual,
+    globalAppStateLayer: () =>
+      // cast: the suite's global state answers the reads this install makes.
+      AppState.layer(
+        mocks.cliGlobalState as unknown as import('@platform/interfaces').AppStateStore,
+      ),
+    processStoresLayer: Layer.merge(
+      Layer.succeed(GlobalValues)(
+        // cast: no step of the CLI install reads the global values.
+        {} as import('@shared/session/database').CurrentValues,
+      ),
+      Layer.succeed(StateStores)({
+        project: () => Effect.succeed(store),
+        repo: () => Effect.succeed(store),
+      }),
+    ),
+  };
+});
 
 vi.mock('@cli/runtime/cliSecrets', () => ({
   cliSecrets: () => ({

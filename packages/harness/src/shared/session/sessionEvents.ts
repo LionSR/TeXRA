@@ -1,5 +1,5 @@
 /**
- * The runtime event plane (PRD 7.1, C7): the publisher and exhaustive event
+ * The runtime event plane: the publisher and exhaustive event
  * readers, including the NDJSON projection. Renderers read SessionInputs,
  * which orders this log against the transient text and local levels.
  */
@@ -126,7 +126,7 @@ export type Append = (
 >;
 
 /**
- * The canonical hostname, pid, and nullable process-start tuple (C5): the
+ * The canonical hostname, pid, and nullable process-start tuple: the
  * `ownerId` stamped on every event the process appends and the `self` entry
  * of its local runtime snapshot. Resolved once at each process entry, where
  * the start identity can be awaited, and provided to the process layer.
@@ -141,7 +141,7 @@ export class ProcessIdentity extends Context.Service<
 }
 
 /**
- * The one publisher of a root's facts (PRD 7.1, C6). Every write to the
+ * The one publisher of a root's facts. Every write to the
  * log is a job on one inbox drained by one fiber, so the commit order of
  * the table is the order the jobs were enqueued: a trace row the tool
  * emitted, the loop's settlement batch that follows it, and a surface's
@@ -156,11 +156,11 @@ export class SessionEvents extends Context.Service<
      *  transaction, and return its value: reads of committed rows and the
      *  appends that depend on them, committed together or not at all, with
      *  no other write between them. An append refusal is one of two typed
-     *  failures (D6 b): `DatabaseNotOwner`, a target the process does not
+     *  failures: `DatabaseNotOwner`, a target the process does not
      *  hold open, and `DatabaseWriteFailed`, the batch rolled back for any
      *  other reason; a job that lets one through writes nothing, and a
      *  transaction that fails to commit is `DatabaseWriteFailed` too.
-     *  Neither is retried or converted here (F3, R7). A job may run again
+     *  Neither is retried or converted here. A job may run again
      *  whole (`Database.job`), so it is database-only. Called from inside
      *  a job, it is a defect: the job would wait on itself. */
     readonly transact: <A, E>(
@@ -183,7 +183,7 @@ export class SessionEvents extends Context.Service<
       >,
       options?: JobOptions,
     ) => void;
-    /** Remove a run and its dependents (C9): the liveness proofs run on the
+    /** Remove a run and its dependents: the liveness proofs run on the
      *  caller's fiber, then the tombstone's transaction runs as the next
      *  job, so it commits in enqueue order and what this publisher tracks
      *  forgets every run it names. */
@@ -209,7 +209,7 @@ export class SessionEvents extends Context.Service<
      *  closes. Read on the publisher fiber (inside a job) or after a
      *  settle, it counts every job committed before. */
     readonly openWork: (aggregateId: AggregateId) => readonly OpenWork[];
-    /** The cold listing hydrate (C8): the latest row per aggregate and type
+    /** The cold listing hydrate: the latest row per aggregate and type
      *  for the listing fact types plus the outstanding approvals, in commit
      *  order; never a transcript row; completes. */
     readonly listing: () => Stream.Stream<

@@ -20,10 +20,10 @@
  */
 
 import * as path from 'node:path';
+import { Settings } from '@texra-ai/harness';
 
 import { Effect } from 'effect';
 
-import type { SettingsStores } from '@shared/config/settingsAccess';
 import type { ClaudeAgentPermissionMode } from '@texra/shared/agentCliSettings';
 import { ClaudeAgentStateKey } from '@texra/shared/settingsView/integrationSettings';
 import {
@@ -31,8 +31,8 @@ import {
   createCachedBinaryResolver,
   importForeignSdk,
 } from '@texra/tools/support/externalBinaryUtils';
-import { readSettingUnlessOverridden } from '@utils/config/platformSettings';
 import type { StateReadFailed } from '@texra-ai/harness';
+import type { SettingsStores } from '@texra-ai/harness';
 
 // ---------------------------------------------------------------------------
 // SDK import
@@ -142,8 +142,6 @@ export const claudeAgentPermissionMode = (
   input: { readonly permission_mode?: ClaudeAgentPermissionMode | null },
   stores: SettingsStores,
 ): Effect.Effect<ClaudeAgentPermissionMode, StateReadFailed> =>
-  readSettingUnlessOverridden(
-    input.permission_mode,
-    stores,
-    ClaudeAgentStateKey.PERMISSION_MODE,
-  );
+  input.permission_mode == null
+    ? Settings.get(stores, ClaudeAgentStateKey.PERMISSION_MODE)
+    : Effect.succeed(input.permission_mode);

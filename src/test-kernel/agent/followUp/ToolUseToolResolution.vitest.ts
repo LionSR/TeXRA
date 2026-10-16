@@ -26,13 +26,17 @@ import {
 } from '@test/support/setupPlatform';
 import { nodeSpawnerLayer } from '@test/support/childProcessTestLayer';
 import { resolveTestStep } from '@test/support/stepToolsTestUtils';
+import { createFakeWorkspaceRoots } from '@test/support/FakePlatform';
 import { texraPlugins } from '@texra/tools/registry';
-import { ToolCatalog, toolCatalogLayer } from '@tools/liveTools';
-import { USER_MCP_CONFIG_PATH } from '@tools/mcp/mcpConfig';
+import {
+  ToolCatalog,
+  ToolCatalogOwner,
+  toolCatalogLayer,
+} from '@tools/liveTools';
+import { mcpConfigPathOf } from '@tools/mcp/mcpConfig';
 import { pluginCatalogLayer } from '@tools/pluginCatalog';
 import { ALWAYS_AVAILABLE } from '@tools/toolProbes';
 import { toolTable } from '@tools/toolTable';
-import { setToolEnabled } from '@tools/toolAvailability';
 
 function toolDefs(names: readonly string[]): ToolDefinition[] {
   return names.map((name) => ({ name }));
@@ -61,7 +65,10 @@ describe('tool-use tool resolution', () => {
       // this host has no editor models.
       Effect.provide(LanguageModel.layer(UNAVAILABLE_LANGUAGE_MODEL_PORT)),
       Effect.provide(
-        pluginCatalogLayer(texraPlugins(), USER_MCP_CONFIG_PATH).pipe(
+        pluginCatalogLayer(
+          texraPlugins(),
+          mcpConfigPathOf(createFakeWorkspaceRoots().storageRoot),
+        ).pipe(
           Layer.provide(
             Layer.merge(nodePlatformLayer, AppState.layer(fakeHostAppState)),
           ),
@@ -188,7 +195,10 @@ describe('tool-use tool resolution', () => {
         Effect.scoped,
         Effect.provide(LanguageModel.layer(UNAVAILABLE_LANGUAGE_MODEL_PORT)),
         Effect.provide(
-          pluginCatalogLayer(texraPlugins(), USER_MCP_CONFIG_PATH).pipe(
+          pluginCatalogLayer(
+            texraPlugins(),
+            mcpConfigPathOf(createFakeWorkspaceRoots().storageRoot),
+          ).pipe(
             Layer.provide(
               Layer.merge(nodePlatformLayer, AppState.layer(fakeHostAppState)),
             ),
@@ -225,8 +235,8 @@ describe('tool-use tool resolution', () => {
           },
         },
       ]);
+      const stores = hostStores();
       return Effect.gen(function* () {
-        const stores = hostStores();
         const resolve = (parentOffered?: readonly OfferedTool[]) =>
           resolveTestStep({
             tools: toolDefs(['zotero_search']),
@@ -248,7 +258,7 @@ describe('tool-use tool resolution', () => {
         expect(names(first)).toEqual(['zotero_search']);
         expect(events).toEqual(['open']);
 
-        yield* setToolEnabled('zotero', false, stores.globalState);
+        yield* (yield* ToolCatalog).setEnabled('zotero', false);
         // The next pin is without the plugin, and a child reads the same
         // catalog: it cannot keep what its parent's step was
         // offered once the tool has left.
@@ -268,7 +278,10 @@ describe('tool-use tool resolution', () => {
           // No switch follower: only the steps hold the layer.
           toolCatalogLayer(table, { switches: Stream.never }).pipe(
             Layer.provide(
-              Layer.merge(nodePlatformLayer, AppState.layer(fakeHostAppState)),
+              Layer.merge(
+                nodePlatformLayer,
+                AppState.layer(stores.globalState),
+              ),
             ),
           ),
         ),
@@ -323,7 +336,7 @@ describe('tool-use tool resolution', () => {
         );
         const tools = yield* Effect.provide(
           Effect.gen(function* () {
-            return yield* (yield* ToolCatalog).session;
+            return yield* (yield* ToolCatalogOwner).session;
           }),
           catalog,
         );

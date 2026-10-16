@@ -2,7 +2,8 @@
 import { Effect, type Scope } from 'effect';
 
 // Local imports - runtime
-import type { PresentationEventHandlers, SessionHandle } from '@agent/runtime';
+import { type PresentationEventHandlers } from '@texra-ai/harness';
+import type { SessionHandle } from '@agent/runtime';
 import type { LogLevel, RunId } from '@shared/schemas';
 import { formatInstructionActionHint } from '@ui/copy/instructionActionHint';
 

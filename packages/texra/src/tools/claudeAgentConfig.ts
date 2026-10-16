@@ -1,4 +1,5 @@
 // Node imports
+import { hash } from 'node:crypto';
 import { access } from 'node:fs/promises';
 import * as path from 'node:path';
 
@@ -10,7 +11,6 @@ import { Effect } from 'effect';
 import { apiKeyEnvName, exposeApiKey, lookupApiKey } from '@texra-ai/llm';
 import { Secrets, withLogChannel } from '@texra-ai/harness';
 import { executeCommand } from '@texra-ai/harness/node';
-import { sha256Hex } from '@utils/core/idHash';
 import { inheritedEnv } from '@utils/system/envFlags';
 import { ensureError } from '@utils/errors/errorMessage';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
@@ -123,7 +123,7 @@ function claudeKeychainCredentialProbes(
   const usesDefaultConfigDir =
     defaultConfigDir !== undefined &&
     normalizedConfigDir === path.resolve(defaultConfigDir);
-  const configDirHash = sha256Hex(normalizedConfigDir);
+  const configDirHash = hash('sha256', normalizedConfigDir, 'hex');
   const keychainProfiles = [normalizedConfigDir, configDirHash];
   const legacyProbes: string[][] = usesDefaultConfigDir
     ? [['find-generic-password', '-s', 'Claude Code-credentials']]

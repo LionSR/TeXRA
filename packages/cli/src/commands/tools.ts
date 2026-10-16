@@ -89,8 +89,9 @@ function showTool(context: CliContext, id: string) {
 
 function toggleTool(context: CliContext, id: string, enabled: boolean) {
   return Effect.gen(function* () {
-    const services = yield* initCliPlatform(context);
-    const ok = yield* setCliToolEnabled(services.globalState, id, enabled);
+    // The toggle runs on the process runtime the init installs.
+    yield* initCliPlatform(context);
+    const ok = yield* setCliToolEnabled(id, enabled);
     if (!ok) {
       writeTextStderr(formatCliToolNotToggleableMessage(id));
       return CliExitCode.Usage;

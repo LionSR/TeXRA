@@ -1,7 +1,11 @@
+import { hash } from 'node:crypto';
 import * as path from 'node:path';
+import { normalizeFilePath } from '@texra-ai/harness/schemas';
+import { hasExtension } from '@texra-ai/harness';
 
 import { Cause, Effect, FileSystem } from 'effect';
 
+import { Settings } from '@texra-ai/harness';
 import type { AgentTrace } from '@agent/trace';
 import { compileLatex2Pdf, type CompileLatex2PdfResult } from '@latex/texTools';
 import { hasLatexCompiler } from '@latex/latexToolchain';
@@ -25,11 +29,6 @@ import { runDirUnder } from '@utils/files/runStorageFs';
 import { type RunFileService } from '@utils/files/runStorage';
 import { locateInWorkspace } from '@utils/files/workspaceFS';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import { normalizeFilePath } from '@utils/core';
-import { truncatedHexId } from '@utils/core/idHash';
-import { hasExtension } from '@utils/core/pathCore';
-import { readSettingFrom } from '@utils/config/platformSettings';
-import { sanitizePathSegment } from '@utils/text/sanitizePathSegment';
 
 import {
   publishCompiledPdfArtifact,
@@ -62,7 +61,7 @@ export const getWorkflowAutoCompileTimeoutMs = Effect.fn(
 )(function* (roots: WorkspaceRoots) {
   return Math.max(
     MIN_TIMEOUT_MS,
-    yield* readSettingFrom<number>(
+    yield* Settings.get<number>(
       roots,
       DocumentsStateKey.WORKFLOW_AUTO_COMPILE_TIMEOUT_MS,
     ),
@@ -120,7 +119,7 @@ export const runCompileCheck = Effect.fn('documents.runCompileCheck')(
   function* (ctx: CompileCheckContext, currentRound: number) {
     const empty: CompileCheckResult = { artifacts: [] };
     if (
-      !(yield* readSettingFrom<boolean>(
+      !(yield* Settings.get<boolean>(
         ctx.roots,
         DocumentsStateKey.WORKFLOW_AUTO_COMPILE,
       ))
@@ -277,11 +276,11 @@ const compileOne = Effect.fn('documents.compileOne')(function* (
   // "a_b.tex") both collapse to the same string, so a second file's log
   // write/delete would clobber the first's. Suffix with a short hash of the
   // untruncated path so every output gets its own collision-free log slot.
-  const sanitizedName = sanitizePathSegment(pathForSafeName, {
-    invalidCharPattern: /[^a-zA-Z0-9._-]/g,
-    replacement: '_',
-  });
-  const pathHash = truncatedHexId(pathForSafeName, PATH_HASH_LENGTH);
+  const sanitizedName = pathForSafeName.replaceAll(/[^a-zA-Z0-9._-]/g, '_');
+  const pathHash = hash('sha256', pathForSafeName, 'hex').slice(
+    0,
+    PATH_HASH_LENGTH,
+  );
   const sanitizedStem = sanitizedName.slice(0, MAX_SANITIZED_STEM_LENGTH);
   const safeName = `${sanitizedStem}_${pathHash}`;
   const buildDir = path.join(

@@ -1,8 +1,7 @@
 /**
  * The process's plugin table: the plugin list an entry passes to
- * `processLayer` (TeXRA's is `texraPlugins` in `@tools/registry`),
- * by plugin id, and each tool by name. What a plugin contributes to the tool catalog (`@tools/liveTools`)
- * is read off its value. The `ToolRegistry` service holds it, beside
+ * `processLayer`, by plugin id, and each tool by name. What a plugin
+ * contributes to the tool catalog is read off its value. The `ToolRegistry` service holds it, beside
  * the catalog built over it. This module imports no tool or plugin layer, so
  * a reader of the tag loads none of them.
  */
@@ -24,6 +23,7 @@ import type { AgentEntry } from '@agent/index/agentEntry';
 import type { LoadablePlugin } from '@common/plugins/pluginTrust';
 import type { AppState, ConfigProvider } from '@platform/interfaces';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
+import type { GlobalValues } from '@platform/processRuntime';
 import {
   AgentDefinitionSchema,
   type PermissionPayload,
@@ -31,7 +31,6 @@ import {
   type RunId,
   type ToolFact,
 } from '@shared/schemas';
-import type { GlobalDatabase } from '@shared/session/database';
 import type { RunState } from '@shared/session/runStateFold';
 import type { ToolCatalog } from '@tools/liveTools';
 import type { McpServerPlugin } from '@tools/mcp/mcpConfig';
@@ -54,7 +53,7 @@ export type PluginLayerServices =
 /**
  * A plugin's process-lifetime services (its `processLayer`): built
  * when the plugin is switched on or first pinned, released when it is
- * switched off and no step uses it (`@tools/liveTools`). `ROut` is what it
+ * switched off and no step uses it. `ROut` is what it
  * serves its own plugin's code (`definePlugin`); the table holds it erased.
  * `drain` is its step of the core shutdown protocol, run before the
  * sessions close while its services are still up.
@@ -87,7 +86,7 @@ export class PluginHold extends Context.Service<
 /**
  * An installed plugin a step loads while it is enabled and trusted: its MCP
  * servers, if any, whose tools the catalog contributes under its one id and every
- * tool-use run is offered (`@tools/liveTools`), and the plugin as read, whose
+ * tool-use run is offered, and the plugin as read, whose
  * skills the step lists. Its servers are held under its trust digest
  * (`source.trust.digest`), which changes exactly when what it would start
  * or ship does, and so replaces them.
@@ -110,7 +109,7 @@ export type InstalledToolReader = Effect.Effect<{
 
 /**
  * What decides that a parked run continues, pinned by
- * each step beside its tools (`@agent/runtime/loop/step`); with none, the run
+ * each step beside its tools; with none, the run
  * parks. `atIdle` answers the synthetic turn's text or null; `canContinue`
  * is false when the run ends here or a follow-up is queued. `onResume` runs
  * at a resumed activation's first step that pins it, before the activation
@@ -163,7 +162,7 @@ export interface RequestDecisionHook {
     readonly commit: (
       facts: readonly (ToolFact & { readonly aggregate: string })[],
     ) => Effect.Effect<void, LogWriteError>;
-  }) => Effect.Effect<void, Error, GlobalDatabase>;
+  }) => Effect.Effect<void, Error, GlobalValues>;
 }
 
 /**

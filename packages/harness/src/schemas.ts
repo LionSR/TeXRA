@@ -3,12 +3,8 @@ export type {
   AgentConfig,
   AgentConfigPayload,
 } from '@agent/core/definition/AgentConfig';
-export {
-  AgentDefinitionSchema,
-  InlinePersonaSchema,
-  PersonaSchema,
-} from '@shared/schemas';
-export type { AgentDefinition, InlinePersona, Persona } from '@shared/schemas';
+export { InlinePersonaSchema } from '@shared/schemas';
+export type { InlinePersona, Persona } from '@shared/schemas';
 // The payloads `RuntimePresentationEventPayloads` (root) names, one per
 // notice a session's runs ask a host to present.
 export type {
@@ -23,12 +19,14 @@ export type {
 export type { RunEndResult } from '@agent/runtime/RunEndResult';
 export { DEFAULT_AGENT_MODEL } from '@shared/constants/defaultModels';
 export {
-  AgentNameSchema,
   AgentSourceSchema,
   RunIdSchema,
   RUN_OUTCOME,
   RunOutcomeSchema,
 } from '@shared/schemas';
+// A fresh run id, for a caller that names a run before a session launches
+// it (a service's task start).
+export { generateRunId } from '@utils/core';
 export type {
   AgentConfigInput,
   AgentSource,
@@ -88,3 +86,19 @@ export {
   TraceDocumentSchema,
   type TraceDocument,
 } from '@transcript/traceDocumentSchema';
+// Path basics that hold in a browser: forward slashes, a path's base name,
+// and its base name without the extension.
+export { getBasename, getFileStem, normalizeFilePath } from '@utils/core';
+// The setting rows a `ConfigProvider` resolves against (its `catalog`) and
+// the harness's own state keys, as a settings UI (a webview included) builds
+// its catalog from them and names the rows it renders.
+export {
+  configTreeRows,
+  settingsCatalog,
+  type SettingsCatalog,
+  type SettingsViewSnapshot,
+  type SettingsViewStateSettingEntry,
+  type StateSettingEntry,
+  type SurfacedSettingEntry,
+} from '@shared/state/stateSettings';
+export { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';

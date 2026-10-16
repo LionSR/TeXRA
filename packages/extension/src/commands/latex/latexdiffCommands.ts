@@ -5,8 +5,8 @@ import * as vscode from 'vscode';
 // Local imports
 import { withLogChannel } from '@texra-ai/harness';
 import { withSessionFs } from '@texra-ai/harness';
-import { readSettingFrom } from '@texra-ai/harness';
 import { pathToLocationIn } from '@texra-ai/harness';
+import { Settings } from '@texra-ai/harness';
 import {
   prepareBuildDisplay,
   scheduleViewerDisplay,
@@ -32,7 +32,7 @@ import {
   NO_LATEXDIFF_OPERATIONS_MESSAGE,
 } from '@latex/latexdiff/latexdiffCopy';
 import type { FileLocation } from '@shared/schemas';
-import { settingEnumChoices } from '@shared/state/stateSettings';
+import { settingEnumChoices } from '@texra/shared/settingsView/settingRows';
 import { DocumentsStateKey } from '@texra/shared/settingsView/documentsSettings';
 import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
 import type { WorkflowDiffRequest } from '@texra/controllers/session/hostRunActions';
@@ -83,7 +83,7 @@ type MarkupItem = vscode.QuickPickItem & { value: LatexdiffMathMarkupValue };
 const promptForLatexdiffMathMarkup = Effect.fnUntraced(function* (
   roots: WorkspaceRoots,
 ) {
-  const configuredMode = yield* readSettingFrom<LatexdiffMathMarkupValue>(
+  const configuredMode = yield* Settings.get<LatexdiffMathMarkupValue>(
     roots,
     DocumentsStateKey.LATEXDIFF_MATH_MARKUP,
   );

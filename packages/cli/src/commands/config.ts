@@ -1,12 +1,9 @@
+import { Settings } from '@texra-ai/harness';
 import { defineCommand } from 'citty';
 import { Effect } from 'effect';
 
-import {
-  createWorkspaceAgentsController,
-  InvalidAgentTeamError,
-} from '@agent/index';
+import { AgentCatalog, InvalidAgentTeamError } from '@texra-ai/harness';
 import { agentKeyOf } from '@shared/schemas';
-import { readSetting } from '@shared/config/settingsAccess';
 import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
 
 import {
@@ -67,7 +64,10 @@ const showConfig = Effect.fn('showConfig')(function* (
   const agents = yield* readCliWorkspaceAgents(stores);
   const settings = Object.fromEntries(
     yield* Effect.forEach(TEXRA_SETTINGS.cliRows, (entry) =>
-      Effect.map(readSetting(entry, stores), (value) => [entry.key, value]),
+      Effect.map(Settings.get(stores, entry.key), (value) => [
+        entry.key,
+        value,
+      ]),
     ),
   );
   const record = { settings, agents };
@@ -101,7 +101,7 @@ const configureWorkspaceAgents = Effect.fn('configureWorkspaceAgents')(
     },
   ) {
     const roots = services.roots;
-    const workspaceAgents = createWorkspaceAgentsController(roots);
+    const workspaceAgents = (yield* AgentCatalog).workspaceAgents(roots);
     const workspaceChoices = [
       input.inherit,
       input.all,

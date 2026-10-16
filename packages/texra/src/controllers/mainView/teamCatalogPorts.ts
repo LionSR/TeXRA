@@ -1,8 +1,7 @@
 // Local imports
 import { Effect } from 'effect';
-import { getCatalogAgent } from '@agent/index';
-import { WorkspaceStateKey } from '@shared/state/stateKeys';
-import type { StateStore } from '@texra-ai/harness';
+import { AgentCatalog, type StateStore } from '@texra-ai/harness';
+import { WorkspaceStateKey } from '@texra-ai/harness/schemas';
 
 /**
  * Live team-catalog ports shared by every host's main view. Launch resolution
@@ -14,7 +13,7 @@ export function createTeamCatalogPorts(repoState: StateStore) {
   return Effect.gen(function* () {
     return {
       customPresetsRaw: yield* repoState.get(WorkspaceStateKey.CUSTOM_TEAMS),
-      resolveAgent: getCatalogAgent,
+      resolveAgent: (yield* AgentCatalog).get,
     };
   });
 }

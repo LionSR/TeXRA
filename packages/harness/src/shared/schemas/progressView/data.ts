@@ -29,7 +29,7 @@ export const MediaAttachmentKindSchema = z.enum(['image', 'document']);
 export type MediaAttachmentKind = z.infer<typeof MediaAttachmentKindSchema>;
 
 /**
- * `userMessage` row payload (#7508): attachment kind + count only — never
+ * `userMessage` row payload: attachment kind + count only — never
  * bytes — so the archived conversation can render `[image attachment]` /
  * `[document attachment]` markers for media that was sent to the model but
  * only ever lived in the provider message, not the transcript row.
@@ -132,7 +132,7 @@ export type ToolUseLog = z.infer<typeof ToolUseLogSchema>;
 
 /**
  * The flat, renderer-friendly tool-use view `normalizeToolUse`
- * (`@shared/toolUse`) derives from a parsed {@link ToolUseLog}. Declared as a
+ * derives from a parsed {@link ToolUseLog}. Declared as a
  * plain type, not a schema: the producer builds this shape field-by-field and
  * nothing ever parses it, so a Zod schema would own no boundary.
  */

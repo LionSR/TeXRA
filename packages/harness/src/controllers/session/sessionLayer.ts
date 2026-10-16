@@ -76,6 +76,7 @@ import {
   nodePlatformServices,
   workspaceEnvironmentLayer,
 } from '@platform/defaults/nodePlatform';
+import { resolveGlobalStoragePath } from '@platform/defaults/workspaceStorage';
 import {
   aggregateTarget,
   RUN_OUTCOME,
@@ -93,7 +94,8 @@ import {
   type SessionOpenError,
 } from '@shared/session/database';
 import { UsageLog } from '@shared/usageLog';
-import { ToolCatalog } from '@tools/liveTools';
+import { ToolCatalogOwner } from '@tools/liveTools';
+import { mcpConfigPathOf } from '@tools/mcp/mcpConfig';
 import { pluginCatalogLayer } from '@tools/pluginCatalog';
 import type { Plugin } from '@tools/plugins';
 import { toolAvailabilityLayer } from '@tools/toolAvailability';
@@ -102,8 +104,9 @@ import { ToolRegistry } from '@tools/toolTable';
 import { agentCatalogFollower } from '@tools/agentCatalogFollower';
 import { followInterruptedTasks } from '@tools/interruptedTasks';
 import { databaseLayer, globalDatabaseLayer } from './Database';
+import { globalAppStateLayer, processStoresLayer } from './appStateStore';
 import { projectDatabaseLayer } from './projectDatabase';
-import { deletionCollector, type RunFilesServices } from './deletionCleanup';
+import { deletionCollector } from './deletionCleanup';
 import { ownerLiveness } from './ownerLiveness';
 import { sessionRequests } from './SessionRequests';
 import { makeSessionStore } from './sessionStore';
@@ -181,7 +184,7 @@ const sessionHandleLayer = (key: SessionKey) =>
       yield* Effect.addFinalizer(() => store.close);
       // The runs' fork and the project's tools end with this scope.
       const fork = yield* FiberSet.makeRuntime<ProcessServices>();
-      const tools = yield* (yield* ToolCatalog).session;
+      const tools = yield* (yield* ToolCatalogOwner).session;
       const interactions = new SessionHostInteractions();
       // Each run's `.env`, read as it launches, and its window's models.
       const env = Layer.merge(
@@ -220,7 +223,7 @@ const sessionHandleLayer = (key: SessionKey) =>
           },
           local: local.ref,
           plugins,
-          services: yield* Effect.context<GlobalDatabase | RunFilesServices>(),
+          services: yield* Effect.context<ProcessServices>(),
           closed: store.closed,
         }),
         approvals: createSessionApprovals(() => session),
@@ -387,6 +390,7 @@ const openSession = (open: SessionHandleInit) =>
       roots: {
         host: roots.host,
         workspace: roots.workspace,
+        storageRoot: roots.storageRoot,
         storage: roots.storage,
         globalStorage: roots.globalStorage,
         config: roots.config,
@@ -560,17 +564,15 @@ export interface ProcessLayerOptions {
     never,
     ProcessProbe
   >;
-  /** The global storage root every session of the process shares. */
-  readonly globalStorage: string;
+  /** The storage root this process opened (`WorkspaceRoots.storageRoot`). */
+  readonly storageRoot: string;
   /**
    * The app's plugins, in order, the harness's built-ins among them: the
    * process serves them as `ToolRegistry` and the tool catalog over it
-   * (`ToolCatalog`). The harness names no plugin of its own; TeXRA's entries
-   * pass `texraPlugins` (`@tools/registry`).
+   * (`ToolCatalog`). The harness names no plugin of its own: an app passes
+   * its list, `harnessBuiltins` among it.
    */
   readonly plugins: readonly Plugin[];
-  /** The MCP config file (`.mcp.json` shape) the catalog reads. */
-  readonly mcpConfigPath: string;
   readonly secrets: PlatformSecrets;
   /** The host's agent-directory layer: it may capture AppState as it is
    *  built, which its readers never see. */
@@ -580,11 +582,10 @@ export interface ProcessLayerOptions {
   readonly toolMissingReporter?: ToolMissingHandler;
   /**
    * The host's global application-state layer, acquired in this runtime's
-   * scope: the TeXRA hosts' store over the global root's database values,
-   * the SDK's embedder store, or a platform-less CLI entry's refusing one,
-   * which creates no storage on a possibly read-only root.
+   * scope. Absent, the global root's values (`globalAppStateLayer`); the
+   * SDK's embedder store, or a platform-less CLI entry's refusing one.
    */
-  readonly appState: Layer.Layer<
+  readonly appState?: Layer.Layer<
     AppState,
     DatabaseOpenFailed,
     GlobalDatabase | ProcessIdentity | ProcessProbe
@@ -635,31 +636,30 @@ export interface ProcessLayerOptions {
  *  its `Sessions` over. */
 export function ownerProcessLayer({
   processStart = nodeProcesses.selfIdentity(),
-  globalStorage,
+  storageRoot,
   plugins,
-  mcpConfigPath,
   secrets,
-  appState,
+  appState = globalAppStateLayer(resolveGlobalStoragePath(storageRoot)),
   languageModel,
   agentDirectories,
   toolMissingReporter,
   toolAvailability = toolAvailabilityLayer,
   usageLog = UsageLog.disabled,
-  globalDatabase: globalDatabaseOption = globalDatabaseLayer(globalStorage),
+  globalDatabase: globalDatabaseOption,
   minimumLogLevel,
   workspace,
 }: ProcessLayerOptions): Layer.Layer<ProcessServices | SessionOwner> {
-  const catalog = pluginCatalogLayer(plugins, mcpConfigPath);
+  const globalStorage = resolveGlobalStoragePath(storageRoot);
+  const catalog = pluginCatalogLayer(plugins, mcpConfigPathOf(storageRoot));
   // Non-failing: `selfIdentity()` reads an unreadable identity as undefined.
   const identity = Layer.effect(
     ProcessIdentity,
     Effect.map(processStart, (start) => ({ ownerId: processOwnerId(start) })),
   );
   // Keep the global handle outside session `Layer.fresh`; open failure is fatal.
-  const globalDatabase = globalDatabaseOption.pipe(
-    Layer.provide(identity),
-    Layer.orDie,
-  );
+  const globalDatabase = (
+    globalDatabaseOption ?? globalDatabaseLayer(globalStorage)
+  ).pipe(Layer.provide(identity), Layer.orDie);
   const services = Layer.mergeAll(
     Secrets.layer(secrets),
     LanguageModel.layer(languageModel),
@@ -672,8 +672,7 @@ export function ownerProcessLayer({
       ? Layer.empty
       : ToolMissingReporter.layer(toolMissingReporter),
     catalog,
-    // One retry gate for the process: a 429 cools a credential for every
-    // project's runs.
+    // One retry gate per process: a 429 cools a credential for every project.
     Layer.effect(RouteRetries, ModelRetryGate.make),
   ).pipe(
     Layer.provideMerge(appState.pipe(Layer.orDie)),
@@ -681,6 +680,7 @@ export function ownerProcessLayer({
   );
   return sessionOwnerLayer.pipe(
     Layer.provideMerge(SessionMap.layer),
+    Layer.provideMerge(processStoresLayer),
     Layer.provideMerge(projectDatabaseLayer),
     // The usage log's own lifetime: its sender and ticker run with this
     // runtime, its finalizer drains the queue while HTTP is up, and it is
@@ -716,7 +716,7 @@ const sessionOwnerLayer = Layer.effect(
   SessionOwner,
   Effect.gen(function* () {
     const map = yield* SessionMap;
-    const catalog = yield* ToolCatalog;
+    const catalog = yield* ToolCatalogOwner;
     const withMap = <A, E>(
       effect: Effect.Effect<A, E, SessionMap>,
     ): Effect.Effect<A, E> => Effect.provideService(effect, SessionMap, map);

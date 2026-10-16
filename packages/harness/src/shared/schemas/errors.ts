@@ -3,7 +3,7 @@ import { z } from 'zod';
 /** Reason a credential/quota is exhausted, requiring user action before an
  *  identical retry can succeed. The reasons are mutually exclusive — a single
  *  error is classified as exactly one — which is why this is a discriminant
- *  rather than independent booleans. `isCredentialExhausted` below answers the
+ *  rather than independent booleans. `getExhaustionReason` below answers the
  *  combined "exhausted for any reason" question. */
 const ExhaustionReasonSchema = z.enum([
   /** The upstream provider account itself is out of credit/quota — the key
@@ -78,64 +78,6 @@ const ProviderErrorObjectSchema = z.object({
 export const ProviderErrorSchema = ProviderErrorObjectSchema.strict();
 export type ProviderError = z.infer<typeof ProviderErrorSchema>;
 
-/** Context about where/when the error occurred */
-const ErrorContextSchema = z.object({
-  operation: z.string().optional(),
-  model: z.string().optional(),
-});
-export type ErrorContext = z.infer<typeof ErrorContextSchema>;
-
-/**
- * Complete error log data. Strict, like every sibling provider-error schema:
- * a stream log still carrying the retired independent classification markers
- * must fail loudly rather than have them stripped into a classification-less
- * row that reads as an ordinary provider failure.
- */
-export const ErrorLogDataSchema = ProviderErrorObjectSchema.omit({
-  // The raw provider response body is bulky diagnostic data; it goes to the
-  // process log only, never into a stream-log row.
-  rawErrorBody: true,
-})
-  .extend({
-    // Compose the shared operation/model context pair from ErrorContextSchema
-    // so adding a field there propagates to the flattened log-row shape instead
-    // of silently diverging (mirrors the omit-based RetryErrorInfoSchema).
-    ...ErrorContextSchema.shape,
-    rawMessage: z.string().optional(),
-  })
-  .strict();
-export type ErrorLogData = z.infer<typeof ErrorLogDataSchema>;
-
-/** Recover the actionable exhaustion reason from the canonical classification. */
-export function getExhaustionReason(
-  errorDetails: Pick<ProviderError, 'classification'> | undefined | null,
-): ExhaustionReason | undefined {
-  const parsed = ExhaustionReasonSchema.safeParse(
-    errorDetails?.classification?.kind,
-  );
-  return parsed.success ? parsed.data : undefined;
-}
-
-/** Whether an identical retry needs a credential or route change first. */
-function isCredentialExhausted(
-  errorDetails: Pick<ProviderError, 'classification'> | undefined | null,
-): boolean {
-  return getExhaustionReason(errorDetails) !== undefined;
-}
-
-/** Whether retrying past the automatic attempts needs a credential or route
- *  change first: an exhausted credential, or a 401 or 403. */
-export function isCredentialRetryFailure(
-  errorDetails:
-    Pick<ProviderError, 'classification' | 'statusCode'> | undefined,
-): boolean {
-  return (
-    isCredentialExhausted(errorDetails) ||
-    errorDetails?.statusCode === 401 ||
-    errorDetails?.statusCode === 403
-  );
-}
-
 /**
  * Minimal error info for retry state tracking.
  *
@@ -150,6 +92,51 @@ export const RetryErrorInfoSchema = ProviderErrorObjectSchema.omit({
   rawErrorBody: true,
 }).strict();
 export type RetryErrorInfo = z.infer<typeof RetryErrorInfoSchema>;
+
+/** Context about where/when the error occurred */
+const ErrorContextSchema = z.object({
+  operation: z.string().optional(),
+  model: z.string().optional(),
+});
+export type ErrorContext = z.infer<typeof ErrorContextSchema>;
+
+/**
+ * Complete error log data. Strict, like every sibling provider-error schema:
+ * a stream log still carrying the retired independent classification markers
+ * must fail loudly rather than have them stripped into a classification-less
+ * row that reads as an ordinary provider failure.
+ */
+export const ErrorLogDataSchema = RetryErrorInfoSchema.extend({
+  // Compose the shared operation/model context pair from ErrorContextSchema
+  // so adding a field there propagates to the flattened log-row shape instead
+  // of silently diverging.
+  ...ErrorContextSchema.shape,
+  rawMessage: z.string().optional(),
+}).strict();
+export type ErrorLogData = z.infer<typeof ErrorLogDataSchema>;
+
+/** Recover the actionable exhaustion reason from the canonical classification. */
+export function getExhaustionReason(
+  errorDetails: Pick<ProviderError, 'classification'> | undefined | null,
+): ExhaustionReason | undefined {
+  const parsed = ExhaustionReasonSchema.safeParse(
+    errorDetails?.classification?.kind,
+  );
+  return parsed.success ? parsed.data : undefined;
+}
+
+/** Whether retrying past the automatic attempts needs a credential or route
+ *  change first: an exhausted credential, or a 401 or 403. */
+export function isCredentialRetryFailure(
+  errorDetails:
+    Pick<ProviderError, 'classification' | 'statusCode'> | undefined,
+): boolean {
+  return (
+    getExhaustionReason(errorDetails) !== undefined ||
+    errorDetails?.statusCode === 401 ||
+    errorDetails?.statusCode === 403
+  );
+}
 
 /** Project a full ProviderError onto the retry-state record by dropping the
  *  bulky `rawErrorBody`; every other field carries over unchanged. */

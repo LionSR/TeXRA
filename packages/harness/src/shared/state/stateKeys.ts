@@ -103,6 +103,3 @@ export enum GlobalStateKey {
   ONBOARDING_FIRST_RUN_DONE = 'texra.onboarding.firstRunDone',
   ONBOARDING_DEFAULT_TEAM_ID = 'texra.onboarding.defaultTeamId',
 }
-
-/** Prefix used for per-instruction suppression flags */
-export const INSTRUCTION_PREFIX = 'instruction.';

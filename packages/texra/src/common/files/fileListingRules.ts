@@ -1,9 +1,9 @@
+import { getBasename, normalizeFilePath } from '@texra-ai/harness/schemas';
 import { FILE_HANDLING_RULES } from '@texra/common/files/fileHandlingRules';
 import {
   getIncludedExtensions,
   type ExtensionCategory,
 } from '@texra/common/files/fileTypeUtils';
-import { getBasename, normalizeFilePath } from '@utils/core';
 
 // Edited files have their own entry point (getEditedFileListConfig), so they
 // are not listable through getFileListConfig. The surviving vocabulary matches

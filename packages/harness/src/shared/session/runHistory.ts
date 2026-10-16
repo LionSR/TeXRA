@@ -31,7 +31,7 @@ import type {
  * degradation defect in a different costume, so `open` and `load` keep
  * them in their error channel beside it.
  *
- * Which arms are reachable, and from where (D6 b):
+ * Which arms are reachable, and from where:
  * - `not-owner`: from a resume's `open`, where the claim proves prior owners
  *   dead before moving and a live foreign owner is the
  *   `DatabaseClaimRefused` verdict it fails with (a claim taken after that
@@ -39,13 +39,13 @@ import type {
  *   where the session's log refuses a target this process no longer
  *   holds open as `DatabaseNotOwner`, nothing written. It is never
  *   synthesised from any other write failure: a disk error stays a
- *   `DatabaseWriteFailed` (F3). A loop that meets it mid-turn stops with it,
- *   no retry and no second write (R7).
+ *   `DatabaseWriteFailed`. A loop that meets it mid-turn stops with it,
+ *   no retry and no second write.
  * - `unsafe-endpoint`: a pre-publish assertion over every durable origin,
- *   the loud restatement of the package's endpoint constraint (D1).
+ *   the loud restatement of the package's endpoint constraint.
  * - `unprepared-history`: `PreparedHistorySchema` over the history the batch
  *   assembles, at the write boundary of every batch that appends to or
- *   rewrites it, and on cold load (D11).
+ *   rewrites it, and on cold load.
  * - `inconsistent`: the rows do not fold; `cause` says why. From `load`, and
  *   from `RunCell.append` before it publishes: a batch is folded first and
  *   refused with nothing committed, because a published row the fold rejects

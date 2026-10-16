@@ -1,5 +1,5 @@
 // Local imports - run requests
-import { Effect } from 'effect';
+import { Effect, absurd } from 'effect';
 
 // Local imports - team launch
 
@@ -7,7 +7,6 @@ import { Effect } from 'effect';
 
 // Local imports - shared types and errors
 import { Rejected, type StateReadFailed } from '@texra-ai/harness';
-import type { WorkspaceAgentsStores } from '@agent/index';
 import {
   formatTeamLaunchBlockedMessage,
   formatUnknownTeamMessage,
@@ -15,6 +14,7 @@ import {
   TEAM_SELECTION_REQUIRED_MESSAGE,
 } from '@common/teams/TeamPlan';
 import { type AgentDelegationScope } from '@shared/schemas';
+import { isPastedImage } from '@texra/utils/files/pastedImageName';
 import {
   validateRunRequest,
   type ValidatedRunRequest,
@@ -25,9 +25,11 @@ import { createTeamCatalogPorts } from '@texra/controllers/mainView/teamCatalogP
 import { documentTaskConfig } from '@texra/agent/output/documentRecipe';
 import { DocumentTaskOptionsSchema } from '@texra/shared/plugins/documents';
 import { pastedImageFullPath } from '@texra/utils/files/pastedImageUtils';
-import { assertNever } from '@utils/core';
-import { isPastedImage } from '@utils/files/pastedImageName';
-import type { AgentCatalogServices, StartInput } from '@texra-ai/harness';
+import type {
+  AgentCatalog,
+  StartInput,
+  WorkspaceAgentsStores,
+} from '@texra-ai/harness';
 
 type LaunchRequest = Extract<HostRequest, { kind: 'launch' }>;
 
@@ -50,7 +52,7 @@ const buildLaunchRequest = Effect.fn('buildLaunchRequest')(function* (
     readonly delegationAgentScope: AgentDelegationScope;
     readonly cli: { readonly teamId: string };
   },
-): Effect.fn.Return<LaunchPreparation, StateReadFailed, AgentCatalogServices> {
+): Effect.fn.Return<LaunchPreparation, StateReadFailed, AgentCatalog> {
   const task = sessionType === 'task';
   if (task && launch.inputFiles.length === 0) {
     return {
@@ -139,7 +141,7 @@ export function prepareSurfaceLaunch(
 ): Effect.Effect<
   ValidatedRunRequest,
   Rejected | StateReadFailed,
-  AgentCatalogServices
+  AgentCatalog
 > {
   return Effect.gen(function* () {
     let preparation: LaunchPreparation;
@@ -189,10 +191,7 @@ export function prepareSurfaceLaunch(
               );
           break;
         default:
-          return assertNever(
-            resolution,
-            'Unhandled main-view team launch resolution',
-          );
+          return absurd(resolution);
       }
     }
     if (!preparation.valid) {

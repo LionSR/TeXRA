@@ -21,7 +21,7 @@ import { nanoid } from 'nanoid';
 import React from 'react';
 
 import { apiKeySecretName } from '@texra-ai/llm';
-import { refresh } from '@agent/index';
+import { AgentCatalog } from '@texra-ai/harness';
 import { tuiOutputStreamForColor } from '@cli/tui/noColorOutput';
 import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
 import { nodeFileServices } from '@platform/defaults/jsonStore';
@@ -334,11 +334,7 @@ const HARNESS_PLATFORM_SERVICES = await installCliProcessRuntime(
 );
 if (RESET_MULTI_AGENT_DISABLED) {
   await HARNESS_PLATFORM_SERVICES.runtime.runPromise(
-    setCliToolEnabled(
-      HARNESS_PLATFORM_SERVICES.globalState,
-      'multi-agent',
-      false,
-    ),
+    setCliToolEnabled('multi-agent', false),
   );
 }
 // The one process runtime this harness runs on, as its composition root
@@ -393,7 +389,7 @@ if (process.env.HARNESS_VISIBLE_MODELS !== undefined) {
     }),
   );
 }
-await harnessRuntime.runPromise(refresh());
+await harnessRuntime.runPromise(AgentCatalog.use((catalog) => catalog.refresh));
 
 // =========================================================================
 // Fold seeding: every fixture is a session fact

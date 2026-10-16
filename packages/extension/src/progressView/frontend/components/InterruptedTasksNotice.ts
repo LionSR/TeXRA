@@ -85,18 +85,8 @@ export class InterruptedTasksNotice extends LitElement {
         font-size: var(--font-size-sm);
         color: var(--color-text-secondary);
       }
-      .settings-link {
+      #alwaysResumeButton {
         margin-inline-start: auto;
-        padding: 0;
-        border: none;
-        background: none;
-        font: inherit;
-        font-size: var(--font-size-sm);
-        color: var(--color-text-secondary);
-        cursor: pointer;
-      }
-      .settings-link:hover {
-        color: var(--color-text-link);
       }
     `,
   ];
@@ -205,13 +195,13 @@ export class InterruptedTasksNotice extends LitElement {
             @click=${() => this.dismiss(tasks)}
             >${INTERRUPTED_NOTICE.notNow}</wa-button
           >
-          <button
-            type="button"
-            class="settings-link"
+          <wa-button
+            id="alwaysResumeButton"
+            appearance="plain"
+            size="s"
             @click=${() => this.openSettings('general')}
+            >${INTERRUPTED_NOTICE.alwaysResume}</wa-button
           >
-            ${INTERRUPTED_NOTICE.alwaysResume}
-          </button>
         </div>
       </div>`,
     });

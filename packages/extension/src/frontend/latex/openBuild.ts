@@ -1,5 +1,6 @@
 import * as os from 'node:os';
 import * as path from 'node:path';
+import { getFileStem } from '@texra-ai/harness/schemas';
 
 import * as vscode from 'vscode';
 import { Effect, FileSystem, type Path, type PlatformError } from 'effect';
@@ -18,7 +19,6 @@ import {
 } from '@texra/shared/constants/latexTiming';
 
 // Local imports - utilities
-import { getFileStem } from '@utils/core';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import type { WorkspaceRoots } from '@texra-ai/harness';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';

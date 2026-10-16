@@ -3,20 +3,29 @@
 import * as path from 'node:path';
 
 import * as vscode from 'vscode';
-import { Data, Effect, Exit, FileSystem, Queue, Scope, Stream } from 'effect';
+import {
+  Context,
+  Data,
+  Effect,
+  Exit,
+  FileSystem,
+  Queue,
+  Scope,
+  Stream,
+} from 'effect';
 
 import {
   AppState,
   LanguageModel,
   withProcessServices,
 } from '@texra-ai/harness';
-import { withLogChannel } from '@texra-ai/harness';
+import { GlobalStateKey } from '@texra-ai/harness/schemas';
 import {
   SessionHostInteractions,
   type HostInteractions,
-  type SessionHandle,
-} from '@agent/runtime';
-import { getCatalogAgent, refresh } from '@agent/index';
+} from '@texra-ai/harness';
+import { AgentCatalog, withLogChannel } from '@texra-ai/harness';
+import { type SessionHandle } from '@agent/runtime';
 import { BundledViewContentProvider } from '@common/webview';
 import { emitAppSignal } from '@eventBus/AppSignals';
 import { subscribeAppSignal } from '@frontend/events/appSignalSubscriptions';
@@ -29,7 +38,7 @@ import {
   getFirstRunDone,
   setOnboardingDeclined,
 } from '@shared/state/onboardingState';
-import { GlobalStateKey } from '@shared/state/stateKeys';
+import { createFlushableDebounce } from '@texra/utils/core/flushableDebounce';
 import {
   EXTENSION_CATEGORIES,
   getFilterExtensions,
@@ -76,7 +85,6 @@ import {
 import { workspaceFileOptions } from '@texra/controllers/session/workspaceFileOptions';
 import { hasUsableSetupCredential } from '@texra/model/setupCredentialAccess';
 import { checkCoreDependencies } from '@texra/utils/system/checkCoreDependencies';
-import { createFlushableDebounce } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { createExtensionHostRequests } from './extensionHostRequests';
@@ -231,7 +239,11 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
           yield* this.snapshot.setOnboarding(transition.state);
           if (!transition.selectSetupAgent) return;
           // Resolve the registry key so the dropdown matches by value.
-          const entry = getCatalogAgent('setup');
+          const catalog = Context.get(
+            yield* this.runtime.contextEffect,
+            AgentCatalog,
+          );
+          const entry = catalog.get('setup');
           this.surfaceAction({
             kind: 'launch',
             patch: {
@@ -647,7 +659,9 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     } = {},
   ) {
     return Effect.suspend(() =>
-      options.agentCatalogAlreadyFresh ? Effect.void : refresh(),
+      options.agentCatalogAlreadyFresh
+        ? Effect.void
+        : AgentCatalog.use((catalog) => catalog.refresh),
     ).pipe(
       Effect.andThen(this.snapshot.refreshCatalogs),
       Effect.andThen(

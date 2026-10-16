@@ -9,21 +9,20 @@ import { Effect, Predicate } from 'effect';
 import { z } from 'zod';
 
 import { defineTool } from '@texra-ai/harness';
-import { requireRun } from '@texra-ai/harness/plugins';
+import { requireRun, errorResult } from '@texra-ai/harness/plugins';
 import { ChildRuns } from '@texra-ai/harness/plugins';
+import { AgentCatalog } from '@texra-ai/harness';
 import {
-  findAgentByIdentifier,
-  getCatalogAgent,
-  resolveDelegationScopeAgents,
-} from '@agent/index/agentRegistry';
-import { toJsonValue, type ToolResult } from '@shared/schemas';
+  agentMatchesIdentifier,
+  toJsonValue,
+  type ToolResult,
+} from '@shared/schemas';
 import { DocumentTaskOptionsSchema } from '@texra/shared/plugins/documents';
 import {
   documentTaskKey,
   documentTaskPatch,
 } from '@texra/agent/output/documentRecipe';
 import { documentTaskOf } from '@texra/tools/documents/documentTask';
-import { errorResult } from '@tools/core/result';
 import { CALL_FIELDS, fileList } from '@tools/delegation/AgentTool';
 
 const DocumentTaskInputSchema = z.strictObject({
@@ -72,11 +71,11 @@ const runDocumentTask = Effect.fn('DocumentTaskTool.call')(function* (
   input: DocumentTaskInput,
 ) {
   const call = yield* requireRun('document_task');
-  const agents = yield* resolveDelegationScopeAgents(
+  const catalog = yield* AgentCatalog;
+  const agent = (yield* catalog.visible(
     call.env.roots,
     call.run.delegationAgentScope ?? undefined,
-  );
-  const agent = findAgentByIdentifier(agents, input.agentName);
+  )).find((entry) => agentMatchesIdentifier(entry, input.agentName));
   if (agent !== undefined && documentTaskOf(agent) === null)
     return errorResult(
       `'${input.agentName}' has no document task: call \`agent\` to run it with a prompt.`,
@@ -106,7 +105,7 @@ const runDocumentTask = Effect.fn('DocumentTaskTool.call')(function* (
       configFor: (chosen) => {
         // The exact entry: a bare name would re-resolve to what shadows it.
         const key = documentTaskKey(chosen);
-        const entry = getCatalogAgent(key);
+        const entry = catalog.get(key);
         const patch =
           entry &&
           documentTaskPatch(

@@ -7,9 +7,9 @@
  * which stay wire identifiers and never reach the screen.
  */
 
+import { absurd } from 'effect';
 import { type TokenUsageStats, type UsageRoute } from '@shared/schemas';
 import { codingPlanForUsageRoute } from '@texra/shared/model/codingPlans';
-import { assertNever } from '@utils/core';
 import { formatCostUsd } from '@utils/text/stringUtils';
 
 /** Model calls paid for by your own provider accounts. */
@@ -125,7 +125,7 @@ export function usageRouteBadge(
     case undefined:
       return undefined;
     default:
-      return assertNever(route, 'Unhandled usage route');
+      return absurd(route);
   }
 }
 

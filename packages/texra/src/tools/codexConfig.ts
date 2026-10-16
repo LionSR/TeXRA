@@ -4,17 +4,19 @@ import { z } from 'zod';
 
 // Local imports - agent config
 import { codexBackendModelId } from '@texra-ai/llm';
-import { withLogChannel } from '@texra-ai/harness';
+import {
+  withLogChannel,
+  withPerKeyLane,
+  type PerKeyLane,
+} from '@texra-ai/harness';
+import { Settings } from '@texra-ai/harness';
 import { executeCommand } from '@texra-ai/harness/node';
-import type { SettingsStores } from '@shared/config/settingsAccess';
 import { type ToolError } from '@shared/schemas';
 import {
   isCodexModel,
   type AgentCliEffort,
 } from '@texra/shared/agentCliSettings';
 import { CodexStateKey } from '@texra/shared/settingsView/integrationSettings';
-import { readSettingFrom } from '@utils/config/platformSettings';
-import { withPerKeyLane, type PerKeyLane } from '@utils/core/perKeyQueue';
 import {
   agentCliReasoning,
   resolveAgentCliModel,
@@ -26,6 +28,7 @@ import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 // Type-only imports
 import type { ModelReasoningEffort } from '@openai/codex-sdk';
+import type { SettingsStores } from '@texra-ai/harness';
 
 const CHANNEL = 'codexConfig';
 
@@ -81,11 +84,8 @@ export const codexRun = Effect.fn('codexConfig.codexRun')(function* (
   ToolError | StateReadFailed,
   ChildProcessSpawner
 > {
-  const modelString = yield* readSettingFrom<string>(
-    stores,
-    CodexStateKey.MODEL,
-  );
-  const userEffort = yield* readSettingFrom<AgentCliEffort>(
+  const modelString = yield* Settings.get<string>(stores, CodexStateKey.MODEL);
+  const userEffort = yield* Settings.get<AgentCliEffort>(
     stores,
     CodexStateKey.REASONING_EFFORT,
   );

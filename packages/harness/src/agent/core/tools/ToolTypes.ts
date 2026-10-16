@@ -140,27 +140,6 @@ export interface ITool<E = Error, R = never> {
   call(rawInput: unknown): Effect.Effect<ToolResult, E, R>;
 }
 
-/** Tool lookup abstraction — supports dependency injection and mock tools. */
-export interface IToolRegistry<E = Error, R = never> {
-  get(name: string): ITool<E, R> | undefined;
-}
-
-/** Map- or Record-backed IToolRegistry. */
-export class MapToolRegistry<E = Error, R = never> implements IToolRegistry<
-  E,
-  R
-> {
-  private readonly tools: Map<string, ITool<E, R>>;
-
-  constructor(tools: Map<string, ITool<E, R>> | Record<string, ITool<E, R>>) {
-    this.tools = tools instanceof Map ? tools : new Map(Object.entries(tools));
-  }
-
-  get(name: string): ITool<E, R> | undefined {
-    return this.tools.get(name);
-  }
-}
-
 /**
  * The requests one tool call raises, opened through its run's loop. Each
  * carries an id its attempt derives, so a person's pending approval outlives

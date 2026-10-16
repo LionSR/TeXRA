@@ -3,11 +3,11 @@ import * as path from 'node:path';
 import { Effect, FileSystem } from 'effect';
 
 import { withLogChannel } from '@texra-ai/harness';
-import type { SettingsStores } from '@shared/config/settingsAccess';
 import { runToolWithCheck } from '@texra/utils/system/toolChecks';
 import { entryTypeIn } from '@utils/files/fsEntryExists';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { LATEX_COMMANDS_CHANNEL as CHANNEL } from '../latexLogging';
+import type { SettingsStores } from '@texra-ai/harness';
 
 export const LATEXINDENT_CONFIG_KEY = 'texra.latex.latexindentConfig';
 

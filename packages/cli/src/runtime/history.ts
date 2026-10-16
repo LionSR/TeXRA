@@ -3,6 +3,11 @@ import * as path from 'node:path';
 import { Effect, FileSystem, PlatformError, Result, Stream } from 'effect';
 
 import {
+  listRunGeneratedFiles,
+  type RunGeneratedFile,
+  type SessionOpenError,
+} from '@texra-ai/harness';
+import {
   deriveResumability,
   getRunRecords,
   listRuns,
@@ -22,13 +27,8 @@ import {
 import type { RunView } from '@shared/session/sessionView';
 import { runOutcomeToCliRunStatus } from '@shared/runs/runStatus';
 import { loadChatExportInput, type ChatExportInput } from '@texra/agent/export';
-import {
-  listRunGeneratedFiles,
-  type RunGeneratedFile,
-} from '@tools/executions/runGeneratedFiles';
 import { serializeFilteredConfig } from '@tools/executions/configView';
 import { readCompletedRunConversation } from '@transcript';
-import { byStringProp } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { absentReason } from '@utils/files/fsEntryExists';
 
@@ -51,7 +51,6 @@ import {
   formatConversationTranscript,
 } from './history/conversationFormat';
 import type { AgentConfig } from '@texra-ai/harness/schemas';
-import type { SessionOpenError } from '@texra-ai/harness';
 
 /** A run's generated files and its edited workspace files render alike.
  *  First group wins on a path collision; generated output precedes workspace. */
@@ -64,7 +63,7 @@ function mergeHistoryFiles(
       if (!files.has(file.path)) files.set(file.path, file);
     }
   }
-  return [...files.values()].toSorted(byStringProp((f) => f.path));
+  return [...files.values()].toSorted((a, b) => a.path.localeCompare(b.path));
 }
 
 export interface CliHistoryEntry {
@@ -183,7 +182,7 @@ export const readCliHistoryDetails = Effect.fn('cli.readCliHistoryDetails')(
         store.readReport(),
         readCompletedRunConversation(id, session),
         store.readWorkspaceFiles(),
-        listRunGeneratedFiles(id, session),
+        listRunGeneratedFiles(id, session.roots.storage),
         deriveResumability(id, session),
       ],
       { concurrency: 8 },

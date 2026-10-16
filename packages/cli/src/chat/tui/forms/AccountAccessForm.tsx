@@ -16,7 +16,6 @@ import {
 
 import type { SelectItem } from '@cli/tui/ui/Select';
 import { LoadingIndicator } from '@cli/tui/ui/LoadingIndicator';
-import type { SettingsStores } from '@shared/config/settingsAccess';
 import { SUBSCRIPTION_AUTH_PROVIDERS } from '@shared/model/subscriptionAuth';
 import {
   DEVICE_CODE_DESCRIPTION,
@@ -31,6 +30,7 @@ import { ListForm } from './_shared/ListForm';
 import { useAsyncResource } from './_shared/useAsyncListForm';
 import type { ProcessRuntime } from '@texra-ai/harness';
 import type { PlatformSecrets } from '@texra-ai/harness';
+import type { SettingsStores } from '@texra-ai/harness';
 
 export type AccountAccessFormValue =
   | { readonly kind: 'access'; readonly selection: CliModelAccessSelection }

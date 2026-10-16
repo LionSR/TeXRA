@@ -9,9 +9,9 @@ import {
 } from '@texra-ai/harness/node';
 import { parseJsonWith } from '@common/parsing/safeParseJson';
 import { updateCheckRecordsLayer } from '@texra/controllers/session/updateCheckRecords';
-import { UPDATE_CHECK_SKIP_ENV } from '@texra/utils/system/semverUpdateCheck';
 import {
   fetchJsonStringField,
+  UPDATE_CHECK_SKIP_ENV,
   runDailyUpdateCheck,
   type UpdateCheckFetchResult,
 } from '@texra/utils/system/updateCheck';

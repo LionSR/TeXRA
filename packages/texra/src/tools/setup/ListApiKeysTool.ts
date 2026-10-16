@@ -5,8 +5,8 @@ import { z } from 'zod';
 // Local imports
 import { API_KEY_PROVIDER_IDS, apiKeySecretName } from '@texra-ai/llm';
 import { defineTool, Secrets } from '@texra-ai/harness';
+import { executed } from '@texra-ai/harness/plugins';
 import { GITHUB_TOKEN_STORAGE_KEY } from '@texra/tools/github/githubAuth';
-import { executed } from '@tools/core/result';
 import { formatResultCount } from '@utils/text/stringUtils';
 
 // Local file imports

@@ -1,5 +1,6 @@
 // Node imports
 import { join } from 'node:path';
+import { normalizeFilePath } from '@texra-ai/harness/schemas';
 
 // Third-party imports
 import { Effect, FileSystem, type PlatformError } from 'effect';
@@ -11,7 +12,6 @@ import {
   shouldVisitDirectory,
   type FileFilterConfig,
 } from '@texra/common/files/fileListingRules';
-import { byString, normalizeFilePath } from '@utils/core';
 import { absentReason } from '@utils/files/fsEntryExists';
 
 interface WorkspaceFileListingOptions {
@@ -76,5 +76,5 @@ export const listWorkspaceFiles = Effect.fn(
   }
 
   yield* visit(options.root, '');
-  return results.sort(byString);
+  return results.sort((a, b) => a.localeCompare(b));
 });

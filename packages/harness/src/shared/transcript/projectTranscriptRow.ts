@@ -1,7 +1,6 @@
 /**
  * The transcript row builders: what each thing a run says looks like as the
- * row every host paints. The transcript fold (`@shared/session/transcriptFold`)
- * decides which builder an event reaches and supplies the row envelope; these
+ * row every host paints. The transcript fold decides which builder an event reaches and supplies the row envelope; these
  * turn typed, already-decoded values into rows and never parse.
  *
  * Membership for a decoded `log` payload is a single allowlist: every message
@@ -23,7 +22,6 @@ import {
   hasIncompleteEmbeddedSubagentFollowup,
   summarizeSubagentFollowup,
 } from '@shared/subagentFollowup';
-import { assertNever } from '@utils/core';
 import { formatCompactTokenCount } from '@utils/text/stringUtils';
 
 import { toolRowModel, type ToolRowModelContext } from './toolRowModel';
@@ -350,9 +348,9 @@ export function logPayloadRow(
       return undefined;
 
     default:
-      return assertNever(
-        payload,
-        `Unprojected log messageType: ${String((payload as LogPayload).messageType)}`,
-      );
+      // A persisted payload can carry a messageType this build does not
+      // know, so the failure names it.
+      payload satisfies never;
+      throw new Error(`Unprojected log payload: ${JSON.stringify(payload)}`);
   }
 }

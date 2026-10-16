@@ -10,7 +10,11 @@ import {
   resolveToolPath,
   type ToolPathResolution,
 } from '@tools/pathResolution';
-import { buildBytesAttachment, buildFileAttachment } from '@tools/attachments';
+import {
+  ATTACHMENT_MAX_BYTES,
+  buildBytesAttachment,
+  buildFileAttachment,
+} from '@tools/attachments';
 import { formatFileView } from '@tools/formatting';
 import { parseEml, type EmlImageAttachment } from '@tools/emlParser';
 import {
@@ -69,9 +73,6 @@ const ReadInputSchema = z.strictObject({
 type ReadInput = z.infer<typeof ReadInputSchema>;
 
 type AttachmentKind = 'pdf' | 'image' | 'document';
-
-/** Guard against very large EML files exhausting memory during parsing. */
-const MAX_EML_BYTES = 15 * 1024 * 1024; // 15 MiB — matches ATTACHMENT_MAX_BYTES
 
 const ATTACHMENT_COPY: Record<
   AttachmentKind,
@@ -152,10 +153,11 @@ const read = Effect.fn('ReadFileTool.execute')(function* (
 
   if (hasExtension(input.path, '.eml')) {
     const stats = yield* fs.stat(resolved.absolute);
-    if (Number(stats.size) > MAX_EML_BYTES) {
+    // Guard against very large EML files exhausting memory during parsing.
+    if (Number(stats.size) > ATTACHMENT_MAX_BYTES) {
       return yield* Effect.fail(
         new ToolError(
-          `EML file exceeds maximum size of ${formatBytes(MAX_EML_BYTES)}.`,
+          `EML file exceeds maximum size of ${formatBytes(ATTACHMENT_MAX_BYTES)}.`,
         ),
       );
     }
@@ -227,7 +229,7 @@ function getAttachmentConfig(filePath: string): AttachmentKind | null {
   // Office documents are binary formats that cannot be read as text.
   // Return them as attachments so models with file input support can process them.
   if (
-    OFFICE_EXTENSIONS.has(extension) ||
+    OFFICE_EXTENSIONS.includes(extension) ||
     OFFICE_MIME_TYPES.has(mimeType ?? '')
   ) {
     return 'document';

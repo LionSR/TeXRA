@@ -6,10 +6,8 @@
  *
  * Resolution is by hand, not by ambient scope: a caller answers for the
  * workspace whose roots it was given — a tool call's `call.roots`, a run's
- * `session.roots`, a host command's `session.roots`. The `AsyncLocalStorage`
- * frame this module used to carry is gone (#12421), and the process-wide
- * holder that survived it is gone too: `SessionHandleInit.roots` is required,
- * so every session is opened over roots its composition root named, and this
+ * `session.roots`, a host command's `session.roots`. There is no ambient
+ * holder: `SessionHandleInit.roots` is required, so every session is opened over roots its composition root named, and this
  * module declares the record without holding one.
  */
 import type { SettingHost } from '@shared/state/stateSettings';
@@ -28,6 +26,12 @@ export interface WorkspaceRoots {
   readonly host: SettingHost;
   /** Canonical physical workspace root, or undefined when no folder is open. */
   readonly workspace: string | undefined;
+  /**
+   * The storage root this process opened (the hosts' `~/.texra`, an SDK
+   * embedder's `storageDir`): every storage path below derives from it, and
+   * the files a person keeps there (the MCP config) are found beside it.
+   */
+  readonly storageRoot: string;
   /** Application-owned storage for this project's TeXRA 1.0 state. Custom
    * hosts must keep this separate from earlier release storage directories;
    * session services use this exact root without importing previous state. */

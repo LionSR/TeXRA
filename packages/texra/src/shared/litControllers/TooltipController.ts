@@ -1,4 +1,4 @@
-import { clamp, createFlushableDebounce } from '@utils/core';
+import { createFlushableDebounce } from '@texra/utils/core/flushableDebounce';
 
 /**
  * Tooltip delay in ms before showing (matches VS Code native tooltip timing).
@@ -75,7 +75,10 @@ function show(anchor: Element): void {
 
     // Clamp to viewport edges
     const margin = 4;
-    left = clamp(left, margin, window.innerWidth - tooltipRect.width - margin);
+    left = Math.max(
+      margin,
+      Math.min(window.innerWidth - tooltipRect.width - margin, left),
+    );
 
     tooltipEl.style.left = `${left}px`;
     tooltipEl.style.top = `${rect.bottom + 4}px`;

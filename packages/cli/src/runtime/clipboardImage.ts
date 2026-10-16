@@ -23,11 +23,11 @@ import * as ChildProcess from 'effect/process/ChildProcess';
 
 import { withSessionFs } from '@texra-ai/harness';
 import { executeCommand } from '@texra-ai/harness/node';
+import { generatePastedImageName } from '@texra/utils/files/pastedImageName';
 import {
   type PastedImageSaveFailed,
   savePastedImageBuffer,
 } from '@texra/utils/files/pastedImageUtils';
-import { generatePastedImageName } from '@utils/files/pastedImageName';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import type { WorkspaceRoots } from '@texra-ai/harness';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';

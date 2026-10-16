@@ -1,4 +1,5 @@
 /** Host-neutral relaunch and retry actions shared by extension and desktop. */
+import { Settings } from '@texra-ai/harness';
 import { Cause, Data, Effect, FileSystem, type Scope } from 'effect';
 
 import {
@@ -8,7 +9,7 @@ import {
   type SecretsFailed,
 } from '@texra-ai/llm';
 import {
-  type AgentCatalogServices,
+  type AgentCatalog,
   AppState,
   DatabaseReadFailed,
   getHelperModelName,
@@ -26,8 +27,11 @@ import {
   withLogChannel,
   type WorkspaceRoots,
 } from '@texra-ai/harness';
-import { presentRunFailure } from '@agent/runtime/terminalResultToast';
-import type { SessionHostInteractions } from '@agent/runtime/HostInteractions';
+import { GlobalStateKey } from '@texra-ai/harness/schemas';
+import {
+  presentRunFailure,
+  type SessionHostInteractions,
+} from '@texra-ai/harness';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { getRunRecords } from '@agent/storage';
 import { FOLLOW_UP_WAKE_FAILED_MESSAGE } from '@agent/followUp/ToolUseFollowUp';
@@ -51,7 +55,6 @@ import {
 import type { MessageHost, NotificationFailed } from '@texra/hosts/uiHosts';
 import { runActionGuard } from '@texra/controllers/session/runActionGuard';
 import type { TaskRecordsUnavailable } from '@texra/controllers/server/serviceSession';
-import { getUseOpenRouter } from '@utils/config/providerConfig';
 import { entryExists } from '@utils/files/fsEntryExists';
 import {
   locateInWorkspace,
@@ -263,12 +266,12 @@ export const createHostRunActions = (
 ): Effect.Effect<
   HostRunActions,
   never,
-  FileSystem.FileSystem | Secrets | AgentCatalogServices
+  FileSystem.FileSystem | Secrets | AgentCatalog
 > =>
   Effect.gen(function* () {
     const secrets = yield* Secrets;
     // The catalog the merge's task resolves its agent against.
-    const catalog = yield* Effect.context<AgentCatalogServices>();
+    const catalog = yield* Effect.context<AgentCatalog>();
     // Resolved once here and carried: the planner's workspace probes below
     // read through this filesystem rather than taking one from whatever
     // context each of its callers happens to run on.
@@ -484,7 +487,7 @@ export const createHostRunActions = (
         }
         let fallback = getRuntimeModelDirectFallback(
           request.model,
-          yield* getUseOpenRouter(roots),
+          yield* Settings.get<boolean>(roots, GlobalStateKey.USE_OPENROUTER),
         );
         if (!fallback) {
           yield* ports.showInfo(
@@ -503,7 +506,7 @@ export const createHostRunActions = (
         if (!prepared || !isRetryPending(runId, requestId)) return;
         const currentFallback = getRuntimeModelDirectFallback(
           request.model,
-          yield* getUseOpenRouter(roots),
+          yield* Settings.get<boolean>(roots, GlobalStateKey.USE_OPENROUTER),
         );
         if (!currentFallback) {
           yield* ports.showInfo(modelsChanged);
@@ -518,7 +521,7 @@ export const createHostRunActions = (
           if (!prepared || !isRetryPending(runId, requestId)) return;
           const finalFallback = getRuntimeModelDirectFallback(
             request.model,
-            yield* getUseOpenRouter(roots),
+            yield* Settings.get<boolean>(roots, GlobalStateKey.USE_OPENROUTER),
           );
           if (!finalFallback || finalFallback.provider !== fallback.provider) {
             yield* ports.showInfo(modelsChanged);

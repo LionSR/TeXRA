@@ -9,6 +9,12 @@ import {
 
 // Local imports - platform
 import { modelConfig } from '@texra-ai/llm';
+import { Settings } from '@texra-ai/harness';
+import {
+  mcpConfigPathOf,
+  readMcpConfig,
+  type ConfigProvider,
+} from '@texra-ai/harness';
 import {
   JsonConfigProvider,
   type ConfigStore,
@@ -17,19 +23,12 @@ import { nodeFileServices, type JsonStore } from '@platform/defaults/jsonStore';
 import { openTexraConfigStores } from '@platform/defaults/nodeStores';
 
 // Local imports - shared
-import { canonicalConfigKey } from '@shared/config/configKeys';
-import type { SettingsStores } from '@shared/config/settingsAccess';
 import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
 
 // Local imports - tools
-import { readMcpConfig, USER_MCP_CONFIG_PATH } from '@tools/mcp/mcpConfig';
 
 // Local imports - utilities
-import {
-  readConfigSettingFrom,
-  writeSettingTo,
-} from '@utils/config/platformSettings';
-import type { ConfigProvider } from '@texra-ai/harness';
+import type { SettingsStores } from '@texra-ai/harness';
 
 /**
  * The model a `texra` command starts on when nothing else names one.
@@ -147,23 +146,20 @@ export function cliCommandDefaults(
   stores: SettingsStores,
   role: CliCommandRole,
 ): CliCommandDefaults {
-  const sectionKey = canonicalConfigKey(role);
+  const sectionKey = `texra.${role}`;
   const section =
-    readConfigSettingFrom<CliCommandDefaults | undefined>(
+    Settings.getConfig<CliCommandDefaults | undefined>(
       stores.config,
       sectionKey,
     ) ?? {};
-  const modelKey = section.model ? sectionKey : canonicalConfigKey('model');
+  const modelKey = section.model ? sectionKey : 'texra.model';
   const model =
     section.model ??
-    readConfigSettingFrom<string | undefined>(stores.config, modelKey);
+    Settings.getConfig<string | undefined>(stores.config, modelKey);
   return {
     agent:
       section.agent ??
-      readConfigSettingFrom<string | undefined>(
-        stores.config,
-        canonicalConfigKey('agent'),
-      ),
+      Settings.getConfig<string | undefined>(stores.config, 'texra.agent'),
     model,
     ...(model === undefined
       ? {}
@@ -191,7 +187,7 @@ export const setWorkspaceCliChatAgent = Effect.fn(
       new Error('The default chat agent must not be empty.'),
     );
   }
-  const sectionKey = canonicalConfigKey('chat');
+  const sectionKey = 'texra.chat';
   // The workspace file's own section, not the merged read: the write below
   // lands in the workspace target, so seeding from `workspace over user` would
   // copy a user-level `texra.chat.model` into the project file and pin it
@@ -201,7 +197,7 @@ export const setWorkspaceCliChatAgent = Effect.fn(
   const next: { agent?: string; model?: string } = { ...existing };
   if (trimmed) next.agent = trimmed;
   else delete next.agent;
-  yield* writeSettingTo(
+  yield* Settings.set(
     stores,
     sectionKey,
     Object.keys(next).length > 0 ? next : undefined,
@@ -217,7 +213,7 @@ const KNOWN_CONFIG_KEYS: ReadonlySet<string> = new Set(
 const COMMAND_SECTION_KEYS: ReadonlySet<string> = new Set(['agent', 'model']);
 
 const COMMAND_SECTION_CONFIG_KEYS: ReadonlySet<string> = new Set(
-  COMMAND_ROLES.map(canonicalConfigKey),
+  COMMAND_ROLES.map((role) => `texra.${role}`),
 );
 
 /**
@@ -291,7 +287,7 @@ export function loadCliStartupConfig(
       // otherwise reads: a broken file warns here, not first mid-run.
       const mcpConfig = yield* readMcpConfig(
         yield* FileSystem.FileSystem,
-        USER_MCP_CONFIG_PATH,
+        mcpConfigPathOf(storageRoot),
       );
       // A value its catalog row rejects is reported once, in `warnings`
       // below, and then reads as absent: every read passes over it to the

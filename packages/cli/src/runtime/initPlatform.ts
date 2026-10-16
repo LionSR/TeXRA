@@ -15,19 +15,15 @@ import {
   type Session,
   type SessionOpenError,
   withProcessServices,
+  StateStores,
 } from '@texra-ai/harness';
 import {
   createNodeWorkspaceRoots,
   resolveGlobalStoragePath,
   resolveWorkspaceStoragePath,
 } from '@texra-ai/harness/node';
+import { GlobalStateKey } from '@texra-ai/harness/schemas';
 import type { SessionHandle } from '@agent/runtime';
-import {
-  openProjectStateStore,
-  openRepoStateStore,
-} from '@controllers/session/appStateStore';
-import type { SettingsStores } from '@shared/config/settingsAccess';
-import { GlobalStateKey } from '@shared/state/stateKeys';
 import { telemetryNoticeIfDue } from '@telemetry/telemetryNotice';
 import { DisposableStore } from '@texra/platform/disposable';
 import { bootstrapHost } from '@texra/controllers/hostBootstrap';
@@ -50,6 +46,7 @@ import {
 import { CliExitCode } from './exitCodes';
 import { terminalForegroundHeld } from './foregroundCommand';
 import type { CliContext } from './cliContext';
+import type { SettingsStores } from '@texra-ai/harness';
 
 type CliShutdownSignal = 'SIGINT' | 'SIGTERM';
 // Removers for the listeners installCliShutdownSignalHandlers put on the
@@ -116,8 +113,8 @@ export type CliPlatformServices = SettingsStores & {
   /**
    * The stores this root opened, handed over rather than read back. `config`,
    * `workspaceState`, `repoState` and `globalState` are the slots a catalog setting
-   * resolves against, so a read or write through `readSettingFrom` /
-   * `writeSettingTo` answers for this process's project, from the record
+   * resolves against, so a read or write through `Settings.get` /
+   * `Settings.set` answers for this process's project, from the record
    * the caller holds rather than any process-wide lookup.
    */
   readonly secrets: PlatformSecrets;
@@ -342,11 +339,13 @@ export function initCliPlatform(
           // owned by the project scope; AppState (global) is the runtime's.
           const { storageRoot } = context;
           const storage = resolveWorkspaceStoragePath(storageRoot, context.cwd);
-          const workspaceState = yield* openProjectStateStore(
+          const workspaceState = yield* (yield* StateStores)
+            .project(storage, context.cwd)
+            .pipe(Scope.provide(projectScope));
+          const repoState = yield* (yield* StateStores).repo(
             storage,
             context.cwd,
-          ).pipe(Scope.provide(projectScope));
-          const repoState = yield* openRepoStateStore(context.cwd, storage);
+          );
           // One process, one project: the process roots are the `--cwd` workspace,
           // over the config provider the startup read already opened — the project
           // `.texra/config.json` layered over the user-level
@@ -355,8 +354,8 @@ export function initCliPlatform(
           const roots = createNodeWorkspaceRoots({
             host: 'cli',
             workspacePath: context.cwd,
+            storageRoot,
             storage,
-            globalStorage: resolveGlobalStoragePath(storageRoot),
             config: context.config,
             workspaceState,
             repoState,

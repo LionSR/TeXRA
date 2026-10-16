@@ -1,4 +1,5 @@
 import { Cause, Effect, Exit } from 'effect';
+import { Settings } from '@texra-ai/harness';
 import { HttpClientError } from 'effect/http';
 import { LRUCache } from 'lru-cache';
 
@@ -9,7 +10,7 @@ import {
 } from '@texra-ai/llm/node';
 import { exposeApiKey, lookupApiKey, type SecretsFailed } from '@texra-ai/llm';
 import { withLogChannel } from '@texra-ai/harness';
-import type { SettingsStores } from '@shared/config/settingsAccess';
+import { GlobalStateKey } from '@texra-ai/harness/schemas';
 import type {
   SubscriptionUsageProvider,
   SubscriptionUsageSnapshot,
@@ -17,7 +18,6 @@ import type {
 } from '@texra/shared/model/subscriptionUsage';
 import { SUBSCRIPTION_USAGE_PROVIDERS } from '@texra/shared/model/subscriptionUsage';
 import { CODING_PLAN_SUBSCRIPTIONS } from '@texra/shared/model/codingPlans';
-import { useChinaRegion } from '@utils/config/providerConfig';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { fetchChatGptUsage } from './codexUsageAdapter';
@@ -30,6 +30,7 @@ import { fetchKimiCodeUsage } from './kimiCodeUsageAdapter';
 import type { PlatformSecrets } from '@texra-ai/harness';
 import type { ParsedSubscriptionUsage } from './subscriptionUsageParsing';
 import type { HttpClient } from 'effect/http';
+import type { SettingsStores } from '@texra-ai/harness';
 
 const CHANNEL = 'SubscriptionUsage';
 
@@ -164,7 +165,8 @@ export class SubscriptionUsageService {
           ),
       },
       glmCodingPlan: {
-        resolveVariant: () => useChinaRegion(this.stores, 'glm'),
+        resolveVariant: () =>
+          Settings.get<boolean>(this.stores, GlobalStateKey.GLM_USE_CHINA),
         fetch: (useChina) =>
           Effect.flatMap(this.loadApiKey('glm'), (apiKey) =>
             apiKey

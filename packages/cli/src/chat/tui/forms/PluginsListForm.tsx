@@ -37,7 +37,12 @@ interface PluginsListFormProps {
    *  availability probes read its folder and configuration. */
   readonly roots: Pick<
     WorkspaceRoots,
-    'host' | 'workspace' | 'config' | 'globalState' | 'globalStorage'
+    | 'host'
+    | 'workspace'
+    | 'config'
+    | 'globalState'
+    | 'globalStorage'
+    | 'storageRoot'
   >;
   /** The process runtime the probes and writes run on. */
   readonly runtime: ProcessRuntime;
@@ -86,11 +91,9 @@ export function PluginsListForm(
 
   const toggle = (row: PluginRow) => {
     if (row.kind === 'texra')
-      return setCliToolEnabled(
-        roots.globalState,
-        row.item.id,
-        row.item.enabled === false,
-      ).pipe(Effect.asVoid);
+      return setCliToolEnabled(row.item.id, row.item.enabled === false).pipe(
+        Effect.asVoid,
+      );
     if (row.kind === 'installed')
       // On and trusted switches off; on but changed since it was trusted
       // opens the review, as switching on does.

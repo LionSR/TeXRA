@@ -1,17 +1,19 @@
 import { mkdir, readFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join, relative } from 'node:path';
-import { Cause, Context, Effect, Exit, FileSystem, Layer, Scope } from 'effect';
+import { Cause, Effect, Exit, FileSystem, Layer, Scope } from 'effect';
 import { it as effectIt } from '@effect/vitest';
 
 import { describe, expect, it, vi } from 'vitest';
 import { globalDatabaseLayer } from '@controllers/session/Database';
+import { processStoresLayer } from '@controllers/session/appStateStore';
 import { projectDatabaseLayer } from '@controllers/session/projectDatabase';
 import { openDesktopProjectRegistry } from '@desktop/main/desktopProjects.js';
 import {
   DesktopProjectRecords,
   openDesktopProjectRecords,
 } from '@desktop/main/desktopProjectRecords.js';
+import { GlobalValues } from '@platform/processRuntime';
 import { SessionOwner } from '@platform/processRuntime';
 import { JsonStore } from '@platform/defaults/jsonStore';
 import {
@@ -19,10 +21,14 @@ import {
   processOwnerId,
 } from '@platform/defaults/nodeProcesses';
 import { resolveGlobalStoragePath } from '@platform/defaults/workspaceStorage';
-import { DatabaseWriteFailed, GlobalDatabase } from '@shared/session/database';
+import { DatabaseWriteFailed } from '@shared/session/database';
 import { ProcessIdentity } from '@shared/session/sessionEvents';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
-import { createFakeHost, storePluginsLayer } from '@test/support/setupPlatform';
+import {
+  createFakeHost,
+  storePluginsLayer,
+  globalValuesOver,
+} from '@test/support/setupPlatform';
 import {
   closeAllTestSessions,
   closeTestSession,
@@ -43,20 +49,28 @@ import type { Sessions } from '@texra-ai/harness';
  * scope owns: the process runtime holds one in production, and these suites
  * reopen the same root to prove what survives a closed handle.
  */
-const globalDatabaseOf = Effect.fnUntraced(function* (profile: string) {
-  const owner = processOwnerId(yield* nodeProcesses.selfIdentity());
-  const context = yield* Layer.build(
+const globalDatabaseOf = (profile: string) =>
+  Effect.map(nodeProcesses.selfIdentity(), (start) =>
     globalDatabaseLayer(resolveGlobalStoragePath(profile)).pipe(
-      Layer.provide(ProcessIdentity.layer(owner)),
+      Layer.provide(ProcessIdentity.layer(processOwnerId(start))),
       Layer.provide(nodePlatformLayer),
       Layer.orDie,
     ),
   );
-  return Context.get(context, GlobalDatabase);
-});
+/** The process's stores over the profile's global root, held for the
+ *  caller's scope. */
+const processStoresOf = (profile: string) =>
+  Effect.flatMap(globalDatabaseOf(profile), (database) =>
+    Layer.build(processStoresLayer.pipe(Layer.provide(database))),
+  );
 const projectRecordsOf = (profile: string) =>
   Effect.flatMap(globalDatabaseOf(profile), (database) =>
-    Effect.provideService(openDesktopProjectRecords, GlobalDatabase, database),
+    Effect.flatMap(Layer.build(globalValuesOver(database)), (values) =>
+      Effect.provide(
+        Effect.map(GlobalValues, openDesktopProjectRecords),
+        values,
+      ),
+    ),
   );
 
 /** The kernel's session owner, opening every project's session ephemeral
@@ -162,10 +176,7 @@ describe('desktop composition root and launch environment', () => {
               SessionOwner,
               ephemeralOwner('project close regression'),
             ),
-            Effect.provideService(
-              GlobalDatabase,
-              yield* globalDatabaseOf(profile),
-            ),
+            Effect.provide(yield* processStoresOf(profile)),
           );
           yield* Effect.addFinalizer(() => registry.dispose());
           const successorRoot = join(profile, 'successor');
@@ -248,10 +259,7 @@ describe('desktop composition root and launch environment', () => {
             SessionOwner,
             ephemeralOwner('project disposal regression'),
           ),
-          Effect.provideService(
-            GlobalDatabase,
-            yield* globalDatabaseOf(profile),
-          ),
+          Effect.provide(yield* processStoresOf(profile)),
         );
         yield* Effect.addFinalizer(() =>
           registry.dispose().pipe(Effect.ignore),

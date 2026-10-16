@@ -5,13 +5,15 @@ import {
   type PlatformSecrets,
   type LanguageModel,
 } from '@texra-ai/harness';
-import type { SessionHostInteractions } from '@agent/runtime/HostInteractions';
-import { presentRunFailure } from '@agent/runtime/terminalResultToast';
-import type { SettingsStores } from '@shared/config/settingsAccess';
+import {
+  presentRunFailure,
+  type SessionHostInteractions,
+} from '@texra-ai/harness';
 import { SETUP_AGENT_NAME } from '@shared/constants/agents';
 import { validateRunRequest } from '@texra/controllers/session/runRequests';
 import type { HostRunActions } from '@texra/controllers/session/hostRunActions';
 import { resolveSetupLaunchModel } from '@texra/model/setupCredentialAccess';
+import type { SettingsStores } from '@texra-ai/harness';
 
 /** Instruction handed to the setup agent when launched. Shared by every host. */
 export const SETUP_INSTRUCTION =

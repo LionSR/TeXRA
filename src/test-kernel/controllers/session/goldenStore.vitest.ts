@@ -42,7 +42,7 @@ import { it } from '@effect/vitest';
 import { Effect, Layer, Stream, SubscriptionRef } from 'effect';
 import { afterAll, afterEach, beforeEach, describe, expect } from 'vitest';
 
-import { refresh } from '@agent/index';
+import { AgentCatalog } from '@agent/index/agentCatalog';
 import { resumeRun } from '@agent/runtime/resumeRun';
 import { makeRunHistory } from '@agent/runtime/RunHistory';
 import { sessionEventsLayer } from '@agent/runtime/SessionEvents';
@@ -58,7 +58,6 @@ import { SessionViewService } from '@controllers/session/SessionView';
 import { sessionInputsLayer } from '@controllers/session/sessionInputs';
 import { makeSessionStore } from '@controllers/session/sessionStore';
 import { WorkspaceRoots } from '@controllers/session/WorkspaceRoots';
-import { AgentDirectories, AppState } from '@platform/interfaces';
 import { withProcessServices } from '@platform/processRuntime';
 import {
   qualifyAggregateId,
@@ -75,22 +74,13 @@ import {
   type SessionView,
 } from '@shared/session/sessionView';
 import { nodeSpawnerLayer } from '@test/support/childProcessTestLayer';
-import { FakeStateStore } from '@test/support/FakePlatform';
-import { testHttpClientLayer } from '@test/support/fetchTestUtils';
-import {
-  nodePlatformLayer,
-  unusedGlobalStorageFs,
-} from '@test/support/fsTestUtils';
+import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { REPO_ROOT } from '@test/support/repoScan';
 import {
   closeTestDefaultSession,
   openTestDefaultSession,
 } from '@test/support/sessionEnd';
-import {
-  fakeHostAgentDirectories,
-  setupPlatform,
-  storePluginsLayer,
-} from '@test/support/setupPlatform';
+import { setupPlatform, storePluginsLayer } from '@test/support/setupPlatform';
 import {
   createTempDirPlatform,
   useTempDirs,
@@ -371,9 +361,7 @@ describe('the golden 1.0 store', () => {
           .all(),
       );
       expect(shared.length).toBeGreaterThan(0);
-      const db = yield* Database;
-      expect(yield* db.readAll(0)).toHaveLength(rows.length);
-    }).pipe(Effect.provide(substrate(storage)));
+    });
   });
 
   it.effect('folds to the pinned session view and run states', () => {
@@ -634,18 +622,8 @@ describe('the golden run killed after its effect', () => {
       );
     });
     writeFileSync(flag, 'texra-cli-run-validation\n');
-    await Effect.runPromise(
-      Effect.provide(
-        refresh(),
-        Layer.mergeAll(
-          unusedGlobalStorageFs(),
-          storePluginsLayer,
-          nodePlatformLayer,
-          testHttpClientLayer,
-          AgentDirectories.layer(fakeHostAgentDirectories),
-          AppState.layer(new FakeStateStore()),
-        ),
-      ),
+    await testRuntime().runPromise(
+      AgentCatalog.use((catalog) => catalog.refresh),
     );
     await Effect.runPromise(closeTestDefaultSession);
   });

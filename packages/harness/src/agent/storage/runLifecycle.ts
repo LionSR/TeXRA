@@ -94,7 +94,7 @@ export interface RegisterRunOptions {
   readonly identity: RunIdentity;
   /** Runtime behavior declared by the launch source, not UI visibility. */
   readonly userFollowUpSupport?: UserFollowUpSupport;
-  /** The run's `run.description`, durable at birth (#9590 A4): a child's
+  /** The run's `run.description`, durable at birth: a child's
    *  task label; a root's summary comes later as a second row. */
   readonly description?: string;
   /** Who wrote it: the model, unless a fork copies its user's title. */

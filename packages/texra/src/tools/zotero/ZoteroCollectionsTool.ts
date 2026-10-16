@@ -10,13 +10,12 @@
  */
 
 // Third-party imports
-import { Effect } from 'effect';
+import { Effect, Predicate } from 'effect';
 import { z } from 'zod';
 
 // Local imports - core
 import { defineTool } from '@texra-ai/harness';
-import { executed } from '@tools/core/result';
-import { filterNotNull } from '@utils/core';
+import { executed } from '@texra-ai/harness/plugins';
 import { formatResultCount } from '@utils/text/stringUtils';
 
 // Local imports - zotero
@@ -128,7 +127,7 @@ function filterTree(nodes: CollectionNode[], query: string): FilterResult {
     const nameMatches = node.name.toLowerCase().includes(lowerQuery);
     const filteredChildren = node.children
       .map((child) => visit(child))
-      .filter(filterNotNull);
+      .filter(Predicate.isNotNull);
 
     if (nameMatches) matchCount++;
 
@@ -138,7 +137,7 @@ function filterTree(nodes: CollectionNode[], query: string): FilterResult {
     return null;
   }
 
-  const tree = nodes.map((n) => visit(n)).filter(filterNotNull);
+  const tree = nodes.map((n) => visit(n)).filter(Predicate.isNotNull);
 
   return { tree, matchCount };
 }

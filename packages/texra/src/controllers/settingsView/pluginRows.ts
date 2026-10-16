@@ -8,15 +8,19 @@
  */
 import { Effect, FileSystem } from 'effect';
 
-import { getCatalogAgents } from '@agent/index';
+import {
+  AgentCatalog,
+  mcpServerOfToolName,
+  mcpConfigPathOf,
+  readMcpConfig,
+  type ToolProbeInputs,
+  type WorkspaceRoots,
+} from '@texra-ai/harness';
 import type { PluginEnv } from '@common/plugins/installRecord';
 import { listPlugins } from '@common/plugins/pluginTrust';
 import { buildToolDashboardItems } from '@texra/controllers/settingsView/ToolDashboardData';
 import type { PluginRow } from '@texra/shared/settingsView/settingsViewMessages';
-import { readMcpConfig, USER_MCP_CONFIG_PATH } from '@tools/mcp/mcpConfig';
-import { mcpServerOfToolName } from '@tools/mcp/mcpServer';
-import type { ExternalToolCheckResult } from '@tools/toolAvailabilityService';
-import type { ToolProbeInputs } from '@texra-ai/harness';
+import type { ExternalToolCheckResult } from '@texra-ai/harness';
 
 /**
  * Build the rows, the MCP config file they read, and what that file's
@@ -25,10 +29,10 @@ import type { ToolProbeInputs } from '@texra-ai/harness';
  * or invalid `mcp.json` lists no servers and says why in `mcpWarnings`.
  */
 export const buildPluginRows = Effect.fn('buildPluginRows')(function* (
-  inputs: ToolProbeInputs & PluginEnv,
+  inputs: ToolProbeInputs & PluginEnv & Pick<WorkspaceRoots, 'storageRoot'>,
   cachedResults?: readonly ExternalToolCheckResult[],
 ) {
-  const agents = getCatalogAgents().map((agent) => ({
+  const agents = (yield* AgentCatalog).list().map((agent) => ({
     name: agent.name,
     tools: agent.tools ?? [],
   }));
@@ -46,10 +50,8 @@ export const buildPluginRows = Effect.fn('buildPluginRows')(function* (
 
   const items = yield* buildToolDashboardItems(inputs, cachedResults);
   const installed = yield* listPlugins(inputs);
-  const mcp = yield* readMcpConfig(
-    yield* FileSystem.FileSystem,
-    USER_MCP_CONFIG_PATH,
-  );
+  const mcpConfigPath = mcpConfigPathOf(inputs.storageRoot);
+  const mcp = yield* readMcpConfig(yield* FileSystem.FileSystem, mcpConfigPath);
 
   const rows: PluginRow[] = [
     ...items.map((item): PluginRow => ({
@@ -86,7 +88,7 @@ export const buildPluginRows = Effect.fn('buildPluginRows')(function* (
   ];
   return {
     rows,
-    mcpConfigPath: USER_MCP_CONFIG_PATH,
+    mcpConfigPath,
     mcpWarnings: mcp?.warnings ?? [],
   };
 });

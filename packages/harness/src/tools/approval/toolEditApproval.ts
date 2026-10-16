@@ -19,9 +19,8 @@ import {
   type ToolResult,
 } from '@shared/schemas';
 import { refusalCopy, refusalOf } from '@shared/session/approvalDecision';
+import { Settings } from '@shared/config/settings';
 import { errorResult } from '@tools/core/result';
-import { clamp } from '@utils/core';
-import { readSettingFrom } from '@utils/config/platformSettings';
 import { workspaceRelativePath } from '@utils/files/workspaceFS';
 import {
   buildDiffHunks,
@@ -181,11 +180,11 @@ function firstChangedLineIn(
     // A deletion has no line of its own in the proposed text; reveal the
     // position it was removed from.
     if (marker === '-') {
-      return clamp(line - 1, 0, lastProposedLine);
+      return Math.max(0, Math.min(lastProposedLine, line - 1));
     }
     line += 1;
   }
-  return clamp(hunk.newStart - 1, 0, lastProposedLine);
+  return Math.max(0, Math.min(lastProposedLine, hunk.newStart - 1));
 }
 
 // ============================================================================
@@ -204,7 +203,7 @@ export const requestToolEditApproval = Effect.fn('requestToolEditApproval')(
     request: Omit<ToolEditApprovalRequest, 'permission' | 'roots'>,
   ): Effect.fn.Return<ToolEditApprovalResult, Error, ToolContext> {
     const call = yield* requireRun('A tool-edit approval');
-    const approvalsEnabled = yield* readSettingFrom<boolean>(
+    const approvalsEnabled = yield* Settings.get<boolean>(
       call.env.roots,
       TOOL_EDIT_APPROVAL_CONFIG_KEY,
     );
