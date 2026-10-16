@@ -219,7 +219,12 @@ export class ProviderKeyList extends LitElement {
             ${this.renderActions(entry)}
           </div>
         </div>
-        ${entry.provider === 'anthropic' ? renderPlanCreditsHint() : nothing}
+        ${
+          entry.provider === 'anthropic' &&
+          (isExpanded || entry.status !== 'set')
+            ? renderPlanCreditsHint()
+            : nothing
+        }
         ${isExpanded ? this.renderDetails(entry) : nothing}
       </section>
     `;
@@ -250,8 +255,8 @@ export class ProviderKeyList extends LitElement {
   }
 }
 
-/** Under the Anthropic row, always visible: a Max or Team plan's monthly API
- *  credits are spent through the key this row sets. */
+/** Under the Anthropic row while it has no key or is expanded: a Max or Team
+ *  plan's monthly API credits are spent through the key this row sets. */
 function renderPlanCreditsHint(): TemplateResult {
   return html`<p class="provider-row-hint">
     ${ANTHROPIC_PLAN_CREDITS.hint}

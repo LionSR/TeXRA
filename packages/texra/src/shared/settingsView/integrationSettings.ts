@@ -106,8 +106,7 @@ export const CLAUDE_AGENT_SETTINGS: readonly PluginSettingRow[] = [
       key: ClaudeAgentStateKey.MODEL,
       ...CLAUDE_AGENT_MODEL_SETTING,
       title: 'Claude Code model',
-      description:
-        "Claude model selected for Claude Code agent sessions. A Claude Code sign-in (claude login or CLAUDE_CODE_OAUTH_TOKEN) is used first, under your plan's usage limits; only without one does Claude Code use your Anthropic API key, which can draw on a Max or Team plan's monthly API credits.",
+      description: 'Claude model selected for Claude Code agent sessions.',
     }),
   },
   {
