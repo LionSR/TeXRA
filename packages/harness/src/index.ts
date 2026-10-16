@@ -83,6 +83,39 @@ export {
   type ProcessServices,
 } from '@platform/processRuntime';
 
+// The process's agent catalog: its reads, launch resolution and custom
+// copies, the workspace's agent selection over it, and the agent
+// directories a host serves it (bundled agents under its packaged
+// resources' `BUNDLED_AGENTS_DIRECTORY`).
+export {
+  AgentCatalog,
+  AgentCatalogLoadError,
+  AgentNotFound,
+  type AgentCatalogShape,
+  type WorkspaceAgentsStores,
+} from '@agent/index/agentCatalog';
+export type { AgentEntry } from '@agent/index/agentEntry';
+export {
+  InvalidAgentTeamError,
+  type WorkspaceAgentsController,
+  type WorkspaceAgentsControllerDeps,
+  type WorkspaceAgentsEntry,
+} from '@agent/workspaceAgents/WorkspaceAgentsController';
+export type { TeamPreset } from '@common/teams/TeamPresets';
+export type { TeamCatalogAgent, TeamRunPlan } from '@common/teams/TeamPlan';
+export type {
+  AgentDelegationScope,
+  AgentModePreset,
+  AgentScanIssue,
+} from '@shared/schemas';
+export {
+  AgentCustomizeRefused,
+  AgentDirectoryService,
+  readCustomAgentDir,
+  type AgentCustomization,
+  type AgentDirectoryServiceOptions,
+} from '@agent/index/AgentDirectoryService';
+export { BUNDLED_AGENTS_DIRECTORY } from '@agent/index/BundledAgentDirectories';
 // The process's stores: the global root's current values, each family a
 // host or plugin declares (`ValueFamily`), the per-project settings stores,
 // and storage maintenance under a storage root.
@@ -101,7 +134,6 @@ export {
 
 // The failures the surface names.
 export {
-  AgentNotFound,
   PluginsRefused,
   ResumeRefused,
   RunFailure,

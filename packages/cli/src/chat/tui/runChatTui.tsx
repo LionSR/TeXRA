@@ -24,8 +24,11 @@ import {
   type RunId,
   type AgentConfig,
 } from '@texra-ai/harness/schemas';
-import { SESSION_CLOSE_DEADLINE_MS, Settings } from '@texra-ai/harness';
-import { getVisibleAgents } from '@agent/index';
+import {
+  AgentCatalog,
+  SESSION_CLOSE_DEADLINE_MS,
+  Settings,
+} from '@texra-ai/harness';
 import {
   CliUsageError,
   effectiveApprovalPolicy,
@@ -266,9 +269,9 @@ export async function runChat(
         envAgent: context.envAgent,
         envModel: context.envModel,
         // The implicit chat default is a persona with no document task.
-        visibleToolUseAgents: (yield* getVisibleAgents(services)).filter(
-          (agent) => documentTaskOf(agent) === null,
-        ),
+        visibleToolUseAgents: (yield* (yield* AgentCatalog).visible(
+          services,
+        )).filter((agent) => documentTaskOf(agent) === null),
       });
       const agentEntry = yield* resolveChatToolUseAgent(
         services,

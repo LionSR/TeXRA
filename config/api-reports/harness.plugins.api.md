@@ -2,8 +2,9 @@
 
 Generated from `packages/harness/src/plugins.ts` by `node scripts/check-core-quality.mjs --update`; do not edit. A diff here is a change to the public surface.
 
-Exports: 46
+Exports: 47
 
+- `AGENT_TOOL_NAME` — `const AGENT_TOOL_NAME: "agent"`
 - `AgentBlock` — `interface AgentBlock<A = unknown, R = unknown> { readonly key: string; readonly schema: z.ZodType<A>; readonly result?: AgentBlockResult<R>; }`
 - `agentBlockOf` — `function agentBlockOf: <A>(entry: Pick<AgentEntry, "blocks">, block: AgentBlock<A, unknown>) => A | undefined`
 - `AgentBlockResult` — `interface AgentBlockResult<R = unknown> { readonly schema: z.ZodType<R>; delivery(value: R, runId: RunId): readonly string[]; changes(value: R, roots: Pick<WorkspaceRoots, 'workspace' | 'storage'>): readonly RecipeChange[]; }`

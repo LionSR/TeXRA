@@ -1,7 +1,7 @@
 import { mkdir, writeFile } from 'node:fs/promises';
 import * as path from 'node:path';
 
-import { Effect, Fiber, Layer, Scope, Stream } from 'effect';
+import { Effect, Fiber, Scope, Stream } from 'effect';
 
 /**
  * Production-shaped regression for #9531. Agent registration, launch, child
@@ -52,7 +52,7 @@ vi.mock('@agent/runtime/modelAccess/ModelAccess', async (importActual) => {
 });
 
 // Local imports - agent runtime
-import { refresh } from '@agent/index';
+import { AgentCatalog } from '@agent/index/agentCatalog';
 import { getRunRecords } from '@agent/storage/runRecords';
 import { readChildTurnState } from '@agent/storage/runRecords';
 import { prepareAgentDefinition } from '@agent/runtime/AgentLaunchContext';
@@ -72,7 +72,6 @@ import type { RunToolCall } from '@agent/runtime/RunCall';
 import type { BoundModel } from '@agent/runtime/modelAccess/ModelAccess';
 import { routePolicies } from '@agent/runtime/modelAccess/failureInfo';
 import { presentDesktopFinalOutput } from '@desktop/main/desktopAgentLaunch';
-import { AgentDirectories, AppState } from '@platform/interfaces';
 import { withProcessServices } from '@platform/processRuntime';
 import { MODEL_RETRY_MAX_ATTEMPTS_SETTING } from '@shared/schemas';
 import {
@@ -83,7 +82,6 @@ import {
   type SessionEvent,
 } from '@shared/schemas';
 import { NO_APPROVAL_GRANTS } from '@shared/approvalBypassKind';
-import { FakeStateStore } from '@test/support/FakePlatform';
 import { startAwaited } from '@test/support/runHandleFixtures';
 import { noopTrace } from '@test/support/noopTrace';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
@@ -100,17 +98,10 @@ import {
   useTempDirs,
 } from '@test/support/tempDirPlatform';
 import {
-  fakeHostAgentDirectories,
   fakeHostSecrets,
   setupPlatform,
   type FakeHost,
-  storePluginsLayer,
 } from '@test/support/setupPlatform';
-import {
-  nodePlatformLayer,
-  unusedGlobalStorageFs,
-} from '@test/support/fsTestUtils';
-import { testHttpClientLayer } from '@test/support/fetchTestUtils';
 import {
   closeTestDefaultSession,
   openTestDefaultSession,
@@ -631,18 +622,8 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
   setupPlatform(integrationPlatform);
 
   beforeEach(async () => {
-    await Effect.runPromise(
-      Effect.provide(
-        refresh(),
-        Layer.mergeAll(
-          unusedGlobalStorageFs(),
-          storePluginsLayer,
-          nodePlatformLayer,
-          testHttpClientLayer,
-          AgentDirectories.layer(fakeHostAgentDirectories),
-          AppState.layer(new FakeStateStore()),
-        ),
-      ),
+    await testRuntime().runPromise(
+      AgentCatalog.use((catalog) => catalog.refresh),
     );
     // The process session over a persistent store: one session per root,
     // so the ephemeral default this file's setup installed gives way to it.

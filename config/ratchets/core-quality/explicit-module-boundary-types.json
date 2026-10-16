@@ -1,5 +1,4 @@
 {
-  "packages/harness/src/agent/index/agentRegistry.ts": 3,
   "packages/harness/src/agent/index/BundledAgentDirectories.ts": 1,
   "packages/harness/src/agent/runtime/helperModelName.ts": 1,
   "packages/harness/src/agent/runtime/loop/hooks.ts": 1,

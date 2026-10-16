@@ -245,9 +245,14 @@ function captureNextRenderOnSubmit(options?: { recordRender?: boolean }): {
 }
 
 async function stubAgentRegistry(): Promise<() => void> {
-  const agents = await import('@agent/index');
+  const { AgentCatalog } = await import('@agent/index/agentCatalog');
+  const agents = testRuntime().runSync(
+    Effect.gen(function* () {
+      return yield* AgentCatalog;
+    }),
+  );
   const spies = [
-    vi.spyOn(agents, 'getVisibleAgents').mockReturnValue(Effect.succeed([])),
+    vi.spyOn(agents, 'visible').mockReturnValue(Effect.succeed([])),
   ];
   return () => {
     for (const spy of spies) spy.mockRestore();

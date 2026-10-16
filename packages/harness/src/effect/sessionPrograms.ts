@@ -16,7 +16,7 @@
  * launch they hand it.
  */
 import {
-  type Context,
+  Context,
   Data,
   Deferred,
   Effect,
@@ -26,7 +26,7 @@ import {
 } from 'effect';
 
 // Each runtime value comes from the module that defines it.
-import { getAgent } from '@agent/index/agentRegistry';
+import { AgentCatalog, AgentNotFound } from '@agent/index/agentCatalog';
 import { describeFollowUpFailure } from '@agent/followUp/ToolUseFollowUp';
 import { resumeOwnRun } from '@agent/runtime/resumeRun';
 import type { SessionHandle as RuntimeSessionHandle } from '@agent/runtime/SessionHandle';
@@ -42,7 +42,6 @@ import { generateRunId } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import {
-  AgentNotFound,
   ResumeRefused,
   RunFailure,
   ToolsRefused,
@@ -94,19 +93,21 @@ function admitTools(
  *  recorded on the config and validated by its schema there. */
 function admitInput(
   input: StartInput,
-  canAsk: boolean,
+  session: RuntimeSessionHandle,
+  services: Context.Context<AgentCatalog>,
 ): Effect.Effect<
   ReturnType<typeof AgentConfigSchema.parse>,
   LaunchError | RunFailure
 > {
   return Effect.gen(function* () {
+    const canAsk = !session.interactions.approvalPromptsUnavailable;
     yield* admitTools(input.tools ?? [], canAsk);
     // A host's whole configuration: its launch resolves the agent itself.
     if ('config' in input) return input.config;
     const { agent } = input;
     const resolved =
       typeof agent === 'string'
-        ? getAgent(agent)
+        ? Context.get(services, AgentCatalog).get(agent)
         : { name: null, source: 'inline' as const };
     if (!resolved) {
       return yield* new AgentNotFound({
@@ -146,8 +147,7 @@ function start(
   input: StartInput,
 ): Effect.Effect<Run, LaunchError | RunFailure> {
   return Effect.gen(function* () {
-    const canAsk = !session.interactions.approvalPromptsUnavailable;
-    const config = yield* admitInput(input, canAsk);
+    const config = yield* admitInput(input, session, services);
     const runId = input.runId ?? generateRunId();
     // A supplied id is checked and reserved in one step (`starting`, held
     // until the handoff ends, when the run is in the registry): a second

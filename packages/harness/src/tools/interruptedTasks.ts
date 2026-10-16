@@ -22,6 +22,7 @@ import { resumeOnSession } from '@agent/followUp/ToolUseFollowUp';
 import { resumeBlocker } from '@agent/runtime/resumeBlocker';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { getRunRecords } from '@agent/storage/runRecords';
+import type { AgentCatalog } from '@agent/index/agentCatalog';
 import { onAppSignal } from '@eventBus/AppSignals';
 import { withLogChannel } from '@logger/effectLog';
 import type { AgentCatalogServices } from '@platform/processRuntime';
@@ -89,7 +90,11 @@ export const followInterruptedTasks = Effect.fn('followInterruptedTasks')(
     const check = (
       runId: RunId,
       resume: boolean,
-    ): Effect.Effect<void, never, Scope.Scope | AgentCatalogServices> =>
+    ): Effect.Effect<
+      void,
+      never,
+      Scope.Scope | AgentCatalog | AgentCatalogServices
+    > =>
       Effect.suspend(() => {
         const running = checking.get(runId);
         if (running !== undefined) {
