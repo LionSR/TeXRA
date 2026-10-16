@@ -32,7 +32,6 @@
   "packages/harness/src/agent/trace/AgentTrace.ts": 6,
   "packages/harness/src/agent/trace/events.ts": 2,
   "packages/harness/src/common/plugins/hookConfig.ts": 1,
-  "packages/harness/src/common/plugins/mcpServers.ts": 1,
   "packages/harness/src/common/plugins/pluginManifest.ts": 1,
   "packages/harness/src/common/plugins/pluginTrust.ts": 1,
   "packages/harness/src/logger/effectDiagnostics.ts": 1,

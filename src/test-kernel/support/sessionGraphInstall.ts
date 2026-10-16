@@ -8,7 +8,6 @@ import {
 import { AppState, AgentDirectories } from '@platform/interfaces';
 import { withForkFailureReporting } from '@platform/processRuntime';
 import { UsageLog } from '@shared/usageLog';
-import { mcpConfigPathOf } from '@tools/mcp/mcpConfig';
 import type { Plugin } from '@tools/plugins';
 import { initTestProcessRuntime } from './testProcessRuntime';
 import { unprobedToolAvailability } from './toolAvailabilityTestLayer';
@@ -49,23 +48,23 @@ import {
  * process services read the fake host installed at call time, as the bare
  * runtime's do: this runtime outlives the per-test hosts.
  */
-const { globalStorage } = createFakeWorkspaceRoots();
+const { storageRoot } = createFakeWorkspaceRoots();
 
 /** Reads of this install's process start: the `ProcessIdentity` layer is a
  *  process service, so it builds once however many sessions open. */
 export const identityReads = { count: 0 };
 
 /** The kernel's composition over the fake host: `processLayer`'s options
- *  with `plugins` under the global root `root`. The setting rows travel
+ *  with `plugins` under the storage root `root`. The setting rows travel
  *  with the fake host's config (`ConfigProvider.catalog`). */
 const testProcessOptions = (
   plugins: readonly Plugin[],
-  root: string = globalStorage,
+  root: string = storageRoot,
 ): ProcessLayerOptions => ({
-  globalStorage: root,
-  // Under the fake global root, never the developer's `~/.texra/mcp.json`.
+  // Under the worker's storage root: its global storage, and its mcp.json
+  // rather than the developer's `~/.texra/mcp.json`.
+  storageRoot: root,
   plugins,
-  mcpConfigPath: mcpConfigPathOf(root),
   secrets: fakeHostSecrets,
   appState: AppState.layer(fakeHostAppState),
   languageModel: fakeHostLanguageModel,
@@ -79,7 +78,7 @@ const testProcessOptions = (
 });
 
 /** A second composition in this process, for a suite that needs one: the
- *  kernel's, under the global root `root`, with a process start of its own.
+ *  kernel's, under the storage root `root`, with a process start of its own.
  *  Fixed, as the install's is: reading the real one spawns PowerShell on
  *  Windows, seconds under CI load, and only the install's reads count in
  *  `identityReads`. */

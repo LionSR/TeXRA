@@ -291,6 +291,12 @@ export {
 } from '@platform/rootedFs';
 // A path as a `FileLocation` against the workspace root a caller holds.
 export { pathToLocationIn } from '@utils/files/fileLocation';
+// The user's MCP servers the tool catalog loads: the config file beside a
+// global storage directory, read as the catalog reads it, and the server a
+// namespaced MCP tool name belongs to.
+export { mcpConfigPathOf, readMcpConfig } from '@tools/mcp/mcpConfig';
+export type { McpServerConfig } from '@common/plugins/mcpServers';
+export { mcpServerOfToolName } from '@tools/mcp/mcpServer';
 // The files a run left in its storage directory, under a session's storage
 // (the executions tool's listing, for a host that shows it outside a run).
 export {

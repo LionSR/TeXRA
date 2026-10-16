@@ -27,6 +27,7 @@ import {
 
 // Local file imports
 import { JsonConfigProvider } from './jsonConfigProvider';
+import { resolveGlobalStoragePath } from './workspaceStorage';
 import type { WorkspaceRoots } from '../workspaceRoots';
 import type { JsonConfigProviderOptions } from './jsonConfigProvider';
 import type { ConfigProvider, StateStore } from '../interfaces';
@@ -37,10 +38,10 @@ interface NodeWorkspaceRootsInit {
   readonly host: SettingHost;
   /** The canonical workspace root (`canonicalizeWorkspacePath`), decided by the host where it reads it. */
   readonly workspacePath: string | undefined;
+  /** The storage root this process opened (`WorkspaceRoots.storageRoot`). */
+  readonly storageRoot: string;
   /** The storage root opened for this workspace (`resolveWorkspaceStoragePath`). */
   readonly storage: string;
-  /** The cross-workspace global storage root (`resolveGlobalStoragePath`). */
-  readonly globalStorage: string;
   /**
    * Config source: the workspace + global stores to build the file-backed
    * provider from, or an already-constructed provider for hosts that resolve
@@ -67,8 +68,9 @@ export function createNodeWorkspaceRoots(
   return {
     host: init.host,
     workspace: init.workspacePath,
+    storageRoot: init.storageRoot,
     storage: init.storage,
-    globalStorage: init.globalStorage,
+    globalStorage: resolveGlobalStoragePath(init.storageRoot),
     config:
       'workspace' in init.config
         ? new JsonConfigProvider(init.config)

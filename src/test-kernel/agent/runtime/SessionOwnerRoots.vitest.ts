@@ -43,6 +43,7 @@ describe('session owner roots', () => {
         const originalRoots = {
           host: installedRoots.host,
           workspace: installedRoots.workspace,
+          storageRoot: installedRoots.storageRoot,
           storage: installedRoots.storage,
           globalStorage: installedRoots.globalStorage,
           config: installedRoots.config,
