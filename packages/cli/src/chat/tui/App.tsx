@@ -23,7 +23,6 @@ import {
 } from '@cli/tui/inputKeys';
 import { defaultShortcutModifierLabel } from '@cli/runtime/shortcutLabels';
 import { acceptsFollowUp } from '@shared/session/sessionView';
-import type { SettingsStores } from '@shared/config/settingsAccess';
 import { AGENT_LIST } from '@ui/copy/nestedRuns';
 import {
   APPROVAL_FOREGROUND_MAX_ROWS,
@@ -95,6 +94,7 @@ import type {
 } from '@texra-ai/harness';
 import type { InputHistory } from './history/inputHistory';
 import type { PastedImageEntry } from './input/draftAttachments';
+import type { SettingsStores } from '@texra-ai/harness';
 
 // Jump-to-waiting: surface the newly focused run's pending approval right
 // away instead of leaving it queued behind other runs' items.

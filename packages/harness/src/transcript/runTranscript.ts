@@ -8,7 +8,7 @@ import { Effect } from 'effect';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { DEBUG_MODE_KEY, type RunId } from '@shared/schemas';
 import { foldRunTranscript } from '@shared/session/transcriptFold';
-import { readConfigSettingFrom } from '@utils/config/platformSettings';
+import { Settings } from '@shared/config/settings';
 
 /** Fold the run's committed rows into its transcript; empty when the run
  *  never existed or is tombstoned. Verbosity is read at the call, from the
@@ -24,10 +24,7 @@ export const readRunTranscript = (
         foldRunTranscript(
           events,
           session.roots.config
-            ? readConfigSettingFrom<boolean>(
-                session.roots.config,
-                DEBUG_MODE_KEY,
-              )
+            ? Settings.getConfig<boolean>(session.roots.config, DEBUG_MODE_KEY)
             : false,
         ),
       ),

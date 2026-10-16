@@ -7,12 +7,12 @@ import { z } from 'zod';
 
 // Local imports
 import { withLogChannel, WorkspaceFs } from '@texra-ai/harness';
+import { Settings } from '@texra-ai/harness';
 import type { ExecResult, FileLocation } from '@shared/schemas';
 import { SUPPORTED_LATEX_COMPILERS } from '@texra/shared/constants/latexToolchain';
 import { runToolWithCheck } from '@texra/utils/system/toolChecks';
 import { envVar } from '@utils/system/envFlags';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import { readSettingFrom } from '@utils/config/platformSettings';
 import { splitContentLines } from '@utils/text/stringUtils';
 import { LATEX_COMMANDS_CHANNEL as CHANNEL } from './latexLogging';
 import type { WorkspaceRoots } from '@texra-ai/harness';
@@ -212,7 +212,7 @@ export const compileLatex2Pdf = Effect.fn('compileLatex2Pdf')(function* (
     const tikzInputDirectory = roots.config.get<string>(
       'texra.latex.tikzInputDirectory',
     );
-    const includeWorkspace = yield* readSettingFrom<boolean>(
+    const includeWorkspace = yield* Settings.get<boolean>(
       roots,
       'texra.latex.includeWorkspaceInTexinputs',
     );

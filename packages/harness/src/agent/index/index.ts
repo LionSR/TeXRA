@@ -12,6 +12,7 @@
 export {
   AgentDirectoryService,
   agentSourceRoots,
+  readCustomAgentDir,
 } from './AgentDirectoryService';
 
 export {

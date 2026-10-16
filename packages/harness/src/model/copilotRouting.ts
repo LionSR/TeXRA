@@ -28,8 +28,8 @@ import {
   type LanguageModelInfo,
   type LanguageModelReference,
 } from '@platform/languageModel';
-import { readState } from '@shared/config/settingsAccess';
 import { GlobalStateKey } from '@shared/state/stateKeys';
+import { Settings } from '@shared/config/settings';
 
 /**
  * The Copilot access route for one canonical base model: the exact editor
@@ -123,7 +123,11 @@ const RouteModelsSchema = z.array(z.string()).prefault([]);
  */
 export function preferredCopilotRouteModels(state: Pick<StateStore, 'get'>) {
   return Effect.map(
-    readState(state, GlobalStateKey.COPILOT_ROUTE_MODELS, RouteModelsSchema),
+    Settings.state(
+      state,
+      GlobalStateKey.COPILOT_ROUTE_MODELS,
+      RouteModelsSchema,
+    ),
     liveRouteModels,
   );
 }

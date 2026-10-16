@@ -12,13 +12,13 @@ import { settleQuickInput } from '@commands/_shared/quickInputUtils';
 import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
 import { quickPick } from '@frontend/ui/dialogs';
 import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
-import type { SettingsStores } from '@shared/config/settingsAccess';
 import { SettingsProfileKeyController } from '@texra/controllers/settingsView/SettingsProfileKeyController';
 import {
   getProviderDisplayName,
   getProviderKeyUrl,
 } from '@texra/model/providerPresentation';
 import type { PlatformSecrets } from '@texra-ai/harness';
+import type { SettingsStores } from '@texra-ai/harness';
 
 const CHANNEL = 'ApiKeyCommands';
 

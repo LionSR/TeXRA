@@ -4,7 +4,20 @@ import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
 import { normalizeFilePath } from '@utils/core';
 import { isPathWithin } from '@utils/core/pathCore';
 
-import { MEMORY_DISPLAY_ROOT } from './constants';
+/** The root the memory tool shows its tree under. */
+export const MEMORY_DISPLAY_ROOT = '/memories';
+
+/** How deep a directory `view` lists. */
+export const DIRECTORY_LISTING_DEPTH = 2;
+
+/** How many lines a memory preview shows. */
+export const MAX_PREVIEW_LINES = 120;
+
+/** How many characters a memory preview shows. */
+export const MAX_PREVIEW_CHARS = 8000;
+
+/** How many memories may be pinned at once. */
+export const MAX_PINNED_MEMORIES = 10;
 
 export function relativeToDisplayPath(relativePath: string): string {
   if (!relativePath) {

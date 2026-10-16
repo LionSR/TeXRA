@@ -10,9 +10,9 @@ import { turnCost, type TurnResult } from '@texra-ai/llm';
 
 import { usageRouteOf } from '@agent/runtime/modelAccess/credentials';
 import type { BoundModel } from '@agent/runtime/modelAccess/ModelAccess';
-import type { SettingsStores } from '@shared/config/settingsAccess';
 import type { NormalizedUsage, RunId } from '@shared/schemas';
 import type { UsageLog } from '@shared/usageLog';
+import type { SettingsStores } from '@shared/config/settings';
 import { environment } from '@utils/system/nodeWorkspace';
 import { roundTo } from '@utils/core';
 

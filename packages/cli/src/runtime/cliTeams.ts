@@ -2,6 +2,7 @@
 import { Effect } from 'effect';
 
 // Local imports
+import { WorkspaceStateKey } from '@texra-ai/harness/schemas';
 import type { AgentEntry } from '@agent/index';
 import type { CliNdjsonRecord } from '@cli/schemas/cliOutput';
 import {
@@ -18,7 +19,6 @@ import {
   type TeamPreset,
 } from '@common/teams/TeamPresets';
 import { hasDelegationTool } from '@shared/constants/delegationTools';
-import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { formatResultCount } from '@utils/text/stringUtils';
 import type { StateStore } from '@texra-ai/harness';
 
