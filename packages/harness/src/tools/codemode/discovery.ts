@@ -7,9 +7,10 @@
  * needs.
  */
 import { Predicate } from 'effect';
+import { inputSchema } from '@agent/core/tools/toolSchema';
 import { type ScriptDoor } from '@agent/runtime/RunCall';
 
-import { declarationOf, firstSentence, inputSchema } from './declarations';
+import { declarationOf, firstSentence } from './declarations';
 
 const STOP_WORDS = new Set(
   'a an and are as at be by for from in is it of on or that the this to with'.split(

@@ -11,6 +11,7 @@ export {
   isFileNotFoundError,
   isModuleNotFoundError,
   isNotADirectoryError,
+  isUserAbort,
 } from './errorPredicates';
 export {
   AGENT_ERROR_OUTCOME,

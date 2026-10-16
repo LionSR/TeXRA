@@ -23,10 +23,10 @@ const CHANNEL = 'SessionHostInteractions';
 const MAX_PENDING_PRESENTATION_REPLAYS = 256;
 
 /**
- * The host's presentation surface for a session (ruling A9-3): what a host
+ * The host's presentation surface for a session: what a host
  * can show or do on the runtime's behalf. It answers nothing. Every request a
  * run makes of a person is a `request.opened` row the fold lists and a
- * `request.decide` command a surface sends (one run model, section 3.7), so
+ * `request.decide` command a surface sends, so
  * there is no queue behind this port and no method returns a decision.
  */
 export interface HostInteractions {

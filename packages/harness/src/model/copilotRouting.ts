@@ -35,7 +35,7 @@ import { Settings } from '@shared/config/settings';
  * The Copilot access route for one canonical base model: the exact editor
  * model reference requests must use, plus the access state the editor
  * reported. Keyed by base model id: Copilot is a transport for the logical
- * model, never a separate model identity (#9635).
+ * model, never a separate model identity.
  */
 export interface CopilotModelRoute {
   readonly access: LanguageModelAccessState;
@@ -116,7 +116,7 @@ const RouteModelsSchema = z.array(z.string()).prefault([]);
  * Persisted canonical model ids whose Copilot route the user prefers, read
  * from the process global state the caller holds (the `AppState` service, or
  * the store a host root threaded down). Settings needs the raw list so a model
- * the editor no longer discovers still surfaces its undo (#9659).
+ * the editor no longer discovers still surfaces its undo.
  *
  * Copilot discovery never matches a retired or deprecated base model, so a
  * preference for one could never resolve to a route; it drops out at read.
@@ -176,7 +176,7 @@ export function setCopilotRoutePreference(
 /**
  * Why a model decided onto the Copilot route cannot be served through it with
  * the route discovered for it, or undefined when it can. The preference is a
- * hard route choice (#9635): handler routing reports this reason and never
+ * hard route choice: handler routing reports this reason and never
  * falls through to a provider key, OpenRouter, or a subscription the user did
  * not choose for this model.
  */

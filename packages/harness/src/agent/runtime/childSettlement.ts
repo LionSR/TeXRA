@@ -3,7 +3,7 @@
  * consumed, `child.turn settled`) and its delivery, the report queued on the
  * parent's input. Both commit in one append, one SQLite transaction
  * (`settleChildTurn`), so no crash leaves a settled turn its parent never
- * reads; a last turn's commit with the child's `run.end` (#8093). A parent
+ * reads; a last turn's commit with the child's `run.end`. A parent
  * another process holds refuses: the child parks holding the result, and
  * whoever next admits the parent delivers it with the child's end, read
  * from rows: the owner's tail seeing the park, or the parent's resume.
@@ -110,7 +110,7 @@ export type TransactionPart = Effect.Effect<
 
 /**
  * The settlement of one turn whose report is `message`, delivered to `to`
- * under the strategy's one `deliveryId` or the turn's own (#9531): its
+ * under the strategy's one `deliveryId` or the turn's own: its
  * prompt's, so a re-execution after a crash is judged a replay, else the
  * `child.turn` key (run, attempt, turn index), distinct across attempts.
  */

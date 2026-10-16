@@ -33,8 +33,7 @@ import {
 import { Settings } from '@texra-ai/harness';
 import { type SessionHandle, terminalFailurePresented } from '@agent/runtime';
 import { deriveResumability, getRunRecords } from '@agent/storage';
-import { AgentError } from '@common/errors';
-import { isUserAbort } from '@common/errors/sdkError/errorPatterns';
+import { AgentError, isUserAbort } from '@common/errors';
 import { isLiveRun } from '@shared/session/sessionView';
 import {
   DatabaseNotOwner,

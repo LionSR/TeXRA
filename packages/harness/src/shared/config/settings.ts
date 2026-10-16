@@ -80,9 +80,9 @@ function classifyStored(schema: z.ZodType, raw: unknown): StoredSetting {
 
 /**
  * A stored value that no longer validates resolves to the schema default —
- * but only after warning, as #7470 established for the reader this replaced:
- * an invalid *persisted* value must not vanish without a trace. Every reader
- * warns with this text before it substitutes the default.
+ * but only after warning: an invalid *persisted* value must not vanish
+ * without a trace. Every reader warns with this text before it substitutes
+ * the default.
  */
 function invalidStoredMessage(key: string, cause: string): string {
   return `Ignoring invalid persisted value for setting "${key}": ${cause}`;
@@ -173,7 +173,7 @@ function get<T>(
  * {@link get} without the snap to the default: a present value that fails
  * the row's schema comes back as `invalid` with its cause. For a permission
  * gate whose absent default is permissive, where corruption of a deliberate
- * denial must deny rather than re-permit (#11797).
+ * denial must deny rather than re-permit.
  */
 function inspect<T>(
   stores: SettingsStores,
@@ -235,6 +235,8 @@ function set(
   target?: ConfigTarget,
 ): Effect.Effect<void, ConfigWriteFailed | Error> {
   const entry = entryOf(stores.config, key);
+  // A schema rejection is thrown rather than constructed as a typed failure:
+  // `src/shared` may take only type imports from `src/platform`.
   return Effect.gen(function* () {
     yield* writeSlot(entry, entry.schema.parse(value), stores, target);
     if (value !== true) return;

@@ -9,7 +9,7 @@
  * first and then its ancestry's while the parent edge stands, so a toggle on
  * a parent reaches every descendant without a row of theirs.
  *
- * One value per session (#8144): two sessions queue and answer their
+ * One value per session: two sessions queue and answer their
  * approvals independently. It is reached through the session itself
  * (`SessionHandle.approvals`), never from context.
  */

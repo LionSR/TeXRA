@@ -4,8 +4,7 @@
  * Runs every group's checks concurrently — one shared `probe` per group feeds
  * its `check` (availability), `statusLabel` (badge), and `detailCheck`
  * (human-readable detail) — and holds each workspace's last results in one
- * `SubscriptionRef`. What to check is each plugin's `availability` in
- * {@link @tools/plugins}.
+ * `SubscriptionRef`. What to check is each plugin's `availability`.
  *
  * The composition root builds the service with the process runtime, so every
  * host probes the same way: each session holds its workspace, which probes it

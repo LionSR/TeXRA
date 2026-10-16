@@ -324,10 +324,8 @@ export const databaseLayer = (
       const collectBlobs = `DELETE FROM blob
         WHERE digest IN (SELECT value FROM json_each(?))
           AND NOT EXISTS (SELECT 1 FROM event_blob r WHERE r.digest = blob.digest)`;
-      const all = `SELECT ${EVENT_COLUMNS} FROM ${EVENT_FROM}
-        WHERE e."commit" > ? AND e."commit" <= ?
-        ORDER BY e."commit"`;
-      // `readAll` narrowed by type, plus projected rows; the range binds once.
+      // The display types in a commit range, plus projected rows; the range
+      // binds once.
       const display = displayUnion(
         '"commit" > ? AND "commit" <= ?',
         '"commit"',
@@ -797,15 +795,6 @@ export const databaseLayer = (
         movedAside,
         level,
         currentCommit: query(currentCommit),
-        readAll: (fromCommit, throughCommit) =>
-          query(
-            Effect.gen(function* () {
-              return yield* decodedRows(all, [
-                fromCommit,
-                throughCommit ?? (yield* currentCommit),
-              ]);
-            }),
-          ),
         readDisplay: (fromCommit) => {
           // Pages are separate snapshots: a tombstone seen stays in view.
           const tombstones = new Map<number, SessionEvent>();
