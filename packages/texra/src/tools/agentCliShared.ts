@@ -6,7 +6,12 @@ import { Effect, type Context } from 'effect';
 
 // Local imports
 import { ToolContext, type ToolContextShape } from '@texra-ai/harness';
-import { ChildRuns, requireRun, type ToolRun } from '@texra-ai/harness/plugins';
+import {
+  ChildRuns,
+  requireRun,
+  type ToolRun,
+  executed,
+} from '@texra-ai/harness/plugins';
 import type {
   ChildRunPort,
   ProcessChildStrategy,
@@ -23,7 +28,6 @@ import {
   type TokenUsageStats,
   type ToolResult,
 } from '@shared/schemas';
-import { executed } from '@tools/core/result';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { previewLabel } from '@utils/text/stringUtils';
 import type { AgentConfig } from '@texra-ai/harness/schemas';

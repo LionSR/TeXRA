@@ -6,14 +6,17 @@ import { z } from 'zod';
 import { defineTool, ToolContext, withLogChannel } from '@texra-ai/harness';
 
 // Local imports
+import {
+  resolveToolPath,
+  type ToolPathCall,
+  executed,
+} from '@texra-ai/harness/plugins';
 import { type ToolResult, ToolError } from '@shared/schemas';
 import {
   countBySeverity,
   formatCounts,
   formatMessageList,
 } from '@texra/utils/diagnostics/diagnosticFormatting';
-import { resolveToolPath, type ToolPathCall } from '@tools/pathResolution';
-import { executed } from '@tools/core/result';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local file imports

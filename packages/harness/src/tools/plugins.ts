@@ -56,7 +56,7 @@ import type {
 } from '@tools/toolTable';
 
 /** What a transition rule reads of a plugin row: value and parent edge. */
-interface PluginRow {
+export interface PluginRow {
   readonly value: JsonValue;
   readonly parent: RunId | null;
 }
@@ -70,7 +70,7 @@ interface PluginRow {
  * here) without reading it. Arms live beside their readers, in modules
  * webviews can import.
  */
-interface PluginArm {
+export interface PluginArm {
   /** The plugin's id: an arm is its own plugin's, never another's. */
   readonly plugin: string;
   readonly kind: string;

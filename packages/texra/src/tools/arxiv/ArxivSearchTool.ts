@@ -12,11 +12,10 @@ import { z } from 'zod';
 
 // Local imports
 import { defineTool, withLogChannel } from '@texra-ai/harness';
+import { nullishWithDefault, executed } from '@texra-ai/harness/plugins';
 import { normaliseArxivIdentifier } from '@latex/arxivIdentifier';
 import { ToolError } from '@shared/schemas';
 import { requireNonEmptyString } from '@tools/utils';
-import { nullishWithDefault } from '@tools/core/inputSchema';
-import { executed } from '@tools/core/result';
 import { pluralize } from '@utils/text/stringUtils';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 

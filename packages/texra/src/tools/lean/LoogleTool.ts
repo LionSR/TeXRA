@@ -8,10 +8,13 @@ import { Cause, Effect, Array as Arr } from 'effect';
 import { z } from 'zod';
 
 import { defineTool, withLogChannel } from '@texra-ai/harness';
+import {
+  errorResult,
+  executed,
+  nullishWithDefault,
+} from '@texra-ai/harness/plugins';
 import { ToolResult } from '@shared/schemas';
 import { retryTransientFetch, scopedOkClient } from '@tools/timeouts';
-import { errorResult, executed } from '@tools/core/result';
-import { nullishWithDefault } from '@tools/core/inputSchema';
 import {
   formatResultCount,
   truncateWithEllipsis,
