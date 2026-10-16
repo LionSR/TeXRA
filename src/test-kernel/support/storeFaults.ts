@@ -26,25 +26,16 @@ import * as os from 'node:os';
 import { join, resolve } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 
-import {
-  type Cause,
-  Deferred,
-  Effect,
-  Layer,
-  RcMap,
-  Ref,
-  type Scope,
-} from 'effect';
+import { type Cause, Deferred, Effect, RcMap, Ref, type Scope } from 'effect';
 import { afterEach, beforeEach, vi } from 'vitest';
 
 import { API_KEY_ENV_NAMES, apiKeySecretName } from '@texra-ai/llm';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
-import { refresh } from '@agent/index';
+import { AgentCatalog } from '@agent/index/agentCatalog';
 import type {
   SessionHandle,
   SessionHandleInit,
 } from '@agent/runtime/SessionHandle';
-import { AgentDirectories, AppState } from '@platform/interfaces';
 import { withProcessServices } from '@platform/processRuntime';
 import type { RunId, SessionEventDraft } from '@shared/schemas';
 import {
@@ -55,16 +46,8 @@ import {
 } from '@shared/session/database';
 
 import { generateRunId } from '@utils/core';
-import { FakeStateStore } from './FakePlatform';
-import { testHttpClientLayer } from './fetchTestUtils';
-import { nodePlatformLayer, unusedGlobalStorageFs } from './fsTestUtils';
 import { REPO_ROOT } from './repoScan';
-import {
-  fakeHostAgentDirectories,
-  fakeHostSecrets,
-  setupPlatform,
-  storePluginsLayer,
-} from './setupPlatform';
+import { fakeHostSecrets, setupPlatform } from './setupPlatform';
 import { closeTestDefaultSession, openTestDefaultSession } from './sessionEnd';
 import { createTempDirPlatform, useTempDirs } from './tempDirPlatform';
 import { testRuntime } from './testProcessRuntime';
@@ -406,18 +389,8 @@ export function validationHost(prefix: string): void {
     mkdirSync(storage, { recursive: true });
     mkdirSync(workspace!, { recursive: true });
     writeFileSync(flag, 'texra-cli-run-validation\n');
-    await Effect.runPromise(
-      Effect.provide(
-        refresh(),
-        Layer.mergeAll(
-          unusedGlobalStorageFs(),
-          storePluginsLayer,
-          nodePlatformLayer,
-          testHttpClientLayer,
-          AgentDirectories.layer(fakeHostAgentDirectories),
-          AppState.layer(new FakeStateStore()),
-        ),
-      ),
+    await testRuntime().runPromise(
+      AgentCatalog.use((catalog) => catalog.refresh),
     );
     // A golden child's model is chosen among those a key makes available.
     await Effect.runPromise(

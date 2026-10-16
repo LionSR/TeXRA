@@ -1,6 +1,5 @@
 {
   "packages/harness/src/agent/core/tools/ToolTypes.ts": 1,
-  "packages/harness/src/agent/index/index.ts": 1,
   "packages/harness/src/agent/runtime/executeAgent.ts": 2,
   "packages/harness/src/agent/runtime/FollowUps.ts": 1,
   "packages/harness/src/agent/runtime/index.ts": 1,

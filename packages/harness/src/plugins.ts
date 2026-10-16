@@ -13,6 +13,9 @@
  * reads an agent's block with `agentBlockOf`.
  */
 export { harnessBuiltins } from '@tools/builtinPlugins';
+/** The name of the `multiAgent` plugin's tool, which runs a named agent as
+ *  a child of the calling run: an agent whose tools name it orchestrates. */
+export { AGENT_TOOL_NAME } from '@shared/constants/delegationTools';
 /** The `web` plugin's fetch tool, typed with what its call requires, for a
  *  host that calls it outside a run (the editor's Copilot tools). */
 export { WebFetchTool } from '@tools/web/WebFetchTool';

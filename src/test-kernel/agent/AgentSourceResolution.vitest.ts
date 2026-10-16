@@ -9,13 +9,10 @@ import { afterAll, beforeAll, describe, expect } from 'vitest';
 
 // Local imports
 import {
+  AgentCatalog,
   findAgentByIdentifier,
-  getCatalogAgent,
-  getVisibleAgents,
-  refresh,
-  resolveAgentForLaunch,
-  resolveDelegationScopeAgents,
-} from '@agent/index/agentRegistry';
+  type AgentCatalogShape,
+} from '@agent/index/agentCatalog';
 import type { AgentEntry } from '@agent/index/agentEntry';
 import { AgentDirectories, AppState } from '@platform/interfaces';
 import { GlobalStorageFs } from '@platform/rootedFs';
@@ -33,18 +30,21 @@ import { cleanupTempDirs, makeTempDir } from '@test/support/tempDirPlatform';
 import { testHttpClientLayer } from '@test/support/fetchTestUtils';
 import type { RootedFileSystem } from '@utils/files/rootedFileSystem';
 
+/** The suite's catalog, loaded once the fake host is installed. */
+let catalog: AgentCatalogShape;
+
 /** The entry validation accepts: `identifier` within the visible agents. */
 function visibleAgent(identifier: string) {
-  return getVisibleAgents(hostStores()).pipe(
-    Effect.map((entries) => findAgentByIdentifier(entries, identifier)),
-  );
+  return catalog
+    .visible(hostStores())
+    .pipe(Effect.map((entries) => findAgentByIdentifier(entries, identifier)));
 }
 
 /** Resolve exactly as launch does: through the single launch resolver, by the
  * source the delegation captured at validation time (see `getAgentPath`). */
 function launchAs(entry: AgentEntry | undefined) {
   return entry
-    ? resolveAgentForLaunch(hostStores(), entry.name, entry.source)
+    ? catalog.forLaunch(hostStores(), entry.name, entry.source)
     : Effect.succeed(undefined);
 }
 
@@ -95,20 +95,24 @@ describe('shadowed agent resolution', () => {
 
     // The fake host answers `custom()` from a temp directory of its own, so
     // nothing in this load reaches the global storage view.
-    await Effect.runPromise(
+    catalog = await Effect.runPromise(
       Effect.provide(
-        Effect.provideService(
-          refresh(),
-          GlobalStorageFs,
-          {} as RootedFileSystem,
-        ).pipe(
-          Effect.provideService(AgentDirectories, fakeHostAgentDirectories),
-          Effect.provideService(AppState, new FakeStateStore()),
-        ),
-        Layer.mergeAll(
-          nodePlatformLayer,
-          testHttpClientLayer,
-          storePluginsLayer,
+        Effect.gen(function* () {
+          const loaded = yield* AgentCatalog;
+          yield* loaded.refresh;
+          return loaded;
+        }),
+        AgentCatalog.layer.pipe(
+          Layer.provide(
+            Layer.mergeAll(
+              Layer.succeed(GlobalStorageFs)({} as RootedFileSystem),
+              AgentDirectories.layer(fakeHostAgentDirectories),
+              AppState.layer(new FakeStateStore()),
+              nodePlatformLayer,
+              testHttpClientLayer,
+              storePluginsLayer,
+            ),
+          ),
         ),
       ),
     );
@@ -122,7 +126,7 @@ describe('shadowed agent resolution', () => {
     'pins launch to the exact (source, name) entry validation captured',
     () =>
       Effect.gen(function* () {
-        const builtIn = yield* launchAs(getCatalogAgent('builtIn:assistant'));
+        const builtIn = yield* launchAs(catalog.get('builtIn:assistant'));
         expect(builtIn?.source).toBe('builtIn');
 
         const custom = yield* launchAs(yield* visibleAgent('assistant'));
@@ -136,15 +140,12 @@ describe('shadowed agent resolution', () => {
       Effect.gen(function* () {
         // A direct launch without a pinned source (e.g. the webview "Run") routes
         // through the visible agents — the identical lookup validation makes.
-        const unpinned = yield* resolveAgentForLaunch(
-          hostStores(),
-          'assistant',
-        );
+        const unpinned = yield* catalog.forLaunch(hostStores(), 'assistant');
         expect(unpinned).toBe(yield* visibleAgent('assistant'));
         expect(unpinned?.source).toBe('custom');
 
         // A stale/missing pinned source falls through to that same visible-set tier.
-        const stale = yield* resolveAgentForLaunch(
+        const stale = yield* catalog.forLaunch(
           hostStores(),
           'assistant',
           'plugin',
@@ -152,7 +153,7 @@ describe('shadowed agent resolution', () => {
         expect(stale?.source).toBe('custom');
 
         // A `source:name` key matches its exact entry, even a shadowed one.
-        const keyed = yield* resolveAgentForLaunch(
+        const keyed = yield* catalog.forLaunch(
           hostStores(),
           'builtIn:assistant',
         );
@@ -162,7 +163,7 @@ describe('shadowed agent resolution', () => {
 
   it.effect('resolves scoped keys and drops unknown ones', () =>
     Effect.gen(function* () {
-      const scoped = yield* resolveDelegationScopeAgents(hostStores(), [
+      const scoped = yield* catalog.visible(hostStores(), [
         'assistant',
         'builtIn:assistant',
         'missing-agent',
@@ -182,7 +183,7 @@ describe('shadowed agent resolution', () => {
         // Both source-qualified identifiers must resolve to their own entry
         // (`custom:review` to the custom one, not the built-in it shadows), and
         // the deduplicated result must keep both, in scope order.
-        const scoped = yield* resolveDelegationScopeAgents(hostStores(), [
+        const scoped = yield* catalog.visible(hostStores(), [
           'builtIn:review',
           'custom:review',
         ]);

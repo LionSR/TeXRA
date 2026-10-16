@@ -8,7 +8,7 @@ import { Effect, FileSystem, Layer } from 'effect';
 import { describe } from 'vitest';
 
 // Local imports
-import { AgentDirectoryService } from '@agent/index';
+import { AgentDirectoryService } from '@agent/index/AgentDirectoryService';
 import type { GlobalStorageFs } from '@platform/rootedFs';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import {

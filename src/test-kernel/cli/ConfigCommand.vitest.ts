@@ -64,18 +64,19 @@ const bundledAgentDirectories = () => ({
 
 beforeAll(async () => {
   customAgentsDir = await makeTempDir('texra-config-agents-', tempDirs);
-  // The catalog is loaded before the command runs, as the process runtime
-  // does at build.
-  const { refresh } = await import('@agent/index/agentRegistry');
-  const { AgentDirectories } = await import('@platform/interfaces');
-  await testRuntime().runPromise(
-    refresh().pipe(
-      Effect.provideService(AgentDirectories, bundledAgentDirectories()),
-    ),
-  );
 });
 
 setupPlatform({}, { agentDirectories: bundledAgentDirectories() });
+
+// The catalog is loaded over the installed host's agent directories before
+// each command runs, as the process runtime does at build, so the one real
+// scan's info line lands before the output spies.
+beforeEach(async () => {
+  const { AgentCatalog } = await import('@agent/index/agentCatalog');
+  await testRuntime().runPromise(
+    AgentCatalog.use((catalog) => catalog.refresh),
+  );
+});
 
 /** The selection the real workspace agents controller last persisted. */
 function readSelection(): Promise<unknown> {

@@ -3,10 +3,10 @@ import { Text } from 'ink';
 import { useState } from 'react';
 
 import {
-  createWorkspaceAgentsController,
-  getCatalogAgents,
+  AgentCatalog,
   type AgentEntry,
-} from '@agent/index';
+  type WorkspaceAgentsStores,
+} from '@texra-ai/harness';
 import {
   readCliWorkspaceAgents,
   type CliWorkspaceAgentsRecord,
@@ -38,6 +38,10 @@ interface WorkspaceAgentsData {
   readonly presets: readonly AgentModePreset[];
   readonly agents: readonly AgentEntry[];
 }
+
+/** The workspace's agent selection over the process's catalog. */
+const workspaceAgentsOf = (roots: WorkspaceAgentsStores) =>
+  Effect.map(AgentCatalog, (catalog) => catalog.workspaceAgents(roots));
 
 interface WorkspaceAgentsFormProps {
   /** The process runtime the workspace agents read and the default-agent write run on,
@@ -102,12 +106,15 @@ export function WorkspaceAgentsForm(
         Effect.map(
           Effect.all({
             record: readCliWorkspaceAgents(roots),
-            presets: createWorkspaceAgentsController(roots).allPresets(),
+            presets: Effect.flatMap(workspaceAgentsOf(roots), (agents) =>
+              agents.allPresets(),
+            ),
+            catalog: AgentCatalog,
           }),
-          ({ record, presets }): WorkspaceAgentsData => ({
+          ({ record, presets, catalog }): WorkspaceAgentsData => ({
             record,
             presets,
-            agents: getCatalogAgents(),
+            agents: [...catalog.list()],
           }),
         ),
       runtime: props.runtime,
@@ -218,14 +225,26 @@ export function WorkspaceAgentsForm(
     return frame(
       items,
       (value) => {
-        const workspaceAgents = createWorkspaceAgentsController(roots);
+        const workspaceAgents = workspaceAgentsOf(roots);
         if (value === 'inherit')
-          write(() => workspaceAgents.setInherited(), 'overview');
+          write(
+            () =>
+              Effect.flatMap(workspaceAgents, (agents) =>
+                agents.setInherited(),
+              ),
+            'overview',
+          );
         else if (value === 'all')
-          write(() => workspaceAgents.setAll(), 'overview');
+          write(
+            () => Effect.flatMap(workspaceAgents, (agents) => agents.setAll()),
+            'overview',
+          );
         else
           write(
-            () => workspaceAgents.setTeam(value.slice('team:'.length)),
+            () =>
+              Effect.flatMap(workspaceAgents, (agents) =>
+                agents.setTeam(value.slice('team:'.length)),
+              ),
             'overview',
           );
       },
@@ -248,12 +267,11 @@ export function WorkspaceAgentsForm(
         })),
       ],
       (value) => {
-        const workspaceAgents = createWorkspaceAgentsController(roots);
         write(
           () =>
-            value
-              ? workspaceAgents.setDefaultTeam(value)
-              : workspaceAgents.clearDefaultTeam(),
+            Effect.flatMap(workspaceAgentsOf(roots), (agents) =>
+              value ? agents.setDefaultTeam(value) : agents.clearDefaultTeam(),
+            ),
           'overview',
         );
       },
@@ -300,11 +318,13 @@ export function WorkspaceAgentsForm(
       const agent = agents.find((candidate) => agentKeyOf(candidate) === value);
       if (!agent) return;
       write(() =>
-        createWorkspaceAgentsController(roots).setAgentEnabled({
-          source: agent.source,
-          name: agent.name,
-          enabled: !selected.has(value),
-        }),
+        Effect.flatMap(workspaceAgentsOf(roots), (agents) =>
+          agents.setAgentEnabled({
+            source: agent.source,
+            name: agent.name,
+            enabled: !selected.has(value),
+          }),
+        ),
       );
     },
     () => setMode('overview'),

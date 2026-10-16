@@ -18,9 +18,10 @@
 // (`nodeSpawnerLayer`).
 import * as NodeFileSystem from '@effect/platform-node/NodeFileSystem';
 import * as NodePath from '@effect/platform-node/NodePath';
-import { ConfigProvider, Effect, Layer, RcMap } from 'effect';
+import { ConfigProvider, Context, Effect, Layer, RcMap } from 'effect';
 import { afterEach, beforeEach } from 'vitest';
 
+import type { AgentCatalogShape } from '@agent/index/agentCatalog';
 import { ModelRetryGate } from '@agent/runtime/ModelRetryGate';
 import { RouteRetries } from '@agent/runtime/run/invocation';
 import type { ModelOptionStores } from '@model/computeModelOptions';
@@ -268,6 +269,9 @@ type FakeProcessServicesLayer = Layer.Layer<FakeProcessServices>;
 
 let processServices: FakeProcessServicesLayer | undefined;
 
+/** The one agent catalog the fake process services serve every runtime. */
+let sharedAgentCatalog: AgentCatalogShape | undefined;
+
 /**
  * The environment the harness runtime's ConfigProvider serves, reseeded from
  * the installed host on every install. The provider looks leaves up live, so
@@ -310,6 +314,7 @@ export async function installFakeHost(host: FakeHost): Promise<void> {
     { LanguageModel },
     { unprobedToolAvailability },
     { SessionOwner: SessionOwnerTag },
+    { AgentCatalog },
   ] = await Promise.all([
     import('@test/support/testWorkspaceRoots'),
     import('./testProcessRuntime'),
@@ -320,6 +325,7 @@ export async function installFakeHost(host: FakeHost): Promise<void> {
     import('@platform/languageModel'),
     import('./toolAvailabilityTestLayer'),
     import('@platform/processRuntime'),
+    import('@agent/index/agentCatalog'),
   ]);
   current = host;
   for (const key of Object.keys(harnessEnv)) delete harnessEnv[key];
@@ -416,7 +422,29 @@ export async function installFakeHost(host: FakeHost): Promise<void> {
       globalStorageFsLayer(current?.roots.globalStorage ?? ''),
       Layer.mergeAll(NodeFileSystem.layer, NodePath.layer),
     ),
-  ).pipe(Layer.provideMerge(nodeSpawnerLayer));
+  ).pipe(
+    Layer.provideMerge(nodeSpawnerLayer),
+    // The process's agent catalog, over the services above: one for every
+    // runtime these services build, as a process has one. A suite loads it
+    // (`refresh`) when it reads agents.
+    (services) =>
+      Layer.provideMerge(
+        Layer.effect(
+          AgentCatalog,
+          Effect.suspend(() =>
+            sharedAgentCatalog
+              ? Effect.succeed(sharedAgentCatalog)
+              : Effect.scoped(Layer.build(AgentCatalog.layer)).pipe(
+                  Effect.map((context) => {
+                    sharedAgentCatalog = Context.get(context, AgentCatalog);
+                    return sharedAgentCatalog;
+                  }),
+                ),
+          ),
+        ),
+        services,
+      ),
+  );
   initTestWorkspaceRoots(host.roots);
   // A bare process runtime for the Promise-facing boundaries that run
   // fibers (the loopback sign-in). The session graph family is not installed

@@ -37,6 +37,7 @@ import { Context, Effect, Layer, ManagedRuntime, Stream } from 'effect';
 import {
   AgentDirectories,
   AppState,
+  AgentDirectoryService,
   processLayer,
   Sessions,
   StateWriteFailed,
@@ -47,7 +48,6 @@ import {
   withForkFailureReporting,
 } from '@texra-ai/harness';
 import { resolveGlobalStoragePath } from '@texra-ai/harness/node';
-import { AgentDirectoryService } from '@agent/index';
 import { appStateStoreFromDatabase } from '@controllers/session/appStateStore';
 import type { MinimumLogLevel } from '@logger/effectDiagnostics';
 import { GlobalDatabase } from '@shared/session/database';

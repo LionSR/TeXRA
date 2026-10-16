@@ -24,6 +24,7 @@ import {
   Path,
   type Scope,
 } from 'effect';
+import type { AgentCatalog } from '@agent/index/agentCatalog';
 import type { RouteRetries } from '@agent/runtime/run/invocation';
 import type { SessionOwnerShape } from '@agent/runtime/SessionHandle';
 import { writeLogEntry } from '@logger/logSink';
@@ -77,6 +78,7 @@ export type ProcessServices =
   | AppState
   | LanguageModel
   | AgentDirectories
+  | AgentCatalog
   | UsageLog
   | ToolRegistry
   | ToolCatalog

@@ -13,9 +13,8 @@
 
 import { Effect } from 'effect';
 import { z } from 'zod';
-import { defineTool, ToolContext } from '@texra-ai/harness';
+import { AgentCatalog, defineTool, ToolContext } from '@texra-ai/harness';
 
-import { createWorkspaceAgentsController } from '@agent/index/agentRegistry';
 import { teamPresets } from '@common/teams/TeamPresets';
 import { agentName, ToolError } from '@shared/schemas';
 import { executed } from '@tools/core/result';
@@ -48,7 +47,7 @@ const applyTeam = Effect.fn('ApplyTeamTool.execute')(function* (
   input: ApplyTeamInput,
 ) {
   const call = yield* ToolContext;
-  const workspaceAgents = createWorkspaceAgentsController(call.env.roots);
+  const workspaceAgents = (yield* AgentCatalog).workspaceAgents(call.env.roots);
 
   const result = yield* workspaceAgents.applyTeam(input.teamId);
 

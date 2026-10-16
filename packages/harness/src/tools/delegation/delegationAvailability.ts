@@ -18,7 +18,7 @@ import { Effect } from 'effect';
 
 // Local imports
 import { modelRefOf } from '@texra-ai/llm';
-import { resolveDelegationScopeAgents } from '@agent/index/agentRegistry';
+import { AgentCatalog } from '@agent/index/agentCatalog';
 import type { StepTools } from '@agent/runtime/loop/step';
 import { withLogChannel } from '@logger/effectLog';
 import {
@@ -68,7 +68,7 @@ export const readDelegationTargets = Effect.fn('readDelegationTargets')(
       ({ name }) => registry.get(name)?.launchesTasks,
     );
     if (!chats && !tasks) return undefined;
-    const entries = yield* resolveDelegationScopeAgents(stores, scope);
+    const entries = yield* (yield* AgentCatalog).visible(stores, scope);
     const agents = entries.flatMap(
       ({ name, description, tools: agentTools, blocks }) => {
         const task = Object.keys(blocks).length > 0;

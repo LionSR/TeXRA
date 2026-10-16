@@ -2,7 +2,7 @@
 import { Clock, Effect, Predicate, Result } from 'effect';
 
 // Local imports
-import type { WorkspaceAgentsController } from '@agent/workspaceAgents/WorkspaceAgentsController';
+import { AGENT_TOOL_NAME } from '@texra-ai/harness/plugins';
 import { planTeamRun } from '@common/teams/TeamPlan';
 import { findTeamPreset, type TeamPreset } from '@common/teams/TeamPresets';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
@@ -14,10 +14,10 @@ import {
   type AgentSource,
 } from '@shared/schemas';
 import { BUILTIN_TEAM_ROOT_AGENT_NAMES } from '@shared/constants/agents';
-import { hasDelegationTool } from '@shared/constants/delegationTools';
 import { type AgentSelectionItem } from '@texra/shared/settingsView/settingsViewMessages';
 import { documentTaskOf } from '@texra/tools/documents/documentTask';
 import { byName } from '@utils/core';
+import type { WorkspaceAgentsController } from '@texra-ai/harness';
 import type { StateStore } from '@texra-ai/harness';
 
 interface SettingsAgentCatalogEntry {
@@ -73,7 +73,7 @@ export class SettingsAgentCatalogController {
   getOrchestratorAgentNames(): string[] {
     const names = new Set<string>(BUILTIN_TEAM_ROOT_AGENT_NAMES);
     for (const agent of this.deps.getAgents()) {
-      if (hasDelegationTool(agent.tools)) names.add(agent.name);
+      if (agent.tools?.includes(AGENT_TOOL_NAME)) names.add(agent.name);
     }
     return [...names].sort();
   }

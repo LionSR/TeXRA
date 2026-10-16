@@ -5,6 +5,7 @@ import {
   AgentDirectories,
   AppState,
   processLayer,
+  AgentDirectoryService,
   UNAVAILABLE_LANGUAGE_MODEL_PORT,
   withForkFailureReporting,
   type ProcessServices,
@@ -19,7 +20,6 @@ import {
   resolveGlobalStoragePath,
   resolveWorkspaceStoragePath,
 } from '@texra-ai/harness/node';
-import { AgentDirectoryService } from '@agent/index';
 import {
   appStateStoreFromDatabase,
   openProjectStateStore,

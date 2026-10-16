@@ -6,17 +6,11 @@
  */
 import { Effect, FileSystem } from 'effect';
 
-import { AgentDirectories, type WorkspaceRoots } from '@texra-ai/harness';
 import {
-  agentSourceRoots,
-  changedBuiltInOf,
-  createWorkspaceAgentsController,
-  getAgent,
-  getCatalogAgents,
-  getCustomAgentScanIssues,
-  keepCustomAgent,
-  refresh,
-} from '@agent/index';
+  AgentCatalog,
+  AgentDirectories,
+  type WorkspaceRoots,
+} from '@texra-ai/harness';
 import { readCustomAgentDir } from '@shared/config/settingsAccess';
 import { agentKey } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
@@ -53,12 +47,19 @@ interface SettingsAgentCommandsPorts {
 export function settingsAgentCommands(ports: SettingsAgentCommandsPorts) {
   const { bindings, present } = ports;
   const { globalState } = ports.roots;
-  const workspaceAgents = createWorkspaceAgentsController(ports.roots);
-  const catalog = new SettingsAgentCatalogController({
-    repoState: ports.roots.repoState,
-    workspaceAgents,
-    getAgents: getCatalogAgents,
-    newerBuiltInOf: (entry) => changedBuiltInOf(entry)?.source,
+  /** The page's views over the process's agent catalog. */
+  const page = Effect.map(AgentCatalog, (agents) => {
+    const workspaceAgents = agents.workspaceAgents(ports.roots);
+    return {
+      agents,
+      workspaceAgents,
+      catalog: new SettingsAgentCatalogController({
+        repoState: ports.roots.repoState,
+        workspaceAgents,
+        getAgents: () => [...agents.list()],
+        newerBuiltInOf: (entry) => agents.newerBuiltIn(entry)?.source,
+      }),
+    };
   });
   const customDirectory = AgentDirectories.use((directories) =>
     directories.custom(),
@@ -66,10 +67,11 @@ export function settingsAgentCommands(ports: SettingsAgentCommandsPorts) {
 
   const postSelection = present.post(
     Effect.gen(function* () {
+      const { agents, catalog } = yield* page;
       return {
         command: SETTINGS_VIEW_COMMANDS.UPDATE_AGENT_SELECTION,
         agents: yield* catalog.buildSelectionItems(),
-        customAgentIssues: [...getCustomAgentScanIssues()],
+        customAgentIssues: [...agents.scanIssues()],
       };
     }),
   );
@@ -85,6 +87,7 @@ export function settingsAgentCommands(ports: SettingsAgentCommandsPorts) {
   );
   const postPresets = present.post(
     Effect.gen(function* () {
+      const { catalog, workspaceAgents } = yield* page;
       return {
         command: SETTINGS_VIEW_COMMANDS.UPDATE_AGENT_MODE_PRESETS,
         customPresets: yield* catalog.getCustomPresets(),
@@ -106,7 +109,8 @@ export function settingsAgentCommands(ports: SettingsAgentCommandsPorts) {
     agentCatalogAlreadyFresh = false,
   ): HostEffect =>
     Effect.gen(function* () {
-      if (!agentCatalogAlreadyFresh) yield* refresh();
+      if (!agentCatalogAlreadyFresh)
+        yield* AgentCatalog.use((agents) => agents.refresh);
       yield* allSettledVoid<Error, ProcessServices>([
         postPresets,
         postSelection,
@@ -125,12 +129,7 @@ export function settingsAgentCommands(ports: SettingsAgentCommandsPorts) {
   );
 
   const actions = createSettingsAgentActions({
-    findAgent: (source, name) => getAgent(agentKey(source, name)),
     getCustomAgentDirectory: () => customDirectory,
-    getSourceRoots: (source) =>
-      AgentDirectories.use((directories) =>
-        agentSourceRoots(directories, source),
-      ),
     openDocument: bindings.openPath,
     openReadOnlyDocument: (filePath) =>
       Effect.flatMap(
@@ -143,27 +142,30 @@ export function settingsAgentCommands(ports: SettingsAgentCommandsPorts) {
     showInfoMessage: present.notice,
     showErrorMessage: present.alert,
     refreshAfterMutation: () => refreshAfterAgentMutation(),
-    forgetDeletedAgent: (name) => workspaceAgents.forgetDeletedAgent(name),
+    forgetDeletedAgent: (name) =>
+      Effect.flatMap(page, ({ workspaceAgents }) =>
+        workspaceAgents.forgetDeletedAgent(name),
+      ),
   });
 
   const handlers = {
     setAgentEnabled: (message) =>
       present.reported(
         'Failed to update agent visibility',
-        workspaceAgents
-          .setAgentEnabled({
+        Effect.flatMap(page, ({ workspaceAgents }) =>
+          workspaceAgents.setAgentEnabled({
             source: message.agentSource,
             name: message.agentName,
             enabled: message.enabled,
-          })
-          .pipe(Effect.andThen(refreshAfterAgentMutation(undefined, true))),
+          }),
+        ).pipe(Effect.andThen(refreshAfterAgentMutation(undefined, true))),
       ),
     setAllAgentsEnabled: (message) =>
       present.reported(
         'Failed to update agent visibility',
-        catalog
-          .setAllAgentsEnabled(message)
-          .pipe(Effect.andThen(refreshAfterAgentMutation(undefined, true))),
+        Effect.flatMap(page, ({ catalog }) =>
+          catalog.setAllAgentsEnabled(message),
+        ).pipe(Effect.andThen(refreshAfterAgentMutation(undefined, true))),
       ),
     openAgentYaml: (message) =>
       present.reported(
@@ -184,7 +186,18 @@ export function settingsAgentCommands(ports: SettingsAgentCommandsPorts) {
       present.reported(
         'Failed to keep the custom agent',
         Effect.gen(function* () {
-          if (!(yield* keepCustomAgent(message.agentName))) {
+          const agents = yield* AgentCatalog;
+          const custom = agents.get(agentKey('custom', message.agentName));
+          const kept =
+            custom &&
+            (yield* agents
+              .customize(custom, 'keep')
+              .pipe(
+                Effect.catchTag('AgentCustomizeRefused', () =>
+                  Effect.succeed(undefined),
+                ),
+              ));
+          if (kept === undefined) {
             return yield* present.alert(
               `${message.agentName} has no newer built-in version to dismiss.`,
             );
@@ -197,20 +210,10 @@ export function settingsAgentCommands(ports: SettingsAgentCommandsPorts) {
         'Failed to reveal agent file',
         actions.revealAgentFile(message),
       ),
-    openAgentFolder: (message) =>
+    openAgentFolder: () =>
       present.reported(
         'Failed to open agent folder',
-        Effect.gen(function* () {
-          const [directory] = yield* AgentDirectories.use((directories) =>
-            agentSourceRoots(directories, message.folderType),
-          );
-          if (!directory) {
-            return yield* present.alert(
-              `No local directory for agent source: ${message.folderType}`,
-            );
-          }
-          yield* bindings.revealPath(directory);
-        }),
+        Effect.flatMap(customDirectory, bindings.revealPath),
       ),
     createAgent: (message) =>
       present.reported(
@@ -265,16 +268,18 @@ export function settingsAgentCommands(ports: SettingsAgentCommandsPorts) {
     applyAgentModePreset: (message) =>
       present.reported(
         'Failed to apply agent team',
-        applySettingsTeam(message.presetId, {
-          workspaceAgents,
-          catalog,
-          presentation: {
-            showInfoMessage: present.notice,
-            showErrorMessage: present.alert,
-          },
-          refreshAfterApply: (selectedToolUseAgent) =>
-            refreshAfterAgentMutation(selectedToolUseAgent, true),
-        }),
+        Effect.flatMap(page, ({ workspaceAgents, catalog }) =>
+          applySettingsTeam(message.presetId, {
+            workspaceAgents,
+            catalog,
+            presentation: {
+              showInfoMessage: present.notice,
+              showErrorMessage: present.alert,
+            },
+            refreshAfterApply: (selectedToolUseAgent) =>
+              refreshAfterAgentMutation(selectedToolUseAgent, true),
+          }),
+        ),
       ),
     saveAgentModePreset: () =>
       present.reported(
@@ -285,6 +290,7 @@ export function settingsAgentCommands(ports: SettingsAgentCommandsPorts) {
             placeHolder: 'e.g. My Research Team',
           });
           if (!name?.trim()) return;
+          const { catalog } = yield* page;
           const preset = yield* catalog.saveCurrentPreset(name);
           yield* refreshAfterAgentMutation(undefined, true);
           yield* present.notice(`Saved team "${preset.name}"`);
@@ -294,6 +300,7 @@ export function settingsAgentCommands(ports: SettingsAgentCommandsPorts) {
       present.reported(
         'Failed to delete agent team',
         Effect.gen(function* () {
+          const { catalog } = yield* page;
           const target = yield* catalog.getCustomPreset(message.presetId);
           if (!target) {
             return yield* present.alert(

@@ -5,7 +5,11 @@
 import { Box, Text } from 'ink';
 import { Effect } from 'effect';
 
-import { getCatalogAgent, type WorkspaceAgentsStores } from '@agent/index';
+import {
+  AgentCatalog,
+  type ProcessRuntime,
+  type WorkspaceAgentsStores,
+} from '@texra-ai/harness';
 import { Select } from '@cli/tui/ui/Select';
 import {
   computeSelectWindowSize,
@@ -25,7 +29,6 @@ import {
   PickerKeyHints,
 } from './_shared/FormFrame';
 import { useAsyncPickerForm } from './_shared/ListForm';
-import type { ProcessRuntime } from '@texra-ai/harness';
 
 interface AgentListFormProps {
   /** The process runtime the catalog read runs on, from the surface that
@@ -49,7 +52,9 @@ export type AgentPickerValue =
   | { readonly kind: 'team'; readonly teamId: string };
 
 interface AgentGroups {
-  readonly agents: readonly DocumentAgentOption[];
+  readonly agents: readonly (DocumentAgentOption & {
+    readonly description?: string;
+  })[];
   readonly teams: readonly TeamOptionData[];
 }
 
@@ -65,8 +70,7 @@ function agentPickerItems(
   groups: AgentGroups,
 ): ReadonlyArray<SelectItem<AgentPickerValue>> {
   return [
-    ...groups.agents.map((agent) => {
-      const description = getCatalogAgent(agent.value)?.description;
+    ...groups.agents.map(({ description, ...agent }) => {
       return {
         value: { kind: 'agent' as const, agent: agent.value },
         label:
@@ -127,7 +131,11 @@ export function AgentListForm(props: AgentListFormProps): React.JSX.Element {
     loadingLabel: 'Loading agents...',
     load: () =>
       Effect.gen(function* () {
-        const agents = yield* agentOptionsData(props.stores);
+        const catalog = yield* AgentCatalog;
+        const agents = (yield* agentOptionsData(props.stores)).map((agent) => ({
+          ...agent,
+          description: catalog.get(agent.value)?.description,
+        }));
         const teams = loadTeamOptions(
           yield* createTeamCatalogPorts(props.stores.repoState),
         );

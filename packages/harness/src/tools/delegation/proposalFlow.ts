@@ -10,11 +10,10 @@ import { Cause, Effect, Exit } from 'effect';
 
 // Local imports
 import {
+  AgentCatalog,
   findAgentByIdentifier,
-  getCatalogAgent,
-  resolveDelegationScopeAgents,
   type WorkspaceAgentsStores,
-} from '@agent/index/agentRegistry';
+} from '@agent/index/agentCatalog';
 import { type RunToolCall } from '@agent/runtime/RunCall';
 import { isTrustedScript } from '@agent/core/definition/RunRecord';
 import type {
@@ -56,11 +55,10 @@ export const requireAgent = Effect.fn('requireAgent')(function* (
   name: string,
   run: Pick<RunToolCall['run'], 'config' | 'delegationAgentScope'>,
 ) {
-  const pinned = isTrustedScript(run.config)
-    ? getCatalogAgent(name)
-    : undefined;
+  const catalog = yield* AgentCatalog;
+  const pinned = isTrustedScript(run.config) ? catalog.get(name) : undefined;
   if (pinned) return pinned;
-  const agents = yield* resolveDelegationScopeAgents(
+  const agents = yield* catalog.visible(
     stores,
     run.delegationAgentScope ?? undefined,
   );
@@ -287,7 +285,7 @@ export const decideDelegation = Effect.fn('decideDelegation')(function* (
       : undefined;
   const resolvedAgentOverride = agentOverride
     ? findAgentByIdentifier(
-        yield* resolveDelegationScopeAgents(
+        yield* (yield* AgentCatalog).visible(
           parent.env.roots,
           parent.run.delegationAgentScope ?? undefined,
         ),

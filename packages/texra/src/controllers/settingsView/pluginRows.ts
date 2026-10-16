@@ -8,7 +8,7 @@
  */
 import { Effect, FileSystem } from 'effect';
 
-import { getCatalogAgents } from '@agent/index';
+import { AgentCatalog, type ToolProbeInputs } from '@texra-ai/harness';
 import type { PluginEnv } from '@common/plugins/installRecord';
 import { listPlugins } from '@common/plugins/pluginTrust';
 import { buildToolDashboardItems } from '@texra/controllers/settingsView/ToolDashboardData';
@@ -16,7 +16,6 @@ import type { PluginRow } from '@texra/shared/settingsView/settingsViewMessages'
 import { readMcpConfig, USER_MCP_CONFIG_PATH } from '@tools/mcp/mcpConfig';
 import { mcpServerOfToolName } from '@tools/mcp/mcpServer';
 import type { ExternalToolCheckResult } from '@tools/toolAvailabilityService';
-import type { ToolProbeInputs } from '@texra-ai/harness';
 
 /**
  * Build the rows, the MCP config file they read, and what that file's
@@ -28,7 +27,7 @@ export const buildPluginRows = Effect.fn('buildPluginRows')(function* (
   inputs: ToolProbeInputs & PluginEnv,
   cachedResults?: readonly ExternalToolCheckResult[],
 ) {
-  const agents = getCatalogAgents().map((agent) => ({
+  const agents = (yield* AgentCatalog).list().map((agent) => ({
     name: agent.name,
     tools: agent.tools ?? [],
   }));
