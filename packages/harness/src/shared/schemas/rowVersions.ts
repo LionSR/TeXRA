@@ -106,7 +106,10 @@ export const ROW_KINDS: Readonly<Record<SessionEventDraft['type'], RowKind>> = {
   // run as damaged rather than read as that build's).
   'stage.start': { version: 2, upcast: [] },
   'stage.end': V1,
-  'tool.start': V1,
+  // v2: a tool's card is stated (`card`), not derived from its name, so the
+  // fold has no Codex builders (no upcaster, as `run.config`: an earlier
+  // build's card would read without its sections).
+  'tool.start': { version: 2, upcast: [] },
   'tool.end': V1,
   usage: V1,
   'context.state': V1,
