@@ -4,10 +4,9 @@ import {
   LoopbackTransportUnavailableError,
   type SubscriptionDeviceCodePrompt,
 } from '@texra-ai/llm/node';
-import { withLogChannel } from '@texra-ai/harness';
+import { Skills, withLogChannel } from '@texra-ai/harness';
 import { onAppSignal } from '@eventBus/AppSignals';
 import { ACCOUNT_OUTCOME } from '@shared/model/accountAuth';
-import { loadRuntimeSkillDisplay } from '@skills/runtimeSkills';
 import { unsupported } from '@texra/shared/utils/dispatcher';
 import type { ExternalOpenFailed } from '@texra/hosts/uiHosts';
 import { SettingsViewInboundMessageSchema } from '@texra/shared/settingsView/settingsViewMessages';
@@ -175,10 +174,7 @@ export function createDesktopSettingsIpc(
     roots: options.roots,
     secrets: options.secrets,
     resourcesPath: options.resourcesPath,
-    skillDisplay: loadRuntimeSkillDisplay(
-      options.roots.workspace,
-      options.roots,
-    ),
+    skillDisplay: Skills.display(options.roots),
     accountCopy: ACCOUNT_OUTCOME,
     bindings: {
       ...bindings,

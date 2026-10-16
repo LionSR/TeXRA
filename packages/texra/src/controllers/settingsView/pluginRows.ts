@@ -9,15 +9,15 @@
 import { Effect, FileSystem } from 'effect';
 
 import {
+  InstalledPlugins,
   mcpServerOfToolName,
   mcpConfigPathOf,
   readMcpConfig,
+  type PluginEnv,
   type ToolProbeInputs,
   type WorkspaceRoots,
 } from '@texra-ai/harness';
 import { getCatalogAgents } from '@agent/index';
-import type { PluginEnv } from '@common/plugins/installRecord';
-import { listPlugins } from '@common/plugins/pluginTrust';
 import { buildToolDashboardItems } from '@texra/controllers/settingsView/ToolDashboardData';
 import type { PluginRow } from '@texra/shared/settingsView/settingsViewMessages';
 import type { ExternalToolCheckResult } from '@tools/toolAvailabilityService';
@@ -49,7 +49,7 @@ export const buildPluginRows = Effect.fn('buildPluginRows')(function* (
   };
 
   const items = yield* buildToolDashboardItems(inputs, cachedResults);
-  const installed = yield* listPlugins(inputs);
+  const installed = yield* InstalledPlugins.list(inputs);
   const mcpConfigPath = mcpConfigPathOf(inputs.storageRoot);
   const mcp = yield* readMcpConfig(yield* FileSystem.FileSystem, mcpConfigPath);
 

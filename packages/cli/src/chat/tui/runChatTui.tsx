@@ -686,7 +686,7 @@ export async function runChat(
     onSkillSelect: (selection) =>
       Effect.sync(() => chatController.activateSkill(selection)),
     onResumeSelect: chatController.resume,
-    configStores: runtimeSession.roots,
+    configRoots: runtimeSession.roots,
     onError: (error) => {
       appendLocalErrorTranscript(toErrorMessage(error));
     },

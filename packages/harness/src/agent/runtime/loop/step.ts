@@ -306,8 +306,7 @@ const openStep = Effect.fn('Step.open')(function* (
     const catalog =
       listing || names.length > 0
         ? yield* loadRuntimeSkillCatalog({
-            workspacePath: roots.workspace,
-            settings: roots,
+            roots,
             plugins: { loadable: skills.plugins, withheld: [] },
             named: [...names, ...(recordedSkills ?? [])],
           })
@@ -518,8 +517,7 @@ export const resolveActivations = Effect.fn('Step.resolveActivations')(
     if (open === null || names.length === 0) return [...names];
     const { roots } = run.session;
     const { named } = yield* loadRuntimeSkillCatalog({
-      workspacePath: roots.workspace,
-      settings: roots,
+      roots,
       plugins: { loadable: open.skills.plugins, withheld: [] },
       named: names,
     });

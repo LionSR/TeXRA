@@ -236,6 +236,37 @@ export { pathToLocationIn } from '@utils/files/fileLocation';
 export { mcpConfigPathOf, readMcpConfig } from '@tools/mcp/mcpConfig';
 export type { McpServerConfig } from '@common/plugins/mcpServers';
 export { mcpServerOfToolName } from '@tools/mcp/mcpServer';
+// The skills a session's roots discover: the inventory a settings page
+// lists, and the enabled ones a person activates, each read with its
+// discovery issues; the source options a host's flags set.
+export {
+  Skills,
+  type EnabledSkill,
+  type SkillRoots,
+} from '@skills/runtimeSkills';
+export type { SkillSourceOptions } from '@skills/skillSources';
+export type {
+  SkillIssueCode,
+  SkillIssueSeverity,
+  SkillLoadIssue,
+} from '@skills/skillLoader';
+export type { SkillDisplayItem } from '@shared/schemas';
+// The Claude Code and Codex plugins installed under a session's storage
+// root: install, update, remove, list, enable (asking the user to trust),
+// disable, and what loads now; and what each answers with or refuses.
+export {
+  InstalledPlugins,
+  type PluginOrigin,
+  type PluginUpdate,
+} from '@common/plugins/installedPlugins';
+export type { PluginEnv } from '@common/plugins/installRecord';
+export {
+  PluginError,
+  PluginRequestError,
+} from '@common/plugins/pluginManifest';
+export type { PluginListing, PluginReview } from '@common/plugins/pluginTrust';
+export type { ConfiguredHook } from '@common/plugins/hookConfig';
+export type { InstalledPlugin, PluginTrust } from '@shared/schemas';
 // Which external tools this machine has, as plugins' `availability` probes
 // answered; a host reads it and asks for a refresh.
 export { ToolAvailability } from '@tools/toolAvailabilityService';

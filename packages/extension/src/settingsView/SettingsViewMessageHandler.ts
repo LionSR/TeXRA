@@ -10,7 +10,7 @@ import * as vscode from 'vscode';
 import { Cause, Effect, Exit, Fiber } from 'effect';
 import { ModelError, completedTurn } from '@texra-ai/llm';
 
-import { withLogChannel } from '@texra-ai/harness';
+import { Skills, withLogChannel } from '@texra-ai/harness';
 import { emitAppSignal } from '@eventBus/AppSignals';
 import { subscribeAppSignal } from '@frontend/events/appSignalSubscriptions';
 import { VscodeExternalOpener } from '@frontend/hosts/VscodeExternalOpener';
@@ -31,7 +31,6 @@ import {
 import type { ProgressViewProvider } from '@progressView/ProgressViewProvider';
 import { TEXRA_APPROVAL_POLICY_CONFIG_KEY } from '@shared/approvalPolicy';
 import { ACCOUNT_OUTCOME } from '@shared/model/accountAuth';
-import { loadRuntimeSkillDisplay } from '@skills/runtimeSkills';
 import { TexraStateKey } from '@texra/shared/settingsView/texraSettings';
 import {
   SettingsViewInboundMessageSchema,
@@ -117,7 +116,7 @@ export class SettingsViewMessageHandler {
       roots,
       secrets,
       resourcesPath: path.join(context.extensionPath, 'resources'),
-      skillDisplay: loadRuntimeSkillDisplay(roots.workspace, roots),
+      skillDisplay: Skills.display(roots),
       accountCopy: ACCOUNT_OUTCOME,
       bindings: {
         post: (message) =>

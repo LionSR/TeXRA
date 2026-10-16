@@ -12,20 +12,14 @@
 import { Effect, FileSystem, Result } from 'effect';
 
 // Local imports - agent runtime
-import { mcpConfigPathOf, type ProcessServices } from '@texra-ai/harness';
 import {
-  installPlugins,
-  parsePluginOrigin,
-  removePlugin,
-  updatePlugins,
-} from '@common/plugins/installedPlugins';
-import type { PluginEnv } from '@common/plugins/installRecord';
-import { PluginRequestError } from '@common/plugins/pluginManifest';
-import {
-  disablePlugin,
-  enablePlugin,
+  InstalledPlugins,
+  mcpConfigPathOf,
+  PluginRequestError,
+  type PluginEnv,
   type PluginReview,
-} from '@common/plugins/pluginTrust';
+  type ProcessServices,
+} from '@texra-ai/harness';
 import type { PluginActionMessage } from '@texra/shared/settingsView/pluginMessages';
 import { safeHomedir } from '@utils/system/platformPaths';
 
@@ -65,13 +59,13 @@ export function settingsPluginCommands(ports: {
       placeHolder: 'github.com/owner/repo',
     }))?.trim();
     if (!source) return;
-    const origin = parsePluginOrigin(
+    const origin = InstalledPlugins.origin(
       source,
       roots.workspace ?? safeHomedir() ?? '/',
       undefined,
     );
     if (Result.isFailure(origin)) return yield* Effect.fail(origin.failure);
-    const added = yield* installPlugins(origin.success, [], roots);
+    const added = yield* InstalledPlugins.install(origin.success, [], roots);
     yield* present.notice(
       `Installed ${added.map(({ name }) => name).join(', ')}. Switch it on to review what it declares and trust it.`,
     );
@@ -105,18 +99,18 @@ export function settingsPluginCommands(ports: {
     switch (message.action) {
       case 'enable':
         return Effect.flatMap(
-          enablePlugin(name, roots, confirmTrust),
+          InstalledPlugins.enable(name, roots, confirmTrust),
           (outcome) =>
             outcome === 'declined'
               ? present.notice(`${name} was not trusted, so it stays off.`)
               : Effect.void,
         );
       case 'disable':
-        return disablePlugin(name, roots);
+        return InstalledPlugins.disable(name, roots);
       case 'update':
-        return updatePlugins([name], roots);
+        return InstalledPlugins.update([name], roots);
       case 'remove':
-        return removePlugin(name, roots);
+        return InstalledPlugins.remove(name, roots);
     }
   };
 

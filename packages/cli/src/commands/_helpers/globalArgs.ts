@@ -4,7 +4,6 @@ import {
   TEXRA_APPROVAL_POLICIES,
   type TexraApprovalPolicy,
 } from '@shared/approvalPolicy';
-import { INTEROP_SKILL_DIRS } from '@skills/skillSources';
 import {
   CLI_OUTPUT_FORMATS,
   type CliOutputFormat,
@@ -113,9 +112,8 @@ export const GLOBAL_ARGS: CliGlobalArgsDef = {
 export const SKILL_SOURCE_ARGS: CliSkillSourceArgsDef = {
   'include-interop': {
     type: 'boolean',
-    description: `Also include ${formatCommaList(
-      INTEROP_SKILL_DIRS.map((dir) => `${dir}/skills`),
-    )} from the workspace and home directory`,
+    description:
+      'Also include .agents/skills, .claude/skills, .codex/skills, and .gemini/skills from the workspace and home directory',
   },
   source: {
     type: 'string',

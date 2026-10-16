@@ -29,7 +29,14 @@ import {
 } from './installRecord';
 import { readPluginCandidates, type PluginCandidate } from './marketplace';
 import { pluginDataDir } from './pluginHooks';
-import { rereadPlugin } from './pluginTrust';
+import {
+  describeHook,
+  disablePlugin,
+  enablePlugin,
+  listPlugins,
+  readInstalledPluginLoad,
+  rereadPlugin,
+} from './pluginTrust';
 import { checkoutDetached, fetchPinned } from './pluginGit';
 import {
   ioError,
@@ -40,7 +47,7 @@ import {
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 /** Where a plugin comes from, as the user named it. */
-type PluginOrigin =
+export type PluginOrigin =
   | { readonly kind: 'git'; readonly url: string; readonly ref?: string }
   | { readonly kind: 'local'; readonly path: string };
 
@@ -62,7 +69,7 @@ const GITHUB_SHORTHAND =
  * runs, so a bad source is the user's mistake to correct. `ref` (the CLI's
  * `--ref`) applies to git sources only.
  */
-export function parsePluginOrigin(
+function parsePluginOrigin(
   input: string,
   cwd: string,
   ref: string | undefined,
@@ -149,8 +156,6 @@ function claimName(run: InstallRun, name: string) {
   return Effect.void;
 }
 
-type InstallFailure = PluginError | PluginRequestError | Error;
-
 /** What a marketplace entry says of a plugin, kept for one with no manifest
  *  of its own. */
 const standIn = (candidate: Extract<PluginCandidate, { kind: 'dir' }>) => ({
@@ -168,7 +173,7 @@ function installFromRoot(
   nested: boolean,
 ): Effect.Effect<
   InstalledPlugin[],
-  InstallFailure,
+  PluginError | PluginRequestError | Error,
   ChildProcessSpawner | FileSystem.FileSystem
 > {
   return Effect.gen(function* () {
@@ -243,7 +248,7 @@ function installOrigin(
   nested: boolean,
 ): Effect.Effect<
   InstalledPlugin[],
-  InstallFailure,
+  PluginError | PluginRequestError | Error,
   ChildProcessSpawner | FileSystem.FileSystem
 > {
   if (origin.kind === 'local') {
@@ -306,7 +311,7 @@ function installOrigin(
  * another install recorded meanwhile; a failure removes the managed
  * directories this install created and records nothing.
  */
-export function installPlugins(
+function installPlugins(
   origin: PluginOrigin,
   only: readonly string[],
   env: PluginEnv,
@@ -342,7 +347,7 @@ export function installPlugins(
  * directory or `plugin-data/<name>` is deleted. What the plugin wrote to
  * history stays there, kept unread while it is absent.
  */
-export function removePlugin(name: string, env: PluginEnv) {
+function removePlugin(name: string, env: PluginEnv) {
   return Effect.gen(function* () {
     const dir = path.join(pluginsDir(env), name);
     const dataDir = pluginDataDir(env.globalStorage, name);
@@ -399,7 +404,7 @@ export interface PluginUpdate {
  * directory never disagree. An enabled plugin stays enabled; a new version,
  * or a change to what it runs, loads only once the user trusts it.
  */
-export function updatePlugins(names: readonly string[], env: PluginEnv) {
+function updatePlugins(names: readonly string[], env: PluginEnv) {
   return Effect.gen(function* () {
     const installed = yield* readInstalled(env);
     const targets =
@@ -443,3 +448,36 @@ export function updatePlugins(names: readonly string[], env: PluginEnv) {
     return updates;
   });
 }
+
+/**
+ * The Claude Code and Codex plugins installed for every host: the one
+ * install record in a session's global state, the trust given to each, and
+ * the managed plugins under its global storage, which the storage root the
+ * host opened derives. Each operation takes those roots (`PluginEnv`; a
+ * session's `WorkspaceRoots` is one), so a host acts on the record its
+ * process opened.
+ */
+export const InstalledPlugins = {
+  /** Parse a source as a user types it, refused before anything runs. */
+  origin: parsePluginOrigin,
+  /** Install what an origin offers, recorded disabled until trusted. */
+  install: installPlugins,
+  /** Refetch and reread the named plugins, or every one. */
+  update: updatePlugins,
+  /** Forget a plugin and its trust, and delete what TeXRA manages of it. */
+  remove: removePlugin,
+  /** Every installed plugin, as a listing reports it now. */
+  list: listPlugins,
+  /** Enable a plugin, asking `confirm` to trust it unless it already is. */
+  enable: enablePlugin,
+  /** Disable a plugin; it stays installed, pinned and trusted. */
+  disable: disablePlugin,
+  /** The records of the plugins that load now: enabled, and trusted as
+   *  they are. Never fails; a fault loads none. */
+  loaded: (env: Pick<PluginEnv, 'globalState'>) =>
+    Effect.map(readInstalledPluginLoad(env), ({ loadable }) =>
+      loadable.map(({ record }) => record),
+    ),
+  /** A hook's event, matcher and command, as the trust review shows it. */
+  describeHook,
+};

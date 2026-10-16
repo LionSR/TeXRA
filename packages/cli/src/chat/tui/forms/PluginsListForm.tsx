@@ -7,10 +7,14 @@ import { Box, Text } from 'ink';
 import { useState } from 'react';
 import { Effect } from 'effect';
 
+import {
+  InstalledPlugins,
+  type PluginReview,
+  type ProcessRuntime,
+  type WorkspaceRoots,
+} from '@texra-ai/harness';
 import { setCliToolEnabled } from '@cli/runtime/tools';
 import { COLOR_WARNING } from '@cli/tui/ui/colors';
-import { disablePlugin, enablePlugin } from '@common/plugins/pluginTrust';
-import type { PluginReview } from '@common/plugins/pluginTrust';
 import { buildPluginRows } from '@texra/controllers/settingsView/pluginRows';
 import type { PluginRow } from '@texra/shared/settingsView/settingsViewMessages';
 import {
@@ -27,8 +31,6 @@ import {
 } from '@ui/copy/plugins';
 
 import { AsyncListForm } from './_shared/ListForm';
-import type { ProcessRuntime } from '@texra-ai/harness';
-import type { WorkspaceRoots } from '@texra-ai/harness';
 
 interface PluginsListFormProps {
   readonly availableRows?: number;
@@ -100,8 +102,8 @@ export function PluginsListForm(
       // On and trusted switches off; on but changed since it was trusted
       // opens the review, as switching on does.
       return row.plugin.enabled && row.plugin.trusted
-        ? disablePlugin(row.plugin.name, roots)
-        : enablePlugin(row.plugin.name, roots, confirmTrust).pipe(
+        ? InstalledPlugins.disable(row.plugin.name, roots)
+        : InstalledPlugins.enable(row.plugin.name, roots, confirmTrust).pipe(
             Effect.asVoid,
           );
     return Effect.void;

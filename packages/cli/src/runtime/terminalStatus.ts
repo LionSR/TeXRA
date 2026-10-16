@@ -1,15 +1,18 @@
 import { Effect } from 'effect';
 
+import {
+  InstalledPlugins,
+  type DatabaseReadFailed,
+  type RunEndResult,
+} from '@texra-ai/harness';
 import { getRunRecords } from '@agent/storage';
 import type { SessionHandle } from '@agent/runtime';
-import { readInstalledPluginLoad } from '@common/plugins/pluginTrust';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import { RUN_OUTCOME, type RunOutcome } from '@shared/schemas';
 import { runOutcomeToCliRunStatus } from '@shared/runs/runStatus';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { CliExitCode } from './exitCodes';
-import type { DatabaseReadFailed, RunEndResult } from '@texra-ai/harness';
 import type { CliPluginPin } from '../schemas/cliOutput';
 
 // A type alias, not an interface: the result line types its payload as a
@@ -34,16 +37,14 @@ export type CliRunResult = RunEndResult & CliRunResultMetadata;
  * to the run, so it is not listed.
  */
 export function readCliPluginPins(stores: SettingsStores) {
-  return readInstalledPluginLoad(stores).pipe(
-    Effect.map(({ loadable }) =>
-      loadable.map(
-        ({ record: { name, source, ref, commit } }): CliPluginPin => ({
-          name,
-          source,
-          ref,
-          commit,
-        }),
-      ),
+  return InstalledPlugins.loaded(stores).pipe(
+    Effect.map((loaded) =>
+      loaded.map(({ name, source, ref, commit }): CliPluginPin => ({
+        name,
+        source,
+        ref,
+        commit,
+      })),
     ),
   );
 }

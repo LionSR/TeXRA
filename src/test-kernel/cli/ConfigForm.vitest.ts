@@ -148,7 +148,10 @@ async function renderCliConfigForm(
   const { React } = await loadInk();
   return renderInkElement(
     React.createElement(CliConfigForm, {
-      stores: makeFakeSettingsStores('cli').stores,
+      roots: {
+        ...testDefaultSession().roots,
+        ...makeFakeSettingsStores('cli').stores,
+      },
       secrets: formSecrets,
       runtime: testRuntime(),
       onClose: () => undefined,
@@ -206,7 +209,7 @@ async function openConfigFormProps(
     runtime: testRuntime(),
     runtimeSession: testDefaultSession(),
     runSession: testSessionOf(testDefaultSession()),
-    configStores: stores,
+    configRoots: { ...testDefaultSession().roots, ...stores },
   });
   openCliSlashCommandForm('config', '');
   return renderConfigFormProps();
@@ -405,7 +408,7 @@ describe('/config slash command wiring', () => {
           runtime: testRuntime(),
           runtimeSession: testDefaultSession(),
           runSession: testSessionOf(testDefaultSession()),
-          configStores: stores,
+          configRoots: { ...testDefaultSession().roots, ...stores },
         });
         expect(openCliSlashCommandForm('config', '')).toBe(true);
         expect(activeForm.get()?.commandName).toBe('config');
@@ -435,7 +438,7 @@ describe('/config slash command wiring', () => {
           runtime: testRuntime(),
           runtimeSession: testDefaultSession(),
           runSession: testSessionOf(testDefaultSession()),
-          configStores: stores,
+          configRoots: { ...testDefaultSession().roots, ...stores },
           onProjectApprovalPolicyChanged: (policy) => {
             applied.push(policy);
           },

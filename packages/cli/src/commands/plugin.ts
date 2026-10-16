@@ -1,27 +1,15 @@
 import { defineCommand } from 'citty';
 import { Effect, type FileSystem, Result } from 'effect';
 
-import { withProcessServices } from '@texra-ai/harness';
 import {
-  installPlugins,
-  parsePluginOrigin,
-  removePlugin,
-  updatePlugins,
-  type PluginUpdate,
-} from '@common/plugins/installedPlugins';
-import {
+  InstalledPlugins,
   PluginRequestError,
-  UNLOADED_COMPONENT_LABELS,
-} from '@common/plugins/pluginManifest';
-import {
-  describeHook,
-  disablePlugin,
-  enablePlugin,
-  listPlugins,
+  withProcessServices,
+  type PluginEnv,
   type PluginListing,
   type PluginReview,
-} from '@common/plugins/pluginTrust';
-import type { PluginEnv } from '@common/plugins/installRecord';
+  type PluginUpdate,
+} from '@texra-ai/harness';
 
 import { CliUsageError, type CliContext } from '../runtime/cliContext';
 import { CliExitCode } from '../runtime/exitCodes';
@@ -167,7 +155,7 @@ const pluginInstallCommand = defineCliCommand({
   catchExitCode: pluginExitCode,
   run: (context, ctx) => {
     // Parsed while building, so a bad source refuses before anything opens.
-    const origin = parsePluginOrigin(
+    const origin = InstalledPlugins.origin(
       ctx.args.source,
       context.cwd,
       typeof ctx.args.ref === 'string' ? ctx.args.ref : undefined,
@@ -176,9 +164,9 @@ const pluginInstallCommand = defineCliCommand({
       throw new CliUsageError(origin.failure.message);
     const only = collectStringFlagValues(ctx.rawArgs, 'plugin');
     return withPluginEnv(context, (env) =>
-      installPlugins(origin.success, only, env).pipe(
+      InstalledPlugins.install(origin.success, only, env).pipe(
         Effect.flatMap((added) =>
-          listPlugins(env).pipe(
+          InstalledPlugins.list(env).pipe(
             Effect.map((all) =>
               all.filter((plugin) =>
                 added.some((entry) => entry.name === plugin.name),
@@ -208,7 +196,7 @@ const pluginListCommand = defineCliCommand({
   catchExitCode: pluginExitCode,
   run: (context) =>
     withPluginEnv(context, (env) =>
-      listPlugins(env).pipe(
+      InstalledPlugins.list(env).pipe(
         Effect.map((plugins) => {
           emitCliResult(context, {
             json: plugins,
@@ -232,7 +220,7 @@ function formatPluginShow(plugin: PluginListing): string {
   return [
     listed,
     plugin.hooks.length === 0 ? '  hooks: none' : '  hooks:',
-    ...plugin.hooks.map((hook) => `    ${describeHook(hook)}`),
+    ...plugin.hooks.map((hook) => `    ${InstalledPlugins.describeHook(hook)}`),
     ...(plugin.unsupportedHooks.length === 0
       ? []
       : [
@@ -252,7 +240,7 @@ const pluginShowCommand = defineCliCommand({
   catchExitCode: pluginExitCode,
   run: (context, ctx) =>
     withPluginEnv(context, (env) =>
-      listPlugins(env).pipe(
+      InstalledPlugins.list(env).pipe(
         Effect.flatMap((plugins) => {
           const plugin = plugins.find(({ name }) => name === ctx.args.name);
           if (plugin === undefined)
@@ -282,7 +270,7 @@ const pluginRemoveCommand = defineCliCommand({
   catchExitCode: pluginExitCode,
   run: (context, ctx) =>
     withPluginEnv(context, (env) =>
-      removePlugin(ctx.args.name, env).pipe(
+      InstalledPlugins.remove(ctx.args.name, env).pipe(
         Effect.map((removed) => {
           const result = { removed: removed.name, path: removed.path };
           let text = `Removed ${removed.name}.`;
@@ -314,7 +302,7 @@ const pluginEnableCommand = defineCliCommand({
   catchExitCode: pluginExitCode,
   run: (context, ctx) =>
     withPluginEnv(context, (env) =>
-      enablePlugin(ctx.args.name, env, askTrust).pipe(
+      InstalledPlugins.enable(ctx.args.name, env, askTrust).pipe(
         Effect.map((outcome) => {
           const result = {
             name: ctx.args.name,
@@ -349,7 +337,7 @@ const pluginDisableCommand = defineCliCommand({
   catchExitCode: pluginExitCode,
   run: (context, ctx) =>
     withPluginEnv(context, (env) =>
-      disablePlugin(ctx.args.name, env).pipe(
+      InstalledPlugins.disable(ctx.args.name, env).pipe(
         Effect.map(() => {
           const result = { name: ctx.args.name, enabled: false };
           emitCliResult(context, {
@@ -383,7 +371,7 @@ const pluginUpdateCommand = defineCliCommand({
   catchExitCode: pluginExitCode,
   run: (context, ctx) =>
     withPluginEnv(context, (env) =>
-      updatePlugins(
+      InstalledPlugins.update(
         typeof ctx.args.name === 'string' ? [ctx.args.name] : [],
         env,
       ).pipe(
@@ -451,7 +439,7 @@ export const pluginCommand = withUsageSections(
       ],
     },
     {
-      title: `TeXRA loads a plugin's skills, commands (as skills) and agents as <plugin>:<name>, and runs its MCP servers and command hooks, each in its own process. It does not load its ${UNLOADED_COMPONENT_LABELS.join(', ')}; a plugin with LSP servers cannot be enabled yet.`,
+      title: `TeXRA loads a plugin's skills, commands (as skills) and agents as <plugin>:<name>, and runs its MCP servers and command hooks, each in its own process. It does not load its LSP servers, output styles, apps; a plugin with LSP servers cannot be enabled yet.`,
       rows: [],
     },
   ],

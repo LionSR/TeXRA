@@ -95,12 +95,6 @@ const IGNORED_COMPONENTS = [
   { label: 'apps', field: 'apps', files: ['.app.json'] },
 ] as const;
 
-/** Every component label a plugin can carry that TeXRA does not load. */
-export const UNLOADED_COMPONENT_LABELS = [
-  ...CODE_COMPONENTS,
-  ...IGNORED_COMPONENTS,
-].map((component) => component.label);
-
 /** A filesystem failure, as a plugin error the user reads. */
 export const ioError = (error: PlatformError.PlatformError) =>
   new PluginError({ message: error.message });

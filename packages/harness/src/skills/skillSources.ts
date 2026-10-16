@@ -13,12 +13,7 @@ export interface SkillSourceOptions {
   readonly additionalPaths?: readonly string[];
 }
 
-export const INTEROP_SKILL_DIRS = [
-  '.agents',
-  '.claude',
-  '.codex',
-  '.gemini',
-] as const;
+const INTEROP_SKILL_DIRS = ['.agents', '.claude', '.codex', '.gemini'] as const;
 
 /**
  * The skill tiers in precedence order. A tier fixes the persisted scope its
@@ -30,8 +25,8 @@ export const INTEROP_SKILL_DIRS = [
  * skills read the same whether one directory or several ship them.
  *
  * Installed plugins sit right below the user's own skills and carry the
- * `user` scope: installing one is a per-user act like writing
- * `~/.texra/skills`, so the user source switch governs both. Their skills
+ * `user` scope: installing one is a per-user act like writing to
+ * the storage root's `skills/`, so the user source switch governs both. Their skills
  * and commands are named `<plugin>:<name>`, so they never shadow, or are
  * shadowed by, a skill of another source.
  */
@@ -55,6 +50,8 @@ type SkillTierId = (typeof SKILL_TIERS)[number]['id'];
 interface SkillSourceCall {
   readonly cwd: string;
   readonly home: string;
+  /** The storage root the host opened; its `skills/` holds the user's own. */
+  readonly storageRoot: string;
   readonly resourcesPath: string;
   readonly options: SkillSourceOptions;
   /** The installed plugins that load: enabled, and trusted as they are. */
@@ -119,8 +116,8 @@ const CORE_SKILL_CONTRIBUTIONS: readonly SkillSourceContribution[] = [
   {
     id: 'core:user',
     tier: 'user',
-    roots: ({ home }) => [
-      { path: path.join(home, '.texra', 'skills'), label: 'user' },
+    roots: ({ storageRoot }) => [
+      { path: path.join(storageRoot, 'skills'), label: 'user' },
     ],
   },
   {
