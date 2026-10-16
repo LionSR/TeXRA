@@ -39,7 +39,6 @@ import {
   isPreferSubscription,
   setPreferSubscription,
 } from '@model/subscriptionAccess';
-import type { SettingsStores } from '@shared/config/settingsAccess';
 import {
   codexAccountLabel,
   type SUBSCRIPTION_AUTH_PROVIDERS,
@@ -49,6 +48,7 @@ import {
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import type { SecretsFailed } from '@texra-ai/llm';
 import type { HttpClient } from 'effect/http';
+import type { SettingsStores } from '@texra-ai/harness';
 
 const CHANNEL = 'subscriptionProviders';
 

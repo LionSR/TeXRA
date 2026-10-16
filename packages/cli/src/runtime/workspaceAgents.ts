@@ -1,9 +1,9 @@
 import { Effect } from 'effect';
 
 import { createWorkspaceAgentsController } from '@agent/index';
-import type { SettingsStores } from '@shared/config/settingsAccess';
 import type { WorkspaceAgentsSelection } from '@shared/schemas';
 import { cliCommandDefaults } from './cliConfig';
+import type { SettingsStores } from '@texra-ai/harness';
 
 /** The workspace agents controller's own snapshot shape — derived, never restated. */
 type WorkspaceAgentsSnapshot = Effect.Success<

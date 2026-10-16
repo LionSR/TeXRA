@@ -9,7 +9,7 @@
  *
  * Plain data with no import of the catalog: the settings catalog is reachable
  * from stored shapes, which the llm package may not own. The rows cover the
- * catalog exactly, which `providerConfig.ts` checks at compile time.
+ * catalog exactly, which `modelSettings.ts` checks at compile time.
  */
 import { GlobalStateKey } from './stateKeys';
 

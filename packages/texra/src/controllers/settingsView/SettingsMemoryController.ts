@@ -1,18 +1,9 @@
 import { Effect } from 'effect';
 
-import { resolveMemoryStoragePath } from '@platform/defaults/workspaceStorage';
-import type { MemoryViewItem } from '@shared/tools/memoryView';
+import { MemoryStore, type MemoryViewItem } from '@texra-ai/harness/plugins';
 import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 import type { PromptHost } from '@texra/hosts/uiHosts';
 import type { MemoryPreview } from '@texra/shared/settingsView/settingsViewMessages';
-import { MAX_PINNED_MEMORIES } from '@tools/memory/constants';
-import {
-  deleteMemoryPath,
-  loadMemoryItems,
-  loadMemoryPreview,
-  onMemoryTreeLane,
-  setMemoryPinned,
-} from '@tools/memory/memoryFileSystem';
 
 interface SettingsMemoryControllerDeps {
   prompt: Pick<PromptHost, 'confirm' | 'warning'>;
@@ -34,7 +25,7 @@ export class SettingsMemoryController {
   readonly getMemoryDataMessage = Effect.fn(
     'SettingsMemoryController.getMemoryDataMessage',
   )(function* () {
-    const items = yield* loadMemoryItems();
+    const items = yield* MemoryStore.list;
     return {
       command: SETTINGS_VIEW_COMMANDS.UPDATE_MEMORY,
       items,
@@ -44,21 +35,16 @@ export class SettingsMemoryController {
   readonly getMemoryPreviewMessage = Effect.fn(
     'SettingsMemoryController.getMemoryPreviewMessage',
   )(function* (storagePath: string) {
-    const resolvedPath = resolveMemoryStoragePath(storagePath);
-    const preview = yield* loadMemoryPreview(resolvedPath);
     return {
       command: SETTINGS_VIEW_COMMANDS.UPDATE_MEMORY_PREVIEW,
-      preview,
+      preview: yield* MemoryStore.preview(storagePath),
     } satisfies SettingsMemoryMessage;
   });
 
   getMemoryPreviewErrorMessage(storagePath: string): SettingsMemoryMessage {
     return {
       command: SETTINGS_VIEW_COMMANDS.UPDATE_MEMORY_PREVIEW,
-      preview: {
-        storagePath: resolveMemoryStoragePath(storagePath),
-        error: true,
-      },
+      preview: { storagePath, error: true },
     };
   }
 
@@ -76,10 +62,9 @@ export class SettingsMemoryController {
       );
       if (!confirmed) return null;
 
-      const storagePath = resolveMemoryStoragePath(input.storagePath);
       // On the memory tree's lane, as every memory tool command is: a delete
       // from here never races an agent's edit beneath it.
-      yield* deleteMemoryPath(storagePath).pipe(onMemoryTreeLane);
+      yield* MemoryStore.delete(input.storagePath);
       return yield* this.getMemoryDataMessage();
     },
   );
@@ -91,13 +76,10 @@ export class SettingsMemoryController {
     storagePath: string,
     pinned: boolean,
   ) {
-    const resolvedPath = resolveMemoryStoragePath(storagePath);
-    const result = yield* setMemoryPinned(resolvedPath, pinned).pipe(
-      onMemoryTreeLane,
-    );
+    const result = yield* MemoryStore.pin(storagePath, pinned);
     if (result.status === 'cap-reached') {
       yield* this.deps.prompt.warning(
-        `Cannot pin: maximum of ${MAX_PINNED_MEMORIES} pinned memories reached. Unpin an existing memory first.`,
+        `Cannot pin: maximum of ${result.max} pinned memories reached. Unpin an existing memory first.`,
       );
       return null;
     }

@@ -1,9 +1,7 @@
 // Node imports
 import { realpathSync } from 'node:fs';
-import { basename, join, posix } from 'node:path';
+import { basename, join } from 'node:path';
 
-import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
-import { normalizeFilePath } from '@utils/core';
 import { truncatedHexId } from '@utils/core/idHash';
 import { sanitizePathSegment } from '@utils/text/sanitizePathSegment';
 
@@ -82,17 +80,4 @@ export function resolveWorkspaceStoragePath(
     STORAGE_LAYOUT.workspace,
     workspaceStorageId(workspacePath),
   );
-}
-
-export function resolveMemoryStoragePath(
-  storagePath: string = WORKSPACE_STORAGE_LAYOUT.memory,
-): string {
-  const normalized = posix.normalize(normalizeFilePath(storagePath));
-  if (
-    normalized !== WORKSPACE_STORAGE_LAYOUT.memory &&
-    !normalized.startsWith(`${WORKSPACE_STORAGE_LAYOUT.memory}/`)
-  ) {
-    throw new Error(`Invalid memory path: ${storagePath}`);
-  }
-  return normalized;
 }

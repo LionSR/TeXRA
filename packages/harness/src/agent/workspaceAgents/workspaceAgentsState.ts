@@ -27,8 +27,8 @@ import {
   HiddenCustomAgentKeysSchema,
   INHERITED_WORKSPACE_AGENTS,
 } from '@shared/schemas';
-import { readState } from '@shared/config/settingsAccess';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
+import { Settings } from '@shared/config/settings';
 import { withPerKeyLane, type PerKeyLane } from '@utils/core/perKeyQueue';
 
 /**
@@ -56,7 +56,7 @@ export function serializeWorkspaceWrite<A, E>(
  * every durable write.
  */
 export function readWorkspaceAgentsSelection(repoState: StateStore) {
-  return readState(
+  return Settings.state(
     repoState,
     WorkspaceStateKey.WORKSPACE_AGENTS,
     WorkspaceAgentsSelectionSchema.prefault(INHERITED_WORKSPACE_AGENTS),
@@ -74,7 +74,7 @@ function readHidden(
   repoState: StateStore,
 ): Effect.Effect<Set<string>, StateReadFailed> {
   return Effect.map(
-    readState(
+    Settings.state(
       repoState,
       WorkspaceStateKey.HIDDEN_CUSTOM_AGENTS,
       HiddenCustomAgentKeysSchema.prefault([]),

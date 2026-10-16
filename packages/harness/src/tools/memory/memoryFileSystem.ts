@@ -30,10 +30,10 @@ import { StorageFs } from '@platform/rootedFs';
 import type { MemoryViewItem } from '@shared/tools/memoryView';
 import {
   MAX_PINNED_MEMORIES,
-  MAX_PREVIEW_LINES,
   MAX_PREVIEW_CHARS,
-} from '@tools/memory/constants';
-import { relativeToDisplayPath } from '@tools/memory/memoryUtils';
+  MAX_PREVIEW_LINES,
+  relativeToDisplayPath,
+} from '@tools/memory/memoryUtils';
 import {
   buildFile,
   parseFrontmatter,

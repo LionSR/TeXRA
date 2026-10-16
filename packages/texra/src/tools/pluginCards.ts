@@ -7,10 +7,7 @@
  */
 
 // Local imports
-import type {
-  PluginSettingRow,
-  SettingHost,
-} from '@shared/state/stateSettings';
+import type { PluginSettingRow } from '@texra/shared/settingsView/settingRows';
 import type { ToolCategory } from '@texra/shared/tools/toolPlugin';
 import {
   CLAUDE_AGENT_SETTINGS,
@@ -23,6 +20,7 @@ import {
 } from '@texra/tools/github/prSubscriptionConstants';
 import { LEAN4_EXTENSION_ID } from '@texra/tools/lean/leanTypes';
 import { preferredInstallCommand } from '@texra/tools/availabilityProbes';
+import type { SettingHost } from '@texra-ai/harness';
 
 /** How a user gets a probed plugin's dependency installed and signed in. */
 export interface ToolPluginSetup {

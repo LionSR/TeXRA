@@ -3,6 +3,7 @@ import * as path from 'node:path';
 
 // Third-party imports
 import { Effect, FileSystem } from 'effect';
+import { z } from 'zod';
 
 // Local imports
 import { CUSTOM_AGENTS_STORAGE_DIR } from '@common/storage/storageLayout';
@@ -15,7 +16,8 @@ import {
   type StateStore,
 } from '@platform/interfaces';
 import { GlobalStorageFs } from '@platform/rootedFs';
-import { readCustomAgentDir } from '@shared/config/settingsAccess';
+import { Settings } from '@shared/config/settings';
+import { GlobalStateKey } from '@shared/state/stateKeys';
 import type { AgentSource } from '@shared/schemas';
 import { entryExists } from '@utils/files/fsEntryExists';
 
@@ -25,6 +27,19 @@ import {
 } from './BundledAgentDirectories';
 
 type AgentDirectoryDocsId = 'custom-agents';
+
+/**
+ * The custom agent directory the user configured, trimmed; empty when none is
+ * (the host then uses its default directory).
+ */
+export const readCustomAgentDir = (
+  state: Pick<StateStore, 'get'>,
+): Effect.Effect<string, StateReadFailed> =>
+  Settings.state(
+    state,
+    GlobalStateKey.CUSTOM_AGENT_DIR,
+    z.string().trim().prefault(''),
+  );
 
 interface AgentDirectoryIssueReporter {
   report(message: string, docsId: AgentDirectoryDocsId): Effect.Effect<void>;
