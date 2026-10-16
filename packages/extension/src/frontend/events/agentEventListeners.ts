@@ -19,11 +19,11 @@ import {
   type RuntimePresentationEvent,
   type RuntimePresentationEventPayloads,
 } from '@texra-ai/harness';
+import {
+  type HostInteractions,
+  type PresentationEventHandlers,
+} from '@texra-ai/harness';
 import { withLogChannel } from '@texra-ai/harness';
-import type {
-  HostInteractions,
-  PresentationEventHandlers,
-} from '@agent/runtime';
 import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
 import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';
 import { safeExecuteCommand } from '@frontend/system/commandUtils';

@@ -19,13 +19,13 @@ import {
   LanguageModel,
   withProcessServices,
 } from '@texra-ai/harness';
-import { AgentCatalog, withLogChannel } from '@texra-ai/harness';
 import { GlobalStateKey } from '@texra-ai/harness/schemas';
 import {
   SessionHostInteractions,
   type HostInteractions,
-  type SessionHandle,
-} from '@agent/runtime';
+} from '@texra-ai/harness';
+import { AgentCatalog, withLogChannel } from '@texra-ai/harness';
+import { type SessionHandle } from '@agent/runtime';
 import { BundledViewContentProvider } from '@common/webview';
 import { emitAppSignal } from '@eventBus/AppSignals';
 import { subscribeAppSignal } from '@frontend/events/appSignalSubscriptions';
