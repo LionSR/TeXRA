@@ -32,7 +32,7 @@ import type {
 import { modelOptionsFrom } from '@texra/model/modelOptions';
 import { createTeamCatalogPorts } from '@texra/controllers/mainView/teamCatalogPorts';
 import { readRecentCommits } from '@texra/utils/git/repositoryOverview';
-import type { AgentCatalogServices } from '@texra-ai/harness';
+import type { AgentCatalog } from '@texra-ai/harness';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 import type { SettingsStores } from '@texra-ai/harness';
 
@@ -103,14 +103,14 @@ export interface HostSnapshotSource {
   readonly refresh: Effect.Effect<
     void,
     never,
-    AgentCatalogServices | LanguageModel | ChildProcessSpawner
+    AgentCatalog | FileSystem.FileSystem | LanguageModel | ChildProcessSpawner
   >;
   /** The agent, team, and model catalogs changed (an agent list edit, a
    *  credential, a sign-in). */
   readonly refreshCatalogs: Effect.Effect<
     void,
     never,
-    AgentCatalogServices | LanguageModel
+    AgentCatalog | LanguageModel
   >;
   /** The project's files changed on disk, or the surface asked for a relist. */
   readonly refreshFiles: Effect.Effect<void, never, FileSystem.FileSystem>;
@@ -280,11 +280,9 @@ export function createHostSnapshotSource(
 
   return {
     refresh: guarded<
-      AgentCatalogServices | LanguageModel | ChildProcessSpawner
+      AgentCatalog | FileSystem.FileSystem | LanguageModel | ChildProcessSpawner
     >(...catalogLoads, loadFiles, loadCommits, loadHostBanners),
-    refreshCatalogs: guarded<AgentCatalogServices | LanguageModel>(
-      ...catalogLoads,
-    ),
+    refreshCatalogs: guarded<AgentCatalog | LanguageModel>(...catalogLoads),
     refreshFiles: guarded(loadFiles),
     refreshCommits: guarded(loadCommits),
     refreshHostBanners: guarded(loadHostBanners),

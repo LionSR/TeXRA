@@ -39,7 +39,6 @@ import {
 import { acceptsFollowUp, isLiveRun } from '@texra-ai/harness/schemas';
 import { isTerminalOutcomePhase } from '@texra-ai/harness/schemas';
 import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';
-import { terminalFailurePresented } from '@agent/runtime';
 import { runOutcomeExitCode } from '@cli/runtime/terminalStatus';
 import { createCliRuntimeHost } from '@cli/runtime/cliPresentationHost';
 import {
@@ -432,10 +431,7 @@ export function createChatSessionController(
     // (e.g. the model-not-recognized instruction), or presented already (by
     // the service, to this chat) is marked -- skip the generic transcript
     // line so the TUI doesn't show the same failure twice.
-    if (
-      !hasErrorPresentationClaimed(error) &&
-      !terminalFailurePresented(error)
-    ) {
+    if (!hasErrorPresentationClaimed(error)) {
       appendLocalErrorTranscript(toErrorMessage(error));
     }
     // Another live process holds the run: it refused the claim, or took it

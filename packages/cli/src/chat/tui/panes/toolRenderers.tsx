@@ -20,6 +20,7 @@ import {
   type ToolSectionFile,
   type TranscriptText,
 } from '@texra-ai/harness/transcript';
+import { AGENT_TOOL_NAME } from '@texra-ai/harness/plugins';
 import { formatAgentProposalFileGroup } from '@cli/runtime/approval/approvalSummaries';
 import {
   safeTerminalText,
@@ -30,7 +31,6 @@ import { COLOR_ERROR, COLOR_HINT, COLOR_SUCCESS } from '@cli/tui/ui/colors';
 import { STATUS_DOT, TOOL_OUTPUT_CORNER } from '@cli/tui/ui/glyphs';
 import type { ToolRow } from '@cli/chat/tui/state/sessionView';
 import { TOOL_CALL_STATUS } from '@shared/schemas';
-import { AGENT_TOOL_NAME } from '@shared/constants/delegationTools';
 import { buildDiffHunks } from '@utils/text/unifiedDiff';
 import { truncateWithEllipsis } from '@utils/text/stringUtils';
 

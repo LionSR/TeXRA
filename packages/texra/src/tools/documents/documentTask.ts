@@ -14,13 +14,20 @@ import { agentBlockOf, errorResult } from '@texra-ai/harness/plugins';
 import { withLogChannel, hasExtension } from '@texra-ai/harness';
 import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';
 import {
-  computeAgentOptionsData,
-  getCatalogAgent,
+  AgentCatalog,
   type AgentEntry,
   type WorkspaceAgentsStores,
-} from '@agent/index';
+} from '@texra-ai/harness';
+import { AGENT_TOOL_NAME } from '@texra-ai/harness/plugins';
 import { buildTemplatePassthrough } from '@agent/prompt/templateInputs';
-import type { FileListEntry, ToolResult } from '@shared/schemas';
+import { PREFERRED_TOOL_USE_AGENTS } from '@shared/constants/agents';
+import {
+  agentKeyOf,
+  DEFAULT_WORKFLOW_AGENT,
+  type AgentOptionData,
+  type FileListEntry,
+  type ToolResult,
+} from '@shared/schemas';
 import {
   DOCUMENT_TASK_BLOCK,
   type DocumentAgentOption,
@@ -35,17 +42,41 @@ export const documentTaskOf = (
   entry: Pick<AgentEntry, 'blocks'>,
 ): DocumentTask | null => agentBlockOf(entry, DOCUMENT_TASK_BLOCK) ?? null;
 
+/** The agents a launcher lists first, in this order; the rest follow by
+ *  name. */
+const PREFERRED_AGENTS: readonly string[] = [
+  ...PREFERRED_TOOL_USE_AGENTS,
+  DEFAULT_WORKFLOW_AGENT,
+];
+const preferredRank = ({ name }: AgentEntry) => {
+  const rank = PREFERRED_AGENTS.indexOf(name);
+  return rank < 0 ? PREFERRED_AGENTS.length : rank;
+};
+
 /**
- * The agent options every launcher lists (`computeAgentOptionsData`), each
- * document task carrying its revision count (`rounds`).
+ * The agent options every launcher lists: the workspace's visible agents,
+ * the preferred ones first, each document task carrying its revision count
+ * (`rounds`).
  */
 export const agentOptionsData = (stores: WorkspaceAgentsStores) =>
-  Effect.map(computeAgentOptionsData(stores), (options) =>
-    options.map((option): DocumentAgentOption => {
-      const entry = getCatalogAgent(option.value);
-      const task = entry && documentTaskOf(entry);
-      return task ? { ...option, rounds: task.requests.length } : option;
-    }),
+  Effect.map(
+    Effect.flatMap(AgentCatalog, (catalog) => catalog.visible(stores)),
+    (entries) =>
+      entries
+        .toSorted(
+          (a, b) =>
+            preferredRank(a) - preferredRank(b) || a.name.localeCompare(b.name),
+        )
+        .map((entry): DocumentAgentOption => {
+          const option: AgentOptionData = {
+            value: agentKeyOf(entry),
+            label: entry.name,
+            isOrchestrator: entry.tools?.includes(AGENT_TOOL_NAME) === true,
+            source: entry.source,
+          };
+          const task = documentTaskOf(entry);
+          return task ? { ...option, rounds: task.requests.length } : option;
+        }),
   );
 
 /**

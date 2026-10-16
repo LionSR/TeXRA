@@ -10,7 +10,7 @@
 import { Cause, Effect, Queue, type Scope, Stream } from 'effect';
 
 import { withLogChannel } from '@texra-ai/harness';
-import type { HostInteractions } from '@agent/runtime/HostInteractions';
+import { type HostInteractions } from '@texra-ai/harness';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { ToolEditApprovalController } from '@texra/controllers/approval/ToolEditApprovalController';
 import type { ToolEditApprovalRequest } from '@tools/approval/toolEditApproval';

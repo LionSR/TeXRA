@@ -23,7 +23,7 @@ import { ModelError, ModelErrorFieldsSchema, type Model } from '@texra-ai/llm';
 
 import { withLogChannel } from '@texra-ai/harness';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
-import type { HostInteractions } from '@agent/runtime/HostInteractions';
+import { type HostInteractions } from '@texra-ai/harness';
 import { toJsonValue } from '@shared/schemas';
 import type { ToolEditApprovalController } from '@texra/controllers/approval/ToolEditApprovalController';
 import type { EditorCapabilities } from '@texra/tools/editorHost';

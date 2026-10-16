@@ -5,8 +5,8 @@ import {
   APPROVAL_POLICY_CONFIG_KEY,
   type ApprovalPolicy,
 } from '@texra-ai/harness/schemas';
+import { AgentCatalog } from '@texra-ai/harness';
 import { Settings } from '@texra-ai/harness';
-import { getCatalogAgent } from '@agent/index';
 import {
   canLaunchTeam,
   planTeamRun,
@@ -80,7 +80,7 @@ const loadTeamRunPlan = Effect.fn('loadTeamRunPlan')(function* (
   );
   if (!team) return yield* failUsage(missingTeamMessage(init.team));
   return planTeamRun(team, {
-    resolveAgent: getCatalogAgent,
+    resolveAgent: (yield* AgentCatalog).get,
     agentOverride: init.agent,
   });
 });
@@ -107,7 +107,7 @@ const runTeamList = Effect.fn('runTeamList')(function* (
   services: CliPlatformServices,
 ) {
   const plans = planTeamRuns(yield* readCliTeams(services.repoState), {
-    resolveAgent: getCatalogAgent,
+    resolveAgent: (yield* AgentCatalog).get,
   });
 
   emitCliResult(context, {

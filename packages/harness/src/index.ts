@@ -64,6 +64,39 @@ export {
   type ProcessServices,
 } from '@platform/processRuntime';
 
+// The process's agent catalog: its reads, launch resolution and custom
+// copies, the workspace's agent selection over it, and the agent
+// directories a host serves it (bundled agents under its packaged
+// resources' `BUNDLED_AGENTS_DIRECTORY`).
+export {
+  AgentCatalog,
+  AgentCatalogLoadError,
+  AgentNotFound,
+  type AgentCatalogShape,
+  type WorkspaceAgentsStores,
+} from '@agent/index/agentCatalog';
+export type { AgentEntry } from '@agent/index/agentEntry';
+export {
+  InvalidAgentTeamError,
+  type WorkspaceAgentsController,
+  type WorkspaceAgentsControllerDeps,
+  type WorkspaceAgentsEntry,
+} from '@agent/workspaceAgents/WorkspaceAgentsController';
+export type { TeamPreset } from '@common/teams/TeamPresets';
+export type { TeamCatalogAgent, TeamRunPlan } from '@common/teams/TeamPlan';
+export type {
+  AgentDelegationScope,
+  AgentModePreset,
+  AgentScanIssue,
+} from '@shared/schemas';
+export {
+  AgentCustomizeRefused,
+  AgentDirectoryService,
+  readCustomAgentDir,
+  type AgentCustomization,
+  type AgentDirectoryServiceOptions,
+} from '@agent/index/AgentDirectoryService';
+export { BUNDLED_AGENTS_DIRECTORY } from '@agent/index/BundledAgentDirectories';
 // The process's stores: the global root's current values, each family a
 // host or plugin declares (`ValueFamily`), the per-project settings stores,
 // and storage maintenance under a storage root.
@@ -82,7 +115,6 @@ export {
 
 // The failures the surface names.
 export {
-  AgentNotFound,
   PluginsRefused,
   ResumeRefused,
   RunFailure,
@@ -102,7 +134,20 @@ export {
   describeFollowUpFailure,
   presentFollowUpResult,
 } from '@agent/followUp/ToolUseFollowUp';
-export { hasErrorPresentationClaimed } from '@common/errors/sdkError/errorMetadata';
+export {
+  attachErrorPresentationClaimed,
+  hasErrorPresentationClaimed,
+} from '@common/errors/sdkError/errorMetadata';
+// A host's presentation surface: what a session presents through, the
+// `SessionHostInteractions` a host with no session of its own presents
+// through, a host's emit handlers (one per presentation event), and a failed
+// run's presentation, which marks it presented.
+export {
+  SessionHostInteractions,
+  type HostInteractions,
+} from '@agent/runtime/HostInteractions';
+export type { PresentationEventHandlers } from '@agent/runtime/runtimePresentationEvents';
+export { presentRunFailure } from '@agent/runtime/terminalResultToast';
 export { escapeText } from '@shared/utils/xmlEscape';
 
 // The payloads, as the runtime defines them.

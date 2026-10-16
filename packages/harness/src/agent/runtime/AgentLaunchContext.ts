@@ -3,13 +3,7 @@ import { ZodError } from 'zod';
 import { ModelProvider, type ModelConfig } from 'llm-zoo';
 
 import { selectModel } from '@texra-ai/llm';
-import {
-  getCatalogLoadFailure,
-  getCustomAgentScanIssues,
-  refresh,
-  resolveAgentForLaunch,
-  settledCatalog,
-} from '@agent/index/agentRegistry';
+import { AgentCatalog } from '@agent/index/agentCatalog';
 import { agentEntryOf } from '@agent/index/agentYamlScanner';
 import { requirePluginAgentLoads } from '@agent/index/pluginAgents';
 import {
@@ -172,23 +166,6 @@ function beginRunStage(
   return agentLogger.openStage(label, { kind: 'run' });
 }
 
-/** A launch that misses names why: the catalog did not load, or the files the
- *  scan skipped (a custom agent it rejects is unlisted) and their reasons. */
-const missNote = () => {
-  const failure = getCatalogLoadFailure();
-  const issues = getCustomAgentScanIssues();
-  return (
-    (failure === undefined
-      ? ''
-      : `. The agent catalog did not load: ${failure}`) +
-    (issues.length === 0
-      ? ''
-      : `. Custom agent files that failed to load:${issues
-          .map((issue) => `\n  ${issue.path}: ${issue.message}`)
-          .join('')}`)
-  );
-};
-
 export const prepareAgentDefinition = Effect.fn('prepareAgentDefinition')(
   function* (input: {
     config: AgentConfig;
@@ -197,27 +174,27 @@ export const prepareAgentDefinition = Effect.fn('prepareAgentDefinition')(
   }) {
     const fullConfig = input.config;
     const interactions = input.session.interactions;
-    // One resolution rule (resolveAgentForLaunch), over a settled catalog;
-    // a miss rescans.
-    const resolve = resolveAgentForLaunch(
-      input.session.roots,
-      fullConfig.agent,
-      fullConfig.agentSource,
-    );
-    // A persona the config carries (its schema admitted it) is the agent.
+    // A persona the config carries (its schema admitted it) is the agent;
+    // a named one resolves over a settled catalog, and a miss says why.
     const agentEntry =
       fullConfig.persona != null
         ? agentEntryOf(fullConfig.persona, { source: 'inline', path: '' })
-        : ((yield* Effect.andThen(settledCatalog, resolve)) ??
-          (yield* Effect.andThen(refresh(), resolve)) ??
-          (yield* presentLaunchError(
-            interactions,
-            new AgentError(
-              `Could not find agent: ${fullConfig.agent}${missNote()}`,
-            ),
-            'showAgentConfigBanner',
-            { agentName: fullConfig.agent },
-          )));
+        : yield* (yield* AgentCatalog)
+            .forLaunch(
+              input.session.roots,
+              fullConfig.agent,
+              fullConfig.agentSource,
+            )
+            .pipe(
+              Effect.catchTag('AgentNotFound', (missed) =>
+                presentLaunchError(
+                  interactions,
+                  new AgentError(missed.message),
+                  'showAgentConfigBanner',
+                  { agentName: fullConfig.agent },
+                ),
+              ),
+            );
     if (agentEntry.source === 'plugin')
       yield* requirePluginAgentLoads(
         agentEntry,

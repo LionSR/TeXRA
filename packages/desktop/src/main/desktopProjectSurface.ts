@@ -78,22 +78,23 @@ export const openProjectSurface = Effect.fn('desktop.openProjectSurface')(
       const { dialogs, previewHost } = host;
       const postForActiveProject = (message: unknown) =>
         surfaceScope === owner && host.post(message);
-      const openAgentDocument = (filePath: string) =>
-        Effect.gen(function* () {
-          const target = agentDocumentForPath(filePath);
-          if (!target)
-            return yield* Effect.fail(
-              new AgentDocumentUnavailable({
-                message:
-                  'This agent definition is no longer in the catalog. Refresh Settings and try again.',
-              }),
-            );
-          postForActiveProject({
-            command: DESKTOP_WORKSPACE_COMMANDS.OPEN_DOCUMENT,
-            session: project.key,
-            target,
-          });
-        });
+      /** Open the agent definition at `filePath` as a document, or, when
+       *  the catalog holds none there, run `otherwise`. */
+      const openAgentDocument = <E, R>(
+        filePath: string,
+        otherwise: Effect.Effect<void, E, R>,
+      ) =>
+        Effect.flatMap(agentDocumentForPath(filePath), (target) =>
+          target
+            ? Effect.sync(() => {
+                postForActiveProject({
+                  command: DESKTOP_WORKSPACE_COMMANDS.OPEN_DOCUMENT,
+                  session: project.key,
+                  target,
+                });
+              })
+            : otherwise,
+        );
       return {
         post: (message) =>
           Effect.flatMap(message, (built) =>
@@ -134,12 +135,19 @@ export const openProjectSurface = Effect.fn('desktop.openProjectSurface')(
           openExternal: (url) => host.openExternalProgram(url, false),
         },
         openPath: (filePath) =>
-          agentDocumentForPath(filePath)
-            ? openAgentDocument(filePath)
-            : previewHost.openPath(filePath),
+          openAgentDocument(filePath, previewHost.openPath(filePath)),
         revealPath: (filePath) =>
           Effect.sync(() => shell.showItemInFolder(filePath)),
-        showReadOnlyYaml: (filePath) => openAgentDocument(filePath),
+        showReadOnlyYaml: (filePath) =>
+          openAgentDocument(
+            filePath,
+            Effect.fail(
+              new AgentDocumentUnavailable({
+                message:
+                  'This agent definition is no longer in the catalog. Refresh Settings and try again.',
+              }),
+            ),
+          ),
         pickFolder: (title) =>
           host.pickFolder(
             title,

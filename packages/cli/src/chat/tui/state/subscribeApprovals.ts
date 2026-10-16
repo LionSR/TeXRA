@@ -22,7 +22,7 @@ import {
 } from '@texra-ai/llm';
 import { withLogChannel } from '@texra-ai/harness';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
-import type { HostInteractions } from '@agent/runtime';
+import { type HostInteractions } from '@texra-ai/harness';
 import { warnApprovalDenied } from '@cli/runtime/approval/approvalPrompts';
 import { promptForCliProviderApiKey } from '@cli/chat/tui/hosts/cliProviderKeys';
 import type { CliContext } from '@cli/runtime/cliContext';

@@ -1,20 +1,21 @@
 // Standard library imports
 import * as path from 'node:path';
-import { isStrictlyWithin } from '@texra-ai/harness';
 
 // Third-party imports
 import { Effect, FileSystem } from 'effect';
 
 // Local imports - controllers
-import { customCopyPath, writeStampedCopy } from '@agent/index/customAgentCopy';
 // Local imports - shared
-import { isPackagedAgentSource, type AgentSource } from '@shared/schemas';
+import {
+  AgentCatalog,
+  isStrictlyWithin,
+  type ProcessServices,
+} from '@texra-ai/harness';
+import { agentKey, isPackagedAgentSource } from '@shared/schemas';
 import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 import type { MessageHost } from '@texra/hosts/uiHosts';
 import { type SettingsMessageFor } from '@texra/shared/settingsView/settingsViewMessages';
 // Local imports - utilities
-import { entryExists } from '@utils/files/fsEntryExists';
-import type { ProcessServices } from '@texra-ai/harness';
 
 /**
  * One step of a settings agent action: the host's own failure, on the process
@@ -44,15 +45,7 @@ interface AgentFileHandlers {
 }
 
 interface SettingsAgentActionsOptions {
-  readonly findAgent: (
-    source: AgentSource,
-    name: string,
-  ) => { path?: string; digest?: string } | undefined;
   readonly getCustomAgentDirectory: () => SettingsActionEffect<string>;
-  /** The directories a source's agents live under (`agentSourceRoots`). */
-  readonly getSourceRoots: (
-    source: AgentSource,
-  ) => SettingsActionEffect<readonly string[]>;
   readonly openDocument: (filePath: string) => SettingsActionEffect<void>;
   /**
    * Show a file the user must not edit in place. Hosts present it however
@@ -103,7 +96,9 @@ export function createSettingsAgentActions(
   return {
     openAgentYaml: (message) =>
       Effect.gen(function* () {
-        const entry = options.findAgent(message.agentSource, message.agentName);
+        const entry = (yield* AgentCatalog).get(
+          agentKey(message.agentSource, message.agentName),
+        );
         if (!entry?.path) {
           yield* options.showErrorMessage(
             openAgentYamlErrorMessage(
@@ -124,7 +119,9 @@ export function createSettingsAgentActions(
 
     revealAgentFile: (message) =>
       Effect.gen(function* () {
-        const entry = options.findAgent(message.agentSource, message.agentName);
+        const entry = (yield* AgentCatalog).get(
+          agentKey(message.agentSource, message.agentName),
+        );
         if (!entry?.path) {
           yield* options.showErrorMessage(
             `Agent not found or has no file: ${message.agentName}`,
@@ -142,7 +139,9 @@ export function createSettingsAgentActions(
           );
           return;
         }
-        const entry = options.findAgent(message.agentSource, message.agentName);
+        const entry = (yield* AgentCatalog).get(
+          agentKey(message.agentSource, message.agentName),
+        );
         if (!entry?.path || entry.digest == null) {
           yield* options.showErrorMessage(
             `Agent not found or has no file: ${message.agentName}`,
@@ -150,38 +149,31 @@ export function createSettingsAgentActions(
           return;
         }
 
-        // Both directory reads start together, as the `Promise.all` they
-        // replace did.
-        const [customDir, sourceRoots] = yield* Effect.all(
-          [
-            options.getCustomAgentDirectory(),
-            options.getSourceRoots(message.agentSource),
-          ],
-          { concurrency: 'unbounded' },
-        );
-        const targetPath = customCopyPath({
-          entryPath: entry.path,
-          sourceRoots,
-          customDir,
-        });
-        if (!targetPath) {
-          yield* options.showErrorMessage(
-            'Refusing to copy: target path escapes the custom agents directory.',
+        // A copy already there is replaced only on the user's say-so.
+        const catalog = yield* AgentCatalog;
+        const targetPath = yield* catalog
+          .customize(entry, 'copy')
+          .pipe(
+            Effect.catchTag('AgentCustomizeRefused', (refused) =>
+              refused.reason === 'exists' && refused.path !== undefined
+                ? Effect.flatMap(
+                    options.confirmAction(
+                      `A custom copy already exists: ${path.basename(refused.path)}`,
+                      'Overwrite',
+                    ),
+                    (overwrite) =>
+                      overwrite
+                        ? catalog.customize(entry, 'overwrite')
+                        : Effect.succeed(undefined),
+                  )
+                : Effect.as(
+                    options.showErrorMessage(refused.message),
+                    undefined,
+                  ),
+            ),
           );
-          return;
-        }
+        if (targetPath === undefined) return;
 
-        const fs = yield* FileSystem.FileSystem;
-        const targetExists = yield* entryExists(fs, targetPath);
-        if (targetExists) {
-          const overwrite = yield* options.confirmAction(
-            `A custom copy already exists: ${path.basename(targetPath)}`,
-            'Overwrite',
-          );
-          if (!overwrite) return;
-        }
-
-        yield* writeStampedCopy(entry.path, targetPath, entry.digest);
         yield* options.refreshAfterMutation();
         yield* options.openDocument(targetPath);
         yield* options.showInfoMessage(
@@ -194,9 +186,8 @@ export function createSettingsAgentActions(
         if (activeDeletions.has(message.agentName)) return Effect.void;
         activeDeletions.add(message.agentName);
         return Effect.gen(function* () {
-          const entryPath = options.findAgent(
-            'custom',
-            message.agentName,
+          const entryPath = (yield* AgentCatalog).get(
+            agentKey('custom', message.agentName),
           )?.path;
           if (!entryPath) {
             yield* options.showErrorMessage(
