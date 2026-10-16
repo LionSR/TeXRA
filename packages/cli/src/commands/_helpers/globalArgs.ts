@@ -1,10 +1,10 @@
 import { Skills } from '@texra-ai/harness';
+import {
+  APPROVAL_POLICIES,
+  type ApprovalPolicy,
+} from '@texra-ai/harness/schemas';
 import { CliUsageError, type CliGlobalArgs } from '@cli/runtime/cliContext';
 import { documentsNegatedBooleanForm } from '@cli/runtime/completionCommandTree';
-import {
-  TEXRA_APPROVAL_POLICIES,
-  type TexraApprovalPolicy,
-} from '@shared/approvalPolicy';
 import {
   CLI_OUTPUT_FORMATS,
   type CliOutputFormat,
@@ -32,7 +32,7 @@ type CliGlobalArgsDef = {
   };
   'approval-policy': {
     type: 'enum';
-    options: TexraApprovalPolicy[];
+    options: ApprovalPolicy[];
     description: string;
   };
   // Positively-named boolean defaulting to `true`: citty parses `--no-color`
@@ -93,7 +93,7 @@ export const GLOBAL_ARGS: CliGlobalArgsDef = {
   },
   'approval-policy': {
     type: 'enum',
-    options: [...TEXRA_APPROVAL_POLICIES],
+    options: [...APPROVAL_POLICIES],
     description:
       'Privileged tool actions: never (deny all), ask (prompt; default), or yolo (auto-approve)',
   },

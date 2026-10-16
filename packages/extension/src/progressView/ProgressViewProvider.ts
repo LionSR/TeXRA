@@ -19,6 +19,7 @@ import {
   LanguageModel,
   withProcessServices,
 } from '@texra-ai/harness';
+import { toErrorMessage } from '@texra-ai/harness/schemas';
 import { GlobalStateKey } from '@texra-ai/harness/schemas';
 import {
   SessionHostInteractions,
@@ -85,7 +86,6 @@ import {
 import { workspaceFileOptions } from '@texra/controllers/session/workspaceFileOptions';
 import { hasUsableSetupCredential } from '@texra/model/setupCredentialAccess';
 import { checkCoreDependencies } from '@texra/utils/system/checkCoreDependencies';
-import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { createExtensionHostRequests } from './extensionHostRequests';
 import { RequestAttention } from './requestAttention';

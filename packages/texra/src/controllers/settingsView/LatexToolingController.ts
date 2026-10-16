@@ -2,6 +2,7 @@ import { Cause, Effect } from 'effect';
 
 // Local imports - shared constants
 import { withLogChannel } from '@texra-ai/harness';
+import { toErrorMessage } from '@texra-ai/harness/schemas';
 import {
   DEFAULT_LATEX_SETTINGS_STATUS,
   type LatexSettingsStatus,
@@ -20,7 +21,6 @@ import {
   checkToolInstalled,
   detectPackageManager,
 } from '@texra/utils/system/toolChecks';
-import { toErrorMessage } from '@utils/errors/errorMessage';
 import { findToolInCommonPaths } from '@utils/system/binaryResolver';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 

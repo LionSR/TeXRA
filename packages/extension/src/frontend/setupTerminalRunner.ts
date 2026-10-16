@@ -21,6 +21,7 @@ import stripAnsi from 'strip-ansi';
 import * as vscode from 'vscode';
 
 // Local imports - common
+import { ensureError } from '@texra-ai/harness/schemas';
 import { TERMINAL_OUTPUT_MAX_CHARS } from '@texra/common/terminalOutput';
 // Local imports - hosts
 import {
@@ -28,7 +29,6 @@ import {
   type TerminalRunRequest,
   type TerminalRunResult,
 } from '@texra/hosts/uiHosts';
-import { ensureError } from '@utils/errors/errorMessage';
 
 import { firstEventOrTimeout } from './vscode/vscodeEventWait';
 

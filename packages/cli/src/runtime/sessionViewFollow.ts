@@ -5,7 +5,7 @@
  * (`scriptPlainOutput.ts`), which are otherwise separate renderers.
  */
 import type { SessionHandle } from '@agent/runtime';
-import type { SessionView } from '@shared/session/sessionView';
+import type { SessionView } from '@texra-ai/harness/schemas';
 import type { RunId } from '@texra-ai/harness/schemas';
 
 /** What a headless renderer reads of a session: its view. */

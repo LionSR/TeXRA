@@ -11,10 +11,10 @@ import {
 
 import { type ProcessRuntime, withProcessServices } from '@texra-ai/harness';
 import { withSessionFs } from '@texra-ai/harness';
+import { toErrorMessage } from '@texra-ai/harness/schemas';
 import { isLatexFile } from '@texra/shared/latexFileTypes';
 import { ExternalOpenFailed, type MessageHost } from '@texra/hosts/uiHosts';
 import type { BuildDisplayFn } from '@texra/tools/latex/latexPreview';
-import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import {
   DESKTOP_PDF_COMMANDS,

@@ -11,6 +11,8 @@ import { Cause, Effect, Exit, Fiber } from 'effect';
 import { ModelError, completedTurn } from '@texra-ai/llm';
 
 import { Skills, hasExtension, withLogChannel } from '@texra-ai/harness';
+import { APPROVAL_POLICY_CONFIG_KEY } from '@texra-ai/harness/schemas';
+import { ensureError } from '@texra-ai/harness/schemas';
 import { emitAppSignal } from '@eventBus/AppSignals';
 import { subscribeAppSignal } from '@frontend/events/appSignalSubscriptions';
 import { VscodeExternalOpener } from '@frontend/hosts/VscodeExternalOpener';
@@ -29,7 +31,6 @@ import {
   setCopilotRoutePreference,
 } from '@model/copilotRouting';
 import type { ProgressViewProvider } from '@progressView/ProgressViewProvider';
-import { TEXRA_APPROVAL_POLICY_CONFIG_KEY } from '@shared/approvalPolicy';
 import { ACCOUNT_OUTCOME } from '@shared/model/accountAuth';
 import { TexraStateKey } from '@texra/shared/settingsView/texraSettings';
 import {
@@ -40,7 +41,6 @@ import { createSettingsViewBody } from '@texra/controllers/settingsView/sharedSe
 import type { SettingsViewInboundHandlerRegistry } from '@texra/controllers/settingsView/settingsViewDispatch';
 import type { SubscriptionProviderId } from '@texra/controllers/modelAccess/subscriptionProviders';
 import { allSettledVoid } from '@texra/utils/core/allSettledVoid';
-import { ensureError } from '@utils/errors/errorMessage';
 import { normalizeLineEndings } from '@utils/text/stringUtils';
 import {
   latexEditorStatus,
@@ -177,7 +177,7 @@ export class SettingsViewMessageHandler {
           if (key === TexraStateKey.INLINE_CRITICISM_ENABLED) {
             return syncInlineCriticism();
           }
-          if (key !== TEXRA_APPROVAL_POLICY_CONFIG_KEY) return Effect.void;
+          if (key !== APPROVAL_POLICY_CONFIG_KEY) return Effect.void;
           return Effect.sync(() =>
             emitAppSignal('approvalPolicyChanged', undefined),
           );

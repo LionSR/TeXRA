@@ -1,20 +1,18 @@
 import { Text } from 'ink';
 
 import type { SelectItem } from '@cli/tui/ui/Select';
-import type { ApprovalBypassKind } from '@shared/approvalBypassKind';
-import {
-  TEXRA_APPROVAL_POLICY_OPTIONS,
-  type TexraApprovalPolicy,
-} from '@shared/approvalPolicy';
+import { APPROVAL_POLICY_OPTIONS } from '@ui/copy/approvalPolicy';
 import { RUN_GRANT_COPY } from '@ui/copy/delegationApproval';
 
 import { ListForm } from './_shared/ListForm';
+import type { ApprovalPolicy } from '@texra-ai/harness/schemas';
+import type { ApprovalBypassKind } from '@texra-ai/harness/schemas';
 
 /** A policy, or a grant of the focused task to revoke. */
-export type ApprovalFormValue = TexraApprovalPolicy | ApprovalBypassKind;
+export type ApprovalFormValue = ApprovalPolicy | ApprovalBypassKind;
 
 interface ApprovalPolicyFormProps {
-  readonly currentPolicy: TexraApprovalPolicy;
+  readonly currentPolicy: ApprovalPolicy;
   /** The focused task's grants that are on, each offered for revoking;
    *  granting is the card's `a`. */
   readonly grants: readonly ApprovalBypassKind[];
@@ -31,7 +29,7 @@ export function ApprovalPolicyForm(
   props: ApprovalPolicyFormProps,
 ): React.JSX.Element {
   const items: ReadonlyArray<SelectItem<ApprovalFormValue>> = [
-    ...TEXRA_APPROVAL_POLICY_OPTIONS,
+    ...APPROVAL_POLICY_OPTIONS,
     ...props.grants.map((kind) => ({
       value: kind,
       label: RUN_GRANT_COPY.revoke(kind),

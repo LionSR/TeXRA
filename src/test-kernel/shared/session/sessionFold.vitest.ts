@@ -386,7 +386,7 @@ describe('sessionFold', () => {
     const pending = foldAll([...scenario.pending, alive]);
     const rootPending = runView(pending, ROOT);
     expect(rootPending.status).toBe(RUN_PHASE.RUNNING);
-    expect(rootPending.statusLabel).toBe('Running');
+    expect(rootPending.statusKey).toBe('running');
     expect(rootPending.tone).toBe('running');
     expect(rootPending.rollup).toStrictEqual({
       total: 2,
@@ -407,7 +407,7 @@ describe('sessionFold', () => {
     const settled = foldAll(scenario.events);
     const root = runView(settled, ROOT);
     expect(root.status).toBe(RUN_PHASE.COMPLETED);
-    expect(root.statusLabel).toBe('Completed');
+    expect(root.statusKey).toBe('completed');
     expect(root.tone).toBe('success');
     expect(root.group).toBe('recent');
     expect(root.forceExpanded).toBe(false);
@@ -452,7 +452,7 @@ describe('sessionFold', () => {
     expect(runView(withOwner, CHILD).approval).toBe('own');
     expect(runView(withOwner, CHILD).forceExpanded).toBe(true);
     expect(runView(withOwner, CHILD).readOnly).toBe(false);
-    expect(runView(withOwner, CHILD).statusLabel).toBe('Waiting on you');
+    expect(runView(withOwner, CHILD).statusKey).toBe('waitingOnUser');
     expect(runView(withOwner, CHILD).tone).toBe('warning');
     expect(runView(withOwner, CHILD).statusDetail).toBeNull();
     expect(runView(withOwner, ROOT).approval).toBe('descendant');
@@ -470,7 +470,7 @@ describe('sessionFold', () => {
     expect(child.group).toBe('interrupted');
     expect(child.approval).toBe('none');
     expect(child.status).toBe(RUN_PHASE.RUNNING);
-    expect(child.statusLabel).toBe('Interrupted');
+    expect(child.statusKey).toBe('interrupted');
     expect(child.tone).toBe('warning');
     expect(child.statusDetail).toMatch(/resume/i);
     expect(child.readOnly).toBe(false);

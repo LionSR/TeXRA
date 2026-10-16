@@ -1,5 +1,6 @@
 import { Effect } from 'effect';
 
+import { toErrorMessage } from '@texra-ai/harness/schemas';
 import { bumpCodexPreferenceVersion } from '@cli/chat/tui/state/cliState';
 import { setCliSubscriptionPreference } from '@cli/chat/tui/state/subscriptionPreference';
 import {
@@ -24,7 +25,6 @@ import {
   SUBSCRIPTION_AUTH_COPY,
 } from '@shared/model/accountAuth';
 import type { SubscriptionProviderId } from '@texra/controllers/modelAccess/subscriptionProviders';
-import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import {
   type SlashCommandOutput,

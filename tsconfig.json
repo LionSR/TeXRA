@@ -16,6 +16,9 @@
       "@texra-ai/harness/node": ["./packages/harness/src/node.ts"],
       "@texra-ai/harness/plugins": ["./packages/harness/src/plugins.ts"],
       "@texra-ai/harness/schemas": ["./packages/harness/src/schemas.ts"],
+      "@texra-ai/harness/transcript": [
+        "./packages/harness/src/transcriptEntry.ts"
+      ],
       "@texra-ai/harness": ["./packages/harness/src/index.ts"],
       "@shared/*": [
         "./packages/harness/src/shared/*",

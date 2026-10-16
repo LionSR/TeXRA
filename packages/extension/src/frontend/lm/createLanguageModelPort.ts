@@ -10,7 +10,7 @@ import {
   type LanguageModelPort,
 } from '@texra-ai/harness';
 import { withLogChannel } from '@texra-ai/harness';
-import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
+import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';
 import { acquireVscodeLanguageModel } from './acquireVscodeLanguageModel';
 
 const CHANNEL = 'LanguageModelPort';

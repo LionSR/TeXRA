@@ -19,13 +19,10 @@ import {
   withLogChannel,
   type UsageLogEntry,
 } from '@texra-ai/harness';
+import { extractErrorMessage, toErrorMessage } from '@texra-ai/harness/schemas';
 import { readOrCreateInstallId } from '@telemetry/installId';
 import { TELEMETRY_ENABLED_KEY } from '@texra/shared/settingsView/texraSettings';
 import { unrefSleepClock } from '@texra/utils/system/unrefSleepClock';
-import {
-  extractErrorMessage,
-  toErrorMessage,
-} from '@utils/errors/errorMessage';
 import { isEnvFlagEnabled } from '@utils/system/envFlags';
 import type { AppState, ConfigProvider } from '@texra-ai/harness';
 

@@ -6,11 +6,11 @@ import {
   type RunEndResult,
   type SettingsStores,
 } from '@texra-ai/harness';
+import { toErrorMessage } from '@texra-ai/harness/schemas';
 import { getRunRecords } from '@agent/storage';
 import type { SessionHandle } from '@agent/runtime';
+import { runOutcomeToCliRunStatus } from '@cli/schemas/cliOutput';
 import { RUN_OUTCOME, type RunOutcome } from '@shared/schemas';
-import { runOutcomeToCliRunStatus } from '@shared/runs/runStatus';
-import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { CliExitCode } from './exitCodes';
 import type { CliPluginPin } from '../schemas/cliOutput';

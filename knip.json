@@ -24,6 +24,7 @@
         "src/node.ts!",
         "src/plugins.ts!",
         "src/schemas.ts!",
+        "src/transcriptEntry.ts!",
         "src/agent/codeSandbox/worker.ts!",
         "scripts/*.mjs!"
       ],

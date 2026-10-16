@@ -54,7 +54,7 @@ import { TuiSession } from '@cli/chat/tui/state/sessionRunState';
 import type { TranscriptRow } from '@cli/chat/tui/state/sessionView';
 import * as subscriptionAccess from '@model/subscriptionAccess';
 import { withProcessServices } from '@platform/processRuntime';
-import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
+import type { ApprovalPolicy } from '@shared/approvalPolicy';
 import {
   RUN_PHASE,
   type RunId,
@@ -207,7 +207,7 @@ function createContext(
   session: TuiSession = createSession(),
   overrides: Partial<SlashCommandContext> = {},
 ): SlashCommandContext {
-  let approvalPolicy: TexraApprovalPolicy = 'ask';
+  let approvalPolicy: ApprovalPolicy = 'ask';
   return {
     cliContext: createCliContext(),
     session,

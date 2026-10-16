@@ -11,9 +11,9 @@ import { computed, signal } from '@lit-labs/signals';
 import { Cause, Effect } from 'effect';
 
 import { withLogChannel } from '@texra-ai/harness';
+import { transcriptText } from '@texra-ai/harness/transcript';
+import { toErrorMessage } from '@texra-ai/harness/schemas';
 import type { TranscriptRow } from '@cli/chat/tui/state/sessionView';
-import { transcriptText } from '@shared/transcript';
-import { toErrorMessage } from '@utils/errors/errorMessage';
 import {
   CLI_LOCAL_RUN_ID,
   focusRun,

@@ -31,20 +31,21 @@ import {
   type StartInput,
   SESSION_CLOSE_DEADLINE_MS,
 } from '@texra-ai/harness';
+import { AgentError } from '@texra-ai/harness';
+import { isUserAbort } from '@texra-ai/harness';
 import { Settings } from '@texra-ai/harness';
+import { isLiveRun } from '@texra-ai/harness/schemas';
+import {
+  APPROVAL_POLICY_CONFIG_KEY,
+  type ApprovalPolicy,
+} from '@texra-ai/harness/schemas';
+import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';
 import { type SessionHandle } from '@agent/runtime';
 import { deriveResumability, getRunRecords } from '@agent/storage';
-import { AgentError, isUserAbort } from '@common/errors';
-import { isLiveRun } from '@shared/session/sessionView';
 import {
   DatabaseNotOwner,
   type SessionOpenError,
 } from '@shared/session/database';
-import {
-  TEXRA_APPROVAL_POLICY_CONFIG_KEY,
-  type TexraApprovalPolicy,
-} from '@shared/approvalPolicy';
-import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 import { createHeadlessCliHostInteractions } from './approvalAdapter';
 import {
@@ -284,9 +285,9 @@ export function executeCliRequest(
     // what this invocation asked for riding its launch (`launchApproval`).
     const refused = launchApprovalNotice(
       runContext.requestedApprovalPolicy,
-      Settings.getConfig<TexraApprovalPolicy>(
+      Settings.getConfig<ApprovalPolicy>(
         runSession.roots.config,
-        TEXRA_APPROVAL_POLICY_CONFIG_KEY,
+        APPROVAL_POLICY_CONFIG_KEY,
       ),
     );
     if (refused !== undefined) writeTextStderr(refused);

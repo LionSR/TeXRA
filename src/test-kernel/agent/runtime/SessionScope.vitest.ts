@@ -6,7 +6,7 @@ import { registryOf } from '@agent/runtime/runRegistry';
 import { submitFollowUp } from '@agent/followUp/ToolUseFollowUp';
 import { TraceEmitter } from '@agent/trace';
 import { MESSAGE_TYPES } from '@shared/schemas';
-import type { TranscriptRow } from '@shared/transcript';
+import type { TranscriptRow } from '@shared/transcript/transcriptRow';
 import { closeSessionOf } from '@test/support/sessionEnd';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { testRunHandle } from '@test/support/runHandleFixtures';

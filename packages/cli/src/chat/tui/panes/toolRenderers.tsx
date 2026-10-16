@@ -1,7 +1,7 @@
 // Tool-row rendering: one styled-line model is the single source of truth.
 //
 // The row's *content* is decided once, host-agnostically, by `toolRowModel`
-// (`@shared/transcript`): header label and preview, the structured sections
+// (`@texra-ai/harness/transcript`): header label and preview, the structured sections
 // that describe the call, whether the output block is shown and why not. This
 // module is only the terminal's paint of that model — spans (text +
 // color/dim/bold) plus the head/tail elision the terminal spends its own
@@ -12,6 +12,14 @@
 // beyond its plain-text projection.
 
 // Local imports - shared schemas and utilities
+import { isMcpToolName } from '@texra-ai/harness/transcript';
+import { toolDisplayKind } from '@texra-ai/harness/transcript';
+import {
+  transcriptText,
+  type ToolSection,
+  type ToolSectionFile,
+  type TranscriptText,
+} from '@texra-ai/harness/transcript';
 import { AGENT_TOOL_NAME } from '@texra-ai/harness/plugins';
 import { formatAgentProposalFileGroup } from '@cli/runtime/approval/approvalSummaries';
 import {
@@ -23,14 +31,6 @@ import { COLOR_ERROR, COLOR_HINT, COLOR_SUCCESS } from '@cli/tui/ui/colors';
 import { STATUS_DOT, TOOL_OUTPUT_CORNER } from '@cli/tui/ui/glyphs';
 import type { ToolRow } from '@cli/chat/tui/state/sessionView';
 import { TOOL_CALL_STATUS } from '@shared/schemas';
-import { isMcpToolName } from '@shared/tools/toolDisplayName';
-import { toolDisplayKind } from '@shared/tools/toolKind';
-import {
-  transcriptText,
-  type ToolSection,
-  type ToolSectionFile,
-  type TranscriptText,
-} from '@shared/transcript';
 import { buildDiffHunks } from '@utils/text/unifiedDiff';
 import { truncateWithEllipsis } from '@utils/text/stringUtils';
 

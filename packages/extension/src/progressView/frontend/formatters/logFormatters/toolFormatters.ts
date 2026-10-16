@@ -4,7 +4,7 @@
  * Everything this card says about a call — its header label and preview, the
  * structured sections, whether the output block is shown at all, the error
  * text and the user instruction — comes from `ToolRow.model`
- * (`toolRowModel` in `@shared/transcript`). This file paints that model with
+ * (`toolRowModel` in `@texra-ai/harness/transcript`). This file paints that model with
  * Lit and applies the webview's own widths, icons, and live controls.
  *
  * IMPORTANT: Lit templates preserve whitespace literally. Multi-line templates
@@ -16,10 +16,9 @@
 import { html, nothing, type TemplateResult } from 'lit';
 
 // Local imports - shared utilities
-import { toolDisplayKind } from '@shared/tools/toolKind';
-import { normalizeToolName } from '@shared/tools/toolDisplayName';
+import { toolDisplayKind } from '@texra-ai/harness/transcript';
+import { normalizeToolName } from '@texra-ai/harness/transcript';
 import type { TeXRAIconName } from '@shared/iconNames';
-import type { ToolRow } from '@shared/transcript';
 import { truncateWithEllipsis } from '@utils/text/stringUtils';
 
 // Local imports - formatter helpers
@@ -37,6 +36,7 @@ import {
   getToolTimeoutMs,
 } from './toolFormatters/helpers';
 import { renderToolSections } from './toolFormatters/toolSections';
+import type { ToolRow } from '@texra-ai/harness/transcript';
 import type { FormatResult } from '../baseLogFormatter';
 
 // Side-effect import - register the <tool-timer> element rendered below

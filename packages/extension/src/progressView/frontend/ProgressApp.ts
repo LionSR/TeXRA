@@ -87,7 +87,7 @@ import './components/OnboardingWelcomeCard';
 import './components/RunHeader';
 import type { HeaderMenuItem } from './components/RunHeader';
 import type { WaSelectEvent } from '@awesome.me/webawesome/dist/events/events.js';
-import type { SessionView, RunView } from '@texra-ai/harness';
+import type { SessionView, RunView } from '@texra-ai/harness/schemas';
 
 registerTeXRAWebAwesomeIcons();
 

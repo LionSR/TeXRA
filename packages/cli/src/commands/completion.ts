@@ -1,6 +1,6 @@
 import { defineCommand } from 'citty';
 
-import { toErrorMessage } from '@utils/errors/errorMessage';
+import { toErrorMessage } from '@texra-ai/harness/schemas';
 
 import { CliUsageError } from '../runtime/cliContext';
 import { generateCompletionScript } from '../runtime/completion';

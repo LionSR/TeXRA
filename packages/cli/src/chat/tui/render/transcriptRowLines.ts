@@ -1,20 +1,20 @@
 // Terminal paint of a shared transcript row's body.
 //
-// `@shared/transcript` carries every text untruncated plus the measurements
+// `@texra-ai/harness/transcript` carries every text untruncated plus the measurements
 // needed to elide it; this module is where the terminal spends its own budget
 // — a head/tail line slice with a `N lines hidden` marker, and a terminal-safe pass
 // over text a producer wrote. Nothing here truncates the model.
 
-import { safeTerminalText } from '@cli/runtime/terminalText';
-import { hiddenRowsText } from '@cli/tui/overflowText';
-import { CROSS, TICK, TOOL_OUTPUT_CORNER } from '@cli/tui/ui/glyphs';
-import type { TranscriptRow } from '@cli/chat/tui/state/sessionView';
 import {
   elideText,
   transcriptText,
   type StatItem,
   type TranscriptText,
-} from '@shared/transcript';
+} from '@texra-ai/harness/transcript';
+import { safeTerminalText } from '@cli/runtime/terminalText';
+import { hiddenRowsText } from '@cli/tui/overflowText';
+import { CROSS, TICK, TOOL_OUTPUT_CORNER } from '@cli/tui/ui/glyphs';
+import type { TranscriptRow } from '@cli/chat/tui/state/sessionView';
 import { formatBytes } from '@utils/text/stringUtils';
 
 // A body block can be arbitrarily large (a 50 KB tool dump, a long error

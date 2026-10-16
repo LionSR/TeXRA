@@ -11,7 +11,7 @@ import { userInfo } from 'node:os';
 
 import { Effect } from 'effect';
 
-import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
+import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';
 
 /** What the shell prints before its environment, so profile noise ahead of
  *  it is skipped. */

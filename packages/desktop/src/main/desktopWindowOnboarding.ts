@@ -5,10 +5,10 @@ import { Data, Effect, Scope } from 'effect';
 
 import { withProcessServices, type ProcessRuntime } from '@texra-ai/harness';
 import { withLogChannel } from '@texra-ai/harness';
+import { toErrorMessage } from '@texra-ai/harness/schemas';
 import { hasUsableSetupCredential } from '@texra/model/setupCredentialAccess';
 import { kickoffDesktopSetup } from '@texra/controllers/onboarding/setupLaunch';
 import type { HostRunActions } from '@texra/controllers/session/hostRunActions';
-import { toErrorMessage } from '@utils/errors/errorMessage';
 import { createDesktopOnboardingIpc } from './desktopOnboardingIpc.js';
 import type {
   PlatformSecrets,

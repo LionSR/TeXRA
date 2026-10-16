@@ -3,8 +3,8 @@
 import { html } from 'lit';
 
 import type { FormatResult } from '@progressView/frontend/formatters/baseLogFormatter';
-import type { WebSearchRow } from '@shared/transcript';
 import { buildToolUseDetails } from './helpers';
+import type { WebSearchRow } from '@texra-ai/harness/transcript';
 
 export function formatWebSearchTemplate(row: WebSearchRow): FormatResult {
   return buildToolUseDetails({

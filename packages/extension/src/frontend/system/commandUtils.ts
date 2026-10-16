@@ -4,9 +4,9 @@ import * as vscode from 'vscode';
 
 // Local imports
 import { withLogChannel } from '@texra-ai/harness';
+import { ensureError } from '@texra-ai/harness/schemas';
 import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
 import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
-import { ensureError } from '@utils/errors/errorMessage';
 import type { ToolMissingHandler } from '@texra-ai/harness';
 
 const DEFAULT_CHANNEL = 'commandUtils';

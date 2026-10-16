@@ -25,9 +25,9 @@ import { StatusCodes } from 'http-status-codes';
 import * as tar from 'tar';
 
 import { withLogChannel, hasExtension } from '@texra-ai/harness';
+import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';
 import { readDirectoryTypedTolerant } from '@utils/files/fsDurability';
 import { entryExists } from '@utils/files/fsEntryExists';
-import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { normaliseArxivIdentifier } from './arxivIdentifier';
 import { indentLatexFilesInDirectory } from './formatter/indentDirectory';
 import type { LatexFormatter } from './formatter/texFormatter';

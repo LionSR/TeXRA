@@ -7,12 +7,12 @@ import { z } from 'zod';
 
 // Local imports
 import { withLogChannel, WorkspaceFs } from '@texra-ai/harness';
+import { toErrorMessage } from '@texra-ai/harness/schemas';
 import { Settings } from '@texra-ai/harness';
 import type { ExecResult, FileLocation } from '@shared/schemas';
 import { SUPPORTED_LATEX_COMPILERS } from '@texra/shared/constants/latexToolchain';
 import { runToolWithCheck } from '@texra/utils/system/toolChecks';
 import { envVar } from '@utils/system/envFlags';
-import { toErrorMessage } from '@utils/errors/errorMessage';
 import { splitContentLines } from '@utils/text/stringUtils';
 import { LATEX_COMMANDS_CHANNEL as CHANNEL } from './latexLogging';
 import type { WorkspaceRoots } from '@texra-ai/harness';

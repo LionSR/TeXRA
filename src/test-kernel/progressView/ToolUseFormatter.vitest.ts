@@ -5,14 +5,16 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import { LOG_LEVELS, MESSAGE_TYPES } from '@shared/schemas';
 import type { RunLabels } from '@shared/tools/executionsDisplay';
 import { decodeToolUseLog } from '@shared/toolUse';
+import type {
+  ErrorRow,
+  StreamingTextRow,
+  ToolRow,
+} from '@shared/transcript/transcriptRow';
 import {
   logPayloadRow,
   streamingTextRow,
   toolRow,
-  type ErrorRow,
-  type StreamingTextRow,
-  type ToolRow,
-} from '@shared/transcript';
+} from '@shared/transcript/projectTranscriptRow';
 
 // Local imports - test utilities
 import {

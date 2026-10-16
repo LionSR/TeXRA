@@ -26,6 +26,7 @@ import {
 } from 'effect';
 import { z } from 'zod';
 
+import { OutcomeSchema, RuntimeRequestSchema } from '@texra-ai/harness/schemas';
 import {
   CommitOrdinalSchema,
   ExistenceReconciliationSchema,
@@ -37,10 +38,6 @@ import {
   type FoldInput,
   type TranscriptSubscription,
 } from '@shared/schemas';
-import {
-  OutcomeSchema,
-  RuntimeRequestSchema,
-} from '@shared/session/runtimeRequest';
 import { HostRequestSchema } from './hostRequest';
 import { HostSnapshotSchema, type HostSnapshot } from './hostSnapshot';
 import { LaunchPatchSchema } from './surface';

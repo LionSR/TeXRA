@@ -1,8 +1,8 @@
 import { Effect, FileSystem } from 'effect';
 
+import { toErrorMessage } from '@texra-ai/harness/schemas';
 import type { AgentTrace } from '@agent/trace';
 import type { CompileFailure } from '@texra/shared/plugins/documentOutputs';
-import { toErrorMessage } from '@utils/errors/errorMessage';
 
 const COMPILE_LOG_EXCERPT_CHAR_LIMIT = 12000;
 

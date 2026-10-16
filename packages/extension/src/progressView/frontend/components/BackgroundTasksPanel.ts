@@ -31,14 +31,14 @@ import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 
 // Local imports
 import { rollupOf } from '@texra-ai/harness/schemas';
-import type { InquiryThreadSummary, RunId } from '@shared/schemas';
-import type { SessionView, RunView } from '@shared/session/sessionView';
+import { dispatchedChildren } from '@texra-ai/harness/transcript';
 import type { TeXRAIconName } from '@shared/iconNames';
-import { dispatchedChildren } from '@shared/transcript';
+import type { InquiryThreadSummary, RunId } from '@shared/schemas';
 import type { Surface } from '@texra/shared/session/surface';
 import { inquiryThreadsUnder } from '@texra/shared/plugins/externalInquiry';
 import { SessionUiEvents } from '@texra/shared/session/uiEvents';
 import { TickerController } from '@texra/shared/litControllers/TickerController';
+import { runStatusLabel } from '@ui/copy/runStatus';
 import { designTokens, commonViewStyles } from '@ui/styles';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import { NESTED_AGENT } from '@ui/copy/nestedRuns';
@@ -48,6 +48,7 @@ import {
 } from '@utils/text/stringUtils';
 import { getTimeFormatter } from '../formatters/timestampUtils';
 import { dispatchGroupToggle } from '../utils';
+import type { SessionView, RunView } from '@texra-ai/harness/schemas';
 
 /** The card's key in `Surface.groups` for its run. */
 const DISPATCH_GROUP_KEY = 'dispatch';
@@ -387,7 +388,7 @@ export class BackgroundTasksPanel extends LitElement {
     const pendingApproval = child.approval === 'own';
     const glyph = pendingApproval ? 'circle-dot' : TONE_ICONS[child.tone];
     const latest = child.latestLine ?? child.description ?? '';
-    const label = `Open ${child.label}: ${child.statusLabel}`;
+    const label = `Open ${child.label}: ${runStatusLabel(child.statusKey)}`;
     return html`
       <button
         type="button"

@@ -1,6 +1,10 @@
 import { Effect, Predicate } from 'effect';
 import { defineCommand } from 'citty';
 
+import {
+  APPROVAL_POLICY_CONFIG_KEY,
+  type ApprovalPolicy,
+} from '@texra-ai/harness/schemas';
 import { AgentCatalog } from '@texra-ai/harness';
 import { Settings } from '@texra-ai/harness';
 import {
@@ -9,10 +13,6 @@ import {
   planTeamRuns,
 } from '@common/teams/TeamPlan';
 import { findTeamPreset } from '@common/teams/TeamPresets';
-import {
-  TEXRA_APPROVAL_POLICY_CONFIG_KEY,
-  type TexraApprovalPolicy,
-} from '@shared/approvalPolicy';
 
 import { missingAgentMessage, missingTeamMessage } from '../runtime/agents';
 import {
@@ -150,9 +150,9 @@ export const runTeam = Effect.fn('runTeam')(function* (
     context.mode === 'headless' &&
     effectiveApprovalPolicy(
       context.requestedApprovalPolicy ?? context.approvalPolicy,
-      Settings.getConfig<TexraApprovalPolicy>(
+      Settings.getConfig<ApprovalPolicy>(
         services.config,
-        TEXRA_APPROVAL_POLICY_CONFIG_KEY,
+        APPROVAL_POLICY_CONFIG_KEY,
       ),
     ) === 'ask';
   const plan = yield* loadTeamRunPlan(init, services);

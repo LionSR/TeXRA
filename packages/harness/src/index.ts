@@ -10,14 +10,6 @@
  * This module is the package's public surface and is documented as one
  * (packages/harness/README.md); it is the one barrel the "no convenience
  * barrels" rule does not apply to.
- *
- * The root entry used to render these services as Promises and
- * AsyncIterables, the boundary the Effect migration's rule R1 names
- * (`2026-08-26-effect-4-runtime-migration.md`,
- * §7 R1, boundary kind 3: the published SDK speaks Promises). That ruling is
- * superseded (2026-09-21): `effect` is a mandatory exact-pin peer dependency
- * of the whole package, the package has no external consumers, and TeXRA 1.0
- * keeps no parallel surfaces.
  */
 
 // The services and their layer. `Sessions.layer({ platform, plugins })` is
@@ -170,8 +162,7 @@ export type {
 } from '@agent/core/tools/ToolTypes';
 export type { SettingHost } from '@shared/state/stateSettings';
 export { ToolContext } from '@agent/core/tools/ToolTypes';
-export { defineTool } from '@tools/core/definition';
-export type { DefinedTool } from '@tools/core/definition';
+export { defineTool, type DefinedTool } from '@tools/core/definition';
 export type {
   AggregateId,
   RequestDecision,
@@ -188,10 +179,8 @@ export {
   NotOwner,
   Rejected,
   Unavailable,
-} from '@shared/session/requestErrors';
-export type {
-  RequestError,
-  RequestRefusal,
+  type RequestError,
+  type RequestRefusal,
 } from '@shared/session/requestErrors';
 export type {
   Outcome,
@@ -202,12 +191,6 @@ export type {
 
 // The platform's ports: what an `AgentPlatform` implements, the failures its
 // stores answer with, and the services a plugin's code reads them as.
-export type {
-  AgentDirectoriesPort,
-  ConfigProvider,
-  StateStore,
-  ToolMissingHandler,
-} from '@platform/interfaces';
 export {
   AgentDirectories,
   AgentDirectoriesFailed,
@@ -216,18 +199,19 @@ export {
   StateReadFailed,
   StateWriteFailed,
   ToolMissingReporter,
+  type AgentDirectoriesPort,
+  type ConfigProvider,
+  type StateStore,
+  type ToolMissingHandler,
 } from '@platform/interfaces';
-export type { PlatformSecrets } from '@platform/secrets';
-export { Secrets } from '@platform/secrets';
-export type {
-  LanguageModelAccessState,
-  LanguageModelInfo,
-  LanguageModelPort,
-  LanguageModelReference,
-} from '@platform/languageModel';
+export { Secrets, type PlatformSecrets } from '@platform/secrets';
 export {
   LanguageModel,
   UNAVAILABLE_LANGUAGE_MODEL_PORT,
+  type LanguageModelAccessState,
+  type LanguageModelInfo,
+  type LanguageModelPort,
+  type LanguageModelReference,
 } from '@platform/languageModel';
 export type { WorkspaceRoots } from '@platform/workspaceRoots';
 
@@ -289,17 +273,23 @@ export {
   withSessionFs,
   WorkspaceFs,
 } from '@platform/rootedFs';
-// A path as a `FileLocation` against the workspace root a caller holds.
-export { pathToLocationIn } from '@utils/files/fileLocation';
+// A `FileLocation` by its root: a workspace file, a file under a run's
+// storage, a file outside both, or a path against the workspace root a
+// caller holds.
+export {
+  createExternalLocation,
+  createRunStorageLocation,
+  createWorkspaceLocation,
+  pathToLocationIn,
+} from '@utils/files/fileLocation';
 // The user's MCP servers the tool catalog loads: the config file beside a
 // global storage directory, read as the catalog reads it, and the server a
 // namespaced MCP tool name belongs to.
 export { mcpConfigPathOf, readMcpConfig } from '@tools/mcp/mcpConfig';
 export type { McpServerConfig } from '@common/plugins/mcpServers';
 export { mcpServerOfToolName } from '@tools/mcp/mcpServer';
-// The skills a session's roots discover: the inventory a settings page
-// lists, and the enabled ones a person activates, each read with its
-// discovery issues; the source options a host's flags set.
+// The skills a session's roots discover (the settings inventory, the enabled
+// ones a person activates) with their issues, and a host's source options.
 export {
   Skills,
   type EnabledSkill,
@@ -312,9 +302,8 @@ export type {
   SkillLoadIssue,
 } from '@skills/skillLoader';
 export type { SkillDisplayItem } from '@shared/schemas';
-// The Claude Code and Codex plugins installed under a session's storage
-// root: install, update, remove, list, enable (asking the user to trust),
-// disable, and what loads now; and what each answers with or refuses.
+// The Claude Code and Codex plugins installed under a storage root: their
+// operations (enable asks for trust), what loads now, and their refusals.
 export {
   InstalledPlugins,
   type PluginOrigin,
@@ -334,6 +323,24 @@ export {
   listRunGeneratedFiles,
   type RunGeneratedFile,
 } from '@tools/executions/runGeneratedFiles';
+// Failures as a host or plugin reads them: the agent error and how it is
+// presented, the filesystem and module predicates, the cause chain, a
+// user's abort, and a provider error's message. Error messages themselves
+// (`toErrorMessage`, `ensureError`) are in `./schemas`.
+export { AgentError } from '@common/errors/agentErrors';
+export {
+  agentErrorPresentation,
+  type AgentErrorKind,
+  type AgentErrorPresentation,
+} from '@common/errors/agentErrorClassification';
+export {
+  causeChain,
+  isFileNotFoundError,
+  isModuleNotFoundError,
+  isNotADirectoryError,
+  isUserAbort,
+} from '@common/errors/errorPredicates';
+export { getSdkErrorMessage } from '@common/errors/sdkError/providerErrorFormat';
 // Path containment on the platform's own paths, a path's segments and its
 // POSIX form, and an extension check that ignores case. (The browser-safe
 // path basics are in `./schemas`.)

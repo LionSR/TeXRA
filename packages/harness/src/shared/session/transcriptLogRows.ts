@@ -11,7 +11,7 @@ import {
   type MessageType,
   type TranscriptEvent,
 } from '@shared/schemas';
-import type { StreamingTextRow } from '@shared/transcript';
+import type { StreamingTextRow } from '@shared/transcript/transcriptRow';
 
 import { open, write, type Draft } from './transcriptState';
 

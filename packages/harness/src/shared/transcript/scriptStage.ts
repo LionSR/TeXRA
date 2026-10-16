@@ -23,9 +23,8 @@ import {
   acceptsFollowUp,
   requestAnswerability,
   type FollowUpHost,
-  type RunView as FoldedRunView,
-  type SessionView,
 } from '@shared/session/sessionView';
+import type { RunView, SessionView } from '@shared/session/readonlyViews';
 import type { ReadonlyDeep } from '@shared/session/readonlyDeep';
 import { deliveredResponse } from '@shared/subagentFollowup';
 import { formatWorkflowCallFiles } from '@shared/transcript/workflowCall';
@@ -74,10 +73,6 @@ export const SCRIPT_CALL_STATUS_LABEL = {
   'not run': 'Not run',
 } as const satisfies Record<ScriptCallStatus, string>;
 
-/** An agent row's one action: open its agent's conversation, the composer
- *  addressed to it, to steer it while it runs or keep talking after. */
-export const TALK_TO_AGENT = 'Talk to this agent';
-
 const NOT_RUN_NOTE = 'The task ended before this call started.';
 const INTERRUPTED_NOTE = 'Stopped with its task. Resume the task to continue.';
 
@@ -100,7 +95,7 @@ export interface ScriptCallView {
   readonly needsYou: boolean;
   /** An agent row whose agent takes a message here now (`acceptsFollowUp`,
    *  the rule the composer it opens reads): opening it is talking to it
-   *  (`TALK_TO_AGENT`). Any other agent opens read-only. */
+   *  (a host's talk-to-agent action). Any other agent opens read-only. */
   readonly talkable: boolean;
   /** The row's one line: its `detail`, else a finished agent's answer, else
    *  what its child last said, each cut to its first line. Never the
@@ -110,7 +105,7 @@ export interface ScriptCallView {
   readonly line: string;
 }
 
-interface ScriptPhaseView {
+export interface ScriptPhaseView {
   /** The guest's `phase()` title; null before its first. */
   readonly title: string | null;
   /** The phase's calls, in issue order. */
@@ -153,14 +148,15 @@ function pendingRequestLine(payload: ReadonlyDeep<PermissionPayload>): string {
   }
 }
 
-/** The fold's values as a reader holds them (`Session.view`). */
-type RunView = ReadonlyDeep<FoldedRunView>;
+/** A tool row as a reader holds it (`Session.view`). */
 type ToolRow = ReadonlyDeep<FoldedToolRow>;
-type StageSession = Pick<ReadonlyDeep<SessionView>, 'runs' | 'requests'>;
 
 /** The run under `run` that is asking: itself, else the first descendant
  *  the fold marked, following `descendant` down. */
-function askingRun(view: StageSession, run: RunView): RunView | undefined {
+function askingRun(
+  view: Pick<SessionView, 'runs' | 'requests'>,
+  run: RunView,
+): RunView | undefined {
   if (run.approval === 'own') return run;
   if (run.approval !== 'descendant') return undefined;
   for (const childId of run.childIds) {
@@ -208,7 +204,7 @@ function statusOf(
 function callView(
   row: ToolRow,
   run: RunView,
-  view: StageSession,
+  view: Pick<SessionView, 'runs' | 'requests'>,
   host: FollowUpHost,
 ): ScriptCallView {
   const agent = row.toolUse.toolName === AGENT_TOOL;
@@ -367,7 +363,7 @@ export function dispatchedChildren<Run extends RunView>(
  */
 export function scriptStages(
   run: RunView,
-  view: StageSession,
+  view: Pick<SessionView, 'runs' | 'requests'>,
   host: FollowUpHost,
 ): ScriptStageView[] {
   const { taskGroups, rows } = run.transcript;

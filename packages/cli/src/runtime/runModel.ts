@@ -1,6 +1,6 @@
 import { Effect } from 'effect';
 
-import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
+import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';
 
 import {
   CLI_CHEAP_START_MODEL,

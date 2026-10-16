@@ -15,11 +15,11 @@ import {
   type PerKeyLane,
   withPerKeyLane,
 } from '@texra-ai/harness';
+import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';
 import {
   CLI_NDJSON_CONTRACT,
   type CliNdjsonRecord,
 } from '@cli/schemas/cliOutput';
-import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 const closed = { stdout: false, stderr: false };
 

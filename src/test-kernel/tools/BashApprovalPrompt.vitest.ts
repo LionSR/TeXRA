@@ -150,7 +150,7 @@ describe('requestBashApproval queueing', () => {
 
         expect(result).toEqual({
           action: 'deny',
-          reason: 'Denied by TeXRA approval policy.',
+          reason: 'Denied by the approval policy.',
         });
         expect(policyDenials).toBe(1);
         expect(requests.opened).toEqual([]);

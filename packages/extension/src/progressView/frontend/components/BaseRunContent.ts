@@ -8,14 +8,18 @@ import { html, LitElement, nothing, type TemplateResult } from 'lit';
 import { property } from 'lit/decorators.js';
 
 import { isLiveRun } from '@texra-ai/harness/schemas';
-import type { PermissionPayload } from '@shared/schemas';
-import type { SessionView, RunView } from '@shared/session/sessionView';
 import type { HostSnapshot } from '@texra/shared/session/hostSnapshot';
 import type { Surface } from '@texra/shared/session/surface';
 import { SessionUiEvents } from '@texra/shared/session/uiEvents';
+import { runStatusLabel } from '@ui/copy/runStatus';
 import { interruptedTasks, resumeBlockerFix } from '@ui/copy/interruptedTasks';
 import { TASK_ACTIONS } from '@ui/copy/nestedRuns';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
+import type {
+  PendingRequest,
+  RunView,
+  SessionView,
+} from '@texra-ai/harness/schemas';
 import '@awesome.me/webawesome/dist/components/button/button.js';
 import type { ForkFromHere } from './UserMessage';
 import './InterruptedTasksNotice';
@@ -33,7 +37,7 @@ export abstract class BaseRunContent extends LitElement {
 
   /** The pending requests this run has open, in the fold's request order:
    *  oldest first, the newest last. */
-  protected get runPermissions(): PermissionPayload[] {
+  protected get runPermissions(): readonly PendingRequest['payload'][] {
     const run = this.run;
     if (!run || !this.view) return [];
     return this.view.requests
@@ -97,7 +101,7 @@ export abstract class BaseRunContent extends LitElement {
     const fix = run.resumeBlocked && resumeBlockerFix(run.resumeBlocked);
     const request = (kind: 'resume') => () =>
       this.dispatchEvent(SessionUiEvents.host({ kind, runId: run.id }));
-    let explanation = `${run.statusLabel}.`;
+    let explanation = `${runStatusLabel(run.statusKey)}.`;
     if (live)
       explanation = `This ${run.parentId === null ? 'task' : 'agent'} takes no messages.`;
     else if (run.actions.includes('resume'))

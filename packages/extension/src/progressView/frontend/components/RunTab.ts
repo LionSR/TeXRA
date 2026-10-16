@@ -16,6 +16,7 @@ import { classMap } from 'lit/directives/class-map.js';
 // Local imports
 import { type TeXRAIconName } from '@shared/iconNames';
 import { SessionUiEvents } from '@texra/shared/session/uiEvents';
+import { runStatusLabel } from '@ui/copy/runStatus';
 import { designTokens } from '@ui/styles';
 import {
   buttonStyles,
@@ -38,7 +39,7 @@ import { waIcon } from '@ui/wa/webAwesomeIcons';
 import { NESTED_AGENT, TASK_ACTIONS } from '@ui/copy/nestedRuns';
 import { formatRelativeTime, formatResultCount } from '@utils/text/stringUtils';
 import { runTabStyles } from './RunTab.styles';
-import type { RunView } from '@texra-ai/harness';
+import type { RunView } from '@texra-ai/harness/schemas';
 
 /** Shape cue per tone (G4: the fold spells the tone, the host the glyph). */
 const TONE_ICONS: Record<RunView['tone'], TeXRAIconName> = {
@@ -60,7 +61,7 @@ function buildTooltip(run: RunView): string {
     : undefined;
   const mainLine = [
     run.label,
-    `Status: ${run.approval === 'none' ? run.statusLabel : 'Needs approval'}`,
+    `Status: ${run.approval === 'none' ? runStatusLabel(run.statusKey) : 'Needs approval'}`,
     run.rollup.total > 0 && rollupLabel(run),
     modelDisplay && `Model: ${modelDisplay}`,
     worktreeDisplay,
@@ -175,7 +176,7 @@ export class RunTab extends LitElement {
       : TONE_ICONS[run.tone];
     const accessibleStatusLabel = pendingApproval
       ? 'Needs approval'
-      : run.statusLabel;
+      : runStatusLabel(run.statusKey);
     const runTitle = run.title;
     const tooltip = buildTooltip(run);
     const deleteLabel =

@@ -1,4 +1,4 @@
-import { summarizeEmbeddedSubagentFollowups } from '@shared/subagentFollowup';
+import { summarizeEmbeddedSubagentFollowups } from '@texra-ai/harness/transcript';
 import {
   MATH_SPAN_PATTERNS,
   protectByPatterns,

@@ -21,8 +21,6 @@ import {
   USER_ENTRY_PREFIX,
 } from '@cli/tui/ui/glyphs';
 import type { TranscriptRow } from '@cli/chat/tui/state/sessionView';
-import type { CompactionActivityStatus } from '@shared/runs/compactionActivityProjection';
-import type { TranscriptRowKind } from '@shared/transcript';
 import { renderAnsiMarkdown } from '../render/ansiMarkdown';
 import { transcriptRowBodyLines } from '../render/transcriptRowLines';
 import {
@@ -30,6 +28,8 @@ import {
   transcriptRowHeadline,
 } from './transcriptEntries';
 import { toolUseDisplayLines, toolUseMarginBottomRows } from './toolRenderers';
+import type { TranscriptRowKind } from '@texra-ai/harness/transcript';
+import type { CompactionActivityStatus } from '@texra-ai/harness/transcript';
 
 const DEFAULT_TRANSCRIPT_COLUMNS = 80;
 const USER_ENTRY_MARGIN_TOP_ROWS = 1;

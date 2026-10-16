@@ -4,12 +4,12 @@ import * as vscode from 'vscode';
 
 // Local imports
 import { withLogChannel } from '@texra-ai/harness';
-import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
 import {
   ensureError,
   formatError,
   toErrorMessage,
-} from '@utils/errors/errorMessage';
+} from '@texra-ai/harness/schemas';
+import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
 
 /** Valid documentation identifiers for error messages. */
 type DocId = 'custom-agents' | 'latex-diff';

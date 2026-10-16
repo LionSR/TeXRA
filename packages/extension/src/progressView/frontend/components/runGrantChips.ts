@@ -3,9 +3,9 @@ import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 import { css, html, nothing, type TemplateResult } from 'lit';
 import { repeat } from 'lit/directives/repeat.js';
 
-import type { ApprovalBypassKind } from '@shared/approvalBypassKind';
 import { RUN_GRANT_COPY, RUN_GRANT_ORDER } from '@ui/copy/delegationApproval';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
+import type { ApprovalBypassKind } from '@texra-ai/harness/schemas';
 
 function grantChip(
   id: string,

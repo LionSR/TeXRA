@@ -1,10 +1,10 @@
 import { Effect, FileSystem, Predicate, Array as Arr } from 'effect';
 
 import { withLogChannel, hasExtension } from '@texra-ai/harness';
+import { pathToLocationIn } from '@texra-ai/harness';
+import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';
 import { runToolWithCheck } from '@texra/utils/system/toolChecks';
-import { pathToLocationIn } from '@utils/files/fileLocation';
 import { pathExists } from '@utils/files/fsDurability';
-import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { normalizeLineEndings } from '@utils/text/stringUtils';
 import { LATEX_COMMANDS_CHANNEL as CHANNEL } from './latexLogging';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
