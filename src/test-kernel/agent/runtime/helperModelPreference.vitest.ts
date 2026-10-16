@@ -13,10 +13,11 @@ import {
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { fakeStores } from '@test/support/FakePlatform';
 
-const readModelAvailabilityInputs = vi.hoisted(() =>
-  vi.fn(() => Effect.succeed({})),
+const readModelOptions = vi.hoisted(() =>
+  vi.fn((): Effect.Effect<readonly { unavailableReason?: string }[]> =>
+    Effect.succeed([{}]),
+  ),
 );
-const modelUnavailableReasonFrom = vi.hoisted(() => vi.fn());
 
 vi.mock('@model/computeModelOptions', () => ({
   CALLING_SCOPE: <A>(read: () => A): A => read(),
@@ -26,8 +27,7 @@ vi.mock('@model/computeModelOptions', () => ({
     Effect.map(state.get(HELPER_KEY), (model) => [
       modelRefOf(String(model)) ?? String(model),
     ]),
-  readModelAvailabilityInputs,
-  modelUnavailableReasonFrom,
+  readModelOptions,
 }));
 vi.mock('llm-zoo', async (importOriginal) => ({
   ...(await importOriginal<typeof import('llm-zoo')>()),
@@ -58,8 +58,7 @@ function configFor(model: string): AgentConfig {
 describe('applyHelperModelPreference', () => {
   beforeEach(() => {
     vi.resetModules();
-    readModelAvailabilityInputs.mockClear();
-    modelUnavailableReasonFrom.mockReset();
+    readModelOptions.mockClear();
   });
 
   function resolve(config: AgentConfig) {
@@ -69,7 +68,7 @@ describe('applyHelperModelPreference', () => {
       Effect.flatMap(({ applyHelperModelPreference }) =>
         applyHelperModelPreference(config, STORES),
       ),
-      // The real `readModelAvailabilityInputs` requires the service; the mock
+      // The real `readModelOptions` requires the service; the mock
       // replaces it, but the requirement stays on the program's type.
       Effect.provide(LanguageModel.layer(UNAVAILABLE_LANGUAGE_MODEL_PORT)),
     );
@@ -98,7 +97,7 @@ describe('applyHelperModelPreference', () => {
       const result = yield* resolve(configFor('opus'));
 
       expect(result.model).toBe('opus');
-      expect(readModelAvailabilityInputs).not.toHaveBeenCalled();
+      expect(readModelOptions).not.toHaveBeenCalled();
     }),
   );
 
@@ -107,7 +106,9 @@ describe('applyHelperModelPreference', () => {
     () =>
       Effect.gen(function* () {
         yield* withHelper('deepseek/deepseek-flash@none');
-        modelUnavailableReasonFrom.mockReturnValue('No API key configured.');
+        readModelOptions.mockReturnValueOnce(
+          Effect.succeed([{ unavailableReason: 'No API key configured.' }]),
+        );
 
         const result = yield* resolve(configFor('opus'));
 

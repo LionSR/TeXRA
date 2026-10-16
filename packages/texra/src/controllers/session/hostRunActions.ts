@@ -11,7 +11,9 @@ import {
   type AgentCatalogServices,
   AppState,
   DatabaseReadFailed,
+  getHelperModelName,
   isRequestRefusal,
+  type ModelHostFactUnreadable,
   Rejected,
   type RequestError,
   type RequestRefusal,
@@ -24,14 +26,12 @@ import {
   withLogChannel,
   type WorkspaceRoots,
 } from '@texra-ai/harness';
-import { getHelperModelName } from '@agent/runtime/helperModelName';
 import { presentRunFailure } from '@agent/runtime/terminalResultToast';
 import type { SessionHostInteractions } from '@agent/runtime/HostInteractions';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { getRunRecords } from '@agent/storage';
 import { FOLLOW_UP_WAKE_FAILED_MESSAGE } from '@agent/followUp/ToolUseFollowUp';
 import { getRuntimeModelDirectFallback } from '@model/copilotRouting';
-import type { ModelHostFactUnreadable } from '@model/computeModelOptions';
 import { isTaskConfig, recipeBlockOf, type RunId } from '@shared/schemas';
 import {
   validateRunRequest,

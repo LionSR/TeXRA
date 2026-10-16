@@ -48,7 +48,7 @@ const RUNTIME_BY_ID = {
 /**
  * Runtime catalog consumed by retry policy and host route presentation. Which
  * plan serves a model's next request is not answered here: the picker decides
- * it (`usageRouteFrom` over the picker's routed inputs).
+ * it (the `usageRoute` of each `readModelOptions` option).
  */
 export const codingPlanSubscriptionRuntimes: readonly CodingPlanSubscriptionRuntime[] =
   Object.freeze(

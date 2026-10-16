@@ -12,14 +12,12 @@
 import { Cause, Data, Effect, Exit, type FileSystem } from 'effect';
 import {
   AgentDirectories,
+  getEnabledModels,
+  readModelOptions,
   type LanguageModel,
   type PlatformSecrets,
 } from '@texra-ai/harness';
 import { loadTeamOptions } from '@common/teams/TeamPlan';
-import {
-  getEnabledModels,
-  readModelAvailabilityInputs,
-} from '@model/computeModelOptions';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import {
   TEXRA_APPROVAL_POLICY_CONFIG_KEY,
@@ -221,11 +219,11 @@ export function createHostSnapshotSource(
   });
 
   const loadModels = Effect.gen(function* () {
-    const inputs = yield* readModelAvailabilityInputs(
+    const models = yield* readModelOptions(
       { ...options.stores, secrets: options.secrets },
       yield* getEnabledModels(options.stores.globalState),
     );
-    catalogs = { ...catalogs, modelOptions: modelOptionsFrom(inputs) };
+    catalogs = { ...catalogs, modelOptions: modelOptionsFrom(models) };
   });
 
   const loadFiles = Effect.gen(function* () {

@@ -21,11 +21,11 @@ import {
 } from '@texra-ai/llm';
 
 import {
+  readModelOptions,
   type StorageFs,
   withLogChannel,
   withSessionFs,
 } from '@texra-ai/harness';
-import { readModelAvailabilityInputs } from '@model/computeModelOptions';
 import { discoverCopilotRoutes } from '@model/copilotRouting';
 import { TEXRA_APPROVAL_POLICY_CONFIG_KEY } from '@shared/approvalPolicy';
 import { SUBSCRIPTION_AUTH_PROVIDERS } from '@shared/model/subscriptionAuth';
@@ -129,7 +129,7 @@ export function createSettingsViewBody(ports: SettingsViewBodyPorts) {
     stores: roots,
     secrets,
     resolveModelOptions: (stores, models) =>
-      Effect.map(readModelAvailabilityInputs(stores, models), modelOptionsFrom),
+      Effect.map(readModelOptions(stores, models), modelOptionsFrom),
     copilotRoutes: discoverCopilotRoutes(),
   });
   const usage = new SubscriptionUsageService({ secrets, stores: roots });

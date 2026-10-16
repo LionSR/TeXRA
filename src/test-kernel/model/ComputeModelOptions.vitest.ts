@@ -11,10 +11,7 @@ import {
 } from '@texra-ai/llm';
 import { effectDiagnosticsLayer } from '@logger/effectDiagnostics';
 import { setLogSink } from '@logger/logSink';
-import {
-  modelUnavailableReasonFrom,
-  readModelAvailabilityInputs,
-} from '@model/computeModelOptions';
+import { readModelOptions, type ModelOption } from '@model/computeModelOptions';
 import { LanguageModel } from '@platform/languageModel';
 import { DEFAULT_MODELS } from '@shared/constants/defaultModels';
 import {
@@ -54,12 +51,17 @@ const OPENAI_KEY_SECRETS = { [apiKeySecretName('openai')]: 'sk-openai' };
  * the read's Copilot discovery yields the `LanguageModel` service, which the
  * bare `it.effect` runtime does not carry.
  */
-const availabilityInputs = (
-  ...args: Parameters<typeof readModelAvailabilityInputs>
-) =>
-  readModelAvailabilityInputs(...args).pipe(
+const availabilityInputs = (...args: Parameters<typeof readModelOptions>) =>
+  readModelOptions(...args).pipe(
     Effect.provide(LanguageModel.layer(fakeHostLanguageModel)),
   );
+
+/** The reason `model`'s option gives for not running, or `null` when it can. */
+const unavailableReasonOf = (
+  options: readonly ModelOption[],
+  model: string,
+): string | null =>
+  options.find((option) => option.model === model)?.unavailableReason ?? null;
 
 /**
  * Global state that counts the Copilot-preference reads, the one live state
@@ -226,7 +228,7 @@ describe('model availability', () => {
       const [model] = modelOptionsFrom(
         yield* availabilityInputs(hostStores(), [KIMI_CODING]),
       );
-      const reason = modelUnavailableReasonFrom(
+      const reason = unavailableReasonOf(
         yield* availabilityInputs(hostStores(), [KIMI_CODING]),
         KIMI_CODING,
       );
@@ -330,8 +332,8 @@ describe('model availability', () => {
     () =>
       Effect.gen(function* () {
         // The seam callers now own: everything that touches a host happens in
-        // `readModelAvailabilityInputs`, and both finishers are synchronous
-        // functions of that value — no store is consulted a second time while
+        // `readModelOptions`, and the rows and reasons are synchronous
+        // functions of its options — no store is consulted a second time while
         // the rows are built, so a credential change mid-render cannot split
         // one computation across two views of the host.
         //
@@ -357,8 +359,8 @@ describe('model availability', () => {
         const preferenceReadsAfterInputs = globalState.copilotPreferenceReads;
 
         const rows = modelOptionsFrom(inputs);
-        const available = modelUnavailableReasonFrom(inputs, GPT55);
-        const copilot = modelUnavailableReasonFrom(inputs, GPT56_TERRA);
+        const available = unavailableReasonOf(inputs, GPT55);
+        const copilot = unavailableReasonOf(inputs, GPT56_TERRA);
 
         expect(rows.map((row) => row.availability)).toEqual([
           'provider-key',
@@ -400,7 +402,7 @@ describe('model availability', () => {
       const [model] = modelOptionsFrom(
         yield* availabilityInputs(hostStores(), [HAIKU3]),
       );
-      const reason = modelUnavailableReasonFrom(
+      const reason = unavailableReasonOf(
         yield* availabilityInputs(hostStores(), [HAIKU3]),
         HAIKU3,
       );
@@ -459,7 +461,7 @@ describe('model availability', () => {
       const [model] = modelOptionsFrom(
         yield* availabilityInputs(hostStores(), [GPT56_PRO]),
       );
-      const reason = modelUnavailableReasonFrom(
+      const reason = unavailableReasonOf(
         yield* availabilityInputs(hostStores(), [GPT56_PRO]),
         GPT56_PRO,
       );
@@ -484,7 +486,7 @@ describe('model availability', () => {
         const [model] = modelOptionsFrom(
           yield* availabilityInputs(hostStores(), [GPT55]),
         );
-        const reason = modelUnavailableReasonFrom(
+        const reason = unavailableReasonOf(
           yield* availabilityInputs(hostStores(), [GPT55]),
           GPT55,
         );

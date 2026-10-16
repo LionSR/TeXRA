@@ -4,8 +4,7 @@ import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { withLogChannel } from '@logger/effectLog';
 import {
   getEnabledModels,
-  modelUnavailableReasonFrom,
-  readModelAvailabilityInputs,
+  readModelOptions,
   type ModelOptionStores,
 } from '@model/computeModelOptions';
 import { DEFAULT_HELPER_MODEL } from '@shared/constants/defaultModels';
@@ -75,10 +74,8 @@ export const applyHelperModelPreference = Effect.fn(
     return config;
   }
 
-  const unavailable = modelUnavailableReasonFrom(
-    yield* readModelAvailabilityInputs(stores, [helperModel]),
-    helperModel,
-  );
+  const [option] = yield* readModelOptions(stores, [helperModel]);
+  const unavailable = option?.unavailableReason;
   if (unavailable) {
     yield* Effect.logWarning(
       `Keeping ${config.model} for ${config.agent}: helper model ${helperModel} is unavailable. ${unavailable}`,

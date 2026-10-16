@@ -10,7 +10,7 @@ import {
 
 import { Effect } from 'effect';
 import { codexBackendModelId, routeConfig } from '@texra-ai/llm';
-import { readProspectiveUsageRoute } from '@model/computeModelOptions';
+import { readModelOptions } from '@model/computeModelOptions';
 import { readModelSettings, routeFactsFor } from '@model/modelSettings';
 import { withProcessServices } from '@platform/processRuntime';
 import { CHATGPT_CODEX_CONTEXT_WINDOW_SETTING } from '@shared/schemas';
@@ -163,7 +163,9 @@ describe('ChatGPT subscription model routing', () => {
   const prospectiveRoute = () =>
     withProcessServices(
       testRuntime(),
-      readProspectiveUsageRoute(hostStores(), 'openai/gpt-5.5-2026-04-23'),
+      readModelOptions(hostStores(), ['openai/gpt-5.5-2026-04-23']).pipe(
+        Effect.map(([option]) => option?.usageRoute),
+      ),
     );
 
   it.effect(

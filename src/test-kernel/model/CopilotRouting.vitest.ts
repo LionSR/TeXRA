@@ -4,7 +4,7 @@ import { MODEL_CONFIGS } from 'llm-zoo';
 import { describe, expect, vi } from 'vitest';
 
 import { apiKeySecretName } from '@texra-ai/llm';
-import { readModelAvailabilityInputs } from '@model/computeModelOptions';
+import { readModelOptions } from '@model/computeModelOptions';
 import {
   copilotRouteUnavailableReason,
   discoverCopilotRoutes,
@@ -32,10 +32,8 @@ import { modelOptionsFrom } from '@texra/model/modelOptions';
  * provided explicitly because the bare `it.effect` runtime does not carry the
  * process services.
  */
-const availabilityInputs = (
-  ...args: Parameters<typeof readModelAvailabilityInputs>
-) =>
-  readModelAvailabilityInputs(...args).pipe(
+const availabilityInputs = (...args: Parameters<typeof readModelOptions>) =>
+  readModelOptions(...args).pipe(
     Effect.provide(LanguageModel.layer(fakeHostLanguageModel)),
   );
 

@@ -1,6 +1,6 @@
 /**
  * CLI projection of the enabled-models catalog. The selection itself
- * (`GlobalStateKey.MODEL_SELECTION`) is owned by `@model/computeModelOptions` —
+ * (`GlobalStateKey.MODEL_SELECTION`) is owned by the harness —
  * `getEnabledModels` reads it, `setModelEnabled` writes it and enforces the
  * "at least one enabled" and "never enable a retired model" invariants for
  * every host. This module only resolves CLI argument spellings and shapes the
@@ -14,11 +14,12 @@ import { Effect } from 'effect';
 
 import { modelConfig, modelRefOf } from '@texra-ai/llm';
 import {
+  getEnabledModels,
+  setModelEnabled,
   StateWriteFailed,
   type StateReadFailed,
   type StateStore,
 } from '@texra-ai/harness';
-import { getEnabledModels, setModelEnabled } from '@model/computeModelOptions';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { getModelLabel } from '@shared/model/modelLabel';
 

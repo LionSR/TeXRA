@@ -22,9 +22,8 @@ import { resolveDelegationScopeAgents } from '@agent/index/agentRegistry';
 import type { StepTools } from '@agent/runtime/loop/step';
 import { withLogChannel } from '@logger/effectLog';
 import {
-  modelVerdictsFrom,
-  readModelAvailabilityInputs,
-  type ModelAvailabilityInputs,
+  readModelOptions,
+  type ModelOption,
   type ModelOptionStores,
 } from '@model/computeModelOptions';
 import { decideRunModel } from '@model/runModelDecision';
@@ -42,8 +41,8 @@ import { readSettingFrom } from '@utils/config/platformSettings';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 /** The models that can run now, in picker order. */
-const availableModelNames = (inputs: ModelAvailabilityInputs): string[] =>
-  modelVerdictsFrom(inputs).flatMap(({ model, availability }) =>
+const availableModelNames = (options: readonly ModelOption[]): string[] =>
+  options.flatMap(({ model, availability }) =>
     MODEL_AVAILABILITY_STATUS[availability].available ? [model] : [],
   );
 
@@ -90,7 +89,7 @@ export const readDelegationTargets = Effect.fn('readDelegationTargets')(
           : [];
       },
     );
-    const models = yield* readModelAvailabilityInputs(stores).pipe(
+    const models = yield* readModelOptions(stores).pipe(
       Effect.map(availableModelNames),
       // A failed read (an unreadable store, a host call that rejected) tells
       // the model the list is unknown rather than failing the step, and is
@@ -225,13 +224,13 @@ export const selectAvailableDelegationModel = Effect.fn(
    */
   readonly settings: SettingsStores;
 }) {
-  const inputs = yield* readModelAvailabilityInputs({
+  const options = yield* readModelOptions({
     ...input.settings,
     secrets: yield* Secrets,
   });
   const availableModels = [
     ...new Set(
-      availableModelNames(inputs)
+      availableModelNames(options)
         .map((model) => model.trim())
         .filter(Boolean),
     ),

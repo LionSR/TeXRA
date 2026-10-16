@@ -10,7 +10,6 @@ import {
   onTestFinished,
   vi,
 } from 'vitest';
-import type { ModelOptionStores } from '@model/computeModelOptions';
 import {
   StateWriteFailed,
   type ConfigProvider,
@@ -47,8 +46,9 @@ import {
   commandOf,
   createStubSettingsBindings,
 } from './desktopSettingsTestSupport';
+import type { ModelOptionStores } from '@texra-ai/harness';
 
-const readModelAvailabilityInputs = vi.hoisted(() =>
+const readModelOptions = vi.hoisted(() =>
   vi.fn((_stores: ModelOptionStores, models: readonly string[] = []) =>
     Effect.succeed(models.map((model) => ({ value: model, label: model }))),
   ),
@@ -70,7 +70,7 @@ vi.mock(
 
 vi.mock('@model/computeModelOptions', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@model/computeModelOptions')>()),
-  readModelAvailabilityInputs,
+  readModelOptions,
   // The mocked read resolves the rows this fixture wants; the pure finisher
   // hands them back.
 }));

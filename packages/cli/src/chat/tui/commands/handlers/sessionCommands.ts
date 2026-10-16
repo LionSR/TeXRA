@@ -1,6 +1,7 @@
 import { Effect, Result, Stream } from 'effect';
 
 import { goalStateOf } from '@texra-ai/harness/schemas';
+import { readModelOptions, type Session } from '@texra-ai/harness';
 import type { SessionHandle } from '@agent/runtime';
 import { defaultShortcutModifierLabel } from '@cli/runtime/shortcutLabels';
 import {
@@ -26,7 +27,6 @@ import {
   appendLocalNotice,
   appendLocalRequestRefusal,
 } from '@cli/chat/tui/state/transcript';
-import { readProspectiveUsageRoute } from '@model/computeModelOptions';
 import { runBypasses } from '@shared/approvalBypassKind';
 import { isLiveRun } from '@shared/session/sessionView';
 import { interruptedTasks } from '@ui/copy/interruptedTasks';
@@ -42,7 +42,6 @@ import {
   type SlashCommandContext,
   type SlashCommandEffect,
 } from './slashContext';
-import type { Session } from '@texra-ai/harness';
 import type { RunId } from '@texra-ai/harness/schemas';
 
 export function showCliSlashCommandHelp(): void {
@@ -101,9 +100,9 @@ export const showCliSessionStatus = Effect.fn('showCliSessionStatus')(
       context.runtimeSession,
       activeRunId,
     );
-    const prospectiveRoute = yield* readProspectiveUsageRoute(
+    const [option] = yield* readModelOptions(
       { ...context.stores, secrets: context.secrets },
-      model,
+      [model],
     );
     appendLocalNotice(
       formatCliSessionStatus({
@@ -112,7 +111,7 @@ export const showCliSessionStatus = Effect.fn('showCliSessionStatus')(
         teamName: meta.teamName,
         // A completed request's route cannot change, so it outranks the
         // prospective one.
-        modelAccess: run?.usage.usageRoute ?? prospectiveRoute,
+        modelAccess: run?.usage.usageRoute ?? option?.usageRoute,
         approvalBypasses:
           activeRunId === undefined
             ? undefined

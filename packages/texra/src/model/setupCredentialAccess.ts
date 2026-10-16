@@ -2,16 +2,16 @@ import { Effect } from 'effect';
 
 import { hasUsableApiKey } from '@texra-ai/llm';
 import {
+  readModelOptions,
+  type LanguageModel,
   type ModelOptionStores,
-  readModelAvailabilityInputs,
-  usageRouteFrom,
-} from '@model/computeModelOptions';
+  type PlatformSecrets,
+} from '@texra-ai/harness';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import { isModelOptionAvailable } from '@shared/schemas';
 import { modelOptionsFrom } from '@texra/model/modelOptions';
 import { SETUP_MODEL_BY_PROVIDER } from '@texra/model/setupModelDefaults';
 import { getUseOpenRouter } from '@utils/config/providerConfig';
-import type { PlatformSecrets, LanguageModel } from '@texra-ai/harness';
 
 /**
  * The setup assistant's launch model: the first provider setup model the
@@ -32,20 +32,19 @@ export const resolveSetupLaunchModel = Effect.fn('resolveSetupLaunchModel')(
     includeAccessListFallback: boolean,
   ) {
     const candidates = Object.entries(SETUP_MODEL_BY_PROVIDER);
-    const inputs = yield* readModelAvailabilityInputs(
+    const options = yield* readModelOptions(
       { ...stores, secrets },
       candidates.map(([, model]) => model),
     );
-    const options = modelOptionsFrom(inputs);
-    const runnable = options.filter(
-      (option, index) =>
-        isModelOptionAvailable(option) &&
-        (option.availability === 'openrouter-key') ===
-          (candidates[index]?.[0] === 'openRouter'),
+    const runnable = modelOptionsFrom(options).flatMap((row, index) =>
+      isModelOptionAvailable(row) &&
+      (row.availability === 'openrouter-key') ===
+        (candidates[index]?.[0] === 'openRouter')
+        ? [{ row, paidByPlan: options[index]?.usageRoute !== undefined }]
+        : [],
     );
-    const pick =
-      runnable.find((option) => usageRouteFrom(inputs, option.value)) ??
-      runnable[0];
+    const pick = (runnable.find(({ paidByPlan }) => paidByPlan) ?? runnable[0])
+      ?.row;
     if (pick) {
       return {
         model: pick.value,
@@ -83,4 +82,4 @@ export function hasUsableSetupCredential(
 
 /** The picker's model options as the follow-up controls list them, read live. */
 export const loadModelOptions = (stores: ModelOptionStores) =>
-  readModelAvailabilityInputs(stores).pipe(Effect.map(modelOptionsFrom));
+  readModelOptions(stores).pipe(Effect.map(modelOptionsFrom));

@@ -2,11 +2,11 @@ import { Box, Text, useStderr, useWindowSize } from 'ink';
 import { Cause, Effect, Exit } from 'effect';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
+import { readModelOptions, type PlatformSecrets } from '@texra-ai/harness';
 import { loadingFrameAt } from '@cli/tui/ui/LoadingIndicator';
 import { COLOR_ERROR } from '@cli/tui/ui/colors';
 import { useLiveNowMsSince } from '@cli/tui/useLiveNowMs';
 import { usePollingInterval } from '@cli/tui/usePollingInterval';
-import { readProspectiveUsageRoute } from '@model/computeModelOptions';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import { isEmptyUsage } from '@shared/schemas';
 import { isActivePhase } from '@shared/runs/runStatus';
@@ -37,7 +37,6 @@ import {
   subscriptionUsageProviderForStatus,
 } from './statusBarDisplay';
 import type { ProcessRuntime, ProcessServices } from '@texra-ai/harness';
-import type { PlatformSecrets } from '@texra-ai/harness';
 
 const CODEX_SUBSCRIPTION_REFRESH_MS = 10_000;
 const SUBSCRIPTION_QUOTA_REFRESH_MS = 30_000;
@@ -166,10 +165,9 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
     props.runtime,
     routeReadKey,
     () =>
-      readProspectiveUsageRoute(
-        { ...props.stores, secrets: props.secrets },
+      readModelOptions({ ...props.stores, secrets: props.secrets }, [
         accessModel,
-      ),
+      ]).pipe(Effect.map(([option]) => option?.usageRoute)),
     CODEX_SUBSCRIPTION_REFRESH_MS,
   );
   // Only a read of the current key settles here, so a probe that a newer key

@@ -3,16 +3,14 @@ import { Effect, Result } from 'effect';
 
 // Local imports
 import {
-  readModelAvailabilityInputs,
-  usageRouteFrom,
-  type ModelAvailabilityInputs,
-  type ModelOptionStores,
-} from '@model/computeModelOptions';
-import {
   decideRunModel,
+  readModelOptions,
+  type ModelOption,
+  type ModelOptionStores,
+  type ProcessRuntime,
   type RunModelCandidate,
   type RunModelDecisionReason,
-} from '@model/runModelDecision';
+} from '@texra-ai/harness';
 import type { ModelOptionData, UsageRoute } from '@shared/schemas';
 import {
   isModelOptionAvailable,
@@ -24,7 +22,6 @@ import { assertNever } from '@utils/core';
 // Local file imports
 import { resolveKnownCliModelId } from './cliConfig';
 import { formatCliModelAccessRoute } from './modelAccessRoute';
-import type { ProcessRuntime } from '@texra-ai/harness';
 
 export interface CliModelAccess {
   readonly model: ModelOptionData;
@@ -187,22 +184,21 @@ export function modelSelectItemsForCli(
   );
 }
 
-function cliModelAccessFrom(inputs: ModelAvailabilityInputs) {
-  return (model: ModelOptionData): CliModelAccess => ({
+/** Each option's picker row, with the plan its route pays through. */
+function cliModelAccessFrom(options: readonly ModelOption[]): CliModelAccess[] {
+  return modelOptionsFrom(options).map((model, index) => ({
     model,
     available: isModelOptionAvailable(model),
     status: formatModelAccessStatus(model),
-    usageRoute: usageRouteFrom(inputs, model.value),
-  });
+    usageRoute: options[index]?.usageRoute,
+  }));
 }
 
 export const getCliModelAccessList = Effect.fn('getCliModelAccessList')(
   function* (options: CliModelAccessListOptions) {
-    const inputs = yield* readModelAvailabilityInputs(
-      options.stores,
-      options.models,
+    return cliModelAccessFrom(
+      yield* readModelOptions(options.stores, options.models),
     );
-    return modelOptionsFrom(inputs).map(cliModelAccessFrom(inputs));
   },
 );
 
@@ -335,11 +331,10 @@ export const loadCliModelAccessEntry = Effect.fn('loadCliModelAccessEntry')(
     const hiddenModelId = resolveKnownCliModelId(trimmed);
     if (hiddenModelId == null) return undefined;
 
-    const inputs = yield* readModelAvailabilityInputs(options.stores, [
-      hiddenModelId,
-    ]);
-    const hiddenModelOption = modelOptionsFrom(inputs)[0];
-    if (!hiddenModelOption) {
+    const [hiddenEntry] = cliModelAccessFrom(
+      yield* readModelOptions(options.stores, [hiddenModelId]),
+    );
+    if (!hiddenEntry) {
       return yield* Effect.fail(
         new Error(
           `Model "${hiddenModelId}" is configured but has no option data.`,
@@ -347,7 +342,7 @@ export const loadCliModelAccessEntry = Effect.fn('loadCliModelAccessEntry')(
       );
     }
 
-    return cliModelAccessFrom(inputs)(hiddenModelOption);
+    return hiddenEntry;
   },
 );
 

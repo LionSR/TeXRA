@@ -14,24 +14,20 @@ import {
   resolveModelSource,
 } from '@texra-ai/llm';
 import {
+  getEnabledModels,
+  getHelperModelName,
+  reasoningEffortOverrides,
+  setModelEnabled,
   StateReadFailed,
   StateWriteFailed,
+  supportsReasoningLevel,
+  type ModelOptionStores,
   type PlatformSecrets,
 } from '@texra-ai/harness';
-import { getHelperModelName } from '@agent/runtime/helperModelName';
-import {
-  getEnabledModels,
-  setModelEnabled,
-  type ModelOptionStores,
-} from '@model/computeModelOptions';
 import {
   preferredCopilotRouteModels,
   type CopilotModelRoute,
 } from '@model/copilotRouting';
-import {
-  reasoningEffortOverrides,
-  supportsReasoningLevel,
-} from '@model/reasoningLevel';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import { type ModelOptionData } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
@@ -72,7 +68,7 @@ interface SettingsModelSelectionControllerDeps<R> {
   >;
   /**
    * Resolve availability-decorated options for the given models, reading the
-   * shared availability inputs and finishing them with `modelOptionsFrom` —
+   * shared model options (`readModelOptions`) worded by `modelOptionsFrom` —
    * the same source the CLI picker uses.
    */
   resolveModelOptions: (

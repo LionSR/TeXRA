@@ -13,14 +13,15 @@ import {
 } from 'effect';
 import { HttpClient, HttpClientError, HttpClientRequest } from 'effect/http';
 
-import { withLogChannel } from '@texra-ai/harness';
+import {
+  UsageLog,
+  UsageLogResponseSchema,
+  withLogChannel,
+  type UsageLogBatch,
+  type UsageLogEntry,
+  type UsageLogResponse,
+} from '@texra-ai/harness';
 import { writeLogLine } from '@logger/logSink';
-import { UsageLog, UsageLogResponseSchema } from '@shared/usageLog';
-import type {
-  UsageLogEntry,
-  UsageLogBatch,
-  UsageLogResponse,
-} from '@shared/usageLog';
 import { readOrCreateInstallId } from '@telemetry/installId';
 import { TELEMETRY_ENABLED_KEY } from '@texra/shared/settingsView/texraSettings';
 import { unrefSleepClock } from '@texra/utils/system/unrefSleepClock';

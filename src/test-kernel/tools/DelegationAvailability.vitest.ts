@@ -6,19 +6,18 @@ import type { ModelOptionData } from '@shared/schemas';
 import { fakeProcessServices, hostStores } from '@test/support/setupPlatform';
 
 const mocks = vi.hoisted(() => ({
-  readModelAvailabilityInputs: vi.fn(),
+  readModelOptions: vi.fn<() => Effect.Effect<readonly ModelOptionData[]>>(),
 }));
 
 vi.mock('@model/computeModelOptions', () => ({
-  readModelAvailabilityInputs: mocks.readModelAvailabilityInputs,
-  // Availability is read once and finished purely, so a case seeds the option
-  // rows on the read and the pure finisher hands them straight back.
-  // The availability read is stubbed to rows; their verdicts are the rows'.
-  modelVerdictsFrom: (rows: readonly ModelOptionData[]) =>
-    rows.map(({ value, availability }) => ({
-      model: value,
-      availability: availability ?? 'provider-key',
-    })),
+  // A case seeds picker rows; the read answers each row's verdict.
+  readModelOptions: () =>
+    Effect.map(mocks.readModelOptions(), (rows) =>
+      rows.map(({ value, availability }) => ({
+        model: value,
+        availability: availability ?? 'provider-key',
+      })),
+    ),
 }));
 
 const { selectAvailableDelegationModel } =
@@ -44,7 +43,7 @@ describe('delegation model availability', () => {
     'rejects an explicitly requested model that is not currently available',
     () =>
       Effect.gen(function* () {
-        mocks.readModelAvailabilityInputs.mockReturnValue(
+        mocks.readModelOptions.mockReturnValue(
           Effect.succeed([
             model('anthropic/claude-sonnet-4-6'),
             model('anthropic/claude-opus-4-8', { availability: 'retired' }),
@@ -70,7 +69,7 @@ describe('delegation model availability', () => {
 
   it.effect('uses the parent model only when it is available', () =>
     Effect.gen(function* () {
-      mocks.readModelAvailabilityInputs.mockReturnValue(
+      mocks.readModelOptions.mockReturnValue(
         Effect.succeed([
           model('deepseek/deepseek-v4-flash'),
           model('anthropic/claude-sonnet-4-6'),
