@@ -10,7 +10,7 @@ import {
   decideModelRoute,
   resolveRouteEndpoint,
 } from '@texra-ai/llm';
-import { readProspectiveUsageRoute } from '@model/computeModelOptions';
+import { readModelOptions } from '@model/computeModelOptions';
 import { readModelSettings, routeFactsFor } from '@model/modelSettings';
 import {
   LanguageModel,
@@ -185,11 +185,11 @@ describe('coding-plan subscription runtime', () => {
           ...(usageRoute && { usageRoute }),
         });
         expect(
-          yield* readProspectiveUsageRoute(hostStores(), 'glm/glm-5.3').pipe(
+          (yield* readModelOptions(hostStores(), ['glm/glm-5.3']).pipe(
             Effect.provide(
               LanguageModel.layer(UNAVAILABLE_LANGUAGE_MODEL_PORT),
             ),
-          ),
+          ))[0]?.usageRoute,
         ).toBe(usageRoute);
       }),
   );

@@ -13,8 +13,11 @@ import { Context, Data, Effect, Layer } from 'effect';
 
 // Local imports
 import { getCodexStatus } from '@texra-ai/llm/node';
-import { Secrets, type LanguageModel } from '@texra-ai/harness';
-import { readProspectiveUsageRoute } from '@model/computeModelOptions';
+import {
+  readModelOptions,
+  Secrets,
+  type LanguageModel,
+} from '@texra-ai/harness';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import { ToolError } from '@shared/schemas';
 import type {
@@ -141,7 +144,7 @@ export function assertInSetupAllowlist(
 class SubscriptionProbeFailed extends Data.TaggedError(
   'SubscriptionProbeFailed',
 )<{
-  readonly member: 'readProspectiveUsageRoute';
+  readonly member: 'readModelOptions';
   readonly message: string;
   readonly cause: unknown;
 }> {}
@@ -160,18 +163,20 @@ export const getChatGptSubscriptionStatus = Effect.fn(
   const status = yield* getCodexStatus(secrets);
   // Routing is only consulted for a signed-in account, as the `&&` did.
   if (!status.signedIn) return { signedIn: false, enabled: false };
-  const route = yield* readProspectiveUsageRoute(
-    { ...stores, secrets },
+  const [option] = yield* readModelOptions({ ...stores, secrets }, [
     CHATGPT_SETUP_MODEL,
-  ).pipe(
+  ]).pipe(
     Effect.mapError(
       (cause) =>
         new SubscriptionProbeFailed({
-          member: 'readProspectiveUsageRoute',
+          member: 'readModelOptions',
           message: 'ChatGPT subscription routing could not be resolved.',
           cause,
         }),
     ),
   );
-  return { signedIn: true, enabled: route === 'chatgpt-subscription' };
+  return {
+    signedIn: true,
+    enabled: option?.usageRoute === 'chatgpt-subscription',
+  };
 });

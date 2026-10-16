@@ -2,9 +2,12 @@
 import { Data, Effect, PlatformError } from 'effect';
 
 // Local imports
+import {
+  decideRunModel,
+  type ModelHostFactUnreadable,
+  type StateReadFailed,
+} from '@texra-ai/harness';
 import { detectGeneratedLatexdiffArtifact } from '@latex/latexdiff/diffFileNameManager';
-import type { ModelHostFactUnreadable } from '@model/computeModelOptions';
-import { decideRunModel } from '@model/runModelDecision';
 import {
   isTaskConfig,
   fileLocationAddressPath,
@@ -21,7 +24,6 @@ import {
 } from '@texra/shared/plugins/documentOutputs';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { pluralize } from '@utils/text/stringUtils';
-import type { StateReadFailed } from '@texra-ai/harness';
 import type { AgentConfig } from '@texra-ai/harness/schemas';
 import type { RunOutputsSource } from './runOutputs';
 

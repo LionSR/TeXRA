@@ -3,7 +3,6 @@
  * focus, overlays, exit hints) lives here as signals.
  */
 import { computed, signal, type Signal } from '@lit-labs/signals';
-import type { RunModelDecisionReason } from '@model/runModelDecision';
 import {
   TEXRA_APPROVAL_POLICY_DEFAULT,
   type TexraApprovalPolicy,
@@ -26,7 +25,7 @@ import {
 } from '@texra/shared/session/surface';
 import { RUN_GROUP_LABELS } from '@ui/copy/runStatus';
 import { sessionView } from './sessionView';
-import type { RunView } from '@texra-ai/harness';
+import type { RunModelDecisionReason, RunView } from '@texra-ai/harness';
 import type { PastedImageEntry } from '../input/draftAttachments';
 
 // ---------------------------------------------------------------------------

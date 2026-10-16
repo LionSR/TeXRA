@@ -10,20 +10,19 @@ import {
   selectCliRunnableModel,
   type CliModelAccess,
 } from '@cli/runtime/modelAccess';
-import type { RunModelDecisionReason } from '@model/runModelDecision';
 import type { ProcessServices } from '@platform/processRuntime';
 import type { ModelOptionData } from '@shared/schemas';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { fakeStores } from '@test/support/FakePlatform';
 import { setupPlatform } from '@test/support/setupPlatform';
+import type { RunModelDecisionReason } from '@texra-ai/harness';
 
-const readModelAvailabilityInputsMock = vi.hoisted(() => vi.fn());
+const readModelOptionsMock = vi.hoisted(() => vi.fn());
 
 vi.mock('@model/computeModelOptions', () => ({
-  readModelAvailabilityInputs: readModelAvailabilityInputsMock,
-  // Availability is read once and finished purely, so a case seeds the option
-  // rows on the read and the pure finisher hands them straight back.
-  usageRouteFrom: () => undefined,
+  // A case seeds the option rows on the read, and the wording below hands
+  // them straight back.
+  readModelOptions: readModelOptionsMock,
 }));
 // The availability read is stubbed to rows already.
 vi.mock('@texra/model/modelOptions', () => ({
@@ -107,12 +106,12 @@ const RETIRED_HAIKU3_OPTION = modelOption('anthropic/claude-3-haiku-20240307', {
 });
 
 function expectModelOptionsRequested(models: string[]): void {
-  expect(readModelAvailabilityInputsMock).toHaveBeenCalledWith(stores, models);
+  expect(readModelOptionsMock).toHaveBeenCalledWith(stores, models);
 }
 
 describe('CLI model access resolution', () => {
   beforeEach(() => {
-    readModelAvailabilityInputsMock.mockReset();
+    readModelOptionsMock.mockReset();
   });
 
   it('owns fallback behavior by model source', async () => {
@@ -264,7 +263,7 @@ describe('CLI model access resolution', () => {
   });
 
   it('rejects explicit retired hidden models before fallback', async () => {
-    readModelAvailabilityInputsMock.mockReturnValueOnce(
+    readModelOptionsMock.mockReturnValueOnce(
       Effect.succeed([RETIRED_HAIKU3_OPTION]),
     );
 
@@ -327,7 +326,7 @@ describe('CLI model access resolution', () => {
   });
 
   it('keeps ChatGPT models available without TeXRA sign-in or API keys', async () => {
-    readModelAvailabilityInputsMock.mockReturnValueOnce(
+    readModelOptionsMock.mockReturnValueOnce(
       Effect.succeed([
         modelOption('openai/gpt-5.6-sol', {
           availability: 'subscription-access',
@@ -349,7 +348,7 @@ describe('CLI model access resolution', () => {
   });
 
   it('checks access for explicit models hidden from the visible model list', async () => {
-    readModelAvailabilityInputsMock
+    readModelOptionsMock
       .mockReturnValueOnce(
         Effect.succeed([
           modelOption('anthropic/claude-sonnet-4-6', {
@@ -371,13 +370,13 @@ describe('CLI model access resolution', () => {
         ),
       ),
     ).resolves.toEqual({ model: HIDDEN_MODEL });
-    expect(readModelAvailabilityInputsMock).toHaveBeenNthCalledWith(2, stores, [
+    expect(readModelOptionsMock).toHaveBeenNthCalledWith(2, stores, [
       HIDDEN_MODEL,
     ]);
   });
 
   it('ignores stale lower-priority hidden candidates after a runnable winner', async () => {
-    readModelAvailabilityInputsMock.mockReturnValueOnce(Effect.succeed([]));
+    readModelOptionsMock.mockReturnValueOnce(Effect.succeed([]));
 
     await expect(
       run(
@@ -399,7 +398,7 @@ describe('CLI model access resolution', () => {
   });
 
   it('resolves hidden model entries for diagnostic commands', async () => {
-    readModelAvailabilityInputsMock.mockReturnValueOnce(
+    readModelOptionsMock.mockReturnValueOnce(
       Effect.succeed([
         modelOption(HIDDEN_MODEL, {
           availability: 'missing-key',
@@ -432,7 +431,7 @@ describe('CLI model access resolution', () => {
       }),
     ).resolves.toEqual({ model: USER_FACING_MODEL });
 
-    readModelAvailabilityInputsMock.mockReturnValueOnce(
+    readModelOptionsMock.mockReturnValueOnce(
       Effect.succeed([
         modelOption(USER_FACING_MODEL, {
           availability: 'missing-key',
@@ -458,7 +457,7 @@ describe('CLI model access resolution', () => {
   });
 
   it('reports stale hidden model configuration directly', async () => {
-    readModelAvailabilityInputsMock
+    readModelOptionsMock
       .mockReturnValueOnce(
         Effect.succeed([
           modelOption('anthropic/claude-sonnet-4-6', {

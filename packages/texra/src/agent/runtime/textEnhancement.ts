@@ -1,9 +1,11 @@
 import { Effect } from 'effect';
 
-import { withLogChannel } from '@texra-ai/harness';
-import { helperCall } from '@agent/runtime/helperModel';
+import {
+  helperCall,
+  withLogChannel,
+  type ModelOptionStores,
+} from '@texra-ai/harness';
 import { getSdkErrorMessage } from '@common/errors/sdkError/providerErrorFormat';
-import type { ModelOptionStores } from '@model/computeModelOptions';
 import { extractTextFromTag } from '@texra/utils/text/xmlExtraction';
 import { isNonEmptyString } from '@utils/text/stringUtils';
 

@@ -23,6 +23,7 @@ import {
   type PlatformSecrets,
   type ProcessRuntime,
   type ProcessServices,
+  type RunModelDecisionReason,
   type RunStopReason,
   type RuntimeRequest,
   type RunView,
@@ -45,7 +46,6 @@ import {
 } from '@cli/runtime/modelAccess';
 import { createCliRuntimeHost } from '@cli/runtime/cliPresentationHost';
 import { runOutcomeExitCode } from '@cli/runtime/terminalStatus';
-import type { RunModelDecisionReason } from '@model/runModelDecision';
 import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import { acceptsFollowUp, isLiveRun } from '@shared/session/sessionView';

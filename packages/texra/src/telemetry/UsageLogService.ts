@@ -12,15 +12,14 @@ import {
   Semaphore,
 } from 'effect';
 import { HttpClient, HttpClientError, HttpClientRequest } from 'effect/http';
+import { z } from 'zod';
 
-import { withLogChannel } from '@texra-ai/harness';
+import {
+  UsageLog,
+  withLogChannel,
+  type UsageLogEntry,
+} from '@texra-ai/harness';
 import { writeLogLine } from '@logger/logSink';
-import { UsageLog, UsageLogResponseSchema } from '@shared/usageLog';
-import type {
-  UsageLogEntry,
-  UsageLogBatch,
-  UsageLogResponse,
-} from '@shared/usageLog';
 import { readOrCreateInstallId } from '@telemetry/installId';
 import { TELEMETRY_ENABLED_KEY } from '@texra/shared/settingsView/texraSettings';
 import { unrefSleepClock } from '@texra/utils/system/unrefSleepClock';
@@ -34,6 +33,31 @@ import type { AppState, ConfigProvider } from '@texra-ai/harness';
 const CHANNEL = 'UsageLogService';
 
 const USAGE_LOG_ENDPOINT = 'https://remote.texra.ai/functions/v1/log-usage-v2';
+
+/** One request body of the `log-usage-v2` edge function. */
+interface UsageLogBatch {
+  readonly entries: readonly UsageLogEntry[];
+  readonly batchId: string;
+}
+
+/** The edge function's answer to a batch. */
+const UsageLogResponseSchema = z.discriminatedUnion('success', [
+  z.object({
+    success: z.literal(true),
+    accepted: z.int().nonnegative(),
+  }),
+  z.object({
+    success: z.literal(false),
+    accepted: z.literal(0),
+    error: z.string().optional(),
+    /** The edge's stable rejection code (`BATCH_REJECTED`, `INVALID_JSON`). */
+    errorCode: z.string().optional(),
+    /** Only an explicit false permits the client to discard instead of retry. */
+    retryable: z.boolean().optional(),
+  }),
+]);
+
+type UsageLogResponse = z.infer<typeof UsageLogResponseSchema>;
 const MAX_QUEUE_SIZE = 1000;
 const REQUEST_TIMEOUT_MS = 10000;
 const DISPOSE_WARNING_TIMEOUT_MS = 5000;

@@ -1,5 +1,5 @@
 /**
- * The model picker's rows: each model's verdict (`modelVerdictsFrom`, the
+ * The model picker's rows: each model's option (`readModelOptions`, the
  * harness's), worded for display — label, source, context window, prices,
  * tooltip, reasoning column and route badge. Pure.
  */
@@ -11,12 +11,7 @@ import {
   isKimiSubscriptionEligible,
   providerDisplayName,
 } from '@texra-ai/llm';
-import {
-  modelVerdictsFrom,
-  type ModelAvailabilityInputs,
-  type ModelVerdict,
-} from '@model/computeModelOptions';
-import { supportsReasoningLevel } from '@model/reasoningLevel';
+import { supportsReasoningLevel, type ModelOption } from '@texra-ai/harness';
 import type { ModelOptionData } from '@shared/schemas';
 import {
   EXPENSIVE_MODEL_HINT,
@@ -77,7 +72,7 @@ function reasoningLevelLabel(
 }
 
 /** One verdict as a picker row. */
-function optionRow(verdict: ModelVerdict): ModelOptionData {
+function optionRow(verdict: ModelOption): ModelOptionData {
   const { model, availability } = verdict;
   if (!('config' in verdict)) {
     return { value: model, label: model, availability };
@@ -114,7 +109,7 @@ function optionRow(verdict: ModelVerdict): ModelOptionData {
 
 /** The picker rows for every visible model, in the order they are shown. */
 export function modelOptionsFrom(
-  inputs: ModelAvailabilityInputs,
+  options: readonly ModelOption[],
 ): ModelOptionData[] {
-  return modelVerdictsFrom(inputs).map(optionRow);
+  return options.map(optionRow);
 }

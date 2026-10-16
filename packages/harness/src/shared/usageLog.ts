@@ -60,31 +60,6 @@ const UsageLogEntrySchema = UsageLogMetadataSchema.extend(
 
 export type UsageLogEntry = z.infer<typeof UsageLogEntrySchema>;
 
-const UsageLogBatchSchema = z.object({
-  entries: z.array(UsageLogEntrySchema),
-  batchId: z.uuid(),
-});
-
-export type UsageLogBatch = z.infer<typeof UsageLogBatchSchema>;
-
-export const UsageLogResponseSchema = z.discriminatedUnion('success', [
-  z.object({
-    success: z.literal(true),
-    accepted: z.int().nonnegative(),
-  }),
-  z.object({
-    success: z.literal(false),
-    accepted: z.literal(0),
-    error: z.string().optional(),
-    /** The edge's stable rejection code (`BATCH_REJECTED`, `INVALID_JSON`). */
-    errorCode: z.string().optional(),
-    /** Only an explicit false permits the client to discard instead of retry. */
-    retryable: z.boolean().optional(),
-  }),
-]);
-
-export type UsageLogResponse = z.infer<typeof UsageLogResponseSchema>;
-
 /** The process-owned producer; telemetry supplies its scoped sender implementation. */
 export class UsageLog extends Context.Service<
   UsageLog,

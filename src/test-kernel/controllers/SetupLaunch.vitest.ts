@@ -26,14 +26,19 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@model/computeModelOptions', () => ({
-  readModelAvailabilityInputs: (_stores: unknown, models: readonly string[]) =>
-    Effect.succeed(models),
-  usageRouteFrom: (_inputs: unknown, model: string) =>
-    mocks.usageRoutes.get(model),
+  readModelOptions: (_stores: unknown, models: readonly string[]) =>
+    Effect.succeed(
+      models.map((model) => ({
+        model,
+        usageRoute: mocks.usageRoutes.get(model),
+      })),
+    ),
 }));
 vi.mock('@texra/model/modelOptions', () => ({
-  modelOptionsFrom: (models: readonly string[]): ModelOptionData[] =>
-    models.map((value) => ({
+  modelOptionsFrom: (
+    options: readonly { model: string }[],
+  ): ModelOptionData[] =>
+    options.map(({ model: value }) => ({
       value,
       label: value,
       availability: 'missing-key',

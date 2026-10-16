@@ -1,6 +1,5 @@
 import { Effect } from 'effect';
 
-import type { RunModelCandidate } from '@model/runModelDecision';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 import {
@@ -12,6 +11,7 @@ import { CliUsageError, type CliContext } from './cliContext';
 import { writeTextStderr } from './logSinks';
 import { selectCliRunnableModel, type CliModelStores } from './modelAccess';
 import { shouldRenderRunProgress } from './runProgressRenderer';
+import type { RunModelCandidate } from '@texra-ai/harness';
 
 /** Trim `-m`; throw a Usage error for unknown ids; undefined when absent. */
 export function assertExplicitModelKnown(

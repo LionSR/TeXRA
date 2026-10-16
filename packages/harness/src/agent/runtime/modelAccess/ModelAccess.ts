@@ -25,8 +25,7 @@ import { getHelperModelName } from '@agent/runtime/helperModelName';
 import type { RoutePolicy } from '@agent/runtime/ModelRetryGate';
 import { RouteUnavailable } from '@common/errors/agentErrors';
 import {
-  modelUnavailableReasonFrom,
-  readModelAvailabilityInputs,
+  readModelOptions,
   type ModelOptionStores,
 } from '@model/computeModelOptions';
 import { readModelSettings } from '@model/modelSettings';
@@ -145,11 +144,11 @@ const helperRequest = Effect.fn('ModelAccess.helper')(function* (
     getHelperModelName(stores),
     RouteUnavailable.of,
   );
-  const inputs = yield* Effect.mapError(
-    readModelAvailabilityInputs(stores, [modelId]),
+  const [option] = yield* Effect.mapError(
+    readModelOptions(stores, [modelId]),
     RouteUnavailable.of,
   );
-  const reason = modelUnavailableReasonFrom(inputs, modelId);
+  const reason = option?.unavailableReason;
   if (reason) return yield* RouteUnavailable.of(new Error(reason));
   // One-shot deterministic text: the whole output budget, never sampled.
   return { modelId, declinedRoutes: [], textOnly: true, temperature: 0 };

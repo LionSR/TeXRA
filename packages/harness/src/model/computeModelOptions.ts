@@ -120,7 +120,7 @@ const UNAVAILABLE_REASON_BUILDERS: Record<
   },
   'copilot-consent-required': copilotUnavailableReason,
   'copilot-unavailable': copilotUnavailableReason,
-  // Unreachable from `modelUnavailableReasonFrom` (it answers "not recognized"
+  // Unreachable from `optionOf` (it answers "not recognized"
   // first), but an `available: false` kind the table must still cover.
   'unknown-model': ({ model }) => `Model "${model}" is not recognized.`,
 };
@@ -538,37 +538,99 @@ export function setModelEnabled(input: {
 }
 
 /**
- * One computation's resolved inputs: the host facts and key statuses, read
- * once, and the route each visible model was decided to take over them.
- *
- * This is the whole of the boundary between reading a host and computing
- * availability. {@link readModelAvailabilityInputs} is the only thing in this
- * module that touches a host; {@link modelVerdictsFrom} and
- * {@link modelUnavailableReasonFrom} are pure functions of this value, so a
- * caller awaits once and then finishes synchronously. It carries no store
- * reference, which is what makes that structural rather than a promise: the
- * finishers have nothing to read a host through.
+ * One visible model's option: whether it can run now, the route that decided
+ * it, and what that route means for the next request. The registry does not
+ * describe an `unknown-model`. Each host words a row from it (the app's
+ * `modelOptionsFrom`).
  */
-export interface ModelAvailabilityInputs {
-  /** The host facts plus the key status of every provider the routes consult. */
-  readonly context: ModelAvailabilityContext;
-  /** Stage 1's decision per model, keyed by model. */
-  readonly routed: RoutedModels;
-  /** The models the rows are built for, in the order they are shown. */
-  readonly visible: readonly string[];
+export type ModelOption =
+  | {
+      readonly model: string;
+      readonly availability: 'unknown-model';
+      readonly unavailableReason: string;
+      readonly usageRoute?: undefined;
+    }
+  | {
+      readonly model: string;
+      readonly availability: ModelAvailabilityKind;
+      /** Why it cannot run now, worded as a run would fail; absent when it can. */
+      readonly unavailableReason?: string;
+      /** The subscription paying for the next request; absent means own keys. */
+      readonly usageRoute?: UsageRoute;
+      /** The registry config as published: what the model is. */
+      readonly published: ModelConfig;
+      /** The config it runs with on its route: the editor's when Copilot serves it. */
+      readonly config: ModelConfig;
+      readonly route: ModelRoute<CopilotModelRoute>;
+      /** The key its route bills, or the model's own source. */
+      readonly source: string;
+      /** The user's saved reasoning effort for it. */
+      readonly savedEffort: ReasoningEffort | undefined;
+    };
+
+/**
+ * Stage 3 for one model, pure: its verdict over the key statuses stage 2
+ * read, and the reason a run would fail with when it cannot run.
+ */
+function optionOf(
+  model: string,
+  decision: RoutedModel | undefined,
+  { keyStatuses, reasoningLevels }: ModelAvailabilityContext,
+): ModelOption {
+  if (!decision) {
+    return {
+      model,
+      availability: 'unknown-model',
+      unavailableReason: `Model "${model}" is not recognized.`,
+    };
+  }
+  const { route } = decision;
+  const { kind, usageRoute } = resolveModelAvailability(
+    model,
+    decision.gate,
+    keyStatuses,
+  );
+  // cast: a kind the status table marks unavailable is one the builders
+  // cover; the compiler enforces that on the table, not at this call site.
+  const unavailableReason = MODEL_AVAILABILITY_STATUS[kind].available
+    ? undefined
+    : UNAVAILABLE_REASON_BUILDERS[kind as UnavailableAvailabilityKind]({
+        model,
+        source: modelSource(route, decision.config),
+        route,
+      });
+  const config =
+    route.kind === 'copilot' && route.route?.access === 'allowed'
+      ? route.route.effectiveConfig
+      : decision.config;
+  return {
+    model,
+    availability: kind,
+    ...(unavailableReason === undefined ? {} : { unavailableReason }),
+    ...(usageRoute === undefined ? {} : { usageRoute }),
+    published: decision.rawConfig,
+    config,
+    route,
+    source: modelSource(route, config),
+    savedEffort: reasoningLevels[config.ref],
+  };
 }
 
 /**
- * Read everything one availability computation runs over: the facts every
- * model shares, each model routed once, then one key-status read per provider
- * the routes consult. The module's only host call; every host read fails in
- * its typed channel ({@link ModelHostFactUnreadable}). `models`, when given,
- * is honored verbatim. Nothing is cached here: the editor's routes and the
- * sign-in state are read live by design.
+ * Every visible model's option, in the order they are shown — the one read
+ * behind every model picker, run-model check and prospective route. The
+ * facts every model shares are read once, each model is routed once, then
+ * one key status is read per provider the routes consult; each option is
+ * finished purely over them, so the ~157-model settings pass costs no
+ * per-model awaits. Every host read fails in its typed channel
+ * ({@link ModelHostFactUnreadable}). `models`, when given, is honored
+ * verbatim, one option each, in order. Nothing is cached here: the editor's
+ * routes and the sign-in state are read live by design.
  */
-export const readModelAvailabilityInputs = Effect.fn(
-  'readModelAvailabilityInputs',
-)(function* (stores: ModelOptionStores, models?: readonly string[]) {
+export const readModelOptions = Effect.fn('readModelOptions')(function* (
+  stores: ModelOptionStores,
+  models?: readonly string[],
+) {
   const routeCtx = yield* buildAvailabilityContext(stores);
   const visible =
     models ??
@@ -585,119 +647,8 @@ export const readModelAvailabilityInputs = Effect.fn(
     routed,
     routeCtx,
   );
-  return { context, routed, visible } satisfies ModelAvailabilityInputs;
+  return visible.map((model) => optionOf(model, routed.get(model), context));
 });
-
-/**
- * One visible model's verdict: whether it can run now, and the route that
- * decided it. The registry does not describe an `unknown-model`. Each host
- * words a row from it (the app's `modelOptionsFrom`).
- */
-export type ModelVerdict =
-  | { readonly model: string; readonly availability: 'unknown-model' }
-  | {
-      readonly model: string;
-      readonly availability: ModelAvailabilityKind;
-      /** The registry config as published: what the model is. */
-      readonly published: ModelConfig;
-      /** The config it runs with on its route: the editor's when Copilot serves it. */
-      readonly config: ModelConfig;
-      readonly route: ModelRoute<CopilotModelRoute>;
-      /** The key its route bills, or the model's own source. */
-      readonly source: string;
-      /** The user's saved reasoning effort for it. */
-      readonly savedEffort: ReasoningEffort | undefined;
-    };
-
-/**
- * Every visible model's verdict, in the order they are shown: pure, and the
- * whole of the per-model work, so the ~157-model settings pass costs no
- * awaits.
- */
-export function modelVerdictsFrom(
-  inputs: ModelAvailabilityInputs,
-): ModelVerdict[] {
-  return inputs.visible.map((model) => {
-    const decision = inputs.routed.get(model);
-    if (!decision) return { model, availability: 'unknown-model' };
-    const { route } = decision;
-    const config =
-      route.kind === 'copilot' && route.route?.access === 'allowed'
-        ? route.route.effectiveConfig
-        : decision.config;
-    return {
-      model,
-      availability: resolveModelAvailability(
-        model,
-        decision.gate,
-        inputs.context.keyStatuses,
-      ).kind,
-      published: decision.rawConfig,
-      config,
-      route,
-      source: modelSource(route, config),
-      savedEffort: inputs.context.reasoningLevels[config.ref],
-    };
-  });
-}
-
-/**
- * The subscription the picker decided will pay for `model`'s next request, or
- * `undefined` when the user's own key would: the one prospective route. Pure,
- * like {@link modelUnavailableReasonFrom}; `inputs` must cover `model`.
- */
-export function usageRouteFrom(
-  inputs: ModelAvailabilityInputs,
-  model: string,
-): UsageRoute | undefined {
-  const decision = inputs.routed.get(model);
-  return decision
-    ? resolveModelAvailability(model, decision.gate, inputs.context.keyStatuses)
-        .usageRoute
-    : undefined;
-}
-
-/** {@link usageRouteFrom} for one model, read fresh. */
-export const readProspectiveUsageRoute = Effect.fn('readProspectiveUsageRoute')(
-  function* (stores: ModelOptionStores, model: string) {
-    return usageRouteFrom(
-      yield* readModelAvailabilityInputs(stores, [model]),
-      model,
-    );
-  },
-);
-
-/**
- * A human-readable reason why a model is unavailable, or `null` if available.
- * Pure — including the two Copilot kinds, whose sentence is worded from the
- * route the model was decided onto. `inputs` must have been read for a list
- * containing `model` (a single `[model]` list is the usual one).
- */
-export function modelUnavailableReasonFrom(
-  inputs: ModelAvailabilityInputs,
-  model: string,
-): string | null {
-  const decision = inputs.routed.get(model);
-  if (!decision) return `Model "${model}" is not recognized.`;
-
-  const availability = resolveModelAvailability(
-    model,
-    decision.gate,
-    inputs.context.keyStatuses,
-  );
-  if (MODEL_AVAILABILITY_STATUS[availability.kind].available) return null;
-
-  // `availability.kind` is guaranteed `available: false` here, so it's a
-  // valid `UnavailableAvailabilityKind` and every case is covered by
-  // `UNAVAILABLE_REASON_BUILDERS` — the compiler, not this call site, is what
-  // enforces that a newly added unavailable kind gets a reason.
-  const kind = availability.kind as UnavailableAvailabilityKind;
-  return UNAVAILABLE_REASON_BUILDERS[kind]({
-    model,
-    source: modelSource(decision.route, decision.config),
-    route: decision.route,
-  });
-}
 
 /** The source a row is grouped and worded under: the key its route bills. */
 function modelSource(route: ModelRoute, config: ModelConfig): string {

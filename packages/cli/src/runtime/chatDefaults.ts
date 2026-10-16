@@ -1,7 +1,4 @@
-import {
-  decideRunModel,
-  type RunModelDecisionReason,
-} from '@model/runModelDecision';
+import { decideRunModel, type RunModelDecisionReason } from '@texra-ai/harness';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import { isImplicitDefaultEligible } from '@shared/constants/agents';
 
