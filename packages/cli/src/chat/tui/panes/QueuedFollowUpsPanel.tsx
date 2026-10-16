@@ -1,12 +1,12 @@
 import { Box, Text } from 'ink';
 
+import { summarizeSubagentFollowup } from '@texra-ai/harness/transcript';
 import { hiddenRowsText } from '@cli/tui/overflowText';
 import { COLOR_WARNING } from '@cli/tui/ui/colors';
 import {
   textDisplayWidth,
   truncateSummaryToWidth,
 } from '@cli/runtime/terminalText';
-import { summarizeSubagentFollowup } from '@shared/subagentFollowup';
 import { pluralize } from '@utils/text/stringUtils';
 
 const QUEUED_FOLLOW_UP_PANEL_MAX_ROWS = 3;

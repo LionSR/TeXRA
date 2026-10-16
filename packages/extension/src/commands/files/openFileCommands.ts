@@ -5,11 +5,11 @@ import * as vscode from 'vscode';
 // Local imports
 import { withLogChannel } from '@texra-ai/harness';
 import { WorkspaceFs } from '@texra-ai/harness';
+import { ensureError } from '@texra-ai/harness/schemas';
 import { openFileInEditor } from '@frontend/vscode/vscodeEditor';
 import { openFirstLabelMatch } from '@latex/labelSearch';
 import { listWorkspaceFilesOfType } from '@texra/controllers/session/workspaceFileOptions';
 import { workspaceAbsolutePath } from '@utils/files/workspaceFS';
-import { ensureError } from '@utils/errors/errorMessage';
 import { normalizeLineEndings } from '@utils/text/stringUtils';
 import type { WorkspaceRoots } from '@texra-ai/harness';
 

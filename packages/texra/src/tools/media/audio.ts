@@ -22,8 +22,8 @@ import {
   findCommand,
   type FoundCommand,
 } from '@texra-ai/harness/node';
-import { getSdkErrorMessage } from '@common/errors/sdkError/providerErrorFormat';
-import { ensureError } from '@utils/errors/errorMessage';
+import { getSdkErrorMessage } from '@texra-ai/harness';
+import { ensureError } from '@texra-ai/harness/schemas';
 import { absentReason } from '@utils/files/fsEntryExists';
 import type { WorkspaceRoots } from '@texra-ai/harness';
 import type {

@@ -6,6 +6,7 @@
 import { Cause, Effect } from 'effect';
 
 import { withLogChannel } from '@texra-ai/harness';
+import { formatError } from '@texra-ai/harness/schemas';
 import type {
   ExternalOpener,
   MessageHost,
@@ -15,7 +16,6 @@ import type {
 import type { LatexEditorStatus } from '@texra/controllers/settingsView/LatexToolingController';
 import type { SubscriptionProviderId } from '@texra/controllers/modelAccess/subscriptionProviders';
 import type { SettingsViewOutboundMessage } from '@texra/shared/settingsView/settingsViewMessages';
-import { formatError } from '@utils/errors/errorMessage';
 import type { ProcessServices } from '@texra-ai/harness';
 import type { RunId } from '@texra-ai/harness/schemas';
 

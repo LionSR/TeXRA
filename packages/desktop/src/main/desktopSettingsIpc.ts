@@ -5,6 +5,7 @@ import {
   type SubscriptionDeviceCodePrompt,
 } from '@texra-ai/llm/node';
 import { withLogChannel } from '@texra-ai/harness';
+import { toErrorMessage } from '@texra-ai/harness/schemas';
 import { onAppSignal } from '@eventBus/AppSignals';
 import { ACCOUNT_OUTCOME } from '@shared/model/accountAuth';
 import { loadRuntimeSkillDisplay } from '@skills/runtimeSkills';
@@ -22,7 +23,6 @@ import {
   type SubscriptionProviderId,
 } from '@texra/controllers/modelAccess/subscriptionProviders';
 import { gitHubTokenRejectedMessage } from '@texra/tools/github/githubAuth';
-import { toErrorMessage } from '@utils/errors/errorMessage';
 import { parsedRoute, type DesktopCommandRoute } from './desktopIpcTypes.js';
 import type { StorageFs } from '@texra-ai/harness';
 import type { ProcessServices } from '@texra-ai/harness';

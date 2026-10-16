@@ -24,6 +24,7 @@ import {
   type PresentationEventHandlers,
 } from '@texra-ai/harness';
 import { withLogChannel } from '@texra-ai/harness';
+import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';
 import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
 import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';
 import { safeExecuteCommand } from '@frontend/system/commandUtils';
@@ -36,7 +37,6 @@ import {
   type RequestShowErrorPayload,
   type RequestShowInstructionPayload,
 } from '@shared/schemas';
-import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import type { StateStore, WorkspaceRoots } from '@texra-ai/harness';
 
 const CHANNEL = 'agentEventListeners';

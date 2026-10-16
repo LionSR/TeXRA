@@ -9,13 +9,13 @@
 import { Effect, Fiber } from 'effect';
 
 import { type ApiKeyProviderId, apiProviderOfSecretName } from '@texra-ai/llm';
+import { toErrorMessage } from '@texra-ai/harness/schemas';
 import { onAppSignal } from '@eventBus/AppSignals';
 import {
   ProviderKeyActionFailed,
   SettingsProfileKeyController,
 } from '@texra/controllers/settingsView/SettingsProfileKeyController';
 import { getProviderDisplayName } from '@texra/model/providerPresentation';
-import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { bumpCodexPreferenceVersion } from '../state/cliState';
 import { tuiUi } from './tuiUiHost';

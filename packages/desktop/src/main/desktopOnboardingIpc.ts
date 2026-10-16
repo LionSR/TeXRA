@@ -7,13 +7,13 @@ import {
   StateWriteFailed,
   StateReadFailed,
 } from '@texra-ai/harness';
+import { toErrorMessage } from '@texra-ai/harness/schemas';
 import {
   setFirstRunDone,
   setOnboardingDeclined,
 } from '@shared/state/onboardingState';
 import type { OnboardingFunnelState } from '@texra/shared/session/hostSnapshot';
 import { OnboardingFunnelRefresher } from '@texra/controllers/onboarding/onboardingFunnel';
-import { toErrorMessage } from '@utils/errors/errorMessage';
 import type { ProcessServices } from '@texra-ai/harness';
 
 /**

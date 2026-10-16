@@ -30,8 +30,8 @@ import {
   executed,
 } from '@texra-ai/harness/plugins';
 import { executeCommand } from '@texra-ai/harness/node';
+import { toErrorMessage } from '@texra-ai/harness/schemas';
 import { ToolError, type RunId, type ToolResult } from '@shared/schemas';
-import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import {
   DEFAULT_CHECK_ANNOTATION_LEVEL,

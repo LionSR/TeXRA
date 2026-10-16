@@ -7,7 +7,7 @@ import {
   TOOL_CALL_STATUS,
   type RunId,
 } from '@shared/schemas';
-import type { TranscriptRow } from '@shared/transcript';
+import type { TranscriptRow } from '@shared/transcript/transcriptRow';
 import { createTestRunTrace } from '@test/support/sessionTestUtils';
 
 /** A fold built into a fresh trace, plus its rows and groups. */

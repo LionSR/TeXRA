@@ -9,7 +9,7 @@ import * as path from 'node:path';
 import { Effect, FileSystem } from 'effect';
 
 import { hasExtension, withLogChannel } from '@texra-ai/harness';
-import { ensureError } from '@utils/errors/errorMessage';
+import { ensureError } from '@texra-ai/harness/schemas';
 import { pathExists } from '@utils/files/fsDurability';
 
 const CHANNEL = 'LatexParsing';

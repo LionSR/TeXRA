@@ -18,13 +18,13 @@ import { unsafeHTML } from 'lit/directives/unsafe-html.js';
 
 // Local imports - shared transcript model
 import type { TeXRAIconName } from '@shared/iconNames';
-import type { StreamingTextRow } from '@shared/transcript';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 
 // Local imports - formatter helpers
 import { formatDisplayTimestamp } from '../timestampUtils';
 import { processMarkdownContent } from '../markdownRenderer';
 import { buildCopyButton, buildDetailsSummary } from '../htmlBuilders';
+import type { StreamingTextRow } from '@texra-ai/harness/transcript';
 import type { FormatResult } from '../baseLogFormatter';
 
 type BannerConfig = {

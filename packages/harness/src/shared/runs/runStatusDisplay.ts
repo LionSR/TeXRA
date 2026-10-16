@@ -1,47 +1,11 @@
 import {
-  ownerIdentity,
   RUN_PHASE,
   RUN_LIFECYCLE_READY,
   RUN_SUBSTATE,
-  type OwnerId,
   type ResumeBlocker,
-  type RunId,
   type RunLifecycleStatus,
   type RunSubstate,
 } from '@shared/schemas';
-
-type RunStatusDisplayKey =
-  | Exclude<RunLifecycleStatus, typeof RUN_LIFECYCLE_READY>
-  | RunSubstate
-  | 'ready';
-
-/**
- * The fold's interrupted reading (PRD one-fold-three-renderers, 5.2): an
- * in-flight run whose owner process nobody holds. A copy key over the
- * durable phase, never a lifecycle status or a host display key, so the
- * durable event set and the hosts' per-status tables stay what they are and
- * only the label and tone change.
- */
-const RUN_DISPLAY_INTERRUPTED = 'interrupted';
-/** The fold's waiting reading: a held run parked on the user's answer, such
- *  as a failed model request asking to retry or stop. */
-const RUN_DISPLAY_WAITING_ON_USER = 'waitingOnUser';
-type RunStatusCopyKey =
-  | RunStatusDisplayKey
-  | typeof RUN_DISPLAY_INTERRUPTED
-  | typeof RUN_DISPLAY_WAITING_ON_USER;
-
-/**
- * Display key for a `RunLifecycleStatus` (a `RunPhase`, or the `ready`
- * idle sentinel every host defaults an unstarted run to).
- */
-function runStatusDisplayKey(
-  status: RunLifecycleStatus,
-  substate?: RunSubstate,
-): RunStatusDisplayKey {
-  if (status === RUN_LIFECYCLE_READY) return 'ready';
-  return substate ?? status;
-}
 
 /**
  * The tone (PRD one-fold-three-renderers, G4 and 15): a fact-only word
@@ -55,55 +19,56 @@ export const RUN_STATUS_TONE = {
   WARNING: 'warning',
 } as const;
 type RunStatusTone = (typeof RUN_STATUS_TONE)[keyof typeof RUN_STATUS_TONE];
-type RunStatusCopy = {
-  readonly statusLabel: string;
-  readonly tone: RunStatusTone;
-};
 
 /**
- * The one status copy table (G4): the fold reads it into
- * `RunView.statusLabel` and `tone`, and every renderer prints that word as
- * is. `packages/cli/scripts/validate-run.mjs` pins the completed and
- * stopped words from here against the real headless run.
+ * The one status table (G4): each way a run's status reads, and its tone.
+ * A key is the run's phase, its substate when it has one, `ready` before
+ * its first activation, or one of the fold's two readings: `interrupted`
+ * (an in-flight run whose owner process nobody holds) and `waitingOnUser`
+ * (a run parked on the user's answer). The words are the app's
+ * (`@ui/copy/runStatus`); the fold stores the key.
  */
-const RUN_STATUS_COPY: Record<RunStatusCopyKey, RunStatusCopy> = {
-  [RUN_SUBSTATE.STARTING]: { statusLabel: 'Initializing', tone: 'running' },
-  [RUN_PHASE.RUNNING]: { statusLabel: 'Running', tone: 'running' },
-  [RUN_PHASE.FAILED]: { statusLabel: 'Error', tone: 'danger' },
-  [RUN_PHASE.COMPLETED]: { statusLabel: 'Completed', tone: 'success' },
-  [RUN_PHASE.CANCELLED]: { statusLabel: 'Stopped', tone: 'neutral' },
-  ready: { statusLabel: 'Ready', tone: 'neutral' },
-  [RUN_PHASE.WAITING]: { statusLabel: 'Idle', tone: 'neutral' },
-  [RUN_SUBSTATE.RESUMING]: { statusLabel: 'Resuming', tone: 'running' },
-  [RUN_SUBSTATE.PAUSED]: { statusLabel: 'Paused', tone: 'warning' },
-  [RUN_SUBSTATE.RESULT_WAITING]: {
-    statusLabel: 'Result waiting: parent is open elsewhere',
-    tone: 'warning',
-  },
-  [RUN_DISPLAY_INTERRUPTED]: { statusLabel: 'Interrupted', tone: 'warning' },
-  [RUN_DISPLAY_WAITING_ON_USER]: {
-    statusLabel: 'Waiting on you',
-    tone: 'warning',
-  },
-};
+const RUN_STATUS_TONE_OF = {
+  [RUN_SUBSTATE.STARTING]: 'running',
+  [RUN_PHASE.RUNNING]: 'running',
+  [RUN_PHASE.FAILED]: 'danger',
+  [RUN_PHASE.COMPLETED]: 'success',
+  [RUN_PHASE.CANCELLED]: 'neutral',
+  [RUN_LIFECYCLE_READY]: 'neutral',
+  [RUN_PHASE.WAITING]: 'neutral',
+  [RUN_SUBSTATE.RESUMING]: 'running',
+  [RUN_SUBSTATE.PAUSED]: 'warning',
+  [RUN_SUBSTATE.RESULT_WAITING]: 'warning',
+  interrupted: 'warning',
+  waitingOnUser: 'warning',
+} as const satisfies Record<string, RunStatusTone>;
+
+/** How a run's status reads: one key of the status table. */
+export type RunStatusKey = keyof typeof RUN_STATUS_TONE_OF;
+/** Every key of the status table, the enum `RunView.statusKey` holds. */
+// cast: `Object.keys` widens to string[]; the table's own keys are these.
+export const RUN_STATUS_KEYS = Object.keys(RUN_STATUS_TONE_OF) as [
+  RunStatusKey,
+  ...RunStatusKey[],
+];
 
 /**
- * The label and tone pair a `RunView` carries (G4), read from the one
- * table through one display key: the status and substate, or the fold's
- * interrupted reading when an in-flight run has lost its owner.
+ * The status key and tone a `RunView` carries (G4), read from the one
+ * table: the status and substate, or the fold's interrupted or waiting
+ * reading.
  */
-export function runStatusCopy(
+export function runStatus(
   status: RunLifecycleStatus,
   options: {
     readonly substate?: RunSubstate;
     readonly interrupted?: boolean;
     readonly waiting?: boolean;
   } = {},
-): RunStatusCopy {
-  let key: RunStatusCopyKey = runStatusDisplayKey(status, options.substate);
-  if (options.interrupted) key = RUN_DISPLAY_INTERRUPTED;
-  else if (options.waiting) key = RUN_DISPLAY_WAITING_ON_USER;
-  return { ...RUN_STATUS_COPY[key] };
+): { readonly statusKey: RunStatusKey; readonly tone: RunStatusTone } {
+  let statusKey: RunStatusKey = options.substate ?? status;
+  if (options.interrupted) statusKey = 'interrupted';
+  else if (options.waiting) statusKey = 'waitingOnUser';
+  return { statusKey, tone: RUN_STATUS_TONE_OF[statusKey] };
 }
 
 /** Banner copy for the fold's interrupted reading: the process running the
@@ -145,19 +110,4 @@ export const RUN_EARLIER_BUILD_MESSAGE =
  *  its pid: the one part of a process identity a user can act on. */
 export function runHeldMessage(pid: number): string {
   return `Held by another TeXRA process (pid ${pid}). Let it finish or close it; if it is gone, Delete removes the task.`;
-}
-
-/** The refusal a host prints when another TeXRA process holds a run: the
- *  owner named by the pid and machine recorded in its claim, the two parts
- *  of an identity a user can act on. */
-export function runHeldByProcessMessage(
-  runId: RunId,
-  ownerId: OwnerId,
-): string {
-  const { pid, hostname } = ownerIdentity(ownerId);
-  return `Task ${runId} is held by another TeXRA process (pid ${pid} on ${hostname}).`;
-}
-
-export function formatRunStatusLabel(status: RunLifecycleStatus): string {
-  return RUN_STATUS_COPY[runStatusDisplayKey(status)].statusLabel;
 }

@@ -166,9 +166,9 @@ function attached(renderer: RunProgressRenderer): TestRunProgressRenderer {
       runs.set(
         id,
         makeRunView({
-          // The label, tone, and group follow the merged status.
+          // The key, tone, and group follow the merged status.
           ...(current
-            ? (({ statusLabel, tone, group, ...rest }) => rest)(current)
+            ? (({ statusKey, tone, group, ...rest }) => rest)(current)
             : { createdAt: (createdAt += 1) }),
           ...over,
           id,

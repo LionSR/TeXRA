@@ -13,7 +13,7 @@ import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { RunHandle } from '@agent/runtime/RunHandle';
 import { JsonConfigProvider } from '@platform/defaults/jsonConfigProvider';
 import { JsonStore, nodeFileServices } from '@platform/defaults/jsonStore';
-import { TEXRA_APPROVAL_POLICY_CONFIG_KEY } from '@shared/approvalPolicy';
+import { APPROVAL_POLICY_CONFIG_KEY } from '@shared/approvalPolicy';
 import { type RunId } from '@shared/schemas';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 
@@ -74,7 +74,7 @@ describe('SessionHandle', () => {
           local: service,
           catalog: TEXRA_SETTINGS,
         });
-        yield* windowB.set(TEXRA_APPROVAL_POLICY_CONFIG_KEY, 'yolo');
+        yield* windowB.set(APPROVAL_POLICY_CONFIG_KEY, 'yolo');
         const roots = { ...testWorkspaceRoots(), config };
         const before = yield* createTestSession({
           roots: { ...roots, storage: `${roots.storage}/policy-before` },
@@ -84,7 +84,7 @@ describe('SessionHandle', () => {
         // same file) while window A still shows Auto-approve. A window has
         // no door to tell the service a policy, so A's reconnect changes
         // nothing: both sessions answer with the file's value.
-        yield* windowB.set(TEXRA_APPROVAL_POLICY_CONFIG_KEY, 'ask');
+        yield* windowB.set(APPROVAL_POLICY_CONFIG_KEY, 'ask');
         expect(before.approvals.policy()).toBe('ask');
         const after = yield* createTestSession({
           roots: { ...roots, storage: `${roots.storage}/policy-after` },

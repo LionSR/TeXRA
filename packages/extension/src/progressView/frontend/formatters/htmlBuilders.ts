@@ -17,7 +17,6 @@ import { diffWordsWithSpace } from 'diff';
 
 import type { FileListEntry } from '@shared/schemas';
 import type { TeXRAIconName } from '@shared/iconNames';
-import type { FileListRow } from '@shared/transcript';
 import { copyWithFeedback } from '@texra/shared/utils/clipboard';
 import { highlightSpans } from '@texra/shared/highlighting/highlightCode';
 
@@ -34,6 +33,7 @@ import {
   DIFF_MARKER_THRESHOLD,
   INLINE_DIFF_TIMEOUT_MS,
 } from './constants';
+import type { FileListRow } from '@texra-ai/harness/transcript';
 
 /** Build a tool-use section template. Empty label omits the label element. */
 export function buildToolUseSection(

@@ -3,9 +3,9 @@ import { Data, Effect } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports - utilities
+import { toErrorMessage } from '@texra-ai/harness/schemas';
 import { ownedPrompt } from '@frontend/hosts/VscodeUiHost';
 import { showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
-import { toErrorMessage } from '@utils/errors/errorMessage';
 import { workspaceRelativePath } from '@utils/files/workspaceFS';
 
 const CHANNEL = 'dialogs';

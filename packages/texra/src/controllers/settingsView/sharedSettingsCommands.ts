@@ -22,8 +22,8 @@ import {
   withLogChannel,
   withSessionFs,
 } from '@texra-ai/harness';
+import { APPROVAL_POLICY_CONFIG_KEY } from '@texra-ai/harness/schemas';
 import { discoverCopilotRoutes } from '@model/copilotRouting';
-import { TEXRA_APPROVAL_POLICY_CONFIG_KEY } from '@shared/approvalPolicy';
 import { SUBSCRIPTION_AUTH_PROVIDERS } from '@shared/model/subscriptionAuth';
 import type { SubscriptionUsageProvider } from '@texra/shared/model/subscriptionUsage';
 import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
@@ -290,7 +290,7 @@ export function createSettingsViewBody(ports: SettingsViewBodyPorts) {
       if (codingPlanForUsageSetting(key) !== undefined) {
         yield* postUsage(false);
       }
-      if (key === TEXRA_APPROVAL_POLICY_CONFIG_KEY) {
+      if (key === APPROVAL_POLICY_CONFIG_KEY) {
         yield* bindings.refreshCatalogs();
       }
       yield* bindings.stateSettingApplied(key);

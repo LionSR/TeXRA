@@ -24,7 +24,7 @@ import { overlaySurfaceStyles } from '@ui/styles/overlaySurfaceStyles';
 import { designTokens, commonViewStyles } from '@ui/styles';
 import { renderIconActionButton } from '@ui/wa/actionButtons';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
-import type { SessionView } from '@texra-ai/harness';
+import type { SessionView } from '@texra-ai/harness/schemas';
 import './RunTabs';
 
 @customElement('session-drawer')

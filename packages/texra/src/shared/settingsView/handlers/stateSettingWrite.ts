@@ -20,11 +20,11 @@ import {
   type SurfacedSettingEntry,
 } from '@texra-ai/harness/schemas';
 import {
-  TEXRA_APPROVAL_POLICY_CONFIG_KEY,
-  type TexraApprovalPolicy,
-} from '@shared/approvalPolicy';
+  APPROVAL_POLICY_CONFIG_KEY,
+  type ApprovalPolicy,
+} from '@texra-ai/harness/schemas';
+import { ensureError } from '@texra-ai/harness/schemas';
 import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
-import { ensureError } from '@utils/errors/errorMessage';
 import type { SettingsStores } from '@texra-ai/harness';
 
 /**
@@ -68,7 +68,7 @@ export interface StateSettingUpdatePorts<H extends SettingHost = SettingHost> {
    */
   readonly requiresOpenWorkspace?: () => boolean;
   /** Applies the approval-policy side effect when that setting changes. */
-  readonly onApprovalPolicyChanged?: (policy: TexraApprovalPolicy) => void;
+  readonly onApprovalPolicyChanged?: (policy: ApprovalPolicy) => void;
 }
 
 /**
@@ -114,12 +114,12 @@ export function applyStateSettingUpdate<H extends SettingHost>(
     Effect.mapError((cause) => new StateSettingWriteFailed({ cause })),
     Effect.andThen(
       Effect.gen(function* () {
-        if (entry.key !== TEXRA_APPROVAL_POLICY_CONFIG_KEY) return;
+        if (entry.key !== APPROVAL_POLICY_CONFIG_KEY) return;
         const policy = (
           parsed === null
             ? yield* Settings.get(ports.stores, entry.key)
             : parsed.data
-        ) as TexraApprovalPolicy;
+        ) as ApprovalPolicy;
         yield* Effect.try({
           try: () => ports.onApprovalPolicyChanged?.(policy),
           catch: ensureError,

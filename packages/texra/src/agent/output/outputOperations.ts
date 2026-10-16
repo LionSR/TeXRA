@@ -1,7 +1,7 @@
 import { Effect } from 'effect';
 
+import { toErrorMessage } from '@texra-ai/harness/schemas';
 import type { AgentTrace } from '@agent/trace';
-import { toErrorMessage } from '@utils/errors/errorMessage';
 
 /** Trace levels that the output managers use for recoverable failures. */
 type OutputLogLevel = 'error' | 'warn';

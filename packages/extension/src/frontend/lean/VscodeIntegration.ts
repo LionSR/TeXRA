@@ -14,6 +14,7 @@ import * as vscode from 'vscode';
 import { Cause, Data, Effect, Fiber, Result } from 'effect';
 
 import { withLogChannel, isStrictlyWithin } from '@texra-ai/harness';
+import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';
 import { promptExtensionInstall } from '@frontend/ui/instruction';
 import { openFileInEditor } from '@frontend/vscode/vscodeEditor';
 import { waitForDiagnosticsChange } from '@frontend/vscode/vscodeDiagnostics';
@@ -33,7 +34,6 @@ import {
   type LeanServerRoster,
 } from '@texra/tools/lean/leanServerRegistry';
 import type { LeanLanguageServicesShape } from '@texra/tools/lean/leanLanguageServices';
-import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import type { StateStore } from '@texra-ai/harness';
 
 const CHANNEL = 'VscodeLeanIntegration';

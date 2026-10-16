@@ -6,6 +6,7 @@
 
 import { Box, Text } from 'ink';
 
+import { taskGroupDisplayStatus } from '@texra-ai/harness/transcript';
 import { safeTerminalText } from '@cli/runtime/terminalText';
 import { COLOR_BORDER, COLOR_ERROR, COLOR_WARNING } from '@cli/tui/ui/colors';
 import { CROSS, PENDING_BOX, TICK, WARNING } from '@cli/tui/ui/glyphs';
@@ -17,8 +18,6 @@ import {
   type TaskGroup,
   type TaskGroupStatus,
 } from '@shared/schemas';
-import { formatRunStatusLabel } from '@shared/runs/runStatusDisplay';
-import { taskGroupDisplayStatus } from '@shared/runs/taskGroupProjection';
 import {
   formatRoundLabel,
   latexdiffDisplayName,
@@ -30,6 +29,7 @@ import {
   type ReadonlyRoundIndexed,
   type OutputFileInfo,
 } from '@texra/shared/plugins/documentOutputs';
+import { runStatusLabel } from '@ui/copy/runStatus';
 import { formatCompactDuration } from '@utils/text/stringUtils';
 
 import { COMPACTION_ACTIVITY_STATUS_STYLE } from './transcriptEntryLayout';
@@ -78,7 +78,7 @@ function taskGroupLine(
     // A task group's status is a RunPhase, so it is worded with the stream
     // vocabulary — the same one the progress view's group icon announces,
     // never the workflow-call vocabulary that happens to share key names.
-    text: `${appearance.marker} ${safeTerminalText(label)} ${formatRunStatusLabel(status)}${duration}`,
+    text: `${appearance.marker} ${safeTerminalText(label)} ${runStatusLabel(status)}${duration}`,
     color: appearance.color,
     role: 'lifecycle',
   };

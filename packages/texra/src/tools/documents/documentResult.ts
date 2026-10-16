@@ -11,6 +11,7 @@ import path from 'node:path';
 import { Effect, FileSystem } from 'effect';
 
 import { withLogChannel, isPathWithin } from '@texra-ai/harness';
+import { toErrorMessage } from '@texra-ai/harness/schemas';
 import { runStorageFilePath, type RunId } from '@shared/schemas';
 import { escapeAttr } from '@shared/utils/xmlEscape';
 import { stripWorkflowRoundDir } from '@texra/shared/constants/workflowOutput';
@@ -21,7 +22,6 @@ import {
   type OutputFileSummary,
   type ResultDiffSummary,
 } from '@texra/shared/plugins/documentOutputs';
-import { toErrorMessage } from '@utils/errors/errorMessage';
 import { readNormalizedFile } from '@utils/files/fsDurability';
 import { runDirUnder } from '@utils/files/runStorageFs';
 import { workspaceRelativePath } from '@utils/files/workspaceFS';

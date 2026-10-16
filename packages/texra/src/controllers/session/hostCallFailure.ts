@@ -11,7 +11,7 @@
 import { Data, Effect } from 'effect';
 
 import { isRequestRefusal, type RequestRefusal } from '@texra-ai/harness';
-import { toErrorMessage } from '@utils/errors/errorMessage';
+import { toErrorMessage } from '@texra-ai/harness/schemas';
 
 /**
  * A host capability failed on a channel the request has no tag for. `member`

@@ -7,6 +7,7 @@ import * as vscode from 'vscode';
 import { withLogChannel, type RootedFileSystem } from '@texra-ai/harness';
 import { WorkspaceFs } from '@texra-ai/harness';
 import { executeCommand, findCommand } from '@texra-ai/harness/node';
+import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';
 import { VscodeExternalOpener } from '@frontend/hosts/VscodeExternalOpener';
 import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
 import { type HostPromptFailed, inputBox } from '@frontend/ui/dialogs';
@@ -25,7 +26,6 @@ import {
 } from '@latex/overleafProject';
 import { COMMIT_HASH_PATTERN } from '@texra/utils/git/commitHashPattern';
 import { COMMIT_LABEL_FORMAT } from '@texra/utils/git/commitLogFormat';
-import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import type { PlatformSecrets, WorkspaceRoots } from '@texra-ai/harness';
 
 const CHANNEL = 'gitCommands';

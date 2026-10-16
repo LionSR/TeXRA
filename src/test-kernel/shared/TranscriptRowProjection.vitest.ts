@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
 import { MESSAGE_TYPES, type ToolUseLog } from '@shared/schemas';
+import type { TranscriptRowBase } from '@shared/transcript/transcriptRow';
 import {
   logPayloadRow,
   toolRow,
-  type TranscriptRowBase,
-} from '@shared/transcript';
+} from '@shared/transcript/projectTranscriptRow';
 
 const base: TranscriptRowBase = {
   id: 'a',

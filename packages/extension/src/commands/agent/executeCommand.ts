@@ -5,8 +5,8 @@ import { z, ZodError } from 'zod';
 // Local imports
 import { AgentConfigSchema } from '@texra-ai/harness/schemas';
 import { withLogChannel } from '@texra-ai/harness';
+import { ensureError } from '@texra-ai/harness/schemas';
 import type { HostRunActions } from '@texra/controllers/session/hostRunActions';
-import { ensureError } from '@utils/errors/errorMessage';
 
 const CHANNEL = 'ExecuteCommand';
 

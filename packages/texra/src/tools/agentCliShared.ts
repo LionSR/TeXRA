@@ -12,6 +12,7 @@ import {
   type ToolRun,
   executed,
 } from '@texra-ai/harness/plugins';
+import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';
 import type {
   ChildRunPort,
   ProcessChildStrategy,
@@ -28,7 +29,6 @@ import {
   type TokenUsageStats,
   type ToolResult,
 } from '@shared/schemas';
-import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { previewLabel } from '@utils/text/stringUtils';
 import type { AgentConfig } from '@texra-ai/harness/schemas';
 

@@ -1,9 +1,7 @@
 /** Run status constants shared across agent runtime and UI layers. */
 import {
-  CLI_RUN_STATUS,
   RUN_OUTCOME,
   RUN_PHASE,
-  type CliRunStatus,
   type RunOutcome,
   type RunLifecycleStatus,
 } from '@shared/schemas';
@@ -13,8 +11,8 @@ import {
 // ============================================================================
 //
 // `RunOutcome` is the canonical terminal fact, decided once at the run
-// lifecycle boundary. The derivation rule and persisted run-status
-// projection below are the only production mappings — flows and hosts must
+// lifecycle boundary. The derivation rule below is the only production
+// mapping — flows and hosts must
 // not hand-roll their own.
 
 /**
@@ -28,27 +26,6 @@ export function deriveRunOutcome(facts: {
   if (facts.failed) return RUN_OUTCOME.FAILED;
   if (facts.cancelled) return RUN_OUTCOME.CANCELLED;
   return RUN_OUTCOME.COMPLETED;
-}
-
-/**
- * Project the canonical outcome onto the frozen public run-status
- * vocabulary (CLI NDJSON history status, CLI display prose).
- * The only production mapping — flows and hosts must not hand-roll their
- * own. An out-of-vocabulary value (stale fixture, unparsed legacy data)
- * fails with a named error instead of an undefined-property crash
- * downstream.
- */
-export function runOutcomeToCliRunStatus(outcome: RunOutcome): CliRunStatus {
-  switch (outcome) {
-    case RUN_OUTCOME.COMPLETED:
-      return CLI_RUN_STATUS.COMPLETED;
-    case RUN_OUTCOME.CANCELLED:
-      return CLI_RUN_STATUS.INTERRUPTED;
-    case RUN_OUTCOME.FAILED:
-      return CLI_RUN_STATUS.ERROR;
-    default:
-      throw new Error(`Unhandled run outcome: ${String(outcome)}`);
-  }
 }
 
 // ============================================================================

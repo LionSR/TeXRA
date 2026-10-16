@@ -3,9 +3,9 @@ import * as vscode from 'vscode';
 
 import { withLogChannel } from '@texra-ai/harness';
 import { withExtendedPath } from '@texra-ai/harness/node';
+import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';
 import { promptExtensionInstall } from '@frontend/ui/instruction';
 import { LATEX_WORKSHOP_EXT_ID } from '@texra/shared/constants/latexToolchain';
-import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import type { StateStore } from '@texra-ai/harness';
 
 const CHANNEL = 'extension';

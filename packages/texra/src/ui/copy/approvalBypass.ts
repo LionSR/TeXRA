@@ -1,4 +1,4 @@
-import type { ApprovalBypassKind } from '@shared/approvalBypassKind';
+import type { ApprovalBypassKind } from '@texra-ai/harness/schemas';
 
 /**
  * Host-visible labels for per-stream approval-bypass grants. CLI status-bar

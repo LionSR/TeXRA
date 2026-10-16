@@ -2,11 +2,13 @@ import * as path from 'node:path';
 
 import { Effect, FileSystem, PlatformError, Result, Stream } from 'effect';
 
+import { toErrorMessage } from '@texra-ai/harness/schemas';
 import {
   listRunGeneratedFiles,
   type RunGeneratedFile,
   type SessionOpenError,
 } from '@texra-ai/harness';
+import type { SessionHandle } from '@agent/runtime';
 import {
   deriveResumability,
   getRunRecords,
@@ -15,7 +17,7 @@ import {
   type AgentRunListingEntry,
   type RunResult,
 } from '@agent/storage';
-import type { SessionHandle } from '@agent/runtime';
+import { runOutcomeToCliRunStatus } from '@cli/schemas/cliOutput';
 import type { CliNdjsonRecord } from '@cli/schemas/cliOutput';
 import {
   RunIdSchema,
@@ -24,12 +26,9 @@ import {
   RUN_SUBSTATE,
   type RunId,
 } from '@shared/schemas';
-import type { RunView } from '@shared/session/sessionView';
-import { runOutcomeToCliRunStatus } from '@shared/runs/runStatus';
 import { loadChatExportInput, type ChatExportInput } from '@texra/agent/export';
 import { serializeFilteredConfig } from '@tools/executions/configView';
 import { readCompletedRunConversation } from '@transcript';
-import { toErrorMessage } from '@utils/errors/errorMessage';
 import { absentReason } from '@utils/files/fsEntryExists';
 
 import { CliUsageError } from './cliContext';
@@ -50,6 +49,7 @@ import {
   formatConversationPreview,
   formatConversationTranscript,
 } from './history/conversationFormat';
+import type { RunView } from '@texra-ai/harness/schemas';
 import type { AgentConfig } from '@texra-ai/harness/schemas';
 
 /** A run's generated files and its edited workspace files render alike.

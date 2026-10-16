@@ -7,7 +7,7 @@ import {
   canonicalizeWorkspacePath,
   executeCommand,
 } from '@texra-ai/harness/node';
-import { parseJsonWith } from '@common/parsing/safeParseJson';
+import { parseJsonWith } from '@texra-ai/harness/schemas';
 import { updateCheckRecordsLayer } from '@texra/controllers/session/updateCheckRecords';
 import {
   fetchJsonStringField,

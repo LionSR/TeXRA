@@ -16,6 +16,7 @@ import {
 } from '@texra-ai/harness';
 import { withExtendedPath } from '@texra-ai/harness/node';
 import { executed } from '@texra-ai/harness/plugins';
+import { ensureError } from '@texra-ai/harness/schemas';
 import { nodeHostEnvironment } from '@texra/platform/defaults/nodeHostEnvironment';
 import { hasUsableSetupCredential } from '@texra/model/setupCredentialAccess';
 import {
@@ -24,7 +25,6 @@ import {
 } from '@texra/shared/constants/latexToolchain';
 import { resolveGitHubTokenSource } from '@texra/tools/github/githubAuth';
 import { detectPackageManager } from '@texra/utils/system/toolChecks';
-import { ensureError } from '@utils/errors/errorMessage';
 
 // Local file imports
 

@@ -1,13 +1,13 @@
 import { describe, expect, it } from 'vitest';
 
 import {
-  TEXRA_APPROVAL_POLICIES,
-  TEXRA_APPROVAL_POLICY_OPTIONS,
+  APPROVAL_POLICIES,
   decideHumanInputRequest,
   decideRetryApproval,
-  decideTexraApproval,
-  parseTexraApprovalPolicy,
+  decideApproval,
+  parseApprovalPolicy,
 } from '@shared/approvalPolicy';
+import { APPROVAL_POLICY_OPTIONS } from '@ui/copy/approvalPolicy';
 
 describe('TeXRA approval policy', () => {
   it.each([
@@ -22,7 +22,7 @@ describe('TeXRA approval policy', () => {
     'decides %s with promptRequired=%s, bypass=%s, canPresent=%s as %s',
     (policy, promptRequired, scopedBypass, canPresent, expected) => {
       expect(
-        decideTexraApproval({
+        decideApproval({
           policy,
           promptRequired,
           scopedBypass,
@@ -33,14 +33,12 @@ describe('TeXRA approval policy', () => {
   );
 
   it('publishes one ordered set of policy choices and accepts only those values', () => {
-    const optionValues = TEXRA_APPROVAL_POLICY_OPTIONS.map(
-      ({ value }) => value,
-    );
+    const optionValues = APPROVAL_POLICY_OPTIONS.map(({ value }) => value);
     expect(optionValues).toEqual(['ask', 'never', 'yolo']);
-    expect(new Set(optionValues)).toEqual(new Set(TEXRA_APPROVAL_POLICIES));
-    expect(optionValues).toHaveLength(TEXRA_APPROVAL_POLICIES.length);
-    expect(parseTexraApprovalPolicy(' Yolo ')).toBe('yolo');
-    expect(parseTexraApprovalPolicy('auto')).toBeUndefined();
+    expect(new Set(optionValues)).toEqual(new Set(APPROVAL_POLICIES));
+    expect(optionValues).toHaveLength(APPROVAL_POLICIES.length);
+    expect(parseApprovalPolicy(' Yolo ')).toBe('yolo');
+    expect(parseApprovalPolicy('auto')).toBeUndefined();
   });
 
   it.each([

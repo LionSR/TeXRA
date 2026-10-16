@@ -9,10 +9,8 @@
 import { Duration, Effect, type FileSystem } from 'effect';
 
 // Local imports
-import {
-  causeChain,
-  isModuleNotFoundError,
-} from '@common/errors/errorPredicates';
+import { causeChain, isModuleNotFoundError } from '@texra-ai/harness';
+import { toErrorMessage } from '@texra-ai/harness/schemas';
 import {
   hasPackageManager,
   SYSTEM_PACKAGE_MANAGERS,
@@ -20,7 +18,6 @@ import {
 } from '@texra/utils/system/toolChecks';
 import { scopedClient } from '@tools/timeouts';
 import { ToolProbeFailed } from '@tools/toolProbes';
-import { toErrorMessage } from '@utils/errors/errorMessage';
 import { isWSL } from '@utils/system/wslDetect';
 import type {
   ToolAvailabilityChecks,

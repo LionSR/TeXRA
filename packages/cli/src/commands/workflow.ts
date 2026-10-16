@@ -1,12 +1,12 @@
 import * as path from 'node:path';
 import { Effect, FileSystem, Result } from 'effect';
 
+import { toErrorMessage } from '@texra-ai/harness/schemas';
 import { deriveResumability, getRunRecords } from '@agent/storage';
 import { RUN_OUTCOME, type RunId } from '@shared/schemas';
 import { documentTaskPatch } from '@texra/agent/output/documentRecipe';
 import { DocumentTaskOptionsSchema } from '@texra/shared/plugins/documents';
 import { documentTaskOf } from '@texra/tools/documents/documentTask';
-import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { failUsage, type CliContext } from '../runtime/cliContext';
 import { CliExitCode } from '../runtime/exitCodes';

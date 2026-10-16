@@ -290,8 +290,15 @@ export {
   WorkspaceFs,
 } from '@platform/rootedFs';
 export type { RootedFileSystem } from '@utils/files/rootedFileSystem';
-// A path as a `FileLocation` against the workspace root a caller holds.
-export { pathToLocationIn } from '@utils/files/fileLocation';
+// A `FileLocation` by its root: a workspace file, a file under a run's
+// storage, a file outside both, or a path against the workspace root a
+// caller holds.
+export {
+  createExternalLocation,
+  createRunStorageLocation,
+  createWorkspaceLocation,
+  pathToLocationIn,
+} from '@utils/files/fileLocation';
 // The user's MCP servers the tool catalog loads: the config file beside a
 // global storage directory, read as the catalog reads it, and the server a
 // namespaced MCP tool name belongs to.
@@ -304,6 +311,24 @@ export {
   listRunGeneratedFiles,
   type RunGeneratedFile,
 } from '@tools/executions/runGeneratedFiles';
+// Failures as a host or plugin reads them: the agent error and how it is
+// presented, the filesystem and module predicates, the cause chain, a
+// user's abort, and a provider error's message. Error messages themselves
+// (`toErrorMessage`, `ensureError`) are in `./schemas`.
+export { AgentError } from '@common/errors/agentErrors';
+export {
+  agentErrorPresentation,
+  type AgentErrorKind,
+  type AgentErrorPresentation,
+} from '@common/errors/agentErrorClassification';
+export {
+  causeChain,
+  isFileNotFoundError,
+  isModuleNotFoundError,
+  isNotADirectoryError,
+  isUserAbort,
+} from '@common/errors/errorPredicates';
+export { getSdkErrorMessage } from '@common/errors/sdkError/providerErrorFormat';
 // Path containment on the platform's own paths, a path's segments and its
 // POSIX form, and an extension check that ignores case. (The browser-safe
 // path basics are in `./schemas`.)
