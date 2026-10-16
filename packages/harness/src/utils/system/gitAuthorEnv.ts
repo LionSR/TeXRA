@@ -11,9 +11,9 @@ import type { StateReadFailed } from '@platform/interfaces';
  * attributes each project's commits by that project's own setting.
  */
 
-import type { SettingsStores } from '@shared/config/settingsAccess';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
-import { readSettingFrom } from '@utils/config/platformSettings';
+import { Settings } from '@shared/config/settings';
+import type { SettingsStores } from '@shared/config/settings';
 
 /** Empty when the caller has no workspace, or when commit marking is off. */
 export function getGitAuthorEnv(
@@ -25,18 +25,18 @@ export function getGitAuthorEnv(
   > {
     if (!settings) return {};
     if (
-      !(yield* readSettingFrom<boolean>(
+      !(yield* Settings.get<boolean>(
         settings,
         WorkspaceStateKey.GIT_MARK_COMMITS,
       ))
     ) {
       return {};
     }
-    const name = yield* readSettingFrom<string>(
+    const name = yield* Settings.get<string>(
       settings,
       WorkspaceStateKey.GIT_AUTHOR_NAME,
     );
-    const email = yield* readSettingFrom<string>(
+    const email = yield* Settings.get<string>(
       settings,
       WorkspaceStateKey.GIT_AUTHOR_EMAIL,
     );

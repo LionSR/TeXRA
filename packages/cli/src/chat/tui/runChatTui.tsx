@@ -18,11 +18,13 @@ import {
 } from 'effect';
 import { render, type Instance as InkInstance } from 'ink';
 
+import { type ConfigProvider, type RuntimeRequest } from '@texra-ai/harness';
 import {
   qualifyAggregateId,
-  type ConfigProvider,
-  type RuntimeRequest,
-} from '@texra-ai/harness';
+  type RunId,
+  type AgentConfig,
+} from '@texra-ai/harness/schemas';
+import { Settings } from '@texra-ai/harness';
 import { getVisibleAgents } from '@agent/index';
 import { getRunRecords } from '@agent/storage';
 import {
@@ -73,7 +75,6 @@ import { subscribeToSignalChanges } from '@texra/shared/signals';
 import { serviceSession } from '@texra/controllers/server/serviceSession';
 import { documentTaskOf } from '@texra/tools/documents/documentTask';
 import { sessionStoreMovedAsideMessage } from '@ui/copy/sessionStore';
-import { readConfigSettingFrom } from '@utils/config/platformSettings';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import {
@@ -137,7 +138,6 @@ import {
   TuiSession,
 } from './state/sessionRunState';
 import { createSessionExitController } from './sessionExitController';
-import type { RunId, AgentConfig } from '@texra-ai/harness/schemas';
 
 interface ChatResult {
   exitCode: number;
@@ -150,7 +150,7 @@ type PolicyChange = Extract<RuntimeRequest, { kind: 'policy.set' }>['change'];
 const projectApprovalPolicy = (roots: {
   readonly config: ConfigProvider;
 }): TexraApprovalPolicy =>
-  readConfigSettingFrom<TexraApprovalPolicy>(
+  Settings.getConfig<TexraApprovalPolicy>(
     roots.config,
     TEXRA_APPROVAL_POLICY_CONFIG_KEY,
   );

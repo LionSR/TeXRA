@@ -373,12 +373,12 @@ files.
 
 ## Entry points
 
-| Entry                       | Contents                                                                                                                            |
-| --------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| `@texra-ai/harness`         | `Sessions`, `Session`, `Run`, the tagged errors, and the tool-definition helpers (`defineTool`, `MapToolRegistry`) with their types |
-| `@texra-ai/harness/schemas` | Zod schemas + inferred types for agent definitions, configs, and run results                                                        |
-| `@texra-ai/harness/plugins` | `harnessBuiltins`: the built-in plugins                                                                                             |
-| `@texra-ai/harness/node`    | `nodePlatform(options)`, a ready-made Node `AgentPlatform` with its workspace roots                                                 |
+| Entry                       | Contents                                                                                                      |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `@texra-ai/harness`         | `Sessions`, `Session`, `Run`, the tagged errors, and the tool-definition helper (`defineTool`) with its types |
+| `@texra-ai/harness/schemas` | Zod schemas + inferred types for agent definitions, configs, and run results                                  |
+| `@texra-ai/harness/plugins` | `harnessBuiltins`: the built-in plugins                                                                       |
+| `@texra-ai/harness/node`    | `nodePlatform(options)`, a ready-made Node `AgentPlatform` with its workspace roots                           |
 
 Every entry needs the peers installed. See [Install](#install).
 
@@ -428,7 +428,9 @@ and environment-variable secrets (so provider API keys are read from
 `process.env`; nothing is persisted). The setting rows your own plugins read
 go to it as `nodePlatform({ settings })`, resolved after the harness's own; a
 platform with its own `ConfigProvider` carries them as its `catalog`, built
-with `settingsCatalog(rows)` from `@texra-ai/harness/node`.
+with `settingsCatalog(rows)` from `@texra-ai/harness/node`. Code reads and
+writes a setting through `Settings` (`get`, `set`, `reset`) against the
+stores it holds.
 
 Model requests carry their own HTTP transport: the environment's proxy policy
 (`HTTP_PROXY`, `HTTPS_PROXY`, `NO_PROXY`) and a 30-minute stream inactivity

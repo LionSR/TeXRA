@@ -1,9 +1,5 @@
 import { Context, Effect, Layer, type Scope } from 'effect';
-import type {
-  ITool,
-  IToolRegistry,
-  ToolContext,
-} from '@agent/core/tools/ToolTypes';
+import type { ITool, ToolContext } from '@agent/core/tools/ToolTypes';
 import { runInbox, type RunInbox } from '@agent/followUp/ToolUseFollowUp';
 import { getRunRecords } from '@agent/storage/runRecords';
 import type { ProcessServices } from '@platform/processRuntime';
@@ -134,4 +130,5 @@ export type PluginToolServices = CallServices | ChildRuns;
 export type ToolServices =
   PluginToolServices | Runs | RunCall | ScriptCalls | IssuingScript;
 export type RuntimeTool<E = Error, R = ToolServices> = ITool<E, R>;
-export type RuntimeToolRegistry = IToolRegistry<Error, ToolServices>;
+/** The tools a run offers, by name. */
+export type RuntimeToolRegistry = ReadonlyMap<string, RuntimeTool>;

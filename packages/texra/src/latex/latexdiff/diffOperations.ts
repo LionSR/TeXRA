@@ -19,6 +19,7 @@ import { Effect, type FileSystem, type Path } from 'effect';
 
 // Local imports
 import { withLogChannel } from '@texra-ai/harness';
+import { Settings } from '@texra-ai/harness';
 import { type FileLocation, type RunId } from '@shared/schemas';
 import type { LatexdiffMathMarkupValue } from '@texra/shared/constants/latexConfig';
 import { DocumentsStateKey } from '@texra/shared/settingsView/documentsSettings';
@@ -29,7 +30,6 @@ import {
   type ReadonlyRoundIndexed,
   type OutputFileInfo,
 } from '@texra/shared/plugins/documentOutputs';
-import { readSettingFrom } from '@utils/config/platformSettings';
 
 // Local file imports
 import { LaTeXdiffService } from '../latexdiff';
@@ -83,7 +83,7 @@ export const runLatexdiffForRun = Effect.fn('runLatexdiffForRun')(
       return { results: [] };
     }
 
-    const generateBetweenRoundDiffs = yield* readSettingFrom<boolean>(
+    const generateBetweenRoundDiffs = yield* Settings.get<boolean>(
       roots,
       DocumentsStateKey.LATEXDIFF_BETWEEN_ROUNDS,
     );

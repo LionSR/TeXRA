@@ -28,7 +28,6 @@ import {
 } from '@model/computeModelOptions';
 import { decideRunModel } from '@model/runModelDecision';
 import { Secrets } from '@platform/secrets';
-import type { SettingsStores } from '@shared/config/settingsAccess';
 import {
   MODEL_AVAILABILITY_STATUS,
   type AgentDelegationScope,
@@ -37,7 +36,8 @@ import {
 import { AGENT_TOOL_NAME } from '@shared/constants/delegationTools';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 
-import { readSettingFrom } from '@utils/config/platformSettings';
+import { Settings } from '@shared/config/settings';
+import type { SettingsStores } from '@shared/config/settings';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 /** The models that can run now, in picker order. */
@@ -105,7 +105,7 @@ export const readDelegationTargets = Effect.fn('readDelegationTargets')(
       agents,
       models,
       worktree: chats
-        ? yield* readSettingFrom<boolean>(
+        ? yield* Settings.get<boolean>(
             stores,
             WorkspaceStateKey.GIT_WORKTREE_SUPPORT,
           )

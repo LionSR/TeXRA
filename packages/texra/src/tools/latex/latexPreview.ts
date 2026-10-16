@@ -12,13 +12,13 @@ import path from 'node:path';
 import { Cause, Deferred, Effect, FileSystem, type Path } from 'effect';
 
 import { withLogChannel } from '@texra-ai/harness';
+import { Settings } from '@texra-ai/harness';
 import { TEMP_EXTENSIONS } from '@housekeeping/constants';
 import { filesByPrefix } from '@latex/formatter/latexindentpt';
 import { LaTeXdiffService } from '@latex/latexdiff';
 import { generateDiffFileName } from '@latex/latexdiff/diffFileNameManager';
 import type { FileLocation } from '@shared/schemas';
 import { LATEXDIFF_TEMP_FILE_LOCATIONS } from '@texra/shared/settingsView/texraSettings';
-import { readSettingFrom } from '@utils/config/platformSettings';
 import { generateShortId } from '@utils/core';
 import {
   createExternalLocation,
@@ -229,7 +229,7 @@ const createTempFileWithCleanup = Effect.fn('createTempFileWithCleanup')(
       return yield* Effect.fail(new Error('No workspace folder open'));
     }
 
-    const location = yield* readSettingFrom<
+    const location = yield* Settings.get<
       (typeof LATEXDIFF_TEMP_FILE_LOCATIONS)[number]
     >(entry.request.roots, 'texra.latexdiff.tempFileLocation');
 

@@ -2,15 +2,15 @@ import { Effect } from 'effect';
 // Third-party imports
 
 // Local imports - formatter implementations
-import type { SettingsStores } from '@shared/config/settingsAccess';
+import { Settings } from '@texra-ai/harness';
 import { TexraStateKey } from '@texra/shared/settingsView/texraSettings';
-import { readSettingFrom } from '@utils/config/platformSettings';
 
 // Local file imports
 import { LATEXINDENT_CONFIG_KEY, runLatexIndent } from './latexindentpt';
 import { TEXFMT_CONFIG_KEY, runTexFmt } from './texfmt';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 import type { FileSystem } from 'effect';
+import type { SettingsStores } from '@texra-ai/harness';
 
 interface LatexFormatterDefinition {
   /** Setting value that selects this formatter. */
@@ -61,7 +61,7 @@ const LATEX_FORMATTERS: Record<string, LatexFormatterDefinition> = {
  */
 export function resolveLatexFormatter(stores: SettingsStores) {
   return Effect.gen(function* () {
-    const formatter = yield* readSettingFrom<string>(
+    const formatter = yield* Settings.get<string>(
       stores,
       TexraStateKey.LATEX_FORMATTER,
     );

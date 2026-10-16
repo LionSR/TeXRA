@@ -8,11 +8,11 @@ import { Effect, Result } from 'effect';
 import { z } from 'zod';
 
 // Local imports - shared contracts
-import type { SettingsStores } from '@shared/config/settingsAccess';
 import { InstalledPluginSchema, type InstalledPlugin } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 
 // Local imports - plugin reading
+import type { SettingsStores } from '@shared/config/settings';
 import { PluginError, PluginRequestError } from './pluginManifest';
 
 /**
