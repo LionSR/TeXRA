@@ -92,6 +92,9 @@ export function defineTool<T, R = never>(
       ),
     );
   return {
+    // First, so a caller's stray `definition` or `call` cannot replace the
+    // ones built here.
+    ...declared,
     definition: {
       name,
       description,
@@ -101,7 +104,6 @@ export function defineTool<T, R = never>(
       ...(scriptReturns !== undefined && { scriptReturns }),
       ...(card !== undefined && { card }),
     },
-    ...declared,
     // Validate lazily in the caller's fiber; interruption never becomes a
     // tool result.
     call: (rawInput) =>
