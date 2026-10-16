@@ -16,7 +16,6 @@ import * as path from 'node:path';
 
 import { Effect, FileSystem, type PlatformError } from 'effect';
 
-import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { withLogChannel } from '@logger/effectLog';
 import type { RunId } from '@shared/schemas';
 // toPosixPath also trims and resolves `.`/`..` segments beyond a bare slash
@@ -41,22 +40,22 @@ export interface RunGeneratedFile {
  * List the generated (non-KV) files under a run's storage directory, sorted by
  * path. Returns `[]` when the run has no storage directory at all.
  *
- * The run directory is resolved once under `session.roots.storage`, as data
- * rather than from an ambient session scope a fiber's continuation may not
- * carry, so a host holding one session per open project walks this session's
- * storage.
+ * `storage` is the session's storage directory (`WorkspaceRoots.storage`),
+ * taken as data rather than from an ambient session scope a fiber's
+ * continuation may not carry, so a host holding one session per open project
+ * walks the storage of the session it names.
  */
 export const listRunGeneratedFiles = Effect.fn('listRunGeneratedFiles')(
   function* (
     runId: RunId,
-    session: SessionHandle,
+    storage: string,
   ): Effect.fn.Return<
     RunGeneratedFile[],
     PlatformError.PlatformError,
     FileSystem.FileSystem
   > {
     const fs = yield* FileSystem.FileSystem;
-    const runDir = runDirUnder(session.roots.storage, runId);
+    const runDir = runDirUnder(storage, runId);
     if (!(yield* fs.exists(runDir))) return [];
     const files = yield* walkRunStorage(runDir, '', RUN_FILE_SCAN_DEPTH);
     return files.sort((a, b) => a.path.localeCompare(b.path));

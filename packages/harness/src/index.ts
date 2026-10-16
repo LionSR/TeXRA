@@ -298,6 +298,12 @@ export {
   createWorkspaceLocation,
   pathToLocationIn,
 } from '@utils/files/fileLocation';
+// The files a run left in its storage directory, under a session's storage
+// (the executions tool's listing, for a host that shows it outside a run).
+export {
+  listRunGeneratedFiles,
+  type RunGeneratedFile,
+} from '@tools/executions/runGeneratedFiles';
 // Failures as a host or plugin reads them: the agent error and how it is
 // presented, the filesystem and module predicates, the cause chain, a
 // user's abort, and a provider error's message. Error messages themselves
