@@ -102,9 +102,11 @@ describe('planToolTerminalAction', () => {
   it.each(CASES)('$name', ({ packageManager, isWindows, input, expected }) => {
     mocks.packageManager = packageManager ?? null;
     const platform = Object.getOwnPropertyDescriptor(process, 'platform');
-    if (isWindows) {
-      Object.defineProperty(process, 'platform', { value: 'win32' });
-    }
+    // Pin the platform both ways so a Windows runner doesn't leak into the
+    // non-Windows cases.
+    Object.defineProperty(process, 'platform', {
+      value: isWindows ? 'win32' : 'linux',
+    });
     try {
       expect(planToolTerminalAction(input)).toEqual(expected);
     } finally {
