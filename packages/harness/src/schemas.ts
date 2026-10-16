@@ -52,6 +52,15 @@ export {
   runIdentityDisplayName,
 } from '@shared/schemas';
 export type { DisplaySessionEvent } from '@shared/schemas';
+// The card a plugin's tool states for its own call (an external agent's
+// patch, thread or turn), in the section kinds every renderer paints.
+export { ToolCardSchema } from '@shared/schemas';
+export type { ToolCard } from '@shared/schemas';
+// The route a request's usage is billed through: a subscription plan, or
+// the user's API key.
+export type { UsageRoute } from '@shared/schemas';
+// Why a model option can or cannot run, as a picker shows it.
+export type { ModelAvailabilityKind } from '@shared/schemas';
 // Reads of a `SessionView` (root) for a renderer: what needs a person, how
 // busy the session is, and where each run stands.
 export {

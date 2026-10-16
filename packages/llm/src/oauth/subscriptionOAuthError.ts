@@ -11,6 +11,7 @@ import { Data } from 'effect';
 export type SubscriptionOAuthErrorKind =
   'fatal' | 'expired' | 'transient' | 'config';
 
+/** A subscription sign-in or refresh failed; `kind` says what to do next. */
 export class SubscriptionOAuthError extends Data.TaggedError(
   'SubscriptionOAuthError',
 )<{

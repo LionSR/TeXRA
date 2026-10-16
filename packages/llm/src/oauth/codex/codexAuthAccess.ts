@@ -8,10 +8,7 @@ import {
   createSecretBackedCoordinator,
   getSubscriptionSessionStatus,
 } from '../sessionAccess.js';
-import {
-  SubscriptionOAuthCoordinator,
-  type SubscriptionSessionStatus,
-} from '../SubscriptionOAuthCoordinator.js';
+import { SubscriptionOAuthCoordinator } from '../SubscriptionOAuthCoordinator.js';
 import { defineLoopbackLogin } from '../loopbackLogin.js';
 import {
   CODEX_CALLBACK_FALLBACK_PORT,
@@ -20,6 +17,10 @@ import {
   CODEX_SESSION_SECRET_KEY,
 } from './codexConstants.js';
 import { CODEX_POLICY } from './codexSessionPolicy.js';
+import type {
+  SubscriptionCoordinator,
+  SubscriptionSessionStatus,
+} from '../subscriptionCoordinator.js';
 import type { CredentialStore } from '../../providers/credentials.js';
 import type { CodexSession } from './codexSessionTypes.js';
 import type { Effect } from 'effect';
@@ -29,13 +30,11 @@ const CHANNEL = 'codexAuth';
 /** The coordinator for the caller's secret store. */
 export const codexCoordinator: (
   secrets: CredentialStore,
-) => SubscriptionOAuthCoordinator<CodexSession> = createSecretBackedCoordinator(
-  {
-    secretKey: CODEX_SESSION_SECRET_KEY,
-    makeCoordinator: (storage) =>
-      new SubscriptionOAuthCoordinator({ storage, policy: CODEX_POLICY }),
-  },
-);
+) => SubscriptionCoordinator<CodexSession> = createSecretBackedCoordinator({
+  secretKey: CODEX_SESSION_SECRET_KEY,
+  makeCoordinator: (storage) =>
+    new SubscriptionOAuthCoordinator({ storage, policy: CODEX_POLICY }),
+});
 
 /** Signed-in status, read from the caller's secret store. */
 export function getCodexStatus(

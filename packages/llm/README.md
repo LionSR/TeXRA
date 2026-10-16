@@ -18,19 +18,23 @@ passes configuration in (`RouteFacts`) and credentials through one port,
 ## Install
 
 Requires Node.js 22.19.0 or later in 22.x, or Node.js 24 or later. The
-package is ESM only. `effect` and `zod` (v4) are peer dependencies, so your
-install supplies the one copy of each:
+package is ESM only. `effect` (^4.0.5) and `zod` (^4.4.3) are peer
+dependencies, so your install supplies the one copy of each:
 
 ```bash
 npm install @texra-ai/llm effect zod
 ```
 
+`llm-zoo` (the catalog) and the Anthropic, Google and OpenRouter SDKs come in
+as dependencies. A binding loads only its own protocol's SDK, on demand.
+OpenAI's runtime is bundled, so `openai` is not installed.
+
 ## Example
 
-Pick a catalog model, decide its route, bind it, and run one turn. The key is
-read from the environment here; the runnable version of this program,
-[`packages/harness/example/llm.ts`](https://github.com/LionSR/TeXRA/blob/main/packages/harness/example/llm.ts), passes a `fetch`
-that answers 401 instead so it needs no key.
+Pick a catalog model, decide its route, bind it, and run one turn. Here the
+key is read from the environment. The runnable version of this program,
+[`packages/harness/example/llm.ts`](https://github.com/LionSR/TeXRA/blob/main/packages/harness/example/llm.ts),
+passes a `fetch` that answers 401, so it needs no key.
 
 ```ts
 import { Effect } from 'effect';
@@ -54,11 +58,11 @@ const endpoint = resolveRouteEndpoint(selected.config, route, {
 if (endpoint === undefined) throw new Error('No endpoint for the provider.');
 
 const program = Effect.gen(function* () {
-  const { model } = yield* bindModel({
+  const binding = yield* bindModel({
     protocol: 'anthropic-messages',
     model: selected.config,
     endpoint,
-    credentialScope: 'anthropic:api-key',
+    credentialScope: `${route.provider}:api-key`,
     credential: {
       kind: 'api-key',
       apiKey: process.env.ANTHROPIC_API_KEY ?? '',
@@ -76,30 +80,71 @@ const program = Effect.gen(function* () {
       background: false,
     },
   });
-  const turn = yield* model.prepareTurn({
+  const turn = yield* binding.model.prepareTurn({
     messages: [{ role: 'user', content: [{ kind: 'text', text: 'Hello.' }] }],
   });
   if (turn.mode !== 'foreground')
     throw new Error('Expected a foreground turn.');
-  return yield* completedTurn(model.streamTurn(turn));
-}).pipe(Effect.scoped);
+  return yield* completedTurn(binding.model.streamTurn(turn));
+}).pipe(
+  Effect.scoped,
+  Effect.catchTag('ModelError', (error) =>
+    Effect.fail(new Error(`${error.kind}: ${error.message}`)),
+  ),
+);
 
-console.log(await Effect.runPromise(program));
+const result = await Effect.runPromise(program);
+console.log(result.content);
 ```
 
-Every failure is a `ModelError` whose `kind` classifies it (`authentication`,
-`rate-limited`, …). The package retries nothing: retry, pricing and persistence
-belong to the caller ([`@texra-ai/harness`](../harness/README.md) is one).
+`bindModel` returns a `Binding`. It holds the `Model` and the facts its
+configuration fixed: the origin, background capability, service tier, and
+whether the route takes a forced tool choice. The connection, and any files
+the model uploads, live in the caller's `Scope`. Closing the scope releases
+them.
+
+## Errors
+
+A `Model` fails with exactly one error type, `ModelError` (`_tag:
+'ModelError'`). Fiber interruption stays outside it. Branch on its fields,
+never on its message:
+
+| Field                                        | What it says                                                                                                                                                                                                                        |
+| -------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `kind`                                       | the class of failure: `invalid-request`, `unsupported`, `authentication`, `rate-limited`, `quota-exhausted`, `context-overflow`, `continuation-gone`, `transport`, `provider-rejection`, `malformed-output`, `observation-deadline` |
+| `retryable`                                  | whether repeating the request unchanged can succeed. It defaults from `kind` and `status`; the binding overrides it where the vendor's reply says more                                                                              |
+| `scope`                                      | what the failure is evidence about beyond this request: `model` (a limit on one model) or `route` (the provider, credential and endpoint)                                                                                           |
+| `retryAfterMs`                               | the provider's own "come back in" delay, when its reply stated one                                                                                                                                                                  |
+| `quota`                                      | for `quota-exhausted`: the `plan` used up (a `PlanRoute`, or `null` for the account's credit), and when it resets                                                                                                                   |
+| `status`, `requestId`, `responseId`, `model` | the HTTP facts, when the failure had a reply                                                                                                                                                                                        |
+
+`ModelErrorFieldsSchema` is the same fields as data, for an error that
+crosses a process boundary. The package itself retries nothing. Retry,
+pricing and persistence belong to the caller
+([`@texra-ai/harness`](../harness/README.md) is one).
+
+The other failures are tagged errors too:
+
+- `SecretsFailed` from a `CredentialStore`, and from a sign-in flow that
+  reads or writes the session. Its `reason` is `store-unavailable` or `io`.
+- `ReasoningChoiceError` from a strict `chooseReasoning`.
+- From `./node`: `SubscriptionOAuthError`, whose `kind` is `fatal`,
+  `expired`, `transient` or `config` and whose `needsReauth` says whether to
+  sign in again. Also `LoopbackTransportUnavailableError`, raised when the
+  browser sign-in cannot start, so the device-code flow can take over. The
+  sign-in programs fail with a plain `Error` whose `message` is the text to
+  show the user.
 
 ## The entries
 
 The package is split by where its code runs, not by topic.
 
-| Entry    | What it holds                                                                                                                                                                                                     | Runs in      |
-| -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------ |
-| `.`      | the turn contract (`turn.ts`), the provider catalog and key lookup (`providers/`), the route decision, `routeConfig`, the route endpoint, the reasoning choice (`models/`), `CredentialStore`, the account labels | browser-safe |
-| `./node` | `bindModel(configuration, credential, transport) → Model`, the ChatGPT and Grok sign-in flows and their coordinators (`oauth/`), `SharedAttempt`                                                                  | Node         |
+| Entry    | What it holds                                                                                                                                                                                                                                         | Runs in      |
+| -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------ |
+| `.`      | the turn contract (`Model`, the request, result and event schemas, `completedTurn`), `ModelError`, the provider catalog and API-key lookup over `CredentialStore`, model selection, the route decision and endpoint, the reasoning choice, `turnCost` | browser-safe |
+| `./node` | `bindModel(spec) → Binding`, the ChatGPT and Grok sign-in flows and their `SubscriptionCoordinator`s, `SharedAttempt`                                                                                                                                 | Node         |
 
+Every type a public signature names is exported from one of the two entries.
 The protocols (`api/`), the prefix fingerprint and the upload cache are
 internal: `bindModel` loads the chosen protocol with a literal
 `import('./api/<protocol>.js')`, so a run loads only its provider's SDK.
@@ -110,8 +155,10 @@ vendor SDK.
 Inside the workspace the entries are the TypeScript sources. `npm run build`
 writes what a pack publishes (`publishConfig.exports`): one ESM bundle per
 entry under `dist/`, each protocol a chunk, OpenAI's patched runtime carried
-inside, and the entries' declarations, checked by the harness's artifact
-validator.
+inside, and the entries' declarations with their TSDoc. The harness's
+artifact validator checks the result, including that no published signature
+names a type the entries do not export
+(`packages/harness/scripts/forgotten-exports.mjs`).
 
 ## The contract
 
@@ -139,31 +186,33 @@ covers, which the operation handle deliberately does not copy.
 
 ## The tree
 
-| File                              | What it owns                                                                                                                                                 |
-| --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `turn.ts`                         | the `.` entry's turn contract: the `Model` interface, the request, configuration, result and event contract, the tool and reasoning schemas, `completedTurn` |
-| `protocol.ts`                     | the protocol enum, binding identity (`BindingSchema`, `OriginSchema`, `ModelOriginSchema`) and JSON materialization                                          |
-| `message.ts`                      | the wire message and history schemas, the content parts, and the continuation prefixes                                                                       |
-| `errors.ts`                       | `ModelError` and the failure classification along it, `RemoteOperation` included                                                                             |
-| `api/transport.ts`                | stream pull, tool-argument parsing, the abort-safe request helper                                                                                            |
-| `api/openaiResponses.ts`          | `openaiResponsesModel`                                                                                                                                       |
-| `api/parts.ts`                    | the part events every codec reports a response in, and the canonical-part algebra (identity, restatement, growth)                                            |
-| `api/assembleTurn.ts`             | the one turn fold over part events: identity, positions, deltas, call arguments, finish agreement, terminal validation                                       |
-| `api/openaiResponsesCodec.ts`     | the response-side schemas, content lowering, and the one Responses event decoder (stream, WebSocket, observation)                                            |
-| `api/openaiResponsesUsage.ts`     | the usage receipt schema and its normalization, xAI's settled cost included                                                                                  |
-| `api/openaiResponsesLower.ts`     | input lowering and the continuation anchor                                                                                                                   |
-| `api/openaiResponsesRequest.ts`   | preparing a turn, its parameters, the abort classification                                                                                                   |
-| `api/openaiResponsesWebSocket.ts` | the experimental WebSocket transport                                                                                                                         |
-| `api/anthropicMessages.ts`        | `anthropicMessagesModel`                                                                                                                                     |
-| `api/googleInteractions.ts`       | `googleInteractionsModel`                                                                                                                                    |
-| `api/openrouterChat.ts`           | `openrouterChatModel`                                                                                                                                        |
-| `api/uploadCache.ts`              | the digest-keyed, model-scoped upload cache behind `uploadFile`                                                                                              |
-| `api/prefixFingerprint.ts`        | the admitted-history fingerprint a background completion anchors on                                                                                          |
-| `api/openaiError.ts`              | SDK error classification into `ModelError`                                                                                                                   |
-| `node.ts`                         | the `./node` entry: `bindModel`, the protocol choice, and the sign-in exports                                                                                |
-| `providers/`                      | the provider plugins, the API-key providers and `CredentialStore`, the coding plans                                                                          |
-| `models/`                         | model selection over llm-zoo, the route decision and its config and endpoint, OpenRouter routing, the reasoning choice, the picker's base option             |
-| `oauth/`                          | the ChatGPT (`codex/`) and Grok (`xai/`) sign-in flows over the shared OAuth coordinator, loopback and device flows                                          |
+| File                              | What it owns                                                                                                                                                            |
+| --------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `turn.ts`                         | the `.` entry's turn contract: the `Model` interface, the request, configuration, result and event contract, the tool and reasoning schemas, `completedTurn`            |
+| `protocol.ts`                     | the protocol enum, binding identity (`BindingSchema`, `OriginSchema`, `ModelOriginSchema`) and JSON materialization                                                     |
+| `message.ts`                      | the wire message and history schemas, the content parts, and the continuation prefixes                                                                                  |
+| `errors.ts`                       | `ModelError` and the failure classification along it, `RemoteOperation` included                                                                                        |
+| `api/transport.ts`                | stream pull, tool-argument parsing, the abort-safe request helper                                                                                                       |
+| `api/openaiResponses.ts`          | `openaiResponsesModel`                                                                                                                                                  |
+| `api/parts.ts`                    | the part events every codec reports a response in, and the canonical-part algebra (identity, restatement, growth)                                                       |
+| `api/assembleTurn.ts`             | the one turn fold over part events: identity, positions, deltas, call arguments, finish agreement, terminal validation                                                  |
+| `api/openaiResponsesCodec.ts`     | the response-side schemas, content lowering, and the one Responses event decoder (stream, WebSocket, observation)                                                       |
+| `api/openaiResponsesUsage.ts`     | the usage receipt schema and its normalization, xAI's settled cost included                                                                                             |
+| `api/openaiResponsesLower.ts`     | input lowering and the continuation anchor                                                                                                                              |
+| `api/openaiResponsesRequest.ts`   | preparing a turn, its parameters, the abort classification                                                                                                              |
+| `api/openaiResponsesWebSocket.ts` | the experimental WebSocket transport                                                                                                                                    |
+| `api/anthropicMessages.ts`        | `anthropicMessagesModel`                                                                                                                                                |
+| `api/googleInteractions.ts`       | `googleInteractionsModel`                                                                                                                                               |
+| `api/openrouterChat.ts`           | `openrouterChatModel`                                                                                                                                                   |
+| `api/uploadCache.ts`              | the digest-keyed, model-scoped upload cache behind `uploadFile`                                                                                                         |
+| `api/prefixFingerprint.ts`        | the admitted-history fingerprint a background completion anchors on                                                                                                     |
+| `api/openaiError.ts`              | SDK error classification into `ModelError`                                                                                                                              |
+| `node.ts`                         | the `./node` entry: `bindModel`, the protocol choice, and the sign-in exports                                                                                           |
+| `api/configuration.ts`            | the vendor rules that turn a catalog model, its route and the caller's options into each protocol's configuration (`responsesConfiguration.ts`: the Responses vendors') |
+| `api/verdict.ts`                  | the verdict on a failure, read off the vendor's reply (`failureReply.ts`): status, retryability, scope, quota                                                           |
+| `providers/`                      | the provider plugins, the API-key providers and their key lookup, `CredentialStore`                                                                                     |
+| `models/`                         | model selection over llm-zoo, the route decision and its config and endpoint, the reasoning choice, a turn's cost                                                       |
+| `oauth/`                          | the ChatGPT (`codex/`) and Grok (`xai/`) sign-in flows over the shared subscription coordinator, loopback and device flows                                              |
 
 The `vscode-lm` protocol cannot live here: it is acquired from the
 editor. `packages/extension/src/frontend/lm/acquireVscodeLanguageModel.ts`

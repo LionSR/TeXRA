@@ -97,6 +97,7 @@ function snapped(
   };
 }
 
+/** How {@link chooseReasoning} settles a request the model cannot serve. */
 export interface ChooseReasoningOptions {
   /** The user's saved level for this model, used when the selection names none. */
   readonly userEffort?: ReasoningEffort;

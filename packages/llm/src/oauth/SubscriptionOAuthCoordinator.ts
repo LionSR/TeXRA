@@ -27,7 +27,13 @@ import { authorizeRequest } from './pkce.js';
 import { SubscriptionOAuthError } from './subscriptionOAuthError.js';
 import type { OAuthRequestError } from './oauthRequest.js';
 import type { SecretsFailed } from '../providers/credentials.js';
-import type { SubscriptionSessionBase } from './subscriptionSessionSchema.js';
+import type {
+  SubscriptionAuthorizeRequest,
+  SubscriptionCoordinator,
+  SubscriptionSession,
+  SubscriptionSessionStatus,
+  SubscriptionTokenResponse,
+} from './subscriptionCoordinator.js';
 import type { HttpClient } from 'effect/http';
 import type { z } from 'zod';
 
@@ -38,31 +44,6 @@ export interface SubscriptionSessionStorage {
   get(): Effect.Effect<string | undefined, SecretsFailed>;
   store(value: string): Effect.Effect<void, SecretsFailed>;
   delete(): Effect.Effect<void, SecretsFailed>;
-}
-
-/** Raw token-endpoint shape shared by authorization-code and refresh grants. */
-export interface SubscriptionTokenResponse {
-  access_token: string;
-  refresh_token?: string | null;
-  id_token?: string | null;
-  expires_in: number;
-}
-
-/** Canonical stored session: the persisted base schema's shape (its single
- *  source of truth) plus the two optional identity fields the status read
- *  reports. Providers may add fields via intersection types. */
-export type SubscriptionSession = SubscriptionSessionBase & {
-  email?: string;
-  accountId?: string;
-};
-
-/** The authorize URL a loopback login opens, and what its callback checks. */
-export interface SubscriptionAuthorizeRequest {
-  url: string;
-  /** The high-entropy secret carried through the loopback round-trip. */
-  verifier: string;
-  state: string;
-  redirectUri: string;
 }
 
 /** Token grants compose in the calling fiber, including request cancellation. */
@@ -83,12 +64,6 @@ export interface SubscriptionOAuthClient {
     SubscriptionOAuthError,
     HttpClient.HttpClient
   >;
-}
-
-export interface SubscriptionSessionStatus {
-  signedIn: boolean;
-  email?: string;
-  accountId?: string;
 }
 
 /**
@@ -175,7 +150,10 @@ function formGrantClient(endpoint: OAuthFormEndpoint): SubscriptionOAuthClient {
   };
 }
 
-export class SubscriptionOAuthCoordinator<S extends SubscriptionSession> {
+/** The {@link SubscriptionCoordinator} over a provider's policy. */
+export class SubscriptionOAuthCoordinator<
+  S extends SubscriptionSession,
+> implements SubscriptionCoordinator<S> {
   private readonly storage: SubscriptionSessionStorage;
   private readonly policy: SubscriptionOAuthPolicy<S>;
   private readonly client: SubscriptionOAuthClient;

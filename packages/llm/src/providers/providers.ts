@@ -40,9 +40,9 @@ export function apiKeyEnvName(provider: ApiKeyProviderId): string {
 }
 
 /**
- * Every environment variable TeXRA reads as a provider API key, derived from
- * the provider manifest, so a provider added there is covered here. A child
- * process TeXRA spawns does not inherit them (see `inheritedEnv`).
+ * Every environment variable read as a provider API key, derived from the
+ * provider manifest, so a provider added there is covered here: what a host
+ * keeps out of a child process's environment, for one.
  */
 export const API_KEY_ENV_NAMES: readonly string[] = Object.freeze(
   API_KEY_PROVIDER_IDS.map(apiKeyEnvName),

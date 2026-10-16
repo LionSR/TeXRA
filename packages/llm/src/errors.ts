@@ -22,6 +22,7 @@ const ResponsesOperationSchema = z
     afterSequence: z.int().nonnegative().nullable(),
   })
   .readonly();
+/** Remote work a provider accepted: enough to observe or cancel it later. */
 export const RemoteOperationSchema = z.union([
   ResponsesOperationSchema,
   ResponsesOperationSchema.unwrap()
@@ -34,6 +35,7 @@ export const RemoteOperationSchema = z.union([
     })
     .readonly(),
 ]);
+/** {@link RemoteOperationSchema}'s value. */
 export type RemoteOperation = z.infer<typeof RemoteOperationSchema>;
 
 /** A subscription plan whose quota a request can exhaust, named by its route. */
@@ -45,6 +47,8 @@ const PlanRouteSchema = z.enum([
 ]);
 /** A subscription plan, named by the route that bills through it. */
 export type PlanRoute = z.infer<typeof PlanRouteSchema>;
+/** The route a binding bills through: a plan, or the caller's API key. */
+export type BillingRoute = PlanRoute | 'api-key';
 
 /** A model failure's fields as data: what crosses a process boundary (an
  *  editor's model served to the service) and is rebuilt there as a
@@ -106,7 +110,8 @@ export const ModelErrorFieldsSchema = z.strictObject({
     ])
     .optional(),
 });
-type ModelErrorFields = z.infer<typeof ModelErrorFieldsSchema> & {
+/** A {@link ModelError}'s fields: the wire fields and the local `cause`. */
+export type ModelErrorFields = z.infer<typeof ModelErrorFieldsSchema> & {
   readonly cause?: unknown;
 };
 
