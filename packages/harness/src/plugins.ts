@@ -19,8 +19,8 @@
  * `ProcessPluginLayer`; work that outlives its step holds the session layer
  * with `PluginHold`; a plugin that records the decisions on a request kind
  * is that kind's `RequestDecisionHook`. The process's plugin table is the
- * `ToolRegistry` service, and `readDisabledTools` reads which plugins the
- * user switched off.
+ * `ToolRegistry` service. A tool refuses a call by failing with `ToolError`;
+ * `fileOps` takes the `WriteFilter` its `write_file` applies.
  */
 export {
   codemode,
@@ -31,7 +31,8 @@ export {
   multiAgent,
   web,
 } from '@tools/builtinPlugins';
-export { definePlugin, readDisabledTools } from '@tools/plugins';
+export { definePlugin } from '@tools/plugins';
+export type { WriteFilter } from '@tools/WriteTool';
 export {
   agentBlockOf,
   PluginHold,
@@ -43,12 +44,14 @@ export {
   type RequestDecisionHook,
 } from '@tools/toolTable';
 export { errorResult, executed } from '@tools/core/result';
+export { ToolError } from '@shared/schemas';
 export { nullishWithDefault } from '@tools/core/inputSchema';
 export {
   assertNoParentTraversal,
   parseWorkingDirectory,
   resolveToolPath,
   type ToolPathCall,
+  type ToolPathResolution,
   type WorkspacePathResolution,
 } from '@tools/pathResolution';
 /** The `web` plugin's fetch tool, typed with what its call requires, for a

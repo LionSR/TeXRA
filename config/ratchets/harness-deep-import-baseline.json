@@ -244,6 +244,7 @@
       "@tools/mcp/mcpServer",
       "@tools/memory/constants",
       "@tools/memory/memoryFileSystem",
+      "@tools/plugins",
       "@tools/timeouts",
       "@tools/toolAvailability",
       "@tools/toolAvailabilityService",

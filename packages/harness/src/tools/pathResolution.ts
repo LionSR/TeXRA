@@ -22,21 +22,28 @@ import {
   toPosixPath,
 } from '@utils/core/pathCore';
 
+/** A tool path resolved against the call's roots: its root-relative and
+ *  absolute spellings, the path filesystem calls take, and the external root
+ *  it falls in, if any. */
 export interface WorkspacePathResolution {
-  relative: string;
-  absolute: string;
+  readonly relative: string;
+  readonly absolute: string;
   /**
    * The path to pass to filesystem operations.
    * Absolute when operating outside the workspace (e.g. a worktree),
    * workspace-relative otherwise.
    */
-  fsPath: string;
+  readonly fsPath: string;
   /**
    * When the resolved path falls inside a registered external root, this
    * describes that root (label, writable flag). Undefined for workspace paths
    * and for any external path outside the allowlist.
    */
-  external?: { root: string; writable: boolean; label: string };
+  readonly external?: {
+    readonly root: string;
+    readonly writable: boolean;
+    readonly label: string;
+  };
 }
 
 interface OutsideRootCandidate {
@@ -101,7 +108,10 @@ export const assertNoParentTraversal = (
  * `WorkspaceFs` view answers it, and absolute for a working-directory or
  * outside path.
  */
-export function resolveToolPath(call: ToolPathCall, targetPath?: string) {
+export function resolveToolPath(
+  call: ToolPathCall,
+  targetPath?: string,
+): Effect.Effect<ToolPathResolution, Error> {
   return Effect.gen(function* () {
     const settings = call.roots;
     const root = call.workingDirectory ?? call.roots.workspace;

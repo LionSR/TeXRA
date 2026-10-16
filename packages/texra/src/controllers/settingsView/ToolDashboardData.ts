@@ -17,7 +17,7 @@ import {
   type SettingHost,
   type Plugin,
 } from '@texra-ai/harness';
-import { readDisabledTools, ToolRegistry } from '@texra-ai/harness/plugins';
+import { ToolRegistry } from '@texra-ai/harness/plugins';
 import type {
   ToolCommandKind,
   ToolDashboardItem,
@@ -27,6 +27,7 @@ import {
   type PluginCard,
   type ToolPluginSetup,
 } from '@texra/tools/pluginCards';
+import { readDisabledTools } from '@tools/plugins';
 import {
   ToolAvailability,
   type ExternalToolCheckResult,
