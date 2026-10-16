@@ -471,7 +471,7 @@ export type SessionEvent = z.infer<typeof SessionEventSchema>;
 
 /**
  * What a publisher hands `SessionEvents.publish`: the body plus the aggregate
- * it lives on (contract C2). The publisher stamps the rest of the envelope
+ * it lives on. The publisher stamps the rest of the envelope
  * (`seq`, `commit`, `origin`, `at`) under its permit; no caller passes them.
  * Parsing a draft removes caller-supplied envelope fields before storage.
  */
@@ -526,12 +526,12 @@ export function edgesOf(draft: SessionEventDraft): AggregateEdges {
 }
 
 /**
- * The listing types the fold keys `latest` by (PRD 5.1): every durable arm
+ * The listing types the fold keys `latest` by: every durable arm
  * but the transcript tier. The request pair shares one entry because it
  * folds to one set, the follow-up pair likewise, and the lifecycle pair (`run.start`, `run.removed`)
  * shares one because it folds to one existence: a tombstone's commit then
  * outranks a replayed `run.start` below it, which is what makes the
- * tombstone final under every read (5.2, "Existence"). `run.position` is a
+ * tombstone final under every read. `run.position` is a
  * listing key of its own: the phase is folded from it, so a cold listing
  * that dropped it would paint every parked run as ready. `stage.start` is
  * transcript tier alone: its display arm is a no-op and only the transcript

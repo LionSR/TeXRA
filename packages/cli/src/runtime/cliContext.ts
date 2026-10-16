@@ -6,6 +6,7 @@ import { Effect, FileSystem, Result } from 'effect';
 
 import { DatabaseOpenFailed, type ConfigProvider } from '@texra-ai/harness';
 import { canonicalizeWorkspacePath } from '@texra-ai/harness/node';
+import { Settings } from '@texra-ai/harness';
 import { safeParseJson } from '@texra-ai/harness/schemas';
 import {
   APPROVAL_POLICY_CONFIG_KEY,
@@ -24,7 +25,6 @@ import {
   type CliOutputFormat,
 } from '@texra/shared/cliOutputFormat';
 import { approvalPolicyLabel } from '@ui/copy/approvalPolicy';
-import { readConfigSettingFrom } from '@utils/config/platformSettings';
 import { absentReason } from '@utils/files/fsEntryExists';
 import { envVar } from '@utils/system/envFlags';
 import { isNonEmptyString } from '@utils/text/stringUtils';
@@ -428,7 +428,7 @@ export const buildCliContext = Effect.fn('cliContext.buildCliContext')(
           ));
     const approvalPolicy: ApprovalPolicy =
       requestedApprovalPolicy ??
-      readConfigSettingFrom<ApprovalPolicy>(config, APPROVAL_POLICY_CONFIG_KEY);
+      Settings.getConfig<ApprovalPolicy>(config, APPROVAL_POLICY_CONFIG_KEY);
     const outputFormat: CliOutputFormat =
       init.globalArgs.outputFormat ??
       (yield* pickEnv(
@@ -439,10 +439,7 @@ export const buildCliContext = Effect.fn('cliContext.buildCliContext')(
             : undefined,
         configWarnings,
       )) ??
-      readConfigSettingFrom<CliOutputFormat>(
-        config,
-        CLI_OUTPUT_FORMAT_CONFIG_KEY,
-      );
+      Settings.getConfig<CliOutputFormat>(config, CLI_OUTPUT_FORMAT_CONFIG_KEY);
     let minimumLogLevel: MinimumLogLevel = 'Info';
     if (init.globalArgs.quiet) minimumLogLevel = 'None';
     else if (init.globalArgs.verbose) minimumLogLevel = 'Debug';

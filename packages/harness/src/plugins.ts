@@ -11,11 +11,65 @@
  * only through `ChildRuns`: it launches a child, and sends a run its input
  * (`RunInbox`). A plugin that owns a block of an agent file (`AgentBlock`)
  * reads an agent's block with `agentBlockOf`.
+ *
+ * An app defines a plugin with `definePlugin`; its tools return `executed` or
+ * `errorResult`, give an omitted input field its default with
+ * `nullishWithDefault`, and resolve a path the model names against the
+ * call's roots with `resolveToolPath`. A plugin's process services are its
+ * `ProcessPluginLayer`; work that outlives its step holds the session layer
+ * with `PluginHold`; a plugin that records the decisions on a request kind
+ * is that kind's `RequestDecisionHook`. The process's plugin table is the
+ * `ToolRegistry` service. A tool refuses a call by failing with `ToolError`;
+ * `fileOps` takes the `WriteFilter` its `write_file` applies.
  */
-export { harnessBuiltins } from '@tools/builtinPlugins';
+export {
+  codemode,
+  fileOps,
+  goal,
+  harnessBuiltins,
+  memoryWorkflow,
+  multiAgent,
+  web,
+} from '@tools/builtinPlugins';
+export {
+  definePlugin,
+  type PluginArm,
+  type PluginDefinition,
+  type PluginRow,
+} from '@tools/plugins';
+export type { WriteFilter } from '@tools/WriteTool';
+export {
+  agentBlockOf,
+  PluginHold,
+  ToolRegistry,
+  type AgentBlock,
+  type AgentBlockResult,
+  type ProcessPluginLayer,
+  type RecipeChange,
+  type RequestDecisionHook,
+} from '@tools/toolTable';
+export { errorResult, executed } from '@tools/core/result';
+export { ToolError } from '@shared/schemas';
+export { nullishWithDefault } from '@tools/core/inputSchema';
+export {
+  assertNoParentTraversal,
+  parseWorkingDirectory,
+  resolveToolPath,
+  type ToolPathCall,
+  type ToolPathResolution,
+  type WorkspacePathResolution,
+} from '@tools/pathResolution';
 /** The `web` plugin's fetch tool, typed with what its call requires, for a
  *  host that calls it outside a run (the editor's Copilot tools). */
 export { WebFetchTool } from '@tools/web/WebFetchTool';
+// The memory tool's tree as a host reads and edits it outside a run, over
+// the session's storage view.
+export {
+  MemoryStore,
+  type MemoryPinResult,
+  type MemoryPreview,
+} from '@tools/memory/memoryStore';
+export type { MemoryViewItem } from '@shared/tools/memoryView';
 export { callerRun, requireRun } from '@agent/runtime/RunCall';
 export {
   ChildRuns,
@@ -24,9 +78,3 @@ export {
 export type { RunInbox } from '@agent/followUp/ToolUseFollowUp';
 export type { ToolRun } from '@agent/core/tools/ToolTypes';
 export { HostCapabilities } from '@agent/runtime/agentToolResolution';
-export {
-  agentBlockOf,
-  type AgentBlock,
-  type AgentBlockResult,
-  type RecipeChange,
-} from '@tools/toolTable';

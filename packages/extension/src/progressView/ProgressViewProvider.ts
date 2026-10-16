@@ -12,6 +12,7 @@ import {
 } from '@texra-ai/harness';
 import { withLogChannel } from '@texra-ai/harness';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
+import { GlobalStateKey } from '@texra-ai/harness/schemas';
 import {
   SessionHostInteractions,
   type HostInteractions,
@@ -30,7 +31,6 @@ import {
   getFirstRunDone,
   setOnboardingDeclined,
 } from '@shared/state/onboardingState';
-import { GlobalStateKey } from '@shared/state/stateKeys';
 import {
   EXTENSION_CATEGORIES,
   getFilterExtensions,

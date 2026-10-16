@@ -3,6 +3,7 @@ import * as path from 'node:path';
 import { Cause, Effect, FileSystem } from 'effect';
 
 import { createRunStorageLocation } from '@texra-ai/harness';
+import { Settings } from '@texra-ai/harness';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
 import type { AgentTrace } from '@agent/trace';
 import { compileLatex2Pdf, type CompileLatex2PdfResult } from '@latex/texTools';
@@ -28,7 +29,6 @@ import { locateInWorkspace } from '@utils/files/workspaceFS';
 import { normalizeFilePath } from '@utils/core';
 import { truncatedHexId } from '@utils/core/idHash';
 import { hasExtension } from '@utils/core/pathCore';
-import { readSettingFrom } from '@utils/config/platformSettings';
 import { sanitizePathSegment } from '@utils/text/sanitizePathSegment';
 
 import {
@@ -62,7 +62,7 @@ export const getWorkflowAutoCompileTimeoutMs = Effect.fn(
 )(function* (roots: WorkspaceRoots) {
   return Math.max(
     MIN_TIMEOUT_MS,
-    yield* readSettingFrom<number>(
+    yield* Settings.get<number>(
       roots,
       DocumentsStateKey.WORKFLOW_AUTO_COMPILE_TIMEOUT_MS,
     ),
@@ -120,7 +120,7 @@ export const runCompileCheck = Effect.fn('documents.runCompileCheck')(
   function* (ctx: CompileCheckContext, currentRound: number) {
     const empty: CompileCheckResult = { artifacts: [] };
     if (
-      !(yield* readSettingFrom<boolean>(
+      !(yield* Settings.get<boolean>(
         ctx.roots,
         DocumentsStateKey.WORKFLOW_AUTO_COMPILE,
       ))

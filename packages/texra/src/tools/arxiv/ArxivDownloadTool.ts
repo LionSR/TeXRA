@@ -7,13 +7,12 @@ import { z } from 'zod';
 // Local imports
 import { defineTool, ToolContext, WorkspaceFs } from '@texra-ai/harness';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
+import { nullishWithDefault, executed } from '@texra-ai/harness/plugins';
 import { ArxivProcessor, type ArxivSourceError } from '@latex/arxivProcessor';
 import { resolveLatexFormatter } from '@latex/formatter/texFormatter';
 import { ToolError } from '@shared/schemas';
 import { getGitignoreMatcher } from '@tools/gitignore';
 import { formatToolOutput } from '@tools/formatting';
-import { nullishWithDefault } from '@tools/core/inputSchema';
-import { executed } from '@tools/core/result';
 import { readDirectoryTyped } from '@utils/files/fsDurability';
 import { toPosixPath } from '@utils/core/pathCore';
 

@@ -10,6 +10,7 @@ import '@awesome.me/webawesome/dist/components/radio-group/radio-group.js';
 import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 
+import { WorkspaceStateKey } from '@texra-ai/harness/schemas';
 import {
   parseApprovalPolicy,
   APPROVAL_POLICY_CONFIG_KEY,
@@ -21,7 +22,6 @@ import {
   RESUME_ON_OPEN_SETTING,
   TOOL_EDIT_APPROVAL_CONFIG_KEY,
 } from '@shared/schemas';
-import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { APPROVAL_POLICY_OPTIONS } from '@ui/copy/approvalPolicy';
 import { commonViewStyles, designTokens } from '@ui/styles';
 import {

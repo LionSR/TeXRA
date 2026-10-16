@@ -51,7 +51,6 @@ import { CliExitCode } from '@cli/runtime/exitCodes';
 import { launchApproval, type CliContext } from '@cli/runtime/cliContext';
 import { heldElsewhereBy } from '@shared/session/database';
 import { isTaskConfig, type RunId } from '@shared/schemas';
-import type { SettingsStores } from '@shared/config/settingsAccess';
 import type { DisposableStore } from '@texra/platform/disposable';
 import { FOCUSED_AGENT } from '@ui/copy/nestedRuns';
 import { generateRunId } from '@utils/core';
@@ -94,6 +93,7 @@ import type { FollowUpDeliveryQueue } from './followUpDeliveryQueue';
 import type { SessionRequests } from './tui/state/approvalQueue';
 import type { SkillActivation } from './tui/forms/SkillsListForm';
 import type { PastedImageEntry } from './tui/input/draftAttachments';
+import type { SettingsStores } from '@texra-ai/harness';
 
 /** The root-run slot a message continuing the stopped conversation holds
  *  while the session resumes it, so the chat reads as busy (Ctrl-C stops,

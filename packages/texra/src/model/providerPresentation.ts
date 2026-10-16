@@ -5,6 +5,7 @@
  * Keys are platform-specific (a moonshot.cn key does not work on
  * moonshot.ai), so the key page follows the same toggle the endpoint does.
  */
+import { Settings } from '@texra-ai/harness';
 import { Effect } from 'effect';
 
 import {
@@ -13,9 +14,17 @@ import {
   type RegionalProviderId,
 } from '@texra-ai/llm';
 import { providerRegionSetting } from '@shared/state/providerSettings';
-import type { SettingsStores } from '@shared/config/settingsAccess';
-import { useChinaRegion } from '@utils/config/providerConfig';
 import type { StateReadFailed } from '@texra-ai/harness';
+import type { SettingsStores } from '@texra-ai/harness';
+
+/** Whether `provider`'s region toggle picks its China platform. */
+function useChinaRegion(
+  stores: SettingsStores,
+  provider: string,
+): Effect.Effect<boolean, StateReadFailed> {
+  const key = providerRegionSetting(provider)?.key;
+  return key ? Settings.get<boolean>(stores, key) : Effect.succeed(false);
+}
 
 /** A value that differs between a provider's two platforms. */
 interface Regional {

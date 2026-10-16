@@ -25,13 +25,12 @@ import {
   ChildRuns,
   requireRun,
   type RunInbox,
+  parseWorkingDirectory,
+  nullishWithDefault,
+  executed,
 } from '@texra-ai/harness/plugins';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
-import type { SettingsStores } from '@shared/config/settingsAccess';
 import { ToolError, type RunId, type ToolResult } from '@shared/schemas';
-import { parseWorkingDirectory } from '@tools/pathResolution';
-import { nullishWithDefault } from '@tools/core/inputSchema';
-import { executed } from '@tools/core/result';
 import { executeCommand } from '@utils/system/execUtils';
 
 import {
@@ -51,6 +50,7 @@ import { GitHubSubscriptions } from './subscriptionBindings';
 import { parseGitHubSlug } from './githubSlug';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 import type { GhIssue } from './prTypes';
+import type { SettingsStores } from '@texra-ai/harness';
 
 /**
  * What each level brings in, keyed by level. Declared above the schema because

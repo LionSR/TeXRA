@@ -30,8 +30,8 @@ export type UserFollowUpSupport = z.infer<typeof UserFollowUpSupportSchema>;
 
 /**
  * The live phase vocabulary. Membership questions are answered by the
- * predicates in `@shared/runs/runStatus` (`isActivePhase`,
- * `isInFlightPhase`, `isTerminalOutcomePhase`).
+ * predicates `isActivePhase`, `isInFlightPhase` and
+ * `isTerminalOutcomePhase`.
  */
 export const RUN_PHASE = {
   RUNNING: 'running',
@@ -46,12 +46,11 @@ export type RunPhase = z.infer<typeof RunPhaseSchema>;
 
 /**
  * Subset of `RunPhase` used for task groups (`TaskGroupSchema.status`,
- * populated from `GROUP_START`/`GROUP_END` transcript rows — #7993 step 3).
+ * populated from `GROUP_START`/`GROUP_END` transcript rows).
  * No `WAITING`: task groups have no waiting concept, only running and the
- * three terminal `RunOutcome` values (§8.2's group-end mapping table,
- * 2026-07-03-session-scoped-runtime-architecture.md). Using the
- * native vocabulary keeps the completed/cancelled distinction §8.2 writes to
- * the transcript row visible in the rendered value.
+ * three terminal `RunOutcome` values. Using the native vocabulary keeps the
+ * completed/cancelled distinction the group-end row records visible in the
+ * rendered value.
  */
 export const TaskGroupStatusSchema = z.enum([
   RUN_PHASE.RUNNING,

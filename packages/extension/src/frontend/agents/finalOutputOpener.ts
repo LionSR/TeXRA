@@ -3,10 +3,10 @@ import { Effect, Result } from 'effect';
 
 import { withLogChannel } from '@texra-ai/harness';
 import { ensureError } from '@texra-ai/harness/schemas';
-import type { SettingsStores } from '@shared/config/settingsAccess';
 import { selectAutoOpenFinalOutput } from '@texra/agent/output/selectAutoOpenFinalOutput';
 import type { RunEndResult } from '@texra-ai/harness';
 import type { AgentConfig } from '@texra-ai/harness/schemas';
+import type { SettingsStores } from '@texra-ai/harness';
 
 const CHANNEL = 'FinalOutputOpener';
 

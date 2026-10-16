@@ -231,11 +231,11 @@ import type { RunId } from '@shared/schemas';
 import type { SessionView as RuntimeSessionView } from '@shared/session/sessionView';
 import type { Plugin } from '@tools/plugins';
 import {
-  qualifyAggregateId,
   type AgentPlatform,
   Sessions,
 } from '../../../packages/harness/src/index';
 import { nodePlatform } from '../../../packages/harness/src/node';
+import { qualifyAggregateId } from '../../../packages/harness/src/schemas';
 
 /** The plugin list every composition below is made with. */
 const PLUGINS: readonly Plugin[] = [];

@@ -9,7 +9,6 @@ import { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 import { Secrets } from '@texra-ai/harness';
 import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';
-import type { SettingsStores } from '@shared/config/settingsAccess';
 import { ACCOUNT_OUTCOME } from '@shared/model/accountAuth';
 import {
   subscriptionProvider,
@@ -20,6 +19,7 @@ import {
 import { presentCliSignInUrl, type CliSignInProgress } from './signInUrl';
 import { interactiveTerminalFailure } from './terminalRequirements';
 import { cliEnvValue, type CliContext } from './cliContext';
+import type { SettingsStores } from '@texra-ai/harness';
 
 export interface CliSubscriptionLoginTransportInit {
   readonly device: boolean;

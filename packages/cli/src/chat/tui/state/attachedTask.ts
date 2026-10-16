@@ -5,11 +5,8 @@
 
 import { Effect, type Scope, Stream } from 'effect';
 
-import {
-  qualifyAggregateId,
-  type Outcome,
-  type RuntimeRequest,
-} from '@texra-ai/harness';
+import { type Outcome, type RuntimeRequest } from '@texra-ai/harness';
+import { qualifyAggregateId } from '@texra-ai/harness/schemas';
 import {
   attentionOf,
   type RunView,

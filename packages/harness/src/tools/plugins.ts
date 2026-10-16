@@ -1,12 +1,11 @@
 /**
  * A plugin: what one unit of the harness contributes (its tools, the probe
  * of its dependency, its switch, its continuation, prompt section and
- * layers). The harness's built-ins are `@tools/builtinPlugins`; an app
+ * layers). The harness's built-ins are `harnessBuiltins`; an app
  * passes its list, built-ins included, to `processLayer`, and the
- * process's `ToolRegistry` holds it (`@tools/toolTable`), which every
+ * process's `ToolRegistry` holds it, which every
  * reader takes it from: availability probes, the first-install switch seed,
- * the switches, a run's injected tools
- * (`@agent/runtime/agentToolResolution`), and the bundled skills and agents
+ * the switches, a run's injected tools, and the bundled skills and agents
  * at `resources/plugins/<id>/`, which a switched-off plugin withholds with
  * its tools. How the app shows a plugin is its own record, keyed by id.
  *
@@ -57,7 +56,7 @@ import type {
 } from '@tools/toolTable';
 
 /** What a transition rule reads of a plugin row: value and parent edge. */
-interface PluginRow {
+export interface PluginRow {
   readonly value: JsonValue;
   readonly parent: RunId | null;
 }
@@ -68,10 +67,10 @@ interface PluginRow {
  * maps version `i + 1` to `i + 2`) the store reads an older value through.
  * The store checks every row of the kind against its arm, and keeps a row
  * whose arm the process's plugins lack (its plugin removed, or not listed
- * here) without reading it. Arms live beside their readers under
- * `@shared/plugins/`, which webviews import.
+ * here) without reading it. Arms live beside their readers, in modules
+ * webviews can import.
  */
-interface PluginArm {
+export interface PluginArm {
   /** The plugin's id: an arm is its own plugin's, never another's. */
   readonly plugin: string;
   readonly kind: string;
@@ -99,7 +98,7 @@ interface PluginArm {
 /**
  * One plugin: what it contributes to a run. How an app shows it (a
  * dashboard card's copy, its setup guide, its settings rows) is the app's
- * own record, keyed by `id` (TeXRA's is `@tools/pluginCards`).
+ * own record, keyed by `id`.
  */
 export interface Plugin {
   /** Stable, persisted identifier (the switch key, the plugin a run's
@@ -135,7 +134,7 @@ export interface Plugin {
    *  the plugin is switched on. */
   readonly prompt?: PromptSection;
   /** Process-lifetime services, up while the plugin is switched on or a step
-   *  pins it (`@tools/liveTools`). A host-supplied one (Copilot's, in VS
+   *  pins it. A host-supplied one (Copilot's, in VS
    *  Code) is passed with the host's plugin value. */
   readonly processLayer?: ProcessPluginLayer;
   /** Session-lifetime services, one per open session, up while the plugin

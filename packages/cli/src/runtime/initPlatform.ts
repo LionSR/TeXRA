@@ -22,13 +22,12 @@ import {
   resolveWorkspaceStoragePath,
 } from '@texra-ai/harness/node';
 import { ensureError } from '@texra-ai/harness/schemas';
+import { GlobalStateKey } from '@texra-ai/harness/schemas';
 import type { SessionHandle } from '@agent/runtime';
 import {
   openProjectStateStore,
   openRepoStateStore,
 } from '@controllers/session/appStateStore';
-import type { SettingsStores } from '@shared/config/settingsAccess';
-import { GlobalStateKey } from '@shared/state/stateKeys';
 import { telemetryNoticeIfDue } from '@telemetry/telemetryNotice';
 import { DisposableStore } from '@texra/platform/disposable';
 import { bootstrapHost } from '@texra/controllers/hostBootstrap';
@@ -50,6 +49,7 @@ import {
 import { CliExitCode } from './exitCodes';
 import { terminalForegroundHeld } from './foregroundCommand';
 import type { CliContext } from './cliContext';
+import type { SettingsStores } from '@texra-ai/harness';
 
 type CliShutdownSignal = 'SIGINT' | 'SIGTERM';
 // Removers for the listeners installCliShutdownSignalHandlers put on the
@@ -116,8 +116,8 @@ export type CliPlatformServices = SettingsStores & {
   /**
    * The stores this root opened, handed over rather than read back. `config`,
    * `workspaceState`, `repoState` and `globalState` are the slots a catalog setting
-   * resolves against, so a read or write through `readSettingFrom` /
-   * `writeSettingTo` answers for this process's project, from the record
+   * resolves against, so a read or write through `Settings.get` /
+   * `Settings.set` answers for this process's project, from the record
    * the caller holds rather than any process-wide lookup.
    */
   readonly secrets: PlatformSecrets;

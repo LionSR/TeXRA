@@ -2,9 +2,8 @@
  * Subagent progress update types.
  *
  * These are pure data types with no implementation dependencies,
- * used by both @agent/ and @tools/ to communicate subagent progress.
- * Living in @shared/schemas/ breaks the circular dependency between
- * agent runtime and tools.
+ * shared by the agent runtime and the tools to communicate subagent
+ * progress.
  */
 
 import type { Plan } from './plan';

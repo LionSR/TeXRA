@@ -7,8 +7,7 @@ import {
   type RunOutcome,
 } from '@shared/schemas';
 
-import { isDiskFullError } from './errorPredicates';
-import { isUserAbort } from './sdkError/errorPatterns';
+import { isDiskFullError, isUserAbort } from './errorPredicates';
 import { normalizeProviderError } from './sdkError/providerErrorFormat';
 
 export type AgentErrorKind = NonNullable<RunEnd['error']>['kind'];

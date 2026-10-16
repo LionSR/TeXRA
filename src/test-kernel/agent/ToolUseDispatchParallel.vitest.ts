@@ -39,7 +39,6 @@ import {
 
 // Local imports
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
-import { MapToolRegistry } from '@agent/core/tools/ToolTypes';
 import { requireToolRun } from '@agent/runtime/RunCall';
 import type {
   RuntimeTool as ITool,
@@ -276,7 +275,7 @@ const openDispatch = Effect.fn('openDispatch')(function* (
   const session = yield* createTestSession();
   const runId = dispatchRunId();
   const logger = options.logger ?? noopTrace;
-  const tools = new MapToolRegistry(options.tools);
+  const tools = new Map(Object.entries(options.tools));
   publishTestRunStart(session, runId);
   yield* session.log.settled;
   const cell = yield* session.runHistory.open(runId, {

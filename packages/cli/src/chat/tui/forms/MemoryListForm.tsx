@@ -4,15 +4,14 @@
 import { Text } from 'ink';
 import { Effect } from 'effect';
 
+import { MemoryStore, type MemoryViewItem } from '@texra-ai/harness/plugins';
 import {
   CLI_MEMORY_LIST_LIMIT,
   cliMemoryItemDescription,
   runCliMemory,
 } from '@cli/runtime/memory';
-import { loadMemoryItems } from '@tools/memory/memoryFileSystem';
 
 import { AsyncListForm } from './_shared/ListForm';
-import type { MemoryViewItem } from '@texra-ai/harness/schemas';
 import type { ProcessRuntime } from '@texra-ai/harness';
 import type { WorkspaceRoots } from '@texra-ai/harness';
 
@@ -36,7 +35,7 @@ export function MemoryListForm(props: MemoryListFormProps): React.JSX.Element {
       title="/memory"
       loadingLabel="Loading memories..."
       load={() =>
-        Effect.map(runCliMemory(props.roots, loadMemoryItems()), (items) =>
+        Effect.map(runCliMemory(props.roots, MemoryStore.list), (items) =>
           items.slice(0, CLI_MEMORY_LIST_LIMIT),
         )
       }

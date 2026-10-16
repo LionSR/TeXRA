@@ -112,7 +112,7 @@ export type ToolUseFollowUpTarget =
 export interface RunRegistryInit {
   /** The session these runs belong to, resolved when first used. */
   readonly session: () => SessionHandle;
-  /** The fork every run starts on: the session's context, never a caller's, since a fork from a tool call reads that call's run services (#13348); a child's parent is data (`parentRunId`), not fiber ancestry. */
+  /** The fork every run starts on: the session's context, never a caller's, since a fork from a tool call reads that call's run services; a child's parent is data (`parentRunId`), not fiber ancestry. */
   readonly fork: <A, E>(
     effect: Effect.Effect<A, E, ProcessServices>,
   ) => Fiber.Fiber<A, E>;
@@ -402,7 +402,7 @@ export class RunRegistry implements RunsShape {
         })) as RunsShape['launch'];
 
   /**
-   * The one launch door (R2): every run starts here, on the session's context
+   * The one launch door: every run starts here, on the session's context
    * ({@link fork}), after earlier work on its lane. It refuses with `RunLive`
    * as it claims; a surviving claim lifts the stop marks. `settle` wraps it.
    */

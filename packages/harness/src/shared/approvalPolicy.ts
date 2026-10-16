@@ -176,11 +176,10 @@ export function decideHumanInputRequest(input: {
 
 export function humanInputDenialMessage(
   deny: Exclude<HumanInputDecision, 'present'>['deny'],
-  yoloMessage: string = APPROVAL_YOLO_NO_HUMAN_MESSAGE,
 ): string {
   switch (deny) {
     case 'yolo-no-human':
-      return yoloMessage;
+      return APPROVAL_YOLO_NO_HUMAN_MESSAGE;
     case 'policy':
       return APPROVAL_POLICY_DENIED_MESSAGE;
     case 'unpresentable':

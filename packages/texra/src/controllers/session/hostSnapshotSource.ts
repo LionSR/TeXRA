@@ -21,8 +21,8 @@ import {
   APPROVAL_POLICY_CONFIG_KEY,
   type ApprovalPolicy,
 } from '@texra-ai/harness/schemas';
+import { Settings } from '@texra-ai/harness';
 import { loadTeamOptions } from '@common/teams/TeamPlan';
-import type { SettingsStores } from '@shared/config/settingsAccess';
 import type { FileOptions } from '@texra/shared/session/hostSnapshot';
 import { agentOptionsData } from '@texra/tools/documents/documentTask';
 import type {
@@ -32,12 +32,9 @@ import type {
 import { modelOptionsFrom } from '@texra/model/modelOptions';
 import { createTeamCatalogPorts } from '@texra/controllers/mainView/teamCatalogPorts';
 import { readRecentCommits } from '@texra/utils/git/repositoryOverview';
-import {
-  readSettingFrom,
-  readConfigSettingFrom,
-} from '@utils/config/platformSettings';
 import type { AgentCatalogServices } from '@texra-ai/harness';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
+import type { SettingsStores } from '@texra-ai/harness';
 
 type Banners = HostSnapshot['banners'];
 
@@ -179,7 +176,7 @@ export function createHostSnapshotSource(
   const publish = Effect.suspend(() =>
     options.publish({
       project: options.project,
-      approvalPolicy: readConfigSettingFrom<ApprovalPolicy>(
+      approvalPolicy: Settings.getConfig<ApprovalPolicy>(
         options.stores.config,
         APPROVAL_POLICY_CONFIG_KEY,
       ),
@@ -235,7 +232,7 @@ export function createHostSnapshotSource(
     if (options.root === undefined) return;
     commits = yield* readRecentCommits(
       options.root,
-      yield* readSettingFrom<number>(
+      yield* Settings.get<number>(
         options.stores,
         'texra.git.numberOfCommitsToShow',
       ),

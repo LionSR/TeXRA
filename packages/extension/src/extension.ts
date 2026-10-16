@@ -3,6 +3,7 @@ import * as path from 'node:path';
 
 // Third-party imports
 import * as vscode from 'vscode';
+import { z } from 'zod';
 import {
   Cause,
   Context,
@@ -39,7 +40,7 @@ import { withLogChannel } from '@texra-ai/harness';
 import { setLogSink } from '@texra-ai/harness';
 import { StorageFs, withSessionFs } from '@texra-ai/harness';
 import { ToolAvailability } from '@texra-ai/harness';
-import { readConfigSettingFrom } from '@texra-ai/harness';
+import { Settings } from '@texra-ai/harness';
 import {
   APPROVAL_POLICY_CONFIG_KEY,
   type ApprovalPolicy,
@@ -88,7 +89,6 @@ import { defaultNodeStorageRoot } from '@platform/defaults/nodeStorage';
 import { openTexraConfigStores } from '@platform/defaults/nodeStores';
 import { JsonConfigProvider } from '@platform/defaults/jsonConfigProvider';
 import { GlobalDatabase } from '@shared/session/database';
-import { readState, StateFlagSchema } from '@shared/config/settingsAccess';
 import { telemetryNoticeIfDue } from '@telemetry/telemetryNotice';
 import { usageLogLayer } from '@telemetry/UsageLogService';
 import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
@@ -675,7 +675,7 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
   const updateStatusBarTooltip = () => {
     // The project's persisted policy: what a run here, or the service's
     // for this project, decides under.
-    const policy = readConfigSettingFrom<ApprovalPolicy>(
+    const policy = Settings.getConfig<ApprovalPolicy>(
       roots.config,
       APPROVAL_POLICY_CONFIG_KEY,
     );
@@ -765,7 +765,13 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
     catch: ensureError,
   });
   const welcomeKey = 'texra.welcomeShown';
-  if (!(yield* readState(globalState, welcomeKey, StateFlagSchema))) {
+  if (
+    !(yield* Settings.state(
+      globalState,
+      welcomeKey,
+      z.boolean().prefault(false),
+    ))
+  ) {
     // First-run welcome card; a failure leaves the flag unset, so it repeats.
     yield* Effect.forkScoped(
       fromHost('texra.showMainView', () =>

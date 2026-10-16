@@ -10,7 +10,7 @@
 import * as path from 'node:path';
 
 import { Effect, FileSystem } from 'effect';
-import { agentBlockOf } from '@texra-ai/harness/plugins';
+import { agentBlockOf, errorResult } from '@texra-ai/harness/plugins';
 import { withLogChannel } from '@texra-ai/harness';
 import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';
 import {
@@ -26,7 +26,6 @@ import {
   type DocumentAgentOption,
   type DocumentTask,
 } from '@texra/shared/plugins/documents';
-import { errorResult } from '@tools/core/result';
 import { hasExtension } from '@utils/core/pathCore';
 import { readNormalizedFile } from '@utils/files/fsDurability';
 import { workspaceAbsolutePath } from '@utils/files/workspaceFS';

@@ -10,10 +10,9 @@
  * `describeTool` returns: the whole description, a doc comment per field.
  */
 import { Predicate } from 'effect';
-import { toJSONSchema } from 'zod';
 
+import { inputSchema } from '@agent/core/tools/toolSchema';
 import type { ToolDefinition } from '@shared/schemas';
-import { TOOL_JSON_SCHEMA_OPTIONS } from '@shared/tools/toolJsonSchema';
 
 type Schema = Record<string, unknown>;
 
@@ -26,12 +25,6 @@ export const firstSentence = (text: string | undefined): string => {
   const end = /[.!?](?=\s|$)|\n/.exec(trimmed);
   return end === null ? trimmed : trimmed.slice(0, end.index + 1).trim();
 };
-
-/** A tool's input as JSON Schema, unflattened. */
-export const inputSchema = (definition: ToolDefinition): unknown =>
-  definition.zodSchema === undefined
-    ? definition.parameters
-    : toJSONSchema(definition.zodSchema, TOOL_JSON_SCHEMA_OPTIONS);
 
 const docComment = (text: string, indent: string): string[] => {
   const lines = text.trim().replaceAll('*/', '*\\/').split(/\r?\n/);

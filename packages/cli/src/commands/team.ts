@@ -5,6 +5,7 @@ import {
   APPROVAL_POLICY_CONFIG_KEY,
   type ApprovalPolicy,
 } from '@texra-ai/harness/schemas';
+import { Settings } from '@texra-ai/harness';
 import { getCatalogAgent } from '@agent/index';
 import {
   canLaunchTeam,
@@ -12,7 +13,6 @@ import {
   planTeamRuns,
 } from '@common/teams/TeamPlan';
 import { findTeamPreset } from '@common/teams/TeamPresets';
-import { readConfigSettingFrom } from '@utils/config/platformSettings';
 import { filterNotNullish } from '@utils/core';
 
 import { missingAgentMessage, missingTeamMessage } from '../runtime/agents';
@@ -151,7 +151,7 @@ export const runTeam = Effect.fn('runTeam')(function* (
     context.mode === 'headless' &&
     effectiveApprovalPolicy(
       context.requestedApprovalPolicy ?? context.approvalPolicy,
-      readConfigSettingFrom<ApprovalPolicy>(
+      Settings.getConfig<ApprovalPolicy>(
         services.config,
         APPROVAL_POLICY_CONFIG_KEY,
       ),

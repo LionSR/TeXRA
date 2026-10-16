@@ -17,7 +17,6 @@ import {
   installPlugins,
   parsePluginOrigin,
 } from '@common/plugins/installedPlugins';
-import type { SettingsStores } from '@shared/config/settingsAccess';
 import type { ServiceConnection } from '@texra/controllers/server/client';
 import { RUN_GRANT_ORDER } from '@ui/copy/delegationApproval';
 import { PLUGINS_TUI } from '@ui/copy/plugins';
@@ -87,6 +86,7 @@ import type {
   Session,
 } from '@texra-ai/harness';
 import type { PlatformSecrets } from '@texra-ai/harness';
+import type { SettingsStores } from '@texra-ai/harness';
 
 type SelectHandler<T> = (value: T) => SlashCommandEffect;
 

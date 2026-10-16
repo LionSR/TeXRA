@@ -3,17 +3,17 @@ import { z } from 'zod';
 import { ToolContext } from '@texra-ai/harness';
 import { ensureError } from '@texra-ai/harness/schemas';
 import {
+  resolveToolPath,
+  type WorkspacePathResolution,
+  executed,
+} from '@texra-ai/harness/plugins';
+import {
   ToolError,
   type ToolFileAttachment,
   type ToolResult,
 } from '@shared/schemas';
-import {
-  resolveToolPath,
-  type WorkspacePathResolution,
-} from '@tools/pathResolution';
 import { buildFileAttachment } from '@tools/attachments';
 import { formatToolOutput } from '@tools/formatting';
-import { executed } from '@tools/core/result';
 import { entryExists } from '@utils/files/fsEntryExists';
 
 /** Shared `texPath` Zod field for LaTeX extraction tools, with a per-tool description. */

@@ -1,3 +1,5 @@
+import { Predicate } from 'effect';
+
 /** Check if an error represents a file-not-found condition. */
 export function isFileNotFoundError(err: unknown): boolean {
   const code = (err as { code?: string })?.code;
@@ -52,4 +54,9 @@ export function isDiskFullError(err: unknown): boolean {
   return causeChain(err).some(
     (current) => (current as { code?: string }).code === 'ENOSPC',
   );
+}
+
+/** True if `err` is an `AbortController` abort (a DOM `AbortError`). */
+export function isUserAbort(err: unknown): boolean {
+  return Predicate.isObject(err) && err.name === 'AbortError';
 }

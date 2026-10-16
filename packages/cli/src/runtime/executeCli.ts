@@ -32,6 +32,7 @@ import {
 } from '@texra-ai/harness';
 import { AgentError } from '@texra-ai/harness';
 import { isUserAbort } from '@texra-ai/harness';
+import { Settings } from '@texra-ai/harness';
 import { isLiveRun } from '@texra-ai/harness/schemas';
 import {
   APPROVAL_POLICY_CONFIG_KEY,
@@ -44,7 +45,6 @@ import {
   DatabaseNotOwner,
   type SessionOpenError,
 } from '@shared/session/database';
-import { readConfigSettingFrom } from '@utils/config/platformSettings';
 import { aggregateError, generateRunId } from '@utils/core';
 
 import { createHeadlessCliHostInteractions } from './approvalAdapter';
@@ -285,7 +285,7 @@ export function executeCliRequest(
     // what this invocation asked for riding its launch (`launchApproval`).
     const refused = launchApprovalNotice(
       runContext.requestedApprovalPolicy,
-      readConfigSettingFrom<ApprovalPolicy>(
+      Settings.getConfig<ApprovalPolicy>(
         runSession.roots.config,
         APPROVAL_POLICY_CONFIG_KEY,
       ),

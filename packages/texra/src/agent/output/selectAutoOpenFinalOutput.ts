@@ -1,14 +1,14 @@
 import { Effect } from 'effect';
-import type { SettingsStores } from '@shared/config/settingsAccess';
+import { Settings } from '@texra-ai/harness';
 import { RUN_OUTCOME } from '@shared/schemas';
 import {
   documentsResultOf,
   finalWorkflowOutput,
 } from '@texra/shared/plugins/documentOutputs';
 import { DOCUMENT_TASK_BLOCK } from '@texra/shared/plugins/documents';
-import { readSettingFrom } from '@utils/config/platformSettings';
 import type { RunEndResult } from '@texra-ai/harness';
 import type { AgentConfig } from '@texra-ai/harness/schemas';
+import type { SettingsStores } from '@texra-ai/harness';
 
 /**
  * Decide whether a finished run should auto-open a final output, and which
@@ -45,7 +45,7 @@ export function selectAutoOpenFinalOutput(
     )
       return undefined;
     if (
-      !(yield* readSettingFrom<boolean>(
+      !(yield* Settings.get<boolean>(
         stores,
         'texra.agentOutputs.autoOpenFinal',
       ))

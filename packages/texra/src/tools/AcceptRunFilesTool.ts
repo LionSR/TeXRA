@@ -20,7 +20,11 @@ import {
   type ToolContextShape,
   WorkspaceFs,
 } from '@texra-ai/harness';
-import { ChildRuns, requireRun } from '@texra-ai/harness/plugins';
+import {
+  ChildRuns,
+  requireRun,
+  assertNoParentTraversal,
+} from '@texra-ai/harness/plugins';
 import { createWorkspaceLocation } from '@texra-ai/harness';
 import { ensureError } from '@texra-ai/harness/schemas';
 import { cleanupAcceptedWorkspaceDiffFiles } from '@latex/acceptedFileTarget';
@@ -35,7 +39,6 @@ import {
   FileLocation,
 } from '@shared/schemas';
 import { documentsAcceptedFact } from '@texra/shared/plugins/documents';
-import { assertNoParentTraversal } from '@tools/pathResolution';
 import {
   buildApprovalRejectedResult,
   requestToolEditApproval,

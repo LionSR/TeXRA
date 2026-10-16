@@ -12,7 +12,7 @@ import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
 import { StorageFs } from '@platform/rootedFs';
 import { createFakeWorkspaceRoots } from '@test/support/FakePlatform';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
-import { MEMORY_DISPLAY_ROOT } from '@tools/memory/constants';
+import { MEMORY_DISPLAY_ROOT } from '@tools/memory/memoryUtils';
 import { MemoryTool } from '@tools/memory/MemoryTool';
 import type { RootedFileSystem } from '@utils/files/rootedFileSystem';
 

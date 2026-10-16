@@ -21,7 +21,7 @@ import {
   type StateStore,
 } from '@texra-ai/harness';
 import { getModelLabel } from '@texra-ai/harness/schemas';
-import { GlobalStateKey } from '@shared/state/stateKeys';
+import { GlobalStateKey } from '@texra-ai/harness/schemas';
 
 import { knownCliModelIds, resolveKnownCliModelId } from './cliConfig';
 

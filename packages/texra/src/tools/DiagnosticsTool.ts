@@ -7,14 +7,17 @@ import { defineTool, ToolContext, withLogChannel } from '@texra-ai/harness';
 
 // Local imports
 import { toErrorMessage } from '@texra-ai/harness/schemas';
+import {
+  resolveToolPath,
+  type ToolPathCall,
+  executed,
+} from '@texra-ai/harness/plugins';
 import { type ToolResult, ToolError } from '@shared/schemas';
 import {
   countBySeverity,
   formatCounts,
   formatMessageList,
 } from '@texra/utils/diagnostics/diagnosticFormatting';
-import { resolveToolPath, type ToolPathCall } from '@tools/pathResolution';
-import { executed } from '@tools/core/result';
 
 // Local file imports
 import {

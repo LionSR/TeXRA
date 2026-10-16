@@ -23,6 +23,8 @@ import {
   ChildRuns,
   requireRun,
   type PluginToolServices,
+  nullishWithDefault,
+  executed,
 } from '@texra-ai/harness/plugins';
 import {
   InquiryThreadIdSchema,
@@ -38,8 +40,6 @@ import {
   type InquiryThreadRecord,
 } from '@texra/shared/plugins/externalInquiry';
 import { inquiryRecordsLayer } from '@texra/tools/inquiry/inquiryRecords';
-import { nullishWithDefault } from '@tools/core/inputSchema';
-import { executed } from '@tools/core/result';
 import { formatResultCount } from '@utils/text/stringUtils';
 
 import { collectKnownSessionLinks } from './inquiryRecordFormatting';

@@ -6,7 +6,12 @@ import { Effect, type Context } from 'effect';
 
 // Local imports
 import { ToolContext, type ToolContextShape } from '@texra-ai/harness';
-import { ChildRuns, requireRun, type ToolRun } from '@texra-ai/harness/plugins';
+import {
+  ChildRuns,
+  requireRun,
+  type ToolRun,
+  executed,
+} from '@texra-ai/harness/plugins';
 import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';
 import type {
   ChildRunPort,
@@ -17,7 +22,6 @@ import {
   FOLLOW_UP_WAKE_FAILED_MESSAGE,
 } from '@agent/followUp/ToolUseFollowUp';
 import { senderOf } from '@agent/followUp/followUpSender';
-import type { SettingsStores } from '@shared/config/settingsAccess';
 import {
   ToolError,
   type FollowUpContent,
@@ -25,7 +29,6 @@ import {
   type TokenUsageStats,
   type ToolResult,
 } from '@shared/schemas';
-import { executed } from '@tools/core/result';
 import { previewLabel } from '@utils/text/stringUtils';
 import type { AgentConfig } from '@texra-ai/harness/schemas';
 
@@ -33,6 +36,7 @@ import type {
   AgentCliSessionEntry,
   AgentCliSessionRegistry,
 } from './agentCliSessionRegistry';
+import type { SettingsStores } from '@texra-ai/harness';
 
 interface AgentCliResumeLabels {
   notActiveLabel: string;

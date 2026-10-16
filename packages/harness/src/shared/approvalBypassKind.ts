@@ -97,19 +97,30 @@ function policyLimit<Id>(
   source: ApprovalGrantSource<Id>,
   runId: Id,
 ): ApprovalPolicyLimit | undefined {
-  const seen = new Set<Id>();
   let limit: ApprovalPolicyLimit | undefined;
+  for (const grants of ancestry(source, runId)) {
+    const own = grants?.limit;
+    // Block is the strictest limit; any other is Ask.
+    if (own !== undefined && limit !== 'never') limit = own;
+  }
+  return limit;
+}
+
+/** The grants of a run and each ancestor while its edges stand, the run
+ *  first; a cycle in the edges ends the walk. */
+function* ancestry<Id>(
+  source: ApprovalGrantSource<Id>,
+  runId: Id,
+): Generator<ApprovalGrants | undefined> {
+  const seen = new Set<Id>();
   for (
     let current: Id | null | undefined = runId;
     current !== null && current !== undefined && !seen.has(current);
     current = source.runs.get(current)?.parentId
   ) {
     seen.add(current);
-    const own = source.policy.get(current)?.limit;
-    // Block is the strictest limit; any other is Ask.
-    if (own !== undefined && limit !== 'never') limit = own;
+    yield source.policy.get(current);
   }
-  return limit;
 }
 
 /** No grants of its own: every kind defers to the run's ancestry. */
@@ -134,15 +145,8 @@ export function resolveBypass<Id>(
   runId: Id,
   kind: ApprovalBypassKind,
 ): 'goal' | 'human' | null {
-  const seen = new Set<Id>();
   let goals = true;
-  for (
-    let current: Id | null | undefined = runId;
-    current !== null && current !== undefined && !seen.has(current);
-    current = source.runs.get(current)?.parentId
-  ) {
-    seen.add(current);
-    const grants = source.policy.get(current);
+  for (const grants of ancestry(source, runId)) {
     if (goals && grants?.goal.includes(kind)) return 'goal';
     const own = grants?.own[kind];
     if (own === 'parent') goals = false;
@@ -210,14 +214,8 @@ export function inheritedGrants<Id>(
 ): ApprovalGrants {
   const own: Partial<Record<ApprovalBypassKind, OwnGrant>> = {};
   for (const kind of APPROVAL_BYPASS_KINDS) {
-    const seen = new Set<Id>();
-    for (
-      let current: Id | null | undefined = runId;
-      current !== null && current !== undefined && !seen.has(current);
-      current = source.runs.get(current)?.parentId
-    ) {
-      seen.add(current);
-      const value = source.policy.get(current)?.own[kind];
+    for (const grants of ancestry(source, runId)) {
+      const value = grants?.own[kind];
       if (value === undefined || value === 'parent') continue;
       own[kind] = value;
       break;

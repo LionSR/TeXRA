@@ -27,6 +27,7 @@ import { ensureError } from '@texra-ai/harness/schemas';
 import { emitAppSignal } from '@eventBus/AppSignals';
 
 import { unrefSleepClock } from '@texra/utils/system/unrefSleepClock';
+import type { Disposable } from '@texra/platform/disposable';
 import { jitteredExponentialBackoffMs } from '@utils/core';
 import {
   type ConditionalResponse,
@@ -36,7 +37,6 @@ import {
   type GitHubServices,
 } from './githubClient';
 import { shouldDropBotEvent } from './botFilter';
-import type { Disposable } from '@texra-ai/harness';
 import type { DedupedResource } from './pollingDedup';
 import type { GhUser } from './prTypes';
 import type { ZodType } from 'zod';

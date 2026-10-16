@@ -8,9 +8,9 @@ import {
   type Session,
   withProcessServices,
 } from '@texra-ai/harness';
-import { readSettingFrom } from '@texra-ai/harness';
 import { pathToLocationIn } from '@texra-ai/harness';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
+import { Settings } from '@texra-ai/harness';
 import { emitAppSignal } from '@eventBus/AppSignals';
 import { acceptEditedFileReplace } from '@latex/acceptedFileTarget';
 import { openFirstLabelMatch } from '@latex/labelSearch';
@@ -161,7 +161,7 @@ export class DesktopProgressFileActions {
 
       yield* this.ui.showErrorMessage(
         latexdiffAllFailedMessage(
-          yield* readSettingFrom<LatexdiffMathMarkupValue>(
+          yield* Settings.get<LatexdiffMathMarkupValue>(
             this.host.session.roots,
             DocumentsStateKey.LATEXDIFF_MATH_MARKUP,
           ),
