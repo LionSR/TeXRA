@@ -12,6 +12,7 @@
     "packages/harness/src/node.ts",
     "packages/harness/src/plugins.ts",
     "packages/harness/src/schemas.ts",
+    "packages/harness/src/transcriptEntry.ts",
     "packages/harness/src/effect/**/*.ts",
     "packages/harness/src/types/ambient.d.ts"
   ],

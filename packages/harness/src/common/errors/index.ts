@@ -7,15 +7,9 @@
  * Failure formatting (buildErrorLogData, normalizeProviderError, etc.) lives under @common/errors/sdkError/* - import them
  * directly from the defining module; they are not part of the public barrel.
  */
-export {
-  isFileNotFoundError,
-  isModuleNotFoundError,
-  isNotADirectoryError,
-  isUserAbort,
-} from './errorPredicates';
+export { isFileNotFoundError, isNotADirectoryError } from './errorPredicates';
 export {
   AGENT_ERROR_OUTCOME,
-  agentErrorPresentation,
   classifyAgentError,
 } from './agentErrorClassification';
 

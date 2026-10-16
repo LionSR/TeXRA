@@ -373,12 +373,13 @@ files.
 
 ## Entry points
 
-| Entry                       | Contents                                                                                                                                                                                      |
-| --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `@texra-ai/harness`         | `Sessions`, `Session`, `Run`, the tagged errors, and the tool-definition helper (`defineTool`) with its types                                                                                 |
-| `@texra-ai/harness/schemas` | Zod schemas + inferred types for agent definitions, configs, and run results                                                                                                                  |
-| `@texra-ai/harness/plugins` | The built-in plugins (`harnessBuiltins`, or one by one), and what a plugin is written with: `definePlugin`, `executed`/`errorResult`, `nullishWithDefault`, `resolveToolPath`, `ToolRegistry` |
-| `@texra-ai/harness/node`    | `nodePlatform(options)`, a ready-made Node `AgentPlatform` with its workspace roots                                                                                                           |
+| Entry                          | Contents                                                                                                                                                                                                     |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `@texra-ai/harness`            | `Sessions`, `Session`, `Run`, the tagged errors, and the tool-definition helper (`defineTool`) with its types                                                                                                |
+| `@texra-ai/harness/schemas`    | Browser-safe: Zod schemas + inferred types for agent definitions, configs, and run results; the read-only `SessionView`, `RunView` and `TranscriptView` and their reads; the approval policy; error messages |
+| `@texra-ai/harness/transcript` | Browser-safe: the transcript rows a `TranscriptView` holds and the projections a renderer derives from them                                                                                                  |
+| `@texra-ai/harness/plugins`    | The built-in plugins (`harnessBuiltins`, or one by one), and what a plugin is written with: `definePlugin`, `executed`/`errorResult`, `nullishWithDefault`, `resolveToolPath`, `ToolRegistry`                |
+| `@texra-ai/harness/node`       | `nodePlatform(options)`, a ready-made Node `AgentPlatform` with its workspace roots                                                                                                                          |
 
 Every entry needs the peers installed. See [Install](#install).
 
@@ -405,10 +406,12 @@ Failures are `Data.TaggedError`s. Six come from the package itself —
 launch path threw — and three, `DatabaseOpenFailed`, `DatabaseReadFailed` and
 `SessionOptionsConflict` (the `SessionOpenError` union), reach the surface
 from the session store when it cannot open or read, or is open over the
-other store, for nine in all. A
+other store, for nine in the session lifecycle. The entry exports other
+tagged errors too; `config/api-reports/harness.api.md` lists the whole
+surface. A
 `session.request` answers with the runtime's own `Outcome` or its
 `RequestError` union, the same values every TeXRA host reads. Beyond these,
-nothing else is exported: no fold internals, no host widgets.
+no fold internals and no host widgets are exported.
 
 A runnable version of this program against a packed tarball is in
 [`example/`](./example).
@@ -420,7 +423,8 @@ composes (the agent directories, secrets, the resume
 and language-model ports, and an optional `toolMissingHandler` that surfaces
 a missing external tool) plus the `WorkspaceRoots` of the folder the runs
 work in (workspace path, its storage path, config, workspace state, and the
-process-wide global state), and the `mcpConfigPath` its tool registry reads.
+process-wide global state). The tool registry reads the MCP servers of the
+`mcp.json` at the storage root that global storage lies under.
 `nodePlatform()` supplies all of them: process-local config and state,
 TeXRA's ordinary storage layout under the `storageDir` you name (required; the
 package never writes to the user's `~/.texra`), that directory's `mcp.json`,

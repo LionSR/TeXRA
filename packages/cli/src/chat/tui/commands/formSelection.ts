@@ -3,7 +3,7 @@
 
 import { Cause, Effect, Fiber } from 'effect';
 
-import { toErrorMessage } from '@utils/errors/errorMessage';
+import { toErrorMessage } from '@texra-ai/harness/schemas';
 
 import { formProgress, setTransientNotice } from '../state/cliState';
 import { appendLocalNotice } from '../state/transcript';

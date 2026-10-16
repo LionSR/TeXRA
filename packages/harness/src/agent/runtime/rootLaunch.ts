@@ -9,7 +9,7 @@ import {
   NO_APPROVAL_GRANTS,
   type ApprovalPolicyLimit,
 } from '@shared/approvalBypassKind';
-import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
+import type { ApprovalPolicy } from '@shared/approvalPolicy';
 import { type RunId, USER_FOLLOW_UP_SUPPORT } from '@shared/schemas';
 import { generateRunId } from '@utils/core';
 import { humanGrant } from './runApprovalQueue';
@@ -59,7 +59,7 @@ export interface RootLaunchOptions extends Pick<
    * and its descendants run under the stricter of it and the project's
    * policy, for good. A launch never widens the project's policy.
    */
-  approvalPolicy?: TexraApprovalPolicy;
+  approvalPolicy?: ApprovalPolicy;
 }
 
 /** A fresh launch; a persisted run resumes through `resumeRun`. */

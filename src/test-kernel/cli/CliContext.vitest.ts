@@ -1,6 +1,6 @@
-import { mkdir, rm, symlink, writeFile } from 'node:fs/promises';
+import { mkdir, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { dirname, join } from 'node:path';
+import { join } from 'node:path';
 
 import { it } from '@effect/vitest';
 import { describe, expect, vi } from 'vitest';
@@ -22,7 +22,7 @@ import {
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { withEnv } from '@test/support/testEnv';
-import { USER_MCP_CONFIG_PATH } from '@tools/mcp/mcpConfig';
+import { mcpConfigPathOf } from '@tools/mcp/mcpConfig';
 import { canonicalizeWorkspacePath } from '@utils/system/nodeWorkspace';
 
 const ambient = {
@@ -205,26 +205,22 @@ describe('CLI context config defaults', () => {
   });
 
   it('warns on a malformed user mcp.json, the warning doctor reports', async () => {
-    // The user mcp.json lives in the worker's scratch HOME (isolateHome.ts
-    // fails the run before any test if it could reach the real one).
-    await mkdir(dirname(USER_MCP_CONFIG_PATH), { recursive: true });
-    await writeFile(USER_MCP_CONFIG_PATH, '{ "mcpServers": ');
-    try {
-      const context = await cliContext({
-        ambient,
-        env: {},
-        globalArgs: {
-          cwd: await makeTempDir('texra-cli-context-', tempDirs),
-        },
-        storageRoot: await makeTempDir('texra-cli-storage-', tempDirs),
-      });
+    // The mcp.json of the storage root the CLI was started on.
+    const storageRoot = await makeTempDir('texra-cli-storage-', tempDirs);
+    const mcpConfigPath = mcpConfigPathOf(storageRoot);
+    await writeFile(mcpConfigPath, '{ "mcpServers": ');
+    const context = await cliContext({
+      ambient,
+      env: {},
+      globalArgs: {
+        cwd: await makeTempDir('texra-cli-context-', tempDirs),
+      },
+      storageRoot,
+    });
 
-      expect(context.configWarnings.join('\n')).toContain(
-        `${USER_MCP_CONFIG_PATH} is not valid JSON`,
-      );
-    } finally {
-      await rm(USER_MCP_CONFIG_PATH, { force: true });
-    }
+    expect(context.configWarnings.join('\n')).toContain(
+      `${mcpConfigPath} is not valid JSON`,
+    );
   });
 
   it('accepts every config key a CLI reader honors', async () => {

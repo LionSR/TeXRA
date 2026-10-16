@@ -7,7 +7,7 @@
 import { Data, Effect } from 'effect';
 import * as vscode from 'vscode';
 
-import { toErrorMessage } from '@utils/errors/errorMessage';
+import { toErrorMessage } from '@texra-ai/harness/schemas';
 
 /**
  * Why an editor call produced no editor: VS Code would not read the document

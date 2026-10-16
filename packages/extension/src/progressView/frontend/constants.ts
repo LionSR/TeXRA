@@ -3,7 +3,7 @@ import type { TeXRAIconName } from '@shared/iconNames';
 import { isDocumentTaskRun } from '@texra/shared/plugins/documents';
 import type { HostRequest } from '@texra/shared/session/hostRequest';
 import { TASK_ACTIONS } from '@ui/copy/nestedRuns';
-import type { RunView } from '@texra-ai/harness';
+import type { RunView } from '@texra-ai/harness/schemas';
 
 /** One run action in the run header's menu. Stop sits in the row itself. */
 export interface RunMenuAction {

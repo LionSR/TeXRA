@@ -3,6 +3,7 @@ import { Effect } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports
+import { toErrorMessage } from '@texra-ai/harness/schemas';
 import {
   NotificationFailed,
   PromptFailed,
@@ -13,7 +14,6 @@ import {
   type PromptMessageItem,
   type PromptMessageOptions,
 } from '@texra/hosts/uiHosts';
-import { toErrorMessage } from '@utils/errors/errorMessage';
 
 /**
  * Each entry calls through `vscode.window` at call time rather than holding

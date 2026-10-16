@@ -16,6 +16,7 @@
   "packages/harness/src/shared/schemas/index.ts": 1,
   "packages/harness/src/tools/goal/index.ts": 1,
   "packages/harness/src/tools/toolTable.ts": 1,
+  "packages/harness/src/transcriptEntry.ts": 1,
   "packages/llm/src/api/anthropicMessages.ts": 1,
   "packages/llm/src/api/openaiResponses.ts": 1,
   "packages/llm/src/index.ts": 1,

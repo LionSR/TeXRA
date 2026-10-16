@@ -9,15 +9,15 @@ import { repeat } from 'lit/directives/repeat.js';
 
 import { agentName, isModelOptionAvailable } from '@shared/schemas';
 import type { TeXRAIconName } from '@shared/iconNames';
-import {
-  texraApprovalPolicyLabel,
-  formatTexraApprovalPolicy,
-  type TexraApprovalPolicy,
-} from '@shared/approvalPolicy';
 import type { DocumentAgentOption } from '@texra/shared/plugins/documents';
 import type { HostSnapshot } from '@texra/shared/session/hostSnapshot';
 import type { SessionType, Surface } from '@texra/shared/session/surface';
+import {
+  approvalPolicyLabel,
+  formatApprovalPolicy,
+} from '@ui/copy/approvalPolicy';
 import { TASK_APPROVAL } from '@ui/copy/taskApproval';
+import type { ApprovalPolicy } from '@texra-ai/harness/schemas';
 
 /** The agent menu's sections, one per launch mode: every agent chats, and
  *  an agent with a document task (`rounds`) also runs one. */
@@ -207,15 +207,15 @@ export function launcherChipMenus(
  *  the moment of delegating; the run header then shows it and can revoke it. */
 function approvalMenu(
   launch: Launch,
-  policy: TexraApprovalPolicy,
+  policy: ApprovalPolicy,
   actions: {
     setLaunch(patch: Partial<Launch>): void;
     openSettings(section: 'general'): void;
   },
 ): ChipMenu {
   const overridden = launch.approval === 'autoApprove' && policy !== 'never';
-  const policyLabel = texraApprovalPolicyLabel(policy);
-  const policyDescription = formatTexraApprovalPolicy(policy);
+  const policyLabel = approvalPolicyLabel(policy);
+  const policyDescription = formatApprovalPolicy(policy);
   return {
     id: 'composer-approval',
     icon: overridden ? 'rocket' : 'shield',

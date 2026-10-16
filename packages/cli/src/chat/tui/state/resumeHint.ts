@@ -1,18 +1,18 @@
 import { quote } from 'shell-quote';
 
-import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
+import { descendantRuns } from '@texra-ai/harness/schemas';
 import {
   isEmptyUsage,
   isLoopDriven,
   type RunId,
   type TokenUsageStats,
 } from '@shared/schemas';
-import { descendantRuns } from '@shared/session/sessionView';
 import type { CliOutputFormat } from '@texra/shared/cliOutputFormat';
 import { usageCostLabel } from '@ui/copy/modelAccess';
 import { TASK_ACTIONS } from '@ui/copy/nestedRuns';
 
 import { runViewOf } from './sessionView';
+import type { ApprovalPolicy } from '@texra-ai/harness/schemas';
 import type { SessionView } from '@texra-ai/harness';
 
 export interface ResumeTarget {
@@ -28,7 +28,7 @@ interface ResumeTargetsInput {
 export interface ResumeCommandOptions {
   readonly cwd?: string;
   readonly processCwd?: string;
-  readonly approvalPolicy?: TexraApprovalPolicy;
+  readonly approvalPolicy?: ApprovalPolicy;
   readonly outputFormat?: CliOutputFormat;
   readonly print?: boolean;
   readonly includeInteropSkills?: boolean;

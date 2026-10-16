@@ -18,7 +18,6 @@ import {
 } from '@texra-ai/harness';
 import {
   createNodeWorkspaceRoots,
-  resolveGlobalStoragePath,
   resolveWorkspaceStoragePath,
 } from '@texra-ai/harness/node';
 import { emitAppSignal } from '@eventBus/AppSignals';
@@ -30,7 +29,6 @@ import { usageLogLayer } from '@telemetry/UsageLogService';
 import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
 import { bootstrapHost } from '@texra/controllers/hostBootstrap';
 import { texraPlugins } from '@texra/tools/registry';
-import { USER_MCP_CONFIG_PATH } from '@tools/mcp/mcpConfig';
 import { processEnvConfigLayer } from '@utils/system/envFlags';
 
 // Local file imports
@@ -92,7 +90,6 @@ export const initializeElectronPlatform = Effect.fn(
   // own roots (desktopProjects.ts); this pair only backs the window before a
   // folder is open.
   const storage = resolveWorkspaceStoragePath(dataRoot, undefined);
-  const globalStorage = resolveGlobalStoragePath(dataRoot);
   // Secrets precede the runtime; the process identity and application state
   // are acquired by its own layers, over the spawner and database it serves.
   const { mainDir, resourcesPath, configStores, secrets } = yield* Effect.gen(
@@ -132,9 +129,8 @@ export const initializeElectronPlatform = Effect.fn(
   const runtime = withForkFailureReporting(
     ManagedRuntime.make(
       processLayer({
-        globalStorage,
+        storageRoot: dataRoot,
         plugins: texraPlugins(),
-        mcpConfigPath: USER_MCP_CONFIG_PATH,
         secrets,
         // No editor in this process.
         languageModel: UNAVAILABLE_LANGUAGE_MODEL_PORT,
@@ -175,8 +171,8 @@ export const initializeElectronPlatform = Effect.fn(
     const processRoots = createNodeWorkspaceRoots({
       host: 'desktop',
       workspacePath: undefined,
+      storageRoot: dataRoot,
       storage,
-      globalStorage,
       config: configStores,
       workspaceState: workspaceStateStore,
       repoState: yield* (yield* StateStores).repo(storage, undefined),

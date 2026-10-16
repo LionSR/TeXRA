@@ -4,11 +4,11 @@ import { z } from 'zod';
 
 import { Cause, Effect, Exit, Result } from 'effect';
 import { canonicalizeWorkspacePath } from '@texra-ai/harness/node';
-import { parseJsonWith } from '@common/parsing/safeParseJson';
+import { parseJsonWith } from '@texra-ai/harness/schemas';
 import { updateCheckRecordsLayer } from '@texra/controllers/session/updateCheckRecords';
-import { UPDATE_CHECK_SKIP_ENV } from '@texra/utils/system/semverUpdateCheck';
 import {
   fetchJsonStringField,
+  UPDATE_CHECK_SKIP_ENV,
   runDailyUpdateCheck,
   type UpdateCheckFetchResult,
 } from '@texra/utils/system/updateCheck';

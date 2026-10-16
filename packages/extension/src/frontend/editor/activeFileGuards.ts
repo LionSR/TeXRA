@@ -4,6 +4,7 @@ import * as vscode from 'vscode';
 
 // Local imports - utils
 import { withLogChannel } from '@texra-ai/harness';
+import { ensureError } from '@texra-ai/harness/schemas';
 import {
   showLoggedErrorMessage,
   showLoggedMessage,
@@ -11,7 +12,6 @@ import {
 import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
 import type { NotificationFailed } from '@texra/hosts/uiHosts';
 import { workspaceRelativePath } from '@utils/files/workspaceFS';
-import { ensureError } from '@utils/errors/errorMessage';
 import type { WorkspaceRoots } from '@texra-ai/harness';
 
 const CHANNEL = 'ActiveFileGuards';

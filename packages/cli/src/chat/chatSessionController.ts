@@ -36,24 +36,23 @@ import {
   type AgentConfigPayload,
   generateRunId,
 } from '@texra-ai/harness/schemas';
-import { launchApproval, type CliContext } from '@cli/runtime/cliContext';
-import { CliExitCode } from '@cli/runtime/exitCodes';
-import { readCliTeamName } from '@cli/runtime/cliTeams';
-import { setCliHelperModel } from '@cli/runtime/initPlatform';
+import { acceptsFollowUp, isLiveRun } from '@texra-ai/harness/schemas';
+import { isTerminalOutcomePhase } from '@texra-ai/harness/schemas';
+import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';
+import { runOutcomeExitCode } from '@cli/runtime/terminalStatus';
+import { createCliRuntimeHost } from '@cli/runtime/cliPresentationHost';
 import {
   formatCliNoAvailableModelsRecovery,
   selectCliRunnableModel,
 } from '@cli/runtime/modelAccess';
-import { createCliRuntimeHost } from '@cli/runtime/cliPresentationHost';
-import { runOutcomeExitCode } from '@cli/runtime/terminalStatus';
-import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
-import { acceptsFollowUp, isLiveRun } from '@shared/session/sessionView';
-import { isTerminalOutcomePhase } from '@shared/runs/runStatus';
-import { isTaskConfig, type RunId } from '@shared/schemas';
+import { setCliHelperModel } from '@cli/runtime/initPlatform';
+import { readCliTeamName } from '@cli/runtime/cliTeams';
+import { CliExitCode } from '@cli/runtime/exitCodes';
+import { launchApproval, type CliContext } from '@cli/runtime/cliContext';
 import { heldElsewhereBy } from '@shared/session/database';
+import { isTaskConfig, type RunId } from '@shared/schemas';
 import type { DisposableStore } from '@texra/platform/disposable';
 import { FOCUSED_AGENT } from '@ui/copy/nestedRuns';
-import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { handleTuiSlashCommand } from './tui/commands/handleSlashCommand';
 import {
   CHAT_API_MODE_MODEL_RECOVERY,
@@ -88,6 +87,7 @@ import {
   moveLocalTranscriptToRun,
   reportRequestDefect,
 } from './tui/state/transcript';
+import type { ApprovalPolicy } from '@texra-ai/harness/schemas';
 import type { FollowUpDeliveryQueue } from './followUpDeliveryQueue';
 import type { SessionRequests } from './tui/state/approvalQueue';
 import type { SkillActivation } from './tui/forms/SkillsListForm';
@@ -252,7 +252,7 @@ export interface ChatSessionControllerInit {
   /** The policy the chat asked for itself (its flag, then `/approval`),
    *  which each launch carries (`launchApproval`); none follows the
    *  project's. */
-  readonly approvalPolicy: () => TexraApprovalPolicy | undefined;
+  readonly approvalPolicy: () => ApprovalPolicy | undefined;
 }
 
 /** What the chat reads of a run's records: its saved setup, and whether

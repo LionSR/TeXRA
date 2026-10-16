@@ -5,6 +5,7 @@ import * as vscode from 'vscode';
 // Local imports - utilities
 import { withLogChannel } from '@texra-ai/harness';
 import { WorkspaceFs } from '@texra-ai/harness';
+import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';
 import { VscodeExternalOpener } from '@frontend/hosts/VscodeExternalOpener';
 import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
 import { type HostPromptFailed, inputBox } from '@frontend/ui/dialogs';
@@ -24,7 +25,6 @@ import {
 import { COMMIT_HASH_PATTERN } from '@texra/utils/git/commitHashPattern';
 import { COMMIT_LABEL_FORMAT } from '@texra/utils/git/commitLogFormat';
 import type { RootedFileSystem } from '@utils/files/rootedFileSystem';
-import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { executeCommand } from '@utils/system/execUtils';
 import { whichOnExtendedPath } from '@utils/system/platformPaths';
 import type { PlatformSecrets, WorkspaceRoots } from '@texra-ai/harness';

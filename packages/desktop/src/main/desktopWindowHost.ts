@@ -10,12 +10,12 @@ import {
   INSTRUCTION_ACTION,
   type InstructionAction,
 } from '@texra-ai/harness/schemas';
+import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';
 import type { DownMessage } from '@texra/shared/session/sessionFrames';
 import {
   ExternalOpenFailed,
   type NotificationFailed,
 } from '@texra/hosts/uiHosts';
-import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { postDesktopSettingsView } from '../shared/desktopCommandSurface.js';
 import { createDesktopDialogs } from './desktopDialogs.js';
 import { createDesktopDiffHost } from './desktopDiffHost.js';

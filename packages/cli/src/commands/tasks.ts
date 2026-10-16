@@ -16,13 +16,14 @@ import {
 } from '@texra-ai/harness/schemas';
 import { Settings } from '@texra-ai/harness';
 import {
-  TEXRA_APPROVAL_POLICY_CONFIG_KEY,
-  type TexraApprovalPolicy,
-} from '@shared/approvalPolicy';
+  APPROVAL_POLICY_CONFIG_KEY,
+  type ApprovalPolicy,
+} from '@texra-ai/harness/schemas';
+import { ensureError } from '@texra-ai/harness/schemas';
 import type { RequestErrorWire } from '@texra/shared/session/sessionFrames';
 import type { TaskSummary } from '@texra/controllers/server/protocol';
 import type { ServiceClient } from '@texra/controllers/server/client';
-import { ensureError } from '@utils/errors/errorMessage';
+import { runStatusLabel } from '@ui/copy/runStatus';
 
 import { resolveCliRunAgent } from '../runtime/agents';
 import {
@@ -99,7 +100,7 @@ function requestTask(
 
 function taskLine(task: TaskSummary): string {
   const live = task.live ? '*' : ' ';
-  return `${live} ${task.runId}  ${task.statusLabel.padEnd(12)} ${task.label}  (${task.workspace})`;
+  return `${live} ${task.runId}  ${runStatusLabel(task.statusKey).padEnd(12)} ${task.label}  (${task.workspace})`;
 }
 
 const listCommand = defineCliCommand({
@@ -192,9 +193,9 @@ const startCommand = defineCliCommand({
       const approval = launchApproval(requested);
       const refused = launchApprovalNotice(
         requested,
-        Settings.getConfig<TexraApprovalPolicy>(
+        Settings.getConfig<ApprovalPolicy>(
           services.config,
-          TEXRA_APPROVAL_POLICY_CONFIG_KEY,
+          APPROVAL_POLICY_CONFIG_KEY,
         ),
       );
       if (refused !== undefined) writeTextStderr(refused);

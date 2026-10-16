@@ -4,10 +4,10 @@ import { z } from 'zod';
 import { defineTool, ToolContext } from '@texra-ai/harness';
 
 // Local imports - tools
+import { pathToLocationIn } from '@texra-ai/harness';
 import { TikzPictureManager } from '@latex/TikzPictureManager';
 import { type ToolFileAttachment, type ToolResult } from '@shared/schemas';
 import { formatToolOutput } from '@tools/formatting';
-import { pathToLocationIn } from '@utils/files/fileLocation';
 import { formatResultCount } from '@utils/text/stringUtils';
 import {
   buildLimitedAttachments,

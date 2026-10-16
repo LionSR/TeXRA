@@ -47,7 +47,7 @@ import {
   isSettledRow,
   type ToolRow,
   type TranscriptRow,
-} from '@shared/transcript';
+} from '@shared/transcript/transcriptRow';
 import {
   loadInk,
   renderOutputAtTerminalSize,

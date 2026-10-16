@@ -27,7 +27,7 @@ import { BaseRequestPanel, type RunGrant } from './BaseRequestPanel';
 
 // Local imports - styles
 import { toolEditRequestPanelStyles } from './ToolEditRequestPanel.styles';
-import type { RuntimeRequest } from '@texra-ai/harness';
+import type { RuntimeRequest } from '@texra-ai/harness/schemas';
 import type { WaSelectEvent } from '@awesome.me/webawesome/dist/events/events.js';
 
 @customElement('tool-edit-request-panel')

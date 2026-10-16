@@ -12,6 +12,7 @@
 import { Effect, FileSystem, Result } from 'effect';
 
 // Local imports - agent runtime
+import { mcpConfigPathOf, type ProcessServices } from '@texra-ai/harness';
 import {
   installPlugins,
   parsePluginOrigin,
@@ -26,9 +27,7 @@ import {
   type PluginReview,
 } from '@common/plugins/pluginTrust';
 import type { PluginActionMessage } from '@texra/shared/settingsView/pluginMessages';
-import { USER_MCP_CONFIG_PATH } from '@tools/mcp/mcpConfig';
 import { safeHomedir } from '@utils/system/platformPaths';
-import type { ProcessServices } from '@texra-ai/harness';
 
 // Local imports - this module's neighbours
 import type {
@@ -38,7 +37,10 @@ import type {
 
 /** The installed-plugin arm of the settings body. */
 export function settingsPluginCommands(ports: {
-  readonly roots: PluginEnv & { readonly workspace: string | undefined };
+  readonly roots: PluginEnv & {
+    readonly workspace: string | undefined;
+    readonly storageRoot: string;
+  };
   readonly bindings: SettingsHostBindings;
   readonly present: SettingsPresentation;
   /** Repaint the Plugins page, whose rows this arm's changes feed. */
@@ -79,10 +81,11 @@ export function settingsPluginCommands(ports: {
    *  never created, so the page is no second writer of it. */
   const openMcpConfig = Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
-    if (yield* fs.exists(USER_MCP_CONFIG_PATH))
-      return yield* bindings.openPath(USER_MCP_CONFIG_PATH);
+    const mcpConfigPath = mcpConfigPathOf(roots.storageRoot);
+    if (yield* fs.exists(mcpConfigPath))
+      return yield* bindings.openPath(mcpConfigPath);
     yield* present.notice(
-      `No MCP servers are configured. Create ${USER_MCP_CONFIG_PATH} as { "mcpServers": { "<name>": { "command": "…", "args": [] } } }, the shape Claude Code's .mcp.json uses.`,
+      `No MCP servers are configured. Create ${mcpConfigPath} as { "mcpServers": { "<name>": { "command": "…", "args": [] } } }, the shape Claude Code's .mcp.json uses.`,
     );
   });
 

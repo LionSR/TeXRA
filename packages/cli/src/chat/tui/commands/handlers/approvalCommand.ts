@@ -1,20 +1,17 @@
 import { Effect } from 'effect';
 
 import { type RunId } from '@texra-ai/harness/schemas';
+import { parseApprovalPolicy } from '@texra-ai/harness/schemas';
 import {
   appendLocalNotice,
   appendLocalRequestRefusal,
 } from '@cli/chat/tui/state/transcript';
 import { setTransientNotice } from '@cli/chat/tui/state/cliState';
 import type { SessionRequests } from '@cli/chat/tui/state/approvalQueue';
-import {
-  formatTexraApprovalPolicy,
-  parseTexraApprovalPolicy,
-} from '@shared/approvalPolicy';
-import type { ApprovalBypassKind } from '@shared/approvalBypassKind';
+import { formatApprovalPolicy } from '@ui/copy/approvalPolicy';
 import { RUN_GRANT_NOUN } from '@ui/copy/delegationApproval';
-
 import { type SlashCommandContext } from './slashContext';
+import type { ApprovalBypassKind } from '@texra-ai/harness/schemas';
 
 const APPROVAL_USAGE = 'Usage: /approval [ask | never | yolo]';
 
@@ -27,9 +24,9 @@ export function applyCliApprovalPolicySelection(
   input: string,
   context: SlashCommandContext,
 ): Effect.Effect<void> {
-  const policy = parseTexraApprovalPolicy(input.trim().toLowerCase());
+  const policy = parseApprovalPolicy(input.trim().toLowerCase());
   if (!policy) return Effect.sync(() => setTransientNotice(APPROVAL_USAGE));
-  const confirm = `Approval mode: ${formatTexraApprovalPolicy(policy)}`;
+  const confirm = `Approval mode: ${formatApprovalPolicy(policy)}`;
   return context
     .setApprovalPolicy(policy)
     .pipe(Effect.andThen(Effect.sync(() => appendLocalNotice(confirm))));

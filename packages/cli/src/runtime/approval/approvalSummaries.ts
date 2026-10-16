@@ -1,3 +1,4 @@
+import { getModelLabel } from '@texra-ai/harness/schemas';
 import { hiddenRowsText } from '@cli/tui/overflowText';
 import {
   getProposalFileGroups,
@@ -6,7 +7,6 @@ import {
   type RetryPermission,
   type UserQuestionPermission,
 } from '@shared/schemas';
-import { getModelLabel } from '@shared/model/modelLabel';
 import { agentProposalLabel } from '@texra/shared/plugins/documents';
 import type { ToolEditApprovalRequest } from '@tools/approval/toolEditApproval';
 import {

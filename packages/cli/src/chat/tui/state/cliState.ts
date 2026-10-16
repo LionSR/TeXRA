@@ -4,17 +4,17 @@
  */
 import { computed, signal, type Signal } from '@lit-labs/signals';
 import {
-  TEXRA_APPROVAL_POLICY_DEFAULT,
-  type TexraApprovalPolicy,
-} from '@shared/approvalPolicy';
+  APPROVAL_POLICY_DEFAULT,
+  type ApprovalPolicy,
+} from '@texra-ai/harness/schemas';
+import { descendantRuns } from '@texra-ai/harness/schemas';
+import { compareByNewestCreationTime } from '@texra-ai/harness/transcript';
 import {
   RunIdSchema,
   type AgentDelegationScope,
   type AgentSource,
   type RunId,
 } from '@shared/schemas';
-import { descendantRuns } from '@shared/session/sessionView';
-import { compareByNewestCreationTime } from '@shared/runs/runOrdering';
 import {
   applySurfaceAction,
   emptySurface,
@@ -43,7 +43,7 @@ export interface SessionMeta {
   readonly model: string;
   readonly modelSource: RunModelDecisionReason;
   readonly cwd: string;
-  readonly approvalPolicy: TexraApprovalPolicy;
+  readonly approvalPolicy: ApprovalPolicy;
   readonly teamName?: string;
   readonly cliTeamId?: string;
   readonly delegationAgentScope?: AgentDelegationScope;
@@ -55,7 +55,7 @@ const EMPTY_SESSION_META: SessionMeta = {
   model: '',
   modelSource: 'builtin-default',
   cwd: '',
-  approvalPolicy: TEXRA_APPROVAL_POLICY_DEFAULT,
+  approvalPolicy: APPROVAL_POLICY_DEFAULT,
   version: '',
 };
 

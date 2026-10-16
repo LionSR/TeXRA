@@ -12,12 +12,12 @@ import { z } from 'zod';
 
 // Local imports
 import { defineTool, withLogChannel } from '@texra-ai/harness';
+import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';
 import { nullishWithDefault, executed } from '@texra-ai/harness/plugins';
 import { normaliseArxivIdentifier } from '@latex/arxivIdentifier';
 import { ToolError } from '@shared/schemas';
 import { requireNonEmptyString } from '@tools/utils';
 import { pluralize } from '@utils/text/stringUtils';
-import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 type Category = Parameters<typeof catQuery>[0];
 

@@ -21,10 +21,9 @@ import {
 } from 'effect';
 import stripAnsi from 'strip-ansi';
 
+import { isTerminalOutcomePhase } from '@texra-ai/harness/schemas';
 import { fullTranscriptEntryLayout } from '@cli/chat/tui/panes/transcriptEntryLayout';
-import { isTerminalOutcomePhase } from '@shared/runs/runStatus';
 import { qualifyAggregateId, type RunOutcome } from '@shared/schemas';
-import type { RunView, SessionView } from '@shared/session/sessionView';
 import type {
   EventsFrame,
   RequestErrorWire,
@@ -34,6 +33,7 @@ import type { ServiceClient } from '@texra/controllers/server/client';
 import { WebviewSessions } from '@texra/controllers/session/webviewSessionLayer';
 
 import { writeNdjsonStdout, writeTextStdout } from './logSinks';
+import type { RunView, SessionView } from '@texra-ai/harness/schemas';
 
 /** What a refused request says, worded for a terminal. */
 export function describeWireRefusal(error: RequestErrorWire): string {

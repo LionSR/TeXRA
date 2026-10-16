@@ -6,13 +6,13 @@
 import { Effect } from 'effect';
 import * as vscode from 'vscode';
 
+import { ensureError } from '@texra-ai/harness/schemas';
 import { showLoggedInfoMessage } from '@frontend/ui/errorHandlingUtils';
 import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 import type { LatexEditorStatus } from '@texra/controllers/settingsView/LatexToolingController';
 import type { SettingsViewInboundHandlerRegistry } from '@texra/controllers/settingsView/settingsViewDispatch';
 import type { createSettingsViewBody } from '@texra/controllers/settingsView/sharedSettingsCommands';
 import { LATEX_WORKSHOP_EXT_ID } from '@texra/shared/constants/latexToolchain';
-import { ensureError } from '@utils/errors/errorMessage';
 
 const CHANNEL = 'latexSettingsHandlers';
 

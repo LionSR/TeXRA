@@ -11,7 +11,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 // Local imports
 import type { SessionMeta } from '@cli/chat/tui/state/cliState';
 import type { RunId } from '@shared/schemas';
-import type { TranscriptRow } from '@shared/transcript';
+import type { TranscriptRow } from '@shared/transcript/transcriptRow';
 import {
   FakeStdin,
   FakeStdout,

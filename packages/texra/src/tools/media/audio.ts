@@ -17,13 +17,13 @@ import {
 import * as ChildProcess from 'effect/process/ChildProcess';
 
 import { withLogChannel } from '@texra-ai/harness';
-import { getSdkErrorMessage } from '@common/errors/sdkError/providerErrorFormat';
+import { getSdkErrorMessage } from '@texra-ai/harness';
+import { ensureError } from '@texra-ai/harness/schemas';
 import {
   resolveOptionalCommand,
   type ResolvedBinaryCommand,
 } from '@utils/system/binaryResolver';
 import { withExtendedPath } from '@utils/system/platformPaths';
-import { ensureError } from '@utils/errors/errorMessage';
 import { absentReason } from '@utils/files/fsEntryExists';
 import type { WorkspaceRoots } from '@texra-ai/harness';
 import type {

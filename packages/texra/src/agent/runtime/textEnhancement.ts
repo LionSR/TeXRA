@@ -5,7 +5,7 @@ import {
   withLogChannel,
   type ModelOptionStores,
 } from '@texra-ai/harness';
-import { getSdkErrorMessage } from '@common/errors/sdkError/providerErrorFormat';
+import { getSdkErrorMessage } from '@texra-ai/harness';
 import { extractTextFromTag } from '@texra/utils/text/xmlExtraction';
 import { isNonEmptyString } from '@utils/text/stringUtils';
 

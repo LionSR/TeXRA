@@ -11,7 +11,7 @@
  */
 import type { ResumeBlocker, RunId } from '@shared/schemas';
 import { formatResultCount } from '@utils/text/stringUtils';
-import type { RunView, SessionView } from '@texra-ai/harness';
+import type { RunView, SessionView } from '@texra-ai/harness/schemas';
 
 /** One interrupted task, as the notice lists it. */
 export interface InterruptedTask {

@@ -41,6 +41,10 @@
       "types": "./dist/types/schemas.d.ts",
       "import": "./dist/schemas.js"
     },
+    "./transcript": {
+      "types": "./dist/types/transcriptEntry.d.ts",
+      "import": "./dist/transcript.js"
+    },
     "./plugins": {
       "types": "./dist/types/plugins.d.ts",
       "import": "./dist/plugins.js"

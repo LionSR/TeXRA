@@ -12,8 +12,9 @@
 import { Effect, Exit, Fiber, Result, Stream } from 'effect';
 
 import { withLogChannel } from '@texra-ai/harness';
+import { approvalPolicyDenialMessage } from '@texra-ai/harness/schemas';
+import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';
 import { type HostInteractions } from '@texra-ai/harness';
-import { texraApprovalDenialMessage } from '@shared/approvalPolicy';
 import { requestParksItsCaller } from '@shared/schemas';
 import type {
   PermissionPayload,
@@ -23,7 +24,6 @@ import type {
   UserQuestionPermission,
 } from '@shared/schemas';
 import { type ToolEditApprovalRequest } from '@tools/approval/toolEditApproval';
-import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import {
   type CliApprovalContent,
   type CliApprovalPromptHooks,
@@ -197,7 +197,7 @@ export function createHeadlessCliHostInteractions(
     if (promptsUnavailable) {
       return yield* decide(runId, requestId, {
         action: 'deny',
-        reason: texraApprovalDenialMessage('deny-unpresentable'),
+        reason: approvalPolicyDenialMessage('deny-unpresentable'),
       });
     }
     const ask = (content: CliApprovalContent) =>

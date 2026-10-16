@@ -1,4 +1,4 @@
-import type { ApprovalBypassKind } from '@shared/approvalBypassKind';
+import type { ApprovalBypassKind } from '@texra-ai/harness/schemas';
 
 /**
  * What each run-scoped grant approves, one noun per approval kind: edits,

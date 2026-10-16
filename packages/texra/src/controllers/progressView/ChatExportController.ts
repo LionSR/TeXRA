@@ -22,6 +22,8 @@ import * as path from 'node:path';
 import { Effect, FileSystem, type PlatformError } from 'effect';
 
 import { StorageFs, type WorkspaceFs } from '@texra-ai/harness';
+import { toErrorMessage } from '@texra-ai/harness/schemas';
+import { pathToLocationIn } from '@texra-ai/harness';
 import type { ChatExportInput } from '@agent/export/schemas';
 
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
@@ -42,8 +44,6 @@ import {
   injectStandaloneTrace,
   type AssembleTraceResult,
 } from '@transcript';
-import { toErrorMessage } from '@utils/errors/errorMessage';
-import { pathToLocationIn } from '@utils/files/fileLocation';
 import { readNormalizedFile } from '@utils/files/fsDurability';
 import { absentReason } from '@utils/files/fsEntryExists';
 

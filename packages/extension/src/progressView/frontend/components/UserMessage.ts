@@ -20,7 +20,7 @@ import {
   decodeXmlEntities,
   deliveryTagOf,
   formatScriptDeliverySummary,
-} from '@shared/subagentFollowup';
+} from '@texra-ai/harness/transcript';
 import type { ScriptDeliverySummary } from '@shared/schemas';
 import { DELIVERY_TAGS } from '@shared/deliveryTags';
 import { CopyButtonController } from '@texra/shared/litControllers/CopyButtonController';

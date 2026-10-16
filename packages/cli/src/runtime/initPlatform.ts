@@ -22,13 +22,13 @@ import {
   resolveGlobalStoragePath,
   resolveWorkspaceStoragePath,
 } from '@texra-ai/harness/node';
+import { ensureError } from '@texra-ai/harness/schemas';
 import { GlobalStateKey } from '@texra-ai/harness/schemas';
 import type { SessionHandle } from '@agent/runtime';
 import { telemetryNoticeIfDue } from '@telemetry/telemetryNotice';
 import { DisposableStore } from '@texra/platform/disposable';
 import { bootstrapHost } from '@texra/controllers/hostBootstrap';
 import { sessionStoreMovedAsideMessage } from '@ui/copy/sessionStore';
-import { ensureError } from '@utils/errors/errorMessage';
 
 // Local file imports
 import {
@@ -354,8 +354,8 @@ export function initCliPlatform(
           const roots = createNodeWorkspaceRoots({
             host: 'cli',
             workspacePath: context.cwd,
+            storageRoot,
             storage,
-            globalStorage: resolveGlobalStoragePath(storageRoot),
             config: context.config,
             workspaceState,
             repoState,

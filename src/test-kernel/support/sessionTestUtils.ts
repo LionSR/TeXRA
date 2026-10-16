@@ -27,8 +27,8 @@ import {
   resetTranscriptOwnership,
 } from '@shared/session/transcriptState';
 import {
-  TEXRA_APPROVAL_POLICY_CONFIG_KEY,
-  type TexraApprovalPolicy,
+  APPROVAL_POLICY_CONFIG_KEY,
+  type ApprovalPolicy,
 } from '@shared/approvalPolicy';
 import {
   closeSessionOf,
@@ -65,6 +65,7 @@ export const createTestSession = (
       roots: init.roots ?? {
         host: installed.host,
         workspace: installed.workspace,
+        storageRoot: installed.storageRoot,
         storage: `${installed.storage}/test-sessions/${opened}`,
         globalStorage: installed.globalStorage,
         config: installed.config,
@@ -213,10 +214,10 @@ export function createTestRunTrace(runId: RunId) {
 /** Set the project's approval policy: the setting every session over
  *  `roots` (by default the installed fake host's) decides by. */
 export function setTestApprovalPolicy(
-  policy: TexraApprovalPolicy,
+  policy: ApprovalPolicy,
   { config }: Pick<WorkspaceRoots, 'config'> = testWorkspaceRoots(),
 ): void {
   if (!(config instanceof FakeConfigProvider))
     throw new Error('The installed fake host has no fake config to set.');
-  config.set(TEXRA_APPROVAL_POLICY_CONFIG_KEY, policy);
+  config.set(APPROVAL_POLICY_CONFIG_KEY, policy);
 }

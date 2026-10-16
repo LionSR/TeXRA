@@ -33,7 +33,7 @@ import {
 
 import { ChildProcessSpawner } from 'effect/process';
 import { withLogChannel } from '@texra-ai/harness';
-import { toErrorMessage } from '@utils/errors/errorMessage';
+import { toErrorMessage } from '@texra-ai/harness/schemas';
 import { pathExists } from '@utils/files/fsDurability';
 
 import { runLakeCommand } from './lakeCommands';

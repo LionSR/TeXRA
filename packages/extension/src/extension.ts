@@ -33,20 +33,22 @@ import {
 } from '@texra-ai/harness';
 import {
   createNodeWorkspaceRoots,
-  resolveGlobalStoragePath,
   resolveWorkspaceStoragePath,
   canonicalizeWorkspacePath,
 } from '@texra-ai/harness/node';
 import { withLogChannel } from '@texra-ai/harness';
 import { setLogSink } from '@texra-ai/harness';
-import { StorageFs, withSessionFs } from '@texra-ai/harness';
 import { ToolAvailability } from '@texra-ai/harness';
 import { Settings } from '@texra-ai/harness';
+import {
+  APPROVAL_POLICY_CONFIG_KEY,
+  type ApprovalPolicy,
+} from '@texra-ai/harness/schemas';
+import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';
 import { EXTENSION_COMMANDS } from '@commands/extensionCommandIds';
 import { setApiKey as apiSetApiKey } from '@commands/api/apiKeyCommands';
 import { openGettingStarted } from '@commands/system/walkthroughCommands';
 import { createSampleProjectWithoutWorkspace } from '@commands/system/sampleProjectCommands';
-import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
 import { emitAppSignal, onAppSignal } from '@eventBus/AppSignals';
 import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
 import {
@@ -79,12 +81,6 @@ import { FileSecrets, secretsDirectory } from '@platform/defaults/fileSecrets';
 import { defaultNodeStorageRoot } from '@platform/defaults/nodeStorage';
 import { openTexraConfigStores } from '@platform/defaults/nodeStores';
 import { JsonConfigProvider } from '@platform/defaults/jsonConfigProvider';
-import {
-  formatTexraApprovalPolicy,
-  TEXRA_APPROVAL_POLICY_CONFIG_KEY,
-  texraApprovalPolicyLabel,
-  type TexraApprovalPolicy,
-} from '@shared/approvalPolicy';
 import { telemetryNoticeIfDue } from '@telemetry/telemetryNotice';
 import { usageLogLayer } from '@telemetry/UsageLogService';
 import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
@@ -100,10 +96,12 @@ import { makeEditorHost, type EditorRegistry } from '@texra/tools/editorHost';
 import { texraPlugins } from '@texra/tools/registry';
 import { gitHubTokenRejectedMessage } from '@texra/tools/github/githubAuth';
 import { LeanLanguageServices } from '@texra/tools/lean/leanLanguageServices';
-import { USER_MCP_CONFIG_PATH } from '@tools/mcp/mcpConfig';
+import {
+  formatApprovalPolicy,
+  approvalPolicyLabel,
+} from '@ui/copy/approvalPolicy';
 import { sessionStoreMovedAsideMessage } from '@ui/copy/sessionStore';
 import { usageCostLabel } from '@ui/copy/modelAccess';
-import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { reachExtensionService } from './common/extensionService';
 
 // Local file imports
@@ -146,7 +144,6 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
     defaultNodeStorageRoot(),
     workspaceRoot,
   );
-  const globalStorage = resolveGlobalStoragePath(defaultNodeStorageRoot());
   // The one credential store every host shares (`~/.texra/secrets/`):
   // the background service reads the keys this window saves.
   const secrets = new FileSecrets(
@@ -167,7 +164,7 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
   const managed = withForkFailureReporting(
     ManagedRuntime.make(
       processLayer({
-        globalStorage,
+        storageRoot: defaultNodeStorageRoot(),
         // TeXRA's plugins, with Copilot's TeXRA tools over the window's roots.
         plugins: texraPlugins({
           editors,
@@ -190,7 +187,6 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
           // and the Lean 4 probe.
           setup: vscodeSetupPlatform,
         }),
-        mcpConfigPath: USER_MCP_CONFIG_PATH,
         secrets,
         // The editor's LM API on the workspace path, unavailable on the
         // credential-only one. The one defaulting site for this host.
@@ -272,8 +268,8 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
       const roots = createNodeWorkspaceRoots({
         host: 'vscode',
         workspacePath: workspaceRoot,
+        storageRoot: defaultNodeStorageRoot(),
         storage,
-        globalStorage,
         config,
         workspaceState: projectState,
         repoState: yield* (yield* StateStores).repo(storage, workspaceRoot),
@@ -540,16 +536,6 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
     yield* warn(reason);
     if (handle.log.movedAside)
       yield* warn(sessionStoreMovedAsideMessage(handle.log.movedAside));
-    // The run-storage directory of the session just opened, through that
-    // session's own storage view.
-    yield* withSessionFs(
-      roots,
-      Effect.flatMap(Effect.service(StorageFs), (storageFs) =>
-        storageFs.makeDirectory(WORKSPACE_STORAGE_LAYOUT.runs, {
-          recursive: true,
-        }),
-      ),
-    );
   }
   const { session } = windowSession;
 
@@ -662,11 +648,11 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
   const updateStatusBarTooltip = () => {
     // The project's persisted policy: what a run here, or the service's
     // for this project, decides under.
-    const policy = Settings.getConfig<TexraApprovalPolicy>(
+    const policy = Settings.getConfig<ApprovalPolicy>(
       roots.config,
-      TEXRA_APPROVAL_POLICY_CONFIG_KEY,
+      APPROVAL_POLICY_CONFIG_KEY,
     );
-    const policyLine = `Approval policy: ${texraApprovalPolicyLabel(policy)} — ${formatTexraApprovalPolicy(policy)}`;
+    const policyLine = `Approval policy: ${approvalPolicyLabel(policy)} — ${formatApprovalPolicy(policy)}`;
     const usage = statusBarUsageTracker.totalUsage;
     const { cost, inputTokens, outputTokens } = usage;
     if (cost === 0 && inputTokens === 0 && outputTokens === 0) {

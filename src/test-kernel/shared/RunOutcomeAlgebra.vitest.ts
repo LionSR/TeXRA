@@ -2,8 +2,8 @@
 import { describe, expect, it } from 'vitest';
 
 // Local imports
+import { runOutcomeToCliRunStatus } from '@cli/schemas/cliOutput';
 import {
-  CLI_RUN_STATUS,
   RUN_OUTCOME,
   RUN_PHASE,
   RunPhaseSchema,
@@ -14,7 +14,6 @@ import {
   isActivePhase,
   isInFlightPhase,
   isTerminalOutcomePhase,
-  runOutcomeToCliRunStatus,
 } from '@shared/runs/runStatus';
 
 describe('run outcome algebra', () => {
@@ -39,17 +38,11 @@ describe('run outcome algebra', () => {
   );
 
   it('projects each outcome into the injective legacy run vocabulary', () => {
-    expect(runOutcomeToCliRunStatus(RUN_OUTCOME.COMPLETED)).toBe(
-      CLI_RUN_STATUS.COMPLETED,
-    );
+    expect(runOutcomeToCliRunStatus(RUN_OUTCOME.COMPLETED)).toBe('completed');
     // A user stop persists 'interrupted' and ends the transcript group
     // neutral — cancelled is a sibling of failed, never folded into it.
-    expect(runOutcomeToCliRunStatus(RUN_OUTCOME.CANCELLED)).toBe(
-      CLI_RUN_STATUS.INTERRUPTED,
-    );
-    expect(runOutcomeToCliRunStatus(RUN_OUTCOME.FAILED)).toBe(
-      CLI_RUN_STATUS.ERROR,
-    );
+    expect(runOutcomeToCliRunStatus(RUN_OUTCOME.CANCELLED)).toBe('interrupted');
+    expect(runOutcomeToCliRunStatus(RUN_OUTCOME.FAILED)).toBe('error');
   });
 });
 

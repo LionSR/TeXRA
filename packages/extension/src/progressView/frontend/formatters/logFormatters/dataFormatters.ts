@@ -15,10 +15,10 @@ import { html } from 'lit';
 import { ifDefined } from 'lit/directives/if-defined.js';
 
 // Local imports - shared schemas and utilities
-import type { FileListRow } from '@shared/transcript';
+import { buildDetailsSummary, buildFileListRender } from '../htmlBuilders';
+import type { FileListRow } from '@texra-ai/harness/transcript';
 
 // Local imports - formatter helpers
-import { buildDetailsSummary, buildFileListRender } from '../htmlBuilders';
 import type { FormatResult } from '../baseLogFormatter';
 
 /** Format file list entry as TemplateResult: an icon/label summary over a
