@@ -3,9 +3,9 @@ import { Clock, Effect, Predicate, Result } from 'effect';
 
 // Local imports
 import { AGENT_TOOL_NAME } from '@texra-ai/harness/plugins';
+import { WorkspaceStateKey } from '@texra-ai/harness/schemas';
 import { planTeamRun } from '@common/teams/TeamPlan';
 import { findTeamPreset, type TeamPreset } from '@common/teams/TeamPresets';
-import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import {
   agentKeyOf,
   agentMatchesIdentifier,

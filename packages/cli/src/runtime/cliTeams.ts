@@ -3,6 +3,7 @@ import { Effect } from 'effect';
 
 // Local imports
 import { AGENT_TOOL_NAME } from '@texra-ai/harness/plugins';
+import { WorkspaceStateKey } from '@texra-ai/harness/schemas';
 import type { CliNdjsonRecord } from '@cli/schemas/cliOutput';
 import {
   availableTeamMemberCount,
@@ -17,7 +18,6 @@ import {
   launchableTeamPresets,
   type TeamPreset,
 } from '@common/teams/TeamPresets';
-import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { formatResultCount } from '@utils/text/stringUtils';
 import type { AgentEntry } from '@texra-ai/harness';
 import type { StateStore } from '@texra-ai/harness';

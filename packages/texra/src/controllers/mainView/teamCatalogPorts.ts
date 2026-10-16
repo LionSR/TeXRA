@@ -1,7 +1,7 @@
 // Local imports
 import { Effect } from 'effect';
 import { AgentCatalog, type StateStore } from '@texra-ai/harness';
-import { WorkspaceStateKey } from '@shared/state/stateKeys';
+import { WorkspaceStateKey } from '@texra-ai/harness/schemas';
 
 /**
  * Live team-catalog ports shared by every host's main view. Launch resolution

@@ -70,11 +70,14 @@ export const fileOps = (
     tools: fileTools(options.writeFilter),
   });
 
+/** The web: `web_search` and `web_fetch`. */
 export const web: Plugin = builtin({
   id: 'web',
   tools: { web_search: WebSearchTool, web_fetch: WebFetchTool },
 });
 
+/** Memory and past runs: the `memory` tool, offered while memory is on,
+ *  and `executions`. */
 export const memoryWorkflow: Plugin = builtin({
   id: 'memory-workflow',
   tools: {

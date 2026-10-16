@@ -16,7 +16,6 @@ import { setWorkspaceCliChatAgent } from '@cli/runtime/cliConfig';
 import { COLOR_ERROR, COLOR_WARNING } from '@cli/tui/ui/colors';
 import { CROSS, TICK, WARNING } from '@cli/tui/ui/glyphs';
 import type { SelectItem } from '@cli/tui/ui/Select';
-import type { SettingsStores } from '@shared/config/settingsAccess';
 import {
   AGENT_MODE_PRESETS,
   agentKeyOf,
@@ -29,6 +28,7 @@ import { renderAsyncListFormTransient } from './_shared/FormFrame';
 import { ListForm } from './_shared/ListForm';
 import { runFormWrite, useAsyncListForm } from './_shared/useAsyncListForm';
 import type { ProcessRuntime, ProcessServices } from '@texra-ai/harness';
+import type { SettingsStores } from '@texra-ai/harness';
 
 type WorkspaceAgentsFormMode =
   'overview' | 'workspace' | 'default' | 'chat-default' | 'custom';

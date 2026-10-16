@@ -5,8 +5,8 @@ import * as ChildProcess from 'effect/process/ChildProcess';
 import { quote as shellQuote } from 'shell-quote';
 
 import { withLogChannel } from '@logger/effectLog';
-import type { SettingsStores } from '@shared/config/settingsAccess';
 import type { ExecResult } from '@shared/schemas';
+import type { SettingsStores } from '@shared/config/settings';
 import { onAbort } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { inheritedEnv } from '@utils/system/envFlags';

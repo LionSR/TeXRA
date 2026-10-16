@@ -34,7 +34,7 @@ import {
 } from '@shared/schemas';
 import { isTerminalOutcomePhase } from '@shared/runs/runStatus';
 import { claimStanding } from '@shared/session/database';
-import { readSettingFrom } from '@utils/config/platformSettings';
+import { Settings } from '@shared/config/settings';
 
 const CHANNEL = 'InterruptedTasks';
 
@@ -122,7 +122,7 @@ export const followInterruptedTasks = Effect.fn('followInterruptedTasks')(
         );
       });
     if (offer) {
-      const policy = yield* readSettingFrom<ResumeOnOpen>(
+      const policy = yield* Settings.get<ResumeOnOpen>(
         session.roots,
         RESUME_ON_OPEN_SETTING.configKey,
       );

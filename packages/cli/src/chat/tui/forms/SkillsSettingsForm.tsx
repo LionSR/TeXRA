@@ -1,19 +1,19 @@
 import { Text } from 'ink';
 import { Effect } from 'effect';
 
+import { WorkspaceStateKey } from '@texra-ai/harness/schemas';
+import { Settings } from '@texra-ai/harness';
 import {
   ActiveSkillSourceScopeSchema,
   type ActiveSkillSourceScope,
   type SkillDisplayItem,
 } from '@shared/schemas';
-import type { SettingsStores } from '@shared/config/settingsAccess';
-import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { loadRuntimeSkillDisplay } from '@skills/runtimeSkills';
 import { applyStateSettingUpdate } from '@texra/shared/settingsView/handlers/stateSettingWrite';
-import { readSettingFrom } from '@utils/config/platformSettings';
 
 import { AsyncListForm } from './_shared/ListForm';
 import type { ProcessRuntime } from '@texra-ai/harness';
+import type { SettingsStores } from '@texra-ai/harness';
 
 type SkillToggle =
   | { readonly kind: 'source'; readonly scope: ActiveSkillSourceScope }
@@ -62,11 +62,11 @@ export function SkillsSettingsForm(
           const result = yield* loadRuntimeSkillDisplay(workspaceRoot, stores);
           return {
             skills: result.skills,
-            disabledNames: yield* readSettingFrom<string[]>(
+            disabledNames: yield* Settings.get<string[]>(
               stores,
               WorkspaceStateKey.DISABLED_SKILLS,
             ),
-            disabledScopes: yield* readSettingFrom<ActiveSkillSourceScope[]>(
+            disabledScopes: yield* Settings.get<ActiveSkillSourceScope[]>(
               stores,
               WorkspaceStateKey.DISABLED_SKILL_SOURCES,
             ),

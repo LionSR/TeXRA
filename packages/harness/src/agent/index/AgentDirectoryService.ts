@@ -3,6 +3,7 @@ import * as path from 'node:path';
 
 // Third-party imports
 import { Data, Effect, FileSystem } from 'effect';
+import { z } from 'zod';
 
 // Local imports
 import { CUSTOM_AGENTS_STORAGE_DIR } from '@common/storage/storageLayout';
@@ -16,7 +17,8 @@ import {
   type StateStore,
 } from '@platform/interfaces';
 import { GlobalStorageFs } from '@platform/rootedFs';
-import { readCustomAgentDir } from '@shared/config/settingsAccess';
+import { Settings } from '@shared/config/settings';
+import { GlobalStateKey } from '@shared/state/stateKeys';
 import type { AgentSource } from '@shared/schemas';
 import { isStrictlyWithin } from '@utils/core/pathCore';
 import { entryExists } from '@utils/files/fsEntryExists';
@@ -92,7 +94,11 @@ export class AgentDirectoryService {
     string,
     AgentDirectoriesFailed
   > {
-    return readCustomAgentDir(this.options.state).pipe(
+    return Settings.state(
+      this.options.state,
+      GlobalStateKey.CUSTOM_AGENT_DIR,
+      z.string().trim().prefault(''),
+    ).pipe(
       Effect.mapError(
         (cause) =>
           new AgentDirectoriesFailed({

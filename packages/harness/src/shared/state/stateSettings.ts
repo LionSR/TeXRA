@@ -34,8 +34,8 @@ import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 // Git defaults
 // ============================================================================
 
-export const DEFAULT_GIT_AUTHOR_NAME = 'texra-ai';
-export const DEFAULT_GIT_AUTHOR_EMAIL = 'texra-ai@users.noreply.github.com';
+const DEFAULT_GIT_AUTHOR_NAME = 'texra-ai';
+const DEFAULT_GIT_AUTHOR_EMAIL = 'texra-ai@users.noreply.github.com';
 
 /**
  * Keep file-oriented tools inside the active working directory unless the
@@ -162,7 +162,7 @@ export interface StateSettingEntry {
   readonly onWrite?: SettingWriteEffects;
   /**
    * Per-value descriptions for an enum setting, aligned 1:1 with the schema's
-   * enum options (see {@link settingEnumOptions}). The option *values* are
+   * enum options (TeXRA's settings UIs derive them). The option *values* are
    * derived from the schema, not restated here.
    */
   readonly enumDescriptions?: readonly string[];
@@ -189,26 +189,9 @@ export type SettingsViewStateSettingEntry = SurfacedSettingEntry & {
   };
 };
 
-/** A row a plugin declares, with the short label its Plugins-page card shows
- *  (the card already names the plugin, so 'Model' rather than 'Codex model'). */
-export interface PluginSettingRow {
-  readonly row: SurfacedSettingEntry;
-  readonly label: string;
-}
-
 // ============================================================================
 // Row builders
 // ============================================================================
-
-/**
- * A row at least one settings UI renders. Display copy is required at the call
- * site, so a rendered row can never fall back to an empty label.
- */
-export function surfacedSetting(
-  entry: SurfacedSettingEntry,
-): SurfacedSettingEntry {
-  return entry;
-}
 
 /** A global provider knob with no settings-view row (`.texra/config.json`). */
 function configToggle(on: boolean, description: string) {
@@ -227,7 +210,7 @@ function globalProviderToggle(opts: {
   readonly onWrite?: SettingWriteEffects;
   readonly model: ModelsTabSurface;
 }): SurfacedSettingEntry {
-  return surfacedSetting({
+  return {
     key: opts.key,
     schema: z.boolean().prefault(opts.default),
     title: opts.model.label,
@@ -240,7 +223,7 @@ function globalProviderToggle(opts: {
       cliConfig: true,
       models: [opts.model],
     },
-  });
+  } satisfies SurfacedSettingEntry;
 }
 
 // ============================================================================
@@ -352,7 +335,7 @@ const HARNESS_CONFIG_ROWS: Record<
     'Let OpenAI models use multiple tools at the same time for faster results. Enabled by default; disable for models that require sequential tool run.',
   ),
   // No `configTarget`: both runtime readers resolve the *merged* config value
-  // through `readSettingFrom`, so narrowing the row to the global scope would
+  // through `Settings.get`, so narrowing the row to the global scope would
   // hide (and block writes to) a workspace override the runtime honors.
   'model.compactionThresholdPercent': {
     schema: z
@@ -476,7 +459,7 @@ export function configTreeRows(
  * approval-policy module owns its schema and its legacy-spelling
  * normalization.
  */
-const APPROVAL_POLICY_SETTING = surfacedSetting({
+const APPROVAL_POLICY_SETTING = {
   key: TEXRA_APPROVAL_POLICY_CONFIG_KEY,
   // Strict on purpose: `settingEnumOptions` derives the dropdown from a
   // `ZodEnum` row, and the tolerant spelling belongs to
@@ -492,7 +475,7 @@ const APPROVAL_POLICY_SETTING = surfacedSetting({
   configTarget: 'local',
   enumLabels: ['Block', 'Ask', 'Auto-approve'],
   surfaces: { settingsView: 'approval', cliConfig: true },
-});
+} satisfies SurfacedSettingEntry;
 
 // ============================================================================
 // State-backed rows
@@ -502,7 +485,7 @@ const APPROVAL_POLICY_SETTING = surfacedSetting({
 // through the same catalog write path.
 const PROVIDER_ENDPOINT_SETTINGS = PROVIDER_ENDPOINT_STATE_ENTRIES.map(
   ({ endpointKey, displayName }) =>
-    surfacedSetting({
+    ({
       key: endpointKey,
       schema: z.string().prefault(''),
       title: `${displayName} endpoint`,
@@ -510,7 +493,7 @@ const PROVIDER_ENDPOINT_SETTINGS = PROVIDER_ENDPOINT_STATE_ENTRIES.map(
       category: 'model',
       slot: 'globalState',
       surfaces: { settingsView: 'profile', cliConfig: true },
-    }),
+    }) satisfies SurfacedSettingEntry,
 );
 
 /**
@@ -528,7 +511,7 @@ const PROVIDER_ROUTING_SETTINGS = PROVIDER_REGION_SETTINGS.map(
 
 const STATE_SETTINGS: readonly StateSettingEntry[] = [
   // --- Git commit author marking ---------------------------------------------
-  surfacedSetting({
+  {
     key: WorkspaceStateKey.GIT_MARK_COMMITS,
     schema: z.boolean().prefault(true),
     title: 'Mark agent commits',
@@ -537,8 +520,8 @@ const STATE_SETTINGS: readonly StateSettingEntry[] = [
     category: 'git',
     slot: 'repoState',
     surfaces: { settingsView: 'git-author', cliConfig: true },
-  }),
-  surfacedSetting({
+  } satisfies SurfacedSettingEntry,
+  {
     key: WorkspaceStateKey.GIT_AUTHOR_NAME,
     // `.min(1)` so a blank value is rejected at the write boundary and a
     // legacy blank read falls back (loudly) to the default identity.
@@ -549,8 +532,8 @@ const STATE_SETTINGS: readonly StateSettingEntry[] = [
     category: 'git',
     slot: 'repoState',
     surfaces: { settingsView: 'git-author', cliConfig: true },
-  }),
-  surfacedSetting({
+  } satisfies SurfacedSettingEntry,
+  {
     key: WorkspaceStateKey.GIT_AUTHOR_EMAIL,
     schema: z.string().min(1).prefault(DEFAULT_GIT_AUTHOR_EMAIL),
     title: 'Agent commit email',
@@ -559,8 +542,8 @@ const STATE_SETTINGS: readonly StateSettingEntry[] = [
     category: 'git',
     slot: 'repoState',
     surfaces: { settingsView: 'git-author', cliConfig: true },
-  }),
-  surfacedSetting({
+  } satisfies SurfacedSettingEntry,
+  {
     key: WorkspaceStateKey.GIT_WORKTREE_SUPPORT,
     schema: z.boolean().prefault(false),
     title: 'Subagent worktrees',
@@ -569,7 +552,7 @@ const STATE_SETTINGS: readonly StateSettingEntry[] = [
     category: 'git',
     slot: 'repoState',
     surfaces: { settingsView: 'git-author', cliConfig: true },
-  }),
+  } satisfies SurfacedSettingEntry,
 
   // --- Workspace agents ----------------------------------------------------------
   // Written and read by the agent list and the settings view's agent catalog,
@@ -598,7 +581,7 @@ const STATE_SETTINGS: readonly StateSettingEntry[] = [
   // either row. Before the move the extension smuggled that same intent past a
   // `workspaceState` slot via a worktree-shared key list, while the Node hosts
   // scoped the value per workspace-path hash — one row, two meanings.
-  surfacedSetting({
+  {
     key: GlobalStateKey.ALLOW_ORCHESTRATOR_KILL,
     schema: z.boolean().prefault(true),
     title: 'Let a task stop its agents',
@@ -607,8 +590,8 @@ const STATE_SETTINGS: readonly StateSettingEntry[] = [
     category: 'agents',
     slot: 'globalState',
     surfaces: { settingsView: 'agents', cliConfig: true },
-  }),
-  surfacedSetting({
+  } satisfies SurfacedSettingEntry,
+  {
     key: GlobalStateKey.DETACH_SUBAGENTS_ON_STOP,
     schema: z.boolean().prefault(false),
     title: 'Keep agents running',
@@ -616,13 +599,13 @@ const STATE_SETTINGS: readonly StateSettingEntry[] = [
     category: 'agents',
     slot: 'globalState',
     surfaces: { settingsView: 'agents', cliConfig: true },
-  }),
+  } satisfies SurfacedSettingEntry,
 
   // --- Memory ---------------------------------------------------------------
   // Every host's runtime honors the key through the `memory` entry of the
   // memory-workflow plugin's `injectedWhen` (`@tools/plugins`), but only the
   // settings view renders it; the CLI has no `/config` row for it.
-  surfacedSetting({
+  {
     key: GlobalStateKey.MEMORY_ENABLED,
     schema: z.boolean().prefault(true),
     title: 'Enable memory for chat agents',
@@ -630,10 +613,10 @@ const STATE_SETTINGS: readonly StateSettingEntry[] = [
     category: 'tools',
     slot: 'globalState',
     surfaces: { settingsView: 'memory' },
-  }),
+  } satisfies SurfacedSettingEntry,
 
   // --- OpenAI WebSocket transport (experimental) -----------------------------
-  surfacedSetting({
+  {
     key: GlobalStateKey.WEBSOCKET_OPENAI,
     schema: z.boolean().prefault(false),
     title: 'OpenAI WebSocket',
@@ -653,13 +636,13 @@ const STATE_SETTINGS: readonly StateSettingEntry[] = [
         },
       ],
     },
-  }),
+  } satisfies SurfacedSettingEntry,
 
   // --- Provider endpoints -----------------------------------------------------
   ...PROVIDER_ENDPOINT_SETTINGS,
 
   // --- Model picker preferences ---------------------------------------------
-  surfacedSetting({
+  {
     key: GlobalStateKey.HELPER_MODEL,
     schema: z.string().min(1).prefault(DEFAULT_HELPER_MODEL),
     title: 'Helper model',
@@ -668,8 +651,8 @@ const STATE_SETTINGS: readonly StateSettingEntry[] = [
     category: 'model',
     slot: 'globalState',
     surfaces: { settingsView: 'models' },
-  }),
-  surfacedSetting({
+  } satisfies SurfacedSettingEntry,
+  {
     key: GlobalStateKey.PREFER_SHORT_MODEL_NAMES,
     schema: z.boolean().prefault(false),
     title: 'Prefer short model names',
@@ -677,7 +660,7 @@ const STATE_SETTINGS: readonly StateSettingEntry[] = [
     category: 'model',
     slot: 'globalState',
     surfaces: { settingsView: 'models' },
-  }),
+  } satisfies SurfacedSettingEntry,
 
   // --- OpenRouter routing ----------------------------------------------------
   globalProviderToggle({
@@ -732,7 +715,7 @@ const STATE_SETTINGS: readonly StateSettingEntry[] = [
     schema: z.array(z.string()).prefault([]),
     slot: 'globalState',
   },
-  surfacedSetting({
+  {
     key: WorkspaceStateKey.DISABLED_SKILLS,
     schema: z.array(QualifiedSkillNameSchema).prefault([]),
     title: 'Skills',
@@ -741,8 +724,8 @@ const STATE_SETTINGS: readonly StateSettingEntry[] = [
     slot: 'config',
     openForm: 'skills',
     surfaces: { settingsView: 'skills', cliConfig: true },
-  }),
-  surfacedSetting({
+  } satisfies SurfacedSettingEntry,
+  {
     key: WorkspaceStateKey.DISABLED_SKILL_SOURCES,
     schema: z.array(ActiveSkillSourceScopeSchema).prefault([]),
     title: 'Skill sources',
@@ -751,8 +734,8 @@ const STATE_SETTINGS: readonly StateSettingEntry[] = [
     slot: 'config',
     openForm: 'skills',
     surfaces: { settingsView: 'skills', cliConfig: true },
-  }),
-  surfacedSetting({
+  } satisfies SurfacedSettingEntry,
+  {
     key: WorkspaceStateKey.TOOL_PATH_PROTECTION_ENABLED,
     schema: z.boolean().prefault(DEFAULT_TOOL_PATH_PROTECTION_ENABLED),
     title: 'Restrict tool paths to the working directory',
@@ -761,7 +744,7 @@ const STATE_SETTINGS: readonly StateSettingEntry[] = [
     category: 'tools',
     slot: 'workspaceState',
     surfaces: { settingsView: 'approval', cliConfig: true },
-  }),
+  } satisfies SurfacedSettingEntry,
 ];
 
 // ============================================================================
@@ -883,53 +866,4 @@ export function settingsCatalog(
         : value;
     },
   };
-}
-
-// ============================================================================
-// Row helpers
-// ============================================================================
-
-/** The entry's schema with the outer `.prefault()` wrapper peeled off. */
-export function settingSchemaWithoutPrefault(
-  entry: StateSettingEntry,
-): unknown {
-  return entry.schema instanceof z.ZodPrefault
-    ? entry.schema.unwrap()
-    : entry.schema;
-}
-
-/**
- * Enum option values for a setting, derived from its `z.enum(...)` schema (via
- * the public `.unwrap().options`) rather than restated on the row, or
- * `undefined` for non-enum settings. The schema stays the single source of the
- * allowed values; only the per-value prose (`enumDescriptions`) is editorial.
- */
-export function settingEnumOptions(
-  entry: StateSettingEntry,
-): readonly string[] | undefined {
-  const inner = settingSchemaWithoutPrefault(entry);
-  return inner instanceof z.ZodEnum
-    ? (inner.options as readonly string[])
-    : undefined;
-}
-
-export interface SettingEnumChoice<T extends string = string> {
-  readonly value: T;
-  readonly label: string;
-  readonly description?: string;
-}
-
-/** Enum values paired with display metadata for settings UIs. */
-export function settingEnumChoices<T extends string = string>(
-  entry: StateSettingEntry,
-): readonly SettingEnumChoice<T>[] | undefined {
-  const values = settingEnumOptions(entry);
-  if (!values) return undefined;
-  return values.map((value, index) => ({
-    value: value as T,
-    label: entry.enumLabels?.[index] ?? value,
-    ...(entry.enumDescriptions?.[index] && {
-      description: entry.enumDescriptions[index],
-    }),
-  }));
 }

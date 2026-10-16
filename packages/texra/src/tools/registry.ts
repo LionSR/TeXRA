@@ -7,7 +7,17 @@
 
 // Third-party imports
 import { Effect, Layer } from 'effect';
-import { HostCapabilities } from '@texra-ai/harness/plugins';
+import {
+  HostCapabilities,
+  codemode,
+  fileOps,
+  goal,
+  memoryWorkflow,
+  multiAgent,
+  web,
+  definePlugin,
+  type ProcessPluginLayer,
+} from '@texra-ai/harness/plugins';
 
 // Local imports
 import replacementEngine, {
@@ -27,18 +37,8 @@ import {
 } from '@texra/tools/integrationPlugins';
 import type { LeanLanguageServices } from '@texra/tools/lean/leanLanguageServices';
 import { AskUserQuestionTool } from '@texra/tools/userQuestion/UserQuestionTool';
-import {
-  codemode,
-  fileOps,
-  goal,
-  memoryWorkflow,
-  multiAgent,
-  web,
-} from '@tools/builtinPlugins';
 import type { WriteFilter } from '@tools/WriteTool';
-import { definePlugin, type Plugin } from '@tools/plugins';
 import { ALWAYS_AVAILABLE } from '@tools/toolProbes';
-import type { ProcessPluginLayer } from '@tools/toolTable';
 
 // Local file imports
 import { AcceptRunFilesTool } from './AcceptRunFilesTool';
@@ -102,6 +102,7 @@ import { ReadConfigTool, UpdateConfigTool } from './setup/ConfigTools';
 import { SendToTerminalTool } from './setup/SendToTerminalTool';
 import { ApplyTeamTool } from './setup/ApplyTeamTool';
 import { SetupPlatform, type SetupPlatformShape } from './setup/platform';
+import type { Plugin } from '@texra-ai/harness';
 
 /** TeXRA's filter on `write_file`: a `.tex` file's content goes through the
  *  replacement rules of the call's workspace. */

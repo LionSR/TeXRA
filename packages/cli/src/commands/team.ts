@@ -2,6 +2,7 @@ import { Effect } from 'effect';
 import { defineCommand } from 'citty';
 
 import { AgentCatalog } from '@texra-ai/harness';
+import { Settings } from '@texra-ai/harness';
 import {
   canLaunchTeam,
   planTeamRun,
@@ -12,7 +13,6 @@ import {
   TEXRA_APPROVAL_POLICY_CONFIG_KEY,
   type TexraApprovalPolicy,
 } from '@shared/approvalPolicy';
-import { readConfigSettingFrom } from '@utils/config/platformSettings';
 import { filterNotNullish } from '@utils/core';
 
 import { missingAgentMessage, missingTeamMessage } from '../runtime/agents';
@@ -151,7 +151,7 @@ export const runTeam = Effect.fn('runTeam')(function* (
     context.mode === 'headless' &&
     effectiveApprovalPolicy(
       context.requestedApprovalPolicy ?? context.approvalPolicy,
-      readConfigSettingFrom<TexraApprovalPolicy>(
+      Settings.getConfig<TexraApprovalPolicy>(
         services.config,
         TEXRA_APPROVAL_POLICY_CONFIG_KEY,
       ),

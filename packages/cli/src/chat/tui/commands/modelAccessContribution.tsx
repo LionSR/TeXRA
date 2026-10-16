@@ -10,7 +10,6 @@ import {
   type LoginFormValue,
   parseChatLoginSlashArgs,
 } from '@cli/runtime/loginOptions';
-import type { SettingsStores } from '@shared/config/settingsAccess';
 
 import {
   AccountAccessForm,
@@ -40,6 +39,7 @@ import type {
 } from './handlers/slashContext';
 import type { formSelectionHandler } from './formSelection';
 import type { SlashCommandContribution, SlashFormProps } from './slashRegistry';
+import type { SettingsStores } from '@texra-ai/harness';
 
 /** Selection handler that reports progress while the form shows a busy frame. */
 export type FormActionHandler<T> = (

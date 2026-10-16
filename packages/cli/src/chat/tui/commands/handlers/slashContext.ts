@@ -6,7 +6,6 @@ import { type CliSignInProgress } from '@cli/runtime/signInUrl';
 import { setTransientNotice } from '@cli/chat/tui/state/cliState';
 import { type TuiSession } from '@cli/chat/tui/state/sessionRunState';
 import { appendLocalNotice } from '@cli/chat/tui/state/transcript';
-import type { SettingsStores } from '@shared/config/settingsAccess';
 import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
 import type {
   ProcessRuntime,
@@ -15,6 +14,7 @@ import type {
 } from '@texra-ai/harness';
 import type { PlatformSecrets } from '@texra-ai/harness';
 import type { Effect } from 'effect';
+import type { SettingsStores } from '@texra-ai/harness';
 
 /**
  * What a slash command does, as a program the dispatcher runs: the chat's

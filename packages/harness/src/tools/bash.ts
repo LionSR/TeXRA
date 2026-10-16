@@ -14,7 +14,6 @@ import type { ProcessChildStrategy } from '@agent/runtime/childRunLoop';
 import { ToolContext } from '@agent/core/tools/ToolTypes';
 import { requireToolRun } from '@agent/runtime/RunCall';
 import { type SessionHandle } from '@agent/runtime/SessionHandle';
-import type { SettingsStores } from '@shared/config/settingsAccess';
 import {
   BASH_BACKGROUND_LOG_CAP_CHARS,
   BASH_TOOL_DEFAULT_TIMEOUT_MS,
@@ -27,6 +26,7 @@ import {
   type ToolResult,
   USER_FOLLOW_UP_SUPPORT,
 } from '@shared/schemas';
+import type { SettingsStores } from '@shared/config/settings';
 import {
   formatBashDelivery,
   formatBashError,
