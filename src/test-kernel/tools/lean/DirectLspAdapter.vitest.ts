@@ -39,6 +39,7 @@ import {
   Exit,
   Fiber,
   Layer,
+  Logger,
   Scope,
 } from 'effect';
 import { TestClock } from 'effect/testing';
@@ -480,9 +481,13 @@ describe('LeanServerPool', () => {
       const second = makeLakeProject(tempRoot, 'project-b');
       let spawnCount = 0;
       let firstClosed = false;
-      // The idle first server closes once the next spawn has failed, so the
-      // retry finds it closing, not closed.
+      // The idle first server closes only once the pool has entered EMFILE
+      // recovery (its warning), so the retry finds it closing, not closed.
       const firstClose = Promise.withResolvers<void>();
+      const recovering = Logger.make(({ message }) => {
+        if (String(message).includes('Lean spawn hit a full file table'))
+          firstClose.resolve();
+      });
       const first = createFakeLeanChild({ closeGate: firstClose.promise });
       first.on('close', () => {
         firstClosed = true;
@@ -490,10 +495,7 @@ describe('LeanServerPool', () => {
       spawnOverride.current = () => {
         spawnCount += 1;
         if (spawnCount === 1) return first;
-        if (!firstClosed) {
-          firstClose.resolve();
-          return createFailedSpawnChild('EMFILE');
-        }
+        if (!firstClosed) return createFailedSpawnChild('EMFILE');
         return createFakeLeanChild();
       };
 
@@ -505,6 +507,7 @@ describe('LeanServerPool', () => {
       const started = yield* pool
         .fetchDiagnosticsForFile(second.filePath, NO_RUN)
         .pipe(
+          Effect.withLogger(recovering),
           // A retry that never awaits the close would hang.
           Effect.timeoutOrElse({
             duration: '5 seconds',
