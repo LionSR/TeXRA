@@ -7,10 +7,11 @@
  * calls `Effect.runPromise`, `runSync`, or `runFork`: a Promise-land
  * embedder runs `Effect.runPromise(program)` at its own entry point.
  *
- * This module is the package's public surface and is documented as one
- * (packages/harness/README.md); it is the one barrel the "no convenience
- * barrels" rule does not apply to.
+ * This module is the package's public surface, documented in the package
+ * README. `effect` is a peer dependency: the surface is Effect services, not
+ * Promises.
  */
+// The one barrel the "no convenience barrels" rule does not apply to.
 
 // The services and their layer. `Sessions.layer({ platform, plugins })` is
 // an embedder's way in: the process and its sessions live for that layer's
@@ -163,6 +164,7 @@ export type {
 export type { SettingHost } from '@shared/state/stateSettings';
 export { ToolContext } from '@agent/core/tools/ToolTypes';
 export { defineTool, type DefinedTool } from '@tools/core/definition';
+export type { ToolResult } from '@shared/schemas';
 export type {
   AggregateId,
   RequestDecision,
