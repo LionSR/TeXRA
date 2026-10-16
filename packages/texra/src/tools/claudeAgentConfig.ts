@@ -33,8 +33,9 @@ const CHANNEL = 'claudeAgent';
  * swallowed and treated as "no credential."
  *
  * `env` is the environment the subprocess will get, so the answer matches
- * what Claude Code sees; `currentPlatform` is injectable for testability;
- * home-directory resolution goes through `os.homedir()`.
+ * what Claude Code sees; `currentPlatform` is injectable for testability.
+ * A home directory that cannot be resolved is logged and leaves only an
+ * explicit `CLAUDE_CONFIG_DIR` to probe.
  */
 const hasClaudeOauthCredential = Effect.fn('hasClaudeOauthCredential')(
   function* (
@@ -43,7 +44,8 @@ const hasClaudeOauthCredential = Effect.fn('hasClaudeOauthCredential')(
   ): Effect.fn.Return<boolean, never, ChildProcessSpawner> {
     if (env.CLAUDE_CODE_OAUTH_TOKEN) return true;
 
-    const configDir = resolveClaudeConfigDir(env.CLAUDE_CONFIG_DIR);
+    const configDir = yield* resolveClaudeConfigDir(env.CLAUDE_CONFIG_DIR);
+    if (configDir === undefined) return false;
     // Raw node:fs/promises, not the `FileSystem` service: `access(F_OK)` is
     // exactly this question, and the service's `exists` would need this same
     // failure branch anyway — so taking it from context buys nothing for one
@@ -61,7 +63,11 @@ const hasClaudeOauthCredential = Effect.fn('hasClaudeOauthCredential')(
     if (credentialFileExists) return true;
 
     if (currentPlatform === 'darwin') {
-      for (const probe of claudeKeychainCredentialProbes(configDir)) {
+      const defaultConfigDir = yield* resolveClaudeConfigDir(undefined);
+      for (const probe of claudeKeychainCredentialProbes(
+        configDir,
+        defaultConfigDir,
+      )) {
         const { exitCode } = yield* executeCommand(['security', ...probe], {
           cwd: process.cwd(),
           settings: undefined,
@@ -83,21 +89,40 @@ const hasClaudeOauthCredential = Effect.fn('hasClaudeOauthCredential')(
   },
 );
 
-function resolveClaudeConfigDir(configDirInput: string | undefined): string {
-  const homeDir = os.homedir();
-  const configDir = configDirInput?.trim();
-  if (!configDir) return path.join(homeDir, '.claude');
-  if (configDir === '~') return homeDir;
-  if (configDir.startsWith('~/') || configDir.startsWith('~\\')) {
-    return path.join(homeDir, configDir.slice(2));
-  }
-  return configDir;
-}
+/** The home directory, or `undefined` (logged) where none resolves. */
+const homeDirectory = Effect.try({
+  try: () => os.homedir(),
+  catch: ensureError,
+}).pipe(
+  Effect.catch((error) =>
+    Effect.logWarning(
+      `The home directory could not be resolved; a Claude Code login under it reads as not found: ${error.message}`,
+    ).pipe(withLogChannel(CHANNEL), Effect.as(undefined)),
+  ),
+);
 
-function claudeKeychainCredentialProbes(configDir: string): string[][] {
+/** Claude Code's config directory: an explicit `CLAUDE_CONFIG_DIR` as is,
+ *  else under the home directory, or `undefined` when that is unknown. */
+const resolveClaudeConfigDir = Effect.fnUntraced(function* (
+  configDirInput: string | undefined,
+): Effect.fn.Return<string | undefined> {
+  const configDir = configDirInput?.trim();
+  if (configDir && configDir !== '~' && !/^~[\\/]/.test(configDir))
+    return configDir;
+  const homeDir = yield* homeDirectory;
+  if (homeDir === undefined) return undefined;
+  if (!configDir) return path.join(homeDir, '.claude');
+  return configDir === '~' ? homeDir : path.join(homeDir, configDir.slice(2));
+});
+
+function claudeKeychainCredentialProbes(
+  configDir: string,
+  defaultConfigDir: string | undefined,
+): string[][] {
   const normalizedConfigDir = path.resolve(configDir);
   const usesDefaultConfigDir =
-    normalizedConfigDir === path.resolve(resolveClaudeConfigDir(undefined));
+    defaultConfigDir !== undefined &&
+    normalizedConfigDir === path.resolve(defaultConfigDir);
   const configDirHash = sha256Hex(normalizedConfigDir);
   const keychainProfiles = [normalizedConfigDir, configDirHash];
   const legacyProbes: string[][] = usesDefaultConfigDir

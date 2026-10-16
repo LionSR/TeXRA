@@ -238,7 +238,7 @@ export interface AgentDirectoriesPort {
 
 /**
  * The process's agent directories as an Effect service
- * (`@texra/platform/AgentDirectories`), provided once by the composition root
+ * (`@texra-ai/harness/platform/AgentDirectories`), provided once by the composition root
  * through `processLayer`. The shape is the port itself: a program
  * that resolves one of the three local agent directories yields the port's own
  * readers instead of reaching for the process platform's copy.
@@ -276,7 +276,7 @@ export type ToolMissingHandler = (
 
 /**
  * The process's tool-missing reporter as an Effect service
- * (`@texra/platform/ToolMissingReporter`), provided once by the composition
+ * (`@texra-ai/harness/platform/ToolMissingReporter`), provided once by the composition
  * root through `processLayer`. A program that needs to surface a
  * missing tool yields it via `Effect.serviceOption`, so an absent reporter is
  * silence rather than a missing requirement.
