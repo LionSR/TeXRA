@@ -2,6 +2,7 @@ import { Settings } from '@texra-ai/harness';
 import { Effect } from 'effect';
 
 import { loadApiKeyStatusMap } from '@texra-ai/llm';
+import { type SurfacedSettingEntry } from '@texra-ai/harness/schemas';
 import { commitCliProviderApiKey } from '@cli/chat/tui/hosts/cliProviderKeys';
 import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
 import { storeCredential } from '@texra/common/secrets/storeCredential';

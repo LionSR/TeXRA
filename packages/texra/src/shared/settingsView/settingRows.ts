@@ -1,6 +1,5 @@
 /**
- * What TeXRA's settings UIs read off a catalog row: the config-tree row
- * builder its own rows use, the row's schema without its default, the enum
+ * What TeXRA's settings UIs read off a catalog row: the row's schema without its default, the enum
  * choices a dropdown lists, and the label a Plugins-page card shows. Plain
  * functions of a row, so the extension webview, the desktop renderer and the
  * CLI `/config` panel render the same choices.
@@ -17,21 +16,6 @@ import type {
 export interface PluginSettingRow {
   readonly row: SurfacedSettingEntry;
   readonly label: string;
-}
-
-/**
- * Config-file-backed rows from a record keyed by dotted path under `texra.`:
- * the key and the uniform `config` slot are derived, not restated. The
- * record's declaration order is the catalog order.
- */
-export function configTreeRows(
-  rows: Readonly<Record<string, Omit<StateSettingEntry, 'key' | 'slot'>>>,
-): StateSettingEntry[] {
-  return Object.entries(rows).map(([path, row]) => ({
-    ...row,
-    key: `texra.${path}`,
-    slot: 'config',
-  }));
 }
 
 /** The entry's schema with the outer `.prefault()` wrapper peeled off. */

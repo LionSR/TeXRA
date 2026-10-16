@@ -11,7 +11,7 @@ import { Text, useInput } from 'ink';
 import { useState } from 'react';
 import { z } from 'zod';
 
-import { type SurfacedSettingEntry } from '@texra-ai/harness';
+import { type SurfacedSettingEntry } from '@texra-ai/harness/schemas';
 import { isCtrlInput } from '@cli/tui/inputKeys';
 import type { SelectItem } from '@cli/tui/ui/Select';
 import {

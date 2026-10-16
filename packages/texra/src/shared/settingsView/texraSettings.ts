@@ -16,12 +16,12 @@ import { z } from 'zod';
 
 // Local imports
 import {
+  configTreeRows,
   settingsCatalog,
   type SettingsCatalog,
   type StateSettingEntry,
 } from '@texra-ai/harness/schemas';
 import { CliOutputFormatSchema } from '@texra/shared/cliOutputFormat';
-import { configTreeRows } from '@texra/shared/settingsView/settingRows';
 import {
   LATEX_CONFIG_DEFAULTS,
   LATEX_FORMATTER_VALUES,

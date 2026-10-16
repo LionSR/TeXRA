@@ -4,7 +4,7 @@
     {
       "id": "EFF-ADOPT-config-provider",
       "candidate": "the platform config providers onto an Effect ConfigProvider",
-      "why": "Config<T> over the platform port's own get buys nothing: the read stays synchronous and answers for the workspace the caller was handed. Naming each row a second time as Config.Boolean/Config.Int beside the Zod catalog row that owns it is a dual schema system with a ConfigError where readSettingFrom's validation already stands. Settings stay synchronous by ruling; Effect Config is for process.env reads, a separate lane.",
+      "why": "Config<T> over the platform port's own get buys nothing: the read stays synchronous and answers for the workspace the caller was handed. Naming each row a second time as Config.Boolean/Config.Int beside the Zod catalog row that owns it is a dual schema system with a ConfigError where Settings.get's validation already stands. Settings stay synchronous by ruling; Effect Config is for process.env reads, a separate lane.",
       "ruling": ".agents/docs/implemented/simplification/2026-09-20-effect-facility-adoption.md#3-not-re-proposed",
       "symbols": [
         {

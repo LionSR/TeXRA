@@ -3,8 +3,8 @@
 import { Effect, Predicate } from 'effect';
 
 import { withLogChannel } from '@texra-ai/harness';
-import type { AgentTrace } from '@agent/trace';
 import { Settings } from '@texra-ai/harness';
+import type { AgentTrace } from '@agent/trace';
 import type {
   TokenUsageStats,
   ToolError,

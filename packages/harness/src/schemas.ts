@@ -83,6 +83,7 @@ export {
 // the harness's own state keys, as a settings UI (a webview included) builds
 // its catalog from them and names the rows it renders.
 export {
+  configTreeRows,
   settingsCatalog,
   type SettingsCatalog,
   type SettingsViewSnapshot,

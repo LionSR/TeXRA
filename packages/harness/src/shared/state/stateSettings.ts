@@ -444,7 +444,7 @@ const HARNESS_CONFIG_ROWS: Record<
  * the key and the uniform `config` slot are derived, not restated. The
  * record's declaration order is the catalog order.
  */
-function configTreeRows(
+export function configTreeRows(
   rows: Readonly<Record<string, Omit<StateSettingEntry, 'key' | 'slot'>>>,
 ): StateSettingEntry[] {
   return Object.entries(rows).map(([path, row]) => ({

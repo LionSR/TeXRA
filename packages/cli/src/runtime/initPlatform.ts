@@ -21,13 +21,12 @@ import {
   resolveGlobalStoragePath,
   resolveWorkspaceStoragePath,
 } from '@texra-ai/harness/node';
-import { GlobalStateKey } from '@texra-ai/harness';
+import { GlobalStateKey } from '@texra-ai/harness/schemas';
 import type { SessionHandle } from '@agent/runtime';
 import {
   openProjectStateStore,
   openRepoStateStore,
 } from '@controllers/session/appStateStore';
-import { GlobalStateKey } from '@shared/state/stateKeys';
 import { telemetryNoticeIfDue } from '@telemetry/telemetryNotice';
 import { DisposableStore } from '@texra/platform/disposable';
 import { bootstrapHost } from '@texra/controllers/hostBootstrap';

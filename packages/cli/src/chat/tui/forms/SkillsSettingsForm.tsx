@@ -1,7 +1,7 @@
 import { Text } from 'ink';
 import { Effect } from 'effect';
 
-import { WorkspaceStateKey } from '@texra-ai/harness';
+import { WorkspaceStateKey } from '@texra-ai/harness/schemas';
 import { Settings } from '@texra-ai/harness';
 import {
   ActiveSkillSourceScopeSchema,

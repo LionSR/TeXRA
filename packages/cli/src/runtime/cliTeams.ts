@@ -2,7 +2,7 @@
 import { Effect } from 'effect';
 
 // Local imports
-import { WorkspaceStateKey } from '@texra-ai/harness';
+import { WorkspaceStateKey } from '@texra-ai/harness/schemas';
 import type { AgentEntry } from '@agent/index';
 import type { CliNdjsonRecord } from '@cli/schemas/cliOutput';
 import {

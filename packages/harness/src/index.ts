@@ -252,6 +252,3 @@ export {
   type SettingsStores,
   type StoredSetting,
 } from '@shared/config/settings';
-// The harness's own state keys, and the row shape a settings UI lists.
-export { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
-export type { SurfacedSettingEntry } from '@shared/state/stateSettings';

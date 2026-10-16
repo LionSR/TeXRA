@@ -9,9 +9,8 @@ import { z } from 'zod';
  */
 
 import type { StateStore, StateWriteFailed } from '@platform/interfaces';
-import { StateFlagSchema } from '@shared/config/settings';
+import { Settings, StateFlagSchema } from '@shared/config/settings';
 import { GlobalStateKey } from '@shared/state/stateKeys';
-import { Settings } from '@shared/config/settings';
 import { isNonEmptyString } from '@utils/text/stringUtils';
 
 export function setOnboardingDeclined(
