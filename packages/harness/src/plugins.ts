@@ -24,6 +24,12 @@ export {
 export type { RunInbox } from '@agent/followUp/ToolUseFollowUp';
 export type { ToolRun } from '@agent/core/tools/ToolTypes';
 export { HostCapabilities } from '@agent/runtime/agentToolResolution';
+/** The files a run left in its storage directory (the executions tool's
+ *  listing), for a host that shows them outside a run (the CLI's history). */
+export {
+  listRunGeneratedFiles,
+  type RunGeneratedFile,
+} from '@tools/executions/runGeneratedFiles';
 export {
   agentBlockOf,
   type AgentBlock,

@@ -52,7 +52,6 @@
       "@skills/skillSources",
       "@tools/approval/toolEditApproval",
       "@tools/executions/configView",
-      "@tools/executions/runGeneratedFiles",
       "@tools/mcp/mcpConfig",
       "@tools/memory/constants",
       "@tools/memory/memoryFileSystem",
@@ -110,7 +109,6 @@
     "extension": [
       "@agent/index",
       "@agent/runtime",
-      "@common/storage/storageLayout",
       "@controllers/session/appStateStore",
       "@eventBus/AppSignals",
       "@logger/effectDiagnostics",
