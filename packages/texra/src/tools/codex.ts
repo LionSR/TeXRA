@@ -28,6 +28,7 @@ import {
   withLogChannel,
   type WorkspaceRoots,
 } from '@texra-ai/harness';
+import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';
 import { Settings } from '@texra-ai/harness';
 import {
   emitToolUseCard,
@@ -58,7 +59,6 @@ import { CodexStateKey } from '@texra/shared/settingsView/integrationSettings';
 import { buildSyntheticToolUseConfig } from '@texra/tools/core/syntheticAgentConfig';
 import { buildAgentWorkspaceOptions } from '@texra/tools/agentWorkspaceOptions';
 import { formatWallTimeSeconds, previewLabel } from '@utils/text/stringUtils';
-import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local file imports
 import {

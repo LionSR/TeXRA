@@ -2,6 +2,8 @@ import { readFile, rm } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { build } from 'esbuild';
+
 import { checkForgottenExports } from './forgotten-exports.mjs';
 import {
   isFile,
@@ -212,6 +214,26 @@ await checkForgottenExports({
     path.resolve(packageRoot, target.types),
   ),
 });
+// The entries a browser loads (the webview frontends, the desktop renderer),
+// bundled for the browser with every import inlined, external packages
+// included: a Node built-in anywhere in an entry's closure fails here.
+const BROWSER_ENTRIES = { '@texra-ai/harness': ['./schemas', './transcript'] };
+for (const entry of BROWSER_ENTRIES[manifest.name] ?? []) {
+  const built = await build({
+    absWorkingDir: packageRoot,
+    bundle: true,
+    entryPoints: [path.resolve(packageRoot, publishedExports[entry].import)],
+    format: 'esm',
+    logLevel: 'silent',
+    platform: 'browser',
+    write: false,
+  }).catch((error) => error);
+  if (built instanceof Error) {
+    throw new Error(
+      `The "${entry}" entry does not build for the browser: ${built.message}`,
+    );
+  }
+}
 
 console.log(
   `Validated ${declarationFiles.length} declarations (${unreachable.length} no entry reaches removed) and ${externalPackages.size} external packages.`,

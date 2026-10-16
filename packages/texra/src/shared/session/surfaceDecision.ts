@@ -10,8 +10,8 @@
  */
 
 import type { PermissionPayload, RequestDecision } from '@shared/schemas';
-import type { ApprovalBypassKind } from '@shared/approvalBypassKind';
-import type { RuntimeRequest } from '@shared/session/runtimeRequest';
+import type { ApprovalBypassKind } from '@texra-ai/harness/schemas';
+import type { PendingRequest, RuntimeRequest } from '@texra-ai/harness/schemas';
 
 import type { HostRequest } from './hostRequest';
 
@@ -74,7 +74,7 @@ const BYPASS_OF_KIND: Partial<
  * decides the retry itself. Everything else is one `request.decide`.
  */
 export function approvalDecisionArms(
-  permission: PermissionPayload,
+  permission: PendingRequest['payload'],
   decision: SurfaceDecision,
 ): readonly ApprovalArm[] {
   const { runId, requestId } = permission.data;

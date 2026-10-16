@@ -41,9 +41,11 @@ import {
   type StateStore,
   type WorkspaceRoots,
 } from '@texra-ai/harness';
-import { attachErrorPresentationClaimed } from '@texra-ai/harness';
+import {
+  agentErrorPresentation,
+  attachErrorPresentationClaimed,
+} from '@texra-ai/harness';
 import { describeFollowUpFailure } from '@agent/followUp/ToolUseFollowUp';
-import { agentErrorPresentation } from '@common/errors';
 import {
   JsonValueSchema,
   RUN_OUTCOME,

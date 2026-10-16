@@ -2,7 +2,7 @@ import '@awesome.me/webawesome/dist/components/details/details.js';
 import { html, nothing, render, type TemplateResult } from 'lit';
 import { repeat } from 'lit/directives/repeat.js';
 import { Hash, Result } from 'effect';
-import { parseJsonWith } from '@common/parsing/safeParseJson';
+import { parseJsonWith } from '@texra-ai/harness/schemas';
 import type { TeXRAIconName } from '@shared/iconNames';
 import { postMessage } from '@texra/shared/hostBridge';
 import { renderLabeledActionButton } from '@ui/wa/actionButtons';

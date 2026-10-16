@@ -2,6 +2,7 @@
 import { randomBytes } from 'node:crypto';
 import { Context, DateTime, Effect, Layer, Result } from 'effect';
 
+import { ensureError } from '@texra-ai/harness/schemas';
 import { GlobalValues } from '@texra-ai/harness';
 import {
   InquiryThreadIdSchema,
@@ -16,7 +17,6 @@ import {
   InquiryRecords,
   type InquiryThreadRecord,
 } from '@texra/shared/plugins/externalInquiry';
-import { ensureError } from '@utils/errors/errorMessage';
 
 const QUESTION_PREVIEW_CHARS = 200;
 

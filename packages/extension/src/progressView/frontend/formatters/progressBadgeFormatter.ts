@@ -4,7 +4,7 @@ import {
   isDocumentTaskRun,
 } from '@texra/shared/plugins/documents';
 import { passLabel } from '@ui/copy/taskDiagnostics';
-import type { RunView } from '@texra-ai/harness';
+import type { RunView } from '@texra-ai/harness/schemas';
 
 /**
  * The run header's pass chip: "Pass 2 of 3" on a document task, naming the

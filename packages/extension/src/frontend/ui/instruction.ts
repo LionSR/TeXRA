@@ -6,8 +6,8 @@ import * as vscode from 'vscode';
 import { withLogChannel } from '@texra-ai/harness';
 import { z } from 'zod';
 import { Settings } from '@texra-ai/harness';
+import { ensureError } from '@texra-ai/harness/schemas';
 import { safeExecuteCommand } from '@frontend/system/commandUtils';
-import { ensureError } from '@utils/errors/errorMessage';
 import type {
   StateStore,
   StateReadFailed,

@@ -6,6 +6,7 @@ import { Cause, Effect } from 'effect';
 import { AgentConfigSchema } from '@texra-ai/harness/schemas';
 import { withLogChannel } from '@texra-ai/harness';
 import { isLiveRun } from '@texra-ai/harness/schemas';
+import { toErrorMessage } from '@texra-ai/harness/schemas';
 import { GlobalStateKey } from '@texra-ai/harness/schemas';
 import { EXTENSION_COMMANDS } from '@commands/extensionCommandIds';
 import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
@@ -21,7 +22,6 @@ import {
   hasUsableSetupCredential,
   resolveSetupLaunchModel,
 } from '@texra/model/setupCredentialAccess';
-import { toErrorMessage } from '@utils/errors/errorMessage';
 import type { ProcessServices, Session } from '@texra-ai/harness';
 import type {
   PlatformSecrets,

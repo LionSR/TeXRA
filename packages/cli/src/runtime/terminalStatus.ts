@@ -1,9 +1,9 @@
 import { Effect } from 'effect';
 
+import { toErrorMessage } from '@texra-ai/harness/schemas';
+import { runOutcomeToCliRunStatus } from '@cli/schemas/cliOutput';
 import { readInstalledPluginLoad } from '@common/plugins/pluginTrust';
 import { RUN_OUTCOME, type RunOutcome } from '@shared/schemas';
-import { runOutcomeToCliRunStatus } from '@shared/runs/runStatus';
-import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { CliExitCode } from './exitCodes';
 import type { LocalSession } from '@texra-ai/harness';

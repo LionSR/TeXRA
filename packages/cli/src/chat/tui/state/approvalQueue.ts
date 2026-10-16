@@ -13,13 +13,13 @@ import { computed, signal } from '@lit-labs/signals';
 import { Cause, Effect, absurd } from 'effect';
 
 import { withLogChannel } from '@texra-ai/harness';
+import { attentionOf } from '@texra-ai/harness/schemas';
 import type {
   PermissionPayload,
   ProgressPermissionKind,
   RequestDecision,
   RunId,
 } from '@shared/schemas';
-import { attentionOf } from '@shared/session/sessionView';
 import {
   approvalDecisionArms,
   type SurfaceDecision,
@@ -96,7 +96,7 @@ export interface PendingApproval {
 }
 
 /** A pending `request.opened` fact, typed to {@link PendingApprovalKind}. */
-type PendingApprovalFact = SessionView['requests'][number] & {
+export type PendingApprovalFact = SessionView['requests'][number] & {
   readonly payload: Extract<PermissionPayload, { kind: PendingApprovalKind }>;
 };
 

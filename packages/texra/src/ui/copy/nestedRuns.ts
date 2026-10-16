@@ -87,3 +87,7 @@ export const TASK_ACTIONS = {
   /** The CLI's exit line before the `texra resume …` command. */
   resumeHint: 'Resume this task with:',
 } as const;
+
+/** An agent row's one action: open its agent's conversation, the composer
+ *  addressed to it, to steer it while it runs or keep talking after. */
+export const TALK_TO_AGENT = 'Talk to this agent';

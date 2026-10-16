@@ -39,6 +39,11 @@ import { withLogChannel } from '@texra-ai/harness';
 import { setLogSink } from '@texra-ai/harness';
 import { ToolAvailability } from '@texra-ai/harness';
 import { Settings } from '@texra-ai/harness';
+import {
+  APPROVAL_POLICY_CONFIG_KEY,
+  type ApprovalPolicy,
+} from '@texra-ai/harness/schemas';
+import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';
 import { EXTENSION_COMMANDS } from '@commands/extensionCommandIds';
 import { setApiKey as apiSetApiKey } from '@commands/api/apiKeyCommands';
 import { openGettingStarted } from '@commands/system/walkthroughCommands';
@@ -75,12 +80,6 @@ import { FileSecrets, secretsDirectory } from '@platform/defaults/fileSecrets';
 import { defaultNodeStorageRoot } from '@platform/defaults/nodeStorage';
 import { openTexraConfigStores } from '@platform/defaults/nodeStores';
 import { JsonConfigProvider } from '@platform/defaults/jsonConfigProvider';
-import {
-  formatTexraApprovalPolicy,
-  TEXRA_APPROVAL_POLICY_CONFIG_KEY,
-  texraApprovalPolicyLabel,
-  type TexraApprovalPolicy,
-} from '@shared/approvalPolicy';
 import { telemetryNoticeIfDue } from '@telemetry/telemetryNotice';
 import { usageLogLayer } from '@telemetry/UsageLogService';
 import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
@@ -96,9 +95,12 @@ import { makeEditorHost, type EditorRegistry } from '@texra/tools/editorHost';
 import { texraPlugins } from '@texra/tools/registry';
 import { gitHubTokenRejectedMessage } from '@texra/tools/github/githubAuth';
 import { LeanLanguageServices } from '@texra/tools/lean/leanLanguageServices';
+import {
+  formatApprovalPolicy,
+  approvalPolicyLabel,
+} from '@ui/copy/approvalPolicy';
 import { sessionStoreMovedAsideMessage } from '@ui/copy/sessionStore';
 import { usageCostLabel } from '@ui/copy/modelAccess';
-import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { reachExtensionService } from './common/extensionService';
 
 // Local file imports
@@ -642,11 +644,11 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
   const updateStatusBarTooltip = () => {
     // The project's persisted policy: what a run here, or the service's
     // for this project, decides under.
-    const policy = Settings.getConfig<TexraApprovalPolicy>(
+    const policy = Settings.getConfig<ApprovalPolicy>(
       roots.config,
-      TEXRA_APPROVAL_POLICY_CONFIG_KEY,
+      APPROVAL_POLICY_CONFIG_KEY,
     );
-    const policyLine = `Approval policy: ${texraApprovalPolicyLabel(policy)} — ${formatTexraApprovalPolicy(policy)}`;
+    const policyLine = `Approval policy: ${approvalPolicyLabel(policy)} — ${formatApprovalPolicy(policy)}`;
     const usage = statusBarUsageTracker.totalUsage;
     const { cost, inputTokens, outputTokens } = usage;
     if (cost === 0 && inputTokens === 0 && outputTokens === 0) {

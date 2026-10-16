@@ -40,8 +40,7 @@ export type {
   RunView,
   TranscriptView,
 } from './effect/sessions.js';
-// What a session reads: one run's records, the runs this process holds, a
-// deletion's report, and the values they answer with.
+// What a session reads: a run's records, held runs, a deletion's report.
 export type {
   HeldRun,
   RunDeletion,
@@ -172,11 +171,10 @@ export { escapeText } from '@shared/utils/xmlEscape';
 // The payloads, as the runtime defines them.
 export type { AgentEvent } from '@agent/trace';
 
-// `RunEndResult` is sourced from its own module: declaration emit follows
-// whichever module a public type comes from, and a module that pulls the
-// model handlers' `.d.ts` graph into the published surface trips the
-// provider-type leak check in `scripts/validate-artifacts.mjs`
-// (`@anthropic-ai/sdk`).
+// `RunEndResult` comes from its own module: declaration emit follows the
+// module a public type comes from, and one that pulls the model handlers'
+// `.d.ts` graph in trips the provider-type leak check in
+// `scripts/validate-artifacts.mjs` (`@anthropic-ai/sdk`).
 export type { RunEndResult } from '@agent/runtime/RunEndResult';
 export type {
   CallRequests,
@@ -306,8 +304,15 @@ export {
   withSessionFs,
   WorkspaceFs,
 } from '@platform/rootedFs';
-// A path as a `FileLocation` against the workspace root a caller holds.
-export { pathToLocationIn } from '@utils/files/fileLocation';
+// A `FileLocation` by its root: a workspace file, a file under a run's
+// storage, a file outside both, or a path against the workspace root a
+// caller holds.
+export {
+  createExternalLocation,
+  createRunStorageLocation,
+  createWorkspaceLocation,
+  pathToLocationIn,
+} from '@utils/files/fileLocation';
 // The user's MCP servers the tool catalog loads: the config file beside a
 // global storage directory, read as the catalog reads it, and the server a
 // namespaced MCP tool name belongs to.
@@ -320,6 +325,24 @@ export {
   listRunGeneratedFiles,
   type RunGeneratedFile,
 } from '@tools/executions/runGeneratedFiles';
+// Failures as a host or plugin reads them: the agent error and how it is
+// presented, the filesystem and module predicates, the cause chain, a
+// user's abort, and a provider error's message. Error messages themselves
+// (`toErrorMessage`, `ensureError`) are in `./schemas`.
+export { AgentError } from '@common/errors/agentErrors';
+export {
+  agentErrorPresentation,
+  type AgentErrorKind,
+  type AgentErrorPresentation,
+} from '@common/errors/agentErrorClassification';
+export {
+  causeChain,
+  isFileNotFoundError,
+  isModuleNotFoundError,
+  isNotADirectoryError,
+  isUserAbort,
+} from '@common/errors/errorPredicates';
+export { getSdkErrorMessage } from '@common/errors/sdkError/providerErrorFormat';
 // Path containment on the platform's own paths, a path's segments and its
 // POSIX form, and an extension check that ignores case. (The browser-safe
 // path basics are in `./schemas`.)

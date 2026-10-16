@@ -19,7 +19,7 @@ import {
   readCliHistoryDetails,
 } from '@cli/runtime/history';
 import { withProcessServices } from '@platform/processRuntime';
-import { qualifyAggregateId, CLI_RUN_STATUS } from '@shared/schemas';
+import { qualifyAggregateId } from '@shared/schemas';
 import type { RunId, RunOutcome } from '@shared/schemas';
 import { seedRows } from '@test/support/sessionTestUtils';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
@@ -144,7 +144,7 @@ describe('CLI history status formatting', () => {
 
         expect(details?.checkpointPresent).toBe(true);
         expect(details?.status).toBe(HISTORY_RUN_STATUS.RESUMABLE);
-        expect(details?.status).not.toBe(CLI_RUN_STATUS.COMPLETED);
+        expect(details?.status).not.toBe('completed');
         expect(formatCliHistoryDetailsText(details!)).toContain(
           'Checkpoint: present',
         );

@@ -22,6 +22,8 @@ import {
 import { z } from 'zod';
 
 import { resolveWorkspaceStoragePath } from '@texra-ai/harness/node';
+import { isTerminalOutcomePhase } from '@texra-ai/harness/schemas';
+import { isLiveRun } from '@texra-ai/harness/schemas';
 import { proveOwnerLiveness } from '@agent/storage/leaseOwnerLiveness';
 import { sessionInputsLayer } from '@controllers/session/sessionInputs';
 import {
@@ -30,7 +32,7 @@ import {
 } from '@controllers/session/sessionSources';
 import { WorkspaceRoots } from '@controllers/session/WorkspaceRoots';
 import type { ProcessProbe } from '@platform/defaults/nodeProcesses';
-import { isTerminalOutcomePhase } from '@shared/runs/runStatus';
+import { emptySessionView } from '@shared/session/sessionView';
 import {
   ownerIdentity,
   type LocalRuntimeState,
@@ -45,7 +47,6 @@ import {
 import { WORKSPACE_STORES } from '@shared/session/valueFamily';
 import { fold } from '@shared/session/sessionFold';
 import { SessionInputs } from '@shared/session/sessionInputs';
-import { emptySessionView, isLiveRun } from '@shared/session/sessionView';
 import type { Session, SessionView } from '@texra-ai/harness';
 
 import type { TaskSummary } from './protocol';
@@ -65,7 +66,7 @@ function summaries(view: SessionView, workspace: string): TaskSummary[] {
       runId: run.id,
       label: run.label,
       description: run.description,
-      statusLabel: run.statusLabel,
+      statusKey: run.statusKey,
       launchedAt: run.launchedAt,
       live: run.ownedHere && isLiveRun(run),
     }));

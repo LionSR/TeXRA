@@ -2,10 +2,10 @@ import { basename } from 'node:path';
 
 import { computed } from '@lit-labs/signals';
 
+import { isWorkingRun } from '@texra-ai/harness/schemas';
 import { osc } from '@cli/runtime/ansiEscapes';
 import { loadingFrameAt } from '@cli/tui/ui/LoadingIndicator';
 import { subscribeToPolling } from '@cli/tui/usePollingInterval';
-import { isWorkingRun } from '@shared/session/sessionView';
 import {
   formatSessionTitle,
   TERMINAL_TAB_TITLE,

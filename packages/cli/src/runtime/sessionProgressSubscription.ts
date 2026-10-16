@@ -7,11 +7,11 @@ import {
   SubscriptionRef,
 } from 'effect';
 
+import { isLiveRun, type RunView } from '@texra-ai/harness/schemas';
 import type { CliNdjsonRecord } from '@cli/schemas/cliOutput';
 import { runIdentityName, type RunId } from '@shared/schemas';
-import { isLiveRun } from '@shared/session/sessionView';
 import { writeNdjsonStdout } from './logSinks';
-import type { LocalSession, RunView } from '@texra-ai/harness';
+import type { LocalSession } from '@texra-ai/harness';
 
 export type CliNdjsonProgressRecordWriter = (record: CliNdjsonRecord) => void;
 

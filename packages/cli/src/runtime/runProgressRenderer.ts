@@ -8,10 +8,14 @@ import path from 'node:path';
 
 import { Effect, type Fiber, type Scope, Stream } from 'effect';
 
+import {
+  isLiveRun,
+  type SessionView,
+  type RunView,
+} from '@texra-ai/harness/schemas';
+import { isTerminalOutcomePhase } from '@texra-ai/harness/schemas';
 import { RUN_PHASE, type RunId, type RunPhase } from '@shared/schemas';
-import { isLiveRun } from '@shared/session/sessionView';
-import { isTerminalOutcomePhase } from '@shared/runs/runStatus';
-import { formatLoopPositionLabel } from '@ui/copy/runStatus';
+import { formatLoopPositionLabel, runStatusLabel } from '@ui/copy/runStatus';
 import { formatCompactDuration, pluralize } from '@utils/text/stringUtils';
 
 import {
@@ -21,7 +25,6 @@ import {
 } from './terminalText';
 import { getStderrColumns, writeRawStderr } from './logSinks';
 import { claimRootRun, type RunProgressSession } from './sessionViewFollow';
-import type { RunView, SessionView } from '@texra-ai/harness';
 import type { CliContext } from './cliContext';
 
 const CLEAR_LINE = '\r\x1b[2K';
@@ -294,9 +297,9 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
 function livePhaseText(root: RunView): string | undefined {
   if (root.status === 'ready') return undefined;
   if (root.status === RUN_PHASE.RUNNING) {
-    return root.description || root.statusLabel;
+    return root.description || runStatusLabel(root.statusKey);
   }
-  return root.statusLabel;
+  return runStatusLabel(root.statusKey);
 }
 
 function formatInputLabel(files: readonly string[]): string | undefined {

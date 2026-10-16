@@ -5,8 +5,8 @@ import { type CliSignInProgress } from '@cli/runtime/signInUrl';
 import { setTransientNotice } from '@cli/chat/tui/state/cliState';
 import { type TuiSession } from '@cli/chat/tui/state/sessionRunState';
 import { appendLocalNotice } from '@cli/chat/tui/state/transcript';
-import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
 import type { LocalSession } from '@texra-ai/harness';
+import type { ApprovalPolicy } from '@texra-ai/harness/schemas';
 import type {
   ProcessRuntime,
   ProcessServices,
@@ -51,10 +51,8 @@ export interface SlashCommandContext {
   readonly initialAgent: string;
   readonly initialModel: string;
   readonly requestInputExit: () => void;
-  readonly getApprovalPolicy: () => TexraApprovalPolicy;
-  readonly setApprovalPolicy: (
-    policy: TexraApprovalPolicy,
-  ) => Effect.Effect<void>;
+  readonly getApprovalPolicy: () => ApprovalPolicy;
+  readonly setApprovalPolicy: (policy: ApprovalPolicy) => Effect.Effect<void>;
   /** Start a new task (`/clear`): false, with a notice, while a response
    *  is running. */
   readonly resetSession: () => boolean;

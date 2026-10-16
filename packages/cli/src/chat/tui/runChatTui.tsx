@@ -29,6 +29,16 @@ import {
   SESSION_CLOSE_DEADLINE_MS,
   Settings,
 } from '@texra-ai/harness';
+import { isLiveRun } from '@texra-ai/harness/schemas';
+import {
+  APPROVAL_POLICY_CONFIG_KEY,
+  type ApprovalPolicy,
+} from '@texra-ai/harness/schemas';
+import {
+  isActivePhase,
+  isTranscriptSettlementPhase,
+} from '@texra-ai/harness/schemas';
+import { toErrorMessage } from '@texra-ai/harness/schemas';
 import {
   CliUsageError,
   effectiveApprovalPolicy,
@@ -60,24 +70,14 @@ import {
 } from '@cli/tui/terminalCleanup';
 import { cliSecrets } from '@cli/runtime/cliSecrets';
 import { nodeFileServices } from '@platform/defaults/jsonStore';
-import { isLiveRun } from '@shared/session/sessionView';
-import {
-  formatTexraApprovalPolicy,
-  TEXRA_APPROVAL_POLICY_CONFIG_KEY,
-  type TexraApprovalPolicy,
-} from '@shared/approvalPolicy';
 import { RUN_PHASE } from '@shared/schemas';
 import { getFirstRunDone } from '@shared/state/onboardingState';
-import {
-  isActivePhase,
-  isTranscriptSettlementPhase,
-} from '@shared/runs/runStatus';
 import { DisposableStore } from '@texra/platform/disposable';
 import { subscribeToSignalChanges } from '@texra/shared/signals';
 import { serviceSession } from '@texra/controllers/server/serviceSession';
 import { documentTaskOf } from '@texra/tools/documents/documentTask';
+import { formatApprovalPolicy } from '@ui/copy/approvalPolicy';
 import { sessionStoreMovedAsideMessage } from '@ui/copy/sessionStore';
-import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import {
   createChatSessionController,
@@ -151,11 +151,8 @@ type PolicyChange = Extract<RuntimeRequest, { kind: 'policy.set' }>['change'];
 /** The project's persisted approval policy, as the session reads it. */
 const projectApprovalPolicy = (roots: {
   readonly config: ConfigProvider;
-}): TexraApprovalPolicy =>
-  Settings.getConfig<TexraApprovalPolicy>(
-    roots.config,
-    TEXRA_APPROVAL_POLICY_CONFIG_KEY,
-  );
+}): ApprovalPolicy =>
+  Settings.getConfig<ApprovalPolicy>(roots.config, APPROVAL_POLICY_CONFIG_KEY);
 
 export interface RunChatInit {
   /** `--agent` override from the CLI; falls through `resolveChatDefaults`. */
@@ -369,7 +366,7 @@ export async function runChat(
   // The policy this chat's launches ask for (`launchApproval`): its flag,
   // then each `/approval`.
   let chatPolicy = context.requestedApprovalPolicy;
-  const getApprovalPolicy = (): TexraApprovalPolicy =>
+  const getApprovalPolicy = (): ApprovalPolicy =>
     effectiveApprovalPolicy(
       chatPolicy,
       projectApprovalPolicy(runtimeSession.roots),
@@ -385,9 +382,7 @@ export async function runChat(
   // Auto-approve turns them off, so the next round inherits them cleared;
   // a stricter policy lowers a live run's limit at once, even below the
   // project's.
-  const setApprovalPolicy = (
-    policy: TexraApprovalPolicy,
-  ): Effect.Effect<void> => {
+  const setApprovalPolicy = (policy: ApprovalPolicy): Effect.Effect<void> => {
     // What the chat asked for, not the effective policy: a yolo under a
     // Block project left a grant that a later Ask project would honour.
     const leaving = chatPolicy === 'yolo' && policy !== 'yolo';
@@ -653,9 +648,7 @@ export async function runChat(
       setApprovalPolicy(policy).pipe(
         Effect.andThen(
           Effect.sync(() =>
-            appendLocalNotice(
-              `Approval mode: ${formatTexraApprovalPolicy(policy)}`,
-            ),
+            appendLocalNotice(`Approval mode: ${formatApprovalPolicy(policy)}`),
           ),
         ),
       ),
@@ -664,7 +657,7 @@ export async function runChat(
         approvalPolicy: effectiveApprovalPolicy(chatPolicy, policy),
       });
       appendLocalNotice(
-        `Project approval policy: ${formatTexraApprovalPolicy(policy)}`,
+        `Project approval policy: ${formatApprovalPolicy(policy)}`,
       );
     },
     canSelectModel: () => session.canSelectModel(),

@@ -25,7 +25,7 @@ import {
 import { bannerStyles, commonViewStyles, designTokens } from '@ui/styles';
 import { renderBannerFrame } from '@ui/wa/bannerFrame';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
-import type { SessionView } from '@texra-ai/harness';
+import type { SessionView } from '@texra-ai/harness/schemas';
 
 @customElement('interrupted-tasks-notice')
 export class InterruptedTasksNotice extends LitElement {

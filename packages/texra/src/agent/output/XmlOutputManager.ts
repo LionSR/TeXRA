@@ -2,6 +2,8 @@ import * as path from 'node:path';
 
 import { Effect, FileSystem } from 'effect';
 
+import { createExternalLocation } from '@texra-ai/harness';
+import { toErrorMessage } from '@texra-ai/harness/schemas';
 import type { AgentTrace } from '@agent/trace';
 
 import replacementEngine, {
@@ -20,9 +22,7 @@ import {
   type OutputFileInfo,
 } from '@texra/shared/plugins/documentOutputs';
 import { addCdataToTagsMultiple } from '@texra/utils/text/xmlCdata';
-import { createExternalLocation } from '@utils/files/fileLocation';
 import { RunFileService } from '@utils/files/runStorage';
-import { toErrorMessage } from '@utils/errors/errorMessage';
 import {
   formatResultCount,
   normalizeLineEndings,

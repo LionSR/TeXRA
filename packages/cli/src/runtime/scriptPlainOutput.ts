@@ -7,14 +7,19 @@
  */
 import { Effect, Scope, ScopedRef, Stream } from 'effect';
 
+import { isTerminalOutcomePhase } from '@texra-ai/harness/schemas';
+import {
+  descendantRuns,
+  type RunView,
+  type SessionView,
+} from '@texra-ai/harness/schemas';
+import { scriptStages } from '@texra-ai/harness/transcript';
 import { qualifyAggregateId, RUN_PHASE, type RunId } from '@shared/schemas';
-import { isTerminalOutcomePhase } from '@shared/runs/runStatus';
-import { descendantRuns } from '@shared/session/sessionView';
-import { scriptStages } from '@shared/transcript';
+import { runStatusLabel } from '@ui/copy/runStatus';
 import { formatCostUsd } from '@utils/text/stringUtils';
 
 import { claimRootRun } from './sessionViewFollow';
-import type { LocalSession, RunView, SessionView } from '@texra-ai/harness';
+import type { LocalSession } from '@texra-ai/harness';
 
 /** The plain script output also subscribes the transcripts it prints,
  *  since transcript rows fold only for subscribed aggregates. */
@@ -51,7 +56,10 @@ function scriptPlainLines(
       );
   }
   if (isTerminalOutcomePhase(run.status) && run.identity.kind === 'script')
-    lines.set('outcome', `${run.statusLabel}: ${run.identity.title}`);
+    lines.set(
+      'outcome',
+      `${runStatusLabel(run.statusKey)}: ${run.identity.title}`,
+    );
   return lines;
 }
 

@@ -3,6 +3,7 @@ import { Data, Effect, FileSystem, PlatformError } from 'effect';
 import { satisfies as semverSatisfies } from 'semver';
 
 // Local imports
+import { extractErrorMessage } from '@texra-ai/harness/schemas';
 import type { CliNdjsonRecord } from '@cli/schemas/cliOutput';
 import {
   probeLatexToolchain,
@@ -11,7 +12,6 @@ import {
 import { workspaceTexraConfigPath } from '@platform/defaults/nodeStorage';
 import type { UsageLoggingOptOut } from '@telemetry/UsageLogService';
 import { TELEMETRY_ENABLED_KEY } from '@texra/shared/settingsView/texraSettings';
-import { extractErrorMessage } from '@utils/errors/errorMessage';
 import { formatResultCount } from '@utils/text/stringUtils';
 
 // Local file imports

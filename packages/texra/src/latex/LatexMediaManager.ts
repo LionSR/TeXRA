@@ -6,11 +6,11 @@ import { hasExtension } from '@texra-ai/harness';
 import { Effect, FileSystem, Predicate } from 'effect';
 
 // Local imports
+import { pathToLocationIn } from '@texra-ai/harness';
+import { toErrorMessage } from '@texra-ai/harness/schemas';
 import type { FileLocation } from '@shared/schemas';
 import type { DocumentTaskOptions } from '@texra/shared/plugins/documents';
-import { pathToLocationIn } from '@utils/files/fileLocation';
 import { RunFileService } from '@utils/files/runStorage';
-import { toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local file imports
 import { extractLatexFileDependencies } from './extractFileDependencies';

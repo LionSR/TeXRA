@@ -1,6 +1,6 @@
 import { type BrowserWindow, clipboard, dialog } from 'electron';
 import { Effect } from 'effect';
-import { ensureError } from '@utils/errors/errorMessage';
+import { ensureError } from '@texra-ai/harness/schemas';
 import type { SubscriptionDeviceCodePrompt } from '@texra-ai/llm/node';
 
 /** A synchronous clipboard throw is a typed failure, so it reaches the

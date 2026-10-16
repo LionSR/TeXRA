@@ -2,7 +2,7 @@ import { defineCommand } from 'citty';
 import { Cause, Effect, Exit } from 'effect';
 
 import { getEnabledModels } from '@texra-ai/harness';
-import { toErrorMessage } from '@utils/errors/errorMessage';
+import { toErrorMessage } from '@texra-ai/harness/schemas';
 
 import { knownCliModelIds } from '../runtime/cliConfig';
 import {

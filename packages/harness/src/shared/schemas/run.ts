@@ -1,18 +1,10 @@
 import { z } from 'zod';
 
-export const CLI_RUN_STATUS = {
-  COMPLETED: 'completed',
-  INTERRUPTED: 'interrupted',
-  ERROR: 'error',
-} as const;
-
-export type CliRunStatus = (typeof CLI_RUN_STATUS)[keyof typeof CLI_RUN_STATUS];
-
 /**
  * Canonical terminal outcome of an agent run — the single fact "how did this
  * run end", decided exactly once at the run-lifecycle boundary. Current
  * production writers use these values for terminal run, group-end, and run
- * state. `CliRunStatus` remains an injective persisted-metadata projection.
+ * state.
  *
  * `cancelled` is a sibling of `failed`, never folded into it — a user stop is
  * not an error. This is the triad `ResultEvent.outcome` carries.

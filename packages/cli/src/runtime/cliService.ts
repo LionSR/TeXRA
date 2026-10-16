@@ -35,6 +35,7 @@ import {
   resolveGlobalStoragePath,
   resolveWorkspaceStoragePath,
 } from '@texra-ai/harness/node';
+import { ensureError } from '@texra-ai/harness/schemas';
 import { onAppSignal } from '@eventBus/AppSignals';
 import { JsonStore } from '@platform/defaults/jsonStore';
 import { TEXRA_CONFIG_FILE_NAME } from '@platform/defaults/nodeStorage';
@@ -59,7 +60,6 @@ import { bootstrapHost } from '@texra/controllers/hostBootstrap';
 import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
 import { sessionStoreMovedAsideMessage } from '@ui/copy/sessionStore';
 import { envFlag } from '@utils/system/envFlags';
-import { ensureError } from '@utils/errors/errorMessage';
 import { loginShellEnvironment } from './loginShellEnv';
 
 import { cliEnvValue, readCliEntrypointPath } from './cliContext';

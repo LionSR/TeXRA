@@ -2,6 +2,7 @@ import { Data, Effect } from 'effect';
 
 import { hasUsableApiKey } from '@texra-ai/llm';
 import { Secrets, type PlatformSecrets } from '@texra-ai/harness';
+import { toErrorMessage } from '@texra-ai/harness/schemas';
 import { SUBSCRIPTION_AUTH_PROVIDERS } from '@shared/model/subscriptionAuth';
 import {
   codingPlanSubscriptionRuntimes,
@@ -12,7 +13,6 @@ import {
   subscriptionProvider,
   type SubscriptionProviderId,
 } from '@texra/controllers/modelAccess/subscriptionProviders';
-import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import {
   shouldUseSubscriptionDeviceCode,

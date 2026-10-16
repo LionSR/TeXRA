@@ -21,7 +21,6 @@ import {
 } from 'effect';
 
 import { qualifyAggregateId, type RunId } from '@shared/schemas';
-import type { SessionView } from '@shared/session/sessionView';
 import type { HostSnapshot } from '@texra/shared/session/hostSnapshot';
 import {
   DownMessageSchema,
@@ -37,6 +36,7 @@ import {
   installWebviewRuntime,
   WebviewSessions,
 } from '@texra/controllers/session/webviewSessionLayer';
+import type { SessionView } from '@texra-ai/harness/schemas';
 
 /** One session's graph as `WebviewSessions.open` hands it out. */
 type WebviewGraph = Effect.Success<ReturnType<typeof WebviewSessions.open>>;

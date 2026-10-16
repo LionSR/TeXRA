@@ -4,8 +4,8 @@ import * as path from 'node:path';
 // Third-party imports
 import { Effect, FileSystem, Predicate } from 'effect';
 
+import { ensureError } from '@texra-ai/harness/schemas';
 import type { FileLocation } from '@shared/schemas';
-import { ensureError } from '@utils/errors/errorMessage';
 import { normalizeLineEndings } from '@utils/text/stringUtils';
 
 import {

@@ -25,6 +25,8 @@ import {
   requireRun,
   assertNoParentTraversal,
 } from '@texra-ai/harness/plugins';
+import { createWorkspaceLocation } from '@texra-ai/harness';
+import { ensureError } from '@texra-ai/harness/schemas';
 import { cleanupAcceptedWorkspaceDiffFiles } from '@latex/acceptedFileTarget';
 import { stripCriticizeAnnotations } from '@replacement/advanced';
 import {
@@ -42,7 +44,6 @@ import {
   requestToolEditApproval,
 } from '@tools/approval/toolEditApproval';
 import { approvedWriteConflict } from '@tools/approval/approvedWrite';
-import { createWorkspaceLocation } from '@utils/files/fileLocation';
 import { locateInWorkspace } from '@utils/files/workspaceFS';
 import { entryExists, absentReason } from '@utils/files/fsEntryExists';
 import { readNormalizedFile } from '@utils/files/fsDurability';
@@ -52,7 +53,6 @@ import {
   originalSnapshotPathUnder,
   inspectRunStorageEntryUnder,
 } from '@utils/files/runStorageFs';
-import { ensureError } from '@utils/errors/errorMessage';
 import type { PluginToolServices } from '@texra-ai/harness/plugins';
 
 /**
