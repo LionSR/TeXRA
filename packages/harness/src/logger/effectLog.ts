@@ -1,10 +1,10 @@
 /**
  * Channel-annotated diagnostics. Every producer writes one structured entry to
- * the single host sink in `@logger/logSink`; code that can yield an Effect
+ * the single host sink (`writeLogEntry`); code that can yield an Effect
  * calls `Effect.log*` and names its channel once for the whole program rather
  * than threading a channel string through every helper, and attaches a payload
  * raw with `Effect.annotateLogs(self, { data })` — the write path in
- * `@logger/logSink` renders and bounds it once, for every host surface, so no
+ * the sink renders and bounds it once, for every host surface, so no
  * producer decides how much detail a surface shows.
  */
 // Third-party imports

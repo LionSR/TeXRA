@@ -1,5 +1,5 @@
 /**
- * The process's Effect runtime (PRD one-fold-three-renderers, 7.7): one
+ * The process's Effect runtime: one
  * `ManagedRuntime` per process, made at the composition root and disposed
  * on the existing shutdown path. `runPromise`,
  * `runFork`, and `runSync` appear at the entries and at the outermost
@@ -7,10 +7,10 @@
  *
  * Held by the entry that made it, never by this module: each composition
  * root keeps its `ManagedRuntime` in a local and threads it to the surfaces
- * that run on it (rulings ledger, #12720). This module owns the types that
- * describe it, the fork-failure reporting wrapper the roots build it
- * with, and the logger a view's runtime (a webview, the Electron renderer)
- * builds with; there is no ambient slot to read it back from.
+ * that run on it. This module owns the types that describe it, the
+ * fork-failure reporting wrapper the roots build it with, and the logger a
+ * view's runtime (a webview, the Electron renderer) builds with; there is no
+ * ambient slot to read it back from.
  */
 import {
   Cause,
@@ -87,7 +87,7 @@ export type ProcessServices =
  * The services a step pinned from its plugins' layers (a plugin's
  * `processLayer` and `sessionLayer`), erased: the harness names no plugin's
  * service. A plugin's own code requires them by name, which `definePlugin`
- * checks against what its layers serve (`@tools/plugins`), and reaches them
+ * checks against what its layers serve, and reaches them
  * only through the step that pinned the plugin, which provides this context
  * to the call.
  */
@@ -108,8 +108,8 @@ export type AgentCatalogServices =
 
 /**
  * The process's session owner: one session per workspace storage root,
- * served by `processLayer` (`@controllers/session/sessionLayer`) over the
- * `LayerMap` that owns every session's lifetime; its shape is
+ * served by `processLayer` over the `LayerMap` that owns every session's
+ * lifetime; its shape is
  * {@link SessionOwnerShape}.
  */
 export class SessionOwner extends Context.Service<
@@ -214,8 +214,8 @@ function isInterruption(cause: Cause.Cause<unknown>): boolean {
 }
 
 /**
- * A runtime whose `runFork` reports a fiber's failure or defect on exit
- * (#12613). `Fiber.addObserver` fires on every exit, including fibers a
+ * A runtime whose `runFork` reports a fiber's failure or defect on exit.
+ * `Fiber.addObserver` fires on every exit, including fibers a
  * caller later `Fiber.join`s, so a joined failure is logged here and still
  * delivered to the joiner. A success stays silent, as does an exit made of
  * interrupts alone or of interrupts beside Effect's end-of-stream `Done`.

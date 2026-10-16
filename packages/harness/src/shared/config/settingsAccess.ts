@@ -113,7 +113,7 @@ const valueOrDefault = (
  * {@link readSetting} without the snap to the default: a present value that
  * fails the row's schema comes back as `invalid` with its cause. For a
  * permission gate whose absent default is permissive, where corruption of a
- * deliberate denial must deny rather than re-permit (#11797).
+ * deliberate denial must deny rather than re-permit.
  */
 export function inspectSetting(
   entry: StateSettingEntry,
@@ -218,10 +218,8 @@ function writeSlot(
  * Validate and persist a state-backed setting, then apply the row's declared
  * write effects. A value the entry's schema rejects, and a row that excludes a
  * setting the catalog does not have, are both defects of the program rather
- * than members of the write's error channel — the failure is thrown, not
- * constructed, because `src/shared` may not take a value import from
- * `src/platform` (the subsystem edge ratchet pins that edge to type-only).
- * Callers that hand this an unvalidated `unknown` must therefore validate
+ * than members of the write's error channel: the failure is thrown, not
+ * constructed. Callers that hand this an unvalidated `unknown` must therefore validate
  * first. Config-backed settings use the target declared by their catalog
  * row, falling back to `'workspace'`; an explicit caller target wins.
  * State-store slots ignore target.
@@ -238,6 +236,8 @@ export function writeSetting(
   stores: SettingsStores,
   target?: ConfigTarget,
 ): Effect.Effect<void, ConfigWriteFailed | Error> {
+  // A schema rejection is thrown rather than constructed as a typed failure:
+  // `src/shared` may take only type imports from `src/platform`.
   return Effect.gen(function* () {
     yield* writeSlot(entry, entry.schema.parse(value), stores, target);
     if (value !== true) return;

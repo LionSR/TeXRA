@@ -1,9 +1,9 @@
 /**
- * The runtime request protocol (PRD one-fold-three-renderers, 8.2): one Zod
+ * The runtime request protocol: one Zod
  * union of the requests a surface issues to its session's runtime and the
  * outcomes the runtime answers with. In process (the TUI, headless) the
  * Effect's own result is the response and no message exists; the envelope
- * and response a bridge posts (8.4) arrive with that bridge.
+ * and response a bridge posts arrive with that bridge.
  *
  * Arm tags are `group.action` throughout, so two groups cannot claim one
  * tag. Every run-scoped arm names a bare `runId`: a `RunId` names one run
@@ -115,7 +115,7 @@ export const RuntimeRequestSchema = z.discriminatedUnion('kind', [
     requestId: z.string().min(1),
   }),
   /** The field-level mutation, not a snapshot: the authority applies it and
-   *  publishes the resulting `approval.policy` (PRD 6, item 2). */
+   *  publishes the resulting `approval.policy`. */
   z.object({
     kind: z.literal('policy.set'),
     change: z.discriminatedUnion('field', [

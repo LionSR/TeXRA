@@ -1,6 +1,5 @@
 /**
- * The fold's transient input arms (.agents/docs/implemented/architecture/2026-09-03-prd-one-fold-three-renderers.md
- * sections 5.2 and 6): the read a durable row came from, live text chunks,
+ * The fold's transient input arms: the read a durable row came from, live text chunks,
  * the local runtime snapshot, the transcript subscription set, and the
  * replay and drain markers. None carries a seq.
  */
@@ -15,7 +14,7 @@ import {
 } from './sessionEvent';
 
 /**
- * The read that delivered a durable row (PRD 7.1): the cold listing, one
+ * The read that delivered a durable row: the cold listing, one
  * aggregate's history, or the tail. Only a tail row advances `cursor`.
  */
 export const FoldEventSchema = z.object({
@@ -26,7 +25,7 @@ export const FoldEventSchema = z.object({
 
 /**
  * A live text delta for one row, carrying its own offsets into the row's
- * in-flight text (PRD 5.2, "Live text"): the transient analogue of `seq`.
+ * in-flight text: the transient analogue of `seq`.
  * The fold ignores a chunk whose `to` is not past the text it holds,
  * otherwise truncates at `from` and appends, so a redelivery in any order is
  * a no-op, a `from: 0` chunk replaces the row, and two adjacent chunks merge
@@ -78,7 +77,7 @@ export type LocalRuntimeState = z.infer<typeof LocalRuntimeStateSchema>;
 
 /**
  * The aggregates whose transcript tier the view holds, each with the seq
- * its history is read from (PRD 5.2, "Residency"). Every value of the set
+ * its history is read from. Every value of the set
  * is a fold input: an aggregate entering it gets its `folded` entry, one
  * leaving it loses its transcript tier.
  */

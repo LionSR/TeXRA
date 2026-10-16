@@ -1,11 +1,10 @@
 /**
- * The one session state every renderer reads (PRD one-fold-three-renderers,
- * section 5.1). Fold output, never persisted, never parsed: the schema is the
+ * The one session state every renderer reads. Fold output, never persisted, never parsed: the schema is the
  * type's single source of truth, so a field lands here first and every host
  * reads the same name.
  *
  * `SessionView` holds `Map`s because it never crosses a bridge; only events,
- * chunks, and `local` do (8.1), and those are arrays and records.
+ * chunks, and `local` do, and those are arrays and records.
  *
  * Interaction state (selection, drafts, recording, expansion, focus, scroll)
  * is never here (G3); `sessionPresentationBoundary.vitest.ts` pins the names.
@@ -407,7 +406,7 @@ export function sessionActivity(view: ReadSessionView): SessionTitleState {
 
 /**
  * The empty view a fold starts from: keyed by its session, its cursor at the
- * layer's tail anchor (PRD 7.2), and its initial verbosity flag. Built once
+ * layer's tail anchor, and its initial verbosity flag. Built once
  * per fold fiber; a replay's first input can replace it when policy changes.
  */
 export function emptySessionView(
