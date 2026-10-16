@@ -2,7 +2,6 @@
 import { Cause, Effect, type Scope } from 'effect';
 import { z, ZodError, type ZodType } from 'zod';
 import type { ITool, ToolGuard } from '@agent/core/tools/ToolTypes';
-import type { SettingHost } from '@shared/state/stateSettings';
 import {
   DIAGNOSTIC_TYPE_VALIDATION_ERROR,
   formatZodIssuesForDiagnostics,
@@ -22,19 +21,14 @@ type ToolExecute<T, R> = (input: T) => Effect.Effect<ToolResult, Error, R>;
  * A defined tool: plain data plus a `call` that validates and normalizes
  * failures. An anonymous object type so the SDK's `.d.ts` inlines it.
  */
-export type DefinedTool<T, R = never> = Omit<ITool<Error, R>, 'call'> & {
+export type DefinedTool<T, R = never> = Omit<
+  ITool<Error, R>,
+  'call' | 'guard'
+> & {
   call(
     rawInput: unknown,
   ): Effect.Effect<ToolResult, Error, Exclude<R, Scope.Scope>>;
-  readonly lane: ITool['lane'];
-  readonly replay: ITool['replay'];
-  readonly requiresApproval: ITool['requiresApproval'];
-  readonly slow: boolean | undefined;
-  readonly unavailableHosts: readonly SettingHost[] | undefined;
-  readonly hostCapability: string | undefined;
-  readonly launchesTasks: true | undefined;
-  readonly guard: ToolGuard<T, R> | undefined;
-  readonly describe: ITool['describe'];
+  readonly guard?: ToolGuard<T, R>;
 };
 
 export type DefineToolOptions<T, R = never> = Required<
@@ -74,15 +68,24 @@ export type DefineToolOptions<T, R = never> = Required<
 export function defineTool<T, R = never>(
   def: DefineToolOptions<T, R>,
 ): DefinedTool<T, R> {
+  const {
+    name,
+    description,
+    scriptReturns,
+    card,
+    schema,
+    execute,
+    ...declared
+  } = def;
   const validate = (rawInput: unknown) =>
     Effect.try({
-      try: () => def.schema.parse(rawInput),
+      try: () => schema.parse(rawInput),
       catch: ensureError,
     }).pipe(
       Effect.catch((error) =>
         error instanceof z.core.$ZodAsyncError
           ? Effect.tryPromise({
-              try: () => def.schema.parseAsync(rawInput),
+              try: () => schema.parseAsync(rawInput),
               catch: ensureError,
             })
           : Effect.fail(error),
@@ -90,32 +93,21 @@ export function defineTool<T, R = never>(
     );
   return {
     definition: {
-      name: def.name,
-      description: def.description,
+      name,
+      description,
       // The Zod schema is the tool's only parameter representation; the
       // provider converters derive JSON Schema from it per request.
-      zodSchema: def.schema,
-      ...(def.scriptReturns !== undefined && {
-        scriptReturns: def.scriptReturns,
-      }),
-      ...(def.card !== undefined && { card: def.card }),
+      zodSchema: schema,
+      ...(scriptReturns !== undefined && { scriptReturns }),
+      ...(card !== undefined && { card }),
     },
-    lane: def.lane,
-    ...(def.scriptGlobal !== undefined && { scriptGlobal: def.scriptGlobal }),
-    replay: def.replay,
-    requiresApproval: def.requiresApproval,
-    slow: def.slow,
-    unavailableHosts: def.unavailableHosts,
-    hostCapability: def.hostCapability,
-    launchesTasks: def.launchesTasks,
-    guard: def.guard,
-    describe: def.describe,
+    ...declared,
     // Validate lazily in the caller's fiber; interruption never becomes a
     // tool result.
     call: (rawInput) =>
       Effect.scoped(
         validate(rawInput).pipe(
-          Effect.flatMap(def.execute),
+          Effect.flatMap(execute),
           Effect.catchCause((cause) => {
             if (Cause.hasInterrupts(cause)) return Effect.failCause(cause);
             if (findStorageRefusal(cause)) return Effect.failCause(cause);

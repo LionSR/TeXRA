@@ -41,7 +41,7 @@ import {
   type TransactionPart,
   wakeParent,
 } from '@agent/runtime/childSettlement';
-import { isUserAbort } from '@common/errors/sdkError/errorPatterns';
+import { isUserAbort } from '@common/errors/errorPredicates';
 import {
   RUN_OUTCOME,
   qualifyAggregateId,

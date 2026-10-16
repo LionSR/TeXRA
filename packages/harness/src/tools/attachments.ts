@@ -29,7 +29,8 @@ export interface BuildFileAttachmentOptions {
   resolved?: ToolPathResolution;
 }
 
-const ATTACHMENT_MAX_BYTES = 15 * 1024 * 1024; // 15 MiB
+/** The largest file read as an attachment or parsed as an email: 15 MiB. */
+export const ATTACHMENT_MAX_BYTES = 15 * 1024 * 1024;
 
 /**
  * Max image dimension (px) for many-image API requests.
