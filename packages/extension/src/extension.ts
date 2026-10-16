@@ -40,6 +40,7 @@ import { withLogChannel } from '@texra-ai/harness';
 import { setLogSink } from '@texra-ai/harness';
 import { ToolAvailability } from '@texra-ai/harness';
 import { Settings } from '@texra-ai/harness';
+import { JsonConfigProvider } from '@texra-ai/harness/node';
 import {
   APPROVAL_POLICY_CONFIG_KEY,
   type ApprovalPolicy,
@@ -78,11 +79,10 @@ import { createVsCodeLogSink } from '@frontend/vscode/vscodeLogSink';
 import { effectDiagnosticsLayer } from '@logger/effectDiagnostics';
 import { nodeFileServices } from '@platform/defaults/jsonStore';
 import { FileSecrets, secretsDirectory } from '@platform/defaults/fileSecrets';
-import { defaultNodeStorageRoot } from '@platform/defaults/nodeStorage';
-import { openTexraConfigStores } from '@platform/defaults/nodeStores';
-import { JsonConfigProvider } from '@platform/defaults/jsonConfigProvider';
 import { telemetryNoticeIfDue } from '@telemetry/telemetryNotice';
 import { usageLogLayer } from '@telemetry/UsageLogService';
+import { openTexraConfigStores } from '@texra/platform/defaults/nodeStores';
+import { defaultNodeStorageRoot } from '@texra/platform/defaults/nodeStorage';
 import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
 import type { CommandId } from '@texra/shared/commands/catalog';
 import {

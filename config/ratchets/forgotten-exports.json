@@ -35,7 +35,6 @@
   "packages/harness/src/common/plugins/pluginManifest.ts": 1,
   "packages/harness/src/common/plugins/pluginTrust.ts": 1,
   "packages/harness/src/logger/effectDiagnostics.ts": 1,
-  "packages/harness/src/platform/defaults/jsonConfigProvider.ts": 2,
   "packages/harness/src/platform/defaults/nodeHost.ts": 1,
   "packages/harness/src/platform/defaults/nodeProcesses.ts": 1,
   "packages/harness/src/platform/interfaces.ts": 2,
