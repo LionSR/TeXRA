@@ -6,11 +6,9 @@
  * nothing.
  *
  * A session is one per workspace storage root, built and held by the
- * process's session owner (`SessionOwner`, served by `processLayer` in
- * `controllers/session/sessionLayer.ts`; `src/agent` never imports
- * `src/controllers`, so the tag lives here). Each opener keeps the handle it was given; a run-scoped
- * caller receives its session as data, never through a module singleton
- * (#7694). It has no readiness gate: a restored session is usable the
+ * process's session owner (`SessionOwner`, served by `processLayer`). Each
+ * opener keeps the handle it was given; a run-scoped caller receives its
+ * session as data, never through a module singleton. It has no readiness gate: a restored session is usable the
  * moment it exists, and what a run with no loop in this process is gets
  * decided by the fold's `readOnly` and `group` rules over the view.
  */
@@ -165,8 +163,7 @@ interface ResumeBlock {
 }
 
 /**
- * The session's view: the one fold every renderer reads (PRD
- * one-fold-three-renderers, 5.1), the transport replay it is folded from,
+ * The session's view: the one fold every renderer reads, the transport replay it is folded from,
  * the transcript subscriptions that decide what it folds, and the local
  * truth it folds beside the rows.
  */
@@ -243,7 +240,7 @@ export interface SessionHandleInit {
    * whose resume was blocked once what it needs is back, and with `offer`
    * also lists at open, or under `texra.resumeOnOpen: auto` continues, the
    * tasks a closed or crashed TeXRA left interrupted. Headless runs and the
-   * SDK leave it unset: their policy is off (ruling Q2).
+   * SDK leave it unset: their policy is off.
    */
   readonly interruptedTasks?: 'offer' | 'retry';
   /** Absent, the project's database; ephemeral, a throwaway one. */
@@ -285,8 +282,8 @@ export interface AskOptions<E> {
 
 /**
  * Everything one session's requests are: the one handler of every request a
- * surface issues (PRD one-fold-three-renderers, 7.6 and 8.2), and a run's
- * questions to a person, asked and decided as rows (one run model, 3.7).
+ * surface issues, and a run's questions to a person, asked and decided as
+ * rows.
  * Built by the session layer over that session's log (`SessionRequests.ts`);
  * one value per session, so two sessions admit, serialize and answer
  * requests independently.
@@ -370,8 +367,8 @@ export interface SessionHandle {
 
 /**
  * The process's session owner (the `SessionOwner` tag's shape): one session per workspace storage root,
- * served by `processLayer` (`@controllers/session/sessionLayer`) over the
- * `LayerMap` that owns every session's lifetime. Every opener reaches it
+ * served by `processLayer` over the `LayerMap` that owns every session's
+ * lifetime. Every opener reaches it
  * from context: the hosts' default sessions, the desktop's projects, the
  * service's tasks and the SDK's `Sessions`.
  *

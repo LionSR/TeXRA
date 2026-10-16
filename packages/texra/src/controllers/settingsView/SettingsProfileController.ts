@@ -1,9 +1,7 @@
+import { Settings } from '@texra-ai/harness';
 import { Effect } from 'effect';
 import { API_KEY_PROVIDER_IDS } from '@texra-ai/llm';
-import {
-  readSetting,
-  type SettingsStores,
-} from '@shared/config/settingsAccess';
+import { providerEndpointKey } from '@shared/state/providerSettings';
 import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
 import {
@@ -11,10 +9,7 @@ import {
   type UpdateProfileMessage,
 } from '@texra/shared/settingsView/settingsViewMessages';
 import { getProviderDisplayName } from '@texra/model/providerPresentation';
-import {
-  getProviderEndpoint,
-  supportsCustomEndpoint,
-} from '@utils/config/providerConfig';
+import type { SettingsStores } from '@texra-ai/harness';
 
 /**
  * Host-supplied storage wiring: `stores` and `loadProviderKeyStatuses` depend
@@ -61,15 +56,15 @@ export class SettingsProfileController {
   ) {
     return Effect.forEach(API_KEY_PROVIDER_IDS, (provider) =>
       Effect.gen({ self: this }, function* () {
+        const endpointKey = providerEndpointKey(provider);
         return {
           provider,
           displayName: yield* this.getProviderDisplayName(provider),
           status: secretStatuses[provider] ?? 'not-set',
-          customEndpoint: yield* getProviderEndpoint(
-            this.deps.stores,
-            provider,
-          ),
-          supportsCustomEndpoint: supportsCustomEndpoint(provider),
+          customEndpoint: endpointKey
+            ? yield* Settings.get<string>(this.deps.stores, endpointKey)
+            : '',
+          supportsCustomEndpoint: endpointKey !== undefined,
           providerSettings: yield* this.getProviderSettings(provider),
         };
       }),
@@ -80,7 +75,7 @@ export class SettingsProfileController {
     return Effect.forEach(
       TEXRA_SETTINGS.modelsTab(provider),
       ({ entry, surface }) =>
-        readSetting(entry, this.deps.stores).pipe(
+        Settings.get(this.deps.stores, entry.key).pipe(
           Effect.map((value) => {
             const { provider: _provider, ...display } = surface;
             return { ...display, key: entry.key, value: value === true };

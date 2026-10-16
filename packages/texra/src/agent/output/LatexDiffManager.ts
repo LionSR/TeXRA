@@ -2,6 +2,7 @@ import * as path from 'node:path';
 
 import { Effect, FileSystem } from 'effect';
 
+import { Settings } from '@texra-ai/harness';
 import type { AgentTrace } from '@agent/trace';
 import { LaTeXdiffResult, LaTeXdiffService } from '@latex/latexdiff';
 import { buildBetweenRoundDiffSuffix } from '@latex/latexdiff/diffFileNameManager';
@@ -25,7 +26,6 @@ import { checkToolInstalled } from '@texra/utils/system/toolChecks';
 import { createRunStorageLocation } from '@utils/files/fileLocation';
 import { entryExists } from '@utils/files/fsEntryExists';
 import { RunFileService } from '@utils/files/runStorage';
-import { readSettingFrom } from '@utils/config/platformSettings';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import {
@@ -258,7 +258,7 @@ export class LatexDiffManager {
         }
       }
 
-      const generateBetweenRoundDiffs = yield* readSettingFrom<boolean>(
+      const generateBetweenRoundDiffs = yield* Settings.get<boolean>(
         this.roots,
         DocumentsStateKey.LATEXDIFF_BETWEEN_ROUNDS,
       );

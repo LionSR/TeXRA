@@ -1,18 +1,13 @@
-import type { SettingsStores } from '@shared/config/settingsAccess';
+import { Settings } from '@texra-ai/harness';
+import { GlobalStateKey } from '@texra-ai/harness/schemas';
 import { providerRegionSetting } from '@shared/state/providerSettings';
-import { GlobalStateKey } from '@shared/state/stateKeys';
 import {
   CODING_PLAN_SUBSCRIPTIONS,
   type CodingPlanSubscription,
 } from '@texra/shared/model/codingPlans';
-import {
-  getGLMCodingPlan,
-  getPreferKimiCode,
-  setGLMCodingPlan,
-} from '@utils/config/providerConfig';
-import { writeSettingTo } from '@utils/config/platformSettings';
 import type { ConfigWriteFailed, StateReadFailed } from '@texra-ai/harness';
 import type { Effect } from 'effect';
+import type { SettingsStores } from '@texra-ai/harness';
 
 export interface CodingPlanSubscriptionRuntime {
   readonly descriptor: CodingPlanSubscription;
@@ -32,13 +27,16 @@ export interface CodingPlanSubscriptionRuntime {
 
 const RUNTIME_BY_ID = {
   glmCodingPlan: {
-    getEnabled: getGLMCodingPlan,
-    setEnabled: setGLMCodingPlan,
+    getEnabled: (stores) =>
+      Settings.get<boolean>(stores, GlobalStateKey.GLM_CODING_PLAN),
+    setEnabled: (stores, enabled) =>
+      Settings.set(stores, GlobalStateKey.GLM_CODING_PLAN, enabled),
   },
   kimiCode: {
-    getEnabled: getPreferKimiCode,
+    getEnabled: (stores) =>
+      Settings.get<boolean>(stores, GlobalStateKey.KIMI_CODE_PREFER),
     setEnabled: (stores, enabled) =>
-      writeSettingTo(stores, GlobalStateKey.KIMI_CODE_PREFER, enabled),
+      Settings.set(stores, GlobalStateKey.KIMI_CODE_PREFER, enabled),
   },
 } as const satisfies Record<
   CodingPlanSubscription['id'],

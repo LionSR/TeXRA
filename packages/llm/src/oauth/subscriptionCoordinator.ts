@@ -47,8 +47,8 @@ export interface SubscriptionSessionStatus {
 /**
  * One provider's subscription session over the caller's secret store:
  * reading it, keeping it fresh, signing in and out. The mutating and
- * refreshing programs fail with {@link SubscriptionOAuthError} as is and a
- * secret-store rejection unwrapped to its own cause.
+ * refreshing programs fail with {@link SubscriptionOAuthError}, or with the
+ * secret store's own {@link SecretsFailed} when it rejects.
  */
 export interface SubscriptionCoordinator<S extends SubscriptionSession> {
   /** The stored session, or null when signed out or unreadable. */

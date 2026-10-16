@@ -29,7 +29,6 @@ import {
   nullishWithDefault,
   executed,
 } from '@texra-ai/harness/plugins';
-import type { SettingsStores } from '@shared/config/settingsAccess';
 import { ToolError, type RunId, type ToolResult } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { executeCommand } from '@utils/system/execUtils';
@@ -51,6 +50,7 @@ import { GitHubSubscriptions } from './subscriptionBindings';
 import { parseGitHubSlug } from './githubSlug';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 import type { GhIssue } from './prTypes';
+import type { SettingsStores } from '@texra-ai/harness';
 
 /**
  * What each level brings in, keyed by level. Declared above the schema because

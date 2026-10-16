@@ -1,7 +1,6 @@
 /**
- * The stored shape of a model turn and of canonical history
- * (`.agents/docs/proposed/architecture/2026-09-28-storage-v1-design.md` §4),
- * owned by storage rather than by `@texra-ai/llm`. A provider SDK or enum
+ * The stored shape of a model turn and of canonical history, owned by
+ * storage rather than by `@texra-ai/llm`. A provider SDK or enum
  * change in the package is then no stored format change.
  *
  * What the runtime branches on is strict here: content part kinds and their

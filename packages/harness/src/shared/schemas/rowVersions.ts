@@ -1,9 +1,8 @@
 /**
- * The version registry of the session store's row kinds
- * (`.agents/docs/proposed/architecture/2026-09-28-storage-v1-design.md` §3).
- * Each kind the store holds carries the version this build writes and the
- * adjacent upcasters that bring an older stored version to it; the row codec
- * (`packages/harness/src/controllers/session/rowCodec.ts`) is the one reader of both.
+ * The version registry of the session store's row kinds. Each kind the
+ * store holds carries the version this build writes and the adjacent
+ * upcasters that bring an older stored version to it; the session store's
+ * row codec is the one reader of both.
  *
  * A row is always written at its kind's current version. A lower stored
  * version is upcast step by step and then parsed with the current arm; a

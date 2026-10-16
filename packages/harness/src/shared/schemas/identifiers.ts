@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 /**
- * The one id a run has (one run model, R4): minted once at launch, assigned
+ * The one id a run has: minted once at launch, assigned
  * at `run.start`, and the key of every fact about that run. Hex: 12 chars
  * when generated, 24 when derived from a checkpoint identity. Branded so a
  * string that was never minted as a run id cannot be passed for one.

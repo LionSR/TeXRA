@@ -13,17 +13,12 @@ import {
   MODEL_COMPACTION_THRESHOLD_SETTING,
   MODEL_RETRY_MAX_ATTEMPTS_SETTING,
 } from '@shared/schemas';
-import { settingEnumOptions } from '@shared/state/stateSettings';
 import type {
   SettingHost,
   StateSettingEntry,
 } from '@shared/state/stateSettings';
-import {
-  readSetting,
-  resetSetting,
-  writeSetting,
-} from '@shared/config/settingsAccess';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
+import { Settings } from '@shared/config/settings';
 import {
   FakeScopedConfigProvider,
   FakeStateStore,
@@ -34,6 +29,7 @@ import {
   isStored,
   makeFakeSettingsStores,
 } from '@test/support/settingsStoresFake';
+import { settingEnumOptions } from '@texra/shared/settingsView/settingRows';
 import {
   TEXRA_SETTINGS,
   TexraStateKey,
@@ -44,7 +40,6 @@ import type { DerivedSettingsSnapshot } from '@texra/shared/settingsView/setting
 import { dispatchSettingsViewOutbound } from '@texra/shared/settingsView/settingsViewMessages';
 import { DocumentsStateKey } from '@texra/shared/settingsView/documentsSettings';
 import { orchestratorKillDenial } from '@tools/executions/killPolicy';
-import { readSettingFrom } from '@utils/config/platformSettings';
 
 function entryByKey(key: string): StateSettingEntry {
   const entry = TEXRA_SETTINGS.byKey(key);
@@ -183,7 +178,7 @@ describe('catalog-derived settings snapshots', () => {
             message.values[TexraStateKey.LATEX_FORMATTER],
             'tex-fmt',
           );
-          assert.equal(logs.at('WARN', 'settingsAccess').length, 1);
+          assert.equal(logs.at('WARN', 'settings').length, 1);
         } finally {
           setLogSink(null);
         }
@@ -212,7 +207,7 @@ describe('knownKeys derivation', () => {
   });
 });
 
-describe('settingsAccess', () => {
+describe('Settings', () => {
   const assertResetRestoresDefault = Effect.fn(function* (options: {
     key: string;
     host: SettingHost;
@@ -222,12 +217,16 @@ describe('settingsAccess', () => {
     const fake = makeFakeSettingsStores();
     const entry = entryByKey(options.key);
     const store = fake[options.storeName];
-    yield* writeSetting(entry, false, { ...fake.stores, host: options.host });
+    yield* Settings.set(
+      { ...fake.stores, host: options.host },
+      entry.key,
+      false,
+    );
     assert.equal(yield* isStored(store, entry.key), true);
-    yield* resetSetting(entry, { ...fake.stores, host: options.host });
+    yield* Settings.reset({ ...fake.stores, host: options.host }, entry.key);
     assert.equal(yield* isStored(store, entry.key), false);
     assert.equal(
-      yield* readSetting(entry, { ...fake.stores, host: options.host }),
+      yield* Settings.get({ ...fake.stores, host: options.host }, entry.key),
       options.expectedDefault,
     );
   });
@@ -236,10 +235,10 @@ describe('settingsAccess', () => {
     Effect.gen(function* () {
       const { stores, config, repoState } = makeFakeSettingsStores();
       const entry = entryByKey(WorkspaceStateKey.GIT_MARK_COMMITS);
-      yield* writeSetting(entry, false, stores);
+      yield* Settings.set(stores, entry.key, false);
       assert.equal(yield* isStored(repoState, entry.key), true);
       assert.equal(yield* isStored(config, entry.key), false);
-      assert.equal(yield* readSetting(entry, stores), false);
+      assert.equal(yield* Settings.get(stores, entry.key), false);
     }),
   );
 
@@ -247,11 +246,7 @@ describe('settingsAccess', () => {
     Effect.gen(function* () {
       const { stores, globalState } = makeFakeSettingsStores();
       yield* globalState.update(GlobalStateKey.USE_OPENROUTER, true);
-      yield* writeSetting(
-        entryByKey('texra.xaiGrok.preferSubscription'),
-        true,
-        stores,
-      );
+      yield* Settings.set(stores, 'texra.xaiGrok.preferSubscription', true);
       assert.equal(
         yield* globalState.get(GlobalStateKey.USE_OPENROUTER),
         false,
@@ -265,7 +260,7 @@ describe('settingsAccess', () => {
       const entry = TEXRA_SETTINGS.settingsViewByKey('texra.telemetry.enabled');
       assert.ok(entry);
 
-      yield* writeSetting(entry, false, stores);
+      yield* Settings.set(stores, entry.key, false);
 
       assert.deepEqual(config.inspect(entry.key), {
         globalValue: false,
@@ -278,14 +273,18 @@ describe('settingsAccess', () => {
     Effect.gen(function* () {
       const { stores, config, globalState } = makeFakeSettingsStores();
       const entry = entryByKey(GlobalStateKey.ENDPOINT_GOOGLE);
-      yield* writeSetting(entry, 'https://example.invalid/v1', {
-        ...stores,
-        host: 'cli',
-      });
+      yield* Settings.set(
+        {
+          ...stores,
+          host: 'cli',
+        },
+        entry.key,
+        'https://example.invalid/v1',
+      );
       assert.equal(yield* isStored(globalState, entry.key), true);
       assert.equal(yield* isStored(config, entry.key), false);
       assert.equal(
-        yield* readSetting(entry, { ...stores, host: 'cli' }),
+        yield* Settings.get({ ...stores, host: 'cli' }, entry.key),
         'https://example.invalid/v1',
       );
     }),
@@ -357,7 +356,7 @@ describe('settingsAccess', () => {
               if (stored !== undefined) config.set(setting.configKey, stored);
               yield* Effect.promise(() => installPlatform({}, { config }));
               assert.equal(
-                yield* readSetting(entry, stores),
+                yield* Settings.get(stores, entry.key),
                 expected,
                 `${setting.configKey} stored=${String(stored)}`,
               );
@@ -371,7 +370,7 @@ describe('settingsAccess', () => {
 
   // #12710: the five Models-tab provider toggles declare `configTarget:
   // 'global'`, so `readSetting` resolves them on the global scope alone. The
-  // run now reads them through the same catalog reader (`readSettingFrom` in
+  // run now reads them through the same catalog reader (`Settings.get` in
   // `packages/harness/src/model/modelSettings.ts`), where it used to read the
   // merged config and could therefore honor a workspace override the tab had
   // no way to show. One scope, one answer, both sides.
@@ -400,8 +399,7 @@ describe('settingsAccess', () => {
             repoState: new FakeStateStore(),
             globalState: new FakeStateStore(),
           };
-          assert.equal(yield* readSetting(entry, stores), true, key);
-          assert.equal(yield* readSettingFrom<boolean>(stores, key), true, key);
+          assert.equal(yield* Settings.get<boolean>(stores, key), true, key);
         }
       }),
   );
@@ -416,10 +414,10 @@ describe('settingsAccess', () => {
         yield* workspaceState.update(entry.key, 'stale-bogus-value');
         try {
           assert.equal(
-            yield* readSetting(entry, stores),
+            yield* Settings.get(stores, entry.key),
             LATEX_CONFIG_DEFAULTS.latexFormatter,
           );
-          const warnings = logs.at('WARN', 'settingsAccess');
+          const warnings = logs.at('WARN', 'settings');
           assert.equal(warnings.length, 1);
           assert.ok(
             String(warnings[0]?.message).startsWith(

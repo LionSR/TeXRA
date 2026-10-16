@@ -25,9 +25,9 @@ import {
 } from '@shared/schemas';
 import type { CellError } from '@shared/session/runHistory';
 import type { RunHistoryDraft, RunState } from '@shared/session/runStateFold';
-import type { SettingsStores } from '@shared/config/settingsAccess';
 import type { RunCell } from '@shared/session/runHistory';
-import { readSettingFrom } from '@utils/config/platformSettings';
+import { Settings } from '@shared/config/settings';
+import type { SettingsStores } from '@shared/config/settings';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { rowAggregate, type Message } from '../loop/rows';
@@ -139,7 +139,7 @@ const overThreshold = Effect.fn('compaction.overThreshold')(function* (
   state: RunState,
   input: Pick<CompactionInput, 'stores' | 'bound'>,
 ) {
-  const percent = yield* readSettingFrom<number>(
+  const percent = yield* Settings.get<number>(
     input.stores,
     MODEL_COMPACTION_THRESHOLD_SETTING.configKey,
   );

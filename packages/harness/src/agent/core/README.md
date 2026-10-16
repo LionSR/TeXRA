@@ -7,7 +7,7 @@ concern they carry:
 | Module        | Concern                          | Contents                                                                                                                                                                                                            |
 | ------------- | -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `definition/` | What an agent **is** (configure) | `AgentConfig` (launch/run configuration + payload), `RunRecord`; the definition format itself (`AgentDefinition`, `Persona`) is a schema in `@shared/schemas` (`agent.ts`), a plugin's block its own (`AgentBlock`) |
-| `tools/`      | Tool contracts and tool calls    | `ToolTypes` (`ITool`, `IToolRegistry`, `MapToolRegistry`, `ToolContext`), `toolAttachmentExtraction`, `toolCallParsing` (duplicate-call partitioning and tool-call error normalization, used by the run loop)       |
+| `tools/`      | Tool contracts and tool calls    | `ToolTypes` (`ITool`, `ToolContext`), `toolAttachmentExtraction`, `toolCallParsing` (duplicate-call partitioning and tool-call error normalization, used by the run loop)                                           |
 
 What is **not** here, and where it lives instead:
 

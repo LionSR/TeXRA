@@ -22,10 +22,10 @@
  */
 
 import * as path from 'node:path';
+import { Settings } from '@texra-ai/harness';
 
 import { Effect, type FileSystem } from 'effect';
 
-import type { SettingsStores } from '@shared/config/settingsAccess';
 import type { CodexSandboxMode } from '@texra/shared/agentCliSettings';
 import { CodexStateKey } from '@texra/shared/settingsView/integrationSettings';
 import {
@@ -35,9 +35,9 @@ import {
   resolvePackageDir,
 } from '@texra/tools/support/externalBinaryUtils';
 import { inheritedEnv } from '@utils/system/envFlags';
-import { readSettingUnlessOverridden } from '@utils/config/platformSettings';
 import { IS_WINDOWS } from '@utils/system/platformPaths';
 import type { StateReadFailed } from '@texra-ai/harness';
+import type { SettingsStores } from '@texra-ai/harness';
 
 type SandboxMode = import('@openai/codex-sdk').SandboxMode;
 type PlatformInfo = { pkg: string; triple: string };
@@ -206,8 +206,6 @@ export const codexSandboxMode = (
   input: { readonly sandbox_mode?: SandboxMode | null },
   stores: SettingsStores,
 ): Effect.Effect<SandboxMode, StateReadFailed> =>
-  readSettingUnlessOverridden(
-    input.sandbox_mode,
-    stores,
-    CodexStateKey.SANDBOX_MODE,
-  );
+  input.sandbox_mode == null
+    ? Settings.get(stores, CodexStateKey.SANDBOX_MODE)
+    : Effect.succeed(input.sandbox_mode);

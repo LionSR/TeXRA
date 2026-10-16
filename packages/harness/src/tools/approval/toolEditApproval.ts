@@ -19,9 +19,9 @@ import {
   type ToolResult,
 } from '@shared/schemas';
 import { refusalCopy, refusalOf } from '@shared/session/approvalDecision';
+import { Settings } from '@shared/config/settings';
 import { errorResult } from '@tools/core/result';
 import { clamp } from '@utils/core';
-import { readSettingFrom } from '@utils/config/platformSettings';
 import { workspaceRelativePath } from '@utils/files/workspaceFS';
 import {
   buildDiffHunks,
@@ -204,7 +204,7 @@ export const requestToolEditApproval = Effect.fn('requestToolEditApproval')(
     request: Omit<ToolEditApprovalRequest, 'permission' | 'roots'>,
   ): Effect.fn.Return<ToolEditApprovalResult, Error, ToolContext> {
     const call = yield* requireRun('A tool-edit approval');
-    const approvalsEnabled = yield* readSettingFrom<boolean>(
+    const approvalsEnabled = yield* Settings.get<boolean>(
       call.env.roots,
       TOOL_EDIT_APPROVAL_CONFIG_KEY,
     );

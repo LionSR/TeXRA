@@ -14,11 +14,9 @@ import { z } from 'zod';
 
 import { defineTool, ToolContext } from '@texra-ai/harness';
 import { executed } from '@texra-ai/harness/plugins';
+import { type StateSettingEntry } from '@texra-ai/harness/schemas';
 import { ToolError } from '@shared/schemas';
-import {
-  settingSchemaWithoutPrefault,
-  type StateSettingEntry,
-} from '@shared/state/stateSettings';
+import { settingSchemaWithoutPrefault } from '@texra/shared/settingsView/settingRows';
 import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
 
 /**

@@ -1,3 +1,4 @@
+import { Settings } from '@texra-ai/harness';
 import { Effect } from 'effect';
 /**
  * The one builder for every catalog-derived settings-view snapshot.
@@ -9,13 +10,10 @@ import { Effect } from 'effect';
  * catalog row and are applied by `readSetting`, so a snapshot builder has
  * nothing left of its own to say.
  */
-import {
-  readSetting,
-  type SettingsStores,
-} from '@shared/config/settingsAccess';
 import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
 import type { DerivedSettingsSnapshot } from '@texra/shared/settingsView/settingsViewMessages';
+import type { SettingsStores } from '@texra-ai/harness';
 
 /** Read one settings-view snapshot from the host's stores. */
 export function buildSettingsSnapshotMessage(
@@ -30,7 +28,7 @@ export function buildSettingsSnapshotMessage(
         yield* Effect.forEach(
           TEXRA_SETTINGS.snapshotEntries(snapshot),
           (entry) =>
-            readSetting(entry, stores).pipe(
+            Settings.get(stores, entry.key).pipe(
               Effect.map((value) => [entry.key, value] as const),
             ),
         ),
