@@ -43,6 +43,7 @@ import {
   PluginError,
   PluginRequestError,
   readPlugin,
+  UNLOADED_COMPONENT_LABELS,
 } from './pluginManifest';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
@@ -457,14 +458,17 @@ function updatePlugins(names: readonly string[], env: PluginEnv) {
  * session's `WorkspaceRoots` is one), so a host acts on the record its
  * process opened.
  */
-export const InstalledPlugins = {
+export const InstalledPlugins = Object.freeze({
+  /** The components a plugin can carry that TeXRA does not load. */
+  unloadedComponents: UNLOADED_COMPONENT_LABELS,
   /** Parse a source as a user types it, refused before anything runs. */
   origin: parsePluginOrigin,
   /** Install what an origin offers, recorded disabled until trusted. */
   install: installPlugins,
   /** Refetch and reread the named plugins, or every one. */
   update: updatePlugins,
-  /** Forget a plugin and its trust, and delete what TeXRA manages of it. */
+  /** Forget a plugin and its trust, and delete its managed directory and
+   *  plugin data; a local plugin's own directory is left in place. */
   remove: removePlugin,
   /** Every installed plugin, as a listing reports it now. */
   list: listPlugins,
@@ -480,4 +484,4 @@ export const InstalledPlugins = {
     ),
   /** A hook's event, matcher and command, as the trust review shows it. */
   describeHook,
-};
+} as const);

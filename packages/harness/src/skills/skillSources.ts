@@ -13,7 +13,13 @@ export interface SkillSourceOptions {
   readonly additionalPaths?: readonly string[];
 }
 
-const INTEROP_SKILL_DIRS = ['.agents', '.claude', '.codex', '.gemini'] as const;
+/** The other agent tools' folders whose `skills/` an interop listing reads. */
+export const INTEROP_SKILL_DIRS = Object.freeze([
+  '.agents',
+  '.claude',
+  '.codex',
+  '.gemini',
+] as const);
 
 /**
  * The skill tiers in precedence order. A tier fixes the persisted scope its

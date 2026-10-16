@@ -439,7 +439,7 @@ export const pluginCommand = withUsageSections(
       ],
     },
     {
-      title: `TeXRA loads a plugin's skills, commands (as skills) and agents as <plugin>:<name>, and runs its MCP servers and command hooks, each in its own process. It does not load its LSP servers, output styles, apps; a plugin with LSP servers cannot be enabled yet.`,
+      title: `TeXRA loads a plugin's skills, commands (as skills) and agents as <plugin>:<name>, and runs its MCP servers and command hooks, each in its own process. It does not load its ${InstalledPlugins.unloadedComponents.join(', ')}; a plugin with LSP servers cannot be enabled yet.`,
       rows: [],
     },
   ],

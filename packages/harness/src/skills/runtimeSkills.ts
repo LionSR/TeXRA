@@ -33,6 +33,7 @@ import {
 
 import {
   foldSkillSources,
+  INTEROP_SKILL_DIRS,
   type SkillSourceContribution,
   type SkillSourceOptions,
 } from './skillSources';
@@ -215,7 +216,10 @@ export interface EnabledSkill {
  * installed plugins' as they load now, and the bundled ones the host
  * installed. Every read answers with the discovery issues beside the skills.
  */
-export const Skills = {
+export const Skills = Object.freeze({
+  /** The folders, beside a workspace and the home folder, whose `skills/`
+   *  an interop listing (`includeInterop`) also reads. */
+  interopDirs: INTEROP_SKILL_DIRS,
   /**
    * The complete inventory a settings page lists, each skill marked enabled
    * or not. A switched-off plugin's skills are hidden, not listed as
@@ -261,7 +265,7 @@ export const Skills = {
       issues: result.errors,
     };
   }),
-};
+} as const);
 
 /**
  * One discovered skill as a step lists it: its plugin, name and listing

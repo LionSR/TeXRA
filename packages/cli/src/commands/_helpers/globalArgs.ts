@@ -1,3 +1,4 @@
+import { Skills } from '@texra-ai/harness';
 import { CliUsageError, type CliGlobalArgs } from '@cli/runtime/cliContext';
 import { documentsNegatedBooleanForm } from '@cli/runtime/completionCommandTree';
 import {
@@ -112,8 +113,9 @@ export const GLOBAL_ARGS: CliGlobalArgsDef = {
 export const SKILL_SOURCE_ARGS: CliSkillSourceArgsDef = {
   'include-interop': {
     type: 'boolean',
-    description:
-      'Also include .agents/skills, .claude/skills, .codex/skills, and .gemini/skills from the workspace and home directory',
+    description: `Also include ${formatCommaList(
+      Skills.interopDirs.map((dir) => `${dir}/skills`),
+    )} from the workspace and home directory`,
   },
   source: {
     type: 'string',
