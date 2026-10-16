@@ -9,7 +9,7 @@ import { Effect, Predicate } from 'effect';
 import { z } from 'zod';
 
 import { defineTool } from '@texra-ai/harness';
-import { requireRun } from '@texra-ai/harness/plugins';
+import { requireRun, errorResult } from '@texra-ai/harness/plugins';
 import { ChildRuns } from '@texra-ai/harness/plugins';
 import {
   findAgentByIdentifier,
@@ -23,7 +23,6 @@ import {
   documentTaskPatch,
 } from '@texra/agent/output/documentRecipe';
 import { documentTaskOf } from '@texra/tools/documents/documentTask';
-import { errorResult } from '@tools/core/result';
 import { CALL_FIELDS, fileList } from '@tools/delegation/AgentTool';
 
 const DocumentTaskInputSchema = z.strictObject({

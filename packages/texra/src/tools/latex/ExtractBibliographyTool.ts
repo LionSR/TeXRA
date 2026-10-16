@@ -9,14 +9,17 @@ import { relativeToRoot } from '@texra-ai/harness/node';
 
 // Local imports - tools
 import {
+  resolveToolPath,
+  type ToolPathCall,
+  executed,
+} from '@texra-ai/harness/plugins';
+import {
   extractBibliographyContext,
   loadBibliographyEntries,
   summarizeBibliographyEntries,
 } from '@latex/extractBibliography';
 import type { ToolResult } from '@shared/schemas';
-import { resolveToolPath, type ToolPathCall } from '@tools/pathResolution';
 import { formatToolOutput } from '@tools/formatting';
-import { executed } from '@tools/core/result';
 import { toPosixPath } from '@utils/core/pathCore';
 import { ensureError } from '@utils/errors/errorMessage';
 import { pathExists } from '@utils/files/fsDurability';
