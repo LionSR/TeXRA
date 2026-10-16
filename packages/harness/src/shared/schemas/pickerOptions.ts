@@ -47,6 +47,7 @@ const ModelAvailabilityKindSchema = z.enum([
   // registry no longer describes it, so nothing can route a request for it.
   'unknown-model',
 ]);
+/** Why a model option can or cannot run. */
 export type ModelAvailabilityKind = z.infer<typeof ModelAvailabilityKindSchema>;
 
 /**
