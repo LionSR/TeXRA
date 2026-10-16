@@ -71,7 +71,7 @@ const partsForFile = Effect.fn('mediaInput.file')(function* (
     }
     // A model that takes a PDF natively is handed the file's bytes as they
     // are, so the local page count is only needed to rasterize: it is read
-    // after this branch, never before, so a PDF pdf-lib cannot parse still
+    // after this branch, never before, so a PDF the image tool cannot read still
     // reaches a model that could read it.
     if (capabilities.supportsNativePdf) {
       const base64 = yield* getBase64EncodedMedia(path, config);

@@ -57,8 +57,6 @@
     "prepack": "node -e \"if (!/^pnpm\\//.test(process.env.npm_config_user_agent ?? '')) { console.error('Pack and publish with pnpm: only it applies publishConfig.exports and resolves workspace: versions.'); process.exit(1); }\" && npm run build"
   },
   "dependencies": {
-    "@cantoo/pdf-lib": "catalog:",
-    "date-fns": "catalog:",
     "diff": "catalog:",
     "escape-string-regexp": "catalog:",
     "glob": "catalog:",
