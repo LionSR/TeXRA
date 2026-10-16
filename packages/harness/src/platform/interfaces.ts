@@ -61,14 +61,13 @@ export interface ConfigProvider {
    * Callers of a cataloged `texra.*` key therefore omit `defaultValue`; it is
    * for keys the catalog does not own.
    *
-   * It stays synchronous by ruling, and it casts: the value it returns is
-   * whatever the store holds. A reader that needs the value checked reads
-   * through `Settings.get` (`@shared/config/settings`), which
-   * resolves the key's catalog row and safe-parses the stored value against
-   * the row's schema; a hand-edited `"false"` in a boolean row is a truthy
-   * string here and silently means the opposite. Nothing may cache what
-   * either read returns: a setting the user changes mid-process is read on
-   * the next call.
+   * It is synchronous, and it casts: the value it returns is whatever the
+   * store holds. A reader that needs the value checked reads through
+   * `Settings.get`, which resolves the key's catalog row and safe-parses the
+   * stored value against the row's schema; a hand-edited `"false"` in a
+   * boolean row is a truthy string here and silently means the opposite.
+   * Nothing may cache what either read returns: a setting the user changes
+   * mid-process is read on the next call.
    *
    * Path conventions:
    * - Use dot notation with or without the canonical `texra.` prefix.
@@ -223,11 +222,10 @@ export interface AgentDirectoriesPort {
 }
 
 /**
- * The process's agent directories as an Effect service
- * (`@texra-ai/harness/platform/AgentDirectories`), provided once by the composition root
- * through `processLayer`. The shape is the port itself: a program
- * that resolves one of the three local agent directories yields the port's own
- * readers instead of reaching for the process platform's copy.
+ * The process's agent directories as an Effect service, provided once by the
+ * composition root through `processLayer`. The shape is the port itself: a
+ * program that resolves one of the three local agent directories yields the
+ * port's own readers instead of reaching for the process platform's copy.
  *
  * `layer` takes the port itself, for the same reason `Secrets.layer` does:
  * every root builds its agent directories before it installs the runtime that
@@ -261,9 +259,8 @@ export type ToolMissingHandler = (
 ) => Effect.Effect<void>;
 
 /**
- * The process's tool-missing reporter as an Effect service
- * (`@texra-ai/harness/platform/ToolMissingReporter`), provided once by the composition
- * root through `processLayer`. A program that needs to surface a
+ * The process's tool-missing reporter as an Effect service, provided once
+ * by the composition root through `processLayer`. A program that needs to surface a
  * missing tool yields it via `Effect.serviceOption`, so an absent reporter is
  * silence rather than a missing requirement.
  *

@@ -12,10 +12,10 @@ export const BUNDLED_AGENTS_DIRECTORY = 'agents' as const;
  * The agent directories of the tool plugins, at
  * `<resources>/plugins/<id>/agents`, by plugin id (a plugin that ships no
  * agents has no such directory, which scans as none). Their agents are bundled
- * agents like the core ones: the `builtIn` source. The process's agent-catalog follower
- * (`@tools/agentCatalogFollower`) installs them under the host's packaged
- * resources root as it is built, before any reload; the plugin ids cross as strings, so `@agent/index` takes no edge
- * to `@tools`. The default installs none.
+ * agents like the core ones: the `builtIn` source. The process's agent-catalog
+ * follower installs them under the host's packaged resources root as it is
+ * built, before any reload; the plugin ids cross as strings, so the agent
+ * index takes no edge to the tools. The default installs none.
  */
 let pluginAgentDirectories: ReadonlyMap<string, string> = new Map();
 

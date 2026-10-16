@@ -2,7 +2,7 @@
  * Agent tool resolution — single source of truth for the tools one step
  * offers.
  *
- * A step pins its tools in its session's catalog (`@tools/liveTools`):
+ * A step pins its tools in its session's catalog (`ToolCatalog`):
  * the tools of every plugin switched on, of the installed plugins, and of
  * the loaded plugins (MCP servers) its run holds. This module narrows
  * those to what the run may be offered, in this order:
