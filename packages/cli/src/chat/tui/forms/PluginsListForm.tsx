@@ -37,7 +37,12 @@ interface PluginsListFormProps {
    *  availability probes read its folder and configuration. */
   readonly roots: Pick<
     WorkspaceRoots,
-    'host' | 'workspace' | 'config' | 'globalState' | 'globalStorage'
+    | 'host'
+    | 'workspace'
+    | 'config'
+    | 'globalState'
+    | 'globalStorage'
+    | 'storageRoot'
   >;
   /** The process runtime the probes and writes run on. */
   readonly runtime: ProcessRuntime;

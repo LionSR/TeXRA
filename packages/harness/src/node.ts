@@ -10,16 +10,12 @@ import type { PlatformSecrets } from '@platform/secrets';
 import { MemoryConfigProvider } from '@platform/defaults/memoryConfigProvider';
 import { MemoryStateStore } from '@platform/defaults/memoryState';
 import { createNodeWorkspaceRoots } from '@platform/defaults/nodeHost';
-import {
-  resolveGlobalStoragePath,
-  resolveWorkspaceStoragePath,
-} from '@platform/defaults/workspaceStorage';
+import { resolveWorkspaceStoragePath } from '@platform/defaults/workspaceStorage';
 import { UNAVAILABLE_LANGUAGE_MODEL_PORT } from '@platform/languageModel';
 import {
   settingsCatalog,
   type StateSettingEntry,
 } from '@shared/state/stateSettings';
-import { mcpConfigPathOf } from '@tools/mcp/mcpConfig';
 import { canonicalizeWorkspacePath } from '@utils/system/nodeWorkspace';
 
 import type { AgentPlatform } from './index.js';
@@ -100,7 +96,6 @@ export function nodePlatform(options: NodePlatformOptions): AgentPlatform {
     secrets: unpersistedSecrets,
     // No editor behind this platform.
     languageModel: UNAVAILABLE_LANGUAGE_MODEL_PORT,
-    mcpConfigPath: mcpConfigPathOf(options.storageDir),
     agentDirectories: {
       custom: () => Effect.succeed(options.agentsDir),
       customConfigured: () => Effect.succeed(true),
@@ -110,7 +105,7 @@ export function nodePlatform(options: NodePlatformOptions): AgentPlatform {
       host: 'sdk',
       workspacePath: workspaceDir,
       storage: resolveWorkspaceStoragePath(options.storageDir, workspaceDir),
-      globalStorage: resolveGlobalStoragePath(options.storageDir),
+      storageRoot: options.storageDir,
       // Process-local configuration: an embedder's settings must not be read
       // from, or written to, the user's `.texra/config.json`.
       config: new MemoryConfigProvider(settingsCatalog(options.settings ?? [])),

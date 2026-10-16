@@ -65,6 +65,7 @@ export const createTestSession = (
       roots: init.roots ?? {
         host: installed.host,
         workspace: installed.workspace,
+        storageRoot: installed.storageRoot,
         storage: `${installed.storage}/test-sessions/${opened}`,
         globalStorage: installed.globalStorage,
         config: installed.config,

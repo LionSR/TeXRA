@@ -62,9 +62,6 @@ export interface AgentPlatform {
   /** The bridge its `LanguageModel` service serves; an embedder with no
    *  editor passes `UNAVAILABLE_LANGUAGE_MODEL_PORT`, as `nodePlatform()`. */
   readonly languageModel: LanguageModelPort;
-  /** The MCP config file (`.mcp.json` shape) the process's tool registry
-   *  reads; `nodePlatform()` names the one under its `storageDir`. */
-  readonly mcpConfigPath: string;
 }
 
 /** What an embedder composes the process from: its platform and its

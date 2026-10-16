@@ -76,6 +76,7 @@ import {
   nodePlatformServices,
   workspaceEnvironmentLayer,
 } from '@platform/defaults/nodePlatform';
+import { resolveGlobalStoragePath } from '@platform/defaults/workspaceStorage';
 import {
   aggregateTarget,
   RUN_OUTCOME,
@@ -94,6 +95,7 @@ import {
 } from '@shared/session/database';
 import { UsageLog } from '@shared/usageLog';
 import { ToolCatalogOwner } from '@tools/liveTools';
+import { mcpConfigPathOf } from '@tools/mcp/mcpConfig';
 import { pluginCatalogLayer } from '@tools/pluginCatalog';
 import type { Plugin } from '@tools/plugins';
 import { toolAvailabilityLayer } from '@tools/toolAvailability';
@@ -388,6 +390,7 @@ const openSession = (open: SessionHandleInit) =>
       roots: {
         host: roots.host,
         workspace: roots.workspace,
+        storageRoot: roots.storageRoot,
         storage: roots.storage,
         globalStorage: roots.globalStorage,
         config: roots.config,
@@ -561,8 +564,8 @@ export interface ProcessLayerOptions {
     never,
     ProcessProbe
   >;
-  /** The global storage root every session of the process shares. */
-  readonly globalStorage: string;
+  /** The storage root this process opened (`WorkspaceRoots.storageRoot`). */
+  readonly storageRoot: string;
   /**
    * The app's plugins, in order, the harness's built-ins among them: the
    * process serves them as `ToolRegistry` and the tool catalog over it
@@ -570,8 +573,6 @@ export interface ProcessLayerOptions {
    * its list, `harnessBuiltins` among it.
    */
   readonly plugins: readonly Plugin[];
-  /** The MCP config file (`.mcp.json` shape) the catalog reads. */
-  readonly mcpConfigPath: string;
   readonly secrets: PlatformSecrets;
   /** The host's agent-directory layer: it may capture AppState as it is
    *  built, which its readers never see. */
@@ -635,31 +636,30 @@ export interface ProcessLayerOptions {
  *  its `Sessions` over. */
 export function ownerProcessLayer({
   processStart = nodeProcesses.selfIdentity(),
-  globalStorage,
+  storageRoot,
   plugins,
-  mcpConfigPath,
   secrets,
-  appState = globalAppStateLayer(globalStorage),
+  appState = globalAppStateLayer(resolveGlobalStoragePath(storageRoot)),
   languageModel,
   agentDirectories,
   toolMissingReporter,
   toolAvailability = toolAvailabilityLayer,
   usageLog = UsageLog.disabled,
-  globalDatabase: globalDatabaseOption = globalDatabaseLayer(globalStorage),
+  globalDatabase: globalDatabaseOption,
   minimumLogLevel,
   workspace,
 }: ProcessLayerOptions): Layer.Layer<ProcessServices | SessionOwner> {
-  const catalog = pluginCatalogLayer(plugins, mcpConfigPath);
+  const globalStorage = resolveGlobalStoragePath(storageRoot);
+  const catalog = pluginCatalogLayer(plugins, mcpConfigPathOf(storageRoot));
   // Non-failing: `selfIdentity()` reads an unreadable identity as undefined.
   const identity = Layer.effect(
     ProcessIdentity,
     Effect.map(processStart, (start) => ({ ownerId: processOwnerId(start) })),
   );
   // Keep the global handle outside session `Layer.fresh`; open failure is fatal.
-  const globalDatabase = globalDatabaseOption.pipe(
-    Layer.provide(identity),
-    Layer.orDie,
-  );
+  const globalDatabase = (
+    globalDatabaseOption ?? globalDatabaseLayer(globalStorage)
+  ).pipe(Layer.provide(identity), Layer.orDie);
   const services = Layer.mergeAll(
     Secrets.layer(secrets),
     LanguageModel.layer(languageModel),

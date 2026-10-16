@@ -127,8 +127,8 @@ export const cliServiceProjects = Effect.fn('cliServiceProjects')(function* (
     return createNodeWorkspaceRoots({
       host: 'cli',
       workspacePath: workspace,
+      storageRoot,
       storage,
-      globalStorage,
       config: { ...configs, global: globalConfig, catalog: TEXRA_SETTINGS },
       workspaceState,
       repoState,

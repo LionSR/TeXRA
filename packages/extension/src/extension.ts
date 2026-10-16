@@ -33,7 +33,6 @@ import {
 } from '@texra-ai/harness';
 import {
   createNodeWorkspaceRoots,
-  resolveGlobalStoragePath,
   resolveWorkspaceStoragePath,
   canonicalizeWorkspacePath,
 } from '@texra-ai/harness/node';
@@ -97,7 +96,6 @@ import { makeEditorHost, type EditorRegistry } from '@texra/tools/editorHost';
 import { texraPlugins } from '@texra/tools/registry';
 import { gitHubTokenRejectedMessage } from '@texra/tools/github/githubAuth';
 import { LeanLanguageServices } from '@texra/tools/lean/leanLanguageServices';
-import { USER_MCP_CONFIG_PATH } from '@tools/mcp/mcpConfig';
 import {
   formatApprovalPolicy,
   approvalPolicyLabel,
@@ -146,7 +144,6 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
     defaultNodeStorageRoot(),
     workspaceRoot,
   );
-  const globalStorage = resolveGlobalStoragePath(defaultNodeStorageRoot());
   // The one credential store every host shares (`~/.texra/secrets/`):
   // the background service reads the keys this window saves.
   const secrets = new FileSecrets(
@@ -167,7 +164,7 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
   const managed = withForkFailureReporting(
     ManagedRuntime.make(
       processLayer({
-        globalStorage,
+        storageRoot: defaultNodeStorageRoot(),
         // TeXRA's plugins, with Copilot's TeXRA tools over the window's roots.
         plugins: texraPlugins({
           editors,
@@ -190,7 +187,6 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
           // and the Lean 4 probe.
           setup: vscodeSetupPlatform,
         }),
-        mcpConfigPath: USER_MCP_CONFIG_PATH,
         secrets,
         // The editor's LM API on the workspace path, unavailable on the
         // credential-only one. The one defaulting site for this host.
@@ -272,8 +268,8 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
       const roots = createNodeWorkspaceRoots({
         host: 'vscode',
         workspacePath: workspaceRoot,
+        storageRoot: defaultNodeStorageRoot(),
         storage,
-        globalStorage,
         config,
         workspaceState: projectState,
         repoState: yield* (yield* StateStores).repo(storage, workspaceRoot),

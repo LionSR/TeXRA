@@ -71,6 +71,7 @@ import {
 import { listWorkspaceFilesOfType } from '@texra/controllers/session/workspaceFileOptions';
 import { serviceRecords } from '@texra/controllers/server/serviceSession';
 import { loadModelOptions } from '@texra/model/setupCredentialAccess';
+import { normalizeLineEndings } from '@utils/text/stringUtils';
 
 import {
   DESKTOP_DOCS_URL,
@@ -255,7 +256,7 @@ export function createDesktopHostRequests(
       // rooted view that would refuse a path outside the workspace.
       readFile: (file) =>
         Effect.flatMap(Effect.service(FileSystem.FileSystem), (fs) =>
-          fs.readFileString(file),
+          Effect.map(fs.readFileString(file), normalizeLineEndings),
         ),
       showInfo: (message) => host.showInfoMessage(message),
       showError: rejectRequestEffect,

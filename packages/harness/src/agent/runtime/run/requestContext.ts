@@ -282,18 +282,18 @@ function mismatch(state: RunState, sent: ResolvedTurn): string | null {
       stableStringify(state.offeredTools.map(({ shown }) => shown))
   )
     return "the request does not send the tools its step's tools.offered row records";
-  const sentFields: Record<string, unknown> = sent;
-  const rebuilt: Record<string, unknown> = turn;
-  const differ = [
-    'mode',
-    'system',
-    'messages',
-    'tools',
-    'controls',
-    'continuation',
-  ].filter(
-    (key) => stableStringify(rebuilt[key]) !== stableStringify(sentFields[key]),
-  );
+  // Indexing `sent` rejects a key some `ResolvedTurn` variant lacks at compile
+  // time; `continuation` exists on the Responses and Google variants only.
+  const continuationOf = (t: object) =>
+    'continuation' in t ? t.continuation : undefined;
+  const differ: string[] = (
+    ['mode', 'system', 'messages', 'tools', 'controls'] as const
+  ).filter((key) => stableStringify(turn[key]) !== stableStringify(sent[key]));
+  if (
+    stableStringify(continuationOf(turn)) !==
+    stableStringify(continuationOf(sent))
+  )
+    differ.push('continuation');
   return differ.length === 0
     ? null
     : `the rebuilt request differs in ${differ.join(', ')}`;
