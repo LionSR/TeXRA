@@ -82,14 +82,21 @@ export interface ToolCatalogShape {
   ) => Effect.Effect<void, StateReadFailed | StateWriteFailed>;
 }
 
-// The catalog's one service slot: a `Context` keys a service by this string,
-// so both keys below read the same service.
-const CATALOG_KEY = '@texra/tools/ToolCatalog';
+/** The process's tool catalog. */
+export const ToolCatalog = Context.Service<ToolCatalog, ToolCatalogShape>(
+  '@texra/tools/ToolCatalog',
+);
+
+/** The owner's catalog's identifier: what the process's owner requires. */
+export interface ToolCatalogOwner {
+  readonly _: unique symbol;
+}
 
 /** The catalog the process's owner runs on: the host's reads, with the
- *  shutdown protocol's plugin step and each session's catalog. */
+ *  shutdown protocol's plugin step and each session's catalog.
+ *  `toolCatalogLayer` serves one object under both keys. */
 export const ToolCatalogOwner = Context.Service<
-  ToolCatalog,
+  ToolCatalogOwner,
   ToolCatalogShape & {
     /** The shutdown protocol's plugin step: every up process layer's
      *  `drain`, while its services are still up. */
@@ -97,12 +104,7 @@ export const ToolCatalogOwner = Context.Service<
     /** A session's catalog, in the caller's scope (the session's). */
     readonly session: Effect.Effect<SessionTools, never, Scope.Scope>;
   }
->(CATALOG_KEY);
-
-/** The process's tool catalog, as a host or a plugin's process layer reads
- *  it: the owner's service, read-only (only `toolCatalogLayer` serves it). */
-export const ToolCatalog: Context.Key<ToolCatalog, ToolCatalogShape> =
-  Context.Service<ToolCatalog, ToolCatalogShape>(CATALOG_KEY);
+>('@texra/tools/ToolCatalogOwner');
 
 /**
  * The catalog over `table`, served with it as the `ToolRegistry`: the
@@ -119,7 +121,7 @@ export const toolCatalogLayer = (
     readonly switches?: Stream.Stream<ReadonlySet<string>>;
   } = {},
 ): Layer.Layer<
-  ToolCatalog | ToolRegistry,
+  ToolCatalog | ToolCatalogOwner | ToolRegistry,
   never,
   Exclude<PluginLayerServices, ToolCatalog>
 > => {
@@ -141,8 +143,7 @@ export const toolCatalogLayer = (
         .filter(({ id, toggle }) => toggle === undefined || !off.has(id))
         .map(({ id }) => id),
     );
-  const catalog = Layer.effect(
-    ToolCatalogOwner,
+  const catalog = Layer.effectContext(
     Effect.gen(function* () {
       // What a process layer is built over, beside this catalog: exactly
       // these services, never the build's scope with them.
@@ -164,7 +165,7 @@ export const toolCatalogLayer = (
         yield* RcMap.make({
           lookup: (id: string) =>
             buildPluginLayer(id, processLayerOf).pipe(
-              Effect.provideService(ToolCatalogOwner, service),
+              Effect.provideContext(served),
               Effect.provide(process),
             ),
         });
@@ -234,7 +235,11 @@ export const toolCatalogLayer = (
         ),
         session: sessionTools(shared),
       };
-      return service;
+      // One object under both keys; a host reads the narrow one.
+      const served = Context.make(ToolCatalogOwner, service).pipe(
+        Context.add(ToolCatalog, service),
+      );
+      return served;
     }),
   );
   return catalog.pipe(Layer.provideMerge(Layer.succeed(ToolRegistry)(table)));

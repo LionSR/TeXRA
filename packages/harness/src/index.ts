@@ -240,7 +240,11 @@ export {
 // The process's tool catalog: the built-in tools the switches leave on, a
 // plugin's process services, and the switches themselves; and the switches'
 // first-install seed.
-export { ToolCatalog, type ToolCatalogShape } from '@tools/liveTools';
+export {
+  ToolCatalog,
+  type ToolCatalogOwner,
+  type ToolCatalogShape,
+} from '@tools/liveTools';
 export { seedDisabledToolDefaults } from '@tools/toolAvailability';
 // The harness's log output: where its entries go and how an entry reads.
 export {
