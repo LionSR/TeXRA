@@ -7,9 +7,8 @@
  * session store (`DatabaseOpenFailed`, `DatabaseReadFailed`,
  * `SessionOptionsConflict`: the `SessionOpenError` union in
  * `@shared/session/database`), for nine in the session lifecycle. The entry
- * exports other tagged errors (request, platform-port, agent-catalog and
- * model-route failures); `config/api-reports/harness.api.md` lists the whole
- * surface.
+ * exports other tagged errors too; `config/api-reports/harness.api.md` lists
+ * the whole surface.
  *
  * Request failures are not defined here. A `session.request` answers with the
  * runtime's own `RequestError` union (`@shared/session/requestErrors`), the
