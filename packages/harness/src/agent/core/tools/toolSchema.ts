@@ -190,6 +190,13 @@ function withArrayItems(node: unknown): unknown {
   };
 }
 
+/** A tool's input as JSON Schema, unflattened: its Zod schema converted,
+ *  else its pre-converted parameters. */
+export const inputSchema = (definition: ToolDefinition): unknown =>
+  definition.zodSchema === undefined
+    ? definition.parameters
+    : toJSONSchema(definition.zodSchema, TOOL_JSON_SCHEMA_OPTIONS);
+
 /**
  * Converts a Zod schema to JSON Schema, or returns the pre-converted
  * parameters: top-level discriminated unions are flattened, every array
@@ -199,15 +206,7 @@ function withArrayItems(node: unknown): unknown {
 export function convertToolSchema(
   def: ToolDefinition,
 ): JSONSchemaObject | null {
-  let schema: JSONSchemaObject | null;
-  if (def.zodSchema) {
-    schema = toJSONSchema(
-      def.zodSchema,
-      TOOL_JSON_SCHEMA_OPTIONS,
-    ) as JSONSchemaObject;
-  } else {
-    schema = (def.parameters ?? null) as JSONSchemaObject | null;
-  }
+  const schema = inputSchema(def) as JSONSchemaObject | null | undefined;
   if (!schema) return null;
   return withArrayItems(stripDollarSchema(flattenTopLevelUnion(schema)));
 }
