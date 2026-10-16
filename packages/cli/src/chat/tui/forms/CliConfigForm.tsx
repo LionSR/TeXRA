@@ -31,13 +31,14 @@ import {
 import { SkillsSettingsForm } from './SkillsSettingsForm';
 import type { ApprovalPolicy } from '@texra-ai/harness/schemas';
 import type { ProcessRuntime } from '@texra-ai/harness';
-import type { PlatformSecrets } from '@texra-ai/harness';
-import type { SettingsStores } from '@texra-ai/harness';
+import type { PlatformSecrets, WorkspaceRoots } from '@texra-ai/harness';
 
 export interface CliConfigFormProps {
   readonly availableRows?: number;
-  /** The settings slots this form reads and writes: the surface's own roots. */
-  readonly stores: SettingsStores;
+  /** The surface's own roots: the settings slots this form reads and
+   *  writes, and the project the process opened, for the agents and skills
+   *  rows. */
+  readonly roots: WorkspaceRoots;
   /**
    * The secret store the API-key and GitHub-token rows read and write. Ink
    * components run no Effect, so the process store arrives as a prop from the
@@ -46,8 +47,6 @@ export interface CliConfigFormProps {
   readonly secrets: PlatformSecrets;
   /** The process runtime the rows' reads and writes run on, from the same surface. */
   readonly runtime: ProcessRuntime;
-  /** The project the process opened, for the agents and skills rows. */
-  readonly workspaceRoot: string | undefined;
   readonly onClose: () => void;
   readonly onError?: (error: unknown) => void;
   /**
@@ -63,7 +62,7 @@ export interface CliConfigFormProps {
  * it, so persistence and runtime side effects cannot diverge between them.
  */
 export function CliConfigForm(props: CliConfigFormProps): React.JSX.Element {
-  const { stores, secrets, runtime } = props;
+  const { roots, secrets, runtime } = props;
   // The status reads are programs like the save and remove rows below them,
   // so this surface settles all of them on the runtime it was handed.
   const apiKeys = useAsyncResource({
@@ -92,7 +91,7 @@ export function CliConfigForm(props: CliConfigFormProps): React.JSX.Element {
       Effect.map(
         Effect.forEach(TEXRA_SETTINGS.cliRows, (entry) =>
           Effect.map(
-            Settings.get(stores, entry.key),
+            Settings.get(roots, entry.key),
             (value) => [entry.key, value] as const,
           ),
         ),
@@ -119,7 +118,7 @@ export function CliConfigForm(props: CliConfigFormProps): React.JSX.Element {
     Effect.gen(function* () {
       const result = yield* applyStateSettingUpdate(entry.key, value, {
         host: 'cli',
-        stores,
+        stores: roots,
         onApprovalPolicyChanged: props.onApprovalPolicyChanged,
       });
       const label = entry.title ?? entry.key;
@@ -188,8 +187,8 @@ export function CliConfigForm(props: CliConfigFormProps): React.JSX.Element {
         agents: (onBack) => (
           <WorkspaceAgentsForm
             runtime={props.runtime}
-            stores={stores}
-            workspaceRoot={props.workspaceRoot}
+            stores={roots}
+            workspaceRoot={roots.workspace}
             availableRows={props.availableRows}
             onClose={onBack}
             onError={props.onError}
@@ -204,7 +203,7 @@ export function CliConfigForm(props: CliConfigFormProps): React.JSX.Element {
             // form settles it on the runtime this surface handed it.
             onSave={(provider, key) =>
               Effect.gen(function* () {
-                yield* commitCliProviderApiKey(secrets, stores, provider, key);
+                yield* commitCliProviderApiKey(secrets, roots, provider, key);
                 apiKeys.setData(
                   (current) => current && { ...current, [provider]: 'set' },
                 );
@@ -244,8 +243,7 @@ export function CliConfigForm(props: CliConfigFormProps): React.JSX.Element {
         skills: (onBack) => (
           <SkillsSettingsForm
             availableRows={props.availableRows}
-            stores={stores}
-            workspaceRoot={props.workspaceRoot}
+            roots={roots}
             runtime={props.runtime}
             onClose={onBack}
           />

@@ -11,6 +11,7 @@ import {
   SKILL_CATALOG_MAX_SKILLS,
   type ActiveSkillSourceScope,
   type SkillCatalogEntry,
+  type SkillDisplayIssue,
   type SkillDisplayItem,
 } from '@shared/schemas';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
@@ -32,6 +33,7 @@ import {
 
 import {
   foldSkillSources,
+  INTEROP_SKILL_DIRS,
   type SkillSourceContribution,
   type SkillSourceOptions,
 } from './skillSources';
@@ -70,27 +72,39 @@ export function installSkillContributions(
 }
 
 /**
- * Discover the installed contributions folded for one folder, with the
+ * The roots one skill read answers for: the workspace whose project skills
+ * it finds (the home folder without one), the storage root whose `skills/`
+ * holds the user's own, and the setting slots that switch skills, sources
+ * and plugins off. A session's `WorkspaceRoots` is one.
+ */
+export type SkillRoots = SettingsStores & {
+  readonly workspace: string | undefined;
+  readonly storageRoot: string;
+};
+
+/**
+ * Discover the installed contributions folded for one workspace, with the
  * installed plugins that load (`plugins`, as the caller read them): the
  * enabled ones the user trusts as they are. Why each other enabled plugin
  * loads nothing is a discovery issue, so every listing names it. `options`
  * replaces the installed options for one call: the CLI's `skills list`
  * flags.
  */
-export function discoverRuntimeSkillSources(
-  cwd: string,
+function discoverRuntimeSkills(
+  roots: Pick<SkillRoots, 'workspace' | 'storageRoot'>,
   plugins: InstalledPluginLoad,
   options: SkillSourceOptions = installed.options,
 ) {
+  // `safeHomedir()` never throws (unlike raw `os.homedir()`, which can raise
+  // UV_ENOENT in containers/CI); `/nonexistent` matches the fallback used by
+  // other agnostic-zone callers (e.g. `claudeAgentConfig.ts`).
+  const home = safeHomedir() ?? '/nonexistent';
   return Effect.gen(function* () {
     const result = yield* discoverSkillSources(
       foldSkillSources(installed.contributions, {
-        cwd,
-        // `safeHomedir()` never throws (unlike raw `os.homedir()`, which can
-        // raise UV_ENOENT in containers/CI); `/nonexistent` matches the
-        // fallback used by other agnostic-zone callers (e.g.
-        // `claudeAgentConfig.ts`).
-        home: safeHomedir() ?? '/nonexistent',
+        cwd: roots.workspace ?? home,
+        home,
+        storageRoot: roots.storageRoot,
         resourcesPath: installed.resourcesPath,
         options,
         plugins: plugins.loadable,
@@ -107,21 +121,6 @@ export function discoverRuntimeSkillSources(
     } satisfies DiscoverSkillSourcesResult;
   });
 }
-
-/**
- * Discover the complete runtime source registry, from the sources of
- * `workspaceRoot` or of the home folder without one. The root is carried as
- * data by the caller that holds it — a run's session workspace, or the host's
- * at the settings surface that asked (#12421).
- */
-const discoverRuntimeSkills = (
-  workspaceRoot: string | undefined,
-  plugins: InstalledPluginLoad,
-) =>
-  discoverRuntimeSkillSources(
-    workspaceRoot ?? safeHomedir() ?? '/nonexistent',
-    plugins,
-  );
 
 function sourceLabel(source: SkillSource): string {
   return source.label ?? source.scope;
@@ -148,7 +147,7 @@ function isSkillDisabled(
  * the roots its prompt is being built for, so the answer is that project's
  * rather than the calling context's.
  */
-export function readDisabledSkills(stores: SettingsStores) {
+function readDisabledSkills(stores: SettingsStores) {
   return Effect.gen(function* () {
     return {
       names: yield* Settings.get<string[]>(
@@ -167,12 +166,8 @@ export function readDisabledSkills(stores: SettingsStores) {
   });
 }
 
-/**
- * One discovered skill projected for a host display. Every host renders this
- * shape: the settings tabs from {@link loadRuntimeSkillDisplay}, and the CLI's
- * `skills list` per discovered entry.
- */
-export function skillDisplayItem(
+/** One discovered skill projected for a host display. */
+function skillDisplayItem(
   entry: SourcedSkill,
   disabled: DisabledSkills,
 ): SkillDisplayItem {
@@ -188,47 +183,89 @@ export function skillDisplayItem(
   };
 }
 
-/** Discover the complete inventory for host settings displays. */
-export const loadRuntimeSkillDisplay = Effect.fn('skills.runtimeDisplay')(
-  function* (workspaceRoot: string | undefined, stores: SettingsStores) {
-    const disabled = yield* readDisabledSkills(stores);
+/** Discover only skills that may be injected or explicitly activated. */
+function loadEnabledRuntimeSkills(
+  roots: Pick<SkillRoots, 'workspace' | 'storageRoot'>,
+  plugins: InstalledPluginLoad,
+  disabled: DisabledSkills,
+  options?: SkillSourceOptions,
+) {
+  return Effect.map(
+    discoverRuntimeSkills(roots, plugins, options),
+    (result): DiscoverSkillSourcesResult => ({
+      skills: result.skills.filter(
+        (entry) => !isSkillDisabled(entry, disabled),
+      ),
+      // Keep discovery issues visible even for disabled sources so users
+      // can repair a source before enabling it again.
+      errors: result.errors,
+    }),
+  );
+}
+
+/** One skill a person may activate: its display row, and the activation
+ *  block a message carries to select it. */
+export interface EnabledSkill {
+  readonly display: SkillDisplayItem;
+  readonly activation: string;
+}
+
+/**
+ * The skills the hosts list and activate, read for one session's roots:
+ * project skills under its workspace, the user's under its storage root,
+ * installed plugins' as they load now, and the bundled ones the host
+ * installed. Every read answers with the discovery issues beside the skills.
+ */
+export const Skills = Object.freeze({
+  /** The folders, beside a workspace and the home folder, whose `skills/`
+   *  an interop listing (`includeInterop`) also reads. */
+  interopDirs: INTEROP_SKILL_DIRS,
+  /**
+   * The complete inventory a settings page lists, each skill marked enabled
+   * or not. A switched-off plugin's skills are hidden, not listed as
+   * disabled: the plugin's switch is their one control.
+   */
+  display: Effect.fn('Skills.display')(function* (roots: SkillRoots) {
+    const disabled = yield* readDisabledSkills(roots);
     const result = yield* discoverRuntimeSkills(
-      workspaceRoot,
-      yield* readInstalledPluginLoad(stores),
+      roots,
+      yield* readInstalledPluginLoad(roots),
     );
     return {
-      // A switched-off plugin's skills are hidden, not listed as disabled:
-      // the plugin's switch is their one control.
       skills: result.skills
         .filter(({ source }) => !pluginOff(source, disabled))
         .map((entry) => skillDisplayItem(entry, disabled)),
-      issues: result.errors.map(({ message, path }) => ({ message, path })),
+      issues: result.errors.map(({ message, path }): SkillDisplayIssue => ({
+        message,
+        path,
+      })),
     };
-  },
-);
-
-export function filterDiscoveredSkills(
-  result: DiscoverSkillSourcesResult,
-  disabled: DisabledSkills,
-): DiscoverSkillSourcesResult {
-  return {
-    skills: result.skills.filter((entry) => !isSkillDisabled(entry, disabled)),
-    // Keep discovery issues visible even for disabled sources so users can
-    // repair a source before enabling it again.
-    errors: result.errors,
-  };
-}
-
-/** Discover only skills that may be injected or explicitly activated. */
-export function loadEnabledRuntimeSkills(
-  workspaceRoot: string | undefined,
-  plugins: InstalledPluginLoad,
-  disabled: DisabledSkills,
-) {
-  return Effect.map(discoverRuntimeSkills(workspaceRoot, plugins), (result) =>
-    filterDiscoveredSkills(result, disabled),
-  );
-}
+  }),
+  /**
+   * The skills agents are offered: every enabled one, in precedence order,
+   * with each discovery issue in full. `options` replaces the host's source
+   * options for one read (the CLI's `skills list` flags).
+   */
+  enabled: Effect.fn('Skills.enabled')(function* (
+    roots: SkillRoots,
+    options?: SkillSourceOptions,
+  ) {
+    const disabled = yield* readDisabledSkills(roots);
+    const result = yield* loadEnabledRuntimeSkills(
+      roots,
+      yield* readInstalledPluginLoad(roots),
+      disabled,
+      options,
+    );
+    return {
+      skills: result.skills.map((entry): EnabledSkill => ({
+        display: skillDisplayItem(entry, disabled),
+        activation: formatRuntimeSkillActivation(entry),
+      })),
+      issues: result.errors,
+    };
+  }),
+} as const);
 
 /**
  * One discovered skill as a step lists it: its plugin, name and listing
@@ -286,14 +323,18 @@ export const activatedSkillNames = (texts: readonly string[]): string[] =>
     ),
   ].slice(-ACTIVATED_SKILLS_MAX);
 
-export function formatRuntimeSkillActivation({
-  skill,
-  source,
-}: SourcedSkill): string {
+/**
+ * The block a message carries to activate one skill: the instruction to
+ * use it, and its body with `${TEXRA_SKILL_DIR}` resolved. Its
+ * `<skill name>` is what {@link activatedSkillNames} reads back.
+ */
+function formatRuntimeSkillActivation({ skill, source }: SourcedSkill): string {
   const body = escapeText(
     skill.body.replaceAll('${TEXRA_SKILL_DIR}', skill.baseDir),
   );
   return [
+    '<skill_activation>',
+    `The user selected the ${escapeText(skill.name)} skill. Use these instructions for the next substantive user request. Resolve relative file references against the skill_directory.`,
     `<skill name="${escapeAttr(skill.name)}">`,
     `<source>${escapeText(sourceLabel(source))}</source>`,
     `<path>${escapeText(skill.path)}</path>`,
@@ -302,15 +343,16 @@ export function formatRuntimeSkillActivation({
     body,
     '</instructions>',
     '</skill>',
+    '</skill_activation>',
   ].join('\n');
 }
 
 export const loadRuntimeSkillCatalog = Effect.fn('skills.runtimeCatalog')(
   function* (run: {
-    /** The run's workspace root; undefined with no folder open. */
-    readonly workspacePath: string | undefined;
-    /** The run's setting slots, which hold its disabled-skill lists. */
-    readonly settings: SettingsStores;
+    /** The run's session roots: its workspace (undefined with no folder
+     *  open), its storage root, and the slots holding its disabled-skill
+     *  lists. */
+    readonly roots: SkillRoots;
     /** The installed plugins the step accepted. */
     readonly plugins: InstalledPluginLoad;
     /** Skills to resolve by name from everything discovery enables, past
@@ -320,15 +362,11 @@ export const loadRuntimeSkillCatalog = Effect.fn('skills.runtimeCatalog')(
   }) {
     // The enabled set the hosts list, with every tool plugin's skills
     // whatever its switch: the step lists those of the plugins it pinned.
-    const disabled = yield* readDisabledSkills(run.settings);
-    const result = yield* loadEnabledRuntimeSkills(
-      run.workspacePath,
-      run.plugins,
-      {
-        ...disabled,
-        plugins: [],
-      },
-    );
+    const disabled = yield* readDisabledSkills(run.roots);
+    const result = yield* loadEnabledRuntimeSkills(run.roots, run.plugins, {
+      ...disabled,
+      plugins: [],
+    });
     // Discovery orders by source precedence and then skill directory. The
     // bound applies to what a reader lists, after its switch filter, so a
     // switched-off plugin's skills never push an enabled one out: the
@@ -343,11 +381,11 @@ export const loadRuntimeSkillCatalog = Effect.fn('skills.runtimeCatalog')(
     const named = new Set(run.named);
     return {
       catalog: yield* Effect.forEach(catalog, (entry) =>
-        catalogEntry(run.workspacePath, entry),
+        catalogEntry(run.roots.workspace, entry),
       ),
       named: yield* Effect.forEach(
         result.skills.filter(({ skill }) => named.has(skill.name)),
-        (entry) => catalogEntry(run.workspacePath, entry),
+        (entry) => catalogEntry(run.roots.workspace, entry),
       ),
       issues: result.errors,
     };

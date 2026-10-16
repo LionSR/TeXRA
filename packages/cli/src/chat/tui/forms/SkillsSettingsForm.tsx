@@ -2,18 +2,20 @@ import { Text } from 'ink';
 import { Effect } from 'effect';
 
 import { WorkspaceStateKey } from '@texra-ai/harness/schemas';
-import { Settings } from '@texra-ai/harness';
+import {
+  Settings,
+  Skills,
+  type ProcessRuntime,
+  type WorkspaceRoots,
+} from '@texra-ai/harness';
 import {
   ActiveSkillSourceScopeSchema,
   type ActiveSkillSourceScope,
   type SkillDisplayItem,
 } from '@shared/schemas';
-import { loadRuntimeSkillDisplay } from '@skills/runtimeSkills';
 import { applyStateSettingUpdate } from '@texra/shared/settingsView/handlers/stateSettingWrite';
 
 import { AsyncListForm } from './_shared/ListForm';
-import type { ProcessRuntime } from '@texra-ai/harness';
-import type { SettingsStores } from '@texra-ai/harness';
 
 type SkillToggle =
   | { readonly kind: 'source'; readonly scope: ActiveSkillSourceScope }
@@ -28,9 +30,9 @@ interface SkillsSettingsData {
 
 interface SkillsSettingsFormProps {
   readonly availableRows?: number;
-  readonly stores: SettingsStores;
-  /** The session's workspace folder: where project skills are discovered. */
-  readonly workspaceRoot: string | undefined;
+  /** The session's roots: where its skills are discovered, and the setting
+   *  slots their switches live in. */
+  readonly roots: WorkspaceRoots;
   /**
    * The process runtime the shared write path settles on. Ink components run
    * no Effect of their own, so it arrives as a prop from `/config`.
@@ -58,16 +60,16 @@ export function SkillsSettingsForm(
       loadingLabel="Loading skills..."
       load={() =>
         Effect.gen(function* () {
-          const { stores, workspaceRoot } = props;
-          const result = yield* loadRuntimeSkillDisplay(workspaceRoot, stores);
+          const { roots } = props;
+          const result = yield* Skills.display(roots);
           return {
             skills: result.skills,
             disabledNames: yield* Settings.get<string[]>(
-              stores,
+              roots,
               WorkspaceStateKey.DISABLED_SKILLS,
             ),
             disabledScopes: yield* Settings.get<ActiveSkillSourceScope[]>(
-              stores,
+              roots,
               WorkspaceStateKey.DISABLED_SKILL_SOURCES,
             ),
             issueCount: result.issues.length,
@@ -112,7 +114,7 @@ export function SkillsSettingsForm(
           Effect.flatMap(
             applyStateSettingUpdate(key, next, {
               host: 'cli',
-              stores: props.stores,
+              stores: props.roots,
             }),
             (result) =>
               result.kind === 'applied'

@@ -5,31 +5,24 @@
 import { Text } from 'ink';
 import { Effect } from 'effect';
 
-import { escapeText, type ProcessRuntime } from '@texra-ai/harness';
+import {
+  Skills,
+  type EnabledSkill,
+  type ProcessRuntime,
+  type SkillLoadIssue,
+  type WorkspaceRoots,
+} from '@texra-ai/harness';
 import type { SelectItem } from '@cli/tui/ui/Select';
 import { readCliSkillsOffNotice } from '@cli/runtime/skills';
-import { readInstalledPluginLoad } from '@common/plugins/pluginTrust';
-import {
-  formatRuntimeSkillActivation,
-  loadEnabledRuntimeSkills,
-  readDisabledSkills,
-  skillDisplayItem,
-} from '@skills/runtimeSkills';
-import type {
-  DiscoverSkillSourcesResult,
-  SourcedSkill,
-} from '@skills/loadSkills';
 import { formatResultCount } from '@utils/text/stringUtils';
 
 import { AsyncListForm } from './_shared/ListForm';
-import type { SettingsStores } from '@texra-ai/harness';
 
 interface SkillsListFormProps {
   readonly availableRows?: number;
-  /** The session's workspace folder: where project skills are discovered. */
-  readonly workspaceRoot: string | undefined;
-  /** The session's setting slots, which the disabled-skill set is read from. */
-  readonly stores: SettingsStores;
+  /** The session's roots: where its skills are discovered, and the setting
+   *  slots that switch skills off. */
+  readonly roots: WorkspaceRoots;
   /**
    * The process runtime the discovery program settles on. Ink components run
    * no Effect of their own, so it arrives as a prop from `/skills`.
@@ -44,41 +37,26 @@ export interface SkillActivation {
   readonly activationPrompt: string;
 }
 
-function formatSkillActivationPrompt(skill: SourcedSkill): string {
-  const activationInstruction = [
-    `The user selected the ${escapeText(skill.skill.name)} skill.`,
-    'Use these instructions for the next substantive user request.',
-    'Resolve relative file references against the skill_directory.',
-  ].join(' ');
-  return [
-    '<skill_activation>',
-    activationInstruction,
-    formatRuntimeSkillActivation(skill),
-    '</skill_activation>',
-  ].join('\n');
+interface SkillsListData {
+  readonly skills: readonly EnabledSkill[];
+  readonly issues: readonly SkillLoadIssue[];
+  readonly offHint: string | undefined;
 }
 
 function skillSelectItemsForTui(
-  skills: readonly SourcedSkill[],
-  disabled: Effect.Success<ReturnType<typeof readDisabledSkills>>,
+  skills: readonly EnabledSkill[],
 ): SelectItem<SkillActivation>[] {
-  return skills.map((skill) => {
-    const item = skillDisplayItem(skill, disabled);
-    return {
-      value: {
-        name: item.name,
-        activationPrompt: formatSkillActivationPrompt(skill),
-      },
-      label: item.name,
-      description: `${item.label} · ${item.description}`,
-    };
-  });
+  return skills.map(({ display, activation }) => ({
+    value: { name: display.name, activationPrompt: activation },
+    label: display.name,
+    description: `${display.label} · ${display.description}`,
+  }));
 }
 
 function skillIssueSummaryDetail(
-  result: DiscoverSkillSourcesResult & { offHint: string | undefined },
+  result: SkillsListData,
 ): React.JSX.Element | undefined {
-  if (result.errors.length === 0 && result.offHint === undefined) {
+  if (result.issues.length === 0 && result.offHint === undefined) {
     return undefined;
   }
   return (
@@ -88,9 +66,9 @@ function skillIssueSummaryDetail(
           {result.offHint}
         </Text>
       )}
-      {result.errors.length === 0 ? null : (
+      {result.issues.length === 0 ? null : (
         <Text dimColor>
-          {formatResultCount(result.errors.length, 'import issue')}
+          {formatResultCount(result.issues.length, 'import issue')}
         </Text>
       )}
     </>
@@ -99,38 +77,26 @@ function skillIssueSummaryDetail(
 
 export function SkillsListForm(props: SkillsListFormProps): React.JSX.Element {
   return (
-    <AsyncListForm<
-      DiscoverSkillSourcesResult & {
-        disabled: Effect.Success<ReturnType<typeof readDisabledSkills>>;
-        offHint: string | undefined;
-      },
-      SkillActivation
-    >
+    <AsyncListForm<SkillsListData, SkillActivation>
       title="/skills"
       loadingLabel="Loading skills..."
       load={() =>
         Effect.gen(function* () {
-          const disabled = yield* readDisabledSkills(props.stores);
-          const result = yield* loadEnabledRuntimeSkills(
-            props.workspaceRoot,
-            yield* readInstalledPluginLoad(props.stores),
-            disabled,
-          );
+          const result = yield* Skills.enabled(props.roots);
           return {
             ...result,
-            disabled,
-            offHint: yield* readCliSkillsOffNotice(props.stores, '/config'),
+            offHint: yield* readCliSkillsOffNotice(props.roots, '/config'),
           };
         })
       }
       runtime={props.runtime}
-      items={(result) => skillSelectItemsForTui(result.skills, result.disabled)}
+      items={(result) => skillSelectItemsForTui(result.skills)}
       isEmpty={(result) => result.skills.length === 0}
       availableRows={props.availableRows}
       description={<Text dimColor>Select a skill to activate it.</Text>}
       detailFor={skillIssueSummaryDetail}
       detailRowsFor={(result) =>
-        (result.errors.length > 0 ? 1 : 0) +
+        (result.issues.length > 0 ? 1 : 0) +
         (result.offHint === undefined ? 0 : 1)
       }
       compactDetailFor={(result) => (

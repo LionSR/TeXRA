@@ -4,7 +4,11 @@ import path from 'node:path';
 
 import { Effect, FileSystem, Result } from 'effect';
 
-import { DatabaseOpenFailed, type ConfigProvider } from '@texra-ai/harness';
+import {
+  DatabaseOpenFailed,
+  type ConfigProvider,
+  type SkillSourceOptions,
+} from '@texra-ai/harness';
 import { canonicalizeWorkspacePath } from '@texra-ai/harness/node';
 import { Settings } from '@texra-ai/harness';
 import { safeParseJson } from '@texra-ai/harness/schemas';
@@ -18,7 +22,6 @@ import { stricterPolicy } from '@texra-ai/harness/schemas';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
 import type { MinimumLogLevel } from '@logger/effectDiagnostics';
 import { defaultNodeStorageRoot } from '@platform/defaults/nodeStorage';
-import type { SkillSourceOptions } from '@skills/skillSources';
 import {
   CLI_OUTPUT_FORMATS,
   CLI_OUTPUT_FORMAT_CONFIG_KEY,

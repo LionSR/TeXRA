@@ -4,6 +4,11 @@
 import { Effect, Result, type Scope } from 'effect';
 
 import { type RunId } from '@texra-ai/harness/schemas';
+import {
+  InstalledPlugins,
+  type PlatformSecrets,
+  type WorkspaceRoots,
+} from '@texra-ai/harness';
 import { runBypasses } from '@texra-ai/harness/schemas';
 import type { SessionHandle } from '@agent/runtime';
 import type { GetModelSwitchDisabledReason } from '@cli/runtime/modelAccess';
@@ -13,10 +18,6 @@ import type {
   CliLogoutTarget,
   LoginFormValue,
 } from '@cli/runtime/loginOptions';
-import {
-  installPlugins,
-  parsePluginOrigin,
-} from '@common/plugins/installedPlugins';
 import type { ServiceConnection } from '@texra/controllers/server/client';
 import { RUN_GRANT_ORDER } from '@ui/copy/delegationApproval';
 import { PLUGINS_TUI } from '@ui/copy/plugins';
@@ -85,7 +86,6 @@ import type {
   ProcessServices,
   Session,
 } from '@texra-ai/harness';
-import type { PlatformSecrets } from '@texra-ai/harness';
 import type { SettingsStores } from '@texra-ai/harness';
 
 type SelectHandler<T> = (value: T) => SlashCommandEffect;
@@ -137,7 +137,7 @@ export function registerBuiltinSlashCommands(options: {
   onSkillSelect?: SelectHandler<SkillActivation>;
   /** Reach the TeXRA service (`/tasks`), starting it when none runs. */
   connectService?: () => Effect.Effect<ServiceConnection, Error, Scope.Scope>;
-  configStores?: SettingsStores;
+  configRoots?: WorkspaceRoots;
   onError?: ErrorHandler;
 }): void {
   const { secrets, stores, runtime } = options;
@@ -333,8 +333,7 @@ export function registerBuiltinSlashCommands(options: {
     (formProps) => (
       <SkillsListForm
         runtime={runtime}
-        workspaceRoot={options.runSession.roots.workspace}
-        stores={options.runSession.roots}
+        roots={options.runSession.roots}
         {...formProps}
       />
     ),
@@ -376,13 +375,13 @@ export function registerBuiltinSlashCommands(options: {
       if (verb?.toLowerCase() !== 'add' || !source)
         return yield* Effect.fail(new Error(PLUGINS_TUI.addUsage));
       const { roots } = options.runSession;
-      const origin = parsePluginOrigin(
+      const origin = InstalledPlugins.origin(
         source,
         roots.workspace ?? context.cliContext.cwd,
         undefined,
       );
       if (Result.isFailure(origin)) return yield* Effect.fail(origin.failure);
-      const added = yield* installPlugins(
+      const added = yield* InstalledPlugins.install(
         origin.success,
         pick === undefined ? [] : [pick],
         roots,
@@ -391,15 +390,14 @@ export function registerBuiltinSlashCommands(options: {
     });
 
   function configContribution(
-    configStores: SettingsStores,
+    configRoots: WorkspaceRoots,
   ): SlashCommandContribution {
     const ConfigFormAdapter = (props: SlashFormProps): React.JSX.Element => {
       return (
         <CliConfigForm
-          stores={configStores}
+          roots={configRoots}
           secrets={secrets}
           runtime={runtime}
-          workspaceRoot={options.runSession.roots.workspace}
           availableRows={props.availableRows}
           // The project's policy, written: the status bar follows it, and
           // the chat's own `/approval` choice stays as it was.
@@ -595,7 +593,7 @@ export function registerBuiltinSlashCommands(options: {
     },
     // Only offer /config when the host wired the stores it reads/writes — a
     // command that can't reach a store would render an inert panel.
-    ...(options.configStores ? [configContribution(options.configStores)] : []),
+    ...(options.configRoots ? [configContribution(options.configRoots)] : []),
     ...sessionContributions(runSession),
   ]);
 }
