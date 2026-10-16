@@ -122,7 +122,6 @@ export { hasErrorPresentationClaimed } from '@common/errors/sdkError/errorMetada
 export { escapeText } from '@shared/utils/xmlEscape';
 
 // The payloads, as the runtime defines them.
-export { qualifyAggregateId } from '@shared/schemas';
 export type { AgentEvent } from '@agent/trace';
 
 // `RunEndResult` is deliberately sourced from its own module rather than
@@ -136,13 +135,12 @@ export type { RunEndResult } from '@agent/runtime/RunEndResult';
 export type {
   CallRequests,
   ITool,
-  IToolRegistry,
   ToolContextShape,
   ToolEnv,
   ToolGuard,
 } from '@agent/core/tools/ToolTypes';
 export type { SettingHost } from '@shared/state/stateSettings';
-export { MapToolRegistry, ToolContext } from '@agent/core/tools/ToolTypes';
+export { ToolContext } from '@agent/core/tools/ToolTypes';
 export { defineTool } from '@tools/core/definition';
 export type { DefinedTool } from '@tools/core/definition';
 export type {
@@ -178,7 +176,6 @@ export type {
 export type {
   AgentDirectoriesPort,
   ConfigProvider,
-  Disposable,
   StateStore,
   ToolMissingHandler,
 } from '@platform/interfaces';

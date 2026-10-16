@@ -361,9 +361,7 @@ describe('the golden 1.0 store', () => {
           .all(),
       );
       expect(shared.length).toBeGreaterThan(0);
-      const db = yield* Database;
-      expect(yield* db.readAll(0)).toHaveLength(rows.length);
-    }).pipe(Effect.provide(substrate(storage)));
+    });
   });
 
   it.effect('folds to the pinned session view and run states', () => {

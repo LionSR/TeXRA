@@ -14,8 +14,11 @@ import {
 } from '@utils/errors/errorMessage';
 
 import { RouteUnavailable } from '../agentErrors';
-import { findInCauseChain, isDiskFullError } from '../errorPredicates';
-import { isUserAbort } from './errorPatterns';
+import {
+  findInCauseChain,
+  isDiskFullError,
+  isUserAbort,
+} from '../errorPredicates';
 import { attachProviderError, detectProviderError } from './errorMetadata';
 
 /**

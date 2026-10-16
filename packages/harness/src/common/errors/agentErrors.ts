@@ -3,7 +3,7 @@ import { Data } from 'effect';
 /**
  * Base class for runtime errors raised by the agent layer.
  *
- * Host-neutral (lives in `@common/errors`) so any host can reference it.
+ * Host-neutral, so any host can reference it.
  * Specific subclasses should be added only when a concrete thrower and
  * catcher exist for them — anything else duplicates the existing
  * `ProviderError` schema and `isUserAbort` machinery.

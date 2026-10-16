@@ -25,6 +25,19 @@ import {
 const WAITING_RUN = 'a11ce1' as RunId;
 const ORPHAN_RUN = 'baddad' as RunId;
 
+/** Both canonical runs' rows and the store's last commit: a rewrite or a
+ *  new row changes one of them. */
+const canonicalRows = (fixture: DatabaseFixture) =>
+  Effect.gen(function* () {
+    const database = yield* fixture.Database;
+    return {
+      commit: yield* database.currentCommit,
+      runs: yield* Effect.forEach([WAITING_RUN, ORPHAN_RUN], (runId) =>
+        database.readAggregate(fixture.qualifyAggregateId('run', runId), 0),
+      ),
+    };
+  });
+
 /** Open the same C1 database implementation used by the application. */
 function inEventDatabase<A, E>(
   fixture: DatabaseFixture,
@@ -112,7 +125,7 @@ async function writeCanonicalRunFixtures(
           fixture.qualifyAggregateId('run', runFixture.runId),
         ),
       );
-      return yield* database.readAll(0);
+      return yield* canonicalRows(fixture);
     }),
   );
 }
@@ -188,10 +201,7 @@ test('a new desktop process hydrates waiting and orphaned histories without rewr
     const reloaded = await inEventDatabase(
       fixture,
       storagePath,
-      Effect.gen(function* () {
-        const database = yield* fixture.Database;
-        return yield* database.readAll(0);
-      }),
+      canonicalRows(fixture),
     );
     expect(reloaded).toEqual(persisted);
   } finally {

@@ -41,7 +41,7 @@ import {
   type TransactionPart,
   wakeParent,
 } from '@agent/runtime/childSettlement';
-import { isUserAbort } from '@common/errors/sdkError/errorPatterns';
+import { isUserAbort } from '@common/errors/errorPredicates';
 import {
   RUN_OUTCOME,
   qualifyAggregateId,
@@ -225,9 +225,7 @@ interface ChildRunLoopShared {
 
 /**
  * One child loop's parameters, by family: a native child (no port), gated
- * by the session's child-run budget when `budgeted`
- * (`.agents/docs/implemented/architecture/2026-08-15-child-run-concurrency-budget.md`),
- * or a process child with the port that presents and ends it, outside it.
+ * by the session's child-run budget when `budgeted`, or a process child with the port that presents and ends it, outside it.
  */
 export type ChildRunLoopParams<TTurn, R = never> = ChildRunLoopShared &
   (
