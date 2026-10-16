@@ -5,7 +5,7 @@
  * derives nothing the fold already states; it keeps only what it last
  * printed.
  */
-import { Effect, Exit, Scope, Stream } from 'effect';
+import { Effect, Scope, ScopedRef, Stream } from 'effect';
 
 import { qualifyAggregateId, RUN_PHASE, type RunId } from '@shared/schemas';
 import { isTerminalOutcomePhase } from '@shared/runs/runStatus';
@@ -69,8 +69,6 @@ export function attachScriptPlainOutput(
   return Effect.gen(function* () {
     const previous = new Map<RunId, ReadonlyMap<string, string>>();
     let subscribed = '';
-    /** The scope the current subscription's interest lives in. */
-    let interest: Scope.Closeable | undefined;
     let rootRunId: RunId | undefined;
     const attachCursor = session.view.current().cursor;
     const write = (line: string): void => {
@@ -85,9 +83,8 @@ export function attachScriptPlainOutput(
         if (before?.get(id) !== line) write(line);
       }
     };
-    yield* Effect.addFinalizer(() =>
-      interest === undefined ? Effect.void : Scope.close(interest, Exit.void),
-    );
+    /** Holds the current subscription's interest; released with this scope. */
+    const interest = yield* ScopedRef.make<void>(() => undefined);
     yield* Effect.forkScoped(
       Stream.runForEach(session.view.changes, (view) =>
         Effect.gen(function* () {
@@ -116,19 +113,17 @@ export function attachScriptPlainOutput(
           const key = scriptRuns.map((run) => run.id).join('\0');
           if (key !== subscribed) {
             subscribed = key;
-            // The new set is held before the old one is let go, so no run
-            // printed in both leaves the fold in between.
-            const next = yield* Scope.make();
-            yield* session.view
-              .subscribe(
+            // ScopedRef.set holds the new set before it lets the old one go,
+            // so no run printed in both leaves the fold in between.
+            yield* ScopedRef.set(
+              interest,
+              session.view.subscribe(
                 scriptRuns.map((run) => ({
                   id: qualifyAggregateId('run', run.id),
                   fromSeq: 0,
                 })),
-              )
-              .pipe(Scope.provide(next));
-            if (interest !== undefined) yield* Scope.close(interest, Exit.void);
-            interest = next;
+              ),
+            );
           }
           for (const run of scriptRuns) printRun(run, view);
         }),
