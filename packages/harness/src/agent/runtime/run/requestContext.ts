@@ -271,6 +271,14 @@ export function admittedTurn(
   return admitted;
 }
 
+const TURN_FIELDS = [
+  'mode',
+  'system',
+  'messages',
+  'tools',
+  'controls',
+] as const satisfies readonly (keyof ResolvedTurn)[];
+
 /** Why the rows at `state` do not rebuild `sent`, or null when they do. */
 function mismatch(state: RunState, sent: ResolvedTurn): string | null {
   const { recorded, turn } = recordedTurn(state);
@@ -282,17 +290,8 @@ function mismatch(state: RunState, sent: ResolvedTurn): string | null {
       stableStringify(state.offeredTools.map(({ shown }) => shown))
   )
     return "the request does not send the tools its step's tools.offered row records";
-  const sentFields: Record<string, unknown> = sent;
-  const rebuilt: Record<string, unknown> = turn;
-  const differ = [
-    'mode',
-    'system',
-    'messages',
-    'tools',
-    'controls',
-    'continuation',
-  ].filter(
-    (key) => stableStringify(rebuilt[key]) !== stableStringify(sentFields[key]),
+  const differ = TURN_FIELDS.filter(
+    (key) => stableStringify(turn[key]) !== stableStringify(sent[key]),
   );
   return differ.length === 0
     ? null
