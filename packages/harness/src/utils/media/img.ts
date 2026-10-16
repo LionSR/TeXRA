@@ -2,7 +2,6 @@
 import * as path from 'node:path';
 
 // Third-party imports
-import { PDFDocument } from '@cantoo/pdf-lib';
 import { Data, Effect, FileSystem } from 'effect';
 import { imageSize } from 'image-size';
 
@@ -25,7 +24,7 @@ const PDF_RASTER_MAX_SIZE: [number, number] = [1024, 1024];
 /**
  * A media file that could not be turned into model input for a reason other
  * than the filesystem's own (`PlatformError`): missing or empty, unmeasurable,
- * or an image tool or PDF parser that failed. The message is the one the run
+ * or an image tool that failed. The message is the one the run
  * transcript shows.
  */
 class MediaConversionFailed extends Data.TaggedError('MediaConversionFailed')<{
@@ -36,22 +35,6 @@ class MediaConversionFailed extends Data.TaggedError('MediaConversionFailed')<{
 /** A throw or rejection from outside Effect, carrying its own message. */
 const conversionFailure = (cause: unknown): MediaConversionFailed =>
   new MediaConversionFailed({ message: toErrorMessage(cause), cause });
-
-/** A step that runs outside Effect (image tools, the PDF parser), typed. */
-const conversionStep = <A>(
-  evaluate: () => PromiseLike<A>,
-): Effect.Effect<A, MediaConversionFailed> =>
-  Effect.tryPromise({ try: evaluate, catch: conversionFailure });
-
-/** The page count of an in-memory PDF; fails when the bytes or the lazily walked page tree do not parse. */
-const pdfPageCount = (bytes: Uint8Array) =>
-  conversionStep(async () => {
-    const doc = await PDFDocument.load(bytes, {
-      updateMetadata: false,
-      ignoreEncryption: true,
-    });
-    return doc.getPageCount();
-  });
 
 /** Base64 of file bytes, without copying them. */
 function toBase64(bytes: Uint8Array): string {
@@ -274,16 +257,33 @@ export const processPdf2Png = Effect.fn('img.processPdf2Png')(function* (
   pdfPath: string,
 ) {
   const fs = yield* FileSystem.FileSystem;
-  const pageCount = yield* pdfPageCount(yield* fs.readFile(pdfPath));
-  if (pageCount === 0) {
-    return yield* new MediaConversionFailed({ message: 'PDF has no pages.' });
-  }
-
   const tool = yield* detectImageTool();
   if (!tool) {
     return yield* new MediaConversionFailed({
       message: 'GraphicsMagick/ImageMagick is not installed.',
     });
+  }
+
+  // `identify` prints one line per page, and `-ping` skips decoding pixels;
+  // counting lines needs no agreement between the two tools on `%n`.
+  const identified = yield* executeCommand(
+    [tool, 'identify', '-ping', '-format', '%p\\n', pdfPath],
+    {
+      channel: CHANNEL,
+      // Absolute input path: see `resizeImageIfNeeded`.
+      cwd: process.cwd(),
+      settings: undefined,
+      killProcessTree: true,
+    },
+  );
+  if (!identified.success) {
+    return yield* new MediaConversionFailed({
+      message: identified.stderr || `Failed to count the pages of ${pdfPath}`,
+    });
+  }
+  const pageCount = identified.stdout.split('\n').filter(Boolean).length;
+  if (pageCount === 0) {
+    return yield* new MediaConversionFailed({ message: 'PDF has no pages.' });
   }
 
   // Private per-conversion directory so the release below can delete every

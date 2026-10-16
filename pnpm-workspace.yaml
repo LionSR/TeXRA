@@ -8,7 +8,6 @@ packages:
 # the `peers` catalog below.
 catalog:
   '@anthropic-ai/claude-agent-sdk': '^0.3.296'
-  '@cantoo/pdf-lib': '^2.9.2'
   '@effect/platform-node': '4.0.5'
   '@effect/sql-sqlite-node': '4.0.5'
   '@effect/vitest': '4.0.5'
@@ -20,7 +19,6 @@ catalog:
   arxiv-client: '^0.0.9'
   bibtex: '^0.9.0'
   content-disposition: '^3.0.0'
-  date-fns: '^4.4.0'
   diff: '^9.0.0'
   diff-match-patch: '^1.0.5'
   effect: '4.0.5'
