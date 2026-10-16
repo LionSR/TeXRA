@@ -218,4 +218,4 @@ export { withLogChannel } from '@logger/effectLog';
 export {
   readConfigSettingFrom,
   readSettingFrom,
-} from '@utils/config/platformSettings';
+} from '@shared/config/platformSettings';

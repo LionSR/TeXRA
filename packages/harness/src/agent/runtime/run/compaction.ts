@@ -27,7 +27,7 @@ import type { CellError } from '@shared/session/runHistory';
 import type { RunHistoryDraft, RunState } from '@shared/session/runStateFold';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import type { RunCell } from '@shared/session/runHistory';
-import { readSettingFrom } from '@utils/config/platformSettings';
+import { readSettingFrom } from '@shared/config/platformSettings';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { rowAggregate, type Message } from '../loop/rows';

@@ -27,6 +27,7 @@ import { Effect, type FileSystem } from 'effect';
 
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import type { CodexSandboxMode } from '@shared/schemas';
+import { readSettingUnlessOverridden } from '@shared/config/platformSettings';
 import { CodexStateKey } from '@texra/shared/settingsView/integrationSettings';
 import {
   binaryIfPresent,
@@ -35,7 +36,6 @@ import {
   resolvePackageDir,
 } from '@texra/tools/support/externalBinaryUtils';
 import { inheritedEnv } from '@utils/system/envFlags';
-import { readSettingUnlessOverridden } from '@utils/config/platformSettings';
 import { IS_WINDOWS } from '@utils/system/platformPaths';
 import type { StateReadFailed } from '@texra-ai/harness';
 

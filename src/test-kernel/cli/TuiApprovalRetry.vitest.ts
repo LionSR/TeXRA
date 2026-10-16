@@ -59,9 +59,9 @@ vi.mock('@cli/chat/tui/state/subscriptionPreference', () => ({
   setCliSubscriptionPreference: mocks.setCliSubscriptionPreference,
 }));
 
-vi.mock('@utils/config/providerConfig', async (importActual) => {
+vi.mock('@shared/config/providerConfig', async (importActual) => {
   const actual =
-    await importActual<typeof import('@utils/config/providerConfig')>();
+    await importActual<typeof import('@shared/config/providerConfig')>();
   return {
     ...actual,
     setGLMCodingPlan: mocks.setGLMCodingPlan,

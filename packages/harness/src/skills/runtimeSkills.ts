@@ -16,7 +16,7 @@ import {
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 import { escapeAttr, escapeText } from '@shared/utils/xmlEscape';
 import type { SettingsStores } from '@shared/config/settingsAccess';
-import { readSettingFrom } from '@utils/config/platformSettings';
+import { readSettingFrom } from '@shared/config/platformSettings';
 import { isPathWithin } from '@utils/core/pathCore';
 import { canonicalizePath } from '@utils/files/externalRoots';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';

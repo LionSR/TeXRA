@@ -17,8 +17,8 @@ import type {
   SubscriptionUsageSnapshots,
 } from '@shared/schemas';
 import { SUBSCRIPTION_USAGE_PROVIDERS } from '@shared/schemas';
+import { useChinaRegion } from '@shared/config/providerConfig';
 import { CODING_PLAN_SUBSCRIPTIONS } from '@texra/shared/model/codingPlans';
-import { useChinaRegion } from '@utils/config/providerConfig';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { fetchChatGptUsage } from './codexUsageAdapter';

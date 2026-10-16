@@ -38,7 +38,7 @@ import {
 import { AGENT_TOOL_NAME } from '@shared/constants/delegationTools';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 
-import { readSettingFrom } from '@utils/config/platformSettings';
+import { readSettingFrom } from '@shared/config/platformSettings';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 /** The models that can run now, in picker order. */

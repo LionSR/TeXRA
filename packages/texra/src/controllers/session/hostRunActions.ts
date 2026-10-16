@@ -33,6 +33,7 @@ import { FOLLOW_UP_WAKE_FAILED_MESSAGE } from '@agent/followUp/ToolUseFollowUp';
 import { getRuntimeModelDirectFallback } from '@model/copilotRouting';
 import type { ModelHostFactUnreadable } from '@model/computeModelOptions';
 import { isTaskConfig, recipeBlockOf, type RunId } from '@shared/schemas';
+import { getUseOpenRouter } from '@shared/config/providerConfig';
 import {
   validateRunRequest,
   type RunRequest,
@@ -51,7 +52,6 @@ import {
 import type { MessageHost, NotificationFailed } from '@texra/hosts/uiHosts';
 import { runActionGuard } from '@texra/controllers/session/runActionGuard';
 import type { TaskRecordsUnavailable } from '@texra/controllers/server/serviceSession';
-import { getUseOpenRouter } from '@utils/config/providerConfig';
 import { entryExists } from '@utils/files/fsEntryExists';
 import {
   locateInWorkspace,

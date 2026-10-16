@@ -20,16 +20,16 @@ import { openTexraConfigStores } from '@platform/defaults/nodeStores';
 // Local imports - shared
 import { canonicalConfigKey } from '@shared/config/configKeys';
 import type { SettingsStores } from '@shared/config/settingsAccess';
+import {
+  readConfigSettingFrom,
+  writeSettingTo,
+} from '@shared/config/platformSettings';
 import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
 
 // Local imports - tools
 import { readMcpConfig, USER_MCP_CONFIG_PATH } from '@tools/mcp/mcpConfig';
 
 // Local imports - utilities
-import {
-  readConfigSettingFrom,
-  writeSettingTo,
-} from '@utils/config/platformSettings';
 import type { ConfigProvider } from '@texra-ai/harness';
 
 /**

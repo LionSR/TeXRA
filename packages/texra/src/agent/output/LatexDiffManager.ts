@@ -12,6 +12,7 @@ import {
   type FileLocation,
   type RunStorageFileLocation,
 } from '@shared/schemas';
+import { readSettingFrom } from '@shared/config/platformSettings';
 import type {
   LatexdiffEntry,
   OutputFileInfo,
@@ -25,7 +26,6 @@ import { checkToolInstalled } from '@texra/utils/system/toolChecks';
 import { createRunStorageLocation } from '@utils/files/fileLocation';
 import { entryExists } from '@utils/files/fsEntryExists';
 import { RunFileService } from '@utils/files/runStorage';
-import { readSettingFrom } from '@utils/config/platformSettings';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import {

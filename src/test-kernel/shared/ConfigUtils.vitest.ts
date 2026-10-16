@@ -1,15 +1,15 @@
 import { Effect } from 'effect';
 import { it } from '@effect/vitest';
-// Suites for packages/harness/src/utils/config (platformSettings + providerConfig).
+// Suites for packages/harness/src/shared/config (platformSettings + providerConfig).
 
 import { afterEach, describe, expect, vi } from 'vitest';
 import { GlobalStateKey } from '@shared/state/stateKeys';
+import { getProviderEndpoint } from '@shared/config/providerConfig';
+import { readSettingFrom } from '@shared/config/platformSettings';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { installPlatform } from '@test/support/setupPlatform';
 import { TexraStateKey } from '@texra/shared/settingsView/texraSettings';
 import { LATEX_CONFIG_DEFAULTS } from '@texra/shared/constants/latexConfig';
-import { getProviderEndpoint } from '@utils/config/providerConfig';
-import { readSettingFrom } from '@utils/config/platformSettings';
 
 afterEach(() => {
   vi.restoreAllMocks();

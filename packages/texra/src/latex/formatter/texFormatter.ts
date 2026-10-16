@@ -3,8 +3,8 @@ import { Effect } from 'effect';
 
 // Local imports - formatter implementations
 import type { SettingsStores } from '@shared/config/settingsAccess';
+import { readSettingFrom } from '@shared/config/platformSettings';
 import { TexraStateKey } from '@texra/shared/settingsView/texraSettings';
-import { readSettingFrom } from '@utils/config/platformSettings';
 
 // Local file imports
 import { LATEXINDENT_CONFIG_KEY, runLatexIndent } from './latexindentpt';

@@ -17,8 +17,8 @@ import {
   texraApprovalDenialMessage,
 } from '@shared/approvalPolicy';
 import { refusalCopy, refusalOf } from '@shared/session/approvalDecision';
+import { readSettingFrom } from '@shared/config/platformSettings';
 import { errorResult } from '@tools/core/result';
-import { readSettingFrom } from '@utils/config/platformSettings';
 import { previewLabel } from '@utils/text/stringUtils';
 
 const DEFAULT_BASH_REJECTION_GUIDANCE =

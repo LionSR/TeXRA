@@ -15,6 +15,7 @@ import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { RunId } from '@shared/schemas';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
+import { readSettingFrom } from '@shared/config/platformSettings';
 import { displayToStoragePath } from '@tools/memory/memoryUtils';
 import { parseWorkingDirectory } from '@tools/pathResolution';
 import { errorResult } from '@tools/core/result';
@@ -23,7 +24,6 @@ import { nullishWithDefault } from '@tools/core/inputSchema';
 import { runStorageLocationUnder } from '@utils/files/runStorageFs';
 import { workspaceAbsolutePath } from '@utils/files/workspaceFS';
 import { entryExists } from '@utils/files/fsEntryExists';
-import { readSettingFrom } from '@utils/config/platformSettings';
 import {
   ensureError,
   extractErrorMessage,

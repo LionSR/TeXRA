@@ -86,13 +86,13 @@ vi.mock('@model/subscriptionAccess', () => ({
       : mocks.setPreferXaiSubscription(stores, enabled),
 }));
 
-vi.mock('@utils/config/providerConfig', () => ({
+vi.mock('@shared/config/providerConfig', () => ({
   getPreferKimiCode: mocks.getPreferKimiCode,
   getGLMCodingPlan: mocks.getGLMCodingPlan,
   setGLMCodingPlan: mocks.setGLMCodingPlan,
 }));
 
-vi.mock('@utils/config/platformSettings', () => ({
+vi.mock('@shared/config/platformSettings', () => ({
   writeSettingTo: mocks.writeSettingTo,
 }));
 

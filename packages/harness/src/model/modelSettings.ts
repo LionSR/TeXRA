@@ -22,14 +22,14 @@ import {
 } from '@shared/schemas';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import { GlobalStateKey } from '@shared/state/stateKeys';
-import { readSettingFrom } from '@utils/config/platformSettings';
+import { readSettingFrom } from '@shared/config/platformSettings';
 import {
   getGLMCodingPlan,
   getPreferKimiCode,
   getProviderEndpoint,
   getUseOpenRouter,
   useChinaRegion,
-} from '@utils/config/providerConfig';
+} from '@shared/config/providerConfig';
 
 import { preferredCopilotRouteModels } from './copilotRouting';
 import { reasoningEffortOverrides } from './reasoningLevel';

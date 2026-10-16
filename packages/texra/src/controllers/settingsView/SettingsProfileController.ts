@@ -4,6 +4,10 @@ import {
   readSetting,
   type SettingsStores,
 } from '@shared/config/settingsAccess';
+import {
+  getProviderEndpoint,
+  supportsCustomEndpoint,
+} from '@shared/config/providerConfig';
 import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
 import {
@@ -11,10 +15,6 @@ import {
   type UpdateProfileMessage,
 } from '@texra/shared/settingsView/settingsViewMessages';
 import { getProviderDisplayName } from '@texra/model/providerPresentation';
-import {
-  getProviderEndpoint,
-  supportsCustomEndpoint,
-} from '@utils/config/providerConfig';
 
 /**
  * Host-supplied storage wiring: `stores` and `loadProviderKeyStatuses` depend

@@ -77,7 +77,7 @@ export interface ConfigProvider {
    *
    * It stays synchronous by ruling, and it casts: the value it returns is
    * whatever the store holds. A reader that needs the value checked reads
-   * through `readSettingFrom` (`@utils/config/platformSettings`), which
+   * through `readSettingFrom` (`@shared/config/platformSettings`), which
    * resolves the key's catalog row and safe-parses the stored value against
    * the row's schema; a hand-edited `"false"` in a boolean row is a truthy
    * string here and silently means the opposite. Nothing may cache what

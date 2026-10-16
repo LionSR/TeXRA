@@ -47,6 +47,7 @@ import {
   type OfferedTool,
   type ToolDefinition,
 } from '@shared/schemas';
+import { readSettingFrom } from '@shared/config/platformSettings';
 import {
   toolDigests,
   type HeldPlugins,
@@ -55,7 +56,6 @@ import {
 import { mcpPluginId, mcpServerOfToolName } from '@tools/mcp/mcpServer';
 import { ToolAvailability } from '@tools/toolAvailabilityService';
 import { ToolRegistry } from '@tools/toolTable';
-import { readSettingFrom } from '@utils/config/platformSettings';
 
 /**
  * The host capabilities a session's host serves now (`ITool.hostCapability`

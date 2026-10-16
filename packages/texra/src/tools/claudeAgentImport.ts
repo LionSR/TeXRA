@@ -25,13 +25,13 @@ import { Effect } from 'effect';
 
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import type { ClaudeAgentPermissionMode } from '@shared/schemas';
+import { readSettingUnlessOverridden } from '@shared/config/platformSettings';
 import { ClaudeAgentStateKey } from '@texra/shared/settingsView/integrationSettings';
 import {
   binaryIfPresent,
   createCachedBinaryResolver,
   importForeignSdk,
 } from '@texra/tools/support/externalBinaryUtils';
-import { readSettingUnlessOverridden } from '@utils/config/platformSettings';
 import { IS_WINDOWS } from '@utils/system/platformPaths';
 import type { StateReadFailed } from '@texra-ai/harness';
 

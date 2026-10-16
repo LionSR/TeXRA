@@ -16,12 +16,12 @@ import type { SettingsStores } from '@shared/config/settingsAccess';
 import { agentName, type RunId } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { SETUP_AGENT_NAME } from '@shared/constants/agents';
+import { getUseOpenRouter } from '@shared/config/providerConfig';
 import { SETUP_INSTRUCTION } from '@texra/controllers/onboarding/setupLaunch';
 import {
   hasUsableSetupCredential,
   resolveSetupLaunchModel,
 } from '@texra/model/setupCredentialAccess';
-import { getUseOpenRouter } from '@utils/config/providerConfig';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import type { ProcessServices, Session } from '@texra-ai/harness';
 import type {

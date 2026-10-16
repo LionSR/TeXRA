@@ -8,9 +8,9 @@ import {
 } from '@shared/schemas';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
+import { readSettingFrom } from '@shared/config/platformSettings';
 import { loadRuntimeSkillDisplay } from '@skills/runtimeSkills';
 import { applyStateSettingUpdate } from '@texra/shared/settingsView/handlers/stateSettingWrite';
-import { readSettingFrom } from '@utils/config/platformSettings';
 
 import { AsyncListForm } from './_shared/ListForm';
 import type { ProcessRuntime } from '@texra-ai/harness';

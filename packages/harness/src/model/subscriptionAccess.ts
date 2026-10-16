@@ -12,7 +12,7 @@ import {
   type SettingsStores,
 } from '@shared/config/settingsAccess';
 import type { SubscriptionAuthStatus } from '@shared/model/subscriptionAuth';
-import { writeSettingTo } from '@utils/config/platformSettings';
+import { writeSettingTo } from '@shared/config/platformSettings';
 import type { Effect } from 'effect';
 
 type SubscriptionAuthProvider = SubscriptionAuthStatus['provider'];

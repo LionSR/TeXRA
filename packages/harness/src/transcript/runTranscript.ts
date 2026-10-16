@@ -8,7 +8,7 @@ import { Effect } from 'effect';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { DEBUG_MODE_KEY, type RunId } from '@shared/schemas';
 import { foldRunTranscript } from '@shared/session/transcriptFold';
-import { readConfigSettingFrom } from '@utils/config/platformSettings';
+import { readConfigSettingFrom } from '@shared/config/platformSettings';
 
 /** Fold the run's committed rows into its transcript; empty when the run
  *  never existed or is tombstoned. Verbosity is read at the call, from the

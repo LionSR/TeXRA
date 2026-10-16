@@ -21,6 +21,7 @@ import {
   ToolError,
   type FileLocation,
 } from '@shared/schemas';
+import { readSettingFrom } from '@shared/config/platformSettings';
 import {
   documentsSummary,
   documentTaskOptions,
@@ -51,7 +52,6 @@ import {
   OUTPUT_END_TAG,
 } from '@texra/shared/plugins/documentOutputs';
 import { executed } from '@tools/core/result';
-import { readSettingFrom } from '@utils/config/platformSettings';
 
 /** A revision of a document task, by its zero-based index. */
 export const RevisionSchema = z

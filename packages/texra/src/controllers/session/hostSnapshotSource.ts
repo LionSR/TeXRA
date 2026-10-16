@@ -25,6 +25,10 @@ import {
   TEXRA_APPROVAL_POLICY_CONFIG_KEY,
   type TexraApprovalPolicy,
 } from '@shared/approvalPolicy';
+import {
+  readSettingFrom,
+  readConfigSettingFrom,
+} from '@shared/config/platformSettings';
 import type { FileOptions } from '@texra/shared/session/hostSnapshot';
 import { agentOptionsData } from '@texra/tools/documents/documentTask';
 import type {
@@ -34,10 +38,6 @@ import type {
 import { modelOptionsFrom } from '@texra/model/modelOptions';
 import { createTeamCatalogPorts } from '@texra/controllers/mainView/teamCatalogPorts';
 import { readRecentCommits } from '@texra/utils/git/repositoryOverview';
-import {
-  readSettingFrom,
-  readConfigSettingFrom,
-} from '@utils/config/platformSettings';
 import type { AgentCatalogServices } from '@texra-ai/harness';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 

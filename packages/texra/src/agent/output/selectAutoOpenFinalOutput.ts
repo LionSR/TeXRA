@@ -1,12 +1,12 @@
 import { Effect } from 'effect';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import { RUN_OUTCOME } from '@shared/schemas';
+import { readSettingFrom } from '@shared/config/platformSettings';
 import {
   documentsResultOf,
   finalWorkflowOutput,
 } from '@texra/shared/plugins/documentOutputs';
 import { DOCUMENT_TASK_BLOCK } from '@texra/shared/plugins/documents';
-import { readSettingFrom } from '@utils/config/platformSettings';
 import type { RunEndResult } from '@texra-ai/harness';
 import type { AgentConfig } from '@texra-ai/harness/schemas';
 

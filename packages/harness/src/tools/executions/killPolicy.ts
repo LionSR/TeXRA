@@ -9,7 +9,7 @@ import { Effect } from 'effect';
 import { withLogChannel } from '@logger/effectLog';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import { GlobalStateKey } from '@shared/state/stateKeys';
-import { inspectSettingFrom } from '@utils/config/platformSettings';
+import { inspectSettingFrom } from '@shared/config/platformSettings';
 
 const CHANNEL = 'ExecutionsTool';
 

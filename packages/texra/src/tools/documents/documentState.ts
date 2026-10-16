@@ -28,6 +28,7 @@ import {
   type FileLocation,
   type ToolFact,
 } from '@shared/schemas';
+import { readSettingFrom } from '@shared/config/platformSettings';
 import {
   WORKFLOW_OUTPUT_BASENAME,
   workflowOutputRoundDir,
@@ -60,7 +61,6 @@ import {
   documentTaskOf,
   taskFileVars,
 } from '@texra/tools/documents/documentTask';
-import { readSettingFrom } from '@utils/config/platformSettings';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { pathToLocationIn } from '@utils/files/fileLocation';
 import { renderPrompt } from '@utils/prompt';

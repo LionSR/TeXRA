@@ -14,7 +14,7 @@ import {
 } from '@texra-ai/llm';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import { providerRegionSetting } from '@shared/state/providerSettings';
-import { useChinaRegion } from '@utils/config/providerConfig';
+import { useChinaRegion } from '@shared/config/providerConfig';
 import type { StateReadFailed } from '@texra-ai/harness';
 
 /** A value that differs between a provider's two platforms. */

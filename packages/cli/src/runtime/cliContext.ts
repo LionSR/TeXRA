@@ -21,8 +21,8 @@ import {
   type TexraApprovalPolicy,
 } from '@shared/approvalPolicy';
 import { stricterPolicy } from '@shared/approvalBypassKind';
+import { readConfigSettingFrom } from '@shared/config/platformSettings';
 import type { SkillSourceOptions } from '@skills/skillSources';
-import { readConfigSettingFrom } from '@utils/config/platformSettings';
 import { absentReason } from '@utils/files/fsEntryExists';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { envVar } from '@utils/system/envFlags';

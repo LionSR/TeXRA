@@ -24,6 +24,7 @@ import {
   writeSetting,
 } from '@shared/config/settingsAccess';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
+import { readSettingFrom } from '@shared/config/platformSettings';
 import {
   FakeScopedConfigProvider,
   FakeStateStore,
@@ -44,7 +45,6 @@ import type { DerivedSettingsSnapshot } from '@texra/shared/settingsView/setting
 import { dispatchSettingsViewOutbound } from '@texra/shared/settingsView/settingsViewMessages';
 import { DocumentsStateKey } from '@texra/shared/settingsView/documentsSettings';
 import { orchestratorKillDenial } from '@tools/executions/killPolicy';
-import { readSettingFrom } from '@utils/config/platformSettings';
 
 function entryByKey(key: string): StateSettingEntry {
   const entry = TEXRA_SETTINGS.byKey(key);

@@ -13,8 +13,8 @@ import type {
   ToolUseLog,
   ToolCallStatus,
 } from '@shared/schemas';
+import { readSettingFrom } from '@shared/config/platformSettings';
 import { ClaudeAgentStateKey } from '@texra/shared/settingsView/integrationSettings';
-import { readSettingFrom } from '@utils/config/platformSettings';
 import { truncateSummary } from '@utils/text/stringUtils';
 
 import {

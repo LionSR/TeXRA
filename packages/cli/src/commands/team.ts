@@ -12,7 +12,7 @@ import {
   TEXRA_APPROVAL_POLICY_CONFIG_KEY,
   type TexraApprovalPolicy,
 } from '@shared/approvalPolicy';
-import { readConfigSettingFrom } from '@utils/config/platformSettings';
+import { readConfigSettingFrom } from '@shared/config/platformSettings';
 import { filterNotNullish } from '@utils/core';
 
 import { missingAgentMessage, missingTeamMessage } from '../runtime/agents';

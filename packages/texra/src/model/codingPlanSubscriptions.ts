@@ -2,15 +2,15 @@ import type { SettingsStores } from '@shared/config/settingsAccess';
 import { providerRegionSetting } from '@shared/state/providerSettings';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import {
-  CODING_PLAN_SUBSCRIPTIONS,
-  type CodingPlanSubscription,
-} from '@texra/shared/model/codingPlans';
-import {
   getGLMCodingPlan,
   getPreferKimiCode,
   setGLMCodingPlan,
-} from '@utils/config/providerConfig';
-import { writeSettingTo } from '@utils/config/platformSettings';
+} from '@shared/config/providerConfig';
+import { writeSettingTo } from '@shared/config/platformSettings';
+import {
+  CODING_PLAN_SUBSCRIPTIONS,
+  type CodingPlanSubscription,
+} from '@texra/shared/model/codingPlans';
 import type { ConfigWriteFailed, StateReadFailed } from '@texra-ai/harness';
 import type { Effect } from 'effect';
 

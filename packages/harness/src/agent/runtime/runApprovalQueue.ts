@@ -46,7 +46,7 @@ import { writeRefused, type RequestError } from '@shared/session/requestErrors';
 import type { Outcome, RuntimeRequest } from '@shared/session/runtimeRequest';
 import { parentEdgeOf } from '@shared/session/runRelation';
 import type { UnfoldedDraft } from '@shared/session/sessionEvents';
-import { readConfigSettingFrom } from '@utils/config/platformSettings';
+import { readConfigSettingFrom } from '@shared/config/platformSettings';
 import { type PerKeyLane, withPerKeyLane } from '@utils/core/perKeyQueue';
 
 import type { SessionHandle } from './SessionHandle';

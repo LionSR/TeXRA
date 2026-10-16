@@ -13,7 +13,7 @@ import type { StateReadFailed } from '@platform/interfaces';
 
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
-import { readSettingFrom } from '@utils/config/platformSettings';
+import { readSettingFrom } from '@shared/config/platformSettings';
 
 /** Empty when the caller has no workspace, or when commit marking is off. */
 export function getGitAuthorEnv(

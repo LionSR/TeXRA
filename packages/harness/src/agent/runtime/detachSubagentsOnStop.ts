@@ -1,7 +1,7 @@
 import { Effect } from 'effect';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import { GlobalStateKey } from '@shared/state/stateKeys';
-import { readSettingFrom } from '@utils/config/platformSettings';
+import { readSettingFrom } from '@shared/config/platformSettings';
 
 /**
  * Whether stopping or killing an agent stream should detach its active child

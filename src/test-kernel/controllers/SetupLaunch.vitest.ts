@@ -41,7 +41,7 @@ vi.mock('@texra/model/modelOptions', () => ({
     })),
 }));
 
-vi.mock('@utils/config/providerConfig', () => ({
+vi.mock('@shared/config/providerConfig', () => ({
   getUseOpenRouter: mocks.getUseOpenRouter,
 }));
 

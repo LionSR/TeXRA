@@ -43,7 +43,7 @@ import {
   TEXRA_APPROVAL_POLICY_CONFIG_KEY,
   type TexraApprovalPolicy,
 } from '@shared/approvalPolicy';
-import { readConfigSettingFrom } from '@utils/config/platformSettings';
+import { readConfigSettingFrom } from '@shared/config/platformSettings';
 import { aggregateError, generateRunId } from '@utils/core';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 

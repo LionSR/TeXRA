@@ -19,9 +19,9 @@ import {
   type ToolResult,
 } from '@shared/schemas';
 import { refusalCopy, refusalOf } from '@shared/session/approvalDecision';
+import { readSettingFrom } from '@shared/config/platformSettings';
 import { errorResult } from '@tools/core/result';
 import { clamp } from '@utils/core';
-import { readSettingFrom } from '@utils/config/platformSettings';
 import { workspaceRelativePath } from '@utils/files/workspaceFS';
 import {
   buildDiffHunks,

@@ -12,8 +12,8 @@ import { GOAL_CONTINUATION_TEMPLATE } from '@agent/runtime/bundledPrompts';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { goalElapsedMs } from '@shared/plugins/goal';
 import { GOAL_MAX_COST_SETTING, type RunId } from '@shared/schemas';
+import { readSettingFrom } from '@shared/config/platformSettings';
 import type { Continuation } from '@tools/toolTable';
-import { readSettingFrom } from '@utils/config/platformSettings';
 import { renderPrompt } from '@utils/prompt';
 import { formatCompactDuration, formatCostUsd } from '@utils/text/stringUtils';
 

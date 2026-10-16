@@ -11,8 +11,8 @@ import {
   type AgentCliEffort,
   type ToolError,
 } from '@shared/schemas';
+import { readSettingFrom } from '@shared/config/platformSettings';
 import { CodexStateKey } from '@texra/shared/settingsView/integrationSettings';
-import { readSettingFrom } from '@utils/config/platformSettings';
 import { withPerKeyLane, type PerKeyLane } from '@utils/core/perKeyQueue';
 import { executeCommand } from '@utils/system/execUtils';
 import {

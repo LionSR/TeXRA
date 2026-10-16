@@ -11,7 +11,7 @@ import {
 import { DEFAULT_HELPER_MODEL } from '@shared/constants/defaultModels';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import { GlobalStateKey } from '@shared/state/stateKeys';
-import { readSettingFrom } from '@utils/config/platformSettings';
+import { readSettingFrom } from '@shared/config/platformSettings';
 
 const CHANNEL = 'helperModel';
 

@@ -56,10 +56,10 @@ import {
   ToolError,
 } from '@shared/schemas';
 import { DELIVERY_TAG } from '@shared/deliveryTags';
+import { readSettingFrom } from '@shared/config/platformSettings';
 import { CodexStateKey } from '@texra/shared/settingsView/integrationSettings';
 import { buildSyntheticToolUseConfig } from '@texra/tools/core/syntheticAgentConfig';
 import { buildAgentWorkspaceOptions } from '@texra/tools/agentWorkspaceOptions';
-import { readSettingFrom } from '@utils/config/platformSettings';
 import { formatWallTimeSeconds, previewLabel } from '@utils/text/stringUtils';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 

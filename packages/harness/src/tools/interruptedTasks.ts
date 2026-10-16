@@ -33,7 +33,7 @@ import {
 } from '@shared/schemas';
 import { isTerminalOutcomePhase } from '@shared/runs/runStatus';
 import { claimStanding } from '@shared/session/database';
-import { readSettingFrom } from '@utils/config/platformSettings';
+import { readSettingFrom } from '@shared/config/platformSettings';
 
 const CHANNEL = 'InterruptedTasks';
 

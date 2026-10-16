@@ -11,6 +11,7 @@ import {
   type FileLocation,
   type RunStorageFileLocation,
 } from '@shared/schemas';
+import { readSettingFrom } from '@shared/config/platformSettings';
 import { stripWorkflowRoundDir } from '@texra/shared/constants/workflowOutput';
 import { DocumentsStateKey } from '@texra/shared/settingsView/documentsSettings';
 import { LATEX_CONFIG_RANGES } from '@texra/shared/constants/latexConfig';
@@ -28,7 +29,6 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 import { normalizeFilePath } from '@utils/core';
 import { truncatedHexId } from '@utils/core/idHash';
 import { hasExtension } from '@utils/core/pathCore';
-import { readSettingFrom } from '@utils/config/platformSettings';
 import { sanitizePathSegment } from '@utils/text/sanitizePathSegment';
 
 import {

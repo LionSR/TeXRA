@@ -35,6 +35,7 @@ import {
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import { type ModelOptionData } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
+import { readSettingFrom } from '@shared/config/platformSettings';
 import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 import {
   type CopilotRouteInfo,
@@ -47,7 +48,6 @@ import {
   isFastFirstResponseModel,
 } from '@texra/shared/model/modelPicker';
 import { byName } from '@utils/core';
-import { readSettingFrom } from '@utils/config/platformSettings';
 
 interface SettingsModelSelectionControllerDeps<R> {
   /**

@@ -6,6 +6,7 @@ import { Effect } from 'effect';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import { ToolError } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
+import { readSettingFrom } from '@shared/config/platformSettings';
 import { ensureError } from '@utils/errors/errorMessage';
 import { normalizeFilePath } from '@utils/core';
 import { locateInWorkspace } from '@utils/files/workspaceFS';
@@ -15,7 +16,6 @@ import {
   type MatchedExternalRoot,
   type StepRoot,
 } from '@utils/files/externalRoots';
-import { readSettingFrom } from '@utils/config/platformSettings';
 import {
   getPathSegments,
   isPathWithin,

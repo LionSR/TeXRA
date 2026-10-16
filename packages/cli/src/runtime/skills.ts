@@ -5,6 +5,7 @@ import { Effect } from 'effect';
 import { readInstalledPluginLoad } from '@common/plugins/pluginTrust';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import { AGENT_SKILLS_CONFIG_KEY } from '@shared/schemas';
+import { readSettingFrom } from '@shared/config/platformSettings';
 import type { SkillLoadIssue, SourcedSkill } from '@skills/loadSkills';
 import type { SkillSourceOptions } from '@skills/skillSources';
 import {
@@ -12,7 +13,6 @@ import {
   filterDiscoveredSkills,
   readDisabledSkills,
 } from '@skills/runtimeSkills';
-import { readSettingFrom } from '@utils/config/platformSettings';
 
 /**
  * Fold the contributions the command's platform init installed for `cwd`,

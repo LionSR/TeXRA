@@ -28,7 +28,7 @@ import {
   type DatabaseReadFailed,
 } from '@shared/session/database';
 import { SessionInputs } from '@shared/session/sessionInputs';
-import { readConfigSettingFrom } from '@utils/config/platformSettings';
+import { readConfigSettingFrom } from '@shared/config/platformSettings';
 import {
   LocalRuntimeSource,
   TextChunkSource,

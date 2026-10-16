@@ -5,7 +5,7 @@ import { Effect, FileSystem } from 'effect';
 import type { AgentTrace } from '@agent/trace';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import type { InvocationRef, RunId } from '@shared/schemas';
-import { readSettingFrom } from '@utils/config/platformSettings';
+import { readSettingFrom } from '@shared/config/platformSettings';
 import { runDirUnder } from '@utils/files/runStorageFs';
 import { sanitizePathSegment } from '@utils/text/sanitizePathSegment';
 

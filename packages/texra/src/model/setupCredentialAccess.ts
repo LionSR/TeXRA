@@ -8,9 +8,9 @@ import {
 } from '@model/computeModelOptions';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import { isModelOptionAvailable } from '@shared/schemas';
+import { getUseOpenRouter } from '@shared/config/providerConfig';
 import { modelOptionsFrom } from '@texra/model/modelOptions';
 import { SETUP_MODEL_BY_PROVIDER } from '@texra/model/setupModelDefaults';
-import { getUseOpenRouter } from '@utils/config/providerConfig';
 import type { PlatformSecrets, LanguageModel } from '@texra-ai/harness';
 
 /**

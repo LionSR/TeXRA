@@ -68,12 +68,12 @@ import {
   isActivePhase,
   isTranscriptSettlementPhase,
 } from '@shared/runs/runStatus';
+import { readConfigSettingFrom } from '@shared/config/platformSettings';
 import { DisposableStore } from '@texra/platform/disposable';
 import { subscribeToSignalChanges } from '@texra/shared/signals';
 import { serviceSession } from '@texra/controllers/server/serviceSession';
 import { documentTaskOf } from '@texra/tools/documents/documentTask';
 import { sessionStoreMovedAsideMessage } from '@ui/copy/sessionStore';
-import { readConfigSettingFrom } from '@utils/config/platformSettings';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import {
