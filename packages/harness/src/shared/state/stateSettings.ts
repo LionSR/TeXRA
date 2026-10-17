@@ -362,7 +362,7 @@ const HARNESS_CONFIG_ROWS: Record<
   'chatgptCodex.preferSubscription': {
     schema: z.boolean().prefault(false),
     description:
-      'Prefer your signed-in ChatGPT subscription for Codex-eligible OpenAI models instead of API-key routing. Experimental. Subscription routing defaults to a 272K-token input budget; use chatgptCodex.contextWindowK to override it.',
+      'Prefer your signed-in ChatGPT subscription for Codex-eligible OpenAI models instead of API-key routing. Experimental. Subscription routing takes the input window the Codex backend grants each model; use chatgptCodex.contextWindowK to override it.',
     onWrite: SUBSCRIPTION_PREFERENCE_WRITE,
   },
   'chatgptCodex.contextWindowK': {
@@ -370,7 +370,8 @@ const HARNESS_CONFIG_ROWS: Record<
       .int()
       .min(CHATGPT_CODEX_CONTEXT_WINDOW_SETTING.min)
       .max(CHATGPT_CODEX_CONTEXT_WINDOW_SETTING.max)
-      .prefault(CHATGPT_CODEX_CONTEXT_WINDOW_SETTING.defaultValue),
+      .nullable()
+      .prefault(null),
     title: 'Subscription input token budget (K tokens)',
     description: CHATGPT_CODEX_CONTEXT_WINDOW_SETTING.description,
     category: 'model',

@@ -14,11 +14,7 @@ import { setLogSink } from '@logger/logSink';
 import { readModelOptions, type ModelOption } from '@model/computeModelOptions';
 import { LanguageModel } from '@platform/languageModel';
 import { DEFAULT_MODELS } from '@shared/constants/defaultModels';
-import {
-  CHATGPT_CODEX_CONTEXT_WINDOW_SETTING,
-  isModelOptionAvailable,
-  type ModelOptionData,
-} from '@shared/schemas';
+import { isModelOptionAvailable, type ModelOptionData } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { FakeSecrets, FakeStateStore } from '@test/support/FakePlatform';
 import { captureLogEntries } from '@test/support/logSinkCapture';
@@ -539,8 +535,7 @@ describe('model availability', () => {
         expect(model.availability).toBe('subscription-access');
         expect(model.context).toBe(
           `${Math.round(
-            (CHATGPT_CODEX_CONTEXT_WINDOW_SETTING.defaultValue *
-              CHATGPT_CODEX_CONTEXT_WINDOW_SETTING.tokensPerUnit +
+            ((MODEL_CONFIGS[GPT55].codexSubscription?.contextWindow ?? 0) +
               MODEL_CONFIGS[GPT55].maxOutputTokens) /
               1000,
           )}K`,

@@ -61,10 +61,10 @@ export interface RouteFacts<C = unknown> {
    *  outranks its path. */
   readonly glmCodingPlan: boolean;
   /**
-   * The context window, in tokens, the user grants the ChatGPT subscription
-   * (`routeConfig` caps the model's window at it).
+   * The user's input window override, in tokens, for the ChatGPT
+   * subscription; `undefined` takes the window the backend grants the model.
    */
-  readonly chatgptContextWindow: number;
+  readonly chatgptContextWindow: number | undefined;
   /**
    * The host's endpoint per provider id: a dashboard URL, or the default of
    * the region the provider's toggle picks. A provider absent here takes its
@@ -111,7 +111,11 @@ export type ModelRoute<C = unknown> =
       readonly route: C | undefined;
     }
   | { readonly kind: 'openrouter-unsupported' }
-  | { readonly kind: 'chatgpt-subscription' }
+  | {
+      readonly kind: 'chatgpt-subscription';
+      /** The input window the Codex backend grants this model. */
+      readonly contextWindow: number;
+    }
   | { readonly kind: 'xai-subscription' }
   | { readonly kind: 'openrouter' }
   | {
@@ -123,17 +127,18 @@ export type ModelRoute<C = unknown> =
   | { readonly kind: 'no-api-key' };
 
 /**
- * Whether the Codex backend serves `model` on a ChatGPT subscription: the
- * llm-zoo `codexSubscription` flag, which records the backend's own model
- * manifest. Serving status is a fact about the backend, so it lives in the
- * registry data; a retired model must flip the flag there.
+ * How the Codex backend serves `model` on a ChatGPT subscription, or
+ * `undefined` when it does not: the llm-zoo `codexSubscription` entry, which
+ * records the backend's own model catalog and the input window it grants.
+ * Serving status is a fact about the backend, so it lives in the registry
+ * data; a retired model must drop the entry there.
  */
-function isCodexSubscriptionEligible(model: ModelConfig): boolean {
-  return (
-    model.provider === ModelProvider.OPENAI &&
-    !model.openRouterOnly &&
-    model.codexSubscription === true
-  );
+function codexSubscriptionOf(
+  model: ModelConfig,
+): ModelConfig['codexSubscription'] {
+  return model.provider === ModelProvider.OPENAI && !model.openRouterOnly
+    ? model.codexSubscription
+    : undefined;
 }
 
 /** Trailing llm-zoo date pin (`-2026-04-23`) on a model `id`. */
@@ -260,13 +265,14 @@ export function decideModelRoute<C>(
   }
   // The subscriptions are preferences: signed out, the model takes its key.
   // The Codex backend serves no provider reasoning mode (OpenAI `pro`).
+  const codex = codexSubscriptionOf(config);
   if (
     facts.chatgptSubscription &&
     facts.mode === undefined &&
     !viaOpenRouter &&
-    isCodexSubscriptionEligible(config)
+    codex !== undefined
   ) {
-    return { kind: 'chatgpt-subscription' };
+    return { kind: 'chatgpt-subscription', contextWindow: codex.contextWindow };
   }
   if (
     facts.xaiSubscription &&
@@ -334,7 +340,7 @@ export function routeConfig(
   switch (route.kind) {
     case 'chatgpt-subscription': {
       const inputTokenLimit = Math.min(
-        facts.chatgptContextWindow,
+        facts.chatgptContextWindow ?? route.contextWindow,
         config.contextWindow,
       );
       return {

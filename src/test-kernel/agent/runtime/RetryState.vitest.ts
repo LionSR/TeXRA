@@ -777,7 +777,7 @@ describe('ModelInvoker retry', () => {
         ]);
 
         const kit = yield* openRun(session, stub.model, {
-          route: { kind: 'chatgpt-subscription' },
+          route: { kind: 'chatgpt-subscription', contextWindow: 272_000 },
         });
         yield* Effect.promise(() => seedActiveRun(session, kit.runId));
         const outcome = yield* invokeOn(kit);
