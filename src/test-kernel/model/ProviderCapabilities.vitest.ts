@@ -168,7 +168,7 @@ describe('ChatGPT subscription model routing', () => {
   const prospectiveRoute = () =>
     withProcessServices(
       testRuntime(),
-      readModelOptions(hostStores(), ['openai/gpt-5.5-2026-04-23']).pipe(
+      readModelOptions(hostStores(), ['openai/gpt-5.6-sol']).pipe(
         Effect.map(([option]) => option?.usageRoute),
       ),
     );

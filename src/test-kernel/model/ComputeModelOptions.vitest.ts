@@ -529,14 +529,14 @@ describe('model availability', () => {
         );
 
         const [model] = modelOptionsFrom(
-          yield* availabilityInputs(hostStores(), [GPT55]),
+          yield* availabilityInputs(hostStores(), [GPT56]),
         );
 
         expect(model.availability).toBe('subscription-access');
         expect(model.context).toBe(
           `${Math.round(
-            ((MODEL_CONFIGS[GPT55].codexSubscription?.contextWindow ?? 0) +
-              MODEL_CONFIGS[GPT55].maxOutputTokens) /
+            ((MODEL_CONFIGS[GPT56].codexSubscription?.contextWindow ?? 0) +
+              MODEL_CONFIGS[GPT56].maxOutputTokens) /
               1000,
           )}K`,
         );
