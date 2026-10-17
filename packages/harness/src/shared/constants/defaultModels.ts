@@ -38,6 +38,7 @@ export const DEFAULT_MODELS: readonly string[] = [
   'anthropic/claude-sonnet-5-5',
   'anthropic/claude-opus-5-5',
   'anthropic/claude-fable-5-1',
+  'google/gemini-4-argon',
   'google/gemini-3.8-flash',
   'google/gemini-3.1-pro-preview',
 

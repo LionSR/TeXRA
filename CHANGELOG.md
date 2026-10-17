@@ -624,11 +624,12 @@ history`, a resume and a follow-up say it was "written by an earlier
   272K default for all. Settings → Subscriptions → ChatGPT → Advanced →
   Input token budget is now an override: leave it empty for each model's
   own window, or set a value for every model, as before.
-- **Gemini 4 Argon and Claude Haiku 5.5 are in the model list.** The model
-  catalog (llm-zoo 3.0.0) also updates Claude Sonnet 5.5's cache price
-  and MiniMax prices and retirements, and marks Claude Haiku 4.5
-  deprecated. GPT-5.5, GPT-5.4 and GPT-5.4 mini no longer route through a ChatGPT
-  subscription, since the Codex backend no longer serves them.
+- **Gemini 4 Argon is in the default model list, and Claude Haiku 5.5 is
+  available.** The model catalog (llm-zoo 3.0.0) also updates Claude
+  Sonnet 5.5's cache price and MiniMax prices and retirements, and marks
+  Claude Haiku 4.5 deprecated. GPT-5.5, GPT-5.4 and GPT-5.4 mini no longer
+  route through a ChatGPT subscription, since the Codex backend no longer
+  serves them.
 
 - **Claude Max and Team plans' API credits are pointed out where you add an
   Anthropic key.** The welcome card, the Anthropic row in Settings → API
