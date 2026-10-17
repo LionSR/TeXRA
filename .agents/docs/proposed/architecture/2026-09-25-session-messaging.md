@@ -643,7 +643,7 @@ change. What it does, and where it differs from the plan above:
   `deliverResumeWakeFailure`, `formatFollowUpInstruction` and
   `stripOrchestratorFollowup` are deleted. A call with no calling run speaks
   as the user. Any sender may wake an idle run.
-- **The listing** moved to `src/tools/executions/runListing.ts` and marks
+- **The listing** moved to `src/tools/executions/executionListing.ts` and marks
   each run with what it is to the caller (`(your orchestrator)`,
   `(your sibling)`, `(your upstream orchestrator)`, …) from the one
   `runRelation` reading, with an `unread=N` count from the live view.
