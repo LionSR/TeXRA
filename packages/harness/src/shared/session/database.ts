@@ -7,7 +7,7 @@
  *   `DatabaseRowCorrupt` or `DatabaseRowEarlier` is unreadable, never resumed.
  * - `DatabaseWriteFailed`: nothing written; a run ends (`findStorageRefusal`).
  * - `DatabaseStoreNewer`, the cause of any of these: the store is refused whole.
- * - `DatabaseNotOwner` and `DatabaseClaimRefused`, never wrapped (D6 b):
+ * - `DatabaseNotOwner` and `DatabaseClaimRefused`, never wrapped:
  *   nothing written; a run that lost its own claim stops, and one another
  *   process holds is refused as held elsewhere ({@link heldElsewhereBy}).
  */
@@ -50,7 +50,7 @@ export const INPUT_HISTORY_LINE_LIMIT = 4000;
 export const DeletionModeSchema = z.enum(['single', 'bulk', 'automatic']);
 export type DeletionMode = z.infer<typeof DeletionModeSchema>;
 
-/** C7's current claim and existence, independent of historical event writers. */
+/** The current claim and existence, independent of historical event writers. */
 export const AggregateStateSchema = z.object({
   aggregateId: AggregateIdSchema,
   /** The incarnation's durable identity, minted with its first row. */
@@ -65,7 +65,7 @@ export const AggregateStateSchema = z.object({
 export type AggregateState = z.infer<typeof AggregateStateSchema>;
 
 /**
- * C5's current claim on one aggregate, its owner's liveness proved in the same
+ * The current claim on one aggregate, its owner's liveness proved in the same
  * call (`self` is this process; a null owner is unclaimed or absent): what a
  * resume gate and the run listing ask, never the fold, whose prober watches
  * only owners of runs already resident in the view. */
@@ -106,7 +106,7 @@ export class DatabaseOpenFailed extends Data.TaggedError('DatabaseOpenFailed')<{
   override readonly message = storeFailureMessage(this.cause);
 }
 
-/** A batch was rejected whole (C6): no member, sequence or wake level moved. */
+/** A batch was rejected whole: no member, sequence or wake level moved. */
 export class DatabaseWriteFailed extends Data.TaggedError(
   'DatabaseWriteFailed',
 )<{
@@ -116,9 +116,9 @@ export class DatabaseWriteFailed extends Data.TaggedError(
   override readonly message = storeFailureMessage(this.cause);
 }
 
-/** C5: a batch member targets an aggregate this process does not hold open;
+/** A batch member targets an aggregate this process does not hold open;
  *  nothing was written. Ownership, not the disk, so it is never wrapped in
- *  `DatabaseWriteFailed` (D6 b). */
+ *  `DatabaseWriteFailed`. */
 export class DatabaseNotOwner extends Data.TaggedError('DatabaseNotOwner')<{
   readonly aggregateId: AggregateId;
   /** The holder and closure at refusal time, read in the refusing transaction. */
@@ -262,9 +262,9 @@ export class Database extends Context.Service<
     /** Set when this open moved a pre-1.0 or damaged store aside. */
     readonly movedAside: SessionStoreMovedAside | null;
     /**
-     * C6: append an ordered batch across aggregates, whole or not at all, in
+     * Append an ordered batch across aggregates, whole or not at all, in
      * the caller's {@link job} or its own transaction; `seq` and `commit`
-     * follow batch order and the writer is this process (C5). A target this
+     * follow batch order and the writer is this process. A target this
      * process does not hold open refuses the batch as `DatabaseNotOwner`;
      * any other rollback is `DatabaseWriteFailed`.
      */
@@ -330,7 +330,7 @@ export class Database extends Context.Service<
       id: AggregateId,
       fromSeq: number,
     ) => Effect.Effect<readonly DisplaySessionEvent[], DatabaseReadFailed>;
-    /** C5: who holds one aggregate right now, with its owner's liveness
+    /** Who holds one aggregate right now, with its owner's liveness
      *  proved in this call. The one ownership read that is fresh by
      *  construction, so a cold run's long-dead owner is never reported held.
      *  An absent or tombstoned aggregate is unclaimed: a closed row keeps the
@@ -347,7 +347,7 @@ export class Database extends Context.Service<
       readonly AggregateId[],
       DatabaseReadFailed | DatabaseClaimError
     >;
-    /** C9: prove the tree's owners off the publisher, then answer its job
+    /** Prove the tree's owners off the publisher, then answer its job
      *  (`SessionEvents.removeRun`): reread, claim, append the tombstone. */
     readonly prepareRunRemoval: (
       id: AggregateId,
@@ -357,12 +357,12 @@ export class Database extends Context.Service<
       Effect.Effect<readonly SessionEvent[], DatabaseClaimError>,
       DatabaseReadFailed | DatabaseWriteFailed
     >;
-    /** C9: the `run.removed` tombstones cleanup has not collected. */
+    /** The `run.removed` tombstones cleanup has not collected. */
     readonly readPendingDeletions: () => Effect.Effect<
       readonly SessionEvent[],
       DatabaseReadFailed
     >;
-    /** C9: `cleanup` removes a tombstone's run directories, then its closed
+    /** `cleanup` removes a tombstone's run directories, then its closed
      *  aggregate, dependents, rows and orphaned blobs go. Every step may run
      *  twice; a failed cleanup keeps the tombstone for the next pass. */
     readonly collectDeletion: (
@@ -373,7 +373,7 @@ export class Database extends Context.Service<
     readonly releaseClaims: (
       ids: readonly AggregateId[],
     ) => Effect.Effect<void, DatabaseWriteFailed>;
-    /** C7's event prefix, current claims and damaged runs from one read. */
+    /** The event prefix, current claims and damaged runs from one read. */
     readonly readInputBatch: (
       ids: readonly AggregateId[],
       fromCommit: CommitOrdinal,

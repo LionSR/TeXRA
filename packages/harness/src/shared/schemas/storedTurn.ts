@@ -11,7 +11,7 @@
  * {@link ProviderEvidenceSchema}: bytes this store keeps and never interprets.
  * The package parses them when it replays to its own protocol, and refuses
  * another protocol's evidence there. `RunHistory` converts between these
- * shapes and the package's (`packages/harness/src/agent/runtime/storedTurn.ts`).
+ * shapes and the package's.
  */
 import { z } from 'zod';
 

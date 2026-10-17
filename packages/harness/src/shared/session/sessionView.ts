@@ -1,14 +1,14 @@
 /**
- * The one session state every renderer reads. Fold output, never persisted, never parsed: the schema is the
- * type's single source of truth, so a field lands here first and every host
- * reads the same name.
+ * The one session state every renderer reads. Fold output, never persisted,
+ * never parsed: a field lands here first and every host reads its name.
  *
  * `SessionView` holds `Map`s because it never crosses a bridge; only events,
  * chunks, and `local` do, and those are arrays and records.
  *
  * Interaction state (selection, drafts, recording, expansion, focus, scroll)
- * is never here (G3); `sessionPresentationBoundary.vitest.ts` pins the names.
+ * is never here.
  */
+// `sessionPresentationBoundary.vitest.ts` pins the interaction-state names.
 import { z } from 'zod';
 
 import { ApprovalPolicySnapshotSchema } from '@shared/approvalBypassKind';
@@ -57,7 +57,7 @@ const SessionKeySchema = z.string().min(1);
  * projection's working state, the live text per streaming row) in a
  * module-private map beside it, so a host can neither depend on nor mutate
  * them. The slice is replaced on every change and never written after the
- * fold that produced it returns (D5). Row and block elements are the shared
+ * fold that produced it returns. Row and block elements are the shared
  * renderers' own TypeScript shapes, stated here rather than re-declared.
  */
 const TranscriptViewSchema = z.object({

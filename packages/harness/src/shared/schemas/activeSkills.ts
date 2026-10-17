@@ -8,7 +8,7 @@ export const SKILL_CATALOG_MAX_SKILLS = 200;
 export const ACTIVATED_SKILLS_MAX = 20;
 
 /** Canonical skill-source scope vocabulary, shared with the skills loader
- *  (`packages/harness/src/skills/loadSkills.ts`) and the persisted disabled-source setting, so
+ *  and the persisted disabled-source setting, so
  *  a scope added here is representable everywhere. */
 export const ActiveSkillSourceScopeSchema = z.enum([
   'bundled',
