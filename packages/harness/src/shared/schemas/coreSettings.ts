@@ -55,7 +55,8 @@ export const MODEL_COMPACTION_THRESHOLD_SETTING = Object.freeze({
 } as const);
 
 /**
- * Bounds, default, and copy for the ChatGPT-subscription input budget.
+ * Bounds and copy for the ChatGPT-subscription input budget; unset, each
+ * model takes the window the Codex backend grants it.
  *
  * The stored unit is **thousands of tokens**, and the key says so. Every
  * budget in play is a round multiple of 1000 (272K, 400K, 872K), so a raw

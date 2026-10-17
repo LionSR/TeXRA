@@ -177,7 +177,9 @@ export function renderSettingsNumberRow(
     const input = event.target as WaInput;
     const raw = input.value;
     if (typeof raw !== 'string' || raw.trim() === '') {
-      if (options.onClear) {
+      // A number input reads empty for unparseable text too; only a field
+      // the user emptied clears the setting.
+      if (options.onClear && !input.input.validity.badInput) {
         options.onClear();
         return;
       }
