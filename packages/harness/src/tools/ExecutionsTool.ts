@@ -63,7 +63,7 @@ import {
   ExecutionsToolInputSchema,
   type ExecutionsToolInput,
 } from './executions/toolInput';
-import { listRuns } from './executions/runListing';
+import { listExecutions } from './executions/executionListing';
 import { missingRun, sendToRun } from './executions/send';
 import { turnAttributionNote } from './executions/turnAttribution';
 import { shouldSkipWait } from './executions/waitCoordination';
@@ -168,11 +168,21 @@ const EXECUTION_ROUTES: ReadonlyArray<{
     summary: 'List executions (paginated; use offset/limit for pages)',
     actions: {
       view: ({ context, input }) =>
-        listRuns(context.session, context.runId, input.offset, input.limit),
+        listExecutions(
+          context.session,
+          context.runId,
+          input.offset,
+          input.limit,
+        ),
       wait: ({ context, input }) =>
         waitForRuns(context, input.timeout, input.ids).pipe(
           Effect.andThen(
-            listRuns(context.session, context.runId, input.offset, input.limit),
+            listExecutions(
+              context.session,
+              context.runId,
+              input.offset,
+              input.limit,
+            ),
           ),
         ),
       query: ({ context, input }) =>

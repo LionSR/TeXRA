@@ -33,7 +33,7 @@ draw on five different sources:
 
 | Source                                                                                                | Paths                                                                                            |
 | ----------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
-| Listing fold, `session.readView([])`                                                                  | `/executions` (`executions/runListing.ts`), `/children`, `/todos`, the `/config` category filter |
+| Listing fold, `session.readView([])`                                                                  | `/executions` (`executions/executionListing.ts`), `/children`, `/todos`, the `/config` category filter |
 | One aggregate folded, `readView([runId])`                                                             | `/executions/{id}` (workflow board)                                                              |
 | Private run records, `getRunRecords` (`run.report`, `run.result`, `run.record`, `run.workspaceFiles`) | `/report`, `/result`, `/config`, `/workspace-files`                                              |
 | Transcript fold, `readCompletedRunConversation` → `readRunTranscript`                                 | `/conversation`                                                                                  |
