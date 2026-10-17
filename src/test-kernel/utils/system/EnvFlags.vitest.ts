@@ -1,8 +1,8 @@
 import { Effect } from 'effect';
 import { describe, expect, it } from 'vitest';
 
+import { envFlag } from '@texra-ai/harness/node';
 import { withEnv } from '@test/support/testEnv';
-import { envFlag } from '@utils/system/envFlags';
 
 const readFlag = (env: Record<string, string>): boolean =>
   Effect.runSync(envFlag('FLAG').pipe(withEnv(env)));

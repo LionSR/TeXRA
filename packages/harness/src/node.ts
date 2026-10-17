@@ -40,6 +40,11 @@ export {
 } from '@utils/system/execUtils';
 export { findCommand, type FoundCommand } from '@utils/system/binaryResolver';
 export { withExtendedPath } from '@utils/system/platformPaths';
+// The process environment as the harness reads it: a flag (any value but
+// unset, empty, `0`, `false`, `no` or `off` is on), and the environment a
+// child agent CLI starts from (no provider key but the one it authenticates
+// with).
+export { envFlag, inheritedEnv } from '@utils/system/envFlags';
 // Crash-safe replace of a file.
 export { writeFileAtomic } from '@utils/files/fsDurability';
 // The setting rows a `ConfigProvider` resolves against (its `catalog`): an

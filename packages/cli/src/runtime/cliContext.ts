@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import path from 'node:path';
 
-import { Effect, FileSystem, Result } from 'effect';
+import { Effect, FileSystem, Result, Config, Option } from 'effect';
 
 import {
   DatabaseOpenFailed,
@@ -29,7 +29,6 @@ import {
 } from '@texra/shared/cliOutputFormat';
 import { approvalPolicyLabel } from '@ui/copy/approvalPolicy';
 import { absentReason } from '@utils/files/fsEntryExists';
-import { envVar } from '@utils/system/envFlags';
 import { isNonEmptyString } from '@utils/text/stringUtils';
 
 import { isCliSupportedModelId, loadCliStartupConfig } from './cliConfig';
@@ -330,8 +329,8 @@ export interface BuildCliContextInit {
 
 /** One env-tier value from the ambient ConfigProvider, trimmed; blank reads as unset. */
 const envTier = (key: string): Effect.Effect<string | undefined> =>
-  Effect.map(envVar(key), (raw) => {
-    const value = raw?.trim();
+  Effect.map(Config.String(key).pipe(Config.option, Effect.orDie), (raw) => {
+    const value = Option.getOrUndefined(raw)?.trim();
     return isNonEmptyString(value) ? value : undefined;
   });
 

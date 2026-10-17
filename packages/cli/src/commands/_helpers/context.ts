@@ -1,9 +1,8 @@
-import { Effect, Layer } from 'effect';
+import { Effect } from 'effect';
 
 import { buildCliContext } from '@cli/runtime/cliContext';
 import { writeTextStderr } from '@cli/runtime/logSinks';
 import { nodeFileServices } from '@platform/defaults/jsonStore';
-import { processEnvConfigLayer } from '@utils/system/envFlags';
 
 import { pickGlobalArgs, type ParsedGlobalArgs } from './globalArgs';
 
@@ -36,5 +35,5 @@ export function contextFromArgs(
       for (const warning of printed) writeTextStderr(`WARN ${warning}`);
     }
     return context;
-  }).pipe(Effect.provide(Layer.merge(nodeFileServices, processEnvConfigLayer)));
+  }).pipe(Effect.provide(nodeFileServices));
 }

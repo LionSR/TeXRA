@@ -26,7 +26,6 @@
       "@utils/files/fsDurability",
       "@utils/files/fsEntryExists",
       "@utils/files/runStorageFs",
-      "@utils/system/envFlags",
       "@utils/text/stringUtils",
       "@utils/text/unifiedDiff"
     ],
@@ -45,7 +44,6 @@
       "@utils/files/fsDurability",
       "@utils/files/fsEntryExists",
       "@utils/files/workspaceFS",
-      "@utils/system/envFlags",
       "@utils/text/stringUtils",
       "@utils/text/unifiedDiff"
     ],
@@ -132,7 +130,6 @@
       "@utils/files/runStorageFs",
       "@utils/files/workspaceFS",
       "@utils/prompt",
-      "@utils/system/envFlags",
       "@utils/system/gitEnv",
       "@utils/system/toolUtils",
       "@utils/system/wslDetect",

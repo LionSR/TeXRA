@@ -1,7 +1,6 @@
-import { Data, Effect } from 'effect';
+import { Data, Effect, Config, Option } from 'effect';
 import * as ChildProcess from 'effect/process/ChildProcess';
 import { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
-import { envVar } from '@utils/system/envFlags';
 import type { PlatformError } from 'effect/PlatformError';
 
 /** The OS browser launcher could not open the URL. The message never
@@ -60,8 +59,12 @@ const launchBrowser = Effect.fn('launchBrowser')(function* (
   url: string,
 ): Effect.fn.Return<void, BrowserLaunchFailed, ChildProcessSpawner> {
   const wsl =
-    (yield* envVar('WSL_DISTRO_NAME')) !== undefined ||
-    (yield* envVar('WSL_INTEROP')) !== undefined;
+    Option.isSome(
+      yield* Config.String('WSL_DISTRO_NAME').pipe(Config.option, Effect.orDie),
+    ) ||
+    Option.isSome(
+      yield* Config.String('WSL_INTEROP').pipe(Config.option, Effect.orDie),
+    );
   const launch = resolveBrowserLaunch(url, wsl);
   const spawner = yield* ChildProcessSpawner;
   // Never the `PlatformError` message: it embeds the argv, and the argv is

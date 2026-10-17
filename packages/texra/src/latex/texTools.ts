@@ -2,7 +2,7 @@
 import * as path from 'node:path';
 
 // External imports
-import { Data, Effect, FileSystem } from 'effect';
+import { Data, Effect, FileSystem, Config, Option } from 'effect';
 import { z } from 'zod';
 
 // Local imports
@@ -12,7 +12,6 @@ import { Settings } from '@texra-ai/harness';
 import type { ExecResult, FileLocation } from '@shared/schemas';
 import { SUPPORTED_LATEX_COMPILERS } from '@texra/shared/constants/latexToolchain';
 import { runToolWithCheck } from '@texra/utils/system/toolChecks';
-import { envVar } from '@utils/system/envFlags';
 import { splitContentLines } from '@utils/text/stringUtils';
 import { LATEX_COMMANDS_CHANNEL as CHANNEL } from './latexLogging';
 import type { WorkspaceRoots } from '@texra-ai/harness';
@@ -101,11 +100,11 @@ const latexInputEnv = Effect.fn('texTools.latexInputEnv')(function* (
   texInputParts: readonly string[],
   bibSearchParts: readonly string[],
 ): Effect.fn.Return<Record<string, string>> {
-  const [tex, bib, bst] = yield* Effect.all([
-    envVar('TEXINPUTS'),
-    envVar('BIBINPUTS'),
-    envVar('BSTINPUTS'),
-  ]);
+  const [tex, bib, bst] = (yield* Effect.all([
+    Config.String('TEXINPUTS').pipe(Config.option, Effect.orDie),
+    Config.String('BIBINPUTS').pipe(Config.option, Effect.orDie),
+    Config.String('BSTINPUTS').pipe(Config.option, Effect.orDie),
+  ])).map(Option.getOrUndefined);
   const texInputs = buildKpathseaSearchPath(texInputParts, tex);
   const bibInputs = buildKpathseaSearchPath(bibSearchParts, bib);
   const bstInputs = buildKpathseaSearchPath(bibSearchParts, bst);
