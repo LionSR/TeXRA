@@ -1097,6 +1097,11 @@ show` print the same notice, and the new `texra agents customize`,
 
 ### Bug Fixes
 
+- **`texra`'s `/key` picker shows which providers already have a key.** Each
+  provider row reads "Key set", "Env" or "Not set", as the API-keys page of
+  `/config` already did. If the key store cannot be read, the rows read
+  "Status unavailable" and the error is reported in the transcript. The keys
+  themselves are never shown.
 - **ChatGPT-subscription models answer again.** After a change on
   ChatGPT's side, every call through a ChatGPT subscription failed with
   "The model returned an unsupported event". The extra information
