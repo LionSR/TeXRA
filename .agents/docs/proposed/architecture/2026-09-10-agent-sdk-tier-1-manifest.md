@@ -26,7 +26,7 @@ Status: proposed
 >    surface (`Plugin`, `Sessions.layer({ plugins })`, `Plugins.contribute` in a
 >    `Scope`, `Session.resume`) — not a frozen static-export list. The standing
 >    readiness re-verification
->    ([`2026-10-12-agent-sdk-readiness-reverify.md`](./2026-10-12-agent-sdk-readiness-reverify.md),
+>    ([`2026-10-17-agent-sdk-readiness-reverify.md`](./2026-10-17-agent-sdk-readiness-reverify.md),
 >    §Carried.3) is the standing re-verification of that surface; this rework
 >    re-scopes the manifest around the harness SDK rather than ratifying the old
 >    static enumeration — which would pin deleted names (`ToolHost`,
