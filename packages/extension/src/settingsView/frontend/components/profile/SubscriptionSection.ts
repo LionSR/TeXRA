@@ -84,8 +84,8 @@ export class SubscriptionSection extends LitElement {
   /** Parent-owned acknowledgement generation for restoring rejected edits. */
   @property({ attribute: false }) ackGeneration = 0;
   @property({ attribute: false }) auth: SubscriptionAuthStatus | null = null;
-  @property({ attribute: false }) contextWindow =
-    CHATGPT_CODEX_CONTEXT_WINDOW_SETTING.defaultValue;
+  /** The override in thousands of tokens; `null` is each model's own window. */
+  @property({ attribute: false }) contextWindow: number | null = null;
   @property({ attribute: false }) usage: SubscriptionUsageSnapshot | null =
     null;
   @property({ attribute: false }) now = 0;
@@ -195,11 +195,14 @@ export class SubscriptionSection extends LitElement {
                   ${renderSettingsNumberRow({
                     label: 'Input token budget',
                     description:
-                      'How much context TeXRA sends per request on your ChatGPT plan. The default matches Codex.',
-                    value: this.contextWindow,
+                      'How much context TeXRA sends per request on your ChatGPT plan. Leave it empty for the window Codex grants each model.',
+                    value: this.contextWindow ?? undefined,
+                    placeholder: 'Model default',
                     min: contextWindowSetting.min,
                     max: contextWindowSetting.max,
                     unit: contextWindowSetting.unitLabel,
+                    onClear: () =>
+                      postStateSetting(contextWindowSetting.configKey, null),
                     onChange: (value) =>
                       postStateSetting(contextWindowSetting.configKey, value),
                   })}

@@ -48,7 +48,9 @@ type SettingInputResult =
 function settingEditKind(entry: SurfacedSettingEntry): SettingEditKind {
   if (entry.openForm) return 'form';
   if (settingEnumOptions(entry)) return 'enum';
-  const schema = settingSchemaWithoutPrefault(entry);
+  const stored = settingSchemaWithoutPrefault(entry);
+  // A nullable setting edits as its value; Ctrl-R resets it to null.
+  const schema = stored instanceof z.ZodNullable ? stored.unwrap() : stored;
   if (schema instanceof z.ZodBoolean) return 'boolean';
   if (schema instanceof z.ZodNumber) return 'number';
   if (schema instanceof z.ZodString) return 'string';

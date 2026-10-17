@@ -15,7 +15,6 @@ import {
 import { customElement, property } from 'lit/decorators.js';
 
 // Local imports - shared styles, schemas, and templates
-import { CHATGPT_CODEX_CONTEXT_WINDOW_SETTING } from '@shared/schemas';
 import type { SubscriptionAuthStatuses } from '@shared/model/subscriptionAuth';
 import type { SubscriptionUsageSnapshots } from '@texra/shared/model/subscriptionUsage';
 import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
@@ -74,8 +73,8 @@ export class SubscriptionsTab extends LitElement {
   @property({ attribute: false }) ackGeneration = 0;
   @property({ attribute: false }) subscriptionAuth: SubscriptionAuthStatuses =
     {};
-  @property({ attribute: false }) chatgptCodexContextWindow =
-    CHATGPT_CODEX_CONTEXT_WINDOW_SETTING.defaultValue;
+  @property({ attribute: false }) chatgptCodexContextWindow: number | null =
+    null;
   @property({ attribute: false }) usage: SubscriptionUsageSnapshots | null =
     null;
   @property({ attribute: false }) copilotModels: CopilotRouteInfo[] = [];
