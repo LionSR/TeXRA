@@ -1084,6 +1084,11 @@ show` print the same notice, and the new `texra agents customize`,
 
 ### Bug Fixes
 
+- **ChatGPT-subscription models answer again.** The ChatGPT backend began
+  streaming a `response.metadata` event (serving-model, moderation and
+  safety notices beside the output), and every call failed as "The model
+  returned an unsupported event". It is now read as a notice that carries
+  no output.
 - **A `codex`/`claude_code` call no longer fails as "This run has finished"
   while another call resumes the same session.** When two calls resumed the
   same stale thread or session id at once, the second could be woken

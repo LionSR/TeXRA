@@ -433,6 +433,10 @@ const FRAMING_EVENTS = new Set([
   'response.reasoning_text.done',
   'response.function_call_arguments.delta',
   'response.function_call_arguments.done',
+  // ChatGPT's Codex backend: notices beside the output (the serving model,
+  // moderation, verification and safety-buffering hints, websocket turn
+  // state). Codex CLI shows them as UI notices; none changes the content.
+  'response.metadata',
 ]);
 
 /** One decoded Responses event: its sequence, its parts, whether it settles. */
