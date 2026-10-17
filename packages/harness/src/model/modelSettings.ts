@@ -232,12 +232,15 @@ export const readModelSettings = Effect.fn('readModelSettings')(function* (
           ),
           // Stored in thousands of tokens; this is its only reader.
           chatgptContextWindow: Effect.map(
-            Settings.get<number>(
+            Settings.get<number | null>(
               stores,
               CHATGPT_CODEX_CONTEXT_WINDOW_SETTING.configKey,
             ),
             (thousands) =>
-              thousands * CHATGPT_CODEX_CONTEXT_WINDOW_SETTING.tokensPerUnit,
+              thousands === null
+                ? undefined
+                : thousands *
+                  CHATGPT_CODEX_CONTEXT_WINDOW_SETTING.tokensPerUnit,
           ),
           endpoints: readEndpoints(stores),
         },
