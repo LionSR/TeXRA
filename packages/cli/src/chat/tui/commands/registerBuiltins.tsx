@@ -489,6 +489,7 @@ export function registerBuiltinSlashCommands(options: {
       onLoginSelect: options.onLoginSelect,
       onLogoutSelect: options.onLogoutSelect,
       onAccountChanged: options.onAccountChanged,
+      onError: options.onError,
     }),
     {
       pluginId: 'approval',

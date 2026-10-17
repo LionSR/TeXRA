@@ -453,6 +453,36 @@ describe('/config slash command wiring', () => {
       }),
   );
 
+  // Regression: `/key` mounted the provider picker without a status view, so
+  // no row said which providers already had a key.
+  it.live('shows each provider key status in the /key picker', () =>
+    Effect.gen(function* () {
+      const stores = makeFakeSettingsStores('cli').stores;
+      registerBuiltinSlashCommands({
+        secrets: new FakeSecrets({
+          [apiKeySecretName('openai')]: 'sk-private-test-key',
+        }),
+        stores,
+        runtime: testRuntime(),
+        runtimeSession: testDefaultSession(),
+        runSession: testSessionOf(testDefaultSession()),
+      });
+      openCliSlashCommandForm('key', '');
+      const rendered = yield* Effect.promise(() =>
+        renderInkElement(activeForm.get()?.render(() => undefined, 30)),
+      );
+      yield* Effect.addFinalizer(() =>
+        Effect.sync(() => rendered.instance.unmount()),
+      );
+
+      yield* Effect.promise(() =>
+        waitFor(() => rendered.stdout.output.includes('OpenAI — Key set')),
+      );
+      expect(rendered.stdout.output).toContain('Anthropic — Not set');
+      expect(rendered.stdout.output).not.toContain('sk-private-test-key');
+    }),
+  );
+
   it.live('persists writes through the accessor to the CLI store', () =>
     Effect.gen(function* () {
       const { stores, repoState } = makeFakeSettingsStores('cli');

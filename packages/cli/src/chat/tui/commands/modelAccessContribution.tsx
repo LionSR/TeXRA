@@ -4,6 +4,8 @@
 
 import { Effect } from 'effect';
 
+import { loadApiKeyStatusMap } from '@texra-ai/llm';
+
 import type { CliModelAccessSelection } from '@cli/runtime/modelAccessRoute';
 import {
   type CliLogoutTarget,
@@ -16,6 +18,7 @@ import {
   type AccountAccessFormValue,
 } from '../forms/AccountAccessForm';
 import { ProviderApiKeyForm } from '../forms/ProviderApiKeyForm';
+import { useAsyncResource } from '../forms/_shared/useAsyncListForm';
 import { modelConnectionNeeded } from '../modelConnection';
 import { setTransientNotice } from '../state/cliState';
 import { appendLocalNotice } from '../state/transcript';
@@ -37,7 +40,7 @@ import type {
   SlashCommandEffect,
   SlashCommandOutput,
 } from './handlers/slashContext';
-import type { formSelectionHandler } from './formSelection';
+import type { ErrorHandler, formSelectionHandler } from './formSelection';
 import type { SlashCommandContribution, SlashFormProps } from './slashRegistry';
 import type { SettingsStores } from '@texra-ai/harness';
 
@@ -78,6 +81,8 @@ export function modelAccessContribution(deps: {
   /** After a sign-in, sign-out, preference, or key save settles: the chat
    *  re-checks whether a model can answer now. */
   readonly onAccountChanged?: () => Effect.Effect<void, never, ProcessServices>;
+  /** Reports a failed key-status read; the rows then read "Status unavailable". */
+  readonly onError?: ErrorHandler;
 }): SlashCommandContribution {
   const { secrets, stores, runtime, bindSelection } = deps;
   const onModelAccessSelect: FormActionHandler<CliModelAccessSelection> =
@@ -156,9 +161,19 @@ export function modelAccessContribution(deps: {
   }
 
   function ProviderApiKeyFormAdapter(props: SlashFormProps): React.JSX.Element {
+    const apiKeys = useAsyncResource({
+      load: () => loadApiKeyStatusMap(secrets),
+      runtime,
+      onError: deps.onError,
+    });
     return (
       <ProviderApiKeyForm
         availableRows={props.availableRows}
+        statusView={{
+          statuses: apiKeys.data,
+          loading: apiKeys.loading,
+          error: apiKeys.error !== undefined,
+        }}
         runtime={runtime}
         onSave={onApiKeySave}
         onDone={(provider, modelNotice) => {
