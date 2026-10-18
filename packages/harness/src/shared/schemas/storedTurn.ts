@@ -103,7 +103,7 @@ const TokenCount = z.int().nonnegative().nullable();
 export const StoredTurnSchema = z.discriminatedUnion('kind', [
   z.strictObject({
     kind: z.literal('http'),
-    providerResponseId: z.string().min(1),
+    providerResponseId: z.string().min(1).nullable(),
     requestedOrigin: StoredOriginSchema,
     returnedModel: z.string().min(1).nullable(),
     modelFingerprint: z.string().nullable(),

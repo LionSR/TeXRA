@@ -96,6 +96,10 @@ const WireInteractionSchema = z.object({
   steps: z.unknown().optional(),
   usage: WireUsageSchema.optional(),
 });
+// Stateless streams can report no retrievable interaction ID.
+const WireStreamInteractionSchema = WireInteractionSchema.extend({
+  id: z.string().optional(),
+});
 /** Wire statuses that report an interaction still working, not a terminal outcome. */
 const IN_FLIGHT_STATUSES: readonly string[] = ['queued', 'in_progress'];
 /** Wire statuses of a turn that completed, with or without local calls. */
@@ -103,11 +107,11 @@ const COMPLETED_STATUSES: readonly string[] = ['completed', 'requires_action'];
 const WireEventSchema = z.discriminatedUnion('event_type', [
   z.object({
     event_type: z.literal('interaction.created'),
-    interaction: WireInteractionSchema.omit({ status: true }),
+    interaction: WireStreamInteractionSchema.omit({ status: true }),
   }),
   z.object({
     event_type: z.literal('interaction.completed'),
-    interaction: WireInteractionSchema,
+    interaction: WireStreamInteractionSchema,
   }),
   z.object({
     event_type: z.literal('interaction.status_update'),
@@ -416,12 +420,7 @@ function createInput(
   >;
 }
 
-/**
- * The canonical part a step opens, from a stream start or a snapshot. A
- * snapshot hands back the SDK's parse of a call's arguments, with no bytes
- * behind it, so its text is re-encoded from that parse; a streamed call's
- * argument deltas replace it.
- */
+/** Open a canonical part; re-encode snapshot arguments until streamed deltas replace them. */
 const stepPart = Effect.fn('llm.google.stepPart')(function* (
   step: z.infer<typeof WireCompletedStepSchema>,
 ): Effect.fn.Return<Part, ModelError> {
@@ -490,17 +489,20 @@ const usageParts = (
 
 /** What a completed interaction reports: its identity, usage and finish. */
 const interactionEnd = (
-  interaction: z.infer<typeof WireInteractionSchema>,
+  interaction: z.infer<typeof WireStreamInteractionSchema>,
 ): PartEvent[] => [
-  { kind: 'identity', id: interaction.id, model: interaction.model ?? null },
+  {
+    kind: 'identity',
+    id: interaction.id || null,
+    model: interaction.model ?? null,
+  },
   ...usageParts(interaction.usage),
   {
     kind: 'finish',
     finish: {
       finishReason:
         interaction.status === 'requires_action' ? 'tool-calls' : 'stop',
-      // The Interactions resource reports no reason for ending, so the
-      // status is the whole of what Google says about the outcome.
+      // Google reports status but no terminal reason.
       finishEvidence: {
         kind: 'google-interactions',
         status: interaction.status,
@@ -548,7 +550,7 @@ function deltaPart(
 }
 
 /** One streamed Interactions event as parts; nothing follows completion. */
-function googleWire() {
+function googleWire(store: boolean) {
   let done = false;
   const fail = (
     message: string,
@@ -572,6 +574,8 @@ function googleWire() {
         case 'interaction.created':
         case 'interaction.completed': {
           const interaction = event.interaction;
+          if (store && !interaction.id)
+            return yield* fail('Google omitted a stored interaction ID.');
           // The stream takes content only from complete start/delta/stop cycles.
           if (interaction.steps !== undefined)
             return yield* fail(
@@ -582,7 +586,7 @@ function googleWire() {
             return [
               {
                 kind: 'identity',
-                id: interaction.id,
+                id: interaction.id || null,
                 model: interaction.model ?? null,
               },
               ...usageParts(interaction.usage),
@@ -624,11 +628,7 @@ function googleWire() {
     });
 }
 
-/**
- * Builds only the stored anchor a completed turn leaves for its next round.
- * Foreground completion and background observation share it, so an observed
- * turn chains on `previous_interaction_id` exactly as a streamed one does.
- */
+/** The stored anchor shared by foreground completion and background observation. */
 const googleContinuation = Effect.fn('llm.google.continuation')(function* (
   turn: Extract<ResolvedTurn, { protocol: 'google-interactions' }>,
   result: TurnResult,
@@ -641,8 +641,7 @@ const googleContinuation = Effect.fn('llm.google.continuation')(function* (
     { role: 'assistant', origin, content: result.content },
   ];
   const coveredSteps = yield* lowerMessages(prefix, origin);
-  // A turn that left no step of its own covers nothing past the input:
-  // the next user input would lower into the covered user_input step.
+  // With no output step, the next input joins the last user_input step.
   if (coveredSteps.at(-1)?.type === 'user_input') return undefined;
   return {
     origin,
@@ -761,11 +760,12 @@ export function googleInteractionsModel(
         const body = reader;
         return assembleTurn(
           pullStream(() => body.read(), sdkFailure).pipe(
-            Stream.mapEffect(googleWire()),
+            Stream.mapEffect(googleWire(turn.controls.store)),
           ),
           {
             origin,
             provider: 'Google',
+            allowMissingResponseId: !turn.controls.store,
             finalize: (result) => withContinuation(turn, result),
           },
         );

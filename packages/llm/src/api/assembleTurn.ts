@@ -26,6 +26,8 @@ export interface AssemblyOptions {
   readonly provider: string;
   /** Known before any event: a header, or the remote operation observed. */
   readonly responseId?: string;
+  /** A stateless Google stream may announce a response without a stored ID. */
+  readonly allowMissingResponseId?: boolean;
   /**
    * The stream may begin mid-response (a resumed observation): progress on
    * a position it never saw open is shown, not kept, and the terminal
@@ -41,7 +43,7 @@ export interface AssemblyOptions {
 /** What the parts have established so far; one per response. */
 interface Assembly {
   readonly options: AssemblyOptions;
-  id: string | undefined;
+  id: string | null | undefined;
   model: string | undefined;
   fingerprint: string | undefined;
   announced: boolean;
@@ -78,10 +80,11 @@ function identify(turn: Assembly, event: Of<'identity'>): Folded {
     )
   )
     return fail(turn, 'changed the response identity');
-  turn.id ||= event.id || undefined;
+  turn.id ||=
+    event.id || (turn.options.allowMissingResponseId ? null : undefined);
   turn.model ||= event.model || undefined;
   turn.fingerprint ??= event.fingerprint;
-  if (turn.announced || turn.id === undefined) return none;
+  if (turn.announced || turn.id == null) return none;
   turn.announced = true;
   return Effect.succeed([
     {
@@ -284,7 +287,7 @@ const complete = Effect.fn('llm.completeTurn')(function* (turn: Assembly) {
     finishReason: reason,
     usage: turn.usage,
   });
-  if (!result.success || result.data.providerResponseId === null)
+  if (!result.success || result.data.kind !== 'http')
     return yield* new ModelError({
       kind: 'malformed-output',
       message: `${turn.options.provider} returned inconsistent completed content.`,
@@ -319,7 +322,7 @@ export function turnAssembly(options: AssemblyOptions): {
     complete: Effect.suspend(() => complete(turn)),
     enrich: (error) =>
       fillModelError(error, {
-        responseId: turn.id,
+        responseId: turn.id ?? undefined,
         model: turn.model ?? options.origin.requestedModel,
       }),
   };
