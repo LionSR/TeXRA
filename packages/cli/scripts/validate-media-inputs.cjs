@@ -2,7 +2,8 @@
 // node packages/cli/scripts/validate-media-inputs.cjs.
 // Failure modes: binary inputs decoded as text, dropped or altered audio,
 // lost ordinary text, media attached only to the first document revision,
-// or conversational media resolved in run storage before being mirrored.
+// conversational media resolved in run storage before being mirrored,
+// or media mistaken for an edited output or a text-file instruction.
 'use strict';
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -18,6 +19,7 @@ const AUDIO = Buffer.from(
 const NOTE = 'Synthetic text: keep the equation x + y = z and café unchanged.';
 const DOCUMENT =
   '\\documentclass{article}\n\\begin{document}\nSynthetic result.\n\\end{document}\n';
+const EDIT_INPUT = DOCUMENT.replace('Synthetic result.', NOTE);
 
 module.exports = (request, response) => {
   let body = '';
@@ -33,7 +35,7 @@ module.exports = (request, response) => {
     const text =
       process.env.TEXRA_MEDIA_CHAT === 'true'
         ? 'Synthetic result.'
-        : `<documents><document name="transcript.tex">${DOCUMENT}</document></documents>`;
+        : `<documents><document name="${process.env.TEXRA_MEDIA_FILENAME ?? 'transcript.tex'}">${DOCUMENT}</document></documents>`;
     const events = [
       {
         event_type: 'interaction.created',
@@ -92,6 +94,10 @@ if (require.main === module) {
       path.join(globalStorage, 'custom_agents/synthetic_chat.yaml'),
       'name: synthetic_chat\ndescription: Synthetic chat smoke.\ntools: []\nprompt: Produce a short response.\n',
     );
+    fs.writeFileSync(
+      path.join(globalStorage, 'custom_agents/synthetic_edit.yaml'),
+      'name: synthetic_edit\ndescription: Synthetic edit smoke.\ntools: []\nprompt: Revise the document.\ntask:\n  prefix: "{{ ALL_INPUTS }}"\n  requests: ["Revise the document.", "Check the document."]\n',
+    );
     for (const scenario of [
       {
         name: 'audio',
@@ -125,12 +131,29 @@ if (require.main === module) {
         note: false,
         calls: 1,
       },
-    ]) {
+      {
+        name: 'edit-file',
+        agent: 'synthetic_edit',
+        files: ['paper.tex', 'silence.M4A'],
+        audio: true,
+        note: true,
+        calls: 2,
+      },
+      {
+        name: 'edit-dir',
+        agent: 'synthetic_edit',
+        files: ['paper.tex', 'silence.M4A'],
+        audio: true,
+        note: true,
+        calls: 2,
+      },
+    ].filter((entry) => !process.argv[2] || entry.name === process.argv[2])) {
       const work = path.join(artifacts, scenario.name);
       fs.rmSync(work, { recursive: true, force: true });
       fs.mkdirSync(work, { recursive: true });
       fs.writeFileSync(path.join(work, 'silence.M4A'), AUDIO);
       fs.writeFileSync(path.join(work, 'notes.txt'), NOTE);
+      fs.writeFileSync(path.join(work, 'paper.tex'), EDIT_INPUT);
       const requests = path.join(work, 'requests.ndjson');
       fs.writeFileSync(requests, '');
       const result = spawnSync(
@@ -143,7 +166,10 @@ if (require.main === module) {
           work,
           ...scenario.files.flatMap((file) => ['--input', file]),
           ...(scenario.name === 'audio' ? ['--output', 'transcript.tex'] : []),
-          ...(scenario.name === 'mixed' ? ['--output-dir', 'delivered'] : []),
+          ...(scenario.name === 'edit-file' ? ['--output', 'edited.tex'] : []),
+          ...(['mixed', 'edit-dir'].includes(scenario.name)
+            ? ['--output-dir', 'delivered']
+            : []),
           '--instruction',
           'Return the synthetic result.',
           '--model',
@@ -174,6 +200,10 @@ if (require.main === module) {
             TEXRA_FAKE_HANDLER: __filename,
             TEXRA_MEDIA_REQUESTS: requests,
             TEXRA_MEDIA_CHAT: String(scenario.name === 'chat'),
+            TEXRA_MEDIA_FILENAME:
+              scenario.agent === 'synthetic_edit'
+                ? 'paper.tex'
+                : 'transcript.tex',
           },
         },
       );
@@ -218,7 +248,13 @@ if (require.main === module) {
           Buffer.byteLength(text) < 12000,
           `${scenario.name}: oversized prompt`,
         );
-        if (scenario.name === 'chat') assert(text.includes('notes.txt'));
+        if (scenario.name === 'chat') {
+          assert(text.includes('notes.txt'));
+          assert(
+            !text.includes('silence.M4A'),
+            'media is not a text-file instruction',
+          );
+        }
         if (scenario.note)
           assert(
             text.includes(NOTE),
@@ -249,6 +285,16 @@ if (require.main === module) {
             ),
             DOCUMENT,
           );
+        if (scenario.name === 'edit-file')
+          assert.equal(
+            fs.readFileSync(path.join(work, 'edited.tex'), 'utf8'),
+            DOCUMENT,
+          );
+        if (scenario.name === 'edit-dir')
+          assert.equal(
+            fs.readFileSync(path.join(work, 'delivered/paper.tex'), 'utf8'),
+            DOCUMENT,
+          );
       }
       const storage = path.join(home, '.texra/v1/workspace-storage');
       const project = fs
@@ -270,6 +316,10 @@ if (require.main === module) {
       );
       assert.deepEqual(fs.readFileSync(path.join(work, 'silence.M4A')), AUDIO);
       assert.equal(fs.readFileSync(path.join(work, 'notes.txt'), 'utf8'), NOTE);
+      assert.equal(
+        fs.readFileSync(path.join(work, 'paper.tex'), 'utf8'),
+        EDIT_INPUT,
+      );
       console.log(
         `${scenario.name}: native CLI verified; artifacts in ${path.relative(root, work)}`,
       );

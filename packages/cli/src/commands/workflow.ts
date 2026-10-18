@@ -152,7 +152,8 @@ export const runHeadlessAgent = Effect.fn('runHeadlessAgent')(function* (
     {},
     ({ inputFiles, contextFiles, stdinInputPath }) =>
       Effect.gen(function* () {
-        if (init.output && inputFiles.length > 1) {
+        const classified = classifyInputFiles(inputFiles);
+        if (init.output && classified.inputFiles.length > 1) {
           return yield* failUsage(MULTI_INPUT_OUTPUT_MESSAGE);
         }
 
@@ -167,7 +168,7 @@ export const runHeadlessAgent = Effect.fn('runHeadlessAgent')(function* (
         // stamped on the config below, from the entry resolved above, and
         // read back from the recorded config at finalization.
         const expectedOutputFiles = init.outputDir
-          ? inputDerivedOutputFiles(inputFiles, stdinInputPath)
+          ? inputDerivedOutputFiles(classified.inputFiles, stdinInputPath)
           : undefined;
         // Persist CLI destinations absolutely so resumption has one path
         // representation and never reconstructs output locations.
@@ -181,7 +182,7 @@ export const runHeadlessAgent = Effect.fn('runHeadlessAgent')(function* (
           agent: init.agent,
           agentSource: source,
           model,
-          ...classifyInputFiles(inputFiles),
+          ...classified,
           contextFiles,
           outputFiles: [],
           ...(cliOutputFile !== undefined || cliOutputDirectory !== undefined
@@ -255,14 +256,15 @@ const runToolUseAgent = Effect.fn('runToolUseAgent')(function* (
     },
     ({ inputFiles, contextFiles, stdinInputPath }) =>
       Effect.gen(function* () {
+        const classified = classifyInputFiles(inputFiles);
         const config: AgentConfigPayload = {
           agent: init.agent,
           agentSource,
           model,
-          ...classifyInputFiles(inputFiles),
+          ...classified,
           contextFiles,
           instruction: formatToolUseAgentRunInstruction({
-            inputFiles,
+            inputFiles: classified.inputFiles,
             contextFiles,
             instruction,
           }),

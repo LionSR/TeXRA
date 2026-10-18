@@ -98,6 +98,7 @@ texra run transcribe_audio --input recording.m4a --output transcript.tex --model
 
 Text inputs retain their usual behavior. You can combine text and media with
 repeated `--input` flags; `--context` supplies read-only text context.
+For editing tasks, media attachments do not count as output documents.
 
 Pass read-only context files with repeated `--context` flags. The agent can
 read these files through `{{ ALL_CONTEXTS }}`, but it only emits revised
