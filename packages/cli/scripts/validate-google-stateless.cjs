@@ -157,6 +157,15 @@ if (require.main === module) {
         { readOnly: true },
       );
       try {
+        assert.deepEqual(
+          database
+            .prepare(
+              "SELECT DISTINCT version FROM event WHERE type = 'model.message'",
+            )
+            .all()
+            .map((row) => row.version),
+          [4],
+        );
         const responses = database
           .prepare("SELECT data FROM event WHERE type = 'model.message'")
           .all()
