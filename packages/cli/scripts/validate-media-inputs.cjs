@@ -35,7 +35,10 @@ module.exports = (request, response) => {
     const text =
       process.env.TEXRA_MEDIA_CHAT === 'true'
         ? 'Synthetic result.'
-        : `<documents><document name="${process.env.TEXRA_MEDIA_FILENAME ?? 'transcript.tex'}">${DOCUMENT}</document></documents>`;
+        : `<documents>${(process.env.TEXRA_MEDIA_FILENAME ?? 'transcript.tex')
+            .split(',')
+            .map((name) => `<document name="${name}">${DOCUMENT}</document>`)
+            .join('')}</documents>`;
     const events = [
       {
         event_type: 'interaction.created',
@@ -98,6 +101,10 @@ if (require.main === module) {
       path.join(globalStorage, 'custom_agents/synthetic_edit.yaml'),
       'name: synthetic_edit\ndescription: Synthetic edit smoke.\ntools: []\nprompt: Revise the document.\ntask:\n  prefix: "{{ ALL_INPUTS }}"\n  requests: ["Revise the document.", "Check the document."]\n',
     );
+    fs.writeFileSync(
+      path.join(globalStorage, 'custom_agents/synthetic_multi.yaml'),
+      'name: synthetic_multi\ndescription: Synthetic multi-output smoke.\ntools: []\nprompt: Produce the requested documents.\ntask:\n  outputs: [first.tex, second.tex]\n  prefix: "{{ ALL_INPUTS }}"\n  requests: ["Write both documents.", "Check both documents."]\n',
+    );
     for (const scenario of [
       {
         name: 'audio',
@@ -147,6 +154,28 @@ if (require.main === module) {
         note: true,
         calls: 2,
       },
+      {
+        name: 'stdin-audio',
+        agent: 'synthetic_document',
+        files: ['-', 'silence.M4A'],
+        audio: true,
+        note: true,
+        calls: 2,
+      },
+      {
+        name: 'stdin-glob',
+        agent: 'synthetic_document',
+        files: ['-', 'silence.*'],
+        audio: true,
+        note: true,
+        calls: 2,
+      },
+      {
+        name: 'multi-output',
+        agent: 'synthetic_multi',
+        files: ['paper.tex', 'silence.M4A'],
+        reject: true,
+      },
     ].filter((entry) => !process.argv[2] || entry.name === process.argv[2])) {
       const work = path.join(artifacts, scenario.name);
       fs.rmSync(work, { recursive: true, force: true });
@@ -165,7 +194,11 @@ if (require.main === module) {
           '--cwd',
           work,
           ...scenario.files.flatMap((file) => ['--input', file]),
-          ...(scenario.name === 'audio' ? ['--output', 'transcript.tex'] : []),
+          ...(['audio', 'stdin-audio', 'stdin-glob', 'multi-output'].includes(
+            scenario.name,
+          )
+            ? ['--output', 'transcript.tex']
+            : []),
           ...(scenario.name === 'edit-file' ? ['--output', 'edited.tex'] : []),
           ...(['mixed', 'edit-dir'].includes(scenario.name)
             ? ['--output-dir', 'delivered']
@@ -185,6 +218,7 @@ if (require.main === module) {
         {
           cwd: root,
           encoding: 'utf8',
+          input: scenario.files.includes('-') ? NOTE : undefined,
           timeout: 60000,
           maxBuffer: 8 * 1024 * 1024,
           env: {
@@ -201,9 +235,11 @@ if (require.main === module) {
             TEXRA_MEDIA_REQUESTS: requests,
             TEXRA_MEDIA_CHAT: String(scenario.name === 'chat'),
             TEXRA_MEDIA_FILENAME:
-              scenario.agent === 'synthetic_edit'
-                ? 'paper.tex'
-                : 'transcript.tex',
+              scenario.agent === 'synthetic_multi'
+                ? 'first.tex,second.tex'
+                : scenario.agent === 'synthetic_edit'
+                  ? 'paper.tex'
+                  : 'transcript.tex',
           },
         },
       );
@@ -212,6 +248,24 @@ if (require.main === module) {
         result.stdout ?? '',
       );
       fs.writeFileSync(path.join(work, 'stderr.txt'), result.stderr ?? '');
+      if (scenario.reject) {
+        assert.equal(
+          result.status,
+          2,
+          'multiple declared outputs require --output-dir',
+        );
+        assert.match(result.stderr, /single final artifact/);
+        assert.equal(
+          fs.readFileSync(requests, 'utf8'),
+          '',
+          'reject before model work',
+        );
+        assert(!fs.existsSync(path.join(work, 'transcript.tex')));
+        console.log(
+          `${scenario.name}: native CLI rejected before provider work`,
+        );
+        continue;
+      }
       assert.equal(result.status, 0, `${result.stderr}\n${result.stdout}`);
       const turns = fs
         .readFileSync(requests, 'utf8')
@@ -272,7 +326,7 @@ if (require.main === module) {
         const output = completed.output.documents.outputs[0].absolutePath;
         assert.equal(fs.readFileSync(output, 'utf8'), DOCUMENT);
         fs.copyFileSync(output, path.join(work, 'result.tex'));
-        if (scenario.name === 'audio')
+        if (['audio', 'stdin-audio', 'stdin-glob'].includes(scenario.name))
           assert.equal(
             fs.readFileSync(path.join(work, 'transcript.tex'), 'utf8'),
             DOCUMENT,

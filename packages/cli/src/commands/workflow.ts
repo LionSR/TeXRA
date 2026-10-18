@@ -1,5 +1,6 @@
 import * as path from 'node:path';
 import { Effect, FileSystem, Result } from 'effect';
+import { hasMagic } from 'glob';
 
 import { toErrorMessage } from '@texra-ai/harness/schemas';
 import { deriveResumability, getRunRecords } from '@agent/storage';
@@ -127,7 +128,8 @@ export const runHeadlessAgent = Effect.fn('runHeadlessAgent')(function* (
   // pins the resolved source.
   const agent = yield* resolveCliRunAgent(services, init.agent);
   const { source } = agent;
-  if (documentTaskOf(agent) === null) {
+  const task = documentTaskOf(agent);
+  if (task === null) {
     return yield* runToolUseAgent(context, init, source, instruction, services);
   }
 
@@ -137,12 +139,32 @@ export const runHeadlessAgent = Effect.fn('runHeadlessAgent')(function* (
   if (init.inputFiles.length === 0) {
     return yield* failUsage(WORKFLOW_INPUT_REQUIRED_MESSAGE);
   }
+  if (init.output && task.outputs.filter(Boolean).length > 1) {
+    return yield* failUsage(MULTI_INPUT_OUTPUT_MESSAGE);
+  }
   // Fast-fail an `--output-dir` or `--output` path the final copy would reject
   // (`EEXIST` / `EISDIR`) only after the full agent run.
   yield* assertOutputDirAvailable(init.outputDir, context.cwd);
   yield* assertOutputFileAvailable(init.output, context.cwd);
-  if (init.output && hasMixedStdinWorkflowInputSpecs(init.inputFiles)) {
-    return yield* failUsage(MULTI_INPUT_OUTPUT_MESSAGE);
+  if (init.output) {
+    // Only literal text specs can be rejected before expanding globs or
+    // reading stdin. The expanded files are checked below.
+    const literalInputs = init.inputFiles
+      .map((file) => file.trim())
+      .filter(
+        (file) =>
+          !hasMagic(file, {
+            magicalBraces: true,
+            windowsPathsNoEscape: process.platform === 'win32',
+          }),
+      );
+    if (
+      hasMixedStdinWorkflowInputSpecs(
+        classifyInputFiles(literalInputs).inputFiles,
+      )
+    ) {
+      return yield* failUsage(MULTI_INPUT_OUTPUT_MESSAGE);
+    }
   }
 
   return yield* withExpandedRunInputs(
