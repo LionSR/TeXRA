@@ -125,7 +125,9 @@ export const ROW_KINDS: Readonly<Record<SessionEventDraft['type'], RowKind>> = {
   // earlier build's v1 row refuses its run as written by that build).
   // v3: dispatch facts carry no `ordinal` (a call's place is its index) and
   // no `stageId` (no upcaster, as v2).
-  'model.message': { version: 3, upcast: [] },
+  // v4: stateless Google responses may have a null provider ID. Older builds
+  // must refuse the newer store rather than parse those rows as corrupt.
+  'model.message': { version: 4, upcast: [] },
   'context.edit': V1,
   'tool.intent': V1,
   'script.call': V1,
