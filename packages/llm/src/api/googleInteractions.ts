@@ -100,9 +100,7 @@ const WireInteractionSchema = z.object({
 const WireStreamInteractionSchema = WireInteractionSchema.extend({
   id: z.string().optional(),
 });
-/** Wire statuses that report an interaction still working, not a terminal outcome. */
 const IN_FLIGHT_STATUSES: readonly string[] = ['queued', 'in_progress'];
-/** Wire statuses of a turn that completed, with or without local calls. */
 const COMPLETED_STATUSES: readonly string[] = ['completed', 'requires_action'];
 const WireEventSchema = z.discriminatedUnion('event_type', [
   z.object({
@@ -115,7 +113,7 @@ const WireEventSchema = z.discriminatedUnion('event_type', [
   }),
   z.object({
     event_type: z.literal('interaction.status_update'),
-    interaction_id: z.string().min(1),
+    interaction_id: WireStreamInteractionSchema.shape.id,
     status: z.string(),
   }),
   z.object({
@@ -487,7 +485,6 @@ const usageParts = (
         },
       ];
 
-/** What a completed interaction reports: its identity, usage and finish. */
 const interactionEnd = (
   interaction: z.infer<typeof WireStreamInteractionSchema>,
 ): PartEvent[] => [
@@ -549,7 +546,6 @@ function deltaPart(
   }
 }
 
-/** One streamed Interactions event as parts; nothing follows completion. */
 function googleWire(store: boolean) {
   let done = false;
   const fail = (
@@ -599,7 +595,11 @@ function googleWire(store: boolean) {
           return interactionEnd(event.interaction);
         }
         case 'interaction.status_update':
-          return [{ kind: 'identity', id: event.interaction_id, model: null }];
+          if (store && !event.interaction_id)
+            return yield* fail('Google omitted a stored interaction ID.');
+          return [
+            { kind: 'identity', id: event.interaction_id || null, model: null },
+          ];
         case 'error':
           return yield* new ModelError({
             kind: 'provider-rejection',

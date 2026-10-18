@@ -286,12 +286,35 @@ describe('canonical Google Interactions protocol', () => {
 
   // Failure modes: a stateless response can lack a retrievable ID; accepting it
   // must not fabricate identity/continuation, weaken stored turns, accept an
-  // invalid ID, lose provider errors, or bypass lifecycle/identity checks.
+  // invalid ID (including on status updates), lose provider errors, or bypass
+  // lifecycle/identity checks.
   it.effect.each([
     { store: false, id: '', outcome: 'ok' },
     { store: false, id: undefined, outcome: 'ok' },
     { store: false, id: 'int_fixture', outcome: 'ok' },
     { store: true, id: 'int_fixture', outcome: 'ok' },
+    { store: false, id: '', status: { id: '' }, outcome: 'ok' },
+    { store: false, id: undefined, status: { id: undefined }, outcome: 'ok' },
+    {
+      store: true,
+      id: 'int_fixture',
+      status: { id: '' },
+      outcome: 'malformed-output',
+    },
+    {
+      store: true,
+      id: 'int_fixture',
+      status: { id: undefined },
+      outcome: 'malformed-output',
+    },
+    { store: false, id: '', status: { id: null }, outcome: 'malformed-output' },
+    { store: false, id: '', status: { id: 42 }, outcome: 'malformed-output' },
+    {
+      store: false,
+      id: 'int_fixture',
+      status: { id: 'int_other' },
+      outcome: 'malformed-output',
+    },
     { store: true, id: '', outcome: 'malformed-output' },
     { store: true, id: undefined, outcome: 'malformed-output' },
     { store: false, id: 42, outcome: 'malformed-output' },
@@ -307,14 +330,23 @@ describe('canonical Google Interactions protocol', () => {
       outcome: 'malformed-output',
     },
   ])(
-    'handles response identity with store=$store id=$id fault=$fault',
-    ({ store, id, fault, outcome }) =>
+    'handles response identity with store=$store id=$id status=$status fault=$fault',
+    ({ store, id, status, fault, outcome }) =>
       Effect.gen(function* () {
         const events = [
           {
             event_type: 'interaction.created',
             interaction: { id, model: 'gemini-returned' },
           },
+          ...(status === undefined
+            ? []
+            : [
+                {
+                  event_type: 'interaction.status_update',
+                  interaction_id: status.id,
+                  status: 'in_progress',
+                },
+              ]),
           {
             event_type: 'step.start',
             index: 0,

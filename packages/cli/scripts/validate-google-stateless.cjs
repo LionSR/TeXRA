@@ -27,6 +27,11 @@ module.exports = (request, response) => {
         event_type: 'interaction.created',
         interaction: { id, model: input.model },
       },
+      {
+        event_type: 'interaction.status_update',
+        interaction_id: id,
+        status: 'in_progress',
+      },
       { event_type: 'step.start', index: 0, step: { type: 'model_output' } },
       {
         event_type: 'step.delta',
