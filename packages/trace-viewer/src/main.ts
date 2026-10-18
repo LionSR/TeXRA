@@ -13,6 +13,7 @@ import '@progressView/frontend/ProgressApp';
 import { mountProgressWebview } from '@progressView/frontend/progressWebview';
 import type { ProgressApp } from '@progressView/frontend/ProgressApp';
 import { formatLoopPositionLabel } from '@ui/copy/runStatus';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { setTraceCut, trace } from './traceHostBridge';
 import {
@@ -35,7 +36,7 @@ function renderLoadError(err: unknown): void {
   const heading = document.createElement('h1');
   heading.textContent = 'Unable to load trace';
   const detail = document.createElement('p');
-  detail.textContent = err instanceof Error ? err.message : String(err);
+  detail.textContent = toErrorMessage(err);
   errorRegion.append(heading, detail);
   document.querySelector('progress-app')?.replaceWith(errorRegion);
 }
