@@ -111,11 +111,11 @@ const openTask = Effect.fn('documents.openTask')(function* (
         (ok) => ({ path: file, absolutePath, ok }),
       );
     });
-  const inputs = yield* located(config.inputFiles);
+  const inputs = yield* located([...config.inputFiles, ...config.mediaFiles]);
   if (inputs.length === 0 || inputs.some((input) => !input.ok))
     return yield* Effect.fail(
       new ToolError(
-        `The document task of '${config.agent}' revises files: pass inputFiles with files that still exist and can be read (its result carries output files and diffs, not response text).`,
+        `The document task of '${config.agent}' needs readable inputFiles or mediaFiles (its result carries output files and diffs, not response text).`,
       ),
     );
   const contexts = yield* located(config.contextFiles);

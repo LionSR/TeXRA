@@ -7,6 +7,7 @@ import { RUN_OUTCOME, type RunId } from '@shared/schemas';
 import { documentTaskPatch } from '@texra/agent/output/documentRecipe';
 import { DocumentTaskOptionsSchema } from '@texra/shared/plugins/documents';
 import { documentTaskOf } from '@texra/tools/documents/documentTask';
+import { getIncludedExtensions } from '@texra/common/files/fileTypeUtils';
 
 import { failUsage, type CliContext } from '../runtime/cliContext';
 import { CliExitCode } from '../runtime/exitCodes';
@@ -81,6 +82,19 @@ interface HeadlessRunInit {
   readonly instruction: string;
   readonly instructionFile?: string;
   readonly reflect?: boolean;
+}
+
+/** Keep binary media out of document text interpolation on both run paths. */
+function classifyInputFiles(files: readonly string[]) {
+  const extensions = getIncludedExtensions('media');
+  const inputFiles: string[] = [];
+  const mediaFiles: string[] = [];
+  for (const file of files) {
+    if (extensions.includes(path.extname(file).toLowerCase()))
+      mediaFiles.push(file);
+    else inputFiles.push(file);
+  }
+  return { inputFiles, mediaFiles };
 }
 
 /**
@@ -167,7 +181,7 @@ export const runHeadlessAgent = Effect.fn('runHeadlessAgent')(function* (
           agent: init.agent,
           agentSource: source,
           model,
-          inputFiles,
+          ...classifyInputFiles(inputFiles),
           contextFiles,
           outputFiles: [],
           ...(cliOutputFile !== undefined || cliOutputDirectory !== undefined
@@ -245,7 +259,7 @@ const runToolUseAgent = Effect.fn('runToolUseAgent')(function* (
           agent: init.agent,
           agentSource,
           model,
-          inputFiles,
+          ...classifyInputFiles(inputFiles),
           contextFiles,
           instruction: formatToolUseAgentRunInstruction({
             inputFiles,
@@ -447,7 +461,7 @@ export const headlessRunCommand = defineCliCommand({
       alias: 'i',
       valueHint: 'file',
       description:
-        'Workspace file passed to the agent (repeatable; use `-` to read stdin; required for document tasks)',
+        'Text or supported media file passed to the agent (repeatable; use `-` for text stdin; required for document tasks)',
     },
     context: {
       type: 'string',
