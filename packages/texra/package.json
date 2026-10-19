@@ -28,7 +28,7 @@
     "lit": "^3.3.3",
     "llm-zoo": "catalog:",
     "lru-cache": "catalog:",
-    "markdown-it": "^15.0.2",
+    "markdown-it": "^15.0.3",
     "markdown-it-texmath": "^1.0.0",
     "monaco-editor": "^0.57.0",
     "nunjucks": "catalog:",
