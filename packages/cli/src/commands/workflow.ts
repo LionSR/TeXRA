@@ -1,5 +1,6 @@
 import * as path from 'node:path';
 import { Effect, FileSystem, Result } from 'effect';
+import { hasMagic } from 'glob';
 
 import { toErrorMessage } from '@texra-ai/harness/schemas';
 import { deriveResumability, getRunRecords } from '@agent/storage';
@@ -7,6 +8,7 @@ import { RUN_OUTCOME, type RunId } from '@shared/schemas';
 import { documentTaskPatch } from '@texra/agent/output/documentRecipe';
 import { DocumentTaskOptionsSchema } from '@texra/shared/plugins/documents';
 import { documentTaskOf } from '@texra/tools/documents/documentTask';
+import { getIncludedExtensions } from '@texra/common/files/fileTypeUtils';
 
 import { failUsage, type CliContext } from '../runtime/cliContext';
 import { CliExitCode } from '../runtime/exitCodes';
@@ -83,6 +85,19 @@ interface HeadlessRunInit {
   readonly reflect?: boolean;
 }
 
+/** Keep binary media out of document text interpolation on both run paths. */
+function classifyInputFiles(files: readonly string[]) {
+  const extensions = getIncludedExtensions('media');
+  const inputFiles: string[] = [];
+  const mediaFiles: string[] = [];
+  for (const file of files) {
+    if (extensions.includes(path.extname(file).toLowerCase()))
+      mediaFiles.push(file);
+    else inputFiles.push(file);
+  }
+  return { inputFiles, mediaFiles };
+}
+
 /**
  * `texra run <agent>`: the one headless run command. The agent is resolved
  * once: one with a document task runs it over `--input` files (taking
@@ -113,7 +128,8 @@ export const runHeadlessAgent = Effect.fn('runHeadlessAgent')(function* (
   // pins the resolved source.
   const agent = yield* resolveCliRunAgent(services, init.agent);
   const { source } = agent;
-  if (documentTaskOf(agent) === null) {
+  const task = documentTaskOf(agent);
+  if (task === null) {
     return yield* runToolUseAgent(context, init, source, instruction, services);
   }
 
@@ -123,12 +139,32 @@ export const runHeadlessAgent = Effect.fn('runHeadlessAgent')(function* (
   if (init.inputFiles.length === 0) {
     return yield* failUsage(WORKFLOW_INPUT_REQUIRED_MESSAGE);
   }
+  if (init.output && task.outputs.filter(Boolean).length > 1) {
+    return yield* failUsage(MULTI_INPUT_OUTPUT_MESSAGE);
+  }
   // Fast-fail an `--output-dir` or `--output` path the final copy would reject
   // (`EEXIST` / `EISDIR`) only after the full agent run.
   yield* assertOutputDirAvailable(init.outputDir, context.cwd);
   yield* assertOutputFileAvailable(init.output, context.cwd);
-  if (init.output && hasMixedStdinWorkflowInputSpecs(init.inputFiles)) {
-    return yield* failUsage(MULTI_INPUT_OUTPUT_MESSAGE);
+  if (init.output) {
+    // Only literal text specs can be rejected before expanding globs or
+    // reading stdin. The expanded files are checked below.
+    const literalInputs = init.inputFiles
+      .map((file) => file.trim())
+      .filter(
+        (file) =>
+          !hasMagic(file, {
+            magicalBraces: true,
+            windowsPathsNoEscape: process.platform === 'win32',
+          }),
+      );
+    if (
+      hasMixedStdinWorkflowInputSpecs(
+        classifyInputFiles(literalInputs).inputFiles,
+      )
+    ) {
+      return yield* failUsage(MULTI_INPUT_OUTPUT_MESSAGE);
+    }
   }
 
   return yield* withExpandedRunInputs(
@@ -138,7 +174,8 @@ export const runHeadlessAgent = Effect.fn('runHeadlessAgent')(function* (
     {},
     ({ inputFiles, contextFiles, stdinInputPath }) =>
       Effect.gen(function* () {
-        if (init.output && inputFiles.length > 1) {
+        const classified = classifyInputFiles(inputFiles);
+        if (init.output && classified.inputFiles.length > 1) {
           return yield* failUsage(MULTI_INPUT_OUTPUT_MESSAGE);
         }
 
@@ -153,7 +190,7 @@ export const runHeadlessAgent = Effect.fn('runHeadlessAgent')(function* (
         // stamped on the config below, from the entry resolved above, and
         // read back from the recorded config at finalization.
         const expectedOutputFiles = init.outputDir
-          ? inputDerivedOutputFiles(inputFiles, stdinInputPath)
+          ? inputDerivedOutputFiles(classified.inputFiles, stdinInputPath)
           : undefined;
         // Persist CLI destinations absolutely so resumption has one path
         // representation and never reconstructs output locations.
@@ -167,7 +204,7 @@ export const runHeadlessAgent = Effect.fn('runHeadlessAgent')(function* (
           agent: init.agent,
           agentSource: source,
           model,
-          inputFiles,
+          ...classified,
           contextFiles,
           outputFiles: [],
           ...(cliOutputFile !== undefined || cliOutputDirectory !== undefined
@@ -241,14 +278,15 @@ const runToolUseAgent = Effect.fn('runToolUseAgent')(function* (
     },
     ({ inputFiles, contextFiles, stdinInputPath }) =>
       Effect.gen(function* () {
+        const classified = classifyInputFiles(inputFiles);
         const config: AgentConfigPayload = {
           agent: init.agent,
           agentSource,
           model,
-          inputFiles,
+          ...classified,
           contextFiles,
           instruction: formatToolUseAgentRunInstruction({
-            inputFiles,
+            inputFiles: classified.inputFiles,
             contextFiles,
             instruction,
           }),
@@ -447,7 +485,7 @@ export const headlessRunCommand = defineCliCommand({
       alias: 'i',
       valueHint: 'file',
       description:
-        'Workspace file passed to the agent (repeatable; use `-` to read stdin; required for document tasks)',
+        'Text or supported media file passed to the agent (repeatable; use `-` for text stdin; required for document tasks)',
     },
     context: {
       type: 'string',

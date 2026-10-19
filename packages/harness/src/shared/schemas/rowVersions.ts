@@ -78,7 +78,9 @@ export const ROW_KINDS: Readonly<Record<SessionEventDraft['type'], RowKind>> = {
   // v3: a script's handed-down call commits in the run's opening batch (no
   // upcaster: a v2 script run cut before its handed-down row would resume
   // into a model call instead of its script).
-  'run.config': { version: 3, upcast: [] },
+  // v4: media-only tasks can produce outputs; earlier readers reject those
+  // configurations because they count only text inputs (no upcaster).
+  'run.config': { version: 4, upcast: [] },
   'run.model': V1,
   'run.detach': V1,
   // v2: a recipe's value is `structured`, with no `documents` (no upcaster,
