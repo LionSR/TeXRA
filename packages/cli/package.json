@@ -76,7 +76,7 @@
     "ink": "^7.1.1",
     "llm-zoo": "catalog:",
     "lru-cache": "^11.5.3",
-    "markdown-it": "^15.0.2",
+    "markdown-it": "^15.0.3",
     "nanoid": "catalog:",
     "node-pty": "^1.0.0",
     "picocolors": "^1.1.1",
