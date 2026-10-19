@@ -80,7 +80,7 @@
     "nanoid": "catalog:",
     "node-pty": "^1.0.0",
     "picocolors": "^1.1.1",
-    "react": "^19.3.0",
+    "react": "^19.3.1",
     "safe-stable-stringify": "catalog:",
     "semver": "^7.8.5",
     "shell-quote": "catalog:",

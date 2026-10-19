@@ -75,7 +75,7 @@
     "effect": "catalog:",
     "esbuild": "catalog:",
     "openai": "7.20.0",
-    "vitest": "^5.0.4",
+    "vitest": "^5.0.5",
     "zod": "4.4.3"
   }
 }
