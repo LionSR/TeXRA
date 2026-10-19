@@ -40,7 +40,7 @@ catalog:
   pathe: '^2.0.3'
   postal-mime: '^4.0.5'
   pretty-bytes: '7.2.0'
-  pretty-ms: '^9.3.1'
+  pretty-ms: '^10.0.0'
   quickjs-emscripten-core: '0.32.0'
   safe-stable-stringify: '^2.5.0'
   shell-quote: '^1.12.0'
