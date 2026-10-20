@@ -68,7 +68,7 @@
     "storage:freeze": "vitest run --config vitest.config.mjs --mode freeze src/test-kernel/schemas/rowVersions.vitest.ts"
   },
   "devDependencies": {
-    "@effect/language-service": "^0.87.4",
+    "@effect/language-service": "^0.87.5",
     "@effect/platform-node": "catalog:",
     "@effect/sql-sqlite-node": "catalog:",
     "@effect/vitest": "catalog:",
