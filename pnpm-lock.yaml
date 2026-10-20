@@ -148,8 +148,8 @@ importers:
   .:
     devDependencies:
       '@effect/language-service':
-        specifier: ^0.87.4
-        version: 0.87.4
+        specifier: ^0.87.5
+        version: 0.87.5
       '@effect/platform-node':
         specifier: 'catalog:'
         version: 4.0.5(effect@4.0.5)(redis@6.2.1(@opentelemetry/api@1.9.1))
@@ -1198,8 +1198,8 @@ packages:
     resolution: {integrity: sha512-WyOx8cJQ+FQus4Mm4uPIZA64gbk3Wxh0so5Lcii0aJifqwoVOlfFtorjLE0Hen4OYyHZMXDWqMmaQemBhgxFRQ==}
     engines: {node: '>=14'}
 
-  '@effect/language-service@0.87.4':
-    resolution: {integrity: sha512-AfFn4K45l84LtbQSwoPWc06nrg7OzfV3uJOnIUqimSOWTCIsY1IKBXZfjSsVTq7jDuL9Jtoz8//bZp9+rkEihg==}
+  '@effect/language-service@0.87.5':
+    resolution: {integrity: sha512-np/zJgk71/PyHxtoqyUKLYcpQhoRBI+L6+1Z0ILk35JSQ/lvXzwlwOwddYZLDkeC4bdF2ukKekqKlla/F88R5w==}
     hasBin: true
 
   '@effect/platform-node-shared@4.0.5':
@@ -6148,7 +6148,7 @@ snapshots:
 
   '@ctrl/tinycolor@4.1.0': {}
 
-  '@effect/language-service@0.87.4': {}
+  '@effect/language-service@0.87.5': {}
 
   '@effect/platform-node-shared@4.0.5(effect@4.0.5)':
     dependencies:
