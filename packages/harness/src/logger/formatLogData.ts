@@ -6,7 +6,9 @@
  * `Error` flattener for the raw values its other callers hand it.
  */
 // Third-party imports
-import safeStringify from 'safe-stable-stringify';
+import { configure } from 'safe-stable-stringify';
+
+const safeStringify = configure({ circularValue: '[Circular]' });
 
 /**
  * Flatten an `Error` into the plain object `JSON.stringify` would otherwise
