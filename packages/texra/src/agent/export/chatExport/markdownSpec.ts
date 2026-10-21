@@ -1,6 +1,9 @@
 /** Markdown format spec for chat export. */
 
-import type { DocumentMeta, ExportAttachmentType } from '@agent/export/schemas';
+import type {
+  DocumentMeta,
+  ExportAttachmentType,
+} from '@texra/agent/export/schemas';
 
 import {
   HEADER_FIELDS,

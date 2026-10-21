@@ -6,11 +6,11 @@
  * over `emit()` so the trace channel remains a single source of truth.
  *
  * App-specific helpers (`logSdkError`/`logProgressStatus`/
- * `logUserMessage`/etc.) are plain functions in `helpers.ts` and
- * `toolUseHelpers.ts` that operate on this interface — there is no host
- * subtype. SDK consumers program directly against `AgentTrace`.
+ * `logUserMessage`/etc.) are plain functions in `helpers.ts` that operate on
+ * this interface — there is no host subtype. SDK consumers program directly
+ * against `AgentTrace`.
  */
-import type { MessageType, RunOutcome } from '@shared/schemas';
+import type { MessageType, RunOutcome, ToolUseLog } from '@shared/schemas';
 
 import type { AgentEvent } from './events';
 
@@ -61,6 +61,26 @@ export interface StreamHandle {
   finalize(finalText?: string): string;
 }
 
+/**
+ * Handle returned by `openToolCard`: one tool call's card, for a caller that
+ * runs the call outside the run loop (an external agent's own tools).
+ */
+export interface ToolCardHandle {
+  /** The log the card last showed. */
+  readonly log: ToolUseLog;
+  /**
+   * Show the call's latest log: an `in_progress` status keeps the card open,
+   * any other closes it, and a log without a status closes it as completed.
+   */
+  update(log: ToolUseLog): void;
+  /**
+   * Close the card as failed if it is still open, keeping what it last
+   * showed: the caller's turn ended before the call reported. A closed card
+   * is left as it closed.
+   */
+  failIfOpen(): void;
+}
+
 /** Sugar passed to debug/info/warn/error. */
 export interface LogOptions {
   readonly data?: unknown;
@@ -76,7 +96,7 @@ export interface LogOptions {
 /**
  * Agent-general SDK surface. Every method ultimately reduces to `emit()` so
  * the trace channel is a single source of truth. App-specific helpers are
- * plain functions over this interface (see `helpers.ts` / `toolUseHelpers.ts`).
+ * plain functions over this interface (see `helpers.ts`).
  */
 export interface AgentTrace {
   // ─── SSoT primitives ────────────────────────────────────────────────
@@ -98,4 +118,10 @@ export interface AgentTrace {
    * from the start event alone.
    */
   openRun(kind: MessageType, options?: StreamOptions): StreamHandle;
+  /**
+   * Open a tool call's card with its first log (`tool.start`). A log whose
+   * status is already terminal opens and closes the card at once; one without
+   * a status, or `in_progress`, leaves it open for `update`.
+   */
+  openToolCard(log: ToolUseLog): ToolCardHandle;
 }

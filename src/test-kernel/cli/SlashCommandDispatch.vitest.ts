@@ -52,7 +52,7 @@ import * as modelAccessSelection from '@cli/runtime/modelAccessSelection';
 import * as cliProviderKeys from '@cli/chat/tui/hosts/cliProviderKeys';
 import { TuiSession } from '@cli/chat/tui/state/sessionRunState';
 import type { TranscriptRow } from '@cli/chat/tui/state/sessionView';
-import * as subscriptionAccess from '@model/subscriptionAccess';
+import { SubscriptionPreference } from '@model/subscriptionAccess';
 import { withProcessServices } from '@platform/processRuntime';
 import type { ApprovalPolicy } from '@shared/approvalPolicy';
 import {
@@ -553,9 +553,7 @@ describe('handleTuiSlashCommand', () => {
           label: 'person@example.com',
         }),
       );
-      vi.spyOn(subscriptionAccess, 'setPreferSubscription').mockReturnValue(
-        Effect.void,
-      );
+      vi.spyOn(SubscriptionPreference, 'set').mockReturnValue(Effect.void);
 
       const handled = yield* dispatchSlash('/login chatgpt', createContext());
 

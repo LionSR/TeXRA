@@ -7,8 +7,7 @@ import { apiKeySecretName } from '@texra-ai/llm';
 import { readModelOptions } from '@model/computeModelOptions';
 import {
   copilotRouteUnavailableReason,
-  discoverCopilotRoutes,
-  getRuntimeModelDirectFallback,
+  CopilotRoutes,
 } from '@model/copilotRouting';
 import type {
   LanguageModelInfo,
@@ -77,7 +76,7 @@ function languageModelPort(
 
 /** Discover over `models` through a port of their own. */
 const discover = (...models: readonly LanguageModelInfo[]) =>
-  discoverCopilotRoutes().pipe(
+  CopilotRoutes.discover().pipe(
     Effect.provide(LanguageModel.layer(languageModelPort(models))),
   );
 
@@ -154,21 +153,21 @@ describe('Copilot route discovery', () => {
   );
 
   it('reports the direct fallback for a base model and a legacy copilot id', () => {
-    expect(getRuntimeModelDirectFallback(GEMINI31P, false)).toEqual({
+    expect(CopilotRoutes.directFallback(GEMINI31P, false)).toEqual({
       model: GEMINI31P,
       provider: 'google',
     });
-    expect(getRuntimeModelDirectFallback(GEMINI31P, true)).toEqual({
+    expect(CopilotRoutes.directFallback(GEMINI31P, true)).toEqual({
       model: GEMINI31P,
       provider: 'openRouter',
     });
-    expect(getRuntimeModelDirectFallback(GPT56_TERRA, false)).toEqual({
+    expect(CopilotRoutes.directFallback(GPT56_TERRA, false)).toEqual({
       model: GPT56_TERRA,
       provider: 'openai',
     });
     // OpenRouter serves no provider reasoning mode, so `+pro` keeps its key.
     expect(
-      getRuntimeModelDirectFallback('openai/gpt-5.6-sol+pro', true),
+      CopilotRoutes.directFallback('openai/gpt-5.6-sol+pro', true),
     ).toBeUndefined();
   });
 

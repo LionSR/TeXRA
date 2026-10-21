@@ -19,8 +19,10 @@ import {
   type AgentEntry,
   type WorkspaceAgentsStores,
 } from '@texra-ai/harness';
-import { AGENT_TOOL_NAME } from '@texra-ai/harness/plugins';
-import { buildTemplatePassthrough } from '@agent/prompt/templateInputs';
+import {
+  AGENT_TOOL_NAME,
+  buildTemplatePassthrough,
+} from '@texra-ai/harness/plugins';
 import { PREFERRED_TOOL_USE_AGENTS } from '@shared/constants/agents';
 import {
   agentKeyOf,

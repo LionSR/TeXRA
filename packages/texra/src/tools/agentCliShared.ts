@@ -5,10 +5,16 @@
 import { Effect, type Context } from 'effect';
 
 // Local imports
-import { ToolContext, type ToolContextShape } from '@texra-ai/harness';
+import {
+  describeFollowUpFailure,
+  presentFollowUpResult,
+  ToolContext,
+  type ToolContextShape,
+} from '@texra-ai/harness';
 import {
   ChildRuns,
   requireRun,
+  senderOf,
   type AgentTrace,
   type ProcessChildStrategy,
   type ToolRun,
@@ -19,11 +25,6 @@ import {
   toErrorMessage,
   previewLabel,
 } from '@texra-ai/harness/schemas';
-import {
-  describeFollowUpFailure,
-  FOLLOW_UP_WAKE_FAILED_MESSAGE,
-} from '@agent/followUp/ToolUseFollowUp';
-import { senderOf } from '@agent/followUp/followUpSender';
 import {
   ToolError,
   type FollowUpContent,
@@ -88,10 +89,11 @@ const queueAgentCliFollowUp = Effect.fn('agentCliShared.queueAgentCliFollowUp')(
     const preview = previewLabel(prompt);
     // A queued follow-up whose wake failed is still queued: it is delivered
     // when the agent is resumed, so the caller must not offer it again.
-    const wakeFailed = result.status === 'queued' && result.wake === 'failed';
-    const followUpLine = wakeFailed
-      ? `Follow-up instruction queued for ${labels.queuedLabel} '${id}', but the agent could not be resumed. ${FOLLOW_UP_WAKE_FAILED_MESSAGE}`
-      : `Follow-up instruction queued for ${labels.queuedLabel} '${id}'. The agent will process it and deliver a new result automatically.`;
+    const wakeFailed = presentFollowUpResult(result);
+    const followUpLine =
+      wakeFailed.severity !== 'none'
+        ? `Follow-up instruction queued for ${labels.queuedLabel} '${id}', but the agent could not be resumed. ${wakeFailed.message}`
+        : `Follow-up instruction queued for ${labels.queuedLabel} '${id}'. The agent will process it and deliver a new result automatically.`;
     return executed(
       [followUpLine, `Run ID: ${stored.runId}`].join('\n'),
       `Follow-up queued for ${labels.summaryLabel}: ${preview}`,
