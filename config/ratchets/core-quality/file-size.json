@@ -1,7 +1,7 @@
 {
   "packages/harness/src/agent/codeSandbox/worker.ts": 545,
   "packages/harness/src/agent/runtime/AgentLaunchContext.ts": 423,
-  "packages/harness/src/agent/runtime/AgentRunLifecycle.ts": 500,
+  "packages/harness/src/agent/runtime/AgentRunLifecycle.ts": 497,
   "packages/harness/src/agent/runtime/childRunLoop.ts": 993,
   "packages/harness/src/agent/runtime/executeAgent.ts": 404,
   "packages/harness/src/agent/runtime/FollowUps.ts": 430,
