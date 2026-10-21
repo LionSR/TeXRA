@@ -219,8 +219,14 @@ export const serve = Effect.fn('server.serve')(function* (
     // Another service's record replaced this one's (two started at once):
     // no new client finds this one, so it leaves once nothing works here
     // and no client it already answered is connected. A record it cannot
-    // read is not a replacement.
-    const record = yield* readServiceRecord(paths);
+    // read is not a replacement: this check runs again on the next tick.
+    const record = yield* readServiceRecord(paths).pipe(
+      Effect.catch((error) =>
+        Effect.logWarning(
+          `Cannot read the service record ${paths.record}: ${error.message}`,
+        ).pipe(Effect.as(null)),
+      ),
+    );
     if (
       record !== null &&
       record.pid !== process.pid &&

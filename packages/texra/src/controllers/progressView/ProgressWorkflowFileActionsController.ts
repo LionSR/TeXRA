@@ -159,23 +159,10 @@ export class ProgressWorkflowFileActionsController {
         file && activeRun
           ? this.modelOutputBackups.get(activeRun, file)
           : undefined;
-      let currentContent: string | undefined;
-
-      if (backup !== undefined) {
-        currentContent = yield* this.deps.host
-          .readFile(file)
-          .pipe(
-            Effect.catch((error) =>
-              Effect.logDebug(
-                `Could not read current content of ${file} before accept`,
-              ).pipe(
-                Effect.annotateLogs({ data: error }),
-                withLogChannel(CHANNEL),
-                Effect.as(undefined),
-              ),
-            ),
-          );
-      }
+      // The file about to be accepted: a read that fails fails the accept,
+      // rather than dropping the run's "user modified the output" follow-up.
+      const currentContent =
+        backup === undefined ? undefined : yield* this.deps.host.readFile(file);
 
       let copyMeta: AcceptCopyMeta | undefined;
       if (activeRun && file) {
@@ -265,9 +252,10 @@ export class ProgressWorkflowFileActionsController {
       this.modelOutputBackups.set(runId, file, contentDigest(content));
     }).pipe(
       // Best-effort: backup only informs the accepted-edit follow-up, but a
-      // later Accept then has no compare-time content to offer.
+      // later Accept then cannot tell the run the user edited the output, so
+      // the miss is a warning.
       Effect.catch((error) =>
-        Effect.logDebug(`Could not back up model output for ${file}`).pipe(
+        Effect.logWarning(`Could not back up model output for ${file}`).pipe(
           Effect.annotateLogs({ data: error }),
           withLogChannel(CHANNEL),
         ),

@@ -129,21 +129,20 @@ function ownDirectory(
 
 /** The record a running service wrote, or null when there is none. A
  *  record that does not parse is reported and read as none: the next
- *  service to start writes a fresh one. */
+ *  service to start writes a fresh one. A record that is there but cannot
+ *  be read fails: it may name a live service, so it is not "none". */
 export function readServiceRecord(
   paths: ServicePaths,
-): Effect.Effect<ServiceRecord | null, never, FileSystem.FileSystem> {
+): Effect.Effect<
+  ServiceRecord | null,
+  PlatformError.PlatformError,
+  FileSystem.FileSystem
+> {
   return Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
     const text = yield* fs.readFileString(paths.record).pipe(
       Effect.map((value): string | null => value),
-      Effect.catch((error: PlatformError.PlatformError) =>
-        absentReason(error)
-          ? Effect.succeed(null)
-          : Effect.logWarning(
-              `Cannot read the service record ${paths.record}`,
-            ).pipe(Effect.annotateLogs({ data: error }), Effect.as(null)),
-      ),
+      Effect.catchIf(absentReason, () => Effect.succeed(null)),
     );
     if (text === null) return null;
     const parsed = ServiceRecordSchema.safeParse(safeJson(text));

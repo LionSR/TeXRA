@@ -42,10 +42,10 @@ import {
 } from '@agent/trace';
 import { formatDelivery } from '@agent/runtime/deliveryEnvelope';
 import { MESSAGE_TYPES } from '@shared/schemas';
+import { ToolError } from '@shared/schemas';
 import type {
   RunId,
   TokenUsageStats,
-  ToolError,
   ToolResult,
   ToolUseLog,
 } from '@shared/schemas';
@@ -594,7 +594,17 @@ const launchClaudeAgentSession = Effect.fn(
   const { workingDirectory, additionalDirectories } =
     buildAgentWorkspaceOptions(roots.workspace, context.parentWorkingDirectory);
   // The env block reads the process environment and `Secrets`: no workspace.
-  const env = yield* config.buildClaudeAgentEnv();
+  const env = yield* config
+    .buildClaudeAgentEnv()
+    .pipe(
+      Effect.mapError(
+        (failure) =>
+          new ToolError(
+            `Could not read the managed Anthropic API key: ${failure.message}`,
+            { cause: failure },
+          ),
+      ),
+    );
   const pathToClaudeCodeExecutable = yield* findClaudeBinaryPath().pipe(
     Effect.orDie,
   );

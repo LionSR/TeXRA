@@ -73,6 +73,8 @@ export const WINDOWS_UNSUPPORTED =
 /** How long a started service has to answer its first hello: it loads the
  *  agent catalog first, which a loaded machine makes slow. */
 const START_TIMEOUT = '60 seconds';
+/** A started service's probe before it answers this protocol. */
+const NOT_YET_UP = 'not yet up';
 /** How long a service that accepts the connection may take to say hello. */
 const HELLO_TIMEOUT = '10 seconds';
 
@@ -148,12 +150,21 @@ function probeService(
 /**
  * The hello of the service `storageRoot`'s record names, or null when there
  * is none: no record, or a socket nobody accepts on (a service that died).
+ * A record that cannot be read is unavailable, not none: starting another
+ * service beside the one it may name is the wrong answer.
  */
 export function probeRecordedService(
   storageRoot: string,
 ): Effect.Effect<ServiceInfo | null, ServiceUnavailable> {
-  return readServiceRecord(servicePaths(storageRoot)).pipe(
+  const paths = servicePaths(storageRoot);
+  return readServiceRecord(paths).pipe(
     Effect.provide(nodeFileServices),
+    Effect.mapError(
+      (error) =>
+        new ServiceUnavailable({
+          reason: `The TeXRA service record ${paths.record} cannot be read: ${error.message}`,
+        }),
+    ),
     Effect.flatMap((record) =>
       record === null ? Effect.succeed(null) : probeService(record.socket),
     ),
@@ -282,33 +293,32 @@ export const ensureService = Effect.fn('server.ensureService')(function* (
     // retiring service: all wait for this protocol's own service.
     // A newer protocol's service that came up meanwhile (a newer build
     // replaced the one this window spoke to) refuses this one at once: no
-    // wait for a service of this protocol that will not come.
+    // wait for a service of this protocol that will not come. Past the
+    // deadline the last probe's own reason stands; only "not yet up" reads
+    // as the service not answering.
     info = yield* probeRecordedService(storageRoot).pipe(
       Effect.flatMap((answer) => {
         if (answer !== null && answer.protocol > PROTOCOL_VERSION)
           return Effect.fail(newerService(answer));
         return answer?.protocol === PROTOCOL_VERSION && answer.pid !== retired
           ? Effect.succeed(answer)
-          : Effect.fail(new ServiceUnavailable({ reason: 'not yet up' }));
+          : Effect.fail(new ServiceUnavailable({ reason: NOT_YET_UP }));
       }),
       Effect.retry({
-        schedule: Schedule.spaced('200 millis'),
+        schedule: Schedule.spaced('200 millis').pipe(
+          Schedule.upTo({ duration: START_TIMEOUT }),
+        ),
         while: (error) => error.newer !== true,
       }),
-      Effect.timeout(START_TIMEOUT),
-      Effect.catch((error) =>
-        error instanceof ServiceUnavailable && error.newer === true
-          ? Effect.fail(error)
-          : Effect.succeed(null),
+      Effect.mapError((error) =>
+        error.reason === NOT_YET_UP
+          ? new ServiceUnavailable({
+              reason: `The TeXRA service did not answer within ${START_TIMEOUT} (its log: ${servicePaths(storageRoot).log}).`,
+            })
+          : error,
       ),
     );
   }
-  if (info === null)
-    return yield* Effect.fail(
-      new ServiceUnavailable({
-        reason: `The TeXRA service did not answer within ${START_TIMEOUT} (its log: ${servicePaths(storageRoot).log}).`,
-      }),
-    );
   const { socket } = info;
   const client = yield* connectService(socket, options.onDisconnect).pipe(
     Effect.mapError(

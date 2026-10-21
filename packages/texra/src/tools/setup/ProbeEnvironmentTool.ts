@@ -92,12 +92,12 @@ const probe = Effect.fn('ProbeEnvironmentTool.execute')(function* () {
         withLogChannel('Setup Credentials'),
       ),
       resolveGitHubTokenSource(secrets).pipe(
-        // A store the host cannot read is not a token; say so in the log
-        // rather than reporting "no token" as if it were an answer.
+        // A store the host cannot read is not a token: the report says the
+        // status is unknown, as it does for an unreadable API key.
         Effect.catch((failure) =>
           Effect.logWarning(
-            `GitHub token check failed; reporting no token: ${failure.message}`,
-          ).pipe(withLogChannel(CHANNEL), Effect.as('none' as const)),
+            `GitHub token check failed: ${failure.message}`,
+          ).pipe(withLogChannel(CHANNEL), Effect.as('unknown' as const)),
         ),
       ),
       getChatGptSubscriptionStatus(roots).pipe(
@@ -105,11 +105,8 @@ const probe = Effect.fn('ProbeEnvironmentTool.execute')(function* () {
         // on it would tell a signed-in user to sign in.
         Effect.catch((failure) =>
           Effect.logWarning(
-            `ChatGPT subscription probe failed; reporting signed-out: ${failure.message}`,
-          ).pipe(
-            withLogChannel(CHANNEL),
-            Effect.as({ signedIn: false, enabled: false }),
-          ),
+            `ChatGPT subscription probe failed: ${failure.message}`,
+          ).pipe(withLogChannel(CHANNEL), Effect.as('unknown' as const)),
         ),
       ),
     ],
@@ -167,14 +164,20 @@ const probe = Effect.fn('ProbeEnvironmentTool.execute')(function* () {
   ];
   const origins = new Set(summary.credentials.apiKeys.map((key) => key.origin));
   const { credentials } = summary;
+  const chatGptEnabled =
+    credentials.chatGptSubscription !== 'unknown' &&
+    credentials.chatGptSubscription.enabled;
   const creds = [
     origins.has('secret') && 'provider API key saved',
     origins.has('env') && 'provider API key in environment',
     origins.has('unknown') && 'provider API key status unavailable',
-    credentials.chatGptSubscription.enabled && 'ChatGPT subscription enabled',
+    chatGptEnabled && 'ChatGPT subscription enabled',
+    credentials.chatGptSubscription === 'unknown' &&
+      'ChatGPT subscription status unavailable',
+    credentials.githubToken === 'unknown' && 'GitHub token status unavailable',
     credentials.hasAnyUsableCredential &&
       !credentials.anyApiKeySet &&
-      !credentials.chatGptSubscription.enabled &&
+      !chatGptEnabled &&
       'usable credential',
   ].filter((cred): cred is string => typeof cred === 'string');
   parts.push(`credentials: ${creds.length > 0 ? creds.join(' + ') : 'none'}`);

@@ -2,9 +2,10 @@
 import * as path from 'node:path';
 import { hasExtension } from '@texra-ai/harness';
 import { RunFileService } from '@texra-ai/harness/plugins';
+import { absentReason } from '@texra-ai/harness/node';
 
 // Third-party imports
-import { Effect, FileSystem, Predicate } from 'effect';
+import { Effect, FileSystem, PlatformError, Predicate } from 'effect';
 
 // Local imports
 import { pathToLocationIn } from '@texra-ai/harness';
@@ -86,15 +87,26 @@ export class LatexMediaManager {
       (item) =>
         task(item).pipe(
           Effect.catch((error) =>
-            Effect.sync(() => {
-              this.logger.debug(failureMessage, {
-                data: { path: pathOf(item), error },
-              });
-            }),
+            Effect.sync(() =>
+              this.logSkipped(failureMessage, pathOf(item), error),
+            ),
           ),
         ),
       { concurrency: LATEX_CONCURRENCY, discard: true },
     );
+  }
+
+  /**
+   * Log an item mirroring skipped. A path that is not there (a deleted
+   * figure) is expected; any other failure leaves the compile without a file
+   * it needs, failing later as a LaTeX "file not found", so it is a warning
+   * naming the cause.
+   */
+  private logSkipped(message: string, path: string, error: unknown): void {
+    const absent = PlatformError.isPlatformError(error) && absentReason(error);
+    (absent ? this.logger.debug : this.logger.warn).call(this.logger, message, {
+      data: { path, error },
+    });
   }
 
   private mirrorFigureDependencies(
@@ -294,9 +306,11 @@ export class LatexMediaManager {
         const deps = yield* extractLatexFileDependencies(file).pipe(
           Effect.catch((error) =>
             Effect.sync((): readonly string[] => {
-              this.logger.debug('Unable to extract LaTeX dependencies', {
-                data: { path: file.absolutePath, error },
-              });
+              this.logSkipped(
+                'Unable to extract LaTeX dependencies',
+                file.absolutePath,
+                error,
+              );
               return [];
             }),
           ),
@@ -341,9 +355,11 @@ export class LatexMediaManager {
       const entries = yield* fs.readDirectory(projectDir).pipe(
         Effect.catch((error) =>
           Effect.sync((): readonly string[] | undefined => {
-            this.logger.debug('Unable to scan project siblings', {
-              data: { path: projectDir, error },
-            });
+            this.logSkipped(
+              'Unable to scan project siblings',
+              projectDir,
+              error,
+            );
             return undefined;
           }),
         ),

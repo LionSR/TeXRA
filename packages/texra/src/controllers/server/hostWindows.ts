@@ -459,10 +459,12 @@ export const makeHostWindows = Effect.sync((): HostWindows => {
             CallResultSchemas.approveToolEdit,
             window,
           ).pipe(
+            // An edit the window holds that cannot be read stays pending,
+            // never approved as the model proposed it.
             Effect.catch((failure) =>
               Effect.logWarning(
-                `The window's edit of ${requestId} was not read (${failure.message}); the edit is approved as proposed`,
-              ).pipe(Effect.as(false)),
+                `The window's edit of ${requestId} was not read (${failure.message}); the request stays pending`,
+              ).pipe(Effect.as(true)),
             ),
           );
         }),
