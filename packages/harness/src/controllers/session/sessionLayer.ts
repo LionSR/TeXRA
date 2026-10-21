@@ -618,13 +618,11 @@ export interface ProcessLayerOptions {
     DatabaseOpenFailed,
     ProcessIdentity | ProcessProbe
   >;
-  /**
-   * The runtime's emission threshold for Effect diagnostics, from facts that
-   * cannot change mid-process: the surface (the extension's channel filters
-   * itself: `'Trace'`; the desktop's log file: `'Debug'`) or the CLI's
-   * `--quiet` / `--verbose`. It is read before any logger runs, so a live
-   * user setting arrives by another road (the fold's `debug` flag).
-   */
+  /** The runtime's emission threshold for Effect diagnostics, from facts that
+   *  cannot change mid-process: the surface (the extension's channel filters
+   *  itself: `'Trace'`; the desktop's log file: `'Debug'`) or the CLI's
+   *  `--quiet` / `--verbose`. It is read before any logger runs, so a live
+   *  user setting arrives by another road (the fold's `debug` flag). */
   readonly minimumLogLevel: LogLevel.LogLevel;
   /** A single-project host's folder, whose `.env` its own reads see. */
   readonly workspace?: string;
