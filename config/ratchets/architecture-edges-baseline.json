@@ -21,7 +21,6 @@
     { "from": "controllers", "to": "platform", "kind": "value" },
     { "from": "controllers", "to": "shared", "kind": "value" },
     { "from": "controllers", "to": "tools", "kind": "value" },
-    { "from": "controllers", "to": "transcript", "kind": "value" },
     { "from": "controllers", "to": "utils", "kind": "value" },
     { "from": "housekeeping", "to": "shared", "kind": "value" },
     { "from": "latex", "to": "replacement", "kind": "value" },

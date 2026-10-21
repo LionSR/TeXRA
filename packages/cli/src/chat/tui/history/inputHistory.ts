@@ -2,13 +2,11 @@
 import { Clock, Effect, Semaphore } from 'effect';
 
 import { withLogChannel } from '@texra-ai/harness';
+import { GlobalDatabase, INPUT_HISTORY_LIMIT } from '@texra-ai/harness/node';
+import type { InputHistoryRecord } from '@texra-ai/harness/schemas';
 
-import {
-  GlobalDatabase,
-  INPUT_HISTORY_LIMIT,
-  INPUT_HISTORY_LINE_LIMIT,
-  type InputHistoryRecord,
-} from '@shared/session/database';
+/** The longest entry kept: a longer line is cut to this many characters. */
+const INPUT_HISTORY_LINE_LIMIT = 4000;
 
 export interface InputHistory {
   /** Persist a nonempty entry, suppressing an adjacent duplicate. */

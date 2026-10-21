@@ -23,7 +23,7 @@ import {
   type RunId,
   type ToolFact,
 } from '@shared/schemas';
-import type { ValueFamily } from '@shared/session/valueFamily';
+import type { ValueFamily } from '@texra-ai/harness';
 import type { SessionView } from '@texra-ai/harness/schemas';
 
 /** A thread's full record: its turns, explicit `status` and the asking run. */

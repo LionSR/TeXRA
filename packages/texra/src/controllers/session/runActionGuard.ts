@@ -8,8 +8,8 @@
 import { Effect } from 'effect';
 
 import { Rejected } from '@texra-ai/harness';
+import { runActionRefusal } from '@texra-ai/harness/schemas';
 import type { RunAction, RunId } from '@shared/schemas';
-import { runActionRefusal } from '@shared/session/runActions';
 import type { RunView } from '@texra-ai/harness';
 
 export function runActionGuard(view: {

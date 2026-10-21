@@ -36,7 +36,7 @@ import {
 import { isLiveRun, type SessionView } from '@shared/session/sessionView';
 import { assertNoParentTraversal } from '@tools/pathResolution';
 import { executed } from '@tools/core/result';
-import { readCompletedRunConversation } from '@transcript';
+import { readCompletedRunConversation } from '@transcript/completedRunArchive';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { readNormalizedFile } from '@utils/files/fsDurability';
 import { findExistingRunStoragePathUnder } from '@utils/files/runStorageFs';

@@ -14,8 +14,9 @@
  *
  * An app defines a plugin with `definePlugin`; its tools return `executed` or
  * `errorResult`, give an omitted input field its default with
- * `nullishWithDefault`, and resolve a path the model names against the
- * call's roots with `resolveToolPath`. A plugin's process services are its
+ * `nullishWithDefault`, resolve a path the model names against the call's
+ * roots with `resolveToolPath`, and read a request's answer they do not
+ * accept as its refusal with `refusalOf`. A plugin's process services are its
  * `ProcessPluginLayer`; work that outlives its step holds the session layer
  * with `PluginHold`; a plugin that records the decisions on a request kind
  * is that kind's `RequestDecisionHook`. The process's plugin table is the
@@ -90,6 +91,8 @@ export {
   type JsonRpcConnectionOptions,
   type JsonRpcRequestError,
 } from '@tools/jsonRpc';
+// A request's answer the tool does not accept, read as the refusal it is.
+export { refusalOf } from '@shared/session/approvalDecision';
 export type { RefusalDecision } from '@shared/schemas';
 export { ToolError } from '@shared/schemas';
 export { nullishWithDefault } from '@tools/core/inputSchema';

@@ -123,7 +123,7 @@ export {
   type StorageInventory,
 } from '@controllers/session/projectDatabase';
 
-// The failures the surface names.
+// The failures the surface names, and the other owner a refusal names.
 export {
   PluginsRefused,
   ResumeRefused,
@@ -135,6 +135,7 @@ export type { LaunchError } from './effect/errors.js';
 export {
   DatabaseOpenFailed,
   DatabaseReadFailed,
+  heldElsewhereBy,
   SessionOptionsConflict,
 } from '@shared/session/database';
 export type { SessionOpenError } from '@shared/session/database';

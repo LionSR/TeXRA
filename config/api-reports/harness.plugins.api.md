@@ -2,7 +2,7 @@
 
 Generated from `packages/harness/src/plugins.ts` by `node scripts/check-core-quality.mjs --update`; do not edit. A diff here is a change to the public surface.
 
-Exports: 111
+Exports: 112
 
 - `AGENT_TOOL_NAME` — `const AGENT_TOOL_NAME: "agent"`
 - `AgentBlock` — `interface AgentBlock<A = unknown, R = unknown> { readonly key: string; readonly schema: z.ZodType<A>; readonly result?: AgentBlockResult<R>; }`
@@ -74,6 +74,7 @@ Exports: 111
 - `randomizedExponentialBackoff` — `function randomizedExponentialBackoff: (base: Input) => Schedule<Duration, unknown, never, never>`
 - `RecipeChange` — `interface RecipeChange { readonly path: string; readonly absolutePath: string; readonly base: string | null; readonly added: number | null; readonly removed: number | null; }`
 - `RefusalDecision` — `type RefusalDecision = Extract<RequestDecision, { action: 'reject' | 'deny' | 'cancel'; }>; ≡ RefusalDecision`
+- `refusalOf` — `function refusalOf: (kind: "bash" | "externalInquiry" | "planApproval" | "proposal" | "retry" | "toolEdit" | "userQuestion", decision: { action: "answer"; answer: string; sessionLinks?: null | string[] | undefined; } | { action: "approve"; agent?: null | string | undefined; content?: null | string | undefined; model?: null | string | undefined; } | { action: "approve_and_goal"; autoApproveAll?: null | true | undefined; } | { action: "cancel"; cause?: null | string | undefined; } | { action: "deny"; reason: string; } | { action: "reject"; feedback?: null | string | undefined; } | { action: "retry"; credentials?: "configured" | "personal" | null | undefined; feedback?: null | string | undefined; } | { action: "setup"; } | { action: "skip"; feedback?: null | string | undefined; } | { action: "submit"; answers: Record<string, string | string[]>; }) => RefusalDecision`
 - `RequestDecisionHook` — `interface RequestDecisionHook { readonly kind: PermissionPayload['kind']; readonly record: (request: { readonly payload: PermissionPayload; readonly decision: RequestDecision; readonly inbox: (runId: RunId) => RunInbox; readonly commit: (facts: readonly (ToolFact & { readonly aggregate: string; })[]) => Effect.Effect<void, LogWriteError>; }) => Effect.Effect<void, Error, GlobalValues>; }`
 - `requestToolEditApproval` — `const requestToolEditApproval: (request: ToolEditProposal) => Effect<ToolEditApprovalResult, Error, ToolContext>`
 - `requireRun` — `const requireRun: (toolName: string) => Effect<ToolContextShape & { readonly requests: CallRequests; readonly run: ToolRun; }, ToolError, ToolContext>`
