@@ -31,7 +31,10 @@ import * as tar from 'tar';
 import { withLogChannel, hasExtension } from '@texra-ai/harness';
 import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';
 import { normaliseArxivIdentifier } from './arxivIdentifier';
-import { indentLatexFilesInDirectory } from './formatter/indentDirectory';
+import {
+  indentLatexFilesInDirectory,
+  type IndentLatexResult,
+} from './formatter/indentDirectory';
 import type { LatexFormatter } from './formatter/texFormatter';
 
 // Cover the entire request, including body streaming, while allowing large
@@ -102,6 +105,22 @@ const INVALID_ARXIV_INPUT_ERROR =
 
 const PDF_ONLY_SUBMISSION_ERROR =
   'This arXiv paper only has a PDF submission — no LaTeX source is available for download';
+
+/** What auto-indent did to a downloaded source, every outcome named. */
+function describeIndent(result: IndentLatexResult): string {
+  switch (result.status) {
+    case 'formatted':
+      return result.failed.length === 0
+        ? `Formatted ${result.count} LaTeX files`
+        : `Formatted ${result.count} LaTeX files; ${result.failed.length} could not be formatted: ${result.failed.map((file) => path.basename(file)).join(', ')}`;
+    case 'disabled':
+      return 'LaTeX formatting is disabled; the source is left as downloaded';
+    case 'missing-config':
+      return `LaTeX formatting skipped: its config ${result.configPath} was not found`;
+    case 'error':
+      return `LaTeX formatting failed: ${toErrorMessage(result.error)}`;
+  }
+}
 
 /**
  * Determine file extension from content-type header.
@@ -468,7 +487,12 @@ class ArxivSourceProcessor {
           ),
         );
 
-        progressCallback?.(`Formatted ${indentResult.count} LaTeX files`, 95);
+        // Formatting is post-processing on a source that has landed, so its
+        // failure does not fail the download; it is said, never a bare count.
+        const indented = describeIndent(indentResult);
+        if (indentResult.status !== 'formatted' || indentResult.failed.length)
+          yield* Effect.logWarning(indented);
+        progressCallback?.(indented, 95);
       }
 
       progressCallback?.('arXiv source downloaded successfully!', 100);
