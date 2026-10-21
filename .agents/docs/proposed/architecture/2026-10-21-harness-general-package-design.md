@@ -345,6 +345,12 @@ On 2026-10-21 the owner set this order:
    (`AgentTrace`, `describeFollowUpFailure`) itself.
 4. This design's lanes.
 
+Two later branches are not in the owner's order but also precede the lanes
+whose files they edit: #14199 (fallback chains; `agent/runtime`, the llm OAuth
+files, `claudeAgent.ts`) before lanes 2b, 3 and 4, and
+`claude/effect-native-replacements` (Effect `Clock`, `Cache` and `repeat` in
+`agent/runtime`, `tools/bash.ts`, the CLI service) before lanes 2b and 5.
+
 The "Pre-water night launch priorities" review (2026-10-21) ranked two items
 first: finishing the move of tool-edit approval into the loop, and putting the
 remaining built-ins on `ToolContext`. Both are prerequisites of lane 4b and
