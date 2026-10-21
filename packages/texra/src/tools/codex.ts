@@ -28,11 +28,7 @@ import {
   withLogChannel,
   type WorkspaceRoots,
 } from '@texra-ai/harness';
-import {
-  ensureError,
-  toErrorMessage,
-  previewLabel,
-} from '@texra-ai/harness/schemas';
+import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';
 import { Settings } from '@texra-ai/harness';
 import {
   emitToolUseCard,
@@ -60,7 +56,6 @@ import { DELIVERY_TAG } from '@shared/deliveryTags';
 import type { CodexApprovalPolicy } from '@texra/shared/agentCliSettings';
 import { CodexSandboxModeSchema } from '@texra/shared/agentCliSettings';
 import { CodexStateKey } from '@texra/shared/settingsView/integrationSettings';
-import { buildSyntheticToolUseConfig } from '@texra/tools/core/syntheticAgentConfig';
 import { buildAgentWorkspaceOptions } from '@texra/tools/agentWorkspaceOptions';
 
 // Local file imports
@@ -522,21 +517,11 @@ const launchCodexSession = Effect.fn('codex.launchCodexSession')(function* (
       error instanceof ToolError ? Effect.fail(error) : Effect.die(error),
     ),
   );
-  // Synthetic run metadata for the child run: Codex runs outside the normal
-  // run loop, so the tool-use category and the model's reference are stated
-  // here rather than inherited from the generic AgentConfig defaults.
-  const config = buildSyntheticToolUseConfig({
-    agent: CODEX_AGENT_NAME,
-    model: run.ref,
-    instruction: input.prompt,
-  });
-  const preview = previewLabel(input.prompt);
-
   return yield* launchAgentCliSession({
     resumeId: input.thread_id ?? undefined,
     agentName: 'codex',
-    description: input.prompt,
-    config,
+    prompt: input.prompt,
+    modelRef: run.ref,
     registerFailedMessage: 'Failed to register Codex run.',
     buildLaunch: ({ childRun, runId }) =>
       buildCodexLaunch({
@@ -548,7 +533,7 @@ const launchCodexSession = Effect.fn('codex.launchCodexSession')(function* (
         releaseFallbackClaim: context.releaseFallbackClaim,
         registry: context.registry,
       }),
-    summary: `Launched Codex: ${preview}`,
+    summaryLabel: 'Codex',
     launchedLine: `Codex agent launched (model: ${run.ref}, effort: ${run.effort ?? 'none'}, sandbox: ${sandboxMode}).${run.note ? ` ${run.note}` : ''}`,
     followUpLine: `Result will be delivered as a follow-up message when the turn completes. The delivery includes the thread_id. Pass it to codex on a later call to send a follow-up instruction.`,
   });

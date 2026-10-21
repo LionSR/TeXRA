@@ -32,11 +32,7 @@ import {
 } from '@texra-ai/harness';
 
 // Local imports
-import {
-  ensureError,
-  toErrorMessage,
-  previewLabel,
-} from '@texra-ai/harness/schemas';
+import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';
 import {
   emitToolUseCard,
   endOpenToolUseCards,
@@ -64,7 +60,6 @@ import {
   ClaudeAgentPermissionModeSchema,
 } from '@texra/shared/agentCliSettings';
 import type { ClaudeAgentPermissionMode } from '@texra/shared/agentCliSettings';
-import { buildSyntheticToolUseConfig } from '@texra/tools/core/syntheticAgentConfig';
 import { buildAgentWorkspaceOptions } from '@texra/tools/agentWorkspaceOptions';
 import { isNonEmptyString } from '@utils/text/stringUtils';
 
@@ -607,21 +602,11 @@ const launchClaudeAgentSession = Effect.fn(
   const pathToClaudeCodeExecutable = yield* findClaudeBinaryPath().pipe(
     Effect.orDie,
   );
-  // Synthetic run metadata for the child run: the Claude Code CLI runs outside
-  // the normal run loop, so the tool-use category and the model's reference
-  // are stated here rather than inherited from the generic AgentConfig defaults.
-  const agentConfig = buildSyntheticToolUseConfig({
-    agent: CLAUDE_AGENT_NAME,
-    model: claudeRun.ref,
-    instruction: input.prompt,
-  });
-  const preview = previewLabel(input.prompt);
-
   return yield* launchAgentCliSession({
     resumeId: input.fork_session ? undefined : (input.session_id ?? undefined),
     agentName: CLAUDE_AGENT_NAME,
-    description: input.prompt,
-    config: agentConfig,
+    prompt: input.prompt,
+    modelRef: claudeRun.ref,
     registerFailedMessage: 'Failed to register Claude Code CLI run.',
     buildLaunch: ({ childRun, runId }) =>
       buildClaudeAgentLaunch({
@@ -639,7 +624,7 @@ const launchClaudeAgentSession = Effect.fn(
         releaseFallbackClaim: context.releaseFallbackClaim,
         registry: context.registry,
       }),
-    summary: `Launched Claude Code CLI: ${preview}`,
+    summaryLabel: 'Claude Code CLI',
     launchedLine: `Claude Code agent launched (model: ${claudeRun.ref}, effort: ${claudeRun.effort ?? 'none'}, permission: ${permissionMode}).${claudeRun.note ? ` ${claudeRun.note}` : ''}`,
     followUpLine: `Result will be delivered as a follow-up message when the turn completes. The delivery includes the session_id. Pass it back on a later call to send a follow-up.`,
   });

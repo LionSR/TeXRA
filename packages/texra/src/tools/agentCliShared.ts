@@ -33,7 +33,7 @@ import {
   type TokenUsageStats,
   type ToolResult,
 } from '@shared/schemas';
-import type { AgentConfig } from '@texra-ai/harness/schemas';
+import { buildSyntheticToolUseConfig } from '@texra/tools/core/syntheticAgentConfig';
 
 import type {
   AgentCliSessionEntry,
@@ -152,8 +152,10 @@ interface AgentCliLaunchParams<TTurn> {
   /** The thread or session id this launch continues, if any. */
   resumeId?: string;
   agentName: string;
-  description: string;
-  config: AgentConfig;
+  /** The prompt the child launches with; it labels the run and its summary. */
+  prompt: string;
+  /** The model reference the child run is labeled with. */
+  modelRef: string;
   registerFailedMessage: string;
   /**
    * Build the provider's loop strategy around the child stream the launch
@@ -163,7 +165,8 @@ interface AgentCliLaunchParams<TTurn> {
     childRun: ChildRunPort;
     runId: RunId;
   }) => Effect.Effect<ProcessChildStrategy<TTurn>, Error>;
-  summary: string;
+  /** Names the CLI in the result summary: `Launched <summaryLabel>: <prompt>`. */
+  summaryLabel: string;
   launchedLine: string;
   followUpLine: string;
 }
@@ -189,8 +192,15 @@ export const launchAgentCliSession = Effect.fn(
         agent: params.agentName,
         tool: params.agentName,
       },
-      config: params.config,
-      description: params.description,
+      // Synthetic run metadata: the CLI runs outside the normal run loop, so
+      // the tool-use category and the model's reference are stated here
+      // rather than inherited from the generic AgentConfig defaults.
+      config: buildSyntheticToolUseConfig({
+        agent: params.agentName,
+        model: params.modelRef,
+        instruction: params.prompt,
+      }),
+      description: params.prompt,
       resumeId: params.resumeId,
       buildLaunch: params.buildLaunch,
     })
@@ -210,7 +220,7 @@ export const launchAgentCliSession = Effect.fn(
       `Run: ${runId}`,
       params.followUpLine,
     ].join('\n'),
-    params.summary,
+    `Launched ${params.summaryLabel}: ${previewLabel(params.prompt)}`,
   );
 });
 
