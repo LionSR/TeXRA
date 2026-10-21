@@ -34,7 +34,8 @@ files move, about 1,500 import lines change, one row field is added, and about
 ### What holds
 
 - **Every forbidden import edge is zero.** harness→app, harness→host,
-  llm→repo and texra→host all measure zero over 1,417 files. ESLint, the
+  llm→repo and texra→host all measure zero over about 1,400 source files at
+  `08455c8`. ESLint, the
   deep-import baseline and the architecture tests agree with one another.
 - **The writer core is clean.** There are three commit doors, all on the one
   publisher (`agent/runtime/SessionEvents.ts:224-341`). No app or host file
@@ -57,22 +58,26 @@ files move, about 1,500 import lines change, one row field is added, and about
 
 ### Behind our own design
 
-- **Semantic leaks, eleven groups.** Discipline teams are hardcoded in
+- **Semantic leaks.** The audit counted eleven groups; the largest follow.
+  Discipline teams are hardcoded in
   `shared/schemas/agentPresets.ts:62-145`. The settings catalog forces the
-  `texra.` prefix (`shared/state/stateSettings.ts:858`), with 66 literals in 11
-  files. TeX Live and MiKTeX discovery sits in `utils/system/binaryResolver.ts`
-  and is exported from `./node`. The base system prompt asks for LaTeX math
+  `texra.` prefix (`shared/state/stateSettings.ts:858`), and `texra.` appears on
+  about 100 lines across 29 harness files, comments included. TeX tool lookup
+  sits in `utils/system/binaryResolver.ts` and the TeX Live and MiKTeX
+  directories in `utils/system/platformPaths.ts`; both are exported from
+  `./node`. The base system prompt asks for LaTeX math
   (`agent/prompt/PromptBuilder.ts:32`). `SettingHost` lists TeXRA's products
   (`stateSettings.ts:72`) and sits on `WorkspaceRoots` and `ITool`. The
   547-line canned validation model lives inside the run package. Icon names
   live in the wire layer.
-- **The root entry is a host door.** It has 246 exports: 43 serve only TeXRA's
+- **The root entry is a host door.** It has 246 exports by `config/api-reports/harness.api.md`: 43 serve only TeXRA's
   hosts (`HostInteractions` with VS Code event names at
   `agent/runtime/runtimePresentationEvents.ts:20-26`, presets,
   `WorkspaceAgentsController`, `decideRunModel`) and 37 are internal plumbing
   (`setLogSink`, `withForkFailureReporting`, path helpers).
-- **The plugin contract does not cover TeXRA's own plugins.** 55 of 95 files
-  in `packages/texra/src/tools` import harness internals. `ALWAYS_AVAILABLE`,
+- **The plugin contract does not cover TeXRA's own plugins.** More than half
+  of the 95 files in `packages/texra/src/tools` (55 to 58, depending on the
+  alias set counted) import harness internals. `ALWAYS_AVAILABLE`,
   `ToolFact`, `PermissionPayload`, `ToolCard` and `Continuation` are not
   public. Built-ins get `Runs | RunCall | ScriptCalls | IssuingScript` through
   an unexported `defineBuiltinPlugin` (`tools/plugins.ts:182`). The
@@ -94,7 +99,8 @@ files move, about 1,500 import lines change, one row field is added, and about
   `shared/session/sessionFold.ts:903` and the switch in `transcriptFold.ts`
   skip known arms without `satisfies never`.
 - **Hosts.** `desktopHostRequests.ts` and `extensionHostRequests.ts` share
-  about 400 identical lines. Three hosts repeat the agent-directories layer and
+  about 400 lines of the same composition: 125 lines are byte-identical, and
+  the rest make the same calls with host-specific ports. Three hosts repeat the agent-directories layer and
   the service reach. In total about 1,400 lines can go. The CLI TUI
   synthesizes transcript rows with `Date.now()`
   (`packages/cli/src/chat/tui/state/transcript.ts:78`).
@@ -239,7 +245,7 @@ ruling holds, the file is deleted and nothing else changes.
 - `defineBuiltinPlugin` is deleted. The engine tools stay in `tools/`. Every
   other built-in is a `definePlugin` value in `builtins/`, which a lint fence
   restricts to public entries. The same fence on `packages/texra/src/tools`
-  drives the 55-of-95 count to zero.
+  drives that count to zero.
 - `toolUseHelpers.ts` is deleted. The agent-CLI tools report progress through
   `progress(text)`, which emits a transient `stream.chunk`.
 - `defineTool({ deferred: true })` builds on codemode's existing discovery.
@@ -345,7 +351,8 @@ renderer `Date.now()`, and silent degradation outside the harness and llm).
   (547), `agentPresets.ts` (192), `common/teams` (372), `iconNames.ts` (138),
   `copilotRouting.ts` (225) and `quotaFallbackRoutes.ts` (71).
 - The import graph was computed by resolving every `tsconfig.json` alias over
-  1,417 files (10,740 import rows). The harness deep-import set matches
+  about 1,400 files and 10,000 import statements at `08455c8` (the exact
+  figures depend on the file filter). The harness deep-import set matches
   `config/ratchets/harness-deep-import-baseline.json` exactly.
 - The pi-durable comparison reads its `README.md`, `package.json` (1.3.0),
   `CHANGELOG.md` and `docs/spec.md` at `earendil-works/pi` main.
