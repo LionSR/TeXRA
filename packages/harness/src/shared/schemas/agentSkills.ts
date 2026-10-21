@@ -6,11 +6,11 @@ import { SkillNameSchema } from './skillName';
 export const AGENT_SKILLS_CONFIG_KEY = 'texra.skills.enabled';
 export const AGENT_SKILLS_ENABLED_DEFAULT = false;
 
-/** Whether agents receive the available bundled and imported skills. */
+/** Whether agents receive the skills discovered from every source. */
 export const AgentSkillsEnabledSchema = z
   .boolean()
   .describe(
-    'Discover TeXRA and imported skills and expose them to agent prompts',
+    'Discover the skills of every source and expose them to agent prompts',
   );
 
 /**
