@@ -225,13 +225,11 @@ export function loadCommandFile(
         errors,
       };
     }),
-    Effect.catch((err) =>
-      Effect.succeed<LoadedSkill>({
-        errors: [
-          issue('error', 'read_error', toErrorMessage(err), { path: file }),
-        ],
-      }),
-    ),
+    Effect.orElseSucceed((err): LoadedSkill => ({
+      errors: [
+        issue('error', 'read_error', toErrorMessage(err), { path: file }),
+      ],
+    })),
   );
 }
 
@@ -293,14 +291,12 @@ export function loadSkillDirectory(
         catch: ensureError,
       }),
     ),
-    Effect.catch((err) =>
-      Effect.succeed<LoadedSkill>({
-        errors: [
-          issue('error', skillReadErrorCode(err), toErrorMessage(err), {
-            path: skillPath,
-          }),
-        ],
-      }),
-    ),
+    Effect.orElseSucceed((err): LoadedSkill => ({
+      errors: [
+        issue('error', skillReadErrorCode(err), toErrorMessage(err), {
+          path: skillPath,
+        }),
+      ],
+    })),
   );
 }

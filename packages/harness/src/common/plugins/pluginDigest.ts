@@ -69,7 +69,7 @@ const pluginFiles = Effect.fn('pluginDigest.pluginFiles')(function* (
         // path it reads is a link, digested as its target text.
         const link = yield* fs
           .readLink(full)
-          .pipe(Effect.catch(() => Effect.succeed(undefined)));
+          .pipe(Effect.orElseSucceed(() => undefined));
         if (link !== undefined) {
           files.push([relative, `-> ${link}`]);
           continue;
