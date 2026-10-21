@@ -4,6 +4,7 @@ import { z } from 'zod';
 
 import type { SubscriptionUsageWindow } from '@texra/shared/model/subscriptionUsage';
 
+import { clamp } from '@utils/text/stringUtils';
 import type { Cause } from 'effect';
 import type { HttpClientError } from 'effect/http';
 
@@ -130,9 +131,9 @@ export function usageWindow(
 ): SubscriptionUsageWindow | undefined {
   let percentUsed: number | undefined;
   if (usage.used !== undefined) {
-    percentUsed = Math.max(0, Math.min(100, usage.used));
+    percentUsed = clamp(usage.used, 0, 100);
   } else if (usage.remaining !== undefined) {
-    percentUsed = 100 - Math.max(0, Math.min(100, usage.remaining));
+    percentUsed = 100 - clamp(usage.remaining, 0, 100);
   }
   if (percentUsed === undefined) return undefined;
   return {

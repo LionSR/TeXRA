@@ -13,6 +13,7 @@ import type { TeXRAIconName } from '@shared/iconNames';
 import { createEvent } from '@texra/shared/utils/events';
 import { designTokens, commonViewStyles } from '@ui/styles';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
+import { clamp } from '@utils/text/stringUtils';
 
 /** Detail payload for the `page-change` custom event. */
 export interface PageChangeDetail {
@@ -31,7 +32,7 @@ export function paginate<T>(
   pageSize: number,
 ): T[] {
   const totalPages = Math.max(1, Math.ceil(items.length / pageSize));
-  const safePage = Math.max(0, Math.min(totalPages - 1, page));
+  const safePage = clamp(page, 0, totalPages - 1);
   const start = safePage * pageSize;
   return items.slice(start, start + pageSize);
 }
@@ -97,7 +98,7 @@ export class Pagination extends LitElement {
   }
 
   private goTo(target: number): void {
-    const page = Math.max(0, Math.min(this.totalPages - 1, target));
+    const page = clamp(target, 0, this.totalPages - 1);
     if (page === this.page) return;
     this.dispatchEvent(createEvent<PageChangeDetail>('page-change', { page }));
   }
@@ -146,7 +147,12 @@ export class Pagination extends LitElement {
           <span class="pagination-status"
             >Page ${page + 1} of ${totalPages}</span
           >
-          ${this.renderNavButton('chevron-right', 'Next page', page + 1, atLast)}
+          ${this.renderNavButton(
+            'chevron-right',
+            'Next page',
+            page + 1,
+            atLast,
+          )}
           ${this.renderNavButton(
             'forward-step',
             'Last page',

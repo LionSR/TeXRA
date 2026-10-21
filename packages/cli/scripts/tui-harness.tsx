@@ -1350,11 +1350,12 @@ if (SHOW_PLAN) {
 if (SHOW_EDIT_APPROVAL) {
   const showApproval = () => {
     const request = makeEditApprovalRequest();
-    const { permission } = prepareToolEditApprovalPrompt(session(), {
-      requestId: 'harness-edit-approval',
-      request,
-      relativePath: request.path,
-    });
+    const { permission, hunks, firstChangedLine } =
+      prepareToolEditApprovalPrompt(session(), {
+        requestId: 'harness-edit-approval',
+        request,
+        relativePath: request.path,
+      });
     // The preview the durable payload cannot carry is staged on the host,
     // exactly as `requestToolEditApproval` stages it. Staging hands back the
     // release for an open that never commits; this request is opened right
@@ -1364,6 +1365,8 @@ if (SHOW_EDIT_APPROVAL) {
         ...request,
         roots: session().roots,
         permission,
+        hunks,
+        firstChangedLine,
       }),
     );
     requestHarnessApproval(

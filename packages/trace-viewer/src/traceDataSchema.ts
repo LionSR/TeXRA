@@ -11,6 +11,7 @@ import { z } from 'zod';
 
 import {
   readTraceFacts,
+  toErrorMessage,
   TraceDocumentSchema,
   type TraceDocument,
 } from '@texra-ai/harness/schemas';
@@ -30,7 +31,6 @@ export function parseTraceData(raw: unknown): TraceDocument {
   try {
     return readTraceFacts(result.data, APP_ARMS);
   } catch (error) {
-    const reason = error instanceof Error ? error.message : String(error);
-    throw new Error(INCOMPATIBLE + reason, { cause: error });
+    throw new Error(INCOMPATIBLE + toErrorMessage(error), { cause: error });
   }
 }

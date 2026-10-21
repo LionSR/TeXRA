@@ -7,6 +7,7 @@ import './shell.css';
 // page owns the mount (rather than the bundle's entry) because the scrubber
 // remounts it: a fresh shell is a fresh generation, and the bridge answers
 // that generation at the new cut.
+import { toErrorMessage } from '@texra-ai/harness/schemas';
 import '@ui/wa';
 import 'katex/dist/katex.min.css';
 import '@progressView/frontend/ProgressApp';
@@ -35,7 +36,7 @@ function renderLoadError(err: unknown): void {
   const heading = document.createElement('h1');
   heading.textContent = 'Unable to load trace';
   const detail = document.createElement('p');
-  detail.textContent = err instanceof Error ? err.message : String(err);
+  detail.textContent = toErrorMessage(err);
   errorRegion.append(heading, detail);
   document.querySelector('progress-app')?.replaceWith(errorRegion);
 }

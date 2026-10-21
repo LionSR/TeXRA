@@ -15,6 +15,11 @@ function floorToWholeSeconds(durationMs: number): number {
   return Math.floor(durationMs / 1000) * 1000;
 }
 
+/** Pin `value` into `[min, max]`; `min` wins when the bounds cross. */
+export function clamp(value: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, value));
+}
+
 /**
  * Format a duration in milliseconds to a compact human-readable string
  * (e.g. `3m 42s`, `1h 5m`, `2d 4h`).

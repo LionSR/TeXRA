@@ -4,6 +4,7 @@ import { Box, Text, useWindowSize } from 'ink';
 import {
   parseUserQuestionAnswer,
   USER_QUESTION_SKIPPED_FEEDBACK,
+  userQuestionDecision,
 } from '@cli/runtime/userQuestionAnswer';
 import { wrapAnsiToWidth } from '@cli/tui/ansiWrap';
 import {
@@ -32,7 +33,6 @@ import type { SurfaceDecision } from '@texra/shared/session/surfaceDecision';
 import {
   toggleUserQuestionSelection,
   updateUserQuestionAnswers,
-  userQuestionDecision,
 } from './UserQuestionState';
 import { BaseTextInput } from '../input/BaseTextInput';
 

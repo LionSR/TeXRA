@@ -15,7 +15,6 @@
       "@shared/schemas",
       "@shared/session/database",
       "@shared/state/onboardingState",
-      "@tools/approval/toolEditApproval",
       "@tools/executions/configView",
       "@transcript",
       "@utils/files/fsDurability",
@@ -31,7 +30,6 @@
       "@shared/iconNames",
       "@shared/model/accountAuth",
       "@shared/state/onboardingState",
-      "@tools/approval/toolEditApproval",
       "@utils/files/fsDurability",
       "@utils/files/fsEntryExists",
       "@utils/files/workspaceFS",
@@ -52,7 +50,6 @@
       "@shared/state/onboardingState",
       "@shared/state/providerSettings",
       "@shared/utils/xmlEscape",
-      "@tools/approval/toolEditApproval",
       "@utils/files/workspaceFS",
       "@utils/text/stringUtils"
     ],

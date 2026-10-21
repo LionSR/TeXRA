@@ -20,6 +20,7 @@ import {
 
 import {
   ApprovalPolicySchema,
+  ToolEditContentSchema,
   type ApprovalPolicyDenial,
 } from '@texra-ai/harness/schemas';
 import {
@@ -137,10 +138,8 @@ export type Notice = z.infer<typeof NoticeSchema>;
 
 /** A tool edit's preview as a window stages it: the request without the
  *  service's workspace roots, which the window supplies itself. */
-const ToolEditStagingSchema = z.object({
+const ToolEditStagingSchema = ToolEditContentSchema.extend({
   path: z.string(),
-  originalContent: z.string(),
-  proposedContent: z.string(),
   sourceTool: z.string(),
   runId: RunIdSchema.nullable(),
   permission: ToolEditPermissionSchema,

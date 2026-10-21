@@ -130,6 +130,8 @@ const previewOf = (entry: Staged | undefined): ToolEditContent | null =>
     : {
         originalContent: entry.request.originalContent,
         proposedContent: entry.request.proposedContent,
+        hunks: entry.request.hunks,
+        firstChangedLine: entry.request.firstChangedLine,
       };
 
 /** The project folder a session holds, or its store for a session with
@@ -425,6 +427,8 @@ export const makeHostWindows = Effect.sync((): HostWindows => {
             path: request.path,
             originalContent: request.originalContent,
             proposedContent: request.proposedContent,
+            hunks: request.hunks,
+            firstChangedLine: request.firstChangedLine,
             sourceTool: request.sourceTool,
             runId: request.runId ?? null,
             permission: request.permission,

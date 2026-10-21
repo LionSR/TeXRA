@@ -38,13 +38,11 @@ import type {
   RuntimeRequest,
   Session,
   SessionView,
+  ToolEditContent,
 } from '@texra-ai/harness';
 
 interface TuiApprovalAdornments {
-  readonly toolEdit: {
-    readonly originalContent: string;
-    readonly proposedContent: string;
-  };
+  readonly toolEdit: ToolEditContent;
 }
 
 /**

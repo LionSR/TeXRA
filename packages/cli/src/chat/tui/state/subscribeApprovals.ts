@@ -267,7 +267,12 @@ export function createTuiHostInteractions(
               stagePresentation({
                 kind: 'toolEdit',
                 data: payload.data,
-                tui: preview ?? { originalContent: '', proposedContent: '' },
+                tui: preview ?? {
+                  originalContent: '',
+                  proposedContent: '',
+                  hunks: [],
+                  firstChangedLine: null,
+                },
               }),
             ),
           ),
@@ -296,10 +301,7 @@ export function createTuiHostInteractions(
       stagePresentation({
         kind: 'toolEdit',
         data: request.permission,
-        tui: {
-          originalContent: request.originalContent,
-          proposedContent: request.proposedContent,
-        },
+        tui: request,
       });
     },
     // `forgetSettledRequests` only drops a presentation whose request the
