@@ -250,7 +250,9 @@ The transcript tier is display rows too (`shared/schemas/traceEvent.ts:22-88`):
 `tool.end` (it closes), `usage` (one priced turn; a run with a run history
 stores none), `context.state`, `stream.start`, `stream.end`, and
 `response.finalized` (the final text of a turn). `response.finalized` is
-read by the fold (`shared/session/runStateFold.ts:166`).
+read by the fold, which marks the turn's answer final
+(`shared/session/runFacts.ts:88-89`, called from
+`shared/session/runStateFold.ts:549`).
 
 Streamed text (`stream.chunk`) is transient. It is not an arm of the
 vocabulary and never a row (`agent/runtime/loop/toolUseDispatch.ts:549-567`).
