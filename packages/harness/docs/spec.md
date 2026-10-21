@@ -479,9 +479,11 @@ writes no row (`controllers/session/Database.ts:480-481`, `:988-996`).
 
 ### 7.2 Resume under a claim
 
-A resume MUST hold the run's claim before it reads the run's state, and
-holds it until the launched run holds its own
-(`agent/runtime/resumeRun.ts:188-196`). A run another live process holds
+A resume MUST hold the run's claim before it folds the run's history or
+decides who owns the run, and holds it until the launched run holds its own
+(`agent/runtime/resumeRun.ts:188-200`). Its earlier reads (the run's
+configuration and existence) only refuse a run whose records are gone
+(`agent/runtime/resumeRun.ts:175-183`). A run another live process holds
 answers `owned_elsewhere` (`agent/runtime/resumeRun.ts:196`). A run live in
 this process is refused (`agent/runtime/resumeRun.ts:174`). A child an open
 call of its parent owns resumes through that parent
@@ -672,10 +674,7 @@ These existing suites check the sections above. Paths are under
    `shared/session/runStateFold.ts:2` name the commit path
    `RunHistory.appendBatch`. No such member exists; the code's path is
    `RunCell.append` (`shared/session/runHistory.ts:151-156`).
-3. The brief for this spec names `RunHistory.activate`. It is a private
-   function of `makeRunHistory`, reached as `RunHistory.open` with an
-   `activation` (`agent/runtime/RunHistory.ts:354`, `:390-394`).
-4. `packages/harness/AGENTS.md` and the README say `tool.intent` commits
+3. `packages/harness/AGENTS.md` and the README say `tool.intent` commits
    after a call's hooks, guard and approval. The guard asks only for tools
    with a declared command guard or `requiresApproval`; a tool whose body
    opens its own request, such as a file edit's approval
@@ -683,18 +682,18 @@ These existing suites check the sections above. Paths are under
    committed (`agent/runtime/loop/toolGuard.ts:45-47`). Resume handles that
    case (`shared/session/inFlight.ts:346-370`), but the stated order is not
    universal.
-5. The durable-harness note states the contract as "no attempt is billed
+4. The durable-harness note states the contract as "no attempt is billed
    twice". The code resends an attempt that no person admitted and whose
    outcome no row recorded (`shared/session/inFlight.ts:217`); the earlier
    attempt may have been billed. The suite asserts at most one committed
    response per invocation (I3), not one billing.
-6. The durable-harness note says "the fold refuses `run.end` on a parent
+5. The durable-harness note says "the fold refuses `run.end` on a parent
    whose projection holds an open owned call". The refusal found is in the
    run lifecycle, not the fold (`agent/storage/runLifecycle.ts:282-296`, `:319`).
-7. The core-concepts note says an uncertain storage failure is fatal for the
+6. The core-concepts note says an uncertain storage failure is fatal for the
    session. The code ends the run and fails the call
    (`shared/session/runHistory.ts:68-86`); no code was found that closes the
    session on such a failure.
-8. The durable-harness note says "the specification is the tests, not
+7. The durable-harness note says "the specification is the tests, not
    prose". This document restates the tests and the code; where it and they
    disagree, they win.
