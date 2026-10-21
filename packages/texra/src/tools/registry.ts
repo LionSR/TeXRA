@@ -17,16 +17,15 @@ import {
   web,
   definePlugin,
   type ProcessPluginLayer,
-  type WriteFilter,
 } from '@texra-ai/harness/plugins';
 
 // Local imports
+import { ALWAYS_AVAILABLE } from '@texra-ai/harness/plugins';
 import replacementEngine, {
   logReplacementDiagnostics,
 } from '@replacement/engine';
-import { isTexFile } from '@texra/shared/latexFileTypes';
-import { APP_PLUGIN_ARMS } from '@texra/shared/plugins/appArms';
-import { DOCUMENT_TASK_BLOCK } from '@texra/shared/plugins/documents';
+import { AskUserQuestionTool } from '@texra/tools/userQuestion/UserQuestionTool';
+import type { LeanLanguageServices } from '@texra/tools/lean/leanLanguageServices';
 import {
   claudeAgent,
   codex,
@@ -36,9 +35,9 @@ import {
   wolfram,
   zotero,
 } from '@texra/tools/integrationPlugins';
-import type { LeanLanguageServices } from '@texra/tools/lean/leanLanguageServices';
-import { AskUserQuestionTool } from '@texra/tools/userQuestion/UserQuestionTool';
-import { ALWAYS_AVAILABLE } from '@tools/toolProbes';
+import { DOCUMENT_TASK_BLOCK } from '@texra/shared/plugins/documents';
+import { APP_PLUGIN_ARMS } from '@texra/shared/plugins/appArms';
+import { isTexFile } from '@texra/shared/latexFileTypes';
 
 // Local file imports
 import { AcceptRunFilesTool } from './AcceptRunFilesTool';
@@ -102,6 +101,7 @@ import { ReadConfigTool, UpdateConfigTool } from './setup/ConfigTools';
 import { SendToTerminalTool } from './setup/SendToTerminalTool';
 import { ApplyTeamTool } from './setup/ApplyTeamTool';
 import { SetupPlatform, type SetupPlatformShape } from './setup/platform';
+import type { WriteFilter } from '@texra-ai/harness/plugins';
 import type { Plugin } from '@texra-ai/harness';
 
 /** TeXRA's filter on `write_file`: a `.tex` file's content goes through the

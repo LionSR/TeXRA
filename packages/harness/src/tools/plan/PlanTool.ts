@@ -21,7 +21,12 @@ import { z } from 'zod';
 import { requireToolRun, type RunToolCall } from '@agent/runtime/RunCall';
 import { withLogChannel } from '@logger/effectLog';
 import { goalElapsedMs, type Goal } from '@shared/plugins/goal';
-import type { Plan, RunId, ToolResult } from '@shared/schemas';
+import {
+  ToolError,
+  type Plan,
+  type RunId,
+  type ToolResult,
+} from '@shared/schemas';
 import { refusalOf } from '@shared/session/approvalDecision';
 import {
   clearGoal,
@@ -31,7 +36,6 @@ import {
   startGoal,
   type GoalAutoApprovalScope,
 } from '@tools/goal';
-import { requireNonEmptyString } from '@tools/utils';
 import { defineTool } from '@tools/core/definition';
 import { errorResult, executed } from '@tools/core/result';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -370,7 +374,8 @@ function planCommand(
       return executeUpdate(call, { objective: input.objective });
     case 'pause':
     case 'complete': {
-      const reason = requireNonEmptyString(input.reason, 'reason');
+      const reason = input.reason.trim();
+      if (!reason) return Effect.fail(new ToolError('reason cannot be empty.'));
       return input.command === 'pause'
         ? executePause(call, call.run.runId, reason)
         : executeComplete(call, call.run.runId, reason);

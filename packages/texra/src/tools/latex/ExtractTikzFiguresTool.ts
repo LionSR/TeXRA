@@ -6,9 +6,9 @@ import { defineTool, ToolContext } from '@texra-ai/harness';
 
 // Local imports - tools
 import { pathToLocationIn } from '@texra-ai/harness';
+import { formatToolOutput } from '@texra-ai/harness/plugins';
 import { TikzPictureManager } from '@latex/TikzPictureManager';
 import { type ToolFileAttachment, type ToolResult } from '@shared/schemas';
-import { formatToolOutput } from '@tools/formatting';
 import {
   buildLimitedAttachments,
   emptyExtractionResult,
