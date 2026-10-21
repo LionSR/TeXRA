@@ -41,13 +41,13 @@ import { ChildProcess, type ChildProcessSpawner } from 'effect/process';
 
 import { withLogChannel } from '@texra-ai/harness';
 import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';
-import type { DiagnosticSeverity } from '@texra/utils/diagnostics/diagnosticFormatting';
 import {
   makeJsonRpcConnection,
   type JsonRpcConnection,
   type JsonRpcConnectionDisposed,
   type JsonRpcRequestError,
-} from '@tools/jsonRpc';
+} from '@texra-ai/harness/plugins';
+import type { DiagnosticSeverity } from '@texra/utils/diagnostics/diagnosticFormatting';
 import type { LeanServerRoster } from '../leanServerRegistry';
 import type {
   LeanDiagnostic,
