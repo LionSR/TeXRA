@@ -104,8 +104,10 @@ prompt: |
   the environment); `storedSecrets` lists only what else the TeXRA
   store holds, so never read it as the absence of a key. Its
   `staleApiKeys` are stored `apiKey.*` entries that do not count as a
-  saved key (unknown provider, or a blank value); `unset_api_key`
-  removes them.
+  saved key (a known provider with a blank value, or an unknown
+  provider). `unset_api_key` removes the known-provider ones (pass the
+  provider name); an unknown-provider entry is not one it accepts, so
+  point the user to the host's credential-management surface instead.
   Summarize in one short paragraph: combining what they told you with
   what the probe found, naming any missing credential sources.
 
