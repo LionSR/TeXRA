@@ -92,8 +92,11 @@ files move, about 1,500 import lines change, one row field is added, and about
   (activate's cancels, tool-card producers, grants and `run.config`
   derivations, `followup.consumed` drafts). Re-checked at `6e5b262`, none is
   a defect; see lane 4.
-- **Dormant checks.** The row-version freeze returns early because
-  `config/storage/frozen/` does not exist (`src/test-kernel/schemas/rowVersions.vitest.ts:104`).
+- **The row-version freeze is unarmed until a release.** Its check returns
+  early while `config/storage/frozen/` does not exist
+  (`src/test-kernel/schemas/rowVersions.vitest.ts:104`). That is by design:
+  `npm run storage:freeze` is a `releasing` step, so the first release that
+  promises its rows writes the watermark.
 - **Hosts.** `desktopHostRequests.ts` and `extensionHostRequests.ts` share
   about 400 lines of the same composition: 125 lines are byte-identical, and
   the rest make the same calls with host-specific ports. Three hosts repeat the agent-directories layer and
@@ -276,7 +279,7 @@ Each lane leaves `npm run gate` and `test:pure` green. The only row change is
 | 4   | Writers: closed on re-check, nothing to build (below)                                                                                                                                        | —      | 0           |
 | 4b  | Built-ins fence                                                                                                                                                                              | M      | ~53         |
 | 5   | Ports, and the conformance suites parameterised by layer (internal); `wakeAt` with the Clock port; `defineTool({ deferred: true })`                                                          | M      | 0           |
-| 6   | Freeze: `storage:freeze`, and remove the early return                                                                                                                                        | S      | 0           |
+| 6   | Freeze: `storage:freeze` at the first release (a `releasing` step, not a lane)                                                                                                               | S      | 0           |
 | 7   | Host dedup: `createGuiHostRequests`, one service reach, the agent-directories layer from options, the CLI notices through `LocalSession.emit`                                                | L      | 0           |
 | 8   | `./promise`                                                                                                                                                                                  | S      | 0           |
 | 9   | Publish, `docs/spec.md`, a numbered examples ladder                                                                                                                                          | M      | 0           |
