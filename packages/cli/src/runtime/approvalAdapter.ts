@@ -11,21 +11,20 @@
  */
 import { Effect, Exit, Fiber, Result, Stream } from 'effect';
 
-import { withLogChannel } from '@texra-ai/harness';
-import { approvalPolicyDenialMessage } from '@texra-ai/harness/schemas';
+import { withLogChannel, type RequestDecision } from '@texra-ai/harness';
+import {
+  approvalPolicyDenialMessage,
+  requestParksItsCaller,
+  type PermissionPayload,
+  type RunId,
+  type UserQuestionAnswers,
+  type UserQuestionPermission,
+} from '@texra-ai/harness/schemas';
 import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';
 import {
   type HostInteractions,
   type ToolEditApprovalRequest,
 } from '@texra-ai/harness';
-import { requestParksItsCaller } from '@shared/schemas';
-import type {
-  PermissionPayload,
-  RequestDecision,
-  RunId,
-  UserQuestionAnswers,
-  UserQuestionPermission,
-} from '@shared/schemas';
 import {
   type CliApprovalContent,
   type CliApprovalPromptHooks,

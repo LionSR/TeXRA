@@ -1,6 +1,12 @@
 import { hash } from 'node:crypto';
 import * as path from 'node:path';
-import { normalizeFilePath } from '@texra-ai/harness/schemas';
+import {
+  normalizeFilePath,
+  fileLocationDisplayPath,
+  type RunId,
+  type FileLocation,
+  type RunStorageFileLocation,
+} from '@texra-ai/harness/schemas';
 import { RunFileService } from '@texra-ai/harness/plugins';
 import { hasExtension } from '@texra-ai/harness';
 
@@ -11,12 +17,6 @@ import { Settings } from '@texra-ai/harness';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
 import { compileLatex2Pdf, type CompileLatex2PdfResult } from '@latex/texTools';
 import { hasLatexCompiler } from '@latex/latexToolchain';
-import {
-  fileLocationDisplayPath,
-  type RunId,
-  type FileLocation,
-  type RunStorageFileLocation,
-} from '@shared/schemas';
 import { stripWorkflowRoundDir } from '@texra/shared/constants/workflowOutput';
 import { DocumentsStateKey } from '@texra/shared/settingsView/documentsSettings';
 import { LATEX_CONFIG_RANGES } from '@texra/shared/constants/latexConfig';

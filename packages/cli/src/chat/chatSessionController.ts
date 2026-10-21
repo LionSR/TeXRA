@@ -17,7 +17,6 @@ import {
 
 import {
   describeFollowUpFailure,
-  escapeText,
   hasErrorPresentationClaimed,
   heldElsewhereBy,
   presentFollowUpResult,
@@ -35,7 +34,10 @@ import {
   AgentConfigSchema,
   type AgentConfig,
   type AgentConfigPayload,
+  escapeText,
   generateRunId,
+  isTaskConfig,
+  type RunId,
 } from '@texra-ai/harness/schemas';
 import { acceptsFollowUp, isLiveRun } from '@texra-ai/harness/schemas';
 import { isTerminalOutcomePhase } from '@texra-ai/harness/schemas';
@@ -50,7 +52,6 @@ import { setCliHelperModel } from '@cli/runtime/initPlatform';
 import { readCliTeamName } from '@cli/runtime/cliTeams';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import { launchApproval, type CliContext } from '@cli/runtime/cliContext';
-import { isTaskConfig, type RunId } from '@shared/schemas';
 import type { DisposableStore } from '@texra/platform/disposable';
 import { FOCUSED_AGENT } from '@ui/copy/nestedRuns';
 import { handleTuiSlashCommand } from './tui/commands/handleSlashCommand';

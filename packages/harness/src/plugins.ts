@@ -94,7 +94,11 @@ export {
 // A request's answer the tool does not accept, read as the refusal it is.
 export { refusalOf } from '@shared/session/approvalDecision';
 export type { RefusalDecision } from '@shared/schemas';
-export { ToolError } from '@shared/schemas';
+export {
+  ToolError,
+  type EditRecord,
+  type ToolFileAttachment,
+} from '@shared/schemas';
 export { nullishWithDefault } from '@tools/core/inputSchema';
 export {
   assertNoParentTraversal,
@@ -162,6 +166,8 @@ export type { StepRoot } from '@utils/files/externalRoots';
 // policy, opening, trace and stages, model binding and run files.
 export type { ToolRun } from '@agent/core/tools/ToolTypes';
 export type { ToolPolicy } from '@agent/runtime/run/AgentRun';
+// Renders a prompt template (Nunjucks) with its variables.
+export { renderPrompt } from '@utils/prompt';
 export {
   buildTemplatePassthrough,
   type TemplateInputs,
@@ -184,7 +190,9 @@ export type {
   RouteOptions,
   RoutePolicy,
 } from '@agent/runtime/ModelRetryGate';
-export { RunFileService } from '@utils/files/runStorage';
+// A run's files under its session storage: its directory, the pre-run
+// snapshots and workspace mirrors it prepares, and output locations.
+export { RunFileService, type RunStorageEntry } from '@utils/files/runStorage';
 export { HostCapabilities } from '@agent/runtime/agentToolResolution';
 // The harness's retry policy: which HTTP statuses are worth retrying, the
 // randomized exponential backoff `Schedule` its fetches retry on, and the

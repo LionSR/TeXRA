@@ -47,6 +47,7 @@ export {
   executeCommand,
   type ExecuteCommandBaseOptions,
 } from '@utils/system/execUtils';
+export type { ExecResult } from '@shared/schemas';
 export { findCommand, type FoundCommand } from '@utils/system/binaryResolver';
 export { probeTool, type ToolProbe } from '@utils/system/toolUtils';
 export { withExtendedPath } from '@utils/system/platformPaths';

@@ -1,10 +1,11 @@
 // Third-party imports
 import { diffLines, structuredPatch, type StructuredPatchHunk } from 'diff';
-import { Effect } from 'effect';
+import { Effect, Number as Num } from 'effect';
 
 // Local imports - common
 import { withLogChannel } from '@logger/effectLog';
-import { clamp, countLines } from '@utils/text/stringUtils';
+import { formatHunkLines } from '@shared/session/runtimeRequest';
+import { countLines } from '@utils/text/stringUtils';
 
 const CHANNEL = 'unifiedDiff';
 
@@ -233,26 +234,14 @@ export function firstChangedLine(
     // A deletion has no line of its own in the proposed text; reveal the
     // position it was removed from.
     if (marker === '-') {
-      return clamp(line - 1, 0, lastProposedLine);
+      return Num.clamp(line - 1, { minimum: 0, maximum: lastProposedLine });
     }
     line += 1;
   }
-  return clamp(hunk.newStart - 1, 0, lastProposedLine);
-}
-
-/**
- * The one hunk-header policy. `,1` ranges are omitted, the form `diff -u` and
- * `git diff` emit.
- */
-export function formatHunkHeader(hunk: Hunk): string {
-  const range = (start: number, lines: number) =>
-    lines === 1 ? String(start) : `${start},${lines}`;
-  return `@@ -${range(hunk.oldStart, hunk.oldLines)} +${range(hunk.newStart, hunk.newLines)} @@`;
-}
-
-/** Hunks as unified-diff text lines, each hunk preceded by its header. */
-export function formatHunkLines(hunks: readonly Hunk[]): string[] {
-  return hunks.flatMap((hunk) => [formatHunkHeader(hunk), ...hunk.lines]);
+  return Num.clamp(hunk.newStart - 1, {
+    minimum: 0,
+    maximum: lastProposedLine,
+  });
 }
 
 /**

@@ -14,7 +14,7 @@ import '@progressView/frontend/components/ContextManagement';
 
 // Local imports - shared schemas and components
 import type { ActionConfig } from '@progressView/frontend/components/ContextManagement';
-import type { TeXRAIconName } from '@shared/iconNames';
+import type { IconName } from '@ui/wa/iconNames';
 import type { ContextManagementRow } from '@texra-ai/harness/transcript';
 
 // Local imports - formatter helpers
@@ -22,10 +22,7 @@ import type { FormatResult } from '../baseLogFormatter';
 
 /** Per-action icon and accent color. The label and the stat items are the
  *  row's; only this presentation pair is the webview's. */
-const ACTION_PRESENTATION: Record<
-  string,
-  { icon: TeXRAIconName; color: string }
-> = {
+const ACTION_PRESENTATION: Record<string, { icon: IconName; color: string }> = {
   clear_tool_uses: { icon: 'trash', color: 'var(--wa-color-chart-green)' },
   clear_thinking: { icon: 'lightbulb', color: 'var(--wa-color-chart-green)' },
   truncation: { icon: 'ellipsis', color: 'var(--wa-color-chart-orange)' },
@@ -36,7 +33,7 @@ const ACTION_PRESENTATION: Record<
 };
 
 /** Icon per context-management item key. */
-const ITEM_ICONS: Record<string, TeXRAIconName> = {
+const ITEM_ICONS: Record<string, IconName> = {
   maxTokens: 'arrow-down',
   tokensFreed: 'minus',
   utilization: 'chart-pie',

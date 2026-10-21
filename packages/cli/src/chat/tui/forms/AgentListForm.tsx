@@ -10,6 +10,7 @@ import {
   type ProcessRuntime,
   type WorkspaceAgentsStores,
 } from '@texra-ai/harness';
+import { type TeamOptionData, agentName } from '@texra-ai/harness/schemas';
 import { Select } from '@cli/tui/ui/Select';
 import {
   computeSelectWindowSize,
@@ -17,8 +18,6 @@ import {
 } from '@cli/tui/selectWindow';
 import type { SelectItem } from '@cli/tui/ui/Select';
 import { loadTeamOptions } from '@common/teams/TeamPlan';
-import type { TeamOptionData } from '@shared/schemas';
-import { agentName } from '@shared/schemas';
 import type { DocumentAgentOption } from '@texra/shared/plugins/documents';
 import { agentOptionsData } from '@texra/tools/documents/documentTask';
 import { createTeamCatalogPorts } from '@texra/controllers/mainView/teamCatalogPorts';

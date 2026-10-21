@@ -10,8 +10,6 @@ import '@awesome.me/webawesome/dist/components/dropdown/dropdown.js';
 import '@awesome.me/webawesome/dist/components/dropdown-item/dropdown-item.js';
 import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 
-import type { TeXRAIconName } from '@shared/iconNames';
-import type { FileSelectConfig } from '@texra/shared/launcher/fileSelectConfigs';
 import type { DocumentFileType } from '@texra/shared/launcher/fileTypes';
 import {
   DocumentTaskOptionsSchema,
@@ -20,6 +18,8 @@ import {
 import type { SurfaceAction } from '@texra/shared/session/surface';
 import { SessionUiEvents } from '@texra/shared/session/uiEvents';
 import { SortableController } from '@texra/shared/litControllers/SortableController';
+import type { FileSelectConfig } from '@ui/copy/fileSelectConfigs';
+import type { IconName } from '@ui/wa/iconNames';
 import { dropCueStyles } from '@ui/styles/commonViewStyles';
 import { designTokens } from '@ui/styles';
 import { renderIconActionButton } from '@ui/wa/actionButtons';
@@ -152,7 +152,7 @@ export class FileSelectGroup extends LitElement {
   /** Shared wa-dropdown chrome (trigger button + tooltip) for the checkbox menus. */
   private renderConfigDropdown(opts: {
     id: string;
-    icon: TeXRAIconName;
+    icon: IconName;
     label: string;
     hasOptions: boolean;
     items: TemplateResult;

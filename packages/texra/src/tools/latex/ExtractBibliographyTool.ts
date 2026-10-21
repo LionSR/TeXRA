@@ -10,6 +10,7 @@ import {
   ToolContext,
   WorkspaceFs,
   toPosixPath,
+  type ToolResult,
 } from '@texra-ai/harness';
 import { relativeToRoot, pathExists } from '@texra-ai/harness/node';
 
@@ -26,7 +27,6 @@ import {
   loadBibliographyEntries,
   summarizeBibliographyEntries,
 } from '@latex/extractBibliography';
-import type { ToolResult } from '@shared/schemas';
 import {
   emptyExtractionResult,
   resolveLatexFile,

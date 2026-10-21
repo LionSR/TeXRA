@@ -8,11 +8,10 @@ import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 
 // Local imports - shared styles
-import type { Plan } from '@shared/schemas';
 import type { Surface } from '@texra/shared/session/surface';
 import { designTokens, commonViewStyles } from '@ui/styles';
 import { dispatchGroupToggle } from '../utils';
-import type { RunId } from '@texra-ai/harness/schemas';
+import type { RunId, Plan } from '@texra-ai/harness/schemas';
 
 // Web Awesome native components
 import '@awesome.me/webawesome/dist/components/details/details.js';

@@ -23,7 +23,7 @@ import {
   buildCodeBlock,
   SPINNER_ICON_NAME,
 } from '@progressView/frontend/formatters/htmlBuilders';
-import type { TeXRAIconName } from '@shared/iconNames';
+import type { IconName } from '@ui/wa/iconNames';
 import type { TranscriptRowBase } from '@texra-ai/harness/transcript';
 
 // Side-effect import to register <terminal-output> custom element
@@ -80,7 +80,7 @@ export function getToolTimeoutMs(
  */
 export function buildToolUseDetails(opts: {
   row: Pick<TranscriptRowBase, 'id' | 'groupId' | 'timestamp'>;
-  iconName: TeXRAIconName | typeof SPINNER_ICON_NAME;
+  iconName: IconName | typeof SPINNER_ICON_NAME;
   label: string;
   isError: boolean;
   content: TemplateResult;

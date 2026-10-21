@@ -44,9 +44,9 @@ import {
   Rejected,
   type Session,
   withLogChannel,
+  type RequestDecision,
 } from '@texra-ai/harness';
-import { toErrorMessage } from '@texra-ai/harness/schemas';
-import type { RequestDecision, SessionEvent } from '@shared/schemas';
+import { toErrorMessage, type SessionEvent } from '@texra-ai/harness/schemas';
 import { isLatexFile } from '@texra/shared/latexFileTypes';
 import type { HostRequest } from '@texra/shared/session/hostRequest';
 import {

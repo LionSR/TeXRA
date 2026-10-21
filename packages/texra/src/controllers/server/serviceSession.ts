@@ -6,7 +6,12 @@
  * listing folded here, and a watch is the service's feed, read back as the
  * fold inputs it carries.
  */
-import { generateRunId } from '@texra-ai/harness/schemas';
+import {
+  generateRunId,
+  JsonValueSchema,
+  RUN_OUTCOME,
+  type RunId,
+} from '@texra-ai/harness/schemas';
 import {
   Cause,
   Data,
@@ -40,19 +45,13 @@ import {
   type Session,
   type StateStore,
   type WorkspaceRoots,
+  type TranscriptSubscription,
 } from '@texra-ai/harness';
 import {
   agentErrorPresentation,
   attachErrorPresentationClaimed,
   describeFollowUpFailure,
 } from '@texra-ai/harness';
-import {
-  JsonValueSchema,
-  RUN_OUTCOME,
-  type FoldInput,
-  type RunId,
-  type TranscriptSubscription,
-} from '@shared/schemas';
 import type {
   EventsFrame,
   RequestErrorWire,
@@ -65,6 +64,7 @@ import {
   type ServiceClient,
   type ServiceLink,
 } from './client';
+import type { FoldInput } from '@texra-ai/harness/transcript';
 import type { RunEndResult } from '@texra-ai/harness';
 import type { ProjectStateFailed, TaskRecordsFailed } from './protocol';
 

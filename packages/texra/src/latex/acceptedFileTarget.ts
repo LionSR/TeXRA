@@ -1,6 +1,9 @@
 // Node imports
 import path from 'node:path';
-import { normalizeFilePath } from '@texra-ai/harness/schemas';
+import {
+  normalizeFilePath,
+  type FileLocation,
+} from '@texra-ai/harness/schemas';
 
 // Third-party imports
 import { Effect, FileSystem, type PlatformError } from 'effect';
@@ -17,7 +20,6 @@ import {
   createWorkspaceLocation,
 } from '@texra-ai/harness';
 import { generateDiffFileName } from '@latex/latexdiff/diffFileNameManager';
-import type { FileLocation } from '@shared/schemas';
 
 const CHANNEL = 'AcceptedFileTarget';
 

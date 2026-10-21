@@ -15,8 +15,8 @@ import { customElement, property, state } from 'lit/decorators.js';
 import { classMap } from 'lit/directives/class-map.js';
 
 // Local imports
-import { type TeXRAIconName } from '@shared/iconNames';
 import { SessionUiEvents } from '@texra/shared/session/uiEvents';
+import { type IconName } from '@ui/wa/iconNames';
 import { runNoticeText, runStatusLabel } from '@ui/copy/runStatus';
 import { designTokens } from '@ui/styles';
 import {
@@ -38,12 +38,12 @@ import '@awesome.me/webawesome/dist/components/dropdown-item/dropdown-item.js';
 import './WorktreeChip';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import { NESTED_AGENT, TASK_ACTIONS } from '@ui/copy/nestedRuns';
-import { formatRelativeTime } from '@utils/text/stringUtils';
+import { formatRelativeTime } from '@ui/copy/format';
 import { runTabStyles } from './RunTab.styles';
 import type { RunView } from '@texra-ai/harness/schemas';
 
 /** Shape cue per tone (G4: the fold spells the tone, the host the glyph). */
-const TONE_ICONS: Record<RunView['tone'], TeXRAIconName> = {
+const TONE_ICONS: Record<RunView['tone'], IconName> = {
   running: 'circle',
   success: 'circle-check',
   danger: 'circle-exclamation',

@@ -1,4 +1,4 @@
-import { agentName } from '@shared/schemas';
+import { agentName } from '@texra-ai/harness/schemas';
 import {
   PREFERRED_TOOL_USE_AGENTS,
   implicitDefaultToolUseAgents,

@@ -210,7 +210,7 @@ const icons = {
 // (e.g. <wa-icon name="warning">) while resolving to the closest Font Awesome
 // glyph in the registry above. Docs-site-only: there is no repo-wide
 // codicon-alias table left to mirror (src/shared/wa/webAwesomeIcons.ts
-// resolves TeXRAIconName directly, not codicon names).
+// resolves IconName directly, not codicon names).
 const CODICON_ALIASES = {
   account: 'circle-user',
   add: 'plus',

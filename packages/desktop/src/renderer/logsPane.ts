@@ -3,8 +3,8 @@ import { html, nothing, render, type TemplateResult } from 'lit';
 import { repeat } from 'lit/directives/repeat.js';
 import { Hash, Result } from 'effect';
 import { parseJsonWith, truncateSummary } from '@texra-ai/harness/schemas';
-import type { TeXRAIconName } from '@shared/iconNames';
 import { postMessage } from '@texra/shared/hostBridge';
+import type { IconName } from '@ui/wa/iconNames';
 import { renderLabeledActionButton } from '@ui/wa/actionButtons';
 import { renderEmptyState } from '@ui/wa/emptyState';
 import { renderLoadingState } from '@ui/wa/loadingState';
@@ -84,7 +84,7 @@ const LOG_LEVEL_PRESENTATION = {
   warn: { icon: 'triangle-exclamation', label: 'Warning' },
 } as const satisfies Record<
   DesktopLogLevel,
-  { readonly icon: TeXRAIconName; readonly label: string }
+  { readonly icon: IconName; readonly label: string }
 >;
 
 /**
@@ -202,7 +202,7 @@ export function createLogsPane(
 
   function viewerTemplate(): TemplateResult {
     const action = (
-      icon: TeXRAIconName,
+      icon: IconName,
       label: string,
       onClick: () => void,
     ): TemplateResult =>

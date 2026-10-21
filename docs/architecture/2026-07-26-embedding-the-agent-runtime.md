@@ -541,9 +541,10 @@ following classification makes that distinction.
   roots every session is opened over.
 - **`:370-378` — `bootstrapHost({ host: 'cli', roots, secrets, skills })`:**
   The shared once-per-process install every host runs beside its runtime
-  (`packages/texra/src/controllers/hostBootstrap.ts:75-92`): the model HTTP dispatcher, the
-  process setting host, the account probes, the runtime skill sources, and the
-  first-install disabled-tool seed. An embedder that skips it gets a runtime
+  (`packages/texra/src/controllers/hostBootstrap.ts:75-92`): the process
+  setting host, the account probes, the runtime skill sources, and the
+  first-install disabled-tool seed. (The model HTTP dispatcher is installed by
+  `processLayer()` itself, the host path; `Sessions.layer` never sets it.) An embedder that skips it gets a runtime
   without those, not a broken one. The CLI runs it before publishing its roots
   so the fallible seed fails while they are still private.
 

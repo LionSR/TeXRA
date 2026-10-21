@@ -3,7 +3,11 @@ import { Settings } from '@texra-ai/harness';
 import { Cause, Effect } from 'effect';
 
 // Local imports
-import { AgentConfigSchema } from '@texra-ai/harness/schemas';
+import {
+  AgentConfigSchema,
+  agentName,
+  type RunId,
+} from '@texra-ai/harness/schemas';
 import { withLogChannel } from '@texra-ai/harness';
 import { isLiveRun } from '@texra-ai/harness/schemas';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
@@ -15,7 +19,6 @@ import {
   announce,
   showLoggedInfoMessage,
 } from '@frontend/ui/errorHandlingUtils';
-import { agentName, type RunId } from '@shared/schemas';
 import { SETUP_AGENT_NAME } from '@shared/constants/agents';
 import { SETUP_INSTRUCTION } from '@texra/controllers/onboarding/setupLaunch';
 import {

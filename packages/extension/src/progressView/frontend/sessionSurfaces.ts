@@ -30,8 +30,8 @@ import {
   PersistedState,
   type KeyValueStore,
 } from '@texra/shared/state/PersistedState';
-import { LAUNCH_FILE_LISTS } from '@texra/shared/launcher/fileSelectConfigs';
 import { subscribeToSignalChanges } from '@texra/shared/signals';
+import { LAUNCH_FILE_LISTS } from '@ui/copy/fileSelectConfigs';
 
 import { playCompletionSound } from './audioNotification';
 import {
