@@ -9,8 +9,8 @@ import * as vscode from 'vscode';
 
 // Local imports
 import { formatFatalErrorDetail, withLogChannel } from '@texra-ai/harness';
+import { effectDiagnosticsLayer } from '@texra-ai/harness/node';
 import { ensureError } from '@texra-ai/harness/schemas';
-import { effectDiagnosticsLayer } from '@logger/effectDiagnostics';
 
 /** The extension entry's own channel. */
 const CHANNEL = 'extension';

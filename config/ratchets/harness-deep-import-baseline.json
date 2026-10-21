@@ -22,7 +22,6 @@
     ],
     "extension": [
       "@eventBus/AppSignals",
-      "@logger/effectDiagnostics",
       "@platform/defaults/fileSecrets",
       "@platform/defaults/jsonStore",
       "@shared/constants/agents",
