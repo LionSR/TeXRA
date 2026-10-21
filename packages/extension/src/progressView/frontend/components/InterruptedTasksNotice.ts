@@ -106,8 +106,8 @@ export class InterruptedTasksNotice extends LitElement {
     const fix = task.blocked && resumeBlockerFix(task.blocked);
     return html`<li>
       <wa-button
+        class="btn-ghost is-link"
         appearance="plain"
-        variant="brand"
         size="s"
         @click=${() =>
           this.dispatchEvent(

@@ -104,9 +104,8 @@ export class LatexdiffResults extends LitElement {
     accessibleLabel: string,
   ): TemplateResult {
     return html`<wa-button
-      class="file-link"
+      class="file-link btn-ghost is-link"
       appearance="plain"
-      variant="brand"
       size="s"
       data-file=${filePath}
       @click=${() => this.handleFileClick(filePath)}

@@ -494,9 +494,8 @@ export class SessionComposer extends LitElement {
       <span class="routing-target">Your message goes to ${run.label}</span>
       <span aria-hidden="true">·</span>
       <wa-button
-        class="routing-parent"
+        class="routing-parent btn-ghost is-link"
         appearance="plain"
-        variant="brand"
         size="s"
         @click=${() => this.replyToParent(parent.id)}
         >reply to ${parent.label} instead</wa-button
