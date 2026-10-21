@@ -146,7 +146,10 @@ export const buildToolDashboardItems = Effect.fn('buildToolDashboardItems')(
       ).map((result) => [result.id, result]),
     );
 
-    const disabledIds = yield* (yield* ToolCatalog).disabled;
+    const disabledIds = yield* Effect.flatMap(
+      ToolCatalog,
+      (catalog) => catalog.disabled,
+    );
     const externalItems: ToolDashboardItem[] = [];
     for (const { card, plugin } of visible) {
       const result = results.get(card.id);
