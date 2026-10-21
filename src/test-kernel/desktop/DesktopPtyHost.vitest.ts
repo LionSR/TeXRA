@@ -149,6 +149,26 @@ describe('desktop pty host', () => {
     expect(host.get(TERMINAL_ID)).toBeUndefined();
   });
 
+  it('releases the id when the shell fails to spawn', async () => {
+    const pty = createFakePty(401);
+    const spawnPty = vi
+      .fn<SpawnPty>()
+      .mockImplementationOnce(() => {
+        throw new Error('posix_spawnp failed.');
+      })
+      .mockReturnValueOnce(pty);
+    const host = createHost({ loadPty: loadFakePty(spawnPty) });
+
+    await expect(
+      host.create({ id: TERMINAL_ID, cols: 80, rows: 24 }),
+    ).rejects.toThrow('posix_spawnp failed.');
+    expect(host.get(TERMINAL_ID)).toBeUndefined();
+
+    const retried = await host.create({ id: TERMINAL_ID, cols: 80, rows: 24 });
+    expect(retried).toBeDefined();
+    expect(spawnPty).toHaveBeenCalledTimes(2);
+  });
+
   it('ignores a module-load failure from an invalidated creation', async () => {
     const loadFailure = createDeferred<PtyModule>();
     const host = createHost({

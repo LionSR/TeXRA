@@ -227,22 +227,24 @@ export function createDesktopPtyHost(
         },
       };
       sessions.set(id, handle);
-      let pty: NodePtyModule;
+      // Until a shell runs, a failure (the module load, or the spawn itself:
+      // a helper that cannot execute) gives the id back, so a later start
+      // for it spawns again rather than finding a handle no shell ever backs.
       try {
-        pty = await (options.loadPty?.() ?? loadNodePty());
+        const pty = await (options.loadPty?.() ?? loadNodePty());
+        if (disposed) return undefined;
+        child = pty.spawn(defaultShell(), [], {
+          name: 'xterm-256color',
+          cols: size.cols,
+          rows: size.rows,
+          cwd: cwd ?? options.cwd?.() ?? process.cwd(),
+          env: ptyEnvironment(),
+        });
       } catch (error) {
         if (sessions.get(id) === handle) sessions.delete(id);
         if (disposed) return undefined;
         throw error;
       }
-      if (disposed) return undefined;
-      child = pty.spawn(defaultShell(), [], {
-        name: 'xterm-256color',
-        cols: size.cols,
-        rows: size.rows,
-        cwd: cwd ?? options.cwd?.() ?? process.cwd(),
-        env: ptyEnvironment(),
-      });
       child.onData((data) => {
         if (sessions.get(id) !== handle) return;
         options.onData(id, data);
