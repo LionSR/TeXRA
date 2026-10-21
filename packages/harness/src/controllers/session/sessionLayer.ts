@@ -15,6 +15,7 @@ import {
   Hash,
   Layer,
   LayerMap,
+  type LogLevel,
   Option,
   RcMap,
   Stream,
@@ -49,10 +50,7 @@ import {
 } from '@agent/runtime/SessionHandle';
 import { presentTerminalResult } from '@agent/runtime/terminalResultToast';
 import { withLogChannel } from '@logger/effectLog';
-import {
-  effectDiagnosticsLayer,
-  type MinimumLogLevel,
-} from '@logger/effectDiagnostics';
+import { effectDiagnosticsLayer } from '@logger/effectDiagnostics';
 import {
   holdProcessRoot,
   SessionOwner,
@@ -626,7 +624,7 @@ export interface ProcessLayerOptions {
    * `--quiet` / `--verbose`. It is read before any logger runs, so a live
    * user setting arrives by another road (the fold's `debug` flag).
    */
-  readonly minimumLogLevel: MinimumLogLevel;
+  readonly minimumLogLevel: LogLevel.LogLevel;
   /** A single-project host's folder, whose `.env` its own reads see. */
   readonly workspace?: string;
 }

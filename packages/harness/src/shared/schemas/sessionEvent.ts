@@ -100,10 +100,10 @@ export function ownerPid(ownerId: OwnerId): number {
  */
 export type OwnerLiveness = 'alive' | 'dead' | 'unprovable';
 
+const AggregateKindSchema = z.enum(['run', 'plugin']);
 /** C2 separates independent lifecycles even when their logical ids coincide:
  *  `run` is keyed by the run id, `plugin` (one a plugin owns) `<plugin>:<key>`. */
-const AggregateKindSchema = z.enum(['run', 'plugin']);
-type AggregateKind = z.infer<typeof AggregateKindSchema>;
+export type AggregateKind = z.infer<typeof AggregateKindSchema>;
 const AggregateKeySchema = z
   .tuple([AggregateKindSchema, z.string().min(1)])
   .refine(
@@ -129,7 +129,7 @@ export const AggregateIdSchema = z
 export type AggregateId = z.infer<typeof AggregateIdSchema>;
 
 /** A logical id that is not itself an already-qualified aggregate key. */
-type LogicalId = string & {
+export type LogicalId = string & {
   readonly [z.$brand]?: { readonly AggregateId?: never };
 };
 

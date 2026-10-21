@@ -158,7 +158,8 @@ export function retryDenialMessage(
   }
 }
 
-type HumanInputDecision =
+/** Whether a human-input request may be shown, or why it settles denied. */
+export type HumanInputDecision =
   | 'present'
   | {
       readonly deny: 'yolo-no-human' | 'policy' | 'unpresentable';

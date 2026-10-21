@@ -77,7 +77,8 @@ export type SettingHost = 'vscode' | 'cli' | 'desktop' | 'sdk';
  * database), so a repository has one value on every host and in every
  * worktree.
  */
-type SettingStore = 'config' | 'workspaceState' | 'repoState' | 'globalState';
+export type SettingStore =
+  'config' | 'workspaceState' | 'repoState' | 'globalState';
 
 export type SettingsViewSnapshot =
   | 'agents'
@@ -91,7 +92,7 @@ export type SettingsViewSnapshot =
   | 'telemetry';
 
 /** One provider's control group in the Models tab. */
-interface ModelsTabSurface {
+export interface ModelsTabSurface {
   /** Canonical provider id whose expanded settings show this control. */
   readonly provider: string;
   readonly label: string;
@@ -102,7 +103,7 @@ interface ModelsTabSurface {
 }
 
 /** Catalog-driven UIs that render the row. Absent means no UI renders it. */
-interface SettingSurfaces {
+export interface SettingSurfaces {
   /**
    * Rendered by the extension/desktop settings view; the value names the
    * snapshot rebroadcast after a write. Presence also makes the row writable
@@ -116,7 +117,7 @@ interface SettingSurfaces {
 }
 
 /** Consequences of writing a row, declared once for every write path. */
-interface SettingWriteEffects {
+export interface SettingWriteEffects {
   /**
    * Catalog keys forced to `false` when this row is written `true` — mutually
    * exclusive routes. Applied by `writeSetting`, so every host inherits it.

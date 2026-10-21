@@ -23,7 +23,19 @@ import type { AgentPlatform } from './index.js';
 // The Node building blocks `nodePlatform` is made of, for a host that
 // composes its own platform: workspace roots over Node, the canonical
 // spelling of a workspace path, and the storage layout under a root.
-export { createNodeWorkspaceRoots } from '@platform/defaults/nodeHost';
+export {
+  createNodeWorkspaceRoots,
+  type NodeWorkspaceRootsInit,
+} from '@platform/defaults/nodeHost';
+// The process's SQLite stores (the global root's handle, the project
+// connections every session borrows), the identity stamped on every row the
+// process appends, and what reading a process's start identity takes.
+export type {
+  GlobalDatabase,
+  ProjectDatabases,
+} from '@shared/session/database';
+export type { ProcessIdentity } from '@shared/session/sessionEvents';
+export type { ProcessProbe } from '@platform/defaults/nodeProcesses';
 export {
   canonicalizeWorkspacePath,
   relativeToRoot,
