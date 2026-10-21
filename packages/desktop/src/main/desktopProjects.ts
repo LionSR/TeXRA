@@ -18,7 +18,7 @@ import {
 
 import {
   SessionHostInteractions,
-  SessionOwner,
+  type LocalSession,
   type Session,
   type Sessions,
   withPerKeyLane,
@@ -31,7 +31,6 @@ import {
   resolveWorkspaceStoragePath,
 } from '@texra-ai/harness/node';
 import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';
-import { type SessionHandle } from '@agent/runtime';
 import { openTexraWorkspaceConfigStores } from '@texra/platform/defaults/nodeStores';
 import {
   projectDisplayOf,
@@ -61,26 +60,25 @@ interface DesktopProjectFacts {
    *  for it, derived once from `key` and `root`. */
   readonly display: ProjectDisplay;
   readonly roots: WorkspaceRoots;
-  /** Where this project's runs run: the background service's session, for
-   *  a folder while the app is its client, or the one opened here. */
-  readonly session: Session;
-  /** Where a failure this window meets before a run opens is presented: the
-   *  local session's interactions, or the window's own, which its run wiring
-   *  attaches. */
-  readonly present: SessionHostInteractions;
+  /** Where a failure this window meets before a run opens, and a run's
+   *  final output, are presented: the local session, or the window's own
+   *  host, which its run wiring attaches. */
+  readonly present: Pick<SessionHostInteractions, 'emit'>;
   /** Release the session from its owner; settles once its entry has unwound. */
   dispose(): Effect.Effect<void>;
 }
 
-/** An open project: its session opened here (`handle`), or the service's,
- *  which this process holds no handle, run log or claim of. */
+/** An open project: its session opened here, or the service's, which
+ *  this process holds no store, run or claim of. */
 export type DesktopProject = DesktopProjectFacts &
   (
-    | { readonly handle: SessionHandle; readonly service?: undefined }
+    | { readonly session: LocalSession; readonly service?: undefined }
     | {
-        readonly handle?: undefined;
+        /** Where this project's runs run: the background service. */
+        readonly session: Session;
         readonly service: ServiceLink;
         readonly root: string;
+        readonly present: SessionHostInteractions;
       }
   );
 
@@ -114,8 +112,8 @@ interface DesktopProjectRegistryOptions {
   /** The background service, when the app is its client: a folder's
    *  runs run there. */
   readonly service: ServiceLink | undefined;
-  /** The process's sessions: each project's session, as every host drives
-   *  it, is opened through them beside the owner's handle. */
+  /** The process's sessions: each project's session is opened through
+   *  them. */
   readonly sessions: Sessions['Service'];
 }
 
@@ -240,7 +238,6 @@ function openProjectSession(
   // The closeable scope the caller provides; `dispose` closes it.
   scope: Scope.Closeable,
   service: ServiceLink | undefined,
-  owner: SessionOwner['Service'],
   sessions: Sessions['Service'],
 ): Effect.Effect<DesktopProject, Error, Scope.Scope> {
   return Effect.gen(function* () {
@@ -266,24 +263,21 @@ function openProjectSession(
       };
     // The no-workspace session's runs, and every run without a service, run
     // here.
-    const handle = yield* Effect.acquireRelease(
-      owner.open({ roots, interruptedTasks: 'offer' }),
+    const session = yield* Effect.acquireRelease(
+      sessions.open(roots, {
+        persistent: true,
+        host: { interruptedTasks: 'offer' },
+      }),
       // The one close every session takes: its runs stopped under the
       // shutdown deadline, the ones still live past it settled, its
       // artifacts flushed, its entry released.
-      (opened) => Effect.asVoid(owner.close(opened.roots.storage)),
+      (opened) => Effect.asVoid(sessions.close(opened.roots)),
     );
     // A store moved aside at open (pre-1.0 or corrupt) is said once, as the
     // extension and the CLI say it.
-    if (handle.log.movedAside)
-      warnInDialog(sessionStoreMovedAsideMessage(handle.log.movedAside));
-    return {
-      ...facts,
-      root,
-      handle,
-      session: yield* sessions.open(roots, { persistent: true }),
-      present: handle.interactions,
-    };
+    if (session.storeMovedAside)
+      warnInDialog(sessionStoreMovedAsideMessage(session.storeMovedAside));
+    return { ...facts, root, session, present: session };
   });
 }
 
@@ -296,10 +290,9 @@ export function openDesktopProjectRegistry(
 ): Effect.Effect<
   DesktopProjectRegistry,
   Error,
-  DesktopProjectRecords | StateStores | SessionOwner
+  DesktopProjectRecords | StateStores
 > {
   return Effect.gen(function* () {
-    const owner = yield* SessionOwner;
     const { sessions } = options;
     const records = yield* DesktopProjectRecords;
     const stateStores = yield* StateStores;
@@ -311,7 +304,6 @@ export function openDesktopProjectRegistry(
         options.processRoots,
         options.processScope,
         undefined,
-        owner,
         sessions,
       ).pipe(
         Scope.provide(options.processScope),
@@ -397,7 +389,6 @@ export function openDesktopProjectRegistry(
                 roots,
                 projectScope,
                 options.service,
-                owner,
                 sessions,
               ).pipe(
                 Effect.tap((project) =>

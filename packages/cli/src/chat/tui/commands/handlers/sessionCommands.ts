@@ -5,7 +5,6 @@ import { goalStateOf } from '@texra-ai/harness/schemas';
 import { readModelOptions, type Session } from '@texra-ai/harness';
 import { runBypasses } from '@texra-ai/harness/schemas';
 import { isLiveRun } from '@texra-ai/harness/schemas';
-import type { SessionHandle } from '@agent/runtime';
 import { defaultShortcutModifierLabel } from '@cli/runtime/shortcutLabels';
 import {
   formatCliSessionStatus,
@@ -43,6 +42,7 @@ import {
   type SlashCommandContext,
   type SlashCommandEffect,
 } from './slashContext';
+import type { LocalSession } from '@texra-ai/harness';
 import type { RunId } from '@texra-ai/harness/schemas';
 
 export function showCliSlashCommandHelp(): void {
@@ -74,12 +74,10 @@ export function showCliWorkPlan(): void {
 
 /** The skills the run's latest step lists, read from its rows. */
 const activeSkillNamesFor = Effect.fn('activeSkillNamesFor')(function* (
-  session: SessionHandle,
+  session: LocalSession,
   runId: RunId | undefined,
 ) {
-  const state =
-    runId === undefined ? null : yield* session.runHistory.load(runId);
-  return state?.offeredSkills ?? [];
+  return runId === undefined ? [] : yield* session.records(runId).readSkills();
 });
 
 export const showCliSessionStatus = Effect.fn('showCliSessionStatus')(

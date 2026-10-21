@@ -18,6 +18,7 @@ import {
   Rejected,
   type RequestError,
   type RequestRefusal,
+  type LocalSession,
   type Run,
   Secrets,
   type Session,
@@ -33,8 +34,6 @@ import {
   presentRunFailure,
   type SessionHostInteractions,
 } from '@texra-ai/harness';
-import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import { getRunRecords } from '@agent/storage';
 import { FOLLOW_UP_WAKE_FAILED_MESSAGE } from '@agent/followUp/ToolUseFollowUp';
 import { getRuntimeModelDirectFallback } from '@model/copilotRouting';
 import { isTaskConfig, recipeBlockOf, type RunId } from '@shared/schemas';
@@ -116,7 +115,7 @@ type RunValidatedOptions = Pick<
 >;
 
 /** What the run actions read and present beside the window's `Session`:
- *  filled from this process's session handle where the window holds one
+ *  filled from this process's session where the window holds one
  *  ({@link localRunActionPorts}), from the service where it runs there. */
 export interface RunActionRecordPorts {
   /** The window's roots: its workspace and its settings stores. */
@@ -134,11 +133,11 @@ export interface RunActionRecordPorts {
 
 /** The ports of a window whose process holds its session. */
 export const localRunActionPorts = (
-  handle: SessionHandle,
+  session: LocalSession,
 ): RunActionRecordPorts => ({
-  roots: handle.roots,
-  readConfig: (runId) => getRunRecords(handle, runId).readConfig(),
-  present: handle.interactions,
+  roots: session.roots,
+  readConfig: (runId) => session.records(runId).readConfig(),
+  present: session,
 });
 
 export interface HostRunActionPorts extends RunActionRecordPorts {

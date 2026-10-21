@@ -127,7 +127,7 @@ const BROWSER_HARNESS_ENTRY_PATTERN = {
 };
 
 // The SDK's entry files: the package's public surface and its Effect
-// boundary (the host door below), as opposed to the harness modules under it.
+// boundary, as opposed to the harness modules under it.
 const HARNESS_ENTRY_FILES = [
   'packages/harness/src/index.ts',
   'packages/harness/src/node.ts',

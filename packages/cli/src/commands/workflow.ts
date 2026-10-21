@@ -3,7 +3,6 @@ import { Effect, FileSystem, Result } from 'effect';
 import { hasMagic } from 'glob';
 
 import { toErrorMessage } from '@texra-ai/harness/schemas';
-import { deriveResumability, getRunRecords } from '@agent/storage';
 import { RUN_OUTCOME, type RunId } from '@shared/schemas';
 import { documentTaskPatch } from '@texra/agent/output/documentRecipe';
 import { DocumentTaskOptionsSchema } from '@texra/shared/plugins/documents';
@@ -343,11 +342,8 @@ export const executeCliWorkflowConfig = Effect.fn('executeCliWorkflowConfig')(
     const recoveryInputIsDurable = options.recoveryInputIsDurable ?? true;
     // Not a run a model failure stopped (its folded `lastError`): read from
     // the rows, so no verdict held in memory can be missed by an interrupt.
-    const canAdvertiseInterruptedRun: CheckpointRefinement = (_, runId) =>
-      Effect.map(
-        session.runHistory.load(runId),
-        (state) => state?.lastError == null,
-      );
+    const canAdvertiseInterruptedRun: CheckpointRefinement = (runId) =>
+      Effect.map(session.records(runId).readModelFailed(), (failed) => !failed);
     const writeResumeHint = (
       runId: RunId,
       waitForWrite = false,
@@ -366,11 +362,11 @@ export const executeCliWorkflowConfig = Effect.fn('executeCliWorkflowConfig')(
     const maybeAdvertiseRecovery = (runId: RunId) =>
       Effect.gen(function* () {
         if (!run.ok || !run.outcomePersisted) return;
-        const resumability = yield* deriveResumability(runId, session);
+        const resumable = yield* session.records(runId).readResumable();
         if (
           yield* advertisesInterruptedRun(
             runId,
-            resumability,
+            resumable,
             canAdvertiseInterruptedRun,
           )
         )
@@ -398,7 +394,7 @@ export const executeCliWorkflowConfig = Effect.fn('executeCliWorkflowConfig')(
           // fails the command when a completed run's copy was asked for, and
           // only warns otherwise.
           const recorded = yield* Effect.result(
-            getRunRecords(session, ended.runId).readConfig(),
+            session.records(ended.runId).readConfig(),
           );
           if (Result.isFailure(recorded)) {
             const message = `The output of task ${ended.runId} was not copied: its recorded configuration could not be read: ${toErrorMessage(recorded.failure)}`;

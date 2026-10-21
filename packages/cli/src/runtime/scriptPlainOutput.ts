@@ -1,11 +1,11 @@
 /**
  * The plain-text script progress of `texra run` (PRD
  * one-fold-three-renderers, 10.3): what the session view's script stages
- * say, printed as their lines change. It reads `SessionHandle.view` and
+ * say, printed as their lines change. It reads `LocalSession.view` and
  * derives nothing the fold already states; it keeps only what it last
  * printed.
  */
-import { Effect, type Scope, Stream, SubscriptionRef } from 'effect';
+import { Effect, Scope, ScopedRef, Stream } from 'effect';
 
 import { isTerminalOutcomePhase } from '@texra-ai/harness/schemas';
 import {
@@ -14,15 +14,15 @@ import {
   type SessionView,
 } from '@texra-ai/harness/schemas';
 import { scriptStages, formatCostUsd } from '@texra-ai/harness/transcript';
-import type { SessionHandle } from '@agent/runtime';
 import { qualifyAggregateId, RUN_PHASE, type RunId } from '@shared/schemas';
 import { runStatusLabel } from '@ui/copy/runStatus';
 
 import { claimRootRun } from './sessionViewFollow';
+import type { LocalSession } from '@texra-ai/harness';
 
 /** The plain script output also subscribes the transcripts it prints,
  *  since transcript rows fold only for subscribed aggregates. */
-type ScriptPlainSession = Pick<SessionHandle, 'view'>;
+type ScriptPlainSession = Pick<LocalSession, 'view'>;
 
 interface ScriptPlainOutputOptions {
   /** The launched run when the request names it, else the first top-level
@@ -77,7 +77,7 @@ export function attachScriptPlainOutput(
     const previous = new Map<RunId, ReadonlyMap<string, string>>();
     let subscribed = '';
     let rootRunId: RunId | undefined;
-    const attachCursor = SubscriptionRef.getUnsafe(session.view.ref).cursor;
+    const attachCursor = session.view.current().cursor;
     const write = (line: string): void => {
       options.beforeWrite?.();
       options.writeLine(line);
@@ -90,9 +90,8 @@ export function attachScriptPlainOutput(
         if (before?.get(id) !== line) write(line);
       }
     };
-    yield* Effect.addFinalizer(() =>
-      session.view.subscribe('script-plain-output', []),
-    );
+    /** Holds the current subscription's interest; released with this scope. */
+    const interest = yield* ScopedRef.make<void>(() => undefined);
     yield* Effect.forkScoped(
       Stream.runForEach(session.view.changes, (view) =>
         Effect.gen(function* () {
@@ -121,12 +120,16 @@ export function attachScriptPlainOutput(
           const key = scriptRuns.map((run) => run.id).join('\0');
           if (key !== subscribed) {
             subscribed = key;
-            yield* session.view.subscribe(
-              'script-plain-output',
-              scriptRuns.map((run) => ({
-                id: qualifyAggregateId('run', run.id),
-                fromSeq: 0,
-              })),
+            // ScopedRef.set holds the new set before it lets the old one go,
+            // so no run printed in both leaves the fold in between.
+            yield* ScopedRef.set(
+              interest,
+              session.view.subscribe(
+                scriptRuns.map((run) => ({
+                  id: qualifyAggregateId('run', run.id),
+                  fromSeq: 0,
+                })),
+              ),
             );
           }
           for (const run of scriptRuns) printRun(run, view);

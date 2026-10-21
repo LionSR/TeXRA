@@ -15,12 +15,14 @@ import {
   USER_FOLLOW_UP_SUPPORT,
 } from '@shared/schemas';
 import type { RunId } from '@shared/schemas';
+import { testSessionOf } from '@test/support/testProcessRuntime';
 import {
   createTestSession,
   publishTestRunStart,
   publishTestRows,
 } from '@test/support/sessionTestUtils';
 import { inquiryThreadRow } from '@test/support/inquiryThreadRow';
+import { closeTestSession } from '@test/support/sessionEnd';
 
 const runId = 'c11a01' as RunId;
 const childRunId = 'c11c01' as RunId;
@@ -167,7 +169,7 @@ function rowFields(record: CliNdjsonRecord): {
 const projectionOver = Effect.fnUntraced(function* (session: SessionHandle) {
   const writeRecord = recordWriter();
   const detach = yield* attachCliSessionProgressProjection(
-    session,
+    testSessionOf(session),
     writeRecord,
   );
   const publish = async (source: Source): Promise<void> => {
@@ -450,5 +452,41 @@ describe('attachCliSessionProgressProjection', () => {
       );
       expect(writeRecord).toHaveBeenCalledTimes(1);
     }),
+  );
+
+  it.effect(
+    'over a reopened store holding earlier runs, projects only the new run',
+    () =>
+      Effect.gen(function* () {
+        const first = yield* createTestSession({ persistent: true });
+        publishTestRunStart(first, runId);
+        yield* first.log.settled;
+        yield* closeTestSession(first.roots.storage);
+        const session = yield* createTestSession({
+          persistent: true,
+          roots: first.roots,
+        });
+        const { records, publish, detach } = yield* projectionOver(session);
+        yield* Effect.addFinalizer(() => detach);
+        yield* Effect.promise(() =>
+          publish({
+            draft: {
+              type: 'run.start',
+              aggregateId: childAggregate,
+              identity: { kind: 'process', tool: 'bash' },
+              userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
+              parent: null,
+              provenance: null,
+            },
+          }),
+        );
+
+        expect(
+          records()
+            .filter((record) => record.event === 'run.start')
+            .map(rowFields)
+            .map(({ fields }) => fields.aggregateId),
+        ).toEqual([childAggregate]);
+      }),
   );
 });

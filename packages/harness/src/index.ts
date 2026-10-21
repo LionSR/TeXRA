@@ -13,9 +13,8 @@
  */
 // The one barrel the "no convenience barrels" rule does not apply to.
 
-// The services and their layer. `Sessions.layer({ platform, plugins })` is
-// an embedder's way in: the process and its sessions live for that layer's
-// scope, so nothing is held without a scope to end it.
+// The services and their layer. `Sessions.layer({ platform, plugins })` is an
+// embedder's way in; the process and its sessions live for that layer's scope.
 export type { AgentPlatform, Composition } from './effect/sessions.js';
 export type { Plugin } from '@tools/plugins';
 export { Sessions, processLayer } from './effect/processLayer.js';
@@ -25,6 +24,7 @@ export type {
   PendingRequest,
   ResumeInput,
   Run,
+  LocalSession,
   Session,
   SessionHost,
   SessionView,
@@ -32,6 +32,24 @@ export type {
   RunView,
   TranscriptView,
 } from './effect/sessions.js';
+// What a session reads: a run's records, held runs, a deletion's report.
+export type {
+  HeldRun,
+  RunDeletion,
+  RunRecords,
+} from './effect/sessionReads.js';
+export type { SessionStoreMovedAside } from '@shared/session/database';
+export type { RunEnd } from '@shared/schemas';
+export type { RunResult } from '@agent/storage/resultMeta';
+export type { RunRefusal } from '@agent/runtime/runClassification';
+export type { AgentRunListingEntry } from '@agent/storage/runListing';
+export type { ExportNode } from '@agent/export/schemas';
+export {
+  formatConversationMessage,
+  type ConversationFormatOptions,
+} from '@agent/storage/conversationFormat';
+export type { RunWorkspaceFile } from '@agent/storage/runWorkspaceFiles';
+export type { AssembleTraceResult } from '@transcript/traceAssembler';
 export type { InlinePersona } from '@shared/schemas';
 // What `SessionHost.emit` takes and answers: the notices a session's runs
 // ask a host to present.
@@ -41,12 +59,9 @@ export type {
   RuntimePresentationEventPayloads,
 } from '@agent/runtime/runtimePresentationEvents';
 
-// The process the hosts compose and the session owner it serves: one
-// `processLayer` for every TeXRA host and for `Sessions.layer` above.
-export { SessionOwner } from '@platform/processRuntime';
+// The process the hosts compose: one `processLayer` for every host.
 export type { ProcessLayerOptions } from '@controllers/session/sessionLayer';
-// A project's `.env` over the process environment, for a host surface that
-// serves one project (the desktop's), as each run reads it.
+// A project's `.env` over the process environment, for a one-project host.
 export { workspaceEnvironmentLayer } from '@platform/defaults/nodePlatform';
 export {
   withForkFailureReporting,
@@ -57,10 +72,8 @@ export {
   type ProcessServices,
 } from '@platform/processRuntime';
 
-// The process's agent catalog: its reads, launch resolution and custom
-// copies, the workspace's agent selection over it, and the agent
-// directories a host serves it (bundled agents under its packaged
-// resources' `BUNDLED_AGENTS_DIRECTORY`).
+// The agent catalog: reads, launch resolution, custom copies, the workspace's
+// selection, and the agent directories a host serves it.
 export {
   AgentCatalog,
   AgentCatalogLoadError,
@@ -131,10 +144,8 @@ export {
   attachErrorPresentationClaimed,
   hasErrorPresentationClaimed,
 } from '@common/errors/sdkError/errorMetadata';
-// A host's presentation surface: what a session presents through, the
-// `SessionHostInteractions` a host with no session of its own presents
-// through, a host's emit handlers (one per presentation event), and a failed
-// run's presentation, which marks it presented.
+// A host's presentation surface: session and sessionless interactions, the
+// emit handlers (one per event), and a failed run's presentation claim.
 export {
   SessionHostInteractions,
   type HostInteractions,
@@ -146,13 +157,8 @@ export { escapeText } from '@shared/utils/xmlEscape';
 // The payloads, as the runtime defines them.
 export type { AgentEvent } from '@agent/trace';
 
-// `RunEndResult` is deliberately sourced from its own module rather than
-// from the `@agent/runtime` barrel. It appears in this package's PUBLIC
-// declarations, and declaration emit follows whichever module a public type
-// comes from: taking it from the barrel pulls the barrel's whole `.d.ts`
-// graph — model handlers included — into the published type surface, which
-// trips the provider-type leak check in `scripts/validate-artifacts.mjs`
-// (`@anthropic-ai/sdk`).
+// `RunEndResult` comes from its own module so declaration emit does not pull
+// the provider SDK types in (the leak check in `scripts/validate-artifacts.mjs`).
 export type { RunEndResult } from '@agent/runtime/RunEndResult';
 export type {
   CallRequests,
@@ -191,8 +197,7 @@ export type {
   ToolEditContent,
 } from '@shared/session/runtimeRequest';
 
-// The platform's ports: what an `AgentPlatform` implements, the failures its
-// stores answer with, and the services a plugin's code reads them as.
+// The platform's ports, their stores' failures, and the services plugins read.
 export {
   AgentDirectories,
   AgentDirectoriesFailed,
@@ -227,13 +232,10 @@ export type {
 
 // The budget a session close waits for its runs: a plugin's drain fits it.
 export { SESSION_CLOSE_DEADLINE_MS } from '@agent/runtime/SessionHandle';
-// Model access a host request makes outside a run: the user's own key and
-// the endpoint they set (audio transcription).
+// Model access outside a run: the user's key and endpoint (transcription).
 export { ownKeyCredential } from '@agent/runtime/modelAccess/credentials';
-// The models a host offers: one read answers every visible model's option
-// (availability, route, the plan paying, why it cannot run), beside the
-// enabled list and its one writer, the precedence that picks a run's model,
-// the one reasoning-level policy, and the helper model.
+// The models a host offers: each visible model's option, the enabled list and
+// its writer, run-model precedence, the reasoning policy, the helper model.
 export {
   getEnabledModels,
   ModelHostFactUnreadable,
@@ -264,9 +266,7 @@ export { UsageLog, type UsageLogEntry } from '@shared/usageLog';
 // What a used-up plan falls back to, as the retry copy names it.
 export { quotaFallbackRouteFor } from '@shared/quotaFallbackRoutes';
 
-// The rooted file systems a plugin's code reads (the workspace, the
-// session's run storage, the global storage root), and the layers that
-// serve them over a session's roots outside a run.
+// The rooted file systems plugins read, and their layers outside a run.
 export {
   GlobalStorageFs,
   sessionFsLayer,
@@ -275,18 +275,14 @@ export {
   WorkspaceFs,
 } from '@platform/rootedFs';
 export type { RootedFileSystem } from '@utils/files/rootedFileSystem';
-// A `FileLocation` by its root: a workspace file, a file under a run's
-// storage, a file outside both, or a path against the workspace root a
-// caller holds.
+// A `FileLocation` by its root: workspace, run storage, external, or relative.
 export {
   createExternalLocation,
   createRunStorageLocation,
   createWorkspaceLocation,
   pathToLocationIn,
 } from '@utils/files/fileLocation';
-// The user's MCP servers the tool catalog loads: the config file beside a
-// global storage directory, read as the catalog reads it, and the server a
-// namespaced MCP tool name belongs to.
+// The user's MCP servers: their config file, and a namespaced tool's server.
 export { mcpConfigPathOf, readMcpConfig } from '@tools/mcp/mcpConfig';
 export type { McpServerConfig } from '@common/plugins/mcpServers';
 export { mcpServerOfToolName } from '@tools/mcp/mcpServer';
@@ -325,10 +321,8 @@ export {
   listRunGeneratedFiles,
   type RunGeneratedFile,
 } from '@tools/executions/runGeneratedFiles';
-// Failures as a host or plugin reads them: the agent error and how it is
-// presented, the filesystem and module predicates, the cause chain, a
-// user's abort, and a provider error's message. Error messages themselves
-// (`toErrorMessage`, `ensureError`) are in `./schemas`.
+// Failures as hosts and plugins read them: the agent error, predicates, cause
+// chain, abort, provider message (`toErrorMessage` is in `./schemas`).
 export { AgentError, RouteUnavailable } from '@common/errors/agentErrors';
 export {
   agentErrorPresentation,
@@ -343,9 +337,7 @@ export {
   isUserAbort,
 } from '@common/errors/errorPredicates';
 export { getSdkErrorMessage } from '@common/errors/sdkError/providerErrorFormat';
-// Path containment on the platform's own paths, a path's segments and its
-// POSIX form, and an extension check that ignores case. (The browser-safe
-// path basics are in `./schemas`.)
+// Platform path containment, segments, POSIX form, case-free extension check.
 export {
   getPathSegments,
   hasExtension,
@@ -369,9 +361,7 @@ export {
   type AvailabilityResults,
   type ExternalToolCheckResult,
 } from '@tools/toolAvailabilityService';
-// The process's tool catalog: the built-in tools the switches leave on, a
-// plugin's process services, and the switches themselves; and the switches'
-// first-install seed.
+// The tool catalog: enabled built-ins, plugin services, switches and their seed.
 export {
   ToolCatalog,
   type ToolCatalogOwner,
@@ -388,8 +378,7 @@ export {
   type LogSink,
 } from '@logger/logSink';
 export { withLogChannel } from '@logger/effectLog';
-// The redaction the write path applies, for a host surface that shows text
-// outside it (a crash dialog, a log file read back, a result message).
+// The write path's redaction, for host text shown outside it.
 export { formatFatalErrorDetail, redactSecrets } from '@logger/redaction';
 // Every read and write of a catalog setting, against the stores a caller
 // holds (a session's roots), and the typed read of a non-catalog state key.

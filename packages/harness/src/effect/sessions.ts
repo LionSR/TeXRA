@@ -9,8 +9,12 @@
 import type { AgentEvent } from '@agent/trace';
 import type { ITool } from '@agent/core/tools/ToolTypes';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
-import type { HostInteractions } from '@agent/runtime/HostInteractions';
+import type {
+  HostInteractions,
+  SessionHostInteractions,
+} from '@agent/runtime/HostInteractions';
 import type { RunEndResult } from '@agent/runtime/RunEndResult';
+import type { AgentRunListingEntry } from '@agent/storage/runListing';
 import type {
   AgentDirectoriesPort,
   ToolMissingHandler,
@@ -21,12 +25,17 @@ import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import type { ApprovalPolicy } from '@shared/approvalPolicy';
 import type {
   CommitOrdinal,
+  DisplaySessionEvent,
   FoldInput,
   InlinePersona,
   RequestDecision,
   RunId,
   TranscriptSubscription,
 } from '@shared/schemas';
+import type {
+  DatabaseReadFailed,
+  SessionStoreMovedAside,
+} from '@shared/session/database';
 import type { RequestError } from '@shared/session/requestErrors';
 import type { Outcome, RuntimeRequest } from '@shared/session/runtimeRequest';
 import type {
@@ -34,7 +43,7 @@ import type {
   SessionView,
 } from '@shared/session/readonlyViews';
 import type { Plugin } from '@tools/plugins';
-import type { Effect, Stream, Scope } from 'effect';
+import type { Effect, Stream, Scope, SubscriptionRef } from 'effect';
 
 import type {
   LaunchError,
@@ -43,6 +52,7 @@ import type {
   ToolsRefused,
   TraceUnavailable,
 } from './errors.js';
+import type { HeldRun, RunDeletion, RunRecords } from './sessionReads.js';
 
 /**
  * The process services the package composes, together with the workspace
@@ -94,13 +104,25 @@ export type ApprovalHandler = (
 
 /** How a root's session is opened. A later open of the same root gets the
  *  session already there, and must ask for the same store: one that
- *  differs fails with `SessionOptionsConflict`. */
+ *  differs fails with `SessionOptionsConflict`. What `host` says is read
+ *  only by the open that builds the session. */
 export interface OpenOptions {
   /** Keep the session's history in the root's SQLite store (under
    *  `roots.storage`, the store every TeXRA host keeps), so a later process
    *  reopens it and resumes its runs. Absent, the store is in memory and
    *  ends with the session. */
   readonly persistent?: boolean;
+  /**
+   * The opener is a TeXRA host, whose surfaces answer the runs' requests
+   * from the view (a `request.decide`), attached or not; absent, nobody can
+   * answer until a host that does attaches ({@link Session.attach}), so the
+   * session's policy denies every request. A window (the TUI, desktop, the
+   * extension, the service) sets `interruptedTasks`: it resumes a task
+   * whose resume was blocked once what it needs is back, and with `offer`
+   * also lists at open, or under `texra.resumeOnOpen: auto` continues, the
+   * tasks a closed or crashed TeXRA left interrupted.
+   */
+  readonly host?: { readonly interruptedTasks?: 'offer' | 'retry' };
 }
 
 /**
@@ -186,8 +208,9 @@ export interface Run {
   readonly interrupt: Effect.Effect<void>;
 }
 
-/** One session of the process's owner: a root's runs, its view, and the
- *  hosts attached to it. */
+/** One session: a root's runs, its view, and the hosts attached to it,
+ *  whether this process holds it ({@link LocalSession}) or a window drives
+ *  the background service's. */
 export interface Session {
   readonly roots: WorkspaceRoots;
   /** The fold's levels, each an immutable value. */
@@ -240,4 +263,67 @@ export interface Session {
   readonly attach: (
     host: SessionHost,
   ) => Effect.Effect<void, never, Scope.Scope>;
+}
+
+/**
+ * A session this process holds (`Sessions.open`): every {@link Session}'s
+ * members, and the reads of its store, the runs it holds here and the
+ * notices it presents.
+ */
+export interface LocalSession extends Session {
+  /** Set when opening the store moved an older build's or a damaged store
+   *  aside; the host that opened the session presents it once. */
+  readonly storeMovedAside: SessionStoreMovedAside | null;
+  readonly view: Session['view'] & {
+    /** Fold the transcripts of the runs `set` names, beside every other
+     *  reader's, for the caller's scope. */
+    readonly subscribe: (
+      set: readonly TranscriptSubscription[],
+    ) => Effect.Effect<void, never, Scope.Scope>;
+    /** The view folded cold from the store as of this call: every run's
+     *  listing, and the whole history of the runs named. */
+    readonly read: (runIds: readonly RunId[]) => Effect.Effect<SessionView>;
+    /** The store's head: the last commit, where a reader attaching now
+     *  starts {@link events} to see only what commits from here on. A
+     *  level's `cursor` can sit far behind it right after open. */
+    readonly head: () => CommitOrdinal;
+    /**
+     * Every display row committed past `from` ({@link head}, or a level's
+     * `cursor`), every run's, in commit order, then each as it commits. `drained` receives
+     * the commit each forward read covered, a row the store no longer
+     * holds included.
+     */
+    readonly events: (
+      from: CommitOrdinal,
+      drained?: SubscriptionRef.SubscriptionRef<CommitOrdinal>,
+    ) => Stream.Stream<DisplaySessionEvent, DatabaseReadFailed>;
+  };
+  /** One run's committed records. */
+  readonly records: (runId: RunId) => RunRecords;
+  /** The runs a user started (agent runs with no parent), newest first,
+   *  each with its saved setup. */
+  readonly listRuns: () => Effect.Effect<AgentRunListingEntry[], Error>;
+  /** What this process holds of `runId`, or of every run it holds. */
+  readonly held: {
+    (runId: RunId): HeldRun | undefined;
+    (): readonly HeldRun[];
+  };
+  /**
+   * Delete one run, or every run the store lists (`'all'`), through the
+   * run's claim: a run a live owner holds is left (`active`). Only a
+   * single run's deletion may take over an owner that cannot be proved
+   * alive or dead.
+   */
+  readonly deleteRuns: (
+    target: RunId | 'all',
+  ) => Effect.Effect<RunDeletion, DatabaseReadFailed>;
+  /** Present a notice through the newest attached host; with
+   *  `replayWhenAttached`, a notice raised while none is attached waits
+   *  for the next. */
+  readonly emit: SessionHostInteractions['emit'];
+  /** A barrier: every write enqueued before it has run, and the view has
+   *  folded what it committed. It waits for the fold, not for the
+   *  consumers the fold gates (the terminal-result presenter among them),
+   *  which see those rows as it releases them. */
+  readonly settled: Effect.Effect<void>;
 }

@@ -16,6 +16,7 @@ import { afterEach, describe, expect, onTestFinished, vi } from 'vitest';
 
 import type { DesktopToolEditApprovalUi } from '@desktop/main/desktopToolEditApproval';
 import type { RunId } from '@shared/schemas';
+import { testSessionOf } from '@test/support/testProcessRuntime';
 import { closeSessionOf } from '@test/support/sessionEnd';
 import { testRuntime } from '@test/support/testProcessRuntime';
 
@@ -130,7 +131,7 @@ function createApprovalFixture(
       );
     const controller = new modules.controllerModule.ToolEditApprovalController({
       host,
-      session,
+      session: testSessionOf(session),
     });
     yield* Effect.addFinalizer(() =>
       Effect.promise(() => testRuntime().runPromise(controller.dispose())),

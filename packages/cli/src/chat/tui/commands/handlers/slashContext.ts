@@ -1,11 +1,11 @@
 import { type RunId } from '@texra-ai/harness/schemas';
-import { type SessionHandle } from '@agent/runtime';
 import { type CliContext } from '@cli/runtime/cliContext';
 import { type CliNoAvailableModelsRecoveryOptions } from '@cli/runtime/modelAccess';
 import { type CliSignInProgress } from '@cli/runtime/signInUrl';
 import { setTransientNotice } from '@cli/chat/tui/state/cliState';
 import { type TuiSession } from '@cli/chat/tui/state/sessionRunState';
 import { appendLocalNotice } from '@cli/chat/tui/state/transcript';
+import type { LocalSession } from '@texra-ai/harness';
 import type { ApprovalPolicy } from '@texra-ai/harness/schemas';
 import type {
   ProcessRuntime,
@@ -30,7 +30,7 @@ export interface SlashCommandContext {
   readonly session: TuiSession;
   /** The process session whose records `/status` reads (a run's offered
    *  skills); records stay read here. */
-  readonly runtimeSession: SessionHandle;
+  readonly runtimeSession: LocalSession;
   /** Where run requests and resumes land: the chat's session, here or in
    *  the background service. */
   readonly runSession: Session;

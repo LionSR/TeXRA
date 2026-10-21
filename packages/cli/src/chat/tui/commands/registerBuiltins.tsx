@@ -10,7 +10,6 @@ import {
   type WorkspaceRoots,
 } from '@texra-ai/harness';
 import { runBypasses } from '@texra-ai/harness/schemas';
-import type { SessionHandle } from '@agent/runtime';
 import type { GetModelSwitchDisabledReason } from '@cli/runtime/modelAccess';
 import { parseCliHistoryId } from '@cli/runtime/history';
 import type { CliModelAccessSelection } from '@cli/runtime/modelAccessRoute';
@@ -80,6 +79,7 @@ import {
   type FormActionHandler,
   modelAccessContribution,
 } from './modelAccessContribution';
+import type { LocalSession } from '@texra-ai/harness';
 import type { ApprovalPolicy } from '@texra-ai/harness/schemas';
 import type {
   ProcessRuntime,
@@ -107,7 +107,7 @@ export function registerBuiltinSlashCommands(options: {
   runtime: ProcessRuntime;
   /** The process session `/resume` lists history from: its records, which
    *  stay read here. */
-  runtimeSession: SessionHandle;
+  runtimeSession: LocalSession;
   /** Where the commands' run requests and resumes land: the chat's session,
    *  here or in the service. */
   runSession: Session;

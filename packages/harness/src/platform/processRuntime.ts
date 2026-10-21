@@ -39,6 +39,7 @@ import type { UsageLog } from '@shared/usageLog';
 import type { ToolCatalog, ToolCatalogOwner } from '@tools/liveTools';
 import type { ToolAvailability } from '@tools/toolAvailabilityService';
 import type { ToolRegistry } from '@tools/toolTable';
+import type { Sessions } from '../effect/processLayer.js';
 import type { HttpClient } from 'effect/http';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
@@ -92,8 +93,8 @@ export class StateStores extends Context.Service<
  * `ToolCatalog` (with `ToolCatalogOwner`, its owner's view), the tool catalog
  * each session's steps pin their tools in, and
  * `ToolAvailability`, each workspace's last dependency probe. Every run
- * and session of the process is provided these; the `SessionOwner` above
- * them is the composition root's alone ({@link ProcessRuntime}).
+ * and session of the process is provided these; the `Sessions` above them
+ * is the composition root's alone ({@link ProcessRuntime}).
  */
 export type ProcessServices =
   | ProcessIdentity
@@ -204,25 +205,26 @@ export const holdProcessRoot = (
   });
 
 /** The runtime a composition root makes over `processLayer`: the process
- *  services, and the `SessionOwner` that opens and closes its sessions. */
+ *  services, and the `Sessions` that open and close its sessions. */
 export type ProcessRuntime = ManagedRuntime.ManagedRuntime<
-  ProcessServices | SessionOwner,
+  ProcessServices | Sessions,
   never
 >;
 
 /**
- * `effect` over this runtime's services, as a program rather than a run: a
+ * `effect` over this runtime's services (a {@link ProcessRuntime}'s, or a
+ * host runtime's that serves more), as a program rather than a run: a
  * composition root hands the process services to a program it must give away
  * — a shutdown handler, a host callback typed as an Effect — without
  * stepping through a Promise to get them. The services are the runtime's own
  * context, built once and cached there, so this is the same provision
  * `runPromise` would have made, minus the boundary.
  */
-export function withProcessServices<A, E>(
+export function withProcessServices<A, E, R = ProcessServices | Sessions>(
   // Not named `runtime`: the migration ratchet pins this file's one approved
   // `runtime` binding to `withForkFailureReporting`'s parameter.
-  processRuntime: ProcessRuntime,
-  effect: Effect.Effect<A, E, ProcessServices | SessionOwner>,
+  processRuntime: ManagedRuntime.ManagedRuntime<R, never>,
+  effect: Effect.Effect<A, E, NoInfer<R>>,
 ): Effect.Effect<A, E> {
   return Effect.flatMap(processRuntime.contextEffect, (context) =>
     Effect.provide(effect, context),

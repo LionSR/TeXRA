@@ -4,7 +4,7 @@ import * as path from 'node:path';
 import { Effect } from 'effect';
 import { describe, expect, it } from 'vitest';
 
-import { listRunWorkspaceFiles } from '@agent/storage';
+import { listRunWorkspaceFiles } from '@agent/storage/runWorkspaceFiles';
 import { fakePath } from '@test/support/FakePlatform';
 import { setupPlatform } from '@test/support/setupPlatform';
 

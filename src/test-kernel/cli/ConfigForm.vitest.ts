@@ -207,7 +207,7 @@ async function openConfigFormProps(
     secrets: new FakeSecrets(),
     stores,
     runtime: testRuntime(),
-    runtimeSession: testDefaultSession(),
+    runtimeSession: testSessionOf(testDefaultSession()),
     runSession: testSessionOf(testDefaultSession()),
     configRoots: { ...testDefaultSession().roots, ...stores },
   });
@@ -406,7 +406,7 @@ describe('/config slash command wiring', () => {
           secrets: new FakeSecrets(),
           stores,
           runtime: testRuntime(),
-          runtimeSession: testDefaultSession(),
+          runtimeSession: testSessionOf(testDefaultSession()),
           runSession: testSessionOf(testDefaultSession()),
           configRoots: { ...testDefaultSession().roots, ...stores },
         });
@@ -436,7 +436,7 @@ describe('/config slash command wiring', () => {
           secrets: new FakeSecrets(),
           stores,
           runtime: testRuntime(),
-          runtimeSession: testDefaultSession(),
+          runtimeSession: testSessionOf(testDefaultSession()),
           runSession: testSessionOf(testDefaultSession()),
           configRoots: { ...testDefaultSession().roots, ...stores },
           onProjectApprovalPolicyChanged: (policy) => {
@@ -464,7 +464,7 @@ describe('/config slash command wiring', () => {
         }),
         stores,
         runtime: testRuntime(),
-        runtimeSession: testDefaultSession(),
+        runtimeSession: testSessionOf(testDefaultSession()),
         runSession: testSessionOf(testDefaultSession()),
       });
       openCliSlashCommandForm('key', '');

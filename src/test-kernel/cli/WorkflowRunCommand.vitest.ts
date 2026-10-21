@@ -12,7 +12,7 @@ import { cliLogSinksMock } from '@test/support/cliLogSinksMock';
 
 import { it } from '@effect/vitest';
 import { Cause, Effect, Exit } from 'effect';
-import type { SessionHandle } from '@agent/runtime';
+import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { asDocumentTask } from '@test/support/ProgressControllerHarnesses';
 import type { DocumentsResult } from '@texra/shared/plugins/documentOutputs';
 import type { runHeadlessAgent } from '@cli/commands/workflow';
@@ -345,7 +345,7 @@ describe('CLI run command, workflow agents', () => {
     fixtureSession = session;
     const platform = {
       ...installedHost().platform,
-      session: Effect.succeed(session),
+      session: Effect.succeed(testSessionOf(session)),
       runtime: testRuntime(),
     };
     cliInitPlatformMock.initCliPlatform.mockReturnValue(
@@ -1052,8 +1052,7 @@ describe('CLI run command, workflow agents', () => {
           context,
           {
             services: {
-              session: Effect.succeed(session),
-              runSession: Effect.succeed(testSessionOf(session)),
+              session: Effect.succeed(testSessionOf(session)),
               runtime: testRuntime(),
               shutdownScope: installedHost().platform.shutdownScope,
             },
@@ -1106,8 +1105,7 @@ describe('CLI run command, workflow agents', () => {
           context,
           {
             services: {
-              session: Effect.succeed(session),
-              runSession: Effect.succeed(testSessionOf(session)),
+              session: Effect.succeed(testSessionOf(session)),
               runtime: testRuntime(),
               shutdownScope: installedHost().platform.shutdownScope,
             },

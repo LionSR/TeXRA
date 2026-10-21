@@ -1,7 +1,7 @@
 import { it } from '@effect/vitest';
 import { Effect, SynchronizedRef } from 'effect';
 import { beforeEach, describe, expect } from 'vitest';
-import { getRunRecords } from '@agent/storage';
+import { getRunRecords } from '@agent/storage/runRecords';
 import { finalizeRun } from '@agent/storage/runLifecycle';
 import {
   appendRow,

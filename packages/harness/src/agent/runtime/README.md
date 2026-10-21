@@ -19,7 +19,7 @@ groupings by concern so the shape is visible without opening every file.
 | **Host interactions**             | Session-scoped host capabilities                                 | `HostInteractions` / `SessionHostInteractions` (session-owned host interaction and presentation port: diagnostics, manual criticism, unavailable-tool notices, plan approval, agent proposal, retry, bash, tool-edit, user question, external inquiry)                                                                                                                                                                                                                                                                                                                                                                                                                                |
 | **Run history & services**        | What the loop takes from context to read, write and call         | `RunHistory` (claims through `Database`, reads and writes through the session's `SessionLog`), `RunCell` (`loop/runProgram.ts`, the run's one state holder and its only writer), `FollowUps` (pending follow-up input and its one-batch consume), `ModelInvoker` (the one service that calls the llm `Model`), `storedTurn` (turn and history conversion at the run history boundary), `RunCall` and `ToolServices` (capabilities scoped to one tool invocation)                                                                                                                                                                                                                      |
 | **Child runs & model cells**      | Drive a child run's turns and the model instance each turn uses  | `childRunLoop` (the single driver for every child-run type), `childSettlement` (a child turn's rows and its parent's delivery, in one transaction), `childRunBudget` (per-session child-run concurrency budget), `ModelRetryGate` (process-shared recovery probes for a model route), `nativeSubagentStrategy` (native launch options and result formatting), `scriptRun` (a background script's strategy and summary), `recipeResult` (what a recipe run's value reads as), `subagentResults` and `deliveryEnvelope` (the XML delivery envelope every child path builds)                                                                                                             |
-| **Classification & control**      | Classify what a persisted run was and queue control over it      | `runClassification` (`runRefusal`, exported from the barrel), `runApprovalQueue` (per-run approval queueing), `requestPolicy` (what the session's approval policy settles when a request opens)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| **Classification & control**      | Classify what a persisted run was and queue control over it      | `runClassification` (`runRefusal`, a `LocalSession` record read), `runApprovalQueue` (per-run approval queueing), `requestPolicy` (what the session's approval policy settles when a request opens)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
 | **Model resolution**              | Turn a model name/config into a bound llm `Model`                | `modelAccess/ModelAccess` (the one model path: settings, route, credential, binding), `run/validationModel` (the CI-only canned model and its gate), `helperModel` (`helperCall`, the one-shot helper path through `ModelAccess`, gated, priced and usage-logged like every model call), `helperModelName` (the helper model a helper call runs on)                                                                                                                                                                                                                                                                                                                                   |
 | **Content helpers**               | One-shot content generation built on the helper model            | `sessionDescription` (AI session summary)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
 
@@ -36,9 +36,9 @@ updating the few imports that reference it. Most runtime files still have many
 direct consumers inside `packages/harness/src/agent`, the agent SDK package, and tests. Moving
 them into subdirectories would therefore create mechanical churn
 disproportionate to a documentation change. The CLI, desktop, and extension
-hosts are decoupled from that layout through the curated `@agent/runtime`
-surface, but the internal direct imports remain a reason to keep the rest of
-this directory flat.
+hosts are decoupled from that layout by the public `LocalSession`, but the
+internal direct imports remain a reason to keep the rest of this directory
+flat.
 
 The exception this section has always named — "if a future refactor touches a
 whole group's internal call sites anyway, revisit turning that group into a
@@ -52,15 +52,8 @@ already touching the whole group — governs any further one.
 
 ## Importing
 
-CLI, desktop, and extension host code imports the curated public surface:
-
-```ts
-import { runRefusal, type SessionHandle } from '@agent/runtime';
-```
-
-The barrel contains only symbols used across that host boundary; a host
-declares the shape it reads itself (the CLI's `CliRunFacts` in
-`packages/cli/src/runtime/toolUseResumeData.ts`). Code inside
-`packages/harness/src/agent`, the agent SDK package, and tests should continue importing the
-specific `@agent/runtime/<File>` module so internal dependency edges stay
-explicit and the host-facing surface does not become a convenience barrel.
+CLI, desktop, and extension host code holds the public `LocalSession`
+(`@texra-ai/harness`) and imports nothing from here. Code inside
+`packages/harness/src/agent`, the agent SDK package, and tests import the
+specific `@agent/runtime/<File>` module, so internal dependency edges stay
+explicit; there is no barrel.

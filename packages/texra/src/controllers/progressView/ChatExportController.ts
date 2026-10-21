@@ -21,12 +21,16 @@ import * as path from 'node:path';
 
 import { Effect, FileSystem, type PlatformError } from 'effect';
 
-import { StorageFs, type WorkspaceFs } from '@texra-ai/harness';
+import {
+  StorageFs,
+  type AssembleTraceResult,
+  type LocalSession,
+  type WorkspaceFs,
+} from '@texra-ai/harness';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
 import { pathToLocationIn } from '@texra-ai/harness';
 import type { ChatExportInput } from '@agent/export/schemas';
 
-import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { compileLatex2Pdf } from '@latex/texTools';
 import {
   formatChatAsMarkdown,
@@ -39,11 +43,7 @@ import {
   type ChatExportLoadResult,
 } from '@texra/agent/export/loadChatExportInput';
 import type { TaskRecordsUnavailable } from '@texra/controllers/server/serviceSession';
-import {
-  assembleTrace,
-  injectStandaloneTrace,
-  type AssembleTraceResult,
-} from '@transcript';
+import { injectStandaloneTrace } from '@transcript';
 import { readNormalizedFile } from '@utils/files/fsDurability';
 import { absentReason } from '@utils/files/fsEntryExists';
 
@@ -96,7 +96,7 @@ function bundleFailure(
   );
 }
 
-/** The run records an export reads: from this process's session handle
+/** The run records an export reads: from this process's session
  *  ({@link localExportRecords}), or from the service that holds the run. */
 export interface ChatExportRecords {
   /** The run's setup and assembled export input (`loadChatExportInput`). */
@@ -112,10 +112,10 @@ export interface ChatExportRecords {
 
 /** The export records of a window whose process holds its session. */
 export const localExportRecords = (
-  session: SessionHandle,
+  session: LocalSession,
 ): ChatExportRecords => ({
   input: (runId) => loadChatExportInput(runId, session),
-  trace: (runId) => assembleTrace(runId, session),
+  trace: (runId) => session.records(runId).readTrace(),
 });
 
 interface ChatExportControllerDeps {

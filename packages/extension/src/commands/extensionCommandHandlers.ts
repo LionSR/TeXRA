@@ -18,7 +18,7 @@ import {
   type CommandHandler,
 } from '@texra/shared/commands/registry';
 import type { StorageFs, WorkspaceFs } from '@texra-ai/harness';
-import type { ProcessServices, SessionOwner } from '@texra-ai/harness';
+import type { ProcessServices, Sessions } from '@texra-ai/harness';
 import type { Effect } from 'effect';
 
 /**
@@ -63,7 +63,7 @@ type ExtensionRegistryCommandId =
 type CommandProgram<A = void> = Effect.Effect<
   A,
   Error,
-  ProcessServices | SessionOwner | WorkspaceFs | StorageFs
+  ProcessServices | Sessions | WorkspaceFs | StorageFs
 >;
 
 /**

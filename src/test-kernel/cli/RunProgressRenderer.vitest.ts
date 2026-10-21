@@ -27,6 +27,7 @@ import {
   USER_FOLLOW_UP_SUPPORT,
 } from '@shared/schemas';
 import type { SessionView, RunView } from '@shared/session/sessionView';
+import { testSessionOf } from '@test/support/testProcessRuntime';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
 import {
   createTestSession,
@@ -148,7 +149,10 @@ async function settle(): Promise<void> {
 /** A followed session over a bare view: the renderer reads only its level
  *  and its changes. */
 const followed = (ref: SubscriptionRef.SubscriptionRef<SessionView>) => ({
-  view: { ref, changes: SubscriptionRef.changes(ref) },
+  view: {
+    current: () => SubscriptionRef.getUnsafe(ref),
+    changes: SubscriptionRef.changes(ref),
+  },
 });
 
 function attached(renderer: RunProgressRenderer): TestRunProgressRenderer {
@@ -795,7 +799,7 @@ describe('CLI run progress renderer', () => {
           );
           const scope = yield* Scope.make();
           yield* host
-            .attachRunProgressRenderer(session)
+            .attachRunProgressRenderer(testSessionOf(session))
             .pipe(Scope.provide(scope));
           // The session's graph is fresh: let its fold subscribe before the
           // facts land, so each fact paints as its own level.
@@ -826,7 +830,7 @@ describe('CLI run progress renderer', () => {
           );
           const scope = yield* Scope.make();
           yield* host
-            .attachRunProgressRenderer(session)
+            .attachRunProgressRenderer(testSessionOf(session))
             .pipe(Scope.provide(scope));
           yield* publishRun(session, { runId: 'b2b2b2' });
           yield* session.log.settled;
@@ -868,7 +872,7 @@ describe('CLI run progress renderer', () => {
 
           const scope = yield* Scope.make();
           yield* host
-            .attachRunProgressRenderer(session)
+            .attachRunProgressRenderer(testSessionOf(session))
             .pipe(Scope.provide(scope));
           yield* publishRun(session, { runId: 'c3c3c3' });
           host.prepareInteractivePrompt?.();
@@ -901,7 +905,7 @@ describe('CLI run progress renderer', () => {
               );
               const scope = yield* Scope.make();
               yield* host
-                .attachRunProgressRenderer(session)
+                .attachRunProgressRenderer(testSessionOf(session))
                 .pipe(Scope.provide(scope));
               yield* publishRun(session, { runId: 'd4d4d4' });
               yield* Scope.close(scope, Exit.void);
@@ -1015,7 +1019,9 @@ describe('CLI run progress renderer', () => {
             yield* Effect.promise(() => settle());
             // The child list is the fold's: the parent's `childIds` and the child's own
             // row, derived beside the line that folded them.
-            const detach = yield* attachCliSessionProgressProjection(session);
+            const detach = yield* attachCliSessionProgressProjection(
+              testSessionOf(session),
+            );
             publishTestRows(session, [
               {
                 type: 'run.start',

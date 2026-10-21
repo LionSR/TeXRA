@@ -15,12 +15,11 @@
 import { Duration, Effect, FileSystem, Stream, SubscriptionRef } from 'effect';
 
 // Local imports
+import { getRunRecords, persistedParentRunId } from '@agent/storage/runRecords';
 import {
-  getRunRecords,
   listRunWorkspaceFiles,
   resolveRunWorkspaceFilePath,
-} from '@agent/storage';
-import { persistedParentRunId } from '@agent/storage/runRecords';
+} from '@agent/storage/runWorkspaceFiles';
 import { type SessionHandle } from '@agent/runtime/SessionHandle';
 import { requireToolRun } from '@agent/runtime/RunCall';
 import { Runs } from '@agent/runtime/runRegistry';

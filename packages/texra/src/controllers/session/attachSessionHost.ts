@@ -10,10 +10,9 @@
 import { Cause, Effect, Queue, type Scope, Stream } from 'effect';
 
 import { withLogChannel } from '@texra-ai/harness';
-import { type HostInteractions } from '@texra-ai/harness';
-import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { ToolEditApprovalController } from '@texra/controllers/approval/ToolEditApprovalController';
 import type { ToolEditApprovalRequest } from '@tools/approval/toolEditApproval';
+import type { HostInteractions, LocalSession } from '@texra-ai/harness';
 
 const CHANNEL = 'SessionHost';
 
@@ -22,7 +21,7 @@ type PreviewServices = Effect.Services<
 >;
 
 export const attachSessionHost = Effect.fn('session.attachHost')(function* (
-  session: SessionHandle,
+  session: LocalSession,
   controller: ToolEditApprovalController,
   interactions: Omit<
     HostInteractions,
@@ -55,7 +54,7 @@ export const attachSessionHost = Effect.fn('session.attachHost')(function* (
   // Total: a failed event read is logged, not left to end this fiber with
   // every staged preview waiting on a `request.decided`.
   yield* Effect.forkScoped(
-    Stream.runForEach(session.log.tail(session.log.now()), (event) =>
+    Stream.runForEach(session.view.events(session.view.head()), (event) =>
       controller.handleSessionEvent(event),
     ).pipe(
       Effect.catchCause((cause) =>
@@ -71,20 +70,17 @@ export const attachSessionHost = Effect.fn('session.attachHost')(function* (
     ),
     { startImmediately: true },
   );
-  yield* Effect.acquireRelease(
-    session.interactions.use({
-      ...interactions,
-      presentToolEdit: (request) => {
-        Queue.offerUnsafe(stagings, request);
-      },
-      // The release is composed into the session's own program, which does
-      // not carry this window's services: they are the ones captured here.
-      releaseToolEdit: (requestId) =>
-        Effect.provideContext(controller.release(requestId), services),
-      // An approve-all reaches the edits a user made in a staged diff view.
-      approveToolEdit: (requestId) =>
-        Effect.provideContext(controller.approveStaged(requestId), services),
-    }),
-    (detach) => Effect.sync(detach),
-  );
+  yield* session.attach({
+    ...interactions,
+    presentToolEdit: (request) => {
+      Queue.offerUnsafe(stagings, request);
+    },
+    // The release is composed into the session's own program, which does
+    // not carry this window's services: they are the ones captured here.
+    releaseToolEdit: (requestId) =>
+      Effect.provideContext(controller.release(requestId), services),
+    // An approve-all reaches the edits a user made in a staged diff view.
+    approveToolEdit: (requestId) =>
+      Effect.provideContext(controller.approveStaged(requestId), services),
+  });
 });

@@ -146,7 +146,7 @@ export const createDesktopAgentRun = Effect.fn('desktop.createAgentRun')(
         spawn,
       }),
       // A decision goes where the run runs.
-      session: { requests: project.session },
+      session: project.session,
     });
     // Dispose joins any tool-edit LaTeX build still displaying, which has no
     // cancellation signal, so the window's release must not wait on it: it
@@ -162,10 +162,10 @@ export const createDesktopAgentRun = Effect.fn('desktop.createAgentRun')(
     // asks anything. This host presents only the tool-edit preview; every
     // other request (bash, plan, proposal, retry, question) is listed by the
     // fold and answered by a surface's `request.decide`.
-    if (project.handle !== undefined)
+    if (project.service === undefined)
       yield* withProcessServices(
         runtime,
-        attachSessionHost(project.handle, toolEditApprovals, {
+        attachSessionHost(project.session, toolEditApprovals, {
           emit: handlePresentationEvent,
         }).pipe(Scope.provide(scope)),
       );

@@ -7,7 +7,7 @@ import { beforeEach, describe, expect, vi } from 'vitest';
 import { registryOf, Runs } from '@agent/runtime/runRegistry';
 
 // Local imports
-import { getRunRecords } from '@agent/storage';
+import { getRunRecords } from '@agent/storage/runRecords';
 import { registerRun } from '@agent/storage/runLifecycle';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import type {

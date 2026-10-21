@@ -4,8 +4,6 @@ import { Effect, FileSystem, PlatformError, Result } from 'effect';
 
 import { describeFollowUpFailure } from '@texra-ai/harness';
 import { ensureError } from '@texra-ai/harness/schemas';
-import { runRefusal } from '@agent/runtime';
-import { getRunRecords } from '@agent/storage';
 import {
   agentKey,
   agentName,
@@ -101,7 +99,7 @@ export function runResumeCommand(
   return Effect.gen(function* () {
     const stores = yield* initCliPlatform(context);
     const session = yield* stores.session;
-    const store = getRunRecords(session, id);
+    const store = session.records(id);
     const configResult = yield* Effect.result(store.readConfig());
     if (Result.isFailure(configResult)) {
       writeTextStderr(loadFailureMessage(id, configResult.failure));
@@ -134,7 +132,7 @@ export function runResumeCommand(
         return CliExitCode.Usage;
       }
       const forked = yield* Effect.result(
-        session.requests.request({
+        session.request({
           kind: 'run.fork',
           runId: id,
           at: action.at,
@@ -149,7 +147,7 @@ export function runResumeCommand(
           new Error(`run.fork answered ${forked.success.kind}`),
         );
       const forkId = forked.success.runId;
-      const forkConfig = yield* getRunRecords(session, forkId).readConfig();
+      const forkConfig = yield* session.records(forkId).readConfig();
       if (!forkConfig) {
         writeTextStderr(`Task ${forkId} was forked without a configuration.`);
         return CliExitCode.AgentError;
@@ -158,7 +156,7 @@ export function runResumeCommand(
     }
     // Gate resume on ownership: a run held by any owner that is alive or cannot
     // be proven dead refuses, naming that owner.
-    const refusal = yield* runRefusal(id, session);
+    const refusal = yield* store.readRefusal();
     if (refusal?.kind === 'finished') {
       writeTextStderr(describeFollowUpFailure('finished'));
       return CliExitCode.Usage;

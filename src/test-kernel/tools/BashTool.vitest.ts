@@ -9,7 +9,7 @@ import { Deferred, Effect, Exit, Fiber, Schedule } from 'effect';
 import { beforeEach, afterEach, describe, vi } from 'vitest';
 
 // Local imports
-import { getRunRecords } from '@agent/storage';
+import { getRunRecords } from '@agent/storage/runRecords';
 import * as toolUseFollowUp from '@agent/followUp/ToolUseFollowUp';
 
 import { formatToolResultAsText } from '@agent/runtime/run/toolResultText';

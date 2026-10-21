@@ -16,7 +16,7 @@ import path from 'node:path';
 import { setTimeout } from 'node:timers/promises';
 
 import { render } from 'ink';
-import { Effect, Fiber, SubscriptionRef } from 'effect';
+import { Context, Effect, Fiber, SubscriptionRef } from 'effect';
 import { nanoid } from 'nanoid';
 import React from 'react';
 
@@ -25,6 +25,7 @@ import { AgentCatalog } from '@texra-ai/harness';
 import { tuiOutputStreamForColor } from '@cli/tui/noColorOutput';
 import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
 import { nodeFileServices } from '@platform/defaults/jsonStore';
+import { SessionOwner } from '@platform/processRuntime';
 import { MemoryConfigProvider } from '@platform/defaults/memoryConfigProvider';
 import { runBypasses } from '@shared/approvalBypassKind';
 import { DEFAULT_MODELS } from '@shared/constants/defaultModels';
@@ -365,12 +366,18 @@ if (HARNESS_MEMORY_FILES.length > 0) {
     utimesSync(filePath, mtime, mtime);
   });
 }
-// The persistent session `initCliPlatform` opened over the harness roots.
-const harnessRuntimeSession = await harnessRuntime.runPromise(
+// The persistent session `initCliPlatform` opened over the harness roots,
+// and its internal handle, which the fixtures seed rows through: the same
+// root's, from the process's session owner.
+const harnessRunSession = await harnessRuntime.runPromise(
   HARNESS_PLATFORM_SERVICES.session,
 );
-const harnessRunSession = await harnessRuntime.runPromise(
-  HARNESS_PLATFORM_SERVICES.runSession,
+const harnessRuntimeSession = await harnessRuntime.runPromise(
+  Effect.flatMap(harnessRuntime.contextEffect, (context) =>
+    Context.getUnsafe(context, SessionOwner).open({
+      roots: harnessRunSession.roots,
+    }),
+  ),
 );
 if (process.env.HARNESS_VISIBLE_AGENTS !== undefined) {
   await harnessRuntime.runPromise(
@@ -1667,7 +1674,7 @@ registerBuiltinSlashCommands({
   secrets: HARNESS_PLATFORM_SERVICES.secrets,
   stores: HARNESS_PLATFORM_SERVICES,
   runtime: HARNESS_PLATFORM_SERVICES.runtime,
-  runtimeSession: harnessRuntimeSession,
+  runtimeSession: harnessRunSession,
   runSession: harnessRunSession,
   // Mirror `texra chat`: agent selection is open exactly while no root run
   // is pending.
