@@ -1,11 +1,58 @@
 /**
- * LaTeX toolchain constants: the dependency catalog, the per-tool install guides
- * and structured install commands, and the platform normalization helpers they
- * share. Split out of the old `@shared/constants/latex` dumping ground.
+ * LaTeX toolchain constants: the recommended LaTeX Workshop settings, the
+ * dependency catalog, the per-tool install guides and structured install
+ * commands, and the platform normalization helpers they share. Split out of
+ * the old `@shared/constants/latex` dumping ground.
  */
 
 /** Extension ID for the LaTeX Workshop VS Code extension. */
 export const LATEX_WORKSHOP_EXT_ID = 'James-Yu.latex-workshop';
+
+/**
+ * A recommended VS Code setting: a scalar written as is, or an object merged
+ * key-by-key into whatever the user already has set (rather than overwritten
+ * wholesale).
+ */
+export type LatexRecommendedSetting = {
+  readonly key: string;
+  readonly name: string;
+  readonly description: string;
+} & (
+  | { readonly kind: 'scalar'; readonly value: string }
+  | {
+      readonly kind: 'object';
+      readonly value: Readonly<Record<string, boolean>>;
+    }
+);
+
+/**
+ * The VS Code settings the LaTeX page recommends, keyed by the
+ * `LatexSettingsStatus` field that reports each one, in display order. The
+ * extension's settings handler writes and inspects them; the LaTeX tab
+ * renders them.
+ */
+export const LATEX_RECOMMENDED_SETTINGS = {
+  outDir: {
+    kind: 'scalar',
+    key: 'latex-workshop.latex.outDir',
+    value: '%DIR%/build/',
+    name: 'LaTeX Output Directory',
+    description:
+      'Redirect compilation artifacts to a build/ subfolder, keeping your project root clean.',
+  },
+  autoRevealExclude: {
+    kind: 'object',
+    key: 'explorer.autoRevealExclude',
+    value: { '**/build/': true },
+    name: 'Explorer Auto-Reveal Exclude',
+    description:
+      'Prevent the build/ folder from being auto-revealed in the Explorer sidebar.',
+  },
+} as const satisfies Readonly<Record<string, LatexRecommendedSetting>>;
+
+/** A `LatexSettingsStatus` field that reports one recommended setting. */
+export type LatexRecommendedSettingField =
+  keyof typeof LATEX_RECOMMENDED_SETTINGS;
 
 // ============================================================
 // Dependency catalog

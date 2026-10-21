@@ -10,7 +10,6 @@ import { LitElement, html, css, type TemplateResult, nothing } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 
 // Local imports - shared styles and utilities
-import { createEvent } from '@texra/shared/utils/events';
 import type { IconName } from '@ui/wa/iconNames';
 import { designTokens, commonViewStyles } from '@ui/styles';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
@@ -106,7 +105,13 @@ export class Pagination extends LitElement {
       maximum: Math.max(0, this.totalPages - 1),
     });
     if (page === this.page) return;
-    this.dispatchEvent(createEvent<PageChangeDetail>('page-change', { page }));
+    this.dispatchEvent(
+      new CustomEvent<PageChangeDetail>('page-change', {
+        detail: { page },
+        bubbles: true,
+        composed: true,
+      }),
+    );
   }
 
   private renderNavButton(
