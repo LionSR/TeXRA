@@ -106,6 +106,7 @@ export {
   type AgentDirectoryServiceOptions,
 } from '@agent/index/AgentDirectoryService';
 export { BUNDLED_AGENTS_DIRECTORY } from '@agent/index/BundledAgentDirectories';
+export { registerCustomAgentRoot } from '@tools/agentCatalogFollower';
 // The process's stores: the global root's current values, each family a
 // host or plugin declares (`ValueFamily`), the per-project settings stores,
 // and storage maintenance under a storage root.
