@@ -1,12 +1,12 @@
 import path from 'node:path';
 
 import { Effect, FileSystem, PlatformError } from 'effect';
+import { pathExists } from '@texra-ai/harness/node';
 
 import {
   parseGitHubSlug,
   type GitHubSlug,
 } from '@texra/tools/github/githubSlug';
-import { pathExists } from '@utils/files/fsDurability';
 
 import { CliExitCode } from '../runtime/exitCodes';
 import { tryOpenBrowser } from '../runtime/browser';

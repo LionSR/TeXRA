@@ -11,7 +11,7 @@ import { parseBibFile } from 'bibtex';
 
 // Local imports - utils
 import { ensureError } from '@texra-ai/harness/schemas';
-import { pathExists } from '@utils/files/fsDurability';
+import { pathExists, readNormalizedFile } from '@texra-ai/harness/node';
 
 // Local file imports
 import {
@@ -49,15 +49,14 @@ interface BibliographyEntriesResult {
 /** Bibliography probes hit the filesystem, so bound the fan-out. */
 const PROBE_CONCURRENCY = 8;
 
-/** Read a bibliography file, surfacing the read failure as a typed error.
- *  Decoded from bytes rather than `readFileString`, whose `TextDecoder`
- *  would strip a leading UTF-8 BOM the file carries. */
+/** Read a bibliography file, surfacing the read failure as a typed error. */
 const readBibliographyFile = Effect.fn('latex.readBibliographyFile')(function* (
   filePath: string,
 ) {
   const fs = yield* FileSystem.FileSystem;
-  const bytes = yield* fs.readFile(filePath).pipe(Effect.mapError(ensureError));
-  return Buffer.from(bytes).toString('utf-8').replaceAll('\r\n', '\n');
+  return yield* readNormalizedFile(fs, filePath).pipe(
+    Effect.mapError(ensureError),
+  );
 });
 
 export const extractBibliographyContext = Effect.fn(

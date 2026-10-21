@@ -11,8 +11,9 @@ import * as path from 'node:path';
 
 import { Effect, FileSystem } from 'effect';
 import { agentBlockOf, errorResult } from '@texra-ai/harness/plugins';
+import { readNormalizedFile } from '@texra-ai/harness/node';
 import { withLogChannel, hasExtension } from '@texra-ai/harness';
-import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';
+import { toErrorMessage } from '@texra-ai/harness/schemas';
 import {
   AgentCatalog,
   type AgentEntry,
@@ -33,8 +34,6 @@ import {
   type DocumentAgentOption,
   type DocumentTask,
 } from '@texra/shared/plugins/documents';
-import { readNormalizedFile } from '@utils/files/fsDurability';
-import { workspaceAbsolutePath } from '@utils/files/workspaceFS';
 import { formatBytes, isNonEmptyString } from '@utils/text/stringUtils';
 
 /** The document task `entry` defines, or null for a chat agent. */
@@ -159,10 +158,16 @@ export const rejectOversizedBibAttachments = Effect.fn(
     .filter((file) => hasExtension(file, '.bib'));
 
   for (const bibFile of bibFiles) {
-    const absolute = yield* Effect.try({
-      try: () => workspaceAbsolutePath(workspaceRoot, bibFile),
-      catch: ensureError,
-    });
+    // A relative path names a workspace file, which needs a folder open.
+    let absolute = bibFile;
+    if (!path.isAbsolute(bibFile)) {
+      if (!workspaceRoot) {
+        return yield* Effect.fail(
+          new Error('Workspace path is not available.'),
+        );
+      }
+      absolute = path.join(workspaceRoot, bibFile);
+    }
     // `FileSystem.stat` follows a link; a link whose target does not
     // resolve is measured as no file, as a path `readLink` cannot name is
     // no entry at all.

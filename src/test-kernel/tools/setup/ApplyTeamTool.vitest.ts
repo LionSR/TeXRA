@@ -9,7 +9,6 @@ import { afterEach, beforeAll, beforeEach, describe, expect, vi } from 'vitest';
 // Local imports
 import { AgentCatalog } from '@agent/index/agentCatalog';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
-import { getDefaultTeamId } from '@shared/state/onboardingState';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { hostStores, installPlatform } from '@test/support/setupPlatform';
@@ -19,6 +18,9 @@ import { ApplyTeamTool } from '@texra/tools/setup/ApplyTeamTool';
 
 // Local file imports
 import { createFakeSetupPlatform } from './fixtures';
+
+const defaultTeamId = () =>
+  hostStores().globalState.get(GlobalStateKey.ONBOARDING_DEFAULT_TEAM_ID);
 
 function workspaceAgents() {
   return testWorkspaceRoots().repoState.get(WorkspaceStateKey.WORKSPACE_AGENTS);
@@ -30,7 +32,7 @@ function applyTeam(input: Parameters<(typeof ApplyTeamTool)['call']>[0]) {
 
 const expectNoTeamState = Effect.gen(function* () {
   expect(yield* workspaceAgents()).toBeUndefined();
-  expect(yield* getDefaultTeamId(hostStores().globalState)).toBeUndefined();
+  expect(yield* defaultTeamId()).toBeUndefined();
 });
 
 async function clearOnboardingState(): Promise<void> {
@@ -127,9 +129,7 @@ describe('apply_team', () => {
         kind: 'team',
         teamId: 'physicist',
       });
-      expect(yield* getDefaultTeamId(hostStores().globalState)).toBe(
-        'physicist',
-      );
+      expect(yield* defaultTeamId()).toBe('physicist');
     }),
   );
 });

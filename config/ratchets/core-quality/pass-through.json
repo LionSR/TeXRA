@@ -7,6 +7,7 @@
   "packages/harness/src/controllers/session/Database.ts": 1,
   "packages/harness/src/effect/sessionPrograms.ts": 1,
   "packages/harness/src/index.ts": 1,
+  "packages/harness/src/node.ts": 1,
   "packages/harness/src/platform/defaults/memoryConfigProvider.ts": 1,
   "packages/harness/src/platform/interfaces.ts": 3,
   "packages/harness/src/plugins.ts": 1,

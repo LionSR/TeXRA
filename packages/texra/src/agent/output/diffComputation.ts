@@ -8,7 +8,8 @@
 import { Effect, FileSystem, PlatformError } from 'effect';
 
 import { withLogChannel } from '@texra-ai/harness';
-import { createWorkspaceLocation } from '@texra-ai/harness';
+import { absentReason } from '@texra-ai/harness/node';
+import { pathToLocationIn } from '@texra-ai/harness';
 import { toErrorMessage, countLines } from '@texra-ai/harness/schemas';
 import {
   fileLocationDisplayPath,
@@ -17,8 +18,6 @@ import {
 } from '@shared/schemas';
 import type { OutputFileInfo } from '@texra/shared/plugins/documentOutputs';
 import { diffLineChanges } from '@texra/utils/text/diff';
-import { locateInWorkspace } from '@utils/files/workspaceFS';
-import { absentReason } from '@utils/files/fsEntryExists';
 
 import { traceFileLineage } from './lineageMapping';
 import { ensureRoundData, type OutputState } from './outputState';
@@ -90,20 +89,14 @@ function toWorkspaceOrigin(
   return Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
     if (!loc || loc.kind !== 'runStorage') return loc;
-    const resolved = locateInWorkspace(workspace, loc.relativePath);
+    const resolved = pathToLocationIn(workspace, loc.relativePath);
     // `stat` follows a link, as the `isFile` this replaces did, so a symlink to
     // a file counts and a dangling one (or a directory) does not.
     const isFile = yield* fs.stat(resolved.absolutePath).pipe(
       Effect.map((info) => info.type === 'File'),
       Effect.catchIf(absentReason, () => Effect.succeed(false)),
     );
-    if (resolved.kind !== 'workspace' || !isFile) {
-      return loc;
-    }
-    return createWorkspaceLocation(
-      resolved.absolutePath,
-      resolved.relativePath,
-    );
+    return resolved.kind === 'workspace' && isFile ? resolved : loc;
   });
 }
 

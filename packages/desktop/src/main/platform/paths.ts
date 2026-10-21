@@ -4,8 +4,8 @@ import { app } from 'electron';
 import { Data, Effect, FileSystem, Config, Option } from 'effect';
 
 import { BUNDLED_AGENTS_DIRECTORY } from '@texra-ai/harness';
+import { absentReason, pathExists } from '@texra-ai/harness/node';
 import { defaultNodeStorageRoot } from '@texra/platform/defaults/nodeStorage';
-import { absentReason } from '@utils/files/fsEntryExists';
 
 /** No resources candidate holds every bundled agent directory. */
 class DesktopResourcesNotFound extends Data.TaggedError(
@@ -52,8 +52,8 @@ export const resolveDesktopMainDir = Effect.fn('resolveDesktopMainDir')(
     let currentDir = startDir;
     for (let depth = 0; depth < 3; depth += 1) {
       if (
-        (yield* isPresent(fs, join(currentDir, '../preload/index.cjs'))) &&
-        (yield* isPresent(fs, join(currentDir, '../renderer/index.html')))
+        (yield* pathExists(fs, join(currentDir, '../preload/index.cjs'))) &&
+        (yield* pathExists(fs, join(currentDir, '../renderer/index.html')))
       ) {
         return currentDir;
       }
@@ -96,11 +96,6 @@ const hasRequiredResourceDirectories = Effect.fn(
   }
   return true;
 });
-
-const isPresent = (fs: FileSystem.FileSystem, path: string) =>
-  fs
-    .exists(path)
-    .pipe(Effect.catchIf(absentReason, () => Effect.succeed(false)));
 
 const isExistingDirectory = (fs: FileSystem.FileSystem, path: string) =>
   fs.stat(path).pipe(

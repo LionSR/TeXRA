@@ -1,6 +1,6 @@
 import { Settings } from '@texra-ai/harness';
 import { GlobalStateKey } from '@texra-ai/harness/schemas';
-import { providerRegionSetting } from '@shared/state/providerSettings';
+import { providerRegionSetting } from '@texra-ai/harness/schemas';
 import {
   CODING_PLAN_SUBSCRIPTIONS,
   type CodingPlanSubscription,
