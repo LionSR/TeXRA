@@ -4,6 +4,7 @@ import {
   type ExternalInquiryPermission,
   type InquiryThreadId,
   type RunId,
+  type RequestDecision,
 } from '@texra-ai/harness/schemas';
 import { Effect } from 'effect';
 /**
@@ -18,7 +19,7 @@ import { Effect } from 'effect';
  */
 
 // Local imports - agent
-import { withLogChannel, type RequestDecision } from '@texra-ai/harness';
+import { withLogChannel } from '@texra-ai/harness';
 
 // Local imports - shared
 import {

@@ -10,17 +10,12 @@ import * as path from 'node:path';
 import { Effect, Option } from 'effect';
 import { z } from 'zod';
 
-import {
-  GlobalValues,
-  readSessionView,
-  type Session,
-  type SessionView,
-} from '@texra-ai/harness';
+import { GlobalValues, readSessionView, type Session } from '@texra-ai/harness';
+import { type SessionView, isLiveRun } from '@texra-ai/harness/schemas';
 import {
   resolveWorkspaceStoragePath,
   WORKSPACE_STORES,
 } from '@texra-ai/harness/node';
-import { isLiveRun } from '@texra-ai/harness/schemas';
 
 import type { TaskSummary } from './protocol';
 

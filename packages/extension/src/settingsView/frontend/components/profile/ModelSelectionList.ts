@@ -20,8 +20,8 @@ import {
 import {
   REASONING_LEVEL_LABELS,
   REASONING_LEVEL_OPTIONS,
+  EXPENSIVE_MODEL_HINT,
 } from '@texra/shared/model/modelPicker';
-import { EXPENSIVE_MODEL_HINT } from '@texra/shared/model/modelPicker';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import { renderKeyStatusIcon, statusCheckIconStyles } from '@ui/wa/statusIcons';
 import { renderSettingsSectionHeading } from '@ui/wa/settingsSection';

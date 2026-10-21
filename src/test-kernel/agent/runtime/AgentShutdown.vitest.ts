@@ -8,10 +8,9 @@ import { registryOf } from '@agent/runtime/runRegistry';
 
 // Local imports
 
-import { closeSessionOf } from '@test/support/sessionEnd';
+import { closeSessionOf, closeAllTestSessions } from '@test/support/sessionEnd';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { createTestSession } from '@test/support/sessionTestUtils';
-import { closeAllTestSessions } from '@test/support/sessionEnd';
 
 describe('agent shutdown', () => {
   afterEach(() => {

@@ -11,20 +11,22 @@
  */
 import { Effect, Exit, Fiber, Result, Stream } from 'effect';
 
-import { withLogChannel, type RequestDecision } from '@texra-ai/harness';
 import {
+  withLogChannel,
+  type HostInteractions,
+  type ToolEditApprovalRequest,
+} from '@texra-ai/harness';
+import {
+  type RequestDecision,
   approvalPolicyDenialMessage,
   requestParksItsCaller,
   type PermissionPayload,
   type RunId,
   type UserQuestionAnswers,
   type UserQuestionPermission,
+  ensureError,
+  toErrorMessage,
 } from '@texra-ai/harness/schemas';
-import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';
-import {
-  type HostInteractions,
-  type ToolEditApprovalRequest,
-} from '@texra-ai/harness';
 import {
   type CliApprovalContent,
   type CliApprovalPromptHooks,
@@ -46,7 +48,8 @@ import {
 } from './userQuestionAnswer';
 import { type CliContext } from './cliContext';
 import { writeTextStderr } from './logSinks';
-import type { ProcessRuntime, Session, SessionView } from '@texra-ai/harness';
+import type { ProcessRuntime, Session } from '@texra-ai/harness';
+import type { SessionView } from '@texra-ai/harness/schemas';
 
 const CHANNEL = 'cli.approval';
 

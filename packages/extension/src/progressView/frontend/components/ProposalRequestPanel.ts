@@ -8,6 +8,7 @@ import {
   getProposalFileGroups,
   type AgentProposalPermission,
   type PermissionPayload,
+  getModelLabel,
 } from '@texra-ai/harness/schemas';
 import { html, nothing, type PropertyValues, type TemplateResult } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
@@ -24,7 +25,6 @@ import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 
 // Local imports - shared styles
 import { modelRefOf } from '@texra-ai/llm';
-import { getModelLabel } from '@texra-ai/harness/schemas';
 import type { HostSnapshot } from '@texra/shared/session/hostSnapshot';
 import { APPROVE_ALL_DELEGATED_WORK_ACTION } from '@texra/shared/session/surfaceDecision';
 import { SessionUiEvents } from '@texra/shared/session/uiEvents';

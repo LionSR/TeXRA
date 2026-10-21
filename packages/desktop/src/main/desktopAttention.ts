@@ -12,8 +12,7 @@ import { runStatusLabel } from '@ui/copy/runStatus';
 
 import { DesktopProjects, type DesktopProject } from './desktopProjects.js';
 import { DESKTOP_HEADLESS } from './desktopPresentation.js';
-import type { RunView, SessionView } from '@texra-ai/harness';
-import type { RunId } from '@texra-ai/harness/schemas';
+import type { RunView, SessionView, RunId } from '@texra-ai/harness/schemas';
 
 /** The host's attention surfaces, served by the Electron composition root. */
 interface DesktopAttentionPortShape {

@@ -4,9 +4,9 @@ import {
   withLogChannel,
   type PerKeyLane,
   withPerKeyLane,
-  type RequestDecision,
 } from '@texra-ai/harness';
 import {
+  type RequestDecision,
   ensureError,
   toErrorMessage,
   type RunId,

@@ -11,19 +11,16 @@
 //   - a settings view writes only rows tagged for a settings-view snapshot;
 //     the CLI writes only the rows its `/config` panel lists.
 
-import { Settings } from '@texra-ai/harness';
+import { Settings, type SettingHost } from '@texra-ai/harness';
 import { Data, Effect } from 'effect';
 
-import { type SettingHost } from '@texra-ai/harness';
 import {
   type SettingsViewStateSettingEntry,
   type SurfacedSettingEntry,
-} from '@texra-ai/harness/schemas';
-import {
   APPROVAL_POLICY_CONFIG_KEY,
   type ApprovalPolicy,
+  ensureError,
 } from '@texra-ai/harness/schemas';
-import { ensureError } from '@texra-ai/harness/schemas';
 import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
 import type { SettingsStores } from '@texra-ai/harness';
 

@@ -25,8 +25,8 @@ import {
   type CopilotModelRoute,
   type ModelOptionStores,
   type PlatformSecrets,
+  Settings,
 } from '@texra-ai/harness';
-import { Settings } from '@texra-ai/harness';
 import {
   GlobalStateKey,
   type ModelOptionData,

@@ -26,10 +26,10 @@ import {
   type AssembleTraceResult,
   type LocalSession,
   type WorkspaceFs,
+  pathToLocationIn,
 } from '@texra-ai/harness';
 import { absentReason, readNormalizedFile } from '@texra-ai/harness/node';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
-import { pathToLocationIn } from '@texra-ai/harness';
 import { compileLatex2Pdf } from '@latex/texTools';
 import type { ChatExportInput } from '@texra/agent/export/schemas';
 

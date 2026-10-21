@@ -51,8 +51,8 @@ import type {
   RequestAnswerability,
   PermissionPayload,
   RunId,
+  RuntimeRequest,
 } from '@texra-ai/harness/schemas';
-import type { RuntimeRequest } from '@texra-ai/harness/schemas';
 
 /** The three ways a card declines, each with its one word. */
 const DECLINE_LABEL = {

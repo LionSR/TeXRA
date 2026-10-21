@@ -1,8 +1,11 @@
 import { Effect, FileSystem, Predicate, Array as Arr } from 'effect';
 
-import { withLogChannel, hasExtension } from '@texra-ai/harness';
+import {
+  withLogChannel,
+  hasExtension,
+  pathToLocationIn,
+} from '@texra-ai/harness';
 import { pathExists, readNormalizedFile } from '@texra-ai/harness/node';
-import { pathToLocationIn } from '@texra-ai/harness';
 import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';
 import { runToolWithCheck } from '@texra/utils/system/toolChecks';
 import { LATEX_COMMANDS_CHANNEL as CHANNEL } from './latexLogging';

@@ -1,9 +1,10 @@
 import { Effect } from 'effect';
 
-import { MemoryStore, type MemoryViewItem } from '@texra-ai/harness/plugins';
+import { MemoryStore } from '@texra-ai/harness/plugins';
 import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 import type { PromptHost } from '@texra/hosts/uiHosts';
 import type { MemoryPreview } from '@texra/shared/settingsView/settingsViewMessages';
+import type { MemoryViewItem } from '@texra-ai/harness/schemas';
 
 interface SettingsMemoryControllerDeps {
   prompt: Pick<PromptHost, 'confirm' | 'warning'>;

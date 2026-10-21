@@ -37,8 +37,6 @@ import {
   type SkillDisplayIssue,
   type SkillDisplayItem,
   type AgentScanIssue,
-} from '@texra-ai/harness/schemas';
-import {
   APPROVAL_POLICY_CONFIG_KEY,
   type ApprovalPolicy,
 } from '@texra-ai/harness/schemas';

@@ -17,14 +17,13 @@ import {
   type RunId,
 } from '@texra-ai/harness/schemas';
 import { toSignal, type StreamSignal } from '@texra/shared/signals';
-import type { FollowUpHost } from '@texra-ai/harness/schemas';
 import type {
-  ProcessRuntime,
+  FollowUpHost,
   RunView,
-  Session,
   SessionView,
   TranscriptView,
-} from '@texra-ai/harness';
+} from '@texra-ai/harness/schemas';
+import type { ProcessRuntime, Session } from '@texra-ai/harness';
 
 /** A transcript row as the TUI reads it off the session view. */
 export type TranscriptRow = TranscriptView['rows'][number];

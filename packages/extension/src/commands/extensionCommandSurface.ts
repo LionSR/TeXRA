@@ -3,8 +3,7 @@ import { Effect } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports
-import { withLogChannel } from '@texra-ai/harness';
-import { withSessionFs } from '@texra-ai/harness';
+import { withLogChannel, withSessionFs } from '@texra-ai/harness';
 import { runExecuteCommand as agentRunExecuteCommand } from '@commands/agent/executeCommand';
 import { downloadArXivSource as latexDownloadArXivSource } from '@commands/latex/arXivCommands';
 import { confirmCleanBuild } from '@commands/housekeeping/cleanCommands';
@@ -39,9 +38,12 @@ import {
   EXTENSION_COMMAND_HANDLERS,
   type ExtensionCommandActions,
 } from './extensionCommandHandlers';
-import type { ProcessRuntime, Session } from '@texra-ai/harness';
-import type { PlatformSecrets } from '@texra-ai/harness';
-import type { WorkspaceRoots } from '@texra-ai/harness';
+import type {
+  ProcessRuntime,
+  Session,
+  PlatformSecrets,
+  WorkspaceRoots,
+} from '@texra-ai/harness';
 
 const externalOpener = new VscodeExternalOpener();
 

@@ -29,8 +29,8 @@ import { routePolicies } from '@agent/runtime/modelAccess/failureInfo';
 import { registryOf } from '@agent/runtime/runRegistry';
 import { noCoWrite } from '@shared/session/sessionEvents';
 import type { RunCell } from '@shared/session/runHistory';
-import { PersonaSchema } from '@shared/schemas';
 import {
+  PersonaSchema,
   MODEL_RETRY_MAX_ATTEMPTS_SETTING,
   type RetryErrorInfo,
   type RunId,

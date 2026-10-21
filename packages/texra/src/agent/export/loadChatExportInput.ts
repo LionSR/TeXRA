@@ -23,8 +23,8 @@ import { Data, DateTime, Effect } from 'effect';
 
 import { toErrorMessage } from '@texra-ai/harness/schemas';
 import type { ChatExportInput } from '@texra/agent/export/schemas';
-import type { ExportNode, LocalSession, RunView } from '@texra-ai/harness';
-import type { RunId, AgentConfig } from '@texra-ai/harness/schemas';
+import type { ExportNode, LocalSession } from '@texra-ai/harness';
+import type { RunView, RunId, AgentConfig } from '@texra-ai/harness/schemas';
 
 /**
  * A stored run's export input could not be read: the run record read or the

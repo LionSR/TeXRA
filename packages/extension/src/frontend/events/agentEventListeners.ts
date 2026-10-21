@@ -18,12 +18,10 @@ import {
   type HostPresentation,
   type RuntimePresentationEvent,
   type RuntimePresentationEventPayloads,
-} from '@texra-ai/harness';
-import {
   type HostInteractions,
   type PresentationEventHandlers,
+  withLogChannel,
 } from '@texra-ai/harness';
-import { withLogChannel } from '@texra-ai/harness';
 import {
   ensureError,
   toErrorMessage,

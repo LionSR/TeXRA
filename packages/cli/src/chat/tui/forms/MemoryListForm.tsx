@@ -4,7 +4,7 @@
 import { Text } from 'ink';
 import { Effect } from 'effect';
 
-import { MemoryStore, type MemoryViewItem } from '@texra-ai/harness/plugins';
+import { MemoryStore } from '@texra-ai/harness/plugins';
 import {
   CLI_MEMORY_LIST_LIMIT,
   cliMemoryItemDescription,
@@ -12,8 +12,8 @@ import {
 } from '@cli/runtime/memory';
 
 import { AsyncListForm } from './_shared/ListForm';
-import type { ProcessRuntime } from '@texra-ai/harness';
-import type { WorkspaceRoots } from '@texra-ai/harness';
+import type { MemoryViewItem } from '@texra-ai/harness/schemas';
+import type { ProcessRuntime, WorkspaceRoots } from '@texra-ai/harness';
 
 interface MemoryListFormProps {
   /** The process runtime the listing runs on, from the surface that

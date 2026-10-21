@@ -13,8 +13,9 @@ import type {
   ApprovalBypassKind,
   PermissionPayload,
   RequestDecision,
+  PendingRequest,
+  RuntimeRequest,
 } from '@texra-ai/harness/schemas';
-import type { PendingRequest, RuntimeRequest } from '@texra-ai/harness/schemas';
 
 import type { HostRequest } from './hostRequest';
 
