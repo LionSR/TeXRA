@@ -21,6 +21,8 @@ import {
   isPathWithin,
   OFFICE_EXTENSIONS,
   pathToLocationIn,
+  withPerKeyLane,
+  type PerKeyLane,
 } from '@texra-ai/harness';
 import {
   entryTypeIn,
@@ -369,6 +371,12 @@ export function createDesktopWorkspaceIpc(
       return { kind: 'contents', contents } satisfies HostOutcome;
     });
 
+  // One save of a file at a time. Each save is its own request fiber, so v5's
+  // write could otherwise land after v6's and leave v5 on disk while the tab
+  // reads clean. The lane is keyed by the request's path and claimed before
+  // resolving it: keyed by the asynchronous canonical path, the later save
+  // could resolve first and overtake.
+  const writeLanes = new Map<string, PerKeyLane>();
   const writeFile = (path: string, contents: string) =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
@@ -377,7 +385,7 @@ export function createDesktopWorkspaceIpc(
         : resolveWorkspaceWritePath(options.getWorkspacePath(), path);
       yield* fs.writeFileString(absolutePath, contents);
       return { kind: 'done' } satisfies HostOutcome;
-    });
+    }).pipe(withPerKeyLane(writeLanes, path));
 
   /** A refused file request is the request's answer: the editor pane shows
    *  it. */

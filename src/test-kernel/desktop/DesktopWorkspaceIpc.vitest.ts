@@ -9,7 +9,7 @@ import {
 import { join } from 'node:path';
 
 import { it } from '@effect/vitest';
-import { Deferred, Effect, Exit, Scope } from 'effect';
+import { Context, Deferred, Effect, Exit, FileSystem, Scope } from 'effect';
 import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 
 import { AgentCatalog } from '@agent/index/agentCatalog';
@@ -285,6 +285,41 @@ describe('desktop workspace IPC', () => {
         expect(readFileSync(packagedPath, 'utf8')).toBe(original);
         expect(readFileSync(externalPath, 'utf8')).toBe('outside');
       }),
+  );
+
+  // Each save is its own host-request fiber: v5's write, still in flight,
+  // landed after v6's and left v5 on disk while the tab read clean. The first
+  // write waits for the second to land, or for 100 ms when nothing overtakes
+  // it, so the old interleaving fails here and the serialized one passes.
+  it.live('lands two overlapping saves of one file in the order sent', () =>
+    Effect.gen(function* () {
+      const ipc = createIpc(vi.fn());
+      const context = yield* testRuntime().contextEffect;
+      const fs = Context.get(context, FileSystem.FileSystem);
+      const v6Landed = Deferred.makeUnsafe<void>();
+      const raced = FileSystem.FileSystem.of({
+        ...fs,
+        writeFileString: (path, data, options) =>
+          data === 'v5'
+            ? Effect.raceFirst(
+                Deferred.await(v6Landed),
+                Effect.sleep('100 millis'),
+              ).pipe(Effect.andThen(fs.writeFileString(path, data, options)))
+            : fs
+                .writeFileString(path, data, options)
+                .pipe(Effect.ensuring(Deferred.succeed(v6Landed, undefined))),
+      });
+      const save = (contents: string) =>
+        ipc
+          .file({ kind: 'write', path: 'paper.tex', contents })
+          .pipe(
+            Effect.provideService(FileSystem.FileSystem, raced),
+            Effect.provide(context),
+          );
+
+      yield* Effect.all([save('v5'), save('v6')], { concurrency: 2 });
+      expect(readFileSync(join(workspacePath, 'paper.tex'), 'utf8')).toBe('v6');
+    }),
   );
 
   it.effect(
