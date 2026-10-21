@@ -1,28 +1,22 @@
-TeXRA
+@texra-ai/harness
 Copyright 2024-2026 TeXRA Team
 
-This product is licensed under the Apache License, Version 2.0 (see LICENSE).
-It includes software from the following third-party project:
+This product is licensed under the Apache License, Version 2.0 (see
+LICENSE.txt). Its dist/plugins.js bundle embeds the code sandbox: the QuickJS
+JavaScript engine compiled to WebAssembly (inlined as base64), the
+quickjs-emscripten bindings that drive it, and a worker script bundled with
+the third-party code it imports. Those components are listed below with their
+licenses. Every other dependency is installed from npm, not bundled.
 
 --------------------------------------------------------------------------------
 
-Font Awesome Free
-https://fontawesome.com
+quickjs-emscripten (quickjs-emscripten-core, @jitl/quickjs-ffi-types,
+@jitl/quickjs-wasmfile-release-sync)
+https://github.com/justjake/quickjs-emscripten
 
-Icon artwork from the `@fortawesome/free-solid-svg-icons` package is imported by
-`packages/texra/src/ui/wa/webAwesomeIcons.ts` and bundled into TeXRA's shipped hosts, so
-the icons are redistributed with this product.
+The MIT License
 
-Copyright (c) Fonticons, Inc. (https://fontawesome.com)
-
-Icons: CC BY 4.0 License (https://creativecommons.org/licenses/by/4.0/)
-The Creative Commons Attribution 4.0 International License applies to all icons
-packaged as SVG and JS file types, which is the form imported here.
-
-Code: MIT License
-The MIT License applies to the package's non-icon, non-font files.
-
-Full Font Awesome Free license: https://fontawesome.com/license/free.
+quickjs-emscripten copyright (c) 2019-2024 Jake Teton-Landis
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -41,3 +35,88 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+--------------------------------------------------------------------------------
+
+QuickJS (compiled into the @jitl/quickjs-wasmfile-release-sync WebAssembly
+module)
+https://bellard.org/quickjs/
+
+QuickJS Javascript Engine
+
+Copyright (c) 2017-2021 Fabrice Bellard
+Copyright (c) 2017-2021 Charlie Gordon
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
+THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.
+
+--------------------------------------------------------------------------------
+
+Effect (effect, @effect/platform-node, @effect/platform-node-shared; bundled
+into the code sandbox worker)
+https://github.com/Effect-TS/effect
+
+MIT License
+
+Copyright (c) 2023 Effectful Technologies Inc
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+--------------------------------------------------------------------------------
+
+Zod (zod; bundled into the code sandbox worker)
+https://github.com/colinhacks/zod
+
+MIT License
+
+Copyright (c) 2025 Colin McDonnell
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+

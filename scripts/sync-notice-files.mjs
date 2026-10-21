@@ -4,12 +4,14 @@ import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import process from 'node:process';
 
-// Code-generate every publishable package's NOTICE.txt from the root NOTICE —
-// the single hand-edited source of truth for third-party attribution. Each
-// artifact must ship its own copy (the VSIX, the Electron installers and the
-// two npm packages are distributed separately, and an attribution obligation
-// attaches to each), so the duplication is required; what is NOT required is
-// maintaining five copies by hand and hoping they agree.
+// Code-generate each app host's NOTICE.txt from the root NOTICE — the single
+// hand-edited source of truth for the attribution of what the app bundles.
+// Each artifact must ship its own copy (the VSIX, the Electron installers and
+// the CLI's npm package are distributed separately, and an attribution
+// obligation attaches to each), so the duplication is required; what is NOT
+// required is maintaining three copies by hand and hoping they agree. The two
+// library packages (packages/harness, packages/llm) bundle different
+// third-party code from the app, so each hand-edits its own NOTICE.txt.
 // In `--check` mode this is the CI diff gate, failing when a copy has drifted out of sync with the root NOTICE.
 
 const rootDir = path.resolve(
@@ -19,7 +21,6 @@ const rootDir = path.resolve(
 
 /** Every package whose published artifact carries its own attribution copy. */
 const PACKAGE_NOTICES = [
-  'packages/harness/NOTICE.txt',
   'packages/cli/NOTICE.txt',
   'packages/desktop/NOTICE.txt',
   'packages/extension/NOTICE.txt',
