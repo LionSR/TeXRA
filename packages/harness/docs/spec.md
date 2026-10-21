@@ -145,14 +145,16 @@ A row MUST be written at its kind's current version
 highest version each kind was written at
 (`controllers/session/Database.ts:606-607`).
 
-The store gate refuses a store that names a kind or version this build does not
-read (`controllers/session/rowCodec.ts:385-397`). It MUST run at open and inside
-every outermost transaction that writes or derives rows, so no build reads part
-of a store or writes beside rows it cannot read
-(`controllers/session/Database.ts:296`, `:450-466`). Releasing claims is the one
-write it skips: it writes no row and only gives back this process's claims
-(`controllers/session/Database.ts:450-454`, `:988-996`). A core kind this build
-lacks and never retired counts as newer
+The store gate refuses a store that names a core kind this build lacks, or a
+known kind at a version above the one this build reads
+(`controllers/session/rowCodec.ts:370-397`). A plugin kind whose plugin this
+build lacks passes the gate; its rows are left out of every read (below). The
+gate MUST run at open and inside every outermost transaction that writes or
+derives rows, so no build reads a store holding core rows it cannot read, or
+writes beside them (`controllers/session/Database.ts:296`, `:450-466`).
+Releasing claims is the one write it skips: it writes no row and only gives back
+this process's claims (`controllers/session/Database.ts:450-454`, `:988-996`). A
+core kind this build lacks and never retired counts as newer
 (`controllers/session/rowCodec.ts:372-378`). Kinds a build deleted are listed as
 retired; their rows fail only their own run's reads
 (`shared/schemas/rowVersions.ts:44-56`, `controllers/session/rowCodec.ts:285`).
@@ -220,8 +222,9 @@ The `model.message` arms:
 ### 3.2 Run records (private to the runtime)
 
 `run.report` holds the run's report text, `run.result` its result metadata, and
-`followup.closed` marks its input closed until a claim reopens it
-(`shared/schemas/sessionEvent.ts:404-411`).
+`followup.closed` marks its input closed until the run's next `run.activate`
+reopens it (`shared/schemas/sessionEvent.ts:404-411`,
+`shared/session/runRows.ts:203-220`); taking the run's claim does not.
 
 ### 3.3 Display rows (session-authored and run-authored)
 
@@ -446,11 +449,13 @@ attempt, with `next: ask` (`agent/runtime/ModelInvoker.ts:743-759`). An attempt
 no person admitted, whose outcome no row recorded, is resent
 (`shared/session/inFlight.ts:217`).
 
-A rejected subscription token MAY be renewed once per invocation
-(`agent/runtime/run/invocation.ts:152-175`). On a send, the renewal commits a
-`failed` row with `next: retry` and the attempt is resent; while observing an
-accepted operation, the renewed observation repeats with no row and is never a
-resend (`agent/runtime/run/invocation.ts:336-348`, `:378-393`).
+A rejected subscription token MAY be renewed once per execution of
+`runInvocation` (`agent/runtime/run/invocation.ts:152-175`, `:362`). The limit
+is held in memory, not in a row, so a resume may renew the same invocation
+again. On a send, the renewal commits a `failed` row with `next: retry` and the
+attempt is resent; while observing an accepted operation, the renewed
+observation repeats with no row and is never a resend
+(`agent/runtime/run/invocation.ts:336-348`, `:378-393`).
 
 ## 7. Claims and several processes
 
@@ -520,12 +525,12 @@ or an `externalInquiry` (`shared/session/runStateFold.ts:249-270`).
 | fork a run another process holds, from its committed rows | `controllers/session/SessionRequests.ts:160-163` |
 | take over a run whose owner is proven dead                | `controllers/session/storeAside.ts:69-83`        |
 
-| A process MUST NOT                                          | Code                                             |
-| ----------------------------------------------------------- | ------------------------------------------------ |
-| append to an aggregate another process holds                | `controllers/session/Database.ts:641-653`        |
-| answer a request of a run a live process holds (`NotOwner`) | `controllers/session/SessionRequests.ts:159-171` |
-| resume a run a live process holds                           | `agent/runtime/resumeRun.ts:195-196`             |
-| write to a store a newer build wrote                        | `controllers/session/Database.ts:463-466`        |
+| A process MUST NOT                                                                | Code                                             |
+| --------------------------------------------------------------------------------- | ------------------------------------------------ |
+| append to an aggregate another process holds                                      | `controllers/session/Database.ts:641-653`        |
+| answer a request of a run a live process holds (`NotOwner`)                       | `controllers/session/SessionRequests.ts:159-171` |
+| resume a run a live process holds                                                 | `agent/runtime/resumeRun.ts:195-196`             |
+| write rows to a store a newer build wrote (giving back its own claims is allowed) | `controllers/session/Database.ts:463-466`        |
 
 A run that loses its claim mid-run gets `RunHistoryRefused` `not-owner` from its
 next append, with nothing written (`agent/runtime/RunHistory.ts:176-198`,
@@ -596,17 +601,17 @@ resume the root run (`src/test-kernel/support/crashConformance.ts:8-27`).
 
 The guarantees, numbered as in the package README:
 
-| #   | Guarantee                                                                                                                                        | Asserted by                         |
-| --- | ------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------- |
-| I1  | Under the suite's deterministic model, recovery reaches the clean run's outcome: its answers, view edits, call results, owned children and fork. | `crashConformance.ts:30-32`, `:761` |
-| I2  | A call settled before the crash is not executed again, and no call settles twice.                                                                | `crashConformance.ts:33`, `:761`    |
-| I3  | One model invocation has at most one committed response.                                                                                         | `crashConformance.ts:38`, `:761`    |
-| I4  | A command runs only after its approval; an unfinished call whose outcome is unknown runs again only after a person's retry.                      | `crashConformance.ts:34-35`, `:761` |
-| I5  | An owned child that ended cleanly answers its call; it is not launched again without a person's retry; no child is left without a terminal row.  | `crashConformance.ts:39-40`, `:873` |
-| I6  | A child's result is delivered to its parent once, never lost, including while the parent was held elsewhere.                                     | `crashConformance.ts:865-886`       |
-| I7  | A fork keeps the history it was registered with; handoff and compaction keep the context they committed.                                         | `crashConformance.ts:41`, `:761`    |
-| I8  | A run's halt commits with its end; a stopped run never reads as interrupted.                                                                     | `crashConformance.ts:43-44`, `:761` |
-| I9  | Turning off a run's shell bypass is acknowledged only after its row is durable.                                                                  | `crashConformance.ts:53-54`, `:761` |
+| #   | Guarantee                                                                                                                                             | Asserted by                         |
+| --- | ----------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------- |
+| I1  | Under the suite's deterministic model, recovery reaches the clean run's outcome: its answers, view edits, call results, owned children and fork.      | `crashConformance.ts:30-32`, `:761` |
+| I2  | A call settled before the crash is not executed again, and no call settles twice.                                                                     | `crashConformance.ts:33`, `:761`    |
+| I3  | One model invocation has at most one committed response.                                                                                              | `crashConformance.ts:38`, `:761`    |
+| I4  | A command runs only after its approval; an unfinished call that is not replay-safe, whose outcome is unknown, runs again only after a person's retry. | `crashConformance.ts:34-35`, `:761` |
+| I5  | An owned child that ended cleanly answers its call; it is not launched again without a person's retry; no child is left without a terminal row.       | `crashConformance.ts:39-40`, `:873` |
+| I6  | A child's result is delivered to its parent once, never lost, including while the parent was held elsewhere.                                          | `crashConformance.ts:865-886`       |
+| I7  | A fork keeps the history it was registered with; handoff and compaction keep the context they committed.                                              | `crashConformance.ts:41`, `:761`    |
+| I8  | A run's halt commits with its end; a stopped run never reads as interrupted.                                                                          | `crashConformance.ts:43-44`, `:761` |
+| I9  | Turning off a run's shell bypass is acknowledged only after its row is durable.                                                                       | `crashConformance.ts:53-54`, `:761` |
 
 The paths in this table are under `src/test-kernel/support/`. I1 is equality
 with a clean run because the suite's validation model is deterministic. Against
