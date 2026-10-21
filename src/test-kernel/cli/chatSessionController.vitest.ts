@@ -1097,7 +1097,9 @@ describe('createChatSessionController', () => {
     // Typed while the stop settles: the first waits for the stopped
     // generation, then goes to the session's own admission for that run; the
     // admission resumed it, so the second goes to the resumed run directly,
-    // never waiting on its drain. The chat keeps no copy of either.
+    // never waiting on its drain. The chat keeps no copy of either. A served
+    // chat observes no resumes: the slot passes to the resumed run, so a
+    // later message cannot start a second root beside it.
     holdRun('a11111' as RunId);
     // The stopped generation is no longer live here: the view says so.
     installSession({ view: installableViewRef() });
@@ -1111,6 +1113,7 @@ describe('createChatSessionController', () => {
     const ctrl = createChatSessionController(
       makeInit({
         session,
+        served: true,
         getSlashCommandContext: () => ({}) as SlashCommandContext,
       }),
     );
@@ -1136,5 +1139,7 @@ describe('createChatSessionController', () => {
     );
     expect(mocks.executeAgent).not.toHaveBeenCalled();
     expect(session.interruptedRunId).toBeUndefined();
+    expect(session.runId).toBe('a11111');
+    expect(chatTuiCanStartRootRun(session)).toBe(false);
   });
 });
