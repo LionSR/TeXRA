@@ -1,4 +1,4 @@
-import { Effect } from 'effect';
+import { Effect, Redacted } from 'effect';
 
 import type { SubscriptionUsageWindow } from '@texra/shared/model/subscriptionUsage';
 import {
@@ -162,7 +162,7 @@ export function parseGlmCodingPlanUsage(
 }
 
 export function fetchGlmCodingPlanUsage(
-  apiKey: string,
+  apiKey: Redacted.Redacted<string>,
   timeoutMs: number,
   usageUrl = GLM_CODING_PLAN_USAGE_URL,
 ): Effect.Effect<
@@ -176,7 +176,7 @@ export function fetchGlmCodingPlanUsage(
       headers: {
         Accept: 'application/json',
         'Accept-Language': 'en-US,en',
-        Authorization: apiKey,
+        Authorization: Redacted.value(apiKey),
         'Content-Type': 'application/json',
       },
       timeoutMs,
