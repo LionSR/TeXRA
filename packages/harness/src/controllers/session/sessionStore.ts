@@ -14,7 +14,6 @@ import {
   type Context,
   Deferred,
   Effect,
-  Exit,
   Option,
   RcMap,
   Scope,
@@ -101,13 +100,13 @@ const logFailure =
 
 /**
  * The settled level: the lesser of what the tail delivered and what the
- * view folded. `to(commit)` waits until it (or another `level`) reaches
- * `commit`; it dies with a tail's reader or the fold, never hangs.
+ * view folded. `to(commit)` waits until it (or `level`) reaches `commit`;
+ * it dies with the tail or the level's end, so it never hangs.
  */
 function settlement(
   view: Context.Service.Shape<typeof SessionViewService>,
   delivered: SubscriptionRef.SubscriptionRef<CommitOrdinal>,
-  readerEnded: Deferred.Deferred<void, DatabaseReadFailed>,
+  tailEnded: Deferred.Deferred<void, DatabaseReadFailed>,
 ) {
   const cursor = () =>
     Math.min(
@@ -126,7 +125,7 @@ function settlement(
       Stream.filter((at) => at >= commit),
       Stream.runHead,
       Effect.raceFirst(
-        Deferred.await(readerEnded).pipe(
+        Deferred.await(tailEnded).pipe(
           Effect.orDie,
           Effect.andThen(
             Effect.die(new Error('Session committed-event consumer stopped')),
@@ -137,7 +136,7 @@ function settlement(
         Option.isSome(level)
           ? Effect.void
           : Effect.die(
-              new Error('Session view stopped before publication settled'),
+              new Error('Session view or reader stopped before settling'),
             ),
       ),
     );
@@ -294,15 +293,18 @@ export const makeSessionStore = (
     // every commit after it.
     const anchor = yield* database.currentCommit;
     const delivered = yield* SubscriptionRef.make(anchor);
-    const readerEnded = yield* Deferred.make<void, DatabaseReadFailed>();
-    const settle = settlement(view, delivered, readerEnded);
+    const tailEnded = yield* Deferred.make<void, DatabaseReadFailed>();
+    const settle = settlement(view, delivered, tailEnded);
     const foldedRead = yield* SubscriptionRef.make(anchor);
-    const readPast = (commit: CommitOrdinal) =>
-      settle.to(commit, SubscriptionRef.changes(foldedRead));
+    const foldedEnded = yield* Deferred.make<void>();
+    const foldedLevel = SubscriptionRef.changes(foldedRead).pipe(
+      Stream.interruptWhen(Deferred.await(foldedEnded)),
+    );
+    const readPast = (commit: CommitOrdinal) => settle.to(commit, foldedLevel);
     const transact = transaction(events, database, settle.to);
     let doorsShut = false;
     const closed = () => doorsShut;
-    /** Every job before it has run, folded, and `folded` read past it. */
+    /** Jobs before it ran, `folded` read past them; its end fails only this. */
     const settled = events
       .transact(() => database.currentCommit, { order: true })
       .pipe(Effect.orDie, Effect.flatMap(readPast));
@@ -364,9 +366,7 @@ export const makeSessionStore = (
         { get: Effect.sync(settle.cursor), changes: settle.changes },
         anchor,
         foldedRead,
-      ).pipe(
-        Stream.onExit((exit) => Deferred.done(readerEnded, Exit.asVoid(exit))),
-      ),
+      ).pipe(Stream.ensuring(Deferred.succeed(foldedEnded, undefined))),
       deliver: (removed) =>
         events.all(anchor, delivered).pipe(
           Stream.runForEach((event) =>
@@ -384,7 +384,7 @@ export const makeSessionStore = (
               Effect.logError,
             ),
           ),
-          Effect.onExit((exit) => Deferred.done(readerEnded, exit)),
+          Effect.onExit((exit) => Deferred.done(tailEnded, exit)),
           Effect.forkScoped,
           Effect.asVoid,
         ),
