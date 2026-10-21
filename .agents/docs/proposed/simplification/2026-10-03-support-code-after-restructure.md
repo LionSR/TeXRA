@@ -99,8 +99,26 @@ with `which.sync(program, { path: process.env.PATH })`. If a binary is only
 on the extended PATH, it pins for a server but is refused for a hook, and
 the two can pin different binaries for the same name.
 
-Proposal: one resolver for both. The extended PATH is the one TeXRA's
-spawns use. Not done because it changes which hooks load.
+Proposal: one resolver for both. Not done because it changes which hooks
+load.
+
+Checked on 2026-10-21: the premise that TeXRA's spawns use the extended
+PATH does not hold for these two. `runHook` (`pluginHooks.ts`) spawns with
+`extendEnv: false` and `PATH: process.env.PATH`, and `mcpServer.ts`
+(`connect`) spawns with `extendEnv: false` over `environment` (the process
+environment with the project's `.env` over it). Neither extends PATH, so the
+hook pin matches what the hook runs, and the server pin is the odd one out.
+The extended PATH only appends directories, so the two differ only for a
+program that is found in one of those directories alone. Such a program pins
+for a server, and the server's spawn then fails. Moving hook pins onto the
+extended PATH would pin a binary the hook cannot start. The fix belongs on
+the spawn side: either both children get the extended PATH, or the server
+pins on the PATH it spawns with, including the project's `.env` `PATH`. Which
+one is a design question that stays open. The extension host makes the two
+PATHs equal anyway: it writes the extended PATH into `process.env.PATH` once
+it activates (`initializeLatexSupport`). The CLI and the desktop app do not.
+`hasPackageManager` (`toolChecks.ts`) now calls `whichOnExtendedPath`
+instead of a second copy of it.
 
 ## 5. `entryTypeIn` and `entryExists` disagree on ENOTDIR (done in sweep base-2)
 
