@@ -14,7 +14,7 @@ import type { Effect } from 'effect';
 
 /** Config key of each provider's "prefer my subscription" switch. */
 const PREFER_SUBSCRIPTION_KEYS: Readonly<
-  Record<SubscriptionAuthStatus['provider'], string>
+  Record<SubscriptionAuthProvider, string>
 > = {
   chatgpt: 'texra.chatgptCodex.preferSubscription',
   grok: 'texra.xaiGrok.preferSubscription',
@@ -22,7 +22,7 @@ const PREFER_SUBSCRIPTION_KEYS: Readonly<
 
 /** Whether the user has switched on "prefer my subscription" for `provider`. */
 function isPreferSubscription(
-  provider: 'chatgpt' | 'grok',
+  provider: SubscriptionAuthProvider,
   stores: SettingsStores,
 ): boolean {
   return Settings.getConfig<boolean>(
@@ -39,7 +39,7 @@ function isPreferSubscription(
  * lands in the layer that wins, so no more specific setting can override it.
  */
 function setPreferSubscription(
-  provider: 'chatgpt' | 'grok',
+  provider: SubscriptionAuthProvider,
   stores: SettingsStores,
   enabled: boolean,
 ): Effect.Effect<void, ConfigWriteFailed | Error> {
