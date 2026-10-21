@@ -103,6 +103,7 @@ import { ToolAvailability } from '@tools/toolAvailabilityService';
 import { ToolRegistry } from '@tools/toolTable';
 import { agentCatalogFollower } from '@tools/agentCatalogFollower';
 import { followInterruptedTasks } from '@tools/interruptedTasks';
+import { type PerKeyLane, withPerKeyLane } from '@utils/core/perKeyQueue';
 import { databaseLayer, globalDatabaseLayer } from './Database';
 import { globalAppStateLayer, processStoresLayer } from './appStateStore';
 import { projectDatabaseLayer } from './projectDatabase';
@@ -375,6 +376,12 @@ class SessionMap extends Context.Service<
   );
 }
 
+/** One lane per root for {@link openSession} and {@link closeSession}: a
+ *  close holds the map entry for up to two budgets, and an open landing
+ *  meanwhile was answered with it, then held a session whose doors the close
+ *  shut under it. On the lane the open waits and builds afresh. */
+const rootLanes = new Map<string, PerKeyLane>();
+
 /** The session of `open`'s root: built now, or the one already open. A
  *  build that fails leaves no entry behind (the map would otherwise answer
  *  every later open of the root with the cached failure). */
@@ -411,11 +418,10 @@ const openSession = (open: SessionHandleInit) =>
           message: `The session of ${key.storage} is already open over the other store; close it before opening it differently.`,
         });
     return Context.get(context, Session);
-  }).pipe(Effect.scoped);
+  }).pipe(Effect.scoped, withPerKeyLane(rootLanes, open.roots.storage));
 
-/** Every session the map holds, entries still building waited for within
- *  the close budget. Builds nothing: a key whose entry has been released,
- *  or is still opening past the budget, is skipped. */
+/** Every session the map holds, entries still building waited for within the
+ *  close budget; one released, or opening past the budget, is skipped. */
 const listSessions = Effect.gen(function* () {
   const sessions = yield* SessionMap;
   const keys = yield* RcMap.keys(sessions.rcMap);
@@ -442,8 +448,7 @@ const listSessions = Effect.gen(function* () {
 });
 
 /** An entry whose build failed holds no session: its opener fails with the
- *  cause, and a reader that only waited on the entry reads it as absent,
- *  with the cause logged. */
+ *  cause; a reader that only waited on it reads it as absent, cause logged. */
 const unopenedEntry =
   (key: SessionKey) =>
   (error: SessionOpenError): Effect.Effect<Option.Option<never>> =>
@@ -501,8 +506,7 @@ const settleRun = (session: SessionHandle, runId: RunId): Effect.Effect<void> =>
  * rest ({@link SESSION_CLOSE_DEADLINE_MS}); settle in a second budget each
  * run still held ({@link settleRun}), reported abandoned; release the entry,
  * whose finalizers flush and unwind. Uninterruptible: the budget is its one
- * cancellation, and every step after it still runs.
- */
+ * cancellation, and every step after it still runs. */
 const closeSession = (root: string) =>
   Effect.gen(function* () {
     const sessions = yield* SessionMap;
@@ -549,7 +553,7 @@ const closeSession = (root: string) =>
     }
     yield* sessions.invalidate(key);
     return { settled, abandoned } satisfies SessionCloseReport;
-  }).pipe(Effect.uninterruptible);
+  }).pipe(Effect.uninterruptible, withPerKeyLane(rootLanes, root));
 
 /**
  * What a composition root composes its process from: the app's plugins and
@@ -590,42 +594,37 @@ export interface ProcessLayerOptions {
     DatabaseOpenFailed,
     GlobalDatabase | ProcessIdentity | ProcessProbe
   >;
-  /**
-   * The host's editor language-model bridge, served as `LanguageModel`. Every
-   * host has a value for it: the VS Code extension's bridge to the editor's
-   * language-model API, or `UNAVAILABLE_LANGUAGE_MODEL_PORT` elsewhere, where
-   * discovery discovers nothing and binding an editor model fails.
-   */
+  /** The host's editor language-model bridge, served as `LanguageModel`: the
+   *  VS Code extension's bridge to the editor's language-model API, or
+   *  `UNAVAILABLE_LANGUAGE_MODEL_PORT` elsewhere, where discovery discovers
+   *  nothing and binding an editor model fails. */
   readonly languageModel: LanguageModelPort;
   /** The dependency probes every tool gate and Tools dashboard read: absent,
    *  every host's; a test harness passes one that starts no probe. */
   readonly toolAvailability?: typeof toolAvailabilityLayer;
-  /** The host's usage layer owns its version-stamped sender and final drain.
-   *  Absent, `UsageLog.disabled`: no usage is reported, as for an embedder,
-   *  which has no version or editor of its own to stamp entries with. The
-   *  host supplies the layer so this composition does not reach into
-   *  telemetry. */
+  /** The host's usage layer owns its version-stamped sender and final drain,
+   *  so this composition does not reach into telemetry. Absent,
+   *  `UsageLog.disabled`: no usage is reported, as for an embedder, which
+   *  has no version or editor of its own to stamp entries with. */
   readonly usageLog?: Layer.Layer<
     UsageLog,
     never,
     HttpClient.HttpClient | AppState
   >;
   /** The process's handle on the global storage root, built and closed with
-   *  this runtime. Absent, the root's own database; opening it creates the
-   *  root's SQLite file and forks a change poll, so the CLI entry that runs
-   *  before any platform, on a possibly read-only root, passes a refusal. */
+   *  this runtime. Absent, the root's own database, whose open creates its
+   *  SQLite file and forks a change poll, so the CLI entry that runs before
+   *  any platform, on a possibly read-only root, passes a refusal. */
   readonly globalDatabase?: Layer.Layer<
     GlobalDatabase,
     DatabaseOpenFailed,
     ProcessIdentity | ProcessProbe
   >;
-  /**
-   * The runtime's emission threshold for Effect diagnostics, from facts that
-   * cannot change mid-process: the surface (the extension's channel filters
-   * itself: `'Trace'`; the desktop's log file: `'Debug'`) or the CLI's
-   * `--quiet` / `--verbose`. It is read before any logger runs, so a live
-   * user setting arrives by another road (the fold's `debug` flag).
-   */
+  /** The runtime's emission threshold for Effect diagnostics, from facts that
+   *  cannot change mid-process: the surface (the extension's channel filters
+   *  itself: `'Trace'`; the desktop's log file: `'Debug'`) or the CLI's
+   *  `--quiet` / `--verbose`. It is read before any logger runs, so a live
+   *  user setting arrives by another road (the fold's `debug` flag). */
   readonly minimumLogLevel: MinimumLogLevel;
   /** A single-project host's folder, whose `.env` its own reads see. */
   readonly workspace?: string;

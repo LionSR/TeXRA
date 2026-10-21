@@ -199,6 +199,10 @@ export function installCliShutdownSignalHandlers(quiet: boolean): void {
         process.once(signal, handler);
         return;
       }
+      // A second signal during the shutdown sequence leaves at once: with
+      // this `once` listener spent, it would otherwise be Node's default
+      // death, mid-flush.
+      process.once(signal, () => process.exit(exitCode));
       await runCliExit(cliPlatformShutdownSequence({ quiet }));
       process.exit(exitCode);
     };

@@ -1,9 +1,7 @@
-/**
- * The session's follow-up inbox: a run's input is its `followup.queued` rows
- * less its `followup.consumed` ones, read inside the job acting on them, by
- * one reader per run (its generation here); the run's claim is the only
- * lock, and when a row may be read is data on it (`holdUntil`, `RunInput`).
- */
+/** The session's follow-up inbox: a run's input is its `followup.queued` rows
+ *  less its `followup.consumed` ones, read inside the job acting on them, by
+ *  one reader per run (its generation here); the run's claim is the only
+ *  lock, and when a row may be read is data on it (`holdUntil`, `RunInput`). */
 import { Deferred, Effect, Result, type Scope } from 'effect';
 
 import type { ResumeAttempt } from '@agent/runtime/resumeRun';
@@ -37,9 +35,8 @@ import type { FollowUpSenderInput } from './followUpSender';
 
 const CHANNEL = 'Inbox';
 
-/** The rows a run's input is read from. */
 const INPUT_TYPES = [...FOLLOW_UP_TYPES, ...RUN_LIFECYCLE_TYPES];
-/** A run's input: what is queued, every follow-up id named, if closed. */
+/** A run's input, read from {@link INPUT_TYPES}: queued, every id, if closed. */
 type InputRows = RunRows & { readonly closed: boolean };
 
 /** The session doors the inbox works through (the session layer wires them). */
@@ -69,8 +66,7 @@ export interface InboxItem {
 }
 
 /** How a send landed. `queued.read`: a reader here takes it; `queued.wake`:
- *  nobody here will (no generation is live and no resume is in flight), and
- *  the caller owes the run a resume. */
+ *  nobody here will ({@link Inbox.reads}), so the caller owes it a resume. */
 export type Sent =
   | { readonly kind: 'duplicate' }
   | { readonly kind: 'queued'; readonly read: boolean; readonly wake: boolean }
@@ -91,7 +87,6 @@ export interface SendOptions {
 
 /** A resume's result, and whether this caller joined one in flight. */
 type Resumed = { readonly result: ResumeAttempt; readonly joined: boolean };
-
 /** A send decided inside a job: its rows, and how it landed. */
 type Admission = { rows: readonly RunInputDraft[]; sent: Sent };
 
@@ -108,10 +103,10 @@ export class Inbox {
     { readonly done: Deferred.Deferred<ResumeAttempt, Error>; joiners: number }
   >();
   private readonly observers = new Set<(closed: InboxClosed) => void>();
+  /** Runs whose generation here released its reader: live, reading no more. */
+  private readonly released = new Set<RunId>();
   private disposed = false;
-
   private readonly port: InboxPort;
-
   constructor(port: InboxPort) {
     this.port = port;
   }
@@ -131,9 +126,8 @@ export class Inbox {
   }
 
   /** {@link send} for a producer with no fiber (a child's progress notice):
-   *  enqueued on the publisher now, so it commits in call order ahead of
-   *  the turn's result; `to` is read in that job (none: nothing queued). A
-   *  failure is logged. */
+   *  enqueued on the publisher now, so it commits in call order ahead of the
+   *  turn's result; `to` is read in that job (none: nothing). Failures log. */
   sendDetached(to: Effect.Effect<RunId | null, Error>, item: InboxItem): void {
     if (this.disposed) return;
     this.port.detach((append) =>
@@ -158,6 +152,7 @@ export class Inbox {
         );
         if (this.disposed) input.end();
         else this.readers.set(runId, input);
+        this.released.delete(runId);
         return Effect.succeed(input);
       }),
       (input) => Effect.sync(() => this.release(runId, input, false)),
@@ -170,6 +165,7 @@ export class Inbox {
   release(runId: RunId, input: RunInput, terminal: boolean): void {
     if (this.readers.get(runId) !== input) return;
     this.readers.delete(runId);
+    this.released.add(runId);
     input.end();
     if (!terminal) return;
     this.port.detach(() =>
@@ -215,7 +211,16 @@ export class Inbox {
     if (this.disposed) return;
     this.readers.get(runId)?.end();
     this.readers.delete(runId);
+    this.released.delete(runId);
     this.notify({ kind: 'run', runId });
+  }
+
+  /** Whether a generation here reads, or will read, the run's queued rows: a
+   *  reader is open, a live generation has not opened one yet, or a resume is
+   *  in flight. Liveness alone counted a generation past its reader as one. */
+  reads(runId: RunId): boolean {
+    const opening = this.port.live(runId) && !this.released.has(runId);
+    return opening || this.readers.has(runId) || this.resumes.has(runId);
   }
 
   /** One resume of `runId` at a time; a joiner (`onJoined`) hears its result. */
@@ -308,9 +313,7 @@ export class Inbox {
         const wake =
           options.wake === true &&
           options.hold !== 'instruction' &&
-          reader === undefined &&
-          !this.port.live(runId) &&
-          !this.resumes.has(runId);
+          !this.reads(runId);
         const sent: Sent =
           replay && !wake
             ? { kind: 'duplicate' }
@@ -384,7 +387,6 @@ export class Inbox {
   }
 }
 
-/** Log `message` at warn with the failure behind it. */
 const warnWith =
   (message: string) =>
   (cause: unknown): Effect.Effect<void> =>

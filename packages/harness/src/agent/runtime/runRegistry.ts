@@ -64,6 +64,7 @@ export class RunLive extends Data.TaggedError('RunLive')<{
     return `Run is already running: ${this.runId}`;
   }
 }
+const isRunLive = (e: unknown): e is RunLive => e instanceof RunLive;
 
 /** Run work refused because the session is disposed or closing. */
 class RunAdmissionClosed extends Data.TaggedError('RunAdmissionClosed')<{
@@ -606,12 +607,9 @@ export class RunRegistry implements RunsShape {
 
   // ------------------------------------------------------------------ stop
 
-  /**
-   * The run's fiber, interrupted by run id. Synchronously callable from every
-   * host surface, and answered straight away: the entry has a fiber or it
-   * does not. The fiber-only primitive a child loop's own interrupt composes;
-   * every other caller stops through {@link interruptActive} or {@link stop}.
-   */
+  /** The run's fiber, interrupted by run id: synchronous, answered at once
+   *  from every host surface. The fiber-only primitive a child loop's own
+   *  interrupt composes; others stop via {@link interruptActive}, {@link stop}. */
   interrupt(runId: RunId): boolean {
     const fiber = this.entries.get(runId)?.fiber;
     if (fiber === undefined) return false;
@@ -619,12 +617,9 @@ export class RunRegistry implements RunsShape {
     return true;
   }
 
-  /**
-   * Stop whatever of the run is live here, by run id: the child loop's
-   * activation when one is reserved — its interrupt aborts the foreign
-   * turn's signal and, for a native child, the run's fiber with it — and
-   * the run's fiber itself otherwise.
-   */
+  /** Stop whatever of the run is live here, by run id: a reserved child-loop
+   *  activation (its interrupt aborts the foreign turn's signal and, for a
+   *  native child, the run's fiber with it), else the run's fiber itself. */
   interruptActive(runId: RunId): boolean {
     const activation = this.entries.get(runId)?.activation;
     if (activation === undefined) return this.interrupt(runId);
@@ -634,15 +629,12 @@ export class RunRegistry implements RunsShape {
 
   /**
    * Stop a run and apply the caller's declared child policy: the one stop
-   * every surface issues.
-   *
-   * A run this process drives is stopped where it stands: its children
-   * first, by the policy, then its handle or child driver. A cascading stop
-   * does that now, so {@link RunStop.accepted} answers at once; a detaching
-   * one commits the children's durable `run.detach` batch first, because a
-   * child completing while that batch commits would otherwise route its
-   * terminal result to the just-stopped parent.
-   *
+   * every surface issues. A run this process drives is stopped where it
+   * stands: its children first, by the policy, then its handle or child
+   * driver. A cascading stop does that now, so {@link RunStop.accepted}
+   * answers at once; a detaching one commits the children's durable
+   * `run.detach` batch first, or a child completing while that batch
+   * commits would route its terminal result to the just-stopped parent.
    * A run no handle or child driver here owns is stopped from outside, so
    * its claim fences the whole gesture, descendant sweep included, and the
    * stop writes the terminal row itself; a refused row fails the settlement.
@@ -689,15 +681,23 @@ export class RunRegistry implements RunsShape {
         Effect.andThen(
           Effect.suspend(() =>
             // A reached handle or child driver owns terminal finalization;
-            // only an ownerless stop writes the terminal fact here. A run
-            // that already ended keeps its own verdict.
+            // only an ownerless stop writes the terminal fact here, as an
+            // inactive-run step: a generation admitted meanwhile (a resume
+            // here) refuses it with `RunLive` and becomes the stop's target
+            // and its lifecycle's one writer. An ended run keeps its verdict.
             stopHere()
               ? Effect.void
-              : finalizeRun(this.init.session(), {
+              : this.withInactiveRunStep(
                   runId,
-                  outcome: RUN_OUTCOME.CANCELLED,
-                  keepExistingOutcome: true,
-                }).pipe(Effect.asVoid),
+                  finalizeRun(this.init.session(), {
+                    runId,
+                    outcome: RUN_OUTCOME.CANCELLED,
+                    keepExistingOutcome: true,
+                  }),
+                ).pipe(
+                  Effect.catchIf(isRunLive, () => Effect.sync(stopHere)),
+                  Effect.asVoid,
+                ),
           ),
         ),
       );

@@ -490,9 +490,11 @@ export function createChatSessionController(
   // startRootRun
   // -----------------------------------------------------------------------
 
-  const startRootRun = (config: AgentConfigPayload): void => {
+  const startRootRun = (
+    config: AgentConfigPayload,
+    runId: RunId = generateRunId(),
+  ): void => {
     session.interruptedRunId = undefined;
-    const runId = generateRunId();
 
     // The slot has to be claimed before the chain that settles it exists, so
     // the claim holds the `await` of a `Deferred` the run chain completes.
@@ -502,8 +504,7 @@ export function createChatSessionController(
     const claim = Deferred.await(claimedRun);
     // Native launch may resolve its stream on this turn. Claim first so
     // marking the run pending cannot erase that run or a reentrant stop.
-    session.markRunPending(claim);
-    session.runId = runId;
+    session.markRunPending(claim, runId);
     runtime.runFork(
       recoverRun(
         Effect.gen(function* () {
@@ -841,11 +842,15 @@ export function createChatSessionController(
       followUpQueue.clear();
       let started = false;
       // The slot is claimed before the program runs, the way every other launch
-      // path claims it: `startRootRun` below re-claims it for the run it mints,
-      // and a refusal on the way there settles this deferred instead.
+      // path claims it: `startRootRun` below re-claims it for the run, whose
+      // id is minted here so the claim names it from the first instant (a
+      // follow-up typed during the model selection below waits for that run
+      // to fold instead of reading an idless claim as a settled run), and a
+      // refusal on the way there settles this deferred instead.
+      const runId = generateRunId();
       const startSettled = Deferred.makeUnsafe<void, Error>();
       const claim = Deferred.await(startSettled);
-      session.markRunPending(claim);
+      session.markRunPending(claim, runId);
       return recoverRun(
         Effect.gen(function* () {
           const meta = sessionMetaSignal.get();
@@ -881,19 +886,24 @@ export function createChatSessionController(
             session.markRunCompleted(claim);
             return;
           }
-          startRootRun({
-            agent: meta.agent || initialAgent,
-            agentSource: meta.agentSource,
-            model: selection.model,
-            instruction,
-            ...(displayInstruction !== undefined ? { displayInstruction } : {}),
-            workingDirectory: cwd,
-            ...(mediaFiles?.length ? { mediaFiles: [...mediaFiles] } : {}),
-            ...(meta.cliTeamId ? { cli: { teamId: meta.cliTeamId } } : {}),
-            ...(meta.delegationAgentScope
-              ? { delegationAgentScope: meta.delegationAgentScope }
-              : {}),
-          });
+          startRootRun(
+            {
+              agent: meta.agent || initialAgent,
+              agentSource: meta.agentSource,
+              model: selection.model,
+              instruction,
+              ...(displayInstruction !== undefined
+                ? { displayInstruction }
+                : {}),
+              workingDirectory: cwd,
+              ...(mediaFiles?.length ? { mediaFiles: [...mediaFiles] } : {}),
+              ...(meta.cliTeamId ? { cli: { teamId: meta.cliTeamId } } : {}),
+              ...(meta.delegationAgentScope
+                ? { delegationAgentScope: meta.delegationAgentScope }
+                : {}),
+            },
+            runId,
+          );
           started = true;
         }),
         (error) => {

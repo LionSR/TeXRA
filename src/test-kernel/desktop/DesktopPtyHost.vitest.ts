@@ -131,6 +131,24 @@ describe('desktop pty host', () => {
     expect(host.get(TERMINAL_ID)).toBe(replacement);
   });
 
+  it('never spawns a shell for a tab closed while its module loads', async () => {
+    const pty = createFakePty(301);
+    const spawnPty = vi.fn<SpawnPty>(() => pty);
+    const load = createDeferred<PtyModule>();
+    const host = createHost({
+      loadPty: vi.fn<LoadPty>().mockReturnValue(load.promise),
+    });
+
+    const creation = host.create({ id: TERMINAL_ID, cols: 80, rows: 24 });
+    // The renderer's TERMINAL_CLOSE: the handle is already the id's owner.
+    host.get(TERMINAL_ID)?.dispose();
+    load.resolve({ spawn: spawnPty });
+
+    expect(await creation).toBeUndefined();
+    expect(spawnPty).not.toHaveBeenCalled();
+    expect(host.get(TERMINAL_ID)).toBeUndefined();
+  });
+
   it('ignores a module-load failure from an invalidated creation', async () => {
     const loadFailure = createDeferred<PtyModule>();
     const host = createHost({

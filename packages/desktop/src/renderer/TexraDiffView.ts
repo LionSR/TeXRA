@@ -105,10 +105,17 @@ export class TexraDiffView extends LitElement {
     // editor. The component's slot retains the diff frame and sizing.
     this.editorContainer.className = 'desktop-diff-editor';
     this.append(this.editorContainer);
+    // A re-opened view (the pane drops the element when its last diff
+    // closes) has no editor and gets no `firstUpdated`: load it again here.
+    if (this.hasUpdated && !this.editor) void this.ensureEditor();
   }
 
   override disconnectedCallback(): void {
+    // Disconnecting abandons any load in flight: the generation bump makes
+    // its completion a no-op, so the flag it owned is cleared here, or the
+    // next connection would read "still loading" forever.
     this.loadGeneration += 1;
+    this.loading = false;
     this.resizeObserver?.disconnect();
     this.disposeMonacoObjects();
     super.disconnectedCallback();

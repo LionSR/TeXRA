@@ -94,8 +94,13 @@ export class TuiSession {
     this.stopRequested = false;
   }
 
-  markRunPending(runSettled: RootRunSettled): void {
-    rootRunClaim.set({ runId: undefined, runSettled, runCompleted: false });
+  /** Claim the slot for `runSettled`'s run. `runId` is set in the same write
+   *  when the claimant minted it: a claim held with no run id reads to a
+   *  follow-up as "the run already settled" (`awaitRunFolded(undefined)`),
+   *  so a message typed while the claimant was still choosing its model was
+   *  bounced as sent to an ended conversation. */
+  markRunPending(runSettled: RootRunSettled, runId?: RunId): void {
+    rootRunClaim.set({ runId, runSettled, runCompleted: false });
     this.runExitCode = CliExitCode.Success;
     this.stopRequested = false;
   }

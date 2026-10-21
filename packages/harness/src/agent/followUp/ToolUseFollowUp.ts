@@ -169,27 +169,35 @@ export function resumeOnSession(
         }),
       );
   });
-  return Effect.flatMap(registryOf(session.runs).fork(attempt), Fiber.join);
+  // The attempt is the session's from the fork on; the join is observation
+  // only, so it stays interruptible even where the caller is masked (a
+  // child's boundary settlement waits here for its parent's whole resumed
+  // turn, and a stop of that child must land before the parent parks).
+  return Effect.flatMap(registryOf(session.runs).fork(attempt), (fiber) =>
+    Effect.interruptible(Fiber.join(fiber)),
+  );
 }
 
 /**
  * Wake a run whose follow-up row is already durable: true when a generation
- * here reads it, either one already live (the wake was owed when the row
- * landed, and another has started since) or the one the resume
- * ({@link resumeOnSession}) started.
+ * here reads it (`Inbox.reads`: one already live that has, or will open,
+ * its reader, or a resume in flight) or the one the resume
+ * ({@link resumeOnSession}) started. A generation still live past its
+ * reader is winding down: the resume waits for it to leave the registry,
+ * where it would otherwise be refused as a second generation.
  */
 export function startFollowUpWake(
   runId: RunId,
   session: SessionHandle,
 ): Effect.Effect<boolean> {
-  return Effect.suspend(() =>
-    session.runs.get(runId)?.live === true
-      ? Effect.succeed(true)
-      : Effect.map(
-          resumeOnSession(runId, session),
-          (result) => 'started' in result && result.delivered,
-        ),
-  );
+  return Effect.suspend(() => {
+    if (session.followUps.reads(runId)) return Effect.succeed(true);
+    const live = session.runs.get(runId);
+    return (live?.live === true ? live.drained : Effect.void).pipe(
+      Effect.andThen(resumeOnSession(runId, session)),
+      Effect.map((result) => 'started' in result && result.delivered),
+    );
+  });
 }
 
 type Admission =
