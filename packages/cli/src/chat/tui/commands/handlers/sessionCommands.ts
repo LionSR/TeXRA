@@ -193,6 +193,7 @@ export function resumeInterruptedTasks(
               Effect.sync(() =>
                 appendLocalErrorTranscript(
                   `Could not resume ${task.title}: ${toErrorMessage(refused)}`,
+                  task.runId,
                 ),
               ),
             ),

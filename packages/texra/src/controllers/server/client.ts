@@ -294,8 +294,13 @@ export const ensureService = Effect.fn('server.ensureService')(function* (
     // A newer protocol's service that came up meanwhile (a newer build
     // replaced the one this window spoke to) refuses this one at once: no
     // wait for a service of this protocol that will not come. Past the
-    // deadline the last probe's own reason stands; only "not yet up" reads
-    // as the service not answering.
+    // deadline, which interrupts a probe still in flight (a record read on
+    // a stalled mount has no timeout of its own), the last completed
+    // probe's reason stands; only "not yet up" reads as the service not
+    // answering.
+    const lastRefusal = yield* Ref.make(
+      new ServiceUnavailable({ reason: NOT_YET_UP }),
+    );
     info = yield* probeRecordedService(storageRoot).pipe(
       Effect.flatMap((answer) => {
         if (answer !== null && answer.protocol > PROTOCOL_VERSION)
@@ -304,11 +309,14 @@ export const ensureService = Effect.fn('server.ensureService')(function* (
           ? Effect.succeed(answer)
           : Effect.fail(new ServiceUnavailable({ reason: NOT_YET_UP }));
       }),
+      Effect.tapError((refusal) => Ref.set(lastRefusal, refusal)),
       Effect.retry({
-        schedule: Schedule.spaced('200 millis').pipe(
-          Schedule.upTo({ duration: START_TIMEOUT }),
-        ),
+        schedule: Schedule.spaced('200 millis'),
         while: (error) => error.newer !== true,
+      }),
+      Effect.timeoutOrElse({
+        duration: START_TIMEOUT,
+        orElse: () => Effect.flatMap(Ref.get(lastRefusal), Effect.fail),
       }),
       Effect.mapError((error) =>
         error.reason === NOT_YET_UP

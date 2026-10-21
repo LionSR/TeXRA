@@ -115,6 +115,22 @@ describe('CLI history status formatting', () => {
     ]);
   });
 
+  it('never lets blocked runs push a resumable run off the list', () => {
+    const blocked = Array.from({ length: 60 }, (_, index) => ({
+      id: `blocked-${index}`,
+      resumable: false,
+      resumeBlocked: 'written by an earlier build',
+    }));
+    const listed = listResumableCliHistoryEntries([
+      ...blocked,
+      { id: 'older-resumable', resumable: true },
+    ]);
+    expect(listed.filter((entry) => entry.resumable)).toEqual([
+      { id: 'older-resumable', resumable: true },
+    ]);
+    expect(listed.filter((entry) => !entry.resumable)).toHaveLength(10);
+  });
+
   it('reports outcome-free entries as unknown when they cannot resume', () => {
     // A missing terminal outcome means the terminal write never happened
     // (crash, kill, old build) — reporting 'completed' would mask crashes.
