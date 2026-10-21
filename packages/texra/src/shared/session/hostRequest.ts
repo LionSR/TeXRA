@@ -158,6 +158,10 @@ export const HostRequestSchema = z.discriminatedUnion('kind', [
         kind: z.literal('write'),
         path: z.string(),
         contents: z.string(),
+        /** What the editor last read from the file: the write lands only
+         *  while the file still holds it (else `changedOnDisk`). Null
+         *  overwrites whatever is there. */
+        base: z.string().nullable(),
       }),
     ]),
   }),

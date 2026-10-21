@@ -355,19 +355,26 @@ export function createDesktopWorkspaceIpc(
       Effect.map((entries): HostOutcome => ({ kind: 'entries', entries })),
     );
 
+  // The editor's buffers are LF-only, as every read of a workspace file
+  // through the shared facade this replaces already was. Decoding the bytes
+  // ourselves keeps a UTF-8 BOM, which `readFileString`'s decoder strips and
+  // the editor's verbatim save would otherwise delete.
+  const editorText = (fs: FileSystem.FileSystem, absolutePath: string) =>
+    fs
+      .readFile(absolutePath)
+      .pipe(
+        Effect.map((bytes) =>
+          Buffer.from(bytes).toString('utf8').replaceAll('\r\n', '\n'),
+        ),
+      );
+
   const readFile = (path: string) =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
       const absolutePath = yield* path.startsWith('texra-agent:')
         ? resolveAgentDocument(path, false)
         : resolveWorkspacePath(options.getWorkspacePath(), path);
-      // The editor's buffers are LF-only, as every read of a workspace file
-      // through the shared facade this replaces already was. Decoding the
-      // bytes ourselves keeps a UTF-8 BOM, which `readFileString`'s decoder
-      // strips and the editor's verbatim save would otherwise delete.
-      const contents = Buffer.from(yield* fs.readFile(absolutePath))
-        .toString('utf8')
-        .replaceAll('\r\n', '\n');
+      const contents = yield* editorText(fs, absolutePath);
       return { kind: 'contents', contents } satisfies HostOutcome;
     });
 
@@ -376,13 +383,30 @@ export function createDesktopWorkspaceIpc(
   // reads clean. The lane is keyed by the request's path and claimed before
   // resolving it: keyed by the asynchronous canonical path, the later save
   // could resolve first and overtake.
+  //
+  // The disk is the one owner of what the file holds: a save carries what
+  // the editor last read (`base`) and lands only while the file still holds
+  // it, checked on the same lane as the write. A run that rewrote the file
+  // meanwhile is answered `changedOnDisk` instead of overwritten; the
+  // editor asks whether to overwrite or reload. A file gone since the read
+  // is recreated, as a deleted file always was.
   const writeLanes = new Map<string, PerKeyLane>();
-  const writeFile = (path: string, contents: string) =>
+  const writeFile = (path: string, contents: string, base: string | null) =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
       const absolutePath = yield* path.startsWith('texra-agent:')
         ? resolveAgentDocument(path, true)
         : resolveWorkspaceWritePath(options.getWorkspacePath(), path);
+      if (base !== null) {
+        const onDisk = yield* editorText(fs, absolutePath).pipe(
+          Effect.catchIf(
+            (error) => error.reason._tag === 'NotFound',
+            () => Effect.succeed(null),
+          ),
+        );
+        if (onDisk !== null && onDisk !== base)
+          return { kind: 'changedOnDisk' } satisfies HostOutcome;
+      }
       yield* fs.writeFileString(absolutePath, contents);
       return { kind: 'done' } satisfies HostOutcome;
     }).pipe(withPerKeyLane(writeLanes, path));
@@ -445,7 +469,7 @@ export function createDesktopWorkspaceIpc(
         case 'read':
           return refuse(readFile(action.path));
         case 'write':
-          return refuse(writeFile(action.path, action.contents));
+          return refuse(writeFile(action.path, action.contents, action.base));
       }
     },
 
