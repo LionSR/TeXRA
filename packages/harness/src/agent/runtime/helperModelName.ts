@@ -39,14 +39,11 @@ export function getHelperModelName(stores: SettingsStores) {
 }
 
 /**
- * Helper-model preference for the "fix LaTeX" VS Code actions.
+ * Helper-model preference for a caller-opted launch.
  *
- * The Fix-Compilation command and the progress-view compile fixer launch
- * latexFixer through `texra.execute` with `preferHelperModel`, so the root
- * launch runs them on the configured helper model rather than the
- * heavyweight model the user has selected. Every other launch (a direct
- * main-view Run, the CLI, an orchestrator delegation) leaves the flag off and
- * keeps the chosen model.
+ * A caller that passes `preferHelperModel` runs the root launch on the
+ * configured helper model rather than the heavyweight model the user has
+ * selected. Every other launch leaves the flag off and keeps the chosen model.
  *
  * Swap `config`'s model for the configured helper model, or return it unchanged
  * when the helper model already equals it, the helper model can't call
