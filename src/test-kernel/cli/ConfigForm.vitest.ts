@@ -464,7 +464,7 @@ describe('/config slash command wiring', () => {
         }),
         stores,
         runtime: testRuntime(),
-        runtimeSession: testDefaultSession(),
+        runtimeSession: testSessionOf(testDefaultSession()),
         runSession: testSessionOf(testDefaultSession()),
       });
       openCliSlashCommandForm('key', '');
