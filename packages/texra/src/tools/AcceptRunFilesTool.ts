@@ -33,6 +33,11 @@ import {
   readNormalizedFile,
 } from '@texra-ai/harness/node';
 import { ensureError } from '@texra-ai/harness/schemas';
+import {
+  buildApprovalRejectedResult,
+  requestToolEditApproval,
+} from '@texra-ai/harness/plugins';
+import { approvedWriteConflict } from '@texra-ai/harness/plugins';
 import { cleanupAcceptedWorkspaceDiffFiles } from '@latex/acceptedFileTarget';
 import { stripCriticizeAnnotations } from '@replacement/advanced';
 import {
@@ -40,22 +45,17 @@ import {
   ToolError,
   type EditRecord,
   type ToolResult,
-  RefusalDecision,
   RunId,
   FileLocation,
 } from '@shared/schemas';
 import { documentsAcceptedFact } from '@texra/shared/plugins/documents';
-import {
-  buildApprovalRejectedResult,
-  requestToolEditApproval,
-} from '@tools/approval/toolEditApproval';
-import { approvedWriteConflict } from '@tools/approval/approvedWrite';
 import { pluralize } from '@utils/text/stringUtils';
 import {
   findExistingRunStoragePathUnder,
   originalSnapshotPathUnder,
   inspectRunStorageEntryUnder,
 } from '@utils/files/runStorageFs';
+import type { RefusalDecision } from '@texra-ai/harness/plugins';
 import type { PluginToolServices } from '@texra-ai/harness/plugins';
 
 /**

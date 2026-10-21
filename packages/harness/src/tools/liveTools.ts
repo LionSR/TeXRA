@@ -38,7 +38,11 @@ import {
 import type { PluginContext } from '@platform/processRuntime';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { entriesOf } from '@tools/catalogEntries';
-import { storedDisabledTools, type Plugin } from '@tools/plugins';
+import {
+  readDisabledTools,
+  storedDisabledTools,
+  type Plugin,
+} from '@tools/plugins';
 import {
   buildPluginLayer,
   follow,
@@ -80,6 +84,9 @@ export interface ToolCatalogShape {
     plugin: string,
     enabled: boolean,
   ) => Effect.Effect<void, StateReadFailed | StateWriteFailed>;
+  /** The plugin ids switched off in the global state store now; none while
+   *  no switch was written. */
+  readonly disabled: Effect.Effect<ReadonlySet<string>, StateReadFailed>;
 }
 
 /** The process's tool catalog. */
@@ -207,6 +214,7 @@ export const toolCatalogLayer = (
           ),
         ),
         processServices,
+        disabled: readDisabledTools(state),
         setEnabled: (id, enabled) =>
           (table.entries.get(id)?.toggle === undefined
             ? Effect.logWarning(`Plugin ${id} has no switch; nothing written.`)
