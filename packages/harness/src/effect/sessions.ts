@@ -321,9 +321,9 @@ export interface LocalSession extends Session {
    *  `replayWhenAttached`, a notice raised while none is attached waits
    *  for the next. */
   readonly emit: SessionHostInteractions['emit'];
-  /** A barrier: every write enqueued before it has run, and the view has
-   *  folded what it committed. It waits for the fold, not for the
-   *  consumers the fold gates (the terminal-result presenter among them),
-   *  which see those rows as it releases them. */
+  /** A barrier: every write enqueued before it has run, the view has
+   *  folded what it committed, and the session's own consumers of those
+   *  rows have run over them: a failed run's end has been presented to the
+   *  attached host (or queued for the next one) by the time it returns. */
   readonly settled: Effect.Effect<void>;
 }

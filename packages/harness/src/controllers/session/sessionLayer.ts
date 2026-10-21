@@ -255,8 +255,8 @@ const sessionHandleLayer = (key: SessionKey) =>
         .deliver((runId) => session.followUps.forget(runId))
         .pipe(Scope.provide(consumerScope));
       // The registry's phase notification rides the fold-gated tail: its
-      // waiters read `RunView.status` synchronously, so a row reaches them
-      // once the view holds its state. Host notices go to the author.
+      // waiters read `RunView.status` once the view holds a row's state.
+      // Host notices go to the author. `log.settled` waits for this reader.
       yield* Stream.runForEach(store.folded, (event) =>
         Effect.gen(function* () {
           const target = aggregateTarget(event.aggregateId);
