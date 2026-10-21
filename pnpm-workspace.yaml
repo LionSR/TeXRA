@@ -38,7 +38,7 @@ catalog:
   nunjucks: '^3.2.4'
   openai: '^7.20.0'
   pathe: '^2.0.3'
-  postal-mime: '^4.0.7'
+  postal-mime: '^4.0.11'
   pretty-bytes: '7.2.0'
   pretty-ms: '^10.0.0'
   quickjs-emscripten-core: '0.32.0'
