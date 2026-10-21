@@ -1,8 +1,7 @@
 /**
- * Tool for viewing and managing run history, generated files, and
- * running processes. Supports viewing past runs, waiting for status
- * changes, reading output from background processes, and killing live
- * runs.
+ * Tool for viewing and managing run history, generated files, and running
+ * processes. Supports viewing past runs, waiting for status changes, reading
+ * output from background processes, and killing live runs.
  *
  * Every fact about a run — what it is, what it is called, how far it got,
  * whose child it is, what it still has to do — is read off the session fold
@@ -82,24 +81,24 @@ interface RunToolContext {
  * the phases, a follow-up as a `queuedFollowUps` id the caller did not hold.
  * The caller is inside this tool call, so nothing it is sent is taken before
  * the wait sees it, whoever sent it; a change landing before the stream's
- * first emission still wakes it. `settled` is re-checked once the stream is
- * up, closing the window after the caller's pre-check. The view stream ends
- * with the session, which ends the wait too. The race settles on the first
- * completion, success or failure, so a dead fold surfaces at once instead
- * of stalling until the deadline.
+ * first emission, or after `initial` (the view `runIds` were chosen on),
+ * still wakes it; `settled` is re-checked once the stream is up. The view
+ * stream ends with the session, which ends the wait too. The race settles on
+ * the first completion, success or failure, so a dead fold surfaces at once
+ * instead of stalling until the deadline.
  */
 const awaitStatusChange = Effect.fn('ExecutionsTool.awaitStatusChange')(
   function* (
     context: RunToolContext,
+    initial: SessionView,
     timeoutSeconds: number,
     runIds: readonly RunId[],
-    settled: () => boolean,
+    settled: (view: SessionView) => boolean,
   ) {
     const phases = (view: SessionView): string =>
       runIds.map((id) => view.runs.get(id)?.status ?? '').join(',');
     const sent = (view: SessionView): readonly string[] =>
       (view.queuedFollowUps.get(context.runId) ?? []).map((f) => f.followUpId);
-    const initial = SubscriptionRef.getUnsafe(context.session.view.ref);
     const started = phases(initial);
     const held = new Set(sent(initial));
     const change = context.session.view.changes.pipe(
@@ -109,8 +108,9 @@ const awaitStatusChange = Effect.fn('ExecutionsTool.awaitStatusChange')(
       ),
       Stream.runHead,
     );
+    const { ref } = context.session.view;
     const alreadySettled = Effect.suspend(() =>
-      settled() ? Effect.void : Effect.never,
+      settled(SubscriptionRef.getUnsafe(ref)) ? Effect.void : Effect.never,
     );
     yield* Effect.raceAllFirst([change, alreadySettled]).pipe(
       Effect.timeoutOption(Duration.seconds(timeoutSeconds)),
@@ -356,15 +356,15 @@ const waitForRuns = Effect.fn('ExecutionsTool.waitForRuns')(function* (
 ) {
   const runs = yield* Runs;
   const candidates = ids?.length ? ids : runs.get().map((r) => r.runId);
-  // Exclude runs that are already effectively done
-  // (completed, inactive, or tool-use subagent WAITING with result delivered).
+  // Skip runs already done (see shouldSkipWait) on the view the wait starts from.
+  const initial = SubscriptionRef.getUnsafe(context.session.view.ref);
   const pendingIds = [...new Set(candidates)].filter(
-    (id) => !shouldSkipWait(context.session, id),
+    (id) => !shouldSkipWait(context.session, initial, id),
   );
   if (pendingIds.length === 0) return;
 
-  yield* awaitStatusChange(context, timeout, pendingIds, () =>
-    pendingIds.every((id) => shouldSkipWait(context.session, id)),
+  yield* awaitStatusChange(context, initial, timeout, pendingIds, (view) =>
+    pendingIds.every((id) => shouldSkipWait(context.session, view, id)),
   );
 });
 
