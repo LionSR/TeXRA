@@ -2,11 +2,12 @@
 
 Generated from `packages/harness/src/transcriptEntry.ts` by `node scripts/check-core-quality.mjs --update`; do not edit. A diff here is a change to the public surface.
 
-Exports: 59
+Exports: 73
 
 - `BASH_TOOL_DEFAULT_TIMEOUT_MS` — `const BASH_TOOL_DEFAULT_TIMEOUT_MS: 120000`
 - `buildMcpToolName` — `function buildMcpToolName: (server: string, tool: string) => string`
 - `CommitOrdinal` — `type CommitOrdinal = z.infer<typeof CommitOrdinalSchema>; ≡ number`
+- `CompactionActivityBlock` — `interface CompactionActivityBlock { readonly operationId: string; readonly status: CompactionActivityStatus; readonly finalized: boolean; readonly settledThroughSeqNo?: number; readonly startPosition: number; readonly startedAt: number; readonly finishedAt?: number; readonly freed?: { readonly tokens: number; readonly utilizationBefore: number; readonly utilizationAfter: number; }; }`
 - `CompactionActivityRow` — `interface CompactionActivityRow extends TranscriptRowBase { readonly kind: 'compactionActivity'; readonly block: CompactionActivityBlock; readonly label: string; }`
 - `CompactionActivityStatus` — `type CompactionActivityStatus = 'running' | CompactionActivityOutcome | 'interrupted'; ≡ CompactionActivityStatus`
 - `compareByNewestCreationTime` — `function compareByNewestCreationTime: (a: { readonly createdAt: number; readonly id: string; }, b: { readonly createdAt: number; readonly id: string; }) => number`
@@ -19,6 +20,7 @@ Exports: 59
 - `ElidedText` — `interface ElidedText { readonly head: readonly string[]; readonly tail: readonly string[]; readonly hiddenLines: number; }`
 - `elideText` — `function elideText: (text: TranscriptText, budget: TextBudget) => ElidedText`
 - `ErrorRow` — `interface ErrorRow extends TranscriptRowBase { readonly kind: 'error'; readonly summary: TranscriptText; readonly details: readonly ErrorRowDetail[]; readonly detailText: TranscriptText; }`
+- `ErrorRowDetail` — `interface ErrorRowDetail { readonly key: keyof ErrorLogData; readonly value: string; }`
 - `EXECUTIONS_WAIT_DEFAULT_TIMEOUT_SECONDS` — `const EXECUTIONS_WAIT_DEFAULT_TIMEOUT_SECONDS: 300`
 - `executionsWaitTimeoutSeconds` — `function executionsWaitTimeoutSeconds: (timeout: unknown) => number`
 - `FileListRow` — `interface FileListRow extends TranscriptRowBase { readonly kind: 'fileList'; readonly files: readonly FileListEntry[]; readonly summary: string; readonly media: readonly LoadedMediaRef[]; }`
@@ -29,6 +31,7 @@ Exports: 59
 - `formatResultCount` — `function formatResultCount: (count: number, singular: string, plural?: string | undefined) => string`
 - `formatScriptDeliverySummary` — `function formatScriptDeliverySummary: (summary: { costUsd: number; durationMs: number; errorCause: null | string; files: { added: null | number; path: string; removed: null | number; }[]; name: string; outcome: "completed" | "failed" | "stopped"; phaseCount: number; tally: { cancelled: number; failed: number; ok: number; skipped: number; total: number; }; }) => string`
 - `isMcpToolName` — `function isMcpToolName: (toolName: string) => boolean`
+- `LoadedMediaRef` — `interface LoadedMediaRef { readonly path: string; readonly media: LoadedMediaMetadata; }`
 - `LogRow` — `interface LogRow extends TranscriptRowBase { readonly kind: 'log'; readonly text: TranscriptText; }`
 - `normalizeToolName` — `function normalizeToolName: (toolName: string) => string`
 - `PayloadLanguage` — `type PayloadLanguage = 'yaml' | 'plaintext'; ≡ PayloadLanguage`
@@ -48,14 +51,25 @@ Exports: 59
 - `summarizeSubagentFollowup` — `function summarizeSubagentFollowup: (text: unknown) => string`
 - `taskGroupDisplayStatus` — `function taskGroupDisplayStatus: (group: Pick<{ endTime?: number | undefined; id: string; kind?: "run" | "script" | "session" | undefined; name: string; parentGroupId?: string | undefined; startTime: number; status: "cancelled" | "completed" | "failed" | "running"; }, "status">, runDurableOutcome: "cancelled" | "completed" | "failed" | undefined) => "cancelled" | "completed" | "failed" | "running"`
 - `TextBudget` — `interface TextBudget { readonly headLines: number; readonly tailLines: number; }`
+- `ToolBadgesSection` — `interface ToolBadgesSection extends ToolSectionBase { readonly kind: 'badges'; readonly badges: readonly string[]; }`
+- `ToolCallFacts` — `interface ToolCallFacts { readonly phase?: string; readonly attempt?: number; }`
+- `ToolCodeSection` — `interface ToolCodeSection extends ToolSectionBase { readonly kind: 'code'; readonly text: TranscriptText; readonly language: string | PayloadLanguage; }`
+- `ToolDiffSection` — `interface ToolDiffSection extends ToolSectionBase { readonly kind: 'diff'; readonly oldText: string; readonly newText: string; readonly fileLabel?: string; }`
 - `toolDisplayKind` — `function toolDisplayKind: (toolName: string) => ToolDisplayKind | undefined`
 - `ToolDisplayKind` — `type ToolDisplayKind = 'edit' | 'read' | 'write' | 'bash' | 'script'; ≡ ToolDisplayKind`
 - `ToolFileGroupsSection` — `interface ToolFileGroupsSection extends ToolSectionBase { readonly kind: 'fileGroups'; readonly groups: readonly ProposalFileGroup[]; }`
 - `ToolFileListSection` — `interface ToolFileListSection extends ToolSectionBase { readonly kind: 'fileList'; readonly files: readonly ToolSectionFile[]; }`
+- `ToolFileNamespace` — `type ToolFileNamespace = 'workspace' | 'memory' | 'run'; ≡ ToolFileNamespace`
 - `ToolFileSection` — `interface ToolFileSection extends ToolSectionBase { readonly kind: 'file'; readonly path: string; readonly startLine?: number; readonly endLine?: number; readonly namespace: ToolFileNamespace; }`
+- `ToolIdentifierSection` — `interface ToolIdentifierSection extends ToolSectionBase { readonly kind: 'identifier'; readonly value: string; readonly note?: string; }`
+- `ToolOutputSuppression` — `type ToolOutputSuppression = 'empty' | 'duplicate-of-header' | 'duplicate-of-error' | 'rendered-by-sections' | 'file-link' | 'trivial-write'; ≡ ToolOutputSuppression`
 - `ToolRow` — `interface ToolRow extends TranscriptRowBase, ToolCallFacts { readonly kind: 'tool'; readonly toolUse: NormalizedToolUse; readonly model: ToolRowModel; readonly log: ToolUseLog; }`
+- `ToolRowModel` — `interface ToolRowModel { readonly headerLabel: string; readonly headerPreview: string; readonly sections: readonly ToolSection[]; readonly output?: TranscriptText; readonly errorPreview?: TranscriptText; readonly userInstruction?: TranscriptText; readonly showOutput: boolean; readonly outputSuppression?: ToolOutputSuppression; readonly showsNoOutputMarker: boolean; readonly status?: ToolCallStatus; readonly isError: boolean; readonly isUserFeedback: boolean; readonly isInProgress: boolean; readonly exitCode?: number; }`
 - `ToolSection` — `type ToolSection = ToolTextSection | ToolCodeSection | ToolIdentifierSection | ToolFileSection | ToolFileGroupsSection | ToolFileListSection | ToolDiffSection | ToolBadgesSection | ToolStatusSection; ≡ ToolSection`
+- `ToolSectionBase` — `interface ToolSectionBase { readonly label: string; }`
 - `ToolSectionFile` — `interface ToolSectionFile { readonly path: string; readonly from?: string; readonly note?: string; readonly lineChanges?: { readonly added: number; readonly removed: number; }; }`
+- `ToolStatusSection` — `interface ToolStatusSection extends ToolSectionBase { readonly kind: 'status'; readonly status: string; }`
+- `ToolTextSection` — `interface ToolTextSection extends ToolSectionBase { readonly kind: 'text'; readonly text: TranscriptText; }`
 - `TranscriptRow` — `type TranscriptRow = StreamingTextRow | UserRow | ErrorRow | ToolRow | WebSearchRow | FileListRow | ContextManagementRow | ProgressStatusRow | CompactionActivityRow | LogRow; ≡ TranscriptRow`
 - `TranscriptRowBase` — `interface TranscriptRowBase { readonly id: string; readonly seqNo?: number; readonly settlementSeqNo?: number; readonly timestamp: number; readonly level: LogLevel; readonly verbose?: boolean; readonly groupId?: string; readonly messageType?: MessageType; readonly origin?: 'local'; }`
 - `TranscriptRowKind` — `type TranscriptRowKind = TranscriptRow['kind']; ≡ "assistant" | "compactionActivity" | "contextManagement" | "error" | "fileList" | "log" | "progressStatus" | "scratchpad" | "thinking" | "tool" | "user" | "webSearch"`

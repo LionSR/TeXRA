@@ -46,7 +46,10 @@ import {
   RUN_STATUS_TONE,
 } from '@shared/runs/runStatusDisplay';
 import type { TranscriptRow } from '@shared/transcript/transcriptRow';
-import type { ReadonlyDeep } from './readonlyDeep';
+import type {
+  RunView as ReadRunView,
+  SessionView as ReadSessionView,
+} from './readonlyViews';
 
 /** Which session (paper) a view is of: the session's storage root. */
 const SessionKeySchema = z.string().min(1);
@@ -344,9 +347,6 @@ const SessionViewSchema = z.object({
   queuedFollowUps: z.map(RunIdSchema, z.array(QueuedFollowUpViewSchema)),
 });
 export type SessionView = z.infer<typeof SessionViewSchema>;
-
-type ReadSessionView = ReadonlyDeep<SessionView>;
-type ReadRunView = ReadonlyDeep<RunView>;
 
 /** What wants this window: the requests it can answer, in fold order (the
  *  badge), and those `previous` could not (none without it: history). */

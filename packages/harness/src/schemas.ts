@@ -74,6 +74,7 @@ export {
   sessionActivity,
 } from '@shared/session/sessionView';
 export type {
+  Attention,
   RequestAnswerability,
   SessionTitleState,
 } from '@shared/session/sessionView';
@@ -87,6 +88,74 @@ export type {
   TranscriptView,
 } from '@shared/session/readonlyViews';
 export type { FollowUpHost } from '@shared/session/sessionView';
+// The fold's own shapes the views are read-only copies of.
+export type { ReadonlyDeep } from '@shared/session/readonlyDeep';
+export type {
+  RunView as FoldRunView,
+  SessionView as FoldSessionView,
+  TranscriptView as FoldTranscriptView,
+} from '@shared/session/sessionView';
+// What a session store's reads and claims answer with: an aggregate's claim
+// and state, a deletion's mode, a CLI input-history row, and the refusals.
+export type {
+  AggregateClaim,
+  AggregateState,
+  DatabaseClaimError,
+  DatabaseClaimRefused,
+  DatabaseNotOwner,
+  DeletionMode,
+  InputHistoryRecord,
+} from '@shared/session/database';
+// A follow-up queued for a run, as its row holds it (`InboxItem.control`).
+export type { QueuedFollowUp } from '@shared/session/runRows';
+// The plan a used-up subscription falls back to (`quotaFallbackRouteFor`).
+export type {
+  QuotaFallbackExhaustionReason,
+  QuotaFallbackRoute,
+} from '@shared/quotaFallbackRoutes';
+// The data shapes the public signatures name: session events and their
+// owners, run facts, tool definitions and results, log and transcript
+// payloads, follow-ups and requests.
+export type {
+  AgentProposal,
+  AggregateKind,
+  AttachedMemoryMiss,
+  CompactionActivityData,
+  CompactionActivityOutcome,
+  ContextManagementData,
+  DeclinableUsageRoute,
+  DispatchFacts,
+  ErrorLogData,
+  ExhaustionReason,
+  FileListEntry,
+  FollowUpContent,
+  FollowUpSender,
+  HookEvent,
+  JsonValue,
+  LoadedMediaMetadata,
+  LocalRuntimeState,
+  LogicalId,
+  LogLevel,
+  MediaAttachmentKind,
+  MessageType,
+  ModelBackend,
+  NormalizedToolUse,
+  OfferedTool,
+  OwnerId,
+  OwnerLiveness,
+  PermissionPayload,
+  ProposalFileGroup,
+  ResultMeta,
+  RunIdentity,
+  ScriptDeliverySummary,
+  SessionEvent,
+  SessionEventDraft,
+  ToolCallStatus,
+  ToolDefinition,
+  ToolEditPermission,
+  ToolFact,
+  ToolUseLog,
+} from '@shared/schemas';
 // Where a run's lifecycle status stands: in flight (running, or waiting for
 // its next input), active, ended, or settled enough for its transcript.
 export {
@@ -121,6 +190,8 @@ export {
   parseApprovalPolicy,
   type ApprovalPolicy,
   type ApprovalPolicyDenial,
+  type HumanInputDecision,
+  type RetryApprovalDecision,
 } from '@shared/approvalPolicy';
 // The approvals a run may skip, and how a run's own and inherited grants
 // resolve against the policy.
@@ -129,6 +200,8 @@ export {
   runBypasses,
   stricterPolicy,
   type ApprovalBypassKind,
+  type ApprovalGrants,
+  type ApprovalGrantSource,
 } from '@shared/approvalBypassKind';
 // A request a host sends a session and the outcome it answers with.
 export {
@@ -162,6 +235,7 @@ export {
   readTraceFacts,
   TraceDocumentSchema,
   type TraceDocument,
+  type TraceFactArm,
 } from '@transcript/traceDocumentSchema';
 // Path basics that hold in a browser: forward slashes, a path's base name,
 // and its base name without the extension.
@@ -172,12 +246,18 @@ export { getBasename, getFileStem, normalizeFilePath } from '@utils/core';
 export {
   configTreeRows,
   settingsCatalog,
+  type ModelsTabSurface,
   type SettingsCatalog,
+  type SettingStore,
+  type SettingSurfaces,
   type SettingsViewSnapshot,
   type SettingsViewStateSettingEntry,
+  type SettingWriteEffects,
   type StateSettingEntry,
   type SurfacedSettingEntry,
 } from '@shared/state/stateSettings';
+// What a `ConfigProvider` (root) writes to and reads back per scope.
+export type { ConfigInspection, ConfigTarget } from '@platform/interfaces';
 export { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 
 // Text primitives: grapheme-safe truncation (plain, whitespace-collapsed, or

@@ -18,15 +18,14 @@
  * (`ToolResult.facts`), never a log payload.
  */
 import type { RunId, SessionEventDraft } from '@shared/schemas';
-import type { RunStateRowType } from '@shared/session/runStateFold';
 
 /** One session arm as the trace carries it; distributive over `T`. A row
  *  the run's state is folded from is never a trace arm: the trace is the
- *  display door, and those rows commit through the run's cell. */
-type TraceArm<T extends Exclude<SessionEventDraft['type'], RunStateRowType>> =
-  T extends unknown
-    ? Omit<Extract<SessionEventDraft, { type: T }>, 'aggregateId'>
-    : never;
+ *  display door, and those rows commit through the run's cell
+ *  (`runEventDraft`, typed to an unfolded draft, refuses any other). */
+export type TraceArm<T extends SessionEventDraft['type']> = T extends unknown
+  ? Omit<Extract<SessionEventDraft, { type: T }>, 'aggregateId'>
+  : never;
 
 /**
  * The terminal fact as the runtime hands it to in-process consumers
@@ -41,7 +40,7 @@ export type ResultEvent = TraceArm<'run.end'> & { readonly runId: RunId };
  * for it and the session graph carries the text instead, so it has no
  * session arm to derive from.
  */
-interface StreamChunkEvent {
+export interface StreamChunkEvent {
   readonly type: 'stream.chunk';
   readonly id: string;
   readonly text: string;

@@ -9,17 +9,27 @@
  * (`recordToolFileRead`, `requireFileReadForEdit`) read the run's
  * `fileService.readFiles` through `ToolContext`, so any tool may use them.
  */
-import { Context, Data, Effect } from 'effect';
+import {
+  Context,
+  Data,
+  Effect,
+  type Scope,
+  type SynchronizedRef,
+} from 'effect';
 
 import type { ScriptOp } from '@agent/codeSandbox/codeSandbox';
+import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import {
   ToolContext,
   type CallRequests,
   type ToolContextShape,
   type ToolRun,
 } from '@agent/core/tools/ToolTypes';
+import type { TemplateOpening } from '@agent/prompt/templateInputs';
+import type { AgentTrace, StageHandle } from '@agent/trace';
 import {
   ToolError,
+  type AgentDelegationScope,
   type PermissionPayload,
   type ToolResult,
   type ToolDefinition,
@@ -27,9 +37,11 @@ import {
 } from '@shared/schemas';
 import type { CellError } from '@shared/session/runHistory';
 import { errorResult } from '@tools/core/result';
+import type { RunFileService } from '@utils/files/runStorage';
 
 import type { InvokeError } from './ModelInvoker';
-import type { AgentRunShape } from './run/AgentRun';
+import type { BoundModel } from './modelAccess/ModelAccess';
+import type { AgentRunShape, ToolPolicy } from './run/AgentRun';
 import type {
   RuntimePresentationEvent,
   RuntimePresentationEventPayloads,
@@ -132,15 +144,15 @@ export interface ScriptScope extends ScriptSource {
  */
 declare module '../core/tools/ToolTypes.js' {
   interface ToolRun {
-    readonly toolPolicy: AgentRunShape['toolPolicy'];
-    readonly config: AgentRunShape['config'];
-    readonly model: AgentRunShape['model'];
-    readonly delegationAgentScope?: AgentRunShape['delegationAgentScope'];
-    readonly scope: AgentRunShape['scope'];
-    readonly opening: AgentRunShape['opening'];
-    readonly logger: AgentRunShape['logger'];
-    readonly parentStage: AgentRunShape['parentStage'];
-    readonly fileService: AgentRunShape['fileService'];
+    readonly toolPolicy: ToolPolicy;
+    readonly config: AgentConfig;
+    readonly model: SynchronizedRef.SynchronizedRef<BoundModel>;
+    readonly delegationAgentScope?: AgentDelegationScope | null;
+    readonly scope: Scope.Scope;
+    readonly opening: TemplateOpening | null;
+    readonly logger: AgentTrace;
+    readonly parentStage: StageHandle;
+    readonly fileService: RunFileService;
   }
   interface CallRequests {
     /**

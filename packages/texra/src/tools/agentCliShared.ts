@@ -9,6 +9,8 @@ import { ToolContext, type ToolContextShape } from '@texra-ai/harness';
 import {
   ChildRuns,
   requireRun,
+  type AgentTrace,
+  type ProcessChildStrategy,
   type ToolRun,
   executed,
 } from '@texra-ai/harness/plugins';
@@ -17,10 +19,6 @@ import {
   toErrorMessage,
   previewLabel,
 } from '@texra-ai/harness/schemas';
-import type {
-  ChildRunPort,
-  ProcessChildStrategy,
-} from '@agent/runtime/childRunLoop';
 import {
   describeFollowUpFailure,
   FOLLOW_UP_WAKE_FAILED_MESSAGE,
@@ -162,7 +160,7 @@ interface AgentCliLaunchParams<TTurn> {
    * guard created. See {@link buildAgentCliLaunch}.
    */
   buildLaunch: (ctx: {
-    childRun: ChildRunPort;
+    logger: AgentTrace;
     runId: RunId;
   }) => Effect.Effect<ProcessChildStrategy<TTurn>, Error>;
   /** Names the CLI in the result summary: `Launched <summaryLabel>: <previewLabel(prompt)>`. */
@@ -349,7 +347,7 @@ export function dispatchAgentCliTool<R = never, S = never>(params: {
 // ============================================================================
 
 interface AgentCliLoopParams<TTurn> {
-  childRun: ChildRunPort;
+  logger: AgentTrace;
   runId: RunId;
   /** Stage label opened on the child trace (e.g. "Codex session"). */
   stageLabel: string;
@@ -408,7 +406,7 @@ export function buildAgentCliLaunch<TTurn>(
 ): Effect.Effect<ProcessChildStrategy<TTurn>> {
   return Effect.gen(function* () {
     const {
-      childRun,
+      logger,
       runId,
       stageLabel,
       initialPrompt,
@@ -422,7 +420,6 @@ export function buildAgentCliLaunch<TTurn>(
       isTurnError,
       turnErrorMessage,
     } = params;
-    const { logger } = childRun;
     // Released with the child's aliases (`releaseSessionOwnership`).
     yield* registry.holdWhileLive(runId);
 

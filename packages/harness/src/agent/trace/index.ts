@@ -8,7 +8,12 @@
  * App-specific helpers (`logSdkError`/`logUserMessage`/etc.) are plain
  * functions over this interface in `helpers.ts` / `toolUseHelpers.ts`.
  */
-export type { AgentEvent, ResultEvent } from './events';
+export type {
+  AgentEvent,
+  ResultEvent,
+  StreamChunkEvent,
+  TraceArm,
+} from './events';
 
 export type { AgentTrace, StageHandle, StreamHandle } from './AgentTrace';
 

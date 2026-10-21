@@ -53,11 +53,8 @@ export type SubmitFollowUpResult =
   | { status: 'queued'; wake?: 'failed' }
   | { status: 'failed'; reason: FollowUpFailureReason };
 
-type FollowUpPresentation =
-  { severity: 'none' } | { severity: 'info' | 'warning'; message: string };
-
-interface SubmitFollowUpOptions {
-  readonly session: SessionHandle;
+/** How one input is delivered to a run. */
+export interface RunInboxSendOptions {
   /**
    * Notifications never revive a persisted cursor. A child delivery is an
    * ordinary continuation: its parent counts the child as active until the
@@ -66,6 +63,10 @@ interface SubmitFollowUpOptions {
   readonly mode?: 'live_notification';
   /** Only from the run's parent, by its rows (`SendOptions.fromParent`). */
   readonly fromParent?: boolean;
+}
+
+interface SubmitFollowUpOptions extends RunInboxSendOptions {
+  readonly session: SessionHandle;
 }
 
 const FAILURE_MESSAGES: Record<FollowUpFailureReason, string> = {
@@ -95,7 +96,7 @@ export function describeFollowUpFailure(reason: FollowUpFailureReason): string {
 
 export function presentFollowUpResult(
   result: SubmitFollowUpResult,
-): FollowUpPresentation {
+): { severity: 'none' } | { severity: 'info' | 'warning'; message: string } {
   if (result.status === 'failed') {
     return {
       severity: 'warning',
@@ -299,7 +300,7 @@ export interface RunInbox {
   /** Deliver `item` to the run. */
   readonly send: (
     item: InboxItem,
-    options?: Pick<SubmitFollowUpOptions, 'mode' | 'fromParent'>,
+    options?: RunInboxSendOptions,
   ) => Effect.Effect<SubmitFollowUpResult, Error>;
   /** Hear the run take no more input, or its session's inbox close;
    *  returns the detach. */
