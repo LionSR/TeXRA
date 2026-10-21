@@ -18,10 +18,16 @@ const mocks = vi.hoisted(() => ({
   showLoggedInfoMessage: vi.fn(() => Effect.succeed('')),
 }));
 
-vi.mock('@model/copilotRouting', async (original) => ({
-  ...(await original<typeof import('@model/copilotRouting')>()),
-  setCopilotRoutePreference: mocks.setCopilotRoutePreference,
-}));
+vi.mock('@model/copilotRouting', async (original) => {
+  const actual = await original<typeof import('@model/copilotRouting')>();
+  return {
+    ...actual,
+    CopilotRoutes: {
+      ...actual.CopilotRoutes,
+      setPreferred: mocks.setCopilotRoutePreference,
+    },
+  };
+});
 
 // The Models-page repaint discovers the Copilot routes itself; these cases
 // count the discovery the access request makes, so the repaint is inert.

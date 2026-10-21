@@ -30,9 +30,9 @@ import {
 import { absentReason, readNormalizedFile } from '@texra-ai/harness/node';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
 import { pathToLocationIn } from '@texra-ai/harness';
-import type { ChatExportInput } from '@agent/export/schemas';
-
 import { compileLatex2Pdf } from '@latex/texTools';
+import type { ChatExportInput } from '@texra/agent/export/schemas';
+
 import {
   formatChatAsMarkdown,
   formatChatAsLatex,
