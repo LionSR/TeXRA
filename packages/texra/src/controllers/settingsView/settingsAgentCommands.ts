@@ -13,6 +13,7 @@ import {
   AgentDirectories,
   isStrictlyWithin,
   readCustomAgentDir,
+  registerCustomAgentRoot,
   type WorkspaceRoots,
 } from '@texra-ai/harness';
 import { entryTypeIn, readNormalizedFile } from '@texra-ai/harness/node';
@@ -29,7 +30,6 @@ import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 import { SettingsAgentCatalogController } from '@texra/controllers/settingsView/SettingsAgentCatalogController';
 import type { SettingsViewInboundHandlerRegistry } from '@texra/controllers/settingsView/settingsViewDispatch';
 import { allSettledVoid } from '@texra/utils/core/allSettledVoid';
-import { registerCustomAgentRoot } from '@tools/agentCatalogFollower';
 import type { ProcessServices } from '@texra-ai/harness';
 
 import type {

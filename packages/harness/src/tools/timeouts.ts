@@ -90,7 +90,9 @@ export const withRequestTimeout = Effect.fn('timeouts.withRequestTimeout')(
     Effect.scoped(request).pipe(Effect.timeout(Duration.millis(timeoutMs))),
 );
 
-interface RetryTransientFetchOptions<E> {
+/** How {@link retryTransientFetch} retries: its retry count, base backoff,
+ *  per-attempt deadline and transient-failure observer. */
+export interface RetryTransientFetchOptions<E> {
   /** Retries after the first attempt. */
   readonly retries: number;
   /**

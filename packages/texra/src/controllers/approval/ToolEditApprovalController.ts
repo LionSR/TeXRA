@@ -55,7 +55,7 @@ import {
   type BuildDisplayFn,
   type LatexPreviewEntry,
 } from '@texra/tools/latex/latexPreview';
-import type { ToolEditApprovalRequest } from '@tools/approval/toolEditApproval';
+import type { ToolEditApprovalRequest } from '@texra-ai/harness';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 const CHANNEL = 'ToolEditApproval';
