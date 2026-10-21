@@ -94,7 +94,8 @@ function isLocalDirectory(
 }
 
 /**
- * Create `directory` and answer the database path inside it.
+ * Create `directory` (with `create`; without, it must exist) and answer the
+ * database path inside it.
  *
  * C1: reject remote or unclassified storage before SQLite opens. The native
  * Windows realpath uses GetFinalPathNameByHandleW, resolving junctions and
@@ -104,10 +105,11 @@ function isLocalDirectory(
 export const localDatabasePath = Effect.fn('localDatabasePath')(function* (
   directory: string,
   fileName: string,
+  create: boolean,
 ): Effect.fn.Return<string, Error | PlatformError, ChildProcessSpawner> {
   const resolved = yield* Effect.try({
     try: () => {
-      mkdirSync(directory, { recursive: true });
+      if (create) mkdirSync(directory, { recursive: true });
       return realpathSync.native(directory);
     },
     catch: ensureError,
