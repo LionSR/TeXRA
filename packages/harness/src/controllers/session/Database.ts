@@ -133,13 +133,10 @@ const INSERT_REF = 'INSERT INTO event_blob ("commit", digest) VALUES (?, ?)';
 const UPSERT_KIND = `INSERT INTO stored_kind (type, version) VALUES (?, ?)
   ON CONFLICT(type) DO UPDATE
   SET version = max(stored_kind.version, excluded.version)`;
-/**
- * The listing: each aggregate's `listing_entry` rows, each run's spend
- * (`run_usage`, on its newest priced row's envelope) and its latest model
- * switch, in commit order. Primary-key joins only.
- */
-/** The listed rows, driven from `listing_entry` (`CROSS JOIN` holds the
- *  order: a store is never `ANALYZE`d), each by its event's primary key. */
+/** The listing (each aggregate's `listing_entry` rows, each run's spend on
+ *  its newest priced row's envelope and its latest model switch, in commit
+ *  order), driven from `listing_entry` (`CROSS JOIN` holds the order: a
+ *  store is never `ANALYZE`d), each by its event's primary key. */
 const LISTED = `listing_entry l CROSS JOIN event e ON e."commit" = l."commit"
   ${EVENT_JOINS}`;
 
@@ -207,7 +204,7 @@ const displayUnion = (where: string, order: string, arm?: string) =>
     ${arm === undefined ? '' : `UNION ALL ${arm}`}
   ) WHERE ${where} ORDER BY ${order}`;
 export const databaseLayer = (
-  mode: 'persistent' | 'ephemeral',
+  mode: 'persistent' | 'ephemeral' | 'existing',
 ): Layer.Layer<
   Database,
   DatabaseOpenFailed,
@@ -226,25 +223,30 @@ export const databaseLayer = (
           Effect.provideService(ChildProcessSpawner, spawner),
         );
       const path =
-        mode === 'persistent'
-          ? join(roots.storage, SESSION_DATABASE_FILE)
-          : ':memory:';
+        mode === 'ephemeral'
+          ? ':memory:'
+          : join(roots.storage, SESSION_DATABASE_FILE);
       const openFailed = (cause: unknown): DatabaseOpenFailed =>
         new DatabaseOpenFailed({ path, cause });
+      const create = mode !== 'existing';
       const filename =
         mode === 'ephemeral'
           ? ':memory:'
-          : yield* localDatabasePath(roots.storage, SESSION_DATABASE_FILE).pipe(
-              Effect.mapError(openFailed),
-            );
+          : yield* localDatabasePath(
+              roots.storage,
+              SESSION_DATABASE_FILE,
+              create,
+            ).pipe(Effect.mapError(openFailed));
       const { sql, movedAside } = yield* openStore(
         SqliteClient.make({
-          filename,
+          filename: create
+            ? filename
+            : `file:${filename.replace(/[%?#]/g, encodeURIComponent)}?mode=rw`,
           disableWAL: mode === 'ephemeral',
           busyTimeout: '5 seconds',
         }),
         SqliteClient.make({ filename, readonly: true, disableWAL: true }),
-        mode,
+        mode === 'ephemeral' ? mode : 'persistent',
         path,
         filename,
       ).pipe(mapDatabaseFailure(openFailed));
@@ -324,8 +326,7 @@ export const databaseLayer = (
       const collectBlobs = `DELETE FROM blob
         WHERE digest IN (SELECT value FROM json_each(?))
           AND NOT EXISTS (SELECT 1 FROM event_blob r WHERE r.digest = blob.digest)`;
-      // The display types in a commit range, plus projected rows; the range
-      // binds once.
+      // The display types in a commit range, plus projected rows.
       const display = displayUnion(
         '"commit" > ? AND "commit" <= ?',
         '"commit"',
@@ -618,8 +619,7 @@ export const databaseLayer = (
           const target = aggregateTarget(draft.aggregateId);
           const columns = aggregateColumns(draft.aggregateId);
           if (edges.borrowsClaim) {
-            // A plugin's own aggregate borrows its claim for this
-            // transaction only.
+            // A plugin's own aggregate borrows its claim for this transaction only.
             yield* exec(claim, [identity.ownerId, ...columns, null]);
           }
           if (edges.reparent != null) {

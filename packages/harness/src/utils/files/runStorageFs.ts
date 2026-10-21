@@ -150,16 +150,21 @@ export const createSymlink = Effect.fn('runStorage.createSymlink')(function* (
   const fs = yield* FileSystem.FileSystem;
   yield* ensureParentDir(destination);
   yield* fs.symlink(sourceAbsolute, destination).pipe(
-    // One recovery, exactly as the one `catch` it replaces: an existing
-    // destination is replaced (the anti-clobber rule lives with the callers
-    // that decide what may be replaced, never here), a host that cannot make
-    // links copies instead, and a second failure of either propagates rather
-    // than re-entering this branch.
+    // One recovery: an existing link is replaced, while any other entry (a
+    // file the run wrote) fails `AlreadyExists` and stays; a host that cannot
+    // make links copies instead, and a second failure of either propagates
+    // rather than re-entering this branch.
     Effect.catch((error) => {
       if (error.reason._tag === 'AlreadyExists') {
-        return fs
-          .remove(destination, { recursive: true, force: true })
-          .pipe(Effect.andThen(fs.symlink(sourceAbsolute, destination)));
+        return entryTypeIn(fs, destination).pipe(
+          Effect.flatMap((type) =>
+            type === 'SymbolicLink'
+              ? fs
+                  .remove(destination)
+                  .pipe(Effect.andThen(fs.symlink(sourceAbsolute, destination)))
+              : Effect.fail(error),
+          ),
+        );
       }
       const code = (error.reason.cause as NodeJS.ErrnoException | undefined)
         ?.code;

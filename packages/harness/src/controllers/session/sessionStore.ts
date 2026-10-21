@@ -15,7 +15,6 @@ import {
   Deferred,
   Effect,
   Option,
-  RcMap,
   Scope,
   Stream,
   SubscriptionRef,
@@ -44,7 +43,6 @@ import {
 } from '@shared/session/database';
 import {
   ProcessIdentity,
-  PublisherJob,
   afterCommit,
   SessionEvents,
   type Append,
@@ -144,26 +142,19 @@ function settlement(
 }
 
 /**
- * This process's holds on run claims, counted: the first holder proves any
- * prior owner dead and takes the claim (or finds it already this
- * process's), later holders share it, and the claim's disposition is
- * decided when the last holder's scope closes: given back to how the first
- * found it, or released when a hold `ends` it. The map closes with the
- * session, deciding whatever is still held.
- *
- * A hold inside a publisher job is the job's own, never the map's: the map's
- * lookup could wait on the connection the job holds, and its release would
- * run in the job's transaction after it ended. It is taken in the job's
- * transaction and decided by the scope that closes it, in that closer's
- * transaction (`Scope.addFinalizer` keeps no context).
+ * This process's holds on run claims: one count per run, whoever holds (a
+ * publisher job or not). Each holder is counted before it takes, in its own
+ * transaction (a job's, inside it): the first proves any prior owner dead
+ * and takes the claim, later ones find it this process's. Only the last to
+ * go decides the claim (`Scope.addFinalizer` keeps no context: in its
+ * closer's transaction): given back to how the holders found it, or
+ * released when a hold `ends` it. The session's close decides whatever is
+ * still held.
  */
 const claimHolds = (database: DatabaseShape) => {
-  const take = (id: AggregateId) =>
-    Effect.map(database.acquireClaims([id]), (ids) => ({
-      taken: ids.length > 0,
-      ended: false,
-    }));
-  const decide = (id: AggregateId, hold: { taken: boolean; ended: boolean }) =>
+  type Hold = { count: number; taken: boolean; ended: boolean };
+  const holds = new Map<AggregateId, Hold>();
+  const decide = (id: AggregateId, hold: Hold) =>
     hold.taken || hold.ended
       ? database
           .releaseClaims([id])
@@ -175,31 +166,37 @@ const claimHolds = (database: DatabaseShape) => {
             ),
           )
       : Effect.void;
-  return Effect.map(
-    RcMap.make({
-      lookup: (id: AggregateId) =>
-        Effect.acquireRelease(take(id), (hold) => decide(id, hold)),
-    }),
-    (claims): SessionLog['hold'] =>
-      (runId, options = {}) => {
-        const id = qualifyAggregateId('run', runId);
-        const held = (hold: { ended: boolean }) => {
-          if (options.ends === true) hold.ended = true;
-        };
-        return Effect.flatMap(PublisherJob, (job) =>
-          job !== null
-            ? Effect.flatMap(take(id), (hold) => {
-                held(hold);
-                return Effect.flatMap(Effect.scope, (scope) =>
-                  Scope.addFinalizer(
-                    scope,
-                    Effect.suspend(() => decide(id, hold)),
-                  ),
-                );
-              })
-            : Effect.map(RcMap.get(claims, id), held),
-        );
-      },
+  const letGo = (id: AggregateId, hold: Hold) =>
+    Effect.suspend(() => {
+      hold.count -= 1;
+      if (hold.count > 0 || holds.get(id) !== hold) return Effect.void;
+      holds.delete(id);
+      return decide(id, hold);
+    });
+  const close = Effect.suspend(() => {
+    const held = [...holds];
+    holds.clear();
+    return Effect.forEach(held, ([id, hold]) => decide(id, hold), {
+      discard: true,
+    });
+  });
+  const hold: SessionLog['hold'] = (runId, options = {}) => {
+    const id = qualifyAggregateId('run', runId);
+    return Effect.uninterruptibleMask((restore) =>
+      Effect.gen(function* () {
+        const held = holds.get(id) ?? { count: 0, taken: false, ended: false };
+        holds.set(id, held);
+        held.count += 1;
+        yield* Effect.addFinalizer(() => letGo(id, held));
+        if ((yield* restore(database.acquireClaims([id]))).length > 0)
+          held.taken = true;
+        if (options.ends === true) held.ended = true;
+      }),
+    );
+  };
+  return Effect.as(
+    Effect.addFinalizer(() => close),
+    hold,
   );
 };
 
