@@ -19,11 +19,14 @@
  */
 import type { RunId, SessionEventDraft } from '@shared/schemas';
 
-/** One session arm as the trace carries it; distributive over `T`. A row
- *  the run's state is folded from is never a trace arm: the trace is the
+/** One session arm as the trace carries it, distributive over `T`: an
+ *  {@link AgentEvent} arm, or the `run.end` a {@link ResultEvent} names. A
+ *  row the run's state is folded from is never one: the trace is the
  *  display door, and those rows commit through the run's cell
  *  (`runEventDraft`, typed to an unfolded draft, refuses any other). */
-export type TraceArm<T extends SessionEventDraft['type']> = T extends unknown
+export type TraceArm<
+  T extends Exclude<AgentEvent, StreamChunkEvent>['type'] | 'run.end',
+> = T extends unknown
   ? Omit<Extract<SessionEventDraft, { type: T }>, 'aggregateId'>
   : never;
 
