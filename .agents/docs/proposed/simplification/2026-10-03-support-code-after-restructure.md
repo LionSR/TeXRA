@@ -104,8 +104,10 @@ load.
 
 Checked on 2026-10-21: the premise that TeXRA's spawns use the extended
 PATH does not hold for these two. `runHook` (`pluginHooks.ts`) spawns with
-`extendEnv: false` and `PATH: process.env.PATH`, and `mcpServer.ts`
-(`connect`) spawns with `extendEnv: false` over `environment` (the process
+`extendEnv: false` and `PATH: process.env.PATH ?? '/usr/bin:/bin'`;
+`pinHook` resolves over `process.env.PATH ?? ''`, so with PATH unset the
+hook is left dynamic rather than pinned against that fallback.
+`mcpServer.ts` (`connect`) spawns with `extendEnv: false` over `environment` (the process
 environment with the project's `.env` over it). Neither extends PATH, so the
 hook pin matches what the hook runs, and the server pin is the odd one out.
 The extended PATH only appends directories, so the two differ only for a
