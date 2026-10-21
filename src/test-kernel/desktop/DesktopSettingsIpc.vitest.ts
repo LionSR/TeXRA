@@ -567,6 +567,13 @@ describe('desktop settings IPC', () => {
   );
 
   it('posts the Tools and LaTeX pages and approval settings on readiness', async () => {
+    // The GitHub token status falls back to GH_TOKEN/GITHUB_TOKEN; a blank one
+    // counts as unset, so 'none' below holds whatever the shell exports.
+    vi.stubEnv('GH_TOKEN', '');
+    vi.stubEnv('GITHUB_TOKEN', '');
+    onTestFinished(() => {
+      vi.unstubAllEnvs();
+    });
     const repoState = new FakeStateStore({
       [CodexStateKey.SANDBOX_MODE]: 'danger-full-access',
     });
