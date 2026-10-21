@@ -7,7 +7,6 @@ import { CliUsageError, type CliContext } from '@cli/runtime/cliContext';
 import { selectCliRunnableModel } from '@cli/runtime/modelAccess';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
-import { FakeConfigProvider } from '@test/support/FakePlatform';
 import { hostStores, installPlatform } from '@test/support/setupPlatform';
 
 const mocks = vi.hoisted(() => ({
@@ -43,10 +42,7 @@ function makeContext(partial: Partial<CliContext> = {}): CliContext {
 /** Installs a host whose config carries `texra.run.model` — the tier
  *  `selectCliRunModel` resolves through the workspace roots. */
 function withRunModel(model: string): Promise<void> {
-  return installPlatform(
-    {},
-    { config: new FakeConfigProvider({ 'texra.run': { model } }) },
-  );
+  return installPlatform({ config: { 'texra.run': { model } } });
 }
 
 /**
