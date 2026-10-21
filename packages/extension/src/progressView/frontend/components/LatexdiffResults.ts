@@ -73,7 +73,9 @@ export class LatexdiffResults extends LitElement {
         flex-wrap: wrap;
       }
 
-      .file-link {
+      .file-link.btn-ghost {
+        flex-shrink: 1;
+        min-width: 0;
         overflow-wrap: anywhere;
       }
       .file-link::part(base) {

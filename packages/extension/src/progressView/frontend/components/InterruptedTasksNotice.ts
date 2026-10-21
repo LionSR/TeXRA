@@ -68,6 +68,14 @@ export class InterruptedTasksNotice extends LitElement {
         gap: var(--wa-space-3xs) var(--wa-space-2xs);
         min-width: 0;
       }
+      .task.btn-ghost {
+        flex-shrink: 1;
+        min-width: 0;
+        text-align: start;
+      }
+      .task::part(base) {
+        white-space: normal;
+      }
       .meta,
       .blocked {
         font-size: var(--font-size-sm);
@@ -106,7 +114,7 @@ export class InterruptedTasksNotice extends LitElement {
     const fix = task.blocked && resumeBlockerFix(task.blocked);
     return html`<li>
       <wa-button
-        class="btn-ghost is-link"
+        class="task btn-ghost is-link"
         appearance="plain"
         size="s"
         @click=${() =>
