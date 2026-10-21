@@ -291,7 +291,7 @@ store commits it. Live trace chunks are transient; they are not recovery input.
 The repository's crash-conformance suite checks the following contracts: it
 cuts a real SQLite store back to each commit point of a run, as a process
 killed there would leave it, then reopens the store and resumes the run,
-under both the harness built-ins and the TeXRA app's plugins:
+under both the harness built-ins and a full app's plugins:
 
 - **I1** Recovery reaches the clean run's outcome: its committed answers,
   tool results, owned children, and context edits are preserved.

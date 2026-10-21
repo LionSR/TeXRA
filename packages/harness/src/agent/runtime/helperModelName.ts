@@ -61,7 +61,7 @@ export const applyHelperModelPreference = Effect.fn(
 
   const helperModelConfig = modelConfig(helperModel);
 
-  // The agent (e.g. latexFixer) needs its tools, so do not assign a helper
+  // The agent needs its tools, so do not assign a helper
   // model that does not declare function calling — not only one that
   // explicitly sets the capability to false.
   if (!helperModelConfig?.capabilities.supportsFunctionCalling) {
