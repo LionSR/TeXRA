@@ -288,6 +288,9 @@ first one is released is fine.
 
 ## Durable invariants
 
+The full protocol, with what each commit point guarantees, is specified in
+[`docs/spec.md`](./docs/spec.md).
+
 A run's next step comes from its committed history. The session publishes a
 whole batch through one inbox, and the run fold checks the batch before the
 store commits it. Live trace chunks are transient; they are not recovery input.
