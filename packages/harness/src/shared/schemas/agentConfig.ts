@@ -11,23 +11,22 @@ import { JsonValueSchema } from './jsonValue';
 export const DEFAULT_WORKFLOW_AGENT = 'correct';
 
 /**
- * CLI-only fields, grouped so the CLI-specific footprint of `AgentConfig`
- * is self-evident at the schema level. Absent for extension/desktop-launched
- * runs.
+ * Fields a command-line launch sets, grouped so their footprint on
+ * `AgentConfig` is self-evident at the schema level. Absent for runs a host
+ * launches from a view.
  */
 const CliOutputFieldsSchema = z.object({
-  /** Workspace copy target for `texra run --output`, preserved for resume. */
+  /** Workspace file the run's output is copied to, kept for resume. */
   outputFile: z.string().nullish(),
-  /** Workspace copy directory for `texra run --output-dir`. */
+  /** Workspace directory the run's output files are copied to. */
   outputDirectory: z.string().nullish(),
   /** Relative artifacts expected under {@link CliOutputFieldsSchema.outputDirectory}. */
   expectedOutputFiles: z.array(z.string()).nullish(),
   /**
-   * Team preset id this run was launched from (`texra team run
-   * <preset>` in the CLI; the main-view launcher also sets it for team runs so
-   * resume retains team identity). Used so a team run — whose root is an
-   * orchestrator agent — is not inferred as the default agent for a plain
-   * `texra chat` session. Preserved across resume.
+   * Team preset id this run was launched from (a CLI team command, or a
+   * view's team launcher, so resume retains team identity). Used so a team
+   * run, whose root is an orchestrator agent, is not inferred as the default
+   * agent for a plain chat session. Preserved across resume.
    */
   teamId: z.string().nullish(),
 });
