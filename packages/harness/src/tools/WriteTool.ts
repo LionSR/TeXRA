@@ -28,8 +28,8 @@ type WriteInput = z.infer<typeof WriteInputSchema>;
 
 /**
  * What an app does to the content `write_file` is given before it proposes
- * it, by path, under the call's workspace configuration: TeXRA's `.tex`
- * replacements. The harness's `write_file` writes what it is given.
+ * it, by path, under the call's workspace configuration (text replacements
+ * for a file type, say). The harness's `write_file` writes what it is given.
  */
 export type WriteFilter = (
   path: string,

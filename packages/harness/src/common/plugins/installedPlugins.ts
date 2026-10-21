@@ -459,7 +459,7 @@ function updatePlugins(names: readonly string[], env: PluginEnv) {
  * process opened.
  */
 export const InstalledPlugins = Object.freeze({
-  /** The components a plugin can carry that TeXRA does not load. */
+  /** The components a plugin can carry that the harness does not load. */
   unloadedComponents: UNLOADED_COMPONENT_LABELS,
   /** Parse a source as a user types it, refused before anything runs. */
   origin: parsePluginOrigin,

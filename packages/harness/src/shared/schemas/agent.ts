@@ -4,7 +4,7 @@ import { ToolDefinitionSchema, type ToolDefinition } from './toolDefinition';
 
 export const AGENT_SOURCE = {
   CUSTOM: 'custom',
-  /** Shipped with TeXRA: the bundled agent directories and those of the
+  /** Shipped with the host: the bundled agent directories and those of the
    *  first-party plugins that are on. */
   BUILT_IN: 'builtIn',
   /** An installed Claude Code or Codex plugin's agent, named `<plugin>:<name>`. */

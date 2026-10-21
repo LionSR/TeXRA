@@ -34,7 +34,7 @@ const SCHEMA_VERSION = 101;
 /** The first stamp a released build wrote. Fixed for good: a store stamped
  *  below it is pre-1.0 and moved aside; one at or above it is kept. */
 const BASELINE_1_0 = 101;
-/** `TeXR`: a TeXRA store, told apart from a foreign SQLite file before
+/** `TeXR`: a harness store, told apart from a foreign SQLite file before
  *  anything in it is touched. */
 const APPLICATION_ID = 0x54655852;
 
@@ -167,7 +167,7 @@ const userTables = (sql: Sql) =>
     )
     .pipe(Effect.map((rows) => rows.map((row) => row.name)));
 
-/** A pre-1.0 TeXRA store's mark: `event`, `event_sequence` keyed by `aggregate_id`. */
+/** A pre-1.0 store's mark: `event`, `event_sequence` keyed by `aggregate_id`. */
 const PRE1_SIGNATURE = `SELECT count(*) AS keyed FROM pragma_table_info('event') a,
   pragma_table_info('event_sequence') b
   WHERE a.name = 'aggregate_id' AND b.name = 'aggregate_id'`;
@@ -190,7 +190,7 @@ const incrementalVacuum = Effect.fnUntraced(function* (sql: Sql) {
  * Refuse a file this build must not touch, answering whether it is a store
  * written before 1.0, which the caller moves aside (a released store never
  * is). Refused: another application's file (its `application_id`, a 1.0
- * stamp without TeXRA's, or tables without `PRE1_SIGNATURE` below the
+ * stamp without ours, or tables without `PRE1_SIGNATURE` below the
  * baseline), a newer schema, and a released one this build has no step from.
  * Run read-only before the store's own connection enables WAL, and again.
  */

@@ -2,9 +2,9 @@
 // plugin manifest (`.claude-plugin/plugin.json`) and the Codex plugin
 // manifest (`.codex-plugin/plugin.json`), with the conventional component
 // locations beside them (`skills/`, `commands/`, `agents/`, `.mcp.json`).
-// TeXRA defines no manifest of its own. Each file is validated with Zod here,
-// at the boundary; fields TeXRA does not read are stripped. The marketplace
-// files that list plugins are read by `./marketplace`.
+// The harness defines no manifest of its own. Each file is validated with Zod
+// here, at the boundary; fields the harness does not read are stripped. The
+// marketplace files that list plugins are read by `./marketplace`.
 
 // Node imports
 import * as path from 'node:path';
@@ -50,8 +50,8 @@ export const failPlugin = (message: string) =>
 export const ComponentPathsSchema = z.union([z.string(), z.array(z.string())]);
 
 /**
- * The manifest fields TeXRA reads. The Claude Code and Codex manifests agree
- * on these, so one schema reads both. `mcpServers` is a path, several, or
+ * The manifest fields the harness reads. The Claude Code and Codex manifests
+ * agree on these, so one schema reads both. `mcpServers` is a path, several, or
  * the servers inline; the fields after it are read only to classify them.
  */
 const PluginManifestSchema = z.object({
@@ -82,20 +82,20 @@ export const PLUGIN_MANIFEST_FILES = [
 const McpFileSchema = z.record(z.string(), z.unknown());
 
 /**
- * Components that run code TeXRA does not run yet: LSP servers. A plugin
- * with one is refused. Hooks run out of process (`./pluginHooks`).
+ * Components that run code the harness does not run yet: LSP servers. A
+ * plugin with one is refused. Hooks run out of process (`./pluginHooks`).
  */
 const CODE_COMPONENTS = [
   { label: 'LSP servers', field: 'lspServers', files: ['.lsp.json'] },
 ] as const;
 
-/** Data components TeXRA does not load. They are reported, never read. */
+/** Data components the harness does not load. They are reported, never read. */
 const IGNORED_COMPONENTS = [
   { label: 'output styles', field: 'outputStyles', files: ['output-styles'] },
   { label: 'apps', field: 'apps', files: ['.app.json'] },
 ] as const;
 
-/** Every component label a plugin can carry that TeXRA does not load. */
+/** Every component label a plugin can carry that the harness does not load. */
 export const UNLOADED_COMPONENT_LABELS = Object.freeze(
   [...CODE_COMPONENTS, ...IGNORED_COMPONENTS].map(
     (component) => component.label,
@@ -190,15 +190,15 @@ export interface ResolvedPlugin {
   /** Its stdio MCP servers, `${CLAUDE_PLUGIN_ROOT}` expanded, each run in
    *  the plugin directory under the name `plugin_<plugin>_<server>`. */
   readonly mcpServers: readonly McpServerConfig[];
-  /** Its command hooks TeXRA runs, and one line for each configured hook
-   *  or event it does not run. */
+  /** Its command hooks the harness runs, and one line for each configured
+   *  hook or event it does not run. */
   readonly hooks: {
     readonly hooks: readonly ConfiguredHook[];
     readonly unsupported: readonly string[];
   };
-  /** Labels of the components that run code TeXRA refuses (LSP servers). */
+  /** Labels of the code components the harness refuses (LSP servers). */
   readonly code: readonly string[];
-  /** Labels of the data components TeXRA does not load. */
+  /** Labels of the data components the harness does not load. */
   readonly ignored: readonly string[];
   /** MCP server entries that were skipped, and why. */
   readonly warnings: readonly string[];
@@ -339,8 +339,8 @@ function hooksOf(dir: string, name: string, manifests: PluginManifest[]) {
     );
     const hooks: ConfiguredHook[] = [];
     const unsupported: string[] = [];
-    // Handlers whose `if` TeXRA does not evaluate: they run on every call
-    // their matcher matches, said once at debug level.
+    // Handlers whose `if` the harness does not evaluate: they run on every
+    // call their matcher matches, said once at debug level.
     const unevaluated: string[] = [];
     const add = (source: string, config: z.infer<typeof HooksConfigSchema>) => {
       const found = configuredHooks(source, config);
@@ -416,7 +416,7 @@ function presentComponents(
 /**
  * Read the plugin in `dir`: its skill roots (the conventional `skills/`
  * directory when present plus every declared path), command and agent files,
- * MCP servers, and the components it carries that TeXRA does not load.
+ * MCP servers, and the components it carries that the harness does not load.
  * `fallback` stands in for a manifest when the directory has none: the
  * marketplace entry, as a non-strict Claude Code marketplace allows, or on a
  * reread the plugin's own record.

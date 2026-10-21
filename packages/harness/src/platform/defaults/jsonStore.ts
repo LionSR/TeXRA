@@ -48,7 +48,7 @@ interface JsonStoreOptions {
    * Serve other writers' changes: every read first compares the file's
    * inode, mtime and size with the version it holds (about a microsecond)
    * and re-reads the file when they differ. A long-lived process that other
-   * processes configure (the TeXRA service) opens its stores this way. A
+   * processes configure (a background service) opens its stores this way. A
    * changed file it cannot read keeps the last view and is logged as a
    * warning, once per version of the file.
    */

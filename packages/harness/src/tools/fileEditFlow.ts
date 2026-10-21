@@ -175,7 +175,7 @@ export function replaceLiteralMatches({
     );
   }
 
-  // A function replacer inserts its result verbatim: dollar patterns in LaTeX
+  // A function replacer inserts its result verbatim: dollar patterns in prose
   // or code are never interpreted.
   const verbatim = (): string => replacement;
   return {

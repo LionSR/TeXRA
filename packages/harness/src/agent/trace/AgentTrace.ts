@@ -5,7 +5,7 @@
  * reaches the sinks the trace was built with ({@link AgentTraceSink}). Every other method on this interface is sugar
  * over `emit()` so the trace channel remains a single source of truth.
  *
- * TeXRA-specific helpers (`logSdkError`/`logProgressStatus`/
+ * App-specific helpers (`logSdkError`/`logProgressStatus`/
  * `logUserMessage`/etc.) are plain functions in `helpers.ts` and
  * `toolUseHelpers.ts` that operate on this interface — there is no host
  * subtype. SDK consumers program directly against `AgentTrace`.
@@ -75,7 +75,7 @@ export interface LogOptions {
 
 /**
  * Agent-general SDK surface. Every method ultimately reduces to `emit()` so
- * the trace channel is a single source of truth. TeXRA-specific helpers are
+ * the trace channel is a single source of truth. App-specific helpers are
  * plain functions over this interface (see `helpers.ts` / `toolUseHelpers.ts`).
  */
 export interface AgentTrace {

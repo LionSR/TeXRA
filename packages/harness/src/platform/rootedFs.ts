@@ -26,7 +26,7 @@ export class WorkspaceFs extends Context.Service<
   RootedFileSystem
 >()('@texra-ai/harness/platform/WorkspaceFs') {}
 
-/** The session's own storage root (`~/.texra/...` by default). */
+/** The session's own storage root (under the process's storage directory). */
 export class StorageFs extends Context.Service<StorageFs, RootedFileSystem>()(
   '@texra-ai/harness/platform/StorageFs',
 ) {}

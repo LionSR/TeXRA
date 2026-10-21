@@ -12,7 +12,7 @@
  *
  * Request failures are not defined here. A `session.request` answers with the
  * runtime's own `RequestError` union (`@shared/session/requestErrors`), the
- * same values every TeXRA host reads, so the package adds no second
+ * same values every host reads, so the package adds no second
  * vocabulary for them.
  */
 import { Data } from 'effect';

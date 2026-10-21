@@ -5,7 +5,7 @@
  * other run the refusal is one of:
  *
  * - `held_elsewhere`: its claim is held by an owner that is alive or cannot
- *   be proven dead (another TeXRA process);
+ *   be proven dead (another process);
  * - `finished`: `deriveResumability` finds no point to continue from;
  * - `earlier_build`: its rows were written by an earlier build.
  *

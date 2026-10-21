@@ -8,9 +8,9 @@
  * (`{ ...output, outcome, cost }`), unless `background` detaches it; called
  * directly it detaches, as a delegation always has, except in a one-shot
  * run, which waits. The script's `agent` calls share one approval request
- * showing its source (Q5); a direct call proposes itself. A completed
+ * showing its source; a direct call proposes itself. A completed
  * awaited call is reused by a later call with the same key in the same run
- * or a background script run of it (Q2), and a call cut short finds the
+ * or a background script run of it, and a call cut short finds the
  * child its attempt launched
  * (`agentChild.ts`).
  */
@@ -265,7 +265,7 @@ const fingerprint = Effect.fn('agent.fingerprint')(function* (
 });
 
 /**
- * The runs whose completed calls a call may reuse (Q2): the run that issued
+ * The runs whose completed calls a call may reuse: the run that issued
  * the `script` call, and the background script runs it launched. A call of
  * a background script's run reaches its parent and its siblings this way.
  */

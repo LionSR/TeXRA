@@ -23,7 +23,7 @@ import type { InboxItem, SendOptions } from './Inbox';
  *   would claim the run ended normally.
  * - `read_failed`: the run's claim or state could not be read just now
  *   (a busy or failing store), which says nothing about the run itself.
- * - `owned_elsewhere`: another TeXRA process holds the run.
+ * - `owned_elsewhere`: another process holds the run.
  * - `not_resumable`: the run has no running loop here and the submission was
  *   refused (a terminalized queue, a disposed session, or a message that
  *   is not the user's own).

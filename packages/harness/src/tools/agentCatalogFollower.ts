@@ -18,7 +18,7 @@
  * A host that packages a catalog (its agent directories name a resources
  * root) or names a custom directory of its own (an embedder's) gets the
  * catalog. The CLI entries that run no agents, and must create nothing under
- * a possibly read-only storage root (`texra clone`), get none. As it is
+ * a possibly read-only storage root, get none. As it is
  * built, before its first load, it registers the tool plugins' agent
  * directories under the resources root (`<resources>/plugins/<id>/agents`),
  * so no load or reload scans without them.
@@ -237,7 +237,7 @@ export const agentCatalogFollower = Layer.effectDiscard(
       Effect.forkScoped,
     );
     // The team a workspace runs (`apply_team`, the settings view), written by
-    // this process or another sharing the store, a `texra serve` task's
+    // this process or another sharing the store, a background service task's
     // among them: every agent list here repaints. The first element is the
     // subscription itself, not a change.
     yield* appState.changes([GlobalStateKey.ONBOARDING_DEFAULT_TEAM_ID]).pipe(

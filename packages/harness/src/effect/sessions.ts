@@ -108,19 +108,19 @@ export type ApprovalHandler = (
  *  only by the open that builds the session. */
 export interface OpenOptions {
   /** Keep the session's history in the root's SQLite store (under
-   *  `roots.storage`, the store every TeXRA host keeps), so a later process
+   *  `roots.storage`, the store every host keeps), so a later process
    *  reopens it and resumes its runs. Absent, the store is in memory and
    *  ends with the session. */
   readonly persistent?: boolean;
   /**
-   * The opener is a TeXRA host, whose surfaces answer the runs' requests
-   * from the view (a `request.decide`), attached or not; absent, nobody can
-   * answer until a host that does attaches ({@link Session.attach}), so the
-   * session's policy denies every request. A window (the TUI, desktop, the
-   * extension, the service) sets `interruptedTasks`: it resumes a task
-   * whose resume was blocked once what it needs is back, and with `offer`
-   * also lists at open, or under `texra.resumeOnOpen: auto` continues, the
-   * tasks a closed or crashed TeXRA left interrupted.
+   * The opener is an interactive host, whose surfaces answer the runs'
+   * requests from the view (a `request.decide`), attached or not; absent,
+   * nobody can answer until a host that does attaches
+   * ({@link Session.attach}), so the session's policy denies every request.
+   * A window sets `interruptedTasks`: it resumes a task whose resume was
+   * blocked once what it needs is back, and with `offer` also lists at open,
+   * or under `texra.resumeOnOpen: auto` continues, the tasks a closed or
+   * crashed process left interrupted.
    */
   readonly host?: { readonly interruptedTasks?: 'offer' | 'retry' };
 }
@@ -152,7 +152,7 @@ export type StartInput = (
   readonly runId?: RunId;
   /** The chat's previous root: the run starts with the grants it held. */
   readonly continues?: RunId;
-  /** Run on the configured helper model (a host's compile-fix actions). */
+  /** Run on the configured helper model instead of the selected one. */
   readonly helperModel?: boolean;
   /** A quota-exhausted retry offers the user's own API key. */
   readonly ownKeyFallback?: boolean;

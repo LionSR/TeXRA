@@ -222,7 +222,7 @@ export function readDisabledTools(store: StateStore) {
  * (an arm's `writes`), once each and in commit order: a run that changes
  * the workspace past the editor's own write path records it as a fact on
  * its own rows, and every process that folds the run announces it, so a
- * window hears a `texra serve` task's change as it hears its own. The view
+ * window hears a background service task's change as it hears its own. The view
  * only says which runs to look at: a run whose announced fact differs from
  * the last level read, the first level included. The rows themselves are
  * read (`rows`), since the view keeps each kind's latest value only and its

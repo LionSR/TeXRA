@@ -14,8 +14,8 @@
  * results and the Tools dashboard follows them. No UI has to be open for a
  * run to be offered what its workspace can run.
  *
- * Results are keyed by workspace root: the probes read the workspace (the
- * GitHub group asks whether it is a git repository, Zotero reads its
+ * Results are keyed by workspace root: the probes read the workspace (a
+ * group may ask whether it is a git repository, or read the workspace's
  * configuration), so on a multi-project host one workspace's results must
  * not answer for another's.
  */
@@ -172,8 +172,8 @@ export const toolAvailabilityLayer: Layer.Layer<
       Effect.forEach(
         PROBED_PLUGINS,
         // A plugin's probe runs with its own process services while its
-        // layer is up (the Lean plugin's server roster); a probe never
-        // brings a layer up, which could act (Copilot's registers tools).
+        // layer is up (a language server roster, say); a probe never
+        // brings a layer up, which could act (one may register tools).
         (plugin) =>
           Effect.scoped(
             Effect.flatMap(catalog.processServices(plugin.id), (own) =>
@@ -315,7 +315,7 @@ export const toolAvailabilityLayer: Layer.Layer<
 
 /**
  * Run one group's check, status label and detail from one shared probe
- * result. Some groups (Codex, Zotero, GitHub PR) touch async local state, so
+ * result. Some groups touch async local state (a local service, a CLI), so
  * running the callbacks independently can duplicate the same probe work.
  */
 const checkToolGroup = Effect.fn('checkToolGroup')(function* (

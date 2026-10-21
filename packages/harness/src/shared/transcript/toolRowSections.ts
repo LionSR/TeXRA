@@ -88,8 +88,8 @@ function outputEdits<T>(output: unknown): T[] | undefined {
 
 /**
  * The old/new pair an edit-like call carries. No schema spans every producer:
- * TeXRA's `edit_file` writes `old_str`/`new_str`, a delegated Claude `Edit`
- * writes `old_string`/`new_string`, and `MultiEdit` nests an array of those,
+ * the harness's `edit_file` writes `old_str`/`new_str`, a delegated Claude
+ * `Edit` writes `old_string`/`new_string`, and `MultiEdit` nests an array of those,
  * so each candidate is read with explicit guards.
  */
 function editCandidates(
@@ -504,8 +504,8 @@ function buildDefaultSections(ctx: SectionContext): ToolSection[] {
   ];
 }
 
-/** TeXRA's native tools name the target file `path`; a delegated sub-agent's
- *  built-in Read/Write/Edit tools use Anthropic's own `file_path`. */
+/** The harness's native tools name the target file `path`; a delegated
+ *  sub-agent's built-in Read/Write/Edit tools use Anthropic's own `file_path`. */
 export function inputFilePath(input: unknown): string {
   if (!Predicate.isObject(input)) return '';
   return asString(input.path) ?? asString(input.file_path) ?? '';

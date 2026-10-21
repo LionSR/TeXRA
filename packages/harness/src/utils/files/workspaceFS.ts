@@ -75,7 +75,7 @@ export function locateInWorkspace(
   // are valid filename chars and path.normalize would preserve them.
   const relativePath = path.posix.normalize(normalizeFilePath(inputPath));
   // `startsWith('..')` alone also matches a first segment that merely begins
-  // with two dots (`..notes.tex`), which is a file inside the root. The
+  // with two dots (`..notes.md`), which is a file inside the root. The
   // normalized path uses '/' on every platform, so match the '..' segment.
   if (relativePath === '..' || relativePath.startsWith('../')) {
     return { kind: 'external', absolutePath: path.resolve(root, inputPath) };

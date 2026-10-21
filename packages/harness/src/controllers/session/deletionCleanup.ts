@@ -55,8 +55,7 @@ class GeneratedRootRedirected extends Data.TaggedError(
  *
  * This is resolve-then-check, not the handle-confined deletion the retired
  * native addon performed: a root replaced in the window *between* the resolve
- * and the removal is no longer detected. TeXRA 1.0's file-ownership design
- * owns that remaining contract (#12139).
+ * and the removal is no longer detected.
  */
 const removeRunDirectories = (
   fs: FileSystem.FileSystem,

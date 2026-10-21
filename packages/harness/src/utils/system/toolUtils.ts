@@ -3,7 +3,7 @@
  * command (falling back to a common-paths lookup), and the image processor
  * that PDF rasterization and image resizing pick.
  * Which tools an app needs, and how it tells the user to install a missing
- * one, are the app's own table (TeXRA's: `@texra/utils/system/toolChecks`).
+ * one, are the app's own table.
  */
 
 // Third-party imports

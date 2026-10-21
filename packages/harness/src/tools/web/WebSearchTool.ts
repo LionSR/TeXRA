@@ -33,8 +33,7 @@ type WebSearchInput = z.infer<typeof WebSearchInputSchema>;
 /**
  * `RelatedTopics` entries are self-referential (a topic group nests further
  * `Topics`), so the interface is kept and the recursive schema is annotated
- * against it (z.lazy) — matching the house pattern in
- * `packages/texra/src/tools/zotero/bbtClient.ts` (`BbtCollectionChainSchema`).
+ * against it (z.lazy).
  */
 interface DuckDuckGoResult {
   Text?: string | null;

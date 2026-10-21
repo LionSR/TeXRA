@@ -42,7 +42,7 @@ export function getBasename(filePath: string | undefined | null): string {
 }
 
 /**
- * Basename without its final extension (`'paper'` for `'dir/paper.tex'`).
+ * Basename without its final extension (`'notes'` for `'dir/notes.md'`).
  * Dotfiles keep their name (`'.gitignore'` → `'.gitignore'`).
  */
 export function getFileStem(filePath: string | undefined | null): string {

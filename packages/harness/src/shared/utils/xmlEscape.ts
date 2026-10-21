@@ -1,6 +1,6 @@
 /** XML/HTML escaping helpers. Single source of truth for both agent-core
  *  XML emission (e.g. <subagent-result> wrappers) and frontend HTML
- *  interpolation (e.g. processMarkdownContent's LaTeX reference labels),
+ *  interpolation (e.g. labels a markdown renderer writes into HTML),
  *  so both sides import the same function. */
 
 /** Escape for use inside a double-quoted HTML/XML attribute value. */

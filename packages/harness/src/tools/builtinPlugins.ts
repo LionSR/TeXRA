@@ -61,7 +61,7 @@ type _CanonicalDisplayNamesAreBuiltIns = AssertNever<
 >;
 
 /** Files and the shell: every agent needs them. An app passes the filter
- *  `write_file` applies to what it writes (TeXRA's `.tex` replacements). */
+ *  `write_file` applies to what it writes (its own content replacements). */
 export const fileOps = (
   options: { readonly writeFilter?: WriteFilter } = {},
 ): Plugin =>

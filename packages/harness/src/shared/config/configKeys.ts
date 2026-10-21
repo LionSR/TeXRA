@@ -1,5 +1,5 @@
 /**
- * Shared TeXRA configuration key helpers.
+ * Shared configuration key helpers.
  *
  * Hosts store settings as flat `texra.<key>` entries. Callers may pass either
  * spelling to the configuration API; storage always uses the canonical key.

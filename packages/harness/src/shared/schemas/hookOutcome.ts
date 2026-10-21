@@ -6,8 +6,8 @@
  */
 import { z } from 'zod';
 
-/** The hook events TeXRA runs in v1; the protocol module parses the rest of
- *  the reference's events and ignores them. */
+/** The hook events the harness runs in v1; the protocol module parses the
+ *  rest of the reference's events and ignores them. */
 export const SUPPORTED_HOOK_EVENTS = [
   'SessionStart',
   'UserPromptSubmit',

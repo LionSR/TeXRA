@@ -32,8 +32,8 @@ export function isPlainAgentIdentity(
   return identity?.kind === 'agent' && identity.tool === undefined;
 }
 
-/** Whether TeXRA's own loop drives the run, so a resume can continue it: a
- *  native agent's or a background script's. A process or an external CLI
+/** Whether the harness's own loop drives the run, so a resume can continue
+ *  it: a native agent's or a background script's. A process or an external CLI
  *  drives its own run. */
 export function isLoopDriven(identity: RunIdentity): boolean {
   return isPlainAgentIdentity(identity) || identity.kind === 'script';

@@ -166,8 +166,8 @@ export interface RequestDecisionHook {
 }
 
 /**
- * A top-level block a plugin owns in an agent file (TeXRA's documents plugin
- * owns `task:`). The catalog scan checks a file's block against `schema`
+ * A top-level block a plugin owns in an agent file (such as `task:`). The
+ * catalog scan checks a file's block against `schema`
  * and keeps the parsed value on the entry (`AgentEntry.blocks`); a file
  * whose block fails it, or that holds a key no listed plugin owns, is
  * refused like any other invalid definition. An agent with a block is a

@@ -5,7 +5,7 @@ import type { StateReadFailed } from '@platform/interfaces';
  *
  * When the calling session's workspace marks agent commits, these are merged
  * into the environment of every command {@link executeCommand} runs, so any
- * `git commit` carries the configured TeXRA identity. Read at spawn time from
+ * `git commit` carries the configured agent identity. Read at spawn time from
  * the setting slots the caller named on the command options, not from a value
  * applied once for the whole process: a process holding several projects
  * attributes each project's commits by that project's own setting.

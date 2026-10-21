@@ -39,11 +39,11 @@ export function getHelperModelName(stores: SettingsStores) {
 }
 
 /**
- * Helper-model preference for launches that opt in with `preferHelperModel`
- * (a host's compile-fix actions): the root launch runs them on the configured
- * helper model rather than the heavyweight model the user has selected.
- * Every other launch (a direct main-view Run, the CLI, an orchestrator
- * delegation) leaves the flag off and keeps the chosen model.
+ * Helper-model preference for launches that opt in with
+ * `preferHelperModel`: small, quick fix-up actions a host runs on the
+ * configured helper model rather than the heavyweight model the user has
+ * selected. Every other launch (a direct run, an orchestrator delegation)
+ * leaves the flag off and keeps the chosen model.
  *
  * Swap `config`'s model for the configured helper model, or return it unchanged
  * when the helper model already equals it, the helper model can't call

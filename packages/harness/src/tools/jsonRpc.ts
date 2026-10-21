@@ -1,6 +1,6 @@
 /**
  * JSON-RPC 2.0 over a byte stream and a byte sink, in one of two framings:
- * LSP's `Content-Length: <n>\r\n\r\n<json>` (the Lean language server) or
+ * LSP's `Content-Length: <n>\r\n\r\n<json>` (a language server) or
  * one message per line (an MCP server's stdio transport).
  *
  * Inbound bytes run through the frame decoder (`Stream.mapAccumEffect` over a

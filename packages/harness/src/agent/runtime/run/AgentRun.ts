@@ -1,6 +1,6 @@
 /**
  * The per-run service: everything one run owns, provided once at the
- * `executeAgent` boundary for the run's lifetime (injection step 6, Q3). Run
+ * `executeAgent` boundary for the run's lifetime. Run
  * identity and the parent edge, the launch configuration, the resolved tool
  * registry, the trace emitter, the owning session's interaction and retry
  * ports, and the bound llm `Model` in a synchronized cell a mid-run switch

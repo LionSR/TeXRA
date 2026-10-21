@@ -269,7 +269,7 @@ class ServerKey implements Equal.Equal {
 
 /** How long an MCP server no run or step holds stays up for the next: long
  *  enough to read an answer before replying. In the service, a session left
- *  idle closes sooner (`texra serve --idle-timeout`), and a session's close
+ *  idle closes sooner (its configured idle timeout), and a session's close
  *  always stops its servers. */
 const SERVER_IDLE = Duration.minutes(30);
 

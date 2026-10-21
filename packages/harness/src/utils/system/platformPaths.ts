@@ -68,8 +68,8 @@ export function safeHomedir(): string | null {
  * `existsAtAbsolute` throws on a relative path on purpose, so that a
  * mistyped root is never silently dropped. But these roots come from user
  * environment variables, and this runs inside `getExtraDirs()` — on the path
- * of *every* subprocess TeXRA spawns. A throw there is not a loud failure for
- * one directory, it is every command in the session failing with
+ * of *every* subprocess the harness spawns. A throw there is not a loud
+ * failure for one directory, it is every command in the session failing with
  * `Path must be absolute`, which reads to the user as the tool being missing.
  * So a relative value is skipped and reported, never thrown.
  */

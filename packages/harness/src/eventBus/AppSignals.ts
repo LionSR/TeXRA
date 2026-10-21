@@ -59,7 +59,7 @@ export interface AppSignalPayloads {
    * emits for writes from other processes. The finalizer runs on every exit of the write, failure and
    * interruption included, because an interrupted commit may still have
    * landed; the signal means "re-read this key", never "the value changed".
-   * The same stores hold OAuth tokens and Overleaf credentials, so a subscriber filters on `key` and ignores the rest: an
+   * The same stores hold OAuth tokens and other credentials, so a subscriber filters on `key` and ignores the rest: an
    * OAuth refresh must not repaint the profile tab.
    *
    * Consumed by: extension and desktop (an `apiKey.*` change repaints the
@@ -91,7 +91,7 @@ export interface AppSignalPayloads {
    *
    * Emitted, in every process sharing the global store, when the default
    * team changes (`apply_team`, which the setup agent runs mid-conversation,
-   * even in a `texra serve` task; `agentCatalogFollower`); and by the tool
+   * even in a background service task; `agentCatalogFollower`); and by the tool
    * registry (`pluginCatalogLayer`) once it has reloaded the agent catalog
    * after a tool switch or the plugin install record changed, in this
    * process or another.

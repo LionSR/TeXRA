@@ -16,7 +16,7 @@ import type { CredentialStore, SecretsFailed } from '@texra-ai/llm';
  * the failure typed as {@link SecretsFailed} instead of `unknown`, and a
  * credential read is interruptible like the program around it.
  * {@link PlatformSecrets.set} and {@link PlatformSecrets.delete}
- * carry one extra rule, ruled for host-controller study Q2: a credential
+ * carry one extra rule: a credential
  * commit survives cancellation. The uninterruptible region is the commit
  * itself and nothing before it — for the file-backed store it begins once
  * the write lane has been entered, inside `FileSecrets`, so a write still

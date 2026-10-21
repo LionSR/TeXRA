@@ -2,8 +2,8 @@
  * Format-agnostic intermediate representation for chat export.
  *
  * These describe the `ExportNode` that `readCompletedRunConversation`
- * (`@transcript/completedRunArchive`) projects from transcript rows and every
- * format spec (markdown, LaTeX) and text view consumes. The HTML export path uses
+ * projects from transcript rows and every format spec (markdown and the
+ * others) and text view consumes. The HTML export path uses
  * `assembleTrace` instead. They are host-neutral and carry no
  * provider-specific types — the command-layer export package imports these
  * without pulling in `openai/*` or `@google/genai`.

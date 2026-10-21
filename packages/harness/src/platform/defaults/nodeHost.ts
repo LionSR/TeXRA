@@ -1,18 +1,18 @@
 /**
  * Node host composition helpers.
  *
- * All three composition roots (the `texra` CLI runtime, the Electron desktop
- * main process, and the VS Code extension host) open a workspace's roots and
- * register their runtime skill sources the same way. This module owns those
+ * Every Node composition root (a CLI runtime, a desktop main process, an
+ * editor extension host) opens a workspace's roots and registers its
+ * runtime skill sources the same way. This module owns those
  * two steps so the hosts cannot drift; each host still installs its process
  * runtime in its own composition root.
  *
  * This file is a composition helper, not a core platform abstraction: it
  * deliberately reaches "up" into `@agent` and `@skills` for the registration
  * helpers, mirroring what each host's composition root would otherwise inline.
- * Nothing in `@agent` / `@skills` imports it back, so there is no cycle. The
- * direct Lean LSP adapter is not here: each Node root hands its layer to
- * `processLayer`, so the adapter stays out of hosts that only need
+ * Nothing in `@agent` / `@skills` imports it back, so there is no cycle. A
+ * plugin's language server adapter is not here: each Node root hands its
+ * layer to `processLayer`, so the adapter stays out of hosts that only need
  * the composition helpers. The platform literal itself is not here either:
  * every field of it is host-specific, so each root writes its own.
  */

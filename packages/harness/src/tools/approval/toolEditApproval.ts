@@ -48,7 +48,7 @@ export interface ToolEditApprovalRequest extends ToolEditContent {
   readonly sourceTool: string;
   readonly runId?: RunId | null;
   /**
-   * The session's workspace roots, as data: the LaTeX preview of this request
+   * The session's workspace roots, as data: a host's preview of this request
    * writes its temp files under the workspace and reads the diff's settings
    * from these slots, and that preview program runs on the host's own runner
    * rather than inside the tool call that raised the request, so the roots

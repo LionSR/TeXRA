@@ -241,9 +241,9 @@ export class RunFileService {
 
   /**
    * For every mirrored top-level dependency, ensure a symlink also exists at
-   * `<runDir>/<relativeDirectory>/<relativePath>`, so a build run there
-   * (`latexmk`, `latexdiff` with that `cwd`) resolves `\input{foo}` against
-   * sibling symlinks. Idempotent; safe to call every time.
+   * `<runDir>/<relativeDirectory>/<relativePath>`, so a build tool run there
+   * with that `cwd` resolves a relative include of `foo` against sibling
+   * symlinks. Idempotent; safe to call every time.
    *
    * Collisions with the caller's own artifacts are skipped:
    *   - a dependency at runDir root named `options.protectedStem` (any
@@ -318,8 +318,8 @@ export class RunFileService {
 
             // Guard against clobbering a real file already written to the
             // round dir — e.g. a multi-document extracted output at
-            // `r{round}/chapters/ch1.tex` when `chapters/ch1.tex` is also an
-            // `\input` dependency. A stale symlink from a previous call is
+            // `r{round}/chapters/ch1.md` when `chapters/ch1.md` is also an
+            // include dependency. A stale symlink from a previous call is
             // safe to replace (idempotent); anything else must be preserved.
             // Absence is the common case — no collision, proceed with the
             // link. Any other failure leaves the collision unknown, and
