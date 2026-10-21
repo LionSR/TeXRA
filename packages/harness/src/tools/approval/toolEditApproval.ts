@@ -28,7 +28,7 @@ import {
   unifiedDiffText,
   type DiffHunks,
 } from '@utils/text/unifiedDiff';
-import { countLines, isNonEmptyString } from '@utils/text/stringUtils';
+import { clamp, countLines, isNonEmptyString } from '@utils/text/stringUtils';
 
 const CHANNEL = 'ToolEditApproval';
 
@@ -176,11 +176,11 @@ function firstChangedLineIn(
     // A deletion has no line of its own in the proposed text; reveal the
     // position it was removed from.
     if (marker === '-') {
-      return Math.max(0, Math.min(lastProposedLine, line - 1));
+      return clamp(line - 1, 0, lastProposedLine);
     }
     line += 1;
   }
-  return Math.max(0, Math.min(lastProposedLine, hunk.newStart - 1));
+  return clamp(hunk.newStart - 1, 0, lastProposedLine);
 }
 
 // ============================================================================

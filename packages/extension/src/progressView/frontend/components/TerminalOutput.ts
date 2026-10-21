@@ -6,6 +6,7 @@ import { Terminal } from '@xterm/xterm';
 import xtermStyles from '@xterm/xterm/css/xterm.css?inline';
 
 import { resolveXtermTheme } from '@ui/wa/xtermTheme';
+import { clamp } from '@utils/text/stringUtils';
 
 const MIN_SCROLLBACK = 4_000;
 
@@ -224,7 +225,7 @@ export class TerminalOutput extends LitElement {
     const contentRows = buffer.baseY + buffer.cursorY + 1;
     const rows = this.fill
       ? (dims?.rows ?? this.terminal.rows)
-      : Math.max(1, Math.min(MAX_VISIBLE_ROWS, contentRows));
+      : clamp(contentRows, 1, MAX_VISIBLE_ROWS);
 
     if (cols !== this.terminal.cols || rows !== this.terminal.rows) {
       this.terminal.resize(cols, rows);
