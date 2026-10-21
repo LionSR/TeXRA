@@ -180,25 +180,57 @@ export function resumeOnSession(
 
 /**
  * Wake a run whose follow-up row is already durable: true when a generation
- * here reads it (`Inbox.reads`: one already live that has, or will open,
- * its reader, or a resume in flight) or the one the resume
- * ({@link resumeOnSession}) started. A generation still live past its
- * reader is winding down: the resume waits for it to leave the registry,
- * where it would otherwise be refused as a second generation.
+ * here reads it, either one already live (it takes the row at its next
+ * park, or its exit owes the wake: {@link wakeAfterGeneration}) or the one
+ * the resume ({@link resumeOnSession}) started.
  */
 export function startFollowUpWake(
   runId: RunId,
   session: SessionHandle,
 ): Effect.Effect<boolean> {
-  return Effect.suspend(() => {
-    if (session.followUps.reads(runId)) return Effect.succeed(true);
-    const live = session.runs.get(runId);
-    return (live?.live === true ? live.drained : Effect.void).pipe(
-      Effect.andThen(resumeOnSession(runId, session)),
-      Effect.map((result) => 'started' in result && result.delivered),
-    );
-  });
+  return Effect.suspend(() =>
+    session.runs.get(runId)?.live === true
+      ? Effect.succeed(true)
+      : Effect.map(
+          resumeOnSession(runId, session),
+          (result) => 'started' in result && result.delivered,
+        ),
+  );
 }
+
+/**
+ * The wake a run's last liveness arm here owes as it ends. A row landing
+ * while a generation (or a hold) is live is left to it: `Sent.wake` is
+ * false and its sender resumes nothing. But a loop stops reading before its
+ * fiber ends (the description join, the terminal rows), and a hold reads
+ * nothing at all, so a row landing then has no reader. The registry calls
+ * this as the arm ends; once every job enqueued before has committed (every
+ * such row is durable), a run nobody here holds, with a message queued on an
+ * open input, is resumed. A sender that saw no live arm woke the run
+ * itself; the one resume per run (`Inbox.resumeOnce`) joins the two. A
+ * failure to read the input is logged: the row waits for an explicit Resume.
+ */
+export const wakeAfterGeneration = (
+  runId: RunId,
+  session: SessionHandle,
+): Effect.Effect<void> =>
+  Effect.gen(function* () {
+    yield* session.log.settled;
+    if (session.runs.get(runId)?.live === true) return;
+    const input = yield* session.followUps.read(runId);
+    if (input.closed || !input.followUps.some((f) => f.control === undefined))
+      return;
+    yield* startFollowUpWake(runId, session);
+  }).pipe(
+    Effect.catchCause((cause) =>
+      Effect.logWarning(
+        `Run ${runId} was not woken as its generation left; an explicit Resume delivers what is queued`,
+      ).pipe(
+        Effect.annotateLogs({ data: Cause.squash(cause) }),
+        withLogChannel(CHANNEL),
+      ),
+    ),
+  );
 
 type Admission =
   SubmitFollowUpResult | { readonly resume: Effect.Effect<boolean> };

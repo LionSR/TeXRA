@@ -25,6 +25,7 @@ import {
 import { FetchHttpClient, HttpClient } from 'effect/http';
 
 import { Inbox } from '@agent/followUp/Inbox';
+import { wakeAfterGeneration } from '@agent/followUp/ToolUseFollowUp';
 import {
   executeAgent,
   resumeToolUseFromResumeData,
@@ -202,6 +203,7 @@ const sessionHandleLayer = (key: SessionKey) =>
           resumeTurn: resumeToolUseFromResumeData,
           resume: resumeRun,
         },
+        wake: (runId) => void fork(wakeAfterGeneration(runId, session)),
       });
       const session: SessionHandle = {
         roots: key.open.roots,
@@ -376,8 +378,7 @@ class SessionMap extends Context.Service<
 
 /** One lane per root for {@link openSession} and {@link closeSession}: a
  *  close holds the map entry for up to two budgets, and an open landing
- *  meanwhile was answered with it, then held a session whose doors the close
- *  shut under it. On the lane the open waits and builds afresh. */
+ *  meanwhile took that entry, then held a session the close shut under it. */
 const rootLanes = new Map<string, PerKeyLane>();
 
 /** The session of `open`'s root: built now, or the one already open. A

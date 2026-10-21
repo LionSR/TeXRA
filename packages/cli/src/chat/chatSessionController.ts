@@ -102,8 +102,6 @@ interface PreparingRoot {
   readonly slot: Deferred.Deferred<void, Error>;
   /** The slot's claim: what completing it names. */
   readonly claim: RootRunSettled;
-  /** The user stopped meanwhile: the stop lands on the run once it is live. */
-  stopped: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -394,9 +392,9 @@ export function createChatSessionController(
   let stopReason: RunStopReason = 'user';
   const requestStop = (reason: RunStopReason): void => {
     stopReason = reason;
+    // A continuation of the stopped conversation carries it: the stop is a
+    // fact of the claim, which a claim for the same run inherits.
     session.stopRequested = true;
-    // A continuation of the stopped conversation stops with it.
-    if (preparingRoot) preparingRoot.stopped = true;
   };
 
   // -----------------------------------------------------------------------
@@ -564,7 +562,7 @@ export function createChatSessionController(
     Effect.suspend(() => {
       const claimedRun = Deferred.makeUnsafe<void, Error>();
       const claim = Deferred.await(claimedRun);
-      if (!session.tryClaimRootRunSlot(claim)) {
+      if (!session.tryClaimRootRunSlot(claim, id)) {
         // The slot is taken, so the deferred this attempt made is dropped
         // unsettled: nothing holds it, and no fiber is parked on it.
         appendLocalNotice(
@@ -721,9 +719,8 @@ export function createChatSessionController(
   const claimPreparingRoot = (runId: RunId): PreparingRoot | undefined => {
     const slot = Deferred.makeUnsafe<void, Error>();
     const claim = Deferred.await(slot);
-    if (!session.tryClaimRootRunSlot(claim)) return undefined;
-    session.runId = runId;
-    preparingRoot = { runId, slot, claim, stopped: false };
+    if (!session.tryClaimRootRunSlot(claim, runId)) return undefined;
+    preparingRoot = { runId, slot, claim };
     return preparingRoot;
   };
 
@@ -769,16 +766,13 @@ export function createChatSessionController(
       preparingRoot?.runId === run.id ? preparingRoot : undefined;
     releasePreparingRoot(preparing);
     const claim = Deferred.await(adopted);
-    if (!session.tryClaimRootRunSlot(claim)) return;
-    session.runId = run.id;
+    if (!session.tryClaimRootRunSlot(claim, run.id)) return;
     if (session.interruptedRunId === run.id)
       session.interruptedRunId = undefined;
     rootRunId.set(run.id);
     focusRun(run.id);
-    if (preparing?.stopped) {
-      session.stopRequested = true;
-      interruptActiveRun();
-    }
+    // A stop asked while the continuation prepared is the claim's.
+    if (session.stopRequested) interruptActiveRun();
     runtime.runFork(
       Effect.gen(function* () {
         yield* adoptRunRecord(run.id);
