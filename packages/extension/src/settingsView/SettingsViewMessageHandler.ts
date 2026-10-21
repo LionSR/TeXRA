@@ -16,8 +16,10 @@ import {
   hasExtension,
   withLogChannel,
 } from '@texra-ai/harness';
-import { APPROVAL_POLICY_CONFIG_KEY } from '@texra-ai/harness/schemas';
-import { ensureError } from '@texra-ai/harness/schemas';
+import {
+  APPROVAL_POLICY_CONFIG_KEY,
+  ensureError,
+} from '@texra-ai/harness/schemas';
 import { emitAppSignal } from '@eventBus/AppSignals';
 import { subscribeAppSignal } from '@frontend/events/appSignalSubscriptions';
 import { VscodeExternalOpener } from '@frontend/hosts/VscodeExternalOpener';
@@ -46,10 +48,14 @@ import {
   latexEditorStatus,
   vscodeLatexSettingsHandlers,
 } from './handlers/latexSettingsHandlers';
-import type { StorageFs } from '@texra-ai/harness';
-import type { ProcessRuntime, ProcessServices } from '@texra-ai/harness';
-import type { PlatformSecrets, StateStore } from '@texra-ai/harness';
-import type { WorkspaceRoots } from '@texra-ai/harness';
+import type {
+  StorageFs,
+  ProcessRuntime,
+  ProcessServices,
+  PlatformSecrets,
+  StateStore,
+  WorkspaceRoots,
+} from '@texra-ai/harness';
 
 /** The webview shapes SettingsView dispatches for. */
 type SettingsWebview = vscode.WebviewView | vscode.WebviewPanel;

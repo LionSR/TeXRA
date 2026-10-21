@@ -28,6 +28,7 @@ import {
   withLogChannel,
   type WorkspaceRoots,
   type ToolResult,
+  Settings,
 } from '@texra-ai/harness';
 import {
   ensureError,
@@ -38,14 +39,13 @@ import {
   type ToolCallStatus,
   MESSAGE_TYPES,
 } from '@texra-ai/harness/schemas';
-import { Settings } from '@texra-ai/harness';
-import { ToolError } from '@texra-ai/harness/plugins';
-import { DELIVERY_TAG } from '@texra-ai/harness/transcript';
 import {
+  ToolError,
   formatDelivery,
   type AgentTrace,
   type ToolCardHandle,
 } from '@texra-ai/harness/plugins';
+import { DELIVERY_TAG } from '@texra-ai/harness/transcript';
 import type { CodexApprovalPolicy } from '@texra/shared/agentCliSettings';
 import { CodexSandboxModeSchema } from '@texra/shared/agentCliSettings';
 import { CodexStateKey } from '@texra/shared/settingsView/integrationSettings';
@@ -74,8 +74,10 @@ import {
   buildCodexTurnToolLog,
   codexCallCard,
 } from './codexShared';
-import type { ProcessChildStrategy } from '@texra-ai/harness/plugins';
-import type { ChildRuns } from '@texra-ai/harness/plugins';
+import type {
+  ProcessChildStrategy,
+  ChildRuns,
+} from '@texra-ai/harness/plugins';
 import type { AgentCliSessionRegistry } from './agentCliSessionRegistry';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 

@@ -21,15 +21,10 @@ import path from 'node:path';
 import { Effect, Option, Stream } from 'effect';
 import { z } from 'zod';
 
-import {
-  defineTool,
-  Sessions,
-  type ApprovalHandler,
-  type PendingRequest,
-  type RunId,
-} from '@texra-ai/harness';
+import { defineTool, Sessions, type ApprovalHandler } from '@texra-ai/harness';
 import { nodePlatform } from '@texra-ai/harness/node';
 import { harnessBuiltins } from '@texra-ai/harness/plugins';
+import type { PendingRequest, RunId } from '@texra-ai/harness/schemas';
 
 const [workspace, storageDir, mode, argument] = process.argv.slice(2);
 if (

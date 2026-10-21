@@ -1,7 +1,7 @@
 /** LaTeX settings page, one section at a time: dependencies, compile and
  *  diff, formatting and review, and recommended VS Code settings. */
 
-import { Predicate } from 'effect';
+import { Predicate, Struct } from 'effect';
 import '@awesome.me/webawesome/dist/components/tag/tag.js';
 import '@awesome.me/webawesome/dist/components/copy-button/copy-button.js';
 import '@awesome.me/webawesome/dist/components/details/details.js';
@@ -31,6 +31,8 @@ import {
   DEPENDENCY_INSTALL_COMMANDS,
   hasInstallCommands,
   HOMEBREW_INSTALL_COMMAND,
+  LATEX_RECOMMENDED_SETTINGS,
+  type LatexRecommendedSettingField,
   SCOOP_INSTALL_COMMAND,
   type InstallCommand,
   type OSPlatform,
@@ -138,34 +140,6 @@ const DEPENDENCIES: DependencyInfo[] = [
   },
 ];
 
-/** Metadata for each recommended setting. */
-interface SettingInfo {
-  readonly key: keyof LatexSettingsStatus;
-  readonly name: string;
-  readonly configKey: string;
-  readonly value: string;
-  readonly description: string;
-}
-
-const RECOMMENDED_SETTINGS: SettingInfo[] = [
-  {
-    key: 'outDir',
-    name: 'LaTeX Output Directory',
-    configKey: 'latex-workshop.latex.outDir',
-    value: '%DIR%/build/',
-    description:
-      'Redirect compilation artifacts to a build/ subfolder, keeping your project root clean.',
-  },
-  {
-    key: 'autoRevealExclude',
-    name: 'Explorer Auto-Reveal Exclude',
-    configKey: 'explorer.autoRevealExclude',
-    value: '{ "**/build/": true }',
-    description:
-      'Prevent the build/ folder from being auto-revealed in the Explorer sidebar.',
-  },
-];
-
 @customElement('latex-tab')
 export class LaTeXTab extends LitElement {
   static override styles = [
@@ -194,7 +168,10 @@ export class LaTeXTab extends LitElement {
   @property() formatter = 'latexindent';
   @property({ type: Boolean }) inlineCriticismEnabled = false;
 
-  private handleApply(field?: SettingInfo['key'], reset = false): void {
+  private handleApply(
+    field?: LatexRecommendedSettingField,
+    reset = false,
+  ): void {
     postMessage(SETTINGS_VIEW_COMMANDS.APPLY_LATEX_SETTINGS, { field, reset });
   }
 
@@ -406,14 +383,20 @@ export class LaTeXTab extends LitElement {
     `;
   }
 
-  private renderSettingCard(info: SettingInfo): TemplateResult {
-    const isSet = this.settings[info.key];
+  private renderSettingCard(
+    field: LatexRecommendedSettingField,
+  ): TemplateResult {
+    const info = LATEX_RECOMMENDED_SETTINGS[field];
+    const isSet = this.settings[field];
+    // HTML collapses the indent newlines: an object reads `{ "key": value }`.
+    const value =
+      info.kind === 'scalar' ? info.value : JSON.stringify(info.value, null, 1);
     return html`
       <div class="settings-row">
         <div class="settings-row-text">
           <span class="settings-row-label">${info.name}</span>
-          <div class="setting-config-key">${info.configKey}</div>
-          <div class="setting-value">${info.value}</div>
+          <div class="setting-config-key">${info.key}</div>
+          <div class="setting-value">${value}</div>
           <span class="settings-row-help">${info.description}</span>
         </div>
         <div class="settings-row-control">
@@ -430,7 +413,7 @@ export class LaTeXTab extends LitElement {
                   kind: 'secondary',
                   appearance: 'outlined',
                   title: 'Reset this setting to default',
-                  onClick: () => this.handleApply(info.key, true),
+                  onClick: () => this.handleApply(field, true),
                 })
               : renderLabeledActionButton({
                   icon: 'check',
@@ -438,7 +421,7 @@ export class LaTeXTab extends LitElement {
                   kind: 'secondary',
                   appearance: 'outlined',
                   title: 'Apply this setting',
-                  onClick: () => this.handleApply(info.key),
+                  onClick: () => this.handleApply(field),
                 })
           }
         </div>
@@ -485,7 +468,9 @@ export class LaTeXTab extends LitElement {
                 onClick: () => this.handleApply(),
               }),
         })}
-        ${RECOMMENDED_SETTINGS.map((info) => this.renderSettingCard(info))}
+        ${Struct.keys(LATEX_RECOMMENDED_SETTINGS).map((field) =>
+          this.renderSettingCard(field),
+        )}
       </div>
     `;
   }

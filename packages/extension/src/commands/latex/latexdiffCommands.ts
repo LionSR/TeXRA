@@ -3,15 +3,17 @@ import { Cause, Effect, FileSystem } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports
-import { withLogChannel } from '@texra-ai/harness';
-import { withSessionFs } from '@texra-ai/harness';
-import { pathToLocationIn } from '@texra-ai/harness';
+import {
+  withLogChannel,
+  withSessionFs,
+  pathToLocationIn,
+  Settings,
+} from '@texra-ai/harness';
 import {
   ensureError,
   toErrorMessage,
   type FileLocation,
 } from '@texra-ai/harness/schemas';
-import { Settings } from '@texra-ai/harness';
 import {
   prepareBuildDisplay,
   scheduleViewerDisplay,

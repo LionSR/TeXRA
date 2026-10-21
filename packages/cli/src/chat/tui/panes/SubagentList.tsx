@@ -2,7 +2,6 @@ import { formatResultCount } from '@texra-ai/harness/transcript';
 import { Box, Text, useInput, useWindowSize } from 'ink';
 import { useMemo } from 'react';
 
-import { type RunId } from '@texra-ai/harness/schemas';
 import { Select, type SelectItem } from '@cli/tui/ui/Select';
 import { COLOR_HINT } from '@cli/tui/ui/colors';
 import { COLLAPSED, EXPANDED, TICK } from '@cli/tui/ui/glyphs';
@@ -25,7 +24,7 @@ import {
   type PendingApprovalKind,
 } from '../state/approvalQueue';
 import { useSignal } from '../state/useSignal';
-import type { RunView } from '@texra-ai/harness';
+import type { RunId, RunView } from '@texra-ai/harness/schemas';
 
 const SUBAGENT_SUMMARY_MAX_COLUMNS = 100;
 

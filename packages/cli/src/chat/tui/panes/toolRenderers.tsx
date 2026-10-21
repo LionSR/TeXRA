@@ -17,9 +17,9 @@ import {
   TOOL_CALL_STATUS,
 } from '@texra-ai/harness/schemas';
 import { buildDiffHunks } from '@texra-ai/harness';
-import { isMcpToolName } from '@texra-ai/harness/transcript';
-import { toolDisplayKind } from '@texra-ai/harness/transcript';
 import {
+  isMcpToolName,
+  toolDisplayKind,
   transcriptText,
   type ToolSection,
   type ToolSectionFile,

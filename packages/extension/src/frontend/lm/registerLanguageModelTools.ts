@@ -27,6 +27,7 @@ import {
   type ProcessRuntime,
   type WorkspaceRoots,
   type ToolResult,
+  sessionFsLayer,
 } from '@texra-ai/harness';
 import {
   ChildRuns,
@@ -34,7 +35,6 @@ import {
   type PluginToolServices,
   type ProcessPluginLayer,
 } from '@texra-ai/harness/plugins';
-import { sessionFsLayer } from '@texra-ai/harness';
 
 import { ArxivSearchTool } from '@texra/tools/arxiv/ArxivSearchTool';
 

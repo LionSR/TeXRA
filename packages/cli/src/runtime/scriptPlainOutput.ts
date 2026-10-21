@@ -12,8 +12,6 @@ import {
   qualifyAggregateId,
   RUN_PHASE,
   type RunId,
-} from '@texra-ai/harness/schemas';
-import {
   descendantRuns,
   type RunView,
   type SessionView,

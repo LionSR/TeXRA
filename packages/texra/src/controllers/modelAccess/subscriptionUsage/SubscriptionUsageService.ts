@@ -1,5 +1,5 @@
 import { Cause, Effect, Exit } from 'effect';
-import { Settings } from '@texra-ai/harness';
+import { Settings, withLogChannel } from '@texra-ai/harness';
 import { HttpClientError } from 'effect/http';
 import { LRUCache } from 'lru-cache';
 
@@ -9,9 +9,7 @@ import {
   SubscriptionOAuthError,
 } from '@texra-ai/llm/node';
 import { exposeApiKey, lookupApiKey, type SecretsFailed } from '@texra-ai/llm';
-import { withLogChannel } from '@texra-ai/harness';
-import { toErrorMessage } from '@texra-ai/harness/schemas';
-import { GlobalStateKey } from '@texra-ai/harness/schemas';
+import { toErrorMessage, GlobalStateKey } from '@texra-ai/harness/schemas';
 import type {
   SubscriptionUsageProvider,
   SubscriptionUsageSnapshot,
@@ -27,10 +25,9 @@ import {
   GLM_CODING_PLAN_USAGE_URL,
 } from './glmCodingPlanUsageAdapter';
 import { fetchKimiCodeUsage } from './kimiCodeUsageAdapter';
-import type { PlatformSecrets } from '@texra-ai/harness';
+import type { PlatformSecrets, SettingsStores } from '@texra-ai/harness';
 import type { ParsedSubscriptionUsage } from './subscriptionUsageParsing';
 import type { HttpClient } from 'effect/http';
-import type { SettingsStores } from '@texra-ai/harness';
 
 const CHANNEL = 'SubscriptionUsage';
 

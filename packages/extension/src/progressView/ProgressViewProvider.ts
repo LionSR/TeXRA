@@ -18,19 +18,18 @@ import {
   AppState,
   LanguageModel,
   withProcessServices,
+  SessionHostInteractions,
+  type HostInteractions,
+  AgentCatalog,
+  withLogChannel,
 } from '@texra-ai/harness';
 import {
   toErrorMessage,
   agentKeyOf,
   type FileLocation,
   type RunId,
+  GlobalStateKey,
 } from '@texra-ai/harness/schemas';
-import { GlobalStateKey } from '@texra-ai/harness/schemas';
-import {
-  SessionHostInteractions,
-  type HostInteractions,
-} from '@texra-ai/harness';
-import { AgentCatalog, withLogChannel } from '@texra-ai/harness';
 import { BundledViewContentProvider } from '@common/webview';
 import { emitAppSignal } from '@eventBus/AppSignals';
 import { subscribeAppSignal } from '@frontend/events/appSignalSubscriptions';
@@ -98,8 +97,6 @@ import type {
   ProcessServices,
   Session,
   WorkspaceRoots,
-} from '@texra-ai/harness';
-import type {
   PlatformSecrets,
   StateStore,
   StateReadFailed,

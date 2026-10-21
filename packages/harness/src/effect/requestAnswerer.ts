@@ -24,15 +24,12 @@ import type { HostInteractions } from '@agent/runtime/HostInteractions';
 import type { SessionHandle as RuntimeSessionHandle } from '@agent/runtime/SessionHandle';
 import { withLogChannel } from '@logger/effectLog';
 import { requestParksItsCaller, type RequestDecision } from '@shared/schemas';
+import type { PendingRequest } from '@shared/session/readonlyViews';
 import type { RequestError } from '@shared/session/requestErrors';
 import { attentionOf } from '@shared/session/sessionView';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
-import type {
-  ApprovalHandler,
-  PendingRequest,
-  SessionHost,
-} from './sessions.js';
+import type { ApprovalHandler, SessionHost } from './sessions.js';
 
 const CHANNEL = 'agentPackage';
 

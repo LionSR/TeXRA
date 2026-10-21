@@ -13,7 +13,7 @@ import {
   type RunAction,
   type RunId,
 } from '@texra-ai/harness/schemas';
-import type { RunView } from '@texra-ai/harness';
+import type { RunView } from '@texra-ai/harness/schemas';
 
 export function runActionGuard(view: {
   readonly run: (runId: RunId) => RunView | undefined;

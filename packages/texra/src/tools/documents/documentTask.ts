@@ -10,12 +10,20 @@
 import * as path from 'node:path';
 
 import { Effect, FileSystem } from 'effect';
-import { agentBlockOf, errorResult } from '@texra-ai/harness/plugins';
+import {
+  agentBlockOf,
+  errorResult,
+  AGENT_TOOL_NAME,
+  buildTemplatePassthrough,
+} from '@texra-ai/harness/plugins';
 import { readNormalizedFile } from '@texra-ai/harness/node';
 import {
   withLogChannel,
   hasExtension,
   type ToolResult,
+  AgentCatalog,
+  type AgentEntry,
+  type WorkspaceAgentsStores,
 } from '@texra-ai/harness';
 import {
   toErrorMessage,
@@ -24,15 +32,6 @@ import {
   type AgentOptionData,
   type FileListEntry,
 } from '@texra-ai/harness/schemas';
-import {
-  AgentCatalog,
-  type AgentEntry,
-  type WorkspaceAgentsStores,
-} from '@texra-ai/harness';
-import {
-  AGENT_TOOL_NAME,
-  buildTemplatePassthrough,
-} from '@texra-ai/harness/plugins';
 import { PREFERRED_TOOL_USE_AGENTS } from '@shared/constants/agents';
 import {
   DOCUMENT_TASK_BLOCK,

@@ -20,6 +20,8 @@ export type {
   RequestShowInstructionPayload,
   ShowAgentConfigBannerPayload,
 } from '@shared/schemas';
+// `RunEndResult` comes from its own module so declaration emit does not pull
+// the provider SDK types in (the leak check in `scripts/validate-artifacts.mjs`).
 export type { RunEndResult } from '@agent/runtime/RunEndResult';
 export { DEFAULT_AGENT_MODEL } from '@shared/constants/defaultModels';
 export {
@@ -70,7 +72,7 @@ export {
   SUBSCRIPTION_AUTH_PROVIDERS,
   type SubscriptionAuthProvider,
 } from '@shared/model/subscriptionAuth';
-// Reads of a `SessionView` (root) for a renderer: what needs a person, how
+// Reads of a `SessionView` for a renderer: what needs a person, how
 // busy the session is, and where each run stands.
 export {
   acceptsFollowUp,
@@ -87,9 +89,8 @@ export type {
   RequestAnswerability,
   SessionTitleState,
 } from '@shared/session/sessionView';
-// The views themselves, read-only all the way down (the root re-exports
-// them), the request a run waits on, and what a host brings to
-// `acceptsFollowUp`.
+// The views themselves, read-only all the way down, the request a run
+// waits on, and what a host brings to `acceptsFollowUp`.
 export type {
   PendingRequest,
   RunView,

@@ -25,8 +25,7 @@ vi.mock('@agent/followUp/ToolUseFollowUp', async (importOriginal) => ({
   startFollowUpWake: mocks.startFollowUpWake,
 }));
 
-import { getRunRecords } from '@agent/storage/runRecords';
-import { readChildTurnState } from '@agent/storage/runRecords';
+import { getRunRecords, readChildTurnState } from '@agent/storage/runRecords';
 import { submitFollowUp } from '@agent/followUp/ToolUseFollowUp';
 import {
   startChildRunLoop,

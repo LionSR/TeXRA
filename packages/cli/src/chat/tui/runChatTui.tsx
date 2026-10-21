@@ -18,28 +18,25 @@ import {
 } from 'effect';
 import { render, type Instance as InkInstance } from 'ink';
 
-import { type ConfigProvider, type RuntimeRequest } from '@texra-ai/harness';
 import {
-  qualifyAggregateId,
-  type RunId,
-  type AgentConfig,
-  RUN_PHASE,
-} from '@texra-ai/harness/schemas';
-import {
+  type ConfigProvider,
   AgentCatalog,
   SESSION_CLOSE_DEADLINE_MS,
   Settings,
 } from '@texra-ai/harness';
-import { isLiveRun } from '@texra-ai/harness/schemas';
 import {
+  type RuntimeRequest,
+  qualifyAggregateId,
+  type RunId,
+  type AgentConfig,
+  RUN_PHASE,
+  isLiveRun,
   APPROVAL_POLICY_CONFIG_KEY,
   type ApprovalPolicy,
-} from '@texra-ai/harness/schemas';
-import {
   isActivePhase,
   isTranscriptSettlementPhase,
+  toErrorMessage,
 } from '@texra-ai/harness/schemas';
-import { toErrorMessage } from '@texra-ai/harness/schemas';
 import { nodeFileServices } from '@texra-ai/harness/node';
 import {
   CliUsageError,

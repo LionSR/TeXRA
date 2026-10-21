@@ -14,8 +14,7 @@ import {
 } from 'react';
 
 // Local imports - shared runtime
-import { type RunId } from '@texra-ai/harness/schemas';
-import { acceptsFollowUp } from '@texra-ai/harness/schemas';
+import { type RunId, acceptsFollowUp } from '@texra-ai/harness/schemas';
 import {
   isCtrlInput,
   isEscapeInput,
@@ -87,15 +86,15 @@ import {
 } from './state/sessionView';
 import { useSignal } from './state/useSignal';
 import type { EventEmitter } from 'node:events';
-import type { ProcessRuntime } from '@texra-ai/harness';
 import type {
+  ProcessRuntime,
   PlatformSecrets,
-  RuntimeRequest,
   Session,
+  SettingsStores,
 } from '@texra-ai/harness';
+import type { RuntimeRequest } from '@texra-ai/harness/schemas';
 import type { InputHistory } from './history/inputHistory';
 import type { PastedImageEntry } from './input/draftAttachments';
-import type { SettingsStores } from '@texra-ai/harness';
 
 // Jump-to-waiting: surface the newly focused run's pending approval right
 // away instead of leaving it queued behind other runs' items.

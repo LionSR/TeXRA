@@ -10,8 +10,7 @@ import {
 } from '@cli/runtime/cliTeams';
 import { planTeamRun } from '@common/teams/TeamPlan';
 import { findTeamPreset, teamPresets } from '@common/teams/TeamPresets';
-import { PersonaSchema } from '@shared/schemas';
-import { agentMatchesIdentifier } from '@shared/schemas';
+import { PersonaSchema, agentMatchesIdentifier } from '@shared/schemas';
 import { DOCUMENT_TASK_BLOCK } from '@texra/shared/plugins/documents';
 
 function agent(name: string, tools: string[] = []): AgentEntry {

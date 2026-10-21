@@ -14,8 +14,9 @@ import {
   errorResult,
   executed,
   nullishWithDefault,
+  retryTransientFetch,
+  scopedOkClient,
 } from '@texra-ai/harness/plugins';
-import { retryTransientFetch, scopedOkClient } from '@texra-ai/harness/plugins';
 
 const LOOGLE_TIMEOUT_MS = 10_000; // 10 s
 const LOOGLE_CHANNEL = 'lean_loogle';

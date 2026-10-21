@@ -26,20 +26,18 @@ import {
   type StateStore,
   WorkspaceRoots,
   ToolMissingHandler,
-  withForkFailureReporting,
   withProcessServices,
   StateStores,
+  withLogChannel,
+  setLogSink,
+  ToolAvailability,
+  Settings,
 } from '@texra-ai/harness';
+import { withForkFailureReporting } from '@texra-ai/harness/transcript';
 import {
   createNodeWorkspaceRoots,
   resolveWorkspaceStoragePath,
   canonicalizeWorkspacePath,
-} from '@texra-ai/harness/node';
-import { withLogChannel } from '@texra-ai/harness';
-import { setLogSink } from '@texra-ai/harness';
-import { ToolAvailability } from '@texra-ai/harness';
-import { Settings } from '@texra-ai/harness';
-import {
   effectDiagnosticsLayer,
   FileSecrets,
   JsonConfigProvider,
@@ -49,8 +47,9 @@ import {
 import {
   APPROVAL_POLICY_CONFIG_KEY,
   type ApprovalPolicy,
+  ensureError,
+  toErrorMessage,
 } from '@texra-ai/harness/schemas';
-import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';
 import { EXTENSION_COMMANDS } from '@commands/extensionCommandIds';
 import { setApiKey as apiSetApiKey } from '@commands/api/apiKeyCommands';
 import { openGettingStarted } from '@commands/system/walkthroughCommands';

@@ -8,10 +8,13 @@ import { formatResultCount } from '@texra-ai/harness/transcript';
 import { Effect, Stream } from 'effect';
 
 import { withLogChannel } from '@texra-ai/harness';
-import { attentionOf } from '@texra-ai/harness/schemas';
-import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';
-import type { Session, SessionView } from '@texra-ai/harness';
-import type { RunId } from '@texra-ai/harness/schemas';
+import {
+  attentionOf,
+  ensureError,
+  toErrorMessage,
+} from '@texra-ai/harness/schemas';
+import type { Session } from '@texra-ai/harness';
+import type { SessionView, RunId } from '@texra-ai/harness/schemas';
 import type * as vscode from 'vscode';
 
 /** What the provider lends: its two surfaces, read at use, and its moves. */

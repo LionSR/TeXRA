@@ -25,17 +25,17 @@ import {
   type RequestRefusal,
   PlatformSecrets,
   LanguageModel,
-} from '@texra-ai/harness';
-import { workspaceRelativePath } from '@texra-ai/harness/node';
-import {
   withProcessServices,
   type ProcessRuntime,
   type ProcessServices,
   type Session,
+  withLogChannel,
+  withSessionFs,
+  WorkspaceFs,
+  type StorageFs,
+  pathToLocationIn,
 } from '@texra-ai/harness';
-import { withLogChannel } from '@texra-ai/harness';
-import { withSessionFs, WorkspaceFs, type StorageFs } from '@texra-ai/harness';
-import { pathToLocationIn } from '@texra-ai/harness';
+import { workspaceRelativePath } from '@texra-ai/harness/node';
 import { toErrorMessage, type RunId } from '@texra-ai/harness/schemas';
 import {
   handleLatexdiff,
@@ -117,11 +117,11 @@ const CHANNEL = 'ExtensionHostRequests';
 
 /** The VS Code command behind each getting-started action. */
 const GETTING_STARTED_COMMANDS = {
-  runSetup: 'texra.runSetupAssistant',
-  createSampleProject: 'texra.createSampleProject',
-  cloneOverleaf: 'texra.cloneOverleafProject',
-  downloadArxiv: 'texra.downloadArXivSource',
-  openWalkthrough: 'texra.openGettingStarted',
+  runSetup: EXTENSION_COMMANDS.RUN_SETUP_ASSISTANT,
+  createSampleProject: EXTENSION_COMMANDS.CREATE_SAMPLE_PROJECT,
+  cloneOverleaf: EXTENSION_COMMANDS.CLONE_OVERLEAF_PROJECT,
+  downloadArxiv: EXTENSION_COMMANDS.DOWNLOAD_ARXIV_SOURCE,
+  openWalkthrough: EXTENSION_COMMANDS.OPEN_GETTING_STARTED,
 } satisfies Record<GettingStartedAction, string>;
 
 interface ExtensionHostRequestsOptions {
