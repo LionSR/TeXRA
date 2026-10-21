@@ -1,18 +1,15 @@
 import { Effect, FileSystem } from 'effect';
 import { z } from 'zod';
-import { ToolContext } from '@texra-ai/harness';
+import { ToolContext, type ToolResult } from '@texra-ai/harness';
 import { entryTypeIn } from '@texra-ai/harness/node';
 import { ensureError } from '@texra-ai/harness/schemas';
 import {
   resolveToolPath,
   type WorkspacePathResolution,
   executed,
-} from '@texra-ai/harness/plugins';
-import {
   ToolError,
   type ToolFileAttachment,
-  type ToolResult,
-} from '@shared/schemas';
+} from '@texra-ai/harness/plugins';
 import { buildFileAttachment } from '@tools/attachments';
 import { formatToolOutput } from '@tools/formatting';
 

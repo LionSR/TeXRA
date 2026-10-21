@@ -1,6 +1,6 @@
 import { Effect } from 'effect';
 import { Settings } from '@texra-ai/harness';
-import { RUN_OUTCOME } from '@shared/schemas';
+import { RUN_OUTCOME } from '@texra-ai/harness/schemas';
 import {
   documentsResultOf,
   finalWorkflowOutput,

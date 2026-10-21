@@ -1,5 +1,4 @@
-import { clamp } from '@utils/text/stringUtils';
-
+import { Number as Num } from 'effect';
 export interface TextEdit {
   readonly value: string;
   readonly cursor: number;
@@ -13,7 +12,7 @@ export interface TextEdit {
 export type CursorEdit = (value: string, cursor: number) => TextEdit;
 
 export function clampCursor(cursor: number, length: number): number {
-  return clamp(cursor, 0, length);
+  return Num.clamp(cursor, { minimum: 0, maximum: length });
 }
 
 /**

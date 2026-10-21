@@ -10,7 +10,7 @@
  */
 
 // Third-party imports
-import { formatResultCount } from '@texra-ai/harness/transcript';
+import { formatResultCount, pluralize } from '@texra-ai/harness/transcript';
 import { z } from 'zod';
 import { Clock, Effect, FileSystem } from 'effect';
 
@@ -20,11 +20,16 @@ import {
   ToolContext,
   type ToolContextShape,
   WorkspaceFs,
+  type RequestDecision,
+  type ToolResult,
 } from '@texra-ai/harness';
 import {
   ChildRuns,
   requireRun,
   assertNoParentTraversal,
+  RunFileService,
+  ToolError,
+  type EditRecord,
 } from '@texra-ai/harness/plugins';
 import { pathToLocationIn } from '@texra-ai/harness';
 import {
@@ -32,30 +37,19 @@ import {
   entryTypeIn,
   readNormalizedFile,
 } from '@texra-ai/harness/node';
-import { ensureError } from '@texra-ai/harness/schemas';
+import {
+  ensureError,
+  RunIdSchema,
+  FileLocation,
+} from '@texra-ai/harness/schemas';
 import { cleanupAcceptedWorkspaceDiffFiles } from '@latex/acceptedFileTarget';
 import { stripCriticizeAnnotations } from '@replacement/advanced';
-import {
-  RunIdSchema,
-  ToolError,
-  type EditRecord,
-  type ToolResult,
-  RequestRefusal,
-  RunId,
-  FileLocation,
-} from '@shared/schemas';
 import { documentsAcceptedFact } from '@texra/shared/plugins/documents';
 import {
   buildApprovalRejectedResult,
   requestToolEditApproval,
 } from '@tools/approval/toolEditApproval';
 import { approvedWriteConflict } from '@tools/approval/approvedWrite';
-import { pluralize } from '@utils/text/stringUtils';
-import {
-  findExistingRunStoragePathUnder,
-  originalSnapshotPathUnder,
-  inspectRunStorageEntryUnder,
-} from '@utils/files/runStorageFs';
 import type { PluginToolServices } from '@texra-ai/harness/plugins';
 
 /**
@@ -83,6 +77,12 @@ const fileAt = (fs: FileSystem.FileSystem, target: string) =>
 // ============================================================================
 
 /** One declined file: the refusal a person or a policy gave it. */
+/** The decision arms that refuse an edit. */
+type RequestRefusal = Extract<
+  RequestDecision,
+  { action: 'reject' | 'deny' | 'cancel' }
+>;
+
 interface RecordedRejection {
   readonly path: string;
   readonly refusal: RequestRefusal;
@@ -193,12 +193,10 @@ function executeAcceptRunFilesTool(
   return Effect.gen(function* () {
     const call = yield* ToolContext;
     yield* requireRun('accept_run_files');
-    const directory = yield* findExistingRunStoragePathUnder(
-      call.env.roots.storage,
-      input.execution_id,
-    );
+    // The run whose files are accepted, which is not the calling run.
+    const runFiles = new RunFileService(input.execution_id, call.env.roots);
     if (
-      directory === undefined &&
+      !(yield* runFiles.hasDirectory()) &&
       !(yield* (yield* ChildRuns).records(input.execution_id).exists)
     ) {
       return yield* Effect.fail(
@@ -207,13 +205,14 @@ function executeAcceptRunFilesTool(
         ),
       );
     }
-    return yield* acceptFiles(input, call);
+    return yield* acceptFiles(input, call, runFiles);
   });
 }
 
 const acceptFiles = Effect.fn('AcceptRunFilesTool.acceptFiles')(function* (
   input: AcceptRunFilesInput,
   call: ToolContextShape,
+  runFiles: RunFileService,
 ): Effect.fn.Return<ToolResult, Error, PluginToolServices> {
   const { execution_id: runId, files, strip_criticize } = input;
 
@@ -225,7 +224,7 @@ const acceptFiles = Effect.fn('AcceptRunFilesTool.acceptFiles')(function* (
         yield* assertNoParentTraversal(mapping.path);
 
         const sourceLocation = yield* resolveSourceFile(
-          runId,
+          runFiles,
           mapping.path,
           call,
         );
@@ -264,11 +263,7 @@ const acceptFiles = Effect.fn('AcceptRunFilesTool.acceptFiles')(function* (
         // Determine original content for diff display. In-place document
         // outputs can make source and destination the same workspace file, so
         // the pre-run snapshot is the only reliable "before" image.
-        const snapshotPath = originalSnapshotPathUnder(
-          call.env.roots.storage,
-          runId,
-          dest.relativePath,
-        );
+        const snapshotPath = runFiles.originalSnapshotPath(dest.relativePath);
         const snapshotExists = yield* fileAt(processFs, snapshotPath).pipe(
           Effect.mapError(ensureError),
         );
@@ -437,7 +432,7 @@ const acceptFiles = Effect.fn('AcceptRunFilesTool.acceptFiles')(function* (
  */
 const resolveSourceFile = Effect.fn('AcceptRunFilesTool.resolveSourceFile')(
   function* (
-    runId: RunId,
+    runFiles: RunFileService,
     runPath: string,
     call: ToolContextShape,
   ): Effect.fn.Return<
@@ -445,11 +440,8 @@ const resolveSourceFile = Effect.fn('AcceptRunFilesTool.resolveSourceFile')(
     Error,
     FileSystem.FileSystem | WorkspaceFs
   > {
-    const entry = yield* inspectRunStorageEntryUnder(
-      call.env.roots.storage,
-      runId,
-      runPath,
-    );
+    const { runId } = runFiles;
+    const entry = yield* runFiles.inspectEntry(runPath);
     switch (entry.kind) {
       case 'file':
         return entry.location;

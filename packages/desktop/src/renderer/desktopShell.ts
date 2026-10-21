@@ -12,11 +12,11 @@ import '@awesome.me/webawesome/dist/components/dropdown/dropdown.js';
 import '@awesome.me/webawesome/dist/components/dropdown-item/dropdown-item.js';
 import { html, nothing, type TemplateResult } from 'lit';
 
-import type { TeXRAIconName } from '@shared/iconNames';
 import type { ProjectDisplay } from '@texra/shared/session/hostSnapshot';
 import type { Surface } from '@texra/shared/session/surface';
 import { unseenRuns } from '@texra/shared/session/unseenRuns';
 import type { Shell } from '@texra/shared/session/shell';
+import type { IconName } from '@ui/wa/iconNames';
 import {
   renderIconActionButton,
   renderLabeledActionButton,
@@ -58,7 +58,7 @@ interface ShellSidebarCallbacks {
 }
 
 function sidebarAction(options: {
-  icon: TeXRAIconName;
+  icon: IconName;
   label: string;
   title?: string;
   emphasized?: boolean;

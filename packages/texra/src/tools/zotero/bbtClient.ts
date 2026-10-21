@@ -18,8 +18,8 @@ import { StatusCodes } from 'http-status-codes';
 import { z } from 'zod';
 
 // Local imports
-import { ToolContext } from '@texra-ai/harness';
-import { ToolError, type ToolResult } from '@shared/schemas';
+import { ToolContext, type ToolResult } from '@texra-ai/harness';
+import { ToolError } from '@texra-ai/harness/plugins';
 import {
   isTransportReason,
   scopedClient,

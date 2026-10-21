@@ -10,8 +10,8 @@
 import { z } from 'zod';
 import { ReasoningEffortSchema } from 'llm-zoo/schemas';
 
-import { type SettingsViewSnapshot } from '@texra-ai/harness/schemas';
 import {
+  type SettingsViewSnapshot,
   AgentModePresetSchema,
   AgentScanIssueSchema,
   AgentSourceSchema,
@@ -19,7 +19,7 @@ import {
   RunIdSchema,
   SkillDisplayIssueSchema,
   SkillDisplayItemSchema,
-} from '@shared/schemas';
+} from '@texra-ai/harness/schemas';
 import {
   SUBSCRIPTION_AUTH_PROVIDERS,
   SubscriptionAuthStatusSchema,

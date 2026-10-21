@@ -7,14 +7,18 @@
  */
 import { Effect, Scope, ScopedRef, Stream } from 'effect';
 
-import { isTerminalOutcomePhase } from '@texra-ai/harness/schemas';
+import {
+  isTerminalOutcomePhase,
+  qualifyAggregateId,
+  RUN_PHASE,
+  type RunId,
+} from '@texra-ai/harness/schemas';
 import {
   descendantRuns,
   type RunView,
   type SessionView,
 } from '@texra-ai/harness/schemas';
 import { scriptStages, formatCostUsd } from '@texra-ai/harness/transcript';
-import { qualifyAggregateId, RUN_PHASE, type RunId } from '@shared/schemas';
 import { runStatusLabel } from '@ui/copy/runStatus';
 import { scriptCallLine } from '@ui/copy/scriptStage';
 

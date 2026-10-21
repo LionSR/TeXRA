@@ -5,7 +5,11 @@
 import { Effect, type Context } from 'effect';
 
 // Local imports
-import { ToolContext, type ToolContextShape } from '@texra-ai/harness';
+import {
+  ToolContext,
+  type ToolContextShape,
+  type ToolResult,
+} from '@texra-ai/harness';
 import {
   ChildRuns,
   requireRun,
@@ -13,24 +17,21 @@ import {
   type ProcessChildStrategy,
   type ToolRun,
   executed,
+  ToolError,
 } from '@texra-ai/harness/plugins';
 import {
   ensureError,
   toErrorMessage,
   previewLabel,
+  type FollowUpContent,
+  type RunId,
+  type TokenUsageStats,
 } from '@texra-ai/harness/schemas';
 import {
   describeFollowUpFailure,
   FOLLOW_UP_WAKE_FAILED_MESSAGE,
 } from '@agent/followUp/ToolUseFollowUp';
 import { senderOf } from '@agent/followUp/followUpSender';
-import {
-  ToolError,
-  type FollowUpContent,
-  type RunId,
-  type TokenUsageStats,
-  type ToolResult,
-} from '@shared/schemas';
 import { buildSyntheticToolUseConfig } from '@texra/tools/core/syntheticAgentConfig';
 
 import type {

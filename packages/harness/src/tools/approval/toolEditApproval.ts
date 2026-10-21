@@ -30,7 +30,6 @@ import {
   unifiedDiffText,
   type DiffHunks,
 } from '@utils/text/unifiedDiff';
-import { isNonEmptyString } from '@utils/text/stringUtils';
 
 const CHANNEL = 'ToolEditApproval';
 
@@ -340,7 +339,10 @@ export function buildApprovalRejectedResult(
     refusal.action === 'reject'
       ? `User rejected ${sourceTool} for ${path}.`
       : `${copy.summary}: ${sourceTool} for ${path}.`;
-  const details = [copy.detail].filter(isNonEmptyString);
+  const details = [copy.detail].filter(
+    (detail): detail is string =>
+      typeof detail === 'string' && detail.trim() !== '',
+  );
   const error =
     details.length > 0 ? `${summary}\n\n${details.join('\n')}` : summary;
   return errorResult(error, {

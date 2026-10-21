@@ -31,19 +31,18 @@ import {
   type Run,
   type Session,
   type SessionView,
+  type RunEnd,
 } from '@texra-ai/harness';
-import { isLiveRun } from '@texra-ai/harness/schemas';
-import { toErrorMessage } from '@texra-ai/harness/schemas';
-import { presentRunFailure } from '@texra-ai/harness';
 import {
+  isLiveRun,
   emptyRunEndOutput,
   RUN_OUTCOME,
   RUN_PHASE,
-  type CommitOrdinal,
   type JsonValue,
-  type RunEnd,
   type RunId,
-} from '@shared/schemas';
+} from '@texra-ai/harness/schemas';
+import { toErrorMessage } from '@texra-ai/harness/schemas';
+import { presentRunFailure } from '@texra-ai/harness';
 import { loadChatExportInput } from '@texra/agent/export/loadChatExportInput';
 import type { HostSnapshot } from '@texra/shared/session/hostSnapshot';
 import {
@@ -64,6 +63,7 @@ import {
 
 import { makeHostWindows } from './hostWindows';
 import { listTasks } from './taskList';
+import type { CommitOrdinal } from '@texra-ai/harness/transcript';
 
 /** A project the service serves: its session, as every host drives it. */
 export interface ServiceProject {

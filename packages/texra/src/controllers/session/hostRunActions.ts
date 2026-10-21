@@ -32,7 +32,12 @@ import {
   pathToLocationIn,
   type WorkspaceRoots,
 } from '@texra-ai/harness';
-import { toErrorMessage } from '@texra-ai/harness/schemas';
+import {
+  toErrorMessage,
+  isTaskConfig,
+  recipeBlockOf,
+  type RunId,
+} from '@texra-ai/harness/schemas';
 import { GlobalStateKey } from '@texra-ai/harness/schemas';
 import {
   presentRunFailure,
@@ -40,7 +45,6 @@ import {
 } from '@texra-ai/harness';
 import { FOLLOW_UP_WAKE_FAILED_MESSAGE } from '@agent/followUp/ToolUseFollowUp';
 import { getRuntimeModelDirectFallback } from '@model/copilotRouting';
-import { isTaskConfig, recipeBlockOf, type RunId } from '@shared/schemas';
 import {
   validateRunRequest,
   type RunRequest,

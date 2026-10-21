@@ -44,7 +44,7 @@ interface ChildRunDelivery {
    * Null/undefined values are dropped by the envelope.
    */
   readonly attributes?: readonly DeliveryEnvelopeAttribute[];
-  /** Pre-rendered wall-time body text (`1.2s` agent-CLI, `formatDuration` native). */
+  /** Pre-rendered wall-time body text, in seconds to a tenth (`1.2s`). */
   readonly wallTime?: string;
   /** Final assistant response as one inline element; empty → `(no response)`. */
   readonly response?: string;

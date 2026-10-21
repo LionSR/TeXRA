@@ -2,12 +2,11 @@
 import { formatResultCount } from '@texra-ai/harness/transcript';
 import { Effect, type FileSystem } from 'effect';
 import { z } from 'zod';
-import { defineTool, ToolContext } from '@texra-ai/harness';
+import { defineTool, ToolContext, type ToolResult } from '@texra-ai/harness';
 
 // Local imports - tools
 import { pathToLocationIn } from '@texra-ai/harness';
 import { TikzPictureManager } from '@latex/TikzPictureManager';
-import { type ToolFileAttachment, type ToolResult } from '@shared/schemas';
 import { formatToolOutput } from '@tools/formatting';
 import {
   buildLimitedAttachments,
@@ -15,6 +14,7 @@ import {
   resolveLatexFile,
   texPathField,
 } from './figureExtractionShared';
+import type { ToolFileAttachment } from '@texra-ai/harness/plugins';
 import type { WorkspaceFs } from '@texra-ai/harness';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 

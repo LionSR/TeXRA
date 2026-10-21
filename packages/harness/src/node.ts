@@ -36,6 +36,7 @@ export {
   executeCommand,
   type ExecuteCommandBaseOptions,
 } from '@utils/system/execUtils';
+export type { ExecResult } from '@shared/schemas';
 export { findCommand, type FoundCommand } from '@utils/system/binaryResolver';
 export { withExtendedPath } from '@utils/system/platformPaths';
 // The process environment as the harness reads it: a flag (any value but

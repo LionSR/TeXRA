@@ -11,9 +11,8 @@ import { z } from 'zod';
 
 // Local imports - core
 import { defineTool } from '@texra-ai/harness';
-import { executed } from '@texra-ai/harness/plugins';
-import { ToolError } from '@shared/schemas';
-import { pluralize } from '@utils/text/stringUtils';
+import { executed, ToolError } from '@texra-ai/harness/plugins';
+import { pluralize } from '@texra-ai/harness/transcript';
 
 // Local imports - zotero
 import { callBetterBibTeX, withZoteroPort } from './bbtClient';

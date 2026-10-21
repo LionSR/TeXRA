@@ -14,8 +14,8 @@
  * setting cannot call the same choice two different things.
  */
 
-import type { TeXRAIconName } from '@shared/iconNames';
 import type { GettingStartedAction } from '@texra/shared/session/hostRequest';
+import type { IconName } from '@ui/wa/iconNames';
 import { OWN_API_KEYS } from './modelAccess';
 
 /** The one credential prompt: the extension/desktop card and the CLI's
@@ -88,5 +88,5 @@ export const GETTING_STARTED_ACTION_PRESENTATION = {
   openWalkthrough: { label: 'Open walkthrough', icon: 'book' },
 } as const satisfies Record<
   GettingStartedAction,
-  { readonly label: string; readonly icon: TeXRAIconName }
+  { readonly label: string; readonly icon: IconName }
 >;

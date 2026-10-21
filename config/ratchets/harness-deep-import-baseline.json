@@ -11,22 +11,17 @@
       "@shared/constants/agents",
       "@shared/model/accountAuth",
       "@shared/model/subscriptionAuth",
-      "@shared/schemas",
       "@shared/session/database",
       "@shared/state/onboardingState",
       "@tools/executions/configView",
-      "@transcript",
-      "@utils/text/stringUtils",
-      "@utils/text/unifiedDiff"
+      "@transcript"
     ],
     "desktop": [
       "@eventBus/AppSignals",
       "@platform/defaults/fileSecrets",
       "@platform/defaults/jsonStore",
-      "@shared/iconNames",
       "@shared/model/accountAuth",
-      "@shared/state/onboardingState",
-      "@utils/text/unifiedDiff"
+      "@shared/state/onboardingState"
     ],
     "extension": [
       "@eventBus/AppSignals",
@@ -35,15 +30,10 @@
       "@platform/defaults/fileSecrets",
       "@platform/defaults/jsonStore",
       "@shared/constants/agents",
-      "@shared/deliveryTags",
-      "@shared/iconNames",
       "@shared/model/accountAuth",
       "@shared/model/subscriptionAuth",
-      "@shared/schemas",
       "@shared/state/onboardingState",
-      "@shared/state/providerSettings",
-      "@shared/utils/xmlEscape",
-      "@utils/text/stringUtils"
+      "@shared/state/providerSettings"
     ],
     "texra": [
       "@agent/export/schemas",
@@ -62,17 +52,13 @@
       "@platform/defaults/nodeHost",
       "@platform/processRuntime",
       "@shared/constants/agents",
-      "@shared/deliveryTags",
-      "@shared/iconNames",
       "@shared/model/subscriptionAuth",
-      "@shared/schemas",
       "@shared/session/approvalDecision",
       "@shared/session/database",
       "@shared/session/runActions",
       "@shared/session/valueFamily",
       "@shared/state/onboardingState",
       "@shared/state/providerSettings",
-      "@shared/utils/xmlEscape",
       "@tools/agentCatalogFollower",
       "@tools/approval/approvedWrite",
       "@tools/approval/toolEditApproval",
@@ -87,13 +73,9 @@
       "@tools/utils",
       "@tools/WriteTool",
       "@transcript",
-      "@utils/files/runStorageFs",
-      "@utils/prompt",
       "@utils/system/gitEnv",
       "@utils/system/toolUtils",
-      "@utils/system/wslDetect",
-      "@utils/text/stringUtils",
-      "@utils/text/unifiedDiff"
+      "@utils/system/wslDetect"
     ],
     "trace-viewer": []
   }

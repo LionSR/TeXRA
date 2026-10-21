@@ -60,7 +60,6 @@ import type { QueuedFollowUp } from '@shared/session/runRows';
 import { formatSubagentProgress } from '@shared/subagentFollowup';
 import { deriveRunOutcome } from '@shared/runs/runStatus';
 import { aggregateError, onAbort } from '@utils/core';
-import { formatDuration } from '@utils/text/stringUtils';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 /** A stopped child's pause: the notice its parent reads, and the id a
@@ -356,7 +355,7 @@ function attemptTurn<TTurn, R, RTurn>(
         const wallTimeMs = (yield* Clock.currentTimeMillis) - startedAt;
         yield* loop.log(
           'info',
-          `Turn completed in ${formatDuration(wallTimeMs)}`,
+          `Turn completed in ${(wallTimeMs / 1000).toFixed(1)}s`,
         );
         const turnIsError = strategy.isTurnError?.(turn) === true;
         const turnError = turnIsError

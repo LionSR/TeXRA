@@ -6,7 +6,7 @@ import {
   type AgentEntry,
   type WorkspaceAgentsStores,
 } from '@texra-ai/harness';
-import { agentKeyOf } from '@shared/schemas';
+import { agentKeyOf } from '@texra-ai/harness/schemas';
 import { documentTaskOf } from '@texra/tools/documents/documentTask';
 
 import { CliUsageError } from './cliContext';

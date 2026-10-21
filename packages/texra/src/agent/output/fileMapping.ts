@@ -3,9 +3,12 @@ import { getPathSegments, toPosixPath } from '@texra-ai/harness';
 
 import { Effect, FileSystem } from 'effect';
 
-import { toErrorMessage } from '@texra-ai/harness/schemas';
+import {
+  toErrorMessage,
+  fileLocationDisplayPath,
+  type FileLocation,
+} from '@texra-ai/harness/schemas';
 import type { AgentTrace } from '@agent/trace';
-import { fileLocationDisplayPath, type FileLocation } from '@shared/schemas';
 
 /** A LaTeX `\input` path trimmed, with POSIX separators and `.`/`..` resolved. */
 function normalizeLatexPath(value: string): string {

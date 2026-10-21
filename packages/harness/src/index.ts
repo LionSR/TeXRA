@@ -154,9 +154,9 @@ export {
   type HostInteractions,
 } from '@agent/runtime/HostInteractions';
 export type { ToolEditApprovalRequest } from '@tools/approval/toolEditApproval';
+export { buildDiffHunks, type DiffHunks } from '@utils/text/unifiedDiff';
 export type { PresentationEventHandlers } from '@agent/runtime/runtimePresentationEvents';
 export { presentRunFailure } from '@agent/runtime/terminalResultToast';
-export { escapeText } from '@shared/utils/xmlEscape';
 
 // The payloads, as the runtime defines them.
 export type { AgentEvent, StreamChunkEvent, TraceArm } from '@agent/trace';

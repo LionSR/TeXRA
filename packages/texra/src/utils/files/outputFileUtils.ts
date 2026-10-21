@@ -1,8 +1,7 @@
 import * as path from 'node:path';
-import { normalizeFilePath } from '@texra-ai/harness/schemas';
+import { normalizeFilePath, agentFileName } from '@texra-ai/harness/schemas';
 
 import { modelConfig } from '@texra-ai/llm';
-import { agentFileName } from '@shared/schemas';
 import { WORKFLOW_OUTPUT_BASENAME } from '@texra/shared/constants/workflowOutput';
 
 function getSafeDocumentPathParts(source: string): {

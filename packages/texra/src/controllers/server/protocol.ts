@@ -34,21 +34,23 @@ import { Rpc, RpcGroup } from 'effect/rpc';
 import * as SchemaIssue from 'effect/SchemaIssue';
 import { z } from 'zod';
 
-import { AgentConfigSchema } from '@texra-ai/harness/schemas';
+import {
+  AgentConfigSchema,
+  JsonValueSchema,
+  RunEndSchema,
+  RunIdSchema,
+  RunRecordFieldsSchema,
+} from '@texra-ai/harness/schemas';
 import {
   ApprovalPolicySchema,
   RUN_STATUS_KEYS,
 } from '@texra-ai/harness/schemas';
 import { OutcomeSchema, RuntimeRequestSchema } from '@texra-ai/harness/schemas';
-import { ChatExportInputSchema } from '@agent/export/schemas';
 import {
   CommitOrdinalSchema,
   DisplaySessionEventSchema,
-  JsonValueSchema,
-  RunEndSchema,
-  RunIdSchema,
-  RunRecordFieldsSchema,
-} from '@shared/schemas';
+} from '@texra-ai/harness/transcript';
+import { ChatExportInputSchema } from '@agent/export/schemas';
 
 import {
   EventsFrameSchema,

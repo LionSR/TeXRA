@@ -6,17 +6,17 @@ import { createRunStorageLocation } from '@texra-ai/harness';
 import { RunFileService } from '@texra-ai/harness/plugins';
 import { entryTypeIn } from '@texra-ai/harness/node';
 import { Settings } from '@texra-ai/harness';
-import { toErrorMessage } from '@texra-ai/harness/schemas';
-import type { AgentTrace } from '@agent/trace';
-import { LaTeXdiffResult, LaTeXdiffService } from '@latex/latexdiff';
-import { buildBetweenRoundDiffSuffix } from '@latex/latexdiff/diffFileNameManager';
-import { compileLatex2Pdf } from '@latex/texTools';
 import {
+  toErrorMessage,
   fileLocationDisplayPath,
   type RunId,
   type FileLocation,
   type RunStorageFileLocation,
-} from '@shared/schemas';
+} from '@texra-ai/harness/schemas';
+import type { AgentTrace } from '@agent/trace';
+import { LaTeXdiffResult, LaTeXdiffService } from '@latex/latexdiff';
+import { buildBetweenRoundDiffSuffix } from '@latex/latexdiff/diffFileNameManager';
+import { compileLatex2Pdf } from '@latex/texTools';
 import type {
   LatexdiffEntry,
   OutputFileInfo,

@@ -7,7 +7,11 @@ import { Box, Text, useInput, useWindowSize } from 'ink';
 import { Effect, Fiber, type Scope } from 'effect';
 import { useEffect, useRef, useState } from 'react';
 
-import { acceptsFollowUp } from '@texra-ai/harness/schemas';
+import {
+  acceptsFollowUp,
+  type RunId,
+  type ToolEditPermission,
+} from '@texra-ai/harness/schemas';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
 import { isEscapeInput } from '@cli/tui/inputKeys';
 import {
@@ -17,7 +21,6 @@ import {
 import { COLOR_ERROR, COLOR_HINT, COLOR_WARNING } from '@cli/tui/ui/colors';
 import { POINTER } from '@cli/tui/ui/glyphs';
 import { KeyHints } from '@cli/tui/ui/KeyHints';
-import type { RunId, ToolEditPermission } from '@shared/schemas';
 import {
   approvalDecisionArms,
   type SurfaceDecision,

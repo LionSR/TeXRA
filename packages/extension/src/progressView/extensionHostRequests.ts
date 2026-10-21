@@ -36,7 +36,7 @@ import {
 import { withLogChannel } from '@texra-ai/harness';
 import { withSessionFs, WorkspaceFs, type StorageFs } from '@texra-ai/harness';
 import { pathToLocationIn } from '@texra-ai/harness';
-import { toErrorMessage } from '@texra-ai/harness/schemas';
+import { toErrorMessage, type RunId } from '@texra-ai/harness/schemas';
 import {
   handleLatexdiff,
   handleLatexdiffCommitAction,
@@ -61,7 +61,6 @@ import { signInWithSubscription } from '@frontend/auth/subscriptionSignIn';
 import { openFinalOutputIfAvailable } from '@frontend/agents/finalOutputOpener';
 import { parseVersionControlDiffFilename } from '@latex/latexdiff/diffFileNameManager';
 import latexPreamble from '@resources/templates/chatExport.tex';
-import { type RunId } from '@shared/schemas';
 import {
   setFirstRunDone,
   setOnboardingDeclined,

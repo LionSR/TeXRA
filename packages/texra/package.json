@@ -33,6 +33,8 @@
     "monaco-editor": "^0.57.0",
     "nunjucks": "catalog:",
     "openai": "catalog:",
+    "pretty-bytes": "catalog:",
+    "pretty-ms": "catalog:",
     "semver": "^7.8.5",
     "sortablejs": "^1.15.7",
     "tar": "catalog:",

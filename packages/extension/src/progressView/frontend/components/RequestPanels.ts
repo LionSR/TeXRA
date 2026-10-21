@@ -16,8 +16,10 @@ import { repeat } from 'lit/directives/repeat.js';
 import { html as staticHtml, literal } from 'lit/static-html.js';
 
 // Local imports - shared schemas
-import { requestAnswerability } from '@texra-ai/harness/schemas';
-import type { PermissionPayload } from '@shared/schemas';
+import {
+  requestAnswerability,
+  type PermissionPayload,
+} from '@texra-ai/harness/schemas';
 import type { HostSnapshot } from '@texra/shared/session/hostSnapshot';
 import type { Surface } from '@texra/shared/session/surface';
 import type { RunView } from '@texra-ai/harness/schemas';

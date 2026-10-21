@@ -6,13 +6,16 @@ import { entryTypeIn } from '@texra-ai/harness/node';
 import { Effect, FileSystem } from 'effect';
 
 import { createExternalLocation } from '@texra-ai/harness';
-import { toErrorMessage } from '@texra-ai/harness/schemas';
+import {
+  toErrorMessage,
+  fileLocationDisplayPath,
+  type FileLocation,
+} from '@texra-ai/harness/schemas';
 import type { AgentTrace } from '@agent/trace';
 
 import replacementEngine, {
   logReplacementDiagnostics,
 } from '@replacement/engine';
-import { fileLocationDisplayPath, type FileLocation } from '@shared/schemas';
 import { getExtractedDocOutputFileName } from '@texra/utils/files/outputFileUtils';
 import {
   DOCUMENT_NAME_REGEX,

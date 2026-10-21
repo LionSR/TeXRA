@@ -17,7 +17,7 @@
  */
 
 // Third-party imports
-import { getBasename } from '@texra-ai/harness/schemas';
+import { getBasename, agentName } from '@texra-ai/harness/schemas';
 import { html, LitElement, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 import { classMap } from 'lit/directives/class-map.js';
@@ -36,7 +36,6 @@ import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 
 // Local imports - shared webview
 import '@ui/wa/spinner';
-import { agentName } from '@shared/schemas';
 import { isDocumentTaskRun } from '@texra/shared/plugins/documents';
 import type { HostSnapshot } from '@texra/shared/session/hostSnapshot';
 import type { Surface } from '@texra/shared/session/surface';

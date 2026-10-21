@@ -2,7 +2,7 @@
 
 Generated from `packages/harness/src/node.ts` by `node scripts/check-core-quality.mjs --update`; do not edit. A diff here is a change to the public surface.
 
-Exports: 33
+Exports: 34
 
 - `absentReason` — `const absentReason: (error: PlatformError) => boolean`
 - `canonicalizeWorkspacePath` — `function canonicalizeWorkspacePath: (workspacePath: string) => string`
@@ -10,6 +10,7 @@ Exports: 33
 - `createNodeWorkspaceRoots` — `function createNodeWorkspaceRoots: (init: NodeWorkspaceRootsInit) => WorkspaceRoots`
 - `entryTypeIn` — `const entryTypeIn: (fs: FileSystem, target: string) => Effect<Type | undefined, PlatformError, never>`
 - `envFlag` — `const envFlag: (name: string, env?: Readonly<Record<string, string | undefined>> | undefined) => Effect<boolean, never, never>`
+- `ExecResult` — `type ExecResult = z.infer<typeof ExecResultSchema>; ≡ { exitCode: number; noExitCode?: boolean | undefined; outputLimitExceeded?: boolean | undefined; stderr: string; stdout: string; success: boolean; timedOut: boolean; }`
 - `executeCommand` — `const executeCommand: (command: string | string[], options: ExecuteCommandBaseOptions) => Effect<{ exitCode: number; noExitCode?: boolean | undefined; outputLimitExceeded?: boolean | undefined; stderr: string; stdout: string; success: boolean; timedOut: boolean; }, never, ChildProcessSpawner>`
 - `ExecuteCommandBaseOptions` — `interface ExecuteCommandBaseOptions { readonly channel?: string; readonly env?: Record<string, string>; readonly timeout?: number; readonly cwd: string | undefined; readonly settings: SettingsStores | undefined; readonly onStdout?: (chunk: string) => void; readonly onStderr?: (chunk: string) => void; readonly buffer?: boolean; readonly maxBuffer?: number; readonly signal?: AbortSignal; readonly quiet?: boolean; readonly killProcessTree?: boolean; }`
 - `findCommand` — `const findCommand: (name: string, options?: undefined | { readonly fresh?: boolean | undefined; readonly path?: string | undefined; }) => Effect<FoundCommand | null, never, ChildProcessSpawner>`

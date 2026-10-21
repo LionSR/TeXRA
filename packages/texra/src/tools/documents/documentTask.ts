@@ -12,8 +12,18 @@ import * as path from 'node:path';
 import { Effect, FileSystem } from 'effect';
 import { agentBlockOf, errorResult } from '@texra-ai/harness/plugins';
 import { readNormalizedFile } from '@texra-ai/harness/node';
-import { withLogChannel, hasExtension } from '@texra-ai/harness';
-import { toErrorMessage } from '@texra-ai/harness/schemas';
+import {
+  withLogChannel,
+  hasExtension,
+  type ToolResult,
+} from '@texra-ai/harness';
+import {
+  toErrorMessage,
+  agentKeyOf,
+  DEFAULT_WORKFLOW_AGENT,
+  type AgentOptionData,
+  type FileListEntry,
+} from '@texra-ai/harness/schemas';
 import {
   AgentCatalog,
   type AgentEntry,
@@ -23,18 +33,11 @@ import { AGENT_TOOL_NAME } from '@texra-ai/harness/plugins';
 import { buildTemplatePassthrough } from '@agent/prompt/templateInputs';
 import { PREFERRED_TOOL_USE_AGENTS } from '@shared/constants/agents';
 import {
-  agentKeyOf,
-  DEFAULT_WORKFLOW_AGENT,
-  type AgentOptionData,
-  type FileListEntry,
-  type ToolResult,
-} from '@shared/schemas';
-import {
   DOCUMENT_TASK_BLOCK,
   type DocumentAgentOption,
   type DocumentTask,
 } from '@texra/shared/plugins/documents';
-import { formatBytes, isNonEmptyString } from '@utils/text/stringUtils';
+import { formatBytes } from '@ui/copy/format';
 
 /** The document task `entry` defines, or null for a chat agent. */
 export const documentTaskOf = (
@@ -154,7 +157,7 @@ export const rejectOversizedBibAttachments = Effect.fn(
 > {
   const fs = yield* FileSystem.FileSystem;
   const bibFiles = contextFiles
-    .filter(isNonEmptyString)
+    .filter((file) => file.trim() !== '')
     .filter((file) => hasExtension(file, '.bib'));
 
   for (const bibFile of bibFiles) {

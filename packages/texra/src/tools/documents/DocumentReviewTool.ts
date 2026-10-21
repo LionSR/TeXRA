@@ -8,8 +8,8 @@ import { Effect, FileSystem } from 'effect';
 import { z } from 'zod';
 
 import { defineTool } from '@texra-ai/harness';
-import { executed } from '@texra-ai/harness/plugins';
-import { fileLocationDisplayPath } from '@shared/schemas';
+import { executed, renderPrompt } from '@texra-ai/harness/plugins';
+import { fileLocationDisplayPath } from '@texra-ai/harness/schemas';
 import { failureContextFromLogs } from '@texra/agent/output/compileFailureRoundContext';
 import { traceFileLineage } from '@texra/agent/output/lineageMapping';
 import {
@@ -21,8 +21,7 @@ import {
   RevisionSchema,
 } from '@texra/tools/documents/documentTools';
 import { type RoundOutput } from '@texra/shared/plugins/documentOutputs';
-import { renderPrompt } from '@utils/prompt';
-import { reportDiffTimeout, unifiedDiffText } from '@utils/text/unifiedDiff';
+import { unifiedDiffOf } from '@texra/tools/documents/documentResult';
 
 /** The most diff a critic reads, across all outputs: a whole rewrite of a
  *  long document would not fit its model's context. */
@@ -111,8 +110,7 @@ export const DocumentReviewTool = defineTool({
           ? yield* fs.readFileString(base.absolutePath)
           : '';
       const after = yield* fs.readFileString(output.location.absolutePath);
-      const { text, timeout } = unifiedDiffText(before, after);
-      yield* reportDiffTimeout(timeout);
+      const text = yield* unifiedDiffOf(before, after);
       const shown = text === undefined ? '(unchanged)' : bounded(text, left);
       left -= shown.length;
       parts.push(`<diff path="${path}">\n${shown}\n</diff>`);

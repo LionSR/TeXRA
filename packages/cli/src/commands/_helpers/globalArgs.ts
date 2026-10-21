@@ -9,7 +9,6 @@ import {
   CLI_OUTPUT_FORMATS,
   type CliOutputFormat,
 } from '@texra/shared/cliOutputFormat';
-import { isNonEmptyString } from '@utils/text/stringUtils';
 import type { ParsedArgs } from 'citty';
 
 /**
@@ -144,7 +143,10 @@ export function pickGlobalArgs(
     print: args.print === true,
     quiet: args.quiet === true,
     verbose: args.verbose === true,
-    cwd: isNonEmptyString(args.cwd) ? args.cwd : undefined,
+    cwd:
+      typeof args.cwd === 'string' && args.cwd.trim() !== ''
+        ? args.cwd
+        : undefined,
     outputFormat: args['output-format'],
     approvalPolicy: args['approval-policy'],
     // citty parses `--no-color` into `color: false`.

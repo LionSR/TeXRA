@@ -198,8 +198,10 @@ export {
   type ApprovalGrants,
   type ApprovalGrantSource,
 } from '@shared/approvalBypassKind';
-// A request a host sends a session and the outcome it answers with.
+// A request a host sends a session and the outcome it answers with, and a
+// tool edit's hunks as unified-diff lines.
 export {
+  formatHunkLines,
   OutcomeSchema,
   RuntimeRequestSchema,
   ToolEditContentSchema,
@@ -267,3 +269,123 @@ export {
   truncateSummary,
   truncateWithEllipsis,
 } from '@utils/text/stringUtils';
+// Escaping for an XML or HTML attribute value and for element text.
+export { escapeAttr, escapeText } from '@shared/utils/xmlEscape';
+
+// Agents as a catalog names them: name, key and file name, scan issues, the
+// default workflow agent, team presets and a workspace's selection.
+export {
+  AGENT_MODE_PRESETS,
+  agentFileName,
+  agentKeyOf,
+  agentMatchesIdentifier,
+  type AgentModePreset,
+  AgentModePresetSchema,
+  agentName,
+  type AgentScanIssue,
+  AgentScanIssueSchema,
+  DEFAULT_WORKFLOW_AGENT,
+  parseAgentModePresets,
+  STARTER_AGENT_MODE_PRESET,
+  type WorkspaceAgentsSelection,
+} from '@shared/schemas';
+// Picker rows (models, agents, teams), and whether a model option runs.
+export {
+  type AgentOptionData,
+  AgentOptionDataSchema,
+  isModelOptionAvailable,
+  MODEL_AVAILABILITY_STATUS,
+  ModelAvailabilityFieldsSchema,
+  type ModelOptionData,
+  ModelOptionDataSchema,
+  type TeamOptionData,
+  TeamOptionDataSchema,
+} from '@shared/schemas';
+// The permission payloads a request carries, and an inquiry's turns.
+export {
+  type AgentProposalPermission,
+  type AnsweredInquiryTurn,
+  type BashPermission,
+  CredentialSwitchSchema,
+  type ExternalInquiryPermission,
+  ExternalInquiryTurnRecordSchema,
+  type InquiryThreadId,
+  InquiryThreadIdSchema,
+  type OpenInquiryTurn,
+  type PlanApprovalPermission,
+  type RequestDecision,
+  type RetryPermission,
+  ToolEditPermissionSchema,
+  type UserQuestionAnswers,
+  UserQuestionAnswersSchema,
+  type UserQuestionPermission,
+  type UserQuestionPrompt,
+  UserQuestionPromptSchema,
+} from '@shared/schemas';
+// Harness setting rows and config keys, and skills as a list shows them.
+export {
+  type ActiveSkillSourceScope,
+  ActiveSkillSourceScopeSchema,
+  AGENT_SKILLS_CONFIG_KEY,
+  BASH_APPROVAL_CONFIG_KEY,
+  CHATGPT_CODEX_CONTEXT_WINDOW_SETTING,
+  CHILD_RUN_CONCURRENCY_BUDGET_CONFIG_KEY,
+  CHILD_RUN_CONCURRENCY_BUDGET_SETTING,
+  GOAL_MAX_COST_SETTING,
+  InstalledPluginSchema,
+  MODEL_COMPACTION_THRESHOLD_SETTING,
+  MODEL_RETRY_MAX_ATTEMPTS_SETTING,
+  RESUME_ON_OPEN_SETTING,
+  type SkillDisplayIssue,
+  SkillDisplayIssueSchema,
+  type SkillDisplayItem,
+  SkillDisplayItemSchema,
+  SkillNameSchema,
+  TOOL_EDIT_APPROVAL_CONFIG_KEY,
+} from '@shared/schemas';
+// Runs: phases, substates and actions, identity, ends and records, plans,
+// tool-call status, a store's owner, and the requests that park a caller.
+export {
+  emptyRunEndOutput,
+  isLoopDriven,
+  isTaskConfig,
+  type McpToolOutput,
+  ownerIdentity,
+  type Plan,
+  planSummaryLine,
+  type ProgressPermissionKind,
+  recipeBlockOf,
+  requestParksItsCaller,
+  RUN_LIFECYCLE_READY,
+  RUN_PHASE,
+  RUN_SUBSTATE,
+  type RunAction,
+  type RunEndOutput,
+  RunEndSchema,
+  runIdentityName,
+  RunRecordFieldsSchema,
+  TOOL_CALL_STATUS,
+  type WorktreeInfo,
+} from '@shared/schemas';
+// What tools and runs produce: file locations and display paths, line
+// counts, usage, JSON values, log message types and context state.
+export {
+  type ContextStateData,
+  type DiffStats,
+  DiffStatsSchema,
+  fileLocationAddressPath,
+  fileLocationDisplayPath,
+  FileLocationSchema,
+  fileLocationShortDisplayPath,
+  getProposalFileGroups,
+  type ProposalFileFields,
+  isEmptyUsage,
+  JsonValueSchema,
+  LineCountSchema,
+  MESSAGE_TYPES,
+  NullableFileFieldsSchema,
+  runStorageFilePath,
+  sumUsageStats,
+  toJsonValue,
+  type TokenUsageStats,
+} from '@shared/schemas';

@@ -11,7 +11,6 @@ import { z } from 'zod';
 import type { StateStore, StateWriteFailed } from '@platform/interfaces';
 import { Settings, StateFlagSchema } from '@shared/config/settings';
 import { GlobalStateKey } from '@shared/state/stateKeys';
-import { isNonEmptyString } from '@utils/text/stringUtils';
 
 export function setOnboardingDeclined(
   state: StateStore,
@@ -43,7 +42,7 @@ export function getDefaultTeamId(state: StateStore) {
       GlobalStateKey.ONBOARDING_DEFAULT_TEAM_ID,
       z.string().optional(),
     );
-    return isNonEmptyString(value) ? value : undefined;
+    return value?.trim() ? value : undefined;
   });
 }
 

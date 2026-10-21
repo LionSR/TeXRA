@@ -8,8 +8,7 @@ import { Effect, FileSystem, Predicate } from 'effect';
 
 // Local imports
 import { pathToLocationIn } from '@texra-ai/harness';
-import { toErrorMessage } from '@texra-ai/harness/schemas';
-import type { FileLocation } from '@shared/schemas';
+import { toErrorMessage, type FileLocation } from '@texra-ai/harness/schemas';
 import type { DocumentTaskOptions } from '@texra/shared/plugins/documents';
 
 // Local file imports

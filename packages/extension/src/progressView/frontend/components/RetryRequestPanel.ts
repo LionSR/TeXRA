@@ -10,9 +10,8 @@ import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/details/details.js';
 
 // Local imports - shared schemas
-import { getModelLabel } from '@texra-ai/harness/schemas';
-import type { RetryPermission } from '@shared/schemas';
-import type { TeXRAIconName } from '@shared/iconNames';
+import { getModelLabel, type RetryPermission } from '@texra-ai/harness/schemas';
+import type { IconName } from '@ui/wa/iconNames';
 import { renderLabeledActionButton } from '@ui/wa/actionButtons';
 
 // Local imports - base class
@@ -25,7 +24,7 @@ import { retryRequestPanelStyles } from './RetryRequestPanel.styles';
 export class RetryRequestPanel extends BaseRequestPanel<'retry'> {
   static override styles = [BaseRequestPanel.styles, retryRequestPanelStyles];
 
-  protected override get primaryIcon(): TeXRAIconName {
+  protected override get primaryIcon(): IconName {
     return 'rotate-right';
   }
 

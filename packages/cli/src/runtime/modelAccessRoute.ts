@@ -1,4 +1,3 @@
-import type { DeclinableUsageRoute, UsageRoute } from '@shared/schemas';
 import {
   SUBSCRIPTION_AUTH_PROVIDERS,
   type SubscriptionAuthStatus,
@@ -14,6 +13,10 @@ import {
   type CodingPlanSubscriptionId,
 } from '@texra/shared/model/codingPlans';
 import { OWN_API_KEYS } from '@ui/copy/modelAccess';
+import type {
+  DeclinableUsageRoute,
+  UsageRoute,
+} from '@texra-ai/harness/schemas';
 
 // Kept to one rendered row: the /login form and the account panel both
 // budget a single line for this description (75 columns at most).

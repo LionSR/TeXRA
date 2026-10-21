@@ -7,11 +7,11 @@ import { html, nothing, type TemplateResult } from 'lit';
 import { live } from 'lit/directives/live.js';
 import { repeat } from 'lit/directives/repeat.js';
 
-import { agentName, isModelOptionAvailable } from '@shared/schemas';
-import type { TeXRAIconName } from '@shared/iconNames';
+import { agentName, isModelOptionAvailable } from '@texra-ai/harness/schemas';
 import type { DocumentAgentOption } from '@texra/shared/plugins/documents';
 import type { HostSnapshot } from '@texra/shared/session/hostSnapshot';
 import type { SessionType, Surface } from '@texra/shared/session/surface';
+import type { IconName } from '@ui/wa/iconNames';
 import {
   approvalPolicyLabel,
   formatApprovalPolicy,
@@ -30,7 +30,7 @@ const AGENT_SECTIONS: ReadonlyArray<
 
 export interface ChipMenu {
   readonly id: string;
-  readonly icon: TeXRAIconName;
+  readonly icon: IconName;
   readonly label: string;
   readonly title: string;
   readonly description?: string;

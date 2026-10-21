@@ -16,7 +16,7 @@ import {
   type AgentTrace,
   type ToolUseCardRef,
 } from '@agent/trace';
-import type { ToolUseLog } from '@shared/schemas';
+import type { ToolUseLog } from '@texra-ai/harness/schemas';
 
 // Third-party type imports
 import type { SDKBackgroundTasksChangedMessage } from '@anthropic-ai/claude-agent-sdk';
