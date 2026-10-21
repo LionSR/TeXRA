@@ -29,8 +29,8 @@ import { generateRunId } from '@utils/core';
 const readTool = ReadConfigTool;
 const updateTool = UpdateConfigTool;
 
-function createPlatform(initial: Record<string, unknown> = {}) {
-  const project = createFakeHost({ config: initial });
+function createPlatform() {
+  const project = createFakeHost();
   const layer = nativeToolTestLayer({ roots: project.roots });
   return { config: project.roots.config, layer };
 }
@@ -52,9 +52,10 @@ describe('ConfigTools — read_config', () => {
 describe('ConfigTools — update_config allowlist', () => {
   it.effect('writes an allowlisted key when the value matches its schema', () =>
     Effect.gen(function* () {
-      const { config, layer } = createPlatform({
-        'texra.bib.zoteroPort': 23119,
-      });
+      const { config, layer } = createPlatform();
+      // The user scope's value the write replaces: a project value would
+      // shadow it on read.
+      yield* config.update('texra.bib.zoteroPort', 23119, 'global');
 
       const result = yield* updateTool
         .call({

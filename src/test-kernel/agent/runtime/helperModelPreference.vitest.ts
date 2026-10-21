@@ -11,7 +11,7 @@ import {
   UNAVAILABLE_LANGUAGE_MODEL_PORT,
 } from '@platform/languageModel';
 import { GlobalStateKey } from '@shared/state/stateKeys';
-import { fakeStores } from '@test/support/FakePlatform';
+import { makeFakeSettingsStores } from '@test/support/settingsStoresFake';
 
 const readModelOptions = vi.hoisted(() =>
   vi.fn((): Effect.Effect<readonly { unavailableReason?: string }[]> =>
@@ -37,7 +37,8 @@ vi.mock('llm-zoo', async (importOriginal) => ({
 const HELPER_KEY = vi.hoisted(() => 'polishModel');
 
 /** The launching run's stores; each case writes its helper model there. */
-const STORES = fakeStores();
+const { stores, secrets } = makeFakeSettingsStores();
+const STORES = { ...stores, secrets };
 
 function withHelper(helper: string) {
   return STORES.globalState.update(GlobalStateKey.HELPER_MODEL, helper);

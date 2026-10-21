@@ -12,6 +12,7 @@ import {
 } from 'vitest';
 
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
+import { cliInitPlatformMock } from '@test/support/cliInitPlatformMock';
 import { spyOnStreamWrite } from '@test/cli/fixtures/streamWriteSpy';
 import { REPO_ROOT } from '@test/support/repoScan';
 import { installedHost, setupPlatform } from '@test/support/setupPlatform';
@@ -19,20 +20,8 @@ import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 import { testRuntime } from '@test/support/testProcessRuntime';
 
 const mocks = vi.hoisted(() => ({
-  initCliPlatform: vi.fn(),
-  installCliProcessRuntime: vi.fn(),
   readCliWorkspaceAgents: vi.fn(),
   setWorkspaceCliChatAgent: vi.fn(() => Effect.void),
-}));
-
-vi.mock('@cli/runtime/initPlatform', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@cli/runtime/initPlatform')>()),
-  initCliPlatform: mocks.initCliPlatform,
-}));
-
-vi.mock('@cli/runtime/cliProcessRuntime', async () => ({
-  installCliProcessRuntime: mocks.installCliProcessRuntime,
-  disposeCliProcessRuntime: Effect.void,
 }));
 
 vi.mock('@cli/runtime/workspaceAgents', () => ({
@@ -102,10 +91,12 @@ describe('CLI config command', () => {
         undefined,
       ),
     );
-    mocks.initCliPlatform.mockReturnValue(
+    cliInitPlatformMock.initCliPlatform.mockReturnValue(
       Effect.succeed({ runtime: testRuntime(), roots: host.roots }),
     );
-    mocks.installCliProcessRuntime.mockImplementation(() => testRuntime());
+    cliInitPlatformMock.installCliProcessRuntime.mockImplementation(() =>
+      testRuntime(),
+    );
     mocks.readCliWorkspaceAgents.mockResolvedValue({
       selection: { kind: 'all' },
       effectiveSelection: { kind: 'all' },

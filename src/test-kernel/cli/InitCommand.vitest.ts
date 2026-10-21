@@ -1,3 +1,4 @@
+/* eslint-disable import/order -- Vitest mocks must be declared before importing the runtime under test. */
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 
@@ -12,23 +13,12 @@ import {
   vi,
 } from 'vitest';
 
+// The shared mock registrations evaluate before `@cli/commands/root` below.
+import { cliInitPlatformMock } from '@test/support/cliInitPlatformMock';
+
 const mocks = vi.hoisted(() => ({
   getCliModelAccessList: vi.fn(),
-  initCliPlatform: vi.fn(),
-  installCliProcessRuntime: vi.fn(),
 }));
-
-vi.mock('@cli/runtime/initPlatform', () => ({
-  initCliPlatform: mocks.initCliPlatform,
-}));
-
-vi.mock('@cli/runtime/cliProcessRuntime', async () => {
-  const { Effect } = await import('effect');
-  return {
-    installCliProcessRuntime: mocks.installCliProcessRuntime,
-    disposeCliProcessRuntime: Effect.void,
-  };
-});
 
 vi.mock('@cli/runtime/modelAccess', async (importOriginal) => {
   const actual =
@@ -129,7 +119,7 @@ describe('CLI init command', () => {
     // access list and the workspace agents' visibility read, so the mock returns the
     // installed host's own stores.
     const host = installedHost();
-    mocks.initCliPlatform.mockReset().mockReturnValue(
+    cliInitPlatformMock.initCliPlatform.mockReset().mockReturnValue(
       Effect.succeed({
         secrets: host.secrets,
         globalState: host.roots.globalState,
@@ -138,7 +128,7 @@ describe('CLI init command', () => {
         runtime: testRuntime(),
       }),
     );
-    mocks.installCliProcessRuntime
+    cliInitPlatformMock.installCliProcessRuntime
       .mockReset()
       .mockImplementation(() => testRuntime());
     stdoutSpy = spyOnStreamWrite(process.stdout, (chunk) => {
