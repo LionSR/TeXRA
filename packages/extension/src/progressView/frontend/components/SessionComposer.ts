@@ -499,6 +499,7 @@ export class SessionComposer extends LitElement {
         class="routing-parent btn-ghost is-link"
         appearance="plain"
         size="s"
+        type="button"
         @click=${() => this.replyToParent(parent.id)}
         >reply to ${parent.label} instead</wa-button
       >

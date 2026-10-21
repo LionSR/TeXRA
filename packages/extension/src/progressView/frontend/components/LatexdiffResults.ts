@@ -110,6 +110,7 @@ export class LatexdiffResults extends LitElement {
       class="file-link btn-ghost is-link"
       appearance="plain"
       size="s"
+      type="button"
       data-file=${filePath}
       @click=${() => this.handleFileClick(filePath)}
       ><span aria-hidden="true">${label}</span

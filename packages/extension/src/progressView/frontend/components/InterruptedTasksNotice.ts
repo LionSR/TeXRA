@@ -71,10 +71,10 @@ export class InterruptedTasksNotice extends LitElement {
       .task.btn-ghost {
         flex-shrink: 1;
         min-width: 0;
-        text-align: start;
       }
       .task::part(base) {
         white-space: normal;
+        text-align: start;
       }
       .meta,
       .blocked {
@@ -117,6 +117,7 @@ export class InterruptedTasksNotice extends LitElement {
         class="task btn-ghost is-link"
         appearance="plain"
         size="s"
+        type="button"
         @click=${() =>
           this.dispatchEvent(
             SessionUiEvents.surface({ kind: 'select', runId: task.runId }),
