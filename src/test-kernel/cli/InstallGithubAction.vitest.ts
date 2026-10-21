@@ -11,10 +11,10 @@ import { runCli } from '@cli/commands/root';
 import { NO_PLATFORM_INSTALL } from '@cli/runtime/cliProcessRuntime';
 import { defaultBranch } from '@cli/runtime/gitOps';
 import { CliExitCode } from '@cli/runtime/exitCodes';
-import { defaultNodeStorageRoot } from '@platform/defaults/nodeStorage';
 import { createDeferred } from '@test/support/asyncTestUtils';
 import { nodeSpawnerLayer } from '@test/support/childProcessTestLayer';
 import { spyOnStreamWrite } from '@test/cli/fixtures/streamWriteSpy';
+import { defaultNodeStorageRoot } from '@texra/platform/defaults/nodeStorage';
 import { parseGitHubSlug } from '@texra/tools/github/githubSlug';
 
 const browserMocks = vi.hoisted(() => ({

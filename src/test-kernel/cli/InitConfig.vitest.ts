@@ -15,13 +15,13 @@ import {
   type InitAnswers,
 } from '@cli/runtime/initConfig';
 import { setWorkspaceCliChatAgent } from '@cli/runtime/cliConfig';
-import { workspaceTexraConfigPath } from '@platform/defaults/nodeStorage';
 import { Settings } from '@shared/config/settings';
 import { errnoError, nodePlatformLayer } from '@test/support/fsTestUtils';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { FakeConfigProvider } from '@test/support/FakePlatform';
 import { installPlatform } from '@test/support/setupPlatform';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
+import { workspaceTexraConfigPath } from '@texra/platform/defaults/nodeStorage';
 
 const tempDirs = useTempDirs();
 

@@ -4,7 +4,7 @@ import { app } from 'electron';
 import { Data, Effect, FileSystem, Config, Option } from 'effect';
 
 import { BUNDLED_AGENTS_DIRECTORY } from '@texra-ai/harness';
-import { defaultNodeStorageRoot } from '@platform/defaults/nodeStorage';
+import { defaultNodeStorageRoot } from '@texra/platform/defaults/nodeStorage';
 import { absentReason } from '@utils/files/fsEntryExists';
 
 /** No resources candidate holds every bundled agent directory. */

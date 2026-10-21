@@ -2,9 +2,10 @@
 
 Generated from `packages/harness/src/node.ts` by `node scripts/check-core-quality.mjs --update`; do not edit. A diff here is a change to the public surface.
 
-Exports: 18
+Exports: 22
 
 - `canonicalizeWorkspacePath` — `function canonicalizeWorkspacePath: (workspacePath: string) => string`
+- `ConfigStore` — `interface ConfigStore { get<T>(key: string): T | undefined; set(key: string, value: unknown): Effect.Effect<void, Error>; }`
 - `createNodeWorkspaceRoots` — `function createNodeWorkspaceRoots: (init: NodeWorkspaceRootsInit) => WorkspaceRoots`
 - `envFlag` — `const envFlag: (name: string, env?: Readonly<Record<string, string | undefined>> | undefined) => Effect<boolean, never, never>`
 - `executeCommand` — `const executeCommand: (command: string | string[], options: ExecuteCommandBaseOptions) => Effect<{ exitCode: number; noExitCode?: boolean | undefined; outputLimitExceeded?: boolean | undefined; stderr: string; stdout: string; success: boolean; timedOut: boolean; }, never, ChildProcessSpawner>`
@@ -12,8 +13,11 @@ Exports: 18
 - `findCommand` — `const findCommand: (name: string, options?: undefined | { readonly fresh?: boolean | undefined; readonly path?: string | undefined; }) => Effect<FoundCommand | null, never, ChildProcessSpawner>`
 - `FoundCommand` — `interface FoundCommand { readonly command: string; readonly args: readonly string[]; readonly resolvedPath: string; }`
 - `inheritedEnv` — `const inheritedEnv: (keep?: "anthropic" | "dashscope" | "deepseek" | "glm" | "google" | "kimiCode" | "meta" | "minimax" | "moonshot" | "openRouter" | "openai" | "xai" | undefined) => Effect<Record<string, string>, never, never>`
+- `JsonConfigProvider` — `class JsonConfigProvider { constructor: new ({ workspace, global, local, catalog, }: JsonConfigProviderOptions) => JsonConfigProvider; static: ; instance: catalog: SettingsCatalog; get: <T>(key: string, defaultValue?: T | undefined) => T; inspect: <T = unknown>(key: string) => Partial<Record<"globalValue" | "workspaceValue", T>>; update: <T>(key: string, value: T, target?: ConfigTarget) => Effect<void, ConfigWriteFailed, never> }`
+- `JsonConfigProviderOptions` — `interface JsonConfigProviderOptions { workspace: ConfigStore; global: ConfigStore; local: ConfigStore; catalog: SettingsCatalog; }`
 - `nodePlatform` — `function nodePlatform: (options: NodePlatformOptions) => AgentPlatform`
 - `NodePlatformOptions` — `interface NodePlatformOptions { readonly agentsDir: string; readonly workspaceDir?: string; readonly storageDir: string; readonly settings?: readonly StateSettingEntry[]; }`
+- `projectValueIgnored` — `function projectValueIgnored: (catalog: SettingsCatalog, key: string, value: unknown) => boolean`
 - `relativeToRoot` — `function relativeToRoot: (root: string, filePath: string) => string | undefined`
 - `resolveGlobalStoragePath` — `function resolveGlobalStoragePath: (storageRoot: string) => string`
 - `resolveWorkspaceStoragePath` — `function resolveWorkspaceStoragePath: (storageRoot: string, workspacePath: string | undefined) => string`

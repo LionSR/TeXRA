@@ -10,8 +10,8 @@ import {
   probeLatexToolchain,
   type LatexToolchainProbe,
 } from '@latex/latexToolchain';
-import { workspaceTexraConfigPath } from '@platform/defaults/nodeStorage';
 import type { UsageLoggingOptOut } from '@telemetry/UsageLogService';
+import { workspaceTexraConfigPath } from '@texra/platform/defaults/nodeStorage';
 import { TELEMETRY_ENABLED_KEY } from '@texra/shared/settingsView/texraSettings';
 
 // Local file imports

@@ -32,8 +32,7 @@ import {
 } from '@texra-ai/harness/node';
 import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';
 import { type SessionHandle } from '@agent/runtime';
-import type { ConfigStore } from '@platform/defaults/jsonConfigProvider';
-import { openTexraWorkspaceConfigStores } from '@platform/defaults/nodeStores';
+import { openTexraWorkspaceConfigStores } from '@texra/platform/defaults/nodeStores';
 import {
   projectDisplayOf,
   type ProjectDisplay,
@@ -48,6 +47,7 @@ import { sessionStoreMovedAsideMessage } from '@ui/copy/sessionStore';
 import { absentReason } from '@utils/files/fsEntryExists';
 import { DesktopProjectRecords } from './desktopProjectRecords.js';
 import { showDesktopWarningDialog } from './platform/warningDialog.js';
+import type { ConfigStore } from '@texra-ai/harness/node';
 import type { WorkspaceRoots } from '@texra-ai/harness';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 

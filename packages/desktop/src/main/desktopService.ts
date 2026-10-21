@@ -10,7 +10,7 @@ import * as path from 'node:path';
 
 import { Effect, type Scope } from 'effect';
 
-import { defaultNodeStorageRoot } from '@platform/defaults/nodeStorage';
+import { defaultNodeStorageRoot } from '@texra/platform/defaults/nodeStorage';
 import {
   linkService,
   spawnService,

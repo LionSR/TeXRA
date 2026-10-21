@@ -21,7 +21,7 @@ import {
 import { stricterPolicy } from '@texra-ai/harness/schemas';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
 import type { MinimumLogLevel } from '@logger/effectDiagnostics';
-import { defaultNodeStorageRoot } from '@platform/defaults/nodeStorage';
+import { defaultNodeStorageRoot } from '@texra/platform/defaults/nodeStorage';
 import {
   CLI_OUTPUT_FORMATS,
   CLI_OUTPUT_FORMAT_CONFIG_KEY,

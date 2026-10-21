@@ -7,7 +7,7 @@
  */
 import * as path from 'node:path';
 
-import { defaultNodeStorageRoot } from '@platform/defaults/nodeStorage';
+import { defaultNodeStorageRoot } from '@texra/platform/defaults/nodeStorage';
 import {
   linkService,
   spawnService,

@@ -16,24 +16,21 @@ import * as path from 'node:path';
 // Third-party imports
 import { Effect } from 'effect';
 
-// Local imports - utilities
-import type { SettingsCatalog } from '@shared/state/stateSettings';
-import { toErrorMessage } from '@utils/errors/errorMessage';
+// Local imports
+import {
+  projectValueIgnored,
+  resolveGlobalStoragePath,
+  resolveWorkspaceStoragePath,
+  type JsonConfigProviderOptions,
+  type SettingsCatalog,
+} from '@texra-ai/harness/node';
+import { toErrorMessage } from '@texra-ai/harness/schemas';
+import { JsonStore } from '@platform/defaults/jsonStore';
 
-// Local file imports
-import { JsonStore } from './jsonStore';
 import {
   TEXRA_CONFIG_FILE_NAME,
   workspaceTexraConfigPath,
 } from './nodeStorage';
-import {
-  resolveGlobalStoragePath,
-  resolveWorkspaceStoragePath,
-} from './workspaceStorage';
-import {
-  projectValueIgnored,
-  type JsonConfigProviderOptions,
-} from './jsonConfigProvider';
 
 /**
  * Open the stores backing the workspace and local config targets. The desktop

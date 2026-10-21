@@ -8,13 +8,13 @@ import { Effect } from 'effect';
 import { describe, expect } from 'vitest';
 
 // Local imports - platform
-import { openTexraConfigStores } from '@platform/defaults/nodeStores';
 import {
   resolveGlobalStoragePath,
   resolveWorkspaceStoragePath,
 } from '@platform/defaults/workspaceStorage';
 import { nodePlatformLayer, pathExists } from '@test/support/fsTestUtils';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
+import { openTexraConfigStores } from '@texra/platform/defaults/nodeStores';
 import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
 
 describe('workspace storage defaults', () => {

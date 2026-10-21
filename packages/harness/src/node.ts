@@ -55,6 +55,14 @@ export {
   type SettingsCatalog,
   type StateSettingEntry,
 } from '@shared/state/stateSettings';
+// The config provider over a host's stores (workspace, local, global), and
+// whether it ignores a project file's value for a row.
+export {
+  JsonConfigProvider,
+  projectValueIgnored,
+  type ConfigStore,
+  type JsonConfigProviderOptions,
+} from '@platform/defaults/jsonConfigProvider';
 
 /** Filesystem locations used by the default Node platform. */
 export interface NodePlatformOptions {
