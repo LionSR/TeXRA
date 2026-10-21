@@ -21,12 +21,13 @@ import {
 } from '@cli/tui/overflowText';
 
 // Local imports - TUI input and presentation
+import { clamp } from '@utils/text/stringUtils';
 import { COLOR_HINT } from './colors';
 import { POINTER, TICK } from './glyphs';
 
 /** `index` held to a valid index of a `length`-item list (0 when empty). */
 function clampIndex(index: number, length: number): number {
-  return Math.max(0, Math.min(length - 1, index));
+  return clamp(index, 0, length - 1);
 }
 
 export interface SelectItem<T> {
@@ -197,9 +198,7 @@ function visibleSelectRange({
 }): { readonly start: number; readonly end: number } {
   if (itemCount <= 0) return { start: 0, end: 0 };
   const visibleCount =
-    maxVisibleItems == null
-      ? itemCount
-      : Math.max(0, Math.min(itemCount, maxVisibleItems));
+    maxVisibleItems == null ? itemCount : clamp(maxVisibleItems, 0, itemCount);
   if (visibleCount <= 0) return { start: 0, end: 0 };
   const clampedHighlight = clampIndex(highlight, itemCount);
   const centerOffset = Math.floor(visibleCount / 2);

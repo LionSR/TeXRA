@@ -30,6 +30,7 @@ import { focusRingStyles } from '@ui/styles/controlStyles';
 
 // Local imports - shared icons and utils
 import { waIcon } from '@ui/wa/webAwesomeIcons';
+import { clamp } from '@utils/text/stringUtils';
 
 /** The usage strip's token counters in order: each one's icon and tooltip,
  *  and the words the strip's aria summary reads. Only the `always` ones show
@@ -275,7 +276,10 @@ export class UsagePanel extends LitElement {
       : html`<span id="usage-cost" class="token-stat">${this.renderCostRoute(cost)}</span><wa-tooltip for="usage-cost" placement="top-end">${ownShare}</wa-tooltip>`;
     return html`
       <span class="run-summary__value">
-        ${join(visibleTokenStats(this.usage).map(renderTokenStat), html`<span aria-hidden="true">·</span>`)}
+        ${join(
+          visibleTokenStats(this.usage).map(renderTokenStat),
+          html`<span aria-hidden="true">·</span>`,
+        )}
         <span aria-hidden="true">·</span>${costRoute}
       </span>
     `;
@@ -336,7 +340,7 @@ export class UsagePanel extends LitElement {
     // 1% so a window that is genuinely in use never reads as `0% context
     // used` — the rule `roundedContextPercent` sets and the CLI status bar
     // already applies to this same number.
-    const clamped = Math.max(0, Math.min(100, utilizationPercent));
+    const clamped = clamp(utilizationPercent, 0, 100);
     const roundedPercent = roundedContextPercent(utilizationPercent);
     const percentLabel = `${roundedPercent}% context used`;
 

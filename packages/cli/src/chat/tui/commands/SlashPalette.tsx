@@ -11,6 +11,7 @@ import { KeyHints } from '@cli/tui/ui/KeyHints';
 import { nextWrappingHighlightIndex } from '@cli/tui/ui/Select';
 import { COLOR_HINT } from '@cli/tui/ui/colors';
 import { POINTER } from '@cli/tui/ui/glyphs';
+import { clamp } from '@utils/text/stringUtils';
 import {
   matchSlashCommands,
   type SlashCommand,
@@ -54,12 +55,12 @@ function slashPaletteWindow({
     return { start: 0, end: 0, hiddenBefore: 0, hiddenAfter: 0 };
   }
 
-  const visibleAtEdge = Math.max(1, Math.min(itemCount, maxVisibleCommands));
+  const visibleAtEdge = clamp(maxVisibleCommands, 1, itemCount);
   if (itemCount <= visibleAtEdge) {
     return { start: 0, end: itemCount, hiddenBefore: 0, hiddenAfter: 0 };
   }
 
-  const clamped = Math.max(0, Math.min(itemCount - 1, highlight));
+  const clamped = clamp(highlight, 0, itemCount - 1);
   if (clamped < visibleAtEdge) {
     return {
       start: 0,
@@ -129,8 +130,7 @@ export function SlashPalette(
   // Whenever the match list resizes (user kept typing), clamp the cursor
   // so it doesn't point past the end.
   useEffect(() => {
-    const clamped =
-      matchCount === 0 ? 0 : Math.max(0, Math.min(matchCount - 1, highlight));
+    const clamped = matchCount === 0 ? 0 : clamp(highlight, 0, matchCount - 1);
     if (clamped !== highlight) setHighlight(clamped);
   }, [matchCount, highlight]);
 
