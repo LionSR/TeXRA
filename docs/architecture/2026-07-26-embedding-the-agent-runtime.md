@@ -178,7 +178,7 @@ it is in the package's declarations (`config/api-reports/harness.api.md`,
 `harness.node.api.md`, `harness.plugins.api.md`).
 
 ```ts
-import { Effect, Stream } from 'effect';
+import { Effect, Fiber, Stream } from 'effect';
 import { Sessions } from '@texra-ai/harness';
 import { nodePlatform } from '@texra-ai/harness/node';
 import { harnessBuiltins } from '@texra-ai/harness/plugins';
@@ -207,14 +207,19 @@ const program = Effect.gen(function* () {
     agent: 'assistant',
     instruction: 'Hello',
   });
-  yield* Effect.forkScoped(
+  const events = yield* Effect.forkScoped(
     Stream.runForEach(run.events, (event) =>
       Effect.sync(() => {
         if (event.type === 'stream.chunk') process.stdout.write(event.text);
       }),
     ),
   );
-  return yield* run.result;
+  const result = yield* run.result;
+  // The run's trace ends with it, so the join drains what the result may
+  // have outrun; returning on the result alone would close the scoped
+  // consumer and drop the trailing events.
+  yield* Fiber.join(events);
+  return result;
 }).pipe(
   Effect.scoped,
   // The process and its sessions live for this layer's scope; releasing it
@@ -227,11 +232,14 @@ console.log(result.outcome);
 ```
 
 `session.start` validates its input itself: a refusal before any model work
-fails it with a tagged error (`AgentNotFound`, `ToolsRefused`), and a failure
-after admission fails `run.result` with `RunFailure`. A host inside this
-repository that already holds a `ValidatedExecutionRequest` launches through
-`session.runs.launch` on its `SessionHandle` instead, which needs the
-composition root's `SessionOwner`.
+fails it with a tagged error (`AgentNotFound`, `ToolsRefused`); an input its
+schemas reject fails it with `RunFailure` before admission too (`admitInput`,
+`packages/harness/src/effect/sessionPrograms.ts:94-137`, wraps
+`InlinePersonaSchema.parse` and `AgentConfigSchema.parse`, so a typed
+`temperature: 2` is one); and a failure after admission fails `run.result`
+with `RunFailure`. A host inside this repository that already holds a
+`ValidatedExecutionRequest` launches through `session.runs.launch` on its
+`SessionHandle` instead, which needs the composition root's `SessionOwner`.
 `validateRunRequest` (`packages/texra/src/controllers/session/runRequests.ts`)
 is the result-style helper that builds one: it returns either a
 `ValidatedExecutionRequest` or a validation message. A caller that prefers
