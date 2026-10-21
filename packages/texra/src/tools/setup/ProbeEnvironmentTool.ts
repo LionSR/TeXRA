@@ -226,18 +226,25 @@ const probe = Effect.fn('ProbeEnvironmentTool.execute')(function* (
       apiKeys,
       chatGptSubscription: chatGptStatus,
       githubToken,
-      // Stored entries the fields above do not name: `apiKey.*` entries for
-      // no known provider (stale, so shown by raw name), and a count of the
-      // rest, whose names may carry user-derived identifiers.
+      // Stored entries the fields above do not name. `staleApiKeys` lists,
+      // by raw name, every stored `apiKey.*` entry that is not counted as a
+      // saved key: one for no known provider, or a known provider's entry
+      // whose value is blank (its `origin` then reads env or none, yet
+      // `unset_api_key` still has an entry to remove). The rest is a count,
+      // since those names may carry user-derived identifiers.
       storedSecrets:
         storedKeys === 'unavailable'
           ? storedKeys
           : {
-              unrecognizedApiKeys: storedKeys.filter(
-                (key) =>
-                  key.startsWith('apiKey.') &&
-                  apiProviderOfSecretName(key) === undefined,
-              ),
+              staleApiKeys: storedKeys.filter((key) => {
+                if (!key.startsWith('apiKey.')) return false;
+                const provider = apiProviderOfSecretName(key);
+                if (provider === undefined) return true;
+                const origin = apiKeys.find(
+                  (entry) => entry.provider === provider,
+                )?.origin;
+                return origin === 'env' || origin === 'none';
+              }),
               otherRedactedCount: storedKeys.filter(
                 (key) =>
                   !key.startsWith('apiKey.') &&

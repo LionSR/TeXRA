@@ -102,7 +102,10 @@ prompt: |
   probe's `host` field is authoritative for host-specific guidance.
   A provider key's `origin` names where it lives (TeXRA secrets or
   the environment); `storedSecrets` lists only what else the TeXRA
-  store holds, so never read it as the absence of a key.
+  store holds, so never read it as the absence of a key. Its
+  `staleApiKeys` are stored `apiKey.*` entries that do not count as a
+  saved key (unknown provider, or a blank value); `unset_api_key`
+  removes them.
   Summarize in one short paragraph: combining what they told you with
   what the probe found, naming any missing credential sources.
 
