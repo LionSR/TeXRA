@@ -15,7 +15,7 @@ import { Effect, Result } from 'effect';
 
 // Local imports
 import { SharedAttempt } from './sharedAttempt.js';
-import { ensureError, LOG_CHANNEL, toErrorMessage } from './support.js';
+import { ensureError, toErrorMessage } from './support.js';
 
 import { SerializedWrites } from './authProgram.js';
 import {
@@ -36,8 +36,6 @@ import type {
 } from './subscriptionCoordinator.js';
 import type { HttpClient } from 'effect/http';
 import type { z } from 'zod';
-
-const CHANNEL = 'SubscriptionOAuth';
 
 /** Secret-backed persistence for one session bundle. */
 export interface SubscriptionSessionStorage {
@@ -169,35 +167,37 @@ export class SubscriptionOAuthCoordinator<
     this.now = init.now ?? Date.now;
   }
 
-  /** The stored session, or null when signed out or unreadable. */
+  /**
+   * The stored session, or null when none is stored. A stored session that
+   * does not parse is not "never signed in": it fails `fatal`, so the
+   * caller asks for a fresh sign-in, which overwrites it.
+   */
   readonly loadSession = Effect.fn('SubscriptionOAuthCoordinator.loadSession')(
-    function* (this: SubscriptionOAuthCoordinator<S>) {
+    function* (
+      this: SubscriptionOAuthCoordinator<S>,
+    ): Effect.fn.Return<S | null, SecretsFailed | SubscriptionOAuthError> {
       const raw = yield* this.storage.get();
       if (!raw) return null;
       const parsedJson = Result.try({
         try: () => JSON.parse(raw) as unknown,
         catch: ensureError,
       });
-      if (Result.isFailure(parsedJson)) {
-        // Present-but-corrupt is not the same as never signed in.
-        yield* Effect.logWarning(
-          `Stored subscription session is not valid JSON; treating as signed out: ${toErrorMessage(parsedJson.failure)}`,
-        ).pipe(Effect.annotateLogs({ [LOG_CHANNEL]: CHANNEL }));
-        return null;
-      }
-      const parsed = this.policy.sessionSchema.safeParse(parsedJson.success);
-      if (!parsed.success) {
-        yield* Effect.logWarning(
-          `Stored subscription session failed schema validation; treating as signed out: ${toErrorMessage(parsed.error)}`,
-        ).pipe(Effect.annotateLogs({ [LOG_CHANNEL]: CHANNEL }));
-        return null;
-      }
-      return parsed.data;
+      const parsed = Result.isFailure(parsedJson)
+        ? undefined
+        : this.policy.sessionSchema.safeParse(parsedJson.success);
+      if (parsed?.success) return parsed.data;
+      return yield* new SubscriptionOAuthError({
+        message: `The stored subscription session is unreadable; sign in again: ${toErrorMessage(Result.isFailure(parsedJson) ? parsedJson.failure : parsed?.error)}`,
+        kind: 'fatal',
+      });
     },
   );
 
   /** Signed-in status of the stored session. */
-  getStatus(): Effect.Effect<SubscriptionSessionStatus, SecretsFailed> {
+  getStatus(): Effect.Effect<
+    SubscriptionSessionStatus,
+    SecretsFailed | SubscriptionOAuthError
+  > {
     return Effect.map(this.loadSession(), (session) =>
       session
         ? {

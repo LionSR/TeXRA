@@ -200,9 +200,15 @@ if (ownsSingleInstanceLock) {
             globalConfigStore: platformInit.globalConfigStore,
           }).pipe(Effect.provideService(DesktopProjectRecords, projectRecords));
           projects = registry;
-          const unopenedProjects = remembered.missing.map(
-            (root) => `${root} (no such folder; forgotten)`,
-          );
+          const unopenedProjects = [
+            ...remembered.missing.map(
+              (root) => `${root} (no such folder; forgotten)`,
+            ),
+            ...remembered.unreadable.map(
+              ({ root, reason }) =>
+                `${root} (could not be read; kept for the next launch): ${reason}`,
+            ),
+          ];
           yield* Effect.forEach(
             remembered.roots,
             (root) =>

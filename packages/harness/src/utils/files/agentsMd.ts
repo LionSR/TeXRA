@@ -20,14 +20,15 @@ const AGENTS_FILE = 'AGENTS.md';
  * `~/.texra/AGENTS.md`. `AGENTS.md` is the one instructions file; no other
  * name is read. Returns the trimmed content or an empty string if none found.
  *
- * A missing file is the ordinary case and answers with the empty string; every
- * other filesystem failure (a permission error, an unreadable root) is warned
- * about before it does, because a silently absent instructions file reads
- * exactly like a run the user never wrote instructions for.
+ * A missing file is the ordinary case and falls through to the next root;
+ * every other filesystem failure (a permission error, an unreadable root)
+ * fails the load with the file's path, because a silently absent
+ * instructions file reads exactly like a run the user never wrote
+ * instructions for.
  */
 export const loadAgentsMd = (
   workspace: string | undefined,
-): Effect.Effect<string, never, FileSystem.FileSystem> =>
+): Effect.Effect<string, Error, FileSystem.FileSystem> =>
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
     // Precedence order: the run's workspace, then the user's `~/.texra`. A
@@ -41,8 +42,23 @@ export const loadAgentsMd = (
 
     for (const { root, source } of candidates) {
       const file = path.join(root, AGENTS_FILE);
-      if (!(yield* entryExists(fs, file))) continue;
-      const trimmed = (yield* readNormalizedFile(fs, file)).trim();
+      // Absent, a dangling link included, is '' and falls through.
+      const content = yield* Effect.gen(function* () {
+        if (!(yield* entryExists(fs, file))) return '';
+        return yield* readNormalizedFile(fs, file);
+      }).pipe(
+        Effect.catchIf(
+          (error) => error.reason._tag === 'NotFound',
+          () => Effect.succeed(''),
+        ),
+        Effect.mapError(
+          (error) =>
+            new Error(`Failed to load ${file}: ${toErrorMessage(error)}`, {
+              cause: error,
+            }),
+        ),
+      );
+      const trimmed = content.trim();
       if (!trimmed) continue;
       yield* Effect.logDebug(`Loaded ${source} ${AGENTS_FILE}`).pipe(
         withLogChannel(CHANNEL),
@@ -50,14 +66,4 @@ export const loadAgentsMd = (
       return trimmed;
     }
     return '';
-  }).pipe(
-    Effect.catchIf(
-      (error) => error.reason._tag === 'NotFound',
-      () => Effect.succeed(''),
-    ),
-    Effect.catch((error) =>
-      Effect.logWarning(
-        `Failed to load ${AGENTS_FILE}: ${toErrorMessage(error)}`,
-      ).pipe(withLogChannel(CHANNEL), Effect.as('')),
-    ),
-  );
+  });

@@ -68,6 +68,9 @@ export interface CliHistoryEntry {
    *  Ownership and loadability are settled when the run is opened.
    *  Independent of the frozen `status`: a failed run can be resumable. */
   readonly resumable: boolean;
+  /** The listing's cause when the run cannot resume in this build (its rows
+   *  are unreadable, or an earlier build's); resume surfaces show it. */
+  readonly resumeBlocked?: string;
   readonly inputBasename: string;
   /** A document task's run, or a chat. */
   readonly kind?: 'task' | 'chat';
@@ -104,16 +107,20 @@ export interface CliHistoryConversationPreviewMessage {
   readonly truncated: boolean;
 }
 
-/** Rows the resume surfaces offer. Both the launcher's resume browser and the
+/** Rows the resume surfaces offer: the resumable runs and, with their
+ *  cause, the runs this build cannot resume, so none vanishes unexplained.
+ *  Both the launcher's resume browser and the
  *  `/resume` form read this, and the launcher's Resume row counts against it,
  *  so the advertised count can never exceed the list it opens. Filtering and
  *  capping live together so a caller cannot honor one half of the rule. */
 const RESUME_LIST_LIMIT = 50;
 
 export function listResumableCliHistoryEntries<
-  T extends Pick<CliHistoryEntry, 'resumable'>,
+  T extends Pick<CliHistoryEntry, 'resumable' | 'resumeBlocked'>,
 >(entries: readonly T[]): T[] {
-  return entries.filter((entry) => entry.resumable).slice(0, RESUME_LIST_LIMIT);
+  return entries
+    .filter((entry) => entry.resumable || entry.resumeBlocked !== undefined)
+    .slice(0, RESUME_LIST_LIMIT);
 }
 
 export type CliHistoryDeleteResult =
@@ -486,6 +493,9 @@ function toCliHistoryEntry(entry: AgentRunListingEntry): CliHistoryEntry {
     model: entry.model ?? config.model,
     status,
     resumable,
+    ...(entry.resumeBlocked !== undefined && {
+      resumeBlocked: entry.resumeBlocked,
+    }),
     inputBasename,
     kind: runKindOf(config),
     description: entry.description,

@@ -47,6 +47,7 @@ function createHost(
   overrides: Partial<DesktopPtyHostOptions> = {},
 ): ReturnType<typeof createDesktopPtyHost> {
   return createDesktopPtyHost({
+    cwd: '/workspace',
     onData: vi.fn(),
     onExit: vi.fn(),
     onError: vi.fn(),

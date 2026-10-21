@@ -734,17 +734,22 @@ export function createChatSessionController(
     Deferred.doneUnsafe(preparing.slot, Effect.void);
   };
 
-  /** Adopt a resumed run's configuration and helper model. */
+  /** Adopt a resumed run's configuration and helper model. A failure is the
+   *  chat's own line (the TUI's log sink is silent): the run goes on, but the
+   *  chat's model and settings may not be the run's. */
   const adoptRunRecord = (runId: RunId) =>
     Effect.gen(function* () {
       const config = yield* init.records(runId).readConfig();
-      if (!config) return;
+      if (!config)
+        return yield* Effect.fail(new Error('it has no stored configuration'));
       yield* adoptRunConfig(config, 'history');
       yield* setCliHelperModel(stores.globalState, config.model);
     }).pipe(
       Effect.catch((error) =>
-        Effect.logWarning(
-          `Resumed run ${runId}: its configuration could not be adopted: ${toErrorMessage(error)}`,
+        Effect.sync(() =>
+          appendLocalErrorTranscript(
+            `Resumed run ${runId}: its configuration could not be adopted: ${toErrorMessage(error)}`,
+          ),
         ),
       ),
     );

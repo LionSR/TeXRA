@@ -174,8 +174,10 @@ function hostPath(input: string): string {
 
 /**
  * Whether a subscription's preference is on and its session signed in. The
- * sign-in is read only when the preference is on; the preference read is a
- * synchronous catalog read that throws, kept in the typed channel.
+ * sign-in is read only when the preference is on, and a session that cannot
+ * be read fails rather than reading as signed out, which would route the
+ * call to a different billing route; the preference read is a synchronous
+ * catalog read that throws, kept in the typed channel.
  */
 const subscriptionOn = (
   stores: ModelOptionStores,
@@ -192,11 +194,18 @@ const subscriptionOn = (
   }).pipe(
     Effect.flatMap((on) =>
       on
-        ? Effect.map(
-            (provider === 'chatgpt' ? getCodexStatus : getXaiStatus)(
-              stores.secrets,
+        ? (provider === 'chatgpt' ? getCodexStatus : getXaiStatus)(
+            stores.secrets,
+          ).pipe(
+            Effect.map((status) => status.signedIn),
+            Effect.mapError(
+              (cause) =>
+                new StateReadFailed({
+                  key: provider,
+                  message: `Could not read the ${provider} subscription session.`,
+                  cause,
+                }),
             ),
-            (status) => status.signedIn,
           )
         : Effect.succeed(false),
     ),
@@ -220,15 +229,30 @@ export const readModelSettings = Effect.fn('readModelSettings')(function* (
           ),
           chatgptSubscription: subscriptionOn(stores, 'chatgpt'),
           xaiSubscription: subscriptionOn(stores, 'grok'),
-          // An unreadable Kimi Code key reads as absent and warns, the rule
-          // the picker applies to every key status.
-          kimiCodeKey: hasUsableApiKey(stores.secrets, 'kimiCode').pipe(
-            Effect.catchTag('SecretsFailed', (failure) =>
-              Effect.logWarning(
-                'Failed to read Kimi Code API key status; treating it as unavailable.',
-                failure.cause,
-              ).pipe(Effect.as(false)),
-            ),
+          // Under the Kimi Code preference the key picks the billing route,
+          // so an unreadable one fails the read rather than routing to the
+          // pay-per-token key. Otherwise it reads as absent and warns, the
+          // rule the picker applies to every key status.
+          kimiCodeKey: Effect.flatMap(
+            flag(GlobalStateKey.KIMI_CODE_PREFER),
+            (preferred) =>
+              hasUsableApiKey(stores.secrets, 'kimiCode').pipe(
+                Effect.catchTag('SecretsFailed', (failure) =>
+                  preferred
+                    ? Effect.fail(
+                        new StateReadFailed({
+                          key: 'kimiCode',
+                          message:
+                            'Could not read the Kimi Code API key while Kimi Code is preferred.',
+                          cause: failure,
+                        }),
+                      )
+                    : Effect.logWarning(
+                        'Failed to read Kimi Code API key status; treating it as unavailable.',
+                        failure.cause,
+                      ).pipe(Effect.as(false)),
+                ),
+              ),
           ),
           // Stored in thousands of tokens; this is its only reader.
           chatgptContextWindow: Effect.map(

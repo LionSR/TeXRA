@@ -144,7 +144,7 @@ export function assertInSetupAllowlist(
 class SubscriptionProbeFailed extends Data.TaggedError(
   'SubscriptionProbeFailed',
 )<{
-  readonly member: 'readModelOptions';
+  readonly member: 'getCodexStatus' | 'readModelOptions';
   readonly message: string;
   readonly cause: unknown;
 }> {}
@@ -160,7 +160,16 @@ export const getChatGptSubscriptionStatus = Effect.fn(
   Secrets | LanguageModel
 > {
   const secrets = yield* Secrets;
-  const status = yield* getCodexStatus(secrets);
+  const status = yield* getCodexStatus(secrets).pipe(
+    Effect.mapError(
+      (cause) =>
+        new SubscriptionProbeFailed({
+          member: 'getCodexStatus',
+          message: 'The ChatGPT subscription session could not be read.',
+          cause,
+        }),
+    ),
+  );
   // Routing is only consulted for a signed-in account, as the `&&` did.
   if (!status.signedIn) return { signedIn: false, enabled: false };
   const [option] = yield* readModelOptions({ ...stores, secrets }, [

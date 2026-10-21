@@ -434,15 +434,28 @@ export function executeCliRequest(
             const inspection = stopped
               ? yield* session.records(launchRunId).readResumable()
               : undefined;
-            // The ordinary bounded shutdown path below remains authoritative
-            // when checkpoint inspection itself is unavailable.
+            // Decided here, from the rows before the run's end, and again by
+            // the finalization's drain after it: this early verdict is what
+            // lets the wait below outrank the deadline, which a verdict read
+            // after the end could not. When it cannot be read the ordinary
+            // bounded path below remains authoritative (its race still sees
+            // the drain start a notice), and the shutdown says so.
             const advertisesCheckpoint =
               inspection !== undefined &&
               (yield* advertisesInterruptedRun(
                 launchRunId,
                 inspection,
                 options.canAdvertiseInterruptedRun,
-              ).pipe(Effect.orElseSucceed(() => false)));
+              ).pipe(
+                Effect.catch((error) =>
+                  Effect.logWarning(
+                    `Run ${launchRunId}: whether it can be resumed could not be read before shutdown; its recovery notice waits only within the shutdown deadline`,
+                  ).pipe(
+                    Effect.annotateLogs({ data: error }),
+                    Effect.as(false),
+                  ),
+                ),
+              ));
             // Wait for the run's end and its recovery notice before the
             // handler exits. A resumable run keeps shutdown alive until the
             // promised notice is flushed: that wait outranks the deadline.

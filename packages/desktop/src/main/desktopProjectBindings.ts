@@ -5,6 +5,8 @@
 // their own views. A binding is a scope: everything it holds is a finalizer
 // of it, and releasing a project closes that scope, awaited.
 
+import { homedir } from 'node:os';
+
 import {
   Cause,
   Effect,
@@ -129,7 +131,10 @@ export const openProjectBindings = Effect.fn('desktop.openProjectBindings')(
       const post = (message: DesktopWorkspaceReply) =>
         !released && host.post({ ...message, session: project.key });
       const ptyHost = createDesktopPtyHost({
-        cwd: () => project.root,
+        // The project's folder; the no-workspace session's terminal opens in
+        // the home directory, never the app's own process cwd (`/` when
+        // launched from the dock).
+        cwd: project.root ?? homedir(),
         onData: (sessionId, data) =>
           post({
             command: DESKTOP_WORKSPACE_COMMANDS.TERMINAL_DATA,

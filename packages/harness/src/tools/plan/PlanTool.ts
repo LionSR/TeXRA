@@ -14,7 +14,7 @@
  */
 
 // Third-party imports
-import { Clock, Effect } from 'effect';
+import { Cause, Clock, Effect } from 'effect';
 import { z } from 'zod';
 
 // Local imports
@@ -23,6 +23,7 @@ import { withLogChannel } from '@logger/effectLog';
 import { goalElapsedMs, type Goal } from '@shared/plugins/goal';
 import type { Plan, RunId, ToolResult } from '@shared/schemas';
 import { refusalOf } from '@shared/session/approvalDecision';
+import { findStorageRefusal } from '@shared/session/runHistory';
 import {
   clearGoal,
   goalOf,
@@ -38,6 +39,10 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 import { formatCompactDuration } from '@utils/text/stringUtils';
 
 const CHANNEL = 'PlanTool';
+
+/** A goal write the model can work around; a store refusal ends the run. */
+const notStorageRefusal = (error: Error): boolean =>
+  findStorageRefusal(Cause.fail(error)) === undefined;
 
 function formatGoalView(goal: Goal, nowMs: number): string {
   return [
@@ -131,7 +136,7 @@ const startGoalForPlan = Effect.fn('PlanTool.startGoalForPlan')(function* (
         `Plan approved: goal ${active.goalId} retargeted`,
       );
     }).pipe(
-      Effect.catch((err) => {
+      Effect.catchIf(notStorageRefusal, (err) => {
         const reason = toErrorMessage(err);
         return Effect.logWarning(
           'Failed to retarget in-flight goal for approved plan; returning an explicit error result.',
@@ -174,7 +179,7 @@ const startGoalForPlan = Effect.fn('PlanTool.startGoalForPlan')(function* (
       `Plan approved: goal ${goal.goalId} started`,
     );
   }).pipe(
-    Effect.catch((err) => {
+    Effect.catchIf(notStorageRefusal, (err) => {
       const reason = toErrorMessage(err);
       return Effect.logWarning(
         'Failed to start goal for approved plan; falling back to plain approval.',

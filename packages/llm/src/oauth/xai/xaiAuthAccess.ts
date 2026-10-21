@@ -4,10 +4,8 @@
  * session state.
  */
 
-import {
-  createSecretBackedCoordinator,
-  getSubscriptionSessionStatus,
-} from '../sessionAccess.js';
+import { Effect } from 'effect';
+import { createSecretBackedCoordinator } from '../sessionAccess.js';
 import { SubscriptionOAuthCoordinator } from '../SubscriptionOAuthCoordinator.js';
 import { defineLoopbackLogin } from '../loopbackLogin.js';
 import {
@@ -20,11 +18,12 @@ import type {
   SubscriptionCoordinator,
   SubscriptionSessionStatus,
 } from '../subscriptionCoordinator.js';
-import type { CredentialStore } from '../../providers/credentials.js';
+import type {
+  CredentialStore,
+  SecretsFailed,
+} from '../../providers/credentials.js';
+import type { SubscriptionOAuthError } from '../subscriptionOAuthError.js';
 import type { XaiSession } from './xaiSessionTypes.js';
-import type { Effect } from 'effect';
-
-const CHANNEL = 'xaiAuth';
 
 /** The coordinator for the caller's secret store. */
 export const xaiCoordinator: (
@@ -35,15 +34,15 @@ export const xaiCoordinator: (
     new SubscriptionOAuthCoordinator({ storage, policy: XAI_POLICY }),
 });
 
-/** Signed-in status, read from the caller's secret store. */
+/** Signed-in status, read from the caller's secret store. A store that
+ *  cannot be read, or a stored session that does not parse, fails. */
 export function getXaiStatus(
   secrets: CredentialStore,
-): Effect.Effect<SubscriptionSessionStatus> {
-  return getSubscriptionSessionStatus(
-    () => xaiCoordinator(secrets),
-    CHANNEL,
-    'Grok',
-  );
+): Effect.Effect<
+  SubscriptionSessionStatus,
+  SecretsFailed | SubscriptionOAuthError
+> {
+  return Effect.suspend(() => xaiCoordinator(secrets).getStatus());
 }
 
 /** The browser sign-in, bound to the registered Grok callback. */

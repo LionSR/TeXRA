@@ -55,8 +55,8 @@ interface PtySessionHandle {
 }
 
 export interface DesktopPtyHostOptions {
-  /** Default working directory for new sessions: the active paper's root. */
-  cwd?: () => string | undefined;
+  /** Working directory for every session, decided by the owner. */
+  readonly cwd: string;
   /** Streams pty output to the renderer. */
   onData(sessionId: string, data: string): void;
   /** Reports process exit so the UI can mark the session finished. */
@@ -77,7 +77,6 @@ export interface DesktopPtyHost {
     id: string;
     cols: number;
     rows: number;
-    cwd?: string;
   }): Promise<PtySessionHandle | undefined>;
   get(id: string): PtySessionHandle | undefined;
   disposeAll(): void;
@@ -182,7 +181,7 @@ export function createDesktopPtyHost(
   let generation = 0;
 
   return {
-    async create({ id, cols, rows, cwd }) {
+    async create({ id, cols, rows }) {
       const existing = sessions.get(id);
       if (existing) return existing;
 
@@ -208,7 +207,7 @@ export function createDesktopPtyHost(
         // so clamp to a sane minimum until the renderer reports real bounds.
         cols: Math.max(cols, 20),
         rows: Math.max(rows, 5),
-        cwd: cwd ?? options.cwd?.() ?? process.cwd(),
+        cwd: options.cwd,
         env: ptyEnvironment(),
       });
 

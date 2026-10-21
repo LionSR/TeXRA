@@ -42,7 +42,10 @@ function resumeEntryLabel(entry: CliHistoryEntry): string {
 }
 
 function resumeEntryDescription(entry: CliHistoryEntry): string {
-  return `${entry.timestamp} · ${entry.status} · ${formatCliHistoryAgentLabel(entry)}`;
+  const standing = `${entry.timestamp} · ${entry.status} · ${formatCliHistoryAgentLabel(entry)}`;
+  return entry.resumable || entry.resumeBlocked === undefined
+    ? standing
+    : `${standing} · cannot resume: ${entry.resumeBlocked}`;
 }
 
 export function ResumeListForm(props: ResumeListFormProps): React.JSX.Element {
@@ -62,6 +65,7 @@ export function ResumeListForm(props: ResumeListFormProps): React.JSX.Element {
           value: entry.id,
           label: resumeEntryLabel(entry),
           description: resumeEntryDescription(entry),
+          disabled: !entry.resumable,
         }))
       }
       availableRows={props.availableRows}

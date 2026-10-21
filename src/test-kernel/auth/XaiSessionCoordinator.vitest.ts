@@ -2,14 +2,12 @@ import { it } from '@effect/vitest';
 import { Effect } from 'effect';
 import { afterEach, describe, expect, vi } from 'vitest';
 
-import { effectDiagnosticsLayer } from '@logger/effectDiagnostics';
-import { setLogSink } from '@logger/logSink';
-import { captureLogEntries } from '@test/support/logSinkCapture';
 import {
   SubscriptionOAuthCoordinator,
   type SubscriptionOAuthClient,
   type SubscriptionSessionStorage,
 } from '../../../packages/llm/src/oauth/SubscriptionOAuthCoordinator.js';
+import { SubscriptionOAuthError } from '../../../packages/llm/src/oauth/subscriptionOAuthError.js';
 import { XAI_POLICY } from '../../../packages/llm/src/oauth/xai/xaiSessionPolicy.js';
 import type { XaiSession } from '../../../packages/llm/src/oauth/xai/xaiSessionTypes.js';
 
@@ -46,7 +44,6 @@ function makeCoordinator(options: {
 
 describe('xAI subscription session coordinator', () => {
   afterEach(() => {
-    setLogSink(null);
     vi.restoreAllMocks();
   });
 
@@ -69,25 +66,21 @@ describe('xAI subscription session coordinator', () => {
   });
 
   it.effect.each([
-    { stored: '{not-json', warning: 'not valid JSON' },
-    {
-      stored: JSON.stringify({ accessToken: 'only' }),
-      warning: 'schema validation',
-    },
+    { stored: '{not-json', what: 'not JSON' },
+    { stored: JSON.stringify({ accessToken: 'only' }), what: 'off-schema' },
   ])(
-    'warns and treats an unreadable stored session ($warning) as signed out',
-    ({ stored, warning }) =>
+    'fails an unreadable stored session ($what) as fatal, not signed out',
+    ({ stored }) =>
       Effect.gen(function* () {
-        const logs = captureLogEntries();
         const storage: SubscriptionSessionStorage = {
           get: () => Effect.succeed(stored),
           store: () => Effect.void,
           delete: () => Effect.void,
         };
         const coordinator = makeCoordinator({ storage });
-        expect(yield* coordinator.loadSession()).toBeNull();
-        expect(yield* coordinator.getStatus()).toEqual({ signedIn: false });
-        expect(logs.has('WARN', 'SubscriptionOAuth', warning)).toBe(true);
-      }).pipe(Effect.provide(effectDiagnosticsLayer('Trace'))),
+        const status = yield* Effect.flip(coordinator.getStatus());
+        expect(status).toBeInstanceOf(SubscriptionOAuthError);
+        expect(status).toMatchObject({ kind: 'fatal' });
+      }),
   );
 });

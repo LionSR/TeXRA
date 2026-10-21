@@ -24,6 +24,7 @@ import {
   getXaiStatus,
   LoopbackTransportUnavailableError,
   type SubscriptionDeviceCodePrompt,
+  type SubscriptionOAuthError,
   type SubscriptionSessionStatus,
   xaiCoordinator,
   xaiLoginWithDeviceCode,
@@ -51,6 +52,10 @@ import type { HttpClient } from 'effect/http';
 import type { SettingsStores } from '@texra-ai/harness';
 
 const CHANNEL = 'subscriptionProviders';
+
+/** Why a subscription's status could not be read: the store, or a stored
+ *  session that does not parse. */
+type SubscriptionStatusError = SecretsFailed | SubscriptionOAuthError;
 
 /**
  * A provider's id, spelled once: the wire vocabulary in
@@ -125,10 +130,12 @@ export interface SubscriptionProvider {
    */
   signOut(secrets: PlatformSecrets): Effect.Effect<void, SecretsFailed>;
   /**
-   * The signed-in status. Infallible: an unreadable store reports
-   * signed-out, with the cause logged by the probe.
+   * The signed-in status. A store that cannot be read, or a stored session
+   * that does not parse, fails rather than reading as signed out.
    */
-  getStatus(secrets: PlatformSecrets): Effect.Effect<SubscriptionAccount>;
+  getStatus(
+    secrets: PlatformSecrets,
+  ): Effect.Effect<SubscriptionAccount, SubscriptionStatusError>;
   isPreferSubscription(stores: SettingsStores): boolean;
   /**
    * Persist the preference. An `Effect`, like
@@ -158,7 +165,7 @@ interface SubscriptionProviderBindings<Coordinator, Session> extends Pick<
   };
   readonly getStatus: (
     secrets: PlatformSecrets,
-  ) => Effect.Effect<SubscriptionSessionStatus>;
+  ) => Effect.Effect<SubscriptionSessionStatus, SubscriptionStatusError>;
   readonly loginWithDeviceCode: (options: {
     coordinator: Coordinator;
     onPrompt: (prompt: SubscriptionDeviceCodePrompt) => Effect.Effect<void>;
@@ -322,7 +329,7 @@ export function subscriptionAuthStatus(
   providerId: SubscriptionProviderId,
   stores: SettingsStores,
   secrets: PlatformSecrets,
-): Effect.Effect<SubscriptionAuthStatus> {
+): Effect.Effect<SubscriptionAuthStatus, SubscriptionStatusError> {
   const provider = subscriptionProvider(providerId);
   return Effect.map(provider.getStatus(secrets), (status) => ({
     provider: providerId,

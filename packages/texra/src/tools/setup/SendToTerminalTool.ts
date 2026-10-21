@@ -54,7 +54,7 @@ const sendToTerminal = Effect.fn('SendToTerminalTool.execute')(function* (
   const command = input.command.trim();
   const name = TERMINAL_NAME_PREFIX + input.label.trim();
 
-  const { exitCode, output, timedOut } = yield* terminal({
+  const { exitCode, output, outputLost, timedOut } = yield* terminal({
     name,
     command,
     timeoutMs: input.timeout,
@@ -78,8 +78,13 @@ const sendToTerminal = Effect.fn('SendToTerminalTool.execute')(function* (
     ? `"${name}" timed out after ${Math.round(input.timeout / 1000)}s`
     : `"${name}" exited ${exitLabel}`;
   const outputText = output.trim() ? `\n\n${output}` : '';
+  // A lost capture must not read as a command that printed nothing.
+  const lostText =
+    outputLost === undefined
+      ? ''
+      : `\n\nOutput could not be captured${output.trim() ? ' in full' : ''} (${outputLost}); re-probe with \`verify_setup\` to see what the command did.`;
 
-  return executed(summary + outputText, summary);
+  return executed(summary + lostText + outputText, summary);
 });
 
 export const SendToTerminalTool = defineTool({
@@ -87,7 +92,7 @@ export const SendToTerminalTool = defineTool({
   // Requires a VS Code terminal.
   unavailableHosts: ['cli', 'desktop', 'sdk'],
   requiresApproval: true,
-  description: `Run a command in a VS Code integrated terminal: use this instead of \`bash\` when the command needs a real TTY: \`sudo\` password prompts, package managers that ask for confirmation (e.g. \`brew install --cask\`), or anything that drops the user into an interactive UI. Approval reuses the regular \`bash\` approval dialog. Returns an exit code and an ANSI-stripped output tail of up to ${TERMINAL_OUTPUT_MAX_CHARS} characters when shell integration is active (bash/zsh/pwsh/fish in VS Code-launched terminals); returns an undefined exit code with empty output otherwise: re-probe with \`verify_setup\` to confirm what actually happened. Do NOT use this to bypass \`bash\` approvals on commands that would work in \`bash\`.`,
+  description: `Run a command in a VS Code integrated terminal: use this instead of \`bash\` when the command needs a real TTY: \`sudo\` password prompts, package managers that ask for confirmation (e.g. \`brew install --cask\`), or anything that drops the user into an interactive UI. Approval reuses the regular \`bash\` approval dialog. Returns an exit code and an ANSI-stripped output tail of up to ${TERMINAL_OUTPUT_MAX_CHARS} characters when shell integration is active (bash/zsh/pwsh/fish in VS Code-launched terminals); otherwise the exit code is unknown and the result says the output could not be captured: re-probe with \`verify_setup\` to confirm what actually happened. Do NOT use this to bypass \`bash\` approvals on commands that would work in \`bash\`.`,
   schema: SendToTerminalInputSchema,
   // Approval reuses the regular bash dialog: the loop gates the same trimmed
   // command the terminal receives. No cwd: the command goes to a named

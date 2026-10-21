@@ -223,6 +223,12 @@ export interface TerminalRunResult {
   exitCode: number | undefined;
   /** ANSI-stripped, length-capped tail of command output when available. */
   output: string;
+  /**
+   * Why the output could not be captured, in whole or in part; absent when
+   * `output` is everything the command printed (up to the cap). `output` then
+   * holds whatever was read before the loss, which may be nothing.
+   */
+  outputLost?: string;
   timedOut: boolean;
 }
 

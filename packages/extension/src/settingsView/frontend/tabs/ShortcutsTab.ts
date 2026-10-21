@@ -179,8 +179,16 @@ export class ShortcutsTab extends LitElement {
   }
 
   private updateShortcut(id: string, accelerator: string | undefined): void {
-    getDesktopShortcutService()?.update(id, accelerator);
     this.recordingId = undefined;
+    try {
+      getDesktopShortcutService()?.update(id, accelerator);
+    } catch (error) {
+      // The service refuses a write that would overwrite stored bindings it
+      // could not read; its message names the way out.
+      this.feedback = error instanceof Error ? error.message : String(error);
+      this.feedbackIsError = true;
+      return;
+    }
     this.feedback = accelerator
       ? `Saved ${formatDesktopAccelerator(accelerator, detectBrowserPlatform())}.`
       : 'Shortcut cleared.';

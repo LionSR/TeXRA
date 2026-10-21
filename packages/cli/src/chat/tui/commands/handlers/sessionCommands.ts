@@ -1,7 +1,7 @@
 import { formatResultCount } from '@texra-ai/harness/transcript';
 import { Effect, Result, Stream } from 'effect';
 
-import { goalStateOf } from '@texra-ai/harness/schemas';
+import { goalStateOf, toErrorMessage } from '@texra-ai/harness/schemas';
 import { readModelOptions, type Session } from '@texra-ai/harness';
 import { runBypasses } from '@texra-ai/harness/schemas';
 import { isLiveRun } from '@texra-ai/harness/schemas';
@@ -26,6 +26,7 @@ import {
 } from '@cli/chat/tui/state/sessionView';
 import { terminalCapabilities } from '@cli/chat/tui/state/terminalCapabilities';
 import {
+  appendLocalErrorTranscript,
   appendLocalNotice,
   appendLocalRequestRefusal,
 } from '@cli/chat/tui/state/transcript';
@@ -179,12 +180,19 @@ export function resumeInterruptedTasks(
     );
     return Effect.forEach(
       tasks,
-      // A refusal is the task's own line; the rest still resume.
+      // A refusal is the task's own transcript line, as the single-task
+      // `/resume` reports one; the rest still resume.
       (task) =>
         runSession
           .resume(task.runId, { interactive: true })
           .pipe(
-            Effect.ignore({ log: 'Warn', message: `Resuming ${task.runId}` }),
+            Effect.catch((refused) =>
+              Effect.sync(() =>
+                appendLocalErrorTranscript(
+                  `Could not resume ${task.title}: ${toErrorMessage(refused)}`,
+                ),
+              ),
+            ),
           ),
       { concurrency: 'unbounded', discard: true },
     ).pipe(Effect.forkDetach, Effect.asVoid);

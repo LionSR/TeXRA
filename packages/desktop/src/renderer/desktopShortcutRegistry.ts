@@ -64,7 +64,12 @@ export function createDesktopShortcutRegistry(
 ): DesktopShortcutRegistry {
   const view = options.document.defaultView;
   const { platform } = options;
-  let overrides = readOverrides(view?.localStorage);
+  const stored = readOverrides(view?.localStorage);
+  let overrides = stored.ok ? stored.overrides : {};
+  // While the stored blob is unreadable it stays untouched: `update` rewrites
+  // the whole key, so writing over it would erase every binding it holds.
+  // `reset()` is the explicit way to discard it.
+  let unreadable = !stored.ok;
   const listeners = new Set<
     (entries: readonly DesktopShortcutEntry[]) => void
   >();
@@ -105,6 +110,11 @@ export function createDesktopShortcutRegistry(
     ) {
       return;
     }
+    if (unreadable) {
+      throw new Error(
+        'Saved keyboard shortcuts could not be read. Use "Reset all" to discard them before changing a shortcut.',
+      );
+    }
     overrides = {
       ...overrides,
       [id]: accelerator ?? null,
@@ -118,6 +128,7 @@ export function createDesktopShortcutRegistry(
 
   function reset(): void {
     overrides = {};
+    unreadable = false;
     view?.localStorage.removeItem(DESKTOP_SHORTCUT_STORAGE_KEY);
     notify();
   }
@@ -246,28 +257,26 @@ function hasPrimaryModifier(event: KeyboardEvent): boolean {
   return event.metaKey || event.ctrlKey || event.altKey;
 }
 
-function readOverrides(storage: Storage | undefined): DesktopShortcutOverrides {
-  if (!storage) return {};
-  const raw = storage.getItem(DESKTOP_SHORTCUT_STORAGE_KEY);
-  if (!raw) return {};
+type StoredOverrides =
+  | { readonly ok: true; readonly overrides: DesktopShortcutOverrides }
+  | { readonly ok: false };
+
+function readOverrides(storage: Storage | undefined): StoredOverrides {
+  const raw = storage?.getItem(DESKTOP_SHORTCUT_STORAGE_KEY);
+  if (!raw) return { ok: true, overrides: {} };
   try {
     const parsed: unknown = JSON.parse(raw);
     const result = DesktopShortcutOverridesSchema.safeParse(parsed);
-    if (result.success) return result.data;
-    // A present-but-invalid overrides blob is user-authored state, and the
-    // next `update` rewrites the whole key: falling back to {} silently would
-    // turn one bad write into the permanent loss of every other binding.
+    if (result.success) return { ok: true, overrides: result.data };
     console.warn(
-      '[desktop] Stored keyboard shortcut overrides failed validation; falling back to defaults.',
+      '[desktop] Stored keyboard shortcut overrides failed validation; using defaults and keeping the stored value until "Reset all".',
       result.error,
     );
   } catch (error) {
-    // Malformed JSON resolves to the same empty defaults as a failed schema
-    // parse, with the same loudness for the same reason.
     console.warn(
-      '[desktop] Stored keyboard shortcut overrides are not readable JSON; falling back to defaults.',
+      '[desktop] Stored keyboard shortcut overrides are not readable JSON; using defaults and keeping the stored value until "Reset all".',
       error,
     );
   }
-  return {};
+  return { ok: false };
 }

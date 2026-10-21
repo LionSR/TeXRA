@@ -4,10 +4,8 @@
  * session state.
  */
 
-import {
-  createSecretBackedCoordinator,
-  getSubscriptionSessionStatus,
-} from '../sessionAccess.js';
+import { Effect } from 'effect';
+import { createSecretBackedCoordinator } from '../sessionAccess.js';
 import { SubscriptionOAuthCoordinator } from '../SubscriptionOAuthCoordinator.js';
 import { defineLoopbackLogin } from '../loopbackLogin.js';
 import {
@@ -21,11 +19,12 @@ import type {
   SubscriptionCoordinator,
   SubscriptionSessionStatus,
 } from '../subscriptionCoordinator.js';
-import type { CredentialStore } from '../../providers/credentials.js';
+import type {
+  CredentialStore,
+  SecretsFailed,
+} from '../../providers/credentials.js';
+import type { SubscriptionOAuthError } from '../subscriptionOAuthError.js';
 import type { CodexSession } from './codexSessionTypes.js';
-import type { Effect } from 'effect';
-
-const CHANNEL = 'codexAuth';
 
 /** The coordinator for the caller's secret store. */
 export const codexCoordinator: (
@@ -36,15 +35,15 @@ export const codexCoordinator: (
     new SubscriptionOAuthCoordinator({ storage, policy: CODEX_POLICY }),
 });
 
-/** Signed-in status, read from the caller's secret store. */
+/** Signed-in status, read from the caller's secret store. A store that
+ *  cannot be read, or a stored session that does not parse, fails. */
 export function getCodexStatus(
   secrets: CredentialStore,
-): Effect.Effect<SubscriptionSessionStatus> {
-  return getSubscriptionSessionStatus(
-    () => codexCoordinator(secrets),
-    CHANNEL,
-    'ChatGPT',
-  );
+): Effect.Effect<
+  SubscriptionSessionStatus,
+  SecretsFailed | SubscriptionOAuthError
+> {
+  return Effect.suspend(() => codexCoordinator(secrets).getStatus());
 }
 
 /** The browser sign-in, bound to the registered ChatGPT callback. */

@@ -5,6 +5,7 @@
  * `SubscriptionOAuthCoordinator.ts`.
  */
 import type { SecretsFailed } from '../providers/credentials.js';
+import type { SubscriptionOAuthError } from './subscriptionOAuthError.js';
 import type { SubscriptionSessionBaseSchema } from './subscriptionSessionSchema.js';
 import type { Effect } from 'effect';
 import type { HttpClient } from 'effect/http';
@@ -51,10 +52,17 @@ export interface SubscriptionSessionStatus {
  * secret store's own {@link SecretsFailed} when it rejects.
  */
 export interface SubscriptionCoordinator<S extends SubscriptionSession> {
-  /** The stored session, or null when signed out or unreadable. */
-  loadSession(): Effect.Effect<S | null, SecretsFailed>;
+  /** The stored session, or null when none is stored; a stored one that
+   *  does not parse fails `fatal`. */
+  loadSession(): Effect.Effect<
+    S | null,
+    SecretsFailed | SubscriptionOAuthError
+  >;
   /** Signed-in status of the stored session. */
-  getStatus(): Effect.Effect<SubscriptionSessionStatus, SecretsFailed>;
+  getStatus(): Effect.Effect<
+    SubscriptionSessionStatus,
+    SecretsFailed | SubscriptionOAuthError
+  >;
   /** The stored session, refreshed when it expires soon. */
   getFreshSession(): Effect.Effect<S, Error, HttpClient.HttpClient>;
   /** Refresh now: the provider rejected the access token before its expiry. */
