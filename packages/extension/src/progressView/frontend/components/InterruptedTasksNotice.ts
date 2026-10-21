@@ -68,17 +68,17 @@ export class InterruptedTasksNotice extends LitElement {
         gap: var(--wa-space-3xs) var(--wa-space-2xs);
         min-width: 0;
       }
-      .task {
-        padding: 0;
-        border: none;
-        background: none;
-        font: inherit;
-        color: var(--color-text-link);
-        cursor: pointer;
-        text-align: start;
+      .task.btn-ghost {
+        flex-shrink: 1;
+        min-width: 0;
       }
-      .task:hover {
-        text-decoration: underline;
+      .task,
+      .task::part(base) {
+        font-size: inherit;
+      }
+      .task::part(base) {
+        white-space: normal;
+        text-align: start;
       }
       .meta,
       .blocked {
@@ -117,16 +117,17 @@ export class InterruptedTasksNotice extends LitElement {
   private renderTask(task: InterruptedTask): TemplateResult {
     const fix = task.blocked && resumeBlockerFix(task.blocked);
     return html`<li>
-      <button
+      <wa-button
+        class="task btn-ghost is-link"
+        appearance="plain"
+        size="s"
         type="button"
-        class="task"
         @click=${() =>
           this.dispatchEvent(
             SessionUiEvents.surface({ kind: 'select', runId: task.runId }),
           )}
+        >${task.title}</wa-button
       >
-        ${task.title}
-      </button>
       <span class="meta"
         >${
           task.stoppedAt === null

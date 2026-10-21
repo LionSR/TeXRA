@@ -6,6 +6,7 @@ import { customElement, property } from 'lit/decorators.js';
 import { repeat } from 'lit/directives/repeat.js';
 
 // Side-effect imports - register WA components
+import '@awesome.me/webawesome/dist/components/button/button.js';
 import '@awesome.me/webawesome/dist/components/details/details.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
@@ -72,19 +73,14 @@ export class LatexdiffResults extends LitElement {
         flex-wrap: wrap;
       }
 
-      .file-link {
-        appearance: none;
-        padding: 0;
-        border: 0;
-        background: none;
-        color: var(--color-text-link);
-        cursor: pointer;
-        font: inherit;
-        text-align: inherit;
-        text-decoration: underline;
-        text-decoration-thickness: from-font;
-        text-underline-position: from-font;
+      .file-link.btn-ghost {
+        flex-shrink: 1;
+        min-width: 0;
         overflow-wrap: anywhere;
+      }
+      .file-link::part(base) {
+        white-space: normal;
+        text-align: start;
       }
 
       .arrow {
@@ -110,15 +106,16 @@ export class LatexdiffResults extends LitElement {
     label: string,
     accessibleLabel: string,
   ): TemplateResult {
-    return html`<button
+    return html`<wa-button
+      class="file-link btn-ghost is-link"
+      appearance="plain"
+      size="s"
       type="button"
-      class="file-link"
       data-file=${filePath}
-      aria-label=${accessibleLabel}
       @click=${() => this.handleFileClick(filePath)}
-    >
-      ${label}
-    </button>`;
+      ><span aria-hidden="true">${label}</span
+      ><span class="visually-hidden">${accessibleLabel}</span></wa-button
+    >`;
   }
 
   private renderEntry(entry: LatexdiffEntry, index: number): TemplateResult {
