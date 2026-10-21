@@ -40,7 +40,7 @@ import {
 } from './approval/approvalSummaries';
 import {
   parseUserQuestionAnswer,
-  USER_QUESTION_SKIPPED_FEEDBACK,
+  userQuestionDecision,
 } from './userQuestionAnswer';
 import { type CliContext } from './cliContext';
 import { writeTextStderr } from './logSinks';
@@ -123,13 +123,7 @@ const askHeadlessUserQuestion = Effect.fn(
     } satisfies RequestDecision;
   }
 
-  if (Object.keys(answers).length === 0) {
-    return {
-      action: 'skip',
-      feedback: USER_QUESTION_SKIPPED_FEEDBACK,
-    } satisfies RequestDecision;
-  }
-  return { action: 'submit', answers } satisfies RequestDecision;
+  return userQuestionDecision(answers);
 });
 
 /** `runtime` is the process runtime the headless run holds: the view
