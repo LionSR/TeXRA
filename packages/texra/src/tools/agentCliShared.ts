@@ -165,7 +165,7 @@ interface AgentCliLaunchParams<TTurn> {
     childRun: ChildRunPort;
     runId: RunId;
   }) => Effect.Effect<ProcessChildStrategy<TTurn>, Error>;
-  /** Names the CLI in the result summary: `Launched <summaryLabel>: <prompt>`. */
+  /** Names the CLI in the result summary: `Launched <summaryLabel>: <previewLabel(prompt)>`. */
   summaryLabel: string;
   launchedLine: string;
   followUpLine: string;
