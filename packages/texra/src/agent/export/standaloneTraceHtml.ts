@@ -7,7 +7,7 @@
  * comment). `main.ts`'s `loadTrace()` reads this global if present, before
  * falling back to fetching `trace.json`.
  */
-import type { TraceDocument } from './traceDocumentSchema';
+import type { TraceDocument } from '@texra-ai/harness/schemas';
 
 const MODULE_SCRIPT_MARKER = '<script type="module"';
 

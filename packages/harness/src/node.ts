@@ -17,12 +17,15 @@ export {
   type NodeWorkspaceRootsInit,
 } from '@platform/defaults/nodeHost';
 export { nodePlatformServices } from '@platform/defaults/nodePlatform';
-// The process's SQLite stores (the global root's handle, the project
-// connections every session borrows), the identity stamped on every row the
-// process appends, and what reading a process's start identity takes.
-export type {
+// The process's SQLite stores (the global root's handle, which
+// `ProcessLayerOptions.globalDatabase` may replace, and the bound its input
+// history keeps; the project connections every session borrows), the
+// identity stamped on every row the process appends, and what reading a
+// process's start identity takes.
+export {
   GlobalDatabase,
-  ProjectDatabases,
+  INPUT_HISTORY_LIMIT,
+  type ProjectDatabases,
 } from '@shared/session/database';
 export type { ProcessIdentity } from '@shared/session/sessionEvents';
 export type { ProcessProbe } from '@platform/defaults/nodeProcesses';
@@ -35,6 +38,9 @@ export {
   resolveGlobalStoragePath,
   resolveWorkspaceStoragePath,
 } from '@platform/defaults/workspaceStorage';
+// The global root's record of each workspace store under a storage root,
+// keyed by its storage directory's name: the root it serves.
+export { WORKSPACE_STORES } from '@shared/session/valueFamily';
 // Running a program on this machine: find it, run it, tell whether it is
 // installed, and give any other child the PATH the harness resolves tools on.
 export {

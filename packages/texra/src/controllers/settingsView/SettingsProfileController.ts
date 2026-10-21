@@ -1,7 +1,7 @@
 import { Settings } from '@texra-ai/harness';
 import { Effect } from 'effect';
 import { API_KEY_PROVIDER_IDS } from '@texra-ai/llm';
-import { providerEndpointKey } from '@shared/state/providerSettings';
+import { providerEndpointKey } from '@texra-ai/harness/schemas';
 import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
 import {

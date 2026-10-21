@@ -71,7 +71,7 @@ import {
 } from '@cli/tui/terminalCleanup';
 import { cliSecrets } from '@cli/runtime/cliSecrets';
 import { RUN_PHASE } from '@shared/schemas';
-import { getFirstRunDone } from '@shared/state/onboardingState';
+import { getFirstRunDone } from '@texra/controllers/onboarding/onboardingFunnel';
 import { DisposableStore } from '@texra/platform/disposable';
 import { subscribeToSignalChanges } from '@texra/shared/signals';
 import { serviceSession } from '@texra/controllers/server/serviceSession';
