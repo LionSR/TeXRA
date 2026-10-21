@@ -10,15 +10,15 @@ import { Duration, Effect, type FileSystem } from 'effect';
 
 // Local imports
 import { causeChain, isModuleNotFoundError } from '@texra-ai/harness';
-import { runsInWsl } from '@texra-ai/harness/node';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
+import { scopedClient } from '@texra-ai/harness/plugins';
+import { ToolProbeFailed } from '@texra-ai/harness/plugins';
 import {
   hasPackageManager,
   SYSTEM_PACKAGE_MANAGERS,
   type SystemPackageManager,
 } from '@texra/utils/system/toolChecks';
-import { scopedClient } from '@tools/timeouts';
-import { ToolProbeFailed } from '@tools/toolProbes';
+import { isWSL } from '@utils/system/wslDetect';
 import type {
   ToolAvailabilityChecks,
   ToolProbeError,
@@ -106,7 +106,7 @@ export function probeZoteroBbt(
 
 /** Appended to install hints when running under WSL, where side matters. */
 function wslInstallHint(): string {
-  return runsInWsl() ? ' (run this inside WSL, not on the Windows side)' : '';
+  return isWSL ? ' (run this inside WSL, not on the Windows side)' : '';
 }
 
 /** Resolved status of an SDK-backed CLI integration for the dashboard. */

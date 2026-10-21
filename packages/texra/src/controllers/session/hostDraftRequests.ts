@@ -161,12 +161,15 @@ export class HostDraftRequests {
         reason: 'A recording is already in progress.',
       });
     }
+    // The check above and this reservation are one synchronous step: a
+    // `yield*` between them would let a second Start pass the check too and
+    // put two recorders on the microphone.
     const take: Take = {
       roots,
       port,
       descriptor: { session: roots.storage, target },
-      result: yield* Deferred.make<HostOutcome, Rejected | Cancelled>(),
-      settled: yield* Deferred.make<void>(),
+      result: Deferred.makeUnsafe<HostOutcome, Rejected | Cancelled>(),
+      settled: Deferred.makeUnsafe<void>(),
       stopping: false,
       cancelled: false,
     };

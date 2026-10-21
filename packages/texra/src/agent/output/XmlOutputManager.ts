@@ -7,7 +7,6 @@ import { Effect, FileSystem } from 'effect';
 
 import { createExternalLocation } from '@texra-ai/harness';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
-import type { AgentTrace } from '@agent/trace';
 
 import replacementEngine, {
   logReplacementDiagnostics,
@@ -36,6 +35,7 @@ import {
   normalizeDocumentName,
 } from './extraction/filenameHeaders';
 import { reportMissingOutputs, type OutputState } from './outputState';
+import type { AgentTrace } from '@texra-ai/harness/plugins';
 import type { ConfigProvider } from '@texra-ai/harness';
 import type { AgentConfig } from '@texra-ai/harness/schemas';
 

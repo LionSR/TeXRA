@@ -21,7 +21,7 @@ const PREFER_SUBSCRIPTION_KEYS: Readonly<
 };
 
 /** Whether the user has switched on "prefer my subscription" for `provider`. */
-export function isPreferSubscription(
+function isPreferSubscription(
   provider: SubscriptionAuthProvider,
   stores: SettingsStores,
 ): boolean {
@@ -38,7 +38,7 @@ export function isPreferSubscription(
  * every host's config is a layered `JsonConfigProvider`, and the write
  * lands in the layer that wins, so no more specific setting can override it.
  */
-export function setPreferSubscription(
+function setPreferSubscription(
   provider: SubscriptionAuthProvider,
   stores: SettingsStores,
   enabled: boolean,
@@ -53,3 +53,10 @@ export function setPreferSubscription(
     inspection.workspaceValue !== undefined ? 'workspace' : 'global';
   return Settings.set(stores, configKey, enabled, target);
 }
+
+/** Each subscription's "prefer my subscription" switch: its read (`get`) and
+ *  its write in the scope that controls it (`set`). */
+export const SubscriptionPreference = Object.freeze({
+  get: isPreferSubscription,
+  set: setPreferSubscription,
+});

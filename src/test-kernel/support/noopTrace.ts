@@ -8,6 +8,7 @@ import type {
   StageOptions,
   StreamHandle,
 } from '@agent/trace/AgentTrace';
+import { TraceEmitter } from '@agent/trace/TraceEmitter';
 import type { RunOutcome } from '@shared/schemas';
 import { generateShortId } from '@utils/core';
 
@@ -42,5 +43,10 @@ export const noopTrace: AgentTrace = {
   },
   openRun() {
     return new NoopStreamHandle(generateShortId());
+  },
+  // Through `emit`, so a suite that spreads this trace and replaces `emit`
+  // sees the card's events.
+  openToolCard(log) {
+    return new TraceEmitter((event) => this.emit(event)).openToolCard(log);
   },
 };

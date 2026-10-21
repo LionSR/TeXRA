@@ -3,8 +3,10 @@ export type {
   AgentConfig,
   AgentConfigPayload,
 } from '@agent/core/definition/AgentConfig';
-// A run's saved record (`assembleTrace`'s): an agent's config or a task's.
+// A run's saved record (`assembleTrace`'s): an agent's config or a task's,
+// and its JSON with the fields its category hides dropped.
 export type { RunRecord } from '@agent/core/definition/RunRecord';
+export { serializeFilteredConfig } from '@tools/executions/configView';
 export { InlinePersonaSchema } from '@shared/schemas';
 export type { InlinePersona, Persona } from '@shared/schemas';
 // The payloads `RuntimePresentationEventPayloads` (root) names, one per
@@ -66,6 +68,7 @@ export type { ModelAvailabilityKind } from '@shared/schemas';
 export {
   SUBSCRIPTION_AUTH_NAMES,
   SUBSCRIPTION_AUTH_PROVIDERS,
+  type SubscriptionAuthProvider,
 } from '@shared/model/subscriptionAuth';
 // Reads of a `SessionView` (root) for a renderer: what needs a person, how
 // busy the session is, and where each run stands.

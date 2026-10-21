@@ -10,8 +10,8 @@ import type {
   ChatExportInput,
   DocumentMeta,
   ExportConfig,
-  ExportNode,
-} from '@agent/export/schemas';
+} from '@texra/agent/export/schemas';
+import type { ExportNode } from '@texra-ai/harness';
 
 /** Compile-time guarantee: every node kind has a renderer. */
 export type NodeRenderers = {
