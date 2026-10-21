@@ -94,7 +94,10 @@ export function describeRunNotice(run: RunView): string | null {
       return 'an earlier build wrote it, and this build cannot open it';
     case 'resumeBlocked': {
       const { kind, name } = notice.reason;
-      return `its ${kind === 'agentMissing' ? 'agent' : 'plugin'} ${name} ${RESUME_BLOCKER[kind]}, so a resume waits until that is fixed`;
+      const then = notice.retry
+        ? 'it continues by itself once that is fixed'
+        : 'it can be resumed once that is fixed';
+      return `its ${kind === 'agentMissing' ? 'agent' : 'plugin'} ${name} ${RESUME_BLOCKER[kind]}; ${then}`;
     }
     case 'interrupted':
       return 'the process running it stopped before it finished; resume it to continue';

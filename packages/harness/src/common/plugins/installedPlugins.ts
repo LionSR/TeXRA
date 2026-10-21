@@ -149,7 +149,7 @@ function claimName(run: InstallRun, name: string) {
   if (AgentSourceSchema.safeParse(name).success)
     return Effect.fail(
       new PluginRequestError({
-        message: `A plugin cannot be named "${name}": that name is reserved for the built-in agent sources (${AgentSourceSchema.options.join(', ')}).`,
+        message: `A plugin cannot be named "${name}": that name is reserved as an agent source (${AgentSourceSchema.options.join(', ')}).`,
       }),
     );
   if (run.taken.has(name)) return Effect.fail(nameTaken(name));
