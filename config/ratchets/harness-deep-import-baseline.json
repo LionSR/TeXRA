@@ -5,34 +5,20 @@
       "@common/teams/TeamPlan",
       "@common/teams/TeamPresets",
       "@eventBus/AppSignals",
-      "@platform/defaults/fileSecrets",
-      "@platform/defaults/jsonStore",
-      "@platform/defaults/nodePlatform",
       "@shared/constants/agents"
     ],
     "desktop": [
-      "@eventBus/AppSignals",
-      "@platform/defaults/fileSecrets",
-      "@platform/defaults/jsonStore"
+      "@eventBus/AppSignals"
     ],
     "extension": [
       "@eventBus/AppSignals",
-      "@platform/defaults/fileSecrets",
-      "@platform/defaults/jsonStore",
       "@shared/constants/agents"
     ],
     "texra": [
       "@common/teams/TeamPlan",
       "@common/teams/TeamPresets",
       "@eventBus/AppSignals",
-      "@platform/defaults/jsonStore",
-      "@platform/defaults/longRunningModelTransport",
-      "@platform/defaults/nodeHost",
-      "@platform/processRuntime",
-      "@shared/constants/agents",
-      "@utils/system/gitEnv",
-      "@utils/system/toolUtils",
-      "@utils/system/wslDetect"
+      "@shared/constants/agents"
     ],
     "trace-viewer": []
   }

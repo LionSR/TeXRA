@@ -41,7 +41,10 @@ import { ToolAvailability } from '@texra-ai/harness';
 import { Settings } from '@texra-ai/harness';
 import {
   effectDiagnosticsLayer,
+  FileSecrets,
   JsonConfigProvider,
+  nodeFileServices,
+  secretsDirectory,
 } from '@texra-ai/harness/node';
 import {
   APPROVAL_POLICY_CONFIG_KEY,
@@ -78,8 +81,6 @@ import {
   registerInlineComments,
 } from '@frontend/comments/inlineComments';
 import { createVsCodeLogSink } from '@frontend/vscode/vscodeLogSink';
-import { nodeFileServices } from '@platform/defaults/jsonStore';
-import { FileSecrets, secretsDirectory } from '@platform/defaults/fileSecrets';
 import { telemetryNoticeIfDue } from '@telemetry/telemetryNotice';
 import { usageLogLayer } from '@telemetry/UsageLogService';
 import { openTexraConfigStores } from '@texra/platform/defaults/nodeStores';

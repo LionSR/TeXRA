@@ -12,7 +12,7 @@ function floorToWholeSeconds(durationMs: number): number {
 /**
  * Compact duration capped at two units (`45s`, `3m 5s`, `1h 1m`).
  *
- * Backed by `pretty-ms` with whole-second flooring like {@link formatDuration},
+ * Backed by `pretty-ms` with whole-second flooring,
  * but renders zero / negative / sub-second durations as `0s` (used by elapsed
  * displays that start from zero, e.g. goal timings and server uptime).
  */

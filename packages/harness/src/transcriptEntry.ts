@@ -21,6 +21,12 @@ export {
   type TextChunk,
   type TranscriptSubscription,
 } from '@shared/schemas';
+// The runtime a view folds on: fork failures reported, and the redacting
+// log sink in place of the console logger.
+export {
+  viewDiagnosticsLayer,
+  withForkFailureReporting,
+} from '@platform/processRuntime';
 
 // The rows: one kind each, the headline a row is listed by, and the
 // untruncated text a host elides to fit.
