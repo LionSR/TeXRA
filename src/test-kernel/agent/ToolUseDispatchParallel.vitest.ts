@@ -55,7 +55,10 @@ import type { BoundModel } from '@agent/runtime/modelAccess/ModelAccess';
 import { routePolicies } from '@agent/runtime/modelAccess/failureInfo';
 import type { PluginContext } from '@platform/processRuntime';
 import { MODEL_RETRY_MAX_ATTEMPTS_SETTING } from '@shared/schemas';
-import { DatabaseWriteFailed } from '@shared/session/database';
+import {
+  DatabaseNotOwner,
+  DatabaseWriteFailed,
+} from '@shared/session/database';
 import {
   DIAGNOSTIC_TYPE_VALIDATION_ERROR,
   formatZodIssuesForDiagnostics,
@@ -419,6 +422,40 @@ describe('tool-use dispatch', () => {
       const saved = yield* kit.session.runHistory.load(kit.runId);
       expect(settledIds(saved)).toEqual([]);
       expect(saved?.pendingResponse).not.toBeNull();
+      yield* closeSessionOf(kit.session);
+    }),
+  );
+
+  it.live('ends the run on a claim a tool write lost', () =>
+    Effect.gen(function* () {
+      // A write outside the run history (an approval scope, a goal) raises
+      // the claim's own refusal, never a tool result the model reads.
+      const kit = yield* openDispatch({
+        tools: {
+          write_state: {
+            definition: { name: 'write_state' },
+            call: () =>
+              Effect.fail(
+                new DatabaseNotOwner({
+                  aggregateId: rowAggregate(dispatchRunId()),
+                  ownerId: null,
+                  closed: false,
+                }),
+              ),
+          },
+        },
+        calls: [makeCall('lost-claim', 'write_state', {})],
+      });
+      const exit = yield* Effect.exit(dispatch(kit));
+      expect(Exit.isFailure(exit)).toBe(true);
+      if (Exit.isFailure(exit)) {
+        expect(Cause.squash(exit.cause)).toMatchObject({
+          _tag: 'RunHistoryRefused',
+          reason: 'not-owner',
+        });
+      }
+      const saved = yield* kit.session.runHistory.load(kit.runId);
+      expect(settledIds(saved)).toEqual([]);
       yield* closeSessionOf(kit.session);
     }),
   );

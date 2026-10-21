@@ -13,6 +13,8 @@ import { Cause, Context, Data, type Effect, type Scope } from 'effect';
 
 import type { RunId, SessionEventDraft } from '@shared/schemas';
 import {
+  DatabaseClaimRefused,
+  DatabaseNotOwner,
   DatabaseReadFailed,
   DatabaseRowCorrupt,
   DatabaseRowEarlier,
@@ -65,6 +67,15 @@ export class RunHistoryRefused extends Data.TaggedError('RunHistoryRefused')<{
   }
 }
 
+/** A write the store refused: the disk, the run history, or a claim this
+ *  process does not hold (a write outside the run history raises the
+ *  claim's own refusal). */
+export type StorageRefusal =
+  | DatabaseWriteFailed
+  | RunHistoryRefused
+  | DatabaseNotOwner
+  | DatabaseClaimRefused;
+
 /**
  * The store's refusal anywhere in `cause`, failure or defect. A refused write
  * ends the run whatever failed beside it, so a caller that turns the rest of
@@ -72,17 +83,47 @@ export class RunHistoryRefused extends Data.TaggedError('RunHistoryRefused')<{
  */
 export function findStorageRefusal(
   cause: Cause.Cause<unknown>,
-): DatabaseWriteFailed | RunHistoryRefused | undefined {
+): StorageRefusal | undefined {
   for (const reason of cause.reasons) {
     if (Cause.isInterruptReason(reason)) continue;
     const error = Cause.isFailReason(reason) ? reason.error : reason.defect;
     if (
       error instanceof DatabaseWriteFailed ||
-      error instanceof RunHistoryRefused
+      error instanceof RunHistoryRefused ||
+      error instanceof DatabaseNotOwner ||
+      error instanceof DatabaseClaimRefused
     )
       return error;
   }
   return undefined;
+}
+
+/**
+ * `refusal` as run `runId` ends with it: a claim it lost, or one another
+ * process holds, is the run history's `not-owner` refusal, worded from the
+ * refusing row; a disk or history refusal is itself.
+ */
+export function runRefusal(
+  runId: RunId,
+  refusal: DatabaseNotOwner | DatabaseClaimRefused,
+): RunHistoryRefused;
+export function runRefusal(
+  runId: RunId,
+  refusal: StorageRefusal,
+): DatabaseWriteFailed | RunHistoryRefused;
+export function runRefusal(
+  runId: RunId,
+  refusal: StorageRefusal,
+): DatabaseWriteFailed | RunHistoryRefused {
+  if (refusal instanceof DatabaseClaimRefused) {
+    const detail = `held by ${refusal.ownerId} (${refusal.verdict})`;
+    return new RunHistoryRefused({ reason: 'not-owner', runId, detail });
+  }
+  if (!(refusal instanceof DatabaseNotOwner)) return refusal;
+  let detail = `held by ${refusal.ownerId}`;
+  if (refusal.ownerId === null) detail = 'the claim is unheld';
+  if (refusal.closed) detail = 'the run aggregate is closed';
+  return new RunHistoryRefused({ reason: 'not-owner', runId, detail });
 }
 
 /** The same append, every row admitted: held by the run's cell and the
