@@ -17,7 +17,7 @@ import { resolveBypass } from '@texra-ai/harness/schemas';
 import type { TeXRAIconName } from '@shared/iconNames';
 import { SessionUiEvents } from '@texra/shared/session/uiEvents';
 import { CopyButtonController } from '@texra/shared/litControllers/CopyButtonController';
-import { runStatusLabel } from '@ui/copy/runStatus';
+import { runNoticeText, runStatusLabel } from '@ui/copy/runStatus';
 import { TASK_ACTIONS } from '@ui/copy/nestedRuns';
 import { formatTaskDiagnostics } from '@ui/copy/taskDiagnostics';
 import { designTokens, commonViewStyles } from '@ui/styles';
@@ -468,7 +468,7 @@ export class RunHeader extends LitElement {
           ${
             canContinue
               ? `${runStatusLabel(run.statusKey)}. Send a message to continue.`
-              : (run.statusDetail ?? statusLabel)
+              : (runNoticeText(run.statusNotice) ?? statusLabel)
           }
         </wa-tooltip>
         <span class="status-label" aria-hidden="true">${statusLabel}</span>

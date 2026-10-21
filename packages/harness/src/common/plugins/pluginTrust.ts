@@ -77,7 +77,7 @@ const envKeyOf = (stores: Pick<SettingsStores, 'globalState'>) =>
 
 /** Why a plugin with LSP servers is refused. */
 const codeRefusal = (name: string, plugin: ResolvedPlugin) =>
-  `Plugin ${name} ships ${plugin.code.join(', ')}, which TeXRA does not run yet, so it cannot be enabled.`;
+  `Plugin ${name} ships ${plugin.code.join(', ')}, which this build does not run yet, so it cannot be enabled.`;
 
 /** A hook's event, matcher and command, as the prompt and a listing show it. */
 export const describeHook = (hook: ConfiguredHook) =>
@@ -155,7 +155,7 @@ const reviewLines = (record: InstalledPlugin, plugin: ResolvedPlugin) =>
     }
     if (unsupported.length > 0)
       lines.push(
-        'Hooks TeXRA does not run:',
+        'Hooks this build does not run:',
         ...unsupported.map((line) => `  ${line}`),
       );
     lines.push(

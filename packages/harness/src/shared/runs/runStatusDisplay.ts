@@ -2,7 +2,6 @@ import {
   RUN_PHASE,
   RUN_LIFECYCLE_READY,
   RUN_SUBSTATE,
-  type ResumeBlocker,
   type RunLifecycleStatus,
   type RunSubstate,
 } from '@shared/schemas';
@@ -68,45 +67,4 @@ export function runStatus(
   if (options.interrupted) statusKey = 'interrupted';
   else if (options.waiting) statusKey = 'waitingOnUser';
   return { statusKey, tone: RUN_STATUS_TONE_OF[statusKey] };
-}
-
-/** Banner copy for the fold's interrupted reading: the process running the
- *  run is gone; a pending approval stays listed, so a resume re-asks it. */
-export const RUN_INTERRUPTED_MESSAGE =
-  'The process running this task stopped before it finished. Resume it to continue.';
-
-/** Banner copy for a run a resume found blocked: what it waits for, and
- *  whether it continues by itself then (`retry`: a resume was asked for). */
-export function runResumeBlockedMessage({
-  reason,
-  retry,
-}: {
-  readonly reason: ResumeBlocker;
-  readonly retry: boolean;
-}): string {
-  const then = retry ? 'It continues once' : 'You can resume it once';
-  switch (reason.kind) {
-    case 'agentMissing':
-      return `This task's agent, ${reason.name}, is no longer installed. ${then} the agent is back.`;
-    case 'pluginOff':
-      return `This task's agent comes from the ${reason.name} plugin, which is off. ${then} the plugin is on.`;
-    case 'pluginUntrusted':
-      return `This task's agent comes from the ${reason.name} plugin, which is not trusted as it is now. ${then} you trust it.`;
-  }
-}
-
-/** Banner copy for a run with a row that does not decode: shown, never
- *  opened. */
-export const RUN_DAMAGED_MESSAGE =
-  "Part of this task's saved history is damaged, so it cannot be opened or resumed.";
-
-/** Banner copy for a run with a row an earlier build wrote at a version
- *  this one has no upcaster for: shown, never opened. */
-export const RUN_EARLIER_BUILD_MESSAGE =
-  "This task was written by an earlier build of TeXRA; it can't be opened by this one.";
-
-/** Banner and tooltip copy for a run another host process holds, named by
- *  its pid: the one part of a process identity a user can act on. */
-export function runHeldMessage(pid: number): string {
-  return `Held by another TeXRA process (pid ${pid}). Let it finish or close it; if it is gone, Delete removes the task.`;
 }

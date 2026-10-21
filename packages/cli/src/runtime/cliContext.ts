@@ -2,7 +2,14 @@ import { readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import path from 'node:path';
 
-import { Effect, FileSystem, Result, Config, Option } from 'effect';
+import {
+  Effect,
+  FileSystem,
+  Result,
+  Config,
+  Option,
+  type LogLevel,
+} from 'effect';
 
 import {
   DatabaseOpenFailed,
@@ -20,7 +27,6 @@ import {
 } from '@texra-ai/harness/schemas';
 import { stricterPolicy } from '@texra-ai/harness/schemas';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
-import type { MinimumLogLevel } from '@logger/effectDiagnostics';
 import { defaultNodeStorageRoot } from '@texra/platform/defaults/nodeStorage';
 import {
   CLI_OUTPUT_FORMATS,
@@ -63,7 +69,7 @@ export interface CliContext {
    * level filter of its own. A flag is exactly the kind of fact a
    * layer-build capture is for: it cannot change mid-process.
    */
-  readonly minimumLogLevel: MinimumLogLevel;
+  readonly minimumLogLevel: LogLevel.LogLevel;
   readonly renderRunProgress?: boolean;
   readonly stdoutIsTty: boolean;
   readonly termIsDumb: boolean;
@@ -442,7 +448,7 @@ export const buildCliContext = Effect.fn('cliContext.buildCliContext')(
         configWarnings,
       )) ??
       Settings.getConfig<CliOutputFormat>(config, CLI_OUTPUT_FORMAT_CONFIG_KEY);
-    let minimumLogLevel: MinimumLogLevel = 'Info';
+    let minimumLogLevel: LogLevel.LogLevel = 'Info';
     if (init.globalArgs.quiet) minimumLogLevel = 'None';
     else if (init.globalArgs.verbose) minimumLogLevel = 'Debug';
     return {

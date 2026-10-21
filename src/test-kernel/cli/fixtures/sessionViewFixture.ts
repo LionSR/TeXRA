@@ -83,7 +83,7 @@ function runViewFields(over: RunViewOverrides): RunView {
     status,
     substate: null,
     durableOutcome: null,
-    statusDetail: null,
+    statusNotice: null,
     statusKey: copy.statusKey,
     tone: copy.tone,
     createdAt: 1,

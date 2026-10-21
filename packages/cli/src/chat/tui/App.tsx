@@ -23,7 +23,7 @@ import {
   rewriteKittyEnterInput,
 } from '@cli/tui/inputKeys';
 import { defaultShortcutModifierLabel } from '@cli/runtime/shortcutLabels';
-import { runStatusLabel } from '@ui/copy/runStatus';
+import { runNoticeText, runStatusLabel } from '@ui/copy/runStatus';
 import { AGENT_LIST } from '@ui/copy/nestedRuns';
 import {
   APPROVAL_FOREGROUND_MAX_ROWS,
@@ -186,7 +186,8 @@ export function App(props: AppProps): React.JSX.Element {
     activeRun.parentId !== null &&
     !acceptsFollowUp(activeRun, CLI_FOLLOW_UP_HOST);
   const unavailableDetail = activeRun?.readOnly
-    ? (activeRun.statusDetail ?? runStatusLabel(activeRun.statusKey))
+    ? (runNoticeText(activeRun.statusNotice) ??
+      runStatusLabel(activeRun.statusKey))
     : undefined;
   const appInputDisabled = foregroundOpen || childListFocused;
   const inputDisabledMessage = childListFocused

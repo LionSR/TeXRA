@@ -40,10 +40,6 @@ import {
   type AgentTrace,
   type OpenToolUseCard,
 } from '@agent/trace';
-import type {
-  ChildRunPort,
-  ProcessChildStrategy,
-} from '@agent/runtime/childRunLoop';
 import { formatDelivery } from '@agent/runtime/deliveryEnvelope';
 import { MESSAGE_TYPES } from '@shared/schemas';
 import type {
@@ -86,6 +82,7 @@ import {
   readClaudeCodeRun,
   type ClaudeCodeRun,
 } from './claudeAgentShared';
+import type { ProcessChildStrategy } from '@texra-ai/harness/plugins';
 import type { ChildRuns } from '@texra-ai/harness/plugins';
 import type { AgentCliSessionRegistry } from './agentCliSessionRegistry';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
@@ -404,7 +401,7 @@ function extractToolErrorMessage(content: unknown): string | undefined {
 // ============================================================================
 
 function buildClaudeAgentLaunch(params: {
-  childRun: ChildRunPort;
+  logger: AgentTrace;
   runId: RunId;
   initialPrompt: string;
   run: ClaudeCodeRun;
@@ -425,8 +422,7 @@ function buildClaudeAgentLaunch(params: {
   releaseFallbackClaim: (() => void) | undefined;
   registry: AgentCliSessionRegistry;
 }): Effect.Effect<ProcessChildStrategy<TurnResult>> {
-  const { childRun, runId, initialPrompt } = params;
-  const { logger } = childRun;
+  const { logger, runId, initialPrompt } = params;
 
   // The SDK needs the prior session id to resume the same conversation across
   // turns; it's threaded forward from each turn's result. Seeded from
@@ -438,7 +434,7 @@ function buildClaudeAgentLaunch(params: {
     : params.resumeSessionId;
 
   return buildAgentCliLaunch({
-    childRun,
+    logger,
     runId,
     stageLabel: 'Claude Code session',
     initialPrompt,
@@ -608,9 +604,9 @@ const launchClaudeAgentSession = Effect.fn(
     prompt: input.prompt,
     modelRef: claudeRun.ref,
     registerFailedMessage: 'Failed to register Claude Code CLI run.',
-    buildLaunch: ({ childRun, runId }) =>
+    buildLaunch: ({ logger, runId }) =>
       buildClaudeAgentLaunch({
-        childRun,
+        logger,
         runId,
         initialPrompt: input.prompt,
         run: claudeRun,

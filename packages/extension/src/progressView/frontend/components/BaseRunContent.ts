@@ -11,7 +11,7 @@ import { isLiveRun } from '@texra-ai/harness/schemas';
 import type { HostSnapshot } from '@texra/shared/session/hostSnapshot';
 import type { Surface } from '@texra/shared/session/surface';
 import { SessionUiEvents } from '@texra/shared/session/uiEvents';
-import { runStatusLabel } from '@ui/copy/runStatus';
+import { runNoticeText, runStatusLabel } from '@ui/copy/runStatus';
 import { interruptedTasks, resumeBlockerFix } from '@ui/copy/interruptedTasks';
 import { TASK_ACTIONS } from '@ui/copy/nestedRuns';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
@@ -110,7 +110,7 @@ export abstract class BaseRunContent extends LitElement {
       explanation += ' Fork to continue with this conversation’s history.';
     return html`<div class="conversation-ended">
       <span role="status" aria-atomic="true"
-        >${run.statusDetail ?? explanation}</span
+        >${runNoticeText(run.statusNotice) ?? explanation}</span
       >
       ${
         // The task's one Resume (an interrupted task, a workflow from its

@@ -737,7 +737,12 @@ describe('BashTool', () => {
       assert.match(end?.error?.message ?? '', /^Result lost: /);
       assert.equal(yield* records.readResultMeta(), null);
       const card = (yield* session.view.read([runId])).runs.get(runId);
-      assert.match(card?.statusDetail ?? '', /^Result lost: /);
+      const notice = card?.statusNotice;
+      assert.equal(notice?.kind, 'lost');
+      assert.match(
+        notice?.kind === 'lost' ? notice.message : '',
+        /^Result lost: /,
+      );
       // The parent hears it lost, never the result the settlement carried.
       assert.deepEqual(
         (yield* session.followUps.read(parentRunId)).followUps

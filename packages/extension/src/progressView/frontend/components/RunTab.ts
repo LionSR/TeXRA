@@ -17,7 +17,7 @@ import { classMap } from 'lit/directives/class-map.js';
 // Local imports
 import { type TeXRAIconName } from '@shared/iconNames';
 import { SessionUiEvents } from '@texra/shared/session/uiEvents';
-import { runStatusLabel } from '@ui/copy/runStatus';
+import { runNoticeText, runStatusLabel } from '@ui/copy/runStatus';
 import { designTokens } from '@ui/styles';
 import {
   buttonStyles,
@@ -75,7 +75,7 @@ function buildTooltip(run: RunView): string {
   return [
     mainLine,
     run.description,
-    run.statusDetail,
+    runNoticeText(run.statusNotice),
     lastSeen && `Last activity ${lastSeen}`,
   ]
     .filter(Boolean)
@@ -170,6 +170,7 @@ export class RunTab extends LitElement {
 
   override render(): TemplateResult {
     const run = this.run;
+    const notice = runNoticeText(run.statusNotice);
     const pendingApproval = run.approval !== 'none';
     const showStatus = pendingApproval || run.tone !== 'neutral';
     const statusGlyph = pendingApproval
@@ -319,11 +320,7 @@ export class RunTab extends LitElement {
               >
               ${waIcon(this.decorator.icon, { id: 'run-tab-kind', className: 'run-kind' })}
             </div>
-            ${
-              run.statusDetail
-                ? html`<div class="tab-detail">${run.statusDetail}</div>`
-                : nothing
-            }
+            ${notice ? html`<div class="tab-detail">${notice}</div>` : nothing}
           </button>
           ${showStatus ? html`<wa-tooltip for="run-tab-status">${accessibleStatusLabel}</wa-tooltip>` : nothing}
         </div>

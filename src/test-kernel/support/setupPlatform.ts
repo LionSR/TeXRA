@@ -62,7 +62,7 @@ import {
 } from '@texra/tools/lean/leanLanguageServices';
 import { goalContinuation } from '@tools/goal/goalContinuation';
 import { toolCatalogLayer } from '@tools/liveTools';
-import type { Plugin } from '@tools/plugins';
+import { defineBuiltinPlugin, type Plugin } from '@tools/plugins';
 import { ToolRegistry, toolTable } from '@tools/toolTable';
 import { nodeSpawnerLayer } from './childProcessTestLayer';
 import {
@@ -386,13 +386,13 @@ export async function installFakeHost(host: FakeHost): Promise<void> {
     // or provides `pluginCatalogLayer`.
     toolCatalogLayer(
       toolTable([
-        {
+        defineBuiltinPlugin({
           id: 'goal',
           toggle: 'off',
           availability: { check: () => Effect.succeed(true) },
           continuation: goalContinuation,
           arms: HARNESS_PLUGIN_ARMS.goal,
-        },
+        }),
         ...ARMED_PLUGINS,
       ]),
     ).pipe(

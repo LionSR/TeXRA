@@ -5,6 +5,7 @@ import type { AttemptKey } from '@agent/storage/runRecords';
 import { isTerminalOutcomePhase } from '@shared/runs/runStatus';
 import type { RunId } from '@shared/schemas';
 import type { RunView } from '@shared/session/sessionView';
+import { describeRunNotice } from '../executionFormatters';
 /**
  * Turn attribution for the executions tool's single latest-value slots.
  */
@@ -28,9 +29,8 @@ function turnFate(turn: AttemptKey, run: RunView | undefined): string {
   }
   // Another process holds the run, or its state cannot be read here:
   // either way nothing here may call the turn finished.
-  if (run.statusDetail !== null) {
-    return `${label} has not finished: ${run.statusDetail}`;
-  }
+  const notice = describeRunNotice(run);
+  if (notice !== null) return `${label} has not finished: ${notice}`;
   return `${label} is still running`;
 }
 

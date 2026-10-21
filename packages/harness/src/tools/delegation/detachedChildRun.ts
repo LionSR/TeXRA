@@ -26,6 +26,7 @@ import {
 } from '@agent/runtime/childRunLoop';
 import { registerRun } from '@agent/storage/runLifecycle';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
+import type { AgentTrace } from '@agent/trace';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { withLogChannel } from '@logger/effectLog';
 import {
@@ -174,7 +175,7 @@ export function startDetachedChildRunLoop<
 /**
  * A child run an external process drives, launched from a plugin's tool:
  * how it reads (`identity`), its record, its task label, and the strategy
- * its loop runs, built around the child stream the launch created. With
+ * its loop runs, built around the trace of the child the launch created. With
  * `resumeId`, the paused child of the caller that kept that id is
  * activated again instead of a new run.
  */
@@ -184,7 +185,7 @@ export interface ProcessChildLaunch<TTurn> {
   readonly description: string;
   readonly resumeId?: string;
   readonly buildLaunch: (ctx: {
-    readonly childRun: ChildRunPort;
+    readonly logger: AgentTrace;
     readonly runId: RunId;
   }) => Effect.Effect<ProcessChildStrategy<TTurn>, Error>;
 }
@@ -228,7 +229,8 @@ export const launchProcessChild = <TTurn>(
               createChildRun(session, runId, parentRunId, launch.identity),
             ),
           ),
-        buildLaunch: (childRun) => launch.buildLaunch({ childRun, runId }),
+        buildLaunch: (childRun) =>
+          launch.buildLaunch({ logger: childRun.logger, runId }),
       }).pipe(Effect.orDie);
       return runId;
     }),

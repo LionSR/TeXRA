@@ -211,7 +211,7 @@ export const prepareAgentDefinition = Effect.fn('prepareAgentDefinition')(
     if (unknown.length > 0)
       return yield* Effect.fail(
         new AgentError(
-          `Agent '${agentEntry.name}' declares ${unknown.length === 1 ? 'a tool' : 'tools'} TeXRA does not have: ${unknown.join(', ')}. Edit ${agentEntry.path || 'the persona'} to remove or rename ${unknown.length === 1 ? 'it' : 'them'}; \`delegate_agent\` and \`delegate_workflow\` are now \`agent\`, and \`delegate_multi_agents\` is \`script\` with \`agent\`.`,
+          `Agent '${agentEntry.name}' declares ${unknown.length === 1 ? 'a tool' : 'tools'} this build does not have: ${unknown.join(', ')}. Edit ${agentEntry.path || 'the persona'} to remove or rename ${unknown.length === 1 ? 'it' : 'them'}; \`delegate_agent\` and \`delegate_workflow\` are now \`agent\`, and \`delegate_multi_agents\` is \`script\` with \`agent\`.`,
         ),
       );
 

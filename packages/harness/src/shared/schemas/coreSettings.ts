@@ -51,7 +51,7 @@ export const MODEL_COMPACTION_THRESHOLD_SETTING = Object.freeze({
   min: 0,
   max: 100,
   description:
-    "When the conversation reaches this percentage of the model's context limit, TeXRA automatically summarizes earlier messages to free up space. Lower values trigger summarization sooner. Set to 0 to disable.",
+    "When the conversation reaches this percentage of the model's context limit, earlier messages are summarized automatically to free up space. Lower values trigger summarization sooner. Set to 0 to disable.",
 } as const);
 
 /**
@@ -73,7 +73,7 @@ export const CHATGPT_CODEX_CONTEXT_WINDOW_SETTING = Object.freeze({
   max: 872,
   unitLabel: 'K tokens',
   description:
-    "Input token budget for ChatGPT-subscription (Codex) routing, in thousands of tokens, mirroring Codex CLI's model_context_window. Unset, each model takes the window the Codex backend grants it (500 for GPT-6.1 Sol, 272 for the others); a value overrides it for every model, up to 872 (872,000 tokens). Automatic compaction may run earlier according to the separate compaction threshold. TeXRA adds the model's output budget when displaying the total context window. The OpenAI backend enforces the real per-account limit — values above what your subscription allows fail and trigger compaction recovery.",
+    "Input token budget for ChatGPT-subscription (Codex) routing, in thousands of tokens, mirroring Codex CLI's model_context_window. Unset, each model takes the window the Codex backend grants it (500 for GPT-6.1 Sol, 272 for the others); a value overrides it for every model, up to 872 (872,000 tokens). Automatic compaction may run earlier according to the separate compaction threshold. The model's output budget is added when displaying the total context window. The OpenAI backend enforces the real per-account limit — values above what your subscription allows fail and trigger compaction recovery.",
 } as const);
 
 /**
@@ -105,7 +105,7 @@ export const RESUME_ON_OPEN_SETTING = Object.freeze({
   values: ['ask', 'auto'],
   defaultValue: 'ask',
   description:
-    'When TeXRA opens and finds tasks it stopped before they finished: list them so you can choose, or continue them all.',
+    'On opening, when tasks stopped before they finished: list them so you can choose, or continue them all.',
 } as const);
 
 export type ResumeOnOpen = (typeof RESUME_ON_OPEN_SETTING.values)[number];

@@ -104,9 +104,9 @@ export interface SessionLog {
    *  transient text; its order is this call, a refusal the run's own
    *  ({@link RunTrace.lost}). */
   publish(runId: RunId, event: AgentEvent): void;
-  /** A barrier: every job enqueued before it has run and the view has
-   *  folded what they committed. A refused detached row is heard by its own
-   *  writer (a run's trace, at its end), never here. */
+  /** A barrier: every job enqueued before it has run, the view folded it,
+   *  and the session's reader of the folded tail (the terminal-result
+   *  presenter) ran over it. A refused detached row is heard by its writer. */
   readonly settled: Effect.Effect<void>;
   /** The current commit ordinal: where a reader attaching now starts its
    *  {@link tail}, so it sees what is published from here on. */
