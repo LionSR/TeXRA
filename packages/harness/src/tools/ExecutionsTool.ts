@@ -168,22 +168,10 @@ const EXECUTION_ROUTES: ReadonlyArray<{
     summary: 'List executions (paginated; use offset/limit for pages)',
     actions: {
       view: ({ context, input }) =>
-        listExecutions(
-          context.session,
-          context.runId,
-          input.offset,
-          input.limit,
-        ),
+        listExecutions(context, input.offset, input.limit),
       wait: ({ context, input }) =>
         waitForRuns(context, input.timeout, input.ids).pipe(
-          Effect.andThen(
-            listExecutions(
-              context.session,
-              context.runId,
-              input.offset,
-              input.limit,
-            ),
-          ),
+          Effect.andThen(listExecutions(context, input.offset, input.limit)),
         ),
       query: ({ context, input }) =>
         queryHistory(context.session, input.sql, input.params),

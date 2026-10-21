@@ -32,9 +32,14 @@ const RELATION_NOUN: Record<Exclude<RunRelation, 'peer'>, string> = {
   sibling: 'sibling',
 };
 
+/** The session to list and the run asking, whose relations the list marks. */
+interface ListingCaller {
+  readonly session: SessionHandle;
+  readonly runId: RunId | undefined;
+}
+
 export const listExecutions = Effect.fn('listExecutions')(function* (
-  session: SessionHandle,
-  caller: RunId | undefined,
+  { session, runId: caller }: ListingCaller,
   offset: number,
   limit: number,
 ) {
