@@ -743,7 +743,7 @@ describe('desktop settings IPC', () => {
   });
 
   it('applies two quick skill switches to the list the host holds, neither undoing the other', async () => {
-    const config = new FakeScopedConfigProvider();
+    const config = fakeConfig();
     const { settings } = await createCapturedSettingsFixture({ config });
 
     // Both sent before the first one's snapshot comes back.
