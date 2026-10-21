@@ -183,7 +183,7 @@ function makeSession(overrides: SessionFixture = {}): TuiSession {
     session.markRunCompleted(overrides.runSettled);
   if (overrides.runId) session.runId = overrides.runId;
   session.interruptedRunId = overrides.interruptedRunId;
-  session.stopRequested = overrides.stopRequested ?? false;
+  if (overrides.stopRequested) session.askStop('user');
   return session;
 }
 

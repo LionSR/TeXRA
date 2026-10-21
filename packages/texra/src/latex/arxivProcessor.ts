@@ -544,10 +544,28 @@ class ArxivSourceProcessor {
       // straight into it and a partial tree holding one `.tex` would pass
       // `hasExistingSource` on the next Download. A directory that was already
       // there, and the workspace root, belong to the user and stay.
-      const ownsPaperDir =
-        !isRoot &&
-        (yield* permanentFs(entryTypeIn(fs, paperDirFull))) === undefined;
-      yield* permanentFs(fs.makeDirectory(paperDirFull, { recursive: true }));
+      //
+      // The claim is the create itself: a non-recursive `makeDirectory` either
+      // makes the directory, and this download owns it, or fails
+      // `AlreadyExists`, and it is the user's or a concurrent download's. An
+      // existence probe before the create let two downloads of one id (two
+      // runs, or a run and the host command) both pass it, both believe they
+      // owned the directory, and the loser's cleanup remove the winner's
+      // placed source.
+      const ownsPaperDir = isRoot
+        ? false
+        : yield* permanentFs(
+            fs
+              .makeDirectory(path.dirname(paperDirFull), { recursive: true })
+              .pipe(
+                Effect.andThen(fs.makeDirectory(paperDirFull)),
+                Effect.as(true),
+                Effect.catchIf(
+                  (error) => error.reason._tag === 'AlreadyExists',
+                  () => Effect.succeed(false),
+                ),
+              ),
+          );
       yield* Effect.addFinalizer((exit) =>
         ownsPaperDir && !Exit.isSuccess(exit)
           ? this.cleanUpBestEffort(paperDirFull, 'paper dir', {
@@ -556,11 +574,15 @@ class ArxivSourceProcessor {
           : Effect.void,
       );
 
-      // Use a unique staging directory name to avoid clobbering an existing 'download/' folder at root
-      const stagingDirName = `.arxiv-download-${id.replaceAll('/', '_')}`;
-      const downloadDirFull = path.join(paperDirFull, stagingDirName);
-      yield* permanentFs(
-        fs.makeDirectory(downloadDirFull, { recursive: true }),
+      // A staging directory of this download's own: a fixed name derived from
+      // the id would be shared by two downloads of the same paper, which
+      // would then stream into one archive file and remove each other's
+      // staging. The prefix keeps it clear of a user's `download/` folder.
+      const downloadDirFull = yield* permanentFs(
+        fs.makeTempDirectory({
+          directory: paperDirFull,
+          prefix: `.arxiv-download-${id.replaceAll('/', '_')}-`,
+        }),
       );
       // The staging directory belongs to this scope, so removing it is a scope
       // finalizer rather than a step on the happy path. Every non-success exit

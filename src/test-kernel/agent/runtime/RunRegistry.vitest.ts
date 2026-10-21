@@ -190,6 +190,7 @@ function createRegistry(
     session: () => session,
     fork: testRunFork,
     programs: testRunPrograms,
+    wake: () => {},
   });
   return { events, phases, registry, grants };
 }
