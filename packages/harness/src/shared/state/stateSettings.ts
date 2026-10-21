@@ -412,13 +412,13 @@ const HARNESS_CONFIG_ROWS: Record<
   'debug.saveModelIO': {
     schema: z.boolean().prefault(false),
     description:
-      'Save what TeXRA sends to and receives from the model: the request messages and raw responses as JSON, plus the final input prompt as XML.',
+      'Save what is sent to and received from the model: the request messages and raw responses as JSON, plus the final input prompt as XML.',
   },
   'skills.enabled': {
     schema: AgentSkillsEnabledSchema.prefault(AGENT_SKILLS_ENABLED_DEFAULT),
     title: 'Enable skills for agents',
     description:
-      'Expose enabled TeXRA and imported skills to agent prompts. Skills are off by default.',
+      'Expose enabled built-in and imported skills to agent prompts. Skills are off by default.',
     category: 'tools',
     surfaces: { settingsView: 'skills', cliConfig: true },
   },
@@ -518,7 +518,7 @@ const STATE_SETTINGS: readonly StateSettingEntry[] = [
     schema: z.boolean().prefault(true),
     title: 'Mark agent commits',
     description:
-      'Attribute agent-authored git commits to the TeXRA identity so they are distinguishable from your own commits.',
+      'Attribute agent-authored git commits to the agent commit author so they are distinguishable from your own commits.',
     category: 'git',
     slot: 'repoState',
     surfaces: { settingsView: 'git-author', cliConfig: true },

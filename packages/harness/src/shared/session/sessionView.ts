@@ -26,6 +26,7 @@ import {
   requestParksItsCaller,
   RunActionSchema,
   RunIdentitySchema,
+  RunNoticeSchema,
   RunOutcomeSchema,
   RUN_LIFECYCLE_READY,
   RUN_PHASE,
@@ -123,8 +124,8 @@ const RunViewSchema = z.object({
    *  so nothing can move it. What lets a host paint an open group as
    *  interrupted and the session release the run's sidecar record. */
   durableOutcome: RunOutcomeSchema.nullable(),
-  /** Banner copy: unreadable, else interrupted or held, else `lost`. */
-  statusDetail: z.string().nullable(),
+  /** What the run's banner says (`RunNoticeSchema`); null: nothing. */
+  statusNotice: RunNoticeSchema.nullable(),
   /** The result its end lost (a `result-lost` error), whatever its outcome. */
   lost: z.string().nullable(),
   // G4: one table (`runStatusDisplay`) keys both, through the status and
@@ -176,8 +177,7 @@ const RunViewSchema = z.object({
   approval: z.enum(['none', 'own', 'descendant']),
   /** This process cannot act on it: another live owner, or unreadable (5.2). */
   readOnly: z.boolean(),
-  /** What a resume of this run waits for in this process (`statusDetail`
-   *  words it); null when nothing blocks it. */
+  /** What a resume of this run waits for here; null: nothing blocks it. */
   resumeBlocked: ResumeBlockerSchema.nullable(),
   /** What a host may offer on the run now (`runActions`). */
   actions: z.array(RunActionSchema).readonly(),

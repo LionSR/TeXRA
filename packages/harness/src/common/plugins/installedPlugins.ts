@@ -149,7 +149,7 @@ function claimName(run: InstallRun, name: string) {
   if (AgentSourceSchema.safeParse(name).success)
     return Effect.fail(
       new PluginRequestError({
-        message: `A plugin cannot be named "${name}": that name is reserved for TeXRA's own agents (${AgentSourceSchema.options.join(', ')}).`,
+        message: `A plugin cannot be named "${name}": that name is reserved for the built-in agent sources (${AgentSourceSchema.options.join(', ')}).`,
       }),
     );
   if (run.taken.has(name)) return Effect.fail(nameTaken(name));
@@ -189,7 +189,7 @@ function installFromRoot(
         if (nested) {
           return yield* Effect.fail(
             new PluginError({
-              message: `${candidate.url} is listed by a marketplace that was itself listed by one; TeXRA follows one level.`,
+              message: `${candidate.url} is listed by a marketplace that was itself listed by one; only one level is followed.`,
             }),
           );
         }

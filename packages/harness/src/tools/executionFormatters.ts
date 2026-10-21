@@ -71,9 +71,38 @@ function getAvailablePaths(
  * difference.
  */
 export function formatRunStatus(run: RunView): string {
-  return run.statusDetail === null
-    ? run.status
-    : `${run.status}: ${run.statusDetail}`;
+  const notice = describeRunNotice(run);
+  return notice === null ? run.status : `${run.status}: ${notice}`;
+}
+
+const RESUME_BLOCKER = {
+  agentMissing: 'is not installed',
+  pluginOff: 'is off',
+  pluginUntrusted: 'is not trusted as it is now',
+} as const;
+
+/** The fold's notice on `run` (`RunView.statusNotice`) as the model reads
+ *  it; null when there is none. Hosts word it through the app's copy. */
+export function describeRunNotice(run: RunView): string | null {
+  const notice = run.statusNotice;
+  switch (notice?.kind) {
+    case undefined:
+      return null;
+    case 'damaged':
+      return 'part of its saved history is damaged, so it cannot be opened or resumed';
+    case 'earlierBuild':
+      return 'an earlier build wrote it, and this build cannot open it';
+    case 'resumeBlocked': {
+      const { kind, name } = notice.reason;
+      return `its ${kind === 'agentMissing' ? 'agent' : 'plugin'} ${name} ${RESUME_BLOCKER[kind]}, so a resume waits until that is fixed`;
+    }
+    case 'interrupted':
+      return 'the process running it stopped before it finished; resume it to continue';
+    case 'held':
+      return `held by another process (pid ${notice.pid})`;
+    case 'lost':
+      return notice.message;
+  }
 }
 
 /** One /executions line. `marks` is what the line says about the run

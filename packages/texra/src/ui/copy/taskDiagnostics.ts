@@ -2,7 +2,7 @@ import { Predicate } from 'effect';
 import { fileLocationAddressPath } from '@shared/schemas';
 import { documentsOf } from '@texra/shared/plugins/documents';
 import { roundIndexedEntries } from '@texra/shared/plugins/documentOutputs';
-import { runStatusLabel } from '@ui/copy/runStatus';
+import { runNoticeText, runStatusLabel } from '@ui/copy/runStatus';
 import type { RunView } from '@texra-ai/harness/schemas';
 
 /**
@@ -27,7 +27,7 @@ export function formatTaskDiagnostics(run: RunView): string {
     `Task: ${run.title}`,
     `Agent: ${model ? `${run.label} (${model})` : run.label}`,
     `Status: ${runStatusLabel(run.statusKey)}`,
-    run.statusDetail ?? undefined,
+    runNoticeText(run.statusNotice) ?? undefined,
     `Id: ${run.id}`,
     run.parentId === null ? undefined : `Started by: ${run.parentId}`,
   ];

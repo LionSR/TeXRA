@@ -106,7 +106,7 @@ function marketplaceCandidate(
       } satisfies PluginCandidate;
     }
     return yield* failPlugin(
-      `Marketplace plugin ${entry.name} uses a "${typeof source === 'string' ? source : source.source}" source, which TeXRA cannot install yet. Supported: a relative path, "local", "github" and "url".`,
+      `Marketplace plugin ${entry.name} uses a "${typeof source === 'string' ? source : source.source}" source, which cannot be installed yet. Supported: a relative path, "local", "github" and "url".`,
     );
   });
 }

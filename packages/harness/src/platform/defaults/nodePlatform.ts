@@ -217,7 +217,7 @@ const supervisedSpawner = Layer.effect(
           if (code !== 'ESRCH') {
             writeSync(
               2,
-              `TeXRA: could not stop child process ${pid} at exit: ${code ?? ensureError(error).message}\n`,
+              `Could not stop child process ${pid} at exit: ${code ?? ensureError(error).message}\n`,
             );
           }
         }

@@ -7,7 +7,6 @@ import { registryOf } from '@agent/runtime/runRegistry';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { presentRunFailure } from '@agent/runtime/terminalResultToast';
 import { withLogChannel } from '@logger/effectLog';
-import { RUN_EARLIER_BUILD_MESSAGE } from '@shared/runs/runStatusDisplay';
 import type { RunId } from '@shared/schemas';
 import type { InboxItem, SendOptions } from './Inbox';
 
@@ -73,11 +72,11 @@ const FAILURE_MESSAGES: Record<FollowUpFailureReason, string> = {
   finished: 'This run has finished. Start a new agent task to continue.',
   unusable_checkpoint:
     "This run's saved state could not be loaded, so it cannot be continued. Delete it from history and start a new agent task.",
-  earlier_build: RUN_EARLIER_BUILD_MESSAGE,
-  read_failed:
-    "TeXRA couldn't read this task right now. Try again in a moment.",
+  earlier_build:
+    'This run was written by an earlier build, and this build cannot continue it.',
+  read_failed: "This run couldn't be read right now. Try again in a moment.",
   owned_elsewhere:
-    'This run is live in another TeXRA window. Send the message there.',
+    'This run is live in another process. Send the message there.',
   not_resumable:
     'This run cannot accept messages right now. Resume it, or start a new agent task.',
   not_parent:

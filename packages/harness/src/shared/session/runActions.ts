@@ -115,7 +115,7 @@ export function runActionRefusal(
 ): string {
   const what = ACTION_LABEL[action];
   if (run.readOnly)
-    return `${what} is not available: this TeXRA process cannot act on “${run.label}”.`;
+    return `${what} is not available: this process cannot act on “${run.label}”.`;
   if (isLiveRun(run))
     return `${what} is not available while “${run.label}” is running; stop it first.`;
   return `${what} is not available for “${run.label}” in its current state.`;
