@@ -78,14 +78,15 @@ function readJsonRecordSync(filePath: string): JsonRecord {
 }
 
 /**
- * Read the store file as a JSON object. A missing file reads as an empty
- * record; unreadable or non-object content fails with the original error
- * (`SyntaxError`, `TypeError`, or the Node filesystem error). The standard
- * filesystem service's error is unwrapped at this store boundary because its
- * existing callers match the underlying Node errors.
+ * Read the store file as a JSON object. A missing file reads as a copy of
+ * `missingFallback`; unreadable or non-object content fails with the
+ * original error (`SyntaxError`, `TypeError`, or the Node filesystem error).
+ * The standard filesystem service's error is unwrapped at this store boundary
+ * because its existing callers match the underlying Node errors.
  */
 const readJsonRecord = Effect.fn('JsonStore.readJsonRecord')(function* (
   filePath: string,
+  missingFallback: JsonRecord = {},
 ) {
   const fs = yield* FileSystem.FileSystem;
   const content = yield* fs.readFile(filePath).pipe(
@@ -94,7 +95,7 @@ const readJsonRecord = Effect.fn('JsonStore.readJsonRecord')(function* (
     Effect.mapError(storageError),
     Effect.catchIf(isFileNotFoundError, () => Effect.succeed(undefined)),
   );
-  if (content === undefined) return {};
+  if (content === undefined) return { ...missingFallback };
   const parsed = yield* Effect.try({
     try: () => JSON.parse(content) as unknown,
     catch: (cause) => cause as SyntaxError,
@@ -114,22 +115,21 @@ const writeLanes = new Map<string, PerKeyLane>();
 
 /**
  * Persist one mutation as a read-modify-write: prepare the directory, re-read
- * the file, apply the mutation, and write the result atomically. A file that
- * is gone reads as empty, so the mutation lands alone: another actor's
- * deletion (a user resetting the file) is a fact of the file, not something
- * this instance's remembered keys are written back over.
+ * the file (falling back to `missingFallback` when it is gone), apply the
+ * mutation, and write the result atomically.
  */
 const flush = Effect.fn('JsonStore.flush')(function* (
   filePath: string,
   key: string,
   value: unknown,
+  missingFallback: JsonRecord,
 ) {
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
   yield* fs
     .makeDirectory(path.dirname(filePath), { recursive: true })
     .pipe(Effect.mapError(storageError));
-  const record = yield* readJsonRecord(filePath);
+  const record = yield* readJsonRecord(filePath, missingFallback);
   if (value === undefined) {
     delete record[key];
   } else {
@@ -277,7 +277,10 @@ export class JsonStore {
     )(
       Effect.uninterruptible(
         Effect.suspend(() =>
-          Effect.provide(flush(this.filePath, key, value), nodeFileServices),
+          Effect.provide(
+            flush(this.filePath, key, value, this.snapshot()),
+            nodeFileServices,
+          ),
         ).pipe(
           Effect.tap(() =>
             Effect.sync(() => {
