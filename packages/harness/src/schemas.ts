@@ -99,7 +99,8 @@ export { runActionRefusal } from '@shared/session/runActions';
 // What makes the views read-only all the way down.
 export type { ReadonlyDeep } from '@shared/session/readonlyDeep';
 // What a session store's reads and claims answer with: an aggregate's claim
-// and state, a deletion's mode, a CLI input-history row, and the refusals.
+// and state, a deletion's mode, a CLI input-history row, the refusals, and
+// the notice of a store moved aside on open.
 export type {
   AggregateClaim,
   AggregateState,
@@ -108,6 +109,7 @@ export type {
   DatabaseNotOwner,
   DeletionMode,
   InputHistoryRecord,
+  SessionStoreMovedAside,
 } from '@shared/session/database';
 // A follow-up queued for a run, as its row holds it (`InboxItem.control`).
 export type { QueuedFollowUp } from '@shared/session/runRows';

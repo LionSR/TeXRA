@@ -40,8 +40,11 @@ import {
   isPreferSubscription,
   setPreferSubscription,
 } from '@model/subscriptionAccess';
-import type { SubscriptionAuthStatus } from '@texra/shared/model/subscriptionAuth';
-import { codexAccountLabel, xaiAccountLabel } from '@ui/copy/accountAuth';
+import {
+  codexAccountLabel,
+  type SubscriptionAuthStatus,
+  xaiAccountLabel,
+} from '@texra/shared/model/subscriptionAuth';
 import type { SUBSCRIPTION_AUTH_PROVIDERS } from '@texra-ai/harness/schemas';
 import type { SecretsFailed } from '@texra-ai/llm';
 import type { HttpClient } from 'effect/http';
