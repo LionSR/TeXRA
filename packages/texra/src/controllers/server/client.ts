@@ -115,6 +115,14 @@ function connectService(
   });
 }
 
+/** Nothing accepts a connection on the socket: no service, or a dead one. */
+const nobodyListens = (error: {
+  readonly _tag: string;
+  readonly reason?: { readonly _tag: string };
+}) =>
+  (error._tag === 'RpcClientError' || error._tag === 'SocketError') &&
+  error.reason?._tag === 'SocketOpenError';
+
 /**
  * The hello of the service on `socket`, or null when nothing accepts the
  * connection (no socket, or a dead service's). A socket that accepts but
@@ -122,7 +130,7 @@ function connectService(
  * hello: that fails, so no caller mistakes it for a dead one and takes its
  * socket over.
  */
-function probeService(
+export function probeService(
   socket: string,
 ): Effect.Effect<ServiceInfo | null, ServiceUnavailable> {
   return Effect.scoped(
@@ -133,8 +141,7 @@ function probeService(
     Effect.timeout(HELLO_TIMEOUT),
     Effect.map((info): ServiceInfo | null => info),
     Effect.catch((error) =>
-      (error._tag === 'RpcClientError' || error._tag === 'SocketError') &&
-      error.reason._tag === 'SocketOpenError'
+      nobodyListens(error)
         ? Effect.succeed(null)
         : Effect.fail(
             new ServiceUnavailable({
@@ -224,6 +231,16 @@ export function askServiceToStop(
   );
 }
 
+/** Ask the service on `socket` to drain: it exits once its running tasks
+ *  end. One that exited already is retired. */
+export function retireService(
+  socket: string,
+): Effect.Effect<void, SocketError | RpcClientError.RpcClientError> {
+  return askServiceToStop(socket, true).pipe(
+    Effect.catchIf(nobodyListens, () => Effect.void),
+  );
+}
+
 /** The refusal of a running service that speaks a newer protocol. */
 const newerService = (info: ServiceInfo) =>
   new ServiceUnavailable({
@@ -259,7 +276,7 @@ export const ensureService = Effect.fn('server.ensureService')(function* (
     yield* Effect.logInfo(
       `Retiring the TeXRA service ${info.version} (protocol ${info.protocol}): it finishes its running tasks and exits.`,
     );
-    yield* askServiceToStop(retiring.socket, true).pipe(
+    yield* retireService(retiring.socket).pipe(
       Effect.mapError(
         (error) =>
           new ServiceUnavailable({

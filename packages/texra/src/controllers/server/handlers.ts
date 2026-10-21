@@ -87,7 +87,7 @@ export class ServiceProjects extends Context.Service<
       workspace: string,
     ) => Effect.Effect<ServiceProject, Error, Scope.Scope>;
     /** The sessions open now, by storage root. */
-    readonly opened: Effect.Effect<ReadonlyMap<string, Session>>;
+    readonly opened: Effect.Effect<ReadonlyMap<string, LocalSession>>;
     /** The files this process's sessions announce their tasks wrote
      *  (`workspaceFilesWritten`), as the host hears them on its signal bus
      *  (controllers do not import it). */
@@ -111,6 +111,9 @@ export class ServiceControl extends Context.Service<
     readonly clients: Effect.Effect<number>;
     /** A drain is in progress: no new task starts. */
     readonly draining: Effect.Effect<boolean>;
+    /** Hold a task's admission for the caller's scope, which a drain
+     *  waits for; false, and nothing held, once the service is leaving. */
+    readonly admission: Effect.Effect<boolean, never, Scope.Scope>;
     /** Stop now, or drain first; returns once the stop is asked. */
     readonly stop: (drain: boolean) => Effect.Effect<void>;
     /** How long anything unused is kept: the service with no client and
@@ -119,21 +122,19 @@ export class ServiceControl extends Context.Service<
   }
 >()('@texra/server/ServiceControl') {}
 
-/** The tasks the service runs now, across its open projects; with
- *  `parked` false, only those at work, not a conversation waiting for its
- *  next message. */
+/** The tasks the service runs now, across its open projects: what its
+ *  registry holds live, which an admitted run is before the view folds it.
+ *  With `parked` false, only those at work, not a conversation the view
+ *  shows waiting for its next message. */
 export const runningTasks = Effect.fn('server.runningTasks')(function* (
   projects: Context.Service.Shape<typeof ServiceProjects>,
   parked = true,
 ): Effect.fn.Return<number> {
   let running = 0;
   for (const session of (yield* projects.opened).values()) {
-    for (const run of session.view.current().runs.values())
-      if (
-        run.ownedHere &&
-        isLiveRun(run) &&
-        (parked || run.status !== RUN_PHASE.WAITING)
-      )
+    const { runs } = session.view.current();
+    for (const { runId, live } of session.held())
+      if (live && (parked || runs.get(runId)?.status !== RUN_PHASE.WAITING))
         running += 1;
   }
   return running;
@@ -281,8 +282,10 @@ export const serviceHandlers = TexraRpcs.toLayer(
     // A task's start and resume are its session's, as every host's are.
     const runs = yield* FiberSet.make();
     const scope = yield* Effect.scope;
+    // The admission is held until the handler's scope ends, by when the
+    // run is the registry's: a drain waits for a start already under way.
     const refuseWhileDraining = Effect.gen(function* () {
-      if (yield* control.draining)
+      if (!(yield* control.admission))
         return yield* Effect.fail(
           failed('The service is shutting down; start the task again.'),
         );
