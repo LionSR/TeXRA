@@ -8,13 +8,13 @@ import {
   type WorkspacePathResolution,
   executed,
 } from '@texra-ai/harness/plugins';
+import { buildFileAttachment } from '@texra-ai/harness/plugins';
+import { formatToolOutput } from '@texra-ai/harness/plugins';
 import {
   ToolError,
   type ToolFileAttachment,
   type ToolResult,
 } from '@shared/schemas';
-import { buildFileAttachment } from '@tools/attachments';
-import { formatToolOutput } from '@tools/formatting';
 
 /** Shared `texPath` Zod field for LaTeX extraction tools, with a per-tool description. */
 export function texPathField(description: string): z.ZodString {
