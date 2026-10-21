@@ -41,7 +41,7 @@ import {
   type SkillDisplayItem,
 } from '@shared/schemas';
 import type { AgentScanIssue } from '@shared/schemas';
-import type { SubscriptionAuthStatuses } from '@shared/model/subscriptionAuth';
+import type { SubscriptionAuthStatuses } from '@texra/shared/model/subscriptionAuth';
 import type { SubscriptionUsageSnapshots } from '@texra/shared/model/subscriptionUsage';
 import {
   TELEMETRY_ENABLED_KEY,

@@ -18,11 +18,11 @@ import {
   codexAccountLabel,
   type SubscriptionAuthStatus,
   xaiAccountLabel,
-} from '@shared/model/subscriptionAuth';
-import { CHATGPT_AUTH, GROK_AUTH } from '@shared/model/accountAuth';
+} from '@texra/shared/model/subscriptionAuth';
 import type { SubscriptionUsageSnapshot } from '@texra/shared/model/subscriptionUsage';
 import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 import { postMessage } from '@texra/shared/hostBridge';
+import { CHATGPT_AUTH, GROK_AUTH } from '@ui/copy/accountAuth';
 import { commonViewStyles, designTokens } from '@ui/styles';
 import { renderLabeledActionButton } from '@ui/wa/actionButtons';
 import {
