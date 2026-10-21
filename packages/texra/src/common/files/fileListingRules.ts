@@ -1,4 +1,3 @@
-import { getPathSegments } from '@texra-ai/harness';
 import { getBasename, normalizeFilePath } from '@texra-ai/harness/schemas';
 import { FILE_HANDLING_RULES } from '@texra/common/files/fileHandlingRules';
 import {
@@ -79,9 +78,9 @@ export function prepareFileFilters(config: FileFilterConfig): FileFilterConfig {
 }
 
 function containsHiddenSegment(relativePath: string): boolean {
-  return getPathSegments(normalizeFilePath(relativePath)).some(
-    (segment) => segment.startsWith('.') && segment.length > 1,
-  );
+  return normalizeFilePath(relativePath)
+    .split('/')
+    .some((segment) => segment.startsWith('.') && segment.length > 1);
 }
 
 function containsExcludedDirectory(
@@ -89,7 +88,7 @@ function containsExcludedDirectory(
   excludeDirs: readonly string[],
 ): boolean {
   const normalizedPath = normalizeFilePath(relativePath).toLowerCase();
-  const pathSegments = getPathSegments(normalizedPath);
+  const pathSegments = normalizedPath.split('/');
 
   return excludeDirs.some((dir) => {
     if (dir.includes('/')) {

@@ -55,10 +55,12 @@ split, but it's imported by webview-reachable code (`src/ui/transcript/*`)
 and can't pull in `pathCore.ts` (which imports `node:path`). Its duplication
 is the accepted cost of the `BROWSER_SAFE_UTILS` boundary.
 
-**Update 2026-10-21:** `fileListingRules.ts` and `compiledPdfArtifacts.ts`
-now split through `getPathSegments` (the `..`-filtering in the PDF path is
-unchanged, applied on top of it). `outputFileUtils.ts` stays as is: it needs
-`path.posix.parse` and the drive-letter check.
+**Update 2026-10-21:** tried routing `fileListingRules.ts` and
+`compiledPdfArtifacts.ts` through `getPathSegments` (#14159) and reverted:
+`getPathSegments` trims its input, so a name with leading whitespace
+(` .draft`, ` node_modules`, ` report.tex`) would change hidden/excluded
+results and published PDF paths. Not a drop-in; a shared helper would need a
+non-trimming variant first.
 
 ## 2. `monacoLanguage.ts` basename reimplementation
 
