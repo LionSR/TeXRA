@@ -7,7 +7,7 @@ import { EXTENSION_COMMANDS } from '@commands/extensionCommandIds';
 import {
   SettingsTargetSchema,
   type SettingsTarget,
-} from '@texra/shared/settingsView/settingsViewMessages';
+} from '@texra/shared/settingsView/settingsTarget';
 import {
   commandCatalog,
   settingsTabByCommand,

@@ -14,6 +14,7 @@ import { customElement, property } from 'lit/decorators.js';
 import { repeat } from 'lit/directives/repeat.js';
 
 import type { Surface } from '@texra/shared/session/surface';
+import type { SettingsTarget } from '@texra/shared/settingsView/settingsTarget';
 import { SessionUiEvents } from '@texra/shared/session/uiEvents';
 import {
   INTERRUPTED_NOTICE,
@@ -110,8 +111,8 @@ export class InterruptedTasksNotice extends LitElement {
     );
   }
 
-  private openSettings(section: 'plugins' | 'general'): void {
-    this.dispatchEvent(SessionUiEvents.host({ kind: 'openSettings', section }));
+  private openSettings(target: SettingsTarget): void {
+    this.dispatchEvent(SessionUiEvents.host({ kind: 'openSettings', target }));
   }
 
   private renderTask(task: InterruptedTask): TemplateResult {
@@ -200,7 +201,7 @@ export class InterruptedTasksNotice extends LitElement {
             id="alwaysResumeButton"
             appearance="plain"
             size="s"
-            @click=${() => this.openSettings('general')}
+            @click=${() => this.openSettings('general/approval')}
             >${INTERRUPTED_NOTICE.alwaysResume}</wa-button
           >
         </div>

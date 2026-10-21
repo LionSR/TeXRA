@@ -419,21 +419,9 @@ export function createDesktopHostRequests(
         : Effect.fail(new Rejected({ reason: message.text }));
     },
     latexdiffAgainstCommit,
-    openSettings: (section) =>
+    openSettings: (target) =>
       Effect.sync(() =>
-        postDesktopSettingsView(
-          options.postToRenderer,
-          section
-            ? (
-                {
-                  teams: 'agents/teams',
-                  models: 'models/models',
-                  plugins: 'plugins',
-                  general: 'general/approval',
-                } as const
-              )[section]
-            : undefined,
-        ),
+        postDesktopSettingsView(options.postToRenderer, target),
       ),
     // Only the "ask the user for a key" step is host-specific: on the
     // desktop that means opening the Models tab rather than a modal prompt.
@@ -442,9 +430,6 @@ export function createDesktopHostRequests(
     ),
     openApiKeyGuide: Effect.suspend(() =>
       options.openExternalUrl('https://texra.ai/guide/configuration.html'),
-    ),
-    openAgentSettings: Effect.sync(() =>
-      postDesktopSettingsView(options.postToRenderer, 'agents/library'),
     ),
     openCustomAgentDirectory: Effect.gen(function* () {
       const directory = yield* options.getCustomAgentDirectory();

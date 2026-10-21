@@ -12,6 +12,7 @@ import type { TeXRAIconName } from '@shared/iconNames';
 import type { DocumentAgentOption } from '@texra/shared/plugins/documents';
 import type { HostSnapshot } from '@texra/shared/session/hostSnapshot';
 import type { SessionType, Surface } from '@texra/shared/session/surface';
+import type { SettingsTarget } from '@texra/shared/settingsView/settingsTarget';
 import {
   approvalPolicyLabel,
   formatApprovalPolicy,
@@ -45,7 +46,7 @@ export function launcherChipMenus(
   host: HostSnapshot,
   actions: {
     setLaunch(patch: Partial<Launch>): void;
-    openSettings(section: 'agents' | 'teams' | 'models' | 'general'): void;
+    openSettings(target: SettingsTarget): void;
   },
 ): ChipMenu[] {
   const team = host.teamOptions.find(
@@ -135,9 +136,9 @@ export function launcherChipMenus(
             selectedTeamId: value.slice(5),
           });
         } else if (value === 'settings:teams') {
-          actions.openSettings('teams');
+          actions.openSettings('agents/teams');
         } else if (value === 'settings:agents') {
-          actions.openSettings('agents');
+          actions.openSettings('agents/library');
         }
       },
     },
@@ -167,7 +168,7 @@ export function launcherChipMenus(
         if (value.startsWith('model:')) {
           actions.setLaunch({ model: value.slice(6) });
         } else if (value === 'settings:models') {
-          actions.openSettings('models');
+          actions.openSettings('models/models');
         }
       },
     },
@@ -210,7 +211,7 @@ function approvalMenu(
   policy: ApprovalPolicy,
   actions: {
     setLaunch(patch: Partial<Launch>): void;
-    openSettings(section: 'general'): void;
+    openSettings(target: SettingsTarget): void;
   },
 ): ChipMenu {
   const overridden = launch.approval === 'autoApprove' && policy !== 'never';
@@ -259,7 +260,7 @@ function approvalMenu(
         if (value === 'approval:autoApprove' && policy === 'never') return;
         actions.setLaunch({ approval: value.slice(9) as Launch['approval'] });
       } else if (value === 'settings:general') {
-        actions.openSettings('general');
+        actions.openSettings('general/approval');
       }
     },
   };

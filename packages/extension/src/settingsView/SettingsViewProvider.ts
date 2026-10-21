@@ -8,7 +8,7 @@ import type { ProgressViewProvider } from '@progressView/ProgressViewProvider';
 import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 import { DisposableStore } from '@texra/platform/disposable';
 import type { SubscriptionProviderId } from '@texra/controllers/modelAccess/subscriptionProviders';
-import type { SettingsTarget } from '@texra/shared/settingsView/settingsViewMessages';
+import type { SettingsTarget } from '@texra/shared/settingsView/settingsTarget';
 
 // Local file imports
 import {

@@ -10,7 +10,7 @@ import {
   SETTINGS_TAB_ORDER,
   type SettingsSectionName,
   type SettingsTabPanelName,
-} from '@texra/shared/settingsView/settingsViewMessages';
+} from '@texra/shared/settingsView/settingsTarget';
 import { PLUGINS_PAGE } from '@ui/copy/plugins';
 
 interface SettingsSectionEntry {

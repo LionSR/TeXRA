@@ -12,8 +12,8 @@ import type { SubscriptionUsageSnapshots } from '@texra/shared/model/subscriptio
 import type {
   ModelSelectionItem,
   ProviderKeyStatus,
-  SettingsSectionName,
 } from '@texra/shared/settingsView/settingsViewMessages';
+import type { SettingsSectionName } from '@texra/shared/settingsView/settingsTarget';
 import { commonViewStyles, designTokens } from '@ui/styles';
 
 // Local imports - settings view components (side-effect: register)

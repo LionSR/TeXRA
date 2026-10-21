@@ -24,10 +24,8 @@ import {
 import type { AgentScanIssue } from '@shared/schemas';
 import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 import { postMessage } from '@texra/shared/hostBridge';
-import {
-  type AgentSelectionItem,
-  type SettingsSectionName,
-} from '@texra/shared/settingsView/settingsViewMessages';
+import type { AgentSelectionItem } from '@texra/shared/settingsView/settingsViewMessages';
+import type { SettingsSectionName } from '@texra/shared/settingsView/settingsTarget';
 import {
   commonViewStyles,
   designTokens,

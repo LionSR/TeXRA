@@ -17,9 +17,9 @@ import { DocumentsStateKey } from '@texra/shared/settingsView/documentsSettings'
 import { TexraStateKey } from '@texra/shared/settingsView/texraSettings';
 import {
   type LatexSettingsStatus,
-  type SettingsSectionName,
   DEFAULT_LATEX_SETTINGS_STATUS,
 } from '@texra/shared/settingsView/settingsViewMessages';
+import type { SettingsSectionName } from '@texra/shared/settingsView/settingsTarget';
 
 // Local imports - LaTeX toolchain (install guides + commands)
 import {
