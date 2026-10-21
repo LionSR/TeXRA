@@ -11,10 +11,9 @@ import {
   AgentDirectories,
   readCustomAgentDir,
   type WorkspaceRoots,
+  registerCustomAgentRoot,
 } from '@texra-ai/harness';
-import { GlobalStateKey } from '@texra-ai/harness/schemas';
-import { registerCustomAgentRoot } from '@texra-ai/harness';
-import { agentKey } from '@shared/schemas';
+import { GlobalStateKey, agentKey } from '@texra-ai/harness/schemas';
 import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 import { createSettingsAgentActions } from '@texra/controllers/settingsView/backend/SettingsAgentActions';
 import {

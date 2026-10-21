@@ -2,7 +2,7 @@ import type {
   RequestDecision,
   UserQuestionAnswers,
   UserQuestionPrompt,
-} from '@shared/schemas';
+} from '@texra-ai/harness/schemas';
 
 /**
  * Feedback the agent receives when a user question ends with no answers —

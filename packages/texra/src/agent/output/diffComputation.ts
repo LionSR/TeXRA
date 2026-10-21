@@ -7,15 +7,15 @@
 
 import { Effect, FileSystem, PlatformError } from 'effect';
 
-import { withLogChannel } from '@texra-ai/harness';
+import { withLogChannel, pathToLocationIn } from '@texra-ai/harness';
 import { absentReason } from '@texra-ai/harness/node';
-import { pathToLocationIn } from '@texra-ai/harness';
-import { toErrorMessage, countLines } from '@texra-ai/harness/schemas';
 import {
+  toErrorMessage,
+  countLines,
   fileLocationDisplayPath,
   type DiffStats,
   type FileLocation,
-} from '@shared/schemas';
+} from '@texra-ai/harness/schemas';
 import type { OutputFileInfo } from '@texra/shared/plugins/documentOutputs';
 import { diffLineChanges } from '@texra/utils/text/diff';
 

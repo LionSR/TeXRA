@@ -7,10 +7,8 @@
  * harness holds none of it. Browser-safe: it imports only schemas and
  * browser-safe path helpers.
  */
-import { getBasename } from '@texra-ai/harness/schemas';
-import { z } from 'zod';
-
 import {
+  getBasename,
   DiffStatsSchema,
   FileLocationSchema,
   fileLocationDisplayPath,
@@ -18,7 +16,8 @@ import {
   LineCountSchema,
   type DiffStats,
   type FileLocation,
-} from '@shared/schemas';
+} from '@texra-ai/harness/schemas';
+import { z } from 'zod';
 
 /** A zero-based round (a document task's revision) number. */
 const RoundNumberSchema = z.int().nonnegative();

@@ -5,8 +5,12 @@ import {
   type PerKeyLane,
   withPerKeyLane,
 } from '@texra-ai/harness';
-import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';
-import type { RequestDecision, RunId } from '@shared/schemas';
+import {
+  type RequestDecision,
+  ensureError,
+  toErrorMessage,
+  type RunId,
+} from '@texra-ai/harness/schemas';
 
 import { type CliContext, type CliPromptRequest } from '../cliContext';
 import { askCliQuestion, writeTextStderr } from '../logSinks';

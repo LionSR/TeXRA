@@ -6,13 +6,13 @@ import { html, nothing, type TemplateResult } from 'lit';
 import { ifDefined } from 'lit/directives/if-defined.js';
 import { html as staticHtml, literal } from 'lit/static-html.js';
 
-import type { TeXRAIconName } from '@shared/iconNames';
+import type { IconName } from '@ui/wa/iconNames';
 import { waIcon } from './webAwesomeIcons';
 
 type EmptyStateHeadingTag = 'h1' | 'h2' | 'h3';
 
 export interface EmptyStateOptions {
-  readonly icon: TeXRAIconName;
+  readonly icon: IconName;
   readonly title: string;
   readonly body?: string;
   readonly className?: string;

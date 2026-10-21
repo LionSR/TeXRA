@@ -13,13 +13,13 @@ import { computed, signal } from '@lit-labs/signals';
 import { Cause, Effect, absurd } from 'effect';
 
 import { withLogChannel } from '@texra-ai/harness';
-import { attentionOf } from '@texra-ai/harness/schemas';
-import type {
-  PermissionPayload,
-  ProgressPermissionKind,
-  RequestDecision,
-  RunId,
-} from '@shared/schemas';
+import {
+  type RequestDecision,
+  attentionOf,
+  type PermissionPayload,
+  type ProgressPermissionKind,
+  type RunId,
+} from '@texra-ai/harness/schemas';
 import {
   approvalDecisionArms,
   type SurfaceDecision,
@@ -33,13 +33,12 @@ import {
   appendLocalRequestRefusal,
   reportRequestDefect,
 } from './transcript';
+import type { ProcessRuntime, Session } from '@texra-ai/harness';
 import type {
-  ProcessRuntime,
   RuntimeRequest,
-  Session,
   SessionView,
   ToolEditContent,
-} from '@texra-ai/harness';
+} from '@texra-ai/harness/schemas';
 
 interface TuiApprovalAdornments {
   readonly toolEdit: ToolEditContent;

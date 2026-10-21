@@ -17,6 +17,12 @@ import {
   type RunId,
   type AgentConfigPayload,
   generateRunId,
+  type RunEndResult,
+  isLiveRun,
+  APPROVAL_POLICY_CONFIG_KEY,
+  type ApprovalPolicy,
+  ensureError,
+  toErrorMessage,
 } from '@texra-ai/harness/schemas';
 import {
   describeFollowUpFailure,
@@ -26,20 +32,13 @@ import {
   type ProcessRuntime,
   type ProcessServices,
   type Run,
-  type RunEndResult,
   type Session,
   type StartInput,
   SESSION_CLOSE_DEADLINE_MS,
+  AgentError,
+  isUserAbort,
+  Settings,
 } from '@texra-ai/harness';
-import { AgentError } from '@texra-ai/harness';
-import { isUserAbort } from '@texra-ai/harness';
-import { Settings } from '@texra-ai/harness';
-import { isLiveRun } from '@texra-ai/harness/schemas';
-import {
-  APPROVAL_POLICY_CONFIG_KEY,
-  type ApprovalPolicy,
-} from '@texra-ai/harness/schemas';
-import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';
 
 import { createHeadlessCliHostInteractions } from './approvalAdapter';
 import {

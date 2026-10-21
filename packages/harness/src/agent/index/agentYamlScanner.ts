@@ -13,8 +13,7 @@ import {
   PersonaSchema,
   type AgentDefinition,
 } from '@shared/schemas';
-import type { AgentSource } from '@shared/schemas';
-import type { AgentScanIssue } from '@shared/schemas';
+import type { AgentSource, AgentScanIssue } from '@shared/schemas';
 import { ToolRegistry } from '@tools/toolTable';
 import { truncatedHexId } from '@utils/core/idHash';
 import { toErrorMessage } from '@utils/errors/errorMessage';

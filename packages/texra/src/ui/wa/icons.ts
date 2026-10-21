@@ -1,4 +1,4 @@
-import type { TeXRAIconName } from '@shared/iconNames';
+import type { IconName } from '@ui/wa/iconNames';
 
 /**
  * Model provider decorator configuration - single source of truth for provider indicators.
@@ -14,7 +14,7 @@ import type { TeXRAIconName } from '@shared/iconNames';
  * unrelated metaphor.
  */
 interface ProviderDecorator {
-  icon: TeXRAIconName;
+  icon: IconName;
   label: string;
 }
 
@@ -64,6 +64,6 @@ export const AGENT_DECORATORS = {
 } as const;
 
 export interface RunDecorator {
-  readonly icon: TeXRAIconName;
+  readonly icon: IconName;
   readonly label: string;
 }

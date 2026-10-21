@@ -1,8 +1,8 @@
 {
-  "@texra-ai/harness": 349,
+  "@texra-ai/harness": 351,
   "@texra-ai/harness/node": 120,
-  "@texra-ai/harness/plugins": 317,
-  "@texra-ai/harness/schemas": 72,
+  "@texra-ai/harness/plugins": 318,
+  "@texra-ai/harness/schemas": 73,
   "@texra-ai/harness/transcript": 103,
   "@texra-ai/llm": 14,
   "@texra-ai/llm/node": 30

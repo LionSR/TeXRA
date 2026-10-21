@@ -4,16 +4,16 @@
  */
 import * as path from 'node:path';
 
+import { agentFileName, type RunId } from '@texra-ai/harness/schemas';
 import { HISTORY_DIR } from '@housekeeping/constants';
 import { generateTimestamp } from '@housekeeping/utils';
-import { agentFileName, type RunId } from '@shared/schemas';
 import { modelFileName } from '@texra/utils/files/outputFileUtils';
 import { documentsOf } from '@texra/shared/plugins/documents';
 import {
   type ReadonlyRoundIndexed,
   type OutputFileInfo,
 } from '@texra/shared/plugins/documentOutputs';
-import type { SessionView } from '@texra-ai/harness';
+import type { SessionView } from '@texra-ai/harness/schemas';
 
 /**
  * One run's recorded output files by round, from a view of the session that

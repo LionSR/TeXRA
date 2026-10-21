@@ -12,8 +12,8 @@ import { Effect } from 'effect';
 import {
   definePlugin,
   type ProcessPluginLayer,
+  ALWAYS_AVAILABLE,
 } from '@texra-ai/harness/plugins';
-import { ALWAYS_AVAILABLE } from '@texra-ai/harness/plugins';
 import { APP_PLUGIN_ARMS } from '@texra/shared/plugins/appArms';
 import {
   ClaudeAgentSessions,

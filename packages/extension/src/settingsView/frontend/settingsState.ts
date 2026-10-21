@@ -21,12 +21,9 @@
  * replays. A signal declared any other way is silently left out of the reset.
  */
 
-import { GlobalStateKey, WorkspaceStateKey } from '@texra-ai/harness/schemas';
 import {
-  APPROVAL_POLICY_CONFIG_KEY,
-  type ApprovalPolicy,
-} from '@texra-ai/harness/schemas';
-import {
+  GlobalStateKey,
+  WorkspaceStateKey,
   AGENT_SKILLS_CONFIG_KEY,
   BASH_APPROVAL_CONFIG_KEY,
   CHATGPT_CODEX_CONTEXT_WINDOW_SETTING,
@@ -39,8 +36,10 @@ import {
   type AgentModePreset,
   type SkillDisplayIssue,
   type SkillDisplayItem,
-} from '@shared/schemas';
-import type { AgentScanIssue } from '@shared/schemas';
+  type AgentScanIssue,
+  APPROVAL_POLICY_CONFIG_KEY,
+  type ApprovalPolicy,
+} from '@texra-ai/harness/schemas';
 import type { SubscriptionAuthStatuses } from '@texra/shared/model/subscriptionAuth';
 import type { SubscriptionUsageSnapshots } from '@texra/shared/model/subscriptionUsage';
 import {

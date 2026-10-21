@@ -20,6 +20,8 @@ export type {
   RequestShowInstructionPayload,
   ShowAgentConfigBannerPayload,
 } from '@shared/schemas';
+// `RunEndResult` comes from its own module so declaration emit does not pull
+// the provider SDK types in (the leak check in `scripts/validate-artifacts.mjs`).
 export type { RunEndResult } from '@agent/runtime/RunEndResult';
 export { DEFAULT_AGENT_MODEL } from '@shared/constants/defaultModels';
 export {
@@ -70,7 +72,7 @@ export {
   SUBSCRIPTION_AUTH_PROVIDERS,
   type SubscriptionAuthProvider,
 } from '@shared/model/subscriptionAuth';
-// Reads of a `SessionView` (root) for a renderer: what needs a person, how
+// Reads of a `SessionView` for a renderer: what needs a person, how
 // busy the session is, and where each run stands.
 export {
   acceptsFollowUp,
@@ -87,9 +89,8 @@ export type {
   RequestAnswerability,
   SessionTitleState,
 } from '@shared/session/sessionView';
-// The views themselves, read-only all the way down (the root re-exports
-// them), the request a run waits on, and what a host brings to
-// `acceptsFollowUp`.
+// The views themselves, read-only all the way down, the request a run
+// waits on, and what a host brings to `acceptsFollowUp`.
 export type {
   PendingRequest,
   RunView,
@@ -212,8 +213,10 @@ export {
   type ApprovalGrants,
   type ApprovalGrantSource,
 } from '@shared/approvalBypassKind';
-// A request a host sends a session and the outcome it answers with.
+// A request a host sends a session and the outcome it answers with, and a
+// tool edit's hunks as unified-diff lines.
 export {
+  formatHunkLines,
   OutcomeSchema,
   RuntimeRequestSchema,
   ToolEditContentSchema,
@@ -286,3 +289,110 @@ export {
   truncateSummary,
   truncateWithEllipsis,
 } from '@utils/text/stringUtils';
+// Escaping for an XML or HTML attribute value and for element text.
+export { escapeAttr, escapeText } from '@shared/utils/xmlEscape';
+
+// Agents (names, keys, scan issues, team presets) and picker rows.
+export {
+  AGENT_MODE_PRESETS,
+  agentFileName,
+  agentKeyOf,
+  agentMatchesIdentifier,
+  type AgentModePreset,
+  AgentModePresetSchema,
+  agentName,
+  type AgentOptionData,
+  AgentOptionDataSchema,
+  type AgentScanIssue,
+  AgentScanIssueSchema,
+  DEFAULT_WORKFLOW_AGENT,
+  isModelOptionAvailable,
+  MODEL_AVAILABILITY_STATUS,
+  ModelAvailabilityFieldsSchema,
+  type ModelOptionData,
+  ModelOptionDataSchema,
+  parseAgentModePresets,
+  STARTER_AGENT_MODE_PRESET,
+  type TeamOptionData,
+  TeamOptionDataSchema,
+  type WorkspaceAgentsSelection,
+} from '@shared/schemas';
+// Request payloads, inquiry turns, harness setting keys, and skills.
+export {
+  type ActiveSkillSourceScope,
+  ActiveSkillSourceScopeSchema,
+  AGENT_SKILLS_CONFIG_KEY,
+  type AgentProposalPermission,
+  type AnsweredInquiryTurn,
+  BASH_APPROVAL_CONFIG_KEY,
+  type BashPermission,
+  CHATGPT_CODEX_CONTEXT_WINDOW_SETTING,
+  CHILD_RUN_CONCURRENCY_BUDGET_CONFIG_KEY,
+  CHILD_RUN_CONCURRENCY_BUDGET_SETTING,
+  CredentialSwitchSchema,
+  type ExternalInquiryPermission,
+  ExternalInquiryTurnRecordSchema,
+  GOAL_MAX_COST_SETTING,
+  type InquiryThreadId,
+  InquiryThreadIdSchema,
+  InstalledPluginSchema,
+  MODEL_COMPACTION_THRESHOLD_SETTING,
+  MODEL_RETRY_MAX_ATTEMPTS_SETTING,
+  type OpenInquiryTurn,
+  type PlanApprovalPermission,
+  type RequestDecision,
+  RESUME_ON_OPEN_SETTING,
+  type RetryPermission,
+  type SkillDisplayIssue,
+  SkillDisplayIssueSchema,
+  type SkillDisplayItem,
+  SkillDisplayItemSchema,
+  SkillNameSchema,
+  TOOL_EDIT_APPROVAL_CONFIG_KEY,
+  ToolEditPermissionSchema,
+  type UserQuestionAnswers,
+  UserQuestionAnswersSchema,
+  type UserQuestionPermission,
+  type UserQuestionPrompt,
+  UserQuestionPromptSchema,
+} from '@shared/schemas';
+// Runs and what they produce: phases, records, plans, files and usage.
+export {
+  type ContextStateData,
+  type DiffStats,
+  DiffStatsSchema,
+  emptyRunEndOutput,
+  fileLocationAddressPath,
+  fileLocationDisplayPath,
+  FileLocationSchema,
+  fileLocationShortDisplayPath,
+  getProposalFileGroups,
+  isEmptyUsage,
+  isLoopDriven,
+  isTaskConfig,
+  JsonValueSchema,
+  LineCountSchema,
+  type McpToolOutput,
+  MESSAGE_TYPES,
+  NullableFileFieldsSchema,
+  ownerIdentity,
+  type Plan,
+  planSummaryLine,
+  type ProgressPermissionKind,
+  type ProposalFileFields,
+  recipeBlockOf,
+  requestParksItsCaller,
+  RUN_LIFECYCLE_READY,
+  RUN_PHASE,
+  RUN_SUBSTATE,
+  type RunEndOutput,
+  RunEndSchema,
+  runIdentityName,
+  RunRecordFieldsSchema,
+  runStorageFilePath,
+  sumUsageStats,
+  toJsonValue,
+  type TokenUsageStats,
+  TOOL_CALL_STATUS,
+  type WorktreeInfo,
+} from '@shared/schemas';

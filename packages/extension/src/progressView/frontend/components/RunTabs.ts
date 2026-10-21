@@ -29,8 +29,7 @@ import { renderEmptyState } from '@ui/wa/emptyState';
 import { layoutStyles } from '../styles/logStyles';
 import { runTabsContainerStyles } from './RunTabsContainer.styles';
 import { getComposedPathElement } from '../utils';
-import type { SessionView, RunView } from '@texra-ai/harness/schemas';
-import type { RunId } from '@texra-ai/harness/schemas';
+import type { SessionView, RunView, RunId } from '@texra-ai/harness/schemas';
 import type { RunTab } from './RunTab';
 import './RunTab';
 

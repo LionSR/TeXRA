@@ -1,12 +1,11 @@
 import { Stream } from 'effect';
 
-import type { RunId } from '@shared/schemas';
 import type { OutputFileInfo } from '@texra/shared/plugins/documentOutputs';
 import {
   DOCUMENTS_OUTPUT_KEY,
   documentRoundsOf,
 } from '@texra/shared/plugins/documents';
-import type { SessionView } from '@texra-ai/harness';
+import type { RunId, SessionView } from '@texra-ai/harness/schemas';
 
 /**
  * The output files a run's documents fact names, every revision's, each time

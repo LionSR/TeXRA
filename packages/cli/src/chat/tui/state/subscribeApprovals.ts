@@ -20,14 +20,16 @@ import {
   lookupApiKey,
   providerDisplayName,
 } from '@texra-ai/llm';
-import { withLogChannel } from '@texra-ai/harness';
-import { toErrorMessage } from '@texra-ai/harness/schemas';
-import { type HostInteractions } from '@texra-ai/harness';
+import { withLogChannel, type HostInteractions } from '@texra-ai/harness';
+import {
+  toErrorMessage,
+  type RetryPermission,
+  type RunId,
+} from '@texra-ai/harness/schemas';
 import { warnApprovalDenied } from '@cli/runtime/approval/approvalPrompts';
 import { promptForCliProviderApiKey } from '@cli/chat/tui/hosts/cliProviderKeys';
 import type { CliContext } from '@cli/runtime/cliContext';
 import type { CliRuntimeHost } from '@cli/runtime/cliPresentationHost';
-import type { RetryPermission, RunId } from '@shared/schemas';
 import type { HostRequest } from '@texra/shared/session/hostRequest';
 import {
   ApiKeyPromptFailed,
@@ -52,9 +54,9 @@ import { appendLocalNotice } from './transcript';
 import type {
   PlatformSecrets,
   ProcessRuntime,
-  ToolEditContent,
+  SettingsStores,
 } from '@texra-ai/harness';
-import type { SettingsStores } from '@texra-ai/harness';
+import type { ToolEditContent } from '@texra-ai/harness/schemas';
 
 /**
  * What this host holds for its lifetime: the session its denial notices read

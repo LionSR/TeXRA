@@ -24,8 +24,8 @@ import {
   sessionRunIds,
 } from './cliState';
 import { currentView, runViewOf } from './sessionView';
-import type { RequestError, RunView } from '@texra-ai/harness';
-import type { RunId } from '@texra-ai/harness/schemas';
+import type { RequestError } from '@texra-ai/harness';
+import type { RunView, RunId } from '@texra-ai/harness/schemas';
 
 /**
  * The runs whose transcript tier this terminal keeps resident: its

@@ -10,18 +10,21 @@
 import { Cause, Effect, Exit, FileSystem } from 'effect';
 import { z } from 'zod';
 
-import { defineTool } from '@texra-ai/harness';
-import { ChildRuns, requireRun, executed } from '@texra-ai/harness/plugins';
-import { Settings } from '@texra-ai/harness';
-import { postProcessResponse } from '@latex/texraResponseTextProcessing';
+import { defineTool, Settings } from '@texra-ai/harness';
+import {
+  ChildRuns,
+  requireRun,
+  executed,
+  ToolError,
+} from '@texra-ai/harness/plugins';
 import {
   fileLocationDisplayPath,
   MESSAGE_TYPES,
   RUN_OUTCOME,
   RunIdSchema,
-  ToolError,
   type FileLocation,
-} from '@shared/schemas';
+} from '@texra-ai/harness/schemas';
+import { postProcessResponse } from '@latex/texraResponseTextProcessing';
 import {
   documentsSummary,
   documentTaskOptions,

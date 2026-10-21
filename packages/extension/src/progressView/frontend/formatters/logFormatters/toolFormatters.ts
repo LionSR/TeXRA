@@ -17,9 +17,11 @@ import { truncateWithEllipsis } from '@texra-ai/harness/schemas';
 import { html, nothing, type TemplateResult } from 'lit';
 
 // Local imports - shared utilities
-import { toolDisplayKind } from '@texra-ai/harness/transcript';
-import { normalizeToolName } from '@texra-ai/harness/transcript';
-import type { TeXRAIconName } from '@shared/iconNames';
+import {
+  toolDisplayKind,
+  normalizeToolName,
+} from '@texra-ai/harness/transcript';
+import type { IconName } from '@ui/wa/iconNames';
 
 // Local imports - formatter helpers
 import {
@@ -62,7 +64,7 @@ export function formatToolUseTemplate(
   const displayKind = toolDisplayKind(toolName);
   const showAsError = model.isError && !model.isUserFeedback;
 
-  let iconName: TeXRAIconName | typeof SPINNER_ICON_NAME;
+  let iconName: IconName | typeof SPINNER_ICON_NAME;
   if (model.isUserFeedback) {
     iconName = 'comment';
   } else if (running) {

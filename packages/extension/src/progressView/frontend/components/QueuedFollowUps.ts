@@ -9,9 +9,9 @@ import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 
 // Local imports - shared styles
+import { pluralize } from '@texra-ai/harness/transcript';
 import { designTokens, commonViewStyles } from '@ui/styles';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
-import { pluralize } from '@utils/text/stringUtils';
 
 // Web Awesome native components
 import '@awesome.me/webawesome/dist/components/details/details.js';

@@ -2,13 +2,19 @@
 import { formatResultCount } from '@texra-ai/harness/transcript';
 import { Effect, type FileSystem } from 'effect';
 import { z } from 'zod';
-import { defineTool, ToolContext } from '@texra-ai/harness';
+import {
+  defineTool,
+  ToolContext,
+  type ToolResult,
+  pathToLocationIn,
+} from '@texra-ai/harness';
 
 // Local imports - tools
-import { pathToLocationIn } from '@texra-ai/harness';
-import { formatToolOutput } from '@texra-ai/harness/plugins';
+import {
+  formatToolOutput,
+  type ToolFileAttachment,
+} from '@texra-ai/harness/plugins';
 import { TikzPictureManager } from '@latex/TikzPictureManager';
-import { type ToolFileAttachment, type ToolResult } from '@shared/schemas';
 import {
   buildLimitedAttachments,
   emptyExtractionResult,

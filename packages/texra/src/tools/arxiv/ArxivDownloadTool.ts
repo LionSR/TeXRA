@@ -12,12 +12,15 @@ import {
   toPosixPath,
 } from '@texra-ai/harness';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
-import { nullishWithDefault, executed } from '@texra-ai/harness/plugins';
-import { getGitignoreMatcher } from '@texra-ai/harness/plugins';
-import { formatToolOutput } from '@texra-ai/harness/plugins';
+import {
+  nullishWithDefault,
+  executed,
+  ToolError,
+  getGitignoreMatcher,
+  formatToolOutput,
+} from '@texra-ai/harness/plugins';
 import { ArxivProcessor, type ArxivSourceError } from '@latex/arxivProcessor';
 import { resolveLatexFormatter } from '@latex/formatter/texFormatter';
-import { ToolError } from '@shared/schemas';
 
 const NO_ENTRIES_MESSAGE = '(no entries)';
 const DEFAULT_HIDDEN_NAMES = new Set(['.git', '.gitignore']);

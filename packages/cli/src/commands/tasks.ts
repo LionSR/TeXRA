@@ -13,13 +13,11 @@ import {
   AgentConfigSchema,
   type AgentConfigPayload,
   generateRunId,
-} from '@texra-ai/harness/schemas';
-import { Settings } from '@texra-ai/harness';
-import {
   APPROVAL_POLICY_CONFIG_KEY,
   type ApprovalPolicy,
+  ensureError,
 } from '@texra-ai/harness/schemas';
-import { ensureError } from '@texra-ai/harness/schemas';
+import { Settings } from '@texra-ai/harness';
 import type { RequestErrorWire } from '@texra/shared/session/sessionFrames';
 import type { TaskSummary } from '@texra/controllers/server/protocol';
 import type { ServiceClient } from '@texra/controllers/server/client';
@@ -44,7 +42,8 @@ import { defineCliCommand } from './_helpers/defineCliCommand';
 import { GLOBAL_ARGS, optString } from './_helpers/globalArgs';
 import { emitCliResult } from './_helpers/output';
 import { formatToolUseAgentRunInstruction } from './_helpers/runInstructions';
-import type { Outcome, RuntimeRequest } from '@texra-ai/harness';
+import type { Outcome } from '@texra-ai/harness';
+import type { RuntimeRequest } from '@texra-ai/harness/schemas';
 
 /** The text width an attach lays rows out at when stdout is not a terminal,
  *  so a saved transcript does not depend on who saved it. */

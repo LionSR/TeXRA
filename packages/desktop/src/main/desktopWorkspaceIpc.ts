@@ -12,7 +12,7 @@
 // not a root-confined view that would refuse them.
 
 import { basename, dirname, join } from 'node:path';
-import { normalizeFilePath } from '@texra-ai/harness/schemas';
+import { normalizeFilePath, toErrorMessage } from '@texra-ai/harness/schemas';
 
 import { Data, Effect, FileSystem, type PlatformError } from 'effect';
 
@@ -26,7 +26,6 @@ import {
   entryTypeIn,
   readDirectoryTypedTolerant,
 } from '@texra-ai/harness/node';
-import { toErrorMessage } from '@texra-ai/harness/schemas';
 import { onAppSignal } from '@eventBus/AppSignals';
 import { FILE_HANDLING_RULES } from '@texra/common/files/fileHandlingRules';
 import { getIncludedExtensions } from '@texra/common/files/fileTypeUtils';

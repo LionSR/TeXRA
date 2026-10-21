@@ -1,4 +1,5 @@
 // Third-party imports
+import { Number as Num } from 'effect';
 import {
   formatCompactTokenCount,
   formatCostUsd,
@@ -18,19 +19,18 @@ import {
   isEmptyUsage,
   type ContextStateData,
   type TokenUsageStats,
-} from '@shared/schemas';
-import type { TeXRAIconName } from '@shared/iconNames';
+} from '@texra-ai/harness/schemas';
 import {
   contextGaugeBand,
   roundedContextPercent,
 } from '@texra/shared/contextGauge';
+import type { IconName } from '@ui/wa/iconNames';
 import { designTokens } from '@ui/styles';
 import { usageCostLabel, usageRouteBadge } from '@ui/copy/modelAccess';
 import { focusRingStyles } from '@ui/styles/controlStyles';
 
 // Local imports - shared icons and utils
 import { waIcon } from '@ui/wa/webAwesomeIcons';
-import { clamp } from '@utils/text/stringUtils';
 
 /** The usage strip's token counters in order: each one's icon and tooltip,
  *  and the words the strip's aria summary reads. Only the `always` ones show
@@ -82,7 +82,7 @@ const TOKEN_STATS = [
   },
 ] as const satisfies readonly {
   key: keyof TokenUsageStats;
-  icon: TeXRAIconName;
+  icon: IconName;
   id: string;
   tooltip: string;
   label: string;
@@ -340,7 +340,7 @@ export class UsagePanel extends LitElement {
     // 1% so a window that is genuinely in use never reads as `0% context
     // used` — the rule `roundedContextPercent` sets and the CLI status bar
     // already applies to this same number.
-    const clamped = clamp(utilizationPercent, 0, 100);
+    const clamped = Num.clamp(utilizationPercent, { minimum: 0, maximum: 100 });
     const roundedPercent = roundedContextPercent(utilizationPercent);
     const percentLabel = `${roundedPercent}% context used`;
 

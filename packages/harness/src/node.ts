@@ -47,6 +47,7 @@ export {
   executeCommand,
   type ExecuteCommandBaseOptions,
 } from '@utils/system/execUtils';
+export type { ExecResult } from '@shared/schemas';
 export { findCommand, type FoundCommand } from '@utils/system/binaryResolver';
 export { probeTool, type ToolProbe } from '@utils/system/toolUtils';
 export { withExtendedPath } from '@utils/system/platformPaths';
@@ -77,14 +78,6 @@ export {
 // sink, the minimum level, a bounded tracer), for a host program that runs
 // outside its process runtime: before it is built, or after it is gone.
 export { effectDiagnosticsLayer } from '@logger/effectDiagnostics';
-// The setting rows a `ConfigProvider` resolves against (its `catalog`): an
-// embedder with its own provider builds one from its rows, which
-// `settingsCatalog` puts after the harness's own.
-export {
-  settingsCatalog,
-  type SettingsCatalog,
-  type StateSettingEntry,
-} from '@shared/state/stateSettings';
 // The config provider over a host's stores (workspace, local, global), and
 // whether it ignores a project file's value for a row.
 export {

@@ -1,6 +1,6 @@
 // Node imports
 import * as path from 'node:path';
-import { hasExtension } from '@texra-ai/harness';
+import { hasExtension, pathToLocationIn } from '@texra-ai/harness';
 import { RunFileService } from '@texra-ai/harness/plugins';
 import { absentReason } from '@texra-ai/harness/node';
 
@@ -8,9 +8,7 @@ import { absentReason } from '@texra-ai/harness/node';
 import { Effect, FileSystem, PlatformError, Predicate } from 'effect';
 
 // Local imports
-import { pathToLocationIn } from '@texra-ai/harness';
-import { toErrorMessage } from '@texra-ai/harness/schemas';
-import type { FileLocation } from '@shared/schemas';
+import { toErrorMessage, type FileLocation } from '@texra-ai/harness/schemas';
 import type { DocumentTaskOptions } from '@texra/shared/plugins/documents';
 
 // Local file imports

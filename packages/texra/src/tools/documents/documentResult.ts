@@ -10,15 +10,24 @@ import path from 'node:path';
 
 import { Effect, FileSystem } from 'effect';
 
-import { withLogChannel, isPathWithin } from '@texra-ai/harness';
+import {
+  buildDiffHunks,
+  withLogChannel,
+  isPathWithin,
+} from '@texra-ai/harness';
 import { RunFileService } from '@texra-ai/harness/plugins';
 import {
   readNormalizedFile,
   workspaceRelativePath,
 } from '@texra-ai/harness/node';
-import { toErrorMessage, countLines } from '@texra-ai/harness/schemas';
-import { runStorageFilePath, type RunId } from '@shared/schemas';
-import { escapeAttr } from '@shared/utils/xmlEscape';
+import {
+  toErrorMessage,
+  countLines,
+  runStorageFilePath,
+  type RunId,
+  escapeAttr,
+  formatHunkLines,
+} from '@texra-ai/harness/schemas';
 import { stripWorkflowRoundDir } from '@texra/shared/constants/workflowOutput';
 import {
   DocumentsResultSchema,
@@ -27,9 +36,22 @@ import {
   type OutputFileSummary,
   type ResultDiffSummary,
 } from '@texra/shared/plugins/documentOutputs';
-import { reportDiffTimeout, unifiedDiffText } from '@utils/text/unifiedDiff';
 import type { WorkspaceRoots } from '@texra-ai/harness';
 import type { AgentBlockResult, RecipeChange } from '@texra-ai/harness/plugins';
+
+/**
+ * The unified diff of `before` into `after`, `undefined` when nothing
+ * changed. A diff that ran past its bound reads as a whole replacement, and
+ * the warning saying so is logged here.
+ */
+export const unifiedDiffOf = Effect.fn('documents.unifiedDiffOf')(function* (
+  before: string,
+  after: string,
+) {
+  const { hunks, timeout } = buildDiffHunks(before, after);
+  if (timeout !== undefined) yield* Effect.logWarning(timeout);
+  return hunks.length > 0 ? formatHunkLines(hunks).join('\n') : undefined;
+});
 
 /**
  * Format a single output file summary as XML. `path` remains run-relative for
@@ -225,8 +247,7 @@ const computeAndWriteWorkflowDiffs = Effect.fn('documents.computeDiffs')(
             largeChange = changedLines / originalLines > LARGE_CHANGE_RATIO;
           }
 
-          const { text: diff, timeout } = unifiedDiffText(original, modified);
-          yield* reportDiffTimeout(timeout);
+          const diff = yield* unifiedDiffOf(original, modified);
           if (!diff) return { kind: 'none' } as const;
           const limit = largeChange ? LARGE_CHANGE_DIFF_LINES : MAX_DIFF_LINES;
           // Use full relativePath (with separators replaced) to avoid collisions

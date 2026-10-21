@@ -5,14 +5,13 @@ import * as path from 'node:path';
 import { Effect, FileSystem } from 'effect';
 
 // Local imports - log
-import { withLogChannel } from '@texra-ai/harness';
-import { pathToLocationIn } from '@texra-ai/harness';
-import type { FileLocation } from '@shared/schemas';
-import { renderPrompt } from '@utils/prompt';
+import { withLogChannel, pathToLocationIn } from '@texra-ai/harness';
+import { renderPrompt } from '@texra-ai/harness/plugins';
 
 // Local imports - latex utils
 import { compileLatex2Pdf } from './texTools';
 import { LATEX_COMMANDS_CHANNEL as CHANNEL } from './latexLogging';
+import type { FileLocation } from '@texra-ai/harness/schemas';
 import type { WorkspaceRoots } from '@texra-ai/harness';
 
 /**

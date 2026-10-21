@@ -9,8 +9,8 @@
 
 import { formatCostUsd } from '@texra-ai/harness/transcript';
 import { absurd } from 'effect';
-import { type TokenUsageStats, type UsageRoute } from '@shared/schemas';
 import { codingPlanForUsageRoute } from '@texra/shared/model/codingPlans';
+import type { TokenUsageStats, UsageRoute } from '@texra-ai/harness/schemas';
 
 /** Model calls paid for by your own provider accounts. */
 export const OWN_API_KEYS = {

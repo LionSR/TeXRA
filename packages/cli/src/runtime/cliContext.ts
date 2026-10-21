@@ -15,21 +15,21 @@ import {
   DatabaseOpenFailed,
   type ConfigProvider,
   type SkillSourceOptions,
+  Settings,
 } from '@texra-ai/harness';
 import {
   absentReason,
   canonicalizeWorkspacePath,
 } from '@texra-ai/harness/node';
-import { Settings } from '@texra-ai/harness';
-import { safeParseJson } from '@texra-ai/harness/schemas';
 import {
+  safeParseJson,
   APPROVAL_POLICY_CONFIG_KEY,
   APPROVAL_POLICY_NO_INPUT_DEFAULT,
   parseApprovalPolicy,
   type ApprovalPolicy,
+  stricterPolicy,
+  toErrorMessage,
 } from '@texra-ai/harness/schemas';
-import { stricterPolicy } from '@texra-ai/harness/schemas';
-import { toErrorMessage } from '@texra-ai/harness/schemas';
 import { defaultNodeStorageRoot } from '@texra/platform/defaults/nodeStorage';
 import {
   CLI_OUTPUT_FORMATS,
@@ -37,7 +37,6 @@ import {
   type CliOutputFormat,
 } from '@texra/shared/cliOutputFormat';
 import { approvalPolicyLabel } from '@ui/copy/approvalPolicy';
-import { isNonEmptyString } from '@utils/text/stringUtils';
 
 import { isCliSupportedModelId, loadCliStartupConfig } from './cliConfig';
 import { loginShellEnvironment } from './loginShellEnv';
@@ -342,7 +341,7 @@ export interface BuildCliContextInit {
 const envTier = (key: string): Effect.Effect<string | undefined> =>
   Effect.map(Config.String(key).pipe(Config.option, Effect.orDie), (raw) => {
     const value = Option.getOrUndefined(raw)?.trim();
-    return isNonEmptyString(value) ? value : undefined;
+    return value === '' ? undefined : value;
   });
 
 /** An env-tier value through its own parse; an invalid one warns and yields nothing. */
@@ -368,7 +367,7 @@ const resolveCliCwd = Effect.fn('cliContext.resolveCliCwd')(function* (
   // When `--cwd` IS passed, validate it explicitly: a typo or stale path
   // should fail loudly instead of silently falling back to the resolved-but-
   // nonexistent string and running the agent against the wrong workspace.
-  if (!isNonEmptyString(cwdFlag)) {
+  if (typeof cwdFlag !== 'string' || cwdFlag.trim() === '') {
     return canonicalizeWorkspacePath(readCliCwd());
   }
   const requested = path.resolve(cwdFlag);

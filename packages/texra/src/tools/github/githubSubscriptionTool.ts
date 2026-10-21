@@ -20,7 +20,12 @@
 import { Effect } from 'effect';
 import { z } from 'zod';
 
-import { defineTool, Secrets, ToolContext } from '@texra-ai/harness';
+import {
+  defineTool,
+  Secrets,
+  ToolContext,
+  type ToolResult,
+} from '@texra-ai/harness';
 import {
   ChildRuns,
   requireRun,
@@ -28,10 +33,10 @@ import {
   parseWorkingDirectory,
   nullishWithDefault,
   executed,
+  ToolError,
 } from '@texra-ai/harness/plugins';
 import { executeCommand } from '@texra-ai/harness/node';
-import { toErrorMessage } from '@texra-ai/harness/schemas';
-import { ToolError, type RunId, type ToolResult } from '@shared/schemas';
+import { toErrorMessage, type RunId } from '@texra-ai/harness/schemas';
 
 import {
   DEFAULT_CHECK_ANNOTATION_LEVEL,

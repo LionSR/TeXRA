@@ -1,10 +1,13 @@
 import { formatResultCount } from '@texra-ai/harness/transcript';
 import { Effect, Result, Stream } from 'effect';
 
-import { goalStateOf, toErrorMessage } from '@texra-ai/harness/schemas';
+import {
+  goalStateOf,
+  isLiveRun,
+  runBypasses,
+  toErrorMessage,
+} from '@texra-ai/harness/schemas';
 import { readModelOptions, type Session } from '@texra-ai/harness';
-import { runBypasses } from '@texra-ai/harness/schemas';
-import { isLiveRun } from '@texra-ai/harness/schemas';
 import { defaultShortcutModifierLabel } from '@cli/runtime/shortcutLabels';
 import {
   formatCliSessionStatus,

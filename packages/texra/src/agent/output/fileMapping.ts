@@ -3,8 +3,11 @@ import { getPathSegments, toPosixPath } from '@texra-ai/harness';
 
 import { Effect, FileSystem } from 'effect';
 
-import { toErrorMessage } from '@texra-ai/harness/schemas';
-import { fileLocationDisplayPath, type FileLocation } from '@shared/schemas';
+import {
+  toErrorMessage,
+  fileLocationDisplayPath,
+  type FileLocation,
+} from '@texra-ai/harness/schemas';
 import type { AgentTrace } from '@texra-ai/harness/plugins';
 
 /** A LaTeX `\input` path trimmed, with POSIX separators and `.`/`..` resolved. */

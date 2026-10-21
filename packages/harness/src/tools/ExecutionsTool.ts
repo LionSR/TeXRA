@@ -41,7 +41,7 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 import { readNormalizedFile } from '@utils/files/fsDurability';
 import { findExistingRunStoragePathUnder } from '@utils/files/runStorageFs';
 import { getPathSegments } from '@utils/core/pathCore';
-import { formatBytes, splitContentLines } from '@utils/text/stringUtils';
+import { splitContentLines } from '@utils/text/stringUtils';
 
 // Local file imports
 import {
@@ -131,9 +131,9 @@ interface SizedEntry {
  * straight through.
  */
 function formatSizedEntryLines(entries: readonly SizedEntry[]): string[] {
-  return entries.map((entry) => {
-    const sizeStr = entry.isDirectory ? '<dir>' : formatBytes(entry.size);
-    return `${sizeStr.padStart(8)}  ${entry.path}`;
+  return entries.map(({ isDirectory, size, path }) => {
+    const bytes = `${size.toLocaleString('en-US')} bytes`;
+    return `${(isDirectory ? '<dir>' : bytes).padStart(8)}  ${path}`;
   });
 }
 type ExecutionsAction = ExecutionsToolInput['action'];

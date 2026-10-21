@@ -37,9 +37,12 @@ import {
   envFlag,
   JsonStore,
 } from '@texra-ai/harness/node';
-import { ensureError } from '@texra-ai/harness/schemas';
+import {
+  ensureError,
+  ownerIdentity,
+  type OwnerId,
+} from '@texra-ai/harness/schemas';
 import { onAppSignal } from '@eventBus/AppSignals';
-import { ownerIdentity, type OwnerId } from '@shared/schemas';
 import { TEXRA_CONFIG_FILE_NAME } from '@texra/platform/defaults/nodeStorage';
 import { openTexraWorkspaceConfigStores } from '@texra/platform/defaults/nodeStores';
 import type { EditorHostShape } from '@texra/tools/editorHost';

@@ -1,14 +1,16 @@
-import { Settings } from '@texra-ai/harness';
-import { Effect } from 'effect';
-
-import { hasUsableApiKey } from '@texra-ai/llm';
-import { GlobalStateKey } from '@texra-ai/harness/schemas';
 import {
+  Settings,
   readModelOptions,
   type ModelOptionStores,
   type PlatformSecrets,
 } from '@texra-ai/harness';
-import { isModelOptionAvailable } from '@shared/schemas';
+import { Effect } from 'effect';
+
+import { hasUsableApiKey } from '@texra-ai/llm';
+import {
+  GlobalStateKey,
+  isModelOptionAvailable,
+} from '@texra-ai/harness/schemas';
 import { modelOptionsFrom } from '@texra/model/modelOptions';
 import { SETUP_MODEL_BY_PROVIDER } from '@texra/model/setupModelDefaults';
 import type { SettingsStores } from '@texra-ai/harness';

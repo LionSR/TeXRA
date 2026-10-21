@@ -11,11 +11,12 @@ import {
   type RunModelCandidate,
   type RunModelDecisionReason,
 } from '@texra-ai/harness';
-import type { ModelOptionData, UsageRoute } from '@shared/schemas';
 import {
+  type ModelOptionData,
+  type UsageRoute,
   isModelOptionAvailable,
   MODEL_AVAILABILITY_STATUS,
-} from '@shared/schemas';
+} from '@texra-ai/harness/schemas';
 import { modelOptionsFrom } from '@texra/model/modelOptions';
 
 // Local file imports

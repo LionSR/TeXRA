@@ -1,13 +1,16 @@
 // Third-party imports
-import { Settings } from '@texra-ai/harness';
+import { Settings, withLogChannel } from '@texra-ai/harness';
 import { Cause, Effect } from 'effect';
 
 // Local imports
-import { AgentConfigSchema } from '@texra-ai/harness/schemas';
-import { withLogChannel } from '@texra-ai/harness';
-import { isLiveRun } from '@texra-ai/harness/schemas';
-import { toErrorMessage } from '@texra-ai/harness/schemas';
-import { GlobalStateKey } from '@texra-ai/harness/schemas';
+import {
+  AgentConfigSchema,
+  agentName,
+  type RunId,
+  isLiveRun,
+  toErrorMessage,
+  GlobalStateKey,
+} from '@texra-ai/harness/schemas';
 import { EXTENSION_COMMANDS } from '@commands/extensionCommandIds';
 import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
 import { safeExecuteCommand } from '@frontend/system/commandUtils';
@@ -15,18 +18,18 @@ import {
   announce,
   showLoggedInfoMessage,
 } from '@frontend/ui/errorHandlingUtils';
-import { agentName, type RunId } from '@shared/schemas';
 import { SETUP_AGENT_NAME } from '@shared/constants/agents';
 import { SETUP_INSTRUCTION } from '@texra/controllers/onboarding/setupLaunch';
 import { resolveSetupLaunchModel } from '@texra/model/setupCredentialAccess';
-import type { ProcessServices, Session } from '@texra-ai/harness';
 import type {
+  ProcessServices,
+  Session,
   PlatformSecrets,
   StateReadFailed,
   StateWriteFailed,
+  WorkspaceRoots,
+  SettingsStores,
 } from '@texra-ai/harness';
-import type { WorkspaceRoots } from '@texra-ai/harness';
-import type { SettingsStores } from '@texra-ai/harness';
 
 /** The setup assistant's log channel, for its launch and what follows it. */
 export const SETUP_ASSISTANT_CHANNEL = 'SetupAssistant';

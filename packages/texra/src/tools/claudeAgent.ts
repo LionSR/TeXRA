@@ -29,24 +29,29 @@ import {
   Secrets,
   ToolContext,
   type ToolContextShape,
+  type ToolResult,
 } from '@texra-ai/harness';
 
 // Local imports
-import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';
+import {
+  ensureError,
+  toErrorMessage,
+  MESSAGE_TYPES,
+  type RunId,
+  type TokenUsageStats,
+  type ToolUseLog,
+} from '@texra-ai/harness/schemas';
+import { DELIVERY_TAG } from '@texra-ai/harness/transcript';
 import {
   formatDelivery,
   type AgentTrace,
   type ToolCardHandle,
 } from '@texra-ai/harness/plugins';
-import { MESSAGE_TYPES } from '@shared/schemas';
-import { ToolError } from '@shared/schemas';
-import type {
-  RunId,
-  TokenUsageStats,
-  ToolResult,
-  ToolUseLog,
-} from '@shared/schemas';
-import { DELIVERY_TAG } from '@shared/deliveryTags';
+import {
+  ToolError,
+  type ProcessChildStrategy,
+  type ChildRuns,
+} from '@texra-ai/harness/plugins';
 import {
   AgentCliEffortSchema,
   ClaudeAgentModelSchema,
@@ -54,7 +59,6 @@ import {
 } from '@texra/shared/agentCliSettings';
 import type { ClaudeAgentPermissionMode } from '@texra/shared/agentCliSettings';
 import { buildAgentWorkspaceOptions } from '@texra/tools/agentWorkspaceOptions';
-import { isNonEmptyString } from '@utils/text/stringUtils';
 
 // Local file imports
 import { ClaudeBackgroundTaskTracker } from './claudeAgentBackgroundTasks';
@@ -79,8 +83,6 @@ import {
   readClaudeCodeRun,
   type ClaudeCodeRun,
 } from './claudeAgentShared';
-import type { ProcessChildStrategy } from '@texra-ai/harness/plugins';
-import type { ChildRuns } from '@texra-ai/harness/plugins';
 import type { AgentCliSessionRegistry } from './agentCliSessionRegistry';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
@@ -247,7 +249,8 @@ export function runStreamedTurn(params: {
           usage = claudeResultUsage(raw);
           totalCostUsd = raw.total_cost_usd;
           if (raw.subtype === 'success') {
-            if (isNonEmptyString(raw.result)) responseParts.push(raw.result);
+            if (typeof raw.result === 'string' && raw.result.trim() !== '')
+              responseParts.push(raw.result);
           } else {
             isError = true;
             errorMessage =
@@ -298,7 +301,10 @@ export function runStreamedTurn(params: {
         errorMessage,
         'Claude Code fork did not create a distinct session',
       ]
-        .filter(isNonEmptyString)
+        .filter(
+          (part): part is string =>
+            typeof part === 'string' && part.trim() !== '',
+        )
         .join('\n');
     }
 
@@ -322,7 +328,7 @@ function handleAssistantBlocks(
   for (const block of blocks) {
     switch (block.type) {
       case 'text':
-        if (isNonEmptyString(block.text)) {
+        if (typeof block.text === 'string' && block.text.trim() !== '') {
           logger.info(block.text, {
             messageType: MESSAGE_TYPES.MODEL_RESPONSE,
           });
@@ -330,7 +336,10 @@ function handleAssistantBlocks(
         }
         break;
       case 'thinking':
-        if (isNonEmptyString(block.thinking)) {
+        if (
+          typeof block.thinking === 'string' &&
+          block.thinking.trim() !== ''
+        ) {
           logger.info(block.thinking, { messageType: MESSAGE_TYPES.THINKING });
         }
         break;

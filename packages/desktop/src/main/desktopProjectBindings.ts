@@ -23,8 +23,8 @@ import {
   workspaceEnvironmentLayer,
   type ProcessRuntime,
   type ProcessServices,
+  ToolAvailability,
 } from '@texra-ai/harness';
-import { ToolAvailability } from '@texra-ai/harness';
 import { linkOutage } from '@texra/controllers/server/client';
 import type { HostDraftRequests } from '@texra/controllers/session/hostDraftRequests';
 import {

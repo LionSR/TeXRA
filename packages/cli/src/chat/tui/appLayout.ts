@@ -1,7 +1,7 @@
 /** Pure row allocation and visibility policy for the root CLI TUI layout. */
 
+import { Number as Num } from 'effect';
 import { type RunId } from '@texra-ai/harness/schemas';
-import { clamp } from '@utils/text/stringUtils';
 import { SLASH_PALETTE_ROWS } from './commands/SlashPalette';
 import { REVERSE_SEARCH_ROWS } from './input/ReverseSearch';
 
@@ -72,7 +72,10 @@ export function allocateMiddleRows({
     foregroundRows:
       foregroundMaxRows === undefined
         ? foregroundRows
-        : clamp(foregroundRows, 1, foregroundMaxRows),
+        : Num.clamp(foregroundRows, {
+            minimum: 1,
+            maximum: Math.max(1, foregroundMaxRows),
+          }),
     transcriptRows,
   };
 }

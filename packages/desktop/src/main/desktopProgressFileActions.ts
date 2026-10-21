@@ -7,10 +7,10 @@ import {
   type ProcessServices,
   type Session,
   withProcessServices,
+  pathToLocationIn,
+  Settings,
 } from '@texra-ai/harness';
-import { pathToLocationIn } from '@texra-ai/harness';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
-import { Settings } from '@texra-ai/harness';
 import { emitAppSignal } from '@eventBus/AppSignals';
 import { acceptEditedFileReplace } from '@latex/acceptedFileTarget';
 import { openFirstLabelMatch } from '@latex/labelSearch';

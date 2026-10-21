@@ -10,6 +10,7 @@ import {
   presentFollowUpResult,
   ToolContext,
   type ToolContextShape,
+  type ToolResult,
 } from '@texra-ai/harness';
 import {
   ChildRuns,
@@ -19,19 +20,16 @@ import {
   type ProcessChildStrategy,
   type ToolRun,
   executed,
+  ToolError,
 } from '@texra-ai/harness/plugins';
 import {
   ensureError,
   toErrorMessage,
   previewLabel,
-} from '@texra-ai/harness/schemas';
-import {
-  ToolError,
   type FollowUpContent,
   type RunId,
   type TokenUsageStats,
-  type ToolResult,
-} from '@shared/schemas';
+} from '@texra-ai/harness/schemas';
 import { buildSyntheticToolUseConfig } from '@texra/tools/core/syntheticAgentConfig';
 
 import type {

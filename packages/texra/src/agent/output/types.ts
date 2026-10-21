@@ -1,4 +1,4 @@
-import type { FileLocation } from '@shared/schemas';
+import type { FileLocation } from '@texra-ai/harness/schemas';
 
 /** File relationship facts for a single output path. All fields optional — absence means no match. */
 export interface RoundFileEntry {

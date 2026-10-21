@@ -1,7 +1,6 @@
 /** Agent registry value objects. */
 
-import type { Persona } from '@shared/schemas';
-import type { AgentSource } from '@shared/schemas';
+import type { Persona, AgentSource } from '@shared/schemas';
 
 /**
  * An agent as the catalog lists it, and as a launch runs it: the scan

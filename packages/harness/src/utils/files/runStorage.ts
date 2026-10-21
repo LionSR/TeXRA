@@ -4,21 +4,27 @@ import * as path from 'node:path';
 // Third-party imports
 import { Effect, FileSystem, PlatformError } from 'effect';
 
+import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
 import { withLogChannel } from '@logger/effectLog';
-import { type RunId, type FileLocation } from '@shared/schemas';
+import {
+  type RunId,
+  type FileLocation,
+  type RunStorageFileLocation,
+} from '@shared/schemas';
+import { normalizeFilePath } from '@utils/core';
+import { getPathSegments } from '@utils/core/pathCore';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import {
   createExternalLocation,
   createRunStorageLocation,
   pathToLocationIn,
 } from './fileLocation';
-import { entryTypeIn } from './fsEntryExists';
+import { entryExists, entryTypeIn } from './fsEntryExists';
 import {
   CHANNEL,
   createSymlink,
   ensureParentDir,
   ensureRunDirUnder,
-  originalSnapshotPathUnder,
   runDirUnder,
   runStorageAbsolutePathUnder,
   runStorageLocationUnder,
@@ -32,6 +38,16 @@ import { locateInWorkspace } from './workspaceFS';
 const isAbsent = (error: Error): boolean =>
   error instanceof PlatformError.PlatformError &&
   error.reason._tag === 'NotFound';
+
+/** One run-relative entry of a run's storage, read without following a link. */
+export type RunStorageEntry =
+  | { readonly kind: 'file'; readonly location: RunStorageFileLocation }
+  | {
+      readonly kind: 'symlink' | 'directory' | 'unsupported';
+      readonly absolutePath: string;
+    }
+  | { readonly kind: 'missing' }
+  | { readonly kind: 'invalid'; readonly reason: string };
 
 export class RunFileService {
   public readonly runDirectory: string;
@@ -135,11 +151,7 @@ export class RunFileService {
       if (target.kind !== 'workspace') return target;
       if (shouldSkipRelocation(target.relativePath)) return target;
 
-      const snapshotAbsolute = originalSnapshotPathUnder(
-        this.roots.storage,
-        this.runId,
-        target.relativePath,
-      );
+      const snapshotAbsolute = this.originalSnapshotPath(target.relativePath);
       const snapshot = createRunStorageLocation(
         snapshotAbsolute,
         target.relativePath,
@@ -166,6 +178,101 @@ export class RunFileService {
             ),
       ),
     );
+  }
+
+  /** Whether this run has a directory under its storage root. */
+  public hasDirectory(): Effect.Effect<
+    boolean,
+    PlatformError.PlatformError,
+    FileSystem.FileSystem
+  > {
+    return Effect.gen({ self: this }, function* () {
+      return yield* entryExists(
+        yield* FileSystem.FileSystem,
+        this.runDirectory,
+      );
+    });
+  }
+
+  /** Where a workspace file's pre-run snapshot lives in this run. */
+  public originalSnapshotPath(workspaceRelativePath: string): string {
+    return path.join(
+      this.runDirectory,
+      WORKSPACE_STORAGE_LAYOUT.original,
+      workspaceRelativePath,
+    );
+  }
+
+  /**
+   * Inspect one run-relative entry of this run's storage without following
+   * a workspace-mirror symlink, the entry's own or an ancestor directory's.
+   */
+  public inspectEntry(
+    relativePath: string,
+  ): Effect.Effect<
+    RunStorageEntry,
+    PlatformError.PlatformError,
+    FileSystem.FileSystem
+  > {
+    return Effect.gen({ self: this }, function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const posixPath = normalizeFilePath(relativePath);
+      const pathSegments = getPathSegments(posixPath);
+      if (
+        pathSegments.length === 0 ||
+        path.posix.isAbsolute(posixPath) ||
+        path.win32.isAbsolute(relativePath) ||
+        pathSegments.includes('..')
+      ) {
+        return {
+          kind: 'invalid',
+          reason:
+            'Run-storage paths must be non-empty relative paths without parent traversal.',
+        } as const;
+      }
+      const normalizedPath = path.posix.normalize(posixPath);
+      // Every directory the walk descends through, run root first, with the
+      // entry's own path excluded: one path per prefix of `pathSegments`.
+      const ancestors = [
+        this.runDirectory,
+        ...pathSegments
+          .slice(0, -1)
+          .map((_, index) =>
+            path.join(this.runDirectory, ...pathSegments.slice(0, index + 1)),
+          ),
+      ];
+      for (const ancestor of ancestors) {
+        const ancestorType = yield* entryTypeIn(fs, ancestor);
+        if (ancestorType === undefined) return { kind: 'missing' } as const;
+        if (ancestorType === 'SymbolicLink') {
+          return { kind: 'symlink', absolutePath: ancestor } as const;
+        }
+        if (ancestorType !== 'Directory') {
+          return { kind: 'unsupported', absolutePath: ancestor } as const;
+        }
+      }
+
+      const absolutePath = path.join(this.runDirectory, normalizedPath);
+      const type = yield* entryTypeIn(fs, absolutePath);
+      if (type === undefined) return { kind: 'missing' } as const;
+      if (type === 'SymbolicLink') {
+        return { kind: 'symlink', absolutePath } as const;
+      }
+      if (type === 'File') {
+        return {
+          kind: 'file',
+          location: createRunStorageLocation(
+            absolutePath,
+            normalizedPath,
+            this.runId,
+          ),
+        } as const;
+      }
+      if (type === 'Directory') {
+        return { kind: 'directory', absolutePath } as const;
+      }
+      return { kind: 'unsupported', absolutePath } as const;
+    });
   }
 
   /** Create a FileLocation for a workflow output file. */
@@ -290,11 +397,7 @@ export class RunFileService {
             // (cls/sty/bib/figures) have no snapshot and fall through to the
             // workspace mirror at `runDir/<rel>`, which is correct — those
             // are never written to.
-            const snapshotAbsolute = originalSnapshotPathUnder(
-              this.roots.storage,
-              this.runId,
-              relativePath,
-            );
+            const snapshotAbsolute = this.originalSnapshotPath(relativePath);
             const workspaceMirrorAbsolute = runStorageAbsolutePathUnder(
               this.roots.storage,
               this.runId,

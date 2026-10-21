@@ -22,13 +22,13 @@ import { ifDefined } from 'lit/directives/if-defined.js';
 import { when } from 'lit/directives/when.js';
 
 // Local imports - shared schemas and utilities
-import type { LogLevel } from '@shared/schemas';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 
 // Local imports - formatter helpers
 import { formatDisplayTimestamp } from '../timestampUtils';
 import { ICON_BY_LEVEL } from '../constants';
 import { buildCopyButton } from '../htmlBuilders';
+import type { LogLevel } from '@texra-ai/harness/schemas';
 import type {
   ErrorRow,
   LogRow,

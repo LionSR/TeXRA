@@ -4,9 +4,8 @@ import * as path from 'node:path';
 // Third-party imports
 import { Effect, FileSystem, Predicate } from 'effect';
 
-import { ensureError } from '@texra-ai/harness/schemas';
+import { ensureError, type FileLocation } from '@texra-ai/harness/schemas';
 import { readNormalizedFile } from '@texra-ai/harness/node';
-import type { FileLocation } from '@shared/schemas';
 
 import {
   findExistingLatexPath,

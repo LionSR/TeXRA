@@ -26,8 +26,8 @@ import {
   type ModelOption,
   type ModelOptionStores,
   type PlatformSecrets,
+  Settings,
 } from '@texra-ai/harness';
-import { Settings } from '@texra-ai/harness';
 import { GlobalStateKey } from '@texra-ai/harness/schemas';
 import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 import {

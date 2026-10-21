@@ -1,14 +1,19 @@
 import * as path from 'node:path';
-import { formatResultCount } from '@texra-ai/harness/transcript';
+import { formatResultCount, pluralize } from '@texra-ai/harness/transcript';
 import { RunFileService } from '@texra-ai/harness/plugins';
-import { toPosixPath } from '@texra-ai/harness';
+// toPosixPath also trims and resolves `.`/`..` segments beyond a bare slash
+// swap; safe here since these paths come from getSafeDocumentRelativePath /
+// path.relative on the workflow's own generated outputs, never user input.
+import { toPosixPath, isNotADirectoryError } from '@texra-ai/harness';
 
 import { Effect, FileSystem, Path, PlatformError } from 'effect';
 
-import { isNotADirectoryError } from '@texra-ai/harness';
+import {
+  type RunEndOutput,
+  isTaskConfig,
+  RUN_OUTCOME,
+} from '@texra-ai/harness/schemas';
 import { runOutcomeToCliRunStatus } from '@cli/schemas/cliOutput';
-import type { RunEndOutput } from '@shared/schemas';
-import { isTaskConfig, RUN_OUTCOME } from '@shared/schemas';
 import { stripWorkflowRoundDir } from '@texra/shared/constants/workflowOutput';
 import { getSafeDocumentRelativePath } from '@texra/utils/files/outputFileUtils';
 import {
@@ -17,16 +22,14 @@ import {
   type DocumentsResult,
   type OutputFileSummary,
 } from '@texra/shared/plugins/documentOutputs';
-// toPosixPath also trims and resolves `.`/`..` segments beyond a bare slash
-// swap; safe here since these paths come from getSafeDocumentRelativePath /
-// path.relative on the workflow's own generated outputs, never user input.
-import { isNonEmptyString, pluralize } from '@utils/text/stringUtils';
 
 import { CliUsageError, type CliContext } from './cliContext';
 import { type CliRunResult } from './terminalStatus';
 import { STDIN_WORKFLOW_INPUT_BASENAME } from './workflowInputs';
-import type { RunEndResult } from '@texra-ai/harness';
-import type { AgentConfigPayload } from '@texra-ai/harness/schemas';
+import type {
+  RunEndResult,
+  AgentConfigPayload,
+} from '@texra-ai/harness/schemas';
 
 type OutputFlag = '--output' | '--output-dir';
 
@@ -439,7 +442,7 @@ export function resumeWorkflowOutputFile(
   if (!isTaskConfig(config)) return undefined;
 
   const cliOutputFile = config.cli?.outputFile;
-  if (isNonEmptyString(cliOutputFile)) {
+  if (typeof cliOutputFile === 'string' && cliOutputFile.trim() !== '') {
     if (!path.isAbsolute(cliOutputFile)) {
       throw new CliUsageError(
         `Stored document task output file is not absolute: ${cliOutputFile}`,
@@ -452,7 +455,8 @@ export function resumeWorkflowOutputFile(
   if (outputFiles.length !== 1) return undefined;
 
   const outputFile = outputFiles[0];
-  if (!isNonEmptyString(outputFile)) return undefined;
+  if (typeof outputFile !== 'string' || outputFile.trim() === '')
+    return undefined;
   if (path.isAbsolute(outputFile)) return outputFile;
   const workingDirectory = config.workingDirectory;
   return workingDirectory
@@ -466,7 +470,8 @@ export function resumeWorkflowOutputDirectory(
   if (!isTaskConfig(config)) return undefined;
 
   const outputDirectory = config.cli?.outputDirectory;
-  if (!isNonEmptyString(outputDirectory)) return undefined;
+  if (typeof outputDirectory !== 'string' || outputDirectory.trim() === '')
+    return undefined;
   if (!path.isAbsolute(outputDirectory)) {
     throw new CliUsageError(
       `Stored document task output directory is not absolute: ${outputDirectory}`,

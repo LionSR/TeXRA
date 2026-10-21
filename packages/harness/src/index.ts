@@ -21,16 +21,12 @@ export { Sessions, processLayer } from './effect/processLayer.js';
 export type {
   ApprovalHandler,
   OpenOptions,
-  PendingRequest,
   ResumeInput,
   Run,
   LocalSession,
   Session,
   SessionHost,
-  SessionView,
   StartInput,
-  RunView,
-  TranscriptView,
 } from './effect/sessions.js';
 // What a session reads: a run's records, held runs, a deletion's report.
 export type {
@@ -38,7 +34,6 @@ export type {
   RunDeletion,
   RunRecords,
 } from './effect/sessionReads.js';
-export type { SessionStoreMovedAside } from '@shared/session/database';
 // A project's view read cold from its store, for a multi-project listing.
 export { readSessionView } from '@controllers/session/readSessionView';
 export type { RunEnd } from '@shared/schemas';
@@ -52,7 +47,6 @@ export {
 } from '@agent/storage/conversationFormat';
 export type { RunWorkspaceFile } from '@agent/storage/runWorkspaceFiles';
 export type { AssembleTraceResult } from '@transcript/traceAssembler';
-export type { InlinePersona } from '@shared/schemas';
 // What `SessionHost.emit` takes and answers: the notices a session's runs
 // ask a host to present.
 export type {
@@ -67,7 +61,6 @@ export type { ProcessLayerOptions } from '@controllers/session/sessionLayer';
 // A project's `.env` over the process environment, for a one-project host.
 export { workspaceEnvironmentLayer } from '@platform/defaults/nodePlatform';
 export {
-  withForkFailureReporting,
   withProcessServices,
   type AgentCatalogServices,
   type PluginContext,
@@ -93,11 +86,7 @@ export {
 } from '@agent/workspaceAgents/WorkspaceAgentsController';
 export type { TeamPreset } from '@common/teams/TeamPresets';
 export type { TeamCatalogAgent, TeamRunPlan } from '@common/teams/TeamPlan';
-export type {
-  AgentDelegationScope,
-  AgentModePreset,
-  AgentScanIssue,
-} from '@shared/schemas';
+export type { AgentDelegationScope } from '@shared/schemas';
 export {
   AgentCustomizeRefused,
   AgentDirectoryService,
@@ -156,16 +145,13 @@ export {
   type HostInteractions,
 } from '@agent/runtime/HostInteractions';
 export type { ToolEditApprovalRequest } from '@tools/approval/toolEditApproval';
+export { buildDiffHunks, type DiffHunks } from '@utils/text/unifiedDiff';
 export type { PresentationEventHandlers } from '@agent/runtime/runtimePresentationEvents';
 export { presentRunFailure } from '@agent/runtime/terminalResultToast';
-export { escapeText } from '@shared/utils/xmlEscape';
 
 // The payloads, as the runtime defines them.
 export type { AgentEvent, StreamChunkEvent, TraceArm } from '@agent/trace';
 
-// `RunEndResult` comes from its own module so declaration emit does not pull
-// the provider SDK types in (the leak check in `scripts/validate-artifacts.mjs`).
-export type { RunEndResult } from '@agent/runtime/RunEndResult';
 export type {
   CallRequests,
   ITool,
@@ -177,13 +163,7 @@ export type { SettingHost } from '@shared/state/stateSettings';
 export { ToolContext } from '@agent/core/tools/ToolTypes';
 export { defineTool, type DefinedTool } from '@tools/core/definition';
 export type { ToolResult } from '@shared/schemas';
-export type {
-  AggregateId,
-  RequestDecision,
-  RunId,
-  SessionCloseReport,
-  TranscriptSubscription,
-} from '@shared/schemas';
+export type { AggregateId, SessionCloseReport } from '@shared/schemas';
 // A request's refusals, as `Session.request` fails with them.
 export {
   Cancelled,
@@ -196,12 +176,7 @@ export {
   type RequestError,
   type RequestRefusal,
 } from '@shared/session/requestErrors';
-export type {
-  Outcome,
-  RunStopReason,
-  RuntimeRequest,
-  ToolEditContent,
-} from '@shared/session/runtimeRequest';
+export type { Outcome, RunStopReason } from '@shared/session/runtimeRequest';
 
 // The platform's ports, their stores' failures, and the services plugins read.
 export {
@@ -309,7 +284,6 @@ export type {
   SkillIssueSeverity,
   SkillLoadIssue,
 } from '@skills/skillLoader';
-export type { SkillDisplayItem } from '@shared/schemas';
 // The Claude Code and Codex plugins installed under a storage root: their
 // operations (enable asks for trust), what loads now, and their refusals.
 export {

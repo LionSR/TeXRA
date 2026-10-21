@@ -1,9 +1,13 @@
 import { computed, signal } from '@lit-labs/signals';
 
-import { isActivePhase } from '@texra-ai/harness/schemas';
-import { isLiveRun } from '@texra-ai/harness/schemas';
+import {
+  isActivePhase,
+  RUN_PHASE,
+  type RunPhase,
+  type RunId,
+  isLiveRun,
+} from '@texra-ai/harness/schemas';
 import { CliExitCode } from '@cli/runtime/exitCodes';
-import { RUN_PHASE, type RunPhase, type RunId } from '@shared/schemas';
 
 import { registerCliStateResetHook } from './cliState';
 import { runPhaseOf, runViewOf, sessionView } from './sessionView';

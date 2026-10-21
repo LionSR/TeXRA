@@ -1,12 +1,13 @@
+import prettyMilliseconds from 'pretty-ms';
 import { buildMcpToolName } from '@texra-ai/harness/transcript';
-import { getBasename, truncateSummary } from '@texra-ai/harness/schemas';
-import type {
-  McpToolOutput,
-  ToolCallStatus,
-  ToolCard,
-  ToolUseLog,
-} from '@shared/schemas';
-import { formatDuration } from '@utils/text/stringUtils';
+import {
+  getBasename,
+  truncateSummary,
+  type McpToolOutput,
+  type ToolCallStatus,
+  type ToolCard,
+  type ToolUseLog,
+} from '@texra-ai/harness/schemas';
 import type {
   CommandExecutionItem,
   FileChangeItem,
@@ -214,7 +215,11 @@ export function buildCodexTurnToolLog({
               {
                 kind: 'text' as const,
                 label: 'Duration:',
-                text: formatDuration(roundedMs),
+                // Whole seconds, at least 1s: the card's wall-time reading.
+                text: prettyMilliseconds(
+                  Math.max(1000, Math.floor(roundedMs / 1000) * 1000),
+                  { secondsDecimalDigits: 0 },
+                ),
               },
             ]
           : []),

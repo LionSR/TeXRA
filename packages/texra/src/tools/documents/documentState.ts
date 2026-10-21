@@ -17,23 +17,27 @@ import { dirname } from 'node:path';
 
 import { Cause, Effect, Exit, FileSystem, SynchronizedRef } from 'effect';
 
-import { ChildRuns, type ToolRun } from '@texra-ai/harness/plugins';
-import { toErrorMessage } from '@texra-ai/harness/schemas';
+import {
+  ChildRuns,
+  type ToolRun,
+  ToolError,
+  renderPrompt,
+} from '@texra-ai/harness/plugins';
+import {
+  toErrorMessage,
+  qualifyAggregateId,
+  fileLocationDisplayPath,
+  type FileLocation,
+  type ToolFact,
+} from '@texra-ai/harness/schemas';
 import {
   AgentCatalog,
   pathToLocationIn,
   type AgentEntry,
+  Settings,
 } from '@texra-ai/harness';
-import { Settings } from '@texra-ai/harness';
 import { LatexMediaManager } from '@latex/LatexMediaManager';
 import { getTeXCountStats } from '@latex/texcount';
-import {
-  qualifyAggregateId,
-  fileLocationDisplayPath,
-  ToolError,
-  type FileLocation,
-  type ToolFact,
-} from '@shared/schemas';
 import {
   WORKFLOW_OUTPUT_BASENAME,
   workflowOutputRoundDir,
@@ -41,6 +45,8 @@ import {
 import {
   documentsOutputFact,
   latestDocumentRounds,
+  documentTaskOptions,
+  type DocumentTask,
 } from '@texra/shared/plugins/documents';
 import type { DocumentDiffs } from '@texra/shared/plugins/documentOutputs';
 import { XmlOutputManager } from '@texra/agent/output/XmlOutputManager';
@@ -59,14 +65,9 @@ import {
 } from '@texra/agent/output/compileFailureRoundContext';
 import { DocumentsStateKey } from '@texra/shared/settingsView/documentsSettings';
 import {
-  documentTaskOptions,
-  type DocumentTask,
-} from '@texra/shared/plugins/documents';
-import {
   documentTaskOf,
   taskFileVars,
 } from '@texra/tools/documents/documentTask';
-import { renderPrompt } from '@utils/prompt';
 import type { CallRequests, ToolEnv } from '@texra-ai/harness';
 import type { AgentConfig } from '@texra-ai/harness/schemas';
 

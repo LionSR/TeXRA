@@ -1,18 +1,22 @@
 import { summarizeSubagentFollowup } from '@texra-ai/harness/transcript';
-import { getModelLabel, truncateSummary } from '@texra-ai/harness/schemas';
-import { formatCliModelAccessRoute } from '@cli/runtime/modelAccessRoute';
 import {
+  getModelLabel,
+  truncateSummary,
   isEmptyUsage,
   type TokenUsageStats,
   type UsageRoute,
-} from '@shared/schemas';
+} from '@texra-ai/harness/schemas';
+import { formatCliModelAccessRoute } from '@cli/runtime/modelAccessRoute';
 import { formatApprovalPolicy } from '@ui/copy/approvalPolicy';
 import { RUN_GRANT_NOUN, RUN_GRANT_ORDER } from '@ui/copy/delegationApproval';
 import { usageCostLabel } from '@ui/copy/modelAccess';
 
 import { formatResumeCommand } from './state/resumeHint';
-import type { ApprovalPolicy } from '@texra-ai/harness/schemas';
-import type { RunView, SessionView } from '@texra-ai/harness';
+import type {
+  ApprovalPolicy,
+  RunView,
+  SessionView,
+} from '@texra-ai/harness/schemas';
 import type { BypassState } from './panes/statusBarDisplay';
 
 const QUEUED_FOLLOW_UP_STATUS_LENGTH = 160;

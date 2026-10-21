@@ -26,6 +26,8 @@ import {
   ToolContext,
   type ProcessRuntime,
   type WorkspaceRoots,
+  type ToolResult,
+  sessionFsLayer,
 } from '@texra-ai/harness';
 import {
   ChildRuns,
@@ -33,9 +35,7 @@ import {
   type PluginToolServices,
   type ProcessPluginLayer,
 } from '@texra-ai/harness/plugins';
-import { sessionFsLayer } from '@texra-ai/harness';
 
-import type { ToolResult } from '@shared/schemas';
 import { ArxivSearchTool } from '@texra/tools/arxiv/ArxivSearchTool';
 
 // Local imports - language model tools

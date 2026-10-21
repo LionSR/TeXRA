@@ -17,7 +17,7 @@ import { ifDefined } from 'lit/directives/if-defined.js';
 import { unsafeHTML } from 'lit/directives/unsafe-html.js';
 
 // Local imports - shared transcript model
-import type { TeXRAIconName } from '@shared/iconNames';
+import type { IconName } from '@ui/wa/iconNames';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 
 // Local imports - formatter helpers
@@ -28,7 +28,7 @@ import type { StreamingTextRow } from '@texra-ai/harness/transcript';
 import type { FormatResult } from '../baseLogFormatter';
 
 type BannerConfig = {
-  iconName: TeXRAIconName;
+  iconName: IconName;
   labelText: string;
   copyTitle: string;
   contentClass: string;

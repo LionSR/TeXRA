@@ -6,8 +6,8 @@ import { requireRun, executed, refusalOf } from '@texra-ai/harness/plugins';
 import {
   UserQuestionAnswersSchema,
   UserQuestionPromptSchema,
-} from '@shared/schemas';
-import type { UserQuestionPermission } from '@shared/schemas';
+  type UserQuestionPermission,
+} from '@texra-ai/harness/schemas';
 
 const CHANNEL = 'UserQuestionTool';
 

@@ -13,10 +13,13 @@ import { z } from 'zod';
 // Local imports
 import { defineTool, withLogChannel } from '@texra-ai/harness';
 import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';
-import { nullishWithDefault, executed } from '@texra-ai/harness/plugins';
+import {
+  nullishWithDefault,
+  executed,
+  ToolError,
+} from '@texra-ai/harness/plugins';
+import { pluralize } from '@texra-ai/harness/transcript';
 import { normaliseArxivIdentifier } from '@latex/arxivIdentifier';
-import { ToolError } from '@shared/schemas';
-import { pluralize } from '@utils/text/stringUtils';
 
 type Category = Parameters<typeof catQuery>[0];
 

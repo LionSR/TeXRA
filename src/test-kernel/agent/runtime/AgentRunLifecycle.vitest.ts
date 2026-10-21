@@ -18,12 +18,11 @@ import { qualifyAggregateId, RUN_OUTCOME, agentKey } from '@shared/schemas';
 import type { RunId, RunOutcome } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { SETUP_AGENT_NAME } from '@shared/constants/agents';
-import { startAwaited } from '@test/support/runHandleFixtures';
+import { startAwaited, testRunHandle } from '@test/support/runHandleFixtures';
 import { untrackRun } from '@test/support/sessionEnd';
 import { captureLogEntries } from '@test/support/logSinkCapture';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
-import { testRunHandle } from '@test/support/runHandleFixtures';
 import {
   fakeProcessServices,
   installPlatform,

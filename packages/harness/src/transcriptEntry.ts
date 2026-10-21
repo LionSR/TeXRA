@@ -6,13 +6,27 @@
 // caller's transport serves.
 export { RemoteSessionView } from '@controllers/session/SessionView';
 export { SessionInputs } from '@shared/session/sessionInputs';
+export {
+  CommitOrdinalSchema,
+  DisplaySessionEventSchema,
+  ExistenceReconciliationSchema,
+  FoldEventSchema,
+  LocalRuntimeStateSchema,
+  TextChunkSchema,
+  TranscriptSubscriptionSchema,
+  type CommitOrdinal,
+  type ExistenceReconciliation,
+  type FoldInput,
+  type ResumeBlocker,
+  type TextChunk,
+  type TranscriptSubscription,
+} from '@shared/schemas';
 // The runtime a view folds on: fork failures reported, and the redacting
 // log sink in place of the console logger.
 export {
   viewDiagnosticsLayer,
   withForkFailureReporting,
 } from '@platform/processRuntime';
-export type { CommitOrdinal, FoldInput } from '@shared/schemas';
 
 // The rows: one kind each, the headline a row is listed by, and the
 // untruncated text a host elides to fit.
@@ -86,7 +100,7 @@ export {
   type ScriptStageView,
 } from '@shared/transcript/scriptStage';
 // A delivered follow-up as a renderer shows it: its tag, its summary, and
-// a script delivery's tally.
+// a script delivery's tally; and the envelope tags a producer mints.
 export {
   decodeXmlEntities,
   deliveryTagOf,
@@ -94,7 +108,12 @@ export {
   summarizeEmbeddedSubagentFollowups,
   summarizeSubagentFollowup,
 } from '@shared/subagentFollowup';
-export type { DeliveryTagName } from '@shared/deliveryTags';
+export {
+  DELIVERY_TAG,
+  DELIVERY_TAGS,
+  type DeliveryTagEntry,
+  type DeliveryTagName,
+} from '@shared/deliveryTags';
 // Run lists and task groups: their order, a group's status, and a
 // compaction's status.
 export {
@@ -107,11 +126,12 @@ export type {
   CompactionActivityStatus,
 } from '@shared/runs/compactionActivityProjection';
 // How the rows word what they count: a compact duration, a token count, a
-// USD cost, and a count with its noun. A host's own status line uses the
-// same wording.
+// USD cost, and a count with its noun (or the noun alone). A host's own
+// status line uses the same wording.
 export {
   formatCompactDuration,
   formatCompactTokenCount,
   formatCostUsd,
   formatResultCount,
+  pluralize,
 } from '@utils/text/stringUtils';

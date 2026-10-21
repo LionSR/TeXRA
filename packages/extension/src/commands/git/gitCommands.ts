@@ -4,8 +4,11 @@ import { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 import * as vscode from 'vscode';
 
 // Local imports - utilities
-import { withLogChannel, type RootedFileSystem } from '@texra-ai/harness';
-import { WorkspaceFs } from '@texra-ai/harness';
+import {
+  withLogChannel,
+  type RootedFileSystem,
+  WorkspaceFs,
+} from '@texra-ai/harness';
 import { executeCommand, findCommand } from '@texra-ai/harness/node';
 import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';
 import { VscodeExternalOpener } from '@frontend/hosts/VscodeExternalOpener';

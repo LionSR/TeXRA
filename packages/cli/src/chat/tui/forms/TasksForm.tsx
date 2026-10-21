@@ -7,8 +7,12 @@ import { Box, Text, useInput, useWindowSize } from 'ink';
 import { Effect, Fiber, type Scope } from 'effect';
 import { useEffect, useRef, useState } from 'react';
 
-import { acceptsFollowUp } from '@texra-ai/harness/schemas';
-import { toErrorMessage } from '@texra-ai/harness/schemas';
+import {
+  acceptsFollowUp,
+  type RunId,
+  type ToolEditPermission,
+  toErrorMessage,
+} from '@texra-ai/harness/schemas';
 import { isEscapeInput } from '@cli/tui/inputKeys';
 import {
   BORDERED_PANEL_CHROME_COLUMNS,
@@ -17,7 +21,6 @@ import {
 import { COLOR_ERROR, COLOR_HINT, COLOR_WARNING } from '@cli/tui/ui/colors';
 import { POINTER } from '@cli/tui/ui/glyphs';
 import { KeyHints } from '@cli/tui/ui/KeyHints';
-import type { RunId, ToolEditPermission } from '@shared/schemas';
 import {
   approvalDecisionArms,
   type SurfaceDecision,
@@ -36,7 +39,8 @@ import {
 } from '../state/attachedTask';
 import { transcriptToLines } from '../state/transcriptLines';
 import { AsyncListForm } from './_shared/ListForm';
-import type { ProcessRuntime, ToolEditContent } from '@texra-ai/harness';
+import type { ProcessRuntime } from '@texra-ai/harness';
+import type { ToolEditContent } from '@texra-ai/harness/schemas';
 import type {
   ApprovalPayload,
   PendingApprovalFact,

@@ -185,7 +185,7 @@ export type AgentOptionData = z.infer<typeof AgentOptionDataSchema>;
 export const TeamOptionDataSchema = PickerOptionBaseSchema.extend({
   /** Provenance uses the shared `'built-in' | 'custom'` team vocabulary. */
   source: z.enum(['built-in', 'custom']),
-  /** Web Awesome icon name registered in `packages/harness/src/shared/iconNames.ts`. */
+  /** The team's icon, a name the host's icon set draws. */
   icon: z.string(),
   /** Preset description, surfaced as the option `title`. */
   description: z.string().prefault(''),

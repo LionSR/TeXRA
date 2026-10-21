@@ -1,8 +1,7 @@
-import { getBasename } from '@texra-ai/harness/schemas';
+import { getBasename, type WorktreeInfo } from '@texra-ai/harness/schemas';
 import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 
-import { type WorktreeInfo } from '@shared/schemas';
 import { designTokens, commonViewStyles } from '@ui/styles';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 

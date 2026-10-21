@@ -30,7 +30,7 @@ import {
   InstalledPluginSchema,
   RUN_OUTCOME,
   type RunOutcome,
-} from '@shared/schemas';
+} from '@texra-ai/harness/schemas';
 
 /**
  * The two keys every line carries beyond the record a command builds: `ts`,

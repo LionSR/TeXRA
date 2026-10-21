@@ -15,9 +15,9 @@ import {
   type ExecuteCommandBaseOptions,
   probeTool,
   withExtendedPath,
+  type ExecResult,
 } from '@texra-ai/harness/node';
 import which from 'which';
-import type { ExecResult } from '@shared/schemas';
 import {
   PDFLATEX_INSTALL_GUIDE,
   LATEXDIFF_INSTALL_GUIDE,
