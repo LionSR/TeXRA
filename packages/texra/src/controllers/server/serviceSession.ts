@@ -420,6 +420,11 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
       client['task.ended']({ workspace, runId }),
     ).pipe(
       Effect.retry({ times: 2 }),
+      // The service answered that the end could not be read: that, not an
+      // offline service, is why the result is missing.
+      Effect.catchTag('TaskFailed', (refused) =>
+        Effect.fail(runFailure(refused.message)),
+      ),
       Effect.catch((error) =>
         Effect.logWarning(
           `The TeXRA service stopped before task ${runId} ended`,

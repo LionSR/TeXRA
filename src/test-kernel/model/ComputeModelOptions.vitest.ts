@@ -240,7 +240,7 @@ describe('model availability', () => {
   );
 
   it.effect(
-    'warns once per provider when the picker cannot read credentials',
+    'reports an unreadable key store as such and warns once per provider',
     () =>
       Effect.gen(function* () {
         const readError = new Error('credential store unavailable');
@@ -264,14 +264,15 @@ describe('model availability', () => {
           yield* availabilityInputs(hostStores(), [GPT55, GPT56]),
         );
 
-        expect(gpt55.availability).toBe('missing-key');
-        expect(gpt56.availability).toBe('missing-key');
+        // An unreadable store is not a missing key.
+        expect(gpt55.availability).toBe('key-unreadable');
+        expect(gpt56.availability).toBe('key-unreadable');
         // The provider reads run concurrently, so the order is not fixed.
         expect(logs.at('WARN').map((entry) => entry.message)).toEqual(
           expect.arrayContaining(
             ['OpenAI', 'OpenRouter', 'Kimi Code'].map((name) =>
               expect.stringContaining(
-                `Failed to read ${name} API key status; treating it as unavailable.`,
+                `Failed to read ${name} API key status`,
               ),
             ),
           ),

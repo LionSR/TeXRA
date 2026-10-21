@@ -267,6 +267,8 @@ function formatCliModelRecovery(entry: CliModelAccess): string | undefined {
   switch (availability) {
     case 'missing-key':
       return formatCliNoAvailableModelsRecovery();
+    case 'key-unreadable':
+      return 'The API key could not be read from secret storage: check that the store is unlocked and readable, then retry.';
     case 'provider-key':
     case 'openrouter-key':
       return undefined;

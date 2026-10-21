@@ -191,14 +191,15 @@ const internal = (cause: Cause.Cause<unknown>) =>
  * left, its `run.end` as the run's records hold it, and `at`, the cursor of
  * the first level that shows the run no longer live, or gone: a fold at or
  * past it holds the run's end, or its removal. A run that ended with no
- * `run.end` it could read (deleted, or its store unreadable) ends with the
- * outcome its view shows, without output.
+ * `run.end` (deleted) ends with the outcome its view shows, without output;
+ * a store that cannot be read fails the answer, never reads as an empty end.
  */
 function runEnded(
   { session }: ServiceProject,
   runId: RunId,
 ): Effect.Effect<
-  Pick<RunEnd, 'outcome' | 'output' | 'error'> & { at: CommitOrdinal }
+  Pick<RunEnd, 'outcome' | 'output' | 'error'> & { at: CommitOrdinal },
+  TaskFailed
 > {
   return Effect.gen(function* () {
     yield* session.held(runId)?.drained ?? Effect.void;
@@ -217,10 +218,10 @@ function runEnded(
       .records(runId)
       .readRunEnd()
       .pipe(
-        Effect.catch((error) =>
-          Effect.logWarning(
-            `Task ${runId} ended; its result was not read: ${error.message}`,
-          ).pipe(Effect.as(null)),
+        Effect.mapError((error) =>
+          failed(
+            `Task ${runId} ended; its result could not be read: ${error.message}`,
+          ),
         ),
       );
     if (end !== null) {
