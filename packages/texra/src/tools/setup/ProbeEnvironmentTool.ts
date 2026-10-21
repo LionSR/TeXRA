@@ -226,17 +226,21 @@ const probe = Effect.fn('ProbeEnvironmentTool.execute')(function* (
       apiKeys,
       chatGptSubscription: chatGptStatus,
       githubToken,
-      // Stored entries the fields above do not name. `staleApiKeys` lists,
-      // by raw name, every stored `apiKey.*` entry that is not counted as a
-      // saved key: one for no known provider, or a known provider's entry
-      // whose value is blank (its `origin` then reads env or none, yet
-      // `unset_api_key` still has an entry to remove). The rest is a count,
-      // since those names may carry user-derived identifiers.
+      // Stored entries the fields above do not name. `staleSecrets` lists,
+      // by raw key name, every stored credential entry that is not counted as
+      // a saved credential: an `apiKey.*` entry for no known provider, or a
+      // known provider's key or the GitHub token whose stored value is blank
+      // (its origin then reads env or none, yet the store still holds it).
+      // The rest is a count, since those names may carry user-derived
+      // identifiers.
       storedSecrets:
         storedKeys === 'unavailable'
           ? storedKeys
           : {
-              staleApiKeys: storedKeys.filter((key) => {
+              staleSecrets: storedKeys.filter((key) => {
+                if (key === GITHUB_TOKEN_STORAGE_KEY) {
+                  return githubToken === 'env' || githubToken === 'none';
+                }
                 if (!key.startsWith('apiKey.')) return false;
                 const provider = apiProviderOfSecretName(key);
                 if (provider === undefined) return true;
@@ -302,7 +306,7 @@ const probe = Effect.fn('ProbeEnvironmentTool.execute')(function* (
 export const ProbeEnvironmentTool = defineTool({
   name: 'probe_environment',
   replay: 'safe',
-  description: `Probe the active host and environment and return a structured JSON summary covering host kind, OS, shell, PATH, detected package manager (brew/apt/scoop), installation status of TeXRA's core LaTeX dependencies (pdflatex, latexmk, latexindent, perl, gs, ${IMAGE_TOOL_LABEL}, texcount, latexdiff), the LaTeX Workshop VS Code extension, each provider API key's origin (TeXRA secrets, environment, or absent; values are never returned), ChatGPT subscription state, broader usable credential status, and the rest of TeXRA's persisted credential store (\`storedSecrets\`: \`staleApiKeys\`, the stored \`apiKey.*\` entries that do not count as a saved key (an unknown provider, or a known provider whose stored value is blank), by raw key name, and a redacted count of other secret names; \`"unavailable"\` when the store cannot be read). Recognised providers' keys can be removed with unset_api_key; other entries only through the current host's credential-management surface. With {"tool": "<name>"}, re-checks only that tool on PATH and answers in one line (use after an install command to confirm it worked). Read-only, no approval required. Call this first in any setup session to decide what to do next, and again as the final check.`,
+  description: `Probe the active host and environment and return a structured JSON summary covering host kind, OS, shell, PATH, detected package manager (brew/apt/scoop), installation status of TeXRA's core LaTeX dependencies (pdflatex, latexmk, latexindent, perl, gs, ${IMAGE_TOOL_LABEL}, texcount, latexdiff), the LaTeX Workshop VS Code extension, each provider API key's origin (TeXRA secrets, environment, or absent; values are never returned), ChatGPT subscription state, broader usable credential status, and the rest of TeXRA's persisted credential store (\`storedSecrets\`: \`staleSecrets\`, the stored credential entries that do not count as a saved credential (an \`apiKey.*\` entry for an unknown provider, or a known provider's key or the GitHub token whose stored value is blank), by raw key name, and a redacted count of other secret names; \`"unavailable"\` when the store cannot be read). Recognised providers' keys can be removed with unset_api_key, the GitHub token through the host's GitHub token setting, and other entries only through the current host's credential-management surface. With {"tool": "<name>"}, re-checks only that tool on PATH and answers in one line (use after an install command to confirm it worked). Read-only, no approval required. Call this first in any setup session to decide what to do next, and again as the final check.`,
   schema: ProbeEnvironmentInputSchema,
   execute: probe,
 });

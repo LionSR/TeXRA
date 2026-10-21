@@ -171,6 +171,7 @@ describe('setup credential reporting', () => {
             secrets: {
               'apiKey.retired-provider': 'stored-value',
               'apiKey.openai': '   ',
+              'github.token': '  ',
               'texra.other.secret': 'stored-value',
             },
           },
@@ -184,6 +185,7 @@ describe('setup credential reporting', () => {
       assert.match(outputOf(result), /"apiKey\.retired-provider"/);
       // A known provider's blank entry is not a saved key, so it is stale too.
       assert.match(outputOf(result), /"apiKey\.openai"/);
+      assert.match(outputOf(result), /"github\.token"/);
       assert.match(outputOf(result), /"otherRedactedCount": 1/);
       assert.doesNotMatch(outputOf(result), /texra\.other\.secret/);
       assert.doesNotMatch(outputOf(result), /stored-value/);

@@ -103,11 +103,13 @@ prompt: |
   A provider key's `origin` names where it lives (TeXRA secrets or
   the environment); `storedSecrets` lists only what else the TeXRA
   store holds, so never read it as the absence of a key. Its
-  `staleApiKeys` are stored `apiKey.*` entries that do not count as a
-  saved key (a known provider with a blank value, or an unknown
-  provider). `unset_api_key` removes the known-provider ones (pass the
-  provider name); an unknown-provider entry is not one it accepts, so
-  point the user to the host's credential-management surface instead.
+  `staleSecrets` are stored entries that do not count as a saved
+  credential (a known provider's key or the GitHub token with a blank
+  value, or an `apiKey.*` entry for an unknown provider).
+  `unset_api_key` removes the known-provider keys (pass the provider
+  name); point the user to the host's GitHub token setting for
+  `github.token`, and to the host's credential-management surface for
+  an unknown-provider entry, which `unset_api_key` does not accept.
   Summarize in one short paragraph: combining what they told you with
   what the probe found, naming any missing credential sources.
 
