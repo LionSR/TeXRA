@@ -253,8 +253,8 @@ export function applyEnvironmentShields(
   for (const match of sorted) {
     if (match.start < copiedUntil) continue;
     pieces.push(content.slice(copiedUntil, lineStarts[match.startLine]!));
-    for (let line = match.startLine; line <= match.endLine; line++) {
-      const contentStart = match.lineContentStarts[line - match.startLine]!;
+    for (const [offset, contentStart] of match.lineContentStarts.entries()) {
+      const line = match.startLine + offset;
       const lineStart = lineStarts[line]!;
       const lineEnd = lineEnds[line]!;
       const fullPrefix = content.slice(lineStart, contentStart);
