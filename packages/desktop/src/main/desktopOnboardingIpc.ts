@@ -42,9 +42,10 @@ interface DesktopOnboardingIpcOptions {
   /**
    * Host-provided check for a usable credential (a subscription or any
    * provider API key), as a program: the secrets read behind it is one, and
-   * the funnel refresh below yields it on the runtime it already holds.
+   * the funnel refresh below yields it on the runtime it already holds. A
+   * check that cannot be answered fails, and the funnel keeps its state.
    */
-  hasCredential: () => Effect.Effect<boolean, never, LanguageModel>;
+  hasCredential: () => Effect.Effect<boolean, Error, LanguageModel>;
   /** Launch the setup conversation when the user clicks "Run Setup". The
    *  host presents its own failure, so the program settles. */
   kickoffSetup: () => Effect.Effect<void>;

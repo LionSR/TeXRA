@@ -250,7 +250,8 @@ export async function runChat(
       // Without a usable credential the chat still opens: the "Connect a
       // model" panel takes the first foreground slot, and model resolution
       // waits for the connection instead of ending the process.
-      const hasCredential = yield* checkModelConnection(services);
+      const credential = yield* checkModelConnection(services);
+      if (credential.notice) startupNotices.push(credential.notice);
       const explicitAgent = initialResume?.config.agent ?? init.agentOverride;
       // The setup-agent handoff belongs to the moment a first credential
       // lands, which is after startup when the chat opened without one.
@@ -283,7 +284,7 @@ export async function runChat(
       // resolution, the no-models hints, and the header/status all read this
       // same value so they can never disagree.
       const modelSelectionExit = yield* Effect.exit(
-        hasCredential
+        credential.ready
           ? selectCliRunnableModel(
               [{ model: defaults.model, reason: defaults.modelSource }],
               {
@@ -342,7 +343,6 @@ export async function runChat(
         runsElsewhere: Result.isSuccess(service),
         defaults,
         firstRunSetupAgent,
-        model: modelSelection.model,
         inputHistory: yield* loadInputHistory,
         // The drain lives as long as the process runtime; the graceful exit
         // waits on `idle` before that runtime is disposed.
@@ -359,9 +359,8 @@ export async function runChat(
   );
   if (startup.exitCode !== undefined) return { exitCode: startup.exitCode };
   const { services, runtimeSession, runSession, runsElsewhere, link } = startup;
-  const { defaults, model } = startup;
+  const { defaults } = startup;
   const { inputHistory, followUpQueue, startupNotices } = startup;
-  const { agent } = defaults;
 
   // The policy this chat's launches ask for (`launchApproval`): its flag,
   // then each `/approval`.
@@ -433,8 +432,6 @@ export async function runChat(
     stores: services,
     runtime: services.runtime,
     processCwd: process.cwd(),
-    initialAgent: agent,
-    initialModel: model,
     requestInputExit: exitController.requestInputExit,
     getApprovalPolicy,
     setApprovalPolicy,
@@ -576,9 +573,6 @@ export async function runChat(
     disposables,
     shutdownScope: services.shutdownScope,
     followUpQueue,
-    initialAgent: agent,
-    initialModel: model,
-    initialModelSource: defaults.modelSource,
     cwd: context.cwd,
     getSlashCommandContext: slashCommandContext,
     secrets: services.secrets,
@@ -627,7 +621,6 @@ export async function runChat(
       connectChatModel(
         slashCommandContext(),
         {
-          startupModel: model,
           modelSource: defaults.modelSource,
           recovery: CHAT_STARTUP_MODEL_RECOVERY,
           firstRunSetupAgent: startup.firstRunSetupAgent,

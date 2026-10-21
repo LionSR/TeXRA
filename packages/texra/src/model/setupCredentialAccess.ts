@@ -5,7 +5,6 @@ import { hasUsableApiKey } from '@texra-ai/llm';
 import { GlobalStateKey } from '@texra-ai/harness/schemas';
 import {
   readModelOptions,
-  type LanguageModel,
   type ModelOptionStores,
   type PlatformSecrets,
 } from '@texra-ai/harness';
@@ -71,23 +70,17 @@ export const resolveSetupLaunchModel = Effect.fn('resolveSetupLaunchModel')(
 
 /**
  * True when the setup assistant has a model to launch with, the OpenRouter
- * last resort included. A check that cannot be answered is logged and read as
- * no credential, so a broken store sends the user to onboarding instead of
- * failing the gate.
+ * last resort included. A check that cannot be answered fails typed: an
+ * unreadable store is not the fact "no credential", and each caller decides
+ * what an unknown answer means for its surface.
  */
-export function hasUsableSetupCredential(
+export const hasUsableSetupCredential = (
   stores: SettingsStores,
   secrets: PlatformSecrets,
-): Effect.Effect<boolean, never, LanguageModel> {
-  return resolveSetupLaunchModel(stores, secrets, true).pipe(
+) =>
+  resolveSetupLaunchModel(stores, secrets, true).pipe(
     Effect.map((resolution) => resolution !== null),
-    Effect.catch((failure) =>
-      Effect.logWarning(
-        `Setup credential check failed; treating it as no credential: ${failure.message}`,
-      ).pipe(Effect.as(false)),
-    ),
   );
-}
 
 /** The picker's model options as the follow-up controls list them, read live. */
 export const loadModelOptions = (stores: ModelOptionStores) =>

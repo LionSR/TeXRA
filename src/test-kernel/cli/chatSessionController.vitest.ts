@@ -284,9 +284,6 @@ function makeInit(
     disposables: new DisposableStore(),
     shutdownScope: scope,
     followUpQueue: Effect.runSync(makeFollowUpDeliveryQueue(scope)),
-    initialAgent: 'demo-agent',
-    initialModel: 'demo-model',
-    initialModelSource: 'builtin-default',
     cwd: '/tmp/workspace',
     getSlashCommandContext: () => {
       throw new Error('slash commands are not exercised here');

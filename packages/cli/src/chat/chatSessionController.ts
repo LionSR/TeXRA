@@ -24,7 +24,6 @@ import {
   type PlatformSecrets,
   type ProcessRuntime,
   type ProcessServices,
-  type RunModelDecisionReason,
   type RunStopReason,
   type RuntimeRequest,
   type RunView,
@@ -231,9 +230,6 @@ export interface ChatSessionControllerInit {
   /** Serial queue for follow-up message delivery (cleared on resume). */
   readonly followUpQueue: FollowUpDeliveryQueue;
 
-  readonly initialAgent: string;
-  readonly initialModel: string;
-  readonly initialModelSource: RunModelDecisionReason;
   readonly cwd: string;
   readonly getSlashCommandContext: () => SlashCommandContext;
   /**
@@ -314,9 +310,6 @@ export function createChatSessionController(
     disposables,
     shutdownScope,
     followUpQueue,
-    initialAgent,
-    initialModel,
-    initialModelSource,
     cwd,
     getSlashCommandContext,
     secrets,
@@ -854,14 +847,8 @@ export function createChatSessionController(
       return recoverRun(
         Effect.gen(function* () {
           const meta = sessionMetaSignal.get();
-          const currentModel = meta.model || initialModel;
           const selection = yield* selectCliRunnableModel(
-            [
-              {
-                model: currentModel,
-                reason: meta.model ? meta.modelSource : initialModelSource,
-              },
-            ],
+            [{ model: meta.model, reason: meta.modelSource }],
             {
               stores: { ...stores, secrets, runtime },
               noAvailableModelsMessage: formatCliNoAvailableModelsRecovery(
@@ -888,7 +875,7 @@ export function createChatSessionController(
           }
           startRootRun(
             {
-              agent: meta.agent || initialAgent,
+              agent: meta.agent,
               agentSource: meta.agentSource,
               model: selection.model,
               instruction,

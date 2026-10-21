@@ -58,6 +58,9 @@ export interface CliContext {
   readonly cwd: string;
   readonly mode: CliMode;
   readonly outputFormat: CliOutputFormat;
+  /** The policy this invocation's launches run under: the configured one,
+   *  narrowed by {@link requestedApprovalPolicy} through
+   *  {@link effectiveApprovalPolicy}. */
   readonly approvalPolicy: ApprovalPolicy;
   /** The policy this invocation asked for itself (`--approval-policy`,
    *  `TEXRA_APPROVAL_POLICY`, `--no-input`), absent when it follows the
@@ -436,9 +439,10 @@ export const buildCliContext = Effect.fn('cliContext.buildCliContext')(
             parseApprovalPolicy,
             configWarnings,
           ));
-    const approvalPolicy: ApprovalPolicy =
-      requestedApprovalPolicy ??
-      Settings.getConfig<ApprovalPolicy>(config, APPROVAL_POLICY_CONFIG_KEY);
+    const approvalPolicy = effectiveApprovalPolicy(
+      requestedApprovalPolicy,
+      Settings.getConfig<ApprovalPolicy>(config, APPROVAL_POLICY_CONFIG_KEY),
+    );
     const outputFormat: CliOutputFormat =
       init.globalArgs.outputFormat ??
       (yield* pickEnv(

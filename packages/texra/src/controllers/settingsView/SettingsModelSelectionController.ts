@@ -23,12 +23,12 @@ import {
   StateWriteFailed,
   supportsReasoningLevel,
   type CopilotModelRoute,
+  type ModelOption,
   type ModelOptionStores,
   type PlatformSecrets,
 } from '@texra-ai/harness';
 import { Settings } from '@texra-ai/harness';
 import { GlobalStateKey } from '@texra-ai/harness/schemas';
-import { type ModelOptionData } from '@shared/schemas';
 import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 import {
   type CopilotRouteInfo,
@@ -40,6 +40,7 @@ import {
   isExpensiveModel,
   isFastFirstResponseModel,
 } from '@texra/shared/model/modelPicker';
+import { modelOptionsFrom } from '@texra/model/modelOptions';
 import type { SettingsStores } from '@texra-ai/harness';
 
 interface SettingsModelSelectionControllerDeps<R> {
@@ -54,9 +55,9 @@ interface SettingsModelSelectionControllerDeps<R> {
   secrets: PlatformSecrets;
   /**
    * The Copilot routes the editor offers now (`CopilotRoutes.discover` over
-   * the host's language-model port). This controller composes the read and
-   * hands the result back as one program the host settles at its message
-   * boundary.
+   * the host's language-model port), for the Copilot section's route status.
+   * This controller composes the read and hands the result back as one
+   * program the host settles at its message boundary.
    */
   copilotRoutes: Effect.Effect<
     ReadonlyMap<string, CopilotModelRoute>,
@@ -64,14 +65,14 @@ interface SettingsModelSelectionControllerDeps<R> {
     R
   >;
   /**
-   * Resolve availability-decorated options for the given models, reading the
-   * shared model options (`readModelOptions`) worded by `modelOptionsFrom` —
-   * the same source the CLI picker uses.
+   * The shared model options (`readModelOptions`) for the given models — the
+   * same source the CLI picker uses. Each option carries its decided route's
+   * config, which the reasoning controls read.
    */
   resolveModelOptions: (
     stores: ModelOptionStores,
     models: readonly string[],
-  ) => Effect.Effect<ModelOptionData[], Error, R>;
+  ) => Effect.Effect<readonly ModelOption[], Error, R>;
 }
 
 interface SettingsModelSelectionData {
@@ -99,7 +100,7 @@ export class SettingsModelSelectionController<R = never> {
       const preferredModels = new Set(
         yield* CopilotRoutes.preferred(this.deps.stores.globalState),
       );
-      const models = yield* this.buildSelectionItems(routes, preferredModels);
+      const models = yield* this.buildSelectionItems();
       return {
         models,
         helperModel: yield* getHelperModelName(this.deps.stores),
@@ -179,10 +180,7 @@ export class SettingsModelSelectionController<R = never> {
       .pipe(Effect.asVoid);
   }
 
-  private buildSelectionItems(
-    copilotRoutes: ReadonlyMap<string, CopilotModelRoute>,
-    preferredCopilotModels: ReadonlySet<string>,
-  ): Effect.Effect<ModelSelectionItem[], Error, R> {
+  private buildSelectionItems(): Effect.Effect<ModelSelectionItem[], Error, R> {
     return Effect.gen({ self: this }, function* () {
       const enabledSet = new Set(
         yield* getEnabledModels(this.deps.stores.globalState),
@@ -211,16 +209,18 @@ export class SettingsModelSelectionController<R = never> {
           MODEL_SELECTION_SOURCES.has(resolveModelSource(config)),
         )
         .map((config) => config.ref);
-      const optionsData = yield* this.deps.resolveModelOptions(
+      const options = yield* this.deps.resolveModelOptions(
         { ...this.deps.stores, secrets: this.deps.secrets },
         candidates,
       );
+      const rows = modelOptionsFrom(options);
 
       const items: ModelSelectionItem[] = [];
-      for (const option of optionsData) {
-        const name = option.value;
+      for (const [index, decided] of options.entries()) {
+        const option = rows[index];
+        const name = decided.model;
         const config = configs.get(name);
-        if (!config) continue;
+        if (!config || !option || !('config' in decided)) continue;
 
         const item: ModelSelectionItem = {
           name,
@@ -238,14 +238,11 @@ export class SettingsModelSelectionController<R = never> {
           availability: option.availability,
         };
 
-        const copilotRoute = copilotRoutes.get(name);
-        const effectiveConfig =
-          preferredCopilotModels.has(name) && copilotRoute?.access === 'allowed'
-            ? copilotRoute.effectiveConfig
-            : config;
+        // The reasoning controls follow the config the decided route runs
+        // with: the editor's when an allowed Copilot route serves the model.
         this.addReasoningLevelData(
           item,
-          effectiveConfig,
+          decided.config,
           reasoningOverrides[config.ref],
         );
         items.push(item);

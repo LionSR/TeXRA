@@ -34,7 +34,6 @@ import '@awesome.me/webawesome/dist/components/switch/switch.js';
 // Local imports - profile view styles and events
 import { postStateSetting } from '../shared/stateSettingRows';
 import { providerKeyListStyles } from './ProviderKeyList.styles';
-import { resolveProviderKeyRows } from './providerKeyRows';
 import './SubscriptionUsageRow';
 import type WaInput from '@awesome.me/webawesome/dist/components/input/input.js';
 import type WaSwitch from '@awesome.me/webawesome/dist/components/switch/switch.js';
@@ -48,7 +47,9 @@ export class ProviderKeyList extends LitElement {
     providerKeyListStyles,
   ];
 
-  @property({ attribute: false }) providerKeyStatuses: ProviderKeyStatus[] = [];
+  /** Null until the profile state arrives. */
+  @property({ attribute: false }) providerKeyStatuses:
+    ProviderKeyStatus[] | null = null;
 
   /** Plan usage for the coding-plan providers (Kimi Code, GLM Coding Plan). */
   @property({ attribute: false }) usage: SubscriptionUsageSnapshots | null =
@@ -231,8 +232,6 @@ export class ProviderKeyList extends LitElement {
   }
 
   override render(): TemplateResult {
-    const rows = resolveProviderKeyRows(this.providerKeyStatuses);
-
     const description =
       "Add a key from each provider's developer console. Kimi Code and GLM Coding Plan keys go on their rows; a ChatGPT or Grok plan signs in below instead.";
 
@@ -243,13 +242,17 @@ export class ProviderKeyList extends LitElement {
           description,
           icon: 'key',
         })}
-        <div
-          class="settings-disclosure-list"
-          role="list"
-          aria-label="Provider API keys"
-        >
-          ${rows.map((entry) => this.renderRow(entry))}
-        </div>
+        ${
+          this.providerKeyStatuses === null
+            ? html`<em class="text-secondary">Loading key status…</em>`
+            : html`<div
+                class="settings-disclosure-list"
+                role="list"
+                aria-label="Provider API keys"
+              >
+                ${this.providerKeyStatuses.map((entry) => this.renderRow(entry))}
+              </div>`
+        }
       </div>
     `;
   }

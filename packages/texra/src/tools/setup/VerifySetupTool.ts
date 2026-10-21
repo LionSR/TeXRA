@@ -85,7 +85,16 @@ const verify = Effect.fn('VerifySetupTool.execute')(function* (
     [
       collectCoreSetupStatus(platform),
       hasUsableSetupCredential(roots, secrets).pipe(
-        withLogChannel('Setup Credentials'),
+        // A check that cannot be answered is reported as unknown, not as a
+        // missing credential the user would be told to add again.
+        Effect.catch((failure) =>
+          Effect.logWarning(
+            `Setup credential check failed: ${failure.message}`,
+          ).pipe(
+            withLogChannel('Setup Credentials'),
+            Effect.as('unknown' as const),
+          ),
+        ),
       ),
     ],
     { concurrency: 'unbounded' },
@@ -106,18 +115,20 @@ const verify = Effect.fn('VerifySetupTool.execute')(function* (
   );
   // A usable model credential is a direct provider key or a provider
   // subscription.
-  lines.push(
-    `Credentials: ${
-      hasUsableCredential
-        ? 'usable model credential available'
-        : 'NONE: need an API key or sign-in'
-    }.`,
-  );
+  let credentialLine: string;
+  if (hasUsableCredential === 'unknown') {
+    credentialLine = 'status unavailable (the credential check failed)';
+  } else if (hasUsableCredential) {
+    credentialLine = 'usable model credential available';
+  } else {
+    credentialLine = 'NONE: need an API key or sign-in';
+  }
+  lines.push(`Credentials: ${credentialLine}.`);
 
   const ready =
     missingCore.length === 0 &&
     (latexWorkshopInstalled === undefined || latexWorkshopInstalled) &&
-    hasUsableCredential;
+    hasUsableCredential === true;
 
   let verificationSummary: string;
   if (ready) {

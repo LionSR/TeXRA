@@ -95,7 +95,7 @@ export const showCliSessionStatus = Effect.fn('showCliSessionStatus')(
         ? runViewOf(view, run.parentId)
         : run;
     const activeChildSessions = runningChildCount(view, countedParent);
-    const model = run?.model ?? (meta.model || context.initialModel);
+    const model = run?.model ?? meta.model;
     const activeSkills = yield* activeSkillNamesFor(
       context.runtimeSession,
       activeRunId,
@@ -106,7 +106,7 @@ export const showCliSessionStatus = Effect.fn('showCliSessionStatus')(
     );
     appendLocalNotice(
       formatCliSessionStatus({
-        agent: meta.agent || context.initialAgent,
+        agent: meta.agent,
         model,
         teamName: meta.teamName,
         // A completed request's route cannot change, so it outranks the

@@ -89,7 +89,13 @@ const probe = Effect.fn('ProbeEnvironmentTool.execute')(function* () {
         { concurrency: 'unbounded' },
       ),
       hasUsableSetupCredential(roots, secrets).pipe(
-        withLogChannel('Setup Credentials'),
+        // A check that cannot be answered is not "no credential"; advice
+        // built on it would send a configured user to sign in again.
+        Effect.catch((failure) =>
+          Effect.logWarning(
+            `Setup credential check failed: ${failure.message}`,
+          ).pipe(withLogChannel(CHANNEL), Effect.as('unknown' as const)),
+        ),
       ),
       resolveGitHubTokenSource(secrets).pipe(
         // A store the host cannot read is not a token: the report says the
@@ -175,7 +181,9 @@ const probe = Effect.fn('ProbeEnvironmentTool.execute')(function* () {
     credentials.chatGptSubscription === 'unknown' &&
       'ChatGPT subscription status unavailable',
     credentials.githubToken === 'unknown' && 'GitHub token status unavailable',
-    credentials.hasAnyUsableCredential &&
+    credentials.hasAnyUsableCredential === 'unknown' &&
+      'credential status unavailable',
+    credentials.hasAnyUsableCredential === true &&
       !credentials.anyApiKeySet &&
       !chatGptEnabled &&
       'usable credential',

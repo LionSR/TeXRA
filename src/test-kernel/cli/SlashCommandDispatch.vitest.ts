@@ -216,8 +216,6 @@ function createContext(
     stores: services.stores,
     runtime: testRuntime(),
     processCwd: '/tmp/launcher',
-    initialAgent: 'chat',
-    initialModel: 'deepseek/deepseek-v4-flash',
     requestInputExit: vi.fn(),
     getApprovalPolicy: () => approvalPolicy,
     setApprovalPolicy: (policy) =>

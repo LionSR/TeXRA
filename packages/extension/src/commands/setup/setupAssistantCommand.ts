@@ -18,10 +18,7 @@ import {
 import { agentName, type RunId } from '@shared/schemas';
 import { SETUP_AGENT_NAME } from '@shared/constants/agents';
 import { SETUP_INSTRUCTION } from '@texra/controllers/onboarding/setupLaunch';
-import {
-  hasUsableSetupCredential,
-  resolveSetupLaunchModel,
-} from '@texra/model/setupCredentialAccess';
+import { resolveSetupLaunchModel } from '@texra/model/setupCredentialAccess';
 import type { ProcessServices, Session } from '@texra-ai/harness';
 import type {
   PlatformSecrets,
@@ -176,34 +173,13 @@ export function launchSetupAssistant(
       return 'not-started' as const;
     }
 
-    // The credential predicate every host shares: adapter-level checks, so a
-    // blank env key does not count and fail later as "No model is available".
-    const hasCredential = yield* hasUsableSetupCredential(roots, secrets).pipe(
-      withLogChannel('Setup Credentials'),
-    );
-    if (!hasCredential) {
-      yield* connectModel;
-      return 'not-started' as const;
-    }
-
+    // The launch model the credential predicate every host shares decides:
+    // adapter-level checks, so a blank env key does not count and fail later
+    // as "No model is available". No model is the missing-credential case; a
+    // check that cannot be answered fails to the launch-failure report below.
     const resolution = yield* resolveSetupLaunchModel(roots, secrets, true);
     if (!resolution) {
-      // Edge case: no setup-model candidate is usable with the current
-      // credentials. Refuse launch rather than pick a model that crashes at
-      // runtime.
-      const choice = yield* vscodeUi.warning(
-        'No model is available with your current keys. Add a provider API key or sign in with your ChatGPT subscription, then try again.',
-        { modal: true, items: ['Open Models tab', 'Set API key'] },
-      );
-      if (choice === 'Open Models tab') {
-        yield* safeExecuteCommand(
-          'texra.showDashboard',
-          ['models/keys'],
-          CHANNEL,
-        );
-      } else if (choice === 'Set API key') {
-        yield* safeExecuteCommand(EXTENSION_COMMANDS.SET_API_KEY, [], CHANNEL);
-      }
+      yield* connectModel;
       return 'not-started' as const;
     }
 

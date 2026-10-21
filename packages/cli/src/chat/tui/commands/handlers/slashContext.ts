@@ -48,8 +48,6 @@ export interface SlashCommandContext {
    */
   readonly runtime: ProcessRuntime;
   readonly processCwd?: CliContext['cwd'];
-  readonly initialAgent: string;
-  readonly initialModel: string;
   readonly requestInputExit: () => void;
   readonly getApprovalPolicy: () => ApprovalPolicy;
   readonly setApprovalPolicy: (policy: ApprovalPolicy) => Effect.Effect<void>;

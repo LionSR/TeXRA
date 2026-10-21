@@ -55,6 +55,10 @@ function resolveLatexWorkshopOutDir(filePath: string): string {
 
   const docfile = getFileStem(filePath);
   const doc = path.join(dir, docfile);
+  // The first folder, not the file's own: LaTeX Workshop's
+  // `replaceArgumentPlaceholders` expands these against
+  // `workspaceFolders[0]`, and the viewer looks for the PDF where it would.
+  // The callers' files sit outside every folder anyway.
   const workspaceFolder =
     vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? dir;
   const relativeDir = path.relative(workspaceFolder, dir);
