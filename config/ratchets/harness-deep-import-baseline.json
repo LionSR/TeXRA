@@ -30,7 +30,6 @@
     ],
     "extension": [
       "@eventBus/AppSignals",
-      "@logger/effectDiagnostics",
       "@model/copilotRouting",
       "@platform/defaults/fileSecrets",
       "@platform/defaults/jsonStore",

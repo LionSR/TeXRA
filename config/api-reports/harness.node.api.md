@@ -2,12 +2,13 @@
 
 Generated from `packages/harness/src/node.ts` by `node scripts/check-core-quality.mjs --update`; do not edit. A diff here is a change to the public surface.
 
-Exports: 33
+Exports: 34
 
 - `absentReason` — `const absentReason: (error: PlatformError) => boolean`
 - `canonicalizeWorkspacePath` — `function canonicalizeWorkspacePath: (workspacePath: string) => string`
 - `ConfigStore` — `interface ConfigStore { get<T>(key: string): T | undefined; set(key: string, value: unknown): Effect.Effect<void, Error>; }`
 - `createNodeWorkspaceRoots` — `function createNodeWorkspaceRoots: (init: NodeWorkspaceRootsInit) => WorkspaceRoots`
+- `effectDiagnosticsLayer` — `const effectDiagnosticsLayer: (minimumLogLevel: LogLevel) => Layer<never, never, never>`
 - `entryTypeIn` — `const entryTypeIn: (fs: FileSystem, target: string) => Effect<Type | undefined, PlatformError, never>`
 - `envFlag` — `const envFlag: (name: string, env?: Readonly<Record<string, string | undefined>> | undefined) => Effect<boolean, never, never>`
 - `executeCommand` — `const executeCommand: (command: string | string[], options: ExecuteCommandBaseOptions) => Effect<{ exitCode: number; noExitCode?: boolean | undefined; outputLimitExceeded?: boolean | undefined; stderr: string; stdout: string; success: boolean; timedOut: boolean; }, never, ChildProcessSpawner>`
