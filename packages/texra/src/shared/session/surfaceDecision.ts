@@ -9,8 +9,11 @@
  * protocols, and nothing else.
  */
 
-import type { PermissionPayload, RequestDecision } from '@shared/schemas';
-import type { ApprovalBypassKind } from '@texra-ai/harness/schemas';
+import type {
+  ApprovalBypassKind,
+  PermissionPayload,
+  RequestDecision,
+} from '@texra-ai/harness/schemas';
 import type { PendingRequest, RuntimeRequest } from '@texra-ai/harness/schemas';
 
 import type { HostRequest } from './hostRequest';

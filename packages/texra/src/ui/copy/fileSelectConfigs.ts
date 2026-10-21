@@ -6,16 +6,16 @@
  */
 import { z } from 'zod';
 
-import { TEXRA_ICON_CANONICAL_NAMES } from '@shared/iconNames';
 import {
   DocumentFileTypeSchema,
   type MultipleDocumentFileType,
-} from './fileTypes';
+} from '@texra/shared/launcher/fileTypes';
+import { ICON_NAMES } from '@ui/wa/iconNames';
 
 const FileSelectConfigSchema = z.object({
   type: DocumentFileTypeSchema,
   label: z.string(),
-  icon: z.enum(TEXRA_ICON_CANONICAL_NAMES),
+  icon: z.enum(ICON_NAMES),
   addOpenedLabel: z.string(),
   emptyListLabel: z.string(),
   selectListLabel: z.string(),

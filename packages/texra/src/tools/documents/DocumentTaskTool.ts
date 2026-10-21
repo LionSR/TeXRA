@@ -8,16 +8,12 @@
 import { Effect, Predicate } from 'effect';
 import { z } from 'zod';
 
-import { defineTool } from '@texra-ai/harness';
+import { defineTool, type ToolResult } from '@texra-ai/harness';
 import { requireRun, errorResult } from '@texra-ai/harness/plugins';
 import { ChildRuns } from '@texra-ai/harness/plugins';
 import { AgentCatalog } from '@texra-ai/harness';
 import { CALL_FIELDS, fileList } from '@texra-ai/harness/plugins';
-import {
-  agentMatchesIdentifier,
-  toJsonValue,
-  type ToolResult,
-} from '@shared/schemas';
+import { agentMatchesIdentifier, toJsonValue } from '@texra-ai/harness/schemas';
 import { DocumentTaskOptionsSchema } from '@texra/shared/plugins/documents';
 import {
   documentTaskKey,

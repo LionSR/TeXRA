@@ -60,11 +60,12 @@ services through the Effect context the process runtime serves; when it
 needs a capability no port exposes, add a typed port rather than an import.
 
 **Does it run in a webview?** The webview frontends bundle for the browser, so
-anything they import must avoid Node built-ins. Only a small, fixed set of
-`utils` modules is reachable from them — the `BROWSER_SAFE_UTILS` allowlist in
-`eslint.config.mjs`, which ESLint enforces. Adding an import to
-any of them, or to their transitive dependencies, can break a webview build in a
-way `tsc` will not catch.
+anything they import must avoid Node built-ins. They reach the harness only
+through its two browser entries, `@texra-ai/harness/schemas` and
+`@texra-ai/harness/transcript` (ESLint refuses an `@utils/*` import there).
+Adding an import to a module in either entry's closure can break a webview
+build in a way `tsc` will not catch; the browser build of both entries
+catches it.
 
 ## Picking between the general-sounding names
 

@@ -17,10 +17,14 @@ import {
   type WorkspaceRoots,
 } from '@texra-ai/harness';
 import { entryTypeIn, readNormalizedFile } from '@texra-ai/harness/node';
-import { GlobalStateKey, toErrorMessage } from '@texra-ai/harness/schemas';
+import {
+  GlobalStateKey,
+  agentKey,
+  isPackagedAgentSource,
+  toErrorMessage,
+} from '@texra-ai/harness/schemas';
 import { formatResultCount } from '@texra-ai/harness/transcript';
 import { formatUnknownTeamMessage } from '@common/teams/TeamPlan';
-import { agentKey, isPackagedAgentSource } from '@shared/schemas';
 import {
   AGENT_TEMPLATE_FILES,
   DEFAULT_AGENT_TEMPLATE_TOOLS_YAML,

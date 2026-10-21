@@ -8,8 +8,7 @@
  */
 
 import { truncateWithEllipsis } from '@texra-ai/harness/schemas';
-import { DELIVERY_TAG } from '@shared/deliveryTags';
-import { isNonEmptyString } from '@utils/text/stringUtils';
+import { DELIVERY_TAG } from '@texra-ai/harness/transcript';
 import type { GhIssueComment } from './prTypes';
 
 const WEBHOOK_TAG = DELIVERY_TAG.githubWebhookActivity;
@@ -73,7 +72,11 @@ export function authorOf(user: { login: string } | null | undefined): string {
 export function sections(
   ...parts: ReadonlyArray<string | null | undefined | false>
 ): string {
-  return parts.filter(isNonEmptyString).join('\n\n');
+  return parts
+    .filter(
+      (part): part is string => typeof part === 'string' && part.trim() !== '',
+    )
+    .join('\n\n');
 }
 
 export function truncate(s: string | null | undefined, max: number): string {

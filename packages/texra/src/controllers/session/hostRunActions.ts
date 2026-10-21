@@ -32,15 +32,19 @@ import {
   pathToLocationIn,
   type WorkspaceRoots,
 } from '@texra-ai/harness';
-import { toErrorMessage } from '@texra-ai/harness/schemas';
+import {
+  toErrorMessage,
+  isTaskConfig,
+  recipeBlockOf,
+  type RunId,
+} from '@texra-ai/harness/schemas';
 import { GlobalStateKey } from '@texra-ai/harness/schemas';
 import {
+  CopilotRoutes,
+  presentFollowUpResult,
   presentRunFailure,
   type SessionHostInteractions,
 } from '@texra-ai/harness';
-import { FOLLOW_UP_WAKE_FAILED_MESSAGE } from '@agent/followUp/ToolUseFollowUp';
-import { getRuntimeModelDirectFallback } from '@model/copilotRouting';
-import { isTaskConfig, recipeBlockOf, type RunId } from '@shared/schemas';
 import {
   validateRunRequest,
   type RunRequest,
@@ -497,7 +501,7 @@ export const createHostRunActions = (
           );
           return;
         }
-        let fallback = getRuntimeModelDirectFallback(
+        let fallback = CopilotRoutes.directFallback(
           request.model,
           yield* Settings.get<boolean>(roots, GlobalStateKey.USE_OPENROUTER),
         );
@@ -516,7 +520,7 @@ export const createHostRunActions = (
           false,
         );
         if (!prepared || !isRetryPending(runId, requestId)) return;
-        const currentFallback = getRuntimeModelDirectFallback(
+        const currentFallback = CopilotRoutes.directFallback(
           request.model,
           yield* Settings.get<boolean>(roots, GlobalStateKey.USE_OPENROUTER),
         );
@@ -531,7 +535,7 @@ export const createHostRunActions = (
             false,
           );
           if (!prepared || !isRetryPending(runId, requestId)) return;
-          const finalFallback = getRuntimeModelDirectFallback(
+          const finalFallback = CopilotRoutes.directFallback(
             request.model,
             yield* Settings.get<boolean>(roots, GlobalStateKey.USE_OPENROUTER),
           );
@@ -597,11 +601,17 @@ export const createHostRunActions = (
         const deliver = session
           .request({ kind: 'followUp.send', runId, text })
           .pipe(
-            Effect.flatMap((outcome) =>
-              outcome.kind === 'followUp' && outcome.wake === 'failed'
-                ? present(FOLLOW_UP_WAKE_FAILED_MESSAGE)
-                : Effect.void,
-            ),
+            Effect.flatMap((outcome) => {
+              if (outcome.kind !== 'followUp') return Effect.void;
+              const shown = presentFollowUpResult(
+                outcome.status === 'sent'
+                  ? { status: 'sent' }
+                  : { status: 'queued', wake: outcome.wake ?? undefined },
+              );
+              return shown.severity === 'none'
+                ? Effect.void
+                : present(shown.message);
+            }),
             Effect.catchCause((cause) => {
               const message = toErrorMessage(Cause.squash(cause));
               return Effect.logWarning(

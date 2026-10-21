@@ -2,7 +2,7 @@
 import * as path from 'node:path';
 
 // Third-party imports
-import { Effect, FileSystem, Path, PlatformError } from 'effect';
+import { Effect, FileSystem, Path } from 'effect';
 
 // Local imports
 import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
@@ -50,22 +50,6 @@ export function runDirUnder(storageRoot: string, id: RunId): string {
   return path.join(storageRoot, resolveRunStoragePath(id));
 }
 
-/** A workspace file's pre-run snapshot path under `storageRoot`. */
-export function originalSnapshotPathUnder(
-  storageRoot: string,
-  runId: RunId,
-  workspaceRelativePath: string,
-): string {
-  return path.join(
-    storageRoot,
-    resolveRunStoragePath(
-      runId,
-      WORKSPACE_STORAGE_LAYOUT.original,
-      workspaceRelativePath,
-    ),
-  );
-}
-
 /**
  * The run-storage-relative path of `segments` under `storageRoot` when it
  * exists, so a caller that addresses run storage by relative path (the
@@ -79,85 +63,6 @@ export const findExistingRunStoragePathUnder = Effect.fn(
   return (yield* entryExists(fs, path.join(storageRoot, storagePath)))
     ? storagePath
     : undefined;
-});
-
-type RunStorageEntryInspection =
-  | { readonly kind: 'file'; readonly location: RunStorageFileLocation }
-  | {
-      readonly kind: 'symlink' | 'directory' | 'unsupported';
-      readonly absolutePath: string;
-    }
-  | { readonly kind: 'missing' }
-  | { readonly kind: 'invalid'; readonly reason: string };
-
-/**
- * Inspect one run-relative run-storage entry under `storageRoot` without
- * following a workspace-mirror symlink.
- */
-export const inspectRunStorageEntryUnder = Effect.fn(
-  'runStorage.inspectRunStorageEntry',
-)(function* (
-  storageRoot: string,
-  runId: RunId,
-  relativePath: string,
-): Effect.fn.Return<
-  RunStorageEntryInspection,
-  PlatformError.PlatformError,
-  FileSystem.FileSystem
-> {
-  const fs = yield* FileSystem.FileSystem;
-  const posixPath = normalizeFilePath(relativePath);
-  const pathSegments = getPathSegments(posixPath);
-  if (
-    pathSegments.length === 0 ||
-    path.posix.isAbsolute(posixPath) ||
-    path.win32.isAbsolute(relativePath) ||
-    pathSegments.includes('..')
-  ) {
-    return {
-      kind: 'invalid',
-      reason:
-        'Run-storage paths must be non-empty relative paths without parent traversal.',
-    };
-  }
-  const normalizedPath = path.posix.normalize(posixPath);
-
-  const root = resolveRunStoragePath(runId);
-  const entry = resolveRunStoragePath(runId, normalizedPath);
-  // Every directory the walk below descends through, run root first, with the
-  // entry's own path excluded: one path per prefix of `pathSegments`.
-  const ancestors = [
-    root,
-    ...pathSegments
-      .slice(0, -1)
-      .map((_, index) =>
-        resolveRunStoragePath(runId, ...pathSegments.slice(0, index + 1)),
-      ),
-  ];
-  for (const ancestor of ancestors) {
-    const ancestorPath = path.join(storageRoot, ancestor);
-    const ancestorType = yield* entryTypeIn(fs, ancestorPath);
-    if (ancestorType === undefined) return { kind: 'missing' };
-    if (ancestorType === 'SymbolicLink') {
-      return { kind: 'symlink', absolutePath: ancestorPath };
-    }
-    if (ancestorType !== 'Directory') {
-      return { kind: 'unsupported', absolutePath: ancestorPath };
-    }
-  }
-
-  const absolutePath = path.join(storageRoot, entry);
-  const type = yield* entryTypeIn(fs, absolutePath);
-  if (type === undefined) return { kind: 'missing' };
-  if (type === 'SymbolicLink') return { kind: 'symlink', absolutePath };
-  if (type === 'File') {
-    return {
-      kind: 'file',
-      location: createRunStorageLocation(absolutePath, normalizedPath, runId),
-    };
-  }
-  if (type === 'Directory') return { kind: 'directory', absolutePath };
-  return { kind: 'unsupported', absolutePath };
 });
 
 /** Create a run's directory under `storageRoot`, runs directory included. */

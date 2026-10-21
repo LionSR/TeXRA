@@ -11,7 +11,6 @@ import {
 } from '@texra-ai/harness';
 import { Settings } from '@texra-ai/harness';
 import { executeCommand } from '@texra-ai/harness/node';
-import { type ToolError } from '@shared/schemas';
 import {
   isCodexModel,
   type AgentCliEffort,
@@ -23,6 +22,7 @@ import {
   selectAgentCliModel,
   type AgentCliModelRule,
 } from './agentCliModel';
+import type { ToolError } from '@texra-ai/harness/plugins';
 import type { StateReadFailed } from '@texra-ai/harness';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 

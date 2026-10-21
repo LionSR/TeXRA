@@ -10,10 +10,7 @@ import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 // Local imports
 import { errnoError, nodePlatformLayer } from '@test/support/fsTestUtils';
 import { setupPlatform } from '@test/support/setupPlatform';
-import {
-  inspectRunStorageEntryUnder,
-  runStorageLocationUnder,
-} from '@utils/files/runStorageFs';
+import { runStorageLocationUnder } from '@utils/files/runStorageFs';
 import { RunFileService } from '@utils/files/runStorage';
 
 const runId = 'abcdef123456' as RunId;
@@ -78,31 +75,32 @@ const inspect = (relativePath: string) =>
     Effect.gen(function* () {
       const processFs = yield* FileSystem.FileSystem;
       const info = { ...(yield* processFs.stat('/')), type: 'File' as const };
-      return yield* inspectRunStorageEntryUnder(
-        storageRoot,
-        runId,
-        relativePath,
-      ).pipe(
-        Effect.provideService(FileSystem.FileSystem, {
-          ...processFs,
-          // A link answers `readLink`; everything else, and every probe
-          // failure, falls through to the stat below.
-          readLink: (target: string) =>
-            probe(target).pipe(
-              Effect.flatMap((type) =>
-                type === 'SymbolicLink'
-                  ? Effect.succeed(target)
-                  : missing(target),
+      return yield* new RunFileService(runId, {
+        storage: storageRoot,
+        workspace: workspaceRoot,
+      })
+        .inspectEntry(relativePath)
+        .pipe(
+          Effect.provideService(FileSystem.FileSystem, {
+            ...processFs,
+            // A link answers `readLink`; everything else, and every probe
+            // failure, falls through to the stat below.
+            readLink: (target: string) =>
+              probe(target).pipe(
+                Effect.flatMap((type) =>
+                  type === 'SymbolicLink'
+                    ? Effect.succeed(target)
+                    : missing(target),
+                ),
               ),
-            ),
-          stat: (target: string) =>
-            probe(target).pipe(Effect.map((type) => ({ ...info, type }))),
-        }),
-      );
+            stat: (target: string) =>
+              probe(target).pipe(Effect.map((type) => ({ ...info, type }))),
+          }),
+        );
     }).pipe(Effect.provide(nodePlatformLayer)),
   );
 
-describe('inspectRunStorageEntryUnder', () => {
+describe('RunFileService.inspectEntry', () => {
   it('returns a canonical location for a regular primary-layout file', async () => {
     probe = (target) => {
       if (target === primaryEntry('r1', 'draft.tex')) return entryType('File');

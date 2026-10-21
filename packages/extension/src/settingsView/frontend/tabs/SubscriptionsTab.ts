@@ -15,6 +15,7 @@ import {
 import { customElement, property } from 'lit/decorators.js';
 
 // Local imports - shared styles, schemas, and templates
+import { pluralize } from '@texra-ai/harness/transcript';
 import type { SubscriptionAuthStatuses } from '@texra/shared/model/subscriptionAuth';
 import type { SubscriptionUsageSnapshots } from '@texra/shared/model/subscriptionUsage';
 import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
@@ -31,9 +32,6 @@ import '@awesome.me/webawesome/dist/components/button/button.js';
 import '@awesome.me/webawesome/dist/components/details/details.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/tag/tag.js';
-
-// Local imports - utilities
-import { pluralize } from '@utils/text/stringUtils';
 
 // Local imports - settings view components (importing the descriptors also
 // registers the <subscription-section> element)

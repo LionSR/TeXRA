@@ -45,7 +45,7 @@ export type { RunEnd } from '@shared/schemas';
 export type { RunResult } from '@agent/storage/resultMeta';
 export type { RunRefusal } from '@agent/runtime/runClassification';
 export type { AgentRunListingEntry } from '@agent/storage/runListing';
-export type { ExportNode } from '@agent/export/schemas';
+export { ExportNodeSchema, type ExportNode } from '@agent/export/schemas';
 export {
   formatConversationMessage,
   type ConversationFormatOptions,
@@ -156,9 +156,9 @@ export {
   type HostInteractions,
 } from '@agent/runtime/HostInteractions';
 export type { ToolEditApprovalRequest } from '@tools/approval/toolEditApproval';
+export { buildDiffHunks, type DiffHunks } from '@utils/text/unifiedDiff';
 export type { PresentationEventHandlers } from '@agent/runtime/runtimePresentationEvents';
 export { presentRunFailure } from '@agent/runtime/terminalResultToast';
-export { escapeText } from '@shared/utils/xmlEscape';
 
 // The payloads, as the runtime defines them.
 export type { AgentEvent, StreamChunkEvent, TraceArm } from '@agent/trace';
@@ -258,7 +258,8 @@ export {
   type RunModelDecisionReason,
   type RunModelFallbackMode,
 } from '@model/runModelDecision';
-export type { CopilotModelRoute } from '@model/copilotRouting';
+export { CopilotRoutes, type CopilotModelRoute } from '@model/copilotRouting';
+export { SubscriptionPreference } from '@model/subscriptionAccess';
 export {
   reasoningEffortOverrides,
   supportsReasoningLevel,

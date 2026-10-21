@@ -52,18 +52,6 @@ const COMPOSITION_ROOT_FILES = new Set([
   path.join(__dirname, 'src/test-kernel/support/sessionGraphInstall.ts'),
 ]);
 
-// The `@utils/*` modules the webview frontends may import at runtime. Each is
-// held to the browser (no Node built-ins) and may import only the others, so
-// the set stays closed under its own imports. The browser path basics and
-// error messages reach the frontends through `@texra-ai/harness/schemas`,
-// whose closure the browser build proves.
-const BROWSER_SAFE_UTILS = ['@utils/text/stringUtils'];
-const BROWSER_SAFE_UTILS_MESSAGE = `Browser-reachable code may import at runtime only the browser-safe utils (${BROWSER_SAFE_UTILS.join(', ')}); adding one means holding it to the browser too.`;
-// A regex rather than a gitignore group: `@utils/**` would exclude the
-// intermediate `@utils/text/` directory, and negation cannot re-include a
-// file under an excluded directory.
-const BROWSER_SAFE_UTILS_REGEX = `^@utils/(?!(?:${BROWSER_SAFE_UTILS.map((mod) => mod.slice('@utils/'.length)).join('|')})$)`;
-
 // The CLI reads process input only through its runtime context and writes to
 // the terminal only at its I/O boundary files.
 const CLI_PROCESS_INPUT_RESTRICTIONS = ['argv', 'env', 'cwd'].map(
@@ -940,9 +928,10 @@ export default tseslint.config(
             },
             BROWSER_HARNESS_ENTRY_PATTERN,
             {
-              regex: BROWSER_SAFE_UTILS_REGEX,
+              group: ['@utils', '@utils/**'],
               allowTypeImports: true,
-              message: BROWSER_SAFE_UTILS_MESSAGE,
+              message:
+                'A browser bundle reaches harness helpers through @texra-ai/harness/schemas or @texra-ai/harness/transcript, whose closures the browser build proves.',
             },
           ],
         },
@@ -971,45 +960,6 @@ export default tseslint.config(
           patterns: [
             ...HOST_LAYER_RESTRICTED_IMPORT_PATTERNS,
             BROWSER_HARNESS_ENTRY_PATTERN,
-          ],
-        },
-      ],
-    },
-  },
-
-  // The browser-safe utils: no Node built-ins, and runtime imports of other
-  // repo modules only from the set itself, by alias, so the allowlist sees
-  // every edge and the frontends' reachable closure stays these files.
-  {
-    files: BROWSER_SAFE_UTILS.map(
-      (mod) =>
-        `${mod.replace('@utils', 'packages/harness/src/utils')}{.ts,/index.ts}`,
-    ),
-    rules: {
-      'import/no-nodejs-modules': 'error',
-      'no-restricted-imports': [
-        'error',
-        {
-          paths: HOST_LAYER_RESTRICTED_IMPORT_PATHS,
-          patterns: [
-            ...HOST_LAYER_RESTRICTED_IMPORT_PATTERNS,
-            {
-              group: INTERNAL_ALIAS_NAMES.filter(
-                (alias) => alias !== '@utils',
-              ).flatMap((alias) => [alias, `${alias}/**`]),
-              allowTypeImports: true,
-              message: BROWSER_SAFE_UTILS_MESSAGE,
-            },
-            {
-              regex: BROWSER_SAFE_UTILS_REGEX,
-              allowTypeImports: true,
-              message: BROWSER_SAFE_UTILS_MESSAGE,
-            },
-            {
-              regex: '^\\.',
-              message:
-                'Browser-safe utils import each other by @utils alias, so the allowlist sees every edge.',
-            },
           ],
         },
       ],

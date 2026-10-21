@@ -191,8 +191,11 @@ function trackPromptEvents(): {
   return {
     events,
     hooks: {
-      beforePrompt: () => {
+      prompting: () => {
         events.push('before');
+        return () => {
+          events.push('after');
+        };
       },
     },
     answerWith: (answer) => () =>
@@ -275,7 +278,7 @@ describe('approval prompt hooks', () => {
         action: 'reject',
         feedback: 'no review needed',
       });
-      expect(tracker.events).toEqual(['before', 'prompt']);
+      expect(tracker.events).toEqual(['before', 'prompt', 'after']);
     }),
   );
 
@@ -426,7 +429,7 @@ describe('buildToolEditApprovalContent', () => {
         const prompts: string[] = [];
         const summaries: string[] = [];
         const answers = ['view', 'y'];
-        const beforePrompt = vi.fn();
+        const prompting = vi.fn(() => undefined);
         const stderrWrite = stubStderrWrites();
 
         const decision = yield* askApproval(
@@ -439,7 +442,7 @@ describe('buildToolEditApprovalContent', () => {
               }),
           }),
           { summary: 'bounded preview', details: () => 'complete proposal' },
-          { beforePrompt },
+          { prompting },
         );
 
         expect(decision).toEqual({ action: 'approve' });
@@ -448,7 +451,7 @@ describe('buildToolEditApprovalContent', () => {
           'Approve? [y/N, v view full, or n <feedback>] ',
         ]);
         expect(summaries).toEqual(['bounded preview', 'bounded preview']);
-        expect(beforePrompt).toHaveBeenCalledTimes(2);
+        expect(prompting).toHaveBeenCalledTimes(2);
         expect(stderrWrite).toHaveBeenCalledWith(
           'complete proposal\n',
           expect.any(Function),

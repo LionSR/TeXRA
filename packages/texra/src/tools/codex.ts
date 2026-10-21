@@ -27,28 +27,25 @@ import {
   ToolContext,
   withLogChannel,
   type WorkspaceRoots,
+  type ToolResult,
 } from '@texra-ai/harness';
-import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';
-import { Settings } from '@texra-ai/harness';
 import {
-  emitToolUseCard,
-  endOpenToolUseCards,
-  endToolUseCard,
-  logWebSearch,
+  ensureError,
+  toErrorMessage,
+  type RunId,
+  type TokenUsageStats,
+  type ToolUseLog,
+  type ToolCallStatus,
+  MESSAGE_TYPES,
+} from '@texra-ai/harness/schemas';
+import { Settings } from '@texra-ai/harness';
+import { ToolError } from '@texra-ai/harness/plugins';
+import { DELIVERY_TAG } from '@texra-ai/harness/transcript';
+import {
+  formatDelivery,
   type AgentTrace,
-  type OpenToolUseCard,
-  type ToolUseCardRef,
-} from '@agent/trace';
-import { formatDelivery } from '@agent/runtime/deliveryEnvelope';
-import type {
-  RunId,
-  TokenUsageStats,
-  ToolResult,
-  ToolUseLog,
-  ToolCallStatus,
-} from '@shared/schemas';
-import { MESSAGE_TYPES, ToolError } from '@shared/schemas';
-import { DELIVERY_TAG } from '@shared/deliveryTags';
+  type ToolCardHandle,
+} from '@texra-ai/harness/plugins';
 import type { CodexApprovalPolicy } from '@texra/shared/agentCliSettings';
 import { CodexSandboxModeSchema } from '@texra/shared/agentCliSettings';
 import { CodexStateKey } from '@texra/shared/settingsView/integrationSettings';
@@ -138,7 +135,10 @@ function logCodexItem(item: ThreadItem, logger: AgentTrace): void {
       logger.info(item.text, { messageType: MESSAGE_TYPES.THINKING });
       break;
     case 'web_search':
-      logWebSearch(logger, { query: item.query });
+      logger.info('', {
+        messageType: MESSAGE_TYPES.WEB_SEARCH,
+        data: { query: item.query },
+      });
       break;
     case 'error':
       logger.error(item.message);
@@ -178,24 +178,22 @@ function buildCodexLiveToolLog(
 
 function updateCodexLiveToolLog(
   logger: AgentTrace,
-  refs: Map<string, OpenToolUseCard>,
+  cards: Map<string, ToolCardHandle>,
   item: ThreadItem,
   toolLog: ToolUseLog,
 ): void {
-  const existing = refs.get(item.id);
-  const { status = 'completed', ...rest } = toolLog;
-  if (existing) endToolUseCard(logger, existing, rest, status);
-  // The ref stays after the card closes (re-ending is idempotent); its last
-  // log tells the turn's finalizer whether the card is still open.
-  const card = existing ?? emitToolUseCard(logger, toolLog);
-  refs.set(item.id, { ...card, toolLog });
+  // The card stays after it closes (re-ending is idempotent); it knows
+  // whether it is still open when the turn's finalizer asks.
+  const existing = cards.get(item.id);
+  if (existing) existing.update(toolLog);
+  else cards.set(item.id, logger.openToolCard(toolLog));
 }
 
 function publishCodexItemProgress(params: {
   item: ThreadItem;
   status: ToolCallStatus;
   logger: AgentTrace;
-  refs: Map<string, OpenToolUseCard>;
+  refs: Map<string, ToolCardHandle>;
 }): boolean {
   const { item, status, logger, refs } = params;
 
@@ -231,38 +229,38 @@ export function runStreamedTurn(
     logger.info(prompt, { messageType: MESSAGE_TYPES.USER_MESSAGE });
     const responseParts: string[] = [];
     let usage: RunResult['usage'] = null;
-    const itemLogRefs = new Map<string, OpenToolUseCard>();
+    const itemLogRefs = new Map<string, ToolCardHandle>();
 
     // The live "Codex Turn" card is opened on turn.started and closed on
     // turn.completed / turn.failed with the measured wall time. The
     // `Effect.ensuring` below closes it and every open item card on any other
     // exit (stream error, abort, early end), so no dead turn keeps a Running
     // card. finalizeTurnCard is a no-op once the card is closed.
-    let turnLogRef: ToolUseCardRef | null = null;
+    let turnCard: ToolCardHandle | null = null;
     let turnStartedMs = Date.now();
     const finalizeTurnCard = (
       state: 'completed' | 'failed',
       error?: string,
     ) => {
-      if (!turnLogRef) return;
-      const { status = 'completed', ...rest } = buildCodexTurnToolLog({
-        state,
-        wallTimeMs: Date.now() - turnStartedMs,
-        ...(error != null && { error }),
-      });
-      endToolUseCard(logger, turnLogRef, rest, status);
-      turnLogRef = null;
+      if (!turnCard) return;
+      turnCard.update(
+        buildCodexTurnToolLog({
+          state,
+          wallTimeMs: Date.now() - turnStartedMs,
+          ...(error != null && { error }),
+        }),
+      );
+      turnCard = null;
     };
 
     const onEvent = (event: ThreadEvent): void => {
       switch (event.type) {
         case 'thread.started':
-          emitToolUseCard(logger, buildCodexThreadToolLog(event));
+          logger.openToolCard(buildCodexThreadToolLog(event));
           break;
         case 'turn.started':
           turnStartedMs = Date.now();
-          turnLogRef = emitToolUseCard(
-            logger,
+          turnCard = logger.openToolCard(
             buildCodexTurnToolLog({ state: 'running' }),
           );
           break;
@@ -315,7 +313,8 @@ export function runStreamedTurn(
       }),
       Effect.ensuring(
         Effect.sync(() => {
-          endOpenToolUseCards(logger, itemLogRefs);
+          for (const card of itemLogRefs.values()) card.failIfOpen();
+          itemLogRefs.clear();
           finalizeTurnCard('failed');
         }),
       ),

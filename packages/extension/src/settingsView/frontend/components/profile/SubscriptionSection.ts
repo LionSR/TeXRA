@@ -13,7 +13,7 @@ import { customElement, property } from 'lit/decorators.js';
 // Local imports - shared auth
 
 // Local imports - shared styles
-import { CHATGPT_CODEX_CONTEXT_WINDOW_SETTING } from '@shared/schemas';
+import { CHATGPT_CODEX_CONTEXT_WINDOW_SETTING } from '@texra-ai/harness/schemas';
 import {
   codexAccountLabel,
   type SubscriptionAuthStatus,

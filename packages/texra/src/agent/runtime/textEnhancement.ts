@@ -7,7 +7,6 @@ import {
 } from '@texra-ai/harness';
 import { getSdkErrorMessage } from '@texra-ai/harness';
 import { extractTextFromTag } from '@texra/utils/text/xmlExtraction';
-import { isNonEmptyString } from '@utils/text/stringUtils';
 
 import type { WorkspaceRoots } from '@texra-ai/harness';
 
@@ -53,7 +52,7 @@ export const polishTextWithAI = Effect.fn('polishTextWithAI')(function* (
       // A draft polish serves no run and no agent category.
       { agentName: 'polish', runId: null },
     );
-    if (!isNonEmptyString(responseText)) {
+    if (typeof responseText !== 'string' || responseText.trim() === '') {
       return yield* Effect.fail(new Error('Model returned no text.'));
     }
     const corrected = extractTextFromTag(responseText, 'corrected_text');

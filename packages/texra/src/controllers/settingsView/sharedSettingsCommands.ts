@@ -21,6 +21,7 @@ import {
 } from '@texra-ai/llm';
 
 import {
+  CopilotRoutes,
   readModelOptions,
   Settings,
   type SettingsStores,
@@ -33,7 +34,6 @@ import {
   providerEndpointKey,
   SUBSCRIPTION_AUTH_PROVIDERS,
 } from '@texra-ai/harness/schemas';
-import { discoverCopilotRoutes } from '@model/copilotRouting';
 import type { SubscriptionUsageProvider } from '@texra/shared/model/subscriptionUsage';
 import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 import { modelOptionsFrom } from '@texra/model/modelOptions';
@@ -180,7 +180,7 @@ export function createSettingsViewBody(ports: SettingsViewBodyPorts) {
     secrets,
     resolveModelOptions: (stores, models) =>
       Effect.map(readModelOptions(stores, models), modelOptionsFrom),
-    copilotRoutes: discoverCopilotRoutes(),
+    copilotRoutes: CopilotRoutes.discover(),
   });
   const usage = new SubscriptionUsageService({ secrets, stores: roots });
   const memoryPage = settingsMemoryCommands({ bindings, present });

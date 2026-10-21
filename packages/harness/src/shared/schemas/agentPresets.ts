@@ -9,8 +9,6 @@
 
 import { z } from 'zod';
 
-import type { TeXRAIconName } from '@shared/iconNames';
-
 const AGENT_MODE_PRESET_ICON_NAMES = [
   'bookmark',
   'rocket',
@@ -18,7 +16,7 @@ const AGENT_MODE_PRESET_ICON_NAMES = [
   'cube',
   'hashtag',
   'screwdriver-wrench',
-] as const satisfies readonly TeXRAIconName[];
+] as const;
 
 /** Schema for a single agent team: its members, by name. */
 export const AgentModePresetSchema = z.object({

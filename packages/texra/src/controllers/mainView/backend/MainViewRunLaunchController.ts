@@ -6,14 +6,17 @@ import { Effect, absurd } from 'effect';
 // Local imports - main-view run
 
 // Local imports - shared types and errors
-import { Rejected, type StateReadFailed } from '@texra-ai/harness';
+import {
+  Rejected,
+  type StateReadFailed,
+  type AgentDelegationScope,
+} from '@texra-ai/harness';
 import {
   formatTeamLaunchBlockedMessage,
   formatUnknownTeamMessage,
   resolveTeamLaunch,
   TEAM_SELECTION_REQUIRED_MESSAGE,
 } from '@common/teams/TeamPlan';
-import { type AgentDelegationScope } from '@shared/schemas';
 import { isPastedImage } from '@texra/utils/files/pastedImageName';
 import {
   validateRunRequest,

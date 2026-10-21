@@ -9,14 +9,13 @@ import { truncateWithEllipsis } from '@texra-ai/harness/schemas';
 import { Cause, Effect, Array as Arr } from 'effect';
 import { z } from 'zod';
 
-import { defineTool, withLogChannel } from '@texra-ai/harness';
+import { defineTool, withLogChannel, ToolResult } from '@texra-ai/harness';
 import {
   errorResult,
   executed,
   nullishWithDefault,
 } from '@texra-ai/harness/plugins';
 import { retryTransientFetch, scopedOkClient } from '@texra-ai/harness/plugins';
-import { ToolResult } from '@shared/schemas';
 
 const LOOGLE_TIMEOUT_MS = 10_000; // 10 s
 const LOOGLE_CHANNEL = 'lean_loogle';

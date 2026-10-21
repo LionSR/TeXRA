@@ -5,7 +5,7 @@ import replacementEngine, {
   logReplacementDiagnostics,
   type ReplacementConfigRead,
 } from '@replacement/engine';
-import type { FileLocation } from '@shared/schemas';
+import type { FileLocation } from '@texra-ai/harness/schemas';
 import type { ConfigProvider } from '@texra-ai/harness';
 
 /** LaTeX starred math environments that need label removal during diff processing. */

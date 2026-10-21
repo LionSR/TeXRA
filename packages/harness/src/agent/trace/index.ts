@@ -6,7 +6,7 @@
  * helpers are sugar over `emit()`.
  *
  * App-specific helpers (`logSdkError`/`logUserMessage`/etc.) are plain
- * functions over this interface in `helpers.ts` / `toolUseHelpers.ts`.
+ * functions over this interface in `helpers.ts`.
  */
 export type {
   AgentEvent,
@@ -19,21 +19,10 @@ export type { AgentTrace, StageHandle, StreamHandle } from './AgentTrace';
 
 export { TraceEmitter } from './TraceEmitter';
 export {
-  startToolUseCard,
-  endToolUseCard,
-  emitToolUseCard,
-  endOpenToolUseCards,
-  type OpenToolUseCard,
-  type ToolUseCardRef,
-} from './toolUseHelpers';
-export {
   logSdkError,
   logProviderError,
   startCompactionActivity,
   logProgressStatus,
   logUserMessage,
   logContextManagementEvent,
-  logWebSearch,
-  logFilesLoaded,
-  logFileCategory,
 } from './helpers';

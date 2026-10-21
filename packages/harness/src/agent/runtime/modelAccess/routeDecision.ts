@@ -25,7 +25,7 @@ import { shouldUseInternalValidationModel } from '@agent/runtime/run/validationM
 import { RouteUnavailable } from '@common/errors/agentErrors';
 import {
   copilotRouteUnavailableReason,
-  discoverCopilotRoutes,
+  CopilotRoutes,
   type CopilotModelRoute,
 } from '@model/copilotRouting';
 import { routeFactsFor, type ModelSettings } from '@model/modelSettings';
@@ -128,7 +128,7 @@ export const decideRoute = Effect.fn('decideRoute')(function* (
   const copilotRoute =
     (prefersCopilot && mode === undefined) ||
     config.provider === ModelProvider.COPILOT
-      ? (yield* discoverCopilotRoutes().pipe(
+      ? (yield* CopilotRoutes.discover().pipe(
           Effect.mapError((cause) =>
             unavailable(
               `Could not list the editor's models: ${cause.message}`,

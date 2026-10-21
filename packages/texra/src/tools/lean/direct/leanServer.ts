@@ -39,7 +39,11 @@ import {
 } from 'effect';
 import { ChildProcess, type ChildProcessSpawner } from 'effect/process';
 
-import { withLogChannel } from '@texra-ai/harness';
+import {
+  type PerKeyLane,
+  withLogChannel,
+  withPerKeyLane,
+} from '@texra-ai/harness';
 import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';
 import {
   makeJsonRpcConnection,
@@ -409,6 +413,19 @@ const make = ({
       return rpc;
     });
 
+    /**
+     * One writer per file for `openFiles` and the server's document stream.
+     * Every run on this Lake root shares the server, so two of them opening
+     * or restarting one file at once would both read it, both send `didOpen`
+     * at version 1, and the one whose state the other replaced would fail
+     * `LeanSessionDisposed` on a healthy server. `ensureFileOpen` and
+     * `restartFile` are entered on the file's lane; `restartFile` reaches
+     * `ensureFileOpen` from inside it.
+     */
+    const fileLanes = new Map<string, PerKeyLane>();
+    const onFileLane = (absolute: string) =>
+      withPerKeyLane(fileLanes, absolute);
+
     const ensureFileOpen = Effect.fn('LeanServer.ensureFileOpen')(function* (
       absolute: string,
       forceReload: boolean,
@@ -495,7 +512,7 @@ const make = ({
       filePath: string,
     ) {
       const absolute = path.resolve(filePath);
-      yield* ensureFileOpen(absolute, false);
+      yield* ensureFileOpen(absolute, false).pipe(onFileLane(absolute));
       yield* waitForDiagnosticsQuiet(absolute);
       return absolute;
     });
@@ -527,16 +544,18 @@ const make = ({
       filePath: string,
     ) {
       const absolute = path.resolve(filePath);
-      const live = yield* requireRpc;
-      const state = openFiles.get(absolute);
-      if (state) {
-        yield* live.notify('textDocument/didClose', {
-          textDocument: { uri: pathToUri(absolute) },
-        });
-        yield* Deferred.fail(state.next, new LeanSessionDisposed());
-        openFiles.delete(absolute);
-      }
-      yield* ensureFileOpen(absolute, true);
+      yield* Effect.gen(function* () {
+        const live = yield* requireRpc;
+        const state = openFiles.get(absolute);
+        if (state) {
+          yield* live.notify('textDocument/didClose', {
+            textDocument: { uri: pathToUri(absolute) },
+          });
+          yield* Deferred.fail(state.next, new LeanSessionDisposed());
+          openFiles.delete(absolute);
+        }
+        yield* ensureFileOpen(absolute, true);
+      }).pipe(onFileLane(absolute));
     });
 
     return LeanServer.of({

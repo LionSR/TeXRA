@@ -7,6 +7,7 @@
 
 import { Box, Text } from 'ink';
 
+import { pluralize } from '@texra-ai/harness/transcript';
 import { hiddenRowsText } from '@cli/tui/overflowText';
 import { truncateSummaryToWidth } from '@cli/runtime/terminalText';
 import {
@@ -14,7 +15,7 @@ import {
   resumeBlockerLine,
   type InterruptedTask,
 } from '@ui/copy/interruptedTasks';
-import { formatRelativeTime, pluralize } from '@utils/text/stringUtils';
+import { formatRelativeTime } from '@ui/copy/format';
 
 /** The heading, the task lines and the actions line, at most this many. */
 const NOTICE_MAX_ROWS = 6;

@@ -36,11 +36,7 @@ import {
 import { executed } from '@tools/core/result';
 import { generateRunId } from '@utils/core';
 import { ensureError } from '@utils/errors/errorMessage';
-import {
-  formatDuration,
-  previewLabel,
-  stripControlCharacters,
-} from '@utils/text/stringUtils';
+import { previewLabel, stripControlCharacters } from '@utils/text/stringUtils';
 import { executeCommand } from '@utils/system/execUtils';
 import { appendHead, appendTail } from '@utils/text/appendTail';
 
@@ -446,7 +442,8 @@ const executeForeground = Effect.fn('BashTool.executeForeground')(function* (
     return yield* Effect.fail(new ToolError(parts.join('\n')));
   }
 
-  const duration = formatDuration((yield* Clock.currentTimeMillis) - startedAt);
+  const elapsedMs = (yield* Clock.currentTimeMillis) - startedAt;
+  const duration = `${(elapsedMs / 1000).toFixed(1)}s`;
 
   if (result.success) {
     const preview = previewLabel(command);

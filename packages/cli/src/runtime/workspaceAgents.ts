@@ -4,8 +4,8 @@ import {
   AgentCatalog,
   type WorkspaceAgentsController,
 } from '@texra-ai/harness';
-import type { WorkspaceAgentsSelection } from '@shared/schemas';
 import { cliCommandDefaults } from './cliConfig';
+import type { WorkspaceAgentsSelection } from '@texra-ai/harness/schemas';
 import type { SettingsStores } from '@texra-ai/harness';
 
 /** The workspace agents controller's own snapshot shape — derived, never restated. */
