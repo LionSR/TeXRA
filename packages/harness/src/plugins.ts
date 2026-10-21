@@ -90,6 +90,7 @@ export {
   type JsonRpcConnectionOptions,
   type JsonRpcRequestError,
 } from '@tools/jsonRpc';
+export type { RefusalDecision } from '@shared/schemas';
 export { ToolError } from '@shared/schemas';
 export { nullishWithDefault } from '@tools/core/inputSchema';
 export {

@@ -55,7 +55,7 @@ import {
   originalSnapshotPathUnder,
   inspectRunStorageEntryUnder,
 } from '@utils/files/runStorageFs';
-import type { RefusalDecision } from '@texra-ai/harness/schemas';
+import type { RefusalDecision } from '@texra-ai/harness/plugins';
 import type { PluginToolServices } from '@texra-ai/harness/plugins';
 
 /**

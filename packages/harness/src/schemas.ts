@@ -142,7 +142,6 @@ export type {
   OwnerLiveness,
   PermissionPayload,
   ProposalFileGroup,
-  RefusalDecision,
   ResultMeta,
   RunIdentity,
   ScriptDeliverySummary,
