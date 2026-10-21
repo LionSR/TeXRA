@@ -6,7 +6,7 @@
  */
 
 // Third-party imports
-import { Effect } from 'effect';
+import { Clock, Effect } from 'effect';
 import { prepareAgentDefinition } from '@agent/runtime/AgentLaunchContext';
 import { childToolRefusal } from '@agent/runtime/agentToolResolution';
 
@@ -85,7 +85,7 @@ export const launchDetachedSubagent = Effect.fn('launchDetachedSubagent')(
     const { session: parentSession, runId: parentRunId } = parent.run;
     const workingDirectory = childConfigPayload.workingDirectory ?? undefined;
     const agentName = childConfigPayload.agent;
-    const startedAt = Date.now();
+    const startedAt = yield* Clock.currentTimeMillis;
     const definition = yield* prepareAgentDefinition({
       config: AgentConfigSchema.parse(childConfigPayload),
       session: parentSession,
