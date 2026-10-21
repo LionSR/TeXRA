@@ -18,7 +18,9 @@ import { testHttpClientLayer } from '@test/support/fetchTestUtils';
 import { withEnv } from '@test/support/testEnv';
 
 import { scriptedSpawnerLayer } from '@test/support/childProcessTestLayer';
-import { CODEX_SESSION_SECRET_KEY } from '../../../packages/llm/src/oauth/codex/codexProvider.js';
+
+/** The secret a ChatGPT session persists under. */
+const CODEX_SESSION_SECRET_KEY = 'auth.chatgpt-codex';
 
 const mocks = vi.hoisted(() => ({
   isPreferCodexSubscription: vi.fn(),

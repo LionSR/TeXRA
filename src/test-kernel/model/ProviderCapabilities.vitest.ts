@@ -18,10 +18,10 @@ import { withProcessServices } from '@platform/processRuntime';
 const CODEX_INPUT_LIMIT = 272_000;
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { hostStores, installPlatform } from '@test/support/setupPlatform';
-import {
-  CODEX_SESSION_SECRET_KEY,
-  type CodexSession,
-} from '../../../packages/llm/src/oauth/codex/codexProvider.js';
+import type { CodexSession } from '@texra-ai/llm/node';
+
+/** The secret a ChatGPT session persists under. */
+const CODEX_SESSION_SECRET_KEY = 'auth.chatgpt-codex';
 
 /** The config a model runs with on the ChatGPT subscription. */
 const chatgptConfig = (config: ModelConfig) =>

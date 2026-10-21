@@ -116,34 +116,10 @@
       "name": "isAllowedExternalUrl"
     },
     {
-      "file": "packages/llm/src/oauth/codex/codexProvider.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "CODEX_POLICY"
-    },
-    {
-      "file": "packages/llm/src/oauth/codex/codexProvider.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "CODEX_SESSION_SECRET_KEY"
-    },
-    {
-      "file": "packages/llm/src/oauth/codex/codexProvider.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "extractCodexClaims"
-    },
-    {
       "file": "packages/llm/src/oauth/oauthRequest.ts",
       "category": "unused",
       "kind": "exports",
       "name": "OAuthUnexpectedResponse"
-    },
-    {
-      "file": "packages/llm/src/oauth/xai/xaiProvider.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "XAI_POLICY"
     },
     {
       "file": "packages/texra/src/controllers/modelAccess/subscriptionUsage/codexUsageAdapter.ts",

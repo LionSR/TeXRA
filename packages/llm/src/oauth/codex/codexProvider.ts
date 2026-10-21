@@ -91,7 +91,7 @@ const CODEX_JWT_AUTH_CLAIM = 'https://api.openai.com/auth';
  * over API_KEY_PROVIDER_IDS, and so the Codex credential is never treated as an
  * api key.
  */
-export const CODEX_SESSION_SECRET_KEY = 'auth.chatgpt-codex';
+const CODEX_SESSION_SECRET_KEY = 'auth.chatgpt-codex';
 
 // Schema-first per CLAUDE.md: define the Zod schemas, derive the TS types. The
 // stored bundle is the canonical camelCase shape; the raw token-endpoint
@@ -203,7 +203,7 @@ const EMPTY_CLAIMS: CodexJwtClaims = {};
  * Extract account id + email, preferring the id_token and falling back to the
  * access_token field-by-field. Either token may be absent.
  */
-export function extractCodexClaims(
+function extractCodexClaims(
   idToken: string | undefined,
   accessToken: string | undefined,
 ): CodexJwtClaims {
@@ -223,7 +223,7 @@ export function extractCodexClaims(
  * the authorize URL and the claims differ from Grok; single-flight refresh,
  * storage races, and error mapping live in the shared machine.
  */
-export const CODEX_POLICY: SubscriptionOAuthPolicy<CodexSession> = {
+const CODEX_POLICY: SubscriptionOAuthPolicy<CodexSession> = {
   sessionSchema: CodexSessionSchema,
   tokenEndpoint: {
     tokenUrl: CODEX_TOKEN_URL,

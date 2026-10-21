@@ -169,7 +169,7 @@ function decodeXaiJwtClaims(token: string): XaiJwtClaims {
  * the authorize URL, claims, and JWT-exp refresh differ from ChatGPT/Codex,
  * so the shared coordinator runs it as is.
  */
-export const XAI_POLICY: SubscriptionOAuthPolicy<XaiSession> = {
+const XAI_POLICY: SubscriptionOAuthPolicy<XaiSession> = {
   sessionSchema: XaiSessionSchema,
   tokenEndpoint: {
     tokenUrl: XAI_TOKEN_URL,
