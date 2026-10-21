@@ -6,7 +6,7 @@ import {
   AgentDirectories,
   isStrictlyWithin,
 } from '@texra-ai/harness';
-import { AGENT_SOURCE, agentKey, agentName } from '@shared/schemas';
+import { AGENT_SOURCE, agentKey, agentName } from '@texra-ai/harness/schemas';
 
 import {
   AGENT_NAME_DESCRIPTION,

@@ -4,12 +4,15 @@ import {
   InstalledPlugins,
   type DatabaseReadFailed,
   type LocalSession,
-  type RunEndResult,
   type SettingsStores,
 } from '@texra-ai/harness';
-import { toErrorMessage } from '@texra-ai/harness/schemas';
+import {
+  type RunEndResult,
+  toErrorMessage,
+  RUN_OUTCOME,
+  type RunOutcome,
+} from '@texra-ai/harness/schemas';
 import { runOutcomeToCliRunStatus } from '@cli/schemas/cliOutput';
-import { RUN_OUTCOME, type RunOutcome } from '@shared/schemas';
 
 import { CliExitCode } from './exitCodes';
 import type { CliPluginPin } from '../schemas/cliOutput';

@@ -1,15 +1,16 @@
+// Node imports
+import * as path from 'node:path';
+
 // Third-party imports
 import { Effect } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports
-import { withLogChannel } from '@texra-ai/harness';
-import { WorkspaceFs } from '@texra-ai/harness';
+import { withLogChannel, WorkspaceFs } from '@texra-ai/harness';
 import { ensureError } from '@texra-ai/harness/schemas';
 import { openFileInEditor } from '@frontend/vscode/vscodeEditor';
 import { openFirstLabelMatch } from '@latex/labelSearch';
 import { listWorkspaceFilesOfType } from '@texra/controllers/session/workspaceFileOptions';
-import { workspaceAbsolutePath } from '@utils/files/workspaceFS';
 import type { WorkspaceRoots } from '@texra-ai/harness';
 
 const CHANNEL = 'openFileCommands';
@@ -34,10 +35,13 @@ function openInEditor(
   );
 }
 
-export function openFile(roots: WorkspaceRoots, file: string, line?: number) {
-  const absolutePath = workspaceAbsolutePath(roots.workspace, file);
-  const opened =
-    line !== undefined && line > 0
+export function openFile(file: string, line?: number) {
+  // An absolute path opens as is; a relative one names a workspace file.
+  const opened = Effect.gen(function* () {
+    const absolutePath = path.isAbsolute(file)
+      ? file
+      : yield* (yield* WorkspaceFs).resolve(file);
+    return yield* line !== undefined && line > 0
       ? openInEditor(absolutePath, () => new vscode.Position(line - 1, 0))
       : Effect.tryPromise({
           try: () =>
@@ -47,6 +51,7 @@ export function openFile(roots: WorkspaceRoots, file: string, line?: number) {
             ),
           catch: ensureError,
         });
+  });
   return opened.pipe(
     Effect.tapError((error) =>
       Effect.logError(`Could not open ${file}: ${error.message}`).pipe(
@@ -88,8 +93,12 @@ export const openLabel = Effect.fn('openFileCommands.openLabel')(function* (
         ),
       ),
     (file, index) =>
-      openInEditor(workspaceAbsolutePath(roots.workspace, file), (doc) =>
-        doc.positionAt(index),
-      ),
+      workspaceFs
+        .resolve(file)
+        .pipe(
+          Effect.flatMap((absolutePath) =>
+            openInEditor(absolutePath, (doc) => doc.positionAt(index)),
+          ),
+        ),
   );
 });

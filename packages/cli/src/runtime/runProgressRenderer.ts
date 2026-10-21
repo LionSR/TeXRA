@@ -5,7 +5,7 @@
  * The plain-text workflow lines are `scriptPlainOutput.ts`.
  */
 import path from 'node:path';
-import { formatCompactDuration } from '@texra-ai/harness/transcript';
+import { formatCompactDuration, pluralize } from '@texra-ai/harness/transcript';
 
 import { Effect, type Fiber, type Scope, Stream } from 'effect';
 
@@ -13,11 +13,12 @@ import {
   isLiveRun,
   type SessionView,
   type RunView,
+  RUN_PHASE,
+  type RunId,
+  type RunPhase,
+  isTerminalOutcomePhase,
 } from '@texra-ai/harness/schemas';
-import { isTerminalOutcomePhase } from '@texra-ai/harness/schemas';
-import { RUN_PHASE, type RunId, type RunPhase } from '@shared/schemas';
 import { formatLoopPositionLabel, runStatusLabel } from '@ui/copy/runStatus';
-import { pluralize } from '@utils/text/stringUtils';
 
 import {
   safeTerminalText,
@@ -41,6 +42,10 @@ export interface RunProgressRenderer {
   ): Effect.Effect<void, never, Scope.Scope>;
   clear(): void;
   preserve(): void;
+  /** {@link preserve}, held: no paint and no heartbeat until the returned
+   *  release is called. A prompt owns the terminal while it is open; a view
+   *  level landing meanwhile must not repaint the status line over it. */
+  suspend(): () => void;
 }
 
 export interface RunProgressRendererInit {
@@ -94,6 +99,8 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
   /** The last root phase the renderer painted; a repeat is not a change. */
   private paintedPhase: RunPhase | undefined;
   private heartbeat: Fiber.Fiber<never> | undefined;
+  /** Open prompts holding the line ({@link suspend}). */
+  private suspended = 0;
 
   constructor(
     init: RunProgressRendererInit & {
@@ -129,7 +136,11 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
                   this.applyView(view);
                   if (this.rootRunTerminal || !this.rootRunId) {
                     this.stopHeartbeat();
-                  } else if (this.ansi && !this.heartbeat) {
+                  } else if (
+                    this.ansi &&
+                    !this.heartbeat &&
+                    this.suspended === 0
+                  ) {
                     // A start waits a full interval. This stream's scope
                     // interrupts and joins the heartbeat when it ends.
                     this.heartbeat = yield* Effect.sleep(
@@ -165,6 +176,17 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
       this.write('\n');
       this.liveLine = false;
     }
+  }
+
+  suspend(): () => void {
+    this.preserve();
+    this.suspended += 1;
+    let released = false;
+    return () => {
+      if (released) return;
+      released = true;
+      this.suspended -= 1;
+    };
   }
 
   private root(): RunView | undefined {
@@ -204,6 +226,7 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
   }
 
   private render(force = false): void {
+    if (this.suspended > 0) return;
     const now = this.nowMs();
     if (!force && now - this.lastRenderAt < this.minIntervalMs) return;
     const { line, state } = this.formatLine(now);

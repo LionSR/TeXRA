@@ -8,7 +8,6 @@ import {
   isCompactRows,
 } from '@cli/tui/ui/theme';
 import { fillRows, truncateToWidth } from '@cli/runtime/terminalText';
-import type { PlanApprovalPermission } from '@shared/schemas';
 import type { SurfaceDecision } from '@texra/shared/session/surfaceDecision';
 import { PLAN_GOAL_COPY } from '@ui/copy/delegationApproval';
 
@@ -21,6 +20,7 @@ import {
   confirmCardCompactChromeRows,
   type ConfirmCardKeyRow,
 } from './ConfirmCardState';
+import type { PlanApprovalPermission } from '@texra-ai/harness/schemas';
 
 interface PlanApprovalProps {
   readonly availableRows?: number;

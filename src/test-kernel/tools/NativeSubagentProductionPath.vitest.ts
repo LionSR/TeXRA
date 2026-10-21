@@ -53,8 +53,7 @@ vi.mock('@agent/runtime/modelAccess/ModelAccess', async (importActual) => {
 
 // Local imports - agent runtime
 import { AgentCatalog } from '@agent/index/agentCatalog';
-import { getRunRecords } from '@agent/storage/runRecords';
-import { readChildTurnState } from '@agent/storage/runRecords';
+import { getRunRecords, readChildTurnState } from '@agent/storage/runRecords';
 import { prepareAgentDefinition } from '@agent/runtime/AgentLaunchContext';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import type { ITool } from '@agent/core/tools/ToolTypes';
@@ -73,8 +72,8 @@ import type { BoundModel } from '@agent/runtime/modelAccess/ModelAccess';
 import { routePolicies } from '@agent/runtime/modelAccess/failureInfo';
 import { presentDesktopFinalOutput } from '@desktop/main/desktopAgentLaunch';
 import { withProcessServices } from '@platform/processRuntime';
-import { MODEL_RETRY_MAX_ATTEMPTS_SETTING } from '@shared/schemas';
 import {
+  MODEL_RETRY_MAX_ATTEMPTS_SETTING,
   qualifyAggregateId,
   RUN_OUTCOME,
   RUN_PHASE,
@@ -113,7 +112,7 @@ import {
 } from '@texra/controllers/session/hostRunActions';
 import { ExecutionsTool } from '@tools/ExecutionsTool';
 import { launchDetachedSubagent } from '@tools/delegation/subagentRun';
-import { readCompletedRunConversation } from '@transcript';
+import { readCompletedRunConversation } from '@transcript/completedRunArchive';
 import { generateRunId } from '@utils/core';
 import { RunFileService } from '@utils/files/runStorage';
 import { ResolvedTurnSchema } from '../../../packages/llm/src/turn.js';

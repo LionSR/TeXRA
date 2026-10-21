@@ -3,6 +3,7 @@ import '@awesome.me/webawesome/dist/components/input/input.js';
 import { LitElement, css, html, nothing, type TemplateResult } from 'lit';
 import { customElement, state } from 'lit/decorators.js';
 
+import { pluralize } from '@texra-ai/harness/transcript';
 import {
   detectBrowserPlatform,
   formatDesktopAccelerator,
@@ -19,7 +20,6 @@ import {
 } from '@ui/wa/actionButtons';
 import { renderEmptyState } from '@ui/wa/emptyState';
 import { renderSettingsSectionHeading } from '@ui/wa/settingsSection';
-import { pluralize } from '@utils/text/stringUtils';
 
 @customElement('shortcuts-tab')
 export class ShortcutsTab extends LitElement {

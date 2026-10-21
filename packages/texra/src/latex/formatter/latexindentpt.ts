@@ -3,9 +3,9 @@ import * as path from 'node:path';
 import { Effect, FileSystem } from 'effect';
 
 import { withLogChannel } from '@texra-ai/harness';
+import { entryTypeIn } from '@texra-ai/harness/node';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
 import { runToolWithCheck } from '@texra/utils/system/toolChecks';
-import { entryTypeIn } from '@utils/files/fsEntryExists';
 import { LATEX_COMMANDS_CHANNEL as CHANNEL } from '../latexLogging';
 import type { SettingsStores } from '@texra-ai/harness';
 

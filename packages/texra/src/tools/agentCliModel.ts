@@ -17,7 +17,7 @@ import {
   type SelectedModel,
   selectModel,
 } from '@texra-ai/llm';
-import { ToolError } from '@shared/schemas';
+import { ToolError } from '@texra-ai/harness/plugins';
 import {
   AgentCliEffortSchema,
   type AgentCliEffort,

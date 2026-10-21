@@ -1,6 +1,9 @@
 import { Effect } from 'effect';
 
-import { toErrorMessage } from '@texra-ai/harness/schemas';
+import {
+  toErrorMessage,
+  SUBSCRIPTION_AUTH_PROVIDERS,
+} from '@texra-ai/harness/schemas';
 import { bumpCodexPreferenceVersion } from '@cli/chat/tui/state/cliState';
 import { setCliSubscriptionPreference } from '@cli/chat/tui/state/subscriptionPreference';
 import {
@@ -19,20 +22,19 @@ import {
   type CliLoginSlashArgs,
   type CliLogoutTarget,
 } from '@cli/runtime/loginOptions';
-import { SUBSCRIPTION_AUTH_PROVIDERS } from '@shared/model/subscriptionAuth';
-import {
-  ACCOUNT_OUTCOME,
-  SUBSCRIPTION_AUTH_COPY,
-} from '@shared/model/accountAuth';
 import type { SubscriptionProviderId } from '@texra/controllers/modelAccess/subscriptionProviders';
+import { ACCOUNT_OUTCOME, SUBSCRIPTION_AUTH_COPY } from '@ui/copy/accountAuth';
 
 import {
   type SlashCommandOutput,
   transcriptSlashCommandOutput,
 } from './slashContext';
-import type { AgentCatalogServices } from '@texra-ai/harness';
-import type { Secrets, PlatformSecrets } from '@texra-ai/harness';
-import type { SettingsStores } from '@texra-ai/harness';
+import type {
+  AgentCatalogServices,
+  Secrets,
+  PlatformSecrets,
+  SettingsStores,
+} from '@texra-ai/harness';
 
 const CHAT_LOGIN_USAGE = [
   'Usage: /login chatgpt [--no-browser] [--device]',

@@ -12,7 +12,7 @@ import { DELIVERY_TAG } from '@shared/deliveryTags';
 import type { ExecResult } from '@shared/schemas';
 import { escapeText } from '@shared/utils/xmlEscape';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import { formatDuration, splitContentLines } from '@utils/text/stringUtils';
+import { splitContentLines } from '@utils/text/stringUtils';
 
 /** Last N lines of output for the delivery preview. */
 const OUTPUT_PREVIEW_LINES = 20;
@@ -72,7 +72,7 @@ export function formatBashDelivery(
     // status was lost; say which, so no reader takes it for a real exit.
     ...(result.timedOut ? ['<timed-out>true</timed-out>'] : []),
     ...(result.noExitCode ? ['<no-exit-code>true</no-exit-code>'] : []),
-    `<wall-time>${formatDuration(wallTimeMs)}</wall-time>`,
+    `<wall-time>${(wallTimeMs / 1000).toFixed(1)}s</wall-time>`,
   ];
   const outputStreams = [
     ['output', stdout],

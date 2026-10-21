@@ -11,7 +11,7 @@ import {
   readStorageInventory,
 } from '@texra-ai/harness';
 import { formatResultCount } from '@texra-ai/harness/transcript';
-import { formatBytes } from '@utils/text/stringUtils';
+import { formatBytes } from '@ui/copy/format';
 
 import { CliExitCode } from './exitCodes';
 import { askCliQuestion, writeTextStderr, writeTextStdout } from './logSinks';

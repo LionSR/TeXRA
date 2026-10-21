@@ -12,6 +12,7 @@ import { Effect } from 'effect';
 import {
   definePlugin,
   type ProcessPluginLayer,
+  ALWAYS_AVAILABLE,
 } from '@texra-ai/harness/plugins';
 import { APP_PLUGIN_ARMS } from '@texra/shared/plugins/appArms';
 import {
@@ -50,7 +51,6 @@ import { ZoteroAddTool } from '@texra/tools/zotero/ZoteroAddTool';
 import { ZoteroCollectionsTool } from '@texra/tools/zotero/ZoteroCollectionsTool';
 import { ZoteroExportTool } from '@texra/tools/zotero/ZoteroExportTool';
 import { ZoteroSearchTool } from '@texra/tools/zotero/ZoteroSearchTool';
-import { ALWAYS_AVAILABLE } from '@tools/toolProbes';
 import type { Plugin } from '@texra-ai/harness';
 
 /** A probe without tools: agents run `wolframscript` through `bash`. */

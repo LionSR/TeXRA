@@ -3,6 +3,7 @@ import { Effect } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports
+import { workspaceRelativePath } from '@texra-ai/harness/node';
 import {
   showLoggedErrorMessage,
   showLoggedInfoMessage,
@@ -10,7 +11,6 @@ import {
 import { selectFiles } from '@frontend/ui/dialogs';
 import type { MultipleDocumentFileType } from '@texra/shared/launcher/fileTypes';
 import { getFilterExtensions } from '@texra/common/files/fileTypeUtils';
-import { workspaceRelativePath } from '@utils/files/workspaceFS';
 import type { WorkspaceRoots } from '@texra-ai/harness';
 
 const CHANNEL = 'fileSelectionCommands';

@@ -1,9 +1,8 @@
 import { formatResultCount } from '@texra-ai/harness/transcript';
 import { Effect, Result, Stream } from 'effect';
 
+import { runBypasses, isLiveRun } from '@texra-ai/harness/schemas';
 import { readModelOptions, type Session } from '@texra-ai/harness';
-import { runBypasses } from '@texra-ai/harness/schemas';
-import { isLiveRun } from '@texra-ai/harness/schemas';
 import { defaultShortcutModifierLabel } from '@cli/runtime/shortcutLabels';
 import {
   formatCliSessionStatus,
@@ -378,7 +377,7 @@ export function sessionContributions(
               // flag itself, and the queued task polls this flag — dropping it
               // would hang `/exit` forever with a follow-up queued and no
               // stream id yet.
-              context.session.stopRequested = true;
+              context.session.askStop('shutdown');
               context.requestInputExit();
             }),
         },

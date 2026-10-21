@@ -12,10 +12,14 @@
 // beyond its plain-text projection.
 
 // Local imports - shared schemas and utilities
-import { truncateWithEllipsis } from '@texra-ai/harness/schemas';
-import { isMcpToolName } from '@texra-ai/harness/transcript';
-import { toolDisplayKind } from '@texra-ai/harness/transcript';
 import {
+  truncateWithEllipsis,
+  TOOL_CALL_STATUS,
+} from '@texra-ai/harness/schemas';
+import { buildDiffHunks } from '@texra-ai/harness';
+import {
+  isMcpToolName,
+  toolDisplayKind,
   transcriptText,
   type ToolSection,
   type ToolSectionFile,
@@ -31,8 +35,6 @@ import {
 import { COLOR_ERROR, COLOR_HINT, COLOR_SUCCESS } from '@cli/tui/ui/colors';
 import { STATUS_DOT, TOOL_OUTPUT_CORNER } from '@cli/tui/ui/glyphs';
 import type { ToolRow } from '@cli/chat/tui/state/sessionView';
-import { TOOL_CALL_STATUS } from '@shared/schemas';
-import { buildDiffHunks } from '@utils/text/unifiedDiff';
 
 // Local imports - CLI TUI rendering
 import {

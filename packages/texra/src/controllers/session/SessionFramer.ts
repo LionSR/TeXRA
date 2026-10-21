@@ -27,18 +27,20 @@ import { Effect, Stream, SubscriptionRef } from 'effect';
 import {
   qualifyAggregateId,
   listingTypeOf,
-  type CommitOrdinal,
-  type ExistenceReconciliation,
-  type FoldInput,
   type LocalRuntimeState,
-  type TextChunk,
-} from '@shared/schemas';
+} from '@texra-ai/harness/schemas';
 import type { HostSnapshot } from '@texra/shared/session/hostSnapshot';
 import type {
   EventsFrame,
   FoldEvent,
   Subscribe,
 } from '@texra/shared/session/sessionFrames';
+import type {
+  CommitOrdinal,
+  ExistenceReconciliation,
+  FoldInput,
+  TextChunk,
+} from '@texra-ai/harness/transcript';
 import type { Session } from '@texra-ai/harness';
 
 /** Rows per frame before the window cuts it. */

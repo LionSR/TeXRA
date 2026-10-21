@@ -10,32 +10,34 @@
 import * as path from 'node:path';
 
 import { Effect, FileSystem } from 'effect';
-import { agentBlockOf, errorResult } from '@texra-ai/harness/plugins';
-import { withLogChannel, hasExtension } from '@texra-ai/harness';
-import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';
 import {
+  agentBlockOf,
+  errorResult,
+  AGENT_TOOL_NAME,
+  buildTemplatePassthrough,
+} from '@texra-ai/harness/plugins';
+import { readNormalizedFile } from '@texra-ai/harness/node';
+import {
+  withLogChannel,
+  hasExtension,
+  type ToolResult,
   AgentCatalog,
   type AgentEntry,
   type WorkspaceAgentsStores,
 } from '@texra-ai/harness';
-import { AGENT_TOOL_NAME } from '@texra-ai/harness/plugins';
-import { buildTemplatePassthrough } from '@agent/prompt/templateInputs';
-import { PREFERRED_TOOL_USE_AGENTS } from '@shared/constants/agents';
 import {
+  toErrorMessage,
   agentKeyOf,
   DEFAULT_WORKFLOW_AGENT,
   type AgentOptionData,
   type FileListEntry,
-  type ToolResult,
-} from '@shared/schemas';
+} from '@texra-ai/harness/schemas';
+import { PREFERRED_TOOL_USE_AGENTS } from '@shared/constants/agents';
 import {
   DOCUMENT_TASK_BLOCK,
   type DocumentAgentOption,
   type DocumentTask,
 } from '@texra/shared/plugins/documents';
-import { readNormalizedFile } from '@utils/files/fsDurability';
-import { workspaceAbsolutePath } from '@utils/files/workspaceFS';
-import { formatBytes, isNonEmptyString } from '@utils/text/stringUtils';
 
 /** The document task `entry` defines, or null for a chat agent. */
 export const documentTaskOf = (
@@ -155,14 +157,20 @@ export const rejectOversizedBibAttachments = Effect.fn(
 > {
   const fs = yield* FileSystem.FileSystem;
   const bibFiles = contextFiles
-    .filter(isNonEmptyString)
+    .filter((file) => file.trim() !== '')
     .filter((file) => hasExtension(file, '.bib'));
 
   for (const bibFile of bibFiles) {
-    const absolute = yield* Effect.try({
-      try: () => workspaceAbsolutePath(workspaceRoot, bibFile),
-      catch: ensureError,
-    });
+    // A relative path names a workspace file, which needs a folder open.
+    let absolute = bibFile;
+    if (!path.isAbsolute(bibFile)) {
+      if (!workspaceRoot) {
+        return yield* Effect.fail(
+          new Error('Workspace path is not available.'),
+        );
+      }
+      absolute = path.join(workspaceRoot, bibFile);
+    }
     // `FileSystem.stat` follows a link; a link whose target does not
     // resolve is measured as no file, as a path `readLink` cannot name is
     // no entry at all.
@@ -178,7 +186,7 @@ export const rejectOversizedBibAttachments = Effect.fn(
     if (Number(stats.size) <= LARGE_BIB_LIMIT_BYTES) continue;
 
     const sizeBytes = Number(stats.size);
-    const message = `${bibFile} is ${sizeBytes} bytes (${formatBytes(sizeBytes)}), over the ${LARGE_BIB_LIMIT_BYTES} byte (${formatBytes(LARGE_BIB_LIMIT_BYTES)}) limit. Call extract_bib_entries first if citations are needed, then re-propose without the full .bib file.`;
+    const message = `${bibFile} is ${sizeBytes} bytes, over the ${LARGE_BIB_LIMIT_BYTES} byte limit. Call extract_bib_entries first if citations are needed, then re-propose without the full .bib file.`;
     return errorResult(message, {
       summary: `Rejected oversized BibTeX attachment`,
       diagnostics: {

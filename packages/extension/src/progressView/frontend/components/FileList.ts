@@ -1,5 +1,11 @@
 // Third-party imports
-import { getBasename, normalizeFilePath } from '@texra-ai/harness/schemas';
+import {
+  getBasename,
+  normalizeFilePath,
+  fileLocationDisplayPath,
+  type FileLocation,
+  type RunId,
+} from '@texra-ai/harness/schemas';
 import {
   LitElement,
   html,
@@ -17,12 +23,7 @@ import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 
 // Local imports
-import {
-  fileLocationDisplayPath,
-  type FileLocation,
-  type RunId,
-} from '@shared/schemas';
-import type { TeXRAIconName } from '@shared/iconNames';
+import { pluralize } from '@texra-ai/harness/transcript';
 import {
   type CompileFailure,
   getEffectiveDiffBase,
@@ -36,10 +37,10 @@ import {
 import type { HostRequest } from '@texra/shared/session/hostRequest';
 import type { Surface } from '@texra/shared/session/surface';
 import { SessionUiEvents } from '@texra/shared/session/uiEvents';
+import type { IconName } from '@ui/wa/iconNames';
 import { designTokens, commonViewStyles } from '@ui/styles';
 import { renderIconActionButton } from '@ui/wa/actionButtons';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
-import { pluralize } from '@utils/text/stringUtils';
 import { getComposedPathElement } from '../utils';
 
 // Local imports - styles
@@ -55,7 +56,7 @@ type FileVerb = Extract<HostRequest, { kind: 'fileAction' }>['action'];
 import '@awesome.me/webawesome/dist/components/details/details.js';
 
 interface FileActionOptions {
-  readonly icon: TeXRAIconName;
+  readonly icon: IconName;
   readonly label: string;
   readonly title: string;
   readonly className: string;

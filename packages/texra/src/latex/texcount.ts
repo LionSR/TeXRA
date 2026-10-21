@@ -1,10 +1,13 @@
 import { Effect, FileSystem, Predicate, Array as Arr } from 'effect';
 
-import { withLogChannel, hasExtension } from '@texra-ai/harness';
-import { pathToLocationIn } from '@texra-ai/harness';
+import {
+  withLogChannel,
+  hasExtension,
+  pathToLocationIn,
+} from '@texra-ai/harness';
+import { pathExists, readNormalizedFile } from '@texra-ai/harness/node';
 import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';
 import { runToolWithCheck } from '@texra/utils/system/toolChecks';
-import { pathExists } from '@utils/files/fsDurability';
 import { LATEX_COMMANDS_CHANNEL as CHANNEL } from './latexLogging';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 import type { SettingsStores } from '@texra-ai/harness';
@@ -25,13 +28,8 @@ const hasChinesePackages = Effect.fn('texcount.hasChinesePackages')(function* (
   absolutePath: string,
 ) {
   const fs = yield* FileSystem.FileSystem;
-  return yield* fs.readFile(absolutePath).pipe(
+  return yield* readNormalizedFile(fs, absolutePath).pipe(
     Effect.mapError(ensureError),
-    // Decoded from bytes rather than `readFileString`, whose `TextDecoder`
-    // would strip a leading UTF-8 BOM the file carries.
-    Effect.map((bytes) =>
-      Buffer.from(bytes).toString('utf-8').replaceAll('\r\n', '\n'),
-    ),
     Effect.map((content) =>
       CHINESE_PACKAGES.some(
         (pkg) =>

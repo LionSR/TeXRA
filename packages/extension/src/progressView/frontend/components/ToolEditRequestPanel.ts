@@ -11,6 +11,7 @@ import '@awesome.me/webawesome/dist/components/dropdown-item/dropdown-item.js';
 import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 
 // Local imports - shared styles
+import { pluralize } from '@texra-ai/harness/transcript';
 import { isLatexFile } from '@texra/shared/latexFileTypes';
 import { APPROVE_SESSION_ACTION } from '@texra/shared/session/surfaceDecision';
 import { SessionUiEvents } from '@texra/shared/session/uiEvents';
@@ -20,7 +21,6 @@ import { RUN_GRANT_LABEL } from '@ui/copy/delegationApproval';
 import { renderLabeledActionButton } from '@ui/wa/actionButtons';
 import { selectedItemValue } from '@ui/wa/selectTemplates';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
-import { pluralize } from '@utils/text/stringUtils';
 
 // Local imports - base class
 import { BaseRequestPanel, type RunGrant } from './BaseRequestPanel';

@@ -29,16 +29,16 @@ import {
   type SessionEventDraft,
 } from '@shared/schemas';
 import type { RunView, SessionView } from '@shared/session/sessionView';
-import { startAwaited } from '@test/support/runHandleFixtures';
-import { untrackRun } from '@test/support/sessionEnd';
-import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
-import { publishTestRunStart } from '@test/support/sessionTestUtils';
 import {
+  startAwaited,
   admitInterruptibleRun,
   testRunFork,
   testRunPrograms,
   testRunHandle,
 } from '@test/support/runHandleFixtures';
+import { untrackRun } from '@test/support/sessionEnd';
+import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
+import { publishTestRunStart } from '@test/support/sessionTestUtils';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { generateRunId } from '@utils/core';
 
@@ -190,6 +190,7 @@ function createRegistry(
     session: () => session,
     fork: testRunFork,
     programs: testRunPrograms,
+    wake: () => {},
   });
   return { events, phases, registry, grants };
 }

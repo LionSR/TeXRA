@@ -26,12 +26,13 @@ import {
   type AssembleTraceResult,
   type LocalSession,
   type WorkspaceFs,
+  pathToLocationIn,
 } from '@texra-ai/harness';
+import { absentReason, readNormalizedFile } from '@texra-ai/harness/node';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
-import { pathToLocationIn } from '@texra-ai/harness';
-import type { ChatExportInput } from '@agent/export/schemas';
-
 import { compileLatex2Pdf } from '@latex/texTools';
+import type { ChatExportInput } from '@texra/agent/export/schemas';
+
 import {
   formatChatAsMarkdown,
   formatChatAsLatex,
@@ -43,9 +44,7 @@ import {
   type ChatExportLoadResult,
 } from '@texra/agent/export/loadChatExportInput';
 import type { TaskRecordsUnavailable } from '@texra/controllers/server/serviceSession';
-import { injectStandaloneTrace } from '@transcript';
-import { readNormalizedFile } from '@utils/files/fsDurability';
-import { absentReason } from '@utils/files/fsEntryExists';
+import { injectStandaloneTrace } from '@texra/agent/export/standaloneTraceHtml';
 
 import { TranscriptExportFailed } from './transcriptExportFailure';
 import type { WorkspaceRoots } from '@texra-ai/harness';

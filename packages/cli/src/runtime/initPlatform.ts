@@ -21,8 +21,7 @@ import {
   resolveGlobalStoragePath,
   resolveWorkspaceStoragePath,
 } from '@texra-ai/harness/node';
-import { ensureError } from '@texra-ai/harness/schemas';
-import { GlobalStateKey } from '@texra-ai/harness/schemas';
+import { ensureError, GlobalStateKey } from '@texra-ai/harness/schemas';
 import { telemetryNoticeIfDue } from '@telemetry/telemetryNotice';
 import { DisposableStore } from '@texra/platform/disposable';
 import { bootstrapHost } from '@texra/controllers/hostBootstrap';
@@ -199,6 +198,10 @@ export function installCliShutdownSignalHandlers(quiet: boolean): void {
         process.once(signal, handler);
         return;
       }
+      // A second signal during the shutdown sequence leaves at once: with
+      // this `once` listener spent, it would otherwise be Node's default
+      // death, mid-flush.
+      process.once(signal, () => process.exit(exitCode));
       await runCliExit(cliPlatformShutdownSequence({ quiet }));
       process.exit(exitCode);
     };

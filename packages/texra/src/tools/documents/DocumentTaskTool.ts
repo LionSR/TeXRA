@@ -8,22 +8,21 @@
 import { Effect, Predicate } from 'effect';
 import { z } from 'zod';
 
-import { defineTool } from '@texra-ai/harness';
-import { requireRun, errorResult } from '@texra-ai/harness/plugins';
-import { ChildRuns } from '@texra-ai/harness/plugins';
-import { AgentCatalog } from '@texra-ai/harness';
+import { defineTool, type ToolResult, AgentCatalog } from '@texra-ai/harness';
 import {
-  agentMatchesIdentifier,
-  toJsonValue,
-  type ToolResult,
-} from '@shared/schemas';
+  requireRun,
+  errorResult,
+  ChildRuns,
+  CALL_FIELDS,
+  fileList,
+} from '@texra-ai/harness/plugins';
+import { agentMatchesIdentifier, toJsonValue } from '@texra-ai/harness/schemas';
 import { DocumentTaskOptionsSchema } from '@texra/shared/plugins/documents';
 import {
   documentTaskKey,
   documentTaskPatch,
 } from '@texra/agent/output/documentRecipe';
 import { documentTaskOf } from '@texra/tools/documents/documentTask';
-import { CALL_FIELDS, fileList } from '@tools/delegation/AgentTool';
 
 const DocumentTaskInputSchema = z.strictObject({
   prompt: z

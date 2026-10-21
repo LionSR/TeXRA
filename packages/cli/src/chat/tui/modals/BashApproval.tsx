@@ -3,7 +3,6 @@ import { Text, useWindowSize } from 'ink';
 import { COLOR_WARNING } from '@cli/tui/ui/colors';
 import { confirmCardContentWidth } from '@cli/tui/ui/theme';
 import { truncateToWidth } from '@cli/runtime/terminalText';
-import type { BashPermission } from '@shared/schemas';
 
 import type { SurfaceDecision } from '@texra/shared/session/surfaceDecision';
 import { ConfirmCard } from './ConfirmCard';
@@ -11,6 +10,7 @@ import {
   ScrollableModalText,
   scrollableModalTextRowsBudget,
 } from './ScrollableModalText';
+import type { BashPermission } from '@texra-ai/harness/schemas';
 
 interface BashApprovalProps {
   readonly availableRows?: number;

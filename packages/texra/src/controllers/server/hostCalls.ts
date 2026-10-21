@@ -22,8 +22,6 @@ import {
   ApprovalPolicySchema,
   ToolEditContentSchema,
   type ApprovalPolicyDenial,
-} from '@texra-ai/harness/schemas';
-import {
   FileLocationSchema,
   INSTRUCTION_ACTION,
   RunIdSchema,
@@ -33,7 +31,7 @@ import {
   type RequestShowErrorPayload,
   type RequestShowInstructionPayload,
   type ShowAgentConfigBannerPayload,
-} from '@shared/schemas';
+} from '@texra-ai/harness/schemas';
 import type { ManualCriticismEntry } from '@texra/tools/editorHost';
 import type { GenericDiagnostic } from '@texra/utils/diagnostics/diagnosticFormatting';
 import type { LanguageModelInfo } from '@texra-ai/harness';

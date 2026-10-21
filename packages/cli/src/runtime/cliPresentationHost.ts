@@ -2,8 +2,6 @@
 import { Effect, type Scope } from 'effect';
 
 // Local imports - runtime
-import { type PresentationEventHandlers } from '@texra-ai/harness';
-import type { LogLevel, RunId } from '@shared/schemas';
 import { formatInstructionActionHint } from '@ui/copy/instructionActionHint';
 
 // Local imports - CLI runtime
@@ -14,11 +12,13 @@ import {
 } from './logSinks';
 import { createRunProgressRenderer } from './runProgressRenderer';
 import { missingAgentMessage } from './agents';
-import type { LocalSession } from '@texra-ai/harness';
 import type {
+  PresentationEventHandlers,
+  LocalSession,
   RuntimePresentationEvent,
   RuntimePresentationEventPayloads,
 } from '@texra-ai/harness';
+import type { LogLevel, RunId } from '@texra-ai/harness/schemas';
 import type { CliContext } from './cliContext';
 
 export interface CliRuntimeHost {
@@ -31,6 +31,9 @@ export interface CliRuntimeHost {
     options?: { readonly runId?: RunId },
   ): Effect.Effect<void, never, Scope.Scope>;
   prepareInteractivePrompt?: () => void;
+  /** {@link prepareInteractivePrompt}, held until the returned release is
+   *  called: for a prompt, which owns the terminal while it is open. */
+  holdForPrompt?: () => (() => void) | undefined;
   close(): Effect.Effect<void>;
 }
 
@@ -112,6 +115,7 @@ export function createCliRuntimeHost(context: CliContext): CliRuntimeHost {
     attachRunProgressRenderer: (session, options) =>
       runProgress ? runProgress.attach(session, options) : Effect.void,
     prepareInteractivePrompt: () => runProgress?.preserve(),
+    holdForPrompt: () => runProgress?.suspend(),
     emit<K extends RuntimePresentationEvent>(
       event: K,
       payload: RuntimePresentationEventPayloads[K],

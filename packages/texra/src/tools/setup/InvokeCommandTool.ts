@@ -4,8 +4,7 @@ import { z } from 'zod';
 
 // Local imports
 import { defineTool } from '@texra-ai/harness';
-import { executed } from '@texra-ai/harness/plugins';
-import { ToolError } from '@shared/schemas';
+import { executed, ToolError } from '@texra-ai/harness/plugins';
 import type { CommandId } from '@texra/shared/commands/catalog';
 
 // Local file imports

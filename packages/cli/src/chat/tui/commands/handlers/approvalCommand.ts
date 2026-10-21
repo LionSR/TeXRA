@@ -1,7 +1,6 @@
 import { Effect } from 'effect';
 
-import { type RunId } from '@texra-ai/harness/schemas';
-import { parseApprovalPolicy } from '@texra-ai/harness/schemas';
+import { type RunId, parseApprovalPolicy } from '@texra-ai/harness/schemas';
 import {
   appendLocalNotice,
   appendLocalRequestRefusal,

@@ -8,8 +8,8 @@ import {
   type LanguageModelAccessState,
   type LanguageModelInfo,
   type LanguageModelPort,
+  withLogChannel,
 } from '@texra-ai/harness';
-import { withLogChannel } from '@texra-ai/harness';
 import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';
 import { acquireVscodeLanguageModel } from './acquireVscodeLanguageModel';
 
@@ -60,7 +60,7 @@ export function createLanguageModelPort(
             toModelInfo(model, accessInformation),
           ),
         // The editor's own error travels on unchanged (a non-Error rejection
-        // is wrapped): the one production consumer (`discoverCopilotRoutes`)
+        // is wrapped): the one production consumer (`CopilotRoutes.discover`)
         // hands it to the caller that asked for discovery, which reads its
         // message.
         catch: ensureError,

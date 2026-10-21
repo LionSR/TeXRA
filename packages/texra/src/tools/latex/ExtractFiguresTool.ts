@@ -2,14 +2,16 @@
 import { formatResultCount } from '@texra-ai/harness/transcript';
 import { Effect, FileSystem } from 'effect';
 import { z } from 'zod';
-import { defineTool, ToolContext } from '@texra-ai/harness';
+import {
+  defineTool,
+  ToolContext,
+  type ToolResult,
+  pathToLocationIn,
+} from '@texra-ai/harness';
 
 // Local imports - tools
-import { pathToLocationIn } from '@texra-ai/harness';
-import { resolveToolPath } from '@texra-ai/harness/plugins';
+import { resolveToolPath, formatToolOutput } from '@texra-ai/harness/plugins';
 import { extractFigurePathsFromLatex } from '@latex/extractFigure';
-import type { ToolResult } from '@shared/schemas';
-import { formatToolOutput } from '@tools/formatting';
 
 import {
   buildLimitedAttachments,

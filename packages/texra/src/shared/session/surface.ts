@@ -13,8 +13,12 @@
  */
 import { z } from 'zod';
 
-import { DEFAULT_AGENT_MODEL } from '@texra-ai/harness/schemas';
 import {
+  DEFAULT_AGENT_MODEL,
+  NullableFileFieldsSchema,
+  RunIdSchema,
+  isModelOptionAvailable,
+  type RunId,
   acceptsFollowUp,
   type FollowUpHost,
   type SessionView,
@@ -22,15 +26,11 @@ import {
 } from '@texra-ai/harness/schemas';
 import {
   InquiryDraftSchema,
-  NullableFileFieldsSchema,
-  RunIdSchema,
-  isModelOptionAvailable,
   type InquiryDraft,
-  type RunId,
-} from '@shared/schemas';
+} from '@texra/shared/plugins/externalInquiry';
 import { DocumentTaskOptionsSchema } from '@texra/shared/plugins/documents';
 import { markShownRunSeen } from './unseenRuns';
-import type { SessionView as ReadSessionView } from '@texra-ai/harness';
+import type { SessionView as ReadSessionView } from '@texra-ai/harness/schemas';
 import type { HostSnapshot } from './hostSnapshot';
 import type { RequestErrorWire } from './sessionFrames';
 

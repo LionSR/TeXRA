@@ -1,13 +1,12 @@
 import { Effect } from 'effect';
 import { Settings } from '@texra-ai/harness';
-import { RUN_OUTCOME } from '@shared/schemas';
+import { RUN_OUTCOME } from '@texra-ai/harness/schemas';
 import {
   documentsResultOf,
   finalWorkflowOutput,
 } from '@texra/shared/plugins/documentOutputs';
 import { DOCUMENT_TASK_BLOCK } from '@texra/shared/plugins/documents';
-import type { RunEndResult } from '@texra-ai/harness';
-import type { AgentConfig } from '@texra-ai/harness/schemas';
+import type { RunEndResult, AgentConfig } from '@texra-ai/harness/schemas';
 import type { SettingsStores } from '@texra-ai/harness';
 
 /**

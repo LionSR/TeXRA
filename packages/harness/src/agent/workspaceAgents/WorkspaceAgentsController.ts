@@ -1,4 +1,5 @@
 import { Data, Effect } from 'effect';
+import { z } from 'zod';
 
 import { planTeamRun } from '@common/teams/TeamPlan';
 import { findTeamPreset, teamPresets } from '@common/teams/TeamPresets';
@@ -15,12 +16,8 @@ import {
   WorkspaceAgentsSelectionSchema,
   INHERITED_WORKSPACE_AGENTS,
 } from '@shared/schemas';
-import {
-  clearDefaultTeamId,
-  getDefaultTeamId,
-  setDefaultTeamId,
-} from '@shared/state/onboardingState';
-import { WorkspaceStateKey } from '@shared/state/stateKeys';
+import { Settings } from '@shared/config/settings';
+import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 
 import {
   forgetHiddenAgent,
@@ -31,6 +28,9 @@ import {
   unlistedCustomAgents,
   visibleAgents,
 } from './workspaceAgentsState';
+
+const DEFAULT_TEAM = GlobalStateKey.ONBOARDING_DEFAULT_TEAM_ID;
+const TeamIdSchema = z.string().min(1).optional();
 
 export interface WorkspaceAgentsEntry {
   readonly name: string;
@@ -88,7 +88,7 @@ export class WorkspaceAgentsController<
   }
 
   getDefaultTeamId() {
-    return getDefaultTeamId(this.deps.globalState);
+    return Settings.state(this.deps.globalState, DEFAULT_TEAM, TeamIdSchema);
   }
 
   private getEffectiveSelection() {
@@ -426,10 +426,10 @@ export class WorkspaceAgentsController<
         }),
       );
     }
-    return setDefaultTeamId(this.deps.globalState, teamId);
+    return this.deps.globalState.update(DEFAULT_TEAM, teamId);
   }
 
   clearDefaultTeam(): Effect.Effect<void, StateWriteFailed> {
-    return clearDefaultTeamId(this.deps.globalState);
+    return this.deps.globalState.update(DEFAULT_TEAM, undefined);
   }
 }

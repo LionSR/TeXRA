@@ -1,20 +1,23 @@
 // Node imports
 import path from 'node:path';
-import { normalizeFilePath } from '@texra-ai/harness/schemas';
+import {
+  normalizeFilePath,
+  type FileLocation,
+} from '@texra-ai/harness/schemas';
 
 // Third-party imports
 import { Effect, FileSystem, type PlatformError } from 'effect';
 
 // Local imports
-import { withLogChannel, WorkspaceFs } from '@texra-ai/harness';
 import {
+  pathToLocationIn,
+  withLogChannel,
+  WorkspaceFs,
   createExternalLocation,
   createRunStorageLocation,
   createWorkspaceLocation,
 } from '@texra-ai/harness';
 import { generateDiffFileName } from '@latex/latexdiff/diffFileNameManager';
-import type { FileLocation } from '@shared/schemas';
-import { locateInWorkspace } from '@utils/files/workspaceFS';
 
 const CHANNEL = 'AcceptedFileTarget';
 
@@ -181,6 +184,16 @@ export function commitAcceptedFile<E>(
   });
 }
 
+/** The file's content, or `undefined` for a file that is not there. */
+const contentOrMissing = (
+  fs: FileSystem.FileSystem,
+  absolutePath: string,
+): Effect.Effect<string | undefined, PlatformError.PlatformError> =>
+  Effect.gen(function* () {
+    if (!(yield* fs.exists(absolutePath))) return undefined;
+    return yield* fs.readFileString(absolutePath);
+  });
+
 /**
  * Resolve the accept target beside the base file, confirm the write, then
  * commit it via {@link commitAcceptedFile}. Returns whether the write
@@ -203,8 +216,9 @@ export function acceptEditedFileReplace<E>(
     const editedPath = editedLocation.absolutePath;
     const target = getAcceptedFileTarget(baseLocation, editedPath);
     const { targetLocation, isNewFile } = target;
-    const targetExists =
-      isNewFile && (yield* fs.exists(targetLocation.absolutePath));
+    const targetPath = targetLocation.absolutePath;
+    const confirmedAgainst = yield* contentOrMissing(fs, targetPath);
+    const targetExists = isNewFile && confirmedAgainst !== undefined;
 
     const confirmed = yield* ports.confirm(
       buildAcceptConfirmMessage(
@@ -216,6 +230,15 @@ export function acceptEditedFileReplace<E>(
     );
     if (!confirmed) return false;
 
+    // The confirmation was given to the target as it was when the dialog
+    // opened; the dialog can stay open for minutes. A save to the target
+    // meanwhile (the user's editor, a run) is not replaced on that answer.
+    if ((yield* contentOrMissing(fs, targetPath)) !== confirmedAgainst) {
+      yield* ports.showInfo(
+        `${target.targetFileName} changed while the confirmation was open; nothing was written. Accept again to replace the current content.`,
+      );
+      return false;
+    }
     yield* commitAcceptedFile(
       baseLocation,
       editedLocation,
@@ -273,7 +296,7 @@ export const cleanupAcceptedWorkspaceDiffFiles = Effect.fn(
   entries: readonly { outputPath: string; originalPath: string }[],
 ): Effect.fn.Return<string[], never, WorkspaceFs> {
   const stale = entries.flatMap(({ outputPath, originalPath }) => {
-    const original = locateInWorkspace(workspaceRoot, originalPath);
+    const original = pathToLocationIn(workspaceRoot, originalPath);
     if (original.kind === 'external') return [];
     const diffLocation = staleDiffFileLocation(original, outputPath, original);
     if (!diffLocation || diffLocation.kind === 'external') return [];

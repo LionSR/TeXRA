@@ -15,7 +15,7 @@ import { safeTerminalText } from '@cli/runtime/terminalText';
 import { hiddenRowsText } from '@cli/tui/overflowText';
 import { CROSS, TICK, TOOL_OUTPUT_CORNER } from '@cli/tui/ui/glyphs';
 import type { TranscriptRow } from '@cli/chat/tui/state/sessionView';
-import { formatBytes } from '@utils/text/stringUtils';
+import { formatBytes } from '@ui/copy/format';
 
 // A body block can be arbitrarily large (a 50 KB tool dump, a long error
 // payload). Finalized scrollback and the live region show a head+tail slice

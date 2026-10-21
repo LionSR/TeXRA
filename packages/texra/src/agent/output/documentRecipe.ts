@@ -17,7 +17,7 @@ import {
   type AgentEntry,
   type WorkspaceAgentsStores,
 } from '@texra-ai/harness';
-import { agentKey, agentName } from '@shared/schemas';
+import { agentKey, agentName } from '@texra-ai/harness/schemas';
 import {
   DOCUMENT_TASK_BLOCK,
   DocumentTaskOptionsSchema,

@@ -10,7 +10,7 @@
 import type {
   PermissionPayload,
   RequestDecision,
-  RequestRefusal,
+  RefusalDecision,
 } from '@shared/schemas';
 
 /**
@@ -21,7 +21,7 @@ import type {
 export function refusalOf(
   kind: PermissionPayload['kind'],
   decision: RequestDecision,
-): RequestRefusal {
+): RefusalDecision {
   if (
     decision.action === 'reject' ||
     decision.action === 'deny' ||
@@ -43,7 +43,7 @@ export function refusalOf(
  */
 export function refusalCopy(
   subject: string,
-  refusal: RequestRefusal,
+  refusal: RefusalDecision,
 ): {
   readonly summary: string;
   readonly detail: string | undefined;

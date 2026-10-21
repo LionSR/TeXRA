@@ -51,9 +51,9 @@ import {
   type ProcessServices,
   type StateStore,
   UNAVAILABLE_LANGUAGE_MODEL_PORT,
-  withForkFailureReporting,
 } from '@texra-ai/harness';
-import { GlobalDatabase } from '@shared/session/database';
+import { withForkFailureReporting } from '@texra-ai/harness/transcript';
+import { GlobalDatabase } from '@texra-ai/harness/node';
 import { usageLogLayer } from '@telemetry/UsageLogService';
 import { makeEditorHost, type EditorRegistry } from '@texra/tools/editorHost';
 import { texraPlugins } from '@texra/tools/registry';

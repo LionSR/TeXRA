@@ -2,7 +2,14 @@ import * as path from 'node:path';
 
 import { Effect, FileSystem, PlatformError } from 'effect';
 
-import { toErrorMessage } from '@texra-ai/harness/schemas';
+import {
+  toErrorMessage,
+  RunIdSchema,
+  isTaskConfig,
+  RUN_SUBSTATE,
+  type RunId,
+  serializeFilteredConfig,
+} from '@texra-ai/harness/schemas';
 import {
   listRunGeneratedFiles,
   type AgentRunListingEntry,
@@ -11,17 +18,10 @@ import {
   type RunResult,
   type SessionOpenError,
 } from '@texra-ai/harness';
+import { absentReason } from '@texra-ai/harness/node';
 import { runOutcomeToCliRunStatus } from '@cli/schemas/cliOutput';
 import type { CliNdjsonRecord } from '@cli/schemas/cliOutput';
-import {
-  RunIdSchema,
-  isTaskConfig,
-  RUN_SUBSTATE,
-  type RunId,
-} from '@shared/schemas';
 import { loadChatExportInput, type ChatExportInput } from '@texra/agent/export';
-import { serializeFilteredConfig } from '@tools/executions/configView';
-import { absentReason } from '@utils/files/fsEntryExists';
 
 import { CliUsageError } from './cliContext';
 import { cliErrorMessage } from './logSinks';
@@ -41,8 +41,7 @@ import {
   formatConversationPreview,
   formatConversationTranscript,
 } from './history/conversationFormat';
-import type { RunView } from '@texra-ai/harness/schemas';
-import type { AgentConfig } from '@texra-ai/harness/schemas';
+import type { RunView, AgentConfig } from '@texra-ai/harness/schemas';
 
 /** A run's generated files and its edited workspace files render alike.
  *  First group wins on a path collision; generated output precedes workspace. */

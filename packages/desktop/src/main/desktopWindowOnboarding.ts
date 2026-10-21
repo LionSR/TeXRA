@@ -3,8 +3,11 @@
 
 import { Data, Effect, Scope } from 'effect';
 
-import { withProcessServices, type ProcessRuntime } from '@texra-ai/harness';
-import { withLogChannel } from '@texra-ai/harness';
+import {
+  withProcessServices,
+  type ProcessRuntime,
+  withLogChannel,
+} from '@texra-ai/harness';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
 import { hasUsableSetupCredential } from '@texra/model/setupCredentialAccess';
 import { kickoffDesktopSetup } from '@texra/controllers/onboarding/setupLaunch';

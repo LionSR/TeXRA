@@ -15,6 +15,7 @@
 import { absurd } from 'effect';
 import { html, nothing, type TemplateResult } from 'lit';
 
+import { pluralize } from '@texra-ai/harness/transcript';
 import {
   buildToolUseSection,
   wrapInPre,
@@ -31,7 +32,6 @@ import {
   getLanguageFromPath,
 } from '@progressView/frontend/formatters/constants';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
-import { pluralize } from '@utils/text/stringUtils';
 
 import { buildToolSection } from './helpers';
 import type {

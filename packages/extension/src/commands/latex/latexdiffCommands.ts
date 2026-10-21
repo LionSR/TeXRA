@@ -3,11 +3,17 @@ import { Cause, Effect, FileSystem } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports
-import { withLogChannel } from '@texra-ai/harness';
-import { withSessionFs } from '@texra-ai/harness';
-import { pathToLocationIn } from '@texra-ai/harness';
-import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';
-import { Settings } from '@texra-ai/harness';
+import {
+  withLogChannel,
+  withSessionFs,
+  pathToLocationIn,
+  Settings,
+} from '@texra-ai/harness';
+import {
+  ensureError,
+  toErrorMessage,
+  type FileLocation,
+} from '@texra-ai/harness/schemas';
 import {
   prepareBuildDisplay,
   scheduleViewerDisplay,
@@ -32,7 +38,6 @@ import {
   latexdiffAllFailedMessage,
   NO_LATEXDIFF_OPERATIONS_MESSAGE,
 } from '@latex/latexdiff/latexdiffCopy';
-import type { FileLocation } from '@shared/schemas';
 import { settingEnumChoices } from '@texra/shared/settingsView/settingRows';
 import { DocumentsStateKey } from '@texra/shared/settingsView/documentsSettings';
 import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';

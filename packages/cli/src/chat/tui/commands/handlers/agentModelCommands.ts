@@ -1,6 +1,9 @@
 import { Cause, Effect } from 'effect';
 
-import { toErrorMessage } from '@texra-ai/harness/schemas';
+import {
+  toErrorMessage,
+  agentName as bareAgentName,
+} from '@texra-ai/harness/schemas';
 import { resolveCliRunAgent } from '@cli/runtime/agents';
 import { CliUsageError } from '@cli/runtime/cliContext';
 import { readCliTeamName } from '@cli/runtime/cliTeams';
@@ -25,7 +28,6 @@ import {
   formatUnknownTeamMessage,
   resolveTeamLaunch,
 } from '@common/teams/TeamPlan';
-import { agentName as bareAgentName } from '@shared/schemas';
 import { createTeamCatalogPorts } from '@texra/controllers/mainView/teamCatalogPorts';
 import {
   CHAT_API_MODE_MODEL_RECOVERY,

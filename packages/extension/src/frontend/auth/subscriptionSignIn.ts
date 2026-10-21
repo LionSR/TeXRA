@@ -12,7 +12,6 @@ import {
   showLoggedInfoMessage,
 } from '@frontend/ui/errorHandlingUtils';
 import { withVSCodeProgress } from '@frontend/ui/progress';
-import { ACCOUNT_OUTCOME } from '@shared/model/accountAuth';
 import {
   subscriptionProvider,
   type SubscriptionAccount,
@@ -20,9 +19,9 @@ import {
   type SubscriptionProviderId,
   type SubscriptionSignInPresenter,
 } from '@texra/controllers/modelAccess/subscriptionProviders';
-import type { Secrets } from '@texra-ai/harness';
+import { ACCOUNT_OUTCOME } from '@ui/copy/accountAuth';
+import type { Secrets, SettingsStores } from '@texra-ai/harness';
 import type { HttpClient } from 'effect/http';
-import type { SettingsStores } from '@texra-ai/harness';
 
 const OPEN_DEFAULT_BROWSER = 'Open in Default Browser';
 const COPY_SIGN_IN_LINK = 'Copy Sign-in Link';

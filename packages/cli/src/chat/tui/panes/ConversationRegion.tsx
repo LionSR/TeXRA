@@ -3,6 +3,7 @@
 // panels below it.
 
 // Third-party imports
+import { Number as Num } from 'effect';
 import { Box } from 'ink';
 import { useLayoutEffect, type ReactNode } from 'react';
 
@@ -11,7 +12,6 @@ import { clampModalWidth } from '@cli/tui/ui/theme';
 import { interruptedTasks } from '@ui/copy/interruptedTasks';
 
 // Local imports - conversation panes and layout
-import { clamp } from '@utils/text/stringUtils';
 import {
   allocateConversationPanelRows,
   allocateMiddleRows,
@@ -124,7 +124,10 @@ export function ConversationRegion({
     ? queuedFollowUpPanelRowCount(queuedFollowUpMessages)
     : 0;
   const queuedFollowUpPanelRows = queuedFollowUpPanelWanted
-    ? clamp(requestedQueuedFollowUpPanelRows, 0, rows - footerRows)
+    ? Num.clamp(requestedQueuedFollowUpPanelRows, {
+        minimum: 0,
+        maximum: Math.max(0, rows - footerRows),
+      })
     : 0;
   const queuedFollowUpPanelVisible = queuedFollowUpPanelRows > 0;
   // The open-time notice shares the queued panel's place above the footer

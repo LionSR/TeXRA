@@ -12,13 +12,13 @@ import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 
 // Local imports - shared styles
-import type { TeXRAIconName } from '@shared/iconNames';
 import { SessionUiEvents } from '@texra/shared/session/uiEvents';
 import {
   formatRoundLabel,
   latexdiffDisplayName,
   type LatexdiffEntry,
 } from '@texra/shared/plugins/documentOutputs';
+import type { IconName } from '@ui/wa/iconNames';
 import { designTokens, commonViewStyles } from '@ui/styles';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 
@@ -31,11 +31,10 @@ import { buildDetailsSummary } from '../formatters/htmlBuilders';
 import { bannerDetailsWaDetailsStyles } from '../styles/logEntryStyles';
 
 /** Status wa-icon name lookup for latexdiff entries. */
-const LATEXDIFF_STATUS_ICONS: Record<LatexdiffEntry['status'], TeXRAIconName> =
-  {
-    ok: 'check',
-    failed: 'circle-exclamation',
-  };
+const LATEXDIFF_STATUS_ICONS: Record<LatexdiffEntry['status'], IconName> = {
+  ok: 'check',
+  failed: 'circle-exclamation',
+};
 
 /** Screen-reader labels for the otherwise icon-only result status. */
 const LATEXDIFF_STATUS_LABELS: Record<LatexdiffEntry['status'], string> = {

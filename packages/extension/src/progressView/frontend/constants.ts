@@ -1,16 +1,15 @@
-import type { RunAction } from '@shared/schemas';
-import type { TeXRAIconName } from '@shared/iconNames';
 import { isDocumentTaskRun } from '@texra/shared/plugins/documents';
 import type { HostRequest } from '@texra/shared/session/hostRequest';
+import type { IconName } from '@ui/wa/iconNames';
 import { TASK_ACTIONS } from '@ui/copy/nestedRuns';
-import type { RunView } from '@texra-ai/harness/schemas';
+import type { RunView, RunAction } from '@texra-ai/harness/schemas';
 
 /** One run action in the run header's menu. Stop sits in the row itself. */
 export interface RunMenuAction {
   id: string;
   /** The run action it performs: shown only while `RunView.actions` holds it. */
   action: RunAction;
-  icon: TeXRAIconName;
+  icon: IconName;
   label: string;
   /**
    * What choosing it sends: a host arm on the run, the runtime's

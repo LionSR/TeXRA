@@ -7,15 +7,16 @@ import {
   type ModelHostFactUnreadable,
   type StateReadFailed,
 } from '@texra-ai/harness';
-import { toErrorMessage } from '@texra-ai/harness/schemas';
-import { detectGeneratedLatexdiffArtifact } from '@latex/latexdiff/diffFileNameManager';
 import {
+  toErrorMessage,
   isTaskConfig,
   fileLocationAddressPath,
   MODEL_AVAILABILITY_STATUS,
   type ModelAvailabilityKind,
   type RunId,
-} from '@shared/schemas';
+} from '@texra-ai/harness/schemas';
+import { pluralize } from '@texra-ai/harness/transcript';
+import { detectGeneratedLatexdiffArtifact } from '@latex/latexdiff/diffFileNameManager';
 import type { RunRequest } from '@texra/controllers/session/runRequests';
 import {
   type CompileFailure,
@@ -23,7 +24,6 @@ import {
   formatRoundLabel,
   type OutputFileInfo,
 } from '@texra/shared/plugins/documentOutputs';
-import { pluralize } from '@utils/text/stringUtils';
 import type { AgentConfig } from '@texra-ai/harness/schemas';
 import type { RunOutputsSource } from './runOutputs';
 

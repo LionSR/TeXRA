@@ -84,8 +84,12 @@ import { SessionViewService } from '@controllers/session/SessionView';
 import { sessionInputsLayer } from '@controllers/session/sessionInputs';
 import { WorkspaceRoots } from '@controllers/session/WorkspaceRoots';
 import { onAppSignal } from '@eventBus/AppSignals';
-import { StateStores, type GlobalValues } from '@platform/processRuntime';
-import { SessionOwner, withProcessServices } from '@platform/processRuntime';
+import {
+  StateStores,
+  type GlobalValues,
+  SessionOwner,
+  withProcessServices,
+} from '@platform/processRuntime';
 import { AppState, type StateStore } from '@platform/interfaces';
 import type { ProcessProbe } from '@platform/defaults/nodeProcesses';
 import {
@@ -99,17 +103,16 @@ import {
   type RunId,
   type SessionEvent,
   type SessionEventDraft,
-  type InquiryThreadSummary,
 } from '@shared/schemas';
-import { runStateAppend } from '@shared/session/runHistory';
-import { Database } from '@shared/session/database';
-import { runActions } from '@shared/session/runActions';
-import { GlobalStateKey } from '@shared/state/stateKeys';
 import {
+  runStateAppend,
   RunHistory,
   RunHistoryRefused,
   type RunCell,
 } from '@shared/session/runHistory';
+import { Database } from '@shared/session/database';
+import { runActions } from '@shared/session/runActions';
+import { GlobalStateKey } from '@shared/state/stateKeys';
 import type { RunHistoryDraft } from '@shared/session/runStateFold';
 import { ProcessIdentity, SessionEvents } from '@shared/session/sessionEvents';
 import type { SessionView } from '@shared/session/sessionView';
@@ -140,6 +143,7 @@ import {
   globalValuesOver,
 } from '@test/support/setupPlatform';
 import { inquiryThreadRow } from '@test/support/inquiryThreadRow';
+import type { InquiryThreadSummary } from '@texra/shared/plugins/externalInquiry';
 import {
   DOCUMENTS_ACCEPTED_ARM,
   documentsAcceptedFact,

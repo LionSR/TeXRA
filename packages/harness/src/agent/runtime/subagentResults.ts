@@ -17,7 +17,6 @@ import {
 } from '@shared/schemas';
 import { DELIVERY_TAG } from '@shared/deliveryTags';
 import { escapeAttr, escapeText } from '@shared/utils/xmlEscape';
-import { formatDuration } from '@utils/text/stringUtils';
 import { formatDelivery } from './deliveryEnvelope';
 import type { RecipeResult } from './recipeResult';
 
@@ -108,7 +107,7 @@ export function formatSubagentDelivery(
     ],
     wallTime:
       options.wallTimeMs !== undefined
-        ? formatDuration(options.wallTimeMs)
+        ? `${(options.wallTimeMs / 1000).toFixed(1)}s`
         : undefined,
     lines,
   });
@@ -130,7 +129,7 @@ export function formatSubagentError(
       { name: 'agent', value: agentName },
       { name: 'retryable', value: formatted.userRetryable },
     ],
-    wallTime: formatDuration(options.wallTimeMs),
+    wallTime: `${(options.wallTimeMs / 1000).toFixed(1)}s`,
     lines: formatDeliveryPreamble(options),
     message: formatted.message,
   });

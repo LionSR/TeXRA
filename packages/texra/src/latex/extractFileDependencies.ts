@@ -14,8 +14,8 @@ import * as path from 'node:path';
 import { Effect, FileSystem, Predicate } from 'effect';
 
 // Local imports
-import { ensureError } from '@texra-ai/harness/schemas';
-import type { FileLocation } from '@shared/schemas';
+import { ensureError, type FileLocation } from '@texra-ai/harness/schemas';
+import { readNormalizedFile } from '@texra-ai/harness/node';
 
 // Local file imports
 import {
@@ -77,13 +77,11 @@ export const extractLatexFileDependencies = Effect.fn(
   // Follow symlinks so run-storage paths resolve against the workspace
   const latexDir = yield* resolveLatexDir(latexFileLocation.absolutePath);
 
-  // Decoded from bytes rather than `readFileString`, whose `TextDecoder`
-  // would strip a leading UTF-8 BOM the file carries.
   const fs = yield* FileSystem.FileSystem;
-  const bytes = yield* fs
-    .readFile(latexFileLocation.absolutePath)
-    .pipe(Effect.mapError(ensureError));
-  const content = Buffer.from(bytes).toString('utf-8').replaceAll('\r\n', '\n');
+  const content = yield* readNormalizedFile(
+    fs,
+    latexFileLocation.absolutePath,
+  ).pipe(Effect.mapError(ensureError));
   const uncommented = stripLatexComments(content);
 
   const texInputPaths = [INPUT_PATTERN, INCLUDE_PATTERN].flatMap((pattern) =>

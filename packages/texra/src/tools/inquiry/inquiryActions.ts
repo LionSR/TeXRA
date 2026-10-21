@@ -1,4 +1,11 @@
-import { previewLabel, truncateSummary } from '@texra-ai/harness/schemas';
+import {
+  previewLabel,
+  truncateSummary,
+  type ExternalInquiryPermission,
+  type InquiryThreadId,
+  type RunId,
+  type RequestDecision,
+} from '@texra-ai/harness/schemas';
 import { Effect } from 'effect';
 /**
  * The inquiry's side of a `request.decided` (one run model, 3.7): an inquiry
@@ -16,18 +23,11 @@ import { withLogChannel } from '@texra-ai/harness';
 
 // Local imports - shared
 import {
-  type ExternalInquiryPermission,
-  type InquiryThreadId,
-  type InquiryThreadSummary,
-  type RequestDecision,
-  type RunId,
-} from '@shared/schemas';
-import {
   InquiryRecords,
   inquiryThreadFact,
   type InquiryThreadRecord,
+  type InquiryThreadSummary,
 } from '@texra/shared/plugins/externalInquiry';
-import { formatRelativeTime } from '@utils/text/stringUtils';
 import type { RunInbox, RequestDecisionHook } from '@texra-ai/harness/plugins';
 
 const CHANNEL = 'InquiryTool';
@@ -42,7 +42,7 @@ function formatStillOpen(threads: InquiryThreadSummary[]): string[] {
     'Still open on this run:',
     ...threads.map(
       (t) =>
-        `  - ${t.threadId}  "${previewLabel(t.lastQuestionPreview)}"  (dispatched ${formatRelativeTime(Date.parse(t.lastActivityIso))})`,
+        `  - ${t.threadId}  "${previewLabel(t.lastQuestionPreview)}"  (dispatched ${t.lastActivityIso})`,
     ),
   ];
 }

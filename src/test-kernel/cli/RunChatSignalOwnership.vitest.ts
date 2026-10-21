@@ -361,6 +361,14 @@ describe('runChat signal ownership wiring', () => {
         (signal) => [signal, process.listeners(signal)] as const,
       ),
     );
+    // The drain's force-exit handlers: a second signal while the session
+    // drains restores the terminal and leaves (sessionExitController).
+    const forceSignals = ['SIGINT', 'SIGTERM', 'SIGHUP'] as const;
+    const forceBaseline = new Map(
+      forceSignals.map(
+        (signal) => [signal, process.listeners(signal)] as const,
+      ),
+    );
     const tuiListeners = new Map<TargetSignal, (...args: unknown[]) => void>();
     const observeNewListener = (
       event: string | symbol,
@@ -458,6 +466,14 @@ describe('runChat signal ownership wiring', () => {
       mocks.terminalRelease.mockImplementationOnce(() => {
         mocks.callOrder.push('terminal.release');
       });
+      // From here the exit installs the drain's force handlers; keep the
+      // TUI's own listeners in `tuiListeners` and the order to the exit.
+      process.off('newListener', observeNewListener);
+      const beforeExit = new Map(
+        forceSignals.map(
+          (signal) => [signal, process.listeners(signal)] as const,
+        ),
+      );
       tuiListeners.get('SIGTERM')?.();
       expect(mocks.callOrder.slice(0, 2)).toEqual([
         'ink.unmount',
@@ -469,6 +485,13 @@ describe('runChat signal ownership wiring', () => {
       });
       await exitCalled.promise;
       expect(exit).toHaveBeenCalledWith(143);
+      for (const signal of forceSignals) {
+        const added = process
+          .listeners(signal)
+          .filter((listener) => !beforeExit.get(signal)?.includes(listener));
+        expect(added).toHaveLength(1);
+        process.removeListener(signal, added[0] as () => void);
+      }
       for (const signal of targetSignals) {
         expect(process.listeners(signal)).toEqual(
           baselineListeners.get(signal) ?? [],
@@ -481,6 +504,13 @@ describe('runChat signal ownership wiring', () => {
       for (const [signal, listener] of tuiListeners) {
         if (!(baselineListeners.get(signal) ?? []).includes(listener)) {
           process.removeListener(signal, listener);
+        }
+      }
+      for (const signal of forceSignals) {
+        for (const listener of process.listeners(signal)) {
+          if (!forceBaseline.get(signal)?.includes(listener)) {
+            process.removeListener(signal, listener as () => void);
+          }
         }
       }
       restoreAgentRegistry();

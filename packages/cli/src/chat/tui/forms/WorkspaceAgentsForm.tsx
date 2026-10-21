@@ -8,6 +8,12 @@ import {
   type WorkspaceAgentsStores,
 } from '@texra-ai/harness';
 import {
+  type AgentModePreset,
+  AGENT_MODE_PRESETS,
+  agentKeyOf,
+  STARTER_AGENT_MODE_PRESET,
+} from '@texra-ai/harness/schemas';
+import {
   readCliWorkspaceAgents,
   type CliWorkspaceAgentsRecord,
 } from '@cli/runtime/workspaceAgents';
@@ -16,19 +22,16 @@ import { setWorkspaceCliChatAgent } from '@cli/runtime/cliConfig';
 import { COLOR_ERROR, COLOR_WARNING } from '@cli/tui/ui/colors';
 import { CROSS, TICK, WARNING } from '@cli/tui/ui/glyphs';
 import type { SelectItem } from '@cli/tui/ui/Select';
-import {
-  AGENT_MODE_PRESETS,
-  agentKeyOf,
-  STARTER_AGENT_MODE_PRESET,
-  type AgentModePreset,
-} from '@shared/schemas';
 
 import { documentTaskOf } from '@texra/tools/documents/documentTask';
 import { renderAsyncListFormTransient } from './_shared/FormFrame';
 import { ListForm } from './_shared/ListForm';
 import { runFormWrite, useAsyncListForm } from './_shared/useAsyncListForm';
-import type { ProcessRuntime, ProcessServices } from '@texra-ai/harness';
-import type { SettingsStores } from '@texra-ai/harness';
+import type {
+  ProcessRuntime,
+  ProcessServices,
+  SettingsStores,
+} from '@texra-ai/harness';
 
 type WorkspaceAgentsFormMode =
   'overview' | 'workspace' | 'default' | 'chat-default' | 'custom';

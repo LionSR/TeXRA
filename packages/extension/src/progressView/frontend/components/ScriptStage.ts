@@ -16,10 +16,6 @@ import { classMap } from 'lit/directives/class-map.js';
 import { repeat } from 'lit/directives/repeat.js';
 
 // Local imports - shared contracts
-import {
-  type ScriptCallView,
-  type ScriptStageView,
-} from '@texra-ai/harness/transcript';
 import type { Surface, SurfaceRefusal } from '@texra/shared/session/surface';
 import { SessionUiEvents } from '@texra/shared/session/uiEvents';
 import { TALK_TO_AGENT } from '@ui/copy/nestedRuns';
@@ -27,8 +23,11 @@ import { SCRIPT_CALL_STATUS_LABEL } from '@ui/copy/scriptStage';
 import { designTokens } from '@ui/styles';
 import { terminalStatusIcon } from '@ui/wa/statusIcons';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
-import type { SessionView } from '@texra-ai/harness/schemas';
-import type { RunId } from '@texra-ai/harness/schemas';
+import type {
+  ScriptCallView,
+  ScriptStageView,
+} from '@texra-ai/harness/transcript';
+import type { SessionView, RunId } from '@texra-ai/harness/schemas';
 import type WaDropdownItem from '@awesome.me/webawesome/dist/components/dropdown-item/dropdown-item.js';
 import type { WaSelectEvent } from '@awesome.me/webawesome/dist/events/events.js';
 

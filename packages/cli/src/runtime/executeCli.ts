@@ -4,6 +4,7 @@ import {
   Effect,
   Exit,
   Fiber,
+  Predicate,
   Result,
   Scope,
   Stream,
@@ -16,6 +17,12 @@ import {
   type RunId,
   type AgentConfigPayload,
   generateRunId,
+  type RunEndResult,
+  isLiveRun,
+  APPROVAL_POLICY_CONFIG_KEY,
+  type ApprovalPolicy,
+  ensureError,
+  toErrorMessage,
 } from '@texra-ai/harness/schemas';
 import {
   describeFollowUpFailure,
@@ -25,24 +32,13 @@ import {
   type ProcessRuntime,
   type ProcessServices,
   type Run,
-  type RunEndResult,
   type Session,
   type StartInput,
   SESSION_CLOSE_DEADLINE_MS,
+  AgentError,
+  isUserAbort,
+  Settings,
 } from '@texra-ai/harness';
-import { AgentError } from '@texra-ai/harness';
-import { isUserAbort } from '@texra-ai/harness';
-import { Settings } from '@texra-ai/harness';
-import { isLiveRun } from '@texra-ai/harness/schemas';
-import {
-  APPROVAL_POLICY_CONFIG_KEY,
-  type ApprovalPolicy,
-} from '@texra-ai/harness/schemas';
-import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';
-import {
-  DatabaseNotOwner,
-  type SessionOpenError,
-} from '@shared/session/database';
 
 import { createHeadlessCliHostInteractions } from './approvalAdapter';
 import {
@@ -69,7 +65,8 @@ import {
   launchApprovalNotice,
   type CliContext,
 } from './cliContext';
-import type { LocalSession } from '@texra-ai/harness';
+import type { DatabaseNotOwner } from '@texra-ai/harness/schemas';
+import type { LocalSession, SessionOpenError } from '@texra-ai/harness';
 
 /** The process services a headless run requires: its session's runs are
  *  the session's, so it asks for the process services alone. */
@@ -305,7 +302,7 @@ export function executeCliRequest(
       options.services.runtime,
       runContext,
       {
-        beforePrompt: () => presentationHost.prepareInteractivePrompt?.(),
+        prompting: () => presentationHost.holdForPrompt?.(),
         emit: (event, payload) => {
           if (event === 'requestShowError') failurePresented = true;
           presentationHost.emit(event, payload);
@@ -597,7 +594,10 @@ export function executeCliRequest(
           // A run another owner holds now is that owner's to finalize.
           yield* drain.pipe(
             Effect.catch((error: unknown) =>
-              error instanceof DatabaseNotOwner
+              Predicate.isTagged(
+                error,
+                'DatabaseNotOwner' satisfies DatabaseNotOwner['_tag'],
+              )
                 ? Effect.void
                 : Effect.fail(ensureError(error)),
             ),

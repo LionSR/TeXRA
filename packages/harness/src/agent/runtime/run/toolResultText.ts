@@ -6,7 +6,6 @@
  * mutation vocabulary.
  */
 import type { ToolFileAttachment, ToolResult } from '@shared/schemas';
-import { isNonEmptyString } from '@utils/text/stringUtils';
 import { appendHead, appendTail } from '@utils/text/appendTail';
 
 /** Max character length for tool result text (200KB ~ 50-66k tokens). */
@@ -74,7 +73,7 @@ export function formatToolResultAsText(
 ): string {
   const textPieces: string[] = [];
 
-  if (result.status === 'executed' && isNonEmptyString(result.output)) {
+  if (result.status === 'executed' && result.output?.trim()) {
     textPieces.push(result.output);
   }
 

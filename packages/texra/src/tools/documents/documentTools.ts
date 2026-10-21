@@ -10,18 +10,21 @@
 import { Cause, Effect, Exit, FileSystem } from 'effect';
 import { z } from 'zod';
 
-import { defineTool } from '@texra-ai/harness';
-import { ChildRuns, requireRun, executed } from '@texra-ai/harness/plugins';
-import { Settings } from '@texra-ai/harness';
-import { logFileCategory, logFilesLoaded } from '@agent/trace';
-import { postProcessResponse } from '@latex/texraResponseTextProcessing';
+import { defineTool, Settings } from '@texra-ai/harness';
+import {
+  ChildRuns,
+  requireRun,
+  executed,
+  ToolError,
+} from '@texra-ai/harness/plugins';
 import {
   fileLocationDisplayPath,
+  MESSAGE_TYPES,
   RUN_OUTCOME,
   RunIdSchema,
-  ToolError,
   type FileLocation,
-} from '@shared/schemas';
+} from '@texra-ai/harness/schemas';
+import { postProcessResponse } from '@latex/texraResponseTextProcessing';
 import {
   documentsSummary,
   documentTaskOptions,
@@ -126,8 +129,19 @@ const openTask = Effect.fn('documents.openTask')(function* (
     contexts.filter((context) => context.ok).map((c) => c.absolutePath),
   );
   if (oversized) return oversized;
-  logFileCategory(logger, 'Input Files', inputs, stageId);
-  logFileCategory(logger, 'Context Files', contexts, stageId);
+  // One files-loaded card per category, its label each file's source.
+  const logCategory = (category: string, files: typeof inputs) => {
+    if (files.length === 0) return;
+    const data = files.map(({ path, ok }) => ({
+      path,
+      ok,
+      source: category,
+      sourceDisplay: category,
+    }));
+    logger.info('', { messageType: MESSAGE_TYPES.FILE_LIST, data, stageId });
+  };
+  logCategory('Input Files', inputs);
+  logCategory('Context Files', contexts);
   return null;
 });
 
@@ -187,7 +201,11 @@ const revisionContext = Effect.fn('documents.revisionContext')(function* (
     );
   const revised = yield* revisionPrompt(docs, revision);
   if (stageId !== undefined && revised.loaded.length > 0)
-    logFilesLoaded(docs.run.logger, revised.loaded, stageId);
+    docs.run.logger.info('', {
+      messageType: MESSAGE_TYPES.FILE_LIST,
+      data: revised.loaded,
+      stageId,
+    });
   // The critic's review of the last revision, after this one's request.
   const prompt = critique?.trim()
     ? `${revised.prompt}\n\nA reviewer read your last revision. Apply the corrections that hold, and the suggested improvement where it serves this request:\n<critique revision="${revision}">\n${critique.trim()}\n</critique>`

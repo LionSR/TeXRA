@@ -7,7 +7,6 @@ import {
 import { Skills, withLogChannel } from '@texra-ai/harness';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
 import { onAppSignal } from '@eventBus/AppSignals';
-import { ACCOUNT_OUTCOME } from '@shared/model/accountAuth';
 import { unsupported } from '@texra/shared/utils/dispatcher';
 import type { ExternalOpenFailed } from '@texra/hosts/uiHosts';
 import { SettingsViewInboundMessageSchema } from '@texra/shared/settingsView/settingsViewMessages';
@@ -22,10 +21,14 @@ import {
   type SubscriptionProviderId,
 } from '@texra/controllers/modelAccess/subscriptionProviders';
 import { gitHubTokenRejectedMessage } from '@texra/tools/github/githubAuth';
+import { ACCOUNT_OUTCOME } from '@ui/copy/accountAuth';
 import { parsedRoute, type DesktopCommandRoute } from './desktopIpcTypes.js';
-import type { StorageFs } from '@texra-ai/harness';
-import type { ProcessServices } from '@texra-ai/harness';
-import type { PlatformSecrets, WorkspaceRoots } from '@texra-ai/harness';
+import type {
+  StorageFs,
+  ProcessServices,
+  PlatformSecrets,
+  WorkspaceRoots,
+} from '@texra-ai/harness';
 import type { DesktopSpawn } from './desktopWindows.js';
 
 const NO_EXTENSION_HOSTING =

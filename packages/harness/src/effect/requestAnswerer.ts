@@ -10,6 +10,7 @@ import {
   Deferred,
   Duration,
   Effect,
+  Exit,
   Fiber,
   FiberSet,
   Queue,
@@ -23,15 +24,12 @@ import type { HostInteractions } from '@agent/runtime/HostInteractions';
 import type { SessionHandle as RuntimeSessionHandle } from '@agent/runtime/SessionHandle';
 import { withLogChannel } from '@logger/effectLog';
 import { requestParksItsCaller, type RequestDecision } from '@shared/schemas';
+import type { PendingRequest } from '@shared/session/readonlyViews';
 import type { RequestError } from '@shared/session/requestErrors';
 import { attentionOf } from '@shared/session/sessionView';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
-import type {
-  ApprovalHandler,
-  PendingRequest,
-  SessionHost,
-} from './sessions.js';
+import type { ApprovalHandler, SessionHost } from './sessions.js';
 
 const CHANNEL = 'agentPackage';
 
@@ -133,8 +131,6 @@ function answerRequests(
               Effect.andThen(superseded(pending)),
             ),
       ),
-      // Withdrawn: asked again should this handler become the newest.
-      Effect.onInterrupt(() => forget(pending)),
       Effect.asVoid,
       // An interrupt is a withdrawal, handled above; anything else is logged.
       Effect.catchCause((cause) =>
@@ -163,12 +159,27 @@ function answerRequests(
         ),
         (pending) =>
           // One handler awaiting its embedder never holds the next. Held
-          // in the map before it starts, so an attach can withdraw it.
+          // in the map before it starts, so an attach can withdraw it, and
+          // forgotten by the fiber's own exit: a withdrawal (asked again
+          // should this handler become the newest) or a failure. The exit
+          // observer is what makes a prompt withdrawn in the tick it was
+          // forked, before its first step ran, forget itself too; a finalizer
+          // inside the effect never runs for a fiber that never started, and
+          // the key it left behind kept the request from ever being asked
+          // again. A decided request stays held until the view drops it, so
+          // the fold catching up cannot re-ask it.
           FiberSet.run(prompts, answer(pending), {
             startImmediately: false,
           }).pipe(
             Effect.tap((fiber) =>
-              Effect.sync(() => asked.set(keyOf(pending), fiber)),
+              Effect.sync(() => {
+                const key = keyOf(pending);
+                asked.set(key, fiber);
+                fiber.addObserver((exit) => {
+                  if (Exit.isFailure(exit) && asked.get(key) === fiber)
+                    asked.delete(key);
+                });
+              }),
             ),
           ),
         { discard: true },

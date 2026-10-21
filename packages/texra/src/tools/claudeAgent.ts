@@ -29,27 +29,24 @@ import {
   Secrets,
   ToolContext,
   type ToolContextShape,
+  type ToolResult,
 } from '@texra-ai/harness';
 
 // Local imports
-import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';
 import {
-  emitToolUseCard,
-  endOpenToolUseCards,
-  endToolUseCard,
+  ensureError,
+  toErrorMessage,
+  MESSAGE_TYPES,
+  type RunId,
+  type TokenUsageStats,
+  type ToolUseLog,
+} from '@texra-ai/harness/schemas';
+import { DELIVERY_TAG } from '@texra-ai/harness/transcript';
+import {
+  formatDelivery,
   type AgentTrace,
-  type OpenToolUseCard,
-} from '@agent/trace';
-import { formatDelivery } from '@agent/runtime/deliveryEnvelope';
-import { MESSAGE_TYPES } from '@shared/schemas';
-import type {
-  RunId,
-  TokenUsageStats,
-  ToolError,
-  ToolResult,
-  ToolUseLog,
-} from '@shared/schemas';
-import { DELIVERY_TAG } from '@shared/deliveryTags';
+  type ToolCardHandle,
+} from '@texra-ai/harness/plugins';
 import {
   AgentCliEffortSchema,
   ClaudeAgentModelSchema,
@@ -57,7 +54,6 @@ import {
 } from '@texra/shared/agentCliSettings';
 import type { ClaudeAgentPermissionMode } from '@texra/shared/agentCliSettings';
 import { buildAgentWorkspaceOptions } from '@texra/tools/agentWorkspaceOptions';
-import { isNonEmptyString } from '@utils/text/stringUtils';
 
 // Local file imports
 import { ClaudeBackgroundTaskTracker } from './claudeAgentBackgroundTasks';
@@ -82,8 +78,11 @@ import {
   readClaudeCodeRun,
   type ClaudeCodeRun,
 } from './claudeAgentShared';
-import type { ProcessChildStrategy } from '@texra-ai/harness/plugins';
-import type { ChildRuns } from '@texra-ai/harness/plugins';
+import type {
+  ProcessChildStrategy,
+  ToolError,
+  ChildRuns,
+} from '@texra-ai/harness/plugins';
 import type { AgentCliSessionRegistry } from './agentCliSessionRegistry';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
@@ -222,7 +221,7 @@ export function runStreamedTurn(params: {
     }
 
     const responseParts: string[] = [];
-    const toolLogRefs = new Map<string, OpenToolUseCard>();
+    const toolCards = new Map<string, ToolCardHandle>();
     const backgroundTasks = new ClaudeBackgroundTaskTracker(logger);
     let usage: TurnResult['usage'] = null;
     let sessionId: string | undefined;
@@ -237,20 +236,21 @@ export function runStreamedTurn(params: {
           handleAssistantBlocks(
             raw.message.content,
             logger,
-            toolLogRefs,
+            toolCards,
             responseParts,
           );
           break;
         case 'user':
           if (Array.isArray(raw.message.content)) {
-            handleToolResults(raw.message.content, logger, toolLogRefs);
+            handleToolResults(raw.message.content, toolCards);
           }
           break;
         case 'result':
           usage = claudeResultUsage(raw);
           totalCostUsd = raw.total_cost_usd;
           if (raw.subtype === 'success') {
-            if (isNonEmptyString(raw.result)) responseParts.push(raw.result);
+            if (typeof raw.result === 'string' && raw.result.trim() !== '')
+              responseParts.push(raw.result);
           } else {
             isError = true;
             errorMessage =
@@ -286,7 +286,8 @@ export function runStreamedTurn(params: {
         Effect.sync(() => {
           params.signal.removeEventListener('abort', forwardAbort);
           backgroundTasks.finish();
-          endOpenToolUseCards(logger, toolLogRefs);
+          for (const card of toolCards.values()) card.failIfOpen();
+          toolCards.clear();
         }),
       ),
     );
@@ -300,7 +301,10 @@ export function runStreamedTurn(params: {
         errorMessage,
         'Claude Code fork did not create a distinct session',
       ]
-        .filter(isNonEmptyString)
+        .filter(
+          (part): part is string =>
+            typeof part === 'string' && part.trim() !== '',
+        )
         .join('\n');
     }
 
@@ -318,13 +322,13 @@ export function runStreamedTurn(params: {
 function handleAssistantBlocks(
   blocks: SDKAssistantMessage['message']['content'],
   logger: AgentTrace,
-  refs: Map<string, OpenToolUseCard>,
+  cards: Map<string, ToolCardHandle>,
   responseParts: string[],
 ): void {
   for (const block of blocks) {
     switch (block.type) {
       case 'text':
-        if (isNonEmptyString(block.text)) {
+        if (typeof block.text === 'string' && block.text.trim() !== '') {
           logger.info(block.text, {
             messageType: MESSAGE_TYPES.MODEL_RESPONSE,
           });
@@ -332,7 +336,10 @@ function handleAssistantBlocks(
         }
         break;
       case 'thinking':
-        if (isNonEmptyString(block.thinking)) {
+        if (
+          typeof block.thinking === 'string' &&
+          block.thinking.trim() !== ''
+        ) {
           logger.info(block.thinking, { messageType: MESSAGE_TYPES.THINKING });
         }
         break;
@@ -345,7 +352,7 @@ function handleAssistantBlocks(
           status: 'in_progress',
           trace: logger,
         });
-        refs.set(block.id, { ...emitToolUseCard(logger, toolLog), toolLog });
+        cards.set(block.id, logger.openToolCard(toolLog));
         break;
       }
     }
@@ -354,18 +361,16 @@ function handleAssistantBlocks(
 
 function handleToolResults(
   blocks: Exclude<SDKUserMessage['message']['content'], string>,
-  logger: AgentTrace,
-  refs: Map<string, OpenToolUseCard>,
+  cards: Map<string, ToolCardHandle>,
 ): void {
   for (const block of blocks) {
     if (block.type !== 'tool_result') continue;
     const id = block.tool_use_id;
     if (typeof id !== 'string') continue;
-    const ref = refs.get(id);
-    if (!ref) continue;
+    const card = cards.get(id);
+    if (!card) continue;
 
     const isError = block.is_error === true;
-    const { status: _status, ...baseLog } = ref.toolLog;
     const update: Partial<ToolUseLog> = {
       ...(block.content !== undefined && {
         output: block.content as ToolUseLog['output'],
@@ -374,13 +379,12 @@ function handleToolResults(
         error: extractToolErrorMessage(block.content) ?? 'Tool error',
       }),
     };
-    endToolUseCard(
-      logger,
-      ref,
-      { ...baseLog, ...update },
-      isError ? 'failed' : 'completed',
-    );
-    refs.delete(id);
+    card.update({
+      ...card.log,
+      ...update,
+      status: isError ? 'failed' : 'completed',
+    });
+    cards.delete(id);
   }
 }
 

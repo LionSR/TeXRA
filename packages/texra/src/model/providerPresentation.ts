@@ -13,9 +13,8 @@ import {
   type ApiKeyProviderId,
   type RegionalProviderId,
 } from '@texra-ai/llm';
-import { providerRegionSetting } from '@shared/state/providerSettings';
-import type { StateReadFailed } from '@texra-ai/harness';
-import type { SettingsStores } from '@texra-ai/harness';
+import { providerRegionSetting } from '@texra-ai/harness/schemas';
+import type { StateReadFailed, SettingsStores } from '@texra-ai/harness';
 
 /** Whether `provider`'s region toggle picks its China platform. */
 function useChinaRegion(

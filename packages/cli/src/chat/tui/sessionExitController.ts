@@ -42,10 +42,12 @@ import {
   formatResumeHint,
 } from './state/resumeHint';
 import { chatTuiRunPending, type TuiSession } from './state/sessionRunState';
-import type { ApprovalPolicy } from '@texra-ai/harness/schemas';
-import type { SessionView } from '@texra-ai/harness';
+import type {
+  ApprovalPolicy,
+  SessionView,
+  RunId,
+} from '@texra-ai/harness/schemas';
 import type { RunStopReason } from '@texra-ai/harness';
-import type { RunId } from '@texra-ai/harness/schemas';
 import type { Instance as InkInstance } from 'ink';
 
 const EXIT_CONFIRMATION_TTL_MS = 800;
@@ -122,6 +124,21 @@ export function createSessionExitController(
     signalHandlers.dispose();
     exitConfirmationExpiresAt = 0;
     clearTransientNotice();
+    // The drain that follows awaits the run's stop and the store's flush. A
+    // signal during it is the user giving up on that wait, and with no
+    // listener it would be Node's default death: no `exit` event, so the
+    // terminal stays in raw mode. One force handler per signal restores the
+    // terminal synchronously and leaves; `release` is idempotent.
+    for (const [signal, exitCode] of [
+      ['SIGINT', CliExitCode.Interrupted],
+      ['SIGTERM', CliExitCode.Terminated],
+      ['SIGHUP', 129],
+    ] as const) {
+      process.once(signal, () => {
+        ctx.terminal.release();
+        process.exit(exitCode);
+      });
+    }
   };
   // Persist the reopen hint to native scrollback: the main session plus each
   // subagent TeXRA drives, so any route can be continued by its own id.

@@ -12,18 +12,18 @@ import path from 'node:path';
 
 import { Cause, Deferred, Effect, FileSystem, type Path } from 'effect';
 
-import { withLogChannel, isStrictlyWithin } from '@texra-ai/harness';
 import {
+  withLogChannel,
+  isStrictlyWithin,
   createExternalLocation,
   createWorkspaceLocation,
+  Settings,
 } from '@texra-ai/harness';
-import { Settings } from '@texra-ai/harness';
-import { toErrorMessage } from '@texra-ai/harness/schemas';
+import { toErrorMessage, type FileLocation } from '@texra-ai/harness/schemas';
 import { TEMP_EXTENSIONS } from '@housekeeping/constants';
 import { filesByPrefix } from '@latex/formatter/latexindentpt';
 import { LaTeXdiffService } from '@latex/latexdiff';
 import { generateDiffFileName } from '@latex/latexdiff/diffFileNameManager';
-import type { FileLocation } from '@shared/schemas';
 import { LATEXDIFF_TEMP_FILE_LOCATIONS } from '@texra/shared/settingsView/texraSettings';
 import type { WorkspaceRoots } from '@texra-ai/harness';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
@@ -195,8 +195,7 @@ const readFileWithFallback = (
 ): Effect.Effect<string, never, PreviewServices> =>
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
-    // The raw bytes decoded as-is: no line-ending normalization and no BOM
-    // handling, unlike `readNormalizedFile`.
+    // The raw bytes decoded as-is, line endings included.
     return yield* fs.readFile(uri.fsPath).pipe(
       Effect.map((bytes) => Buffer.from(bytes).toString('utf8')),
       Effect.catch((error) =>

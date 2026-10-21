@@ -30,8 +30,8 @@ import {
   PersistedState,
   type KeyValueStore,
 } from '@texra/shared/state/PersistedState';
-import { LAUNCH_FILE_LISTS } from '@texra/shared/launcher/fileSelectConfigs';
 import { subscribeToSignalChanges } from '@texra/shared/signals';
+import { LAUNCH_FILE_LISTS } from '@ui/copy/fileSelectConfigs';
 
 import { playCompletionSound } from './audioNotification';
 import {
@@ -40,9 +40,11 @@ import {
   type WebviewSession,
   type WebviewTransport,
 } from './sessionTransport';
-import type { SessionView } from '@texra-ai/harness/schemas';
-import type { RuntimeRequest } from '@texra-ai/harness/schemas';
-import type { RunId } from '@texra-ai/harness/schemas';
+import type {
+  SessionView,
+  RuntimeRequest,
+  RunId,
+} from '@texra-ai/harness/schemas';
 
 /** One open session as the root holds it: its three records as signals. */
 interface SessionSurface {

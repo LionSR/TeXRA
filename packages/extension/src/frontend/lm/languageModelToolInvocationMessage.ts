@@ -1,7 +1,6 @@
 // Local imports - core
 import { truncateSummary } from '@texra-ai/harness/schemas';
 import { Predicate } from 'effect';
-import { isNonEmptyString } from '@utils/text/stringUtils';
 
 export type LanguageModelResearchToolName = 'arxiv_search' | 'web_fetch';
 
@@ -11,7 +10,7 @@ function readInputString(input: unknown, key: string): string | undefined {
   if (!Predicate.isObject(input)) return undefined;
 
   const value = input[key];
-  return isNonEmptyString(value) ? value.trim() : undefined;
+  return typeof value === 'string' ? value.trim() || undefined : undefined;
 }
 
 function searchMessage(service: string, input: unknown): string {

@@ -1,20 +1,22 @@
 // Node imports
 import * as path from 'node:path';
-import { normalizeFilePath } from '@texra-ai/harness/schemas';
-import { hasExtension } from '@texra-ai/harness';
+import {
+  normalizeFilePath,
+  fileLocationDisplayPath,
+  type RunId,
+  type FileLocation,
+  type RunStorageFileLocation,
+} from '@texra-ai/harness/schemas';
+import {
+  hasExtension,
+  isFileNotFoundError,
+  createRunStorageLocation,
+} from '@texra-ai/harness';
 
 // Third-party imports
 import { Effect, FileSystem, type PlatformError } from 'effect';
 
 // Local imports
-import { isFileNotFoundError } from '@texra-ai/harness';
-import { createRunStorageLocation } from '@texra-ai/harness';
-import {
-  fileLocationDisplayPath,
-  type RunId,
-  type FileLocation,
-  type RunStorageFileLocation,
-} from '@shared/schemas';
 import { stripWorkflowRoundDir } from '@texra/shared/constants/workflowOutput';
 
 interface PublishCompiledPdfOptions {

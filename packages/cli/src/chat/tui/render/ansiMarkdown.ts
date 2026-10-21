@@ -9,6 +9,7 @@
 // `highlight.js` grammars the webview already pulls — keeping fence rendering
 // consistent between hosts without dragging the HTML wrapper through.
 
+import { Number as Num } from 'effect';
 import Table from 'cli-table3';
 import { highlight, supportsLanguage } from 'cli-highlight';
 import { LRUCache } from 'lru-cache';
@@ -28,7 +29,6 @@ import {
   createMarkdownRenderer,
   type MarkdownItInstance,
 } from '@ui/markdown/createMarkdownRenderer';
-import { clamp } from '@utils/text/stringUtils';
 
 /** SGR open/close codes wrapped through String.fromCharCode so the ESC byte
  *  is never a literal in source (pre-commit hooks have been known to mangle
@@ -347,7 +347,7 @@ function configureAnsi(
 
   r.hr = (tokens, idx) =>
     `${quoteBlockStart(tokens, idx)}${style.dim(
-      '─'.repeat(clamp(width ?? 40, 1, 40)),
+      '─'.repeat(Num.clamp(width ?? 40, { minimum: 1, maximum: 40 })),
     )}\n`;
 
   // Emit raw SGR codes so the styling stays open across the link body. The

@@ -71,11 +71,7 @@ vi.mock('@cli/chat/tui/state/transcript', () => ({
   reportRequestDefect: mocks.reportRequestDefect,
 }));
 
-import {
-  ResumeRefused,
-  type Session,
-  type SessionView,
-} from '@texra-ai/harness';
+import { ResumeRefused, type Session } from '@texra-ai/harness';
 import { describeFollowUpFailure } from '@agent/followUp/ToolUseFollowUp';
 import { registryOf } from '@agent/runtime/runRegistry';
 import type {
@@ -141,6 +137,7 @@ import {
   seedView,
   viewWith,
 } from './fixtures/sessionViewFixture';
+import type { SessionView } from '@texra-ai/harness/schemas';
 
 // The state stores the controller's setting reads land on, as ports of the
 // installed fake host rather than a module mock of `platform()`: the setting
@@ -183,7 +180,7 @@ function makeSession(overrides: SessionFixture = {}): TuiSession {
     session.markRunCompleted(overrides.runSettled);
   if (overrides.runId) session.runId = overrides.runId;
   session.interruptedRunId = overrides.interruptedRunId;
-  session.stopRequested = overrides.stopRequested ?? false;
+  if (overrides.stopRequested) session.askStop('user');
   return session;
 }
 

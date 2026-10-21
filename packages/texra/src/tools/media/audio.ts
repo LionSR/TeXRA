@@ -16,15 +16,15 @@ import {
 } from 'effect';
 import * as ChildProcess from 'effect/process/ChildProcess';
 
-import { withLogChannel } from '@texra-ai/harness';
+import { withLogChannel, getSdkErrorMessage } from '@texra-ai/harness';
 import {
   withExtendedPath,
   findCommand,
   type FoundCommand,
+  absentReason,
+  pathExists,
 } from '@texra-ai/harness/node';
-import { getSdkErrorMessage } from '@texra-ai/harness';
 import { ensureError } from '@texra-ai/harness/schemas';
-import { absentReason } from '@utils/files/fsEntryExists';
 import type { WorkspaceRoots } from '@texra-ai/harness';
 import type {
   ChildProcessHandle,
@@ -105,8 +105,7 @@ const resolveSoxCommand = Effect.fnUntraced(function* (
     // A configured binary that is missing fails loudly too: silently
     // recording with whatever `sox` is on PATH is not what was configured.
     const fs = yield* FileSystem.FileSystem;
-    const exists = yield* fs.exists(configuredPath).pipe(
-      Effect.catchIf(absentReason, () => Effect.succeed(false)),
+    const exists = yield* pathExists(fs, configuredPath).pipe(
       recorderFailure('startRecording'),
     );
     if (!exists) {

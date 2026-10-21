@@ -116,10 +116,7 @@ import { registerIconLibrary } from '@awesome.me/webawesome/dist/components/icon
 import { html, type TemplateResult } from 'lit';
 import { ifDefined } from 'lit/directives/if-defined.js';
 
-import {
-  TEXRA_ICON_CANONICAL_NAMES,
-  type TeXRAIconName,
-} from '@shared/iconNames';
+import { ICON_NAMES, type IconName } from '@ui/wa/iconNames';
 
 const TEXRA_ICON_LIBRARY = 'texra';
 
@@ -261,7 +258,7 @@ const icons = {
   wrench: faWrench,
   xmark: faXmark,
 } as const satisfies Record<
-  (typeof TEXRA_ICON_CANONICAL_NAMES)[number],
+  (typeof ICON_NAMES)[number],
   FontAwesomeIconDefinition
 >;
 
@@ -302,7 +299,7 @@ interface WaIconOptions {
 // registered set is Font Awesome free-solid, so there is no second variant to
 // resolve.
 export function waIcon(
-  name: TeXRAIconName,
+  name: IconName,
   options: WaIconOptions = {},
 ): TemplateResult {
   return html`<wa-icon

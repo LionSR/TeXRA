@@ -10,15 +10,12 @@ import * as path from 'node:path';
 import { Effect, Option } from 'effect';
 import { z } from 'zod';
 
+import { GlobalValues, readSessionView, type Session } from '@texra-ai/harness';
+import { type SessionView, isLiveRun } from '@texra-ai/harness/schemas';
 import {
-  readSessionView,
-  type Session,
-  type SessionView,
-} from '@texra-ai/harness';
-import { resolveWorkspaceStoragePath } from '@texra-ai/harness/node';
-import { isLiveRun } from '@texra-ai/harness/schemas';
-import { GlobalDatabase } from '@shared/session/database';
-import { WORKSPACE_STORES } from '@shared/session/valueFamily';
+  resolveWorkspaceStoragePath,
+  WORKSPACE_STORES,
+} from '@texra-ai/harness/node';
 
 import type { TaskSummary } from './protocol';
 
@@ -54,7 +51,7 @@ export const listTasks = Effect.fn('taskList.listTasks')(function* (
   open: ReadonlyMap<string, Session>,
   all: boolean,
 ) {
-  const records = yield* (yield* GlobalDatabase).values.list(WORKSPACE_STORES);
+  const records = yield* (yield* GlobalValues).list(WORKSPACE_STORES);
   // A record is keyed by its storage directory's name, beside the store of
   // no workspace.
   const stores = path.dirname(

@@ -7,6 +7,7 @@ import {
   ToolContext,
   type ToolContextShape,
   withLogChannel,
+  type ToolResult,
 } from '@texra-ai/harness';
 import {
   callerRun,
@@ -15,9 +16,9 @@ import {
   errorResult,
   executed,
   nullishWithDefault,
+  ToolError,
 } from '@texra-ai/harness/plugins';
-import { toErrorMessage } from '@texra-ai/harness/schemas';
-import { ToolError, type RunId, type ToolResult } from '@shared/schemas';
+import { toErrorMessage, type RunId } from '@texra-ai/harness/schemas';
 import {
   countBySeverity,
   formatCounts,

@@ -6,7 +6,7 @@
 import { z } from 'zod';
 
 import { AgentSourceSchema } from '@shared/schemas/agent';
-import { CHATGPT_AUTH, GROK_AUTH } from '@shared/model/accountAuth';
+import { SUBSCRIPTION_AUTH_NAMES } from '@shared/model/subscriptionAuth';
 
 // ============================================================
 // Option Data Schemas
@@ -75,12 +75,12 @@ export const MODEL_AVAILABILITY_STATUS = {
     requiresKey: true,
   },
   'subscription-access': {
-    label: CHATGPT_AUTH.subscriptionLabel,
+    label: SUBSCRIPTION_AUTH_NAMES.chatgpt.subscriptionLabel,
     available: true,
     requiresKey: false,
   },
   'xai-subscription-access': {
-    label: GROK_AUTH.subscriptionLabel,
+    label: SUBSCRIPTION_AUTH_NAMES.grok.subscriptionLabel,
     available: true,
     requiresKey: false,
   },
@@ -177,7 +177,7 @@ export type AgentOptionData = z.infer<typeof AgentOptionDataSchema>;
 export const TeamOptionDataSchema = PickerOptionBaseSchema.extend({
   /** Provenance uses the shared `'built-in' | 'custom'` team vocabulary. */
   source: z.enum(['built-in', 'custom']),
-  /** Web Awesome icon name registered in `packages/harness/src/shared/iconNames.ts`. */
+  /** The team's icon, a name the host's icon set draws. */
   icon: z.string(),
   /** Preset description, surfaced as the option `title`. */
   description: z.string().prefault(''),

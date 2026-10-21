@@ -1,8 +1,8 @@
-import type { RunId } from '@shared/schemas';
 import {
   type ReadonlyRoundIndexed,
   type OutputFileInfo,
 } from '@texra/shared/plugins/documentOutputs';
+import type { RunId } from '@texra-ai/harness/schemas';
 
 /**
  * The run-output accessors shared by the progress-view controllers

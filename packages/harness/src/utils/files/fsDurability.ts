@@ -1,20 +1,19 @@
 /**
  * The filesystem primitives the repo must keep that the standard library's
  * `FileSystem` does not provide: crash-safe replace, a directory listing
- * carrying each entry's own (unfollowed) type, and exclusive or
- * symlink-dereferencing copies.
+ * carrying each entry's own (unfollowed) type, and symlink-dereferencing
+ * copies.
  *
  * Nothing here re-implements an operation `FileSystem` already has — an
  * append, for instance, is `fs.writeFile(path, data, { flag: 'a' })` and gets
  * no wrapper. The Node calls `FileSystem` cannot express (`lstat`,
- * `copyFile` with `COPYFILE_EXCL`, `cp` with `dereference`, and the
+ * `readdir` with types, `cp` with `dereference`, and the
  * `write-file-atomic` package) classify their errno exactly as
  * `@effect/platform-node` does, so a consumer matches `SystemError` by
  * `reason._tag` either way.
  */
 
 // Node imports
-import { constants as fsConstants } from 'node:fs';
 import * as nodeFs from 'node:fs/promises';
 
 // Third-party imports
@@ -23,8 +22,6 @@ import { Effect, FileSystem, Path, PlatformError } from 'effect';
 import writeFileAtomicLib from 'write-file-atomic';
 
 import { withLogChannel } from '@logger/effectLog';
-
-import { absentReason } from './fsEntryExists';
 
 const CHANNEL = 'fsDurability';
 
@@ -101,32 +98,6 @@ function entryTypeOf(entry: {
   if (entry.isSocket()) return 'Socket';
   return 'Unknown';
 }
-
-/**
- * `FileSystem.exists` with a path whose parent is not a directory (`ENOTDIR`)
- * counted as absent alongside `ENOENT`; the standard library reports that
- * case as `BadResource`. {@link absentReason} names ENOTDIR specifically, so
- * an operational failure (`ELOOP`, `EACCES`) still propagates instead of
- * reading as "absent".
- *
- * This probe follows links, so a dangling symlink reads as absent (ENOENT)
- * while a circular one raises ELOOP and propagates, unlike the lstat-backed
- * `entryExists` in `fsEntryExists.ts`. A
- * caller asking whether a dependency, figure, bibliography or input *file* is
- * unusable wants the follow; a caller asking whether the path names an entry
- * wants `entryExists`.
- *
- * The caller passes the filesystem it probes with, so a rooted view answers
- * for the paths inside its root and the process filesystem answers for the
- * rest.
- */
-export const pathExists = (
-  fs: FileSystem.FileSystem,
-  target: string,
-): Effect.Effect<boolean, PlatformError.PlatformError> =>
-  fs
-    .exists(target)
-    .pipe(Effect.catchIf(absentReason, () => Effect.succeed(false)));
 
 /**
  * The entry type and size at `target`, `lstat` first and then `stat` when the
@@ -237,22 +208,6 @@ export const readDirectoryTypedTolerant = Effect.fn(
     (row): row is readonly [string, FileSystem.File.Type] => row !== undefined,
   );
 });
-
-/**
- * Copy one file to a destination that must not exist yet (`COPYFILE_EXCL`):
- * the existence check and the creation are one step, so of two concurrent
- * copies to the same name exactly one succeeds and the other fails with
- * `AlreadyExists`. `FileSystem.copy` silently skips an existing destination
- * and `FileSystem.copyFile` replaces it.
- */
-export const copyFileExclusive = Effect.fn('fsDurability.copyFileExclusive')(
-  function* (from: string, to: string) {
-    yield* Effect.tryPromise({
-      try: () => nodeFs.copyFile(from, to, fsConstants.COPYFILE_EXCL),
-      catch: (cause) => systemErrorFrom('copyFileExclusive', to, cause),
-    });
-  },
-);
 
 /**
  * Copy a file or directory tree, replacing symlinks with the content they

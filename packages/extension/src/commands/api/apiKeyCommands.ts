@@ -17,8 +17,7 @@ import {
   getProviderDisplayName,
   getProviderKeyUrl,
 } from '@texra/model/providerPresentation';
-import type { PlatformSecrets } from '@texra-ai/harness';
-import type { SettingsStores } from '@texra-ai/harness';
+import type { PlatformSecrets, SettingsStores } from '@texra-ai/harness';
 
 const CHANNEL = 'ApiKeyCommands';
 

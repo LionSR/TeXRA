@@ -8,8 +8,8 @@ import { Effect } from 'effect';
 import {
   INSTRUCTION_ACTION,
   type InstructionAction,
+  toErrorMessage,
 } from '@texra-ai/harness/schemas';
-import { toErrorMessage } from '@texra-ai/harness/schemas';
 import { NotificationFailed, PromptFailed } from '@texra/hosts/uiHosts';
 import { TranscriptExportFailed } from '@texra/controllers/progressView/transcriptExportFailure';
 

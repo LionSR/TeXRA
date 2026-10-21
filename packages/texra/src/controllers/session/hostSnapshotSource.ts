@@ -16,25 +16,26 @@ import {
   readModelOptions,
   type LanguageModel,
   type PlatformSecrets,
+  type PerKeyLane,
+  Settings,
+  withPerKeyLane,
 } from '@texra-ai/harness';
 import {
   APPROVAL_POLICY_CONFIG_KEY,
   type ApprovalPolicy,
 } from '@texra-ai/harness/schemas';
-import { Settings } from '@texra-ai/harness';
 import { loadTeamOptions } from '@common/teams/TeamPlan';
-import type { FileOptions } from '@texra/shared/session/hostSnapshot';
-import { agentOptionsData } from '@texra/tools/documents/documentTask';
 import type {
+  FileOptions,
   HostSnapshot,
   ProjectDisplay,
 } from '@texra/shared/session/hostSnapshot';
+import { agentOptionsData } from '@texra/tools/documents/documentTask';
 import { modelOptionsFrom } from '@texra/model/modelOptions';
 import { createTeamCatalogPorts } from '@texra/controllers/mainView/teamCatalogPorts';
 import { readRecentCommits } from '@texra/utils/git/repositoryOverview';
-import type { AgentCatalog } from '@texra-ai/harness';
+import type { AgentCatalog, SettingsStores } from '@texra-ai/harness';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
-import type { SettingsStores } from '@texra-ai/harness';
 
 type Banners = HostSnapshot['banners'];
 
@@ -256,6 +257,14 @@ export function createHostSnapshotSource(
     if (tools) dependency = tools;
   });
 
+  /** One lane for every refresh of this source: the producers write the
+   *  fields above and `publish` reads them, so two refreshes in flight at
+   *  once (a burst of file-watcher events, a catalog reload during a full
+   *  refresh) would let the slower, older read publish last and leave the
+   *  shell showing a state no later event corrects. In lane order the last
+   *  refresh asked for is the last to publish. */
+  const refreshLanes = new Map<'refresh', PerKeyLane>();
+
   /** Each producer settles on its own: one that fails is reported and keeps
    *  its last value, and the snapshot still publishes what the others read,
    *  so a single unavailable source never leaves the shell blank. */
@@ -274,7 +283,7 @@ export function createHostSnapshotSource(
           options.onError(Cause.squash(exit.cause));
       }
       yield* publish;
-    });
+    }).pipe(withPerKeyLane(refreshLanes, 'refresh'));
 
   const catalogLoads = [loadAgents, loadTeams, loadModels];
 

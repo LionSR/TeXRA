@@ -33,8 +33,12 @@ import {
   logoutFromChat,
 } from './handlers/loginCommands';
 import { openCliSlashCommandForm } from './slashForms';
-import type { ProcessRuntime, ProcessServices } from '@texra-ai/harness';
-import type { PlatformSecrets } from '@texra-ai/harness';
+import type {
+  ProcessRuntime,
+  ProcessServices,
+  PlatformSecrets,
+  SettingsStores,
+} from '@texra-ai/harness';
 import type { ApiKeyProviderId } from '@texra-ai/llm';
 import type {
   SlashCommandEffect,
@@ -42,7 +46,6 @@ import type {
 } from './handlers/slashContext';
 import type { ErrorHandler, formSelectionHandler } from './formSelection';
 import type { SlashCommandContribution, SlashFormProps } from './slashRegistry';
-import type { SettingsStores } from '@texra-ai/harness';
 
 /** Selection handler that reports progress while the form shows a busy frame. */
 export type FormActionHandler<T> = (

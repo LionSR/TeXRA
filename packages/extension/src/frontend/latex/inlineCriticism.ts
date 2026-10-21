@@ -22,8 +22,13 @@ import { Cause, Effect, Fiber, FileSystem, Stream } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports
-import { withLogChannel, hasExtension } from '@texra-ai/harness';
-import { Settings } from '@texra-ai/harness';
+import {
+  type PerKeyLane,
+  withLogChannel,
+  hasExtension,
+  withPerKeyLane,
+  Settings,
+} from '@texra-ai/harness';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
 import { outputFilesProduced } from '@frontend/events/runFactSubscriptions';
 import { lineToRange } from '@frontend/vscode/vscodeEditor';
@@ -31,16 +36,20 @@ import { parseCriticismAnnotations } from '@latex/criticismParser';
 import type { OutputFileInfo } from '@texra/shared/plugins/documentOutputs';
 import type { ManualCriticismEntry } from '@texra/tools/editorHost';
 import { TexraStateKey } from '@texra/shared/settingsView/texraSettings';
-import type { Session } from '@texra-ai/harness';
-import type { ProcessRuntime } from '@texra-ai/harness';
-import type { StateReadFailed } from '@texra-ai/harness';
-import type { SettingsStores } from '@texra-ai/harness';
+import type {
+  Session,
+  ProcessRuntime,
+  StateReadFailed,
+  SettingsStores,
+} from '@texra-ai/harness';
 
 const CHANNEL = 'InlineCriticism';
 const COLLECTION_NAME = 'texra-criticism';
 const SOURCE_LABEL = 'TeXRA';
 const CODE_PARSED = 'criticize';
 const CODE_TOOL = 'criticize:tool';
+
+const fileLanes = new Map<string, PerKeyLane>();
 
 /** What {@link registerInlineCriticism} attached the feature to. */
 interface CriticismRegistration {
@@ -138,10 +147,17 @@ function handleAddOutputFiles(
 ): void {
   if (!collection) return;
   runtime.runFork(
-    Effect.forEach(files, refreshFileDiagnostics, {
-      concurrency: 8,
-      discard: true,
-    }).pipe(
+    Effect.forEach(
+      files,
+      // One refresh per path at a time, in arrival order: two rounds writing
+      // the same output file fork two reads, and without the lane the older
+      // read can land last and set stale squiggles over the newer ones.
+      (file) =>
+        refreshFileDiagnostics(file).pipe(
+          withPerKeyLane(fileLanes, file.location.absolutePath),
+        ),
+      { concurrency: 8, discard: true },
+    ).pipe(
       Effect.catchCause((cause) =>
         Effect.logError(
           `Failed to refresh criticism diagnostics: ${toErrorMessage(Cause.squash(cause))}`,

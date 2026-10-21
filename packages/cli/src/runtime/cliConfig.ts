@@ -9,15 +9,19 @@ import {
 
 // Local imports - platform
 import { modelConfig } from '@texra-ai/llm';
-import { Settings } from '@texra-ai/harness';
 import {
+  Settings,
   mcpConfigPathOf,
   readMcpConfig,
   type ConfigProvider,
   type SettingsStores,
 } from '@texra-ai/harness';
-import { JsonConfigProvider, type ConfigStore } from '@texra-ai/harness/node';
-import { nodeFileServices, type JsonStore } from '@platform/defaults/jsonStore';
+import {
+  JsonConfigProvider,
+  nodeFileServices,
+  type ConfigStore,
+  type JsonStore,
+} from '@texra-ai/harness/node';
 
 // Local imports - shared
 import { openTexraConfigStores } from '@texra/platform/defaults/nodeStores';

@@ -11,11 +11,10 @@ import { customElement, property, state } from 'lit/decorators.js';
 import { classMap } from 'lit/directives/class-map.js';
 import { repeat } from 'lit/directives/repeat.js';
 
-import { acceptsFollowUp } from '@texra-ai/harness/schemas';
-import { resolveBypass } from '@texra-ai/harness/schemas';
-import type { TeXRAIconName } from '@shared/iconNames';
+import { acceptsFollowUp, resolveBypass } from '@texra-ai/harness/schemas';
 import { SessionUiEvents } from '@texra/shared/session/uiEvents';
 import { CopyButtonController } from '@texra/shared/litControllers/CopyButtonController';
+import type { IconName } from '@ui/wa/iconNames';
 import { runNoticeText, runStatusLabel } from '@ui/copy/runStatus';
 import { TASK_ACTIONS } from '@ui/copy/nestedRuns';
 import { formatTaskDiagnostics } from '@ui/copy/taskDiagnostics';
@@ -42,16 +41,19 @@ import {
 } from '../constants';
 import { progressBadgeLabel } from '../formatters/progressBadgeFormatter';
 import { renderRunGrantChips, runGrantStyles } from './runGrantChips';
-import type { SessionView, RunView } from '@texra-ai/harness/schemas';
-import type { ApprovalBypassKind } from '@texra-ai/harness/schemas';
-import type { RunId } from '@texra-ai/harness/schemas';
+import type {
+  SessionView,
+  RunView,
+  ApprovalBypassKind,
+  RunId,
+} from '@texra-ai/harness/schemas';
 import type { WaSelectEvent } from '@awesome.me/webawesome/dist/events/events.js';
 
 /** A window-level item the shell appends to the run's menu: pop out,
  *  LaTeXDiffs, figures. */
 export interface HeaderMenuItem {
   readonly value: string;
-  readonly icon: TeXRAIconName;
+  readonly icon: IconName;
   readonly label: string;
   readonly activate: () => void;
 }

@@ -1184,7 +1184,9 @@ function normalize(file, root) {
     [/<wall-time>[^<]*<\/wall-time>/g, '<wall-time>0s</wall-time>'],
     [/"durationMs":\d+/g, '"durationMs":0'],
     // A process child's turn time in its run-log line.
-    [/Turn completed in [\dhms ]+/g, 'Turn completed in 1s'],
+    [/Turn completed in [\d.hms ]+/g, 'Turn completed in 1s'],
+    // A bash call's elapsed time in its summary.
+    [/\(exit (\d+), [\d.]+s\)/g, '(exit $1, 1s)'],
     // A call's wall time in its run-log line.
     [/ · (?:\d+m )?\d+s · \$/g, ' · 0s · $'],
   ];

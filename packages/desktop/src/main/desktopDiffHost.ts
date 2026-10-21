@@ -3,20 +3,19 @@ import path from 'node:path';
 import { Cause, Effect, FileSystem, type PlatformError } from 'effect';
 import { nanoid } from 'nanoid';
 
-import { type ProcessRuntime, withProcessServices } from '@texra-ai/harness';
-import { toErrorMessage } from '@texra-ai/harness/schemas';
+import {
+  buildDiffHunks,
+  type ProcessRuntime,
+  withLogChannel,
+  withProcessServices,
+} from '@texra-ai/harness';
+import { formatHunkLines, toErrorMessage } from '@texra-ai/harness/schemas';
 import {
   ExternalOpenFailed,
   type DiffSource,
   type DiffViewHost,
 } from '@texra/hosts/uiHosts';
 import { monacoLanguageForPath } from '@texra/shared/monaco/monacoLanguage';
-import {
-  buildDiffHunks,
-  countLineChanges,
-  reportDiffTimeout,
-  unifiedDiffText,
-} from '@utils/text/unifiedDiff';
 
 import {
   DESKTOP_DIFF_COMMANDS,
@@ -146,10 +145,14 @@ export function createDesktopDiffHost(
           { concurrency: 2 },
         );
         // Compare opens pairs no approval diffed, so this diff reports its
-        // own timeout; the counts fold the same hunks.
+        // own timeout; the counts and the fallback patch read the same hunks.
         const diff = buildDiffHunks(originalContent, proposedContent);
-        yield* reportDiffTimeout(diff.timeout);
-        const lineChanges = countLineChanges(diff.hunks);
+        if (diff.timeout !== undefined) {
+          yield* Effect.logWarning(diff.timeout).pipe(
+            withLogChannel('unifiedDiff'),
+          );
+        }
+        const changed = diff.hunks.flatMap((hunk) => hunk.lines);
 
         // Prefer the in-app Review workbench when wired. A `false` return value
         // or a thrown error opts into the external-editor fallback (covers the
@@ -168,22 +171,18 @@ export function createDesktopDiffHost(
             displayPath: title.replace(/^Tool edit:\s*/, ''),
             originalText: originalContent,
             proposedText: proposedContent,
-            additions: lineChanges.added,
-            deletions: lineChanges.removed,
+            additions: changed.filter((line) => line.startsWith('+')).length,
+            deletions: changed.filter((line) => line.startsWith('-')).length,
             language: monacoLanguageForPath(proposed.filePath ?? ''),
           } satisfies DesktopShowDiffMessage,
         );
         if (shownInRenderer) return;
 
         // External-editor fallback: write a unified patch file and open it.
-        const { text: diffBody, timeout } = unifiedDiffText(
-          originalContent,
-          proposedContent,
-        );
-        yield* reportDiffTimeout(timeout);
-        const patch = diffBody
-          ? `--- ${original.filePath}\n+++ ${proposed.filePath}\n${diffBody}\n`
-          : `No textual changes for ${path.basename(proposed.filePath)}.\n`;
+        const patch =
+          diff.hunks.length > 0
+            ? `--- ${original.filePath}\n+++ ${proposed.filePath}\n${formatHunkLines(diff.hunks).join('\n')}\n`
+            : `No textual changes for ${path.basename(proposed.filePath)}.\n`;
         const tempDir = yield* fs.makeTempDirectory({
           prefix: 'texra-desktop-diff-',
         });

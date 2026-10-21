@@ -18,17 +18,17 @@ import '@awesome.me/webawesome/dist/components/button-group/button-group.js';
 import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 
 // Local imports - shared styles
-import type { TeXRAIconName } from '@shared/iconNames';
 import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 import { postMessage } from '@texra/shared/hostBridge';
 import { DetailsOpenController } from '@texra/shared/litControllers/DetailsOpenController';
+import type { IconName } from '@ui/wa/iconNames';
 import { getLightweightMd } from '@ui/markdown/lightweightMd';
 import { markdownStyles } from '@ui/styles/markdownStyles';
 import { designTokens, commonViewStyles } from '@ui/styles';
 import { renderIconActionButtonParts } from '@ui/wa/actionButtons';
 import { metaStripStyles, renderDotMeta } from '@ui/wa/metaStrip';
 import { cachedDateTimeFormat } from '@ui/formatting/dateTimeFormat';
-import { formatBytes } from '@utils/text/stringUtils';
+import { formatBytes } from '@ui/copy/format';
 import type { MemoryViewItem } from '@texra-ai/harness/schemas';
 
 const SHORT_DATE_TIME_OPTIONS: Intl.DateTimeFormatOptions = {
@@ -209,21 +209,21 @@ export class MemoryItem extends LitElement {
     const actions = [
       {
         id: 'memory-pin-button',
-        icon: (pinned ? 'thumbtack-slash' : 'thumbtack') as TeXRAIconName,
+        icon: (pinned ? 'thumbtack-slash' : 'thumbtack') as IconName,
         label: pinned ? 'Unpin' : 'Pin',
         tooltip: pinned ? 'Unpin this memory' : 'Pin as core long-term memory',
         onClick: this.handleTogglePin,
       },
       {
         id: 'memory-open-button',
-        icon: 'file-export' as TeXRAIconName,
+        icon: 'file-export' as IconName,
         label: 'Open',
         tooltip: 'Open in editor',
         onClick: this.handleOpen,
       },
       {
         id: 'memory-delete-button',
-        icon: 'trash' as TeXRAIconName,
+        icon: 'trash' as IconName,
         label: 'Delete',
         tooltip: 'Delete this memory',
         onClick: this.handleDelete,
