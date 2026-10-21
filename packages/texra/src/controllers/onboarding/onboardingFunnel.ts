@@ -11,8 +11,7 @@
  * workspace-scoped: onboarding is a fact about the user, and a fresh
  * workspace must never demote a veteran back to State 0/1. Each host
  * (extension, CLI, desktop) computes `hasCredential` with its own credential
- * sources and reads the flags from `@shared/state/onboardingState` using its
- * `AppState` store.
+ * sources and reads and writes the flags below through its `AppState` store.
  *
  * The derivation is the planner below; the in-session loop around it — probe,
  * plan, publish, clear a stale skip, serialized against itself — is
@@ -20,11 +19,10 @@
  */
 
 import { Effect, Semaphore } from 'effect';
+import { z } from 'zod';
 
-import {
-  readOnboardingFlags,
-  setOnboardingDeclined,
-} from '@shared/state/onboardingState';
+import { Settings } from '@texra-ai/harness';
+import { GlobalStateKey } from '@texra-ai/harness/schemas';
 import type { OnboardingFunnelState } from '@texra/shared/session/hostSnapshot';
 import type {
   StateStore,
@@ -32,6 +30,33 @@ import type {
   StateWriteFailed,
   LanguageModel,
 } from '@texra-ai/harness';
+
+/** An onboarding flag: off until something sets it. */
+const OnboardingFlagSchema = z.boolean().prefault(false);
+
+/** Record whether the user chose "Skip for now" on the State 0 picker. */
+export function setOnboardingDeclined(
+  state: StateStore,
+  declined: boolean,
+): Effect.Effect<void, StateWriteFailed> {
+  return state.update(GlobalStateKey.ONBOARDING_DECLINED, declined);
+}
+
+/** Whether a real run has completed (or the user skipped setup). */
+export function getFirstRunDone(state: StateStore) {
+  return Settings.state(
+    state,
+    GlobalStateKey.ONBOARDING_FIRST_RUN_DONE,
+    OnboardingFlagSchema,
+  );
+}
+
+export function setFirstRunDone(
+  state: StateStore,
+  done: boolean,
+): Effect.Effect<void, StateWriteFailed> {
+  return state.update(GlobalStateKey.ONBOARDING_FIRST_RUN_DONE, done);
+}
 
 interface OnboardingFunnelInputs {
   /** A usable credential exists (a subscription or any provider API key). */
@@ -149,7 +174,12 @@ export class OnboardingFunnelRefresher {
       const hasCredential = yield* this.host.hasCredential();
       const transition = planOnboardingFunnelTransition(this.current, {
         hasCredential,
-        ...(yield* readOnboardingFlags(this.host.flags)),
+        declined: yield* Settings.state(
+          this.host.flags,
+          GlobalStateKey.ONBOARDING_DECLINED,
+          OnboardingFlagSchema,
+        ),
+        firstRunDone: yield* getFirstRunDone(this.host.flags),
       });
       const changed = this.current !== transition.state;
       yield* this.host.apply({ ...transition, changed });

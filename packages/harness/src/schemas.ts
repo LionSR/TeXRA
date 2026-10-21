@@ -61,6 +61,12 @@ export type { ToolCard } from '@shared/schemas';
 export type { UsageRoute } from '@shared/schemas';
 // Why a model option can or cannot run, as a picker shows it.
 export type { ModelAvailabilityKind } from '@shared/schemas';
+// The subscriptions a model call can route through, and each one's switch
+// and sign-in names.
+export {
+  SUBSCRIPTION_AUTH_NAMES,
+  SUBSCRIPTION_AUTH_PROVIDERS,
+} from '@shared/model/subscriptionAuth';
 // Reads of a `SessionView` (root) for a renderer: what needs a person, how
 // busy the session is, and where each run stands.
 export {
@@ -88,10 +94,13 @@ export type {
   TranscriptView,
 } from '@shared/session/readonlyViews';
 export type { FollowUpHost } from '@shared/session/sessionView';
+// Why a run no longer takes an action its `actions` once listed.
+export { runActionRefusal } from '@shared/session/runActions';
 // What makes the views read-only all the way down.
 export type { ReadonlyDeep } from '@shared/session/readonlyDeep';
 // What a session store's reads and claims answer with: an aggregate's claim
-// and state, a deletion's mode, a CLI input-history row, and the refusals.
+// and state, a deletion's mode, a CLI input-history row, the refusals, and
+// the notice of a store moved aside on open.
 export type {
   AggregateClaim,
   AggregateState,
@@ -100,6 +109,7 @@ export type {
   DatabaseNotOwner,
   DeletionMode,
   InputHistoryRecord,
+  SessionStoreMovedAside,
 } from '@shared/session/database';
 // A follow-up queued for a run, as its row holds it (`InboxItem.control`).
 export type { QueuedFollowUp } from '@shared/session/runRows';
@@ -159,6 +169,7 @@ export {
 } from '@shared/runs/runStatusDisplay';
 export type {
   ExternalFileLocation,
+  RunAction,
   RunLifecycleStatus,
   RunPhase,
   RunStorageFileLocation,
@@ -256,6 +267,11 @@ export {
 // What a `ConfigProvider` (root) writes to and reads back per scope.
 export type { ConfigInspection, ConfigTarget } from '@platform/interfaces';
 export { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
+// A provider's custom-endpoint key and China-region toggle, if it has them.
+export {
+  providerEndpointKey,
+  providerRegionSetting,
+} from '@shared/state/providerSettings';
 
 // Text primitives: grapheme-safe truncation (plain, whitespace-collapsed, or
 // at the preview width), a text's content lines and their count, and
@@ -272,8 +288,7 @@ export {
 // Escaping for an XML or HTML attribute value and for element text.
 export { escapeAttr, escapeText } from '@shared/utils/xmlEscape';
 
-// Agents as a catalog names them: name, key and file name, scan issues, the
-// default workflow agent, team presets and a workspace's selection.
+// Agents (names, keys, scan issues, team presets) and picker rows.
 export {
   AGENT_MODE_PRESETS,
   agentFileName,
@@ -282,39 +297,54 @@ export {
   type AgentModePreset,
   AgentModePresetSchema,
   agentName,
+  type AgentOptionData,
+  AgentOptionDataSchema,
   type AgentScanIssue,
   AgentScanIssueSchema,
   DEFAULT_WORKFLOW_AGENT,
-  parseAgentModePresets,
-  STARTER_AGENT_MODE_PRESET,
-  type WorkspaceAgentsSelection,
-} from '@shared/schemas';
-// Picker rows (models, agents, teams), and whether a model option runs.
-export {
-  type AgentOptionData,
-  AgentOptionDataSchema,
   isModelOptionAvailable,
   MODEL_AVAILABILITY_STATUS,
   ModelAvailabilityFieldsSchema,
   type ModelOptionData,
   ModelOptionDataSchema,
+  parseAgentModePresets,
+  STARTER_AGENT_MODE_PRESET,
   type TeamOptionData,
   TeamOptionDataSchema,
+  type WorkspaceAgentsSelection,
 } from '@shared/schemas';
-// The permission payloads a request carries, and an inquiry's turns.
+// Request payloads, inquiry turns, harness setting keys, and skills.
 export {
+  type ActiveSkillSourceScope,
+  ActiveSkillSourceScopeSchema,
+  AGENT_SKILLS_CONFIG_KEY,
   type AgentProposalPermission,
   type AnsweredInquiryTurn,
+  BASH_APPROVAL_CONFIG_KEY,
   type BashPermission,
+  CHATGPT_CODEX_CONTEXT_WINDOW_SETTING,
+  CHILD_RUN_CONCURRENCY_BUDGET_CONFIG_KEY,
+  CHILD_RUN_CONCURRENCY_BUDGET_SETTING,
   CredentialSwitchSchema,
   type ExternalInquiryPermission,
   ExternalInquiryTurnRecordSchema,
+  GOAL_MAX_COST_SETTING,
   type InquiryThreadId,
   InquiryThreadIdSchema,
+  InstalledPluginSchema,
+  MODEL_COMPACTION_THRESHOLD_SETTING,
+  MODEL_RETRY_MAX_ATTEMPTS_SETTING,
   type OpenInquiryTurn,
   type PlanApprovalPermission,
   type RequestDecision,
+  RESUME_ON_OPEN_SETTING,
   type RetryPermission,
+  type SkillDisplayIssue,
+  SkillDisplayIssueSchema,
+  type SkillDisplayItem,
+  SkillDisplayItemSchema,
+  SkillNameSchema,
+  TOOL_EDIT_APPROVAL_CONFIG_KEY,
   ToolEditPermissionSchema,
   type UserQuestionAnswers,
   UserQuestionAnswersSchema,
@@ -322,70 +352,43 @@ export {
   type UserQuestionPrompt,
   UserQuestionPromptSchema,
 } from '@shared/schemas';
-// Harness setting rows and config keys, and skills as a list shows them.
-export {
-  type ActiveSkillSourceScope,
-  ActiveSkillSourceScopeSchema,
-  AGENT_SKILLS_CONFIG_KEY,
-  BASH_APPROVAL_CONFIG_KEY,
-  CHATGPT_CODEX_CONTEXT_WINDOW_SETTING,
-  CHILD_RUN_CONCURRENCY_BUDGET_CONFIG_KEY,
-  CHILD_RUN_CONCURRENCY_BUDGET_SETTING,
-  GOAL_MAX_COST_SETTING,
-  InstalledPluginSchema,
-  MODEL_COMPACTION_THRESHOLD_SETTING,
-  MODEL_RETRY_MAX_ATTEMPTS_SETTING,
-  RESUME_ON_OPEN_SETTING,
-  type SkillDisplayIssue,
-  SkillDisplayIssueSchema,
-  type SkillDisplayItem,
-  SkillDisplayItemSchema,
-  SkillNameSchema,
-  TOOL_EDIT_APPROVAL_CONFIG_KEY,
-} from '@shared/schemas';
-// Runs: phases, substates and actions, identity, ends and records, plans,
-// tool-call status, a store's owner, and the requests that park a caller.
-export {
-  emptyRunEndOutput,
-  isLoopDriven,
-  isTaskConfig,
-  type McpToolOutput,
-  ownerIdentity,
-  type Plan,
-  planSummaryLine,
-  type ProgressPermissionKind,
-  recipeBlockOf,
-  requestParksItsCaller,
-  RUN_LIFECYCLE_READY,
-  RUN_PHASE,
-  RUN_SUBSTATE,
-  type RunAction,
-  type RunEndOutput,
-  RunEndSchema,
-  runIdentityName,
-  RunRecordFieldsSchema,
-  TOOL_CALL_STATUS,
-  type WorktreeInfo,
-} from '@shared/schemas';
-// What tools and runs produce: file locations and display paths, line
-// counts, usage, JSON values, log message types and context state.
+// Runs and what they produce: phases, records, plans, files and usage.
 export {
   type ContextStateData,
   type DiffStats,
   DiffStatsSchema,
+  emptyRunEndOutput,
   fileLocationAddressPath,
   fileLocationDisplayPath,
   FileLocationSchema,
   fileLocationShortDisplayPath,
   getProposalFileGroups,
-  type ProposalFileFields,
   isEmptyUsage,
+  isLoopDriven,
+  isTaskConfig,
   JsonValueSchema,
   LineCountSchema,
+  type McpToolOutput,
   MESSAGE_TYPES,
   NullableFileFieldsSchema,
+  ownerIdentity,
+  type Plan,
+  planSummaryLine,
+  type ProgressPermissionKind,
+  type ProposalFileFields,
+  recipeBlockOf,
+  requestParksItsCaller,
+  RUN_LIFECYCLE_READY,
+  RUN_PHASE,
+  RUN_SUBSTATE,
+  type RunEndOutput,
+  RunEndSchema,
+  runIdentityName,
+  RunRecordFieldsSchema,
   runStorageFilePath,
   sumUsageStats,
   toJsonValue,
   type TokenUsageStats,
+  TOOL_CALL_STATUS,
+  type WorktreeInfo,
 } from '@shared/schemas';

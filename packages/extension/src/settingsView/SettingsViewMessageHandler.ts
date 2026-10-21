@@ -31,7 +31,6 @@ import {
   setCopilotRoutePreference,
 } from '@model/copilotRouting';
 import type { ProgressViewProvider } from '@progressView/ProgressViewProvider';
-import { ACCOUNT_OUTCOME } from '@shared/model/accountAuth';
 import { TexraStateKey } from '@texra/shared/settingsView/texraSettings';
 import {
   SettingsViewInboundMessageSchema,
@@ -41,6 +40,7 @@ import { createSettingsViewBody } from '@texra/controllers/settingsView/sharedSe
 import type { SettingsViewInboundHandlerRegistry } from '@texra/controllers/settingsView/settingsViewDispatch';
 import type { SubscriptionProviderId } from '@texra/controllers/modelAccess/subscriptionProviders';
 import { allSettledVoid } from '@texra/utils/core/allSettledVoid';
+import { ACCOUNT_OUTCOME } from '@ui/copy/accountAuth';
 import {
   latexEditorStatus,
   vscodeLatexSettingsHandlers,

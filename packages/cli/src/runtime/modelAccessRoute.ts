@@ -1,17 +1,15 @@
-import {
-  SUBSCRIPTION_AUTH_PROVIDERS,
-  type SubscriptionAuthStatus,
-} from '@shared/model/subscriptionAuth';
-import {
-  CHATGPT_AUTH,
-  GROK_AUTH,
-  SUBSCRIPTION_AUTH_COPY,
-} from '@shared/model/accountAuth';
+import { SUBSCRIPTION_AUTH_PROVIDERS } from '@texra-ai/harness/schemas';
+import type { SubscriptionAuthStatus } from '@texra/shared/model/subscriptionAuth';
 import {
   CODING_PLAN_SUBSCRIPTIONS,
   type CodingPlanSubscription,
   type CodingPlanSubscriptionId,
 } from '@texra/shared/model/codingPlans';
+import {
+  CHATGPT_AUTH,
+  GROK_AUTH,
+  SUBSCRIPTION_AUTH_COPY,
+} from '@ui/copy/accountAuth';
 import { OWN_API_KEYS } from '@ui/copy/modelAccess';
 import type {
   DeclinableUsageRoute,

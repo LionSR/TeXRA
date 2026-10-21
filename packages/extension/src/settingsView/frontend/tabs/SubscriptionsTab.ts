@@ -16,7 +16,7 @@ import { customElement, property } from 'lit/decorators.js';
 
 // Local imports - shared styles, schemas, and templates
 import { pluralize } from '@texra-ai/harness/transcript';
-import type { SubscriptionAuthStatuses } from '@shared/model/subscriptionAuth';
+import type { SubscriptionAuthStatuses } from '@texra/shared/model/subscriptionAuth';
 import type { SubscriptionUsageSnapshots } from '@texra/shared/model/subscriptionUsage';
 import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 import { postMessage } from '@texra/shared/hostBridge';

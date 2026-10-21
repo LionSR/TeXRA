@@ -18,6 +18,7 @@ import {
 import {
   describeFollowUpFailure,
   hasErrorPresentationClaimed,
+  heldElsewhereBy,
   presentFollowUpResult,
   type PlatformSecrets,
   type ProcessRuntime,
@@ -51,7 +52,6 @@ import { setCliHelperModel } from '@cli/runtime/initPlatform';
 import { readCliTeamName } from '@cli/runtime/cliTeams';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import { launchApproval, type CliContext } from '@cli/runtime/cliContext';
-import { heldElsewhereBy } from '@shared/session/database';
 import type { DisposableStore } from '@texra/platform/disposable';
 import { FOCUSED_AGENT } from '@ui/copy/nestedRuns';
 import { handleTuiSlashCommand } from './tui/commands/handleSlashCommand';

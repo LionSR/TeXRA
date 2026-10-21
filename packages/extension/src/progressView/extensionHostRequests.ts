@@ -64,7 +64,7 @@ import latexPreamble from '@resources/templates/chatExport.tex';
 import {
   setFirstRunDone,
   setOnboardingDeclined,
-} from '@shared/state/onboardingState';
+} from '@texra/controllers/onboarding/onboardingFunnel';
 import { isMultipleDocumentFileType } from '@texra/shared/launcher/fileTypes';
 import { getIncludedExtensions } from '@texra/common/files/fileTypeUtils';
 import type {

@@ -1,7 +1,7 @@
 {
   "packages/harness/src/agent/codeSandbox/worker.ts": 545,
   "packages/harness/src/agent/runtime/AgentLaunchContext.ts": 423,
-  "packages/harness/src/agent/runtime/AgentRunLifecycle.ts": 497,
+  "packages/harness/src/agent/runtime/AgentRunLifecycle.ts": 496,
   "packages/harness/src/agent/runtime/childRunLoop.ts": 992,
   "packages/harness/src/agent/runtime/executeAgent.ts": 404,
   "packages/harness/src/agent/runtime/FollowUps.ts": 430,
@@ -23,7 +23,7 @@
   "packages/harness/src/controllers/session/storeSchema.ts": 412,
   "packages/harness/src/shared/schemas/runHistoryEvent.ts": 451,
   "packages/harness/src/shared/schemas/sessionEvent.ts": 638,
-  "packages/harness/src/shared/session/database.ts": 414,
+  "packages/harness/src/shared/session/database.ts": 413,
   "packages/harness/src/shared/session/runRows.ts": 412,
   "packages/harness/src/shared/session/runStateFold.ts": 552,
   "packages/harness/src/shared/session/sessionFold.ts": 1229,

@@ -20,7 +20,7 @@ import {
   type RunId,
   type ToolFact,
 } from '@texra-ai/harness/schemas';
-import type { ValueFamily } from '@shared/session/valueFamily';
+import type { ValueFamily } from '@texra-ai/harness';
 import type { SessionView } from '@texra-ai/harness/schemas';
 
 const InquiryThreadStatusSchema = z.enum(['open', 'answered', 'dropped']);

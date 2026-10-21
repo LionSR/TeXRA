@@ -20,7 +20,6 @@ import {
   ToolContext,
   type ToolContextShape,
   WorkspaceFs,
-  type RequestDecision,
   type ToolResult,
 } from '@texra-ai/harness';
 import {
@@ -30,6 +29,7 @@ import {
   RunFileService,
   ToolError,
   type EditRecord,
+  type RefusalDecision,
 } from '@texra-ai/harness/plugins';
 import { pathToLocationIn } from '@texra-ai/harness';
 import {
@@ -77,15 +77,9 @@ const fileAt = (fs: FileSystem.FileSystem, target: string) =>
 // ============================================================================
 
 /** One declined file: the refusal a person or a policy gave it. */
-/** The decision arms that refuse an edit. */
-type RequestRefusal = Extract<
-  RequestDecision,
-  { action: 'reject' | 'deny' | 'cancel' }
->;
-
 interface RecordedRejection {
   readonly path: string;
-  readonly refusal: RequestRefusal;
+  readonly refusal: RefusalDecision;
 }
 
 /**
@@ -95,14 +89,14 @@ interface RecordedRejection {
  */
 function summarizeRefusals(rejections: readonly RecordedRejection[]): {
   readonly path: string;
-  readonly refusal: RequestRefusal;
+  readonly refusal: RefusalDecision;
 } {
-  const of = <A extends RequestRefusal['action']>(action: A) =>
+  const of = <A extends RefusalDecision['action']>(action: A) =>
     rejections.filter(
       (
         r,
       ): r is RecordedRejection & {
-        refusal: Extract<RequestRefusal, { action: A }>;
+        refusal: Extract<RefusalDecision, { action: A }>;
       } => r.refusal.action === action,
     );
   const cancelled = of('cancel');

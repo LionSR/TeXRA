@@ -6,7 +6,7 @@
 import { z } from 'zod';
 
 import { AgentSourceSchema } from '@shared/schemas/agent';
-import { CHATGPT_AUTH, GROK_AUTH } from '@shared/model/accountAuth';
+import { SUBSCRIPTION_AUTH_NAMES } from '@shared/model/subscriptionAuth';
 
 // ============================================================
 // Option Data Schemas
@@ -75,12 +75,12 @@ export const MODEL_AVAILABILITY_STATUS = {
     requiresKey: true,
   },
   'subscription-access': {
-    label: CHATGPT_AUTH.subscriptionLabel,
+    label: SUBSCRIPTION_AUTH_NAMES.chatgpt.subscriptionLabel,
     available: true,
     requiresKey: false,
   },
   'xai-subscription-access': {
-    label: GROK_AUTH.subscriptionLabel,
+    label: SUBSCRIPTION_AUTH_NAMES.grok.subscriptionLabel,
     available: true,
     requiresKey: false,
   },
