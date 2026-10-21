@@ -8,15 +8,15 @@ import {
   type UserQuestionPermission,
 } from '@shared/schemas';
 import { agentProposalLabel } from '@texra/shared/plugins/documents';
-import type { ToolEditApprovalRequest } from '@tools/approval/toolEditApproval';
 import {
   SCRIPT_REQUEST_COPY,
   scriptRequestCallLine,
   scriptRequestFirstAgentLine,
 } from '@ui/copy/scriptRequest';
-import { buildDiffHunks, formatHunkLines } from '@utils/text/unifiedDiff';
+import { formatHunkLines } from '@utils/text/unifiedDiff';
 
 import { type CliApprovalContent } from './approvalPrompts';
+import type { ToolEditApprovalRequest } from '@texra-ai/harness';
 
 const TRUNCATED_DIFF_LINE_MARKER = ' … [line truncated]';
 const TOOL_EDIT_APPROVAL_DIFF_MAX_CHARS = 12_000;
@@ -202,11 +202,7 @@ export function formatBashApprovalSummary(payload: BashPermission): string {
 function toolEditDiffLines(
   request: Omit<ToolEditApprovalRequest, 'permission' | 'roots'>,
 ): readonly string[] {
-  // The approval flow that raised this request reports a diff timeout.
-  const { hunks } = buildDiffHunks(
-    request.originalContent,
-    request.proposedContent,
-  );
+  const { hunks } = request;
   if (hunks.length === 0) return [];
 
   return [

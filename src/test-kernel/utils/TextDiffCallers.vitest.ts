@@ -19,9 +19,12 @@ import {
   approvedWriteConflict,
   writeApprovedContent,
 } from '@tools/approval/approvedWrite';
-import { firstChangedLine } from '@tools/approval/toolEditApproval';
 import { runDirUnder } from '@utils/files/runStorageFs';
-import { unifiedDiffText } from '@utils/text/unifiedDiff';
+import {
+  buildDiffHunks,
+  firstChangedLine,
+  unifiedDiffText,
+} from '@utils/text/unifiedDiff';
 
 function installFakePlatform(
   files: Record<string, string> = {},
@@ -89,10 +92,11 @@ describe('shared text-diff caller fixtures', () => {
         const original = 'alpha\nbeta\nomega\n';
         const final = 'alpha\nBETA\nomega\n';
 
+        const inserted = 'alpha\ninsert\nbeta\nomega\n';
         expect(
           firstChangedLine(
-            'alpha\nbeta\nomega\n',
-            'alpha\ninsert\nbeta\nomega\n',
+            buildDiffHunks('alpha\nbeta\nomega\n', inserted).hunks,
+            inserted,
           ),
         ).toBe(1);
         const patch = unifiedDiffText(original, final).text;

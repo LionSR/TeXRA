@@ -15,12 +15,9 @@ import {
   publishTestRunStart,
   publishTestRows,
 } from '@test/support/sessionTestUtils';
-import {
-  requestToolEditApproval,
-  type ToolEditApprovalRequest,
-} from '@tools/approval/toolEditApproval';
+import { requestToolEditApproval } from '@tools/approval/toolEditApproval';
 
-type PendingToolEdit = Omit<ToolEditApprovalRequest, 'permission' | 'roots'>;
+type PendingToolEdit = Parameters<typeof requestToolEditApproval>[0];
 
 describe('Concurrent session tool edit approval handlers', () => {
   setupPlatform({ workspacePath: '/workspace', config: {}, files: {} });

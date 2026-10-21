@@ -4,6 +4,7 @@ import { Effect } from 'effect';
 
 // Local imports - common
 import { withLogChannel } from '@logger/effectLog';
+import { clamp, countLines } from '@utils/text/stringUtils';
 
 const CHANNEL = 'unifiedDiff';
 
@@ -191,20 +192,66 @@ export function reportDiffTimeout(
     : Effect.logWarning(timeout).pipe(withLogChannel(CHANNEL));
 }
 
+/** A hunk as its readers see it: jsdiff's, or one carried as data. */
+type Hunk = Readonly<Omit<StructuredPatchHunk, 'lines'>> & {
+  readonly lines: readonly string[];
+};
+
+/** Added/removed line counts folded over hunks a caller already holds. */
+export function countLineChanges(hunks: readonly Hunk[]): {
+  added: number;
+  removed: number;
+} {
+  let added = 0;
+  let removed = 0;
+  for (const hunk of hunks) {
+    for (const line of hunk.lines) {
+      if (line.startsWith('+')) added += 1;
+      else if (line.startsWith('-')) removed += 1;
+    }
+  }
+  return { added, removed };
+}
+
+/**
+ * The 0-based line of `proposed` where the first of `hunks` (its diff from
+ * some original) changes it, which a diff view scrolls to; null when there
+ * is no change.
+ */
+export function firstChangedLine(
+  hunks: readonly Hunk[],
+  proposed: string,
+): number | null {
+  const [hunk] = hunks;
+  if (!hunk) return null;
+
+  const lastProposedLine = Math.max(countLines(proposed) - 1, 0);
+  let line = hunk.newStart;
+  for (const text of hunk.lines) {
+    const marker = text.at(0);
+    if (marker === '+') return Math.min(line - 1, lastProposedLine);
+    // A deletion has no line of its own in the proposed text; reveal the
+    // position it was removed from.
+    if (marker === '-') {
+      return clamp(line - 1, 0, lastProposedLine);
+    }
+    line += 1;
+  }
+  return clamp(hunk.newStart - 1, 0, lastProposedLine);
+}
+
 /**
  * The one hunk-header policy. `,1` ranges are omitted, the form `diff -u` and
  * `git diff` emit.
  */
-export function formatHunkHeader(hunk: StructuredPatchHunk): string {
+export function formatHunkHeader(hunk: Hunk): string {
   const range = (start: number, lines: number) =>
     lines === 1 ? String(start) : `${start},${lines}`;
   return `@@ -${range(hunk.oldStart, hunk.oldLines)} +${range(hunk.newStart, hunk.newLines)} @@`;
 }
 
 /** Hunks as unified-diff text lines, each hunk preceded by its header. */
-export function formatHunkLines(
-  hunks: readonly StructuredPatchHunk[],
-): string[] {
+export function formatHunkLines(hunks: readonly Hunk[]): string[] {
   return hunks.flatMap((hunk) => [formatHunkHeader(hunk), ...hunk.lines]);
 }
 

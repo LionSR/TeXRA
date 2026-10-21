@@ -29,7 +29,7 @@ import {
 } from '@test/support/sessionTestUtils';
 import type { DiffSource } from '@texra/hosts/uiHosts';
 import type { ToolEditPreview } from '@texra/controllers/approval/ToolEditApprovalController';
-import type { ToolEditApprovalRequest } from '@tools/approval/toolEditApproval';
+import type * as ToolEditApproval from '@tools/approval/toolEditApproval';
 import { createStubDesktopAgentRunHost } from './desktopAgentRunTestHarness.ts';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
@@ -161,7 +161,7 @@ function createApprovalFixture(
        * to a run the run history already knows.
        */
       requestApproval(
-        request: Omit<ToolEditApprovalRequest, 'permission' | 'roots'>,
+        request: Parameters<typeof ToolEditApproval.requestToolEditApproval>[0],
       ) {
         const { runId } = request;
         return Effect.gen(function* () {

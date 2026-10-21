@@ -134,6 +134,7 @@ export {
 export {
   OutcomeSchema,
   RuntimeRequestSchema,
+  ToolEditContentSchema,
 } from '@shared/session/runtimeRequest';
 export type {
   RuntimeRequest,

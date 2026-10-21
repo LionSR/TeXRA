@@ -16,9 +16,9 @@ import {
   compactAwareMaxScrollOffset,
   type ScrollableDisplayLine,
 } from './scrollBounds';
-import type { StructuredPatchHunk } from 'diff';
+import type { ToolEditContent } from '@texra-ai/harness/schemas';
 
-type Hunk = StructuredPatchHunk;
+type Hunk = ToolEditContent['hunks'][number];
 
 export interface InlinePatchGroup {
   readonly fileLabel: string;
