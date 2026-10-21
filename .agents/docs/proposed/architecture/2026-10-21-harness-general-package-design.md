@@ -6,7 +6,8 @@ status: proposed
 # The harness as a general package: surface first, two structural moves
 
 Baseline: `main` at `08455c8` for the audits, re-checked against `1a553be`.
-Line references point into that tree. The durable doc is
+Line references point into that tree, except the lane 4 re-check, which reads
+`6e5b262`. The durable doc is
 [`2026-10-02-durable-harness.md`](./2026-10-02-durable-harness.md) (accepted);
 the split doc is
 [`2026-10-02-harness-package-split.md`](./2026-10-02-harness-package-split.md).
@@ -339,7 +340,9 @@ On 2026-10-21 the owner set this order:
 3. The debt-cleanup branches (`claude/debt-*`). Their item 2 folds the llm
    OAuth files, so the `.catch` removal in lane 3 waits for it. Item 7 changes
    `openSettings` in both GUI host request files, so lane 7 waits for it.
-   Items 5 and 8 shrink the deep-import baseline before lane 1 deletes it.
+   Item 5 (#14197) shrinks the deep-import baseline before lane 1 deletes
+   it. Item 8 (#14198) was closed unmerged, so lane 1 moves its two imports
+   (`AgentTrace`, `describeFollowUpFailure`) itself.
 4. This design's lanes.
 
 The "Pre-water night launch priorities" review (2026-10-21) ranked two items
