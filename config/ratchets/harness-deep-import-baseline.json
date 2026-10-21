@@ -22,7 +22,6 @@
     ],
     "extension": [
       "@eventBus/AppSignals",
-      "@model/copilotRouting",
       "@platform/defaults/fileSecrets",
       "@platform/defaults/jsonStore",
       "@shared/constants/agents",
@@ -33,17 +32,9 @@
       "@utils/text/stringUtils"
     ],
     "texra": [
-      "@agent/export/schemas",
-      "@agent/followUp/followUpSender",
-      "@agent/followUp/ToolUseFollowUp",
-      "@agent/prompt/templateInputs",
-      "@agent/runtime/deliveryEnvelope",
-      "@agent/trace",
       "@common/teams/TeamPlan",
       "@common/teams/TeamPresets",
       "@eventBus/AppSignals",
-      "@model/copilotRouting",
-      "@model/subscriptionAccess",
       "@platform/defaults/jsonStore",
       "@platform/defaults/longRunningModelTransport",
       "@platform/defaults/nodeHost",

@@ -6,12 +6,12 @@
  */
 
 import { RunFileService } from '@texra-ai/harness/plugins';
-import type { AgentTrace } from '@agent/trace';
 import type { FileLocation } from '@shared/schemas';
 import {
   type CompileFailure,
   type RoundOutput,
 } from '@texra/shared/plugins/documentOutputs';
+import type { AgentTrace } from '@texra-ai/harness/plugins';
 import type { WorkspaceRoots } from '@texra-ai/harness';
 import type { AgentConfig } from '@texra-ai/harness/schemas';
 

@@ -57,6 +57,7 @@ export function testRunRegistry(): RunRegistry {
     session: () => session,
     fork: testRunFork,
     programs: testRunPrograms,
+    wake: () => {},
   });
 }
 
