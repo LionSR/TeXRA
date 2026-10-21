@@ -5,6 +5,7 @@ import { toPosixPath } from '@texra-ai/harness';
 import { Effect, FileSystem, Path, PlatformError } from 'effect';
 
 import { isNotADirectoryError } from '@texra-ai/harness';
+import { runDirUnder } from '@texra-ai/harness/node';
 import { runOutcomeToCliRunStatus } from '@cli/schemas/cliOutput';
 import type { RunEndOutput } from '@shared/schemas';
 import { isTaskConfig, RUN_OUTCOME } from '@shared/schemas';
@@ -16,7 +17,6 @@ import {
   type DocumentsResult,
   type OutputFileSummary,
 } from '@texra/shared/plugins/documentOutputs';
-import { runDirUnder } from '@utils/files/runStorageFs';
 // toPosixPath also trims and resolves `.`/`..` segments beyond a bare slash
 // swap; safe here since these paths come from getSafeDocumentRelativePath /
 // path.relative on the workflow's own generated outputs, never user input.

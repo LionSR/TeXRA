@@ -16,7 +16,16 @@ import { normalizeFilePath } from '@texra-ai/harness/schemas';
 
 import { Data, Effect, FileSystem, type PlatformError } from 'effect';
 
-import { Rejected, isPathWithin, OFFICE_EXTENSIONS } from '@texra-ai/harness';
+import {
+  Rejected,
+  isPathWithin,
+  OFFICE_EXTENSIONS,
+  pathToLocationIn,
+} from '@texra-ai/harness';
+import {
+  entryTypeIn,
+  readDirectoryTypedTolerant,
+} from '@texra-ai/harness/node';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
 import { onAppSignal } from '@eventBus/AppSignals';
 import { FILE_HANDLING_RULES } from '@texra/common/files/fileHandlingRules';
@@ -28,9 +37,6 @@ import {
   prepareFileFilters,
   shouldVisitDirectory,
 } from '@texra/common/files/fileListingRules';
-import { locateInWorkspace } from '@utils/files/workspaceFS';
-import { readDirectoryTypedTolerant } from '@utils/files/fsDurability';
-import { entryTypeIn } from '@utils/files/fsEntryExists';
 
 import {
   DESKTOP_WORKSPACE_COMMANDS,
@@ -164,17 +170,11 @@ function locateWorkspaceTarget(
   { absolutePath: string; root: string },
   WorkspaceRequestRefused
 > {
-  const located = locateInWorkspace(root, inputPath);
-  if (located.kind !== 'workspace') {
+  // With no folder open every path is outside it.
+  const located = root ? pathToLocationIn(root, inputPath) : undefined;
+  if (!root || located?.kind !== 'workspace') {
     return Effect.fail(
       new WorkspaceRequestRefused({ message: WORKSPACE_BOUNDARY_ERROR }),
-    );
-  }
-  if (!root) {
-    return Effect.fail(
-      new WorkspaceRequestRefused({
-        message: 'Workspace path is not available.',
-      }),
     );
   }
   return Effect.succeed({ absolutePath: located.absolutePath, root });

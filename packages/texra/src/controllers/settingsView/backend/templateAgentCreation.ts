@@ -3,6 +3,7 @@ import * as path from 'node:path';
 
 // Third-party imports
 import { Effect, FileSystem } from 'effect';
+import { entryTypeIn } from '@texra-ai/harness/node';
 
 // Local imports - agent
 import {
@@ -11,8 +12,6 @@ import {
   renderAgentTemplateString,
 } from '@texra/agent/templates/agentTemplateRenderer';
 // Local imports - utilities
-import { readNormalizedFile } from '@utils/files/fsDurability';
-import { entryExists } from '@utils/files/fsEntryExists';
 
 /**
  * "Create an agent from a bundled template" is one operation with one set of
@@ -63,20 +62,21 @@ export const writeTemplateAgentFile = Effect.fn(
     ? `${baseName} — document task`
     : `${baseName} — chat agent`;
   const fs = yield* FileSystem.FileSystem;
-  if (yield* entryExists(fs, filePath)) {
+  if ((yield* entryTypeIn(fs, filePath)) !== undefined) {
     return {
       ok: false,
       message: `A file named "${fileName}" already exists in the custom agents folder.`,
     } as const;
   }
-  const raw = yield* readNormalizedFile(
-    fs,
-    path.join(
-      resourcesRoot,
-      'templates',
-      AGENT_TEMPLATE_FILES[input.task ? 'workflowSingle' : 'toolUse'],
-    ),
-  );
+  const raw = yield* fs
+    .readFileString(
+      path.join(
+        resourcesRoot,
+        'templates',
+        AGENT_TEMPLATE_FILES[input.task ? 'workflowSingle' : 'toolUse'],
+      ),
+    )
+    .pipe(Effect.map((text) => text.replaceAll('\r\n', '\n')));
   yield* fs.writeFileString(
     filePath,
     renderAgentTemplateString(raw, {

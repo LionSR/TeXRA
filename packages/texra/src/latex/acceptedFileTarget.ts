@@ -6,7 +6,11 @@ import { normalizeFilePath } from '@texra-ai/harness/schemas';
 import { Effect, FileSystem, type PlatformError } from 'effect';
 
 // Local imports
-import { withLogChannel, WorkspaceFs } from '@texra-ai/harness';
+import {
+  pathToLocationIn,
+  withLogChannel,
+  WorkspaceFs,
+} from '@texra-ai/harness';
 import {
   createExternalLocation,
   createRunStorageLocation,
@@ -14,7 +18,6 @@ import {
 } from '@texra-ai/harness';
 import { generateDiffFileName } from '@latex/latexdiff/diffFileNameManager';
 import type { FileLocation } from '@shared/schemas';
-import { locateInWorkspace } from '@utils/files/workspaceFS';
 
 const CHANNEL = 'AcceptedFileTarget';
 
@@ -273,7 +276,7 @@ export const cleanupAcceptedWorkspaceDiffFiles = Effect.fn(
   entries: readonly { outputPath: string; originalPath: string }[],
 ): Effect.fn.Return<string[], never, WorkspaceFs> {
   const stale = entries.flatMap(({ outputPath, originalPath }) => {
-    const original = locateInWorkspace(workspaceRoot, originalPath);
+    const original = pathToLocationIn(workspaceRoot, originalPath);
     if (original.kind === 'external') return [];
     const diffLocation = staleDiffFileLocation(original, outputPath, original);
     if (!diffLocation || diffLocation.kind === 'external') return [];

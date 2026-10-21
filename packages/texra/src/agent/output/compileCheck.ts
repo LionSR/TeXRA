@@ -1,11 +1,12 @@
 import { hash } from 'node:crypto';
 import * as path from 'node:path';
 import { normalizeFilePath } from '@texra-ai/harness/schemas';
+import { runDirUnder } from '@texra-ai/harness/node';
 import { hasExtension } from '@texra-ai/harness';
 
 import { Cause, Effect, FileSystem } from 'effect';
 
-import { createRunStorageLocation } from '@texra-ai/harness';
+import { createRunStorageLocation, pathToLocationIn } from '@texra-ai/harness';
 import { Settings } from '@texra-ai/harness';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
 import type { AgentTrace } from '@agent/trace';
@@ -25,10 +26,7 @@ import {
   isGenericOutputStem,
   type OutputFileInfo,
 } from '@texra/shared/plugins/documentOutputs';
-import { readNormalizedFile } from '@utils/files/fsDurability';
-import { runDirUnder } from '@utils/files/runStorageFs';
 import { type RunFileService } from '@utils/files/runStorage';
-import { locateInWorkspace } from '@utils/files/workspaceFS';
 
 import {
   publishCompiledPdfArtifact,
@@ -324,10 +322,7 @@ const compileOne = Effect.fn('documents.compileOne')(function* (
     >,
     CompileAttempt
   > {
-    const content = yield* readNormalizedFile(
-      fs,
-      outputFile.location.absolutePath,
-    );
+    const content = yield* fs.readFileString(outputFile.location.absolutePath);
     if (!/\\documentclass/.test(content)) {
       ctx.logger.debug(
         `Compile check: ${displayName} has no \\documentclass, skipping`,
@@ -342,7 +337,7 @@ const compileOne = Effect.fn('documents.compileOne')(function* (
     const source = outputFile.source.trim();
     const locatedSource =
       source.length > 0
-        ? locateInWorkspace(ctx.roots.workspace, source)
+        ? pathToLocationIn(ctx.roots.workspace, source)
         : undefined;
     const sourceLocation =
       locatedSource?.kind === 'workspace' ? locatedSource : outputFile.location;

@@ -26,6 +26,7 @@ import {
   StateStores,
 } from '@texra-ai/harness';
 import {
+  absentReason,
   createNodeWorkspaceRoots,
   canonicalizeWorkspacePath,
   resolveWorkspaceStoragePath,
@@ -43,7 +44,6 @@ import {
 } from '@texra/controllers/server/serviceSession';
 import type { ServiceLink } from '@texra/controllers/server/client';
 import { sessionStoreMovedAsideMessage } from '@ui/copy/sessionStore';
-import { absentReason } from '@utils/files/fsEntryExists';
 import { DesktopProjectRecords } from './desktopProjectRecords.js';
 import { showDesktopWarningDialog } from './platform/warningDialog.js';
 import type { ConfigStore } from '@texra-ai/harness/node';

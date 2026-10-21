@@ -7,16 +7,12 @@ import { Effect, FileSystem } from 'effect';
 
 // Local imports
 import { withLogChannel } from '@texra-ai/harness';
+import { entryTypeIn, runDirUnder } from '@texra-ai/harness/node';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
 import type { RunId } from '@shared/schemas';
 import type { HostRequest } from '@texra/shared/session/hostRequest';
 import { PrunedNestedMap } from '@texra/utils/core/prunedNestedMap';
 import { type AcceptCopyMeta } from '@texra/shared/plugins/documentOutputs';
-import {
-  ensureRunDirUnder,
-  findRunDirUnder,
-  runDirUnder,
-} from '@utils/files/runStorageFs';
 import type { HostRequestFailure } from '@texra-ai/harness';
 import type { AgentConfig } from '@texra-ai/harness/schemas';
 import type { HostRunActions } from '../session/hostRunActions';
@@ -101,13 +97,12 @@ export class ProgressWorkflowFileActionsController {
 
   openRunStorage(runId: RunId): FileAction<void> {
     return Effect.gen({ self: this }, function* () {
-      const storageRoot = this.deps.storageRoot;
-      let directoryToReveal = yield* findRunDirUnder(storageRoot, runId);
-      if (!directoryToReveal) {
-        yield* ensureRunDirUnder(storageRoot, runId);
-        directoryToReveal = runDirUnder(storageRoot, runId);
+      const runDirectory = runDirUnder(this.deps.storageRoot, runId);
+      const fs = yield* FileSystem.FileSystem;
+      if ((yield* entryTypeIn(fs, runDirectory)) === undefined) {
+        yield* fs.makeDirectory(runDirectory, { recursive: true });
       }
-      yield* this.deps.host.openDirectory(directoryToReveal);
+      yield* this.deps.host.openDirectory(runDirectory);
     }).pipe(
       Effect.catch((error) =>
         Effect.logError('Failed to open run folder', error).pipe(

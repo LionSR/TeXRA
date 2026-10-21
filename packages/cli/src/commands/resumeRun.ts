@@ -3,6 +3,7 @@ import * as path from 'node:path';
 import { Effect, FileSystem, PlatformError, Result } from 'effect';
 
 import { describeFollowUpFailure } from '@texra-ai/harness';
+import { absentReason } from '@texra-ai/harness/node';
 import { ensureError } from '@texra-ai/harness/schemas';
 import {
   agentKey,
@@ -12,7 +13,6 @@ import {
   type RunId,
 } from '@shared/schemas';
 import { approvalPolicyLabel } from '@ui/copy/approvalPolicy';
-import { pathExists } from '@utils/files/fsDurability';
 
 import { executeCliWorkflowConfig } from './workflow';
 import { formatResumeCommand } from '../chat/tui/state/resumeHint';
@@ -74,7 +74,10 @@ const workflowRecoveryInputsAreDurable = Effect.fn(
   const paths = [...(config.inputFiles ?? []), ...(config.contextFiles ?? [])];
   const present = yield* Effect.forEach(
     paths,
-    (inputPath) => pathExists(fs, path.resolve(cwd, inputPath)),
+    (inputPath) =>
+      fs
+        .exists(path.resolve(cwd, inputPath))
+        .pipe(Effect.catchIf(absentReason, () => Effect.succeed(false))),
     { concurrency: 8 },
   );
   return present.every(Boolean);

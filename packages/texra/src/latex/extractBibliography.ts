@@ -11,7 +11,7 @@ import { parseBibFile } from 'bibtex';
 
 // Local imports - utils
 import { ensureError } from '@texra-ai/harness/schemas';
-import { pathExists } from '@utils/files/fsDurability';
+import { absentReason } from '@texra-ai/harness/node';
 
 // Local file imports
 import {
@@ -74,7 +74,8 @@ export const extractBibliographyContext = Effect.fn(
   const probed = yield* Effect.forEach(
     referencedPaths,
     (candidate) =>
-      pathExists(fs, candidate).pipe(
+      fs.exists(candidate).pipe(
+        Effect.catchIf(absentReason, () => Effect.succeed(false)),
         Effect.map((exists) => ({ candidate, exists })),
       ),
     { concurrency: PROBE_CONCURRENCY },

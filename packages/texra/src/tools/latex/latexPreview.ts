@@ -195,8 +195,7 @@ const readFileWithFallback = (
 ): Effect.Effect<string, never, PreviewServices> =>
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
-    // The raw bytes decoded as-is: no line-ending normalization and no BOM
-    // handling, unlike `readNormalizedFile`.
+    // The raw bytes decoded as-is, line endings included.
     return yield* fs.readFile(uri.fsPath).pipe(
       Effect.map((bytes) => Buffer.from(bytes).toString('utf8')),
       Effect.catch((error) =>

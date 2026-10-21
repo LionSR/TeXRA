@@ -81,15 +81,6 @@ export const findExistingRunStoragePathUnder = Effect.fn(
     : undefined;
 });
 
-/** A run's directory under `storageRoot`, when that directory exists. */
-export const findRunDirUnder = Effect.fn('runStorage.findRunDir')(function* (
-  storageRoot: string,
-  id: RunId,
-) {
-  const rel = yield* findExistingRunStoragePathUnder(storageRoot, id);
-  return rel ? path.join(storageRoot, rel) : undefined;
-});
-
 type RunStorageEntryInspection =
   | { readonly kind: 'file'; readonly location: RunStorageFileLocation }
   | {
@@ -184,21 +175,6 @@ export function runStorageAbsolutePathUnder(
   workspaceRelative: string,
 ): string {
   return path.join(storageRoot, resolveRunStoragePath(id, workspaceRelative));
-}
-
-/** Locate `absolutePath` inside one named run's directory under `storageRoot`. */
-export function runStorageLocationInRunUnder(
-  storageRoot: string,
-  absolutePath: string,
-  runId: RunId,
-): RunStorageFileLocation | undefined {
-  if (!path.isAbsolute(absolutePath)) return undefined;
-  const relativePath = runStorageRelativePath(
-    absolutePath,
-    runDirUnder(storageRoot, runId),
-  );
-  if (!relativePath) return undefined;
-  return createRunStorageLocation(absolutePath, relativePath, runId);
 }
 
 /**

@@ -5,7 +5,6 @@ import replacementEngine, {
   type ReplacementConfigRead,
 } from '@replacement/engine';
 import type { FileLocation } from '@shared/schemas';
-import { readNormalizedFile } from '@utils/files/fsDurability';
 import type { ConfigProvider } from '@texra-ai/harness';
 
 /** LaTeX starred math environments that need label removal during diff processing. */
@@ -74,12 +73,19 @@ export class DiffFileProcessor {
   ): Effect.Effect<void, PlatformError.PlatformError, FileSystem.FileSystem> {
     return Effect.gen({ self: this }, function* () {
       const fs = yield* FileSystem.FileSystem;
-      const content = yield* readNormalizedFile(
-        fs,
-        diffFileLocation.absolutePath,
-      );
+      // Decoded by `Buffer`, which keeps a leading BOM the written-back file
+      // must keep (`readFileString` drops it).
+      const read = (target: string) =>
+        fs
+          .readFile(target)
+          .pipe(
+            Effect.map((bytes) =>
+              Buffer.from(bytes).toString('utf-8').replaceAll('\r\n', '\n'),
+            ),
+          );
+      const content = yield* read(diffFileLocation.absolutePath);
       const editedContent = editedFileLocation
-        ? yield* readNormalizedFile(fs, editedFileLocation.absolutePath)
+        ? yield* read(editedFileLocation.absolutePath)
         : undefined;
       let processedContent = this.restoreFlattenedBibliography(
         content,

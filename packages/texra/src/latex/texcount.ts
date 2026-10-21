@@ -1,10 +1,10 @@
 import { Effect, FileSystem, Predicate, Array as Arr } from 'effect';
 
 import { withLogChannel, hasExtension } from '@texra-ai/harness';
+import { absentReason } from '@texra-ai/harness/node';
 import { pathToLocationIn } from '@texra-ai/harness';
 import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';
 import { runToolWithCheck } from '@texra/utils/system/toolChecks';
-import { pathExists } from '@utils/files/fsDurability';
 import { LATEX_COMMANDS_CHANNEL as CHANNEL } from './latexLogging';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 import type { SettingsStores } from '@texra-ai/harness';
@@ -69,7 +69,8 @@ const rejectionReason = Effect.fn('texcount.rejectionReason')(function* (
   filePath: string,
 ) {
   const fs = yield* FileSystem.FileSystem;
-  const exists = yield* pathExists(fs, filePath).pipe(
+  const exists = yield* fs.exists(filePath).pipe(
+    Effect.catchIf(absentReason, () => Effect.succeed(false)),
     Effect.mapError(ensureError),
   );
   if (!exists) {

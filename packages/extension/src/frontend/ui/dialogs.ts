@@ -3,10 +3,10 @@ import { Data, Effect } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports - utilities
-import { toErrorMessage } from '@texra-ai/harness/schemas';
+import { relativeToRoot } from '@texra-ai/harness/node';
+import { normalizeFilePath, toErrorMessage } from '@texra-ai/harness/schemas';
 import { ownedPrompt } from '@frontend/hosts/VscodeUiHost';
 import { showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
-import { workspaceRelativePath } from '@utils/files/workspaceFS';
 
 const CHANNEL = 'dialogs';
 
@@ -104,7 +104,10 @@ export function selectFiles(
       return null;
     }
     return fileUris.map((uri) =>
-      workspaceRelativePath(workspacePath, uri.fsPath),
+      workspacePath
+        ? (relativeToRoot(workspacePath, uri.fsPath) ??
+          normalizeFilePath(uri.fsPath))
+        : uri.fsPath,
     );
   });
 }

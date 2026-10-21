@@ -11,7 +11,12 @@ import path from 'node:path';
 import { Effect, FileSystem } from 'effect';
 
 import { withLogChannel, isPathWithin } from '@texra-ai/harness';
-import { toErrorMessage, countLines } from '@texra-ai/harness/schemas';
+import { runDirUnder, relativeToRoot } from '@texra-ai/harness/node';
+import {
+  toErrorMessage,
+  countLines,
+  normalizeFilePath,
+} from '@texra-ai/harness/schemas';
 import { runStorageFilePath, type RunId } from '@shared/schemas';
 import { escapeAttr } from '@shared/utils/xmlEscape';
 import { stripWorkflowRoundDir } from '@texra/shared/constants/workflowOutput';
@@ -22,9 +27,6 @@ import {
   type OutputFileSummary,
   type ResultDiffSummary,
 } from '@texra/shared/plugins/documentOutputs';
-import { readNormalizedFile } from '@utils/files/fsDurability';
-import { runDirUnder } from '@utils/files/runStorageFs';
-import { workspaceRelativePath } from '@utils/files/workspaceFS';
 import { reportDiffTimeout, unifiedDiffText } from '@utils/text/unifiedDiff';
 import type { WorkspaceRoots } from '@texra-ai/harness';
 import type { AgentBlockResult, RecipeChange } from '@texra-ai/harness/plugins';
@@ -129,10 +131,15 @@ function deliveredFilePath(
   roots: Pick<WorkspaceRoots, 'workspace' | 'storage'>,
   output: OutputFileSummary,
 ): string {
-  return output.originalPath === null ||
-    isPathWithin(roots.storage, output.originalPath)
-    ? stripWorkflowRoundDir(output.relativePath)
-    : workspaceRelativePath(roots.workspace, output.originalPath);
+  const { originalPath } = output;
+  if (originalPath === null || isPathWithin(roots.storage, originalPath)) {
+    return stripWorkflowRoundDir(output.relativePath);
+  }
+  if (!roots.workspace) return originalPath;
+  return (
+    relativeToRoot(roots.workspace, originalPath) ??
+    normalizeFilePath(originalPath)
+  );
 }
 
 /** Every revision's outputs, in revision order: a document revised twice
@@ -203,11 +210,18 @@ const computeAndWriteWorkflowDiffs = Effect.fn('documents.computeDiffs')(
       (o) =>
         Effect.gen(function* () {
           if (!o.originalPath) return null;
+          // Decoded by `Buffer`, which keeps a leading BOM, so a BOM change
+          // shows in the diff (`readFileString` drops it).
+          const read = (target: string) =>
+            fs
+              .readFile(target)
+              .pipe(
+                Effect.map((bytes) =>
+                  Buffer.from(bytes).toString('utf-8').replaceAll('\r\n', '\n'),
+                ),
+              );
           const [original, modified] = yield* Effect.all(
-            [
-              readNormalizedFile(fs, o.originalPath),
-              readNormalizedFile(fs, o.absolutePath),
-            ],
+            [read(o.originalPath), read(o.absolutePath)],
             { concurrency: 2 },
           );
 

@@ -11,7 +11,7 @@ import {
   WorkspaceFs,
   toPosixPath,
 } from '@texra-ai/harness';
-import { relativeToRoot } from '@texra-ai/harness/node';
+import { relativeToRoot, absentReason } from '@texra-ai/harness/node';
 
 // Local imports - tools
 import { ensureError } from '@texra-ai/harness/schemas';
@@ -27,7 +27,6 @@ import {
 } from '@latex/extractBibliography';
 import type { ToolResult } from '@shared/schemas';
 import { formatToolOutput } from '@tools/formatting';
-import { pathExists } from '@utils/files/fsDurability';
 import {
   emptyExtractionResult,
   resolveLatexFile,
@@ -102,10 +101,12 @@ const extractBibliography = Effect.fn('ExtractBibliographyTool.execute')(
         ? yield* FileSystem.FileSystem
         : yield* WorkspaceFs;
       // A path whose parent is not a directory is a missing bibliography, not
-      // a tool failure: that is `pathExists`'s reading. `exists` follows the
+      // a tool failure (`absentReason`). `exists` follows the
       // link, deliberately, so a dangling symlink reads as a missing
       // bibliography.
-      const exists = yield* pathExists(fs, resolved.fsPath);
+      const exists = yield* fs
+        .exists(resolved.fsPath)
+        .pipe(Effect.catchIf(absentReason, () => Effect.succeed(false)));
       const target = exists ? bibliographyFiles : missingBibliographyFiles;
       if (!target.includes(resolved.absolute)) {
         target.push(resolved.absolute);

@@ -1,5 +1,6 @@
 import * as path from 'node:path';
 import { formatResultCount } from '@texra-ai/harness/transcript';
+import { entryTypeIn } from '@texra-ai/harness/node';
 
 import { Effect, FileSystem } from 'effect';
 
@@ -24,7 +25,6 @@ import {
 } from '@texra/shared/plugins/documentOutputs';
 import { addCdataToTagsMultiple } from '@texra/utils/text/xmlCdata';
 import { RunFileService } from '@utils/files/runStorage';
-import { entryTypeIn } from '@utils/files/fsEntryExists';
 
 import {
   assignByContentSimilarity,

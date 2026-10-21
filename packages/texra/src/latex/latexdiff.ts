@@ -8,7 +8,6 @@ import { formatError } from '@texra-ai/harness/schemas';
 import { pathToLocationIn } from '@texra-ai/harness';
 import type { FileLocation } from '@shared/schemas';
 import type { LatexdiffMathMarkupValue } from '@texra/shared/constants/latexConfig';
-import { readNormalizedFile } from '@utils/files/fsDurability';
 import { generateDiffFileName } from './latexdiff/diffFileNameManager';
 import { DiffFileProcessor } from './latexdiff/diffFileProcessor';
 import { DiffCommandExecutor } from './latexdiff/diffCommandExecutor';
@@ -98,7 +97,15 @@ export class LaTeXdiffService {
   ): Effect.Effect<string, PlatformError.PlatformError, FileSystem.FileSystem> {
     return Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
-      return yield* readNormalizedFile(fs, absolutePath);
+      // Decoded by `Buffer`, which keeps a leading BOM (`readFileString`
+      // drops it).
+      return yield* fs
+        .readFile(absolutePath)
+        .pipe(
+          Effect.map((bytes) =>
+            Buffer.from(bytes).toString('utf-8').replaceAll('\r\n', '\n'),
+          ),
+        );
     });
   }
 

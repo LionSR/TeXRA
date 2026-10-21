@@ -1,10 +1,10 @@
 import { Effect, FileSystem } from 'effect';
 
 import { AgentCatalog } from '@texra-ai/harness';
+import { absentReason } from '@texra-ai/harness/node';
 import { implicitDefaultToolUseAgents } from '@shared/constants/agents';
 import { workspaceTexraConfigPath } from '@texra/platform/defaults/nodeStorage';
 import { documentTaskOf } from '@texra/tools/documents/documentTask';
-import { pathExists } from '@utils/files/fsDurability';
 
 import { CLI_CHEAP_START_MODEL } from '../runtime/cliConfig';
 import { type CliContext } from '../runtime/cliContext';
@@ -148,7 +148,11 @@ const runInit = Effect.fn('runInit')(function* (
   const filePath = workspaceTexraConfigPath(context.cwd);
   if (
     !opts.force &&
-    (yield* FileSystem.FileSystem.use((fs) => pathExists(fs, filePath)))
+    (yield* FileSystem.FileSystem.use((fs) =>
+      fs
+        .exists(filePath)
+        .pipe(Effect.catchIf(absentReason, () => Effect.succeed(false))),
+    ))
   ) {
     writeTextStderr(
       `Refusing to overwrite existing config at ${filePath}. Re-run with --force to replace it.`,

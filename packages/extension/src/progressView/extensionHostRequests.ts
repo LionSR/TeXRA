@@ -35,7 +35,8 @@ import {
 import { withLogChannel } from '@texra-ai/harness';
 import { withSessionFs, WorkspaceFs, type StorageFs } from '@texra-ai/harness';
 import { pathToLocationIn } from '@texra-ai/harness';
-import { toErrorMessage } from '@texra-ai/harness/schemas';
+import { relativeToRoot } from '@texra-ai/harness/node';
+import { normalizeFilePath, toErrorMessage } from '@texra-ai/harness/schemas';
 import {
   handleLatexdiff,
   handleLatexdiffCommitAction,
@@ -112,10 +113,6 @@ import {
 import { loadModelOptions } from '@texra/model/setupCredentialAccess';
 import { checkCoreDependencies } from '@texra/utils/system/checkCoreDependencies';
 import { getToolDocsPage } from '@texra/utils/system/toolChecks';
-import {
-  locateInWorkspace,
-  workspaceRelativePath,
-} from '@utils/files/workspaceFS';
 
 const CHANNEL = 'ExtensionHostRequests';
 
@@ -432,7 +429,11 @@ export function createExtensionHostRequests(
       .filter((uri) => uri.scheme === 'file');
     return Effect.succeed([
       ...new Set(
-        fileUris.map((uri) => workspaceRelativePath(workspaceRoot, uri.fsPath)),
+        fileUris.map(
+          (uri) =>
+            relativeToRoot(workspaceRoot, uri.fsPath) ??
+            normalizeFilePath(uri.fsPath),
+        ),
       ),
     ]);
   }
@@ -473,7 +474,7 @@ export function createExtensionHostRequests(
               ),
             );
           }
-          const sourceLocation = locateInWorkspace(
+          const sourceLocation = pathToLocationIn(
             roots.workspace,
             parsed.sourcePath,
           );
@@ -543,8 +544,7 @@ export function createExtensionHostRequests(
   /** This host's half of the shared body's binding table: every verb mapped
    *  onto a VS Code command, an editor API, or the sidebar. */
   const hostBindings: SharedHostRequestBindings = {
-    openPath: (file, line) =>
-      runHandler('openFile', openFile(roots, file, line)),
+    openPath: (file, line) => runHandler('openFile', openFile(file, line)),
     openLabel: (label) => runHandler('openLabel', openLabel(roots, label)),
     exportTranscript: (runId) => Effect.asVoid(exportTranscript(runId)),
     surfaceAction: (action) => options.surfaceAction(action),

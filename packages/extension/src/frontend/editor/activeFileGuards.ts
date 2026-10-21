@@ -4,14 +4,14 @@ import * as vscode from 'vscode';
 
 // Local imports - utils
 import { withLogChannel } from '@texra-ai/harness';
-import { ensureError } from '@texra-ai/harness/schemas';
+import { relativeToRoot } from '@texra-ai/harness/node';
+import { ensureError, normalizeFilePath } from '@texra-ai/harness/schemas';
 import {
   showLoggedErrorMessage,
   showLoggedMessage,
 } from '@frontend/ui/errorHandlingUtils';
 import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
 import type { NotificationFailed } from '@texra/hosts/uiHosts';
-import { workspaceRelativePath } from '@utils/files/workspaceFS';
 import type { WorkspaceRoots } from '@texra-ai/harness';
 
 const CHANNEL = 'ActiveFileGuards';
@@ -98,10 +98,11 @@ const getActiveLatexEditor = (
       }
     }
 
-    const relativePath = workspaceRelativePath(
-      roots.workspace,
-      editor.document.fileName,
-    );
+    const fileName = editor.document.fileName;
+    const relativePath = roots.workspace
+      ? (relativeToRoot(roots.workspace, fileName) ??
+        normalizeFilePath(fileName))
+      : fileName;
 
     return {
       status: 'ok',

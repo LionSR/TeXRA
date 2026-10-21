@@ -9,8 +9,8 @@ import * as path from 'node:path';
 import { Effect, FileSystem } from 'effect';
 
 import { hasExtension, withLogChannel } from '@texra-ai/harness';
+import { absentReason } from '@texra-ai/harness/node';
 import { ensureError } from '@texra-ai/harness/schemas';
-import { pathExists } from '@utils/files/fsDurability';
 
 const CHANNEL = 'LatexParsing';
 
@@ -116,14 +116,15 @@ export const resolveLatexDir = Effect.fn('latex.resolveLatexDir')(function* (
 /**
  * Return `absolutePath` if it exists on disk, otherwise null. Centralizes
  * the existence probe used by the various LaTeX dependency resolvers:
- * `pathExists`'s reading, which is ENOTDIR read as absent alongside ENOENT plus
+ * ENOTDIR read as absent alongside ENOENT (`absentReason`), plus
  * a link that resolves to nothing read as absent -- right for a dependency,
  * which a dangling symlink does not supply.
  */
 export const existingExternalPath = Effect.fn('latex.existingExternalPath')(
   function* (absolutePath: string) {
     const fs = yield* FileSystem.FileSystem;
-    const exists = yield* pathExists(fs, absolutePath).pipe(
+    const exists = yield* fs.exists(absolutePath).pipe(
+      Effect.catchIf(absentReason, () => Effect.succeed(false)),
       Effect.mapError(ensureError),
     );
     return exists ? absolutePath : null;

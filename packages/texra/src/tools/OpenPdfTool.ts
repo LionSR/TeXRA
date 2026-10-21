@@ -1,9 +1,18 @@
 // Node imports
+import * as path from 'node:path';
 
 // Third-party imports
 import { Effect, FileSystem } from 'effect';
 import { z } from 'zod';
-import { defineTool, ToolContext, hasExtension } from '@texra-ai/harness';
+import {
+  createRunStorageLocation,
+  defineTool,
+  ToolContext,
+  hasExtension,
+  isPathWithin,
+} from '@texra-ai/harness';
+import { runDirUnder } from '@texra-ai/harness/node';
+import { normalizeFilePath } from '@texra-ai/harness/schemas';
 import {
   callerRun,
   resolveToolPath,
@@ -20,7 +29,6 @@ import {
   type FileLocation,
   type RunStorageFileLocation,
 } from '@shared/schemas';
-import { runStorageLocationInRunUnder } from '@utils/files/runStorageFs';
 
 // Local file imports
 import { EditorHost, type EditorCapabilities } from './editorHost';
@@ -116,12 +124,20 @@ export const OpenPdfTool = defineTool({
     const run = yield* callerRun;
     const runId = run?.runId;
     const trimmedPath = input.path.trim();
+    // An absolute path inside this run's own storage directory.
+    const runDirectory = runId && runDirUnder(env.roots.storage, runId);
+    const runRelative =
+      runDirectory &&
+      path.isAbsolute(trimmedPath) &&
+      isPathWithin(runDirectory, trimmedPath)
+        ? normalizeFilePath(path.relative(runDirectory, trimmedPath))
+        : '';
     const ports: OpenPdfPorts = {
       call: env,
       openPdf: (yield* EditorHost).at(env.roots.storage).openPdf,
       runStorageLocation:
-        runId && trimmedPath
-          ? runStorageLocationInRunUnder(env.roots.storage, trimmedPath, runId)
+        runId && runRelative
+          ? createRunStorageLocation(trimmedPath, runRelative, runId)
           : undefined,
     };
     return yield* openPdfProgram(ports, input);

@@ -22,7 +22,8 @@ import type { AgentPlatform } from './index.js';
 
 // The Node building blocks `nodePlatform` is made of, for a host that
 // composes its own platform: workspace roots over Node, the canonical
-// spelling of a workspace path, and the storage layout under a root.
+// spelling of a workspace path, and the storage layout under a root (a
+// run's directory among it).
 export { createNodeWorkspaceRoots } from '@platform/defaults/nodeHost';
 export {
   canonicalizeWorkspacePath,
@@ -32,6 +33,7 @@ export {
   resolveGlobalStoragePath,
   resolveWorkspaceStoragePath,
 } from '@platform/defaults/workspaceStorage';
+export { runDirUnder } from '@utils/files/runStorageFs';
 // Running a program on this machine: find it, run it, and give any other
 // child the PATH the harness resolves tools on.
 export {
@@ -45,8 +47,15 @@ export { withExtendedPath } from '@utils/system/platformPaths';
 // child agent CLI starts from (no provider key but the one it authenticates
 // with).
 export { envFlag, inheritedEnv } from '@utils/system/envFlags';
-// Crash-safe replace of a file.
-export { writeFileAtomic } from '@utils/files/fsDurability';
+// The file reads `FileSystem` has no form for: crash-safe replace, a listing
+// that types each entry from its dirent and drops one it cannot type, an
+// entry's own (lstat) type, and the failures a probe reads as absent
+// (`NotFound`, or a parent that is a file).
+export {
+  readDirectoryTypedTolerant,
+  writeFileAtomic,
+} from '@utils/files/fsDurability';
+export { absentReason, entryTypeIn } from '@utils/files/fsEntryExists';
 // The setting rows a `ConfigProvider` resolves against (its `catalog`): an
 // embedder with its own provider builds one from its rows, which
 // `settingsCatalog` puts after the harness's own.

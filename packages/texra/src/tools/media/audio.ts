@@ -21,10 +21,10 @@ import {
   withExtendedPath,
   findCommand,
   type FoundCommand,
+  absentReason,
 } from '@texra-ai/harness/node';
 import { getSdkErrorMessage } from '@texra-ai/harness';
 import { ensureError } from '@texra-ai/harness/schemas';
-import { absentReason } from '@utils/files/fsEntryExists';
 import type { WorkspaceRoots } from '@texra-ai/harness';
 import type {
   ChildProcessHandle,

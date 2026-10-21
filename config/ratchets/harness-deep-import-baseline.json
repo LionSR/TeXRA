@@ -17,9 +17,6 @@
       "@shared/state/onboardingState",
       "@tools/executions/configView",
       "@transcript",
-      "@utils/files/fsDurability",
-      "@utils/files/fsEntryExists",
-      "@utils/files/runStorageFs",
       "@utils/text/stringUtils",
       "@utils/text/unifiedDiff"
     ],
@@ -30,9 +27,6 @@
       "@shared/iconNames",
       "@shared/model/accountAuth",
       "@shared/state/onboardingState",
-      "@utils/files/fsDurability",
-      "@utils/files/fsEntryExists",
-      "@utils/files/workspaceFS",
       "@utils/text/unifiedDiff"
     ],
     "extension": [
@@ -50,7 +44,6 @@
       "@shared/state/onboardingState",
       "@shared/state/providerSettings",
       "@shared/utils/xmlEscape",
-      "@utils/files/workspaceFS",
       "@utils/text/stringUtils"
     ],
     "texra": [
@@ -96,11 +89,8 @@
       "@tools/utils",
       "@tools/WriteTool",
       "@transcript",
-      "@utils/files/fsDurability",
-      "@utils/files/fsEntryExists",
       "@utils/files/runStorage",
       "@utils/files/runStorageFs",
-      "@utils/files/workspaceFS",
       "@utils/prompt",
       "@utils/system/gitEnv",
       "@utils/system/toolUtils",
