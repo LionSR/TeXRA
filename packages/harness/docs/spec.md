@@ -95,7 +95,10 @@ the read verifies the digest (`controllers/session/rowCodec.ts:191-197`,
 
 ### 2.3 One publisher
 
-Every write of a session is a job on one inbox drained by one fiber. Jobs
+Every row a session writes is written by a job on one inbox drained by one
+fiber. Claims are not rows: a claim is taken in the transaction of the job
+that needs it, and released in the transaction of the scope that closes it,
+which need not be a job (`controllers/session/sessionStore.ts:150-181`). Jobs
 SHALL run in the order they were enqueued, one at a time, and the table's
 commit order is that order (`agent/runtime/SessionEvents.ts:240-248`). A job
 is one SQLite transaction: its appends commit together or not at all
@@ -142,9 +145,11 @@ the highest version each kind was written at
 
 The store gate refuses a store that names a kind or version this build does
 not read (`controllers/session/rowCodec.ts:385-397`). It MUST run at open and
-inside every outermost write transaction, so no build reads part of a store
-or writes beside rows it cannot read (`controllers/session/Database.ts:296`,
-`:463-466`). A core kind this build lacks and never retired counts as newer
+inside every outermost transaction that writes or derives rows, so no build
+reads part of a store or writes beside rows it cannot read
+(`controllers/session/Database.ts:296`, `:450-466`). Releasing claims is the
+one write it skips: it writes no row and only gives back this process's
+claims (`controllers/session/Database.ts:450-454`, `:988-996`). A core kind this build lacks and never retired counts as newer
 (`controllers/session/rowCodec.ts:372-378`). Kinds a build deleted are listed
 as retired; their rows fail only their own run's reads
 (`shared/schemas/rowVersions.ts:44-56`, `controllers/session/rowCodec.ts:285`).
@@ -288,9 +293,12 @@ approval (`agent/runtime/loop/toolGuard.ts:40-47`, `:103-113`). A slow tool's
 already committed MUST NOT commit another
 (`agent/runtime/loop/toolUseDispatch.ts:596`).
 
-**W4.** A call's `tool.result` MUST commit with its whole card: a slow tool's
-`tool.end`, a fast tool's `tool.start` and `tool.end`
-(`agent/runtime/loop/toolUseDispatch.ts:484-504`, `:696-699`). The delivering
+**W4.** A call whose body ran MUST commit its `tool.result` with its whole
+card: a slow tool's `tool.end`, a fast tool's `tool.start` and `tool.end`
+(`agent/runtime/loop/toolUseDispatch.ts:484-504`, `:696-699`). A synthetic
+settlement, which no body produced (a call skipped by a replan, a duplicate,
+a call after the turn ended), commits its `tool.result` with no card
+(`agent/runtime/loop/toolUseDispatch.ts:438`, `:754`, `:1036-1047`). The delivering
 `append` MUST commit only once every call of the response has settled, as
 one tool group bound to the response (`agent/runtime/loop/toolUseDispatch.ts:1164-1169`).
 A delivery its settlements do not match is a defect
@@ -431,9 +439,11 @@ attempt, with `next: ask` (`agent/runtime/ModelInvoker.ts:743-759`). An
 attempt no person admitted, whose outcome no row recorded, is resent
 (`shared/session/inFlight.ts:217`).
 
-A rejected subscription token MAY be renewed once per invocation; the
-renewed attempt is resent without a `failed` row
-(`agent/runtime/run/invocation.ts:152-175`, `:336-348`).
+A rejected subscription token MAY be renewed once per invocation
+(`agent/runtime/run/invocation.ts:152-175`). On a send, the renewal commits a
+`failed` row with `next: retry` and the attempt is resent; while observing
+an accepted operation, the renewed observation repeats with no row and is
+never a resend (`agent/runtime/run/invocation.ts:336-348`, `:378-393`).
 
 ## 7. Claims and several processes
 
