@@ -89,10 +89,11 @@ files move, about 1,500 import lines change, one row field is added, and about
   same-basename pairs. Plugins live in four homes and storage in four. The
   lowest layer imports upward (`platform/processRuntime.ts:27-42`), and the
   foundation directories cycle (`shared↔utils`, `common↔utils`).
-- **Writers: one near-miss survived the re-check.** The audits listed five
+- **Writers: no near-miss survived the re-check.** The audits listed five
   (activate's cancels, tool-card producers, grants derivations, `run.config`
-  shapes, `followup.consumed` drafts). Re-checked at `6e5b262`, only the
-  second tool-card producer is a defect; see lane 4.
+  shapes, `followup.consumed` drafts). Re-checked at `6e5b262`, none is a
+  defect. One guard is missing: `transcriptFold.ts`'s switch has no
+  `satisfies never`; see lane 4.
 - **The row-version freeze is unarmed until a release.** Its check returns
   early while `config/storage/frozen/` does not exist
   (`src/test-kernel/schemas/rowVersions.vitest.ts:104`). That is by design:
@@ -125,7 +126,7 @@ The two restructures beat the control by one point, at ten times its churn.
 All four agreed on the substance: a root of about 30 names, a public authoring
 closure, methods on `Run`, a neutral host port, vocabulary as data, Storage as
 an Effect `SqlClient`, the execution pair as a port, conformance from the
-existing suites, the writer fixes (re-checked below: one remains) and the
+existing suites, the writer fixes (re-checked below: none remains) and the
 freeze. This design is the control
 plus the two moves that buy what the control cannot.
 
@@ -278,7 +279,7 @@ Each lane leaves `npm run gate` and `test:pure` green. The only row change is
 | 2   | Foundation order: `logger`, `eventBus` and `types` into `platform/`; the run-storage utils into `agent/storage`; the `@common/webview` alias removed                                         | M      | 11          |
 | 2b  | Session merge, with the history lint zone                                                                                                                                                    | M      | ~55         |
 | 3   | Vocabulary as data: namespace, `SettingHost` → probe, branding, the prompt section, data files to texra, the validation model to cli, llm branding as bind facts, the OAuth `.catch` removal | M      | 9           |
-| 4   | Writers: the agent-CLI tools' cards become transient `stream.chunk` progress (re-check below)                                                                                                | —      | 0           |
+| 4   | `satisfies never` after `transcriptFold.ts`'s `record` switch; the writer items closed on re-check (below)                                                                                   | —      | 0           |
 | 4b  | Built-ins fence                                                                                                                                                                              | M      | ~53         |
 | 5   | Ports, and the conformance suites parameterised by layer (internal); `wakeAt` with the Clock port; `defineTool({ deferred: true })`                                                          | M      | 0           |
 | 6   | Freeze: `storage:freeze` at the first release (a `releasing` step, not a lane)                                                                                                               | S      | 0           |
@@ -288,7 +289,8 @@ Each lane leaves `npm run gate` and `test:pure` green. The only row change is
 
 ### Lane 4 re-check (2026-10-21, at `6e5b262`)
 
-Before lane 4 started, each item was read against the tree. One needs code:
+Before lane 4 started, each item was read against the tree. None of the
+writer items needs code; one guard does:
 
 - **activate's cancels** (`agent/runtime/RunHistory.ts`, `activate`) are
   written in the claim's transaction, for exactly the requests the fold shows
@@ -297,14 +299,17 @@ Before lane 4 started, each item was read against the tree. One needs code:
   answering surfaces; routing activation through it would add one read per
   request and close no race. `decide` is the one writer of a surface's
   answer; activation answers for a process that exited.
-- **Card producers: still two.** Deleting `agent/trace/toolUseHelpers.ts`
+- **Card producers: one per run.** Deleting `agent/trace/toolUseHelpers.ts`
   moved its emission into `TraceEmitter.openToolCard`
-  (`agent/trace/TraceEmitter.ts:139`), which still writes `tool.start` and
-  `tool.end` beside the loop's cards. Its callers are the agent-CLI tools
+  (`agent/trace/TraceEmitter.ts:139`). Its callers are the agent-CLI tools
   (`packages/texra/src/tools/claudeAgent.ts`, `codex.ts`,
-  `claudeAgentBackgroundTasks.ts`), which open a card per nested call of the
-  external agent. This is lane 4: those calls report through transient
-  `stream.chunk` progress on the outer call's card, and `openToolCard` goes.
+  `claudeAgentBackgroundTasks.ts`), and they write on the trace of the child
+  run that `launchAgentCliSession` registers through `ChildRuns.launchProcess`
+  (`packages/texra/src/tools/agentCliShared.ts`), a run "outside the normal
+  run loop", after the launching call's card has closed. A loop run's cards
+  are the loop's; a process run's are `openToolCard`'s; no run has two
+  writers. Moving them to `stream.chunk` on the launching card would drop
+  them.
 - **Grants**: `grantsKept`, `inheritedGrants` (`shared/approvalBypassKind.ts`)
   and `delegatedChildGrants` (`tools/approval/index.ts`) are three rules
   (kept after a detach, inherited, a delegated child's birth grants), not one
@@ -317,8 +322,10 @@ Before lane 4 started, each item was read against the tree. One needs code:
   inputs (follow-up records, ids, filtered controls); one builder saves
   nothing.
 - **`satisfies never`**: `applySessionSlices` in `sessionFold.ts` is partial
-  by design (the run arm takes the rest), and `transcriptFold.ts`'s switch
-  already covers all ten transcript event kinds.
+  by design (the run arm takes the rest) and stays so. `transcriptFold.ts`'s
+  `record` switch covers all ten transcript event kinds today but has no
+  `satisfies never`, so a new kind would compile and vanish from a durable
+  fold. Lane 4 is that guard.
 - **Cross-protocol switches**: `admitSwitch`
   (`agent/runtime/modelAccess/routeDecision.ts`) already refuses them
   (`DIFFERENT_FORMAT`). It compares backends, not protocols, which is
