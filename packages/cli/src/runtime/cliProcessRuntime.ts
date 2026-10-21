@@ -53,7 +53,7 @@ import {
   UNAVAILABLE_LANGUAGE_MODEL_PORT,
   withForkFailureReporting,
 } from '@texra-ai/harness';
-import { GlobalDatabase } from '@shared/session/database';
+import { GlobalDatabase } from '@texra-ai/harness/node';
 import { usageLogLayer } from '@telemetry/UsageLogService';
 import { makeEditorHost, type EditorRegistry } from '@texra/tools/editorHost';
 import { texraPlugins } from '@texra/tools/registry';

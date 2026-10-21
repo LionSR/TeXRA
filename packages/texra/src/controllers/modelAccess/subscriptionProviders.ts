@@ -40,12 +40,9 @@ import {
   isPreferSubscription,
   setPreferSubscription,
 } from '@model/subscriptionAccess';
-import {
-  codexAccountLabel,
-  type SUBSCRIPTION_AUTH_PROVIDERS,
-  type SubscriptionAuthStatus,
-  xaiAccountLabel,
-} from '@shared/model/subscriptionAuth';
+import type { SubscriptionAuthStatus } from '@texra/shared/model/subscriptionAuth';
+import { codexAccountLabel, xaiAccountLabel } from '@ui/copy/accountAuth';
+import type { SUBSCRIPTION_AUTH_PROVIDERS } from '@texra-ai/harness/schemas';
 import type { SecretsFailed } from '@texra-ai/llm';
 import type { HttpClient } from 'effect/http';
 import type { SettingsStores } from '@texra-ai/harness';
@@ -54,7 +51,7 @@ const CHANNEL = 'subscriptionProviders';
 
 /**
  * A provider's id, spelled once: the wire vocabulary in
- * `@shared/model/subscriptionAuth` is the same set the catalog keys on.
+ * `SUBSCRIPTION_AUTH_PROVIDERS` is the same set the catalog keys on.
  */
 export type SubscriptionProviderId =
   (typeof SUBSCRIPTION_AUTH_PROVIDERS)[number];

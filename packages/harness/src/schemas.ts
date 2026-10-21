@@ -61,6 +61,12 @@ export type { ToolCard } from '@shared/schemas';
 export type { UsageRoute } from '@shared/schemas';
 // Why a model option can or cannot run, as a picker shows it.
 export type { ModelAvailabilityKind } from '@shared/schemas';
+// The subscriptions a model call can route through, and each one's switch
+// and sign-in names.
+export {
+  SUBSCRIPTION_AUTH_NAMES,
+  SUBSCRIPTION_AUTH_PROVIDERS,
+} from '@shared/model/subscriptionAuth';
 // Reads of a `SessionView` (root) for a renderer: what needs a person, how
 // busy the session is, and where each run stands.
 export {
@@ -88,6 +94,8 @@ export type {
   TranscriptView,
 } from '@shared/session/readonlyViews';
 export type { FollowUpHost } from '@shared/session/sessionView';
+// Why a run no longer takes an action its `actions` once listed.
+export { runActionRefusal } from '@shared/session/runActions';
 // What makes the views read-only all the way down.
 export type { ReadonlyDeep } from '@shared/session/readonlyDeep';
 // What a session store's reads and claims answer with: an aggregate's claim
@@ -159,6 +167,7 @@ export {
 } from '@shared/runs/runStatusDisplay';
 export type {
   ExternalFileLocation,
+  RunAction,
   RunLifecycleStatus,
   RunPhase,
   RunStorageFileLocation,
@@ -254,6 +263,11 @@ export {
 // What a `ConfigProvider` (root) writes to and reads back per scope.
 export type { ConfigInspection, ConfigTarget } from '@platform/interfaces';
 export { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
+// A provider's custom-endpoint key and China-region toggle, if it has them.
+export {
+  providerEndpointKey,
+  providerRegionSetting,
+} from '@shared/state/providerSettings';
 
 // Text primitives: grapheme-safe truncation (plain, whitespace-collapsed, or
 // at the preview width), a text's content lines and their count, and

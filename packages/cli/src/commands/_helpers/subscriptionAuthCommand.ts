@@ -11,12 +11,12 @@ import {
   signOutCliSubscription,
   subscriptionSignOutOutcomeMessage,
 } from '@cli/runtime/subscriptionLogin';
-import { ACCOUNT_OUTCOME } from '@shared/model/accountAuth';
 import {
   subscriptionProvider,
   type SubscriptionAccount,
   type SubscriptionProviderId,
 } from '@texra/controllers/modelAccess/subscriptionProviders';
+import { ACCOUNT_OUTCOME } from '@ui/copy/accountAuth';
 
 import { defineCliCommand } from './defineCliCommand';
 import { booleanArg, GLOBAL_ARGS } from './globalArgs';

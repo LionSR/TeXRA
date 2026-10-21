@@ -7,7 +7,7 @@ import {
   BASH_APPROVAL_CONFIG_KEY,
   type BashPermission,
   type RequestDecision,
-  type RequestRefusal,
+  type RefusalDecision,
   type RunId,
   type ToolResult,
 } from '@shared/schemas';
@@ -43,7 +43,7 @@ export interface BashApprovalRequest {
 
 /** What a bash approval settles to: the approval, or one of the refusals. */
 export type BashDecision =
-  Extract<RequestDecision, { action: 'approve' }> | RequestRefusal;
+  Extract<RequestDecision, { action: 'approve' }> | RefusalDecision;
 
 /**
  * Build the bash permission payload every host lists from the fold, the bash
@@ -134,7 +134,7 @@ export const requestBashApproval = Effect.fn('requestBashApproval')(function* (
 
 export function buildBashApprovalRejectedResult(
   command: string,
-  refusal: RequestRefusal,
+  refusal: RefusalDecision,
 ): ToolResult {
   const preview = previewLabel(command);
   const copy = refusalCopy('Command', refusal);

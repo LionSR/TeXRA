@@ -113,7 +113,7 @@ import {
 } from '@texra/controllers/session/hostRunActions';
 import { ExecutionsTool } from '@tools/ExecutionsTool';
 import { launchDetachedSubagent } from '@tools/delegation/subagentRun';
-import { readCompletedRunConversation } from '@transcript';
+import { readCompletedRunConversation } from '@transcript/completedRunArchive';
 import { generateRunId } from '@utils/core';
 import { RunFileService } from '@utils/files/runStorage';
 import { ResolvedTurnSchema } from '../../../packages/llm/src/turn.js';

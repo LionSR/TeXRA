@@ -39,7 +39,7 @@ import {
 } from '@test/support/sessionEnd';
 import { loadChatExportInput as loadChatExportInputEffect } from '@texra/agent/export/loadChatExportInput';
 import { ExecutionsTool } from '@tools/ExecutionsTool';
-import { readCompletedRunConversation as readCompletedRunConversationEffect } from '@transcript';
+import { readCompletedRunConversation as readCompletedRunConversationEffect } from '@transcript/completedRunArchive';
 
 const tempDirs = useTempDirs();
 
