@@ -14,13 +14,14 @@
  */
 import { Context, Effect, Layer, LayerMap, ManagedRuntime } from 'effect';
 
-import { RemoteSessionView, SessionInputs } from '@texra-ai/harness/transcript';
-// The browser-safe module, not the harness entry: this layer runs in the
-// webview, which must not evaluate the Node process composition.
+// The browser entry, not the harness root: this layer runs in the webview,
+// which must not evaluate the Node process composition.
 import {
+  RemoteSessionView,
+  SessionInputs,
   viewDiagnosticsLayer,
   withForkFailureReporting,
-} from '@platform/processRuntime';
+} from '@texra-ai/harness/transcript';
 import { SessionFrames } from '@texra/shared/session/sessionFrames';
 
 /** The graph of one session key. `Layer.fresh` for the same reason as the
