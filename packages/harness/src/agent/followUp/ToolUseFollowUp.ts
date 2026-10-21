@@ -7,7 +7,11 @@ import { registryOf } from '@agent/runtime/runRegistry';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { presentRunFailure } from '@agent/runtime/terminalResultToast';
 import { withLogChannel } from '@logger/effectLog';
-import type { RunId } from '@shared/schemas';
+import {
+  type CommitOrdinal,
+  qualifyAggregateId,
+  type RunId,
+} from '@shared/schemas';
 import type { InboxItem, SendOptions } from './Inbox';
 
 /**
@@ -204,23 +208,39 @@ export function startFollowUpWake(
  * false and its sender resumes nothing. But a loop stops reading before its
  * fiber ends (the description join, the terminal rows), and a hold reads
  * nothing at all, so a row landing then has no reader. The registry calls
- * this as the arm ends; once every job enqueued before has committed (every
- * such row is durable), a run nobody here holds, with a message queued on an
- * open input, is resumed. A sender that saw no live arm woke the run
- * itself; the one resume per run (`Inbox.resumeOnce`) joins the two. A
- * failure to read the input is logged: the row waits for an explicit Resume.
+ * this as the arm ends, with `since`, the commit the arm began at; once
+ * every job enqueued before has committed (every such row is durable), a
+ * run nobody here holds, with a message queued since then on an open input,
+ * is resumed. A row queued before the arm began is not owed: the arm was its
+ * wake (a resume that failed leaves it to the next explicit Resume), or its
+ * sender saw no live arm and woke the run itself; the one resume per run
+ * (`Inbox.resumeOnce`) joins the two. A failure to read is logged.
  */
 export const wakeAfterGeneration = (
   runId: RunId,
   session: SessionHandle,
+  since: CommitOrdinal,
 ): Effect.Effect<void> =>
   Effect.gen(function* () {
     yield* session.log.settled;
     if (session.runs.get(runId)?.live === true) return;
     const input = yield* session.followUps.read(runId);
-    if (input.closed || !input.followUps.some((f) => f.control === undefined))
-      return;
-    yield* startFollowUpWake(runId, session);
+    if (input.closed) return;
+    const queued = new Set(
+      input.followUps.flatMap((f) =>
+        f.control === undefined ? [f.followUpId] : [],
+      ),
+    );
+    const rows = yield* session.log.rows(qualifyAggregateId('run', runId), [
+      'followup.queued',
+    ]);
+    const landedSince = rows.some(
+      (row) =>
+        row.type === 'followup.queued' &&
+        row.commit > since &&
+        queued.has(row.followUpId),
+    );
+    if (landedSince) yield* startFollowUpWake(runId, session);
   }).pipe(
     Effect.catchCause((cause) =>
       Effect.logWarning(

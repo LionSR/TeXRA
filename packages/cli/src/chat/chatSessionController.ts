@@ -392,9 +392,9 @@ export function createChatSessionController(
   let stopReason: RunStopReason = 'user';
   const requestStop = (reason: RunStopReason): void => {
     stopReason = reason;
-    // A continuation of the stopped conversation carries it: the stop is a
-    // fact of the claim, which a claim for the same run inherits.
-    session.stopRequested = true;
+    // The stop is a fact of the claim: a `user` stop is the turn's, and a
+    // shutdown carries into every claim taken while leaving.
+    session.askStop(reason);
   };
 
   // -----------------------------------------------------------------------
@@ -562,7 +562,7 @@ export function createChatSessionController(
     Effect.suspend(() => {
       const claimedRun = Deferred.makeUnsafe<void, Error>();
       const claim = Deferred.await(claimedRun);
-      if (!session.tryClaimRootRunSlot(claim, id)) {
+      if (!session.tryClaimRootRunSlot(claim)) {
         // The slot is taken, so the deferred this attempt made is dropped
         // unsettled: nothing holds it, and no fiber is parked on it.
         appendLocalNotice(
@@ -771,8 +771,9 @@ export function createChatSessionController(
       session.interruptedRunId = undefined;
     rootRunId.set(run.id);
     focusRun(run.id);
-    // A stop asked while the continuation prepared is the claim's.
-    if (session.stopRequested) interruptActiveRun();
+    // A stop asked while a continuation prepared is the claim's; a manual
+    // resume's stop landed at its adoption.
+    if (preparing !== undefined && session.stopRequested) interruptActiveRun();
     runtime.runFork(
       Effect.gen(function* () {
         yield* adoptRunRecord(run.id);
@@ -1094,7 +1095,7 @@ export function createChatSessionController(
           );
           if (outcome.kind !== 'refused') return;
           if (followUpTarget === session.runId) {
-            session.stopRequested = true;
+            session.askStop('user');
           } else {
             appendLocalNotice(
               FOCUSED_AGENT.selectedNoLongerAccepting,

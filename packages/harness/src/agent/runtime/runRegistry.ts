@@ -37,6 +37,7 @@ import {
   RUN_SUBSTATE,
   type RunId,
   type RunPhase,
+  type CommitOrdinal,
 } from '@shared/schemas';
 import { isInFlightPhase } from '@shared/runs/runStatus';
 import type { RunStopReason } from '@shared/session/runtimeRequest';
@@ -120,8 +121,8 @@ export interface RunRegistryInit {
   /** The run programs these runs run, given by the session layer: an import
    *  of them here would close a cycle (their tools reach `Runs`). */
   readonly programs: RunPrograms;
-  /** The run's last liveness arm here ended: wake it for rows landed since. */
-  readonly wake: (runId: RunId) => void;
+  /** No liveness arm of the run is left here: wake it for rows landed since. */
+  readonly wake: (runId: RunId, since: CommitOrdinal) => void;
 }
 
 /** The run programs: a root launch, a fresh run's turn, a resumed run's
@@ -238,7 +239,6 @@ export class RunRegistry implements RunsShape {
       if (entry[slot] === fiber) {
         entry[slot] = undefined;
         this.prune(runId, entry);
-        if (!this.isLive(runId)) this.init.wake(runId);
       }
     });
   }
@@ -266,8 +266,7 @@ export class RunRegistry implements RunsShape {
 
   /** Whether this process holds a live generation of the run: its fiber, a
    *  hold, or an admitted launch. A live tool-use loop is not a fourth arm:
-   *  the loop attaches and detaches inside the run program, which runs on
-   *  the generation's fiber. */
+   *  it attaches and detaches inside the run program, on the generation's fiber. */
   private isLive(runId: RunId): boolean {
     const entry = this.entries.get(runId);
     if (entry === undefined) return false;
@@ -455,6 +454,7 @@ export class RunRegistry implements RunsShape {
       // leaves; the entry is captured at the claim, so a stale leave
       // unwinding after `dispose` decrements its own entry.
       let counted: RunEntry | undefined;
+      let since: CommitOrdinal | undefined;
       const refuseClaim = (): RunLive | undefined => {
         const held =
           inactiveStep &&
@@ -467,6 +467,7 @@ export class RunRegistry implements RunsShape {
         counted = this.entryFor(runId);
         counted.stopReason = undefined;
         counted.launches += 1;
+        since = this.init.session().log.now();
         return undefined;
       };
       const leave = (): void => {
@@ -476,7 +477,8 @@ export class RunRegistry implements RunsShape {
         if (entry === undefined) return;
         entry.launches -= 1;
         this.prune(runId, entry);
-        if (!inactiveStep && !this.isLive(runId)) this.init.wake(runId);
+        if (since !== undefined && !this.isLive(runId))
+          this.init.wake(runId, since);
       };
       const step = Effect.gen({ self: this }, function* () {
         this.waiting.delete(refusal);
@@ -505,12 +507,10 @@ export class RunRegistry implements RunsShape {
     });
   }
 
-  /**
-   * Hold an inactive run for the caller's scope, refusing a live owner as an
-   * inactive-run step does ({@link withInactiveRunStep}). The hold is an idle
-   * fiber on the entry, which {@link isLive} reports and no stop reaches,
-   * carrying the run's DB claim in its own scope: one construct fences both.
-   */
+  /** Hold an inactive run for the caller's scope, refusing a live owner as an
+   *  inactive-run step does ({@link withInactiveRunStep}): an idle fiber on
+   *  the entry, which {@link isLive} reports and no stop reaches, carrying
+   *  the run's DB claim in its own scope, so one construct fences both. */
   private hold(runId: RunId): Effect.Effect<void, Error, Scope.Scope> {
     return Effect.suspend(() => {
       const refused = this.closedRefusal();
@@ -518,6 +518,7 @@ export class RunRegistry implements RunsShape {
       return Effect.asVoid(
         Effect.acquireRelease(
           Effect.gen({ self: this }, function* () {
+            const since = this.init.session().log.now();
             const ready = Deferred.makeUnsafe<void, Error>();
             const latch = yield* Latch.make(false);
             const hold = Effect.scoped(
@@ -527,9 +528,8 @@ export class RunRegistry implements RunsShape {
                 yield* Latch.await(latch);
               }),
             ).pipe(Effect.catch((error) => Deferred.fail(ready, error)));
-            // Registered as its first step, as in `admit`; scoped, not a
-            // child, so the hold outlives the fiber that took it until the
-            // scope closes.
+            // Registered as its first step, as in `admit`; scoped, not a child,
+            // so the hold outlives the fiber that took it until the scope closes.
             const fiber = yield* Effect.forkScoped(
               Effect.withFiber((self) => {
                 if (
@@ -544,23 +544,29 @@ export class RunRegistry implements RunsShape {
               { startImmediately: true },
             );
             yield* Deferred.await(ready);
-            return { latch, fiber };
+            return { latch, fiber, since };
           }),
-          // The join awaits the claim release before the caller's scope closes.
-          ({ latch, fiber }) =>
-            Latch.open(latch).pipe(Effect.andThen(Fiber.join(fiber))),
+          // The join awaits the claim release before the caller's scope
+          // closes; the hold was the run's liveness, so its end owes the wake.
+          ({ latch, fiber, since }) =>
+            Latch.open(latch).pipe(
+              Effect.andThen(Fiber.join(fiber)),
+              Effect.andThen(
+                Effect.sync(() => {
+                  if (!this.isLive(runId)) this.init.wake(runId, since);
+                }),
+              ),
+            ),
         ),
       );
     });
   }
 
-  /**
-   * The session's one child-run concurrency budget: the cap on concurrently
-   * live native child model conversations (`childRunBudget.ts` holds the
-   * design and the configured value). Made at `permits` on first call and
-   * re-pinned on every later one, so a settings change takes effect at the
-   * next child launch and sharing loops pick it up on their next turn.
-   */
+  /** The session's one child-run concurrency budget: the cap on concurrently
+   *  live native child model conversations (`childRunBudget.ts` holds the
+   *  design and the configured value). Made at `permits` on first call and
+   *  re-pinned on every later one, so a settings change takes effect at the
+   *  next child launch and sharing loops pick it up on their next turn. */
   childRunBudget(permits: number): Effect.Effect<Semaphore.Semaphore> {
     return Effect.suspend(() => {
       const existing = this.budget;
@@ -592,9 +598,7 @@ export class RunRegistry implements RunsShape {
    *  which the loop does only after its final delivery to the parent. */
   reserveChildActivation(activation: ChildRunActivation): () => void {
     this.assertActive();
-    if (this.entries.get(activation.runId)?.activation) {
-      return () => {};
-    }
+    if (this.entries.get(activation.runId)?.activation) return () => {};
     if (activation.launchParent !== null)
       this.assertAdmitsChild(activation.launchParent, activation.runId);
     this.entryFor(activation.runId).activation = activation;
@@ -716,15 +720,14 @@ export class RunRegistry implements RunsShape {
     };
   }
 
-  /** The session is closing: refuse every run registered from here on,
-   *  and stop every run no other run here stops, cascading into its
-   *  children. A child whose parent this registry holds is stopped by that
-   *  parent's cascade; every other run — a root, or a child whose parent is
-   *  not here — is stopped itself. Answers the runs left for the caller to
-   *  settle: those no live target took the stop for, since nothing here
-   *  drives them, and those whose stop failed to record what it owed storage
-   *  (logged here). Stopped runs keep their records until they settle
-   *  ({@link awaitDrained}). */
+  /** The session is closing: refuse every run registered from here on, and
+   *  stop every run no other run here stops, cascading into its children (a
+   *  child whose parent this registry holds is stopped by that parent's
+   *  cascade; every other run is stopped itself). Answers the runs left for
+   *  the caller to settle: those no live target took the stop for, since
+   *  nothing here drives them, and those whose stop failed to record what it
+   *  owed storage (logged here). Stopped runs keep their records until they
+   *  settle ({@link awaitDrained}). */
   stopAll(): Effect.Effect<readonly RunId[]> {
     this.closing = true;
     const shutdown = {
@@ -754,14 +757,11 @@ export class RunRegistry implements RunsShape {
     ).pipe(Effect.map((left) => left.flat()));
   }
 
-  /**
-   * One `run.end` this process committed, from the session's fold-gated tail
-   * once the view has folded it: a run that ended `cancelled` closes the
-   * admission window its stop left, so this interrupts the children admitted
-   * in the window between the stop's settlement and the fold — every later
-   * one {@link assertAdmitsChild} refuses. Each interrupted driver settles
-   * its own run.
-   */
+  /** One `run.end` this process committed, from the session's fold-gated tail
+   *  once the view has folded it: a run that ended `cancelled` closes the
+   *  admission window its stop left, so this interrupts the children admitted
+   *  between the stop's settlement and the fold — every later one
+   *  {@link assertAdmitsChild} refuses. Each interrupted driver settles its run. */
   sweepChildrenOfFoldedStop(runId: RunId): void {
     if (this.disposed || !this.stopFolded(runId)) return;
     // The folded stop's reason is not known here: its children are
@@ -783,9 +783,8 @@ export class RunRegistry implements RunsShape {
     visited: Set<string>,
     reason: RunStopReason | undefined,
   ): void {
-    // Preparation and final delivery outlive the engine handle; stop their
-    // activation as well as the live run below. The activation is keyed
-    // apart from the handle so each is interrupted once per stop.
+    // Preparation and final delivery outlive the engine handle: stop their
+    // activation too, keyed apart from the handle so each is interrupted once.
     for (const activation of this.activations(parentRunId)) {
       const key = `activation:${activation.runId}`;
       if (visited.has(key)) continue;

@@ -203,7 +203,7 @@ const sessionHandleLayer = (key: SessionKey) =>
           resumeTurn: resumeToolUseFromResumeData,
           resume: resumeRun,
         },
-        wake: (runId) => void fork(wakeAfterGeneration(runId, session)),
+        wake: (id, since) => void fork(wakeAfterGeneration(id, session, since)),
       });
       const session: SessionHandle = {
         roots: key.open.roots,
