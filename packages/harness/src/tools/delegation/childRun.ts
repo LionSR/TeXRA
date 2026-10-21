@@ -18,11 +18,11 @@ import {
   aggregateTarget,
   RUN_OUTCOME,
   RUN_SUBSTATE,
+  ToolError,
 } from '@shared/schemas';
 import { DELIVERY_TAG } from '@shared/deliveryTags';
 import { escapeText } from '@shared/utils/xmlEscape';
 import type { RunId, RunIdentity } from '@shared/schemas';
-import { ToolError } from '@shared/schemas';
 import { truncateWithEllipsis } from '@utils/text/stringUtils';
 import { generateRunId } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';

@@ -6,6 +6,7 @@ import { nanoid } from 'nanoid';
 import {
   buildDiffHunks,
   type ProcessRuntime,
+  withLogChannel,
   withProcessServices,
 } from '@texra-ai/harness';
 import { formatHunkLines, toErrorMessage } from '@texra-ai/harness/schemas';
@@ -146,7 +147,11 @@ export function createDesktopDiffHost(
         // Compare opens pairs no approval diffed, so this diff reports its
         // own timeout; the counts and the fallback patch read the same hunks.
         const diff = buildDiffHunks(originalContent, proposedContent);
-        if (diff.timeout !== undefined) yield* Effect.logWarning(diff.timeout);
+        if (diff.timeout !== undefined) {
+          yield* Effect.logWarning(diff.timeout).pipe(
+            withLogChannel('unifiedDiff'),
+          );
+        }
         const changed = diff.hunks.flatMap((hunk) => hunk.lines);
 
         // Prefer the in-app Review workbench when wired. A `false` return value

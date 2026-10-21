@@ -10,6 +10,7 @@ import {
   ToolContext,
   hasExtension,
   isPathWithin,
+  pathToLocationIn,
 } from '@texra-ai/harness';
 import {
   normalizeFilePath,
@@ -28,7 +29,6 @@ import {
 } from '@texra-ai/harness/plugins';
 
 // Local imports
-import { pathToLocationIn } from '@texra-ai/harness';
 
 // Local file imports
 import { EditorHost, type EditorCapabilities } from './editorHost';

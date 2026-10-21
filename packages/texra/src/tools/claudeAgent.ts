@@ -81,8 +81,8 @@ import {
 import type {
   ProcessChildStrategy,
   ToolError,
+  ChildRuns,
 } from '@texra-ai/harness/plugins';
-import type { ChildRuns } from '@texra-ai/harness/plugins';
 import type { AgentCliSessionRegistry } from './agentCliSessionRegistry';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 

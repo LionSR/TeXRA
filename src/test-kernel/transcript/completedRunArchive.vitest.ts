@@ -14,9 +14,8 @@ import { resumeRun } from '@agent/runtime/resumeRun';
 import { withProcessServices } from '@platform/processRuntime';
 import { LOG_LEVELS, MESSAGE_TYPES, qualifyAggregateId } from '@shared/schemas';
 import type { JsonValue, LogLevel, MessageType, RunId } from '@shared/schemas';
-import { testSessionOf } from '@test/support/testProcessRuntime';
+import { testSessionOf, testRuntime } from '@test/support/testProcessRuntime';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
-import { testRuntime } from '@test/support/testProcessRuntime';
 import {
   createTempDirPlatform,
   useTempDirs,

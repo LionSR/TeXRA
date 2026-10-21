@@ -8,8 +8,7 @@ import {
 } from '@texra-ai/harness/schemas';
 import { Effect, Predicate } from 'effect';
 
-import { withLogChannel } from '@texra-ai/harness';
-import { Settings } from '@texra-ai/harness';
+import { withLogChannel, Settings } from '@texra-ai/harness';
 import { isClaudeCodeModel } from '@texra/shared/agentCliSettings';
 import type { AgentCliEffort } from '@texra/shared/agentCliSettings';
 import { ClaudeAgentStateKey } from '@texra/shared/settingsView/integrationSettings';
@@ -21,7 +20,7 @@ import {
   type AgentCliModelRule,
 } from './agentCliModel';
 import type { AgentTrace, ToolError } from '@texra-ai/harness/plugins';
-import type { StateReadFailed } from '@texra-ai/harness';
+import type { StateReadFailed, SettingsStores } from '@texra-ai/harness';
 import type { ModelConfig } from 'llm-zoo';
 
 import type {
@@ -30,7 +29,6 @@ import type {
   SDKResultMessage,
   ThinkingConfig,
 } from '@anthropic-ai/claude-agent-sdk';
-import type { SettingsStores } from '@texra-ai/harness';
 
 /**
  * Compile-time guard: the agent CLI effort vocabulary in `@shared` (the one

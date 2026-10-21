@@ -19,9 +19,15 @@ import {
   RUN_PHASE,
   emptyRunEndOutput,
   qualifyAggregateId,
+  RunIdSchema,
+  type RunId,
+  type RunPhase,
 } from '@shared/schemas';
-import { RunIdSchema, type RunId, type RunPhase } from '@shared/schemas';
-import { closeSessionOf } from '@test/support/sessionEnd';
+import {
+  closeSessionOf,
+  closeTestSession,
+  openTestDefaultSession,
+} from '@test/support/sessionEnd';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import {
@@ -33,6 +39,7 @@ import { testRunHandle } from '@test/support/runHandleFixtures';
 import {
   createTempDirPlatform,
   useTempDirs,
+  withTempDirEffect,
 } from '@test/support/tempDirPlatform';
 import { installPlatform, setupPlatform } from '@test/support/setupPlatform';
 import {
@@ -41,12 +48,7 @@ import {
   publishTestRunStart,
   publishTestRows,
 } from '@test/support/sessionTestUtils';
-import { withTempDirEffect } from '@test/support/tempDirPlatform';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
-import {
-  closeTestSession,
-  openTestDefaultSession,
-} from '@test/support/sessionEnd';
 import { ExecutionsTool } from '@tools/ExecutionsTool';
 
 /**

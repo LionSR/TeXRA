@@ -23,7 +23,10 @@ import type {
   SessionEventDraft,
 } from '@shared/schemas';
 import { DatabaseWriteFailed } from '@shared/session/database';
-import { setTestApprovalPolicy } from '@test/support/sessionTestUtils';
+import {
+  setTestApprovalPolicy,
+  publishTestRunStart,
+} from '@test/support/sessionTestUtils';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { waitForCondition } from '@test/support/asyncTestUtils';
@@ -32,7 +35,6 @@ import {
   createFakeHost,
   installPlatform as installFakePlatform,
 } from '@test/support/setupPlatform';
-import { publishTestRunStart } from '@test/support/sessionTestUtils';
 import { EditFileTool } from '@tools/EditTool';
 import { writeFileTool } from '@tools/WriteTool';
 import {

@@ -4,7 +4,7 @@
  * top-level run, the `lastTimestamp` it showed (`Surface.seen`); the fold
  * says when the run last changed.
  */
-import type { RunId, SessionView } from '@texra-ai/harness';
+import type { RunId, SessionView } from '@texra-ai/harness/schemas';
 
 import type { Surface } from './surface';
 

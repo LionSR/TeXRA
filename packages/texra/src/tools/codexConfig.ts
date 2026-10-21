@@ -8,8 +8,8 @@ import {
   withLogChannel,
   withPerKeyLane,
   type PerKeyLane,
+  Settings,
 } from '@texra-ai/harness';
-import { Settings } from '@texra-ai/harness';
 import { executeCommand } from '@texra-ai/harness/node';
 import {
   isCodexModel,
@@ -23,12 +23,11 @@ import {
   type AgentCliModelRule,
 } from './agentCliModel';
 import type { ToolError } from '@texra-ai/harness/plugins';
-import type { StateReadFailed } from '@texra-ai/harness';
+import type { StateReadFailed, SettingsStores } from '@texra-ai/harness';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 // Type-only imports
 import type { ModelReasoningEffort } from '@openai/codex-sdk';
-import type { SettingsStores } from '@texra-ai/harness';
 
 const CHANNEL = 'codexConfig';
 

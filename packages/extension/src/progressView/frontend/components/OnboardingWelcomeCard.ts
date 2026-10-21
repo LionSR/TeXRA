@@ -5,10 +5,8 @@ import { customElement } from 'lit/decorators.js';
 
 import { SessionUiEvents } from '@texra/shared/session/uiEvents';
 import { ANTHROPIC_PLAN_CREDITS } from '@ui/copy/modelAccess';
-import { GETTING_STARTED_ACTION_PRESENTATION } from '@ui/copy/onboarding';
-import { designTokens, commonViewStyles } from '@ui/styles';
-import { waIcon } from '@ui/wa/webAwesomeIcons';
 import {
+  GETTING_STARTED_ACTION_PRESENTATION,
   ONBOARDING_CARD_LEDE,
   ONBOARDING_CARD_TITLE,
   ONBOARDING_CHOICE_API_KEY,
@@ -16,6 +14,8 @@ import {
   ONBOARDING_CHOICE_SKIP_LABEL,
   TEXRA_TAGLINE,
 } from '@ui/copy/onboarding';
+import { designTokens, commonViewStyles } from '@ui/styles';
+import { waIcon } from '@ui/wa/webAwesomeIcons';
 
 const { openWalkthrough: OPEN_WALKTHROUGH } =
   GETTING_STARTED_ACTION_PRESENTATION;

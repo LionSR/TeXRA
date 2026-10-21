@@ -4,11 +4,10 @@ import { RunFileService } from '@texra-ai/harness/plugins';
 // toPosixPath also trims and resolves `.`/`..` segments beyond a bare slash
 // swap; safe here since these paths come from getSafeDocumentRelativePath /
 // path.relative on the workflow's own generated outputs, never user input.
-import { toPosixPath } from '@texra-ai/harness';
+import { toPosixPath, isNotADirectoryError } from '@texra-ai/harness';
 
 import { Effect, FileSystem, Path, PlatformError } from 'effect';
 
-import { isNotADirectoryError } from '@texra-ai/harness';
 import {
   type RunEndOutput,
   isTaskConfig,
@@ -27,8 +26,10 @@ import {
 import { CliUsageError, type CliContext } from './cliContext';
 import { type CliRunResult } from './terminalStatus';
 import { STDIN_WORKFLOW_INPUT_BASENAME } from './workflowInputs';
-import type { RunEndResult } from '@texra-ai/harness';
-import type { AgentConfigPayload } from '@texra-ai/harness/schemas';
+import type {
+  RunEndResult,
+  AgentConfigPayload,
+} from '@texra-ai/harness/schemas';
 
 type OutputFlag = '--output' | '--output-dir';
 

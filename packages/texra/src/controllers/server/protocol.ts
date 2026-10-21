@@ -40,12 +40,11 @@ import {
   RunEndSchema,
   RunIdSchema,
   RunRecordFieldsSchema,
-} from '@texra-ai/harness/schemas';
-import {
   ApprovalPolicySchema,
   RUN_STATUS_KEYS,
+  OutcomeSchema,
+  RuntimeRequestSchema,
 } from '@texra-ai/harness/schemas';
-import { OutcomeSchema, RuntimeRequestSchema } from '@texra-ai/harness/schemas';
 import {
   CommitOrdinalSchema,
   DisplaySessionEventSchema,

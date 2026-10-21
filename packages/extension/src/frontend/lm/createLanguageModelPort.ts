@@ -8,8 +8,8 @@ import {
   type LanguageModelAccessState,
   type LanguageModelInfo,
   type LanguageModelPort,
+  withLogChannel,
 } from '@texra-ai/harness';
-import { withLogChannel } from '@texra-ai/harness';
 import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';
 import { acquireVscodeLanguageModel } from './acquireVscodeLanguageModel';
 

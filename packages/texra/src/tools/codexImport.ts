@@ -35,8 +35,7 @@ import {
   importForeignSdk,
   resolvePackageDir,
 } from '@texra/tools/support/externalBinaryUtils';
-import type { StateReadFailed } from '@texra-ai/harness';
-import type { SettingsStores } from '@texra-ai/harness';
+import type { StateReadFailed, SettingsStores } from '@texra-ai/harness';
 
 type SandboxMode = import('@openai/codex-sdk').SandboxMode;
 type PlatformInfo = { pkg: string; triple: string };

@@ -12,12 +12,13 @@ import path from 'node:path';
 
 import { Cause, Deferred, Effect, FileSystem, type Path } from 'effect';
 
-import { withLogChannel, isStrictlyWithin } from '@texra-ai/harness';
 import {
+  withLogChannel,
+  isStrictlyWithin,
   createExternalLocation,
   createWorkspaceLocation,
+  Settings,
 } from '@texra-ai/harness';
-import { Settings } from '@texra-ai/harness';
 import { toErrorMessage, type FileLocation } from '@texra-ai/harness/schemas';
 import { TEMP_EXTENSIONS } from '@housekeeping/constants';
 import { filesByPrefix } from '@latex/formatter/latexindentpt';

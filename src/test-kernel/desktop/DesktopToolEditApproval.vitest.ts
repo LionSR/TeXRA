@@ -16,9 +16,8 @@ import { afterEach, describe, expect, onTestFinished, vi } from 'vitest';
 
 import type { DesktopToolEditApprovalUi } from '@desktop/main/desktopToolEditApproval';
 import type { RunId } from '@shared/schemas';
-import { testSessionOf } from '@test/support/testProcessRuntime';
+import { testSessionOf, testRuntime } from '@test/support/testProcessRuntime';
 import { closeSessionOf } from '@test/support/sessionEnd';
-import { testRuntime } from '@test/support/testProcessRuntime';
 
 import { createFakeWorkspaceRoots } from '@test/support/FakePlatform';
 import { createModuleMocks } from '@test/support/moduleMocks';

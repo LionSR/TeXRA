@@ -21,6 +21,7 @@ import {
   type ToolContextShape,
   WorkspaceFs,
   type ToolResult,
+  pathToLocationIn,
 } from '@texra-ai/harness';
 import {
   ChildRuns,
@@ -30,8 +31,10 @@ import {
   ToolError,
   type EditRecord,
   type RefusalDecision,
+  approvedWriteConflict,
+  buildApprovalRejectedResult,
+  requestToolEditApproval,
 } from '@texra-ai/harness/plugins';
-import { pathToLocationIn } from '@texra-ai/harness';
 import {
   absentReason,
   entryTypeIn,
@@ -42,11 +45,6 @@ import {
   RunIdSchema,
   FileLocation,
 } from '@texra-ai/harness/schemas';
-import {
-  approvedWriteConflict,
-  buildApprovalRejectedResult,
-  requestToolEditApproval,
-} from '@texra-ai/harness/plugins';
 import { cleanupAcceptedWorkspaceDiffFiles } from '@latex/acceptedFileTarget';
 import { stripCriticizeAnnotations } from '@replacement/advanced';
 import { documentsAcceptedFact } from '@texra/shared/plugins/documents';

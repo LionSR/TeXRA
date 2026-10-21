@@ -16,8 +16,8 @@ import {
   RUN_PHASE,
   type RunId,
   type RunPhase,
+  isTerminalOutcomePhase,
 } from '@texra-ai/harness/schemas';
-import { isTerminalOutcomePhase } from '@texra-ai/harness/schemas';
 import { formatLoopPositionLabel, runStatusLabel } from '@ui/copy/runStatus';
 
 import {

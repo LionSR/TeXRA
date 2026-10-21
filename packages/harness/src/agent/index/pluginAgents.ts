@@ -25,8 +25,7 @@ import {
 import { parseYamlWith } from '@common/parsing/safeParseYaml';
 import { withLogChannel } from '@logger/effectLog';
 import { AppState } from '@platform/interfaces';
-import { PersonaSchema } from '@shared/schemas';
-import { AgentNameSchema } from '@shared/schemas';
+import { PersonaSchema, AgentNameSchema } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { readNormalizedFile } from '@utils/files/fsDurability';
 

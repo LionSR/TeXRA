@@ -2,10 +2,13 @@ import * as path from 'node:path';
 
 import { Effect, FileSystem, PlatformError } from 'effect';
 
-import { redactSecrets, withLogChannel } from '@texra-ai/harness';
+import {
+  redactSecrets,
+  withLogChannel,
+  pathToLocationIn,
+} from '@texra-ai/harness';
 import { executeCommand, readNormalizedFile } from '@texra-ai/harness/node';
 import { formatError, type FileLocation } from '@texra-ai/harness/schemas';
-import { pathToLocationIn } from '@texra-ai/harness';
 import type { LatexdiffMathMarkupValue } from '@texra/shared/constants/latexConfig';
 import { generateDiffFileName } from './latexdiff/diffFileNameManager';
 import { DiffFileProcessor } from './latexdiff/diffFileProcessor';

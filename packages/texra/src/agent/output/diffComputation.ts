@@ -7,9 +7,8 @@
 
 import { Effect, FileSystem, PlatformError } from 'effect';
 
-import { withLogChannel } from '@texra-ai/harness';
+import { withLogChannel, pathToLocationIn } from '@texra-ai/harness';
 import { absentReason } from '@texra-ai/harness/node';
-import { pathToLocationIn } from '@texra-ai/harness';
 import {
   toErrorMessage,
   countLines,

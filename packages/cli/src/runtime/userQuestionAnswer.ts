@@ -1,5 +1,5 @@
-import type { RequestDecision } from '@texra-ai/harness';
 import type {
+  RequestDecision,
   UserQuestionAnswers,
   UserQuestionPrompt,
 } from '@texra-ai/harness/schemas';

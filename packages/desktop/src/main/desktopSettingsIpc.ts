@@ -23,9 +23,12 @@ import {
 import { gitHubTokenRejectedMessage } from '@texra/tools/github/githubAuth';
 import { ACCOUNT_OUTCOME } from '@ui/copy/accountAuth';
 import { parsedRoute, type DesktopCommandRoute } from './desktopIpcTypes.js';
-import type { StorageFs } from '@texra-ai/harness';
-import type { ProcessServices } from '@texra-ai/harness';
-import type { PlatformSecrets, WorkspaceRoots } from '@texra-ai/harness';
+import type {
+  StorageFs,
+  ProcessServices,
+  PlatformSecrets,
+  WorkspaceRoots,
+} from '@texra-ai/harness';
 import type { DesktopSpawn } from './desktopWindows.js';
 
 const NO_EXTENSION_HOSTING =
