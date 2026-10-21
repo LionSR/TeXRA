@@ -34,7 +34,6 @@ import {
   type RunIdentity,
   type RunPhase,
 } from '@shared/schemas';
-import { runHeldMessage } from '@shared/runs/runStatusDisplay';
 import type { SessionView, RunView } from '@shared/session/sessionView';
 import { testRuntime, testSessionOf } from '@test/support/testProcessRuntime';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
@@ -47,6 +46,7 @@ import {
   type InkRenderHandles,
 } from '@test/support/inkTestHarness.ts';
 import { waitForCondition as waitFor } from '@test/support/asyncTestUtils';
+import { runNoticeText } from '@ui/copy/runStatus';
 import {
   bindTestSessionView,
   makeRunView,
@@ -556,14 +556,15 @@ describe('App foreground Escape ownership', () => {
   it('shows a root another process holds as read-only', async () => {
     seedChildHierarchy();
     const onSubmit = vi.fn();
-    const detail = runHeldMessage(4321);
+    const notice = { kind: 'held', pid: 4321 } as const;
+    const detail = runNoticeText(notice) ?? '';
     const { instance, stdin, stdout } = await renderDebugApp(
       { ...appProps(), onSubmit },
       { columns: 240, rows: 30 },
     );
 
     try {
-      seedRun(ROOT, { readOnly: true, statusDetail: detail });
+      seedRun(ROOT, { readOnly: true, statusNotice: notice });
       await waitFor(() =>
         currentFrame(stdout).replaceAll(/\s+/gu, ' ').includes(detail),
       );

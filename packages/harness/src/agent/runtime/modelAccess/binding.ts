@@ -130,7 +130,7 @@ const bindEditor = Effect.fn('binding.editor')(function* (
       deployment,
       supportsImageInput: routed.capabilities.supportsVision,
       supportsToolCalling: routed.capabilities.supportsFunctionCalling,
-      defaults: { justification: 'Run the selected TeXRA agent.' },
+      defaults: { justification: 'Run the selected agent.' },
     }),
     origin: {
       protocol: 'vscode-lm',

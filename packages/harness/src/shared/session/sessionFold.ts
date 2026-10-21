@@ -69,12 +69,7 @@ import {
   isTerminalOutcomePhase,
   isTranscriptSettlementPhase,
 } from '@shared/runs/runStatus';
-import {
-  runHeldMessage,
-  RUN_INTERRUPTED_MESSAGE,
-  runResumeBlockedMessage,
-  runStatus,
-} from '@shared/runs/runStatusDisplay';
+import { runStatus } from '@shared/runs/runStatusDisplay';
 import { isSettledRow, rowHeadline } from '../transcript/transcriptRow';
 import {
   applyRunRow,
@@ -320,7 +315,7 @@ function createRun(
     status: RUN_LIFECYCLE_READY,
     substate: null,
     durableOutcome: null,
-    statusDetail: null,
+    statusNotice: null,
     lost: null,
     ...runStatus(RUN_LIFECYCLE_READY),
     createdAt: event.commit,
@@ -508,7 +503,7 @@ function withAggregates(view: SessionView, run: RunView): RunView {
   const interrupted = !isTerminalOutcomePhase(run.status) && !held && !paused;
   const waiting = pendingOwn && held && !isTerminalOutcomePhase(run.status);
   const durableOutcome = isTerminalOutcomePhase(run.status) ? run.status : null;
-  const unreadable = local.unreadable.find((u) => u.runId === run.id)?.detail;
+  const unreadable = local.unreadable.find((u) => u.runId === run.id)?.reason;
   const children = run.childIds.flatMap((id) => view.runs.get(id) ?? []);
   const treeUsage = sumUsageStats([
     run.usage,
@@ -534,14 +529,19 @@ function withAggregates(view: SessionView, run: RunView): RunView {
   const forceExpanded = waiting || interrupted || descendantNeedsUser;
   const blockedEntry = local.resumeBlocked.find((b) => b.runId === run.id);
   const resumeBlocked = blockedEntry?.reason ?? null;
-  let statusDetail: string | null = unreadable ?? null;
-  if (statusDetail === null && blockedEntry !== undefined)
-    statusDetail = runResumeBlockedMessage(blockedEntry);
-  else if (statusDetail === null && interrupted)
-    statusDetail = RUN_INTERRUPTED_MESSAGE;
-  else if (statusDetail === null && heldBy !== null)
-    statusDetail = runHeldMessage(ownerPid(heldBy));
-  else if (statusDetail === null) statusDetail = run.lost;
+  let statusNotice: RunView['statusNotice'] = null;
+  if (unreadable !== undefined) statusNotice = { kind: unreadable };
+  else if (blockedEntry !== undefined)
+    statusNotice = {
+      kind: 'resumeBlocked',
+      reason: blockedEntry.reason,
+      retry: blockedEntry.retry,
+    };
+  else if (interrupted) statusNotice = { kind: 'interrupted' };
+  else if (heldBy !== null)
+    statusNotice = { kind: 'held', pid: ownerPid(heldBy) };
+  else if (run.lost !== null)
+    statusNotice = { kind: 'lost', message: run.lost };
   return withDerived(run, {
     group,
     approval,
@@ -553,7 +553,7 @@ function withAggregates(view: SessionView, run: RunView): RunView {
     rollup: rollupOf(children),
     treeUsage,
     ...status,
-    statusDetail,
+    statusNotice,
     resumeBlocked,
   });
 }

@@ -135,7 +135,7 @@ export class DatabaseClaimRefused extends Data.TaggedError(
   readonly ownerId: OwnerId;
   readonly verdict: 'alive' | 'unprovable';
 }> {
-  override readonly message = `Another TeXRA process (${this.ownerId}) ${this.verdict === 'alive' ? 'holds this run.' : 'may hold this run: it could not be proven to have exited.'}`;
+  override readonly message = `Another process (${this.ownerId}) ${this.verdict === 'alive' ? 'holds this run.' : 'may hold this run: it could not be proven to have exited.'}`;
 }
 
 /** A claiming transaction's refusals: the claim's, a writer's, or the write. */
@@ -175,7 +175,7 @@ export class DatabaseStoreNewer extends Data.TaggedError('DatabaseStoreNewer')<{
   readonly type: string;
   readonly version: number;
 }> {
-  override readonly message = `The session store holds ${this.type} rows at version ${this.version}, which this build does not read: a newer TeXRA wrote them, or a pre-release of a different format. Update TeXRA, or move the store aside to start a fresh one. Nothing in the store was changed.`;
+  override readonly message = `The session store holds ${this.type} rows at version ${this.version}, which this build does not read: a newer build wrote them, or a pre-release of a different format. Update to a newer build, or move the store aside to start a fresh one. Nothing in the store was changed.`;
 }
 
 /** A stored row that does not decode as its kind's shape. */
@@ -192,7 +192,7 @@ export class DatabaseRowEarlier extends Data.TaggedError('DatabaseRowEarlier')<{
   readonly commit: number;
   readonly type: string;
 }> {
-  override readonly message = `The session store's ${this.type} row at commit ${this.commit} was written by an earlier build of TeXRA; it can't be opened by this one.`;
+  override readonly message = `The session store's ${this.type} row at commit ${this.commit} was written by an earlier build; it can't be opened by this one.`;
 }
 
 /**
