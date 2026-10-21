@@ -101,7 +101,7 @@ import {
 } from './storeAside';
 import { openStore, reclaimFreePages } from './storeSchema';
 /** The database file of a session root, beside the stores it replaces. */
-export const SESSION_DATABASE_FILE = 'texra.db';
+const SESSION_DATABASE_FILE = 'texra.db';
 const CHANNEL = 'sessionDatabase';
 /** A row or draft that contradicts the store's own protocol: a defect. */
 const invariant = (message: string) => Effect.die(new Error(message));
@@ -241,7 +241,7 @@ export const databaseLayer = (
         SqliteClient.make({
           filename: create
             ? filename
-            : `file:${filename.replace(/[%?#]/g, encodeURIComponent)}?mode=rw`,
+            : `file:${filename.replaceAll(/[%?#]/g, encodeURIComponent)}?mode=rw`,
           disableWAL: mode === 'ephemeral',
           busyTimeout: '5 seconds',
         }),
