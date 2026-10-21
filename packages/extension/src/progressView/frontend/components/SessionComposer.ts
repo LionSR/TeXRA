@@ -83,17 +83,7 @@ export class SessionComposer extends LitElement {
         white-space: nowrap;
       }
       .routing .routing-parent {
-        background: none;
-        border: none;
-        padding: 0;
-        margin: 0;
-        font: inherit;
-        color: var(--color-text-link);
-        cursor: pointer;
         white-space: nowrap;
-      }
-      .routing .routing-parent:hover {
-        text-decoration: underline;
       }
 
       .composer {
@@ -503,13 +493,14 @@ export class SessionComposer extends LitElement {
       ${waIcon('code-branch')}
       <span class="routing-target">Your message goes to ${run.label}</span>
       <span aria-hidden="true">·</span>
-      <button
-        type="button"
+      <wa-button
         class="routing-parent"
+        appearance="plain"
+        variant="brand"
+        size="s"
         @click=${() => this.replyToParent(parent.id)}
+        >reply to ${parent.label} instead</wa-button
       >
-        reply to ${parent.label} instead
-      </button>
     </div>`;
   }
 

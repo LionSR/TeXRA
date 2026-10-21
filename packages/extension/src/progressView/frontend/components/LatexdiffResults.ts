@@ -73,17 +73,6 @@ export class LatexdiffResults extends LitElement {
       }
 
       .file-link {
-        appearance: none;
-        padding: 0;
-        border: 0;
-        background: none;
-        color: var(--color-text-link);
-        cursor: pointer;
-        font: inherit;
-        text-align: inherit;
-        text-decoration: underline;
-        text-decoration-thickness: from-font;
-        text-underline-position: from-font;
         overflow-wrap: anywhere;
       }
 
@@ -110,15 +99,16 @@ export class LatexdiffResults extends LitElement {
     label: string,
     accessibleLabel: string,
   ): TemplateResult {
-    return html`<button
-      type="button"
+    return html`<wa-button
       class="file-link"
+      appearance="plain"
+      variant="brand"
+      size="s"
       data-file=${filePath}
       aria-label=${accessibleLabel}
       @click=${() => this.handleFileClick(filePath)}
-    >
-      ${label}
-    </button>`;
+      >${label}</wa-button
+    >`;
   }
 
   private renderEntry(entry: LatexdiffEntry, index: number): TemplateResult {
