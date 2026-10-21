@@ -88,9 +88,9 @@ files move, about 1,500 import lines change, one row field is added, and about
   same-basename pairs. Plugins live in four homes and storage in four. The
   lowest layer imports upward (`platform/processRuntime.ts:27-42`), and the
   foundation directories cycle (`shared↔utils`, `common↔utils`).
-- **Writers: one near-miss survived the re-check.** The audits listed four
-  (activate's cancels, tool-card producers, grants and `run.config`
-  derivations, `followup.consumed` drafts). Re-checked at `6e5b262`, only the
+- **Writers: one near-miss survived the re-check.** The audits listed five
+  (activate's cancels, tool-card producers, grants derivations, `run.config`
+  shapes, `followup.consumed` drafts). Re-checked at `6e5b262`, only the
   second tool-card producer is a defect; see lane 4.
 - **The row-version freeze is unarmed until a release.** Its check returns
   early while `config/storage/frozen/` does not exist
