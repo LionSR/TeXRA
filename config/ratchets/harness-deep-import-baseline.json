@@ -7,13 +7,8 @@
       "@eventBus/AppSignals",
       "@shared/constants/agents"
     ],
-    "desktop": [
-      "@eventBus/AppSignals"
-    ],
-    "extension": [
-      "@eventBus/AppSignals",
-      "@shared/constants/agents"
-    ],
+    "desktop": ["@eventBus/AppSignals"],
+    "extension": ["@eventBus/AppSignals", "@shared/constants/agents"],
     "texra": [
       "@common/teams/TeamPlan",
       "@common/teams/TeamPresets",
