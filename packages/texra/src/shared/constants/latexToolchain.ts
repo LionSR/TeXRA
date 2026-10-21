@@ -61,7 +61,8 @@ interface LatexToolEntry {
  * and none restates a name: the doctor probe (`@latex/latexToolchain`), the
  * setup assistant's (`@tools/setup/toolProbing`), the settings view's LaTeX
  * status (`@controllers/settingsView/LatexToolingController`), and the
- * dependency banner (`checkCoreDependencies` in `@utils/system/toolUtils`).
+ * dependency banner (`checkCoreDependencies` in
+ * `@texra/utils/system/checkCoreDependencies`).
  *
  * The order is the doctor's row order, which is user-visible CLI output.
  *
