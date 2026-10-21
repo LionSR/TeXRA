@@ -974,8 +974,27 @@ export function createChatSessionController(
       if (!started) restoreReservedSkillActivations();
       return;
     }
-    let delivered = false;
     let preparing: PreparingRoot | undefined;
+    // Sent, or handed back to the input: a message settles once.
+    let settled = false;
+    /**
+     * The message was not delivered: it goes back to the input, naming why
+     * when there is a reason, with the skill activations it reserved. Every
+     * end but a send comes here: a refusal, a delivery that stopped or
+     * failed, and one the queue dropped before it started.
+     */
+    const undelivered = (reason?: string): void => {
+      if (settled) return;
+      settled = true;
+      requestDraftRestore(line, images);
+      if (reason !== undefined) {
+        setTransientNotice(
+          `${reason} The message has been restored to the input.`,
+          { ttlMs: Infinity },
+        );
+      }
+      restoreReservedSkillActivations();
+    };
     /**
      * The delivery is an Effect program so the queue's scope reaches it: an
      * interrupted delivery stops at its next step instead of mutating the
@@ -1011,24 +1030,12 @@ export function createChatSessionController(
                 // wins this race with `undefined` so the draft is restored.
                 runSettled.pipe(Effect.exit, Effect.as(undefined)),
           )));
-      // Hand the message back to the input, naming why when there is a reason.
-      const restoreDraft = (reason?: string): void => {
-        requestDraftRestore(line, images);
-        if (reason !== undefined) {
-          setTransientNotice(
-            `${reason} The message has been restored to the input.`,
-            { ttlMs: Infinity },
-          );
-        }
-      };
       if (session.stopRequested) {
-        restoreDraft();
+        undelivered();
         return;
       }
       if (!followUpTarget) {
-        restoreDraft(
-          'The conversation ended before the message could be sent.',
-        );
+        undelivered('The conversation ended before the message could be sent.');
         return;
       }
       yield* Effect.uninterruptible(
@@ -1068,7 +1075,7 @@ export function createChatSessionController(
               ),
             );
           if (outcome.kind === 'sent') {
-            delivered = true;
+            settled = true;
             // The session took the message and resumed the run: it is no
             // longer the stopped conversation, and the next message goes to
             // it live rather than waiting for it to drain.
@@ -1091,7 +1098,7 @@ export function createChatSessionController(
           // Teardown mid-send is not a verdict on the message, and a defect is
           // no refusal (the run may be healthy): both hand the message back
           // without stopping the stream or retargeting the conversation.
-          restoreDraft(
+          undelivered(
             outcome.kind === 'interrupted' ? undefined : outcome.reason,
           );
           if (outcome.kind !== 'refused') return;
@@ -1114,7 +1121,7 @@ export function createChatSessionController(
         Effect.ensuring(
           Effect.sync(() => {
             releasePreparingRoot(preparing);
-            if (!delivered) restoreReservedSkillActivations();
+            undelivered();
           }),
         ),
         Effect.catchCause((cause) =>
@@ -1125,6 +1132,7 @@ export function createChatSessionController(
               ),
         ),
       ),
+      () => undelivered(),
     );
   });
 
