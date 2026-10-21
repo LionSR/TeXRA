@@ -7,13 +7,14 @@
  * has delivered, and its view has folded, every commit it made, so a caller
  * that reads the view next sees what it wrote. The raw tail is delivered
  * here too ({@link SessionStore.deliver}): it drops the transient text a
- * committed row closes and hands a run's removal to the session, and its
- * position is half of what "settled" waits for.
+ * committed row closes and hands a run's removal to the session. "Settled"
+ * waits further, for the reader of the folded tail to run over a commit.
  */
 import {
   type Context,
   Deferred,
   Effect,
+  Exit,
   Option,
   RcMap,
   Scope,
@@ -69,9 +70,9 @@ export interface SessionStore {
   readonly detach: SessionEventsShape['detach'];
   /** Remove a run and its dependents, as the publisher's next job. */
   readonly removeRun: SessionEventsShape['removeRun'];
-  /** The tail as the view has folded it: every row above the store's
-   *  opening commit, released once the view holds the state that folded
-   *  it, for a reader that reads the view beside each row. */
+  /** The tail as the view has folded it (each row released once the view
+   *  holds its state), for the session's one reader: `settled` waits until
+   *  it has run over a commit, so it never waits on `settled` itself. */
   readonly folded: Stream.Stream<SessionEvent, DatabaseReadFailed>;
   /**
    * Deliver the raw tail from the store's opening commit for the caller's
@@ -100,13 +101,13 @@ const logFailure =
 
 /**
  * The settled level: the lesser of what the tail delivered and what the
- * view folded. `to(commit)` waits until it reaches `commit`; it dies with
- * the tail or the fold, so a wait is answered or fails, never hangs.
+ * view folded. `to(commit)` waits until it (or another `level`) reaches
+ * `commit`; it dies with a tail's reader or the fold, never hangs.
  */
 function settlement(
   view: Context.Service.Shape<typeof SessionViewService>,
   delivered: SubscriptionRef.SubscriptionRef<CommitOrdinal>,
-  tailEnded: Deferred.Deferred<void, DatabaseReadFailed>,
+  readerEnded: Deferred.Deferred<void, DatabaseReadFailed>,
 ) {
   const cursor = () =>
     Math.min(
@@ -120,12 +121,12 @@ function settlement(
     SubscriptionRef.changes(delivered),
     { haltStrategy: 'left' },
   ).pipe(Stream.map(cursor));
-  const to = (commit: CommitOrdinal): Effect.Effect<void> =>
-    changes.pipe(
-      Stream.filter((level) => level >= commit),
+  const to = (commit: CommitOrdinal, level = changes): Effect.Effect<void> =>
+    level.pipe(
+      Stream.filter((at) => at >= commit),
       Stream.runHead,
       Effect.raceFirst(
-        Deferred.await(tailEnded).pipe(
+        Deferred.await(readerEnded).pipe(
           Effect.orDie,
           Effect.andThen(
             Effect.die(new Error('Session committed-event consumer stopped')),
@@ -293,15 +294,18 @@ export const makeSessionStore = (
     // every commit after it.
     const anchor = yield* database.currentCommit;
     const delivered = yield* SubscriptionRef.make(anchor);
-    const tailEnded = yield* Deferred.make<void, DatabaseReadFailed>();
-    const settle = settlement(view, delivered, tailEnded);
+    const readerEnded = yield* Deferred.make<void, DatabaseReadFailed>();
+    const settle = settlement(view, delivered, readerEnded);
+    const foldedRead = yield* SubscriptionRef.make(anchor);
+    const readPast = (commit: CommitOrdinal) =>
+      settle.to(commit, SubscriptionRef.changes(foldedRead));
     const transact = transaction(events, database, settle.to);
     let doorsShut = false;
     const closed = () => doorsShut;
-    /** Every job enqueued before it has run, and the view folded it. */
+    /** Every job before it has run, folded, and `folded` read past it. */
     const settled = events
       .transact(() => database.currentCommit, { order: true })
-      .pipe(Effect.orDie, Effect.flatMap(settle.to));
+      .pipe(Effect.orDie, Effect.flatMap(readPast));
     const trace = makeRunTrace({
       storage,
       events,
@@ -354,10 +358,14 @@ export const makeSessionStore = (
       trace,
       detach: events.detach,
       removeRun: events.removeRun,
+      // Pulled in order: `foldedRead` moves once a read's rows were run.
       folded: tailFrom(
         database.readDisplay,
         { get: Effect.sync(settle.cursor), changes: settle.changes },
         anchor,
+        foldedRead,
+      ).pipe(
+        Stream.onExit((exit) => Deferred.done(readerEnded, Exit.asVoid(exit))),
       ),
       deliver: (removed) =>
         events.all(anchor, delivered).pipe(
@@ -376,7 +384,7 @@ export const makeSessionStore = (
               Effect.logError,
             ),
           ),
-          Effect.onExit((exit) => Deferred.done(tailEnded, exit)),
+          Effect.onExit((exit) => Deferred.done(readerEnded, exit)),
           Effect.forkScoped,
           Effect.asVoid,
         ),
