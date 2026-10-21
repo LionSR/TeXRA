@@ -80,6 +80,7 @@ export class LatexdiffResults extends LitElement {
       }
       .file-link::part(base) {
         white-space: normal;
+        text-align: start;
       }
 
       .arrow {

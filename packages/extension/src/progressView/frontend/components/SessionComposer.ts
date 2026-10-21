@@ -82,7 +82,9 @@ export class SessionComposer extends LitElement {
         text-overflow: ellipsis;
         white-space: nowrap;
       }
-      .routing .routing-parent {
+      .routing .routing-parent,
+      .routing .routing-parent::part(base) {
+        font-size: inherit;
         white-space: nowrap;
       }
 
