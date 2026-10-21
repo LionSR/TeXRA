@@ -1,3 +1,4 @@
+import prettyMilliseconds from 'pretty-ms';
 import { buildMcpToolName } from '@texra-ai/harness/transcript';
 import {
   getBasename,
@@ -214,7 +215,11 @@ export function buildCodexTurnToolLog({
               {
                 kind: 'text' as const,
                 label: 'Duration:',
-                text: `${(roundedMs / 1000).toFixed(1)}s`,
+                // Whole seconds, at least 1s: the card's wall-time reading.
+                text: prettyMilliseconds(
+                  Math.max(1000, Math.floor(roundedMs / 1000) * 1000),
+                  { secondsDecimalDigits: 0 },
+                ),
               },
             ]
           : []),
