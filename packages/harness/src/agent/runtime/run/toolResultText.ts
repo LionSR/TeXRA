@@ -15,7 +15,7 @@ const MAX_TOOL_RESULT_TEXT_LENGTH = 200_000;
 /**
  * Head and tail kept when a tool result exceeds the cap, rather than dropping
  * it wholesale. Head is small (just enough to name the invoked engine/file);
- * tail is large because LaTeX/build errors cluster at the end of long logs.
+ * tail is large because build errors cluster at the end of long logs.
  */
 export const TOOL_RESULT_TRUNCATION_HEAD_CHARS = 4_000;
 export const TOOL_RESULT_TRUNCATION_TAIL_CHARS = 50_000;
@@ -40,8 +40,8 @@ export function formatAttachmentSummary(
  * Check if tool result text exceeds the maximum allowed length. Returns a
  * head+tail replacement (with an explicit elision marker) if exceeded,
  * otherwise null so the caller keeps the original text. Head is small
- * (enough to name the invoked engine/file); tail is large because LaTeX and
- * build errors cluster at the end of long logs.
+ * (enough to name the invoked engine/file); tail is large because build
+ * errors cluster at the end of long logs.
  */
 function checkToolResultTextLimit(text: string): string | null {
   if (text.length <= MAX_TOOL_RESULT_TEXT_LENGTH) {
