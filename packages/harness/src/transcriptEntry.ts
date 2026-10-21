@@ -1,6 +1,12 @@
 // What a renderer paints a session's transcript from, browser-safe like
-// `./schemas`: the rows a `TranscriptView` (`./schemas`) holds and the
-// projections every host derives from them.
+// `./schemas`: the view folded from a transport, the rows a `TranscriptView`
+// (`./schemas`) holds, and the projections every host derives from them.
+
+// A session's view across a process boundary: the fold over the inputs the
+// caller's transport serves.
+export { RemoteSessionView } from '@controllers/session/SessionView';
+export { SessionInputs } from '@shared/session/sessionInputs';
+export type { CommitOrdinal, FoldInput } from '@shared/schemas';
 
 // The rows: one kind each, the headline a row is listed by, and the
 // untruncated text a host elides to fit.

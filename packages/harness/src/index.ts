@@ -39,6 +39,8 @@ export type {
   RunRecords,
 } from './effect/sessionReads.js';
 export type { SessionStoreMovedAside } from '@shared/session/database';
+// A project's view read cold from its store, for a multi-project listing.
+export { readSessionView } from '@controllers/session/readSessionView';
 export type { RunEnd } from '@shared/schemas';
 export type { RunResult } from '@agent/storage/resultMeta';
 export type { RunRefusal } from '@agent/runtime/runClassification';

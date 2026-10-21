@@ -44,7 +44,7 @@ import {
 import { Database } from '@shared/session/database';
 import { SessionInputs } from '@shared/session/sessionInputs';
 import { ProcessIdentity, SessionEvents } from '@shared/session/sessionEvents';
-import type { SessionView } from '@shared/session/sessionView';
+import type { SessionView } from '@shared/session/readonlyViews';
 import { closeSessionOf } from '@test/support/sessionEnd';
 import {
   createFakeWorkspaceRoots,
@@ -180,10 +180,9 @@ const ticking = Effect.forever(
 );
 
 const settle = (
-  view: SubscriptionRef.SubscriptionRef<SessionView>,
+  changes: Stream.Stream<SessionView>,
   ready: (view: SessionView) => boolean,
-) =>
-  SubscriptionRef.changes(view).pipe(Stream.takeUntil(ready), Stream.runDrain);
+) => changes.pipe(Stream.takeUntil(ready), Stream.runDrain);
 
 /** The text a row paints: its durable text joined with the live text the
  *  fold holds for it, once the row's entry has folded. */
@@ -510,11 +509,10 @@ describe('session framer', () => {
         const host = yield* SubscriptionRef.make<HostSnapshot | null>(HOST);
         const webview = yield* WebviewSessions.open(KEY);
         const { frames, view } = webview;
-        const shell = webview.subscriptions;
         // The shell: begin the generation and set its transcript set, then
         // post the Subscribe; the decoder feeds every frame that answers it.
         yield* frames.begin(subscribe.generation);
-        yield* shell.set('shell', subscribe.aggregates);
+        yield* view.subscribe('shell', subscribe.aggregates);
         const parentDecoder = yield* Effect.forkScoped(
           Stream.runForEach(
             frameSubscription(source, host, subscribe),
@@ -551,12 +549,15 @@ describe('session framer', () => {
           existence: null,
         });
         const ticker = yield* Effect.forkScoped(ticking);
-        yield* settle(view.ref, (v) => rowText(v, RUN, 'row-1') === 'Hello');
         yield* settle(
-          runtimeView.ref,
+          view.changes,
           (v) => rowText(v, RUN, 'row-1') === 'Hello',
         );
-        expect(drawn(yield* SubscriptionRef.get(view.ref))).toEqual(
+        yield* settle(
+          runtimeView.changes,
+          (v) => rowText(v, RUN, 'row-1') === 'Hello',
+        );
+        expect(drawn(view.current())).toEqual(
           drawn(yield* SubscriptionRef.get(runtimeView.ref)),
         );
         // A tail commit reaches both folds.
@@ -566,16 +567,16 @@ describe('session framer', () => {
           new Map([[`${RUN}/row-1`, textTail('Hello again')]]),
         );
         yield* settle(
-          view.ref,
+          view.changes,
           (v) =>
             v.runs.get(RUN)?.status === RUN_PHASE.RUNNING &&
             rowText(v, RUN, 'row-1') === 'Hello again',
         );
         yield* settle(
-          runtimeView.ref,
+          runtimeView.changes,
           (v) => v.runs.get(RUN)?.status === RUN_PHASE.RUNNING,
         );
-        const folded = yield* SubscriptionRef.get(view.ref);
+        const folded = view.current();
         expect(folded.debug).toBe(false);
         expect(drawn(folded)).toEqual(
           drawn(yield* SubscriptionRef.get(runtimeView.ref)),
@@ -591,20 +592,20 @@ describe('session framer', () => {
             { ...runStart, aggregateId: qualifyAggregateId('run', SECOND) },
           ]),
         );
-        yield* settle(view.ref, (v) => v.runs.has(SECOND));
-        yield* settle(runtimeView.ref, (v) => v.runs.has(SECOND));
+        yield* settle(view.changes, (v) => v.runs.has(SECOND));
+        yield* settle(runtimeView.changes, (v) => v.runs.has(SECOND));
         yield* Fiber.interrupt(parentDecoder);
         const named: Subscribe = {
           ...subscribe,
           generation: 2,
-          cursor: (yield* SubscriptionRef.get(view.ref)).cursor,
+          cursor: view.current().cursor,
           aggregates: [
             ...subscribe.aggregates,
             { id: qualifyAggregateId('run', SECOND), fromSeq: 0 },
           ],
         };
         yield* frames.begin(named.generation);
-        yield* shell.set('shell', named.aggregates);
+        yield* view.subscribe('shell', named.aggregates);
         const decoder = yield* Effect.forkScoped(
           Stream.runForEach(frameSubscription(source, host, named), (frame) =>
             frames.feed(frame),
@@ -619,7 +620,10 @@ describe('session framer', () => {
           chunks.ref,
           (held) => new Map([...held, [`${SECOND}/row-2`, textTail('First')]]),
         );
-        yield* settle(view.ref, (v) => rowText(v, SECOND, 'row-2') === 'First');
+        yield* settle(
+          view.changes,
+          (v) => rowText(v, SECOND, 'row-2') === 'First',
+        );
         yield* SubscriptionRef.update(
           chunks.ref,
           (held) =>
@@ -632,18 +636,18 @@ describe('session framer', () => {
             ]),
         );
         yield* settle(
-          view.ref,
+          view.changes,
           (v) => rowText(v, SECOND, 'row-2') === 'First suffix',
         );
         yield* settle(
-          runtimeView.ref,
+          runtimeView.changes,
           (v) => rowText(v, SECOND, 'row-2') === 'First suffix',
         );
 
         // Neither a partial replay nor its superseded generation may mutate
         // the previously published view, whose indexes are shared by the fold.
         yield* Fiber.interrupt(decoder);
-        const beforeLive = yield* SubscriptionRef.get(view.ref);
+        const beforeLive = view.current();
         const sameCursorFrame: EventsFrame = {
           kind: 'events',
           session: KEY,
@@ -671,7 +675,7 @@ describe('session framer', () => {
           ],
         });
         yield* TestClock.adjust('16 millis');
-        expect(yield* SubscriptionRef.get(view.ref)).toBe(beforeLive);
+        expect(view.current()).toBe(beforeLive);
         yield* frames.feed({
           ...sameCursorFrame,
           existence: {
@@ -684,13 +688,13 @@ describe('session framer', () => {
             ],
           },
         });
-        yield* settle(view.ref, (v) => v.runs.get(RUN)?.ownerId === null);
-        const afterLive = yield* SubscriptionRef.get(view.ref);
+        yield* settle(view.changes, (v) => v.runs.get(RUN)?.ownerId === null);
+        const afterLive = view.current();
         expect(afterLive.cursor).toBe(beforeLive.cursor);
         expect(rowText(afterLive, RUN, 'row-1')).toBe('Hello again!');
-        const beforeReplay = yield* SubscriptionRef.get(view.ref);
+        const beforeReplay = view.current();
         yield* frames.begin(3);
-        yield* shell.set('shell', named.aggregates);
+        yield* view.subscribe('shell', named.aggregates);
         yield* frames.feed({
           kind: 'events',
           session: KEY,
@@ -717,10 +721,10 @@ describe('session framer', () => {
           existence: null,
         });
         yield* TestClock.adjust('16 millis');
-        expect(yield* SubscriptionRef.get(view.ref)).toBe(beforeReplay);
+        expect(view.current()).toBe(beforeReplay);
         expect(beforeReplay.runs.get(RUN)?.status).toBe(RUN_PHASE.RUNNING);
         yield* frames.begin(4);
-        yield* shell.set('shell', named.aggregates);
+        yield* view.subscribe('shell', named.aggregates);
         const resumed = yield* Effect.forkScoped(
           Stream.runForEach(
             frameSubscription(source, host, {
@@ -731,10 +735,8 @@ describe('session framer', () => {
             (frame) => frames.feed(frame),
           ),
         );
-        yield* settle(view.ref, (v) => v !== beforeReplay);
-        expect(
-          (yield* SubscriptionRef.get(view.ref)).runs.get(RUN)?.status,
-        ).toBe(RUN_PHASE.RUNNING);
+        yield* settle(view.changes, (v) => v !== beforeReplay);
+        expect(view.current().runs.get(RUN)?.status).toBe(RUN_PHASE.RUNNING);
         yield* Fiber.interrupt(ticker);
         yield* Fiber.interrupt(resumed);
       }).pipe(
@@ -781,7 +783,7 @@ describe('session framer', () => {
       const startReplay = (request: Subscribe) =>
         Effect.gen(function* () {
           yield* webview.frames.begin(request.generation);
-          yield* webview.subscriptions.set('shell', request.aggregates);
+          yield* webview.view.subscribe('shell', request.aggregates);
           return yield* Effect.forkScoped(
             Stream.runForEach(
               frameSubscription(source, host, request),
@@ -792,10 +794,10 @@ describe('session framer', () => {
       const ticker = yield* Effect.forkScoped(ticking);
       let decoder = yield* startReplay(subscribe);
       yield* settle(
-        webview.view.ref,
+        webview.view.changes,
         (view) => (view.folded.get(aggregateId) ?? 0) > 0 && view.cursor > 0,
       );
-      let current = yield* SubscriptionRef.get(webview.view.ref);
+      let current = webview.view.current();
       expect(current.debug).toBe(false);
       expect(hasDebugRow(current)).toBe(false);
       expect(current.cursor).toBeGreaterThan(0);
@@ -811,10 +813,10 @@ describe('session framer', () => {
         aggregates: [{ id: aggregateId, fromSeq: nonzeroFromSeq }],
       });
       yield* settle(
-        webview.view.ref,
+        webview.view.changes,
         (view) => view.debug && hasDebugRow(view),
       );
-      current = yield* SubscriptionRef.get(webview.view.ref);
+      current = webview.view.current();
       expect(current.folded.get(aggregateId)).toBe(nonzeroFromSeq);
 
       config.set(DEBUG_MODE_KEY, false);
@@ -829,7 +831,7 @@ describe('session framer', () => {
         ],
       });
       yield* settle(
-        webview.view.ref,
+        webview.view.changes,
         (view) => !view.debug && !hasDebugRow(view) && view.runs.has(RUN),
       );
       yield* Fiber.interrupt(ticker);

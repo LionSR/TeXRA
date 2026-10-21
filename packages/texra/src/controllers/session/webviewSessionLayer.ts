@@ -2,9 +2,9 @@
  * The webview's Effect graphs (PRD one-fold-three-renderers, 7.3, 7.7):
  * one per session key, in a `LayerMap`, built on the one `ManagedRuntime`
  * a webview entry makes with `installWebviewRuntime`. SessionInputs is fed
- * directly by the ordered frames; the same SessionViewService folds them
- * in the sidebar, editor tab, and Electron renderer. SessionFrames carries
- * the host snapshot separately from the fold.
+ * directly by the ordered frames; the harness's `RemoteSessionView` folds
+ * them in the sidebar, editor tab, and Electron renderer. SessionFrames
+ * carries the host snapshot separately from the fold.
  *
  * The shell opens a session with `WebviewSessions.open(key)`, begins a
  * generation on its frames right before it posts the `Subscribe` up, and
@@ -14,37 +14,30 @@
  */
 import { Context, Effect, Layer, LayerMap, ManagedRuntime } from 'effect';
 
-import { TranscriptSubscriptions } from '@controllers/session/sessionSources';
-import { SessionViewService } from '@controllers/session/SessionView';
-import { WorkspaceRoots } from '@controllers/session/WorkspaceRoots';
+import { RemoteSessionView, SessionInputs } from '@texra-ai/harness/transcript';
 // The browser-safe module, not the harness entry: this layer runs in the
 // webview, which must not evaluate the Node process composition.
 import {
   viewDiagnosticsLayer,
   withForkFailureReporting,
 } from '@platform/processRuntime';
-import { SessionInputs } from '@shared/session/sessionInputs';
 import { SessionFrames } from '@texra/shared/session/sessionFrames';
 
 /** The graph of one session key. `Layer.fresh` for the same reason as the
  *  runtime's: static layers memoize by reference across the map. */
 const webviewSessionLayer = (key: string) =>
   Layer.fresh(
-    SessionViewService.layer.pipe(
-      Layer.provideMerge(
-        Layer.mergeAll(
-          Layer.effect(
-            SessionInputs,
-            Effect.map(SessionFrames, (frames) => ({
-              read: (aggregates, _fromCommit, previousDebug) =>
-                frames.inputs(aggregates, previousDebug),
-            })),
-          ),
-          TranscriptSubscriptions.layer,
+    RemoteSessionView.layer(key).pipe(
+      Layer.provide(
+        Layer.effect(
+          SessionInputs,
+          Effect.map(SessionFrames, (frames) => ({
+            read: (aggregates, _fromCommit, previousDebug) =>
+              frames.inputs(aggregates, previousDebug),
+          })),
         ),
       ),
       Layer.provideMerge(SessionFrames.layer),
-      Layer.provide(Layer.succeed(WorkspaceRoots)({ storage: key })),
     ),
   );
 
@@ -53,9 +46,8 @@ const webviewSessionLayer = (key: string) =>
 interface WebviewSession {
   readonly key: string;
   readonly frames: Context.Service.Shape<typeof SessionFrames>;
-  readonly view: Context.Service.Shape<typeof SessionViewService>;
-  /** The shell is the graph's one port. */
-  readonly subscriptions: Context.Service.Shape<typeof TranscriptSubscriptions>;
+  /** The shell is the view's one subscribing port. */
+  readonly view: Context.Service.Shape<typeof RemoteSessionView>;
 }
 
 export class WebviewSessions extends LayerMap.Service<WebviewSessions>()(
@@ -69,8 +61,7 @@ export class WebviewSessions extends LayerMap.Service<WebviewSessions>()(
       Effect.map((context): WebviewSession => ({
         key,
         frames: Context.get(context, SessionFrames),
-        view: Context.get(context, SessionViewService),
-        subscriptions: Context.get(context, TranscriptSubscriptions),
+        view: Context.get(context, RemoteSessionView),
       })),
     );
   }
