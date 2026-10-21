@@ -60,8 +60,6 @@ import type { ModelProvider } from 'llm-zoo';
 
 // Re-export what settings consumers need from the view-message modules, so
 // they keep one import site; the schemas themselves stay unexported here.
-export { type MemoryPreview } from './memoryViewMessages';
-
 export {
   type ProviderKeyStatus,
   type ProviderSetting,
@@ -837,8 +835,3 @@ export const SettingsViewInboundMessageSchema = z.discriminatedUnion(
 export type SettingsViewInboundMessage = z.infer<
   typeof SettingsViewInboundMessageSchema
 >;
-
-/** Type helper for extracting a specific inbound message by command. */
-export type SettingsMessageFor<
-  C extends SettingsViewInboundMessage['command'],
-> = Extract<SettingsViewInboundMessage, { command: C }>;

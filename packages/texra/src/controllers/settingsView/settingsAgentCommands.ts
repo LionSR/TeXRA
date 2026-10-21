@@ -4,26 +4,30 @@
  * team presets, with the refresh every mutation ends in. The host binds only
  * what it shows its own way (a document, a folder picker, the AI creator).
  */
-import { Effect, FileSystem } from 'effect';
+import * as path from 'node:path';
+
+import { Effect, FileSystem, absurd } from 'effect';
 
 import {
   AgentCatalog,
   AgentDirectories,
+  isStrictlyWithin,
   readCustomAgentDir,
   type WorkspaceRoots,
 } from '@texra-ai/harness';
-import { GlobalStateKey } from '@texra-ai/harness/schemas';
-import { agentKey } from '@shared/schemas';
-import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
-import { createSettingsAgentActions } from '@texra/controllers/settingsView/backend/SettingsAgentActions';
+import { entryTypeIn, readNormalizedFile } from '@texra-ai/harness/node';
+import { GlobalStateKey, toErrorMessage } from '@texra-ai/harness/schemas';
+import { formatResultCount } from '@texra-ai/harness/transcript';
+import { formatUnknownTeamMessage } from '@common/teams/TeamPlan';
+import { agentKey, isPackagedAgentSource } from '@shared/schemas';
 import {
-  templateAgentNamePrompt,
-  validateTemplateAgentName,
-  writeTemplateAgentFile,
-} from '@texra/controllers/settingsView/backend/templateAgentCreation';
+  AGENT_TEMPLATE_FILES,
+  DEFAULT_AGENT_TEMPLATE_TOOLS_YAML,
+  renderAgentTemplateString,
+} from '@texra/agent/templates/agentTemplateRenderer';
+import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 import { SettingsAgentCatalogController } from '@texra/controllers/settingsView/SettingsAgentCatalogController';
 import type { SettingsViewInboundHandlerRegistry } from '@texra/controllers/settingsView/settingsViewDispatch';
-import { applySettingsTeam } from '@texra/controllers/settingsView/SettingsTeamController';
 import { allSettledVoid } from '@texra/utils/core/allSettledVoid';
 import { registerCustomAgentRoot } from '@tools/agentCatalogFollower';
 import type { ProcessServices } from '@texra-ai/harness';
@@ -34,6 +38,64 @@ import type {
 } from './settingsHostBindings';
 
 type HostEffect = Effect.Effect<void, Error, ProcessServices>;
+
+/** Rejection reason for a proposed custom-agent file name, or null. */
+function validateTemplateAgentName(value: string): string | null {
+  if (!value) return 'Name cannot be empty';
+  if (value.includes('/') || value.includes('\\')) {
+    return 'Name cannot contain path separators';
+  }
+  if (value.includes(' ')) return 'Use underscores instead of spaces';
+  if (/[:#[\]{}|>&*!%@`]/.test(value)) {
+    return 'Name cannot contain YAML-special characters';
+  }
+  return null;
+}
+
+/**
+ * Render a template agent into its file, refusing to overwrite an existing
+ * file. `resourcesRoot` is the packaged `…/resources` directory that holds
+ * `templates/<kind>.yaml`.
+ */
+const writeTemplateAgentFile = Effect.fn('settings.writeTemplateAgentFile')(
+  function* (
+    input: { task: boolean; name: string; customDir: string },
+    resourcesRoot: string,
+  ) {
+    const fileName = input.name.endsWith('.yaml')
+      ? input.name
+      : `${input.name}.yaml`;
+    const filePath = path.join(input.customDir, fileName);
+    const baseName = input.name.replace(/\.yaml$/, '');
+    const description = input.task
+      ? `${baseName} — document task`
+      : `${baseName} — chat agent`;
+    const fs = yield* FileSystem.FileSystem;
+    if ((yield* entryTypeIn(fs, filePath)) !== undefined) {
+      return {
+        ok: false,
+        message: `A file named "${fileName}" already exists in the custom agents folder.`,
+      } as const;
+    }
+    const raw = yield* readNormalizedFile(
+      fs,
+      path.join(
+        resourcesRoot,
+        'templates',
+        AGENT_TEMPLATE_FILES[input.task ? 'workflowSingle' : 'toolUse'],
+      ),
+    );
+    yield* fs.writeFileString(
+      filePath,
+      renderAgentTemplateString(raw, {
+        AGENT_NAME: baseName,
+        DESCRIPTION: description,
+        TOOLS_YAML: DEFAULT_AGENT_TEMPLATE_TOOLS_YAML,
+      }),
+    );
+    return { ok: true, filePath } as const;
+  },
+);
 
 interface SettingsAgentCommandsPorts {
   readonly roots: Pick<WorkspaceRoots, 'repoState' | 'globalState'>;
@@ -128,25 +190,10 @@ export function settingsAgentCommands(ports: SettingsAgentCommandsPorts) {
     ]),
   );
 
-  const actions = createSettingsAgentActions({
-    getCustomAgentDirectory: () => customDirectory,
-    openDocument: bindings.openPath,
-    openReadOnlyDocument: (filePath) =>
-      Effect.flatMap(
-        FileSystem.FileSystem.use((fs) => fs.readFileString(filePath)),
-        (text) => bindings.showReadOnlyYaml(filePath, text),
-      ),
-    revealFile: bindings.revealPath,
-    confirmAction: (message, confirmLabel) =>
-      bindings.prompt.confirm(message, { modal: true, confirmLabel }),
-    showInfoMessage: present.notice,
-    showErrorMessage: present.alert,
-    refreshAfterMutation: () => refreshAfterAgentMutation(),
-    forgetDeletedAgent: (name) =>
-      Effect.flatMap(page, ({ workspaceAgents }) =>
-        workspaceAgents.forgetDeletedAgent(name),
-      ),
-  });
+  // A delete already in flight for this agent swallows a second click (#9487):
+  // the second request would otherwise open another confirmation and then
+  // report the agent the first one removed as not found.
+  const activeDeletions = new Set<string>();
 
   const handlers = {
     setAgentEnabled: (message) =>
@@ -170,17 +217,122 @@ export function settingsAgentCommands(ports: SettingsAgentCommandsPorts) {
     openAgentYaml: (message) =>
       present.reported(
         'Failed to open agent YAML file',
-        actions.openAgentYaml(message),
+        Effect.gen(function* () {
+          const entry = (yield* AgentCatalog).get(
+            agentKey(message.agentSource, message.agentName),
+          );
+          if (!entry?.path) {
+            return yield* present.alert(
+              entry
+                ? `No configuration file found for agent "${message.agentName}". The agent definition may be incomplete — try re-creating it from the Agents tab.`
+                : `Agent "${message.agentName}" could not be found. It may have been removed or renamed. Check the Agents tab in Settings to see available agents.`,
+            );
+          }
+          // A packaged definition lives inside the installed host bundle, so
+          // opening the file itself would let a save mutate the built-in agent
+          // every later scan and launch reads — and silently bypass the
+          // adjacent Customize action that makes the editable copy. The host
+          // shows it without a buffer that saves over the original.
+          const entryPath = entry.path;
+          yield* isPackagedAgentSource(message.agentSource)
+            ? Effect.flatMap(
+                FileSystem.FileSystem.use((fs) => fs.readFileString(entryPath)),
+                (text) => bindings.showReadOnlyYaml(entryPath, text),
+              )
+            : bindings.openPath(entryPath);
+        }),
       ),
     customizeAgent: (message) =>
       present.reported(
         'Failed to create custom agent copy',
-        actions.customizeAgent(message),
+        Effect.gen(function* () {
+          if (message.agentSource === 'plugin') {
+            return yield* present.alert(
+              `${message.agentName} comes from an installed plugin and has no editable copy; edit the plugin's own agent file instead.`,
+            );
+          }
+          const catalog = yield* AgentCatalog;
+          const entry = catalog.get(
+            agentKey(message.agentSource, message.agentName),
+          );
+          if (!entry?.path || entry.digest == null) {
+            return yield* present.alert(
+              `Agent not found or has no file: ${message.agentName}`,
+            );
+          }
+
+          // A copy already there is replaced only on the user's say-so.
+          const targetPath = yield* catalog
+            .customize(entry, 'copy')
+            .pipe(
+              Effect.catchTag('AgentCustomizeRefused', (refused) =>
+                refused.reason === 'exists' && refused.path !== undefined
+                  ? Effect.flatMap(
+                      bindings.prompt.confirm(
+                        `A custom copy already exists: ${path.basename(refused.path)}`,
+                        { modal: true, confirmLabel: 'Overwrite' },
+                      ),
+                      (overwrite) =>
+                        overwrite
+                          ? catalog.customize(entry, 'overwrite')
+                          : Effect.succeed(undefined),
+                    )
+                  : Effect.as(present.alert(refused.message), undefined),
+              ),
+            );
+          if (targetPath === undefined) return;
+
+          yield* refreshAfterAgentMutation();
+          yield* bindings.openPath(targetPath);
+          yield* present.notice(
+            `Created custom copy: ${path.basename(targetPath)}`,
+          );
+        }),
       ),
     deleteCustomAgent: (message) =>
       present.reported(
         'Failed to delete custom agent',
-        actions.deleteCustomAgent(message),
+        Effect.suspend((): HostEffect => {
+          if (activeDeletions.has(message.agentName)) return Effect.void;
+          activeDeletions.add(message.agentName);
+          return Effect.gen(function* () {
+            const entryPath = (yield* AgentCatalog).get(
+              agentKey('custom', message.agentName),
+            )?.path;
+            if (!entryPath) {
+              return yield* present.alert(
+                `Custom agent not found: ${message.agentName}`,
+              );
+            }
+
+            const customDir = yield* customDirectory;
+            if (!isStrictlyWithin(customDir, entryPath)) {
+              return yield* present.alert(
+                'Refusing to delete: file is not inside the custom agents directory.',
+              );
+            }
+
+            const confirmed = yield* bindings.prompt.confirm(
+              `Delete "${message.agentName}"? This cannot be undone.`,
+              { modal: true, confirmLabel: 'Delete' },
+            );
+            if (!confirmed) return;
+
+            const fs = yield* FileSystem.FileSystem;
+            // `force` is the facade's delete: a path already gone is the
+            // post-condition, not a failure.
+            yield* fs.remove(entryPath, { force: true });
+            // The removal is real only here: the agent list forgets its choice.
+            const { workspaceAgents } = yield* page;
+            yield* workspaceAgents.forgetDeletedAgent(message.agentName);
+            yield* present.notice(`Deleted custom agent: ${message.agentName}`);
+            yield* refreshAfterAgentMutation();
+          }).pipe(
+            Effect.ensuring(
+              Effect.sync(() => activeDeletions.delete(message.agentName)),
+            ),
+          );
+        }),
       ),
     keepCustomAgent: (message) =>
       present.reported(
@@ -208,7 +360,17 @@ export function settingsAgentCommands(ports: SettingsAgentCommandsPorts) {
     revealAgentFile: (message) =>
       present.reported(
         'Failed to reveal agent file',
-        actions.revealAgentFile(message),
+        Effect.gen(function* () {
+          const entry = (yield* AgentCatalog).get(
+            agentKey(message.agentSource, message.agentName),
+          );
+          if (!entry?.path) {
+            return yield* present.alert(
+              `Agent not found or has no file: ${message.agentName}`,
+            );
+          }
+          yield* bindings.revealPath(entry.path);
+        }),
       ),
     openAgentFolder: () =>
       present.reported(
@@ -220,7 +382,7 @@ export function settingsAgentCommands(ports: SettingsAgentCommandsPorts) {
         'Failed to create agent',
         Effect.gen(function* () {
           const name = yield* bindings.prompt.input({
-            prompt: templateAgentNamePrompt(message.task),
+            prompt: `Enter a name for the new ${message.task ? 'document task' : 'chat'} agent (without .yaml extension)`,
             placeHolder: 'my_agent',
           });
           if (!name) return;
@@ -268,18 +430,41 @@ export function settingsAgentCommands(ports: SettingsAgentCommandsPorts) {
     applyAgentModePreset: (message) =>
       present.reported(
         'Failed to apply agent team',
-        Effect.flatMap(page, ({ workspaceAgents, catalog }) =>
-          applySettingsTeam(message.presetId, {
-            workspaceAgents,
-            catalog,
-            presentation: {
-              showInfoMessage: present.notice,
-              showErrorMessage: present.alert,
-            },
-            refreshAfterApply: (selectedToolUseAgent) =>
-              refreshAfterAgentMutation(selectedToolUseAgent, true),
-          }),
-        ),
+        Effect.gen(function* () {
+          const { workspaceAgents, catalog } = yield* page;
+          const result = yield* workspaceAgents.applyTeam(message.presetId);
+          switch (result.status) {
+            case 'unknown':
+              return yield* present.alert(
+                formatUnknownTeamMessage(message.presetId),
+              );
+            case 'applied': {
+              const selectedToolUseAgent = yield* catalog.getPresetRoot(
+                [...result.preset.agents],
+                result.preset.id,
+              );
+              // The team is committed before this repaint, so a failed
+              // repaint says the apply itself went through.
+              yield* refreshAfterAgentMutation(selectedToolUseAgent, true).pipe(
+                Effect.mapError(
+                  (cause) =>
+                    new Error(
+                      `The team was applied, but the settings view could not be refreshed: ${toErrorMessage(cause)}`,
+                      { cause },
+                    ),
+                ),
+              );
+              const unresolvedCount = result.resolution.missingAgents.length;
+              return yield* present.notice(
+                unresolvedCount === 0
+                  ? `Applied "${result.preset.name}" team`
+                  : `Applied "${result.preset.name}" with ${formatResultCount(unresolvedCount, 'member')} still unavailable`,
+              );
+            }
+            default:
+              return absurd(result);
+          }
+        }),
       ),
     saveAgentModePreset: () =>
       present.reported(
