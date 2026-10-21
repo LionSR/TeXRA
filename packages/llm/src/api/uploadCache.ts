@@ -129,26 +129,30 @@ export function filesApiUploads(provider: {
     const digest = digestOf(parsed.data.base64);
     if (released || live.has(digest) || inFlight.has(digest)) return;
     inFlight.add(digest);
-    const uploaded = yield* send(parsed.data).pipe(
-      Effect.ensuring(Effect.sync(() => inFlight.delete(digest))),
-    );
-    // `send` can outlive a concurrent release. The check and the cache
-    // writes are one synchronous stretch, so a release either already ran
-    // (delete this id, do not cache it) or still sees it in `owned`.
-    if (released) {
-      yield* remove(uploaded.fileId).pipe(
+    // Only the request is interruptible: once it answers, the id has one
+    // owner at every instant, `owned` (a release reports it) or this fiber.
+    yield* Effect.uninterruptibleMask((restore) =>
+      Effect.gen(function* () {
+        const uploaded = yield* restore(send(parsed.data)).pipe(
+          Effect.ensuring(Effect.sync(() => inFlight.delete(digest))),
+        );
+        if (!released) {
+          owned.add(uploaded.fileId);
+          live.set(digest, uploaded);
+          return;
+        }
         // The release that would have reported this id already finished, so
-        // a refused delete is warned here rather than silently dropped.
-        Effect.catchTag('ModelError', (error) =>
+        // a delete refused or cut short is warned here, never dropped.
+        const unreleased = (why: string) =>
           Effect.logWarning(
-            `Uploaded file ${uploaded.fileId} could not be deleted after its binding was released; the provider expires it on its own (${error.message}).`,
-          ),
-        ),
-      );
-      return;
-    }
-    owned.add(uploaded.fileId);
-    live.set(digest, uploaded);
+            `Uploaded file ${uploaded.fileId} could not be deleted after its binding was released; the provider expires it on its own (${why}).`,
+          );
+        yield* restore(remove(uploaded.fileId)).pipe(
+          Effect.catchTag('ModelError', (error) => unreleased(error.message)),
+          Effect.onInterrupt(() => unreleased('interrupted')),
+        );
+      }),
+    );
   });
 
   const releaseUploads = Effect.fn('llm.uploads.release')(function* () {
