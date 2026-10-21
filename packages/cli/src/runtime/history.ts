@@ -11,6 +11,7 @@ import {
   type RunResult,
   type SessionOpenError,
 } from '@texra-ai/harness';
+import { absentReason } from '@texra-ai/harness/node';
 import { runOutcomeToCliRunStatus } from '@cli/schemas/cliOutput';
 import type { CliNdjsonRecord } from '@cli/schemas/cliOutput';
 import {
@@ -21,7 +22,6 @@ import {
 } from '@shared/schemas';
 import { loadChatExportInput, type ChatExportInput } from '@texra/agent/export';
 import { serializeFilteredConfig } from '@tools/executions/configView';
-import { absentReason } from '@utils/files/fsEntryExists';
 
 import { CliUsageError } from './cliContext';
 import { cliErrorMessage } from './logSinks';

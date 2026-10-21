@@ -1,6 +1,7 @@
 import { Effect, FileSystem } from 'effect';
 import { z } from 'zod';
 import { ToolContext } from '@texra-ai/harness';
+import { entryTypeIn } from '@texra-ai/harness/node';
 import { ensureError } from '@texra-ai/harness/schemas';
 import {
   resolveToolPath,
@@ -14,7 +15,6 @@ import {
 } from '@shared/schemas';
 import { buildFileAttachment } from '@tools/attachments';
 import { formatToolOutput } from '@tools/formatting';
-import { entryExists } from '@utils/files/fsEntryExists';
 
 /** Shared `texPath` Zod field for LaTeX extraction tools, with a per-tool description. */
 export function texPathField(description: string): z.ZodString {
@@ -65,7 +65,7 @@ export const resolveLatexFile = Effect.fn('tools.resolveLatexFile')(function* (
     Effect.mapError(ensureError),
   );
   const { display } = path;
-  const exists = yield* entryExists(fs, path.absolute);
+  const exists = (yield* entryTypeIn(fs, path.absolute)) !== undefined;
   if (!exists) {
     return yield* Effect.fail(
       new ToolError(`LaTeX file not found: ${display}`),

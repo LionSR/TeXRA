@@ -11,6 +11,11 @@ import path from 'node:path';
 import { Effect, FileSystem } from 'effect';
 
 import { withLogChannel, isPathWithin } from '@texra-ai/harness';
+import { RunFileService } from '@texra-ai/harness/plugins';
+import {
+  readNormalizedFile,
+  workspaceRelativePath,
+} from '@texra-ai/harness/node';
 import { toErrorMessage, countLines } from '@texra-ai/harness/schemas';
 import { runStorageFilePath, type RunId } from '@shared/schemas';
 import { escapeAttr } from '@shared/utils/xmlEscape';
@@ -22,9 +27,6 @@ import {
   type OutputFileSummary,
   type ResultDiffSummary,
 } from '@texra/shared/plugins/documentOutputs';
-import { readNormalizedFile } from '@utils/files/fsDurability';
-import { runDirUnder } from '@utils/files/runStorageFs';
-import { workspaceRelativePath } from '@utils/files/workspaceFS';
 import { reportDiffTimeout, unifiedDiffText } from '@utils/text/unifiedDiff';
 import type { WorkspaceRoots } from '@texra-ai/harness';
 import type { AgentBlockResult, RecipeChange } from '@texra-ai/harness/plugins';
@@ -129,10 +131,11 @@ function deliveredFilePath(
   roots: Pick<WorkspaceRoots, 'workspace' | 'storage'>,
   output: OutputFileSummary,
 ): string {
-  return output.originalPath === null ||
-    isPathWithin(roots.storage, output.originalPath)
-    ? stripWorkflowRoundDir(output.relativePath)
-    : workspaceRelativePath(roots.workspace, output.originalPath);
+  const { originalPath } = output;
+  if (originalPath === null || isPathWithin(roots.storage, originalPath)) {
+    return stripWorkflowRoundDir(output.relativePath);
+  }
+  return workspaceRelativePath(roots.workspace, originalPath);
 }
 
 /** Every revision's outputs, in revision order: a document revised twice
@@ -248,7 +251,10 @@ const computeAndWriteWorkflowDiffs = Effect.fn('documents.computeDiffs')(
     );
     const written = computed.filter((diff) => diff !== null);
     if (written.length > 0) {
-      const runDir = runDirUnder(storageRoot, runId);
+      const runDir = new RunFileService(runId, {
+        storage: storageRoot,
+        workspace: undefined,
+      }).runDirectory;
       // One recursive create reaches the run directory and the runs root above
       // it, which is all the run-dir ensure ahead of this ever did.
       yield* fs.makeDirectory(path.join(runDir, 'diffs'), { recursive: true });

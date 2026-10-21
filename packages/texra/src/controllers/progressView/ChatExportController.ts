@@ -27,6 +27,7 @@ import {
   type LocalSession,
   type WorkspaceFs,
 } from '@texra-ai/harness';
+import { absentReason, readNormalizedFile } from '@texra-ai/harness/node';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
 import { pathToLocationIn } from '@texra-ai/harness';
 import type { ChatExportInput } from '@agent/export/schemas';
@@ -44,8 +45,6 @@ import {
 } from '@texra/agent/export/loadChatExportInput';
 import type { TaskRecordsUnavailable } from '@texra/controllers/server/serviceSession';
 import { injectStandaloneTrace } from '@transcript';
-import { readNormalizedFile } from '@utils/files/fsDurability';
-import { absentReason } from '@utils/files/fsEntryExists';
 
 import { TranscriptExportFailed } from './transcriptExportFailure';
 import type { WorkspaceRoots } from '@texra-ai/harness';

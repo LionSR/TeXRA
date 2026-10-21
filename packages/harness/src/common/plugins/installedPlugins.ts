@@ -10,14 +10,14 @@ import * as path from 'node:path';
 
 // Third-party imports
 import { Effect, FileSystem, Result } from 'effect';
-
-// Local imports - shared contracts
 import {
   AgentSourceSchema,
   SkillNameSchema,
   type InstalledPlugin,
 } from '@shared/schemas';
-import { pathExists } from '@utils/files/fsDurability';
+import { pathExists } from '@utils/files/fsEntryExists';
+
+// Local imports - shared contracts
 
 // Local imports - plugin install record, reading and git
 import {

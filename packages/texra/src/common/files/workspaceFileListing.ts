@@ -1,6 +1,7 @@
 // Node imports
 import { join } from 'node:path';
 import { normalizeFilePath } from '@texra-ai/harness/schemas';
+import { absentReason } from '@texra-ai/harness/node';
 
 // Third-party imports
 import { Effect, FileSystem, type PlatformError } from 'effect';
@@ -12,7 +13,6 @@ import {
   shouldVisitDirectory,
   type FileFilterConfig,
 } from '@texra/common/files/fileListingRules';
-import { absentReason } from '@utils/files/fsEntryExists';
 
 interface WorkspaceFileListingOptions {
   root: string;

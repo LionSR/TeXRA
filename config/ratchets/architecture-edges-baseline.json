@@ -24,7 +24,6 @@
     { "from": "controllers", "to": "transcript", "kind": "value" },
     { "from": "controllers", "to": "utils", "kind": "value" },
     { "from": "housekeeping", "to": "shared", "kind": "value" },
-    { "from": "housekeeping", "to": "utils", "kind": "value" },
     { "from": "latex", "to": "replacement", "kind": "value" },
     { "from": "latex", "to": "shared", "kind": "value" },
     { "from": "latex", "to": "utils", "kind": "value" },

@@ -133,7 +133,7 @@ export type {
   RouteOptions,
   RoutePolicy,
 } from '@agent/runtime/ModelRetryGate';
-export type { RunFileService } from '@utils/files/runStorage';
+export { RunFileService } from '@utils/files/runStorage';
 export { HostCapabilities } from '@agent/runtime/agentToolResolution';
 // The harness's retry policy: which HTTP statuses are worth retrying, the
 // randomized exponential backoff `Schedule` its fetches retry on, and the

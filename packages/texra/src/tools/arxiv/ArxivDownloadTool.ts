@@ -18,7 +18,6 @@ import { resolveLatexFormatter } from '@latex/formatter/texFormatter';
 import { ToolError } from '@shared/schemas';
 import { getGitignoreMatcher } from '@tools/gitignore';
 import { formatToolOutput } from '@tools/formatting';
-import { readDirectoryTyped } from '@utils/files/fsDurability';
 
 const NO_ENTRIES_MESSAGE = '(no entries)';
 const DEFAULT_HIDDEN_NAMES = new Set(['.git', '.gitignore']);
@@ -33,11 +32,15 @@ function formatDirEntry(name: string, type: FileSystem.File.Type): string {
 const listExtractedEntries = Effect.fn('listExtractedEntries')(function* (
   dirFsPath: string,
   workspaceRoot: string,
-): Effect.fn.Return<string, Error, FileSystem.FileSystem | Path.Path> {
-  // The extraction directory is already absolute, so it is listed through the
-  // process filesystem; each entry carries its own type, a symlink reported
-  // as a symlink rather than as what it points at.
-  const entries = yield* readDirectoryTyped(dirFsPath);
+): Effect.fn.Return<
+  string,
+  Error,
+  FileSystem.FileSystem | Path.Path | WorkspaceFs
+> {
+  // The extraction directory lies in the workspace; each entry carries its
+  // own type, a symlink reported as a symlink rather than as what it points
+  // at.
+  const entries = yield* (yield* WorkspaceFs).readDirectoryTyped(dirFsPath);
   const dirRelative = toPosixPath(
     path.relative(workspaceRoot, dirFsPath) || '.',
   );

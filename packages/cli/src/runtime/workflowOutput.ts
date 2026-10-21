@@ -1,5 +1,6 @@
 import * as path from 'node:path';
 import { formatResultCount } from '@texra-ai/harness/transcript';
+import { RunFileService } from '@texra-ai/harness/plugins';
 import { toPosixPath } from '@texra-ai/harness';
 
 import { Effect, FileSystem, Path, PlatformError } from 'effect';
@@ -16,7 +17,6 @@ import {
   type DocumentsResult,
   type OutputFileSummary,
 } from '@texra/shared/plugins/documentOutputs';
-import { runDirUnder } from '@utils/files/runStorageFs';
 // toPosixPath also trims and resolves `.`/`..` segments beyond a bare slash
 // swap; safe here since these paths come from getSafeDocumentRelativePath /
 // path.relative on the workflow's own generated outputs, never user input.
@@ -327,7 +327,10 @@ export function resolveWorkflowOutput(
             ),
           )
         : { outputs: [], compileFailures: [], diffs: [] });
-    const runDirectory = runDirUnder(options.storageRoot, result.runId);
+    const { runDirectory } = new RunFileService(result.runId, {
+      storage: options.storageRoot,
+      workspace: undefined,
+    });
     const baseResult = {
       ...result,
       output: { ...output, documents },

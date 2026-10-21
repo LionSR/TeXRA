@@ -1,10 +1,10 @@
 import { Effect, FileSystem } from 'effect';
 
 import { AgentCatalog } from '@texra-ai/harness';
+import { pathExists } from '@texra-ai/harness/node';
 import { implicitDefaultToolUseAgents } from '@shared/constants/agents';
 import { workspaceTexraConfigPath } from '@texra/platform/defaults/nodeStorage';
 import { documentTaskOf } from '@texra/tools/documents/documentTask';
-import { pathExists } from '@utils/files/fsDurability';
 
 import { CLI_CHEAP_START_MODEL } from '../runtime/cliConfig';
 import { type CliContext } from '../runtime/cliContext';

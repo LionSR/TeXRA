@@ -26,7 +26,12 @@ import {
   requireRun,
   assertNoParentTraversal,
 } from '@texra-ai/harness/plugins';
-import { createWorkspaceLocation } from '@texra-ai/harness';
+import { pathToLocationIn } from '@texra-ai/harness';
+import {
+  absentReason,
+  entryTypeIn,
+  readNormalizedFile,
+} from '@texra-ai/harness/node';
 import { ensureError } from '@texra-ai/harness/schemas';
 import { cleanupAcceptedWorkspaceDiffFiles } from '@latex/acceptedFileTarget';
 import { stripCriticizeAnnotations } from '@replacement/advanced';
@@ -45,9 +50,6 @@ import {
   requestToolEditApproval,
 } from '@tools/approval/toolEditApproval';
 import { approvedWriteConflict } from '@tools/approval/approvedWrite';
-import { locateInWorkspace } from '@utils/files/workspaceFS';
-import { entryExists, absentReason } from '@utils/files/fsEntryExists';
-import { readNormalizedFile } from '@utils/files/fsDurability';
 import { pluralize } from '@utils/text/stringUtils';
 import {
   findExistingRunStoragePathUnder,
@@ -231,8 +233,11 @@ const acceptFiles = Effect.fn('AcceptRunFilesTool.acceptFiles')(function* (
         const destPath = mapping.original ?? mapping.path;
         // The call's own workspace root, as data: the source may resolve
         // under any root, but the destination is this session's.
-        const dest = locateInWorkspace(call.env.roots.workspace, destPath);
-        if (dest.kind === 'external') {
+        const workspaceRoot = call.env.roots.workspace;
+        const dest = workspaceRoot
+          ? pathToLocationIn(workspaceRoot, destPath)
+          : undefined;
+        if (dest?.kind !== 'workspace') {
           return yield* Effect.fail(
             new ToolError(`original must be inside the workspace: ${destPath}`),
           );
@@ -248,10 +253,13 @@ const acceptFiles = Effect.fn('AcceptRunFilesTool.acceptFiles')(function* (
           strip_criticize
             ? stripCriticizeAnnotations(rawContent)
             : { content: rawContent, count: 0 };
-        const destExists = yield* entryExists(
+        const destExists = yield* entryTypeIn(
           workspaceFs,
           dest.relativePath,
-        ).pipe(Effect.mapError(ensureError));
+        ).pipe(
+          Effect.map((type) => type !== undefined),
+          Effect.mapError(ensureError),
+        );
 
         // Determine original content for diff display. In-place document
         // outputs can make source and destination the same workspace file, so
@@ -468,14 +476,15 @@ const resolveSourceFile = Effect.fn('AcceptRunFilesTool.resolveSourceFile')(
 
     // Fall back to workspace
     const workspaceFs = yield* WorkspaceFs;
-    const wsLoc = locateInWorkspace(call.env.roots.workspace, runPath);
+    // `runPath` is non-empty here: run storage refused an empty one above.
+    const wsLoc = pathToLocationIn(call.env.roots.workspace, runPath);
     if (
-      wsLoc.kind !== 'external' &&
-      (yield* entryExists(workspaceFs, wsLoc.relativePath).pipe(
+      wsLoc.kind === 'workspace' &&
+      (yield* entryTypeIn(workspaceFs, wsLoc.relativePath).pipe(
         Effect.mapError(ensureError),
-      ))
+      )) !== undefined
     ) {
-      return createWorkspaceLocation(wsLoc.absolutePath, wsLoc.relativePath);
+      return wsLoc;
     }
 
     return yield* Effect.fail(

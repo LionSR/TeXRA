@@ -33,8 +33,8 @@ import {
 
 import { ChildProcessSpawner } from 'effect/process';
 import { withLogChannel } from '@texra-ai/harness';
+import { pathExists } from '@texra-ai/harness/node';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
-import { pathExists } from '@utils/files/fsDurability';
 
 import { runLakeCommand } from './lakeCommands';
 import { LeanServer, type LeanStartError } from './leanServer';

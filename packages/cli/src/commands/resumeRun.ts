@@ -3,6 +3,7 @@ import * as path from 'node:path';
 import { Effect, FileSystem, PlatformError, Result } from 'effect';
 
 import { describeFollowUpFailure } from '@texra-ai/harness';
+import { pathExists } from '@texra-ai/harness/node';
 import { ensureError } from '@texra-ai/harness/schemas';
 import {
   agentKey,
@@ -12,7 +13,6 @@ import {
   type RunId,
 } from '@shared/schemas';
 import { approvalPolicyLabel } from '@ui/copy/approvalPolicy';
-import { pathExists } from '@utils/files/fsDurability';
 
 import { executeCliWorkflowConfig } from './workflow';
 import { formatResumeCommand } from '../chat/tui/state/resumeHint';

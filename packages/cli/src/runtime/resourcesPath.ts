@@ -2,8 +2,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { Data, Effect, FileSystem } from 'effect';
-
-import { pathExists } from '@utils/files/fsDurability';
+import { pathExists } from '@texra-ai/harness/node';
 
 /** No resources candidate exists beside this build of the CLI. */
 class CliResourcesNotFound extends Data.TaggedError('CliResourcesNotFound')<{

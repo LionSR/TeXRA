@@ -11,7 +11,7 @@ import {
   WorkspaceFs,
   toPosixPath,
 } from '@texra-ai/harness';
-import { relativeToRoot } from '@texra-ai/harness/node';
+import { relativeToRoot, pathExists } from '@texra-ai/harness/node';
 
 // Local imports - tools
 import { ensureError } from '@texra-ai/harness/schemas';
@@ -27,7 +27,6 @@ import {
 } from '@latex/extractBibliography';
 import type { ToolResult } from '@shared/schemas';
 import { formatToolOutput } from '@tools/formatting';
-import { pathExists } from '@utils/files/fsDurability';
 import {
   emptyExtractionResult,
   resolveLatexFile,
