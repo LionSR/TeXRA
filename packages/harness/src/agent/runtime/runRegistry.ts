@@ -120,6 +120,8 @@ export interface RunRegistryInit {
   /** The run programs these runs run, given by the session layer: an import
    *  of them here would close a cycle (their tools reach `Runs`). */
   readonly programs: RunPrograms;
+  /** The run's last liveness arm here ended: wake it for rows landed since. */
+  readonly wake: (runId: RunId) => void;
 }
 
 /** The run programs: a root launch, a fresh run's turn, a resumed run's
@@ -236,6 +238,7 @@ export class RunRegistry implements RunsShape {
       if (entry[slot] === fiber) {
         entry[slot] = undefined;
         this.prune(runId, entry);
+        if (!this.isLive(runId)) this.init.wake(runId);
       }
     });
   }
@@ -402,11 +405,9 @@ export class RunRegistry implements RunsShape {
           session: this.init.session(),
         })) as RunsShape['launch'];
 
-  /**
-   * The one launch door: every run starts here, on the session's context
-   * ({@link fork}), after earlier work on its lane. It refuses with `RunLive`
-   * as it claims; a surviving claim lifts the stop marks. `settle` wraps it.
-   */
+  /** The one launch door: every run starts here, on the session's context
+   *  ({@link fork}), after earlier work on its lane. It refuses with
+   *  `RunLive` as it claims; a surviving claim lifts the stop marks. */
   start<A, E, R extends AgentRunServices, B, E2>(
     runId: RunId,
     program: Effect.Effect<A, E, R>,
@@ -433,14 +434,13 @@ export class RunRegistry implements RunsShape {
 
   /** Run `operation` on `runId`'s lane: claim the lane synchronously, fork
    *  the operation registered on the entry from its first step, and hold
-   *  the lane until that fiber settles, finalizers included.
-   *
-   *  The claim is conditional: {@link isLive} reads the entry in the same
-   *  synchronous step as the tail swap, so this is the one admission.
-   *  `inactiveStep` marks an inactive-run step rather than a generation: it
-   *  also refuses on retained owners and lane holders, and stays out of
-   *  {@link isLive}. A step waiting for its predecessor is refusable where it
-   *  stands ({@link waiting}) and hands the lane on when interrupted. */
+   *  the lane until that fiber settles, finalizers included. The claim is
+   *  conditional: {@link isLive} reads the entry in the same synchronous step
+   *  as the tail swap, so this is the one admission. `inactiveStep` marks an
+   *  inactive-run step rather than a generation: it also refuses on retained
+   *  owners and lane holders, and stays out of {@link isLive}. A step waiting
+   *  for its predecessor is refusable where it stands ({@link waiting}) and
+   *  hands the lane on when interrupted. */
   private admit<A, E, R>(
     runId: RunId,
     operation: Effect.Effect<A, E, R>,
@@ -476,6 +476,7 @@ export class RunRegistry implements RunsShape {
         if (entry === undefined) return;
         entry.launches -= 1;
         this.prune(runId, entry);
+        if (!inactiveStep && !this.isLive(runId)) this.init.wake(runId);
       };
       const step = Effect.gen({ self: this }, function* () {
         this.waiting.delete(refusal);
@@ -628,16 +629,15 @@ export class RunRegistry implements RunsShape {
   }
 
   /**
-   * Stop a run and apply the caller's declared child policy: the one stop
-   * every surface issues. A run this process drives is stopped where it
-   * stands: its children first, by the policy, then its handle or child
-   * driver. A cascading stop does that now, so {@link RunStop.accepted}
-   * answers at once; a detaching one commits the children's durable
-   * `run.detach` batch first, or a child completing while that batch
-   * commits would route its terminal result to the just-stopped parent.
-   * A run no handle or child driver here owns is stopped from outside, so
-   * its claim fences the whole gesture, descendant sweep included, and the
-   * stop writes the terminal row itself; a refused row fails the settlement.
+   * Stop a run and apply the caller's declared child policy. A run this
+   * process drives is stopped where it stands: its children first, by the
+   * policy, then its handle or child driver. A cascading stop does that now,
+   * so {@link RunStop.accepted} answers at once; a detaching one commits the
+   * children's durable `run.detach` batch first, or a child completing while
+   * that batch commits would route its terminal result to the just-stopped
+   * parent. A run no handle or child driver here owns is stopped from
+   * outside: its claim fences the whole gesture, descendant sweep included,
+   * and the stop writes the terminal row itself; a refused row fails it.
    */
   stop(runId: RunId, options: RunStopOptions): RunStop {
     const token = Symbol('run-stop');

@@ -30,12 +30,17 @@ interface RootRunClaim {
   readonly runId: RunId | undefined;
   readonly runSettled: RootRunSettled | undefined;
   readonly runCompleted: boolean;
+  /** A stop asked of this claim's run (Ctrl-C, `/exit`), read by every path
+   *  that would start or continue it. A claim for the same run inherits it;
+   *  one for a new run starts clear ({@link TuiSession.markRunPending}). */
+  readonly stopRequested: boolean;
 }
 
 const NO_CLAIM: RootRunClaim = {
   runId: undefined,
   runSettled: undefined,
   runCompleted: false,
+  stopRequested: false,
 };
 
 const rootRunClaim = signal<RootRunClaim>(NO_CLAIM);
@@ -69,14 +74,22 @@ export class TuiSession {
   /** Root conversation that remains recoverable after an interrupted turn. */
   interruptedRunId: RunId | undefined;
   runExitCode: CliExitCode = CliExitCode.Success;
-  stopRequested = false;
 
   get runId(): RunId | undefined {
     return rootRunClaim.get().runId;
   }
 
+  /** The held claim's run moves to the one a resume adopted (its parent). */
   set runId(runId: RunId | undefined) {
     rootRunClaim.set({ ...rootRunClaim.get(), runId });
+  }
+
+  get stopRequested(): boolean {
+    return rootRunClaim.get().stopRequested;
+  }
+
+  set stopRequested(stopRequested: boolean) {
+    rootRunClaim.set({ ...rootRunClaim.get(), stopRequested });
   }
 
   get runSettled(): RootRunSettled | undefined {
@@ -91,18 +104,27 @@ export class TuiSession {
     rootRunClaim.set(NO_CLAIM);
     this.interruptedRunId = undefined;
     this.runExitCode = CliExitCode.Success;
-    this.stopRequested = false;
   }
 
-  /** Claim the slot for `runSettled`'s run. `runId` is set in the same write
-   *  when the claimant minted it: a claim held with no run id reads to a
-   *  follow-up as "the run already settled" (`awaitRunFolded(undefined)`),
-   *  so a message typed while the claimant was still choosing its model was
-   *  bounced as sent to an ended conversation. */
+  /** Claim the slot for `runSettled`'s run, `runId`, in one write: a claim
+   *  held with no run id read to a follow-up as "the run already settled"
+   *  (`awaitRunFolded(undefined)`), so a message typed while the claimant
+   *  was still choosing its model was bounced as sent to an ended
+   *  conversation. A stop is asked of a conversation: a claim continuing the
+   *  same run (a stopped conversation's follow-up, its resume) carries it,
+   *  and a new run starts clear whatever stop its predecessor took. */
   markRunPending(runSettled: RootRunSettled, runId?: RunId): void {
-    rootRunClaim.set({ runId, runSettled, runCompleted: false });
+    const previous = rootRunClaim.get();
+    rootRunClaim.set({
+      runId,
+      runSettled,
+      runCompleted: false,
+      stopRequested:
+        runId !== undefined &&
+        runId === previous.runId &&
+        previous.stopRequested,
+    });
     this.runExitCode = CliExitCode.Success;
-    this.stopRequested = false;
   }
 
   /** The exit code a claim's run ends with, while the slot still holds that
@@ -137,9 +159,9 @@ export class TuiSession {
    * instead — it never suspends before claiming, so it has no check-then-await
    * window for this primitive to close.
    */
-  tryClaimRootRunSlot(runSettled: RootRunSettled): boolean {
+  tryClaimRootRunSlot(runSettled: RootRunSettled, runId?: RunId): boolean {
     if (!chatTuiCanStartRootRun(this)) return false;
-    this.markRunPending(runSettled);
+    this.markRunPending(runSettled, runId);
     return true;
   }
 
