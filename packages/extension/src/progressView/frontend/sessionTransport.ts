@@ -256,11 +256,7 @@ export function installWebviewTransport(
         scope,
         pending,
         inbox,
-        view$: toSignal(
-          runtime,
-          SubscriptionRef.changes(graph.view.ref),
-          SubscriptionRef.getUnsafe(graph.view.ref),
-        ),
+        view$: toSignal(runtime, graph.view.changes, graph.view.current()),
         host$: toSignal(
           runtime,
           SubscriptionRef.changes(graph.frames.host),
@@ -289,9 +285,7 @@ export function installWebviewTransport(
       runtime.runSync(
         graph.frames
           .begin(message.generation)
-          .pipe(
-            Effect.andThen(graph.subscriptions.set(SHELL_PORT, aggregates)),
-          ),
+          .pipe(Effect.andThen(graph.view.subscribe(SHELL_PORT, aggregates))),
       );
       post(message);
     },

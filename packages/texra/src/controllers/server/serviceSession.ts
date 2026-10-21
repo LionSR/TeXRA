@@ -358,7 +358,7 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
   const resubscribe = lane.withPermits(1)(
     Effect.gen(function* () {
       generation += 1;
-      const view = yield* SubscriptionRef.get(graph.view.ref);
+      const view = graph.view.current();
       const named = new Set(
         [...watches.values()].flatMap((set) => set.map((entry) => entry.id)),
       );
@@ -367,7 +367,7 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
         fromSeq: view.folded.get(id) ?? 0,
       }));
       yield* graph.frames.begin(generation);
-      yield* graph.subscriptions.set(WINDOW_PORT, aggregates);
+      yield* graph.view.subscribe(WINDOW_PORT, aggregates);
       const client = yield* SubscriptionRef.get(link.client);
       // Offline: the link's return resubscribes.
       if (client === null) return yield* FiberHandle.clear(feed);
@@ -476,7 +476,7 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
       // A resumed run's levels can still show the outcome its previous
       // activation ended with: the slice starts at a level where it is
       // live, and ends with the outcome after that, or with the result.
-      view: SubscriptionRef.changes(graph.view.ref).pipe(
+      view: graph.view.changes.pipe(
         Stream.dropWhile(
           (level) => level.runs.get(runId)?.durableOutcome !== null,
         ),
@@ -512,8 +512,8 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
   return {
     roots,
     view: {
-      current: () => SubscriptionRef.getUnsafe(graph.view.ref),
-      changes: SubscriptionRef.changes(graph.view.ref),
+      current: graph.view.current,
+      changes: graph.view.changes,
       // The watch names its runs to this window's own view too, so the
       // view folds their transcripts while it runs; each service the link
       // holds serves it from the cursor it last delivered.

@@ -1,10 +1,12 @@
 /**
  * The owner-liveness prober every session graph runs (`sessionGraphLayer` in
- * `./sessionLayer`), apart from the graph that builds it in.
+ * `./sessionLayer`), apart from the graph that builds it in, and the one
+ * probe a cold read takes (`./readSessionView`).
  */
 import { Effect, Layer, Stream, SubscriptionRef } from 'effect';
 
 import { proveOwnerLiveness } from '@agent/storage/leaseOwnerLiveness';
+import type { ProcessProbe } from '@platform/defaults/nodeProcesses';
 import { isTerminalOutcomePhase } from '@shared/runs/runStatus';
 import { ownerIdentity, type OwnerId } from '@shared/schemas';
 import { ProcessIdentity } from '@shared/session/sessionEvents';
@@ -16,8 +18,9 @@ import { SessionViewService } from './SessionView';
 /** How often the owners the view names are re-probed (PRD 5.2). */
 const OWNER_LIVENESS_PROBE_INTERVAL = '5 seconds';
 
-/** The owner ids of the non-terminal runs another process wrote. */
-function foreignOwners(view: SessionView, self: OwnerId): OwnerId[] {
+/** The owner ids of the non-terminal runs another process wrote; with no
+ *  `self` (a cold read), every owner of a non-terminal run. */
+function foreignOwners(view: SessionView, self: OwnerId | null): OwnerId[] {
   const foreign = [...view.runs.values()].flatMap((run) =>
     run.ownerId !== null &&
     run.ownerId !== self &&
@@ -27,6 +30,20 @@ function foreignOwners(view: SessionView, self: OwnerId): OwnerId[] {
   );
   return [...new Set(foreign)].sort();
 }
+
+/** The foreign owners of `view` a probe proves dead, in owner order. */
+export const deadOwners = (
+  view: SessionView,
+  self: OwnerId | null,
+): Effect.Effect<OwnerId[], never, ProcessProbe> =>
+  Effect.gen(function* () {
+    const dead: OwnerId[] = [];
+    for (const owner of foreignOwners(view, self)) {
+      const liveness = yield* proveOwnerLiveness(ownerIdentity(owner));
+      if (liveness === 'dead') dead.push(owner);
+    }
+    return dead;
+  });
 
 /**
  * The liveness prober (PRD 5.2, contract C5): every owner the view names on a
@@ -43,15 +60,10 @@ export const ownerLiveness = Layer.effectDiscard(
     const local = yield* LocalRuntimeSource;
     const identity = yield* ProcessIdentity;
     const probe = Effect.gen(function* () {
-      const owners = foreignOwners(
+      const dead = yield* deadOwners(
         yield* SubscriptionRef.get(view.ref),
         identity.ownerId,
       );
-      const dead: OwnerId[] = [];
-      for (const owner of owners) {
-        const liveness = yield* proveOwnerLiveness(ownerIdentity(owner));
-        if (liveness === 'dead') dead.push(owner);
-      }
       const snapshot = yield* SubscriptionRef.get(local.ref);
       if (
         snapshot.dead.length === dead.length &&

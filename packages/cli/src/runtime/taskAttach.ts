@@ -10,15 +10,7 @@
  * Attaching never steers the task: it ends when the task reaches a terminal
  * outcome, and an interrupt only detaches this client.
  */
-import {
-  Data,
-  Effect,
-  Fiber,
-  LogLevel,
-  Option,
-  Stream,
-  SubscriptionRef,
-} from 'effect';
+import { Data, Effect, Fiber, LogLevel, Option, Stream } from 'effect';
 import stripAnsi from 'strip-ansi';
 
 import { isTerminalOutcomePhase } from '@texra-ai/harness/schemas';
@@ -118,8 +110,8 @@ export function watchTask(
       // Begin the generation and name the transcript before the first
       // frame, as a webview shell does before it posts its `Subscribe`.
       yield* graph.frames.begin(generation);
-      yield* graph.subscriptions.set(ATTACH_PORT, aggregates);
-      const { debug } = yield* SubscriptionRef.get(graph.view.ref);
+      yield* graph.view.subscribe(ATTACH_PORT, aggregates);
+      const { debug } = graph.view.current();
       const feeding = yield* client['task.watch']({
         workspace: task.workspace,
         subscribe: {

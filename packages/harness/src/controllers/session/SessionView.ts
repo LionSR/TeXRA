@@ -11,9 +11,9 @@
  * and each batch arrives whole, so an incomplete or superseded read never
  * mutates the indexes held by the published view.
  *
- * The service holds no log: the webview builds it over frames
- * (`webviewSessionLayer`). The plane's tail as this view has folded it,
- * `SessionStore.folded`, is derived from `ref` where the log is
+ * The service holds no log: a view across a process boundary folds over its
+ * transport's inputs (`RemoteSessionView`). The plane's tail as this view has
+ * folded it, `SessionStore.folded`, is derived from `ref` where the log is
  * (`sessionStore.ts`).
  */
 import {
@@ -30,8 +30,13 @@ import {
 } from 'effect';
 
 import type { SessionViewAccess } from '@agent/runtime/SessionHandle';
-import { qualifyAggregateId, type LocalRuntimeState } from '@shared/schemas';
+import {
+  qualifyAggregateId,
+  type LocalRuntimeState,
+  type TranscriptSubscription,
+} from '@shared/schemas';
 import { Database, type DatabaseReadFailed } from '@shared/session/database';
+import type { SessionView as ReadonlySessionView } from '@shared/session/readonlyViews';
 import { SessionInputs } from '@shared/session/sessionInputs';
 import { fold } from '@shared/session/sessionFold';
 import {
@@ -116,6 +121,56 @@ export class SessionViewService extends Context.Service<
       return { ref, changes };
     }),
   );
+}
+
+/**
+ * A session's view folded where its store is not: a webview, a renderer, a
+ * client of another process. The caller serves `SessionInputs` from its
+ * transport, in the order the store's reader produced them; the layer runs
+ * the same fold over them a session runs over its store, keyed by the
+ * session's storage root, and `subscribe` names the aggregates each of the
+ * caller's ports wants transcripts for (an empty set removes the port).
+ */
+export class RemoteSessionView extends Context.Service<
+  RemoteSessionView,
+  {
+    /** The current level. */
+    readonly current: () => ReadonlySessionView;
+    /** The current level, then every later one; as
+     *  `SessionViewService.changes`, it ends, or dies, with the fold. */
+    readonly changes: Stream.Stream<ReadonlySessionView>;
+    readonly subscribe: (
+      port: string,
+      set: readonly TranscriptSubscription[],
+    ) => Effect.Effect<void>;
+  }
+>()('@texra-ai/harness/session/RemoteSessionView') {
+  /** Fresh per call: two views never share a fold, even in one memo map. */
+  static layer(
+    storage: string,
+  ): Layer.Layer<RemoteSessionView, never, SessionInputs> {
+    return Layer.fresh(
+      Layer.effect(
+        RemoteSessionView,
+        Effect.gen(function* () {
+          const { ref, changes } = yield* SessionViewService;
+          const subscriptions = yield* TranscriptSubscriptions;
+          return {
+            current: () => SubscriptionRef.getUnsafe(ref),
+            changes,
+            subscribe: subscriptions.set,
+          };
+        }),
+      ).pipe(
+        Layer.provide(
+          SessionViewService.layer.pipe(
+            Layer.provideMerge(TranscriptSubscriptions.layer),
+            Layer.provide(Layer.succeed(WorkspaceRoots)({ storage })),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 /**

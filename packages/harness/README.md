@@ -375,9 +375,9 @@ files.
 
 | Entry                          | Contents                                                                                                                                                                                                     |
 | ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `@texra-ai/harness`            | `Sessions`, `Session`, `Run`, the tagged errors, and the tool-definition helper (`defineTool`) with its types                                                                                                |
+| `@texra-ai/harness`            | `Sessions`, `Session`, `Run`, the tagged errors, the tool-definition helper (`defineTool`) with its types, and `readSessionView`, a project's view read cold from its store                                  |
 | `@texra-ai/harness/schemas`    | Browser-safe: Zod schemas + inferred types for agent definitions, configs, and run results; the read-only `SessionView`, `RunView` and `TranscriptView` and their reads; the approval policy; error messages |
-| `@texra-ai/harness/transcript` | Browser-safe: the transcript rows a `TranscriptView` holds and the projections a renderer derives from them                                                                                                  |
+| `@texra-ai/harness/transcript` | Browser-safe: `RemoteSessionView`, a session's view folded over the `SessionInputs` a transport serves; the transcript rows a `TranscriptView` holds and the projections a renderer derives from them        |
 | `@texra-ai/harness/plugins`    | The built-in plugins (`harnessBuiltins`, or one by one), and what a plugin is written with: `definePlugin`, `executed`/`errorResult`, `nullishWithDefault`, `resolveToolPath`, `ToolRegistry`                |
 | `@texra-ai/harness/node`       | `nodePlatform(options)`, a ready-made Node `AgentPlatform` with its workspace roots                                                                                                                          |
 
